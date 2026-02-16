@@ -894,6 +894,18 @@ export const api = {
     return res.data?.data || {};
   },
 
+  /** 更新项目级 Skill */
+  async updateSkill(name: string, data: { description?: string; content?: string }): Promise<any> {
+    const res = await http.put(`/skills/${encodeURIComponent(name)}`, data);
+    return res.data?.data || {};
+  },
+
+  /** 删除项目级 Skill */
+  async deleteSkill(name: string): Promise<any> {
+    const res = await http.delete(`/skills/${encodeURIComponent(name)}`);
+    return res.data?.data || {};
+  },
+
   /** 基于使用模式推荐创建 Skill */
   async suggestSkills(): Promise<any> {
     const res = await http.get('/skills/suggest');

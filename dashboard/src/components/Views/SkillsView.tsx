@@ -3,6 +3,7 @@ import {
   BookOpen, Plus, RefreshCw, ChevronRight, ChevronDown,
   Sparkles, X, Send, Package, FolderOpen, Copy, Check,
   AlertCircle, Loader2, FileText, Lightbulb, Zap, Bot, User, Cpu,
+  Pencil, Trash2, Save,
 } from 'lucide-react';
 import api from '../../api';
 import { notify } from '../../utils/notification';
@@ -63,6 +64,13 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [creatingSuggestion, setCreatingSuggestion] = useState<string | null>(null);
 
+  /* ── Edit & Delete state ── */
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [saving, setSavingSkill] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   /* ── Fetch skills list ── */
   const fetchSkills = useCallback(async () => {
     setLoading(true);
@@ -89,6 +97,8 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       setSelectedSkill(null);
       return;
     }
+    setEditing(false);
+    setConfirmDelete(false);
     setLoadingDetail(true);
     try {
       const data = await api.loadSkill(name);
@@ -106,6 +116,56 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
     navigator.clipboard.writeText(selectedSkill.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  /* ── Enter edit mode ── */
+  const handleStartEdit = () => {
+    if (!selectedSkill) return;
+    setEditContent(selectedSkill.content);
+    setEditing(true);
+  };
+
+  /* ── Cancel edit ── */
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setEditContent('');
+  };
+
+  /* ── Save edit ── */
+  const handleSaveEdit = async () => {
+    if (!selectedSkill || !editContent.trim()) return;
+    setSavingSkill(true);
+    try {
+      await api.updateSkill(selectedSkill.skillName, { content: editContent });
+      notify('已保存', { title: `Skill "${selectedSkill.skillName}" 更新成功` });
+      setEditing(false);
+      // Reload detail
+      const data = await api.loadSkill(selectedSkill.skillName);
+      setSelectedSkill(data);
+    } catch (err: any) {
+      notify(err.message || '', { title: '更新 Skill 失败', type: 'error' });
+    } finally {
+      setSavingSkill(false);
+    }
+  };
+
+  /* ── Delete skill ── */
+  const handleDelete = async () => {
+    if (!selectedSkill) return;
+    setDeleting(true);
+    try {
+      await api.deleteSkill(selectedSkill.skillName);
+      notify('已删除', { title: `Skill "${selectedSkill.skillName}" 删除成功` });
+      setSelectedSkill(null);
+      setConfirmDelete(false);
+      setEditing(false);
+      fetchSkills();
+      onRefresh?.();
+    } catch (err: any) {
+      notify(err.message || '', { title: '删除 Skill 失败', type: 'error' });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   /* ── Fetch skill suggestions (merge rule-based + AI signal) ── */
@@ -424,6 +484,42 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                   >
                     {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
                   </button>
+                  {selectedSkill.source === 'project' && !editing && (
+                    <>
+                      <button
+                        onClick={handleStartEdit}
+                        className="p-1.5 rounded-md hover:bg-blue-50 transition-colors text-slate-400 hover:text-blue-600"
+                        title="编辑"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(true)}
+                        className="p-1.5 rounded-md hover:bg-red-50 transition-colors text-slate-400 hover:text-red-500"
+                        title="删除"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  )}
+                  {editing && (
+                    <>
+                      <button
+                        onClick={handleSaveEdit}
+                        disabled={saving}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50"
+                      >
+                        {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                        保存
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className="px-2.5 py-1 border border-slate-200 text-slate-500 rounded-md hover:bg-slate-50 transition-colors text-xs"
+                      >
+                        取消
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -444,10 +540,48 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
               )}
 
               {/* Content */}
-              <div className="flex-1 overflow-y-auto p-4">
-                <pre className="whitespace-pre-wrap text-xs text-slate-700 font-mono leading-relaxed">
-                  {selectedSkill.content}
-                </pre>
+              <div className="flex-1 overflow-y-auto p-4 relative">
+                {editing ? (
+                  <textarea
+                    value={editContent}
+                    onChange={e => setEditContent(e.target.value)}
+                    className="w-full h-full min-h-[300px] text-xs text-slate-700 font-mono leading-relaxed border border-blue-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none bg-blue-50/30"
+                    spellCheck={false}
+                  />
+                ) : (
+                  <pre className="whitespace-pre-wrap text-xs text-slate-700 font-mono leading-relaxed">
+                    {selectedSkill.content}
+                  </pre>
+                )}
+
+                {/* Delete confirmation overlay */}
+                {confirmDelete && (
+                  <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-10">
+                    <div className="bg-white border border-red-200 rounded-xl shadow-lg p-6 max-w-sm text-center">
+                      <Trash2 size={32} className="mx-auto mb-3 text-red-400" />
+                      <h3 className="font-semibold text-slate-800 mb-2">确认删除</h3>
+                      <p className="text-sm text-slate-500 mb-4">
+                        删除 Skill "<span className="font-mono font-bold">{selectedSkill.skillName}</span>"？此操作不可撤销。
+                      </p>
+                      <div className="flex gap-3 justify-center">
+                        <button
+                          onClick={() => setConfirmDelete(false)}
+                          className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 text-sm"
+                        >
+                          取消
+                        </button>
+                        <button
+                          onClick={handleDelete}
+                          disabled={deleting}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
+                        >
+                          {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                          确认删除
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
