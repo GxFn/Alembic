@@ -115,7 +115,8 @@ export function useBootstrapSocket(): UseBootstrapSocketReturn {
     const recoverBootstrapStatus = async () => {
       try {
         const status = await api.getBootstrapStatus();
-        if (status && status.status !== 'idle' && status.tasks) {
+        // 只恢复正在运行中的 session，已完成/失败的不再续传
+        if (status && status.status === 'running' && status.tasks) {
           // Only update if the session matches or is newer
           setSession(prev => {
             if (!prev || prev.id === status.id || status.progress > (prev?.progress ?? 0)) {

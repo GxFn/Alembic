@@ -1,12 +1,20 @@
-import React from 'react';
-import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, Code, RefreshCw, Edit3, LogOut, User, ShieldCheck, Eye, Fingerprint, BookOpen, Sparkles, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, Code, Edit3, LogOut, User, ShieldCheck, Eye, Fingerprint, BookOpen, Sparkles, PanelLeftClose, PanelLeftOpen, Zap } from 'lucide-react';
 import { TabType } from '../../constants';
 import { ICON_SIZES } from '../../constants/icons';
+import api from '../../api';
+import { getSocket } from '../../lib/socket';
+
+/** 格式化 token 数字：1234 → "1.2k", 1234567 → "1.2M" */
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
+  return String(n);
+}
 
 interface SidebarProps {
   activeTab: TabType;
   navigateToTab: (tab: TabType, options?: { preserveSearch?: boolean }) => void;
-  handleRefreshProject: () => void;
   candidateCount: number;
   signalSuggestionCount?: number;
   isDarkMode?: boolean;
@@ -40,13 +48,39 @@ interface NavItem {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
-  activeTab, navigateToTab, handleRefreshProject, candidateCount,
+  activeTab, navigateToTab, candidateCount,
   signalSuggestionCount = 0, isDarkMode = false,
   currentUser, currentRole, permissionMode, onLogout,
   collapsed = false, onToggleCollapse,
 }) => {
   const roleInfo = ROLE_LABELS[currentRole || ''] || ROLE_LABELS.developer;
   const ModeIcon = MODE_ICONS[permissionMode || 'probe'] || Eye;
+
+  // ── Token 消耗指标（事件驱动刷新，不轮询） ──
+  const [tokenSummary, setTokenSummary] = useState<{ total_tokens: number; call_count: number } | null>(null);
+  const refreshTokens = useCallback(() => {
+    api.getTokenUsage7Days()
+      .then(d => setTokenSummary(d.summary))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // 初始加载一次
+    refreshTokens();
+
+    // 监听 socket 事件：AI 调用产生新 token 时触发
+    const socket = getSocket();
+    const onTokenChange = () => refreshTokens();
+    socket.on('candidate-created', onTokenChange);
+    socket.on('bootstrap:all-completed', onTokenChange);
+    socket.on('token-usage-updated', onTokenChange);
+
+    return () => {
+      socket.off('candidate-created', onTokenChange);
+      socket.off('bootstrap:all-completed', onTokenChange);
+      socket.off('token-usage-updated', onTokenChange);
+    };
+  }, [refreshTokens]);
 
   const navItems: NavItem[] = [
     { tab: 'recipes', icon: Bookmark, label: 'Recipes' },
@@ -145,14 +179,27 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </>
         )}
-        <button
-          onClick={handleRefreshProject}
-          title={collapsed ? 'Refresh Project' : undefined}
-          className={`w-full flex items-center ${collapsed ? 'justify-center py-2' : 'justify-center gap-2 text-[10px] font-bold uppercase'} ${isDarkMode ? 'text-slate-400 hover:text-blue-400' : 'text-slate-400 hover:text-blue-600'} transition-colors`}
-        >
-          <RefreshCw size={collapsed ? ICON_SIZES.lg : ICON_SIZES.xs} />
-          {!collapsed && <span>Refresh Project</span>}
-        </button>
+        {/* Token 消耗指标 */}
+        {tokenSummary && tokenSummary.total_tokens > 0 && (
+          <button
+            onClick={() => navigateToTab('help')}
+            title={collapsed ? `7日 Token: ${fmtTokens(tokenSummary.total_tokens)} (${tokenSummary.call_count} 次)` : undefined}
+            className={`w-full flex items-center ${collapsed ? 'justify-center py-2 mb-1' : 'gap-2 px-2 py-1.5 mb-2'} rounded-lg transition-colors ${isDarkMode ? 'bg-slate-700/30 hover:bg-slate-700/50 text-slate-400' : 'bg-amber-50 hover:bg-amber-100 text-amber-700'}`}
+          >
+            <Zap size={collapsed ? ICON_SIZES.lg : ICON_SIZES.sm} className={isDarkMode ? 'text-amber-400' : 'text-amber-500'} />
+            {!collapsed && (
+              <div className="flex flex-col items-start min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider">7日 Token</span>
+                <span className={`text-xs font-mono font-semibold ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>
+                  {fmtTokens(tokenSummary.total_tokens)}
+                  <span className={`ml-1 text-[10px] font-normal ${isDarkMode ? 'text-slate-500' : 'text-amber-600/70'}`}>({tokenSummary.call_count}次)</span>
+                </span>
+              </div>
+            )}
+          </button>
+        )}
+
+
       </div>
     </aside>
   );

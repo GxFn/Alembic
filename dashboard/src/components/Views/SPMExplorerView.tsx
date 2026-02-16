@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Zap, Edit3, Cpu, Loader2, Layers, Shield, AlertTriangle } from 'lucide-react';
+import { Box, Zap, Edit3, Cpu, Loader2, Layers, Shield, AlertTriangle, RefreshCw } from 'lucide-react';
 import { SPMTarget, ExtractedRecipe, ScanResultItem, Recipe, GuardAuditResult } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
@@ -27,6 +27,7 @@ interface SPMExplorerViewProps {
   isShellTarget: (name: string) => boolean;
   recipes?: Recipe[];
   isSavingRecipe?: boolean;
+  handleRefreshProject?: () => void;
 }
 
 const SPMExplorerView: React.FC<SPMExplorerViewProps> = ({
@@ -47,7 +48,8 @@ const SPMExplorerView: React.FC<SPMExplorerViewProps> = ({
   onEditRecipe,
   isShellTarget,
   recipes = [],
-  isSavingRecipe = false
+  isSavingRecipe = false,
+  handleRefreshProject
 }) => {
   const [editingCodeIndex, setEditingCodeIndex] = useState<number | null>(null);
   const [translatingIndex, setTranslatingIndex] = useState<number | null>(null);
@@ -202,6 +204,15 @@ const SPMExplorerView: React.FC<SPMExplorerViewProps> = ({
     <div className="w-80 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden shrink-0">
     <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
       <span className="font-bold text-sm">项目 Target ({targets.length})</span>
+      {handleRefreshProject && (
+        <button
+          onClick={handleRefreshProject}
+          title="刷新项目结构"
+          className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-blue-600 transition-colors"
+        >
+          <RefreshCw size={ICON_SIZES.sm} />
+        </button>
+      )}
     </div>
     <div className="flex-1 overflow-y-auto p-2 space-y-1">
       {filteredTargets.map(t => {

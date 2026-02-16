@@ -1003,7 +1003,6 @@ ${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
     <Sidebar 
     activeTab={activeTab} 
     navigateToTab={navigateToTab} 
-    handleRefreshProject={handleRefreshProject} 
     candidateCount={candidateCount}
     signalSuggestionCount={signalSuggestionCount}
     isDarkMode={isDarkMode}
@@ -1139,6 +1138,7 @@ ${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
         isShellTarget={isShellTarget}
         recipes={data?.recipes ?? []}
         isSavingRecipe={isSavingRecipe}
+        handleRefreshProject={handleRefreshProject}
       />
       ) : activeTab === 'editor' ? (
       <XcodeSimulator />
