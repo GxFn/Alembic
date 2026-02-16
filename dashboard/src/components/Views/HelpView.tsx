@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { BookOpen, Rocket, Database, Zap, Search, Shield, Code, GitBranch, MessageSquare, Terminal, FileCode, List, ChevronDown, ChevronRight, Lock, Layers, RefreshCw, ArrowRightLeft, Brain, Network } from 'lucide-react';
+import { BookOpen, Rocket, Database, Zap, Search, Shield, Code, GitBranch, MessageSquare, Terminal, FileCode, List, ChevronDown, ChevronRight, Lock, Layers, RefreshCw, ArrowRightLeft, Brain, Network, BarChart3 } from 'lucide-react';
 import { ICON_SIZES } from '../../constants/icons';
+import TokenUsageChart from '../Charts/TokenUsageChart';
 
 const HelpView: React.FC = () => {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['quick-start']));
@@ -57,6 +58,11 @@ const HelpView: React.FC = () => {
       </div>
 
       <div className="space-y-4">
+        {/* Token 用量统计 */}
+        <Section id="token-usage" title="Token 用量（近 7 日）" icon={<BarChart3 size={ICON_SIZES.xl} className="text-blue-600" />}>
+          <TokenUsageChart />
+        </Section>
+
         {/* 快速开始 */}
         <Section id="quick-start" title="快速开始" icon={<Rocket size={ICON_SIZES.xl} className="text-blue-600" />}>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

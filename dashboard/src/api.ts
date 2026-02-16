@@ -950,6 +950,16 @@ Skill 文档格式要求：
     return res.data?.data || { vars: {}, hasEnvFile: false, llmReady: false };
   },
 
+  /** 近 7 日 Token 消耗报告 */
+  async getTokenUsage7Days(): Promise<{
+    daily: Array<{ date: string; input_tokens: number; output_tokens: number; total_tokens: number; call_count: number }>;
+    bySource: Array<{ source: string; input_tokens: number; output_tokens: number; total_tokens: number; call_count: number }>;
+    summary: { input_tokens: number; output_tokens: number; total_tokens: number; call_count: number; avg_per_call: number };
+  }> {
+    const res = await http.get('/ai/token-usage');
+    return res.data?.data || { daily: [], bySource: [], summary: { input_tokens: 0, output_tokens: 0, total_tokens: 0, call_count: 0, avg_per_call: 0 } };
+  },
+
   /** 写入 / 更新用户项目 .env 中的 LLM 配置 */
   async saveLlmEnvConfig(config: {
     provider: string;
