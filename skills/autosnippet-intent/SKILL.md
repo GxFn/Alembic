@@ -45,7 +45,8 @@ Use this skill when the user's intent is unclear or overlaps multiple capabiliti
 - Candidates: `autosnippet_validate_candidate`, `autosnippet_check_duplicate`, `autosnippet_submit_candidate`, `autosnippet_submit_candidates`, `autosnippet_submit_draft_recipes`, `autosnippet_enrich_candidates`
 - Guard: `autosnippet_guard_check`, `autosnippet_guard_audit_files`, `autosnippet_scan_project`
 - Telemetry: `autosnippet_confirm_usage`
-- Bootstrap: `autosnippet_bootstrap_knowledge`
+- Bootstrap: `autosnippet_bootstrap_knowledge`, `autosnippet_bootstrap_refine`
+- Skills: `autosnippet_list_skills`, `autosnippet_load_skill`, `autosnippet_create_skill`, `autosnippet_update_skill`, `autosnippet_delete_skill`, `autosnippet_suggest_skills`
 
 This skill is a router only; it does not perform actions itself.
 

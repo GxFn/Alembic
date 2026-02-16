@@ -448,12 +448,16 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 | Tool | 用途 |
 |------|------|
 | `autosnippet_bootstrap_knowledge` | 启动冷启动扫描（本 Skill 核心工具） |
+| `autosnippet_enrich_candidates` | ① 结构补齐：诊断候选字段缺失 |
+| `autosnippet_bootstrap_refine` | ② 内容润色：AI 精炼候选质量（summary/insight/relations） |
 | `autosnippet_submit_candidates` | 批量提交候选 |
 | `autosnippet_submit_candidate` | 提交单条候选 |
 | `autosnippet_validate_candidate` | 校验候选字段 |
 | `autosnippet_check_duplicate` | 去重检查 |
 | `autosnippet_context_search` | 查找已有知识（避免重复） |
 | `autosnippet_scan_project` | 轻量探查（不写库） |
+| `autosnippet_list_skills` | 列出可用 Skill 列表 |
+| `autosnippet_load_skill` | 加载指定 Skill 文档获取指引 |
 
 ## Related Skills
 

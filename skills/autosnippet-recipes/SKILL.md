@@ -78,7 +78,7 @@ Recipe is the core knowledge unit. V2 uses a unified structured model:
 
 ---
 
-## MCP Tools Reference (31 tools)
+## MCP Tools Reference (38 tools)
 
 ### Query (Agent can freely use)
 
@@ -124,6 +124,18 @@ Recipe is the core knowledge unit. V2 uses a unified structured model:
 | autosnippet_guard_audit_files | Multi-file batch Guard audit |
 | autosnippet_scan_project | Lightweight project scan + Guard audit |
 | autosnippet_bootstrap_knowledge | Cold-start knowledge base initialization (9 dimensions) |
+| autosnippet_bootstrap_refine | AI refinement of bootstrap candidates (Phase 6) |
+
+### Skills Management
+
+| Tool | Description |
+|------|-------------|
+| autosnippet_list_skills | List all available Agent Skills |
+| autosnippet_load_skill | Load Skill document for domain guidance |
+| autosnippet_create_skill | Create project-level Skill |
+| autosnippet_update_skill | Update project-level Skill |
+| autosnippet_delete_skill | Delete project-level Skill |
+| autosnippet_suggest_skills | AI-powered Skill creation suggestions |
 
 ### Usage Telemetry
 

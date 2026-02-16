@@ -93,7 +93,8 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 | 合规报告 | `autosnippet_compliance_report`, `autosnippet_recipe_insights` |
 | 使用确认 | `autosnippet_confirm_usage` |
 | 项目扫描 | `autosnippet_scan_project` |
-| 冷启动 | `autosnippet_bootstrap_knowledge` |
+| 冷启动 | `autosnippet_bootstrap_knowledge`, `autosnippet_bootstrap_refine` |
+| Skills 管理 | `autosnippet_list_skills`, `autosnippet_load_skill`, `autosnippet_create_skill`, `autosnippet_update_skill`, `autosnippet_delete_skill`, `autosnippet_suggest_skills` |
 | 自检/能力 | `autosnippet_health`, `autosnippet_capabilities` |
 
 ### Failure Handling (Examples)
