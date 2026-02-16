@@ -89,6 +89,35 @@ function normalizeObjCHeader(header: string): string {
   return header.trim();
 }
 
+/* ── V3 字段安全访问 ── */
+const getCode = (res: ScanResultItem): string => res.code || res.content?.pattern || '';
+const getSummary = (res: ScanResultItem): string => res.summary || res.summary_cn || res.description || '';
+const getUsageGuide = (res: ScanResultItem): string => res.usageGuide || res.usage_guide_cn || '';
+const getKnowledgeType = (res: ScanResultItem): string => res.knowledgeType || res.knowledge_type || 'code-pattern';
+const getScope = (res: ScanResultItem): string => res.scope || 'project-specific';
+const getDifficulty = (res: ScanResultItem): string => res.difficulty || res.complexity || 'intermediate';
+const getAuthority = (res: ScanResultItem): number => res.authority || res.stats?.authority || 3;
+const getHeaders = (res: ScanResultItem): string[] => res.headers || [];
+const getTags = (res: ScanResultItem): string[] => res.tags || [];
+const getModuleName = (res: ScanResultItem): string => res.moduleName || res.module_name || '';
+const getKind = (res: ScanResultItem): string => res.kind || 'pattern';
+
+/**
+ * 判断该条目是否可以提取为 Xcode Snippet。
+ * 仅当 knowledge_type=code-pattern 且 content.pattern 看起来是实际代码（而非 Markdown/纯文本）时才能生成 Snippet。
+ */
+const canExtractSnippet = (res: ScanResultItem): boolean => {
+  const kt = getKnowledgeType(res);
+  if (kt !== 'code-pattern') return false;
+  const codeText = (res.code || res.content?.pattern || '').trim();
+  if (!codeText) return false;
+  // Markdown 特征：以 # / - / > / * 开头，或大段中文文本无代码特征
+  const lines = codeText.split('\n').filter(l => l.trim());
+  const mdLines = lines.filter(l => /^\s*(#{1,6}\s|[-*>]\s|\d+\.\s)/.test(l));
+  if (mdLines.length > lines.length * 0.3) return false;
+  return true;
+};
+
 const ScanResultCard: React.FC<ScanResultCardProps> = ({
   res,
   index: i,
@@ -106,7 +135,11 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
   isSavingRecipe = false,
 }) => {
   const isExpanded = expandedEditIndex === i;
-  const headers = res.headers || [];
+  const headers = getHeaders(res);
+  const code = getCode(res);
+  const summary = getSummary(res);
+  const usageGuide = getUsageGuide(res);
+  const snippetAble = canExtractSnippet(res);
 
   return (
     <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -115,7 +148,7 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5">Recipe Title</label>
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5">知识条目标题</label>
               {res.scanMode === 'project' ? (
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center gap-1">
                   <Layers size={10} /> PROJECT
@@ -124,11 +157,26 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-200 flex items-center gap-1">
                   <Zap size={10} /> {res.candidateTargetName || 'TARGET'}
                 </span>
+              ) : res.lifecycle ? (
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                  res.lifecycle === 'pending' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                  res.lifecycle === 'active' ? 'bg-green-100 text-green-700 border border-green-200' :
+                  'bg-slate-100 text-slate-600 border border-slate-200'
+                }`}>
+                  {res.lifecycle === 'pending' ? '待审核' :
+                   res.lifecycle === 'active' ? '已发布' :
+                   res.lifecycle === 'deprecated' ? '已废弃' : res.lifecycle}
+                </span>
               ) : null}
+              {res.source && res.source !== 'unknown' && (
+                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 border border-violet-100">
+                  {res.source === 'agent' ? 'AI Agent' : res.source === 'bootstrap-scan' ? 'AI 扫描' : res.source}
+                </span>
+              )}
             </div>
             <input
               className="font-semibold bg-transparent border-b-2 border-transparent hover:border-slate-200 focus:border-blue-500 outline-none px-0.5 text-lg w-full text-slate-800 placeholder:text-slate-300"
-              value={res.title}
+              value={res.title || ''}
               onChange={e => handleUpdateScanResult(i, { title: e.target.value })}
             />
           </div>
@@ -146,33 +194,35 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
               onClick={() => handleSaveExtracted(res)}
               disabled={isSavingRecipe}
               className={`text-xs px-4 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap ${
-                res.mode === 'full'
+                snippetAble && res.mode === 'full'
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'bg-amber-600 text-white hover:bg-amber-700'
               }`}
             >
               {isSavingRecipe ? <Loader2 size={ICON_SIZES.md} className="animate-spin" /> : <CheckCircle size={ICON_SIZES.md} />}
-              {isSavingRecipe ? '保存中...' : '保存为 Recipe'}
+              {isSavingRecipe ? '保存中...' : snippetAble ? '保存为 Recipe' : '保存知识'}
             </button>
           </div>
         </div>
 
         {/* ── Controls row ── */}
         <div className="flex items-end gap-4 flex-wrap">
+          {snippetAble && (
           <div className="flex flex-col">
             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Trigger</label>
             <input
               className="font-mono font-bold text-blue-600 bg-blue-50/80 border border-blue-100 px-2.5 py-1 rounded-md outline-none text-xs focus:ring-2 focus:ring-blue-500/20 w-40"
-              value={res.trigger}
+              value={res.trigger || ''}
               placeholder="@cmd"
               onChange={e => handleUpdateScanResult(i, { trigger: e.target.value })}
             />
           </div>
+          )}
           <div className="flex flex-col">
-            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Category</label>
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">分类</label>
             <select
               className="font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-blue-500/20"
-              value={res.category}
+              value={res.category || ''}
               onChange={e => handleUpdateScanResult(i, { category: e.target.value })}
             >
               {categories.filter(c => c !== 'All').map(cat => (
@@ -181,8 +231,9 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
             </select>
           </div>
           <div className="w-px h-6 bg-slate-200 self-end mb-0.5" />
+          {snippetAble && (
           <div className="flex flex-col">
-            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Language</label>
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">语言</label>
             <div className="flex bg-slate-100 p-0.5 rounded-md">
               <button
                 onClick={() => handleUpdateScanResult(i, { language: 'swift' })}
@@ -198,15 +249,16 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
               </button>
             </div>
           </div>
+          )}
           <div className="flex flex-col">
-            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Lang</label>
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">内容语言</label>
             <div className="flex bg-slate-100 p-0.5 rounded-md items-center">
               <button
                 onClick={() => handleContentLangChange(i, 'cn', res)}
                 disabled={translatingIndex !== null}
                 className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${res.lang === 'cn' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-500'} disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                CN
+                中文
               </button>
               <button
                 onClick={() => handleContentLangChange(i, 'en', res)}
@@ -218,8 +270,9 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
               </button>
             </div>
           </div>
+          {snippetAble && (
           <div className="flex flex-col">
-            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Mode</label>
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">模式</label>
             <div className="flex bg-slate-100 p-0.5 rounded-md">
               <button
                 onClick={() => handleUpdateScanResult(i, { mode: 'full' })}
@@ -235,24 +288,25 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
               </button>
             </div>
           </div>
+          )}
           <div className="w-px h-6 bg-slate-200 self-end mb-0.5" />
           <div className="flex flex-col">
-            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Difficulty</label>
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">难度</label>
             <select
               className="font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-purple-500/20"
-              value={res.difficulty || 'intermediate'}
-              onChange={e => handleUpdateScanResult(i, { difficulty: e.target.value as any })}
+              value={getDifficulty(res)}
+              onChange={e => handleUpdateScanResult(i, { difficulty: e.target.value, complexity: e.target.value })}
             >
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
+              <option value="beginner">初级</option>
+              <option value="intermediate">中级</option>
+              <option value="advanced">高级</option>
             </select>
           </div>
           <div className="flex flex-col">
-            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Authority</label>
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">权威分</label>
             <select
               className="font-bold text-amber-600 bg-amber-50/60 border border-amber-100 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-amber-500/20"
-              value={res.authority || 3}
+              value={getAuthority(res)}
               onChange={e => handleUpdateScanResult(i, { authority: parseInt(e.target.value) })}
             >
               <option value="1">⭐ 1</option>
@@ -265,42 +319,56 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
         </div>
       </div>
 
-      {/* ── Metadata row: Knowledge Type / Scope / Module / Headers / Tags ── */}
+      {/* ── Metadata row: Kind / Knowledge Type / Scope / Module / Headers / Tags ── */}
       <div className="px-6 pt-5 pb-0 space-y-3">
         <div className="flex flex-wrap gap-x-4 gap-y-2 items-end">
           <div className="flex flex-col">
-            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Knowledge Type</label>
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Kind</label>
             <select
               className="font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-blue-500/20"
-              value={res.knowledgeType || 'code-pattern'}
-              onChange={e => handleUpdateScanResult(i, { knowledgeType: e.target.value as any })}
+              value={getKind(res)}
+              onChange={e => handleUpdateScanResult(i, { kind: e.target.value })}
             >
-              <option value="code-pattern">Code Pattern</option>
-              <option value="architecture">Architecture</option>
-              <option value="best-practice">Best Practice</option>
               <option value="rule">Rule</option>
+              <option value="pattern">Pattern</option>
+              <option value="fact">Fact</option>
             </select>
           </div>
           <div className="flex flex-col">
-            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Scope</label>
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">知识类型</label>
             <select
               className="font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-blue-500/20"
-              value={res.scope || 'project-specific'}
-              onChange={e => handleUpdateScanResult(i, { scope: e.target.value as any })}
+              value={getKnowledgeType(res)}
+              onChange={e => handleUpdateScanResult(i, { knowledgeType: e.target.value, knowledge_type: e.target.value })}
             >
-              <option value="universal">Universal</option>
-              <option value="project-specific">Project Specific</option>
-              <option value="target-specific">Target Specific</option>
+              <option value="code-pattern">代码模式</option>
+              <option value="architecture">架构设计</option>
+              <option value="best-practice">最佳实践</option>
+              <option value="code-standard">代码规范</option>
+              <option value="call-chain">调用链路</option>
+              <option value="rule">规则</option>
+            </select>
+          </div>
+          <div className="flex flex-col">
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">适用范围</label>
+            <select
+              className="font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-blue-500/20"
+              value={getScope(res)}
+              onChange={e => handleUpdateScanResult(i, { scope: e.target.value })}
+            >
+              <option value="universal">通用</option>
+              <option value="project-specific">项目级</option>
+              <option value="target-specific">模块级</option>
             </select>
           </div>
           <div className="w-px h-6 bg-slate-200 self-end mb-0.5" />
-          {res.moduleName && (
+          {getModuleName(res) && (
             <div className="flex flex-col">
-              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Module</label>
-              <span className="text-[11px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-1 rounded-md font-mono font-bold">{res.moduleName}</span>
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">模块</label>
+              <span className="text-[11px] bg-purple-50 text-purple-700 border border-purple-100 px-2 py-1 rounded-md font-mono font-bold">{getModuleName(res)}</span>
             </div>
           )}
-          {headers.length > 0 && (
+          {snippetAble && headers.length > 0 && (
             <div className="flex items-end gap-2">
               <div className="flex flex-col">
                 <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Headers</label>
@@ -326,13 +394,13 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
           )}
           <div className="w-px h-6 bg-slate-200 self-end mb-0.5" />
           <div className="flex flex-col flex-1 min-w-[160px]">
-            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Tags</label>
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">标签</label>
             <div className="flex flex-wrap gap-1 items-center bg-white border border-slate-200 rounded-md px-1.5 py-0.5 min-h-[28px] focus-within:ring-2 focus-within:ring-blue-500/20">
-              {(res.tags || []).map((tag: string, ti: number) => (
+              {getTags(res).map((tag: string, ti: number) => (
                 <span key={ti} className="flex items-center gap-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0 rounded">
                   {tag}
                   <button
-                    onClick={() => { const newTags = [...(res.tags || [])]; newTags.splice(ti, 1); handleUpdateScanResult(i, { tags: newTags }); }}
+                    onClick={() => { const newTags = [...getTags(res)]; newTags.splice(ti, 1); handleUpdateScanResult(i, { tags: newTags }); }}
                     className="text-blue-400 hover:text-red-500 transition-colors leading-none text-[10px]"
                     title="移除"
                   >
@@ -342,27 +410,27 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
               ))}
               <input
                 className="flex-1 min-w-[80px] text-[11px] text-slate-600 outline-none bg-transparent py-0.5"
-                placeholder={(res.tags || []).length === 0 ? '按 Enter/逗号添加...' : ''}
+                placeholder={getTags(res).length === 0 ? '按 Enter/逗号添加...' : ''}
                 onKeyDown={e => {
                   const input = e.currentTarget;
                   const val = input.value.trim();
                   if ((e.key === 'Enter' || e.key === ',' || e.key === '，') && val) {
                     e.preventDefault();
                     const newTag = val.replace(/[,，]/g, '').trim();
-                    if (newTag && !(res.tags || []).includes(newTag)) {
-                      handleUpdateScanResult(i, { tags: [...(res.tags || []), newTag] });
+                    if (newTag && !getTags(res).includes(newTag)) {
+                      handleUpdateScanResult(i, { tags: [...getTags(res), newTag] });
                     }
                     input.value = '';
-                  } else if (e.key === 'Backspace' && !input.value && (res.tags || []).length > 0) {
-                    const newTags = [...(res.tags || [])];
+                  } else if (e.key === 'Backspace' && !input.value && getTags(res).length > 0) {
+                    const newTags = [...getTags(res)];
                     newTags.pop();
                     handleUpdateScanResult(i, { tags: newTags });
                   }
                 }}
                 onBlur={e => {
                   const val = e.currentTarget.value.trim().replace(/[,，]/g, '').trim();
-                  if (val && !(res.tags || []).includes(val)) {
-                    handleUpdateScanResult(i, { tags: [...(res.tags || []), val] });
+                  if (val && !getTags(res).includes(val)) {
+                    handleUpdateScanResult(i, { tags: [...getTags(res), val] });
                   }
                   e.currentTarget.value = '';
                 }}
@@ -372,15 +440,15 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
         </div>
 
         {/* Headers expanded editing */}
-        {isExpanded && headers.length > 0 && (
+        {snippetAble && isExpanded && headers.length > 0 && (
           <div className="space-y-2 bg-slate-50/80 rounded-lg p-3 border border-slate-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">导入头文件</label>
                 {/* Usage summary */}
                 {(() => {
-                  const usedCount = headers.filter(h => isHeaderUsedInCode(h, res.code) === 'used').length;
-                  const unusedCount = headers.filter(h => isHeaderUsedInCode(h, res.code) === 'unused').length;
+                  const usedCount = headers.filter(h => isHeaderUsedInCode(h, code) === 'used').length;
+                  const unusedCount = headers.filter(h => isHeaderUsedInCode(h, code) === 'unused').length;
                   return (
                     <span className="text-[9px] text-slate-400">
                       {usedCount > 0 && <span className="text-green-600 font-bold">{usedCount} 引用</span>}
@@ -403,10 +471,10 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
                   格式化
                 </button>
                 {/* Remove unused */}
-                {headers.some(h => isHeaderUsedInCode(h, res.code) === 'unused') && (
+                {headers.some(h => isHeaderUsedInCode(h, code) === 'unused') && (
                   <button
                     onClick={() => {
-                      const kept = headers.filter(h => isHeaderUsedInCode(h, res.code) !== 'unused');
+                      const kept = headers.filter(h => isHeaderUsedInCode(h, code) !== 'unused');
                       handleUpdateScanResult(i, { headers: kept });
                     }}
                     className="text-[9px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded hover:bg-amber-200 font-bold"
@@ -428,7 +496,7 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
             </div>
             <div className="space-y-1">
               {headers.map((h, hi) => {
-                const usage = isHeaderUsedInCode(h, res.code);
+                const usage = isHeaderUsedInCode(h, code);
                 return (
                   <div key={hi} className="flex items-center gap-2">
                     {/* Usage indicator */}
@@ -470,26 +538,48 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
         )}
       </div>
 
-      {/* ── Content area: Summary, UsageGuide, Similarity, Code ── */}
+      {/* ── Content area: Summary, UsageGuide, AI Info, Similarity, Code ── */}
       <div className="px-6 pb-6 pt-3 space-y-3">
+        {/* AI 推理信息（来自候选的 reasoning） */}
+        {res.reasoning && (res.reasoning.confidence != null || (res.reasoning.why_standard && !/^Submitted via /i.test(res.reasoning.why_standard))) && (
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 text-xs space-y-1.5">
+            <div className="flex items-center gap-1.5 text-indigo-600 font-bold text-[10px]">
+              AI 推理
+              {res.reasoning.confidence != null && (
+                <span className={`ml-auto font-mono text-[10px] ${
+                  res.reasoning.confidence >= 0.7 ? 'text-emerald-600' : res.reasoning.confidence >= 0.4 ? 'text-amber-600' : 'text-red-600'
+                }`}>
+                  置信度 {Math.round(res.reasoning.confidence * 100)}%
+                </span>
+              )}
+            </div>
+            {res.reasoning.why_standard && !/^Submitted via /i.test(res.reasoning.why_standard) && (
+              <p className="text-slate-600">{res.reasoning.why_standard}</p>
+            )}
+            {res.reasoning.sources && res.reasoning.sources.length > 0 && (
+              <p className="text-slate-400">来源: {res.reasoning.sources.join(', ')}</p>
+            )}
+          </div>
+        )}
+
         {/* Summary */}
         <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Summary (摘要) - {res.lang === 'cn' ? '中文' : 'EN'}</label>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">摘要 - {res.lang === 'cn' ? '中文' : 'EN'}</label>
           <textarea
             rows={1}
             className="w-full text-sm text-slate-600 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none resize-none leading-relaxed focus:ring-2 focus:ring-blue-500/10"
-            value={res.summary}
+            value={summary}
             onChange={e => handleUpdateScanResult(i, { summary: e.target.value })}
           />
         </div>
 
         {/* Usage Guide */}
         <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Usage Guide (使用指南) - {res.lang === 'cn' ? '中文' : 'EN'}</label>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">使用指南 - {res.lang === 'cn' ? '中文' : 'EN'}</label>
           <textarea
             rows={3}
             className="w-full text-sm text-slate-600 bg-white border border-slate-200 rounded-xl px-3 py-2 outline-none resize-y leading-relaxed focus:ring-2 focus:ring-blue-500/10"
-            value={typeof res.usageGuide === 'object' ? JSON.stringify(res.usageGuide) : (res.usageGuide || '')}
+            value={typeof usageGuide === 'object' ? JSON.stringify(usageGuide) : usageGuide}
             onChange={e => handleUpdateScanResult(i, { usageGuide: e.target.value })}
             placeholder="何时用 / 关键点 / 依赖..."
           />
@@ -497,7 +587,7 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
 
         {/* Similarity warnings — 仅在有 ≥60% 相似结果时才显示，不产生布局变化 */}
         {(() => {
-          const simKey = res.candidateId ?? `scan-${i}`;
+          const simKey = res.candidateId ?? res.id ?? `scan-${i}`;
           const similar = similarityMap[simKey];
           // 只过滤出有意义的相似结果（≥60%），低于此阈值不显示
           const meaningfulSimilar = (similar || []).filter(s => s.similarity >= 0.6);
@@ -547,7 +637,7 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
         {/* Code editing */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="text-[10px] font-bold text-slate-400 uppercase">Standardized Usage Example (标准使用示例)</label>
+            <label className="text-[10px] font-bold text-slate-400 uppercase">代码 / 标准用法示例</label>
             {editingCodeIndex === i ? (
               <button
                 type="button"
@@ -570,14 +660,16 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
           {editingCodeIndex === i ? (
             <div className="rounded-xl overflow-hidden">
               <HighlightedCodeEditor
-                value={res.code}
-                onChange={(code) => handleUpdateScanResult(i, { code })}
+                value={code}
+                onChange={(newCode) => handleUpdateScanResult(i, { code: newCode })}
                 language={codeLang(res)}
-                height={`${Math.min(12, res.code.split('\n').length) * 20 + 16}px`}
+                height={`${Math.min(12, code.split('\n').length) * 20 + 16}px`}
               />
             </div>
+          ) : code ? (
+            <CodeBlock code={code} language={codeLang(res)} showLineNumbers />
           ) : (
-            <CodeBlock code={res.code} language={codeLang(res)} showLineNumbers />
+            <p className="text-xs text-slate-400 italic py-4">（无代码内容）</p>
           )}
         </div>
       </div>

@@ -42,7 +42,7 @@ Use this skill when the user's intent is unclear or overlaps multiple capabiliti
 - Insights: `autosnippet_recipe_insights`, `autosnippet_compliance_report`
 - Graph: `autosnippet_graph_query`, `autosnippet_graph_impact`, `autosnippet_graph_path`, `autosnippet_graph_stats`
 - Structure: `autosnippet_get_targets`, `autosnippet_get_target_files`, `autosnippet_get_target_metadata`
-- Candidates: `autosnippet_validate_candidate`, `autosnippet_check_duplicate`, `autosnippet_submit_candidate`, `autosnippet_submit_candidates`, `autosnippet_submit_draft_recipes`, `autosnippet_enrich_candidates`
+- Candidates: `autosnippet_validate_candidate`, `autosnippet_check_duplicate`, `autosnippet_submit_knowledge`, `autosnippet_submit_knowledge_batch`, `autosnippet_submit_knowledge_batch`, `autosnippet_enrich_candidates`
 - Guard: `autosnippet_guard_check`, `autosnippet_guard_audit_files`, `autosnippet_scan_project`
 - Telemetry: `autosnippet_confirm_usage`
 - Bootstrap: `autosnippet_bootstrap_knowledge`, `autosnippet_bootstrap_refine`

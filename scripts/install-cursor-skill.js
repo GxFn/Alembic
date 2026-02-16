@@ -22,7 +22,6 @@ const require = createRequire(import.meta.url);
 import fs from 'node:fs';
 import path from 'node:path';
 import * as defaults from '../lib/infrastructure/config/Defaults.js';
-import { RecipeStatsTracker } from '../lib/service/recipe/RecipeStatsTracker.js';
 
 const autoSnippetRoot = path.join(__dirname, '..');
 const skillsSource = path.join(autoSnippetRoot, 'skills');
@@ -156,11 +155,6 @@ function buildProjectRecipesContext(projectRoot) {
   if (!fs.existsSync(recipesDir)) return null;
   const mdFiles = collectMdFiles(recipesDir, recipesDir).sort();
   if (mdFiles.length === 0) return null;
-  let stats = { byFile: {} };
-  try {
-    const tracker = new RecipeStatsTracker(projectRoot);
-    stats = tracker.getStats();
-  } catch (_) {}
 
   const lines = [
     '# Project Recipes Index\n\n',

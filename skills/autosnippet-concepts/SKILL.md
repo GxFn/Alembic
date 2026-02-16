@@ -87,7 +87,7 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 | 知识图谱 | `autosnippet_graph_query`, `autosnippet_graph_impact`, `autosnippet_graph_path`, `autosnippet_graph_stats` |
 | 候选预检 | `autosnippet_validate_candidate` |
 | 去重建议 | `autosnippet_check_duplicate` |
-| 候选提交 | `autosnippet_submit_candidate`, `autosnippet_submit_candidates`, `autosnippet_submit_draft_recipes` |
+| 候选提交 | `autosnippet_submit_knowledge`, `autosnippet_submit_knowledge_batch`, `autosnippet_submit_knowledge_batch` |
 | AI 补全 | `autosnippet_enrich_candidates` |
 | Guard 检查 | `autosnippet_guard_check`, `autosnippet_guard_audit_files` |
 | 合规报告 | `autosnippet_compliance_report`, `autosnippet_recipe_insights` |
@@ -337,7 +337,7 @@ When creating or extracting Recipes:
 
 ### Candidate-only Rule (重要)
 
-- **If the user asks for candidates**: Extract structured items and submit via MCP **`autosnippet_submit_candidates`**.
+- **If the user asks for candidates**: Extract structured items and submit via MCP **`autosnippet_submit_knowledge_batch`**.
 
 ---
 
@@ -377,7 +377,7 @@ When `asd ui` is running in the project root, use the HTTP API for on-demand sem
 | Capability | Description | Skill |
 |------------|-------------|-------|
 | **Recipe lookup** | Read `references/project-recipes-context.md` 轻量索引，需全文调 MCP `autosnippet_get_recipe(id)` / `autosnippet_context_search`. Recipe over source | autosnippet-recipes |
-| **Create Recipe** | Dashboard New Recipe; or write to `_draft_recipe.md` and watch auto-adds; or MCP `autosnippet_submit_draft_recipes` | autosnippet-create |
+| **Create Recipe** | Dashboard New Recipe; or write to `_draft_recipe.md` and watch auto-adds; or MCP `autosnippet_submit_knowledge_batch` | autosnippet-create |
 | **Search & insert** | `ass` shortcut or `// as:search`, `asd search`, Dashboard search | autosnippet-search |
 | **Audit review** | `// as:audit`; watch runs AI review against knowledge base | autosnippet-guard |
 | **Dependency graph** | `AutoSnippet/AutoSnippet.spmmap.json`; `asd spm-map` to update; MCP graph tools for querying | autosnippet-structure |
@@ -594,8 +594,8 @@ authority: 3
 
 ### How to add new knowledge
 
-1. **Single code / single Recipe**: Copy to clipboard → open Dashboard (run `asd ui` if not running) → Use Copied Code, paste, review, save; or write `_draft_recipe.md` and let watch auto-add to Candidates. Or use `autosnippet_submit_draft_recipes` via MCP.
-2. **Multiple drafts (recommended)**: Create a **draft folder** (e.g. `.autosnippet-drafts`), **one .md file per Recipe**—do not put everything in one big file. Call MCP **`autosnippet_submit_draft_recipes`** with those file paths to submit to Candidates, then review in Dashboard **Candidates**. **After submit, delete the draft folder** (use `deleteAfterSubmit: true` or `rm -rf .autosnippet-drafts`).
+1. **Single code / single Recipe**: Copy to clipboard → open Dashboard (run `asd ui` if not running) → Use Copied Code, paste, review, save; or write `_draft_recipe.md` and let watch auto-add to Candidates. Or use `autosnippet_submit_knowledge_batch` via MCP.
+2. **Multiple drafts (recommended)**: Create a **draft folder** (e.g. `.autosnippet-drafts`), **one .md file per Recipe**—do not put everything in one big file. Call MCP **`autosnippet_submit_knowledge_batch`** with those file paths to submit to Candidates, then review in Dashboard **Candidates**. **After submit, delete the draft folder** (use `deleteAfterSubmit: true` or `rm -rf .autosnippet-drafts`).
 3. **Intro-only docs**: Recipe candidates can be intro-only (frontmatter + usage guide, no code); after approval they become Recipes and **do not generate a Snippet**—used only for search and Guard context.
 
 ### How to use knowledge once it’s in the base

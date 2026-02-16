@@ -12,8 +12,8 @@ This skill tells the agent how to **submit module usage code** (that Cursor has 
 ## Instructions for the agent (read this first)
 
 1. **Goal**: When you (Cursor) have **finished writing or refining** module usage code, or the user says "把这段提交到 web / 加入知识库", guide them to **submit that code to the Dashboard** so it becomes a **Recipe** in `AutoSnippet/recipes/`.
-2. **Draft workflow**: Prefer **creating a draft folder** (e.g. `.autosnippet-drafts`), **one .md file per Recipe**, multiple draft files—**do not use one big file**. Call MCP **`autosnippet_submit_draft_recipes`** with filePaths (the .md files in the draft folder) to submit to Candidates. **After submit, delete the draft folder** (use `deleteAfterSubmit: true` or run `rm -rf .autosnippet-drafts`). Single-item flow can use `_draft_recipe.md` and watch will auto-add to Candidates.
-3. **When user asks for "candidates"**: Use MCP **`autosnippet_submit_candidates`** for structured items (title/summary/trigger/code/usageGuide); use **`autosnippet_submit_draft_recipes`** for Markdown draft files (prefer draft folder + multiple files; delete draft folder after submit).
+2. **Draft workflow**: Prefer **creating a draft folder** (e.g. `.autosnippet-drafts`), **one .md file per Recipe**, multiple draft files—**do not use one big file**. Call MCP **`autosnippet_submit_knowledge_batch`** with filePaths (the .md files in the draft folder) to submit to Candidates. **After submit, delete the draft folder** (use `deleteAfterSubmit: true` or run `rm -rf .autosnippet-drafts`). Single-item flow can use `_draft_recipe.md` and watch will auto-add to Candidates.
+3. **When user asks for "candidates"**: Use MCP **`autosnippet_submit_knowledge_batch`** for structured items (title/summary/trigger/code/usageGuide); use **`autosnippet_submit_knowledge_batch`** for Markdown draft files (prefer draft folder + multiple files; delete draft folder after submit).
 4. **One Recipe = one scenario**: If you are drafting content, **split** into multiple Recipes by scenario. Never combine multiple usage patterns into one Recipe file or one candidate.
 5. **Recipe candidates can be intro-only**: Intro-only docs (no code block) can be submitted as candidates; after approval they become Recipes and **do not generate a Snippet**—used only for search and Guard context.
 6. **MUST follow standard Recipe format**: Use the complete template from **autosnippet-concepts** skill. Include all required fields: frontmatter with `title`, `trigger`, `category` (one of 8 standard values), `language` (must be `swift` or `objectivec`), `summary_cn`, `summary_en`, `headers` (complete import statements), plus `## Snippet / Code Reference` and `## AI Context / Usage Guide` section.
@@ -51,11 +51,11 @@ This skill tells the agent how to **submit module usage code** (that Cursor has 
      ```
    - See [templates/recipes-setup/README.md](../../templates/recipes-setup/README.md) for detailed format guide & examples.
 7. **Auto-fill headers from project context**: Before submitting, **check `references/project-recipes-context.md`** (轻量索引) to find similar Recipes by title/trigger/category, then call MCP **`autosnippet_get_recipe(id)`** to get full content including headers. Copy the exact import format for `headers` field. If needed, call MCP **`autosnippet_context_search`** with the module name to find similar Recipes and extract their header patterns. This ensures consistency and correctness.
-8. **Primary flow (MCP preferred)**: Code is ready → Agent writes to `_draft_recipe.md` or calls `autosnippet_submit_draft_recipes` / `autosnippet_submit_candidates` → candidates appear in Dashboard Candidates → user reviews and approves → Recipe is added to the knowledge base.
+8. **Primary flow (MCP preferred)**: Code is ready → Agent writes to `_draft_recipe.md` or calls `autosnippet_submit_knowledge_batch` / `autosnippet_submit_knowledge_batch` → candidates appear in Dashboard Candidates → user reviews and approves → Recipe is added to the knowledge base.
 9. **Alternative (Dashboard browser)**: Code is ready → user opens Dashboard (`asd ui` running) → **New Recipe** → **Use Copied Code** (paste the code) → AI fills title/summary/trigger/headers → **user reviews and approves** → saved to knowledge base.
 10. **Alternative (in editor)**: User adds **`// as:create`** in the source file, copies the code, saves → **watch** (from `asd watch` or `asd ui`) auto-adds to Candidates → user opens Dashboard **Candidates** to review and save.
 9. **Draft & clipboard auto-add**: When you write to **`_draft_recipe.md`** (project root) or user uses **`// as:create`** with clipboard content, **watch** automatically reads the draft/clipboard, adds it to **Candidates** (target `_draft` or `_watch`), and shows a **friendly prompt** (e.g. "已创建候选「xxx」，请在 Candidates 页审核" in notification and console). User only needs to open Dashboard **Candidates** to review and save — no manual copy-paste required.
-10. **Multiple recipes**: Prefer **one .md file per Recipe** in a draft folder (e.g. `.autosnippet-drafts/`), call **`autosnippet_submit_draft_recipes`** with the list of file paths, then **delete the draft folder** after submit. Do not use one big file for many Recipes.
+10. **Multiple recipes**: Prefer **one .md file per Recipe** in a draft folder (e.g. `.autosnippet-drafts/`), call **`autosnippet_submit_knowledge_batch`** with the list of file paths, then **delete the draft folder** after submit. Do not use one big file for many Recipes.
 11. **Project root** = directory with `AutoSnippet/AutoSnippet.boxspec.json`. All commands run from the project root.
 
 ---
@@ -68,7 +68,7 @@ This skill tells the agent how to **submit module usage code** (that Cursor has 
 
 - **Code scenario**: Usage code is in current file or clipboard. If not copied, prompt user to copy the code block you provide.
 ...rated a full Recipe (frontmatter, Snippet, Usage Guide), **prefer writing to draft file** `_draft_recipe.md` at project root. On save, **watch automatically reads the draft**, adds it to **Candidates** (target `_draft`), and shows a **friendly prompt** ("已创建候选「xxx」，请在 Candidates 页审核"). User opens Dashboard **Candidates** to review and save — no manual copy needed. Or output in copyable format in chat and guide user to copy → Dashboard → Use Copied Code → paste → review → save. **Do not write to `AutoSnippet/recipes/` or `AutoSnippet/snippets/`.**
-- **Candidate output rule**: When the user asks for candidates, **do not create files under `AutoSnippet/`**. Use **`autosnippet_submit_candidates`** for structured items; use **`autosnippet_submit_draft_recipes`** for draft .md files (prefer draft folder + multiple files; delete draft folder after submit).
+- **Candidate output rule**: When the user asks for candidates, **do not create files under `AutoSnippet/`**. Use **`autosnippet_submit_knowledge_batch`** for structured items; use **`autosnippet_submit_knowledge_batch`** for draft .md files (prefer draft folder + multiple files; delete draft folder after submit).
 
 ### Step 2: Open the web (Dashboard) in browser
 
@@ -78,7 +78,7 @@ This skill tells the agent how to **submit module usage code** (that Cursor has 
 ### Step 3: Submit via Dashboard
 
 1. **Browser**: Run terminal command `open "http://localhost:3000/?action=create&source=clipboard"` (macOS) to open the browser.
-2. **Draft file (preferred for Agent)**: Write full Recipe MD to `_draft_recipe.md` at project root → watch auto-adds to Candidates. Or call MCP **`autosnippet_submit_draft_recipes`** with draft file paths.
+2. **Draft file (preferred for Agent)**: Write full Recipe MD to `_draft_recipe.md` at project root → watch auto-adds to Candidates. Or call MCP **`autosnippet_submit_knowledge_batch`** with draft file paths.
 3. **Manual fallback**: User opens **`http://localhost:3000`** in browser → **New Recipe** → **Use Copied Code** → paste.
 3. Pasted code: **Full Recipe MD** (with `---` frontmatter, `## Snippet / Code Reference`, `## AI Context / Usage Guide`) is parsed directly, **no AI rewrite**. Plain code still goes through AI analysis and fill.
 4. **User reviews and approves** — 人工审核 title/summary/category/trigger 及内容，确认无误后再保存。
@@ -92,7 +92,7 @@ This skill tells the agent how to **submit module usage code** (that Cursor has 
 
 ## Alternative: Copy then jump to Web (Xcode and Cursor)
 
-**Option A — MCP Submit (Cursor 首选)**: After user confirms code, Agent calls **`autosnippet_submit_draft_recipes`** (for .md drafts) or **`autosnippet_submit_candidates`** (for structured items) to submit directly to Candidates. User reviews in Dashboard.
+**Option A — MCP Submit (Cursor 首选)**: After user confirms code, Agent calls **`autosnippet_submit_knowledge_batch`** (for .md drafts) or **`autosnippet_submit_knowledge_batch`** (for structured items) to submit directly to Candidates. User reviews in Dashboard.
 
 **Option B — Browser (Dashboard)**: Run `open "http://localhost:3000/?action=create&source=clipboard"` to open Dashboard New Recipe page; page reads clipboard and fills.
 
@@ -148,9 +148,9 @@ Watch parses all such blocks and adds each as a separate candidate; prompt may s
 
 | User / Cursor situation | Action |
 |-------------------------|--------|
-| "把这段提交到 web / 加入知识库" (code just written) | 1) 提示用户复制代码；2) 写入 `_draft_recipe.md` 或调用 **`autosnippet_submit_draft_recipes`**；3) 若需 Dashboard，运行 `open "http://localhost:3000/?action=create&source=clipboard"`；4) 用户粘贴并保存。 |
+| "把这段提交到 web / 加入知识库" (code just written) | 1) 提示用户复制代码；2) 写入 `_draft_recipe.md` 或调用 **`autosnippet_submit_knowledge_batch`**；3) 若需 Dashboard，运行 `open "http://localhost:3000/?action=create&source=clipboard"`；4) 用户粘贴并保存。 |
 | Agent 起草了 Recipe/Snippet 内容 | **Prefer**: Write to `_draft_recipe.md` (project root) → save → **watch 自动读取并加入候选池**，并给出友好提示 → 用户打开 Dashboard **Candidates** 审核并保存。无需手动复制。 |
-| Code in current file, want to submit from editor | **MCP**：`autosnippet_submit_draft_recipes`（写草稿 .md 后提交）。或 Add **`// as:create`**, copy, save；确保 **`asd watch`** / **`asd ui`** 运行；有剪贴板时自动加入候选并友好提示。 |
+| Code in current file, want to submit from editor | **MCP**：`autosnippet_submit_knowledge_batch`（写草稿 .md 后提交）。或 Add **`// as:create`**, copy, save；确保 **`asd watch`** / **`asd ui`** 运行；有剪贴板时自动加入候选并友好提示。 |
 | Code already in a file (path known) | 打开 **`http://localhost:3000`** → New Recipe → enter path → **Scan File** → review → save. |
 | Agent 起草内容无法完整复制 | Write to `_draft_recipe.md` → save → **watch 自动读取草稿、加入候选并友好提示** → 用户打开 **Candidates** 审核保存。 |
 | Batch from Target | **`asd ais <Target>`** → 打开 **`http://localhost:3000`** → **Candidates** → approve. |
@@ -162,13 +162,13 @@ Watch parses all such blocks and adds each as a separate candidate; prompt may s
 | Tool | Use |
 |------|-----|
 | `autosnippet_context_search` | On-demand semantic search of knowledge base; pass `query`, `limit?` |
-| `autosnippet_submit_draft_recipes` | Submit draft .md as candidates: prefer draft folder + multiple files (not one big file); supports intro-only docs (no code—no Snippet). Pass `filePaths`, optional `targetName`, `deleteAfterSubmit`. **Delete the draft folder after submit** (e.g. `deleteAfterSubmit: true` or `rm -rf .autosnippet-drafts`). |
-| `autosnippet_submit_candidates` | Submit structured items (title, summary, trigger, language, code, usageGuide) for batch scan, etc. |
-| `autosnippet_submit_candidate` | Submit single structured candidate with full V2 fields. |
+| `autosnippet_submit_knowledge_batch` | Submit draft .md as candidates: prefer draft folder + multiple files (not one big file); supports intro-only docs (no code—no Snippet). Pass `filePaths`, optional `targetName`, `deleteAfterSubmit`. **Delete the draft folder after submit** (e.g. `deleteAfterSubmit: true` or `rm -rf .autosnippet-drafts`). |
+| `autosnippet_submit_knowledge_batch` | Submit structured items (title, summary, trigger, language, code, usageGuide) for batch scan, etc. |
+| `autosnippet_submit_knowledge` | Submit single structured candidate with full V2 fields. |
 | `autosnippet_validate_candidate` | Pre-validate candidate quality before submission. |
 | `autosnippet_check_duplicate` | Check for duplicate Recipes before submission. |
 
-**Fallback when Dashboard not open**: Agent can always use `autosnippet_submit_draft_recipes` or `autosnippet_submit_candidates` directly via MCP — no browser needed.
+**Fallback when Dashboard not open**: Agent can always use `autosnippet_submit_knowledge_batch` or `autosnippet_submit_knowledge_batch` directly via MCP — no browser needed.
 
 ---
 

@@ -23,7 +23,7 @@
 
 ## 强制规则（必须遵守）
 1. **禁止直接修改** 知识库目录内容（`AutoSnippet/recipes/`、`.autosnippet/` 等）。
-2. 创建或入库必须走 **Dashboard** 或 MCP 工具流程（`autosnippet_submit_candidate`、`autosnippet_submit_candidates`）。
+2. 创建或入库必须走 **Dashboard** 或 MCP 工具流程（`autosnippet_submit_knowledge`、`autosnippet_submit_knowledge_batch`）。
 3. **优先使用 Recipe** 作为项目标准；源代码仅作补充。
 4. MCP 检索优先：使用 `autosnippet_search` 或 `autosnippet_context_search` 获取语义检索结果。
 5. MCP 调用失败时，**不要在同一轮重复重试**，回退到已读文档或静态上下文。
@@ -47,9 +47,9 @@
 ### 候选提交 & 校验
 - `autosnippet_validate_candidate` — 提交前预校验（5 层）
 - `autosnippet_check_duplicate` — 相似度检测
-- `autosnippet_submit_candidate` — 单条提交（reasoning 必填）
-- `autosnippet_submit_candidates` — 批量提交（含去重 + 限流）
-- `autosnippet_submit_draft_recipes` — 解析草稿 Markdown 文件
+- `autosnippet_submit_knowledge` — 单条提交（reasoning 必填）
+- `autosnippet_submit_knowledge_batch` — 批量提交（含去重 + 限流）
+- `autosnippet_submit_knowledge_batch` — 解析草稿 Markdown 文件
 - `autosnippet_enrich_candidates` — AI 补全缺失语义字段
 
 ### 项目扫描 & 冷启动
@@ -85,8 +85,8 @@
 
 ## 推荐工作流
 - **查找**：`autosnippet_search`（推荐）或 `autosnippet_context_search`（上下文感知）。
-- **产出候选**：`autosnippet_validate_candidate` 预校验 → `autosnippet_submit_candidate` 提交。
-- **冷启动**：`autosnippet_bootstrap_knowledge` → `autosnippet_enrich_candidates` → `autosnippet_bootstrap_refine` → 逐 Target 深入 → `autosnippet_submit_candidates`。
+- **产出候选**：`autosnippet_validate_candidate` 预校验 → `autosnippet_submit_knowledge` 提交。
+- **冷启动**：`autosnippet_bootstrap_knowledge` → `autosnippet_enrich_candidates` → `autosnippet_bootstrap_refine` → 逐 Target 深入 → `autosnippet_submit_knowledge_batch`。
 - **Skills 创建**：`autosnippet_suggest_skills` 分析 → `autosnippet_create_skill` 固化知识。
 - **采纳反馈**：`autosnippet_confirm_usage`（记录使用量影响排序权重）。
 

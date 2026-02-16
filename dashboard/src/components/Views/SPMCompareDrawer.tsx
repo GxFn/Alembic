@@ -54,8 +54,10 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
 
   const copyCandidate = () => {
     const parts = [];
-    if (cand.code) parts.push('## Snippet / Code Reference\n\n```' + candLang + '\n' + cand.code + '\n```');
-    if (cand.usageGuide) parts.push('\n## AI Context / Usage Guide\n\n' + cand.usageGuide);
+    const candCode = cand.code || cand.content?.pattern || '';
+    const candGuide = cand.usageGuide || cand.usage_guide_cn || '';
+    if (candCode) parts.push('## Snippet / Code Reference\n\n```' + candLang + '\n' + candCode + '\n```');
+    if (candGuide) parts.push('\n## AI Context / Usage Guide\n\n' + candGuide);
     navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify('候选内容已复制到剪贴板', { title: '已复制' }));
   };
   const copyRecipe = () => {
@@ -176,14 +178,14 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
             <div className="flex-1 overflow-y-auto p-4">
               <div className="markdown-body text-slate-700 space-y-4">
                 <h3 className="text-sm font-bold">Snippet / Code Reference</h3>
-                {cand.code ? (
-                  <CodeBlock code={cand.code} language={candLang} className="!overflow-visible" />
+                {(cand.code || cand.content?.pattern) ? (
+                  <CodeBlock code={cand.code || cand.content?.pattern || ''} language={candLang} className="!overflow-visible" />
                 ) : (
                   <p className="text-slate-400 italic text-xs">（无代码）</p>
                 )}
                 <h3 className="text-sm font-bold mt-4">AI Context / Usage Guide</h3>
-                {cand.usageGuide ? (
-                  <MarkdownWithHighlight content={cand.usageGuide} />
+                {(cand.usageGuide || cand.usage_guide_cn) ? (
+                  <MarkdownWithHighlight content={cand.usageGuide || cand.usage_guide_cn || ''} />
                 ) : (
                   <p className="text-slate-400 italic text-xs">（无使用指南）</p>
                 )}

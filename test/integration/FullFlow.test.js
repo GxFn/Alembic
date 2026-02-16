@@ -100,13 +100,13 @@ describe('Integration: Complete Gateway Flow', () => {
     test('should allow candidate creation with complete data', async () => {
       const { gateway } = components;
 
-      gateway.register('submit_candidates', async (context) => {
+      gateway.register('submit_knowledge', async (context) => {
         return { candidateId: 'cand-123' };
       });
 
       const result = await gateway.execute({
         actor: 'external_agent',
-        action: 'submit_candidates',
+        action: 'submit_knowledge',
         resource: '/candidates',
         data: {
           name: 'Good Candidate',

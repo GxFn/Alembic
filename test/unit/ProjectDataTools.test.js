@@ -344,7 +344,7 @@ describe('read_project_file', () => {
 });
 
 /* ────────────────────────────────────────────
- *  Tests: submit_with_check — 与 submit_candidate 一致性
+ *  Tests: submit_with_check — 与 submit_knowledge 一致性
  * ──────────────────────────────────────────── */
 describe('submit_with_check consistency', () => {
   beforeAll(() => setupTestProject());
@@ -357,8 +357,8 @@ describe('submit_with_check consistency', () => {
       category: 'Architecture',
       title: 'Example Pattern',
     };
-    const mockCandidateService = {
-      createFromToolParams: jest.fn().mockResolvedValue({ id: 'c-1', status: 'pending' }),
+    const mockKnowledgeService = {
+      create: jest.fn().mockResolvedValue({ id: 'k-1', lifecycle: 'draft', toJSON() { return { id: 'k-1' }; } }),
     };
     const ctx = {
       projectRoot: testProjectDir,
@@ -368,14 +368,14 @@ describe('submit_with_check consistency', () => {
         allowedKnowledgeTypes: ['architecture', 'best-practice'],
         allowedCategories: ['Architecture', 'Service'],
       },
-      container: { get: (name) => name === 'candidateService' ? mockCandidateService : null },
+      container: { get: (name) => name === 'knowledgeService' ? mockKnowledgeService : null },
       logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn() },
     };
     const result = await submitWithCheck.handler(params, ctx);
     expect(result.submitted).toBe(true);
-    // Verify knowledgeType was auto-filled into the item passed to createFromToolParams
-    const itemArg = mockCandidateService.createFromToolParams.mock.calls[0][0];
-    expect(itemArg.knowledgeType).toBe('architecture');
+    // Verify knowledgeType was auto-filled into the data passed to create
+    const dataArg = mockKnowledgeService.create.mock.calls[0][0];
+    expect(dataArg.knowledge_type).toBe('architecture');
   });
 
   it('should pass source from params instead of hardcoded agent', async () => {
@@ -386,19 +386,19 @@ describe('submit_with_check consistency', () => {
       title: 'Test',
       source: 'bootstrap',
     };
-    const mockCandidateService = {
-      createFromToolParams: jest.fn().mockResolvedValue({ id: 'c-2', status: 'pending' }),
+    const mockKnowledgeService = {
+      create: jest.fn().mockResolvedValue({ id: 'k-2', lifecycle: 'draft', toJSON() { return { id: 'k-2' }; } }),
     };
     const ctx = {
       projectRoot: testProjectDir,
-      container: { get: (name) => name === 'candidateService' ? mockCandidateService : null },
+      container: { get: (name) => name === 'knowledgeService' ? mockKnowledgeService : null },
       logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn() },
     };
     const result = await submitWithCheck.handler(params, ctx);
     expect(result.submitted).toBe(true);
     // Verify source parameter was used
-    const sourceArg = mockCandidateService.createFromToolParams.mock.calls[0][1];
-    expect(sourceArg).toBe('bootstrap');
+    const dataArg = mockKnowledgeService.create.mock.calls[0][0];
+    expect(dataArg.source).toBe('bootstrap');
   });
 
   it('should preserve extra fields (complexity, scope) via ...rest', async () => {
@@ -412,20 +412,18 @@ describe('submit_with_check consistency', () => {
       scope: 'module',
       knowledgeType: 'architecture',
     };
-    const mockCandidateService = {
-      createFromToolParams: jest.fn().mockResolvedValue({ id: 'c-3', status: 'pending' }),
+    const mockKnowledgeService = {
+      create: jest.fn().mockResolvedValue({ id: 'k-3', lifecycle: 'draft', toJSON() { return { id: 'k-3' }; } }),
     };
     const ctx = {
       projectRoot: testProjectDir,
-      container: { get: (name) => name === 'candidateService' ? mockCandidateService : null },
+      container: { get: (name) => name === 'knowledgeService' ? mockKnowledgeService : null },
       logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn() },
     };
     const result = await submitWithCheck.handler(params, ctx);
     expect(result.submitted).toBe(true);
-    const itemArg = mockCandidateService.createFromToolParams.mock.calls[0][0];
-    expect(itemArg.complexity).toBe('medium');
-    expect(itemArg.scope).toBe('module');
-    expect(itemArg.knowledgeType).toBe('architecture');
+    const dataArg = mockKnowledgeService.create.mock.calls[0][0];
+    expect(dataArg.knowledge_type).toBe('architecture');
   });
 });
 

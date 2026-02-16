@@ -1,11 +1,8 @@
 /**
  * AutoSnippet Dashboard API Client
  *
- * 直接调用 V2 RESTful API（/api/v1/*），消除 v1-compat 中间层。
- * 负责：
- *   1. 统一 {success, data} 信封解包
- *   2. V2 → V1 前端类型转换（保持 UI 组件不变）
- *   3. V1→V2 请求格式转换（snippet/recipe 保存）
+ * 直接调用 V3 RESTful API（/api/v1/*）。
+ * 前端统一使用 V3 KnowledgeEntry 类型，不做字段映射。
  */
 
 import axios from 'axios';
@@ -16,7 +13,11 @@ import type {
   ProjectData,
   SPMTarget,
   ExtractedRecipe,
-  CandidateItem,
+  KnowledgeEntry,
+  KnowledgePaginatedResponse,
+  KnowledgeStatsResponse,
+  KnowledgeLifecycle,
+  KnowledgeKind,
 } from './types';
 
 // ═══════════════════════════════════════════════════════
@@ -26,179 +27,66 @@ import type {
 const http = axios.create({ baseURL: '/api/v1' });
 
 // ═══════════════════════════════════════════════════════
-//  V2 → V1 Transformations
+//  Type Mappers
 // ═══════════════════════════════════════════════════════
 
-/** V2 Snippet → V1 Snippet (for rootSpec.list) */
-function mapV2SnippetToV1(s: any): Snippet {
-  const meta = s.metadata || {};
-  return {
-    identifier: s.identifier || s.id,
-    title: s.title || '',
-    completionKey: s.completion || s.completionKey || '',
-    summary: s.summary || '',
-    category: s.category || 'Utility',
-    language: s.language || 'swift',
-    content: s.code ? s.code.split('\n') : (s.content || []),
-    body: s.code ? s.code.split('\n') : undefined,
-    headers: meta.headers || [],
-    headerPaths: meta.headerPaths || [],
-    moduleName: meta.moduleName || '',
-    includeHeaders: meta.includeHeaders !== false,
-    link: meta.link || undefined,
-  };
-}
-
-/** V2 Recipe entity → V1 Recipe (with reconstructed markdown `content`) */
-function mapV2RecipeToV1(r: any): Recipe {
+/** V3 KnowledgeEntry → 前端 Recipe 视图类型 */
+function toRecipe(r: any): Recipe {
   const quality = r.quality || {};
-  const statistics = r.statistics || {};
+  const statistics = r.stats || r.statistics || {};
   const contentObj = r.content || {};
   const dims = r.dimensions || {};
 
-  // ── Reconstruct frontmatter + body markdown ──
   const trigger =
-    dims.trigger ||
+    r.trigger || dims.trigger ||
     '@' + (r.title || '').replace(/[\s_-]+(.)?/g, (_: string, c: string) => (c ? c.toUpperCase() : ''));
-  const tags: string[] = r.tags || [];
-  const headers: string[] = dims.headers || [];
 
-  let md = '---\n';
-  md += `title: ${r.title || ''}\n`;
-  md += `trigger: ${trigger}\n`;
-  md += `language: ${r.language || 'swift'}\n`;
-  md += `category: ${r.category || 'Utility'}\n`;
-  // summary: 直接从一级字段读取
-  const summaryCn = r.summaryCn || r.description || '';
-  const summaryEn = r.summaryEn || '';
-  md += `summary: ${summaryCn}\n`;
-  md += `summary_cn: ${summaryCn}\n`;
-  if (summaryEn) md += `summary_en: ${summaryEn}\n`;
-  if (r.scope) md += `scope: ${r.scope}\n`;
-  if (r.knowledgeType) md += `knowledge_type: ${r.knowledgeType}\n`;
-  if (r.complexity) md += `complexity: ${r.complexity}\n`;
-  if (tags.length > 0) md += `tags: ${JSON.stringify(tags)}\n`;
-  if (headers.length > 0) md += `headers: ${JSON.stringify(headers)}\n`;
-  const diff = dims.difficulty || r.complexity || '';
-  if (diff) md += `difficulty: ${diff}\n`;
-  const auth = quality.overall || dims.authority || 0;
-  if (auth) md += `authority: ${auth}\n`;
-  md += `version: ${dims.version || '1.0.0'}\n`;
-  md += `status: ${r.status || 'draft'}\n`;
-  const updatedMs = r.updatedAt ? (r.updatedAt < 1e12 ? r.updatedAt * 1000 : r.updatedAt) : Date.now();
-  md += `updatedAt: ${updatedMs}\n`;
-  md += '---\n\n';
-
-  const pattern = contentObj.pattern || '';
-  if (pattern) md += `\`\`\`${r.language || 'swift'}\n${pattern}\n\`\`\`\n\n`;
-  const rationale = contentObj.rationale || '';
-  if (rationale) md += `## Architecture Usage\n\n${rationale}\n\n`;
-  // UsageGuide: 直接从一级字段读取
-  const usageGuideCn = r.usageGuideCn || '';
-  const usageGuideEn = r.usageGuideEn || '';
-  if (usageGuideCn) md += `## AI Context / Usage Guide\n\n${usageGuideCn}\n\n`;
-  if (usageGuideEn) md += `## AI Context / Usage Guide (EN)\n\n${usageGuideEn}\n\n`;
-  const stepsArr: any[] = contentObj.steps || [];
-  const safeStr = (v: any): string => {
-    if (v == null) return '';
-    if (typeof v === 'string') return v;
-    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-    return JSON.stringify(v);
-  };
-  const stepsStr = stepsArr.map((s: any, i: number) => {
-    if (typeof s === 'string') return `${i + 1}. ${s}`;
-    if (typeof s !== 'object' || s === null) return `${i + 1}. ${String(s)}`;
-    const title = safeStr(s.title);
-    const desc = safeStr(s.description);
-    const code = safeStr(s.code);
-    const parts = [title, desc].filter(Boolean).join(': ');
-    let line = `${i + 1}. ${parts || '(步骤)'}`;
-    if (code) line += `\n\n\`\`\`\n${code}\n\`\`\``;
-    return line;
-  }).join('\n');
-  if (stepsStr.trim()) md += `## Best Practices\n\n${stepsStr}\n\n`;
-  const standardsText = (r.constraints || {}).standards || '';
-  if (standardsText) md += `## Standards\n\n${standardsText}\n\n`;
+  const knowledgeType = r.knowledge_type || r.knowledgeType || '';
+  const usageGuideCn = r.usage_guide_cn || r.usageGuideCn || '';
+  const usageGuideEn = r.usage_guide_en || r.usageGuideEn || '';
 
   const stats: RecipeStats = {
-    authority: quality.overall || 0,
-    authorityScore: quality.overall || 0,
-    guardUsageCount: statistics.applicationCount || 0,
-    humanUsageCount: statistics.adoptionCount || 0,
+    authority: statistics.authority || quality.overall || 0,
+    authorityScore: statistics.authority || quality.overall || 0,
+    guardUsageCount: statistics.applications || statistics.applicationCount || 0,
+    humanUsageCount: statistics.adoptions || statistics.adoptionCount || 0,
     aiUsageCount: 0,
-    lastUsedAt: r.updatedAt || null,
+    lastUsedAt: r.updated_at || r.updatedAt || null,
   };
 
   return {
     id: r.id,
     name: (r.title || r.name || r.id) + '.md',
-    content: md,
+    content: contentObj.pattern || contentObj.markdown || (typeof r.content === 'string' ? r.content : ''),
     category: r.category || '',
     language: r.language || '',
-    description: r.description || '',
-    status: r.status || 'draft',
+    description: r.description || r.summary_cn || r.summaryCn || '',
+    status: r.lifecycle || r.status || 'pending',
     kind: r.kind || undefined,
-    knowledgeType: r.knowledgeType || undefined,
+    knowledgeType: knowledgeType || undefined,
     v2Content: r.content || null,
     relations: r.relations || null,
     constraints: r.constraints || null,
     tags: r.tags || [],
     stats,
-    usageGuide: r.usageGuideCn || r.usageGuideEn || '',
-    usageGuide_cn: r.usageGuideCn || '',
-    usageGuide_en: r.usageGuideEn || '',
+    trigger,
+    source: r.source || '',
+    source_file: r.source_file || r.sourceFile || '',
+    module_name: r.module_name || r.moduleName || '',
+    usageGuide: usageGuideCn || usageGuideEn || '',
+    usageGuide_cn: usageGuideCn || '',
+    usageGuide_en: usageGuideEn || '',
+    scope: r.scope || '',
+    complexity: r.complexity || '',
+    difficulty: r.difficulty || dims.difficulty || r.complexity || '',
+    version: dims.version || '',
+    headers: r.headers || dims.headers || r.include_headers || [],
+    updatedAt: r.updated_at || r.updatedAt || null,
   };
 }
 
-/** V2 Candidate entity → V1 CandidateItem (flat) */
-function mapV2CandidateToV1(c: any): CandidateItem {
-  const meta = c.metadata || {};
-  const reasoning = c.reasoning || {};
-  return {
-    id: c.id,
-    title: meta.title || reasoning.summary || (c.code ? c.code.substring(0, 60) : ''),
-    summary: meta.summary_cn || meta.summary || reasoning.summary || '',
-    summary_cn: meta.summary_cn || meta.summary || '',
-    summary_en: meta.summary_en || '',
-    trigger: meta.trigger || '',
-    category: meta.category || c.category || '',
-    language: c.language || '',
-    code: c.code || '',
-    headers: meta.headers || [],
-    headerPaths: meta.headerPaths || [],
-    moduleName: meta.moduleName || '',
-    usageGuide: meta.usageGuide_cn || meta.usageGuide || '',
-    usageGuide_cn: meta.usageGuide_cn || '',
-    usageGuide_en: meta.usageGuide_en || '',
-    source: c.source || 'unknown',
-    createdAt: c.createdAt,
-    status: c.status,
-    quality: c.quality || meta.quality || null,
-    reviewNotes: c.reviewNotes || meta.reviewNotes || null,
-    relatedRecipes: c.relatedRecipes || meta.relatedRecipes || [],
-    knowledgeType: meta.knowledgeType || c.knowledgeType || undefined,
-    tags: meta.tags || c.tags || [],
-    reasoning: reasoning.whyStandard
-      ? {
-          whyStandard: reasoning.whyStandard || '',
-          sources: reasoning.sources || [],
-          confidence: reasoning.confidence ?? null,
-        }
-      : null,
-    // ── 润色产生的额外字段 ──
-    agentNotes: meta.agentNotes || null,
-    aiInsight: meta.aiInsight || null,
-    relations: meta.relations || null,
-    refinedConfidence: meta.refinedConfidence ?? null,
-    rationale: meta.rationale || '',
-    scope: meta.scope || '',
-    steps: meta.steps || [],
-    complexity: meta.complexity || undefined,
-  } as CandidateItem;
-}
-
 // ═══════════════════════════════════════════════════════
-//  Frontmatter Parser (client-side, replaces v1-compat parsing)
+//  Frontmatter Parser (client-side)
 // ═══════════════════════════════════════════════════════
 
 function parseFrontmatter(markdownContent: string) {
@@ -307,11 +195,11 @@ function parseFrontmatter(markdownContent: string) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  V1→V2 Request Transformations
+//  Request Payload Builders
 // ═══════════════════════════════════════════════════════
 
-/** Build V2 createCandidate payload from V1 item */
-function mapV1ItemToV2Candidate(item: any, targetName: string, source: string) {
+/** 构建 POST /knowledge 请求体（从前端 item 转为 API payload） */
+function toCandidatePayload(item: any, targetName: string, source: string) {
   return {
     code: item.code || '',
     language: item.language || 'swift',
@@ -342,6 +230,26 @@ function mapV1ItemToV2Candidate(item: any, targetName: string, source: string) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  Helpers
+// ═══════════════════════════════════════════════════════
+
+/** 从 idOrName 解析 knowledge ID：如果看起来像 UUID/hash 则直接用，否则按标题搜索 */
+async function resolveKnowledgeId(idOrName: string): Promise<string> {
+  const cleaned = idOrName.replace(/\.md$/i, '');
+  // 如果已经是 ID 格式（UUID 或 hash-like），直接返回
+  if (/^[a-f0-9-]{8,}$/i.test(cleaned)) return cleaned;
+  // 搜索 knowledge 条目
+  const res = await http.get(`/knowledge?limit=1000`);
+  const items = res.data?.data?.data || res.data?.data || [];
+  const found = items.find((r: any) => {
+    const title = r.title || r.name || '';
+    return title === cleaned || title + '.md' === idOrName;
+  });
+  if (found?.id) return found.id;
+  throw new Error(`Knowledge entry not found: ${idOrName}`);
+}
+
+// ═══════════════════════════════════════════════════════
 //  API Methods
 // ═══════════════════════════════════════════════════════
 
@@ -349,26 +257,27 @@ export const api = {
   // ── Data (bulk fetch) ──────
 
   async fetchData(): Promise<ProjectData> {
-    const [recipesRes, candidatesRes, aiConfigRes] = await Promise.all([
-      http.get('/recipes?limit=1000').catch(() => ({ data: { success: true, data: { data: [] } } })),
-      http.get('/candidates?limit=1000').catch(() => ({ data: { success: true, data: { data: [] } } })),
+    const [knowledgeRes, aiConfigRes] = await Promise.all([
+      http.get('/knowledge?limit=1000').catch(() => ({ data: { success: true, data: { data: [] } } })),
       http.get('/ai/config').catch(() => ({ data: { success: true, data: { provider: '', model: '' } } })),
     ]);
 
-    // Recipes
-    const rawRecipes = recipesRes.data?.data?.data || recipesRes.data?.data?.items || [];
-    const recipes = rawRecipes.map(mapV2RecipeToV1);
+    // All knowledge entries from V3 backend
+    const allEntries: any[] = knowledgeRes.data?.data?.data || knowledgeRes.data?.data?.items || [];
 
-    // Candidates → grouped by targetName
-    const rawCandidates = candidatesRes.data?.data?.data || candidatesRes.data?.data?.items || [];
+    // Recipes = active lifecycle entries (auto-approved / manually approved)
+    const activeEntries = allEntries.filter((e: any) => e.lifecycle === 'active');
+    const recipes = activeEntries.map(toRecipe);
+
+    // Candidates 视图仅展示待审核状态，过滤掉已发布/已弃用的条目
+    const rawEntries = allEntries.filter((e: any) => e.lifecycle === 'pending');
     const candidates: ProjectData['candidates'] = {};
-    for (const c of rawCandidates) {
-      const meta = c.metadata || {};
-      const target = meta.targetName || c.category || c.language || '_pending';
+    for (const entry of rawEntries) {
+      const target = entry.category || entry.language || '_pending';
       if (!candidates[target]) {
-        candidates[target] = { targetName: target, scanTime: c.createdAt, items: [] };
+        candidates[target] = { targetName: target, scanTime: entry.created_at, items: [] };
       }
-      candidates[target].items.push(mapV2CandidateToV1(c));
+      candidates[target].items.push(entry);
     }
 
     // AI Config
@@ -479,7 +388,7 @@ export const api = {
       ...(relativePath ? { relativePath } : {}),
     });
     const data = res.data?.data || {};
-    // V2 returns {result: [], source} — take first item or the whole object
+    // API returns {result: [], source} — take first item or the whole object
     if (Array.isArray(data.result) && data.result.length > 0) {
       return data.result[0];
     }
@@ -491,7 +400,7 @@ export const api = {
 
   /**
    * Save recipe from markdown content.
-   * Parses frontmatter → V2 structured data, creates or updates.
+   * Parses frontmatter → structured data, creates or updates.
    */
   async saveRecipe(name: string, markdownContent: string): Promise<void> {
     const parsed = parseFrontmatter(markdownContent);
@@ -550,69 +459,47 @@ export const api = {
       dimensions,
     };
 
-    // Try to find existing recipe by title → update
+    // Try to find existing recipe by ID or title → update
     try {
-      const searchRes = await http.get(`/recipes?keyword=${encodeURIComponent(title)}&limit=5`);
-      const items = searchRes.data?.data?.data || searchRes.data?.data?.items || [];
-      const existing = items.find((r: any) => r.title === title);
-      if (existing) {
-        await http.patch(`/recipes/${existing.id}`, recipeData);
-        return;
-      }
+      const knowledgeId = await resolveKnowledgeId(name);
+      await http.patch(`/knowledge/${knowledgeId}`, recipeData);
+      return;
     } catch {
       /* create new */
     }
 
-    await http.post('/recipes', recipeData);
+    await http.post('/knowledge', recipeData);
   },
 
-  async deleteRecipe(name: string): Promise<void> {
-    const title = name.replace(/\.md$/, '');
-    const searchRes = await http.get(`/recipes?keyword=${encodeURIComponent(title)}&limit=5`);
-    const items = searchRes.data?.data?.data || searchRes.data?.data?.items || [];
-    const recipe = items.find((r: any) => r.title === title) || items[0];
-    if (recipe?.id) {
-      await http.delete(`/recipes/${recipe.id}`);
-    } else {
-      throw new Error('Recipe not found');
-    }
+  async deleteRecipe(idOrName: string): Promise<void> {
+    // 优先用 ID（V3），否则按名称搜索
+    const knowledgeId = await resolveKnowledgeId(idOrName);
+    await http.delete(`/knowledge/${knowledgeId}`);
   },
 
   async getRecipeByName(
     name: string,
   ): Promise<{ name: string; content: string }> {
-    const title = name.replace(/\.md$/, '');
-    const searchRes = await http.get(`/recipes?keyword=${encodeURIComponent(title)}&limit=5`);
-    const items = searchRes.data?.data?.data || searchRes.data?.data?.items || [];
-    if (items.length === 0) throw new Error('Recipe not found');
-    const r = items[0];
+    const knowledgeId = await resolveKnowledgeId(name);
+    const res = await http.get(`/knowledge/${knowledgeId}`);
+    const r = res.data?.data;
+    if (!r) throw new Error('Recipe not found');
     const c = r.content || {};
     return { name, content: c.pattern || c.markdown || '' };
   },
 
-  async setRecipeAuthority(name: string, authority: number): Promise<void> {
-    const title = name.replace(/\.md$/, '');
-    const searchRes = await http.get(`/recipes?keyword=${encodeURIComponent(title)}&limit=5`);
-    const items = searchRes.data?.data?.data || searchRes.data?.data?.items || [];
-    if (items.length > 0 && items[0].id) {
-      await http.patch(`/recipes/${items[0].id}/quality`, {
-        codeCompleteness: authority,
-        projectAdaptation: authority,
-        documentationClarity: authority,
-      });
-    }
+  async setRecipeAuthority(idOrName: string, authority: number): Promise<void> {
+    const knowledgeId = await resolveKnowledgeId(idOrName);
+    await http.patch(`/knowledge/${knowledgeId}/quality`, {
+      codeCompleteness: authority,
+      projectAdaptation: authority,
+      documentationClarity: authority,
+    });
   },
 
-  async updateRecipeRelations(name: string, relations: Record<string, any[]>): Promise<void> {
-    const title = name.replace(/\.md$/, '');
-    const searchRes = await http.get(`/recipes?keyword=${encodeURIComponent(title)}&limit=5`);
-    const items = searchRes.data?.data?.data || searchRes.data?.data?.items || [];
-    const recipe = items.find((r: any) => r.title === title) || items[0];
-    if (recipe?.id) {
-      await http.patch(`/recipes/${recipe.id}`, { relations });
-    } else {
-      throw new Error('Recipe not found');
-    }
+  async updateRecipeRelations(idOrName: string, relations: Record<string, any[]>): Promise<void> {
+    const knowledgeId = await resolveKnowledgeId(idOrName);
+    await http.patch(`/knowledge/${knowledgeId}`, { relations });
   },
 
   async searchRecipes(
@@ -630,24 +517,25 @@ export const api = {
     };
   },
 
-  // ── Candidates ──────────────────────────────────────
+  // ── Candidates (via V3 Knowledge API) ──────────────────────────────────────
 
-  /** 获取单个候选详情（V2 → V1 映射） */
-  async getCandidate(candidateId: string): Promise<CandidateItem> {
-    const res = await http.get(`/candidates/${candidateId}`);
+  /** 获取单个知识条目详情 */
+  async getCandidate(candidateId: string): Promise<KnowledgeEntry> {
+    const res = await http.get(`/knowledge/${candidateId}`);
     const raw = res.data?.data;
-    if (!raw) throw new Error('Candidate not found');
-    return mapV2CandidateToV1(raw);
+    if (!raw) throw new Error('Knowledge entry not found');
+    return raw as KnowledgeEntry;
   },
 
   async deleteCandidate(candidateId: string): Promise<void> {
-    await http.delete(`/candidates/${candidateId}`);
+    await http.delete(`/knowledge/${candidateId}`);
   },
 
-  /** 一键将已批准的 Candidate 提升为 Recipe */
-  async promoteCandidateToRecipe(candidateId: string, overrides?: Record<string, any>): Promise<{ recipe: any; candidate: any }> {
-    const res = await http.post(`/candidates/${candidateId}/promote`, overrides || {});
-    return res.data?.data || { recipe: null, candidate: null };
+  /** 一键将 Candidate 发布为 Recipe (V3: publish → active) */
+  async promoteCandidateToRecipe(candidateId: string, _overrides?: Record<string, any>): Promise<{ recipe: any; candidate: any }> {
+    const res = await http.patch(`/knowledge/${candidateId}/publish`);
+    const entry = res.data?.data;
+    return { recipe: entry, candidate: entry };
   },
 
   /** AI 语义字段补全 — 对候选批量补充缺失字段 */
@@ -700,16 +588,25 @@ export const api = {
   },
 
   async deleteAllCandidatesInTarget(targetName: string): Promise<{ deleted: number }> {
-    const res = await http.post('/candidates/batch-delete', { targetName });
-    return res.data?.data || { deleted: 0 };
+    // V3: list all entries with this category then delete individually
+    const res = await http.get(`/knowledge?category=${encodeURIComponent(targetName)}&limit=1000`);
+    const items = res.data?.data?.data || [];
+    let deleted = 0;
+    for (const item of items) {
+      try {
+        await http.delete(`/knowledge/${item.id}`);
+        deleted++;
+      } catch { /* skip */ }
+    }
+    return { deleted };
   },
 
   async promoteToCandidate(
     item: any,
     targetName: string,
   ): Promise<{ ok: boolean; candidateId: string }> {
-    const data = mapV1ItemToV2Candidate(item, targetName, 'review-promote');
-    const res = await http.post('/candidates', data);
+    const data = toCandidatePayload(item, targetName, 'review-promote');
+    const res = await http.post('/knowledge', data);
     return { ok: true, candidateId: res.data?.data?.id || '' };
   },
 
@@ -717,7 +614,7 @@ export const api = {
     code: string,
     language: string,
   ): Promise<{ similar: Array<{ recipeName: string; similarity: number }> }> {
-    const res = await http.post('/candidates/similarity', { code, language });
+    const res = await http.post('/search/similarity', { code, language }).catch(() => ({ data: { data: { similar: [] } } }));
     return res.data?.data || { similar: [] };
   },
 
@@ -725,7 +622,7 @@ export const api = {
   async getCandidateSimilarityEx(
     params: { targetName?: string; candidateId?: string; candidate?: any },
   ): Promise<{ similar: Array<{ recipeName: string; similarity: number }> }> {
-    const res = await http.post('/candidates/similarity', params);
+    const res = await http.post('/search/similarity', params).catch(() => ({ data: { data: { similar: [] } } }));
     return res.data?.data || { similar: [] };
   },
 
@@ -733,14 +630,12 @@ export const api = {
   async getRecipeContentByName(
     name: string,
   ): Promise<{ name: string; content: string }> {
-    const title = name.replace(/\.md$/, '');
-    const searchRes = await http.get(`/recipes?keyword=${encodeURIComponent(title)}&limit=5`);
-    const items = searchRes.data?.data?.data || searchRes.data?.data?.items || [];
-    const found = items.find((r: any) => r.title === title) || items[0];
-    if (!found) throw new Error('Recipe not found');
-    const r = found;
-    const mapped = mapV2RecipeToV1(r);
-    return { name, content: mapped.content };
+    const knowledgeId = await resolveKnowledgeId(name);
+    const res = await http.get(`/knowledge/${knowledgeId}`);
+    const r = res.data?.data;
+    if (!r) throw new Error('Recipe not found');
+    const recipe = toRecipe(r);
+    return { name, content: recipe.content };
   },
 
   // ── AI ──────────────────────────────────────────────
@@ -848,7 +743,7 @@ export const api = {
 
   // ── Misc ────────────────────────────────────────────
 
-  /** Stub — was not fully implemented in v1-compat */
+  /** Stub — not fully implemented */
   async insertAtSearchMark(_data: any): Promise<{ success: boolean }> {
     return { success: false };
   },
@@ -865,7 +760,7 @@ export const api = {
       results: recipes.map((r: any) => ({
         name: (r.title || r.name || '') + '.md',
         path: '',
-        content: mapV2RecipeToV1(r).content,
+        content: toRecipe(r).content,
         qualityScore: (r.quality || {}).overall || 0,
         recommendReason: '',
       })),
@@ -985,6 +880,89 @@ Skill 文档格式要求：
   }> {
     const res = await http.post('/ai/env-config', config);
     return res.data?.data || { vars: {}, hasEnvFile: false, llmReady: false };
+  },
+
+  // ═══════════════════════════════════════════════════════
+  //  V3 Knowledge API — 统一知识条目（直通 wire format，无映射）
+  // ═══════════════════════════════════════════════════════
+
+  /** 获取知识条目列表（V3 统一 API） */
+  async knowledgeList(params: {
+    page?: number;
+    limit?: number;
+    lifecycle?: KnowledgeLifecycle;
+    kind?: KnowledgeKind;
+    category?: string;
+    language?: string;
+    keyword?: string;
+    tag?: string;
+    source?: string;
+  } = {}): Promise<KnowledgePaginatedResponse> {
+    const query = new URLSearchParams();
+    if (params.page) query.set('page', String(params.page));
+    if (params.limit) query.set('limit', String(params.limit));
+    if (params.lifecycle) query.set('lifecycle', params.lifecycle);
+    if (params.kind) query.set('kind', params.kind);
+    if (params.category) query.set('category', params.category);
+    if (params.language) query.set('language', params.language);
+    if (params.keyword) query.set('keyword', params.keyword);
+    if (params.tag) query.set('tag', params.tag);
+    if (params.source) query.set('source', params.source);
+    const qs = query.toString();
+    const res = await http.get(`/knowledge${qs ? `?${qs}` : ''}`);
+    return res.data?.data || { data: [], pagination: { page: 1, pageSize: 20, total: 0 } };
+  },
+
+  /** 获取知识条目统计 */
+  async knowledgeStats(): Promise<KnowledgeStatsResponse> {
+    const res = await http.get('/knowledge/stats');
+    return res.data?.data || { total: 0, pending: 0, active: 0, deprecated: 0, rules: 0, patterns: 0, facts: 0 };
+  },
+
+  /** 获取知识条目详情 */
+  async knowledgeGet(id: string): Promise<KnowledgeEntry> {
+    const res = await http.get(`/knowledge/${id}`);
+    return res.data?.data;
+  },
+
+  /** 创建知识条目 */
+  async knowledgeCreate(data: Partial<KnowledgeEntry>): Promise<KnowledgeEntry> {
+    const res = await http.post('/knowledge', data);
+    return res.data?.data;
+  },
+
+  /** 更新知识条目 */
+  async knowledgeUpdate(id: string, data: Partial<KnowledgeEntry>): Promise<KnowledgeEntry> {
+    const res = await http.patch(`/knowledge/${id}`, data);
+    return res.data?.data;
+  },
+
+  /** 删除知识条目 */
+  async knowledgeDelete(id: string): Promise<void> {
+    await http.delete(`/knowledge/${id}`);
+  },
+
+  /** 知识条目生命周期操作 */
+  async knowledgeLifecycle(id: string, action: string, reason?: string): Promise<KnowledgeEntry> {
+    const res = await http.patch(`/knowledge/${id}/${action}`, reason ? { reason } : {});
+    return res.data?.data;
+  },
+
+  /** 批量发布 */
+  async knowledgeBatchPublish(ids: string[]): Promise<{ published: KnowledgeEntry[]; failed: Array<{ id: string; error: string }>; successCount: number; failureCount: number }> {
+    const res = await http.post('/knowledge/batch-publish', { ids });
+    return res.data?.data || { published: [], failed: [], successCount: 0, failureCount: 0 };
+  },
+
+  /** 记录使用 */
+  async knowledgeRecordUsage(id: string, type: string = 'adoption', feedback?: string): Promise<void> {
+    await http.post(`/knowledge/${id}/usage`, { type, feedback });
+  },
+
+  /** 重新计算质量评分 */
+  async knowledgeUpdateQuality(id: string): Promise<{ quality: any }> {
+    const res = await http.patch(`/knowledge/${id}/quality`);
+    return res.data?.data || { quality: {} };
   },
 };
 

@@ -60,7 +60,7 @@ const ROLE_PERMISSIONS: Record<RoleId, string[]> = {
   developer: ['*'],
   external_agent: [
     'read:recipes', 'read:guard_rules',
-    'create:candidates', 'submit:candidates',
+    'create:candidates', 'submit:knowledge',
     'read:audit_logs:self',
     'knowledge:bootstrap',
   ],

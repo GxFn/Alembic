@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, Code, Edit3, LogOut, User, ShieldCheck, Eye, Fingerprint, BookOpen, Sparkles, PanelLeftClose, PanelLeftOpen, Zap } from 'lucide-react';
+import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, Code, Edit3, LogOut, User, ShieldCheck, Eye, Fingerprint, BookOpen, Sparkles, PanelLeftClose, PanelLeftOpen, Zap, Library } from 'lucide-react';
 import { TabType } from '../../constants';
 import { ICON_SIZES } from '../../constants/icons';
 import api from '../../api';
@@ -86,6 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { tab: 'recipes', icon: Bookmark, label: 'Recipes' },
     { tab: 'spm', icon: FolderOpen, label: 'SPM Explorer' },
     { tab: 'candidates', icon: Clock, label: `Candidates (${candidateCount})` },
+    { tab: 'knowledge', icon: Library, label: '批量管理' },
     { tab: 'depgraph', icon: GitBranch, label: '依赖关系图' },
     { tab: 'knowledgegraph', icon: Share2, label: '知识图谱' },
     { tab: 'guard', icon: Shield, label: 'Guard' },

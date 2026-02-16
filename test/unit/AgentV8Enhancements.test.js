@@ -46,7 +46,7 @@ describe('plan_task tool', () => {
     const result = await tool.handler({
       steps: [
         { id: 1, action: '审视6条信号', tool: 'search_project_code' },
-        { id: 2, action: '提交候选', tool: 'submit_candidate', depends_on: [1] },
+        { id: 2, action: '提交候选', tool: 'submit_knowledge', depends_on: [1] },
       ],
       strategy: '先搜索补充示例再批量提交',
       estimated_iterations: 4,
@@ -90,7 +90,7 @@ describe('review_my_output tool', () => {
     const tool = findTool('review_my_output');
     const result = await tool.handler({}, {
       _sessionToolCalls: [{
-        tool: 'submit_candidate',
+        tool: 'submit_knowledge',
         params: {
           title: '[Bootstrap] code-pattern/singleton — 项目特写',
           summary: 'BiliDemo 12个Manager类使用单例, dispatch_once 占 67%, 8个文件',
@@ -119,7 +119,7 @@ describe('review_my_output tool', () => {
     const tool = findTool('review_my_output');
     const result = await tool.handler({}, {
       _sessionToolCalls: [{
-        tool: 'submit_candidate',
+        tool: 'submit_knowledge',
         params: {
           title: '[Bootstrap] code-pattern/singleton',
           summary: 'BiliDemo 12个Manager类使用 dispatch_once',
@@ -136,7 +136,7 @@ describe('review_my_output tool', () => {
     const tool = findTool('review_my_output');
     const result = await tool.handler({}, {
       _sessionToolCalls: [{
-        tool: 'submit_candidate',
+        tool: 'submit_knowledge',
         params: {
           title: '[Bootstrap] code-pattern/singleton — 项目特写',
           summary: 'BiliDemo 用了单例模式',
@@ -155,7 +155,7 @@ describe('review_my_output tool', () => {
     const tool = findTool('review_my_output');
     const result = await tool.handler({}, {
       _sessionToolCalls: [{
-        tool: 'submit_candidate',
+        tool: 'submit_knowledge',
         params: {
           title: '[Bootstrap] code-pattern/singleton — 项目特写',
           summary: '该项目使用了单例模式来管理全局状态',

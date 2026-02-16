@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Zap, FileSearch, Box, Trash2, Edit3, Layers, Eye, EyeOff, GitCompare, X, Copy, Brain, BookOpen, Target, ChevronDown, ChevronUp, Sparkles, Shield, Clock, Code2, Tag, AlertTriangle, CheckCircle2, BarChart3, Filter, ArrowUpDown, Rocket, Wand2, Loader2, Lightbulb, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
-import { ProjectData, ExtractedRecipe, CandidateItem, SimilarRecipe } from '../../types';
+import { ProjectData, KnowledgeEntry, SimilarRecipe } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
 import { categoryConfigs, BOOTSTRAP_DIM_LABELS } from '../../constants';
@@ -23,8 +23,8 @@ interface CandidatesViewProps {
   isPendingTarget?: (name: string) => boolean;
   handleDeleteCandidate: (targetName: string, candidateId: string) => void | Promise<void>;
   handleDeleteAllInTarget: (targetName: string) => void;
-  onAuditCandidate: (cand: CandidateItem, targetName: string) => void;
-  onAuditAllInTarget: (items: CandidateItem[], targetName: string) => void;
+  onAuditCandidate: (cand: KnowledgeEntry, targetName: string) => void;
+  onAuditAllInTarget: (items: KnowledgeEntry[], targetName: string) => void;
   onEditRecipe?: (recipe: { name: string; content: string; stats?: any }) => void;
   onColdStart?: () => void;
   isScanning?: boolean;
@@ -36,11 +36,11 @@ interface CandidatesViewProps {
 /* ── 工具函数 ── */
 
 function sortTargetNames(
-  entries: [string, { targetName: string; scanTime: number; items: CandidateItem[] }][],
+  entries: [string, { targetName: string; scanTime: number; items: KnowledgeEntry[] }][],
   isShellTarget: (name: string) => boolean,
   isSilentTarget: (name: string) => boolean,
   isPendingTarget: (name: string) => boolean
-): [string, { targetName: string; scanTime: number; items: CandidateItem[] }][] {
+): [string, { targetName: string; scanTime: number; items: KnowledgeEntry[] }][] {
   return [...entries].sort(([nameA], [nameB]) => {
     const aPending = isPendingTarget(nameA);
     const bPending = isPendingTarget(nameB);
@@ -94,14 +94,6 @@ function confidenceColor(c: number | null | undefined): { ring: string; text: st
   return { ring: 'stroke-red-500', text: 'text-red-700', bg: 'bg-red-50', label: '低' };
 }
 
-/** 优先级配色 */
-function priorityStyle(p: string | undefined) {
-  if (p === 'high') return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: '🔴' };
-  if (p === 'medium') return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: '🟡' };
-  if (p === 'low') return { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', icon: '⚪' };
-  return null;
-}
-
 /** 来源 label */
 const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
   'bootstrap-scan': { label: 'AI 全量扫描', color: 'text-violet-600 bg-violet-50 border-violet-200' },
@@ -110,6 +102,8 @@ const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
   'file-watcher': { label: '文件监听', color: 'text-orange-600 bg-orange-50 border-orange-200' },
   'clipboard': { label: '剪贴板', color: 'text-pink-600 bg-pink-50 border-pink-200' },
   'cli': { label: 'CLI', color: 'text-slate-600 bg-slate-50 border-slate-200' },
+  'agent': { label: 'AI Agent', color: 'text-violet-600 bg-violet-50 border-violet-200' },
+  'submit_with_check': { label: 'AI 审查提交', color: 'text-teal-600 bg-teal-50 border-teal-200' },
 };
 
 /** 小型 SVG 环形置信度 */
@@ -154,14 +148,13 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
   const [similarityMap, setSimilarityMap] = useState<Record<string, SimilarRecipe[]>>({});
   const [similarityLoading, setSimilarityLoading] = useState<string | null>(null);
   /** 异步刷新后的候选覆盖——不触发整页刷新即可更新抽屉 */
-  const [candidateOverrides, setCandidateOverrides] = useState<Record<string, CandidateItem>>({});
+  const [candidateOverrides, setCandidateOverrides] = useState<Record<string, KnowledgeEntry>>({});
   const [filters, setFilters] = useState({
-    priority: 'all' as 'all' | 'high' | 'medium' | 'low',
     sort: 'default' as 'default' | 'score-desc' | 'score-asc' | 'confidence-desc' | 'date-desc',
     onlySimilar: false,
   });
   const [compareModal, setCompareModal] = useState<{
-    candidate: CandidateItem;
+    candidate: KnowledgeEntry;
     targetName: string;
     recipeName: string;
     recipeContent: string;
@@ -184,7 +177,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
     }
   }, []);
 
-  const openCompare = useCallback(async (cand: CandidateItem, targetName: string, recipeName: string, similarList: SimilarRecipe[] = []) => {
+  const openCompare = useCallback(async (cand: KnowledgeEntry, targetName: string, recipeName: string, similarList: SimilarRecipe[] = []) => {
     const normalizedRecipeName = recipeName.replace(/\.md$/i, '');
     let recipeContent = '';
     const existing = data?.recipes?.find(r => r.name === normalizedRecipeName || r.name.endsWith('/' + normalizedRecipeName));
@@ -234,17 +227,14 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
     if (!effectiveTarget || !data?.candidates?.[effectiveTarget]) return null;
     const items = data.candidates[effectiveTarget].items;
     const total = items.length;
-    const high = items.filter(c => c.reviewNotes?.priority === 'high').length;
-    const medium = items.filter(c => c.reviewNotes?.priority === 'medium').length;
-    const low = items.filter(c => c.reviewNotes?.priority === 'low').length;
     const avgConfidence = items.reduce((sum, c) => sum + (c.reasoning?.confidence ?? 0), 0) / (total || 1);
-    const withCode = items.filter(c => c.code && c.code.trim().length > 0).length;
+    const withCode = items.filter(c => c.content?.pattern && c.content.pattern.trim().length > 0).length;
     const sources = new Map<string, number>();
     items.forEach(c => {
       const s = c.source || 'unknown';
       sources.set(s, (sources.get(s) || 0) + 1);
     });
-    return { total, high, medium, low, avgConfidence, withCode, sources };
+    return { total, avgConfidence, withCode, sources };
   }, [effectiveTarget, data?.candidates]);
 
   /** AI 补齐单个候选语义字段 */
@@ -396,12 +386,6 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   <span className="text-slate-400 ml-1">（含代码 {stats.withCode}）</span>
                 )}
               </div>
-              {stats.high > 0 && (
-                <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 border border-red-100">
-                  <span className="text-red-600 font-bold">{stats.high}</span>
-                  <span className="text-red-500">高优先</span>
-                </div>
-              )}
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
                 <span className="text-emerald-500">平均置信度</span>
                 <strong className="text-emerald-700">{Math.round(stats.avgConfidence * 100)}%</strong>
@@ -513,24 +497,20 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
             const filteredItems = group.items
               .filter((cand) => {
-                if (filters.priority !== 'all') {
-                  const priority = cand.reviewNotes?.priority;
-                  if (priority !== filters.priority) return false;
-                }
                 if (filters.onlySimilar) {
-                  const related = cand.relatedRecipes;
+                  const related = cand.relations?.related;
                   if (!Array.isArray(related) || related.length === 0) return false;
                 }
                 return true;
               })
               .sort((a, b) => {
                 if (filters.sort === 'default') return 0;
-                if (filters.sort === 'score-desc') return (b.quality?.overallScore ?? 0) - (a.quality?.overallScore ?? 0);
-                if (filters.sort === 'score-asc') return (a.quality?.overallScore ?? 0) - (b.quality?.overallScore ?? 0);
+                if (filters.sort === 'score-desc') return (b.quality?.overall ?? 0) - (a.quality?.overall ?? 0);
+                if (filters.sort === 'score-asc') return (a.quality?.overall ?? 0) - (b.quality?.overall ?? 0);
                 if (filters.sort === 'confidence-desc') return (b.reasoning?.confidence ?? 0) - (a.reasoning?.confidence ?? 0);
                 if (filters.sort === 'date-desc') {
-                  const ta = typeof a.createdAt === 'number' ? a.createdAt : Number(a.createdAt) || 0;
-                  const tb = typeof b.createdAt === 'number' ? b.createdAt : Number(b.createdAt) || 0;
+                  const ta = typeof a.created_at === 'number' ? a.created_at : 0;
+                  const tb = typeof b.created_at === 'number' ? b.created_at : 0;
                   return tb - ta;
                 }
                 return 0;
@@ -571,19 +551,6 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   {/* 筛选控件 */}
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-50 border border-slate-100">
-                      <Filter size={12} className="text-slate-400" />
-                      <select
-                        className="text-[11px] font-medium bg-transparent border-none outline-none text-slate-600 pr-1 cursor-pointer"
-                        value={filters.priority}
-                        onChange={e => setFilters(prev => ({ ...prev, priority: e.target.value as any }))}
-                      >
-                        <option value="all">全部优先级</option>
-                        <option value="high">🔴 高优先</option>
-                        <option value="medium">🟡 中优先</option>
-                        <option value="low">⚪ 低优先</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-50 border border-slate-100">
                       <ArrowUpDown size={12} className="text-slate-400" />
                       <select
                         className="text-[11px] font-medium bg-transparent border-none outline-none text-slate-600 pr-1 cursor-pointer"
@@ -606,9 +573,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       />
                       只看相似
                     </label>
-                    {(filters.priority !== 'all' || filters.sort !== 'default' || filters.onlySimilar) && (
+                    {(filters.sort !== 'default' || filters.onlySimilar) && (
                       <button
-                        onClick={() => setFilters({ priority: 'all', sort: 'default', onlySimilar: false })}
+                        onClick={() => setFilters({ sort: 'default', onlySimilar: false })}
                         className="text-[11px] font-medium text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors"
                       >
                         重置
@@ -655,10 +622,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   {paginatedItems.map((cand) => {
                     const isExpanded = expandedId === cand.id;
                     const confidence = cand.reasoning?.confidence ?? null;
-                    const overall = cand.quality?.overallScore ?? null;
-                    const priority = cand.reviewNotes?.priority;
-                    const pStyle = priorityStyle(priority);
-                    const related = cand.relatedRecipes?.[0];
+                    const overall = (cand.quality?.overall ?? 0) > 0 ? cand.quality!.overall : null;
+                    const relatedList = cand.relations?.related || [];
+                    const firstRelated = relatedList[0];
                     const similarList = similarityMap[cand.id] || [];
 
                     const srcInfo = SOURCE_LABELS[cand.source || ''] || { label: cand.source || '', color: 'text-slate-500 bg-slate-50 border-slate-200' };
@@ -689,9 +655,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                   })()}
                                   {cand.category || 'general'}
                                 </span>
-                                {cand.knowledgeType && (
+                                {cand.knowledge_type && (
                                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">
-                                    {cand.knowledgeType}
+                                    {cand.knowledge_type}
                                   </span>
                                 )}
                                 {cand.source && cand.source !== 'unknown' && (
@@ -713,7 +679,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                               <h3 className="font-bold text-sm text-slate-800 leading-snug mb-1 line-clamp-1">{cand.title}</h3>
 
                               {/* 摘要 */}
-                              <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{cand.summary || cand.summary_cn || ''}</p>
+                              <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{cand.summary_cn || cand.description || ''}</p>
                             </div>
 
                             {/* 右：置信度环 + 操作 */}
@@ -725,19 +691,19 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         </div>
 
                         {/* ── AI 推理摘要（始终可见） ── */}
-                        {cand.reasoning?.whyStandard && (
+                        {cand.reasoning?.why_standard && !/^Submitted via /i.test(cand.reasoning.why_standard) && (
                           <div className="px-4 py-2 bg-gradient-to-r from-indigo-50/50 to-transparent border-t border-indigo-50">
                             <div className="flex items-start gap-1.5">
                               <Brain size={12} className="text-indigo-400 mt-0.5 shrink-0" />
                               <p className="text-[11px] text-indigo-600/80 line-clamp-1 leading-relaxed">
-                                {cand.reasoning.whyStandard}
+                                {cand.reasoning.why_standard}
                               </p>
                             </div>
                           </div>
                         )}
 
-                        {/* ── 指标行：综合分 + 优先级 + 相似 ── */}
-                        {(overall != null || pStyle || related) && (
+                        {/* ── 指标行：综合分 + 相似 ── */}
+                        {(overall != null || firstRelated) && (
                           <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-t border-slate-50">
                             {overall != null && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
@@ -745,45 +711,40 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                 综合 {(overall * 100).toFixed(0)}%
                               </span>
                             )}
-                            {pStyle && (
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${pStyle.bg} ${pStyle.text} ${pStyle.border}`}>
-                                {pStyle.icon} {priority === 'high' ? '高优先' : priority === 'medium' ? '中优先' : '低优先'}
-                              </span>
-                            )}
-                            {related && (
+                            {firstRelated && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const name = String(related.id || related.title || '').trim();
+                                  const name = String(firstRelated.target || '').trim();
                                   if (name) openCompare(cand, targetName, name, similarList);
                                 }}
                                 className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center gap-1"
                                 title="点击对比相似 Recipe"
                               >
                                 <GitCompare size={10} />
-                                相似 {String(related.title || related.id || '').replace(/\.md$/i, '')} {((related.similarity ?? 0) * 100).toFixed(0)}%
+                                相似 {String(firstRelated.target || '').replace(/\.md$/i, '')}
                               </button>
                             )}
                           </div>
                         )}
 
                         {/* ── 代码预览（始终显示前 3 行） ── */}
-                        {cand.code && (
+                        {cand.content?.pattern && (
                           <div className="overflow-hidden border-t border-slate-200/60">
                             <div className="flex items-center justify-between px-3 py-1.5" style={{ background: '#282c34' }}>
                               <div className="flex items-center gap-2">
                                 <Code2 size={11} className="text-slate-500" />
                                 <span className="text-[10px] text-slate-400 font-mono uppercase tracking-wide">{cand.language || 'code'}</span>
                               </div>
-                              <span className="text-[10px] text-slate-500 font-mono tabular-nums">{cand.code.split('\n').length} 行</span>
+                              <span className="text-[10px] text-slate-500 font-mono tabular-nums">{cand.content.pattern.split('\n').length} 行</span>
                             </div>
                             <div className="relative max-h-[80px] overflow-hidden">
                               <CodeBlock
-                                code={codePreview(cand.code, 3)}
+                                code={codePreview(cand.content.pattern, 3)}
                                 language={cand.language === 'objc' ? 'objectivec' : cand.language}
                                 className="!rounded-none"
                               />
-                              {cand.code.split('\n').length > 3 && (
+                              {cand.content.pattern.split('\n').length > 3 && (
                                 <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-[#282c34] to-transparent pointer-events-none" />
                               )}
                             </div>
@@ -812,10 +773,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             )}
 
                             {/* 日期 */}
-                            {cand.createdAt && formatDate(cand.createdAt) && (
+                            {cand.created_at && formatDate(cand.created_at) && (
                               <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
                                 <Clock size={9} />
-                                {formatDate(cand.createdAt)}
+                                {formatDate(cand.created_at)}
                               </span>
                             )}
                           </div>
@@ -858,21 +819,21 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             >
                               <Edit3 size={12} /> 审核并保存
                             </button>
-                            {cand.status === 'approved' && (
+                            {cand.lifecycle === 'pending' && (
                               <button
                                 onClick={async () => {
                                   try {
                                     await api.promoteCandidateToRecipe(cand.id);
-                                    notify('候选已成功提升为正式 Recipe', { title: '提升成功' });
+                                    notify('已成功发布为正式 Recipe', { title: '发布成功' });
                                     onRefresh?.();
                                   } catch (err: any) {
-                                    notify(err.message, { title: '提升失败', type: 'error' });
+                                    notify(err.message, { title: '发布失败', type: 'error' });
                                   }
                                 }}
                                 className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-colors flex items-center gap-1"
-                                title="一键提升为 Recipe"
+                                title="一键发布为 Recipe"
                               >
-                                <Rocket size={12} /> 提升为 Recipe
+                                <Rocket size={12} /> 发布
                               </button>
                             )}
                           </div>
@@ -914,7 +875,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
         const goToNext = () => { if (hasNext) { setExpandedId(allItems[currentIndex + 1].id); setCompareModal(null); } };
 
         const r = cand.reasoning;
-        const hasReasoning = r && (r.whyStandard || (r.sources && r.sources.length > 0) || r.confidence != null);
+        const meaningfulWhyStandard = r?.why_standard && !/^Submitted via /i.test(r.why_standard);
+        const hasReasoning = r && (meaningfulWhyStandard || (r.sources && r.sources.length > 0) || r.confidence != null);
         const similar = similarityMap[cand.id] || [];
         const isLoadingSimilar = similarityLoading === cand.id;
         const candCatCfg = categoryConfigs[cand.category || ''] || categoryConfigs['All'] || {};
@@ -932,8 +894,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               const compareCandLang = compareCand.language === 'objc' || compareCand.language === 'objective-c' ? 'objectivec' : (compareCand.language || 'text');
               const copyCandidate = () => {
                 const parts = [];
-                if (compareCand.code) parts.push('## Snippet / Code Reference\n\n```' + (compareCandLang || '') + '\n' + compareCand.code + '\n```');
-                if (compareCand.usageGuide) parts.push('\n## AI Context / Usage Guide\n\n' + compareCand.usageGuide);
+                if (compareCand.content?.pattern) parts.push('## Snippet / Code Reference\n\n```' + (compareCandLang || '') + '\n' + compareCand.content.pattern + '\n```');
+                if (compareCand.usage_guide_cn) parts.push('\n## AI Context / Usage Guide\n\n' + compareCand.usage_guide_cn);
                 navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify('候选内容已复制到剪贴板', { title: '已复制' }));
               };
               const copyRecipe = () => {
@@ -1088,12 +1050,12 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               {/* ── 面板内容 ── */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                 {/* 摘要 */}
-                <p className="text-sm text-slate-600 leading-relaxed">{cand.summary || cand.summary_cn || ''}</p>
+                <p className="text-sm text-slate-600 leading-relaxed">{cand.summary_cn || cand.description || ''}</p>
 
                 {/* 标签行 */}
                 <div className="flex flex-wrap gap-1.5">
-                  {cand.knowledgeType && (
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">{cand.knowledgeType}</span>
+                  {cand.knowledge_type && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">{cand.knowledge_type}</span>
                   )}
                   {cand.complexity && (
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
@@ -1107,9 +1069,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       {typeof tag === 'string' ? tag : String(tag)}
                     </span>
                   ))}
-                  {cand.createdAt && formatDate(cand.createdAt) && (
+                  {cand.created_at && formatDate(cand.created_at) && (
                     <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
-                      <Clock size={9} /> {formatDate(cand.createdAt)}
+                      <Clock size={9} /> {formatDate(cand.created_at)}
                     </span>
                   )}
                 </div>
@@ -1123,10 +1085,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     </div>
                     {hasReasoning ? (
                       <>
-                        {r!.whyStandard && (
+                        {r!.why_standard && !/^Submitted via /i.test(r!.why_standard) && (
                           <div>
                             <span className="text-indigo-600 font-bold flex items-center gap-1 mb-0.5"><Target size={10} /> 为什么是标准用法</span>
-                            <p className="text-slate-600 leading-relaxed pl-3">{r!.whyStandard}</p>
+                            <p className="text-slate-600 leading-relaxed pl-3">{r!.why_standard}</p>
                           </div>
                         )}
                         {r!.sources && r!.sources.length > 0 && (
@@ -1158,60 +1120,66 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   </div>
                 )}
 
-                {/* AI 润色结果 — agentNotes / aiInsight / relations / refinedConfidence */}
-                {(cand.agentNotes || cand.aiInsight || cand.refinedConfidence != null || (cand.relations && cand.relations.length > 0)) && (
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 text-xs space-y-3">
-                    <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[11px]">
-                      <Sparkles size={14} />
-                      润色增强信息
-                      {cand.refinedConfidence != null && (
-                        <span className="ml-auto text-emerald-600 font-mono text-[10px]">
-                          润色置信度: {Math.round(cand.refinedConfidence * 100)}%
-                        </span>
+                {/* AI 润色结果 — agent_notes / ai_insight / relations */}
+                {(() => {
+                  const allRelations = cand.relations ? Object.entries(cand.relations).flatMap(([type, arr]) => (Array.isArray(arr) ? arr.map((r: any) => ({ ...r, type })) : [])) : [];
+                  const qualityAssessed = (cand.quality?.overall ?? 0) > 0;
+                  const hasEnhanced = cand.agent_notes || cand.ai_insight || qualityAssessed || allRelations.length > 0;
+                  if (!hasEnhanced) return null;
+                  return (
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 text-xs space-y-3">
+                      <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[11px]">
+                        <Sparkles size={14} />
+                        润色增强信息
+                        {qualityAssessed && (
+                          <span className="ml-auto text-emerald-600 font-mono text-[10px]">
+                            综合评分: {Math.round(cand.quality!.overall * 100)}%
+                          </span>
+                        )}
+                      </div>
+                      {cand.ai_insight && (
+                        <div>
+                          <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
+                            <Lightbulb size={10} /> 架构洞察
+                          </span>
+                          <p className="text-slate-600 leading-relaxed pl-3">{cand.ai_insight}</p>
+                        </div>
+                      )}
+                      {cand.agent_notes && cand.agent_notes.length > 0 && (
+                        <div>
+                          <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
+                            <FileText size={10} /> Agent 笔记
+                          </span>
+                          <ul className="pl-3 text-slate-600 space-y-0.5">
+                            {cand.agent_notes.map((note: string, i: number) => (
+                              <li key={i} className="flex items-start gap-1">
+                                <span className="text-emerald-400 mt-0.5">•</span>{note}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {allRelations.length > 0 && (
+                        <div>
+                          <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
+                            <GitCompare size={10} /> 关联关系
+                          </span>
+                          <div className="pl-3 space-y-1">
+                            {allRelations.map((rel: any, i: number) => (
+                              <div key={i} className="flex items-start gap-1.5 text-slate-600">
+                                <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0 uppercase">
+                                  {rel.type}
+                                </span>
+                                <span className="font-medium text-slate-700">{rel.target}</span>
+                                {rel.description && <span className="text-slate-400">— {rel.description}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
-                    {cand.aiInsight && (
-                      <div>
-                        <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
-                          <Lightbulb size={10} /> 架构洞察
-                        </span>
-                        <p className="text-slate-600 leading-relaxed pl-3">{cand.aiInsight}</p>
-                      </div>
-                    )}
-                    {cand.agentNotes && cand.agentNotes.length > 0 && (
-                      <div>
-                        <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
-                          <FileText size={10} /> Agent 笔记
-                        </span>
-                        <ul className="pl-3 text-slate-600 space-y-0.5">
-                          {cand.agentNotes.map((note: string, i: number) => (
-                            <li key={i} className="flex items-start gap-1">
-                              <span className="text-emerald-400 mt-0.5">•</span>{note}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {cand.relations && cand.relations.length > 0 && (
-                      <div>
-                        <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
-                          <GitCompare size={10} /> 关联关系
-                        </span>
-                        <div className="pl-3 space-y-1">
-                          {cand.relations.map((rel: any, i: number) => (
-                            <div key={i} className="flex items-start gap-1.5 text-slate-600">
-                              <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0 uppercase">
-                                {rel.type}
-                              </span>
-                              <span className="font-medium text-slate-700">{rel.target}</span>
-                              {rel.description && <span className="text-slate-400">— {rel.description}</span>}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* 相似 Recipe */}
                 {(similar.length > 0 || isLoadingSimilar) && (
@@ -1236,33 +1204,33 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 )}
 
                 {/* 完整代码 */}
-                {cand.code && (
+                {cand.content?.pattern && (
                   <div className="-mx-5 overflow-hidden border-y border-slate-200">
                     <div className="flex items-center justify-between px-3 py-2" style={{ background: '#282c34' }}>
                       <div className="flex items-center gap-2">
                         <Code2 size={12} className="text-slate-400" />
                         <span className="text-[11px] text-slate-400 font-mono uppercase tracking-wide">{cand.language || 'code'}</span>
                       </div>
-                      <span className="text-[10px] text-slate-500 font-mono tabular-nums">{cand.code.split('\n').length} 行</span>
+                      <span className="text-[10px] text-slate-500 font-mono tabular-nums">{cand.content.pattern.split('\n').length} 行</span>
                     </div>
-                    <CodeBlock code={cand.code} language={cand.language === 'objc' ? 'objectivec' : cand.language} showLineNumbers className="!rounded-none" />
+                    <CodeBlock code={cand.content.pattern} language={cand.language === 'objc' ? 'objectivec' : cand.language} showLineNumbers className="!rounded-none" />
                   </div>
                 )}
 
                 {/* 使用指南 */}
-                {cand.usageGuide && (
+                {cand.usage_guide_cn && (
                   <div className="rounded-xl border border-slate-100 bg-white p-4">
                     <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 mb-2">
                       <BookOpen size={12} /> 使用指南
                     </div>
                     <div className="prose prose-sm prose-slate max-w-none">
-                      <MarkdownWithHighlight content={cand.usageGuide} />
+                      <MarkdownWithHighlight content={cand.usage_guide_cn} />
                     </div>
                   </div>
                 )}
 
                 {/* 附加信息 */}
-                {(cand.scope || (cand.headers && cand.headers.length > 0) || (cand.steps && cand.steps.length > 0) || cand.rationale) && (
+                {(cand.scope || (cand.headers && cand.headers.length > 0) || (cand.content?.steps && cand.content.steps.length > 0) || cand.content?.rationale) && (
                   <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-2">
                     <div className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5 mb-1">
                       <Layers size={12} /> 附加信息
@@ -1277,19 +1245,19 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         头文件：<strong className="text-slate-700">{cand.headers.join(', ')}</strong>
                       </div>
                     )}
-                    {cand.steps && cand.steps.length > 0 && (
+                    {cand.content?.steps && cand.content.steps.length > 0 && (
                       <div className="text-xs text-slate-500">
-                        <span className="font-medium">实施步骤（{cand.steps.length} 步）:</span>
+                        <span className="font-medium">实施步骤（{cand.content.steps.length} 步）:</span>
                         <ol className="mt-1 ml-4 list-decimal space-y-0.5">
-                          {cand.steps.map((step: any, i: number) => (
+                          {cand.content.steps.map((step: any, i: number) => (
                             <li key={i} className="text-slate-600">{typeof step === 'string' ? step : step.description || String(step)}</li>
                           ))}
                         </ol>
                       </div>
                     )}
-                    {cand.rationale && (
+                    {cand.content?.rationale && (
                       <div className="text-xs text-slate-500">
-                        设计原理：<span className="text-slate-700">{cand.rationale}</span>
+                        设计原理：<span className="text-slate-700">{cand.content.rationale}</span>
                       </div>
                     )}
                   </div>
@@ -1330,20 +1298,20 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  {cand.status === 'approved' && (
+                  {cand.lifecycle === 'pending' && (
                     <button
                       onClick={async () => {
                         try {
                           await api.promoteCandidateToRecipe(cand.id);
-                          notify('候选已成功提升为正式 Recipe', { title: '提升成功' });
+                          notify('已成功发布为正式 Recipe', { title: '发布成功' });
                           onRefresh?.();
                         } catch (err: any) {
-                          notify(err.message, { title: '提升失败', type: 'error' });
+                          notify(err.message, { title: '发布失败', type: 'error' });
                         }
                       }}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors"
                     >
-                      <Rocket size={14} /> 提升为 Recipe
+                      <Rocket size={14} /> 发布
                     </button>
                   )}
                   <button

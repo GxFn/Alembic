@@ -73,7 +73,7 @@ description: Deep project analysis — full scan + semantic field enrichment + g
 }
 ```
 
-Use `autosnippet_submit_candidates` for batch submission.
+Use `autosnippet_submit_knowledge_batch` for batch submission.
 
 #### Phase 4: Guard Deep Audit (Optional)
 对特定文件调用 `autosnippet_guard_audit_files` 做深度规范审计。
@@ -101,7 +101,7 @@ Use `autosnippet_submit_candidates` for batch submission.
 ### Workflow for Enrichment
 
 **方式 A: 你（Agent）直接补全**
-在分析代码时，直接填写所有 6 个语义字段到 `autosnippet_submit_candidate` 调用中。
+在分析代码时，直接填写所有 6 个语义字段到 `autosnippet_submit_knowledge` 调用中。
 
 **方式 B: 对已有候选调用 AI 补全**
 ```

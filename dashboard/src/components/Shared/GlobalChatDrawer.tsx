@@ -3,7 +3,7 @@ import { MessageSquare, X, Send, Brain, Loader2, Check, RotateCcw, ChevronRight,
 import MarkdownWithHighlight from './MarkdownWithHighlight';
 import api from '../../api';
 import { notify } from '../../utils/notification';
-import { CandidateItem } from '../../types';
+import { KnowledgeEntry } from '../../types';
 import { useChatTopics, type ChatMessage } from '../../hooks/useChatTopics';
 
 /* ═══════════════════════════════════════════════════════════
@@ -40,7 +40,7 @@ interface DiffField {
 
 interface RefineContext {
   candidateIds: string[];
-  candidates: CandidateItem[];
+  candidates: KnowledgeEntry[];
   currentIdx: number;
   onCandidateUpdated?: (candidateId: string) => void;
 }
@@ -49,7 +49,7 @@ interface GlobalChatAPI {
   openChat: () => void;
   openRefine: (ctx: {
     candidateIds: string[];
-    candidates: CandidateItem[];
+    candidates: KnowledgeEntry[];
     onCandidateUpdated?: (candidateId: string) => void;
   }) => void;
   close: () => void;
@@ -76,13 +76,13 @@ export const useGlobalChat = () => useContext(GlobalChatContext);
 const uid = () => Math.random().toString(36).substring(2, 10);
 
 const REFINE_FIELD_DEFS: { key: string; label: string; format?: (v: any) => string }[] = [
-  { key: 'summary', label: '摘要' },
-  { key: 'code', label: '内容文档' },
+  { key: 'summary_cn', label: '摘要' },
+  { key: 'pattern', label: '内容文档' },
   { key: 'tags', label: '标签', format: (v) => (Array.isArray(v) ? v.join(', ') : String(v || '')) },
   { key: 'confidence', label: '置信度', format: (v) => String(v ?? '—') },
-  { key: 'insight', label: 'AI 洞察' },
-  { key: 'agentNotes', label: 'Agent 笔记', format: (v) => (Array.isArray(v) ? v.join('\n') : String(v || '')) },
-  { key: 'relations', label: '关联关系', format: (v) => JSON.stringify(v || [], null, 2) },
+  { key: 'ai_insight', label: 'AI 洞察' },
+  { key: 'agent_notes', label: 'Agent 笔记', format: (v) => (Array.isArray(v) ? v.join('\n') : String(v || '')) },
+  { key: 'relations', label: '关联关系', format: (v) => JSON.stringify(v || {}, null, 2) },
 ];
 
 function buildDiffFields(before: Record<string, any>, after: Record<string, any>): DiffField[] {
@@ -98,11 +98,11 @@ function buildDiffFields(before: Record<string, any>, after: Record<string, any>
   return fields;
 }
 
-function extractBefore(cand: CandidateItem): Record<string, any> {
+function extractBefore(cand: KnowledgeEntry): Record<string, any> {
   return {
-    title: cand.title || '', summary: cand.summary || '', code: cand.code || '',
+    title: cand.title || '', summary_cn: cand.summary_cn || '', pattern: cand.content?.pattern || '',
     tags: cand.tags || [], confidence: cand.reasoning?.confidence ?? 0.6,
-    relations: cand.relations || [], insight: null, agentNotes: null,
+    relations: cand.relations || {}, ai_insight: cand.ai_insight || null, agent_notes: cand.agent_notes || null,
   };
 }
 
@@ -154,7 +154,7 @@ interface ChatInternalState {
   chatHistoryRef: React.MutableRefObject<{ role: string; content: string }[]>;
   isRefineMode: boolean;
   currentRefineId: string | null;
-  currentRefineCandidate: CandidateItem | undefined;
+  currentRefineCandidate: KnowledgeEntry | undefined;
   isBatchRefine: boolean;
   close: () => void;
 }
@@ -186,7 +186,7 @@ export const GlobalChatProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (refineCtx && currentRefineCandidate) {
       setMessages(prev => [...prev, {
         id: uid(), role: 'system',
-        content: `\uD83C\uDFAF 润色模式 — **${currentRefineCandidate.title}**\n\n当前摘要: ${currentRefineCandidate.summary || '(无)'}\n\n**输入润色指令，AI 将根据你的指令定向修改候选内容**，下方有常用指令可直接点击使用。`,
+        content: `🎯 润色模式 — **${currentRefineCandidate.title}**\n\n当前摘要: ${currentRefineCandidate.summary_cn || '(无)'}\n\n**输入润色指令，AI 将根据你的指令定向修改候选内容**，下方有常用指令可直接点击使用。`,
         timestamp: Date.now(),
       }]);
       setLastPrompt('');
@@ -194,7 +194,7 @@ export const GlobalChatProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, [refineCtx?.currentIdx]);
 
   const openChat = useCallback(() => { setRefineCtx(null); setIsOpen(true); }, []);
-  const openRefine = useCallback((ctx: { candidateIds: string[]; candidates: CandidateItem[]; onCandidateUpdated?: (id: string) => void }) => {
+  const openRefine = useCallback((ctx: { candidateIds: string[]; candidates: KnowledgeEntry[]; onCandidateUpdated?: (id: string) => void }) => {
     setRefineCtx({ ...ctx, currentIdx: 0 }); setApplied(new Set()); setMessages([]); chatHistoryRef.current = []; setIsOpen(true);
   }, []);
   const close = useCallback(() => setIsOpen(false), []);

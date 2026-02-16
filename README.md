@@ -86,7 +86,7 @@ asd status         # 自检项目根、AI Provider、索引、Dashboard
 
 ```
 用户：「扫描 NetworkModule 这个 Target，提取最佳实践」
-Cursor → autosnippet_get_targets → autosnippet_get_target_files → 逐文件提取 → autosnippet_submit_candidates
+Cursor → get_targets → get_target_files → 逐文件提取 → submit_knowledge_batch
 → Dashboard Candidates 页面审核 → 保存为 Recipe
 ```
 
@@ -171,14 +171,14 @@ asd install:vscode-copilot      # 配置 MCP 和 Copilot 指令
 
 ## MCP 工具一览
 
-38 个 MCP 工具按功能分组：
+38 个 MCP 工具按功能分组（省略了 **autosnippet_** 前缀）：
 
 | 分类 | 工具 |
 |------|------|
-| **系统** | `autosnippet_health`、`autosnippet_capabilities` |
+| **系统** | `health`、`autosnippet_capabilities` |
 | **搜索** | `autosnippet_search`（统合入口）、`autosnippet_context_search`（4 层漏斗）、`autosnippet_keyword_search`、`autosnippet_semantic_search` |
 | **Recipe 浏览** | `autosnippet_list_recipes`、`autosnippet_get_recipe`、`autosnippet_list_rules`、`autosnippet_list_patterns`、`autosnippet_list_facts`、`autosnippet_recipe_insights`、`autosnippet_confirm_usage` |
-| **候选管理** | `autosnippet_validate_candidate`、`autosnippet_check_duplicate`、`autosnippet_submit_candidate`、`autosnippet_submit_candidates`、`autosnippet_submit_draft_recipes`、`autosnippet_enrich_candidates` |
+| **候选管理** | `autosnippet_validate_candidate`、`autosnippet_check_duplicate`、`autosnippet_submit_knowledge`、`autosnippet_submit_knowledge_batch`、`autosnippet_submit_knowledge_batch`、`autosnippet_enrich_candidates` |
 | **知识图谱** | `autosnippet_graph_query`、`autosnippet_graph_impact`、`autosnippet_graph_path`、`autosnippet_graph_stats` |
 | **项目结构** | `autosnippet_get_targets`、`autosnippet_get_target_files`、`autosnippet_get_target_metadata` |
 | **Guard** | `autosnippet_guard_check`、`autosnippet_guard_audit_files`、`autosnippet_scan_project` |

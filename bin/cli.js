@@ -501,12 +501,10 @@ program
   .option('--force', '忽略 hash 强制覆盖')
   .action(async (opts) => {
     const projectRoot = resolve(opts.dir);
-    const { SyncService } = await import('../lib/cli/SyncService.js');
-    const { CandidateSyncService } = await import('../lib/cli/CandidateSyncService.js');
-    const syncService = new SyncService(projectRoot);
-    const candidateSyncService = new CandidateSyncService(projectRoot);
+    const { KnowledgeSyncService } = await import('../lib/cli/KnowledgeSyncService.js');
+    const syncService = new KnowledgeSyncService(projectRoot);
 
-    console.log(`\n🔄 AutoSnippet V2 — 同步 recipes + candidates`);
+    console.log(`\n🔄 AutoSnippet V3 — 同步 knowledge entries`);
     console.log(`   项目: ${basename(projectRoot)}`);
     console.log(`   路径: ${projectRoot}`);
     if (opts.dryRun) console.log('   模式: dry-run（仅报告）');
@@ -533,7 +531,7 @@ program
       });
 
       // 输出报告
-      console.log(`✅ Recipes 同步完成`);
+      console.log(`✅ Knowledge 同步完成`);
       console.log(`   扫描: ${report.synced + report.skipped} 文件`);
       console.log(`   新增: ${report.created}`);
       console.log(`   更新: ${report.updated}`);
@@ -547,34 +545,8 @@ program
       }
 
       if (report.orphaned.length > 0) {
-        console.log(`\n🗑️  ${report.orphaned.length} 个孤儿 Recipe 已标记 deprecated：`);
+        console.log(`\n🗑️  ${report.orphaned.length} 个孤儿条目已标记 deprecated：`);
         for (const id of report.orphaned) {
-          console.log(`   - ${id}`);
-        }
-      }
-
-      // ── Candidates 同步 ──
-      const cReport = candidateSyncService.sync(db, {
-        dryRun: opts.dryRun,
-        force: opts.force,
-      });
-
-      console.log(`\n✅ Candidates 同步完成`);
-      console.log(`   扫描: ${cReport.synced + cReport.skipped} 文件`);
-      console.log(`   新增: ${cReport.created}`);
-      console.log(`   更新: ${cReport.updated}`);
-      console.log(`   跳过: ${cReport.skipped}`);
-
-      if (cReport.violations.length > 0) {
-        console.log(`\n⚠️  检测到 ${cReport.violations.length} 个 Candidate 手动编辑：`);
-        for (const v of cReport.violations) {
-          console.log(`   - ${v}`);
-        }
-      }
-
-      if (cReport.orphaned.length > 0) {
-        console.log(`\n📋 ${cReport.orphaned.length} 个 Candidate 仅存于 DB（无 .md 文件）：`);
-        for (const id of cReport.orphaned) {
           console.log(`   - ${id}`);
         }
       }

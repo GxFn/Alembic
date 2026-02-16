@@ -188,11 +188,11 @@ const SPMExplorerView: React.FC<SPMExplorerViewProps> = ({
   // 延迟请求相似度 — 等待卡片动画渲染完成后再发起，避免布局抖动
   const timer = setTimeout(() => {
     scanResults.forEach((res, i) => {
-      const key = res.candidateId ?? `scan-${i}`;
+      const key = res.candidateId ?? res.id ?? `scan-${i}`;
       if (res.candidateId && res.candidateTargetName) {
         fetchSimilarity(key, { targetName: res.candidateTargetName, candidateId: res.candidateId });
       } else {
-        fetchSimilarity(key, { candidate: { title: res.title, summary: res.summary, code: res.code, usageGuide: res.usageGuide } });
+        fetchSimilarity(key, { candidate: { title: res.title, summary: res.summary || res.summary_cn || res.description || '', code: res.code || res.content?.pattern || '', usageGuide: res.usageGuide || res.usage_guide_cn || '' } });
       }
     });
   }, 800);

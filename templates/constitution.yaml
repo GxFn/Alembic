@@ -48,7 +48,7 @@ roles:
       - "read:recipes"
       - "read:guard_rules"
       - "create:candidates"
-      - "submit:candidates"
+      - "submit:knowledge"
       - "read:audit_logs:self"
       - "knowledge:bootstrap"
       - "create:skills"

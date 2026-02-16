@@ -24,6 +24,7 @@ import GuardView from './components/Views/GuardView';
 import { GlobalChatProvider, GlobalChatPanel, useGlobalChat } from './components/Shared/GlobalChatDrawer';
 import AiChatView from './components/Views/AiChatView';
 import KnowledgeGraphView from './components/Views/KnowledgeGraphView';
+import KnowledgeView from './components/Views/KnowledgeView';
 import SkillsView from './components/Views/SkillsView';
 import BootstrapProgressView from './components/Views/BootstrapProgressView';
 import XcodeSimulator from './pages/XcodeSimulator';
@@ -239,6 +240,11 @@ const App: React.FC = () => {
     }
   }
 
+  // 清除 action/path 参数，确保下次 // as:c 触发时 URL 不同，浏览器会重新加载
+  if (action) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
   return () => {
     window.removeEventListener('popstate', handlePopState);
   };
@@ -249,28 +255,7 @@ const App: React.FC = () => {
   setLoading(true);
   try {
     const projectData = await api.fetchData();
-    // 清理候选池中重复的语言版本
-    if (projectData.candidates) {
-    const cleanedCandidates: typeof projectData.candidates = {};
-    Object.entries(projectData.candidates).forEach(([targetName, targetData]) => {
-      const cleanedItems = targetData.items.map(item => {
-      const summary_cn = item.summary_cn || item.summary || '';
-      const summary_en = item.summary_en && item.summary_en !== summary_cn ? item.summary_en : undefined;
-      const usageGuide_cn = stringifyGuide(item.usageGuide_cn || item.usageGuide || '');
-      const usageGuide_en = item.usageGuide_en && stringifyGuide(item.usageGuide_en) !== usageGuide_cn ? stringifyGuide(item.usageGuide_en) : undefined;
-      
-      return {
-        ...item,
-        summary_cn,
-        summary_en,
-        usageGuide_cn,
-        usageGuide_en
-      };
-      });
-      cleanedCandidates[targetName] = { ...targetData, items: cleanedItems };
-    });
-    projectData.candidates = cleanedCandidates;
-    }
+    // V3 KnowledgeEntry 字段已经是 snake_case 格式，无需清理
     setData(projectData);
   } catch (err: any) {
     notify(err?.message || '无法加载项目数据', { title: '加载失败', type: 'error' });
@@ -341,7 +326,7 @@ const App: React.FC = () => {
       usageGuide: usageGuide_cn
     };
     }));
-    navigateToTab('spm', { preserveSearch: true });
+    navigateToTab('spm');
     setShowCreateModal(false);
     fetchData();
     if (extractResult.result?.length > 0) {
@@ -430,7 +415,7 @@ const App: React.FC = () => {
       summary: summary_cn,
       usageGuide: usageGuide_cn
     }]);
-    navigateToTab('spm', { preserveSearch: true });
+    navigateToTab('spm');
     setShowCreateModal(false);
     fetchData();
     notify(multipleCount ? `已识别 ${multipleCount} 条 Recipe，请在候选池审核` : '提取结果已加入候选池', { title: 'AI 识别完成' });
@@ -721,12 +706,24 @@ const App: React.FC = () => {
   if (isSavingRecipe) return;
   setIsSavingRecipe(true);
   try {
+    // 判断是否可提取 Snippet
+    const kt = extracted.knowledgeType || extracted.knowledge_type || 'code-pattern';
+    const codeRaw = (extracted.code || extracted.content?.pattern || '').trim();
+    const snippetAble = (() => {
+      if (kt !== 'code-pattern' || !codeRaw) return false;
+      const lines = codeRaw.split('\n').filter((l: string) => l.trim());
+      const mdLines = lines.filter((l: string) => /^\s*(#{1,6}\s|[-*>]\s|\d+\.\s)/.test(l));
+      return mdLines.length <= lines.length * 0.3;
+    })();
+
     const triggers = (extracted.trigger || '').split(/[,，\s]+/).map(t => t.trim()).filter(Boolean);
-    if (triggers.length === 0) {
+    if (snippetAble && triggers.length === 0) {
     notify('请输入 Trigger', { type: 'error' });
     setIsSavingRecipe(false);
     return;
     }
+    // 非 Snippet 条目强制 preview 模式
+    const effectiveMode = snippetAble ? extracted.mode : 'preview';
     const primarySnippetId = crypto.randomUUID().toUpperCase();
 
   const recipeName = `${(extracted.title || 'Untitled').replace(/\s+/g, '-')}.md`;
@@ -738,11 +735,17 @@ const App: React.FC = () => {
   const usageGuide_en = extracted.usageGuide_en || extracted.usageGuide || '';
   
   // 构建 Frontmatter
+  const knowledgeType = extracted.knowledgeType || extracted.knowledge_type || '';
+  const difficulty = extracted.difficulty || extracted.complexity || '';
+  const authority = extracted.authority || extracted.stats?.authority || 0;
+  const codeContent = extracted.code || extracted.content?.pattern || '';
+  const kind = extracted.kind || 'pattern';
+  
   let frontmatter = `---
-id: ${extracted.mode === 'full' ? primarySnippetId : 'preview-only'}
+id: ${effectiveMode === 'full' ? primarySnippetId : 'preview-only'}
 title: ${extracted.title || 'Untitled Recipe'}
 language: ${extracted.language || 'swift'}
-trigger: ${triggers.join(', ')}
+trigger: ${triggers.length > 0 ? triggers.join(', ') : 'none'}
 category: ${extracted.category || 'Utility'}
 summary: ${summary_cn}
 summary_cn: ${summary_cn}`;
@@ -753,15 +756,17 @@ summary_cn: ${summary_cn}`;
   
   frontmatter += `
 headers: ${JSON.stringify(extracted.headers || [])}`;
+
+  frontmatter += `\nkind: ${kind}`;
   
-  if (extracted.difficulty) {
-    frontmatter += `\ndifficulty: ${extracted.difficulty}`;
+  if (difficulty) {
+    frontmatter += `\ndifficulty: ${difficulty}`;
   }
-  if (extracted.authority) {
-    frontmatter += `\nauthority: ${extracted.authority}`;
+  if (authority) {
+    frontmatter += `\nauthority: ${authority}`;
   }
-  if (extracted.knowledgeType) {
-    frontmatter += `\nknowledge_type: ${extracted.knowledgeType}`;
+  if (knowledgeType) {
+    frontmatter += `\nknowledge_type: ${knowledgeType}`;
   }
   if (extracted.complexity) {
     frontmatter += `\ncomplexity: ${extracted.complexity}`;
@@ -783,7 +788,7 @@ updatedAt: ${Date.now()}
 ## Snippet / Code Reference
 
 \`\`\`${extracted.language || 'swift'}
-${extracted.code || ''}
+${codeContent}
 \`\`\`
 
 ## AI Context / Usage Guide
@@ -828,7 +833,7 @@ ${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
   const recipeContent = frontmatter + body;
     await api.saveRecipe(recipeName, recipeContent);
     
-    notify(extracted.mode === 'full' ? '已保存为 Recipe（Snippet 将自动生成）' : '已保存到 KB');
+    notify(effectiveMode === 'full' ? '已保存为 Recipe（Snippet 将自动生成）' : '已保存到 KB');
     setScanResults(prev => prev.filter(item => item.title !== extracted.title));
     // 若来自候选池，保存后从候选池移除
     const candTarget = extracted.candidateTargetName;
@@ -1086,34 +1091,66 @@ ${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
         isBootstrapping={bootstrap.session?.status === 'running'}
         onRefresh={fetchData}
         onAuditCandidate={(cand, targetName) => {
+        const candCode = (cand.content?.pattern || '').trim();
+        const candKt = cand.knowledge_type || 'code-pattern';
+        const isSnippetAble = candKt === 'code-pattern' && !!candCode && (() => {
+          const lines = candCode.split('\n').filter(l => l.trim());
+          const mdLines = lines.filter(l => /^\s*(#{1,6}\s|[-*>]\s|\d+\.\s)/.test(l));
+          return mdLines.length <= lines.length * 0.3;
+        })();
         setScanResults([{ 
           ...cand, 
-          mode: 'full',
+          mode: isSnippetAble ? 'full' : 'preview',
           lang: 'cn',
           includeHeaders: true,
-          summary: cand.summary_cn || cand.summary || '',
-          usageGuide: cand.usageGuide_cn || cand.usageGuide || '',
+          summary: cand.summary_cn || cand.description || '',
+          usageGuide: cand.usage_guide_cn || '',
+          code: cand.content?.pattern || '',
+          headers: cand.headers || [],
+          tags: cand.tags || [],
+          knowledgeType: cand.knowledge_type || 'code-pattern',
+          difficulty: cand.complexity || 'intermediate',
+          authority: cand.stats?.authority || 3,
+          moduleName: cand.module_name || '',
           candidateId: cand.id,
           candidateTargetName: targetName
-        }]);
+        } as ScanResultItem]);
         navigateToTab('spm');
         }}
         onAuditAllInTarget={(items, targetName) => {
-        setScanResults(items.map(cand => ({
+        setScanResults(items.map(cand => {
+          const candCode = (cand.content?.pattern || '').trim();
+          const candKt = cand.knowledge_type || 'code-pattern';
+          const isSnippetAble = candKt === 'code-pattern' && !!candCode && (() => {
+            const lines = candCode.split('\n').filter(l => l.trim());
+            const mdLines = lines.filter(l => /^\s*(#{1,6}\s|[-*>]\s|\d+\.\s)/.test(l));
+            return mdLines.length <= lines.length * 0.3;
+          })();
+          return {
           ...cand,
-          mode: 'full' as const,
+          mode: (isSnippetAble ? 'full' : 'preview') as 'full' | 'preview',
           lang: 'cn' as const,
           includeHeaders: true,
-          summary: cand.summary_cn || cand.summary || '',
-          usageGuide: cand.usageGuide_cn || cand.usageGuide || '',
+          summary: cand.summary_cn || cand.description || '',
+          usageGuide: cand.usage_guide_cn || '',
+          code: cand.content?.pattern || '',
+          headers: cand.headers || [],
+          tags: cand.tags || [],
+          knowledgeType: cand.knowledge_type || 'code-pattern',
+          difficulty: cand.complexity || 'intermediate',
+          authority: cand.stats?.authority || 3,
+          moduleName: cand.module_name || '',
           candidateId: cand.id,
           candidateTargetName: targetName
-        })));
+        } as ScanResultItem;
+        }));
         navigateToTab('spm');
         }}
         handleDeleteAllInTarget={handleDeleteAllInTarget} 
       />
       </>
+      ) : activeTab === 'knowledge' ? (
+      <KnowledgeView onRefresh={handleRefreshProject} />
       ) : activeTab === 'depgraph' ? (
       <DepGraphView />
       ) : activeTab === 'knowledgegraph' ? (

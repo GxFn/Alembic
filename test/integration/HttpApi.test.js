@@ -8,8 +8,7 @@
  *   ✓ Health 端点
  *   ✓ Auth 端点 (login / me)
  *   ✓ Auth Probe 端点
- *   ✓ Candidates CRUD
- *   ✓ Recipes CRUD
+ *   ✓ Knowledge CRUD (V3 统一端点)
  *   ✓ Guard Rules CRUD
  *   ✓ 404 路由兜底
  *   ✓ 错误格式一致性
@@ -167,91 +166,42 @@ describe('Integration: HTTP API Endpoints', () => {
   });
 
   // ═══════════════════════════════════════════════════════
-  //  Candidates
+  //  Knowledge (V3 统一端点，替代 Candidates + Recipes)
   // ═══════════════════════════════════════════════════════
 
-  describe('Candidates Endpoints', () => {
-    test('GET /candidates → 200 + 列表', async () => {
-      const res = await fetch(`${BASE}/candidates`);
+  describe('Knowledge Endpoints', () => {
+    test('GET /knowledge → 200 + 列表', async () => {
+      const res = await fetch(`${BASE}/knowledge`);
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.success).toBe(true);
     });
 
-    test('GET /candidates/stats → 200', async () => {
-      const res = await fetch(`${BASE}/candidates/stats`);
+    test('GET /knowledge/stats → 200', async () => {
+      const res = await fetch(`${BASE}/knowledge/stats`);
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.success).toBe(true);
     });
 
-    test('GET /candidates/:nonexistent → 404', async () => {
-      const res = await fetch(`${BASE}/candidates/nonexistent-id-999`);
+    test('GET /knowledge/:nonexistent → 404', async () => {
+      const res = await fetch(`${BASE}/knowledge/nonexistent-id-999`);
       const body = await res.json();
       // 可能返回 404 (NotFoundError) 或 500
       expect(res.status).toBeGreaterThanOrEqual(400);
       expect(body.success).toBe(false);
     });
 
-    test('POST /candidates — admin 可创建', async () => {
-      const res = await fetch(`${BASE}/candidates`, {
+    test('POST /knowledge — admin 可创建', async () => {
+      const res = await fetch(`${BASE}/knowledge`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-User-Id': 'developer',
         },
         body: JSON.stringify({
-          title: 'Test Candidate from HTTP',
-          code: 'function integrationTest() { return true; }',
-          language: 'javascript',
-          category: 'utility',
-        }),
-      });
-
-      // 可能是 200/201（创建成功）或 400/500（因为具体 service 可能需要更多字段）
-      expect(res.status).toBeLessThan(600);
-      const body = await res.json();
-      expect(typeof body.success).toBe('boolean');
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════
-  //  Recipes
-  // ═══════════════════════════════════════════════════════
-
-  describe('Recipes Endpoints', () => {
-    test('GET /recipes → 200 + 列表', async () => {
-      const res = await fetch(`${BASE}/recipes`);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.success).toBe(true);
-    });
-
-    test('GET /recipes/stats → 200', async () => {
-      const res = await fetch(`${BASE}/recipes/stats`);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.success).toBe(true);
-    });
-
-    test('GET /recipes/recommendations → 200', async () => {
-      const res = await fetch(`${BASE}/recipes/recommendations`);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.success).toBe(true);
-    });
-
-    test('POST /recipes — admin 可创建', async () => {
-      const res = await fetch(`${BASE}/recipes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-Id': 'developer',
-        },
-        body: JSON.stringify({
-          name: 'Test Recipe HTTP',
-          description: 'Integration test recipe',
-          kind: 'pattern',
+          title: 'Test Knowledge from HTTP',
+          content: { pattern: 'function integrationTest() { return true; }' },
           language: 'javascript',
           category: 'utility',
         }),
@@ -281,15 +231,15 @@ describe('Integration: HTTP API Endpoints', () => {
   // ═══════════════════════════════════════════════════════
 
   describe('Role-based Access Control via Header', () => {
-    test('external_agent 可以 GET /recipes', async () => {
-      const res = await fetch(`${BASE}/recipes`, {
+    test('external_agent 可以 GET /knowledge', async () => {
+      const res = await fetch(`${BASE}/knowledge`, {
         headers: { 'X-User-Id': 'external_agent' },
       });
       expect(res.status).toBe(200);
     });
 
-    test('chat_agent 可以 GET /candidates', async () => {
-      const res = await fetch(`${BASE}/candidates`, {
+    test('chat_agent 可以 GET /knowledge', async () => {
+      const res = await fetch(`${BASE}/knowledge`, {
         headers: { 'X-User-Id': 'chat_agent' },
       });
       expect(res.status).toBe(200);

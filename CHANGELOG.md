@@ -4,6 +4,52 @@
 
 ---
 
+## [2.10.0] - 2026-02-17
+
+### Guard Audit 三维度项目扫描 + 指令修复 + V1 遗产清理
+
+#### Guard — `// as:a` 三种 scope 支持
+
+- **feat(GuardHandler):** `// as:a file` — 单文件审计（默认），仅应用 file 维度规则
+- **feat(GuardHandler):** `// as:a target` — 扫描当前文件所在目录树，应用 file + target 维度规则
+- **feat(GuardHandler):** `// as:a project` — 扫描整个项目所有源文件，应用全部维度规则
+- **feat(GuardCheckEngine):** 新增 `_runCrossFileChecks()` — 跨文件 ObjC Category 重名检查，识别 `.h`/`.m` 成对（合法）vs 同类型文件重复声明（冲突）
+- **feat(GuardCheckEngine):** `auditFiles()` 返回新增 `crossFileViolations` 字段
+- **feat(MCP guard):** `guardAuditFiles` 和 `scanProject` MCP 响应补充 `crossFileViolations`
+
+#### Guard — 精确度修复
+
+- **fix(DirectiveDetector):** `_isGuardDirective` 从 `startsWith("// as:a")` 改为正则 `/^\/\/\s*as:(?:audit|a)(?:\s|$)/`，避免误匹配 `// as:abc`、`// as:auto` 等
+- **fix(FileWatcher):** `handleGuard` 传入 `this`（watcher 实例），使 GuardHandler 可访问 `projectRoot`
+- **fix(GuardHandler):** scope 参数正确传递到 `engine.checkCode()`，SCOPE_HIERARCHY 过滤真正生效
+
+#### `// as:c` 指令修复
+
+- **fix(App.tsx):** action 参数处理后 `window.history.replaceState()` 清除 URL，确保重复触发 `// as:c` 时浏览器检测到 URL 变更
+- **fix(FileWatcher._appendCandidates):** 传入 `context: { userId: 'filewatcher' }`，修复 `knowledgeService.create()` 因缺少 context 导致 TypeError
+- **fix(FileWatcher._appendCandidates):** 空 `catch {}` 改为 error 日志 + 错误传播 + HTTP 回退
+- **fix(FileWatcher._appendCandidates):** HTTP 端点从不存在的 `/api/v1/candidates`（404）改为正确的 `/api/v1/knowledge`
+- **fix(FileWatcher._appendCandidates):** 增加 title/code 空值过滤，防止空标题提交后 validation error
+
+#### `// as:c -c` 语义修正
+
+- **fix(CreateHandler):** `-c` 模式从 `extract_recipes`（AI 拆分为多条）改为 `summarize_code`（AI 生成标题/摘要），剪贴板内容整体作为单条候选的 `code` 字段
+
+#### AI 提取增强
+
+- **feat(AiProvider):** `_buildExtractPrompt` 新增 `comprehensive` 模式 — 全量分析文件，不跳过"简单"方法，强制返回至少一条 Recipe
+- **feat(tools.js):** `extract_recipes` handler 透传 `comprehensive` 参数
+- **fix(extract.js):** `/extract/text` 补全 3 阶段 AI pipeline（之前只有注释声称调用 AI，实际直接返回空）；`/extract/path` 和 `/extract/text` 均传入 `comprehensive: true`
+
+#### V1 遗产清理 (90 files, +4024 / -9962 lines)
+
+- **refactor:** 删除 V1 Candidate/Recipe 双轨残留代码（CandidateService、RecipeService、CandidateFileWriter、RecipeFileWriter 等），统一到 V3 KnowledgeService / KnowledgeFileWriter
+- **refactor:** 删除 V1 domain 模型（Candidate.js、Recipe.js、Reasoning.js 等）及其 Repository
+- **refactor:** Dashboard 前端组件适配 V3 API，移除 V1 candidates/recipes 专用视图逻辑
+- **refactor:** 测试套件清理，移除依赖已删除 V1 服务的测试文件
+
+---
+
 ## [2.8.3] - 2026-02-16
 
 ### Bug Fixes — MCP 响应体积过大 & Health 版本号错误

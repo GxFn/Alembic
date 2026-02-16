@@ -46,7 +46,7 @@ describe('Integration: Gateway Full Chain', () => {
         'approve:candidates', 'reject:candidates',
         'read:guard_rules', 'create:guard_rules',
         'read:snippets', 'search:query',
-        'submit:candidates',
+        'submit:knowledge',
       ];
       for (const action of actions) {
         if (!gateway.routes.has(action)) {

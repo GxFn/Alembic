@@ -37,9 +37,9 @@ This skill documents the Recipe lifecycle and clarifies what Agent can and canno
 ## Agent Role: What You CAN Do
 
 ### 1. Submit Candidates
-- `autosnippet_submit_candidate` - single structured candidate
-- `autosnippet_submit_candidates` - batch structured candidates
-- `autosnippet_submit_draft_recipes` - submit .md files as candidates
+- `autosnippet_submit_knowledge` - single structured candidate
+- `autosnippet_submit_knowledge_batch` - batch structured candidates
+- `autosnippet_submit_knowledge_batch` - submit .md files as candidates
 
 ### 2. Validate and Enhance Candidates
 - `autosnippet_validate_candidate` - pre-validate quality
@@ -81,7 +81,7 @@ This skill documents the Recipe lifecycle and clarifies what Agent can and canno
 2. Generate structured candidate with rationale, steps, etc.
 3. `autosnippet_check_duplicate` - verify no duplicate exists
 4. `autosnippet_validate_candidate` - pre-validate quality
-5. `autosnippet_submit_candidate` - submit to candidate pool
+5. `autosnippet_submit_knowledge` - submit to candidate pool
 6. Tell user: "Candidate submitted. Review in Dashboard Candidates page."
 
 ### Workflow 2: User asks about an existing Recipe
@@ -94,7 +94,7 @@ This skill documents the Recipe lifecycle and clarifies what Agent can and canno
 1. Explain: "I cannot modify Recipes directly. I can submit an improved version as a new candidate."
 2. `autosnippet_get_recipe` to read current content
 3. Generate improved candidate based on user's feedback
-4. `autosnippet_submit_candidate` - submit improved version
+4. `autosnippet_submit_knowledge` - submit improved version
 5. Tell user: "Improved version submitted as candidate. Update the Recipe in Dashboard."
 
 ---

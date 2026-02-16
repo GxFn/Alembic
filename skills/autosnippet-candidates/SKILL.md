@@ -221,18 +221,18 @@ Severity: `error` (must fix) | `warning` (should fix) | `info` (suggestion)
 3. Call `autosnippet_context_search` to mark similarity and fill `relations`
 4. (Optional) `autosnippet_validate_candidate` pre-validate
 5. (Optional) `autosnippet_check_duplicate` dedup hint
-6. `autosnippet_submit_candidate` or `autosnippet_submit_candidates` to submit
+6. `autosnippet_submit_knowledge` or `autosnippet_submit_knowledge_batch` to submit
 
 ## Batch Target Scan Flow
 1. `autosnippet_get_targets` → select targetName
 2. `autosnippet_get_target_files(targetName)`
 3. Parallel scan → per-file checklist extraction → aggregate / dedup / score
-4. `autosnippet_submit_candidates` batch submit — **all V2 fields are preserved**
+4. `autosnippet_submit_knowledge_batch` batch submit — **all V2 fields are preserved**
 
 ## Draft File Flow (alternative)
 1. Create draft folder (e.g. `.autosnippet-drafts/`) outside `AutoSnippet/`
 2. Generate one .md per pattern in draft folder
-3. Call `autosnippet_submit_draft_recipes` with filePaths and `deleteAfterSubmit: true`
+3. Call `autosnippet_submit_knowledge_batch` with filePaths and `deleteAfterSubmit: true`
 4. Delete draft folder after submit
 
 ---
@@ -247,9 +247,9 @@ Severity: `error` (must fix) | `warning` (should fix) | `info` (suggestion)
 | `autosnippet_context_search` | Find similar existing Recipes → fill `relations` |
 | `autosnippet_validate_candidate` | Pre-validate candidate fields |
 | `autosnippet_check_duplicate` | Cosine similarity dedup check |
-| `autosnippet_submit_candidate` | Submit single candidate (**all V2 fields**) |
-| `autosnippet_submit_candidates` | Batch submit candidates (**all V2 fields preserved**) |
-| `autosnippet_submit_draft_recipes` | Submit .md draft files as candidates |
+| `autosnippet_submit_knowledge` | Submit single candidate (**all V2 fields**) |
+| `autosnippet_submit_knowledge_batch` | Batch submit candidates (**all V2 fields preserved**) |
+| `autosnippet_submit_knowledge_batch` | Submit .md draft files as candidates |
 
 ---
 
