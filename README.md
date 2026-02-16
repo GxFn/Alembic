@@ -175,16 +175,16 @@ asd install:vscode-copilot      # 配置 MCP 和 Copilot 指令
 
 | 分类 | 工具 |
 |------|------|
-| **系统** | `health`、`autosnippet_capabilities` |
-| **搜索** | `autosnippet_search`（统合入口）、`autosnippet_context_search`（4 层漏斗）、`autosnippet_keyword_search`、`autosnippet_semantic_search` |
-| **Recipe 浏览** | `autosnippet_list_recipes`、`autosnippet_get_recipe`、`autosnippet_list_rules`、`autosnippet_list_patterns`、`autosnippet_list_facts`、`autosnippet_recipe_insights`、`autosnippet_confirm_usage` |
-| **候选管理** | `autosnippet_validate_candidate`、`autosnippet_check_duplicate`、`autosnippet_submit_knowledge`、`autosnippet_submit_knowledge_batch`、`autosnippet_submit_knowledge_batch`、`autosnippet_enrich_candidates` |
-| **知识图谱** | `autosnippet_graph_query`、`autosnippet_graph_impact`、`autosnippet_graph_path`、`autosnippet_graph_stats` |
-| **项目结构** | `autosnippet_get_targets`、`autosnippet_get_target_files`、`autosnippet_get_target_metadata` |
-| **Guard** | `autosnippet_guard_check`、`autosnippet_guard_audit_files`、`autosnippet_scan_project` |
-| **冷启动** | `autosnippet_bootstrap_knowledge`、`autosnippet_bootstrap_refine` |
-| **Skills** | `autosnippet_list_skills`、`autosnippet_load_skill`、`autosnippet_create_skill`、`autosnippet_delete_skill`、`autosnippet_update_skill`、`autosnippet_suggest_skills` |
-| **治理** | `autosnippet_compliance_report` |
+| **系统** | `health`、`capabilities` |
+| **搜索** | `search`（统合入口）、`context_search`（4 层漏斗）、`keyword_search`、`semantic_search` |
+| **Recipe 浏览** | `list_recipes`、`get_recipe`、`list_rules`、`patterns`、`list_facts`、`recipe_insights`、`confirm_usage` |
+| **候选管理** | `validate_candidate`、`check_duplicate`、`submit_knowledge`、`submit_knowledge_batch`、`submit_knowledge_batch`、`enrich_candidates` |
+| **知识图谱** | `graph_query`、`graph_impact`、`graph_path`、`graph_stats` |
+| **项目结构** | `get_targets`、`get_target_files`、`get_target_metadata` |
+| **Guard** | `guard_check`、`guard_audit_files`、`scan_project` |
+| **冷启动** | `bootstrap_knowledge`、`bootstrap_refine` |
+| **Skills** | `list_skills`、`load_skill`、`create_skill`、`delete_skill`、`update_skill`、`suggest_skills` |
+| **治理** | `compliance_report` |
 
 ## 配置
 
