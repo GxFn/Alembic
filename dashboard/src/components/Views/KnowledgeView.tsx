@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   BookOpen, Shield, Lightbulb, Search, Filter, ArrowUpDown, ChevronDown, ChevronUp,
+  ChevronLeft, ChevronRight,
   Eye, Code2, Tag, Clock, CheckCircle2, Zap, Archive, RotateCcw, Trash2,
   Loader2, BarChart3, Maximize2, Minimize2, X, Copy, RefreshCw,
-  Globe, Layers, Hash, FolderOpen
+  Globe, Layers, Hash, FolderOpen, FileText, FileCode, Link2
 } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import type {
@@ -13,7 +14,7 @@ import type {
 import api from '../../api';
 import { notify } from '../../utils/notification';
 import { categoryConfigs } from '../../constants';
-import CodeBlock from '../Shared/CodeBlock';
+import CodeBlock, { normalizeCode } from '../Shared/CodeBlock';
 import MarkdownWithHighlight from '../Shared/MarkdownWithHighlight';
 import Pagination from '../Shared/Pagination';
 import { ICON_SIZES } from '../../constants/icons';
@@ -77,7 +78,7 @@ function confidenceColor(c: number | null | undefined): { ring: string; text: st
 
 function codePreview(code: string | undefined, maxLines = 4): string {
   if (!code) return '';
-  return code.split('\n').slice(0, maxLines).join('\n');
+  return normalizeCode(code).split('\n').slice(0, maxLines).join('\n');
 }
 
 /* ═══ 来源标签 ════════════════════════════════════════ */
@@ -431,7 +432,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
             <span className="text-xs text-slate-400 ml-auto">共 {total} 条</span>
           </div>
 
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {entries.map(entry => {
               const lc = LIFECYCLE_CONFIG[entry.lifecycle] || LIFECYCLE_CONFIG.pending;
               const kc = KIND_CONFIG[entry.kind] || KIND_CONFIG.pattern;
@@ -443,22 +444,20 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                 <div
                   key={entry.id}
                   onClick={() => setSelected(entry)}
-                  className={`group flex items-start gap-3 p-3 rounded-xl border bg-white hover:shadow-sm cursor-pointer transition-all ${
+                  className={`group bg-white rounded-xl border shadow-sm hover:shadow-md cursor-pointer transition-all overflow-hidden ${
                     selected?.id === entry.id ? 'ring-2 ring-blue-300 border-blue-200' : 'border-slate-200'
                   }`}
                 >
-                  {/* 复选框 */}
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(entry.id)}
-                    onChange={e => { e.stopPropagation(); toggleSelect(entry.id); }}
-                    onClick={e => e.stopPropagation()}
-                    className="mt-1 rounded border-slate-300"
-                  />
-
-                  {/* 主体 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                  <div className="px-4 pt-3 pb-2">
+                    {/* 复选框 + badges 行 */}
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(entry.id)}
+                        onChange={e => { e.stopPropagation(); toggleSelect(entry.id); }}
+                        onClick={e => e.stopPropagation()}
+                        className="rounded border-slate-300"
+                      />
                       {/* Lifecycle */}
                       <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${lc.bg} ${lc.color} ${lc.border} border`}>
                         <LcIcon size={10} />{lc.label}
@@ -481,17 +480,17 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                           <Zap size={9} />可自动通过
                         </span>
                       )}
-                      {/* Source */}
-                      <span className="text-[10px] text-slate-300 ml-auto">{entry.source}</span>
                     </div>
 
                     {/* Title */}
-                    <h3 className="text-sm font-medium text-slate-800 truncate">{entry.title}</h3>
+                    <h3 className="text-sm font-bold text-slate-900 mb-1 break-words leading-snug">{entry.title}</h3>
 
                     {/* Description / Summary */}
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
-                      {entry.description || entry.content?.rationale || ''}
-                    </p>
+                    {(entry.description || entry.content?.rationale) && (
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                        {entry.description || entry.content?.rationale || ''}
+                      </p>
+                    )}
 
                     {/* 代码预览 */}
                     {entry.content?.pattern && (
@@ -499,20 +498,21 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                         {codePreview(entry.content.pattern, 3)}
                       </pre>
                     )}
+                  </div>
 
-                    {/* Tags + 时间 */}
-                    <div className="flex items-center gap-2 mt-2">
-                      {entry.tags?.slice(0, 3).map(tag => (
-                        <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{tag}</span>
-                      ))}
-                      {entry.tags && entry.tags.length > 3 && (
-                        <span className="text-[10px] text-slate-400">+{entry.tags.length - 3}</span>
-                      )}
-                      <span className="text-[10px] text-slate-300 ml-auto">
-                        {entry.trigger && <span className="text-blue-400 mr-2">{entry.trigger}</span>}
-                        {formatDate(entry.updatedAt)}
-                      </span>
-                    </div>
+                  {/* Tags + 时间 底部行 */}
+                  <div className="px-4 py-2 bg-slate-50/80 border-t border-slate-100 flex items-center gap-2">
+                    {entry.tags?.slice(0, 3).map(tag => (
+                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">{tag}</span>
+                    ))}
+                    {entry.tags && entry.tags.length > 3 && (
+                      <span className="text-[10px] text-slate-400">+{entry.tags.length - 3}</span>
+                    )}
+                    <span className="text-[10px] text-slate-300 ml-auto">
+                      {entry.trigger && <span className="text-blue-400 mr-2">{entry.trigger}</span>}
+                      {entry.source && <span className="mr-2">{entry.source}</span>}
+                      {formatDate(entry.updatedAt)}
+                    </span>
                   </div>
                 </div>
               );
@@ -554,71 +554,61 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
             onClick={e => e.stopPropagation()}
           >
             {/* ── 面板头部 ── */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 shrink-0 bg-slate-50/80">
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <ConfidenceRing value={selected.reasoning?.confidence ?? null} size={40} />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-sm text-slate-800 truncate">{selected.title}</h3>
-                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${lc.bg} ${lc.color} ${lc.border} border`}>
-                      <LcIcon size={10} />{lc.label}
-                    </span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border ${catCfg?.bg || 'bg-slate-50'} ${catCfg?.color || 'text-slate-400'} ${catCfg?.border || 'border-slate-100'}`}>
-                      {selected.category || 'general'}
-                    </span>
-                    {selected.source && selected.source !== 'unknown' && (
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${srcInfo.color}`}>
-                        {srcInfo.label}
-                      </span>
-                    )}
-                    <span className="text-[10px] text-slate-400">{currentIndex + 1}/{entries.length}</span>
-                  </div>
-                </div>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-gradient-to-b from-white to-slate-50/50 shrink-0">
+              <div className="flex-1 min-w-0 mr-3">
+                <h3 className="font-bold text-slate-800 text-lg leading-snug break-words">{selected.title}</h3>
               </div>
-              <div className="flex items-center gap-1 shrink-0 ml-2">
-                <button onClick={goToPrev} disabled={!hasPrev} title="上一条"
-                  className={`p-1.5 rounded-lg transition-colors ${hasPrev ? 'hover:bg-slate-200 text-slate-500' : 'text-slate-300 cursor-not-allowed'}`}>
-                  <ChevronUp size={16} />
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={goToPrev} disabled={!hasPrev} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title="上一条"><ChevronLeft size={ICON_SIZES.md} /></button>
+                <span className="text-xs text-slate-400 tabular-nums">{currentIndex + 1}/{entries.length}</span>
+                <button onClick={goToNext} disabled={!hasNext} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title="下一条"><ChevronRight size={ICON_SIZES.md} /></button>
+                <div className="w-px h-5 bg-slate-200 mx-1" />
+                <button onClick={toggleDrawerWide} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400" title={drawerWide ? '收窄' : '展宽'}>
+                  {drawerWide ? <Minimize2 size={ICON_SIZES.md} /> : <Maximize2 size={ICON_SIZES.md} />}
                 </button>
-                <button onClick={goToNext} disabled={!hasNext} title="下一条"
-                  className={`p-1.5 rounded-lg transition-colors ${hasNext ? 'hover:bg-slate-200 text-slate-500' : 'text-slate-300 cursor-not-allowed'}`}>
-                  <ChevronDown size={16} />
-                </button>
-                <button onClick={toggleDrawerWide} className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400" title={drawerWide ? '收窄面板' : '展开更宽'}>
-                  {drawerWide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                </button>
-                <button onClick={() => setSelected(null)} className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400">
-                  <X size={18} />
-                </button>
+                <button onClick={() => { handleDelete(selected); setSelected(null); }} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title="删除"><Trash2 size={ICON_SIZES.md} /></button>
+                <button onClick={() => setSelected(null)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><X size={ICON_SIZES.md} /></button>
               </div>
             </div>
 
             {/* ── 面板内容 ── */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+            <div className="flex-1 overflow-y-auto">
               {/* 驳回原因 */}
               {selected.rejectionReason && (
-                <section className="bg-red-50 border border-red-200 rounded p-3">
-                  <h3 className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-2">驳回原因</h3>
+                <div className="px-6 py-3 border-b border-red-200 bg-red-50/80">
+                  <label className="text-[10px] font-bold text-red-500 uppercase mb-1.5 block">驳回原因</label>
                   <p className="text-xs text-red-600">{selected.rejectionReason}</p>
-                </section>
+                </div>
               )}
 
-              {/* 基本信息 */}
-              <section>
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">基本信息</h3>
+              {/* 1. Badges + Metadata */}
+              <div className="px-6 py-4 border-b border-slate-100 space-y-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${lc.bg} ${lc.color} ${lc.border} border`}>
+                    <LcIcon size={10} />{lc.label}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${kc.bg} ${kc.color} ${kc.border} border`}>
+                    {React.createElement(kc.icon, { size: 10 })}{kc.label}
+                  </span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border ${catCfg?.bg || 'bg-slate-50'} ${catCfg?.color || 'text-slate-400'} ${catCfg?.border || 'border-slate-100'}`}>
+                    {selected.category || 'general'}
+                  </span>
+                  {selected.knowledgeType && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">{selected.knowledgeType}</span>
+                  )}
+                  {selected.language && (
+                    <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">{selected.language}</span>
+                  )}
+                  {selected.trigger && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold">{selected.trigger}</span>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
                   {(() => {
-                    const KindIcon = kc.icon;
-                    const items: { icon: React.ElementType; iconClass: string; label: string; value: string; mono?: boolean }[] = [
-                      { icon: KindIcon, iconClass: kc.color.replace('text-', 'text-'), label: 'Kind', value: kc.label },
-                      { icon: Code2, iconClass: 'text-sky-400', label: '语言', value: selected.language?.toUpperCase() || '-' },
-                      { icon: Tag, iconClass: 'text-indigo-400', label: '分类', value: selected.category || '-' },
-                    ];
-                    if (selected.knowledgeType) items.push({ icon: Layers, iconClass: 'text-purple-400', label: '类型', value: selected.knowledgeType });
-                    if (selected.complexity) items.push({ icon: Layers, iconClass: 'text-orange-400', label: '复杂度', value: selected.complexity === 'advanced' ? '高级' : selected.complexity === 'intermediate' ? '中级' : selected.complexity === 'beginner' ? '初级' : selected.complexity });
+                    const items: { icon: React.ElementType; iconClass: string; label: string; value: string; mono?: boolean }[] = [];
                     if (selected.scope) items.push({ icon: Globe, iconClass: 'text-teal-400', label: '范围', value: selected.scope === 'universal' ? '通用' : selected.scope === 'project-specific' ? '项目级' : selected.scope === 'module-level' ? '模块级' : selected.scope });
-                    items.push({ icon: Globe, iconClass: 'text-violet-400', label: '来源', value: (SOURCE_LABELS[selected.source || ''] || { label: selected.source || '-' }).label });
-                    if (selected.trigger) items.push({ icon: Zap, iconClass: 'text-amber-400', label: '触发词', value: selected.trigger, mono: true });
+                    if (selected.complexity) items.push({ icon: Layers, iconClass: 'text-orange-400', label: '复杂度', value: selected.complexity === 'advanced' ? '高级' : selected.complexity === 'intermediate' ? '中级' : selected.complexity === 'beginner' ? '初级' : selected.complexity });
+                    if (selected.source && selected.source !== 'unknown') items.push({ icon: Globe, iconClass: 'text-violet-400', label: '来源', value: (SOURCE_LABELS[selected.source || ''] || { label: selected.source || '-' }).label });
                     if (selected.createdAt) items.push({ icon: Clock, iconClass: 'text-slate-400', label: '创建', value: formatDate(selected.createdAt) });
                     if (selected.updatedAt) items.push({ icon: Clock, iconClass: 'text-slate-400', label: '更新', value: formatDate(selected.updatedAt) });
                     if (selected.publishedAt) items.push({ icon: CheckCircle2, iconClass: 'text-emerald-400', label: '发布', value: formatDate(selected.publishedAt) });
@@ -646,257 +636,307 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                     </div>
                   )}
                 </div>
-              </section>
+              </div>
 
-              {/* 摘要 */}
-              {selected.description && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">摘要</h3>
-                  <p className="text-sm text-slate-600 leading-relaxed">{selected.description}</p>
-                </section>
+              {/* 2. Tags */}
+              {selected.tags && selected.tags.length > 0 && (
+                <div className="px-6 py-3 border-b border-slate-100 flex flex-wrap items-center gap-1.5">
+                  <Tag size={11} className="text-slate-300 mr-0.5" />
+                  {selected.tags.map((tag, i) => (
+                    <span key={i} className="text-[9px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 font-medium">{tag}</span>
+                  ))}
+                </div>
               )}
 
-              {/* 代码 */}
-              {selected.content?.pattern && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">代码</h3>
-                  <CodeBlock code={selected.content.pattern} language={selected.language === 'objc' ? 'objectivec' : selected.language} showLineNumbers />
-                </section>
-              )}
-
-              {/* 项目特写 */}
-              {selected.content?.markdown && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">项目特写</h3>
-                  <div className="prose prose-sm max-w-none">
-                    <MarkdownWithHighlight content={selected.content.markdown} />
+              {/* 3. Relations */}
+              {selected.relations && Object.entries(selected.relations).some(([, v]) => Array.isArray(v) && v.length > 0) && (
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Link2 size={12} className="text-purple-400" />
+                    <label className="text-[10px] font-bold text-slate-400 uppercase">关联知识</label>
+                    {(() => {
+                      const total = Object.values(selected.relations).flat().length;
+                      return total > 0 ? <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-bold">{total}</span> : null;
+                    })()}
                   </div>
-                </section>
-              )}
-
-              {/* Delivery 字段: When / Do / Don't */}
-              {(selected.doClause || selected.whenClause || selected.dontClause || selected.topicHint || selected.coreCode) && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Delivery 字段</h3>
-                  <div className="space-y-2 text-xs">
-                    {selected.topicHint && (
-                      <div>
-                        <span className="text-indigo-500 font-medium">Topic：</span>
-                        <span className="text-slate-700">{selected.topicHint}</span>
-                      </div>
-                    )}
-                    {selected.whenClause && (
-                      <div>
-                        <span className="text-blue-500 font-medium">When：</span>
-                        <span className="text-slate-700">{selected.whenClause}</span>
-                      </div>
-                    )}
-                    {selected.doClause && (
-                      <div>
-                        <span className="text-emerald-500 font-medium">Do：</span>
-                        <span className="text-slate-700">{selected.doClause}</span>
-                      </div>
-                    )}
-                    {selected.dontClause && (
-                      <div>
-                        <span className="text-red-500 font-medium">Don't：</span>
-                        <span className="text-slate-700">{selected.dontClause}</span>
-                      </div>
-                    )}
-                    {selected.coreCode && (
-                      <div>
-                        <span className="text-emerald-500 font-medium mb-1 block">Core Code</span>
-                        <pre className="bg-slate-50 rounded p-2 text-[11px] font-mono text-slate-600 overflow-x-auto whitespace-pre-wrap">{selected.coreCode}</pre>
-                      </div>
-                    )}
-                  </div>
-                </section>
-              )}
-
-              {/* 设计原理 */}
-              {selected.content?.rationale && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">设计原理</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">{selected.content.rationale}</p>
-                </section>
-              )}
-
-              {/* 实施步骤 */}
-              {selected.content?.steps && selected.content.steps.length > 0 && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">实施步骤</h3>
-                  <ol className="ml-4 list-decimal space-y-0.5 text-xs text-slate-600">
-                    {selected.content.steps.map((step: any, i: number) => (
-                      <li key={i}>{typeof step === 'string' ? step : step.description || String(step)}</li>
-                    ))}
-                  </ol>
-                </section>
-              )}
-
-              {/* 推理依据 */}
-              {hasReasoning && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">推理依据</h3>
-                  <div className="space-y-2 text-xs">
-                    {r!.whyStandard && !/^Submitted via /i.test(r!.whyStandard) && (
-                      <div>
-                        <span className="text-slate-500 font-medium">Why Standard：</span>
-                        <span className="text-slate-700">{r!.whyStandard}</span>
-                      </div>
-                    )}
-                    {r!.confidence != null && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-500 font-medium">置信度：</span>
-                        <div className="flex-1 max-w-[180px] bg-slate-100 rounded-full h-1.5">
-                          <div
-                            className={`h-full rounded-full ${r!.confidence >= 0.7 ? 'bg-emerald-500' : r!.confidence >= 0.4 ? 'bg-amber-500' : 'bg-red-500'}`}
-                            style={{ width: `${Math.round((r!.confidence ?? 0) * 100)}%` }}
-                          />
+                  <div className="space-y-1.5">
+                    {Object.entries(selected.relations).map(([type, arr]) => {
+                      if (!Array.isArray(arr) || arr.length === 0) return null;
+                      return (
+                        <div key={type} className="flex items-start gap-2">
+                          <span className="text-[10px] font-mono text-slate-500 w-14 shrink-0 pt-0.5 uppercase">{type}</span>
+                          <div className="flex flex-wrap gap-1">
+                            {arr.map((rel: any, ri: number) => (
+                              <span key={ri} className="inline-flex items-center gap-1 px-1.5 py-0.5 border rounded text-[10px] font-mono bg-purple-50 border-purple-200 text-purple-700">
+                                {rel.target || (typeof rel === 'string' ? rel : JSON.stringify(rel))}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                        <span className="font-medium text-slate-700">{Math.round((r!.confidence ?? 0) * 100)}%</span>
-                      </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. Stats */}
+              {selected.stats && Object.values(selected.stats).some(v => v > 0) && (
+                <div className="px-6 py-3 border-b border-slate-100">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-amber-50/60 rounded-xl p-3 text-center border border-amber-100">
+                      <div className="text-lg font-bold text-amber-700">{selected.stats?.authority ?? '—'}</div>
+                      <div className="text-[10px] text-amber-500 font-medium">权威分</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                      <div className="text-lg font-bold text-slate-800">{selected.stats?.guardHits ?? 0}</div>
+                      <div className="text-[10px] text-slate-400 font-medium">Guard</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+                      <div className="text-lg font-bold text-slate-800">{selected.stats?.adoptions ?? 0}</div>
+                      <div className="text-[10px] text-slate-400 font-medium">采纳</div>
+                    </div>
+                    <div className="bg-blue-50/60 rounded-xl p-3 text-center border border-blue-100">
+                      <div className="text-lg font-bold text-blue-700">{selected.stats?.searchHits ?? 0}</div>
+                      <div className="text-[10px] text-blue-500 font-medium">搜索</div>
+                    </div>
+                  </div>
+                  {(selected.stats.views > 0 || selected.stats.applications > 0) && (
+                    <div className="flex items-center gap-4 mt-2 text-[10px] text-slate-400">
+                      <span>浏览: {selected.stats.views}</span>
+                      <span>应用: {selected.stats.applications}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 5. Reasoning — 推理依据 */}
+              {hasReasoning && (
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                    <Lightbulb size={11} className="text-amber-400" /> 推理依据
+                  </label>
+                  <div className="bg-amber-50/30 border border-amber-100 rounded-xl p-4 space-y-2.5">
+                    {r!.whyStandard && !/^Submitted via /i.test(r!.whyStandard) && (
+                      <p className="text-sm text-slate-700 leading-relaxed">{r!.whyStandard}</p>
                     )}
                     {r!.sources && r!.sources.length > 0 && (
-                      <div>
-                        <span className="text-slate-500 font-medium">来源：</span>
-                        <span className="text-slate-700">{r!.sources.join('、')}</span>
-                      </div>
-                    )}
-                    {r!.alternatives && r!.alternatives.length > 0 && (
-                      <div>
-                        <span className="text-slate-500 font-medium">备选方案：</span>
-                        <span className="text-slate-700">{r!.alternatives.join('、')}</span>
-                      </div>
-                    )}
-                  </div>
-                </section>
-              )}
-
-              {/* 约束 */}
-              {selected.constraints && Object.values(selected.constraints).some(v => v && (Array.isArray(v) ? v.length > 0 : true)) && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">约束</h3>
-                  <div className="space-y-2 text-xs">
-                    {selected.constraints.guards && selected.constraints.guards.length > 0 && (
-                      <div>
-                        <span className="text-slate-500 font-medium">Guards：</span>
-                        {selected.constraints.guards.map((g, i) => (
-                          <div key={i} className="ml-3 mt-1 bg-slate-50 rounded p-1.5">
-                            <code className="font-mono text-red-700">{g.pattern}</code>
-                            <span className="ml-2 text-slate-500">{g.message || ''}</span>
-                            <span className={`ml-2 ${g.severity === 'error' ? 'text-red-600' : 'text-amber-600'}`}>[{g.severity}]</span>
-                          </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] text-slate-400 font-bold">来源:</span>
+                        {r!.sources.map((src: string, i: number) => (
+                          <code key={i} className="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-700 font-mono">{src}</code>
                         ))}
                       </div>
                     )}
-                    {selected.constraints.boundaries && selected.constraints.boundaries.length > 0 && (
-                      <div><span className="text-slate-500 font-medium">Boundaries：</span><span className="text-slate-700">{selected.constraints.boundaries.join('；')}</span></div>
-                    )}
-                    {selected.constraints.preconditions && selected.constraints.preconditions.length > 0 && (
-                      <div><span className="text-slate-500 font-medium">Preconditions：</span><span className="text-slate-700">{selected.constraints.preconditions.join('；')}</span></div>
-                    )}
-                    {selected.constraints.sideEffects && selected.constraints.sideEffects.length > 0 && (
-                      <div><span className="text-slate-500 font-medium">Side Effects：</span><span className="text-slate-700">{selected.constraints.sideEffects.join('；')}</span></div>
-                    )}
-                  </div>
-                </section>
-              )}
-
-              {/* 关系 */}
-              {selected.relations && Object.keys(selected.relations).length > 0 && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">关系</h3>
-                  <div className="space-y-2 text-xs">
-                    {Object.entries(selected.relations).map(([type, arr]) => (
-                      Array.isArray(arr) && arr.length > 0 ? (
-                        <div key={type}>
-                          <span className="text-slate-500 font-medium uppercase">{type}：</span>
-                          <ul className="ml-3 mt-0.5 space-y-0.5">
-                            {arr.map((rel: any, i: number) => (
-                              <li key={i} className="text-slate-700">
-                                <span className="font-medium">{rel.target}</span>
-                                {rel.description && <span className="text-slate-400 ml-1">— {rel.description}</span>}
-                              </li>
-                            ))}
-                          </ul>
+                    {r!.confidence != null && r!.confidence > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-400 font-bold">置信度:</span>
+                        <div className="flex-1 max-w-[160px] h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-amber-400 rounded-full"
+                            style={{ width: `${Math.round((r!.confidence ?? 0) * 100)}%` }}
+                          />
                         </div>
-                      ) : null
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* 质量评分 */}
-              {selected.quality && (selected.quality.overall ?? 0) > 0 && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">质量评分</h3>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-                    <div className="flex items-center justify-between"><span className="text-slate-400">完整性</span><span className="text-slate-700 font-medium">{selected.quality.completeness?.toFixed(2) || '0'}</span></div>
-                    <div className="flex items-center justify-between"><span className="text-slate-400">适配度</span><span className="text-slate-700 font-medium">{selected.quality.adaptation?.toFixed(2) || '0'}</span></div>
-                    <div className="flex items-center justify-between"><span className="text-slate-400">文档</span><span className="text-slate-700 font-medium">{selected.quality.documentation?.toFixed(2) || '0'}</span></div>
-                    <div className="flex items-center justify-between"><span className="text-slate-400">综合 ({selected.quality.grade || 'F'})</span><span className="text-slate-700 font-medium">{selected.quality.overall?.toFixed(2) || '0'}</span></div>
-                  </div>
-                </section>
-              )}
-
-              {/* 使用统计 */}
-              {selected.stats && Object.values(selected.stats).some(v => v > 0) && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">使用统计</h3>
-                  <div className="grid grid-cols-3 gap-x-6 gap-y-1.5 text-xs">
-                    {[
-                      { label: '浏览', value: selected.stats?.views || 0 },
-                      { label: '采纳', value: selected.stats?.adoptions || 0 },
-                      { label: '应用', value: selected.stats?.applications || 0 },
-                      { label: 'Guard', value: selected.stats?.guardHits || 0 },
-                      { label: '搜索', value: selected.stats?.searchHits || 0 },
-                      { label: '权威', value: selected.stats?.authority || 0 },
-                    ].map(s => (
-                      <div key={s.label} className="flex items-center justify-between">
-                        <span className="text-slate-400">{s.label}</span>
-                        <span className="text-slate-700 font-medium">{s.value}</span>
+                        <span className="text-[10px] font-bold text-amber-600">{Math.round((r!.confidence ?? 0) * 100)}%</span>
                       </div>
-                    ))}
+                    )}
+                    {r!.alternatives && r!.alternatives.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span className="text-[10px] text-slate-400 font-bold">备选:</span>
+                        {r!.alternatives.map((alt: string, i: number) => (
+                          <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600">{alt}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </section>
+                </div>
               )}
 
-              {/* 标签 */}
-              {selected.tags && selected.tags.length > 0 && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">标签</h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selected.tags.map((tag, i) => (
-                      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{tag}</span>
-                    ))}
+              {/* 6. Quality — 质量评级 */}
+              {selected.quality && selected.quality.grade && selected.quality.grade !== 'F' && (
+                <div className="px-6 py-3 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">质量评级</label>
+                  <div className="flex items-center gap-4">
+                    <span className={`text-2xl font-black ${
+                      selected.quality.grade === 'A' ? 'text-emerald-600' :
+                      selected.quality.grade === 'B' ? 'text-blue-600' :
+                      selected.quality.grade === 'C' ? 'text-amber-600' :
+                      selected.quality.grade === 'D' ? 'text-orange-600' : 'text-slate-400'
+                    }`}>{selected.quality.grade}</span>
+                    <div className="flex-1 grid grid-cols-3 gap-2 text-[10px]">
+                      {selected.quality.completeness != null && selected.quality.completeness > 0 && (
+                        <div className="text-center">
+                          <div className="font-bold text-slate-700">{selected.quality.completeness.toFixed(2)}</div>
+                          <div className="text-slate-400">完整性</div>
+                        </div>
+                      )}
+                      {selected.quality.adaptation != null && selected.quality.adaptation > 0 && (
+                        <div className="text-center">
+                          <div className="font-bold text-slate-700">{selected.quality.adaptation.toFixed(2)}</div>
+                          <div className="text-slate-400">适配度</div>
+                        </div>
+                      )}
+                      {selected.quality.documentation != null && selected.quality.documentation > 0 && (
+                        <div className="text-center">
+                          <div className="font-bold text-slate-700">{selected.quality.documentation.toFixed(2)}</div>
+                          <div className="text-slate-400">文档度</div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </section>
+                </div>
               )}
 
-              {/* Headers */}
+              {/* 7. Description / Summary */}
+              {selected.description && (
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">摘要</label>
+                  <p className="text-sm text-slate-600 leading-relaxed">{selected.description}</p>
+                </div>
+              )}
+
+              {/* 8. Markdown 文档 */}
+              {selected.content?.markdown && (
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                    <FileText size={11} className="text-blue-400" /> Markdown 文档
+                  </label>
+                  <div className="bg-blue-50/30 border border-blue-100 rounded-xl p-4">
+                    <div className="markdown-body text-sm text-slate-700 leading-relaxed">
+                      <MarkdownWithHighlight content={selected.content.markdown} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 9. Headers */}
               {selected.headers && selected.headers.length > 0 && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Headers</h3>
+                <div className="px-6 py-3 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">导入头文件</label>
                   <div className="flex flex-wrap gap-1.5">
                     {selected.headers.map((h, i) => (
-                      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">{h}</span>
+                      <code key={i} className="px-2.5 py-1 bg-violet-50 text-violet-700 border border-violet-100 rounded-md text-[10px] font-mono font-medium">{h}</code>
                     ))}
                   </div>
-                </section>
+                </div>
               )}
 
-              {/* AI 洞察 */}
+              {/* 10. Code / 标准用法 */}
+              {selected.content?.pattern && (
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                    <FileCode size={11} className="text-emerald-500" /> 代码 / 标准用法
+                  </label>
+                  <CodeBlock code={selected.content.pattern} language={selected.language === 'objc' ? 'objectivec' : selected.language} showLineNumbers />
+                </div>
+              )}
+
+              {/* 11. Delivery 字段 */}
+              {(selected.doClause || selected.whenClause || selected.dontClause || selected.topicHint || selected.coreCode) && (
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                    <Layers size={11} className="text-indigo-400" /> Cursor Delivery
+                  </label>
+                  <div className="bg-indigo-50/30 border border-indigo-100 rounded-xl p-4 space-y-1.5 text-xs">
+                    {selected.topicHint && <div><span className="text-indigo-500 font-medium">Topic：</span><span className="text-slate-700">{selected.topicHint}</span></div>}
+                    {selected.whenClause && <div><span className="text-blue-500 font-medium">When：</span><span className="text-slate-700">{selected.whenClause}</span></div>}
+                    {selected.doClause && <div><span className="text-emerald-500 font-medium">Do：</span><span className="text-slate-700">{selected.doClause}</span></div>}
+                    {selected.dontClause && <div><span className="text-red-500 font-medium">Don't：</span><span className="text-slate-700">{selected.dontClause}</span></div>}
+                    {selected.coreCode && (
+                      <div>
+                        <span className="text-purple-500 font-medium">Core Code：</span>
+                        <div className="mt-1">
+                          <CodeBlock code={selected.coreCode} language={selected.language === 'objc' ? 'objectivec' : (selected.language || 'text')} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 12. Rationale */}
+              {selected.content?.rationale && (
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">设计原理</label>
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                    <p className="text-sm text-slate-600 leading-relaxed">{selected.content.rationale}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* 13. Steps */}
+              {selected.content?.steps && selected.content.steps.length > 0 && (
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">实施步骤</label>
+                  <div className="space-y-2">
+                    {selected.content.steps.map((step: any, i: number) => {
+                      if (typeof step === 'string') {
+                        return (
+                          <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100 flex items-start gap-2.5">
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                            <p className="text-xs text-slate-700 leading-relaxed">{step}</p>
+                          </div>
+                        );
+                      }
+                      const title = typeof step.title === 'string' ? step.title : '';
+                      const desc = typeof step.description === 'string' ? step.description : '';
+                      const code = typeof step.code === 'string' ? step.code : '';
+                      return (
+                        <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center shrink-0">{i + 1}</span>
+                            {title && <span className="text-xs font-bold text-slate-700">{title}</span>}
+                          </div>
+                          {desc && <p className="text-xs text-slate-600 ml-7 leading-relaxed">{desc}</p>}
+                          {code && <pre className="text-[11px] font-mono bg-slate-800 text-green-300 p-2.5 rounded-md mt-1.5 ml-7 overflow-x-auto whitespace-pre-wrap">{code}</pre>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 14. Constraints */}
+              {selected.constraints && (() => {
+                const c = selected.constraints;
+                const total = (c.guards?.length || 0) + (c.boundaries?.length || 0) + (c.preconditions?.length || 0) + (c.sideEffects?.length || 0);
+                if (!total) return null;
+                return (
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                      <Shield size={11} className="text-amber-500" /> 约束条件 <span className="text-amber-500 font-mono">{total}</span>
+                    </label>
+                    <div className="space-y-1.5 text-xs text-slate-600">
+                      {c.guards?.map((g, i) => (
+                        <div key={i} className="flex gap-1.5 items-start">
+                          <span className={`text-xs mt-0.5 ${g.severity === 'error' ? 'text-red-500' : 'text-yellow-500'}`}>●</span>
+                          <code className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">{g.pattern}</code>
+                          {g.message && <span className="text-[10px] text-slate-400">— {g.message}</span>}
+                        </div>
+                      ))}
+                      {c.boundaries?.map((b, i) => <div key={i} className="flex gap-1.5"><span className="text-orange-400">●</span>{b}</div>)}
+                      {c.preconditions?.map((p, i) => <div key={i} className="flex gap-1.5"><span className="text-blue-400">◆</span>{p}</div>)}
+                      {c.sideEffects?.map((s, i) => <div key={i} className="flex gap-1.5"><span className="text-pink-400">⚡</span>{s}</div>)}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 15. AI 洞察 */}
               {selected.aiInsight && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">AI 洞察</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">{selected.aiInsight}</p>
-                </section>
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                    <Lightbulb size={11} className="text-cyan-400" /> AI 洞察
+                  </label>
+                  <p className="text-sm text-slate-600 leading-relaxed">{selected.aiInsight}</p>
+                </div>
               )}
 
-              {/* 生命周期历史 */}
+              {/* 16. 生命周期历史 */}
               {selected.lifecycleHistory && selected.lifecycleHistory.length > 0 && (
-                <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">生命周期历史</h3>
+                <div className="px-6 py-4 border-b border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                    <Clock size={11} className="text-slate-400" /> 生命周期历史
+                  </label>
                   <div className="space-y-1">
                     {selected.lifecycleHistory.map((h, i) => {
                       const fromCfg = LIFECYCLE_CONFIG[h.from] || LIFECYCLE_CONFIG.pending;
@@ -912,15 +952,15 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                       );
                     })}
                   </div>
-                </section>
+                </div>
               )}
             </div>
 
             {/* ── 面板底部操作栏 ── */}
-            <div className="shrink-0 border-t border-slate-200 px-5 py-3 bg-slate-50/80 flex items-center justify-between">
+            <div className="shrink-0 border-t border-slate-200 px-5 py-3 bg-gradient-to-b from-slate-50/80 to-white flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleDelete(selected)}
+                  onClick={() => { handleDelete(selected); setSelected(null); }}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 border border-red-200 transition-colors"
                 >
                   <Trash2 size={14} /> 删除

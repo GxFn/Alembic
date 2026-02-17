@@ -4,6 +4,56 @@
 
 ---
 
+## [2.12.0] - 2026-02-18
+
+### Agent Memory 四层架构 + 增量 Bootstrap + 迁移合并 + 前端抽屉统一
+
+> 32 files changed, +1666 / -2122
+
+#### Agent Memory 四层架构 (v4.0)
+
+- **feat(WorkingMemory):** Tier 1 工作记忆 — Scratchpad 关键发现追踪，上下文压缩后仍保留早期分析洞察
+- **feat(EpisodicMemory):** Tier 2 情景记忆 — 跨维度发现共享 + 维度级 Digest + Tier Reflection 聚合
+- **feat(ProjectSemanticMemory):** Tier 3 语义记忆 — EpisodicConsolidator 将情景记忆固化到 SQLite `semantic_memories` 表，供二次冷启动复用
+- **feat(ToolResultCache):** Tier 4 工具结果缓存 — 跨维度 `read_project_file` / `search_project` 去重，避免重复 I/O
+- **feat(ChatAgent):** 集成 WorkingMemory + EpisodicMemory + ToolResultCache + SemanticMemory，execute() 接收四层记忆参数
+- **feat(ServiceContainer):** 注册 `codeEntityGraph` 服务 (Phase E: 代码实体关系图谱)
+
+#### 新增 Agent 工具 (3 个)
+
+- **feat(tools.js):** `note_finding` — 记录关键发现到 WorkingMemory Scratchpad，分析后期不会遗忘早期重要发现
+- **feat(tools.js):** `get_previous_evidence` — 查询前序维度的证据和发现，实现知识跨维度传递
+- **feat(tools.js):** `query_code_graph` — 查询代码实体关系图谱 (search/descendants/impact/relations)
+
+#### 增量 Bootstrap (v5.0)
+
+- **feat(bootstrap.js):** 增量 Bootstrap 评估 — 自动检测文件变更，仅重跑受影响维度
+- **feat(orchestrator.js):** Tier Reflection — 每个 Tier 完成后规则化聚合维度发现 (无需 AI 调用)
+- **feat(orchestrator.js):** EpisodicMemory → ProjectSemanticMemory 固化 + Code Entity Graph 关系写入
+- **feat(AnalystAgent.js):** 语义记忆注入 Analyst prompt，二次冷启动时携带上次分析成果
+
+#### 数据库迁移合并 (V3 统一)
+
+- **refactor(migrations):** 删除 13 个旧迁移文件 (005–017)，统一到 `001_initial_schema.js` 单文件 V3 schema
+- **refactor(001_initial_schema.js):** 新增 `contentHash` 列 (file-sync 完整性校验)
+- **refactor(api-spec.js):** 移除旧 `/candidates` API spec，统一使用 V3 Knowledge API
+
+#### 前端抽屉样式统一 + 代码显示修复
+
+- **refactor(KnowledgeView):** 抽屉重构 — 渐变头部 + ChevronLeft/Right 导航 + 带图标的分段布局 (对齐 RecipesView)
+- **refactor(KnowledgeView):** 列表布局从单列改为 `grid-cols-2` 双列卡片网格
+- **refactor(CandidatesView):** 抽屉重构 — 同 KnowledgeView 对齐 RecipesView 风格
+- **fix(CodeBlock):** 新增 `normalizeCode()` — 修复 AI 生成代码的 regex 转义 (`\[`/`\*`/`\^`) 和字面量 `\n` 显示问题
+- **fix(KnowledgeView + CandidatesView):** `codePreview()` 应用 normalizeCode，列表卡片代码预览恢复正常
+
+#### 其他
+
+- **feat(SearchEngine + SearchHandler):** 适配 Agent Memory 查询接口
+- **feat(ProducerAgent):** 容错规则增强 — 文件读取失败时直接使用分析文本提交
+- **test:** 24 suites / 579 tests 全部通过
+
+---
+
 ## [2.11.0] - 2026-02-18
 
 ### V3 全链路统一 + 字段审计修复 + 前端 V3 内容展示重构

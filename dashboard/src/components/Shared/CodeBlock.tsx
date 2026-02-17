@@ -22,6 +22,37 @@ interface CodeBlockProps {
   showLineNumbers?: boolean;
 }
 
+/**
+ * 规范化代码字符串：修复 AI 生成时产生的 regex 转义和字面量 \n
+ *
+ * 症状: AI 将代码放入 content.pattern 时，有时会把 [ ^ * ( ) { } 等
+ * 字符做 regex 转义（\[、\*、\^…），并把换行写成字面量 \n 而非真实换行。
+ * 这导致代码在前端显示为单行且含大量反斜杠。
+ *
+ * 策略:
+ * 1. 若字符串不含真实换行但包含字面量 \n → 替换为真实换行
+ * 2. 若存在 3+ 个 regex 转义序列（\[、\*、\^…）→ 反转义
+ */
+export function normalizeCode(raw: string): string {
+  if (!raw) return raw;
+
+  let code = raw;
+
+  // Step 1: 字面量 \n → 真实换行（仅当整段代码无真实换行时）
+  if (!code.includes('\n') && code.includes('\\n')) {
+    code = code.replace(/\\n/g, '\n');
+  }
+
+  // Step 2: 检测 regex 转义并还原
+  // 只检测常见 regex 元字符前的反斜杠：[ ] { } ( ) * + ? ^ $ . |
+  const regexEscapes = code.match(/\\(?=[\[\]{}()*+?^$.|])/g);
+  if (regexEscapes && regexEscapes.length >= 3) {
+    code = code.replace(/\\([\[\]{}()*+?^$.|])/g, '$1');
+  }
+
+  return code;
+}
+
 const CodeBlock: React.FC<CodeBlockProps> = ({
   code,
   language = 'text',
@@ -30,6 +61,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
 }) => {
   const lang = LANGUAGE_MAP[language?.toLowerCase()] || language?.toLowerCase() || 'text';
   const noRadius = className.includes('!rounded-none');
+  const normalized = normalizeCode(code);
   return (
   <div className={`rounded-xl overflow-hidden text-sm ${className}`}>
     <SyntaxHighlighter
@@ -46,7 +78,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
     codeTagProps={{ style: { fontFamily: 'ui-monospace, monospace' } }}
     PreTag="div"
     >
-    {code}
+    {normalized}
     </SyntaxHighlighter>
   </div>
   );

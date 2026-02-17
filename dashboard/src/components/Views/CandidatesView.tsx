@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Zap, FileSearch, Box, Trash2, Edit3, Layers, Eye, EyeOff, GitCompare, X, Copy, Brain, BookOpen, Target, ChevronDown, ChevronUp, Sparkles, Shield, Clock, Code2, Tag, AlertTriangle, CheckCircle2, BarChart3, Filter, ArrowUpDown, Rocket, Wand2, Loader2, Lightbulb, FileText, Maximize2, Minimize2 } from 'lucide-react';
+import { Zap, FileSearch, Box, Trash2, Edit3, Layers, Eye, EyeOff, GitCompare, X, Copy, Brain, BookOpen, Target, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sparkles, Shield, Clock, Code2, Tag, AlertTriangle, CheckCircle2, BarChart3, Filter, ArrowUpDown, Rocket, Wand2, Loader2, Lightbulb, FileText, FileCode, Maximize2, Minimize2, Hash, Globe, FolderOpen, Link2 } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { ProjectData, KnowledgeEntry, SimilarRecipe, Recipe } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
 import { categoryConfigs, BOOTSTRAP_DIM_LABELS } from '../../constants';
-import CodeBlock from '../Shared/CodeBlock';
+import CodeBlock, { normalizeCode } from '../Shared/CodeBlock';
 import MarkdownWithHighlight, { stripFrontmatter } from '../Shared/MarkdownWithHighlight';
 import Pagination from '../Shared/Pagination';
 import { ICON_SIZES } from '../../constants/icons';
@@ -82,7 +82,7 @@ function formatDate(raw: string | number | undefined): string {
 /** 代码预览：取前 N 行 */
 function codePreview(code: string | undefined, maxLines = 4): string {
   if (!code) return '';
-  return code.split('\n').slice(0, maxLines).join('\n');
+  return normalizeCode(code).split('\n').slice(0, maxLines).join('\n');
 }
 
 /** 置信度颜色系统 */
@@ -1008,286 +1008,353 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               onClick={e => e.stopPropagation()}
             >
               {/* ── 面板头部 ── */}
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 shrink-0 bg-slate-50/80">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <ConfidenceRing value={cand.reasoning?.confidence ?? null} size={40} />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-sm text-slate-800 truncate">{cand.title}</h3>
-                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border ${candCatCfg?.bg || 'bg-slate-50'} ${candCatCfg?.color || 'text-slate-400'} ${candCatCfg?.border || 'border-slate-100'}`}>
-                        {cand.category || 'general'}
-                      </span>
-                      {cand.source && cand.source !== 'unknown' && (
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${srcInfo.color}`}>
-                          {srcInfo.label}
-                        </span>
-                      )}
-                      <span className="text-[10px] text-slate-400">{currentIndex + 1}/{allItems.length}</span>
-                    </div>
-                  </div>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-gradient-to-b from-white to-slate-50/50 shrink-0">
+                <div className="flex-1 min-w-0 mr-3">
+                  <h3 className="font-bold text-slate-800 text-lg leading-snug break-words">{cand.title}</h3>
                 </div>
-                <div className="flex items-center gap-1 shrink-0 ml-2">
-                  <button onClick={goToPrev} disabled={!hasPrev} title="上一条"
-                    className={`p-1.5 rounded-lg transition-colors ${hasPrev ? 'hover:bg-slate-200 text-slate-500' : 'text-slate-300 cursor-not-allowed'}`}>
-                    <ChevronUp size={16} />
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={goToPrev} disabled={!hasPrev} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title="上一条"><ChevronLeft size={ICON_SIZES.md} /></button>
+                  <span className="text-xs text-slate-400 tabular-nums">{currentIndex + 1}/{allItems.length}</span>
+                  <button onClick={goToNext} disabled={!hasNext} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title="下一条"><ChevronRight size={ICON_SIZES.md} /></button>
+                  <div className="w-px h-5 bg-slate-200 mx-1" />
+                  <button onClick={toggleDrawerWide} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400" title={drawerWide ? '收窄' : '展宽'}>
+                    {drawerWide ? <Minimize2 size={ICON_SIZES.md} /> : <Maximize2 size={ICON_SIZES.md} />}
                   </button>
-                  <button onClick={goToNext} disabled={!hasNext} title="下一条"
-                    className={`p-1.5 rounded-lg transition-colors ${hasNext ? 'hover:bg-slate-200 text-slate-500' : 'text-slate-300 cursor-not-allowed'}`}>
-                    <ChevronDown size={16} />
-                  </button>
-                  <button
-                    onClick={toggleDrawerWide}
-                    className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400"
-                    title={drawerWide ? '收窄面板' : '展开更宽'}
-                  >
-                    {drawerWide ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                  </button>
-                  <button onClick={() => { setExpandedId(null); setCompareModal(null); }} className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400">
-                    <X size={18} />
-                  </button>
+                  <button onClick={() => { handleDeleteCandidate(effectiveTarget!, cand.id); setExpandedId(null); setCompareModal(null); }} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title="删除"><Trash2 size={ICON_SIZES.md} /></button>
+                  <button onClick={() => { setExpandedId(null); setCompareModal(null); }} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><X size={ICON_SIZES.md} /></button>
                 </div>
               </div>
 
               {/* ── 面板内容 ── */}
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-                {/* 摘要 */}
-                <p className="text-sm text-slate-600 leading-relaxed">{cand.description || ''}</p>
+              <div className="flex-1 overflow-y-auto">
 
-                {/* 标签行 */}
-                <div className="flex flex-wrap gap-1.5">
-                  {cand.knowledgeType && (
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">{cand.knowledgeType}</span>
-                  )}
-                  {cand.complexity && (
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                      {cand.complexity === 'advanced' ? '高级' : cand.complexity === 'intermediate' ? '中级' : '初级'}
+                {/* 1. Badges + Metadata */}
+                <div className="px-6 py-4 border-b border-slate-100 space-y-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border ${candCatCfg?.bg || 'bg-slate-50'} ${candCatCfg?.color || 'text-slate-400'} ${candCatCfg?.border || 'border-slate-100'}`}>
+                      {cand.category || 'general'}
                     </span>
-                  )}
-                  {cand.trigger && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 font-bold">{cand.trigger}</span>}
-                  <span className="text-[10px] uppercase font-bold text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">{cand.language}</span>
-                  {cand.tags && cand.tags.slice(0, 5).map((tag, i) => (
-                    <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 font-medium">
-                      {typeof tag === 'string' ? tag : String(tag)}
-                    </span>
-                  ))}
-                  {cand.createdAt && formatDate(cand.createdAt) && (
-                    <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
-                      <Clock size={9} /> {formatDate(cand.createdAt)}
-                    </span>
-                  )}
+                    {cand.knowledgeType && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">{cand.knowledgeType}</span>
+                    )}
+                    {cand.language && (
+                      <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">{cand.language}</span>
+                    )}
+                    {cand.complexity && (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+                        {cand.complexity === 'advanced' ? '高级' : cand.complexity === 'intermediate' ? '中级' : '初级'}
+                      </span>
+                    )}
+                    {cand.trigger && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold">{cand.trigger}</span>}
+                    {cand.source && cand.source !== 'unknown' && (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${srcInfo.color}`}>
+                        {srcInfo.label}
+                      </span>
+                    )}
+                    {cand.lifecycle && cand.lifecycle !== 'pending' && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200">{cand.lifecycle}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
+                    {(() => {
+                      const items: { icon: React.ElementType; iconClass: string; label: string; value: string; mono?: boolean }[] = [];
+                      if (cand.scope) items.push({ icon: Globe, iconClass: 'text-teal-400', label: '范围', value: cand.scope === 'universal' ? '通用' : cand.scope === 'project-specific' ? '项目级' : cand.scope === 'module-level' ? '模块级' : cand.scope });
+                      if (cand.source && cand.source !== 'unknown') items.push({ icon: Globe, iconClass: 'text-violet-400', label: '来源', value: srcInfo.label });
+                      if (cand.createdAt && formatDate(cand.createdAt)) items.push({ icon: Clock, iconClass: 'text-slate-400', label: '创建', value: formatDate(cand.createdAt) });
+                      return items.map((item, i) => {
+                        const Icon = item.icon;
+                        return (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <Icon size={11} className={`${item.iconClass} shrink-0`} />
+                            <span className="text-slate-400">{item.label}</span>
+                            <span className={`font-medium text-slate-600 ${item.mono ? 'font-mono text-[11px]' : ''}`}>{item.value}</span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
 
-                {/* AI 推理面板 */}
-                {(hasReasoning || cand.quality) && (
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 text-xs space-y-3">
-                    <div className="flex items-center gap-1.5 text-indigo-700 font-bold text-[11px]">
-                      <Brain size={14} />
-                      AI 推理过程
-                    </div>
-                    {hasReasoning ? (
-                      <>
-                        {r!.whyStandard && !/^Submitted via /i.test(r!.whyStandard) && (
-                          <div>
-                            <span className="text-indigo-600 font-bold flex items-center gap-1 mb-0.5"><Target size={10} /> 为什么是标准用法</span>
-                            <p className="text-slate-600 leading-relaxed pl-3">{r!.whyStandard}</p>
-                          </div>
-                        )}
-                        {r!.sources && r!.sources.length > 0 && (
-                          <div>
-                            <span className="text-indigo-600 font-bold flex items-center gap-1 mb-0.5"><BookOpen size={10} /> 来源</span>
-                            <ul className="pl-3 text-slate-600 space-y-0.5">
-                              {r!.sources.map((s: string, i: number) => <li key={i} className="flex items-start gap-1"><span className="text-indigo-400 mt-0.5">•</span>{s}</li>)}
-                            </ul>
-                          </div>
-                        )}
-                        {r!.confidence != null && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-indigo-600 font-bold">置信度</span>
-                            <div className="flex-1 max-w-[200px] bg-indigo-100 rounded-full h-2 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all ${r!.confidence >= 0.7 ? 'bg-emerald-500' : r!.confidence >= 0.4 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                style={{ width: `${Math.round((r!.confidence ?? 0) * 100)}%` }}
-                              />
-                            </div>
-                            <span className={`font-bold ${r!.confidence >= 0.7 ? 'text-emerald-600' : r!.confidence >= 0.4 ? 'text-amber-600' : 'text-red-600'}`}>
-                              {Math.round((r!.confidence ?? 0) * 100)}%
-                            </span>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-slate-400 italic pl-3">暂无推理信息</p>
-                    )}
+                {/* 2. Tags */}
+                {cand.tags && cand.tags.length > 0 && (
+                  <div className="px-6 py-3 border-b border-slate-100 flex flex-wrap items-center gap-1.5">
+                    <Tag size={11} className="text-slate-300 mr-0.5" />
+                    {cand.tags.slice(0, 10).map((tag, i) => (
+                      <span key={i} className="text-[9px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 font-medium">
+                        {typeof tag === 'string' ? tag : String(tag)}
+                      </span>
+                    ))}
                   </div>
                 )}
 
-                {/* AI 润色结果 — agent_notes / ai_insight / relations */}
-                {(() => {
-                  const allRelations = cand.relations ? Object.entries(cand.relations).flatMap(([type, arr]) => (Array.isArray(arr) ? arr.map((r: any) => ({ ...r, type })) : [])) : [];
-                  const qualityAssessed = (cand.quality?.overall ?? 0) > 0;
-                  const hasEnhanced = cand.agentNotes || cand.aiInsight || qualityAssessed || allRelations.length > 0;
-                  if (!hasEnhanced) return null;
-                  return (
-                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 text-xs space-y-3">
-                      <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[11px]">
-                        <Sparkles size={14} />
-                        润色增强信息
-                        {qualityAssessed && (
-                          <span className="ml-auto text-emerald-600 font-mono text-[10px]">
-                            综合评分: {Math.round(cand.quality!.overall * 100)}%
-                          </span>
+                {/* 3. Description / Summary */}
+                {cand.description && (
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">摘要</label>
+                    <p className="text-sm text-slate-600 leading-relaxed">{cand.description}</p>
+                  </div>
+                )}
+
+                {/* 4. Reasoning — 推理依据 */}
+                {hasReasoning && (
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                      <Lightbulb size={11} className="text-amber-400" /> 推理依据
+                    </label>
+                    <div className="bg-amber-50/30 border border-amber-100 rounded-xl p-4 space-y-2.5">
+                      {r!.whyStandard && !/^Submitted via /i.test(r!.whyStandard) && (
+                        <p className="text-sm text-slate-700 leading-relaxed">{r!.whyStandard}</p>
+                      )}
+                      {r!.sources && r!.sources.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400 font-bold">来源:</span>
+                          {r!.sources.map((src: string, i: number) => (
+                            <code key={i} className="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-700 font-mono">{src}</code>
+                          ))}
+                        </div>
+                      )}
+                      {r!.confidence != null && r!.confidence > 0 && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-bold">置信度:</span>
+                          <div className="flex-1 max-w-[160px] h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-amber-400 rounded-full"
+                              style={{ width: `${Math.round((r!.confidence ?? 0) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-bold text-amber-600">{Math.round((r!.confidence ?? 0) * 100)}%</span>
+                        </div>
+                      )}
+                      {r!.alternatives && r!.alternatives.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          <span className="text-[10px] text-slate-400 font-bold">备选:</span>
+                          {r!.alternatives.map((alt: string, i: number) => (
+                            <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600">{alt}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. Quality — 质量评级 */}
+                {cand.quality && cand.quality.grade && cand.quality.grade !== 'F' && (
+                  <div className="px-6 py-3 border-b border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">质量评级</label>
+                    <div className="flex items-center gap-4">
+                      <span className={`text-2xl font-black ${
+                        cand.quality.grade === 'A' ? 'text-emerald-600' :
+                        cand.quality.grade === 'B' ? 'text-blue-600' :
+                        cand.quality.grade === 'C' ? 'text-amber-600' :
+                        cand.quality.grade === 'D' ? 'text-orange-600' : 'text-slate-400'
+                      }`}>{cand.quality.grade}</span>
+                      <div className="flex-1 grid grid-cols-3 gap-2 text-[10px]">
+                        {cand.quality.completeness != null && cand.quality.completeness > 0 && (
+                          <div className="text-center">
+                            <div className="font-bold text-slate-700">{cand.quality.completeness}</div>
+                            <div className="text-slate-400">完整性</div>
+                          </div>
+                        )}
+                        {cand.quality.adaptation != null && cand.quality.adaptation > 0 && (
+                          <div className="text-center">
+                            <div className="font-bold text-slate-700">{cand.quality.adaptation}</div>
+                            <div className="text-slate-400">适配度</div>
+                          </div>
+                        )}
+                        {cand.quality.documentation != null && cand.quality.documentation > 0 && (
+                          <div className="text-center">
+                            <div className="font-bold text-slate-700">{cand.quality.documentation}</div>
+                            <div className="text-slate-400">文档度</div>
+                          </div>
                         )}
                       </div>
-                      {cand.aiInsight && (
-                        <div>
-                          <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
-                            <Lightbulb size={10} /> 架构洞察
-                          </span>
-                          <p className="text-slate-600 leading-relaxed pl-3">{cand.aiInsight}</p>
-                        </div>
-                      )}
-                      {cand.agentNotes && cand.agentNotes.length > 0 && (
-                        <div>
-                          <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
-                            <FileText size={10} /> Agent 笔记
-                          </span>
-                          <ul className="pl-3 text-slate-600 space-y-0.5">
-                            {cand.agentNotes.map((note: string, i: number) => (
-                              <li key={i} className="flex items-start gap-1">
-                                <span className="text-emerald-400 mt-0.5">•</span>{note}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {allRelations.length > 0 && (
-                        <div>
-                          <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
-                            <GitCompare size={10} /> 关联关系
-                          </span>
-                          <div className="pl-3 space-y-1">
-                            {allRelations.map((rel: any, i: number) => (
-                              <div key={i} className="flex items-start gap-1.5 text-slate-600">
-                                <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0 uppercase">
-                                  {rel.type}
-                                </span>
-                                <span className="font-medium text-slate-700">{rel.target}</span>
-                                {rel.description && <span className="text-slate-400">— {rel.description}</span>}
-                              </div>
-                            ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 6. AI 润色增强信息 */}
+                {(() => {
+                  const allRelations = cand.relations ? Object.entries(cand.relations).flatMap(([type, arr]) => (Array.isArray(arr) ? arr.map((r: any) => ({ ...r, type })) : [])) : [];
+                  const hasEnhanced = cand.agentNotes || cand.aiInsight || allRelations.length > 0;
+                  if (!hasEnhanced) return null;
+                  return (
+                    <div className="px-6 py-4 border-b border-slate-100">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                        <Sparkles size={11} className="text-emerald-400" /> 润色增强信息
+                      </label>
+                      <div className="bg-emerald-50/30 border border-emerald-100 rounded-xl p-4 space-y-2.5 text-xs">
+                        {cand.aiInsight && (
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold">架构洞察:</span>
+                            <p className="text-sm text-slate-700 leading-relaxed mt-0.5">{cand.aiInsight}</p>
                           </div>
-                        </div>
-                      )}
+                        )}
+                        {cand.agentNotes && cand.agentNotes.length > 0 && (
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold">Agent 笔记:</span>
+                            <ul className="mt-1 space-y-0.5">
+                              {cand.agentNotes.map((note: string, i: number) => (
+                                <li key={i} className="flex items-start gap-1.5 text-slate-600">
+                                  <span className="text-emerald-400 mt-0.5">•</span>{note}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {allRelations.length > 0 && (
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold">关联关系:</span>
+                            <div className="mt-1 space-y-1">
+                              {allRelations.map((rel: any, i: number) => (
+                                <div key={i} className="flex items-start gap-1.5 text-slate-600">
+                                  <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0 uppercase">
+                                    {rel.type}
+                                  </span>
+                                  <span className="font-medium text-slate-700">{rel.target}</span>
+                                  {rel.description && <span className="text-slate-400">— {rel.description}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
 
-                {/* 相似 Recipe */}
+                {/* 7. 相似 Recipe */}
                 {(similar.length > 0 || isLoadingSimilar) && (
-                  <div className="flex flex-wrap gap-1.5 items-center">
-                    <span className="text-[10px] text-slate-400 font-bold">相似 Recipe：</span>
-                    {isLoadingSimilar ? (
-                      <span className="text-[10px] text-slate-400 animate-pulse">加载中...</span>
-                    ) : (
-                      similar.slice(0, 5).map(s => (
-                        <button
-                          key={s.recipeName}
-                          onClick={() => openCompare(cand, effectiveTarget!, s.recipeName, similar)}
-                          className="text-[10px] font-bold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center gap-1"
-                          title={`与 ${s.recipeName} 相似 ${(s.similarity * 100).toFixed(0)}%`}
-                        >
-                          <GitCompare size={10} />
-                          {s.recipeName.replace(/\.md$/i, '')} {(s.similarity * 100).toFixed(0)}%
-                        </button>
-                      ))
-                    )}
+                  <div className="px-6 py-3 border-b border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">相似 Recipe</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {isLoadingSimilar ? (
+                        <span className="text-[10px] text-slate-400 animate-pulse">加载中...</span>
+                      ) : (
+                        similar.slice(0, 5).map(s => (
+                          <button
+                            key={s.recipeName}
+                            onClick={() => openCompare(cand, effectiveTarget!, s.recipeName, similar)}
+                            className="text-[10px] font-bold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center gap-1"
+                            title={`与 ${s.recipeName} 相似 ${(s.similarity * 100).toFixed(0)}%`}
+                          >
+                            <GitCompare size={10} />
+                            {s.recipeName.replace(/\.md$/i, '')} {(s.similarity * 100).toFixed(0)}%
+                          </button>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {/* 完整代码 */}
+                {/* 8. Code / 标准用法 */}
                 {cand.content?.pattern && (
-                  <div className="-mx-5 overflow-hidden border-y border-slate-200">
-                    <div className="flex items-center justify-between px-3 py-2" style={{ background: '#282c34' }}>
-                      <div className="flex items-center gap-2">
-                        <Code2 size={12} className="text-slate-400" />
-                        <span className="text-[11px] text-slate-400 font-mono uppercase tracking-wide">{cand.language || 'code'}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 font-mono tabular-nums">{cand.content.pattern.split('\n').length} 行</span>
-                    </div>
-                    <CodeBlock code={cand.content.pattern} language={cand.language === 'objc' ? 'objectivec' : cand.language} showLineNumbers className="!rounded-none" />
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                      <FileCode size={11} className="text-emerald-500" /> 代码 / 标准用法
+                    </label>
+                    <CodeBlock code={cand.content.pattern} language={cand.language === 'objc' ? 'objectivec' : cand.language} showLineNumbers />
                   </div>
                 )}
 
-                {/* 项目特写（content.markdown） */}
+                {/* 9. Markdown 文档 */}
                 {cand.content?.markdown && (
-                  <div className="rounded-xl border border-slate-100 bg-white p-4">
-                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 mb-2">
-                      <BookOpen size={12} /> 项目特写
-                    </div>
-                    <div className="prose prose-sm prose-slate max-w-none">
-                      <MarkdownWithHighlight content={cand.content.markdown} />
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                      <FileText size={11} className="text-blue-400" /> Markdown 文档
+                    </label>
+                    <div className="bg-blue-50/30 border border-blue-100 rounded-xl p-4">
+                      <div className="markdown-body text-sm text-slate-700 leading-relaxed">
+                        <MarkdownWithHighlight content={cand.content.markdown} />
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Delivery 字段 */}
+                {/* 10. Delivery 字段 */}
                 {(cand.doClause || cand.whenClause || cand.dontClause || cand.topicHint || cand.coreCode) && (
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4 text-xs space-y-1.5">
-                    <div className="text-[11px] font-bold text-indigo-600 flex items-center gap-1.5 mb-1">
-                      <Layers size={12} /> Cursor Delivery
+                  <div className="px-6 py-4 border-b border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                      <Layers size={11} className="text-indigo-400" /> Cursor Delivery
+                    </label>
+                    <div className="bg-indigo-50/30 border border-indigo-100 rounded-xl p-4 text-xs space-y-1.5">
+                      {cand.topicHint && <div><span className="text-indigo-500 font-medium">Topic：</span><span className="text-slate-700">{cand.topicHint}</span></div>}
+                      {cand.whenClause && <div><span className="text-blue-500 font-medium">When：</span><span className="text-slate-700">{cand.whenClause}</span></div>}
+                      {cand.doClause && <div><span className="text-emerald-500 font-medium">Do：</span><span className="text-slate-700">{cand.doClause}</span></div>}
+                      {cand.dontClause && <div><span className="text-red-500 font-medium">Don't：</span><span className="text-slate-700">{cand.dontClause}</span></div>}
+                      {cand.coreCode && (
+                        <div>
+                          <span className="text-purple-500 font-medium">Core Code：</span>
+                          <div className="mt-1">
+                            <CodeBlock code={cand.coreCode} language={cand.language === 'objectivec' || cand.language === 'objc' ? 'objectivec' : (cand.language || 'swift')} />
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    {cand.topicHint && <div><span className="text-indigo-500 font-medium">Topic：</span><span className="text-slate-700">{cand.topicHint}</span></div>}
-                    {cand.whenClause && <div><span className="text-blue-500 font-medium">When：</span><span className="text-slate-700">{cand.whenClause}</span></div>}
-                    {cand.doClause && <div><span className="text-emerald-500 font-medium">Do：</span><span className="text-slate-700">{cand.doClause}</span></div>}
-                    {cand.dontClause && <div><span className="text-red-500 font-medium">Don't：</span><span className="text-slate-700">{cand.dontClause}</span></div>}
-                    {cand.coreCode && (
-                      <div>
-                        <span className="text-purple-500 font-medium">Core Code：</span>
-                        <div className="mt-1">
-                          <CodeBlock code={cand.coreCode} language={cand.language === 'objectivec' || cand.language === 'objc' ? 'objectivec' : (cand.language || 'swift')} />
+                  </div>
+                )}
+
+                {/* 11. Rationale + Steps + Extra */}
+                {(cand.scope || (cand.headers && cand.headers.length > 0) || (cand.content?.steps && cand.content.steps.length > 0) || cand.content?.rationale) && (
+                  <>
+                    {/* Rationale */}
+                    {cand.content?.rationale && (
+                      <div className="px-6 py-4 border-b border-slate-100">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">设计原理</label>
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                          <p className="text-sm text-slate-600 leading-relaxed">{cand.content.rationale}</p>
                         </div>
                       </div>
                     )}
-                  </div>
-                )}
 
-                {/* 附加信息 */}
-                {(cand.scope || (cand.headers && cand.headers.length > 0) || (cand.content?.steps && cand.content.steps.length > 0) || cand.content?.rationale) && (
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-2">
-                    <div className="text-[11px] font-bold text-slate-600 flex items-center gap-1.5 mb-1">
-                      <Layers size={12} /> 附加信息
-                    </div>
-                    {cand.scope && (
-                      <div className="text-xs text-slate-500">
-                        范围：<strong className="text-slate-700">{cand.scope === 'universal' ? '通用' : cand.scope === 'project-specific' ? '项目级' : '模块级'}</strong>
-                      </div>
-                    )}
+                    {/* Headers */}
                     {cand.headers && cand.headers.length > 0 && (
-                      <div className="text-xs text-slate-500">
-                        头文件：<strong className="text-slate-700">{cand.headers.join(', ')}</strong>
-                      </div>
-                    )}
-                    {cand.content?.steps && cand.content.steps.length > 0 && (
-                      <div className="text-xs text-slate-500">
-                        <span className="font-medium">实施步骤（{cand.content.steps.length} 步）:</span>
-                        <ol className="mt-1 ml-4 list-decimal space-y-0.5">
-                          {cand.content.steps.map((step: any, i: number) => (
-                            <li key={i} className="text-slate-600">{typeof step === 'string' ? step : step.description || String(step)}</li>
+                      <div className="px-6 py-3 border-b border-slate-100">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">导入头文件</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {cand.headers.map((h: string, i: number) => (
+                            <code key={i} className="px-2.5 py-1 bg-violet-50 text-violet-700 border border-violet-100 rounded-md text-[10px] font-mono font-medium">{h}</code>
                           ))}
-                        </ol>
+                        </div>
                       </div>
                     )}
-                    {cand.content?.rationale && (
-                      <div className="text-xs text-slate-500">
-                        设计原理：<span className="text-slate-700">{cand.content.rationale}</span>
+
+                    {/* Steps */}
+                    {cand.content?.steps && cand.content.steps.length > 0 && (
+                      <div className="px-6 py-4 border-b border-slate-100">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">实施步骤</label>
+                        <div className="space-y-2">
+                          {cand.content.steps.map((step: any, i: number) => {
+                            if (typeof step === 'string') {
+                              return (
+                                <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100 flex items-start gap-2.5">
+                                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
+                                  <p className="text-xs text-slate-700 leading-relaxed">{step}</p>
+                                </div>
+                              );
+                            }
+                            const title = typeof step.title === 'string' ? step.title : '';
+                            const desc = typeof step.description === 'string' ? step.description : '';
+                            const code = typeof step.code === 'string' ? step.code : '';
+                            return (
+                              <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center shrink-0">{i + 1}</span>
+                                  {title && <span className="text-xs font-bold text-slate-700">{title}</span>}
+                                </div>
+                                {desc && <p className="text-xs text-slate-600 ml-7 leading-relaxed">{desc}</p>}
+                                {code && <pre className="text-[11px] font-mono bg-slate-800 text-green-300 p-2.5 rounded-md mt-1.5 ml-7 overflow-x-auto whitespace-pre-wrap">{code}</pre>}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
               </div>
 
               {/* ── 面板底部操作栏 ── */}
-              <div className="shrink-0 border-t border-slate-200 px-5 py-3 bg-slate-50/80 flex items-center justify-between">
+              <div className="shrink-0 border-t border-slate-200 px-5 py-3 bg-gradient-to-b from-slate-50/80 to-white flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleEnrichCandidate(cand.id)}

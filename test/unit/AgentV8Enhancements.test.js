@@ -204,8 +204,8 @@ describe('review_my_output tool', () => {
  *  Tests: ALL_TOOLS 完整性
  * ──────────────────────────────────────────── */
 describe('tools registry completeness', () => {
-  it('should have 54 tools', () => {
-    expect(ALL_TOOLS.length).toBe(54);
+  it('should have 57 tools', () => {
+    expect(ALL_TOOLS.length).toBe(57);
   });
 
   it('should include all three new meta tools', () => {

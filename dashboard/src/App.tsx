@@ -715,9 +715,18 @@ const App: React.FC = () => {
       includeHeaders: extracted.includeHeaders || false,
     };
 
-    await api.knowledgeCreate(v3Data);
+    const created = await api.knowledgeCreate(v3Data);
 
-    notify(snippetAble ? '已保存为 Recipe（Snippet 将自动生成）' : '已保存到 KB');
+    // 审核卡片保存后直接发布为 active Recipe（跳过 pending 候选阶段）
+    if (created?.id) {
+      try {
+        await api.knowledgeLifecycle(created.id, 'publish');
+      } catch (pubErr) {
+        console.warn('auto-publish after save failed:', pubErr);
+      }
+    }
+
+    notify(snippetAble ? '已保存并发布为 Recipe' : '已保存到 KB');
     setScanResults(prev => prev.filter(item => item.title !== extracted.title));
     // 若来自候选池，保存后从候选池移除
     const candTarget = extracted.candidateTargetName;
