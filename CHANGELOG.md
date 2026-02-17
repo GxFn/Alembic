@@ -4,6 +4,52 @@
 
 ---
 
+## [2.13.0] - 2026-02-18
+
+### Guard 深度增强 — AST 语义规则 + 合规报告 + CI/CD + 反馈闭环
+
+> 17 files changed, +1541 / -59
+
+#### Phase 1: AST 语义规则
+
+- **feat(AstAnalyzer):** 新增 `findCallExpressions()`、`findPatternInContext()`、`checkProtocolConformance()` 三个查询 API
+- **feat(GuardCheckEngine):** AST 规则分支 — 支持 `mustCallThrough`、`mustNotUseInContext`、`mustConformToProtocol` 三种查询类型
+- **feat(GuardService):** `type='ast'` 规则验证，要求 `astQuery` 字段替代 `pattern`
+
+#### Phase 2: ComplianceReporter + Quality Gate
+
+- **feat(ComplianceReporter):** 全项目合规扫描模块 — 文件收集 → 批量审计 → 分组聚合 → 打分 → Quality Gate 评估
+- **feat(SourceFileCollector):** 从 GuardHandler 抽取的可复用文件收集器，支持扩展名/目录过滤
+- **feat(ViolationsStore):** 新增 `getStatsByRule()` (按规则聚合统计) 和 `getTrend()` (最近两次对比趋势)
+- **feat(config):** `qualityGate` 配置段 — maxErrors / maxWarnings / minScore 阈值
+- **feat(guardRules):** `GET /api/v1/rules/compliance` HTTP 端点
+
+#### Phase 3: CI/CD 集成
+
+- **feat(cli):** `guard:ci [path]` — 完整合规扫描 + Quality Gate，支持 --report json/text/markdown，退出码 0/1/2
+- **feat(cli):** `guard:staged` — 仅检查 git staged 文件，适用于 pre-commit hook
+- **feat(templates):** `guard-ci.yml` GitHub Actions 工作流模板 (含 PR 评论)
+- **feat(templates):** `pre-commit-guard.sh` 预提交钩子脚本
+
+#### Phase 4: Guard ↔ Recipe 反馈闭环
+
+- **feat(GuardFeedbackLoop):** 检测已修复违规 → 自动确认 Recipe 使用，闭合 Guard → Recipe 数据回路
+- **feat(mcp/guard):** `guardAuditFiles` Handler 集成 GuardFeedbackLoop
+- **feat(GuardHandler):** `_auditSingleFile()` 展示 `fixSuggestion` + fire-and-forget 反馈检测
+
+#### Phase 5: RuleLearner 增强
+
+- **feat(RuleLearner):** `suggestRules()` — 三策略推荐 (tune_existing / specialize / review_unused)
+- **feat(RuleLearner):** `trackRuleEffectiveness()` — 14 天窗口有效性跟踪 (effective/ineffective/monitoring/no_data)
+
+#### Bug Fixes
+
+- **fix(GuardCheckEngine):** `getRules()` 现在合并 `_astRulesCache` 到返回数组，外部调用方可获取 AST 规则的 `fixSuggestion`
+- **fix(ViolationsStore):** `getRecentRuns()` 使用 `ORDER BY created_at DESC, rowid DESC` 确保同秒写入的稳定排序
+- **fix(ComplianceReporter):** 移除对不存在的 `isGloballyExcluded()` 调用 (`isRuleExcluded()` 已内含全局排除)
+
+---
+
 ## [2.12.0] - 2026-02-18
 
 ### Agent Memory 四层架构 + 增量 Bootstrap + 迁移合并 + 前端抽屉统一

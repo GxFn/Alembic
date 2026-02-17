@@ -1,0 +1,80 @@
+# AutoSnippet Guard CI/CD Check
+# 在 push 和 PR 时自动运行 Guard 合规检查
+#
+# 使用方法：将此文件复制到项目的 .github/workflows/ 目录
+
+name: AutoSnippet Guard Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    name: Guard Compliance Check
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install AutoSnippet
+        run: npm install -g autosnippet
+
+      - name: Initialize workspace
+        run: asd setup --dir .
+
+      - name: Run Guard CI check
+        run: |
+          asd guard:ci . \
+            --report json \
+            --output guard-report.json \
+            --max-warnings 20 \
+            --min-score 70
+
+      - name: Upload Guard Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guard-report
+          path: guard-report.json
+          retention-days: 30
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const report = JSON.parse(fs.readFileSync('guard-report.json', 'utf8'));
+              const { qualityGate, summary } = report;
+              const icon = qualityGate.status === 'PASS' ? '✅' : qualityGate.status === 'WARN' ? '⚠️' : '❌';
+              
+              const body = [
+                `## ${icon} Guard Compliance Report`,
+                '',
+                `| Metric | Value |`,
+                `|--------|-------|`,
+                `| Quality Gate | ${qualityGate.status} (Score: ${qualityGate.score}/100) |`,
+                `| Files Scanned | ${summary.filesScanned} |`,
+                `| Errors | ${summary.errors} |`,
+                `| Warnings | ${summary.warnings} |`,
+              ].join('\n');
+
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            } catch (err) {
+              console.log('Could not post PR comment:', err.message);
+            }

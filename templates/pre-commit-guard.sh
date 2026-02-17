@@ -1,0 +1,33 @@
+#!/bin/sh
+# AutoSnippet Guard pre-commit hook
+# 
+# 安装方法：
+#   cp templates/pre-commit-guard.sh .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# 或使用 husky:
+#   npx husky add .husky/pre-commit "sh templates/pre-commit-guard.sh"
+
+# 检查 asd 是否可用
+if ! command -v asd &> /dev/null; then
+  echo "⚠️  AutoSnippet (asd) not found. Skipping Guard check."
+  echo "   Install: npm install -g autosnippet"
+  exit 0
+fi
+
+echo "🛡️  Running Guard check on staged files..."
+
+# 运行 guard:staged 检查
+asd guard:staged --fail-on-error
+
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+  echo ""
+  echo "❌ Guard check failed. Fix violations before committing."
+  echo "   Use 'git commit --no-verify' to bypass (not recommended)."
+  exit $EXIT_CODE
+fi
+
+echo "✅ Guard check passed."
+exit 0

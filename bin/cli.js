@@ -222,6 +222,150 @@ program
   });
 
 // ─────────────────────────────────────────────────────
+// guard:ci 命令
+// ─────────────────────────────────────────────────────
+program
+  .command('guard:ci [path]')
+  .description('CI/CD 模式运行全项目 Guard 检查')
+  .option('--fail-on-error', '有 error 级违规时 exit 1', true)
+  .option('--fail-on-warning', '超过 warning 阈值时 exit 2')
+  .option('--max-warnings <n>', 'warning 阈值', '20')
+  .option('--report <format>', '报告格式: json | text | markdown', 'text')
+  .option('--output <file>', '报告输出文件')
+  .option('--min-score <n>', 'Quality Gate 最低分', '70')
+  .option('--max-files <n>', '最大扫描文件数', '500')
+  .action(async (scanPath, opts) => {
+    try {
+      const projectRoot = resolve(scanPath || '.');
+      const { bootstrap, container } = await initContainer({ projectRoot });
+      const reporter = container.get('complianceReporter');
+
+      const report = await reporter.generate(projectRoot, {
+        qualityGate: {
+          maxErrors: 0,
+          maxWarnings: parseInt(opts.maxWarnings, 10),
+          minScore: parseInt(opts.minScore, 10),
+        },
+        maxFiles: parseInt(opts.maxFiles, 10),
+      });
+
+      // 输出报告
+      if (opts.report === 'json') {
+        const output = JSON.stringify(report, null, 2);
+        if (opts.output) {
+          const { writeFileSync } = await import('fs');
+          writeFileSync(opts.output, output, 'utf8');
+          console.log(`Report written to ${opts.output}`);
+        } else {
+          console.log(output);
+        }
+      } else {
+        reporter.printReport(report, { format: opts.report });
+      }
+
+      // 如果也要写文件（非 JSON 格式）
+      if (opts.output && opts.report !== 'json') {
+        const { writeFileSync } = await import('fs');
+        writeFileSync(opts.output, JSON.stringify(report, null, 2), 'utf8');
+        console.log(`Report data written to ${opts.output}`);
+      }
+
+      await bootstrap.shutdown();
+
+      // Exit code
+      if (report.qualityGate.status === 'FAIL') {
+        process.exit(report.summary.errors > 0 ? 1 : 2);
+      }
+      process.exit(0);
+    } catch (err) {
+      console.error('Error:', err.message);
+      if (process.env.ASD_DEBUG === '1') console.error(err.stack);
+      process.exit(1);
+    }
+  });
+
+// ─────────────────────────────────────────────────────
+// guard:staged 命令
+// ─────────────────────────────────────────────────────
+program
+  .command('guard:staged')
+  .description('检查 git staged 文件')
+  .option('--fail-on-error', '有 error 时 exit 1', true)
+  .option('--json', '以 JSON 格式输出')
+  .action(async (opts) => {
+    try {
+      const { execSync } = await import('child_process');
+
+      // 获取 staged 文件列表
+      let stagedFiles;
+      try {
+        stagedFiles = execSync('git diff --cached --name-only --diff-filter=ACM', { encoding: 'utf8' })
+          .trim().split('\n').filter(Boolean);
+      } catch (err) {
+        console.error('❌ 无法获取 git staged 文件（是否在 git 仓库中？）');
+        process.exit(1);
+      }
+
+      if (stagedFiles.length === 0) {
+        console.log('✅ No staged files');
+        process.exit(0);
+      }
+
+      // 过滤源文件
+      const { SOURCE_EXTS } = await import('../lib/service/guard/SourceFileCollector.js');
+      const { extname: _extname } = await import('path');
+      const sourceFiles = stagedFiles.filter(f => SOURCE_EXTS.has(_extname(f).toLowerCase()));
+
+      if (sourceFiles.length === 0) {
+        console.log('✅ No source files in staged changes');
+        process.exit(0);
+      }
+
+      const { bootstrap, container } = await initContainer();
+      const engine = container.get('guardCheckEngine');
+      const { detectLanguage } = await import('../lib/service/guard/GuardCheckEngine.js');
+
+      // 读取文件内容并检查
+      const files = [];
+      for (const f of sourceFiles) {
+        const filePath = resolve(f);
+        if (existsSync(filePath)) {
+          files.push({ path: filePath, content: readFileSync(filePath, 'utf8') });
+        }
+      }
+
+      const result = engine.auditFiles(files, { scope: 'file' });
+      const { summary } = result;
+
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else if (summary.totalViolations === 0) {
+        console.log(`✅ ${summary.filesChecked} staged files passed Guard check`);
+      } else {
+        console.log(`\n🛡️  Guard check on ${summary.filesChecked} staged files:`);
+        console.log(`   ${summary.totalErrors} errors, ${summary.totalViolations - summary.totalErrors} warnings\n`);
+
+        const filesWithIssues = result.files.filter(f => f.summary.total > 0);
+        for (const file of filesWithIssues.slice(0, 10)) {
+          console.log(`  📄 ${basename(file.filePath)}  (${file.summary.errors}E / ${file.summary.warnings}W)`);
+          for (const v of file.violations.slice(0, 5)) {
+            const icon = v.severity === 'error' ? '❌' : '⚠️';
+            console.log(`     ${icon} L${v.line} [${v.ruleId}] ${v.message}`);
+          }
+          if (file.violations.length > 5) console.log(`     ... ${file.violations.length - 5} more`);
+        }
+      }
+
+      await bootstrap.shutdown();
+      process.exit(summary.totalErrors > 0 ? 1 : 0);
+    } catch (err) {
+      console.error('Error:', err.message);
+      if (process.env.ASD_DEBUG === '1') console.error(err.stack);
+      process.exit(1);
+    }
+  });
+
+// ─────────────────────────────────────────────────────
 // watch 命令
 // ─────────────────────────────────────────────────────
 program

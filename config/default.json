@@ -47,5 +47,10 @@
     "enabled": true,
     "dimensions": 1536,
     "indexPath": "./data/vector-index"
+  },
+  "qualityGate": {
+    "maxErrors": 0,
+    "maxWarnings": 20,
+    "minScore": 70
   }
 }
