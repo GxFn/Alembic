@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Toaster } from 'react-hot-toast';
 import { notify } from './utils/notification';
-import { Recipe, ProjectData, SPMTarget, ExtractedRecipe, ScanResultItem, GuardAuditResult } from './types';
+import { Recipe, ProjectData, SPMTarget, ExtractedRecipe, ScanResultItem, GuardAuditResult, KnowledgeContent, KnowledgeReasoning, KnowledgeQuality, KnowledgeStats, KnowledgeConstraints } from './types';
 import { TabType, validTabs } from './constants';
 import { isShellTarget, isSilentTarget, isPendingTarget, getWritePermissionErrorMsg, getSaveErrorMsg } from './utils';
 import api from './api';
@@ -66,18 +66,59 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-/** 将 usageGuide 字段安全转为字符串（AI 可能返回 object） */
-function stringifyGuide(val: unknown): string {
-  if (!val) return '';
-  if (typeof val === 'string') return val;
-  if (typeof val === 'object') {
-    // AI 常返回 { "When to use": "...", "Key points": "..." }
-    const obj = val as Record<string, unknown>;
-    return Object.entries(obj)
-      .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join('; ') : v}`)
-      .join('\n');
-  }
-  return String(val);
+/**
+ * 将后端 V3 结构直透为前端 ScanResultItem。
+ * 后端 AI 已输出完整 V3 字段，此处不做任何回退填充，缺失字段留空。
+ *
+ * @param source - 数据来源标识：'ai-scan' | 'extract' | 'clipboard'
+ */
+function mapExtractedToV3(item: any, source: string = 'ai-scan'): Partial<ScanResultItem> {
+  return {
+    // ── 基础字段 ──
+    title: item.title || '',
+    description: item.description || '',
+    trigger: item.trigger || '',
+    language: item.language || '',
+    category: item.category || '',
+    tags: item.tags || [],
+
+    // ── 分类字段 ──
+    kind: item.kind || '',
+    knowledgeType: item.knowledgeType || '',
+    scope: item.scope || '',
+    complexity: item.complexity || '',
+    difficulty: item.difficulty || '',
+    authority: item.authority,
+
+    // ── 生命周期 ──
+    lifecycle: (item.lifecycle || 'pending') as 'pending',
+    source: item.source || source,
+
+    // ── Delivery fields ──
+    doClause: item.doClause || '',
+    dontClause: item.dontClause || '',
+    whenClause: item.whenClause || '',
+    topicHint: item.topicHint || '',
+    coreCode: item.coreCode || '',
+
+    // ── 结构化子对象（直透） ──
+    content: item.content || {},
+    constraints: item.constraints || {},
+    reasoning: item.reasoning || {},
+    quality: item.quality || {},
+    stats: item.stats || {},
+    relations: item.relations || {},
+
+    // ── 头文件相关 ──
+    headers: item.headers || [],
+    headerPaths: item.headerPaths,
+    moduleName: item.moduleName,
+    includeHeaders: item.includeHeaders,
+
+    // ── 时间戳 ──
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
 }
 
 const App: React.FC = () => {
@@ -255,7 +296,7 @@ const App: React.FC = () => {
   setLoading(true);
   try {
     const projectData = await api.fetchData();
-    // V3 KnowledgeEntry 字段已经是 snake_case 格式，无需清理
+    // V3 KnowledgeEntry 字段已全部 camelCase
     setData(projectData);
   } catch (err: any) {
     notify(err?.message || '无法加载项目数据', { title: '加载失败', type: 'error' });
@@ -305,27 +346,11 @@ const App: React.FC = () => {
   setIsExtracting(true);
   try {
     const extractResult = await api.extractFromPath(specifiedPath);
-    setScanResults(extractResult.result.map(item => {
-    const summary_cn = item.summary_cn || item.summary || '';
-    const summary_en = item.summary_en && item.summary_en !== summary_cn ? item.summary_en : undefined;
-    const usageGuide_cn = stringifyGuide(item.usageGuide_cn || item.usageGuide || '');
-    const usageGuide_en = item.usageGuide_en && stringifyGuide(item.usageGuide_en) !== usageGuide_cn ? stringifyGuide(item.usageGuide_en) : undefined;
-    
-    return {
-      ...item,
-      summary_cn,
-      summary_en,
-      usageGuide_cn,
-      usageGuide_en,
-      tags: Array.isArray(item.tags) ? item.tags : [],
-      mode: 'full',
-      lang: 'cn',
-      includeHeaders: true,
-      category: item.category || 'Utility',
-      summary: summary_cn,
-      usageGuide: usageGuide_cn
-    };
-    }));
+    setScanResults(extractResult.result.map(item => ({
+      ...mapExtractedToV3(item, 'extract'),
+      mode: 'full' as const,
+      lang: 'cn' as const,
+    })));
     navigateToTab('spm');
     setShowCreateModal(false);
     fetchData();
@@ -344,27 +369,11 @@ const App: React.FC = () => {
   setIsExtracting(true);
   try {
     const extractResult = await api.extractFromPath(createPath);
-    setScanResults(extractResult.result.map(item => {
-    const summary_cn = item.summary_cn || item.summary || '';
-    const summary_en = item.summary_en && item.summary_en !== summary_cn ? item.summary_en : undefined;
-    const usageGuide_cn = stringifyGuide(item.usageGuide_cn || item.usageGuide || '');
-    const usageGuide_en = item.usageGuide_en && stringifyGuide(item.usageGuide_en) !== usageGuide_cn ? stringifyGuide(item.usageGuide_en) : undefined;
-    
-    return {
-      ...item,
-      summary_cn,
-      summary_en,
-      usageGuide_cn,
-      usageGuide_en,
-      tags: Array.isArray(item.tags) ? item.tags : [],
-      mode: 'full',
-      lang: 'cn',
-      includeHeaders: true,
-      category: item.category || 'Utility',
-      summary: summary_cn,
-      usageGuide: usageGuide_cn
-    };
-    }));
+    setScanResults(extractResult.result.map(item => ({
+      ...mapExtractedToV3(item, 'extract'),
+      mode: 'full' as const,
+      lang: 'cn' as const,
+    })));
     navigateToTab('spm');
     setShowCreateModal(false);
     fetchData();
@@ -394,26 +403,11 @@ const App: React.FC = () => {
     try {
     const item = await api.extractFromText(text, relativePath || undefined);
     
-    // 清理重复的语言版本
-    const summary_cn = item.summary_cn || item.summary || '';
-    const summary_en = item.summary_en && item.summary_en !== summary_cn ? item.summary_en : undefined;
-    const usageGuide_cn = stringifyGuide(item.usageGuide_cn || item.usageGuide || '');
-    const usageGuide_en = item.usageGuide_en && stringifyGuide(item.usageGuide_en) !== usageGuide_cn ? stringifyGuide(item.usageGuide_en) : undefined;
-    
     const multipleCount = (item as ExtractedRecipe & { _multipleCount?: number })._multipleCount;
-    setScanResults([{ 
-      ...item,
-      summary_cn,
-      summary_en,
-      usageGuide_cn,
-      usageGuide_en,
-      tags: Array.isArray(item.tags) ? item.tags : [],
-      mode: 'full', 
-      lang: 'cn',
-      includeHeaders: true,
-      category: item.category || 'Utility',
-      summary: summary_cn,
-      usageGuide: usageGuide_cn
+    setScanResults([{
+      ...mapExtractedToV3(item, 'clipboard'),
+      mode: 'full' as const,
+      lang: 'cn' as const,
     }]);
     navigateToTab('spm');
     setShowCreateModal(false);
@@ -485,14 +479,9 @@ const App: React.FC = () => {
     if (recipes.length > 0 || scannedFiles.length > 0) {
     const scanTargetName = typeof target === 'string' ? target : target?.name || 'unknown';
     const enrichedResults = recipes.map((item: ExtractedRecipe) => ({
-      ...item,
+      ...mapExtractedToV3(item, 'ai-scan'),
       mode: 'full' as const,
       lang: 'cn' as const,
-      includeHeaders: item.includeHeaders !== false,
-      category: item.category || 'Utility',
-      summary: stringifyGuide(item.summary_cn || item.summary || ''),
-      usageGuide: stringifyGuide(item.usageGuide_cn || item.usageGuide || ''),
-      tags: Array.isArray(item.tags) ? item.tags : [],
       candidateTargetName: scanTargetName,
       scanMode: 'target' as const,
     }));
@@ -625,13 +614,9 @@ const App: React.FC = () => {
 
     if (recipes.length > 0 || scannedFiles.length > 0) {
     const enrichedResults = recipes.map((item: ExtractedRecipe) => ({
-      ...item,
+      ...mapExtractedToV3(item, 'ai-scan'),
       mode: 'full' as const,
       lang: 'cn' as const,
-      includeHeaders: item.includeHeaders !== false,
-      category: item.category || 'Utility',
-      summary: item.summary_cn || item.summary || '',
-      usageGuide: item.usageGuide_cn || item.usageGuide || '',
       candidateTargetName: '__project__',
       scanMode: 'project' as const,
     }));
@@ -667,36 +652,6 @@ const App: React.FC = () => {
   const handleUpdateScanResult = (index: number, updates: Partial<ScanResultItem>) => {
   const newResults = [...scanResults];
   const current = { ...newResults[index], ...updates };
-  
-  // 初始化语言字段：确保 summary_cn 有值（作为中文版本的基础）
-  // 但要避免覆盖已存在的 summary_en
-  if (!current.summary_cn && current.summary && !current.summary_en) {
-    // 只有在既没有 summary_cn 也没有 summary_en 时，才初始化 summary_cn
-    current.summary_cn = current.summary;
-  }
-  if (!current.usageGuide_cn && current.usageGuide && !current.usageGuide_en) {
-    // 只有在既没有 usageGuide_cn 也没有 usageGuide_en 时，才初始化 usageGuide_cn
-    current.usageGuide_cn = current.usageGuide;
-  }
-  
-  // 当直接设置 summary/usageGuide（用于翻译后直接显示）时，跳过语言判断
-  // 只有在没有直接提供这些字段时，才根据 lang 来决定使用哪个版本
-  if (updates.lang !== undefined && updates.summary === undefined) {
-    current.summary = updates.lang === 'cn' ? (current.summary_cn || current.summary) : (current.summary_en || current.summary);
-  }
-  if (updates.lang !== undefined && updates.usageGuide === undefined) {
-    current.usageGuide = updates.lang === 'cn' ? (current.usageGuide_cn || current.usageGuide) : (current.usageGuide_en || current.usageGuide);
-  }
-  
-  // 编辑 summary 或 usageGuide 时，保存到对应的语言版本
-  if (updates.summary !== undefined && updates.lang === undefined) {
-    if (current.lang === 'cn') current.summary_cn = updates.summary;
-    else current.summary_en = updates.summary;
-  }
-  if (updates.usageGuide !== undefined && updates.lang === undefined) {
-    if (current.lang === 'cn') current.usageGuide_cn = updates.usageGuide;
-    else current.usageGuide_en = updates.usageGuide;
-  }
 
   newResults[index] = current;
   setScanResults(newResults);
@@ -706,11 +661,10 @@ const App: React.FC = () => {
   if (isSavingRecipe) return;
   setIsSavingRecipe(true);
   try {
-    // 判断是否可提取 Snippet
-    const kt = extracted.knowledgeType || extracted.knowledge_type || 'code-pattern';
-    const codeRaw = (extracted.code || extracted.content?.pattern || '').trim();
+    // V3: 统一数据模型直接取值
+    const codeRaw = (extracted.content?.pattern || '').trim();
     const snippetAble = (() => {
-      if (kt !== 'code-pattern' || !codeRaw) return false;
+      if (!codeRaw) return false;
       const lines = codeRaw.split('\n').filter((l: string) => l.trim());
       const mdLines = lines.filter((l: string) => /^\s*(#{1,6}\s|[-*>]\s|\d+\.\s)/.test(l));
       return mdLines.length <= lines.length * 0.3;
@@ -722,118 +676,48 @@ const App: React.FC = () => {
     setIsSavingRecipe(false);
     return;
     }
-    // 非 Snippet 条目强制 preview 模式
-    const effectiveMode = snippetAble ? extracted.mode : 'preview';
-    const primarySnippetId = crypto.randomUUID().toUpperCase();
 
-  const recipeName = `${(extracted.title || 'Untitled').replace(/\s+/g, '-')}.md`;
-  
-  // 准备中英文版本
-  const summary_cn = extracted.summary_cn || extracted.summary || '';
-  const summary_en = extracted.summary_en || extracted.summary || '';
-  const usageGuide_cn = extracted.usageGuide_cn || extracted.usageGuide || '';
-  const usageGuide_en = extracted.usageGuide_en || extracted.usageGuide || '';
-  
-  // 构建 Frontmatter
-  const knowledgeType = extracted.knowledgeType || extracted.knowledge_type || '';
-  const difficulty = extracted.difficulty || extracted.complexity || '';
-  const authority = extracted.authority || extracted.stats?.authority || 0;
-  const codeContent = extracted.code || extracted.content?.pattern || '';
-  const kind = extracted.kind || 'pattern';
-  
-  let frontmatter = `---
-id: ${effectiveMode === 'full' ? primarySnippetId : 'preview-only'}
-title: ${extracted.title || 'Untitled Recipe'}
-language: ${extracted.language || 'swift'}
-trigger: ${triggers.length > 0 ? triggers.join(', ') : 'none'}
-category: ${extracted.category || 'Utility'}
-summary: ${summary_cn}
-summary_cn: ${summary_cn}`;
+    // ── V3 直透：结构化数据直接写入 Knowledge API，不经 markdown 序列化 ──
+    const v3Data: Record<string, any> = {
+      title:         extracted.title || 'Untitled',
+      description:   extracted.description || '',
+      trigger:       triggers.join(', ') || '',
+      language:      extracted.language || 'swift',
+      category:      extracted.category || 'Utility',
+      kind:          extracted.kind || 'pattern',
+      knowledgeType: extracted.knowledgeType || 'code-pattern',
+      complexity:    extracted.complexity || 'intermediate',
+      scope:         extracted.scope || null,
+      difficulty:    extracted.difficulty || '',
+      tags:          extracted.tags || [],
+      source:        extracted.source || 'ai-scan',
+      sourceFile:    extracted.sourceFile || '',
+      moduleName:    extracted.moduleName || '',
 
-  if (summary_en && summary_en !== summary_cn) {
-    frontmatter += `\nsummary_en: ${summary_en}`;
-  }
-  
-  frontmatter += `
-headers: ${JSON.stringify(extracted.headers || [])}`;
+      // Delivery fields
+      doClause:      extracted.doClause || '',
+      dontClause:    extracted.dontClause || '',
+      whenClause:    extracted.whenClause || '',
+      topicHint:     extracted.topicHint || '',
+      coreCode:      extracted.coreCode || '',
 
-  frontmatter += `\nkind: ${kind}`;
-  
-  if (difficulty) {
-    frontmatter += `\ndifficulty: ${difficulty}`;
-  }
-  if (authority) {
-    frontmatter += `\nauthority: ${authority}`;
-  }
-  if (knowledgeType) {
-    frontmatter += `\nknowledge_type: ${knowledgeType}`;
-  }
-  if (extracted.complexity) {
-    frontmatter += `\ncomplexity: ${extracted.complexity}`;
-  }
-  if (extracted.scope) {
-    frontmatter += `\nscope: ${extracted.scope}`;
-  }
-  if (extracted.tags && extracted.tags.length > 0) {
-    frontmatter += `\ntags: ${JSON.stringify(extracted.tags)}`;
-  }
-  
-  frontmatter += `
-version: "1.0.0"
-updatedAt: ${Date.now()}
----`;
+      // V3 结构化子对象
+      content:       extracted.content || {},
+      reasoning:     extracted.reasoning || {},
+      quality:       extracted.quality || {},
+      constraints:   extracted.constraints || {},
+      relations:     extracted.relations || {},
+      stats:         extracted.stats || {},
 
-  // 构建正文
-  let body = `
-## Snippet / Code Reference
+      // 头文件
+      headers:       extracted.headers || [],
+      headerPaths:   extracted.headerPaths || [],
+      includeHeaders: extracted.includeHeaders || false,
+    };
 
-\`\`\`${extracted.language || 'swift'}
-${codeContent}
-\`\`\`
+    await api.knowledgeCreate(v3Data);
 
-## AI Context / Usage Guide
-
-${usageGuide_cn}`;
-
-  if (usageGuide_en && usageGuide_en !== usageGuide_cn) {
-    body += `
-
-## AI Context / Usage Guide (EN)
-
-${usageGuide_en}`;
-  }
-
-  // Rationale (from AI)
-  if (extracted.rationale) {
-    body += `
-
-## Architecture Usage
-
-${extracted.rationale}`;
-  }
-
-  // Steps (from AI)
-  if (extracted.steps && extracted.steps.length > 0) {
-    body += `
-
-## Best Practices
-
-${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
-  }
-
-  // Preconditions (from AI)
-  if (extracted.preconditions && extracted.preconditions.length > 0) {
-    body += `
-
-## Standards
-
-**Preconditions:**\n${extracted.preconditions.map((p: string) => `- ${p}`).join('\n')}`;
-  }
-  
-  const recipeContent = frontmatter + body;
-    await api.saveRecipe(recipeName, recipeContent);
-    
-    notify(effectiveMode === 'full' ? '已保存为 Recipe（Snippet 将自动生成）' : '已保存到 KB');
+    notify(snippetAble ? '已保存为 Recipe（Snippet 将自动生成）' : '已保存到 KB');
     setScanResults(prev => prev.filter(item => item.title !== extracted.title));
     // 若来自候选池，保存后从候选池移除
     const candTarget = extracted.candidateTargetName;
@@ -856,37 +740,21 @@ ${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
   if (!editingRecipe || isSavingRecipe) return;
   setIsSavingRecipe(true);
   try {
-    // 清理重复的英文版本：保留只有一份 "## AI Context / Usage Guide (EN)"
-    let cleanedContent = editingRecipe.content;
-    
-    // 用简单的方式：找到第一份英文版本，删除之后的所有重复英文版本
-    const enGuidePattern = '\n## AI Context / Usage Guide (EN)';
-    const firstIndex = cleanedContent.indexOf(enGuidePattern);
-    
-    if (firstIndex !== -1) {
-    // 找第一份英文版本后面是否还有其他 "## AI Context / Usage Guide (EN)"
-    const afterFirst = cleanedContent.substring(firstIndex + enGuidePattern.length);
-    const secondIndex = afterFirst.indexOf(enGuidePattern);
-    
-    if (secondIndex !== -1) {
-      // 有重复，找出第一份的完整范围（到下一个标题或末尾）
-      const nextHeaderMatch = afterFirst.match(/\n## /);
-      let endOfFirst = afterFirst.length;
-      
-      if (nextHeaderMatch && nextHeaderMatch.index !== undefined && nextHeaderMatch.index < secondIndex) {
-      // 第一份英文版本后有其他标题
-      endOfFirst = nextHeaderMatch.index;
-      cleanedContent = cleanedContent.substring(0, firstIndex + enGuidePattern.length) + 
-            afterFirst.substring(0, endOfFirst);
-      } else {
-      // 第一份英文版本就到文件末尾（或只到第二份之前）
-      cleanedContent = cleanedContent.substring(0, firstIndex + enGuidePattern.length) + 
-            afterFirst.substring(0, secondIndex);
-      }
-    }
-    }
-    
-    await api.saveRecipe(editingRecipe.name, cleanedContent);
+    // V3: 直接通过 Knowledge API 更新结构化数据
+    const recipeId = editingRecipe.id || editingRecipe.name?.replace(/\.md$/, '');
+    const contentObj = typeof editingRecipe.content === 'string'
+      ? { pattern: editingRecipe.content, markdown: '', rationale: '', steps: [], codeChanges: [], verification: null }
+      : (editingRecipe.content || {});
+
+    await api.knowledgeUpdate(recipeId, {
+      title: editingRecipe.name?.replace(/\.md$/, '') || '',
+      description: editingRecipe.description || '',
+      content: contentObj,
+      tags: editingRecipe.tags || [],
+      kind: editingRecipe.kind,
+      language: editingRecipe.language,
+      category: editingRecipe.category,
+    } as any);
     closeRecipeEdit();
     fetchData();
   } catch (err) {
@@ -962,10 +830,10 @@ ${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
     return semanticResults.some(res => res.metadata.type === 'recipe' && res.metadata.name === s.name);
   }
   const name = s.name || '';
-  const content = s.content || '';
-  const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase()) || content.toLowerCase().includes(searchQuery.toLowerCase());
+  const contentStr = typeof s.content === 'string' ? s.content : [s.content?.pattern, s.content?.markdown].filter(Boolean).join(' ');
+  const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase()) || contentStr.toLowerCase().includes(searchQuery.toLowerCase()) || (s.description || '').toLowerCase().includes(searchQuery.toLowerCase());
   if (selectedCategory === 'All') return matchesSearch;
-  const categoryMatch = content ? content.match(/category:\s*(.*)/) : null;
+  const categoryMatch = contentStr ? contentStr.match(/category:\s*(.*)/) : null;
   const category = categoryMatch ? categoryMatch[1].trim() : 'Utility';
   return matchesSearch && category === selectedCategory;
   }).sort((a, b) => {
@@ -1092,8 +960,7 @@ ${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
         onRefresh={fetchData}
         onAuditCandidate={(cand, targetName) => {
         const candCode = (cand.content?.pattern || '').trim();
-        const candKt = cand.knowledge_type || 'code-pattern';
-        const isSnippetAble = candKt === 'code-pattern' && !!candCode && (() => {
+        const isSnippetAble = !!candCode && (() => {
           const lines = candCode.split('\n').filter(l => l.trim());
           const mdLines = lines.filter(l => /^\s*(#{1,6}\s|[-*>]\s|\d+\.\s)/.test(l));
           return mdLines.length <= lines.length * 0.3;
@@ -1103,15 +970,8 @@ ${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
           mode: isSnippetAble ? 'full' : 'preview',
           lang: 'cn',
           includeHeaders: true,
-          summary: cand.summary_cn || cand.description || '',
-          usageGuide: cand.usage_guide_cn || '',
-          code: cand.content?.pattern || '',
-          headers: cand.headers || [],
-          tags: cand.tags || [],
-          knowledgeType: cand.knowledge_type || 'code-pattern',
-          difficulty: cand.complexity || 'intermediate',
+          difficulty: cand.difficulty || cand.complexity || 'intermediate',
           authority: cand.stats?.authority || 3,
-          moduleName: cand.module_name || '',
           candidateId: cand.id,
           candidateTargetName: targetName
         } as ScanResultItem]);
@@ -1120,8 +980,7 @@ ${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
         onAuditAllInTarget={(items, targetName) => {
         setScanResults(items.map(cand => {
           const candCode = (cand.content?.pattern || '').trim();
-          const candKt = cand.knowledge_type || 'code-pattern';
-          const isSnippetAble = candKt === 'code-pattern' && !!candCode && (() => {
+          const isSnippetAble = !!candCode && (() => {
             const lines = candCode.split('\n').filter(l => l.trim());
             const mdLines = lines.filter(l => /^\s*(#{1,6}\s|[-*>]\s|\d+\.\s)/.test(l));
             return mdLines.length <= lines.length * 0.3;
@@ -1131,15 +990,8 @@ ${extracted.steps.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n')}`;
           mode: (isSnippetAble ? 'full' : 'preview') as 'full' | 'preview',
           lang: 'cn' as const,
           includeHeaders: true,
-          summary: cand.summary_cn || cand.description || '',
-          usageGuide: cand.usage_guide_cn || '',
-          code: cand.content?.pattern || '',
-          headers: cand.headers || [],
-          tags: cand.tags || [],
-          knowledgeType: cand.knowledge_type || 'code-pattern',
-          difficulty: cand.complexity || 'intermediate',
+          difficulty: cand.difficulty || cand.complexity || 'intermediate',
           authority: cand.stats?.authority || 3,
-          moduleName: cand.module_name || '',
           candidateId: cand.id,
           candidateTargetName: targetName
         } as ScanResultItem;

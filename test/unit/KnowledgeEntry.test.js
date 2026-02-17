@@ -24,25 +24,13 @@ describe('Content value object', () => {
       pattern: 'let x = 1',
       rationale: 'idiomatic',
       steps: [{ title: 'step1' }],
-      code_changes: [{ file: 'a.js', before: '', after: '', explanation: '' }],
+      codeChanges: [{ file: 'a.js', before: '', after: '', explanation: '' }],
     });
     expect(c.pattern).toBe('let x = 1');
     expect(c.rationale).toBe('idiomatic');
     expect(c.steps).toHaveLength(1);
     expect(c.codeChanges).toHaveLength(1);
     expect(c.hasContent()).toBe(true);
-  });
-
-  test('fromLegacyCandidate detects markdown', () => {
-    const c = Content.fromLegacyCandidate('# Title\n\nSome content', {});
-    expect(c.markdown).toBe('# Title\n\nSome content');
-    expect(c.pattern).toBe('');
-  });
-
-  test('fromLegacyCandidate keeps code as pattern', () => {
-    const c = Content.fromLegacyCandidate('let x = 1', {});
-    expect(c.pattern).toBe('let x = 1');
-    expect(c.markdown).toBe('');
   });
 
   test('toJSON → fromJSON round-trip', () => {
@@ -71,8 +59,8 @@ describe('Relations value object', () => {
     expect(r.isEmpty()).toBe(false);
   });
 
-  test('fromFlat converts array to buckets', () => {
-    const r = Relations.fromFlat([
+  test('from(flat array) converts array to buckets', () => {
+    const r = Relations.from([
       { type: 'extends', target: 'a', description: 'desc' },
       { type: 'related', target: 'b', description: '' },
       { type: 'extends', target: 'c', description: '' },
@@ -96,15 +84,6 @@ describe('Relations value object', () => {
     const flat = r.toFlatArray();
     expect(flat).toHaveLength(2);
     expect(flat.some(x => x.type === 'calls')).toBe(true);
-  });
-
-  test('handles legacy camelCase keys', () => {
-    const r = Relations.from({
-      dependsOn: [{ target: 'x', description: '' }],
-      dataFlow: [{ target: 'y', description: '' }],
-    });
-    expect(r.getByType('depends_on')).toHaveLength(1);
-    expect(r.getByType('data_flow')).toHaveLength(1);
   });
 
   test('toJSON → from round-trip', () => {
@@ -141,18 +120,18 @@ describe('Constraints value object', () => {
     expect(c.getAstGuards()).toHaveLength(1);
   });
 
-  test('handles side_effects snake_case', () => {
+  test('handles sideEffects', () => {
     const c = Constraints.from({
-      side_effects: ['triggers notification'],
+      sideEffects: ['triggers notification'],
       preconditions: ['import needed'],
     });
     expect(c.sideEffects).toEqual(['triggers notification']);
     expect(c.preconditions).toEqual(['import needed']);
   });
 
-  test('toJSON uses snake_case', () => {
+  test('toJSON uses camelCase', () => {
     const c = new Constraints({ sideEffects: ['x'] });
-    expect(c.toJSON().side_effects).toEqual(['x']);
+    expect(c.toJSON().sideEffects).toEqual(['x']);
   });
 });
 
@@ -163,33 +142,22 @@ describe('Reasoning value object', () => {
     expect(r.isValid()).toBe(false);
   });
 
-  test('accepts snake_case input', () => {
+  test('accepts camelCase input', () => {
     const r = Reasoning.from({
-      why_standard: 'reason',
+      whyStandard: 'reason',
       sources: ['a.m:10'],
       confidence: 0.9,
-      quality_signals: { clarity: 0.8 },
+      qualitySignals: { clarity: 0.8 },
     });
     expect(r.whyStandard).toBe('reason');
     expect(r.qualitySignals.clarity).toBe(0.8);
     expect(r.isValid()).toBe(true);
   });
 
-  test('accepts camelCase input (backward compat)', () => {
-    const r = Reasoning.from({
-      whyStandard: 'reason',
-      sources: ['b.m:5'],
-      confidence: 0.85,
-    });
-    expect(r.whyStandard).toBe('reason');
-    expect(r.isValid()).toBe(true);
-  });
-
-  test('toJSON outputs snake_case', () => {
+  test('toJSON outputs camelCase', () => {
     const r = new Reasoning({ whyStandard: 'x', sources: ['y'], confidence: 0.5 });
     const json = r.toJSON();
-    expect(json.why_standard).toBe('x');
-    expect(json).not.toHaveProperty('whyStandard');
+    expect(json.whyStandard).toBe('x');
   });
 });
 
@@ -217,17 +185,7 @@ describe('Quality value object', () => {
     expect(q.grade).toBe('A');
   });
 
-  test('fromLegacyRecipe maps old field names', () => {
-    const q = Quality.fromLegacyRecipe({
-      codeCompleteness: 0.8,
-      projectAdaptation: 0.7,
-      documentationClarity: 0.6,
-      overall: 0.7,
-    });
-    expect(q.completeness).toBe(0.8);
-    expect(q.adaptation).toBe(0.7);
-    expect(q.documentation).toBe(0.6);
-  });
+
 });
 
 describe('Stats value object', () => {
@@ -237,8 +195,8 @@ describe('Stats value object', () => {
     expect(s.guardHits).toBe(0);
   });
 
-  test('accepts snake_case input', () => {
-    const s = Stats.from({ guard_hits: 5, search_hits: 10 });
+  test('accepts camelCase input', () => {
+    const s = Stats.from({ guardHits: 5, searchHits: 10 });
     expect(s.guardHits).toBe(5);
     expect(s.searchHits).toBe(10);
   });
@@ -249,9 +207,9 @@ describe('Stats value object', () => {
     expect(s.views).toBe(3);
   });
 
-  test('toJSON uses snake_case', () => {
+  test('toJSON uses camelCase', () => {
     const s = new Stats({ guardHits: 7 });
-    expect(s.toJSON().guard_hits).toBe(7);
+    expect(s.toJSON().guardHits).toBe(7);
   });
 });
 
@@ -294,7 +252,7 @@ describe('KnowledgeEntry', () => {
       category: 'Architecture',
       content: { pattern: 'static let shared = Self()' },
       reasoning: {
-        why_standard: 'widely used',
+        whyStandard: 'widely used',
         sources: ['Manager.swift:10'],
         confidence: 0.9,
       },
@@ -329,37 +287,6 @@ describe('KnowledgeEntry', () => {
   });
 
   describe('lifecycle transitions', () => {
-    test('submit: no-op (already pending)', () => {
-      const e = makeEntry();
-      const r = e.submit();
-      expect(r.success).toBe(true);
-      expect(e.lifecycle).toBe('pending');
-    });
-
-    test('approve: pending → active (alias for publish)', () => {
-      const e = makeEntry({ lifecycle: 'pending' });
-      const r = e.approve('reviewer-1');
-      expect(r.success).toBe(true);
-      expect(e.lifecycle).toBe('active');
-      expect(e.publishedBy).toBe('reviewer-1');
-      expect(e.publishedAt).toBeGreaterThan(0);
-    });
-
-    test('autoApprove: no-op (stays pending)', () => {
-      const e = makeEntry({ lifecycle: 'pending' });
-      const r = e.autoApprove();
-      expect(r.success).toBe(true);
-      expect(e.lifecycle).toBe('pending');
-    });
-
-    test('reject: pending → deprecated (alias for deprecate)', () => {
-      const e = makeEntry({ lifecycle: 'pending' });
-      const r = e.reject('reviewer-1', 'not standard');
-      expect(r.success).toBe(true);
-      expect(e.lifecycle).toBe('deprecated');
-      expect(e.rejectionReason).toBe('not standard');
-    });
-
     test('publish: pending → active', () => {
       const e = makeEntry({ lifecycle: 'pending' });
       const r = e.publish('admin');
@@ -395,15 +322,6 @@ describe('KnowledgeEntry', () => {
       const r = e.reactivate(); // active → pending is not valid
       expect(r.success).toBe(false);
       expect(r.error).toContain('Invalid lifecycle transition');
-    });
-
-    test('fastTrack: pending → active (alias for publish)', () => {
-      const e = makeEntry();
-      const r = e.fastTrack('bot');
-      expect(r.success).toBe(true);
-      expect(e.lifecycle).toBe('active');
-      expect(e.publishedBy).toBe('bot');
-      expect(e.lifecycleHistory).toHaveLength(1);
     });
 
     test('lifecycle history tracks all transitions', () => {
@@ -490,10 +408,7 @@ describe('KnowledgeEntry', () => {
     test('toJSON → fromJSON round-trip preserves all fields', () => {
       const original = makeEntry({
         trigger: '@singleton',
-        summaryCn: '单例模式',
-        summaryEn: 'Singleton pattern',
-        usageGuideCn: '使用指南',
-        usageGuideEn: 'Usage guide',
+        description: '单例模式描述',
         tags: ['pattern', 'architecture'],
         relations: {
           extends: [{ target: '@base', description: 'extends base' }],
@@ -511,21 +426,18 @@ describe('KnowledgeEntry', () => {
 
       const json = original.toJSON();
 
-      // verify snake_case keys
-      expect(json.knowledge_type).toBe('code-pattern');
-      expect(json.summary_cn).toBe('单例模式');
-      expect(json.usage_guide_cn).toBe('使用指南');
-      expect(json.header_paths).toEqual(['Foundation']);
-      expect(json.module_name).toBe('FoundationKit');
-      expect(json.include_headers).toBe(true);
-      expect(json.created_by).toBeDefined();
+      // verify camelCase keys
+      expect(json.knowledgeType).toBe('code-pattern');
+      expect(json.headerPaths).toEqual(['Foundation']);
+      expect(json.moduleName).toBe('FoundationKit');
+      expect(json.includeHeaders).toBe(true);
+      expect(json.createdBy).toBeDefined();
 
       // round-trip
       const restored = KnowledgeEntry.fromJSON(json);
       expect(restored.title).toBe(original.title);
       expect(restored.trigger).toBe('@singleton');
-      expect(restored.summaryCn).toBe('单例模式');
-      expect(restored.usageGuideEn).toBe('Usage guide');
+      expect(restored.description).toBe('单例模式描述');
       expect(restored.tags).toEqual(['pattern', 'architecture']);
       expect(restored.relations.getByType('extends')).toHaveLength(1);
       expect(restored.constraints.getRegexGuards()).toHaveLength(1);

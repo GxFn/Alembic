@@ -35,53 +35,48 @@ function toRecipe(r: any): Recipe {
   const quality = r.quality || {};
   const statistics = r.stats || r.statistics || {};
   const contentObj = r.content || {};
-  const dims = r.dimensions || {};
 
   const trigger =
-    r.trigger || dims.trigger ||
+    r.trigger ||
     '@' + (r.title || '').replace(/[\s_-]+(.)?/g, (_: string, c: string) => (c ? c.toUpperCase() : ''));
-
-  const knowledgeType = r.knowledge_type || r.knowledgeType || '';
-  const usageGuideCn = r.usage_guide_cn || r.usageGuideCn || '';
-  const usageGuideEn = r.usage_guide_en || r.usageGuideEn || '';
 
   const stats: RecipeStats = {
     authority: statistics.authority || quality.overall || 0,
     authorityScore: statistics.authority || quality.overall || 0,
-    guardUsageCount: statistics.applications || statistics.applicationCount || 0,
-    humanUsageCount: statistics.adoptions || statistics.adoptionCount || 0,
+    guardUsageCount: statistics.applications || 0,
+    humanUsageCount: statistics.adoptions || 0,
     aiUsageCount: 0,
-    lastUsedAt: r.updated_at || r.updatedAt || null,
+    lastUsedAt: r.updatedAt || null,
   };
 
   return {
     id: r.id,
     name: (r.title || r.name || r.id) + '.md',
-    content: contentObj.pattern || contentObj.markdown || (typeof r.content === 'string' ? r.content : ''),
+    content: contentObj as any,
     category: r.category || '',
     language: r.language || '',
-    description: r.description || r.summary_cn || r.summaryCn || '',
+    description: r.description || '',
     status: r.lifecycle || r.status || 'pending',
     kind: r.kind || undefined,
-    knowledgeType: knowledgeType || undefined,
-    v2Content: r.content || null,
+    knowledgeType: r.knowledgeType || undefined,
+    // v2Content removed — content is now the V3 structured object
     relations: r.relations || null,
     constraints: r.constraints || null,
     tags: r.tags || [],
     stats,
     trigger,
     source: r.source || '',
-    source_file: r.source_file || r.sourceFile || '',
-    module_name: r.module_name || r.moduleName || '',
-    usageGuide: usageGuideCn || usageGuideEn || '',
-    usageGuide_cn: usageGuideCn || '',
-    usageGuide_en: usageGuideEn || '',
+    sourceFile: r.sourceFile || '',
+    moduleName: r.moduleName || '',
+    usageGuide: contentObj.markdown || r.doClause || '',
+    reasoning: r.reasoning || null,
+    quality: r.quality || null,
     scope: r.scope || '',
     complexity: r.complexity || '',
-    difficulty: r.difficulty || dims.difficulty || r.complexity || '',
-    version: dims.version || '',
-    headers: r.headers || dims.headers || r.include_headers || [],
-    updatedAt: r.updated_at || r.updatedAt || null,
+    difficulty: r.difficulty || r.complexity || '',
+    version: r.version || '',
+    headers: r.headers || [],
+    updatedAt: r.updatedAt || null,
   };
 }
 
@@ -109,6 +104,7 @@ function parseFrontmatter(markdownContent: string) {
     rationaleText = '',
     bestPracticesText = '',
     standardsText = '';
+  let kind = '', doClause = '', dontClause = '', whenClause = '', topicHint = '';
   let codePattern = markdownContent;
 
   const fmMatch = markdownContent.match(/^---\n([\s\S]*?)\n---/);
@@ -122,9 +118,9 @@ function parseFrontmatter(markdownContent: string) {
     category = getField('category') || category;
     title = getField('title') || title;
     trigger = getField('trigger') || '';
-    summary = getField('summary_cn') || getField('summary') || summary;
+    summary = getField('summary_cn') || getField('summary') || getField('description') || summary;
     summaryEn = getField('summary_en') || '';
-    knowledgeType = getField('knowledge_type') || '';
+    knowledgeType = getField('knowledge_type') || getField('knowledgeType') || '';
     complexity = getField('complexity') || '';
     scope = getField('scope') || '';
     difficulty = getField('difficulty') || '';
@@ -147,6 +143,11 @@ function parseFrontmatter(markdownContent: string) {
         headers = [headersStr];
       }
     }
+    kind = getField('kind') || '';
+    doClause = getField('doClause') || '';
+    dontClause = getField('dontClause') || '';
+    whenClause = getField('whenClause') || '';
+    topicHint = getField('topicHint') || '';
 
     // Extract code block
     const codeBlock = markdownContent.match(/```[\w]*\n([\s\S]*?)```/);
@@ -191,6 +192,11 @@ function parseFrontmatter(markdownContent: string) {
     rationaleText,
     bestPracticesText,
     standardsText,
+    kind,
+    doClause,
+    dontClause,
+    whenClause,
+    topicHint,
   };
 }
 
@@ -201,12 +207,12 @@ function parseFrontmatter(markdownContent: string) {
 /** 构建 POST /knowledge 请求体（从前端 item 转为 API payload） */
 function toCandidatePayload(item: any, targetName: string, source: string) {
   return {
-    code: item.code || '',
+    code: item.content?.pattern || '',
     language: item.language || 'swift',
     category: Array.isArray(item.category) ? item.category[0] : item.category || targetName || 'general',
     source: source || 'manual',
     reasoning: {
-      whyStandard: item.summary_cn || item.summary || item.title || 'Extracted from project',
+      whyStandard: item.description || item.title || 'Extracted from project',
       sources: [source || 'unknown'],
       confidence: 0.6,
     },
@@ -214,12 +220,7 @@ function toCandidatePayload(item: any, targetName: string, source: string) {
       targetName: targetName || '',
       title: item.title || '',
       trigger: item.trigger || '',
-      summary: item.summary || '',
-      summary_cn: item.summary_cn || '',
-      summary_en: item.summary_en || '',
-      usageGuide: item.usageGuide || '',
-      usageGuide_cn: item.usageGuide_cn || '',
-      usageGuide_en: item.usageGuide_en || '',
+      description: item.description || '',
       category: Array.isArray(item.category) ? item.category[0] : item.category || '',
       headers: item.headers || [],
       headerPaths: item.headerPaths || [],
@@ -275,7 +276,7 @@ export const api = {
     for (const entry of rawEntries) {
       const target = entry.category || entry.language || '_pending';
       if (!candidates[target]) {
-        candidates[target] = { targetName: target, scanTime: entry.created_at, items: [] };
+        candidates[target] = { targetName: target, scanTime: entry.createdAt, items: [] };
       }
       candidates[target].items.push(entry);
     }
@@ -420,7 +421,7 @@ export const api = {
       steps: parsed.bestPracticesText ? [parsed.bestPracticesText] : [],
       codeChanges: [],
       verification: null,
-      markdown: '',
+      markdown: parsed.usageGuide || '',
     };
 
     // 解析 Standards 文本为结构化 constraints
@@ -441,15 +442,11 @@ export const api = {
       }
     }
 
-    const recipeData = {
+    const recipeData: Record<string, any> = {
       title,
       language: parsed.language,
       category: parsed.category,
       description: parsed.summary,
-      summaryCn: parsed.summary || '',
-      summaryEn: parsed.summaryEn || '',
-      usageGuideCn: parsed.usageGuide || '',
-      usageGuideEn: parsed.usageGuideEn || '',
       knowledgeType: parsed.knowledgeType || 'code-pattern',
       complexity: parsed.complexity || 'intermediate',
       scope: parsed.scope || null,
@@ -458,6 +455,11 @@ export const api = {
       constraints: constraintsObj,
       dimensions,
     };
+    if (parsed.kind) recipeData.kind = parsed.kind;
+    if (parsed.doClause) recipeData.doClause = parsed.doClause;
+    if (parsed.dontClause) recipeData.dontClause = parsed.dontClause;
+    if (parsed.whenClause) recipeData.whenClause = parsed.whenClause;
+    if (parsed.topicHint) recipeData.topicHint = parsed.topicHint;
 
     // Try to find existing recipe by ID or title → update
     try {
@@ -635,7 +637,10 @@ export const api = {
     const r = res.data?.data;
     if (!r) throw new Error('Recipe not found');
     const recipe = toRecipe(r);
-    return { name, content: recipe.content };
+    // 将 V3 结构化 content 序列化为 markdown 字符串（用于 compare drawer 等需要纯文本的场景）
+    const c = recipe.content;
+    const contentStr = [c?.pattern, c?.markdown].filter(Boolean).join('\n\n') || '';
+    return { name, content: contentStr };
   },
 
   // ── AI ──────────────────────────────────────────────
@@ -671,9 +676,9 @@ export const api = {
   async translate(
     summary: string,
     usageGuide: string,
-  ): Promise<{ summary_en: string; usageGuide_en: string; warning?: string }> {
+  ): Promise<{ summaryEn: string; usageGuideEn: string; warning?: string }> {
     const res = await http.post('/ai/translate', { summary, usageGuide });
-    const data = res.data?.data || { summary_en: '', usageGuide_en: '' };
+    const data = res.data?.data || { summaryEn: '', usageGuideEn: '' };
     if (res.data?.warning) data.warning = res.data.warning;
     return data;
   },

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Zap, FileSearch, Box, Trash2, Edit3, Layers, Eye, EyeOff, GitCompare, X, Copy, Brain, BookOpen, Target, ChevronDown, ChevronUp, Sparkles, Shield, Clock, Code2, Tag, AlertTriangle, CheckCircle2, BarChart3, Filter, ArrowUpDown, Rocket, Wand2, Loader2, Lightbulb, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
-import { ProjectData, KnowledgeEntry, SimilarRecipe } from '../../types';
+import { ProjectData, KnowledgeEntry, SimilarRecipe, Recipe } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
 import { categoryConfigs, BOOTSTRAP_DIM_LABELS } from '../../constants';
@@ -25,7 +25,7 @@ interface CandidatesViewProps {
   handleDeleteAllInTarget: (targetName: string) => void;
   onAuditCandidate: (cand: KnowledgeEntry, targetName: string) => void;
   onAuditAllInTarget: (items: KnowledgeEntry[], targetName: string) => void;
-  onEditRecipe?: (recipe: { name: string; content: string; stats?: any }) => void;
+  onEditRecipe?: (recipe: Recipe) => void;
   onColdStart?: () => void;
   isScanning?: boolean;
   /** bootstrap 任务是否正在进行（隐藏冷启动按钮和空状态） */
@@ -182,7 +182,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
     let recipeContent = '';
     const existing = data?.recipes?.find(r => r.name === normalizedRecipeName || r.name.endsWith('/' + normalizedRecipeName));
     if (existing?.content) {
-      recipeContent = existing.content;
+      recipeContent = [existing.content.pattern, existing.content.markdown].filter(Boolean).join('\n\n') || '';
     } else {
       try {
         const recipeData = await api.getRecipeContentByName(normalizedRecipeName);
@@ -509,8 +509,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 if (filters.sort === 'score-asc') return (a.quality?.overall ?? 0) - (b.quality?.overall ?? 0);
                 if (filters.sort === 'confidence-desc') return (b.reasoning?.confidence ?? 0) - (a.reasoning?.confidence ?? 0);
                 if (filters.sort === 'date-desc') {
-                  const ta = typeof a.created_at === 'number' ? a.created_at : 0;
-                  const tb = typeof b.created_at === 'number' ? b.created_at : 0;
+                  const ta = typeof a.createdAt === 'number' ? a.createdAt : 0;
+                  const tb = typeof b.createdAt === 'number' ? b.createdAt : 0;
                   return tb - ta;
                 }
                 return 0;
@@ -655,9 +655,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                   })()}
                                   {cand.category || 'general'}
                                 </span>
-                                {cand.knowledge_type && (
+                                {cand.knowledgeType && (
                                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">
-                                    {cand.knowledge_type}
+                                    {cand.knowledgeType}
                                   </span>
                                 )}
                                 {cand.source && cand.source !== 'unknown' && (
@@ -679,7 +679,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                               <h3 className="font-bold text-sm text-slate-800 leading-snug mb-1 line-clamp-1">{cand.title}</h3>
 
                               {/* 摘要 */}
-                              <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{cand.summary_cn || cand.description || ''}</p>
+                              <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{cand.description || ''}</p>
                             </div>
 
                             {/* 右：置信度环 + 操作 */}
@@ -691,12 +691,12 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         </div>
 
                         {/* ── AI 推理摘要（始终可见） ── */}
-                        {cand.reasoning?.why_standard && !/^Submitted via /i.test(cand.reasoning.why_standard) && (
+                        {cand.reasoning?.whyStandard && !/^Submitted via /i.test(cand.reasoning.whyStandard) && (
                           <div className="px-4 py-2 bg-gradient-to-r from-indigo-50/50 to-transparent border-t border-indigo-50">
                             <div className="flex items-start gap-1.5">
                               <Brain size={12} className="text-indigo-400 mt-0.5 shrink-0" />
                               <p className="text-[11px] text-indigo-600/80 line-clamp-1 leading-relaxed">
-                                {cand.reasoning.why_standard}
+                                {cand.reasoning.whyStandard}
                               </p>
                             </div>
                           </div>
@@ -773,10 +773,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             )}
 
                             {/* 日期 */}
-                            {cand.created_at && formatDate(cand.created_at) && (
+                            {cand.createdAt && formatDate(cand.createdAt) && (
                               <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
                                 <Clock size={9} />
-                                {formatDate(cand.created_at)}
+                                {formatDate(cand.createdAt)}
                               </span>
                             )}
                           </div>
@@ -875,7 +875,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
         const goToNext = () => { if (hasNext) { setExpandedId(allItems[currentIndex + 1].id); setCompareModal(null); } };
 
         const r = cand.reasoning;
-        const meaningfulWhyStandard = r?.why_standard && !/^Submitted via /i.test(r.why_standard);
+        const meaningfulWhyStandard = r?.whyStandard && !/^Submitted via /i.test(r.whyStandard);
         const hasReasoning = r && (meaningfulWhyStandard || (r.sources && r.sources.length > 0) || r.confidence != null);
         const similar = similarityMap[cand.id] || [];
         const isLoadingSimilar = similarityLoading === cand.id;
@@ -895,7 +895,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               const copyCandidate = () => {
                 const parts = [];
                 if (compareCand.content?.pattern) parts.push('## Snippet / Code Reference\n\n```' + (compareCandLang || '') + '\n' + compareCand.content.pattern + '\n```');
-                if (compareCand.usage_guide_cn) parts.push('\n## AI Context / Usage Guide\n\n' + compareCand.usage_guide_cn);
+                if (compareCand.content?.markdown) parts.push('\n## 项目特写\n\n' + compareCand.content.markdown);
+                else if (compareCand.doClause) parts.push('\n## AI Context / Usage Guide\n\n' + compareCand.doClause);
                 navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify('候选内容已复制到剪贴板', { title: '已复制' }));
               };
               const copyRecipe = () => {
@@ -910,7 +911,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 } else {
                   let content = '';
                   const existing = data?.recipes?.find(r => r.name === newName || r.name.endsWith('/' + newName));
-                  if (existing?.content) content = existing.content;
+                  if (existing?.content) { content = [existing.content.pattern, existing.content.markdown].filter(Boolean).join('\n\n') || ''; }
                   else {
                     try {
                       const recipeData = await api.getRecipeContentByName(newName);
@@ -934,9 +935,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 setCompareModal(null);
               };
               const handleCompareEditRecipe = () => {
-                const recipe = data?.recipes?.find(r => r.name === compareModal.recipeName || r.name.endsWith('/' + compareModal.recipeName))
-                  || { name: compareModal.recipeName, content: compareModal.recipeContent };
-                onEditRecipe?.(recipe);
+                const recipe = data?.recipes?.find(r => r.name === compareModal.recipeName || r.name.endsWith('/' + compareModal.recipeName));
+                if (recipe) { onEditRecipe?.(recipe); }
+                else { onEditRecipe?.({ name: compareModal.recipeName, content: { markdown: compareModal.recipeContent } } as Recipe); }
                 setCompareModal(null);
               };
               return (
@@ -1050,12 +1051,12 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               {/* ── 面板内容 ── */}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                 {/* 摘要 */}
-                <p className="text-sm text-slate-600 leading-relaxed">{cand.summary_cn || cand.description || ''}</p>
+                <p className="text-sm text-slate-600 leading-relaxed">{cand.description || ''}</p>
 
                 {/* 标签行 */}
                 <div className="flex flex-wrap gap-1.5">
-                  {cand.knowledge_type && (
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">{cand.knowledge_type}</span>
+                  {cand.knowledgeType && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">{cand.knowledgeType}</span>
                   )}
                   {cand.complexity && (
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
@@ -1069,9 +1070,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       {typeof tag === 'string' ? tag : String(tag)}
                     </span>
                   ))}
-                  {cand.created_at && formatDate(cand.created_at) && (
+                  {cand.createdAt && formatDate(cand.createdAt) && (
                     <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
-                      <Clock size={9} /> {formatDate(cand.created_at)}
+                      <Clock size={9} /> {formatDate(cand.createdAt)}
                     </span>
                   )}
                 </div>
@@ -1085,10 +1086,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     </div>
                     {hasReasoning ? (
                       <>
-                        {r!.why_standard && !/^Submitted via /i.test(r!.why_standard) && (
+                        {r!.whyStandard && !/^Submitted via /i.test(r!.whyStandard) && (
                           <div>
                             <span className="text-indigo-600 font-bold flex items-center gap-1 mb-0.5"><Target size={10} /> 为什么是标准用法</span>
-                            <p className="text-slate-600 leading-relaxed pl-3">{r!.why_standard}</p>
+                            <p className="text-slate-600 leading-relaxed pl-3">{r!.whyStandard}</p>
                           </div>
                         )}
                         {r!.sources && r!.sources.length > 0 && (
@@ -1124,7 +1125,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 {(() => {
                   const allRelations = cand.relations ? Object.entries(cand.relations).flatMap(([type, arr]) => (Array.isArray(arr) ? arr.map((r: any) => ({ ...r, type })) : [])) : [];
                   const qualityAssessed = (cand.quality?.overall ?? 0) > 0;
-                  const hasEnhanced = cand.agent_notes || cand.ai_insight || qualityAssessed || allRelations.length > 0;
+                  const hasEnhanced = cand.agentNotes || cand.aiInsight || qualityAssessed || allRelations.length > 0;
                   if (!hasEnhanced) return null;
                   return (
                     <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 text-xs space-y-3">
@@ -1137,21 +1138,21 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                           </span>
                         )}
                       </div>
-                      {cand.ai_insight && (
+                      {cand.aiInsight && (
                         <div>
                           <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
                             <Lightbulb size={10} /> 架构洞察
                           </span>
-                          <p className="text-slate-600 leading-relaxed pl-3">{cand.ai_insight}</p>
+                          <p className="text-slate-600 leading-relaxed pl-3">{cand.aiInsight}</p>
                         </div>
                       )}
-                      {cand.agent_notes && cand.agent_notes.length > 0 && (
+                      {cand.agentNotes && cand.agentNotes.length > 0 && (
                         <div>
                           <span className="text-emerald-600 font-bold flex items-center gap-1 mb-0.5">
                             <FileText size={10} /> Agent 笔记
                           </span>
                           <ul className="pl-3 text-slate-600 space-y-0.5">
-                            {cand.agent_notes.map((note: string, i: number) => (
+                            {cand.agentNotes.map((note: string, i: number) => (
                               <li key={i} className="flex items-start gap-1">
                                 <span className="text-emerald-400 mt-0.5">•</span>{note}
                               </li>
@@ -1217,15 +1218,36 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   </div>
                 )}
 
-                {/* 使用指南 */}
-                {cand.usage_guide_cn && (
+                {/* 项目特写（content.markdown） */}
+                {cand.content?.markdown && (
                   <div className="rounded-xl border border-slate-100 bg-white p-4">
                     <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 mb-2">
-                      <BookOpen size={12} /> 使用指南
+                      <BookOpen size={12} /> 项目特写
                     </div>
                     <div className="prose prose-sm prose-slate max-w-none">
-                      <MarkdownWithHighlight content={cand.usage_guide_cn} />
+                      <MarkdownWithHighlight content={cand.content.markdown} />
                     </div>
+                  </div>
+                )}
+
+                {/* Delivery 字段 */}
+                {(cand.doClause || cand.whenClause || cand.dontClause || cand.topicHint || cand.coreCode) && (
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4 text-xs space-y-1.5">
+                    <div className="text-[11px] font-bold text-indigo-600 flex items-center gap-1.5 mb-1">
+                      <Layers size={12} /> Cursor Delivery
+                    </div>
+                    {cand.topicHint && <div><span className="text-indigo-500 font-medium">Topic：</span><span className="text-slate-700">{cand.topicHint}</span></div>}
+                    {cand.whenClause && <div><span className="text-blue-500 font-medium">When：</span><span className="text-slate-700">{cand.whenClause}</span></div>}
+                    {cand.doClause && <div><span className="text-emerald-500 font-medium">Do：</span><span className="text-slate-700">{cand.doClause}</span></div>}
+                    {cand.dontClause && <div><span className="text-red-500 font-medium">Don't：</span><span className="text-slate-700">{cand.dontClause}</span></div>}
+                    {cand.coreCode && (
+                      <div>
+                        <span className="text-purple-500 font-medium">Core Code：</span>
+                        <div className="mt-1">
+                          <CodeBlock code={cand.coreCode} language={cand.language === 'objectivec' || cand.language === 'objc' ? 'objectivec' : (cand.language || 'swift')} />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

@@ -24,7 +24,7 @@ function makeEntry(overrides = {}) {
     knowledgeType: 'code-pattern',
     kind: 'pattern',
     content: { pattern: 'func test() {}', rationale: 'testing' },
-    reasoning: { why_standard: 'test reason', confidence: 0.9, sources: ['test.swift'] },
+    reasoning: { whyStandard: 'test reason', confidence: 0.9, sources: ['test.swift'] },
     tags: ['api', 'test'],
     lifecycle: Lifecycle.PENDING,
     ...overrides,
@@ -123,7 +123,7 @@ describe('MCP Knowledge Handlers', () => {
       title: 'Test',
       language: 'swift',
       content: { pattern: 'let x = 1' },
-      reasoning: { why_standard: 'test', sources: ['test.swift'], confidence: 0.8 },
+      reasoning: { whyStandard: 'test', sources: ['test.swift'], confidence: 0.8 },
     };
 
     test('应成功提交单条知识', async () => {
@@ -131,13 +131,21 @@ describe('MCP Knowledge Handlers', () => {
       expect(result.success).toBe(true);
       expect(result.data.id).toBe('test-api-001');
       expect(result.data.lifecycle).toBe(Lifecycle.PENDING);
-      expect(svc.create).toHaveBeenCalledWith(validArgs, { userId: 'mcp' });
+      // _enrichToV3 only adds source='mcp', no other field inference
+      expect(svc.create).toHaveBeenCalledWith(
+        expect.objectContaining({ ...validArgs, source: 'mcp' }),
+        { userId: 'mcp' },
+      );
     });
 
     test('应传入 source 字段', async () => {
       const args = { ...validArgs, source: 'cursor-scan' };
       await submitKnowledge(ctx, args);
-      expect(svc.create).toHaveBeenCalledWith(args, { userId: 'mcp' });
+      // caller-provided source is preserved
+      expect(svc.create).toHaveBeenCalledWith(
+        expect.objectContaining({ ...validArgs, source: 'cursor-scan' }),
+        { userId: 'mcp' },
+      );
     });
 
     test('限流时应返回 RATE_LIMIT', async () => {
@@ -172,8 +180,8 @@ describe('MCP Knowledge Handlers', () => {
     const validBatchArgs = {
       target_name: 'TestTarget',
       items: [
-        { title: 'A', language: 'swift', content: { pattern: 'a' }, reasoning: { why_standard: 'a', sources: ['a'] } },
-        { title: 'B', language: 'objc', content: { pattern: 'b' }, reasoning: { why_standard: 'b', sources: ['b'] } },
+        { title: 'A', language: 'swift', content: { pattern: 'a' }, reasoning: { whyStandard: 'a', sources: ['a'] } },
+        { title: 'B', language: 'objc', content: { pattern: 'b' }, reasoning: { whyStandard: 'b', sources: ['b'] } },
       ],
     };
 
@@ -299,7 +307,7 @@ describe('MCP Tool Definitions (V3)', () => {
   test('应包含 submit_knowledge 工具', () => {
     const tool = TOOLS.find(t => t.name === 'autosnippet_submit_knowledge');
     expect(tool).toBeDefined();
-    expect(tool.inputSchema.required).toEqual(['title', 'language', 'content']);
+    expect(tool.inputSchema.required).toEqual(['title', 'language', 'content', 'kind', 'doClause']);
   });
 
   test('应包含 submit_knowledge_batch 工具', () => {

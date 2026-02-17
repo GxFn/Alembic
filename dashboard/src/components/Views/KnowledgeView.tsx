@@ -258,7 +258,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
     try {
       // 拉取所有 pending 条目，筛选 auto_approvable
       const result = await api.knowledgeList({ lifecycle: 'pending', limit: 500 });
-      const autoIds = (result.data || []).filter((e: KnowledgeEntry) => e.auto_approvable).map((e: KnowledgeEntry) => e.id);
+      const autoIds = (result.data || []).filter((e: KnowledgeEntry) => e.autoApprovable).map((e: KnowledgeEntry) => e.id);
       if (autoIds.length === 0) {
         notify('当前没有可自动通过的待审核条目', { title: '无可发布项' });
         return;
@@ -476,7 +476,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                         {entry.reasoning?.confidence != null ? `${Math.round(entry.reasoning.confidence * 100)}%` : '—'}
                       </span>
                       {/* Auto-approvable 标记 */}
-                      {entry.auto_approvable && entry.lifecycle === 'pending' && (
+                      {entry.autoApprovable && entry.lifecycle === 'pending' && (
                         <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-600 border border-cyan-200">
                           <Zap size={9} />可自动通过
                         </span>
@@ -490,7 +490,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
 
                     {/* Description / Summary */}
                     <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
-                      {entry.summary_cn || entry.description || entry.content?.rationale || ''}
+                      {entry.description || entry.content?.rationale || ''}
                     </p>
 
                     {/* 代码预览 */}
@@ -510,7 +510,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                       )}
                       <span className="text-[10px] text-slate-300 ml-auto">
                         {entry.trigger && <span className="text-blue-400 mr-2">{entry.trigger}</span>}
-                        {formatDate(entry.updated_at)}
+                        {formatDate(entry.updatedAt)}
                       </span>
                     </div>
                   </div>
@@ -538,7 +538,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
         const catCfg = categoryConfigs[selected.category || ''] || categoryConfigs['All'] || {};
         const srcInfo = SOURCE_LABELS[selected.source || ''] || { label: selected.source || '', color: 'text-slate-500 bg-slate-50 border-slate-200' };
         const r = selected.reasoning;
-        const hasReasoning = r && (r.why_standard || (r.sources && r.sources.length > 0) || r.confidence != null);
+        const hasReasoning = r && (r.whyStandard || (r.sources && r.sources.length > 0) || r.confidence != null);
         const currentIndex = entries.findIndex(e => e.id === selected.id);
         const hasPrev = currentIndex > 0;
         const hasNext = currentIndex < entries.length - 1;
@@ -596,10 +596,10 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
             {/* ── 面板内容 ── */}
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
               {/* 驳回原因 */}
-              {selected.rejection_reason && (
+              {selected.rejectionReason && (
                 <section className="bg-red-50 border border-red-200 rounded p-3">
                   <h3 className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-2">驳回原因</h3>
-                  <p className="text-xs text-red-600">{selected.rejection_reason}</p>
+                  <p className="text-xs text-red-600">{selected.rejectionReason}</p>
                 </section>
               )}
 
@@ -614,14 +614,14 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                       { icon: Code2, iconClass: 'text-sky-400', label: '语言', value: selected.language?.toUpperCase() || '-' },
                       { icon: Tag, iconClass: 'text-indigo-400', label: '分类', value: selected.category || '-' },
                     ];
-                    if (selected.knowledge_type) items.push({ icon: Layers, iconClass: 'text-purple-400', label: '类型', value: selected.knowledge_type });
+                    if (selected.knowledgeType) items.push({ icon: Layers, iconClass: 'text-purple-400', label: '类型', value: selected.knowledgeType });
                     if (selected.complexity) items.push({ icon: Layers, iconClass: 'text-orange-400', label: '复杂度', value: selected.complexity === 'advanced' ? '高级' : selected.complexity === 'intermediate' ? '中级' : selected.complexity === 'beginner' ? '初级' : selected.complexity });
                     if (selected.scope) items.push({ icon: Globe, iconClass: 'text-teal-400', label: '范围', value: selected.scope === 'universal' ? '通用' : selected.scope === 'project-specific' ? '项目级' : selected.scope === 'module-level' ? '模块级' : selected.scope });
                     items.push({ icon: Globe, iconClass: 'text-violet-400', label: '来源', value: (SOURCE_LABELS[selected.source || ''] || { label: selected.source || '-' }).label });
                     if (selected.trigger) items.push({ icon: Zap, iconClass: 'text-amber-400', label: '触发词', value: selected.trigger, mono: true });
-                    if (selected.created_at) items.push({ icon: Clock, iconClass: 'text-slate-400', label: '创建', value: formatDate(selected.created_at) });
-                    if (selected.updated_at) items.push({ icon: Clock, iconClass: 'text-slate-400', label: '更新', value: formatDate(selected.updated_at) });
-                    if (selected.published_at) items.push({ icon: CheckCircle2, iconClass: 'text-emerald-400', label: '发布', value: formatDate(selected.published_at) });
+                    if (selected.createdAt) items.push({ icon: Clock, iconClass: 'text-slate-400', label: '创建', value: formatDate(selected.createdAt) });
+                    if (selected.updatedAt) items.push({ icon: Clock, iconClass: 'text-slate-400', label: '更新', value: formatDate(selected.updatedAt) });
+                    if (selected.publishedAt) items.push({ icon: CheckCircle2, iconClass: 'text-emerald-400', label: '发布', value: formatDate(selected.publishedAt) });
                     return items.map((item, i) => {
                       const Icon = item.icon;
                       return (
@@ -638,22 +638,21 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                     <span className="text-slate-400">ID</span>
                     <code className="font-mono text-[11px] text-slate-500 break-all">{selected.id}</code>
                   </div>
-                  {selected.source_file && (
+                  {selected.sourceFile && (
                     <div className="flex items-center gap-1.5 basis-full">
                       <FolderOpen size={11} className="text-slate-300 shrink-0" />
                       <span className="text-slate-400">源文件</span>
-                      <code className="font-mono text-[11px] text-slate-500 break-all">{selected.source_file}</code>
+                      <code className="font-mono text-[11px] text-slate-500 break-all">{selected.sourceFile}</code>
                     </div>
                   )}
                 </div>
               </section>
 
               {/* 摘要 */}
-              {(selected.summary_cn || selected.description || selected.summary_en) && (
+              {selected.description && (
                 <section>
                   <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">摘要</h3>
-                  {(selected.summary_cn || selected.description) && <p className="text-sm text-slate-600 leading-relaxed">{selected.summary_cn || selected.description}</p>}
-                  {selected.summary_en && <p className="text-sm text-slate-400 italic mt-1">{selected.summary_en}</p>}
+                  <p className="text-sm text-slate-600 leading-relaxed">{selected.description}</p>
                 </section>
               )}
 
@@ -665,22 +664,51 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                 </section>
               )}
 
-              {/* Markdown */}
+              {/* 项目特写 */}
               {selected.content?.markdown && (
                 <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Markdown</h3>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">项目特写</h3>
                   <div className="prose prose-sm max-w-none">
                     <MarkdownWithHighlight content={selected.content.markdown} />
                   </div>
                 </section>
               )}
 
-              {/* 使用指南 */}
-              {selected.usage_guide_cn && (
+              {/* Delivery 字段: When / Do / Don't */}
+              {(selected.doClause || selected.whenClause || selected.dontClause || selected.topicHint || selected.coreCode) && (
                 <section>
-                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">使用指南</h3>
-                  <div className="prose prose-sm prose-slate max-w-none">
-                    <MarkdownWithHighlight content={selected.usage_guide_cn} />
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Delivery 字段</h3>
+                  <div className="space-y-2 text-xs">
+                    {selected.topicHint && (
+                      <div>
+                        <span className="text-indigo-500 font-medium">Topic：</span>
+                        <span className="text-slate-700">{selected.topicHint}</span>
+                      </div>
+                    )}
+                    {selected.whenClause && (
+                      <div>
+                        <span className="text-blue-500 font-medium">When：</span>
+                        <span className="text-slate-700">{selected.whenClause}</span>
+                      </div>
+                    )}
+                    {selected.doClause && (
+                      <div>
+                        <span className="text-emerald-500 font-medium">Do：</span>
+                        <span className="text-slate-700">{selected.doClause}</span>
+                      </div>
+                    )}
+                    {selected.dontClause && (
+                      <div>
+                        <span className="text-red-500 font-medium">Don't：</span>
+                        <span className="text-slate-700">{selected.dontClause}</span>
+                      </div>
+                    )}
+                    {selected.coreCode && (
+                      <div>
+                        <span className="text-emerald-500 font-medium mb-1 block">Core Code</span>
+                        <pre className="bg-slate-50 rounded p-2 text-[11px] font-mono text-slate-600 overflow-x-auto whitespace-pre-wrap">{selected.coreCode}</pre>
+                      </div>
+                    )}
                   </div>
                 </section>
               )}
@@ -710,10 +738,10 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                 <section>
                   <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">推理依据</h3>
                   <div className="space-y-2 text-xs">
-                    {r!.why_standard && !/^Submitted via /i.test(r!.why_standard) && (
+                    {r!.whyStandard && !/^Submitted via /i.test(r!.whyStandard) && (
                       <div>
                         <span className="text-slate-500 font-medium">Why Standard：</span>
-                        <span className="text-slate-700">{r!.why_standard}</span>
+                        <span className="text-slate-700">{r!.whyStandard}</span>
                       </div>
                     )}
                     {r!.confidence != null && (
@@ -767,8 +795,8 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                     {selected.constraints.preconditions && selected.constraints.preconditions.length > 0 && (
                       <div><span className="text-slate-500 font-medium">Preconditions：</span><span className="text-slate-700">{selected.constraints.preconditions.join('；')}</span></div>
                     )}
-                    {selected.constraints.side_effects && selected.constraints.side_effects.length > 0 && (
-                      <div><span className="text-slate-500 font-medium">Side Effects：</span><span className="text-slate-700">{selected.constraints.side_effects.join('；')}</span></div>
+                    {selected.constraints.sideEffects && selected.constraints.sideEffects.length > 0 && (
+                      <div><span className="text-slate-500 font-medium">Side Effects：</span><span className="text-slate-700">{selected.constraints.sideEffects.join('；')}</span></div>
                     )}
                   </div>
                 </section>
@@ -820,8 +848,8 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                       { label: '浏览', value: selected.stats?.views || 0 },
                       { label: '采纳', value: selected.stats?.adoptions || 0 },
                       { label: '应用', value: selected.stats?.applications || 0 },
-                      { label: 'Guard', value: selected.stats?.guard_hits || 0 },
-                      { label: '搜索', value: selected.stats?.search_hits || 0 },
+                      { label: 'Guard', value: selected.stats?.guardHits || 0 },
+                      { label: '搜索', value: selected.stats?.searchHits || 0 },
                       { label: '权威', value: selected.stats?.authority || 0 },
                     ].map(s => (
                       <div key={s.label} className="flex items-center justify-between">
@@ -858,19 +886,19 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
               )}
 
               {/* AI 洞察 */}
-              {selected.ai_insight && (
+              {selected.aiInsight && (
                 <section>
                   <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">AI 洞察</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">{selected.ai_insight}</p>
+                  <p className="text-xs text-slate-600 leading-relaxed">{selected.aiInsight}</p>
                 </section>
               )}
 
               {/* 生命周期历史 */}
-              {selected.lifecycle_history && selected.lifecycle_history.length > 0 && (
+              {selected.lifecycleHistory && selected.lifecycleHistory.length > 0 && (
                 <section>
                   <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">生命周期历史</h3>
                   <div className="space-y-1">
-                    {selected.lifecycle_history.map((h, i) => {
+                    {selected.lifecycleHistory.map((h, i) => {
                       const fromCfg = LIFECYCLE_CONFIG[h.from] || LIFECYCLE_CONFIG.pending;
                       const toCfg = LIFECYCLE_CONFIG[h.to] || LIFECYCLE_CONFIG.pending;
                       return (

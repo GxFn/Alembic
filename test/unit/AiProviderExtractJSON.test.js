@@ -107,7 +107,7 @@ describe('AiProvider.extractJSON', () => {
     // 模拟：多个完整对象 + 最后一个在 title 值中间被截断
     const recipe1 = JSON.stringify({
       title: 'BDBilibiliVideoPlayerView Init',
-      summary_cn: '视频播放器初始化',
+      description: '视频播放器初始化',
       code: '- (instancetype)initWithFrame:(CGRect)frame {\n    self = [super initWithFrame:frame];\n    if (self) {\n        [self setupUI];\n    }\n    return self;\n}',
       headers: ['#import <UIKit/UIKit.h>', '#import "BDBilibiliVideoPlayerView.h"'],
       tags: ['init', 'video'],
@@ -115,8 +115,8 @@ describe('AiProvider.extractJSON', () => {
 
     const recipe2 = JSON.stringify({
       title: 'GestureRecognizerDelegate',
-      summary_cn: '手势识别器代理方法',
-      usageGuide_cn: '用于处理 UP 主名称和视频区域的点击事件。',
+      description: '手势识别器代理方法',
+      usageGuide: '用于处理 UP 主名称和视频区域的点击事件。',
       code: '- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {\n    return YES;\n}',
     });
 

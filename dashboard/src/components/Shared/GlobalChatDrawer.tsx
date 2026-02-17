@@ -76,12 +76,12 @@ export const useGlobalChat = () => useContext(GlobalChatContext);
 const uid = () => Math.random().toString(36).substring(2, 10);
 
 const REFINE_FIELD_DEFS: { key: string; label: string; format?: (v: any) => string }[] = [
-  { key: 'summary_cn', label: '摘要' },
+  { key: 'description', label: '摘要' },
   { key: 'pattern', label: '内容文档' },
   { key: 'tags', label: '标签', format: (v) => (Array.isArray(v) ? v.join(', ') : String(v || '')) },
   { key: 'confidence', label: '置信度', format: (v) => String(v ?? '—') },
-  { key: 'ai_insight', label: 'AI 洞察' },
-  { key: 'agent_notes', label: 'Agent 笔记', format: (v) => (Array.isArray(v) ? v.join('\n') : String(v || '')) },
+  { key: 'aiInsight', label: 'AI 洞察' },
+  { key: 'agentNotes', label: 'Agent 笔记', format: (v) => (Array.isArray(v) ? v.join('\n') : String(v || '')) },
   { key: 'relations', label: '关联关系', format: (v) => JSON.stringify(v || {}, null, 2) },
 ];
 
@@ -100,9 +100,9 @@ function buildDiffFields(before: Record<string, any>, after: Record<string, any>
 
 function extractBefore(cand: KnowledgeEntry): Record<string, any> {
   return {
-    title: cand.title || '', summary_cn: cand.summary_cn || '', pattern: cand.content?.pattern || '',
+    title: cand.title || '', description: cand.description || '', pattern: cand.content?.pattern || '',
     tags: cand.tags || [], confidence: cand.reasoning?.confidence ?? 0.6,
-    relations: cand.relations || {}, ai_insight: cand.ai_insight || null, agent_notes: cand.agent_notes || null,
+    relations: cand.relations || {}, aiInsight: cand.aiInsight || null, agentNotes: cand.agentNotes || null,
   };
 }
 
@@ -186,7 +186,7 @@ export const GlobalChatProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (refineCtx && currentRefineCandidate) {
       setMessages(prev => [...prev, {
         id: uid(), role: 'system',
-        content: `🎯 润色模式 — **${currentRefineCandidate.title}**\n\n当前摘要: ${currentRefineCandidate.summary_cn || '(无)'}\n\n**输入润色指令，AI 将根据你的指令定向修改候选内容**，下方有常用指令可直接点击使用。`,
+        content: `🎯 润色模式 — **${currentRefineCandidate.title}**\n\n当前摘要: ${currentRefineCandidate.description || '(无)'}\n\n**输入润色指令，AI 将根据你的指令定向修改候选内容**，下方有常用指令可直接点击使用。`,
         timestamp: Date.now(),
       }]);
       setLastPrompt('');

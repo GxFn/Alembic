@@ -179,7 +179,7 @@ describe('SearchEngine', () => {
 
   test('buildIndex should load recipes from DB', () => {
     const rows = [
-      { id: 'r1', title: 'Swift URLSession', description: 'network', language: 'swift', category: 'Network', knowledge_type: 'code-pattern', kind: 'pattern', content_json: '{"pattern":"let s = URLSession()"}', status: 'active', tags_json: '["swift","network"]', trigger: 'url' },
+      { id: 'r1', title: 'Swift URLSession', description: 'network', language: 'swift', category: 'Network', knowledgeType: 'code-pattern', kind: 'pattern', content_json: '{"pattern":"let s = URLSession()"}', status: 'active', tags_json: '["swift","network"]', trigger: 'url' },
     ];
     const db = makeMockDb(rows);
     const engine = new SearchEngine(db);
@@ -199,7 +199,7 @@ describe('SearchEngine', () => {
 
   test('search in keyword mode should use _keywordSearch', async () => {
     const rows = [
-      { id: 'r1', title: 'URLSession', description: 'networking', language: 'swift', category: 'Net', knowledge_type: 'code-pattern', kind: 'pattern', status: 'active', content_json: '{}', trigger: '' },
+      { id: 'r1', title: 'URLSession', description: 'networking', language: 'swift', category: 'Net', knowledgeType: 'code-pattern', kind: 'pattern', status: 'active', content_json: '{}', trigger: '' },
     ];
     const db = makeMockDb(rows);
     const engine = new SearchEngine(db);
@@ -224,7 +224,7 @@ describe('SearchEngine', () => {
 
   test('search in bm25 mode should build index on first call', async () => {
     const rows = [
-      { id: 'r1', title: 'Swift', description: 'test', language: 'swift', category: 'A', knowledge_type: 'code-pattern', kind: 'pattern', content_json: '{}', status: 'active', tags_json: '[]', trigger: '' },
+      { id: 'r1', title: 'Swift', description: 'test', language: 'swift', category: 'A', knowledgeType: 'code-pattern', kind: 'pattern', content_json: '{}', status: 'active', tags_json: '[]', trigger: '' },
     ];
     const db = makeMockDb(rows);
     const engine = new SearchEngine(db);
@@ -236,7 +236,7 @@ describe('SearchEngine', () => {
 
   test('search in semantic mode should fall back to bm25 without aiProvider', async () => {
     const rows = [
-      { id: 'r1', title: 'Swift', description: 'test', language: 'swift', category: 'A', knowledge_type: 'code-pattern', kind: 'pattern', content_json: '{}', status: 'active', tags_json: '[]', trigger: '' },
+      { id: 'r1', title: 'Swift', description: 'test', language: 'swift', category: 'A', knowledgeType: 'code-pattern', kind: 'pattern', content_json: '{}', status: 'active', tags_json: '[]', trigger: '' },
     ];
     const db = makeMockDb(rows);
     const engine = new SearchEngine(db); // no aiProvider

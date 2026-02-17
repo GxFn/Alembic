@@ -4,6 +4,62 @@
 
 ---
 
+## [2.11.0] - 2026-02-18
+
+### V3 全链路统一 + 字段审计修复 + 前端 V3 内容展示重构
+
+> 69 files changed, +2569 / -2496
+
+#### V3 后端统一 — 6 值对象 + camelCase 全链路
+
+- **refactor(KnowledgeEntry):** 6 值对象（Content, Reasoning, Quality, Stats, Relations, Constraints）全部 camelCase，废弃 snake_case 兼容
+- **refactor(KnowledgeRepository.impl):** `_entityToRow` / `_rowToEntity` 全量 camelCase 列映射
+- **refactor(KnowledgeService):** update 白名单重构，值对象字段统一 JSON 序列化
+- **refactor(KnowledgeFileWriter):** 落盘文件 frontmatter 从 snake_case 迁移到 camelCase
+- **refactor(Lifecycle):** `normalizeLifecycle()` 简化为 3 状态 (pending/active/deprecated)
+
+#### V3 Pipeline 字段审计 — 9 项改进 (高+中+低优先级全覆盖)
+
+- **feat(tools.js):** `submit_knowledge` schema 扩展 `scope`/`complexity`/`headers`/`sourceFile` 参数，Bootstrap 管线可传递完整 V3 字段
+- **feat(AiScanService):** 注入 `recipe.moduleName = file.targetName` + `recipe.sourceFile = file.relativePath`
+- **feat(tools.js + AiScanService):** Bootstrap + AiScan 管线创建条目后自动调用 `knowledgeService.updateQuality()` 评分
+- **feat(AiProvider):** `_buildExtractPrompt()` comprehensive + standard 两套 prompt 新增 `content.rationale`、`constraints`、`aiInsight` 输出要求
+- **feat(tools.js):** Bootstrap 管线注入 `agentNotes`（维度元数据）+ `aiInsight`（从 reasoning.whyStandard 取）
+- **feat(tools.js):** `sourceFile` 回退从 `reasoning.sources[0]` 推断（Bootstrap 场景）
+- **feat(KnowledgeService):** `_autoDiscoverRelations()` — 创建条目后自动查找同 moduleName/category 的已有条目，建立 `related` 边并回写 relations 字段
+- **fix(api.ts):** `toRecipe()` version 字段从硬编码 `''` 改为 `r.version || ''`
+
+#### V3 字段审计 Bug 修复 — 4 条链路 Bug
+
+- **fix(values/\*.js):** 6 个值对象 `from()` 新增 `typeof input === 'string' → JSON.parse()` 防御，修复 repository partial merge 时 JSON 字符串被当 object 传入导致字段归零
+- **fix(KnowledgeService):** `_adaptForScorer()` 从引用 V2 已废弃字段 (`summaryCn`/`usageGuideCn`) 改为 V3 字段 (`description` + `content.markdown`)
+- **fix(tools.js):** QualityScorer 评分从手动 `update({quality: JSON.stringify(...)})` 改为 `updateQuality()`，修复 quality 不在 UPDATABLE 白名单导致静默失败
+- **fix(tools.js):** `agentNotes` 从预序列化字符串改为原始对象，修复 `_entityToRow` 二次 `JSON.stringify()` 导致双重嵌套
+
+#### 前端 V3 内容展示重构
+
+- **refactor(types.ts):** `Recipe.content` 从 `string` 改为 `RecipeContent` 结构化对象，移除全部 `v2Content` 字段
+- **refactor(RecipesView):** 卡片同时展示 Markdown 预览 + 代码预览；详情抽屉"使用指南"改为"Markdown 文档"取 `content.markdown`
+- **refactor(RecipeEditor):** 完整重写编辑/预览模式，支持 V3 structured content（markdown + pattern + rationale 三编辑器）
+- **refactor(App.tsx):** `handleSaveExtracted` 从 frontmatter 序列化改为直调 `api.knowledgeCreate()`；`handleSaveRecipe` 改为 `api.knowledgeUpdate()`
+- **fix(CandidatesView):** 修复 `content` 类型不匹配 + `onEditRecipe` 签名适配
+- **fix(SPMCompareDrawer + SPMExplorerView):** content-to-string 转换修复
+- **fix(api.ts):** `getRecipeContentByName` 序列化 V3 content 对象
+
+#### 全局 camelCase 统一 (Dashboard)
+
+- **refactor(11 files):** Dashboard 前端从 snake_case（`knowledge_type`/`usage_guide`/`summary_cn` 等）全量迁移到 camelCase，与后端 V3 API 一致
+- **refactor(ScanResultCard):** 移除 compat 字段映射逻辑
+
+#### 其他
+
+- **feat(HttpServer):** 根路径 `/` 新增 API 元信息 handler，消除外部探测 `POST /` 产生的 404 噪音
+- **feat(SearchEngine + SpmService + ChatAgent):** 下游消费者适配 V3 值对象 API
+- **refactor(SKILL.md × 4):** `article` 参数全部重命名为 `content`
+- **test:** 24 suites / 579 tests 全部通过
+
+---
+
 ## [2.10.0] - 2026-02-17
 
 ### Guard Audit 三维度项目扫描 + 指令修复 + V1 遗产清理

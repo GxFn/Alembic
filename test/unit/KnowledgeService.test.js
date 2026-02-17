@@ -19,7 +19,7 @@ function makeEntry(overrides = {}) {
     knowledgeType: 'code-pattern',
     kind: 'pattern',
     content: { pattern: 'let x = 1;', rationale: 'idiomatic' },
-    reasoning: { why_standard: 'because', confidence: 0.9, sources: ['doc'] },
+    reasoning: { whyStandard: 'because', confidence: 0.9, sources: ['doc'] },
     tags: ['test'],
     lifecycle: Lifecycle.PENDING,
     ...overrides,
@@ -33,9 +33,9 @@ function makeWireData(overrides = {}) {
     description: 'A test knowledge entry',
     language: 'objc',
     category: 'View',
-    knowledge_type: 'code-pattern',
+    knowledgeType: 'code-pattern',
     content: { pattern: 'let x = 1;', rationale: 'idiomatic' },
-    reasoning: { why_standard: 'because', confidence: 0.9, sources: ['doc'] },
+    reasoning: { whyStandard: 'because', confidence: 0.9, sources: ['doc'] },
     tags: ['test'],
     ...overrides,
   };
@@ -69,15 +69,24 @@ function mockRepository() {
       // 模拟 DB 更新后重新加载
       if (updates.lifecycle) entry.lifecycle = updates.lifecycle;
       if (updates.reviewed_by) entry.reviewedBy = updates.reviewed_by;
+      if (updates.reviewedBy) entry.reviewedBy = updates.reviewedBy;
       if (updates.reviewed_at) entry.reviewedAt = updates.reviewed_at;
+      if (updates.reviewedAt) entry.reviewedAt = updates.reviewedAt;
       if (updates.rejection_reason !== undefined) entry.rejectionReason = updates.rejection_reason;
+      if (updates.rejectionReason !== undefined) entry.rejectionReason = updates.rejectionReason;
       if (updates.published_at) entry.publishedAt = updates.published_at;
+      if (updates.publishedAt) entry.publishedAt = updates.publishedAt;
       if (updates.published_by) entry.publishedBy = updates.published_by;
+      if (updates.publishedBy) entry.publishedBy = updates.publishedBy;
       if (updates.probation !== undefined) entry.probation = !!updates.probation;
       if (updates.lifecycle_history_json) {
         entry.lifecycleHistory = JSON.parse(updates.lifecycle_history_json);
       }
-      entry.updatedAt = updates.updated_at || entry.updatedAt;
+      if (updates.lifecycleHistory) {
+        const lh = typeof updates.lifecycleHistory === 'string' ? JSON.parse(updates.lifecycleHistory) : updates.lifecycleHistory;
+        entry.lifecycleHistory = lh;
+      }
+      entry.updatedAt = updates.updated_at || updates.updatedAt || entry.updatedAt;
       return entry;
     }),
     delete: jest.fn(async (id) => {
@@ -272,16 +281,16 @@ describe('KnowledgeService', () => {
       expect(fileWriter.persist).toHaveBeenCalled();
     });
 
-    test('更新 knowledge_type 联动更新 kind', async () => {
+    test('更新 knowledgeType 联动更新 kind', async () => {
       const { service, repo } = createService();
       repo._seed(makeEntry());
 
       await service.update('test-id-001', {
-        knowledge_type: 'boundary-constraint',
+        knowledgeType: 'boundary-constraint',
       }, { userId: 'user1' });
 
       const updateCall = repo.update.mock.calls[0][1];
-      expect(updateCall.knowledge_type).toBe('boundary-constraint');
+      expect(updateCall.knowledgeType).toBe('boundary-constraint');
       expect(updateCall.kind).toBe('rule');
     });
 
@@ -498,7 +507,7 @@ describe('KnowledgeService', () => {
 
       expect(repo.update).toHaveBeenCalled();
       const [, updates] = repo.update.mock.calls[0];
-      expect(updates.stats_json).toBeDefined();
+      expect(updates.stats).toBeDefined();
     });
   });
 
@@ -542,7 +551,7 @@ describe('ConfidenceRouter', () => {
     const router = new ConfidenceRouter();
     const entry = makeEntry({
       content: { pattern: 'code pattern here for testing', rationale: 'good reason' },
-      reasoning: { why_standard: 'standard', confidence: 0.95, sources: ['doc'] },
+      reasoning: { whyStandard: 'standard', confidence: 0.95, sources: ['doc'] },
     });
 
     const result = await router.route(entry);
@@ -555,7 +564,7 @@ describe('ConfidenceRouter', () => {
     const router = new ConfidenceRouter({ rejectThreshold: 0.2 });
     const entry = makeEntry({
       content: { pattern: 'code pattern here for testing', rationale: 'reason' },
-      reasoning: { why_standard: 'standard', confidence: 0.1, sources: ['doc'] },
+      reasoning: { whyStandard: 'standard', confidence: 0.1, sources: ['doc'] },
     });
 
     const result = await router.route(entry);
@@ -568,7 +577,7 @@ describe('ConfidenceRouter', () => {
     const router = new ConfidenceRouter();
     const entry = makeEntry({
       content: { pattern: 'code pattern here for testing', rationale: 'reason' },
-      reasoning: { why_standard: 'standard', confidence: 0.6, sources: ['doc'] },
+      reasoning: { whyStandard: 'standard', confidence: 0.6, sources: ['doc'] },
     });
 
     const result = await router.route(entry);
@@ -597,7 +606,7 @@ describe('ConfidenceRouter', () => {
     const entry = makeEntry({
       source: 'bootstrap',
       content: { pattern: 'code pattern here for testing', rationale: 'reason' },
-      reasoning: { why_standard: 'standard', confidence: 0.75, sources: ['doc'] },
+      reasoning: { whyStandard: 'standard', confidence: 0.75, sources: ['doc'] },
     });
 
     const result = await router.route(entry);
@@ -622,7 +631,7 @@ describe('ConfidenceRouter', () => {
     const router = new ConfidenceRouter({ minContentLength: 50 });
     const entry = makeEntry({
       content: { pattern: 'x', rationale: '' },
-      reasoning: { why_standard: 'standard', confidence: 0.95, sources: ['doc'] },
+      reasoning: { whyStandard: 'standard', confidence: 0.95, sources: ['doc'] },
     });
 
     const result = await router.route(entry);
@@ -638,7 +647,7 @@ describe('ConfidenceRouter', () => {
     const router = new ConfidenceRouter({}, scorer);
     const entry = makeEntry({
       content: { pattern: 'code pattern here for testing', rationale: 'reason' },
-      reasoning: { why_standard: 'standard', confidence: 0.95, sources: ['doc'] },
+      reasoning: { whyStandard: 'standard', confidence: 0.95, sources: ['doc'] },
     });
 
     const result = await router.route(entry);
@@ -654,7 +663,7 @@ describe('ConfidenceRouter', () => {
     const router = new ConfidenceRouter({}, scorer);
     const entry = makeEntry({
       content: { pattern: 'code pattern here for testing', rationale: 'reason' },
-      reasoning: { why_standard: 'standard', confidence: 0.95, sources: ['doc'] },
+      reasoning: { whyStandard: 'standard', confidence: 0.95, sources: ['doc'] },
     });
 
     const result = await router.route(entry);

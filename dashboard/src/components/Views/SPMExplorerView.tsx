@@ -52,7 +52,6 @@ const SPMExplorerView: React.FC<SPMExplorerViewProps> = ({
   handleRefreshProject
 }) => {
   const [editingCodeIndex, setEditingCodeIndex] = useState<number | null>(null);
-  const [translatingIndex, setTranslatingIndex] = useState<number | null>(null);
   const [expandedEditIndex, setExpandedEditIndex] = useState<number | null>(null);
   const [similarityMap, setSimilarityMap] = useState<Record<string, SimilarRecipe[]>>({});
   const [similarityLoading, setSimilarityLoading] = useState<string | null>(null);
@@ -62,7 +61,7 @@ const SPMExplorerView: React.FC<SPMExplorerViewProps> = ({
   const [selectedContextTarget, setSelectedContextTarget] = useState<string | undefined>();
   const fetchedSimilarRef = useRef<Set<string>>(new Set());
   const prevSimilarKeysRef = useRef<string[]>([]);
-  const translateInFlightRef = useRef(false);
+
 
   const fetchSimilarity = useCallback(async (key: string, opts: { targetName?: string; candidateId?: string; candidate?: { title?: string; summary?: string; code?: string; usageGuide?: string } }) => {
   if (fetchedSimilarRef.current.has(key)) return;
@@ -88,7 +87,7 @@ const SPMExplorerView: React.FC<SPMExplorerViewProps> = ({
   let recipeContent = '';
   const existing = recipes?.find(r => r.name === normalizedRecipeName || r.name.endsWith('/' + normalizedRecipeName));
   if (existing?.content) {
-    recipeContent = existing.content;
+    recipeContent = [existing.content.pattern, existing.content.markdown].filter(Boolean).join('\n\n') || '';
   } else {
     try {
     const recipeData = await api.getRecipeContentByName(normalizedRecipeName);
@@ -108,74 +107,7 @@ const SPMExplorerView: React.FC<SPMExplorerViewProps> = ({
   setCompareDrawer({ candidate: res, targetName, recipeName: normalizedRecipeName, recipeContent, similarList: similarList.slice(0, 3), recipeContents: initialCache });
   }, [recipes]);
 
-  const handleContentLangChange = useCallback(async (i: number, newLang: 'cn' | 'en', currentRes: ScanResultItem) => {
-  if (translateInFlightRef.current) return;
-  if (newLang === 'cn') {
-    handleUpdateScanResult(i, { lang: 'cn' });
-    return;
-  }
-  
-  // EN: 切换到英文版本（如果有则切换，没有则翻译生成）
-  const res = currentRes;
-  if (!res) return;
-  
-  const hasEnSummary = !!res.summary_en;
-  const hasEnUsage = !!res.usageGuide_en;
-  
-  // 如果已有完整英文版本，直接切换显示
-  if (hasEnSummary && hasEnUsage) {
-    handleUpdateScanResult(i, { lang: 'en' });
-    return;
-  }
-  
-  // 没有完整英文版本，进行翻译
-  const cnSummary = res.summary_cn ?? res.summary ?? '';
-  const cnUsage = String(res.usageGuide_cn ?? res.usageGuide ?? '');
-  const needSummary = !hasEnSummary && cnSummary.trim().length > 0;
-  const needUsage = !hasEnUsage && cnUsage.trim().length > 0;
-  
-  if (!needSummary && !needUsage) {
-    // 虽然没有需要翻译的，但至少有一个英文版本，切换显示
-    handleUpdateScanResult(i, { lang: 'en' });
-    return;
-  }
-  
-  // 开始翻译
-  translateInFlightRef.current = true;
-  setTranslatingIndex(i);
-  try {
-    const resp = await api.translate(
-    needSummary ? cnSummary : '',
-    needUsage ? cnUsage : '',
-    );
-    
-    if (resp?.warning) {
-    // AI 翻译降级（provider 不可用、超时等），不切换语言
-    notify(resp.warning, { title: '翻译降级', type: 'error' });
-    return;
-    }
-    
-    const updates: any = { lang: 'en' };
-    
-    // 设置或保留翻译后的内容
-    if (resp?.summary_en) {
-    updates.summary_en = resp.summary_en;
-    updates.summary = resp.summary_en;
-    }
-    if (resp?.usageGuide_en) {
-    updates.usageGuide_en = resp.usageGuide_en;
-    updates.usageGuide = resp.usageGuide_en;
-    }
-    
-    handleUpdateScanResult(i, updates);
-    notify('摘要与使用指南已切换为英文版本', { title: '翻译完成' });
-  } catch (err: any) {
-    notify(err?.response?.data?.error || err?.message || '请检查网络或重试', { title: '翻译失败', type: 'error' });
-  } finally {
-    translateInFlightRef.current = false;
-    setTranslatingIndex(null);
-  }
-  }, [handleUpdateScanResult]);
+
 
   useEffect(() => {
   const keys = scanResults.map((r, i) => r.candidateId ?? `scan-${i}`);
@@ -192,7 +124,7 @@ const SPMExplorerView: React.FC<SPMExplorerViewProps> = ({
       if (res.candidateId && res.candidateTargetName) {
         fetchSimilarity(key, { targetName: res.candidateTargetName, candidateId: res.candidateId });
       } else {
-        fetchSimilarity(key, { candidate: { title: res.title, summary: res.summary || res.summary_cn || res.description || '', code: res.code || res.content?.pattern || '', usageGuide: res.usageGuide || res.usage_guide_cn || '' } });
+        fetchSimilarity(key, { candidate: { title: res.title, summary: res.description || '', code: res.content?.pattern || '', usageGuide: res.content?.markdown || '' } });
       }
     });
   }, 800);
@@ -367,14 +299,12 @@ const SPMExplorerView: React.FC<SPMExplorerViewProps> = ({
           index={i}
           editingCodeIndex={editingCodeIndex}
           setEditingCodeIndex={setEditingCodeIndex}
-          translatingIndex={translatingIndex}
           expandedEditIndex={expandedEditIndex}
           setExpandedEditIndex={setExpandedEditIndex}
           similarityMap={similarityMap}
           handleUpdateScanResult={handleUpdateScanResult}
           handleSaveExtracted={handleSaveExtracted}
           handlePromoteToCandidate={handlePromoteToCandidate}
-          handleContentLangChange={handleContentLangChange}
           openCompare={openCompare}
           isSavingRecipe={isSavingRecipe}
         />

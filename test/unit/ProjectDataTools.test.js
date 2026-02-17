@@ -375,55 +375,57 @@ describe('submit_with_check consistency', () => {
     expect(result.submitted).toBe(true);
     // Verify knowledgeType was auto-filled into the data passed to create
     const dataArg = mockKnowledgeService.create.mock.calls[0][0];
-    expect(dataArg.knowledge_type).toBe('architecture');
+    expect(dataArg.knowledgeType).toBe('architecture');
   });
 
-  it('should pass source from params instead of hardcoded agent', async () => {
+  it('should derive source from ctx.source', async () => {
     const params = {
       code: 'func test() {}',
       language: 'swift',
       category: 'Service',
       title: 'Test',
-      source: 'bootstrap',
     };
     const mockKnowledgeService = {
       create: jest.fn().mockResolvedValue({ id: 'k-2', lifecycle: 'draft', toJSON() { return { id: 'k-2' }; } }),
     };
     const ctx = {
       projectRoot: testProjectDir,
+      source: 'system',
       container: { get: (name) => name === 'knowledgeService' ? mockKnowledgeService : null },
       logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn() },
     };
     const result = await submitWithCheck.handler(params, ctx);
     expect(result.submitted).toBe(true);
-    // Verify source parameter was used
+    // source='system' maps to 'bootstrap'
     const dataArg = mockKnowledgeService.create.mock.calls[0][0];
     expect(dataArg.source).toBe('bootstrap');
   });
 
-  it('should preserve extra fields (complexity, scope) via ...rest', async () => {
+  it('should use knowledgeType from dimensionMeta', async () => {
     const params = {
       code: 'class Router {}',
       language: 'swift',
       category: 'Architecture',
       title: 'Router Pattern',
       summary: 'Pattern summary',
-      complexity: 'medium',
-      scope: 'module',
-      knowledgeType: 'architecture',
     };
     const mockKnowledgeService = {
       create: jest.fn().mockResolvedValue({ id: 'k-3', lifecycle: 'draft', toJSON() { return { id: 'k-3' }; } }),
     };
     const ctx = {
       projectRoot: testProjectDir,
+      _dimensionMeta: {
+        id: 'architecture',
+        allowedKnowledgeTypes: ['architecture'],
+        allowedCategories: ['Architecture'],
+      },
       container: { get: (name) => name === 'knowledgeService' ? mockKnowledgeService : null },
       logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn() },
     };
     const result = await submitWithCheck.handler(params, ctx);
     expect(result.submitted).toBe(true);
     const dataArg = mockKnowledgeService.create.mock.calls[0][0];
-    expect(dataArg.knowledge_type).toBe('architecture');
+    expect(dataArg.knowledgeType).toBe('architecture');
   });
 });
 

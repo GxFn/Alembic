@@ -27,9 +27,9 @@ Recipe creation, review, publish, update, deprecate, delete are **human-only via
 
 ---
 
-## V2 Recipe Model
+## V3 Recipe Model
 
-Recipe is the core knowledge unit. V2 uses a unified structured model:
+Recipe is the core knowledge unit. V3 uses a unified structured model:
 
 - **kind**: rule (mandatory norm, Guard enforced) | pattern (best practice) | fact (structural knowledge)
 - **knowledgeType**: code-pattern | architecture | best-practice | naming | error-handling | performance | security | testing | api-usage | workflow | dependency | rule

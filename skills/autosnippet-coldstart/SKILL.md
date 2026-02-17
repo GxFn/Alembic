@@ -462,7 +462,7 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 ## Related Skills
 
 - **autosnippet-analysis**: 语义字段补全 + 深度分析（用于增量分析）
-- **autosnippet-candidates**: 完整候选字段模型 + V2 Schema
+- **autosnippet-candidates**: 完整候选字段模型 + V3 Schema
 - **autosnippet-structure**: 项目结构发现 (targets / files / dependencies)
 - **autosnippet-guard**: Guard 规则详情
 - **autosnippet-reference-swift**: Swift 业界最佳实践参考（命名/并发/错误处理/内存/设计模式）

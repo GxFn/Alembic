@@ -54,8 +54,8 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
 
   const copyCandidate = () => {
     const parts = [];
-    const candCode = cand.code || cand.content?.pattern || '';
-    const candGuide = cand.usageGuide || cand.usage_guide_cn || '';
+    const candCode = cand.content?.pattern || '';
+    const candGuide = cand.content?.markdown || cand.doClause || '';
     if (candCode) parts.push('## Snippet / Code Reference\n\n```' + candLang + '\n' + candCode + '\n```');
     if (candGuide) parts.push('\n## AI Context / Usage Guide\n\n' + candGuide);
     navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify('候选内容已复制到剪贴板', { title: '已复制' }));
@@ -74,7 +74,7 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
       let content = '';
       const existing = recipes?.find(r => r.name === newName || r.name.endsWith('/' + newName));
       if (existing?.content) {
-        content = existing.content;
+        content = [existing.content.pattern, existing.content.markdown].filter(Boolean).join('\n\n') || '';
       } else {
         try {
           const recipeData = await api.getRecipeContentByName(newName);
@@ -102,9 +102,9 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
   };
 
   const handleEditRecipe = () => {
-    const recipe = recipes?.find(r => r.name === data.recipeName || r.name.endsWith('/' + data.recipeName))
-      || { name: data.recipeName, content: data.recipeContent };
-    onEditRecipe?.(recipe);
+    const recipe = recipes?.find(r => r.name === data.recipeName || r.name.endsWith('/' + data.recipeName));
+    if (recipe) { onEditRecipe?.(recipe); }
+    else { onEditRecipe?.({ name: data.recipeName, content: { markdown: data.recipeContent } } as Recipe); }
     onClose();
   };
 
@@ -178,14 +178,14 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
             <div className="flex-1 overflow-y-auto p-4">
               <div className="markdown-body text-slate-700 space-y-4">
                 <h3 className="text-sm font-bold">Snippet / Code Reference</h3>
-                {(cand.code || cand.content?.pattern) ? (
-                  <CodeBlock code={cand.code || cand.content?.pattern || ''} language={candLang} className="!overflow-visible" />
+                {(cand.content?.pattern) ? (
+                  <CodeBlock code={cand.content?.pattern || ''} language={candLang} className="!overflow-visible" />
                 ) : (
                   <p className="text-slate-400 italic text-xs">（无代码）</p>
                 )}
-                <h3 className="text-sm font-bold mt-4">AI Context / Usage Guide</h3>
-                {(cand.usageGuide || cand.usage_guide_cn) ? (
-                  <MarkdownWithHighlight content={cand.usageGuide || cand.usage_guide_cn || ''} />
+                <h3 className="text-sm font-bold mt-4">AI Context / 项目特写</h3>
+                {(cand.content?.markdown || cand.doClause) ? (
+                  <MarkdownWithHighlight content={cand.content?.markdown || cand.doClause || ''} />
                 ) : (
                   <p className="text-slate-400 italic text-xs">（无使用指南）</p>
                 )}

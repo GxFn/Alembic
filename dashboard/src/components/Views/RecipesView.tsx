@@ -47,13 +47,18 @@ function getDisplayName(recipe: Recipe): string {
 }
 
 function getContentStr(recipe: Recipe): string {
-  if (typeof recipe.content === 'string') return recipe.content;
-  const obj = recipe.content as Record<string, string> | null;
-  return obj?.pattern || obj?.markdown || JSON.stringify(recipe.content, null, 2);
+  const c = recipe.content;
+  if (!c) return '';
+  if (typeof c === 'string') return c;
+  // V3: 将 code 和 markdown 都包含在搜索/显示字符串中（两者不互斥）
+  const parts: string[] = [];
+  if (c.pattern) parts.push(c.pattern);
+  if (c.markdown) parts.push(c.markdown);
+  return parts.length > 0 ? parts.join('\n\n') : JSON.stringify(c, null, 2);
 }
 
 function getCodePattern(recipe: Recipe): string {
-  return recipe.v2Content?.pattern || '';
+  return recipe.content?.pattern || '';
 }
 
 function getCodeLang(recipe: Recipe): string {
@@ -117,13 +122,12 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   const [editForm, setEditForm] = useState<{
     title: string;
     description: string;
-    summaryCn: string;
-    usageGuideCn: string;
+    markdown: string;
     codePattern: string;
     rationale: string;
     tags: string[];
     tagInput: string;
-  }>({ title: '', description: '', summaryCn: '', usageGuideCn: '', codePattern: '', rationale: '', tags: [], tagInput: '' });
+  }>({ title: '', description: '', markdown: '', codePattern: '', rationale: '', tags: [], tagInput: '' });
   const [isSaving, setIsSaving] = useState(false);
   const isMountedRef = useRef(true);
 
@@ -151,10 +155,9 @@ const RecipesView: React.FC<RecipesViewProps> = ({
     setEditForm({
       title: recipe.name?.replace(/\.md$/, '') || '',
       description: recipe.description || '',
-      summaryCn: recipe.usageGuide_cn || recipe.usageGuide || '',
-      usageGuideCn: recipe.usageGuide_cn || recipe.usageGuide || '',
-      codePattern: recipe.v2Content?.pattern || '',
-      rationale: recipe.v2Content?.rationale || '',
+      markdown: recipe.content?.markdown || '',
+      codePattern: recipe.content?.pattern || '',
+      rationale: recipe.content?.rationale || '',
       tags: recipe.tags || [],
       tagInput: '',
     });
@@ -177,12 +180,11 @@ const RecipesView: React.FC<RecipesViewProps> = ({
       await api.knowledgeUpdate(recipeId, {
         title: editForm.title,
         description: editForm.description,
-        summary_cn: editForm.summaryCn,
-        usage_guide_cn: editForm.usageGuideCn,
         tags: editForm.tags,
         content: {
-          ...(selectedRecipe.v2Content || {}),
+          ...(selectedRecipe.content || {}),
           pattern: editForm.codePattern,
+          markdown: editForm.markdown,
           rationale: editForm.rationale,
         },
       } as any);
@@ -344,11 +346,11 @@ const RecipesView: React.FC<RecipesViewProps> = ({
     if (recipe.scope) items.push({ icon: Globe, iconClass: 'text-teal-400', label: '作用域', value: recipe.scope === 'universal' ? '通用' : recipe.scope === 'project-specific' ? '项目级' : recipe.scope });
     if (recipe.complexity) items.push({ icon: Layers, iconClass: 'text-orange-400', label: '复杂度', value: recipe.complexity === 'advanced' ? '高级' : recipe.complexity === 'intermediate' ? '中级' : recipe.complexity === 'basic' ? '初级' : recipe.complexity });
     if (recipe.difficulty && recipe.difficulty !== recipe.complexity) items.push({ icon: Layers, iconClass: 'text-amber-400', label: '难度', value: recipe.difficulty });
-    if (recipe.module_name) items.push({ icon: Layers, iconClass: 'text-purple-400', label: '模块', value: recipe.module_name, mono: true });
+    if (recipe.moduleName) items.push({ icon: Layers, iconClass: 'text-purple-400', label: '模块', value: recipe.moduleName, mono: true });
     if (recipe.source && recipe.source !== 'unknown') items.push({ icon: Globe, iconClass: 'text-violet-400', label: '来源', value: recipe.source === 'bootstrap-scan' ? 'AI 扫描' : recipe.source === 'agent' ? 'AI Agent' : recipe.source });
     if (recipe.version) items.push({ icon: Hash, iconClass: 'text-slate-400', label: '版本', value: recipe.version });
     if (recipe.updatedAt && isValidTimestamp(recipe.updatedAt)) items.push({ icon: Hash, iconClass: 'text-slate-400', label: '更新', value: formatDate(recipe.updatedAt) });
-    if (items.length === 0 && !recipe.source_file) return null;
+    if (items.length === 0 && !recipe.sourceFile) return null;
     return (
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
         {items.map((item, i) => {
@@ -361,11 +363,11 @@ const RecipesView: React.FC<RecipesViewProps> = ({
             </div>
           );
         })}
-        {recipe.source_file && (
+        {recipe.sourceFile && (
           <div className="flex items-center gap-1.5 basis-full mt-0.5">
             <FolderOpen size={11} className="text-slate-300 shrink-0" />
             <span className="text-slate-400">源文件</span>
-            <code className="font-mono text-[11px] text-slate-500 break-all" title={recipe.source_file}>{recipe.source_file}</code>
+            <code className="font-mono text-[11px] text-slate-500 break-all" title={recipe.sourceFile}>{recipe.sourceFile}</code>
           </div>
         )}
       </div>
@@ -412,7 +414,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
             {paginatedRecipes.map(recipe => {
               const displayName = getDisplayName(recipe);
               const codePattern = getCodePattern(recipe);
-              const summary = recipe.usageGuide_cn || recipe.usageGuide || recipe.description || '';
+              const summary = recipe.description || recipe.usageGuide || '';
               const isSelected = selectedRecipe && getDisplayName(selectedRecipe) === displayName;
               return (
                 <div
@@ -440,12 +442,31 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   )}
                   {summary && (
                     <div className="px-5 pb-3">
-                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{summary}</p>
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{summary.replace(/^#+\s*/gm, '').replace(/\*\*/g, '')}</p>
+                    </div>
+                  )}
+                  {recipe.content?.markdown && (
+                    <div className="mx-4 mb-2">
+                      <div className="flex items-center gap-1 mb-1 px-0.5">
+                        <FileText size={9} className="text-blue-400" />
+                        <span className="text-[9px] font-bold text-blue-400 uppercase">Markdown</span>
+                      </div>
+                      <div className="bg-blue-50/30 border border-blue-100 rounded-lg px-3 py-2 max-h-[60px] overflow-hidden">
+                        <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
+                          {recipe.content.markdown.replace(/^#+\s*/gm, '').replace(/\*\*/g, '').replace(/```[\s\S]*?```/g, '').trim().slice(0, 200)}
+                        </p>
+                      </div>
                     </div>
                   )}
                   {codePattern && (
-                    <div className="mx-4 mb-3 rounded-lg overflow-hidden max-h-[120px]">
-                      <CodeBlock code={codePattern.split('\n').slice(0, 6).join('\n')} language={getCodeLang(recipe)} />
+                    <div className="mx-4 mb-3">
+                      <div className="flex items-center gap-1 mb-1 px-0.5">
+                        <FileCode size={9} className="text-emerald-400" />
+                        <span className="text-[9px] font-bold text-emerald-400 uppercase">Code</span>
+                      </div>
+                      <div className="rounded-lg overflow-hidden max-h-[120px]">
+                        <CodeBlock code={codePattern.split('\n').slice(0, 6).join('\n')} language={getCodeLang(recipe)} />
+                      </div>
                     </div>
                   )}
                   <div className="px-5 py-2.5 bg-slate-50/80 border-t border-slate-100 flex items-center gap-3 text-[10px] text-slate-400">
@@ -457,10 +478,10 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                         <span>{recipe.source === 'bootstrap-scan' ? 'AI 扫描' : recipe.source === 'agent' ? 'AI Agent' : recipe.source}</span>
                       </>
                     )}
-                    {recipe.module_name && (
+                    {recipe.moduleName && (
                       <>
                         <span className="text-slate-200">|</span>
-                        <span className="font-mono">{recipe.module_name}</span>
+                        <span className="font-mono">{recipe.moduleName}</span>
                       </>
                     )}
                     {recipe.relations && Object.values(recipe.relations).flat().length > 0 && (
@@ -493,7 +514,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
         const displayName = getDisplayName(recipe);
         const codePattern = getCodePattern(recipe);
         const codeLang = getCodeLang(recipe);
-        const v2 = recipe.v2Content;
+        const contentV3 = recipe.content;
 
         return (
           <PageOverlay className="z-30 flex justify-end" onClick={closeDrawer}>
@@ -578,12 +599,14 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                       </div>
                     </div>
 
-                    {/* 使用指南 */}
+                    {/* Markdown 文档 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">使用指南</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block flex items-center gap-1.5">
+                        <FileText size={11} className="text-blue-400" /> Markdown 文档
+                      </label>
                       <textarea
-                        value={editForm.usageGuideCn}
-                        onChange={e => setEditForm(f => ({ ...f, usageGuideCn: e.target.value }))}
+                        value={editForm.markdown}
+                        onChange={e => setEditForm(f => ({ ...f, markdown: e.target.value }))}
                         rows={4}
                         className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y font-mono"
                         placeholder="Markdown 格式..."
@@ -774,7 +797,84 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     )}
                   </div>
 
-                  {/* 4. Description / Summary */}
+                  {/* 4. Reasoning — V3 推理信息 */}
+                  {recipe.reasoning && (recipe.reasoning.whyStandard || (recipe.reasoning.sources && recipe.reasoning.sources.length > 0)) && (
+                    <div className="px-6 py-4 border-b border-slate-100">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                        <Lightbulb size={11} className="text-amber-400" /> 推理依据
+                      </label>
+                      <div className="bg-amber-50/30 border border-amber-100 rounded-xl p-4 space-y-2.5">
+                        {recipe.reasoning.whyStandard && (
+                          <p className="text-sm text-slate-700 leading-relaxed">{recipe.reasoning.whyStandard}</p>
+                        )}
+                        {recipe.reasoning.sources && recipe.reasoning.sources.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] text-slate-400 font-bold">来源:</span>
+                            {recipe.reasoning.sources.map((src, i) => (
+                              <code key={i} className="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-700 font-mono">{src}</code>
+                            ))}
+                          </div>
+                        )}
+                        {recipe.reasoning.confidence != null && recipe.reasoning.confidence > 0 && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-400 font-bold">置信度:</span>
+                            <div className="flex-1 max-w-[160px] h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-amber-400 rounded-full"
+                                style={{ width: `${Math.round(recipe.reasoning.confidence * 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-bold text-amber-600">{Math.round(recipe.reasoning.confidence * 100)}%</span>
+                          </div>
+                        )}
+                        {recipe.reasoning.alternatives && recipe.reasoning.alternatives.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span className="text-[10px] text-slate-400 font-bold">备选:</span>
+                            {recipe.reasoning.alternatives.map((alt, i) => (
+                              <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600">{alt}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 5. Quality — V3 质量评级 */}
+                  {recipe.quality && recipe.quality.grade && recipe.quality.grade !== 'F' && (
+                    <div className="px-6 py-3 border-b border-slate-100">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">质量评级</label>
+                      <div className="flex items-center gap-4">
+                        <span className={`text-2xl font-black ${
+                          recipe.quality.grade === 'A' ? 'text-emerald-600' :
+                          recipe.quality.grade === 'B' ? 'text-blue-600' :
+                          recipe.quality.grade === 'C' ? 'text-amber-600' :
+                          recipe.quality.grade === 'D' ? 'text-orange-600' : 'text-slate-400'
+                        }`}>{recipe.quality.grade}</span>
+                        <div className="flex-1 grid grid-cols-3 gap-2 text-[10px]">
+                          {recipe.quality.completeness != null && recipe.quality.completeness > 0 && (
+                            <div className="text-center">
+                              <div className="font-bold text-slate-700">{recipe.quality.completeness}</div>
+                              <div className="text-slate-400">完整性</div>
+                            </div>
+                          )}
+                          {recipe.quality.adaptation != null && recipe.quality.adaptation > 0 && (
+                            <div className="text-center">
+                              <div className="font-bold text-slate-700">{recipe.quality.adaptation}</div>
+                              <div className="text-slate-400">适配度</div>
+                            </div>
+                          )}
+                          {recipe.quality.documentation != null && recipe.quality.documentation > 0 && (
+                            <div className="text-center">
+                              <div className="font-bold text-slate-700">{recipe.quality.documentation}</div>
+                              <div className="text-slate-400">文档度</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 6. Description / Summary */}
                   {recipe.description && (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">摘要</label>
@@ -782,25 +882,17 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     </div>
                   )}
 
-                  {/* 5. Usage Guide */}
-                  {(recipe.usageGuide || recipe.usageGuide_cn || recipe.usageGuide_en) && (
+                  {/* 7. Markdown 文档 */}
+                  {contentV3?.markdown && (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                        <BookOpen size={11} className="text-blue-400" /> 使用指南
+                        <FileText size={11} className="text-blue-400" /> Markdown 文档
                       </label>
                       <div className="bg-blue-50/30 border border-blue-100 rounded-xl p-4">
                         <div className="markdown-body text-sm text-slate-700 leading-relaxed">
-                          <MarkdownWithHighlight content={recipe.usageGuide_cn || recipe.usageGuide || ''} />
+                          <MarkdownWithHighlight content={contentV3.markdown} />
                         </div>
                       </div>
-                      {recipe.usageGuide_en && (
-                        <div className="mt-3 bg-slate-50 border border-slate-100 rounded-xl p-4">
-                          <span className="text-[9px] text-slate-400 font-bold uppercase block mb-1.5">Usage Guide (EN)</span>
-                          <div className="markdown-body text-sm text-slate-500 leading-relaxed">
-                            <MarkdownWithHighlight content={recipe.usageGuide_en} />
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -816,32 +908,32 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     </div>
                   )}
 
-                  {/* 7. Code Pattern */}
+                  {/* 7. Code / 标准用法 */}
                   {codePattern && (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                        <Code2 size={11} className="text-emerald-500" /> 代码 / 标准用法
+                        <FileCode size={11} className="text-emerald-500" /> 代码 / 标准用法
                       </label>
                       <CodeBlock code={codePattern} language={codeLang} showLineNumbers />
                     </div>
                   )}
 
                   {/* 8. Rationale */}
-                  {v2?.rationale && (
+                  {contentV3?.rationale && (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">设计原理</label>
                       <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                        <p className="text-sm text-slate-600 leading-relaxed">{v2.rationale}</p>
+                        <p className="text-sm text-slate-600 leading-relaxed">{contentV3.rationale}</p>
                       </div>
                     </div>
                   )}
 
                   {/* 9. Steps */}
-                  {v2?.steps && v2.steps.length > 0 && (
+                  {contentV3?.steps && contentV3.steps.length > 0 && (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">实施步骤</label>
                       <div className="space-y-2">
-                        {v2.steps.map((step: any, i: number) => {
+                        {contentV3.steps.map((step: any, i: number) => {
                           if (typeof step === 'string') {
                             return (
                               <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100 flex items-start gap-2.5">
@@ -869,11 +961,11 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   )}
 
                   {/* 10. Code Changes */}
-                  {v2?.codeChanges && v2.codeChanges.length > 0 && (
+                  {contentV3?.codeChanges && contentV3.codeChanges.length > 0 && (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">代码变更</label>
                       <div className="space-y-2">
-                        {v2.codeChanges.map((change, i) => (
+                        {contentV3.codeChanges.map((change, i) => (
                           <div key={i} className="border border-slate-200 rounded-lg overflow-hidden">
                             <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
                               <FileCode size={11} className="text-blue-400" />
@@ -895,13 +987,13 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   )}
 
                   {/* 11. Verification */}
-                  {v2?.verification && (
+                  {contentV3?.verification && (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">验证方法</label>
                       <div className="bg-teal-50/50 border border-teal-100 rounded-xl p-4 space-y-1.5">
-                        {v2.verification.method && <p className="text-xs text-slate-600"><span className="font-bold text-teal-600">方法:</span> {v2.verification.method}</p>}
-                        {v2.verification.expectedResult && <p className="text-xs text-slate-600"><span className="font-bold text-teal-600">预期:</span> {v2.verification.expectedResult}</p>}
-                        {v2.verification.testCode && <pre className="text-[11px] font-mono bg-slate-800 text-green-300 p-2.5 rounded-md overflow-x-auto whitespace-pre-wrap mt-1">{v2.verification.testCode}</pre>}
+                        {contentV3.verification.method && <p className="text-xs text-slate-600"><span className="font-bold text-teal-600">方法:</span> {contentV3.verification.method}</p>}
+                        {contentV3.verification.expectedResult && <p className="text-xs text-slate-600"><span className="font-bold text-teal-600">预期:</span> {contentV3.verification.expectedResult}</p>}
+                        {contentV3.verification.testCode && <pre className="text-[11px] font-mono bg-slate-800 text-green-300 p-2.5 rounded-md overflow-x-auto whitespace-pre-wrap mt-1">{contentV3.verification.testCode}</pre>}
                       </div>
                     </div>
                   )}

@@ -5,7 +5,7 @@
  * 
  * Usage:
  *   asd setup           - 初始化项目
- *   asd ais [Target]    - AI 扫描 Target → Candidates
+ *   asd ais [Target]    - AI 扫描 Target → 直接发布 Recipes
  *   asd search <query>  - 搜索知识库
  *   asd guard <file>    - Guard 检查
  *   asd watch           - 文件监控
@@ -78,10 +78,10 @@ program
 // ─────────────────────────────────────────────────────
 program
   .command('ais [target]')
-  .description('AI 扫描 Target 源码 → 提取 Candidates（需配置 AI Provider）')
+  .description('AI 扫描 Target 源码 → 提取并发布 Recipes（需配置 AI Provider）')
   .option('-d, --dir <path>', '项目目录', '.')
   .option('-m, --max-files <n>', '最大扫描文件数', '200')
-  .option('--dry-run', '仅预览，不创建 Candidate')
+  .option('--dry-run', '仅预览，不发布 Recipe')
   .option('--json', '以 JSON 格式输出')
   .action(async (target, opts) => {
     const projectRoot = resolve(opts.dir);
@@ -99,7 +99,7 @@ program
       const scanner = new AiScanService({ container, projectRoot });
 
       const ora = (await import('ora')).default;
-      const spinner = ora('正在扫描源文件并提取候选...').start();
+      const spinner = ora('正在扫描源文件并提取 Recipe...').start();
 
       const report = await scanner.scan(target || null, {
         maxFiles: parseInt(opts.maxFiles, 10),
@@ -114,7 +114,7 @@ program
         console.log(`\n✅ AI 扫描完成`);
         console.log(`   扫描文件: ${report.files}`);
         console.log(`   跳过: ${report.skipped}`);
-        console.log(`   提取候选: ${report.candidates}`);
+        console.log(`   发布 Recipe: ${report.published}`);
         if (report.errors.length > 0) {
           console.log(`\n⚠️  ${report.errors.length} 个错误：`);
           for (const err of report.errors.slice(0, 10)) {
@@ -122,8 +122,8 @@ program
           }
           if (report.errors.length > 10) console.log(`   ... 及其他 ${report.errors.length - 10} 个`);
         }
-        if (!opts.dryRun && report.candidates > 0) {
-          console.log(`\n📋 候选已创建，请运行 asd ui 打开 Dashboard 审核`);
+        if (!opts.dryRun && report.published > 0) {
+          console.log(`\n📋 Recipe 已发布，可通过 asd search 或 Cursor Rules 使用`);
         }
       }
 
@@ -488,6 +488,47 @@ program
       skillsOnly: opts.skillsOnly,
       mcpOnly: opts.mcpOnly,
     });
+  });
+
+// ─────────────────────────────────────────────────────
+// cursor-rules 命令
+// ─────────────────────────────────────────────────────
+program
+  .command('cursor-rules')
+  .description('生成 Cursor 4 通道交付物料（Rules + Skills → .cursor/）')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .option('--verbose', '详细输出')
+  .action(async (opts) => {
+    const projectRoot = resolve(opts.dir);
+
+    console.log(`\n🚀 AutoSnippet — Cursor Delivery Pipeline`);
+    console.log(`   项目: ${basename(projectRoot)}`);
+    console.log(`   路径: ${projectRoot}\n`);
+
+    const { bootstrap, container } = await initContainer({ projectRoot });
+    try {
+      const pipeline = container.get('cursorDeliveryPipeline');
+      const result = await pipeline.deliver();
+
+      console.log(`✅ Cursor 交付物料生成完成\n`);
+      console.log(`   Channel A (Always-On Rules): ${result.channelA.rulesCount} 条规则 (${result.channelA.tokensUsed} tokens)`);
+      console.log(`   Channel B (Smart Rules):     ${result.channelB.topicCount} 个主题, ${result.channelB.patternsCount} 个模式 (${result.channelB.totalTokens} tokens)`);
+      console.log(`   Channel C (Agent Skills):    ${result.channelC.synced} 个 Skills 已同步`);
+      if (result.channelC.errors > 0) {
+        console.log(`   ⚠️  ${result.channelC.errors} 个错误`);
+      }
+      console.log(`\n   总耗时: ${result.stats.duration}ms`);
+
+      if (opts.verbose && result.channelB.topics) {
+        console.log(`\n   Channel B 主题明细:`);
+        for (const [topic, info] of Object.entries(result.channelB.topics)) {
+          console.log(`     - ${topic}: ${info.patternsCount} patterns (${info.tokensUsed} tokens)`);
+        }
+      }
+      console.log('');
+    } finally {
+      await bootstrap.shutdown?.();
+    }
   });
 
 // ─────────────────────────────────────────────────────

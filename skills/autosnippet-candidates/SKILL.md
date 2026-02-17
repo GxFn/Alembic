@@ -1,6 +1,6 @@
 ---
 name: autosnippet-candidates
-description: Generate Recipe candidates with full V2 structured information. Single file scan or batch Target scan. Agent extracts rich metadata matching the complete Recipe schema. Agent submits candidates only; Recipe creation/modification is human-only.
+description: Generate Recipe candidates with full V3 structured information. Single file scan or batch Target scan. Agent extracts rich metadata matching the complete Recipe schema. Agent submits candidates only; Recipe creation/modification is human-only.
 ---
 
 # AutoSnippet - Generate Candidates with Structured Content (v3.1)
@@ -65,7 +65,7 @@ Recipe creation, review, publish, update, deprecate, delete are **human-only via
 
 ---
 
-## V2 Complete Candidate Field Model
+## V3 Complete Candidate Field Model
 
 Every candidate submitted via `submit_candidate` or `submit_candidates` supports the following fields. **The richer the information, the higher the quality of the resulting Recipe.**
 
@@ -227,7 +227,7 @@ Severity: `error` (must fix) | `warning` (should fix) | `info` (suggestion)
 1. `autosnippet_get_targets` → select targetName
 2. `autosnippet_get_target_files(targetName)`
 3. Parallel scan → per-file checklist extraction → aggregate / dedup / score
-4. `autosnippet_submit_knowledge_batch` batch submit — **all V2 fields are preserved**
+4. `autosnippet_submit_knowledge_batch` batch submit — **all V3 fields are preserved**
 
 ## Draft File Flow (alternative)
 1. Create draft folder (e.g. `.autosnippet-drafts/`) outside `AutoSnippet/`
@@ -247,8 +247,8 @@ Severity: `error` (must fix) | `warning` (should fix) | `info` (suggestion)
 | `autosnippet_context_search` | Find similar existing Recipes → fill `relations` |
 | `autosnippet_validate_candidate` | Pre-validate candidate fields |
 | `autosnippet_check_duplicate` | Cosine similarity dedup check |
-| `autosnippet_submit_knowledge` | Submit single candidate (**all V2 fields**) |
-| `autosnippet_submit_knowledge_batch` | Batch submit candidates (**all V2 fields preserved**) |
+| `autosnippet_submit_knowledge` | Submit single candidate (**all V3 fields**) |
+| `autosnippet_submit_knowledge_batch` | Batch submit candidates (**all V3 fields preserved**) |
 | `autosnippet_submit_knowledge_batch` | Submit .md draft files as candidates |
 
 ---

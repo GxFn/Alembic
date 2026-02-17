@@ -47,7 +47,7 @@ function makeEntry(overrides = {}) {
       markdown:     '',
       rationale:    '确保全局唯一实例',
       steps:        [{ title: '创建', description: '添加 sharedInstance 方法', code: '...' }],
-      code_changes: [],
+      codeChanges:  [],
       verification: { method: 'unit_test', expected_result: 'a === b' },
     },
     relations: {
@@ -64,10 +64,10 @@ function makeEntry(overrides = {}) {
       }],
       boundaries:    ['线程安全'],
       preconditions: ['已导入 Foundation'],
-      side_effects:  ['全局状态'],
+      sideEffects:  ['全局状态'],
     },
     reasoning: {
-      why_standard: '项目大量使用此模式',
+      whyStandard: '项目大量使用此模式',
       sources:      ['Manager.swift:22'],
       confidence:   0.85,
     },
@@ -82,8 +82,8 @@ function makeEntry(overrides = {}) {
       views:       100,
       adoptions:   5,
       applications: 3,
-      guard_hits:  12,
-      search_hits: 42,
+      guardHits:   12,
+      searchHits:  42,
       authority:   3.5,
     },
     headers:       ['#import <Foundation/Foundation.h>'],
@@ -149,15 +149,15 @@ describe('KnowledgeFileWriter', () => {
       expect(md).toContain('language: swift');
       expect(md).toContain('category: Architecture');
       expect(md).toContain('kind: pattern');
-      expect(md).toContain('knowledge_type: code-pattern');
+      expect(md).toContain('knowledgeType: code-pattern');
       expect(md).toContain('complexity: intermediate');
       expect(md).toContain('scope: universal');
       expect(md).toContain('source: bootstrap');
-      expect(md).toContain('created_by: agent');
-      expect(md).toContain('created_at: 1739692800');
-      expect(md).toContain('published_at: 1739779200');
-      expect(md).toContain('published_by: reviewer-001');
-      expect(md).toContain('reviewed_by: reviewer-001');
+      expect(md).toContain('createdBy: agent');
+      expect(md).toContain('createdAt: 1739692800');
+      expect(md).toContain('publishedAt: 1739779200');
+      expect(md).toContain('publishedBy: reviewer-001');
+      expect(md).toContain('reviewedBy: reviewer-001');
     });
 
     it('should include array fields as inline JSON', () => {
@@ -166,8 +166,8 @@ describe('KnowledgeFileWriter', () => {
 
       expect(md).toContain('tags: ["singleton","design-pattern"]');
       expect(md).toContain('headers: ["#import <Foundation/Foundation.h>"]');
-      expect(md).toContain('header_paths: ["Foundation/Foundation.h"]');
-      expect(md).toContain('include_headers: true');
+      expect(md).toContain('headerPaths: ["Foundation/Foundation.h"]');
+      expect(md).toContain('includeHeaders: true');
     });
 
     it('should include value objects as _ prefixed JSON', () => {
@@ -180,14 +180,14 @@ describe('KnowledgeFileWriter', () => {
       expect(md).toContain('_reasoning: {');
       expect(md).toContain('_quality: {');
       expect(md).toContain('_stats: {');
-      expect(md).toContain('_agent_notes: [');
+      expect(md).toContain('_agentNotes: [');
     });
 
     it('should include content hash', () => {
       const entry = makeEntry();
       const md = writer.serialize(entry);
 
-      expect(md).toMatch(/_content_hash: [a-f0-9]{16}/);
+      expect(md).toMatch(/_contentHash: [a-f0-9]{16}/);
     });
 
     it('should build structured body when no markdown', () => {
@@ -196,10 +196,10 @@ describe('KnowledgeFileWriter', () => {
       const body = md.split(/^---$/m).slice(2).join('---').trim();
 
       expect(body).toContain('## Singleton Pattern');
-      expect(body).toContain('> 使用单例模式确保全局唯一性');
+      expect(body).toContain('> Standard singleton implementation');
       expect(body).toContain('```swift');
       expect(body).toContain('+ (instancetype)sharedInstance { ... }');
-      expect(body).toContain('## 使用指南');
+      expect(body).not.toContain('## 使用指南');
       expect(body).toContain('## 设计原理');
       expect(body).toContain('## 实施步骤');
       expect(body).toContain('## Why Standard');
@@ -212,7 +212,7 @@ describe('KnowledgeFileWriter', () => {
           markdown: '# 项目特写 — Manager 管理\n\n这是一篇项目特写...',
           rationale: '',
           steps:     [],
-          code_changes: [],
+          codeChanges: [],
           verification: null,
         },
       });
@@ -241,10 +241,10 @@ describe('KnowledgeFileWriter', () => {
       const md = writer.serialize(entry);
 
       expect(md).not.toContain('difficulty:');
-      expect(md).not.toContain('_agent_notes:');
-      expect(md).not.toContain('_ai_insight:');
-      expect(md).not.toContain('published_at:');
-      expect(md).not.toContain('published_by:');
+      expect(md).not.toContain('_agentNotes:');
+      expect(md).not.toContain('_aiInsight:');
+      expect(md).not.toContain('publishedAt:');
+      expect(md).not.toContain('publishedBy:');
     });
   });
 
@@ -263,10 +263,10 @@ describe('KnowledgeFileWriter', () => {
       expect(parsed.language).toBe('swift');
       expect(parsed.category).toBe('Architecture');
       expect(parsed.kind).toBe('pattern');
-      expect(parsed.knowledge_type).toBe('code-pattern');
+      expect(parsed.knowledgeType).toBe('code-pattern');
       expect(parsed.source).toBe('bootstrap');
-      expect(parsed.created_at).toBe(1739692800);
-      expect(parsed.source_file).toBe('architecture/singleton.md');
+      expect(parsed.createdAt).toBe(1739692800);
+      expect(parsed.sourceFile).toBe('architecture/singleton.md');
     });
 
     it('should parse array fields', () => {
@@ -276,8 +276,8 @@ describe('KnowledgeFileWriter', () => {
 
       expect(parsed.tags).toEqual(['singleton', 'design-pattern']);
       expect(parsed.headers).toEqual(['#import <Foundation/Foundation.h>']);
-      expect(parsed.header_paths).toEqual(['Foundation/Foundation.h']);
-      expect(parsed.include_headers).toBe(true);
+      expect(parsed.headerPaths).toEqual(['Foundation/Foundation.h']);
+      expect(parsed.includeHeaders).toBe(true);
     });
 
     it('should parse _ prefixed JSON value objects', () => {
@@ -302,7 +302,7 @@ describe('KnowledgeFileWriter', () => {
 
       // _reasoning → reasoning
       expect(parsed.reasoning).toBeDefined();
-      expect(parsed.reasoning.why_standard).toBe('项目大量使用此模式');
+      expect(parsed.reasoning.whyStandard).toBe('项目大量使用此模式');
       expect(parsed.reasoning.confidence).toBe(0.85);
 
       // _quality → quality
@@ -313,7 +313,7 @@ describe('KnowledgeFileWriter', () => {
       // _stats → stats
       expect(parsed.stats).toBeDefined();
       expect(parsed.stats.views).toBe(100);
-      expect(parsed.stats.guard_hits).toBe(12);
+      expect(parsed.stats.guardHits).toBe(12);
     });
 
     it('should extract code from body when content.pattern is missing', () => {
@@ -359,14 +359,14 @@ lifecycle: active
 language: swift
 category: general
 probation: true
-include_headers: false
-created_at: 1739692800
+includeHeaders: false
+createdAt: 1739692800
 ---
 `;
       const parsed = parseKnowledgeMarkdown(md);
       expect(parsed.probation).toBe(true);
-      expect(parsed.include_headers).toBe(false);
-      expect(parsed.created_at).toBe(1739692800);
+      expect(parsed.includeHeaders).toBe(false);
+      expect(parsed.createdAt).toBe(1739692800);
     });
 
     it('should parse quoted string values', () => {
@@ -376,12 +376,12 @@ title: "Title with: special chars"
 lifecycle: active
 language: swift
 category: general
-summary_cn: "包含冒号：和引号的摘要"
+description: "包含冒号：和引号的描述"
 ---
 `;
       const parsed = parseKnowledgeMarkdown(md);
       expect(parsed.title).toBe('Title with: special chars');
-      expect(parsed.summary_cn).toBe('包含冒号：和引号的摘要');
+      expect(parsed.description).toBe('包含冒号：和引号的描述');
     });
   });
 
@@ -412,11 +412,8 @@ summary_cn: "包含冒号：和引号的摘要"
       expect(restored.scope).toBe(original.scope);
       expect(restored.tags).toEqual(original.tags);
 
-      // 国际化
-      expect(restored.summaryCn).toBe(original.summaryCn);
-      expect(restored.summaryEn).toBe(original.summaryEn);
-      expect(restored.usageGuideCn).toBe(original.usageGuideCn);
-      expect(restored.usageGuideEn).toBe(original.usageGuideEn);
+      // 描述
+      expect(restored.description).toBe(original.description);
 
       // 值对象
       expect(restored.content.toJSON()).toEqual(original.content.toJSON());
@@ -449,8 +446,8 @@ summary_cn: "包含冒号：和引号的摘要"
       const md2 = writer.serialize(entry2);
 
       // 提取 hash 值
-      const hash1 = md1.match(/_content_hash: ([a-f0-9]+)/)?.[1];
-      const hash2 = md2.match(/_content_hash: ([a-f0-9]+)/)?.[1];
+      const hash1 = md1.match(/_contentHash: ([a-f0-9]+)/)?.[1];
+      const hash2 = md2.match(/_contentHash: ([a-f0-9]+)/)?.[1];
 
       expect(hash1).toBeDefined();
       expect(hash2).toBeDefined();
@@ -482,8 +479,8 @@ summary_cn: "包含冒号：和引号的摘要"
       expect(hash).toMatch(/^[a-f0-9]{16}$/);
     });
 
-    it('should strip _content_hash line before hashing', () => {
-      const content1 = 'line1\n_content_hash: abc123\nline2';
+    it('should strip _contentHash line before hashing', () => {
+      const content1 = 'line1\n_contentHash: abc123\nline2';
       const content2 = 'line1\nline2';
       expect(computeKnowledgeHash(content1)).toBe(computeKnowledgeHash(content2));
     });
@@ -603,42 +600,38 @@ describe('KnowledgeSyncService', () => {
         trigger:         '@test',
         description:     'A test entry',
         lifecycle:       'active',
-        lifecycle_history: [{ from: 'pending', to: 'active', at: 123 }],
+        lifecycleHistory: [{ from: 'pending', to: 'active', at: 123 }],
         probation:       true,
         language:        'swift',
         category:        'View',
         kind:            'pattern',
-        knowledge_type:  'code-pattern',
+        knowledgeType:   'code-pattern',
         complexity:      'intermediate',
         scope:           'universal',
         difficulty:      'beginner',
         tags:            ['test'],
-        summary_cn:      '测试',
-        summary_en:      'test',
-        usage_guide_cn:  '指南',
-        usage_guide_en:  'guide',
         content:         { pattern: 'code', markdown: '' },
         relations:       { related: [{ target: '@other', description: '' }] },
         constraints:     { guards: [], boundaries: [] },
-        reasoning:       { why_standard: 'reason', sources: ['a.swift'] },
+        reasoning:       { whyStandard: 'reason', sources: ['a.swift'] },
         quality:         { overall: 0.8 },
         stats:           { views: 10 },
         headers:         ['#import <UIKit/UIKit.h>'],
-        header_paths:    ['UIKit/UIKit.h'],
-        module_name:     'UIKit',
-        include_headers: true,
-        agent_notes:     ['note'],
-        ai_insight:      'insight',
-        reviewed_by:     'admin',
-        reviewed_at:     1739779200,
-        rejection_reason: null,
+        headerPaths:     ['UIKit/UIKit.h'],
+        moduleName:      'UIKit',
+        includeHeaders:  true,
+        agentNotes:      ['note'],
+        aiInsight:       'insight',
+        reviewedBy:      'admin',
+        reviewedAt:      1739779200,
+        rejectionReason: null,
         source:          'mcp',
-        source_candidate_id: 'old-cand-001',
-        created_by:      'agent',
-        created_at:      1739692800,
-        updated_at:      1739779200,
-        published_at:    1739779200,
-        published_by:    'admin',
+        sourceCandidateId: 'old-cand-001',
+        createdBy:       'agent',
+        createdAt:       1739692800,
+        updatedAt:       1739779200,
+        publishedAt:     1739779200,
+        publishedBy:     'admin',
       };
 
       const rawContent = '---\nid: sync-test-001\n---\n\n## Test';
@@ -646,19 +639,18 @@ describe('KnowledgeSyncService', () => {
 
       expect(row.id).toBe('sync-test-001');
       expect(row.title).toBe('Test Entry');
-      expect(row.trigger_key).toBe('@test');
+      expect(row.trigger).toBe('@test');
       expect(row.lifecycle).toBe('active');
-      expect(row.probation).toBe(1);
       expect(row.language).toBe('swift');
       expect(row.category).toBe('View');
       expect(JSON.parse(row.tags)).toEqual(['test']);
       expect(JSON.parse(row.content)).toEqual({ pattern: 'code', markdown: '' });
       expect(JSON.parse(row.relations)).toEqual({ related: [{ target: '@other', description: '' }] });
-      expect(JSON.parse(row.reasoning)).toEqual({ why_standard: 'reason', sources: ['a.swift'] });
-      expect(row.include_headers).toBe(1);
-      expect(JSON.parse(row.agent_notes)).toEqual(['note']);
-      expect(row.source_file).toBe('AutoSnippet/recipes/view/test.md');
-      expect(row.content_hash).toMatch(/^[a-f0-9]{16}$/);
+      expect(JSON.parse(row.reasoning)).toEqual({ whyStandard: 'reason', sources: ['a.swift'] });
+      expect(row.includeHeaders).toBe(1);
+      expect(JSON.parse(row.agentNotes)).toEqual(['note']);
+      expect(row.sourceFile).toBe('AutoSnippet/recipes/view/test.md');
+      expect(row.contentHash).toMatch(/^[a-f0-9]{16}$/);
     });
 
     it('should use defaults for missing fields', () => {
@@ -671,7 +663,7 @@ describe('KnowledgeSyncService', () => {
       expect(row.language).toBe('swift');
       expect(row.category).toBe('general');
       expect(row.source).toBe('file-sync');
-      expect(row.created_by).toBe('file-sync');
+      expect(row.createdBy).toBe('file-sync');
     });
   });
 });

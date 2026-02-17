@@ -39,7 +39,8 @@ export interface Recipe {
   id?: string;
   name: string;
   trigger?: string;
-  content: string;
+  /** V3 结构化内容对象 */
+  content: RecipeContent;
   category?: string;
   language?: string;
   description?: string;
@@ -48,16 +49,7 @@ export interface Recipe {
   metadata?: any;
   /** 使用统计与权威分（来自 recipe-stats.json） */
   stats?: RecipeStats | null;
-  // ── V2 structured fields (passed through by v1-compat) ──
   knowledgeType?: string;
-  v2Content?: {
-    pattern?: string;
-    rationale?: string;
-    steps?: Array<{ title?: string; description?: string; code?: string }>;
-    codeChanges?: Array<{ file: string; before: string; after: string; explanation: string }>;
-    verification?: { method?: string; expectedResult?: string; testCode?: string } | null;
-    markdown?: string;
-  } | null;
   relations?: Record<string, any[]> | null;
   constraints?: {
     guards?: Array<{ pattern: string; severity: string; message?: string }>;
@@ -68,12 +60,26 @@ export interface Recipe {
   tags?: string[];
   /** 使用指南 */
   usageGuide?: string;
-  usageGuide_cn?: string;
-  usageGuide_en?: string;
   /** 来源信息 */
   source?: string;
-  source_file?: string;
-  module_name?: string;
+  sourceFile?: string;
+  moduleName?: string;
+  /** V3 reasoning 推理 */
+  reasoning?: {
+    whyStandard?: string;
+    sources?: string[];
+    confidence?: number;
+    qualitySignals?: Record<string, number>;
+    alternatives?: string[];
+  } | null;
+  /** V3 quality 质量 */
+  quality?: {
+    completeness?: number;
+    adaptation?: number;
+    documentation?: number;
+    overall?: number;
+    grade?: string;
+  } | null;
   /** V3 直接字段 */
   scope?: string;
   complexity?: string;
@@ -113,16 +119,17 @@ export interface SPMTarget {
 
 export interface ExtractedRecipe {
   title: string;
-  summary: string;
-  summary_cn?: string;
-  summary_en?: string;
+  /** 统一描述（取代 summary_cn / summary_en） */
+  description?: string;
+  /** 兼容旧字段 */
+  summary?: string;
   trigger: string;
   category?: string;
   language: string;
   code: string;
-  usageGuide: string;
-  usageGuide_cn?: string;
-  usageGuide_en?: string;
+  /** AI extractRecipes 返回的完整方法体/项目特写 Markdown */
+  article?: string;
+  usageGuide?: string;
   headers?: string[];
   /** 每条 header 相对于 target 根目录的路径，与 create/headName 一致，用于 // as:include <M/H.h> [path] */
   headerPaths?: string[];
@@ -156,6 +163,13 @@ export interface ExtractedRecipe {
   version?: string;
   /** 更新时间戳（毫秒） */
   updatedAt?: number;
+  // ── Delivery fields ──
+  kind?: KnowledgeKind;
+  doClause?: string;
+  dontClause?: string;
+  whenClause?: string;
+  coreCode?: string;
+  topicHint?: string;
 }
 
 // ── V2 Candidate 类型已删除 — 前端统一使用 V3 KnowledgeEntry ──
@@ -180,15 +194,15 @@ export interface KnowledgeContent {
   markdown?: string;
   rationale?: string;
   steps?: Array<{ title?: string; description?: string; code?: string }>;
-  code_changes?: Array<{ file: string; before: string; after: string; explanation: string }>;
-  verification?: { method?: string; expected_result?: string; test_code?: string } | null;
+  codeChanges?: Array<{ file: string; before: string; after: string; explanation: string }>;
+  verification?: { method?: string; expectedResult?: string; testCode?: string } | null;
 }
 
 export interface KnowledgeReasoning {
-  why_standard: string;
+  whyStandard: string;
   sources: string[];
   confidence: number;
-  quality_signals?: Record<string, unknown>;
+  qualitySignals?: Record<string, unknown>;
   alternatives?: string[];
 }
 
@@ -204,51 +218,54 @@ export interface KnowledgeStats {
   views: number;
   adoptions: number;
   applications: number;
-  guard_hits: number;
-  search_hits: number;
+  guardHits: number;
+  searchHits: number;
   authority: number;
 }
 
 export interface KnowledgeConstraints {
-  guards?: Array<{ id?: string; type?: string; pattern: string; severity: string; message?: string; fix_suggestion?: string }>;
+  guards?: Array<{ id?: string; type?: string; pattern: string; severity: string; message?: string; fixSuggestion?: string }>;
   boundaries?: string[];
   preconditions?: string[];
-  side_effects?: string[];
+  sideEffects?: string[];
 }
 
 export interface KnowledgeRelations {
   inherits?: Array<{ target: string; description?: string }>;
   extends?: Array<{ target: string; description?: string }>;
-  depends_on?: Array<{ target: string; description?: string }>;
+  dependsOn?: Array<{ target: string; description?: string }>;
   conflicts?: Array<{ target: string; description?: string }>;
   related?: Array<{ target: string; description?: string }>;
   implements?: Array<{ target: string; description?: string }>;
   calls?: Array<{ target: string; description?: string }>;
-  data_flow?: Array<{ target: string; description?: string }>;
+  dataFlow?: Array<{ target: string; description?: string }>;
   [key: string]: Array<{ target: string; description?: string }> | undefined;
 }
 
-/** V3 统一知识条目（API 返回的 wire format） */
+/** V3 统一知识条目（API 返回的 wire format — 全 camelCase） */
 export interface KnowledgeEntry {
   id: string;
   title: string;
   trigger: string;
   description: string;
   lifecycle: KnowledgeLifecycle;
-  lifecycle_history?: Array<{ from: string; to: string; at: number; by: string }>;
-  auto_approvable?: boolean;
+  lifecycleHistory?: Array<{ from: string; to: string; at: number; by: string }>;
+  autoApprovable?: boolean;
   language: string;
   category: string;
   kind: KnowledgeKind;
-  knowledge_type: string;
+  knowledgeType: string;
   complexity: string;
   scope?: string;
   difficulty?: string;
   tags: string[];
-  summary_cn?: string;
-  summary_en?: string;
-  usage_guide_cn?: string;
-  usage_guide_en?: string;
+  // ── Delivery fields ──
+  doClause?: string;
+  dontClause?: string;
+  whenClause?: string;
+  coreCode?: string;
+  topicHint?: string;
+  // ── Structured sub-objects ──
   content: KnowledgeContent;
   relations: KnowledgeRelations;
   constraints: KnowledgeConstraints;
@@ -256,22 +273,22 @@ export interface KnowledgeEntry {
   quality: KnowledgeQuality;
   stats: KnowledgeStats;
   headers: string[];
-  header_paths?: string[];
-  module_name?: string;
-  include_headers?: boolean;
-  agent_notes?: string[] | null;
-  ai_insight?: string | null;
-  reviewed_by?: string | null;
-  reviewed_at?: number | null;
-  rejection_reason?: string | null;
+  headerPaths?: string[];
+  moduleName?: string;
+  includeHeaders?: boolean;
+  agentNotes?: string[] | null;
+  aiInsight?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: number | null;
+  rejectionReason?: string | null;
   source: string;
-  source_file?: string | null;
-  source_candidate_id?: string | null;
-  created_by: string;
-  created_at: number;
-  updated_at: number;
-  published_at?: number | null;
-  published_by?: string | null;
+  sourceFile?: string | null;
+  sourceCandidateId?: string | null;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+  publishedAt?: number | null;
+  publishedBy?: string | null;
 }
 
 /** 知识条目列表分页响应 */
@@ -308,9 +325,12 @@ export interface GuardAuditResult {
 }
 
 /**
- * 审核页面使用的条目类型 — 基于 V3 KnowledgeEntry 扩展审核专用字段。
+ * 审核页面使用的条目类型 — 直接使用 V3 KnowledgeEntry 统一数据模型。
  * 从候选页进入审核时直接传入 KnowledgeEntry，仅需补充 mode/lang 等审核控制字段。
- * 从 SPM Target 扫描时由后端返回的 ExtractedRecipe 数据映射而来。
+ * 从 SPM Target 扫描时由后端返回的 ExtractedRecipe 数据映射为 V3 结构。
+ *
+ * 不使用兼容字段（summary/usageGuide/code 等），直接使用：
+ *   description、content.pattern、content.markdown 等 KnowledgeEntry 原生字段。
  */
 export type ScanResultItem = Partial<KnowledgeEntry> & {
   /** 保存模式：full = Snippet+Recipe，preview = Recipe Only */
@@ -323,35 +343,6 @@ export type ScanResultItem = Partial<KnowledgeEntry> & {
   candidateTargetName?: string;
   /** 关联的候选 ID（= KnowledgeEntry.id，保存后用于从候选池移除） */
   candidateId?: string;
-  /** ─── 以下为遗留 SPM 扫描兼容字段 ─── */
-  /** 合并后的当前语言摘要（由 lang 切换） */
-  summary?: string;
-  /** 合并后的当前语言使用指南（由 lang 切换） */
-  usageGuide?: string;
-  usageGuide_cn?: string;
-  usageGuide_en?: string;
-  /** 代码（SPM 扫描产出，V3 对应 content.pattern） */
-  code?: string;
-  /** 头文件列表（SPM 扫描产出，V3 已有 headers） */
-  headers?: string[];
-  /** target/模块名 */
-  moduleName?: string;
-  /** 是否引入头文件 */
-  includeHeaders?: boolean;
-  /** 难度 */
-  difficulty?: string;
-  /** 权威分 1-5 */
+  /** 权威分 1-5（top-level override，编辑时直接写入） */
   authority?: number;
-  /** 知识类型（旧） */
-  knowledgeType?: string;
-  /** 适用范围（旧） */
-  scope?: string;
-  /** 标签 */
-  tags?: string[];
-  /** 设计原理 */
-  rationale?: string;
-  /** 实施步骤 */
-  steps?: string[];
-  /** 前置条件 */
-  preconditions?: string[];
 };
