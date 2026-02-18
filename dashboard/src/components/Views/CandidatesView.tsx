@@ -279,7 +279,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
         setCandidateOverrides(prev => ({ ...prev, [candidateId]: updated }));
       } catch (_) {}
     } catch (err: any) {
-      notify(err.response?.data?.error || err.message, { title: 'AI 补齐失败', type: 'error' });
+      const raw = err.response?.data?.error;
+      notify(typeof raw === 'string' ? raw : raw?.message || err.message, { title: 'AI 补齐失败', type: 'error' });
     } finally {
       setEnrichingIds(prev => { const next = new Set(prev); next.delete(candidateId); return next; });
     }
@@ -301,7 +302,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
       notify(`${total}/${items.length} 条候选已更新`, { title: '① 结构补齐完成' });
       onRefresh?.();
     } catch (err: any) {
-      notify(err.response?.data?.error || err.message, { title: '① 结构补齐失败', type: 'error' });
+      const raw = err.response?.data?.error;
+      notify(typeof raw === 'string' ? raw : raw?.message || err.message, { title: '① 结构补齐失败', type: 'error' });
     } finally {
       setEnrichingAll(false);
     }

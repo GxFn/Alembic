@@ -4,6 +4,41 @@
 
 ---
 
+## [2.19.0] - 2026-02-19
+
+### 新增功能
+
+- **Native Tool Calling**：AI Provider 支持原生函数调用（Gemini / OpenAI / Claude），ChatAgent 新增 tool-call 循环
+- **Structured Output**：`chatWithStructuredOutput()` 支持 schema 驱动的结构化输出
+- **Cross-Encoder Reranker**：搜索管线新增 AI 交叉编码重排序层，提升检索精度
+- **ContextWindow 动态适配**：对话上下文窗口根据模型 token 限制自动调整
+
+### 前端 API 连通性修复
+
+- **恢复 6 个缺失后端路由**：v2.10.0 V1→V3 迁移时 `candidates.js`（559 行 18 个路由）被删除后未完整迁移，导致 v2.10.0–v2.18.0 间 6 个前端 URL 返回 404
+  - 新增 `POST /candidates/enrich` — AI 语义字段补齐
+  - 新增 `POST /candidates/bootstrap-refine` — 批量 Bootstrap 润色
+  - 新增 `POST /candidates/refine-preview` — 对话式润色预览
+  - 新增 `POST /candidates/refine-apply` — 对话式润色应用
+  - 新增 `POST /search/similarity` — 语义相似度搜索
+  - 新增 `POST /search/xcode-simulate` — Xcode 模拟搜索
+
+### 对话式润色重构
+
+- **直接 AI 提示词润色**：`refine-preview` / `refine-apply` 不再委托 `bootstrapRefine` 批量逻辑，改为直接调用 `aiProvider.chatWithStructuredOutput()` 以用户输入为主指令
+- **Preview 数据直传应用**：确认应用时前端将预览阶段的 AI 输出直传后端，避免二次 AI 调用导致结果不一致
+- **润色提示词强化**：增加字段名→UI 标签映射表，严格约束只修改用户指定字段
+
+### Bug 修复
+
+- **SPM 保存崩溃修复**：`toCandidatePayload()` 补齐 `title`/`content` 必填字段；4 处错误处理器修复对象直传 `notify()` 导致 React 渲染崩溃
+- **KnowledgeService.update() context 缺失**：`refine-apply` 和 `enrich` 端点补齐第三参数 `{ userId }` 避免 `Cannot read properties of undefined (reading 'userId')` 错误
+- **GoogleGeminiProvider 递归 sanitize** 修复
+- **ToolRegistry 死代码清理**
+- **UI 标签修复**："次" → "次调用"
+
+---
+
 ## [2.18.0] - 2026-02-19
 
 ### 集成测试扩展

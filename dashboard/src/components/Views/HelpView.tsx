@@ -58,10 +58,10 @@ const HelpView: React.FC = () => {
       </div>
 
       <div className="space-y-4">
-        {/* Token 用量统计 — 暂时隐藏，待 token 计算逻辑统一后恢复 */}
-        {/* <Section id="token-usage" title="Token 用量（近 7 日）" icon={<BarChart3 size={ICON_SIZES.xl} className="text-blue-600" />}>
+        {/* Token 用量统计 */}
+        <Section id="token-usage" title="Token 用量（近 7 日）" icon={<BarChart3 size={ICON_SIZES.xl} className="text-blue-600" />}>
           <TokenUsageChart />
-        </Section> */}
+        </Section>
 
         {/* 快速开始 */}
         <Section id="quick-start" title="快速开始" icon={<Rocket size={ICON_SIZES.xl} className="text-blue-600" />}>

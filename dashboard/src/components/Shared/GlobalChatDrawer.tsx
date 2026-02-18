@@ -316,13 +316,16 @@ export const GlobalChatPanel: React.FC = () => {
     if (applying || !currentRefineId || !refineCtx) return;
     setApplying(true);
     try {
-      await api.refineApply(currentRefineId, lastPrompt);
+      // 从最后一条带 preview 的 assistant 消息中取出预览数据，直接应用而非重调 AI
+      const lastPreview = [...messages].reverse().find(m => m.role === 'assistant' && m.preview)?.preview;
+      await api.refineApply(currentRefineId, lastPrompt, lastPreview);
       setApplied(prev => new Set(prev).add(currentRefineId));
       refineCtx.onCandidateUpdated?.(currentRefineId);
       setMessages(prev => [...prev, { id: uid(), role: 'system', content: '✅ 变更已应用到候选！', timestamp: Date.now() }]);
       notify('候选内容已更新为润色后版本', { title: '润色已应用' });
     } catch (err: any) {
-      notify(err.response?.data?.error || err.message, { title: '应用失败', type: 'error' });
+      const raw = err.response?.data?.error;
+      notify(typeof raw === 'string' ? raw : raw?.message || err.message, { title: '应用失败', type: 'error' });
     } finally { setApplying(false); }
   }, [applying, currentRefineId, lastPrompt, refineCtx]);
 

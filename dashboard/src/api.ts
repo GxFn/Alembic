@@ -206,11 +206,26 @@ function parseFrontmatter(markdownContent: string) {
 
 /** 构建 POST /knowledge 请求体（从前端 item 转为 API payload） */
 function toCandidatePayload(item: any, targetName: string, source: string) {
+  const categoryVal = Array.isArray(item.category) ? item.category[0] : item.category || targetName || 'general';
   return {
-    code: item.content?.pattern || '',
+    // ── POST /api/v1/knowledge 必填字段 ──
+    title: item.title || 'Untitled',
+    content: item.content || { pattern: item.content?.pattern || '', markdown: '', rationale: '' },
+    // ── 候选元数据 ──
+    description: item.description || '',
+    trigger: item.trigger || '',
     language: item.language || 'swift',
-    category: Array.isArray(item.category) ? item.category[0] : item.category || targetName || 'general',
+    category: categoryVal,
+    kind: item.kind || 'pattern',
+    knowledgeType: item.knowledgeType || 'code-pattern',
+    complexity: item.complexity || 'intermediate',
     source: source || 'manual',
+    lifecycle: 'pending',
+    tags: item.tags || [],
+    sourceFile: item.sourceFile || '',
+    moduleName: item.moduleName || '',
+    headers: item.headers || [],
+    headerPaths: item.headerPaths || [],
     reasoning: {
       whyStandard: item.description || item.title || 'Extracted from project',
       sources: [source || 'unknown'],
@@ -221,7 +236,7 @@ function toCandidatePayload(item: any, targetName: string, source: string) {
       title: item.title || '',
       trigger: item.trigger || '',
       description: item.description || '',
-      category: Array.isArray(item.category) ? item.category[0] : item.category || '',
+      category: categoryVal,
       headers: item.headers || [],
       headerPaths: item.headerPaths || [],
       moduleName: item.moduleName || '',
@@ -552,9 +567,9 @@ export const api = {
     return res.data?.data || {};
   },
 
-  /** 对话式润色 — 应用：确认写入变更 */
-  async refineApply(candidateId: string, userPrompt?: string): Promise<{ refined: number; total: number; candidate: any }> {
-    const res = await http.post('/candidates/refine-apply', { candidateId, userPrompt }, { timeout: 120000 });
+  /** 对话式润色 — 应用：确认写入变更（优先传 preview 避免二次 AI 调用） */
+  async refineApply(candidateId: string, userPrompt?: string, preview?: Record<string, any>): Promise<{ refined: number; total: number; candidate: any }> {
+    const res = await http.post('/candidates/refine-apply', { candidateId, userPrompt, preview }, { timeout: 120000 });
     return res.data?.data || {};
   },
 

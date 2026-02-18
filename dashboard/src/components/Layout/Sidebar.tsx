@@ -181,11 +181,11 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </>
         )}
-        {/* Token 消耗指标 — 暂时隐藏，待 token 计算逻辑统一后恢复 */}
-        {/* {tokenSummary && tokenSummary.total_tokens > 0 && (
+        {/* Token 消耗指标 */}
+        {tokenSummary && tokenSummary.total_tokens > 0 && (
           <button
             onClick={() => navigateToTab('help')}
-            title={collapsed ? `7日 Token: ${fmtTokens(tokenSummary.total_tokens)} (${tokenSummary.call_count} 次)` : undefined}
+            title={collapsed ? `7日 Token: ${fmtTokens(tokenSummary.total_tokens)} (${tokenSummary.call_count} 次 AI 调用)` : undefined}
             className={`w-full flex items-center ${collapsed ? 'justify-center py-2 mb-1' : 'gap-2 px-2 py-1.5 mb-2'} rounded-lg transition-colors ${isDarkMode ? 'bg-slate-700/30 hover:bg-slate-700/50 text-slate-400' : 'bg-amber-50 hover:bg-amber-100 text-amber-700'}`}
           >
             <Zap size={collapsed ? ICON_SIZES.lg : ICON_SIZES.sm} className={isDarkMode ? 'text-amber-400' : 'text-amber-500'} />
@@ -194,12 +194,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <span className="text-[10px] font-bold uppercase tracking-wider">7日 Token</span>
                 <span className={`text-xs font-mono font-semibold ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>
                   {fmtTokens(tokenSummary.total_tokens)}
-                  <span className={`ml-1 text-[10px] font-normal ${isDarkMode ? 'text-slate-500' : 'text-amber-600/70'}`}>({tokenSummary.call_count}次)</span>
+                  <span className={`ml-1 text-[10px] font-normal ${isDarkMode ? 'text-slate-500' : 'text-amber-600/70'}`}>({tokenSummary.call_count}次调用)</span>
                 </span>
               </div>
             )}
           </button>
-        )} */}
+        )}
 
 
       </div>

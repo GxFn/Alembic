@@ -827,7 +827,9 @@ const App: React.FC = () => {
     setScanResults(prev => prev.filter((_, i) => i !== index));
     fetchData();
   } catch (err: any) {
-    notify(err.response?.data?.error || '创建 Candidate 失败', { type: 'error' });
+    const raw = err.response?.data?.error;
+    const msg = typeof raw === 'string' ? raw : raw?.message || '创建 Candidate 失败';
+    notify(msg, { type: 'error' });
   }
   };
 
