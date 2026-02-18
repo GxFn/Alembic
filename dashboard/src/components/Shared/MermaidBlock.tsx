@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState, useId } from 'react';
+import React, { useEffect, useState } from 'react';
 import mermaid from 'mermaid';
 
 // 全局只初始化一次
 let mermaidInitialized = false;
+let idCounter = 0;
 
 function ensureMermaidInit() {
   if (mermaidInitialized) return;
@@ -19,21 +20,24 @@ interface MermaidBlockProps {
   code: string;
 }
 
+/**
+ * Mermaid 图表渲染组件
+ * 与 ReactMarkdown 完全独立——由外层 splitMermaidSegments 拆分并直接挂载
+ */
 const MermaidBlock: React.FC<MermaidBlockProps> = ({ code }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string>('');
-  const uniqueId = useId().replace(/:/g, '_');
 
   useEffect(() => {
     let cancelled = false;
+    const id = `mermaid_${idCounter++}`;
 
     async function render() {
       ensureMermaidInit();
       try {
-        const { svg: rendered } = await mermaid.render(`mermaid_${uniqueId}`, code.trim());
+        const { svg: result } = await mermaid.render(id, code.trim());
         if (!cancelled) {
-          setSvg(rendered);
+          setSvg(result);
           setError('');
         }
       } catch (err: any) {
@@ -41,22 +45,20 @@ const MermaidBlock: React.FC<MermaidBlockProps> = ({ code }) => {
           setError(err?.message || 'Mermaid render failed');
           setSvg('');
         }
-        // mermaid.render 失败时会在 DOM 中插入错误节点，清理掉
-        const errNode = document.getElementById(`dmermaid_${uniqueId}`);
-        if (errNode) errNode.remove();
+        // mermaid.render 失败时可能在 DOM 中残留错误容器，清理
+        try { document.getElementById('d' + id)?.remove(); } catch {}
       }
     }
 
     render();
     return () => { cancelled = true; };
-  }, [code, uniqueId]);
+  }, [code]);
 
   if (error) {
-    // 渲染失败时回退显示原始代码
     return (
-      <pre className="my-4 p-4 bg-slate-800 text-slate-200 rounded-lg overflow-x-auto text-sm font-mono">
-        <code>{code}</code>
-      </pre>
+      <div className="my-4 p-4 bg-slate-800 text-slate-200 rounded-lg overflow-x-auto text-sm font-mono whitespace-pre-wrap">
+        {code}
+      </div>
     );
   }
 
@@ -70,7 +72,6 @@ const MermaidBlock: React.FC<MermaidBlockProps> = ({ code }) => {
 
   return (
     <div
-      ref={containerRef}
       className="my-5 flex justify-center overflow-x-auto rounded-lg border border-slate-200 bg-white p-4"
       dangerouslySetInnerHTML={{ __html: svg }}
     />

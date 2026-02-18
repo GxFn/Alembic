@@ -63,7 +63,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
   const noRadius = className.includes('!rounded-none');
   const normalized = normalizeCode(code);
   return (
-  <div className={`rounded-xl overflow-hidden text-sm ${className}`}>
+  <div className={`rounded-xl overflow-x-auto text-sm min-w-0 ${className}`}>
     <SyntaxHighlighter
     language={lang}
     style={oneDark}
@@ -74,8 +74,9 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
       fontSize: '0.8125rem',
       lineHeight: 1.5,
       borderRadius: noRadius ? 0 : '0.75rem',
+      overflowX: 'auto',
     }}
-    codeTagProps={{ style: { fontFamily: 'ui-monospace, monospace' } }}
+    codeTagProps={{ className: 'language-highlighted', style: { fontFamily: 'ui-monospace, monospace' } }}
     PreTag="div"
     >
     {normalized}

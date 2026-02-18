@@ -84,13 +84,15 @@ const PHASE_ORDER = [
 
 /** 文件类型 → 图标 & 颜色 */
 const FILE_TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  'index':        { icon: BookOpen,   color: 'text-blue-600',    label: '项目概述' },
-  'architecture': { icon: Layers,     color: 'text-violet-600',  label: '架构总览' },
-  'components':   { icon: FileCode,   color: 'text-emerald-600', label: '组件清单' },
-  'patterns':     { icon: Sparkles,   color: 'text-amber-600',   label: '代码模式' },
-  'module':       { icon: FolderOpen, color: 'text-cyan-600',    label: '模块文档' },
-  'document':     { icon: FileText,   color: 'text-orange-600',  label: '开发文档' },
-  '_index':       { icon: Hash,       color: 'text-slate-500',   label: '目录索引' },
+  'index':           { icon: BookOpen,   color: 'text-blue-600',    label: '项目概述' },
+  'architecture':    { icon: Layers,     color: 'text-violet-600',  label: '架构总览' },
+  'getting-started': { icon: FileCode,   color: 'text-emerald-600', label: '快速上手' },
+  'protocols':       { icon: Sparkles,   color: 'text-amber-600',   label: '协议与组件' },
+  'components':      { icon: FileCode,   color: 'text-emerald-600', label: '组件清单' },
+  'patterns':        { icon: Sparkles,   color: 'text-amber-600',   label: '代码模式' },
+  'module':          { icon: FolderOpen, color: 'text-cyan-600',    label: '模块文档' },
+  'document':        { icon: FileText,   color: 'text-orange-600',  label: '开发文档' },
+  '_index':          { icon: Hash,       color: 'text-slate-500',   label: '目录索引' },
 };
 
 function getFileTypeConfig(filePath: string) {
@@ -596,12 +598,15 @@ const ContentPlaceholder: React.FC<{
   progress?: number;
   message?: string;
 }> = ({ meta, onSelectFile, isGenerating, progress, message }) => {
-  const quickLinks = [
-    { path: 'index.md',        label: '项目概述', desc: '项目信息、技术栈与数据统计', icon: BookOpen, color: 'bg-blue-50 text-blue-600 border-blue-200' },
-    { path: 'architecture.md', label: '架构总览', desc: '模块依赖图、SPM Target 结构', icon: Layers,   color: 'bg-violet-50 text-violet-600 border-violet-200' },
-    { path: 'components.md',   label: '组件清单', desc: '核心类、协议和继承关系',      icon: FileCode, color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-    { path: 'patterns.md',     label: '代码模式', desc: '知识库 Recipes 中的模式总结', icon: Sparkles, color: 'bg-amber-50 text-amber-600 border-amber-200' },
+  /* 快捷入口：从实际 Wiki 文件列表中匹配，只显示存在的文件 */
+  const quickLinkCandidates = [
+    { path: 'index.md',          label: '项目概述', desc: '项目信息、技术栈与数据统计',   icon: BookOpen,  color: 'bg-blue-50 text-blue-600 border-blue-200' },
+    { path: 'architecture.md',   label: '架构总览', desc: '模块依赖图、SPM Target 结构', icon: Layers,    color: 'bg-violet-50 text-violet-600 border-violet-200' },
+    { path: 'getting-started.md',label: '快速上手', desc: '构建、运行与入口分析',         icon: FileCode,  color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+    { path: 'protocols.md',      label: '协议与组件', desc: '核心协议、委托和组件关系',   icon: Sparkles,  color: 'bg-amber-50 text-amber-600 border-amber-200' },
   ];
+  const fileSet = new Set(meta?.files?.map((f: any) => f.path || f.name) ?? []);
+  const quickLinks = quickLinkCandidates.filter(l => fileSet.size === 0 || fileSet.has(l.path));
 
   return (
     <div className="p-8 overflow-y-auto flex-1">

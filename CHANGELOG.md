@@ -4,6 +4,18 @@
 
 ---
 
+## [2.16.1] - 2026-02-18
+
+### Wiki 修复与改进
+
+- **代码高亮样式修复**：CodeBlock 的 `<code>` 标签添加 `language-highlighted` 类名，解决 Wiki CSS `:not([class*="language-"])` 选择器误匹配导致代码块出现浅色背景/边框的问题
+- **Mermaid 渲染架构分离**：`splitMermaidSegments()` 在 ReactMarkdown 之前提取 Mermaid 块，独立渲染为 SVG，避免 DOM 时序问题
+- **硬换行处理修复**：`enableMarkdownHardBreaks` 改为逐行处理、跳过围栏块，防止代码块内容被意外修改
+- **Wiki 快捷入口修复**：首页「组件清单」「代码模式」替换为实际存在的「快速上手」「协议与组件」，并根据 meta.json 动态过滤
+- **pre → div 替换**：ReactMarkdown 的 `<pre>` 用 `<div className="min-w-0">` 替换,避免 `white-space:pre` 溢出容器
+
+---
+
 ## [2.16.0] - 2026-02-18
 
 ### Wiki 渲染与布局优化
