@@ -333,13 +333,13 @@ class CombinedSearchWindowController: NSObject, NSTableViewDataSource, NSTableVi
         let cellView = NSTableCellView()
         cellView.wantsLayer = true
         
-        // 标题 - 支持两行显示
+        // 标题 - 自动折行，最多两行，右侧留出足够边距
         let textField = NSTextField(labelWithString: item.title)
         textField.font = NSFont.systemFont(ofSize: 14, weight: .medium)
         textField.textColor = .labelColor
-        textField.lineBreakMode = .byWordWrapping  // 改为自动换行
-        textField.maximumNumberOfLines = 2  // 最多显示两行
-        textField.frame = NSRect(x: 12, y: 24, width: tableView.bounds.width - 24, height: 36)  // 增加高度到36，调整y位置
+        textField.lineBreakMode = .byWordWrapping
+        textField.maximumNumberOfLines = 2  // 必须两行保证显示全
+        textField.frame = NSRect(x: 12, y: 24, width: tableView.bounds.width - 56, height: 36)
         cellView.addSubview(textField)
         
         // 说明
@@ -356,7 +356,7 @@ class CombinedSearchWindowController: NSObject, NSTableViewDataSource, NSTableVi
             subtitleField.font = NSFont.systemFont(ofSize: 11, weight: .regular)
             subtitleField.textColor = .secondaryLabelColor
             subtitleField.lineBreakMode = .byTruncatingTail
-            subtitleField.frame = NSRect(x: 12, y: 8, width: tableView.bounds.width - 24, height: 16)  // 调整y位置为8
+            subtitleField.frame = NSRect(x: 12, y: 8, width: tableView.bounds.width - 56, height: 16)
             cellView.addSubview(subtitleField)
         }
         
