@@ -78,3 +78,211 @@
     opacity: 1;
   }
 }
+
+/* ═══════════════════════════════════════════════════════
+ * Wiki Reader — GitHub / Docusaurus 风格 Markdown 排版
+ * 参考: github-markdown-css, @tailwindcss/typography
+ * ═══════════════════════════════════════════════════════ */
+
+.wiki-reader {
+  font-size: 15px;
+  line-height: 1.75;
+  color: #1e293b; /* slate-800 */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* ── 段落和正文 ── */
+.wiki-reader p {
+  margin-bottom: 1em;
+}
+.wiki-reader p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── 标题层级 (GitHub 风格分隔线 + Docusaurus 间距) ── */
+.wiki-reader h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 2rem 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+.wiki-reader h1:first-child {
+  margin-top: 0;
+}
+
+.wiki-reader h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  margin: 1.75rem 0 0.75rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: #0f172a;
+}
+
+.wiki-reader h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.5rem;
+  color: #1e293b;
+}
+
+.wiki-reader h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+  color: #334155;
+}
+
+/* ── 列表 (适当缩进 + 项间距) ── */
+.wiki-reader ul,
+.wiki-reader ol {
+  padding-left: 1.625em;
+  margin-bottom: 1em;
+}
+.wiki-reader li {
+  margin-bottom: 0.25em;
+}
+.wiki-reader li > p {
+  margin-bottom: 0.5em;
+}
+.wiki-reader li > ul,
+.wiki-reader li > ol {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+/* ── 引用块 (GitHub 蓝色边框 + 柔和背景) ── */
+.wiki-reader blockquote {
+  border-left: 4px solid #93c5fd;
+  background: #eff6ff;
+  border-radius: 0 8px 8px 0;
+  padding: 0.75em 1em;
+  margin: 1.25em 0;
+  color: #475569;
+}
+.wiki-reader blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── 行内代码 ── */
+.wiki-reader code:not([class*="language-"]) {
+  padding: 0.15em 0.4em;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Cascadia Code', monospace;
+  color: #1e293b;
+}
+
+/* ── 代码块 (额外间距) ── */
+.wiki-reader pre {
+  margin: 1.25em 0;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+/* ── 表格 (GitHub 条纹 + 圆角) ── */
+.wiki-reader table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.25em 0;
+  font-size: 0.875rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.wiki-reader thead {
+  background: #f8fafc;
+}
+.wiki-reader thead th {
+  padding: 0.6em 1em;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+}
+.wiki-reader tbody tr {
+  transition: background-color 0.15s ease;
+}
+.wiki-reader tbody tr:hover {
+  background: #f8fafc;
+}
+.wiki-reader tbody td {
+  padding: 0.6em 1em;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  vertical-align: top;
+}
+.wiki-reader tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── 水平线 ── */
+.wiki-reader hr {
+  border: none;
+  height: 1px;
+  background: #e2e8f0;
+  margin: 2em 0;
+}
+
+/* ── 链接 ── */
+.wiki-reader a {
+  color: #2563eb;
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+.wiki-reader a:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+  text-decoration-color: rgba(59, 130, 246, 0.4);
+}
+
+/* ── 图片 ── */
+.wiki-reader img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin: 1em 0;
+}
+
+/* ── 加粗 & 斜体 ── */
+.wiki-reader strong {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* ── 删除线 (GFM) ── */
+.wiki-reader del {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+/* ── 任务列表 (GFM) ── */
+.wiki-reader input[type="checkbox"] {
+  margin-right: 0.5em;
+  vertical-align: middle;
+}
+.wiki-reader li:has(> input[type="checkbox"]) {
+  list-style-type: none;
+  margin-left: -1.625em;
+}
+
+/* ── 目录链接列表样式优化 ── */
+.wiki-reader ol a,
+.wiki-reader ul a {
+  text-decoration: none;
+}
+.wiki-reader ol a:hover,
+.wiki-reader ul a:hover {
+  text-decoration: underline;
+}

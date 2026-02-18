@@ -28,6 +28,7 @@ import KnowledgeView from './components/Views/KnowledgeView';
 import SkillsView from './components/Views/SkillsView';
 import BootstrapProgressView from './components/Views/BootstrapProgressView';
 import XcodeSimulator from './pages/XcodeSimulator';
+import WikiView from './components/Views/WikiView';
 import RecipeEditor from './components/Modals/RecipeEditor';
 import CreateModal from './components/Modals/CreateModal';
 import SearchModal from './components/Modals/SearchModal';
@@ -923,7 +924,7 @@ const App: React.FC = () => {
       />
     )}
 
-    <div className={`flex-1 overflow-y-auto ${activeTab === 'editor' ? '' : 'p-8'}`}>
+    <div className={`flex-1 overflow-y-auto ${activeTab === 'editor' || activeTab === 'wiki' ? '' : 'p-8'}`}>
       {loading ? (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -934,6 +935,7 @@ const App: React.FC = () => {
         openRecipeEdit={openRecipeEdit} 
         handleDeleteRecipe={handleDeleteRecipe}
         onRefresh={fetchData}
+        idTitleMap={data?.idTitleMap}
         currentPage={recipePage}
         onPageChange={setRecipePage}
         pageSize={recipePageSize}
@@ -1011,7 +1013,7 @@ const App: React.FC = () => {
       />
       </>
       ) : activeTab === 'knowledge' ? (
-      <KnowledgeView onRefresh={handleRefreshProject} />
+      <KnowledgeView onRefresh={handleRefreshProject} idTitleMap={data?.idTitleMap} />
       ) : activeTab === 'depgraph' ? (
       <DepGraphView />
       ) : activeTab === 'knowledgegraph' ? (
@@ -1038,6 +1040,8 @@ const App: React.FC = () => {
         isSavingRecipe={isSavingRecipe}
         handleRefreshProject={handleRefreshProject}
       />
+      ) : activeTab === 'wiki' ? (
+      <WikiView />
       ) : activeTab === 'editor' ? (
       <XcodeSimulator />
       ) : activeTab === 'help' ? (

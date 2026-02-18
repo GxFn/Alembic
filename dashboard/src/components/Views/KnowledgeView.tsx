@@ -121,11 +121,12 @@ const ConfidenceRing: React.FC<{ value: number | null | undefined; size?: number
 
 interface KnowledgeViewProps {
   onRefresh?: () => void;
+  idTitleMap?: Record<string, string>;
 }
 
 /* ═══ 组件 ═════════════════════════════════════════════ */
 
-const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
+const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: idTitleMapProp }) => {
   // ── 状态 ──
   const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
   const [stats, setStats] = useState<KnowledgeStatsResponse | null>(null);
@@ -206,6 +207,22 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
     fetchStats();
     onRefresh?.();
   }, [fetchEntries, fetchStats, onRefresh]);
+
+  // ID → 标题 查找表 (将关联关系中的 UUID 解析为可读标题)
+  const titleLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    // 全局 map (包含所有 lifecycle 的 entries)
+    if (idTitleMapProp) {
+      for (const [id, title] of Object.entries(idTitleMapProp)) {
+        map.set(id, title);
+      }
+    }
+    // 当前页本地 entries 补充
+    for (const e of entries) {
+      if (e.id && e.title) map.set(e.id, e.title);
+    }
+    return map;
+  }, [entries, idTitleMapProp]);
 
   // ── 生命周期操作 ──
   const handleLifecycleAction = async (entry: KnowledgeEntry, action: string, reason?: string) => {
@@ -666,11 +683,15 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh }) => {
                         <div key={type} className="flex items-start gap-2">
                           <span className="text-[10px] font-mono text-slate-500 w-14 shrink-0 pt-0.5 uppercase">{type}</span>
                           <div className="flex flex-wrap gap-1">
-                            {arr.map((rel: any, ri: number) => (
-                              <span key={ri} className="inline-flex items-center gap-1 px-1.5 py-0.5 border rounded text-[10px] font-mono bg-purple-50 border-purple-200 text-purple-700">
-                                {rel.target || (typeof rel === 'string' ? rel : JSON.stringify(rel))}
+                            {arr.map((rel: any, ri: number) => {
+                              const rawTarget = rel.target || (typeof rel === 'string' ? rel : JSON.stringify(rel));
+                              const displayName = titleLookup.get(rawTarget) || rawTarget;
+                              return (
+                              <span key={ri} className="inline-flex items-center gap-1 px-1.5 py-0.5 border rounded text-[10px] font-mono bg-purple-50 border-purple-200 text-purple-700" title={rawTarget}>
+                                {displayName}
                               </span>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       );

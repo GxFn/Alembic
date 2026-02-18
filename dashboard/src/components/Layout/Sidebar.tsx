@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, Code, Edit3, LogOut, User, ShieldCheck, Eye, Fingerprint, BookOpen, Sparkles, PanelLeftClose, PanelLeftOpen, Zap, Library } from 'lucide-react';
+import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, Code, Edit3, LogOut, User, ShieldCheck, Eye, Fingerprint, BookOpen, Sparkles, PanelLeftClose, PanelLeftOpen, Zap, Library, FileText } from 'lucide-react';
 import { TabType } from '../../constants';
 import { ICON_SIZES } from '../../constants/icons';
 import api from '../../api';
@@ -91,6 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { tab: 'knowledgegraph', icon: Share2, label: '知识图谱' },
     { tab: 'guard', icon: Shield, label: 'Guard' },
     { tab: 'skills', icon: BookOpen, label: 'Skills', badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined, badgeColor: 'bg-amber-100 text-amber-700' },
+    { tab: 'wiki', icon: FileText, label: 'Repo Wiki' },
     { tab: 'ai', icon: MessageSquare, label: 'AI Assistant' },
     { tab: 'editor', icon: Edit3, label: '编辑器（测试）' },
     { tab: 'help', icon: HelpCircle, label: '使用说明' },
@@ -180,8 +181,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           </>
         )}
-        {/* Token 消耗指标 */}
-        {tokenSummary && tokenSummary.total_tokens > 0 && (
+        {/* Token 消耗指标 — 暂时隐藏，待 token 计算逻辑统一后恢复 */}
+        {/* {tokenSummary && tokenSummary.total_tokens > 0 && (
           <button
             onClick={() => navigateToTab('help')}
             title={collapsed ? `7日 Token: ${fmtTokens(tokenSummary.total_tokens)} (${tokenSummary.call_count} 次)` : undefined}
@@ -198,7 +199,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               </div>
             )}
           </button>
-        )}
+        )} */}
 
 
       </div>

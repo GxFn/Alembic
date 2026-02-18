@@ -237,6 +237,31 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
     return { total, avgConfidence, withCode, sources };
   }, [effectiveTarget, data?.candidates]);
 
+  // ID → 标题 查找表 (用于将关联关系中的 UUID 解析为可读标题)
+  const titleLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    // 全局 map (包含所有 lifecycle 的 entries)
+    if (data?.idTitleMap) {
+      for (const [id, title] of Object.entries(data.idTitleMap)) {
+        map.set(id, title);
+      }
+    }
+    // 本地候选补充
+    if (data?.candidates) {
+      for (const group of Object.values(data.candidates)) {
+        for (const item of group.items) {
+          if (item.id && item.title) map.set(item.id, item.title);
+        }
+      }
+    }
+    if (data?.recipes) {
+      for (const r of data.recipes) {
+        if (r.id && r.name) map.set(r.id, r.name.replace(/\.md$/i, ''));
+      }
+    }
+    return map;
+  }, [data?.idTitleMap, data?.candidates, data?.recipes]);
+
   /** AI 补齐单个候选语义字段 */
   const handleEnrichCandidate = useCallback(async (candidateId: string) => {
     if (enrichingIds.has(candidateId)) return;
@@ -722,7 +747,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                 title="点击对比相似 Recipe"
                               >
                                 <GitCompare size={10} />
-                                相似 {String(firstRelated.target || '').replace(/\.md$/i, '')}
+                                相似 {titleLookup.get(String(firstRelated.target || '')) || String(firstRelated.target || '').replace(/\.md$/i, '')}
                               </button>
                             )}
                           </div>
@@ -1210,7 +1235,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                   <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0 uppercase">
                                     {rel.type}
                                   </span>
-                                  <span className="font-medium text-slate-700">{rel.target}</span>
+                                  <span className="font-medium text-slate-700">{titleLookup.get(rel.target) || rel.target}</span>
                                   {rel.description && <span className="text-slate-400">— {rel.description}</span>}
                                 </div>
                               ))}

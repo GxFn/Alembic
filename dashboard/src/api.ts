@@ -284,6 +284,12 @@ export const api = {
     // AI Config
     const aiConfig = aiConfigRes.data?.data || { provider: '', model: '' };
 
+    // 全局 ID→标题 查找表 (将 UUID 关联解析为可读标题)
+    const idTitleMap: Record<string, string> = {};
+    for (const e of allEntries) {
+      if (e.id && e.title) idTitleMap[e.id] = e.title;
+    }
+
     return {
       rootSpec: { list: [] },
       recipes,
@@ -291,6 +297,7 @@ export const api = {
       projectRoot: '',
       watcherStatus: 'active',
       aiConfig: { provider: aiConfig.provider || '', model: aiConfig.model || '' },
+      idTitleMap,
     };
   },
 
@@ -968,6 +975,41 @@ Skill 文档格式要求：
   async knowledgeUpdateQuality(id: string): Promise<{ quality: any }> {
     const res = await http.patch(`/knowledge/${id}/quality`);
     return res.data?.data || { quality: {} };
+  },
+
+  // ── Wiki ──────────────────────────────────────────────
+
+  /** 触发 Wiki 全量生成 */
+  async wikiGenerate(): Promise<void> {
+    await http.post('/wiki/generate');
+  },
+
+  /** 触发 Wiki 增量更新 */
+  async wikiUpdate(): Promise<void> {
+    await http.post('/wiki/update');
+  },
+
+  /** 中止 Wiki 生成 */
+  async wikiAbort(): Promise<void> {
+    await http.post('/wiki/abort');
+  },
+
+  /** 获取 Wiki 状态 */
+  async wikiStatus(): Promise<{ task: any; wiki?: any }> {
+    const res = await http.get('/wiki/status');
+    return res.data?.data || { task: { status: 'idle' } };
+  },
+
+  /** 列出 Wiki 文件 */
+  async wikiFiles(): Promise<{ files: Array<{ path: string; name: string; size: number; modifiedAt: string }>; exists: boolean }> {
+    const res = await http.get('/wiki/files');
+    return res.data?.data || { files: [], exists: false };
+  },
+
+  /** 读取 Wiki 文件内容 */
+  async wikiFileContent(filePath: string): Promise<{ path: string; content: string; size: number }> {
+    const res = await http.get(`/wiki/file/${filePath}`);
+    return res.data?.data || { path: filePath, content: '', size: 0 };
   },
 };
 

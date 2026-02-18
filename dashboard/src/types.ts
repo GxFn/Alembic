@@ -107,6 +107,8 @@ export interface ProjectData {
   watcherStatus?: string;
   /** 当前使用的 AI 提供商与模型（供 UI 展示） */
   aiConfig?: { provider: string; model: string };
+  /** 全局 ID→标题 查找表 (UUID → 人类可读标题) */
+  idTitleMap?: Record<string, string>;
 }
 
 export interface SPMTarget {

@@ -220,35 +220,53 @@ const DepGraphView: React.FC = () => {
   }
 
   return (
-  <div className="w-full max-w-[1400px] mx-auto space-y-6">
-    {/* 标题行 */}
-    <div className="flex flex-wrap items-center justify-between gap-4">
+  <div className="flex-1 flex flex-col overflow-hidden">
+    {/* ── 页面头部 ── */}
+    <div className="mb-4 flex justify-between items-center shrink-0">
     <div className="flex items-center gap-3">
-      <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-50 border border-blue-100">
-        <Layers size={ICON_SIZES.lg} className="text-blue-600" />
+      <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center">
+      <Layers className="text-blue-600" size={20} />
       </div>
       <div>
-      <h2 className="text-xl font-bold text-slate-900">项目依赖关系图</h2>
-      {data.projectRoot && (
-        <p className="text-sm text-slate-500 mt-0.5">
-        项目根: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{data.projectRoot}</code>
-        {data.generatedAt && (
-          <span className="ml-2">· 生成于 {new Date(data.generatedAt).toLocaleString()}</span>
+      <h2 className="text-xl font-bold text-slate-800">项目依赖关系图</h2>
+      <p className="text-xs text-slate-400 mt-0.5">
+        SPM 包依赖结构可视化
+        {data.projectRoot && (
+        <span className="ml-1">· {data.projectRoot}</span>
         )}
-        </p>
+      </p>
+      </div>
+    </div>
+    <div className="flex items-center gap-2">
+      <button
+      type="button"
+      onClick={() => {
+        fetchGraph();
+      }}
+      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100"
+      >
+      <RefreshCw size={14} /> 刷新
+      </button>
+      <div className="flex items-center gap-3 text-xs">
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
+        <Layers size={14} className="text-slate-400" />
+        <span className="text-slate-500">包 <strong className="text-slate-700">{nodes.length}</strong></span>
+      </div>
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
+        <span className="text-emerald-500">依赖</span>
+        <strong className="text-emerald-700">{edges.length}</strong>
+      </div>
+      {data.generatedAt && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100">
+        <span className="text-blue-500">{new Date(data.generatedAt).toLocaleString('zh-CN')}</span>
+        </div>
       )}
       </div>
     </div>
-    <button
-      type="button"
-      onClick={() => {
-      fetchGraph();
-      }}
-      className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-sm shadow-sm transition-colors"
-    >
-      <RefreshCw size={ICON_SIZES.md} /> 刷新
-    </button>
     </div>
+
+    {/* ── 内容区域 ── */}
+    <div className="flex-1 overflow-y-auto pr-1 space-y-6">
 
     {/* 图区域：金字塔分层（不画连线），点击节点在浮窗显示依赖 */}
     <div className="rounded-xl border border-slate-200 bg-slate-50/50 overflow-auto shadow-sm min-h-[480px] flex items-center justify-center relative">
@@ -424,6 +442,7 @@ const DepGraphView: React.FC = () => {
       Target 级节点格式：<span className="font-mono">Package::Target</span>
     </p>
     )}
+    </div>
     </div>
   </div>
   );

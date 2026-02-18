@@ -169,40 +169,61 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
   const totalViolations = runs.reduce((s, r) => s + r.violations.length, 0);
 
   return (
-  <div className="p-6">
-    <div className="flex items-center justify-between mb-6">
-    <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-      <Shield size={ICON_SIZES.xl} className="text-blue-600" />
-      Guard 规则与违反记录
-    </h2>
+  <div className="flex-1 flex flex-col overflow-hidden">
+    {/* ── 页面头部 ── */}
+    <div className="mb-4 flex justify-between items-center shrink-0">
     <div className="flex items-center gap-3">
+      <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center">
+      <Shield className="text-blue-600" size={20} />
+      </div>
+      <div>
+      <h2 className="text-xl font-bold text-slate-800">Guard 规则与违反记录</h2>
+      <p className="text-xs text-slate-400 mt-0.5">静态规则检查 · 自动审计代码变更</p>
+      </div>
+    </div>
+    <div className="flex items-center gap-2">
       <a
       href={GITHUB_ISSUES_NEW_GUARD_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100"
       >
-      <ExternalLink size={ICON_SIZES.md} /> 提交误报/建议
+      <ExternalLink size={14} /> 提交误报
       </a>
       <button
       type="button"
       onClick={() => setShowAiWriteRule(!showAiWriteRule)}
-      className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100"
       >
-      {showAiWriteRule ? <ChevronDown size={ICON_SIZES.md} /> : <ChevronRight size={ICON_SIZES.md} />}
+      {showAiWriteRule ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
       AI 写入规则
       </button>
       {runs.length > 0 && (
       <button
         type="button"
         onClick={handleClearViolations}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-red-600 bg-red-50 border border-red-200 hover:bg-red-100"
       >
-        <Trash2 size={ICON_SIZES.sm} /> 清空历史
+        <Trash2 size={14} /> 清空历史
       </button>
       )}
+      <div className="flex items-center gap-3 text-xs">
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
+        <Shield size={14} className="text-slate-400" />
+        <span className="text-slate-500">规则 <strong className="text-slate-700">{ruleEntries.length}</strong> 条</span>
+      </div>
+      {totalViolations > 0 && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-100">
+        <AlertTriangle size={14} className="text-amber-400" />
+        <span className="text-amber-600">违反 <strong className="text-amber-700">{totalViolations}</strong></span>
+        </div>
+      )}
+      </div>
     </div>
     </div>
+
+    {/* ── 内容区域 ── */}
+    <div className="flex-1 overflow-y-auto pr-1">
 
     {/* AI 写入规则：默认折叠，点击标题行展开 */}
     {showAiWriteRule && (
@@ -507,6 +528,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
       </div>
     )}
     </section>
+    </div>
   </div>
   );
 };

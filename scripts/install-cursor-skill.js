@@ -236,10 +236,8 @@ function buildSpmmapSummary(projectRoot) {
 for (const name of skillDirs) {
   const src = path.join(skillsSource, name);
   const dest = path.join(skillsTarget, name);
-  if (fs.existsSync(dest)) {
-  fs.rmSync(dest, { recursive: true });
-  }
-  fs.cpSync(src, dest, { recursive: true });
+  // 合并模式：只覆盖源文件中存在的文件，保留用户在 skill 目录下自己添加的文件
+  fs.cpSync(src, dest, { recursive: true, force: true });
   console.log(`  ✅ ${name}`);
 
   if (name === 'autosnippet-recipes') {

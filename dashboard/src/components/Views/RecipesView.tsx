@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Edit3, Trash2, Tag, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BookOpenCheck, ChevronLeft, ChevronRight, Eye, Save, Loader2, Link2, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Maximize2, Minimize2, Code2, Hash, Layers, Globe, FolderOpen } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { Recipe } from '../../types';
@@ -34,6 +34,7 @@ interface RecipesViewProps {
   openRecipeEdit: (recipe: Recipe) => void;
   handleDeleteRecipe: (name: string) => void;
   onRefresh?: () => void;
+  idTitleMap?: Record<string, string>;
   currentPage?: number;
   onPageChange?: (page: number) => void;
   pageSize?: number;
@@ -86,6 +87,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   recipes,
   handleDeleteRecipe,
   onRefresh,
+  idTitleMap: idTitleMapProp,
   currentPage: controlledPage,
   onPageChange: controlledOnPageChange,
   pageSize: controlledPageSize,
@@ -210,6 +212,23 @@ const RecipesView: React.FC<RecipesViewProps> = ({
     const normalized = name.replace(/\.md$/i, '').toLowerCase();
     return recipes.find(r => getDisplayName(r).toLowerCase() === normalized);
   };
+
+  // ID → 标题 查找表 (将关联关系中的 UUID 解析为可读标题)
+  const titleLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    // 全局 map (包含所有 lifecycle 的 entries)
+    if (idTitleMapProp) {
+      for (const [id, title] of Object.entries(idTitleMapProp)) {
+        map.set(id, title);
+      }
+    }
+    // 本地 recipes 补充
+    for (const r of recipes) {
+      if (r.id) map.set(r.id, getDisplayName(r));
+      if (r.name) map.set(r.name, getDisplayName(r));
+    }
+    return map;
+  }, [recipes, idTitleMapProp]);
 
   const handleAddRelation = async (type: string, targetName: string) => {
     if (!selectedRecipe) return;
@@ -717,7 +736,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                               return filtered.map(r => {
                                 const rName = getDisplayName(r);
                                 const linked = recipe.relations && Object.values(recipe.relations).flat().some((rel: any) => {
-                                  const id = typeof rel === 'string' ? rel : rel.id || rel.title || '';
+                                  const id = typeof rel === 'string' ? rel : rel.target || rel.id || rel.title || '';
                                   return id.replace(/\.md$/i, '').toLowerCase() === rName.toLowerCase();
                                 });
                                 return (
@@ -742,8 +761,9 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                               <span className="text-[10px] font-mono text-slate-500 w-14 shrink-0 pt-0.5">{icon} {label}</span>
                               <div className="flex flex-wrap gap-1">
                                 {items.map((r: any, ri: number) => {
-                                  const itemName = typeof r === 'string' ? r : r.id || r.title || JSON.stringify(r);
-                                  const found = findRecipeByName(itemName);
+                                  const itemName = typeof r === 'string' ? r : r.target || r.id || r.title || JSON.stringify(r);
+                                  const found = findRecipeByName(itemName) || (titleLookup.has(itemName) ? findRecipeByName(titleLookup.get(itemName)!) : undefined);
+                                  const displayLabel = found ? getDisplayName(found) : (titleLookup.get(itemName) || itemName);
                                   return (
                                     <span
                                       key={ri}
@@ -751,9 +771,9 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                                         found ? 'bg-purple-50 border-purple-200 text-purple-700 cursor-pointer hover:bg-purple-100' : 'bg-white border-slate-200 text-slate-600'
                                       }`}
                                       onClick={() => found && openDrawer(found)}
-                                      title={found ? '点击查看' : itemName}
+                                      title={found ? '点击查看' : displayLabel}
                                     >
-                                      {itemName.replace(/\.md$/i, '')}
+                                      {displayLabel.replace(/\.md$/i, '')}
                                       <button onClick={e => { e.stopPropagation(); handleRemoveRelation(key, itemName); }} className="opacity-0 group-hover/rel:opacity-100 text-red-400 hover:text-red-600 transition-opacity ml-0.5" title="移除"><X size={10} /></button>
                                     </span>
                                   );
