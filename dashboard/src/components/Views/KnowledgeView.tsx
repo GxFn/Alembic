@@ -953,13 +953,17 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
               )}
 
               {/* 16. 生命周期历史 */}
-              {selected.lifecycleHistory && selected.lifecycleHistory.length > 0 && (
+              {(() => {
+                const hist = Array.isArray(selected.lifecycleHistory)
+                  ? selected.lifecycleHistory
+                  : (() => { try { const p = typeof selected.lifecycleHistory === 'string' ? JSON.parse(selected.lifecycleHistory) : null; return Array.isArray(p) ? p : []; } catch { return []; } })();
+                return hist.length > 0 ? (
                 <div className="px-6 py-4 border-b border-slate-100">
                   <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
                     <Clock size={11} className="text-slate-400" /> 生命周期历史
                   </label>
                   <div className="space-y-1">
-                    {selected.lifecycleHistory.map((h, i) => {
+                    {hist.map((h, i) => {
                       const fromCfg = LIFECYCLE_CONFIG[h.from] || LIFECYCLE_CONFIG.pending;
                       const toCfg = LIFECYCLE_CONFIG[h.to] || LIFECYCLE_CONFIG.pending;
                       return (
@@ -974,7 +978,8 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
                     })}
                   </div>
                 </div>
-              )}
+              ) : null;
+              })()}
             </div>
 
             {/* ── 面板底部操作栏 ── */}

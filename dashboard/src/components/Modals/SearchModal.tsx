@@ -18,8 +18,16 @@ interface SearchModalProps {
   onClose: () => void;
 }
 
-function extractFirstCodeBlock(content: string): string {
-  const stripped = content.replace(/^---[\s\S]*?---\s*\n?/, '').trim();
+function extractCodeFromContent(content: any): string {
+  if (!content) return '';
+  // content 已被 search() 解析为对象
+  if (typeof content === 'object') {
+    const text = content.code || content.pattern || content.markdown || content.snippet || content.body || '';
+    if (text) return text;
+  }
+  // 字符串回退: 提取围栏代码块
+  const str = typeof content === 'string' ? content : JSON.stringify(content);
+  const stripped = str.replace(/^---[\s\S]*?---\s*\n?/, '').trim();
   const match = stripped.match(/```[\w]*\n([\s\S]*?)```/);
   if (match && match[1]) return match[1].trim();
   return stripped.slice(0, 8000);
@@ -34,13 +42,18 @@ const SearchModal: React.FC<SearchModalProps> = ({ searchQ, insertPath, onClose 
 
   useEffect(() => {
     isMountedRef.current = true;
-    const q = searchQ ? encodeURIComponent(searchQ) : '';
     abortControllerRef.current = new AbortController();
     
-    api.searchRecipesForModal(searchQ || '', abortControllerRef.current.signal)
+    api.search(searchQ || '', { mode: 'bm25', type: 'recipe', signal: abortControllerRef.current.signal })
       .then(data => {
         if (isMountedRef.current) {
-          setResults(data.results || []);
+          setResults((data.items || []).map((r: any) => ({
+            name: (r.title || r.name || '') + '.md',
+            path: '',
+            content: r.content,
+            qualityScore: (r.quality || {}).overall || r.qualityScore || 0,
+            recommendReason: '',
+          })));
         }
       })
       .catch((err) => {
@@ -65,7 +78,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ searchQ, insertPath, onClose 
   const handleInsert = async (result: SearchResult) => {
     setInserting(result.name);
     try {
-      const content = extractFirstCodeBlock(result.content);
+      const content = extractCodeFromContent(result.content);
       await api.insertAtSearchMark({ path: insertPath, content });
       if (isMountedRef.current) {
         alert('✅ 已插入到 ' + insertPath);

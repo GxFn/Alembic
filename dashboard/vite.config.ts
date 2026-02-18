@@ -8,11 +8,17 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:3000',
         timeout: 300000,      // 5 分钟（AI 扫描需要较长时间）
+        configure: (proxy) => {
+          proxy.on('error', () => {});  // 静默处理后端不可用时的连接错误
+        },
       },
       '/socket.io': {
         target: 'http://127.0.0.1:3000',
         ws: true,             // WebSocket 升级
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', () => {});  // 静默 EPIPE / 连接重置错误
+        },
       },
     }
   },

@@ -68,16 +68,21 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
   
   setIsSearching(true);
   try {
-    const response = await api.contextAwareSearch({
-    keyword: searchQuery,
-    targetName,
-    currentFile,
-    language,
-    limit: 10
+    const data = await api.search(searchQuery, {
+    context: { language },
+    limit: 10,
     });
 
-    setSearchResults(response.results || []);
-    setContextInfo(response.context);
+    setSearchResults((data.items || []).map((r: any) => ({
+    name: (r.title || r.name || '') + '.md',
+    content: r.content?.pattern || r.content?.markdown || r.content?.code || '',
+    similarity: r.score || 0,
+    authority: r.authorityScore || 0,
+    matchType: r.matchType || 'ranked',
+    qualityScore: r.qualityScore || 0,
+    usageCount: r.usageCount || 0,
+    })));
+    setContextInfo(null);
   } catch (error) {
     console.error('Context-aware search failed:', error);
     alert('搜索失败。请重试。');

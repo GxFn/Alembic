@@ -50,7 +50,13 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
   if (!searchQuery) return;
   setIsSemanticSearching(true);
   try {
-    const results = await api.semanticSearch(searchQuery);
+    const data = await api.search(searchQuery, { mode: 'semantic' });
+    const results = (data.items || []).map((r: any) => ({
+      name: (r.title || r.name || '') + '.md',
+      content: r.content?.pattern || r.content?.markdown || r.content?.code || '',
+      similarity: r.score || 0,
+      metadata: { type: 'recipe', name: (r.title || r.name || '') + '.md' },
+    }));
     if (onSemanticSearchResults) onSemanticSearchResults(results);
   } catch (e) {
     console.error('Semantic search failed', e);

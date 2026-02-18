@@ -511,20 +511,7 @@ export const api = {
     await http.patch(`/knowledge/${knowledgeId}`, { relations });
   },
 
-  async searchRecipes(
-    q: string,
-  ): Promise<{ results: Array<{ name: string; content: string }>; total: number }> {
-    const res = await http.get(`/search?q=${encodeURIComponent(q)}&type=recipe`);
-    const data = res.data?.data || {};
-    const recipes = data.recipes || [];
-    return {
-      results: recipes.map((r: any) => ({
-        name: r.title || r.name || '',
-        content: (r.content || {}).pattern || (r.content || {}).markdown || '',
-      })),
-      total: data.totalResults || recipes.length,
-    };
-  },
+  // searchRecipes — removed, use search() instead
 
   // ── Candidates (via V3 Knowledge API) ──────────────────────────────────────
 
@@ -690,32 +677,97 @@ export const api = {
     return data;
   },
 
-  // ── Search ──────────────────────────────────────────
+  // ── Search (统一入口) ─────────────────────────────────
 
-  async semanticSearch(keyword: string, limit: number = 10): Promise<any[]> {
-    const res = await http.get(
-      `/search?q=${encodeURIComponent(keyword)}&mode=semantic&limit=${limit}`,
-    );
+  /**
+   * 统一搜索 — 合并 keyword/bm25/semantic/auto/context-aware 全场景
+   *
+   * - 无 context → GET /search (keyword/bm25/semantic/auto)
+   * - 有 context → POST /search/context-aware (BM25 + Ranking + ContextBoost)
+   *
+   * 返回的 items 中 content 已从 JSON 字符串解析为对象。
+   */
+  async search(
+    query: string,
+    options: {
+      mode?: 'keyword' | 'bm25' | 'semantic' | 'auto';
+      type?: string;
+      limit?: number;
+      signal?: AbortSignal;
+      context?: { language?: string; sessionHistory?: any[]; [key: string]: any };
+    } = {},
+  ): Promise<{ items: any[]; total: number; mode?: string; ranked?: boolean }> {
+    const { mode = 'bm25', type, limit = 20, signal, context } = options;
+
+    // 解析 content JSON 字符串为对象
+    const parseContent = (raw: any): any => {
+      if (!raw) return {};
+      if (typeof raw === 'object') return raw;
+      try { return JSON.parse(raw); } catch { return { markdown: raw }; }
+    };
+
+    // ── 有 context: POST /search/context-aware ──
+    if (context) {
+      const res = await http.post('/search/context-aware', {
+        keyword: query, limit,
+        language: context.language,
+        sessionHistory: context.sessionHistory || [],
+      }, { signal }).catch(() => ({ data: { data: {} } }));
+      const data = res.data?.data || {};
+      const items = (data.results || []).map((r: any) => {
+        const content = parseContent(r.content);
+        return {
+          title: (r.name || '').replace(/\.md$/, ''),
+          content,
+          score: r.similarity || 0,
+          qualityScore: r.qualityScore || 0,
+          usageCount: r.usageCount || 0,
+          authorityScore: r.authority || 0,
+          matchType: r.matchType,
+        };
+      });
+      return { items, total: data.total || items.length, mode: 'bm25', ranked: true };
+    }
+
+    // ── 无 context: GET /search ──
+    const params = new URLSearchParams({ q: query, mode, limit: String(limit) });
+    if (type) params.set('type', type);
+    const res = await http.get(`/search?${params}`, { signal });
     const data = res.data?.data || {};
-    const recipes = data.recipes || [];
-    return recipes.map((r: any) => ({
+    const items = (data.items || []).map((r: any) => ({
+      ...r,
+      content: parseContent(r.content),
+    }));
+    return {
+      items,
+      total: data.totalResults || data.total || items.length,
+      mode: data.mode,
+      ranked: data.ranked,
+    };
+  },
+
+  /** @deprecated 使用 search(query, { mode: 'semantic' }) */
+  async semanticSearch(keyword: string, limit: number = 10): Promise<any[]> {
+    const data = await this.search(keyword, { mode: 'semantic', limit });
+    return data.items.map((r: any) => ({
       name: (r.title || r.name || '') + '.md',
-      content: (r.content || {}).pattern || (r.content || {}).markdown || '',
-      similarity: r.similarity || r.score || 0,
+      content: r.content?.pattern || r.content?.markdown || r.content?.code || '',
+      similarity: r.score || 0,
       metadata: { type: 'recipe', name: (r.title || r.name || '') + '.md' },
     }));
+  },
+
+  /** @deprecated 使用 search(query, { context: {...} }) */
+  async contextAwareSearch(data: any): Promise<any> {
+    const res = await http
+      .post('/search/context-aware', data)
+      .catch(() => ({ data: { data: {} } }));
+    return res.data?.data || {};
   },
 
   async xcodeSimulateSearch(data: any): Promise<any> {
     const res = await http
       .post('/search/xcode-simulate', data)
-      .catch(() => ({ data: { data: {} } }));
-    return res.data?.data || {};
-  },
-
-  async contextAwareSearch(data: any): Promise<any> {
-    const res = await http
-      .post('/search/context-aware', data)
       .catch(() => ({ data: { data: {} } }));
     return res.data?.data || {};
   },
@@ -760,23 +812,21 @@ export const api = {
     return { success: false };
   },
 
-  /** Fetch recipe search results (for SearchModal) */
+  /** @deprecated 使用 search(query, { mode: 'bm25', type: 'recipe', signal }) */
   async searchRecipesForModal(
     q: string,
     signal?: AbortSignal,
   ): Promise<{ results: Array<{ name: string; path: string; content: string; qualityScore?: number; recommendReason?: string }>; total: number }> {
-    const res = await http.get(`/search?q=${encodeURIComponent(q)}&type=recipe`, { signal });
-    const data = res.data?.data || {};
-    const recipes = data.recipes || [];
+    const data = await this.search(q, { mode: 'bm25', type: 'recipe', signal });
     return {
-      results: recipes.map((r: any) => ({
+      results: data.items.map((r: any) => ({
         name: (r.title || r.name || '') + '.md',
         path: '',
-        content: toRecipe(r).content,
-        qualityScore: (r.quality || {}).overall || 0,
+        content: r.content,
+        qualityScore: (r.quality || {}).overall || r.qualityScore || 0,
         recommendReason: '',
       })),
-      total: data.totalResults || recipes.length,
+      total: data.total,
     };
   },
 
