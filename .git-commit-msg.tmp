@@ -1,22 +1,6 @@
-v2.17.0: 搜索引擎单管线统一架构 + Dashboard 搜索合并 + Xcode import 分离
+refactor(search): extract ensureIndex() for callers needing accurate stats
 
-搜索引擎重设计:
-- SearchEngine 内置 Ranking Pipeline (CoarseRanker + MultiSignalRanker + ContextBoost)
-- 统一 API: search(query, {mode, rank, context}) 覆盖全场景
-- MCP handlers 简化 -26%, normalizeFunnelInput 删除
-- HTTP /context-aware 简化 -43%, 移除内联格式转换
-
-Dashboard 搜索合并:
-- 新增统一 api.search() 方法, 合并 4 个搜索方法
-- SearchModal/Header/ContextAwareSearchPanel 统一调用 api.search()
-- KnowledgeView 修复 lifecycleHistory JSON 字符串导致 .map 崩溃
-
-Xcode // as:s 修复:
-- SearchHandler: code 中 #import 行自动分离到 headers
-- SearchEngine.getStats() 自动触发 buildIndex, 修复索引0条误报
-- FileWatcher 搜索传递 context:{intent:generate}, 代码优先排序
-- normalizeSearchResults 增强代码提取
-
-其他:
-- Vite proxy 添加 error handler, 修复 ws EPIPE 报错
-- Dashboard groupByKind fallback 修复未知 kind 丢失
+- getStats() remains a pure query (no side effects)
+- ensureIndex() is the idempotent public method for on-demand index building
+- SearchHandler calls ensureIndex() before getStats() for accurate diagnostics
+- search() delegates to ensureIndex() internally

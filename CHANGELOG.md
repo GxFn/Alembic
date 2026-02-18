@@ -4,6 +4,21 @@
 
 ---
 
+## [2.18.0] - 2026-02-19
+
+### 集成测试扩展
+
+- **SearchPipeline 集成测试**：tokenize 中英文分词、BM25Scorer 评分排序、SearchEngine 端到端（索引构建/缓存命中/模式降级/trigger 匹配/ranking），使用独立 in-memory SQLite 避免并行数据竞争
+- **GuardCheck 集成测试**：多语言规则检查（ObjC/Swift/JS/Python/Java/Go/Rust）、自定义 DB 规则、auditFile 审计、跨文件 Category 重复检测
+- **DirectiveDetector 集成测试**：ObjC/Swift 全指令类型（create/search/audit/include/import）、REGEX/MARKS 常量验证、多指令共存与边界条件
+- **KnowledgeCRUD 集成测试**：完整 CRUD 生命周期（创建/列表/搜索/统计/更新/删除）、lifecycle 状态转换、backward compatibility（approve/reject 别名）、真实 Repository + DB
+
+### Bug 修复
+
+- **lifecycleHistory 双重序列化修复**：`KnowledgeService._lifecycleTransition()` 移除多余的 `JSON.stringify()` 包装，修复生命周期二次转换时 `lifecycleHistory.push is not a function` 崩溃 — repository.update() 内部已通过 `_entityToRow()` 处理序列化
+
+---
+
 ## [2.16.1] - 2026-02-18
 
 ### Wiki 修复与改进
