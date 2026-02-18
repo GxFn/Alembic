@@ -112,6 +112,7 @@ Recipe is the core knowledge unit. V3 uses a unified structured model:
 | autosnippet_submit_knowledge | Submit single candidate (supports structured content) |
 | autosnippet_submit_knowledge_batch | Batch submit candidates |
 | autosnippet_submit_knowledge_batch | Submit draft .md files as candidates |
+| autosnippet_save_document | Save development document (design doc, debug report, ADR) — title + markdown only |
 | autosnippet_validate_candidate | Validate candidate quality |
 | autosnippet_check_duplicate | Dedup check |
 | autosnippet_enrich_candidates | AI semantic field enrichment for candidates |

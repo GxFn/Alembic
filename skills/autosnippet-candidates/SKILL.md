@@ -82,7 +82,7 @@ Every candidate submitted via `submit_candidate` or `submit_candidates` supports
 | Field | Type | Values / Example |
 |-------|------|-----------------|
 | **category** | string | View / Service / Tool / Model / Network / Storage / UI / Utility |
-| **knowledgeType** | string | `code-pattern` \| `architecture` \| `best-practice` \| `code-standard` \| `code-relation` \| `inheritance` \| `call-chain` \| `data-flow` \| `module-dependency` \| `boundary-constraint` \| `code-style` \| `solution` |
+| **knowledgeType** | string | `code-pattern` \| `architecture` \| `best-practice` \| `code-standard` \| `code-relation` \| `inheritance` \| `call-chain` \| `data-flow` \| `module-dependency` \| `boundary-constraint` \| `code-style` \| `solution` \| `dev-document` |
 | **complexity** | string | `beginner` \| `intermediate` \| `advanced` |
 | **scope** | string | `universal` (通用) \| `project-specific` (本项目) \| `target-specific` (特定 Target) |
 | **tags** | string[] | `["networking", "async-await", "error-handling"]` |

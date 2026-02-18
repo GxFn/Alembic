@@ -240,7 +240,7 @@ asd install:vscode-copilot      # 配置 MCP 和 Copilot 指令
 
 ## MCP 工具一览
 
-38 个 MCP 工具按功能分组（省略了 **autosnippet_** 前缀）：
+39 个 MCP 工具按功能分组（省略了 **autosnippet_** 前缀）：
 
 | 分类 | 工具 |
 |------|------|
@@ -248,6 +248,7 @@ asd install:vscode-copilot      # 配置 MCP 和 Copilot 指令
 | **搜索** | `search`（统合入口）、`context_search`（4 层漏斗）、`keyword_search`、`semantic_search` |
 | **Recipe 浏览** | `list_recipes`、`get_recipe`、`list_rules`、`patterns`、`list_facts`、`recipe_insights`、`confirm_usage` |
 | **候选管理** | `validate_candidate`、`check_duplicate`、`submit_knowledge`、`submit_knowledge_batch`、`enrich_candidates` |
+| **开发文档** | `save_document` |
 | **知识图谱** | `graph_query`、`graph_impact`、`graph_path`、`graph_stats` |
 | **项目结构** | `get_targets`、`get_target_files`、`get_target_metadata` |
 | **Guard** | `guard_check`、`guard_audit_files`、`scan_project` |

@@ -658,6 +658,7 @@ program
       console.log(`   Channel A (Always-On Rules): ${result.channelA.rulesCount} 条规则 (${result.channelA.tokensUsed} tokens)`);
       console.log(`   Channel B (Smart Rules):     ${result.channelB.topicCount} 个主题, ${result.channelB.patternsCount} 个模式 (${result.channelB.totalTokens} tokens)`);
       console.log(`   Channel C (Agent Skills):    ${result.channelC.synced} 个 Skills 已同步`);
+      console.log(`   Channel D (Dev Documents):   ${result.channelD?.documentsCount || 0} 篇文档`);
       if (result.channelC.errors > 0) {
         console.log(`   ⚠️  ${result.channelC.errors} 个错误`);
       }

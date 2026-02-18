@@ -320,7 +320,7 @@ describe('P1: semantic_search_code', () => {
  * ════════════════════════════════════════════════════════════ */
 describe('P2: ALL_TOOLS integrity', () => {
   test('contains 57 tools (54 original + 3 agent-memory)', () => {
-    expect(ALL_TOOLS.length).toBe(57);
+    expect(ALL_TOOLS.length).toBe(58);
   });
 
   test('all new tools have name, description, parameters, handler', () => {

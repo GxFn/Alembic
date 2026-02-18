@@ -165,6 +165,7 @@ Watch parses all such blocks and adds each as a separate candidate; prompt may s
 | `autosnippet_submit_knowledge_batch` | Submit draft .md as candidates: prefer draft folder + multiple files (not one big file); supports intro-only docs (no code—no Snippet). Pass `filePaths`, optional `targetName`, `deleteAfterSubmit`. **Delete the draft folder after submit** (e.g. `deleteAfterSubmit: true` or `rm -rf .autosnippet-drafts`). |
 | `autosnippet_submit_knowledge_batch` | Submit structured items (title, summary, trigger, language, code, usageGuide) for batch scan, etc. |
 | `autosnippet_submit_knowledge` | Submit single structured candidate with full V3 fields. |
+| `autosnippet_save_document` | Save a development document (design doc, debug report, ADR) — only needs title + markdown. See **autosnippet-devdocs** skill. |
 | `autosnippet_validate_candidate` | Pre-validate candidate quality before submission. |
 | `autosnippet_check_duplicate` | Check for duplicate Recipes before submission. |
 

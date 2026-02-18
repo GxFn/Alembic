@@ -334,8 +334,8 @@ describe('MCP Tool Definitions (V3)', () => {
     });
   });
 
-  test('TOOLS 数组应包含 38 个工具', () => {
-    expect(TOOLS.length).toBe(38);
+  test('TOOLS 数组应包含 39 个工具', () => {
+    expect(TOOLS.length).toBe(39);
   });
 
   test('submit_knowledge content 字段应有 pattern 和 markdown 属性', () => {

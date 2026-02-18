@@ -506,4 +506,84 @@ describe('CursorDeliveryPipeline', () => {
     expect(result.channelA.tokensUsed).toBeLessThanOrEqual(BUDGET.CHANNEL_A_MAX);
     expect(result.channelA.rulesCount).toBeLessThanOrEqual(BUDGET.CHANNEL_A_MAX_RULES);
   });
+
+  test('Channel D generates devdocs skill for dev-document entries', async () => {
+    const docsEntries = [
+      {
+        id: 'doc-1', title: 'BiliDemo 冷启动分析', kind: 'fact', lifecycle: 'active',
+        knowledgeType: 'dev-document',
+        description: '冷启动耗时 8s 的根因分析报告',
+        content: { markdown: '## 问题背景\n\n冷启动耗时过长...', pattern: '' },
+        tags: ['debug-report', 'performance'],
+        scope: 'project-specific',
+        createdAt: 1700000000,
+        updatedAt: 1700000000,
+        quality: {},
+        stats: {},
+      },
+      {
+        id: 'doc-2', title: 'Architecture Decision Record', kind: 'fact', lifecycle: 'active',
+        knowledgeType: 'dev-document',
+        description: '模块拆分决策记录',
+        content: { markdown: '## 决策\n\n将 Service 层拆分为...', pattern: '' },
+        tags: ['adr', 'architecture'],
+        scope: 'project-specific',
+        createdAt: 1700000000,
+        updatedAt: 1700000000,
+        quality: {},
+        stats: {},
+      },
+    ];
+
+    mockKnowledgeService.list.mockImplementation(async (filters) => {
+      if (filters.lifecycle === 'active') return [...makeEntries(), ...docsEntries];
+      return [];
+    });
+
+    const result = await pipeline.deliver();
+
+    // Channel D should have documents
+    expect(result.channelD.documentsCount).toBe(2);
+    expect(result.channelD.filesWritten).toBe(2);
+
+    // Documents should NOT appear in Channel A/B
+    // (rules count should be same as without documents)
+    expect(result.channelA.rulesCount).toBeGreaterThan(0);
+
+    // SKILL.md index should exist
+    const skillPath = path.join(tmpDir, '.cursor', 'skills', 'autosnippet-devdocs', 'SKILL.md');
+    expect(fs.existsSync(skillPath)).toBe(true);
+    const skillContent = fs.readFileSync(skillPath, 'utf8');
+    expect(skillContent).toContain('autosnippet-devdocs');
+    expect(skillContent).toContain('BiliDemo');
+
+    // Reference MD files should exist
+    const refsDir = path.join(tmpDir, '.cursor', 'skills', 'autosnippet-devdocs', 'references');
+    const refFiles = fs.readdirSync(refsDir);
+    expect(refFiles.length).toBe(2);
+  });
+
+  test('dev-document entries are excluded from Channel A/B classification', async () => {
+    const mixed = [
+      ...makeEntries(),
+      {
+        id: 'doc-x', title: 'Some Doc', kind: 'fact', lifecycle: 'active',
+        knowledgeType: 'dev-document',
+        description: 'A document',
+        content: { markdown: 'Full text here' },
+        tags: [],
+        quality: {},
+        stats: {},
+      },
+    ];
+
+    mockKnowledgeService.list.mockImplementation(async (filters) => {
+      if (filters.lifecycle === 'active') return mixed;
+      return [];
+    });
+
+    const result = await pipeline.deliver();
+    // The dev-document should be in Channel D, not inflating A/B
+    expect(result.channelD.documentsCount).toBe(1);
+  });
 });

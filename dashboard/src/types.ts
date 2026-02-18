@@ -142,7 +142,7 @@ export interface ExtractedRecipe {
   /** 权威分 1～5，审核人员可设置初始值 */
   authority?: number;
   /** 知识类型 */
-  knowledgeType?: 'code-pattern' | 'architecture' | 'best-practice' | 'rule';
+  knowledgeType?: 'code-pattern' | 'architecture' | 'best-practice' | 'rule' | 'dev-document';
   /** 复杂度 */
   complexity?: 'beginner' | 'intermediate' | 'advanced';
   /** 适用范围 */

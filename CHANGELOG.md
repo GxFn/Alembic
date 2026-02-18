@@ -4,6 +4,43 @@
 
 ---
 
+## [2.14.0] - 2026-02-18
+
+### Dev Document 知识管道 — 全链路实现
+
+> 18 files changed, +374 / -20
+
+#### Channel D: Dev Document 投递通道
+
+- **feat(CursorDeliveryPipeline):** 新增 Channel D — `knowledgeType: 'dev-document'` 条目独立分流，生成 SKILL.md 索引 + 独立 reference MD 文件至 `.cursor/skills/autosnippet-devdocs/`
+- **feat(CursorDeliveryPipeline):** `_classify()` 四分类 — rules / patterns / facts / documents；dev-document 不进入 Channel A/B 压缩
+- **feat(Lifecycle):** KIND_MAP 新增 `'dev-document': 'fact'` 映射
+
+#### MCP + Chat 工具
+
+- **feat(MCP):** 新增 `autosnippet_save_document` 工具 (第 39 号) — Agent 可直接提交 MD 文档至知识库，自动设置 knowledgeType/kind/source，自动发布
+- **feat(Chat):** 新增 `save_document` Chat tool (第 58 号) — ChatAgent 同等能力
+- **feat(Gateway):** 注册 save_document action 映射
+- **feat(McpServer):** 路由 `autosnippet_save_document` 到 knowledge handler
+
+#### Skill 引导
+
+- **feat(Skills):** 新建 `autosnippet-devdocs` Skill — 教导 Agent 何时、如何保存开发文档
+- **docs(Skills):** `autosnippet-create`、`autosnippet-recipes`、`autosnippet-candidates` 同步更新工具列表与 knowledgeType 枚举
+
+#### 统计 & UI
+
+- **feat(orchestrator/cli/UpgradeService):** Cursor Delivery 日志输出包含 Channel D documents 计数
+- **feat(Dashboard):** types.ts 新增 `'dev-document'` 类型
+- **docs(README):** 工具总数 38→39，新增「开发文档」分类行
+
+#### 测试
+
+- **test(CursorDeliveryPipeline):** +2 Channel D 测试 — 文档生成验证 + dev-document 排除 A/B 验证
+- **test:** 更新 KnowledgeAPI / AgentV8Enhancements / V10DomainBrain 工具计数断言
+
+---
+
 ## [2.13.0] - 2026-02-18
 
 ### Guard 深度增强 — AST 语义规则 + 合规报告 + CI/CD + 反馈闭环
