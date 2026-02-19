@@ -4,6 +4,24 @@
 
 ---
 
+## [2.19.5] - 2026-02-19
+
+### 新增功能
+
+- **`asd coldstart` CLI 命令**：新增命令行冷启动入口，与 Dashboard 点击冷启动流程完全一致（复用 `bootstrap_knowledge` handler），支持 `--wait` 等待 AI 异步填充、`--json` 输出、`--skip-guard`、`--no-skills` 等选项
+
+### 清理
+
+- **移除死依赖**：从 package.json 删除零引用的 `xml2js`、`@zilliz/milvus2-sdk-node`、`redis`
+- **移除 Redis 缓存层**：删除 `RedisService.js`（365 行），简化 `UnifiedCacheAdapter` 为纯内存模式，清理 `HttpServer` 中 Redis 初始化代码
+- **移除死代码**：删除空目录 `lib/service/qoder/`，`Defaults.js` 中 `STORAGE_ADAPTERS` 去除 `milvus`
+
+### 修复
+
+- **Snippet 同步空内容过滤**：`POST /commands/install` 新增 `.filter(r => r.code.trim().length > 0)`，跳过无代码内容的 Recipe 避免生成空 `.codesnippet` 文件
+
+---
+
 ## [2.19.0] - 2026-02-19
 
 ### 新增功能

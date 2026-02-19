@@ -5,6 +5,7 @@
  * 
  * Usage:
  *   asd setup           - 初始化项目
+ *   asd coldstart       - 冷启动知识库（9 维度分析 + AI 填充）
  *   asd ais [Target]    - AI 扫描 Target → 直接发布 Recipes
  *   asd search <query>  - 搜索知识库
  *   asd guard <file>    - Guard 检查
@@ -71,6 +72,182 @@ program
 
     await service.run();
     service.printSummary();
+  });
+
+// ─────────────────────────────────────────────────────
+// coldstart 命令 (Knowledge Bootstrap)
+// ─────────────────────────────────────────────────────
+program
+  .command('coldstart')
+  .description('冷启动知识库：9 维度项目分析 + AI 异步填充（与 Dashboard 点击冷启动流程一致）')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .option('-m, --max-files <n>', '最大扫描文件数', '500')
+  .option('--skip-guard', '跳过 Guard 审计')
+  .option('--no-skills', '禁用 Skill 加载')
+  .option('--wait', '等待 AI 异步填充完成（默认骨架完成即退出）')
+  .option('--json', '以 JSON 格式输出结果')
+  .action(async (opts) => {
+    const projectRoot = resolve(opts.dir);
+    console.log(`\n🚀 AutoSnippet — 冷启动知识库`);
+    console.log(`   项目: ${basename(projectRoot)}`);
+    console.log(`   路径: ${projectRoot}`);
+    console.log(`   最大文件数: ${opts.maxFiles}`);
+    if (opts.skipGuard) console.log('   Guard 审计: 跳过');
+    console.log('');
+
+    try {
+      const { bootstrap, container } = await initContainer({ projectRoot });
+
+      // 使用与前端 POST /spm/bootstrap 完全相同的入口: chatAgent.executeTool('bootstrap_knowledge')
+      const chatAgent = container.get('chatAgent');
+
+      const ora = (await import('ora')).default;
+      const spinner = ora('Phase 1-4: 收集文件、AST 分析、SPM 依赖、Guard 审计...').start();
+
+      const result = await chatAgent.executeTool('bootstrap_knowledge', {
+        maxFiles: parseInt(opts.maxFiles, 10),
+        skipGuard: opts.skipGuard || false,
+        contentMaxLines: 120,
+        loadSkills: opts.skills !== false,
+      });
+
+      spinner.stop();
+
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        // 输出骨架报告
+        const report = result.report || {};
+        const targets = result.targets || [];
+        const langStats = result.languageStats || {};
+        const guardSummary = result.guardSummary;
+        const astSummary = result.astSummary;
+        const bootstrapCandidates = result.bootstrapCandidates || {};
+        const framework = result.analysisFramework || {};
+
+        console.log('✅ 冷启动骨架已创建\n');
+
+        // 项目概况
+        console.log('📊 项目概况');
+        console.log(`   Targets: ${targets.length}`);
+        console.log(`   文件: ${report.totals?.files || 0}`);
+        console.log(`   主语言: ${result.primaryLanguage || 'unknown'}`);
+        if (Object.keys(langStats).length > 0) {
+          const langParts = Object.entries(langStats)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([ext, count]) => `${ext}(${count})`);
+          console.log(`   语言分布: ${langParts.join(', ')}`);
+        }
+
+        // AST 分析
+        if (astSummary) {
+          console.log(`\n🔬 AST 分析`);
+          console.log(`   类: ${astSummary.classes}, 协议: ${astSummary.protocols}, Category: ${astSummary.categories}`);
+          if (astSummary.metrics) {
+            console.log(`   方法总数: ${astSummary.metrics.totalMethods}, 复杂方法: ${astSummary.metrics.complexMethods}`);
+          }
+        }
+
+        // SPM 依赖
+        if (report.phases?.spmDependencyGraph) {
+          console.log(`\n📦 SPM 依赖`);
+          console.log(`   依赖边: ${report.phases.spmDependencyGraph.edgesWritten}`);
+        }
+
+        // Guard 审计
+        if (guardSummary) {
+          console.log(`\n🛡️  Guard 审计`);
+          console.log(`   违规: ${guardSummary.totalViolations} (${guardSummary.errors} errors, ${guardSummary.warnings} warnings)`);
+        }
+
+        // 维度分析框架
+        if (framework.dimensions) {
+          console.log(`\n📋 分析维度: ${framework.dimensions.length} 个`);
+          for (const dim of framework.dimensions) {
+            const type = dim.skillWorthy ? (dim.dualOutput ? 'Dual' : 'Skill') : 'Candidate';
+            console.log(`   • ${dim.label} [${type}]`);
+          }
+        }
+
+        // AI 异步填充状态
+        console.log(`\n🤖 AI 异步填充: ${result.asyncFill ? '已启动' : '未启用'}`);
+        if (result.bootstrapSession) {
+          const session = result.bootstrapSession;
+          console.log(`   会话: ${session.id}`);
+          console.log(`   任务: ${session.tasks?.length || 0} 个维度`);
+        }
+
+        console.log('');
+      }
+
+      // 等待模式: 轮询 BootstrapTaskManager 直到所有维度完成
+      if (opts.wait && result.bootstrapSession) {
+        const ora2 = (await import('ora')).default;
+        const waitSpinner = ora2('Phase 5: AI 正在逐维度填充知识...').start();
+        let lastStatus = '';
+        let attempts = 0;
+        const maxAttempts = 600; // 最多等 10 分钟（每秒轮询）
+
+        while (attempts < maxAttempts) {
+          await new Promise(r => setTimeout(r, 1000));
+          attempts++;
+
+          try {
+            const taskManager = container.get('bootstrapTaskManager');
+            const sessionStatus = taskManager.getSessionStatus();
+
+            if (!sessionStatus || !sessionStatus.tasks) break;
+
+            const total = sessionStatus.tasks.length;
+            const done = sessionStatus.tasks.filter(t => t.status === 'done' || t.status === 'error').length;
+            const current = sessionStatus.tasks.find(t => t.status === 'running');
+            const statusText = current
+              ? `[${done}/${total}] 正在处理: ${current.meta?.label || current.id}`
+              : `[${done}/${total}] 等待中...`;
+
+            if (statusText !== lastStatus) {
+              waitSpinner.text = statusText;
+              lastStatus = statusText;
+            }
+
+            if (done >= total) {
+              waitSpinner.succeed(`AI 填充完成: ${total} 个维度`);
+
+              // 输出各维度结果
+              if (!opts.json) {
+                const succeeded = sessionStatus.tasks.filter(t => t.status === 'done').length;
+                const failed = sessionStatus.tasks.filter(t => t.status === 'error').length;
+                console.log(`   ✅ 成功: ${succeeded}, ❌ 失败: ${failed}`);
+                for (const t of sessionStatus.tasks) {
+                  const icon = t.status === 'done' ? '✅' : '❌';
+                  console.log(`   ${icon} ${t.meta?.label || t.id}`);
+                }
+                console.log('');
+              }
+              break;
+            }
+          } catch {
+            // bootstrapTaskManager 可能还没就绪
+          }
+        }
+
+        if (attempts >= maxAttempts) {
+          waitSpinner.warn('AI 填充超时（10 分钟），可通过 asd ui 查看进度');
+        }
+      } else if (!opts.json) {
+        console.log('💡 后台 AI 正在逐维度填充知识，可通过以下方式查看进度:');
+        console.log('   • asd ui -d .    → Dashboard 实时查看');
+        console.log('   • 再次运行 asd coldstart --wait 等待完成');
+        console.log('');
+      }
+
+      await bootstrap.shutdown();
+    } catch (err) {
+      console.error(`\n❌ ${err.message}`);
+      if (process.env.ASD_DEBUG === '1') console.error(err.stack);
+      process.exit(1);
+    }
   });
 
 // ─────────────────────────────────────────────────────
