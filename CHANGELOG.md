@@ -9,6 +9,7 @@
 ### 修复
 
 - **Dashboard 生产模式页面无法打开**：404 handler 使用 `app.use('*')` 注册时不具有 `layer.route` 属性，导致 `mountDashboard()` 无法定位并移除它，静态文件中间件被 404 handler 拦截。改为 `app.all('*')` 修复
+- **Dashboard 生产模式白屏**：helmet 默认 CSP `script-src 'self'` 阻止了 Vite 构建的 `<script type="module" crossorigin>` 执行。放宽 CSP 配置，允许 `'unsafe-inline'` 脚本、WebSocket 连接（`ws: wss:`）和 blob 图片
 
 ---
 
