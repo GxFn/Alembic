@@ -5,7 +5,7 @@ description: Discover project structure (targets, files, dependency graph) and b
 
 # AutoSnippet — Structure & Dependencies & Knowledge Graph
 
-> Self-check & Fallback: MCP 工具返回统一 JSON Envelope（{ success, errorCode?, message?, data?, meta }）。重操作前调用 autosnippet_health/autosnippet_capabilities；失败时不在同一轮重试，转用静态上下文或缩小范围后再试。
+> Self-check & Fallback: MCP 工具返回统一 JSON Envelope（{ success, errorCode?, message?, data?, meta }）。重操作前调用 `autosnippet_health`；失败时不在同一轮重试，转用静态上下文或缩小范围后再试。
 
 Use this skill when the user asks about **project structure**, **SPM targets**, **dependency graph**, or **knowledge graph relationships**.
 
@@ -25,14 +25,14 @@ Use this skill when the user asks about **project structure**, **SPM targets**, 
 
 | Tool | Purpose | Key Input |
 |------|---------|-----------|
-| `autosnippet_get_targets` | List all SPM Targets (with file count, language stats, inferred role) | `includeSummary` (default true) |
-| `autosnippet_get_target_files` | Get source files for a Target | `targetName` (required), `includeContent`, `contentMaxLines`, `maxFiles` |
-| `autosnippet_get_target_metadata` | Get Target metadata (dependencies, package info, inferred role, graph edges) | `targetName` (required) |
+| `autosnippet_structure(operation=targets)` | List all SPM Targets (with file count, language stats, inferred role) | `includeSummary` (default true) |
+| `autosnippet_structure(operation=files)` | Get source files for a Target | `targetName` (required), `includeContent`, `contentMaxLines`, `maxFiles` |
+| `autosnippet_structure(operation=metadata)` | Get Target metadata (dependencies, package info, inferred role, graph edges) | `targetName` (required) |
 
 ### Workflow: Discover project structure
-1. `autosnippet_get_targets` → see all Targets with roles
-2. `autosnippet_get_target_files(targetName)` → drill into specific Target
-3. `autosnippet_get_target_metadata(targetName)` → get dependencies and relations
+1. `autosnippet_structure(operation=targets)` → see all Targets with roles
+2. `autosnippet_structure(operation=files, targetName)` → drill into specific Target
+3. `autosnippet_structure(operation=metadata, targetName)` → get dependencies and relations
 
 ---
 
@@ -42,22 +42,22 @@ The knowledge graph captures **relationships between Recipes** (dependencies, ex
 
 | Tool | Purpose | Key Input |
 |------|---------|-----------|
-| `autosnippet_graph_query` | Get all relations for a Recipe node | `nodeId` (Recipe ID), `relation` (filter), `direction` (out/in/both) |
-| `autosnippet_graph_impact` | Impact analysis: what downstream depends on this Recipe | `nodeId`, `maxDepth` (default 3) |
-| `autosnippet_graph_path` | Find shortest path between two Recipes (BFS) | `fromId`, `toId`, `maxDepth` (1-10) |
-| `autosnippet_graph_stats` | Global graph statistics: edge count, relation type distribution | (none) |
+| `autosnippet_graph(operation=query)` | Get all relations for a Recipe node | `nodeId` (Recipe ID), `relation` (filter), `direction` (out/in/both) |
+| `autosnippet_graph(operation=impact)` | Impact analysis: what downstream depends on this Recipe | `nodeId`, `maxDepth` (default 3) |
+| `autosnippet_graph(operation=path)` | Find shortest path between two Recipes (BFS) | `fromId`, `toId`, `maxDepth` (1-10) |
+| `autosnippet_graph(operation=stats)` | Global graph statistics: edge count, relation type distribution | (none) |
 
 ### Workflow: Explore knowledge graph
-1. `autosnippet_graph_stats` → overview: how many edges, relation types
-2. `autosnippet_graph_query(nodeId)` → see all connections for a specific Recipe
-3. `autosnippet_graph_impact(nodeId)` → before changing a Recipe, check downstream impact
-4. `autosnippet_graph_path(fromId, toId)` → discover indirect relationships between Recipes
+1. `autosnippet_graph(operation=stats)` → overview: how many edges, relation types
+2. `autosnippet_graph(operation=query, nodeId)` → see all connections for a specific Recipe
+3. `autosnippet_graph(operation=impact, nodeId)` → before changing a Recipe, check downstream impact
+4. `autosnippet_graph(operation=path, fromId, toId)` → discover indirect relationships between Recipes
 
 ### When to use graph tools
-- User asks "修改这个 Recipe 会影响什么？" → `autosnippet_graph_impact`
-- User asks "这两个模块有什么关联？" → `autosnippet_graph_path`
-- User wants overview of knowledge connections → `autosnippet_graph_stats`
-- User wants to see all dependencies/extends/conflicts for a Recipe → `autosnippet_graph_query`
+- User asks "修改这个 Recipe 会影响什么？" → `autosnippet_graph(operation=impact)`
+- User asks "这两个模块有什么关联？" → `autosnippet_graph(operation=path)`
+- User wants overview of knowledge connections → `autosnippet_graph(operation=stats)`
+- User wants to see all dependencies/extends/conflicts for a Recipe → `autosnippet_graph(operation=query)`
 
 ---
 

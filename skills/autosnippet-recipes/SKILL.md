@@ -1,11 +1,11 @@
 ---
 name: autosnippet-recipes
-description: Provides this project's Recipe-based context to the agent. Recipes are the project's standard knowledge (code patterns + usage guides + structured relations). Use when answering about project standards, Guard, conventions, or when suggesting code. Supports in-context lookup, terminal search (asd search), and on-demand semantic search via MCP tool autosnippet_context_search.
+description: Provides this project's Recipe-based context to the agent. Recipes are the project's standard knowledge (code patterns + usage guides + structured relations). Use when answering about project standards, Guard, conventions, or when suggesting code. Supports in-context lookup, terminal search (asd search), and on-demand semantic search via MCP tool autosnippet_search (mode=context).
 ---
 
 # AutoSnippet Recipe Context (Project Context)
 
-> Self-check and Fallback: MCP tools return unified JSON Envelope. Before heavy ops call autosnippet_health/autosnippet_capabilities. On failure do not retry in same turn; use static context or narrow scope.
+> Self-check and Fallback: MCP tools return unified JSON Envelope. Before heavy ops call `autosnippet_health`. On failure do not retry in same turn; use static context or narrow scope.
 
 This skill provides the agent with this project's context from AutoSnippet Recipes. Recipes are the project's standard knowledge base: code patterns, usage guides, and structured relations.
 
@@ -44,7 +44,7 @@ Recipe is the core knowledge unit. V3 uses a unified structured model:
 
 ## Instructions for the agent
 
-1. **Project context**: Read `references/project-recipes-context.md` in this skill folder for **Recipe 轻量索引**（title/trigger/category/summary 表格）。如需 Recipe 全文，调用 MCP `autosnippet_get_recipe(id)` 或 `autosnippet_search(query)`。索引缺失时，可直接读 `AutoSnippet/recipes/` 目录。
+1. **Project context**: Read `references/project-recipes-context.md` in this skill folder for **Recipe 轻量索引**（title/trigger/category/summary 表格）。如需 Recipe 全文，调用 MCP `autosnippet_knowledge(operation=get, id)` 或 `autosnippet_search(query)`。索引缺失时，可直接读 `AutoSnippet/recipes/` 目录。
 
 2. **Finding code on demand**: Look up matching Recipe by title/summary/usage guide, use its code as standard to suggest. Cite the Recipe title.
 
@@ -53,14 +53,14 @@ Recipe is the core knowledge unit. V3 uses a unified structured model:
 4. **Search - three ways**:
    - In-context: `references/project-recipes-context.md` 轻量索引按 title/trigger/summary 匹配
    - Terminal: `asd search <keyword>` or `asd search --semantic <keyword>`
-   - MCP: `autosnippet_context_search` with query and optional limit
+   - MCP: `autosnippet_search` (mode=auto 或 mode=context) with query and optional limit
 
 5. **Browsing Recipes via MCP**:
-   - `autosnippet_list_recipes` - list with kind/language/category/knowledgeType/status/complexity filters
-   - `autosnippet_get_recipe` - get single Recipe by ID (full content/relations/constraints)
-   - `autosnippet_list_facts` - list kind=fact structural knowledge
+   - `autosnippet_knowledge(operation=list)` - list with kind/language/category/knowledgeType/status/complexity filters
+   - `autosnippet_knowledge(operation=get, id)` - get single Recipe by ID (full content/relations/constraints)
+   - `autosnippet_knowledge(operation=list, kind=fact)` - list kind=fact structural knowledge
 
-6. **Confirming usage**: Call `autosnippet_confirm_usage` with recipeId and usageType (adoption/application) when user adopts a Recipe. Telemetry only.
+6. **Confirming usage**: Call `autosnippet_knowledge(operation=confirm_usage, id, usageType)` when user adopts a Recipe. Telemetry only.
 
 7. **Updating context**: After user changes Recipes, tell them to run `asd install:cursor-skill` to regenerate references.
 
@@ -78,71 +78,38 @@ Recipe is the core knowledge unit. V3 uses a unified structured model:
 
 ---
 
-## MCP Tools Reference (38 tools)
+## MCP Tools Reference (12 个整合工具)
 
 ### Query (Agent can freely use)
 
 | Tool | Description |
 |------|-------------|
-| autosnippet_health | Health check |
-| autosnippet_capabilities | List all tool capabilities |
-| autosnippet_search | Unified search (auto: BM25+semantic fusion) |
-| autosnippet_context_search | Smart context retrieval (intent → multi-agent → 4-layer funnel) |
-| autosnippet_keyword_search | SQL LIKE exact keyword search |
-| autosnippet_semantic_search | Vector semantic search |
-| autosnippet_list_rules | List kind=rule |
-| autosnippet_list_patterns | List kind=pattern |
-| autosnippet_list_facts | List kind=fact |
-| autosnippet_list_recipes | General list (multi-filter) |
-| autosnippet_get_recipe | Get Recipe details |
-| autosnippet_recipe_insights | Recipe quality insights (scores, usage stats, relations summary) |
-| autosnippet_compliance_report | Compliance assessment report |
-| autosnippet_graph_query | Knowledge graph query |
-| autosnippet_graph_impact | Graph impact analysis |
-| autosnippet_graph_path | Graph path finding (BFS shortest path between Recipes) |
-| autosnippet_graph_stats | Graph global statistics (edge count, relation distribution) |
-| autosnippet_get_targets | List project Targets |
-| autosnippet_get_target_files | Get Target file list |
-| autosnippet_get_target_metadata | Get Target metadata |
+| `autosnippet_health` | Health check + KB stats |
+| `autosnippet_search` | Unified search (`mode`: auto/context/keyword/semantic) |
+| `autosnippet_knowledge` | Knowledge browse (`operation`: list/get/insights/confirm_usage) |
+| `autosnippet_graph` | Knowledge graph (`operation`: query/impact/path/stats) |
+| `autosnippet_structure` | Project structure (`operation`: targets/files/metadata) |
 
-### Candidate Submit/Validate (Agent core capability)
+### Candidate Submit (Agent core capability)
 
 | Tool | Description |
 |------|-------------|
-| autosnippet_submit_knowledge | Submit single candidate (supports structured content) |
-| autosnippet_submit_knowledge_batch | Batch submit candidates |
-| autosnippet_submit_knowledge_batch | Submit draft .md files as candidates |
-| autosnippet_save_document | Save development document (design doc, debug report, ADR) — title + markdown only |
-| autosnippet_validate_candidate | Validate candidate quality |
-| autosnippet_check_duplicate | Dedup check |
-| autosnippet_enrich_candidates | AI semantic field enrichment for candidates |
+| `autosnippet_submit_knowledge` | Submit single candidate (**strict validation** — missing required fields rejected immediately, no fallback). Must provide ALL fields in one call: title, language, content(+rationale), kind, doClause, category, trigger, description, headers, usageGuide, knowledgeType |
+| `autosnippet_submit_knowledge_batch` | Batch submit candidates (per-item strict validation + dedup + rate-limit) |
+| `autosnippet_save_document` | Save development document (design doc, debug report, ADR) — title + markdown only |
 
-### Guard & Scan
+### Guard & Scan & Bootstrap
 
 | Tool | Description |
 |------|-------------|
-| autosnippet_guard_check | Single code Guard rule check |
-| autosnippet_guard_audit_files | Multi-file batch Guard audit |
-| autosnippet_scan_project | Lightweight project scan + Guard audit |
-| autosnippet_bootstrap_knowledge | Cold-start knowledge base initialization (9 dimensions) |
-| autosnippet_bootstrap_refine | AI refinement of bootstrap candidates (Phase 6) |
+| `autosnippet_guard` | Code Guard check (`code` single / `files[]` batch — auto-routed) |
+| `autosnippet_bootstrap` | Cold-start + scan (`operation`: knowledge/refine/scan) |
 
 ### Skills Management
 
 | Tool | Description |
 |------|-------------|
-| autosnippet_list_skills | List all available Agent Skills |
-| autosnippet_load_skill | Load Skill document for domain guidance |
-| autosnippet_create_skill | Create project-level Skill |
-| autosnippet_update_skill | Update project-level Skill |
-| autosnippet_delete_skill | Delete project-level Skill |
-| autosnippet_suggest_skills | AI-powered Skill creation suggestions |
-
-### Usage Telemetry
-
-| Tool | Description |
-|------|-------------|
-| autosnippet_confirm_usage | Confirm Recipe adopted/applied |
+| `autosnippet_skill` | Skill management (`operation`: list/load/create/update/delete/suggest) |
 
 ---
 
@@ -150,20 +117,20 @@ Recipe is the core knowledge unit. V3 uses a unified structured model:
 
 | Use | How |
 |-----|-----|
-| Audit | `// as:audit` in source; `asd watch` runs AI review against Recipes. Or MCP `autosnippet_guard_check` / `autosnippet_guard_audit_files` |
-| Search | `asd search keyword` or MCP `autosnippet_search` / `autosnippet_context_search` |
+| Audit | `// as:audit` in source; `asd watch` runs AI review against Recipes. Or MCP `autosnippet_guard` |
+| Search | `asd search keyword` or MCP `autosnippet_search` (mode=auto/context/keyword/semantic) |
 | AI Assistant | Dashboard RAG and AI chat use Recipes as context |
 | Xcode | Recipes linked to Snippets; synced to Xcode CodeSnippets |
 | Guard | kind=rule Recipes enforced by Guard checks during audit |
-| Insights | `autosnippet_recipe_insights` for quality scores, usage stats, and relation summary |
-| Graph | `autosnippet_graph_query` / `autosnippet_graph_impact` / `autosnippet_graph_path` for relationship analysis |
+| Insights | `autosnippet_knowledge(operation=insights, id)` for quality scores, usage stats, and relation summary |
+| Graph | `autosnippet_graph(operation=query/impact/path)` for relationship analysis |
 
 ---
 
 ## Auto-Extracting Headers for New Candidates
 
 1. From code (Recommended): Extract all import statements from user's code
-2. From existing Recipes: Check `references/project-recipes-context.md` index for matching modules, then call MCP `autosnippet_get_recipe(id)` for full content
-3. Via semantic search: Call `autosnippet_context_search` with query like "import ModuleName headers"
+2. From existing Recipes: Check `references/project-recipes-context.md` index for matching modules, then call MCP `autosnippet_knowledge(operation=get, id)` for full content
+3. Via semantic search: Call `autosnippet_search(mode=context)` with query like "import ModuleName headers"
 
 Use Option 1 first, then verify with Option 2 for consistency.

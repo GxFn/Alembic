@@ -37,24 +37,21 @@ This skill documents the Recipe lifecycle and clarifies what Agent can and canno
 ## Agent Role: What You CAN Do
 
 ### 1. Submit Candidates
-- `autosnippet_submit_knowledge` - single structured candidate
+- `autosnippet_submit_knowledge` - single structured candidate (built-in auto-validate + dedup)
 - `autosnippet_submit_knowledge_batch` - batch structured candidates
-- `autosnippet_submit_knowledge_batch` - submit .md files as candidates
 
 ### 2. Validate and Enhance Candidates
-- `autosnippet_validate_candidate` - pre-validate quality
-- `autosnippet_check_duplicate` - check for duplicates
+- Submit via `autosnippet_submit_knowledge` which auto-validates and checks duplicates
 - Add structured content: rationale, steps, codeChanges, knowledgeType, complexity, tags, constraints, headers
 
 ### 3. Search and Query Recipes
-- `autosnippet_list_recipes` - list with filters (kind/language/category/knowledgeType/status/complexity)
-- `autosnippet_get_recipe` - get full Recipe details
-- `autosnippet_list_rules` / `autosnippet_list_patterns` / `autosnippet_list_facts` - query by kind
-- `autosnippet_context_search` / `autosnippet_keyword_search` / `autosnippet_semantic_search` - search
-- `autosnippet_graph_query` / `autosnippet_graph_impact` - knowledge graph
+- `autosnippet_knowledge(operation=list)` - list with filters (kind/language/category/knowledgeType/status/complexity)
+- `autosnippet_knowledge(operation=get, id)` - get full Recipe details
+- `autosnippet_search` - unified search (mode=auto/context/keyword/semantic)
+- `autosnippet_graph(operation=query/impact)` - knowledge graph
 
 ### 4. Record Usage Telemetry
-- `autosnippet_confirm_usage` - record when user adopts/applies a Recipe
+- `autosnippet_knowledge(operation=confirm_usage)` - record when user adopts/applies a Recipe
   - `usageType: "adoption"` - user adopted the Recipe
   - `usageType: "application"` - user applied the Recipe in code
 
@@ -79,20 +76,18 @@ This skill documents the Recipe lifecycle and clarifies what Agent can and canno
 ### Workflow 1: User asks to add a code pattern
 1. Analyze the code pattern
 2. Generate structured candidate with rationale, steps, etc.
-3. `autosnippet_check_duplicate` - verify no duplicate exists
-4. `autosnippet_validate_candidate` - pre-validate quality
-5. `autosnippet_submit_knowledge` - submit to candidate pool
-6. Tell user: "Candidate submitted. Review in Dashboard Candidates page."
+3. `autosnippet_submit_knowledge` - submit to candidate pool (auto-validates + dedup check)
+4. Tell user: "Candidate submitted. Review in Dashboard Candidates page."
 
 ### Workflow 2: User asks about an existing Recipe
-1. `autosnippet_context_search` or `autosnippet_list_recipes` to find it
-2. `autosnippet_get_recipe` to get full details
+1. `autosnippet_search` or `autosnippet_knowledge(operation=list)` to find it
+2. `autosnippet_knowledge(operation=get, id)` to get full details
 3. Present the Recipe content to user
-4. If user adopts it: `autosnippet_confirm_usage` with usageType=adoption
+4. If user adopts it: `autosnippet_knowledge(operation=confirm_usage)` with usageType=adoption
 
 ### Workflow 3: User asks to update a Recipe
 1. Explain: "I cannot modify Recipes directly. I can submit an improved version as a new candidate."
-2. `autosnippet_get_recipe` to read current content
+2. `autosnippet_knowledge(operation=get, id)` to read current content
 3. Generate improved candidate based on user's feedback
 4. `autosnippet_submit_knowledge` - submit improved version
 5. Tell user: "Improved version submitted as candidate. Update the Recipe in Dashboard."

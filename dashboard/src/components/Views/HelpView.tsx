@@ -41,12 +41,12 @@ const HelpView: React.FC = () => {
       <div className="mb-8 text-center">
         <h1 className="text-4xl font-bold text-slate-900 mb-4 flex items-center justify-center gap-3">
           <BookOpen size={ICON_SIZES.xxl} className="text-blue-600" />
-          AutoSnippet V2 使用说明
+          AutoSnippet V3 使用说明
         </h1>
         <p className="text-slate-600 text-lg max-w-3xl mx-auto whitespace-nowrap">
           连接开发者、AI 与项目知识库：ChatAgent 智能对话 · Skills 开放平台 · 知识库持续生长
         </p>
-        <p className="text-slate-400 text-sm mt-2">Node.js ≥ 20 · 13 Skills · AI 可自建 · 38 MCP 工具 · ChatAgent 对话 · 4 层检索管线</p>
+        <p className="text-slate-400 text-sm mt-2">Node.js ≥ 20 · 13 Skills · AI 可自建 · 16 MCP 工具 · ChatAgent 对话 · 4 层检索管线</p>
         <div className="mt-6 flex gap-4 justify-center text-sm">
           <a href="https://github.com/GxFn/AutoSnippet" target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
             查看 GitHub
@@ -115,7 +115,7 @@ const HelpView: React.FC = () => {
                   <tr className="hover:bg-slate-50">
                     <td className="px-4 py-3 border-b font-medium text-green-700">Cursor Agent</td>
                     <td className="px-4 py-3 border-b">按规范生成代码、检索知识库</td>
-                    <td className="px-4 py-3 border-b text-xs">13 个 Skills 理解规范；38 个 MCP 工具按需检索、提交候选；写操作经 Gateway 审核</td>
+                    <td className="px-4 py-3 border-b text-xs">13 个 Skills 理解规范；16 个 MCP 工具按需检索、提交候选；写操作经 Gateway 审核</td>
                   </tr>
                   <tr className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-medium text-purple-700">ChatAgent</td>
@@ -140,7 +140,7 @@ const HelpView: React.FC = () => {
                 <ul className="text-green-700 text-xs space-y-1 list-disc list-inside">
                   <li>扫描 SPM Target + AST 分析源码</li>
                   <li>启发式提取 → AI 精炼 → 生成 Candidate</li>
-                  <li>MCP 工具：<code className="bg-green-100 px-1 rounded">bootstrap_knowledge</code> / <code className="bg-green-100 px-1 rounded">bootstrap_refine</code></li>
+                  <li>MCP 工具：<code className="bg-green-100 px-1 rounded">bootstrap</code>（operation: knowledge / refine / scan）</li>
                 </ul>
               </div>
               <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
@@ -188,7 +188,7 @@ const HelpView: React.FC = () => {
                 <ul className="text-amber-700 text-xs space-y-1 list-disc list-inside">
                   <li>InvertedIndex → CoarseRanker → MultiSignalRanker → RetrievalFunnel</li>
                   <li>BM25 + keyword + semantic 三路融合</li>
-                  <li>4 个搜索 MCP 工具：search / context / keyword / semantic</li>
+                  <li>search MCP 工具：mode 参数路由 auto / keyword / semantic / context 四种模式</li>
                 </ul>
               </div>
               <div className="bg-rose-50 rounded-lg p-4 border border-rose-200">
@@ -200,7 +200,7 @@ const HelpView: React.FC = () => {
                 <ul className="text-rose-700 text-xs space-y-1 list-disc list-inside">
                   <li>内建规则 + 自定义规则 + Recipe 关联</li>
                   <li><code className="bg-rose-100 px-1 rounded">// as:audit</code> 触发 / <code className="bg-rose-100 px-1 rounded">asd guard &lt;file&gt;</code></li>
-                  <li>MCP：<code className="bg-rose-100 px-1 rounded">guard_check</code> / <code className="bg-rose-100 px-1 rounded">guard_audit_files</code> / <code className="bg-rose-100 px-1 rounded">scan_project</code></li>
+                  <li>MCP：<code className="bg-rose-100 px-1 rounded">guard</code>（code=单文件 / files=批量）、<code className="bg-rose-100 px-1 rounded">bootstrap</code>（operation: scan）</li>
                 </ul>
               </div>
             </div>
@@ -266,7 +266,7 @@ const HelpView: React.FC = () => {
               <ul className="text-slate-600 text-sm space-y-2 list-disc list-inside">
                 <li><strong>4 层管线</strong>：InvertedIndex → CoarseRanker → MultiSignalRanker → RetrievalFunnel</li>
                 <li><strong>编辑器内</strong>：<code className="bg-slate-100 px-1 rounded text-xs">// as:search keyword</code></li>
-                <li><strong>Cursor MCP</strong>：4 个搜索工具（search / context / keyword / semantic）</li>
+                <li><strong>Cursor MCP</strong>：search 统合工具（mode 路由 4 种模式）</li>
                 <li><strong>Dashboard</strong>：搜索框支持语义 + 关键词</li>
               </ul>
             </div>
@@ -278,7 +278,7 @@ const HelpView: React.FC = () => {
               <ul className="text-slate-600 text-sm space-y-2 list-disc list-inside">
                 <li><strong>文件审查</strong>：<code className="bg-slate-100 px-1 rounded text-xs">// as:audit</code></li>
                 <li><strong>Target 审查</strong>：<code className="bg-slate-100 px-1 rounded text-xs">// as:audit target</code></li>
-                <li><strong>合规报告</strong>：MCP <code className="bg-slate-100 px-1 rounded text-xs">compliance_report</code></li>
+                <li><strong>Guard 审查</strong>：MCP <code className="bg-slate-100 px-1 rounded text-xs">guard</code>（code / files 参数）</li>
                 <li><strong>Dashboard</strong>：Guard 页面可视化审查</li>
               </ul>
             </div>
@@ -291,7 +291,7 @@ const HelpView: React.FC = () => {
                 <li><strong>同步</strong>：<code className="bg-slate-100 px-1 rounded text-xs">asd sync</code> .md → DB（增量）</li>
                 <li><strong>Hash 校验</strong>：<code className="bg-slate-100 px-1 rounded text-xs">_contentHash</code> 检测手动编辑</li>
                 <li><strong>向量索引</strong>：启动时自动构建语义索引</li>
-                <li><strong>依赖图</strong>：<code className="bg-slate-100 px-1 rounded text-xs">get_targets</code> / <code className="bg-slate-100 px-1 rounded text-xs">get_target_files</code> MCP 工具</li>
+                <li><strong>依赖图</strong>：<code className="bg-slate-100 px-1 rounded text-xs">structure</code>（operation: targets / files）MCP 工具</li>
               </ul>
             </div>
           </div>
@@ -367,29 +367,35 @@ const HelpView: React.FC = () => {
 
           {/* MCP 工具 */}
           <div className="mb-5">
-            <h3 className="font-semibold text-slate-800 mb-3">38 个 MCP 工具</h3>
+            <h3 className="font-semibold text-slate-800 mb-3">16 个 MCP 工具（V3 参数化统合）</h3>
             <div className="overflow-x-auto">
               <table className="min-w-full border border-slate-200 rounded-lg text-xs">
                 <thead>
                   <tr className="bg-slate-50">
-                    <th className="px-3 py-2 border-b text-left">分组</th>
+                    <th className="px-3 py-2 border-b text-left">层级</th>
                     <th className="px-3 py-2 border-b text-left">工具</th>
-                    <th className="px-3 py-2 border-b text-left text-center">数量</th>
+                    <th className="px-3 py-2 border-b text-left">说明</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td className="px-3 py-2 border-b font-medium">system</td><td className="px-3 py-2 border-b"><code>health</code>, <code>capabilities</code></td><td className="px-3 py-2 border-b text-center">2</td></tr>
-                  <tr><td className="px-3 py-2 border-b font-medium">search</td><td className="px-3 py-2 border-b"><code>search</code>, <code>context_search</code>, <code>keyword_search</code>, <code>semantic_search</code></td><td className="px-3 py-2 border-b text-center">4</td></tr>
-                  <tr><td className="px-3 py-2 border-b font-medium">browse</td><td className="px-3 py-2 border-b"><code>list_rules</code>, <code>list_patterns</code>, <code>list_facts</code>, <code>list_recipes</code>, <code>get_recipe</code>, <code>recipe_insights</code>, <code>compliance_report</code>, <code>confirm_usage</code></td><td className="px-3 py-2 border-b text-center">8</td></tr>
-                  <tr><td className="px-3 py-2 border-b font-medium">structure</td><td className="px-3 py-2 border-b"><code>get_targets</code>, <code>get_target_files</code>, <code>get_target_metadata</code>, <code>graph_query</code>, <code>graph_impact</code>, <code>graph_path</code>, <code>graph_stats</code></td><td className="px-3 py-2 border-b text-center">7</td></tr>
-                  <tr><td className="px-3 py-2 border-b font-medium">candidate</td><td className="px-3 py-2 border-b"><code>validate_candidate</code>, <code>check_duplicate</code>, <code>submit_candidate</code>, <code>submit_candidates</code>, <code>submit_draft_recipes</code>, <code>enrich_candidates</code></td><td className="px-3 py-2 border-b text-center">6</td></tr>
-                  <tr><td className="px-3 py-2 border-b font-medium">guard</td><td className="px-3 py-2 border-b"><code>guard_check</code>, <code>guard_audit_files</code>, <code>scan_project</code></td><td className="px-3 py-2 border-b text-center">3</td></tr>
-                  <tr><td className="px-3 py-2 border-b font-medium">bootstrap</td><td className="px-3 py-2 border-b"><code>bootstrap_knowledge</code>, <code>bootstrap_refine</code></td><td className="px-3 py-2 border-b text-center">2</td></tr>
-                  <tr><td className="px-3 py-2 font-medium">skills</td><td className="px-3 py-2"><code>list_skills</code>, <code>load_skill</code>, <code>create_skill</code>, <code>delete_skill</code>, <code>update_skill</code>, <code>suggest_skills</code></td><td className="px-3 py-2 text-center">6</td></tr>
+                  <tr className="bg-blue-50/30"><td colSpan={3} className="px-3 py-1.5 border-b font-semibold text-blue-700 text-xs">Agent 层（12 个）— 默认对外暴露</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>health</code></td><td className="px-3 py-2 border-b">服务健康检查</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>capabilities</code></td><td className="px-3 py-2 border-b">服务能力清单（Agent 自发现）</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>search</code></td><td className="px-3 py-2 border-b">mode 路由 auto / keyword / semantic / context</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>knowledge</code></td><td className="px-3 py-2 border-b">operation 路由 list / get / insights / confirm_usage</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>structure</code></td><td className="px-3 py-2 border-b">operation 路由 targets / files / metadata</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>graph</code></td><td className="px-3 py-2 border-b">operation 路由 query / impact / path / stats</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>guard</code></td><td className="px-3 py-2 border-b">code=单文件审查 / files=批量审查</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>submit_knowledge</code> / <code>submit_knowledge_batch</code> / <code>save_document</code></td><td className="px-3 py-2 border-b">提交候选 / 批量 / 保存文档</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>skill</code></td><td className="px-3 py-2 border-b">operation 路由 list / load / create / update / delete / suggest</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>bootstrap</code></td><td className="px-3 py-2 border-b">operation 路由 knowledge / refine / scan</td></tr>
+                  <tr className="bg-amber-50/30"><td colSpan={3} className="px-3 py-1.5 border-b font-semibold text-amber-700 text-xs">Admin 层（4 个）— 需设置 ASD_MCP_TIER=admin</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">admin</td><td className="px-3 py-2 border-b"><code>enrich_candidates</code> / <code>validate_candidate</code> / <code>check_duplicate</code></td><td className="px-3 py-2 border-b">AI 润色 / 校验 / 查重</td></tr>
+                  <tr><td className="px-3 py-2 font-medium">admin</td><td className="px-3 py-2"><code>knowledge_lifecycle</code></td><td className="px-3 py-2">批量生命周期操作</td></tr>
                 </tbody>
               </table>
             </div>
-            <p className="text-xs text-slate-500 mt-2">其中 11 个写操作工具（submit_candidate, submit_candidates, submit_draft_recipes, enrich_candidates, guard_audit_files, scan_project, bootstrap_knowledge, bootstrap_refine, create_skill, delete_skill, update_skill）通过 Gateway 权限保护。</p>
+            <p className="text-xs text-slate-500 mt-2">写操作工具（submit_knowledge、guard、bootstrap 等）通过 Gateway 权限 / 宪法 / 审计三重保护。</p>
           </div>
 
           {/* 使用示例 */}
@@ -413,7 +419,7 @@ const HelpView: React.FC = () => {
         </Section>
 
         {/* V2 架构亮点 */}
-        <Section id="v2-architecture" title="V2 架构" icon={<Layers size={ICON_SIZES.xl} className="text-blue-600" />}>
+        <Section id="v2-architecture" title="V3 架构" icon={<Layers size={ICON_SIZES.xl} className="text-blue-600" />}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="border border-slate-200 rounded-lg p-5">
               <div className="flex items-center gap-2 mb-3">
@@ -426,7 +432,7 @@ const HelpView: React.FC = () => {
                 <p>② AI 批量提取 → Candidate 候选列表</p>
                 <p>③ 审阅 + Promote → Recipe 知识库就绪</p>
               </div>
-              <p className="text-slate-500 text-xs mt-2">支持 bootstrap_refine 持续迭代、resume 断点续跑</p>
+              <p className="text-slate-500 text-xs mt-2">支持 bootstrap 工具（operation: refine）持续迭代、resume 断点续跑</p>
             </div>
             <div className="border border-slate-200 rounded-lg p-5">
               <div className="flex items-center gap-2 mb-3">
@@ -477,7 +483,7 @@ const HelpView: React.FC = () => {
                   <span className="font-medium">CLI</span><span className="text-slate-500">asd × 10 命令</span>
                 </div>
                 <div className="flex justify-between bg-slate-50 px-3 py-2 rounded">
-                  <span className="font-medium">MCP Server</span><span className="text-slate-500">stdio × 36 工具</span>
+                  <span className="font-medium">MCP Server</span><span className="text-slate-500">stdio × 16 工具</span>
                 </div>
                 <div className="flex justify-between bg-slate-50 px-3 py-2 rounded">
                   <span className="font-medium">HTTP API</span><span className="text-slate-500">Express × 14 路由模块</span>

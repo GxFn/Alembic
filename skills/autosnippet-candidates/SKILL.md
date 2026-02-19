@@ -5,7 +5,7 @@ description: Generate Recipe candidates with full V3 structured information. Sin
 
 # AutoSnippet - Generate Candidates with Structured Content (v3.1)
 
-> Self-check and Fallback: MCP tools return unified JSON Envelope. Before heavy ops call autosnippet_health/autosnippet_capabilities. On failure do not retry in same turn; use static context or narrow scope.
+> Self-check and Fallback: MCP tools return unified JSON Envelope. Before heavy ops call `autosnippet_health`. On failure do not retry in same turn; use static context or narrow scope.
 
 ## Core Rule: Agent Permission Boundary
 
@@ -18,33 +18,37 @@ Recipe creation, review, publish, update, deprecate, delete are **human-only via
 
 ---
 
-## ⚠️ Recipe-Ready Checklist (CRITICAL)
+## ⚠️ Recipe-Ready Checklist (CRITICAL — STRICT ENFORCEMENT)
 
-**MCP 不再使用项目内 AI**——外部 Agent 必须自行提供所有字段。候选字段不全将导致 Recipe 审核时缺失重要信息。
+**MCP 不再使用项目内 AI**——外部 Agent 必须自行提供所有字段。**缺少必要字段的提交将被直接拒绝（不入库）**，不会降级处理。
 
-提交前必须检查以下字段（缺少任何一项，返回的 `recipeReadyHints` 会提示）：
+**严格规则**：
+- 所有必填字段必须在**单次调用**中一次性提供
+- 缺字段的提交会返回 `errorCode: INCOMPLETE_SUBMISSION`，不会创建任何记录
+- **禁止**先提交不完整数据再补全重新提交 — 这会浪费 Token 和时间
+- 提交前自行确认所有字段齐全，一次通过
 
 | 字段 | 级别 | 要求 | 示例 |
 |------|------|------|------|
 | `title` | 必填 | 中文简短标题（≤20字） | "视频封面 Cell 16:9 布局与时长格式化" |
-| `code` | 必填 | 代码片段 | 完整可运行的使用示例 |
+| `content.pattern` / `content.markdown` | 必填 | 代码片段或 Markdown 正文 | 完整可运行的使用示例 |
+| `content.rationale` | 必填 | 设计原理说明 | "统一封面布局避免手动计算" |
 | `language` | 必填 | `swift` / `objectivec` | 小写，不要用 `objc` |
+| `kind` | 必填 | `rule` / `pattern` / `fact` | 知识类型 |
+| `doClause` | 必填 | 英文祈使句正向指令（≤60 tokens） | "Use AspectRatioContainer for 16:9 layout" |
 | `category` | 必填 | 8 选 1 | View/Service/Tool/Model/Network/Storage/UI/Utility |
 | `trigger` | 必填 | @ 开头小写 | `@video-cover-cell` |
-| `summary_cn` | 必填 | 中文摘要 ≤100字 | "封面图片 16:9 自适应布局…" |
-| `summary_en` | 强烈建议 | 英文摘要 ≤100 words | "Cover image 16:9 adaptive layout…" |
+| `description` | 必填 | 中文摘要 ≤80字 | "封面图片 16:9 自适应布局…" |
 | `headers` | 必填 | 完整 import 语句数组 | `["#import <UIKit/UIKit.h>"]` |
-| `usageGuide` | 强烈建议 | Markdown ### 章节 | 见下方格式要求 |
-| `usageGuide_en` | 推荐 | 英文使用指南 | 提升 AI 理解与检索 |
-| `reasoning` | 必填 | whyStandard + sources + confidence | 见 Layer 6 |
-| `knowledgeType` | 强烈建议 | 12 维度之一 | `code-pattern` |
-| `rationale` | 强烈廚议 | 设计原理 | "统一封面布局避免手动计算" |
+| `usageGuide` | 必填 | Markdown ### 章节格式 | 描述何时/如何使用此知识 |
+| `knowledgeType` | 必填 | 知识维度 | `code-pattern` / `architecture` / `best-practice` 等 |
+| `reasoning` | 强烈建议 | whyStandard + sources + confidence | 见 Layer 6 |
 
 **工作流程**：
-1. Agent 提取候选时填写全部字段
-2. 提交后检查返回值中的 `recipeReadyHints`
-3. 若有缺失→ Agent 补全后重新提交（或调用 `autosnippet_enrich_candidates` 查漏）
-4. `recipeReadyHints` 为空 = 候选可直接审核为 Recipe
+1. Agent 提取候选时**一次性填写全部必填字段**
+2. 调用 `autosnippet_submit_knowledge` 提交
+3. 若返回 `INCOMPLETE_SUBMISSION` → 检查 `missingFields`，补齐后重新提交
+4. 提交成功 = 候选可直接审核为 Recipe
 
 ---
 
@@ -58,8 +62,8 @@ Recipe creation, review, publish, update, deprecate, delete are **human-only via
 5. Score and rank -> submit Candidates
 
 **Scenario 2: User says "batch scan Target"**
-1. Call `autosnippet_get_targets` -> select targetName
-2. Call `autosnippet_get_target_files(targetName)`
+1. Call `autosnippet_structure(operation=targets)` -> select targetName
+2. Call `autosnippet_structure(operation=files, targetName)`
 3. Batch extract candidates (parallel)
 4. Dedup, score, similarity mark -> submit Candidates
 
@@ -218,14 +222,13 @@ Severity: `error` (must fix) | `warning` (should fix) | `info` (suggestion)
 ## Single File / Module Scan Flow
 1. Read file → find public classes/functions/common patterns
 2. Per-file checklist extraction (10 dimensions above)
-3. Call `autosnippet_context_search` to mark similarity and fill `relations`
-4. (Optional) `autosnippet_validate_candidate` pre-validate
-5. (Optional) `autosnippet_check_duplicate` dedup hint
+3. Call `autosnippet_search(mode=context)` to mark similarity and fill `relations`
+4. `autosnippet_submit_knowledge` submit single (built-in auto-validate + dedup)
 6. `autosnippet_submit_knowledge` or `autosnippet_submit_knowledge_batch` to submit
 
 ## Batch Target Scan Flow
-1. `autosnippet_get_targets` → select targetName
-2. `autosnippet_get_target_files(targetName)`
+1. `autosnippet_structure(operation=targets)` → select targetName
+2. `autosnippet_structure(operation=files, targetName)`
 3. Parallel scan → per-file checklist extraction → aggregate / dedup / score
 4. `autosnippet_submit_knowledge_batch` batch submit — **all V3 fields are preserved**
 
@@ -241,15 +244,12 @@ Severity: `error` (must fix) | `warning` (should fix) | `info` (suggestion)
 
 | Tool | Usage |
 |------|-------|
-| `autosnippet_get_targets` | List project Targets for batch scan |
-| `autosnippet_get_target_files` | Get files for a Target |
-| `autosnippet_get_target_metadata` | Get Target metadata (dependencies, path) |
-| `autosnippet_context_search` | Find similar existing Recipes → fill `relations` |
-| `autosnippet_validate_candidate` | Pre-validate candidate fields |
-| `autosnippet_check_duplicate` | Cosine similarity dedup check |
-| `autosnippet_submit_knowledge` | Submit single candidate (**all V3 fields**) |
+| `autosnippet_structure(operation=targets)` | List project Targets for batch scan |
+| `autosnippet_structure(operation=files)` | Get files for a Target |
+| `autosnippet_structure(operation=metadata)` | Get Target metadata (dependencies, path) |
+| `autosnippet_search(mode=context)` | Find similar existing Recipes → fill `relations` |
+| `autosnippet_submit_knowledge` | Submit single candidate (**all V3 fields**, built-in auto-validate + dedup) |
 | `autosnippet_submit_knowledge_batch` | Batch submit candidates (**all V3 fields preserved**) |
-| `autosnippet_submit_knowledge_batch` | Submit .md draft files as candidates |
 
 ---
 
@@ -304,16 +304,15 @@ Recommended sections: When to use / When not to use / Key points / Dependencies 
 
 ### 备选：二次补全流程
 
-Step 1: 提交基本字段（title, code, language）→ 获得 candidate ID
-Step 2: 调用 `autosnippet_enrich_candidates({ candidateIds: ["id1", "id2"] })` 查漏
-Step 3: 根据返回的 `missingFields` + `recipeReadyMissing` 补全字段
-Step 4: 重新提交完整候选
+Step 1: 提交基本字段（title, code, language）→ 获得 candidate ID（`autosnippet_submit_knowledge` 内置自动校验 + 去重检查）
+Step 2: 根据提交返回的校验结果补全缺失字段
+Step 3: 重新提交完整候选
 
-`autosnippet_enrich_candidates` 检查两层：
-- **语义字段** (missingFields): rationale, knowledgeType, complexity, scope, steps, constraints
-- **Recipe 必填** (recipeReadyMissing): category, trigger, summary_cn, summary_en, headers, usageGuide
+> 注：`autosnippet_enrich_candidates` / `autosnippet_validate_candidate` / `autosnippet_check_duplicate` 已移入 admin 层级。Agent 层级的 `autosnippet_submit_knowledge` 已内置自动校验 + 去重，无需额外调用。
 
-已填写的字段**不会被覆盖**。使用此流程在候选 → Recipe 之前查漏补缺。
+需要补全的两层字段：
+- **语义字段**: rationale, knowledgeType, complexity, scope, steps, constraints
+- **Recipe 必填**: category, trigger, summary_cn, summary_en, headers, usageGuide
 
 ---
 

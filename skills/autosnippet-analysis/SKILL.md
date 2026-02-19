@@ -5,11 +5,13 @@ description: Deep project analysis — full scan + semantic field enrichment + g
 
 # AutoSnippet — Deep Project Analysis & Semantic Enrichment
 
-> Self-check & Fallback: MCP 工具返回统一 JSON Envelope（{ success, errorCode?, message?, data?, meta }）。重操作前调用 autosnippet_health/autosnippet_capabilities；失败时不在同一轮重试，转用静态上下文或缩小范围后再试。
+> Self-check & Fallback: MCP 工具返回统一 JSON Envelope（{ success, errorCode?, message?, data?, meta }）。重操作前调用 `autosnippet_health`；失败时不在同一轮重试，转用静态上下文或缩小范围后再试。
 
 ## Core Principle
 
-**MCP 工具负责数据采集 + 静态检查；你（Agent）负责语义理解；`autosnippet_enrich_candidates` 负责 AI 补全缺失字段。**
+**MCP 工具负责数据采集 + 静态检查；你（Agent）负责语义理解；Agent 直接填写完整字段后通过 `autosnippet_submit_knowledge` 提交。**
+
+**⚠️ 严格提交规则**：`autosnippet_submit_knowledge` 实施严格前置校验——缺少必要字段的提交将被**直接拒绝（不入库）**。必须在单次调用中一次性提供所有必填字段（title, language, content, kind, doClause, category, trigger, description, headers, usageGuide, knowledgeType, content.rationale）。不要分步提交或先提交再补全。
 
 ---
 
@@ -24,7 +26,7 @@ description: Deep project analysis — full scan + semantic field enrichment + g
 ### Workflow
 
 #### Phase 1: Collect & Baseline
-1. 调用 `autosnippet_scan_project` 获取文件列表 + Guard 审计基线
+1. 调用 `autosnippet_bootstrap(operation=scan)` 获取文件列表 + Guard 审计基线
 2. 审视 Guard 违规 — 静态规则问题 (命名/API 使用/废弃 API)
 3. 确定高优先级文件 (核心模块/共享工具/Service 层)
 
@@ -48,13 +50,21 @@ description: Deep project analysis — full scan + semantic field enrichment + g
 ```json
 {
   "title": "网络层统一错误处理模式",
-  "code": "<实际代码模式>",
+  "content": {
+    "pattern": "<实际代码模式>",
+    "rationale": "统一错误处理避免分散的 try-catch，便于日志收集和错误上报"
+  },
   "language": "swift",
+  "kind": "pattern",
+  "doClause": "Use centralized error handling via APIClient.request() for all network calls",
   "category": "Network",
+  "trigger": "@network-error-handling",
+  "description": "网络层统一错误处理——所有请求通过 APIClient.request() 封装，统一 catch + 日志上报",
+  "headers": ["import Combine", "import Foundation"],
+  "usageGuide": "### 何时使用\n发起网络请求时统一通过 APIClient\n### 如何使用\n1. 创建 NetworkError 枚举 2. 调用 APIClient.request()",
   "knowledgeType": "code-pattern",
   "complexity": "intermediate",
   "scope": "project-specific",
-  "rationale": "统一错误处理避免分散的 try-catch，便于日志收集和错误上报",
   "steps": [
     { "title": "创建 Error 枚举", "description": "在 Network/ 下创建 NetworkError.swift", "code": "enum NetworkError: Error { ... }" },
     { "title": "封装请求方法", "description": "所有请求统一通过 APIClient.request()", "code": "" }
@@ -76,7 +86,7 @@ description: Deep project analysis — full scan + semantic field enrichment + g
 Use `autosnippet_submit_knowledge_batch` for batch submission.
 
 #### Phase 4: Guard Deep Audit (Optional)
-对特定文件调用 `autosnippet_guard_audit_files` 做深度规范审计。
+对特定文件调用 `autosnippet_guard` (files[]) 做深度规范审计。
 
 ---
 
@@ -104,17 +114,13 @@ Use `autosnippet_submit_knowledge_batch` for batch submission.
 在分析代码时，直接填写所有 6 个语义字段到 `autosnippet_submit_knowledge` 调用中。
 
 **方式 B: 对已有候选调用 AI 补全**
-```
-autosnippet_enrich_candidates({ candidateIds: ["id1", "id2", ...] })
-```
-AI 会分析每条候选的代码，自动填充缺失字段（已有字段不会被覆盖）。
+> 注：`autosnippet_enrich_candidates` 已移入 admin 层级，Agent 推荐使用方式 A 直接填写完整字段。
 
 **方式 C: Bootstrap 候选 AI 润色**
 ```
-autosnippet_bootstrap_refine({ candidateIds: ["id1", "id2", ...] })
+autosnippet_bootstrap(operation=refine, candidateIds: ["id1", "id2", ...])
 ```
 使用 AI 对 Bootstrap 候选做内容润色（改善 summary、补充 insight、推断 relations、调整 confidence）。
-必须在 `autosnippet_enrich_candidates` 之后调用（确保字段完整后再润色）。
 
 ---
 
@@ -126,12 +132,11 @@ autosnippet_bootstrap_refine({ candidateIds: ["id1", "id2", ...] })
 
 ### Workflow
 
-1. 调用 `autosnippet_enrich_candidates` 对目标候选做结构补齐（诊断缺失字段）
-2. 调用 `autosnippet_bootstrap_refine` 对候选做 AI 润色（summary/insight/relations）
-3. 调用 `autosnippet_validate_candidate` 检查结构完整性
-4. 调用 `autosnippet_check_duplicate` 检查重复
-5. 报告补全情况 + 缺失字段 + 重复风险
-6. 如缺失字段 AI 无法填充，提示用户手动补充
+1. 对目标候选做结构补齐（确保所有字段完整）
+2. 调用 `autosnippet_bootstrap(operation=refine)` 对候选做 AI 润色（summary/insight/relations）
+3. 提交时使用 `autosnippet_submit_knowledge`（内置自动校验 + 去重检查）
+4. 报告补全情况 + 缺失字段 + 重复风险
+5. 如缺失字段 AI 无法填充，提示用户手动补充
 
 ### Recipe 必备字段检查清单
 

@@ -5,7 +5,7 @@ description: Guides the agent to submit module usage code (designed/written with
 
 # AutoSnippet Create — Submit to Web, Add to AutoSnippet
 
-> Self-check & Fallback: MCP 工具返回统一 JSON Envelope（{ success, errorCode?, message?, data?, meta }）。重操作前调用 autosnippet_health/autosnippet_capabilities；失败时不在同一轮重试，转用静态上下文或缩小范围后再试。
+> Self-check & Fallback: MCP 工具返回统一 JSON Envelope（{ success, errorCode?, message?, data?, meta }）。重操作前调用 `autosnippet_health`；失败时不在同一轮重试，转用静态上下文或缩小范围后再试。
 
 This skill tells the agent how to **submit module usage code** (that Cursor has designed or the user has written) to the **AutoSnippet web (Dashboard)** so it is **added to the knowledge base (Recipes)**. For concepts (knowledge base, Recipe), use **autosnippet-concepts**. For looking up existing Recipes, use **autosnippet-recipes**.
 
@@ -50,7 +50,7 @@ This skill tells the agent how to **submit module usage code** (that Cursor has 
      - 后台自动停止，前台自动恢复
      ```
    - See [templates/recipes-setup/README.md](../../templates/recipes-setup/README.md) for detailed format guide & examples.
-7. **Auto-fill headers from project context**: Before submitting, **check `references/project-recipes-context.md`** (轻量索引) to find similar Recipes by title/trigger/category, then call MCP **`autosnippet_get_recipe(id)`** to get full content including headers. Copy the exact import format for `headers` field. If needed, call MCP **`autosnippet_context_search`** with the module name to find similar Recipes and extract their header patterns. This ensures consistency and correctness.
+7. **Auto-fill headers from project context**: Before submitting, **check `references/project-recipes-context.md`** (轻量索引) to find similar Recipes by title/trigger/category, then call MCP **`autosnippet_knowledge(operation=get, id)`** to get full content including headers. Copy the exact import format for `headers` field. If needed, call MCP **`autosnippet_search(mode=context)`** with the module name to find similar Recipes and extract their header patterns. This ensures consistency and correctness.
 8. **Primary flow (MCP preferred)**: Code is ready → Agent writes to `_draft_recipe.md` or calls `autosnippet_submit_knowledge_batch` / `autosnippet_submit_knowledge_batch` → candidates appear in Dashboard Candidates → user reviews and approves → Recipe is added to the knowledge base.
 9. **Alternative (Dashboard browser)**: Code is ready → user opens Dashboard (`asd ui` running) → **New Recipe** → **Use Copied Code** (paste the code) → AI fills title/summary/trigger/headers → **user reviews and approves** → saved to knowledge base.
 10. **Alternative (in editor)**: User adds **`// as:create`** in the source file, copies the code, saves → **watch** (from `asd watch` or `asd ui`) auto-adds to Candidates → user opens Dashboard **Candidates** to review and save.
@@ -161,13 +161,11 @@ Watch parses all such blocks and adds each as a separate candidate; prompt may s
 
 | Tool | Use |
 |------|-----|
-| `autosnippet_context_search` | On-demand semantic search of knowledge base; pass `query`, `limit?` |
+| `autosnippet_search(mode=context)` | On-demand semantic search of knowledge base; pass `query`, `limit?` |
 | `autosnippet_submit_knowledge_batch` | Submit draft .md as candidates: prefer draft folder + multiple files (not one big file); supports intro-only docs (no code—no Snippet). Pass `filePaths`, optional `targetName`, `deleteAfterSubmit`. **Delete the draft folder after submit** (e.g. `deleteAfterSubmit: true` or `rm -rf .autosnippet-drafts`). |
 | `autosnippet_submit_knowledge_batch` | Submit structured items (title, summary, trigger, language, code, usageGuide) for batch scan, etc. |
-| `autosnippet_submit_knowledge` | Submit single structured candidate with full V3 fields. |
+| `autosnippet_submit_knowledge` | Submit single structured candidate with full V3 fields. **严格前置校验**——缺少必要字段（title, language, content, kind, doClause, category, trigger, description, headers, usageGuide, knowledgeType, content.rationale）的提交将被直接拒绝，不入库。必须一次性提供所有字段。 |
 | `autosnippet_save_document` | Save a development document (design doc, debug report, ADR) — only needs title + markdown. See **autosnippet-devdocs** skill. |
-| `autosnippet_validate_candidate` | Pre-validate candidate quality before submission. |
-| `autosnippet_check_duplicate` | Check for duplicate Recipes before submission. |
 
 **Fallback when Dashboard not open**: Agent can always use `autosnippet_submit_knowledge_batch` or `autosnippet_submit_knowledge_batch` directly via MCP — no browser needed.
 

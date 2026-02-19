@@ -307,7 +307,7 @@ describe('MCP Tool Definitions (V3)', () => {
   test('应包含 submit_knowledge 工具', () => {
     const tool = TOOLS.find(t => t.name === 'autosnippet_submit_knowledge');
     expect(tool).toBeDefined();
-    expect(tool.inputSchema.required).toEqual(['title', 'language', 'content', 'kind', 'doClause']);
+    expect(tool.inputSchema.required).toEqual(['title', 'language', 'content', 'kind', 'doClause', 'category', 'trigger', 'description', 'headers', 'usageGuide', 'knowledgeType']);
   });
 
   test('应包含 submit_knowledge_batch 工具', () => {
@@ -334,8 +334,8 @@ describe('MCP Tool Definitions (V3)', () => {
     });
   });
 
-  test('TOOLS 数组应包含 39 个工具', () => {
-    expect(TOOLS.length).toBe(39);
+  test('TOOLS 数组应包含 16 个工具', () => {
+    expect(TOOLS.length).toBe(16);
   });
 
   test('submit_knowledge content 字段应有 pattern 和 markdown 属性', () => {

@@ -15,7 +15,7 @@ This skill explains [AutoSnippet](https://github.com/GxFn/AutoSnippet)'s **knowl
 4. For **project structure** (targets/dep graph), use **autosnippet-structure**.
 
 5. **Self-check & Fallback (统一 Envelope)**
-  - Before heavy operations, call `autosnippet_health` and `autosnippet_capabilities`.
+  - Before heavy operations, call `autosnippet_health`.
   - All MCP tools return a JSON Envelope: `{ success, errorCode?, message?, data?, meta }`.
   - On failure or empty results, do NOT retry within the same cycle; fall back to static context or ask user for minimal confirmation, then continue with reduced scope.
 
@@ -36,12 +36,12 @@ In AutoSnippet, the **知识库** is the set of project-owned artifacts under **
 
 ## Context Storage and Vector Store
 
-The knowledge base has **context storage** capability: Recipes, docs, etc. are embedded and support semantic search. The agent queries on demand via MCP tool `autosnippet_context_search` without preloading all content.
+The knowledge base has **context storage** capability: Recipes, docs, etc. are embedded and support semantic search. The agent queries on demand via MCP tool `autosnippet_search(mode=context)` without preloading all content.
 
 **Safety and role statement**:
 - Context storage and vector store are **safe** external storage; they only hold project knowledge (Recipes, docs, etc.), with no user privacy or sensitive data exposure risk.
 - **Skills express semantics** (when to query, what to query, how to use); **MCP provides capability** (connection, retrieval, response).
-- **Cursor can use Context storage and vector store as external context**: call `autosnippet_context_search` on demand to fetch relevant chunks instead of loading all knowledge into the conversation, thus **saving context space** (tokens/context window).
+- **Cursor can use Context storage and vector store as external context**: call `autosnippet_search(mode=context)` on demand to fetch relevant chunks instead of loading all knowledge into the conversation, thus **saving context space** (tokens/context window).
 
 | Item | Description |
 |------|-------------|
@@ -49,12 +49,12 @@ The knowledge base has **context storage** capability: Recipes, docs, etc. are e
 | **Build command** | Run `asd embed` from project root |
 | **Index sources** | `recipe` (AutoSnippet/recipes/*.md), `doc` (docs dir), `target-readme` (SPM target READMEs) |
 | **Storage adapter** | Default `json` |
-| **Usage** | With `asd ui` running, MCP tool `autosnippet_context_search` takes `query`, `limit?` for semantic search |
+| **Usage** | With `asd ui` running, MCP tool `autosnippet_search(mode=context)` takes `query`, `limit?` for semantic search |
 | **Use cases** | On-demand lookup of relevant Recipe/docs; Guard review against knowledge base; Dashboard semantic search |
 
 **Prerequisites**: `asd embed` run, `asd ui` started, MCP configured.
 
-**Usage guidance for Cursor**: Assume `asd ui` is kept running when calling MCP tools (`autosnippet_context_search`, `autosnippet_search`, etc.). If a call fails (e.g. connection refused, API error), do **not** retry within the current agent cycle; fall back to static index (`references/project-recipes-context.md` 轻量索引) or in-context lookup instead.
+**Usage guidance for Cursor**: Assume `asd ui` is kept running when calling MCP tools (`autosnippet_search`, etc.). If a call fails (e.g. connection refused, API error), do **not** retry within the current agent cycle; fall back to static index (`references/project-recipes-context.md` 轻量索引) or in-context lookup instead.
 
 **Envelope reading guidance**:
 - Parse Envelope fields:
@@ -67,7 +67,6 @@ The knowledge base has **context storage** capability: Recipes, docs, etc. are e
 
 **Self-check & safety**:
 - Use `autosnippet_health` to verify UI and service availability before heavy operations.
-- Use `autosnippet_capabilities` to list available tools and inputs/outputs.
 - Authentication and HTTP wiring live in MCP, not in Skills. Do not hardcode URLs/HTTP in Skills.
 
 ---
@@ -78,24 +77,20 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 
 | Intent | Primary tool(s) |
 |---|---|
-| 统合搜索 | `autosnippet_search`（auto 模式融合 BM25+语义） |
-| 语义检索 | `autosnippet_context_search` |
-| 精确检索 | `autosnippet_keyword_search` |
-| 向量搜索 | `autosnippet_semantic_search` |
-| 知识浏览 | `autosnippet_list_recipes`, `autosnippet_get_recipe`, `autosnippet_list_rules`, `autosnippet_list_patterns`, `autosnippet_list_facts` |
-| 结构发现 | `autosnippet_get_targets`, `autosnippet_get_target_files`, `autosnippet_get_target_metadata` |
-| 知识图谱 | `autosnippet_graph_query`, `autosnippet_graph_impact`, `autosnippet_graph_path`, `autosnippet_graph_stats` |
-| 候选预检 | `autosnippet_validate_candidate` |
-| 去重建议 | `autosnippet_check_duplicate` |
-| 候选提交 | `autosnippet_submit_knowledge`, `autosnippet_submit_knowledge_batch`, `autosnippet_submit_knowledge_batch` |
-| AI 补全 | `autosnippet_enrich_candidates` |
-| Guard 检查 | `autosnippet_guard_check`, `autosnippet_guard_audit_files` |
-| 合规报告 | `autosnippet_compliance_report`, `autosnippet_recipe_insights` |
-| 使用确认 | `autosnippet_confirm_usage` |
-| 项目扫描 | `autosnippet_scan_project` |
-| 冷启动 | `autosnippet_bootstrap_knowledge`, `autosnippet_bootstrap_refine` |
-| Skills 管理 | `autosnippet_list_skills`, `autosnippet_load_skill`, `autosnippet_create_skill`, `autosnippet_update_skill`, `autosnippet_delete_skill`, `autosnippet_suggest_skills` |
-| 自检/能力 | `autosnippet_health`, `autosnippet_capabilities` |
+| 统合搜索 | `autosnippet_search`（mode=auto 融合 BM25+语义） |
+| 语义检索 | `autosnippet_search(mode=context)` |
+| 精确检索 | `autosnippet_search(mode=keyword)` |
+| 向量搜索 | `autosnippet_search(mode=semantic)` |
+| 知识浏览 | `autosnippet_knowledge(operation=list/get/insights)` |
+| 结构发现 | `autosnippet_structure(operation=targets/files/metadata)` |
+| 知识图谱 | `autosnippet_graph(operation=query/impact/path/stats)` |
+| 候选提交 | `autosnippet_submit_knowledge`, `autosnippet_submit_knowledge_batch` |
+| Guard 检查 | `autosnippet_guard`（code 单条 / files[] 批量 — 自动路由） |
+| 使用确认 | `autosnippet_knowledge(operation=confirm_usage)` |
+| 项目扫描 | `autosnippet_bootstrap(operation=scan)` |
+| 冷启动 | `autosnippet_bootstrap(operation=knowledge/refine)` |
+| Skills 管理 | `autosnippet_skill(operation=list/load/create/update/delete/suggest)` |
+| 自检 | `autosnippet_health` |
 
 ### Failure Handling (Examples)
 - 检索失败（`SEARCH_FAILED`）：改用静态 Recipe 目录或缩小关键词后再试（下一轮）。
@@ -367,7 +362,7 @@ When both Recipe and project source code have relevant implementations, **prefer
 ## On-Demand Context (when asd ui is running)
 
 When `asd ui` is running in the project root, use the HTTP API for on-demand semantic search:
-- MCP tool `autosnippet_context_search` (pass `query`, `limit?`) → returns relevant Recipe/docs
+- MCP tool `autosnippet_search(mode=context)` (pass `query`, `limit?`) → returns relevant Recipe/docs
 - Used to fetch Recipe/docs relevant to the current task dynamically instead of loading all at once.
 
 ---
@@ -376,13 +371,13 @@ When `asd ui` is running in the project root, use the HTTP API for on-demand sem
 
 | Capability | Description | Skill |
 |------------|-------------|-------|
-| **Recipe lookup** | Read `references/project-recipes-context.md` 轻量索引，需全文调 MCP `autosnippet_get_recipe(id)` / `autosnippet_context_search`. Recipe over source | autosnippet-recipes |
+| **Recipe lookup** | Read `references/project-recipes-context.md` 轻量索引，需全文调 MCP `autosnippet_knowledge(operation=get, id)` / `autosnippet_search(mode=context)`. Recipe over source | autosnippet-recipes |
 | **Create Recipe** | Dashboard New Recipe; or write to `_draft_recipe.md` and watch auto-adds; or MCP `autosnippet_submit_knowledge_batch` | autosnippet-create |
 | **Search & insert** | `ass` shortcut or `// as:search`, `asd search`, Dashboard search | autosnippet-search |
 | **Audit review** | `// as:audit`; watch runs AI review against knowledge base | autosnippet-guard |
 | **Dependency graph** | `AutoSnippet/AutoSnippet.spmmap.json`; `asd spm-map` to update; MCP graph tools for querying | autosnippet-structure |
-| **Vector store** | Built by `asd embed`; `autosnippet_context_search` for on-demand lookup. Use as context storage to save space | autosnippet-concepts / autosnippet-recipes |
-| **MCP tools** | `autosnippet_search` (统合搜索), `autosnippet_context_search` (智能语义搜索), `autosnippet_guard_check` (Guard 检查) | — |
+| **Vector store** | Built by `asd embed`; `autosnippet_search(mode=context)` for on-demand lookup. Use as context storage to save space | autosnippet-concepts / autosnippet-recipes |
+| **MCP tools** | `autosnippet_search` (统合搜索), `autosnippet_guard` (Guard 检查) | — |
 
 **Principles**: Recipe is project standard, over project implementation; do not modify AutoSnippet/ directly, submit via Dashboard or MCP candidate submission. Context storage is safe; Skills express semantics, MCP provides capability; Cursor calls on demand to save space.
 
@@ -600,9 +595,9 @@ authority: 3
 
 ### How to use knowledge once it’s in the base
 
-- **Search**: MCP `autosnippet_context_search` / `autosnippet_search`, or terminal `asd search`, Dashboard search, `ass` shortcut or `// as:search`.
-- **Audit**: `// as:audit` runs Guard against Recipe standards. Or call `autosnippet_guard_check` / `autosnippet_guard_audit_files` via MCP for on-demand checking.
-- **Record adoption**: When the user confirms use, call `autosnippet_confirm_usage` to record human usage (affects authority and ranking).
+- **Search**: MCP `autosnippet_search` (mode=context/keyword/semantic/auto), or terminal `asd search`, Dashboard search, `ass` shortcut or `// as:search`.
+- **Audit**: `// as:audit` runs Guard against Recipe standards. Or call `autosnippet_guard` via MCP for on-demand checking (with `code` for single snippet or `files[]` for batch).
+- **Record adoption**: When the user confirms use, call `autosnippet_knowledge(operation=confirm_usage)` to record human usage (affects authority and ranking).
 
 ---
 

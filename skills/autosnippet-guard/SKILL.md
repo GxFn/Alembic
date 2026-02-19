@@ -1,11 +1,11 @@
 ---
 name: autosnippet-guard
-description: Guard checks code against project Recipe standards. Passive (// as:audit + watch) or active (MCP tools autosnippet_guard_check / autosnippet_guard_audit_files). Use when the user wants to audit, lint, or verify code compliance.
+description: Guard checks code against project Recipe standards. Passive (// as:audit + watch) or active (MCP tool autosnippet_guard — auto-routes by code/files params). Use when the user wants to audit, lint, or verify code compliance.
 ---
 
 # AutoSnippet Guard — Code Compliance Checking
 
-> Self-check & Fallback: MCP 工具返回统一 JSON Envelope（{ success, errorCode?, message?, data?, meta }）。重操作前调用 autosnippet_health/autosnippet_capabilities；失败时不在同一轮重试，转用静态上下文或缩小范围后再试。
+> Self-check & Fallback: MCP 工具返回统一 JSON Envelope（{ success, errorCode?, message?, data?, meta }）。重操作前调用 `autosnippet_health`；失败时不在同一轮重试，转用静态上下文或缩小范围后再试。
 
 **Use this skill when**: The user wants to **check** whether code meets **project standards** (规范 / Audit / Guard / Lint).
 
@@ -26,7 +26,7 @@ When the user wants **quick inline audit**:
 
 Agent can directly invoke Guard checks via MCP:
 
-#### Single Code Check: `autosnippet_guard_check`
+#### Single Code Check: `autosnippet_guard` (with `code` param)
 Check a code snippet against Guard rules. Best for quick inline checks.
 
 ```json
@@ -44,7 +44,7 @@ Returns: List of violations with `{ ruleId, severity, message, line, pattern }`.
 - Agent is reviewing code before suggesting changes
 - Quick single-file compliance check
 
-#### Multi-file Audit: `autosnippet_guard_audit_files`
+#### Multi-file Audit: `autosnippet_guard` (with `files[]` param)
 Batch audit multiple files against Guard rules. Results are automatically recorded to ViolationsStore (visible in Dashboard Guard page).
 
 ```json
@@ -80,31 +80,28 @@ Guard uses the **same Recipe content** in `AutoSnippet/recipes/` as the standard
 
 | Tool | Purpose | Input |
 |------|---------|-------|
-| `autosnippet_guard_check` | Single code Guard check | `code` (required), `language`, `filePath` |
-| `autosnippet_guard_audit_files` | Multi-file batch audit | `files[]` (path + optional content), `scope` |
-| `autosnippet_scan_project` | Full project scan + Guard audit | `maxFiles`, `includeContent` |
-| `autosnippet_compliance_report` | Compliance assessment report | `period` (all/daily/weekly/monthly) |
-| `autosnippet_list_rules` | List all Guard rules (kind=rule) | `limit`, `status`, `language`, `category` |
+| `autosnippet_guard` | Code Guard check (single or batch — auto-routed by params) | `code` for single, `files[]` for batch, `language`, `filePath`, `scope` |
+| `autosnippet_bootstrap(operation=scan)` | Full project scan + Guard audit | `maxFiles`, `includeContent` |
+| `autosnippet_knowledge(operation=list, kind=rule)` | List all Guard rules (kind=rule) | `limit`, `status`, `language`, `category` |
 
 ---
 
 ## Typical Agent Workflow
 
 ### Quick Check (user asks "检查这段代码")
-1. Call `autosnippet_guard_check` with the code
+1. Call `autosnippet_guard` with the code
 2. Present violations to user with severity and fix suggestions
-3. If user adopts fixes, optionally `autosnippet_confirm_usage` for the relevant Recipe
+3. If user adopts fixes, optionally `autosnippet_knowledge(operation=confirm_usage)` for the relevant Recipe
 
 ### Module Audit (user asks "审查网络模块")
-1. Call `autosnippet_get_target_files` to get file list
-2. Call `autosnippet_guard_audit_files` with the file paths
+1. Call `autosnippet_structure(operation=files)` to get file list
+2. Call `autosnippet_guard` with the file paths
 3. Summarize violations grouped by severity
 4. Suggest fixes based on Recipe standards
 
 ### Project-wide Compliance
-1. Call `autosnippet_scan_project` for full project scan
-2. Call `autosnippet_compliance_report` for compliance summary
-3. Present high-severity findings first
+1. Call `autosnippet_bootstrap(operation=scan)` for full project scan
+2. Present high-severity findings first
 
 ---
 
@@ -120,6 +117,6 @@ Guard uses the **same Recipe content** in `AutoSnippet/recipes/` as the standard
 
 - **autosnippet-recipes**: Recipe content IS the Guard standard. Use for looking up what the standard says.
 - **autosnippet-intent**: General router; may route Guard-related intents here.
-- **autosnippet-analysis**: Deep project scan + Guard baseline via `autosnippet_scan_project`.
+- **autosnippet-analysis**: Deep project scan + Guard baseline via `autosnippet_bootstrap(operation=scan)`.
 
 ```

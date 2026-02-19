@@ -16,13 +16,13 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 | 已有知识库，查/用 Recipe | → autosnippet-recipes |
 | 只扫描单个文件/模块 | → autosnippet-candidates |
 | 只做 Guard 审计 | → autosnippet-guard |
-| 快速看看项目结构 | → autosnippet-structure（用 scan_project） |
+| 快速看看项目结构 | → autosnippet-structure（用 `autosnippet_bootstrap(operation=scan)`） |
 
 ---
 
 ## Phase 0: 启动扫描
 
-调用 `autosnippet_bootstrap_knowledge` 收集项目结构化数据：
+调用 `autosnippet_bootstrap(operation=knowledge)` 收集项目结构化数据：
 
 ```json
 { "aiMode": "external", "maxFiles": 500, "contentMaxLines": 150 }
@@ -226,7 +226,7 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 
 ## Phase 5: 批量提交
 
-将所有分析结果通过 `autosnippet_submit_knowledge_batch` 批量提交：
+将所有分析结果通过 `autosnippet_submit_knowledge_batch` 批量提交（内置自动校验 + 去重）：
 
 ```json
 {
@@ -283,7 +283,7 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 
 ## scan_project vs bootstrap_knowledge
 
-| | scan_project | bootstrap_knowledge |
+| | `bootstrap(op=scan)` | `bootstrap(op=knowledge)` |
 |---|---|---|
 | **用途** | 快速结构探查（不写库） | 完整知识库初始化（写 knowledge_edges） |
 | **SPM 图谱写入** | ❌ | ✅ |
@@ -447,17 +447,14 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 
 | Tool | 用途 |
 |------|------|
-| `autosnippet_bootstrap_knowledge` | 启动冷启动扫描（本 Skill 核心工具） |
-| `autosnippet_enrich_candidates` | ① 结构补齐：诊断候选字段缺失 |
-| `autosnippet_bootstrap_refine` | ② 内容润色：AI 精炼候选质量（summary/insight/relations） |
+| `autosnippet_bootstrap(operation=knowledge)` | 启动冷启动扫描（本 Skill 核心工具） |
+| `autosnippet_bootstrap(operation=refine)` | AI 精炼候选质量（summary/insight/relations） |
+| `autosnippet_bootstrap(operation=scan)` | 轻量探查（不写库） |
 | `autosnippet_submit_knowledge_batch` | 批量提交候选 |
-| `autosnippet_submit_knowledge` | 提交单条候选 |
-| `autosnippet_validate_candidate` | 校验候选字段 |
-| `autosnippet_check_duplicate` | 去重检查 |
-| `autosnippet_context_search` | 查找已有知识（避免重复） |
-| `autosnippet_scan_project` | 轻量探查（不写库） |
-| `autosnippet_list_skills` | 列出可用 Skill 列表 |
-| `autosnippet_load_skill` | 加载指定 Skill 文档获取指引 |
+| `autosnippet_submit_knowledge` | 提交单条候选（内置自动校验 + 去重检查） |
+| `autosnippet_search(mode=context)` | 查找已有知识（避免重复） |
+| `autosnippet_skill(operation=list)` | 列出可用 Skill 列表 |
+| `autosnippet_skill(operation=load)` | 加载指定 Skill 文档获取指引 |
 
 ## Related Skills
 

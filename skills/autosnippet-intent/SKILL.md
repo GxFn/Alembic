@@ -34,19 +34,18 @@ Use this skill when the user's intent is unclear or overlaps multiple capabiliti
 - `autosnippet-batch-scan` / `autosnippet-recipe-candidates` → merged into autosnippet-candidates
 - `autosnippet-dep-graph` → merged into autosnippet-structure
 
-## MCP tools (reference only)
+## MCP tools (reference only — 12 个整合工具)
 
 - System: `autosnippet_health`, `autosnippet_capabilities`
-- Search: `autosnippet_search`, `autosnippet_context_search`, `autosnippet_keyword_search`, `autosnippet_semantic_search`
-- Browse: `autosnippet_list_recipes`, `autosnippet_get_recipe`, `autosnippet_list_rules`, `autosnippet_list_patterns`, `autosnippet_list_facts`
-- Insights: `autosnippet_recipe_insights`, `autosnippet_compliance_report`
-- Graph: `autosnippet_graph_query`, `autosnippet_graph_impact`, `autosnippet_graph_path`, `autosnippet_graph_stats`
-- Structure: `autosnippet_get_targets`, `autosnippet_get_target_files`, `autosnippet_get_target_metadata`
-- Candidates: `autosnippet_validate_candidate`, `autosnippet_check_duplicate`, `autosnippet_submit_knowledge`, `autosnippet_submit_knowledge_batch`, `autosnippet_submit_knowledge_batch`, `autosnippet_enrich_candidates`
-- Guard: `autosnippet_guard_check`, `autosnippet_guard_audit_files`, `autosnippet_scan_project`
-- Telemetry: `autosnippet_confirm_usage`
-- Bootstrap: `autosnippet_bootstrap_knowledge`, `autosnippet_bootstrap_refine`
-- Skills: `autosnippet_list_skills`, `autosnippet_load_skill`, `autosnippet_create_skill`, `autosnippet_update_skill`, `autosnippet_delete_skill`, `autosnippet_suggest_skills`
+- Search: `autosnippet_search` (mode: auto / context / keyword / semantic)
+- Knowledge: `autosnippet_knowledge` (operation: list / get / insights / confirm_usage)
+- Graph: `autosnippet_graph` (operation: query / impact / path / stats)
+- Structure: `autosnippet_structure` (operation: targets / files / metadata)
+- Submit: `autosnippet_submit_knowledge`, `autosnippet_submit_knowledge_batch`
+- Document: `autosnippet_save_document`
+- Guard: `autosnippet_guard` (code 单文件 / files[] 批量)
+- Bootstrap: `autosnippet_bootstrap` (operation: knowledge / refine / scan)
+- Skills: `autosnippet_skill` (operation: list / load / create / update / delete / suggest)
 
 This skill is a router only; it does not perform actions itself.
 
