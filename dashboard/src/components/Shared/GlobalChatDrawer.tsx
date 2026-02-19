@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
-import { MessageSquare, X, Send, Brain, Loader2, Check, RotateCcw, ChevronRight, ArrowRight, Sparkles, Plus } from 'lucide-react';
+import { MessageSquare, X, Send, Brain, Loader2, Check, RotateCcw, ChevronRight, ArrowRight, Sparkles, Plus, X as XIcon } from 'lucide-react';
 import MarkdownWithHighlight from './MarkdownWithHighlight';
 import api from '../../api';
 import { notify } from '../../utils/notification';
 import { KnowledgeEntry } from '../../types';
 import { useChatTopics, type ChatMessage } from '../../hooks/useChatTopics';
+import { createStreamEventHandler } from '../../hooks/useChatStream';
 
 /* ═══════════════════════════════════════════════════════════
  * GlobalChatDrawer — 常驻 AI Chat（同层内联面板）
@@ -28,6 +29,7 @@ interface ChatMsg {
   content: string;
   diff?: DiffField[];
   preview?: Record<string, any>;
+  excludedFields?: string[];
   timestamp: number;
 }
 
@@ -77,7 +79,9 @@ const uid = () => Math.random().toString(36).substring(2, 10);
 
 const REFINE_FIELD_DEFS: { key: string; label: string; format?: (v: any) => string }[] = [
   { key: 'description', label: '摘要' },
-  { key: 'pattern', label: '内容文档' },
+  { key: 'pattern', label: '代码/标准用法' },
+  { key: 'markdown', label: 'Markdown 文档' },
+  { key: 'rationale', label: '设计原理' },
   { key: 'tags', label: '标签', format: (v) => (Array.isArray(v) ? v.join(', ') : String(v || '')) },
   { key: 'confidence', label: '置信度', format: (v) => String(v ?? '—') },
   { key: 'aiInsight', label: 'AI 洞察' },
@@ -101,6 +105,7 @@ function buildDiffFields(before: Record<string, any>, after: Record<string, any>
 function extractBefore(cand: KnowledgeEntry): Record<string, any> {
   return {
     title: cand.title || '', description: cand.description || '', pattern: cand.content?.pattern || '',
+    markdown: cand.content?.markdown || '', rationale: cand.content?.rationale || '',
     tags: cand.tags || [], confidence: cand.reasoning?.confidence ?? 0.6,
     relations: cand.relations || {}, aiInsight: cand.aiInsight || null, agentNotes: cand.agentNotes || null,
   };
@@ -108,30 +113,61 @@ function extractBefore(cand: KnowledgeEntry): Record<string, any> {
 
 // ─── DiffView ────────────────────────────────────────────
 
-const DiffView: React.FC<{ diff: DiffField[] }> = ({ diff }) => {
+const DiffView: React.FC<{
+  diff: DiffField[];
+  excludedFields?: string[];
+  onToggleField?: (field: string) => void;
+}> = ({ diff, excludedFields = [], onToggleField }) => {
   if (diff.length === 0) return <p className="text-xs text-slate-400 italic py-2">未检测到变更</p>;
   return (
     <div className="space-y-2 mt-2">
-      {diff.map((d) => (
-        <div key={d.field} className="border border-slate-200 rounded-lg overflow-hidden">
-          <div className="px-2.5 py-1 bg-slate-50 border-b border-slate-200 flex items-center gap-1.5">
-            <ArrowRight size={10} className="text-emerald-500" />
-            <span className="text-[10px] font-bold text-slate-600">{d.label}</span>
+      {diff.map((d) => {
+        const excluded = excludedFields.includes(d.field);
+        return (
+          <div key={d.field} className={`border rounded-lg overflow-hidden transition-opacity ${excluded ? 'border-slate-100 opacity-45' : 'border-slate-200'}`}>
+            <div className={`px-2.5 py-1.5 border-b flex items-center gap-1.5 ${excluded ? 'bg-slate-50/50 border-slate-100' : 'bg-slate-50 border-slate-200'}`}>
+              <ArrowRight size={10} className={excluded ? 'text-slate-300' : 'text-emerald-500'} />
+              <span className={`text-[10px] font-bold flex-1 ${excluded ? 'text-slate-400 line-through' : 'text-slate-600'}`}>{d.label}</span>
+              {onToggleField && (
+                excluded ? (
+                  <button
+                    onClick={() => onToggleField(d.field)}
+                    className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-600 transition-colors"
+                    title="重新启用此变更"
+                  >
+                    已排除 · 恢复
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onToggleField(d.field)}
+                    className="group flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-medium rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    title="排除此变更"
+                  >
+                    <XIcon size={10} className="opacity-60 group-hover:opacity-100" />
+                    排除
+                  </button>
+                )
+              )}
+            </div>
+            {!excluded && (
+              <>
+                <div className="p-2 bg-red-50/30 border-b border-slate-200">
+                  <div className="text-[9px] font-bold text-red-400 mb-0.5 uppercase">Before</div>
+                  <pre className="text-[11px] text-slate-600 whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono leading-relaxed scrollbar-light">
+                    {d.before || <span className="italic text-slate-300">（空）</span>}
+                  </pre>
+                </div>
+                <div className="p-2 bg-emerald-50/30">
+                  <div className="text-[9px] font-bold text-emerald-500 mb-0.5 uppercase">After</div>
+                  <pre className="text-[11px] text-slate-700 whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono leading-relaxed scrollbar-light">
+                    {d.after}
+                  </pre>
+                </div>
+              </>
+            )}
           </div>
-          <div className="p-2 bg-red-50/30 border-b border-slate-200">
-            <div className="text-[9px] font-bold text-red-400 mb-0.5 uppercase">Before</div>
-            <pre className="text-[11px] text-slate-600 whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono leading-relaxed scrollbar-light">
-              {d.before || <span className="italic text-slate-300">（空）</span>}
-            </pre>
-          </div>
-          <div className="p-2 bg-emerald-50/30">
-            <div className="text-[9px] font-bold text-emerald-500 mb-0.5 uppercase">After</div>
-            <pre className="text-[11px] text-slate-700 whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono leading-relaxed scrollbar-light">
-              {d.after}
-            </pre>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
@@ -270,8 +306,28 @@ export const GlobalChatPanel: React.FC = () => {
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 200); }, []);
 
   const hasPendingDiff = isRefineMode && currentRefineId
-    && messages.some(m => m.role === 'assistant' && m.diff && m.diff.length > 0)
+    && messages.some(m => {
+      if (m.role !== 'assistant' || !m.diff || m.diff.length === 0) return false;
+      // 如果所有 diff 字段都被排除，则没有待应用的变更
+      const excluded = m.excludedFields || [];
+      return m.diff.some(d => !excluded.includes(d.field));
+    })
     && !applied.has(currentRefineId);
+
+  // 切换单个 diff 字段的排除状态
+  const handleToggleDiffField = useCallback((msgId: string, field: string) => {
+    setMessages(prev => prev.map(m => {
+      if (m.id !== msgId) return m;
+      const excluded = m.excludedFields || [];
+      const newExcluded = excluded.includes(field)
+        ? excluded.filter(f => f !== field)
+        : [...excluded, field];
+      return { ...m, excludedFields: newExcluded };
+    }));
+  }, []);
+
+  // 用于中断流式请求
+  const abortRef = useRef<AbortController | null>(null);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -285,28 +341,77 @@ export const GlobalChatPanel: React.FC = () => {
     setLoading(true);
 
     if (isRefineMode && currentRefineId) {
+      // ── 润色模式 — 统一协议 v2 ──
       setLastPrompt(text);
+      const assistantId = uid();
+      // 插入一个进度消息
+      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '🔄 AI 润色中...', timestamp: Date.now() }]);
+
+      const abort = new AbortController();
+      abortRef.current = abort;
+
       try {
-        const result = await api.refinePreview(currentRefineId, text);
+        const result = await api.refinePreviewStream(currentRefineId, text, (evt) => {
+          if (evt.type === 'data:progress') {
+            // 更新进度提示
+            const msg = evt.message || evt.stage || '处理中...';
+            setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: `🔄 ${msg}` } : m));
+          }
+        }, abort.signal);
+
+        // 完成：用结构化 diff 替换消息
         const before = result.before || (currentRefineCandidate ? extractBefore(currentRefineCandidate) : {});
         const diff = buildDiffFields(before, result.after || {});
-        setMessages(prev => [...prev, {
-          id: uid(), role: 'assistant',
-          content: diff.length > 0 ? `已生成润色预览，共 ${diff.length} 个字段变更：` : '未检测到变更，请尝试更具体的指令。',
-          diff: diff.length > 0 ? diff : undefined, preview: diff.length > 0 ? result.preview : undefined,
-          timestamp: Date.now(),
-        }]);
+        setMessages(prev => prev.map(m => m.id === assistantId ? {
+          ...m,
+          content: diff.length > 0 ? `已生成润色预览，共 ${diff.length} 个字段变更（可单独关闭变更）：` : '未检测到变更，请尝试更具体的指令。',
+          diff: diff.length > 0 ? diff : undefined,
+          preview: diff.length > 0 ? result.preview ?? undefined : undefined,
+          excludedFields: [],
+        } : m));
       } catch (err: any) {
-        setMessages(prev => [...prev, { id: uid(), role: 'assistant', content: `润色预览失败: ${err.response?.data?.error || err.message}`, timestamp: Date.now() }]);
+        if (err.name === 'AbortError') {
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: '（已取消）' } : m));
+        } else {
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: `润色预览失败: ${err.response?.data?.error || err.message}` } : m));
+        }
+      } finally {
+        abortRef.current = null;
       }
     } else {
+      // ── 通用对话 — 统一协议 v2: 状态机驱动 ──
       chatHistoryRef.current.push({ role: 'user', content: text });
+      const assistantId = uid();
+      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '🔄 AI 思考中...', timestamp: Date.now() }]);
+
+      const abort = new AbortController();
+      abortRef.current = abort;
+
+      const { onEvent, getState } = createStreamEventHandler(assistantId, setMessages);
+      let answerText = '';
+
       try {
-        const result = await api.chat(text, chatHistoryRef.current);
-        chatHistoryRef.current.push({ role: 'model', content: result.text });
-        setMessages(prev => [...prev, { id: uid(), role: 'assistant', content: result.text, timestamp: Date.now() }]);
+        const result = await api.chatStream(text, chatHistoryRef.current, (evt) => {
+          onEvent(evt);
+          answerText = getState().answerText;
+        }, abort.signal);
+
+        // 确保最终内容是完整的回答
+        const finalText = result.text || answerText;
+        chatHistoryRef.current.push({ role: 'model', content: finalText });
+        // 最终只保留回答文本
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: finalText } : m));
       } catch (err: any) {
-        setMessages(prev => [...prev, { id: uid(), role: 'assistant', content: `请求失败: ${err.message}`, timestamp: Date.now() }]);
+        if (err.name === 'AbortError') {
+          const { answerText: partialText, toolLogs } = getState();
+          const partial = partialText || (toolLogs.length > 0 ? toolLogs.join('\n') + '\n\n（已取消）' : '（已取消）');
+          if (partialText) chatHistoryRef.current.push({ role: 'model', content: partialText });
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: partial } : m));
+        } else {
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: `请求失败: ${err.message}` } : m));
+        }
+      } finally {
+        abortRef.current = null;
       }
     }
     setLoading(false);
@@ -317,8 +422,19 @@ export const GlobalChatPanel: React.FC = () => {
     setApplying(true);
     try {
       // 从最后一条带 preview 的 assistant 消息中取出预览数据，直接应用而非重调 AI
-      const lastPreview = [...messages].reverse().find(m => m.role === 'assistant' && m.preview)?.preview;
-      await api.refineApply(currentRefineId, lastPrompt, lastPreview);
+      const lastMsg = [...messages].reverse().find(m => m.role === 'assistant' && m.preview);
+      let filteredPreview = lastMsg?.preview;
+      // 如果有排除的字段，将其恢复为 before 值，使后端 diff 不检测到变化
+      if (filteredPreview && lastMsg?.excludedFields?.length && lastMsg.diff) {
+        filteredPreview = { ...filteredPreview };
+        const beforeData = currentRefineCandidate ? extractBefore(currentRefineCandidate) : {};
+        for (const field of lastMsg.excludedFields) {
+          if (field in beforeData) {
+            (filteredPreview as any)[field] = (beforeData as any)[field];
+          }
+        }
+      }
+      await api.refineApply(currentRefineId, lastPrompt, filteredPreview);
       setApplied(prev => new Set(prev).add(currentRefineId));
       refineCtx.onCandidateUpdated?.(currentRefineId);
       setMessages(prev => [...prev, { id: uid(), role: 'system', content: '✅ 变更已应用到候选！', timestamp: Date.now() }]);
@@ -450,7 +566,13 @@ export const GlobalChatPanel: React.FC = () => {
               ) : (
                 <p className={`text-xs leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? '' : msg.role === 'system' ? 'text-slate-500' : 'text-slate-700'}`}>{msg.content}</p>
               )}
-              {msg.diff && msg.diff.length > 0 && <DiffView diff={msg.diff} />}
+              {msg.diff && msg.diff.length > 0 && (
+                <DiffView
+                  diff={msg.diff}
+                  excludedFields={msg.excludedFields}
+                  onToggleField={isRefineMode && !applied.has(currentRefineId!) ? (field) => handleToggleDiffField(msg.id, field) : undefined}
+                />
+              )}
             </div>
           </div>
         ))}
@@ -461,6 +583,12 @@ export const GlobalChatPanel: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Loader2 size={12} className={`animate-spin ${isRefineMode ? 'text-emerald-500' : 'text-blue-500'}`} />
                 <span className="text-xs text-slate-500">{isRefineMode ? 'AI 正在分析...' : 'AI 思考中...'}</span>
+                {abortRef.current && (
+                  <button onClick={() => abortRef.current?.abort()}
+                    className="ml-1 px-1.5 py-0.5 text-[10px] font-bold text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors">
+                    停止
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -469,12 +597,17 @@ export const GlobalChatPanel: React.FC = () => {
       </div>
 
       {/* 润色操作栏 */}
-      {isRefineMode && hasPendingDiff && !loading && (
+      {isRefineMode && hasPendingDiff && !loading && (() => {
+        const lastDiffMsg = [...messages].reverse().find(m => m.role === 'assistant' && m.diff && m.diff.length > 0);
+        const totalFields = lastDiffMsg?.diff?.length || 0;
+        const excludedCount = lastDiffMsg?.excludedFields?.length || 0;
+        const activeCount = totalFields - excludedCount;
+        return (
         <div className="px-4 py-2 border-t border-slate-100 bg-emerald-50/50 flex items-center gap-2 shrink-0">
           <button onClick={handleRefineAccept} disabled={applying}
             className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-lg shadow-sm disabled:opacity-50">
             {applying ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-            {applying ? '应用中...' : '确认应用'}
+            {applying ? '应用中...' : excludedCount > 0 ? `确认应用 (${activeCount}/${totalFields})` : '确认应用'}
           </button>
           <button className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
             <RotateCcw size={11} /> 继续调整
@@ -485,7 +618,8 @@ export const GlobalChatPanel: React.FC = () => {
             </button>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {isRefineMode && !hasPendingDiff && !loading && isBatchRefine
         && applied.has(currentRefineId!) && refineCtx!.currentIdx < refineCtx!.candidateIds.length - 1 && (

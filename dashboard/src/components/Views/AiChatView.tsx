@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageSquare, Send, Brain, Loader2, Plus, Sparkles, ArrowRight, Trash2, Clock, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';
 import MarkdownWithHighlight from '../Shared/MarkdownWithHighlight';
-import { useChatState, useGlobalChat } from '../Shared/GlobalChatDrawer';
+import { useGlobalChat } from '../Shared/GlobalChatDrawer';
 import { useChatTopics, ChatMessage } from '../../hooks/useChatTopics';
+import { createStreamEventHandler } from '../../hooks/useChatStream';
 import api from '../../api';
 
 /* ═══════════════════════════════════════════════════════════
@@ -52,12 +53,12 @@ function formatTopicTime(ts: number): string {
 }
 
 const AiChatView: React.FC = () => {
-  const s = useChatState();
+  // ── 独立本地状态（不与 GlobalChatDrawer 共享） ──
   const { close, isOpen } = useGlobalChat();
-  const {
-    messages, setMessages, loading, setLoading,
-    chatHistoryRef,
-  } = s;
+  const [messages, setMessages] = useState<Array<{ id: string; role: string; content: string; diff?: any[]; timestamp: number }>>([]);
+  const [loading, setLoading] = useState(false);
+  const chatHistoryRef = useRef<{ role: string; content: string }[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
 
   const topicsMgr = useChatTopics();
   const { topics, activeTopicId, activeTopic, createTopic, deleteTopic, saveTopic, switchTopic, setActiveTopicId } = topicsMgr;
@@ -141,13 +142,31 @@ const AiChatView: React.FC = () => {
     setMessages(prev => [...prev, { id: uid(), role: 'user', content: text, timestamp: Date.now() }]);
     setLoading(true);
 
+    const assistantId = uid();
+    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '🔄 AI 思考中...', timestamp: Date.now() }]);
     chatHistoryRef.current.push({ role: 'user', content: text });
+
+    const abort = new AbortController();
+    abortRef.current = abort;
+
     try {
-      const result = await api.chat(text, chatHistoryRef.current);
-      chatHistoryRef.current.push({ role: 'model', content: result.text });
-      setMessages(prev => [...prev, { id: uid(), role: 'assistant', content: result.text, timestamp: Date.now() }]);
+      const { onEvent, getState } = createStreamEventHandler(assistantId, setMessages);
+      const result = await api.chatStream(text, chatHistoryRef.current, (evt) => {
+        onEvent(evt);
+      }, abort.signal);
+
+      const finalText = result.text || getState().answerText;
+      chatHistoryRef.current.push({ role: 'model', content: finalText });
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: finalText } : m));
     } catch (err: any) {
-      setMessages(prev => [...prev, { id: uid(), role: 'assistant', content: `请求失败: ${err.message}`, timestamp: Date.now() }]);
+      if (err.name === 'AbortError') {
+        const partial = '（已取消）';
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: partial } : m));
+      } else {
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: `请求失败: ${err.message}` } : m));
+      }
+    } finally {
+      abortRef.current = null;
     }
     setLoading(false);
   }, [input, loading, activeTopicId, createTopic]);
@@ -337,6 +356,12 @@ const AiChatView: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <Loader2 size={14} className="animate-spin text-blue-500" />
                     <span className="text-sm text-slate-500">AI 思考中...</span>
+                    {abortRef.current && (
+                      <button onClick={() => abortRef.current?.abort()}
+                        className="ml-1 px-1.5 py-0.5 text-[10px] font-bold text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors">
+                        停止
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

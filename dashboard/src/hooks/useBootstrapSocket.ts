@@ -81,6 +81,8 @@ interface UseBootstrapSocketReturn {
   isAllDone: boolean;
   /** AI review pipeline state */
   reviewState: ReviewState;
+  /** Monotonic counter: bumps each time a task creates candidates (for incremental refresh) */
+  candidateCreatedTick: number;
   /** Reset session (clear state) */
   resetSession: () => void;
   /** Start session from API response skeleton */
@@ -95,6 +97,7 @@ export function useBootstrapSocket(): UseBootstrapSocketReturn {
   const [session, setSession] = useState<BootstrapSession | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [reviewState, setReviewState] = useState<ReviewState>(INITIAL_REVIEW_STATE);
+  const [candidateCreatedTick, setCandidateCreatedTick] = useState(0);
   const sessionIdRef = useRef<string | null>(null);
   const recoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -196,6 +199,12 @@ export function useBootstrapSocket(): UseBootstrapSocketReturn {
           skeleton: updatedTasks.filter(t => t.status === 'skeleton').length,
         };
       });
+
+      // 当任务创建了候选时，递增 tick 通知外层刷新数据
+      const created = Number(data.result?.created) || Number(data.result?.extracted) || 0;
+      if (created > 0) {
+        setCandidateCreatedTick(prev => prev + 1);
+      }
     };
 
     const onTaskFailed = (data: { taskId: string; error: string; progress: number }) => {
@@ -353,5 +362,5 @@ export function useBootstrapSocket(): UseBootstrapSocketReturn {
 
   const isAllDone = session?.status === 'completed' || session?.status === 'completed_with_errors';
 
-  return { session, isConnected, isAllDone, reviewState, resetSession, initFromApiResponse };
+  return { session, isConnected, isAllDone, reviewState, candidateCreatedTick, resetSession, initFromApiResponse };
 }

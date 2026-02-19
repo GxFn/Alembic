@@ -168,6 +168,7 @@ const App: React.FC = () => {
   const [signalSuggestionCount, setSignalSuggestionCount] = useState(0);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const trickleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // chatAbortControllerRef 已迁移到 GlobalChatDrawer
 
   // 搜索/分类变化时 Recipes 列表重置到第一页；刷新数据（fetchData）不重置页码
@@ -205,6 +206,14 @@ const App: React.FC = () => {
       fetchData();
     }
   }, [bootstrap.isAllDone]);
+
+  // Bootstrap 维度任务创建候选后，增量刷新内容区域（节流 2s，防止短时间多维度完成时频繁请求）
+  useEffect(() => {
+    if (bootstrap.candidateCreatedTick > 0) {
+      const timer = setTimeout(() => fetchData(), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [bootstrap.candidateCreatedTick]);
 
   // Navigation
   const navigateToTab = (tab: TabType, options?: { preserveSearch?: boolean }) => {
@@ -432,17 +441,20 @@ const App: React.FC = () => {
   }
   };
 
-  const SCAN_PHASES = [
-  { status: '正在读取 Target 源文件...', percent: 15 },
-  { status: '正在发送到 AI 分析...', percent: 35 },
-  { status: '正在识别可复用代码片段...', percent: 55 },
-  { status: '正在生成摘要与使用指南...', percent: 75 },
-  { status: '即将完成...', percent: 92 }
-  ];
+  /** SSE 事件类型 → 进度百分比 & 状态文案映射 */
+  const SCAN_EVENT_PROGRESS: Record<string, { percent: number; status: string | ((e: any) => string) }> = {
+  'scan:started':       { percent: 5,  status: '正在启动扫描...' },
+  'scan:files-loaded':  { percent: 15, status: (e: any) => `已加载 ${e.count || 0} 个源文件` },
+  'scan:reading':       { percent: 25, status: (e: any) => `正在读取 ${e.count || 0} 个文件内容...` },
+  'scan:ai-extracting': { percent: 40, status: '正在 AI 分析提取可复用模式...' },
+  'scan:enriching':     { percent: 85, status: (e: any) => `正在增强 ${e.recipeCount || 0} 条结果...` },
+  'scan:completed':     { percent: 95, status: '扫描完成，正在加载结果...' },
+  };
 
   const handleScanTarget = async (target: SPMTarget) => {
   if (isScanning) return;
   if (abortControllerRef.current) abortControllerRef.current.abort();
+  if (trickleTimerRef.current) { clearInterval(trickleTimerRef.current); trickleTimerRef.current = null; }
   const controller = new AbortController();
   abortControllerRef.current = controller;
 
@@ -451,31 +463,44 @@ const App: React.FC = () => {
   setScanResults([]);
   setGuardAudit(null);
   setScanFileList([]);
-  setScanProgress({ current: 0, total: 100, status: '正在获取待扫描文件列表...' });
-
-  const phaseInterval = 4000;
-  let phaseIndex = 0;
-  const progressTimer = setInterval(() => {
-    phaseIndex = Math.min(phaseIndex + 1, SCAN_PHASES.length);
-    const phase = SCAN_PHASES[phaseIndex - 1];
-    if (phase) {
-    setScanProgress(prev => ({ ...prev, current: phase.percent, status: phase.status }));
-    }
-  }, phaseInterval);
+  setScanProgress({ current: 0, total: 100, status: '正在建立流式连接...' });
 
   try {
-    const filesResult = await api.getTargetFiles(target, controller.signal);
-    const fileList = filesResult.files || [];
-    const fileCount = filesResult.count ?? fileList.length;
-    setScanFileList(fileList);
-    setScanProgress(prev => ({ ...prev, current: 10, status: `正在分析 ${fileCount} 个文件...` }));
+    const scanResult = await api.scanTargetStream(target, (evt: any) => {
+    // 实时处理 SSE 事件更新进度
+    const mapping = SCAN_EVENT_PROGRESS[evt.type];
+    if (mapping) {
+      const statusText = typeof mapping.status === 'function' ? mapping.status(evt) : mapping.status;
+      setScanProgress({ current: mapping.percent, total: 100, status: statusText });
+    }
 
-    const scanResult = await api.scanTarget(target, controller.signal);
-    clearInterval(progressTimer);
+    // 文件列表就绪时立即展示
+    if (evt.type === 'scan:files-loaded' && evt.files) {
+      setScanFileList(evt.files);
+    }
+
+    // AI 提取阶段：启动缓动进度（40% → 80%，每 3 秒 +1%）
+    if (evt.type === 'scan:ai-extracting') {
+      if (trickleTimerRef.current) clearInterval(trickleTimerRef.current);
+      trickleTimerRef.current = setInterval(() => {
+      setScanProgress(prev => ({
+        ...prev,
+        current: Math.min(prev.current + 1, 80),
+      }));
+      }, 3000);
+    }
+
+    // AI 阶段结束，停止缓动
+    if (evt.type === 'scan:enriching' || evt.type === 'scan:completed') {
+      if (trickleTimerRef.current) { clearInterval(trickleTimerRef.current); trickleTimerRef.current = null; }
+    }
+    }, controller.signal);
+
+    if (trickleTimerRef.current) { clearInterval(trickleTimerRef.current); trickleTimerRef.current = null; }
     setScanProgress({ current: 100, total: 100, status: '扫描完成' });
 
     const recipes = scanResult.recipes || [];
-    const scannedFiles = scanResult.scannedFiles?.length ? scanResult.scannedFiles : fileList;
+    const scannedFiles = scanResult.scannedFiles || [];
 
     if (recipes.length > 0 || scannedFiles.length > 0) {
     const scanTargetName = typeof target === 'string' ? target : target?.name || 'unknown';
@@ -487,7 +512,7 @@ const App: React.FC = () => {
       scanMode: 'target' as const,
     }));
     setScanResults(enrichedResults);
-    setScanFileList(scannedFiles);
+    if (scannedFiles.length > 0) setScanFileList(scannedFiles);
 
     fetchData();
     if (recipes.length > 0) {
@@ -501,12 +526,12 @@ const App: React.FC = () => {
     notify('请确认 Target 包含有效的源代码文件', { title: '扫描失败', type: 'error' });
     }
   } catch (err: any) {
-    clearInterval(progressTimer);
-    if (axios.isCancel(err)) return;
-    const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
+    if (trickleTimerRef.current) { clearInterval(trickleTimerRef.current); trickleTimerRef.current = null; }
+    if (err.name === 'AbortError') return;
+    const isTimeout = err.message?.includes('timeout');
     const msg = isTimeout
       ? '扫描超时，请尝试减少 Target 文件数量'
-      : (err.response?.data?.error || err.message);
+      : (err.message || '未知错误');
     notify(msg, { title: isTimeout ? '扫描超时' : '扫描出错', type: 'error' });
   } finally {
     if (abortControllerRef.current === controller) {

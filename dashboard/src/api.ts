@@ -3,6 +3,8 @@
  *
  * 直接调用 V3 RESTful API（/api/v1/*）。
  * 前端统一使用 V3 KnowledgeEntry 类型，不做字段映射。
+ *
+ * SSE 架构: Session + EventSource（POST 创建会话 → GET EventSource 消费事件）
  */
 
 import axios from 'axios';
@@ -266,9 +268,104 @@ async function resolveKnowledgeId(idOrName: string): Promise<string> {
 }
 
 // ═══════════════════════════════════════════════════════
-//  API Methods
+//  SSE Stream Consumer — 统一协议 v2
 // ═══════════════════════════════════════════════════════
 
+/** SSE 统一协议事件类型 */
+export type SSEEventType =
+  | 'stream:start' | 'stream:done' | 'stream:error'
+  | 'step:start' | 'step:end'
+  | 'tool:start' | 'tool:end'
+  | 'text:start' | 'text:delta' | 'text:end'
+  | 'data:progress' | 'data:preview'
+  | 'ping';
+
+export interface SSEEvent {
+  type: SSEEventType;
+  [key: string]: any;
+}
+
+/**
+ * 统一 SSE 流消费器 — 从 fetch Response 中逐行读取 SSE events
+ *
+ * 支持统一协议的所有事件类型:
+ *   stream:start — 会话开始
+ *   step:start   — 推理步骤开始
+ *   tool:start   — 工具调用开始
+ *   tool:end     — 工具调用结束
+ *   text:start   — 文本流开始
+ *   text:delta   — 文本分块
+ *   text:end     — 文本流结束
+ *   step:end     — 推理步骤结束
+ *   data:progress — 进度事件（润色等场景）
+ *   stream:done  — 会话完成
+ *   stream:error — 会话错误
+ *
+ * @param response   fetch 返回的 Response（body 为 ReadableStream）
+ * @param onEvent    收到任意事件时的完整回调
+ * @returns          通过 text:delta 拼接的完整文本（chat 场景使用）
+ */
+async function _consumeSSE(
+  response: Response,
+  onEvent: (evt: SSEEvent) => void,
+): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('ReadableStream not available');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullText = '';
+  let chunkCount = 0;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    chunkCount++;
+    const text = decoder.decode(value, { stream: true });
+
+    buffer += text;
+    const lines = buffer.split('\n');
+    // 保留最后一个不完整行
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      // 心跳 :ping 注释 — 忽略
+      if (line.startsWith(':')) continue;
+      if (!line.startsWith('data: ')) continue;
+      const payload = line.slice(6).trim();
+      if (!payload || payload === '[DONE]') continue;
+
+      try {
+        const evt: SSEEvent = JSON.parse(payload);
+        onEvent(evt);
+
+        // text:delta — 拼接完整文本
+        if (evt.type === 'text:delta' && evt.delta) {
+          fullText += evt.delta;
+        }
+        // stream:done — 如果携带 text 则覆盖
+        else if (evt.type === 'stream:done' && evt.text) {
+          fullText = evt.text;
+        }
+        // stream:error — 抛出错误
+        else if (evt.type === 'stream:error') {
+          throw new Error(evt.message || 'Stream error');
+        }
+      } catch (e) {
+        if (e instanceof SyntaxError) continue; // 非 JSON 行忽略
+        throw e;
+      }
+    }
+  }
+
+  return fullText;
+}
+
+// ═══════════════════════════════════════════════════════
+//  API Methods  (v2 — EventSource architecture)
+// ═══════════════════════════════════════════════════════
 export const api = {
   // ── Data (bulk fetch) ──────
 
@@ -336,6 +433,90 @@ export const api = {
     // Unify response: could be {recipes, scannedFiles} or {result, scannedFiles}
     const recipes = data.recipes || data.result || [];
     return { recipes, scannedFiles: data.scannedFiles || [], message: data.message || '' };
+  },
+
+  /**
+   * 流式 Target 扫描 — SSE Session + EventSource 架构
+   * POST 创建 session → EventSource 消费进度事件 → scan:result 携带最终结果
+   */
+  async scanTargetStream(
+    target: SPMTarget,
+    onEvent: (event: any) => void,
+    signal?: AbortSignal,
+  ): Promise<{ recipes: any[]; scannedFiles: any[]; message: string }> {
+    // Step 1: POST 创建流式扫描会话
+    const startRes = await fetch('/api/v1/spm/scan/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target }),
+      signal,
+    });
+    if (!startRes.ok) throw new Error(`Scan stream start failed: ${startRes.status}`);
+    const startData = await startRes.json();
+    const sessionId = startData.sessionId;
+    if (!sessionId) throw new Error(`No sessionId returned`);
+
+    // Step 2: EventSource 消费 SSE 事件
+    return new Promise((resolve, reject) => {
+      const esUrl = `/api/v1/spm/scan/events/${sessionId}`;
+      const es = new EventSource(esUrl);
+      let resolved = false;
+      let finalResult = { recipes: [] as any[], scannedFiles: [] as any[], message: '' };
+
+      function cleanup() { es.close(); }
+
+      es.onmessage = (e) => {
+        try {
+          const evt = JSON.parse(e.data);
+          onEvent(evt);
+
+          if (evt.type === 'scan:result') {
+            finalResult = {
+              recipes: evt.recipes || [],
+              scannedFiles: evt.scannedFiles || [],
+              message: evt.message || '',
+            };
+          }
+
+          if (evt.type === 'stream:done') {
+            cleanup();
+            resolved = true;
+            resolve(finalResult);
+          }
+
+          if (evt.type === 'stream:error') {
+            cleanup();
+            resolved = true;
+            reject(new Error(evt.message || 'Scan stream error'));
+          }
+        } catch { /* ignore JSON parse errors */ }
+      };
+
+      es.onerror = () => {
+        if (!resolved) {
+          cleanup();
+          resolved = true;
+          // If we already have results, resolve with them
+          if (finalResult.recipes.length > 0) {
+            resolve(finalResult);
+          } else {
+            reject(new Error('EventSource connection failed'));
+          }
+        }
+      };
+
+      if (signal) {
+        const onAbort = () => {
+          if (!resolved) {
+            cleanup();
+            resolved = true;
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          }
+        };
+        if (signal.aborted) { onAbort(); return; }
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
   },
 
   /** 全项目扫描：AI 提取 + Guard 审计 */
@@ -675,6 +856,236 @@ export const api = {
     const res = await http.post('/ai/chat', { prompt, history }, { signal });
     const data = res.data?.data || {};
     return { text: data.reply || data.text || '', hasContext: data.hasContext };
+  },
+
+  /**
+   * 流式 AI 对话 (SSE) — 统一协议 v2
+   *
+   * 事件类型（按时间顺序）:
+   *   - stream:start  — 会话开始
+   *   - step:start    — 新推理步骤 { step, maxSteps, phase }
+   *   - tool:start    — 工具调用开始 { id, tool, args }
+   *   - tool:end      — 工具调用结束 { tool, status, resultSize?, duration?, error? }
+   *   - text:start    — 文本流开始 { id, role }
+   *   - text:delta    — 文本分块 { id, delta }  ← 逐块推送，前端可逐字渲染
+   *   - text:end      — 文本流结束 { id }
+   *   - step:end      — 推理步骤结束 { step }
+   *   - stream:done   — 全部完成 { text, toolCalls, hasContext }
+   *   - stream:error  — 错误 { message }
+   *
+   * @param prompt       用户消息
+   * @param history      对话历史
+   * @param onEvent      每收到一个 SSE 事件的回调（前端根据 type 分别处理）
+   * @param signal       可选 AbortSignal
+   * @returns            { text, toolCalls, hasContext }
+   */
+  async chatStream(
+    prompt: string,
+    history: Array<{ role: string; content: string }>,
+    onEvent: (event: SSEEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<{ text: string; toolCalls?: any[]; hasContext?: boolean }> {
+
+    // ── Step 1: POST 启动对话 ──
+    const startRes = await fetch('/api/v1/ai/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, history }),
+      signal,
+    });
+    if (!startRes.ok) throw new Error(`Chat start failed: ${startRes.status}`);
+
+    const contentType = startRes.headers.get('content-type') || '';
+
+    // ── 兼容检测: 旧后端返回 text/event-stream, 新后端返回 JSON ──
+    if (contentType.includes('text/event-stream')) {
+      // 旧后端 — 直接用 fetch ReadableStream 消费 SSE（降级模式）
+      let finalResult: { text: string; toolCalls?: any[]; hasContext?: boolean } = { text: '' };
+      const fullText = await _consumeSSE(startRes, (evt) => {
+        onEvent(evt);
+        if (evt.type === 'stream:done') {
+          if (evt.text) finalResult.text = evt.text;
+          finalResult.toolCalls = evt.toolCalls;
+          finalResult.hasContext = evt.hasContext;
+        }
+      });
+      if (!finalResult.text && fullText) finalResult.text = fullText;
+      return finalResult;
+    }
+
+    // ── 新后端: 获取 sessionId → EventSource ──
+    const startData = await startRes.json();
+    const sessionId = startData.sessionId;
+    if (!sessionId) throw new Error(`No sessionId returned: ${JSON.stringify(startData)}`);
+
+    // ── Step 2: 通过 EventSource 消费 SSE 事件 ──
+    return new Promise<{ text: string; toolCalls?: any[]; hasContext?: boolean }>((resolve, reject) => {
+      const esUrl = `/api/v1/ai/chat/events/${sessionId}`;
+      const es = new EventSource(esUrl);
+      let fullText = '';
+      let finalResult: { text: string; toolCalls?: any[]; hasContext?: boolean } = { text: '' };
+      let resolved = false;
+
+      function cleanup() {
+        es.close();
+      }
+
+      es.onmessage = (e) => {
+        try {
+          const evt: SSEEvent = JSON.parse(e.data);
+
+          // 跳过内部的 stream:start（EventSource 基础设施事件）
+          if (evt.type === 'stream:start') return;
+
+          // 交付事件给上层回调
+          onEvent(evt);
+
+          // 累积 text:delta 文本
+          if (evt.type === 'text:delta' && evt.delta) {
+            fullText += evt.delta;
+          }
+
+          // 会话完成
+          if (evt.type === 'stream:done') {
+            finalResult = {
+              text: evt.text || fullText,
+              toolCalls: evt.toolCalls,
+              hasContext: evt.hasContext,
+            };
+            cleanup();
+            resolved = true;
+            resolve(finalResult);
+          }
+
+          // 会话错误
+          if (evt.type === 'stream:error') {
+            cleanup();
+            resolved = true;
+            reject(new Error(evt.message || 'Stream error'));
+          }
+        } catch {
+          // 忽略 JSON 解析错误
+        }
+      };
+
+      es.onerror = () => {
+        if (!resolved) {
+          cleanup();
+          if (fullText) {
+            resolved = true;
+            resolve({ text: fullText });
+          } else {
+            resolved = true;
+            reject(new Error('EventSource connection failed'));
+          }
+        }
+      };
+
+      // 处理 AbortSignal
+      if (signal) {
+        const onAbort = () => {
+          if (!resolved) {
+            cleanup();
+            resolved = true;
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          }
+        };
+        if (signal.aborted) {
+          onAbort();
+        } else {
+          signal.addEventListener('abort', onAbort, { once: true });
+        }
+      }
+    });
+  },
+
+  /**
+   * 润色预览 (SSE) — 统一协议 v2
+   * 不再推送 JSON 碎片，改为进度事件 + 最终结构化结果
+   *
+   * 事件类型:
+   *   - stream:start   — 会话开始
+   *   - data:progress   — AI 润色进度 { stage, message }
+   *   - stream:done     — 完成 { candidateId, before, after, preview }
+   *   - stream:error    — 错误 { message }
+   *
+   * @param candidateId  候选条目 ID
+   * @param userPrompt   用户润色指令
+   * @param onEvent      每收到一个 SSE 事件的回调（前端根据 type 处理进度 UI）
+   * @param signal       可选 AbortSignal
+   * @returns            { candidateId, before, after, preview }
+   */
+  async refinePreviewStream(
+    candidateId: string,
+    userPrompt: string,
+    onEvent: (event: SSEEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<{ candidateId: string; before: Record<string, any>; after: Record<string, any>; preview: Record<string, any> | null }> {
+    // Step 1: POST 创建流式润色会话
+    const startRes = await fetch('/api/v1/candidates/refine-preview-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidateId, userPrompt }),
+      signal,
+    });
+    if (!startRes.ok) throw new Error(`Refine stream start failed: ${startRes.status}`);
+    const startData = await startRes.json();
+    const sessionId = startData.sessionId;
+    if (!sessionId) throw new Error('No sessionId returned');
+
+    // Step 2: EventSource 消费 SSE 事件
+    return new Promise((resolve, reject) => {
+      const esUrl = `/api/v1/candidates/refine-preview/events/${sessionId}`;
+      const es = new EventSource(esUrl);
+      let resolved = false;
+
+      function cleanup() { es.close(); }
+
+      // 如果外部 signal 触发 abort，关闭 EventSource
+      if (signal) {
+        signal.addEventListener('abort', () => {
+          cleanup();
+          if (!resolved) {
+            resolved = true;
+            reject(new DOMException('Aborted', 'AbortError'));
+          }
+        }, { once: true });
+      }
+
+      es.onmessage = (e) => {
+        try {
+          const evt: SSEEvent = JSON.parse(e.data);
+          onEvent(evt);
+
+          if (evt.type === 'stream:done') {
+            cleanup();
+            resolved = true;
+            resolve({
+              candidateId: (evt as any).candidateId || candidateId,
+              before: (evt as any).before || {},
+              after: (evt as any).after || {},
+              preview: (evt as any).preview || null,
+            });
+          }
+
+          if (evt.type === 'stream:error') {
+            cleanup();
+            resolved = true;
+            reject(new Error((evt as any).message || 'Refine stream error'));
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      es.onerror = () => {
+        cleanup();
+        if (!resolved) {
+          resolved = true;
+          reject(new Error('Refine EventSource connection lost'));
+        }
+      };
+    });
   },
 
   async summarizeCode(code: string, language: string): Promise<any> {

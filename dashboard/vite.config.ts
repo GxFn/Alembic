@@ -9,7 +9,9 @@ export default defineConfig({
         target: 'http://127.0.0.1:3000',
         timeout: 300000,      // 5 分钟（AI 扫描需要较长时间）
         configure: (proxy) => {
-          proxy.on('error', () => {});  // 静默处理后端不可用时的连接错误
+          proxy.on('error', (err) => {
+            console.log('[vite-proxy] error:', err.message);
+          });
         },
       },
       '/socket.io': {
