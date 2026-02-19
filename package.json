@@ -72,7 +72,7 @@
     "ora": "^8.0.1",
     "redis": "^4.7.0",
     "socket.io": "^4.8.1",
-    "tree-sitter": "^0.25.0",
+    "tree-sitter": "^0.22.4",
     "tree-sitter-objc": "^3.0.2",
     "tree-sitter-swift": "^0.7.1",
     "undici": "^6.23.0",
@@ -80,17 +80,6 @@
     "winston": "^3.11.0",
     "xml2js": "^0.6.2",
     "zod": "^4.3.6"
-  },
-  "overrides": {
-    "tree-sitter-c": {
-      "tree-sitter": "$tree-sitter"
-    },
-    "tree-sitter-objc": {
-      "tree-sitter": "$tree-sitter"
-    },
-    "tree-sitter-swift": {
-      "tree-sitter": "$tree-sitter"
-    }
   },
   "bugs": {
     "url": "https://github.com/GxFn/AutoSnippet/issues"

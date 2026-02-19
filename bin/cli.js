@@ -457,6 +457,7 @@ program
     process.env.PORT = port;
     process.env.HOST = host;
 
+    let httpServer;
     try {
       const { default: HttpServer } = await import('../lib/http/HttpServer.js');
 
@@ -469,7 +470,7 @@ program
         gateway.eventBus = eventBus;
       } catch { /* EventBus 不可用不阻塞启动 */ }
 
-      const httpServer = new HttpServer({ port, host });
+      httpServer = new HttpServer({ port, host });
       await httpServer.initialize();
       await httpServer.start();
 
@@ -510,8 +511,13 @@ program
         const isDebugMode = process.env.ASD_DEBUG === '1';
 
         // 设置 Dashboard URL 供 watcher 跳转浏览器使用
+        // 生产模式用 API 同端口，开发模式用 vite dev 5173
+        const dashDirCheck = join(__dirname, '..', 'dashboard');
+        const isProductionDashboard = existsSync(join(dashDirCheck, 'dist', 'index.html')) && !existsSync(join(dashDirCheck, 'src'));
         if (!opts.apiOnly) {
-          process.env.ASD_DASHBOARD_URL = `http://localhost:5173`;
+          process.env.ASD_DASHBOARD_URL = isProductionDashboard
+            ? `http://127.0.0.1:${port}`
+            : `http://localhost:5173`;
         } else {
           process.env.ASD_DASHBOARD_URL = process.env.ASD_DASHBOARD_URL || `http://${host}:${port}`;
         }
@@ -544,36 +550,54 @@ program
       return;
     }
 
-    // 2. 启动前端 Vite Dev Server
+    // 2. 启动 Dashboard UI
     const dashboardDir = join(__dirname, '..', 'dashboard');
-    if (!existsSync(join(dashboardDir, 'node_modules'))) {
-      console.log('📦 Installing dashboard dependencies...');
-      const install = spawn('npm', ['install'], { cwd: dashboardDir, stdio: 'inherit' });
-      await new Promise((resolve, reject) => {
-        install.on('close', code => code === 0 ? resolve() : reject(new Error(`npm install exited with ${code}`)));
+    const distDir = join(dashboardDir, 'dist');
+    const hasPrebuilt = existsSync(join(distDir, 'index.html'));
+    const hasSrc = existsSync(join(dashboardDir, 'src'));
+
+    if (hasPrebuilt && !hasSrc) {
+      // ── 生产模式：npm 安装的包，在 API 服务器上直接托管预构建产物 ──
+      // 同端口同 origin → /api 路由自然可达，无跨域问题
+      httpServer.mountDashboard(distDir);
+      console.log(`🎨 Dashboard UI ready at http://127.0.0.1:${port}/`);
+
+      if (opts.browser) {
+        const open = (await import('open')).default;
+        open(`http://127.0.0.1:${port}/`);
+      }
+
+    } else {
+      // ── 开发模式：有源码，启动 Vite Dev Server ──
+      if (!existsSync(join(dashboardDir, 'node_modules'))) {
+        console.log('📦 Installing dashboard dependencies...');
+        const install = spawn('npm', ['install'], { cwd: dashboardDir, stdio: 'inherit' });
+        await new Promise((resolve, reject) => {
+          install.on('close', code => code === 0 ? resolve() : reject(new Error(`npm install exited with ${code}`)));
+        });
+      }
+
+      console.log('🎨 Starting Dashboard (dev mode)...');
+      const viteArgs = ['--host'];
+      if (opts.browser) {
+        viteArgs.push('--open');
+      }
+      const vite = spawn('npx', ['vite', ...viteArgs], {
+        cwd: dashboardDir,
+        stdio: 'inherit',
+        env: { ...process.env, VITE_API_URL: `http://127.0.0.1:${port}` },
+      });
+
+      vite.on('error', (err) => {
+        console.error(`❌ Vite failed to start: ${err.message}`);
+      });
+
+      process.on('SIGINT', () => {
+        console.log('\n🛑 Stopping Dashboard...');
+        vite.kill();
+        process.exit(0);
       });
     }
-
-    console.log('🎨 Starting Dashboard UI...');
-    const viteArgs = ['--host'];
-    if (opts.browser) {
-      viteArgs.push('--open');
-    }
-    const vite = spawn('npx', ['vite', ...viteArgs], {
-      cwd: dashboardDir,
-      stdio: 'inherit',
-      env: { ...process.env, VITE_API_URL: `http://127.0.0.1:${port}` },
-    });
-
-    vite.on('error', (err) => {
-      console.error(`❌ Vite failed to start: ${err.message}`);
-    });
-
-    process.on('SIGINT', () => {
-      console.log('\n🛑 Stopping Dashboard...');
-      vite.kill();
-      process.exit(0);
-    });
   });
 
 // ─────────────────────────────────────────────────────
