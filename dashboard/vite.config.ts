@@ -31,11 +31,11 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
           if (id.includes('framer-motion')) return 'framer-motion';
-          if (id.includes('react-syntax-highlighter')) return 'syntax-highlighter';
-          if (id.includes('react-markdown')) return 'react-markdown';
           if (id.includes('lucide-react')) return 'icons';
           if (id.includes('axios')) return 'axios';
           if (id.includes('yaml')) return 'yaml';
+          // react-syntax-highlighter 与 refractor/prismjs 有复杂的内部依赖
+          // 单独拆分会产生循环引用 TDZ 错误，让它们跟随 vendor 一起打包
           return 'vendor';
         }
       }

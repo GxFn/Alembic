@@ -4,6 +4,14 @@
 
 ---
 
+## [2.19.8] - 2026-02-19
+
+### 修复
+
+- **Dashboard 白屏: syntax-highlighter TDZ 错误**：`react-syntax-highlighter` 单独拆分 chunk 时与 `refractor`/`prismjs` 产生循环引用，导致 `Cannot access 'ge' before initialization`。移除 `syntax-highlighter` 和 `react-markdown` 的 manualChunks 配置，合并到 vendor chunk
+
+---
+
 ## [2.19.7] - 2026-02-19
 
 ### 修复
