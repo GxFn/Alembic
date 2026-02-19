@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/*
+ * SPA 根容器封锁 — 禁止 html/body/#root 产生滚动条。
+ * 所有滚动由内部组件自行管理 (overflow-y-auto / overflow-auto)。
+ * 这能彻底消除内容变化时根级滚动条闪烁导致的整页抖动。
+ */
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* 保留原有自定义样式 */
 .no-scrollbar::-webkit-scrollbar {
   display: none;

@@ -552,7 +552,7 @@ const DocumentReader: React.FC<{
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto scrollbar-light">
+      <div className="flex-1 overflow-auto scrollbar-light" style={{ scrollbarGutter: 'stable' }}>
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 size={ICON_SIZES.xl} className="text-blue-500 animate-spin" />
