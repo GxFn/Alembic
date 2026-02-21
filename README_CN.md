@@ -2,7 +2,7 @@
 
 # AutoSnippet
 
-你的代码库里藏着值得复用的模式。AutoSnippet 把它们提取出来，整理好，再喂给 IDE 里的 AI。
+将代码库中的模式提取为知识库，供 IDE 中的 AI 编码助手查询——让生成的代码真正符合你们团队的规范。
 
 [![npm version](https://img.shields.io/npm/v/autosnippet.svg?style=flat-square)](https://www.npmjs.com/package/autosnippet)
 [![License](https://img.shields.io/npm/l/autosnippet.svg?style=flat-square)](https://github.com/GxFn/AutoSnippet/blob/main/LICENSE)

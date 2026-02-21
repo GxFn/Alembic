@@ -2,7 +2,7 @@
 
 # AutoSnippet
 
-Your codebase has patterns worth keeping. AutoSnippet pulls them out, organizes them, and feeds them back to your IDE's AI.
+Extract code patterns from your codebase into a knowledge base, and serve them to AI coding assistants in your IDE — so generated code actually follows your team's conventions.
 
 [![npm version](https://img.shields.io/npm/v/autosnippet.svg?style=flat-square)](https://www.npmjs.com/package/autosnippet)
 [![License](https://img.shields.io/npm/l/autosnippet.svg?style=flat-square)](https://github.com/GxFn/AutoSnippet/blob/main/LICENSE)
