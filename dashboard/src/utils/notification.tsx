@@ -52,21 +52,27 @@ const DEFAULT_DURATIONS: Record<string, number> = {
 
 /* ── 颜色 scheme ──────────────────────────────── */
 
-const COLOR_SCHEMES: Record<string, { bg: string; border: string; bar: string }> = {
+const COLOR_SCHEMES: Record<string, { bg: string; border: string; bar: string; darkBg: string; darkBorder: string }> = {
   success: {
     bg: 'linear-gradient(135deg,#ecfdf5 0%,#f0fdf4 100%)',
     border: '#10b981',
     bar: '#10b981',
+    darkBg: 'linear-gradient(135deg,#0c1a14 0%,#0f1f18 100%)',
+    darkBorder: '#059669',
   },
   error: {
     bg: 'linear-gradient(135deg,#fef2f2 0%,#fff1f2 100%)',
     border: '#ef4444',
     bar: '#ef4444',
+    darkBg: 'linear-gradient(135deg,#1c0f0f 0%,#1f1012 100%)',
+    darkBorder: '#dc2626',
   },
   info: {
     bg: 'linear-gradient(135deg,#eff6ff 0%,#f0f9ff 100%)',
     border: '#3b82f6',
     bar: '#3b82f6',
+    darkBg: 'linear-gradient(135deg,#0f1524 0%,#101828 100%)',
+    darkBorder: '#2563eb',
   },
 };
 
@@ -108,15 +114,18 @@ const ToastContent: React.FC<{
 }> = ({ visible, toastId, body, type, title, duration }) => {
   const scheme = COLOR_SCHEMES[type] || COLOR_SCHEMES.info;
   const IconComp = ICON_MAP[type] || InfoIcon;
+  const dark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 
   return (
     <div
       onClick={() => toast.dismiss(toastId)}
       style={{
-        background: scheme.bg,
-        borderLeft: `4px solid ${scheme.border}`,
+        background: dark ? scheme.darkBg : scheme.bg,
+        borderLeft: `4px solid ${dark ? scheme.darkBorder : scheme.border}`,
         borderRadius: 10,
-        boxShadow: '0 8px 30px rgba(0,0,0,.12),0 2px 8px rgba(0,0,0,.06)',
+        boxShadow: dark
+          ? '0 8px 30px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.25)'
+          : '0 8px 30px rgba(0,0,0,.12),0 2px 8px rgba(0,0,0,.06)',
         padding: '12px 16px 10px 14px',
         display: 'flex',
         alignItems: 'flex-start',
@@ -139,11 +148,11 @@ const ToastContent: React.FC<{
       {/* 文本 */}
       <div style={{ flex: 1, minWidth: 0 }}>
         {title && (
-          <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3, color: '#1e293b', marginBottom: 2 }}>
+          <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3, color: dark ? '#e2e8f0' : '#1e293b', marginBottom: 2 }}>
             {title}
           </div>
         )}
-        <div style={{ fontSize: 12.5, lineHeight: 1.45, color: '#475569', wordBreak: 'break-word' as const }}>
+        <div style={{ fontSize: 12.5, lineHeight: 1.45, color: dark ? '#94a3b8' : '#475569', wordBreak: 'break-word' as const }}>
           {body}
         </div>
       </div>

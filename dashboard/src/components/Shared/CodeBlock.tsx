@@ -2,8 +2,8 @@ import React from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-/** 支持的语法：Objective-C、Swift、Markdown */
-export type CodeLanguage = 'objectivec' | 'objc' | 'swift' | 'markdown';
+/** 支持的语法高亮语言（可扩展） */
+export type CodeLanguage = string;
 
 const LANGUAGE_MAP: Record<string, string> = {
   objectivec: 'objectivec',
@@ -11,8 +11,38 @@ const LANGUAGE_MAP: Record<string, string> = {
   'objective-c': 'objectivec',
   'obj-c': 'objectivec',
   swift: 'swift',
+  go: 'go',
+  javascript: 'javascript',
+  js: 'javascript',
+  typescript: 'typescript',
+  ts: 'typescript',
+  python: 'python',
+  py: 'python',
+  java: 'java',
+  kotlin: 'kotlin',
+  kt: 'kotlin',
+  rust: 'rust',
+  rs: 'rust',
+  dart: 'dart',
+  c: 'c',
+  cpp: 'cpp',
+  'c++': 'cpp',
+  csharp: 'csharp',
+  cs: 'csharp',
+  ruby: 'ruby',
+  rb: 'ruby',
   markdown: 'markdown',
   md: 'markdown',
+  json: 'json',
+  yaml: 'yaml',
+  xml: 'xml',
+  bash: 'bash',
+  sh: 'bash',
+  shell: 'bash',
+  sql: 'sql',
+  html: 'html',
+  css: 'css',
+  text: 'text',
 };
 
 interface CodeBlockProps {

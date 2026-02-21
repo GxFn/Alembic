@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { RefreshCw, Share2, ZoomIn, ZoomOut, Maximize2, Info, Sparkles } from 'lucide-react';
 import api from '../../api';
+import { useI18n } from '../../i18n';
+import { useTheme } from '../../theme';
 import { ICON_SIZES } from '../../constants/icons';
 
 // ─── Types ────────────────────────────────────────────
@@ -73,7 +75,7 @@ const RELATION_LABELS: Record<string, string> = {
   solves:       '解决',
 };
 
-/** 分组颜色色板（按 category 分配） */
+/** 分组颜色色板（按 category 分配）— 浅色模式 */
 const GROUP_COLORS = [
   { bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8' },   // blue
   { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },   // green
@@ -85,6 +87,20 @@ const GROUP_COLORS = [
   { bg: '#f0f9ff', border: '#bae6fd', text: '#0369a1' },   // sky
   { bg: '#fefce8', border: '#fef08a', text: '#a16207' },   // yellow
   { bg: '#f1f5f9', border: '#cbd5e1', text: '#475569' },   // slate
+];
+
+/** 分组颜色色板 — 深色模式 */
+const GROUP_COLORS_DARK = [
+  { bg: 'rgba(59,130,246,0.08)',  border: 'rgba(59,130,246,0.25)',  text: '#60a5fa' },   // blue
+  { bg: 'rgba(34,197,94,0.08)',   border: 'rgba(34,197,94,0.25)',   text: '#4ade80' },   // green
+  { bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.25)',  text: '#fbbf24' },   // amber
+  { bg: 'rgba(236,72,153,0.08)',  border: 'rgba(236,72,153,0.25)',  text: '#f472b6' },   // pink
+  { bg: 'rgba(139,92,246,0.08)',  border: 'rgba(139,92,246,0.25)',  text: '#a78bfa' },   // violet
+  { bg: 'rgba(6,182,212,0.08)',   border: 'rgba(6,182,212,0.25)',   text: '#22d3ee' },   // cyan
+  { bg: 'rgba(249,115,22,0.08)',  border: 'rgba(249,115,22,0.25)',  text: '#fb923c' },   // orange
+  { bg: 'rgba(14,165,233,0.08)',  border: 'rgba(14,165,233,0.25)',  text: '#38bdf8' },   // sky
+  { bg: 'rgba(234,179,8,0.08)',   border: 'rgba(234,179,8,0.25)',   text: '#facc15' },   // yellow
+  { bg: 'rgba(148,163,184,0.08)', border: 'rgba(148,163,184,0.25)', text: '#94a3b8' },   // slate
 ];
 
 // ─── Utilities ────────────────────────────────────────
@@ -250,6 +266,25 @@ function edgePath(
 // ─── Component ────────────────────────────────────────
 
 const KnowledgeGraphView: React.FC = () => {
+  const { t } = useI18n();
+  const { isDark } = useTheme();
+  const palette = isDark ? GROUP_COLORS_DARK : GROUP_COLORS;
+
+  // i18n helper: translate relation labels using locale keys, fallback to module constant
+  const relationLabel = (rel: string): string => {
+    const keyMap: Record<string, string> = {
+      depends_on: 'knowledgeGraph.relationDependsOn', requires: 'knowledgeGraph.relationRequires',
+      extends: 'knowledgeGraph.relationExtends', implements: 'knowledgeGraph.relationImplements',
+      inherits: 'knowledgeGraph.relationInherits', enforces: 'knowledgeGraph.relationEnforces',
+      related: 'knowledgeGraph.relationAssociates', conflicts: 'knowledgeGraph.relationConflicts',
+      calls: 'knowledgeGraph.relationCalls', prerequisite: 'knowledgeGraph.relationPrerequisite',
+      data_flow_to: 'knowledgeGraph.relationDataFlow', references: 'knowledgeGraph.relationReferences',
+      alternative: 'knowledgeGraph.relationAlternative', deprecated_by: 'knowledgeGraph.relationDeprecatedBy',
+      solves: 'knowledgeGraph.relationSolves',
+    };
+    return keyMap[rel] ? t(keyMap[rel]) : (RELATION_LABELS[rel] || rel);
+  };
+
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [nodeLabels, setNodeLabels] = useState<Record<string, string>>({});
   const [nodeTypes, setNodeTypes] = useState<Record<string, string>>({});
@@ -262,6 +297,7 @@ const KnowledgeGraphView: React.FC = () => {
   const [hoveredEdge, setHoveredEdge] = useState<number | null>(null);
   const [discovering, setDiscovering] = useState(false);
   const [discoverResult, setDiscoverResult] = useState<string | null>(null);
+  const [discoverIsError, setDiscoverIsError] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement>(null);
@@ -283,7 +319,7 @@ const KnowledgeGraphView: React.FC = () => {
       setNodeCategories(graphData.nodeCategories || {});
       setStats(statsData);
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || '加载知识图谱失败');
+      setError(err.response?.data?.error || err.message || t('knowledgeGraph.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -296,7 +332,7 @@ const KnowledgeGraphView: React.FC = () => {
     api.getDiscoverRelationsStatus().then(s => {
       if (s.status === 'running') {
         setDiscovering(true);
-        setDiscoverResult(`AI 分析中…（已运行 ${s.elapsed ?? 0}s）`);
+        setDiscoverResult(t('knowledgeGraph.discoverAnalyzing', { elapsed: s.elapsed ?? 0 }));
       }
     }).catch(() => {});
   }, []);
@@ -311,7 +347,8 @@ const KnowledgeGraphView: React.FC = () => {
       if (polls > MAX_POLLS) {
         clearInterval(timer);
         setDiscovering(false);
-        setDiscoverResult('轮询超时，任务可能仍在后台运行。请稍后刷新页面查看结果。');
+        setDiscoverIsError(true);
+        setDiscoverResult(t('knowledgeGraph.discoverPollTimeout'));
         return;
       }
       try {
@@ -322,25 +359,30 @@ const KnowledgeGraphView: React.FC = () => {
           const tp = s.totalPairs ?? 0;
           const be = s.batchErrors ?? 0;
           if (d === 0 && be === 0) {
-            setDiscoverResult(`分析完成，共检查 ${tp} 对 Recipe，未发现关系。待 Recipe 数量增加后可再次尝试。`);
+            setDiscoverIsError(false);
+            setDiscoverResult(t('knowledgeGraph.discoverNoResults', { pairs: tp }));
           } else if (d === 0 && be > 0) {
-            setDiscoverResult(`分析完成，但 ${be} 个批次 AI 调用失败，未发现关系。请检查 AI Provider 配置。`);
+            setDiscoverIsError(true);
+            setDiscoverResult(t('knowledgeGraph.discoverBatchErrors', { errors: be }));
           } else {
-            setDiscoverResult(`发现 ${d} 条关系（共分析 ${tp} 对${be > 0 ? `，${be} 个批次失败` : ''}）`);
+            setDiscoverIsError(false);
+            const failMsg = be > 0 ? t('knowledgeGraph.discoverBatchFailed', { count: be }) : '';
+            setDiscoverResult(t('knowledgeGraph.discoverSuccess', { count: d, pairs: tp, failMsg }));
           }
           fetchGraph();
         } else if (s.status === 'error') {
           setDiscovering(false);
-          const errMsg = s.error || '未知错误';
+          setDiscoverIsError(true);
+          const errMsg = s.error || t('knowledgeGraph.unknownError');
           if (errMsg.includes('AI Provider') || errMsg.includes('API Key')) {
-            setDiscoverResult(`AI 服务未配置: ${errMsg}`);
+            setDiscoverResult(t('knowledgeGraph.discoverAiNotConfigured', { error: errMsg }));
           } else if (errMsg.includes('超时') || errMsg.includes('timeout')) {
-            setDiscoverResult(`任务超时: ${errMsg}`);
+            setDiscoverResult(t('knowledgeGraph.discoverTimeout', { error: errMsg }));
           } else {
-            setDiscoverResult(`发现失败: ${errMsg}`);
+            setDiscoverResult(t('knowledgeGraph.discoverFailed', { error: errMsg }));
           }
         } else if (s.status === 'running') {
-          setDiscoverResult(`AI 分析中…（已运行 ${s.elapsed ?? 0}s）`);
+          setDiscoverResult(t('knowledgeGraph.discoverAnalyzing', { elapsed: s.elapsed ?? 0 }));
         }
       } catch {
         // 网络抖动，继续轮询
@@ -352,34 +394,36 @@ const KnowledgeGraphView: React.FC = () => {
   /** AI 批量发现 Recipe 关系 */
   const handleDiscover = useCallback(async () => {
     setDiscoverResult(null);
+    setDiscoverIsError(false);
     try {
       const resp = await api.discoverRelations();
-      // 后端可能直接返回 empty / timeout 等状态
       if (resp.status === 'empty') {
-        setDiscoverResult(resp.message || 'Recipe 数量不足，无法分析');
+        setDiscoverResult(resp.message || t('knowledgeGraph.discoverInsufficientRecipes'));
         return;
       }
       if (resp.status === 'timeout') {
-        setDiscoverResult(resp.error || '上次任务超时，请重试');
+        setDiscoverIsError(true);
+        setDiscoverResult(resp.error || t('knowledgeGraph.discoverPreviousTimeout'));
         return;
       }
       if (resp.status === 'running') {
         setDiscovering(true);
-        setDiscoverResult('AI 分析仍在进行中…');
+        setDiscoverResult(t('knowledgeGraph.discoverRunning'));
         return;
       }
       // started
       setDiscovering(true);
-      setDiscoverResult('AI 分析已启动，正在后台运行…');
+      setDiscoverResult(t('knowledgeGraph.discoverStarted'));
     } catch (err: any) {
-      const msg = err?.response?.data?.error?.message || err.message || '未知错误';
+      setDiscoverIsError(true);
+      const msg = err?.response?.data?.error?.message || err.message || t('knowledgeGraph.unknownError');
       if (msg.includes('ChatAgent') || msg.includes('AI Provider')) {
-        setDiscoverResult(`AI 服务不可用: ${msg}`);
+        setDiscoverResult(t('knowledgeGraph.discoverAiUnavailable', { error: msg }));
       } else {
-        setDiscoverResult(`启动失败: ${msg}`);
+        setDiscoverResult(t('knowledgeGraph.discoverStartFailed', { error: msg }));
       }
     }
-  }, []);
+  }, [t]);
 
   // Force-directed layout
   const nodes = useMemo(() => {
@@ -419,9 +463,9 @@ const KnowledgeGraphView: React.FC = () => {
   const groupColorMap = useMemo(() => {
     const groups = [...new Set(nodes.map(n => n.group))].sort();
     const map: Record<string, typeof GROUP_COLORS[0]> = {};
-    groups.forEach((g, i) => { map[g] = GROUP_COLORS[i % GROUP_COLORS.length]; });
+    groups.forEach((g, i) => { map[g] = palette[i % palette.length]; });
     return map;
-  }, [nodes]);
+  }, [nodes, palette]);
 
   // Compute SVG viewBox
   const viewBox = useMemo(() => {
@@ -533,7 +577,7 @@ const KnowledgeGraphView: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <p className="text-red-500">{error}</p>
-        <button onClick={fetchGraph} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">重试</button>
+        <button onClick={fetchGraph} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">{t('knowledgeGraph.retry')}</button>
       </div>
     );
   }
@@ -542,10 +586,10 @@ const KnowledgeGraphView: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-500">
         <Share2 size={48} className="text-slate-300" />
-        <p className="text-lg font-medium">知识图谱为空</p>
-        <p className="text-sm text-center max-w-md">当前没有 Recipe 之间的关系数据。点击下方按钮让 AI 自动分析已有 Recipe 之间的潜在关系（requires / extends / enforces / calls 等）。</p>
+        <p className="text-lg font-medium">{t('knowledgeGraph.empty')}</p>
+        <p className="text-sm text-center max-w-md">{t('knowledgeGraph.emptyDesc')}</p>
         {discoverResult && (
-          <p className={`text-sm ${discoverResult.startsWith('发现失败') ? 'text-red-500' : 'text-green-600'}`}>{discoverResult}</p>
+          <p className={`text-sm ${discoverIsError ? 'text-red-500' : 'text-green-600'}`}>{discoverResult}</p>
         )}
         <div className="flex items-center gap-3">
           <button
@@ -554,13 +598,13 @@ const KnowledgeGraphView: React.FC = () => {
             className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             {discovering ? (
-              <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> AI 分析中…</>
+              <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> {t('knowledgeGraph.discovering')}</>
             ) : (
-              <><Sparkles size={ICON_SIZES.sm} /> AI 发现关系</>
+              <><Sparkles size={ICON_SIZES.sm} /> {t('knowledgeGraph.discoverRelations')}</>
             )}
           </button>
           <button onClick={fetchGraph} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-            <RefreshCw size={ICON_SIZES.sm} /> 刷新
+            <RefreshCw size={ICON_SIZES.sm} /> {t('knowledgeGraph.refresh')}
           </button>
         </div>
       </div>
@@ -577,36 +621,36 @@ const KnowledgeGraphView: React.FC = () => {
       <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <div className="flex items-center gap-3">
           <Share2 size={ICON_SIZES.lg} className="text-blue-600" />
-          <h2 className="text-lg font-bold text-slate-800">知识图谱</h2>
+          <h2 className={`text-lg font-bold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>{t('knowledgeGraph.title')}</h2>
           {stats && (
-            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-              {nodes.length} 节点 · {stats.totalEdges} 关系
+            <span className={`text-xs px-2 py-1 rounded-full ${isDark ? 'text-slate-400 bg-slate-700/60' : 'text-slate-500 bg-slate-100'}`}>
+              {t('knowledgeGraph.statsLabel', { nodes: nodes.length, edges: stats.totalEdges })}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <button onClick={() => setZoom(z => Math.min(z + 0.2, 3))} className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors" title="放大">
+          <button onClick={() => setZoom(z => Math.min(z + 0.2, 3))} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200'}`} title={t('knowledgeGraph.zoomIn')}>
             <ZoomIn size={ICON_SIZES.sm} />
           </button>
-          <button onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors" title="缩小">
+          <button onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200'}`} title={t('knowledgeGraph.zoomOut')}>
             <ZoomOut size={ICON_SIZES.sm} />
           </button>
-          <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors" title="重置">
+          <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200'}`} title={t('knowledgeGraph.resetView')}>
             <Maximize2 size={ICON_SIZES.sm} />
           </button>
-          <button onClick={fetchGraph} className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-colors" title="刷新">
+          <button onClick={fetchGraph} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200'}`} title={t('knowledgeGraph.refresh')}>
             <RefreshCw size={ICON_SIZES.sm} />
           </button>
           <button
             onClick={handleDiscover}
             disabled={discovering}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-medium transition-colors disabled:opacity-50"
-            title="AI 自动发现 Recipe 关系"
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-violet-500/15 hover:bg-violet-500/25 text-violet-400' : 'bg-violet-50 hover:bg-violet-100 text-violet-700'}`}
+            title={t('knowledgeGraph.discoverTooltip')}
           >
             {discovering ? (
-              <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-violet-600" /> 分析中…</>
+              <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-violet-600" /> {t('knowledgeGraph.discovering')}</>
             ) : (
-              <><Sparkles size={ICON_SIZES.sm} /> 发现关系</>
+              <><Sparkles size={ICON_SIZES.sm} /> {t('knowledgeGraph.discoverRelations')}</>
             )}
           </button>
         </div>
@@ -620,8 +664,8 @@ const KnowledgeGraphView: React.FC = () => {
             onClick={() => toggleRelation(rel)}
             className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all border ${
               activeRelations.has(rel)
-                ? 'border-transparent shadow-sm'
-                : 'border-slate-200 bg-white text-slate-400 opacity-40'
+                ? isDark ? 'border-transparent shadow-sm' : 'border-transparent shadow-sm'
+                : isDark ? 'border-slate-600 bg-slate-800 text-slate-500 opacity-40' : 'border-slate-200 bg-white text-slate-400 opacity-40'
             }`}
             style={activeRelations.has(rel) ? {
               backgroundColor: (RELATION_COLORS[rel] || '#6b7280') + '18',
@@ -629,7 +673,7 @@ const KnowledgeGraphView: React.FC = () => {
             } : {}}
           >
             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: RELATION_COLORS[rel] || '#6b7280' }} />
-            {RELATION_LABELS[rel] || rel}
+            {relationLabel(rel)}
             {stats?.byRelation?.[rel] != null && <span className="opacity-60">({stats.byRelation[rel]})</span>}
           </button>
         ))}
@@ -638,7 +682,7 @@ const KnowledgeGraphView: React.FC = () => {
       {/* SVG Canvas */}
       <div
         ref={containerRef}
-        className="flex-1 rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white overflow-hidden relative min-h-0"
+        className={`flex-1 rounded-xl border overflow-hidden relative min-h-0 ${isDark ? 'border-slate-700 bg-[#13151c]' : 'border-slate-200 bg-gradient-to-br from-slate-50 to-white'}`}
         style={{ cursor: isPanning.current ? 'grabbing' : 'grab' }}
         onWheel={handleWheel}
       >
@@ -760,9 +804,9 @@ const KnowledgeGraphView: React.FC = () => {
                     const mx = (from.x + to.x) / 2, my = (from.y + to.y) / 2;
                     return (
                       <g>
-                        <rect x={mx - 24} y={my - 16} width={48} height={18} rx={4} fill="white" stroke={RELATION_COLORS[e.relation] || '#6b7280'} strokeWidth={0.8} opacity={0.95} />
+                        <rect x={mx - 24} y={my - 16} width={48} height={18} rx={4} fill={isDark ? '#252526' : 'white'} stroke={RELATION_COLORS[e.relation] || '#6b7280'} strokeWidth={0.8} opacity={0.95} />
                         <text x={mx} y={my - 4} textAnchor="middle" fontSize={9} fontWeight={600} fill={RELATION_COLORS[e.relation] || '#6b7280'}>
-                          {RELATION_LABELS[e.relation] || e.relation}
+                          {relationLabel(e.relation)}
                         </text>
                       </g>
                     );
@@ -790,8 +834,8 @@ const KnowledgeGraphView: React.FC = () => {
                   ? gc.bg
                   : gc.bg;
               const strokeColor = isFocused ? gc.text : isConnected ? gc.border : gc.border;
-              const textColor = isFocused ? '#ffffff' : gc.text;
-              const labelColor = isFocused ? gc.text : '#64748b';
+              const textColor = isFocused ? (isDark ? '#ffffff' : '#ffffff') : gc.text;
+              const labelColor = isFocused ? gc.text : isDark ? '#9ca3af' : '#64748b';
 
               return (
                 <g
@@ -839,7 +883,7 @@ const KnowledgeGraphView: React.FC = () => {
                   {/* Degree badge */}
                   {n.degree >= 3 && !dimmed && (
                     <g>
-                      <circle cx={n.x + r * 0.7} cy={n.y - r * 0.7} r={8} fill="#3b82f6" stroke="white" strokeWidth={1.5} />
+                      <circle cx={n.x + r * 0.7} cy={n.y - r * 0.7} r={8} fill="#3b82f6" stroke={isDark ? '#1e1e1e' : 'white'} strokeWidth={1.5} />
                       <text x={n.x + r * 0.7} y={n.y - r * 0.7 + 3.5} textAnchor="middle" fontSize={8} fill="white" fontWeight={700} style={{ pointerEvents: 'none' }}>
                         {n.degree}
                       </text>
@@ -854,43 +898,43 @@ const KnowledgeGraphView: React.FC = () => {
         {/* Click away to deselect */}
         {selectedNode && (
           <button
-            className="absolute top-2 right-2 text-xs text-slate-400 hover:text-slate-600 bg-white/90 px-2 py-1 rounded-md shadow-sm border border-slate-200"
+            className={`absolute top-2 right-2 text-xs px-2 py-1 rounded-md shadow-sm border ${isDark ? 'text-slate-400 hover:text-slate-200 bg-[#252526]/90 border-slate-600' : 'text-slate-400 hover:text-slate-600 bg-white/90 border-slate-200'}`}
             onClick={() => setSelectedNode(null)}
           >
-            取消选中
+            {t('knowledgeGraph.cancelSelection')}
           </button>
         )}
       </div>
 
       {/* Selected node detail panel */}
       {selectedNode && (
-        <div className="mt-3 p-4 bg-white rounded-xl border border-slate-200 shadow-sm flex-shrink-0 max-h-48 overflow-y-auto scrollbar-light">
-          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100">
+        <div className={`mt-3 p-4 rounded-xl border shadow-sm flex-shrink-0 max-h-48 overflow-y-auto scrollbar-light ${isDark ? 'bg-[#1e1e1e] border-slate-700' : 'bg-white border-slate-200'}`}>
+          <div className={`flex items-center gap-2 mb-3 pb-2 border-b ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
             <Info size={14} className="text-blue-500" />
-            <h3 className="font-semibold text-sm text-slate-800">
+            <h3 className={`font-semibold text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
               {nodeLabels[selectedNode] || selectedNode}
             </h3>
             <span className="text-[10px] text-slate-400 ml-auto">ID: {selectedNode}</span>
           </div>
           <div className="grid grid-cols-2 gap-4 text-xs">
             <div>
-              <span className="text-slate-500 font-medium">出边（依赖）</span>
+              <span className="text-slate-500 font-medium">{t('knowledgeGraph.outEdges')}</span>
               <ul className="mt-1.5 space-y-1">
                 {edges.filter(e => e.fromId === selectedNode && activeRelations.has(e.relation)).map(e => (
                   <li key={e.id} className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: RELATION_COLORS[e.relation] || '#6b7280' }} />
-                    <span className="text-slate-500">{RELATION_LABELS[e.relation] || e.relation}</span>
+                    <span className="text-slate-500">{relationLabel(e.relation)}</span>
                     <span className="text-slate-400">→</span>
                     <button className="text-blue-600 hover:underline truncate" onClick={() => setSelectedNode(e.toId)}>
                       {nodeLabels[e.toId] || e.toId.substring(0, 16)}
                     </button>
                   </li>
                 ))}
-                {edges.filter(e => e.fromId === selectedNode && activeRelations.has(e.relation)).length === 0 && <li className="text-slate-400">无</li>}
+                {edges.filter(e => e.fromId === selectedNode && activeRelations.has(e.relation)).length === 0 && <li className="text-slate-400">{t('knowledgeGraph.none')}</li>}
               </ul>
             </div>
             <div>
-              <span className="text-slate-500 font-medium">入边（被依赖）</span>
+              <span className="text-slate-500 font-medium">{t('knowledgeGraph.inEdges')}</span>
               <ul className="mt-1.5 space-y-1">
                 {edges.filter(e => e.toId === selectedNode && activeRelations.has(e.relation)).map(e => (
                   <li key={e.id} className="flex items-center gap-1.5">
@@ -898,11 +942,11 @@ const KnowledgeGraphView: React.FC = () => {
                       {nodeLabels[e.fromId] || e.fromId.substring(0, 16)}
                     </button>
                     <span className="text-slate-400">→</span>
-                    <span className="text-slate-500">{RELATION_LABELS[e.relation] || e.relation}</span>
+                    <span className="text-slate-500">{relationLabel(e.relation)}</span>
                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: RELATION_COLORS[e.relation] || '#6b7280' }} />
                   </li>
                 ))}
-                {edges.filter(e => e.toId === selectedNode && activeRelations.has(e.relation)).length === 0 && <li className="text-slate-400">无</li>}
+                {edges.filter(e => e.toId === selectedNode && activeRelations.has(e.relation)).length === 0 && <li className="text-slate-400">{t('knowledgeGraph.none')}</li>}
               </ul>
             </div>
           </div>

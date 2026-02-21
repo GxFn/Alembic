@@ -1,8 +1,8 @@
 import { jest } from '@jest/globals';
-import { KnowledgeService } from '../../lib/service/knowledge/KnowledgeService.js';
-import { ConfidenceRouter } from '../../lib/service/knowledge/ConfidenceRouter.js';
 import { KnowledgeEntry } from '../../lib/domain/knowledge/KnowledgeEntry.js';
 import { Lifecycle } from '../../lib/domain/knowledge/Lifecycle.js';
+import { ConfidenceRouter } from '../../lib/service/knowledge/ConfidenceRouter.js';
+import { KnowledgeService } from '../../lib/service/knowledge/KnowledgeService.js';
 
 /* ════════════════════════════════════════════
  *  Mock 工厂
@@ -42,7 +42,7 @@ function makeWireData(overrides = {}) {
 }
 
 function mockRepository() {
-  let _store = new Map();
+  const _store = new Map();
   return {
     create: jest.fn(async (entry) => {
       _store.set(entry.id, entry);
@@ -56,34 +56,63 @@ function mockRepository() {
       pagination: { page: opts?.page || 1, pageSize: opts?.pageSize || 20, total: _store.size },
     })),
     findByKind: jest.fn(async (kind, opts) => ({
-      data: [..._store.values()].filter(e => e.kind === kind),
+      data: [..._store.values()].filter((e) => e.kind === kind),
       pagination: { page: 1, pageSize: 20, total: 0 },
     })),
     search: jest.fn(async (keyword, opts) => ({
-      data: [..._store.values()].filter(e => e.title.includes(keyword)),
+      data: [..._store.values()].filter((e) => e.title.includes(keyword)),
       pagination: { page: 1, pageSize: 20, total: 0 },
     })),
     update: jest.fn(async (id, updates) => {
       const entry = _store.get(id);
-      if (!entry) return null;
+      if (!entry) {
+        return null;
+      }
       // 模拟 DB 更新后重新加载
-      if (updates.lifecycle) entry.lifecycle = updates.lifecycle;
-      if (updates.reviewed_by) entry.reviewedBy = updates.reviewed_by;
-      if (updates.reviewedBy) entry.reviewedBy = updates.reviewedBy;
-      if (updates.reviewed_at) entry.reviewedAt = updates.reviewed_at;
-      if (updates.reviewedAt) entry.reviewedAt = updates.reviewedAt;
-      if (updates.rejection_reason !== undefined) entry.rejectionReason = updates.rejection_reason;
-      if (updates.rejectionReason !== undefined) entry.rejectionReason = updates.rejectionReason;
-      if (updates.published_at) entry.publishedAt = updates.published_at;
-      if (updates.publishedAt) entry.publishedAt = updates.publishedAt;
-      if (updates.published_by) entry.publishedBy = updates.published_by;
-      if (updates.publishedBy) entry.publishedBy = updates.publishedBy;
-      if (updates.probation !== undefined) entry.probation = !!updates.probation;
+      if (updates.lifecycle) {
+        entry.lifecycle = updates.lifecycle;
+      }
+      if (updates.reviewed_by) {
+        entry.reviewedBy = updates.reviewed_by;
+      }
+      if (updates.reviewedBy) {
+        entry.reviewedBy = updates.reviewedBy;
+      }
+      if (updates.reviewed_at) {
+        entry.reviewedAt = updates.reviewed_at;
+      }
+      if (updates.reviewedAt) {
+        entry.reviewedAt = updates.reviewedAt;
+      }
+      if (updates.rejection_reason !== undefined) {
+        entry.rejectionReason = updates.rejection_reason;
+      }
+      if (updates.rejectionReason !== undefined) {
+        entry.rejectionReason = updates.rejectionReason;
+      }
+      if (updates.published_at) {
+        entry.publishedAt = updates.published_at;
+      }
+      if (updates.publishedAt) {
+        entry.publishedAt = updates.publishedAt;
+      }
+      if (updates.published_by) {
+        entry.publishedBy = updates.published_by;
+      }
+      if (updates.publishedBy) {
+        entry.publishedBy = updates.publishedBy;
+      }
+      if (updates.probation !== undefined) {
+        entry.probation = !!updates.probation;
+      }
       if (updates.lifecycle_history_json) {
         entry.lifecycleHistory = JSON.parse(updates.lifecycle_history_json);
       }
       if (updates.lifecycleHistory) {
-        const lh = typeof updates.lifecycleHistory === 'string' ? JSON.parse(updates.lifecycleHistory) : updates.lifecycleHistory;
+        const lh =
+          typeof updates.lifecycleHistory === 'string'
+            ? JSON.parse(updates.lifecycleHistory)
+            : updates.lifecycleHistory;
         entry.lifecycleHistory = lh;
       }
       entry.updatedAt = updates.updated_at || updates.updatedAt || entry.updatedAt;
@@ -181,7 +210,9 @@ describe('KnowledgeService', () => {
     });
 
     test('创建条目 — ConfidenceRouter auto_approve 时标记 autoApprovable', async () => {
-      const router = { route: jest.fn(async () => ({ action: 'auto_approve', reason: 'high confidence' })) };
+      const router = {
+        route: jest.fn(async () => ({ action: 'auto_approve', reason: 'high confidence' })),
+      };
       const { service } = createService({ confidenceRouter: router });
 
       const result = await service.create(makeWireData(), { userId: 'user1' });
@@ -229,18 +260,21 @@ describe('KnowledgeService', () => {
       const hooks = { run: jest.fn(async () => ({ block: true, reason: 'forbidden' })) };
       const { service } = createService({ skillHooks: hooks });
 
-      await expect(
-        service.create(makeWireData(), { userId: 'user1' })
-      ).rejects.toThrow('SkillHook blocked: forbidden');
+      await expect(service.create(makeWireData(), { userId: 'user1' })).rejects.toThrow(
+        'SkillHook blocked: forbidden'
+      );
     });
 
     test('创建条目 — 同步 relations 到 graph', async () => {
       const graph = mockGraphService();
       const { service } = createService({ graphService: graph });
 
-      await service.create(makeWireData({
-        relations: { extends: [{ target: 'other-id', description: 'base' }] },
-      }), { userId: 'user1' });
+      await service.create(
+        makeWireData({
+          relations: { extends: [{ target: 'other-id', description: 'base' }] },
+        }),
+        { userId: 'user1' }
+      );
 
       expect(graph.addEdge).toHaveBeenCalledTimes(1);
     });
@@ -272,10 +306,14 @@ describe('KnowledgeService', () => {
       const { service, repo, fileWriter } = createService();
       repo._seed(makeEntry());
 
-      const result = await service.update('test-id-001', {
-        title: 'Updated Title',
-        tags: ['new-tag'],
-      }, { userId: 'user1' });
+      const _result = await service.update(
+        'test-id-001',
+        {
+          title: 'Updated Title',
+          tags: ['new-tag'],
+        },
+        { userId: 'user1' }
+      );
 
       expect(repo.update).toHaveBeenCalled();
       expect(fileWriter.persist).toHaveBeenCalled();
@@ -285,9 +323,13 @@ describe('KnowledgeService', () => {
       const { service, repo } = createService();
       repo._seed(makeEntry());
 
-      await service.update('test-id-001', {
-        knowledgeType: 'boundary-constraint',
-      }, { userId: 'user1' });
+      await service.update(
+        'test-id-001',
+        {
+          knowledgeType: 'boundary-constraint',
+        },
+        { userId: 'user1' }
+      );
 
       const updateCall = repo.update.mock.calls[0][1];
       expect(updateCall.knowledgeType).toBe('boundary-constraint');
@@ -331,9 +373,9 @@ describe('KnowledgeService', () => {
     test('删除不存在的条目抛出 NotFoundError', async () => {
       const { service } = createService();
 
-      await expect(
-        service.delete('nonexistent', { userId: 'user1' })
-      ).rejects.toThrow('Knowledge entry not found');
+      await expect(service.delete('nonexistent', { userId: 'user1' })).rejects.toThrow(
+        'Knowledge entry not found'
+      );
     });
   });
 
@@ -341,7 +383,7 @@ describe('KnowledgeService', () => {
 
   describe('lifecycle transitions', () => {
     test('submit: pending → pending (no-op, returns entry)', async () => {
-      const { service, repo, fileWriter } = createService();
+      const { service, repo } = createService();
       repo._seed(makeEntry({ lifecycle: Lifecycle.PENDING }));
 
       const result = await service.submit('test-id-001', { userId: 'user1' });
@@ -371,7 +413,9 @@ describe('KnowledgeService', () => {
       const { service, repo } = createService();
       repo._seed(makeEntry({ lifecycle: Lifecycle.PENDING }));
 
-      const result = await service.reject('test-id-001', 'Invalid pattern', { userId: 'reviewer1' });
+      const result = await service.reject('test-id-001', 'Invalid pattern', {
+        userId: 'reviewer1',
+      });
 
       expect(result.lifecycle).toBe(Lifecycle.DEPRECATED);
       expect(result.rejectionReason).toBe('Invalid pattern');
@@ -381,9 +425,9 @@ describe('KnowledgeService', () => {
       const { service, repo } = createService();
       repo._seed(makeEntry({ lifecycle: Lifecycle.PENDING }));
 
-      await expect(
-        service.reject('test-id-001', '', { userId: 'reviewer1' })
-      ).rejects.toThrow('Deprecation reason is required');
+      await expect(service.reject('test-id-001', '', { userId: 'reviewer1' })).rejects.toThrow(
+        'Deprecation reason is required'
+      );
     });
 
     test('publish: pending → active', async () => {
@@ -410,9 +454,9 @@ describe('KnowledgeService', () => {
       const { service, repo } = createService();
       repo._seed(makeEntry({ lifecycle: Lifecycle.ACTIVE }));
 
-      await expect(
-        service.deprecate('test-id-001', '', { userId: 'user1' })
-      ).rejects.toThrow('Deprecation reason is required');
+      await expect(service.deprecate('test-id-001', '', { userId: 'user1' })).rejects.toThrow(
+        'Deprecation reason is required'
+      );
     });
 
     test('reactivate: deprecated → pending', async () => {
@@ -446,9 +490,7 @@ describe('KnowledgeService', () => {
       const { service, repo } = createService();
       repo._seed(makeEntry({ lifecycle: Lifecycle.ACTIVE }));
 
-      await expect(
-        service.reactivate('test-id-001', { userId: 'user1' })
-      ).rejects.toThrow();
+      await expect(service.reactivate('test-id-001', { userId: 'user1' })).rejects.toThrow();
     });
   });
 
@@ -503,7 +545,7 @@ describe('KnowledgeService', () => {
       const { service, repo } = createService();
       repo._seed(makeEntry());
 
-      const result = await service.incrementUsage('test-id-001', 'adoption');
+      const _result = await service.incrementUsage('test-id-001', 'adoption');
 
       expect(repo.update).toHaveBeenCalled();
       const [, updates] = repo.update.mock.calls[0];
@@ -516,9 +558,9 @@ describe('KnowledgeService', () => {
       const { service, repo } = createService();
       repo._seed(makeEntry());
 
-      await expect(
-        service.updateQuality('test-id-001')
-      ).rejects.toThrow('QualityScorer not configured');
+      await expect(service.updateQuality('test-id-001')).rejects.toThrow(
+        'QualityScorer not configured'
+      );
     });
 
     test('有 QualityScorer 时计算并更新', async () => {
@@ -526,7 +568,13 @@ describe('KnowledgeService', () => {
         score: jest.fn(() => ({
           score: 0.85,
           grade: 'B',
-          dimensions: { completeness: 0.9, format: 0.8, codeQuality: 0.7, metadata: 0.6, engagement: 0 },
+          dimensions: {
+            completeness: 0.9,
+            format: 0.8,
+            codeQuality: 0.7,
+            metadata: 0.6,
+            engagement: 0,
+          },
         })),
       };
       const { service, repo } = createService({ qualityScorer: scorer });
@@ -617,7 +665,7 @@ describe('ConfidenceRouter', () => {
   test('内容不完整 → pending', async () => {
     const router = new ConfidenceRouter();
     const entry = makeEntry({
-      title: '',  // 不完整
+      title: '', // 不完整
       content: { pattern: '', rationale: '' },
     });
 

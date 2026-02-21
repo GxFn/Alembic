@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, AlertTriangle, AlertCircle, Trash2, ChevronDown, ChevronRight, ExternalLink, BookOpen, Wrench, Link2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Shield, AlertTriangle, AlertCircle, Trash2, ChevronDown, ChevronRight, ExternalLink, BookOpen, Wrench, Link2, Filter, Info } from 'lucide-react';
 import api from '../../api';
 import { notify } from '../../utils/notification';
-import { GITHUB_ISSUES_NEW_GUARD_URL } from '../../constants';
+import { GITHUB_ISSUES_NEW_GUARD_URL, LANGUAGE_OPTIONS } from '../../constants';
 import { ICON_SIZES } from '../../constants/icons';
+import { useI18n } from '../../i18n';
 
 interface GuardRule {
   message: string;
@@ -13,6 +14,10 @@ interface GuardRule {
   note?: string;
   /** 审查规模：仅在该规模下运行；无则任意规模均运行 */
   dimension?: 'file' | 'target' | 'project';
+  /** 规则分类 */
+  category?: 'safety' | 'correctness' | 'performance' | 'style' | '';
+  /** 修复建议 */
+  fixSuggestion?: string;
   /** 规则溯源：为什么存在这条规则 */
   rationale?: string;
   /** 修复建议列表 */
@@ -41,8 +46,10 @@ interface GuardRun {
 }
 
 const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
+  const { t } = useI18n();
   const [rules, setRules] = useState<Record<string, GuardRule>>({});
   const [runs, setRuns] = useState<GuardRun[]>([]);
+  const [projectLanguages, setProjectLanguages] = useState<string[]>([]);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAiWriteRule, setShowAiWriteRule] = useState(false);
@@ -54,7 +61,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
   message: '',
   severity: 'warning' as 'warning' | 'error',
   pattern: '',
-  languages: ['objc', 'swift'] as string[],
+  languages: [] as string[],
   note: '',
   dimension: '' as '' | 'file' | 'target' | 'project'
   });
@@ -68,6 +75,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     api.getGuardViolations()
     ]);
     setRules(rulesResult?.rules || {});
+    setProjectLanguages(rulesResult?.projectLanguages || []);
     setRuns(violationsResult?.runs || []);
   } catch (_) {
     setRules({});
@@ -82,13 +90,13 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
   }, []);
 
   const handleClearViolations = async () => {
-  if (!window.confirm('确定清空所有 Guard 违反记录？')) return;
+  if (!window.confirm(t('guard.clearConfirm'))) return;
   try {
     await api.clearViolations();
     fetchGuard();
     onRefresh?.();
   } catch (err: any) {
-    notify(err?.message || '清空违反记录失败', { title: '操作失败', type: 'error' });
+    notify(err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
   }
   };
 
@@ -103,7 +111,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
 
   const handleGenerateRule = async () => {
   if (!semanticInput.trim()) {
-    setAddRuleError('请先输入语义描述');
+    setAddRuleError(t('guard.aiGenPlaceholder'));
     return;
   }
   setAddRuleError('');
@@ -119,13 +127,13 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     message: data.message || '',
     severity: data.severity === 'error' ? 'error' : 'warning',
     pattern: data.pattern || '',
-    languages: Array.isArray(data.languages) && data.languages.length > 0 ? data.languages : ['objc', 'swift'],
+    languages: Array.isArray(data.languages) && data.languages.length > 0 ? data.languages : [],
     note: data.note != null ? String(data.note) : '',
     dimension: dim === 'file' || dim === 'target' || dim === 'project' ? dim : ''
     });
     setShowAddRule(true);
   } catch (err: any) {
-    setAddRuleError(err?.response?.data?.error || err?.message || 'AI 生成失败');
+    setAddRuleError(err?.response?.data?.error || err?.message || t('guard.aiGenFailed'));
   } finally {
     setGenerating(false);
   }
@@ -135,7 +143,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
   e.preventDefault();
   setAddRuleError('');
   if (!addRuleForm.ruleId.trim() || !addRuleForm.message.trim() || !addRuleForm.pattern.trim() || addRuleForm.languages.length === 0) {
-    setAddRuleError('请填写规则 ID、说明、正则和至少一种语言');
+    setAddRuleError(t('guard.addRuleValidation'));
     return;
   }
   setAddRuleSubmitting(true);
@@ -149,24 +157,95 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     note: addRuleForm.note.trim() || undefined,
     ...(addRuleForm.dimension ? { dimension: addRuleForm.dimension } : {})
     });
-    setAddRuleForm({ ruleId: '', message: '', severity: 'warning', pattern: '', languages: ['objc', 'swift'], note: '', dimension: '' });
+    setAddRuleForm({ ruleId: '', message: '', severity: 'warning', pattern: '', languages: [], note: '', dimension: '' });
     setSemanticInput('');
     setShowAddRule(false);
     fetchGuard();
     onRefresh?.();
   } catch (err: any) {
-    setAddRuleError(err?.response?.data?.error || err?.message || '写入失败');
+    setAddRuleError(err?.response?.data?.error || err?.message || t('common.saveFailed'));
   } finally {
     setAddRuleSubmitting(false);
   }
   };
 
-  if (loading) {
-  return <div className="p-6 text-slate-500">加载中...</div>;
-  }
+  // ── 按项目语言过滤规则：仅展示当前项目涉及的语言 ──
+  const projectRuleEntries = useMemo(() => {
+    const all = Object.entries(rules);
+    // 如果后端未返回项目语言（如 moduleService 未加载），显示全部
+    if (projectLanguages.length === 0) return all;
+    return all.filter(([, r]) => {
+      if (!r.languages || r.languages.length === 0) return true;
+      return r.languages.some(l => projectLanguages.includes(l));
+    });
+  }, [rules, projectLanguages]);
 
-  const ruleEntries = Object.entries(rules);
+  const ruleEntries = projectRuleEntries;
   const totalViolations = runs.reduce((s, r) => s + r.violations.length, 0);
+
+  // ── 筛选状态 ──
+  const [langFilter, setLangFilter] = useState<string>('all');
+  const [severityFilter, setSeverityFilter] = useState<string>('all');
+
+  // ── 从规则中提取所有涉及的语言（用于动态 tab）──
+  const presentLanguages = useMemo(() => {
+    const langSet = new Set<string>();
+    for (const [, r] of ruleEntries) {
+      (r.languages || []).forEach(l => langSet.add(l));
+    }
+    // 按 LANGUAGE_OPTIONS 顺序排列
+    const ordered = LANGUAGE_OPTIONS.filter(o => langSet.has(o.id)).map(o => o.id);
+    // 附加不在 LANGUAGE_OPTIONS 里的
+    for (const l of langSet) {
+      if (!ordered.includes(l)) ordered.push(l);
+    }
+    return ordered;
+  }, [ruleEntries]);
+
+  // ── 语言显示名映射 ──
+  const langLabel = (id: string) => LANGUAGE_OPTIONS.find(o => o.id === id)?.label || id;
+
+  // ── 严重性统计 ──
+  const severityCounts = useMemo(() => {
+    const counts = { error: 0, warning: 0, info: 0 };
+    for (const [, r] of ruleEntries) {
+      const s = r.severity as keyof typeof counts;
+      if (counts[s] !== undefined) counts[s]++;
+    }
+    return counts;
+  }, [ruleEntries]);
+
+  // ── 分类显示名 ──
+  const categoryLabel = (cat?: string) => {
+    const map: Record<string, string> = { safety: t('guard.categorySafety'), correctness: t('guard.categoryCorrectness'), performance: t('guard.categoryPerformance'), style: t('guard.categoryStyle') };
+    return cat ? map[cat] || cat : '—';
+  };
+
+  // ── 规则 message / fixSuggestion 国际化：优先用 locale key，回退到后端原文 ──
+  const ruleMsg = (ruleId: string, fallback: string) => {
+    const key = `guardRuleMessages.${ruleId}`;
+    const translated = t(key);
+    return translated !== key ? translated : fallback;
+  };
+  const ruleFix = (ruleId: string, fallback?: string) => {
+    if (!fallback) return fallback;
+    const key = `guardRuleFixSuggestions.${ruleId}`;
+    const translated = t(key);
+    return translated !== key ? translated : fallback;
+  };
+
+  // ── 筛选后的规则 ──
+  const filteredEntries = useMemo(() => {
+    return ruleEntries.filter(([, r]) => {
+      if (langFilter !== 'all' && !(r.languages || []).includes(langFilter)) return false;
+      if (severityFilter !== 'all' && r.severity !== severityFilter) return false;
+      return true;
+    });
+  }, [ruleEntries, langFilter, severityFilter]);
+
+  if (loading) {
+  return <div className="p-6 text-slate-500">{t('common.loading')}</div>;
+  }
 
   return (
   <div className="flex-1 flex flex-col overflow-hidden">
@@ -177,8 +256,13 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
       <Shield className="text-blue-600" size={20} />
       </div>
       <div>
-      <h2 className="text-xl font-bold text-slate-800">Guard 规则与违反记录</h2>
-      <p className="text-xs text-slate-400 mt-0.5">静态规则检查 · 自动审计代码变更</p>
+      <h2 className="text-xl font-bold text-slate-800">{t('guard.title')}</h2>
+      <p className="text-xs text-slate-400 mt-0.5">
+        {t('guard.summary')}
+        {projectLanguages.length > 0 && (
+        <span className="ml-1.5">· {t('guard.currentProject')}：{projectLanguages.map(l => langLabel(l)).join(' / ')}</span>
+        )}
+      </p>
       </div>
     </div>
     <div className="flex items-center gap-2">
@@ -188,7 +272,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
       rel="noopener noreferrer"
       className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100"
       >
-      <ExternalLink size={14} /> 提交误报
+      <ExternalLink size={14} /> {t('guard.reportIssue')}
       </a>
       <button
       type="button"
@@ -196,7 +280,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
       className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100"
       >
       {showAiWriteRule ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-      AI 写入规则
+      {t('guard.aiGenRule')}
       </button>
       {runs.length > 0 && (
       <button
@@ -204,18 +288,18 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         onClick={handleClearViolations}
         className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-red-600 bg-red-50 border border-red-200 hover:bg-red-100"
       >
-        <Trash2 size={14} /> 清空历史
+        <Trash2 size={14} /> {t('guard.clearHistory')}
       </button>
       )}
       <div className="flex items-center gap-3 text-xs">
       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
         <Shield size={14} className="text-slate-400" />
-        <span className="text-slate-500">规则 <strong className="text-slate-700">{ruleEntries.length}</strong> 条</span>
+        <span className="text-slate-500">{t('guard.tableHeaders.rule')} <strong className="text-slate-700">{ruleEntries.length}</strong></span>
       </div>
       {totalViolations > 0 && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-100">
         <AlertTriangle size={14} className="text-amber-400" />
-        <span className="text-amber-600">违反 <strong className="text-amber-700">{totalViolations}</strong></span>
+        <span className="text-amber-600">{t('guard.totalViolations', { count: totalViolations })}</span>
         </div>
       )}
       </div>
@@ -230,14 +314,14 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     <section className="mb-6">
     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
       <div>
-      <label htmlFor="semantic-input" className="block text-xs font-medium text-slate-600 mb-1">语义描述（由 AI 生成规则表单）</label>
+      <label htmlFor="semantic-input" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.aiGenRuleDesc')}</label>
       <textarea
       id="semantic-input"
       name="semanticInput"
         value={semanticInput}
         onChange={e => { setSemanticInput(e.target.value); setAddRuleError(''); }}
         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-y min-h-[80px]"
-        placeholder="例如：禁止在主线程使用 dispatch_sync 调用 main queue，易死锁"
+        placeholder={t('guard.aiGenPlaceholder')}
         rows={3}
       />
       <button
@@ -246,7 +330,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         disabled={generating || !semanticInput.trim()}
         className="mt-2 px-4 py-2 bg-slate-600 text-white text-sm rounded-lg hover:bg-slate-700 disabled:opacity-50"
       >
-        {generating ? '生成中...' : 'AI 生成'}
+        {generating ? t('guard.aiGenerating') : t('guard.aiGenRule')}
       </button>
       {addRuleError && <p className="mt-2 text-sm text-red-600">{addRuleError}</p>}
       </div>
@@ -256,16 +340,16 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         onClick={() => setShowAddRule(!showAddRule)}
         className="text-sm font-medium text-blue-600 hover:text-blue-700"
       >
-        {showAddRule ? '收起表单' : '展开 / 编辑表单'}
+        {showAddRule ? t('common.collapse') : t('common.expand')}
       </button>
-      {addRuleForm.ruleId && <span className="text-xs text-slate-500">已生成规则 ID：{addRuleForm.ruleId}</span>}
+      {addRuleForm.ruleId && <span className="text-xs text-slate-500">{t('guard.generatedRuleId')}：{addRuleForm.ruleId}</span>}
       </div>
     </div>
     {showAddRule && (
       <form onSubmit={handleAddRule} className="mt-3 p-4 bg-white border border-slate-200 rounded-xl space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-        <label htmlFor="rule-id" className="block text-xs font-medium text-slate-600 mb-1">规则 ID（英文，如 no-force-unwrap）</label>
+        <label htmlFor="rule-id" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.ruleId')}</label>
         <input
         id="rule-id"
         name="ruleId"
@@ -277,7 +361,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         />
         </div>
         <div>
-        <label htmlFor="rule-severity" className="block text-xs font-medium text-slate-600 mb-1">严重性</label>
+        <label htmlFor="rule-severity" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.severity')}</label>
         <select
         id="rule-severity"
         name="severity"
@@ -291,7 +375,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         </div>
       </div>
       <div>
-      <label htmlFor="rule-message" className="block text-xs font-medium text-slate-600 mb-1">说明（违反时提示）</label>
+      <label htmlFor="rule-message" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.message')}</label>
       <input
         id="rule-message"
         name="message"
@@ -299,11 +383,11 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         value={addRuleForm.message}
         onChange={e => setAddRuleForm(f => ({ ...f, message: e.target.value }))}
         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-        placeholder="禁止在主线程上使用 dispatch_sync(main)"
+        placeholder={t('guard.aiGenPlaceholder')}
         />
       </div>
       <div>
-      <label htmlFor="rule-pattern" className="block text-xs font-medium text-slate-600 mb-1">正则（对每行匹配，JSON 中反斜杠需双写）</label>
+      <label htmlFor="rule-pattern" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.patternLabel')}</label>
       <input
         id="rule-pattern"
         name="pattern"
@@ -315,20 +399,21 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">适用语言</label>
-        <div className="flex gap-4">
-        <label htmlFor="lang-objc" className="flex items-center gap-2 text-sm">
-        <input id="lang-objc" name="languages" type="checkbox" checked={addRuleForm.languages.includes('objc')} onChange={() => handleToggleLang('objc')} />
-        objc
+        <label className="block text-xs font-medium text-slate-600 mb-1">{t('guard.languagesLabel')}</label>
+        <div className="flex gap-3 flex-wrap">
+        {(projectLanguages.length > 0
+          ? LANGUAGE_OPTIONS.filter(o => projectLanguages.includes(o.id))
+          : LANGUAGE_OPTIONS.slice(0, 8)
+        ).map(opt => (
+        <label key={opt.id} htmlFor={`lang-${opt.id}`} className="flex items-center gap-1.5 text-sm">
+        <input id={`lang-${opt.id}`} name="languages" type="checkbox" checked={addRuleForm.languages.includes(opt.id)} onChange={() => handleToggleLang(opt.id)} />
+        {opt.label}
         </label>
-        <label htmlFor="lang-swift" className="flex items-center gap-2 text-sm">
-        <input id="lang-swift" name="languages" type="checkbox" checked={addRuleForm.languages.includes('swift')} onChange={() => handleToggleLang('swift')} />
-          swift
-        </label>
+        ))}
         </div>
       </div>
       <div>
-      <label htmlFor="rule-dimension" className="block text-xs font-medium text-slate-600 mb-1">审查规模（可选，as:audit 后缀可限定）</label>
+      <label htmlFor="rule-dimension" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.dimensionLabel')}</label>
       <select
       id="rule-dimension"
       name="dimension"
@@ -336,14 +421,14 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         onChange={e => setAddRuleForm(f => ({ ...f, dimension: e.target.value as '' | 'file' | 'target' | 'project' }))}
         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
       >
-        <option value="">不限制（任意 as:audit / as:audit file / as:audit target / as:audit project 均运行）</option>
-        <option value="file">同文件（仅 as:audit file 时运行）</option>
-        <option value="target">同 target（仅 as:audit target 时运行）</option>
-        <option value="project">同项目（仅 as:audit project 时运行）</option>
+        <option value="">{t('guard.dimNoLimit')}</option>
+        <option value="file">{t('guard.dimFile')}</option>
+        <option value="target">{t('guard.dimTarget')}</option>
+        <option value="project">{t('guard.dimProject')}</option>
         </select>
       </div>
       <div>
-      <label htmlFor="rule-note" className="block text-xs font-medium text-slate-600 mb-1">备注（可选）</label>
+      <label htmlFor="rule-note" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.noteLabel')}</label>
       <input
         id="rule-note"
         name="note"
@@ -351,15 +436,15 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         value={addRuleForm.note}
         onChange={e => setAddRuleForm(f => ({ ...f, note: e.target.value }))}
         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-        placeholder="仅作简单模式提示"
+        placeholder={t('guard.notePlaceholder')}
         />
       </div>
       <div className="flex gap-2">
         <button type="submit" disabled={addRuleSubmitting} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
-        {addRuleSubmitting ? '写入中...' : '确认写入'}
+        {addRuleSubmitting ? t('common.saving') : t('common.confirm')}
         </button>
         <button type="button" onClick={() => setShowAddRule(false)} className="px-4 py-2 text-slate-600 text-sm rounded-lg hover:bg-slate-100">
-        收起
+        {t('common.collapse')}
         </button>
       </div>
       </form>
@@ -369,34 +454,97 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
 
     {/* 规则表 */}
     <section className="mb-8">
-    <h3 className="text-sm font-semibold text-slate-700 mb-3">iOS 版本规则（guard-rules.json）</h3>
+    {/* ── 规则筛选栏 ── */}
+    <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+      <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+        <Filter size={14} className="text-slate-400" />
+        {t('guard.tableHeaders.rule')}
+        <span className="text-slate-400 font-normal">（{filteredEntries.length}/{ruleEntries.length}）</span>
+      </h3>
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* 严重性筛选 */}
+        <div className="flex items-center gap-1 text-xs">
+          <button onClick={() => setSeverityFilter('all')}
+            className={`px-2 py-1 rounded-md border transition-all ${severityFilter === 'all' ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+            {t('common.all')}
+          </button>
+          <button onClick={() => setSeverityFilter('error')}
+            className={`px-2 py-1 rounded-md border transition-all flex items-center gap-1 ${severityFilter === 'error' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-200 hover:bg-red-50'}`}>
+            <AlertCircle size={12} /> error <span className="opacity-70">({severityCounts.error})</span>
+          </button>
+          <button onClick={() => setSeverityFilter('warning')}
+            className={`px-2 py-1 rounded-md border transition-all flex items-center gap-1 ${severityFilter === 'warning' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50'}`}>
+            <AlertTriangle size={12} /> warning <span className="opacity-70">({severityCounts.warning})</span>
+          </button>
+          <button onClick={() => setSeverityFilter('info')}
+            className={`px-2 py-1 rounded-md border transition-all flex items-center gap-1 ${severityFilter === 'info' ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'}`}>
+            <Info size={12} /> info <span className="opacity-70">({severityCounts.info})</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    {/* ── 语言标签栏 ── */}
+    <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+      <button onClick={() => setLangFilter('all')}
+        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${langFilter === 'all' ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+        {t('guard.allLanguages')}
+      </button>
+      {presentLanguages.map(lang => {
+        const count = ruleEntries.filter(([, r]) => (r.languages || []).includes(lang)).length;
+        return (
+          <button key={lang} onClick={() => setLangFilter(langFilter === lang ? 'all' : lang)}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${langFilter === lang ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+            {langLabel(lang)} <span className="opacity-60">({count})</span>
+          </button>
+        );
+      })}
+    </div>
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <table className="w-full text-sm">
       <thead className="bg-slate-50 border-b border-slate-200">
         <tr>
-        <th className="text-left py-2 px-4 font-medium text-slate-600">规则 ID</th>
-        <th className="text-left py-2 px-4 font-medium text-slate-600">严重性</th>
-        <th className="text-left py-2 px-4 font-medium text-slate-600">说明</th>
-        <th className="text-left py-2 px-4 font-medium text-slate-600">适用语言</th>
-        <th className="text-left py-2 px-4 font-medium text-slate-600">审查规模</th>
+        <th className="text-left py-2 px-4 font-medium text-slate-600">{t('guard.ruleId')}</th>
+        <th className="text-left py-2 px-4 font-medium text-slate-600 w-20">{t('guard.severity')}</th>
+        <th className="text-left py-2 px-4 font-medium text-slate-600">{t('guard.message')}</th>
+        <th className="text-left py-2 px-4 font-medium text-slate-600 w-28">{t('guard.languagesLabel')}</th>
+        <th className="text-left py-2 px-4 font-medium text-slate-600 w-20">{t('guard.category')}</th>
         </tr>
       </thead>
       <tbody>
-        {ruleEntries.length === 0 ? (
-        <tr><td colSpan={5} className="py-4 px-4 text-slate-500">暂无规则</td></tr>
+        {filteredEntries.length === 0 ? (
+        <tr><td colSpan={5} className="py-4 px-4 text-slate-500 text-center">
+          {ruleEntries.length === 0 ? t('common.noData') : t('guard.noMatchingRules')}
+        </td></tr>
         ) : (
-        ruleEntries.map(([id, r]) => (
-          <tr key={id} className="border-b border-slate-100 last:border-0">
-          <td className="py-2 px-4 font-mono text-xs">{id}</td>
+        filteredEntries.map(([id, r]) => (
+          <tr key={id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+          <td className="py-2 px-4 font-mono text-xs text-slate-700">{id}</td>
           <td className="py-2 px-4">
-            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${r.severity === 'error' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+              r.severity === 'error' ? 'bg-red-100 text-red-700'
+              : r.severity === 'info' ? 'bg-blue-100 text-blue-700'
+              : 'bg-amber-100 text-amber-700'
+            }`}>
             {r.severity}
             </span>
           </td>
-          <td className="py-2 px-4 text-slate-700">{r.message}</td>
-          <td className="py-2 px-4 text-slate-500">{(r.languages || []).join(', ')}</td>
-          <td className="py-2 px-4 text-slate-500 text-xs">
-            {r.dimension === 'file' ? '同文件' : r.dimension === 'target' ? '同 target' : r.dimension === 'project' ? '同项目' : '—'}
+          <td className="py-2 px-4 text-slate-700">
+            {ruleMsg(id, r.message)}
+            {r.fixSuggestion && (
+              <span className="ml-1.5 text-xs text-emerald-600" title={ruleFix(id, r.fixSuggestion)}>💡</span>
+            )}
+          </td>
+          <td className="py-2 px-4">
+            <div className="flex flex-wrap gap-1">
+            {(r.languages || []).map(l => (
+              <span key={l} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 font-medium">
+                {langLabel(l)}
+              </span>
+            ))}
+            </div>
+          </td>
+          <td className="py-2 px-4 text-xs text-slate-500">
+            {categoryLabel((r as any).category)}
           </td>
           </tr>
         ))
@@ -409,11 +557,11 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     {/* 违反记录 */}
     <section>
     <h3 className="text-sm font-semibold text-slate-700 mb-3">
-      违反记录（共 {runs.length} 次运行，{totalViolations} 处违反）
+      {t('guard.violationRecords', { runs: runs.length, count: totalViolations })}
     </h3>
     {runs.length === 0 ? (
       <div className="bg-slate-50 border border-slate-200 rounded-xl py-12 text-center text-slate-500">
-      暂无违反记录。在源码中写入 <code className="bg-slate-200 px-1 rounded">// as:audit</code> 并保存，watch 会执行静态规则检查并记录在此。
+      {t('guard.noViolations')}
       </div>
     ) : (
       <div className="space-y-2">
@@ -434,16 +582,16 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
           </span>
           {hasViolations ? (
             <span className="ml-auto flex items-center gap-1 text-amber-600 text-xs font-medium">
-            <AlertTriangle size={ICON_SIZES.sm} /> {run.violations.length} 处违反
+            <AlertTriangle size={ICON_SIZES.sm} /> {t('guard.totalViolations', { count: run.violations.length })}
             </span>
           ) : (
-            <span className="ml-auto text-slate-400 text-xs">无违反</span>
+            <span className="ml-auto text-slate-400 text-xs">{t('guard.noViolations')}</span>
           )}
           </button>
           {isExpanded && (
           <div className="border-t border-slate-100 bg-slate-50/50 p-4">
             {run.violations.length === 0 ? (
-            <p className="text-sm text-slate-500">本次运行未发现违反。</p>
+            <p className="text-sm text-slate-500">{t('guard.noViolations')}</p>
             ) : (
             <ul className="space-y-2">
               {run.violations.map((v, i) => {
@@ -460,10 +608,10 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
                   <span className="font-mono text-xs text-slate-500">[{v.ruleId}] {v.filePath ? `${v.filePath}:${v.line}` : `L${v.line}`}</span>
                   {v.dimension && (
                   <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
-                    {v.dimension === 'file' ? '同文件' : v.dimension === 'target' ? '同 target' : '同项目'}
+                    {v.dimension === 'file' ? t('guard.dimFile') : v.dimension === 'target' ? t('guard.dimTarget') : t('guard.dimProject')}
                   </span>
                   )}
-                  <span className="text-slate-700 ml-2">{v.message}</span>
+                  <span className="text-slate-700 ml-2">{ruleMsg(v.ruleId, v.message)}</span>
                 </div>
                 {v.snippet && (
                   <pre className="text-xs text-slate-600 bg-slate-100 p-2 rounded overflow-x-auto">
@@ -476,14 +624,14 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
                   {matchedRule.rationale && (
                     <div className="flex items-start gap-1.5">
                     <BookOpen size={12} className="text-blue-500 shrink-0 mt-0.5" />
-                    <div><span className="font-bold text-blue-700">技术原因：</span><span className="text-slate-600">{matchedRule.rationale}</span></div>
+                    <div><span className="font-bold text-blue-700">{t('guard.rationale')}：</span><span className="text-slate-600">{matchedRule.rationale}</span></div>
                     </div>
                   )}
                   {matchedRule.fixSuggestions && matchedRule.fixSuggestions.length > 0 && (
                     <div className="flex items-start gap-1.5">
                     <Wrench size={12} className="text-emerald-500 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold text-emerald-700">修复建议：</span>
+                      <span className="font-bold text-emerald-700">{t('guard.fixSuggestion')}：</span>
                       <ul className="mt-0.5 space-y-0.5 text-slate-600">
                       {matchedRule.fixSuggestions.map((s, j) => (
                         <li key={j} className="flex items-start gap-1">
@@ -491,7 +639,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
                         <span>{s}</span>
                         <button
                           className="ml-1 text-blue-500 hover:text-blue-700"
-                          title="复制修复建议"
+                          title={t('guard.copyFixSuggestion')}
                           onClick={() => navigator.clipboard.writeText(s)}
                         >
                           ⎘
@@ -505,12 +653,12 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
                   {matchedRule.sourceRecipe && (
                     <div className="flex items-center gap-1.5">
                     <Link2 size={12} className="text-indigo-500 shrink-0" />
-                    <span className="font-bold text-indigo-700">来源 Recipe：</span>
+                    <span className="font-bold text-indigo-700">{t('guard.sourceRecipe')}：</span>
                     <span className="text-indigo-600 font-mono">{matchedRule.sourceRecipe}</span>
                     </div>
                   )}
                   {!matchedRule.rationale && matchedRule.note && (
-                    <div className="text-slate-500 italic">备注：{matchedRule.note}</div>
+                    <div className="text-slate-500 italic">{t('guard.noteLabel')}：{matchedRule.note}</div>
                   )}
                   </div>
                 )}

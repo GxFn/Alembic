@@ -11,96 +11,100 @@
  *  - KnowledgeSyncService._buildDbRow: wire format → DB row 映射
  */
 
-import { jest } from '@jest/globals';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
-
-import { KnowledgeFileWriter, computeKnowledgeHash, parseKnowledgeMarkdown } from '../../lib/service/knowledge/KnowledgeFileWriter.js';
+import path from 'node:path';
+import { KnowledgeSyncService } from '../../lib/cli/KnowledgeSyncService.js';
 import { KnowledgeEntry } from '../../lib/domain/knowledge/KnowledgeEntry.js';
 import { Lifecycle } from '../../lib/domain/knowledge/Lifecycle.js';
-import { KnowledgeSyncService } from '../../lib/cli/KnowledgeSyncService.js';
+import {
+  computeKnowledgeHash,
+  KnowledgeFileWriter,
+  parseKnowledgeMarkdown,
+} from '../../lib/service/knowledge/KnowledgeFileWriter.js';
 
 /* ═══ 测试数据 ═══ */
 
 function makeEntry(overrides = {}) {
   return new KnowledgeEntry({
-    id:          'test-id-001',
-    title:       'Singleton Pattern',
-    trigger:     '@singleton',
+    id: 'test-id-001',
+    title: 'Singleton Pattern',
+    trigger: '@singleton',
     description: 'Standard singleton implementation',
-    lifecycle:   Lifecycle.ACTIVE,
-    language:    'swift',
-    category:    'Architecture',
-    kind:        'pattern',
+    lifecycle: Lifecycle.ACTIVE,
+    language: 'swift',
+    category: 'Architecture',
+    kind: 'pattern',
     knowledgeType: 'code-pattern',
-    complexity:    'intermediate',
-    scope:         'universal',
-    difficulty:    'intermediate',
-    tags:          ['singleton', 'design-pattern'],
-    summaryCn:     '使用单例模式确保全局唯一性',
-    summaryEn:     'Use singleton pattern for global uniqueness',
-    usageGuideCn:  '通过 sharedInstance 访问',
-    usageGuideEn:  'Access via sharedInstance',
+    complexity: 'intermediate',
+    scope: 'universal',
+    difficulty: 'intermediate',
+    tags: ['singleton', 'design-pattern'],
+    summaryCn: '使用单例模式确保全局唯一性',
+    summaryEn: 'Use singleton pattern for global uniqueness',
+    usageGuideCn: '通过 sharedInstance 访问',
+    usageGuideEn: 'Access via sharedInstance',
     content: {
-      pattern:      '+ (instancetype)sharedInstance { ... }',
-      markdown:     '',
-      rationale:    '确保全局唯一实例',
-      steps:        [{ title: '创建', description: '添加 sharedInstance 方法', code: '...' }],
-      codeChanges:  [],
+      pattern: '+ (instancetype)sharedInstance { ... }',
+      markdown: '',
+      rationale: '确保全局唯一实例',
+      steps: [{ title: '创建', description: '添加 sharedInstance 方法', code: '...' }],
+      codeChanges: [],
       verification: { method: 'unit_test', expected_result: 'a === b' },
     },
     relations: {
-      extends:  [{ target: '@factory', description: '可作为工厂基础' }],
-      related:  [{ target: '@manager', description: '常配合 Manager 使用' }],
+      extends: [{ target: '@factory', description: '可作为工厂基础' }],
+      related: [{ target: '@manager', description: '常配合 Manager 使用' }],
     },
     constraints: {
-      guards: [{
-        id:       'no-direct-init',
-        type:     'regex',
-        pattern:  '\\[\\[\\w+ alloc\\] init\\]',
-        message:  '禁止直接 alloc init',
-        severity: 'warning',
-      }],
-      boundaries:    ['线程安全'],
+      guards: [
+        {
+          id: 'no-direct-init',
+          type: 'regex',
+          pattern: '\\[\\[\\w+ alloc\\] init\\]',
+          message: '禁止直接 alloc init',
+          severity: 'warning',
+        },
+      ],
+      boundaries: ['线程安全'],
       preconditions: ['已导入 Foundation'],
-      sideEffects:  ['全局状态'],
+      sideEffects: ['全局状态'],
     },
     reasoning: {
       whyStandard: '项目大量使用此模式',
-      sources:      ['Manager.swift:22'],
-      confidence:   0.85,
+      sources: ['Manager.swift:22'],
+      confidence: 0.85,
     },
     quality: {
-      completeness:  0.8,
-      adaptation:    0.7,
+      completeness: 0.8,
+      adaptation: 0.7,
       documentation: 0.9,
-      overall:       0.8,
-      grade:         'B',
+      overall: 0.8,
+      grade: 'B',
     },
     stats: {
-      views:       100,
-      adoptions:   5,
+      views: 100,
+      adoptions: 5,
       applications: 3,
-      guardHits:   12,
-      searchHits:  42,
-      authority:   3.5,
+      guardHits: 12,
+      searchHits: 42,
+      authority: 3.5,
     },
-    headers:       ['#import <Foundation/Foundation.h>'],
-    headerPaths:   ['Foundation/Foundation.h'],
-    moduleName:    'Foundation',
+    headers: ['#import <Foundation/Foundation.h>'],
+    headerPaths: ['Foundation/Foundation.h'],
+    moduleName: 'Foundation',
     includeHeaders: true,
-    agentNotes:    ['AI 建议增加线程安全注释'],
-    aiInsight:     '此模式在项目中出现 10+ 次',
-    reviewedBy:    'reviewer-001',
-    reviewedAt:    1739779200,
-    source:        'bootstrap',
-    sourceFile:    'AutoSnippet/recipes/architecture/singleton.md',
-    createdBy:     'agent',
-    createdAt:     1739692800,
-    updatedAt:     1739779200,
-    publishedAt:   1739779200,
-    publishedBy:   'reviewer-001',
+    agentNotes: ['AI 建议增加线程安全注释'],
+    aiInsight: '此模式在项目中出现 10+ 次',
+    reviewedBy: 'reviewer-001',
+    reviewedAt: 1739779200,
+    source: 'bootstrap',
+    sourceFile: 'AutoSnippet/recipes/architecture/singleton.md',
+    createdBy: 'agent',
+    createdAt: 1739692800,
+    updatedAt: 1739779200,
+    publishedAt: 1739779200,
+    publishedBy: 'reviewer-001',
     ...overrides,
   });
 }
@@ -208,10 +212,10 @@ describe('KnowledgeFileWriter', () => {
     it('should output markdown body directly when content.markdown is set', () => {
       const entry = makeEntry({
         content: {
-          pattern:  '',
+          pattern: '',
           markdown: '# 项目特写 — Manager 管理\n\n这是一篇项目特写...',
           rationale: '',
-          steps:     [],
+          steps: [],
           codeChanges: [],
           verification: null,
         },
@@ -234,7 +238,7 @@ describe('KnowledgeFileWriter', () => {
       const entry = makeEntry({
         difficulty: null,
         agentNotes: null,
-        aiInsight:  null,
+        aiInsight: null,
         publishedAt: null,
         publishedBy: null,
       });
@@ -457,7 +461,7 @@ description: "包含冒号：和引号的描述"
 
     it('candidate entry 的 round-trip 也应正常', () => {
       const entry = makeEntry({
-        lifecycle:   Lifecycle.PENDING,
+        lifecycle: Lifecycle.PENDING,
         publishedAt: null,
         publishedBy: null,
       });
@@ -534,7 +538,11 @@ description: "包含冒号：和引号的描述"
     });
 
     it('should use title slug when no trigger', () => {
-      const entry = makeEntry({ trigger: '', title: 'My Pattern Title', lifecycle: Lifecycle.ACTIVE });
+      const entry = makeEntry({
+        trigger: '',
+        title: 'My Pattern Title',
+        lifecycle: Lifecycle.ACTIVE,
+      });
       const result = writer.persist(entry);
 
       expect(path.basename(result)).toBe('my-pattern-title.md');
@@ -590,48 +598,47 @@ description: "包含冒号：和引号的描述"
 /* ═══ KnowledgeSyncService ═══ */
 
 describe('KnowledgeSyncService', () => {
-
   describe('_buildDbRow', () => {
     it('should map parsed wire format to DB row correctly', () => {
       const syncService = new KnowledgeSyncService('/tmp/test');
       const parsed = {
-        id:              'sync-test-001',
-        title:           'Test Entry',
-        trigger:         '@test',
-        description:     'A test entry',
-        lifecycle:       'active',
+        id: 'sync-test-001',
+        title: 'Test Entry',
+        trigger: '@test',
+        description: 'A test entry',
+        lifecycle: 'active',
         lifecycleHistory: [{ from: 'pending', to: 'active', at: 123 }],
-        probation:       true,
-        language:        'swift',
-        category:        'View',
-        kind:            'pattern',
-        knowledgeType:   'code-pattern',
-        complexity:      'intermediate',
-        scope:           'universal',
-        difficulty:      'beginner',
-        tags:            ['test'],
-        content:         { pattern: 'code', markdown: '' },
-        relations:       { related: [{ target: '@other', description: '' }] },
-        constraints:     { guards: [], boundaries: [] },
-        reasoning:       { whyStandard: 'reason', sources: ['a.swift'] },
-        quality:         { overall: 0.8 },
-        stats:           { views: 10 },
-        headers:         ['#import <UIKit/UIKit.h>'],
-        headerPaths:     ['UIKit/UIKit.h'],
-        moduleName:      'UIKit',
-        includeHeaders:  true,
-        agentNotes:      ['note'],
-        aiInsight:       'insight',
-        reviewedBy:      'admin',
-        reviewedAt:      1739779200,
+        probation: true,
+        language: 'swift',
+        category: 'View',
+        kind: 'pattern',
+        knowledgeType: 'code-pattern',
+        complexity: 'intermediate',
+        scope: 'universal',
+        difficulty: 'beginner',
+        tags: ['test'],
+        content: { pattern: 'code', markdown: '' },
+        relations: { related: [{ target: '@other', description: '' }] },
+        constraints: { guards: [], boundaries: [] },
+        reasoning: { whyStandard: 'reason', sources: ['a.swift'] },
+        quality: { overall: 0.8 },
+        stats: { views: 10 },
+        headers: ['#import <UIKit/UIKit.h>'],
+        headerPaths: ['UIKit/UIKit.h'],
+        moduleName: 'UIKit',
+        includeHeaders: true,
+        agentNotes: ['note'],
+        aiInsight: 'insight',
+        reviewedBy: 'admin',
+        reviewedAt: 1739779200,
         rejectionReason: null,
-        source:          'mcp',
+        source: 'mcp',
         sourceCandidateId: 'old-cand-001',
-        createdBy:       'agent',
-        createdAt:       1739692800,
-        updatedAt:       1739779200,
-        publishedAt:     1739779200,
-        publishedBy:     'admin',
+        createdBy: 'agent',
+        createdAt: 1739692800,
+        updatedAt: 1739779200,
+        publishedAt: 1739779200,
+        publishedBy: 'admin',
       };
 
       const rawContent = '---\nid: sync-test-001\n---\n\n## Test';
@@ -645,7 +652,9 @@ describe('KnowledgeSyncService', () => {
       expect(row.category).toBe('View');
       expect(JSON.parse(row.tags)).toEqual(['test']);
       expect(JSON.parse(row.content)).toEqual({ pattern: 'code', markdown: '' });
-      expect(JSON.parse(row.relations)).toEqual({ related: [{ target: '@other', description: '' }] });
+      expect(JSON.parse(row.relations)).toEqual({
+        related: [{ target: '@other', description: '' }],
+      });
       expect(JSON.parse(row.reasoning)).toEqual({ whyStandard: 'reason', sources: ['a.swift'] });
       expect(row.includeHeaders).toBe(1);
       expect(JSON.parse(row.agentNotes)).toEqual(['note']);
@@ -660,7 +669,7 @@ describe('KnowledgeSyncService', () => {
 
       expect(row.title).toBe('');
       expect(row.lifecycle).toBe('pending');
-      expect(row.language).toBe('swift');
+      expect(row.language).toBe('unknown');
       expect(row.category).toBe('general');
       expect(row.source).toBe('file-sync');
       expect(row.createdBy).toBe('file-sync');

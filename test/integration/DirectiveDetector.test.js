@@ -8,7 +8,6 @@
 import { detectTriggers, MARKS, REGEX } from '../../lib/service/automation/DirectiveDetector.js';
 
 describe('Integration: DirectiveDetector', () => {
-
   // ── ObjC 文件指令检测 ─────────────────────────────────
 
   describe('ObjC 文件 (.m)', () => {

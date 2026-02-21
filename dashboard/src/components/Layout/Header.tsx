@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, RefreshCw, BrainCircuit, Loader2, Cpu, ChevronDown, MessageSquare, Settings } from 'lucide-react';
+import { Search, Plus, RefreshCw, BrainCircuit, Loader2, Cpu, ChevronDown, MessageSquare, Settings, Languages, Sun, Moon } from 'lucide-react';
 import api from '../../api';
 import { ICON_SIZES } from '../../constants/icons';
 import { useGlobalChat } from '../Shared/GlobalChatDrawer';
+import { useI18n } from '../../i18n';
+import { useTheme } from '../../theme';
 
 interface AiProvider {
   id: string;
@@ -14,18 +16,19 @@ interface HeaderProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   setShowCreateModal: (show: boolean) => void;
-  handleSyncToXcode: () => void;
+  handleSyncSnippets: () => void;
   aiConfig?: { provider: string; model: string };
   llmReady?: boolean;
   onOpenLlmConfig?: () => void;
   onSemanticSearchResults?: (results: any[]) => void;
   onBeforeAiSwitch?: () => void;
   onAiConfigChange?: () => void;
-  isDarkMode?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCreateModal, handleSyncToXcode, aiConfig, llmReady = true, onOpenLlmConfig, onSemanticSearchResults, onBeforeAiSwitch, onAiConfigChange, isDarkMode = false }) => {
+const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCreateModal, handleSyncSnippets, aiConfig, llmReady = true, onOpenLlmConfig, onSemanticSearchResults, onBeforeAiSwitch, onAiConfigChange }) => {
   const { toggle: toggleChat, isOpen: chatOpen } = useGlobalChat();
+  const { t, lang, setLang } = useI18n();
+  const { isDark: isDarkMode, toggle: toggleTheme } = useTheme();
   const [isSemanticSearching, setIsSemanticSearching] = useState(false);
   const [aiDropdownOpen, setAiDropdownOpen] = useState(false);
   const [aiProviders, setAiProviders] = useState<AiProvider[]>([]);
@@ -60,7 +63,7 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
     if (onSemanticSearchResults) onSemanticSearchResults(results);
   } catch (e) {
     console.error('Semantic search failed', e);
-    alert('语义搜索失败。请确保已运行 asd embed 构建索引。');
+    alert(t('header.semanticSearchFailed'));
   } finally {
     setIsSemanticSearching(false);
   }
@@ -75,7 +78,7 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
     if (onAiConfigChange) onAiConfigChange();
   } catch (e) {
     console.error('AI config update failed', e);
-    alert('切换 AI 失败，请检查项目根目录是否可写。');
+    alert(t('header.aiSwitchFailed'));
   } finally {
     setAiSwitching(false);
   }
@@ -88,7 +91,7 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
       <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} size={ICON_SIZES.md} />
       <input 
       type="text" 
-      placeholder="Search knowledge..." 
+      placeholder={t('header.searchPlaceholder')} 
       className={`w-full pl-10 pr-4 py-2 ${isDarkMode ? 'bg-[#1e1e1e] text-slate-300 placeholder-slate-500' : 'bg-slate-100 text-slate-900'} border-transparent rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all`} 
       value={searchQuery} 
       onChange={(e) => setSearchQuery(e.target.value)}
@@ -98,11 +101,11 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
     <button 
       onClick={handleSemanticSearch}
       disabled={!searchQuery || isSemanticSearching}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${isSemanticSearching ? 'bg-blue-50 text-blue-400' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
-      title="Semantic Search (Brain AI)"
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${isSemanticSearching ? (isDarkMode ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-400') : (isDarkMode ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 hover:bg-blue-100')}`}
+      title={t('header.semanticSearchTitle')}
     >
       {isSemanticSearching ? <Loader2 size={ICON_SIZES.sm} className="animate-spin" /> : <BrainCircuit size={ICON_SIZES.sm} />}
-      Semantic
+      {t('header.semanticSearch')}
     </button>
     </div>
     <div className="flex items-center gap-4">
@@ -110,32 +113,32 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
       <button
         type="button"
         onClick={onOpenLlmConfig}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium hover:bg-amber-100 transition-colors animate-pulse"
-        title="AI 未配置 — 点击设置 LLM"
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors animate-pulse ${isDarkMode ? 'bg-amber-900/30 text-amber-300 border-amber-700 hover:bg-amber-900/50' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'}`}
+        title={t('header.aiNotConfigured')}
       >
         <Settings size={ICON_SIZES.sm} />
-        配置 LLM
+        {t('header.configureLlm')}
       </button>
     ) : aiConfig ? (
       <div className="relative" ref={aiDropdownRef}>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setAiDropdownOpen((v) => !v); }}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium hover:bg-slate-200 transition-colors"
-        title="点击切换 AI 提供商"
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+        title={t('header.clickSwitchAi')}
       >
         <Cpu size={ICON_SIZES.sm} />
         {aiConfig.provider} / {aiConfig.model}
         <ChevronDown size={ICON_SIZES.xs} className={aiDropdownOpen ? 'rotate-180' : ''} />
       </button>
       {aiDropdownOpen && (
-        <div className="absolute top-full right-0 mt-1 py-1 rounded-lg border border-slate-200 bg-white shadow-lg z-20 min-w-[200px]">
-        <div className="px-3 py-2 text-xs text-slate-500 border-b border-slate-100">切换 AI</div>
-        <div className="px-3 py-1.5 text-[11px] text-slate-400 border-b border-slate-100">
-          <button type="button" onClick={() => { setAiDropdownOpen(false); onOpenLlmConfig?.(); }} className="text-blue-500 hover:underline">修改 .env 配置</button>
+        <div className={`absolute top-full right-0 mt-1 py-1 rounded-lg border shadow-lg z-20 min-w-[200px] ${isDarkMode ? 'bg-[#252526] border-[#3e3e42]' : 'bg-white border-slate-200'}`}>
+        <div className={`px-3 py-2 text-xs border-b ${isDarkMode ? 'text-slate-400 border-[#3e3e42]' : 'text-slate-500 border-slate-100'}`}>{t('header.switchAi')}</div>
+        <div className={`px-3 py-1.5 text-[11px] border-b ${isDarkMode ? 'text-slate-500 border-[#3e3e42]' : 'text-slate-400 border-slate-100'}`}>
+          <button type="button" onClick={() => { setAiDropdownOpen(false); onOpenLlmConfig?.(); }} className="text-blue-500 hover:underline">{t('header.editEnvConfig')}</button>
         </div>
         {aiProviders.length === 0 ? (
-          <div className="px-3 py-2 text-xs text-slate-400">加载中...</div>
+          <div className={`px-3 py-2 text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{t('common.loading')}</div>
         ) : (
           aiProviders.map((p) => (
           <button
@@ -143,7 +146,7 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
             type="button"
             disabled={aiSwitching}
             onClick={() => handleSelectAi(p)}
-            className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center justify-between ${aiConfig.provider === p.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-700'}`}
+            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between ${aiConfig.provider === p.id ? (isDarkMode ? 'bg-blue-900/30 text-blue-400 font-medium' : 'bg-blue-50 text-blue-700 font-medium') : (isDarkMode ? 'text-slate-300 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-50')}`}
           >
             <span>{p.label}</span>
             {aiConfig.provider === p.id && <span className="text-xs">✓</span>}
@@ -156,23 +159,40 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
     ) : null}
     <button
       onClick={toggleChat}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
         chatOpen
-          ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200'
+          ? isDarkMode
+            ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30 hover:bg-blue-500/35 hover:brightness-125'
+            : 'bg-blue-100 text-blue-700 ring-1 ring-blue-200 hover:bg-blue-200'
           : isDarkMode
-            ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            ? 'bg-slate-700 text-slate-300 hover:bg-slate-500 hover:text-white'
             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
       }`}
-      title={chatOpen ? '关闭 AI Chat' : '打开 AI Chat'}
+      title={chatOpen ? t('header.closeAiChat') : t('header.openAiChat')}
     >
       <MessageSquare size={ICON_SIZES.sm} />
-      {!chatOpen && <span className="text-xs">AI Chat</span>}
+      {!chatOpen && <span className="text-xs">{t('header.aiChat')}</span>}
     </button>
-    <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors">
-      <Plus size={ICON_SIZES.md} /> New Recipe
+    <button onClick={() => setShowCreateModal(true)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 border ${isDarkMode ? 'bg-slate-200 text-slate-900 border-slate-300 hover:bg-white hover:border-white hover:shadow-[0_0_12px_rgba(255,255,255,0.15)]' : 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800 hover:border-slate-800'}`}>
+      <Plus size={ICON_SIZES.md} /> {t('header.newRecipe')}
     </button>
-    <button onClick={handleSyncToXcode} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
-      <RefreshCw size={ICON_SIZES.md} /> Sync to Xcode
+    <button onClick={handleSyncSnippets} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 border ${isDarkMode ? 'bg-blue-500/20 text-blue-300 border-blue-500/30 hover:bg-blue-500/40 hover:text-blue-200 hover:border-blue-400/50' : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700'}`}>
+      <RefreshCw size={ICON_SIZES.md} /> {t('header.syncSnippets')}
+    </button>
+    <button
+      onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-500 hover:text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+      title={lang === 'zh' ? 'Switch to English' : t('shared.switchToChinese')}
+    >
+      <Languages size={ICON_SIZES.sm} />
+      {t('header.langSwitch')}
+    </button>
+    <button
+      onClick={toggleTheme}
+      className={`flex items-center p-2 rounded-lg transition-all duration-150 ${isDarkMode ? 'bg-slate-700 text-amber-300 hover:bg-slate-500 hover:text-amber-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+      title={isDarkMode ? 'Light mode' : 'Dark mode'}
+    >
+      {isDarkMode ? <Sun size={ICON_SIZES.sm} /> : <Moon size={ICON_SIZES.sm} />}
     </button>
     </div>
   </header>

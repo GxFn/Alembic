@@ -4,6 +4,49 @@
 
 ---
 
+## [3.0.2] - 2026-02-21
+
+### 新增功能
+
+- **Dart (Flutter) 全语言支持**：新增 `DartDiscoverer`（534L）自动识别 Flutter/Dart 项目、`lang-dart.js`（661L）AST 解析器、8 条 Guard 规则、7 个 DimensionCopy 维度条目、SUMMARY_EXTRACTORS 以及 Dashboard 中文/英文标签
+- **Dart (Flutter) Reference Skill**：新增 `autosnippet-reference-dart`（15 个章节、543 行），覆盖命名、空安全、Widget 设计、状态管理、异步、不可变模型、错误处理、DI、Clean Architecture、Extension/Mixin、测试、路由、平台通道/FFI、性能优化、12 个 extraDimensions
+- **Coldstart Dart 示例**：Coldstart Skill 新增 4 个 Dart 维度模板（命名规范、单例模式、错误处理、BuildContext 异步安全），所有 8 个语言参考 Skill 均添加 Dart 交叉引用
+- **多语言 Discovery 体系重构**：从单一 `ProjectDiscoverer` 拆分为 `DiscovererRegistry` + 专用 Discoverer（Node/Go/Jvm/Python/Dart/Spm/Generic），每个 Discoverer 独立识别项目结构与生态
+- **AST 解析器独立化**：按语言拆分为 9 个独立 `lang-*.js` 文件 + `ensure-grammars.js` 按需安装 tree-sitter 语法包 + `ProjectGraph` 统一入口
+- **Dashboard 国际化（i18n）**：新增 `i18n/` 模块（zh.ts、en.ts、types.ts、index.tsx），清理约 117 处硬编码中文字符串，覆盖 Guard 规则消息、冷启动维度标签、SSE 进度文本
+- **Dashboard 暗色模式**：新增 `theme/index.tsx`，全局支持亮色/暗色主题切换
+- **Agent 语言特性**：Agent 可感知项目语言并动态切换 Skill 和分析策略
+- **VSCode 扩展**：新增 `resources/vscode-ext/`（extension.ts、apiClient、codeLens、statusBar、directiveDetector、codeInserter）
+- **模块服务与 Snippet Codec 体系**：新增 `ModuleService`、`LanguageService`，Snippet 编解码拆分为 `SnippetCodec`/`VSCodeCodec`/`XcodeCodec` + `PlaceholderConverter`
+- **Go 语言参考 Skill**：新增 `autosnippet-reference-go`（539 行），覆盖模块结构、命名、错误处理、接口、并发等 12 个章节
+- **多语言参考 Skills**：新增 `autosnippet-reference-java`、`autosnippet-reference-kotlin`、`autosnippet-reference-python`
+- **SPM Explorer → Module Explorer**：`SPMExplorerView` 移除，替换为通用 `ModuleExplorerView`
+- **iOS 平台层**：SPM 相关代码（SpmService、DependencyGraph、PackageSwiftParser、PolicyEngine）和 Xcode 相关代码（XcodeAutomation、XcodeIntegration、SaveEventFilter）迁移至 `lib/platform/ios/`
+- **条件性 Watch 启动**：File Watch 仅在检测到适用场景时自动启动
+- **集成测试**：新增 GoSupport、I18nLang、RealProjectAst/Bootstrap/Discovery/Enhancement/Language 等集成测试
+- **性能基准**：新增 `scripts/bench-real-projects.mjs`、`scripts/collect-test-project-stats.mjs` 及配套 fixtures
+
+### 清理
+
+- **移除 asd-entry 完整性校验**：删除 `resources/asd-entry/`（main.swift + README）、`scripts/build-asd-entry.js`、`bin/asd-verify`；CLI 入口已改为 `bin/cli.js` 直连，校验链路不再使用
+- **移除过时文件**：删除 `.eslintrc.cjs`（已迁移 Biome）、`template.json`、`scripts/init-xcode-snippets.js`、`dashboard/src/pages/XcodeSimulator.tsx`、`nohup.out`
+- **package.json 瘦身**：移除 `prepublishOnly` 中的 `build-asd-entry` 步骤、`files` 中的 `resources/asd-entry/main.swift`
+- **.gitignore 精简**：移除 `bin/asd-verify`、`checksums.json`、`!resources/asd-entry/main.swift` 等已废弃条目
+- **SECURITY.md 更新**：移除 ASD Entry 相关描述
+
+### 改进
+
+- **README 重写**：全面更新项目文档（554 行变更）
+- **新增 README_CN.md**：中文版 README
+- **新增 biome.json**：代码格式化与 lint 配置
+- **Coldstart Skill 扩充**：新增多语言维度参考模板（+593 行），支持 Swift/Go/Python/TypeScript/Java/Dart 示例
+- **ChatAgent / tools.js 大幅重构**：tools.js +1590 行改进，ChatAgent +915 行，增强对话和工具调用能力
+- **bootstrap handler 增强**：+859 行，改进冷启动 pipeline 的编排和 Skill 集成
+- **搜索引擎优化**：SearchEngine、MultiSignalRanker、RetrievalFunnel 等重构
+- **Guard 引擎增强**：GuardCheckEngine 增加 Dart 规则，GuardHandler 改进
+
+---
+
 ## [2.19.8] - 2026-02-19
 
 ### 修复

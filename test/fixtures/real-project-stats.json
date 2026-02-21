@@ -1,0 +1,382 @@
+{
+  "Alamofire": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/Alamofire",
+    "discoverer": "spm",
+    "discovererName": "Swift Package Manager (SPM)",
+    "targets": 2,
+    "files": 86,
+    "langStats": {
+      "swift": 86
+    },
+    "primaryLang": "swift",
+    "profile": {
+      "primary": "swift",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 55
+  },
+  "iCarousel": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/iCarousel",
+    "discoverer": "generic",
+    "discovererName": "Generic (directory scan)",
+    "targets": 1,
+    "files": 10,
+    "langStats": {
+      "h": 4,
+      "m": 6
+    },
+    "primaryLang": "objectivec",
+    "profile": {
+      "primary": "objectivec",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 8
+  },
+  "Euclid": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/Euclid",
+    "discoverer": "spm",
+    "discovererName": "Swift Package Manager (SPM)",
+    "targets": 2,
+    "files": 75,
+    "langStats": {
+      "swift": 75
+    },
+    "primaryLang": "swift",
+    "profile": {
+      "primary": "swift",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 33
+  },
+  "Expression": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/Expression",
+    "discoverer": "spm",
+    "discovererName": "Swift Package Manager (SPM)",
+    "targets": 2,
+    "files": 6,
+    "langStats": {
+      "swift": 5,
+      "h": 1
+    },
+    "primaryLang": "swift",
+    "profile": {
+      "primary": "swift",
+      "secondary": [
+        "objectivec"
+      ],
+      "isMultiLang": true
+    },
+    "depEdges": 0,
+    "elapsedMs": 3
+  },
+  "VectorMath": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/VectorMath",
+    "discoverer": "spm",
+    "discovererName": "Swift Package Manager (SPM)",
+    "targets": 2,
+    "files": 4,
+    "langStats": {
+      "swift": 4
+    },
+    "primaryLang": "swift",
+    "profile": {
+      "primary": "swift",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 1
+  },
+  "layout": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/layout",
+    "discoverer": "generic",
+    "discovererName": "Generic (directory scan)",
+    "targets": 1,
+    "files": 101,
+    "langStats": {
+      "swift": 98,
+      "h": 3
+    },
+    "primaryLang": "swift",
+    "profile": {
+      "primary": "swift",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 5
+  },
+  "RetroRampage": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/RetroRampage",
+    "discoverer": "generic",
+    "discovererName": "Generic (directory scan)",
+    "targets": 1,
+    "files": 38,
+    "langStats": {
+      "swift": 38
+    },
+    "primaryLang": "swift",
+    "profile": {
+      "primary": "swift",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 5
+  },
+  "Consumer": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/Consumer",
+    "discoverer": "spm",
+    "discovererName": "Swift Package Manager (SPM)",
+    "targets": 2,
+    "files": 5,
+    "langStats": {
+      "h": 1,
+      "swift": 4
+    },
+    "primaryLang": "swift",
+    "profile": {
+      "primary": "swift",
+      "secondary": [
+        "objectivec"
+      ],
+      "isMultiLang": true
+    },
+    "depEdges": 0,
+    "elapsedMs": 2
+  },
+  "SwiftFormat": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/SwiftFormat",
+    "discoverer": "spm",
+    "discovererName": "Swift Package Manager (SPM)",
+    "targets": 3,
+    "files": 316,
+    "langStats": {
+      "swift": 315,
+      "h": 1
+    },
+    "primaryLang": "swift",
+    "profile": {
+      "primary": "swift",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 6
+  },
+  "flask": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/flask",
+    "discoverer": "python",
+    "discovererName": "Python (pip/poetry/pdm)",
+    "targets": 2,
+    "files": 65,
+    "langStats": {
+      "py": 65
+    },
+    "primaryLang": "python",
+    "profile": {
+      "primary": "python",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 6,
+    "elapsedMs": 2
+  },
+  "fastapi": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/fastapi",
+    "discoverer": "python",
+    "discovererName": "Python (pip/poetry/pdm)",
+    "targets": 2,
+    "files": 601,
+    "langStats": {
+      "py": 601
+    },
+    "primaryLang": "python",
+    "profile": {
+      "primary": "python",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 5,
+    "elapsedMs": 5
+  },
+  "django-website": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/django-website",
+    "discoverer": "python",
+    "discovererName": "Python (pip/poetry/pdm)",
+    "targets": 16,
+    "files": 234,
+    "langStats": {
+      "py": 234
+    },
+    "primaryLang": "python",
+    "profile": {
+      "primary": "python",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 6
+  },
+  "spring-petclinic": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/spring-petclinic",
+    "discoverer": "jvm",
+    "discovererName": "JVM (Gradle)",
+    "targets": 1,
+    "files": 47,
+    "langStats": {
+      "java": 47
+    },
+    "primaryLang": "java",
+    "profile": {
+      "primary": "java",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 15,
+    "elapsedMs": 2
+  },
+  "Pokedex": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/Pokedex",
+    "discoverer": "jvm",
+    "discovererName": "JVM (Gradle)",
+    "targets": 7,
+    "files": 51,
+    "langStats": {
+      "kt": 51
+    },
+    "primaryLang": "kotlin",
+    "profile": {
+      "primary": "kotlin",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 4
+  },
+  "gin": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/gin",
+    "discoverer": "generic",
+    "discovererName": "Generic (directory scan)",
+    "targets": 1,
+    "files": 4,
+    "langStats": {
+      "go": 4
+    },
+    "primaryLang": "go",
+    "profile": {
+      "primary": "go",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 1
+  },
+  "axum": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/axum",
+    "discoverer": "generic",
+    "discovererName": "Generic (directory scan)",
+    "targets": 1,
+    "files": 296,
+    "langStats": {
+      "rs": 291,
+      "js": 5
+    },
+    "primaryLang": "rust",
+    "profile": {
+      "primary": "rust",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 0,
+    "elapsedMs": 9
+  },
+  "nest": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/nest",
+    "discoverer": "node",
+    "discovererName": "Node.js (npm/pnpm/yarn)",
+    "targets": 9,
+    "files": 820,
+    "langStats": {
+      "ts": 820
+    },
+    "primaryLang": "typescript",
+    "profile": {
+      "primary": "typescript",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 116,
+    "elapsedMs": 10
+  },
+  "todomvc": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/todomvc",
+    "discoverer": "node",
+    "discovererName": "Node.js (npm/pnpm/yarn)",
+    "targets": 1,
+    "files": 490,
+    "langStats": {
+      "js": 417,
+      "ts": 40,
+      "mjs": 1,
+      "jsx": 19,
+      "svelte": 4,
+      "tsx": 3,
+      "vue": 6
+    },
+    "primaryLang": "javascript",
+    "profile": {
+      "primary": "javascript",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 31,
+    "elapsedMs": 12
+  },
+  "vue-element-admin": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/vue-element-admin",
+    "discoverer": "node",
+    "discovererName": "Node.js (npm/pnpm/yarn)",
+    "targets": 1,
+    "files": 218,
+    "langStats": {
+      "js": 87,
+      "vue": 131
+    },
+    "primaryLang": "javascript",
+    "profile": {
+      "primary": "javascript",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 54,
+    "elapsedMs": 3
+  },
+  "discourse": {
+    "projectRoot": "/Users/gaoxuefeng/Documents/github/discourse",
+    "discoverer": "node",
+    "discovererName": "Node.js (npm/pnpm/yarn)",
+    "targets": 52,
+    "files": 2000,
+    "langStats": {
+      "js": 1994,
+      "ts": 2,
+      "cjs": 2,
+      "mjs": 2
+    },
+    "primaryLang": "javascript",
+    "profile": {
+      "primary": "javascript",
+      "secondary": [],
+      "isMultiLang": false
+    },
+    "depEdges": 81,
+    "elapsedMs": 37
+  }
+}

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Tailwind v4: 使用 class 策略的 dark mode（响应 <html class="dark">）*/
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
  * SPA 根容器封锁 — 禁止 html/body/#root 产生滚动条。
  * 所有滚动由内部组件自行管理 (overflow-y-auto / overflow-auto)。
@@ -9,6 +12,433 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
 }
+
+/* ── 深色模式过渡 ── */
+html {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════
+ * Dark Mode — Global Utility Overrides
+ *
+ * 在 .dark 上下文中自动覆盖常用 Tailwind 工具类的配色。
+ * 这样所有组件无需逐一添加 dark: 前缀即可获得深色模式支持。
+ * 特殊场景可用 dark:xxx 类覆盖此默认值（更高特指度）。
+ * ═══════════════════════════════════════════════════════ */
+
+/* ── 基础背景 ── */
+.dark .bg-white        { background-color: #1a1b23; }
+.dark .bg-slate-50     { background-color: #1e2433; }
+.dark .bg-slate-100    { background-color: #283040; }
+.dark .bg-slate-200    { background-color: #334155; }
+.dark .bg-slate-50\/80 { background-color: rgba(30, 36, 51, 0.8); }
+
+/* ── 基础文字 ── */
+.dark .text-slate-900  { color: #e2e8f0; }
+.dark .text-slate-800  { color: #cbd5e1; }
+.dark .text-slate-700  { color: #94a3b8; }
+.dark .text-slate-600  { color: #94a3b8; }
+.dark .text-slate-500  { color: #64748b; }
+.dark .text-slate-400  { color: #78849a; }
+.dark .text-slate-300  { color: #94a3b8; }
+.dark .text-slate-100  { color: #334155; }
+
+/* ── 基础边框 ── */
+.dark .border-slate-50  { border-color: #1e2433; }
+.dark .border-slate-100 { border-color: #283040; }
+.dark .border-slate-200 { border-color: #334155; }
+.dark .border-slate-300 { border-color: #475569; }
+.dark .border-indigo-50 { border-color: rgba(99, 102, 241, 0.12); }
+.dark .border-slate-100 { border-color: #283040; }
+.dark .border-slate-300 { border-color: #3e4a5e; }
+
+/* ── 交互状态 ── */
+.dark .hover\:bg-slate-50:hover  { background-color: #283040; }
+.dark .hover\:bg-slate-100:hover { background-color: #334155; }
+.dark .hover\:bg-slate-200:hover { background-color: #3e4a5e; }
+.dark .hover\:text-slate-600:hover { color: #cbd5e1; }
+.dark .hover\:text-slate-700:hover { color: #cbd5e1; }
+
+/* ── 品牌色浅底（50 级 → 低透明度深色变体） ── */
+.dark .bg-blue-50      { background-color: rgba(59, 130, 246, 0.1); }
+.dark .bg-blue-100     { background-color: rgba(59, 130, 246, 0.18); }
+.dark .bg-amber-50     { background-color: rgba(245, 158, 11, 0.1); }
+.dark .bg-amber-100    { background-color: rgba(245, 158, 11, 0.18); }
+.dark .bg-red-50       { background-color: rgba(239, 68, 68, 0.1); }
+.dark .bg-red-100      { background-color: rgba(239, 68, 68, 0.18); }
+.dark .bg-green-50     { background-color: rgba(34, 197, 94, 0.1); }
+.dark .bg-green-100    { background-color: rgba(34, 197, 94, 0.18); }
+.dark .bg-purple-50    { background-color: rgba(168, 85, 247, 0.1); }
+.dark .bg-purple-100   { background-color: rgba(168, 85, 247, 0.18); }
+.dark .bg-violet-50    { background-color: rgba(139, 92, 246, 0.1); }
+.dark .bg-violet-100   { background-color: rgba(139, 92, 246, 0.18); }
+.dark .bg-emerald-50   { background-color: rgba(16, 185, 129, 0.1); }
+.dark .bg-emerald-100  { background-color: rgba(16, 185, 129, 0.18); }
+.dark .bg-indigo-50    { background-color: rgba(99, 102, 241, 0.1); }
+.dark .bg-indigo-100   { background-color: rgba(99, 102, 241, 0.18); }
+.dark .bg-cyan-50      { background-color: rgba(6, 182, 212, 0.1); }
+.dark .bg-cyan-100     { background-color: rgba(6, 182, 212, 0.18); }
+.dark .bg-rose-50      { background-color: rgba(244, 63, 94, 0.1); }
+.dark .bg-rose-100     { background-color: rgba(244, 63, 94, 0.18); }
+.dark .bg-teal-50      { background-color: rgba(20, 184, 166, 0.1); }
+.dark .bg-teal-100     { background-color: rgba(20, 184, 166, 0.18); }
+.dark .bg-orange-50    { background-color: rgba(249, 115, 22, 0.1); }
+.dark .bg-orange-100   { background-color: rgba(249, 115, 22, 0.18); }
+
+/* ── 品牌色浅底 hover 变体 ── */
+.dark .hover\:bg-blue-50:hover   { background-color: rgba(59, 130, 246, 0.15); }
+.dark .hover\:bg-blue-100:hover  { background-color: rgba(59, 130, 246, 0.25); }
+.dark .hover\:bg-amber-100:hover { background-color: rgba(245, 158, 11, 0.25); }
+.dark .hover\:bg-red-50:hover    { background-color: rgba(239, 68, 68, 0.15); }
+.dark .hover\:bg-red-100:hover   { background-color: rgba(239, 68, 68, 0.25); }
+.dark .hover\:bg-green-50:hover  { background-color: rgba(34, 197, 94, 0.15); }
+
+/* ── 品牌色深文字（700 → 300 级变浅） ── */
+.dark .text-blue-700   { color: #93c5fd; }
+.dark .text-blue-600   { color: #60a5fa; }
+.dark .text-red-700    { color: #fca5a5; }
+.dark .text-red-600    { color: #f87171; }
+.dark .text-amber-700  { color: #fcd34d; }
+.dark .text-amber-600  { color: #fbbf24; }
+.dark .text-amber-800  { color: #fcd34d; }
+.dark .text-green-700  { color: #6ee7b7; }
+.dark .text-green-600  { color: #34d399; }
+.dark .text-purple-700 { color: #c4b5fd; }
+.dark .text-purple-600 { color: #a78bfa; }
+.dark .text-purple-500 { color: #a78bfa; }
+.dark .text-violet-700 { color: #c4b5fd; }
+.dark .text-violet-600 { color: #a78bfa; }
+.dark .text-emerald-700 { color: #6ee7b7; }
+.dark .text-indigo-600 { color: #a5b4fc; }
+.dark .text-indigo-600\/80 { color: rgba(165, 180, 252, 0.9); }
+.dark .text-cyan-700   { color: #67e8f9; }
+.dark .text-cyan-600   { color: #22d3ee; }
+.dark .text-rose-600   { color: #fb7185; }
+.dark .text-teal-700   { color: #5eead4; }
+.dark .text-orange-700 { color: #fdba74; }
+.dark .text-rose-700   { color: #fda4af; }
+.dark .text-indigo-700 { color: #a5b4fc; }
+
+/* ── 品牌色边框（200 → 低透明度） ── */
+.dark .border-blue-200    { border-color: rgba(59, 130, 246, 0.25); }
+.dark .border-blue-100    { border-color: rgba(59, 130, 246, 0.15); }
+.dark .border-amber-200   { border-color: rgba(245, 158, 11, 0.25); }
+.dark .border-amber-100   { border-color: rgba(245, 158, 11, 0.15); }
+.dark .border-red-200     { border-color: rgba(239, 68, 68, 0.25); }
+.dark .border-red-100     { border-color: rgba(239, 68, 68, 0.15); }
+.dark .border-green-200   { border-color: rgba(34, 197, 94, 0.25); }
+.dark .border-green-100   { border-color: rgba(34, 197, 94, 0.15); }
+.dark .border-purple-200  { border-color: rgba(168, 85, 247, 0.25); }
+.dark .border-purple-100  { border-color: rgba(168, 85, 247, 0.15); }
+.dark .border-violet-100  { border-color: rgba(139, 92, 246, 0.15); }
+.dark .border-emerald-100 { border-color: rgba(16, 185, 129, 0.15); }
+.dark .border-cyan-100    { border-color: rgba(6, 182, 212, 0.15); }
+.dark .border-rose-100    { border-color: rgba(244, 63, 94, 0.15); }
+.dark .border-violet-200  { border-color: rgba(139, 92, 246, 0.25); }
+.dark .border-violet-300  { border-color: rgba(139, 92, 246, 0.3); }
+.dark .border-emerald-200 { border-color: rgba(16, 185, 129, 0.25); }
+.dark .border-indigo-100  { border-color: rgba(99, 102, 241, 0.15); }
+.dark .border-indigo-200  { border-color: rgba(99, 102, 241, 0.25); }
+.dark .border-cyan-200    { border-color: rgba(6, 182, 212, 0.25); }
+.dark .border-rose-200    { border-color: rgba(244, 63, 94, 0.25); }
+.dark .border-orange-200  { border-color: rgba(249, 115, 22, 0.25); }
+.dark .border-teal-200    { border-color: rgba(20, 184, 166, 0.25); }
+
+/* ── 表单控件 ── */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  background-color: #1a1b23;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b;
+}
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: #3b82f6;
+}
+
+/* ── focus ring 品牌色适配 ── */
+.dark .focus\:ring-emerald-200:focus { --tw-ring-color: rgba(16, 185, 129, 0.25); }
+.dark .focus\:ring-blue-200:focus    { --tw-ring-color: rgba(59, 130, 246, 0.25); }
+.dark .focus\:ring-violet-200:focus  { --tw-ring-color: rgba(139, 92, 246, 0.25); }
+.dark .focus\:ring-amber-200:focus   { --tw-ring-color: rgba(245, 158, 11, 0.25); }
+.dark .focus\:border-emerald-400:focus  { border-color: #34d399; }
+.dark .focus\:border-blue-400:focus     { border-color: #60a5fa; }
+.dark .focus\:border-violet-400:focus   { border-color: #a78bfa; }
+.dark .focus\:border-amber-400:focus    { border-color: #fbbf24; }
+
+/* ── 品牌色 border 补充 ── */
+.dark .border-teal-100    { border-color: rgba(20, 184, 166, 0.18); }
+.dark .border-orange-100  { border-color: rgba(249, 115, 22, 0.18); }
+
+/* ── shadow 降噪 ── */
+.dark .shadow-sm  { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3); }
+.dark .shadow-md  { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4); }
+.dark .shadow-lg  { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
+.dark .shadow-xl  { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+.dark .shadow-2xl { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6); }
+
+/* ── 渐变覆盖 ── */
+.dark .bg-gradient-to-b.from-white { --tw-gradient-from: #1a1b23; }
+.dark .bg-gradient-to-r.from-blue-50 { --tw-gradient-from: rgba(59, 130, 246, 0.1); }
+.dark .bg-gradient-to-r.to-purple-50 { --tw-gradient-to: rgba(168, 85, 247, 0.1); }
+
+/* ── 特殊：白色背景半透明 ── */
+.dark .bg-white\/90 { background-color: rgba(26, 27, 35, 0.9); }
+.dark .bg-white\/80 { background-color: rgba(26, 27, 35, 0.8); }
+
+/* ── Toaster 适配：自定义 toast 使用 toast.custom()，wrapper 需完全透明 ── */
+.dark [data-sonner-toast] {
+  background-color: #283040 !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+.dark .go4109123758 {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* ── 渐变：白底 → 深底 ── */
+.dark .from-white         { --tw-gradient-from: #1a1b23; }
+.dark .to-white           { --tw-gradient-to: #1a1b23; }
+.dark .from-slate-50      { --tw-gradient-from: #1e2433; }
+.dark .from-slate-50\/80  { --tw-gradient-from: rgba(30, 36, 51, 0.8); }
+.dark .to-slate-50\/50    { --tw-gradient-to: rgba(30, 36, 51, 0.5); }
+.dark .to-slate-50\/40    { --tw-gradient-to: rgba(30, 36, 51, 0.4); }
+.dark .from-blue-50       { --tw-gradient-from: rgba(59, 130, 246, 0.1); }
+.dark .to-blue-50         { --tw-gradient-to: rgba(59, 130, 246, 0.1); }
+.dark .from-indigo-50     { --tw-gradient-from: rgba(99, 102, 241, 0.1); }
+.dark .to-indigo-50       { --tw-gradient-to: rgba(99, 102, 241, 0.1); }
+.dark .from-purple-50     { --tw-gradient-from: rgba(168, 85, 247, 0.1); }
+.dark .to-purple-50       { --tw-gradient-to: rgba(168, 85, 247, 0.1); }
+.dark .from-emerald-50    { --tw-gradient-from: rgba(16, 185, 129, 0.1); }
+.dark .to-emerald-50      { --tw-gradient-to: rgba(16, 185, 129, 0.1); }
+.dark .from-teal-50       { --tw-gradient-from: rgba(20, 184, 166, 0.1); }
+.dark .to-teal-50         { --tw-gradient-to: rgba(20, 184, 166, 0.1); }
+.dark .from-violet-50     { --tw-gradient-from: rgba(139, 92, 246, 0.1); }
+.dark .to-violet-50       { --tw-gradient-to: rgba(139, 92, 246, 0.1); }
+.dark .from-amber-50      { --tw-gradient-from: rgba(245, 158, 11, 0.1); }
+.dark .to-amber-50        { --tw-gradient-to: rgba(245, 158, 11, 0.1); }
+.dark .from-orange-50     { --tw-gradient-from: rgba(249, 115, 22, 0.1); }
+.dark .to-orange-50       { --tw-gradient-to: rgba(249, 115, 22, 0.1); }
+.dark .from-rose-50       { --tw-gradient-from: rgba(244, 63, 94, 0.1); }
+.dark .to-rose-50         { --tw-gradient-to: rgba(244, 63, 94, 0.1); }
+.dark .from-cyan-50\/60   { --tw-gradient-from: rgba(6, 182, 212, 0.08); }
+.dark .to-blue-50\/40     { --tw-gradient-to: rgba(59, 130, 246, 0.06); }
+.dark .from-indigo-50\/50 { --tw-gradient-from: rgba(99, 102, 241, 0.08); }
+
+/* ── 渐变：已深色渐变通道（如 skeleton），dark mode 微调 ── */
+.dark .via-slate-200\/40  { --tw-gradient-via: rgba(100, 116, 139, 0.15); }
+.dark .via-blue-200\/30   { --tw-gradient-via: rgba(59, 130, 246, 0.12); }
+
+/* ── 按钮/标签：已深色的在 dark mode 下变亮 ── */
+.dark .bg-slate-900 {
+  background-color: #cbd5e1;
+  color: #1a1b23;
+}
+.dark .bg-slate-900:hover,
+.dark .hover\:bg-slate-800:hover {
+  background-color: #e2e8f0;
+  color: #0f172a;
+}
+
+/* ── 代码块适配（bg-slate-800 保留，微调对比度） ── */
+.dark .bg-slate-800 { background-color: #0f1219; }
+
+/* ── 透明度变体 (bg-*-50/N, bg-slate-*/N 等) ── */
+.dark .bg-slate-50\/50  { background-color: #252a36; }
+.dark .bg-slate-50\/80  { background-color: rgba(30, 36, 51, 0.8); }
+.dark .bg-slate-100\/80 { background-color: rgba(40, 48, 64, 0.8); }
+.dark .bg-slate-200\/60 { background-color: rgba(51, 65, 85, 0.6); }
+.dark .bg-white\/60     { background-color: rgba(26, 27, 35, 0.6); }
+.dark .bg-white\/40     { background-color: rgba(26, 27, 35, 0.4); }
+.dark .bg-blue-50\/30   { background-color: rgba(59, 130, 246, 0.06); }
+.dark .bg-blue-50\/60   { background-color: rgba(59, 130, 246, 0.1); }
+.dark .bg-amber-50\/30  { background-color: rgba(245, 158, 11, 0.06); }
+.dark .bg-amber-50\/50  { background-color: rgba(245, 158, 11, 0.08); }
+.dark .bg-amber-50\/60  { background-color: rgba(245, 158, 11, 0.1); }
+.dark .bg-red-50\/30    { background-color: rgba(239, 68, 68, 0.06); }
+.dark .bg-emerald-50\/30 { background-color: rgba(16, 185, 129, 0.06); }
+.dark .bg-emerald-50\/50 { background-color: rgba(16, 185, 129, 0.08); }
+.dark .bg-indigo-50\/50  { background-color: rgba(99, 102, 241, 0.08); }
+.dark .bg-indigo-50\/40  { background-color: rgba(99, 102, 241, 0.06); }
+.dark .bg-violet-50\/30  { background-color: rgba(139, 92, 246, 0.06); }
+.dark .bg-cyan-50\/60    { background-color: rgba(6, 182, 212, 0.1); }
+.dark .bg-blue-50\/40    { background-color: rgba(59, 130, 246, 0.06); }
+.dark .bg-blue-50\/80    { background-color: rgba(59, 130, 246, 0.12); }
+
+/* 透明度边框变体 */
+.dark .border-slate-200\/60 { border-color: rgba(51, 65, 85, 0.6); }
+.dark .border-amber-100\/50 { border-color: rgba(245, 158, 11, 0.12); }
+
+/* ── 品牌色 hover 变体（非 slate） ── */
+.dark .hover\:bg-emerald-50:hover  { background-color: rgba(16, 185, 129, 0.12); }
+.dark .hover\:bg-emerald-100:hover { background-color: rgba(16, 185, 129, 0.2); }
+.dark .hover\:bg-violet-50:hover   { background-color: rgba(139, 92, 246, 0.12); }
+.dark .hover\:bg-violet-100:hover  { background-color: rgba(139, 92, 246, 0.2); }
+.dark .hover\:bg-purple-50:hover   { background-color: rgba(168, 85, 247, 0.12); }
+.dark .hover\:bg-amber-50:hover    { background-color: rgba(245, 158, 11, 0.12); }
+.dark .hover\:bg-indigo-50:hover   { background-color: rgba(99, 102, 241, 0.12); }
+.dark .hover\:bg-cyan-50:hover     { background-color: rgba(6, 182, 212, 0.12); }
+
+/* ── 品牌色 hover text 变体 ── */
+.dark .hover\:text-blue-700:hover    { color: #93c5fd; }
+.dark .hover\:text-blue-600:hover    { color: #60a5fa; }
+.dark .hover\:text-red-500:hover     { color: #f87171; }
+.dark .hover\:text-emerald-600:hover { color: #34d399; }
+.dark .hover\:text-emerald-700:hover { color: #6ee7b7; }
+.dark .hover\:text-violet-700:hover  { color: #c4b5fd; }
+.dark .hover\:text-amber-700:hover   { color: #fcd34d; }
+.dark .hover\:text-purple-600:hover  { color: #a78bfa; }
+
+/* ── 中间色调文字适配（400/500 级 — 在暗底上增加亮度） ── */
+.dark .text-red-400      { color: #fca5a5; }
+.dark .text-red-500      { color: #f87171; }
+.dark .text-blue-400     { color: #93c5fd; }
+.dark .text-blue-500     { color: #60a5fa; }
+.dark .text-emerald-500  { color: #34d399; }
+.dark .text-emerald-400  { color: #6ee7b7; }
+.dark .text-violet-500   { color: #a78bfa; }
+.dark .text-amber-500    { color: #f59e0b; }
+.dark .text-amber-400    { color: #fbbf24; }
+.dark .text-purple-400   { color: #c4b5fd; }
+
+/* ── `bg-slate-700` filter/tab 选中态（保持和暗底有区分） ── */
+.dark .bg-slate-700 { background-color: #475569; }
+
+/* ═══════════════════════════════════════════════════════════
+   补充色系：pink / yellow / gray / fuchsia / sky / green
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── pink 色系 ── */
+.dark .bg-pink-50        { background-color: rgba(236, 72, 153, 0.08); }
+.dark .bg-pink-100       { background-color: rgba(236, 72, 153, 0.15); }
+.dark .text-pink-600     { color: #f472b6; }
+.dark .text-pink-400     { color: #f9a8d4; }
+.dark .border-pink-100   { border-color: rgba(236, 72, 153, 0.18); }
+.dark .border-pink-200   { border-color: rgba(236, 72, 153, 0.25); }
+
+/* ── yellow 色系 ── */
+.dark .bg-yellow-50      { background-color: rgba(234, 179, 8, 0.08); }
+.dark .bg-yellow-100     { background-color: rgba(234, 179, 8, 0.15); }
+.dark .bg-yellow-50\/30  { background-color: rgba(234, 179, 8, 0.06); }
+.dark .text-yellow-700   { color: #fbbf24; }
+.dark .text-yellow-600   { color: #fcd34d; }
+.dark .text-yellow-500   { color: #fde68a; }
+.dark .border-yellow-200 { border-color: rgba(234, 179, 8, 0.25); }
+
+/* ── gray 色系（映射到 slate） ── */
+.dark .bg-gray-50  { background-color: #1e2433; }
+.dark .bg-gray-100 { background-color: #283040; }
+.dark .text-gray-700 { color: #94a3b8; }
+.dark .text-gray-600 { color: #94a3b8; }
+.dark .border-gray-200 { border-color: #334155; }
+
+/* ── fuchsia 色系 ── */
+.dark .bg-fuchsia-50     { background-color: rgba(192, 38, 211, 0.08); }
+.dark .bg-fuchsia-100    { background-color: rgba(192, 38, 211, 0.15); }
+.dark .text-fuchsia-600  { color: #d946ef; }
+.dark .border-fuchsia-100 { border-color: rgba(192, 38, 211, 0.18); }
+
+/* ── sky 色系 ── */
+.dark .bg-sky-50         { background-color: rgba(14, 165, 233, 0.08); }
+.dark .bg-sky-100        { background-color: rgba(14, 165, 233, 0.15); }
+.dark .text-sky-600      { color: #38bdf8; }
+.dark .border-sky-100    { border-color: rgba(14, 165, 233, 0.18); }
+
+/* ── green 色系（区别于 emerald） ── */
+.dark .bg-green-50       { background-color: rgba(34, 197, 94, 0.08); }
+.dark .bg-green-100      { background-color: rgba(34, 197, 94, 0.15); }
+.dark .bg-green-100\/70  { background-color: rgba(34, 197, 94, 0.12); }
+.dark .text-green-600    { color: #4ade80; }
+.dark .text-green-700    { color: #86efac; }
+.dark .border-green-100  { border-color: rgba(34, 197, 94, 0.18); }
+
+/* ═══════════════════════════════════════════════════════════
+   深色文字 (800/900 级) — 在暗底上变浅
+   ═══════════════════════════════════════════════════════════ */
+.dark .text-blue-800     { color: #93c5fd; }
+.dark .text-blue-900     { color: #bfdbfe; }
+.dark .text-green-800    { color: #86efac; }
+.dark .text-green-900    { color: #bbf7d0; }
+.dark .text-purple-800   { color: #c4b5fd; }
+.dark .text-purple-900   { color: #ddd6fe; }
+.dark .text-indigo-800   { color: #a5b4fc; }
+.dark .text-indigo-900   { color: #c7d2fe; }
+.dark .text-amber-800    { color: #fcd34d; }
+.dark .text-amber-900    { color: #fde68a; }
+.dark .text-rose-800     { color: #fda4af; }
+.dark .text-rose-900     { color: #fecdd3; }
+.dark .text-red-800      { color: #fca5a5; }
+.dark .text-emerald-800  { color: #6ee7b7; }
+.dark .text-orange-800   { color: #fdba74; }
+.dark .text-violet-800   { color: #c4b5fd; }
+
+/* ═══════════════════════════════════════════════════════════
+   品牌色 bg-200（偏亮中调，dark mode 需降低饱和度）
+   ═══════════════════════════════════════════════════════════ */
+.dark .bg-emerald-200    { background-color: rgba(16, 185, 129, 0.25); }
+.dark .bg-purple-200     { background-color: rgba(168, 85, 247, 0.25); }
+.dark .bg-amber-200      { background-color: rgba(245, 158, 11, 0.25); }
+.dark .bg-blue-200       { background-color: rgba(59, 130, 246, 0.25); }
+.dark .bg-red-200        { background-color: rgba(239, 68, 68, 0.25); }
+
+/* ═══════════════════════════════════════════════════════════
+   品牌色 border-300/400（偏亮边框，dark mode 需柔化）
+   ═══════════════════════════════════════════════════════════ */
+.dark .border-blue-300   { border-color: rgba(59, 130, 246, 0.35); }
+.dark .border-emerald-300 { border-color: rgba(16, 185, 129, 0.35); }
+.dark .border-purple-300 { border-color: rgba(168, 85, 247, 0.35); }
+.dark .border-red-300    { border-color: rgba(239, 68, 68, 0.35); }
+.dark .border-amber-300  { border-color: rgba(245, 158, 11, 0.35); }
+.dark .border-orange-300 { border-color: rgba(249, 115, 22, 0.35); }
+.dark .border-green-400  { border-color: rgba(34, 197, 94, 0.4); }
+.dark .border-amber-400  { border-color: rgba(245, 158, 11, 0.4); }
+
+/* ═══════════════════════════════════════════════════════════
+   hover:bg-200 / hover:text-800 变体
+   ═══════════════════════════════════════════════════════════ */
+.dark .hover\:bg-red-200:hover   { background-color: rgba(239, 68, 68, 0.25); }
+.dark .hover\:bg-amber-200:hover { background-color: rgba(245, 158, 11, 0.25); }
+.dark .hover\:bg-red-100:hover   { background-color: rgba(239, 68, 68, 0.15); }
+.dark .hover\:text-emerald-700:hover { color: #6ee7b7; }
+.dark .hover\:text-violet-800:hover  { color: #c4b5fd; }
+.dark .hover\:text-amber-800:hover   { color: #fcd34d; }
+.dark .hover\:border-emerald-200:hover { border-color: rgba(16, 185, 129, 0.3); }
+
+/* ═══════════════════════════════════════════════════════════
+   bg-{brand}-100/70, /60 透明度变体补充
+   ═══════════════════════════════════════════════════════════ */
+.dark .bg-blue-100\/70    { background-color: rgba(59, 130, 246, 0.12); }
+.dark .bg-green-100\/70   { background-color: rgba(34, 197, 94, 0.12); }
+.dark .bg-purple-100\/70  { background-color: rgba(168, 85, 247, 0.12); }
+.dark .bg-purple-100\/60  { background-color: rgba(168, 85, 247, 0.1); }
+.dark .bg-emerald-50\/60  { background-color: rgba(16, 185, 129, 0.1); }
+.dark .bg-indigo-100\/70  { background-color: rgba(99, 102, 241, 0.12); }
+.dark .bg-amber-100\/70   { background-color: rgba(245, 158, 11, 0.12); }
+.dark .bg-rose-100\/70    { background-color: rgba(244, 63, 94, 0.12); }
+
+/* ═══════════════════════════════════════════════════════════
+   divide / ring 补充
+   ═══════════════════════════════════════════════════════════ */
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #334155;
+}
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #334155;
+}
+.dark .ring-blue-200  { --tw-ring-color: rgba(59, 130, 246, 0.25); }
+.dark .ring-blue-300  { --tw-ring-color: rgba(59, 130, 246, 0.35); }
 
 /* 保留原有自定义样式 */
 .no-scrollbar::-webkit-scrollbar {
@@ -50,6 +480,14 @@ html, body, #root {
 /* Firefox 滚动条样式 */
 .editor-with-dark-scrollbar {
   scrollbar-color: #444 transparent;
+}
+
+/* 高亮层隐藏滚动条（只读层不需要显示） */
+.highlight-scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
+.highlight-scroll-hidden {
+  scrollbar-width: none;
 }
 
 /* 浅色系滚动条 — 用于白色/浅色背景面板 */
@@ -295,4 +733,99 @@ html, body, #root {
 .wiki-reader ol a:hover,
 .wiki-reader ul a:hover {
   text-decoration: underline;
+}
+
+/* ═══════════════════════════════════════════════════════
+ * Wiki Reader — Dark Mode
+ * ═══════════════════════════════════════════════════════ */
+
+.dark .wiki-reader {
+  color: #cbd5e1; /* slate-300 */
+}
+
+.dark .wiki-reader h1 {
+  border-bottom-color: #334155;
+  color: #e2e8f0;
+}
+
+.dark .wiki-reader h2 {
+  border-bottom-color: #1e293b;
+  color: #e2e8f0;
+}
+
+.dark .wiki-reader h3 {
+  color: #cbd5e1;
+}
+
+.dark .wiki-reader h4 {
+  color: #94a3b8;
+}
+
+.dark .wiki-reader blockquote {
+  border-left-color: #3b82f6;
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+.dark .wiki-reader code:not([class*="language-"]) {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.dark .wiki-reader table {
+  border-color: #334155;
+}
+
+.dark .wiki-reader thead {
+  background: #1e293b;
+}
+
+.dark .wiki-reader thead th {
+  color: #94a3b8;
+  border-bottom-color: #334155;
+}
+
+.dark .wiki-reader tbody tr:hover {
+  background: #1e293b;
+}
+
+.dark .wiki-reader tbody td {
+  border-bottom-color: #1e293b;
+  color: #cbd5e1;
+}
+
+.dark .wiki-reader hr {
+  background: #334155;
+}
+
+.dark .wiki-reader a {
+  color: #60a5fa;
+}
+.dark .wiki-reader a:hover {
+  color: #93bbfd;
+  text-decoration-color: rgba(96, 165, 250, 0.4);
+}
+
+.dark .wiki-reader img {
+  border-color: #334155;
+}
+
+.dark .wiki-reader strong {
+  color: #e2e8f0;
+}
+
+.dark .wiki-reader del {
+  color: #64748b;
+}
+
+/* ── 浅色滚动条 — dark mode override ── */
+.dark .scrollbar-light::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3) !important;
+}
+.dark .scrollbar-light::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.5) !important;
+}
+.dark .scrollbar-light {
+  scrollbar-color: rgba(100, 116, 139, 0.3) transparent !important;
 }

@@ -1,6 +1,6 @@
 {
   "name": "autosnippet",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "AutoSnippet - 连接开发者、AI 与项目知识库的工具",
   "type": "module",
   "main": "lib/bootstrap.js",
@@ -9,7 +9,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/postinstall-safe.js",
-    "prepublishOnly": "node scripts/build-native-ui.js && node scripts/build-asd-entry.js",
+    "prepublishOnly": "node scripts/build-native-ui.js",
     "build:native-ui": "swiftc resources/native-ui/main.swift resources/native-ui/combined-window.swift -o resources/native-ui/native-ui -framework AppKit",
     "install:cursor-skill": "node scripts/install-cursor-skill.js",
     "install:cursor-skill:mcp": "node scripts/install-cursor-skill.js --mcp",
@@ -32,9 +32,9 @@
     "release:major": "node scripts/release.js major",
     "cli": "node bin/cli.js",
     "mcp": "node bin/mcp-server.js",
-    "init:snippets": "node scripts/init-xcode-snippets.js init",
-    "list:snippets": "node scripts/init-xcode-snippets.js list",
-    "remove:snippets": "node scripts/init-xcode-snippets.js remove",
+    "init:snippets": "node scripts/init-snippets.js init",
+    "list:snippets": "node scripts/init-snippets.js list",
+    "remove:snippets": "node scripts/init-snippets.js remove",
     "diagnose:mcp": "node scripts/diagnose-mcp.js"
   },
   "author": "gaoxuefeng",
@@ -70,9 +70,7 @@
     "open": "^8.0.4",
     "ora": "^8.0.1",
     "socket.io": "^4.8.1",
-    "tree-sitter": "^0.22.4",
-    "tree-sitter-objc": "^3.0.2",
-    "tree-sitter-swift": "^0.7.1",
+    "tree-sitter": "^0.25.0",
     "undici": "^6.23.0",
     "uuid": "^9.0.1",
     "winston": "^3.11.0",
@@ -94,7 +92,6 @@
     "resources/native-ui/combined-window.swift",
     "resources/native-ui/native-ui",
     "resources/native-ui/README.md",
-    "resources/asd-entry/main.swift",
     "resources/openChrome.applescript"
   ],
   "directories": {
@@ -103,12 +100,51 @@
     "test": "test"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.0.0",
     "@types/node": "^20.10.6",
-    "eslint": "^8.56.0",
-    "jest": "^29.7.0",
-    "mocha": "^11.3.0",
-    "nodemon": "^3.0.2",
+    "jest": "^30.2.0",
+    "mocha": "^11.7.5",
+    "nodemon": "^3.1.13",
     "prettier": "^3.1.1",
     "supertest": "^6.3.3"
+  },
+  "optionalDependencies": {
+    "tree-sitter-go": "^0.25.0",
+    "tree-sitter-java": "^0.23.5",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-kotlin": "^0.3.8",
+    "tree-sitter-objc": "^3.0.2",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-swift": "^0.7.1",
+    "tree-sitter-typescript": "^0.23.2"
+  },
+  "overrides": {
+    "tree-sitter-kotlin": {
+      "tree-sitter": "$tree-sitter"
+    },
+    "tree-sitter-java": {
+      "tree-sitter": "$tree-sitter"
+    },
+    "tree-sitter-python": {
+      "tree-sitter": "$tree-sitter"
+    },
+    "tree-sitter-javascript": {
+      "tree-sitter": "$tree-sitter"
+    },
+    "tree-sitter-typescript": {
+      "tree-sitter": "$tree-sitter"
+    },
+    "tree-sitter-swift": {
+      "tree-sitter": "$tree-sitter"
+    },
+    "tree-sitter-objc": {
+      "tree-sitter": "$tree-sitter"
+    },
+    "tree-sitter-c": {
+      "tree-sitter": "$tree-sitter"
+    },
+    "minimatch": "^10.2.2",
+    "diff": "^8.0.3",
+    "glob": "^11.0.0"
   }
 }

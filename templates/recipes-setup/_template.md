@@ -3,7 +3,7 @@
 title: Your Recipe Title Here (English, ≤50 chars, verb-based)
 trigger: @my_trigger
 category: Network  # MUST be one of: View, Service, Tool, Model, Network, Storage, UI, Utility
-language: swift  # swift, objectivec, javascript, typescript, etc.
+language: swift  # swift, objectivec, go, python, java, kotlin, javascript, typescript
 summary_cn: 中文概述，≤100 字，描述该 Recipe 的用途
 summary_en: English summary, ≤100 words
 headers: ["import Foundation"]  # 完整 import 语句数组

@@ -9,7 +9,7 @@
 
 import { jest } from '@jest/globals';
 import Database from 'better-sqlite3';
-import { SearchEngine, BM25Scorer, tokenize } from '../../lib/service/search/SearchEngine.js';
+import { BM25Scorer, SearchEngine, tokenize } from '../../lib/service/search/SearchEngine.js';
 
 /** 在内存 DB 中创建 knowledge_entries 表 */
 function createInMemoryDb() {
@@ -132,7 +132,7 @@ describe('Integration: Search Pipeline', () => {
       const results = scorer.search('URLSession networking');
       expect(results.length).toBeGreaterThanOrEqual(2);
       // r1 和 r3 都双词命中，应出现在结果中
-      const resultIds = results.map(r => r.id);
+      const resultIds = results.map((r) => r.id);
       expect(resultIds).toContain('r1');
       expect(resultIds).toContain('r3');
       // r2 无匹配词，不应出现在结果中
@@ -171,7 +171,10 @@ describe('Integration: Search Pipeline', () => {
         category: 'networking',
         knowledgeType: 'best-practice',
         kind: 'pattern',
-        content: JSON.stringify({ pattern: 'URLSession.shared', rationale: 'Standard networking API' }),
+        content: JSON.stringify({
+          pattern: 'URLSession.shared',
+          rationale: 'Standard networking API',
+        }),
         lifecycle: 'active',
         tags: JSON.stringify(['networking', 'ios']),
         trigger: 'urlsession',
@@ -184,8 +187,9 @@ describe('Integration: Search Pipeline', () => {
       const row = { ...defaults, ...overrides };
       const keys = Object.keys(row);
       const placeholders = keys.map(() => '?').join(', ');
-      db.prepare(`INSERT INTO knowledge_entries (${keys.join(', ')}) VALUES (${placeholders})`)
-        .run(...Object.values(row));
+      db.prepare(`INSERT INTO knowledge_entries (${keys.join(', ')}) VALUES (${placeholders})`).run(
+        ...Object.values(row)
+      );
       return row;
     }
 
@@ -196,7 +200,10 @@ describe('Integration: Search Pipeline', () => {
         description: '使用 URLSession 进行网络请求的推荐方式',
         trigger: 'urlsession',
         tags: JSON.stringify(['networking', 'ios', 'swift']),
-        content: JSON.stringify({ pattern: 'let task = URLSession.shared.dataTask(with: url)', rationale: 'Foundation networking' }),
+        content: JSON.stringify({
+          pattern: 'let task = URLSession.shared.dataTask(with: url)',
+          rationale: 'Foundation networking',
+        }),
       });
       seedEntry({
         id: 'se-2',
@@ -204,7 +211,10 @@ describe('Integration: Search Pipeline', () => {
         description: '第三方网络库 Alamofire 的封装方式',
         trigger: 'alamofire',
         tags: JSON.stringify(['networking', 'third-party']),
-        content: JSON.stringify({ pattern: 'AF.request(url).responseJSON', rationale: 'Alamofire convenience' }),
+        content: JSON.stringify({
+          pattern: 'AF.request(url).responseJSON',
+          rationale: 'Alamofire convenience',
+        }),
       });
       seedEntry({
         id: 'se-3',
@@ -213,7 +223,10 @@ describe('Integration: Search Pipeline', () => {
         trigger: 'tableview',
         category: 'ui',
         tags: JSON.stringify(['ui', 'tableview']),
-        content: JSON.stringify({ pattern: 'extension VC: UITableViewDelegate', rationale: 'Separation of concerns' }),
+        content: JSON.stringify({
+          pattern: 'extension VC: UITableViewDelegate',
+          rationale: 'Separation of concerns',
+        }),
       });
       seedEntry({
         id: 'se-4',
@@ -225,7 +238,10 @@ describe('Integration: Search Pipeline', () => {
         kind: 'rule',
         trigger: 'dispatch',
         tags: JSON.stringify(['threading', 'guard']),
-        content: JSON.stringify({ pattern: 'dispatch_sync(dispatch_get_main_queue())', rationale: 'Deadlock prevention' }),
+        content: JSON.stringify({
+          pattern: 'dispatch_sync(dispatch_get_main_queue())',
+          rationale: 'Deadlock prevention',
+        }),
       });
       seedEntry({
         id: 'se-5',
@@ -233,7 +249,10 @@ describe('Integration: Search Pipeline', () => {
         description: 'NSManagedObjectContext 多线程使用规范',
         trigger: 'coredata',
         tags: JSON.stringify(['data', 'threading', 'coredata']),
-        content: JSON.stringify({ pattern: 'container.performBackgroundTask', rationale: 'Thread safety' }),
+        content: JSON.stringify({
+          pattern: 'container.performBackgroundTask',
+          rationale: 'Thread safety',
+        }),
         lifecycle: 'deprecated',
       });
 
@@ -247,7 +266,7 @@ describe('Integration: Search Pipeline', () => {
       // se-1~se-4 应被索引, se-5 是 deprecated 不应被索引
       expect(stats.totalDocuments).toBe(4);
       // 验证 deprecated 条目不在索引中
-      const deprecatedInIndex = engine.scorer.documents.find(d => d.id === 'se-5');
+      const deprecatedInIndex = engine.scorer.documents.find((d) => d.id === 'se-5');
       expect(deprecatedInIndex).toBeUndefined();
     });
 
@@ -270,14 +289,14 @@ describe('Integration: Search Pipeline', () => {
       const result = await engine.search('网络请求 networking', { mode: 'bm25' });
       expect(result.items.length).toBeGreaterThanOrEqual(2);
       // 前两条应是 networking 相关
-      const ids = result.items.map(r => r.id);
+      const ids = result.items.map((r) => r.id);
       expect(ids).toContain('se-1');
       expect(ids).toContain('se-2');
     });
 
     it('搜索不到 deprecated 条目', async () => {
       const result = await engine.search('Core Data 并发', { mode: 'keyword' });
-      const ids = result.items.map(r => r.id);
+      const ids = result.items.map((r) => r.id);
       expect(ids).not.toContain('se-5');
     });
 
@@ -365,7 +384,7 @@ describe('Integration: Search Pipeline', () => {
       const result = await freshEngine.search('triggermatch', { mode: 'keyword' });
       expect(result.items.length).toBeGreaterThanOrEqual(1);
       // trigger 精确匹配应给最高分 (1.2)
-      const topItem = result.items.find(r => r.id === 'se-trigger-test');
+      const topItem = result.items.find((r) => r.id === 'se-trigger-test');
       expect(topItem).toBeDefined();
       expect(topItem.score).toBeGreaterThanOrEqual(1.0);
     });

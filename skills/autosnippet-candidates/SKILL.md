@@ -78,8 +78,16 @@ Every candidate submitted via `submit_candidate` or `submit_candidates` supports
 | Field | Type | Example |
 |-------|------|---------|
 | **title** | string | "网络请求统一封装 - APIClient" |
-| **code** | string | The code pattern (maps to `content.pattern`). Use Xcode placeholders `<#name#>` for variables. |
+| **content** | object | `{ markdown: "≥200字 Markdown 正文", pattern: "核心代码模式", rationale: "设计原理" }` |
 | **language** | string | swift / objc / javascript / python etc. |
+| **kind** | string | `rule` / `pattern` / `fact` |
+| **doClause** | string | 英文祈使句正向指令（≠60 tokens）|
+| **trigger** | string | `@` 开头 kebab-case，如 `@api-client` |
+| **description** | string | 中文摘要 ≤80字 |
+| **category** | string | View / Service / Tool / Model / Network / Storage / UI / Utility |
+| **headers** | string[] | 完整 import 语句数组，无 import 传 `[]` |
+| **usageGuide** | string | Markdown ### 章节格式的使用指南 |
+| **knowledgeType** | string | `code-pattern` / `architecture` / `best-practice` 等 |
 
 ### Layer 2: Classification (strongly recommended — enables filtering & search)
 
@@ -91,20 +99,9 @@ Every candidate submitted via `submit_candidate` or `submit_candidates` supports
 | **scope** | string | `universal` (通用) \| `project-specific` (本项目) \| `target-specific` (特定 Target) |
 | **tags** | string[] | `["networking", "async-await", "error-handling"]` |
 
-### Layer 3: Description & Documentation (强烈建议 — 含双语字段)
+### Layer 3: Structured Content (high value — 代码变更与实施步骤)
 
-| Field | Type | Description |
-|-------|------|-------------|
-| **description** | string | 一句话功能描述 |
-| **summary** | string | 中文详细摘要（等同 summary_cn，Markdown），含功能介绍、设计背景 |
-| **summary_cn** | string | 中文摘要（≤100字）— 与 summary 二选一 |
-| **summary_en** | string | 英文摘要（≤100 words）— **强烈建议**，提升检索与 AI 理解 |
-| **trigger** | string | 触发关键词，**必须** `@` 开头。如 `@api-client` |
-| **usageGuide** | string | 中文使用指南（等同 usageGuide_cn，Markdown），包含 `###` 章节 |
-| **usageGuide_cn** | string | 中文使用指南 — 与 usageGuide 二选一 |
-| **usageGuide_en** | string | 英文使用指南（Markdown ### 章节）— **推荐** |
-
-### Layer 4: Structured Content (high value — enables step-by-step guidance & code diff)
+> **注意**: Layer 1 已包含 V3 全部必填字段（title, content, language, kind, doClause, trigger, description, category, headers, usageGuide, knowledgeType）。本层为可选的高价值补充字段。
 
 | Field | Type | Structure |
 |-------|------|-----------|
@@ -259,7 +256,7 @@ Severity: `error` (must fix) | `warning` (should fix) | `info` (suggestion)
 2. **Maximize information density** — Agent's primary value is extracting structured metadata that humans would skip
 3. **Always fill Layer 1-3 + Reasoning + Recipe-Ready Checklist** at minimum; Layer 4-7 for complex patterns
 4. **Reasoning is mandatory** — Every candidate MUST include `reasoning.whyStandard` + `reasoning.sources` + `reasoning.confidence`. No exceptions.
-5. **Bilingual recommended** — `summary_cn` + `summary_en`, `usageGuide` + `usageGuide_en`. English improves AI understanding and search.
+5. **V3 必填字段** — title, content(markdown+pattern+rationale), trigger, kind, doClause, description, language, category, headers, knowledgeType, usageGuide, reasoning
 6. **Check `recipeReadyHints` in submit response** — If not empty, supplement fields and resubmit
 7. **Parallel query existing Recipes** during generation to reduce duplicates and fill `relations`
 6. **Code examples**: use Xcode placeholders (`<#URL#>`, `<#Token#>`), explain in `usageGuide`
@@ -304,15 +301,15 @@ Recommended sections: When to use / When not to use / Key points / Dependencies 
 
 ### 备选：二次补全流程
 
-Step 1: 提交基本字段（title, code, language）→ 获得 candidate ID（`autosnippet_submit_knowledge` 内置自动校验 + 去重检查）
+Step 1: 提交基本字段（title, content, language）→ 获得 candidate ID（`autosnippet_submit_knowledge` 内置自动校验 + 去重检查）
 Step 2: 根据提交返回的校验结果补全缺失字段
 Step 3: 重新提交完整候选
 
 > 注：`autosnippet_enrich_candidates` / `autosnippet_validate_candidate` / `autosnippet_check_duplicate` 已移入 admin 层级。Agent 层级的 `autosnippet_submit_knowledge` 已内置自动校验 + 去重，无需额外调用。
 
-需要补全的两层字段：
-- **语义字段**: rationale, knowledgeType, complexity, scope, steps, constraints
-- **Recipe 必填**: category, trigger, summary_cn, summary_en, headers, usageGuide
+需要补全的字段：
+- **语义字段**: content.rationale, knowledgeType, complexity, scope, steps, constraints
+- **Recipe 必填**: kind, doClause, category, trigger, description, headers, usageGuide, reasoning
 
 ---
 
@@ -324,18 +321,23 @@ Step 3: 重新提交完整候选
   "items": [
     {
       "title": "BiliAPI 网络请求封装",
-      "code": "class BiliAPI {\n  static func request<T: Decodable>(_ endpoint: Endpoint) async throws -> T {\n    let (data, response) = try await URLSession.shared.data(for: endpoint.urlRequest)\n    guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {\n      throw BiliError.invalidResponse\n    }\n    return try JSONDecoder().decode(T.self, from: data)\n  }\n}",
+      "content": {
+        "markdown": "## BiliAPI 网络请求统一封装\n\n### ✅ 标准用法\n```swift\nclass BiliAPI {\n  static func request<T: Decodable>(_ endpoint: Endpoint) async throws -> T {\n    let (data, response) = try await URLSession.shared.data(for: endpoint.urlRequest)\n    guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {\n      throw BiliError.invalidResponse\n    }\n    return try JSONDecoder().decode(T.self, from: data)\n  }\n}\n```\n\n### 使用示例\n```swift\nlet user: UserInfo = try await BiliAPI.request(UserInfoEndpoint(uid: uid))\n```\n\n### 要点\n- 所有网络请求统一通过 BiliAPI.request()\n- 支持泛型解码，自动 JSON → Model\n- 统一错误处理和响应验证",
+        "pattern": "class BiliAPI {\n  static func request<T: Decodable>(_ endpoint: Endpoint) async throws -> T {\n    let (data, response) = try await URLSession.shared.data(for: endpoint.urlRequest)\n    guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {\n      throw BiliError.invalidResponse\n    }\n    return try JSONDecoder().decode(T.self, from: data)\n  }\n}",
+        "rationale": "统一网络层避免各模块各自实现 URLSession 调用，减少重复代码并统一错误处理策略。"
+      },
+      "description": "统一的 API 请求封装，支持泛型解码和错误处理",
+      "kind": "pattern",
+      "doClause": "Use BiliAPI.request() for all network calls with type-safe Decodable responses",
       "language": "swift",
       "category": "Network",
+      "trigger": "@bili-api-request",
+      "headers": ["import Foundation", "import BiliKit"],
       "knowledgeType": "code-pattern",
+      "usageGuide": "### When to use\n- 所有 B 站 API 调用\n- 需要类型安全的响应解码\n\n### Dependencies\n- Foundation\n- BiliKit/Models (Endpoint, BiliError)\n\n### Core steps\n1. 定义 Endpoint\n2. 调用 BiliAPI.request(endpoint)\n3. 处理 Result",
       "complexity": "intermediate",
       "scope": "project-specific",
       "tags": ["networking", "async-await", "generic", "decodable"],
-      "description": "统一的 API 请求封装，支持泛型解码和错误处理",
-      "summary": "基于 async/await 的网络请求封装层，提供类型安全的 API 调用接口。统一错误处理、响应验证和 JSON 解码。",
-      "trigger": "@bili-api-request",
-      "usageGuide": "### When to use\n- 所有 B 站 API 调用\n- 需要类型安全的响应解码\n\n### Dependencies\n- Foundation\n- BiliKit/Models (Endpoint, BiliError)\n\n### Core steps\n1. 定义 Endpoint\n2. 调用 BiliAPI.request(endpoint)\n3. 处理 Result",
-      "rationale": "统一网络层避免各模块各自实现 URLSession 调用，减少重复代码并统一错误处理策略。",
       "steps": [
         {"title": "定义 Endpoint", "description": "创建符合 Endpoint 协议的请求描述", "code": "struct UserInfoEndpoint: Endpoint { ... }"},
         {"title": "发起请求", "description": "调用统一 API 方法", "code": "let user: UserInfo = try await BiliAPI.request(UserInfoEndpoint(uid: uid))"}
@@ -343,7 +345,6 @@ Step 3: 重新提交完整候选
       "codeChanges": [
         {"file": "Sources/Network/OldAPI.swift", "before": "URLSession.shared.dataTask(with: url) { ... }", "after": "let result: T = try await BiliAPI.request(endpoint)", "explanation": "替换回调式为 async/await"}
       ],
-      "headers": ["import Foundation", "import BiliKit"],
       "constraints": {
         "preconditions": ["需要有效的网络连接", "Endpoint 必须实现 urlRequest 属性"],
         "sideEffects": ["发起网络请求"],

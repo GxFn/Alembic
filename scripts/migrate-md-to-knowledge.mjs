@@ -22,40 +22,42 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ── 解析命令行 ──
 const args = process.argv.slice(2);
-const dryRun   = args.includes('--dry-run');
+const dryRun = args.includes('--dry-run');
 const noBackup = args.includes('--no-backup');
-const projectRoot = args.find(a => !a.startsWith('--')) || process.cwd();
+const projectRoot = args.find((a) => !a.startsWith('--')) || process.cwd();
 
 // ── 动态导入（兼容 ESM） ──
-const { parseRecipeMarkdown }    = await import('../lib/service/recipe/RecipeFileWriter.js');
+const { parseRecipeMarkdown } = await import('../lib/service/recipe/RecipeFileWriter.js');
 const { parseCandidateMarkdown } = await import('../lib/service/candidate/CandidateFileWriter.js');
-const { KnowledgeEntry }         = await import('../lib/domain/knowledge/KnowledgeEntry.js');
-const { KnowledgeFileWriter }    = await import('../lib/service/knowledge/KnowledgeFileWriter.js');
-const { Lifecycle }              = await import('../lib/domain/knowledge/Lifecycle.js');
+const { KnowledgeEntry } = await import('../lib/domain/knowledge/KnowledgeEntry.js');
+const { KnowledgeFileWriter } = await import('../lib/service/knowledge/KnowledgeFileWriter.js');
+const { Lifecycle } = await import('../lib/domain/knowledge/Lifecycle.js');
 const { inferKind: inferKindV3 } = await import('../lib/domain/knowledge/Lifecycle.js');
 
-const RECIPES_DIR    = 'AutoSnippet/recipes';
+const RECIPES_DIR = 'AutoSnippet/recipes';
 const CANDIDATES_DIR = 'AutoSnippet/candidates';
-const BACKUP_DIR     = 'AutoSnippet/_backup';
+const BACKUP_DIR = 'AutoSnippet/_backup';
 
-const recipesDir    = path.join(projectRoot, RECIPES_DIR);
+const recipesDir = path.join(projectRoot, RECIPES_DIR);
 const candidatesDir = path.join(projectRoot, CANDIDATES_DIR);
-const backupDir     = path.join(projectRoot, BACKUP_DIR);
+const backupDir = path.join(projectRoot, BACKUP_DIR);
 
 const report = {
-  recipes:    { total: 0, migrated: 0, skipped: 0, errors: [] },
+  recipes: { total: 0, migrated: 0, skipped: 0, errors: [] },
   candidates: { total: 0, migrated: 0, skipped: 0, errors: [] },
 };
 
 // ── 工具函数 ──
 
 function collectMdFiles(dir) {
-  if (!fs.existsSync(dir)) return [];
+  if (!fs.existsSync(dir)) {
+    return [];
+  }
   const results = [];
   const walk = (curDir, base) => {
     for (const entry of fs.readdirSync(curDir, { withFileTypes: true })) {
       const full = path.join(curDir, entry.name);
-      const rel  = base ? `${base}/${entry.name}` : entry.name;
+      const rel = base ? `${base}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         walk(full, rel);
       } else if (entry.name.endsWith('.md') && !entry.name.startsWith('_')) {
@@ -68,14 +70,15 @@ function collectMdFiles(dir) {
 }
 
 function backupFile(absPath, type) {
-  if (noBackup || dryRun) return;
-  const rel = path.relative(
-    type === 'recipe' ? recipesDir : candidatesDir,
-    absPath
-  );
+  if (noBackup || dryRun) {
+    return;
+  }
+  const rel = path.relative(type === 'recipe' ? recipesDir : candidatesDir, absPath);
   const dest = path.join(backupDir, type === 'recipe' ? 'recipes' : 'candidates', rel);
   const destDir = path.dirname(dest);
-  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+  }
   fs.copyFileSync(absPath, dest);
 }
 
@@ -84,7 +87,9 @@ function backupFile(absPath, type) {
  */
 function isAlreadyNewFormat(content) {
   const fm = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
-  if (!fm) return false;
+  if (!fm) {
+    return false;
+  }
   return fm[1].includes('lifecycle:') && fm[1].includes('_content:');
 }
 
@@ -103,78 +108,78 @@ function migrateRecipe(absPath, relPath) {
 
   // 映射旧 Recipe 字段 → KnowledgeEntry wire format
   const statusMap = {
-    active:     Lifecycle.ACTIVE,
+    active: Lifecycle.ACTIVE,
     deprecated: Lifecycle.DEPRECATED,
-    draft:      Lifecycle.DRAFT,
+    draft: Lifecycle.DRAFT,
   };
 
   // 提取旧 dimensions
   const quality = parsed.quality || {};
-  const stats   = parsed.statistics || {};
+  const stats = parsed.statistics || {};
 
   const wireData = {
-    id:                  parsed.id,
-    title:               parsed.title,
-    trigger:             parsed.trigger || '',
-    description:         parsed.summaryCn || parsed.summaryEn || '',
-    lifecycle:           statusMap[parsed.status] || Lifecycle.ACTIVE,
-    lifecycle_history:   [],
-    probation:           false,
-    language:            parsed.language || 'swift',
-    category:            parsed.category || 'general',
-    kind:                parsed.kind || inferKindV3(parsed.knowledgeType || 'code-pattern'),
-    knowledge_type:      parsed.knowledgeType || 'code-pattern',
-    complexity:          parsed.complexity || 'intermediate',
-    scope:               parsed.scope || 'universal',
-    difficulty:          parsed.difficulty || null,
-    tags:                parsed.tags || [],
-    summary_cn:          parsed.summaryCn || '',
-    summary_en:          parsed.summaryEn || '',
-    usage_guide_cn:      parsed.usageGuideCn || '',
-    usage_guide_en:      parsed.usageGuideEn || '',
-    content:             {
-      pattern:   '',
-      markdown:  '',
+    id: parsed.id,
+    title: parsed.title,
+    trigger: parsed.trigger || '',
+    description: parsed.summaryCn || parsed.summaryEn || '',
+    lifecycle: statusMap[parsed.status] || Lifecycle.ACTIVE,
+    lifecycle_history: [],
+    probation: false,
+    language: parsed.language || 'swift',
+    category: parsed.category || 'general',
+    kind: parsed.kind || inferKindV3(parsed.knowledgeType || 'code-pattern'),
+    knowledge_type: parsed.knowledgeType || 'code-pattern',
+    complexity: parsed.complexity || 'intermediate',
+    scope: parsed.scope || 'universal',
+    difficulty: parsed.difficulty || null,
+    tags: parsed.tags || [],
+    summary_cn: parsed.summaryCn || '',
+    summary_en: parsed.summaryEn || '',
+    usage_guide_cn: parsed.usageGuideCn || '',
+    usage_guide_en: parsed.usageGuideEn || '',
+    content: {
+      pattern: '',
+      markdown: '',
       rationale: '',
-      steps:     [],
+      steps: [],
       code_changes: [],
       verification: null,
     },
-    relations:           parsed.relations || {},
-    constraints:         parsed.constraints || {},
-    reasoning:           {},
+    relations: parsed.relations || {},
+    constraints: parsed.constraints || {},
+    reasoning: {},
     quality: {
-      completeness:  quality.codeCompleteness  ?? quality.completeness  ?? 0,
-      adaptation:    quality.projectAdaptation  ?? quality.adaptation    ?? 0,
+      completeness: quality.codeCompleteness ?? quality.completeness ?? 0,
+      adaptation: quality.projectAdaptation ?? quality.adaptation ?? 0,
       documentation: quality.documentationClarity ?? quality.documentation ?? 0,
-      overall:       quality.overall ?? 0,
-      grade:         quality.grade   || 'F',
+      overall: quality.overall ?? 0,
+      grade: quality.grade || 'F',
     },
     stats: {
-      views:        stats.viewCount        ?? stats.views        ?? 0,
-      adoptions:    stats.adoptionCount    ?? stats.adoptions    ?? 0,
+      views: stats.viewCount ?? stats.views ?? 0,
+      adoptions: stats.adoptionCount ?? stats.adoptions ?? 0,
       applications: stats.applicationCount ?? stats.applications ?? 0,
-      guard_hits:   stats.guardHitCount    ?? stats.guard_hits   ?? 0,
-      search_hits:  stats.searchHits       ?? stats.search_hits  ?? 0,
-      authority:    parsed.authority        ?? stats.authority    ?? 0,
+      guard_hits: stats.guardHitCount ?? stats.guard_hits ?? 0,
+      search_hits: stats.searchHits ?? stats.search_hits ?? 0,
+      authority: parsed.authority ?? stats.authority ?? 0,
     },
-    headers:             parsed.headers || [],
-    header_paths:        [],
-    module_name:         '',
-    include_headers:     false,
-    agent_notes:         null,
-    ai_insight:          null,
-    reviewed_by:         null,
-    reviewed_at:         null,
-    rejection_reason:    parsed.deprecationReason || null,
-    source:              'migration',
-    source_file:         `${RECIPES_DIR}/${relPath}`,
+    headers: parsed.headers || [],
+    header_paths: [],
+    module_name: '',
+    include_headers: false,
+    agent_notes: null,
+    ai_insight: null,
+    reviewed_by: null,
+    reviewed_at: null,
+    rejection_reason: parsed.deprecationReason || null,
+    source: 'migration',
+    source_file: `${RECIPES_DIR}/${relPath}`,
     source_candidate_id: parsed.sourceCandidate || null,
-    created_by:          parsed.createdBy || 'system',
-    created_at:          parsed.createdAt || Math.floor(Date.now() / 1000),
-    updated_at:          parsed.updatedAt || Math.floor(Date.now() / 1000),
-    published_at:        parsed.publishedAt || null,
-    published_by:        parsed.publishedBy || null,
+    created_by: parsed.createdBy || 'system',
+    created_at: parsed.createdAt || Math.floor(Date.now() / 1000),
+    updated_at: parsed.updatedAt || Math.floor(Date.now() / 1000),
+    published_at: parsed.publishedAt || null,
+    published_by: parsed.publishedBy || null,
   };
 
   // 提取 body 内容到 content
@@ -220,80 +225,83 @@ function migrateCandidate(absPath, relPath) {
 
   // 映射旧 Candidate 状态 → lifecycle
   const statusMap = {
-    pending:  Lifecycle.PENDING,
+    pending: Lifecycle.PENDING,
     approved: Lifecycle.APPROVED,
     rejected: Lifecycle.REJECTED,
-    applied:  Lifecycle.ACTIVE,
-    draft:    Lifecycle.DRAFT,
+    applied: Lifecycle.ACTIVE,
+    draft: Lifecycle.DRAFT,
   };
 
-  const meta      = parsed._metadata || {};
+  const meta = parsed._metadata || {};
   const reasoning = parsed._reasoning || {};
-  const code      = parsed._bodyCode || '';
+  const code = parsed._bodyCode || '';
 
   // 判断内容类型
-  const isMarkdown = code && (
-    code.includes('— 项目特写') || /^#{1,3}\s/.test(code.trimStart())
-  );
+  const isMarkdown = code && (code.includes('— 项目特写') || /^#{1,3}\s/.test(code.trimStart()));
 
   const wireData = {
-    id:                  parsed.id,
-    title:               meta.title || meta.description || (code ? code.substring(0, 60) : ''),
-    trigger:             meta.trigger || '',
-    description:         meta.description || '',
-    lifecycle:           statusMap[parsed.status] || Lifecycle.PENDING,
-    lifecycle_history:   parsed._statusHistory || [],
-    probation:           false,
-    language:            parsed.language || 'swift',
-    category:            meta.category || parsed.category || 'general',
-    kind:                inferKindV3(meta.knowledgeType || 'code-pattern'),
-    knowledge_type:      meta.knowledgeType || 'code-pattern',
-    complexity:          meta.complexity || 'intermediate',
-    scope:               meta.scope || 'universal',
-    difficulty:          meta.difficulty || null,
-    tags:                meta.tags || [],
-    summary_cn:          meta.summary || meta.summary_cn || '',
-    summary_en:          meta.summary_en || '',
-    usage_guide_cn:      meta.usageGuide || meta.usageGuide_cn || '',
-    usage_guide_en:      meta.usageGuide_en || '',
+    id: parsed.id,
+    title: meta.title || meta.description || (code ? code.substring(0, 60) : ''),
+    trigger: meta.trigger || '',
+    description: meta.description || '',
+    lifecycle: statusMap[parsed.status] || Lifecycle.PENDING,
+    lifecycle_history: parsed._statusHistory || [],
+    probation: false,
+    language: parsed.language || 'swift',
+    category: meta.category || parsed.category || 'general',
+    kind: inferKindV3(meta.knowledgeType || 'code-pattern'),
+    knowledge_type: meta.knowledgeType || 'code-pattern',
+    complexity: meta.complexity || 'intermediate',
+    scope: meta.scope || 'universal',
+    difficulty: meta.difficulty || null,
+    tags: meta.tags || [],
+    summary_cn: meta.summary || meta.summary_cn || '',
+    summary_en: meta.summary_en || '',
+    usage_guide_cn: meta.usageGuide || meta.usageGuide_cn || '',
+    usage_guide_en: meta.usageGuide_en || '',
     content: {
-      pattern:      isMarkdown ? '' : code,
-      markdown:     isMarkdown ? code : '',
-      rationale:    meta.rationale || (typeof reasoning === 'object' ? reasoning.whyStandard : '') || '',
-      steps:        meta.steps || [],
+      pattern: isMarkdown ? '' : code,
+      markdown: isMarkdown ? code : '',
+      rationale:
+        meta.rationale || (typeof reasoning === 'object' ? reasoning.whyStandard : '') || '',
+      steps: meta.steps || [],
       code_changes: meta.codeChanges || [],
       verification: meta.verification || null,
     },
     relations: Array.isArray(meta.relations)
-      ? { related: meta.relations.map(r => typeof r === 'string' ? { target: r, description: '' } : r) }
-      : (meta.relations || {}),
-    constraints:         meta.constraints || {},
+      ? {
+          related: meta.relations.map((r) =>
+            typeof r === 'string' ? { target: r, description: '' } : r
+          ),
+        }
+      : meta.relations || {},
+    constraints: meta.constraints || {},
     reasoning: {
-      why_standard:    (typeof reasoning === 'object' ? reasoning.whyStandard : '') || '',
-      sources:         (typeof reasoning === 'object' ? reasoning.sources : []) || [],
-      confidence:      (typeof reasoning === 'object' ? reasoning.confidence : 0.7) ?? 0.7,
+      why_standard: (typeof reasoning === 'object' ? reasoning.whyStandard : '') || '',
+      sources: (typeof reasoning === 'object' ? reasoning.sources : []) || [],
+      confidence: (typeof reasoning === 'object' ? reasoning.confidence : 0.7) ?? 0.7,
       quality_signals: (typeof reasoning === 'object' ? reasoning.qualitySignals : {}) || {},
-      alternatives:    (typeof reasoning === 'object' ? reasoning.alternatives : []) || [],
+      alternatives: (typeof reasoning === 'object' ? reasoning.alternatives : []) || [],
     },
-    quality:             meta.quality || {},
-    stats:               {},
-    headers:             meta.headers || [],
-    header_paths:        [],
-    module_name:         '',
-    include_headers:     false,
-    agent_notes:         null,
-    ai_insight:          null,
-    reviewed_by:         parsed.approvedBy || parsed.rejectedBy || null,
-    reviewed_at:         parsed.approvedAt || null,
-    rejection_reason:    parsed.rejectionReason || null,
-    source:              parsed.source || 'migration',
-    source_file:         `${CANDIDATES_DIR}/${relPath}`,
+    quality: meta.quality || {},
+    stats: {},
+    headers: meta.headers || [],
+    header_paths: [],
+    module_name: '',
+    include_headers: false,
+    agent_notes: null,
+    ai_insight: null,
+    reviewed_by: parsed.approvedBy || parsed.rejectedBy || null,
+    reviewed_at: parsed.approvedAt || null,
+    rejection_reason: parsed.rejectionReason || null,
+    source: parsed.source || 'migration',
+    source_file: `${CANDIDATES_DIR}/${relPath}`,
     source_candidate_id: null,
-    created_by:          parsed.createdBy || 'system',
-    created_at:          parsed.createdAt || Math.floor(Date.now() / 1000),
-    updated_at:          parsed.updatedAt || Math.floor(Date.now() / 1000),
-    published_at:        null,
-    published_by:        null,
+    created_by: parsed.createdBy || 'system',
+    created_at: parsed.createdAt || Math.floor(Date.now() / 1000),
+    updated_at: parsed.updatedAt || Math.floor(Date.now() / 1000),
+    published_at: null,
+    published_by: null,
   };
 
   // 构建实体并重新序列化
@@ -309,18 +317,9 @@ function migrateCandidate(absPath, relPath) {
   report.candidates.migrated++;
 }
 
-// ═══ 主流程 ═══
-
-console.log(`\n🔄 Knowledge .md Migration`);
-console.log(`  Project: ${projectRoot}`);
-console.log(`  Mode: ${dryRun ? 'DRY RUN' : 'LIVE'}`);
-console.log(`  Backup: ${noBackup ? 'disabled' : 'enabled'}`);
-console.log('');
-
 // ── 迁移 Recipes ──
 const recipeFiles = collectMdFiles(recipesDir);
 report.recipes.total = recipeFiles.length;
-console.log(`📦 Recipes: ${recipeFiles.length} files found`);
 
 for (const { absPath, relPath } of recipeFiles) {
   try {
@@ -334,7 +333,6 @@ for (const { absPath, relPath } of recipeFiles) {
 // ── 迁移 Candidates ──
 const candidateFiles = collectMdFiles(candidatesDir);
 report.candidates.total = candidateFiles.length;
-console.log(`📦 Candidates: ${candidateFiles.length} files found`);
 
 for (const { absPath, relPath } of candidateFiles) {
   try {
@@ -345,20 +343,10 @@ for (const { absPath, relPath } of candidateFiles) {
   }
 }
 
-// ── 报告 ──
-console.log('\n═══ Migration Report ═══');
-console.log(`  Recipes:    ${report.recipes.migrated}/${report.recipes.total} migrated, ${report.recipes.skipped} already new format, ${report.recipes.errors.length} errors`);
-console.log(`  Candidates: ${report.candidates.migrated}/${report.candidates.total} migrated, ${report.candidates.skipped} already new format, ${report.candidates.errors.length} errors`);
-
 if (!noBackup && !dryRun) {
-  console.log(`\n  Backups saved to: ${backupDir}`);
 }
 
 if (report.recipes.errors.length + report.candidates.errors.length > 0) {
-  console.log('\n  Errors:');
-  for (const e of [...report.recipes.errors, ...report.candidates.errors]) {
-    console.log(`    - ${e.file}: ${e.error}`);
+  for (const _e of [...report.recipes.errors, ...report.candidates.errors]) {
   }
 }
-
-console.log('');

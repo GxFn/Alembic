@@ -18,8 +18,8 @@
 
 import Bootstrap from '../../lib/bootstrap.js';
 import { HttpServer } from '../../lib/http/HttpServer.js';
-import { ServiceContainer, getServiceContainer } from '../../lib/injection/ServiceContainer.js';
-import { getTestPort, createTestToken } from '../fixtures/factory.js';
+import { getServiceContainer } from '../../lib/injection/ServiceContainer.js';
+import { getTestPort } from '../fixtures/factory.js';
 
 const PORT = getTestPort();
 const BASE = `http://localhost:${PORT}/api/v1`;
@@ -50,8 +50,12 @@ describe('Integration: HTTP API Endpoints', () => {
   }, 30_000);
 
   afterAll(async () => {
-    if (httpServer) await httpServer.stop();
-    if (bootstrap) await bootstrap.shutdown();
+    if (httpServer) {
+      await httpServer.stop();
+    }
+    if (bootstrap) {
+      await bootstrap.shutdown();
+    }
   });
 
   // ═══════════════════════════════════════════════════════
@@ -133,7 +137,9 @@ describe('Integration: HTTP API Endpoints', () => {
           password: process.env.ASD_AUTH_PASSWORD || 'autosnippet',
         }),
       });
-      const { data: { token } } = await loginRes.json();
+      const {
+        data: { token },
+      } = await loginRes.json();
 
       const res = await fetch(`${BASE}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },

@@ -3,6 +3,7 @@ import { X, Search, CheckCircle } from 'lucide-react';
 import api from '../../api';
 import { ICON_SIZES } from '../../constants/icons';
 import PageOverlay from '../Shared/PageOverlay';
+import { useI18n } from '../../i18n';
 
 interface SearchResult {
   name: string;
@@ -34,6 +35,7 @@ function extractCodeFromContent(content: any): string {
 }
 
 const SearchModal: React.FC<SearchModalProps> = ({ searchQ, insertPath, onClose }) => {
+  const { t } = useI18n();
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [inserting, setInserting] = useState<string | null>(null);
@@ -81,12 +83,12 @@ const SearchModal: React.FC<SearchModalProps> = ({ searchQ, insertPath, onClose 
       const content = extractCodeFromContent(result.content);
       await api.insertAtSearchMark({ path: insertPath, content });
       if (isMountedRef.current) {
-        alert('✅ 已插入到 ' + insertPath);
+        alert(t('searchModal.insertSuccess') + ' ' + insertPath);
         onClose();
       }
     } catch (err) {
       if (isMountedRef.current) {
-        alert('❌ 插入失败');
+        alert(t('searchModal.insertFailed'));
       }
     } finally {
       if (isMountedRef.current) {
@@ -101,12 +103,12 @@ const SearchModal: React.FC<SearchModalProps> = ({ searchQ, insertPath, onClose 
     <div className="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
     <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
       <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800">
-      <Search size={ICON_SIZES.xl} className="text-blue-600" /> as:search — 选择并插入
+      <Search size={ICON_SIZES.xl} className="text-blue-600" /> {t('searchModal.title')}
       </h2>
       <button onClick={onClose} className="p-2 hover:bg-white rounded-full transition-colors"><X size={ICON_SIZES.lg} /></button>
     </div>
     <div className="p-4 text-sm text-slate-500 border-b border-slate-100">
-      关键词: {searchQ || '(全部)'} · 插入到: {insertPath}
+      {t('searchModal.keyword')} {searchQ || t('searchModal.keywordAll')} · {t('searchModal.insertTo')} {insertPath}
     </div>
     <div className="flex-1 overflow-y-auto p-4">
       {loading ? (
@@ -114,7 +116,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ searchQ, insertPath, onClose 
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
       ) : results.length === 0 ? (
-      <div className="text-slate-500 text-center py-8">未找到匹配的 Recipe</div>
+      <div className="text-slate-500 text-center py-8">{t('searchModal.noResults')}</div>
       ) : (
       <ul className="space-y-2">
         {results.map((r) => (
@@ -131,7 +133,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ searchQ, insertPath, onClose 
             <div className="flex items-center gap-2 flex-wrap">
               {r.qualityScore !== undefined && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 rounded text-xs text-blue-700 font-medium">
-                🤖 质量: {(r.qualityScore * 100).toFixed(0)}%
+                🤖 {t('searchModal.quality')} {(r.qualityScore * 100).toFixed(0)}%
               </span>
               )}
               {r.recommendReason && (
@@ -143,9 +145,9 @@ const SearchModal: React.FC<SearchModalProps> = ({ searchQ, insertPath, onClose 
             )}
           </div>
           {inserting === r.name ? (
-            <span className="text-blue-600 text-sm flex items-center gap-1"><span className="animate-spin">⏳</span> 插入中...</span>
+            <span className="text-blue-600 text-sm flex items-center gap-1"><span className="animate-spin">⏳</span> {t('searchModal.inserting')}</span>
           ) : (
-            <span className="text-blue-600 text-sm flex items-center gap-1"><CheckCircle size={ICON_SIZES.md} /> 插入</span>
+            <span className="text-blue-600 text-sm flex items-center gap-1"><CheckCircle size={ICON_SIZES.md} /> {t('searchModal.insertBtn')}</span>
           )}
           </button>
         </li>

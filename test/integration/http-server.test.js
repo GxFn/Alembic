@@ -2,16 +2,15 @@
  * HTTP 服务器集成测试
  */
 
-import { test } from 'node:test';
 import assert from 'node:assert';
+import { test } from 'node:test';
 import HttpServer from '../../lib/http/HttpServer.js';
-import { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
 
 test('HTTP Server - Health Check', async (t) => {
   const httpServer = new HttpServer({ port: 3001 });
   httpServer.initialize();
 
-  const server = await httpServer.start();
+  const _server = await httpServer.start();
 
   await t.test('GET /api/v1/health - should return healthy status', async () => {
     const response = await fetch('http://localhost:3001/api/v1/health');
@@ -49,7 +48,7 @@ test('HTTP Server - Request Logging', async (t) => {
   const httpServer = new HttpServer({ port: 3002 });
   httpServer.initialize();
 
-  const server = await httpServer.start();
+  const _server = await httpServer.start();
 
   await t.test('should log incoming requests', async () => {
     const response = await fetch('http://localhost:3002/api/v1/health');
@@ -63,7 +62,7 @@ test('HTTP Server - CORS Headers', async (t) => {
   const httpServer = new HttpServer({ port: 3003 });
   httpServer.initialize();
 
-  const server = await httpServer.start();
+  const _server = await httpServer.start();
 
   await t.test('should include CORS headers in response', async () => {
     const response = await fetch('http://localhost:3003/api/v1/health');

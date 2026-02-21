@@ -13,6 +13,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, X, Loader2, Sparkles, Code2, Layers, BookOpen, Zap, Settings, Bot, Brain, Filter, Wand2, GitMerge, Clock, Wrench } from 'lucide-react';
 import { notify } from '../../utils/notification';
+import { useI18n } from '../../i18n';
 import type { BootstrapSession, BootstrapTask, ReviewState } from '../../hooks/useBootstrapSocket';
 
 /* ═══════════════════════════════════════════════════════
@@ -50,6 +51,7 @@ function getDimIcon(dimId: string) {
  * ═══════════════════════════════════════════════════════ */
 
 const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
+  const { t } = useI18n();
   const { status, meta } = task;
 
   const statusStyles: Record<string, string> = {
@@ -63,25 +65,25 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
     skeleton: (
       <span className="flex items-center gap-1 text-xs text-slate-400">
         <div className="w-2 h-2 rounded-full bg-slate-300" />
-        等待中
+        {t('bootstrap.statusLabels.skeleton')}
       </span>
     ),
     filling: (
       <span className="flex items-center gap-1 text-xs text-blue-600">
         <Loader2 className="w-3 h-3 animate-spin" />
-        填充中
+        {t('bootstrap.statusLabels.filling')}
       </span>
     ),
     completed: (
       <span className="flex items-center gap-1 text-xs text-emerald-600">
         <Check className="w-3 h-3" />
-        已完成
+        {t('bootstrap.statusLabels.completed')}
       </span>
     ),
     failed: (
       <span className="flex items-center gap-1 text-xs text-red-600">
         <X className="w-3 h-3" />
-        失败
+        {t('bootstrap.statusLabels.failed')}
       </span>
     ),
   };
@@ -116,7 +118,11 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
             <h3 className={`font-medium text-sm ${
               status === 'skeleton' ? 'text-slate-400' : 'text-slate-800'
             }`}>
-              {meta.label}
+              {(() => {
+                const key = `bootstrap.pipelineLabels.${meta.dimId}`;
+                const translated = t(key);
+                return translated !== key ? translated : meta.label;
+              })()}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               {meta.skillWorthy ? 'Skill' : 'Candidate'}
@@ -126,16 +132,16 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
                     const r = task.result as Record<string, unknown>;
                     const sourceCount = (r.sourceCount as number) ?? 0;
                     const extracted = (r.extracted as number) ?? 0;
-                    if (r.type === 'empty') return '✓ 无匹配内容';
+                    if (r.type === 'empty') return t('bootstrap.noMatch');
                     if (r.type === 'skill') {
-                      if (r.empty) return '✓ 无匹配内容';
+                      if (r.empty) return t('bootstrap.noMatch');
                       // dualOutput 维度同时有 Skill + Candidate
                       return extracted > 0
-                        ? `✓ ${sourceCount} 项特征 · ${extracted} 条候选`
-                        : `✓ ${sourceCount} 项特征`;
+                        ? t('bootstrap.featuresAndCandidates', { sourceCount, extracted })
+                        : t('bootstrap.featuresOnly', { sourceCount });
                     }
                     // candidate 类型
-                    return extracted > 0 ? `✓ ${extracted} 条候选` : '✓ 无匹配内容';
+                    return extracted > 0 ? t('bootstrap.candidatesOnly', { extracted }) : t('bootstrap.noMatch');
                   })()}
                 </span>
               )}
@@ -160,23 +166,24 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
  * ═══════════════════════════════════════════════════════ */
 
 const REVIEW_ROUNDS = [
-  { key: 'round1' as const, label: '资格审查', desc: '过滤误报 · 识别合并', icon: <Filter className="w-4 h-4" /> },
-  { key: 'round2' as const, label: '内容精炼', desc: 'AI 改写摘要 · 动态置信度', icon: <Wand2 className="w-4 h-4" /> },
-  { key: 'round3' as const, label: '去重 & 关系', desc: '语义去重 · 关系推断', icon: <GitMerge className="w-4 h-4" /> },
+  { key: 'round1' as const, labelKey: 'bootstrap.reviewRounds.round1Label', descKey: 'bootstrap.reviewRounds.round1Desc', icon: <Filter className="w-4 h-4" /> },
+  { key: 'round2' as const, labelKey: 'bootstrap.reviewRounds.round2Label', descKey: 'bootstrap.reviewRounds.round2Desc', icon: <Wand2 className="w-4 h-4" /> },
+  { key: 'round3' as const, labelKey: 'bootstrap.reviewRounds.round3Label', descKey: 'bootstrap.reviewRounds.round3Desc', icon: <GitMerge className="w-4 h-4" /> },
 ] as const;
 
 const ReviewPipelinePanel: React.FC<{ review: ReviewState }> = ({ review }) => {
+  const { t } = useI18n();
   if (review.activeRound === 0) return null;
 
   return (
     <div className="mt-5 border border-purple-200 rounded-xl bg-purple-50/50 p-4">
       <div className="flex items-center gap-2 mb-3">
         <Brain className="w-5 h-5 text-purple-600" />
-        <h3 className="text-sm font-semibold text-purple-800">AI 审查管线</h3>
+        <h3 className="text-sm font-semibold text-purple-800">{t('bootstrap.reviewPipeline')}</h3>
       </div>
 
       <div className="space-y-2.5">
-        {REVIEW_ROUNDS.map(({ key, label, desc, icon }) => {
+        {REVIEW_ROUNDS.map(({ key, labelKey, descKey, icon }) => {
           const round = review[key];
           const isActive = round.status === 'running';
           const isDone = round.status === 'completed';
@@ -203,14 +210,14 @@ const ReviewPipelinePanel: React.FC<{ review: ReviewState }> = ({ review }) => {
               {/* Label + detail */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className={`text-sm font-medium ${isIdle ? 'text-slate-400' : 'text-slate-800'}`}>{label}</span>
-                  <span className="text-xs text-slate-400">{desc}</span>
+                  <span className={`text-sm font-medium ${isIdle ? 'text-slate-400' : 'text-slate-800'}`}>{t(labelKey)}</span>
+                  <span className="text-xs text-slate-400">{t(descKey)}</span>
                 </div>
 
                 {/* Round-specific progress details */}
                 {key === 'round1' && isDone && (
                   <p className="text-xs text-emerald-600 mt-0.5">
-                    保留 {review.round1.kept ?? '?'} · 合并 {review.round1.merged ?? 0} · 丢弃 {review.round1.dropped ?? 0}
+                    {t('bootstrap.round1Done', { kept: review.round1.kept ?? '?', merged: review.round1.merged ?? 0, dropped: review.round1.dropped ?? 0 })}
                   </p>
                 )}
                 {key === 'round2' && isActive && typeof review.round2.progress === 'number' && (
@@ -221,17 +228,17 @@ const ReviewPipelinePanel: React.FC<{ review: ReviewState }> = ({ review }) => {
                         style={{ width: `${review.round2.progress}%` }}
                       />
                     </div>
-                    <p className="text-xs text-purple-600 mt-0.5">{review.round2.current ?? 0}/{review.round2.total ?? '?'} 条</p>
+                    <p className="text-xs text-purple-600 mt-0.5">{t('bootstrap.round2Progress', { current: review.round2.current ?? 0, total: review.round2.total ?? '?' })}</p>
                   </div>
                 )}
                 {key === 'round2' && isDone && (
                   <p className="text-xs text-emerald-600 mt-0.5">
-                    已精炼 {review.round2.refined ?? '?'}/{review.round2.total ?? '?'} 条
+                    {t('bootstrap.round2Done', { refined: review.round2.refined ?? '?', total: review.round2.total ?? '?' })}
                   </p>
                 )}
                 {key === 'round3' && isDone && (
                   <p className="text-xs text-emerald-600 mt-0.5">
-                    去重后 {review.round3.afterDedup ?? '?'} 条 · {review.round3.relationsFound ?? 0} 条关系
+                    {t('bootstrap.round3Done', { afterDedup: review.round3.afterDedup ?? '?', relationsFound: review.round3.relationsFound ?? 0 })}
                   </p>
                 )}
               </div>
@@ -281,6 +288,7 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
   reviewState,
   onDismiss,
 }) => {
+  const { t } = useI18n();
   const notifiedRef = useRef(false);
   const [now, setNow] = useState(Date.now());
 
@@ -296,9 +304,9 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
     if (isAllDone && session && !notifiedRef.current) {
       notifiedRef.current = true;
       const msg = session.failed > 0
-        ? `${session.completed}/${session.total} 成功，${session.failed} 失败`
-        : `${session.completed} 个维度全部填充成功`;
-      notify(msg, { title: '冷启动完成', type: session.failed > 0 ? 'error' : 'success' });
+        ? t('bootstrap.notifyPartial', { completed: session.completed, total: session.total, failed: session.failed })
+        : t('bootstrap.notifySuccess', { completed: session.completed });
+      notify(msg, { title: t('bootstrap.coldStartComplete'), type: session.failed > 0 ? 'error' : 'success' });
     }
   }, [isAllDone, session]);
 
@@ -319,8 +327,8 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
   const toolCalls = session.totalToolCalls ?? 0;
 
   const statusText =
-    session.status === 'completed' ? '全部完成' :
-    session.status === 'completed_with_errors' ? '完成（有错误）' :
+    session.status === 'completed' ? t('bootstrap.allCompleted') :
+    session.status === 'completed_with_errors' ? t('bootstrap.completedWithErrors') :
     null;
 
   return (
@@ -328,7 +336,7 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">冷启动进度</h2>
+          <h2 className="text-lg font-semibold text-slate-800">{t('bootstrap.title')}</h2>
           {statusText && <p className="text-sm text-slate-500 mt-0.5">{statusText}</p>}
         </div>
         {isAllDone && onDismiss && (
@@ -336,7 +344,7 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
             onClick={onDismiss}
             className="text-sm px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
           >
-            关闭
+            {t('bootstrap.close')}
           </button>
         )}
       </div>
@@ -345,20 +353,20 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
       <div className="flex flex-wrap items-center gap-4 mb-5 text-sm">
         <div className="flex items-center gap-1.5 text-slate-600">
           <Clock size={14} className="text-slate-400" />
-          <span>已用 <span className="font-medium text-slate-800">{formatDuration(elapsedMs)}</span></span>
+          <span>{t('bootstrap.elapsed')} <span className="font-medium text-slate-800">{formatDuration(elapsedMs)}</span></span>
         </div>
         {session.status === 'running' && remaining > 0 && estimatedRemainingMs > 0 && (
           <div className="flex items-center gap-1.5 text-slate-600">
             <Clock size={14} className="text-blue-400" />
-            <span>预计剩余 <span className="font-medium text-blue-600">{formatDuration(estimatedRemainingMs)}</span></span>
+            <span>{t('bootstrap.estimatedRemaining')} <span className="font-medium text-blue-600">{formatDuration(estimatedRemainingMs)}</span></span>
           </div>
         )}
         <div className="flex items-center gap-1.5 text-slate-600">
           <Wrench size={14} className="text-slate-400" />
-          <span>工具调用 <span className="font-medium text-slate-800">{toolCalls}</span></span>
+          <span>{t('bootstrap.toolCalls')} <span className="font-medium text-slate-800">{toolCalls}</span></span>
         </div>
         <div className="text-slate-400 text-xs">
-          {done}/{session.total} 维度
+          {t('bootstrap.dimensions', { done, total: session.total })}
         </div>
       </div>
 

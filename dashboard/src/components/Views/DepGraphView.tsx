@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Layers } from 'lucide-react';
+import { RefreshCw, Layers, Filter } from 'lucide-react';
 import api from '../../api';
+import { useI18n } from '../../i18n';
+import { useTheme } from '../../theme';
 import { ICON_SIZES } from '../../constants/icons';
 
 interface DepGraphNode {
@@ -11,6 +13,9 @@ interface DepGraphNode {
   packageSwift?: string;
   packageName?: string;
   targets?: string[];
+  fullPath?: string;
+  indirect?: boolean;
+  discovererId?: string;
 }
 
 interface DepGraphEdge {
@@ -112,11 +117,14 @@ function pyramidLayout(
 }
 
 const DepGraphView: React.FC = () => {
+  const { t } = useI18n();
+  const { isDark } = useTheme();
   const [data, setData] = useState<DepGraphData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [graphLevel, setGraphLevel] = useState<'package' | 'target'>('package');
+  const [nodeFilter, setNodeFilter] = useState<'all' | 'internal' | 'external'>('all');
 
   const fetchGraph = async () => {
   setLoading(true);
@@ -140,8 +148,20 @@ const DepGraphView: React.FC = () => {
   fetchGraph();
   }, [graphLevel]);
 
-  const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
-  const edges = Array.isArray(data?.edges) ? data.edges : [];
+  const allNodes = Array.isArray(data?.nodes) ? data.nodes : [];
+  const allEdges = Array.isArray(data?.edges) ? data.edges : [];
+
+  // 内部/外部筛选
+  const hasTypes = allNodes.some(n => n.type === 'internal' || n.type === 'external');
+  const nodes = useMemo(() => {
+    if (!hasTypes || nodeFilter === 'all') return allNodes;
+    if (nodeFilter === 'internal') return allNodes.filter(n => n.type !== 'external');
+    return allNodes.filter(n => n.type !== 'internal');
+  }, [allNodes, nodeFilter, hasTypes]);
+  const nodeIds = useMemo(() => new Set(nodes.map(n => n.id)), [nodes]);
+  const edges = useMemo(() => {
+    return allEdges.filter(e => nodeIds.has(e.from) || nodeIds.has(e.to));
+  }, [allEdges, nodeIds]);
 
   const { positions, tiers, tierOrder, tierYRanges } = useMemo(
   () => pyramidLayout(nodes, edges),
@@ -178,12 +198,18 @@ const DepGraphView: React.FC = () => {
   const maxY = Math.max(...[...positions.values()].map(p => p.y), 0);
   const svgH = Math.max(420, maxY + NODE_HEIGHT / 2 + PADDING + 20);
 
-  const tierColors = [
-  { bg: 'rgb(239 246 255)', border: 'rgb(147 197 253)', text: 'rgb(30 64 175)' },
-  { bg: 'rgb(240 253 244)', border: 'rgb(134 239 172)', text: 'rgb(22 101 52)' },
-  { bg: 'rgb(254 249 195)', border: 'rgb(253 224 71)', text: 'rgb(113 63 18)' },
-  { bg: 'rgb(254 243 199)', border: 'rgb(253 186 116)', text: 'rgb(154 52 18)' },
-  { bg: 'rgb(243 232 255)', border: 'rgb(216 180 254)', text: 'rgb(91 33 182)' },
+  const tierColors = isDark ? [
+    { bg: 'rgba(59, 130, 246, 0.14)', border: 'rgba(59, 130, 246, 0.40)', text: 'rgb(147 197 253)' },
+    { bg: 'rgba(34, 197, 94, 0.14)', border: 'rgba(34, 197, 94, 0.40)', text: 'rgb(134 239 172)' },
+    { bg: 'rgba(234, 179, 8, 0.14)', border: 'rgba(234, 179, 8, 0.40)', text: 'rgb(253 224 71)' },
+    { bg: 'rgba(249, 115, 22, 0.14)', border: 'rgba(249, 115, 22, 0.40)', text: 'rgb(253 186 116)' },
+    { bg: 'rgba(139, 92, 246, 0.14)', border: 'rgba(139, 92, 246, 0.40)', text: 'rgb(196 181 253)' },
+  ] : [
+    { bg: 'rgb(239 246 255)', border: 'rgb(147 197 253)', text: 'rgb(30 64 175)' },
+    { bg: 'rgb(240 253 244)', border: 'rgb(134 239 172)', text: 'rgb(22 101 52)' },
+    { bg: 'rgb(254 249 195)', border: 'rgb(253 224 71)', text: 'rgb(113 63 18)' },
+    { bg: 'rgb(254 243 199)', border: 'rgb(253 186 116)', text: 'rgb(154 52 18)' },
+    { bg: 'rgb(243 232 255)', border: 'rgb(216 180 254)', text: 'rgb(91 33 182)' },
   ];
   const getTierStyle = (tier: number) => tierColors[Math.min(tier, tierColors.length - 1)] ?? tierColors[0];
 
@@ -204,17 +230,17 @@ const DepGraphView: React.FC = () => {
       onClick={fetchGraph}
       className="mt-4 px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-800 font-medium text-sm transition-colors"
     >
-      重试
+      {t('depGraph.retry')}
     </button>
     </div>
   );
   }
 
-  if (!data || nodes.length === 0) {
+  if (!data || allNodes.length === 0) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-slate-600 shadow-sm">
-    <p className="font-medium text-slate-700">当前项目内未扫描到 SPM 包依赖关系。</p>
-    <p className="mt-2 text-sm">请确保项目根目录下存在 <code className="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800">Package.swift</code> 或子目录中的 SPM 包，然后点击「Refresh Project」或执行 <code className="bg-slate-200 px-1.5 py-0.5 rounded">asd spm-map</code> 刷新。</p>
+    <p className="font-medium text-slate-700">{t('depGraph.noDataTitle')}</p>
+    <p className="mt-2 text-sm">{t('depGraph.noDataDesc')}</p>
     </div>
   );
   }
@@ -228,9 +254,9 @@ const DepGraphView: React.FC = () => {
       <Layers className="text-blue-600" size={20} />
       </div>
       <div>
-      <h2 className="text-xl font-bold text-slate-800">项目依赖关系图</h2>
+      <h2 className="text-xl font-bold text-slate-800">{t('depGraph.title')}</h2>
       <p className="text-xs text-slate-400 mt-0.5">
-        SPM 包依赖结构可视化
+        {t('depGraph.visualization')}
         {data.projectRoot && (
         <span className="ml-1">· {data.projectRoot}</span>
         )}
@@ -238,6 +264,20 @@ const DepGraphView: React.FC = () => {
       </div>
     </div>
     <div className="flex items-center gap-2">
+      {hasTypes && (
+      <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden text-xs">
+        {(['all', 'internal', 'external'] as const).map((f) => (
+        <button
+          key={f}
+          type="button"
+          onClick={() => setNodeFilter(f)}
+          className={`px-3 py-1.5 font-medium transition-colors ${nodeFilter === f ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+        >
+          {f === 'all' ? t('depGraph.filterAll') : f === 'internal' ? t('depGraph.filterInternal') : t('depGraph.filterExternal')}
+        </button>
+        ))}
+      </div>
+      )}
       <button
       type="button"
       onClick={() => {
@@ -245,15 +285,15 @@ const DepGraphView: React.FC = () => {
       }}
       className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100"
       >
-      <RefreshCw size={14} /> 刷新
+      <RefreshCw size={14} /> {t('depGraph.refresh')}
       </button>
       <div className="flex items-center gap-3 text-xs">
       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
         <Layers size={14} className="text-slate-400" />
-        <span className="text-slate-500">包 <strong className="text-slate-700">{nodes.length}</strong></span>
+        <span className="text-slate-500">{t('depGraph.packages')} <strong className="text-slate-700">{nodes.length}</strong></span>
       </div>
       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
-        <span className="text-emerald-500">依赖</span>
+        <span className="text-emerald-500">{t('depGraph.dependencies')}</span>
         <strong className="text-emerald-700">{edges.length}</strong>
       </div>
       {data.generatedAt && (
@@ -268,8 +308,26 @@ const DepGraphView: React.FC = () => {
     {/* ── 内容区域 ── */}
     <div className="flex-1 overflow-y-auto pr-1 space-y-6">
 
+    {/* 图例 */}
+    {hasTypes && (
+      <div className="flex items-center gap-4 text-xs text-slate-500 px-1">
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block w-3 h-3 rounded border-2 border-slate-300 bg-white" /> {t('depGraph.projectRoot')}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block w-3 h-3 rounded border-2 border-green-400 bg-green-50" /> {t('depGraph.filterInternal')}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block w-3 h-3 rounded border-2 border-amber-400 bg-amber-50 border-dashed" /> {t('depGraph.filterExternal')}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block w-3 h-3 rounded border-2 border-amber-400 bg-amber-50 border-dashed opacity-50" /> {t('depGraph.labelIndirect')}
+      </div>
+      </div>
+    )}
+
     {/* 图区域：金字塔分层（不画连线），点击节点在浮窗显示依赖 */}
-    <div className="rounded-xl border border-slate-200 bg-slate-50/50 overflow-auto shadow-sm min-h-[480px] flex items-center justify-center relative">
+    <div className={`rounded-xl border overflow-auto shadow-sm min-h-[480px] flex items-center justify-center relative ${isDark ? 'border-slate-700 bg-[#13151c]' : 'border-slate-200 bg-slate-50/50'}`}>
     <svg
       width="100%"
       height={svgH}
@@ -297,12 +355,12 @@ const DepGraphView: React.FC = () => {
         rx={8}
         fill={style.bg}
         stroke={style.border}
-        strokeWidth="1"
-        opacity={0.6}
+        strokeWidth={isDark ? 1.5 : 1}
+        opacity={isDark ? 1 : 0.6}
         />
       );
       })}
-      {/* 节点：选中时依赖/被依赖高亮，无关置灰 */}
+      {/* 节点：选中时依赖/被依赖高亮，无关置灰；按 type 区分默认颜色 */}
       {nodes.map((node) => {
       const pos = positions.get(node.id);
       if (!pos) return null;
@@ -313,12 +371,34 @@ const DepGraphView: React.FC = () => {
       const isDependency = selectedNodeId ? (dependsOn.get(selectedNodeId) ?? []).includes(node.id) : false;
       const isDependent = selectedNodeId ? (dependedBy.get(selectedNodeId) ?? []).includes(node.id) : false;
       const isDimmed = selectedNodeId && !isSelected && !isDependency && !isDependent;
+
+      // 根据 node.type 确定默认配色
+      const typeStyle = (() => {
+        if (node.type === 'external') return isDark
+          ? { fill: 'rgba(234, 179, 8, 0.1)', stroke: 'rgb(202 138 4)', text: 'rgb(253 224 71)', badge: 'EXT' }
+          : { fill: 'rgb(254 252 232)', stroke: 'rgb(234 179 8)', text: 'rgb(113 63 18)', badge: 'EXT' };
+        if (node.type === 'internal') return isDark
+          ? { fill: 'rgba(34, 197, 94, 0.1)', stroke: 'rgb(22 163 74)', text: 'rgb(134 239 172)', badge: '' }
+          : { fill: 'rgb(240 253 244)', stroke: 'rgb(74 222 128)', text: 'rgb(22 101 52)', badge: '' };
+        return isDark
+          ? { fill: '#1e2433', stroke: baseStyle.border, text: baseStyle.text, badge: '' }
+          : { fill: 'white', stroke: baseStyle.border, text: baseStyle.text, badge: '' };
+      })();
+
       const nodeStyle = (() => {
-        if (!selectedNodeId) return { fill: 'white', stroke: baseStyle.border, text: baseStyle.text, strokeWidth: 2, opacity: 1 };
-        if (isSelected) return { fill: 'white', stroke: 'rgb(59 130 246)', text: 'rgb(30 64 175)', strokeWidth: 3, opacity: 1 };
-        if (isDependency) return { fill: 'rgb(240 253 244)', stroke: 'rgb(34 197 94)', text: 'rgb(22 101 52)', strokeWidth: 2, opacity: 1 };
-        if (isDependent) return { fill: 'rgb(245 243 255)', stroke: 'rgb(139 92 246)', text: 'rgb(91 33 182)', strokeWidth: 2, opacity: 1 };
-        return { fill: 'rgb(248 250 252)', stroke: 'rgb(203 213 225)', text: 'rgb(148 163 184)', strokeWidth: 1, opacity: 0.6 };
+        if (!selectedNodeId) return { fill: typeStyle.fill, stroke: typeStyle.stroke, text: typeStyle.text, strokeWidth: 2, opacity: node.indirect ? 0.55 : 1 };
+        if (isSelected) return isDark
+          ? { fill: '#283040', stroke: 'rgb(59 130 246)', text: 'rgb(147 197 253)', strokeWidth: 3, opacity: 1 }
+          : { fill: 'white', stroke: 'rgb(59 130 246)', text: 'rgb(30 64 175)', strokeWidth: 3, opacity: 1 };
+        if (isDependency) return isDark
+          ? { fill: 'rgba(34, 197, 94, 0.12)', stroke: 'rgb(34 197 94)', text: 'rgb(134 239 172)', strokeWidth: 2, opacity: 1 }
+          : { fill: 'rgb(240 253 244)', stroke: 'rgb(34 197 94)', text: 'rgb(22 101 52)', strokeWidth: 2, opacity: 1 };
+        if (isDependent) return isDark
+          ? { fill: 'rgba(139, 92, 246, 0.12)', stroke: 'rgb(139 92 246)', text: 'rgb(196 181 253)', strokeWidth: 2, opacity: 1 }
+          : { fill: 'rgb(245 243 255)', stroke: 'rgb(139 92 246)', text: 'rgb(91 33 182)', strokeWidth: 2, opacity: 1 };
+        return isDark
+          ? { fill: '#1a1b23', stroke: 'rgb(51 65 85)', text: 'rgb(100 116 139)', strokeWidth: 1, opacity: 0.6 }
+          : { fill: 'rgb(248 250 252)', stroke: 'rgb(203 213 225)', text: 'rgb(148 163 184)', strokeWidth: 1, opacity: 0.6 };
       })();
       return (
         <g
@@ -337,10 +417,11 @@ const DepGraphView: React.FC = () => {
           stroke={nodeStyle.stroke}
           strokeWidth={nodeStyle.strokeWidth}
           filter={isDimmed ? undefined : 'url(#nodeShadow)'}
+          strokeDasharray={node.type === 'external' ? '4 2' : undefined}
         />
         <text
           x={pos.x}
-          y={pos.y}
+          y={pos.y + (typeStyle.badge ? -2 : 0)}
           textAnchor="middle"
           dominantBaseline="middle"
           fontSize="12"
@@ -350,6 +431,21 @@ const DepGraphView: React.FC = () => {
         >
           {label}
         </text>
+        {typeStyle.badge && (
+          <text
+          x={pos.x}
+          y={pos.y + 12}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize="8"
+          fontWeight="500"
+          fill={typeStyle.text}
+          opacity={0.6}
+          pointerEvents="none"
+          >
+          {typeStyle.badge}
+          </text>
+        )}
         </g>
       );
       })}
@@ -359,7 +455,7 @@ const DepGraphView: React.FC = () => {
       <div
       className="absolute top-4 right-4 w-72 rounded-xl border border-slate-200 bg-white shadow-lg z-10 p-4"
       role="dialog"
-      aria-label="依赖关系"
+      aria-label={t('depGraph.dependencies')}
       >
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
         <span className="font-bold text-slate-800">{selectedNodeId}</span>
@@ -367,17 +463,17 @@ const DepGraphView: React.FC = () => {
         type="button"
         onClick={() => setSelectedNodeId(null)}
         className="text-slate-400 hover:text-slate-600 text-lg leading-none"
-        aria-label="关闭"
+        aria-label={t('depGraph.close')}
         >
         ×
         </button>
       </div>
       <div className="space-y-3 text-sm">
         <div>
-        <div className="font-semibold text-slate-600 mb-1">依赖</div>
+        <div className="font-semibold text-slate-600 mb-1">{t('depGraph.dependencies')}</div>
         <ul className="text-slate-700 space-y-0.5">
           {(dependsOn.get(selectedNodeId) ?? []).length === 0 ? (
-          <li className="text-slate-400">无</li>
+          <li className="text-slate-400">{t('depGraph.none')}</li>
           ) : (
           (dependsOn.get(selectedNodeId) ?? []).map((id) => (
             <li key={id}>→ {id}</li>
@@ -386,10 +482,10 @@ const DepGraphView: React.FC = () => {
         </ul>
         </div>
         <div>
-        <div className="font-semibold text-slate-600 mb-1">被依赖</div>
+        <div className="font-semibold text-slate-600 mb-1">{t('depGraph.dependents')}</div>
         <ul className="text-slate-700 space-y-0.5">
           {(dependedBy.get(selectedNodeId) ?? []).length === 0 ? (
-          <li className="text-slate-400">无</li>
+          <li className="text-slate-400">{t('depGraph.none')}</li>
           ) : (
           (dependedBy.get(selectedNodeId) ?? []).map((id) => (
             <li key={id}>← {id}</li>
@@ -405,16 +501,28 @@ const DepGraphView: React.FC = () => {
     {/* 包列表 / 依赖关系小图（列表） */}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold text-slate-800 mb-3 pb-2 border-b border-slate-100">包列表 ({nodes.length})</h3>
+      <h3 className="text-sm font-bold text-slate-800 mb-3 pb-2 border-b border-slate-100">{t('depGraph.packageList')} ({nodes.length})</h3>
       <ul className="text-sm space-y-3 max-h-[280px] overflow-y-auto pr-1">
       {nodes.map((n) => (
         <li key={n.id} className="pb-3 border-b border-slate-100 last:border-0 last:pb-0">
         <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="font-semibold text-slate-800">{n.id}</span>
+          <span className="font-semibold text-slate-800">{n.label || n.id}</span>
+          {n.type === 'external' && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-medium">{t('depGraph.labelExternal')}</span>
+          )}
+          {n.type === 'internal' && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">{t('depGraph.labelInternal')}</span>
+          )}
+          {n.indirect && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 border border-slate-200 font-medium">{t('depGraph.labelIndirect')}</span>
+          )}
           {n.packageDir && (
           <span className="text-slate-500 text-xs">· {n.packageDir}</span>
           )}
         </div>
+        {n.fullPath && (
+          <div className="mt-1 text-slate-400 text-xs truncate">{n.fullPath}</div>
+        )}
         {n.targets && n.targets.length > 0 && (
           <div className="mt-1.5 text-slate-500 text-xs pl-0">
           Targets: <span className="text-slate-600">{n.targets.join(', ')}</span>
@@ -425,8 +533,8 @@ const DepGraphView: React.FC = () => {
       </ul>
     </div>
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold text-slate-800 mb-3 pb-2 border-b border-slate-100">依赖关系（小图）({edges.length})</h3>
-      <p className="text-xs text-slate-500 mb-2">主图不显示连线，点击节点可在浮窗查看该包依赖；此处列出全部 From → To。</p>
+      <h3 className="text-sm font-bold text-slate-800 mb-3 pb-2 border-b border-slate-100">{t('depGraph.depRelations')} ({edges.length})</h3>
+      <p className="text-xs text-slate-500 mb-2">{t('depGraph.depRelationsDesc')}</p>
       <ul className="text-sm space-y-2 max-h-[280px] overflow-y-auto pr-1">
       {edges.map((e, i) => (
         <li key={`${e.from}-${e.to}-${i}`} className="flex items-center gap-2 text-slate-700">
@@ -439,7 +547,7 @@ const DepGraphView: React.FC = () => {
     </div>
     {graphLevel === 'target' && (
     <p className="text-xs text-slate-500 mt-2">
-      Target 级节点格式：<span className="font-mono">Package::Target</span>
+      {t('depGraph.targetHint')}<span className="font-mono">Package::Target</span>
     </p>
     )}
     </div>

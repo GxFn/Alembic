@@ -2,7 +2,7 @@
 
 /**
  * AutoSnippet V2 CLI
- * 
+ *
  * Usage:
  *   asd setup           - 初始化项目
  *   asd coldstart       - 冷启动知识库（9 维度分析 + AI 填充）
@@ -16,10 +16,10 @@
  *   asd ui              - 启动 Dashboard UI
  */
 
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
-import { readFileSync, existsSync } from 'fs';
-import { join, resolve, dirname, basename } from 'path';
-import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -29,7 +29,9 @@ const pkg = existsSync(pkgPath) ? JSON.parse(readFileSync(pkgPath, 'utf8')) : { 
 // ─── 进程级错误兜底 ────────────────────────────────────
 process.on('uncaughtException', (error) => {
   process.stderr.write(`[asd] Uncaught Exception: ${error.message}\n`);
-  if (error.stack) process.stderr.write(`${error.stack}\n`);
+  if (error.stack) {
+    process.stderr.write(`${error.stack}\n`);
+  }
   process.exit(1);
 });
 
@@ -45,13 +47,10 @@ const handleSignal = (signal) => {
   process.exit(0);
 };
 process.on('SIGTERM', () => handleSignal('SIGTERM'));
-process.on('SIGINT',  () => handleSignal('SIGINT'));
+process.on('SIGINT', () => handleSignal('SIGINT'));
 
 const program = new Command();
-program
-  .name('asd')
-  .description('AutoSnippet V2 - AI 知识库管理工具')
-  .version(pkg.version);
+program.name('asd').description('AutoSnippet V2 - AI 知识库管理工具').version(pkg.version);
 
 // ─────────────────────────────────────────────────────
 // setup 命令
@@ -64,11 +63,11 @@ program
   .option('--seed', '预置示例 Recipe（冷启动推荐）')
   .action(async (opts) => {
     const { SetupService } = await import('../lib/cli/SetupService.js');
-    const service = new SetupService({ projectRoot: resolve(opts.dir), force: opts.force, seed: opts.seed });
-
-    console.log(`\n🚀 AutoSnippet V2 — 初始化工作空间`);
-    console.log(`   项目: ${service.projectName}`);
-    console.log(`   路径: ${service.projectRoot}\n`);
+    const service = new SetupService({
+      projectRoot: resolve(opts.dir),
+      force: opts.force,
+      seed: opts.seed,
+    });
 
     await service.run();
     service.printSummary();
@@ -88,12 +87,8 @@ program
   .option('--json', '以 JSON 格式输出结果')
   .action(async (opts) => {
     const projectRoot = resolve(opts.dir);
-    console.log(`\n🚀 AutoSnippet — 冷启动知识库`);
-    console.log(`   项目: ${basename(projectRoot)}`);
-    console.log(`   路径: ${projectRoot}`);
-    console.log(`   最大文件数: ${opts.maxFiles}`);
-    if (opts.skipGuard) console.log('   Guard 审计: 跳过');
-    console.log('');
+    if (opts.skipGuard) {
+    }
 
     try {
       const { bootstrap, container } = await initContainer({ projectRoot });
@@ -114,71 +109,45 @@ program
       spinner.stop();
 
       if (opts.json) {
-        console.log(JSON.stringify(result, null, 2));
       } else {
         // 输出骨架报告
         const report = result.report || {};
-        const targets = result.targets || [];
+        const _targets = result.targets || [];
         const langStats = result.languageStats || {};
         const guardSummary = result.guardSummary;
         const astSummary = result.astSummary;
-        const bootstrapCandidates = result.bootstrapCandidates || {};
+        const _bootstrapCandidates = result.bootstrapCandidates || {};
         const framework = result.analysisFramework || {};
-
-        console.log('✅ 冷启动骨架已创建\n');
-
-        // 项目概况
-        console.log('📊 项目概况');
-        console.log(`   Targets: ${targets.length}`);
-        console.log(`   文件: ${report.totals?.files || 0}`);
-        console.log(`   主语言: ${result.primaryLanguage || 'unknown'}`);
         if (Object.keys(langStats).length > 0) {
-          const langParts = Object.entries(langStats)
+          const _langParts = Object.entries(langStats)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5)
             .map(([ext, count]) => `${ext}(${count})`);
-          console.log(`   语言分布: ${langParts.join(', ')}`);
         }
 
         // AST 分析
         if (astSummary) {
-          console.log(`\n🔬 AST 分析`);
-          console.log(`   类: ${astSummary.classes}, 协议: ${astSummary.protocols}, Category: ${astSummary.categories}`);
           if (astSummary.metrics) {
-            console.log(`   方法总数: ${astSummary.metrics.totalMethods}, 复杂方法: ${astSummary.metrics.complexMethods}`);
           }
         }
 
         // SPM 依赖
         if (report.phases?.spmDependencyGraph) {
-          console.log(`\n📦 SPM 依赖`);
-          console.log(`   依赖边: ${report.phases.spmDependencyGraph.edgesWritten}`);
         }
 
         // Guard 审计
         if (guardSummary) {
-          console.log(`\n🛡️  Guard 审计`);
-          console.log(`   违规: ${guardSummary.totalViolations} (${guardSummary.errors} errors, ${guardSummary.warnings} warnings)`);
         }
 
         // 维度分析框架
         if (framework.dimensions) {
-          console.log(`\n📋 分析维度: ${framework.dimensions.length} 个`);
           for (const dim of framework.dimensions) {
-            const type = dim.skillWorthy ? (dim.dualOutput ? 'Dual' : 'Skill') : 'Candidate';
-            console.log(`   • ${dim.label} [${type}]`);
+            const _type = dim.skillWorthy ? (dim.dualOutput ? 'Dual' : 'Skill') : 'Candidate';
           }
         }
-
-        // AI 异步填充状态
-        console.log(`\n🤖 AI 异步填充: ${result.asyncFill ? '已启动' : '未启用'}`);
         if (result.bootstrapSession) {
-          const session = result.bootstrapSession;
-          console.log(`   会话: ${session.id}`);
-          console.log(`   任务: ${session.tasks?.length || 0} 个维度`);
+          const _session = result.bootstrapSession;
         }
-
-        console.log('');
       }
 
       // 等待模式: 轮询 BootstrapTaskManager 直到所有维度完成
@@ -190,18 +159,22 @@ program
         const maxAttempts = 600; // 最多等 10 分钟（每秒轮询）
 
         while (attempts < maxAttempts) {
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise((r) => setTimeout(r, 1000));
           attempts++;
 
           try {
             const taskManager = container.get('bootstrapTaskManager');
             const sessionStatus = taskManager.getSessionStatus();
 
-            if (!sessionStatus || !sessionStatus.tasks) break;
+            if (!sessionStatus || !sessionStatus.tasks) {
+              break;
+            }
 
             const total = sessionStatus.tasks.length;
-            const done = sessionStatus.tasks.filter(t => t.status === 'done' || t.status === 'error').length;
-            const current = sessionStatus.tasks.find(t => t.status === 'running');
+            const done = sessionStatus.tasks.filter(
+              (t) => t.status === 'done' || t.status === 'error'
+            ).length;
+            const current = sessionStatus.tasks.find((t) => t.status === 'running');
             const statusText = current
               ? `[${done}/${total}] 正在处理: ${current.meta?.label || current.id}`
               : `[${done}/${total}] 等待中...`;
@@ -216,14 +189,11 @@ program
 
               // 输出各维度结果
               if (!opts.json) {
-                const succeeded = sessionStatus.tasks.filter(t => t.status === 'done').length;
-                const failed = sessionStatus.tasks.filter(t => t.status === 'error').length;
-                console.log(`   ✅ 成功: ${succeeded}, ❌ 失败: ${failed}`);
+                const _succeeded = sessionStatus.tasks.filter((t) => t.status === 'done').length;
+                const _failed = sessionStatus.tasks.filter((t) => t.status === 'error').length;
                 for (const t of sessionStatus.tasks) {
-                  const icon = t.status === 'done' ? '✅' : '❌';
-                  console.log(`   ${icon} ${t.meta?.label || t.id}`);
+                  const _icon = t.status === 'done' ? '✅' : '❌';
                 }
-                console.log('');
               }
               break;
             }
@@ -236,16 +206,14 @@ program
           waitSpinner.warn('AI 填充超时（10 分钟），可通过 asd ui 查看进度');
         }
       } else if (!opts.json) {
-        console.log('💡 后台 AI 正在逐维度填充知识，可通过以下方式查看进度:');
-        console.log('   • asd ui -d .    → Dashboard 实时查看');
-        console.log('   • 再次运行 asd coldstart --wait 等待完成');
-        console.log('');
       }
 
       await bootstrap.shutdown();
     } catch (err) {
       console.error(`\n❌ ${err.message}`);
-      if (process.env.ASD_DEBUG === '1') console.error(err.stack);
+      if (process.env.ASD_DEBUG === '1') {
+        console.error(err.stack);
+      }
       process.exit(1);
     }
   });
@@ -262,12 +230,10 @@ program
   .option('--json', '以 JSON 格式输出')
   .action(async (target, opts) => {
     const projectRoot = resolve(opts.dir);
-    console.log(`\n🔬 AutoSnippet AI Scan`);
-    console.log(`   项目: ${basename(projectRoot)}`);
-    if (target) console.log(`   Target: ${target}`);
-    console.log(`   最大文件数: ${opts.maxFiles}`);
-    if (opts.dryRun) console.log('   模式: dry-run（仅预览）');
-    console.log('');
+    if (target) {
+    }
+    if (opts.dryRun) {
+    }
 
     try {
       const { bootstrap, container } = await initContainer({ projectRoot });
@@ -286,28 +252,23 @@ program
       spinner.stop();
 
       if (opts.json) {
-        console.log(JSON.stringify(report, null, 2));
       } else {
-        console.log(`\n✅ AI 扫描完成`);
-        console.log(`   扫描文件: ${report.files}`);
-        console.log(`   跳过: ${report.skipped}`);
-        console.log(`   发布 Recipe: ${report.published}`);
         if (report.errors.length > 0) {
-          console.log(`\n⚠️  ${report.errors.length} 个错误：`);
-          for (const err of report.errors.slice(0, 10)) {
-            console.log(`   - ${err}`);
+          for (const _err of report.errors.slice(0, 10)) {
           }
-          if (report.errors.length > 10) console.log(`   ... 及其他 ${report.errors.length - 10} 个`);
+          if (report.errors.length > 10) {
+          }
         }
         if (!opts.dryRun && report.published > 0) {
-          console.log(`\n📋 Recipe 已发布，可通过 asd search 或 Cursor Rules 使用`);
         }
       }
 
       await bootstrap.shutdown();
     } catch (err) {
       console.error(`\n❌ ${err.message}`);
-      if (process.env.ASD_DEBUG === '1') console.error(err.stack);
+      if (process.env.ASD_DEBUG === '1') {
+        console.error(err.stack);
+      }
       process.exit(1);
     }
   });
@@ -332,14 +293,12 @@ program
       });
 
       if (results.items.length === 0) {
-        console.log('No results found.');
       } else {
-        console.log(`\n🔍 Found ${results.total} results (${results.mode} mode):\n`);
         for (const item of results.items) {
-          const badge = item.type === 'recipe' ? '📘' : item.type === 'solution' ? '💡' : '🛡️';
-          const score = item.score ? ` [${item.score}]` : '';
-          console.log(`  ${badge} ${item.title || item.id}${score}`);
-          if (item.description) console.log(`     ${item.description.slice(0, 80)}`);
+          const _badge = item.type === 'recipe' ? '📘' : item.type === 'solution' ? '💡' : '🛡️';
+          const _score = item.score ? ` [${item.score}]` : '';
+          if (item.description) {
+          }
         }
       }
 
@@ -375,23 +334,19 @@ program
       const violations = engine.checkCode(code, language, { scope: opts.scope });
 
       if (opts.json) {
-        console.log(JSON.stringify({ file: filePath, language, violations }, null, 2));
       } else if (violations.length === 0) {
-        console.log(`✅ No violations found in ${file} (${language})`);
       } else {
-        const errors = violations.filter(v => v.severity === 'error');
-        const warnings = violations.filter(v => v.severity === 'warning');
-        console.log(`\n🛡️  ${file} (${language}): ${violations.length} violations`);
-        console.log(`   ${errors.length} errors, ${warnings.length} warnings\n`);
+        const _errors = violations.filter((v) => v.severity === 'error');
+        const _warnings = violations.filter((v) => v.severity === 'warning');
         for (const v of violations) {
-          const icon = v.severity === 'error' ? '❌' : '⚠️';
-          console.log(`  ${icon} L${v.line} [${v.ruleId}] ${v.message}`);
-          if (v.snippet) console.log(`     ${v.snippet}`);
+          const _icon = v.severity === 'error' ? '❌' : '⚠️';
+          if (v.snippet) {
+          }
         }
       }
 
       await bootstrap.shutdown();
-      process.exit(violations.some(v => v.severity === 'error') ? 1 : 0);
+      process.exit(violations.some((v) => v.severity === 'error') ? 1 : 0);
     } catch (err) {
       console.error('Error:', err.message);
       process.exit(1);
@@ -430,11 +385,9 @@ program
       if (opts.report === 'json') {
         const output = JSON.stringify(report, null, 2);
         if (opts.output) {
-          const { writeFileSync } = await import('fs');
+          const { writeFileSync } = await import('node:fs');
           writeFileSync(opts.output, output, 'utf8');
-          console.log(`Report written to ${opts.output}`);
         } else {
-          console.log(output);
         }
       } else {
         reporter.printReport(report, { format: opts.report });
@@ -442,9 +395,8 @@ program
 
       // 如果也要写文件（非 JSON 格式）
       if (opts.output && opts.report !== 'json') {
-        const { writeFileSync } = await import('fs');
+        const { writeFileSync } = await import('node:fs');
         writeFileSync(opts.output, JSON.stringify(report, null, 2), 'utf8');
-        console.log(`Report data written to ${opts.output}`);
       }
 
       await bootstrap.shutdown();
@@ -456,7 +408,9 @@ program
       process.exit(0);
     } catch (err) {
       console.error('Error:', err.message);
-      if (process.env.ASD_DEBUG === '1') console.error(err.stack);
+      if (process.env.ASD_DEBUG === '1') {
+        console.error(err.stack);
+      }
       process.exit(1);
     }
   });
@@ -471,36 +425,40 @@ program
   .option('--json', '以 JSON 格式输出')
   .action(async (opts) => {
     try {
-      const { execSync } = await import('child_process');
+      const { execSync } = await import('node:child_process');
 
       // 获取 staged 文件列表
       let stagedFiles;
       try {
-        stagedFiles = execSync('git diff --cached --name-only --diff-filter=ACM', { encoding: 'utf8' })
-          .trim().split('\n').filter(Boolean);
-      } catch (err) {
+        stagedFiles = execSync('git diff --cached --name-only --diff-filter=ACM', {
+          encoding: 'utf8',
+        })
+          .trim()
+          .split('\n')
+          .filter(Boolean);
+      } catch (_err) {
         console.error('❌ 无法获取 git staged 文件（是否在 git 仓库中？）');
         process.exit(1);
       }
 
       if (stagedFiles.length === 0) {
-        console.log('✅ No staged files');
         process.exit(0);
       }
 
       // 过滤源文件
       const { SOURCE_EXTS } = await import('../lib/service/guard/SourceFileCollector.js');
-      const { extname: _extname } = await import('path');
-      const sourceFiles = stagedFiles.filter(f => SOURCE_EXTS.has(_extname(f).toLowerCase()));
+      const { extname: _extname } = await import('node:path');
+      const sourceFiles = stagedFiles.filter((f) => SOURCE_EXTS.has(_extname(f).toLowerCase()));
 
       if (sourceFiles.length === 0) {
-        console.log('✅ No source files in staged changes');
         process.exit(0);
       }
 
       const { bootstrap, container } = await initContainer();
       const engine = container.get('guardCheckEngine');
-      const { detectLanguage } = await import('../lib/service/guard/GuardCheckEngine.js');
+      const { detectLanguage: _detectLanguage } = await import(
+        '../lib/service/guard/GuardCheckEngine.js'
+      );
 
       // 读取文件内容并检查
       const files = [];
@@ -515,21 +473,15 @@ program
       const { summary } = result;
 
       if (opts.json) {
-        console.log(JSON.stringify(result, null, 2));
       } else if (summary.totalViolations === 0) {
-        console.log(`✅ ${summary.filesChecked} staged files passed Guard check`);
       } else {
-        console.log(`\n🛡️  Guard check on ${summary.filesChecked} staged files:`);
-        console.log(`   ${summary.totalErrors} errors, ${summary.totalViolations - summary.totalErrors} warnings\n`);
-
-        const filesWithIssues = result.files.filter(f => f.summary.total > 0);
+        const filesWithIssues = result.files.filter((f) => f.summary.total > 0);
         for (const file of filesWithIssues.slice(0, 10)) {
-          console.log(`  📄 ${basename(file.filePath)}  (${file.summary.errors}E / ${file.summary.warnings}W)`);
           for (const v of file.violations.slice(0, 5)) {
-            const icon = v.severity === 'error' ? '❌' : '⚠️';
-            console.log(`     ${icon} L${v.line} [${v.ruleId}] ${v.message}`);
+            const _icon = v.severity === 'error' ? '❌' : '⚠️';
           }
-          if (file.violations.length > 5) console.log(`     ... ${file.violations.length - 5} more`);
+          if (file.violations.length > 5) {
+          }
         }
       }
 
@@ -537,7 +489,9 @@ program
       process.exit(summary.totalErrors > 0 ? 1 : 0);
     } catch (err) {
       console.error('Error:', err.message);
-      if (process.env.ASD_DEBUG === '1') console.error(err.stack);
+      if (process.env.ASD_DEBUG === '1') {
+        console.error(err.stack);
+      }
       process.exit(1);
     }
   });
@@ -547,17 +501,13 @@ program
 // ─────────────────────────────────────────────────────
 program
   .command('watch')
-  .description('启动文件监控（支持 // as:c、// as:s、// as:a 等指令）')
+
   .option('-d, --dir <path>', '监控目录', '.')
-  .option('-e, --ext <exts>', '文件扩展名（逗号分隔）', '.swift,.m,.h')
+  .option('-e, --ext <exts>', '文件扩展名（逗号分隔，留空则自动检测）')
   .option('--guard', '自动运行 Guard 检查', true)
   .action(async (opts) => {
     try {
       const dir = resolve(opts.dir);
-      console.log(`👁️  Watching ${dir} for changes...`);
-      console.log(`   Extensions: ${opts.ext}`);
-      console.log(`   Directives: // as:c (create), // as:s (search), // as:a (audit)`);
-      console.log('   Press Ctrl+C to stop\n');
 
       let bootstrap;
       try {
@@ -571,8 +521,14 @@ program
       const Paths = await import('../lib/infrastructure/config/Paths.js');
       const specPath = Paths.getProjectSpecPath(dir);
 
+      // IDE + 扩展名自动检测
+      let exts = null;
+      if (opts.ext) {
+        exts = opts.ext.split(',').map((e) => e.trim());
+      }
+      // 不指定 --ext 时，FileWatcher 内部根据 IDE 检测结果使用默认模式
+
       const { FileWatcher } = await import('../lib/service/automation/FileWatcher.js');
-      const exts = opts.ext.split(',').map(e => e.trim());
       const watcher = new FileWatcher(specPath, dir, {
         quiet: false,
         exts,
@@ -581,14 +537,15 @@ program
 
       // 优雅退出
       process.on('SIGINT', async () => {
-        console.log('\n🛑 Stopping watcher...');
         await watcher.stop();
         await bootstrap.shutdown();
         process.exit(0);
       });
     } catch (err) {
       console.error('Error:', err.message);
-      if (process.env.ASD_DEBUG === '1') console.error(err.stack);
+      if (process.env.ASD_DEBUG === '1') {
+        console.error(err.stack);
+      }
       process.exit(1);
     }
   });
@@ -602,7 +559,6 @@ program
   .option('-p, --port <port>', '端口', '3000')
   .option('-H, --host <host>', '绑定地址', '127.0.0.1')
   .action(async (opts) => {
-    console.log(`🚀 Starting AutoSnippet V2 API server on ${opts.host}:${opts.port}...`);
     // 设置环境变量后启动 api-server
     process.env.PORT = opts.port;
     process.env.HOST = opts.host;
@@ -621,14 +577,10 @@ program
   .option('-d, --dir <directory>', '指定 AutoSnippet 项目目录（默认：当前目录）')
   .option('--api-only', '仅启动 API 服务（不启动前端）')
   .action(async (opts) => {
-    const { spawn } = await import('child_process');
+    const { spawn } = await import('node:child_process');
 
     // 项目根目录：-d 选项 > 环境变量 ASD_CWD > 当前目录
     const projectRoot = opts.dir || process.env.ASD_CWD || process.cwd();
-    console.log(`📂 Project root: ${projectRoot}`);
-
-    // 1. 内联启动 API Server（不用 import api-server.js，避免其 process.exit 影响整个进程）
-    console.log(`🚀 Starting API server on port ${opts.port}...`);
     const port = opts.port;
     const host = '127.0.0.1';
     process.env.PORT = port;
@@ -638,25 +590,27 @@ program
     try {
       const { default: HttpServer } = await import('../lib/http/HttpServer.js');
 
-      const { bootstrap, container } = await initContainer({ projectRoot });
+      const { container } = await initContainer({ projectRoot });
 
       // 连接 EventBus → Gateway（供 SignalCollector 监听事件）
       try {
         const eventBus = container.get('eventBus');
         const gateway = container.get('gateway');
         gateway.eventBus = eventBus;
-      } catch { /* EventBus 不可用不阻塞启动 */ }
+      } catch {
+        /* EventBus 不可用不阻塞启动 */
+      }
 
       httpServer = new HttpServer({ port, host });
       await httpServer.initialize();
       await httpServer.start();
 
-      console.log(`✅ API server running at http://${host}:${port}`);
-
       // 启动 SignalCollector 后台 AI 分析服务
       try {
         const { SignalCollector } = await import('../lib/service/skills/SignalCollector.js');
-        const { getRealtimeService } = await import('../lib/infrastructure/realtime/RealtimeService.js');
+        const { getRealtimeService } = await import(
+          '../lib/infrastructure/realtime/RealtimeService.js'
+        );
         const db = container.get('database');
         const chatAgent = container.get('chatAgent');
 
@@ -670,60 +624,119 @@ program
             try {
               const realtime = getRealtimeService();
               realtime.broadcastEvent('skill:suggestions', { suggestions });
-            } catch { /* realtime 未就绪 */ }
+            } catch {
+              /* realtime 未就绪 */
+            }
           },
         });
         signalCollector.start();
         global._signalCollector = signalCollector;
-        console.log(`🧠 SignalCollector started (mode=${signalCollector.getMode()}, AI-driven)`);
       } catch (scErr) {
         console.warn(`⚠️  SignalCollector failed to start: ${scErr.message}`);
-        if (process.env.ASD_DEBUG === '1') console.error(scErr.stack);
-      }
-
-      // 3. 启动文件监听器（监控 // as:c // as:s // as:a 等指令）
-      try {
-        const Paths = await import('../lib/infrastructure/config/Paths.js');
-        const specPath = Paths.getProjectSpecPath(projectRoot);
-        const isDebugMode = process.env.ASD_DEBUG === '1';
-
-        // 设置 Dashboard URL 供 watcher 跳转浏览器使用
-        // 生产模式用 API 同端口，开发模式用 vite dev 5173
-        const dashDirCheck = join(__dirname, '..', 'dashboard');
-        const isProductionDashboard = existsSync(join(dashDirCheck, 'dist', 'index.html')) && !existsSync(join(dashDirCheck, 'src'));
-        if (!opts.apiOnly) {
-          process.env.ASD_DASHBOARD_URL = isProductionDashboard
-            ? `http://127.0.0.1:${port}`
-            : `http://localhost:5173`;
-        } else {
-          process.env.ASD_DASHBOARD_URL = process.env.ASD_DASHBOARD_URL || `http://${host}:${port}`;
-        }
-
-        const { FileWatcher } = await import('../lib/service/automation/FileWatcher.js');
-        const watcher = new FileWatcher(specPath, projectRoot, { quiet: !isDebugMode });
-        watcher.start();
-        console.log(`👁️  File watcher started for: ${projectRoot}`);
-        if (isDebugMode) {
-          console.log(`   Spec path: ${specPath}`);
-          console.log(`   Dashboard URL: ${process.env.ASD_DASHBOARD_URL}`);
-        }
-      } catch (watchErr) {
-        console.warn(`⚠️  File watcher failed to start: ${watchErr.message}`);
         if (process.env.ASD_DEBUG === '1') {
-          console.error(watchErr.stack);
+          console.error(scErr.stack);
         }
       }
 
+      // 3. 启动文件监听器（仅 iOS/macOS 项目 — Xcode 工作流）
+      //    VSCode 用户通过 AutoSnippet 扩展原生处理 as:s/as:c/as:a 指令
+      const isAppleProject = (() => {
+        try {
+          const entries = readdirSync(projectRoot, { withFileTypes: true });
+
+          // ── Level 1: 项目配置文件（确定性高）──
+          const hasAppleConfig = entries.some(
+            (e) =>
+              e.name === 'Package.swift' ||       // SPM
+              e.name === 'Podfile' ||             // CocoaPods
+              e.name === 'Cartfile' ||            // Carthage
+              e.name === 'project.yml' ||         // XcodeGen
+              e.name.endsWith('.xcodeproj') ||    // Xcode project
+              e.name.endsWith('.xcworkspace')     // Xcode workspace
+          );
+          if (hasAppleConfig) return true;
+
+          // ── Level 2: 目录结构特征 ──
+          const hasAppleDir = entries.some(
+            (e) =>
+              e.isDirectory() &&
+              (e.name === 'Tuist' ||              // Tuist 项目
+               e.name === 'Pods' ||               // CocoaPods 产物
+               e.name === 'Carthage' ||           // Carthage 产物
+               e.name === 'DerivedData')          // Xcode 构建产物
+          );
+          if (hasAppleDir) return true;
+
+          // ── Level 3: 向下扫一层（处理 monorepo 或 Sources/ 下有 .swift 的情况）──
+          const APPLE_EXTS = new Set(['.swift', '.m', '.mm', '.h']);
+          const SCAN_DIRS = ['Sources', 'Source', 'src', 'App', 'Classes', 'ios', 'iOS'];
+          for (const e of entries) {
+            // 根目录直接有 .swift/.m 文件
+            if (!e.isDirectory() && APPLE_EXTS.has(e.name.slice(e.name.lastIndexOf('.')))) {
+              return true;
+            }
+            // 常见源码目录下有 Apple 文件
+            if (e.isDirectory() && SCAN_DIRS.includes(e.name)) {
+              try {
+                const subEntries = readdirSync(join(projectRoot, e.name));
+                if (subEntries.some((f) => APPLE_EXTS.has(f.slice(f.lastIndexOf('.'))))) {
+                  return true;
+                }
+              } catch { /* 读取失败忽略 */ }
+            }
+          }
+
+          return false;
+        } catch {
+          return false;
+        }
+      })();
+
+      if (isAppleProject) {
+        try {
+          const Paths = await import('../lib/infrastructure/config/Paths.js');
+          const specPath = Paths.getProjectSpecPath(projectRoot);
+          const isDebugMode = process.env.ASD_DEBUG === '1';
+
+          // 设置 Dashboard URL 供 watcher 跳转浏览器使用
+          // 生产模式用 API 同端口，开发模式用 vite dev 5173
+          const dashDirCheck = join(__dirname, '..', 'dashboard');
+          const isProductionDashboard =
+            existsSync(join(dashDirCheck, 'dist', 'index.html')) &&
+            !existsSync(join(dashDirCheck, 'src'));
+          if (!opts.apiOnly) {
+            process.env.ASD_DASHBOARD_URL = isProductionDashboard
+              ? `http://127.0.0.1:${port}`
+              : `http://localhost:5173`;
+          } else {
+            process.env.ASD_DASHBOARD_URL = process.env.ASD_DASHBOARD_URL || `http://${host}:${port}`;
+          }
+
+          const { FileWatcher } = await import('../lib/service/automation/FileWatcher.js');
+          const watcher = new FileWatcher(specPath, projectRoot, { quiet: !isDebugMode });
+          watcher.start();
+          if (isDebugMode) {
+          }
+        } catch (watchErr) {
+          console.warn(`⚠️  File watcher failed to start: ${watchErr.message}`);
+          if (process.env.ASD_DEBUG === '1') {
+            console.error(watchErr.stack);
+          }
+        }
+      } else if (process.env.ASD_DEBUG === '1') {
+        console.log('ℹ️  Non-Apple project — file watcher skipped (use VSCode extension instead)');
+      }
     } catch (err) {
       console.error(`❌ API server failed to start: ${err.message}`);
       if (err.code === 'EADDRINUSE') {
-        console.error(`   Port ${port} is already in use. Kill it with: lsof -ti:${port} | xargs kill -9`);
+        console.error(
+          `   Port ${port} is already in use. Kill it with: lsof -ti:${port} | xargs kill -9`
+        );
       }
       process.exit(1);
     }
 
     if (opts.apiOnly) {
-      console.log(`   Docs: http://127.0.0.1:${port}/api-spec`);
       return;
     }
 
@@ -737,24 +750,21 @@ program
       // ── 生产模式：npm 安装的包，在 API 服务器上直接托管预构建产物 ──
       // 同端口同 origin → /api 路由自然可达，无跨域问题
       httpServer.mountDashboard(distDir);
-      console.log(`🎨 Dashboard UI ready at http://127.0.0.1:${port}/`);
 
       if (opts.browser) {
         const open = (await import('open')).default;
         open(`http://127.0.0.1:${port}/`);
       }
-
     } else {
       // ── 开发模式：有源码，启动 Vite Dev Server ──
       if (!existsSync(join(dashboardDir, 'node_modules'))) {
-        console.log('📦 Installing dashboard dependencies...');
         const install = spawn('npm', ['install'], { cwd: dashboardDir, stdio: 'inherit' });
         await new Promise((resolve, reject) => {
-          install.on('close', code => code === 0 ? resolve() : reject(new Error(`npm install exited with ${code}`)));
+          install.on('close', (code) =>
+            code === 0 ? resolve() : reject(new Error(`npm install exited with ${code}`))
+          );
         });
       }
-
-      console.log('🎨 Starting Dashboard (dev mode)...');
       const viteArgs = ['--host'];
       if (opts.browser) {
         viteArgs.push('--open');
@@ -770,7 +780,6 @@ program
       });
 
       process.on('SIGINT', () => {
-        console.log('\n🛑 Stopping Dashboard...');
         vite.kill();
         process.exit(0);
       });
@@ -784,32 +793,19 @@ program
   .command('status')
   .description('检查环境状态')
   .action(async () => {
-    console.log('\n📋 AutoSnippet V2 Status\n');
-    console.log(`   Version: ${pkg.version}`);
-    console.log(`   Node: ${process.version}`);
-    console.log(`   Platform: ${process.platform} ${process.arch}`);
-
     // AI 配置
     const { getAiConfigInfo } = await import('../lib/external/ai/AiFactory.js');
-    const aiInfo = getAiConfigInfo();
-    console.log(`\n   AI Provider: ${aiInfo.provider}`);
-    console.log(`   AI Keys: ${Object.entries(aiInfo.keys).filter(([, v]) => v).map(([k]) => k).join(', ') || 'none'}`);
+    const _aiInfo = getAiConfigInfo();
 
     // 检查数据库
-    const dbPath = join(process.cwd(), '.autosnippet', 'autosnippet.db');
-    console.log(`\n   Database: ${existsSync(dbPath) ? '✅ ' + dbPath : '❌ Not found'}`);
+    const _dbPath = join(process.cwd(), '.autosnippet', 'autosnippet.db');
 
     // 检查依赖
     for (const dep of ['better-sqlite3', 'commander', 'express']) {
       try {
         await import(dep);
-        console.log(`   ${dep}: ✅`);
-      } catch {
-        console.log(`   ${dep}: ❌ not installed`);
-      }
+      } catch {}
     }
-
-    console.log('');
   });
 
 // ─────────────────────────────────────────────────────
@@ -824,10 +820,6 @@ program
   .action(async (opts) => {
     const { UpgradeService } = await import('../lib/cli/UpgradeService.js');
     const service = new UpgradeService({ projectRoot: resolve(opts.dir) });
-
-    console.log(`\n🔄 AutoSnippet V2 — 升级 IDE 集成`);
-    console.log(`   项目: ${service.projectName}`);
-    console.log(`   路径: ${service.projectRoot}\n`);
 
     await service.run({
       skillsOnly: opts.skillsOnly,
@@ -846,32 +838,17 @@ program
   .action(async (opts) => {
     const projectRoot = resolve(opts.dir);
 
-    console.log(`\n🚀 AutoSnippet — Cursor Delivery Pipeline`);
-    console.log(`   项目: ${basename(projectRoot)}`);
-    console.log(`   路径: ${projectRoot}\n`);
-
     const { bootstrap, container } = await initContainer({ projectRoot });
     try {
       const pipeline = container.get('cursorDeliveryPipeline');
       const result = await pipeline.deliver();
-
-      console.log(`✅ Cursor 交付物料生成完成\n`);
-      console.log(`   Channel A (Always-On Rules): ${result.channelA.rulesCount} 条规则 (${result.channelA.tokensUsed} tokens)`);
-      console.log(`   Channel B (Smart Rules):     ${result.channelB.topicCount} 个主题, ${result.channelB.patternsCount} 个模式 (${result.channelB.totalTokens} tokens)`);
-      console.log(`   Channel C (Agent Skills):    ${result.channelC.synced} 个 Skills 已同步`);
-      console.log(`   Channel D (Dev Documents):   ${result.channelD?.documentsCount || 0} 篇文档`);
       if (result.channelC.errors > 0) {
-        console.log(`   ⚠️  ${result.channelC.errors} 个错误`);
       }
-      console.log(`\n   总耗时: ${result.stats.duration}ms`);
 
       if (opts.verbose && result.channelB.topics) {
-        console.log(`\n   Channel B 主题明细:`);
-        for (const [topic, info] of Object.entries(result.channelB.topics)) {
-          console.log(`     - ${topic}: ${info.patternsCount} patterns (${info.tokensUsed} tokens)`);
+        for (const [_topic, _info] of Object.entries(result.channelB.topics)) {
         }
       }
-      console.log('');
     } finally {
       await bootstrap.shutdown?.();
     }
@@ -890,12 +867,8 @@ program
     const projectRoot = resolve(opts.dir);
     const { KnowledgeSyncService } = await import('../lib/cli/KnowledgeSyncService.js');
     const syncService = new KnowledgeSyncService(projectRoot);
-
-    console.log(`\n🔄 AutoSnippet V3 — 同步 knowledge entries`);
-    console.log(`   项目: ${basename(projectRoot)}`);
-    console.log(`   路径: ${projectRoot}`);
-    if (opts.dryRun) console.log('   模式: dry-run（仅报告）');
-    console.log('');
+    if (opts.dryRun) {
+    }
 
     // 通过 Bootstrap 打开目标项目的 DB
     const dbPath = join(projectRoot, '.autosnippet', 'autosnippet.db');
@@ -917,28 +890,15 @@ program
         force: opts.force,
       });
 
-      // 输出报告
-      console.log(`✅ Knowledge 同步完成`);
-      console.log(`   扫描: ${report.synced + report.skipped} 文件`);
-      console.log(`   新增: ${report.created}`);
-      console.log(`   更新: ${report.updated}`);
-      console.log(`   跳过: ${report.skipped}`);
-
       if (report.violations.length > 0) {
-        console.log(`\n⚠️  检测到 ${report.violations.length} 个手动编辑（已记入违规统计）：`);
-        for (const v of report.violations) {
-          console.log(`   - ${v}`);
+        for (const _v of report.violations) {
         }
       }
 
       if (report.orphaned.length > 0) {
-        console.log(`\n🗑️  ${report.orphaned.length} 个孤儿条目已标记 deprecated：`);
-        for (const id of report.orphaned) {
-          console.log(`   - ${id}`);
+        for (const _id of report.orphaned) {
         }
       }
-
-      console.log('');
     } finally {
       await bootstrap.shutdown?.();
     }

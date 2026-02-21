@@ -4,6 +4,7 @@ import api from '../../api';
 import CodeBlock from '../Shared/CodeBlock';
 import { ICON_SIZES } from '../../constants/icons';
 import PageOverlay from '../Shared/PageOverlay';
+import { useI18n } from '../../i18n';
 
 interface ContextInfo {
   fileInfo?: {
@@ -52,9 +53,10 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
   onClose,
   currentFile,
   targetName,
-  language = 'swift',
+  language = '',
   onSelectRecipe
 }) => {
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [contextInfo, setContextInfo] = useState<ContextInfo | null>(null);
@@ -85,7 +87,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
     setContextInfo(null);
   } catch (error) {
     console.error('Context-aware search failed:', error);
-    alert('搜索失败。请重试。');
+    alert(t('search.searchFailed'));
   } finally {
     setIsSearching(false);
   }
@@ -106,7 +108,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
     {/* Header */}
     <div className="border-b border-slate-200 p-6">
       <div className="flex items-center justify-between mb-4">
-      <h2 className="text-xl font-bold text-slate-900">智能搜索</h2>
+      <h2 className="text-xl font-bold text-slate-900">{t('search.title')}</h2>
       <button
         onClick={onClose}
         className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
@@ -129,13 +131,13 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
           )}
           {contextInfo.fileInfo?.imports && contextInfo.fileInfo.imports.length > 0 && (
           <div className="text-blue-800 text-xs mt-2">
-            <strong>导入的框架：</strong> {contextInfo.fileInfo.imports.slice(0, 3).join(', ')}
+            <strong>{t('search.importedFrameworks')}</strong> {contextInfo.fileInfo.imports.slice(0, 3).join(', ')}
             {contextInfo.fileInfo.imports.length > 3 && ` +${contextInfo.fileInfo.imports.length - 3}`}
           </div>
           )}
           {contextInfo.targetInfo?.suggestedApis && contextInfo.targetInfo.suggestedApis.length > 0 && (
           <div className="text-blue-800 text-xs mt-1">
-            <strong>相关 APIs：</strong> {contextInfo.targetInfo.suggestedApis.slice(0, 3).join(', ')}
+            <strong>{t('search.relatedApis')}</strong> {contextInfo.targetInfo.suggestedApis.slice(0, 3).join(', ')}
           </div>
           )}
         </div>
@@ -148,7 +150,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={ICON_SIZES.md} />
       <input
         type="text"
-        placeholder="输入搜索关键词..."
+        placeholder={t('search.searchPlaceholder')}
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -161,7 +163,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
       className="mt-3 w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:bg-blue-300 transition-colors flex items-center justify-center gap-2"
       >
       {isSearching && <Loader2 size={ICON_SIZES.sm} className="animate-spin" />}
-      {isSearching ? '搜索中...' : '搜索'}
+      {isSearching ? t('search.searching') : t('search.searchBtn')}
       </button>
     </div>
 
@@ -171,7 +173,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
       <div className="flex items-center justify-center h-full text-slate-500">
         <div className="text-center">
         <Code size={ICON_SIZES.xxl} className="mx-auto mb-2 opacity-50" />
-        <p className="text-sm">输入关键词后点击搜索</p>
+        <p className="text-sm">{t('search.emptyHint')}</p>
         </div>
       </div>
       )}
@@ -196,12 +198,12 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
           {result.isContextRelevant && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 rounded text-xs text-green-700">
             <Target size={ICON_SIZES.xs} />
-            上下文相关
+            {t('search.contextRelevant')}
             </span>
           )}
           {result.matchType && (
             <span className="text-xs text-slate-500">
-            {result.matchType === 'semantic' ? '语义匹配' : '关键词匹配'}
+            {result.matchType === 'semantic' ? t('search.matchSemantic') : t('search.matchKeyword')}
             </span>
           )}
           </div>
@@ -221,10 +223,10 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
         {result.stats && (
         <div className="text-xs text-slate-500 mb-2 flex gap-3">
           {result.stats.authorityScore !== undefined && (
-          <span>权威分: {result.stats.authorityScore}</span>
+          <span>{t('search.authorityScore')}: {result.stats.authorityScore}</span>
           )}
           {result.usageCount !== undefined && (
-          <span>使用: {result.usageCount}次</span>
+          <span>{t('search.usage')}: {t('search.usageCount', { count: result.usageCount })}</span>
           )}
         </div>
         )}
@@ -234,7 +236,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
         <div className="mt-3 pt-3 border-t border-slate-200">
           {result.recommendReason && (
           <div className="text-xs text-slate-600 bg-blue-50 p-2 rounded mb-2 border border-blue-100">
-            <p className="font-medium text-blue-700 mb-0.5">推荐理由</p>
+            <p className="font-medium text-blue-700 mb-0.5">{t('search.recommendReason')}</p>
             <p>{result.recommendReason}</p>
           </div>
           )}
@@ -249,7 +251,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
           }}
           className="mt-2 w-full py-1.5 bg-blue-50 text-blue-600 rounded text-xs font-medium hover:bg-blue-100 transition-colors"
           >
-          查看完整内容
+          {t('search.viewFullContent')}
           </button>
         </div>
         )}
@@ -266,7 +268,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
       <div className="flex items-center justify-center h-32">
         <div className="text-center text-slate-500">
         <AlertCircle size={ICON_SIZES.xl} className="mx-auto mb-2 opacity-50" />
-        <p className="text-sm">未找到匹配的结果</p>
+        <p className="text-sm">{t('search.noResults')}</p>
         </div>
       </div>
       )}
@@ -284,21 +286,21 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
         <h3 className="text-lg font-bold text-slate-900">{selectedResult.name}</h3>
         <div className="flex items-center gap-4 mt-2">
           <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-          相似度: {Math.round(selectedResult.similarity * 100)}%
+          {t('search.similarity')}: {Math.round(selectedResult.similarity * 100)}%
           </span>
           {selectedResult.isContextRelevant && (
           <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
-            ✓ 上下文相关
+            ✓ {t('search.contextRelevant')}
           </span>
           )}
           {selectedResult.qualityScore !== undefined && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 rounded text-xs text-blue-700 font-medium">
-            🤖 质量: {(selectedResult.qualityScore * 100).toFixed(0)}%
+            🤖 {t('search.quality')}: {(selectedResult.qualityScore * 100).toFixed(0)}%
           </span>
           )}
           {selectedResult.stats?.authorityScore !== undefined && (
           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">
-            权威分: {Math.round(selectedResult.stats.authorityScore * 100) / 100}
+            {t('search.authorityScore')}: {Math.round(selectedResult.stats.authorityScore * 100) / 100}
           </span>
           )}
         </div>
@@ -317,7 +319,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
         {selectedResult.content ? (
           <CodeBlock code={selectedResult.content} language="markdown" />
         ) : (
-          <p className="text-slate-500 text-sm">无内容</p>
+          <p className="text-slate-500 text-sm">{t('search.noContent')}</p>
         )}
         </div>
       </div>
@@ -328,7 +330,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
         onClick={() => setDetailsOpen(false)}
         className="px-4 py-2 text-slate-700 hover:bg-slate-200 rounded transition-colors text-sm font-medium"
         >
-        关闭
+        {t('common.close')}
         </button>
         {onSelectRecipe && (
         <button
@@ -339,7 +341,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
           className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition-colors text-sm font-medium flex items-center gap-2"
         >
           <ChevronRight size={ICON_SIZES.md} />
-          使用此片段
+          {t('search.useSnippet')}
         </button>
         )}
       </div>

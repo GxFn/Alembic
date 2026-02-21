@@ -1,7 +1,7 @@
-import { jest } from '@jest/globals';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import { jest } from '@jest/globals';
 
 /* ────────────────────────────────────────────
  *  动态导入
@@ -17,7 +17,7 @@ beforeAll(async () => {
  *  Helpers
  * ──────────────────────────────────────────── */
 function findTool(name) {
-  return ALL_TOOLS.find(t => t.name === name);
+  return ALL_TOOLS.find((t) => t.name === name);
 }
 
 // 创建临时项目目录结构用于工具测试
@@ -30,7 +30,9 @@ beforeAll(() => {
   fs.mkdirSync(path.join(tmpDir, 'tests'), { recursive: true });
 
   // 创建一个 ObjC 文件
-  fs.writeFileSync(path.join(tmpDir, 'src', 'models', 'User.m'), `
+  fs.writeFileSync(
+    path.join(tmpDir, 'src', 'models', 'User.m'),
+    `
 #import "User.h"
 #import <Foundation/Foundation.h>
 
@@ -54,10 +56,13 @@ beforeAll(() => {
     return @{@"name": self.name, @"age": @(self.age)};
 }
 @end
-`);
+`
+  );
 
   // 创建一个 Swift 文件
-  fs.writeFileSync(path.join(tmpDir, 'src', 'services', 'NetworkManager.swift'), `
+  fs.writeFileSync(
+    path.join(tmpDir, 'src', 'services', 'NetworkManager.swift'),
+    `
 import Foundation
 import Alamofire
 
@@ -81,10 +86,13 @@ public class NetworkManager {
         }.resume()
     }
 }
-`);
+`
+  );
 
   // 创建一个 JS 文件
-  fs.writeFileSync(path.join(tmpDir, 'src', 'services', 'ApiClient.js'), `
+  fs.writeFileSync(
+    path.join(tmpDir, 'src', 'services', 'ApiClient.js'),
+    `
 import axios from 'axios';
 import { Logger } from '../utils/Logger.js';
 
@@ -106,11 +114,15 @@ export class ApiClient {
     return axios.post(this.#baseUrl + endpoint, data);
   }
 }
-`);
+`
+  );
 
   // 创建 node_modules 中的文件（应被过滤）
   fs.mkdirSync(path.join(tmpDir, 'node_modules', 'some-lib'), { recursive: true });
-  fs.writeFileSync(path.join(tmpDir, 'node_modules', 'some-lib', 'index.js'), 'module.exports = {}');
+  fs.writeFileSync(
+    path.join(tmpDir, 'node_modules', 'some-lib', 'index.js'),
+    'module.exports = {}'
+  );
 });
 
 afterAll(() => {
@@ -212,9 +224,7 @@ describe('P0: get_file_summary', () => {
     const result = await tool.handler({ filePath: 'src/services/NetworkManager.swift' }, ctx());
 
     expect(result.language).toBe('swift');
-    expect(result.imports).toEqual(expect.arrayContaining([
-      expect.stringContaining('Foundation'),
-    ]));
+    expect(result.imports).toEqual(expect.arrayContaining([expect.stringContaining('Foundation')]));
     expect(result.declarations.length).toBeGreaterThanOrEqual(1);
     expect(result.methods.length).toBeGreaterThanOrEqual(1);
   });
@@ -247,9 +257,12 @@ describe('P0: get_file_summary', () => {
       {
         projectRoot: tmpDir,
         fileCache: [
-          { relativePath: 'cached-file.swift', content: 'import UIKit\nclass MyView: UIView {\n  func setup() {\n  }\n}' },
+          {
+            relativePath: 'cached-file.swift',
+            content: 'import UIKit\nclass MyView: UIView {\n  func setup() {\n  }\n}',
+          },
         ],
-      },
+      }
     );
 
     expect(result.language).toBe('swift');
@@ -275,7 +288,7 @@ describe('P1: semantic_search_code', () => {
     const tool = findTool('semantic_search_code');
     const result = await tool.handler(
       { query: 'error handling' },
-      { projectRoot: tmpDir, container: null },
+      { projectRoot: tmpDir, container: null }
     );
 
     expect(result.error).toBeDefined();
@@ -284,10 +297,7 @@ describe('P1: semantic_search_code', () => {
 
   test('handles empty query', async () => {
     const tool = findTool('semantic_search_code');
-    const result = await tool.handler(
-      { query: '' },
-      { container: { get: () => null } },
-    );
+    const result = await tool.handler({ query: '' }, { container: { get: () => null } });
     expect(result.error).toContain('query');
   });
 
@@ -296,22 +306,33 @@ describe('P1: semantic_search_code', () => {
     const mockEngine = {
       search: jest.fn().mockResolvedValue({
         items: [
-          { id: '1', title: 'Error Handler', description: 'Handles errors', score: 0.95, knowledgeType: 'code-pattern', category: 'Service', language: 'swift' },
+          {
+            id: '1',
+            title: 'Error Handler',
+            description: 'Handles errors',
+            score: 0.95,
+            knowledgeType: 'code-pattern',
+            category: 'Service',
+            language: 'swift',
+          },
         ],
         mode: 'bm25',
       }),
     };
-    const mockContainer = { get: (name) => name === 'searchEngine' ? mockEngine : null };
+    const mockContainer = { get: (name) => (name === 'searchEngine' ? mockEngine : null) };
 
     const result = await tool.handler(
       { query: 'error handling', topK: 3 },
-      { container: mockContainer },
+      { container: mockContainer }
     );
 
     expect(result.mode).toBe('bm25');
     expect(result.results).toHaveLength(1);
     expect(result.results[0].title).toBe('Error Handler');
-    expect(mockEngine.search).toHaveBeenCalledWith('error handling', expect.objectContaining({ mode: 'semantic' }));
+    expect(mockEngine.search).toHaveBeenCalledWith(
+      'error handling',
+      expect.objectContaining({ mode: 'semantic' })
+    );
   });
 });
 
@@ -335,7 +356,7 @@ describe('P2: ALL_TOOLS integrity', () => {
   });
 
   test('no duplicate tool names', () => {
-    const names = ALL_TOOLS.map(t => t.name);
+    const names = ALL_TOOLS.map((t) => t.name);
     const unique = new Set(names);
     expect(unique.size).toBe(names.length);
   });

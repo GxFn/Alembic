@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { Toaster } from 'react-hot-toast';
 import { notify } from './utils/notification';
@@ -9,6 +9,9 @@ import api from './api';
 import { useAuth } from './hooks/useAuth';
 import { usePermission } from './hooks/usePermission';
 import { useBootstrapSocket } from './hooks/useBootstrapSocket';
+import { useI18n } from './i18n';
+import { zh } from './i18n/locales/zh';
+import { useTheme } from './theme';
 import LoginView from './components/Views/LoginView';
 
 // Components
@@ -18,7 +21,7 @@ import CategoryBar from './components/Shared/CategoryBar';
 import RecipesView from './components/Views/RecipesView';
 import HelpView from './components/Views/HelpView';
 import CandidatesView from './components/Views/CandidatesView';
-import SPMExplorerView from './components/Views/SPMExplorerView';
+import ModuleExplorerView from './components/Views/ModuleExplorerView';
 import DepGraphView from './components/Views/DepGraphView';
 import GuardView from './components/Views/GuardView';
 import { GlobalChatProvider, GlobalChatPanel, useGlobalChat } from './components/Shared/GlobalChatDrawer';
@@ -27,7 +30,6 @@ import KnowledgeGraphView from './components/Views/KnowledgeGraphView';
 import KnowledgeView from './components/Views/KnowledgeView';
 import SkillsView from './components/Views/SkillsView';
 import BootstrapProgressView from './components/Views/BootstrapProgressView';
-import XcodeSimulator from './pages/XcodeSimulator';
 import WikiView from './components/Views/WikiView';
 import RecipeEditor from './components/Modals/RecipeEditor';
 import CreateModal from './components/Modals/CreateModal';
@@ -50,7 +52,7 @@ class ErrorBoundary extends React.Component<
     if (this.state.hasError) {
       return (
         <div style={{ padding: 40, textAlign: 'center' }}>
-          <h2 style={{ color: '#ef4444', marginBottom: 12 }}>页面出现异常</h2>
+          <h2 style={{ color: '#ef4444', marginBottom: 12 }}>{zh.app.errorBoundary.title}</h2>
           <pre style={{ fontSize: 12, color: '#64748b', whiteSpace: 'pre-wrap', maxWidth: 600, margin: '0 auto' }}>
             {this.state.error?.message}
           </pre>
@@ -58,7 +60,7 @@ class ErrorBoundary extends React.Component<
             onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
             style={{ marginTop: 16, padding: '8px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}
           >
-            刷新页面
+            {zh.app.errorBoundary.refreshBtn}
           </button>
         </div>
       );
@@ -126,6 +128,7 @@ const App: React.FC = () => {
   const auth = useAuth();
   const permission = usePermission(auth.user?.role);
   const bootstrap = useBootstrapSocket();
+  const { t, lang } = useI18n();
 
   const getTabFromPath = (): TabType => {
   const path = window.location.pathname.replace(/^\//, '').split('/')[0] || '';
@@ -143,6 +146,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [targets, setTargets] = useState<SPMTarget[]>([]);
+  const [customFolderTargets, setCustomFolderTargets] = useState<SPMTarget[]>([]);
   const [selectedTargetName, setSelectedTargetName] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<{ current: number, total: number, status: string }>({ current: 0, total: 0, status: '' });
@@ -175,6 +179,16 @@ const App: React.FC = () => {
   useEffect(() => {
   setRecipePage(1);
   }, [searchQuery, selectedCategory]);
+
+  // 项目切换时从 localStorage 加载该项目的自定义目录
+  useEffect(() => {
+    if (!data?.projectRoot) return;
+    try {
+      const key = `asd:custom-folder-targets:${data.projectRoot}`;
+      const saved = localStorage.getItem(key);
+      setCustomFolderTargets(saved ? JSON.parse(saved) : []);
+    } catch { setCustomFolderTargets([]); }
+  }, [data?.projectRoot]);
 
   /** 切换 AI 前停止当前 AI 任务（扫描等）；不置空 ref，由各任务 finally 清理并更新 UI */
   const stopCurrentAiTasks = () => {
@@ -309,7 +323,7 @@ const App: React.FC = () => {
     // V3 KnowledgeEntry 字段已全部 camelCase
     setData(projectData);
   } catch (err: any) {
-    notify(err?.message || '无法加载项目数据', { title: '加载失败', type: 'error' });
+    notify(err?.message || t('app.load.failed'), { title: t('app.load.failedTitle'), type: 'error' });
   } finally {
     setLoading(false);
   }
@@ -333,12 +347,12 @@ const App: React.FC = () => {
   }
   };
 
-  const handleSyncToXcode = async () => {
+  const handleSyncSnippets = async () => {
   try {
-    await api.syncToXcode();
-    notify('Recipes 已同步到 Xcode CodeSnippets 目录', { title: 'Xcode 同步成功' });
+    const result = await api.syncSnippets('all');
+    notify(t('app.sync.success'), { title: t('app.sync.successTitle') });
   } catch (err) {
-    notify('请检查 Xcode 是否已安装并重试', { title: '同步失败', type: 'error' });
+    notify(t('app.sync.failedHint'), { title: t('app.sync.failed'), type: 'error' });
   }
   };
 
@@ -346,9 +360,9 @@ const App: React.FC = () => {
   try {
     await api.refreshProject();
     fetchTargets();
-    notify('Target 列表与文件树已更新', { title: '项目结构已刷新' });
+    notify(t('app.projectRefresh.success'), { title: t('app.projectRefresh.successTitle') });
   } catch (err) {
-    notify('请确认项目路径有效后重试', { title: '刷新失败', type: 'error' });
+    notify(t('app.load.failedHint'), { title: t('app.projectRefresh.failed'), type: 'error' });
   }
   };
 
@@ -365,10 +379,10 @@ const App: React.FC = () => {
     setShowCreateModal(false);
     fetchData();
     if (extractResult.result?.length > 0) {
-    notify('提取结果已进入候选池，请在 Candidates 页审核', { title: '提取完成' });
+    notify(t('app.extract.success'), { title: t('app.extract.successTitle') });
     }
   } catch (err) {
-    notify('Extraction failed', { type: 'error' });
+    notify(t('app.extract.failed'), { type: 'error' });
   } finally {
     setIsExtracting(false);
   }
@@ -388,12 +402,12 @@ const App: React.FC = () => {
     setShowCreateModal(false);
     fetchData();
     if (extractResult.result?.length > 0) {
-    notify(extractResult.isMarked ? '精准锁定标记代码，已加入候选池' : '提取结果已加入候选池', { title: '提取完成' });
+    notify(extractResult.isMarked ? t('app.extract.markerSuccess') : t('app.extract.normalSuccess'), { title: t('app.extract.successTitle') });
     } else if (!extractResult.isMarked) {
-    notify('未找到 ASD 标记，AI 将分析完整文件', { title: '提取中', type: 'info' });
+    notify(t('app.extract.noMarker'), { title: t('app.extract.extracting'), type: 'info' });
     }
   } catch (err) {
-    notify('Extraction failed', { type: 'error' });
+    notify(t('app.extract.failed'), { type: 'error' });
   } finally {
     setIsExtracting(false);
   }
@@ -402,10 +416,10 @@ const App: React.FC = () => {
   const handleCreateFromClipboard = async (contextPath?: string) => {
   try {
     const text = await navigator.clipboard.readText();
-    if (!text) return notify('请先复制代码到剪贴板', { title: '剪贴板为空', type: 'info' });
+    if (!text) return notify(t('app.clipboard.empty'), { title: t('app.clipboard.emptyTitle'), type: 'info' });
     
     // 立即提示收到代码
-    notify('已收到代码，AI 正在识别可复用模式...', { title: '剪贴板分析中', type: 'info' });
+    notify(t('app.clipboard.analyzing'), { title: t('app.clipboard.analyzingTitle'), type: 'info' });
     
     setIsExtracting(true);
     const relativePath = contextPath || createPath;
@@ -422,20 +436,20 @@ const App: React.FC = () => {
     navigateToTab('spm');
     setShowCreateModal(false);
     fetchData();
-    notify(multipleCount ? `已识别 ${multipleCount} 条 Recipe，请在候选池审核` : '提取结果已加入候选池', { title: 'AI 识别完成' });
+    notify(multipleCount ? t('app.clipboard.resultMulti', { count: multipleCount }) : t('app.extract.normalSuccess'), { title: t('app.clipboard.resultTitle') });
     } catch (err: any) {
     // 区分 AI 错误和其他错误
     const isAiError = err.response?.data?.aiError === true;
     const errorMsg = err.response?.data?.error || err.message;
     
     if (isAiError) {
-      notify(errorMsg, { title: 'AI 识别失败', type: 'error' });
+      notify(errorMsg, { title: t('app.clipboard.aiFailed'), type: 'error' });
     } else {
-      notify(errorMsg, { title: '操作失败', type: 'error' });
+      notify(errorMsg, { title: t('common.operationFailed'), type: 'error' });
     }
     }
   } catch (err) {
-    notify('浏览器可能未授权剪贴板访问', { title: '剪贴板读取失败', type: 'error' });
+    notify(t('app.clipboard.permissionError'), { title: t('app.clipboard.permissionTitle'), type: 'error' });
   } finally {
     setIsExtracting(false);
   }
@@ -443,12 +457,12 @@ const App: React.FC = () => {
 
   /** SSE 事件类型 → 进度百分比 & 状态文案映射 */
   const SCAN_EVENT_PROGRESS: Record<string, { percent: number; status: string | ((e: any) => string) }> = {
-  'scan:started':       { percent: 5,  status: '正在启动扫描...' },
-  'scan:files-loaded':  { percent: 15, status: (e: any) => `已加载 ${e.count || 0} 个源文件` },
-  'scan:reading':       { percent: 25, status: (e: any) => `正在读取 ${e.count || 0} 个文件内容...` },
-  'scan:ai-extracting': { percent: 40, status: '正在 AI 分析提取可复用模式...' },
-  'scan:enriching':     { percent: 85, status: (e: any) => `正在增强 ${e.recipeCount || 0} 条结果...` },
-  'scan:completed':     { percent: 95, status: '扫描完成，正在加载结果...' },
+  'scan:started':       { percent: 5,  status: t('app.scan.events.initializing') },
+  'scan:files-loaded':  { percent: 15, status: (e: any) => t('app.scan.events.filesLoaded', { count: e.count || 0 }) },
+  'scan:reading':       { percent: 25, status: (e: any) => t('app.scan.events.readingFiles', { count: e.count || 0 }) },
+  'scan:ai-extracting': { percent: 40, status: t('app.scan.events.aiAnalyzing') },
+  'scan:enriching':     { percent: 85, status: (e: any) => t('app.scan.events.enriching', { count: e.recipeCount || 0 }) },
+  'scan:completed':     { percent: 95, status: t('app.scan.events.completing') },
   };
 
   const handleScanTarget = async (target: SPMTarget) => {
@@ -463,7 +477,7 @@ const App: React.FC = () => {
   setScanResults([]);
   setGuardAudit(null);
   setScanFileList([]);
-  setScanProgress({ current: 0, total: 100, status: '正在建立流式连接...' });
+  setScanProgress({ current: 0, total: 100, status: t('app.scan.streamInit') });
 
   try {
     const scanResult = await api.scanTargetStream(target, (evt: any) => {
@@ -497,7 +511,7 @@ const App: React.FC = () => {
     }, controller.signal);
 
     if (trickleTimerRef.current) { clearInterval(trickleTimerRef.current); trickleTimerRef.current = null; }
-    setScanProgress({ current: 100, total: 100, status: '扫描完成' });
+    setScanProgress({ current: 100, total: 100, status: t('app.scan.completed') });
 
     const recipes = scanResult.recipes || [];
     const scannedFiles = scanResult.scannedFiles || [];
@@ -516,23 +530,27 @@ const App: React.FC = () => {
 
     fetchData();
     if (recipes.length > 0) {
-      notify(`发现 ${recipes.length} 条可复用代码模式，请在右侧审核`, { title: 'Target 扫描完成' });
+      notify(t('app.scan.targetSuccess', { count: recipes.length }), { title: t('app.scan.targetSuccessTitle') });
     } else if (scanResult.message) {
-      notify(scanResult.message, { title: 'AI 扫描未返回结果', type: 'error' });
+      const isNoAi = scanResult.noAi;
+      notify(scanResult.message, {
+        title: isNoAi ? t('app.scan.aiNotConfigured') : t('app.scan.noResults'),
+        type: isNoAi ? 'info' : 'error',
+      });
     } else {
-      notify('该 Target 中未找到可复用的代码片段', { title: '扫描完成', type: 'info' });
+      notify(t('app.scan.noSnippets'), { title: t('app.scan.scanComplete'), type: 'info' });
     }
     } else {
-    notify('请确认 Target 包含有效的源代码文件', { title: '扫描失败', type: 'error' });
+    notify(t('app.scan.scanFailedHint'), { title: t('app.scan.scanFailed'), type: 'error' });
     }
   } catch (err: any) {
     if (trickleTimerRef.current) { clearInterval(trickleTimerRef.current); trickleTimerRef.current = null; }
     if (err.name === 'AbortError') return;
     const isTimeout = err.message?.includes('timeout');
     const msg = isTimeout
-      ? '扫描超时，请尝试减少 Target 文件数量'
-      : (err.message || '未知错误');
-    notify(msg, { title: isTimeout ? '扫描超时' : '扫描出错', type: 'error' });
+      ? t('app.scan.timeout')
+      : (err.message || t('app.scan.scanError'));
+    notify(msg, { title: isTimeout ? t('app.scan.timeoutTitle') : t('app.scan.scanError'), type: 'error' });
   } finally {
     if (abortControllerRef.current === controller) {
     setIsScanning(false);
@@ -555,12 +573,12 @@ const App: React.FC = () => {
   setScanResults([]);
   setGuardAudit(null);
   setScanFileList([]);
-  setScanProgress({ current: 0, total: 100, status: '正在收集项目结构...' });
+  setScanProgress({ current: 0, total: 100, status: t('app.coldStart.collecting') });
   bootstrap.resetSession();
 
   try {
     const result = await api.bootstrap(controller.signal);
-    setScanProgress({ current: 100, total: 100, status: '骨架已创建，正在后台填充...' });
+    setScanProgress({ current: 100, total: 100, status: t('app.coldStart.skeletonCreated') });
 
     // 如果返回了 bootstrapSession，初始化到 socket hook
     if (result.bootstrapSession) {
@@ -575,17 +593,16 @@ const App: React.FC = () => {
     const fileCount = report.totals?.files || 0;
     const graphEdges = report.totals?.graphEdges || 0;
     const guardInfo = result.guardSummary;
-    const guardMsg = guardInfo ? `, Guard: ${guardInfo.totalViolations} 项违规` : '';
+    const guardMsg = guardInfo ? `, ${t('app.coldStart.guardSuffix', { count: guardInfo.totalViolations })}` : '';
 
     notify(
-      `冷启动骨架已创建: ${targetCount} 个 Target, ${fileCount} 个文件, ` +
-      `${graphEdges} 条依赖${guardMsg}，正在后台逐维度填充...`
+      t('app.coldStart.skeletonDetail', { targets: targetCount, files: fileCount, deps: graphEdges }) + guardMsg
     );
   } catch (err: any) {
     if (axios.isCancel(err)) return;
     const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
     const msg = isTimeout
-      ? '冷启动超时，请检查项目文件数量'
+      ? t('app.coldStart.timeout')
       : (err.response?.data?.error || err.message);
     notify(msg, { type: 'error' });
   } finally {
@@ -610,18 +627,18 @@ const App: React.FC = () => {
   setScanResults([]);
   setGuardAudit(null);
   setScanFileList([]);
-  setScanProgress({ current: 0, total: 100, status: '正在收集所有 Target 文件...' });
+  setScanProgress({ current: 0, total: 100, status: t('app.fullScan.collecting') });
 
   const phases = [
-    { status: '正在收集源文件...', percent: 5 },
-    { status: '正在 AI 分析代码模式...', percent: 15 },
-    { status: 'AI 提取中（大项目可能需要数分钟）...', percent: 25 },
-    { status: 'AI 提取中...', percent: 35 },
-    { status: 'AI 深度分析中...', percent: 45 },
-    { status: '持续处理中...', percent: 55 },
-    { status: '正在运行 Guard 审计...', percent: 65 },
-    { status: '正在汇总结果...', percent: 75 },
-    { status: '即将完成...', percent: 85 },
+    { status: t('app.fullScan.phase5'), percent: 5 },
+    { status: t('app.fullScan.phase15'), percent: 15 },
+    { status: t('app.fullScan.phase25'), percent: 25 },
+    { status: t('app.fullScan.phase35'), percent: 35 },
+    { status: t('app.fullScan.phase45'), percent: 45 },
+    { status: t('app.fullScan.phase55'), percent: 55 },
+    { status: t('app.fullScan.phase65'), percent: 65 },
+    { status: t('app.fullScan.phase75'), percent: 75 },
+    { status: t('app.fullScan.phase85'), percent: 85 },
   ];
   let phaseIndex = 0;
   const progressTimer = setInterval(() => {
@@ -633,7 +650,7 @@ const App: React.FC = () => {
   try {
     const result = await api.scanProject(controller.signal);
     clearInterval(progressTimer);
-    setScanProgress({ current: 100, total: 100, status: result.partial ? '扫描部分完成（超时）' : '全项目扫描完成' });
+    setScanProgress({ current: 100, total: 100, status: result.partial ? t('app.fullScan.partialComplete') : t('app.fullScan.completed') });
 
     const recipes = result.recipes || [];
     const scannedFiles = result.scannedFiles || [];
@@ -652,18 +669,18 @@ const App: React.FC = () => {
     fetchData();
 
     const guardInfo = result.guardAudit?.summary;
-    const violationMsg = guardInfo ? `, Guard: ${guardInfo.totalViolations} 处违反` : '';
-    const partialMsg = result.partial ? '（部分结果，AI 超时）' : '';
-    notify(`全项目扫描完成: ${recipes.length} 条候选${violationMsg}${partialMsg}`);
+    const violationMsg = guardInfo ? `, ${t('app.fullScan.guardSuffix', { count: guardInfo.totalViolations })}` : '';
+    const partialMsg = result.partial ? t('app.fullScan.timeoutSuffix') : '';
+    notify(t('app.fullScan.resultDetail', { count: recipes.length }) + violationMsg + partialMsg);
     } else {
-    notify('全项目扫描完成，未发现可提取内容');
+    notify(t('app.fullScan.noContent'));
     }
   } catch (err: any) {
     clearInterval(progressTimer);
     if (axios.isCancel(err)) return;
     const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
     const msg = isTimeout
-      ? '扫描超时，请尝试减少项目文件数量或分 Target 扫描'
+      ? t('app.fullScan.timeout')
       : (err.response?.data?.error || err.message);
     notify(msg, { type: 'error' });
   } finally {
@@ -698,7 +715,7 @@ const App: React.FC = () => {
 
     const triggers = (extracted.trigger || '').split(/[,，\s]+/).map(t => t.trim()).filter(Boolean);
     if (snippetAble && triggers.length === 0) {
-    notify('请输入 Trigger', { type: 'error' });
+    notify(t('app.recipe.triggerRequired'), { type: 'error' });
     setIsSavingRecipe(false);
     return;
     }
@@ -708,7 +725,7 @@ const App: React.FC = () => {
       title:         extracted.title || 'Untitled',
       description:   extracted.description || '',
       trigger:       triggers.join(', ') || '',
-      language:      extracted.language || 'swift',
+      language:      extracted.language || '',
       category:      extracted.category || 'Utility',
       kind:          extracted.kind || 'pattern',
       knowledgeType: extracted.knowledgeType || 'code-pattern',
@@ -752,7 +769,7 @@ const App: React.FC = () => {
       }
     }
 
-    notify(snippetAble ? '已保存并发布为 Recipe' : '已保存到 KB');
+    notify(snippetAble ? t('app.recipe.savedAsRecipe') : t('app.recipe.savedToKb'));
     setScanResults(prev => prev.filter(item => item.title !== extracted.title));
     // 若来自候选池，保存后从候选池移除
     const candTarget = extracted.candidateTargetName;
@@ -765,7 +782,7 @@ const App: React.FC = () => {
     fetchData();
   } catch (err) {
     const msg = getSaveErrorMsg(err) ?? getWritePermissionErrorMsg(err);
-    notify(msg ?? '保存失败', { type: 'error' });
+    notify(msg ?? t('app.recipe.saveFailed'), { type: 'error' });
   } finally {
     setIsSavingRecipe(false);
   }
@@ -794,20 +811,20 @@ const App: React.FC = () => {
     fetchData();
   } catch (err) {
     const msg = getSaveErrorMsg(err) ?? getWritePermissionErrorMsg(err);
-    notify(msg ?? '保存 Recipe 失败', { type: 'error' });
+    notify(msg ?? t('app.recipe.saveRecipeFailed'), { type: 'error' });
   } finally {
     setIsSavingRecipe(false);
   }
   };
 
   const handleDeleteRecipe = async (name: string) => {
-  if (!window.confirm(`Are you sure?`)) return;
+  if (!window.confirm(t('common.areYouSure'))) return;
   try {
     await api.deleteRecipe(name);
     fetchData();
   } catch (err) {
     const msg = getWritePermissionErrorMsg(err);
-    notify(msg ?? '删除失败', { type: 'error' });
+    notify(msg ?? t('common.deleteFailed'), { type: 'error' });
   }
   };
 
@@ -830,30 +847,30 @@ const App: React.FC = () => {
       return { ...prev, candidates: updated };
     });
   } catch (err) {
-    notify('操作失败', { type: 'error' });
+    notify(t('common.operationFailed'), { type: 'error' });
   }
   };
 
   const handleDeleteAllInTarget = async (targetName: string) => {
-  if (!window.confirm(`确定移除「${targetName}」下的全部候选？`)) return;
+  if (!window.confirm(t('app.candidate.clearConfirm', { name: targetName }))) return;
   try {
     await api.deleteAllCandidatesInTarget(targetName);
     fetchData();
-    notify(`已移除 ${targetName} 下的全部候选`);
+    notify(t('app.candidate.clearDone', { name: targetName }));
   } catch (err) {
-    notify('操作失败', { type: 'error' });
+    notify(t('common.operationFailed'), { type: 'error' });
   }
   };
 
   const handlePromoteToCandidate = async (res: any, index: number) => {
   try {
     await api.promoteToCandidate(res, res.candidateTargetName || selectedTargetName || '_review');
-    notify('已加入 Candidate 待审核队列');
+    notify(t('app.candidate.pushSuccess'));
     setScanResults(prev => prev.filter((_, i) => i !== index));
     fetchData();
   } catch (err: any) {
     const raw = err.response?.data?.error;
-    const msg = typeof raw === 'string' ? raw : raw?.message || '创建 Candidate 失败';
+    const msg = typeof raw === 'string' ? raw : raw?.message || t('app.candidate.pushFailed');
     notify(msg, { type: 'error' });
   }
   };
@@ -886,19 +903,54 @@ const App: React.FC = () => {
   return sb - sa;
   });
 
-  const filteredTargets = targets
+  // 合并 API 发现的 targets 与用户手动添加的自定义目录
+  const mergedTargets = React.useMemo(() => {
+    const apiKeys = new Set(targets.map(t => `${t.discovererId || ''}::${t.name}`));
+    const extras = customFolderTargets.filter(ct => !apiKeys.has(`${ct.discovererId || ''}::${ct.name}`));
+    return [...targets, ...extras];
+  }, [targets, customFolderTargets]);
+
+  const filteredTargets = mergedTargets
   .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
   .sort((a, b) => {
     const aShell = isShellTarget(a.name);
     const bShell = isShellTarget(b.name);
     if (aShell && !bShell) return 1;
     if (!aShell && bShell) return -1;
+    // 自定义目录排在已发现模块之后
+    const aVirtual = a.isVirtual ? 1 : 0;
+    const bVirtual = b.isVirtual ? 1 : 0;
+    if (aVirtual !== bVirtual) return aVirtual - bVirtual;
     return a.name.localeCompare(b.name);
   });
 
+  /** 添加自定义目录到常驻列表 */
+  const handleAddCustomFolder = useCallback((folder: SPMTarget) => {
+    setCustomFolderTargets(prev => {
+      // 按 path 去重
+      if (prev.some(t => t.path === folder.path)) return prev;
+      const next = [...prev, folder];
+      if (data?.projectRoot) {
+        localStorage.setItem(`asd:custom-folder-targets:${data.projectRoot}`, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, [data?.projectRoot]);
+
+  /** 移除自定义目录 */
+  const handleRemoveCustomFolder = useCallback((folderPath: string) => {
+    setCustomFolderTargets(prev => {
+      const next = prev.filter(t => t.path !== folderPath);
+      if (data?.projectRoot) {
+        localStorage.setItem(`asd:custom-folder-targets:${data.projectRoot}`, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, [data?.projectRoot]);
+
   const candidateCount = Object.values(data?.candidates || {}).reduce((acc, curr) => acc + curr.items.length, 0);
 
-  const isDarkMode = activeTab === 'editor';
+  const { isDark: isDarkMode } = useTheme();
 
   // ── 登录门控 ──────────────────────────────────
   if (requireLogin) {
@@ -909,13 +961,12 @@ const App: React.FC = () => {
   <ErrorBoundary>
   <GlobalChatProvider>
   <div className={`flex h-screen ${isDarkMode ? 'bg-[#1e1e1e] text-slate-200' : 'bg-slate-50 text-slate-900'} overflow-hidden font-sans`}>
-    <Toaster position="top-center" toastOptions={{ duration: 5000 }} containerStyle={{ top: 24 }} />
+    <Toaster position="top-center" toastOptions={{ duration: 5000, style: { background: 'none', padding: 0, boxShadow: 'none', border: 'none' } }} containerStyle={{ top: 24 }} />
     <Sidebar 
     activeTab={activeTab} 
     navigateToTab={navigateToTab} 
     candidateCount={candidateCount}
     signalSuggestionCount={signalSuggestionCount}
-    isDarkMode={isDarkMode}
     currentUser={auth.authEnabled ? auth.user?.username : (permission.user !== 'anonymous' ? permission.user : undefined)}
     currentRole={permission.role}
     permissionMode={permission.mode}
@@ -929,13 +980,12 @@ const App: React.FC = () => {
       searchQuery={searchQuery} 
       setSearchQuery={setSearchQuery} 
       setShowCreateModal={setShowCreateModal} 
-      handleSyncToXcode={handleSyncToXcode} 
+      handleSyncSnippets={handleSyncSnippets} 
       aiConfig={data?.aiConfig}
       llmReady={llmReady}
       onOpenLlmConfig={() => setShowLlmConfig(true)}
       onBeforeAiSwitch={stopCurrentAiTasks}
       onAiConfigChange={fetchData}
-      isDarkMode={isDarkMode}
       onSemanticSearchResults={(results) => {
       setSemanticResults(results);
       if (activeTab !== 'recipes') {
@@ -951,7 +1001,7 @@ const App: React.FC = () => {
       />
     )}
 
-    <div className={`flex-1 ${activeTab === 'editor' || activeTab === 'wiki' ? 'overflow-hidden' : 'overflow-y-auto p-8'}`}>
+    <div className={`flex-1 ${activeTab === 'wiki' ? 'overflow-hidden' : 'overflow-y-auto p-8'}`}>
       {loading ? (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -1046,8 +1096,8 @@ const App: React.FC = () => {
       ) : activeTab === 'knowledgegraph' ? (
       <KnowledgeGraphView />
       ) : activeTab === 'spm' ? (
-      <SPMExplorerView 
-        targets={targets}
+      <ModuleExplorerView 
+        targets={mergedTargets}
         filteredTargets={filteredTargets}
         selectedTargetName={selectedTargetName}
         isScanning={isScanning}
@@ -1066,11 +1116,11 @@ const App: React.FC = () => {
         recipes={data?.recipes ?? []}
         isSavingRecipe={isSavingRecipe}
         handleRefreshProject={handleRefreshProject}
+        onAddCustomFolder={handleAddCustomFolder}
+        onRemoveCustomFolder={handleRemoveCustomFolder}
       />
       ) : activeTab === 'wiki' ? (
       <WikiView />
-      ) : activeTab === 'editor' ? (
-      <XcodeSimulator />
       ) : activeTab === 'help' ? (
       <HelpView />
       ) : (

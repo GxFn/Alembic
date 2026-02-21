@@ -16,10 +16,10 @@ This skill tells the agent how to **submit module usage code** (that Cursor has 
 3. **When user asks for "candidates"**: Use MCP **`autosnippet_submit_knowledge_batch`** for structured items (title/summary/trigger/code/usageGuide); use **`autosnippet_submit_knowledge_batch`** for Markdown draft files (prefer draft folder + multiple files; delete draft folder after submit).
 4. **One Recipe = one scenario**: If you are drafting content, **split** into multiple Recipes by scenario. Never combine multiple usage patterns into one Recipe file or one candidate.
 5. **Recipe candidates can be intro-only**: Intro-only docs (no code block) can be submitted as candidates; after approval they become Recipes and **do not generate a Snippet**—used only for search and Guard context.
-6. **MUST follow standard Recipe format**: Use the complete template from **autosnippet-concepts** skill. Include all required fields: frontmatter with `title`, `trigger`, `category` (one of 8 standard values), `language` (must be `swift` or `objectivec`), `summary_cn`, `summary_en`, `headers` (complete import statements), plus `## Snippet / Code Reference` and `## AI Context / Usage Guide` section.
-   - **MCP 不再使用项目内 AI**: 外部 Agent 必须自行填写所有字段，包括 summary_en、usageGuide_en、headers 等。提交后检查返回值中的 `recipeReadyHints`，缺失字段需补全后重新提交。
-   - **双语建议 (RECOMMENDED)**: 同时提供中英文版本——`summary_cn` + `summary_en` + `usageGuide` + `usageGuide_en`。英文提升检索、AI 理解和团队复用（token 增加仅约20-30%，收益高）。纯中文也可接受。
-   - **Placeholders**: Prefer Xcode placeholders in snippets (e.g. `<#URL#>`, `<#Token#>`) and explain each placeholder in the Usage Guide.
+6. **MUST follow V3 Recipe format**: Include all required fields: `title`, `trigger`, `category` (one of 8 standard values), `language`, `kind` (rule/pattern/fact), `doClause`, `description`, `content` (object with markdown, pattern, rationale), `headers` (complete import statements), `usageGuide` (Markdown ### 章节), `knowledgeType`, `reasoning` (whyStandard + sources + confidence).
+   - **MCP 不再使用项目内 AI**: 外部 Agent 必须自行填写所有字段。提交后检查返回值中的 `recipeReadyHints`，缺失字段需补全后重新提交。
+   - **禁止使用旧字段**: 不要使用 `code`、`summary_cn`、`summary_en`，改用 V3 `content` 对象 + `description`。
+   - **Placeholders**: Use IDE-appropriate placeholders in snippets — Xcode format `<#URL#>`, `<#Token#>` (auto-converted to VSCode `${N:...}` on install). Explain each placeholder in the Usage Guide.
    - **Usage Guide structure (强制格式要求)**: 
    * **MUST use structured format with clear section headings** (### heading name)：**NEVER put all content in one continuous line**
    * **MUST use newlines (`\n`) to separate sections and bullet points** — at least 2-3 newlines between major sections
@@ -105,7 +105,7 @@ This skill tells the agent how to **submit module usage code** (that Cursor has 
 | Way | When to use |
 |-----|-------------|
 | **New Recipe → Scan File** | Code is already in a project file; user enters relative path (e.g. `Sources/MyMod/Foo.m`) → Scan File → AI extracts → save in Dashboard. |
-| **SPM Explorer** | Mine usage from an SPM Target: select Target → scan → review in Dashboard → save as Recipe (or Snippet + Recipe). |
+| **Module Explorer** | Mine usage from a module Target: select Target → scan → review in Dashboard → save as Recipe (or Snippet + Recipe). |
 | **Candidates** | Batch: run **`asd ais <Target>`** or **`asd ais --all`** → open Dashboard **Candidates** → approve items → saved to knowledge base. |
 
 All of these **submit through the web (Dashboard)** and result in content in **`AutoSnippet/recipes/`** (and optionally Snippet). The main flow above (Use Copied Code) is for **code that Cursor has just written**.

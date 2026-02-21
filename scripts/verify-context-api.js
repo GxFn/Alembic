@@ -21,33 +21,33 @@ const opts = {
   path: url.pathname,
   method: 'POST',
   headers: {
-  'Content-Type': 'application/json',
-  'Content-Length': Buffer.byteLength(body)
-  }
+    'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(body),
+  },
 };
 
 const req = client.request(opts, (res) => {
   let data = '';
-  res.on('data', (ch) => { data += ch; });
+  res.on('data', (ch) => {
+    data += ch;
+  });
   res.on('end', () => {
-  if (res.statusCode !== 200) {
-    console.error(`❌ API 返回 ${res.statusCode}`);
-    process.exit(1);
-  }
-  try {
-    const json = JSON.parse(data);
-    if (!json.items || !Array.isArray(json.items)) {
-    console.error('❌ 返回结构异常，缺少 items 数组');
-    process.exit(1);
+    if (res.statusCode !== 200) {
+      console.error(`❌ API 返回 ${res.statusCode}`);
+      process.exit(1);
     }
-    console.log(`✅ /api/context/search 可用，返回 ${json.items.length} 条`);
-    if (json.items.length > 0) {
-    console.log('   示例:', json.items[0].metadata?.sourcePath || json.items[0].id);
+    try {
+      const json = JSON.parse(data);
+      if (!json.items || !Array.isArray(json.items)) {
+        console.error('❌ 返回结构异常，缺少 items 数组');
+        process.exit(1);
+      }
+      if (json.items.length > 0) {
+      }
+    } catch (e) {
+      console.error('❌ 解析响应失败:', e.message);
+      process.exit(1);
     }
-  } catch (e) {
-    console.error('❌ 解析响应失败:', e.message);
-    process.exit(1);
-  }
   });
 });
 

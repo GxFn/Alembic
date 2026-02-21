@@ -12,11 +12,14 @@
  * 运行方式：在项目根目录执行 npm run install:cursor-skill，或 asd install:cursor-skill，或 node scripts/install-cursor-skill.js
  */
 
-import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
 import { createRequire } from 'node:module';
+
 const require = createRequire(import.meta.url);
 
 import fs from 'node:fs';
@@ -34,25 +37,27 @@ function findProjectRootFromCwd() {
   let current = path.resolve(process.cwd());
   const maxLevels = 20;
   let levels = 0;
-  
+
   while (levels < maxLevels) {
-  const boxspecPath = path.join(current, 'AutoSnippet', 'AutoSnippet.boxspec.json');
-  if (fs.existsSync(boxspecPath)) {
-    return current; // 当前目录就是项目根
+    const boxspecPath = path.join(current, 'AutoSnippet', 'AutoSnippet.boxspec.json');
+    if (fs.existsSync(boxspecPath)) {
+      return current; // 当前目录就是项目根
+    }
+
+    // 还要检查当前目录本身就是知识库目录的情况（用户直接在 AutoSnippet/ 中运行）
+    const directBoxspec = path.join(current, 'AutoSnippet.boxspec.json');
+    if (fs.existsSync(directBoxspec)) {
+      return path.dirname(current); // 当前是知识库，其父级才是项目根
+    }
+
+    const parentPath = path.dirname(current);
+    if (parentPath === current) {
+      break;
+    }
+    current = parentPath;
+    levels++;
   }
-  
-  // 还要检查当前目录本身就是知识库目录的情况（用户直接在 AutoSnippet/ 中运行）
-  const directBoxspec = path.join(current, 'AutoSnippet.boxspec.json');
-  if (fs.existsSync(directBoxspec)) {
-    return path.dirname(current); // 当前是知识库，其父级才是项目根
-  }
-  
-  const parentPath = path.dirname(current);
-  if (parentPath === current) break;
-  current = parentPath;
-  levels++;
-  }
-  
+
   return null;
 }
 
@@ -62,10 +67,14 @@ if (found) {
 } else {
   // 备选方案：使用PathFinder的查找逻辑
   try {
-  const findPath = require(path.join(autoSnippetRoot, 'lib', 'infrastructure/paths/PathFinder.js'));
-  const fallback = findPath.findProjectRootSync(process.cwd());
-  if (fallback) projectRoot = fallback;
-  } catch (err) {}
+    const findPath = require(
+      path.join(autoSnippetRoot, 'lib', 'infrastructure/paths/PathFinder.js')
+    );
+    const fallback = findPath.findProjectRootSync(process.cwd());
+    if (fallback) {
+      projectRoot = fallback;
+    }
+  } catch (_err) {}
 }
 
 const skillsTarget = path.join(projectRoot, '.cursor', 'skills');
@@ -75,16 +84,14 @@ if (!fs.existsSync(skillsSource)) {
   process.exit(1);
 }
 
-const skillDirs = fs.readdirSync(skillsSource, { withFileTypes: true })
-  .filter(d => d.isDirectory())
-  .map(d => d.name);
+const skillDirs = fs
+  .readdirSync(skillsSource, { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => d.name);
 
 if (skillDirs.length === 0) {
-  console.log('ℹ️  skills 下暂无 skill 目录，跳过安装。');
   process.exit(0);
 }
-  
-  console.log('🚀 Cursor Skills 安装\n');
 
 function getRecipesDir(root) {
   try {
@@ -97,25 +104,31 @@ function getRecipesDir(root) {
       if (fs.existsSync(specPath)) {
         const spec = JSON.parse(fs.readFileSync(specPath, 'utf8'));
         const dir = spec?.recipes?.dir;
-        if (dir) return path.join(root, dir);
+        if (dir) {
+          return path.join(root, dir);
+        }
       }
     }
-  } catch { /* fallback */ }
+  } catch {
+    /* fallback */
+  }
   return path.join(root, defaults.RECIPES_DIR);
 }
 
 function collectMdFiles(dir, baseDir, list = []) {
-  if (!fs.existsSync(dir)) return list;
+  if (!fs.existsSync(dir)) {
+    return list;
+  }
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const e of entries) {
-  const full = path.join(dir, e.name);
-  if (e.isDirectory() && !e.name.startsWith('.')) {
-    collectMdFiles(full, baseDir, list);
-    continue;
-  }
-  if (e.isFile() && e.name.toLowerCase().endsWith('.md')) {
-    list.push(path.relative(baseDir, full).replace(/\\/g, '/'));
-  }
+    const full = path.join(dir, e.name);
+    if (e.isDirectory() && !e.name.startsWith('.')) {
+      collectMdFiles(full, baseDir, list);
+      continue;
+    }
+    if (e.isFile() && e.name.toLowerCase().endsWith('.md')) {
+      list.push(path.relative(baseDir, full).replace(/\\/g, '/'));
+    }
   }
   return list;
 }
@@ -125,7 +138,9 @@ function collectMdFiles(dir, baseDir, list = []) {
  */
 function extractFrontmatterFields(content) {
   const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!m) return {};
+  if (!m) {
+    return {};
+  }
   const block = m[1];
   const extract = (key) => {
     const re = new RegExp(`^${key}:\s*["']?(.+?)["']?\s*$`, 'm');
@@ -152,9 +167,13 @@ function extractFrontmatterFields(content) {
  */
 function buildProjectRecipesContext(projectRoot) {
   const recipesDir = getRecipesDir(projectRoot);
-  if (!fs.existsSync(recipesDir)) return null;
+  if (!fs.existsSync(recipesDir)) {
+    return null;
+  }
   const mdFiles = collectMdFiles(recipesDir, recipesDir).sort();
-  if (mdFiles.length === 0) return null;
+  if (mdFiles.length === 0) {
+    return null;
+  }
 
   const lines = [
     '# Project Recipes Index\n\n',
@@ -178,7 +197,9 @@ function buildProjectRecipesContext(projectRoot) {
       const lang = fm.language || '';
       const kind = fm.kind || '';
       const summary = (fm.summary_cn || fm.summary_en || '').replace(/\|/g, '/');
-      lines.push(`| ${idx} | ${rel} | ${title} | ${trigger} | ${cat} | ${lang} | ${kind} | ${summary} |\n`);
+      lines.push(
+        `| ${idx} | ${rel} | ${title} | ${trigger} | ${cat} | ${lang} | ${kind} | ${summary} |\n`
+      );
     } catch (_) {
       lines.push(`| ${idx} | ${rel} | *(read error)* | | | | | |\n`);
     }
@@ -200,9 +221,15 @@ function buildProjectRecipesContext(projectRoot) {
   }
 
   lines.push('\n## Usage Tips\n\n');
-  lines.push('- 查找 Recipe: `autosnippet_search({ query })` 或 `autosnippet_search({ query, mode: "context" })`\n');
-  lines.push('- 获取详情: `autosnippet_knowledge({ operation: "get", id })` — 返回完整 Recipe 内容、关系、约束\n');
-  lines.push('- 按类型浏览: `autosnippet_knowledge({ operation: "list", kind: "rule" })` / `kind: "pattern"` / `kind: "fact"`\n');
+  lines.push(
+    '- 查找 Recipe: `autosnippet_search({ query })` 或 `autosnippet_search({ query, mode: "context" })`\n'
+  );
+  lines.push(
+    '- 获取详情: `autosnippet_knowledge({ operation: "get", id })` — 返回完整 Recipe 内容、关系、约束\n'
+  );
+  lines.push(
+    '- 按类型浏览: `autosnippet_knowledge({ operation: "list", kind: "rule" })` / `kind: "pattern"` / `kind: "fact"`\n'
+  );
   lines.push('- Guard 检查: `autosnippet_guard({ code })` / `autosnippet_guard({ files })`\n');
 
   return lines.join('');
@@ -210,26 +237,32 @@ function buildProjectRecipesContext(projectRoot) {
 
 function buildSpmmapSummary(projectRoot) {
   const spmmapPath = path.join(projectRoot, defaults.SPMMAP_PATH);
-  if (!fs.existsSync(spmmapPath)) return null;
+  if (!fs.existsSync(spmmapPath)) {
+    return null;
+  }
   try {
-  const data = JSON.parse(fs.readFileSync(spmmapPath, 'utf8'));
-  const graph = data.graph || {};
-  const packages = graph.packages || {};
-  const edges = graph.edges || {};
-  const lines = ['# SPM 依赖结构摘要\n', `Generated by \`asd install:cursor-skill\`. Source: ${defaults.SPMMAP_PATH}\n`, '\n## Packages\n'];
-  for (const [pkg, info] of Object.entries(packages)) {
-    const targets = (info.targets || []).join(', ');
-    lines.push(`- **${pkg}**: ${targets || '(no targets)'}\n`);
-  }
-  lines.push('\n## 依赖关系 (from → to)\n');
-  for (const [from, toList] of Object.entries(edges)) {
-    if (Array.isArray(toList)) {
-    lines.push(`- ${from} → ${toList.join(', ')}\n`);
+    const data = JSON.parse(fs.readFileSync(spmmapPath, 'utf8'));
+    const graph = data.graph || {};
+    const packages = graph.packages || {};
+    const edges = graph.edges || {};
+    const lines = [
+      '# SPM 依赖结构摘要\n',
+      `Generated by \`asd install:cursor-skill\`. Source: ${defaults.SPMMAP_PATH}\n`,
+      '\n## Packages\n',
+    ];
+    for (const [pkg, info] of Object.entries(packages)) {
+      const targets = (info.targets || []).join(', ');
+      lines.push(`- **${pkg}**: ${targets || '(no targets)'}\n`);
     }
-  }
-  return lines.join('');
+    lines.push('\n## 依赖关系 (from → to)\n');
+    for (const [from, toList] of Object.entries(edges)) {
+      if (Array.isArray(toList)) {
+        lines.push(`- ${from} → ${toList.join(', ')}\n`);
+      }
+    }
+    return lines.join('');
   } catch (_) {
-  return null;
+    return null;
   }
 }
 
@@ -238,53 +271,62 @@ for (const name of skillDirs) {
   const dest = path.join(skillsTarget, name);
   // 合并模式：只覆盖源文件中存在的文件，保留用户在 skill 目录下自己添加的文件
   fs.cpSync(src, dest, { recursive: true, force: true });
-  console.log(`  ✅ ${name}`);
 
   if (name === 'autosnippet-recipes') {
     // V2: 生成轻量 Recipe 索引（替代 V1 全文拼接 + by-category 切片）
     const context = buildProjectRecipesContext(projectRoot);
     const refDir = path.join(dest, 'references');
-    if (!fs.existsSync(refDir)) fs.mkdirSync(refDir, { recursive: true });
+    if (!fs.existsSync(refDir)) {
+      fs.mkdirSync(refDir, { recursive: true });
+    }
     const contextPath = path.join(refDir, 'project-recipes-context.md');
     if (context) {
       fs.writeFileSync(contextPath, context, 'utf8');
-      console.log(`    📋 Recipe 索引已生成 (轻量索引 + MCP 按需检索)`);
     } else {
-      if (fs.existsSync(contextPath)) fs.unlinkSync(contextPath);
+      if (fs.existsSync(contextPath)) {
+        fs.unlinkSync(contextPath);
+      }
     }
     // 清理 V1 遗留的 by-category 切片（如存在）
     const oldCatDir = path.join(refDir, 'by-category');
     if (fs.existsSync(oldCatDir)) {
       fs.rmSync(oldCatDir, { recursive: true });
-      console.log(`    🧹 已清理 V1 遗留 by-category 切片`);
     }
     const oldIndexJson = path.join(refDir, 'index.json');
-    if (fs.existsSync(oldIndexJson)) fs.unlinkSync(oldIndexJson);
+    if (fs.existsSync(oldIndexJson)) {
+      fs.unlinkSync(oldIndexJson);
+    }
   }
   if (name === 'autosnippet-structure') {
     // spmmap 摘要注入到 structure skill（替代已删除的 dep-graph skill）
     const summary = buildSpmmapSummary(projectRoot);
     const refDir = path.join(dest, 'references');
-    if (!fs.existsSync(refDir)) fs.mkdirSync(refDir, { recursive: true });
+    if (!fs.existsSync(refDir)) {
+      fs.mkdirSync(refDir, { recursive: true });
+    }
     const summaryPath = path.join(refDir, 'spmmap-summary.md');
     if (summary) {
       fs.writeFileSync(summaryPath, summary, 'utf8');
-      console.log(`    🗺️  SPM 依赖摘要已生成`);
     } else {
-      if (fs.existsSync(summaryPath)) fs.unlinkSync(summaryPath);
+      if (fs.existsSync(summaryPath)) {
+        fs.unlinkSync(summaryPath);
+      }
     }
   }
   if (name === 'autosnippet-guard') {
     // V2: Guard 索引（同 recipes 索引），Agent 主路径走 MCP guard_check
     const context = buildProjectRecipesContext(projectRoot);
     const refDir = path.join(dest, 'references');
-    if (!fs.existsSync(refDir)) fs.mkdirSync(refDir, { recursive: true });
+    if (!fs.existsSync(refDir)) {
+      fs.mkdirSync(refDir, { recursive: true });
+    }
     const guardPath = path.join(refDir, 'guard-context.md');
     if (context) {
       fs.writeFileSync(guardPath, context, 'utf8');
-      console.log(`    🛡️  Guard 索引已生成 (轻量 fallback)`);
     } else {
-      if (fs.existsSync(guardPath)) fs.unlinkSync(guardPath);
+      if (fs.existsSync(guardPath)) {
+        fs.unlinkSync(guardPath);
+      }
     }
   }
 }
@@ -293,17 +335,19 @@ for (const name of skillDirs) {
 const cursorRulesSource = path.join(autoSnippetRoot, 'templates', 'cursor-rules');
 const cursorRulesTarget = path.join(projectRoot, '.cursor', 'rules');
 if (fs.existsSync(cursorRulesSource)) {
-  const ruleFiles = fs.readdirSync(cursorRulesSource, { withFileTypes: true })
-  .filter(d => d.isFile() && d.name.toLowerCase().endsWith('.mdc'))
-  .map(d => d.name);
+  const ruleFiles = fs
+    .readdirSync(cursorRulesSource, { withFileTypes: true })
+    .filter((d) => d.isFile() && d.name.toLowerCase().endsWith('.mdc'))
+    .map((d) => d.name);
   if (ruleFiles.length > 0) {
-  if (!fs.existsSync(cursorRulesTarget)) fs.mkdirSync(cursorRulesTarget, { recursive: true });
-  for (const name of ruleFiles) {
-    const src = path.join(cursorRulesSource, name);
-    const dest = path.join(cursorRulesTarget, name);
-    fs.copyFileSync(src, dest);
-    console.log(`  ✅ ${name}`);
-  }
+    if (!fs.existsSync(cursorRulesTarget)) {
+      fs.mkdirSync(cursorRulesTarget, { recursive: true });
+    }
+    for (const name of ruleFiles) {
+      const src = path.join(cursorRulesSource, name);
+      const dest = path.join(cursorRulesTarget, name);
+      fs.copyFileSync(src, dest);
+    }
   }
 }
 
@@ -314,36 +358,36 @@ const addMcp = process.argv.includes('--mcp');
 if (addMcp && fs.existsSync(mcpServerScript)) {
   let mcp = { mcpServers: {} };
   if (fs.existsSync(mcpPath)) {
-  try {
-    mcp = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
-    if (!mcp.mcpServers) mcp.mcpServers = {};
-  } catch (_) {}
+    try {
+      mcp = JSON.parse(fs.readFileSync(mcpPath, 'utf8'));
+      if (!mcp.mcpServers) {
+        mcp.mcpServers = {};
+      }
+    } catch (_) {}
   }
   mcp.mcpServers.autosnippet = {
-  type: 'stdio',
-  command: 'node',
-  args: [mcpServerScript],
-  env: { ASD_UI_URL: process.env.ASD_UI_URL || defaults.DEFAULT_ASD_UI_URL }
+    type: 'stdio',
+    command: 'node',
+    args: [mcpServerScript],
+    env: { ASD_UI_URL: process.env.ASD_UI_URL || defaults.DEFAULT_ASD_UI_URL },
   };
   fs.mkdirSync(path.dirname(mcpPath), { recursive: true });
   fs.writeFileSync(mcpPath, JSON.stringify(mcp, null, 2), 'utf8');
-  console.log('  ✅ MCP 配置');
 } else if (addMcp) {
   // mcp-server.js 不存在，已跳过
 }
 
-console.log('🎯 Cursor skills 已就绪，安装到项目:', projectRoot);
-console.log(`\n📌 下一步：重启 Cursor 后生效`);
-
 const runEmbed = process.argv.includes('--embed');
 if (runEmbed) {
   (async () => {
-  try {
-    const IndexingPipeline = require(path.join(autoSnippetRoot, 'lib', 'context', 'IndexingPipeline'));
-    const result = await IndexingPipeline.run(projectRoot, { clear: false });
-    // 语义索引已更新
-  } catch (e) {
-    console.warn('⚠️  语义索引更新失败:', e.message);
-  }
+    try {
+      const IndexingPipeline = require(
+        path.join(autoSnippetRoot, 'lib', 'context', 'IndexingPipeline')
+      );
+      const _result = await IndexingPipeline.run(projectRoot, { clear: false });
+      // 语义索引已更新
+    } catch (e) {
+      console.warn('⚠️  语义索引更新失败:', e.message);
+    }
   })().catch(() => process.exit(1));
 }

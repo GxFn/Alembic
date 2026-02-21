@@ -1,5 +1,5 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Constitution from '../../lib/core/constitution/Constitution.js';
 import PermissionManager from '../../lib/core/permission/PermissionManager.js';
 import { PermissionDenied } from '../../lib/shared/errors/BaseError.js';

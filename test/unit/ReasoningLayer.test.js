@@ -10,7 +10,7 @@ jest.unstable_mockModule('../../lib/infrastructure/logging/Logger.js', () => ({
 }));
 
 const { ReasoningTrace } = await import('../../lib/service/chat/ReasoningTrace.js');
-const { ReasoningLayer }  = await import('../../lib/service/chat/ReasoningLayer.js');
+const { ReasoningLayer } = await import('../../lib/service/chat/ReasoningLayer.js');
 
 // ─── ReasoningTrace ─────────────────────────────────────
 describe('ReasoningTrace', () => {
@@ -24,7 +24,12 @@ describe('ReasoningTrace', () => {
     trace.startRound(1);
     trace.setThought('分析项目结构');
     trace.addAction('search_project_code', { query: 'main' });
-    trace.addObservation('search_project_code', { gotNewInfo: true, resultType: 'search', keyFacts: ['5 matches'], resultSize: 200 });
+    trace.addObservation('search_project_code', {
+      gotNewInfo: true,
+      resultType: 'search',
+      keyFacts: ['5 matches'],
+      resultSize: 200,
+    });
     trace.endRound();
 
     const json = trace.toJSON();
@@ -80,9 +85,11 @@ describe('ReasoningTrace', () => {
   test('getRecentSummary 正确汇总最近 N 轮', () => {
     for (let i = 1; i <= 5; i++) {
       trace.startRound(i);
-      if (i % 2 === 1) trace.setThought(`想法 ${i}`);
-      trace.addAction('tool_' + i, {});
-      trace.addObservation('tool_' + i, { gotNewInfo: i <= 3 });
+      if (i % 2 === 1) {
+        trace.setThought(`想法 ${i}`);
+      }
+      trace.addAction(`tool_${i}`, {});
+      trace.addObservation(`tool_${i}`, { gotNewInfo: i <= 3 });
       trace.endRound();
     }
 
@@ -265,7 +272,10 @@ describe('ReasoningLayer', () => {
 
     test('afterAICall native 模式提取 thought', () => {
       layer.beforeAICall(1);
-      layer.afterAICall({ text: '我需要先了解项目的整体结构，然后深入关键模块', functionCalls: [{ name: 'tool' }] });
+      layer.afterAICall({
+        text: '我需要先了解项目的整体结构，然后深入关键模块',
+        functionCalls: [{ name: 'tool' }],
+      });
       layer.afterRound();
 
       const thoughts = layer.trace.getThoughts();
@@ -284,7 +294,12 @@ describe('ReasoningLayer', () => {
 
     test('afterToolExec 记录 action + observation', () => {
       layer.beforeAICall(1);
-      layer.afterToolExec('search_project_code', { query: 'main' }, { matches: [{ file: 'a.js' }] }, null);
+      layer.afterToolExec(
+        'search_project_code',
+        { query: 'main' },
+        { matches: [{ file: 'a.js' }] },
+        null
+      );
       layer.afterRound();
 
       const json = layer.trace.toJSON();
@@ -316,7 +331,7 @@ describe('ReasoningLayer', () => {
         'search_project_code',
         { query: 'test' },
         { matches: [{ file: 'existing.js' }, { file: 'new.js' }] },
-        { uniqueFiles },
+        { uniqueFiles }
       );
       layer.afterRound();
 
@@ -333,7 +348,7 @@ describe('ReasoningLayer', () => {
         'search_project_code',
         { query: 'test' },
         { matches: [{ file: 'a.js' }] },
-        { uniqueFiles },
+        { uniqueFiles }
       );
       layer.afterRound();
 
@@ -442,7 +457,10 @@ describe('ReasoningLayer', () => {
     test('完整 ReAct 周期得到高分', () => {
       for (let i = 1; i <= 3; i++) {
         layer.beforeAICall(i);
-        layer.afterAICall({ text: '长推理文本足够20字符以上的内容', functionCalls: [{ name: 't' }] });
+        layer.afterAICall({
+          text: '长推理文本足够20字符以上的内容',
+          functionCalls: [{ name: 't' }],
+        });
         layer.afterToolExec('submit_knowledge', { title: `t${i}` }, { status: 'ok' }, null);
         layer.afterRound({ newInfoCount: 1, totalCalls: 1, submitCount: 1 });
       }
@@ -555,7 +573,7 @@ describe('ReasoningLayer', () => {
       planLayer.beforeAICall(1, { budget: { maxIterations: 24 } });
       planLayer.afterAICall({
         text: '好的，我来制定一个详细的探索计划：\n1. 获取项目概览和结构信息，了解核心模块\n2. 搜索网络请求相关类的实现代码\n3. 总结分析发现并提交候选\n\n让我开始执行第一步。',
-        functionCalls: [{ name: 'get_project_overview' }]
+        functionCalls: [{ name: 'get_project_overview' }],
       });
       planLayer.afterToolExec('get_project_overview', {}, { files: 100 }, null);
       planLayer.afterRound();
@@ -569,7 +587,7 @@ describe('ReasoningLayer', () => {
       planLayer.beforeAICall(1);
       planLayer.afterAICall({
         text: '我来制定探索计划：\n1. 获取项目概览和目录结构，识别核心模块\n2. 搜索核心类的实现和分析模式\n\n让我从概览开始执行。',
-        functionCalls: [{ name: 'get_project_overview' }]
+        functionCalls: [{ name: 'get_project_overview' }],
       });
       planLayer.afterToolExec('get_project_overview', {}, {}, null);
       planLayer.afterRound();
@@ -588,7 +606,7 @@ describe('ReasoningLayer', () => {
       planLayer.beforeAICall(1, { budget: { maxIterations: 24 } });
       planLayer.afterAICall({
         text: '好的，我来制定一个详细的探索计划：\n1. 获取项目概览，识别核心模块和依赖关系\n2. 搜索核心类的实现，进行模式分析\n\n让我开始执行计划。',
-        functionCalls: [{ name: 'tool' }]
+        functionCalls: [{ name: 'tool' }],
       });
       planLayer.afterRound();
 
@@ -616,7 +634,7 @@ describe('ReasoningLayer', () => {
       fastLayer.beforeAICall(1);
       fastLayer.afterAICall({
         text: '好的，我来制定一个详细的探索计划：\n1. 获取项目概览，了解整体结构和核心模块\n2. 搜索核心类的实现，分析代码模式和设计\n\n让我从第一步开始。',
-        functionCalls: [{ name: 'tool' }]
+        functionCalls: [{ name: 'tool' }],
       });
       fastLayer.afterRound();
 
@@ -637,7 +655,7 @@ describe('ReasoningLayer', () => {
       planLayer.beforeAICall(1, { budget: { maxIterations: 24 } });
       planLayer.afterAICall({
         text: '好的，我来制定初始的探索计划：\n1. 旧步骤获取项目概览和目录结构信息\n2. 旧步骤搜索代码库中的关键实现\n\n让我开始执行。',
-        functionCalls: [{ name: 'tool' }]
+        functionCalls: [{ name: 'tool' }],
       });
       planLayer.afterRound();
 
@@ -653,7 +671,7 @@ describe('ReasoningLayer', () => {
       // AI 返回新 plan
       planLayer.afterAICall({
         text: '根据发现，更新探索计划如下：\n1. 新步骤深入分析网络模块的设计和实现\n2. 新步骤验证缓存策略和数据持久化逻辑\n\n继续执行。',
-        functionCalls: [{ name: 'tool' }]
+        functionCalls: [{ name: 'tool' }],
       });
 
       const plan = planLayer.trace.getPlan();
@@ -671,7 +689,7 @@ describe('ReasoningLayer', () => {
 
       noPlan.afterAICall({
         text: '好的，我来制定一个详细的探索计划：\n1. 步骤一搜索项目关键文件\n2. 步骤二分析核心代码模式\n\n开始执行。',
-        functionCalls: [{ name: 't' }]
+        functionCalls: [{ name: 't' }],
       });
       expect(noPlan.trace.getPlan()).toBeNull();
     });
@@ -680,7 +698,7 @@ describe('ReasoningLayer', () => {
       planLayer.beforeAICall(1);
       planLayer.afterAICall({
         text: '好的，我来制定一个详细的探索计划：\n1. 获取项目概览和目录结构，识别核心模块\n2. 搜索网络请求模式和接口设计\n\n让我开始执行第一步。',
-        functionCalls: [{ name: 'get_project_overview' }]
+        functionCalls: [{ name: 'get_project_overview' }],
       });
       planLayer.afterToolExec('get_project_overview', {}, { files: 10 }, null);
       planLayer.afterRound({ newInfoCount: 1, totalCalls: 1 });
@@ -704,7 +722,7 @@ describe('ReasoningLayer', () => {
       both.beforeAICall(1, { budget: { maxIterations: 24 } });
       both.afterAICall({
         text: '好的，我来制定一个详细的探索计划：\n1. 获取项目概览，识别核心模块和依赖关系\n2. 搜索核心类的实现，进行模式分析\n\n让我开始执行。',
-        functionCalls: [{ name: 'tool' }]
+        functionCalls: [{ name: 'tool' }],
       });
       both.afterRound();
 
@@ -727,7 +745,7 @@ describe('ReasoningLayer', () => {
       planLayer.beforeAICall(1);
       planLayer.afterAICall({
         text: '让我直接开始搜索。',
-        functionCalls: [{ name: 'tool' }]
+        functionCalls: [{ name: 'tool' }],
       });
 
       expect(planLayer.trace.getPlan()).toBeNull();
@@ -737,9 +755,14 @@ describe('ReasoningLayer', () => {
       planLayer.beforeAICall(1);
       planLayer.afterAICall({
         text: '好的，我来制定探索计划：\n1. 搜索 `BDBaseRequest` 子类，分析网络请求模式和继承关系\n2. 获取项目概览，了解整体结构和模块划分\n\n让我开始执行第一步。',
-        functionCalls: [{ name: 'search_project_code' }]
+        functionCalls: [{ name: 'search_project_code' }],
       });
-      planLayer.afterToolExec('search_project_code', { query: 'BDBaseRequest' }, { matches: [] }, null);
+      planLayer.afterToolExec(
+        'search_project_code',
+        { query: 'BDBaseRequest' },
+        { matches: [] },
+        null
+      );
       planLayer.afterRound();
 
       const progress = planLayer.getPlanProgress();

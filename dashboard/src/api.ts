@@ -14,6 +14,7 @@ import type {
   RecipeStats,
   ProjectData,
   SPMTarget,
+  ProjectDirectory,
   ExtractedRecipe,
   KnowledgeEntry,
   KnowledgePaginatedResponse,
@@ -87,7 +88,7 @@ function toRecipe(r: any): Recipe {
 // ═══════════════════════════════════════════════════════
 
 function parseFrontmatter(markdownContent: string) {
-  let language = 'swift',
+  let language = '',
     category = 'general',
     title = '',
     trigger = '',
@@ -216,7 +217,7 @@ function toCandidatePayload(item: any, targetName: string, source: string) {
     // ── 候选元数据 ──
     description: item.description || '',
     trigger: item.trigger || '',
-    language: item.language || 'swift',
+    language: item.language || '',
     category: categoryVal,
     kind: item.kind || 'pattern',
     knowledgeType: item.knowledgeType || 'code-pattern',
@@ -413,26 +414,25 @@ export const api = {
     };
   },
 
-  // ── SPM ─────────────────────────────────────────────
+  // ── Modules (多语言统一模块扫描) ───────
 
   async fetchTargets(): Promise<SPMTarget[]> {
-    const res = await http.get('/spm/targets');
+    const res = await http.get('/modules/targets');
     const data = res.data?.data || {};
     return data.targets || [];
   },
 
   async getTargetFiles(target: SPMTarget, signal?: AbortSignal) {
-    const res = await http.post('/spm/target-files', { target }, { signal });
+    const res = await http.post('/modules/target-files', { target }, { signal });
     const data = res.data?.data || {};
     return { files: data.files || [], count: data.total || data.files?.length || 0 };
   },
 
   async scanTarget(target: SPMTarget, signal?: AbortSignal) {
-    const res = await http.post('/spm/scan', { target }, { signal, timeout: 600000 });
+    const res = await http.post('/modules/scan', { target }, { signal, timeout: 600000 });
     const data = res.data?.data || {};
-    // Unify response: could be {recipes, scannedFiles} or {result, scannedFiles}
     const recipes = data.recipes || data.result || [];
-    return { recipes, scannedFiles: data.scannedFiles || [], message: data.message || '' };
+    return { recipes, scannedFiles: data.scannedFiles || [], message: data.message || '', noAi: !!data.noAi };
   },
 
   /**
@@ -443,9 +443,10 @@ export const api = {
     target: SPMTarget,
     onEvent: (event: any) => void,
     signal?: AbortSignal,
-  ): Promise<{ recipes: any[]; scannedFiles: any[]; message: string }> {
+  ): Promise<{ recipes: any[]; scannedFiles: any[]; message: string; noAi?: boolean }> {
     // Step 1: POST 创建流式扫描会话
-    const startRes = await fetch('/api/v1/spm/scan/stream', {
+    let sessionId: string;
+    const startRes = await fetch('/api/v1/modules/scan/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ target }),
@@ -453,15 +454,15 @@ export const api = {
     });
     if (!startRes.ok) throw new Error(`Scan stream start failed: ${startRes.status}`);
     const startData = await startRes.json();
-    const sessionId = startData.sessionId;
+    sessionId = startData.sessionId;
     if (!sessionId) throw new Error(`No sessionId returned`);
 
     // Step 2: EventSource 消费 SSE 事件
     return new Promise((resolve, reject) => {
-      const esUrl = `/api/v1/spm/scan/events/${sessionId}`;
+      const esUrl = `/api/v1/modules/scan/events/${sessionId}`;
       const es = new EventSource(esUrl);
       let resolved = false;
-      let finalResult = { recipes: [] as any[], scannedFiles: [] as any[], message: '' };
+      let finalResult = { recipes: [] as any[], scannedFiles: [] as any[], message: '', noAi: false };
 
       function cleanup() { es.close(); }
 
@@ -475,6 +476,7 @@ export const api = {
               recipes: evt.recipes || [],
               scannedFiles: evt.scannedFiles || [],
               message: evt.message || '',
+              noAi: !!evt.noAi,
             };
           }
 
@@ -521,7 +523,7 @@ export const api = {
 
   /** 全项目扫描：AI 提取 + Guard 审计 */
   async scanProject(signal?: AbortSignal) {
-    const res = await http.post('/spm/scan-project', {}, { signal, timeout: 600000 });
+    const res = await http.post('/modules/scan-project', {}, { signal, timeout: 600000 });
     const data = res.data?.data || {};
     return {
       targets: data.targets || [],
@@ -532,9 +534,104 @@ export const api = {
     };
   },
 
+  /**
+   * 浏览项目目录结构 — 供目录选择器使用
+   */
+  async browseDirectories(basePath = '', depth = 3): Promise<import('./types').ProjectDirectory[]> {
+    const params = new URLSearchParams();
+    if (basePath) params.set('path', basePath);
+    if (depth) params.set('depth', String(depth));
+    const res = await http.get(`/modules/browse-dirs?${params.toString()}`);
+    return res.data?.data?.directories || [];
+  },
+
+  /**
+   * 流式扫描任意目录 — SSE Session 架构
+   * 复用已有 scan-events SSE 通道
+   */
+  async scanFolderStream(
+    folderPath: string,
+    onEvent: (event: any) => void,
+    signal?: AbortSignal,
+  ): Promise<{ recipes: any[]; scannedFiles: any[]; message: string; noAi?: boolean }> {
+    // Step 1: POST 创建流式扫描会话
+    const startRes = await fetch('/api/v1/modules/scan-folder/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: folderPath }),
+      signal,
+    });
+    if (!startRes.ok) throw new Error(`Scan folder start failed: ${startRes.status}`);
+    const startData = await startRes.json();
+    const sessionId = startData.sessionId;
+    if (!sessionId) throw new Error('No sessionId returned');
+
+    // Step 2: EventSource 消费 SSE 事件（复用已有通道）
+    return new Promise((resolve, reject) => {
+      const esUrl = `/api/v1/modules/scan/events/${sessionId}`;
+      const es = new EventSource(esUrl);
+      let resolved = false;
+      let finalResult = { recipes: [] as any[], scannedFiles: [] as any[], message: '', noAi: false };
+
+      function cleanup() { es.close(); }
+
+      es.onmessage = (e) => {
+        try {
+          const evt = JSON.parse(e.data);
+          onEvent(evt);
+
+          if (evt.type === 'scan:result') {
+            finalResult = {
+              recipes: evt.recipes || [],
+              scannedFiles: evt.scannedFiles || [],
+              message: evt.message || '',
+              noAi: !!evt.noAi,
+            };
+          }
+
+          if (evt.type === 'stream:done') {
+            cleanup();
+            resolved = true;
+            resolve(finalResult);
+          }
+
+          if (evt.type === 'stream:error') {
+            cleanup();
+            resolved = true;
+            reject(new Error(evt.message || 'Scan folder stream error'));
+          }
+        } catch { /* ignore */ }
+      };
+
+      es.onerror = () => {
+        if (!resolved) {
+          cleanup();
+          resolved = true;
+          if (finalResult.recipes.length > 0) {
+            resolve(finalResult);
+          } else {
+            reject(new Error('EventSource connection failed'));
+          }
+        }
+      };
+
+      if (signal) {
+        const onAbort = () => {
+          if (!resolved) {
+            cleanup();
+            resolved = true;
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          }
+        };
+        if (signal.aborted) { onAbort(); return; }
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+  },
+
   /** 冷启动：快速骨架 + 异步逐维度填充（v5） */
   async bootstrap(signal?: AbortSignal) {
-    const res = await http.post('/spm/bootstrap', {}, { signal, timeout: 300000 });
+    const res = await http.post('/modules/bootstrap', {}, { signal, timeout: 300000 });
     const data = res.data?.data || {};
     return {
       report: data.report || {},
@@ -554,23 +651,38 @@ export const api = {
 
   /** 查询 bootstrap 异步填充进度（Socket.io 不可用时的 fallback） */
   async getBootstrapStatus() {
-    const res = await http.get('/spm/bootstrap/status');
+    const res = await http.get('/modules/bootstrap/status');
     return res.data?.data || { status: 'idle' };
   },
 
   async getDepGraph(level: string) {
-    const res = await http.get(`/spm/dep-graph?level=${level}`);
+    const res = await http.get(`/modules/dep-graph?level=${level}`);
     return res.data?.data || {};
+  },
+
+  /** 获取项目信息（检测到的语言、框架等） */
+  async getProjectInfo() {
+    try {
+      const res = await http.get('/modules/project-info');
+      return res.data?.data || {};
+    } catch {
+      return { primaryLanguage: 'unknown', discoverers: [], hasSpm: false };
+    }
   },
 
   // ── Commands ────────────────────────────────────────
 
-  async syncToXcode(): Promise<void> {
-    await http.post('/commands/install');
+  async syncSnippets(target: 'xcode' | 'vscode' | 'all' = 'all'): Promise<any> {
+    const res = await http.post('/commands/install', { target });
+    return res.data;
   },
 
   async refreshProject(): Promise<void> {
-    await http.post('/commands/spm-map');
+    try {
+      await http.post('/modules/update-map');
+    } catch {
+      await http.post('/commands/spm-map');
+    }
   },
 
   // ── Extract ─────────────────────────────────────────
@@ -884,13 +996,15 @@ export const api = {
     history: Array<{ role: string; content: string }>,
     onEvent: (event: SSEEvent) => void,
     signal?: AbortSignal,
+    /** UI language preference — forwarded to Agent for reply language control */
+    lang?: 'zh' | 'en',
   ): Promise<{ text: string; toolCalls?: any[]; hasContext?: boolean }> {
 
     // ── Step 1: POST 启动对话 ──
     const startRes = await fetch('/api/v1/ai/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, history }),
+      body: JSON.stringify({ prompt, history, ...(lang ? { lang } : {}) }),
       signal,
     });
     if (!startRes.ok) throw new Error(`Chat start failed: ${startRes.status}`);
@@ -1200,7 +1314,7 @@ export const api = {
 
   // ── Guard ───────────────────────────────────────────
 
-  async getGuardRules(): Promise<{ rules: Record<string, any> }> {
+  async getGuardRules(): Promise<{ rules: Record<string, any>; projectLanguages: string[] }> {
     const res = await http.get('/rules?limit=100');
     const data = res.data?.data || {};
     const items: any[] = data.data || data.items || [];
@@ -1208,7 +1322,7 @@ export const api = {
     for (const r of items) {
       rules[r.id] = r;
     }
-    return { rules };
+    return { rules, projectLanguages: data.projectLanguages || [] };
   },
 
   async getGuardViolations(): Promise<{ runs: any[] }> {
@@ -1486,6 +1600,19 @@ Skill 文档格式要求：
   async wikiFileContent(filePath: string): Promise<{ path: string; content: string; size: number }> {
     const res = await http.get(`/wiki/file/${filePath}`);
     return res.data?.data || { path: filePath, content: '', size: 0 };
+  },
+
+  // ── Language preference ──────
+
+  /** 获取服务端默认 UI 语言 */
+  async getLang(): Promise<'zh' | 'en'> {
+    const res = await http.get('/ai/lang');
+    return res.data?.data?.lang || 'zh';
+  },
+
+  /** 同步 UI 语言偏好到服务端 */
+  async setLang(lang: 'zh' | 'en'): Promise<void> {
+    await http.post('/ai/lang', { lang });
   },
 };
 

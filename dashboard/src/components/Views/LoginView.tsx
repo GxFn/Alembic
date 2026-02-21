@@ -8,6 +8,7 @@
 import React, { useState, type FormEvent } from 'react';
 import { Code, LogIn, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { ICON_SIZES } from '../../constants/icons';
+import { useI18n } from '../../i18n';
 
 interface LoginViewProps {
   onLogin: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -15,6 +16,7 @@ interface LoginViewProps {
 }
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading }) => {
+  const { t } = useI18n();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -25,17 +27,17 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading }) => {
     setError('');
 
     if (!username.trim()) {
-      setError('请输入用户名');
+      setError(t('login.usernameRequired'));
       return;
     }
     if (!password) {
-      setError('请输入密码');
+      setError(t('login.passwordRequired'));
       return;
     }
 
     const result = await onLogin(username.trim(), password);
     if (!result.success) {
-      setError(result.error || '登录失败，请重试');
+      setError(result.error || t('login.loginFailed'));
     }
   };
 
@@ -54,12 +56,12 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading }) => {
             <Code size={ICON_SIZES.xxl} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-900">AutoSnippet</h1>
-          <p className="text-sm text-slate-500 mt-1">连接开发者、AI 与项目知识库</p>
+          <p className="text-sm text-slate-500 mt-1">{t('login.subtitle')}</p>
         </div>
 
         {/* 登录卡片 */}
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-8">
-          <h2 className="text-lg font-bold text-slate-800 mb-6">登录 Dashboard</h2>
+          <h2 className="text-lg font-bold text-slate-800 mb-6">{t('login.heading')}</h2>
 
           {/* 错误提示 */}
           {error && (
@@ -73,7 +75,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading }) => {
             {/* 用户名 */}
             <div>
               <label htmlFor="username" className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                用户名
+                {t('login.username')}
               </label>
               <input
                 id="username"
@@ -82,7 +84,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading }) => {
                 autoFocus
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                placeholder="输入用户名"
+                placeholder={t('login.usernamePlaceholder')}
                 disabled={isLoading}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 disabled:opacity-60"
               />
@@ -91,7 +93,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading }) => {
             {/* 密码 */}
             <div>
               <label htmlFor="password" className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                密码
+                {t('login.password')}
               </label>
               <div className="relative">
                 <input
@@ -100,7 +102,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading }) => {
                   autoComplete="current-password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  placeholder="输入密码"
+                  placeholder={t('login.passwordPlaceholder')}
                   disabled={isLoading}
                   className="w-full px-3 py-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 disabled:opacity-60"
                 />
@@ -127,12 +129,12 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading }) => {
               {isLoading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>登录中...</span>
+                  <span>{t('login.loggingIn')}</span>
                 </>
               ) : (
                 <>
                   <LogIn size={ICON_SIZES.md} />
-                  <span>登录</span>
+                  <span>{t('login.loginBtn')}</span>
                 </>
               )}
             </button>
@@ -141,7 +143,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading }) => {
 
         {/* 底部提示 */}
         <p className="text-center text-xs text-slate-400 mt-6">
-          登录功能由 <code className="text-slate-500">VITE_AUTH_ENABLED</code> 环境变量控制
+          {t('login.envHint')}
         </p>
       </div>
     </div>

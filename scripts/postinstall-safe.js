@@ -5,13 +5,14 @@
  * 用于避免触发 npm 安全警告
  */
 
-import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
 
 const root = path.resolve(__dirname, '..');
 
@@ -22,14 +23,8 @@ function checkBinaries() {
       name: 'Native UI',
       path: path.join(root, 'resources', 'native-ui', 'native-ui'),
       optional: true,
-      platform: 'darwin'
+      platform: 'darwin',
     },
-    {
-      name: 'ASD Entry',
-      path: path.join(root, 'bin', 'asd-verify'),
-      optional: true,
-      platform: 'darwin'
-    }
   ];
 
   checks.forEach(({ name, path: binPath, optional, platform }) => {
@@ -40,19 +35,12 @@ function checkBinaries() {
 
     if (fs.existsSync(binPath)) {
       const stat = fs.statSync(binPath);
-      const sizeKB = (stat.size / 1024).toFixed(1);
-      console.log(`✅ ${name}: 已安装 (${sizeKB}KB)`);
+      const _sizeKB = (stat.size / 1024).toFixed(1);
     } else if (optional) {
-      console.log(`ℹ️  ${name}: 未安装（可选功能）`);
     } else {
       console.warn(`⚠️  ${name}: 未找到`);
     }
   });
 }
 
-// 主流程
-console.log('\n📦 AutoSnippet 安装检查...\n');
-
 checkBinaries();
-
-console.log('\n✅ 安装完成！运行 asd -h 查看帮助\n');

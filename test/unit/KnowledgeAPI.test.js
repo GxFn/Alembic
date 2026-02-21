@@ -67,7 +67,8 @@ function mockKnowledgeService() {
       pagination: { page: 1, pageSize: 20, total: 1 },
     })),
     getStats: jest.fn(async () => ({
-      total: 10, byLifecycle: { pending: 5, active: 5 },
+      total: 10,
+      byLifecycle: { pending: 5, active: 5 },
     })),
     incrementUsage: jest.fn(async () => {}),
     updateQuality: jest.fn(async () => ({ quality: { overall: 0.8 } })),
@@ -108,7 +109,9 @@ describe('MCP Knowledge Handlers', () => {
     ctx = {
       container: {
         get: jest.fn((name) => {
-          if (name === 'knowledgeService') return svc;
+          if (name === 'knowledgeService') {
+            return svc;
+          }
           return null;
         }),
       },
@@ -134,7 +137,7 @@ describe('MCP Knowledge Handlers', () => {
       // _enrichToV3 only adds source='mcp', no other field inference
       expect(svc.create).toHaveBeenCalledWith(
         expect.objectContaining({ ...validArgs, source: 'mcp' }),
-        { userId: 'mcp' },
+        { userId: 'mcp' }
       );
     });
 
@@ -144,7 +147,7 @@ describe('MCP Knowledge Handlers', () => {
       // caller-provided source is preserved
       expect(svc.create).toHaveBeenCalledWith(
         expect.objectContaining({ ...validArgs, source: 'cursor-scan' }),
-        { userId: 'mcp' },
+        { userId: 'mcp' }
       );
     });
 
@@ -180,8 +183,18 @@ describe('MCP Knowledge Handlers', () => {
     const validBatchArgs = {
       target_name: 'TestTarget',
       items: [
-        { title: 'A', language: 'swift', content: { pattern: 'a' }, reasoning: { whyStandard: 'a', sources: ['a'] } },
-        { title: 'B', language: 'objc', content: { pattern: 'b' }, reasoning: { whyStandard: 'b', sources: ['b'] } },
+        {
+          title: 'A',
+          language: 'swift',
+          content: { pattern: 'a' },
+          reasoning: { whyStandard: 'a', sources: ['a'] },
+        },
+        {
+          title: 'B',
+          language: 'objc',
+          content: { pattern: 'b' },
+          reasoning: { whyStandard: 'b', sources: ['b'] },
+        },
       ],
     };
 
@@ -195,13 +208,13 @@ describe('MCP Knowledge Handlers', () => {
     });
 
     test('缺少 target_name 时应抛出错误', async () => {
-      await expect(submitKnowledgeBatch(ctx, { items: [{ title: 'X' }] }))
-        .rejects.toThrow('target_name');
+      await expect(submitKnowledgeBatch(ctx, { items: [{ title: 'X' }] })).rejects.toThrow(
+        'target_name'
+      );
     });
 
     test('空 items 应抛出错误', async () => {
-      await expect(submitKnowledgeBatch(ctx, { target_name: 'T', items: [] }))
-        .rejects.toThrow();
+      await expect(submitKnowledgeBatch(ctx, { target_name: 'T', items: [] })).rejects.toThrow();
     });
 
     test('部分失败时应返回 errors', async () => {
@@ -226,10 +239,9 @@ describe('MCP Knowledge Handlers', () => {
     test('应使用自定义 source', async () => {
       const args = { ...validBatchArgs, source: 'bootstrap' };
       await submitKnowledgeBatch(ctx, args);
-      expect(svc.create).toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'bootstrap' }),
-        { userId: 'mcp' },
-      );
+      expect(svc.create).toHaveBeenCalledWith(expect.objectContaining({ source: 'bootstrap' }), {
+        userId: 'mcp',
+      });
     });
   });
 
@@ -244,53 +256,59 @@ describe('MCP Knowledge Handlers', () => {
     });
 
     test('submit 操作应被 PERMISSION_DENIED 拒绝', async () => {
-      await expect(knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'submit' }))
-        .rejects.toThrow('PERMISSION_DENIED');
+      await expect(
+        knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'submit' })
+      ).rejects.toThrow('PERMISSION_DENIED');
     });
 
     test('approve 操作应被 PERMISSION_DENIED 拒绝', async () => {
-      await expect(knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'approve' }))
-        .rejects.toThrow('PERMISSION_DENIED');
+      await expect(
+        knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'approve' })
+      ).rejects.toThrow('PERMISSION_DENIED');
     });
 
     test('reject 操作应被 PERMISSION_DENIED 拒绝', async () => {
-      await expect(knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'reject', reason: 'low quality' }))
-        .rejects.toThrow('PERMISSION_DENIED');
+      await expect(
+        knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'reject', reason: 'low quality' })
+      ).rejects.toThrow('PERMISSION_DENIED');
     });
 
     test('publish 操作应被 PERMISSION_DENIED 拒绝', async () => {
-      await expect(knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'publish' }))
-        .rejects.toThrow('PERMISSION_DENIED');
+      await expect(
+        knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'publish' })
+      ).rejects.toThrow('PERMISSION_DENIED');
     });
 
     test('deprecate 操作应被 PERMISSION_DENIED 拒绝', async () => {
-      await expect(knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'deprecate', reason: 'outdated' }))
-        .rejects.toThrow('PERMISSION_DENIED');
+      await expect(
+        knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'deprecate', reason: 'outdated' })
+      ).rejects.toThrow('PERMISSION_DENIED');
     });
 
     test('to_draft 操作应被 PERMISSION_DENIED 拒绝', async () => {
-      await expect(knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'to_draft' }))
-        .rejects.toThrow('PERMISSION_DENIED');
+      await expect(
+        knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'to_draft' })
+      ).rejects.toThrow('PERMISSION_DENIED');
     });
 
     test('fast_track 操作应被 PERMISSION_DENIED 拒绝', async () => {
-      await expect(knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'fast_track' }))
-        .rejects.toThrow('PERMISSION_DENIED');
+      await expect(
+        knowledgeLifecycle(ctx, { id: 'test-api-001', action: 'fast_track' })
+      ).rejects.toThrow('PERMISSION_DENIED');
     });
 
     test('未知操作应被 PERMISSION_DENIED 拒绝', async () => {
-      await expect(knowledgeLifecycle(ctx, { id: 'x', action: 'unknown' }))
-        .rejects.toThrow('PERMISSION_DENIED');
+      await expect(knowledgeLifecycle(ctx, { id: 'x', action: 'unknown' })).rejects.toThrow(
+        'PERMISSION_DENIED'
+      );
     });
 
     test('缺少 id 应抛出错误', async () => {
-      await expect(knowledgeLifecycle(ctx, { action: 'reactivate' }))
-        .rejects.toThrow('id');
+      await expect(knowledgeLifecycle(ctx, { action: 'reactivate' })).rejects.toThrow('id');
     });
 
     test('缺少 action 应抛出错误', async () => {
-      await expect(knowledgeLifecycle(ctx, { id: 'x' }))
-        .rejects.toThrow('action');
+      await expect(knowledgeLifecycle(ctx, { id: 'x' })).rejects.toThrow('action');
     });
   });
 });
@@ -302,35 +320,50 @@ describe('MCP Knowledge Handlers', () => {
 const { TOOLS, TOOL_GATEWAY_MAP } = await import('../../lib/external/mcp/tools.js');
 
 describe('MCP Tool Definitions (V3)', () => {
-  const v3Tools = TOOLS.filter(t => t.name.includes('knowledge'));
+  const _v3Tools = TOOLS.filter((t) => t.name.includes('knowledge'));
 
   test('应包含 submit_knowledge 工具', () => {
-    const tool = TOOLS.find(t => t.name === 'autosnippet_submit_knowledge');
+    const tool = TOOLS.find((t) => t.name === 'autosnippet_submit_knowledge');
     expect(tool).toBeDefined();
-    expect(tool.inputSchema.required).toEqual(['title', 'language', 'content', 'kind', 'doClause', 'category', 'trigger', 'description', 'headers', 'usageGuide', 'knowledgeType']);
+    expect(tool.inputSchema.required).toEqual([
+      'title',
+      'language',
+      'content',
+      'kind',
+      'doClause',
+      'category',
+      'trigger',
+      'description',
+      'headers',
+      'usageGuide',
+      'knowledgeType',
+    ]);
   });
 
   test('应包含 submit_knowledge_batch 工具', () => {
-    const tool = TOOLS.find(t => t.name === 'autosnippet_submit_knowledge_batch');
+    const tool = TOOLS.find((t) => t.name === 'autosnippet_submit_knowledge_batch');
     expect(tool).toBeDefined();
     expect(tool.inputSchema.required).toEqual(['target_name', 'items']);
   });
 
   test('应包含 knowledge_lifecycle 工具', () => {
-    const tool = TOOLS.find(t => t.name === 'autosnippet_knowledge_lifecycle');
+    const tool = TOOLS.find((t) => t.name === 'autosnippet_knowledge_lifecycle');
     expect(tool).toBeDefined();
     expect(tool.inputSchema.required).toEqual(['id', 'action']);
   });
 
   test('V3 工具应在 TOOL_GATEWAY_MAP 中注册', () => {
     expect(TOOL_GATEWAY_MAP.autosnippet_submit_knowledge).toEqual({
-      action: 'knowledge:create', resource: 'knowledge',
+      action: 'knowledge:create',
+      resource: 'knowledge',
     });
     expect(TOOL_GATEWAY_MAP.autosnippet_submit_knowledge_batch).toEqual({
-      action: 'knowledge:create', resource: 'knowledge',
+      action: 'knowledge:create',
+      resource: 'knowledge',
     });
     expect(TOOL_GATEWAY_MAP.autosnippet_knowledge_lifecycle).toEqual({
-      action: 'knowledge:update', resource: 'knowledge',
+      action: 'knowledge:update',
+      resource: 'knowledge',
     });
   });
 
@@ -339,19 +372,27 @@ describe('MCP Tool Definitions (V3)', () => {
   });
 
   test('submit_knowledge content 字段应有 pattern 和 markdown 属性', () => {
-    const tool = TOOLS.find(t => t.name === 'autosnippet_submit_knowledge');
+    const tool = TOOLS.find((t) => t.name === 'autosnippet_submit_knowledge');
     const contentProps = tool.inputSchema.properties.content.properties;
     expect(contentProps.pattern).toBeDefined();
     expect(contentProps.markdown).toBeDefined();
   });
 
   test('knowledge_lifecycle 的 action enum 应包含全部操作', () => {
-    const tool = TOOLS.find(t => t.name === 'autosnippet_knowledge_lifecycle');
+    const tool = TOOLS.find((t) => t.name === 'autosnippet_knowledge_lifecycle');
     const actionEnum = tool.inputSchema.properties.action.enum;
-    expect(actionEnum).toEqual(expect.arrayContaining([
-      'submit', 'approve', 'reject', 'publish',
-      'deprecate', 'reactivate', 'to_draft', 'fast_track',
-    ]));
+    expect(actionEnum).toEqual(
+      expect.arrayContaining([
+        'submit',
+        'approve',
+        'reject',
+        'publish',
+        'deprecate',
+        'reactivate',
+        'to_draft',
+        'fast_track',
+      ])
+    );
   });
 });
 
@@ -367,7 +408,9 @@ const _mockSvc = mockKnowledgeService();
 jest.unstable_mockModule('../../lib/injection/ServiceContainer.js', () => ({
   getServiceContainer: jest.fn(() => ({
     get: jest.fn((name) => {
-      if (name === 'knowledgeService') return _mockSvc;
+      if (name === 'knowledgeService') {
+        return _mockSvc;
+      }
       return null;
     }),
   })),
@@ -378,7 +421,9 @@ jest.unstable_mockModule('../../lib/http/middleware/errorHandler.js', () => ({
 }));
 
 jest.unstable_mockModule('../../lib/infrastructure/logging/Logger.js', () => ({
-  default: { getInstance: () => ({ info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }) },
+  default: {
+    getInstance: () => ({ info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() }),
+  },
 }));
 
 jest.unstable_mockModule('../../lib/http/utils/routeHelpers.js', () => ({
@@ -388,7 +433,10 @@ jest.unstable_mockModule('../../lib/http/utils/routeHelpers.js', () => ({
 
 jest.unstable_mockModule('../../lib/shared/errors/index.js', () => ({
   ValidationError: class ValidationError extends Error {
-    constructor(msg) { super(msg); this.name = 'ValidationError'; }
+    constructor(msg) {
+      super(msg);
+      this.name = 'ValidationError';
+    }
   },
 }));
 
@@ -399,8 +447,10 @@ describe('HTTP Knowledge Route Handlers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // 重置 mock service 调用
-    Object.values(_mockSvc).forEach(v => {
-      if (typeof v?.mockClear === 'function') v.mockClear();
+    Object.values(_mockSvc).forEach((v) => {
+      if (typeof v?.mockClear === 'function') {
+        v.mockClear();
+      }
     });
   });
 
@@ -434,7 +484,11 @@ describe('HTTP Knowledge Route Handlers', () => {
   });
 
   test('PATCH /:id 更新应委托给 service.update', async () => {
-    const entry = await _mockSvc.update('test-api-001', { title: 'Updated' }, { userId: 'test-user' });
+    const entry = await _mockSvc.update(
+      'test-api-001',
+      { title: 'Updated' },
+      { userId: 'test-user' }
+    );
     expect(entry.id).toBe('test-api-001');
   });
 
@@ -485,7 +539,9 @@ describe('HTTP Knowledge Route Handlers', () => {
 
   test('POST /:id/usage 应委托给 service.incrementUsage', async () => {
     await _mockSvc.incrementUsage('test-api-001', 'adoption', { actor: 'test-user' });
-    expect(_mockSvc.incrementUsage).toHaveBeenCalledWith('test-api-001', 'adoption', { actor: 'test-user' });
+    expect(_mockSvc.incrementUsage).toHaveBeenCalledWith('test-api-001', 'adoption', {
+      actor: 'test-user',
+    });
   });
 
   test('PATCH /:id/quality 应委托给 service.updateQuality', async () => {
@@ -495,19 +551,21 @@ describe('HTTP Knowledge Route Handlers', () => {
 
   test('batch-approve 应对每个 id 调用 service.approve', async () => {
     const ids = ['id1', 'id2', 'id3'];
-    await Promise.allSettled(ids.map(id => _mockSvc.approve(id, { userId: 'test-user' })));
+    await Promise.allSettled(ids.map((id) => _mockSvc.approve(id, { userId: 'test-user' })));
     expect(_mockSvc.approve).toHaveBeenCalledTimes(3);
   });
 
   test('batch-reject 应对每个 id 调用 service.reject', async () => {
     const ids = ['id1', 'id2'];
-    await Promise.allSettled(ids.map(id => _mockSvc.reject(id, 'batch reject', { userId: 'test-user' })));
+    await Promise.allSettled(
+      ids.map((id) => _mockSvc.reject(id, 'batch reject', { userId: 'test-user' }))
+    );
     expect(_mockSvc.reject).toHaveBeenCalledTimes(2);
   });
 
   test('batch-publish 应对每个 id 调用 service.publish', async () => {
     const ids = ['id1', 'id2'];
-    await Promise.allSettled(ids.map(id => _mockSvc.publish(id, { userId: 'test-user' })));
+    await Promise.allSettled(ids.map((id) => _mockSvc.publish(id, { userId: 'test-user' })));
     expect(_mockSvc.publish).toHaveBeenCalledTimes(2);
   });
 });

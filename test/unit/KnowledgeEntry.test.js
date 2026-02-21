@@ -1,11 +1,10 @@
-import { jest } from '@jest/globals';
 import { KnowledgeEntry } from '../../lib/domain/knowledge/KnowledgeEntry.js';
-import { Lifecycle, isValidTransition, inferKind } from '../../lib/domain/knowledge/Lifecycle.js';
-import { Content } from '../../lib/domain/knowledge/values/Content.js';
-import { Relations } from '../../lib/domain/knowledge/values/Relations.js';
+import { inferKind, isValidTransition } from '../../lib/domain/knowledge/Lifecycle.js';
 import { Constraints } from '../../lib/domain/knowledge/values/Constraints.js';
-import { Reasoning } from '../../lib/domain/knowledge/values/Reasoning.js';
+import { Content } from '../../lib/domain/knowledge/values/Content.js';
 import { Quality } from '../../lib/domain/knowledge/values/Quality.js';
+import { Reasoning } from '../../lib/domain/knowledge/values/Reasoning.js';
+import { Relations } from '../../lib/domain/knowledge/values/Relations.js';
 import { Stats } from '../../lib/domain/knowledge/values/Stats.js';
 
 /* ════════════════════════════════════════════
@@ -83,7 +82,7 @@ describe('Relations value object', () => {
     });
     const flat = r.toFlatArray();
     expect(flat).toHaveLength(2);
-    expect(flat.some(x => x.type === 'calls')).toBe(true);
+    expect(flat.some((x) => x.type === 'calls')).toBe(true);
   });
 
   test('toJSON → from round-trip', () => {
@@ -184,8 +183,6 @@ describe('Quality value object', () => {
     expect(q.overall).toBe(0.9);
     expect(q.grade).toBe('A');
   });
-
-
 });
 
 describe('Stats value object', () => {
@@ -326,8 +323,8 @@ describe('KnowledgeEntry', () => {
 
     test('lifecycle history tracks all transitions', () => {
       const e = makeEntry();
-      e.publish('admin');       // pending → active
-      e.deprecate('outdated');  // active → deprecated
+      e.publish('admin'); // pending → active
+      e.deprecate('outdated'); // active → deprecated
       expect(e.lifecycleHistory).toHaveLength(2);
       expect(e.lifecycleHistory[0].from).toBe('pending');
       expect(e.lifecycleHistory[0].to).toBe('active');
@@ -392,9 +389,7 @@ describe('KnowledgeEntry', () => {
         lifecycle: 'active',
         kind: 'rule',
         constraints: {
-          guards: [
-            { ast_query: { language: 'swift', node_type: 'call' }, message: 'ast guard' },
-          ],
+          guards: [{ ast_query: { language: 'swift', node_type: 'call' }, message: 'ast guard' }],
         },
       });
       const rules = e.getGuardRules();

@@ -7,6 +7,7 @@ import { ICON_SIZES } from '../../constants/icons';
 import CodeBlock from '../Shared/CodeBlock';
 import MarkdownWithHighlight, { stripFrontmatter } from '../Shared/MarkdownWithHighlight';
 import PageOverlay from '../Shared/PageOverlay';
+import { useI18n } from '../../i18n';
 
 export type { SimilarRecipe };
 
@@ -34,9 +35,8 @@ interface SPMCompareDrawerProps {
 /* ── helper ── */
 const codeLang = (res: { language?: string }) => {
   const l = (res.language || '').toLowerCase();
-  return l === 'objectivec' || l === 'objc' || l === 'objective-c' || l === 'obj-c'
-    ? 'objectivec'
-    : (res.language || 'swift');
+  if (['objectivec', 'objc', 'objective-c', 'obj-c'].includes(l)) return 'objectivec';
+  return res.language || 'text';
 };
 
 const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
@@ -49,6 +49,7 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
   onEditRecipe,
   isSavingRecipe = false,
 }) => {
+  const { t } = useI18n();
   const cand = data.candidate;
   const candLang = codeLang(cand);
 
@@ -58,11 +59,11 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
     const candGuide = cand.content?.markdown || cand.doClause || '';
     if (candCode) parts.push('## Snippet / Code Reference\n\n```' + candLang + '\n' + candCode + '\n```');
     if (candGuide) parts.push('\n## AI Context / Usage Guide\n\n' + candGuide);
-    navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify('候选内容已复制到剪贴板', { title: '已复制' }));
+    navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify(t('spmCompare.candidateCopied'), { title: t('spmCompare.copied') }));
   };
   const copyRecipe = () => {
     const text = stripFrontmatter(data.recipeContent);
-    navigator.clipboard.writeText(text).then(() => notify('Recipe 内容已复制到剪贴板', { title: '已复制' }));
+    navigator.clipboard.writeText(text).then(() => notify(t('spmCompare.recipeCopied'), { title: t('spmCompare.copied') }));
   };
 
   const switchToRecipe = async (newName: string) => {
@@ -87,12 +88,12 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
 
   const handleDelete = async () => {
     if (!cand.candidateId || !data.targetName || !handleDeleteCandidate) return;
-    if (!window.confirm('确定删除该候选？')) return;
+    if (!window.confirm(t('spmCompare.deleteConfirm'))) return;
     try {
       await handleDeleteCandidate(data.targetName, cand.candidateId);
       onClose();
     } catch (err: any) {
-      notify(err?.message || '删除失败', { title: '删除失败', type: 'error' });
+      notify(err?.message || t('spmCompare.deleteFailed'), { title: t('spmCompare.deleteFailed'), type: 'error' });
     }
   };
 
@@ -124,10 +125,10 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <h3 className="font-bold text-slate-800">对比：候选 vs Recipe</h3>
+            <h3 className="font-bold text-slate-800">{t('spmCompare.compareTitle')}</h3>
             <div className="flex items-center gap-1.5 shrink-0">
               {cand.candidateId && data.targetName && (
-                <button onClick={handleDelete} className="text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors">删除候选</button>
+                <button onClick={handleDelete} className="text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors">{t('spmCompare.deleteCandidate')}</button>
               )}
               <button
                 onClick={handleAuditCandidate}
@@ -135,9 +136,9 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
                 className="text-xs text-blue-600 hover:bg-blue-50 px-2 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
               >
                 {isSavingRecipe ? <Loader2 size={ICON_SIZES.xs} className="animate-spin" /> : null}
-                审核候选
+                {t('spmCompare.auditCandidate')}
               </button>
-              <button onClick={handleEditRecipe} className="text-xs text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded transition-colors">编辑 Recipe</button>
+              <button onClick={handleEditRecipe} className="text-xs text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded transition-colors">{t('spmCompare.editRecipe')}</button>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors shrink-0 ml-2">
@@ -148,7 +149,7 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
         {/* Similar recipe switcher */}
         {data.similarList.length > 1 && (
           <div className="flex flex-wrap gap-1.5 px-5 py-2 border-b border-slate-100 bg-slate-50/50 shrink-0">
-            <span className="text-[10px] text-slate-400 font-bold self-center">切换 Recipe：</span>
+            <span className="text-[10px] text-slate-400 font-bold self-center">{t('spmCompare.switchRecipe')}</span>
             {data.similarList.map(s => (
               <button
                 key={s.recipeName}
@@ -170,8 +171,8 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
           {/* Left: Candidate */}
           <div className="flex-1 flex flex-col min-w-0 border-r border-slate-200">
             <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-blue-50/40 shrink-0">
-              <span className="text-xs font-bold text-blue-700 truncate">候选：{cand.title}</span>
-              <button onClick={copyCandidate} className="p-1 hover:bg-blue-100 rounded text-blue-500 shrink-0" title="复制候选">
+              <span className="text-xs font-bold text-blue-700 truncate">{t('spmCompare.candidateTitle', { title: cand.title || '' })}</span>
+              <button onClick={copyCandidate} className="p-1 hover:bg-blue-100 rounded text-blue-500 shrink-0" title={t('spmCompare.copyCandidate')}>
                 <Copy size={ICON_SIZES.xs} />
               </button>
             </div>
@@ -181,13 +182,13 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
                 {(cand.content?.pattern) ? (
                   <CodeBlock code={cand.content?.pattern || ''} language={candLang} className="!overflow-visible" />
                 ) : (
-                  <p className="text-slate-400 italic text-xs">（无代码）</p>
+                  <p className="text-slate-400 italic text-xs">{t('spmCompare.noCode')}</p>
                 )}
-                <h3 className="text-sm font-bold mt-4">AI Context / 项目特写</h3>
+                <h3 className="text-sm font-bold mt-4">{t('spmCompare.aiContextProfile')}</h3>
                 {(cand.content?.markdown || cand.doClause) ? (
                   <MarkdownWithHighlight content={cand.content?.markdown || cand.doClause || ''} />
                 ) : (
-                  <p className="text-slate-400 italic text-xs">（无使用指南）</p>
+                  <p className="text-slate-400 italic text-xs">{t('spmCompare.noGuide')}</p>
                 )}
               </div>
             </div>
@@ -197,7 +198,7 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
           <div className="flex-1 flex flex-col min-w-0">
             <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-emerald-50/40 shrink-0">
               <span className="text-xs font-bold text-emerald-700 truncate">Recipe：{data.recipeName.replace(/\.md$/i, '')}</span>
-              <button onClick={copyRecipe} className="p-1 hover:bg-emerald-100 rounded text-emerald-500 shrink-0" title="复制 Recipe">
+              <button onClick={copyRecipe} className="p-1 hover:bg-emerald-100 rounded text-emerald-500 shrink-0" title={t('spmCompare.copyRecipe')}>
                 <Copy size={ICON_SIZES.xs} />
               </button>
             </div>

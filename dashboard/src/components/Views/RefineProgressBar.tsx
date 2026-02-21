@@ -11,6 +11,7 @@ import React, { useEffect, useRef } from 'react';
 import { Sparkles, Check, X, Loader2 } from 'lucide-react';
 import { notify } from '../../utils/notification';
 import type { RefineSession } from '../../hooks/useRefineSocket';
+import { useI18n } from '../../i18n';
 
 interface RefineProgressBarProps {
   refine: RefineSession | null;
@@ -19,15 +20,16 @@ interface RefineProgressBarProps {
 }
 
 const RefineProgressBar: React.FC<RefineProgressBarProps> = ({ refine, isRefineDone, onDismiss }) => {
+  const { t } = useI18n();
   const notifiedRef = useRef(false);
 
   useEffect(() => {
     if (isRefineDone && refine && !notifiedRef.current) {
       notifiedRef.current = true;
       const msg = refine.failed > 0
-        ? `${refine.refined} 条已更新，${refine.failed} 条失败`
-        : `${refine.refined}/${refine.total} 条候选已更新`;
-      notify(msg, { title: 'AI 润色完成', type: refine.failed > 0 ? 'error' : 'success' });
+        ? t('refineProgress.doneMsgWithFail', { refined: String(refine.refined), failed: String(refine.failed) })
+        : t('refineProgress.doneMsg', { refined: String(refine.refined) });
+      notify(msg, { title: t('refineProgress.doneTitle'), type: refine.failed > 0 ? 'error' : 'success' });
     }
   }, [isRefineDone, refine]);
 
@@ -53,12 +55,14 @@ const RefineProgressBar: React.FC<RefineProgressBarProps> = ({ refine, isRefineD
           </div>
           <div>
             <h3 className="text-sm font-semibold text-slate-800">
-              {isRefineDone ? 'AI 润色完成' : 'AI 润色中'}
+              {isRefineDone ? t('refineProgress.doneTitle') : t('refineProgress.runningTitle')}
             </h3>
             <p className="text-xs text-slate-500">
               {isRefineDone
-                ? `${refine.refined} 条已更新${refine.failed > 0 ? `，${refine.failed} 条失败` : ''}`
-                : `${doneCount}/${refine.total} 条候选`
+                ? (refine.failed > 0
+                    ? t('refineProgress.doneMsgWithFail', { refined: String(refine.refined), failed: String(refine.failed) })
+                    : t('refineProgress.doneMsg', { refined: String(refine.refined) }))
+                : t('refineProgress.progressMsg', { done: String(doneCount), total: String(refine.total) })
               }
               {currentItem && !isRefineDone && (
                 <span className="ml-2 text-blue-600">
@@ -74,7 +78,7 @@ const RefineProgressBar: React.FC<RefineProgressBarProps> = ({ refine, isRefineD
             onClick={onDismiss}
             className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
           >
-            关闭
+            {t('refineProgress.closeBtn')}
           </button>
         )}
       </div>

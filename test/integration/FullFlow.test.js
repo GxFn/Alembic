@@ -1,5 +1,5 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Bootstrap from '../../lib/bootstrap.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -212,7 +212,7 @@ describe('Integration: Complete Gateway Flow', () => {
     testCases.forEach(([actor, action, resource, shouldSucceed]) => {
       test(`${actor} should ${shouldSucceed ? 'be able' : 'NOT be able'} to ${action} ${resource}`, async () => {
         const { gateway } = components;
-        
+
         // 创建唯一的 action 名称，包含 resource 以避免重复注册
         const resourceKey = resource.replace(/\//g, '_').substring(1);
         const actionName = `perm_${actor}_${action}_${resourceKey}`;

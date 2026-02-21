@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { ICON_SIZES } from '../../constants/icons';
+import { useI18n } from '../../i18n';
 
 interface PaginationProps {
   currentPage: number;
@@ -24,6 +25,8 @@ const Pagination: React.FC<PaginationProps> = ({
   if (totalPages <= 1 && totalItems <= pageSizeOptions[0]) {
   return null;
   }
+
+  const { t } = useI18n();
 
   const startItem = (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalItems);
@@ -70,11 +73,11 @@ const Pagination: React.FC<PaginationProps> = ({
     {/* 左侧：显示统计 */}
     <div className="flex items-center gap-4">
     <span className="text-sm text-slate-500">
-      显示 {startItem}-{endItem}，共 {totalItems} 条
+      {t('pagination.showing', { start: startItem, end: endItem, total: totalItems })}
     </span>
     {onPageSizeChange && (
       <div className="flex items-center gap-2">
-      <span className="text-sm text-slate-500">每页</span>
+      <span className="text-sm text-slate-500">{t('pagination.perPage')}</span>
       <select
         value={pageSize}
         onChange={(e) => onPageSizeChange(Number(e.target.value))}
@@ -84,7 +87,7 @@ const Pagination: React.FC<PaginationProps> = ({
         <option key={size} value={size}>{size}</option>
         ))}
       </select>
-      <span className="text-sm text-slate-500">条</span>
+      <span className="text-sm text-slate-500">{t('pagination.unit')}</span>
       </div>
     )}
     </div>
@@ -96,7 +99,7 @@ const Pagination: React.FC<PaginationProps> = ({
       onClick={() => onPageChange(1)}
       disabled={currentPage === 1}
       className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      title="第一页"
+      title={t('pagination.firstPage')}
     >
       <ChevronsLeft size={ICON_SIZES.md} className="text-slate-600" />
     </button>
@@ -106,7 +109,7 @@ const Pagination: React.FC<PaginationProps> = ({
       onClick={() => onPageChange(currentPage - 1)}
       disabled={currentPage === 1}
       className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      title="上一页"
+      title={t('pagination.prevPage')}
     >
       <ChevronLeft size={ICON_SIZES.md} className="text-slate-600" />
     </button>
@@ -139,7 +142,7 @@ const Pagination: React.FC<PaginationProps> = ({
       onClick={() => onPageChange(currentPage + 1)}
       disabled={currentPage === totalPages}
       className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      title="下一页"
+      title={t('pagination.nextPage')}
     >
       <ChevronRight size={ICON_SIZES.md} className="text-slate-600" />
     </button>
@@ -149,7 +152,7 @@ const Pagination: React.FC<PaginationProps> = ({
       onClick={() => onPageChange(totalPages)}
       disabled={currentPage === totalPages}
       className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-      title="最后一页"
+      title={t('pagination.lastPage')}
     >
       <ChevronsRight size={ICON_SIZES.md} className="text-slate-600" />
     </button>

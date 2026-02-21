@@ -111,12 +111,52 @@ export interface ProjectData {
   idTitleMap?: Record<string, string>;
 }
 
-export interface SPMTarget {
+/** v3.2 统一模块目标（多语言） */
+export interface ModuleTarget {
   name: string;
+  /** 包名（SPM: Package 名, Go: module path, Node: package.json name） */
   packageName: string;
+  /** 包配置文件路径（SPM: Package.swift, Go: go.mod, Node: package.json） */
   packagePath: string;
+  /** Target 根目录 */
   targetDir: string;
+  /** 扩展信息（SPM: target 解析结果, Go: modulePath 等） */
   info: any;
+  /** 原始路径（Discoverer 返回的 path） */
+  path?: string;
+  /** target 类型 (library / application / test / directory) */
+  type?: string;
+  /** 模块发现器 ID（spm / node / go / jvm / python / generic / folder-scan） */
+  discovererId?: string;
+  /** 模块发现器显示名称 */
+  discovererName?: string;
+  /** 检测到的语言 */
+  language?: string;
+  /** 框架 */
+  framework?: string;
+  /** Go: go.mod metadata 等 */
+  metadata?: any;
+  /** 是否为手动添加的虚拟目录 */
+  isVirtual?: boolean;
+}
+
+/** @deprecated 使用 ModuleTarget — 向后兼容别名 */
+export type SPMTarget = ModuleTarget;
+
+/** 项目目录条目（供目录浏览器使用） */
+export interface ProjectDirectory {
+  /** 目录名 */
+  name: string;
+  /** 相对于项目根目录的路径 */
+  path: string;
+  /** 目录深度 */
+  depth: number;
+  /** 检测到的主要语言 */
+  language: string;
+  /** 源码文件数量（浅层统计） */
+  sourceFileCount: number;
+  /** 是否包含源码文件 */
+  hasSourceFiles: boolean;
 }
 
 export interface ExtractedRecipe {
@@ -329,7 +369,7 @@ export interface GuardAuditResult {
 /**
  * 审核页面使用的条目类型 — 直接使用 V3 KnowledgeEntry 统一数据模型。
  * 从候选页进入审核时直接传入 KnowledgeEntry，仅需补充 mode/lang 等审核控制字段。
- * 从 SPM Target 扫描时由后端返回的 ExtractedRecipe 数据映射为 V3 结构。
+ * 从模块扫描时由后端返回的 ExtractedRecipe 数据映射为 V3 结构。
  *
  * 不使用兼容字段（summary/usageGuide/code 等），直接使用：
  *   description、content.pattern、content.markdown 等 KnowledgeEntry 原生字段。

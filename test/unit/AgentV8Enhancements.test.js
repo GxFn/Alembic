@@ -14,7 +14,7 @@ beforeAll(async () => {
  *  Helpers
  * ──────────────────────────────────────────── */
 function findTool(name) {
-  return ALL_TOOLS.find(t => t.name === name);
+  return ALL_TOOLS.find((t) => t.name === name);
 }
 
 function makeLogger() {
@@ -43,14 +43,17 @@ describe('plan_task tool', () => {
 
   it('should record plan and return confirmation', async () => {
     const tool = findTool('plan_task');
-    const result = await tool.handler({
-      steps: [
-        { id: 1, action: '审视6条信号', tool: 'search_project_code' },
-        { id: 2, action: '提交候选', tool: 'submit_knowledge', depends_on: [1] },
-      ],
-      strategy: '先搜索补充示例再批量提交',
-      estimated_iterations: 4,
-    }, { logger: makeLogger() });
+    const result = await tool.handler(
+      {
+        steps: [
+          { id: 1, action: '审视6条信号', tool: 'search_project_code' },
+          { id: 2, action: '提交候选', tool: 'submit_knowledge', depends_on: [1] },
+        ],
+        strategy: '先搜索补充示例再批量提交',
+        estimated_iterations: 4,
+      },
+      { logger: makeLogger() }
+    );
 
     expect(result.status).toBe('plan_recorded');
     expect(result.stepCount).toBe(2);
@@ -60,10 +63,13 @@ describe('plan_task tool', () => {
 
   it('should handle missing estimated_iterations gracefully', async () => {
     const tool = findTool('plan_task');
-    const result = await tool.handler({
-      steps: [{ id: 1, action: '分析' }],
-      strategy: '简单分析',
-    }, { logger: makeLogger() });
+    const result = await tool.handler(
+      {
+        steps: [{ id: 1, action: '分析' }],
+        strategy: '简单分析',
+      },
+      { logger: makeLogger() }
+    );
 
     expect(result.stepCount).toBe(1);
   });
@@ -88,16 +94,20 @@ describe('review_my_output tool', () => {
 
   it('should pass well-formed candidates', async () => {
     const tool = findTool('review_my_output');
-    const result = await tool.handler({}, {
-      _sessionToolCalls: [{
-        tool: 'submit_knowledge',
-        params: {
-          title: '[Bootstrap] code-pattern/singleton — 项目特写',
-          description: 'BiliDemo 12个Manager类使用单例, dispatch_once 占 67%, 8个文件',
-          trigger: '@dispatch-once-singleton',
-          kind: 'pattern',
-          doClause: 'Use dispatch_once for thread-safe singleton initialization',
-          content: { markdown: `# 单例模式 — 项目特写
+    const result = await tool.handler(
+      {},
+      {
+        _sessionToolCalls: [
+          {
+            tool: 'submit_knowledge',
+            params: {
+              title: '[Bootstrap] code-pattern/singleton — 项目特写',
+              description: 'BiliDemo 12个Manager类使用单例, dispatch_once 占 67%, 8个文件',
+              trigger: '@dispatch-once-singleton',
+              kind: 'pattern',
+              doClause: 'Use dispatch_once for thread-safe singleton initialization',
+              content: {
+                markdown: `# 单例模式 — 项目特写
 > 本项目 12 个管理类使用单例, dispatch_once 占 67%
 
 本项目使用 dispatch_once 单例，12 个管理类均采用此模式。标准写法：
@@ -109,10 +119,13 @@ describe('review_my_output tool', () => {
 
 入口方法统一命名 sharedInstance，不用 shared 或 defaultManager。
 典型使用者包括 NetworkManager、CacheService、ConfigStore。
-新代码必须使用 dispatch_once 写法。` },
-        },
-      }],
-    });
+新代码必须使用 dispatch_once 写法。`,
+              },
+            },
+          },
+        ],
+      }
+    );
 
     expect(result.status).toBe('all_passed');
     expect(result.checkedCount).toBe(1);
@@ -120,19 +133,26 @@ describe('review_my_output tool', () => {
 
   it('should detect missing 项目特写 suffix', async () => {
     const tool = findTool('review_my_output');
-    const result = await tool.handler({}, {
-      _sessionToolCalls: [{
-        tool: 'submit_knowledge',
-        params: {
-          title: '[Bootstrap] code-pattern/singleton',
-          description: 'BiliDemo 12个Manager类使用 dispatch_once',
-          trigger: '@singleton',
-          kind: 'pattern',
-          doClause: 'Use dispatch_once for singletons',
-          content: { markdown: `# 单例模式\n## 项目约定\n...\n## 生成指南\n你在本项目中...必须...` },
-        },
-      }],
-    });
+    const result = await tool.handler(
+      {},
+      {
+        _sessionToolCalls: [
+          {
+            tool: 'submit_knowledge',
+            params: {
+              title: '[Bootstrap] code-pattern/singleton',
+              description: 'BiliDemo 12个Manager类使用 dispatch_once',
+              trigger: '@singleton',
+              kind: 'pattern',
+              doClause: 'Use dispatch_once for singletons',
+              content: {
+                markdown: `# 单例模式\n## 项目约定\n...\n## 生成指南\n你在本项目中...必须...`,
+              },
+            },
+          },
+        ],
+      }
+    );
 
     expect(result.status).toBe('issues_found');
     expect(result.message).toContain('项目特写');
@@ -140,19 +160,24 @@ describe('review_my_output tool', () => {
 
   it('should detect missing sections', async () => {
     const tool = findTool('review_my_output');
-    const result = await tool.handler({}, {
-      _sessionToolCalls: [{
-        tool: 'submit_knowledge',
-        params: {
-          title: '[Bootstrap] code-pattern/singleton — 项目特写',
-          description: 'BiliDemo 用了单例模式',
-          trigger: '@singleton',
-          kind: 'pattern',
-          doClause: 'Use dispatch_once for singletons',
-          content: { markdown: '# 单例模式 — 项目特写\n一些内容但缺少代码...' },
-        },
-      }],
-    });
+    const result = await tool.handler(
+      {},
+      {
+        _sessionToolCalls: [
+          {
+            tool: 'submit_knowledge',
+            params: {
+              title: '[Bootstrap] code-pattern/singleton — 项目特写',
+              description: 'BiliDemo 用了单例模式',
+              trigger: '@singleton',
+              kind: 'pattern',
+              doClause: 'Use dispatch_once for singletons',
+              content: { markdown: '# 单例模式 — 项目特写\n一些内容但缺少代码...' },
+            },
+          },
+        ],
+      }
+    );
 
     expect(result.status).toBe('issues_found');
     expect(result.failedCount).toBe(1);
@@ -162,19 +187,26 @@ describe('review_my_output tool', () => {
 
   it('should detect description with vague wording', async () => {
     const tool = findTool('review_my_output');
-    const result = await tool.handler({}, {
-      _sessionToolCalls: [{
-        tool: 'submit_knowledge',
-        params: {
-          title: '[Bootstrap] code-pattern/singleton — 项目特写',
-          description: '该项目使用了单例模式来管理全局状态',
-          trigger: '@singleton',
-          kind: 'pattern',
-          doClause: 'Use dispatch_once for singletons',
-          content: { markdown: `# 单例 — 项目特写\n本项目使用 dispatch_once 单例，统一命名 sharedInstance。\n\n\`\`\`objectivec\n// (Manager.m:10)\n+ (instancetype)sharedInstance { ... }\n\`\`\`` },
-        },
-      }],
-    });
+    const result = await tool.handler(
+      {},
+      {
+        _sessionToolCalls: [
+          {
+            tool: 'submit_knowledge',
+            params: {
+              title: '[Bootstrap] code-pattern/singleton — 项目特写',
+              description: '该项目使用了单例模式来管理全局状态',
+              trigger: '@singleton',
+              kind: 'pattern',
+              doClause: 'Use dispatch_once for singletons',
+              content: {
+                markdown: `# 单例 — 项目特写\n本项目使用 dispatch_once 单例，统一命名 sharedInstance。\n\n\`\`\`objectivec\n// (Manager.m:10)\n+ (instancetype)sharedInstance { ... }\n\`\`\``,
+              },
+            },
+          },
+        ],
+      }
+    );
 
     expect(result.status).toBe('issues_found');
     expect(result.message).toContain('泛化措辞');
@@ -182,19 +214,26 @@ describe('review_my_output tool', () => {
 
   it('should handle submit_with_check tool calls too', async () => {
     const tool = findTool('review_my_output');
-    const result = await tool.handler({}, {
-      _sessionToolCalls: [{
-        tool: 'submit_with_check',
-        params: {
-          title: '[Bootstrap] best-practice/weakSelf — 项目特写',
-          description: 'BiliDemo 28个Block使用weakSelf，覆盖 View/Service/Network 三层',
-          trigger: '@weak-self',
-          kind: 'rule',
-          doClause: 'Use weakSelf in all blocks that capture self',
-          content: { markdown: `# weakSelf — 项目特写\n本项目 28 个 Block 使用 weakSelf，覆盖 View/Service/Network 三层。具体约定 (HomeViewController.m:88)\n\n\`\`\`objectivec\n// (HomeViewController.m:88)\ncode\n\`\`\`\n新代码必须使用 weakSelf 写法。` },
-        },
-      }],
-    });
+    const result = await tool.handler(
+      {},
+      {
+        _sessionToolCalls: [
+          {
+            tool: 'submit_with_check',
+            params: {
+              title: '[Bootstrap] best-practice/weakSelf — 项目特写',
+              description: 'BiliDemo 28个Block使用weakSelf，覆盖 View/Service/Network 三层',
+              trigger: '@weak-self',
+              kind: 'rule',
+              doClause: 'Use weakSelf in all blocks that capture self',
+              content: {
+                markdown: `# weakSelf — 项目特写\n本项目 28 个 Block 使用 weakSelf，覆盖 View/Service/Network 三层。具体约定 (HomeViewController.m:88)\n\n\`\`\`objectivec\n// (HomeViewController.m:88)\ncode\n\`\`\`\n新代码必须使用 weakSelf 写法。`,
+              },
+            },
+          },
+        ],
+      }
+    );
 
     expect(result.checkedCount).toBe(1);
   });
@@ -209,7 +248,7 @@ describe('tools registry completeness', () => {
   });
 
   it('should include all three new meta tools', () => {
-    const names = ALL_TOOLS.map(t => t.name);
+    const names = ALL_TOOLS.map((t) => t.name);
     expect(names).toContain('get_tool_details');
     expect(names).toContain('plan_task');
     expect(names).toContain('review_my_output');

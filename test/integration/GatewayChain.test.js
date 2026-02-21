@@ -9,7 +9,7 @@
  *   ✓ 错误恢复（handler 崩溃后 gateway 仍可用）
  */
 
-import { createTestBootstrap, mockGatewayRequest } from '../fixtures/factory.js';
+import { createTestBootstrap } from '../fixtures/factory.js';
 
 describe('Integration: Gateway Full Chain', () => {
   let bootstrap;
@@ -41,11 +41,18 @@ describe('Integration: Gateway Full Chain', () => {
     beforeAll(() => {
       const { gateway } = components;
       const actions = [
-        'read:recipes', 'create:recipes', 'delete:recipes',
-        'read:candidates', 'create:candidates', 'delete:candidates',
-        'approve:candidates', 'reject:candidates',
-        'read:guard_rules', 'create:guard_rules',
-        'read:snippets', 'search:query',
+        'read:recipes',
+        'create:recipes',
+        'delete:recipes',
+        'read:candidates',
+        'create:candidates',
+        'delete:candidates',
+        'approve:candidates',
+        'reject:candidates',
+        'read:guard_rules',
+        'create:guard_rules',
+        'read:snippets',
+        'search:query',
         'submit:knowledge',
       ];
       for (const action of actions) {
@@ -67,8 +74,20 @@ describe('Integration: Gateway Full Chain', () => {
       for (const [action, resource] of allowed) {
         test(`${action} ${resource} → ✓`, async () => {
           const r = await components.gateway.execute({
-            actor, action, resource,
-            data: { confirmed: true, code: 'x', reasoning: { whyStandard: 't', sources: ['t'], qualitySignals: {}, alternatives: [], confidence: 0.9 } },
+            actor,
+            action,
+            resource,
+            data: {
+              confirmed: true,
+              code: 'x',
+              reasoning: {
+                whyStandard: 't',
+                sources: ['t'],
+                qualitySignals: {},
+                alternatives: [],
+                confidence: 0.9,
+              },
+            },
           });
           expect(r.success).toBe(true);
         });
@@ -79,18 +98,32 @@ describe('Integration: Gateway Full Chain', () => {
     describe('external_agent', () => {
       const actor = 'external_agent';
       const cases = [
-        ['read:recipes',      '/recipes',    true],
-        ['create:recipes',    '/recipes',    false],
+        ['read:recipes', '/recipes', true],
+        ['create:recipes', '/recipes', false],
         ['delete:candidates', '/candidates', false],
       ];
       for (const [action, resource, ok] of cases) {
         test(`${action} ${resource} → ${ok ? '✓' : '✗'}`, async () => {
           const r = await components.gateway.execute({
-            actor, action, resource,
-            data: { confirmed: true, code: 'x', reasoning: { whyStandard: 't', sources: ['t'], qualitySignals: {}, alternatives: [], confidence: 0.9 } },
+            actor,
+            action,
+            resource,
+            data: {
+              confirmed: true,
+              code: 'x',
+              reasoning: {
+                whyStandard: 't',
+                sources: ['t'],
+                qualitySignals: {},
+                alternatives: [],
+                confidence: 0.9,
+              },
+            },
           });
           expect(r.success).toBe(ok);
-          if (!ok) expect([400, 403, 500]).toContain(r.error.statusCode);
+          if (!ok) {
+            expect([400, 403, 500]).toContain(r.error.statusCode);
+          }
         });
       }
     });
@@ -99,22 +132,35 @@ describe('Integration: Gateway Full Chain', () => {
     describe('chat_agent', () => {
       const actor = 'chat_agent';
       const cases = [
-        ['read:recipes',      '/recipes',    true],
-        ['read:candidates',   '/candidates', true],
-        ['create:recipes',    '/recipes',    false],
+        ['read:recipes', '/recipes', true],
+        ['read:candidates', '/candidates', true],
+        ['create:recipes', '/recipes', false],
       ];
       for (const [action, resource, ok] of cases) {
         test(`${action} ${resource} → ${ok ? '✓' : '✗'}`, async () => {
           const r = await components.gateway.execute({
-            actor, action, resource,
-            data: { confirmed: true, code: 'x', reasoning: { whyStandard: 't', sources: ['t'], qualitySignals: {}, alternatives: [], confidence: 0.9 } },
+            actor,
+            action,
+            resource,
+            data: {
+              confirmed: true,
+              code: 'x',
+              reasoning: {
+                whyStandard: 't',
+                sources: ['t'],
+                qualitySignals: {},
+                alternatives: [],
+                confidence: 0.9,
+              },
+            },
           });
           expect(r.success).toBe(ok);
-          if (!ok) expect([400, 403, 500]).toContain(r.error.statusCode);
+          if (!ok) {
+            expect([400, 403, 500]).toContain(r.error.statusCode);
+          }
         });
       }
     });
-
   });
 
   // ═══════════════════════════════════════════════════════

@@ -27,7 +27,7 @@ In AutoSnippet, the **知识库** is the set of project-owned artifacts under **
 
 | Part | Location | Meaning |
 |------|----------|---------|
-| **Snippets** | AutoSnippet 根 spec `list` 或 `AutoSnippet/snippets/*.json` | Code snippets synced to Xcode CodeSnippets; developers use them by trigger (completion). |
+| **Snippets** | AutoSnippet 根 spec `list` 或 `AutoSnippet/snippets/*.json` | Code snippets synced to IDE (Xcode CodeSnippets / VSCode .code-snippets); developers use them by trigger (completion). |
 | **Recipes** | `AutoSnippet/recipes/*.md` (or `recipes.dir` in root spec) | Markdown docs: standard code + usage guide; used for AI context, Guard, and search. |
 | **Candidates** | `AutoSnippet/.autosnippet/candidates.json` | AI-scanned candidates; review in Dashboard **Candidates** then approve or delete. |
 | **Context index** | `AutoSnippet/.autosnippet/context/` | Vector index built by `asd embed`; used for on-demand semantic search and Guard. |
@@ -47,7 +47,7 @@ The knowledge base has **context storage** capability: Recipes, docs, etc. are e
 |------|-------------|
 | **Storage path** | `AutoSnippet/.autosnippet/context/` |
 | **Build command** | Run `asd embed` from project root |
-| **Index sources** | `recipe` (AutoSnippet/recipes/*.md), `doc` (docs dir), `target-readme` (SPM target READMEs) |
+| **Index sources** | `recipe` (AutoSnippet/recipes/*.md), `doc` (docs dir), `target-readme` (module target READMEs) |
 | **Storage adapter** | Default `json` |
 | **Usage** | With `asd ui` running, MCP tool `autosnippet_search(mode=context)` takes `query`, `limit?` for semantic search |
 | **Use cases** | On-demand lookup of relevant Recipe/docs; Guard review against knowledge base; Dashboard semantic search |
@@ -121,21 +121,34 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 
 **CRITICAL RULES for Frontmatter fields:**
 - **`category`**: MUST be ONE of these 8 values: `View`, `Service`, `Tool`, `Model`, `Network`, `Storage`, `UI`, `Utility`. NEVER use module names (e.g. "BDNetworkControl") or custom categories.
-- **`headers`**: MUST be complete import/include statements from the code. Swift: `["import ModuleName"]`, ObjC: `["#import <Module/Header.h>"]`. NOT just module names.
-- **`trigger`**: MUST start with `@` (e.g. `@requestManager`). Lowercase, no spaces.
-- **`language`**: MUST be `swift` or `objectivec` (lowercase).
-- **`summary_cn` / `summary_en`**: MUST be concise; `summary_cn` ≤ 100 字，`summary_en` ≤ 100 words.
+- **`headers`**: MUST be complete import/include statements from the code. Examples by language:
+  - Swift: `["import Foundation"]`
+  - ObjC: `["#import <Module/Header.h>"]`
+  - Go: `["import \"fmt\""]`
+  - Python: `["import os"]` / `["from pathlib import Path"]`
+  - Java: `["import java.util.List;"]`
+  - Kotlin: `["import kotlinx.coroutines.*"]`
+  - JS/TS: `["import fs from 'node:fs'"]`
+- **`trigger`**: MUST start with `@` (e.g. `@request-manager`). kebab-case, no spaces.
+- **`language`**: MUST be one of the supported languages (lowercase): `swift`, `objectivec`, `go`, `python`, `java`, `kotlin`, `javascript`, `typescript`.
+- **`kind`**: MUST be one of: `rule`, `pattern`, `fact`.
+- **`doClause`**: English imperative sentence, ≤60 tokens.
+- **`description`**: 中文摘要 ≤80字。
+- **`content`**: 对象 `{ markdown (≥200字), pattern (核心代码), rationale (设计原理) }`。
+- **`usageGuide`**: Markdown `###` 章节格式的使用指南。
+- **`knowledgeType`**: 如 `code-pattern` / `architecture` / `best-practice` / `code-standard` 等。
+- **`reasoning`**: `{ whyStandard, sources[], confidence }`。
 
 **Standard Category Definitions (8 categories - MUST use exactly these):**
 
 | Category | When to Use | Examples |
 |----------|-------------|----------|
-| `View` | UI components, view controllers, custom views | UITableViewCell, UIViewController subclass, custom UIView |
+| `View` | UI components, view controllers, custom views | React Component, SwiftUI View, UIViewController, Android Activity |
 | `Service` | Business logic services, managers, coordinators | UserService, LocationManager, PaymentCoordinator |
-| `Tool` | Utility classes, helpers, extensions | StringHelper, DateFormatter extension, validation utils |
+| `Tool` | Utility classes, helpers, extensions | StringHelper, DateFormatter, validation utils |
 | `Model` | Data models, entities, value objects | User model, APIResponse, configuration objects |
-| `Network` | Network requests, API clients, HTTP/WebSocket | URLSession wrapper, Alamofire usage, API request |
-| `Storage` | Persistence, caching, database operations | CoreData, UserDefaults, file I/O, cache manager |
+| `Network` | Network requests, API clients, HTTP/WebSocket | fetch/axios wrapper, URLSession, OkHttp, net/http |
+| `Storage` | Persistence, caching, database operations | SQLite, Redis, UserDefaults, file I/O, cache manager |
 | `UI` | UI-related utilities not specific to one view | Theme manager, color palette, UI constants |
 | `Utility` | General utilities that don't fit other categories | Logger, error handler, general helpers |
 
@@ -154,22 +167,21 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 | 字段 | 含义 | 来源 | 规则 |
 | :--- | :--- | :--- | :--- |
 | `title` | 标准用法的名称 | 人工命名 | **必填**；**中文**；简短精准（✅ "颜色工具方法"、"异步请求处理"；❌ 避免 "Use xxx"）；≤20 字 |
-| `trigger` | 触发词（Snippet/检索） | 人工命名 | **必填**；`@` 开头，小写/下划线/无空格；唯一 |
+| `trigger` | 触发词（Snippet/检索） | 人工命名 | **必填**；`@` 开头，kebab-case、无空格；唯一 |
 | `category` | 8 类标准分类 | 人工判断 | **必填**；必须为 8 类之一 |
-| `language` | 代码语言 | 从代码确定 | **必填**；`swift` / `objectivec` |
-| `summary_cn` | 中文摘要 | 人工/AI | **必填**；≤100 字 |
-| `summary_en` | 英文摘要 | 人工/AI | **必填**；≤100 words |
-| `headers` | 完整 import/#import | 从代码提取 | **必填**；数组；必须是完整语句 |
+| `language` | 代码语言 | 从代码确定 | **必填**；支持 `swift` / `objectivec` / `go` / `python` / `java` / `kotlin` / `javascript` / `typescript` |
+| `kind` | 知识类型 | 人工/AI | **必填**；`rule` / `pattern` / `fact` |
+| `doClause` | 英文祈使句指令 | AI/人工 | **必填**；≤60 tokens |
+| `description` | 中文功能摘要 | 人工/AI | **必填**；≤80字 |
+| `content` | 内容对象 | 从代码/AI | **必填**；`{ markdown (≥200字), pattern (核心代码), rationale (设计原理) }` |
+| `headers` | 完整 import/include 语句 | 从代码提取 | **必填**；数组；无 import 传 `[]` |
+| `usageGuide` | 使用指南 | AI/人工 | **必填**；Markdown `###` 章节格式 |
+| `knowledgeType` | 知识维度 | AI/人工 | **必填**；如 `code-pattern` / `architecture` / `best-practice` / `code-standard` 等 |
+| `reasoning` | 推理依据 | Agent 必填 | **必填**；`{ whyStandard, sources[], confidence }` |
 | `keywords` | 语义标签 | AI/人工 | 可选；数组；用于检索 |
-| `tags` | 额外标签 | 人工 | 可选；数组；非语义必需 |
-| `version` | 版本号 | 系统/人工 | 可选；语义化版本（如 `1.0.0`） |
-| `author` | 作者/团队 | 人工 | 可选；字符串 |
-| `deprecated` | 是否弃用 | 人工 | 可选；布尔值 |
-| `id` | 唯一标识 | 系统生成 | 可选；若提供需唯一 |
-| `moduleName` | 模块名 | 从 headers 解析 | 自动；不手填 |
-| `deps` | 依赖关系 | 系统解析 | 可选；对象 `{ targets, imports }` |
+| `tags` | 额外标签 | 人工 | 可选；数组 |
 | `difficulty` | 难度等级 | 系统评估 | 可选；`beginner/intermediate/advanced` |
-| `authority` | 权威评分 | 审核设置 | 可选；1～5 |
+| `scope` | 适用范围 | AI/人工 | 可选；`universal/project-specific/target-specific` |
 
 **系统字段（自动生成，无需手填）**：`created`、`lastModified`、`contentHash`。
 
@@ -177,108 +189,58 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 - 多段 Recipe 可在同一文本中，使用「空行 + `---` + 下一段 Frontmatter」分隔。
 - 当内容已是完整 Recipe MD（含 Frontmatter + Snippet + Usage Guide）时，系统直接解析入库，无需 AI 重写。
 
-**Complete Recipe Template (ALWAYS use this structure):**
+**Complete Recipe Template (V3 — ALWAYS use this structure):**
 
-````markdown
----
-id: recipe_network_001
-title: Request with Retry
-trigger: @requestRetry
-category: Network
-language: objectivec
-summary_cn: 带自动重试的网络请求
-summary_en: Make HTTP request with automatic retry
-headers:
-  - "#import <BDNetworkControl/BDBaseRequest.h>"
-  - "#import <BDNetworkControl/BDRequestDefine.h>"
-keywords: [network, retry]
-tags: [network, resilience]
-version: "1.0.0"
-author: team_name
-deprecated: false
-moduleName: BDNetworkControl
-deps:
-  targets: ["BDNetworkControl"]
-  imports: ["BDNetworkControl"]
-difficulty: intermediate
-authority: 3
----
-
-## Snippet / Code Reference
-
-```objectivec
-#import <BDNetworkControl/BDBaseRequest.h>
-
-// Usage example - make it runnable and focused
-BDBaseRequest *request = [[BDBaseRequest alloc] init];
-request.url = @"https://api.example.com/endpoint";
-request.method = BDRequestMethodGET;
-
-[request startWithCompletionBlock:^(BDBaseRequest *req) {
-  // Handle success
-  id responseData = req.responseJson;
-  NSLog(@"Success: %@", responseData);
-} failure:^(BDBaseRequest *req, NSError *error) {
-  // Handle error
-  NSLog(@"Error: %@", error.localizedDescription);
-}];
+```json
+{
+  "title": "带重试的 HTTP GET 请求",
+  "trigger": "@request-retry",
+  "category": "Network",
+  "language": "javascript",
+  "kind": "pattern",
+  "doClause": "Use fetchWithRetry for HTTP GET requests with automatic retry and exponential backoff",
+  "description": "封装带自动重试和指数退避的 HTTP GET 请求，适用于不稳定网络环境下的数据获取场景",
+  "headers": ["import fetch from 'node-fetch'"],
+  "content": {
+    "markdown": "## 带重试的 HTTP GET 请求\n\n在网络不稳定的场景中，单次 HTTP 请求可能因超时或服务端故障而失败。本模式封装了自动重试逻辑与指数退避策略，确保请求在合理次数内成功返回。\n\n### 核心实现\n\n```javascript\nimport fetch from 'node-fetch';\n\nasync function fetchWithRetry(url, options = {}, maxRetries = 3) {\n  for (let attempt = 1; attempt <= maxRetries; attempt++) {\n    try {\n      const response = await fetch(url, options);\n      if (!response.ok) throw new Error(`HTTP ${response.status}`);\n      return await response.json();\n    } catch (error) {\n      if (attempt === maxRetries) throw error;\n      await new Promise(r => setTimeout(r, 1000 * attempt));\n    }\n  }\n}\n\n// Usage\nconst data = await fetchWithRetry('https://api.example.com/endpoint');\nconsole.log('Success:', data);\n```\n\n### 设计要点\n- 指数退避：每次重试等待时间递增（1s, 2s, 3s），避免服务端过载\n- 最大重试次数可配置，默认 3 次\n- 非 2xx 状态码也视为失败并触发重试",
+    "pattern": "async function fetchWithRetry(url, options = {}, maxRetries = 3) {\n  for (let attempt = 1; attempt <= maxRetries; attempt++) {\n    try {\n      const response = await fetch(url, options);\n      if (!response.ok) throw new Error(`HTTP ${response.status}`);\n      return await response.json();\n    } catch (error) {\n      if (attempt === maxRetries) throw error;\n      await new Promise(r => setTimeout(r, 1000 * attempt));\n    }\n  }\n}",
+    "rationale": "指数退避策略是处理网络不稳定的行业标准做法，既保证了请求的可靠性，又通过递增等待避免了对服务端的冲击。封装为独立函数便于全项目统一使用。"
+  },
+  "usageGuide": "### When to Use\n- 需要对不稳定 API 进行可靠调用时\n- 网络环境可能出现间歇性故障的场景\n\n### Key Points\n- maxRetries 默认 3，可根据场景调整\n- 退避时间为线性递增（1s × attempt），可改为指数递增\n- 非 2xx 响应也会触发重试\n\n### Parameters & Customization\n- `url`: 请求地址\n- `options`: fetch 选项（method, headers, body 等）\n- `maxRetries`: 最大重试次数\n\n### Error Handling\n- 超过最大重试次数后抛出最后一次错误\n- 建议在调用处用 try/catch 捕获\n\n### Related Patterns\n- @http-client-base 基础 HTTP 客户端\n- @circuit-breaker 熔断器模式",
+  "knowledgeType": "code-pattern",
+  "reasoning": {
+    "whyStandard": "指数退避 + 自动重试是 HTTP 客户端的行业最佳实践，被 AWS SDK、Google Cloud 等广泛采用",
+    "sources": ["node-fetch documentation", "MDN Fetch API", "AWS SDK retry strategy"],
+    "confidence": 0.9
+  },
+  "keywords": ["network", "retry", "http", "fetch", "exponential-backoff"],
+  "tags": ["network", "resilience"]
+}
 ```
 
-## AI Context / Usage Guide
-
-### When to Use
-- Describe the specific scenario where this Recipe applies
-- List conditions or contexts that make this Recipe relevant
-
-### Key Points
-- Important considerations when using this code
-- Common pitfalls to avoid
-- Best practices specific to this usage
-
-### Parameters & Customization
-- Explain what developers need to customize
-- Document placeholder values and their meanings
-
-### Dependencies & Preconditions
-- Required modules, permissions, and minimum OS version
-
-### Error Handling & Edge Cases
-- Common failure modes, retry/timeout, and fallback behavior
-
-### Performance & Resources
-- Cache, threading, and memory considerations
-
-### Security & Compliance
-- Sensitive data handling, auth, and logging guidance
-
-### Common Pitfalls
-- Typical misuse and how to avoid it
-
-### Related Patterns
-- Link to related Recipes (use @trigger format)
-- Note alternative approaches if applicable
-````
-
 **Template Usage Rules:**
-1. **NEVER skip any section** - include all three: Frontmatter, Snippet, Usage Guide
-2. **RECOMMEND providing English version** (beneficial for search, Cursor AI understanding, and knowledge reuse):
-   - **Why**: 
-   - 🔍 **Search**: English users and English keyword searches benefit from EN version
-   - 🧠 **Cursor AI**: English LLM processes English text naturally, improving pattern comprehension
-   - 📚 **Knowledge reuse**: Global team can access knowledge more effectively
-   - **Token cost**: Only ~20-30% increase (minimal impact)
-   - **Optional approach**: Chinese-only is acceptable; English improves discoverability
-  - **How** (if providing): Generate both `summary_cn` and `summary_en` in frontmatter + both Chinese and English usage guide sections
-  - When submitting via MCP, can include just Chinese or both Chinese + English (`summary_cn` + `summary_en` + `usageGuide_cn` + `usageGuide_en`)
-3. **DO NOT include `type: full`** - this field is deprecated and should be removed
-4. **Headers MUST be complete import statements** - `#import <Module/File.h>` not just filenames
-5. **Required frontmatter fields (必须齐全)**:
-  - `title`, `trigger`, `category`, `language`, `summary_cn`, `summary_en`, `headers`
-6. **Snippet section** - runnable code example with context and comments
-7. **Usage Guide section** - explain When/How/Why, dependencies, error handling, performance, security, pitfalls, and related patterns
-8. **Use placeholders** - use Xcode placeholders like `<#URL#>` and explain them in Usage Guide
-9. **Make trigger unique**: Format `@featureName`, all lowercase, no spaces
-10. **Be specific in summary**: Describe the exact use case, not general concepts
+1. **NEVER skip required fields** — 所有 V3 必填字段必须齐全
+2. **V3 必填字段清单（缺一不可）**：
+   - `title` — 中文 ≤20字
+   - `trigger` — `@` 开头 kebab-case
+   - `category` — 8 类之一: View/Service/Tool/Model/Network/Storage/UI/Utility
+   - `language` — 编程语言标识
+   - `kind` — rule / pattern / fact
+   - `doClause` — 英文祈使句 ≤60 tokens
+   - `description` — 中文摘要 ≤80字
+   - `content` — `{ markdown (≥200字), pattern (核心代码), rationale (设计原理) }`
+   - `headers` — import 语句数组（无 import 传 `[]`）
+   - `usageGuide` — Markdown `###` 章节格式
+   - `knowledgeType` — 如 `code-pattern` / `architecture` / `best-practice` 等
+   - `reasoning` — `{ whyStandard, sources[], confidence }`
+3. **DO NOT include `type: full`** — this field is deprecated and should be removed
+4. **Headers MUST be complete import statements** — e.g. `import X`, `#import <X>`, `from X import Y`, `import "fmt"` — not just filenames
+5. **content.markdown** — 需包含完整代码示例 + 说明文字，≥200 字
+6. **content.pattern** — 核心骨架代码，不含注释和使用示例
+7. **content.rationale** — 为什么这样写的设计原理
+8. **usageGuide** — 解释 When/How/Why、依赖、错误处理、性能、安全、陷阱和相关模式
+9. **Use placeholders** — use IDE-appropriate placeholders: Xcode uses `<#placeholder#>`, VSCode uses `${1:placeholder}`. In Recipe source, prefer Xcode format (auto-converted on install). Explain placeholders in Usage Guide.
+10. **Make trigger unique**: Format `@feature-name`, kebab-case, no spaces
 
 ---
 
@@ -286,29 +248,34 @@ request.method = BDRequestMethodGET;
 
 - **类别误用**：category 只能是 8 类之一，不能写模块名
 - **headers 不完整**：必须是完整 import/#import 语句数组，不能是文件名
-- **缺失必填**：`title`/`trigger`/`category`/`language`/`summary_cn`/`summary_en`/`headers` 必须齐全
+- **缺失必填**：`title`/`trigger`/`category`/`language`/`kind`/`doClause`/`description`/`headers`/`content`(markdown+rationale)/`usageGuide`/`knowledgeType`/`reasoning` 必须齐全
 - **trigger 格式错误**：必须 `@` 开头，小写、无空格
 - **字段滥用**：不要使用已弃用的 `type` 字段
 - **合并多模式**：一个 Recipe 只描述一个具体场景
 
 ### ✅ Quick Checklist Before Submitting
 
-- [ ] Has all 3 sections: Frontmatter + Snippet + Usage Guide
-- [ ] **summary_cn + summary_en** (建议同时提供；中文可接受但不推荐)
-- [ ] Required fields filled: `title`, `trigger`, `category`, `language`, `summary_cn`, `summary_en`, `headers`
-- [ ] `category` is ONE of: View, Service, Tool, Model, Network, Storage, UI, Utility
-- [ ] `headers` contains complete `#import` or `import` statements
-- [ ] `trigger` starts with `@` and is lowercase
-- [ ] `language` is `swift` or `objectivec` (lowercase)
+- [ ] Has all required V3 fields filled
+- [ ] **title**: 中文简短标题（≤20字）
+- [ ] **content**: `{ markdown (≥200字), pattern (核心代码), rationale (设计原理) }`
+- [ ] **trigger**: `@` 开头 kebab-case
+- [ ] **kind**: `rule` / `pattern` / `fact`
+- [ ] **doClause**: 英文祈使句（≠60 tokens）
+- [ ] **description**: 中文摘要 ≤80字
+- [ ] **category**: ONE of View/Service/Tool/Model/Network/Storage/UI/Utility
+- [ ] **language**: `swift`/`objectivec`/`go`/`python`/`java`/`kotlin`/`javascript`/`typescript`
+- [ ] **headers**: 完整 import 语句数组（无 import 传 `[]`）
+- [ ] **usageGuide**: Markdown `###` 章节格式
+- [ ] **knowledgeType**: `code-pattern` / `architecture` / `best-practice` 等
+- [ ] **reasoning**: `{ whyStandard, sources[], confidence }`
 - [ ] Code snippet is runnable with minimal edits
-- [ ] Summary describes the specific use case (not generic)
 - [ ] No `type:` field (this is deprecated)
-- [ ] Optional fields (if provided) are well-formed: `keywords`, `tags`, `version`, `author`, `deprecated`
+- [ ] No `code` / `summary_cn` / `summary_en` (use V3 `content` + `description` instead)
 
 ### Recipe Creation Principles
 
 When creating or extracting Recipes:
-1. **建议提供中英双语**：`summary_cn` + `summary_en`，并可补充双语 usage guide
+1. **V3 必填字段一次性填写**：title, content(markdown+pattern+rationale), trigger, kind, doClause, description, category, language, headers, usageGuide, knowledgeType, reasoning
 2. **保持单场景**：一个 Recipe 只讲一个具体用法
 3. **字段严格**：必填字段必须齐全、格式正确
    - Tools like Dashboard `/api/v1/ai/translate` can help auto-generate missing language, but it's better to provide both
@@ -317,8 +284,22 @@ When creating or extracting Recipes:
 4. **Reusable and focused**: Developer should be able to copy-paste the Recipe's code snippet and use it directly for that ONE scenario.
 5. **Summary should be specific**: "Use async/await for sequential API calls" NOT "Async programming guide".
 6. **Category MUST use standard values**: ONLY use one of these 8 categories: `View`, `Service`, `Tool`, `Model`, `Network`, `Storage`, `UI`, `Utility`. Never use module names (e.g. "BDNetworkControl") or other custom values as category.
-7. **Headers must be complete import statements**: Extract all import/include statements from code. Format: `["import ModuleName"]` for Swift, `["#import <Module/Header.h>"]` for ObjC. Include the full statement, not just module names.
-8. **Auto-extract moduleName** (ObjC): Parse from headers. Example: `["#import <BDNetworkControl/BDBaseRequest.h>"]` → `moduleName: BDNetworkControl`. If multiple modules exist, use the primary/main one.
+7. **Headers must be complete import statements**: Extract all import/include statements from code. Format by language:
+   - Swift: `["import ModuleName"]`
+   - ObjC: `["#import <Module/Header.h>"]`
+   - Go: `["import \"fmt\""]`
+   - Python: `["import os"]` / `["from pathlib import Path"]`
+   - Java/Kotlin: `["import java.util.List;"]`
+   - JS/TS: `["import fs from 'node:fs'"]`
+   Include the full statement, not just module names.
+8. **Auto-extract moduleName**: Parse from headers. Examples:
+   - ObjC: `["#import <BDNetworkControl/BDBaseRequest.h>"]` → `moduleName: BDNetworkControl`
+   - Swift: `["import Foundation"]` → `moduleName: Foundation`
+   - Go: `["import \"net/http\""]` → `moduleName: net/http`
+   - Python: `["from flask import Flask"]` → `moduleName: flask`
+   - Java: `["import com.google.gson.Gson;"]` → `moduleName: com.google.gson`
+   - JS/TS: `["import express from 'express'"]` → `moduleName: express`
+   If multiple modules exist, use the primary/main one.
 9. **Auto-generate tags**: Analyze code to extract 2-4 keyword tags:
    - **Functionality**: network, storage, ui, animation, async, cache, threading
    - **Patterns**: template, singleton, factory, observer, delegate
@@ -351,10 +332,241 @@ When both Recipe and project source code have relevant implementations, **prefer
 
 ---
 
+## Multi-Language Recipe Examples (V3)
+
+> 以下展示不同语言的标准 V3 Recipe 示例，展示所有必填字段在各语言下的写法。
+
+### Example 1: Swift — 网络请求（iOS/macOS）
+
+```json
+{
+  "title": "URLSession 异步 GET 请求",
+  "trigger": "@url-session-get",
+  "category": "Network",
+  "language": "swift",
+  "kind": "pattern",
+  "doClause": "Use async/await URLSession for GET requests with error handling and JSON decoding",
+  "description": "使用 async/await 的 URLSession GET 请求，包含错误处理与 JSON 解码，适用于 iOS/macOS 网络层",
+  "headers": ["import Foundation"],
+  "content": {
+    "markdown": "## URLSession 异步 GET 请求\n\n使用 Swift concurrency 的 async/await 语法封装 URLSession GET 请求，自动校验 HTTP 状态码并解码 JSON。\n\n```swift\nfunc fetchData<T: Decodable>(from url: URL) async throws -> T {\n  let (data, response) = try await URLSession.shared.data(from: url)\n  guard let http = response as? HTTPURLResponse,\n        (200..<300).contains(http.statusCode) else {\n    throw URLError(.badServerResponse)\n  }\n  return try JSONDecoder().decode(T.self, from: data)\n}\n\n// Usage\nlet users: [User] = try await fetchData(from: URL(string: \"https://api.example.com/users\")!)\n```\n\n### 设计要点\n- 泛型 Decodable 约束，支持任意 JSON 模型\n- 校验 HTTP 2xx 范围状态码\n- 利用 Swift Concurrency 自动管理线程",
+    "pattern": "func fetchData<T: Decodable>(from url: URL) async throws -> T {\n  let (data, response) = try await URLSession.shared.data(from: url)\n  guard let http = response as? HTTPURLResponse,\n        (200..<300).contains(http.statusCode) else {\n    throw URLError(.badServerResponse)\n  }\n  return try JSONDecoder().decode(T.self, from: data)\n}",
+    "rationale": "async/await 是 Swift 5.5+ 推荐的异步模式，相比 completion handler 更清晰且不易出错，泛型解码减少重复代码。"
+  },
+  "usageGuide": "### When to Use\n- iOS/macOS 项目中需要从 REST API 获取 JSON 数据\n- 使用 Swift 5.5+ 的项目\n\n### Key Points\n- 必须在 async 上下文中调用\n- 返回类型需遵循 Decodable 协议\n\n### Error Handling\n- 非 2xx 抛出 URLError(.badServerResponse)\n- JSON 解码失败抛出 DecodingError",
+  "knowledgeType": "code-pattern",
+  "reasoning": {
+    "whyStandard": "Apple 官方推荐 async/await URLSession API，是 Swift Concurrency 标准做法",
+    "sources": ["Apple URLSession documentation", "Swift Concurrency WWDC21"],
+    "confidence": 0.95
+  },
+  "keywords": ["network", "async", "urlsession", "json"],
+  "tags": ["network", "template"]
+}
+```
+
+### Example 2: Objective-C — KVO 安全模式
+
+```json
+{
+  "title": "NSObject KVO 安全订阅",
+  "trigger": "@kvo-safe",
+  "category": "Utility",
+  "language": "objectivec",
+  "kind": "rule",
+  "doClause": "Pair addObserver and removeObserver to prevent KVO leaks and crashes",
+  "description": "配对 addObserver/removeObserver，避免 KVO 泄漏与崩溃，确保生命周期安全",
+  "headers": ["#import <Foundation/Foundation.h>"],
+  "content": {
+    "markdown": "## NSObject KVO 安全订阅\n\nKVO 是 Cocoa 的核心机制，但未正确移除观察者会导致崩溃。本规则要求 addObserver 与 removeObserver 必须配对。\n\n```objectivec\n// Add observer\n[self.target addObserver:self\n              forKeyPath:@\"<#property#>\"\n                 options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld\n                 context:NULL];\n\n// Handle changes\n- (void)observeValueForKeyPath:(NSString *)keyPath\n                      ofObject:(id)object\n                        change:(NSDictionary *)change\n                       context:(void *)context {\n  if ([keyPath isEqualToString:@\"<#property#>\"]) {\n    id newValue = change[NSKeyValueChangeNewKey];\n    // Handle change\n  }\n}\n\n// MUST remove in dealloc\n- (void)dealloc {\n  [self.target removeObserver:self forKeyPath:@\"<#property#>\"];\n}\n```\n\n### 设计要点\n- addObserver 与 removeObserver 必须一一配对\n- dealloc 中移除是最后的安全网\n- 使用 context 区分不同观察",
+    "pattern": "[self.target addObserver:self forKeyPath:@\"<#property#>\" options:NSKeyValueObservingOptionNew context:NULL];\n- (void)dealloc { [self.target removeObserver:self forKeyPath:@\"<#property#>\"]; }",
+    "rationale": "KVO 观察者未移除会在对象释放后导致野指针崩溃，配对管理是 Cocoa 开发的基本安全规则。"
+  },
+  "usageGuide": "### When to Use\n- 使用 KVO 监听属性变化时\n- 任何 addObserver 调用都必须有对应的 removeObserver\n\n### Common Pitfalls\n- 忘记在 dealloc 中移除观察者\n- 重复添加同一 keyPath 的观察者\n- 多线程环境下的竞态条件",
+  "knowledgeType": "code-standard",
+  "reasoning": {
+    "whyStandard": "Apple 官方文档明确要求 KVO 观察者必须在释放前移除，否则会触发异常",
+    "sources": ["Apple KVO Programming Guide", "NSObject Protocol Reference"],
+    "confidence": 0.95
+  },
+  "keywords": ["kvo", "safety", "lifecycle"],
+  "tags": ["safety"]
+}
+```
+
+### Example 3: Go — HTTP Handler with Middleware
+
+```json
+{
+  "title": "Go HTTP Handler 中间件链",
+  "trigger": "@go-handler",
+  "category": "Network",
+  "language": "go",
+  "kind": "pattern",
+  "doClause": "Use middleware chain pattern for net/http handlers with logging and recovery",
+  "description": "标准 net/http Handler + 中间件链模式，含日志和 panic 恢复中间件",
+  "headers": ["import \"net/http\"", "import \"log\""],
+  "content": {
+    "markdown": "## Go HTTP Handler 中间件链\n\n使用函数式中间件链组合 HTTP 处理器，每个中间件负责单一职责（日志、恢复等），通过 Chain 函数串联。\n\n```go\ntype Middleware func(http.Handler) http.Handler\n\nfunc LoggingMiddleware(next http.Handler) http.Handler {\n\treturn http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tlog.Printf(\"%s %s\", r.Method, r.URL.Path)\n\t\tnext.ServeHTTP(w, r)\n\t})\n}\n\nfunc RecoveryMiddleware(next http.Handler) http.Handler {\n\treturn http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n\t\tdefer func() {\n\t\t\tif err := recover(); err != nil {\n\t\t\t\thttp.Error(w, \"Internal Server Error\", 500)\n\t\t\t\tlog.Printf(\"panic recovered: %v\", err)\n\t\t\t}\n\t\t}()\n\t\tnext.ServeHTTP(w, r)\n\t})\n}\n\nfunc Chain(h http.Handler, mws ...Middleware) http.Handler {\n\tfor i := len(mws) - 1; i >= 0; i-- {\n\t\tmw := mws[i]\n\t\th = mw(h)\n\t}\n\treturn h\n}\n```\n\n### 设计要点\n- Middleware 类型签名统一：`func(http.Handler) http.Handler`\n- Chain 从右向左包装，保证执行顺序与传入顺序一致\n- RecoveryMiddleware 防止 panic 导致进程崩溃",
+    "pattern": "type Middleware func(http.Handler) http.Handler\n\nfunc Chain(h http.Handler, mws ...Middleware) http.Handler {\n\tfor i := len(mws) - 1; i >= 0; i-- {\n\t\tmw := mws[i]\n\t\th = mw(h)\n\t}\n\treturn h\n}",
+    "rationale": "中间件链是 Go HTTP 服务的标准架构模式，被 chi、gorilla/mux 等主流框架广泛采用，通过函数组合实现关注点分离。"
+  },
+  "usageGuide": "### When to Use\n- 构建 Go HTTP 服务时需要统一的请求处理流水线\n- 需要日志、认证、恢复等通用功能\n\n### Key Points\n- 中间件顺序很重要：Recovery 应在最外层\n- 可自由扩展: Auth、CORS、RateLimit 等\n\n### Related Patterns\n- @go-graceful-shutdown 优雅关闭\n- @go-context-propagation 上下文传递",
+  "knowledgeType": "code-pattern",
+  "reasoning": {
+    "whyStandard": "函数式中间件链是 Go 社区的标准 HTTP 服务架构，与 net/http 原生接口完全兼容",
+    "sources": ["Go net/http documentation", "chi router middleware pattern"],
+    "confidence": 0.9
+  },
+  "keywords": ["http", "handler", "middleware", "server"],
+  "tags": ["network", "pattern"]
+}
+```
+
+### Example 4: Python — 异步数据库查询
+
+```json
+{
+  "title": "异步 PostgreSQL 连接池查询",
+  "trigger": "@async-db",
+  "category": "Storage",
+  "language": "python",
+  "kind": "pattern",
+  "doClause": "Use asyncpg connection pool for async PostgreSQL queries with proper error handling",
+  "description": "使用 asyncpg 连接池执行异步 PostgreSQL 查询，含连接管理与错误处理",
+  "headers": ["import asyncpg", "import asyncio"],
+  "content": {
+    "markdown": "## 异步 PostgreSQL 连接池查询\n\nasyncpg 连接池管理数据库连接的生命周期，避免频繁创建/销毁连接的开销。\n\n```python\nimport asyncpg\nimport asyncio\n\nasync def create_pool(dsn: str) -> asyncpg.Pool:\n    return await asyncpg.create_pool(dsn, min_size=5, max_size=20)\n\nasync def fetch_users(pool: asyncpg.Pool, limit: int = 100) -> list[dict]:\n    async with pool.acquire() as conn:\n        rows = await conn.fetch(\n            \"SELECT id, name, email FROM users WHERE active = $1 LIMIT $2\",\n            True, limit\n        )\n        return [dict(row) for row in rows]\n\n# Usage\npool = await create_pool(\"postgresql://user:pass@localhost/mydb\")\ntry:\n    users = await fetch_users(pool)\nfinally:\n    await pool.close()\n```\n\n### 设计要点\n- 连接池 min_size/max_size 控制资源消耗\n- async with pool.acquire() 自动归还连接\n- 参数化查询防止 SQL 注入",
+    "pattern": "async def create_pool(dsn: str) -> asyncpg.Pool:\n    return await asyncpg.create_pool(dsn, min_size=5, max_size=20)\n\nasync def fetch_users(pool: asyncpg.Pool, limit: int = 100) -> list[dict]:\n    async with pool.acquire() as conn:\n        rows = await conn.fetch(query, *params)\n        return [dict(row) for row in rows]",
+    "rationale": "连接池是数据库访问的标准做法，asyncpg 是 Python 社区性能最优的 PostgreSQL 异步驱动，参数化查询确保安全。"
+  },
+  "usageGuide": "### When to Use\n- Python 异步应用中访问 PostgreSQL\n- 需要高并发数据库访问的场景\n\n### Key Points\n- 必须在 asyncio 事件循环中使用\n- 应用退出前调用 pool.close()\n- 使用参数化查询（$1, $2）而非字符串拼接\n\n### Dependencies\n- asyncpg >= 0.27.0\n- PostgreSQL 9.5+",
+  "knowledgeType": "code-pattern",
+  "reasoning": {
+    "whyStandard": "asyncpg 连接池是 Python 异步 PostgreSQL 访问的行业标准，被 FastAPI、Starlette 等框架推荐",
+    "sources": ["asyncpg documentation", "PostgreSQL connection pooling best practices"],
+    "confidence": 0.9
+  },
+  "keywords": ["database", "async", "postgresql", "pool"],
+  "tags": ["storage", "async"]
+}
+```
+
+### Example 5: TypeScript — React 自定义 Hook
+
+```json
+{
+  "title": "React 通用 useFetch Hook",
+  "trigger": "@use-fetch",
+  "category": "Tool",
+  "language": "typescript",
+  "kind": "pattern",
+  "doClause": "Use generic useFetch hook with loading state, error handling, and auto-cancellation",
+  "description": "通用 useFetch Hook，支持泛型、loading 状态、错误处理与请求自动取消",
+  "headers": ["import { useState, useEffect } from 'react'"],
+  "content": {
+    "markdown": "## React 通用 useFetch Hook\n\n封装 fetch 请求为自定义 Hook，统一管理 loading/data/error 三态，URL 变化时自动取消上一次请求。\n\n```typescript\nimport { useState, useEffect } from 'react';\n\ninterface FetchState<T> {\n  data: T | null;\n  loading: boolean;\n  error: Error | null;\n}\n\nfunction useFetch<T>(url: string): FetchState<T> {\n  const [state, setState] = useState<FetchState<T>>({\n    data: null, loading: true, error: null,\n  });\n\n  useEffect(() => {\n    const controller = new AbortController();\n    setState(prev => ({ ...prev, loading: true, error: null }));\n\n    fetch(url, { signal: controller.signal })\n      .then(res => {\n        if (!res.ok) throw new Error(`HTTP ${res.status}`);\n        return res.json();\n      })\n      .then(data => setState({ data, loading: false, error: null }))\n      .catch(err => {\n        if (err.name !== 'AbortError') {\n          setState({ data: null, loading: false, error: err });\n        }\n      });\n\n    return () => controller.abort();\n  }, [url]);\n\n  return state;\n}\n```\n\n### 设计要点\n- AbortController 在组件卸载或 URL 变化时取消请求\n- 泛型 T 支持任意返回类型\n- 三态（loading/data/error）覆盖所有 UI 场景",
+    "pattern": "function useFetch<T>(url: string): FetchState<T> {\n  const [state, setState] = useState<FetchState<T>>({ data: null, loading: true, error: null });\n  useEffect(() => {\n    const controller = new AbortController();\n    fetch(url, { signal: controller.signal }).then(res => res.json()).then(data => setState({ data, loading: false, error: null }));\n    return () => controller.abort();\n  }, [url]);\n  return state;\n}",
+    "rationale": "自定义 Hook 是 React 的标准复用模式，AbortController 防止内存泄漏，泛型确保类型安全。"
+  },
+  "usageGuide": "### When to Use\n- React 函数组件中需要 fetch 远程数据\n- 需要统一的 loading/error 状态管理\n\n### Key Points\n- URL 变化会自动重新请求\n- 组件卸载时自动取消进行中的请求\n- 返回 { data, loading, error } 三态\n\n### Common Pitfalls\n- 不要在 Hook 外部修改返回的 state\n- 复杂场景考虑使用 React Query / SWR",
+  "knowledgeType": "code-pattern",
+  "reasoning": {
+    "whyStandard": "自定义 Hook + AbortController 是 React 官方推荐的数据获取模式",
+    "sources": ["React documentation - Custom Hooks", "MDN AbortController"],
+    "confidence": 0.9
+  },
+  "keywords": ["react", "hook", "fetch", "typescript"],
+  "tags": ["ui", "pattern"]
+}
+```
+
+### Example 6: Java — 泛型 Repository 模式
+
+```json
+{
+  "title": "泛型 Repository 接口",
+  "trigger": "@java-repo",
+  "category": "Service",
+  "language": "java",
+  "kind": "pattern",
+  "doClause": "Use generic Repository interface with Optional returns for type-safe data access",
+  "description": "Spring Data 风格泛型 Repository 接口，使用 Optional 避免空指针，统一数据访问层",
+  "headers": ["import java.util.Optional;", "import java.util.List;"],
+  "content": {
+    "markdown": "## 泛型 Repository 接口\n\n定义统一的泛型数据访问层接口，使用 Optional 返回值避免 NullPointerException，所有实体 Repository 统一实现此接口。\n\n```java\npublic interface Repository<T, ID> {\n    Optional<T> findById(ID id);\n    List<T> findAll();\n    T save(T entity);\n    void deleteById(ID id);\n    boolean existsById(ID id);\n}\n\n// Implementation\npublic class UserRepository implements Repository<User, Long> {\n    @Override\n    public Optional<User> findById(Long id) {\n        return Optional.ofNullable(queryResult);\n    }\n\n    @Override\n    public User save(User entity) {\n        // persist entity\n        return entity;\n    }\n    // ... other methods\n}\n```\n\n### 设计要点\n- 泛型 <T, ID> 支持任意实体类型\n- Optional 返回避免 null 判断\n- 接口统一，实现可替换（内存/数据库/远程）",
+    "pattern": "public interface Repository<T, ID> {\n    Optional<T> findById(ID id);\n    List<T> findAll();\n    T save(T entity);\n    void deleteById(ID id);\n    boolean existsById(ID id);\n}",
+    "rationale": "Repository 模式是 DDD 的核心模式，Spring Data 将其标准化。泛型接口减少重复代码，Optional 是 Java 8+ 避免 NPE 的标准做法。"
+  },
+  "usageGuide": "### When to Use\n- Java 项目需要统一的数据访问层\n- 使用 Spring Data 或自定义 ORM 时\n\n### Key Points\n- 每个实体创建对应的 Repository 实现\n- findById 返回 Optional，调用方用 orElse/orElseThrow 处理\n- save 方法同时处理新增和更新\n\n### Related Patterns\n- @java-service-layer 服务层模式\n- @java-entity-base 基础实体类",
+  "knowledgeType": "architecture",
+  "reasoning": {
+    "whyStandard": "Repository 模式是 Spring Data 的核心抽象，是 Java 企业级开发的行业标准",
+    "sources": ["Spring Data documentation", "Domain-Driven Design by Eric Evans"],
+    "confidence": 0.95
+  },
+  "keywords": ["repository", "generics", "optional", "pattern"],
+  "tags": ["architecture", "pattern"]
+}
+```
+
+### Example 7: Kotlin — 协程 Flow 数据流
+
+```json
+{
+  "title": "Kotlin Flow 异步数据流",
+  "trigger": "@kotlin-flow",
+  "category": "Service",
+  "language": "kotlin",
+  "kind": "pattern",
+  "doClause": "Use Kotlin Flow with retry and error handling for async data streams",
+  "description": "使用 Kotlin Flow 处理异步数据流，含 retry 重试和错误恢复机制",
+  "headers": ["import kotlinx.coroutines.flow.*", "import kotlinx.coroutines.delay"],
+  "content": {
+    "markdown": "## Kotlin Flow 异步数据流\n\n使用 Flow 构建响应式数据流，结合 retry 和 catch 操作符实现自动重试与错误恢复。\n\n```kotlin\nfun fetchUsersFlow(): Flow<List<User>> = flow {\n    val users = apiClient.getUsers()\n    emit(users)\n}.retry(retries = 3) { cause ->\n    cause is IOException && run { delay(1000); true }\n}.catch { e ->\n    emit(emptyList())\n    logger.error(\"Failed to fetch users\", e)\n}.flowOn(Dispatchers.IO)\n\n// Collect in ViewModel\nviewModelScope.launch {\n    fetchUsersFlow()\n        .collect { users ->\n            _uiState.value = UiState.Success(users)\n        }\n}\n```\n\n### 设计要点\n- flow builder 在协程中发射数据\n- retry 操作符对 IOException 自动重试 3 次\n- catch 操作符兜底：发射空列表并记录日志\n- flowOn(Dispatchers.IO) 确保网络请求在 IO 线程",
+    "pattern": "fun fetchUsersFlow(): Flow<List<User>> = flow {\n    val data = apiClient.getData()\n    emit(data)\n}.retry(retries = 3) { cause ->\n    cause is IOException && run { delay(1000); true }\n}.catch { e ->\n    emit(emptyList())\n}.flowOn(Dispatchers.IO)",
+    "rationale": "Kotlin Flow 是 Kotlin 协程的标准响应式流 API，retry + catch 组合是处理不稳定数据源的最佳实践，flowOn 确保线程安全。"
+  },
+  "usageGuide": "### When to Use\n- Android/Kotlin 项目中需要响应式数据流\n- ViewModel 向 UI 层提供可观察数据\n\n### Key Points\n- collect 是终端操作符，必须在协程中调用\n- flowOn 只影响上游操作符\n- retry 中的 delay 实现退避策略\n\n### Common Pitfalls\n- 不要在 catch 之后再使用 retry\n- collect 在主线程调用时确保 flowOn 指定了合适的调度器\n\n### Related Patterns\n- @kotlin-stateflow StateFlow 状态管理\n- @kotlin-coroutine-scope 协程作用域",
+  "knowledgeType": "code-pattern",
+  "reasoning": {
+    "whyStandard": "Kotlin Flow 是 JetBrains 官方推荐的异步流 API，Google Android 团队推荐替代 RxJava",
+    "sources": ["Kotlin Flow documentation", "Android Developer Guide - Kotlin Flow"],
+    "confidence": 0.9
+  },
+  "keywords": ["flow", "coroutine", "async", "stream"],
+  "tags": ["async", "pattern"]
+}
+```
+
+### Headers 格式速查表
+
+| Language | headers 格式示例 |
+|----------|-----------------|
+| Swift | `["import Foundation"]`, `["import UIKit"]` |
+| ObjC | `["#import <Foundation/Foundation.h>"]`, `["#import <UIKit/UIKit.h>"]` |
+| Go | `["import \"net/http\""]`, `["import \"fmt\""]` |
+| Python | `["import asyncio"]`, `["from pathlib import Path"]` |
+| Java | `["import java.util.List;"]`, `["import java.util.Optional;"]` |
+| Kotlin | `["import kotlinx.coroutines.flow.*"]` |
+| JavaScript | `["import express from 'express'"]`, `["const fs = require('fs')"]` |
+| TypeScript | `["import { useState } from 'react'"]`, `["import type { Config } from './types'"]` |
+
+### Placeholder 格式速查表
+
+| 目标 IDE | 格式 | 示例 |
+|----------|------|------|
+| Xcode | `<#name#>` | `<#URL#>`, `<#Token#>`, `<#completion#>` |
+| VSCode | `${N:name}` | `${1:url}`, `${2:token}`, `${3:callback}` |
+
+> **写法建议**: Recipe 源文件中统一使用 Xcode 格式 `<#...#>`，`asd install` 会自动按目标 IDE 转换。
+
+---
+
 ## Snippet
 
 - **Definition**: A single code snippet entry (title, trigger, body, headers, etc.) listed in the root spec or under `AutoSnippet/snippets/`.
-- **Role**: Synced to Xcode CodeSnippets via **`asd install`**; developers insert by trigger or from the snippet library.
+- **Role**: Synced to IDE (Xcode CodeSnippets / VSCode .code-snippets) via **`asd install`**; developers insert by trigger or from the snippet library.
 - **Relation**: A Recipe can describe the same pattern as a Snippet; creating from Dashboard can produce both.
 
 ---
@@ -375,211 +587,11 @@ When `asd ui` is running in the project root, use the HTTP API for on-demand sem
 | **Create Recipe** | Dashboard New Recipe; or write to `_draft_recipe.md` and watch auto-adds; or MCP `autosnippet_submit_knowledge_batch` | autosnippet-create |
 | **Search & insert** | `ass` shortcut or `// as:search`, `asd search`, Dashboard search | autosnippet-search |
 | **Audit review** | `// as:audit`; watch runs AI review against knowledge base | autosnippet-guard |
-| **Dependency graph** | `AutoSnippet/AutoSnippet.spmmap.json`; `asd spm-map` to update; MCP graph tools for querying | autosnippet-structure |
+| **Dependency graph** | `AutoSnippet/AutoSnippet.spmmap.json`; `asd spm-map` to update; MCP graph tools for querying (supports SPM/Node/Go/JVM/Python) | autosnippet-structure |
 | **Vector store** | Built by `asd embed`; `autosnippet_search(mode=context)` for on-demand lookup. Use as context storage to save space | autosnippet-concepts / autosnippet-recipes |
 | **MCP tools** | `autosnippet_search` (统合搜索), `autosnippet_guard` (Guard 检查) | — |
 
 **Principles**: Recipe is project standard, over project implementation; do not modify AutoSnippet/ directly, submit via Dashboard or MCP candidate submission. Context storage is safe; Skills express semantics, MCP provides capability; Cursor calls on demand to save space.
-
----
-
-## Project-Specific Context (BiliDemo Objective-C)
-
-This project uses **Objective-C** and is organized around several key modules and patterns:
-
-### Module Organization
-
-| Module | Category | Primary Use Cases |
-|--------|----------|-------------------|
-| **BDNetworkControl** | Network | HTTP requests, response handling, retries, timeouts, status codes |
-| **BDPyramid** | Service | Module system, lifecycle hooks, context management, startup monitoring |
-| **BDUIKit** | UI | Custom UI components, alerts, views, collections, animations |
-| **BDFoundation** | Utility | KVO patterns, NSArray/NSDictionary helpers, type safety |
-| **BDAuthor** | View | Author profile pages, custom transitions, animations |
-| **BDWBISigner** | Tool | URL parameter handling, WBI signature generation |
-
-### Objective-C Recipe Best Practices
-
-**Headers format** (complete imports, not just module names):
-```yaml
-headers:
-  - "#import <BDNetworkControl/BDBaseRequest.h>"
-  - "#import <BDNetworkControl/BDRequestDefine.h>"
-```
-
-**Trigger naming** (use class or pattern name):
-- `@BDBaseRequest` - core class patterns
-- `@BDBaseRequestRetry` - specific feature patterns  
-- `@BDPModule` - framework/architecture patterns
-- `@KVOSafe` - safety/best practice patterns
-- `@URLParameterConversion` - utility/helper patterns
-
-**Category selection** (use 8 standard categories, not module names):
-- `Network` - BDNetworkControl usage, API calls, response handling
-- `Service` - BDPyramid modules, architecture, lifecycle
-- `UI` - BDUIKit custom components, layouts
-- `Utility` - helpers, converters, safe wrappers
-- `Tool` - WBISigner, signature generation, specialized tools
-- `View` - custom views, author pages, animations
-- `Storage` - persistence, caching (if applicable)
-- `Model` - data structures, model patterns (if applicable)
-
-### Real-World Recipe Examples (BiliDemo)
-
-**Example 1: Network Request Response Handling**
-```yaml
-id: BDBaseRequest.ResponseHandling
-title: BDBaseRequest 响应与错误处理
-trigger: @BDBaseRequestResponse
-category: Network
-language: objectivec
-summary_cn: 使用 responseJson/responseString 获取成功响应，failure block 中使用 NSError。
-summary_en: Use responseJson/responseString for success and NSError in failure block.
-headers:
-  - "#import <BDNetworkControl/BDBaseRequest.h>"
-keywords: [network, response, error-handling]
-tags: [network]
-version: "1.0.0"
-author: team_name
-deprecated: false
-moduleName: BDNetworkControl
-deps:
-  targets: ["BDNetworkControl"]
-  imports: ["BDNetworkControl"]
-difficulty: beginner
-authority: 3
----
-
-## Snippet / Code Reference
-
-```objc
-[req startWithCompletionBlock:^(BDBaseRequest *r) {
-  id json = r.responseJson;
-  NSString *raw = r.responseString;
-  NSData *data = r.responseData;
-  NSInteger code = r.responseStatusCode;
-  NSDictionary *headers = r.responseHeaders;
-} failure:^(BDBaseRequest *r, NSError *error) {
-  NSLog(@"Error domain: %@, code: %ld", error.domain, (long)error.code);
-}];
-```
-
-## AI Context / Usage Guide
-
-成功响应用 responseJson（自动 JSON 解析）、responseString（raw 文本）或 responseData（二进制）；失败用 NSError 的 domain 和 code；可读 HTTP 状态码和响应头。
-```
-
-**Example 2: Module Lifecycle Pattern**
-```yaml
-id: BDPyramid.ModuleLifecycle
-title: BDPyramid Module 定义与生命周期
-trigger: @BDPyramidModule
-category: Service
-language: objectivec
-summary_cn: 使用 ModuleDefine 声明组件，实现 BDPModuleProtocol 的注册和初始化方法。
-summary_en: Define module with ModuleDefine and implement BDPModuleProtocol lifecycle.
-headers:
-  - "#import <BDPyramid/BDPyramid.h>"
-  - "#import <BDPyramid/BDPModuleProtocol.h>"
-keywords: [module, lifecycle, registration]
-tags: [architecture]
-version: "1.0.0"
-author: team_name
-deprecated: false
-moduleName: BDPyramid
-deps:
-  targets: ["BDPyramid"]
-  imports: ["BDPyramid"]
-difficulty: intermediate
-authority: 3
----
-
-## Snippet / Code Reference
-
-```objc
-ModuleDefine(MyCustomModule);
-
-@interface MyCustomModule : NSObject <BDPModuleProtocol>
-@end
-
-@implementation MyCustomModule
-+ (NSInteger)modulePriority {
-  return BDPModulePriorityHigh;  // Priority: higher = earlier execution
-}
-
-- (void)moduleRegister:(BDPContext *)context {
-  // Register module with framework, setup initial state
-}
-
-- (void)moduleInit:(BDPContext *)context {
-  // Initialize module after all modules registered
-}
-
-- (void)applicationEnvironmentDidSetup:(BDPContext *)context {
-  // Called when app environment ready (window visible, etc.)
-}
-@end
-```
-
-## AI Context / Usage Guide
-
-Priority 值越大越先执行；moduleRegister 用于框架内注册，moduleInit 用于初始化逻辑；可以按需实现其他生命周期方法。
-```
-
-**Example 3: Safe KVO Pattern**
-```yaml
-id: NSObject.KVOSafe
-title: NSObject KVO 安全添加与移除
-trigger: @KVOSafe
-category: Utility
-language: objectivec
-summary_cn: 避免 KVO 重复注册或泄漏，需配对 addObserver 和 removeObserver，避免循环引用。
-summary_en: Pair addObserver/removeObserver to avoid leaks and crashes.
-headers:
-  - "#import <Foundation/Foundation.h>"
-keywords: [kvo, safety, lifecycle]
-tags: [safety]
-version: "1.0.0"
-author: team_name
-deprecated: false
-moduleName: Foundation
-deps:
-  targets: ["Foundation"]
-  imports: ["Foundation"]
-difficulty: beginner
-authority: 3
----
-
-## Snippet / Code Reference
-
-```objc
-// Add observer (in init or setup)
-[self.targetObject addObserver:self 
-           forKeyPath:@"property" 
-            options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld
-            context:NULL];
-
-// Observe changes
-- (void)observeValueForKeyPath:(NSString *)keyPath 
-            ofObject:(id)object 
-            change:(NSDictionary *)change 
-             context:(void *)context {
-  if ([keyPath isEqualToString:@"property"]) {
-    id newValue = change[NSKeyValueChangeNewKey];
-    // Handle change
-  }
-}
-
-// Remove observer (in dealloc, CRITICAL)
-- (void)dealloc {
-  [self.targetObject removeObserver:self forKeyPath:@"property"];
-}
-```
-
-## AI Context / Usage Guide
-
-必须在 dealloc 中移除，否则会导致 EXC_BAD_ACCESS；使用 weakly-held reference 避免循环引用；可用 context 参数区分多个观察者。
-```
 
 ---
 

@@ -1,13 +1,13 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { jest } from '@jest/globals';
-import Gateway from '../../lib/core/gateway/Gateway.js';
 import Constitution from '../../lib/core/constitution/Constitution.js';
 import ConstitutionValidator from '../../lib/core/constitution/ConstitutionValidator.js';
+import Gateway from '../../lib/core/gateway/Gateway.js';
 import PermissionManager from '../../lib/core/permission/PermissionManager.js';
-import DatabaseConnection from '../../lib/infrastructure/database/DatabaseConnection.js';
 import AuditLogger from '../../lib/infrastructure/audit/AuditLogger.js';
 import AuditStore from '../../lib/infrastructure/audit/AuditStore.js';
+import DatabaseConnection from '../../lib/infrastructure/database/DatabaseConnection.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -172,15 +172,15 @@ describe('Gateway', () => {
 
     test('should prevent duplicate registration', () => {
       const handler = async () => ({ ok: true });
-      gateway.register('unique_action_' + Date.now(), handler);
+      gateway.register(`unique_action_${Date.now()}`, handler);
 
       expect(() => {
-        gateway.register('unique_action_' + Date.now() + 1, handler);
+        gateway.register(`unique_action_${Date.now()}${1}`, handler);
       }).not.toThrow();
     });
 
     test('should throw on duplicate action name', () => {
-      const actionName = 'duplicate_test_' + Date.now();
+      const actionName = `duplicate_test_${Date.now()}`;
       gateway.register(actionName, async () => ({ ok: true }));
 
       expect(() => {

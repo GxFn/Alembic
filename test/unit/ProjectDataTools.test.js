@@ -1,7 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { jest } from '@jest/globals';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
 
 /* ────────────────────────────────────────────
  *  动态导入 tools.js 获取 ALL_TOOLS 数组
@@ -11,10 +11,10 @@ let searchProjectCode, readProjectFile, submitWithCheck, getFileSummary;
 beforeAll(async () => {
   const mod = await import('../../lib/service/chat/tools.js');
   const tools = mod.ALL_TOOLS;
-  searchProjectCode = tools.find(t => t.name === 'search_project_code');
-  readProjectFile = tools.find(t => t.name === 'read_project_file');
-  submitWithCheck = tools.find(t => t.name === 'submit_with_check');
-  getFileSummary = tools.find(t => t.name === 'get_file_summary');
+  searchProjectCode = tools.find((t) => t.name === 'search_project_code');
+  readProjectFile = tools.find((t) => t.name === 'read_project_file');
+  submitWithCheck = tools.find((t) => t.name === 'submit_with_check');
+  getFileSummary = tools.find((t) => t.name === 'get_file_summary');
 });
 
 /* ────────────────────────────────────────────
@@ -27,66 +27,78 @@ function setupTestProject() {
 
   // src/AppDelegate.m
   fs.mkdirSync(path.join(testProjectDir, 'src'), { recursive: true });
-  fs.writeFileSync(path.join(testProjectDir, 'src', 'AppDelegate.m'), [
-    '#import "AppDelegate.h"',
-    '',
-    '@implementation AppDelegate',
-    '',
-    '- (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)opts {',
-    '    [self setupWindow];',
-    '    [BILNetworkManager sharedManager];',
-    '    return YES;',
-    '}',
-    '',
-    '- (void)setupWindow {',
-    '    self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];',
-    '}',
-    '',
-    '@end',
-  ].join('\n'));
+  fs.writeFileSync(
+    path.join(testProjectDir, 'src', 'AppDelegate.m'),
+    [
+      '#import "AppDelegate.h"',
+      '',
+      '@implementation AppDelegate',
+      '',
+      '- (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)opts {',
+      '    [self setupWindow];',
+      '    [BILNetworkManager sharedManager];',
+      '    return YES;',
+      '}',
+      '',
+      '- (void)setupWindow {',
+      '    self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];',
+      '}',
+      '',
+      '@end',
+    ].join('\n')
+  );
 
   // src/BILNetworkManager.m
-  fs.writeFileSync(path.join(testProjectDir, 'src', 'BILNetworkManager.m'), [
-    '#import "BILNetworkManager.h"',
-    '',
-    '@implementation BILNetworkManager',
-    '',
-    '+ (instancetype)sharedManager {',
-    '    static BILNetworkManager *instance;',
-    '    static dispatch_once_t onceToken;',
-    '    dispatch_once(&onceToken, ^{',
-    '        instance = [[self alloc] init];',
-    '    });',
-    '    return instance;',
-    '}',
-    '',
-    '- (void)fetchDataWithURL:(NSURL *)url completion:(void(^)(id))block {',
-    '    NSURLSession *session = [NSURLSession sharedSession];',
-    '    [[session dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {',
-    '        if (block) block(data);',
-    '    }] resume];',
-    '}',
-    '',
-    '@end',
-  ].join('\n'));
+  fs.writeFileSync(
+    path.join(testProjectDir, 'src', 'BILNetworkManager.m'),
+    [
+      '#import "BILNetworkManager.h"',
+      '',
+      '@implementation BILNetworkManager',
+      '',
+      '+ (instancetype)sharedManager {',
+      '    static BILNetworkManager *instance;',
+      '    static dispatch_once_t onceToken;',
+      '    dispatch_once(&onceToken, ^{',
+      '        instance = [[self alloc] init];',
+      '    });',
+      '    return instance;',
+      '}',
+      '',
+      '- (void)fetchDataWithURL:(NSURL *)url completion:(void(^)(id))block {',
+      '    NSURLSession *session = [NSURLSession sharedSession];',
+      '    [[session dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {',
+      '        if (block) block(data);',
+      '    }] resume];',
+      '}',
+      '',
+      '@end',
+    ].join('\n')
+  );
 
   // src/BILNetworkManager.h
-  fs.writeFileSync(path.join(testProjectDir, 'src', 'BILNetworkManager.h'), [
-    '#import <Foundation/Foundation.h>',
-    '',
-    '@interface BILNetworkManager : NSObject',
-    '+ (instancetype)sharedManager;',
-    '- (void)fetchDataWithURL:(NSURL *)url completion:(void(^)(id))block;',
-    '@end',
-  ].join('\n'));
+  fs.writeFileSync(
+    path.join(testProjectDir, 'src', 'BILNetworkManager.h'),
+    [
+      '#import <Foundation/Foundation.h>',
+      '',
+      '@interface BILNetworkManager : NSObject',
+      '+ (instancetype)sharedManager;',
+      '- (void)fetchDataWithURL:(NSURL *)url completion:(void(^)(id))block;',
+      '@end',
+    ].join('\n')
+  );
 
   // Pods/Masonry/Masonry.m (third-party — should be filtered)
   fs.mkdirSync(path.join(testProjectDir, 'Pods', 'Masonry'), { recursive: true });
-  fs.writeFileSync(path.join(testProjectDir, 'Pods', 'Masonry', 'Masonry.m'), [
-    '// Masonry third party code',
-    '#import "Masonry.h"',
-    'dispatch_once(&tok, ^{ /* third party singleton */ });',
-  ].join('\n'));
+  fs.writeFileSync(
+    path.join(testProjectDir, 'Pods', 'Masonry', 'Masonry.m'),
+    [
+      '// Masonry third party code',
+      '#import "Masonry.h"',
+      'dispatch_once(&tok, ^{ /* third party singleton */ });',
+    ].join('\n')
+  );
 
   // README.md (non-source — should be filtered)
   fs.writeFileSync(path.join(testProjectDir, 'README.md'), '# Test Project');
@@ -124,10 +136,7 @@ describe('search_project_code', () => {
   });
 
   it('should find text pattern in project files', async () => {
-    const result = await searchProjectCode.handler(
-      { pattern: 'dispatch_once' },
-      makeCtx()
-    );
+    const result = await searchProjectCode.handler({ pattern: 'dispatch_once' }, makeCtx());
     expect(result.total).toBeGreaterThan(0);
     expect(result.matches.length).toBeGreaterThan(0);
     expect(result.matches[0].file).toContain('BILNetworkManager.m');
@@ -135,12 +144,9 @@ describe('search_project_code', () => {
   });
 
   it('should filter third-party code (Pods)', async () => {
-    const result = await searchProjectCode.handler(
-      { pattern: 'dispatch_once' },
-      makeCtx()
-    );
+    const result = await searchProjectCode.handler({ pattern: 'dispatch_once' }, makeCtx());
     // Should NOT include Pods/Masonry hit
-    const podHits = result.matches.filter(m => m.file.includes('Pods'));
+    const podHits = result.matches.filter((m) => m.file.includes('Pods'));
     expect(podHits).toHaveLength(0);
     expect(result.skippedThirdParty).toBeGreaterThan(0);
   });
@@ -175,22 +181,16 @@ describe('search_project_code', () => {
   });
 
   it('should respect maxResults', async () => {
-    const result = await searchProjectCode.handler(
-      { pattern: 'self', maxResults: 2 },
-      makeCtx()
-    );
+    const result = await searchProjectCode.handler({ pattern: 'self', maxResults: 2 }, makeCtx());
     expect(result.matches.length).toBeLessThanOrEqual(2);
     // total may be > maxResults
     expect(result.total).toBeGreaterThanOrEqual(result.matches.length);
   });
 
   it('should score usage lines higher than declarations', async () => {
-    const result = await searchProjectCode.handler(
-      { pattern: 'sharedManager' },
-      makeCtx()
-    );
+    const result = await searchProjectCode.handler({ pattern: 'sharedManager' }, makeCtx());
     // matches sorted by score desc
-    const scores = result.matches.map(m => m.score);
+    const scores = result.matches.map((m) => m.score);
     for (let i = 1; i < scores.length; i++) {
       expect(scores[i]).toBeLessThanOrEqual(scores[i - 1]);
     }
@@ -221,7 +221,11 @@ describe('search_project_code', () => {
 
   it('should work with fileCache (bootstrap mode)', async () => {
     const fileCache = [
-      { relativePath: 'src/Cached.m', content: '// cached content\ndispatch_once(&tok, ^{});', name: 'Cached.m' },
+      {
+        relativePath: 'src/Cached.m',
+        content: '// cached content\ndispatch_once(&tok, ^{});',
+        name: 'Cached.m',
+      },
       { relativePath: 'Pods/AFN/AFN.m', content: 'dispatch_once(&t, ^{});', name: 'AFN.m' },
     ];
     const result = await searchProjectCode.handler(
@@ -248,10 +252,7 @@ describe('read_project_file', () => {
   });
 
   it('should read a file by relative path', async () => {
-    const result = await readProjectFile.handler(
-      { filePath: 'src/AppDelegate.m' },
-      makeCtx()
-    );
+    const result = await readProjectFile.handler({ filePath: 'src/AppDelegate.m' }, makeCtx());
     expect(result.content).toContain('AppDelegate');
     expect(result.totalLines).toBeGreaterThan(0);
     expect(result.language).toBe('objectivec');
@@ -277,37 +278,25 @@ describe('read_project_file', () => {
   });
 
   it('should reject path traversal (..)', async () => {
-    const result = await readProjectFile.handler(
-      { filePath: '../../../etc/passwd' },
-      makeCtx()
-    );
+    const result = await readProjectFile.handler({ filePath: '../../../etc/passwd' }, makeCtx());
     expect(result.error).toBeDefined();
     expect(result.error).toContain('traversal');
   });
 
   it('should reject absolute paths', async () => {
-    const result = await readProjectFile.handler(
-      { filePath: '/etc/passwd' },
-      makeCtx()
-    );
+    const result = await readProjectFile.handler({ filePath: '/etc/passwd' }, makeCtx());
     expect(result.error).toBeDefined();
     expect(result.error).toContain('traversal');
   });
 
   it('should handle non-existent file', async () => {
-    const result = await readProjectFile.handler(
-      { filePath: 'nonexistent/file.m' },
-      makeCtx()
-    );
+    const result = await readProjectFile.handler({ filePath: 'nonexistent/file.m' }, makeCtx());
     expect(result.error).toBeDefined();
     expect(result.error).toContain('not found');
   });
 
   it('should detect language from extension', async () => {
-    const resultM = await readProjectFile.handler(
-      { filePath: 'src/AppDelegate.m' },
-      makeCtx()
-    );
+    const resultM = await readProjectFile.handler({ filePath: 'src/AppDelegate.m' }, makeCtx());
     expect(resultM.language).toBe('objectivec');
 
     const resultH = await readProjectFile.handler(
@@ -319,7 +308,11 @@ describe('read_project_file', () => {
 
   it('should work with fileCache (bootstrap mode)', async () => {
     const fileCache = [
-      { relativePath: 'cached/Test.swift', content: 'import UIKit\nclass Test {}', name: 'Test.swift' },
+      {
+        relativePath: 'cached/Test.swift',
+        content: 'import UIKit\nclass Test {}',
+        name: 'Test.swift',
+      },
     ];
     const result = await readProjectFile.handler(
       { filePath: 'cached/Test.swift' },
@@ -331,9 +324,7 @@ describe('read_project_file', () => {
   });
 
   it('should fallback to disk when file not in cache', async () => {
-    const fileCache = [
-      { relativePath: 'other/file.m', content: 'other', name: 'file.m' },
-    ];
+    const fileCache = [{ relativePath: 'other/file.m', content: 'other', name: 'file.m' }];
     const result = await readProjectFile.handler(
       { filePath: 'src/AppDelegate.m' },
       makeCtx({ fileCache })
@@ -358,7 +349,13 @@ describe('submit_with_check consistency', () => {
       title: 'Example Pattern',
     };
     const mockKnowledgeService = {
-      create: jest.fn().mockResolvedValue({ id: 'k-1', lifecycle: 'draft', toJSON() { return { id: 'k-1' }; } }),
+      create: jest.fn().mockResolvedValue({
+        id: 'k-1',
+        lifecycle: 'draft',
+        toJSON() {
+          return { id: 'k-1' };
+        },
+      }),
     };
     const ctx = {
       projectRoot: testProjectDir,
@@ -368,7 +365,7 @@ describe('submit_with_check consistency', () => {
         allowedKnowledgeTypes: ['architecture', 'best-practice'],
         allowedCategories: ['Architecture', 'Service'],
       },
-      container: { get: (name) => name === 'knowledgeService' ? mockKnowledgeService : null },
+      container: { get: (name) => (name === 'knowledgeService' ? mockKnowledgeService : null) },
       logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn() },
     };
     const result = await submitWithCheck.handler(params, ctx);
@@ -386,12 +383,18 @@ describe('submit_with_check consistency', () => {
       title: 'Test',
     };
     const mockKnowledgeService = {
-      create: jest.fn().mockResolvedValue({ id: 'k-2', lifecycle: 'draft', toJSON() { return { id: 'k-2' }; } }),
+      create: jest.fn().mockResolvedValue({
+        id: 'k-2',
+        lifecycle: 'draft',
+        toJSON() {
+          return { id: 'k-2' };
+        },
+      }),
     };
     const ctx = {
       projectRoot: testProjectDir,
       source: 'system',
-      container: { get: (name) => name === 'knowledgeService' ? mockKnowledgeService : null },
+      container: { get: (name) => (name === 'knowledgeService' ? mockKnowledgeService : null) },
       logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn() },
     };
     const result = await submitWithCheck.handler(params, ctx);
@@ -410,7 +413,13 @@ describe('submit_with_check consistency', () => {
       summary: 'Pattern summary',
     };
     const mockKnowledgeService = {
-      create: jest.fn().mockResolvedValue({ id: 'k-3', lifecycle: 'draft', toJSON() { return { id: 'k-3' }; } }),
+      create: jest.fn().mockResolvedValue({
+        id: 'k-3',
+        lifecycle: 'draft',
+        toJSON() {
+          return { id: 'k-3' };
+        },
+      }),
     };
     const ctx = {
       projectRoot: testProjectDir,
@@ -419,7 +428,7 @@ describe('submit_with_check consistency', () => {
         allowedKnowledgeTypes: ['architecture'],
         allowedCategories: ['Architecture'],
       },
-      container: { get: (name) => name === 'knowledgeService' ? mockKnowledgeService : null },
+      container: { get: (name) => (name === 'knowledgeService' ? mockKnowledgeService : null) },
       logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn() },
     };
     const result = await submitWithCheck.handler(params, ctx);
@@ -449,13 +458,18 @@ describe('get_file_summary language map', () => {
       fs.writeFileSync(path.join(testProjectDir, name), content);
     }
 
-    for (const name of Object.keys(testFiles)) {
-      const result = await getFileSummary.handler(
-        { filePath: name },
-        makeCtx()
-      );
-      // Should fall back to preview (unknown language), not apply JS extractors
-      expect(result.language).toBe('unknown');
+    // Languages with extractors should return structured data, not JS extractors
+    const withExtractors = ['Test.java', 'Test.kt', 'test.go'];
+    for (const name of withExtractors) {
+      const result = await getFileSummary.handler({ filePath: name }, makeCtx());
+      expect(result.language).not.toBe('javascript');
+      expect(result.language).not.toBe('unknown');
+    }
+    // Languages without extractors (rust, ruby) should fall back to preview
+    const withoutExtractors = ['test.rs', 'test.rb'];
+    for (const name of withoutExtractors) {
+      const result = await getFileSummary.handler({ filePath: name }, makeCtx());
+      expect(result.language).not.toBe('javascript');
       expect(result.preview).toBeDefined();
     }
   });

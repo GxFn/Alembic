@@ -3,7 +3,7 @@
 /**
  * AutoSnippet V2 MCP Server 入口
  * 供 Cursor / VSCode Copilot MCP 配置使用
- * 
+ *
  * 配置示例 (.cursor/mcp.json):
  * {
  *   "mcpServers": {
@@ -22,7 +22,9 @@ process.env.ASD_MCP_MODE = '1';
 // ─── 进程级错误兜底 ────────────────────────────────────
 process.on('uncaughtException', (error) => {
   process.stderr.write(`[MCP] Uncaught Exception: ${error.message}\n`);
-  if (error.stack) process.stderr.write(`${error.stack}\n`);
+  if (error.stack) {
+    process.stderr.write(`${error.stack}\n`);
+  }
   process.exit(1);
 });
 
@@ -43,7 +45,7 @@ process.on('SIGINT', () => {
 
 const { startMcpServer } = await import('../lib/external/mcp/McpServer.js');
 
-startMcpServer().catch(err => {
+startMcpServer().catch((err) => {
   process.stderr.write(`MCP Server failed to start: ${err.message}\n`);
   process.exit(1);
 });

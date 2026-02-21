@@ -1,7 +1,6 @@
-import { jest } from '@jest/globals';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 let JsonVectorAdapter, IndexingPipeline;
 
@@ -28,8 +27,18 @@ describe('JsonVectorAdapter', () => {
 
   it('should persist and reload via initSync()', async () => {
     const store1 = new JsonVectorAdapter(tmpDir);
-    await store1.upsert({ id: 'doc-1', content: 'hello world', vector: [0.1, 0.2], metadata: { type: 'test' } });
-    await store1.upsert({ id: 'doc-2', content: 'foo bar', vector: [0.3, 0.4], metadata: { type: 'test' } });
+    await store1.upsert({
+      id: 'doc-1',
+      content: 'hello world',
+      vector: [0.1, 0.2],
+      metadata: { type: 'test' },
+    });
+    await store1.upsert({
+      id: 'doc-2',
+      content: 'foo bar',
+      vector: [0.3, 0.4],
+      metadata: { type: 'test' },
+    });
 
     // New instance — must call initSync to load from disk
     const store2 = new JsonVectorAdapter(tmpDir);
@@ -50,7 +59,7 @@ describe('JsonVectorAdapter', () => {
     const store = new JsonVectorAdapter(tmpDir);
     await store.batchUpsert([
       { id: 'a', content: 'alpha', vector: [1, 0, 0], metadata: { title: 'Alpha' } },
-      { id: 'b', content: 'beta',  vector: [0.9, 0.1, 0], metadata: { title: 'Beta' } },
+      { id: 'b', content: 'beta', vector: [0.9, 0.1, 0], metadata: { title: 'Beta' } },
       { id: 'c', content: 'gamma', vector: [0, 1, 0], metadata: { title: 'Gamma' } },
     ]);
 
@@ -99,20 +108,23 @@ describe('IndexingPipeline', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asd-pipe-'));
     // Create recipes/ directory with test file
     fs.mkdirSync(path.join(tmpDir, 'recipes'), { recursive: true });
-    fs.writeFileSync(path.join(tmpDir, 'recipes', 'test-recipe.md'), [
-      '# Singleton Pattern',
-      '',
-      'Use `sharedInstance` for thread-safe singleton in Objective-C.',
-      '',
-      '```objectivec',
-      '+ (instancetype)sharedInstance {',
-      '    static id instance;',
-      '    static dispatch_once_t onceToken;',
-      '    dispatch_once(&onceToken, ^{ instance = [[self alloc] init]; });',
-      '    return instance;',
-      '}',
-      '```',
-    ].join('\n'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'recipes', 'test-recipe.md'),
+      [
+        '# Singleton Pattern',
+        '',
+        'Use `sharedInstance` for thread-safe singleton in Objective-C.',
+        '',
+        '```objectivec',
+        '+ (instancetype)sharedInstance {',
+        '    static id instance;',
+        '    static dispatch_once_t onceToken;',
+        '    dispatch_once(&onceToken, ^{ instance = [[self alloc] init]; });',
+        '    return instance;',
+        '}',
+        '```',
+      ].join('\n')
+    );
   });
 
   afterEach(() => {

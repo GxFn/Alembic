@@ -12,18 +12,18 @@ SPMTest/
 # native-ui 源码不忽略（resources 下）
 !resources/native-ui/main.swift
 !resources/native-ui/combined-window.swift
-# asd 原生入口源码不忽略
-!resources/asd-entry/main.swift
 # Swift 构建产物
 tools/parse-package/.build/
 resources/native-ui/native-ui
-bin/asd-verify
-# 发布时生成，不提交（prepublishOnly 会生成到 tarball）
-checksums.json
 
 # macOS 系统文件
 .DS_Store
 */.DS_Store
+
+# 运行时垃圾文件
+nohup.out
+prettier-output.log
+.git-commit-msg.tmp
 
 # 本地测试 / 密钥（勿提交）
 test/temp/
@@ -73,9 +73,15 @@ data/
 # 构建产物（可选：若需提交 dist 可删此行）
 dashboard/dist/
 
+# VSCode Extension 构建产物
+resources/vscode-ext/out/
+resources/vscode-ext/*.vsix
+resources/vscode-ext/node_modules/
+
 # 编辑器 / IDE 本地配置
 .vscode/
 .cursor/
+.editorconfig
 
 # Prettier 输出
 prettier-output.log

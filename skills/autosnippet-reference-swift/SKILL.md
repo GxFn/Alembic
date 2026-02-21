@@ -27,12 +27,20 @@ description: Swift 业界最佳实践参考。涵盖命名规范、Swift Concurr
 ```json
 {
   "title": "Swift 命名: 方法名读起来像英语句子",
-  "code": "// ✅ 好的命名 — 读起来像自然语言\nfunc insert(_ element: Element, at index: Int)\nfunc distance(from start: Point, to end: Point) -> Double\nfunc makeIterator() -> Iterator\nfunc index(_ i: Index, offsetBy distance: Int) -> Index\n\n// ❌ 差的命名\nfunc insert(_ element: Element, position: Int)  // 缺少介词\nfunc dist(p1: Point, p2: Point) -> Double  // 缩写不清晰\nfunc getIterator() -> Iterator  // 不要用 get 前缀",
+  "content": {
+    "markdown": "## Swift 命名: 方法名读起来像英语句子\n\n### 标准模式\n```swift\n// ✅ 好的命名 — 读起来像自然语言\nfunc insert(_ element: Element, at index: Int)\nfunc distance(from start: Point, to end: Point) -> Double\nfunc makeIterator() -> Iterator\nfunc index(_ i: Index, offsetBy distance: Int) -> Index\n\n// ❌ 差的命名\nfunc insert(_ element: Element, position: Int)  // 缺少介词\nfunc dist(p1: Point, p2: Point) -> Double  // 缩写不清晰\nfunc getIterator() -> Iterator  // 不要用 get 前缀\n```",
+    "pattern": "// ✅ 好的命名 — 读起来像自然语言\nfunc insert(_ element: Element, at index: Int)\nfunc distance(from start: Point, to end: Point) -> Double\nfunc makeIterator() -> Iterator\nfunc index(_ i: Index, offsetBy distance: Int) -> Index\n\n// ❌ 差的命名\nfunc insert(_ element: Element, position: Int)  // 缺少介词\nfunc dist(p1: Point, p2: Point) -> Double  // 缩写不清晰\nfunc getIterator() -> Iterator  // 不要用 get 前缀",
+    "rationale": "Apple API Design Guidelines: 方法名应在调用点读起来像英语短语。参数标签选择应使调用自然流畅。"
+  },
+  "description": "Swift 命名: 方法名读起来像英语句子",
+  "kind": "rule",
+  "doClause": "Apply the Swift 命名 pattern as described",
   "language": "swift",
+  "headers": [],
   "category": "Tool",
   "knowledgeType": "code-standard",
+  "usageGuide": "### 使用场景\\n触发 `@trigger` 获取Swift 命名: 方法名读起来像英语句子的标准实现模式。",
   "scope": "universal",
-  "rationale": "Apple API Design Guidelines: 方法名应在调用点读起来像英语短语。参数标签选择应使调用自然流畅。",
   "antiPattern": {
     "bad": "func getHeight() -> CGFloat",
     "why": "返回属性的方法不加 get 前缀（遵循 Cocoa 惯例）",
@@ -40,7 +48,10 @@ description: Swift 业界最佳实践参考。涵盖命名规范、Swift Concurr
   },
   "reasoning": {
     "whyStandard": "Swift API Design Guidelines 明确要求: 方法名在使用点可读、工厂方法以 make 开头、Bool 属性读作断言",
-    "sources": ["Apple API Design Guidelines", "Google Swift Style Guide - Naming"],
+    "sources": [
+      "Apple API Design Guidelines",
+      "Google Swift Style Guide - Naming"
+    ],
     "confidence": 0.95
   }
 }
@@ -71,15 +82,26 @@ description: Swift 业界最佳实践参考。涵盖命名规范、Swift Concurr
 ```json
 {
   "title": "Swift Concurrency: async/await 基本模式",
-  "code": "// ✅ 推荐: 使用 async/await\nfunc fetchUser(id: String) async throws -> User {\n  let (data, response) = try await URLSession.shared.data(from: url)\n  guard let httpResponse = response as? HTTPURLResponse,\n        httpResponse.statusCode == 200 else {\n    throw NetworkError.invalidResponse\n  }\n  return try JSONDecoder().decode(User.self, from: data)\n}\n\n// 调用\ndo {\n  let user = try await fetchUser(id: \"123\")\n  await updateUI(with: user)\n} catch {\n  handleError(error)\n}",
+  "content": {
+    "markdown": "## Swift Concurrency: async/await 基本模式\n\n### 标准模式\n```swift\n// ✅ 推荐: 使用 async/await\nfunc fetchUser(id: String) async throws -> User {\n  let (data, response) = try await URLSession.shared.data(from: url)\n  guard let httpResponse = response as? HTTPURLResponse,\n        httpResponse.statusCode == 200 else {\n    throw NetworkError.invalidResponse\n  }\n  return try JSONDecoder().decode(User.self, from: data)\n}\n\n// 调用\ndo {\n  let user = try await fetchUser(id: \"123\")\n  await updateUI(with: user)\n} catch {\n  handleError(error)\n}\n```",
+    "pattern": "// ✅ 推荐: 使用 async/await\nfunc fetchUser(id: String) async throws -> User {\n  let (data, response) = try await URLSession.shared.data(from: url)\n  guard let httpResponse = response as? HTTPURLResponse,\n        httpResponse.statusCode == 200 else {\n    throw NetworkError.invalidResponse\n  }\n  return try JSONDecoder().decode(User.self, from: data)\n}\n\n// 调用\ndo {\n  let user = try await fetchUser(id: \"123\")\n  await updateUI(with: user)\n} catch {\n  handleError(error)\n}",
+    "rationale": "async/await 替代 completion handler，使异步代码像同步代码一样可读。throws 传播错误信息而非 Result 嵌套。"
+  },
+  "description": "Swift Concurrency: async/await 基本模式",
+  "kind": "pattern",
+  "doClause": "Apply the Swift Concurrency pattern as described",
   "language": "swift",
+  "headers": [],
   "category": "Service",
   "knowledgeType": "best-practice",
+  "usageGuide": "### 使用场景\\n触发 `@trigger` 获取Swift Concurrency: async/await 基本模式的标准实现模式。",
   "scope": "universal",
-  "rationale": "async/await 替代 completion handler，使异步代码像同步代码一样可读。throws 传播错误信息而非 Result 嵌套。",
   "reasoning": {
     "whyStandard": "Swift 5.5+ 的 structured concurrency 是 Apple 推荐的异步编程模型",
-    "sources": ["Swift Language Guide - Concurrency", "WWDC 2021"],
+    "sources": [
+      "Swift Language Guide - Concurrency",
+      "WWDC 2021"
+    ],
     "confidence": 0.95
   }
 }
@@ -109,15 +131,25 @@ let photos = await withTaskGroup(of: Data.self) { group in
 ```json
 {
   "title": "Actor 模式: 保护共享可变状态",
-  "code": "// ✅ 用 Actor 保护共享状态\nactor CacheStore {\n  private var cache: [String: Data] = [:]\n  \n  func get(_ key: String) -> Data? {\n    cache[key]  // actor 内部访问不需要 await\n  }\n  \n  func set(_ key: String, data: Data) {\n    cache[key] = data\n  }\n}\n\n// 外部访问需要 await\nlet store = CacheStore()\nlet data = await store.get(\"user\")",
+  "content": {
+    "markdown": "## Actor 模式: 保护共享可变状态\n\n### 标准模式\n```swift\n// ✅ 用 Actor 保护共享状态\nactor CacheStore {\n  private var cache: [String: Data] = [:]\n  \n  func get(_ key: String) -> Data? {\n    cache[key]  // actor 内部访问不需要 await\n  }\n  \n  func set(_ key: String, data: Data) {\n    cache[key] = data\n  }\n}\n\n// 外部访问需要 await\nlet store = CacheStore()\nlet data = await store.get(\"user\")\n```",
+    "pattern": "// ✅ 用 Actor 保护共享状态\nactor CacheStore {\n  private var cache: [String: Data] = [:]\n  \n  func get(_ key: String) -> Data? {\n    cache[key]  // actor 内部访问不需要 await\n  }\n  \n  func set(_ key: String, data: Data) {\n    cache[key] = data\n  }\n}\n\n// 外部访问需要 await\nlet store = CacheStore()\nlet data = await store.get(\"user\")",
+    "rationale": "Actor 保证同一时间只有一个任务访问其可变状态，从编译器级别消除数据竞争"
+  },
+  "description": "Actor 模式: 保护共享可变状态",
+  "kind": "pattern",
+  "doClause": "Apply the Actor 模式 pattern as described",
   "language": "swift",
+  "headers": [],
   "category": "Service",
   "knowledgeType": "best-practice",
+  "usageGuide": "### 使用场景\\n触发 `@trigger` 获取Actor 模式: 保护共享可变状态的标准实现模式。",
   "scope": "universal",
-  "rationale": "Actor 保证同一时间只有一个任务访问其可变状态，从编译器级别消除数据竞争",
   "reasoning": {
     "whyStandard": "Actor 是 Swift Concurrency 的核心原语，取代手动 lock/queue 同步",
-    "sources": ["Swift Language Guide - Actors"],
+    "sources": [
+      "Swift Language Guide - Actors"
+    ],
     "confidence": 0.95
   }
 }
@@ -175,12 +207,20 @@ class MutableState: Sendable {  // 编译错误
 ```json
 {
   "title": "SwiftUI 状态管理: @State / @Binding / @ObservedObject / @StateObject",
-  "code": "// @State — View 拥有的简单值\nstruct CounterView: View {\n  @State private var count = 0\n  var body: some View {\n    Button(\"Count: \\(count)\") { count += 1 }\n  }\n}\n\n// @StateObject — View 拥有的引用类型（只创建一次）\nstruct ProfileView: View {\n  @StateObject private var viewModel = ProfileViewModel()\n}\n\n// @ObservedObject — 外部传入的引用类型（不拥有生命周期）\nstruct DetailView: View {\n  @ObservedObject var viewModel: DetailViewModel\n}\n\n// @Binding — 双向绑定子 View 到父 View 的状态\nstruct ToggleRow: View {\n  @Binding var isOn: Bool\n}",
+  "content": {
+    "markdown": "## SwiftUI 状态管理: @State / @Binding / @ObservedObject / @StateObject\n\n### 标准模式\n```swift\n// @State — View 拥有的简单值\nstruct CounterView: View {\n  @State private var count = 0\n  var body: some View {\n    Button(\"Count: \\(count)\") { count += 1 }\n  }\n}\n\n// @StateObject — View 拥有的引用类型（只创建一次）\nstruct ProfileView: View {\n  @StateObject private var viewModel = ProfileViewModel()\n}\n\n// @ObservedObject — 外部传入的引用类型（不拥有生命周期）\nstruct DetailView: View {\n  @ObservedObject var viewModel: DetailViewModel\n}\n\n// @Binding — 双向绑定子 View 到父 View 的状态\nstruct ToggleRow: View {\n  @Binding var isOn: Bool\n}\n```",
+    "pattern": "// @State — View 拥有的简单值\nstruct CounterView: View {\n  @State private var count = 0\n  var body: some View {\n    Button(\"Count: \\(count)\") { count += 1 }\n  }\n}\n\n// @StateObject — View 拥有的引用类型（只创建一次）\nstruct ProfileView: View {\n  @StateObject private var viewModel = ProfileViewModel()\n}\n\n// @ObservedObject — 外部传入的引用类型（不拥有生命周期）\nstruct DetailView: View {\n  @ObservedObject var viewModel: DetailViewModel\n}\n\n// @Binding — 双向绑定子 View 到父 View 的状态\nstruct ToggleRow: View {\n  @Binding var isOn: Bool\n}",
+    "rationale": "选择正确的属性包装器是 SwiftUI 正确工作的关键: @StateObject 保证只初始化一次, @ObservedObject 不持有生命周期"
+  },
+  "description": "SwiftUI 状态管理: @State / @Binding / @ObservedObject / @StateObject",
+  "kind": "pattern",
+  "doClause": "Apply the SwiftUI 状态管理 pattern as described",
   "language": "swift",
+  "headers": [],
   "category": "View",
   "knowledgeType": "code-pattern",
+  "usageGuide": "### 使用场景\\n触发 `@trigger` 获取SwiftUI 状态管理: @State / @Binding / @ObservedObject / @StateObject的标准实现模式。",
   "scope": "universal",
-  "rationale": "选择正确的属性包装器是 SwiftUI 正确工作的关键: @StateObject 保证只初始化一次, @ObservedObject 不持有生命周期",
   "antiPattern": {
     "bad": "@ObservedObject var viewModel = ViewModel()  // ⚠️ 每次 body 重新求值都会创建新实例",
     "why": "@ObservedObject 不持有对象生命周期，如果在初始化器中创建会导致反复重建",
@@ -188,7 +228,10 @@ class MutableState: Sendable {  // 编译错误
   },
   "reasoning": {
     "whyStandard": "Apple WWDC 2020+ 多次强调 @StateObject vs @ObservedObject 的区别",
-    "sources": ["Apple SwiftUI Documentation", "WWDC 2020 - Data Essentials in SwiftUI"],
+    "sources": [
+      "Apple SwiftUI Documentation",
+      "WWDC 2020 - Data Essentials in SwiftUI"
+    ],
     "confidence": 0.95
   }
 }
@@ -291,10 +334,19 @@ func process(data: Data?) throws -> Result {
 ```json
 {
   "title": "ARC 内存管理: [weak self] 在逃逸闭包中",
-  "code": "// ✅ 正确: 逃逸闭包使用 [weak self]\nclass ViewModel {\n  func startObserving() {\n    NotificationCenter.default.addObserver(\n      forName: .dataChanged, object: nil, queue: .main\n    ) { [weak self] notification in\n      self?.handleDataChange(notification)\n    }\n  }\n}\n\n// ✅ 正确: 非逃逸闭包不需要 weak self\nlet filtered = items.filter { $0.isActive }  // 不需要 [weak self]\nlet mapped = items.map { transform($0) }  // 不需要 [weak self]\n\n// ❌ 错误: delegate 使用 strong 引用\nclass Parent {\n  let child = Child()\n  init() { child.delegate = self }  // retain cycle!\n}\n// ✅ 修复\nweak var delegate: ChildDelegate?",
+  "content": {
+    "markdown": "## ARC 内存管理: [weak self] 在逃逸闭包中\n\n### 标准模式\n```swift\n// ✅ 正确: 逃逸闭包使用 [weak self]\nclass ViewModel {\n  func startObserving() {\n    NotificationCenter.default.addObserver(\n      forName: .dataChanged, object: nil, queue: .main\n    ) { [weak self] notification in\n      self?.handleDataChange(notification)\n    }\n  }\n}\n\n// ✅ 正确: 非逃逸闭包不需要 weak self\nlet filtered = items.filter { $0.isActive }  // 不需要 [weak self]\nlet mapped = items.map { transform($0) }  // 不需要 [weak self]\n\n// ❌ 错误: delegate 使用 strong 引用\nclass Parent {\n  let child = Child()\n  init() { child.delegate = self }  // retain cycle!\n}\n// ✅ 修复\nweak var delegate: ChildDelegate?\n```",
+    "pattern": "// ✅ 正确: 逃逸闭包使用 [weak self]\nclass ViewModel {\n  func startObserving() {\n    NotificationCenter.default.addObserver(\n      forName: .dataChanged, object: nil, queue: .main\n    ) { [weak self] notification in\n      self?.handleDataChange(notification)\n    }\n  }\n}\n\n// ✅ 正确: 非逃逸闭包不需要 weak self\nlet filtered = items.filter { $0.isActive }  // 不需要 [weak self]\nlet mapped = items.map { transform($0) }  // 不需要 [weak self]\n\n// ❌ 错误: delegate 使用 strong 引用\nclass Parent {\n  let child = Child()\n  init() { child.delegate = self }  // retain cycle!\n}\n// ✅ 修复\nweak var delegate: ChildDelegate?",
+    "rationale": "ARC 内存管理: [weak self] 在逃逸闭包中的标准实现模式。"
+  },
+  "description": "ARC 内存管理: [weak self] 在逃逸闭包中",
+  "kind": "pattern",
+  "doClause": "Apply the ARC 内存管理 pattern as described",
   "language": "swift",
+  "headers": [],
   "category": "Tool",
   "knowledgeType": "best-practice",
+  "usageGuide": "### 使用场景\\n触发 `@trigger` 获取ARC 内存管理: [weak self] 在逃逸闭包中的标准实现模式。",
   "scope": "universal",
   "antiPattern": {
     "bad": "closure { self.doSomething() }  // 在异步/存储的闭包中",
@@ -303,7 +355,10 @@ func process(data: Data?) throws -> Result {
   },
   "reasoning": {
     "whyStandard": "ARC 下闭包默认 strong capture，是 iOS 开发中最常见的内存泄漏来源",
-    "sources": ["Apple ARC Documentation", "WWDC Memory Management Sessions"],
+    "sources": [
+      "Apple ARC Documentation",
+      "WWDC Memory Management Sessions"
+    ],
     "confidence": 0.95
   }
 }
@@ -457,3 +512,4 @@ UIView.animate(
 - **autosnippet-coldstart**: 完整冷启动流程（本 Skill 的主 Skill）
 - **autosnippet-reference-objc**: Objective-C 业界最佳实践参考
 - **autosnippet-reference-jsts**: JavaScript/TypeScript 业界最佳实践参考
+- **autosnippet-reference-dart**: Dart (Flutter) 业界最佳实践参考

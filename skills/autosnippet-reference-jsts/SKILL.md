@@ -17,12 +17,20 @@ description: JavaScript/TypeScript 业界最佳实践参考。涵盖类型系统
 ```json
 {
   "title": "TS 模块: 使用 named export，避免 default export",
-  "code": "// ✅ 使用 named export\nexport class UserService { ... }\nexport function parseConfig(raw: string): Config { ... }\nexport const MAX_RETRY = 3;\n\n// 导入时 — 明确看到导入了什么\nimport { UserService, parseConfig } from './user-service';\n\n// ❌ 避免 default export\nexport default class UserService { ... }\n// 导入时可以随意改名，不利于搜索和重构\nimport Whatever from './user-service';",
+  "content": {
+    "markdown": "## TS 模块: 使用 named export，避免 default export\n\n### 标准模式\n```typescript\n// ✅ 使用 named export\nexport class UserService { ... }\nexport function parseConfig(raw: string): Config { ... }\nexport const MAX_RETRY = 3;\n\n// 导入时 — 明确看到导入了什么\nimport { UserService, parseConfig } from './user-service';\n\n// ❌ 避免 default export\nexport default class UserService { ... }\n// 导入时可以随意改名，不利于搜索和重构\nimport Whatever from './user-service';\n```",
+    "pattern": "// ✅ 使用 named export\nexport class UserService { ... }\nexport function parseConfig(raw: string): Config { ... }\nexport const MAX_RETRY = 3;\n\n// 导入时 — 明确看到导入了什么\nimport { UserService, parseConfig } from './user-service';\n\n// ❌ 避免 default export\nexport default class UserService { ... }\n// 导入时可以随意改名，不利于搜索和重构\nimport Whatever from './user-service';",
+    "rationale": "named export 强制导入方使用一致的名称，方便 IDE 自动补全、全局搜索和安全重构"
+  },
+  "description": "TS 模块: 使用 named export，避免 default export",
+  "kind": "rule",
+  "doClause": "Apply the TS 模块 pattern as described",
   "language": "typescript",
+  "headers": [],
   "category": "Tool",
   "knowledgeType": "code-standard",
+  "usageGuide": "### 使用场景\\n触发 `@trigger` 获取TS 模块: 使用 named export，避免 default export的标准实现模式。",
   "scope": "universal",
-  "rationale": "named export 强制导入方使用一致的名称，方便 IDE 自动补全、全局搜索和安全重构",
   "antiPattern": {
     "bad": "export default function handler() { ... }",
     "why": "default export 允许导入方任意命名，导致同一模块在不同文件中有不同名称",
@@ -30,7 +38,9 @@ description: JavaScript/TypeScript 业界最佳实践参考。涵盖类型系统
   },
   "reasoning": {
     "whyStandard": "Google TypeScript Style Guide 明确推荐 named export，AirBnb 和社区也倾向于此",
-    "sources": ["Google TypeScript Style Guide - Exports"],
+    "sources": [
+      "Google TypeScript Style Guide - Exports"
+    ],
     "confidence": 0.9
   }
 }
@@ -107,12 +117,20 @@ const role = user.role || 'user';
 ```json
 {
   "title": "TS 类型: interface 优先于 type alias",
-  "code": "// ✅ interface — 可扩展、声明可合并、错误信息更清晰\ninterface User {\n  id: string;\n  name: string;\n  email: string;\n}\n\n// ✅ interface 继承\ninterface AdminUser extends User {\n  permissions: string[];\n}\n\n// ✅ type 适合: 联合类型、映射类型、元组\ntype Status = 'active' | 'inactive' | 'suspended';\ntype Pair<T> = [T, T];\ntype ReadOnly<T> = { readonly [K in keyof T]: T[K] };\n\n// ❌ 避免: 用 type 定义简单对象结构\ntype User = {\n  id: string;\n  name: string;\n};",
+  "content": {
+    "markdown": "## TS 类型: interface 优先于 type alias\n\n### 标准模式\n```typescript\n// ✅ interface — 可扩展、声明可合并、错误信息更清晰\ninterface User {\n  id: string;\n  name: string;\n  email: string;\n}\n\n// ✅ interface 继承\ninterface AdminUser extends User {\n  permissions: string[];\n}\n\n// ✅ type 适合: 联合类型、映射类型、元组\ntype Status = 'active' | 'inactive' | 'suspended';\ntype Pair<T> = [T, T];\ntype ReadOnly<T> = { readonly [K in keyof T]: T[K] };\n\n// ❌ 避免: 用 type 定义简单对象结构\ntype User = {\n  id: string;\n  name: string;\n};\n```",
+    "pattern": "// ✅ interface — 可扩展、声明可合并、错误信息更清晰\ninterface User {\n  id: string;\n  name: string;\n  email: string;\n}\n\n// ✅ interface 继承\ninterface AdminUser extends User {\n  permissions: string[];\n}\n\n// ✅ type 适合: 联合类型、映射类型、元组\ntype Status = 'active' | 'inactive' | 'suspended';\ntype Pair<T> = [T, T];\ntype ReadOnly<T> = { readonly [K in keyof T]: T[K] };\n\n// ❌ 避免: 用 type 定义简单对象结构\ntype User = {\n  id: string;\n  name: string;\n};",
+    "rationale": "interface 支持声明合并和继承，TypeScript 编译器对 interface 有更好的优化和错误提示"
+  },
+  "description": "TS 类型: interface 优先于 type alias",
+  "kind": "rule",
+  "doClause": "Apply the TS 类型 pattern as described",
   "language": "typescript",
+  "headers": [],
   "category": "Tool",
   "knowledgeType": "code-standard",
+  "usageGuide": "### 使用场景\\n触发 `@trigger` 获取TS 类型: interface 优先于 type alias的标准实现模式。",
   "scope": "universal",
-  "rationale": "interface 支持声明合并和继承，TypeScript 编译器对 interface 有更好的优化和错误提示",
   "antiPattern": {
     "bad": "type Props = { title: string; onClick: () => void }",
     "why": "简单对象形状应该用 interface，type 更适合联合/交叉/映射类型",
@@ -120,7 +138,9 @@ const role = user.role || 'user';
   },
   "reasoning": {
     "whyStandard": "Google TypeScript Style Guide: 'use interfaces to define object types, not type aliases'",
-    "sources": ["Google TypeScript Style Guide - Interfaces vs Type Aliases"],
+    "sources": [
+      "Google TypeScript Style Guide - Interfaces vs Type Aliases"
+    ],
     "confidence": 0.9
   }
 }
@@ -164,12 +184,20 @@ function processInput(input: any): string {
 ```json
 {
   "title": "TS 错误处理: 抛出 Error 子类，不抛字符串",
-  "code": "// ✅ 自定义 Error 子类\nclass AppError extends Error {\n  constructor(\n    message: string,\n    public readonly code: string,\n    public readonly statusCode: number = 500\n  ) {\n    super(message);\n    this.name = 'AppError';\n  }\n}\n\nclass NotFoundError extends AppError {\n  constructor(resource: string, id: string) {\n    super(`${resource} not found: ${id}`, 'NOT_FOUND', 404);\n    this.name = 'NotFoundError';\n  }\n}\n\n// 使用\nasync function getUser(id: string): Promise<User> {\n  const user = await db.findUser(id);\n  if (!user) throw new NotFoundError('User', id);\n  return user;\n}\n\n// 精确 catch\ntry {\n  await getUser('123');\n} catch (error) {\n  if (error instanceof NotFoundError) {\n    res.status(404).json({ error: error.message });\n  } else if (error instanceof AppError) {\n    res.status(error.statusCode).json({ error: error.message });\n  } else {\n    throw error;  // 未知错误继续向上抛\n  }\n}",
+  "content": {
+    "markdown": "## TS 错误处理: 抛出 Error 子类，不抛字符串\n\n### 标准模式\n```typescript\n// ✅ 自定义 Error 子类\nclass AppError extends Error {\n  constructor(\n    message: string,\n    public readonly code: string,\n    public readonly statusCode: number = 500\n  ) {\n    super(message);\n    this.name = 'AppError';\n  }\n}\n\nclass NotFoundError extends AppError {\n  constructor(resource: string, id: string) {\n    super(`${resource} not found: ${id}`, 'NOT_FOUND', 404);\n    this.name = 'NotFoundError';\n  }\n}\n\n// 使用\nasync function getUser(id: string): Promise<User> {\n  const user = await db.findUser(id);\n  if (!user) throw new NotFoundError('User', id);\n  return user;\n}\n\n// 精确 catch\ntry {\n  await getUser('123');\n} catch (error) {\n  if (error instanceof NotFoundError) {\n    res.status(404).json({ error: error.message });\n  } else if (error instanceof AppError) {\n    res.status(error.statusCode).json({ error: error.message });\n  } else {\n    throw error;  // 未知错误继续向上抛\n  }\n}\n```",
+    "pattern": "// ✅ 自定义 Error 子类\nclass AppError extends Error {\n  constructor(\n    message: string,\n    public readonly code: string,\n    public readonly statusCode: number = 500\n  ) {\n    super(message);\n    this.name = 'AppError';\n  }\n}\n\nclass NotFoundError extends AppError {\n  constructor(resource: string, id: string) {\n    super(`${resource} not found: ${id}`, 'NOT_FOUND', 404);\n    this.name = 'NotFoundError';\n  }\n}\n\n// 使用\nasync function getUser(id: string): Promise<User> {\n  const user = await db.findUser(id);\n  if (!user) throw new NotFoundError('User', id);\n  return user;\n}\n\n// 精确 catch\ntry {\n  await getUser('123');\n} catch (error) {\n  if (error instanceof NotFoundError) {\n    res.status(404).json({ error: error.message });\n  } else if (error instanceof AppError) {\n    res.status(error.statusCode).json({ error: error.message });\n  } else {\n    throw error;  // 未知错误继续向上抛\n  }\n}",
+    "rationale": "Error 子类提供 stack trace + instanceof 检查 + 类型安全的额外属性"
+  },
+  "description": "TS 错误处理: 抛出 Error 子类，不抛字符串",
+  "kind": "pattern",
+  "doClause": "Apply the TS 错误处理 pattern as described",
   "language": "typescript",
+  "headers": [],
   "category": "Tool",
   "knowledgeType": "best-practice",
+  "usageGuide": "### 使用场景\\n触发 `@trigger` 获取TS 错误处理: 抛出 Error 子类，不抛字符串的标准实现模式。",
   "scope": "universal",
-  "rationale": "Error 子类提供 stack trace + instanceof 检查 + 类型安全的额外属性",
   "antiPattern": {
     "bad": "throw 'Something went wrong';",
     "why": "字符串没有 stack trace，无法用 instanceof 区分，catch 中无法获取结构化信息",
@@ -177,7 +205,10 @@ function processInput(input: any): string {
   },
   "reasoning": {
     "whyStandard": "Google TypeScript Style Guide: 'always throw Error or subclass, never throw string/number'",
-    "sources": ["Google TypeScript Style Guide - Exceptions", "Node.js Best Practices"],
+    "sources": [
+      "Google TypeScript Style Guide - Exceptions",
+      "Node.js Best Practices"
+    ],
     "confidence": 0.95
   }
 }
@@ -436,3 +467,4 @@ const url = baseUrl + '/api/v' + version + '/users/' + userId;
 - **autosnippet-coldstart**: 完整冷启动流程（本 Skill 的主 Skill）
 - **autosnippet-reference-swift**: Swift 业界最佳实践参考
 - **autosnippet-reference-objc**: Objective-C 业界最佳实践参考
+- **autosnippet-reference-dart**: Dart (Flutter) 业界最佳实践参考

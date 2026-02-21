@@ -40,8 +40,88 @@ export const categoryConfigs: Record<string, { icon: any, color: string, bg: str
 
 export const categories = ['All', 'View', 'Service', 'Tool', 'Model', 'Network', 'Storage', 'UI', 'Utility'];
 
-export const validTabs = ['recipes', 'ai', 'spm', 'candidates', 'knowledge', 'depgraph', 'knowledgegraph', 'guard', 'skills', 'wiki', 'editor', 'help'] as const;
+export const validTabs = ['recipes', 'ai', 'spm', 'candidates', 'knowledge', 'depgraph', 'knowledgegraph', 'guard', 'skills', 'wiki', 'help'] as const;
 export type TabType = typeof validTabs[number];
+
+/** ═══ 多语言支持 ═══ */
+
+/** 语言选项（UI 下拉 / 切换器用） */
+export interface LanguageOption {
+  id: string;        // 规范化 ID（与后端 LanguageService 一致）
+  label: string;     // 显示名
+  aliases?: string[]; // 归一化别名
+}
+
+export const LANGUAGE_OPTIONS: LanguageOption[] = [
+  { id: 'swift',       label: 'Swift' },
+  { id: 'objectivec',  label: 'ObjC',       aliases: ['objc', 'objective-c', 'obj-c'] },
+  { id: 'go',          label: 'Go' },
+  { id: 'javascript',  label: 'JavaScript',  aliases: ['js'] },
+  { id: 'typescript',  label: 'TypeScript',  aliases: ['ts'] },
+  { id: 'python',      label: 'Python',      aliases: ['py'] },
+  { id: 'java',        label: 'Java' },
+  { id: 'kotlin',      label: 'Kotlin',      aliases: ['kt'] },
+  { id: 'rust',        label: 'Rust',        aliases: ['rs'] },
+  { id: 'dart',        label: 'Dart' },
+  { id: 'c',           label: 'C' },
+  { id: 'cpp',         label: 'C++',         aliases: ['c++'] },
+  { id: 'csharp',      label: 'C#',          aliases: ['cs'] },
+  { id: 'ruby',        label: 'Ruby',        aliases: ['rb'] },
+];
+
+/**
+ * 归一化语言 ID：将别名映射为规范 ID
+ * e.g. 'objc' → 'objectivec', 'ts' → 'typescript'
+ */
+export function normalizeLanguageId(raw?: string): string {
+  if (!raw) return '';
+  const lower = raw.toLowerCase().trim();
+  for (const opt of LANGUAGE_OPTIONS) {
+    if (opt.id === lower) return opt.id;
+    if (opt.aliases?.includes(lower)) return opt.id;
+  }
+  return lower; // 未知语言原样返回
+}
+
+/** 获取语言显示名 */
+export function languageDisplayName(langId?: string): string {
+  if (!langId) return '';
+  const norm = normalizeLanguageId(langId);
+  const opt = LANGUAGE_OPTIONS.find(o => o.id === norm);
+  return opt?.label ?? langId;
+}
+
+/** 获取用于代码高亮的 Prism 语言名 */
+export function codeHighlightLanguage(langId?: string): string {
+  const norm = normalizeLanguageId(langId);
+  // Prism 对 ObjC 使用 'objectivec'
+  if (norm === 'objectivec') return 'objectivec';
+  if (norm === 'cpp') return 'cpp';
+  if (norm === 'csharp') return 'csharp';
+  return norm || 'text';
+}
+
+/** 获取语言对应的 import/header 占位符模板 */
+export function importPlaceholder(langId?: string): string {
+  const norm = normalizeLanguageId(langId);
+  switch (norm) {
+    case 'objectivec': return '#import <Module/Header.h>';
+    case 'swift':      return 'import ModuleName';
+    case 'go':         return 'import "package/path"';
+    case 'python':     return 'import module_name';
+    case 'java':
+    case 'kotlin':     return 'import com.example.ClassName';
+    case 'javascript':
+    case 'typescript': return "import { name } from 'module'";
+    case 'rust':       return 'use crate::module::name;';
+    case 'dart':       return "import 'package:name/name.dart';";
+    case 'csharp':     return 'using Namespace.Name;';
+    case 'ruby':       return "require 'module_name'";
+    case 'c':
+    case 'cpp':        return '#include <header.h>';
+    default:           return 'import module';
+  }
+}
 
 /** GitHub 提交问题入口（Guard 误报、规则建议等） */
 export const GITHUB_ISSUES_URL = 'https://github.com/GxFn/AutoSnippet/issues';

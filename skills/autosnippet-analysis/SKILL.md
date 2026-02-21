@@ -143,17 +143,21 @@ autosnippet_bootstrap(operation=refine, candidateIds: ["id1", "id2", ...])
 | 字段 | 重要性 | AI 可填? |
 |------|-------|---------|
 | title | ★★★ 必填 | ✅ |
-| code | ★★★ 必填 | ✅ |
+| content (markdown+pattern+rationale) | ★★★ 必填 | ✅ |
 | language | ★★★ 必填 | ✅ |
-| rationale | ★★★ 强烈推荐 | ✅ |
-| knowledgeType | ★★★ 强烈推荐 | ✅ |
+| kind (rule/pattern/fact) | ★★★ 必填 | ✅ |
+| doClause | ★★★ 必填 | ✅ |
+| category | ★★★ 必填 | ✅ |
+| trigger | ★★★ 必填 | ✅ |
+| description | ★★★ 必填 | ✅ |
+| headers | ★★★ 必填 | ✅ |
+| usageGuide | ★★★ 必填 | ✅ |
+| knowledgeType | ★★★ 必填 | ✅ |
+| reasoning | ★★★ 必填 | Agent 必须自己填 |
 | complexity | ★★☆ 推荐 | ✅ |
 | scope | ★★☆ 推荐 | ✅ |
 | steps | ★★☆ 推荐 | ✅ |
 | constraints.preconditions | ★★☆ 推荐 | ✅ |
-| summary / description | ★★★ 强烈推荐 | ✅ |
-| usageGuide | ★★☆ 推荐 | ⚠️ 需人工审核 |
-| reasoning | ★★★ 必填 | Agent 必须自己填 |
 
 ---
 

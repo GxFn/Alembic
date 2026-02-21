@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import api from '../../api';
+import { useI18n } from '../../i18n';
 
 interface DailyRow {
   date: string;
@@ -55,6 +56,7 @@ const SOURCE_COLORS: Record<string, string> = {
 };
 
 const TokenUsageChart: React.FC = () => {
+  const { t } = useI18n();
   const [daily, setDaily] = useState<DailyRow[]>([]);
   const [bySource, setBySource] = useState<SourceRow[]>([]);
   const [summary, setSummary] = useState<Summary>({ input_tokens: 0, output_tokens: 0, total_tokens: 0, call_count: 0, avg_per_call: 0 });
@@ -71,7 +73,7 @@ const TokenUsageChart: React.FC = () => {
         setBySource(data.bySource || []);
         setSummary(data.summary || { input_tokens: 0, output_tokens: 0, total_tokens: 0, call_count: 0, avg_per_call: 0 });
       } catch (e: any) {
-        if (!cancelled) setError(e.message || '加载失败');
+        if (!cancelled) setError(e.message || t('tokenUsageChart.loadFailed'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -86,7 +88,7 @@ const TokenUsageChart: React.FC = () => {
     return (
       <div className="flex items-center justify-center py-10">
         <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-500 border-t-transparent" />
-        <span className="ml-2 text-slate-500 text-sm">加载 Token 用量…</span>
+        <span className="ml-2 text-slate-500 text-sm">{t('tokenUsageChart.loading')}</span>
       </div>
     );
   }
@@ -101,33 +103,33 @@ const TokenUsageChart: React.FC = () => {
     <div className="space-y-5">
       {/* ── 摘要卡片 ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <SummaryCard label="总 Token" value={fmtTokens(summary.total_tokens)} sub="7 日合计" color="blue" />
-        <SummaryCard label="输入" value={fmtTokens(summary.input_tokens)} sub="Prompt" color="green" />
-        <SummaryCard label="输出" value={fmtTokens(summary.output_tokens)} sub="Completion" color="purple" />
-        <SummaryCard label="调用" value={String(summary.call_count)} sub={`均 ${fmtTokens(summary.avg_per_call)}/次`} color="amber" />
+        <SummaryCard label={t('tokenUsageChart.totalToken')} value={fmtTokens(summary.total_tokens)} sub={t('tokenUsageChart.totalSub')} color="blue" />
+        <SummaryCard label={t('tokenUsageChart.input')} value={fmtTokens(summary.input_tokens)} sub="Prompt" color="green" />
+        <SummaryCard label={t('tokenUsageChart.output')} value={fmtTokens(summary.output_tokens)} sub="Completion" color="purple" />
+        <SummaryCard label={t('tokenUsageChart.calls')} value={String(summary.call_count)} sub={t('tokenUsageChart.avgPerCall', { avg: fmtTokens(summary.avg_per_call) })} color="amber" />
       </div>
 
       {isEmpty ? (
         <div className="text-center py-8 text-slate-400 text-sm">
-          暂无 Token 使用记录，使用 ChatAgent 或 MCP 后数据将自动记录
+          {t('tokenUsageChart.emptyState')}
         </div>
       ) : (
         <>
           {/* ── 每日柱状图 ── */}
           <div>
-            <h4 className="text-sm font-semibold text-slate-700 mb-3">每日用量</h4>
+            <h4 className="text-sm font-semibold text-slate-700 mb-3">{t('tokenUsageChart.dailyUsage')}</h4>
             <div className="flex items-end gap-1.5 h-40">
               {filledDaily.map((d) => {
                 const inputH = (d.input_tokens / maxTokens) * 100;
                 const outputH = (d.output_tokens / maxTokens) * 100;
-                const weekday = ['日', '一', '二', '三', '四', '五', '六'][new Date(d.date + 'T00:00:00').getDay()];
+                const weekday = t(`tokenUsageChart.weekday${new Date(d.date + 'T00:00:00').getDay()}`);
                 return (
                   <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative">
                     {/* tooltip */}
                     <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
                       <p>{d.date}</p>
-                      <p>输入 {fmtTokens(d.input_tokens)} · 输出 {fmtTokens(d.output_tokens)}</p>
-                      <p>{d.call_count} 次调用</p>
+                      <p>{t('tokenUsageChart.dailyDetail', { input: fmtTokens(d.input_tokens), output: fmtTokens(d.output_tokens) })}</p>
+                      <p>{t('tokenUsageChart.dailyCalls', { count: String(d.call_count) })}</p>
                     </div>
                     {/* bars */}
                     <div className="w-full flex flex-col justify-end" style={{ height: '120px' }}>
@@ -140,15 +142,15 @@ const TokenUsageChart: React.FC = () => {
               })}
             </div>
             <div className="flex gap-4 mt-2 text-xs text-slate-500 justify-center">
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-400 inline-block" /> 输入</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-purple-400 inline-block" /> 输出</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-400 inline-block" /> {t('tokenUsageChart.legendInput')}</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-purple-400 inline-block" /> {t('tokenUsageChart.legendOutput')}</span>
             </div>
           </div>
 
           {/* ── 来源分布 ── */}
           {bySource.length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-slate-700 mb-3">来源分布</h4>
+              <h4 className="text-sm font-semibold text-slate-700 mb-3">{t('tokenUsageChart.sourceDistribution')}</h4>
               <div className="space-y-2">
                 {bySource.map((s) => {
                   const pct = summary.total_tokens > 0 ? (s.total_tokens / summary.total_tokens) * 100 : 0;

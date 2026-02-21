@@ -21,19 +21,21 @@ describe('PathGuard', () => {
     });
 
     test('should reject relative projectRoot', () => {
-      expect(() => pathGuard.configure({ projectRoot: 'relative/path' }))
-        .toThrow('projectRoot 必须是绝对路径');
+      expect(() => pathGuard.configure({ projectRoot: 'relative/path' })).toThrow(
+        'projectRoot 必须是绝对路径'
+      );
     });
 
     test('should reject empty projectRoot', () => {
-      expect(() => pathGuard.configure({ projectRoot: '' }))
-        .toThrow('projectRoot 必须是绝对路径');
+      expect(() => pathGuard.configure({ projectRoot: '' })).toThrow('projectRoot 必须是绝对路径');
     });
 
     test('should accept knowledgeBaseDir', () => {
       pathGuard.configure({ projectRoot: PROJECT_ROOT, knowledgeBaseDir: 'Knowledge' });
       // Knowledge/ should be writable
-      expect(pathGuard.isProjectWriteSafe(path.join(PROJECT_ROOT, 'Knowledge/recipes/test.md'))).toBe(true);
+      expect(
+        pathGuard.isProjectWriteSafe(path.join(PROJECT_ROOT, 'Knowledge/recipes/test.md'))
+      ).toBe(true);
     });
   });
 
@@ -50,19 +52,28 @@ describe('PathGuard', () => {
     });
 
     test('should allow paths within projectRoot', () => {
-      expect(() => pathGuard.assertSafe(path.join(PROJECT_ROOT, '.autosnippet/autosnippet.db'))).not.toThrow();
-      expect(() => pathGuard.assertSafe(path.join(PROJECT_ROOT, 'AutoSnippet/recipes/general/test.md'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertSafe(path.join(PROJECT_ROOT, '.autosnippet/autosnippet.db'))
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertSafe(path.join(PROJECT_ROOT, 'AutoSnippet/recipes/general/test.md'))
+      ).not.toThrow();
       expect(() => pathGuard.assertSafe(path.join(PROJECT_ROOT, 'src/main.m'))).not.toThrow();
     });
 
     test('should allow paths within packageRoot', () => {
-      expect(() => pathGuard.assertSafe(path.join(PACKAGE_ROOT, 'logs/error-2024.log'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertSafe(path.join(PACKAGE_ROOT, 'logs/error-2024.log'))
+      ).not.toThrow();
     });
 
     test('should allow Xcode snippets directory', () => {
       const HOME = process.env.HOME || process.env.USERPROFILE;
       if (HOME) {
-        const xcodePath = path.join(HOME, 'Library/Developer/Xcode/UserData/CodeSnippets/test.codesnippet');
+        const xcodePath = path.join(
+          HOME,
+          'Library/Developer/Xcode/UserData/CodeSnippets/test.codesnippet'
+        );
         expect(() => pathGuard.assertSafe(xcodePath)).not.toThrow();
       }
     });
@@ -76,23 +87,27 @@ describe('PathGuard', () => {
     });
 
     test('should block paths outside project boundaries', () => {
-      expect(() => pathGuard.assertSafe('/Users/test/projects/OtherProject/data/test.db'))
-        .toThrow(PathGuardError);
+      expect(() => pathGuard.assertSafe('/Users/test/projects/OtherProject/data/test.db')).toThrow(
+        PathGuardError
+      );
     });
 
     test('should block sibling project directories (BiliDemo scenario)', () => {
-      expect(() => pathGuard.assertSafe('/Users/test/projects/BiliDemo/data/autosnippet.db'))
-        .toThrow(PathGuardError);
+      expect(() =>
+        pathGuard.assertSafe('/Users/test/projects/BiliDemo/data/autosnippet.db')
+      ).toThrow(PathGuardError);
     });
 
     test('should block parent directory traversal', () => {
-      expect(() => pathGuard.assertSafe(path.resolve(PROJECT_ROOT, '../other/file.txt')))
-        .toThrow(PathGuardError);
+      expect(() => pathGuard.assertSafe(path.resolve(PROJECT_ROOT, '../other/file.txt'))).toThrow(
+        PathGuardError
+      );
     });
 
     test('should block path that starts with projectRoot as prefix but not a child', () => {
-      expect(() => pathGuard.assertSafe('/Users/test/projects/MyApp-backup/file.txt'))
-        .toThrow(PathGuardError);
+      expect(() => pathGuard.assertSafe('/Users/test/projects/MyApp-backup/file.txt')).toThrow(
+        PathGuardError
+      );
     });
 
     test('should block null/undefined paths', () => {
@@ -122,41 +137,91 @@ describe('PathGuard', () => {
     // ── 允许的写入路径 ──
 
     test('should allow .autosnippet/ (DB, memory, conversations)', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.autosnippet/autosnippet.db'))).not.toThrow();
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.autosnippet/memory.jsonl'))).not.toThrow();
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.autosnippet/conversations/abc.jsonl'))).not.toThrow();
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.autosnippet/signal-snapshot.json'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.autosnippet/autosnippet.db'))
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.autosnippet/memory.jsonl'))
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(
+          path.join(PROJECT_ROOT, '.autosnippet/conversations/abc.jsonl')
+        )
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(
+          path.join(PROJECT_ROOT, '.autosnippet/signal-snapshot.json')
+        )
+      ).not.toThrow();
     });
 
     test('should allow AutoSnippet/ (knowledge base: recipes, candidates, skills)', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/recipes/general/test.md'))).not.toThrow();
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/candidates/ui/widget.md'))).not.toThrow();
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/skills/coldstart/SKILL.md'))).not.toThrow();
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/guard-exclusions.json'))).not.toThrow();
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/guard-learner.json'))).not.toThrow();
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/recipe-stats.json'))).not.toThrow();
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/feedback.json'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(
+          path.join(PROJECT_ROOT, 'AutoSnippet/recipes/general/test.md')
+        )
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(
+          path.join(PROJECT_ROOT, 'AutoSnippet/candidates/ui/widget.md')
+        )
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(
+          path.join(PROJECT_ROOT, 'AutoSnippet/skills/coldstart/SKILL.md')
+        )
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(
+          path.join(PROJECT_ROOT, 'AutoSnippet/guard-exclusions.json')
+        )
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/guard-learner.json'))
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/recipe-stats.json'))
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/feedback.json'))
+      ).not.toThrow();
     });
 
     test('should allow AutoSnippet/.autosnippet/ (vector index, context)', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/.autosnippet/context/index/vector_index.json'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(
+          path.join(PROJECT_ROOT, 'AutoSnippet/.autosnippet/context/index/vector_index.json')
+        )
+      ).not.toThrow();
     });
 
     test('should allow .cursor/ (IDE integration)', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/mcp.json'))).not.toThrow();
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/rules/autosnippet-skills.mdc'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.cursor/mcp.json'))
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(
+          path.join(PROJECT_ROOT, '.cursor/rules/autosnippet-skills.mdc')
+        )
+      ).not.toThrow();
     });
 
     test('should allow .vscode/ (IDE integration)', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.vscode/settings.json'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.vscode/settings.json'))
+      ).not.toThrow();
     });
 
     test('should allow .github/ (Copilot instructions)', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.github/copilot-instructions.md'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.github/copilot-instructions.md'))
+      ).not.toThrow();
     });
 
     test('should allow .gitignore in project root', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.gitignore'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.gitignore'))
+      ).not.toThrow();
     });
 
     test('should allow .env in project root', () => {
@@ -164,55 +229,68 @@ describe('PathGuard', () => {
     });
 
     test('should allow writes within packageRoot', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PACKAGE_ROOT, 'logs/error.log'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PACKAGE_ROOT, 'logs/error.log'))
+      ).not.toThrow();
     });
 
     test('should allow writes to external whitelist paths (cache only)', () => {
       const HOME = process.env.HOME || process.env.USERPROFILE;
       if (HOME) {
-        expect(() => pathGuard.assertProjectWriteSafe(path.join(HOME, '.autosnippet/cache/test.json'))).not.toThrow();
+        expect(() =>
+          pathGuard.assertProjectWriteSafe(path.join(HOME, '.autosnippet/cache/test.json'))
+        ).not.toThrow();
       }
     });
 
     test('should BLOCK ~/.autosnippet/autosnippet.db (not in cache scope)', () => {
       const HOME = process.env.HOME || process.env.USERPROFILE;
       if (HOME) {
-        expect(() => pathGuard.assertProjectWriteSafe(path.join(HOME, '.autosnippet/autosnippet.db')))
-          .toThrow(PathGuardError);
+        expect(() =>
+          pathGuard.assertProjectWriteSafe(path.join(HOME, '.autosnippet/autosnippet.db'))
+        ).toThrow(PathGuardError);
       }
     });
 
     // ── 禁止的写入路径 ──
 
     test('should BLOCK data/ directory (BiliDemo incident root cause)', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'data/autosnippet.db')))
-        .toThrow(PathGuardError);
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'data/autosnippet.db-shm')))
-        .toThrow(PathGuardError);
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'data/autosnippet.db'))
+      ).toThrow(PathGuardError);
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'data/autosnippet.db-shm'))
+      ).toThrow(PathGuardError);
     });
 
     test('should BLOCK src/ directory (user source code)', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'src/NewFile.swift')))
-        .toThrow(PathGuardError);
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'src/NewFile.swift'))
+      ).toThrow(PathGuardError);
     });
 
     test('should BLOCK random directories at project root', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'temp/debug.log')))
-        .toThrow(PathGuardError);
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'logs/error.log')))
-        .toThrow(PathGuardError);
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'build/output.txt')))
-        .toThrow(PathGuardError);
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'temp/debug.log'))
+      ).toThrow(PathGuardError);
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'logs/error.log'))
+      ).toThrow(PathGuardError);
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'build/output.txt'))
+      ).toThrow(PathGuardError);
     });
 
     test('should BLOCK arbitrary files at project root', () => {
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'random-file.txt')))
-        .toThrow(PathGuardError);
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'random-file.txt'))
+      ).toThrow(PathGuardError);
     });
 
     test('should BLOCK paths outside project entirely', () => {
-      expect(() => pathGuard.assertProjectWriteSafe('/Users/test/projects/BiliDemo/data/test.db'))
-        .toThrow(PathGuardError);
+      expect(() =>
+        pathGuard.assertProjectWriteSafe('/Users/test/projects/BiliDemo/data/test.db')
+      ).toThrow(PathGuardError);
     });
 
     test('should not throw when unconfigured', () => {
@@ -231,15 +309,21 @@ describe('PathGuard', () => {
         projectRoot: PROJECT_ROOT,
         knowledgeBaseDir: 'Knowledge',
       });
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'Knowledge/recipes/test.md'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'Knowledge/recipes/test.md'))
+      ).not.toThrow();
       // Default 'AutoSnippet' should be blocked since kbDir is 'Knowledge'
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/recipes/test.md'))).toThrow(PathGuardError);
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/recipes/test.md'))
+      ).toThrow(PathGuardError);
     });
 
     test('should support setKnowledgeBaseDir after configure', () => {
       pathGuard.configure({ projectRoot: PROJECT_ROOT });
       pathGuard.setKnowledgeBaseDir('MyKB');
-      expect(() => pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'MyKB/recipes/test.md'))).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'MyKB/recipes/test.md'))
+      ).not.toThrow();
     });
   });
 
@@ -280,8 +364,7 @@ describe('PathGuard', () => {
     });
 
     test('should reject relative paths that escape projectRoot', () => {
-      expect(() => pathGuard.resolveProjectPath('../../etc/passwd'))
-        .toThrow(PathGuardError);
+      expect(() => pathGuard.resolveProjectPath('../../etc/passwd')).toThrow(PathGuardError);
     });
   });
 

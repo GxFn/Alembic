@@ -8,16 +8,16 @@
  *   - createTestToken()          — 签发用于 Auth 测试的 token
  */
 
-import path from 'node:path';
+import { execSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
-import crypto from 'node:crypto';
-import { execSync } from 'node:child_process';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.resolve(__dirname, '../..');
+const _PROJECT_ROOT = path.resolve(__dirname, '../..');
 
 // ═══════════════════════════════════════════════════════
 //  Bootstrap Helper
@@ -59,8 +59,7 @@ export function createTempGitRepo(options = {}) {
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asd-test-git-'));
 
-  const exec = (cmd) =>
-    execSync(cmd, { cwd: tmpDir, stdio: 'pipe', encoding: 'utf8' });
+  const exec = (cmd) => execSync(cmd, { cwd: tmpDir, stdio: 'pipe', encoding: 'utf8' });
 
   exec('git init');
   exec('git config user.email "test@autosnippet.dev"');
@@ -79,7 +78,9 @@ export function createTempGitRepo(options = {}) {
   const cleanup = () => {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   return { repoPath: tmpDir, cleanup };
@@ -136,6 +137,7 @@ export function mockRecipe(overrides = {}) {
     category: 'utility',
     status: 'draft',
     content: {
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional template pattern syntax
       pattern: 'function ${name}() { ${body} }',
       variables: ['name', 'body'],
     },
@@ -225,10 +227,7 @@ export function createTestToken(payload = {}, secret = DEFAULT_TOKEN_SECRET) {
  * 创建过期的 token（用于测试 token 过期逻辑）
  */
 export function createExpiredToken(payload = {}, secret = DEFAULT_TOKEN_SECRET) {
-  return createTestToken(
-    { exp: Date.now() - 1000, ...payload },
-    secret,
-  );
+  return createTestToken({ exp: Date.now() - 1000, ...payload }, secret);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -264,7 +263,11 @@ export function onCleanup(fn) {
 export async function runCleanups() {
   while (_cleanups.length) {
     const fn = _cleanups.pop();
-    try { await fn(); } catch { /* ignore */ }
+    try {
+      await fn();
+    } catch {
+      /* ignore */
+    }
   }
 }
 

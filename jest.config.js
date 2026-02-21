@@ -2,11 +2,7 @@ export default {
   testEnvironment: 'node',
   testTimeout: 30000,
   transform: {},
-  collectCoverageFrom: [
-    'lib/**/*.js',
-    '!lib/**/index.js',
-    '!lib/bootstrap.js',
-  ],
+  collectCoverageFrom: ['lib/**/*.js', '!lib/**/index.js', '!lib/bootstrap.js'],
   coverageDirectory: 'coverage',
   coverageThreshold: {
     global: {
@@ -16,9 +12,7 @@ export default {
       statements: 80,
     },
   },
-  testMatch: [
-    '**/test/**/*.test.js',
-  ],
+  testMatch: ['**/test/**/*.test.js'],
   testPathIgnorePatterns: [
     '/node_modules/',
     // 排除使用 node:test 的文件（需通过 Node 原生测试运行器执行）

@@ -17,7 +17,7 @@
 
 import { CapabilityProbe } from '../../lib/core/capability/CapabilityProbe.js';
 import { roleResolverMiddleware } from '../../lib/http/middleware/roleResolver.js';
-import { createTempGitRepo, createTestToken, createExpiredToken } from '../fixtures/factory.js';
+import { createExpiredToken, createTempGitRepo, createTestToken } from '../fixtures/factory.js';
 
 // ═══════════════════════════════════════════════════════
 //  CapabilityProbe — 真实 git repo 测试
@@ -33,7 +33,7 @@ describe('Integration: CapabilityProbe', () => {
 
   test('无子仓库路径 → admin（个人项目模式）', () => {
     const probe = new CapabilityProbe({
-      subRepoPath: '/tmp/nonexistent-path-' + Date.now(),
+      subRepoPath: `/tmp/nonexistent-path-${Date.now()}`,
     });
 
     expect(probe.probe()).toBe('admin');
@@ -41,7 +41,7 @@ describe('Integration: CapabilityProbe', () => {
   });
 
   test('subRepoPath = nonexistent → admin', () => {
-    const probe = new CapabilityProbe({ subRepoPath: '/tmp/nonexistent-' + Date.now() });
+    const probe = new CapabilityProbe({ subRepoPath: `/tmp/nonexistent-${Date.now()}` });
     expect(probe.probe()).toBe('admin');
   });
 
@@ -92,7 +92,9 @@ describe('Integration: CapabilityProbe', () => {
     const fs = await import('node:fs');
     const os = await import('node:os');
     const path = await import('node:path');
-    const tmpDir = fs.default.mkdtempSync(path.default.join(os.default.tmpdir(), 'asd-test-nonrepo-'));
+    const tmpDir = fs.default.mkdtempSync(
+      path.default.join(os.default.tmpdir(), 'asd-test-nonrepo-')
+    );
     repos.push({
       repoPath: tmpDir,
       cleanup: () => fs.default.rmSync(tmpDir, { recursive: true, force: true }),
@@ -105,7 +107,10 @@ describe('Integration: CapabilityProbe', () => {
   // ── 缓存行为 ──
 
   test('缓存命中 — 第二次调用不重新探测', () => {
-    const probe = new CapabilityProbe({ subRepoPath: '/tmp/nonexistent-cache-' + Date.now(), cacheTTL: 60 });
+    const probe = new CapabilityProbe({
+      subRepoPath: `/tmp/nonexistent-cache-${Date.now()}`,
+      cacheTTL: 60,
+    });
 
     const r1 = probe.probe();
     expect(r1).toBe('admin');
@@ -121,7 +126,10 @@ describe('Integration: CapabilityProbe', () => {
   });
 
   test('invalidate 清除缓存', () => {
-    const probe = new CapabilityProbe({ subRepoPath: '/tmp/nonexistent-inval-' + Date.now(), cacheTTL: 60 });
+    const probe = new CapabilityProbe({
+      subRepoPath: `/tmp/nonexistent-inval-${Date.now()}`,
+      cacheTTL: 60,
+    });
     probe.probe();
 
     expect(probe.getCacheStatus().cached).toBe(true);
@@ -131,7 +139,10 @@ describe('Integration: CapabilityProbe', () => {
   });
 
   test('缓存过期后重新探测', () => {
-    const probe = new CapabilityProbe({ subRepoPath: '/tmp/nonexistent-expire-' + Date.now(), cacheTTL: 60 });
+    const probe = new CapabilityProbe({
+      subRepoPath: `/tmp/nonexistent-expire-${Date.now()}`,
+      cacheTTL: 60,
+    });
     probe.probe(); // 首次探测，缓存
 
     // 手动使缓存过期
@@ -181,7 +192,9 @@ describe('Integration: roleResolver middleware', () => {
     const req = { headers: { ...headers } };
     const res = {};
     let nextCalled = false;
-    const next = () => { nextCalled = true; };
+    const next = () => {
+      nextCalled = true;
+    };
     return { req, res, next, wasNextCalled: () => nextCalled };
   }
 
@@ -232,7 +245,7 @@ describe('Integration: roleResolver middleware', () => {
     setEnv('ASD_AUTH_ENABLED', undefined);
 
     // 使用不存在的路径，确保走 "无子仓库 = admin" 路径，避免 _detectSubRepo 命中真实仓库
-    const probe = new CapabilityProbe({ subRepoPath: '/tmp/nonexistent-probe-test-' + Date.now() });
+    const probe = new CapabilityProbe({ subRepoPath: `/tmp/nonexistent-probe-test-${Date.now()}` });
     const middleware = roleResolverMiddleware({ capabilityProbe: probe });
 
     const { req, res, next, wasNextCalled } = mockExpress({});
@@ -262,10 +275,7 @@ describe('Integration: roleResolver middleware', () => {
 
   // 测试 token 生成与验证的一致性
   test('createTestToken 生成的 token 格式正确', () => {
-    const token = createTestToken(
-      { sub: 'admin', role: 'developer' },
-      TOKEN_SECRET,
-    );
+    const token = createTestToken({ sub: 'admin', role: 'developer' }, TOKEN_SECRET);
 
     expect(typeof token).toBe('string');
     const parts = token.split('.');
@@ -279,10 +289,7 @@ describe('Integration: roleResolver middleware', () => {
   });
 
   test('createExpiredToken 生成的 token 已过期', () => {
-    const token = createExpiredToken(
-      { sub: 'admin', role: 'developer' },
-      TOKEN_SECRET,
-    );
+    const token = createExpiredToken({ sub: 'admin', role: 'developer' }, TOKEN_SECRET);
 
     const parts = token.split('.');
     const payload = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
@@ -313,7 +320,9 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     const middleware = roleResolverMiddleware({ capabilityProbe: probe });
     const req = { headers: {} };
     let nextCalled = false;
-    middleware(req, {}, () => { nextCalled = true; });
+    middleware(req, {}, () => {
+      nextCalled = true;
+    });
 
     expect(nextCalled).toBe(true);
     expect(req.resolvedRole).toBe('developer');
@@ -331,7 +340,9 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     const middleware = roleResolverMiddleware({ capabilityProbe: probe });
     const req = { headers: {} };
     let nextCalled = false;
-    middleware(req, {}, () => { nextCalled = true; });
+    middleware(req, {}, () => {
+      nextCalled = true;
+    });
 
     expect(nextCalled).toBe(true);
     expect(req.resolvedRole).toBe('developer');

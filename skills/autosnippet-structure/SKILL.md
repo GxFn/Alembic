@@ -1,13 +1,13 @@
 ---
 name: autosnippet-structure
-description: Discover project structure (targets, files, dependency graph) and browse the knowledge graph (relations between Recipes). Use when the user asks about module structure, SPM targets, dependency relationships, or knowledge graph navigation.
+description: Discover project structure (targets, files, dependency graph) and browse the knowledge graph (relations between Recipes). Use when the user asks about module structure, project targets, dependency relationships, or knowledge graph navigation.
 ---
 
 # AutoSnippet — Structure & Dependencies & Knowledge Graph
 
 > Self-check & Fallback: MCP 工具返回统一 JSON Envelope（{ success, errorCode?, message?, data?, meta }）。重操作前调用 `autosnippet_health`；失败时不在同一轮重试，转用静态上下文或缩小范围后再试。
 
-Use this skill when the user asks about **project structure**, **SPM targets**, **dependency graph**, or **knowledge graph relationships**.
+Use this skill when the user asks about **project structure**, **module targets**, **dependency graph**, or **knowledge graph relationships**.
 
 ## When to use
 
@@ -25,7 +25,7 @@ Use this skill when the user asks about **project structure**, **SPM targets**, 
 
 | Tool | Purpose | Key Input |
 |------|---------|-----------|
-| `autosnippet_structure(operation=targets)` | List all SPM Targets (with file count, language stats, inferred role) | `includeSummary` (default true) |
+| `autosnippet_structure(operation=targets)` | List all module Targets (with file count, language stats, inferred role) | `includeSummary` (default true) |
 | `autosnippet_structure(operation=files)` | Get source files for a Target | `targetName` (required), `includeContent`, `contentMaxLines`, `maxFiles` |
 | `autosnippet_structure(operation=metadata)` | Get Target metadata (dependencies, package info, inferred role, graph edges) | `targetName` (required) |
 
@@ -66,7 +66,7 @@ The knowledge graph captures **relationships between Recipes** (dependencies, ex
 The SPM dependency structure is stored in `AutoSnippet/AutoSnippet.spmmap.json`:
 - **`graph.packages`**: Package declarations with targets
 - **`graph.edges`**: "from depends on to" relationships
-- **Update**: Run `asd spm-map` from project root to refresh
+- **Update**: Run `asd spm-map` from project root to refresh (supports SPM / Node / Go / JVM / Python)
 
 ---
 

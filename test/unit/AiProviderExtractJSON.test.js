@@ -11,12 +11,17 @@ function makeProvider() {
 
 describe('AiProvider.extractJSON', () => {
   let provider;
-  beforeAll(() => { provider = makeProvider(); });
+  beforeAll(() => {
+    provider = makeProvider();
+  });
 
   test('正常完整 JSON 数组', () => {
     const json = '[{"title":"foo","code":"bar"},{"title":"baz","code":"qux"}]';
     const result = provider.extractJSON(json, '[', ']');
-    expect(result).toEqual([{ title: 'foo', code: 'bar' }, { title: 'baz', code: 'qux' }]);
+    expect(result).toEqual([
+      { title: 'foo', code: 'bar' },
+      { title: 'baz', code: 'qux' },
+    ]);
   });
 
   test('包含 markdown 代码块包裹', () => {
@@ -43,7 +48,8 @@ describe('AiProvider.extractJSON', () => {
   });
 
   test('尾部截断 — 代码字段含花括号', () => {
-    const json = '[{"title":"ViewSetup","code":"func viewDidLoad() {\\n    super.viewDidLoad()\\n    setupUI()\\n}"},{"title":"Truncated","code":"func x() {';
+    const json =
+      '[{"title":"ViewSetup","code":"func viewDidLoad() {\\n    super.viewDidLoad()\\n    setupUI()\\n}"},{"title":"Truncated","code":"func x() {';
     const result = provider.extractJSON(json, '[', ']');
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBe(1);
@@ -51,7 +57,8 @@ describe('AiProvider.extractJSON', () => {
   });
 
   test('尾部截断 — 嵌套数组 (headers/tags)', () => {
-    const json = '[{"title":"A","headers":["#import <UIKit/UIKit.h>"],"tags":["ios","ui"]},{"title":"B","headers":["#import <Found';
+    const json =
+      '[{"title":"A","headers":["#import <UIKit/UIKit.h>"],"tags":["ios","ui"]},{"title":"B","headers":["#import <Found';
     const result = provider.extractJSON(json, '[', ']');
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBe(1);
@@ -75,9 +82,11 @@ describe('AiProvider.extractJSON', () => {
   test('尾部截断 — 多个完整 + 最后一个不完整', () => {
     const items = [];
     for (let i = 0; i < 5; i++) {
-      items.push(`{"title":"Item${i}","summary":"desc${i}","code":"func f${i}() {\\n    return ${i}\\n}"}`);
+      items.push(
+        `{"title":"Item${i}","summary":"desc${i}","code":"func f${i}() {\\n    return ${i}\\n}"}`
+      );
     }
-    const complete = '[' + items.join(',') + ',{"title":"Item5","summary":"de';
+    const complete = `[${items.join(',')},{"title":"Item5","summary":"de`;
     const result = provider.extractJSON(complete, '[', ']');
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBe(5);

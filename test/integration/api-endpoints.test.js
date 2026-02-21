@@ -2,21 +2,20 @@
  * REST API 端点集成测试
  */
 
-import { test, describe } from 'node:test';
 import assert from 'node:assert';
-import HttpServer from '../../lib/http/HttpServer.js';
-import { ServiceContainer } from '../../lib/injection/ServiceContainer.js';
+import { describe, test } from 'node:test';
 import Bootstrap from '../../lib/bootstrap.js';
+import HttpServer from '../../lib/http/HttpServer.js';
 
 describe('REST API Integration Tests', async () => {
   let httpServer;
   let bootstrap;
-  let components;
+  let _components;
 
   // 在所有测试开始之前初始化
   await (async () => {
     bootstrap = new Bootstrap({ env: 'test' });
-    components = await bootstrap.initialize();
+    _components = await bootstrap.initialize();
 
     httpServer = new HttpServer({ port: 3005 });
     httpServer.initialize();

@@ -1,0 +1,122 @@
+{
+  "name": "autosnippet",
+  "displayName": "AutoSnippet",
+  "description": "Knowledge-driven code snippets — search, insert, create, and audit directly in your editor",
+  "version": "0.1.0",
+  "publisher": "autosnippet",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Snippets",
+    "Other"
+  ],
+  "keywords": [
+    "snippet",
+    "knowledge",
+    "code-search",
+    "autosnippet"
+  ],
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescriptreact",
+    "onLanguage:python",
+    "onLanguage:go",
+    "onLanguage:rust",
+    "onLanguage:java",
+    "onLanguage:kotlin",
+    "onLanguage:swift",
+    "onLanguage:c",
+    "onLanguage:cpp",
+    "onLanguage:csharp",
+    "onLanguage:ruby",
+    "onLanguage:vue",
+    "onLanguage:svelte",
+    "onLanguage:css",
+    "onLanguage:scss",
+    "onLanguage:html",
+    "onLanguage:markdown",
+    "onLanguage:yaml",
+    "onLanguage:json",
+    "onLanguage:objective-c",
+    "onLanguage:objective-cpp"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "autosnippet.search",
+        "title": "AutoSnippet: Search Knowledge Base",
+        "icon": "$(search)"
+      },
+      {
+        "command": "autosnippet.create",
+        "title": "AutoSnippet: Create Candidate from Selection"
+      },
+      {
+        "command": "autosnippet.audit",
+        "title": "AutoSnippet: Audit Current File"
+      },
+      {
+        "command": "autosnippet.auditProject",
+        "title": "AutoSnippet: Audit Entire Project"
+      },
+      {
+        "command": "autosnippet.status",
+        "title": "AutoSnippet: Show Connection Status"
+      }
+    ],
+    "configuration": {
+      "title": "AutoSnippet",
+      "properties": {
+        "autosnippet.serverPort": {
+          "type": "number",
+          "default": 3000,
+          "description": "Port of the AutoSnippet API server (asd ui / asd start)"
+        },
+        "autosnippet.serverHost": {
+          "type": "string",
+          "default": "localhost",
+          "description": "Host of the AutoSnippet API server"
+        },
+        "autosnippet.enableDirectiveDetection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-detect // as:s, // as:c, // as:a directives on save"
+        },
+        "autosnippet.enableCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show CodeLens actions above AutoSnippet directives"
+        },
+        "autosnippet.insertHighlightDuration": {
+          "type": "number",
+          "default": 2000,
+          "description": "Duration (ms) to highlight inserted code"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "autosnippet.search",
+        "key": "ctrl+shift+f5",
+        "mac": "cmd+shift+f5"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./tsconfig.json",
+    "watch": "tsc -watch -p ./tsconfig.json",
+    "package": "vsce package",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.22.0"
+  }
+}

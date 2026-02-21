@@ -11,6 +11,7 @@ import api from '../../api';
 import { notify } from '../../utils/notification';
 import { ICON_SIZES } from '../../constants/icons';
 import PageOverlay from '../Shared/PageOverlay';
+import { useI18n } from '../../i18n';
 
 /* ── Config ── */
 const kindConfig: Record<string, { label: string; color: string; bg: string; border: string; icon: React.ElementType }> = {
@@ -19,13 +20,13 @@ const kindConfig: Record<string, { label: string; color: string; bg: string; bor
   fact:    { label: 'Fact',    color: 'text-cyan-700',   bg: 'bg-cyan-50',   border: 'border-cyan-200',   icon: BookOpen },
 };
 
-const knowledgeTypeLabels: Record<string, string> = {
-  'code-pattern': '代码模式',
-  'architecture': '架构设计',
-  'best-practice': '最佳实践',
-  'code-standard': '代码规范',
-  'call-chain': '调用链路',
-  'rule': '规则',
+const knowledgeTypeLabelKeys: Record<string, string> = {
+  'code-pattern': 'recipes.knowledgeTypes.codePattern',
+  'architecture': 'recipes.knowledgeTypes.architecture',
+  'best-practice': 'recipes.knowledgeTypes.bestPractice',
+  'code-standard': 'recipes.knowledgeTypes.codeStandard',
+  'call-chain': 'recipes.knowledgeTypes.callChain',
+  'rule': 'recipes.knowledgeTypes.rule',
 };
 
 /* ── Types ── */
@@ -65,7 +66,7 @@ function getCodePattern(recipe: Recipe): string {
 function getCodeLang(recipe: Recipe): string {
   const l = (recipe.language || '').toLowerCase();
   if (['objectivec', 'objc', 'objective-c', 'obj-c'].includes(l)) return 'objectivec';
-  return recipe.language || 'swift';
+  return recipe.language || 'text';
 }
 
 function isValidTimestamp(ts: string | number | null | undefined): boolean {
@@ -93,19 +94,20 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   pageSize: controlledPageSize,
   onPageSizeChange: controlledOnPageSizeChange,
 }) => {
+  const { t } = useI18n();
   type SortKey = 'default' | 'name' | 'authorityScore' | 'authority' | 'totalUsage' | 'lastUsed' | 'category';
   type SortDir = 'asc' | 'desc';
   const [sortKey, setSortKey] = useState<SortKey>('default');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   const sortOptions: { key: SortKey; label: string; defaultDir: SortDir }[] = [
-    { key: 'default',        label: '默认',   defaultDir: 'desc' },
-    { key: 'authorityScore', label: '综合分', defaultDir: 'desc' },
-    { key: 'authority',      label: '权威分', defaultDir: 'desc' },
-    { key: 'totalUsage',     label: '使用',   defaultDir: 'desc' },
-    { key: 'lastUsed',       label: '最近',   defaultDir: 'desc' },
-    { key: 'name',           label: '名称',   defaultDir: 'asc' },
-    { key: 'category',       label: '分类',   defaultDir: 'asc' },
+    { key: 'default',        label: t('recipes.sortNewest'),   defaultDir: 'desc' },
+    { key: 'authorityScore', label: t('recipes.qualityAuthorityScore'), defaultDir: 'desc' },
+    { key: 'authority',      label: t('recipes.qualityExcellent'), defaultDir: 'desc' },
+    { key: 'totalUsage',     label: t('recipes.qualityBasic'),   defaultDir: 'desc' },
+    { key: 'lastUsed',       label: t('recipes.sortQuality'),   defaultDir: 'desc' },
+    { key: 'name',           label: t('recipes.sortAlpha'),   defaultDir: 'asc' },
+    { key: 'category',       label: t('recipes.knowledgeType'),   defaultDir: 'asc' },
   ];
 
   const [internalPage, setInternalPage] = useState(1);
@@ -140,14 +142,14 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   useEffect(() => { return () => { isMountedRef.current = false; }; }, []);
 
   const RELATION_TYPES = [
-    { key: 'related',    label: '关联', icon: '∼' },
-    { key: 'dependsOn',  label: '依赖', icon: '⊕' },
-    { key: 'inherits',   label: '继承', icon: '↑' },
-    { key: 'implements', label: '实现', icon: '◇' },
-    { key: 'calls',      label: '调用', icon: '→' },
-    { key: 'dataFlow',   label: '数据流', icon: '⇢' },
-    { key: 'conflicts',  label: '冲突', icon: '✕' },
-    { key: 'extends',    label: '扩展', icon: '⊃' },
+    { key: 'related',    label: t('knowledgeGraph.relationAssociates'), icon: '∼' },
+    { key: 'dependsOn',  label: t('knowledgeGraph.relationDependsOn'), icon: '⊕' },
+    { key: 'inherits',   label: t('knowledgeGraph.relationInherits'), icon: '↑' },
+    { key: 'implements', label: t('knowledgeGraph.relationImplements'), icon: '◇' },
+    { key: 'calls',      label: t('knowledgeGraph.relationCalls'), icon: '→' },
+    { key: 'dataFlow',   label: t('knowledgeGraph.relationDataFlow'), icon: '⇢' },
+    { key: 'conflicts',  label: t('knowledgeGraph.relationConflicts'), icon: '✕' },
+    { key: 'extends',    label: t('knowledgeGraph.relationExtends'), icon: '⊃' },
   ];
 
   const openDrawer = (recipe: Recipe) => {
@@ -192,7 +194,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
       } as any);
       if (isMountedRef.current) { setDrawerMode('view'); onRefresh?.(); }
     } catch (err: any) {
-      notify(err?.message || '保存失败', { title: '操作失败', type: 'error' });
+      notify(err?.message || t('common.saveFailed'), { title: t('common.operationFailed'), type: 'error' });
     } finally {
       if (isMountedRef.current) setIsSaving(false);
     }
@@ -204,7 +206,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
       await api.setRecipeAuthority(selectedRecipe.id || selectedRecipe.name, authority);
       onRefresh?.();
     } catch (err: any) {
-      notify(err?.message || '设置权威分失败', { title: '操作失败', type: 'error' });
+      notify(err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
     }
   };
 
@@ -249,7 +251,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
       setIsAddingRelation(false); setRelationSearchQuery('');
       onRefresh?.();
     } catch (err: any) {
-      notify(err?.message || '添加关联失败', { title: '操作失败', type: 'error' });
+      notify(err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
     }
   };
 
@@ -270,7 +272,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
       setSelectedRecipe({ ...selectedRecipe, relations: currentRelations });
       onRefresh?.();
     } catch (err: any) {
-      notify(err?.message || '移除关联失败', { title: '操作失败', type: 'error' });
+      notify(err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
     }
   };
 
@@ -347,7 +349,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
           <CatIcon size={compact ? 9 : 10} />{category}
         </span>
         {kt && (
-          <span className={`${sz} font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100`}>{knowledgeTypeLabels[kt] || kt}</span>
+          <span className={`${sz} font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100`}>{knowledgeTypeLabelKeys[kt] ? t(knowledgeTypeLabelKeys[kt]) : kt}</span>
         )}
         {recipe.language && (
           <span className={`${sz} font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase`}>{recipe.language}</span>
@@ -362,13 +364,13 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   /* ── Metadata row: only non-empty fields ── */
   const MetadataRow: React.FC<{ recipe: Recipe }> = ({ recipe }) => {
     const items: { icon: React.ElementType; iconClass: string; label: string; value: string; mono?: boolean }[] = [];
-    if (recipe.scope) items.push({ icon: Globe, iconClass: 'text-teal-400', label: '作用域', value: recipe.scope === 'universal' ? '通用' : recipe.scope === 'project-specific' ? '项目级' : recipe.scope });
-    if (recipe.complexity) items.push({ icon: Layers, iconClass: 'text-orange-400', label: '复杂度', value: recipe.complexity === 'advanced' ? '高级' : recipe.complexity === 'intermediate' ? '中级' : recipe.complexity === 'basic' ? '初级' : recipe.complexity });
-    if (recipe.difficulty && recipe.difficulty !== recipe.complexity) items.push({ icon: Layers, iconClass: 'text-amber-400', label: '难度', value: recipe.difficulty });
-    if (recipe.moduleName) items.push({ icon: Layers, iconClass: 'text-purple-400', label: '模块', value: recipe.moduleName, mono: true });
-    if (recipe.source && recipe.source !== 'unknown') items.push({ icon: Globe, iconClass: 'text-violet-400', label: '来源', value: recipe.source === 'bootstrap-scan' ? 'AI 扫描' : recipe.source === 'agent' ? 'AI Agent' : recipe.source });
-    if (recipe.version) items.push({ icon: Hash, iconClass: 'text-slate-400', label: '版本', value: recipe.version });
-    if (recipe.updatedAt && isValidTimestamp(recipe.updatedAt)) items.push({ icon: Hash, iconClass: 'text-slate-400', label: '更新', value: formatDate(recipe.updatedAt) });
+    if (recipe.scope) items.push({ icon: Globe, iconClass: 'text-teal-400', label: t('candidates.path'), value: recipe.scope === 'universal' ? t('common.all') : recipe.scope === 'project-specific' ? t('candidates.category') : recipe.scope });
+    if (recipe.complexity) items.push({ icon: Layers, iconClass: 'text-orange-400', label: t('candidates.category'), value: recipe.complexity === 'advanced' ? t('candidates.confidenceHigh') : recipe.complexity === 'intermediate' ? t('candidates.confidenceMedium') : recipe.complexity === 'basic' ? t('candidates.confidenceLow') : recipe.complexity });
+    if (recipe.difficulty && recipe.difficulty !== recipe.complexity) items.push({ icon: Layers, iconClass: 'text-amber-400', label: t('candidates.category'), value: recipe.difficulty });
+    if (recipe.moduleName) items.push({ icon: Layers, iconClass: 'text-purple-400', label: t('candidates.category'), value: recipe.moduleName, mono: true });
+    if (recipe.source && recipe.source !== 'unknown') items.push({ icon: Globe, iconClass: 'text-violet-400', label: t('recipes.sourceLabel'), value: recipe.source === 'bootstrap-scan' ? t('recipes.sourceBootstrap') : recipe.source === 'agent' ? t('recipes.sourceAiScan') : recipe.source });
+    if (recipe.version) items.push({ icon: Hash, iconClass: 'text-slate-400', label: t('candidates.language'), value: recipe.version });
+    if (recipe.updatedAt && isValidTimestamp(recipe.updatedAt)) items.push({ icon: Hash, iconClass: 'text-slate-400', label: t('candidates.updatedAt'), value: formatDate(recipe.updatedAt) });
     if (items.length === 0 && !recipe.sourceFile) return null;
     return (
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
@@ -385,7 +387,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
         {recipe.sourceFile && (
           <div className="flex items-center gap-1.5 basis-full mt-0.5">
             <FolderOpen size={11} className="text-slate-300 shrink-0" />
-            <span className="text-slate-400">源文件</span>
+            <span className="text-slate-400">{t('candidates.path')}</span>
             <code className="font-mono text-[11px] text-slate-500 break-all" title={recipe.sourceFile}>{recipe.sourceFile}</code>
           </div>
         )}
@@ -398,8 +400,8 @@ const RecipesView: React.FC<RecipesViewProps> = ({
       {recipes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <BookOpenCheck size={48} className="text-slate-200 mb-4" />
-          <p className="font-medium text-slate-600 mb-1">暂无 Recipe</p>
-          <p className="text-sm text-slate-400">通过 SPM 扫描或手动创建来添加知识条目</p>
+          <p className="font-medium text-slate-600 mb-1">{t('recipes.noResults')}</p>
+          <p className="text-sm text-slate-400">{t('recipes.noContent')}</p>
         </div>
       ) : (
         <>
@@ -425,7 +427,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                 </button>
               );
             })}
-            <span className="ml-auto text-slate-400">{recipes.length} 条</span>
+            <span className="ml-auto text-slate-400">{t('recipes.totalCount', { count: recipes.length })}</span>
           </div>
 
           {/* ══════════ Card grid ══════════ */}
@@ -444,8 +446,8 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   }`}
                 >
                   <div className="absolute top-3 right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button onClick={e => { e.stopPropagation(); openDrawer(recipe); setDrawerMode('edit'); }} className="p-1.5 bg-white/90 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors shadow-sm border border-slate-100" title="编辑"><Edit3 size={ICON_SIZES.sm} /></button>
-                    <button onClick={e => { e.stopPropagation(); handleDeleteRecipe(recipe.name || (recipe as any).id); }} className="p-1.5 bg-white/90 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors shadow-sm border border-slate-100" title="删除"><Trash2 size={ICON_SIZES.sm} /></button>
+                    <button onClick={e => { e.stopPropagation(); openDrawer(recipe); setDrawerMode('edit'); }} className="p-1.5 bg-white/90 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors shadow-sm border border-slate-100" title={t('recipes.editRecipe')}><Edit3 size={ICON_SIZES.sm} /></button>
+                    <button onClick={e => { e.stopPropagation(); handleDeleteRecipe(recipe.name || (recipe as any).id); }} className="p-1.5 bg-white/90 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors shadow-sm border border-slate-100" title={t('recipes.deleteRecipe')}><Trash2 size={ICON_SIZES.sm} /></button>
                   </div>
                   <div className="px-5 pt-4 pb-3">
                     <h3 className="font-bold text-slate-900 text-sm mb-2 pr-16 break-words leading-snug">{displayName}</h3>
@@ -470,7 +472,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                         <FileText size={9} className="text-blue-400" />
                         <span className="text-[9px] font-bold text-blue-400 uppercase">Markdown</span>
                       </div>
-                      <div className="bg-blue-50/30 border border-blue-100 rounded-lg px-3 py-2 max-h-[60px] overflow-hidden">
+                      <div className="bg-blue-50/30 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-800/40 rounded-lg px-3 py-2 max-h-[60px] overflow-hidden">
                         <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
                           {recipe.content.markdown.replace(/^#+\s*/gm, '').replace(/\*\*/g, '').replace(/```[\s\S]*?```/g, '').trim().slice(0, 200)}
                         </p>
@@ -488,13 +490,13 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                       </div>
                     </div>
                   )}
-                  <div className="px-5 py-2.5 bg-slate-50/80 border-t border-slate-100 flex items-center gap-3 text-[10px] text-slate-400">
+                  <div className="px-5 py-2.5 bg-slate-50/80 dark:bg-[#252a36] border-t border-slate-100 dark:border-slate-700 flex items-center gap-3 text-[10px] text-slate-400">
                     <span className="font-bold text-amber-600">★ {recipe.stats?.authority ?? 0}</span>
-                    <span>使用 {recipe.stats ? (recipe.stats.guardUsageCount + recipe.stats.humanUsageCount + recipe.stats.aiUsageCount) : 0}</span>
+                    <span>{t('recipes.usageCount', { count: recipe.stats ? (recipe.stats.guardUsageCount + recipe.stats.humanUsageCount + recipe.stats.aiUsageCount) : 0 })}</span>
                     {recipe.source && recipe.source !== 'unknown' && (
                       <>
                         <span className="text-slate-200">|</span>
-                        <span>{recipe.source === 'bootstrap-scan' ? 'AI 扫描' : recipe.source === 'agent' ? 'AI Agent' : recipe.source}</span>
+                        <span>{recipe.source === 'bootstrap-scan' ? t('recipes.sourceBootstrap') : recipe.source === 'agent' ? t('recipes.sourceAiScan') : recipe.source}</span>
                       </>
                     )}
                     {recipe.moduleName && (
@@ -504,7 +506,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                       </>
                     )}
                     {recipe.relations && Object.values(recipe.relations).flat().length > 0 && (
-                      <span className="ml-auto text-purple-500 font-medium">关系 {Object.values(recipe.relations).flat().length}</span>
+                      <span className="ml-auto text-purple-500 font-medium">{t('recipes.relations')} {Object.values(recipe.relations).flat().length}</span>
                     )}
                   </div>
                 </div>
@@ -539,28 +541,28 @@ const RecipesView: React.FC<RecipesViewProps> = ({
           <PageOverlay className="z-30 flex justify-end" onClick={closeDrawer}>
             <PageOverlay.Backdrop />
             <div
-              className={`relative h-full bg-white shadow-2xl flex flex-col ${drawerWide ? 'w-[min(92vw,1100px)]' : 'w-[min(92vw,800px)]'}`}
+              className={`relative h-full bg-white dark:bg-[#1e1e1e] shadow-2xl flex flex-col ${drawerWide ? 'w-[min(92vw,1100px)]' : 'w-[min(92vw,800px)]'}`}
               style={{ animation: 'slideInRight 0.25s ease-out' }}
               onClick={e => e.stopPropagation()}
             >
               {/* ── Header ── */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-gradient-to-b from-white to-slate-50/50 shrink-0">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-b from-white to-slate-50/50 dark:from-[#252526] dark:to-[#1e1e1e] shrink-0">
                 <div className="flex-1 min-w-0 mr-3">
                   <h3 className="font-bold text-slate-800 text-lg leading-snug break-words">{displayName}</h3>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={goToPrev} disabled={currentIndex <= 0} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title="上一条"><ChevronLeft size={ICON_SIZES.md} /></button>
+                  <button onClick={goToPrev} disabled={currentIndex <= 0} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title={t('common.back')}><ChevronLeft size={ICON_SIZES.md} /></button>
                   <span className="text-xs text-slate-400 tabular-nums">{currentIndex + 1}/{sortedRecipes.length}</span>
-                  <button onClick={goToNext} disabled={currentIndex >= sortedRecipes.length - 1} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title="下一条"><ChevronRight size={ICON_SIZES.md} /></button>
+                  <button onClick={goToNext} disabled={currentIndex >= sortedRecipes.length - 1} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title={t('common.more')}><ChevronRight size={ICON_SIZES.md} /></button>
                   <div className="w-px h-5 bg-slate-200 mx-1" />
                   <div className="flex bg-slate-100 p-0.5 rounded-lg mr-1">
-                    <button onClick={() => setDrawerMode('view')} className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${drawerMode === 'view' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}><Eye size={ICON_SIZES.sm} /> 预览</button>
-                    <button onClick={() => { setDrawerMode('edit'); }} className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${drawerMode === 'edit' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}><Edit3 size={ICON_SIZES.sm} /> 编辑</button>
+                    <button onClick={() => setDrawerMode('view')} className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${drawerMode === 'view' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}><Eye size={ICON_SIZES.sm} /> {t('common.preview')}</button>
+                    <button onClick={() => { setDrawerMode('edit'); }} className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${drawerMode === 'edit' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}><Edit3 size={ICON_SIZES.sm} /> {t('common.edit')}</button>
                   </div>
-                  <button onClick={toggleDrawerWide} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400" title={drawerWide ? '收窄' : '展宽'}>
+                  <button onClick={toggleDrawerWide} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400" title={drawerWide ? t('common.collapse') : t('common.expand')}>
                     {drawerWide ? <Minimize2 size={ICON_SIZES.md} /> : <Maximize2 size={ICON_SIZES.md} />}
                   </button>
-                  <button onClick={() => { handleDeleteRecipe(recipe.name || (recipe as any).id); closeDrawer(); }} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title="删除"><Trash2 size={ICON_SIZES.md} /></button>
+                  <button onClick={() => { handleDeleteRecipe(recipe.name || (recipe as any).id); closeDrawer(); }} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title={t('recipes.deleteRecipe')}><Trash2 size={ICON_SIZES.md} /></button>
                   <button onClick={closeDrawer} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><X size={ICON_SIZES.md} /></button>
                 </div>
               </div>
@@ -570,7 +572,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   <div className="flex-1 overflow-y-auto p-5 space-y-5">
                     {/* 标题 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">标题</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('recipes.recipeDetail')}</label>
                       <input
                         type="text"
                         value={editForm.title}
@@ -581,7 +583,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
 
                     {/* 描述 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">描述</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('recipes.description')}</label>
                       <textarea
                         value={editForm.description}
                         onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
@@ -592,7 +594,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
 
                     {/* 标签 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">标签</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('recipes.tags')}</label>
                       <div className="flex flex-wrap gap-1.5 mb-2">
                         {editForm.tags.map((tag, i) => (
                           <span key={i} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 font-medium">
@@ -612,7 +614,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                               setEditForm(f => ({ ...f, tags: [...f.tags, f.tagInput.trim()], tagInput: '' }));
                             }
                           }}
-                          placeholder="输入标签后按 Enter"
+                          placeholder={t('recipes.tags')}
                           className="flex-1 px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
                         />
                       </div>
@@ -621,21 +623,21 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     {/* Markdown 文档 */}
                     <div>
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block flex items-center gap-1.5">
-                        <FileText size={11} className="text-blue-400" /> Markdown 文档
+                        <FileText size={11} className="text-blue-400" /> {t('recipes.markdown')}
                       </label>
                       <textarea
                         value={editForm.markdown}
                         onChange={e => setEditForm(f => ({ ...f, markdown: e.target.value }))}
                         rows={4}
                         className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y font-mono"
-                        placeholder="Markdown 格式..."
+                        placeholder={t('recipes.markdown')}
                       />
                     </div>
 
                     {/* 代码 / 标准用法 */}
                     <div>
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block flex items-center gap-1.5">
-                        <Code2 size={11} className="text-emerald-500" /> 代码 / 标准用法
+                        <Code2 size={11} className="text-emerald-500" /> {t('recipes.code')}
                       </label>
                       <div className="border border-slate-200 rounded-lg overflow-hidden" style={{ minHeight: 200 }}>
                         <HighlightedCodeEditor
@@ -650,28 +652,28 @@ const RecipesView: React.FC<RecipesViewProps> = ({
 
                     {/* 设计原理 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">设计原理</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('recipes.designRationale')}</label>
                       <textarea
                         value={editForm.rationale}
                         onChange={e => setEditForm(f => ({ ...f, rationale: e.target.value }))}
                         rows={3}
                         className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"
-                        placeholder="为何采用此方案..."
+                        placeholder={t('recipes.designRationale')}
                       />
                     </div>
                   </div>
                   <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-between shrink-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400">权威分</span>
+                      <span className="text-xs text-slate-400">{t('recipes.qualityAuthorityScore')}</span>
                       <select className="font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg outline-none text-[10px]" value={recipe.stats?.authority ?? 3} onChange={e => handleSetAuthority(parseInt(e.target.value))}>
                         {[1,2,3,4,5].map(v => <option key={v} value={v}>{'⭐'.repeat(v)} {v}</option>)}
                       </select>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => setDrawerMode('view')} disabled={isSaving} className="px-4 py-1.5 text-sm text-slate-600 font-medium rounded-lg hover:bg-slate-50">取消</button>
+                      <button onClick={() => setDrawerMode('view')} disabled={isSaving} className="px-4 py-1.5 text-sm text-slate-600 font-medium rounded-lg hover:bg-slate-50">{t('common.cancel')}</button>
                       <button onClick={handleSaveInDrawer} disabled={isSaving} className="px-5 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg flex items-center gap-1.5 hover:bg-blue-700 disabled:opacity-60">
                         {isSaving ? <Loader2 size={ICON_SIZES.sm} className="animate-spin" /> : <Save size={ICON_SIZES.sm} />}
-                        {isSaving ? '保存中...' : '保存'}
+                        {isSaving ? t('common.saving') : t('common.save')}
                       </button>
                     </div>
                   </div>
@@ -701,7 +703,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
                         <Link2 size={12} className="text-purple-400" />
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">关联知识</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">{t('recipes.relations')}</label>
                         {(() => {
                           const total = recipe.relations ? Object.values(recipe.relations).flat().length : 0;
                           return total > 0 ? <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-bold">{total}</span> : null;
@@ -711,7 +713,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                         onClick={() => { setIsAddingRelation(!isAddingRelation); setRelationSearchQuery(''); }}
                         className={`text-[9px] px-2 py-0.5 rounded font-bold flex items-center gap-1 transition-colors ${isAddingRelation ? 'bg-slate-200 text-slate-600' : 'bg-purple-500 text-white hover:bg-purple-600'}`}
                       >
-                        {isAddingRelation ? <><X size={10} /> 取消</> : <><Plus size={10} /> 添加</>}
+                        {isAddingRelation ? <><X size={10} /> {t('common.cancel')}</> : <><Plus size={10} /> {t('recipes.editBtn')}</>}
                       </button>
                     </div>
                     {isAddingRelation && (
@@ -722,7 +724,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                           </select>
                           <div className="flex-1 relative">
                             <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300" />
-                            <input type="text" placeholder="搜索..." value={relationSearchQuery} onChange={e => setRelationSearchQuery(e.target.value)} className="w-full text-xs bg-white border border-purple-200 rounded pl-7 pr-2 py-1 outline-none" autoFocus />
+                            <input type="text" placeholder={t('recipes.searchPlaceholder')} value={relationSearchQuery} onChange={e => setRelationSearchQuery(e.target.value)} className="w-full text-xs bg-white border border-purple-200 rounded pl-7 pr-2 py-1 outline-none" autoFocus />
                           </div>
                         </div>
                         {relationSearchQuery.length > 0 && (
@@ -732,7 +734,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                                 if (getDisplayName(r) === displayName) return false;
                                 return getDisplayName(r).toLowerCase().includes(relationSearchQuery.toLowerCase());
                               }).slice(0, 10);
-                              if (!filtered.length) return <div className="text-xs text-slate-400 py-3 text-center">未找到</div>;
+                              if (!filtered.length) return <div className="text-xs text-slate-400 py-3 text-center">{t('recipes.noResults')}</div>;
                               return filtered.map(r => {
                                 const rName = getDisplayName(r);
                                 const linked = recipe.relations && Object.values(recipe.relations).flat().some((rel: any) => {
@@ -742,7 +744,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                                 return (
                                   <div key={rName} className={`flex items-center justify-between px-3 py-1.5 text-xs ${linked ? 'bg-slate-50 text-slate-400' : 'hover:bg-purple-50 cursor-pointer'}`} onClick={() => !linked && handleAddRelation(newRelationType, rName)}>
                                     <span className="font-medium truncate mr-2">{rName}</span>
-                                    {linked ? <span className="text-[9px] text-slate-400 font-bold shrink-0">已关联</span> : <span className="text-[9px] text-purple-600 font-bold shrink-0">+ 添加</span>}
+                                    {linked ? <span className="text-[9px] text-slate-400 font-bold shrink-0">{t('recipes.relations')}</span> : <span className="text-[9px] text-purple-600 font-bold shrink-0">+ {t('recipes.editBtn')}</span>}
                                   </div>
                                 );
                               });
@@ -771,10 +773,10 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                                         found ? 'bg-purple-50 border-purple-200 text-purple-700 cursor-pointer hover:bg-purple-100' : 'bg-white border-slate-200 text-slate-600'
                                       }`}
                                       onClick={() => found && openDrawer(found)}
-                                      title={found ? '点击查看' : displayLabel}
+                                      title={found ? t('candidates.viewDetail') : displayLabel}
                                     >
                                       {displayLabel.replace(/\.md$/i, '')}
-                                      <button onClick={e => { e.stopPropagation(); handleRemoveRelation(key, itemName); }} className="opacity-0 group-hover/rel:opacity-100 text-red-400 hover:text-red-600 transition-opacity ml-0.5" title="移除"><X size={10} /></button>
+                                      <button onClick={e => { e.stopPropagation(); handleRemoveRelation(key, itemName); }} className="opacity-0 group-hover/rel:opacity-100 text-red-400 hover:text-red-600 transition-opacity ml-0.5" title={t('common.delete')}><X size={10} /></button>
                                     </span>
                                   );
                                 })}
@@ -784,28 +786,28 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                         })}
                       </div>
                     ) : !isAddingRelation && (
-                      <div className="text-xs text-slate-300 py-2 text-center">暂无关联</div>
+                      <div className="text-xs text-slate-300 py-2 text-center">{t('recipes.noContent')}</div>
                     )}
                   </div>
 
                   {/* 4. Stats */}
                   <div className="px-6 py-3 border-b border-slate-100">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="bg-amber-50/60 rounded-xl p-3 text-center border border-amber-100">
+                      <div className="bg-amber-50/60 dark:bg-amber-900/20 rounded-xl p-3 text-center border border-amber-100 dark:border-amber-800/40">
                         <div className="text-lg font-bold text-amber-700">{recipe.stats?.authority ?? '—'}</div>
-                        <div className="text-[10px] text-amber-500 font-medium">权威分</div>
+                        <div className="text-[10px] text-amber-500 font-medium">{t('recipes.qualityAuthorityScore')}</div>
                       </div>
-                      <div className="bg-blue-50/60 rounded-xl p-3 text-center border border-blue-100">
+                      <div className="bg-blue-50/60 dark:bg-blue-900/20 rounded-xl p-3 text-center border border-blue-100 dark:border-blue-800/40">
                         <div className="text-lg font-bold text-blue-700">{recipe.stats?.authorityScore != null ? recipe.stats.authorityScore.toFixed(1) : '—'}</div>
-                        <div className="text-[10px] text-blue-500 font-medium">综合分</div>
+                        <div className="text-[10px] text-blue-500 font-medium">{t('recipes.qualityGreat')}</div>
                       </div>
                       <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
                         <div className="text-lg font-bold text-slate-800">{recipe.stats ? (recipe.stats.guardUsageCount + recipe.stats.humanUsageCount + recipe.stats.aiUsageCount) : 0}</div>
-                        <div className="text-[10px] text-slate-400 font-medium">总使用</div>
+                        <div className="text-[10px] text-slate-400 font-medium">{t('recipes.qualitySolid')}</div>
                       </div>
                       <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                        <div className="text-sm font-bold text-slate-700">{formatDate(recipe.stats?.lastUsedAt) || '从未使用'}</div>
-                        <div className="text-[10px] text-slate-400 font-medium">最近使用</div>
+                        <div className="text-sm font-bold text-slate-700">{formatDate(recipe.stats?.lastUsedAt) || t('recipes.noContent')}</div>
+                        <div className="text-[10px] text-slate-400 font-medium">{t('recipes.qualityGood')}</div>
                       </div>
                     </div>
                     {recipe.stats != null && (recipe.stats.guardUsageCount > 0 || recipe.stats.humanUsageCount > 0 || recipe.stats.aiUsageCount > 0) && (
@@ -821,15 +823,15 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {recipe.reasoning && (recipe.reasoning.whyStandard || (recipe.reasoning.sources && recipe.reasoning.sources.length > 0)) && (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                        <Lightbulb size={11} className="text-amber-400" /> 推理依据
+                        <Lightbulb size={11} className="text-amber-400" /> {t('recipes.reasoning')}
                       </label>
-                      <div className="bg-amber-50/30 border border-amber-100 rounded-xl p-4 space-y-2.5">
+                      <div className="bg-amber-50/30 dark:bg-amber-900/15 border border-amber-100 dark:border-amber-800/40 rounded-xl p-4 space-y-2.5">
                         {recipe.reasoning.whyStandard && (
                           <p className="text-sm text-slate-700 leading-relaxed">{recipe.reasoning.whyStandard}</p>
                         )}
                         {recipe.reasoning.sources && recipe.reasoning.sources.length > 0 && (
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-[10px] text-slate-400 font-bold">来源:</span>
+                            <span className="text-[10px] text-slate-400 font-bold">{t('recipes.sourceColon')}</span>
                             {recipe.reasoning.sources.map((src, i) => (
                               <code key={i} className="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-700 font-mono">{src}</code>
                             ))}
@@ -837,7 +839,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                         )}
                         {recipe.reasoning.confidence != null && recipe.reasoning.confidence > 0 && (
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-slate-400 font-bold">置信度:</span>
+                            <span className="text-[10px] text-slate-400 font-bold">{t('recipes.confidenceColon')}</span>
                             <div className="flex-1 max-w-[160px] h-1.5 bg-slate-200 rounded-full overflow-hidden">
                               <div
                                 className="h-full bg-amber-400 rounded-full"
@@ -849,7 +851,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                         )}
                         {recipe.reasoning.alternatives && recipe.reasoning.alternatives.length > 0 && (
                           <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                            <span className="text-[10px] text-slate-400 font-bold">备选:</span>
+                            <span className="text-[10px] text-slate-400 font-bold">{t('recipes.alternativesLabel')}</span>
                             {recipe.reasoning.alternatives.map((alt, i) => (
                               <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600">{alt}</span>
                             ))}
@@ -862,7 +864,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {/* 5. Quality — V3 质量评级 */}
                   {recipe.quality && recipe.quality.grade && recipe.quality.grade !== 'F' && (
                     <div className="px-6 py-3 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">质量评级</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.qualityGrade')}</label>
                       <div className="flex items-center gap-4">
                         <span className={`text-2xl font-black ${
                           recipe.quality.grade === 'A' ? 'text-emerald-600' :
@@ -874,19 +876,19 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                           {recipe.quality.completeness != null && recipe.quality.completeness > 0 && (
                             <div className="text-center">
                               <div className="font-bold text-slate-700">{recipe.quality.completeness}</div>
-                              <div className="text-slate-400">完整性</div>
+                              <div className="text-slate-400">{t('recipes.qualityCompleteness')}</div>
                             </div>
                           )}
                           {recipe.quality.adaptation != null && recipe.quality.adaptation > 0 && (
                             <div className="text-center">
                               <div className="font-bold text-slate-700">{recipe.quality.adaptation}</div>
-                              <div className="text-slate-400">适配度</div>
+                              <div className="text-slate-400">{t('recipes.qualityAdaptation')}</div>
                             </div>
                           )}
                           {recipe.quality.documentation != null && recipe.quality.documentation > 0 && (
                             <div className="text-center">
                               <div className="font-bold text-slate-700">{recipe.quality.documentation}</div>
-                              <div className="text-slate-400">文档度</div>
+                              <div className="text-slate-400">{t('recipes.qualityDocumentation')}</div>
                             </div>
                           )}
                         </div>
@@ -897,7 +899,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {/* 6. Description / Summary */}
                   {recipe.description && (
                     <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">摘要</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('recipes.description')}</label>
                       <p className="text-sm text-slate-600 leading-relaxed">{recipe.description}</p>
                     </div>
                   )}
@@ -906,9 +908,9 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {contentV3?.markdown && (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                        <FileText size={11} className="text-blue-400" /> Markdown 文档
+                        <FileText size={11} className="text-blue-400" /> {t('recipes.markdown')}
                       </label>
-                      <div className="bg-blue-50/30 border border-blue-100 rounded-xl p-4">
+                      <div className="bg-blue-50/30 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-800/40 rounded-xl p-4">
                         <div className="markdown-body text-sm text-slate-700 leading-relaxed">
                           <MarkdownWithHighlight content={contentV3.markdown} />
                         </div>
@@ -919,7 +921,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {/* 6. Headers */}
                   {recipe.headers && recipe.headers.length > 0 && (
                     <div className="px-6 py-3 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">导入头文件</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.headers')}</label>
                       <div className="flex flex-wrap gap-1.5">
                         {recipe.headers.map((h, i) => (
                           <code key={i} className="px-2.5 py-1 bg-violet-50 text-violet-700 border border-violet-100 rounded-md text-[10px] font-mono font-medium">{h}</code>
@@ -932,7 +934,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {codePattern && (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                        <FileCode size={11} className="text-emerald-500" /> 代码 / 标准用法
+                        <FileCode size={11} className="text-emerald-500" /> {t('recipes.code')}
                       </label>
                       <CodeBlock code={codePattern} language={codeLang} showLineNumbers />
                     </div>
@@ -941,7 +943,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {/* 8. Rationale */}
                   {contentV3?.rationale && (
                     <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">设计原理</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.designRationale')}</label>
                       <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                         <p className="text-sm text-slate-600 leading-relaxed">{contentV3.rationale}</p>
                       </div>
@@ -951,7 +953,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {/* 9. Steps */}
                   {contentV3?.steps && contentV3.steps.length > 0 && (
                     <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">实施步骤</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.steps')}</label>
                       <div className="space-y-2">
                         {contentV3.steps.map((step: any, i: number) => {
                           if (typeof step === 'string') {
@@ -983,7 +985,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {/* 10. Code Changes */}
                   {contentV3?.codeChanges && contentV3.codeChanges.length > 0 && (
                     <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">代码变更</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.codeChanges')}</label>
                       <div className="space-y-2">
                         {contentV3.codeChanges.map((change, i) => (
                           <div key={i} className="border border-slate-200 rounded-lg overflow-hidden">
@@ -994,7 +996,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                             {change.explanation && <p className="text-[11px] text-slate-500 px-3 py-1.5 border-b border-slate-100 bg-yellow-50/30">{change.explanation}</p>}
                             <div className="p-2 bg-red-50/20 border-b border-slate-100">
                               <div className="text-[9px] font-bold text-red-400 mb-0.5 uppercase">Before</div>
-                              <pre className="text-[11px] text-slate-600 whitespace-pre-wrap break-words font-mono">{change.before || '(空)'}</pre>
+                              <pre className="text-[11px] text-slate-600 whitespace-pre-wrap break-words font-mono">{change.before || t('recipes.emptyValue')}</pre>
                             </div>
                             <div className="p-2 bg-emerald-50/20">
                               <div className="text-[9px] font-bold text-emerald-500 mb-0.5 uppercase">After</div>
@@ -1009,10 +1011,10 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   {/* 11. Verification */}
                   {contentV3?.verification && (
                     <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">验证方法</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.validation')}</label>
                       <div className="bg-teal-50/50 border border-teal-100 rounded-xl p-4 space-y-1.5">
-                        {contentV3.verification.method && <p className="text-xs text-slate-600"><span className="font-bold text-teal-600">方法:</span> {contentV3.verification.method}</p>}
-                        {contentV3.verification.expectedResult && <p className="text-xs text-slate-600"><span className="font-bold text-teal-600">预期:</span> {contentV3.verification.expectedResult}</p>}
+                        {contentV3.verification.method && <p className="text-xs text-slate-600"><span className="font-bold text-teal-600">{t('recipes.verificationMethod')}</span> {contentV3.verification.method}</p>}
+                        {contentV3.verification.expectedResult && <p className="text-xs text-slate-600"><span className="font-bold text-teal-600">{t('recipes.verificationExpected')}</span> {contentV3.verification.expectedResult}</p>}
                         {contentV3.verification.testCode && <pre className="text-[11px] font-mono bg-slate-800 text-green-300 p-2.5 rounded-md overflow-x-auto whitespace-pre-wrap mt-1">{contentV3.verification.testCode}</pre>}
                       </div>
                     </div>
@@ -1026,7 +1028,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     return (
                       <div className="px-6 py-4 border-b border-slate-100">
                         <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                          <Shield size={11} className="text-amber-500" /> 约束条件 <span className="text-amber-500 font-mono">{total}</span>
+                          <Shield size={11} className="text-amber-500" /> {t('recipes.constraints')} <span className="text-amber-500 font-mono">{total}</span>
                         </label>
                         <div className="space-y-1.5 text-xs text-slate-600">
                           {c.guards?.map((g, i) => (

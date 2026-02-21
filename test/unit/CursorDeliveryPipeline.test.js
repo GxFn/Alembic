@@ -1,13 +1,17 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { jest } from '@jest/globals';
-import { estimateTokens, truncateToTokenBudget, BUDGET } from '../../lib/service/cursor/TokenBudget.js';
+import { CursorDeliveryPipeline } from '../../lib/service/cursor/CursorDeliveryPipeline.js';
 import { KnowledgeCompressor } from '../../lib/service/cursor/KnowledgeCompressor.js';
-import { TopicClassifier } from '../../lib/service/cursor/TopicClassifier.js';
 import { RulesGenerator } from '../../lib/service/cursor/RulesGenerator.js';
 import { SkillsSyncer } from '../../lib/service/cursor/SkillsSyncer.js';
-import { CursorDeliveryPipeline } from '../../lib/service/cursor/CursorDeliveryPipeline.js';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
+import {
+  BUDGET,
+  estimateTokens,
+  truncateToTokenBudget,
+} from '../../lib/service/cursor/TokenBudget.js';
+import { TopicClassifier } from '../../lib/service/cursor/TopicClassifier.js';
 
 /* ════════════════════════════════════════════
  *  TokenBudget
@@ -75,7 +79,8 @@ describe('KnowledgeCompressor', () => {
     doClause: 'Use dispatch_once for all singleton implementations',
     dontClause: 'use init directly for singleton classes',
     whenClause: 'Implementing singleton pattern',
-    coreCode: '+ (instancetype)sharedInstance {\n  static id _inst;\n  dispatch_once(&t, ^{ _inst = [[self alloc] init]; });\n  return _inst;\n}',
+    coreCode:
+      '+ (instancetype)sharedInstance {\n  static id _inst;\n  dispatch_once(&t, ^{ _inst = [[self alloc] init]; });\n  return _inst;\n}',
     content: {
       markdown: '## 单例模式\n\n本项目中有 42 个类采用 dispatch_once 单例模式...',
       pattern: '',
@@ -116,7 +121,10 @@ describe('KnowledgeCompressor', () => {
       expect(results).toHaveLength(1);
       expect(results[0]).toHaveProperty('trigger', '@singleton');
       expect(results[0]).toHaveProperty('when', 'Implementing singleton pattern');
-      expect(results[0]).toHaveProperty('do', 'Use dispatch_once for all singleton implementations');
+      expect(results[0]).toHaveProperty(
+        'do',
+        'Use dispatch_once for all singleton implementations'
+      );
       expect(results[0]).toHaveProperty('dont', 'use init directly for singleton classes');
       expect(results[0]).toHaveProperty('template');
       expect(results[0].template).toContain('sharedInstance');
@@ -139,13 +147,15 @@ describe('KnowledgeCompressor', () => {
 
   describe('formatWhenDoDont', () => {
     test('formats to Markdown with code block', () => {
-      const compressed = [{
-        trigger: '@test-pattern',
-        when: 'Testing',
-        do: 'Use test pattern',
-        dont: 'Skip validation',
-        template: 'test()',
-      }];
+      const compressed = [
+        {
+          trigger: '@test-pattern',
+          when: 'Testing',
+          do: 'Use test pattern',
+          dont: 'Skip validation',
+          template: 'test()',
+        },
+      ];
       const md = compressor.formatWhenDoDont(compressed);
       expect(md).toContain('### @test-pattern');
       expect(md).toContain('**When**: Testing');
@@ -156,13 +166,15 @@ describe('KnowledgeCompressor', () => {
     });
 
     test('omits code block when template is empty', () => {
-      const compressed = [{
-        trigger: '@no-code',
-        when: 'Something',
-        do: 'Do it',
-        dont: '',
-        template: '',
-      }];
+      const compressed = [
+        {
+          trigger: '@no-code',
+          when: 'Something',
+          do: 'Do it',
+          dont: '',
+          template: '',
+        },
+      ];
       const md = compressor.formatWhenDoDont(compressed);
       expect(md).not.toContain('```');
       expect(md).not.toContain("Don't");
@@ -183,8 +195,18 @@ describe('TopicClassifier', () => {
 
   test('groups entries by topicHint', () => {
     const entries = [
-      { title: 'Network Request', description: 'HTTP API request handling', topicHint: 'networking', tags: [] },
-      { title: 'UI Layout', description: 'View controller layout setup', topicHint: 'ui', tags: [] },
+      {
+        title: 'Network Request',
+        description: 'HTTP API request handling',
+        topicHint: 'networking',
+        tags: [],
+      },
+      {
+        title: 'UI Layout',
+        description: 'View controller layout setup',
+        topicHint: 'ui',
+        tags: [],
+      },
     ];
     const grouped = classifier.group(entries);
     expect(grouped.networking).toHaveLength(1);
@@ -317,23 +339,32 @@ describe('SkillsSyncer', () => {
     // Create source skill
     const srcDir = path.join(tmpDir, 'AutoSnippet', 'skills', 'project-architecture');
     fs.mkdirSync(srcDir, { recursive: true });
-    fs.writeFileSync(path.join(srcDir, 'SKILL.md'), [
-      '---',
-      'name: project-architecture',
-      'description: Auto-generated skill',
-      'createdBy: bootstrap-v3',
-      '---',
-      '',
-      '# Architecture',
-      '',
-      'The project uses modular architecture.',
-    ].join('\n'));
+    fs.writeFileSync(
+      path.join(srcDir, 'SKILL.md'),
+      [
+        '---',
+        'name: project-architecture',
+        'description: Auto-generated skill',
+        'createdBy: bootstrap-v3',
+        '---',
+        '',
+        '# Architecture',
+        '',
+        'The project uses modular architecture.',
+      ].join('\n')
+    );
 
     const result = await syncer.sync();
     expect(result.synced).toContain('autosnippet-architecture');
 
     // Check output
-    const outputPath = path.join(tmpDir, '.cursor', 'skills', 'autosnippet-architecture', 'SKILL.md');
+    const outputPath = path.join(
+      tmpDir,
+      '.cursor',
+      'skills',
+      'autosnippet-architecture',
+      'SKILL.md'
+    );
     expect(fs.existsSync(outputPath)).toBe(true);
 
     const content = fs.readFileSync(outputPath, 'utf8');
@@ -343,7 +374,14 @@ describe('SkillsSyncer', () => {
     expect(content).toContain('autosnippet_search');
 
     // Check references/RECIPES.md exists
-    const recipesPath = path.join(tmpDir, '.cursor', 'skills', 'autosnippet-architecture', 'references', 'RECIPES.md');
+    const recipesPath = path.join(
+      tmpDir,
+      '.cursor',
+      'skills',
+      'autosnippet-architecture',
+      'references',
+      'RECIPES.md'
+    );
     expect(fs.existsSync(recipesPath)).toBe(true);
   });
 
@@ -367,7 +405,10 @@ describe('CursorDeliveryPipeline', () => {
 
   const makeEntries = () => [
     {
-      id: '1', title: '[Bootstrap] code-standard/命名规范', kind: 'rule', lifecycle: 'active',
+      id: '1',
+      title: '[Bootstrap] code-standard/命名规范',
+      kind: 'rule',
+      lifecycle: 'active',
       description: 'Use camelCase for variables, PascalCase for classes',
       trigger: '@naming-convention',
       doClause: 'Use camelCase for variables and PascalCase for classes',
@@ -380,7 +421,10 @@ describe('CursorDeliveryPipeline', () => {
       tags: ['naming'],
     },
     {
-      id: '2', title: '[Bootstrap] architecture/单例模式', kind: 'rule', lifecycle: 'active',
+      id: '2',
+      title: '[Bootstrap] architecture/单例模式',
+      kind: 'rule',
+      lifecycle: 'active',
       description: 'Use dispatch_once for singletons',
       trigger: '@singleton',
       doClause: 'Use dispatch_once for all singleton implementations',
@@ -393,14 +437,18 @@ describe('CursorDeliveryPipeline', () => {
       tags: ['singleton'],
     },
     {
-      id: '3', title: '[Bootstrap] code-pattern/网络请求', kind: 'pattern', lifecycle: 'active',
+      id: '3',
+      title: '[Bootstrap] code-pattern/网络请求',
+      kind: 'pattern',
+      lifecycle: 'active',
       description: 'Use BLNetworkManager for all HTTP requests',
       trigger: '@network-request',
       doClause: 'Use BLNetworkManager for all HTTP requests',
       dontClause: 'use NSURLSession directly',
       whenClause: 'Making HTTP network requests',
       topicHint: 'networking',
-      coreCode: '[[BLNetworkManager sharedInstance] GET:url params:params success:^(id data) {} failure:^(NSError *err) {}];',
+      coreCode:
+        '[[BLNetworkManager sharedInstance] GET:url params:params success:^(id data) {} failure:^(NSError *err) {}];',
       content: {
         markdown: '## 网络请求模式\n\n共 28 处使用此模式',
         pattern: '',
@@ -410,7 +458,10 @@ describe('CursorDeliveryPipeline', () => {
       tags: ['network', 'api'],
     },
     {
-      id: '4', title: '[Bootstrap] code-pattern/UI布局', kind: 'pattern', lifecycle: 'active',
+      id: '4',
+      title: '[Bootstrap] code-pattern/UI布局',
+      kind: 'pattern',
+      lifecycle: 'active',
       description: 'Use auto layout constraints for UI layout',
       trigger: '@ui-layout',
       doClause: 'Use Masonry framework for auto layout constraints',
@@ -429,8 +480,12 @@ describe('CursorDeliveryPipeline', () => {
     mockKnowledgeService = {
       list: jest.fn().mockImplementation(async (filters) => {
         const entries = makeEntries();
-        if (filters.lifecycle === 'active') return entries;
-        if (filters.lifecycle === 'pending') return [];
+        if (filters.lifecycle === 'active') {
+          return entries;
+        }
+        if (filters.lifecycle === 'pending') {
+          return [];
+        }
         return entries;
       }),
     };
@@ -465,7 +520,7 @@ describe('CursorDeliveryPipeline', () => {
 
     // Check at least one pattern file exists
     const rulesDir = path.join(tmpDir, '.cursor', 'rules');
-    const files = fs.readdirSync(rulesDir).filter(f => f.startsWith('autosnippet-patterns-'));
+    const files = fs.readdirSync(rulesDir).filter((f) => f.startsWith('autosnippet-patterns-'));
     expect(files.length).toBeGreaterThan(0);
 
     const content = fs.readFileSync(path.join(rulesDir, files[0]), 'utf8');
@@ -487,18 +542,25 @@ describe('CursorDeliveryPipeline', () => {
 
   test('Channel A token budget stays within 400', async () => {
     // Create many rules to test budget enforcement
-    const manyRules = Array(20).fill(null).map((_, i) => ({
-      id: String(i), title: `Rule ${i}`, kind: 'rule', lifecycle: 'active',
-      description: `Rule ${i} description with enough text to consume tokens`,
-      doClause: `Rule ${i} doClause — always follow this convention in the project`,
-      dontClause: `violate rule ${i}`,
-      content: { markdown: `Rule ${i} content`, pattern: '' },
-      quality: { confidence: 0.9, authorityScore: 0.5 },
-      stats: {},
-      tags: [],
-    }));
+    const manyRules = Array(20)
+      .fill(null)
+      .map((_, i) => ({
+        id: String(i),
+        title: `Rule ${i}`,
+        kind: 'rule',
+        lifecycle: 'active',
+        description: `Rule ${i} description with enough text to consume tokens`,
+        doClause: `Rule ${i} doClause — always follow this convention in the project`,
+        dontClause: `violate rule ${i}`,
+        content: { markdown: `Rule ${i} content`, pattern: '' },
+        quality: { confidence: 0.9, authorityScore: 0.5 },
+        stats: {},
+        tags: [],
+      }));
     mockKnowledgeService.list.mockImplementation(async (filters) => {
-      if (filters.lifecycle === 'active') return manyRules;
+      if (filters.lifecycle === 'active') {
+        return manyRules;
+      }
       return [];
     });
 
@@ -510,7 +572,10 @@ describe('CursorDeliveryPipeline', () => {
   test('Channel D generates devdocs skill for dev-document entries', async () => {
     const docsEntries = [
       {
-        id: 'doc-1', title: 'BiliDemo 冷启动分析', kind: 'fact', lifecycle: 'active',
+        id: 'doc-1',
+        title: 'BiliDemo 冷启动分析',
+        kind: 'fact',
+        lifecycle: 'active',
         knowledgeType: 'dev-document',
         description: '冷启动耗时 8s 的根因分析报告',
         content: { markdown: '## 问题背景\n\n冷启动耗时过长...', pattern: '' },
@@ -522,7 +587,10 @@ describe('CursorDeliveryPipeline', () => {
         stats: {},
       },
       {
-        id: 'doc-2', title: 'Architecture Decision Record', kind: 'fact', lifecycle: 'active',
+        id: 'doc-2',
+        title: 'Architecture Decision Record',
+        kind: 'fact',
+        lifecycle: 'active',
         knowledgeType: 'dev-document',
         description: '模块拆分决策记录',
         content: { markdown: '## 决策\n\n将 Service 层拆分为...', pattern: '' },
@@ -536,7 +604,9 @@ describe('CursorDeliveryPipeline', () => {
     ];
 
     mockKnowledgeService.list.mockImplementation(async (filters) => {
-      if (filters.lifecycle === 'active') return [...makeEntries(), ...docsEntries];
+      if (filters.lifecycle === 'active') {
+        return [...makeEntries(), ...docsEntries];
+      }
       return [];
     });
 
@@ -567,7 +637,10 @@ describe('CursorDeliveryPipeline', () => {
     const mixed = [
       ...makeEntries(),
       {
-        id: 'doc-x', title: 'Some Doc', kind: 'fact', lifecycle: 'active',
+        id: 'doc-x',
+        title: 'Some Doc',
+        kind: 'fact',
+        lifecycle: 'active',
         knowledgeType: 'dev-document',
         description: 'A document',
         content: { markdown: 'Full text here' },
@@ -578,7 +651,9 @@ describe('CursorDeliveryPipeline', () => {
     ];
 
     mockKnowledgeService.list.mockImplementation(async (filters) => {
-      if (filters.lifecycle === 'active') return mixed;
+      if (filters.lifecycle === 'active') {
+        return mixed;
+      }
       return [];
     });
 

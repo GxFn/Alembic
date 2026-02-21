@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Bootstrap from '../lib/bootstrap.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -11,31 +11,14 @@ const __dirname = path.dirname(__filename);
  * 初始化 AutoSnippet 数据库
  */
 async function main() {
-  console.log('🚀 AutoSnippet 2.0 - Database Initialization\n');
-
   try {
     const bootstrap = new Bootstrap({ env: process.env.NODE_ENV || 'development' });
     const components = await bootstrap.initialize();
 
-    console.log('✅ Database initialized successfully');
-    console.log('\nComponents ready:');
-    console.log('  - Database:', components.db ? '✓' : '✗');
-    console.log('  - Logger:', components.logger ? '✓' : '✗');
-    console.log('  - Constitution:', components.constitution ? '✓' : '✗');
-    console.log('  - Gateway:', components.gateway ? '✓' : '✗');
-    console.log('  - Permission Manager:', components.permissionManager ? '✓' : '✗');
-    console.log('  - Audit Logger:', components.auditLogger ? '✓' : '✗');
-
     // 显示宪法信息
-    const constitutionInfo = components.constitution.toJSON();
-    console.log('\n📜 Constitution:');
-    console.log('  - Version:', constitutionInfo.version);
-    console.log('  - Effective Date:', constitutionInfo.effectiveDate);
-    console.log('  - Rules:', (constitutionInfo.rules || []).length);
-    console.log('  - Roles:', constitutionInfo.roles.length);
+    const _constitutionInfo = components.constitution.toJSON();
 
     await bootstrap.shutdown();
-    console.log('\n✅ Initialization complete');
     process.exit(0);
   } catch (error) {
     console.error('\n❌ Initialization failed:', error.message);

@@ -1,19 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import mermaid from 'mermaid';
+import { useI18n } from '../../i18n';
+import { useTheme } from '../../theme';
 
-// 全局只初始化一次
-let mermaidInitialized = false;
 let idCounter = 0;
+let lastTheme = '';
 
-function ensureMermaidInit() {
-  if (mermaidInitialized) return;
+function initMermaid(dark: boolean) {
+  const theme = dark ? 'dark' : 'default';
+  if (theme === lastTheme) return;
   mermaid.initialize({
     startOnLoad: false,
-    theme: 'default',
+    theme,
     securityLevel: 'loose',
     fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
+    ...(dark ? { themeVariables: {
+      darkMode: true,
+      background: '#1e1e1e',
+      primaryColor: '#2d3748',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#4a5568',
+      lineColor: '#94a3b8',
+      secondaryColor: '#283040',
+      tertiaryColor: '#1a2332',
+      noteBkgColor: '#283040',
+      noteTextColor: '#e2e8f0',
+      noteBorderColor: '#4a5568',
+    }} : {}),
   });
-  mermaidInitialized = true;
+  lastTheme = theme;
 }
 
 interface MermaidBlockProps {
@@ -25,6 +40,8 @@ interface MermaidBlockProps {
  * 与 ReactMarkdown 完全独立——由外层 splitMermaidSegments 拆分并直接挂载
  */
 const MermaidBlock: React.FC<MermaidBlockProps> = ({ code }) => {
+  const { t } = useI18n();
+  const { isDark } = useTheme();
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string>('');
 
@@ -33,7 +50,7 @@ const MermaidBlock: React.FC<MermaidBlockProps> = ({ code }) => {
     const id = `mermaid_${idCounter++}`;
 
     async function render() {
-      ensureMermaidInit();
+      initMermaid(isDark);
       try {
         const { svg: result } = await mermaid.render(id, code.trim());
         if (!cancelled) {
@@ -52,7 +69,7 @@ const MermaidBlock: React.FC<MermaidBlockProps> = ({ code }) => {
 
     render();
     return () => { cancelled = true; };
-  }, [code]);
+  }, [code, isDark]);
 
   if (error) {
     return (
@@ -65,14 +82,14 @@ const MermaidBlock: React.FC<MermaidBlockProps> = ({ code }) => {
   if (!svg) {
     return (
       <div className="my-4 flex items-center justify-center py-8 text-slate-400 text-sm">
-        渲染图表中…
+        {t('shared.renderingChart')}
       </div>
     );
   }
 
   return (
     <div
-      className="my-5 flex justify-center overflow-x-auto rounded-lg border border-slate-200 bg-white p-4"
+      className={`my-5 flex justify-center overflow-x-auto rounded-lg border p-4 ${isDark ? 'border-slate-700 bg-[#1e1e1e]' : 'border-slate-200 bg-white'}`}
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

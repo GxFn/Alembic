@@ -6,53 +6,40 @@
  * asd install:full --parser  - 上述 + Swift 解析器
  */
 
-import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 import { execSync } from 'node:child_process';
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
 
 const rootDir = path.resolve(__dirname, '..');
-const withParser = process.env.ASD_INSTALL_PARSER === '1' || process.env.ASD_INSTALL_PARSER === 'true';
-const withNativeUi = process.env.ASD_INSTALL_NATIVE_UI === '1' || process.env.ASD_INSTALL_NATIVE_UI === 'true';
+const withParser =
+  process.env.ASD_INSTALL_PARSER === '1' || process.env.ASD_INSTALL_PARSER === 'true';
+const withNativeUi =
+  process.env.ASD_INSTALL_NATIVE_UI === '1' || process.env.ASD_INSTALL_NATIVE_UI === 'true';
 const dashboardDist = path.join(rootDir, 'dashboard', 'dist');
-
-console.log('=== AutoSnippet 全量安装 ===\n');
-
-// 1. 核心 + 可选依赖
-console.log('1/4 安装核心与可选依赖...');
 execSync('npm install', { cwd: rootDir, stdio: 'inherit' });
-console.log('');
 
 // 2. Dashboard（仅当前端不存在时安装并构建）
 if (!fs.existsSync(dashboardDist)) {
-  console.log('2/4 前端不存在，安装并构建 Dashboard...');
   const dashboardDir = path.join(rootDir, 'dashboard');
   execSync('npm install', { cwd: dashboardDir, stdio: 'inherit' });
   execSync('npm run build:dashboard', { cwd: rootDir, stdio: 'inherit' });
-  console.log('');
 } else {
-  console.log('2/4 跳过 Dashboard（已存在预构建前端）');
-  console.log('');
 }
 
 // 3. ParsePackage / Native UI（可选）
 if (withParser) {
-  console.log('3/4 构建 Swift 解析器（ParsePackage）...');
   execSync('npm run build:parser', { cwd: rootDir, stdio: 'inherit' });
 } else {
-  console.log('3/4 跳过 ParsePackage（需时执行 asd install:full --parser）');
 }
 if (withNativeUi || process.platform === 'darwin') {
-  console.log('4/4 构建 Native UI 辅助程序（macOS）...');
   try {
-  await import('./build-native-ui.js');
+    await import('./build-native-ui.js');
   } catch (_) {}
 } else {
-  console.log('4/4 跳过 Native UI（非 macOS）');
 }
-
-console.log('\n✅ 全量安装完成');

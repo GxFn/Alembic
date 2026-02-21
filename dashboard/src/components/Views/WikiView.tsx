@@ -9,6 +9,7 @@ import {
 import { ICON_SIZES } from '../../constants/icons';
 import api from '../../api';
 import MarkdownWithHighlight from '../Shared/MarkdownWithHighlight';
+import { useI18n } from '../../i18n';
 
 /* ═══════════════════════════════════════════════════════
  *  Types
@@ -64,16 +65,16 @@ interface WikiStatus {
 
 /** 生成阶段配置 */
 const PHASE_CONFIG: Record<string, { label: string; icon: React.ElementType }> = {
-  'init':        { label: '初始化',       icon: CircleDot },
-  'scan':        { label: '扫描项目',     icon: FolderTree },
-  'ast-analyze': { label: 'AST 分析',    icon: FileCode },
-  'spm-parse':   { label: 'SPM 解析',    icon: GitBranch },
-  'knowledge':   { label: '整合知识库',   icon: BookOpen },
-  'generate':    { label: '生成骨架',     icon: FileText },
-  'ai-compose':  { label: 'AI 增强',     icon: Sparkles },
-  'sync-docs':   { label: '同步文档',     icon: Download },
-  'dedup':       { label: '去重',         icon: Layers },
-  'finalize':    { label: '写入元数据',   icon: CheckCircle },
+  'init':        { label: 'Init',           icon: CircleDot },
+  'scan':        { label: 'Scan',           icon: FolderTree },
+  'ast-analyze': { label: 'AST Analyze',    icon: FileCode },
+  'spm-parse':   { label: 'Module Parse',   icon: GitBranch },
+  'knowledge':   { label: 'Knowledge',      icon: BookOpen },
+  'generate':    { label: 'Generate',       icon: FileText },
+  'ai-compose':  { label: 'AI Compose',     icon: Sparkles },
+  'sync-docs':   { label: 'Sync Docs',      icon: Download },
+  'dedup':       { label: 'Dedup',          icon: Layers },
+  'finalize':    { label: 'Finalize',       icon: CheckCircle },
 };
 
 const PHASE_ORDER = [
@@ -84,15 +85,15 @@ const PHASE_ORDER = [
 
 /** 文件类型 → 图标 & 颜色 */
 const FILE_TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  'index':           { icon: BookOpen,   color: 'text-blue-600',    label: '项目概述' },
-  'architecture':    { icon: Layers,     color: 'text-violet-600',  label: '架构总览' },
-  'getting-started': { icon: FileCode,   color: 'text-emerald-600', label: '快速上手' },
-  'protocols':       { icon: Sparkles,   color: 'text-amber-600',   label: '协议与组件' },
-  'components':      { icon: FileCode,   color: 'text-emerald-600', label: '组件清单' },
-  'patterns':        { icon: Sparkles,   color: 'text-amber-600',   label: '代码模式' },
-  'module':          { icon: FolderOpen, color: 'text-cyan-600',    label: '模块文档' },
-  'document':        { icon: FileText,   color: 'text-orange-600',  label: '开发文档' },
-  '_index':          { icon: Hash,       color: 'text-slate-500',   label: '目录索引' },
+  'index':           { icon: BookOpen,   color: 'text-blue-600',    label: 'overview' },
+  'architecture':    { icon: Layers,     color: 'text-violet-600',  label: 'architecture' },
+  'getting-started': { icon: FileCode,   color: 'text-emerald-600', label: 'getting-started' },
+  'protocols':       { icon: Sparkles,   color: 'text-amber-600',   label: 'protocols' },
+  'components':      { icon: FileCode,   color: 'text-emerald-600', label: 'components' },
+  'patterns':        { icon: Sparkles,   color: 'text-amber-600',   label: 'patterns' },
+  'module':          { icon: FolderOpen, color: 'text-cyan-600',    label: 'module' },
+  'document':        { icon: FileText,   color: 'text-orange-600',  label: 'document' },
+  '_index':          { icon: Hash,       color: 'text-slate-500',   label: 'index' },
 };
 
 function getFileTypeConfig(filePath: string) {
@@ -100,7 +101,7 @@ function getFileTypeConfig(filePath: string) {
   if (name === '_index') return FILE_TYPE_CONFIG['_index'];
   if (filePath.startsWith('modules/')) return FILE_TYPE_CONFIG['module'];
   if (filePath.startsWith('documents/')) return FILE_TYPE_CONFIG['document'];
-  return FILE_TYPE_CONFIG[name] || { icon: FileText, color: 'text-slate-500', label: '文档' };
+  return FILE_TYPE_CONFIG[name] || { icon: FileText, color: 'text-slate-500', label: 'doc' };
 }
 
 /** 来源标签配置 */
@@ -110,8 +111,8 @@ const SOURCE_CONFIG: Record<string, { label: string; color: string; bg: string }
 };
 
 const DIR_LABELS: Record<string, string> = {
-  modules: '模块',
-  documents: '开发文档',
+  modules: 'modules',
+  documents: 'documents',
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -129,10 +130,10 @@ function formatDate(dateStr: string | undefined): string {
   if (isNaN(d.getTime())) return '';
   const now = Date.now();
   const diff = now - d.getTime();
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} 小时前`;
-  if (diff < 604800_000) return `${Math.floor(diff / 86400_000)} 天前`;
+  if (diff < 60_000) return 'just now';
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)} min ago`;
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} hr ago`;
+  if (diff < 604800_000) return `${Math.floor(diff / 86400_000)} d ago`;
   return d.toLocaleDateString('zh-CN');
 }
 
@@ -150,6 +151,7 @@ const InlineStats: React.FC<{
   meta: WikiMeta | null;
   filesCount: number;
 }> = ({ meta, filesCount }) => {
+  const { t } = useI18n();
   const aiPolished = meta?.files?.filter(f => f.polished).length || 0;
   const synced = meta?.files?.filter(f => f.source).length || 0;
 
@@ -157,7 +159,7 @@ const InlineStats: React.FC<{
     <div className="flex items-center gap-3 text-xs">
       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
         <FileText size={14} className="text-slate-400" />
-        <span className="text-slate-500">共 <strong className="text-slate-700">{filesCount}</strong> 篇</span>
+        <span className="text-slate-500">{t('wiki.fileCount', { count: filesCount })}</span>
         {aiPolished > 0 && (
           <span className="text-violet-500 ml-1">（AI {aiPolished}）</span>
         )}
@@ -165,7 +167,7 @@ const InlineStats: React.FC<{
       {synced > 0 && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-100">
           <Download size={14} className="text-orange-400" />
-          <span className="text-orange-600">同步 <strong className="text-orange-700">{synced}</strong></span>
+          <span className="text-orange-600">{t('wiki.synced')} <strong className="text-orange-700">{synced}</strong></span>
         </div>
       )}
       {meta?.generatedAt && (
@@ -186,6 +188,7 @@ const GenerationProgress: React.FC<{
   task: WikiStatus['task'];
   onAbort: () => void;
 }> = ({ task, onAbort }) => {
+  const { t } = useI18n();
   if (task.status !== 'running') return null;
 
   const currentPhaseIndex = PHASE_ORDER.indexOf(task.phase || '');
@@ -199,8 +202,8 @@ const GenerationProgress: React.FC<{
             <Loader2 size={ICON_SIZES.lg} className="text-blue-600 animate-spin" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-800">Wiki 生成中</h3>
-            <p className="text-sm text-slate-500">{task.message || '处理中...'}</p>
+            <h3 className="font-semibold text-slate-800">{t('wiki.wikiGenerating')}</h3>
+            <p className="text-sm text-slate-500">{task.message || t('common.loading')}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -210,7 +213,7 @@ const GenerationProgress: React.FC<{
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
           >
             <Square size={ICON_SIZES.sm} />
-            中止
+            {t('common.stop')}
           </button>
         </div>
       </div>
@@ -268,6 +271,7 @@ const StatusBanner: React.FC<{
   task: WikiStatus['task'];
   wiki: WikiStatus['wiki'];
 }> = ({ task, wiki }) => {
+  const { t } = useI18n();
   if (task.status === 'running') return null;
 
   if (task.status === 'error') {
@@ -277,8 +281,8 @@ const StatusBanner: React.FC<{
           <AlertCircle size={ICON_SIZES.md} className="text-red-600" />
         </div>
         <div>
-          <span className="font-semibold text-red-800">生成失败</span>
-          <span className="text-sm text-red-600 ml-3">{task.error || '未知错误'}</span>
+          <span className="font-semibold text-red-800">{t('wiki.genFailed')}</span>
+          <span className="text-sm text-red-600 ml-3">{task.error || t('common.operationFailed')}</span>
         </div>
       </div>
     );
@@ -290,7 +294,7 @@ const StatusBanner: React.FC<{
         <div className="p-1.5 bg-amber-100 rounded-lg">
           <AlertCircle size={ICON_SIZES.md} className="text-amber-600" />
         </div>
-        <span className="text-sm text-amber-700">检测到代码变更，Wiki 可能已过期，建议增量更新</span>
+        <span className="text-sm text-amber-700">{t('wiki.outOfDateHint')}</span>
       </div>
     );
   }
@@ -469,8 +473,8 @@ const FileTreeItem: React.FC<{
       <Icon size={14} className={`flex-shrink-0 ${isActive ? 'text-blue-500' : config.color}`} />
       <span className="truncate text-left">{node.name.replace('.md', '')}</span>
       <span className="ml-auto flex items-center gap-1 flex-shrink-0">
-        {isPolished && <span title="AI 增强"><Sparkles size={10} className="text-violet-400" /></span>}
-        {source && <span title={`来源: ${source}`}><ArrowUpRight size={10} className="text-orange-400" /></span>}
+        {isPolished && <span title="AI Enhanced"><Sparkles size={10} className="text-violet-400" /></span>}
+        {source && <span title={`Source: ${source}`}><ArrowUpRight size={10} className="text-orange-400" /></span>}
       </span>
     </button>
   );
@@ -487,6 +491,7 @@ const DocumentReader: React.FC<{
   meta: WikiMeta | null;
   onBack: () => void;
 }> = ({ filePath, content, loading, meta, onBack }) => {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const fileMeta = meta?.files?.find(f => f.path === filePath);
 
@@ -510,7 +515,7 @@ const DocumentReader: React.FC<{
           <button
             onClick={onBack}
             className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors lg:hidden"
-            title="返回文件列表"
+            title={t('wiki.backToList')}
           >
             <ArrowLeft size={ICON_SIZES.md} />
           </button>
@@ -530,7 +535,7 @@ const DocumentReader: React.FC<{
           {fileMeta?.polished && (
             <span className="flex items-center gap-1 text-xs text-violet-700 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-full">
               <Sparkles size={10} />
-              AI 增强
+              {t('wiki.aiBadge')}
             </span>
           )}
           {fileMeta?.source && (() => {
@@ -546,7 +551,7 @@ const DocumentReader: React.FC<{
             className="flex items-center gap-1 px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
           >
             {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
-            {copied ? '已复制' : '复制'}
+            {copied ? t('wiki.copySuccess') : t('wiki.copyBtn')}
           </button>
         </div>
       </div>
@@ -571,21 +576,23 @@ const DocumentReader: React.FC<{
  *  Empty State
  * ═══════════════════════════════════════════════════════ */
 
-const EmptyState: React.FC = () => (
+const EmptyState: React.FC = () => {
+  const { t } = useI18n();
+  return (
   <div className="h-72 flex flex-col items-center justify-center bg-white rounded-2xl border border-dashed border-slate-200 text-slate-400">
     <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center mb-4">
       <BookOpen size={32} className="text-slate-300" />
     </div>
-    <p className="text-sm font-medium text-slate-500">尚未生成 Repo Wiki</p>
+    <p className="text-sm font-medium text-slate-500">{t('wiki.emptyTitle')}</p>
     <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-slate-400">
-      Wiki 在冷启动时自动全量生成，后续通过增量更新保持同步
+      {t('wiki.emptyDesc')}
     </p>
     <p className="mt-3 text-[11px] text-slate-400">
-      运行 <code className="text-blue-600 bg-blue-50 px-1 rounded">asd setup</code> 冷启动 ·
-      <code className="text-blue-600 bg-blue-50 px-1 rounded ml-1">asd wiki --update</code> 增量更新
+      {t('wiki.emptyHint')}
     </p>
   </div>
-);
+  );
+};
 
 /* ═══════════════════════════════════════════════════════
  *  Content Placeholder (no file selected)
@@ -598,12 +605,13 @@ const ContentPlaceholder: React.FC<{
   progress?: number;
   message?: string;
 }> = ({ meta, onSelectFile, isGenerating, progress, message }) => {
+  const { t } = useI18n();
   /* 快捷入口：从实际 Wiki 文件列表中匹配，只显示存在的文件 */
   const quickLinkCandidates = [
-    { path: 'index.md',          label: '项目概述', desc: '项目信息、技术栈与数据统计',   icon: BookOpen,  color: 'bg-blue-50 text-blue-600 border-blue-200' },
-    { path: 'architecture.md',   label: '架构总览', desc: '模块依赖图、SPM Target 结构', icon: Layers,    color: 'bg-violet-50 text-violet-600 border-violet-200' },
-    { path: 'getting-started.md',label: '快速上手', desc: '构建、运行与入口分析',         icon: FileCode,  color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-    { path: 'protocols.md',      label: '协议与组件', desc: '核心协议、委托和组件关系',   icon: Sparkles,  color: 'bg-amber-50 text-amber-600 border-amber-200' },
+    { path: 'index.md',          label: t('wiki.quickOverview'), desc: t('wiki.quickOverviewDesc'),   icon: BookOpen,  color: 'bg-blue-50 text-blue-600 border-blue-200' },
+    { path: 'architecture.md',   label: t('wiki.quickArch'), desc: t('wiki.quickArchDesc'), icon: Layers,    color: 'bg-violet-50 text-violet-600 border-violet-200' },
+    { path: 'getting-started.md',label: t('wiki.quickStart'), desc: t('wiki.quickStartDesc'),         icon: FileCode,  color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
+    { path: 'protocols.md',      label: t('wiki.quickProtocols'), desc: t('wiki.quickProtocolsDesc'),   icon: Sparkles,  color: 'bg-amber-50 text-amber-600 border-amber-200' },
   ];
   const fileSet = new Set(meta?.files?.map((f: any) => f.path || f.name) ?? []);
   const quickLinks = quickLinkCandidates.filter(l => fileSet.size === 0 || fileSet.has(l.path));
@@ -621,9 +629,9 @@ const ContentPlaceholder: React.FC<{
               <Bot size={36} className="text-blue-500 animate-pulse" />
             </div>
           </div>
-          <h3 className="text-lg font-semibold text-slate-700 mb-1">Wiki 正在生成中…</h3>
+          <h3 className="text-lg font-semibold text-slate-700 mb-1">{t('wiki.wikiGenerating')}</h3>
           <p className="text-sm text-slate-500 max-w-md text-center leading-relaxed">
-            {message || 'AI 正在分析项目结构并撰写文档，新文件会自动出现在左侧文件树中'}
+            {message || t('wiki.generating')}
           </p>
           {typeof progress === 'number' && (
             <div className="mt-4 w-48">
@@ -645,8 +653,8 @@ const ContentPlaceholder: React.FC<{
           <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3">
             <FileText size={24} className="text-slate-400" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-700">选择一个文件开始阅读</h3>
-          <p className="text-sm text-slate-500 mt-1">从左侧文件树选择，或使用下方快捷入口</p>
+          <h3 className="text-lg font-semibold text-slate-700">{t('wiki.selectFile')}</h3>
+          <p className="text-sm text-slate-500 mt-1">{t('wiki.selectPlaceholder')}</p>
         </div>
       )}
 
@@ -669,8 +677,8 @@ const ContentPlaceholder: React.FC<{
 
       {meta && (
         <div className="mt-8 text-center text-xs text-slate-400">
-          {meta.generatedAt && `最后生成: ${new Date(meta.generatedAt).toLocaleString('zh-CN')}`}
-          {meta.duration != null && ` · 耗时 ${formatDuration(meta.duration)}`}
+          {meta.generatedAt && `${t('wiki.lastGenerated')}: ${new Date(meta.generatedAt).toLocaleString()}`}
+          {meta.duration != null && ` · ${t('wiki.duration')} ${formatDuration(meta.duration)}`}
           {meta.version && ` · v${meta.version}`}
         </div>
       )}
@@ -683,6 +691,7 @@ const ContentPlaceholder: React.FC<{
  * ═══════════════════════════════════════════════════════ */
 
 const WikiView: React.FC = () => {
+  const { t } = useI18n();
   const [status, setStatus] = useState<WikiStatus>({ task: { status: 'idle' } });
   const [files, setFiles] = useState<WikiFile[]>([]);
   const [wikiExists, setWikiExists] = useState(false);
@@ -760,7 +769,7 @@ const WikiView: React.FC = () => {
       await api.wikiUpdate();
       setStatus(prev => ({
         ...prev,
-        task: { ...prev.task, status: 'running', progress: 0, message: '增量更新中...' },
+        task: { ...prev.task, status: 'running', progress: 0, message: t('wiki.incrementalUpdating') },
       }));
     } catch (err: any) {
       console.error('Wiki update failed:', err);
@@ -784,7 +793,7 @@ const WikiView: React.FC = () => {
       const result = await api.wikiFileContent(filePath);
       setFileContent(result.content);
     } catch {
-      setFileContent('# 加载失败\n\n无法读取文件内容。');
+      setFileContent(`# ${t('wiki.loadFailed')}\n\n${t('wiki.loadFailedDesc')}`);
     } finally {
       setFileLoading(false);
     }
@@ -836,7 +845,7 @@ const WikiView: React.FC = () => {
                 <Loader2 size={16} className="text-blue-600 animate-spin relative" />
               </div>
               <div className="flex-1 min-w-0">
-                <span className="text-sm font-medium text-blue-800">Wiki 正在生成中</span>
+                <span className="text-sm font-medium text-blue-800">{t('wiki.wikiGenerating')}</span>
                 {status.task.message && (
                   <span className="text-xs text-blue-500 ml-2 truncate">{status.task.message}</span>
                 )}
@@ -869,12 +878,12 @@ const WikiView: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1">
                     {wikiExists && (
-                      <span className="text-[10px] text-slate-400">{displayFiles.length} 篇</span>
+                      <span className="text-[10px] text-slate-400">{t('wiki.fileCount', { count: displayFiles.length })}</span>
                     )}
                     {status.task.status !== 'running' && wikiExists && (
                       <button
                         onClick={handleUpdate}
-                        title="增量更新"
+                        title={t('wiki.incrementalUpdate')}
                         className="p-1 rounded-md text-blue-500 hover:bg-blue-50 transition-colors"
                       >
                         <RefreshCw size={13} />
@@ -886,7 +895,7 @@ const WikiView: React.FC = () => {
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="搜索文件..."
+                    placeholder={t('wiki.searchPlaceholder')}
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     className="w-full pl-8 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
@@ -899,7 +908,7 @@ const WikiView: React.FC = () => {
                 {status.task.status === 'running' && (
                   <div className="mx-2 mt-3 mb-1 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
                     <Loader2 size={12} className="text-blue-500 animate-spin flex-shrink-0" />
-                    <span className="text-[11px] text-blue-600 leading-tight">文件生成中，新文档将自动出现…</span>
+                    <span className="text-[11px] text-blue-600 leading-tight">{t('wiki.generating')}</span>
                   </div>
                 )}
               </div>

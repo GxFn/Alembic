@@ -1,6 +1,0 @@
-refactor(search): extract ensureIndex() for callers needing accurate stats
-
-- getStats() remains a pure query (no side effects)
-- ensureIndex() is the idempotent public method for on-demand index building
-- SearchHandler calls ensureIndex() before getStats() for accurate diagnostics
-- search() delegates to ensureIndex() internally

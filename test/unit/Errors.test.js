@@ -1,4 +1,12 @@
-import { BaseError, PermissionDenied, ConstitutionViolation, ValidationError, NotFoundError, ConflictError, InternalError } from '../../lib/shared/errors/BaseError.js';
+import {
+  BaseError,
+  ConflictError,
+  ConstitutionViolation,
+  InternalError,
+  NotFoundError,
+  PermissionDenied,
+  ValidationError,
+} from '../../lib/shared/errors/BaseError.js';
 
 describe('Error Classes', () => {
   describe('BaseError', () => {

@@ -4,7 +4,7 @@ import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { ProjectData, KnowledgeEntry, SimilarRecipe, Recipe } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
-import { categoryConfigs, BOOTSTRAP_DIM_LABELS } from '../../constants';
+import { categoryConfigs } from '../../constants';
 import CodeBlock, { normalizeCode } from '../Shared/CodeBlock';
 import MarkdownWithHighlight, { stripFrontmatter } from '../Shared/MarkdownWithHighlight';
 import Pagination from '../Shared/Pagination';
@@ -13,8 +13,23 @@ import { useGlobalChat } from '../Shared/GlobalChatDrawer';
 import PageOverlay from '../Shared/PageOverlay';
 import { useRefineSocket } from '../../hooks/useRefineSocket';
 import RefineProgressBar from './RefineProgressBar';
+import { useI18n } from '../../i18n';
 
-const SILENT_LABELS: Record<string, string> = { _watch: 'as:create', _draft: '草稿', _cli: 'CLI', _pending: '待审核(24h)', _recipe: 'New Recipe' };
+const SILENT_LABEL_KEYS: Record<string, string> = { _watch: 'silentLabels.watch', _draft: 'silentLabels.draft', _cli: 'silentLabels.cli', _pending: 'silentLabels.pending', _recipe: 'silentLabels.recipe' };
+
+/** dimension key → i18n locale key mapping */
+const DIM_I18N_KEYS: Record<string, string> = {
+  'architecture': 'bootstrap.dimLabels.architecture',
+  'best-practice': 'bootstrap.dimLabels.bestPractice',
+  'event-and-data-flow': 'bootstrap.dimLabels.eventAndDataFlow',
+  'objc-deep-scan': 'bootstrap.dimLabels.objcDeepScan',
+  'agent-guidelines': 'bootstrap.dimLabels.agentGuidelines',
+  'bootstrap': 'bootstrap.dimLabels.bootstrap',
+  'code-standard': 'bootstrap.dimLabels.codeStandard',
+  'code-pattern': 'bootstrap.dimLabels.codePattern',
+  'project-profile': 'bootstrap.dimLabels.projectProfile',
+  'category-scan': 'bootstrap.dimLabels.categoryScan',
+};
 
 interface CandidatesViewProps {
   data: ProjectData | null;
@@ -59,7 +74,7 @@ function sortTargetNames(
 }
 
 /** 安全格式化日期 — 避免 1970 问题 */
-function formatDate(raw: string | number | undefined): string {
+function formatDate(raw: string | number | undefined, t: (key: string, params?: Record<string, any>) => string): string {
   if (!raw) return '';
   const ts = typeof raw === 'number' ? raw : Number(raw);
   // 如果是秒级时间戳（< 1e12）转为毫秒
@@ -68,15 +83,15 @@ function formatDate(raw: string | number | undefined): string {
   if (isNaN(d.getTime()) || d.getFullYear() < 2000) return '';
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
-  if (diffMs < 0) return d.toLocaleDateString('zh-CN');
+  if (diffMs < 0) return d.toLocaleDateString();
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return '刚刚';
-  if (diffMin < 60) return `${diffMin} 分钟前`;
+  if (diffMin < 1) return t('candidates.timeJustNow');
+  if (diffMin < 60) return t('candidates.timeMinutesAgo', { n: diffMin });
   const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour} 小时前`;
+  if (diffHour < 24) return t('candidates.timeHoursAgo', { n: diffHour });
   const diffDay = Math.floor(diffHour / 24);
-  if (diffDay < 7) return `${diffDay} 天前`;
-  return d.toLocaleDateString('zh-CN');
+  if (diffDay < 7) return t('candidates.timeDaysAgo', { n: diffDay });
+  return d.toLocaleDateString();
 }
 
 /** 代码预览：取前 N 行 */
@@ -86,24 +101,24 @@ function codePreview(code: string | undefined, maxLines = 4): string {
 }
 
 /** 置信度颜色系统 */
-function confidenceColor(c: number | null | undefined): { ring: string; text: string; bg: string; label: string } {
-  if (c == null) return { ring: 'stroke-slate-200', text: 'text-slate-400', bg: 'bg-slate-50', label: '—' };
-  if (c >= 0.8) return { ring: 'stroke-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50', label: '高' };
-  if (c >= 0.6) return { ring: 'stroke-blue-500', text: 'text-blue-700', bg: 'bg-blue-50', label: '中' };
-  if (c >= 0.4) return { ring: 'stroke-amber-500', text: 'text-amber-700', bg: 'bg-amber-50', label: '中低' };
-  return { ring: 'stroke-red-500', text: 'text-red-700', bg: 'bg-red-50', label: '低' };
+function confidenceColor(c: number | null | undefined): { ring: string; text: string; bg: string; labelKey: string } {
+  if (c == null) return { ring: 'stroke-slate-200', text: 'text-slate-400', bg: 'bg-slate-50', labelKey: '' };
+  if (c >= 0.8) return { ring: 'stroke-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50', labelKey: 'candidates.confidenceHighLabel' };
+  if (c >= 0.6) return { ring: 'stroke-blue-500', text: 'text-blue-700', bg: 'bg-blue-50', labelKey: 'candidates.confidenceMediumLabel' };
+  if (c >= 0.4) return { ring: 'stroke-amber-500', text: 'text-amber-700', bg: 'bg-amber-50', labelKey: 'candidates.confidenceMediumLowLabel' };
+  return { ring: 'stroke-red-500', text: 'text-red-700', bg: 'bg-red-50', labelKey: 'candidates.confidenceLowLabel' };
 }
 
 /** 来源 label */
-const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
-  'bootstrap-scan': { label: 'AI 全量扫描', color: 'text-violet-600 bg-violet-50 border-violet-200' },
-  'mcp': { label: 'MCP 提交', color: 'text-blue-600 bg-blue-50 border-blue-200' },
-  'manual': { label: '手动创建', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-  'file-watcher': { label: '文件监听', color: 'text-orange-600 bg-orange-50 border-orange-200' },
-  'clipboard': { label: '剪贴板', color: 'text-pink-600 bg-pink-50 border-pink-200' },
-  'cli': { label: 'CLI', color: 'text-slate-600 bg-slate-50 border-slate-200' },
-  'agent': { label: 'AI Agent', color: 'text-violet-600 bg-violet-50 border-violet-200' },
-  'submit_with_check': { label: 'AI 审查提交', color: 'text-teal-600 bg-teal-50 border-teal-200' },
+const SOURCE_LABEL_KEYS: Record<string, { labelKey: string; color: string }> = {
+  'bootstrap-scan': { labelKey: 'candidates.sourceAiScanLabel', color: 'text-violet-600 bg-violet-50 border-violet-200' },
+  'mcp': { labelKey: 'candidates.sourceMcpLabel', color: 'text-blue-600 bg-blue-50 border-blue-200' },
+  'manual': { labelKey: 'candidates.sourceManualLabel', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
+  'file-watcher': { labelKey: 'candidates.sourceFileWatcherLabel', color: 'text-orange-600 bg-orange-50 border-orange-200' },
+  'clipboard': { labelKey: 'candidates.sourceClipboardLabel', color: 'text-pink-600 bg-pink-50 border-pink-200' },
+  'cli': { labelKey: 'CLI', color: 'text-slate-600 bg-slate-50 border-slate-200' },
+  'agent': { labelKey: 'AI Agent', color: 'text-violet-600 bg-violet-50 border-violet-200' },
+  'submit_with_check': { labelKey: 'candidates.sourceSubmitCheckLabel', color: 'text-teal-600 bg-teal-50 border-teal-200' },
 };
 
 /** 小型 SVG 环形置信度 */
@@ -135,6 +150,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
   handleDeleteCandidate, handleDeleteAllInTarget,
   onAuditCandidate, onAuditAllInTarget, onEditRecipe, onColdStart, isScanning, isBootstrapping, onRefresh,
 }) => {
+  const { t } = useI18n();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { isWide: drawerWide, toggle: toggleDrawerWide } = useDrawerWide();
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
@@ -191,9 +207,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
         const status = err.response?.status;
         const message = err.response?.data?.message || err.message;
         if (status === 404) {
-          notify(`"${normalizedRecipeName}" 不存在于当前知识库`, { title: 'Recipe 不存在', type: 'error' });
+          notify(`"${normalizedRecipeName}" ${t('common.operationFailed')}`, { title: t('common.operationFailed'), type: 'error' });
         } else {
-          notify(message, { title: '加载 Recipe 失败', type: 'error' });
+          notify(message, { title: t('common.loadFailed'), type: 'error' });
         }
         return;
       }
@@ -269,9 +285,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
     try {
       const result = await api.enrichCandidates([candidateId]);
       if (result.enriched > 0) {
-        notify(`已补齐 ${result.results?.[0]?.filledFields?.length || 0} 个结构字段`, { title: 'AI 补齐完成' });
+        notify(`${result.results?.[0]?.filledFields?.length || 0} ${t('candidates.approveSuccess')}`, { title: t('candidates.aiRefine') });
       } else {
-        notify('无缺失字段，均已完整', { title: '无需补齐', type: 'info' });
+        notify(t('recipes.noContent'), { title: t('candidates.aiRefine'), type: 'info' });
       }
       // 异步刷新抽屉内容（不刷新页面）
       try {
@@ -280,7 +296,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
       } catch (_) {}
     } catch (err: any) {
       const raw = err.response?.data?.error;
-      notify(typeof raw === 'string' ? raw : raw?.message || err.message, { title: 'AI 补齐失败', type: 'error' });
+      notify(typeof raw === 'string' ? raw : raw?.message || err.message, { title: t('common.operationFailed'), type: 'error' });
     } finally {
       setEnrichingIds(prev => { const next = new Set(prev); next.delete(candidateId); return next; });
     }
@@ -299,11 +315,11 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
         const result = await api.enrichCandidates(batch);
         total += result.enriched;
       }
-      notify(`${total}/${items.length} 条候选已更新`, { title: '① 结构补齐完成' });
+      notify(`${total}/${items.length} ${t('candidates.batchDeleteDone', { count: total })}`, { title: t('candidates.aiRefine') });
       onRefresh?.();
     } catch (err: any) {
       const raw = err.response?.data?.error;
-      notify(typeof raw === 'string' ? raw : raw?.message || err.message, { title: '① 结构补齐失败', type: 'error' });
+      notify(typeof raw === 'string' ? raw : raw?.message || err.message, { title: t('common.operationFailed'), type: 'error' });
     } finally {
       setEnrichingAll(false);
     }
@@ -352,7 +368,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
           </div>
           <div>
             <h2 className="text-xl font-bold text-slate-800">AI Scan Candidates</h2>
-            <p className="text-xs text-slate-400 mt-0.5">AI 批量扫描后生成的候选内容，等待审核入库</p>
+            <p className="text-xs text-slate-400 mt-0.5">{t('candidates.title')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -366,10 +382,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   ? 'text-slate-400 bg-slate-100 cursor-not-allowed'
                   : 'text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-sm hover:shadow'
               }`}
-              title="冷启动：结构收集 + 9 维度 Candidate 创建（与 MCP 一致）"
+              title={t('candidates.coldStartTitle')}
             >
               {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
-              {isScanning ? '初始化中...' : '冷启动'}
+              {isScanning ? t('common.loading') : t('candidates.sourceBootstrap')}
             </button>
           )}
           {/* ① 结构补齐：填充缺失的语义元数据 */}
@@ -382,10 +398,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   ? 'text-slate-400 bg-slate-100 cursor-not-allowed'
                   : 'text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100'
               }`}
-              title="① 结构补齐：填充缺失的 rationale / knowledgeType / complexity / scope / steps / constraints（只填空不覆盖，建议先于润色执行）"
+              title={t('candidates.enrichTitle')}
             >
               {enrichingAll ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-              {enrichingAll ? '补齐中...' : '① 结构补齐'}
+              {enrichingAll ? t('common.loading') : t('candidates.aiRefine')}
             </button>
           )}
           {/* ② 内容润色：改善描述质量 + 推断关联 */}
@@ -398,23 +414,23 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   ? 'text-slate-400 bg-slate-100 cursor-not-allowed'
                   : 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'
               }`}
-              title="② 内容润色：改善 summary 描述、补充架构洞察、推断 relations 关联、调整 confidence 评分（逐条 AI 精炼，建议在结构补齐之后执行）"
+              title={t('candidates.refineTitle')}
             >
               {refining || isRefining ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              {refining || isRefining ? '润色中...' : '② 内容润色'}
+              {refining || isRefining ? t('common.loading') : t('candidates.aiRefine')}
             </button>
           )}
           {stats && (
             <div className="flex items-center gap-3 text-xs">
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
                 <BarChart3 size={14} className="text-slate-400" />
-                <span className="text-slate-500">共 <strong className="text-slate-700">{stats.total}</strong> 条</span>
+                <span className="text-slate-500">{t('candidates.totalCount', { count: stats.total })}</span>
                 {stats.withCode < stats.total && (
-                  <span className="text-slate-400 ml-1">（含代码 {stats.withCode}）</span>
+                  <span className="text-slate-400 ml-1">{t('candidates.withCode', { count: stats.withCode })}</span>
                 )}
               </div>
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
-                <span className="text-emerald-500">平均置信度</span>
+                <span className="text-emerald-500">{t('candidates.confidence')}</span>
                 <strong className="text-emerald-700">{Math.round(stats.avgConfidence * 100)}%</strong>
               </div>
             </div>
@@ -438,7 +454,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             {targetNames.map((targetName) => {
               const isShell = isShellTarget(targetName);
               const isSilent = isSilentTarget(targetName);
-              const silentLabel = SILENT_LABELS[targetName];
+              const silentLabel = SILENT_LABEL_KEYS[targetName] ? t(SILENT_LABEL_KEYS[targetName]) : undefined;
               const group = data!.candidates[targetName];
               const count = group?.items?.length ?? 0;
               const isSelected = effectiveTarget === targetName;
@@ -456,7 +472,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     const Icon = catCfg?.icon || Box;
                     return <Icon size={ICON_SIZES.sm} className={isSelected ? '' : 'text-slate-400'} />;
                   })()}
-                  <span>{BOOTSTRAP_DIM_LABELS[targetName] || targetName}</span>
+                  <span>{DIM_I18N_KEYS[targetName] ? t(DIM_I18N_KEYS[targetName]) : targetName}</span>
                   {isSilent && silentLabel && <span className="text-[9px] text-amber-600 border border-amber-200 px-1 rounded">{silentLabel}</span>}
                   <span className={`text-[10px] font-normal rounded-full px-1.5 ${isSelected ? 'bg-white/60' : 'bg-slate-200/60 text-slate-400'}`}>{count}</span>
                 </button>
@@ -473,9 +489,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center mb-4">
               <FileSearch size={32} className="text-slate-300" />
             </div>
-            <p className="text-sm font-medium text-slate-500">未发现候选内容</p>
+            <p className="text-sm font-medium text-slate-500">{t('candidates.noResults')}</p>
             <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-slate-400">
-              点击下方按钮冷启动知识库，或使用 CLI 命令手动创建
+              {t('candidates.emptyHint')}
             </p>
             {onColdStart && (
               <button
@@ -488,12 +504,12 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 }`}
               >
                 {isScanning ? <Loader2 size={16} className="animate-spin" /> : <Rocket size={16} />}
-                {isScanning ? '正在初始化...' : '冷启动：初始化知识库'}
+                {isScanning ? t('common.loading') : t('candidates.sourceBootstrap')}
               </button>
             )}
             <p className="mt-3 text-[11px] text-slate-400">
-              或 <code className="text-blue-600 bg-blue-50 px-1 rounded">asd ais --all</code> 全量扫描 ·
-              <code className="text-blue-600 bg-blue-50 px-1 rounded ml-1">asd candidate</code> 从剪贴板创建
+              或 <code className="text-blue-600 bg-blue-50 px-1 rounded">asd ais --all</code> {t('candidates.fullScanBtn')}
+              <code className="text-blue-600 bg-blue-50 px-1 rounded ml-1">asd candidate</code> {t('candidates.clipboardCreate')}
             </p>
           </div>
         )}
@@ -504,9 +520,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             <div className="w-16 h-16 rounded-2xl bg-violet-50 flex items-center justify-center mb-4">
               <Loader2 size={32} className="text-violet-400 animate-spin" />
             </div>
-            <p className="text-sm font-medium text-violet-600">冷启动正在进行中…</p>
+            <p className="text-sm font-medium text-violet-600">{t('common.loading')}</p>
             <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-slate-400">
-              各维度知识正在后台提取并接受 AI 审查，完成后候选内容将自动展示
+              {t('candidates.scanningHint')}
             </p>
           </div>
         )}
@@ -516,7 +532,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
           .map(([targetName, group]) => {
             const isShell = isShellTarget(targetName);
             const isSilent = isSilentTarget(targetName);
-            const silentLabel = SILENT_LABELS[targetName] || '静默';
+            const silentLabel = SILENT_LABEL_KEYS[targetName] ? t(SILENT_LABEL_KEYS[targetName]) : t('candidates.silent');
 
             const pageState = targetPages[targetName] || { page: 1, pageSize: 12 };
             const currentPage = pageState.page;
@@ -566,12 +582,12 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       const Icon = catCfg?.icon || Box;
                       return <Icon size={18} className={catCfg?.color || 'text-blue-600'} />;
                     })()}
-                    <span className="text-base font-bold text-slate-800 truncate">{BOOTSTRAP_DIM_LABELS[targetName] || targetName}</span>
+                    <span className="text-base font-bold text-slate-800 truncate">{DIM_I18N_KEYS[targetName] ? t(DIM_I18N_KEYS[targetName]) : targetName}</span>
                     {isSilent && <span className="text-[10px] font-bold text-amber-600 border border-amber-200 bg-amber-50 px-1.5 py-0.5 rounded">{silentLabel}</span>}
                     {isShell && !isSilent && <span className="text-[10px] font-bold text-slate-400 border border-slate-200 bg-slate-50 px-1.5 py-0.5 rounded">SHELL</span>}
                     <span className="text-[11px] text-slate-400 flex items-center gap-1">
                       <Clock size={11} />
-                      扫描于 {formatDate(group.scanTime) || new Date(group.scanTime).toLocaleString()}
+                      {t('candidates.scannedAt', { time: formatDate(group.scanTime, t) || new Date(group.scanTime).toLocaleString() })}
                     </span>
                   </div>
 
@@ -584,11 +600,11 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         value={filters.sort}
                         onChange={e => setFilters(prev => ({ ...prev, sort: e.target.value as any }))}
                       >
-                        <option value="default">默认排序</option>
-                        <option value="score-desc">综合分 高→低</option>
-                        <option value="score-asc">综合分 低→高</option>
-                        <option value="confidence-desc">置信度 高→低</option>
-                        <option value="date-desc">最新优先</option>
+                        <option value="default">{t('candidates.sortNewest')}</option>
+                        <option value="score-desc">{t('candidates.sortConfidence')} ↓</option>
+                        <option value="score-asc">{t('candidates.sortConfidence')} ↑</option>
+                        <option value="confidence-desc">{t('candidates.confidence')} ↓</option>
+                        <option value="date-desc">{t('candidates.sortOldest')}</option>
                       </select>
                     </div>
                     <label className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50 border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors select-none">
@@ -598,14 +614,14 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         onChange={e => setFilters(prev => ({ ...prev, onlySimilar: e.target.checked }))}
                         className="rounded text-blue-600 w-3 h-3"
                       />
-                      只看相似
+                      {t('candidates.similarOnly')}
                     </label>
                     {(filters.sort !== 'default' || filters.onlySimilar) && (
                       <button
                         onClick={() => setFilters({ sort: 'default', onlySimilar: false })}
                         className="text-[11px] font-medium text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors"
                       >
-                        重置
+                        {t('candidates.resetFilters')}
                       </button>
                     )}
                   </div>
@@ -614,32 +630,32 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
                   {/* 操作按钮 */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-slate-400 font-medium">{totalItems} 条</span>
+                    <span className="text-[11px] text-slate-400 font-medium">{t('candidates.totalCount', { count: totalItems })}</span>
                     <button
                       onClick={() => onAuditAllInTarget(paginatedItems, targetName)}
                       className="text-[11px] font-bold text-blue-600 hover:text-blue-700 px-2.5 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
                     >
-                      当前页进入审核
+                      {t('candidates.approveCurrentPage')}
                     </button>
                     <button
                       onClick={async () => {
-                        if (!window.confirm(`确定移除当前页的 ${paginatedItems.length} 条候选？`)) return;
+                        if (!window.confirm(t('candidates.batchDeleteConfirm', { count: paginatedItems.length }))) return;
                         const results = await Promise.allSettled(
                           paginatedItems.map(item => handleDeleteCandidate(targetName, item.id))
                         );
                         const failed = results.filter(r => r.status === 'rejected').length;
-                        if (failed > 0) notify(`${failed} 条候选移除时出错`, { title: '部分删除失败', type: 'error' });
+                        if (failed > 0) notify(`${failed} ${t('common.deleteFailed')}`, { title: t('common.operationFailed'), type: 'error' });
                         onRefresh?.();
                       }}
                       className="text-[11px] font-bold text-orange-500 hover:text-orange-600 px-2.5 py-1.5 rounded-lg hover:bg-orange-50 transition-colors"
                     >
-                      移除当前页
+                      {t('candidates.removeCurrentPage')}
                     </button>
                     <button
                       onClick={() => handleDeleteAllInTarget(targetName)}
                       className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors border border-red-200"
                     >
-                      全部删除
+                      {t('candidates.deleteAll')}
                     </button>
                   </div>
                 </div>
@@ -654,11 +670,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     const firstRelated = relatedList[0];
                     const similarList = similarityMap[cand.id] || [];
 
-                    const srcInfo = SOURCE_LABELS[cand.source || ''] || { label: cand.source || '', color: 'text-slate-500 bg-slate-50 border-slate-200' };
+                    const srcInfo = SOURCE_LABEL_KEYS[cand.source || ''] || { labelKey: cand.source || '', color: 'text-slate-500 bg-slate-50 border-slate-200' };
                     const candCatCfg = categoryConfigs[cand.category || ''] || categoryConfigs['All'] || {};
 
-                    // 类别颜色用于左侧色条
-                    const strongAccent = (candCatCfg?.color || 'text-blue-600').replace('text-', 'border-l-');
+
 
                     return (
                       <div
@@ -668,8 +683,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                           ${isShell ? 'opacity-75' : ''}
                           ${isExpanded ? 'ring-2 ring-blue-300 border-blue-300 shadow-md' : 'border-slate-200 hover:border-slate-300'}`}
                       >
-                        {/* ── 卡片头部：类别色条 + 标题 + 置信度 ── */}
-                        <div className={`border-l-[4px] ${strongAccent} px-4 pt-3.5 pb-2`}>
+                        {/* ── 卡片头部：标题 + 置信度 ── */}
+                        <div className="px-4 pt-3.5 pb-2">
                           <div className="flex items-start justify-between gap-3">
                             {/* 左：标题 & 标签 */}
                             <div className="flex-1 min-w-0">
@@ -689,7 +704,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                 )}
                                 {cand.source && cand.source !== 'unknown' && (
                                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${srcInfo.color}`}>
-                                    {srcInfo.label}
+                                    {srcInfo.labelKey.startsWith('candidates.') ? t(srcInfo.labelKey) : srcInfo.labelKey}
                                   </span>
                                 )}
                                 {cand.complexity && (
@@ -697,7 +712,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                     ${cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' :
                                       cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' :
                                         'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                                    {cand.complexity === 'advanced' ? '高级' : cand.complexity === 'intermediate' ? '中级' : '初级'}
+                                    {cand.complexity === 'advanced' ? t('candidates.confidenceHigh') : cand.complexity === 'intermediate' ? t('candidates.confidenceMedium') : t('candidates.confidenceLow')}
                                   </span>
                                 )}
                               </div>
@@ -712,7 +727,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             {/* 右：置信度环 + 操作 */}
                             <div className="flex flex-col items-center gap-1 shrink-0">
                               <ConfidenceRing value={confidence} />
-                              <span className="text-[9px] text-slate-400 font-medium">置信度</span>
+                              <span className="text-[9px] text-slate-400 font-medium">{t('candidates.confidence')}</span>
                             </div>
                           </div>
                         </div>
@@ -735,7 +750,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             {overall != null && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                                 <CheckCircle2 size={10} />
-                                综合 {(overall * 100).toFixed(0)}%
+                                {t('candidates.overallScore', { score: (overall * 100).toFixed(0) + '%' })}
                               </span>
                             )}
                             {firstRelated && (
@@ -746,10 +761,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                   if (name) openCompare(cand, targetName, name, similarList);
                                 }}
                                 className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center gap-1"
-                                title="点击对比相似 Recipe"
+                                title={t('candidates.viewDetail')}
                               >
                                 <GitCompare size={10} />
-                                相似 {titleLookup.get(String(firstRelated.target || '')) || String(firstRelated.target || '').replace(/\.md$/i, '')}
+                                {t('candidates.similarPrefix')} {titleLookup.get(String(firstRelated.target || '')) || String(firstRelated.target || '').replace(/\.md$/i, '')}
                               </button>
                             )}
                           </div>
@@ -763,7 +778,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                 <Code2 size={11} className="text-slate-500" />
                                 <span className="text-[10px] text-slate-400 font-mono uppercase tracking-wide">{cand.language || 'code'}</span>
                               </div>
-                              <span className="text-[10px] text-slate-500 font-mono tabular-nums">{cand.content.pattern.split('\n').length} 行</span>
+                              <span className="text-[10px] text-slate-500 font-mono tabular-nums">{t('candidates.linesCount', { count: cand.content.pattern.split('\n').length })}</span>
                             </div>
                             <div className="relative max-h-[80px] overflow-hidden">
                               <CodeBlock
@@ -779,7 +794,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         )}
 
                         {/* ── 卡片底栏：元信息 + 操作 ── */}
-                        <div className="flex justify-between items-center px-4 py-2.5 border-t border-slate-100 bg-slate-50/50 mt-auto" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center px-4 py-2.5 border-t border-slate-100 bg-slate-50/50 dark:bg-[#252a36] dark:border-slate-700 mt-auto" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
                             {/* trigger */}
                             {cand.trigger && (
@@ -800,10 +815,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             )}
 
                             {/* 日期 */}
-                            {cand.createdAt && formatDate(cand.createdAt) && (
+                            {cand.createdAt && formatDate(cand.createdAt, t) && (
                               <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
                                 <Clock size={9} />
-                                {formatDate(cand.createdAt)}
+                                {formatDate(cand.createdAt, t)}
                               </span>
                             )}
                           </div>
@@ -812,7 +827,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             <button
                               onClick={() => handleEnrichCandidate(cand.id)}
                               disabled={enrichingIds.has(cand.id)}
-                              title="① 结构补齐：填充缺失的语义字段（rationale / knowledgeType / complexity 等）"
+                              title={t('candidates.enrichTitleSingle')}
                               className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-medium ${
                                 enrichingIds.has(cand.id)
                                   ? 'text-slate-300 cursor-not-allowed'
@@ -824,7 +839,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             <button
                               onClick={() => handleRefineSingle(cand.id)}
                               disabled={refiningIds.has(cand.id)}
-                              title="② 内容润色：改善描述、补充洞察、推断关联（支持自定义提示词）"
+                              title={t('candidates.refineTitleSingle')}
                               className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-medium ${
                                 refiningIds.has(cand.id)
                                   ? 'text-slate-300 cursor-not-allowed'
@@ -835,7 +850,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             </button>
                             <button
                               onClick={() => { handleDeleteCandidate(targetName, cand.id); if (expandedId === cand.id) { setExpandedId(null); setCompareModal(null); } }}
-                              title="忽略"
+                              title={t('common.delete')}
                               className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
                             >
                               <Trash2 size={14} />
@@ -844,23 +859,23 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                               onClick={() => onAuditCandidate(cand, targetName)}
                               className="text-[11px] font-bold text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors flex items-center gap-1"
                             >
-                              <Edit3 size={12} /> 审核并保存
+                              <Edit3 size={12} /> {t('candidates.approveAndSave')}
                             </button>
                             {cand.lifecycle === 'pending' && (
                               <button
                                 onClick={async () => {
                                   try {
                                     await api.promoteCandidateToRecipe(cand.id);
-                                    notify('已成功发布为正式 Recipe', { title: '发布成功' });
+                                    notify(t('candidates.approveSuccess'), { title: t('candidates.approveSuccess') });
                                     onRefresh?.();
                                   } catch (err: any) {
-                                    notify(err.message, { title: '发布失败', type: 'error' });
+                                    notify(err.message, { title: t('common.operationFailed'), type: 'error' });
                                   }
                                 }}
                                 className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-colors flex items-center gap-1"
-                                title="一键发布为 Recipe"
+                                title={t('candidates.approve')}
                               >
-                                <Rocket size={12} /> 发布
+                                <Rocket size={12} /> {t('candidates.approve')}
                               </button>
                             )}
                           </div>
@@ -907,7 +922,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
         const similar = similarityMap[cand.id] || [];
         const isLoadingSimilar = similarityLoading === cand.id;
         const candCatCfg = categoryConfigs[cand.category || ''] || categoryConfigs['All'] || {};
-        const srcInfo = SOURCE_LABELS[cand.source || ''] || { label: cand.source || '', color: 'text-slate-500 bg-slate-50 border-slate-200' };
+        const srcInfo = SOURCE_LABEL_KEYS[cand.source || ''] || { labelKey: cand.source || '', color: 'text-slate-500 bg-slate-50 border-slate-200' };
 
         return (
           <PageOverlay className="z-30 flex justify-end" onClick={() => { setExpandedId(null); setCompareModal(null); }}>
@@ -922,13 +937,13 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               const copyCandidate = () => {
                 const parts = [];
                 if (compareCand.content?.pattern) parts.push('## Snippet / Code Reference\n\n```' + (compareCandLang || '') + '\n' + compareCand.content.pattern + '\n```');
-                if (compareCand.content?.markdown) parts.push('\n## 项目特写\n\n' + compareCand.content.markdown);
+                if (compareCand.content?.markdown) parts.push('\n## ' + t('candidates.projectProfile') + '\n\n' + compareCand.content.markdown);
                 else if (compareCand.doClause) parts.push('\n## AI Context / Usage Guide\n\n' + compareCand.doClause);
-                navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify('候选内容已复制到剪贴板', { title: '已复制' }));
+                navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify(t('common.copied'), { title: t('common.copied') }));
               };
               const copyRecipe = () => {
                 const text = stripFrontmatter(compareModal.recipeContent);
-                navigator.clipboard.writeText(text).then(() => notify('Recipe 内容已复制到剪贴板', { title: '已复制' }));
+                navigator.clipboard.writeText(text).then(() => notify(t('common.copied'), { title: t('common.copied') }));
               };
               const switchToRecipe = async (newName: string) => {
                 if (newName === compareModal.recipeName) return;
@@ -949,12 +964,12 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 }
               };
               const handleCompareDelete = async () => {
-                if (!window.confirm('确定删除该候选？')) return;
+                if (!window.confirm(t('common.areYouSure'))) return;
                 try {
                   await handleDeleteCandidate(compareModal.targetName, compareCand.id);
                   setCompareModal(null);
                 } catch (err: any) {
-                  notify(err?.message || '删除失败', { title: '删除失败', type: 'error' });
+                  notify(err?.message || t('common.deleteFailed'), { title: t('common.deleteFailed'), type: 'error' });
                 }
               };
               const handleCompareAudit = () => {
@@ -969,24 +984,24 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               };
               return (
                 <div
-                  className={`relative h-full bg-white shadow-2xl flex flex-col border-l border-slate-200 ${drawerWide ? 'w-[800px] max-w-[55vw]' : 'w-[600px] max-w-[45vw]'}`}
+                  className={`relative h-full bg-white dark:bg-[#1e1e1e] shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-700 ${drawerWide ? 'w-[800px] max-w-[55vw]' : 'w-[600px] max-w-[45vw]'}`}
                   style={{ animation: 'slideInRight 0.2s ease-out' }}
                   onClick={e => e.stopPropagation()}
                 >
                   {/* 对比面板头部 */}
-                  <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 shrink-0 bg-emerald-50/60">
+                  <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 shrink-0 bg-emerald-50/60 dark:bg-emerald-900/20">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                         <GitCompare size={16} className="text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-sm text-emerald-800 truncate">Recipe 对比</h3>
+                        <h3 className="font-bold text-sm text-emerald-800 truncate">{t('candidates.recipeCompare')}</h3>
                         <span className="text-[11px] text-emerald-600 truncate block">{compareModal.recipeName.replace(/\.md$/i, '')}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      <button onClick={() => copyRecipe()} className="p-1.5 hover:bg-emerald-100 rounded-lg text-emerald-600 transition-colors" title="复制"><Copy size={14} /></button>
-                      <button onClick={handleCompareEditRecipe} className="text-[11px] font-medium text-emerald-600 hover:bg-emerald-100 px-2 py-1.5 rounded-lg transition-colors">审核 Recipe</button>
+                      <button onClick={() => copyRecipe()} className="p-1.5 hover:bg-emerald-100 rounded-lg text-emerald-600 transition-colors" title={t('common.copy')}><Copy size={14} /></button>
+                      <button onClick={handleCompareEditRecipe} className="text-[11px] font-medium text-emerald-600 hover:bg-emerald-100 px-2 py-1.5 rounded-lg transition-colors">{t('candidates.approveAndSave')}</button>
                       <button onClick={() => setCompareModal(null)} className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400">
                         <X size={16} />
                       </button>
@@ -1011,13 +1026,13 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   {/* 操作栏 */}
                   <div className="flex items-center gap-1.5 px-5 py-2 border-b border-slate-100 bg-white shrink-0">
                     <button onClick={handleCompareDelete} className="text-xs font-medium text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1">
-                      <Trash2 size={12} /> 删除候选
+                      <Trash2 size={12} /> {t('common.delete')}
                     </button>
                     <button onClick={handleCompareAudit} className="text-xs font-medium text-blue-600 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1">
-                      <Edit3 size={12} /> 审核候选
+                      <Edit3 size={12} /> {t('candidates.approveAndSave')}
                     </button>
                     <button onClick={() => copyCandidate()} className="text-xs font-medium text-slate-500 hover:bg-slate-50 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1">
-                      <Copy size={12} /> 复制候选
+                      <Copy size={12} /> {t('common.copy')}
                     </button>
                   </div>
 
@@ -1030,24 +1045,24 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             })()}
 
             <div
-              className={`relative h-full bg-white shadow-2xl flex flex-col border-l border-slate-200 ${drawerWide ? 'w-[960px] max-w-[92vw]' : 'w-[700px] max-w-[92vw]'}`}
+              className={`relative h-full bg-white dark:bg-[#1e1e1e] shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-700 ${drawerWide ? 'w-[960px] max-w-[92vw]' : 'w-[700px] max-w-[92vw]'}`}
               style={{ animation: 'slideInRight 0.25s ease-out' }}
               onClick={e => e.stopPropagation()}
             >
               {/* ── 面板头部 ── */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-gradient-to-b from-white to-slate-50/50 shrink-0">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-b from-white to-slate-50/50 dark:from-[#252526] dark:to-[#1e1e1e] shrink-0">
                 <div className="flex-1 min-w-0 mr-3">
                   <h3 className="font-bold text-slate-800 text-lg leading-snug break-words">{cand.title}</h3>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={goToPrev} disabled={!hasPrev} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title="上一条"><ChevronLeft size={ICON_SIZES.md} /></button>
+                  <button onClick={goToPrev} disabled={!hasPrev} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title={t('common.back')}><ChevronLeft size={ICON_SIZES.md} /></button>
                   <span className="text-xs text-slate-400 tabular-nums">{currentIndex + 1}/{allItems.length}</span>
-                  <button onClick={goToNext} disabled={!hasNext} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title="下一条"><ChevronRight size={ICON_SIZES.md} /></button>
+                  <button onClick={goToNext} disabled={!hasNext} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title={t('common.more')}><ChevronRight size={ICON_SIZES.md} /></button>
                   <div className="w-px h-5 bg-slate-200 mx-1" />
-                  <button onClick={toggleDrawerWide} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400" title={drawerWide ? '收窄' : '展宽'}>
+                  <button onClick={toggleDrawerWide} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400" title={drawerWide ? t('common.collapse') : t('common.expand')}>
                     {drawerWide ? <Minimize2 size={ICON_SIZES.md} /> : <Maximize2 size={ICON_SIZES.md} />}
                   </button>
-                  <button onClick={() => { handleDeleteCandidate(effectiveTarget!, cand.id); setExpandedId(null); setCompareModal(null); }} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title="删除"><Trash2 size={ICON_SIZES.md} /></button>
+                  <button onClick={() => { handleDeleteCandidate(effectiveTarget!, cand.id); setExpandedId(null); setCompareModal(null); }} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title={t('common.delete')}><Trash2 size={ICON_SIZES.md} /></button>
                   <button onClick={() => { setExpandedId(null); setCompareModal(null); }} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><X size={ICON_SIZES.md} /></button>
                 </div>
               </div>
@@ -1069,13 +1084,13 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     )}
                     {cand.complexity && (
                       <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                        {cand.complexity === 'advanced' ? '高级' : cand.complexity === 'intermediate' ? '中级' : '初级'}
+                        {cand.complexity === 'advanced' ? t('candidates.confidenceHigh') : cand.complexity === 'intermediate' ? t('candidates.confidenceMedium') : t('candidates.confidenceLow')}
                       </span>
                     )}
                     {cand.trigger && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold">{cand.trigger}</span>}
                     {cand.source && cand.source !== 'unknown' && (
                       <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${srcInfo.color}`}>
-                        {srcInfo.label}
+                        {srcInfo.labelKey.startsWith('candidates.') ? t(srcInfo.labelKey) : srcInfo.labelKey}
                       </span>
                     )}
                     {cand.lifecycle && cand.lifecycle !== 'pending' && (
@@ -1085,9 +1100,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
                     {(() => {
                       const items: { icon: React.ElementType; iconClass: string; label: string; value: string; mono?: boolean }[] = [];
-                      if (cand.scope) items.push({ icon: Globe, iconClass: 'text-teal-400', label: '范围', value: cand.scope === 'universal' ? '通用' : cand.scope === 'project-specific' ? '项目级' : cand.scope === 'module-level' ? '模块级' : cand.scope });
-                      if (cand.source && cand.source !== 'unknown') items.push({ icon: Globe, iconClass: 'text-violet-400', label: '来源', value: srcInfo.label });
-                      if (cand.createdAt && formatDate(cand.createdAt)) items.push({ icon: Clock, iconClass: 'text-slate-400', label: '创建', value: formatDate(cand.createdAt) });
+                      if (cand.scope) items.push({ icon: Globe, iconClass: 'text-teal-400', label: t('candidates.path'), value: cand.scope === 'universal' ? t('common.all') : cand.scope === 'project-specific' ? t('candidates.category') : cand.scope === 'module-level' ? t('candidates.category') : cand.scope });
+                      if (cand.source && cand.source !== 'unknown') items.push({ icon: Globe, iconClass: 'text-violet-400', label: t('candidates.source'), value: srcInfo.labelKey.startsWith('candidates.') ? t(srcInfo.labelKey) : srcInfo.labelKey });
+                      if (cand.createdAt && formatDate(cand.createdAt, t)) items.push({ icon: Clock, iconClass: 'text-slate-400', label: t('candidates.createdAt'), value: formatDate(cand.createdAt, t) });
                       return items.map((item, i) => {
                         const Icon = item.icon;
                         return (
@@ -1117,7 +1132,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 {/* 3. Description / Summary */}
                 {cand.description && (
                   <div className="px-6 py-4 border-b border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">摘要</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('candidates.description')}</label>
                     <p className="text-sm text-slate-600 leading-relaxed">{cand.description}</p>
                   </div>
                 )}
@@ -1126,15 +1141,15 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 {hasReasoning && (
                   <div className="px-6 py-4 border-b border-slate-100">
                     <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                      <Lightbulb size={11} className="text-amber-400" /> 推理依据
+                      <Lightbulb size={11} className="text-amber-400" /> {t('knowledge.reasoning')}
                     </label>
-                    <div className="bg-amber-50/30 border border-amber-100 rounded-xl p-4 space-y-2.5">
+                    <div className="bg-amber-50/30 dark:bg-amber-900/15 border border-amber-100 dark:border-amber-800/40 rounded-xl p-4 space-y-2.5">
                       {r!.whyStandard && !/^Submitted via /i.test(r!.whyStandard) && (
                         <p className="text-sm text-slate-700 leading-relaxed">{r!.whyStandard}</p>
                       )}
                       {r!.sources && r!.sources.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-[10px] text-slate-400 font-bold">来源:</span>
+                          <span className="text-[10px] text-slate-400 font-bold">{t('candidates.source')}:</span>
                           {r!.sources.map((src: string, i: number) => (
                             <code key={i} className="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-700 font-mono">{src}</code>
                           ))}
@@ -1142,7 +1157,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       )}
                       {r!.confidence != null && r!.confidence > 0 && (
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-400 font-bold">置信度:</span>
+                          <span className="text-[10px] text-slate-400 font-bold">{t('candidates.confidence')}:</span>
                           <div className="flex-1 max-w-[160px] h-1.5 bg-slate-200 rounded-full overflow-hidden">
                             <div
                               className="h-full bg-amber-400 rounded-full"
@@ -1154,7 +1169,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       )}
                       {r!.alternatives && r!.alternatives.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                          <span className="text-[10px] text-slate-400 font-bold">备选:</span>
+                          <span className="text-[10px] text-slate-400 font-bold">{t('candidates.viewDetail')}:</span>
                           {r!.alternatives.map((alt: string, i: number) => (
                             <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600">{alt}</span>
                           ))}
@@ -1167,7 +1182,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 {/* 5. Quality — 质量评级 */}
                 {cand.quality && cand.quality.grade && cand.quality.grade !== 'F' && (
                   <div className="px-6 py-3 border-b border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">质量评级</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('candidates.qualityDimensions')}</label>
                     <div className="flex items-center gap-4">
                       <span className={`text-2xl font-black ${
                         cand.quality.grade === 'A' ? 'text-emerald-600' :
@@ -1179,19 +1194,19 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         {cand.quality.completeness != null && cand.quality.completeness > 0 && (
                           <div className="text-center">
                             <div className="font-bold text-slate-700">{cand.quality.completeness}</div>
-                            <div className="text-slate-400">完整性</div>
+                            <div className="text-slate-400">{t('candidates.qualityDimensions')}</div>
                           </div>
                         )}
                         {cand.quality.adaptation != null && cand.quality.adaptation > 0 && (
                           <div className="text-center">
                             <div className="font-bold text-slate-700">{cand.quality.adaptation}</div>
-                            <div className="text-slate-400">适配度</div>
+                            <div className="text-slate-400">{t('candidates.qualityDimensions')}</div>
                           </div>
                         )}
                         {cand.quality.documentation != null && cand.quality.documentation > 0 && (
                           <div className="text-center">
                             <div className="font-bold text-slate-700">{cand.quality.documentation}</div>
-                            <div className="text-slate-400">文档度</div>
+                            <div className="text-slate-400">{t('candidates.qualityDimensions')}</div>
                           </div>
                         )}
                       </div>
@@ -1207,18 +1222,18 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   return (
                     <div className="px-6 py-4 border-b border-slate-100">
                       <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                        <Sparkles size={11} className="text-emerald-400" /> 润色增强信息
+                        <Sparkles size={11} className="text-emerald-400" /> {t('candidates.refineEnhanced')}
                       </label>
-                      <div className="bg-emerald-50/30 border border-emerald-100 rounded-xl p-4 space-y-2.5 text-xs">
+                      <div className="bg-emerald-50/30 dark:bg-emerald-900/15 border border-emerald-100 dark:border-emerald-800/40 rounded-xl p-4 space-y-2.5 text-xs">
                         {cand.aiInsight && (
                           <div>
-                            <span className="text-[10px] text-slate-400 font-bold">架构洞察:</span>
+                            <span className="text-[10px] text-slate-400 font-bold">{t('candidates.viewDetail')}:</span>
                             <p className="text-sm text-slate-700 leading-relaxed mt-0.5">{cand.aiInsight}</p>
                           </div>
                         )}
                         {cand.agentNotes && cand.agentNotes.length > 0 && (
                           <div>
-                            <span className="text-[10px] text-slate-400 font-bold">Agent 笔记:</span>
+                            <span className="text-[10px] text-slate-400 font-bold">{t('candidates.agentNotes')}</span>
                             <ul className="mt-1 space-y-0.5">
                               {cand.agentNotes.map((note: string, i: number) => (
                                 <li key={i} className="flex items-start gap-1.5 text-slate-600">
@@ -1230,7 +1245,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         )}
                         {allRelations.length > 0 && (
                           <div>
-                            <span className="text-[10px] text-slate-400 font-bold">关联关系:</span>
+                            <span className="text-[10px] text-slate-400 font-bold">{t('recipes.relations')}:</span>
                             <div className="mt-1 space-y-1">
                               {allRelations.map((rel: any, i: number) => (
                                 <div key={i} className="flex items-start gap-1.5 text-slate-600">
@@ -1249,26 +1264,25 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   );
                 })()}
 
-                {/* 7. 相似 Recipe */}
-                {(similar.length > 0 || isLoadingSimilar) && (
+                {/* 7. 相似 Recipe — 仅在有结果时渲染，避免 loading 态导致布局跳动 */}
+                {similar.length > 0 && (
                   <div className="px-6 py-3 border-b border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">相似 Recipe</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                      {t('candidates.similarRecipe')}
+                      {isLoadingSimilar && <span className="text-[10px] text-slate-400 animate-pulse">{t('common.loading')}</span>}
+                    </label>
                     <div className="flex flex-wrap gap-1.5">
-                      {isLoadingSimilar ? (
-                        <span className="text-[10px] text-slate-400 animate-pulse">加载中...</span>
-                      ) : (
-                        similar.slice(0, 5).map(s => (
-                          <button
-                            key={s.recipeName}
-                            onClick={() => openCompare(cand, effectiveTarget!, s.recipeName, similar)}
-                            className="text-[10px] font-bold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center gap-1"
-                            title={`与 ${s.recipeName} 相似 ${(s.similarity * 100).toFixed(0)}%`}
-                          >
-                            <GitCompare size={10} />
-                            {s.recipeName.replace(/\.md$/i, '')} {(s.similarity * 100).toFixed(0)}%
-                          </button>
-                        ))
-                      )}
+                      {similar.slice(0, 5).map(s => (
+                        <button
+                          key={s.recipeName}
+                          onClick={() => openCompare(cand, effectiveTarget!, s.recipeName, similar)}
+                          className="text-[10px] font-bold px-2 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center gap-1"
+                          title={t('candidates.similarWith', { name: s.recipeName, score: (s.similarity * 100).toFixed(0) })}
+                        >
+                          <GitCompare size={10} />
+                          {s.recipeName.replace(/\.md$/i, '')} {(s.similarity * 100).toFixed(0)}%
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1277,7 +1291,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 {cand.content?.pattern && (
                   <div className="px-6 py-4 border-b border-slate-100">
                     <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                      <FileCode size={11} className="text-emerald-500" /> 代码 / 标准用法
+                      <FileCode size={11} className="text-emerald-500" /> {t('knowledge.codePattern')}
                     </label>
                     <CodeBlock code={cand.content.pattern} language={cand.language === 'objc' ? 'objectivec' : cand.language} showLineNumbers />
                   </div>
@@ -1287,10 +1301,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 {cand.content?.markdown && (
                   <div className="px-6 py-4 border-b border-slate-100">
                     <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                      <FileText size={11} className="text-blue-400" /> Markdown 文档
+                      <FileText size={11} className="text-blue-400" /> {t('knowledge.markdownDoc')}
                     </label>
-                    <div className="bg-blue-50/30 border border-blue-100 rounded-xl p-4">
-                      <div className="markdown-body text-sm text-slate-700 leading-relaxed">
+                    <div className="bg-blue-50/30 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-800/40 rounded-xl p-4">
+                      <div className="markdown-body text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                         <MarkdownWithHighlight content={cand.content.markdown} />
                       </div>
                     </div>
@@ -1303,7 +1317,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
                       <Layers size={11} className="text-indigo-400" /> Cursor Delivery
                     </label>
-                    <div className="bg-indigo-50/30 border border-indigo-100 rounded-xl p-4 text-xs space-y-1.5">
+                    <div className="bg-indigo-50/30 dark:bg-indigo-900/15 border border-indigo-100 dark:border-indigo-800/40 rounded-xl p-4 text-xs space-y-1.5">
                       {cand.topicHint && <div><span className="text-indigo-500 font-medium">Topic：</span><span className="text-slate-700">{cand.topicHint}</span></div>}
                       {cand.whenClause && <div><span className="text-blue-500 font-medium">When：</span><span className="text-slate-700">{cand.whenClause}</span></div>}
                       {cand.doClause && <div><span className="text-emerald-500 font-medium">Do：</span><span className="text-slate-700">{cand.doClause}</span></div>}
@@ -1312,7 +1326,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         <div>
                           <span className="text-purple-500 font-medium">Core Code：</span>
                           <div className="mt-1">
-                            <CodeBlock code={cand.coreCode} language={cand.language === 'objectivec' || cand.language === 'objc' ? 'objectivec' : (cand.language || 'swift')} />
+                            <CodeBlock code={cand.coreCode} language={cand.language === 'objectivec' || cand.language === 'objc' ? 'objectivec' : (cand.language || 'text')} />
                           </div>
                         </div>
                       )}
@@ -1326,7 +1340,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     {/* Rationale */}
                     {cand.content?.rationale && (
                       <div className="px-6 py-4 border-b border-slate-100">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">设计原理</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('candidates.rationale')}</label>
                         <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                           <p className="text-sm text-slate-600 leading-relaxed">{cand.content.rationale}</p>
                         </div>
@@ -1336,7 +1350,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     {/* Headers */}
                     {cand.headers && cand.headers.length > 0 && (
                       <div className="px-6 py-3 border-b border-slate-100">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">导入头文件</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('candidates.headers')}</label>
                         <div className="flex flex-wrap gap-1.5">
                           {cand.headers.map((h: string, i: number) => (
                             <code key={i} className="px-2.5 py-1 bg-violet-50 text-violet-700 border border-violet-100 rounded-md text-[10px] font-mono font-medium">{h}</code>
@@ -1348,7 +1362,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     {/* Steps */}
                     {cand.content?.steps && cand.content.steps.length > 0 && (
                       <div className="px-6 py-4 border-b border-slate-100">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">实施步骤</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.steps')}</label>
                         <div className="space-y-2">
                           {cand.content.steps.map((step: any, i: number) => {
                             if (typeof step === 'string') {
@@ -1381,36 +1395,36 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               </div>
 
               {/* ── 面板底部操作栏 ── */}
-              <div className="shrink-0 border-t border-slate-200 px-5 py-3 bg-gradient-to-b from-slate-50/80 to-white flex items-center justify-between">
+              <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 px-5 py-3 bg-gradient-to-b from-slate-50/80 to-white dark:from-[#252526] dark:to-[#1e1e1e] flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleEnrichCandidate(cand.id)}
                     disabled={enrichingIds.has(cand.id)}
-                    title="① 结构补齐"
+                    title={t('candidates.enrichTitleBottom')}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                       enrichingIds.has(cand.id) ? 'text-slate-300 cursor-not-allowed' : 'text-amber-600 hover:bg-amber-50 border border-amber-200'
                     }`}
                   >
                     {enrichingIds.has(cand.id) ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-                    补齐
+                    {t('candidates.enrichShort')}
                   </button>
                   <button
                     onClick={() => handleRefineSingle(cand.id)}
                     disabled={refiningIds.has(cand.id)}
-                    title="② 内容润色"
+                    title={t('candidates.refineTitleBottom')}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                       refiningIds.has(cand.id) ? 'text-slate-300 cursor-not-allowed' : 'text-emerald-600 hover:bg-emerald-50 border border-emerald-200'
                     }`}
                   >
                     {refiningIds.has(cand.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                    润色
+                    {t('candidates.refineShort')}
                   </button>
                   <button
                     onClick={() => { handleDeleteCandidate(effectiveTarget!, cand.id); setExpandedId(null); setCompareModal(null); }}
-                    title="忽略"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 border border-red-200 transition-colors"
+                    title={t('common.delete')}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 border border-red-200 transition-colors`}
                   >
-                    <Trash2 size={14} /> 删除
+                    <Trash2 size={14} /> {t('common.delete')}
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1419,22 +1433,22 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       onClick={async () => {
                         try {
                           await api.promoteCandidateToRecipe(cand.id);
-                          notify('已成功发布为正式 Recipe', { title: '发布成功' });
+                          notify(t('candidates.approveSuccess'), { title: t('candidates.approveSuccess') });
                           onRefresh?.();
                         } catch (err: any) {
-                          notify(err.message, { title: '发布失败', type: 'error' });
+                          notify(err.message, { title: t('common.operationFailed'), type: 'error' });
                         }
                       }}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors"
                     >
-                      <Rocket size={14} /> 发布
+                      <Rocket size={14} /> {t('candidates.approve')}
                     </button>
                   )}
                   <button
                     onClick={() => { onAuditCandidate(cand, effectiveTarget!); setExpandedId(null); setCompareModal(null); }}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm"
                   >
-                    <Edit3 size={14} /> 审核并保存
+                    <Edit3 size={14} /> {t('candidates.approveAndSave')}
                   </button>
                 </div>
               </div>

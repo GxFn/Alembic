@@ -210,6 +210,7 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
             paddingRight: '0.75em',
             paddingBottom: '1rem',
             borderRadius: '0',
+            borderRight: '1px solid #333842',
           }}
         >
           <VirtualLineNumbers
@@ -252,7 +253,7 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
           onScroll={handleScroll}
           rows={rows}
           placeholder={placeholder}
-          className="absolute inset-0 w-full h-full resize-none outline-none"
+          className="absolute inset-0 w-full h-full resize-none outline-none editor-with-dark-scrollbar"
           style={{
             padding: editorStyles.padding,
             lineHeight: editorStyles.lineHeight,
@@ -266,6 +267,7 @@ const HighlightedCodeEditor: React.FC<HighlightedCodeEditorProps> = ({
             border: 'none',
             margin: 0,
             overflow: 'auto',
+            overflowX: 'hidden',
             WebkitAppearance: 'none',
             appearance: 'none' as const,
             boxSizing: 'border-box',

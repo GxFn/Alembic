@@ -8,6 +8,7 @@ import {
 import api from '../../api';
 import { notify } from '../../utils/notification';
 import PageOverlay from '../Shared/PageOverlay';
+import { useI18n } from '../../i18n';
 
 /* ═══════════════════════════════════════════════════════
  *  Types
@@ -35,10 +36,10 @@ interface SkillDetail {
 
 /** createdBy 标签配置 */
 const CREATED_BY_CONFIG: Record<string, { label: string; color: string; icon: typeof Bot }> = {
-  'manual':      { label: '手动',     color: 'bg-slate-100 text-slate-600',   icon: User },
-  'user-ai':     { label: 'AI 协助',  color: 'bg-violet-100 text-violet-600', icon: Sparkles },
-  'system-ai':   { label: '自动',     color: 'bg-amber-100 text-amber-600',   icon: Cpu },
-  'external-ai': { label: '外部 AI',  color: 'bg-cyan-100 text-cyan-600',     icon: Bot },
+  'manual':      { label: 'manual',     color: 'bg-slate-100 text-slate-600',   icon: User },
+  'user-ai':     { label: 'user-ai',  color: 'bg-violet-100 text-violet-600', icon: Sparkles },
+  'system-ai':   { label: 'system-ai',     color: 'bg-amber-100 text-amber-600',   icon: Cpu },
+  'external-ai': { label: 'external-ai',  color: 'bg-cyan-100 text-cyan-600',     icon: Bot },
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -52,6 +53,7 @@ interface SkillsViewProps {
 }
 
 const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCount = 0, onSuggestionCountChange }) => {
+  const { t } = useI18n();
   const [skills, setSkills] = useState<SkillItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSkill, setSelectedSkill] = useState<SkillDetail | null>(null);
@@ -81,7 +83,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       // Skills 路由可能未注册 — 静默处理 404
       const status = err.response?.status;
       if (status !== 404) {
-        notify(err.message || '', { title: '获取 Skills 列表失败', type: 'error' });
+        notify(err.message || '', { title: t('skills.fetchFailed'), type: 'error' });
       }
       setSkills([]);
     } finally {
@@ -104,7 +106,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       const data = await api.loadSkill(name);
       setSelectedSkill(data);
     } catch (err: any) {
-      notify(`"${name}" 不存在或读取出错`, { title: '加载 Skill 失败', type: 'error' });
+      notify(`"${name}" ${t('skills.loadError')}`, { title: t('skills.loadSkillFailed'), type: 'error' });
     } finally {
       setLoadingDetail(false);
     }
@@ -137,13 +139,13 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
     setSavingSkill(true);
     try {
       await api.updateSkill(selectedSkill.skillName, { content: editContent });
-      notify('已保存', { title: `Skill "${selectedSkill.skillName}" 更新成功` });
+      notify(t('skills.saveSuccess'), { title: `Skill "${selectedSkill.skillName}" ${t('skills.updateSuccess')}` });
       setEditing(false);
       // Reload detail
       const data = await api.loadSkill(selectedSkill.skillName);
       setSelectedSkill(data);
     } catch (err: any) {
-      notify(err.message || '', { title: '更新 Skill 失败', type: 'error' });
+      notify(err.message || '', { title: t('skills.updateFailed'), type: 'error' });
     } finally {
       setSavingSkill(false);
     }
@@ -155,14 +157,14 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
     setDeleting(true);
     try {
       await api.deleteSkill(selectedSkill.skillName);
-      notify('已删除', { title: `Skill "${selectedSkill.skillName}" 删除成功` });
+      notify(t('skills.deleteSuccess'), { title: `Skill "${selectedSkill.skillName}" ${t('skills.deleteSuccess')}` });
       setSelectedSkill(null);
       setConfirmDelete(false);
       setEditing(false);
       fetchSkills();
       onRefresh?.();
     } catch (err: any) {
-      notify(err.message || '', { title: '删除 Skill 失败', type: 'error' });
+      notify(err.message || '', { title: t('skills.deleteFailed'), type: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -192,7 +194,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       // 同步角标数量为实际推荐数
       onSuggestionCountChange?.(list.length);
     } catch (err: any) {
-      notify(err.message || '', { title: '获取 Skill 推荐失败', type: 'error' });
+      notify(err.message || '', { title: t('skills.aiRecommendFailed'), type: 'error' });
       setSuggestions([]);
       onSuggestionCountChange?.(0);
     } finally {
@@ -214,7 +216,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
     try {
       // 使用 AI 生成 Skill 内容
       const desc = suggestion.description || suggestion.rationale || suggestion.name;
-      const prompt = `请为以下场景创建一个 Skill 文档：\n\n名称：${suggestion.name}\n描述：${desc}\n推荐原因：${suggestion.rationale}\n\n请直接生成 Skill 正文内容（Markdown 格式），不需要 frontmatter，不需要输出 JSON 元数据。内容应该详细、实用，包含具体的操作指南和示例。`;
+      const prompt = `${t('skillsView.aiPromptPrefix')}\n\n名称：${suggestion.name}\n描述：${desc}\n推荐原因：${suggestion.rationale}\n\n请直接生成 Skill 正文内容（Markdown 格式），不需要 frontmatter，不需要输出 JSON 元数据。内容应该详细、实用，包含具体的操作指南和示例。`;
       const aiResult = await api.aiGenerateSkill(prompt);
       let content = aiResult.reply || suggestion.body || `# ${desc}\n\n${suggestion.rationale || ''}`;
       // 剥离 AI 可能输出的 JSON 元数据首行
@@ -226,7 +228,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
         content,
         createdBy: 'user-ai',
       });
-      notify(`已创建并加入知识库`, { title: `Skill "${suggestion.name}" 创建成功` });
+      notify(t('skills.createAddedToKB'), { title: `Skill "${suggestion.name}" ${t('skills.createSuccess')}` });
       setSuggestions(prev => {
         const next = prev.filter(s => s.name !== suggestion.name);
         onSuggestionCountChange?.(next.length);
@@ -234,7 +236,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       });
       fetchSkills();
     } catch (err: any) {
-      notify(err.message || '', { title: '创建 Skill 失败', type: 'error' });
+      notify(err.message || '', { title: t('skills.createFailed'), type: 'error' });
     } finally {
       setCreatingSuggestion(null);
     }
@@ -261,9 +263,9 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
             <BookOpen size={20} className="text-violet-600" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-800">Skills</h2>
+            <h2 className="text-xl font-bold text-slate-800">{t('skills.title')}</h2>
             <p className="text-sm text-slate-500">
-              Agent 技能文档 — 指导 AI 如何正确使用 AutoSnippet 工具
+              {t('skills.subtitle')}
             </p>
           </div>
         </div>
@@ -272,15 +274,15 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
             onClick={handleSuggest}
             disabled={loadingSuggestions}
             className="flex items-center gap-2 px-3 py-2 border border-amber-300 text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium disabled:opacity-50"
-            title="基于使用模式分析推荐 Skill"
+            title={t('skills.aiRecommendTooltip')}
           >
             {loadingSuggestions ? <Loader2 size={14} className="animate-spin" /> : <Lightbulb size={14} />}
-            推荐
+            {t('skills.aiRecommend')}
           </button>
           <button
             onClick={fetchSkills}
             className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-            title="刷新"
+            title={t('common.refresh')}
           >
             <RefreshCw size={16} />
           </button>
@@ -289,7 +291,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
             className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-sm font-medium"
           >
             <Sparkles size={14} />
-            AI 新建 Skill
+            {t('skills.addSkill')}
           </button>
         </div>
       </div>
@@ -297,9 +299,9 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       {/* ── Filter tabs ── */}
       <div className="flex items-center gap-1 mb-4 p-1 bg-slate-100 rounded-lg w-fit">
         {([
-          { key: 'all' as const, label: '全部', count: skills.length },
-          { key: 'project' as const, label: '项目级', count: projectCount, icon: FolderOpen },
-          { key: 'builtin' as const, label: '内置', count: builtinCount, icon: Package },
+          { key: 'all' as const, label: t('common.all'), count: skills.length },
+          { key: 'project' as const, label: t('skills.filterProject'), count: projectCount, icon: FolderOpen },
+          { key: 'builtin' as const, label: t('skills.filterBuiltin'), count: builtinCount, icon: Package },
         ]).map(f => (
           <button
             key={f.key}
@@ -325,7 +327,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Lightbulb size={16} className="text-amber-600" />
-              <span className="text-sm font-semibold text-amber-800">推荐创建的 Skills</span>
+              <span className="text-sm font-semibold text-amber-800">{t('skills.aiRecommendDesc')}</span>
               {suggestions.length > 0 && (
                 <span className="px-1.5 py-0.5 bg-amber-200 text-amber-700 text-[10px] font-bold rounded-full">{suggestions.length}</span>
               )}
@@ -337,10 +339,10 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
           {loadingSuggestions ? (
             <div className="flex items-center gap-2 text-amber-600 text-xs py-2">
               <Loader2 size={14} className="animate-spin" />
-              分析使用模式中...
+              {t('skills.aiRecommending')}
             </div>
           ) : suggestions.length === 0 ? (
-            <p className="text-xs text-amber-600/70">当前暂无推荐。继续使用后会积累更多信号。</p>
+            <p className="text-xs text-amber-600/70">{t('skills.noRecommendations')}</p>
           ) : (
             <div className="space-y-2">
               {suggestions.map(s => (
@@ -364,9 +366,9 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                     className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors text-xs font-medium disabled:opacity-50"
                   >
                     {creatingSuggestion === s.name ? (
-                      <><Loader2 size={12} className="animate-spin" /> 创建中</>
+                      <><Loader2 size={12} className="animate-spin" /> {t('skills.creating')}</>
                     ) : (
-                      <><Zap size={12} /> AI 创建</>
+                      <><Zap size={12} /> {t('skills.acceptRecommend')}</>
                     )}
                   </button>
                 </div>
@@ -387,7 +389,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
           ) : filteredSkills.length === 0 ? (
             <div className="text-center py-20 text-slate-400">
               <BookOpen size={40} className="mx-auto mb-3 opacity-40" />
-              <p>暂无 Skills</p>
+              <p>{t('skills.noResults')}</p>
             </div>
           ) : (
             filteredSkills.map(skill => (
@@ -418,7 +420,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                           ? 'bg-blue-100 text-blue-600'
                           : 'bg-emerald-100 text-emerald-600'
                       }`}>
-                        {skill.source === 'builtin' ? '内置' : '项目'}
+                        {skill.source === 'builtin' ? t('skills.filterBuiltin') : t('skills.filterProject')}
                       </span>
                       {skill.createdBy && CREATED_BY_CONFIG[skill.createdBy] && (() => {
                         const cfg = CREATED_BY_CONFIG[skill.createdBy!];
@@ -434,7 +436,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                     <p className="text-xs text-slate-500 line-clamp-2">{skill.summary}</p>
                     {skill.useCase && (
                       <p className="text-[11px] text-violet-500 mt-1 italic">
-                        适用：{skill.useCase}
+                        {t('skills.useCase')}：{skill.useCase}
                       </p>
                     )}
                   </div>
@@ -462,7 +464,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                       ? 'bg-blue-100 text-blue-600'
                       : 'bg-emerald-100 text-emerald-600'
                   }`}>
-                    {selectedSkill.source === 'builtin' ? '内置' : '项目'}
+                    {selectedSkill.source === 'builtin' ? t('skills.filterBuiltin') : t('skills.filterProject')}
                   </span>
                   {selectedSkill.createdBy && CREATED_BY_CONFIG[selectedSkill.createdBy] && (() => {
                     const cfg = CREATED_BY_CONFIG[selectedSkill.createdBy!];
@@ -470,17 +472,17 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                     return (
                       <span className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.color}`}>
                         <Icon size={10} />
-                        {cfg.label}创建
+                        {t(`skills.createdBy.${selectedSkill.createdBy}`)}
                       </span>
                     );
                   })()}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400">{selectedSkill.charCount} 字符</span>
+                  <span className="text-[10px] text-slate-400">{selectedSkill.charCount} {t('skills.chars')}</span>
                   <button
                     onClick={handleCopy}
                     className="p-1.5 rounded-md hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600"
-                    title="复制内容"
+                    title={t('common.copy')}
                   >
                     {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
                   </button>
@@ -489,14 +491,14 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                       <button
                         onClick={handleStartEdit}
                         className="p-1.5 rounded-md hover:bg-blue-50 transition-colors text-slate-400 hover:text-blue-600"
-                        title="编辑"
+                        title={t('common.edit')}
                       >
                         <Pencil size={14} />
                       </button>
                       <button
                         onClick={() => setConfirmDelete(true)}
                         className="p-1.5 rounded-md hover:bg-red-50 transition-colors text-slate-400 hover:text-red-500"
-                        title="删除"
+                        title={t('common.delete')}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -510,13 +512,13 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                         className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs font-medium disabled:opacity-50"
                       >
                         {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                        保存
+                        {t('common.save')}
                       </button>
                       <button
                         onClick={handleCancelEdit}
                         className="px-2.5 py-1 border border-slate-200 text-slate-500 rounded-md hover:bg-slate-50 transition-colors text-xs"
                       >
-                        取消
+                        {t('common.cancel')}
                       </button>
                     </>
                   )}
@@ -526,7 +528,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
               {/* Related skills */}
               {selectedSkill.relatedSkills.length > 0 && (
                 <div className="px-4 py-2 border-b border-slate-50 flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold">相关:</span>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold">{t('skills.related')}:</span>
                   {selectedSkill.relatedSkills.map(rs => (
                     <button
                       key={rs}
@@ -559,16 +561,16 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                   <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-10">
                     <div className="bg-white border border-red-200 rounded-xl shadow-lg p-6 max-w-sm text-center">
                       <Trash2 size={32} className="mx-auto mb-3 text-red-400" />
-                      <h3 className="font-semibold text-slate-800 mb-2">确认删除</h3>
+                      <h3 className="font-semibold text-slate-800 mb-2">{t('skills.deleteConfirm')}</h3>
                       <p className="text-sm text-slate-500 mb-4">
-                        删除 Skill "<span className="font-mono font-bold">{selectedSkill.skillName}</span>"？此操作不可撤销。
+                        {t('skills.deleteSkillConfirmMsg', { name: selectedSkill.skillName })}
                       </p>
                       <div className="flex gap-3 justify-center">
                         <button
                           onClick={() => setConfirmDelete(false)}
                           className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 text-sm"
                         >
-                          取消
+                          {t('common.cancel')}
                         </button>
                         <button
                           onClick={handleDelete}
@@ -576,7 +578,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                           className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50"
                         >
                           {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                          确认删除
+                          {t('skills.confirmDelete')}
                         </button>
                       </div>
                     </div>
@@ -588,7 +590,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
             <div className="flex items-center justify-center h-full text-slate-400">
               <div className="text-center">
                 <BookOpen size={40} className="mx-auto mb-3 opacity-30" />
-                <p className="text-sm">选择左侧 Skill 查看详情</p>
+                <p className="text-sm">{t('skills.selectToView')}</p>
               </div>
             </div>
           )}
@@ -618,6 +620,7 @@ const CreateSkillModal: React.FC<{
   onClose: () => void;
   onCreated: () => void;
 }> = ({ onClose, onCreated }) => {
+  const { t } = useI18n();
   const [mode, setMode] = useState<'ai' | 'manual'>('ai');
   const [aiPrompt, setAiPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -701,9 +704,9 @@ const CreateSkillModal: React.FC<{
 
       setAiGenerated(true);
       setMode('manual'); // Switch to manual to let user review/edit
-      notify('请检查并确认生成的内容', { title: 'AI 已生成 Skill' });
+      notify(t('skills.checkGenerated'), { title: t('skills.aiGenerated') });
     } catch (err: any) {
-      setError('AI 生成失败: ' + (err.message || ''));
+      setError(t('skills.aiGenFailed') + ': ' + (err.message || ''));
     } finally {
       setGenerating(false);
     }
@@ -712,18 +715,18 @@ const CreateSkillModal: React.FC<{
   /* ── Save ── */
   const handleSave = async () => {
     if (!name.trim() || !description.trim() || !content.trim()) {
-      setError('请填写名称、描述和内容');
+      setError(t('skills.fillRequired'));
       return;
     }
     setSaving(true);
     setError('');
     try {
       await api.createSkill({ name: name.trim(), description: description.trim(), content: content.trim(), createdBy: aiGenerated ? 'user-ai' : 'manual' });
-      notify(`已保存到知识库`, { title: `Skill "${name}" 创建成功` });
+      notify(t('skills.savedToKB'), { title: `Skill "${name}" ${t('skills.createSuccess')}` });
       onCreated();
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || err.message || '';
-      setError('创建失败: ' + msg);
+      setError(t('skills.createFailed') + ': ' + msg);
     } finally {
       setSaving(false);
     }
@@ -739,7 +742,7 @@ const CreateSkillModal: React.FC<{
             <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
               <Sparkles size={16} className="text-violet-600" />
             </div>
-            <h3 className="font-bold text-lg">新建 Skill</h3>
+            <h3 className="font-bold text-lg">{t('skills.addSkill')}</h3>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
             <X size={18} className="text-slate-400" />
@@ -756,7 +759,7 @@ const CreateSkillModal: React.FC<{
               }`}
             >
               <Sparkles size={12} />
-              AI 生成
+              {t('skills.aiGenMode')}
             </button>
             <button
               onClick={() => setMode('manual')}
@@ -765,7 +768,7 @@ const CreateSkillModal: React.FC<{
               }`}
             >
               <FileText size={12} />
-              手动填写
+              {t('skills.manualMode')}
             </button>
           </div>
         </div>
@@ -777,13 +780,13 @@ const CreateSkillModal: React.FC<{
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  描述你想创建的 Skill
+                  {t('skills.describeSkill')}
                 </label>
                 <div className="relative">
                   <textarea
                     value={aiPrompt}
                     onChange={e => setAiPrompt(e.target.value)}
-                    placeholder="例如：创建一个关于 SwiftUI 动画最佳实践的 Skill，包含常见动画模式、性能优化建议和代码示例..."
+                    placeholder={t('skillsView.placeholderDesc')}
                     className="w-full h-32 px-4 py-3 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
                     disabled={generating}
                   />
@@ -797,12 +800,12 @@ const CreateSkillModal: React.FC<{
                 {generating ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    AI 正在生成...
+                    {t('skills.aiGeneratingContent')}
                   </>
                 ) : (
                   <>
                     <Send size={16} />
-                    生成 Skill
+                    {t('skills.generateSkill')}
                   </>
                 )}
               </button>
@@ -813,7 +816,7 @@ const CreateSkillModal: React.FC<{
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    名称 <span className="text-slate-400 text-xs">(kebab-case)</span>
+                    {t('skills.skillName')} <span className="text-slate-400 text-xs">(kebab-case)</span>
                   </label>
                   <input
                     type="text"
@@ -825,25 +828,25 @@ const CreateSkillModal: React.FC<{
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    一句话描述
+                    {t('skills.skillDescription')}
                   </label>
                   <input
                     type="text"
                     value={description}
                     onChange={e => setDescription(e.target.value)}
-                    placeholder="SwiftUI 动画最佳实践指南"
+                    placeholder={t('skillsView.placeholderName')}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
                   />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Skill 文档内容 <span className="text-slate-400 text-xs">(Markdown)</span>
+                  {t('skills.skillContent')} <span className="text-slate-400 text-xs">(Markdown)</span>
                 </label>
                 <textarea
                   value={content}
                   onChange={e => setContent(e.target.value)}
-                  placeholder="# My Custom Skill&#10;&#10;## 使用场景&#10;...&#10;&#10;## 操作步骤&#10;..."
+                  placeholder={t('skillsView.placeholderContent')}
                   className="w-full h-64 px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 leading-relaxed"
                 />
               </div>
@@ -864,7 +867,7 @@ const CreateSkillModal: React.FC<{
             onClick={onClose}
             className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 transition-colors"
           >
-            取消
+            {t('common.cancel')}
           </button>
           {mode === 'manual' && (
             <button
@@ -875,12 +878,12 @@ const CreateSkillModal: React.FC<{
               {saving ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  保存中...
+                  {t('common.saving')}
                 </>
               ) : (
                 <>
                   <Plus size={14} />
-                  创建 Skill
+                  {t('skills.addSkill')}
                 </>
               )}
             </button>

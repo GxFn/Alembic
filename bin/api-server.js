@@ -5,8 +5,8 @@
  * 用于开发和测试 REST API
  */
 
-import HttpServer from '../lib/http/HttpServer.js';
 import Bootstrap from '../lib/bootstrap.js';
+import HttpServer from '../lib/http/HttpServer.js';
 import Logger from '../lib/infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 

@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { tokenize, BM25Scorer, SearchEngine } from '../../lib/service/search/SearchEngine.js';
+import { BM25Scorer, SearchEngine, tokenize } from '../../lib/service/search/SearchEngine.js';
 
 /* ────────────────────────────────────────────
  *  tokenize()
@@ -86,8 +86,8 @@ describe('BM25Scorer', () => {
   test('addDocument should track doc frequency', () => {
     scorer.addDocument('doc1', 'swift networking');
     scorer.addDocument('doc2', 'swift ui');
-    expect(scorer.docFreq['swift']).toBe(2);
-    expect(scorer.docFreq['networking']).toBe(1);
+    expect(scorer.docFreq.swift).toBe(2);
+    expect(scorer.docFreq.networking).toBe(1);
   });
 
   test('search should return empty for empty query', () => {
@@ -103,8 +103,8 @@ describe('BM25Scorer', () => {
 
     const results = scorer.search('swift');
     expect(results.length).toBe(2);
-    expect(results.map(r => r.id)).toContain('doc1');
-    expect(results.map(r => r.id)).toContain('doc3');
+    expect(results.map((r) => r.id)).toContain('doc1');
+    expect(results.map((r) => r.id)).toContain('doc3');
   });
 
   test('search should rank more relevant documents higher', () => {
@@ -179,7 +179,19 @@ describe('SearchEngine', () => {
 
   test('buildIndex should load recipes from DB', () => {
     const rows = [
-      { id: 'r1', title: 'Swift URLSession', description: 'network', language: 'swift', category: 'Network', knowledgeType: 'code-pattern', kind: 'pattern', content_json: '{"pattern":"let s = URLSession()"}', status: 'active', tags_json: '["swift","network"]', trigger: 'url' },
+      {
+        id: 'r1',
+        title: 'Swift URLSession',
+        description: 'network',
+        language: 'swift',
+        category: 'Network',
+        knowledgeType: 'code-pattern',
+        kind: 'pattern',
+        content_json: '{"pattern":"let s = URLSession()"}',
+        status: 'active',
+        tags_json: '["swift","network"]',
+        trigger: 'url',
+      },
     ];
     const db = makeMockDb(rows);
     const engine = new SearchEngine(db);
@@ -199,7 +211,18 @@ describe('SearchEngine', () => {
 
   test('search in keyword mode should use _keywordSearch', async () => {
     const rows = [
-      { id: 'r1', title: 'URLSession', description: 'networking', language: 'swift', category: 'Net', knowledgeType: 'code-pattern', kind: 'pattern', status: 'active', content_json: '{}', trigger: '' },
+      {
+        id: 'r1',
+        title: 'URLSession',
+        description: 'networking',
+        language: 'swift',
+        category: 'Net',
+        knowledgeType: 'code-pattern',
+        kind: 'pattern',
+        status: 'active',
+        content_json: '{}',
+        trigger: '',
+      },
     ];
     const db = makeMockDb(rows);
     const engine = new SearchEngine(db);
@@ -224,7 +247,19 @@ describe('SearchEngine', () => {
 
   test('search in bm25 mode should build index on first call', async () => {
     const rows = [
-      { id: 'r1', title: 'Swift', description: 'test', language: 'swift', category: 'A', knowledgeType: 'code-pattern', kind: 'pattern', content_json: '{}', status: 'active', tags_json: '[]', trigger: '' },
+      {
+        id: 'r1',
+        title: 'Swift',
+        description: 'test',
+        language: 'swift',
+        category: 'A',
+        knowledgeType: 'code-pattern',
+        kind: 'pattern',
+        content_json: '{}',
+        status: 'active',
+        tags_json: '[]',
+        trigger: '',
+      },
     ];
     const db = makeMockDb(rows);
     const engine = new SearchEngine(db);
@@ -236,7 +271,19 @@ describe('SearchEngine', () => {
 
   test('search in semantic mode should fall back to bm25 without aiProvider', async () => {
     const rows = [
-      { id: 'r1', title: 'Swift', description: 'test', language: 'swift', category: 'A', knowledgeType: 'code-pattern', kind: 'pattern', content_json: '{}', status: 'active', tags_json: '[]', trigger: '' },
+      {
+        id: 'r1',
+        title: 'Swift',
+        description: 'test',
+        language: 'swift',
+        category: 'A',
+        knowledgeType: 'code-pattern',
+        kind: 'pattern',
+        content_json: '{}',
+        status: 'active',
+        tags_json: '[]',
+        trigger: '',
+      },
     ];
     const db = makeMockDb(rows);
     const engine = new SearchEngine(db); // no aiProvider
@@ -275,7 +322,7 @@ describe('SearchEngine', () => {
     expect(engine.getStats().cacheSize).toBe(1);
 
     // Wait for cache to expire
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
     // Access _getCache directly to verify expiration
     const cached = engine._getCache('test:all:20:keyword:');
     expect(cached).toBeNull();

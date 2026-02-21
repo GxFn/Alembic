@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, Code, Edit3, LogOut, User, ShieldCheck, Eye, Fingerprint, BookOpen, Sparkles, PanelLeftClose, PanelLeftOpen, Zap, Library, FileText } from 'lucide-react';
+import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, Code, LogOut, User, ShieldCheck, Eye, Fingerprint, BookOpen, Sparkles, PanelLeftClose, PanelLeftOpen, Zap, Library, FileText } from 'lucide-react';
 import { TabType } from '../../constants';
 import { ICON_SIZES } from '../../constants/icons';
 import api from '../../api';
 import { getSocket } from '../../lib/socket';
+import { useI18n } from '../../i18n';
+import { useTheme } from '../../theme';
 
 /** 格式化 token 数字：1234 → "1.2k", 1234567 → "1.2M" */
 function fmtTokens(n: number): string {
@@ -17,7 +19,6 @@ interface SidebarProps {
   navigateToTab: (tab: TabType, options?: { preserveSearch?: boolean }) => void;
   candidateCount: number;
   signalSuggestionCount?: number;
-  isDarkMode?: boolean;
   currentUser?: string;
   currentRole?: string;
   permissionMode?: string;
@@ -28,10 +29,10 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
 }
 
-const ROLE_LABELS: Record<string, { label: string, color: string, bg: string }> = {
-  developer:       { label: '开发者', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
-  external_agent:  { label: 'Agent', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
-  chat_agent:      { label: 'ChatAgent', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
+const ROLE_LABEL_KEYS: Record<string, { key: string, color: string, bg: string }> = {
+  developer:       { key: 'sidebar.roleDeveloper', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
+  external_agent:  { key: 'sidebar.roleAgent', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
+  chat_agent:      { key: 'sidebar.roleChatAgent', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
 };
 
 const MODE_ICONS: Record<string, typeof ShieldCheck> = {
@@ -49,11 +50,13 @@ interface NavItem {
 
 const Sidebar: React.FC<SidebarProps> = ({
   activeTab, navigateToTab, candidateCount,
-  signalSuggestionCount = 0, isDarkMode = false,
+  signalSuggestionCount = 0,
   currentUser, currentRole, permissionMode, onLogout,
   collapsed = false, onToggleCollapse,
 }) => {
-  const roleInfo = ROLE_LABELS[currentRole || ''] || ROLE_LABELS.developer;
+  const { t } = useI18n();
+  const { isDark: isDarkMode } = useTheme();
+  const roleConf = ROLE_LABEL_KEYS[currentRole || ''] || ROLE_LABEL_KEYS.developer;
   const ModeIcon = MODE_ICONS[permissionMode || 'probe'] || Eye;
 
   // ── Token 消耗指标（事件驱动刷新，不轮询） ──
@@ -83,18 +86,17 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [refreshTokens]);
 
   const navItems: NavItem[] = [
-    { tab: 'recipes', icon: Bookmark, label: 'Recipes' },
-    { tab: 'spm', icon: FolderOpen, label: 'SPM Explorer' },
-    { tab: 'candidates', icon: Clock, label: `Candidates (${candidateCount})` },
-    { tab: 'knowledge', icon: Library, label: '批量管理' },
-    { tab: 'depgraph', icon: GitBranch, label: '依赖关系图' },
-    { tab: 'knowledgegraph', icon: Share2, label: '知识图谱' },
-    { tab: 'guard', icon: Shield, label: 'Guard' },
-    { tab: 'skills', icon: BookOpen, label: 'Skills', badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined, badgeColor: 'bg-amber-100 text-amber-700' },
-    { tab: 'wiki', icon: FileText, label: 'Repo Wiki' },
-    { tab: 'ai', icon: MessageSquare, label: 'AI Assistant' },
-    { tab: 'editor', icon: Edit3, label: '编辑器（测试）' },
-    { tab: 'help', icon: HelpCircle, label: '使用说明' },
+    { tab: 'recipes', icon: Bookmark, label: t('sidebar.recipes') },
+    { tab: 'spm', icon: FolderOpen, label: t('sidebar.moduleExplorer') },
+    { tab: 'candidates', icon: Clock, label: t('sidebar.candidates', { count: candidateCount }) },
+    { tab: 'knowledge', icon: Library, label: t('sidebar.batchManage') },
+    { tab: 'depgraph', icon: GitBranch, label: t('sidebar.depGraph') },
+    { tab: 'knowledgegraph', icon: Share2, label: t('sidebar.knowledgeGraph') },
+    { tab: 'guard', icon: Shield, label: t('sidebar.guard') },
+    { tab: 'skills', icon: BookOpen, label: t('sidebar.skills'), badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined, badgeColor: 'bg-amber-100 text-amber-700' },
+    { tab: 'wiki', icon: FileText, label: t('sidebar.repoWiki') },
+    { tab: 'ai', icon: MessageSquare, label: t('sidebar.aiAssistant') },
+    { tab: 'help', icon: HelpCircle, label: t('sidebar.help') },
   ];
 
   const activeClass = isDarkMode ? 'bg-blue-900/30 text-blue-400 font-medium' : 'bg-blue-50 text-blue-700 font-medium';
@@ -112,7 +114,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {!collapsed && <h1 className="font-bold text-lg truncate">AutoSnippet</h1>}
         </div>
         {onToggleCollapse && !collapsed && (
-          <button onClick={onToggleCollapse} className={`p-1 rounded-md transition-colors ${isDarkMode ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`} title="折叠导航">
+          <button onClick={onToggleCollapse} className={`p-1 rounded-md transition-colors ${isDarkMode ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`} title={t('sidebar.collapseNav')}>
             <PanelLeftClose size={16} />
           </button>
         )}
@@ -121,7 +123,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* 折叠状态下的展开按钮 */}
       {collapsed && onToggleCollapse && (
         <div className="flex justify-center py-2">
-          <button onClick={onToggleCollapse} className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`} title="展开导航">
+          <button onClick={onToggleCollapse} className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`} title={t('sidebar.expandNav')}>
             <PanelLeftOpen size={16} />
           </button>
         </div>
@@ -159,12 +161,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className={`${collapsed ? 'px-2 py-3' : 'p-4'} ${isDarkMode ? 'border-t border-[#3e3e42]' : 'border-t border-slate-100'}`}>
         {!collapsed && (
           <>
-            <div className={`flex items-center gap-1.5 mb-3 px-2 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'bg-slate-700/30 border-slate-600 text-slate-400' : roleInfo.bg + ' ' + roleInfo.color}`}>
+            <div className={`flex items-center gap-1.5 mb-3 px-2 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'bg-slate-700/30 border-slate-600 text-slate-400' : roleConf.bg + ' ' + roleConf.color}`}>
               <ModeIcon size={ICON_SIZES.xs} />
-              <span>{permissionMode === 'token' ? '登录' : '探针'}</span>
+              <span>{permissionMode === 'token' ? t('sidebar.modeLogin') : t('sidebar.modeProbe')}</span>
               <span className="mx-0.5">&middot;</span>
               <ShieldCheck size={ICON_SIZES.xs} />
-              <span>{roleInfo.label}</span>
+              <span>{t(roleConf.key)}</span>
             </div>
             {currentUser && (
               <div className={`flex items-center justify-between mb-3 px-2 py-1.5 rounded-lg ${isDarkMode ? 'bg-slate-700/30' : 'bg-slate-50'}`}>
@@ -173,7 +175,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <span className={`text-xs font-medium truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{currentUser}</span>
                 </div>
                 {onLogout && (
-                  <button onClick={onLogout} title="登出" className={`shrink-0 p-1 rounded transition-colors ${isDarkMode ? 'text-slate-500 hover:text-red-400 hover:bg-slate-700/50' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}>
+                  <button onClick={onLogout} title={t('sidebar.logout')} className={`shrink-0 p-1 rounded transition-colors ${isDarkMode ? 'text-slate-500 hover:text-red-400 hover:bg-slate-700/50' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}>
                     <LogOut size={ICON_SIZES.sm} />
                   </button>
                 )}
@@ -185,16 +187,16 @@ const Sidebar: React.FC<SidebarProps> = ({
         {tokenSummary && tokenSummary.total_tokens > 0 && (
           <button
             onClick={() => navigateToTab('help')}
-            title={collapsed ? `7日 Token: ${fmtTokens(tokenSummary.total_tokens)} (${tokenSummary.call_count} 次 AI 调用)` : undefined}
+            title={collapsed ? `${t('sidebar.tokenLabel')}: ${fmtTokens(tokenSummary.total_tokens)} (${t('sidebar.tokenCallsFull', { count: tokenSummary.call_count })})` : undefined}
             className={`w-full flex items-center ${collapsed ? 'justify-center py-2 mb-1' : 'gap-2 px-2 py-1.5 mb-2'} rounded-lg transition-colors ${isDarkMode ? 'bg-slate-700/30 hover:bg-slate-700/50 text-slate-400' : 'bg-amber-50 hover:bg-amber-100 text-amber-700'}`}
           >
             <Zap size={collapsed ? ICON_SIZES.lg : ICON_SIZES.sm} className={isDarkMode ? 'text-amber-400' : 'text-amber-500'} />
             {!collapsed && (
               <div className="flex flex-col items-start min-w-0">
-                <span className="text-[10px] font-bold uppercase tracking-wider">7日 Token</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider">{t('sidebar.tokenLabel')}</span>
                 <span className={`text-xs font-mono font-semibold ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>
                   {fmtTokens(tokenSummary.total_tokens)}
-                  <span className={`ml-1 text-[10px] font-normal ${isDarkMode ? 'text-slate-500' : 'text-amber-600/70'}`}>({tokenSummary.call_count}次调用)</span>
+                  <span className={`ml-1 text-[10px] font-normal ${isDarkMode ? 'text-slate-500' : 'text-amber-600/70'}`}>({tokenSummary.call_count}{t('sidebar.tokenCalls')})</span>
                 </span>
               </div>
             )}

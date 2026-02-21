@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect, ReactNode } from 'react';
 import { X, Send, ChevronDown, Loader2, MessageSquare, Brain, Code2 } from 'lucide-react';
+import { useI18n } from '../../i18n';
 
 /* ═══════════════════════════════════════════════════════════
  * ChatPanel — 通用对话式交互面板（基础组件）
@@ -187,40 +188,42 @@ const THEME = {
 
 // ─── ChatPanel 组件 ────────────────────────────────────────
 
-const ChatPanel: React.FC<ChatPanelProps> = ({
-  title,
-  titleBadge,
-  subtitle,
-  headerIcon,
-  widthClass = 'w-[680px] max-w-[90vw]',
-  themeColor = 'emerald',
+const ChatPanel: React.FC<ChatPanelProps> = (props) => {
+  const { t } = useI18n();
+  const {
+    title,
+    titleBadge,
+    subtitle,
+    headerIcon,
+    widthClass = 'w-[680px] max-w-[90vw]',
+    themeColor = 'emerald',
 
-  context,
-  defaultCodeExpanded = true,
+    context,
+    defaultCodeExpanded = true,
 
-  messages,
-  loading = false,
-  loadingText = 'AI 正在处理...',
-  emptyTitle = '输入指令开始对话',
-  emptyDescription = '描述你希望执行的操作，AI 将为你处理。',
-  suggestions,
-  emptyIcon,
-  assistantName = 'AI 助手',
-  renderMessageExtra,
+    messages,
+    loading = false,
+    loadingText = t('chatPanel.defaultLoading'),
+    emptyTitle = t('chatPanel.defaultEmptyTitle'),
+    emptyDescription = t('chatPanel.defaultEmptyDesc'),
+    suggestions,
+    emptyIcon,
+    assistantName = t('chatPanel.defaultAssistant'),
+    renderMessageExtra,
 
-  placeholder = '输入指令...',
-  inputHint = 'Enter 发送 · Shift+Enter 换行',
-  inputDisabled = false,
+    placeholder = t('chatPanel.defaultPlaceholder'),
+    inputHint = t('chatPanel.defaultInputHint'),
+    inputDisabled = false,
 
-  onSend,
-  onClose,
-  onSuggestionClick,
+    onSend,
+    onClose,
+    onSuggestionClick,
 
-  renderActions,
+    renderActions,
 
-  children,
-  embedded = false,
-}) => {
+    children,
+    embedded = false,
+  } = props;
   const [input, setInput] = useState('');
   const [codeExpanded, setCodeExpanded] = useState(defaultCodeExpanded);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -344,7 +347,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   className="w-full px-5 py-2 flex items-center gap-1.5 text-[11px] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100/50 transition-colors"
                 >
                   <Code2 size={12} />
-                  <span>{context.codeLabel || '文档内容'}</span>
+                  <span>{context.codeLabel || t('chatPanel.docContent')}</span>
                   <ChevronDown size={12} className={`ml-auto transition-transform ${codeExpanded ? '' : '-rotate-90'}`} />
                 </button>
                 {codeExpanded && (
