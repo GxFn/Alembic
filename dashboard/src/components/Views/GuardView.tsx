@@ -589,7 +589,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
           )}
           </button>
           {isExpanded && (
-          <div className="border-t border-slate-100 bg-slate-50/50 p-4">
+          <div className="border-t border-slate-100 bg-slate-50/50 dark:bg-[#283040] p-4">
             {run.violations.length === 0 ? (
             <p className="text-sm text-slate-500">{t('guard.noViolations')}</p>
             ) : (
@@ -614,7 +614,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
                   <span className="text-slate-700 ml-2">{ruleMsg(v.ruleId, v.message)}</span>
                 </div>
                 {v.snippet && (
-                  <pre className="text-xs text-slate-600 bg-slate-100 p-2 rounded overflow-x-auto">
+                  <pre className="text-xs text-slate-600 bg-[#f1f5f9] dark:bg-[#0f1219] dark:text-slate-400 dark:border dark:border-slate-700 p-2 rounded overflow-x-auto">
                   {v.snippet}
                   </pre>
                 )}

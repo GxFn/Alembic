@@ -4,6 +4,24 @@ import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
 import TokenUsageChart from '../Charts/TokenUsageChart';
 
+const Section = ({ id, title, icon, isExpanded, onToggle, children }: { id: string; title: string; icon: React.ReactNode; isExpanded: boolean; onToggle: (id: string) => void; children: React.ReactNode }) => {
+  return (
+    <section className="border border-slate-200 rounded-lg overflow-hidden">
+      <button
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          {icon}
+          <h2 className="text-lg font-bold text-slate-800">{title}</h2>
+        </div>
+        {isExpanded ? <ChevronDown size={ICON_SIZES.lg} /> : <ChevronRight size={ICON_SIZES.lg} />}
+      </button>
+      {isExpanded && <div className="p-4 bg-white">{children}</div>}
+    </section>
+  );
+};
+
 const HelpView: React.FC = () => {
   const { t } = useI18n();
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['quick-start']));
@@ -16,25 +34,6 @@ const HelpView: React.FC = () => {
       newExpanded.add(section);
     }
     setExpandedSections(newExpanded);
-  };
-
-  const Section = ({ id, title, icon, children }: { id: string; title: string; icon: React.ReactNode; children: React.ReactNode }) => {
-    const isExpanded = expandedSections.has(id);
-    return (
-      <section className="border border-slate-200 rounded-lg overflow-hidden">
-        <button
-          onClick={() => toggleSection(id)}
-          className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            {icon}
-            <h2 className="text-lg font-bold text-slate-800">{title}</h2>
-          </div>
-          {isExpanded ? <ChevronDown size={ICON_SIZES.lg} /> : <ChevronRight size={ICON_SIZES.lg} />}
-        </button>
-        {isExpanded && <div className="p-4 bg-white">{children}</div>}
-      </section>
-    );
   };
 
   return (
@@ -61,12 +60,12 @@ const HelpView: React.FC = () => {
 
       <div className="space-y-4">
         {/* Token 用量统计 */}
-        <Section id="token-usage" title={t('help.tokenUsageLast7Days')} icon={<BarChart3 size={ICON_SIZES.xl} className="text-blue-600" />}>
+        <Section id="token-usage" title={t('help.tokenUsageLast7Days')} icon={<BarChart3 size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('token-usage')} onToggle={toggleSection}>
           <TokenUsageChart />
         </Section>
 
         {/* 快速开始 */}
-        <Section id="quick-start" title={t('help.quickStart')} icon={<Rocket size={ICON_SIZES.xl} className="text-blue-600" />}>
+        <Section id="quick-start" title={t('help.quickStart')} icon={<Rocket size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('quick-start')} onToggle={toggleSection}>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
               <div className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center mb-3 font-bold">1</div>
@@ -95,7 +94,7 @@ const HelpView: React.FC = () => {
         </Section>
 
         {/* 核心概念 */}
-        <Section id="concepts" title={t('help.coreConcepts')} icon={<Database size={ICON_SIZES.xl} className="text-blue-600" />}>
+        <Section id="concepts" title={t('help.coreConcepts')} icon={<Database size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('concepts')} onToggle={toggleSection}>
           {/* 三大角色 */}
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-slate-700 mb-3">{t('help.threeRoles')}</h3>
@@ -246,7 +245,7 @@ const HelpView: React.FC = () => {
         </Section>
 
         {/* 核心功能 */}
-        <Section id="features" title={t('help.coreFeatures')} icon={<Zap size={ICON_SIZES.xl} className="text-blue-600" />}>
+        <Section id="features" title={t('help.coreFeatures')} icon={<Zap size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('features')} onToggle={toggleSection}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="border border-slate-200 rounded-lg p-5 hover:shadow-lg transition-shadow">
               <div className="flex items-center gap-2 mb-3">
@@ -300,7 +299,7 @@ const HelpView: React.FC = () => {
         </Section>
 
         {/* 编辑器指令 */}
-        <Section id="editor-directives" title={t('help.editorDirectives')} icon={<Terminal size={ICON_SIZES.xl} className="text-blue-600" />}>
+        <Section id="editor-directives" title={t('help.editorDirectives')} icon={<Terminal size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('editor-directives')} onToggle={toggleSection}>
           <p className="text-slate-600 text-sm mb-4">{t('help.editorDirectivesNote')}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
@@ -342,7 +341,7 @@ const HelpView: React.FC = () => {
         </Section>
 
         {/* Cursor 集成 */}
-        <Section id="cursor-integration" title={t('help.cursorIntegration')} icon={<MessageSquare size={ICON_SIZES.xl} className="text-blue-600" />}>
+        <Section id="cursor-integration" title={t('help.cursorIntegration')} icon={<MessageSquare size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('cursor-integration')} onToggle={toggleSection}>
           {/* Skills */}
           <div className="mb-5">
             <h3 className="font-semibold text-slate-800 mb-3">{t('help.skills10')}</h3>
@@ -421,7 +420,7 @@ const HelpView: React.FC = () => {
         </Section>
 
         {/* V2 架构亮点 */}
-        <Section id="v2-architecture" title={t('help.v3Architecture')} icon={<Layers size={ICON_SIZES.xl} className="text-blue-600" />}>
+        <Section id="v2-architecture" title={t('help.v3Architecture')} icon={<Layers size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('v2-architecture')} onToggle={toggleSection}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="border border-slate-200 rounded-lg p-5">
               <div className="flex items-center gap-2 mb-3">
@@ -502,7 +501,7 @@ const HelpView: React.FC = () => {
         </Section>
 
         {/* 命令速查 */}
-        <Section id="cli-reference" title={t('help.cliReference')} icon={<Terminal size={ICON_SIZES.xl} className="text-blue-600" />}>
+        <Section id="cli-reference" title={t('help.cliReference')} icon={<Terminal size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('cli-reference')} onToggle={toggleSection}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <h3 className="font-semibold text-slate-800 mb-2">{t('help.initAndEnv')}</h3>

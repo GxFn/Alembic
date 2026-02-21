@@ -1123,6 +1123,8 @@ export const en: DeepString<typeof zh> = {
     noDirs: 'No scannable directories found',
     sourceFileCount: '{count} files',
     selectFolderHint: 'Select a folder with source files. Language will be auto-detected and AI scan will run.',
+    modulesTabLabel: 'Modules ({count})',
+    foldersTabLabel: 'Folders',
   },
 
   /* ═══════════════════════════════ search ══════════════════════════════ */

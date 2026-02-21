@@ -1120,6 +1120,8 @@ export const zh = {
     noDirs: '未发现可扫描的目录',
     sourceFileCount: '{count} 文件',
     selectFolderHint: '选择包含源码文件的目录，系统将自动检测语言并执行 AI 扫描',
+    modulesTabLabel: '模块 ({count})',
+    foldersTabLabel: '目录',
   },
 
   /* ═══════════════════════════════ search ══════════════════════════════ */

@@ -48,7 +48,7 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `language` | string | 主语言名称 |
-| `extraDimensions` | array | 语言特有的额外分析维度（如 Swift Concurrency、ObjC Block 模式、Go goroutine/channel、Python async/decorator、Java Stream/Optional、Dart Widget/BLoC/Riverpod 等） |
+| `extraDimensions` | array | 语言特有的额外分析维度（如 Swift Concurrency、ObjC Block 模式、Go goroutine/channel、Python async/decorator、Java Stream/Optional、Dart Widget/BLoC/Riverpod、Rust ownership/borrowing/lifetime/trait 等） |
 | `typicalPatterns` | array | 该语言中典型的代码模式提示 |
 | `commonAntiPatterns` | array | 该语言常见反模式（bad/why/fix） |
 | `suggestedGuardRules` | array | 建议的 Guard 规则（pattern/severity/message） |
@@ -224,7 +224,7 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 {
   "title": "[must] UI 更新必须在主线程",
   "trigger": "@agent-threading",
-  "code": "// ✅ 正确 — 使用语言/框架提供的主线程机制\n// Swift: @MainActor func updateUI() { ... }\n// JS/TS: 无需显式处理（单线程）但 Web Worker 返回需 postMessage\n// Python: 使用 loop.call_soon_threadsafe() 或框架 API\n// Go: 使用 channel 或 sync 包\n// Java/Kotlin: runOnUiThread { ... } 或 Dispatchers.Main\n\n// ❌ 错误 — 在后台线程直接操作 UI",
+  "code": "// ✅ 正确 — 使用语言/框架提供的主线程机制\n// Swift: @MainActor func updateUI() { ... }\n// JS/TS: 无需显式处理（单线程）但 Web Worker 返回需 postMessage\n// Python: 使用 loop.call_soon_threadsafe() 或框架 API\n// Go: 使用 channel 或 sync 包\n// Java/Kotlin: runOnUiThread { ... } 或 Dispatchers.Main\n// Rust: 使用 tokio::spawn + channel 或 Arc<Mutex<T>> 跨线程共享\n// Dart: 使用 WidgetsBinding.instance.addPostFrameCallback 或 setState\n\n// ❌ 错误 — 在后台线程直接操作 UI",
   "summary_cn": "UI 更新必须在主线程/主 Actor 执行，违反会导致崩溃或数据竞争",
   "summary_en": "UI updates must run on the main thread/actor to prevent crashes and data races",
   "language": "<primaryLanguage>",
@@ -939,6 +939,7 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 > - **autosnippet-reference-kotlin** — Kotlin 专属：空安全/协程/Flow/sealed class/DSL/Compose
 > - **autosnippet-reference-go** — Go 专属：错误处理/接口组合/goroutine/channel/Context/测试
 > - **autosnippet-reference-dart** — Dart (Flutter) 专属：空安全/Widget 设计/状态管理(BLoC/Riverpod)/Freezed/Clean Architecture/测试
+> - **autosnippet-reference-rust** — Rust 专属：所有权/借用/生命周期/trait 系统/错误处理(Result/Option/?)/async-await/unsafe/宏/Cargo 约定
 
 ---
 
@@ -982,3 +983,4 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 - **autosnippet-reference-kotlin**: Kotlin 业界最佳实践参考（空安全/协程/Flow/sealed class/DSL/Compose）
 - **autosnippet-reference-go**: Go 业界最佳实践参考（错误处理/接口组合/goroutine/channel/Context/测试）
 - **autosnippet-reference-dart**: Dart (Flutter) 业界最佳实践参考（空安全/Widget 设计/BLoC/Riverpod/Freezed/Clean Architecture/测试）
+- **autosnippet-reference-rust**: Rust 业界最佳实践参考（所有权/借用/生命周期/trait 系统/错误处理/async-await/unsafe/Cargo 约定）

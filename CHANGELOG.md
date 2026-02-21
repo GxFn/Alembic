@@ -4,6 +4,25 @@
 
 ---
 
+## [3.0.4] - 2026-02-21
+
+### 修复
+
+- **AI 提取输出语言链路**：AI 提取和富化的输出现在尊重用户 locale，中文环境下不再输出英文描述。修改涉及 ChatAgent、tools.js、AiProvider、candidates 路由
+- **Module Explorer 自定义文件夹不持久化**：`api.fetchData()` 中 `projectRoot` 硬编码为空字符串，导致 localStorage key 失效。改为并行请求 `/modules/project-info` 获取真实路径
+- **Help 页面展开/折叠跳顶**：`Section` 组件定义在 `HelpView` 函数体内，React 每次 state 变化都 unmount/remount，导致滚动位置丢失。将 `Section` 提取到模块作用域
+- **Guard 页面暗色模式**：违反记录展开区域、代码片段与卡片背景在暗色模式下融为一体。为展开区域添加 `dark:bg-[#283040]`，代码片段改用 `bg-[#f1f5f9]` + `dark:bg-[#0f1219]` 绕过全局覆盖冲突
+- **index.css 注释语法错误**：透明度变体区域注释中 `*/N` 被 CSS 解析器误判为注释结束符
+
+### 改进
+
+- **README / README_CN 重写**：去除 AI 生成感的营销语气，改为直接的技术文档风格
+- **暗色模式全局覆盖补充**：新增 `hover:bg-slate-50/50`、`bg-blue-50/50` 的 dark 覆盖规则
+- **VS Code 工作区配置**：添加 `.vscode/settings.json`，忽略 Tailwind v4 `@custom-variant` 的未知规则警告
+- **package.json**：keywords 从 3 个扩充至 21 个，覆盖核心功能、AI 生态、支持语言
+
+---
+
 ## [3.0.3] - 2026-02-21
 
 ### 变更

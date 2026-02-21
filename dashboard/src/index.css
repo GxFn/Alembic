@@ -57,6 +57,7 @@ html.dark {
 
 /* ── 交互状态 ── */
 .dark .hover\:bg-slate-50:hover  { background-color: #283040; }
+.dark .hover\:bg-slate-50\/50:hover { background-color: #2d3648; }
 .dark .hover\:bg-slate-100:hover { background-color: #334155; }
 .dark .hover\:bg-slate-200:hover { background-color: #3e4a5e; }
 .dark .hover\:text-slate-600:hover { color: #cbd5e1; }
@@ -255,14 +256,15 @@ html.dark {
 /* ── 代码块适配（bg-slate-800 保留，微调对比度） ── */
 .dark .bg-slate-800 { background-color: #0f1219; }
 
-/* ── 透明度变体 (bg-*-50/N, bg-slate-*/N 等) ── */
-.dark .bg-slate-50\/50  { background-color: #252a36; }
+/* ── 透明度变体 (bg-色-50/N, bg-slate-N/N 等) ── */
+.dark .bg-slate-50\/50  { background-color: #283040; }
 .dark .bg-slate-50\/80  { background-color: rgba(30, 36, 51, 0.8); }
 .dark .bg-slate-100\/80 { background-color: rgba(40, 48, 64, 0.8); }
 .dark .bg-slate-200\/60 { background-color: rgba(51, 65, 85, 0.6); }
 .dark .bg-white\/60     { background-color: rgba(26, 27, 35, 0.6); }
 .dark .bg-white\/40     { background-color: rgba(26, 27, 35, 0.4); }
 .dark .bg-blue-50\/30   { background-color: rgba(59, 130, 246, 0.06); }
+.dark .bg-blue-50\/50   { background-color: rgba(59, 130, 246, 0.08); }
 .dark .bg-blue-50\/60   { background-color: rgba(59, 130, 246, 0.1); }
 .dark .bg-amber-50\/30  { background-color: rgba(245, 158, 11, 0.06); }
 .dark .bg-amber-50\/50  { background-color: rgba(245, 158, 11, 0.08); }

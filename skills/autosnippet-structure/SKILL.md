@@ -66,7 +66,7 @@ The knowledge graph captures **relationships between Recipes** (dependencies, ex
 The SPM dependency structure is stored in `AutoSnippet/AutoSnippet.spmmap.json`:
 - **`graph.packages`**: Package declarations with targets
 - **`graph.edges`**: "from depends on to" relationships
-- **Update**: Run `asd spm-map` from project root to refresh (supports SPM / Node / Go / JVM / Python)
+- **Update**: Run `asd spm-map` from project root to refresh (supports SPM / Node / Go / JVM / Python / Dart / Rust)
 
 ---
 

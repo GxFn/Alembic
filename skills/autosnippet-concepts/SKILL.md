@@ -129,8 +129,10 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
   - Java: `["import java.util.List;"]`
   - Kotlin: `["import kotlinx.coroutines.*"]`
   - JS/TS: `["import fs from 'node:fs'"]`
+  - Dart: `["import 'package:flutter/material.dart'"]`
+  - Rust: `["use std::collections::HashMap;"]`
 - **`trigger`**: MUST start with `@` (e.g. `@request-manager`). kebab-case, no spaces.
-- **`language`**: MUST be one of the supported languages (lowercase): `swift`, `objectivec`, `go`, `python`, `java`, `kotlin`, `javascript`, `typescript`.
+- **`language`**: MUST be one of the supported languages (lowercase): `swift`, `objectivec`, `go`, `python`, `java`, `kotlin`, `javascript`, `typescript`, `dart`, `rust`.
 - **`kind`**: MUST be one of: `rule`, `pattern`, `fact`.
 - **`doClause`**: English imperative sentence, ≤60 tokens.
 - **`description`**: 中文摘要 ≤80字。
@@ -169,7 +171,7 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 | `title` | 标准用法的名称 | 人工命名 | **必填**；**中文**；简短精准（✅ "颜色工具方法"、"异步请求处理"；❌ 避免 "Use xxx"）；≤20 字 |
 | `trigger` | 触发词（Snippet/检索） | 人工命名 | **必填**；`@` 开头，kebab-case、无空格；唯一 |
 | `category` | 8 类标准分类 | 人工判断 | **必填**；必须为 8 类之一 |
-| `language` | 代码语言 | 从代码确定 | **必填**；支持 `swift` / `objectivec` / `go` / `python` / `java` / `kotlin` / `javascript` / `typescript` |
+| `language` | 代码语言 | 从代码确定 | **必填**；支持 `swift` / `objectivec` / `go` / `python` / `java` / `kotlin` / `javascript` / `typescript` / `dart` / `rust` |
 | `kind` | 知识类型 | 人工/AI | **必填**；`rule` / `pattern` / `fact` |
 | `doClause` | 英文祈使句指令 | AI/人工 | **必填**；≤60 tokens |
 | `description` | 中文功能摘要 | 人工/AI | **必填**；≤80字 |
@@ -263,7 +265,7 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 - [ ] **doClause**: 英文祈使句（≠60 tokens）
 - [ ] **description**: 中文摘要 ≤80字
 - [ ] **category**: ONE of View/Service/Tool/Model/Network/Storage/UI/Utility
-- [ ] **language**: `swift`/`objectivec`/`go`/`python`/`java`/`kotlin`/`javascript`/`typescript`
+- [ ] **language**: `swift`/`objectivec`/`go`/`python`/`java`/`kotlin`/`javascript`/`typescript`/`dart`/`rust`
 - [ ] **headers**: 完整 import 语句数组（无 import 传 `[]`）
 - [ ] **usageGuide**: Markdown `###` 章节格式
 - [ ] **knowledgeType**: `code-pattern` / `architecture` / `best-practice` 等

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Box, Zap, Edit3, Cpu, Loader2, Layers, Shield, AlertTriangle, RefreshCw, FolderPlus, FolderOpen, X, ChevronRight, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Box, Zap, Edit3, Cpu, Loader2, Layers, Shield, AlertTriangle, RefreshCw, Trash2, FolderOpen, ChevronRight } from 'lucide-react';
 import { SPMTarget, ExtractedRecipe, ScanResultItem, Recipe, GuardAuditResult, ProjectDirectory } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
@@ -51,6 +51,22 @@ const LANG_COLORS: Record<string, string> = {
   cpp: 'bg-gray-100 text-gray-700 border-gray-200',
 };
 
+/** 语言 → 缩写显示名 */
+const LANG_ABBR: Record<string, string> = {
+  swift: 'Swift',
+  objectivec: 'ObjC',
+  go: 'Go',
+  python: 'Py',
+  java: 'Java',
+  kotlin: 'KT',
+  javascript: 'JS',
+  typescript: 'TS',
+  rust: 'RS',
+  ruby: 'RB',
+  c: 'C',
+  cpp: 'C++',
+};
+
 const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
   targets,
   filteredTargets,
@@ -86,28 +102,49 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
   const fetchedSimilarRef = useRef<Set<string>>(new Set());
   const prevSimilarKeysRef = useRef<string[]>([]);
 
-  // ── 目录选择器状态 ──
-  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  // ── 目录浏览器状态（内联替代弹窗） ──
   const [projectDirs, setProjectDirs] = useState<ProjectDirectory[]>([]);
   const [loadingDirs, setLoadingDirs] = useState(false);
+  const dirsLoaded = useRef(false);
 
-  /** 打开目录选择器 — 加载项目目录列表 */
-  const openFolderPicker = useCallback(async () => {
-    setShowFolderPicker(true);
-    setLoadingDirs(true);
-    try {
-      const dirs = await api.browseDirectories('', 3);
-      setProjectDirs(dirs);
-    } catch (err: any) {
-      notify(err.message || t('moduleExplorer.browseFailedDefault'), { title: t('moduleExplorer.browseFailedTitle'), type: 'error' });
-    } finally {
-      setLoadingDirs(false);
+  // ── 侧栏标签页状态 ──
+  const MODULE_THRESHOLD = 3;
+  const [sidebarTab, setSidebarTab] = useState<'modules' | 'folders'>('modules');
+  const smartDefaultApplied = useRef(false);
+  const nonShellTargetCount = useMemo(
+    () => filteredTargets.filter(t => !isShellTarget(t.name)).length,
+    [filteredTargets, isShellTarget]
+  );
+
+  // 智能默认（仅首次 targets 加载后执行一次）：
+  // 模块数 >= 阈值 → 显示模块；模块数少（如 TS 项目无模块概念）→ 显示目录
+  useEffect(() => {
+    if (smartDefaultApplied.current) return;
+    if (targets.length === 0) return;
+    smartDefaultApplied.current = true;
+    if (nonShellTargetCount < MODULE_THRESHOLD) {
+      setSidebarTab('folders');
+    } else {
+      setSidebarTab('modules');
     }
-  }, []);
+  }, [targets.length, nonShellTargetCount]);
+
+  // 切到目录标签时自动加载目录列表（仅加载一次）
+  useEffect(() => {
+    if (sidebarTab !== 'folders' || dirsLoaded.current) return;
+    dirsLoaded.current = true;
+    setLoadingDirs(true);
+    api.browseDirectories('', 3).then(dirs => {
+      setProjectDirs(dirs);
+    }).catch(() => {
+      setProjectDirs([]);
+    }).finally(() => {
+      setLoadingDirs(false);
+    });
+  }, [sidebarTab]);
 
   /** 选择目录并触发扫描 — 构建虚拟 Target，持久化到侧边栏 */
   const handleSelectFolder = useCallback((dir: ProjectDirectory) => {
-    setShowFolderPicker(false);
     const virtualTarget: SPMTarget = {
       name: dir.name,
       packageName: dir.name,
@@ -121,10 +158,11 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
       info: { source: 'manual-folder-scan', originalPath: dir.path },
       isVirtual: true,
     };
-    // 持久化到前端存储
     onAddCustomFolder?.(virtualTarget);
     handleScanTarget(virtualTarget);
-  }, [handleScanTarget, onAddCustomFolder]);
+    // 切回模块标签，以便看到新添加的虚拟目录
+    setSidebarTab('modules');
+  }, [handleScanTarget, onAddCustomFolder, t]);
 
 
   const fetchSimilarity = useCallback(async (key: string, opts: { targetName?: string; candidateId?: string; candidate?: { title?: string; summary?: string; code?: string; usageGuide?: string } }) => {
@@ -198,29 +236,45 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
   return (
   <div className="flex gap-8 h-full">
     <div className="w-80 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden shrink-0">
-    <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-      <span className="font-bold text-sm">{t('moduleExplorer.projectModules', { count: targets.length })}</span>
-      <div className="flex items-center gap-1.5">
+    {/* ── 标签页切换 ── */}
+    <div className="p-3 bg-slate-50 border-b border-slate-200">
+      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-0.5 bg-slate-200/60 rounded-lg p-0.5">
         <button
-          onClick={openFolderPicker}
-          disabled={isScanning}
-          title={t('moduleExplorer.addFolderScan')}
-          className="p-1.5 rounded-md hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 border border-transparent hover:border-emerald-200 transition-all disabled:opacity-40"
+        onClick={() => setSidebarTab('modules')}
+        className={`text-[11px] px-2.5 py-1.5 rounded-md font-bold transition-all ${
+          sidebarTab === 'modules'
+          ? 'bg-white text-blue-700 shadow-sm'
+          : 'text-slate-500 hover:text-slate-700'
+        }`}
         >
-          <FolderPlus size={ICON_SIZES.md} />
+        {t('moduleExplorer.modulesTabLabel', { count: nonShellTargetCount })}
         </button>
-        {handleRefreshProject && (
         <button
-          onClick={handleRefreshProject}
-          title={t('moduleExplorer.refreshProject')}
-          className="p-1.5 rounded-md hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-transparent hover:border-blue-200 transition-all"
+        onClick={() => setSidebarTab('folders')}
+        className={`text-[11px] px-2.5 py-1.5 rounded-md font-bold transition-all ${
+          sidebarTab === 'folders'
+          ? 'bg-white text-blue-700 shadow-sm'
+          : 'text-slate-500 hover:text-slate-700'
+        }`}
         >
-          <RefreshCw size={ICON_SIZES.md} />
+        {t('moduleExplorer.foldersTabLabel')}
         </button>
-        )}
+      </div>
+      {handleRefreshProject && (
+        <button
+        onClick={handleRefreshProject}
+        title={t('moduleExplorer.refreshProject')}
+        className="p-1.5 rounded-md hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-transparent hover:border-blue-200 transition-all"
+        >
+        <RefreshCw size={ICON_SIZES.md} />
+        </button>
+      )}
       </div>
     </div>
     <div className="flex-1 overflow-y-auto p-2 space-y-1">
+      {sidebarTab === 'modules' ? (
+      <>
       {filteredTargets.map(tgt => {
       const isShell = isShellTarget(tgt.name);
       const isSelected = selectedTargetName === tgt.name;
@@ -243,7 +297,7 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
           <span className={`text-sm truncate ${!isShell ? 'font-bold' : 'font-medium'} ${isSelected ? 'text-blue-700' : ''}`}>{tgt.name}</span>
           {lang && !isShell && (
             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${langBadgeClass}`}>
-            {lang.toUpperCase()}
+            {LANG_ABBR[lang] || lang.toUpperCase()}
             </span>
           )}
           {isVirtual && (
@@ -273,6 +327,56 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         </button>
       );
       })}
+      </>
+      ) : (
+      <>
+      {loadingDirs ? (
+        <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+        <Loader2 size={ICON_SIZES.lg} className="animate-spin mb-3 opacity-40" />
+        <p className="text-xs">{t('moduleExplorer.scanningDirs')}</p>
+        </div>
+      ) : projectDirs.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+        <FolderOpen size={ICON_SIZES.xl} className="mb-3 opacity-20" />
+        <p className="text-xs text-center px-4 leading-relaxed">
+          {t('moduleExplorer.noDirs')}
+        </p>
+        </div>
+      ) : (
+        projectDirs.map(dir => {
+        const dirLangClass = LANG_COLORS[dir.language] || 'bg-slate-100 text-slate-500 border-slate-200';
+        return (
+          <button
+          key={dir.path}
+          onClick={() => handleSelectFolder(dir)}
+          disabled={isScanning || !dir.hasSourceFiles}
+          className={`w-full text-left p-2.5 rounded-lg flex items-center gap-2.5 transition-all border border-transparent
+            ${dir.hasSourceFiles
+            ? (isScanning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-emerald-50 hover:border-emerald-200 cursor-pointer')
+            : 'opacity-40 cursor-not-allowed'}
+          `}
+          style={{ paddingLeft: `${dir.depth * 14 + 10}px` }}
+          >
+          <FolderOpen size={ICON_SIZES.sm} className={dir.hasSourceFiles ? 'text-emerald-500 shrink-0' : 'text-slate-300 shrink-0'} />
+          <span className="text-sm font-medium flex-1 truncate">{dir.name}</span>
+          {dir.hasSourceFiles && dir.language !== 'unknown' && (
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${dirLangClass}`}>
+            {LANG_ABBR[dir.language] || dir.language.toUpperCase()}
+            </span>
+          )}
+          {dir.hasSourceFiles && (
+            <span className="text-[10px] text-slate-400 shrink-0">{t('moduleExplorer.sourceFileCount', { count: dir.sourceFileCount })}</span>
+          )}
+          <ChevronRight size={12} className="text-slate-300 shrink-0" />
+          </button>
+        );
+        })
+      )}
+      <div className="px-3 py-2 text-[10px] text-slate-400 text-center">
+        {t('moduleExplorer.selectFolderHint')}
+      </div>
+      </>
+      )}
     </div>
     </div>
     <div className="flex-1 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden relative">
@@ -315,16 +419,6 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         {selectedTargetName === '__project__' ? t('moduleExplorer.fullProjectScanning') : t('moduleExplorer.moduleScanLabel', { name: selectedTargetName || '...' })}
         </p>
         <p className="text-sm text-slate-500 mb-4">{scanProgress.status}</p>
-        {scanFileList.length > 0 && (
-        <div className="w-full max-w-lg mb-4 text-left">
-          <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">{t('moduleExplorer.filesInScan', { count: scanFileList.length })}</p>
-          <div className="max-h-32 overflow-y-auto space-y-1 rounded-lg bg-slate-50 border border-slate-200 p-2">
-          {scanFileList.map((f, i) => (
-            <div key={i} className="text-xs font-mono text-slate-600 truncate" title={f.path}>{f.name}</div>
-          ))}
-          </div>
-        </div>
-        )}
         <div className="w-full max-w-md bg-slate-100 rounded-full h-2.5 overflow-hidden">
         <div
           className="h-full bg-blue-600 rounded-full transition-all duration-500 ease-out"
@@ -344,17 +438,6 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         <p className="text-xs mt-2 max-w-sm leading-relaxed">
         {t('moduleExplorer.knowledgeExtractHint')}
         </p>
-      </div>
-      )}
-
-      {!isScanning && scanFileList.length > 0 && (
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">{t('moduleExplorer.filesInScan', { count: scanFileList.length })}</p>
-        <div className="flex flex-wrap gap-2">
-        {scanFileList.map((f, i) => (
-          <span key={i} className="text-xs font-mono bg-white border border-slate-200 text-slate-600 px-2 py-1 rounded" title={f.path}>{f.name}</span>
-        ))}
-        </div>
       </div>
       )}
 
@@ -436,67 +519,6 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
       // Recipe selected for detail view
     }}
     />
-
-    {/* 目录选择器浮层 */}
-    {showFolderPicker && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[1px]" onClick={() => setShowFolderPicker(false)}>
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-[480px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
-      <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-        <FolderOpen size={ICON_SIZES.md} className="text-emerald-500" />
-        <span className="font-bold text-sm">{t('moduleExplorer.selectFolderTitle')}</span>
-        </div>
-        <button onClick={() => setShowFolderPicker(false)} className="p-1 rounded hover:bg-slate-100 text-slate-400">
-        <X size={ICON_SIZES.sm} />
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-3 scrollbar-light">
-        {loadingDirs ? (
-        <div className="flex items-center justify-center py-12 text-slate-400">
-          <Loader2 size={ICON_SIZES.lg} className="animate-spin mr-2" />
-          <span className="text-sm">{t('moduleExplorer.scanningDirs')}</span>
-        </div>
-        ) : projectDirs.length === 0 ? (
-        <div className="text-center py-12 text-slate-400 text-sm">
-          {t('moduleExplorer.noDirs')}
-        </div>
-        ) : (
-        <div className="space-y-0.5">
-          {projectDirs.map(dir => {
-          const dirLangClass = LANG_COLORS[dir.language] || 'bg-slate-100 text-slate-500 border-slate-200';
-          return (
-            <button
-            key={dir.path}
-            onClick={() => handleSelectFolder(dir)}
-            disabled={!dir.hasSourceFiles}
-            className={`w-full text-left p-2.5 rounded-lg flex items-center gap-3 transition-all border border-transparent
-              ${dir.hasSourceFiles ? 'hover:bg-emerald-50 hover:border-emerald-200 cursor-pointer' : 'opacity-40 cursor-not-allowed'}
-            `}
-            style={{ paddingLeft: `${dir.depth * 16 + 10}px` }}
-            >
-            <FolderOpen size={ICON_SIZES.sm} className={dir.hasSourceFiles ? 'text-emerald-500' : 'text-slate-300'} />
-            <span className="text-sm font-medium flex-1 truncate">{dir.name}</span>
-            {dir.hasSourceFiles && dir.language !== 'unknown' && (
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${dirLangClass}`}>
-              {dir.language.toUpperCase()}
-              </span>
-            )}
-            {dir.hasSourceFiles && (
-              <span className="text-[10px] text-slate-400 shrink-0">{t('moduleExplorer.sourceFileCount', { count: dir.sourceFileCount })}</span>
-            )}
-            <ChevronRight size={12} className="text-slate-300 shrink-0" />
-            </button>
-          );
-          })}
-        </div>
-        )}
-      </div>
-      <div className="p-3 border-t border-slate-100 text-[10px] text-slate-400 text-center">
-        {t('moduleExplorer.selectFolderHint')}
-      </div>
-      </div>
-    </div>
-    )}
   </div>
   );
 };

@@ -371,9 +371,10 @@ export const api = {
   // ── Data (bulk fetch) ──────
 
   async fetchData(): Promise<ProjectData> {
-    const [knowledgeRes, aiConfigRes] = await Promise.all([
+    const [knowledgeRes, aiConfigRes, projectInfoRes] = await Promise.all([
       http.get('/knowledge?limit=1000').catch(() => ({ data: { success: true, data: { data: [] } } })),
       http.get('/ai/config').catch(() => ({ data: { success: true, data: { provider: '', model: '' } } })),
+      http.get('/modules/project-info').catch(() => ({ data: { success: true, data: { projectRoot: '' } } })),
     ]);
 
     // All knowledge entries from V3 backend
@@ -403,11 +404,14 @@ export const api = {
       if (e.id && e.title) idTitleMap[e.id] = e.title;
     }
 
+    // Project root for per-project storage isolation
+    const projectRoot = projectInfoRes.data?.data?.projectRoot || '';
+
     return {
       rootSpec: { list: [] },
       recipes,
       candidates,
-      projectRoot: '',
+      projectRoot,
       watcherStatus: 'active',
       aiConfig: { provider: aiConfig.provider || '', model: aiConfig.model || '' },
       idTitleMap,
