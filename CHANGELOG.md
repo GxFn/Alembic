@@ -4,6 +4,24 @@
 
 ---
 
+## [3.0.9] - 2026-02-22
+
+### 改进
+
+- **全平台兼容（macOS / Linux / Windows）**：深度审计并修复 7 处 macOS 专属依赖，基础设施层现在可在三大平台运行
+- **ClipboardManager 跨平台重写**：macOS pbcopy/pbpaste 保留；Linux 自动检测 Wayland（wl-copy/wl-paste）与 X11（xclip/xsel），结果缓存；Windows 使用 PowerShell `Get-Clipboard`/`Set-Clipboard`
+- **NativeUi.notify() 跨平台**：macOS osascript 保留；Linux 使用 `notify-send`（libnotify）；Windows 使用 PowerShell UWP ToastNotificationManager
+- **SetupService IDE 发现跨平台**：`which` → Windows 使用 `where`，stderr 通过 `stdio` 选项抑制而非 shell `2>/dev/null`；新增 Windows（`%LOCALAPPDATA%\Programs\*`）及 Linux（`/usr/share/code/`、`/usr/bin/`、`~/.local/bin/`）IDE 路径
+- **路径解析跨平台**：`readlink -f` shell 命令替换为 Node.js 原生 `fs.realpathSync()`
+- **Paths.js 平台感知**：`getSnippetsPath()` 在非 macOS 返回 `~/.autosnippet/snippets/`，macOS 保留 Xcode CodeSnippets 路径
+- **PathGuard 平台条件允许列表**：Xcode snippets 路径仅在 macOS 加入默认 allowlist，其余平台使用 `~/.autosnippet/snippets`
+
+### 修复
+
+- **`os.getenv` Windows 崩溃**：`install-vscode-copilot.js` 中 `os.getenv('APPDATA')` 不是 Node.js API，替换为 `process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')`
+
+---
+
 ## [3.0.8] - 2026-02-21
 
 ### 改进

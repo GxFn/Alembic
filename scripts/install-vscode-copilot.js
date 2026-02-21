@@ -78,7 +78,7 @@ function getVSCodeSettingsPath(isGlobal = true) {
     if (platform === 'darwin') {
       return path.join(os.homedir(), 'Library/Application Support/Code/User/settings.json');
     } else if (platform === 'win32') {
-      return path.join(os.getenv('APPDATA') || os.homedir(), 'Code/User/settings.json');
+      return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Code/User/settings.json');
     } else {
       return path.join(os.homedir(), '.config/Code/User/settings.json');
     }
