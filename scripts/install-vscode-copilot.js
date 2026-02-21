@@ -126,7 +126,7 @@ function getMcpServerPath() {
 // ============ 配置 VSCode settings.json ============
 
 function configureVSCodeSettings() {
-  log('\n📝 配置 VSCode settings.json...', 'blue');
+  log('\n📝 配置 VSCode MCP 设置...', 'blue');
 
   if (isAutoSnippetRepo && !args.path) {
     log('ℹ️  检测到在 AutoSnippet 仓库内执行，仅配置全局设置', 'yellow');
@@ -134,8 +134,8 @@ function configureVSCodeSettings() {
   }
 
   const mcpServerPath = getMcpServerPath();
-  const mcpConfig = {
-    name: 'autosnippet',
+  const mcpServerConfig = {
+    type: 'stdio',
     command: 'node',
     args: [mcpServerPath],
     env: {
@@ -143,71 +143,32 @@ function configureVSCodeSettings() {
     },
   };
 
-  let globalConfigured = false;
-  let workspaceConfigured = false;
+  let configured = false;
 
-  // 全局配置
-  if (configGlobal) {
-    const globalSettingsPath = getVSCodeSettingsPath(true);
-    const globalSettings = readJsonFile(globalSettingsPath, {});
-
-    if (!globalSettings['github.copilot.mcp']) {
-      globalSettings['github.copilot.mcp'] = {};
-    }
-    if (!globalSettings['github.copilot.mcp'].servers) {
-      globalSettings['github.copilot.mcp'].servers = [];
-    }
-
-    const existingIndex = globalSettings['github.copilot.mcp'].servers.findIndex(
-      (s) => s.name === 'autosnippet'
-    );
-
-    if (existingIndex >= 0) {
-      globalSettings['github.copilot.mcp'].servers[existingIndex] = mcpConfig;
-    } else {
-      globalSettings['github.copilot.mcp'].servers.push(mcpConfig);
-    }
-
-    // 添加推荐的全局设置
-    globalSettings['github.copilot.enable'] = globalSettings['github.copilot.enable'] || {};
-    globalSettings['github.copilot.enable']['*'] = true;
-    globalSettings['github.copilot.chat.localeOverride'] = 'zh-CN';
-
-    if (writeJsonFile(globalSettingsPath, globalSettings)) {
-      log(`✅ 全局配置完成: ${globalSettingsPath}`, 'green');
-      globalConfigured = true;
-    }
-  }
-
-  // 工作区配置
+  // 工作区配置 → .vscode/mcp.json（新标准格式）
   if (configWorkspace) {
-    const workspaceSettingsPath = getVSCodeSettingsPath(false);
-    const workspaceSettings = readJsonFile(workspaceSettingsPath, {});
+    const vscodeDir = path.join(projectPath, '.vscode');
+    const mcpConfigPath = path.join(vscodeDir, 'mcp.json');
 
-    if (!workspaceSettings['github.copilot.mcp']) {
-      workspaceSettings['github.copilot.mcp'] = {};
-    }
-    if (!workspaceSettings['github.copilot.mcp'].servers) {
-      workspaceSettings['github.copilot.mcp'].servers = [];
-    }
-
-    const existingIndex = workspaceSettings['github.copilot.mcp'].servers.findIndex(
-      (s) => s.name === 'autosnippet'
-    );
-
-    if (existingIndex >= 0) {
-      workspaceSettings['github.copilot.mcp'].servers[existingIndex] = mcpConfig;
-    } else {
-      workspaceSettings['github.copilot.mcp'].servers.push(mcpConfig);
+    let config = {};
+    if (fs.existsSync(mcpConfigPath)) {
+      try {
+        config = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8'));
+      } catch { /* ignore */ }
     }
 
-    if (writeJsonFile(workspaceSettingsPath, workspaceSettings)) {
-      log(`✅ 工作区配置完成: ${workspaceSettingsPath}`, 'green');
-      workspaceConfigured = true;
+    if (!config.servers) {
+      config.servers = {};
+    }
+    config.servers.autosnippet = mcpServerConfig;
+
+    if (writeJsonFile(mcpConfigPath, config)) {
+      log(`✅ 工作区 MCP 配置完成: ${mcpConfigPath}`, 'green');
+      configured = true;
     }
   }
 
-  return globalConfigured || workspaceConfigured;
+  return configured;
 }
 
 // ============ 创建推荐扩展配置 ============
@@ -270,41 +231,18 @@ function verifyConfiguration() {
 
   log('\n🔍 验证配置...', 'blue');
 
-  // 检查全局设置
-  if (configGlobal) {
-    const globalSettingsPath = getVSCodeSettingsPath(true);
-    if (fs.existsSync(globalSettingsPath)) {
-      const settings = readJsonFile(globalSettingsPath, {});
-      if (settings['github.copilot.mcp']?.servers) {
-        const hasAutosnippet = settings['github.copilot.mcp'].servers.some(
-          (s) => s.name === 'autosnippet'
-        );
-        if (hasAutosnippet) {
-          log(`✅ VSCode 全局 MCP 配置验证成功`, 'green');
-        } else {
-          log(`⚠️  未在全局设置中找到 autosnippet MCP 服务器`, 'yellow');
-        }
-      } else {
-        log(`⚠️  全局设置中未找到 MCP 配置`, 'yellow');
-      }
-    }
-  }
-
-  // 检查工作区设置
+  // 检查工作区 MCP 配置（.vscode/mcp.json）
   if (configWorkspace) {
-    const workspaceSettingsPath = getVSCodeSettingsPath(false);
-    if (fs.existsSync(workspaceSettingsPath)) {
-      const settings = readJsonFile(workspaceSettingsPath, {});
-      if (settings['github.copilot.mcp']?.servers) {
-        const hasAutosnippet = settings['github.copilot.mcp'].servers.some(
-          (s) => s.name === 'autosnippet'
-        );
-        if (hasAutosnippet) {
-          log(`✅ VSCode 工作区 MCP 配置验证成功`, 'green');
-        } else {
-          log(`⚠️  未在工作区设置中找到 autosnippet MCP 服务器`, 'yellow');
-        }
+    const mcpConfigPath = path.join(projectPath, '.vscode/mcp.json');
+    if (fs.existsSync(mcpConfigPath)) {
+      const config = readJsonFile(mcpConfigPath, {});
+      if (config.servers?.autosnippet) {
+        log(`✅ VSCode 工作区 MCP 配置验证成功 (.vscode/mcp.json)`, 'green');
+      } else {
+        log(`⚠️  .vscode/mcp.json 中未找到 autosnippet 服务器`, 'yellow');
       }
+    } else {
+      log(`⚠️  未找到 .vscode/mcp.json`, 'yellow');
     }
   }
 
@@ -353,18 +291,15 @@ function printQuickStart() {
   log(`   ${path.join(projectPath, '.github/copilot-instructions.md')}`, 'yellow');
 
   log('\n📝 配置位置：');
-  if (configGlobal) {
-    log(`   全局: ${getVSCodeSettingsPath(true)}`, 'yellow');
-  }
   if (configWorkspace) {
-    log(`   工作区: ${getVSCodeSettingsPath(false)}`, 'yellow');
+    log(`   MCP: ${path.join(projectPath, '.vscode/mcp.json')}`, 'yellow');
   }
 
   log('\n💡 提示：');
   log('   - 首次配置需要重启 VSCode');
   log('   - MCP 服务器需要 Node.js 18.0+');
   log('   - Dashboard 运行在 http://localhost:3000');
-  log('   - 可在 VSCode 设置中搜索 "copilot.mcp" 查看配置\n');
+  log('   - MCP 配置位于 .vscode/mcp.json（可加入版本控制共享给团队）\n');
 
   log(`${'='.repeat(60)}\n`, 'blue');
 }

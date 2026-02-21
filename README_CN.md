@@ -297,7 +297,8 @@ your-project/
 │   ├── rules/
 │   └── skills/
 └── .vscode/               # VS Code 集成
-    └── settings.json      # MCP 服务配置
+    ├── mcp.json           # MCP 服务配置
+    └── extensions.json    # 推荐扩展
 ```
 
 ## 安全

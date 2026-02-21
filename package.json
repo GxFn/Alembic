@@ -1,6 +1,6 @@
 {
   "name": "autosnippet",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "AutoSnippet - 连接开发者、AI 与项目知识库的工具",
   "type": "module",
   "main": "lib/bootstrap.js",

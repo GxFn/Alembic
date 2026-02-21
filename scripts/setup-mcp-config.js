@@ -64,41 +64,28 @@ if (isVSCode) {
 }
 
 function configureVSCode() {
-  // 找到 settings.json 路径
-  if (os.platform() === 'darwin') {
-    settingsPath = path.join(os.homedir(), 'Library/Application Support/Code/User/settings.json');
-  } else if (os.platform() === 'win32') {
-    settingsPath = path.join(os.getenv('APPDATA'), 'Code/User/settings.json');
-  } else {
-    settingsPath = path.join(os.homedir(), '.config/Code/User/settings.json');
-  }
+  // 使用 .vscode/mcp.json（VSCode 新标准格式）
+  const vscodeDir = path.join(projectPath, '.vscode');
+  const mcpConfigPath = path.join(vscodeDir, 'mcp.json');
 
-  // 读取现有设置
-  let settings = {};
-  if (fs.existsSync(settingsPath)) {
+  // 读取现有配置
+  let config = {};
+  if (fs.existsSync(mcpConfigPath)) {
     try {
-      const content = fs.readFileSync(settingsPath, 'utf8');
-      settings = JSON.parse(content);
+      const content = fs.readFileSync(mcpConfigPath, 'utf8');
+      config = JSON.parse(content);
     } catch (_e) {
       // 忽略解析错误
     }
   }
 
-  // 添加 MCP 配置
-  if (!settings['github.copilot.mcp']) {
-    settings['github.copilot.mcp'] = {};
-  }
-  if (!settings['github.copilot.mcp'].servers) {
-    settings['github.copilot.mcp'].servers = [];
+  // 添加 MCP 服务器配置
+  if (!config.servers) {
+    config.servers = {};
   }
 
-  // 检查 autosnippet 是否已存在
-  const existingIndex = settings['github.copilot.mcp'].servers.findIndex(
-    (s) => s.name === 'autosnippet'
-  );
-
-  const mcpConfig = {
-    name: 'autosnippet',
+  config.servers.autosnippet = {
+    type: 'stdio',
     command: 'node',
     args: [mcpServerPath],
     env: {
@@ -106,24 +93,19 @@ function configureVSCode() {
     },
   };
 
-  if (existingIndex >= 0) {
-    settings['github.copilot.mcp'].servers[existingIndex] = mcpConfig;
-  } else {
-    settings['github.copilot.mcp'].servers.push(mcpConfig);
-  }
-
-  // 写入设置
+  // 写入 .vscode/mcp.json
   try {
-    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8');
+    fs.mkdirSync(vscodeDir, { recursive: true });
+    fs.writeFileSync(mcpConfigPath, JSON.stringify(config, null, 2), 'utf8');
     if (!isQuiet) {
     }
   } catch (e) {
     if (!isQuiet) {
-      console.error(`✗ 保存设置失败: ${e.message}`);
+      console.error(`✗ 保存配置失败: ${e.message}`);
     }
     process.exit(1);
   }
+
 }
 
 function configureCursor() {

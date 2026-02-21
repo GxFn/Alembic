@@ -297,7 +297,8 @@ your-project/
 │   ├── rules/
 │   └── skills/
 └── .vscode/               # VS Code integration
-    └── settings.json      # MCP server config
+    ├── mcp.json           # MCP server config
+    └── extensions.json    # Recommended extensions
 ```
 
 ## Security

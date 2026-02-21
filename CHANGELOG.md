@@ -4,6 +4,17 @@
 
 ---
 
+## [3.0.3] - 2026-02-21
+
+### 变更
+
+- **VSCode MCP 配置迁移至 `.vscode/mcp.json`**：`asd setup` / `asd upgrade` 现在按照 [VSCode 最新 MCP 标准](https://code.visualstudio.com/docs/copilot/customization/mcp-servers) 将 MCP 服务器配置写入独立的 `.vscode/mcp.json` 文件，不再写入 `settings.json` 的 `github.copilot.mcp` 字段
+- **同步更新所有 MCP 配置入口**：`SetupService`、`UpgradeService`、`setup-mcp-config.js`、`install-vscode-copilot.js` 统一使用新格式
+- **`bin/mcp-server.js` 注释更新**：补充 VSCode `.vscode/mcp.json` 配置示例
+- **README / README_CN 目录结构更新**：`.vscode/` 下展示 `mcp.json` + `extensions.json`
+
+---
+
 ## [3.0.2] - 2026-02-21
 
 ### 新增功能
