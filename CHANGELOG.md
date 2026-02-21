@@ -4,6 +4,27 @@
 
 ---
 
+## [3.0.8] - 2026-02-21
+
+### 改进
+
+- **web-tree-sitter WASM 迁移**：从原生 `tree-sitter` 迁移至 `web-tree-sitter@0.25.0`（WASM），消除 C++ 编译依赖，全 11 语言（Go/Python/Java/Kotlin/Swift/JS/TS/Rust/ObjC/Dart/C#）均通过 286 文件零错误解析验证
+- **Guard 规则误报大幅降低**：总违规从 261 降至 118（-55%），新增 `skipComments`（跳过注释行）、`skipTestBlocks`（跳过 Rust `#[cfg(test)]` 内联测试模块）、扩展 `excludePaths`（8 条规则增加测试/mock/bench 目录排除）
+- **Dart (Flutter) Guard 优化**：`dart-avoid-dynamic` 排除 `Map<String, dynamic>` JSON 标准模式（-87.5%），`dart-no-set-state-after-dispose` 降级为 info
+- **Go 规则精调**：`go-no-global-var` 排除 `var _ Interface = ...` 接口满足断言模式，测试文件排除覆盖 `_test.go`
+
+### 新增
+
+- **`_buildCommentMask()` 方法**：按语言构建注释行布尔掩码（支持 `//`/`///`/`/* */`/`#`/`"""`），供规则级 `skipComments` 标志使用
+- **`_buildTestBlockMask()` 方法**：追踪 Rust `#[cfg(test)] mod tests { ... }` 花括号深度，精确标记内联测试块行
+- **AppFlowy 测试项目**：新增第 10 个测试项目（1976 Dart 文件的真实 Flutter 应用），覆盖全部 9 条 Dart Guard 规则
+
+### 修复
+
+- **`getRules()` 属性传播 bug**：内置规则的 `skipComments` / `skipTestBlocks` 属性未被复制到重构的规则对象中，导致这两个标志静默失效
+
+---
+
 ## [3.0.7] - 2026-02-21
 
 ### 新增

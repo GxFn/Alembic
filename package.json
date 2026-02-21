@@ -1,6 +1,6 @@
 {
   "name": "autosnippet",
-  "version": "3.0.7",
+  "version": "3.0.8",
   "description": "Extract code patterns into a knowledge base for AI coding assistants",
   "type": "module",
   "main": "lib/bootstrap.js",
@@ -88,9 +88,9 @@
     "open": "^8.0.4",
     "ora": "^8.0.1",
     "socket.io": "^4.8.1",
-    "tree-sitter": "^0.25.0",
     "undici": "^6.23.0",
     "uuid": "^9.0.1",
+    "web-tree-sitter": "^0.25.0",
     "winston": "^3.11.0",
     "zod": "^4.3.6"
   },
@@ -110,7 +110,8 @@
     "resources/native-ui/combined-window.swift",
     "resources/native-ui/native-ui",
     "resources/native-ui/README.md",
-    "resources/openChrome.applescript"
+    "resources/openChrome.applescript",
+    "resources/grammars"
   ],
   "directories": {
     "doc": "docs",
@@ -126,45 +127,7 @@
     "prettier": "^3.1.1",
     "supertest": "^6.3.3"
   },
-  "optionalDependencies": {
-    "tree-sitter-go": "^0.25.0",
-    "tree-sitter-java": "^0.23.5",
-    "tree-sitter-javascript": "^0.25.0",
-    "tree-sitter-kotlin": "^0.3.8",
-    "tree-sitter-objc": "^3.0.2",
-    "tree-sitter-python": "^0.25.0",
-    "tree-sitter-swift": "^0.7.1",
-    "tree-sitter-typescript": "^0.23.2",
-    "tree-sitter-rust": "^0.23.2"
-  },
   "overrides": {
-    "tree-sitter-kotlin": {
-      "tree-sitter": "$tree-sitter"
-    },
-    "tree-sitter-java": {
-      "tree-sitter": "$tree-sitter"
-    },
-    "tree-sitter-python": {
-      "tree-sitter": "$tree-sitter"
-    },
-    "tree-sitter-javascript": {
-      "tree-sitter": "$tree-sitter"
-    },
-    "tree-sitter-typescript": {
-      "tree-sitter": "$tree-sitter"
-    },
-    "tree-sitter-swift": {
-      "tree-sitter": "$tree-sitter"
-    },
-    "tree-sitter-objc": {
-      "tree-sitter": "$tree-sitter"
-    },
-    "tree-sitter-rust": {
-      "tree-sitter": "$tree-sitter"
-    },
-    "tree-sitter-c": {
-      "tree-sitter": "$tree-sitter"
-    },
     "minimatch": "^10.2.2",
     "diff": "^8.0.3",
     "glob": "^11.0.0"
