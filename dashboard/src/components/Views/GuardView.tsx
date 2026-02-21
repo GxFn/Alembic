@@ -250,14 +250,14 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
   return (
   <div className="flex-1 flex flex-col overflow-hidden">
     {/* ── 页面头部 ── */}
-    <div className="mb-4 flex justify-between items-center shrink-0">
-    <div className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center">
+    <div className="mb-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
+    <div className="flex items-center gap-3 min-w-0">
+      <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
       <Shield className="text-blue-600" size={20} />
       </div>
-      <div>
-      <h2 className="text-xl font-bold text-slate-800">{t('guard.title')}</h2>
-      <p className="text-xs text-slate-400 mt-0.5">
+      <div className="min-w-0">
+      <h2 className="text-lg xl:text-xl font-bold text-slate-800">{t('guard.title')}</h2>
+      <p className="text-xs text-slate-400 mt-0.5 truncate">
         {t('guard.summary')}
         {projectLanguages.length > 0 && (
         <span className="ml-1.5">· {t('guard.currentProject')}：{projectLanguages.map(l => langLabel(l)).join(' / ')}</span>
@@ -265,7 +265,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
       </p>
       </div>
     </div>
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       <a
       href={GITHUB_ISSUES_NEW_GUARD_URL}
       target="_blank"

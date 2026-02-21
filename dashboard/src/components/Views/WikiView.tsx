@@ -563,7 +563,7 @@ const DocumentReader: React.FC<{
             <Loader2 size={ICON_SIZES.xl} className="text-blue-500 animate-spin" />
           </div>
         ) : (
-          <div className="px-8 py-6 max-w-4xl mx-auto">
+          <div className="px-4 xl:px-6 2xl:px-8 py-6 max-w-4xl mx-auto">
             <MarkdownWithHighlight content={content} className="wiki-reader" />
           </div>
         )}
@@ -617,7 +617,7 @@ const ContentPlaceholder: React.FC<{
   const quickLinks = quickLinkCandidates.filter(l => fileSet.size === 0 || fileSet.has(l.path));
 
   return (
-    <div className="p-8 overflow-y-auto flex-1">
+    <div className="p-4 xl:p-6 2xl:p-8 overflow-y-auto flex-1">
       {/* 生成中的沿浸式提示 */}
       {isGenerating && (
         <div className="mb-8 flex flex-col items-center">

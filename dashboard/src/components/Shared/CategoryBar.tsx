@@ -10,7 +10,7 @@ interface CategoryBarProps {
 const CategoryBar: React.FC<CategoryBarProps> = ({ selectedCategory, setSelectedCategory }) => {
   return (
   <div className="bg-white border-b border-slate-100 shrink-0 overflow-hidden">
-    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-8 py-3">
+    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-4 xl:px-6 2xl:px-8 py-3">
     {Object.entries(categoryConfigs).map(([cat, config]) => {
       const Icon = config.icon;
       const isSelected = selectedCategory === cat;

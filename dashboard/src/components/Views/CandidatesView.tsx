@@ -361,17 +361,17 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* ── 页面头部 ── */}
-      <div className="mb-4 flex justify-between items-center shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center">
+      <div className="mb-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
             <Sparkles className="text-blue-600" size={20} />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-800">AI Scan Candidates</h2>
-            <p className="text-xs text-slate-400 mt-0.5">{t('candidates.title')}</p>
+          <div className="min-w-0">
+            <h2 className="text-lg xl:text-xl font-bold text-slate-800">AI Scan Candidates</h2>
+            <p className="text-xs text-slate-400 mt-0.5 truncate">{t('candidates.title')}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* 冷启动按钮 — bootstrap 进行中时隐藏 */}
           {onColdStart && !isBootstrapping && (
             <button

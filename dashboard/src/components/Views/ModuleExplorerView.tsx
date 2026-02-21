@@ -234,8 +234,8 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
   }, [scanResults, fetchSimilarity]);
 
   return (
-  <div className="flex gap-8 h-full">
-    <div className="w-80 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden shrink-0">
+  <div className="flex gap-4 xl:gap-6 2xl:gap-8 h-full">
+    <div className="w-64 xl:w-72 2xl:w-80 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden shrink-0">
     {/* ── 标签页切换 ── */}
     <div className="p-3 bg-slate-50 border-b border-slate-200">
       <div className="flex items-center justify-between">
@@ -410,7 +410,7 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
     
     <div className="flex-1 overflow-y-auto p-6 space-y-8 relative">
       {isScanning && (
-      <div className="absolute inset-0 bg-white/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center text-blue-600 px-8 overflow-y-auto">
+      <div className="absolute inset-0 bg-white/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center text-blue-600 px-4 xl:px-8 overflow-y-auto">
         <div className="relative mb-6">
         <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
         <Cpu size={ICON_SIZES.xxl} className="absolute inset-0 m-auto text-blue-600 animate-pulse" />
@@ -449,7 +449,7 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         <span className="text-sm font-bold text-slate-700">{t('moduleExplorer.guardAuditSummary')}</span>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">PROJECT SCAN</span>
         </div>
-        <div className="flex gap-6 text-sm">
+        <div className="flex flex-wrap gap-3 xl:gap-6 text-sm">
         <div className="flex items-center gap-1.5">
           <span className="text-slate-500">{t('moduleExplorer.auditedFiles')}</span>
           <span className="font-bold text-slate-700">{guardAudit.summary.totalFiles}</span>

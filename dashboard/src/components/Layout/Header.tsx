@@ -85,9 +85,9 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
   };
 
   return (
-  <header className={`h-16 ${isDarkMode ? 'bg-[#252526] border-b border-[#3e3e42]' : 'bg-white border-b border-slate-200'} flex items-center justify-between px-8 shrink-0`}>
-    <div className="flex items-center gap-4">
-    <div className="relative w-96">
+  <header className={`h-16 ${isDarkMode ? 'bg-[#252526] border-b border-[#3e3e42]' : 'bg-white border-b border-slate-200'} flex items-center justify-between px-4 xl:px-6 2xl:px-8 shrink-0 gap-3`}>
+    <div className="flex items-center gap-2 xl:gap-3 2xl:gap-4 min-w-0 flex-1">
+    <div className="relative w-40 xl:w-60 2xl:w-80 min-w-[10rem] shrink">
       <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} size={ICON_SIZES.md} />
       <input 
       type="text" 
@@ -108,7 +108,7 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
       {t('header.semanticSearch')}
     </button>
     </div>
-    <div className="flex items-center gap-4">
+    <div className="flex items-center gap-1.5 xl:gap-2 2xl:gap-3 shrink-0">
     {!llmReady ? (
       <button
         type="button"
@@ -124,12 +124,12 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setAiDropdownOpen((v) => !v); }}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+        className={`flex items-center gap-1.5 px-2 xl:px-3 py-1.5 rounded-lg text-xs font-medium transition-colors max-w-[180px] 2xl:max-w-none ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
         title={t('header.clickSwitchAi')}
       >
-        <Cpu size={ICON_SIZES.sm} />
-        {aiConfig.provider} / {aiConfig.model}
-        <ChevronDown size={ICON_SIZES.xs} className={aiDropdownOpen ? 'rotate-180' : ''} />
+        <Cpu size={ICON_SIZES.sm} className="shrink-0" />
+        <span className="truncate">{aiConfig.provider} / {aiConfig.model}</span>
+        <ChevronDown size={ICON_SIZES.xs} className={`shrink-0 ${aiDropdownOpen ? 'rotate-180' : ''}`} />
       </button>
       {aiDropdownOpen && (
         <div className={`absolute top-full right-0 mt-1 py-1 rounded-lg border shadow-lg z-20 min-w-[200px] ${isDarkMode ? 'bg-[#252526] border-[#3e3e42]' : 'bg-white border-slate-200'}`}>
@@ -173,19 +173,19 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
       <MessageSquare size={ICON_SIZES.sm} />
       {!chatOpen && <span className="text-xs">{t('header.aiChat')}</span>}
     </button>
-    <button onClick={() => setShowCreateModal(true)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 border ${isDarkMode ? 'bg-slate-200 text-slate-900 border-slate-300 hover:bg-white hover:border-white hover:shadow-[0_0_12px_rgba(255,255,255,0.15)]' : 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800 hover:border-slate-800'}`}>
-      <Plus size={ICON_SIZES.md} /> {t('header.newRecipe')}
+    <button onClick={() => setShowCreateModal(true)} className={`flex items-center gap-1.5 px-2.5 xl:px-3 2xl:px-4 py-2 rounded-lg text-xs xl:text-sm font-medium transition-all duration-150 border whitespace-nowrap ${isDarkMode ? 'bg-slate-200 text-slate-900 border-slate-300 hover:bg-white hover:border-white hover:shadow-[0_0_12px_rgba(255,255,255,0.15)]' : 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800 hover:border-slate-800'}`} title={t('header.newRecipe')}>
+      <Plus size={ICON_SIZES.md} /> <span className="hidden xl:inline">{t('header.newRecipe')}</span>
     </button>
-    <button onClick={handleSyncSnippets} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 border ${isDarkMode ? 'bg-blue-500/20 text-blue-300 border-blue-500/30 hover:bg-blue-500/40 hover:text-blue-200 hover:border-blue-400/50' : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700'}`}>
-      <RefreshCw size={ICON_SIZES.md} /> {t('header.syncSnippets')}
+    <button onClick={handleSyncSnippets} className={`flex items-center gap-1.5 px-2.5 xl:px-3 2xl:px-4 py-2 rounded-lg text-xs xl:text-sm font-medium transition-all duration-150 border whitespace-nowrap ${isDarkMode ? 'bg-blue-500/20 text-blue-300 border-blue-500/30 hover:bg-blue-500/40 hover:text-blue-200 hover:border-blue-400/50' : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700'}`} title={t('header.syncSnippets')}>
+      <RefreshCw size={ICON_SIZES.md} /> <span className="hidden xl:inline">{t('header.syncSnippets')}</span>
     </button>
     <button
       onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-500 hover:text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+      className={`flex items-center gap-1 px-2 xl:px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-500 hover:text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
       title={lang === 'zh' ? 'Switch to English' : t('shared.switchToChinese')}
     >
       <Languages size={ICON_SIZES.sm} />
-      {t('header.langSwitch')}
+      <span className="hidden 2xl:inline">{t('header.langSwitch')}</span>
     </button>
     <button
       onClick={toggleTheme}

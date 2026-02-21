@@ -257,13 +257,13 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
   return (
     <div className="h-full flex flex-col">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center shrink-0">
             <BookOpen size={20} className="text-violet-600" />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-800">{t('skills.title')}</h2>
+          <div className="min-w-0">
+            <h2 className="text-lg xl:text-xl font-bold text-slate-800">{t('skills.title')}</h2>
             <p className="text-sm text-slate-500">
               {t('skills.subtitle')}
             </p>
@@ -379,7 +379,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       )}
 
       {/* ── Content ── */}
-      <div className="flex-1 flex gap-6 min-h-0 overflow-hidden">
+      <div className="flex-1 flex gap-4 xl:gap-6 min-h-0 overflow-hidden">
         {/* Skills list */}
         <div className="w-1/2 overflow-y-auto pr-2 space-y-2">
           {loading ? (
@@ -813,7 +813,7 @@ const CreateSkillModal: React.FC<{
           ) : (
             /* Manual mode / Edit generated */
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     {t('skills.skillName')} <span className="text-slate-400 text-xs">(kebab-case)</span>
