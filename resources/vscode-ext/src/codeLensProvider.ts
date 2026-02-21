@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import { detectDirectives, type DetectedDirective } from './directiveDetector';
+import { isDocumentInScope } from './projectScope';
 
 export class DirectiveCodeLensProvider implements vscode.CodeLensProvider {
   private _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
@@ -18,6 +19,11 @@ export class DirectiveCodeLensProvider implements vscode.CodeLensProvider {
   }
 
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+    // 仅对 AutoSnippet 项目内的文件提供 CodeLens
+    if (!isDocumentInScope(document)) {
+      return [];
+    }
+
     const config = vscode.workspace.getConfiguration('autosnippet');
     if (!config.get<boolean>('enableCodeLens', true)) {
       return [];

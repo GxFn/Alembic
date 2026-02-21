@@ -19,6 +19,7 @@ import { DirectiveCodeLensProvider } from './codeLensProvider';
 import { insertAtCursor, insertAtTriggerLine, flashHighlight } from './codeInserter';
 import { detectDirectives, detectFirstDirective, type DetectedDirective } from './directiveDetector';
 import { StatusBar } from './statusBar';
+import { hasAnyProject, isDocumentInScope, invalidateCache } from './projectScope';
 
 let apiClient: ApiClient;
 let statusBar: StatusBar;
@@ -36,12 +37,15 @@ export function activate(context: vscode.ExtensionContext) {
   // 初始化 API Client
   apiClient = new ApiClient(host, port);
 
-  // 状态栏
+  // 状态栏 — 仅在工作区包含 AutoSnippet 项目时显示
   statusBar = new StatusBar(apiClient);
-  statusBar.startPolling();
+  if (hasAnyProject()) {
+    statusBar.show();
+    statusBar.startPolling();
+  }
   context.subscriptions.push(statusBar);
 
-  // CodeLens
+  // CodeLens — 传入作用域判断
   codeLensProvider = new DirectiveCodeLensProvider();
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, codeLensProvider)
@@ -58,10 +62,11 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('autosnippet._executeDirective', cmdExecuteDirective),
   );
 
-  // ─── onSave 指令检测 ───
+  // ─── onSave 指令检测（仅限作用域内文件） ───
 
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(async (document) => {
+      if (!isDocumentInScope(document)) return;
       if (!config.get<boolean>('enableDirectiveDetection', true)) return;
 
       const directive = detectFirstDirective(document);
@@ -102,6 +107,37 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument(() => {
       codeLensProvider.refresh();
+    })
+  );
+
+  // ─── 工作区目录变化时重新检测项目 ───
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      invalidateCache();
+      if (hasAnyProject()) {
+        statusBar.show();
+        statusBar.startPolling();
+      } else {
+        statusBar.hide();
+        statusBar.stopPolling();
+      }
+    })
+  );
+
+  // ─── 切换编辑器时更新状态栏可见性 ───
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (!hasAnyProject()) {
+        statusBar.hide();
+        return;
+      }
+      if (editor && editor.document.uri.scheme === 'file') {
+        if (isDocumentInScope(editor.document)) {
+          statusBar.show();
+        } else {
+          statusBar.hide();
+        }
+      }
     })
   );
 }

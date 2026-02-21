@@ -4,6 +4,20 @@
 
 ---
 
+## [3.0.7] - 2026-02-21
+
+### 新增
+
+- **VS Code 扩展项目作用域**：扩展仅在工作区包含 AutoSnippet 项目（存在 `AutoSnippet/` 或 `.autosnippet/` 目录）时激活状态栏、CodeLens 和 onSave 指令检测，非项目零开销
+- **projectScope 模块**：新增 `projectScope.ts`，提供 `hasAnyProject()` / `isFileInScope()` / `isDocumentInScope()` / `invalidateCache()` 等 API
+
+### 修复
+
+- **轮询定时器泄漏**：`StatusBar.hide()` 不再连带停止 health check 轮询，避免切换编辑器后轮询永久丢失；新增独立 `stopPolling()` 方法
+- **重复定时器**：`startPolling()` 增加防重保护，防止工作区目录变化时创建多个 `setInterval`
+
+---
+
 ## [3.0.6] - 2026-02-21
 
 ### 修复
