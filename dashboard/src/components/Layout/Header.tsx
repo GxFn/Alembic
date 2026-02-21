@@ -124,7 +124,7 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setAiDropdownOpen((v) => !v); }}
-        className={`flex items-center gap-1.5 px-2 xl:px-3 py-1.5 rounded-lg text-xs font-medium transition-colors max-w-[180px] 2xl:max-w-none ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+        className={`flex items-center gap-1.5 px-2 xl:px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-150 max-w-[180px] 2xl:max-w-none ${isDarkMode ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-300 hover:border-slate-500 hover:bg-[#333842]' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
         title={t('header.clickSwitchAi')}
       >
         <Cpu size={ICON_SIZES.sm} className="shrink-0" />
@@ -159,29 +159,29 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
     ) : null}
     <button
       onClick={toggleChat}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-all duration-150 ${
         chatOpen
           ? isDarkMode
-            ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30 hover:bg-blue-500/35 hover:brightness-125'
-            : 'bg-blue-100 text-blue-700 ring-1 ring-blue-200 hover:bg-blue-200'
+            ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 ring-1 ring-blue-500/30 hover:border-blue-400/60 hover:bg-blue-500/30'
+            : 'bg-blue-50 border-blue-300 text-blue-700 ring-1 ring-blue-200 hover:border-blue-400 hover:bg-blue-100'
           : isDarkMode
-            ? 'bg-slate-700 text-slate-300 hover:bg-slate-500 hover:text-white'
-            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-300 hover:border-slate-500 hover:bg-[#333842]'
+            : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
       }`}
       title={chatOpen ? t('header.closeAiChat') : t('header.openAiChat')}
     >
       <MessageSquare size={ICON_SIZES.sm} />
       {!chatOpen && <span className="text-xs">{t('header.aiChat')}</span>}
     </button>
-    <button onClick={() => setShowCreateModal(true)} className={`flex items-center gap-1.5 px-2.5 xl:px-3 2xl:px-4 py-2 rounded-lg text-xs xl:text-sm font-medium transition-all duration-150 border whitespace-nowrap ${isDarkMode ? 'bg-slate-200 text-slate-900 border-slate-300 hover:bg-white hover:border-white hover:shadow-[0_0_12px_rgba(255,255,255,0.15)]' : 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800 hover:border-slate-800'}`} title={t('header.newRecipe')}>
+    <button onClick={() => setShowCreateModal(true)} className={`flex items-center gap-1.5 px-2.5 xl:px-3 2xl:px-4 py-2 rounded-lg text-xs xl:text-sm font-medium transition-all duration-150 border whitespace-nowrap ${isDarkMode ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-300 hover:border-slate-500 hover:bg-[#333842]' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`} title={t('header.newRecipe')}>
       <Plus size={ICON_SIZES.md} /> <span className="hidden xl:inline">{t('header.newRecipe')}</span>
     </button>
-    <button onClick={handleSyncSnippets} className={`flex items-center gap-1.5 px-2.5 xl:px-3 2xl:px-4 py-2 rounded-lg text-xs xl:text-sm font-medium transition-all duration-150 border whitespace-nowrap ${isDarkMode ? 'bg-blue-500/20 text-blue-300 border-blue-500/30 hover:bg-blue-500/40 hover:text-blue-200 hover:border-blue-400/50' : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700'}`} title={t('header.syncSnippets')}>
+    <button onClick={handleSyncSnippets} className={`flex items-center gap-1.5 px-2.5 xl:px-3 2xl:px-4 py-2 rounded-lg text-xs xl:text-sm font-medium transition-all duration-150 border whitespace-nowrap ${isDarkMode ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 hover:border-blue-400/60 hover:bg-blue-500/30' : 'bg-blue-50 border-blue-300 text-blue-600 hover:border-blue-400 hover:bg-blue-100'}`} title={t('header.syncSnippets')}>
       <RefreshCw size={ICON_SIZES.md} /> <span className="hidden xl:inline">{t('header.syncSnippets')}</span>
     </button>
     <button
       onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-      className={`flex items-center gap-1 px-2 xl:px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-500 hover:text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+      className={`flex items-center gap-1 px-2 xl:px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-150 ${isDarkMode ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-300 hover:border-slate-500 hover:bg-[#333842]' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
       title={lang === 'zh' ? 'Switch to English' : t('shared.switchToChinese')}
     >
       <Languages size={ICON_SIZES.sm} />
@@ -189,7 +189,7 @@ const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCre
     </button>
     <button
       onClick={toggleTheme}
-      className={`flex items-center p-2 rounded-lg transition-all duration-150 ${isDarkMode ? 'bg-slate-700 text-amber-300 hover:bg-slate-500 hover:text-amber-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+      className={`flex items-center p-2 rounded-lg border transition-all duration-150 ${isDarkMode ? 'bg-[#2a2d35] border-[#3e3e42] text-amber-300 hover:border-slate-500 hover:bg-[#333842]' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
       title={isDarkMode ? 'Light mode' : 'Dark mode'}
     >
       {isDarkMode ? <Sun size={ICON_SIZES.sm} /> : <Moon size={ICON_SIZES.sm} />}

@@ -699,7 +699,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
                       if (!Array.isArray(arr) || arr.length === 0) return null;
                       return (
                         <div key={type} className="flex items-start gap-2">
-                          <span className="text-[10px] font-mono text-slate-500 w-14 shrink-0 pt-0.5 uppercase">{type}</span>
+                          <span className="text-[10px] font-mono text-slate-500 shrink-0 whitespace-nowrap pt-0.5 uppercase">{type}</span>
                           <div className="flex flex-wrap gap-1">
                             {arr.map((rel: any, ri: number) => {
                               const rawTarget = rel.target || (typeof rel === 'string' ? rel : JSON.stringify(rel));

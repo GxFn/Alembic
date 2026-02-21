@@ -760,7 +760,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                           if (!items || !Array.isArray(items) || items.length === 0) return null;
                           return (
                             <div key={key} className="flex items-start gap-2">
-                              <span className="text-[10px] font-mono text-slate-500 w-14 shrink-0 pt-0.5">{icon} {label}</span>
+                              <span className="text-[10px] font-mono text-slate-500 shrink-0 whitespace-nowrap pt-0.5">{icon} {label}</span>
                               <div className="flex flex-wrap gap-1">
                                 {items.map((r: any, ri: number) => {
                                   const itemName = typeof r === 'string' ? r : r.target || r.id || r.title || JSON.stringify(r);

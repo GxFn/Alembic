@@ -295,14 +295,9 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
           <div className="flex items-center gap-2">
           {!isShell && <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isVirtual ? 'bg-emerald-500' : isSelected ? 'bg-blue-600' : 'bg-blue-600'}`} />}
           <span className={`text-sm truncate ${!isShell ? 'font-bold' : 'font-medium'} ${isSelected ? 'text-blue-700' : ''}`}>{tgt.name}</span>
-          {lang && !isShell && (
+          {lang && !isShell && !isVirtual && lang !== 'unknown' && (
             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${langBadgeClass}`}>
             {LANG_ABBR[lang] || lang.toUpperCase()}
-            </span>
-          )}
-          {isVirtual && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 bg-emerald-50 text-emerald-600 border-emerald-200">
-            FOLDER
             </span>
           )}
           </div>

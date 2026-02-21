@@ -17,7 +17,7 @@ import LoginView from './components/Views/LoginView';
 // Components
 import Sidebar from './components/Layout/Sidebar';
 import Header from './components/Layout/Header';
-import CategoryBar from './components/Shared/CategoryBar';
+
 import RecipesView from './components/Views/RecipesView';
 import HelpView from './components/Views/HelpView';
 import CandidatesView from './components/Views/CandidatesView';
@@ -153,7 +153,7 @@ const App: React.FC = () => {
   const [scanFileList, setScanFileList] = useState<{ name: string; path: string }[]>([]);
   const [scanResults, setScanResults] = useState<ScanResultItem[]>([]);
   const [guardAudit, setGuardAudit] = useState<GuardAuditResult | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+
   const [recipePage, setRecipePage] = useState(1);
   const [recipePageSize, setRecipePageSize] = useState(12);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -175,10 +175,10 @@ const App: React.FC = () => {
   const trickleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // chatAbortControllerRef 已迁移到 GlobalChatDrawer
 
-  // 搜索/分类变化时 Recipes 列表重置到第一页；刷新数据（fetchData）不重置页码
+  // 搜索变化时 Recipes 列表重置到第一页；刷新数据（fetchData）不重置页码
   useEffect(() => {
   setRecipePage(1);
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery]);
 
   // 项目切换时从 localStorage 加载该项目的自定义目录
   useEffect(() => {
@@ -214,12 +214,21 @@ const App: React.FC = () => {
     return () => { cancelled = true; clearInterval(timer); };
   }, []);
 
-  // Bootstrap 异步填充完成时刷新数据    
+  // Bootstrap 异步填充完成时刷新数据 & 弹出通知（只在 App 层做一次，避免 tab 切换导致重复通知）
+  const bootstrapNotifiedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (bootstrap.isAllDone) {
+    if (bootstrap.isAllDone && bootstrap.session) {
+      // 按 session ID 去重：同一次冷启动只通知一次
+      if (bootstrapNotifiedRef.current !== bootstrap.session.id) {
+        bootstrapNotifiedRef.current = bootstrap.session.id;
+        const msg = bootstrap.session.failed > 0
+          ? t('bootstrap.notifyPartial', { completed: bootstrap.session.completed, total: bootstrap.session.total, failed: bootstrap.session.failed })
+          : t('bootstrap.notifySuccess', { completed: bootstrap.session.completed });
+        notify(msg, { title: t('bootstrap.coldStartComplete'), type: bootstrap.session.failed > 0 ? 'error' : 'success' });
+      }
       fetchData();
     }
-  }, [bootstrap.isAllDone]);
+  }, [bootstrap.isAllDone, bootstrap.session?.id]);
 
   // Bootstrap 维度任务创建候选后，增量刷新内容区域（节流 2s，防止短时间多维度完成时频繁请求）
   useEffect(() => {
@@ -886,10 +895,7 @@ const App: React.FC = () => {
   const name = s.name || '';
   const contentStr = typeof s.content === 'string' ? s.content : [s.content?.pattern, s.content?.markdown].filter(Boolean).join(' ');
   const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase()) || contentStr.toLowerCase().includes(searchQuery.toLowerCase()) || (s.description || '').toLowerCase().includes(searchQuery.toLowerCase());
-  if (selectedCategory === 'All') return matchesSearch;
-  const categoryMatch = contentStr ? contentStr.match(/category:\s*(.*)/) : null;
-  const category = categoryMatch ? categoryMatch[1].trim() : 'Utility';
-  return matchesSearch && category === selectedCategory;
+  return matchesSearch;
   }).sort((a, b) => {
   // 如果有语义搜索，按照相似度排序
   if (semanticResults) {
@@ -993,13 +999,6 @@ const App: React.FC = () => {
       }
       }}
     />
-
-    {activeTab === 'recipes' && (
-      <CategoryBar 
-      selectedCategory={selectedCategory} 
-      setSelectedCategory={setSelectedCategory} 
-      />
-    )}
 
     <div className={`flex-1 ${activeTab === 'wiki' ? 'overflow-hidden' : 'overflow-y-auto p-4 xl:p-6 2xl:p-8'}`}>
       {loading ? (

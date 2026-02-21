@@ -10,9 +10,8 @@
  * 全部完成后弹出通知。
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Check, X, Loader2, Sparkles, Code2, Layers, BookOpen, Zap, Settings, Bot, Brain, Filter, Wand2, GitMerge, Clock, Wrench } from 'lucide-react';
-import { notify } from '../../utils/notification';
 import { useI18n } from '../../i18n';
 import type { BootstrapSession, BootstrapTask, ReviewState } from '../../hooks/useBootstrapSocket';
 
@@ -289,7 +288,6 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
   onDismiss,
 }) => {
   const { t } = useI18n();
-  const notifiedRef = useRef(false);
   const [now, setNow] = useState(Date.now());
 
   // Tick every second while running
@@ -299,21 +297,7 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
     return () => clearInterval(timer);
   }, [session?.status]);
 
-  // Notify on completion
-  useEffect(() => {
-    if (isAllDone && session && !notifiedRef.current) {
-      notifiedRef.current = true;
-      const msg = session.failed > 0
-        ? t('bootstrap.notifyPartial', { completed: session.completed, total: session.total, failed: session.failed })
-        : t('bootstrap.notifySuccess', { completed: session.completed });
-      notify(msg, { title: t('bootstrap.coldStartComplete'), type: session.failed > 0 ? 'error' : 'success' });
-    }
-  }, [isAllDone, session]);
-
-  // Reset notification flag when session changes
-  useEffect(() => {
-    if (!session) notifiedRef.current = false;
-  }, [session?.id]);
+  // 通知逻辑已移至 App.tsx（App 层永远挂载，不受 tab 切换影响，彻底避免重复弹出）
 
   if (!session) return null;
 

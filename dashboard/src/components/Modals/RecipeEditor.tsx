@@ -421,7 +421,7 @@ const RecipeEditor: React.FC<RecipeEditorProps> = ({ editingRecipe, setEditingRe
             if (!items || !Array.isArray(items) || items.length === 0) return null;
             return (
               <div key={key} className="flex items-start gap-3">
-              <span className={`text-xs font-mono ${color} w-16 shrink-0 pt-0.5`}>{icon} {label}</span>
+              <span className={`text-xs font-mono ${color} shrink-0 whitespace-nowrap pt-0.5`}>{icon} {label}</span>
               <div className="flex flex-wrap gap-1.5">
                 {items.map((r: any, i: number) => (
                 <span key={i} className="px-2 py-0.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-mono">
