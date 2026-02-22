@@ -72,13 +72,20 @@ function readSnippet(filePath, maxChars) {
 function detectLanguageByExt(ext) {
   const map = {
     '.swift': 'swift',
-    '.m': 'objectivec', '.h': 'objectivec', '.mm': 'objectivec',
-    '.js': 'javascript', '.mjs': 'javascript', '.jsx': 'javascript',
-    '.ts': 'typescript', '.tsx': 'typescript',
+    '.m': 'objectivec',
+    '.h': 'objectivec',
+    '.mm': 'objectivec',
+    '.js': 'javascript',
+    '.mjs': 'javascript',
+    '.jsx': 'javascript',
+    '.ts': 'typescript',
+    '.tsx': 'typescript',
     '.py': 'python',
-    '.java': 'java', '.kt': 'kotlin',
+    '.java': 'java',
+    '.kt': 'kotlin',
     '.go': 'go',
-    '.rs': 'rust', '.rb': 'ruby',
+    '.rs': 'rust',
+    '.rb': 'ruby',
   };
   return map[ext] || 'text';
 }
@@ -109,18 +116,7 @@ function buildRecipe({ title, trigger, language, sourceFile, snippet }) {
 
 const DEFAULT_EXTS = '.swift,.m,.h,.mm,.js,.mjs,.jsx,.ts,.tsx,.py,.java,.kt,.go';
 
-function printUsage() {
-  console.log(`Usage: generate-recipe-drafts [options]
-
-Options:
-  --projectRoot <path>  项目根目录 (默认: 当前目录)
-  --targetDir   <path>  要扫描的源码目录 (默认: projectRoot)
-  --outDir      <path>  输出目录 (默认: <projectRoot>/autosnippet-drafts/recipes)
-  --exts        <list>  扫描的扩展名，逗号分隔 (默认: ${DEFAULT_EXTS})
-  --maxChars    <n>     单文件最大截取字符数 (默认: 4000)
-  --help                显示帮助
-`);
-}
+function printUsage() {}
 
 function main() {
   const args = parseArgs(process.argv);
@@ -130,13 +126,9 @@ function main() {
     process.exit(0);
   }
 
-  const projectRoot = args.projectRoot
-    ? path.resolve(args.projectRoot)
-    : process.cwd();
+  const projectRoot = args.projectRoot ? path.resolve(args.projectRoot) : process.cwd();
 
-  const targetDir = args.targetDir
-    ? path.resolve(args.targetDir)
-    : projectRoot;
+  const targetDir = args.targetDir ? path.resolve(args.targetDir) : projectRoot;
 
   const outDir = args.outDir
     ? path.resolve(args.outDir)
@@ -159,7 +151,7 @@ function main() {
   const files = [];
   walk(targetDir, exts, files);
 
-  let count = 0;
+  let _count = 0;
   for (const filePath of files) {
     const ext = path.extname(filePath);
     const base = path.basename(filePath, ext);
@@ -180,10 +172,8 @@ function main() {
     const safeName = `${base}${ext}`.replace(/\./g, '_');
     const outFile = path.join(outDir, `${safeName}.md`);
     fs.writeFileSync(outFile, recipe, 'utf8');
-    count++;
+    _count++;
   }
-
-  console.log(`✅ 生成 ${count} 个 recipe 草稿 → ${outDir}`);
 }
 
 main();

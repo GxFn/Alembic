@@ -30,7 +30,6 @@ const __dirname = dirname(__filename);
 
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import os from 'node:os';
 import path from 'node:path';
 
 const require = createRequire(import.meta.url);
@@ -46,7 +45,6 @@ const isAutoSnippetRepo =
 
 // 默认只做工作区配置，不做全局配置
 // 如果在 AutoSnippet 仓库内执行且未明确指定 --path，跳过所有配置
-const configGlobal = args.global && !isAutoSnippetRepo;
 const configWorkspace = !args.global && !isAutoSnippetRepo && (args.path || !isAutoSnippetRepo);
 const skipVerify = args['skip-verify'];
 const isQuiet = args.quiet || process.env.ASD_QUIET === 'true';
@@ -70,22 +68,6 @@ function error(msg) {
 }
 
 // ============ 助手函数 ============
-
-function getVSCodeSettingsPath(isGlobal = true) {
-  const platform = os.platform();
-
-  if (isGlobal) {
-    if (platform === 'darwin') {
-      return path.join(os.homedir(), 'Library/Application Support/Code/User/settings.json');
-    } else if (platform === 'win32') {
-      return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Code/User/settings.json');
-    } else {
-      return path.join(os.homedir(), '.config/Code/User/settings.json');
-    }
-  } else {
-    return path.join(projectPath, '.vscode/settings.json');
-  }
-}
 
 function readJsonFile(filePath, defaultValue = {}) {
   if (!fs.existsSync(filePath)) {
@@ -154,7 +136,9 @@ function configureVSCodeSettings() {
     if (fs.existsSync(mcpConfigPath)) {
       try {
         config = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8'));
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     if (!config.servers) {

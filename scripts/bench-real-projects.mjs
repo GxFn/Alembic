@@ -177,48 +177,48 @@ async function benchmark() {
     results.push(row);
     process.stdout.write(
       `✓ ${name.padEnd(20)} ${row.files.toString().padStart(5)} files | ` +
-      `detect=${row.detectMs}ms load=${row.loadMs}ms collect=${row.fileCollectMs}ms ` +
-      `ast=${row.astMs}ms total=${row.totalMs}ms\n`
+        `detect=${row.detectMs}ms load=${row.loadMs}ms collect=${row.fileCollectMs}ms ` +
+        `ast=${row.astMs}ms total=${row.totalMs}ms\n`
     );
   }
 
   // ── 汇总表 ──────────────────────────────────────────────────────
-  process.stdout.write('\n' + '═'.repeat(120) + '\n');
+  process.stdout.write(`\n${'═'.repeat(120)}\n`);
   process.stdout.write(
     'Project'.padEnd(22) +
-    'Files'.padStart(6) +
-    'Disc'.padStart(10) +
-    'Detect'.padStart(8) +
-    'Load'.padStart(8) +
-    'Collect'.padStart(9) +
-    'Lang'.padStart(10) +
-    'AST'.padStart(8) +
-    'Cls'.padStart(5) +
-    'Enh'.padStart(8) +
-    'DimC'.padStart(6) +
-    'Total'.padStart(8) +
-    '  Packs\n'
+      'Files'.padStart(6) +
+      'Disc'.padStart(10) +
+      'Detect'.padStart(8) +
+      'Load'.padStart(8) +
+      'Collect'.padStart(9) +
+      'Lang'.padStart(10) +
+      'AST'.padStart(8) +
+      'Cls'.padStart(5) +
+      'Enh'.padStart(8) +
+      'DimC'.padStart(6) +
+      'Total'.padStart(8) +
+      '  Packs\n'
   );
-  process.stdout.write('─'.repeat(120) + '\n');
+  process.stdout.write(`${'─'.repeat(120)}\n`);
 
   for (const r of results) {
     process.stdout.write(
       r.project.padEnd(22) +
-      r.files.toString().padStart(6) +
-      r.discoverer.padStart(10) +
-      `${r.detectMs}ms`.padStart(8) +
-      `${r.loadMs}ms`.padStart(8) +
-      `${r.fileCollectMs}ms`.padStart(9) +
-      (r.primaryLang || '?').padStart(10) +
-      `${r.astMs}ms`.padStart(8) +
-      r.astClasses.toString().padStart(5) +
-      `${r.enhancementMs}ms`.padStart(8) +
-      `${r.dimCopyMs}ms`.padStart(6) +
-      `${r.totalMs}ms`.padStart(8) +
-      `  ${r.enhPacks}\n`
+        r.files.toString().padStart(6) +
+        r.discoverer.padStart(10) +
+        `${r.detectMs}ms`.padStart(8) +
+        `${r.loadMs}ms`.padStart(8) +
+        `${r.fileCollectMs}ms`.padStart(9) +
+        (r.primaryLang || '?').padStart(10) +
+        `${r.astMs}ms`.padStart(8) +
+        r.astClasses.toString().padStart(5) +
+        `${r.enhancementMs}ms`.padStart(8) +
+        `${r.dimCopyMs}ms`.padStart(6) +
+        `${r.totalMs}ms`.padStart(8) +
+        `  ${r.enhPacks}\n`
     );
   }
-  process.stdout.write('═'.repeat(120) + '\n');
+  process.stdout.write(`${'═'.repeat(120)}\n`);
 
   // 性能阈值检查
   let warnings = 0;

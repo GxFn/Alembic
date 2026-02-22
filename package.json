@@ -1,6 +1,6 @@
 {
   "name": "autosnippet",
-  "version": "3.0.13",
+  "version": "3.1.0",
   "description": "Extract code patterns into a knowledge base for AI coding assistants",
   "type": "module",
   "main": "lib/bootstrap.js",
@@ -9,7 +9,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/postinstall-safe.js",
-    "prepublishOnly": "node scripts/build-native-ui.js",
+    "prepublishOnly": "npm run build:dashboard && node scripts/build-native-ui.js",
     "build:native-ui": "swiftc resources/native-ui/main.swift resources/native-ui/combined-window.swift -o resources/native-ui/native-ui -framework AppKit",
     "install:cursor-skill": "node scripts/install-cursor-skill.js",
     "install:cursor-skill:mcp": "node scripts/install-cursor-skill.js --mcp",
@@ -71,18 +71,14 @@
     "url": "git+https://github.com/GxFn/AutoSnippet.git"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
     "@modelcontextprotocol/sdk": "^1.25.3",
-    "axios": "^1.6.7",
     "better-sqlite3": "^9.2.2",
-    "chalk": "^5.3.0",
     "chokidar": "^3.6.0",
     "commander": "^11.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "helmet": "^7.1.0",
-    "inquirer": "^9.2.12",
     "js-yaml": "^4.1.0",
     "minimist": "^1.2.5",
     "open": "^8.0.4",
@@ -91,8 +87,7 @@
     "undici": "^6.23.0",
     "uuid": "^9.0.1",
     "web-tree-sitter": "^0.25.0",
-    "winston": "^3.11.0",
-    "zod": "^4.3.6"
+    "winston": "^3.11.0"
   },
   "bugs": {
     "url": "https://github.com/GxFn/AutoSnippet/issues"
@@ -122,7 +117,6 @@
     "@biomejs/biome": "2.0.0",
     "@types/node": "^20.10.6",
     "jest": "^30.2.0",
-    "mocha": "^11.7.5",
     "nodemon": "^3.1.13",
     "prettier": "^3.1.1",
     "supertest": "^6.3.3"

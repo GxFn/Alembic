@@ -26,6 +26,7 @@ const TRIGGER_SNIPPETS = [
     title: 'AutoSnippet: Search (Long)',
     summary: 'Search and insert Recipe/Snippet from knowledge base',
     xcodeContent: '// as:search <#keyword#>',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: VSCode snippet placeholder syntax
     vscodeBody: ['// as:search ${1:keyword}'],
   },
   {
@@ -34,6 +35,7 @@ const TRIGGER_SNIPPETS = [
     title: 'AutoSnippet: Create Recipe',
     summary: 'Create new Recipe (Dashboard or clipboard/file)',
     xcodeContent: '// as:create <#-c or -f#>',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: VSCode snippet placeholder syntax
     vscodeBody: ['// as:create ${1:-c or -f}'],
   },
   {
@@ -42,6 +44,7 @@ const TRIGGER_SNIPPETS = [
     title: 'AutoSnippet: Audit Code',
     summary: 'AI code review against knowledge base',
     xcodeContent: '// as:audit <#keyword or scope (file/target/project)#>',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: VSCode snippet placeholder syntax
     vscodeBody: ['// as:audit ${1:keyword or scope (file/target/project)}'],
   },
 ];
@@ -54,7 +57,9 @@ class XcodeInitializer {
   }
 
   isAvailable() {
-    if (process.platform !== 'darwin') return false;
+    if (process.platform !== 'darwin') {
+      return false;
+    }
     try {
       execSync('xcode-select -p', { stdio: 'ignore' });
       return true;
@@ -76,7 +81,7 @@ class XcodeInitializer {
   }
 
   generatePlist(snippet) {
-    const escape = (s) =>
+    const escapeXml = (s) =>
       String(s || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -89,21 +94,21 @@ class XcodeInitializer {
 <plist version="1.0">
 <dict>
   <key>IDECodeSnippetCompletionPrefix</key>
-  <string>${escape(snippet.shortcut)}</string>
+  <string>${escapeXml(snippet.shortcut)}</string>
   <key>IDECodeSnippetCompletionScopes</key>
   <array>
     <string>All</string>
   </array>
   <key>IDECodeSnippetContents</key>
-  <string>${escape(snippet.xcodeContent)}</string>
+  <string>${escapeXml(snippet.xcodeContent)}</string>
   <key>IDECodeSnippetIdentifier</key>
-  <string>${escape(snippet.id)}</string>
+  <string>${escapeXml(snippet.id)}</string>
   <key>IDECodeSnippetLanguage</key>
   <string>Xcode.SourceCodeLanguage.Generic</string>
   <key>IDECodeSnippetSummary</key>
-  <string>${escape(snippet.summary)}</string>
+  <string>${escapeXml(snippet.summary)}</string>
   <key>IDECodeSnippetTitle</key>
-  <string>${escape(snippet.title)}</string>
+  <string>${escapeXml(snippet.title)}</string>
   <key>IDECodeSnippetUserSnippet</key>
   <true/>
   <key>IDECodeSnippetVersion</key>
@@ -113,8 +118,12 @@ class XcodeInitializer {
   }
 
   init() {
-    if (!this.isAvailable()) return { skipped: true, reason: 'Xcode not available' };
-    if (!this.ensureDir()) return { skipped: true, reason: 'Cannot create snippets dir' };
+    if (!this.isAvailable()) {
+      return { skipped: true, reason: 'Xcode not available' };
+    }
+    if (!this.ensureDir()) {
+      return { skipped: true, reason: 'Cannot create snippets dir' };
+    }
 
     let count = 0;
     for (const snippet of TRIGGER_SNIPPETS) {
@@ -126,7 +135,9 @@ class XcodeInitializer {
   }
 
   list() {
-    if (!fs.existsSync(this.snippetsDir)) return [];
+    if (!fs.existsSync(this.snippetsDir)) {
+      return [];
+    }
     return fs
       .readdirSync(this.snippetsDir)
       .filter((f) => f.startsWith('com.autosnippet') && f.endsWith('.codesnippet'));
@@ -174,7 +185,9 @@ class VSCodeInitializer {
   }
 
   init() {
-    if (!this.ensureDir()) return { skipped: true, reason: 'Cannot create .vscode dir' };
+    if (!this.ensureDir()) {
+      return { skipped: true, reason: 'Cannot create .vscode dir' };
+    }
 
     const bundle = {};
     for (const snippet of TRIGGER_SNIPPETS) {
@@ -186,13 +199,15 @@ class VSCodeInitializer {
     }
 
     const filePath = path.join(this.vscodeDir, this.filename);
-    fs.writeFileSync(filePath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');
+    fs.writeFileSync(filePath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf-8');
     return { success: true, count: TRIGGER_SNIPPETS.length, path: filePath };
   }
 
   list() {
     const filePath = path.join(this.vscodeDir, this.filename);
-    if (!fs.existsSync(filePath)) return [];
+    if (!fs.existsSync(filePath)) {
+      return [];
+    }
     try {
       const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
       return Object.keys(content);
@@ -239,15 +254,23 @@ export class SnippetInitializer {
 
   list(target = 'all') {
     const result = {};
-    if (target === 'all' || target === 'xcode') result.xcode = this.xcode.list();
-    if (target === 'all' || target === 'vscode') result.vscode = this.vscode.list();
+    if (target === 'all' || target === 'xcode') {
+      result.xcode = this.xcode.list();
+    }
+    if (target === 'all' || target === 'vscode') {
+      result.vscode = this.vscode.list();
+    }
     return result;
   }
 
   remove(target = 'all') {
     const result = {};
-    if (target === 'all' || target === 'xcode') result.xcode = this.xcode.remove();
-    if (target === 'all' || target === 'vscode') result.vscode = this.vscode.remove();
+    if (target === 'all' || target === 'xcode') {
+      result.xcode = this.xcode.remove();
+    }
+    if (target === 'all' || target === 'vscode') {
+      result.vscode = this.vscode.remove();
+    }
     return result;
   }
 }
@@ -273,22 +296,18 @@ async function main() {
 
   switch (command) {
     case 'init': {
-      const result = await init.initialize(target);
-      console.log('✅ Snippets initialized:', JSON.stringify(result, null, 2));
+      const _result = await init.initialize(target);
       break;
     }
     case 'list': {
-      const result = init.list(target);
-      console.log('📋 Installed snippets:', JSON.stringify(result, null, 2));
+      const _result = init.list(target);
       break;
     }
     case 'remove': {
-      const result = init.remove(target);
-      console.log('🗑️  Snippets removed:', JSON.stringify(result, null, 2));
+      const _result = init.remove(target);
       break;
     }
     case 'help':
-      console.log(`Usage: init-snippets.js [init|list|remove] [--target=xcode|vscode|all]`);
       break;
     default:
       console.error(`Unknown command: ${command}`);

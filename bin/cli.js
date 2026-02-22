@@ -17,7 +17,7 @@
  *   asd mirror          - 镜像 .cursor/ → .qoder/ .trae/
  */
 
-import { existsSync, readFileSync, readdirSync, copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
@@ -648,25 +648,29 @@ program
           // ── Level 1: 项目配置文件（确定性高）──
           const hasAppleConfig = entries.some(
             (e) =>
-              e.name === 'Package.swift' ||       // SPM
-              e.name === 'Podfile' ||             // CocoaPods
-              e.name === 'Cartfile' ||            // Carthage
-              e.name === 'project.yml' ||         // XcodeGen
-              e.name.endsWith('.xcodeproj') ||    // Xcode project
-              e.name.endsWith('.xcworkspace')     // Xcode workspace
+              e.name === 'Package.swift' || // SPM
+              e.name === 'Podfile' || // CocoaPods
+              e.name === 'Cartfile' || // Carthage
+              e.name === 'project.yml' || // XcodeGen
+              e.name.endsWith('.xcodeproj') || // Xcode project
+              e.name.endsWith('.xcworkspace') // Xcode workspace
           );
-          if (hasAppleConfig) return true;
+          if (hasAppleConfig) {
+            return true;
+          }
 
           // ── Level 2: 目录结构特征 ──
           const hasAppleDir = entries.some(
             (e) =>
               e.isDirectory() &&
-              (e.name === 'Tuist' ||              // Tuist 项目
-               e.name === 'Pods' ||               // CocoaPods 产物
-               e.name === 'Carthage' ||           // Carthage 产物
-               e.name === 'DerivedData')          // Xcode 构建产物
+              (e.name === 'Tuist' || // Tuist 项目
+                e.name === 'Pods' || // CocoaPods 产物
+                e.name === 'Carthage' || // Carthage 产物
+                e.name === 'DerivedData') // Xcode 构建产物
           );
-          if (hasAppleDir) return true;
+          if (hasAppleDir) {
+            return true;
+          }
 
           // ── Level 3: 向下扫一层（处理 monorepo 或 Sources/ 下有 .swift 的情况）──
           const APPLE_EXTS = new Set(['.swift', '.m', '.mm', '.h']);
@@ -683,7 +687,9 @@ program
                 if (subEntries.some((f) => APPLE_EXTS.has(f.slice(f.lastIndexOf('.'))))) {
                   return true;
                 }
-              } catch { /* 读取失败忽略 */ }
+              } catch {
+                /* 读取失败忽略 */
+              }
             }
           }
 
@@ -710,7 +716,8 @@ program
               ? `http://127.0.0.1:${port}`
               : `http://localhost:5173`;
           } else {
-            process.env.ASD_DASHBOARD_URL = process.env.ASD_DASHBOARD_URL || `http://${host}:${port}`;
+            process.env.ASD_DASHBOARD_URL =
+              process.env.ASD_DASHBOARD_URL || `http://${host}:${port}`;
           }
 
           const { FileWatcher } = await import('../lib/service/automation/FileWatcher.js');
@@ -725,7 +732,6 @@ program
           }
         }
       } else if (process.env.ASD_DEBUG === '1') {
-        console.log('ℹ️  Non-Apple project — file watcher skipped (use VSCode extension instead)');
       }
     } catch (err) {
       console.error(`❌ API server failed to start: ${err.message}`);
@@ -885,7 +891,6 @@ program
           const destName = file.endsWith('.mdc') ? file.replace(/\.mdc$/, '.md') : file;
           copyFileSync(join(cursorRulesDir, file), join(targetRulesDir, destName));
         }
-        console.log(`   ✅ ${target}/rules/ — ${files.length} rules mirrored`);
       }
 
       const cursorSkillsDir = join(cursorDir, 'skills');
@@ -897,10 +902,8 @@ program
         for (const dir of skillDirs) {
           _copyDirRecursive(join(cursorSkillsDir, dir.name), join(targetSkillsDir, dir.name));
         }
-        console.log(`   ✅ ${target}/skills/ — ${skillDirs.length} skills mirrored`);
       }
     }
-    console.log('\n   💡 完成！如有新增交付物料，可随时重新运行 asd mirror');
   });
 
 /** @private 递归复制目录（mirror 命令用） */
@@ -1004,6 +1007,8 @@ async function initContainer(opts = {}) {
     auditLogger: bootstrap.components.auditLogger,
     gateway: bootstrap.components.gateway,
     constitution: bootstrap.components.constitution,
+    config: bootstrap.components.config,
+    skillHooks: bootstrap.components.skillHooks,
     projectRoot,
   });
   return { bootstrap, container };
