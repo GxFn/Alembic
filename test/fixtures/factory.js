@@ -234,7 +234,7 @@ export function createExpiredToken(payload = {}, secret = DEFAULT_TOKEN_SECRET) 
 //  Port Allocation
 // ═══════════════════════════════════════════════════════
 
-let _portBase = 3050;
+let _portBase = 3050 + (parseInt(process.env.JEST_WORKER_ID, 10) || 0) * 100;
 
 /**
  * 获取下一个可用测试端口（避免与其他测试文件冲突）

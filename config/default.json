@@ -52,5 +52,14 @@
     "maxErrors": 0,
     "maxWarnings": 20,
     "minScore": 70
+  },
+  "guard": {
+    "disabledRules": [],
+    "codeLevelThresholds": {
+      "swift-excessive-force-unwrap": 5,
+      "rust-excessive-unwrap": 3,
+      "rust-excessive-unsafe": 3,
+      "dart-excessive-late": 3
+    }
   }
 }

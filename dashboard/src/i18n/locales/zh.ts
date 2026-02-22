@@ -542,6 +542,8 @@ export const zh = {
     dimNoLimit: '不限制',
     notePlaceholder: '仅作简单模式提示',
     copyFixSuggestion: '复制修复建议',
+    codeLevelConfigTip: 'Code-Level 和 Cross-File 检查（如过度 unwrap、循环 import 等）可通过配置禁用或调整阈值。',
+    codeLevelConfigPath: '配置路径：config/default.json → guard.disabledRules / guard.codeLevelThresholds',
     tableHeaders: {
       rule: '规则',
       file: '文件',

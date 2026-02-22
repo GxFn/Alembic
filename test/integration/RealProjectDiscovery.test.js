@@ -46,7 +46,7 @@ const EXPECTED = {
   'spring-petclinic': { discoverer: 'jvm', minTargets: 1, minFiles: 5 },
   Pokedex: { discoverer: 'jvm', minTargets: 1, minFiles: 5 },
   gin: { discoverer: 'go', minTargets: 1, minFiles: 2 },
-  axum: { discoverer: 'generic', minTargets: 1, minFiles: 20 },
+  axum: { discoverer: 'rust', minTargets: 1, minFiles: 20 },
   nest: { discoverer: 'node', minTargets: 1, minFiles: 50 },
   todomvc: { discoverer: 'node', minTargets: 1, minFiles: 50 },
   'vue-element-admin': { discoverer: 'node', minTargets: 1, minFiles: 30 },

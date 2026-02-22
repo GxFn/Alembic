@@ -112,9 +112,54 @@ describe('KnowledgeCompressor', () => {
       const lines = compressor.compressToRuleLine(entries);
       expect(lines).toHaveLength(0);
     });
+
+    test('no double period when doClause/dontClause ends with dot', () => {
+      const entries = [
+        makeEntry({
+          doClause: 'Always use dispatch_once.',
+          dontClause: "Don't use alloc init directly.",
+        }),
+      ];
+      const lines = compressor.compressToRuleLine(entries);
+      expect(lines[0]).not.toContain('..');
+      expect(lines[0]).toMatch(/\.$/);
+    });
+
+    test('adds language prefix for non-universal scope', () => {
+      const entries = [makeEntry({ language: 'objc', scope: 'project-specific' })];
+      const lines = compressor.compressToRuleLine(entries);
+      expect(lines[0]).toMatch(/^\- \[objc\] /);
+    });
+
+    test('omits language prefix when scope is universal', () => {
+      const entries = [makeEntry({ language: 'objc', scope: 'universal' })];
+      const lines = compressor.compressToRuleLine(entries);
+      expect(lines[0]).not.toContain('[objc]');
+    });
   });
 
   describe('compressToWhenDoDont', () => {
+    test('includes why field from content.rationale', () => {
+      const entries = [
+        makeEntry({
+          kind: 'pattern',
+          content: {
+            markdown: '## test',
+            pattern: '',
+            rationale: 'This ensures thread safety. Multiple threads may access.',
+          },
+        }),
+      ];
+      const results = compressor.compressToWhenDoDont(entries);
+      expect(results[0]).toHaveProperty('why');
+      expect(results[0].why).toContain('thread safety');
+    });
+
+    test('why is empty when rationale is missing', () => {
+      const entries = [makeEntry({ kind: 'pattern' })];
+      const results = compressor.compressToWhenDoDont(entries);
+      expect(results[0].why).toBe('');
+    });
     test('produces structured output from delivery fields', () => {
       const entries = [makeEntry({ kind: 'pattern' })];
       const results = compressor.compressToWhenDoDont(entries);
@@ -134,6 +179,35 @@ describe('KnowledgeCompressor', () => {
       const entries = [makeEntry({ trigger: '' })];
       const results = compressor.compressToWhenDoDont(entries);
       expect(results).toHaveLength(0);
+    });
+
+    test('skeletonizes coreCode — strips pure comment lines', () => {
+      const codeWithComments = [
+        '// This is a comment',
+        '+ (instancetype)shared {',
+        '  // inline comment preserved because line has code too',
+        '  static id _inst;',
+        '  * Not a JSDoc line, starts with * then non-space',
+        '}',
+      ].join('\n');
+      const entries = [makeEntry({ kind: 'pattern', coreCode: codeWithComments })];
+      const results = compressor.compressToWhenDoDont(entries);
+      // Pure comment "// This is a comment" should be stripped
+      expect(results[0].template).not.toMatch(/^\/\/ This is a comment$/m);
+      // Code line with inline comment should be preserved
+      expect(results[0].template).toContain('static id _inst');
+    });
+
+    test('skeletonize preserves *ptr lines (not JSDoc)', () => {
+      const codeWithPointer = [
+        '+ (void)process {',
+        '  *result = [self compute];',
+        '  return;',
+        '}',
+      ].join('\n');
+      const entries = [makeEntry({ kind: 'pattern', coreCode: codeWithPointer })];
+      const results = compressor.compressToWhenDoDont(entries);
+      expect(results[0].template).toContain('*result');
     });
 
     test('deduplicates triggers with suffix', () => {
@@ -178,6 +252,36 @@ describe('KnowledgeCompressor', () => {
       const md = compressor.formatWhenDoDont(compressed);
       expect(md).not.toContain('```');
       expect(md).not.toContain("Don't");
+    });
+
+    test('renders Why line when present', () => {
+      const compressed = [
+        {
+          trigger: '@why-test',
+          when: 'Testing',
+          do: 'Do it',
+          dont: '',
+          why: 'Ensures thread safety',
+          template: '',
+        },
+      ];
+      const md = compressor.formatWhenDoDont(compressed);
+      expect(md).toContain('**Why**: Ensures thread safety');
+    });
+
+    test('omits Why line when why is empty', () => {
+      const compressed = [
+        {
+          trigger: '@no-why',
+          when: 'Testing',
+          do: 'Do it',
+          dont: '',
+          why: '',
+          template: '',
+        },
+      ];
+      const md = compressor.formatWhenDoDont(compressed);
+      expect(md).not.toContain('Why');
     });
   });
 });

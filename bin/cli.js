@@ -14,9 +14,10 @@
  *   asd server          - 启动 API 服务
  *   asd status          - 环境状态
  *   asd ui              - 启动 Dashboard UI
+ *   asd mirror          - 镜像 .cursor/ → .qoder/ .trae/
  */
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, copyFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
@@ -853,6 +854,68 @@ program
       await bootstrap.shutdown?.();
     }
   });
+
+// ─────────────────────────────────────────────────────
+// mirror 命令
+// ─────────────────────────────────────────────────────
+program
+  .command('mirror')
+  .description('镜像 .cursor/ 交付物料到其他兼容 IDE 目录（Qoder / Trae）')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .option('--target <ide>', '目标 IDE：qoder, trae, all（默认 all）', 'all')
+  .action(async (opts) => {
+    const projectRoot = resolve(opts.dir);
+    const targets = opts.target === 'all' ? ['.qoder', '.trae'] : [`.${opts.target}`];
+
+    const cursorDir = join(projectRoot, '.cursor');
+    if (!existsSync(cursorDir)) {
+      console.error('❌ 未找到 .cursor/ 目录，请先运行 asd setup 或 asd cursor-rules');
+      process.exit(1);
+    }
+
+    for (const target of targets) {
+      const cursorRulesDir = join(cursorDir, 'rules');
+      if (existsSync(cursorRulesDir)) {
+        const targetRulesDir = join(projectRoot, target, 'rules');
+        mkdirSync(targetRulesDir, { recursive: true });
+        const files = readdirSync(cursorRulesDir).filter(
+          (f) => f.startsWith('autosnippet-') && (f.endsWith('.mdc') || f.endsWith('.md'))
+        );
+        for (const file of files) {
+          const destName = file.endsWith('.mdc') ? file.replace(/\.mdc$/, '.md') : file;
+          copyFileSync(join(cursorRulesDir, file), join(targetRulesDir, destName));
+        }
+        console.log(`   ✅ ${target}/rules/ — ${files.length} rules mirrored`);
+      }
+
+      const cursorSkillsDir = join(cursorDir, 'skills');
+      if (existsSync(cursorSkillsDir)) {
+        const targetSkillsDir = join(projectRoot, target, 'skills');
+        const skillDirs = readdirSync(cursorSkillsDir, { withFileTypes: true }).filter(
+          (d) => d.isDirectory() && d.name.startsWith('autosnippet-')
+        );
+        for (const dir of skillDirs) {
+          _copyDirRecursive(join(cursorSkillsDir, dir.name), join(targetSkillsDir, dir.name));
+        }
+        console.log(`   ✅ ${target}/skills/ — ${skillDirs.length} skills mirrored`);
+      }
+    }
+    console.log('\n   💡 完成！如有新增交付物料，可随时重新运行 asd mirror');
+  });
+
+/** @private 递归复制目录（mirror 命令用） */
+function _copyDirRecursive(src, dest) {
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+    if (entry.isDirectory()) {
+      _copyDirRecursive(srcPath, destPath);
+    } else {
+      copyFileSync(srcPath, destPath);
+    }
+  }
+}
 
 // ─────────────────────────────────────────────────────
 // sync 命令

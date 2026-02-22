@@ -104,6 +104,7 @@ export interface ProjectData {
   items: KnowledgeEntry[];
   }>;
   projectRoot: string;
+  projectName: string;
   watcherStatus?: string;
   /** 当前使用的 AI 提供商与模型（供 UI 展示） */
   aiConfig?: { provider: string; model: string };

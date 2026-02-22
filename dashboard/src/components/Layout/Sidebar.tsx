@@ -23,6 +23,8 @@ interface SidebarProps {
   currentRole?: string;
   permissionMode?: string;
   onLogout?: () => void;
+  /** 当前打开的项目名称 */
+  projectName?: string;
   /** 是否折叠为图标模式 */
   collapsed?: boolean;
   /** 切换折叠 */
@@ -52,6 +54,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   activeTab, navigateToTab, candidateCount,
   signalSuggestionCount = 0,
   currentUser, currentRole, permissionMode, onLogout,
+  projectName,
   collapsed = false, onToggleCollapse,
 }) => {
   const { t } = useI18n();
@@ -111,7 +114,14 @@ const Sidebar: React.FC<SidebarProps> = ({
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shrink-0">
             <Code size={ICON_SIZES.lg} />
           </div>
-          {!collapsed && <h1 className="font-bold text-lg truncate">AutoSnippet</h1>}
+          {!collapsed && (
+            <div className="flex flex-col min-w-0">
+              <h1 className="font-bold text-lg leading-tight truncate">AutoSnippet</h1>
+              {projectName && (
+                <span className={`text-[11px] leading-tight truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} title={projectName}>{projectName}</span>
+              )}
+            </div>
+          )}
         </div>
         {onToggleCollapse && !collapsed && (
           <button onClick={onToggleCollapse} className={`p-1 rounded-md transition-colors ${isDarkMode ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`} title={t('sidebar.collapseNav')}>

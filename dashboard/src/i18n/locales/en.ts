@@ -545,6 +545,8 @@ export const en: DeepString<typeof zh> = {
     dimNoLimit: 'No limit',
     notePlaceholder: 'Simple pattern hint only',
     copyFixSuggestion: 'Copy fix suggestion',
+    codeLevelConfigTip: 'Code-Level and Cross-File checks (e.g. excessive unwrap, circular import) can be disabled or threshold-adjusted via config.',
+    codeLevelConfigPath: 'Config path: config/default.json → guard.disabledRules / guard.codeLevelThresholds',
     tableHeaders: {
       rule: 'Rule',
       file: 'File',

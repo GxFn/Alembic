@@ -977,6 +977,7 @@ const App: React.FC = () => {
     currentRole={permission.role}
     permissionMode={permission.mode}
     onLogout={auth.authEnabled ? auth.logout : undefined}
+    projectName={data?.projectName}
     collapsed={sidebarCollapsed}
     onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
     />

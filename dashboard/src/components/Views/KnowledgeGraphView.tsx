@@ -621,7 +621,7 @@ const KnowledgeGraphView: React.FC = () => {
       <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <div className="flex items-center gap-3">
           <Share2 size={ICON_SIZES.lg} className="text-blue-600" />
-          <h2 className={`text-lg font-bold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>{t('knowledgeGraph.title')}</h2>
+          <h2 className="text-lg xl:text-xl font-bold text-slate-800">{t('knowledgeGraph.title')}</h2>
           {stats && (
             <span className={`text-xs px-2 py-1 rounded-full ${isDark ? 'text-slate-400 bg-slate-700/60' : 'text-slate-500 bg-slate-100'}`}>
               {t('knowledgeGraph.statsLabel', { nodes: nodes.length, edges: stats.totalEdges })}

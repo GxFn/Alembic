@@ -499,6 +499,14 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         );
       })}
     </div>
+    {/* ── Code-Level / Cross-File 配置提示 ── */}
+    <div className="mb-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-700">
+      <Info size={14} className="shrink-0 mt-0.5" />
+      <div>
+        <span>{t('guard.codeLevelConfigTip')}</span>
+        <span className="ml-1 font-mono text-[11px] text-indigo-500">{t('guard.codeLevelConfigPath')}</span>
+      </div>
+    </div>
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <table className="w-full text-sm">
       <thead className="bg-slate-50 border-b border-slate-200">

@@ -46,10 +46,11 @@ const AST_PROJECTS = {
   Pokedex: { lang: 'kotlin', minClasses: 3, minFiles: 3 },
   todomvc: { lang: 'javascript', minClasses: 0, minFiles: 5 },
   gin: { lang: 'go', minClasses: 5, minFiles: 5 },
+  axum: { lang: 'rust', minClasses: 1, minFiles: 5 },
 };
 
 // 无 AST 插件的项目 — 优雅降级测试
-const NO_AST_PROJECTS = ['axum', 'discourse'];
+const NO_AST_PROJECTS = ['discourse'];
 
 // ── 辅助 ──────────────────────────────────────────────────────────
 async function collectFiles(projectName, maxFiles = 500) {

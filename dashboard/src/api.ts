@@ -406,12 +406,14 @@ export const api = {
 
     // Project root for per-project storage isolation
     const projectRoot = projectInfoRes.data?.data?.projectRoot || '';
+    const projectName = projectInfoRes.data?.data?.projectName || '';
 
     return {
       rootSpec: { list: [] },
       recipes,
       candidates,
       projectRoot,
+      projectName,
       watcherStatus: 'active',
       aiConfig: { provider: aiConfig.provider || '', model: aiConfig.model || '' },
       idTitleMap,
