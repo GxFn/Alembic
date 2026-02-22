@@ -717,18 +717,18 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                       </button>
                     </div>
                     {isAddingRelation && (
-                      <div className="mb-3 bg-purple-50/80 border border-purple-200 rounded-lg p-3 space-y-2">
+                      <div className="mb-3 bg-purple-50/80 dark:bg-purple-900/20 border border-purple-200 rounded-lg p-3 space-y-2">
                         <div className="flex items-center gap-2">
-                          <select value={newRelationType} onChange={e => setNewRelationType(e.target.value)} className="text-[10px] font-bold bg-white border border-purple-200 text-purple-700 rounded px-2 py-1 outline-none">
+                          <select value={newRelationType} onChange={e => setNewRelationType(e.target.value)} className="text-[10px] font-bold bg-white dark:bg-[#1e1e1e] border border-purple-200 text-purple-700 rounded px-2 py-1 outline-none">
                             {RELATION_TYPES.map(t => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
                           </select>
                           <div className="flex-1 relative">
                             <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300" />
-                            <input type="text" placeholder={t('recipes.searchPlaceholder')} value={relationSearchQuery} onChange={e => setRelationSearchQuery(e.target.value)} className="w-full text-xs bg-white border border-purple-200 rounded pl-7 pr-2 py-1 outline-none" autoFocus />
+                            <input type="text" placeholder={t('recipes.searchPlaceholder')} value={relationSearchQuery} onChange={e => setRelationSearchQuery(e.target.value)} className="w-full text-xs bg-white dark:bg-[#1e1e1e] border border-purple-200 rounded pl-7 pr-2 py-1 outline-none" autoFocus />
                           </div>
                         </div>
                         {relationSearchQuery.length > 0 && (
-                          <div className="max-h-36 overflow-y-auto rounded border border-purple-100 bg-white divide-y divide-slate-100">
+                          <div className="max-h-36 overflow-y-auto rounded border border-purple-100 bg-white dark:bg-[#1e1e1e] divide-y divide-slate-100">
                             {(() => {
                               const filtered = recipes.filter(r => {
                                 if (getDisplayName(r) === displayName) return false;

@@ -541,8 +541,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             const filteredItems = group.items
               .filter((cand) => {
                 if (filters.onlySimilar) {
-                  const related = cand.relations?.related;
-                  if (!Array.isArray(related) || related.length === 0) return false;
+                  const simList = similarityMap[cand.id];
+                  if (!Array.isArray(simList) || simList.length === 0) return false;
                 }
                 return true;
               })
@@ -666,9 +666,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     const isExpanded = expandedId === cand.id;
                     const confidence = cand.reasoning?.confidence ?? null;
                     const overall = (cand.quality?.overall ?? 0) > 0 ? cand.quality!.overall : null;
-                    const relatedList = cand.relations?.related || [];
-                    const firstRelated = relatedList[0];
                     const similarList = similarityMap[cand.id] || [];
+                    const firstSimilar = similarList[0] || null;
 
                     const srcInfo = SOURCE_LABEL_KEYS[cand.source || ''] || { labelKey: cand.source || '', color: 'text-slate-500 bg-slate-50 border-slate-200' };
                     const candCatCfg = categoryConfigs[cand.category || ''] || categoryConfigs['All'] || {};
@@ -745,7 +744,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         )}
 
                         {/* ── 指标行：综合分 + 相似 ── */}
-                        {(overall != null || firstRelated) && (
+                        {(overall != null || firstSimilar) && (
                           <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-t border-slate-50">
                             {overall != null && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
@@ -753,18 +752,18 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                 {t('candidates.overallScore', { score: (overall * 100).toFixed(0) + '%' })}
                               </span>
                             )}
-                            {firstRelated && (
+                            {firstSimilar && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const name = String(firstRelated.target || '').trim();
+                                  const name = String(firstSimilar.recipeName || '').trim();
                                   if (name) openCompare(cand, targetName, name, similarList);
                                 }}
                                 className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center gap-1"
-                                title={t('candidates.viewDetail')}
+                                title={t('candidates.similarWith', { name: firstSimilar.recipeName, score: (firstSimilar.similarity * 100).toFixed(0) })}
                               >
                                 <GitCompare size={10} />
-                                {t('candidates.similarPrefix')} {titleLookup.get(String(firstRelated.target || '')) || String(firstRelated.target || '').replace(/\.md$/i, '')}
+                                {t('candidates.similarPrefix')} {firstSimilar.recipeName.replace(/\.md$/i, '')} {(firstSimilar.similarity * 100).toFixed(0)}%
                               </button>
                             )}
                           </div>
