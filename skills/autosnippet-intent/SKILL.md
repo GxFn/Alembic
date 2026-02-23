@@ -44,7 +44,7 @@ Use this skill when the user's intent is unclear or overlaps multiple capabiliti
 - Submit: `autosnippet_submit_knowledge`, `autosnippet_submit_knowledge_batch`
 - Document: `autosnippet_save_document`
 - Guard: `autosnippet_guard` (code 单文件 / files[] 批量)
-- Bootstrap: `autosnippet_bootstrap` (operation: knowledge / refine / scan)
+- Bootstrap: `autosnippet_bootstrap` (no params — Mission Briefing) + `autosnippet_dimension_complete`
 - Skills: `autosnippet_skill` (operation: list / load / create / update / delete / suggest)
 
 This skill is a router only; it does not perform actions itself.

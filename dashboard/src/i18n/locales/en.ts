@@ -968,7 +968,7 @@ export const en: DeepString<typeof zh> = {
     // Component card bullets
     bootstrapBullet1: 'Scan project modules + AST source analysis',
     bootstrapBullet2: 'Heuristic extraction → AI refinement → generate Candidate',
-    bootstrapBullet3: 'MCP tool: <code class="bg-green-100 px-1 rounded">bootstrap</code> (operation: knowledge / refine / scan)',
+    bootstrapBullet3: 'MCP tool: <code class="bg-green-100 px-1 rounded">bootstrap</code> (no params) → Mission Briefing + <code class="bg-green-100 px-1 rounded">dimension_complete</code>',
     candidatesBullet1: 'Sources: AI scan, Cursor, clipboard, Dashboard',
     candidatesBullet2: 'Reviewed and promoted to Recipe for quality assurance',
     candidatesBullet3: 'Reasoning field records AI inference process',
@@ -983,7 +983,7 @@ export const en: DeepString<typeof zh> = {
     searchPipelineBullet3: 'search MCP tool: mode routes auto / keyword / semantic / context four modes',
     guardCompBullet1: 'Built-in rules + custom rules + Recipe association',
 
-    guardCompBullet3: 'MCP: <code class="bg-rose-100 px-1 rounded">guard</code> (code=single file / files=batch), <code class="bg-rose-100 px-1 rounded">bootstrap</code> (operation: scan)',
+    guardCompBullet3: 'MCP: <code class="bg-rose-100 px-1 rounded">guard</code> (code=single file / files=batch), <code class="bg-rose-100 px-1 rounded">bootstrap</code> (includes Guard audit)',
     // Feature card bullets
     kbBuildBullet1: '<strong>AI Scan</strong>: <code class="bg-slate-100 px-1 rounded text-xs">asd ais [Target]</code> batch extraction',
     kbBuildBullet2: '<strong>Cursor Scan</strong>: Tell Copilot "scan Module"',
@@ -1041,12 +1041,12 @@ export const en: DeepString<typeof zh> = {
     mcpStructureDesc: 'operation routes targets / files / metadata',
     mcpGraphDesc: 'operation routes query / impact / path / stats',
     mcpSkillDesc: 'operation routes list / load / create / update / delete / suggest',
-    mcpBootstrapDesc: 'operation routes knowledge / refine / scan',
+    mcpBootstrapDesc: 'No params — returns Mission Briefing + dimension task list',
     // Architecture details
     archBootstrapStep1: '① Project scan → dependency / directory / entry analysis',
     archBootstrapStep2: '② AI batch extraction → Candidate list',
     archBootstrapStep3: '③ Review + Promote → Recipe knowledge base ready',
-    archBootstrapNote: 'Supports bootstrap tool (operation: refine) for continuous iteration & resume from breakpoint',
+    archBootstrapNote: 'Supports bootstrap → dimension_complete loop iteration & session resume from breakpoint',
     archPipelineL1: 'InvertedIndex — inverted index fast recall',
     archPipelineL2: 'CoarseRanker — BM25 + TF-IDF coarse ranking',
     archPipelineL3: 'MultiSignalRanker — multi-dimensional signal fine ranking',

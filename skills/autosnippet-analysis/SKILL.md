@@ -26,7 +26,7 @@ description: Deep project analysis — full scan + semantic field enrichment + g
 ### Workflow
 
 #### Phase 1: Collect & Baseline
-1. 调用 `autosnippet_bootstrap(operation=scan)` 获取文件列表 + Guard 审计基线
+1. 调用 `autosnippet_bootstrap`（无参数）获取 Mission Briefing（文件列表 + Guard 审计基线）
 2. 审视 Guard 违规 — 静态规则问题 (命名/API 使用/废弃 API)
 3. 确定高优先级文件 (核心模块/共享工具/Service 层)
 
@@ -116,11 +116,11 @@ Use `autosnippet_submit_knowledge_batch` for batch submission.
 **方式 B: 对已有候选调用 AI 补全**
 > 注：`autosnippet_enrich_candidates` 已移入 admin 层级，Agent 推荐使用方式 A 直接填写完整字段。
 
-**方式 C: Bootstrap 候选 AI 润色**
+**方式 C: 候选字段诊断**
 ```
-autosnippet_bootstrap(operation=refine, candidateIds: ["id1", "id2", ...])
+autosnippet_enrich_candidates({ candidateIds: ["id1", "id2", ...] })
 ```
-使用 AI 对 Bootstrap 候选做内容润色（改善 summary、补充 insight、推断 relations、调整 confidence）。
+诊断候选缺失字段（不使用 AI），Agent 根据诊断结果自行补全。
 
 ---
 
@@ -133,7 +133,7 @@ autosnippet_bootstrap(operation=refine, candidateIds: ["id1", "id2", ...])
 ### Workflow
 
 1. 对目标候选做结构补齐（确保所有字段完整）
-2. 调用 `autosnippet_bootstrap(operation=refine)` 对候选做 AI 润色（summary/insight/relations）
+2. 调用 `autosnippet_enrich_candidates` 诊断候选缺失字段，根据结果自行补全
 3. 提交时使用 `autosnippet_submit_knowledge`（内置自动校验 + 去重检查）
 4. 报告补全情况 + 缺失字段 + 重复风险
 5. 如缺失字段 AI 无法填充，提示用户手动补充

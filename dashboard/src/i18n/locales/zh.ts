@@ -965,7 +965,7 @@ export const zh = {
     // Component card bullets
     bootstrapBullet1: '扫描项目模块 + AST 分析源码',
     bootstrapBullet2: '启发式提取 → AI 精炼 → 生成 Candidate',
-    bootstrapBullet3: 'MCP 工具：<code class="bg-green-100 px-1 rounded">bootstrap</code>（operation: knowledge / refine / scan）',
+    bootstrapBullet3: 'MCP 工具：<code class="bg-green-100 px-1 rounded">bootstrap</code>（无参数）→ Mission Briefing + <code class="bg-green-100 px-1 rounded">dimension_complete</code>',
     candidatesBullet1: '来源：AI 扫描、Cursor、剪贴板、Dashboard',
     candidatesBullet2: '审核后入库为 Recipe，确保质量',
     candidatesBullet3: 'Reasoning 字段记录 AI 推理过程',
@@ -980,7 +980,7 @@ export const zh = {
     searchPipelineBullet3: 'search MCP 工具：mode 参数路由 auto / keyword / semantic / context 四种模式',
     guardCompBullet1: '内建规则 + 自定义规则 + Recipe 关联',
 
-    guardCompBullet3: 'MCP：<code class="bg-rose-100 px-1 rounded">guard</code>（code=单文件 / files=批量）、<code class="bg-rose-100 px-1 rounded">bootstrap</code>（operation: scan）',
+    guardCompBullet3: 'MCP：<code class="bg-rose-100 px-1 rounded">guard</code>（code=单文件 / files=批量）、<code class="bg-rose-100 px-1 rounded">bootstrap</code>（含 Guard 审计）',
     // Feature card bullets
     kbBuildBullet1: '<strong>AI 扫描</strong>：<code class="bg-slate-100 px-1 rounded text-xs">asd ais [Target]</code> 批量提取',
     kbBuildBullet2: '<strong>Cursor 扫描</strong>：对 Copilot 说 "扫描 Module"',
@@ -1038,12 +1038,12 @@ export const zh = {
     mcpStructureDesc: 'operation 路由 targets / files / metadata',
     mcpGraphDesc: 'operation 路由 query / impact / path / stats',
     mcpSkillDesc: 'operation 路由 list / load / create / update / delete / suggest',
-    mcpBootstrapDesc: 'operation 路由 knowledge / refine / scan',
+    mcpBootstrapDesc: '无参数，返回 Mission Briefing + 维度任务清单',
     // Architecture details
     archBootstrapStep1: '① 项目扫描 → 依赖 / 目录 / 入口分析',
     archBootstrapStep2: '② AI 批量提取 → Candidate 候选列表',
     archBootstrapStep3: '③ 审阅 + Promote → Recipe 知识库就绪',
-    archBootstrapNote: '支持 bootstrap 工具（operation: refine）持续迭代、resume 断点续跑',
+    archBootstrapNote: '支持 bootstrap → dimension_complete 循环迭代、session 断点续跑',
     archPipelineL1: 'InvertedIndex — 倒排索引快速召回',
     archPipelineL2: 'CoarseRanker — BM25 + TF-IDF 粗排',
     archPipelineL3: 'MultiSignalRanker — 多维信号精排',

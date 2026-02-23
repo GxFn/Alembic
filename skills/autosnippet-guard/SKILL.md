@@ -81,7 +81,7 @@ Guard uses the **same Recipe content** in `AutoSnippet/recipes/` as the standard
 | Tool | Purpose | Input |
 |------|---------|-------|
 | `autosnippet_guard` | Code Guard check (single or batch — auto-routed by params) | `code` for single, `files[]` for batch, `language`, `filePath`, `scope` |
-| `autosnippet_bootstrap(operation=scan)` | Full project scan + Guard audit | `maxFiles`, `includeContent` |
+| `autosnippet_bootstrap` | Full project scan + Guard audit (no params, returns Mission Briefing) | — |
 | `autosnippet_knowledge(operation=list, kind=rule)` | List all Guard rules (kind=rule) | `limit`, `status`, `language`, `category` |
 
 ---
@@ -100,7 +100,7 @@ Guard uses the **same Recipe content** in `AutoSnippet/recipes/` as the standard
 4. Suggest fixes based on Recipe standards
 
 ### Project-wide Compliance
-1. Call `autosnippet_bootstrap(operation=scan)` for full project scan
+1. Call `autosnippet_bootstrap` (no params) for full project scan
 2. Present high-severity findings first
 
 ---
@@ -117,6 +117,6 @@ Guard uses the **same Recipe content** in `AutoSnippet/recipes/` as the standard
 
 - **autosnippet-recipes**: Recipe content IS the Guard standard. Use for looking up what the standard says.
 - **autosnippet-intent**: General router; may route Guard-related intents here.
-- **autosnippet-analysis**: Deep project scan + Guard baseline via `autosnippet_bootstrap(operation=scan)`.
+- **autosnippet-analysis**: Deep project scan + Guard baseline via `autosnippet_bootstrap`.
 
 ```

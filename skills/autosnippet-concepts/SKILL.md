@@ -87,8 +87,8 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 | 候选提交 | `autosnippet_submit_knowledge`, `autosnippet_submit_knowledge_batch` |
 | Guard 检查 | `autosnippet_guard`（code 单条 / files[] 批量 — 自动路由） |
 | 使用确认 | `autosnippet_knowledge(operation=confirm_usage)` |
-| 项目扫描 | `autosnippet_bootstrap(operation=scan)` |
-| 冷启动 | `autosnippet_bootstrap(operation=knowledge/refine)` |
+| 项目扫描 | `autosnippet_bootstrap`（无参数，返回 Mission Briefing） |
+| 冷启动 | `autosnippet_bootstrap` + `autosnippet_dimension_complete` |
 | Skills 管理 | `autosnippet_skill(operation=list/load/create/update/delete/suggest)` |
 | 自检 | `autosnippet_health` |
 

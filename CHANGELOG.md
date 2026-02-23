@@ -4,6 +4,24 @@
 
 ---
 
+## [3.1.7] - 2026-02-24
+
+### 改进
+
+- **VS Code Copilot 冷启动体验大幅优化**：解决 Copilot 首次执行冷启动时反复试探字段格式、DB 状态误判等问题
+- **tools.js inputSchema 增强**：`content` 和 `reasoning` 字段新增 `required` 子字段声明 + 内联 JSON 示例，Agent 无需猜测格式即可一次提交成功
+- **health 端点 actionHints**：DB 降级时明确提示 "bootstrap 不依赖数据库可直接调用"，附带冷启动步骤和 Skill 加载建议
+- **capabilities 工作流增加 Skill 加载步骤**：引导不支持 Skills 的 IDE（如 VS Code Copilot）主动加载 `autosnippet-coldstart` Skill
+- **RecipeReadinessChecker 错误消息优化**：检测到 `content`/`reasoning` 为字符串类型时，给出具体 JSON 对象格式示例
+- **copilot-instructions.md 新增 "冷启动必读" 章节**：V3 字段格式关键提醒（content/reasoning 必须为对象、headers 必须为数组、16 个必填字段一次性提供）
+- **autosnippet-coldstart SKILL 全面升级至 V3**：Phase 0 返回字段对齐 Mission Briefing 实际输出（projectMeta/ast/codeEntityGraph/dimensions/submissionSchema/executionPlan/session）；Phase 3/4 模板补全全部 V3 必填字段（content 对象、kind、doClause、dontClause、whenClause、coreCode、usageGuide）；删除已废弃的 `scan_project vs bootstrap_knowledge` 对比表和 `aiMode` 选项
+
+### 修复
+
+- **清除 21 处旧版多参数 bootstrap 引用**：9 个文件中的 `bootstrap(op=knowledge/refine/scan)` 全部替换为 V3 无参数 `autosnippet_bootstrap` 工作流
+
+---
+
 ## [3.1.4] - 2026-02-23
 
 ### 安全

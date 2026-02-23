@@ -1,12 +1,13 @@
 ---
 name: autosnippet-coldstart
-description: Cold-start knowledge base initialization. Full 9-dimension analysis workflow — works with both external Agent and internal AI. Call bootstrap_knowledge, then systematically analyze code and submit candidates.
+description: Cold-start knowledge base initialization (V3). Full 9-dimension analysis workflow for external Agent. Call autosnippet_bootstrap (no params) → analyze code → submit_knowledge → dimension_complete.
 ---
 
-# AutoSnippet — Cold Start (知识库冷启动)
+# AutoSnippet — Cold Start (知识库冷启动) V3
 
 > 首次接入项目 / 知识库重建 / 大版本升级后使用。目标：从零建立完整知识库，覆盖 9 大知识维度。
 > Self-check & Fallback: MCP 工具返回 JSON Envelope（{ success, errorCode?, data?, meta }）。失败时不在同一轮重试，缩小范围再试。
+> **DB 不可用不影响冷启动**: autosnippet_bootstrap 不依赖数据库（纯文件系统分析），可直接调用。
 
 ## Quick Decision
 
@@ -16,51 +17,62 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 | 已有知识库，查/用 Recipe | → autosnippet-recipes |
 | 只扫描单个文件/模块 | → autosnippet-candidates |
 | 只做 Guard 审计 | → autosnippet-guard |
-| 快速看看项目结构 | → autosnippet-structure（用 `autosnippet_bootstrap(operation=scan)`） |
+| 快速看看项目结构 | → autosnippet-structure（用 `autosnippet_structure(operation=targets)`） |
 
 ---
 
 ## Phase 0: 启动扫描
 
-调用 `autosnippet_bootstrap(operation=knowledge)` 收集项目结构化数据：
+调用 `autosnippet_bootstrap`（**无参数**）获取 Mission Briefing：
 
-```json
-{ "aiMode": "external", "maxFiles": 500, "contentMaxLines": 150 }
+```
+autosnippet_bootstrap()
 ```
 
-返回数据（你需要的上下文）：
+> 💡 Bootstrap 不依赖数据库，DB 不可用时也能正常工作。
+
+### Mission Briefing 返回数据
 
 | 字段 | 内容 |
 |------|------|
-| `targets` | 所有模块 Target（含 `inferredRole`: core/service/ui/networking/…） |
-| `filesByTarget` | 按 Target 分组的文件内容（含 `priority`: high/medium/low） |
+| `projectMeta` | 项目元数据（name, primaryLanguage, fileCount, projectType） |
+| `ast` | AST 分析摘要（classes, protocols, functions, imports） |
+| `codeEntityGraph` | 代码实体图谱（类/协议/函数之间的关系） |
 | `dependencyGraph` | `{ nodes, edges }` 模块间依赖关系 |
-| `guardViolationFiles` | Guard 规则违规列表 |
-| `languageStats` | 文件扩展名统计 |
-| `primaryLanguage` | 推断的主语言（swift/objectivec/typescript/…） |
-| `languageExtension` | 语言特有扩展（**重要**，见下方） |
-| `analysisFramework` | 9 维度分析框架（维度清单 + 候选模板） |
+| `guardFindings` | Guard 规则违规摘要 |
+| `targets` | 所有模块 Target（含 `inferredRole`: core/service/ui/networking/…） |
+| `dimensions` | 激活的分析维度任务列表（每个维度含 analysisGuide + evidenceStarters） |
+| `submissionSchema` | **提交格式定义 + 语言自适应 JSON 示例**（⚠️ 必须严格按此格式提交） |
+| `executionPlan` | 分 Tier 执行计划（Tier 1 → Tier 2 → Tier 3） |
+| `session` | Bootstrap 会话信息（session.id 供 dimension_complete 使用） |
 
-### languageExtension — 语言特有分析指引
+### submissionSchema — 提交格式（关键！）
 
-`languageExtension` 包含当前项目主语言的特有信息：
+Mission Briefing 的 `submissionSchema.example` 包含**完整的提交 JSON 示例**，按项目主语言自适应。
+**你必须严格按照该示例的字段格式提交知识**，特别注意：
+- `content` 是 JSON 对象：`{ "pattern": "...", "markdown": "...", "rationale": "..." }`
+- `reasoning` 是 JSON 对象：`{ "whyStandard": "...", "sources": [...], "confidence": 0.85 }`
+- `headers` 是数组：`["import Foundation"]`（无 import 时传 `[]`）
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `language` | string | 主语言名称 |
-| `extraDimensions` | array | 语言特有的额外分析维度（如 Swift Concurrency、ObjC Block 模式、Go goroutine/channel、Python async/decorator、Java Stream/Optional、Dart Widget/BLoC/Riverpod、Rust ownership/borrowing/lifetime/trait 等） |
-| `typicalPatterns` | array | 该语言中典型的代码模式提示 |
-| `commonAntiPatterns` | array | 该语言常见反模式（bad/why/fix） |
-| `suggestedGuardRules` | array | 建议的 Guard 规则（pattern/severity/message） |
-| `agentCautions` | array | 该语言下 Agent 开发必须遵守的注意事项 |
-| `customFields` | object | 预留扩展字段（供用户/插件自定义） |
+### dimensions — 维度任务
 
-**你的分析应同时覆盖 `analysisFramework.dimensions`（9 通用维度）和 `languageExtension.extraDimensions`（语言特有维度）。**
+每个维度对象包含：
+- `id` — 维度标识
+- `label` — 维度名称
+- `analysisGuide` — 分析步骤指引（SOP）
+- `evidenceStarters` — 从 Phase 1-4 数据中提取的证据启发
+- `submissionSpec` — 提交规范（含 preSubmitChecklist）
 
-> **aiMode 选择**:
-> - `external`（默认）= 你自己分析代码，功能最完整，质量最高
-> - `internal` = 内置 AI 分析，你不需要逐文件阅读，适合 context window 不够的情况
-> - `auto` = 先试 internal，失败自动降级 external
+### executionPlan — 分 Tier 执行
+
+```
+Tier 1（项目特征/深度扫描/分类扫描）→ Tier 2（代码规范/架构/设计模式）→ Tier 3（事件流/最佳实践/开发指南）
+```
+
+每个维度的工作流：
+1. 用原生能力（read_file/grep_search）阅读代码分析
+2. 调用 `autosnippet_submit_knowledge_batch` 批量提交 3-5 条候选
+3. 调用 `autosnippet_dimension_complete` 完成维度（传 referencedFiles + keyFindings）
 
 ---
 
@@ -93,6 +105,9 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
   "category": "Service",
   "kind": "rule",
   "doClause": "Follow Presentation → Domain → Data layered architecture with no cross-layer access",
+  "dontClause": "Never import Data layer modules directly from Presentation layer",
+  "whenClause": "When creating new modules, reviewing code, or making architectural decisions",
+  "coreCode": "// Presentation → Domain → Data\n// ✅ Presentation imports Domain\nimport DomainModule\n// ✅ Domain imports Data\nimport DataModule\n// ❌ Presentation must NOT import Data directly",
   "knowledgeType": "architecture",
   "usageGuide": "### 何时使用\n- 新建模块时确定放置层级\n- 代码审查检查跨层调用\n\n### 规则\n- View 层只调 Domain\n- Domain 层只调 Data\n- 禁止反向依赖",
   "difficulty": "intermediate",
@@ -177,26 +192,32 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 {
   "title": "项目技术特征 — [ProjectName]",
   "trigger": "@projectProfile",
-  "code": "techStack:\n  primaryLanguage: <language>\n  frameworks: [<framework1>, <framework2>]\n  minDeployment: <platform version>\n\nprojectStructure:\n  pattern: <modular-spm|monorepo|workspace|...>\n  keyModules:\n    - ModuleA: 核心业务SDK\n    - ModuleB: UI组件库\n\ndependencies:\n  thirdParty:\n    - LibA: 用途\n    - LibB: 用途",
-  "summary_cn": "项目技术栈全貌：语言、框架、模块结构、三方依赖",
-  "summary_en": "Project tech profile: language, frameworks, module structure, dependencies",
+  "content": {
+    "markdown": "## 技术栈全貌\n\n| 维度 | 值 |\n|------|------|\n| 主语言 | <language> |\n| 框架 | <framework1>, <framework2> |\n| 最低部署版本 | <platform version> |\n\n### 项目结构\n- 类型: <modular-spm|monorepo|workspace|...>\n- 核心模块: ModuleA（核心业务SDK）, ModuleB（UI组件库）\n\n### 三方依赖\n- LibA: 用途\n- LibB: 用途",
+    "pattern": "techStack:\n  primaryLanguage: <language>\n  frameworks: [<fw1>, <fw2>]\n  projectStructure: <modular|monorepo|workspace>\n  keyModules: [ModuleA, ModuleB]",
+    "rationale": "项目技术栈全貌，新人 onboarding 和 Agent 理解项目的基础上下文"
+  },
+  "description": "项目技术栈全貌：语言、框架、模块结构、三方依赖",
   "language": "<primaryLanguage>",
   "headers": [],
   "category": "Architecture",
+  "kind": "fact",
+  "doClause": "Understand the project tech stack before making architectural decisions",
+  "dontClause": "Do not introduce frameworks or patterns that conflict with the established tech stack",
+  "whenClause": "When onboarding to the project or making technology choices",
+  "coreCode": "// Project: [ProjectName]\n// Language: <language>\n// Frameworks: <fw1>, <fw2>\n// Structure: <modular|monorepo|workspace>\n// Key Modules: ModuleA, ModuleB",
   "knowledgeType": "architecture",
-  "difficulty": "beginner",
-  "scope": "project-specific",
-  "rationale": "项目技术栈全貌，新人 onboarding 和 Agent 理解项目的基础",
+  "usageGuide": "### 何时查阅\n新人入职、技术选型、跨模块开发时参考\n### 注意事项\n版本升级时同步更新此条目",
   "reasoning": {
     "whyStandard": "项目技术选型摘要，所有开发决策的基础上下文",
-    "sources": ["<project manifest: Package.swift / package.json / go.mod / pom.xml / etc.>", "languageStats", "dependencyGraph"],
+    "sources": ["<project manifest: Package.swift / package.json / go.mod / pom.xml / etc.>", "projectMeta", "dependencyGraph"],
     "confidence": 0.95
   }
 }
 ```
 
 **分析要点**:
-- 从 `languageStats` 推断主要语言
+- 从 `projectMeta` 获取主语言和项目类型
 - 从 `targets` 推断项目结构（单体/模块化）
 - 从 `dependencyGraph` 推断三方/自有模块依赖
 - 从代码中的 import 语句推断框架使用
@@ -224,15 +245,22 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 {
   "title": "[must] UI 更新必须在主线程",
   "trigger": "@agent-threading",
-  "code": "// ✅ 正确 — 使用语言/框架提供的主线程机制\n// Swift: @MainActor func updateUI() { ... }\n// JS/TS: 无需显式处理（单线程）但 Web Worker 返回需 postMessage\n// Python: 使用 loop.call_soon_threadsafe() 或框架 API\n// Go: 使用 channel 或 sync 包\n// Java/Kotlin: runOnUiThread { ... } 或 Dispatchers.Main\n// Rust: 使用 tokio::spawn + channel 或 Arc<Mutex<T>> 跨线程共享\n// Dart: 使用 WidgetsBinding.instance.addPostFrameCallback 或 setState\n\n// ❌ 错误 — 在后台线程直接操作 UI",
-  "summary_cn": "UI 更新必须在主线程/主 Actor 执行，违反会导致崩溃或数据竞争",
-  "summary_en": "UI updates must run on the main thread/actor to prevent crashes and data races",
+  "content": {
+    "markdown": "## UI 线程安全\n\n所有 UI 更新操作必须在主线程/主 Actor 执行。\n\n### 各语言实现\n- **Swift**: `@MainActor func updateUI() { ... }`\n- **JS/TS**: 单线程无需处理，Web Worker 返回需 `postMessage`\n- **Python**: `loop.call_soon_threadsafe()` 或框架 API\n- **Go**: 使用 channel 或 sync 包\n- **Java/Kotlin**: `runOnUiThread { }` 或 `Dispatchers.Main`\n- **Rust**: `tokio::spawn` + channel 或 `Arc<Mutex<T>>`\n- **Dart**: `setState` 或 `WidgetsBinding.instance.addPostFrameCallback`\n\n### 反例\n在后台线程直接操作 UI 会导致崩溃或数据竞争。",
+    "pattern": "// ✅ 正确 — 使用语言/框架提供的主线程机制\n// Swift: @MainActor func updateUI() { ... }\n// Kotlin: runOnUiThread { updateView() }\n\n// ❌ 错误 — 在后台线程直接操作 UI",
+    "rationale": "UI 框架通常要求在主线程更新界面，违反会导致崩溃或数据竞争"
+  },
+  "description": "UI 更新必须在主线程/主 Actor 执行，违反会导致崩溃或数据竞争",
   "language": "<primaryLanguage>",
   "headers": [],
   "category": "Tool",
+  "kind": "rule",
+  "doClause": "Always dispatch UI updates to the main thread or main actor",
+  "dontClause": "Never update UI elements from background threads or non-main dispatchers",
+  "whenClause": "When writing code that updates UI after async operations or background tasks",
+  "coreCode": "// Swift: @MainActor func updateUI() { ... }\n// Kotlin: runOnUiThread { updateView() }\n// JS/TS: postMessage from Worker\n// Python: loop.call_soon_threadsafe(callback)",
   "knowledgeType": "boundary-constraint",
-  "difficulty": "intermediate",
-  "rationale": "UI 框架通常要求在主线程更新界面，违反会导致崩溃或数据竞争",
+  "usageGuide": "### 适用场景\n所有涉及 UI 更新的异步操作\n### 检查方式\n确认回调/闭包中的 UI 操作是否已切换到主线程",
   "reasoning": {
     "whyStandard": "项目 UI 层需在主线程操作，Agent 新写的代码也必须遵守",
     "sources": ["<relevant source files>"],
@@ -307,19 +335,6 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 | `constraints` | ★★☆ 推荐 | 前置条件/边界/副作用 |
 | `relations` | ★★☆ 推荐 | 依赖/扩展/冲突关系 |
 | `antiPattern` | 条件必填 | 仅 Bug 修复维度 |
-
----
-
-## scan_project vs bootstrap_knowledge
-
-| | `bootstrap(op=scan)` | `bootstrap(op=knowledge)` |
-|---|---|---|
-| **用途** | 快速结构探查（不写库） | 完整知识库初始化（写 knowledge_edges） |
-| **SPM 图谱写入** | ❌ | ✅ |
-| **文件内容** | 可选 (includeContent) | external 模式自动包含 |
-| **Guard 审计** | ✅ | ✅ |
-| **后续动作** | 看看就好 | Agent 分析 → submit_candidates |
-| **适合场景** | 了解项目、检查 Guard | 首次接入、知识库重建 |
 
 ---
 
@@ -952,7 +967,7 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 |------|------|
 | 文件太多超出 context window | 减小 `maxFiles`，或先分析 high priority 文件 |
 | 分析维度太多一次做不完 | 分 Target 分批进行，每次分析 1-2 个 Target |
-| 分析质量不高 | 切换 `aiMode="internal"` 使用内置 AI |
+| 分析质量不高 | 检查 submissionSchema 中的示例，确保字段格式严格匹配 |
 | Guard 违规太多 | 先处理 Guard 违规，再做知识分析 |
 | 提交后候选在哪里 | Dashboard → Candidates 页面审核 |
 | 不知道该语言的最佳实践 | 查阅 autosnippet-reference-{lang} Skill |
@@ -963,9 +978,9 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 
 | Tool | 用途 |
 |------|------|
-| `autosnippet_bootstrap(operation=knowledge)` | 启动冷启动扫描（本 Skill 核心工具） |
-| `autosnippet_bootstrap(operation=refine)` | AI 精炼候选质量（summary/insight/relations） |
-| `autosnippet_bootstrap(operation=scan)` | 轻量探查（不写库） |
+| `autosnippet_bootstrap` | 冷启动 Mission Briefing（无参数，返回项目分析 + 维度任务清单） |
+| `autosnippet_dimension_complete` | 维度分析完成通知（提交 recipe 后调用） |
+| `autosnippet_enrich_candidates` | 候选字段完整性诊断 |
 | `autosnippet_submit_knowledge_batch` | 批量提交候选 |
 | `autosnippet_submit_knowledge` | 提交单条候选（内置自动校验 + 去重检查） |
 | `autosnippet_search(mode=context)` | 查找已有知识（避免重复） |

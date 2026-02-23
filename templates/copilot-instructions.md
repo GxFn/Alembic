@@ -65,7 +65,8 @@
 - `autosnippet_skill` — Skill 管理（`operation`: list / load / create / update / delete / suggest）
 
 ### 冷启动 & 扫描
-- `autosnippet_bootstrap` — 项目冷启动与扫描（`operation`: knowledge / refine / scan）
+- `autosnippet_bootstrap` — 冷启动 Mission Briefing（无参数，返回项目分析 + 维度任务清单）
+- `autosnippet_dimension_complete` — 维度分析完成通知（dimensionId + analysisText 必填）
 
 ### 系统
 - `autosnippet_health` — 服务健康状态与知识库统计（可检测空 KB 触发冷启动）
@@ -84,10 +85,25 @@
 - **Bootstrap 自动生成**：冷启动 Phase 5.5 自动生成 4 个 Project Skills（code-standard, architecture, project-profile, agent-guidelines）
 - **优先级**：项目级 Skill 同名覆盖内置；宏观知识查 Skill，微观代码模式查 Recipe
 
+## 冷启动必读（首次使用必看）
+
+执行冷启动前，**必须**先加载 Skill 获取完整指引：
+```
+autosnippet_skill({ operation: "load", name: "autosnippet-coldstart" })
+```
+Skill 包含：完整的 V3 字段格式、JSON 示例模板、维度分析策略。
+**不加载 Skill 直接提交知识会因字段格式问题被反复拒绝。**
+
+### V3 字段格式关键提醒
+- `content` **必须是 JSON 对象**（不是字符串）：`{ "pattern": "代码...", "markdown": "## 标题\n正文...", "rationale": "设计原理" }`
+- `reasoning` **必须是 JSON 对象**：`{ "whyStandard": "原因", "sources": ["file.ts"], "confidence": 0.85 }`
+- `headers` **必须是数组**：`["import Foundation"]`，无 import 时传 `[]`
+- 所有 16 个必填字段必须在**单次调用中一次性提供**，缺字段直接拒绝
+
 ## 推荐工作流
 - **查找**：`autosnippet_search`（推荐 mode=auto）或 `autosnippet_search` mode=context（上下文感知）。
 - **产出候选**：`autosnippet_submit_knowledge` 提交（严格前置校验，必须一次性提供所有必填字段，缺字段直接拒绝不入库）。
-- **冷启动**：`autosnippet_bootstrap` op=knowledge → `autosnippet_bootstrap` op=refine → 逐 Target 深入 → `autosnippet_submit_knowledge_batch`。
+- **冷启动**：`autosnippet_bootstrap`（无参数）→ 逐维度分析代码 → `autosnippet_submit_knowledge_batch` → `autosnippet_dimension_complete`。
 - **Skills 创建**：`autosnippet_skill` op=suggest 分析 → `autosnippet_skill` op=create 固化知识。
 - **采纳反馈**：`autosnippet_knowledge` op=confirm_usage（记录使用量影响排序权重）。
 
