@@ -4,6 +4,16 @@
 
 ---
 
+## [3.1.4] - 2026-02-23
+
+### 安全
+
+- **文件删除路径安全加固**：为 `KnowledgeFileWriter` 的 5 处 `unlinkSync`（`remove()`、`moveOnLifecycleChange()`、`_cleanupOldFile()`、`_walkAndRemoveById()`）添加 `pathGuard.assertSafe()` 断言，防止 `entry.sourceFile` 被污染时删除 projectRoot 外的文件（如 BiliDemo 等开发项目）
+- **WikiUtils.dedup() 路径逃逸防护**：去重删除前校验 `fullPath.startsWith(resolvedWikiDir + sep)`，阻止 `file.path` 含 `../` 时越界删除
+- **checkpoint 递归清理加固**：`clearCheckpoints()` 的 `fs.rm(recursive: true)` 前添加 `pathGuard.assertSafe()`，且 `PathGuardError` 不再被静默吞掉
+
+---
+
 ## [3.1.3] - 2026-02-23
 
 ### 修复
