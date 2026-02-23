@@ -1,6 +1,6 @@
 {
   "name": "autosnippet",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "description": "Extract code patterns into a knowledge base for AI coding assistants",
   "type": "module",
   "main": "lib/bootstrap.js",
@@ -40,7 +40,8 @@
   "author": "gaoxuefeng",
   "license": "MIT",
   "bin": {
-    "asd": "bin/cli.js"
+    "asd": "bin/cli.js",
+    "asd-mcp": "bin/mcp-server.js"
   },
   "keywords": [
     "snippet",

@@ -4,6 +4,15 @@
 
 ---
 
+## [3.1.3] - 2026-02-23
+
+### 修复
+
+- **MCP 配置使用全局命令**：`asd setup` / `asd upgrade` 生成的 IDE MCP 配置（`.vscode/mcp.json`、`.cursor/mcp.json`）改用全局命令 `asd-mcp` 替代 `node` + 绝对路径。修复通过 `npm install -g` 全局安装时，symlink 被穿透导致 MCP 路径指向开发仓库物理路径而非全局安装路径的问题
+- **新增 `asd-mcp` 全局命令**：`package.json` bin 注册 `asd-mcp` 入口，MCP 配置不再依赖 `NODE_PATH` 环境变量
+
+---
+
 ## [3.0.9] - 2026-02-22
 
 ### 改进
