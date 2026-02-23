@@ -27,8 +27,11 @@ const noBackup = args.includes('--no-backup');
 const projectRoot = args.find((a) => !a.startsWith('--')) || process.cwd();
 
 // ── 动态导入（兼容 ESM） ──
-const { parseRecipeMarkdown } = await import('../lib/service/recipe/RecipeFileWriter.js');
-const { parseCandidateMarkdown } = await import('../lib/service/candidate/CandidateFileWriter.js');
+// NOTE: 旧的 RecipeFileWriter / CandidateFileWriter 已统一为 KnowledgeFileWriter
+// parseKnowledgeMarkdown 兼容解析旧格式
+const { parseKnowledgeMarkdown } = await import('../lib/service/knowledge/KnowledgeFileWriter.js');
+const parseRecipeMarkdown = parseKnowledgeMarkdown;
+const parseCandidateMarkdown = parseKnowledgeMarkdown;
 const { KnowledgeEntry } = await import('../lib/domain/knowledge/KnowledgeEntry.js');
 const { KnowledgeFileWriter } = await import('../lib/service/knowledge/KnowledgeFileWriter.js');
 const { Lifecycle } = await import('../lib/domain/knowledge/Lifecycle.js');
