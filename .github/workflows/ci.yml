@@ -122,7 +122,19 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run test:integration
+
+      - name: Show Node/npm version
+        run: node -v && npm -v
+
+      - name: Run integration tests
+        run: npm run test:integration -- --verbose --forceExit 2>&1 | tee /tmp/integration-test.log
         env:
           ASD_DISABLE_WRITE_GUARD: '1'
           ASD_DISABLE_RATE_LIMIT: '1'
+
+      - name: Upload test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-log
+          path: /tmp/integration-test.log
