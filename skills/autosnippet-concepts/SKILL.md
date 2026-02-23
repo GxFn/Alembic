@@ -229,6 +229,9 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
    - `language` — 编程语言标识
    - `kind` — rule / pattern / fact
    - `doClause` — 英文祈使句 ≤60 tokens
+   - `dontClause` — 英文反向约束（描述禁止的做法）
+   - `whenClause` — 英文触发场景（描述何时适用）
+   - `coreCode` — 3-8 行纯代码骨架（语法完整、可直接复制）
    - `description` — 中文摘要 ≤80字
    - `content` — `{ markdown (≥200字), pattern (核心代码), rationale (设计原理) }`
    - `headers` — import 语句数组（无 import 传 `[]`）
@@ -250,7 +253,7 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 
 - **类别误用**：category 只能是 8 类之一，不能写模块名
 - **headers 不完整**：必须是完整 import/#import 语句数组，不能是文件名
-- **缺失必填**：`title`/`trigger`/`category`/`language`/`kind`/`doClause`/`description`/`headers`/`content`(markdown+rationale)/`usageGuide`/`knowledgeType`/`reasoning` 必须齐全
+- **缺失必填**：`title`/`trigger`/`category`/`language`/`kind`/`doClause`/`dontClause`/`whenClause`/`coreCode`/`description`/`headers`/`content`(markdown+rationale)/`usageGuide`/`knowledgeType`/`reasoning` 必须齐全
 - **trigger 格式错误**：必须 `@` 开头，小写、无空格
 - **字段滥用**：不要使用已弃用的 `type` 字段
 - **合并多模式**：一个 Recipe 只描述一个具体场景
@@ -263,6 +266,9 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 - [ ] **trigger**: `@` 开头 kebab-case
 - [ ] **kind**: `rule` / `pattern` / `fact`
 - [ ] **doClause**: 英文祈使句（≠60 tokens）
+- [ ] **dontClause**: 英文反向约束（描述禁止的做法）
+- [ ] **whenClause**: 英文触发场景（描述何时适用）
+- [ ] **coreCode**: 3-8 行纯代码骨架（语法完整、可直接复制）
 - [ ] **description**: 中文摘要 ≤80字
 - [ ] **category**: ONE of View/Service/Tool/Model/Network/Storage/UI/Utility
 - [ ] **language**: `swift`/`objectivec`/`go`/`python`/`java`/`kotlin`/`javascript`/`typescript`/`dart`/`rust`
@@ -277,7 +283,7 @@ This is a conceptual map. Skills stay semantic; MCP provides capability.
 ### Recipe Creation Principles
 
 When creating or extracting Recipes:
-1. **V3 必填字段一次性填写**：title, content(markdown+pattern+rationale), trigger, kind, doClause, description, category, language, headers, usageGuide, knowledgeType, reasoning
+1. **V3 必填字段一次性填写**：title, content(markdown+pattern+rationale), trigger, kind, doClause, dontClause, whenClause, coreCode, description, category, language, headers, usageGuide, knowledgeType, reasoning
 2. **保持单场景**：一个 Recipe 只讲一个具体用法
 3. **字段严格**：必填字段必须齐全、格式正确
    - Tools like Dashboard `/api/v1/ai/translate` can help auto-generate missing language, but it's better to provide both

@@ -11,7 +11,7 @@ description: Deep project analysis — full scan + semantic field enrichment + g
 
 **MCP 工具负责数据采集 + 静态检查；你（Agent）负责语义理解；Agent 直接填写完整字段后通过 `autosnippet_submit_knowledge` 提交。**
 
-**⚠️ 严格提交规则**：`autosnippet_submit_knowledge` 实施严格前置校验——缺少必要字段的提交将被**直接拒绝（不入库）**。必须在单次调用中一次性提供所有必填字段（title, language, content, kind, doClause, category, trigger, description, headers, usageGuide, knowledgeType, content.rationale）。不要分步提交或先提交再补全。
+**⚠️ 严格提交规则**：`autosnippet_submit_knowledge` 实施严格前置校验——缺少必要字段的提交将被**直接拒绝（不入库）**。必须在单次调用中一次性提供所有必填字段（title, language, content, kind, doClause, dontClause, whenClause, coreCode, category, trigger, description, headers, usageGuide, knowledgeType, reasoning, content.rationale）。不要分步提交或先提交再补全。
 
 ---
 

@@ -293,6 +293,9 @@ description: Cold-start knowledge base initialization. Full 9-dimension analysis
 | `category` | ★★★ 必填 | View / Service / Tool / Model / Network / Storage / UI / Utility |
 | `kind` | ★★★ 必填 | rule / pattern / fact |
 | `doClause` | ★★★ 必填 | 英文祈使句正向指令（≤60 tokens） |
+| `dontClause` | ★★★ 必填 | 英文反向约束（描述禁止的做法） |
+| `whenClause` | ★★★ 必填 | 英文触发场景（描述何时适用此规则） |
+| `coreCode` | ★★★ 必填 | 3-8行纯代码骨架（语法完整、括号配对、可直接复制） |
 | `knowledgeType` | ★★★ 必填 | 见 8 维度清单 |
 | `usageGuide` | ★★★ 必填 | 使用指南（### 章节格式） |
 | `reasoning.whyStandard` | ★★★ 必填 | 为什么值得沉淀 |

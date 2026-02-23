@@ -94,7 +94,7 @@ Recipe is the core knowledge unit. V3 uses a unified structured model:
 
 | Tool | Description |
 |------|-------------|
-| `autosnippet_submit_knowledge` | Submit single candidate (**strict validation** — missing required fields rejected immediately, no fallback). Must provide ALL fields in one call: title, language, content(+rationale), kind, doClause, category, trigger, description, headers, usageGuide, knowledgeType |
+| `autosnippet_submit_knowledge` | Submit single candidate (**strict validation** — missing required fields rejected immediately, no fallback). Must provide ALL fields in one call: title, language, content(+rationale), kind, doClause, dontClause, whenClause, coreCode, category, trigger, description, headers, usageGuide, knowledgeType, reasoning |
 | `autosnippet_submit_knowledge_batch` | Batch submit candidates (per-item strict validation + dedup + rate-limit) |
 | `autosnippet_save_document` | Save development document (design doc, debug report, ADR) — title + markdown only |
 

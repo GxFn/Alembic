@@ -101,7 +101,7 @@ Every candidate submitted via `submit_candidate` or `submit_candidates` supports
 
 ### Layer 3: Structured Content (high value — 代码变更与实施步骤)
 
-> **注意**: Layer 1 已包含 V3 全部必填字段（title, content, language, kind, doClause, trigger, description, category, headers, usageGuide, knowledgeType）。本层为可选的高价值补充字段。
+> **注意**: Layer 1 已包含 V3 全部必填字段（title, content, language, kind, doClause, dontClause, whenClause, coreCode, trigger, description, category, headers, usageGuide, knowledgeType, reasoning）。本层为可选的高价值补充字段。
 
 | Field | Type | Structure |
 |-------|------|-----------|
@@ -256,7 +256,7 @@ Severity: `error` (must fix) | `warning` (should fix) | `info` (suggestion)
 2. **Maximize information density** — Agent's primary value is extracting structured metadata that humans would skip
 3. **Always fill Layer 1-3 + Reasoning + Recipe-Ready Checklist** at minimum; Layer 4-7 for complex patterns
 4. **Reasoning is mandatory** — Every candidate MUST include `reasoning.whyStandard` + `reasoning.sources` + `reasoning.confidence`. No exceptions.
-5. **V3 必填字段** — title, content(markdown+pattern+rationale), trigger, kind, doClause, description, language, category, headers, knowledgeType, usageGuide, reasoning
+5. **V3 必填字段** — title, content(markdown+pattern+rationale), trigger, kind, doClause, dontClause, whenClause, coreCode, description, language, category, headers, knowledgeType, usageGuide, reasoning
 6. **Check `recipeReadyHints` in submit response** — If not empty, supplement fields and resubmit
 7. **Parallel query existing Recipes** during generation to reduce duplicates and fill `relations`
 6. **Code examples**: use Xcode placeholders (`<#URL#>`, `<#Token#>`), explain in `usageGuide`

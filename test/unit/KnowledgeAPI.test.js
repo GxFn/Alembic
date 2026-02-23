@@ -331,12 +331,16 @@ describe('MCP Tool Definitions (V3)', () => {
       'content',
       'kind',
       'doClause',
+      'dontClause',
+      'whenClause',
+      'coreCode',
       'category',
       'trigger',
       'description',
       'headers',
       'usageGuide',
       'knowledgeType',
+      'reasoning',
     ]);
   });
 
@@ -367,8 +371,8 @@ describe('MCP Tool Definitions (V3)', () => {
     });
   });
 
-  test('TOOLS 数组应包含 16 个工具', () => {
-    expect(TOOLS.length).toBe(16);
+  test('TOOLS 数组应包含 19 个工具', () => {
+    expect(TOOLS.length).toBe(19);
   });
 
   test('submit_knowledge content 字段应有 pattern 和 markdown 属性', () => {
