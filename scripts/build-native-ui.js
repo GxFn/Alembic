@@ -52,3 +52,22 @@ try {
   } else {
   }
 }
+
+// ── 发布流程：最终校验二进制必须存在 ──
+if (isPublishing) {
+  if (!fs.existsSync(out)) {
+    console.error('❌ 发布中止：native-ui 二进制不存在于', out);
+    console.error('   prepublishOnly 编译步骤可能被跳过或失败');
+    process.exit(1);
+  }
+  const stat = fs.statSync(out);
+  if (stat.size < 10_000) {
+    console.error('❌ 发布中止：native-ui 二进制异常（仅', stat.size, '字节）');
+    process.exit(1);
+  }
+  // 确保有执行权限
+  try {
+    fs.chmodSync(out, 0o755);
+  } catch { /* ignore */ }
+  console.log('✅ native-ui 二进制校验通过 (%s KB)', (stat.size / 1024).toFixed(1));
+}
