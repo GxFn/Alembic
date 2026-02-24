@@ -343,10 +343,24 @@ describe('submit_with_check consistency', () => {
 
   it('should auto-fill knowledgeType from dimensionMeta', async () => {
     const params = {
-      code: 'func example() {}',
+      title: 'Example Pattern',
       language: 'swift',
       category: 'Architecture',
-      title: 'Example Pattern',
+      description: '示例架构模式',
+      trigger: '@example-pattern',
+      kind: 'pattern',
+      doClause: 'Use this pattern for architecture',
+      dontClause: 'Do not bypass the router',
+      whenClause: 'When setting up module routing',
+      coreCode: 'func example() {\n  router.navigate()\n}',
+      headers: [],
+      usageGuide: '### Usage\nCall example()',
+      content: {
+        markdown: '## Example\n\n架构模式示例。本模式展示了如何通过路由器实现模块间解耦导航，确保各业务模块不直接依赖彼此。\n\n```swift\n// 来源: Router.swift:10\nclass Router {\n  static let shared = Router()\n  private var routes: [String: () -> UIViewController] = [:]\n\n  func register(_ path: String, factory: @escaping () -> UIViewController) {\n    routes[path] = factory\n  }\n\n  func navigate(to path: String) {\n    guard let vc = routes[path]?() else { return }\n    topViewController?.navigationController?.pushViewController(vc, animated: true)\n  }\n}\n```\n\n应始终通过路由器导航，禁止直接 push ViewController。路由器负责统一管理页面跳转逻辑。',
+        pattern: 'func example() {}',
+        rationale: 'standard architecture',
+      },
+      reasoning: { whyStandard: 'standard approach', sources: ['Example.swift'], confidence: 0.85 },
     };
     const mockKnowledgeService = {
       create: jest.fn().mockResolvedValue({
@@ -377,10 +391,24 @@ describe('submit_with_check consistency', () => {
 
   it('should derive source from ctx.source', async () => {
     const params = {
-      code: 'func test() {}',
+      title: 'Test',
       language: 'swift',
       category: 'Service',
-      title: 'Test',
+      description: '测试来源推断',
+      trigger: '@test-source',
+      kind: 'pattern',
+      doClause: 'Use this test pattern',
+      dontClause: 'Do not skip validation',
+      whenClause: 'When testing source derivation',
+      coreCode: 'func test() {\n  validate()\n}',
+      headers: [],
+      usageGuide: '### Usage\nCall test()',
+      content: {
+        markdown: '## Test\n\n测试来源推断。本模式展示了如何在提交知识时自动推断数据来源，确保元数据完整性。\n\n```swift\n// 来源: Test.swift:5\nfunc validate(input: String) -> Bool {\n  guard !input.isEmpty else { return false }\n  let pattern = "^[a-zA-Z0-9]+$"\n  return input.range(of: pattern, options: .regularExpression) != nil\n}\n\nfunc testValidation() {\n  assert(validate(input: "abc123") == true)\n  assert(validate(input: "") == false)\n}\n```\n\n应始终进行验证，确保输入数据符合预期格式。验证失败时需提供明确的错误提示。',
+        pattern: 'func test() {}',
+        rationale: 'test rationale',
+      },
+      reasoning: { whyStandard: 'test reason', sources: ['Test.swift'], confidence: 0.8 },
     };
     const mockKnowledgeService = {
       create: jest.fn().mockResolvedValue({
@@ -406,11 +434,24 @@ describe('submit_with_check consistency', () => {
 
   it('should use knowledgeType from dimensionMeta', async () => {
     const params = {
-      code: 'class Router {}',
+      title: 'Router Pattern',
       language: 'swift',
       category: 'Architecture',
-      title: 'Router Pattern',
-      summary: 'Pattern summary',
+      description: '路由模式',
+      trigger: '@router-pattern',
+      kind: 'pattern',
+      doClause: 'Use Router for navigation',
+      dontClause: 'Do not use direct pushViewController',
+      whenClause: 'When implementing navigation',
+      coreCode: 'class Router {\n  func navigate() {}\n}',
+      headers: [],
+      usageGuide: '### Usage\nUse Router.navigate()',
+      content: {
+        markdown: '## Router\n\n路由器模式。本模式定义了统一的页面导航方案，通过中心化的路由注册与跳转机制解耦模块间依赖。\n\n```swift\n// 来源: Router.swift:1\nclass Router {\n  static let shared = Router()\n  private var handlers: [String: () -> UIViewController] = [:]\n\n  func register(_ route: String, handler: @escaping () -> UIViewController) {\n    handlers[route] = handler\n  }\n\n  func navigate(to route: String) {\n    guard let vc = handlers[route]?() else { return }\n    UIApplication.topVC?.navigationController?.pushViewController(vc, animated: true)\n  }\n}\n```\n\n应始终通过路由器导航，禁止直接 push ViewController。路由器负责统一管理跳转逻辑。',
+        pattern: 'class Router {}',
+        rationale: 'router pattern',
+      },
+      reasoning: { whyStandard: 'standard router', sources: ['Router.swift'], confidence: 0.85 },
     };
     const mockKnowledgeService = {
       create: jest.fn().mockResolvedValue({

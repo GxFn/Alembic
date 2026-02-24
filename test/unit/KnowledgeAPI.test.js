@@ -168,7 +168,8 @@ describe('MCP Knowledge Handlers', () => {
       const result = await submitKnowledge(ctx, validArgs);
       expect(result.success).toBe(true);
       expect(result.data.recipeReadyHints).toBeDefined();
-      expect(result.data.recipeReadyHints.missingFields).toContain('category');
+      // UnifiedValidator 返回完整错误描述，验证包含字段名即可
+      expect(result.data.recipeReadyHints.missingFields.some(f => f.includes('category'))).toBe(true);
     });
 
     test('meta 中应包含 tool 名称', async () => {
@@ -184,16 +185,82 @@ describe('MCP Knowledge Handlers', () => {
       target_name: 'TestTarget',
       items: [
         {
-          title: 'A',
+          title: 'Network Request Service',
           language: 'swift',
-          content: { pattern: 'a' },
-          reasoning: { whyStandard: 'a', sources: ['a'] },
+          category: 'Service',
+          description: '网络请求服务模式',
+          trigger: '@network-request',
+          kind: 'pattern',
+          doClause: 'Use pattern A for service calls',
+          dontClause: 'Do not use raw URLSession',
+          whenClause: 'When making network requests',
+          coreCode: 'func fetchData() {\n  service.request()\n}',
+          headers: [],
+          usageGuide: '### Usage\nCall fetchData()',
+          knowledgeType: 'code-pattern',
+          content: {
+            markdown: [
+              '## Network Request Service',
+              '',
+              '在项目中使用统一的网络请求模式，通过 Service 层封装接口调用。所有网络请求必须经过 NetworkService 统一处理，确保错误处理和缓存策略一致。',
+              '',
+              '```swift',
+              '// 来源: NetworkService.swift:42',
+              'func fetchData(url: URL, completion: @escaping (Result<Data, Error>) -> Void) {',
+              '  let session = URLSession.shared',
+              '  session.dataTask(with: url) { data, response, error in',
+              '    guard let data = data else { return }',
+              '    completion(.success(data))',
+              '  }.resume()',
+              '}',
+              '```',
+              '',
+              '应始终通过 Service 层发起网络请求，而不是直接使用 URLSession。Service 层负责统一处理错误、超时和缓存。',
+            ].join('\n'),
+            pattern: 'func fetchData() { service.request() }',
+            rationale: 'standard network pattern',
+          },
+          reasoning: { whyStandard: 'team convention', sources: ['NetworkService.swift'], confidence: 0.8 },
         },
         {
-          title: 'B',
+          title: 'View Layout Setup',
           language: 'objc',
-          content: { pattern: 'b' },
-          reasoning: { whyStandard: 'b', sources: ['b'] },
+          category: 'View',
+          description: 'AutoLayout 视图初始化模式',
+          trigger: '@view-layout',
+          kind: 'pattern',
+          doClause: 'Use pattern B for views',
+          dontClause: 'Do not use frame layout',
+          whenClause: 'When creating UI views',
+          coreCode: '- (void)setupView {\n  [self addSubview:v];\n}',
+          headers: [],
+          usageGuide: '### Usage\nCall setupView',
+          knowledgeType: 'code-pattern',
+          content: {
+            markdown: [
+              '## View Layout Setup',
+              '',
+              '使用 AutoLayout 而非 frame 布局，通过 setupView 方法统一初始化视图。所有子视图添加和约束配置都应在此方法中完成。',
+              '',
+              '```objc',
+              '// 来源: BaseView.m:30',
+              '- (void)setupView {',
+              '  UIView *container = [[UIView alloc] init];',
+              '  container.translatesAutoresizingMaskIntoConstraints = NO;',
+              '  [self addSubview:container];',
+              '  [NSLayoutConstraint activateConstraints:@[',
+              '    [container.topAnchor constraintEqualToAnchor:self.topAnchor],',
+              '    [container.leadingAnchor constraintEqualToAnchor:self.leadingAnchor]',
+              '  ]];',
+              '}',
+              '```',
+              '',
+              '视图初始化应始终在 setupView 中完成，禁止在 init 中直接操作视图层级。',
+            ].join('\n'),
+            pattern: '- (void)setupView { [self addSubview:v]; }',
+            rationale: 'standard view pattern',
+          },
+          reasoning: { whyStandard: 'team convention', sources: ['BaseView.m'], confidence: 0.8 },
         },
       ],
     };
