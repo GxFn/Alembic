@@ -304,6 +304,7 @@ export const en: DeepString<typeof zh> = {
     sourceClipboardLabel: 'Clipboard',
     sourceSignalLabel: 'Signal',
     sourceSubmitCheckLabel: 'AI Review Submit',
+    sourceFallbackLabel: 'Rule Fallback',
   },
 
   /* ═══════════════════════════════ knowledge ═══════════════════════════ */

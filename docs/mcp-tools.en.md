@@ -157,16 +157,23 @@ Submit a single knowledge entry. Subject to strict pre-validation and deduplicat
 |-------|------|----------|-------------|
 | `title` | string | ✅ | Knowledge title |
 | `language` | string | ✅ | Programming language |
-| `content` | string | ✅ | Code content |
+| `content` | object | ✅ | `{ markdown, pattern?, rationale }` content object |
 | `kind` | string | ✅ | Type: `rule` / `pattern` / `fact` |
 | `category` | string | ✅ | Category |
 | `knowledgeType` | string | ✅ | Knowledge type (e.g., `code-pattern`, `code-standard`) |
-| `description` | string | ✅ | Description |
-| `doClause` | string | ✅ | "What should be done" rule description |
-| `trigger` | string | ✅ | Trigger condition |
-| `headers` | object | ✅ | Headers (do, trigger, usageGuide) |
-| `usageGuide` | string | ✅ | Usage guide |
-| `reasoning` | string | — | Reasoning process (required for `chat_agent` role) |
+| `description` | string | ✅ | Chinese summary ≤80 chars |
+| `doClause` | string | ✅ | English imperative positive rule |
+| `dontClause` | string | ✅ | English negative constraint (what NOT to do) |
+| `whenClause` | string | ✅ | English trigger scenario description |
+| `trigger` | string | ✅ | `@kebab-case` unique identifier |
+| `coreCode` | string | ✅ | 3-8 line code skeleton, syntactically complete |
+| `headers` | array | ✅ | Import statement array, pass `[]` when none |
+| `usageGuide` | string | ✅ | `###` section-format usage guide |
+| `reasoning` | object | ✅ | `{ whyStandard, sources, confidence }` reasoning |
+| `topicHint` | string | — | Topic hint: `networking` / `ui` / `data` / `architecture` / `conventions` |
+| `scope` | string | — | Scope: `universal` / `project-specific` / `team-convention` |
+| `complexity` | string | — | Complexity: `basic` / `intermediate` / `advanced` |
+| `sourceFile` | string | — | Source file relative path |
 
 ---
 

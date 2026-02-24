@@ -301,6 +301,7 @@ export const zh = {
     sourceClipboardLabel: '剪贴板',
     sourceSignalLabel: '信号',
     sourceSubmitCheckLabel: 'AI 审查提交',
+    sourceFallbackLabel: '规则降级',
   },
 
   /* ═══════════════════════════════ knowledge ═══════════════════════════ */

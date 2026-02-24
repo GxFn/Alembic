@@ -67,6 +67,24 @@ asd ui           # 打开 Dashboard 审核扫描结果
 
 也可以用 `asd ais <target>` 扫描特定模块。更推荐的方式是在 Cursor 里直接用自然语言描述你想要提取的模式，AI 会自动调用知识库完成扫描和提交。
 
+## 双管线 — 内部 Agent & 外部 Agent
+
+所有核心能力都通过两条完全独立的管线实现。选适合你的那条，或两条都用：
+
+| 核心能力 | 内部 Agent（内置 AI） | 外部 Agent（IDE 驱动） |
+|---|---|---|
+| **冷启动** | Analyst/Producer 双 Agent 自动扫描 | IDE Agent 读 Mission Briefing + MCP 工具 |
+| **知识提取** | `asd ais` → 内置 AI 管线 | Cursor/Copilot 调用 `submit_with_check` |
+| **Project Skill** | 从分析文本自动生成 | IDE Agent 调用 `autosnippet_skill(create)` |
+| **Repo Wiki** | 冷启动结束时自动生成 | IDE Agent 调用 Wiki MCP 工具 |
+| **Guard** | 内置规则引擎（无需 AI） | 同上 — 共享基础设施 |
+| **搜索与检索** | MCP Server 返回结果 | 同上 — 共享基础设施 |
+| **需要** | AI Provider API Key | 支持 Agent 能力的 IDE |
+
+如果完全没有 AI，规则化降级仍能从 AST 和 Guard 数据中提取基础知识。
+
+> **LLM 质量直接影响产出效果。** 能力更强的模型（Claude Opus/Sonnet、GPT-4o、Gemini 2.5 Pro）产出更准确的模式、更丰富的架构洞察、更少的误报。
+
 ## 都有什么
 
 **模式提取** — AI 读你的代码，识别可复用的模式，结构化为 Recipe（代码 + 说明 + 元数据 + 使用指南）。支持 ObjC、Swift、TypeScript、JavaScript、Python、Java、Kotlin、Go、Ruby，共 9 种语言（Tree-sitter AST）。

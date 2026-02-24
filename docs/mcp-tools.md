@@ -157,16 +157,23 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 |------|------|------|------|
 | `title` | string | ✅ | 知识标题 |
 | `language` | string | ✅ | 编程语言 |
-| `content` | string | ✅ | 代码内容 |
+| `content` | object | ✅ | `{ markdown, pattern?, rationale }` 内容对象 |
 | `kind` | string | ✅ | 类型：`rule` / `pattern` / `fact` |
 | `category` | string | ✅ | 分类 |
 | `knowledgeType` | string | ✅ | 知识类型（如 `code-pattern`, `code-standard` 等） |
-| `description` | string | ✅ | 描述 |
-| `doClause` | string | ✅ | "应该做什么"的规则描述 |
-| `trigger` | string | ✅ | 触发条件 |
-| `headers` | object | ✅ | 头信息（do, trigger, usageGuide） |
-| `usageGuide` | string | ✅ | 使用指南 |
-| `reasoning` | string | — | 推理过程（chat_agent 角色必填） |
+| `description` | string | ✅ | 中文简述 ≤80 字 |
+| `doClause` | string | ✅ | 英文祈使句正向规则 |
+| `dontClause` | string | ✅ | 英文反向约束（描述禁止的做法） |
+| `whenClause` | string | ✅ | 英文触发场景描述 |
+| `trigger` | string | ✅ | `@kebab-case` 唯一标识符 |
+| `coreCode` | string | ✅ | 3-8 行纯代码骨架，语法完整可复制 |
+| `headers` | array | ✅ | import 语句数组，无 import 时传 `[]` |
+| `usageGuide` | string | ✅ | `###` 章节格式使用指南 |
+| `reasoning` | object | ✅ | `{ whyStandard, sources, confidence }` 推理过程 |
+| `topicHint` | string | — | 主题提示：`networking` / `ui` / `data` / `architecture` / `conventions` |
+| `scope` | string | — | 作用域：`universal` / `project-specific` / `team-convention` |
+| `complexity` | string | — | 复杂度：`basic` / `intermediate` / `advanced` |
+| `sourceFile` | string | — | 来源文件相对路径 |
 
 ---
 

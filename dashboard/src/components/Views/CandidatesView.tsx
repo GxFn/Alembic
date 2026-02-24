@@ -119,6 +119,7 @@ const SOURCE_LABEL_KEYS: Record<string, { labelKey: string; color: string }> = {
   'cli': { labelKey: 'CLI', color: 'text-slate-600 bg-slate-50 border-slate-200' },
   'agent': { labelKey: 'AI Agent', color: 'text-violet-600 bg-violet-50 border-violet-200' },
   'submit_with_check': { labelKey: 'candidates.sourceSubmitCheckLabel', color: 'text-teal-600 bg-teal-50 border-teal-200' },
+  'bootstrap-fallback': { labelKey: 'candidates.sourceFallbackLabel', color: 'text-amber-600 bg-amber-50 border-amber-200' },
 };
 
 /** 小型 SVG 环形置信度 */
@@ -244,7 +245,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
     const items = data.candidates[effectiveTarget].items;
     const total = items.length;
     const avgConfidence = items.reduce((sum, c) => sum + (c.reasoning?.confidence ?? 0), 0) / (total || 1);
-    const withCode = items.filter(c => c.content?.pattern && c.content.pattern.trim().length > 0).length;
+    const withCode = items.filter(c => (c.content?.pattern && c.content.pattern.trim().length > 0) || (c.coreCode && c.coreCode.trim().length > 0)).length;
     const sources = new Map<string, number>();
     items.forEach(c => {
       const s = c.source || 'unknown';

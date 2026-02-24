@@ -7,9 +7,24 @@ language: swift  # swift, objectivec, go, python, java, kotlin, javascript, type
 summary_cn: 中文概述，≤100 字，描述该 Recipe 的用途
 summary_en: English summary, ≤100 words
 headers: ["import Foundation"]  # 完整 import 语句数组
+knowledgeType: code-pattern  # code-pattern, architecture, best-practice, code-standard, code-style, code-relation, data-flow, event-and-data-flow, module-dependency, boundary-constraint, solution, anti-pattern
 
-# 可选字段（强烈推荐）
-knowledgeType: code-pattern  # code-pattern, architecture, best-practice, boundary-constraint, code-relation, etc.
+# V3 Cursor Delivery 必填字段
+kind: pattern  # rule = 强制约束 | pattern = 可复用模式 | fact = 项目事实
+doClause: "Use dependency injection via constructor"  # 英文祈使句，以动词开头，≤60 tokens
+dontClause: "Don't instantiate services with new directly"  # 英文反向约束
+whenClause: "When creating a new service class"  # 英文触发场景
+coreCode: |
+  class MyService {
+    constructor(private db: Database) {}
+  }
+usageGuide: |
+  ### 何时使用
+  创建新 Service 类时
+  ### 规范
+  统一使用构造器注入
+
+# 可选字段（推荐）
 keywords: ["关键词1", "关键词2", "关键词3"]
 tags: [tag1, tag2]
 whenToUse: |

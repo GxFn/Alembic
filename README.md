@@ -65,6 +65,24 @@ That's it. After you approve some candidates, they become **Recipes** — struct
 
 You can also scan specific modules with `asd ais <target>`. Better yet, just describe what you want in Cursor using natural language — the AI will automatically invoke the knowledge base to scan and submit patterns for you.
 
+## Dual Pipeline — Internal Agent & External Agent
+
+Every core capability works through two fully independent pipelines. Pick whichever fits your setup — or use both:
+
+| Capability | Internal Agent (built-in AI) | External Agent (IDE-driven) |
+|---|---|---|
+| **Cold Start** | Analyst/Producer dual-agent auto-scan | IDE agent reads Mission Briefing + MCP tools |
+| **Knowledge Extraction** | `asd ais` → built-in AI pipeline | Cursor/Copilot calls `submit_with_check` |
+| **Project Skills** | Auto-generated from analysis text | IDE agent calls `autosnippet_skill(create)` |
+| **Repo Wiki** | Auto-generated at end of cold start | IDE agent calls wiki MCP tools |
+| **Guard** | Built-in rule engine (no AI needed) | Same — shared infrastructure |
+| **Search & Retrieval** | MCP server serves results | Same — shared infrastructure |
+| **Requires** | AI provider API key | IDE with agent capabilities |
+
+If no AI is available at all, a rule-based fallback still extracts basic knowledge from AST and Guard data.
+
+> **LLM quality matters.** Higher-capability models (Claude Opus/Sonnet, GPT-4o, Gemini 2.5 Pro) produce significantly better results — more accurate patterns, richer architectural insights, fewer false positives.
+
 ## What's in the Box
 
 **Pattern extraction** — AI reads your code, identifies reusable patterns, and structures them as Recipes with code, explanation, metadata, and usage guidelines. Supports ObjC, Swift, TypeScript, JavaScript, Python, Java, Kotlin, Go, Ruby (9 languages via Tree-sitter AST).
