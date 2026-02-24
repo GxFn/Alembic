@@ -9,3 +9,6 @@ test/temp/
 .env
 .env.local
 *.boxspec
+
+# ── 确保 native-ui 二进制被打包（覆盖 .gitignore 中的排除规则） ──
+!resources/native-ui/native-ui
