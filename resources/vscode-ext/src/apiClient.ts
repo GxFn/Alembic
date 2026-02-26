@@ -115,6 +115,22 @@ export class ApiClient {
   }
 
   /**
+   * 审计单个文件 — 调用 Guard API
+   */
+  async auditFile(filePath: string, content: string, language: string): Promise<any> {
+    return this._post('/guard/file', { filePath, content, language });
+  }
+
+  /**
+   * 批量审计多个文件 — 调用 Guard batch API
+   */
+  async auditBatch(
+    files: Array<{ filePath: string; content?: string; language?: string }>
+  ): Promise<any> {
+    return this._post('/guard/batch', { files });
+  }
+
+  /**
    * 标准化搜索结果（与 SearchHandler.normalizeSearchResults 对齐）
    */
   private _normalizeSearchResults(rawItems: any[]): SearchResultItem[] {

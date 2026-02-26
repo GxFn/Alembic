@@ -1,0 +1,18 @@
+# AutoSnippet Claude Code Hooks
+#
+# 用法：将此文件放到项目 .claude/ 目录下
+# Claude Code 在会话开始时会自动执行 SessionStart hook
+#
+# SessionStart hook 自动调用 prime，恢复任务上下文
+# 无需手动调用 autosnippet_task(operation: "prime")
+
+hooks:
+  SessionStart:
+    # 会话开始时自动 prime TaskGraph 上下文
+    - command: |
+        curl -s -X POST http://localhost:3000/api/v1/task \
+          -H "Content-Type: application/json" \
+          -d '{"operation": "prime"}' \
+          2>/dev/null || echo '{"success": false, "message": "AutoSnippet server not running"}'
+      description: "AutoSnippet TaskGraph auto-prime"
+      timeout: 5000

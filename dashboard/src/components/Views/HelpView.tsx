@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Rocket, Database, Zap, Search, Shield, Code, GitBranch, MessageSquare, Terminal, FileCode, List, ChevronDown, ChevronRight, Layers, RefreshCw, ArrowRightLeft, BarChart3 } from 'lucide-react';
+import { BookOpen, Rocket, Database, Zap, Search, Shield, Code, GitBranch, MessageSquare, Terminal, FileCode, List, ChevronDown, ChevronRight, Layers, RefreshCw, ArrowRightLeft, BarChart3, Network, MonitorSmartphone } from 'lucide-react';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
 import TokenUsageChart from '../Charts/TokenUsageChart';
@@ -70,18 +70,18 @@ const HelpView: React.FC = () => {
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
               <div className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center mb-3 font-bold">1</div>
               <h3 className="font-semibold text-[var(--fg-primary)] mb-2">{t('help.step1Title')}</h3>
-              <pre className="bg-blue-100/70 text-blue-900 px-3 py-2 rounded text-xs overflow-hidden"><code>npm install -g autosnippet{'\n'}cd your-project{'\n'}asd setup</code></pre>
+              <pre className="bg-blue-100/70 text-blue-900 px-3 py-2 rounded text-xs overflow-x-auto whitespace-pre-wrap break-all"><code>npm install -g autosnippet{'\n'}cd your-project{'\n'}asd setup</code></pre>
             </div>
             <div className="bg-green-50 rounded-lg p-4 border border-green-200">
               <div className="bg-green-600 text-white rounded-full w-8 h-8 flex items-center justify-center mb-3 font-bold">2</div>
               <h3 className="font-semibold text-[var(--fg-primary)] mb-2">{t('help.step2Title')}</h3>
-              <pre className="bg-green-100/70 text-green-900 px-3 py-2 rounded text-xs overflow-hidden"><code>asd ui</code></pre>
+              <pre className="bg-green-100/70 text-green-900 px-3 py-2 rounded text-xs overflow-x-auto whitespace-pre-wrap break-all"><code>asd ui</code></pre>
               <p className="text-[var(--fg-secondary)] text-xs mt-2">{t('help.step2Desc')}</p>
             </div>
             <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
               <div className="bg-purple-600 text-white rounded-full w-8 h-8 flex items-center justify-center mb-3 font-bold">3</div>
               <h3 className="font-semibold text-[var(--fg-primary)] mb-2">{t('help.step3Title')}</h3>
-              <pre className="bg-purple-100/70 text-purple-900 px-3 py-2 rounded text-xs overflow-hidden"><code>asd upgrade</code></pre>
+              <pre className="bg-purple-100/70 text-purple-900 px-3 py-2 rounded text-xs overflow-x-auto whitespace-pre-wrap break-all"><code>asd upgrade</code></pre>
               <p className="text-[var(--fg-secondary)] text-xs mt-2">{t('help.step3Desc')}</p>
             </div>
             <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
@@ -204,41 +204,91 @@ const HelpView: React.FC = () => {
                   <li dangerouslySetInnerHTML={{ __html: t('help.guardCompBullet3') }} />
                 </ul>
               </div>
+              <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
+                <h4 className="font-semibold text-cyan-900 mb-2 flex items-center gap-2">
+                  <Network size={ICON_SIZES.lg} />
+                  {t('help.taskGraphLabel')}
+                </h4>
+                <p className="text-cyan-800 text-sm mb-3">{t('help.taskGraphDesc')}</p>
+                <ul className="text-cyan-700 text-xs space-y-1 list-disc list-inside">
+                  <li>{t('help.taskGraphBullet1')}</li>
+                  <li>{t('help.taskGraphBullet2')}</li>
+                  <li dangerouslySetInnerHTML={{ __html: t('help.taskGraphBullet3') }} />
+                </ul>
+              </div>
+              <div className="bg-teal-50 rounded-lg p-4 border border-teal-200">
+                <h4 className="font-semibold text-teal-900 mb-2 flex items-center gap-2">
+                  <MonitorSmartphone size={ICON_SIZES.lg} />
+                  {t('help.ideIntegrationLabel')}
+                </h4>
+                <p className="text-teal-800 text-sm mb-3">{t('help.ideIntegrationDesc')}</p>
+                <ul className="text-teal-700 text-xs space-y-1 list-disc list-inside">
+                  <li dangerouslySetInnerHTML={{ __html: t('help.ideIntegrationBullet1') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.ideIntegrationBullet2') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.ideIntegrationBullet3') }} />
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* 端到端架构流 */}
+          <div className="mt-6 mb-6 p-4 bg-[var(--bg-subtle)] rounded-lg border border-[var(--border-default)]">
+            <h3 className="text-lg font-semibold text-[var(--fg-primary)] mb-3">{t('help.archOverviewLabel')}</h3>
+            <div className="flex items-center justify-between gap-1 text-xs overflow-x-auto pb-2">
+              <div className="bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-medium text-center shrink-0">{t('help.archOverviewBootstrap')}</div>
+              <span className="text-[var(--fg-muted)] shrink-0">→</span>
+              <div className="bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-medium text-center shrink-0">{t('help.archOverviewKB')}</div>
+              <span className="text-[var(--fg-muted)] shrink-0">→</span>
+              <div className="bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-medium text-center shrink-0">{t('help.archOverviewPipeline')}</div>
+              <span className="text-[var(--fg-muted)] shrink-0">→</span>
+              <div className="bg-emerald-100 text-emerald-700 px-3 py-2 rounded-lg font-medium text-center shrink-0">{t('help.archOverviewAgent')}</div>
+              <span className="text-[var(--fg-muted)] shrink-0">→</span>
+              <div className="bg-amber-100 text-amber-700 px-3 py-2 rounded-lg font-medium text-center shrink-0">{t('help.archOverviewTask')}</div>
+              <span className="text-[var(--fg-muted)] shrink-0">→</span>
+              <div className="bg-emerald-100 text-emerald-700 px-3 py-2 rounded-lg font-medium text-center shrink-0">{t('help.archOverviewOutput')}</div>
+            </div>
+            <div className="mt-2 flex items-center justify-center gap-3 text-xs">
+              <span className="bg-rose-100 text-rose-700 px-3 py-1.5 rounded-lg font-medium">↕ {t('help.archOverviewSecurity')} ↕</span>
+              <span className="bg-teal-100 text-teal-700 px-3 py-1.5 rounded-lg font-medium">↕ {t('help.archOverviewIDE')} ↕</span>
             </div>
           </div>
 
           {/* 闭环流程 */}
-          <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-5 border border-[var(--border-default)]">
-            <h3 className="text-lg font-semibold text-[var(--fg-primary)] mb-4">{t('help.knowledgeLoop')}</h3>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex-1 min-w-[100px] text-center">
-                <div className="bg-blue-500 text-white rounded-full w-10 h-10 flex items-center justify-center mx-auto mb-2 font-bold text-lg">1</div>
-                <p className="text-[var(--fg-primary)] font-medium text-sm">{t('help.loopStep1')}</p>
-                <p className="text-[var(--fg-secondary)] text-xs">{t('help.loopStep1Sub')}</p>
-              </div>
-              <div className="text-[var(--fg-muted)] text-2xl">→</div>
-              <div className="flex-1 min-w-[100px] text-center">
-                <div className="bg-green-500 text-white rounded-full w-10 h-10 flex items-center justify-center mx-auto mb-2 font-bold text-lg">2</div>
-                <p className="text-[var(--fg-primary)] font-medium text-sm">{t('help.loopStep2')}</p>
-                <p className="text-[var(--fg-secondary)] text-xs">{t('help.loopStep2Sub')}</p>
-              </div>
-              <div className="text-[var(--fg-muted)] text-2xl">→</div>
-              <div className="flex-1 min-w-[100px] text-center">
-                <div className="bg-purple-500 text-white rounded-full w-10 h-10 flex items-center justify-center mx-auto mb-2 font-bold text-lg">3</div>
-                <p className="text-[var(--fg-primary)] font-medium text-sm">{t('help.loopStep3')}</p>
-                <p className="text-[var(--fg-secondary)] text-xs">{t('help.loopStep3Sub')}</p>
-              </div>
-              <div className="text-[var(--fg-muted)] text-2xl">→</div>
-              <div className="flex-1 min-w-[100px] text-center">
-                <div className="bg-amber-500 text-white rounded-full w-10 h-10 flex items-center justify-center mx-auto mb-2 font-bold text-lg">4</div>
-                <p className="text-[var(--fg-primary)] font-medium text-sm">{t('help.loopStep4')}</p>
-                <p className="text-[var(--fg-secondary)] text-xs">{t('help.loopStep4Sub')}</p>
-              </div>
-              <div className="text-[var(--fg-muted)] text-2xl">→</div>
-              <div className="flex-1 min-w-[100px] text-center">
-                <div className="bg-rose-500 text-white rounded-full w-10 h-10 flex items-center justify-center mx-auto mb-2 font-bold text-lg">5</div>
-                <p className="text-[var(--fg-primary)] font-medium text-sm">{t('help.loopStep5')}</p>
-                <p className="text-[var(--fg-secondary)] text-xs">{t('help.loopStep5Sub')}</p>
+          <div className="mt-6 rounded-lg p-5 border border-[var(--border-default)] bg-[var(--bg-subtle)]">
+            <h3 className="text-lg font-semibold text-[var(--fg-primary)] mb-5">{t('help.knowledgeLoop')}</h3>
+            <div className="flex items-start justify-between gap-0 overflow-x-auto pb-2">
+              {[
+                { step: 1, color: 'blue',   key: 'loopStep1', subKey: 'loopStep1Sub' },
+                { step: 2, color: 'green',  key: 'loopStep2', subKey: 'loopStep2Sub' },
+                { step: 3, color: 'purple', key: 'loopStep3', subKey: 'loopStep3Sub' },
+                { step: 4, color: 'amber',  key: 'loopStep4', subKey: 'loopStep4Sub' },
+                { step: 5, color: 'rose',   key: 'loopStep5', subKey: 'loopStep5Sub' },
+              ].map((item, idx) => (
+                <React.Fragment key={item.step}>
+                  <div className="flex-1 min-w-[90px] flex flex-col items-center text-center">
+                    <div className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-md mb-2.5 bg-${item.color}-500`}>
+                      {item.step}
+                    </div>
+                    <p className="text-[var(--fg-primary)] font-semibold text-sm leading-tight">{t(`help.${item.key}`)}</p>
+                    <p className="text-[var(--fg-muted)] text-xs mt-1 font-mono">{t(`help.${item.subKey}`)}</p>
+                  </div>
+                  {idx < 4 && (
+                    <div className="flex items-center pt-3 px-1 shrink-0">
+                      <div className="w-6 h-px bg-[var(--border-default)]" />
+                      <span className="text-[var(--fg-muted)] text-xs mx-0.5">›</span>
+                      <div className="w-6 h-px bg-[var(--border-default)]" />
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center justify-center">
+              <div className="flex items-center gap-2 text-xs text-[var(--fg-muted)]">
+                <span className="inline-block w-8 h-px bg-rose-400/50" />
+                <span className="italic">{t('help.loopStep5')}</span>
+                <span>→</span>
+                <span className="italic">{t('help.loopStep1')}</span>
+                <span className="inline-block w-8 h-px bg-blue-400/50" />
               </div>
             </div>
           </div>
@@ -246,12 +296,17 @@ const HelpView: React.FC = () => {
 
         {/* 核心功能 */}
         <Section id="features" title={t('help.coreFeatures')} icon={<Zap size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('features')} onToggle={toggleSection}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <p className="text-[var(--fg-secondary)] text-sm mb-5">{t('help.coreFeaturesDesc')}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {/* Knowledge Build */}
             <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
-              <div className="flex items-center gap-2 mb-3">
-                <Code size={ICON_SIZES.lg} className="text-blue-600" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                  <Code size={ICON_SIZES.lg} className="text-blue-600" />
+                </div>
                 <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.knowledgeBuild')}</h3>
               </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.kbBuildDesc')}</p>
               <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
                 <li dangerouslySetInnerHTML={{ __html: t('help.kbBuildBullet1') }} />
                 <li dangerouslySetInnerHTML={{ __html: t('help.kbBuildBullet2') }} />
@@ -259,11 +314,15 @@ const HelpView: React.FC = () => {
                 <li dangerouslySetInnerHTML={{ __html: t('help.kbBuildBullet4') }} />
               </ul>
             </div>
+            {/* Semantic Search */}
             <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
-              <div className="flex items-center gap-2 mb-3">
-                <Search size={ICON_SIZES.lg} className="text-blue-600" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                  <Search size={ICON_SIZES.lg} className="text-emerald-600" />
+                </div>
                 <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.semanticSearchLabel')}</h3>
               </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.semSearchDescShort')}</p>
               <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
                 <li dangerouslySetInnerHTML={{ __html: t('help.semSearchBullet1') }} />
                 <li dangerouslySetInnerHTML={{ __html: t('help.semSearchBullet2') }} />
@@ -271,11 +330,15 @@ const HelpView: React.FC = () => {
                 <li dangerouslySetInnerHTML={{ __html: t('help.semSearchBullet4') }} />
               </ul>
             </div>
+            {/* Guard Compliance */}
             <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
-              <div className="flex items-center gap-2 mb-3">
-                <Shield size={ICON_SIZES.lg} className="text-blue-600" />
-                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.codeAudit')}</h3>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
+                  <Shield size={ICON_SIZES.lg} className="text-purple-600" />
+                </div>
+                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.guardCompliance')}</h3>
               </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.guardComplianceDesc')}</p>
               <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
                 <li dangerouslySetInnerHTML={{ __html: t('help.auditFeatureBullet1') }} />
                 <li dangerouslySetInnerHTML={{ __html: t('help.auditFeatureBullet2') }} />
@@ -283,11 +346,47 @@ const HelpView: React.FC = () => {
                 <li dangerouslySetInnerHTML={{ __html: t('help.auditFeatureBullet4') }} />
               </ul>
             </div>
+            {/* TaskGraph */}
             <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
-              <div className="flex items-center gap-2 mb-3">
-                <RefreshCw size={ICON_SIZES.lg} className="text-blue-600" />
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                  <Network size={ICON_SIZES.lg} className="text-amber-600" />
+                </div>
+                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.featureTaskGraphTitle')}</h3>
+              </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.featureTaskGraphDesc')}</p>
+              <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
+                <li dangerouslySetInnerHTML={{ __html: t('help.featureTaskGraphBullet1') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.featureTaskGraphBullet2') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.featureTaskGraphBullet3') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.featureTaskGraphBullet4') }} />
+              </ul>
+            </div>
+            {/* Wiki Doc Generation */}
+            <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
+                  <FileCode size={ICON_SIZES.lg} className="text-rose-600" />
+                </div>
+                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.wikiDocGen')}</h3>
+              </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.wikiDocGenDesc')}</p>
+              <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
+                <li dangerouslySetInnerHTML={{ __html: t('help.wikiDocBullet1') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.wikiDocBullet2') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.wikiDocBullet3') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.wikiDocBullet4') }} />
+              </ul>
+            </div>
+            {/* Data Sync */}
+            <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-teal-100 flex items-center justify-center shrink-0">
+                  <RefreshCw size={ICON_SIZES.lg} className="text-teal-600" />
+                </div>
                 <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.dataSync')}</h3>
               </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.syncDescShort')}</p>
               <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
                 <li dangerouslySetInnerHTML={{ __html: t('help.syncBullet1') }} />
                 <li dangerouslySetInnerHTML={{ __html: t('help.syncBullet2') }} />
@@ -357,6 +456,7 @@ const HelpView: React.FC = () => {
                 { name: 'coldstart', descKey: 'help.skillColdstart' },
                 { name: 'create', descKey: 'help.skillCreate' },
                 { name: 'lifecycle', descKey: 'help.skillLifecycle' },
+                { name: 'devdocs', descKey: 'help.skillDevdocs' },
               ].map(s => (
                 <div key={s.name} className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-center">
                   <p className="text-xs font-mono text-blue-600">{s.name}</p>
@@ -390,6 +490,9 @@ const HelpView: React.FC = () => {
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>submit_knowledge</code> / <code>submit_knowledge_batch</code> / <code>save_document</code></td><td className="px-3 py-2 border-b">{t('help.mcpSubmitDesc')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>skill</code></td><td className="px-3 py-2 border-b">{t('help.mcpSkillDesc')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>bootstrap</code></td><td className="px-3 py-2 border-b">{t('help.mcpBootstrapDesc')}</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>dimension_complete</code></td><td className="px-3 py-2 border-b">{t('help.mcpDimensionCompleteDesc')}</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>wiki_plan</code> / <code>wiki_finalize</code></td><td className="px-3 py-2 border-b">{t('help.mcpWikiPlanDesc')} · {t('help.mcpWikiFinalizeDesc')}</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>task</code></td><td className="px-3 py-2 border-b">{t('help.mcpTaskDesc')}</td></tr>
                   <tr className="bg-amber-50/30"><td colSpan={3} className="px-3 py-1.5 border-b font-semibold text-amber-700 text-xs">{t('help.mcpAdminLayerHeader')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">admin</td><td className="px-3 py-2 border-b"><code>enrich_candidates</code> / <code>validate_candidate</code> / <code>check_duplicate</code></td><td className="px-3 py-2 border-b">{t('help.mcpEnrichDesc')}</td></tr>
                   <tr><td className="px-3 py-2 font-medium">admin</td><td className="px-3 py-2"><code>knowledge_lifecycle</code></td><td className="px-3 py-2">{t('help.mcpLifecycleDesc')}</td></tr>
@@ -417,84 +520,36 @@ const HelpView: React.FC = () => {
               </div>
             </div>
           </div>
-        </Section>
 
-        {/* V2 架构亮点 */}
-        <Section id="v2-architecture" title={t('help.v3Architecture')} icon={<Layers size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('v2-architecture')} onToggle={toggleSection}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="border border-[var(--border-default)] rounded-lg p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Zap size={ICON_SIZES.lg} className="text-indigo-600" />
-                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.bootstrapEngine')}</h3>
+          {/* VSCode Extension */}
+          <div className="mt-5">
+            <h3 className="font-semibold text-[var(--fg-primary)] mb-3 flex items-center gap-2">
+              <MonitorSmartphone size={ICON_SIZES.lg} className="text-blue-600" />
+              {t('help.vscodeExtension')}
+            </h3>
+            <p className="text-[var(--fg-secondary)] text-sm mb-3">{t('help.vscodeExtDesc')}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+              <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
+                <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-1">{t('help.vscodeExtTaskTool')}</h4>
+                <p className="text-[var(--fg-secondary)] text-xs">{t('help.vscodeExtTaskToolDesc')}</p>
               </div>
-              <p className="text-[var(--fg-secondary)] text-sm mb-2">{t('help.bootstrapEngineDesc')}</p>
-              <div className="bg-[var(--bg-subtle)] rounded p-3 text-xs font-mono text-[var(--fg-primary)] space-y-1">
-                <p>{t('help.archBootstrapStep1')}</p>
-                <p>{t('help.archBootstrapStep2')}</p>
-                <p>{t('help.archBootstrapStep3')}</p>
+              <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
+                <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-1">{t('help.vscodeExtGuardDiag')}</h4>
+                <p className="text-[var(--fg-secondary)] text-xs">{t('help.vscodeExtGuardDiagDesc')}</p>
               </div>
-              <p className="text-[var(--fg-secondary)] text-xs mt-2">{t('help.archBootstrapNote')}</p>
-            </div>
-            <div className="border border-[var(--border-default)] rounded-lg p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Search size={ICON_SIZES.lg} className="text-indigo-600" />
-                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.fourLayerPipeline')}</h3>
-              </div>
-              <p className="text-[var(--fg-secondary)] text-sm mb-2">{t('help.fourLayerPipelineDesc')}</p>
-              <div className="space-y-2 text-xs">
-                <div className="flex items-start gap-2">
-                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium shrink-0">L1</span>
-                  <span className="text-[var(--fg-secondary)]">{t('help.archPipelineL1')}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded font-medium shrink-0">L2</span>
-                  <span className="text-[var(--fg-secondary)]">{t('help.archPipelineL2')}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-medium shrink-0">L3</span>
-                  <span className="text-[var(--fg-secondary)]">{t('help.archPipelineL3')}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded font-medium shrink-0">L4</span>
-                  <span className="text-[var(--fg-secondary)]">{t('help.archPipelineL4')}</span>
-                </div>
+              <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
+                <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-1">{t('help.vscodeExtCodeLens')}</h4>
+                <p className="text-[var(--fg-secondary)] text-xs">{t('help.vscodeExtCodeLensDesc')}</p>
               </div>
             </div>
-            <div className="border border-[var(--border-default)] rounded-lg p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <ArrowRightLeft size={ICON_SIZES.lg} className="text-indigo-600" />
-                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.chatAgentSystem')}</h3>
-              </div>
-              <p className="text-[var(--fg-secondary)] text-sm mb-2">{t('help.chatAgentSystemDesc')}</p>
-              <div className="bg-[var(--bg-subtle)] rounded p-3 text-xs text-[var(--fg-primary)] space-y-1.5">
-                <p dangerouslySetInnerHTML={{ __html: t('help.archAnalystAgent') }} />
-                <p dangerouslySetInnerHTML={{ __html: t('help.archProducerAgent') }} />
-                <p dangerouslySetInnerHTML={{ __html: t('help.archHandoff') }} />
-                <p dangerouslySetInnerHTML={{ __html: t('help.archMemory') }} />
-                <p dangerouslySetInnerHTML={{ __html: t('help.archProjectAware') }} />
-              </div>
-            </div>
-            <div className="border border-[var(--border-default)] rounded-lg p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <GitBranch size={ICON_SIZES.lg} className="text-indigo-600" />
-                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.fiveEntryChannels')}</h3>
-              </div>
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
-                  <span className="font-medium">CLI</span><span className="text-[var(--fg-secondary)]">{t('help.archCliDesc')}</span>
-                </div>
-                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
-                  <span className="font-medium">MCP Server</span><span className="text-[var(--fg-secondary)]">{t('help.archMcpDesc')}</span>
-                </div>
-                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
-                  <span className="font-medium">HTTP API</span><span className="text-[var(--fg-secondary)]">{t('help.archHttpDesc')}</span>
-                </div>
-                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
-                  <span className="font-medium">Dashboard</span><span className="text-[var(--fg-secondary)]">React 19 + Vite 6 + Tailwind 4</span>
-                </div>
-                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
-                  <span className="font-medium">Skills</span><span className="text-[var(--fg-secondary)]">{t('help.archSkillsDesc')}</span>
-                </div>
+            <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3">
+              <h4 className="font-semibold text-[var(--fg-primary)] text-sm mb-2">Commands</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-xs text-[var(--fg-secondary)]">
+                <p>{t('help.vscodeExtCmd1')}</p>
+                <p>{t('help.vscodeExtCmd2')}</p>
+                <p>{t('help.vscodeExtCmd3')}</p>
+                <p>{t('help.vscodeExtCmd4')}</p>
+                <p>{t('help.vscodeExtCmd5')}</p>
               </div>
             </div>
           </div>
@@ -502,7 +557,7 @@ const HelpView: React.FC = () => {
 
         {/* 命令速查 */}
         <Section id="cli-reference" title={t('help.cliReference')} icon={<Terminal size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('cli-reference')} onToggle={toggleSection}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <h3 className="font-semibold text-[var(--fg-primary)] mb-2">{t('help.initAndEnv')}</h3>
               <div className="space-y-1 text-sm">
@@ -536,12 +591,25 @@ const HelpView: React.FC = () => {
                   <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliAisDesc')}</span>
                 </div>
                 <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
-                  <code>asd ais --force</code>
-                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliAisForceDesc')}</span>
-                </div>
-                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
                   <code>asd watch</code>
                   <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliWatchDesc')}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h3 className="font-semibold text-[var(--fg-primary)] mb-2">{t('help.cliColdstartAndScan')}</h3>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
+                  <code>asd coldstart</code>
+                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliColdstartDesc')}</span>
+                </div>
+                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
+                  <code>asd cursor-rules</code>
+                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliCursorRulesDesc')}</span>
+                </div>
+                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
+                  <code>asd mirror</code>
+                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliMirrorDesc')}</span>
                 </div>
               </div>
             </div>
@@ -553,16 +621,41 @@ const HelpView: React.FC = () => {
                   <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliSearchDesc')}</span>
                 </div>
                 <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
-                  <code>asd search -m semantic</code>
-                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliSearchSemanticDesc')}</span>
-                </div>
-                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
                   <code>asd guard &lt;file&gt;</code>
                   <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliGuardDesc')}</span>
                 </div>
                 <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
+                  <code>asd guard:ci</code>
+                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliGuardCiDesc')}</span>
+                </div>
+                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
+                  <code>asd guard:staged</code>
+                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliGuardStagedDesc')}</span>
+                </div>
+                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
                   <code>asd server</code>
                   <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliServerDesc')}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h3 className="font-semibold text-[var(--fg-primary)] mb-2">{t('help.cliTaskManagement')}</h3>
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
+                  <code>asd task list</code>
+                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliTaskListDesc')}</span>
+                </div>
+                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
+                  <code>asd task ready</code>
+                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliTaskReadyDesc')}</span>
+                </div>
+                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
+                  <code>asd task prime</code>
+                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliTaskPrimeDesc')}</span>
+                </div>
+                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
+                  <code>asd task stats</code>
+                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliTaskStatsDesc')}</span>
                 </div>
               </div>
             </div>
@@ -572,10 +665,6 @@ const HelpView: React.FC = () => {
                 <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
                   <code>asd upgrade</code>
                   <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliUpgradeMcpDesc')}</span>
-                </div>
-                <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
-                  <code>asd install:full</code>
-                  <span className="text-[var(--fg-secondary)] text-xs">{t('help.cliInstallFullDesc')}</span>
                 </div>
                 <div className="flex justify-between bg-[var(--bg-subtle)] px-3 py-2 rounded">
                   <code>asd sync --force</code>

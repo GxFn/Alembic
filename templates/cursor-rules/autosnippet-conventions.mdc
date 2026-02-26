@@ -98,3 +98,15 @@ Recipes are classified into three kinds:
 ## Recipe over code
 
 When both a Recipe and the codebase have relevant implementations, prefer the Recipe. Recipes are the project's agreed standard; source code may be legacy or non-standard.
+
+## Guard 诊断响应
+
+当编辑器出现 "AutoSnippet Guard" 诊断时：
+1. 读取 ruleId → `autosnippet_search(query: ruleId)`
+2. 按 Recipe 的 doClause + coreCode 修改代码
+3. 保存并确认诊断消失
+
+## 上下文压力应对
+
+- `_contextHint` 包含 `CONTEXT_PRESSURE:WARNING` → 总结已完成工作，继续。
+- `_contextHint` 包含 `CONTEXT_PRESSURE:CRITICAL` → 立即 prime 恢复上下文。

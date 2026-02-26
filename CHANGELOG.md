@@ -4,6 +4,30 @@
 
 ---
 
+## [3.2.0] - 2026-02-26
+
+### 新增
+
+- **TaskGraph 任务编排系统**：领域模型（Task/TaskGraph/TaskEvent）、仓储层、服务层、HTTP API、MCP 工具（task_manage）完整闭环
+- **Guard 实时反馈**：Guard HTTP 路由、VSCode 扩展 Guard Diagnostics + CodeAction 实时违规标注
+- **VSCode 扩展增强**：Guard 实时诊断、CodeAction 快速修复、Task 工具集成，打包 autosnippet-0.1.0.vsix
+- **MCP 工具 task_manage**：支持 create/list/update/stats/dependencies/events 六项操作
+- **Dashboard 使用说明全面升级**：核心概念 8 组件卡片（含 IDE 集成）、架构流程总览、闭环流程可视化、核心功能 6 卡片
+
+### 改进
+
+- **Dashboard Help 页面**：V3 架构合并入核心概念、闭环流程数据驱动重构、Quick Start 代码块溢出修复、深色模式 CSS 优化
+- **CLI 8 命令输出修复**：status/search/embed/guard/structure/config/task/wiki 全部输出修复（56/56 断言通过）
+- **三系统深度 E2E 测试**：API + MCP + CLI 93/93 断言通过
+- **集成测试**：17/17 全部通过（12 API + 5 CLI）
+
+### 修复
+
+- **连通性审计 10 项修复**：ServiceContainer 注入、bootstrap 回调、MCP handler 参数传递等
+- **边界情况审计 15 项修复**：空值防护、类型安全、错误处理增强
+
+---
+
 ## [3.1.7] - 2026-02-24
 
 ### 改进

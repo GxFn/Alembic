@@ -20,16 +20,29 @@ import { insertAtCursor, insertAtTriggerLine, flashHighlight } from './codeInser
 import { detectDirectives, detectFirstDirective, type DetectedDirective } from './directiveDetector';
 import { StatusBar } from './statusBar';
 import { hasAnyProject, isDocumentInScope, invalidateCache } from './projectScope';
+import { registerTaskTool } from './taskTool';
+import { GuardDiagnostics } from './guardDiagnostics';
+import { registerGuardCodeActions } from './guardCodeAction';
 
 let apiClient: ApiClient;
 let statusBar: StatusBar;
 let codeLensProvider: DirectiveCodeLensProvider;
+let guardDiagnostics: GuardDiagnostics;
 
 // ─────────────────────────────────────────────
 // Extension Lifecycle
 // ─────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext) {
+  // ── lm.registerTool 代理层（tokenBudget 感知）──
+  try {
+    registerTaskTool(context);
+  } catch (err: any) {
+    // lm.registerTool 在低版本 VS Code 可能不存在
+    console.warn('[AutoSnippet] registerTaskTool skipped:', err?.message || err);
+  }
+
+  try {
   const config = vscode.workspace.getConfiguration('autosnippet');
   const host = config.get<string>('serverHost', 'localhost');
   const port = config.get<number>('serverPort', 3000);
@@ -44,6 +57,15 @@ export function activate(context: vscode.ExtensionContext) {
     statusBar.startPolling();
   }
   context.subscriptions.push(statusBar);
+
+  // ── Guard Diagnostics（onDidSave → Guard API → 波浪线）──
+  guardDiagnostics = new GuardDiagnostics();
+  if (config.get<boolean>('enableGuardDiagnostics', true)) {
+    guardDiagnostics.register(context);
+  }
+
+  // ── Guard Code Actions（灯泡菜单：搜索知识库修复）──
+  registerGuardCodeActions(context);
 
   // CodeLens — 传入作用域判断
   codeLensProvider = new DirectiveCodeLensProvider();
@@ -140,6 +162,10 @@ export function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+  } catch (err: any) {
+    console.error('[AutoSnippet] activate() failed:', err);
+    vscode.window.showErrorMessage(`AutoSnippet activation error: ${err.message}`);
+  }
 }
 
 export function deactivate() {
@@ -505,19 +531,103 @@ async function doAudit(
   editor: vscode.TextEditor | undefined,
   scope: string
 ) {
-  // 使用 API server 的 guard 端点
-  // 注: 当前 API server 没有专门的 guard 路由，
-  // 暂时打开 Dashboard guard 页面
-  const config = vscode.workspace.getConfiguration('autosnippet');
-  const host = config.get<string>('serverHost', 'localhost');
-  const port = config.get<number>('serverPort', 3000);
+  if (scope === 'project') {
+    // ── 项目级审计：收集源文件 → 调用 Guard batch API ──
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'AutoSnippet Guard: Auditing project…' },
+      async () => {
+        const roots = (await import('./projectScope')).getActiveProjectRoots();
+        if (roots.length === 0) {
+          vscode.window.showWarningMessage('No AutoSnippet project found in workspace.');
+          return;
+        }
+        // 搜集所有打开的编辑器中的文件（或扫描项目源文件）
+        const openDocs = vscode.workspace.textDocuments.filter(
+          (d) => d.uri.scheme === 'file' && !d.isClosed
+        );
+        if (openDocs.length === 0) {
+          vscode.window.showInformationMessage('No open files to audit.');
+          return;
+        }
+        // 对所有打开的文档逐个触发 Guard 检查
+        let totalViolations = 0;
+        let totalErrors = 0;
+        let totalWarnings = 0;
+        let filesChecked = 0;
+        for (const doc of openDocs) {
+          try {
+            const result = await apiClient.auditFile(
+              doc.uri.fsPath,
+              doc.getText(),
+              doc.languageId
+            );
+            if (result?.success && result.data) {
+              filesChecked++;
+              totalViolations += result.data.summary?.total || 0;
+              totalErrors += result.data.summary?.errors || 0;
+              totalWarnings += result.data.summary?.warnings || 0;
+              // 写入诊断集合（复用 guardDiagnostics 的格式）
+              if (result.data.violations?.length > 0 && guardDiagnostics) {
+                guardDiagnostics.checkFile(doc);
+              }
+            }
+          } catch {
+            // 单文件失败不阻断
+          }
+        }
+        if (totalViolations === 0) {
+          vscode.window.showInformationMessage(
+            `✅ Guard: ${filesChecked} files checked, no violations found.`
+          );
+        } else {
+          vscode.window.showWarningMessage(
+            `🛡️ Guard: ${filesChecked} files — ${totalErrors} errors, ${totalWarnings} warnings, ${totalViolations} total violations. See Problems panel.`
+          );
+        }
+      }
+    );
+    return;
+  }
 
-  const filePath = editor?.document.fileName || '';
-  const url = `http://${host}:${port}/#/guard?scope=${scope}&file=${encodeURIComponent(filePath)}`;
-  vscode.env.openExternal(vscode.Uri.parse(url));
+  // ── 单文件审计 ──
+  if (!editor) {
+    vscode.window.showWarningMessage('No active editor');
+    return;
+  }
+
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'AutoSnippet Guard: Checking file…' },
+    async () => {
+      // 直接复用 guardDiagnostics.checkFile 来写入诊断
+      if (guardDiagnostics) {
+        await guardDiagnostics.checkFile(editor.document);
+      }
+
+      // 同时从 API 获取汇总信息
+      try {
+        const result = await apiClient.auditFile(
+          editor.document.uri.fsPath,
+          editor.document.getText(),
+          editor.document.languageId
+        );
+        if (result?.success && result.data) {
+          const s = result.data.summary;
+          if (s.total === 0) {
+            vscode.window.showInformationMessage('✅ Guard: No violations found.');
+          } else {
+            vscode.window.showWarningMessage(
+              `🛡️ Guard: ${s.errors} errors, ${s.warnings} warnings, ${s.infos} info — see Problems panel.`
+            );
+          }
+        }
+      } catch (err: any) {
+        vscode.window.showErrorMessage(`Guard audit failed: ${err.message}`);
+      }
+    }
+  );
 
   // 如果是从指令触发，删除指令行
-  if (editor && scope !== 'project') {
+  if (scope !== 'project') {
     const directive = detectFirstDirective(editor.document, 'audit');
     if (directive) {
       await editor.edit((editBuilder) => {

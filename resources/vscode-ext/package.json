@@ -19,30 +19,7 @@
     "autosnippet"
   ],
   "activationEvents": [
-    "onLanguage:javascript",
-    "onLanguage:typescript",
-    "onLanguage:javascriptreact",
-    "onLanguage:typescriptreact",
-    "onLanguage:python",
-    "onLanguage:go",
-    "onLanguage:rust",
-    "onLanguage:java",
-    "onLanguage:kotlin",
-    "onLanguage:swift",
-    "onLanguage:c",
-    "onLanguage:cpp",
-    "onLanguage:csharp",
-    "onLanguage:ruby",
-    "onLanguage:vue",
-    "onLanguage:svelte",
-    "onLanguage:css",
-    "onLanguage:scss",
-    "onLanguage:html",
-    "onLanguage:markdown",
-    "onLanguage:yaml",
-    "onLanguage:json",
-    "onLanguage:objective-c",
-    "onLanguage:objective-cpp"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -92,6 +69,21 @@
           "default": true,
           "description": "Show CodeLens actions above AutoSnippet directives"
         },
+        "autosnippet.enableGuardDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Guard diagnostics on file save (shows violations as editor warnings)"
+        },
+        "autosnippet.tokenBudgetWarning": {
+          "type": "number",
+          "default": 20000,
+          "description": "Token budget threshold for WARNING level context pressure hint"
+        },
+        "autosnippet.tokenBudgetCritical": {
+          "type": "number",
+          "default": 5000,
+          "description": "Token budget threshold for CRITICAL level context pressure hint (triggers inline prime)"
+        },
         "autosnippet.insertHighlightDuration": {
           "type": "number",
           "default": 2000,
@@ -104,6 +96,89 @@
         "command": "autosnippet.search",
         "key": "ctrl+shift+f5",
         "mac": "cmd+shift+f5"
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "autosnippet_taskgraph",
+        "displayName": "AutoSnippet TaskGraph",
+        "toolReferenceName": "autosnippet_taskgraph",
+        "canBeReferencedInPrompt": true,
+        "modelDescription": "Manage AutoSnippet TaskGraph lifecycle. Operations: prime (restore session context), ready (get next tasks), claim (start task), close (finish task), create (add task), list (query tasks), show (task details), stats (project metrics), fail/defer (handle blockers), progress (update status), decompose (break into subtasks), blocked (view blocked tasks), dep_add/dep_tree (manage dependencies).",
+        "icon": "$(database)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "type": "string",
+              "description": "Operation to perform",
+              "enum": ["prime", "ready", "claim", "close", "create", "list", "show", "stats", "fail", "defer", "progress", "decompose", "blocked", "dep_add", "dep_tree"]
+            },
+            "id": {
+              "type": "string",
+              "description": "Task ID (for claim, close, show, fail, defer, progress, dep_tree)"
+            },
+            "title": {
+              "type": "string",
+              "description": "Task title (for create)"
+            },
+            "description": {
+              "type": "string",
+              "description": "Task description (for create, progress)"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Reason (for close, fail, defer)"
+            },
+            "priority": {
+              "type": "number",
+              "description": "Priority 1-5, lower = higher (for create). Default: 2"
+            },
+            "parentId": {
+              "type": "string",
+              "description": "Parent task ID (for create, decompose)"
+            },
+            "limit": {
+              "type": "number",
+              "description": "Max results (for ready, list). Default: 5"
+            },
+            "status": {
+              "type": "string",
+              "description": "Filter by status (for list)",
+              "enum": ["open", "in_progress", "closed", "deferred"]
+            },
+            "withKnowledge": {
+              "type": "boolean",
+              "description": "Include knowledge context (for ready). Default: true"
+            },
+            "taskId": {
+              "type": "string",
+              "description": "Source task ID (for dep_add)"
+            },
+            "dependsOn": {
+              "type": "string",
+              "description": "Target dependency task ID (for dep_add)"
+            },
+            "depType": {
+              "type": "string",
+              "description": "Dependency type (for dep_add). Default: blocks",
+              "enum": ["blocks", "waits-for", "related"]
+            },
+            "children": {
+              "type": "array",
+              "description": "Subtask definitions (for decompose)",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "description": { "type": "string" }
+                },
+                "required": ["title"]
+              }
+            }
+          },
+          "required": ["operation"]
+        }
       }
     ]
   },

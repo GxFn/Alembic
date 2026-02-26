@@ -94,6 +94,23 @@ autosnippet_skill({ operation: "load", name: "autosnippet-coldstart" })
 Skill 包含：完整的 V3 字段格式、JSON 示例模板、维度分析策略。
 **不加载 Skill 直接提交知识会因字段格式问题被反复拒绝。**
 
+## Guard 诊断响应
+
+当编辑器出现来自 "AutoSnippet Guard" 的诊断（黄色/红色波浪线）时：
+1. 读取诊断消息中的 `ruleId`
+2. 调用 `autosnippet_search(query: ruleId)` 查找对应 Recipe
+3. 按 Recipe 的 `doClause` + `coreCode` 修复代码
+4. 保存文件并确认诊断消失
+
+灯泡菜单中可快捷搜索知识库或禁用该行检查。
+
+## 上下文压力应对
+
+- 如果任何工具返回 `_contextHint` 包含 `CONTEXT_PRESSURE:WARNING`：
+  → 简要总结已完成工作，然后继续。
+- 如果任何工具返回 `_contextHint` 包含 `CONTEXT_PRESSURE:CRITICAL`：
+  → 立即调用 `autosnippet_task(operation: "prime")` 恢复会话上下文。
+
 ### V3 字段格式关键提醒
 - `content` **必须是 JSON 对象**（不是字符串）：`{ "pattern": "代码...", "markdown": "## 标题\n正文...", "rationale": "设计原理" }`
 - `reasoning` **必须是 JSON 对象**：`{ "whyStandard": "原因", "sources": ["file.ts"], "confidence": 0.85 }`

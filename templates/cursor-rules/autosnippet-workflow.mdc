@@ -1,0 +1,43 @@
+---
+description: AutoSnippet TaskGraph & Guard 工作流 — 任务管理 + 诊断闭环
+alwaysApply: true
+---
+
+# AutoSnippet TaskGraph Workflow
+
+## 任务管理
+
+1. 新会话开始 → `autosnippet_task(operation: "prime")`
+2. 编码前 → `claim`，完成后 → `close`
+3. 遇到错误 → `fail`（不要跳过）
+4. 发现新工作 → `create` + `dep_add(depType: "discovered-from")`
+5. MCP 调用失败 → 不要在同一轮重复重试
+
+## Guard 诊断响应
+
+当编辑器出现 "AutoSnippet Guard" 诊断时：
+1. 读取 ruleId → `autosnippet_search(query: ruleId)`
+2. 按 Recipe 的 doClause + coreCode 修改代码
+3. 保存并确认诊断消失
+
+## 知识搜索
+
+编码前搜索相关知识：`autosnippet_search(query: "相关关键词")`
+
+## 上下文压力
+
+- `_contextHint` 包含 `CONTEXT_PRESSURE:WARNING` → 总结已完成工作，继续
+- `_contextHint` 包含 `CONTEXT_PRESSURE:CRITICAL` → 立即 prime 恢复上下文
+
+## 任务操作速查
+
+| 操作 | 用途 |
+|------|------|
+| `prime` | 恢复会话上下文（新会话必做） |
+| `claim(id)` | 开始处理任务 |
+| `close(id)` | 完成任务 → 返回 newlyReady |
+| `fail(id, reason)` | 标记失败 |
+| `defer(id, reason)` | 延后处理 |
+| `progress(id, desc)` | 更新进度 |
+| `create(title)` | 创建新任务 |
+| `ready` | 获取就绪任务（带知识上下文） |

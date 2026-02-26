@@ -261,12 +261,14 @@ html.dark {
 .dark .text-violet-700 { color: #c4b5fd; }
 .dark .text-violet-600 { color: #a78bfa; }
 .dark .text-emerald-700 { color: #6ee7b7; }
+.dark .text-emerald-600 { color: #34d399; }
 .dark .text-indigo-600 { color: #a5b4fc; }
 .dark .text-indigo-600\/80 { color: rgba(165, 180, 252, 0.9); }
 .dark .text-cyan-700   { color: #67e8f9; }
 .dark .text-cyan-600   { color: #22d3ee; }
 .dark .text-rose-600   { color: #fb7185; }
 .dark .text-teal-700   { color: #5eead4; }
+.dark .text-teal-600   { color: #2dd4bf; }
 .dark .text-orange-700 { color: #fdba74; }
 .dark .text-rose-700   { color: #fda4af; }
 .dark .text-indigo-700 { color: #a5b4fc; }
@@ -533,6 +535,10 @@ html.dark {
 .dark .text-emerald-800  { color: #6ee7b7; }
 .dark .text-orange-800   { color: #fdba74; }
 .dark .text-violet-800   { color: #c4b5fd; }
+.dark .text-cyan-800     { color: #67e8f9; }
+.dark .text-cyan-900     { color: #a5f3fc; }
+.dark .text-teal-800     { color: #5eead4; }
+.dark .text-teal-900     { color: #99f6e4; }
 
 /* ═══════════════════════════════════════════════════════════
    品牌色 bg-200（偏亮中调，dark mode 需降低饱和度）
