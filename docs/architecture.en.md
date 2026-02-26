@@ -25,7 +25,7 @@ AutoSnippet uses a Layered Domain-Driven Design (DDD) architecture. Its core pur
 ┌──────▼──┐ ┌────▼────┐ ┌───▼───┐ ┌───▼──────────┐
 │ HTTP    │ │  MCP    │ │  CLI  │ │  Dashboard   │
 │ Express │ │ stdio   │ │ cmdr  │ │ React+Vite   │
-│ 17 routes│ │ 16 tools│ │14 cmds│ │ 17 views     │
+│ 17 routes│ │ 20 tools│ │14 cmds│ │ 17 views     │
 └──────┬──┘ └────┬────┘ └───┬───┘ └──────────────┘
        │         │          │
 ┌──────▼─────────▼──────────▼─────────────────────────────┐
@@ -51,7 +51,7 @@ AutoSnippet uses a Layered Domain-Driven Design (DDD) architecture. Its core pur
 ┌──────────────────────▼──────────────────────────────────┐
 │                 External Layer                            │
 │  AI: OpenAI / Gemini / Claude / DeepSeek / Ollama       │
-│  MCP: 12 agent + 4 admin tools                           │
+│  MCP: 16 agent + 4 admin tools                           │
 │  Native: Xcode / Clipboard / Browser                     │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -178,7 +178,7 @@ When multiple API Keys are present, automatic fallback is applied.
 
 #### MCP Server
 
-16 tools split into 12 Agent Tier (IDE AI accessible) + 4 Admin Tier (admin/CI), communicating with IDEs via stdio protocol.
+20 tools split into 16 Agent Tier (IDE AI accessible) + 4 Admin Tier (admin/CI), communicating with IDEs via stdio protocol.
 
 ---
 

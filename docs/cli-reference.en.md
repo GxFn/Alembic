@@ -26,6 +26,7 @@ asd --help
 | [`asd status`](#asd-status) | Check environment status |
 | [`asd upgrade`](#asd-upgrade) | Upgrade IDE integrations |
 | [`asd cursor-rules`](#asd-cursor-rules) | Generate Cursor delivery artifacts |
+| [`asd task`](#asd-task) | Task management (TaskGraph) |
 | [`asd sync`](#asd-sync) | Sync Markdown ↔ DB |
 
 ---
@@ -340,6 +341,32 @@ asd cursor-rules [options]
 |--------|---------|-------------|
 | `-d, --dir <path>` | `.` | Project root directory |
 | `--verbose` | `false` | Verbose output |
+
+---
+
+## asd task
+
+TaskGraph management. View task status, statistics, and task lists.
+
+```bash
+asd task <subcommand> [options]
+```
+
+**Subcommands:**
+
+| Subcommand | Description |
+|------------|-------------|
+| `stats` | Show task statistics (total, status distribution, priorities) |
+| `list` | List tasks (supports `--status` filter) |
+| `show <id>` | View task details |
+
+**Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `-d, --dir <path>` | `.` | Project root directory |
+| `--status <status>` | All | Status filter: `open` / `in_progress` / `closed` / `deferred` |
+| `--json` | `false` | JSON format output |
 
 ---
 

@@ -123,6 +123,7 @@ The VS Code extension and `asd watch` (Xcode) pick these up automatically.
 | `asd guard:staged` | Pre-commit hook |
 | `asd watch` | Xcode file watcher |
 | `asd sync` | Sync recipe markdown → DB |
+| `asd task` | Task management (TaskGraph) |
 | `asd upgrade` | Update IDE integrations |
 | `asd status` | Health check |
 

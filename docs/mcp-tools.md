@@ -8,8 +8,8 @@ AutoSnippet 通过 [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 
 MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder / Claude Code）自动启动并连接。
 
-**共 16 个工具：**
-- **Agent Tier (12)** — IDE AI 可直接调用
+**共 20 个工具：**
+- **Agent Tier (16)** — IDE AI 可直接调用
 - **Admin Tier (4)** — 管理员/CI 工具
 
 所有工具经过 Gateway 管线校验（validate → guard → route → audit）。
@@ -248,9 +248,80 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ---
 
+### 13. autosnippet_dimension_complete
+
+维度分析完成通知 — Agent 完成一个冷启动维度的分析后调用。负责 Recipe 关联、Skill 生成、Checkpoint 保存、进度推送。
+
+**参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `dimensionId` | string | ✅ | 维度 ID（如 `project-profile`、`language-scans`） |
+| `analysisText` | string | ✅ | 分析报告全文（Markdown） |
+| `sessionId` | string | — | bootstrap 返回的 session.id（可选，自动查找） |
+| `submittedRecipeIds` | string[] | — | 本维度提交的 recipe ID 列表 |
+| `keyFindings` | string[] | — | 关键发现摘要（3-5 条） |
+| `candidateCount` | number | — | 本维度提交的候选数量 |
+
+---
+
+### 14. autosnippet_wiki_plan
+
+规划 Wiki 文档生成 — 扫描项目结构、分析 AST 和依赖、整合知识库，返回发现的文档主题及数据包。
+
+**参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `language` | string | — | Wiki 文档语言：`zh`（默认）/ `en` |
+| `sessionId` | string | — | bootstrap session ID（可选） |
+
+---
+
+### 15. autosnippet_wiki_finalize
+
+完成 Wiki 生成 — 写入 meta.json、执行去重检查、验证文件完整性。在所有 Wiki 文章写入完成后调用。
+
+**参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `articlesWritten` | string[] | ✅ | 已写入的 Wiki 文件路径列表（相对于 `AutoSnippet/wiki/`） |
+
+---
+
+### 16. autosnippet_task
+
+任务图管理 — 创建/查询/认领/关闭任务，管理依赖关系。用于 Agent 自主拆解和执行复杂多步骤工作。
+
+**参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `operation` | string | ✅ | 操作类型：`create` / `ready` / `claim` / `close` / `fail` / `defer` / `progress` / `show` / `list` / `blocked` / `decompose` / `dep_add` / `dep_tree` / `prime` / `stats` |
+| `title` | string | — | 任务标题（create） |
+| `description` | string | — | 任务描述（create/progress） |
+| `id` | string | — | 任务 ID（claim/close/fail/defer/show/progress） |
+| `priority` | number | — | 优先级 0-4，0=最高（create） |
+| `taskType` | string | — | 任务类型：`epic` / `task` / `bug` / `chore`（create） |
+| `parentId` | string | — | 父任务 ID（create 子任务） |
+| `reason` | string | — | 原因（close/fail/defer） |
+| `dependsOn` | string | — | 依赖的任务 ID（dep_add） |
+| `subtasks` | array | — | 子任务列表（decompose） |
+
+**常用操作：**
+- `prime` — 恢复会话上下文（返回进行中 + 就绪任务）
+- `ready` — 获取下一批可执行任务（含知识上下文）
+- `create` — 创建任务
+- `claim` — 认领并开始任务
+- `close` — 完成任务
+- `stats` — 任务统计
+
+---
+
 ## Admin Tier 工具
 
-### 13. autosnippet_enrich_candidates
+### 17. autosnippet_enrich_candidates
 
 候选字段完整性诊断（纯逻辑检查，不调用 AI）。
 
@@ -262,7 +333,7 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ---
 
-### 14. autosnippet_knowledge_lifecycle
+### 18. autosnippet_knowledge_lifecycle
 
 知识条目生命周期操作。
 
@@ -284,7 +355,7 @@ draft → pending → approved → active → deprecated
 
 ---
 
-### 15. autosnippet_validate_candidate
+### 19. autosnippet_validate_candidate
 
 独立候选结构化预校验（5 层检查）。
 
@@ -303,7 +374,7 @@ draft → pending → approved → active → deprecated
 
 ---
 
-### 16. autosnippet_check_duplicate
+### 20. autosnippet_check_duplicate
 
 相似度检测，检查候选是否与现有知识重复。
 
@@ -338,6 +409,7 @@ MCP 工具与 Gateway Action 的映射关系：
 | `autosnippet_guard` | `read:guard_rules` | 所有角色 |
 | `autosnippet_skill` (create) | `create:skills` | `external_agent` / `developer` |
 | `autosnippet_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `autosnippet_task` | `task:create` / `task:update`（按 operation 路由） | `external_agent` / `developer` |
 | `autosnippet_knowledge_lifecycle` | 按 action 动态路由 | `developer` |
 
 ---

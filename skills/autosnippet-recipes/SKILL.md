@@ -78,7 +78,7 @@ Recipe is the core knowledge unit. V3 uses a unified structured model:
 
 ---
 
-## MCP Tools Reference (12 个整合工具)
+## MCP Tools Reference (20 个整合工具)
 
 ### Query (Agent can freely use)
 
@@ -89,6 +89,7 @@ Recipe is the core knowledge unit. V3 uses a unified structured model:
 | `autosnippet_knowledge` | Knowledge browse (`operation`: list/get/insights/confirm_usage) |
 | `autosnippet_graph` | Knowledge graph (`operation`: query/impact/path/stats) |
 | `autosnippet_structure` | Project structure (`operation`: targets/files/metadata) |
+| `autosnippet_capabilities` | Service capability discovery |
 
 ### Candidate Submit (Agent core capability)
 
@@ -103,7 +104,21 @@ Recipe is the core knowledge unit. V3 uses a unified structured model:
 | Tool | Description |
 |------|-------------|
 | `autosnippet_guard` | Code Guard check (`code` single / `files[]` batch — auto-routed) |
-| `autosnippet_bootstrap` | Cold-start + scan (`operation`: knowledge/refine/scan) |
+| `autosnippet_bootstrap` | Cold-start Mission Briefing (no params — returns project analysis + dimension tasks) |
+| `autosnippet_dimension_complete` | Dimension analysis completion (dimensionId + analysisText required) |
+
+### Wiki
+
+| Tool | Description |
+|------|-------------|
+| `autosnippet_wiki_plan` | Plan Wiki doc generation (scan project → topic data packages) |
+| `autosnippet_wiki_finalize` | Finalize Wiki (meta.json + dedup + validation) |
+
+### Task Management
+
+| Tool | Description |
+|------|-------------|
+| `autosnippet_task` | TaskGraph lifecycle (`operation`: create/ready/claim/close/fail/defer/progress/prime/stats/decompose) |
 
 ### Skills Management
 

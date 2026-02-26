@@ -29,7 +29,7 @@
 5. MCP 调用失败时，**不要在同一轮重复重试**，回退到已读文档或静态上下文。
 6. Skills 负责语义与流程，MCP 负责能力与调用；不要在 Skill 内硬编码 URL/HTTP。
 
-## MCP 工具速查（12 个整合工具）
+## MCP 工具速查（20 个整合工具）
 
 ### 检索
 - `autosnippet_search` — 统合搜索入口（通过 `mode` 参数切换）
@@ -68,9 +68,22 @@
 - `autosnippet_bootstrap` — 冷启动 Mission Briefing（无参数，返回项目分析 + 维度任务清单）
 - `autosnippet_dimension_complete` — 维度分析完成通知（dimensionId + analysisText 必填）
 
+### Wiki 文档
+- `autosnippet_wiki_plan` — Wiki 文档规划（扫描项目生成主题数据包）
+- `autosnippet_wiki_finalize` — Wiki 完成（meta.json + 去重 + 验证）
+
+### 任务管理
+- `autosnippet_task` — TaskGraph 任务图管理（`operation`: create / ready / claim / close / fail / defer / progress / prime / stats / decompose / dep_add / dep_tree 等）
+
 ### 系统
 - `autosnippet_health` — 服务健康状态与知识库统计（可检测空 KB 触发冷启动）
 - `autosnippet_capabilities` — 服务能力清单（列出所有可用 MCP 工具，供 Agent 自发现）
+
+### 管理员工具（Admin Tier）
+- `autosnippet_enrich_candidates` — 候选字段完整性诊断（不使用 AI）
+- `autosnippet_knowledge_lifecycle` — 知识条目生命周期操作（publish/deprecate/reactivate 等）
+- `autosnippet_validate_candidate` — 候选结构化预校验（调试用）
+- `autosnippet_check_duplicate` — 相似度检测（调试用）
 
 ## Recipe 结构要点
 - 必须包含：Frontmatter（`title`、`trigger` 必填）+ `## Snippet / Code Reference` + `## AI Context / Usage Guide`。

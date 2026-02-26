@@ -125,6 +125,7 @@ VS Code 扩展和 `asd watch`（Xcode）会自动识别。
 | `asd guard:staged` | Pre-commit hook |
 | `asd watch` | Xcode 文件监听 |
 | `asd sync` | Recipe Markdown → 数据库同步 |
+| `asd task` | 任务管理（TaskGraph） |
 | `asd upgrade` | 更新 IDE 集成 |
 | `asd status` | 环境检查 |
 

@@ -25,7 +25,7 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 ┌──────▼──┐ ┌────▼────┐ ┌───▼───┐ ┌───▼──────────┐
 │ HTTP    │ │  MCP    │ │  CLI  │ │  Dashboard   │
 │ Express │ │ stdio   │ │ cmdr  │ │ React+Vite   │
-│ 17 路由  │ │ 16 工具  │ │ 14 命令│ │ 17 视图       │
+│ 17 路由  │ │ 20 工具  │ │ 14 命令│ │ 17 视图       │
 └──────┬──┘ └────┬────┘ └───┬───┘ └──────────────┘
        │         │          │
 ┌──────▼─────────▼──────────▼─────────────────────────────┐
@@ -51,7 +51,7 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 ┌──────────────────────▼──────────────────────────────────┐
 │                 External Layer                            │
 │  AI: OpenAI / Gemini / Claude / DeepSeek / Ollama       │
-│  MCP: 12 agent + 4 admin 工具                            │
+│  MCP: 16 agent + 4 admin 工具                            │
 │  Native: Xcode / Clipboard / Browser                     │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -178,7 +178,7 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 
 #### MCP 服务器
 
-16 个工具分为 12 个 Agent Tier（IDE AI 可用）+ 4 个 Admin Tier（管理员/CI），通过 stdio 协议与 IDE 通信。
+20 个工具分为 16 个 Agent Tier（IDE AI 可用）+ 4 个 Admin Tier（管理员/CI），通过 stdio 协议与 IDE 通信。
 
 ---
 

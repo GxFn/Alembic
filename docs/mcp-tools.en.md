@@ -8,8 +8,8 @@ AutoSnippet provides knowledge base access to AI assistants in IDEs via [Model C
 
 The MCP server runs over the stdio protocol. IDEs (Cursor / VS Code / Trae / Qoder / Claude Code) automatically launch and connect to it.
 
-**16 tools total:**
-- **Agent Tier (12)** — Directly callable by IDE AI
+**20 tools total:**
+- **Agent Tier (16)** — Directly callable by IDE AI
 - **Admin Tier (4)** — Admin/CI tools
 
 All tools pass through the Gateway pipeline (validate → guard → route → audit).
@@ -248,9 +248,80 @@ List all available MCP tool overview. Helps AI understand what it can do.
 
 ---
 
+### 13. autosnippet_dimension_complete
+
+Dimension analysis completion notification — Called after the Agent finishes analyzing a coldstart dimension. Handles Recipe association, Skill generation, checkpoint saving, and progress push.
+
+**Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dimensionId` | string | ✅ | Dimension ID (e.g. `project-profile`, `language-scans`) |
+| `analysisText` | string | ✅ | Analysis report full text (Markdown) |
+| `sessionId` | string | — | bootstrap session ID (optional, auto-detected) |
+| `submittedRecipeIds` | string[] | — | Recipe IDs submitted in this dimension |
+| `keyFindings` | string[] | — | Key findings summary (3-5 items) |
+| `candidateCount` | number | — | Number of candidates submitted in this dimension |
+
+---
+
+### 14. autosnippet_wiki_plan
+
+Plan Wiki document generation — Scans project structure, analyzes AST and dependencies, integrates knowledge base, returns discovered topics and data packages.
+
+**Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `language` | string | — | Wiki document language: `zh` (default) / `en` |
+| `sessionId` | string | — | bootstrap session ID (optional) |
+
+---
+
+### 15. autosnippet_wiki_finalize
+
+Finalize Wiki generation — Writes meta.json, runs dedup checks, validates file integrity. Call after all Wiki articles are written.
+
+**Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `articlesWritten` | string[] | ✅ | Written Wiki file paths (relative to `AutoSnippet/wiki/`) |
+
+---
+
+### 16. autosnippet_task
+
+Task graph management — Create/query/claim/close tasks, manage dependencies. Used by Agents for autonomous decomposition and execution of complex multi-step work.
+
+**Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `operation` | string | ✅ | Operation: `create` / `ready` / `claim` / `close` / `fail` / `defer` / `progress` / `show` / `list` / `blocked` / `decompose` / `dep_add` / `dep_tree` / `prime` / `stats` |
+| `title` | string | — | Task title (create) |
+| `description` | string | — | Task description (create/progress) |
+| `id` | string | — | Task ID (claim/close/fail/defer/show/progress) |
+| `priority` | number | — | Priority 0-4, 0=highest (create) |
+| `taskType` | string | — | Task type: `epic` / `task` / `bug` / `chore` (create) |
+| `parentId` | string | — | Parent task ID (create subtask) |
+| `reason` | string | — | Reason (close/fail/defer) |
+| `dependsOn` | string | — | Dependent task ID (dep_add) |
+| `subtasks` | array | — | Subtask list (decompose) |
+
+**Common operations:**
+- `prime` — Restore session context (returns in-progress + ready tasks)
+- `ready` — Get next batch of executable tasks (with knowledge context)
+- `create` — Create a task
+- `claim` — Claim and start a task
+- `close` — Complete a task
+- `stats` — Task statistics
+
+---
+
 ## Admin Tier Tools
 
-### 13. autosnippet_enrich_candidates
+### 17. autosnippet_enrich_candidates
 
 Candidate field completeness diagnosis (pure logic check, no AI).
 
@@ -262,7 +333,7 @@ Candidate field completeness diagnosis (pure logic check, no AI).
 
 ---
 
-### 14. autosnippet_knowledge_lifecycle
+### 18. autosnippet_knowledge_lifecycle
 
 Knowledge entry lifecycle operations.
 
@@ -284,7 +355,7 @@ draft → pending → approved → active → deprecated
 
 ---
 
-### 15. autosnippet_validate_candidate
+### 19. autosnippet_validate_candidate
 
 Standalone candidate structured pre-validation (5 layers).
 
@@ -303,7 +374,7 @@ Standalone candidate structured pre-validation (5 layers).
 
 ---
 
-### 16. autosnippet_check_duplicate
+### 20. autosnippet_check_duplicate
 
 Similarity detection, checking if a candidate duplicates existing knowledge.
 
@@ -338,6 +409,7 @@ Mapping between MCP tools and Gateway Actions:
 | `autosnippet_guard` | `read:guard_rules` | All roles |
 | `autosnippet_skill` (create) | `create:skills` | `external_agent` / `developer` |
 | `autosnippet_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `autosnippet_task` | `task:create` / `task:update` (routed by operation) | `external_agent` / `developer` |
 | `autosnippet_knowledge_lifecycle` | Dynamic by action | `developer` |
 
 ---

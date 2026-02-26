@@ -26,6 +26,7 @@ asd --help
 | [`asd status`](#asd-status) | 环境状态检查 |
 | [`asd upgrade`](#asd-upgrade) | 升级 IDE 集成 |
 | [`asd cursor-rules`](#asd-cursor-rules) | 生成 Cursor 交付物料 |
+| [`asd task`](#asd-task) | 任务管理（TaskGraph） |
 | [`asd sync`](#asd-sync) | 同步 Markdown ↔ DB |
 
 ---
@@ -340,6 +341,32 @@ asd cursor-rules [options]
 |------|--------|------|
 | `-d, --dir <path>` | `.` | 项目根目录 |
 | `--verbose` | `false` | 详细输出 |
+
+---
+
+## asd task
+
+任务图（TaskGraph）管理。查看任务状态、统计信息、任务列表。
+
+```bash
+asd task <subcommand> [options]
+```
+
+**子命令：**
+
+| 子命令 | 说明 |
+|--------|------|
+| `stats` | 显示任务统计（总数、状态分布、优先级） |
+| `list` | 列出任务（支持 `--status` 过滤） |
+| `show <id>` | 查看任务详情 |
+
+**选项：**
+
+| 选项 | 默认值 | 说明 |
+|------|--------|------|
+| `-d, --dir <path>` | `.` | 项目根目录 |
+| `--status <status>` | 全部 | 状态过滤：`open` / `in_progress` / `closed` / `deferred` |
+| `--json` | `false` | JSON 格式输出 |
 
 ---
 

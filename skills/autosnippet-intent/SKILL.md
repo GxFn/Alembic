@@ -34,7 +34,7 @@ Use this skill when the user's intent is unclear or overlaps multiple capabiliti
 - `autosnippet-batch-scan` / `autosnippet-recipe-candidates` → merged into autosnippet-candidates
 - `autosnippet-dep-graph` → merged into autosnippet-structure
 
-## MCP tools (reference only — 12 个整合工具)
+## MCP tools (reference only — 20 个整合工具)
 
 - System: `autosnippet_health`, `autosnippet_capabilities`
 - Search: `autosnippet_search` (mode: auto / context / keyword / semantic)
@@ -45,7 +45,10 @@ Use this skill when the user's intent is unclear or overlaps multiple capabiliti
 - Document: `autosnippet_save_document`
 - Guard: `autosnippet_guard` (code 单文件 / files[] 批量)
 - Bootstrap: `autosnippet_bootstrap` (no params — Mission Briefing) + `autosnippet_dimension_complete`
+- Wiki: `autosnippet_wiki_plan` (topic planning) + `autosnippet_wiki_finalize` (meta.json + dedup)
+- Task: `autosnippet_task` (operation: create / ready / claim / close / fail / defer / progress / prime / stats / decompose)
 - Skills: `autosnippet_skill` (operation: list / load / create / update / delete / suggest)
+- Admin: `autosnippet_enrich_candidates`, `autosnippet_knowledge_lifecycle`, `autosnippet_validate_candidate`, `autosnippet_check_duplicate`
 
 This skill is a router only; it does not perform actions itself.
 
