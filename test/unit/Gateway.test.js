@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { jest } from '@jest/globals';
@@ -27,7 +28,7 @@ describe('Gateway', () => {
     constitutionValidator = new ConstitutionValidator(constitution);
     permissionManager = new PermissionManager(constitution);
 
-    const dbPath = path.join(__dirname, '../../data/test.db');
+    const dbPath = path.join(os.tmpdir(), 'autosnippet-test-gateway.db');
     db = new DatabaseConnection({ path: dbPath });
     await db.connect();
     await db.runMigrations();

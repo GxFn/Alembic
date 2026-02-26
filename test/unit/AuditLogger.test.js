@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import AuditLogger from '../../lib/infrastructure/audit/AuditLogger.js';
@@ -13,7 +14,7 @@ describe('AuditLogger & AuditStore', () => {
   let auditLogger;
 
   beforeAll(async () => {
-    const dbPath = path.join(__dirname, '../../data/test-audit.db');
+    const dbPath = path.join(os.tmpdir(), 'autosnippet-test-audit.db');
     db = new DatabaseConnection({ path: dbPath });
     await db.connect();
     await db.runMigrations();
