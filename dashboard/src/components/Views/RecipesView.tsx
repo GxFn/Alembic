@@ -358,7 +358,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   };
 
   return (
-    <div className="relative">
+    <div className="relative pb-6">
       {recipes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <BookOpenCheck size={48} className="text-[var(--fg-muted)] mb-4 opacity-40" />
@@ -488,7 +488,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
         const contentV3 = recipe.content;
 
         return (
-          <Drawer open={!!selectedRecipe} onClose={closeDrawer} size={drawerWide ? 'xl' : 'md-lg'}>
+          <Drawer open={!!selectedRecipe} onClose={closeDrawer} size={drawerWide ? 'lg' : 'md'}>
               {/* ── Header ── */}
               <Drawer.Header title={displayName}>
                 <Drawer.Nav currentIndex={currentIndex} total={sortedRecipes.length} onPrev={goToPrev} onNext={goToNext} />

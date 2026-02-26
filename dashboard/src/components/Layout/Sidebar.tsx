@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, LogOut, User, Moon, Sun, Library, FileText, BookOpen, Sparkles, Languages } from 'lucide-react';
+import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, LogOut, User, Moon, Sun, Library, FileText, BookOpen, Languages } from 'lucide-react';
 import { TabType } from '../../constants';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
@@ -29,7 +29,7 @@ interface NavItem {
   badge?: number | string;
 }
 
-/** 56px icon-only nav item with tooltip */
+/** 60px icon-only nav item with tooltip */
 function NavButton({
   item, active, onClick,
 }: {
@@ -44,33 +44,24 @@ function NavButton({
           type="button"
           onClick={onClick}
           className={cn(
-            "relative flex items-center justify-center w-10 h-10 rounded-[var(--radius-md)] transition-colors duration-150",
+            "relative flex items-center justify-center w-10 h-10 rounded-[var(--radius-md)] transition-all duration-200",
             active
-              ? "bg-[var(--accent-subtle)] text-[var(--accent)]"
-              : "text-[var(--fg-subtle)] hover:bg-[var(--bg-muted)] hover:text-[var(--fg-default)]"
+              ? "bg-[var(--accent)] text-white shadow-[0_0_16px_var(--accent-glow)]"
+              : "text-[var(--fg-subtle)] hover:bg-[var(--bg-muted)]/60 hover:text-[var(--fg-default)]"
           )}
         >
-          {/* 左侧激活指示条 */}
-          {active && (
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full bg-[var(--accent)]" />
-          )}
-          <item.icon size={20} className="shrink-0" />
+          <item.icon size={18} className="shrink-0" />
           {/* 小圆点 badge */}
           {item.badge != null && (
-            <span className="absolute top-0.5 right-0.5 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--warning)] opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--warning)]" />
+            <span className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center">
+              <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-[var(--warning)] opacity-60" />
+              <span className="relative inline-flex rounded-full h-[18px] min-w-[18px] px-1 items-center justify-center bg-[var(--warning)] text-[9px] font-bold text-white">{item.badge}</span>
             </span>
           )}
         </button>
       </TooltipTrigger>
       <TooltipContent side="right" className="flex items-center gap-1.5">
         <span>{item.label}</span>
-        {item.badge != null && (
-          <span className="flex items-center gap-0.5 text-[10px] font-bold text-[var(--warning)]">
-            <Sparkles size={10} />{item.badge}
-          </span>
-        )}
       </TooltipContent>
     </Tooltip>
   );
@@ -105,11 +96,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <TooltipProvider>
       <aside
-        className="w-[var(--sidebar-width)] flex flex-col shrink-0 border-r border-[var(--border-muted)] bg-[var(--bg-root)] select-none"
+        className="w-[var(--sidebar-width)] flex flex-col shrink-0 glass-surface select-none z-10"
       >
         {/* ── Logo ── */}
         <div className="flex items-center justify-center h-[var(--topbar-height)] border-b border-[var(--border-muted)]">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-[var(--radius-md)] flex items-center justify-center text-white">
+          <div className="w-9 h-9 rounded-[var(--radius-md)] flex items-center justify-center text-white shadow-[0_0_20px_var(--accent-glow)]" style={{ background: 'var(--accent-gradient)' }}>
             <span className="text-[11px] font-black italic tracking-tighter leading-none">AS</span>
           </div>
         </div>
@@ -126,7 +117,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           ))}
 
           {/* 分割线 */}
-          <div className="w-6 h-px bg-[var(--border-muted)] my-1" />
+          <div className="w-6 separator-gradient my-2" />
 
           {auxNav.map((item) => (
             <NavButton

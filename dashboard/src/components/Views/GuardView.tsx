@@ -308,7 +308,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     </div>
 
     {/* ── 内容区域 ── */}
-    <div className="flex-1 overflow-y-auto pr-1">
+    <div className="flex-1 overflow-y-auto pr-1 pb-6">
 
     {/* AI 写入规则：默认折叠，点击标题行展开 */}
     {showAiWriteRule && (

@@ -60,7 +60,8 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 min-w-[8rem] overflow-hidden rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-surface)] p-1 text-[var(--fg-default)] shadow-[var(--shadow-lg)]",
+        "z-50 min-w-[8rem] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--bg-surface)] p-1 text-[var(--fg-default)] shadow-[var(--shadow-xl)]",
+        "dark:bg-[var(--bg-surface)]/95 dark:backdrop-blur-xl dark:border-[var(--glass-border)] dark:shadow-[0_16px_64px_rgba(0,0,0,0.5),0_0_1px_rgba(255,255,255,0.06)]",
         "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
         "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",

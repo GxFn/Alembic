@@ -4,25 +4,25 @@ import { cn } from "../../lib/utils";
 
 const buttonVariants = cva(
   /* base */
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-all cursor-pointer select-none disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-root)] active:scale-[0.98]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-all cursor-pointer select-none disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-root)] active:scale-[0.97]",
   {
     variants: {
       variant: {
         primary:
-          "bg-[var(--bg-emphasis)] text-[var(--fg-on-emphasis)] hover:opacity-90",
+          "bg-[var(--bg-emphasis)] text-[var(--fg-on-emphasis)] hover:opacity-90 shadow-[var(--shadow-sm)]",
         secondary:
-          "bg-[var(--bg-root)] text-[var(--fg-default)] border border-[var(--border-default)] hover:bg-[var(--bg-subtle)] hover:border-[var(--border-emphasis)]",
+          "bg-[var(--bg-surface)] text-[var(--fg-default)] border border-[var(--border-default)] hover:bg-[var(--bg-subtle)] hover:border-[var(--border-emphasis)] shadow-[var(--shadow-sm)]",
         ghost:
           "bg-transparent text-[var(--fg-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--fg-default)]",
         danger:
-          "bg-[var(--danger)] text-white hover:opacity-90",
+          "bg-[var(--danger)] text-white hover:opacity-90 shadow-[0_0_12px_rgba(239,68,68,0.2)]",
         accent:
-          "bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-90",
+          "text-white hover:opacity-90 shadow-[0_0_16px_var(--accent-glow)]",
       },
       size: {
         sm: "h-7 px-2.5 text-xs rounded-[var(--radius-md)]",
         md: "h-9 px-4 text-sm rounded-[var(--radius-md)]",
-        lg: "h-11 px-5 text-base rounded-[var(--radius-md)]",
+        lg: "h-11 px-5 text-base rounded-[var(--radius-lg)]",
         icon: "h-8 w-8 rounded-[var(--radius-md)]",
         "icon-sm": "h-7 w-7 rounded-[var(--radius-sm)]",
       },
@@ -41,12 +41,14 @@ export interface ButtonProps
 }
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, loading, disabled, children, ...props }, ref) => {
+  ({ className, variant, size, loading, disabled, children, style, ...props }, ref) => {
+    const accentStyle = variant === 'accent' ? { background: 'var(--accent-gradient)', ...style } : style;
     return (
       <button
         ref={ref}
         className={cn(buttonVariants({ variant, size, className }))}
         disabled={disabled || loading}
+        style={accentStyle}
         {...props}
       >
         {loading && (

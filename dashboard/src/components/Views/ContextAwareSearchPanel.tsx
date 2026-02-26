@@ -103,7 +103,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
 
   return (
   <PageOverlay className="z-30 flex">
-    <PageOverlay.Backdrop className="bg-black/20" />
+    <PageOverlay.Backdrop className="bg-black/20 dark:bg-black/40 backdrop-blur-sm" />
     <div className="relative w-full max-w-2xl ml-auto bg-white shadow-xl flex flex-col max-h-screen">
     {/* Header */}
     <div className="border-b border-slate-200 p-6">
@@ -278,7 +278,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
     {/* 详情模态框 */}
     {detailsOpen && selectedResult && (
     <PageOverlay className="z-40 flex items-center justify-center p-4">
-      <PageOverlay.Backdrop className="bg-black/40" />
+      <PageOverlay.Backdrop className="bg-black/20 dark:bg-black/40 backdrop-blur-sm" />
       <div className="relative bg-white rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
       {/* Header */}
       <div className="border-b border-slate-200 p-6 flex items-start justify-between shrink-0">

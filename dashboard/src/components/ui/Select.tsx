@@ -31,6 +31,8 @@ export interface SelectProps {
   size?: 'xs' | 'sm' | 'md';
   /** 触发器最小宽度 */
   minWidth?: number;
+  /** 下拉方向：auto 自动检测（默认）、up 向上、down 向下 */
+  direction?: 'auto' | 'up' | 'down';
   id?: string;
   name?: string;
 }
@@ -57,15 +59,35 @@ const Select: React.FC<SelectProps> = ({
   disabled = false,
   size = 'sm',
   minWidth,
+  direction = 'auto',
   id,
   name,
 }) => {
   const [open, setOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
+  const [dropUp, setDropUp] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const selectedOption = options.find(o => o.value === value);
+
+  // 同步计算展开方向
+  const resolveDirection = useCallback(() => {
+    if (direction === 'up') return true;
+    if (direction === 'down') return false;
+    if (!triggerRef.current) return false;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const estimatedHeight = Math.min(options.length * 28 + 8, 248);
+    return spaceBelow < estimatedHeight && rect.top > estimatedHeight;
+  }, [direction, options.length]);
+
+  // 封装 open，打开前先同步算好方向
+  const openDropdown = useCallback(() => {
+    setDropUp(resolveDirection());
+    setOpen(true);
+    setHighlightIndex(options.findIndex(o => o.value === value));
+  }, [resolveDirection, options, value]);
 
   // Click-outside close
   useEffect(() => {
@@ -88,8 +110,7 @@ const Select: React.FC<SelectProps> = ({
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       if (!open) {
-        setOpen(true);
-        setHighlightIndex(enabledOptions.findIndex(o => o.value === value));
+        openDropdown();
       } else if (highlightIndex >= 0 && highlightIndex < enabledOptions.length) {
         onChange(enabledOptions[highlightIndex].value);
         setOpen(false);
@@ -99,8 +120,7 @@ const Select: React.FC<SelectProps> = ({
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (!open) {
-        setOpen(true);
-        setHighlightIndex(enabledOptions.findIndex(o => o.value === value));
+        openDropdown();
       } else {
         setHighlightIndex(i => Math.min(i + 1, enabledOptions.length - 1));
       }
@@ -108,7 +128,7 @@ const Select: React.FC<SelectProps> = ({
       e.preventDefault();
       setHighlightIndex(i => Math.max(i - 1, 0));
     }
-  }, [disabled, open, highlightIndex, options, value, onChange]);
+  }, [disabled, open, highlightIndex, options, value, onChange, openDropdown]);
 
   // Scroll highlighted item into view
   useEffect(() => {
@@ -137,7 +157,7 @@ const Select: React.FC<SelectProps> = ({
         aria-expanded={open}
         aria-haspopup="listbox"
         disabled={disabled}
-        onClick={() => { if (!disabled) { setOpen(o => !o); setHighlightIndex(options.findIndex(o => o.value === value)); } }}
+        onClick={() => { if (!disabled) { if (open) { setOpen(false); } else { openDropdown(); } } }}
         onKeyDown={handleKeyDown}
         className={cn(
           'inline-flex items-center justify-between border border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--fg-default)] font-medium transition-colors',
@@ -164,9 +184,11 @@ const Select: React.FC<SelectProps> = ({
           ref={listRef}
           role="listbox"
           className={cn(
-            'absolute z-50 mt-1 min-w-full max-h-60 overflow-y-auto',
+            'absolute z-50 min-w-full max-h-60 overflow-y-auto',
             'rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-[var(--shadow-lg)] p-0.5',
-            'animate-in fade-in-0 zoom-in-95 slide-in-from-top-1',
+            dropUp
+              ? 'bottom-full mb-1 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1'
+              : 'top-full mt-1 animate-in fade-in-0 zoom-in-95 slide-in-from-top-1',
             contentClassName
           )}
         >

@@ -128,15 +128,15 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <TooltipProvider>
       <header
-        className="h-[var(--topbar-height)] flex items-center justify-between px-4 border-b border-[var(--border-muted)] bg-[var(--bg-root)] shrink-0 gap-3 select-none"
+        className="h-[var(--topbar-height)] flex items-center justify-between px-5 border-b border-[var(--border-muted)] glass shrink-0 gap-3 select-none z-10"
       >
         {/* ── 左侧：面包屑 ── */}
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm text-[var(--fg-subtle)] font-medium truncate max-w-[160px]" title={projectName || 'AutoSnippet'}>{projectName || 'AutoSnippet'}</span>
           {tabLabel && (
             <>
-              <ChevronRight size={14} className="text-[var(--fg-subtle)] shrink-0" />
-              <span className="text-sm text-[var(--fg-default)] font-medium truncate">{tabLabel}</span>
+              <ChevronRight size={14} className="text-[var(--fg-subtle)]/50 shrink-0" />
+              <span className="text-sm text-[var(--fg-default)] font-semibold truncate">{tabLabel}</span>
             </>
           )}
         </div>
@@ -145,16 +145,16 @@ const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onOpenCommandPalette}
           className={cn(
-            "flex items-center gap-2 h-8 px-3 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-subtle)]",
-            "text-sm text-[var(--fg-subtle)] hover:border-[var(--border-emphasis)] hover:text-[var(--fg-muted)] transition-colors",
-            "w-60 justify-between"
+            "flex items-center gap-2 h-8 px-3 rounded-[var(--radius-full)] border border-[var(--border-default)] bg-[var(--bg-subtle)]/60",
+            "text-sm text-[var(--fg-subtle)] hover:border-[var(--accent)]/40 hover:text-[var(--fg-muted)] hover:shadow-[0_0_12px_var(--accent-glow)] transition-all",
+            "w-64 justify-between backdrop-blur-sm"
           )}
         >
           <div className="flex items-center gap-2">
             <Search size={14} />
             <span>{t('header.searchPlaceholder')}</span>
           </div>
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-[var(--border-default)] bg-[var(--bg-root)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--fg-subtle)]">
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded-[var(--radius-sm)] border border-[var(--border-default)] bg-[var(--bg-root)]/60 px-1.5 py-0.5 text-[10px] font-mono text-[var(--fg-subtle)]">
             ⌘K
           </kbd>
         </button>

@@ -24,7 +24,7 @@ const CreateModal: React.FC<CreateModalProps> = ({
   const { t } = useI18n();
   return (
   <PageOverlay className="z-40 flex items-center justify-center p-4">
-    <PageOverlay.Backdrop className="bg-slate-900/50 backdrop-blur-sm" />
+    <PageOverlay.Backdrop className="bg-black/20 dark:bg-black/40 backdrop-blur-sm" />
     <div className="relative w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden bg-[var(--bg-surface)]">
      <div className="p-6 border-b flex justify-between items-center bg-[var(--bg-subtle)] border-[var(--border-default)]">
       <h2 className="text-xl font-bold flex items-center gap-2 text-[var(--fg-primary)]"><Plus size={ICON_SIZES.xl} className="text-blue-600" /> {t('createModal.title')}</h2>

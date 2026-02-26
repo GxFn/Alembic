@@ -65,7 +65,7 @@ const RecipeEditor: React.FC<RecipeEditorProps> = ({ editingRecipe, setEditingRe
 
   return (
   <PageOverlay className="z-40 flex items-center justify-center p-4">
-    <PageOverlay.Backdrop className="bg-slate-900/50 backdrop-blur-sm" />
+    <PageOverlay.Backdrop className="bg-black/20 dark:bg-black/40 backdrop-blur-sm" />
     <div className="relative bg-[var(--bg-surface)] w-full max-w-6xl rounded-2xl shadow-2xl flex flex-col h-[85vh]">
     <div className="p-6 border-b border-[var(--border-default)] flex justify-between items-center flex-wrap gap-4">
       <div className="flex items-center gap-3">

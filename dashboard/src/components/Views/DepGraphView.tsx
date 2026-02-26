@@ -304,7 +304,7 @@ const DepGraphView: React.FC = () => {
     </div>
 
     {/* ── 内容区域 ── */}
-    <div className="flex-1 overflow-y-auto pr-1 space-y-6">
+    <div className="flex-1 overflow-y-auto pr-1 pb-6 space-y-6">
 
     {/* 图例 */}
     {hasTypes && (

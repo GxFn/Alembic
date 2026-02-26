@@ -489,7 +489,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
       )}
 
       {/* ── 内容区域 ── */}
-      <div className="flex-1 overflow-y-auto pr-1">
+      <div className="flex-1 overflow-y-auto pr-1 pb-6">
         {(!data?.candidates || Object.keys(data.candidates).length === 0) && !isBootstrapping && (
           <div className="h-72 flex flex-col items-center justify-center bg-[var(--bg-surface)] rounded-2xl border border-dashed border-[var(--border-default)] text-[var(--fg-muted)]">
             <div className="w-16 h-16 rounded-2xl bg-[var(--bg-subtle)] flex items-center justify-center mb-4">
@@ -931,7 +931,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
         return (
           <PageOverlay className="z-30 flex justify-end" onClick={() => { setExpandedId(null); setCompareModal(null); }}>
-            <PageOverlay.Backdrop className="bg-black/15 backdrop-blur-[1px]" />
+            <PageOverlay.Backdrop className="bg-black/20 dark:bg-black/40 backdrop-blur-sm" />
 
             {/* ── 润色已迁移到 GlobalChatDrawer ── */}
 

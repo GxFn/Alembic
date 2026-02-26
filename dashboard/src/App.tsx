@@ -965,7 +965,7 @@ const App: React.FC = () => {
   return (
   <ErrorBoundary>
   <GlobalChatProvider>
-  <div className="flex h-screen bg-[var(--bg-root)] text-[var(--fg-primary)] overflow-hidden font-sans">
+  <div className="flex h-screen bg-[var(--bg-root)] text-[var(--fg-primary)] overflow-hidden font-sans ambient-bg">
     <Toaster position="top-center" toastOptions={{ duration: 5000, style: { background: 'none', padding: 0, boxShadow: 'none', border: 'none' } }} containerStyle={{ top: 24 }} />
     <Sidebar 
     activeTab={activeTab} 

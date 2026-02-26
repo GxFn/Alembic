@@ -129,7 +129,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
   const [stats, setStats] = useState<KnowledgeStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(12);
   const [total, setTotal] = useState(0);
 
   // 筛选
@@ -314,7 +314,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
   /* ═══ 渲染 ═══════════════════════════════════════════ */
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-6">
       {/* ── 统计卡片 ── */}
       {stats && (
         <div className="grid grid-cols-3 gap-3">

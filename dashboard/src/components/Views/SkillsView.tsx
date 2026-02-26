@@ -734,7 +734,7 @@ const CreateSkillModal: React.FC<{
 
   return (
     <PageOverlay className="z-40 flex items-center justify-center">
-      <PageOverlay.Backdrop className="bg-black/40 backdrop-blur-sm" />
+      <PageOverlay.Backdrop className="bg-black/20 dark:bg-black/40 backdrop-blur-sm" />
         <div className="relative bg-[var(--bg-surface)] rounded-2xl shadow-2xl w-[720px] max-h-[85vh] flex flex-col">
         {/* Modal header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-default)]">

@@ -99,7 +99,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ searchQ, insertPath, onClose 
 
   return (
   <PageOverlay className="z-40 flex items-center justify-center p-4">
-    <PageOverlay.Backdrop className="bg-slate-900/50 backdrop-blur-sm" />
+    <PageOverlay.Backdrop className="bg-black/20 dark:bg-black/40 backdrop-blur-sm" />
     <div className="relative bg-[var(--bg-surface)] w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
     <div className="p-6 border-b border-[var(--border-default)] flex justify-between items-center bg-[var(--bg-subtle)]">
       <h2 className="text-xl font-bold flex items-center gap-2 text-[var(--fg-primary)]">
