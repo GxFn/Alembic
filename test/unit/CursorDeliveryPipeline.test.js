@@ -52,9 +52,9 @@ describe('TokenBudget', () => {
   });
 
   test('BUDGET constants are set', () => {
-    expect(BUDGET.CHANNEL_A_MAX).toBe(400);
+    expect(BUDGET.CHANNEL_A_MAX).toBe(800);
     expect(BUDGET.CHANNEL_B_MAX_PER_FILE).toBe(750);
-    expect(BUDGET.CHANNEL_A_MAX_RULES).toBe(8);
+    expect(BUDGET.CHANNEL_A_MAX_RULES).toBe(15);
     expect(BUDGET.CHANNEL_B_MAX_PATTERNS).toBe(5);
   });
 });
