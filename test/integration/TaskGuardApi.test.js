@@ -176,8 +176,8 @@ describe('Integration: TaskGraph + Guard HTTP API', () => {
         language: 'javascript',
       });
       expect(res.success).toBe(true);
-      expect(res).toHaveProperty('violations');
-      expect(Array.isArray(res.violations)).toBe(true);
+      expect(res.data).toHaveProperty('violations');
+      expect(Array.isArray(res.data.violations)).toBe(true);
     });
 
     it('should reject missing filePath', async () => {
