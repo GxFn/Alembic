@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Zap, CheckCircle, Pencil, Check, GitCompare, Inbox, Layers, Loader2 } from 'lucide-react';
 import { ScanResultItem, SimilarRecipe } from '../../types';
-import { categories, LANGUAGE_OPTIONS, normalizeLanguageId, languageDisplayName, importPlaceholder } from '../../constants';
+import { categories, LANGUAGE_OPTIONS, normalizeLanguageId, importPlaceholder } from '../../constants';
 import { ICON_SIZES } from '../../constants/icons';
 import CodeBlock from '../Shared/CodeBlock';
 import HighlightedCodeEditor from '../Shared/HighlightedCodeEditor';
 import { useI18n } from '../../i18n';
+import Select from '../ui/Select';
 
 /* ═══════════════════════════════════════════════════════
  *  ScanResultCard — Pipeline Unification v2 审核卡片
@@ -223,53 +224,45 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
           </div>
           <div className="flex flex-col">
             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Kind</label>
-            <select
-              className="font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-[#252a36] border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-blue-500/20"
+            <Select
               value={res.kind || 'pattern'}
-              onChange={e => handleUpdateScanResult(i, { kind: e.target.value })}
-            >
-              <option value="rule">Rule</option>
-              <option value="pattern">Pattern</option>
-              <option value="fact">Fact</option>
-            </select>
+              onChange={v => handleUpdateScanResult(i, { kind: v })}
+              options={[
+                { value: 'rule', label: 'Rule' },
+                { value: 'pattern', label: 'Pattern' },
+                { value: 'fact', label: 'Fact' },
+              ]}
+              size="xs"
+            />
           </div>
           <div className="flex flex-col">
             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">Topic</label>
-            <select
-              className="font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-[#252a36] border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-blue-500/20"
+            <Select
               value={res.topicHint || ''}
-              onChange={e => handleUpdateScanResult(i, { topicHint: e.target.value })}
-            >
-              {TOPIC_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+              onChange={v => handleUpdateScanResult(i, { topicHint: v })}
+              options={TOPIC_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+              size="xs"
+            />
           </div>
           <div className="flex flex-col">
             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">{t('scanResult.category')}</label>
-            <select
-              className="font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-[#252a36] border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-blue-500/20"
+            <Select
               value={res.category || ''}
-              onChange={e => handleUpdateScanResult(i, { category: e.target.value })}
-            >
-              {categories.filter(c => c !== 'All').map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
+              onChange={v => handleUpdateScanResult(i, { category: v })}
+              options={categories.filter(c => c !== 'All').map(cat => ({ value: cat, label: cat }))}
+              size="xs"
+            />
           </div>
           <>
             <div className="w-px h-6 bg-slate-200 self-end mb-0.5" />
             <div className="flex flex-col">
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">{t('scanResult.language')}</label>
-              <select
-                className="font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-[#252a36] border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-blue-500/20"
+              <Select
                 value={normalizeLanguageId(res.language)}
-                onChange={e => handleUpdateScanResult(i, { language: e.target.value })}
-              >
-                {LANGUAGE_OPTIONS.map(opt => (
-                  <option key={opt.id} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
+                onChange={v => handleUpdateScanResult(i, { language: v })}
+                options={LANGUAGE_OPTIONS.map(opt => ({ value: opt.id, label: opt.label }))}
+                size="xs"
+              />
             </div>
           </>
           {res.moduleName && (
@@ -304,29 +297,32 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
           )}
           <div className="flex flex-col">
             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">{t('scanResult.difficulty')}</label>
-            <select
-              className="font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-[#252a36] border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-purple-500/20"
+            <Select
               value={res.difficulty || 'intermediate'}
-              onChange={e => handleUpdateScanResult(i, { difficulty: e.target.value, complexity: e.target.value })}
-            >
-              <option value="beginner">{t('scanResult.difficultyBeginner')}</option>
-              <option value="intermediate">{t('scanResult.difficultyIntermediate')}</option>
-              <option value="advanced">{t('scanResult.difficultyAdvanced')}</option>
-            </select>
+              onChange={v => handleUpdateScanResult(i, { difficulty: v, complexity: v })}
+              options={[
+                { value: 'beginner', label: t('scanResult.difficultyBeginner') },
+                { value: 'intermediate', label: t('scanResult.difficultyIntermediate') },
+                { value: 'advanced', label: t('scanResult.difficultyAdvanced') },
+              ]}
+              size="xs"
+            />
           </div>
           <div className="flex flex-col">
             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">{t('scanResult.authorityScore')}</label>
-            <select
-              className="font-bold text-amber-600 bg-amber-50/60 border border-amber-100 px-2 py-1 rounded-md outline-none text-[11px] focus:ring-2 focus:ring-amber-500/20"
-              value={res.authority ?? res.stats?.authority ?? 3}
-              onChange={e => handleUpdateScanResult(i, { authority: parseInt(e.target.value) })}
-            >
-              <option value="1">⭐ 1</option>
-              <option value="2">⭐⭐ 2</option>
-              <option value="3">⭐⭐⭐ 3</option>
-              <option value="4">⭐⭐⭐⭐ 4</option>
-              <option value="5">⭐⭐⭐⭐⭐ 5</option>
-            </select>
+            <Select
+              value={String(res.authority ?? res.stats?.authority ?? 3)}
+              onChange={v => handleUpdateScanResult(i, { authority: parseInt(v) })}
+              options={[
+                { value: '1', label: '⭐ 1', icon: '' },
+                { value: '2', label: '⭐⭐ 2', icon: '' },
+                { value: '3', label: '⭐⭐⭐ 3', icon: '' },
+                { value: '4', label: '⭐⭐⭐⭐ 4', icon: '' },
+                { value: '5', label: '⭐⭐⭐⭐⭐ 5', icon: '' },
+              ]}
+              size="xs"
+              className="font-bold text-amber-600 bg-amber-50 border-amber-100"
+            />
           </div>
         </div>
 

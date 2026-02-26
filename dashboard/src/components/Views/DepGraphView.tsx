@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Layers, Filter } from 'lucide-react';
+import { RefreshCw, Layers } from 'lucide-react';
 import api from '../../api';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
-import { ICON_SIZES } from '../../constants/icons';
 
 interface DepGraphNode {
   id: string;
@@ -30,7 +29,6 @@ interface DepGraphData {
   generatedAt?: string;
 }
 
-const NODE_R = 20;
 const LAYER_HEIGHT = 72;
 const SUB_ROW_HEIGHT = 52;
 const NODE_GAP = 24;
@@ -123,7 +121,7 @@ const DepGraphView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [graphLevel, setGraphLevel] = useState<'package' | 'target'>('package');
+  const [graphLevel, _setGraphLevel] = useState<'package' | 'target'>('package');
   const [nodeFilter, setNodeFilter] = useState<'all' | 'internal' | 'external'>('all');
 
   const fetchGraph = async () => {
@@ -238,8 +236,8 @@ const DepGraphView: React.FC = () => {
 
   if (!data || allNodes.length === 0) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-slate-600 shadow-sm">
-    <p className="font-medium text-slate-700">{t('depGraph.noDataTitle')}</p>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-subtle)] p-8 text-[var(--fg-secondary)] shadow-sm">
+    <p className="font-medium text-[var(--fg-primary)]">{t('depGraph.noDataTitle')}</p>
     <p className="mt-2 text-sm">{t('depGraph.noDataDesc')}</p>
     </div>
   );
@@ -254,8 +252,8 @@ const DepGraphView: React.FC = () => {
       <Layers className="text-blue-600" size={20} />
       </div>
       <div className="min-w-0">
-      <h2 className="text-lg xl:text-xl font-bold text-slate-800">{t('depGraph.title')}</h2>
-      <p className="text-xs text-slate-400 mt-0.5 truncate">
+      <h2 className="text-lg xl:text-xl font-bold text-[var(--fg-primary)]">{t('depGraph.title')}</h2>
+      <p className="text-xs text-[var(--fg-muted)] mt-0.5 truncate">
         {t('depGraph.visualization')}
         {data.projectRoot && (
         <span className="ml-1">· {data.projectRoot}</span>
@@ -265,13 +263,13 @@ const DepGraphView: React.FC = () => {
     </div>
     <div className="flex items-center gap-2 flex-wrap">
       {hasTypes && (
-      <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden text-xs">
+      <div className="flex items-center border border-[var(--border-default)] rounded-lg overflow-hidden text-xs">
         {(['all', 'internal', 'external'] as const).map((f) => (
         <button
           key={f}
           type="button"
           onClick={() => setNodeFilter(f)}
-          className={`px-3 py-1.5 font-medium transition-colors ${nodeFilter === f ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+          className={`px-3 py-1.5 font-medium transition-colors ${nodeFilter === f ? 'bg-blue-600 text-white' : 'bg-[var(--bg-surface)] text-[var(--fg-secondary)] hover:bg-[var(--bg-subtle)]'}`}
         >
           {f === 'all' ? t('depGraph.filterAll') : f === 'internal' ? t('depGraph.filterInternal') : t('depGraph.filterExternal')}
         </button>
@@ -283,14 +281,14 @@ const DepGraphView: React.FC = () => {
       onClick={() => {
         fetchGraph();
       }}
-      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100"
+      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-[var(--fg-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-default)] hover:bg-[var(--bg-subtle)]"
       >
       <RefreshCw size={14} /> {t('depGraph.refresh')}
       </button>
       <div className="flex items-center gap-2 xl:gap-3 text-xs flex-wrap">
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
-        <Layers size={14} className="text-slate-400" />
-        <span className="text-slate-500">{t('depGraph.packages')} <strong className="text-slate-700">{nodes.length}</strong></span>
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-default)]">
+        <Layers size={14} className="text-[var(--fg-muted)]" />
+        <span className="text-[var(--fg-secondary)]">{t('depGraph.packages')} <strong className="text-[var(--fg-primary)]">{nodes.length}</strong></span>
       </div>
       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
         <span className="text-emerald-500">{t('depGraph.dependencies')}</span>
@@ -310,9 +308,9 @@ const DepGraphView: React.FC = () => {
 
     {/* 图例 */}
     {hasTypes && (
-      <div className="flex items-center gap-4 text-xs text-slate-500 px-1">
+      <div className="flex items-center gap-4 text-xs text-[var(--fg-secondary)] px-1">
       <div className="flex items-center gap-1.5">
-        <span className="inline-block w-3 h-3 rounded border-2 border-slate-300 bg-white" /> {t('depGraph.projectRoot')}
+        <span className="inline-block w-3 h-3 rounded border-2 border-[var(--border-emphasis)] bg-[var(--bg-surface)]" /> {t('depGraph.projectRoot')}
       </div>
       <div className="flex items-center gap-1.5">
         <span className="inline-block w-3 h-3 rounded border-2 border-green-400 bg-green-50" /> {t('depGraph.filterInternal')}
@@ -327,7 +325,7 @@ const DepGraphView: React.FC = () => {
     )}
 
     {/* 图区域：金字塔分层（不画连线），点击节点在浮窗显示依赖 */}
-    <div className={`rounded-xl border overflow-auto shadow-sm min-h-[480px] flex items-center justify-center relative ${isDark ? 'border-slate-700 bg-[#13151c]' : 'border-slate-200 bg-slate-50/50'}`}>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-subtle)] overflow-auto shadow-sm min-h-[480px] flex items-center justify-center relative">
     <svg
       width="100%"
       height={svgH}
@@ -453,16 +451,16 @@ const DepGraphView: React.FC = () => {
     {/* 浮窗：选中节点的依赖 / 被依赖 */}
     {selectedNodeId && (
       <div
-      className="absolute top-4 right-4 w-72 rounded-xl border border-slate-200 bg-white shadow-lg z-10 p-4"
+      className="absolute top-4 right-4 w-72 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-lg z-10 p-4"
       role="dialog"
       aria-label={t('depGraph.dependencies')}
       >
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
-        <span className="font-bold text-slate-800">{selectedNodeId}</span>
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-[var(--border-default)]">
+        <span className="font-bold text-[var(--fg-primary)]">{selectedNodeId}</span>
         <button
         type="button"
         onClick={() => setSelectedNodeId(null)}
-        className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+        className="text-[var(--fg-muted)] hover:text-[var(--fg-secondary)] text-lg leading-none"
         aria-label={t('depGraph.close')}
         >
         ×
@@ -470,10 +468,10 @@ const DepGraphView: React.FC = () => {
       </div>
       <div className="space-y-3 text-sm">
         <div>
-        <div className="font-semibold text-slate-600 mb-1">{t('depGraph.dependencies')}</div>
-        <ul className="text-slate-700 space-y-0.5">
+        <div className="font-semibold text-[var(--fg-secondary)] mb-1">{t('depGraph.dependencies')}</div>
+        <ul className="text-[var(--fg-primary)] space-y-0.5">
           {(dependsOn.get(selectedNodeId) ?? []).length === 0 ? (
-          <li className="text-slate-400">{t('depGraph.none')}</li>
+          <li className="text-[var(--fg-muted)]">{t('depGraph.none')}</li>
           ) : (
           (dependsOn.get(selectedNodeId) ?? []).map((id) => (
             <li key={id}>→ {id}</li>
@@ -482,10 +480,10 @@ const DepGraphView: React.FC = () => {
         </ul>
         </div>
         <div>
-        <div className="font-semibold text-slate-600 mb-1">{t('depGraph.dependents')}</div>
-        <ul className="text-slate-700 space-y-0.5">
+        <div className="font-semibold text-[var(--fg-secondary)] mb-1">{t('depGraph.dependents')}</div>
+        <ul className="text-[var(--fg-primary)] space-y-0.5">
           {(dependedBy.get(selectedNodeId) ?? []).length === 0 ? (
-          <li className="text-slate-400">{t('depGraph.none')}</li>
+          <li className="text-[var(--fg-muted)]">{t('depGraph.none')}</li>
           ) : (
           (dependedBy.get(selectedNodeId) ?? []).map((id) => (
             <li key={id}>← {id}</li>
@@ -500,13 +498,13 @@ const DepGraphView: React.FC = () => {
 
     {/* 包列表 / 依赖关系小图（列表） */}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold text-slate-800 mb-3 pb-2 border-b border-slate-100">{t('depGraph.packageList')} ({nodes.length})</h3>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 shadow-sm">
+      <h3 className="text-sm font-bold text-[var(--fg-primary)] mb-3 pb-2 border-b border-[var(--border-default)]">{t('depGraph.packageList')} ({nodes.length})</h3>
       <ul className="text-sm space-y-3 max-h-[280px] overflow-y-auto pr-1">
       {nodes.map((n) => (
-        <li key={n.id} className="pb-3 border-b border-slate-100 last:border-0 last:pb-0">
+        <li key={n.id} className="pb-3 border-b border-[var(--border-default)] last:border-0 last:pb-0">
         <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="font-semibold text-slate-800">{n.label || n.id}</span>
+          <span className="font-semibold text-[var(--fg-primary)]">{n.label || n.id}</span>
           {n.type === 'external' && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-medium">{t('depGraph.labelExternal')}</span>
           )}
@@ -514,39 +512,39 @@ const DepGraphView: React.FC = () => {
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">{t('depGraph.labelInternal')}</span>
           )}
           {n.indirect && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 border border-slate-200 font-medium">{t('depGraph.labelIndirect')}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-subtle)] text-[var(--fg-secondary)] border border-[var(--border-default)] font-medium">{t('depGraph.labelIndirect')}</span>
           )}
           {n.packageDir && (
-          <span className="text-slate-500 text-xs">· {n.packageDir}</span>
+          <span className="text-[var(--fg-secondary)] text-xs">· {n.packageDir}</span>
           )}
         </div>
         {n.fullPath && (
-          <div className="mt-1 text-slate-400 text-xs truncate">{n.fullPath}</div>
+          <div className="mt-1 text-[var(--fg-muted)] text-xs truncate">{n.fullPath}</div>
         )}
         {n.targets && n.targets.length > 0 && (
-          <div className="mt-1.5 text-slate-500 text-xs pl-0">
-          Targets: <span className="text-slate-600">{n.targets.join(', ')}</span>
+          <div className="mt-1.5 text-[var(--fg-secondary)] text-xs pl-0">
+          Targets: <span className="text-[var(--fg-secondary)]">{n.targets.join(', ')}</span>
           </div>
         )}
         </li>
       ))}
       </ul>
     </div>
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-sm font-bold text-slate-800 mb-3 pb-2 border-b border-slate-100">{t('depGraph.depRelations')} ({edges.length})</h3>
-      <p className="text-xs text-slate-500 mb-2">{t('depGraph.depRelationsDesc')}</p>
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 shadow-sm">
+      <h3 className="text-sm font-bold text-[var(--fg-primary)] mb-3 pb-2 border-b border-[var(--border-default)]">{t('depGraph.depRelations')} ({edges.length})</h3>
+      <p className="text-xs text-[var(--fg-secondary)] mb-2">{t('depGraph.depRelationsDesc')}</p>
       <ul className="text-sm space-y-2 max-h-[280px] overflow-y-auto pr-1">
       {edges.map((e, i) => (
-        <li key={`${e.from}-${e.to}-${i}`} className="flex items-center gap-2 text-slate-700">
-        <span className="font-semibold text-slate-800">{e.from}</span>
-        <span className="text-slate-400 shrink-0">→</span>
-        <span className="font-semibold text-slate-800">{e.to}</span>
+        <li key={`${e.from}-${e.to}-${i}`} className="flex items-center gap-2 text-[var(--fg-primary)]">
+        <span className="font-semibold text-[var(--fg-primary)]">{e.from}</span>
+        <span className="text-[var(--fg-muted)] shrink-0">→</span>
+        <span className="font-semibold text-[var(--fg-primary)]">{e.to}</span>
         </li>
       ))}
       </ul>
     </div>
     {graphLevel === 'target' && (
-    <p className="text-xs text-slate-500 mt-2">
+    <p className="text-xs text-[var(--fg-secondary)] mt-2">
       {t('depGraph.targetHint')}<span className="font-mono">Package::Target</span>
     </p>
     )}

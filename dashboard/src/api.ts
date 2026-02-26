@@ -9,12 +9,10 @@
 
 import axios from 'axios';
 import type {
-  Snippet,
   Recipe,
   RecipeStats,
   ProjectData,
   SPMTarget,
-  ProjectDirectory,
   ExtractedRecipe,
   KnowledgeEntry,
   KnowledgePaginatedResponse,

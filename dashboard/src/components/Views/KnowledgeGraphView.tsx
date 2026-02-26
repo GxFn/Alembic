@@ -584,8 +584,8 @@ const KnowledgeGraphView: React.FC = () => {
 
   if (edges.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-500">
-        <Share2 size={48} className="text-slate-300" />
+      <div className="flex flex-col items-center justify-center h-full gap-4 text-[var(--fg-secondary)]">
+        <Share2 size={48} className="text-[var(--fg-muted)]" />
         <p className="text-lg font-medium">{t('knowledgeGraph.empty')}</p>
         <p className="text-sm text-center max-w-md">{t('knowledgeGraph.emptyDesc')}</p>
         {discoverResult && (
@@ -621,30 +621,30 @@ const KnowledgeGraphView: React.FC = () => {
       <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <div className="flex items-center gap-3">
           <Share2 size={ICON_SIZES.lg} className="text-blue-600" />
-          <h2 className="text-lg xl:text-xl font-bold text-slate-800">{t('knowledgeGraph.title')}</h2>
+          <h2 className="text-lg xl:text-xl font-bold text-[var(--fg-primary)]">{t('knowledgeGraph.title')}</h2>
           {stats && (
-            <span className={`text-xs px-2 py-1 rounded-full ${isDark ? 'text-slate-400 bg-slate-700/60' : 'text-slate-500 bg-slate-100'}`}>
+            <span className="text-xs px-2 py-1 rounded-full text-[var(--fg-secondary)] bg-[var(--bg-subtle)]">
               {t('knowledgeGraph.statsLabel', { nodes: nodes.length, edges: stats.totalEdges })}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <button onClick={() => setZoom(z => Math.min(z + 0.2, 3))} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200'}`} title={t('knowledgeGraph.zoomIn')}>
+          <button onClick={() => setZoom(z => Math.min(z + 0.2, 3))} className="p-1.5 rounded-lg transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.zoomIn')}>
             <ZoomIn size={ICON_SIZES.sm} />
           </button>
-          <button onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200'}`} title={t('knowledgeGraph.zoomOut')}>
+          <button onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} className="p-1.5 rounded-lg transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.zoomOut')}>
             <ZoomOut size={ICON_SIZES.sm} />
           </button>
-          <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200'}`} title={t('knowledgeGraph.resetView')}>
+          <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="p-1.5 rounded-lg transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.resetView')}>
             <Maximize2 size={ICON_SIZES.sm} />
           </button>
-          <button onClick={fetchGraph} className={`p-1.5 rounded-lg transition-colors ${isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200'}`} title={t('knowledgeGraph.refresh')}>
+          <button onClick={fetchGraph} className="p-1.5 rounded-lg transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.refresh')}>
             <RefreshCw size={ICON_SIZES.sm} />
           </button>
           <button
             onClick={handleDiscover}
             disabled={discovering}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${isDark ? 'bg-violet-500/15 hover:bg-violet-500/25 text-violet-400' : 'bg-violet-50 hover:bg-violet-100 text-violet-700'}`}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 bg-violet-50 hover:bg-violet-100 text-violet-700"
             title={t('knowledgeGraph.discoverTooltip')}
           >
             {discovering ? (
@@ -664,8 +664,8 @@ const KnowledgeGraphView: React.FC = () => {
             onClick={() => toggleRelation(rel)}
             className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all border ${
               activeRelations.has(rel)
-                ? isDark ? 'border-transparent shadow-sm' : 'border-transparent shadow-sm'
-                : isDark ? 'border-slate-600 bg-slate-800 text-slate-500 opacity-40' : 'border-slate-200 bg-white text-slate-400 opacity-40'
+                ? 'border-transparent shadow-sm'
+                : 'border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--fg-muted)] opacity-40'
             }`}
             style={activeRelations.has(rel) ? {
               backgroundColor: (RELATION_COLORS[rel] || '#6b7280') + '18',
@@ -682,7 +682,7 @@ const KnowledgeGraphView: React.FC = () => {
       {/* SVG Canvas */}
       <div
         ref={containerRef}
-        className={`flex-1 rounded-xl border overflow-hidden relative min-h-0 ${isDark ? 'border-slate-700 bg-[#13151c]' : 'border-slate-200 bg-gradient-to-br from-slate-50 to-white'}`}
+        className="flex-1 rounded-xl border overflow-hidden relative min-h-0 border-[var(--border-default)] bg-[var(--bg-subtle)]"
         style={{ cursor: isPanning.current ? 'grabbing' : 'grab' }}
         onWheel={handleWheel}
       >
@@ -804,7 +804,7 @@ const KnowledgeGraphView: React.FC = () => {
                     const mx = (from.x + to.x) / 2, my = (from.y + to.y) / 2;
                     return (
                       <g>
-                        <rect x={mx - 24} y={my - 16} width={48} height={18} rx={4} fill={isDark ? '#252526' : 'white'} stroke={RELATION_COLORS[e.relation] || '#6b7280'} strokeWidth={0.8} opacity={0.95} />
+                        <rect x={mx - 24} y={my - 16} width={48} height={18} rx={4} fill="var(--bg-surface)" stroke={RELATION_COLORS[e.relation] || '#6b7280'} strokeWidth={0.8} opacity={0.95} />
                         <text x={mx} y={my - 4} textAnchor="middle" fontSize={9} fontWeight={600} fill={RELATION_COLORS[e.relation] || '#6b7280'}>
                           {relationLabel(e.relation)}
                         </text>
@@ -834,8 +834,8 @@ const KnowledgeGraphView: React.FC = () => {
                   ? gc.bg
                   : gc.bg;
               const strokeColor = isFocused ? gc.text : isConnected ? gc.border : gc.border;
-              const textColor = isFocused ? (isDark ? '#ffffff' : '#ffffff') : gc.text;
-              const labelColor = isFocused ? gc.text : isDark ? '#9ca3af' : '#64748b';
+              const textColor = isFocused ? '#ffffff' : gc.text;
+              const labelColor = isFocused ? gc.text : 'var(--fg-muted)';
 
               return (
                 <g
@@ -883,7 +883,7 @@ const KnowledgeGraphView: React.FC = () => {
                   {/* Degree badge */}
                   {n.degree >= 3 && !dimmed && (
                     <g>
-                      <circle cx={n.x + r * 0.7} cy={n.y - r * 0.7} r={8} fill="#3b82f6" stroke={isDark ? '#1e1e1e' : 'white'} strokeWidth={1.5} />
+                      <circle cx={n.x + r * 0.7} cy={n.y - r * 0.7} r={8} fill="#3b82f6" stroke="var(--bg-surface)" strokeWidth={1.5} />
                       <text x={n.x + r * 0.7} y={n.y - r * 0.7 + 3.5} textAnchor="middle" fontSize={8} fill="white" fontWeight={700} style={{ pointerEvents: 'none' }}>
                         {n.degree}
                       </text>
@@ -898,7 +898,7 @@ const KnowledgeGraphView: React.FC = () => {
         {/* Click away to deselect */}
         {selectedNode && (
           <button
-            className={`absolute top-2 right-2 text-xs px-2 py-1 rounded-md shadow-sm border ${isDark ? 'text-slate-400 hover:text-slate-200 bg-[#252526]/90 border-slate-600' : 'text-slate-400 hover:text-slate-600 bg-white/90 border-slate-200'}`}
+            className="absolute top-2 right-2 text-xs px-2 py-1 rounded-md shadow-sm border text-[var(--fg-muted)] hover:text-[var(--fg-secondary)] bg-[var(--bg-surface)] border-[var(--border-default)]"
             onClick={() => setSelectedNode(null)}
           >
             {t('knowledgeGraph.cancelSelection')}
@@ -908,45 +908,45 @@ const KnowledgeGraphView: React.FC = () => {
 
       {/* Selected node detail panel */}
       {selectedNode && (
-        <div className={`mt-3 p-4 rounded-xl border shadow-sm flex-shrink-0 max-h-48 overflow-y-auto scrollbar-light ${isDark ? 'bg-[#1e1e1e] border-slate-700' : 'bg-white border-slate-200'}`}>
-          <div className={`flex items-center gap-2 mb-3 pb-2 border-b ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
+        <div className="mt-3 p-4 rounded-xl border shadow-sm flex-shrink-0 max-h-48 overflow-y-auto scrollbar-light bg-[var(--bg-surface)] border-[var(--border-default)]">
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-[var(--border-default)]">
             <Info size={14} className="text-blue-500" />
-            <h3 className={`font-semibold text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+            <h3 className="font-semibold text-sm text-[var(--fg-primary)]">
               {nodeLabels[selectedNode] || selectedNode}
             </h3>
-            <span className="text-[10px] text-slate-400 ml-auto">ID: {selectedNode}</span>
+            <span className="text-[10px] text-[var(--fg-muted)] ml-auto">ID: {selectedNode}</span>
           </div>
           <div className="grid grid-cols-2 gap-4 text-xs">
             <div>
-              <span className="text-slate-500 font-medium">{t('knowledgeGraph.outEdges')}</span>
+              <span className="text-[var(--fg-secondary)] font-medium">{t('knowledgeGraph.outEdges')}</span>
               <ul className="mt-1.5 space-y-1">
                 {edges.filter(e => e.fromId === selectedNode && activeRelations.has(e.relation)).map(e => (
                   <li key={e.id} className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: RELATION_COLORS[e.relation] || '#6b7280' }} />
-                    <span className="text-slate-500">{relationLabel(e.relation)}</span>
-                    <span className="text-slate-400">→</span>
+                    <span className="text-[var(--fg-secondary)]">{relationLabel(e.relation)}</span>
+                    <span className="text-[var(--fg-muted)]">→</span>
                     <button className="text-blue-600 hover:underline truncate" onClick={() => setSelectedNode(e.toId)}>
                       {nodeLabels[e.toId] || e.toId.substring(0, 16)}
                     </button>
                   </li>
                 ))}
-                {edges.filter(e => e.fromId === selectedNode && activeRelations.has(e.relation)).length === 0 && <li className="text-slate-400">{t('knowledgeGraph.none')}</li>}
+                {edges.filter(e => e.fromId === selectedNode && activeRelations.has(e.relation)).length === 0 && <li className="text-[var(--fg-muted)]">{t('knowledgeGraph.none')}</li>}
               </ul>
             </div>
             <div>
-              <span className="text-slate-500 font-medium">{t('knowledgeGraph.inEdges')}</span>
+              <span className="text-[var(--fg-secondary)] font-medium">{t('knowledgeGraph.inEdges')}</span>
               <ul className="mt-1.5 space-y-1">
                 {edges.filter(e => e.toId === selectedNode && activeRelations.has(e.relation)).map(e => (
                   <li key={e.id} className="flex items-center gap-1.5">
                     <button className="text-blue-600 hover:underline truncate" onClick={() => setSelectedNode(e.fromId)}>
                       {nodeLabels[e.fromId] || e.fromId.substring(0, 16)}
                     </button>
-                    <span className="text-slate-400">→</span>
-                    <span className="text-slate-500">{relationLabel(e.relation)}</span>
+                    <span className="text-[var(--fg-muted)]">→</span>
+                    <span className="text-[var(--fg-secondary)]">{relationLabel(e.relation)}</span>
                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: RELATION_COLORS[e.relation] || '#6b7280' }} />
                   </li>
                 ))}
-                {edges.filter(e => e.toId === selectedNode && activeRelations.has(e.relation)).length === 0 && <li className="text-slate-400">{t('knowledgeGraph.none')}</li>}
+                {edges.filter(e => e.toId === selectedNode && activeRelations.has(e.relation)).length === 0 && <li className="text-[var(--fg-muted)]">{t('knowledgeGraph.none')}</li>}
               </ul>
             </div>
           </div>

@@ -1,18 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, Code, LogOut, User, ShieldCheck, Eye, Fingerprint, BookOpen, Sparkles, PanelLeftClose, PanelLeftOpen, Zap, Library, FileText } from 'lucide-react';
+import React from 'react';
+import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, LogOut, User, Moon, Sun, Library, FileText, BookOpen, Sparkles, Languages } from 'lucide-react';
 import { TabType } from '../../constants';
-import { ICON_SIZES } from '../../constants/icons';
-import api from '../../api';
-import { getSocket } from '../../lib/socket';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
-
-/** 格式化 token 数字：1234 → "1.2k", 1234567 → "1.2M" */
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
-  return String(n);
-}
+import { cn } from '../../lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../ui/Tooltip';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -23,70 +15,74 @@ interface SidebarProps {
   currentRole?: string;
   permissionMode?: string;
   onLogout?: () => void;
-  /** 当前打开的项目名称 */
   projectName?: string;
-  /** 是否折叠为图标模式 */
+  /** @deprecated 永远为图标模式，保留参数兼容 */
   collapsed?: boolean;
-  /** 切换折叠 */
+  /** @deprecated 永远为图标模式 */
   onToggleCollapse?: () => void;
 }
-
-const ROLE_LABEL_KEYS: Record<string, { key: string, color: string, bg: string }> = {
-  developer:       { key: 'sidebar.roleDeveloper', color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
-  external_agent:  { key: 'sidebar.roleAgent', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
-  chat_agent:      { key: 'sidebar.roleChatAgent', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
-};
-
-const MODE_ICONS: Record<string, typeof ShieldCheck> = {
-  token: Fingerprint,
-  probe: Eye,
-};
 
 interface NavItem {
   tab: TabType;
   icon: React.ElementType;
   label: string;
   badge?: number | string;
-  badgeColor?: string;
+}
+
+/** 56px icon-only nav item with tooltip */
+function NavButton({
+  item, active, onClick,
+}: {
+  item: NavItem;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onClick}
+          className={cn(
+            "relative flex items-center justify-center w-10 h-10 rounded-[var(--radius-md)] transition-colors duration-150",
+            active
+              ? "bg-[var(--accent-subtle)] text-[var(--accent)]"
+              : "text-[var(--fg-subtle)] hover:bg-[var(--bg-muted)] hover:text-[var(--fg-default)]"
+          )}
+        >
+          {/* 左侧激活指示条 */}
+          {active && (
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full bg-[var(--accent)]" />
+          )}
+          <item.icon size={20} className="shrink-0" />
+          {/* 小圆点 badge */}
+          {item.badge != null && (
+            <span className="absolute top-0.5 right-0.5 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--warning)] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--warning)]" />
+            </span>
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right" className="flex items-center gap-1.5">
+        <span>{item.label}</span>
+        {item.badge != null && (
+          <span className="flex items-center gap-0.5 text-[10px] font-bold text-[var(--warning)]">
+            <Sparkles size={10} />{item.badge}
+          </span>
+        )}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
   activeTab, navigateToTab, candidateCount,
   signalSuggestionCount = 0,
-  currentUser, currentRole, permissionMode, onLogout,
-  projectName,
-  collapsed = false, onToggleCollapse,
+  currentUser, onLogout,
 }) => {
-  const { t } = useI18n();
-  const { isDark: isDarkMode } = useTheme();
-  const roleConf = ROLE_LABEL_KEYS[currentRole || ''] || ROLE_LABEL_KEYS.developer;
-  const ModeIcon = MODE_ICONS[permissionMode || 'probe'] || Eye;
-
-  // ── Token 消耗指标（事件驱动刷新，不轮询） ──
-  const [tokenSummary, setTokenSummary] = useState<{ total_tokens: number; call_count: number } | null>(null);
-  const refreshTokens = useCallback(() => {
-    api.getTokenUsage7Days()
-      .then(d => setTokenSummary(d.summary))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    // 初始加载一次
-    refreshTokens();
-
-    // 监听 socket 事件：AI 调用产生新 token 时触发
-    const socket = getSocket();
-    const onTokenChange = () => refreshTokens();
-    socket.on('candidate-created', onTokenChange);
-    socket.on('bootstrap:all-completed', onTokenChange);
-    socket.on('token-usage-updated', onTokenChange);
-
-    return () => {
-      socket.off('candidate-created', onTokenChange);
-      socket.off('bootstrap:all-completed', onTokenChange);
-      socket.off('token-usage-updated', onTokenChange);
-    };
-  }, [refreshTokens]);
+  const { t, lang, setLang } = useI18n();
+  const { isDark, toggle: toggleTheme } = useTheme();
 
   const navItems: NavItem[] = [
     { tab: 'recipes', icon: Bookmark, label: t('sidebar.recipes') },
@@ -96,126 +92,109 @@ const Sidebar: React.FC<SidebarProps> = ({
     { tab: 'depgraph', icon: GitBranch, label: t('sidebar.depGraph') },
     { tab: 'knowledgegraph', icon: Share2, label: t('sidebar.knowledgeGraph') },
     { tab: 'guard', icon: Shield, label: t('sidebar.guard') },
-    { tab: 'skills', icon: BookOpen, label: t('sidebar.skills'), badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined, badgeColor: 'bg-amber-100 text-amber-700' },
+    { tab: 'skills', icon: BookOpen, label: t('sidebar.skills'), badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined },
     { tab: 'wiki', icon: FileText, label: t('sidebar.repoWiki') },
     { tab: 'ai', icon: MessageSquare, label: t('sidebar.aiAssistant') },
     { tab: 'help', icon: HelpCircle, label: t('sidebar.help') },
   ];
 
-  const activeClass = isDarkMode ? 'bg-blue-900/30 text-blue-400 font-medium' : 'bg-blue-50 text-blue-700 font-medium';
-  const inactiveClass = isDarkMode ? 'text-slate-300 hover:bg-slate-700/50' : 'text-slate-600 hover:bg-slate-50';
+  /* 分组：主导航 (前9项) 与辅助导航 (AI + Help) */
+  const mainNav = navItems.slice(0, 9);
+  const auxNav = navItems.slice(9);
 
   return (
-    <aside className={`${collapsed ? 'w-16' : 'w-64'} ${isDarkMode ? 'bg-[#252526] border-r border-[#3e3e42]' : 'bg-white border-r border-slate-200'} flex flex-col shrink-0 transition-all duration-200`}>
-
-      {/* Logo + 折叠按钮 */}
-      <div className={`${collapsed ? 'px-3 py-4' : 'p-6'} border-b ${isDarkMode ? 'border-[#3e3e42]' : 'border-slate-100'} flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shrink-0">
-            <Code size={ICON_SIZES.lg} />
+    <TooltipProvider>
+      <aside
+        className="w-[var(--sidebar-width)] flex flex-col shrink-0 border-r border-[var(--border-muted)] bg-[var(--bg-root)] select-none"
+      >
+        {/* ── Logo ── */}
+        <div className="flex items-center justify-center h-[var(--topbar-height)] border-b border-[var(--border-muted)]">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-[var(--radius-md)] flex items-center justify-center text-white">
+            <span className="text-[11px] font-black italic tracking-tighter leading-none">AS</span>
           </div>
-          {!collapsed && (
-            <div className="flex flex-col min-w-0">
-              <h1 className="font-bold text-lg leading-tight truncate">AutoSnippet</h1>
-              {projectName && (
-                <span className={`text-[11px] leading-tight truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} title={projectName}>{projectName}</span>
-              )}
-            </div>
+        </div>
+
+        {/* ── 主导航 ── */}
+        <nav className="flex-1 flex flex-col items-center gap-1 py-3 overflow-y-auto scrollbar-hidden">
+          {mainNav.map((item) => (
+            <NavButton
+              key={item.tab}
+              item={item}
+              active={activeTab === item.tab}
+              onClick={() => navigateToTab(item.tab)}
+            />
+          ))}
+
+          {/* 分割线 */}
+          <div className="w-6 h-px bg-[var(--border-muted)] my-1" />
+
+          {auxNav.map((item) => (
+            <NavButton
+              key={item.tab}
+              item={item}
+              active={activeTab === item.tab}
+              onClick={() => navigateToTab(item.tab)}
+            />
+          ))}
+        </nav>
+
+        {/* ── 底部工具区 ── */}
+        <div className="flex flex-col items-center gap-1 py-3 border-t border-[var(--border-muted)]">
+          {/* 语言切换 */}
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+                className="flex items-center justify-center w-10 h-10 rounded-[var(--radius-md)] text-[var(--fg-subtle)] hover:bg-[var(--bg-muted)] hover:text-[var(--fg-default)] transition-colors"
+              >
+                <Languages size={18} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{t('header.langSwitch')}</TooltipContent>
+          </Tooltip>
+
+          {/* 主题切换 */}
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={toggleTheme}
+                className="flex items-center justify-center w-10 h-10 rounded-[var(--radius-md)] text-[var(--fg-subtle)] hover:bg-[var(--bg-muted)] hover:text-[var(--fg-default)] transition-colors"
+              >
+                {isDark ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {isDark ? t('header.lightMode') : t('header.darkMode')}
+            </TooltipContent>
+          </Tooltip>
+
+          {/* 用户/登出 */}
+          {currentUser && (
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={onLogout}
+                  className="flex items-center justify-center w-10 h-10 rounded-[var(--radius-md)] text-[var(--fg-subtle)] hover:bg-[var(--bg-muted)] hover:text-[var(--danger)] transition-colors"
+                >
+                  <User size={18} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="flex items-center gap-2">
+                <span>{currentUser}</span>
+                {onLogout && (
+                  <>
+                    <span className="text-[var(--fg-subtle)]">·</span>
+                    <span className="flex items-center gap-1 text-[var(--danger)]">
+                      <LogOut size={12} />{t('sidebar.logout')}
+                    </span>
+                  </>
+                )}
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
-        {onToggleCollapse && !collapsed && (
-          <button onClick={onToggleCollapse} className={`p-1 rounded-md transition-colors ${isDarkMode ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`} title={t('sidebar.collapseNav')}>
-            <PanelLeftClose size={16} />
-          </button>
-        )}
-      </div>
-
-      {/* 折叠状态下的展开按钮 */}
-      {collapsed && onToggleCollapse && (
-        <div className="flex justify-center py-2">
-          <button onClick={onToggleCollapse} className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`} title={t('sidebar.expandNav')}>
-            <PanelLeftOpen size={16} />
-          </button>
-        </div>
-      )}
-
-      {/* 导航项 */}
-      <nav className={`flex-1 ${collapsed ? 'px-2 py-2' : 'p-4'} space-y-1 overflow-y-auto scrollbar-light`}>
-        {navItems.map(({ tab, icon: Icon, label, badge, badgeColor }) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => navigateToTab(tab)}
-            title={collapsed ? label : undefined}
-            className={`w-full flex items-center ${collapsed ? 'justify-center px-2 py-2.5 relative' : 'gap-3 px-4 py-2'} rounded-lg transition-colors ${activeTab === tab ? activeClass : inactiveClass}`}
-          >
-            <Icon size={ICON_SIZES.lg} className="shrink-0" />
-            {!collapsed && (
-              <>
-                <span className="flex-1 text-left truncate text-[13px]">{label}</span>
-                {badge != null && (
-                  <span className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${badgeColor || 'bg-blue-100 text-blue-700'}`}>
-                    <Sparkles size={10} />{badge}
-                  </span>
-                )}
-              </>
-            )}
-            {collapsed && badge != null && (
-              <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-amber-400" />
-            )}
-          </button>
-        ))}
-      </nav>
-
-      {/* 底部：角色 / 用户 / 刷新 */}
-      <div className={`${collapsed ? 'px-2 py-3' : 'p-4'} ${isDarkMode ? 'border-t border-[#3e3e42]' : 'border-t border-slate-100'}`}>
-        {!collapsed && (
-          <>
-            <div className={`flex items-center gap-1.5 mb-3 px-2 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'bg-slate-700/30 border-slate-600 text-slate-400' : roleConf.bg + ' ' + roleConf.color}`}>
-              <ModeIcon size={ICON_SIZES.xs} />
-              <span>{permissionMode === 'token' ? t('sidebar.modeLogin') : t('sidebar.modeProbe')}</span>
-              <span className="mx-0.5">&middot;</span>
-              <ShieldCheck size={ICON_SIZES.xs} />
-              <span>{t(roleConf.key)}</span>
-            </div>
-            {currentUser && (
-              <div className={`flex items-center justify-between mb-3 px-2 py-1.5 rounded-lg ${isDarkMode ? 'bg-slate-700/30' : 'bg-slate-50'}`}>
-                <div className="flex items-center gap-2 min-w-0">
-                  <User size={ICON_SIZES.sm} className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />
-                  <span className={`text-xs font-medium truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{currentUser}</span>
-                </div>
-                {onLogout && (
-                  <button onClick={onLogout} title={t('sidebar.logout')} className={`shrink-0 p-1 rounded transition-colors ${isDarkMode ? 'text-slate-500 hover:text-red-400 hover:bg-slate-700/50' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}>
-                    <LogOut size={ICON_SIZES.sm} />
-                  </button>
-                )}
-              </div>
-            )}
-          </>
-        )}
-        {/* Token 消耗指标 */}
-        {tokenSummary && tokenSummary.total_tokens > 0 && (
-          <button
-            onClick={() => navigateToTab('help')}
-            title={collapsed ? `${t('sidebar.tokenLabel')}: ${fmtTokens(tokenSummary.total_tokens)} (${t('sidebar.tokenCallsFull', { count: tokenSummary.call_count })})` : undefined}
-            className={`w-full flex items-center ${collapsed ? 'justify-center py-2 mb-1' : 'gap-2 px-2 py-1.5 mb-2'} rounded-lg transition-colors ${isDarkMode ? 'bg-slate-700/30 hover:bg-slate-700/50 text-slate-400' : 'bg-amber-50 hover:bg-amber-100 text-amber-700'}`}
-          >
-            <Zap size={collapsed ? ICON_SIZES.lg : ICON_SIZES.sm} className={isDarkMode ? 'text-amber-400' : 'text-amber-500'} />
-            {!collapsed && (
-              <div className="flex flex-col items-start min-w-0">
-                <span className="text-[10px] font-bold uppercase tracking-wider">{t('sidebar.tokenLabel')}</span>
-                <span className={`text-xs font-mono font-semibold ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>
-                  {fmtTokens(tokenSummary.total_tokens)}
-                  <span className={`ml-1 text-[10px] font-normal ${isDarkMode ? 'text-slate-500' : 'text-amber-600/70'}`}>({tokenSummary.call_count}{t('sidebar.tokenCalls')})</span>
-                </span>
-              </div>
-            )}
-          </button>
-        )}
-
-
-      </div>
-    </aside>
+      </aside>
+    </TooltipProvider>
   );
 };
 

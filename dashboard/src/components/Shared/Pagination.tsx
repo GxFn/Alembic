@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
+import Select from '../ui/Select';
 
 interface PaginationProps {
   currentPage: number;
@@ -72,22 +73,19 @@ const Pagination: React.FC<PaginationProps> = ({
   <div className="flex items-center justify-between mt-6 px-2">
     {/* 左侧：显示统计 */}
     <div className="flex items-center gap-4">
-    <span className="text-sm text-slate-500">
+    <span className="text-sm text-[var(--fg-secondary)]">
       {t('pagination.showing', { start: startItem, end: endItem, total: totalItems })}
     </span>
     {onPageSizeChange && (
       <div className="flex items-center gap-2">
-      <span className="text-sm text-slate-500">{t('pagination.perPage')}</span>
-      <select
-        value={pageSize}
-        onChange={(e) => onPageSizeChange(Number(e.target.value))}
-        className="text-sm border border-slate-200 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-      >
-        {pageSizeOptions.map(size => (
-        <option key={size} value={size}>{size}</option>
-        ))}
-      </select>
-      <span className="text-sm text-slate-500">{t('pagination.unit')}</span>
+      <span className="text-sm text-[var(--fg-secondary)]">{t('pagination.perPage')}</span>
+      <Select
+        value={String(pageSize)}
+        onChange={(v) => onPageSizeChange(Number(v))}
+        options={pageSizeOptions.map(size => ({ value: String(size), label: String(size) }))}
+        size="sm"
+      />
+      <span className="text-sm text-[var(--fg-secondary)]">{t('pagination.unit')}</span>
       </div>
     )}
     </div>
@@ -98,20 +96,20 @@ const Pagination: React.FC<PaginationProps> = ({
     <button
       onClick={() => onPageChange(1)}
       disabled={currentPage === 1}
-      className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      className="p-1.5 rounded-md hover:bg-[var(--bg-subtle)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       title={t('pagination.firstPage')}
     >
-      <ChevronsLeft size={ICON_SIZES.md} className="text-slate-600" />
+      <ChevronsLeft size={ICON_SIZES.md} className="text-[var(--fg-secondary)]" />
     </button>
 
     {/* 上一页 */}
     <button
       onClick={() => onPageChange(currentPage - 1)}
       disabled={currentPage === 1}
-      className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      className="p-1.5 rounded-md hover:bg-[var(--bg-subtle)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       title={t('pagination.prevPage')}
     >
-      <ChevronLeft size={ICON_SIZES.md} className="text-slate-600" />
+      <ChevronLeft size={ICON_SIZES.md} className="text-[var(--fg-secondary)]" />
     </button>
 
     {/* 页码 */}
@@ -124,13 +122,13 @@ const Pagination: React.FC<PaginationProps> = ({
         className={`min-w-[32px] h-8 px-2 rounded-md text-sm font-medium transition-colors ${
           currentPage === page
           ? 'bg-blue-600 text-white'
-          : 'hover:bg-slate-100 text-slate-600'
+          : 'hover:bg-[var(--bg-subtle)] text-[var(--fg-secondary)]'
         }`}
         >
         {page}
         </button>
       ) : (
-        <span key={index} className="px-1 text-slate-400">
+        <span key={index} className="px-1 text-[var(--fg-muted)]">
         {page}
         </span>
       )
@@ -141,20 +139,20 @@ const Pagination: React.FC<PaginationProps> = ({
     <button
       onClick={() => onPageChange(currentPage + 1)}
       disabled={currentPage === totalPages}
-      className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      className="p-1.5 rounded-md hover:bg-[var(--bg-subtle)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       title={t('pagination.nextPage')}
     >
-      <ChevronRight size={ICON_SIZES.md} className="text-slate-600" />
+      <ChevronRight size={ICON_SIZES.md} className="text-[var(--fg-secondary)]" />
     </button>
 
     {/* 最后一页 */}
     <button
       onClick={() => onPageChange(totalPages)}
       disabled={currentPage === totalPages}
-      className="p-1.5 rounded-md hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      className="p-1.5 rounded-md hover:bg-[var(--bg-subtle)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       title={t('pagination.lastPage')}
     >
-      <ChevronsRight size={ICON_SIZES.md} className="text-slate-600" />
+      <ChevronsRight size={ICON_SIZES.md} className="text-[var(--fg-secondary)]" />
     </button>
     </div>
   </div>

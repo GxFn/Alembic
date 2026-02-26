@@ -1,201 +1,274 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, RefreshCw, BrainCircuit, Loader2, Cpu, ChevronDown, MessageSquare, Settings, Languages, Sun, Moon } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, RefreshCw, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap } from 'lucide-react';
 import api from '../../api';
-import { ICON_SIZES } from '../../constants/icons';
+import { getSocket } from '../../lib/socket';
 import { useGlobalChat } from '../Shared/GlobalChatDrawer';
 import { useI18n } from '../../i18n';
-import { useTheme } from '../../theme';
+import { cn } from '../../lib/utils';
+import { Button } from '../ui/Button';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../ui/Tooltip';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuLabel,
+} from '../ui/DropdownMenu';
+import { TabType } from '../../constants';
+
+/** 格式化 token 数字：1234 → "1.2k", 1234567 → "1.2M" */
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
+  return String(n);
+}
+
+/** 中间省略：保留前后字符，中间用 … 替代 */
+function midEllipsis(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const keep = Math.floor((max - 1) / 2);
+  return s.slice(0, keep) + '…' + s.slice(s.length - keep);
+}
 
 interface AiProvider {
   id: string;
   label: string;
   defaultModel: string;
+  hasKey?: boolean;
 }
 
+/** Tab → 显示名称映射 (i18n 兼容) */
+const TAB_LABELS: Record<TabType, string> = {
+  recipes: 'sidebar.recipes',
+  spm: 'sidebar.moduleExplorer',
+  candidates: 'sidebar.candidates',
+  knowledge: 'sidebar.batchManage',
+  depgraph: 'sidebar.depGraph',
+  knowledgegraph: 'sidebar.knowledgeGraph',
+  guard: 'sidebar.guard',
+  skills: 'sidebar.skills',
+  wiki: 'sidebar.repoWiki',
+  ai: 'sidebar.aiAssistant',
+  help: 'sidebar.help',
+};
+
 interface HeaderProps {
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
   setShowCreateModal: (show: boolean) => void;
   handleSyncSnippets: () => void;
   aiConfig?: { provider: string; model: string };
   llmReady?: boolean;
   onOpenLlmConfig?: () => void;
-  onSemanticSearchResults?: (results: any[]) => void;
   onBeforeAiSwitch?: () => void;
   onAiConfigChange?: () => void;
+  /** 当前激活的 Tab (用于面包屑) */
+  activeTab?: TabType;
+  /** 打开 ⌘K Command Palette */
+  onOpenCommandPalette?: () => void;
+  /** 项目名称 */
+  projectName?: string;
+  /** 候选总数（用于面包屑插值） */
+  candidateCount?: number;
 }
 
-const Header: React.FC<HeaderProps> = ({ searchQuery, setSearchQuery, setShowCreateModal, handleSyncSnippets, aiConfig, llmReady = true, onOpenLlmConfig, onSemanticSearchResults, onBeforeAiSwitch, onAiConfigChange }) => {
+const Header: React.FC<HeaderProps> = ({
+  setShowCreateModal, handleSyncSnippets,
+  aiConfig, llmReady = true, onOpenLlmConfig,
+  onBeforeAiSwitch, onAiConfigChange,
+  activeTab,
+  onOpenCommandPalette,
+  projectName,
+  candidateCount = 0,
+}) => {
   const { toggle: toggleChat, isOpen: chatOpen } = useGlobalChat();
-  const { t, lang, setLang } = useI18n();
-  const { isDark: isDarkMode, toggle: toggleTheme } = useTheme();
-  const [isSemanticSearching, setIsSemanticSearching] = useState(false);
-  const [aiDropdownOpen, setAiDropdownOpen] = useState(false);
+  const { t } = useI18n();
   const [aiProviders, setAiProviders] = useState<AiProvider[]>([]);
   const [aiSwitching, setAiSwitching] = useState(false);
-  const aiDropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-  if (aiDropdownOpen && aiProviders.length === 0) {
-    api.getAiProviders().then((providers) => setAiProviders(providers)).catch(() => {});
-  }
-  }, [aiDropdownOpen, aiProviders.length]);
-
-  useEffect(() => {
-  const close = (e: MouseEvent) => {
-    if (aiDropdownRef.current && !aiDropdownRef.current.contains(e.target as Node)) setAiDropdownOpen(false);
-  };
-  document.addEventListener('click', close);
-  return () => document.removeEventListener('click', close);
+  /* ── Token 消耗指标（事件驱动刷新） ── */
+  const [tokenSummary, setTokenSummary] = useState<{ total_tokens: number; call_count: number } | null>(null);
+  const refreshTokens = useCallback(() => {
+    api.getTokenUsage7Days()
+      .then(d => setTokenSummary(d.summary))
+      .catch(() => {});
   }, []);
 
-  const handleSemanticSearch = async () => {
-  if (!searchQuery) return;
-  setIsSemanticSearching(true);
-  try {
-    const data = await api.search(searchQuery, { mode: 'semantic' });
-    const results = (data.items || []).map((r: any) => ({
-      name: (r.title || r.name || '') + '.md',
-      content: r.content?.pattern || r.content?.markdown || r.content?.code || '',
-      similarity: r.score || 0,
-      metadata: { type: 'recipe', name: (r.title || r.name || '') + '.md' },
-    }));
-    if (onSemanticSearchResults) onSemanticSearchResults(results);
-  } catch (e) {
-    console.error('Semantic search failed', e);
-    alert(t('header.semanticSearchFailed'));
-  } finally {
-    setIsSemanticSearching(false);
-  }
+  useEffect(() => {
+    refreshTokens();
+    const socket = getSocket();
+    const onTokenChange = () => refreshTokens();
+    socket.on('candidate-created', onTokenChange);
+    socket.on('bootstrap:all-completed', onTokenChange);
+    socket.on('token-usage-updated', onTokenChange);
+    return () => {
+      socket.off('candidate-created', onTokenChange);
+      socket.off('bootstrap:all-completed', onTokenChange);
+      socket.off('token-usage-updated', onTokenChange);
+    };
+  }, [refreshTokens]);
+
+  /* ── AI 提供商切换 ── */
+  const handleSelectAi = async (provider: AiProvider) => {
+    setAiSwitching(true);
+    try {
+      onBeforeAiSwitch?.();
+      await api.setAiConfig(provider.id, provider.defaultModel);
+      if (onAiConfigChange) onAiConfigChange();
+    } catch (e) {
+      console.error('AI config update failed', e);
+    } finally {
+      setAiSwitching(false);
+    }
   };
 
-  const handleSelectAi = async (provider: AiProvider) => {
-  setAiSwitching(true);
-  try {
-    onBeforeAiSwitch?.();
-    await api.setAiConfig(provider.id, provider.defaultModel);
-    setAiDropdownOpen(false);
-    if (onAiConfigChange) onAiConfigChange();
-  } catch (e) {
-    console.error('AI config update failed', e);
-    alert(t('header.aiSwitchFailed'));
-  } finally {
-    setAiSwitching(false);
-  }
+  const loadProviders = () => {
+    if (aiProviders.length === 0) {
+      api.getAiProviders().then(setAiProviders).catch(() => {});
+    }
   };
+
+  const tabLabel = activeTab ? t(TAB_LABELS[activeTab], { count: candidateCount }) : '';
 
   return (
-  <header className={`h-16 ${isDarkMode ? 'bg-[#252526] border-b border-[#3e3e42]' : 'bg-white border-b border-slate-200'} flex items-center justify-between px-4 xl:px-6 2xl:px-8 shrink-0 gap-3`}>
-    <div className="flex items-center gap-2 xl:gap-3 2xl:gap-4 min-w-0 flex-1">
-    <div className="relative w-40 xl:w-60 2xl:w-80 min-w-[10rem] shrink">
-      <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} size={ICON_SIZES.md} />
-      <input 
-      type="text" 
-      placeholder={t('header.searchPlaceholder')} 
-      className={`w-full pl-10 pr-4 py-2 ${isDarkMode ? 'bg-[#1e1e1e] text-slate-300 placeholder-slate-500' : 'bg-slate-100 text-slate-900'} border-transparent rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500/20 transition-all`} 
-      value={searchQuery} 
-      onChange={(e) => setSearchQuery(e.target.value)}
-      onKeyDown={(e) => e.key === 'Enter' && handleSemanticSearch()}
-      />
-    </div>
-    <button 
-      onClick={handleSemanticSearch}
-      disabled={!searchQuery || isSemanticSearching}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${isSemanticSearching ? (isDarkMode ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-400') : (isDarkMode ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' : 'bg-blue-50 text-blue-600 hover:bg-blue-100')}`}
-      title={t('header.semanticSearchTitle')}
-    >
-      {isSemanticSearching ? <Loader2 size={ICON_SIZES.sm} className="animate-spin" /> : <BrainCircuit size={ICON_SIZES.sm} />}
-      {t('header.semanticSearch')}
-    </button>
-    </div>
-    <div className="flex items-center gap-1.5 xl:gap-2 2xl:gap-3 shrink-0">
-    {!llmReady ? (
-      <button
-        type="button"
-        onClick={onOpenLlmConfig}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors animate-pulse ${isDarkMode ? 'bg-amber-900/30 text-amber-300 border-amber-700 hover:bg-amber-900/50' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'}`}
-        title={t('header.aiNotConfigured')}
+    <TooltipProvider>
+      <header
+        className="h-[var(--topbar-height)] flex items-center justify-between px-4 border-b border-[var(--border-muted)] bg-[var(--bg-root)] shrink-0 gap-3 select-none"
       >
-        <Settings size={ICON_SIZES.sm} />
-        {t('header.configureLlm')}
-      </button>
-    ) : aiConfig ? (
-      <div className="relative" ref={aiDropdownRef}>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setAiDropdownOpen((v) => !v); }}
-        className={`flex items-center gap-1.5 px-2 xl:px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-150 max-w-[180px] 2xl:max-w-none ${isDarkMode ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-300 hover:border-slate-500 hover:bg-[#333842]' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
-        title={t('header.clickSwitchAi')}
-      >
-        <Cpu size={ICON_SIZES.sm} className="shrink-0" />
-        <span className="truncate">{aiConfig.provider} / {aiConfig.model}</span>
-        <ChevronDown size={ICON_SIZES.xs} className={`shrink-0 ${aiDropdownOpen ? 'rotate-180' : ''}`} />
-      </button>
-      {aiDropdownOpen && (
-        <div className={`absolute top-full right-0 mt-1 py-1 rounded-lg border shadow-lg z-20 min-w-[200px] ${isDarkMode ? 'bg-[#252526] border-[#3e3e42]' : 'bg-white border-slate-200'}`}>
-        <div className={`px-3 py-2 text-xs border-b ${isDarkMode ? 'text-slate-400 border-[#3e3e42]' : 'text-slate-500 border-slate-100'}`}>{t('header.switchAi')}</div>
-        <div className={`px-3 py-1.5 text-[11px] border-b ${isDarkMode ? 'text-slate-500 border-[#3e3e42]' : 'text-slate-400 border-slate-100'}`}>
-          <button type="button" onClick={() => { setAiDropdownOpen(false); onOpenLlmConfig?.(); }} className="text-blue-500 hover:underline">{t('header.editEnvConfig')}</button>
+        {/* ── 左侧：面包屑 ── */}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-sm text-[var(--fg-subtle)] font-medium truncate max-w-[160px]" title={projectName || 'AutoSnippet'}>{projectName || 'AutoSnippet'}</span>
+          {tabLabel && (
+            <>
+              <ChevronRight size={14} className="text-[var(--fg-subtle)] shrink-0" />
+              <span className="text-sm text-[var(--fg-default)] font-medium truncate">{tabLabel}</span>
+            </>
+          )}
         </div>
-        {aiProviders.length === 0 ? (
-          <div className={`px-3 py-2 text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{t('common.loading')}</div>
-        ) : (
-          aiProviders.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            disabled={aiSwitching}
-            onClick={() => handleSelectAi(p)}
-            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between ${aiConfig.provider === p.id ? (isDarkMode ? 'bg-blue-900/30 text-blue-400 font-medium' : 'bg-blue-50 text-blue-700 font-medium') : (isDarkMode ? 'text-slate-300 hover:bg-slate-700/50' : 'text-slate-700 hover:bg-slate-50')}`}
-          >
-            <span>{p.label}</span>
-            {aiConfig.provider === p.id && <span className="text-xs">✓</span>}
-          </button>
-          ))
-        )}
-        </div>
-      )}
-      </div>
-    ) : null}
-    <button
-      onClick={toggleChat}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-all duration-150 ${
-        chatOpen
-          ? isDarkMode
-            ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 ring-1 ring-blue-500/30 hover:border-blue-400/60 hover:bg-blue-500/30'
-            : 'bg-blue-50 border-blue-300 text-blue-700 ring-1 ring-blue-200 hover:border-blue-400 hover:bg-blue-100'
-          : isDarkMode
-            ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-300 hover:border-slate-500 hover:bg-[#333842]'
-            : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-      }`}
-      title={chatOpen ? t('header.closeAiChat') : t('header.openAiChat')}
-    >
-      <MessageSquare size={ICON_SIZES.sm} />
-      {!chatOpen && <span className="text-xs">{t('header.aiChat')}</span>}
-    </button>
-    <button onClick={() => setShowCreateModal(true)} className={`flex items-center gap-1.5 px-2.5 xl:px-3 2xl:px-4 py-2 rounded-lg text-xs xl:text-sm font-medium transition-all duration-150 border whitespace-nowrap ${isDarkMode ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-300 hover:border-slate-500 hover:bg-[#333842]' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`} title={t('header.newRecipe')}>
-      <Plus size={ICON_SIZES.md} /> <span className="hidden xl:inline">{t('header.newRecipe')}</span>
-    </button>
-    <button onClick={handleSyncSnippets} className={`flex items-center gap-1.5 px-2.5 xl:px-3 2xl:px-4 py-2 rounded-lg text-xs xl:text-sm font-medium transition-all duration-150 border whitespace-nowrap ${isDarkMode ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 hover:border-blue-400/60 hover:bg-blue-500/30' : 'bg-blue-50 border-blue-300 text-blue-600 hover:border-blue-400 hover:bg-blue-100'}`} title={t('header.syncSnippets')}>
-      <RefreshCw size={ICON_SIZES.md} /> <span className="hidden xl:inline">{t('header.syncSnippets')}</span>
-    </button>
-    <button
-      onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-      className={`flex items-center gap-1 px-2 xl:px-3 py-2 rounded-lg text-xs font-medium border transition-all duration-150 ${isDarkMode ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-300 hover:border-slate-500 hover:bg-[#333842]' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
-      title={lang === 'zh' ? 'Switch to English' : t('shared.switchToChinese')}
-    >
-      <Languages size={ICON_SIZES.sm} />
-      <span className="hidden 2xl:inline">{t('header.langSwitch')}</span>
-    </button>
-    <button
-      onClick={toggleTheme}
-      className={`flex items-center p-2 rounded-lg border transition-all duration-150 ${isDarkMode ? 'bg-[#2a2d35] border-[#3e3e42] text-amber-300 hover:border-slate-500 hover:bg-[#333842]' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}
-      title={isDarkMode ? 'Light mode' : 'Dark mode'}
-    >
-      {isDarkMode ? <Sun size={ICON_SIZES.sm} /> : <Moon size={ICON_SIZES.sm} />}
-    </button>
-    </div>
-  </header>
+
+        {/* ── 中间：⌘K 搜索触发 ── */}
+        <button
+          onClick={onOpenCommandPalette}
+          className={cn(
+            "flex items-center gap-2 h-8 px-3 rounded-[var(--radius-md)] border border-[var(--border-default)] bg-[var(--bg-subtle)]",
+            "text-sm text-[var(--fg-subtle)] hover:border-[var(--border-emphasis)] hover:text-[var(--fg-muted)] transition-colors",
+            "w-60 justify-between"
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <Search size={14} />
+            <span>{t('header.searchPlaceholder')}</span>
+          </div>
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-[var(--border-default)] bg-[var(--bg-root)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--fg-subtle)]">
+            ⌘K
+          </kbd>
+        </button>
+
+        {/* ── 右侧：操作按钮 ── */}
+        <div className="flex items-center gap-1 shrink-0">
+          {/* LLM 配置警告 */}
+          {!llmReady && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onOpenLlmConfig}
+              className="text-[var(--warning)] animate-pulse"
+            >
+              <Settings size={14} />
+              <span className="text-xs">{t('header.configureLlm')}</span>
+            </Button>
+          )}
+
+          {/* AI Provider 选择器 */}
+          {llmReady && aiConfig && (
+            <DropdownMenu onOpenChange={(open) => open && loadProviders()}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1.5 focus-visible:ring-0 focus-visible:ring-offset-0">
+                  <Cpu size={14} className="shrink-0" />
+                  <span className="text-xs" title={`${aiConfig.provider}/${aiConfig.model}`}>{midEllipsis(aiConfig.model, 28)}</span>
+                  {tokenSummary && tokenSummary.total_tokens > 0 && (
+                    <span className="flex items-center gap-0.5 ml-0.5 text-[10px] text-[var(--fg-subtle)] tabular-nums shrink-0">
+                      <Zap size={9} className="text-amber-500/70" />{fmtTokens(tokenSummary.total_tokens)}
+                    </span>
+                  )}
+                  <ChevronDown size={12} className="shrink-0" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>{t('header.switchAi')}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {aiProviders.length === 0 ? (
+                  <DropdownMenuItem disabled>{t('common.loading')}</DropdownMenuItem>
+                ) : (
+                  aiProviders.map((p) => (
+                    <DropdownMenuItem
+                      key={p.id}
+                      onClick={() => handleSelectAi(p)}
+                      disabled={aiSwitching}
+                      className={cn(
+                        aiConfig.provider === p.id && "bg-[var(--accent-subtle)] text-[var(--accent)] font-medium",
+                        p.hasKey === false && "opacity-50"
+                      )}
+                    >
+                      <span className="flex items-center gap-2 flex-1">
+                        <span
+                          className={cn(
+                            "inline-block w-1.5 h-1.5 rounded-full shrink-0",
+                            p.hasKey !== false ? "bg-emerald-500" : "bg-[var(--fg-subtle)]"
+                          )}
+                        />
+                        {p.label}
+                      </span>
+                      {aiConfig.provider === p.id && <span className="text-xs">✓</span>}
+                    </DropdownMenuItem>
+                  ))
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onOpenLlmConfig}>
+                  <Settings size={14} />
+                  <span>{t('header.editEnvConfig')}</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {/* 新建 */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setShowCreateModal(true)}
+              >
+                <Plus size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t('header.newRecipe')}</TooltipContent>
+          </Tooltip>
+
+          {/* 同步 */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleSyncSnippets}
+              >
+                <RefreshCw size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t('header.syncSnippets')}</TooltipContent>
+          </Tooltip>
+          {/* AI Chat Toggle（贴最右） */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={chatOpen ? "accent" : "ghost"}
+                size="icon-sm"
+                onClick={toggleChat}
+              >
+                <MessageSquare size={16} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{chatOpen ? t('header.closeAiChat') : t('header.openAiChat')}</TooltipContent>
+          </Tooltip>        </div>
+      </header>
+    </TooltipProvider>
   );
 };
 

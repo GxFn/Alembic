@@ -81,7 +81,7 @@ const MermaidBlock: React.FC<MermaidBlockProps> = ({ code }) => {
 
   if (!svg) {
     return (
-      <div className="my-4 flex items-center justify-center py-8 text-slate-400 text-sm">
+      <div className="my-4 flex items-center justify-center py-8 text-[var(--fg-muted)] text-sm">
         {t('shared.renderingChart')}
       </div>
     );
@@ -89,7 +89,7 @@ const MermaidBlock: React.FC<MermaidBlockProps> = ({ code }) => {
 
   return (
     <div
-      className={`my-5 flex justify-center overflow-x-auto rounded-lg border p-4 ${isDark ? 'border-slate-700 bg-[#1e1e1e]' : 'border-slate-200 bg-white'}`}
+      className="my-5 flex justify-center overflow-x-auto rounded-lg border p-4 border-[var(--border-default)] bg-[var(--bg-surface)]"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

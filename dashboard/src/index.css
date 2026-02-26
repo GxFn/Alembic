@@ -3,31 +3,163 @@
 /* Tailwind v4: 使用 class 策略的 dark mode（响应 <html class="dark">）*/
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ═══════════════════════════════════════════════════════════
+ * Design Tokens — Geist-Inspired CSS Variables
+ *
+ * 亮色/暗色模式通过 CSS 变量自动切换，
+ * 新组件使用 var(--xxx) 而非 Tailwind 硬编码色值。
+ * ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── 背景层级 ── */
+  --bg-root:        #ffffff;
+  --bg-surface:     #fafafa;
+  --bg-subtle:      #f5f5f5;
+  --bg-muted:       #ebebeb;
+  --bg-emphasis:    #171717;
+
+  /* ── 前景/文字 ── */
+  --fg-default:     #171717;
+  --fg-muted:       #666666;
+  --fg-subtle:      #999999;
+  --fg-on-emphasis: #ffffff;
+
+  /* ── 边框 ── */
+  --border-default: #e5e5e5;
+  --border-muted:   #ebebeb;
+  --border-emphasis:#d4d4d4;
+
+  /* ── 品牌色 ── */
+  --accent:         #2563eb;
+  --accent-fg:      #ffffff;
+  --accent-subtle:  #eff6ff;
+  --accent-muted:   #dbeafe;
+
+  /* ── 语义色（状态） ── */
+  --success:        #16a34a;
+  --success-subtle: #f0fdf4;
+  --warning:        #d97706;
+  --warning-subtle: #fffbeb;
+  --danger:         #dc2626;
+  --danger-subtle:  #fef2f2;
+  --info:           #2563eb;
+  --info-subtle:    #eff6ff;
+
+  /* ── 间距基线 (4px grid) ── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ── 圆角 ── */
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-full: 9999px;
+
+  /* ── 字体 ── */
+  --font-sans: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+
+  /* ── 字号阶梯 ── */
+  --text-xs:   12px;
+  --text-sm:   13px;
+  --text-base: 14px;
+  --text-lg:   16px;
+  --text-xl:   18px;
+  --text-2xl:  24px;
+  --text-3xl:  30px;
+
+  /* ── 阴影 ── */
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md:  0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg:  0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-xl:  0 16px 48px rgba(0, 0, 0, 0.10);
+
+  /* ── 过渡 ── */
+  --transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow:   300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── 布局 ── */
+  --sidebar-width: 56px;
+  --topbar-height: 48px;
+}
+
+.dark {
+  --bg-root:        #0a0a0a;
+  --bg-surface:     #141414;
+  --bg-subtle:      #1a1a1a;
+  --bg-muted:       #262626;
+  --bg-emphasis:    #ededed;
+
+  --fg-default:     #ededed;
+  --fg-muted:       #a0a0a0;
+  --fg-subtle:      #666666;
+  --fg-on-emphasis: #0a0a0a;
+
+  --border-default: #262626;
+  --border-muted:   #1f1f1f;
+  --border-emphasis:#404040;
+
+  --accent:         #3b82f6;
+  --accent-fg:      #ffffff;
+  --accent-subtle:  rgba(59, 130, 246, 0.10);
+  --accent-muted:   rgba(59, 130, 246, 0.18);
+
+  --success:        #22c55e;
+  --success-subtle: rgba(34, 197, 94, 0.10);
+  --warning:        #eab308;
+  --warning-subtle: rgba(234, 179, 8, 0.10);
+  --danger:         #ef4444;
+  --danger-subtle:  rgba(239, 68, 68, 0.10);
+  --info:           #3b82f6;
+  --info-subtle:    rgba(59, 130, 246, 0.10);
+
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.20);
+  --shadow-md:  0 2px 8px rgba(0, 0, 0, 0.30);
+  --shadow-lg:  0 8px 24px rgba(0, 0, 0, 0.40);
+  --shadow-xl:  0 16px 48px rgba(0, 0, 0, 0.50);
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * Global Resets
+ * ═══════════════════════════════════════════════════════════ */
+
 /*
  * SPA 根容器封锁 — 禁止 html/body/#root 产生滚动条。
- * 所有滚动由内部组件自行管理 (overflow-y-auto / overflow-auto)。
- * 这能彻底消除内容变化时根级滚动条闪烁导致的整页抖动。
+ * 所有滚动由内部组件自行管理。
  */
 html, body, #root {
   height: 100%;
   overflow: hidden;
 }
 
-/* ── 深色模式过渡 ── */
 html {
-  transition: background-color 0.2s ease, color 0.2s ease;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--fg-default);
+  background: var(--bg-root);
+  transition: background-color var(--transition-normal), color var(--transition-normal);
 }
+
 html.dark {
   color-scheme: dark;
 }
 
-/* ═══════════════════════════════════════════════════════
- * Dark Mode — Global Utility Overrides
+/* ═══════════════════════════════════════════════════════════
+ * LEGACY: Dark Mode Global Utility Overrides
  *
- * 在 .dark 上下文中自动覆盖常用 Tailwind 工具类的配色。
- * 这样所有组件无需逐一添加 dark: 前缀即可获得深色模式支持。
- * 特殊场景可用 dark:xxx 类覆盖此默认值（更高特指度）。
- * ═══════════════════════════════════════════════════════ */
+ * 兼容层：现有组件仍使用 Tailwind 硬编码色值。
+ * 随着组件逐步迁移到 CSS 变量，这些覆盖将被移除。
+ * ═══════════════════════════════════════════════════════════ */
 
 /* ── 基础背景 ── */
 .dark .bg-white        { background-color: #1a1b23; }
@@ -149,18 +281,18 @@ html.dark {
 .dark .border-teal-200    { border-color: rgba(20, 184, 166, 0.25); }
 
 /* ── 表单控件 ── */
-.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark input:not([type="checkbox"]):not([type="radio"]):not([cmdk-input]),
 .dark textarea,
 .dark select {
   background-color: #1a1b23;
   border-color: #334155;
   color: #e2e8f0;
 }
-.dark input::placeholder,
+.dark input:not([cmdk-input])::placeholder,
 .dark textarea::placeholder {
   color: #64748b;
 }
-.dark input:focus,
+.dark input:not([cmdk-input]):focus,
 .dark textarea:focus,
 .dark select:focus {
   border-color: #3b82f6;
@@ -831,3 +963,47 @@ html.dark {
 .dark .scrollbar-light {
   scrollbar-color: rgba(100, 116, 139, 0.3) transparent !important;
 }
+
+/* ═══════════════════════════════════════════════
+ * Micro-interaction Animations
+ * ═══════════════════════════════════════════════ */
+
+/* Skeleton shimmer — per redesign spec 4.9 */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-subtle) 0%,
+    var(--bg-muted, #ebebeb) 50%,
+    var(--bg-subtle) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Button press — scale(0.98) on active */
+button:active:not(:disabled),
+[role="button"]:active:not(:disabled) {
+  transform: scale(0.98);
+  transition: transform 100ms ease;
+}
+
+/* Card hover — subtle border + shadow transition */
+.card-hover {
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.card-hover:hover {
+  border-color: var(--border-emphasis);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+}
+
+/* Focus visible — suppress default blue outline;
+   interactive components use their own focus styles */
+:focus-visible {
+  outline: none;
+}
+

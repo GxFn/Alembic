@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Zap, FileSearch, Box, Trash2, Edit3, Layers, Eye, EyeOff, GitCompare, X, Copy, Brain, BookOpen, Target, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sparkles, Shield, Clock, Code2, Tag, AlertTriangle, CheckCircle2, BarChart3, Filter, ArrowUpDown, Rocket, Wand2, Loader2, Lightbulb, FileText, FileCode, Maximize2, Minimize2, Hash, Globe, FolderOpen, Link2 } from 'lucide-react';
+import { FileSearch, Box, Trash2, Edit3, Layers, GitCompare, Copy, Brain, Sparkles, Clock, Code2, CheckCircle2, BarChart3, ArrowUpDown, Rocket, Wand2, Loader2, Globe } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { ProjectData, KnowledgeEntry, SimilarRecipe, Recipe } from '../../types';
 import api from '../../api';
@@ -13,7 +13,13 @@ import { useGlobalChat } from '../Shared/GlobalChatDrawer';
 import PageOverlay from '../Shared/PageOverlay';
 import { useRefineSocket } from '../../hooks/useRefineSocket';
 import RefineProgressBar from './RefineProgressBar';
+import DrawerMeta from '../Shared/DrawerMeta';
+import type { BadgeItem, MetaItem } from '../Shared/DrawerMeta';
+import DrawerContent from '../Shared/DrawerContent';
 import { useI18n } from '../../i18n';
+import Select from '../ui/Select';
+import { Button } from '../ui/Button';
+import { Drawer } from '../Layout/Drawer';
 
 const SILENT_LABEL_KEYS: Record<string, string> = { _watch: 'silentLabels.watch', _draft: 'silentLabels.draft', _cli: 'silentLabels.cli', _pending: 'silentLabels.pending', _recipe: 'silentLabels.recipe' };
 
@@ -102,7 +108,7 @@ function codePreview(code: string | undefined, maxLines = 4): string {
 
 /** 置信度颜色系统 */
 function confidenceColor(c: number | null | undefined): { ring: string; text: string; bg: string; labelKey: string } {
-  if (c == null) return { ring: 'stroke-slate-200', text: 'text-slate-400', bg: 'bg-slate-50', labelKey: '' };
+  if (c == null) return { ring: 'stroke-slate-200', text: 'text-[var(--fg-muted)]', bg: 'bg-[var(--bg-subtle)]', labelKey: '' };
   if (c >= 0.8) return { ring: 'stroke-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50', labelKey: 'candidates.confidenceHighLabel' };
   if (c >= 0.6) return { ring: 'stroke-blue-500', text: 'text-blue-700', bg: 'bg-blue-50', labelKey: 'candidates.confidenceMediumLabel' };
   if (c >= 0.4) return { ring: 'stroke-amber-500', text: 'text-amber-700', bg: 'bg-amber-50', labelKey: 'candidates.confidenceMediumLowLabel' };
@@ -116,7 +122,7 @@ const SOURCE_LABEL_KEYS: Record<string, { labelKey: string; color: string }> = {
   'manual': { labelKey: 'candidates.sourceManualLabel', color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
   'file-watcher': { labelKey: 'candidates.sourceFileWatcherLabel', color: 'text-orange-600 bg-orange-50 border-orange-200' },
   'clipboard': { labelKey: 'candidates.sourceClipboardLabel', color: 'text-pink-600 bg-pink-50 border-pink-200' },
-  'cli': { labelKey: 'CLI', color: 'text-slate-600 bg-slate-50 border-slate-200' },
+  'cli': { labelKey: 'CLI', color: 'text-[var(--fg-secondary)] bg-[var(--bg-subtle)] border-[var(--border-default)]' },
   'agent': { labelKey: 'AI Agent', color: 'text-violet-600 bg-violet-50 border-violet-200' },
   'submit_with_check': { labelKey: 'candidates.sourceSubmitCheckLabel', color: 'text-teal-600 bg-teal-50 border-teal-200' },
   'bootstrap-fallback': { labelKey: 'candidates.sourceFallbackLabel', color: 'text-amber-600 bg-amber-50 border-amber-200' },
@@ -132,7 +138,7 @@ const ConfidenceRing: React.FC<{ value: number | null | undefined; size?: number
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={3} className="text-slate-100" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth={3} className="text-[var(--border-default)]" />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={3} strokeLinecap="round"
           className={ring} strokeDasharray={circumference} strokeDashoffset={offset}
           style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
@@ -155,9 +161,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { isWide: drawerWide, toggle: toggleDrawerWide } = useDrawerWide();
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
-  const [refiningIds, setRefiningIds] = useState<Set<string>>(new Set());
+  const [refiningIds, ] = useState<Set<string>>(new Set());
   const [enrichingAll, setEnrichingAll] = useState(false);
-  const [refining, setRefining] = useState(false);
+  const [refining, ] = useState(false);
   const globalChat = useGlobalChat();
   const { refine: refineProgress, isRefining, isRefineDone, resetRefine } = useRefineSocket();
   const [targetPages, setTargetPages] = useState<Record<string, { page: number; pageSize: number }>>({});
@@ -368,8 +374,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             <Sparkles className="text-blue-600" size={20} />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg xl:text-xl font-bold text-slate-800">AI Scan Candidates</h2>
-            <p className="text-xs text-slate-400 mt-0.5 truncate">{t('candidates.title')}</p>
+            <h2 className="text-lg xl:text-xl font-bold text-[var(--fg-primary)]">AI Scan Candidates</h2>
+            <p className="text-xs text-[var(--fg-muted)] mt-0.5 truncate">{t('candidates.title')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -380,7 +386,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               disabled={isScanning}
               className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
                 isScanning
-                  ? 'text-slate-400 bg-slate-100 cursor-not-allowed'
+                  ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
                   : 'text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-sm hover:shadow'
               }`}
               title={t('candidates.coldStartTitle')}
@@ -396,7 +402,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               disabled={enrichingAll || refining}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
                 enrichingAll || refining
-                  ? 'text-slate-400 bg-slate-100 cursor-not-allowed'
+                  ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
                   : 'text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100'
               }`}
               title={t('candidates.enrichTitle')}
@@ -412,7 +418,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               disabled={refining || enrichingAll || isRefining}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
                 refining || enrichingAll || isRefining
-                  ? 'text-slate-400 bg-slate-100 cursor-not-allowed'
+                  ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
                   : 'text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100'
               }`}
               title={t('candidates.refineTitle')}
@@ -423,11 +429,11 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
           )}
           {stats && (
             <div className="flex items-center gap-3 text-xs">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
-                <BarChart3 size={14} className="text-slate-400" />
-                <span className="text-slate-500">{t('candidates.totalCount', { count: stats.total })}</span>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-default)]">
+                <BarChart3 size={14} className="text-[var(--fg-muted)]" />
+                <span className="text-[var(--fg-secondary)]">{t('candidates.totalCount', { count: stats.total })}</span>
                 {stats.withCode < stats.total && (
-                  <span className="text-slate-400 ml-1">{t('candidates.withCode', { count: stats.withCode })}</span>
+                  <span className="text-[var(--fg-muted)] ml-1">{t('candidates.withCode', { count: stats.withCode })}</span>
                 )}
               </div>
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
@@ -450,10 +456,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
       {/* ── Target 切换标签栏 ── */}
       {candidateEntries.length > 0 && (
-        <div className="shrink-0 bg-white border border-slate-100 rounded-xl px-3 py-2 mb-4 shadow-sm">
+        <div className="shrink-0 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-xl px-3 py-2 mb-4 shadow-sm">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
             {targetNames.map((targetName) => {
-              const isShell = isShellTarget(targetName);
               const isSilent = isSilentTarget(targetName);
               const silentLabel = SILENT_LABEL_KEYS[targetName] ? t(SILENT_LABEL_KEYS[targetName]) : undefined;
               const group = data!.candidates[targetName];
@@ -467,15 +472,15 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all border
                     ${isSelected
                       ? `${catCfg?.bg || 'bg-blue-50'} ${catCfg?.color || 'text-blue-700'} ${catCfg?.border || 'border-blue-200'} shadow-sm ring-1 ring-inset ${catCfg?.border || 'ring-blue-200'}`
-                      : 'bg-slate-50/80 text-slate-600 border-slate-100 hover:border-slate-200 hover:bg-slate-100'}`}
+                      : 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)] border-[var(--border-default)] hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-subtle)]'}`}
                 >
                   {(() => {
                     const Icon = catCfg?.icon || Box;
-                    return <Icon size={ICON_SIZES.sm} className={isSelected ? '' : 'text-slate-400'} />;
+                    return <Icon size={ICON_SIZES.sm} className={isSelected ? '' : 'text-[var(--fg-muted)]'} />;
                   })()}
                   <span>{DIM_I18N_KEYS[targetName] ? t(DIM_I18N_KEYS[targetName]) : targetName}</span>
                   {isSilent && silentLabel && <span className="text-[9px] text-amber-600 border border-amber-200 px-1 rounded">{silentLabel}</span>}
-                  <span className={`text-[10px] font-normal rounded-full px-1.5 ${isSelected ? 'bg-white/60' : 'bg-slate-200/60 text-slate-400'}`}>{count}</span>
+                  <span className={`text-[10px] font-normal rounded-full px-1.5 ${isSelected ? 'bg-white/60' : 'bg-[var(--bg-subtle)] text-[var(--fg-muted)]'}`}>{count}</span>
                 </button>
               );
             })}
@@ -486,12 +491,12 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
       {/* ── 内容区域 ── */}
       <div className="flex-1 overflow-y-auto pr-1">
         {(!data?.candidates || Object.keys(data.candidates).length === 0) && !isBootstrapping && (
-          <div className="h-72 flex flex-col items-center justify-center bg-white rounded-2xl border border-dashed border-slate-200 text-slate-400">
-            <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center mb-4">
-              <FileSearch size={32} className="text-slate-300" />
+          <div className="h-72 flex flex-col items-center justify-center bg-[var(--bg-surface)] rounded-2xl border border-dashed border-[var(--border-default)] text-[var(--fg-muted)]">
+            <div className="w-16 h-16 rounded-2xl bg-[var(--bg-subtle)] flex items-center justify-center mb-4">
+              <FileSearch size={32} className="text-[var(--fg-muted)]" />
             </div>
-            <p className="text-sm font-medium text-slate-500">{t('candidates.noResults')}</p>
-            <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-slate-400">
+            <p className="text-sm font-medium text-[var(--fg-secondary)]">{t('candidates.noResults')}</p>
+            <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-[var(--fg-muted)]">
               {t('candidates.emptyHint')}
             </p>
             {onColdStart && (
@@ -500,7 +505,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 disabled={isScanning}
                 className={`mt-4 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
                   isScanning
-                    ? 'text-slate-400 bg-slate-100 cursor-not-allowed'
+                    ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
                     : 'text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-md hover:shadow-lg'
                 }`}
               >
@@ -508,7 +513,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 {isScanning ? t('common.loading') : t('candidates.sourceBootstrap')}
               </button>
             )}
-            <p className="mt-3 text-[11px] text-slate-400">
+            <p className="mt-3 text-[11px] text-[var(--fg-muted)]">
               或 <code className="text-blue-600 bg-blue-50 px-1 rounded">asd ais --all</code> {t('candidates.fullScanBtn')}
               <code className="text-blue-600 bg-blue-50 px-1 rounded ml-1">asd candidate</code> {t('candidates.clipboardCreate')}
             </p>
@@ -517,12 +522,12 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
         {/* Bootstrap 进行中且无候选内容时，显示等待提示 */}
         {(!data?.candidates || Object.keys(data.candidates).length === 0) && isBootstrapping && (
-          <div className="h-72 flex flex-col items-center justify-center bg-white rounded-2xl border border-dashed border-violet-200 text-slate-400">
+          <div className="h-72 flex flex-col items-center justify-center bg-[var(--bg-surface)] rounded-2xl border border-dashed border-violet-200 text-[var(--fg-muted)]">
             <div className="w-16 h-16 rounded-2xl bg-violet-50 flex items-center justify-center mb-4">
               <Loader2 size={32} className="text-violet-400 animate-spin" />
             </div>
             <p className="text-sm font-medium text-violet-600">{t('common.loading')}</p>
-            <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-slate-400">
+            <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-[var(--fg-muted)]">
               {t('candidates.scanningHint')}
             </p>
           </div>
@@ -577,16 +582,16 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             return (
               <div key={targetName} className="space-y-3">
                 {/* ── 工具栏 ── */}
-                <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-default)] shadow-sm">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     {(() => {
                       const Icon = catCfg?.icon || Box;
                       return <Icon size={18} className={catCfg?.color || 'text-blue-600'} />;
                     })()}
-                    <span className="text-base font-bold text-slate-800 truncate">{DIM_I18N_KEYS[targetName] ? t(DIM_I18N_KEYS[targetName]) : targetName}</span>
+                    <span className="text-base font-bold text-[var(--fg-primary)] truncate">{DIM_I18N_KEYS[targetName] ? t(DIM_I18N_KEYS[targetName]) : targetName}</span>
                     {isSilent && <span className="text-[10px] font-bold text-amber-600 border border-amber-200 bg-amber-50 px-1.5 py-0.5 rounded">{silentLabel}</span>}
-                    {isShell && !isSilent && <span className="text-[10px] font-bold text-slate-400 border border-slate-200 bg-slate-50 px-1.5 py-0.5 rounded">SHELL</span>}
-                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                    {isShell && !isSilent && <span className="text-[10px] font-bold text-[var(--fg-muted)] border border-[var(--border-default)] bg-[var(--bg-subtle)] px-1.5 py-0.5 rounded">SHELL</span>}
+                    <span className="text-[11px] text-[var(--fg-muted)] flex items-center gap-1">
                       <Clock size={11} />
                       {t('candidates.scannedAt', { time: formatDate(group.scanTime, t) || new Date(group.scanTime).toLocaleString() })}
                     </span>
@@ -594,21 +599,23 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
                   {/* 筛选控件 */}
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-50 border border-slate-100">
-                      <ArrowUpDown size={12} className="text-slate-400" />
-                      <select
-                        className="text-[11px] font-medium bg-transparent border-none outline-none text-slate-600 pr-1 cursor-pointer"
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-default)]">
+                      <ArrowUpDown size={12} className="text-[var(--fg-muted)]" />
+                      <Select
                         value={filters.sort}
-                        onChange={e => setFilters(prev => ({ ...prev, sort: e.target.value as any }))}
-                      >
-                        <option value="default">{t('candidates.sortNewest')}</option>
-                        <option value="score-desc">{t('candidates.sortConfidence')} ↓</option>
-                        <option value="score-asc">{t('candidates.sortConfidence')} ↑</option>
-                        <option value="confidence-desc">{t('candidates.confidence')} ↓</option>
-                        <option value="date-desc">{t('candidates.sortOldest')}</option>
-                      </select>
+                        onChange={v => setFilters(prev => ({ ...prev, sort: v as any }))}
+                        options={[
+                          { value: 'default', label: t('candidates.sortNewest') },
+                          { value: 'score-desc', label: `${t('candidates.sortConfidence')} ↓` },
+                          { value: 'score-asc', label: `${t('candidates.sortConfidence')} ↑` },
+                          { value: 'confidence-desc', label: `${t('candidates.confidence')} ↓` },
+                          { value: 'date-desc', label: t('candidates.sortOldest') },
+                        ]}
+                        size="xs"
+                        className="border-none bg-transparent"
+                      />
                     </div>
-                    <label className="text-[11px] font-medium text-slate-500 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50 border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors select-none">
+                    <label className="text-[11px] font-medium text-[var(--fg-secondary)] flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-default)] cursor-pointer hover:bg-[var(--bg-subtle)] transition-colors select-none">
                       <input
                         type="checkbox"
                         checked={filters.onlySimilar}
@@ -620,18 +627,18 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     {(filters.sort !== 'default' || filters.onlySimilar) && (
                       <button
                         onClick={() => setFilters({ sort: 'default', onlySimilar: false })}
-                        className="text-[11px] font-medium text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors"
+                        className="text-[11px] font-medium text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] px-2 py-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] hover:bg-[var(--bg-subtle)] transition-colors"
                       >
                         {t('candidates.resetFilters')}
                       </button>
                     )}
                   </div>
 
-                  <div className="h-5 w-px bg-slate-200" />
+                  <div className="h-5 w-px bg-[var(--border-default)]" />
 
                   {/* 操作按钮 */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-slate-400 font-medium">{t('candidates.totalCount', { count: totalItems })}</span>
+                    <span className="text-[11px] text-[var(--fg-muted)] font-medium">{t('candidates.totalCount', { count: totalItems })}</span>
                     <button
                       onClick={() => onAuditAllInTarget(paginatedItems, targetName)}
                       className="text-[11px] font-bold text-blue-600 hover:text-blue-700 px-2.5 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
@@ -670,7 +677,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     const similarList = similarityMap[cand.id] || [];
                     const firstSimilar = similarList[0] || null;
 
-                    const srcInfo = SOURCE_LABEL_KEYS[cand.source || ''] || { labelKey: cand.source || '', color: 'text-slate-500 bg-slate-50 border-slate-200' };
+                    const srcInfo = SOURCE_LABEL_KEYS[cand.source || ''] || { labelKey: cand.source || '', color: 'text-[var(--fg-secondary)] bg-[var(--bg-subtle)] border-[var(--border-default)]' };
                     const candCatCfg = categoryConfigs[cand.category || ''] || categoryConfigs['All'] || {};
 
 
@@ -679,9 +686,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       <div
                         key={cand.id}
                         onClick={() => setExpandedId(isExpanded ? null : cand.id)}
-                        className={`bg-white rounded-xl border overflow-hidden hover:shadow-lg transition-all duration-200 flex flex-col group cursor-pointer
+                        className={`bg-[var(--bg-surface)] rounded-xl border overflow-hidden hover:shadow-lg transition-all duration-200 flex flex-col group cursor-pointer
                           ${isShell ? 'opacity-75' : ''}
-                          ${isExpanded ? 'ring-2 ring-blue-300 border-blue-300 shadow-md' : 'border-slate-200 hover:border-slate-300'}`}
+                          ${isExpanded ? 'ring-2 ring-blue-300 border-blue-300 shadow-md' : 'border-[var(--border-default)] hover:border-[var(--border-emphasis)]'}`}
                       >
                         {/* ── 卡片头部：标题 + 置信度 ── */}
                         <div className="px-4 pt-3.5 pb-2">
@@ -690,7 +697,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             <div className="flex-1 min-w-0">
                               {/* 第一行：类别 + 来源 + 知识类型 */}
                               <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border ${candCatCfg?.bg || 'bg-slate-50'} ${candCatCfg?.color || 'text-slate-400'} ${candCatCfg?.border || 'border-slate-100'}`}>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border ${candCatCfg?.bg || 'bg-[var(--bg-subtle)]'} ${candCatCfg?.color || 'text-[var(--fg-muted)]'} ${candCatCfg?.border || 'border-[var(--border-default)]'}`}>
                                   {(() => {
                                     const Icon = candCatCfg?.icon || Layers;
                                     return <Icon size={10} />;
@@ -718,16 +725,16 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                               </div>
 
                               {/* 标题 */}
-                              <h3 className="font-bold text-sm text-slate-800 leading-snug mb-1 line-clamp-1">{cand.title}</h3>
+                              <h3 className="font-bold text-sm text-[var(--fg-primary)] leading-snug mb-1 line-clamp-1">{cand.title}</h3>
 
                               {/* 摘要 */}
-                              <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{cand.description || ''}</p>
+                              <p className="text-xs text-[var(--fg-secondary)] line-clamp-2 leading-relaxed">{cand.description || ''}</p>
                             </div>
 
                             {/* 右：置信度环 + 操作 */}
                             <div className="flex flex-col items-center gap-1 shrink-0">
                               <ConfidenceRing value={confidence} />
-                              <span className="text-[9px] text-slate-400 font-medium">{t('candidates.confidence')}</span>
+                              <span className="text-[9px] text-[var(--fg-muted)] font-medium">{t('candidates.confidence')}</span>
                             </div>
                           </div>
                         </div>
@@ -746,7 +753,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
                         {/* ── 指标行：综合分 + 相似 ── */}
                         {(overall != null || firstSimilar) && (
-                          <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-t border-slate-50">
+                          <div className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-t border-[var(--border-default)]">
                             {overall != null && (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
                                 <CheckCircle2 size={10} />
@@ -772,13 +779,13 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
                         {/* ── 代码预览（始终显示前 3 行） ── */}
                         {cand.content?.pattern && (
-                          <div className="overflow-hidden border-t border-slate-200/60">
+                          <div className="overflow-hidden border-t border-[var(--border-default)]/60">
                             <div className="flex items-center justify-between px-3 py-1.5" style={{ background: '#282c34' }}>
                               <div className="flex items-center gap-2">
-                                <Code2 size={11} className="text-slate-500" />
-                                <span className="text-[10px] text-slate-400 font-mono uppercase tracking-wide">{cand.language || 'code'}</span>
+                                <Code2 size={11} className="text-[var(--fg-secondary)]" />
+                                <span className="text-[10px] text-[var(--fg-muted)] font-mono uppercase tracking-wide">{cand.language || 'code'}</span>
                               </div>
-                              <span className="text-[10px] text-slate-500 font-mono tabular-nums">{t('candidates.linesCount', { count: cand.content.pattern.split('\n').length })}</span>
+                              <span className="text-[10px] text-[var(--fg-secondary)] font-mono tabular-nums">{t('candidates.linesCount', { count: cand.content.pattern.split('\n').length })}</span>
                             </div>
                             <div className="relative max-h-[80px] overflow-hidden">
                               <CodeBlock
@@ -794,15 +801,15 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         )}
 
                         {/* ── 卡片底栏：元信息 + 操作 ── */}
-                        <div className="flex justify-between items-center px-4 py-2.5 border-t border-slate-100 bg-slate-50/50 dark:bg-[#252a36] dark:border-slate-700 mt-auto" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center px-4 py-2.5 border-t border-[var(--border-default)] bg-[var(--bg-subtle)] mt-auto" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
                             {/* trigger */}
                             {cand.trigger && (
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 font-bold">{cand.trigger}</span>
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border-default)] text-[var(--fg-secondary)] font-bold">{cand.trigger}</span>
                             )}
 
                             {/* 语言 */}
-                            <span className="text-[10px] uppercase font-bold text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded-md">{cand.language}</span>
+                            <span className="text-[10px] uppercase font-bold text-[var(--fg-muted)] bg-[var(--bg-surface)] border border-[var(--border-default)] px-1.5 py-0.5 rounded-md">{cand.language}</span>
 
                             {/* tags */}
                             {cand.tags && cand.tags.length > 0 && cand.tags.slice(0, 3).map((tag, i) => (
@@ -811,12 +818,12 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                               </span>
                             ))}
                             {cand.tags && cand.tags.length > 3 && (
-                              <span className="text-[9px] text-slate-400">+{cand.tags.length - 3}</span>
+                              <span className="text-[9px] text-[var(--fg-muted)]">+{cand.tags.length - 3}</span>
                             )}
 
                             {/* 日期 */}
                             {cand.createdAt && formatDate(cand.createdAt, t) && (
-                              <span className="text-[9px] text-slate-400 flex items-center gap-0.5">
+                              <span className="text-[9px] text-[var(--fg-muted)] flex items-center gap-0.5">
                                 <Clock size={9} />
                                 {formatDate(cand.createdAt, t)}
                               </span>
@@ -830,7 +837,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                               title={t('candidates.enrichTitleSingle')}
                               className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-medium ${
                                 enrichingIds.has(cand.id)
-                                  ? 'text-slate-300 cursor-not-allowed'
+                                  ? 'text-[var(--fg-muted)] cursor-not-allowed'
                                   : 'text-amber-500 hover:text-amber-600 hover:bg-amber-50'
                               }`}
                             >
@@ -842,7 +849,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                               title={t('candidates.refineTitleSingle')}
                               className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-medium ${
                                 refiningIds.has(cand.id)
-                                  ? 'text-slate-300 cursor-not-allowed'
+                                  ? 'text-[var(--fg-muted)] cursor-not-allowed'
                                   : 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50'
                               }`}
                             >
@@ -851,7 +858,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             <button
                               onClick={() => { handleDeleteCandidate(targetName, cand.id); if (expandedId === cand.id) { setExpandedId(null); setCompareModal(null); } }}
                               title={t('common.delete')}
-                              className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
+                              className="p-1.5 hover:bg-red-50 text-[var(--fg-muted)] hover:text-red-500 rounded-lg transition-colors"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -917,12 +924,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
         const goToNext = () => { if (hasNext) { setExpandedId(allItems[currentIndex + 1].id); setCompareModal(null); } };
 
         const r = cand.reasoning;
-        const meaningfulWhyStandard = r?.whyStandard && !/^Submitted via /i.test(r.whyStandard);
-        const hasReasoning = r && (meaningfulWhyStandard || (r.sources && r.sources.length > 0) || r.confidence != null);
         const similar = similarityMap[cand.id] || [];
         const isLoadingSimilar = similarityLoading === cand.id;
         const candCatCfg = categoryConfigs[cand.category || ''] || categoryConfigs['All'] || {};
-        const srcInfo = SOURCE_LABEL_KEYS[cand.source || ''] || { labelKey: cand.source || '', color: 'text-slate-500 bg-slate-50 border-slate-200' };
+        const srcInfo = SOURCE_LABEL_KEYS[cand.source || ''] || { labelKey: cand.source || '', color: 'text-[var(--fg-secondary)] bg-[var(--bg-subtle)] border-[var(--border-default)]' };
 
         return (
           <PageOverlay className="z-30 flex justify-end" onClick={() => { setExpandedId(null); setCompareModal(null); }}>
@@ -983,13 +988,12 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 setCompareModal(null);
               };
               return (
-                <div
-                  className={`relative h-full bg-white dark:bg-[#1e1e1e] shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-700 ${drawerWide ? 'w-[800px] max-w-[55vw]' : 'w-[600px] max-w-[45vw]'}`}
-                  style={{ animation: 'slideInRight 0.2s ease-out' }}
-                  onClick={e => e.stopPropagation()}
+                <Drawer.Panel
+                  width={drawerWide ? 'w-[800px] max-w-[55vw]' : 'w-[600px] max-w-[45vw]'}
+                  animationDuration="0.2s"
                 >
                   {/* 对比面板头部 */}
-                  <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 dark:border-slate-700 shrink-0 bg-emerald-50/60 dark:bg-emerald-900/20">
+                  <Drawer.Header className="bg-emerald-50/60 py-3.5">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                         <GitCompare size={16} className="text-white" />
@@ -1000,22 +1004,20 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      <button onClick={() => copyRecipe()} className="p-1.5 hover:bg-emerald-100 rounded-lg text-emerald-600 transition-colors" title={t('common.copy')}><Copy size={14} /></button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => copyRecipe()} title={t('common.copy')} className="text-emerald-600 hover:bg-emerald-100"><Copy size={14} /></Button>
                       <button onClick={handleCompareEditRecipe} className="text-[11px] font-medium text-emerald-600 hover:bg-emerald-100 px-2 py-1.5 rounded-lg transition-colors">{t('candidates.approveAndSave')}</button>
-                      <button onClick={() => setCompareModal(null)} className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors text-slate-400">
-                        <X size={16} />
-                      </button>
+                      <Drawer.CloseButton onClose={() => setCompareModal(null)} />
                     </div>
-                  </div>
+                  </Drawer.Header>
 
                   {/* 相似 recipe 切换标签 */}
                   {compareModal.similarList.length > 1 && (
-                    <div className="flex flex-wrap gap-1 px-5 py-2 border-b border-slate-100 bg-white shrink-0">
+                    <div className="flex flex-wrap gap-1 px-5 py-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)] shrink-0">
                       {compareModal.similarList.map(s => (
                         <button
                           key={s.recipeName}
                           onClick={() => switchToRecipe(s.recipeName)}
-                          className={`text-[10px] font-bold px-2 py-1 rounded transition-colors ${compareModal.recipeName === s.recipeName ? 'bg-emerald-200 text-emerald-800' : 'bg-white text-emerald-600 hover:bg-emerald-50 border border-emerald-100'}`}
+                          className={`text-[10px] font-bold px-2 py-1 rounded transition-colors ${compareModal.recipeName === s.recipeName ? 'bg-emerald-200 text-emerald-800' : 'bg-[var(--bg-surface)] text-emerald-600 hover:bg-emerald-50 border border-emerald-100'}`}
                         >
                           {s.recipeName.replace(/\.md$/i, '')} {(s.similarity * 100).toFixed(0)}%
                         </button>
@@ -1024,195 +1026,90 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   )}
 
                   {/* 操作栏 */}
-                  <div className="flex items-center gap-1.5 px-5 py-2 border-b border-slate-100 bg-white shrink-0">
+                  <div className="flex items-center gap-1.5 px-5 py-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)] shrink-0">
                     <button onClick={handleCompareDelete} className="text-xs font-medium text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1">
                       <Trash2 size={12} /> {t('common.delete')}
                     </button>
                     <button onClick={handleCompareAudit} className="text-xs font-medium text-blue-600 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1">
                       <Edit3 size={12} /> {t('candidates.approveAndSave')}
                     </button>
-                    <button onClick={() => copyCandidate()} className="text-xs font-medium text-slate-500 hover:bg-slate-50 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                    <button onClick={() => copyCandidate()} className="text-xs font-medium text-[var(--fg-secondary)] hover:bg-[var(--bg-subtle)] px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1">
                       <Copy size={12} /> {t('common.copy')}
                     </button>
                   </div>
 
                   {/* Recipe 内容 */}
-                  <div className="flex-1 overflow-auto p-5 min-h-0">
+                  <Drawer.Body padded>
                     <MarkdownWithHighlight content={compareModal.recipeContent} stripFrontmatter />
-                  </div>
-                </div>
+                  </Drawer.Body>
+                </Drawer.Panel>
               );
             })()}
 
-            <div
-              className={`relative h-full bg-white dark:bg-[#1e1e1e] shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-700 ${drawerWide ? 'w-[960px] max-w-[92vw]' : 'w-[700px] max-w-[92vw]'}`}
-              style={{ animation: 'slideInRight 0.25s ease-out' }}
-              onClick={e => e.stopPropagation()}
-            >
+            <Drawer.Panel size={drawerWide ? 'lg' : 'md'}>
               {/* ── 面板头部 ── */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-b from-white to-slate-50/50 dark:from-[#252526] dark:to-[#1e1e1e] shrink-0">
-                <div className="flex-1 min-w-0 mr-3">
-                  <h3 className="font-bold text-slate-800 text-lg leading-snug break-words">{cand.title}</h3>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={goToPrev} disabled={!hasPrev} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title={t('common.back')}><ChevronLeft size={ICON_SIZES.md} /></button>
-                  <span className="text-xs text-slate-400 tabular-nums">{currentIndex + 1}/{allItems.length}</span>
-                  <button onClick={goToNext} disabled={!hasNext} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title={t('common.more')}><ChevronRight size={ICON_SIZES.md} /></button>
-                  <div className="w-px h-5 bg-slate-200 mx-1" />
-                  <button onClick={toggleDrawerWide} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400" title={drawerWide ? t('common.collapse') : t('common.expand')}>
-                    {drawerWide ? <Minimize2 size={ICON_SIZES.md} /> : <Maximize2 size={ICON_SIZES.md} />}
-                  </button>
-                  <button onClick={() => { handleDeleteCandidate(effectiveTarget!, cand.id); setExpandedId(null); setCompareModal(null); }} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title={t('common.delete')}><Trash2 size={ICON_SIZES.md} /></button>
-                  <button onClick={() => { setExpandedId(null); setCompareModal(null); }} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><X size={ICON_SIZES.md} /></button>
-                </div>
-              </div>
+              <Drawer.Header title={cand.title}>
+                <Drawer.Nav
+                  currentIndex={currentIndex}
+                  total={allItems.length}
+                  onPrev={goToPrev}
+                  onNext={goToNext}
+                  hasPrev={hasPrev}
+                  hasNext={hasNext}
+                />
+                <Drawer.HeaderActions>
+                  <Drawer.WidthToggle
+                    isWide={drawerWide}
+                    onToggle={toggleDrawerWide}
+                    title={drawerWide ? t('common.collapse') : t('common.expand')}
+                  />
+                  <Button variant="danger" size="icon-sm" onClick={() => { handleDeleteCandidate(effectiveTarget!, cand.id); setExpandedId(null); setCompareModal(null); }}><Trash2 size={16} /></Button>
+                  <Drawer.CloseButton onClose={() => { setExpandedId(null); setCompareModal(null); }} />
+                </Drawer.HeaderActions>
+              </Drawer.Header>
 
               {/* ── 面板内容 ── */}
-              <div className="flex-1 overflow-y-auto">
+              <Drawer.Body>
 
-                {/* 1. Badges + Metadata */}
-                <div className="px-6 py-4 border-b border-slate-100 space-y-3">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border ${candCatCfg?.bg || 'bg-slate-50'} ${candCatCfg?.color || 'text-slate-400'} ${candCatCfg?.border || 'border-slate-100'}`}>
-                      {cand.category || 'general'}
-                    </span>
-                    {cand.knowledgeType && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">{cand.knowledgeType}</span>
-                    )}
-                    {cand.language && (
-                      <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">{cand.language}</span>
-                    )}
-                    {cand.complexity && (
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                        {cand.complexity === 'advanced' ? t('candidates.confidenceHigh') : cand.complexity === 'intermediate' ? t('candidates.confidenceMedium') : t('candidates.confidenceLow')}
-                      </span>
-                    )}
-                    {cand.trigger && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-bold">{cand.trigger}</span>}
-                    {cand.source && cand.source !== 'unknown' && (
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${srcInfo.color}`}>
-                        {srcInfo.labelKey.startsWith('candidates.') ? t(srcInfo.labelKey) : srcInfo.labelKey}
-                      </span>
-                    )}
-                    {cand.lifecycle && cand.lifecycle !== 'pending' && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200">{cand.lifecycle}</span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
-                    {(() => {
-                      const items: { icon: React.ElementType; iconClass: string; label: string; value: string; mono?: boolean }[] = [];
-                      if (cand.scope) items.push({ icon: Globe, iconClass: 'text-teal-400', label: t('candidates.path'), value: cand.scope === 'universal' ? t('common.all') : cand.scope === 'project-specific' ? t('candidates.category') : cand.scope === 'module-level' ? t('candidates.category') : cand.scope });
-                      if (cand.source && cand.source !== 'unknown') items.push({ icon: Globe, iconClass: 'text-violet-400', label: t('candidates.source'), value: srcInfo.labelKey.startsWith('candidates.') ? t(srcInfo.labelKey) : srcInfo.labelKey });
-                      if (cand.createdAt && formatDate(cand.createdAt, t)) items.push({ icon: Clock, iconClass: 'text-slate-400', label: t('candidates.createdAt'), value: formatDate(cand.createdAt, t) });
-                      return items.map((item, i) => {
-                        const Icon = item.icon;
-                        return (
-                          <div key={i} className="flex items-center gap-1.5">
-                            <Icon size={11} className={`${item.iconClass} shrink-0`} />
-                            <span className="text-slate-400">{item.label}</span>
-                            <span className={`font-medium text-slate-600 ${item.mono ? 'font-mono text-[11px]' : ''}`}>{item.value}</span>
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
-                </div>
-
-                {/* 2. Tags */}
-                {cand.tags && cand.tags.length > 0 && (
-                  <div className="px-6 py-3 border-b border-slate-100 flex flex-wrap items-center gap-1.5">
-                    <Tag size={11} className="text-slate-300 mr-0.5" />
-                    {cand.tags.slice(0, 10).map((tag, i) => (
-                      <span key={i} className="text-[9px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 font-medium">
-                        {typeof tag === 'string' ? tag : String(tag)}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {/* 1–2. Badges + Metadata + Tags */}
+                <DrawerMeta
+                  badges={(() => {
+                    const b: BadgeItem[] = [];
+                    b.push({ label: cand.category || 'general', className: `font-bold uppercase ${candCatCfg?.bg || 'bg-[var(--bg-subtle)]'} ${candCatCfg?.color || 'text-[var(--fg-muted)]'} ${candCatCfg?.border || 'border-[var(--border-default)]'}` });
+                    if (cand.knowledgeType) b.push({ label: cand.knowledgeType, className: 'bg-purple-50 text-purple-700 border-purple-200' });
+                    if (cand.language) b.push({ label: cand.language, className: 'uppercase font-bold text-[var(--fg-secondary)] bg-[var(--bg-subtle)] border-[var(--border-default)]' });
+                    if (cand.complexity) b.push({ label: cand.complexity === 'advanced' ? t('candidates.confidenceHigh') : cand.complexity === 'intermediate' ? t('candidates.confidenceMedium') : t('candidates.confidenceLow'), className: cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100' });
+                    if (cand.trigger) b.push({ label: cand.trigger, className: 'font-mono font-bold bg-amber-50 text-amber-700 border-amber-200' });
+                    if (cand.source && cand.source !== 'unknown') b.push({ label: srcInfo.labelKey.startsWith('candidates.') ? t(srcInfo.labelKey) : srcInfo.labelKey, className: srcInfo.color });
+                    if (cand.lifecycle && cand.lifecycle !== 'pending') b.push({ label: cand.lifecycle, className: 'bg-blue-50 text-blue-600 border-blue-200' });
+                    return b;
+                  })()}
+                  metadata={(() => {
+                    const m: MetaItem[] = [];
+                    if (cand.scope) m.push({ icon: Globe, iconClass: 'text-teal-400', label: t('candidates.path'), value: cand.scope === 'universal' ? t('common.all') : cand.scope === 'project-specific' ? t('candidates.category') : cand.scope === 'module-level' ? t('candidates.category') : cand.scope });
+                    if (cand.source && cand.source !== 'unknown') m.push({ icon: Globe, iconClass: 'text-violet-400', label: t('candidates.source'), value: srcInfo.labelKey.startsWith('candidates.') ? t(srcInfo.labelKey) : srcInfo.labelKey });
+                    if (cand.createdAt && formatDate(cand.createdAt, t)) m.push({ icon: Clock, iconClass: 'text-[var(--fg-muted)]', label: t('candidates.createdAt'), value: formatDate(cand.createdAt, t) });
+                    return m;
+                  })()}
+                  tags={cand.tags}
+                  maxTags={10}
+                />
 
                 {/* 3. Description / Summary */}
-                {cand.description && (
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('candidates.description')}</label>
-                    <p className="text-sm text-slate-600 leading-relaxed">{cand.description}</p>
-                  </div>
-                )}
+                <DrawerContent.Description label={t('candidates.description')} text={cand.description} />
 
                 {/* 4. Reasoning — 推理依据 */}
-                {hasReasoning && (
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                      <Lightbulb size={11} className="text-amber-400" /> {t('knowledge.reasoning')}
-                    </label>
-                    <div className="bg-amber-50/30 dark:bg-amber-900/15 border border-amber-100 dark:border-amber-800/40 rounded-xl p-4 space-y-2.5">
-                      {r!.whyStandard && !/^Submitted via /i.test(r!.whyStandard) && (
-                        <p className="text-sm text-slate-700 leading-relaxed">{r!.whyStandard}</p>
-                      )}
-                      {r!.sources && r!.sources.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-[10px] text-slate-400 font-bold">{t('candidates.source')}:</span>
-                          {r!.sources.map((src: string, i: number) => (
-                            <code key={i} className="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-700 font-mono">{src}</code>
-                          ))}
-                        </div>
-                      )}
-                      {r!.confidence != null && r!.confidence > 0 && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-400 font-bold">{t('candidates.confidence')}:</span>
-                          <div className="flex-1 max-w-[160px] h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-amber-400 rounded-full"
-                              style={{ width: `${Math.round((r!.confidence ?? 0) * 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] font-bold text-amber-600">{Math.round((r!.confidence ?? 0) * 100)}%</span>
-                        </div>
-                      )}
-                      {r!.alternatives && r!.alternatives.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                          <span className="text-[10px] text-slate-400 font-bold">{t('candidates.viewDetail')}:</span>
-                          {r!.alternatives.map((alt: string, i: number) => (
-                            <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600">{alt}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <DrawerContent.Reasoning
+                  reasoning={r}
+                  labels={{ section: t('knowledge.reasoning'), source: `${t('candidates.source')}:`, confidence: `${t('candidates.confidence')}:`, alternatives: `${t('candidates.viewDetail')}:` }}
+                  filterSubmitted
+                />
 
                 {/* 5. Quality — 质量评级 */}
-                {cand.quality && cand.quality.grade && cand.quality.grade !== 'F' && (
-                  <div className="px-6 py-3 border-b border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('candidates.qualityDimensions')}</label>
-                    <div className="flex items-center gap-4">
-                      <span className={`text-2xl font-black ${
-                        cand.quality.grade === 'A' ? 'text-emerald-600' :
-                        cand.quality.grade === 'B' ? 'text-blue-600' :
-                        cand.quality.grade === 'C' ? 'text-amber-600' :
-                        cand.quality.grade === 'D' ? 'text-orange-600' : 'text-slate-400'
-                      }`}>{cand.quality.grade}</span>
-                      <div className="flex-1 grid grid-cols-3 gap-2 text-[10px]">
-                        {cand.quality.completeness != null && cand.quality.completeness > 0 && (
-                          <div className="text-center">
-                            <div className="font-bold text-slate-700">{cand.quality.completeness}</div>
-                            <div className="text-slate-400">{t('candidates.qualityDimensions')}</div>
-                          </div>
-                        )}
-                        {cand.quality.adaptation != null && cand.quality.adaptation > 0 && (
-                          <div className="text-center">
-                            <div className="font-bold text-slate-700">{cand.quality.adaptation}</div>
-                            <div className="text-slate-400">{t('candidates.qualityDimensions')}</div>
-                          </div>
-                        )}
-                        {cand.quality.documentation != null && cand.quality.documentation > 0 && (
-                          <div className="text-center">
-                            <div className="font-bold text-slate-700">{cand.quality.documentation}</div>
-                            <div className="text-slate-400">{t('candidates.qualityDimensions')}</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <DrawerContent.Quality
+                  quality={cand.quality}
+                  labels={{ section: t('candidates.qualityDimensions'), completeness: t('recipes.qualityCompleteness'), adaptation: t('recipes.qualityAdaptation'), documentation: t('recipes.qualityDocumentation') }}
+                />
 
                 {/* 6. AI 润色增强信息 */}
                 {(() => {
@@ -1220,23 +1117,23 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   const hasEnhanced = cand.agentNotes || cand.aiInsight || allRelations.length > 0;
                   if (!hasEnhanced) return null;
                   return (
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                    <div className="px-6 py-4 border-b border-[var(--border-default)]">
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-2 block flex items-center gap-1.5">
                         <Sparkles size={11} className="text-emerald-400" /> {t('candidates.refineEnhanced')}
                       </label>
-                      <div className="bg-emerald-50/30 dark:bg-emerald-900/15 border border-emerald-100 dark:border-emerald-800/40 rounded-xl p-4 space-y-2.5 text-xs">
+                      <div className="bg-emerald-50/30 border border-emerald-100 rounded-xl p-4 space-y-2.5 text-xs">
                         {cand.aiInsight && (
                           <div>
-                            <span className="text-[10px] text-slate-400 font-bold">{t('candidates.viewDetail')}:</span>
-                            <p className="text-sm text-slate-700 leading-relaxed mt-0.5">{cand.aiInsight}</p>
+                            <span className="text-[10px] text-[var(--fg-muted)] font-bold">{t('candidates.viewDetail')}:</span>
+                            <p className="text-sm text-[var(--fg-primary)] leading-relaxed mt-0.5">{cand.aiInsight}</p>
                           </div>
                         )}
                         {cand.agentNotes && cand.agentNotes.length > 0 && (
                           <div>
-                            <span className="text-[10px] text-slate-400 font-bold">{t('candidates.agentNotes')}</span>
+                            <span className="text-[10px] text-[var(--fg-muted)] font-bold">{t('candidates.agentNotes')}</span>
                             <ul className="mt-1 space-y-0.5">
                               {cand.agentNotes.map((note: string, i: number) => (
-                                <li key={i} className="flex items-start gap-1.5 text-slate-600">
+                                <li key={i} className="flex items-start gap-1.5 text-[var(--fg-secondary)]">
                                   <span className="text-emerald-400 mt-0.5">•</span>{note}
                                 </li>
                               ))}
@@ -1245,15 +1142,15 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         )}
                         {allRelations.length > 0 && (
                           <div>
-                            <span className="text-[10px] text-slate-400 font-bold">{t('recipes.relations')}:</span>
+                            <span className="text-[10px] text-[var(--fg-muted)] font-bold">{t('recipes.relations')}:</span>
                             <div className="mt-1 space-y-1">
                               {allRelations.map((rel: any, i: number) => (
-                                <div key={i} className="flex items-start gap-1.5 text-slate-600">
+                                <div key={i} className="flex items-start gap-1.5 text-[var(--fg-secondary)]">
                                   <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0 uppercase">
                                     {rel.type}
                                   </span>
-                                  <span className="font-medium text-slate-700">{titleLookup.get(rel.target) || rel.target}</span>
-                                  {rel.description && <span className="text-slate-400">— {rel.description}</span>}
+                                  <span className="font-medium text-[var(--fg-primary)]">{titleLookup.get(rel.target) || rel.target}</span>
+                                  {rel.description && <span className="text-[var(--fg-muted)]">— {rel.description}</span>}
                                 </div>
                               ))}
                             </div>
@@ -1266,10 +1163,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
                 {/* 7. 相似 Recipe — 仅在有结果时渲染，避免 loading 态导致布局跳动 */}
                 {similar.length > 0 && (
-                  <div className="px-6 py-3 border-b border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
+                  <div className="px-6 py-3 border-b border-[var(--border-default)]">
+                    <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-2 block flex items-center gap-1.5">
                       {t('candidates.similarRecipe')}
-                      {isLoadingSimilar && <span className="text-[10px] text-slate-400 animate-pulse">{t('common.loading')}</span>}
+                      {isLoadingSimilar && <span className="text-[10px] text-[var(--fg-muted)] animate-pulse">{t('common.loading')}</span>}
                     </label>
                     <div className="flex flex-wrap gap-1.5">
                       {similar.slice(0, 5).map(s => (
@@ -1288,121 +1185,32 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 )}
 
                 {/* 8. Code / 标准用法 */}
-                {cand.content?.pattern && (
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                      <FileCode size={11} className="text-emerald-500" /> {t('knowledge.codePattern')}
-                    </label>
-                    <CodeBlock code={cand.content.pattern} language={cand.language === 'objc' ? 'objectivec' : cand.language} showLineNumbers />
-                  </div>
-                )}
+                <DrawerContent.CodePattern label={t('knowledge.codePattern')} code={cand.content?.pattern} language={cand.language} />
 
                 {/* 9. Markdown 文档 */}
-                {cand.content?.markdown && (
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                      <FileText size={11} className="text-blue-400" /> {t('knowledge.markdownDoc')}
-                    </label>
-                    <div className="bg-blue-50/30 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-800/40 rounded-xl p-4">
-                      <div className="markdown-body text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                        <MarkdownWithHighlight content={cand.content.markdown} />
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <DrawerContent.MarkdownSection label={t('knowledge.markdownDoc')} content={cand.content?.markdown} />
 
                 {/* 10. Delivery 字段 */}
-                {(cand.doClause || cand.whenClause || cand.dontClause || cand.topicHint || cand.coreCode) && (
-                  <div className="px-6 py-4 border-b border-slate-100">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                      <Layers size={11} className="text-indigo-400" /> Cursor Delivery
-                    </label>
-                    <div className="bg-indigo-50/30 dark:bg-indigo-900/15 border border-indigo-100 dark:border-indigo-800/40 rounded-xl p-4 text-xs space-y-1.5">
-                      {cand.topicHint && <div><span className="text-indigo-500 font-medium">Topic：</span><span className="text-slate-700">{cand.topicHint}</span></div>}
-                      {cand.whenClause && <div><span className="text-blue-500 font-medium">When：</span><span className="text-slate-700">{cand.whenClause}</span></div>}
-                      {cand.doClause && <div><span className="text-emerald-500 font-medium">Do：</span><span className="text-slate-700">{cand.doClause}</span></div>}
-                      {cand.dontClause && <div><span className="text-red-500 font-medium">Don't：</span><span className="text-slate-700">{cand.dontClause}</span></div>}
-                      {cand.coreCode && (
-                        <div>
-                          <span className="text-purple-500 font-medium">Core Code：</span>
-                          <div className="mt-1">
-                            <CodeBlock code={cand.coreCode} language={cand.language === 'objectivec' || cand.language === 'objc' ? 'objectivec' : (cand.language || 'text')} />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                <DrawerContent.Delivery
+                  delivery={{ topicHint: cand.topicHint, whenClause: cand.whenClause, doClause: cand.doClause, dontClause: cand.dontClause, coreCode: cand.coreCode }}
+                  language={cand.language}
+                />
 
-                {/* 11. Rationale + Steps + Extra */}
-                {(cand.scope || (cand.headers && cand.headers.length > 0) || (cand.content?.steps && cand.content.steps.length > 0) || cand.content?.rationale) && (
-                  <>
-                    {/* Rationale */}
-                    {cand.content?.rationale && (
-                      <div className="px-6 py-4 border-b border-slate-100">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('candidates.rationale')}</label>
-                        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                          <p className="text-sm text-slate-600 leading-relaxed">{cand.content.rationale}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Headers */}
-                    {cand.headers && cand.headers.length > 0 && (
-                      <div className="px-6 py-3 border-b border-slate-100">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('candidates.headers')}</label>
-                        <div className="flex flex-wrap gap-1.5">
-                          {cand.headers.map((h: string, i: number) => (
-                            <code key={i} className="px-2.5 py-1 bg-violet-50 text-violet-700 border border-violet-100 rounded-md text-[10px] font-mono font-medium">{h}</code>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Steps */}
-                    {cand.content?.steps && cand.content.steps.length > 0 && (
-                      <div className="px-6 py-4 border-b border-slate-100">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.steps')}</label>
-                        <div className="space-y-2">
-                          {cand.content.steps.map((step: any, i: number) => {
-                            if (typeof step === 'string') {
-                              return (
-                                <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100 flex items-start gap-2.5">
-                                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
-                                  <p className="text-xs text-slate-700 leading-relaxed">{step}</p>
-                                </div>
-                              );
-                            }
-                            const title = typeof step.title === 'string' ? step.title : '';
-                            const desc = typeof step.description === 'string' ? step.description : '';
-                            const code = typeof step.code === 'string' ? step.code : '';
-                            return (
-                              <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center shrink-0">{i + 1}</span>
-                                  {title && <span className="text-xs font-bold text-slate-700">{title}</span>}
-                                </div>
-                                {desc && <p className="text-xs text-slate-600 ml-7 leading-relaxed">{desc}</p>}
-                                {code && <pre className="text-[11px] font-mono bg-slate-800 text-green-300 p-2.5 rounded-md mt-1.5 ml-7 overflow-x-auto whitespace-pre-wrap">{code}</pre>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+                {/* 11. Rationale + Headers + Steps */}
+                <DrawerContent.Rationale label={t('candidates.rationale')} text={cand.content?.rationale} />
+                <DrawerContent.Headers label={t('candidates.headers')} headers={cand.headers} />
+                <DrawerContent.Steps label={t('recipes.steps')} steps={cand.content?.steps} />
+              </Drawer.Body>
 
               {/* ── 面板底部操作栏 ── */}
-              <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 px-5 py-3 bg-gradient-to-b from-slate-50/80 to-white dark:from-[#252526] dark:to-[#1e1e1e] flex items-center justify-between">
+              <Drawer.Footer>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleEnrichCandidate(cand.id)}
                     disabled={enrichingIds.has(cand.id)}
                     title={t('candidates.enrichTitleBottom')}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                      enrichingIds.has(cand.id) ? 'text-slate-300 cursor-not-allowed' : 'text-amber-600 hover:bg-amber-50 border border-amber-200'
+                      enrichingIds.has(cand.id) ? 'text-[var(--fg-muted)] cursor-not-allowed' : 'text-amber-600 hover:bg-amber-50 border border-amber-200'
                     }`}
                   >
                     {enrichingIds.has(cand.id) ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
@@ -1413,7 +1221,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     disabled={refiningIds.has(cand.id)}
                     title={t('candidates.refineTitleBottom')}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                      refiningIds.has(cand.id) ? 'text-slate-300 cursor-not-allowed' : 'text-emerald-600 hover:bg-emerald-50 border border-emerald-200'
+                      refiningIds.has(cand.id) ? 'text-[var(--fg-muted)] cursor-not-allowed' : 'text-emerald-600 hover:bg-emerald-50 border border-emerald-200'
                     }`}
                   >
                     {refiningIds.has(cand.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
@@ -1451,8 +1259,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     <Edit3 size={14} /> {t('candidates.approveAndSave')}
                   </button>
                 </div>
-              </div>
-            </div>
+              </Drawer.Footer>
+            </Drawer.Panel>
           </PageOverlay>
         );
       })()}

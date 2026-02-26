@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, X, Zap, Target, Code, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
 import api from '../../api';
 import CodeBlock from '../Shared/CodeBlock';

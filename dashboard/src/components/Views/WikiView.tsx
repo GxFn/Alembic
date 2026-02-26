@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   BookOpen, RefreshCw, FileText, FolderOpen, ArrowLeft, Loader2,
-  Square, CheckCircle, AlertCircle, Clock, ChevronRight,
-  ChevronDown, Search, Sparkles, GitBranch, Download, Copy, Check,
-  Hash, Bot, FileCode, FolderTree, Layers,
-  ArrowUpRight, CircleDot, Trash2,
+  AlertCircle, Clock, ChevronRight,
+  ChevronDown, Search, Sparkles, Copy, Check,
+  Hash, Bot, FileCode, Layers,
+  ArrowUpRight,
 } from 'lucide-react';
 import { ICON_SIZES } from '../../constants/icons';
 import api from '../../api';
@@ -63,26 +63,6 @@ interface WikiStatus {
  *  Constants & Config
  * ═══════════════════════════════════════════════════════ */
 
-/** 生成阶段配置 */
-const PHASE_CONFIG: Record<string, { label: string; icon: React.ElementType }> = {
-  'init':        { label: 'Init',           icon: CircleDot },
-  'scan':        { label: 'Scan',           icon: FolderTree },
-  'ast-analyze': { label: 'AST Analyze',    icon: FileCode },
-  'spm-parse':   { label: 'Module Parse',   icon: GitBranch },
-  'knowledge':   { label: 'Knowledge',      icon: BookOpen },
-  'generate':    { label: 'Generate',       icon: FileText },
-  'ai-compose':  { label: 'AI Compose',     icon: Sparkles },
-  'sync-docs':   { label: 'Sync Docs',      icon: Download },
-  'dedup':       { label: 'Dedup',          icon: Layers },
-  'finalize':    { label: 'Finalize',       icon: CheckCircle },
-};
-
-const PHASE_ORDER = [
-  'init', 'scan', 'ast-analyze', 'spm-parse',
-  'knowledge', 'generate', 'ai-compose',
-  'sync-docs', 'dedup', 'finalize',
-];
-
 /** 文件类型 → 图标 & 颜色 */
 const FILE_TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
   'index':           { icon: BookOpen,   color: 'text-blue-600',    label: 'overview' },
@@ -93,7 +73,7 @@ const FILE_TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string;
   'patterns':        { icon: Sparkles,   color: 'text-amber-600',   label: 'patterns' },
   'module':          { icon: FolderOpen, color: 'text-cyan-600',    label: 'module' },
   'document':        { icon: FileText,   color: 'text-orange-600',  label: 'document' },
-  '_index':          { icon: Hash,       color: 'text-slate-500',   label: 'index' },
+  '_index':          { icon: Hash,       color: 'text-[var(--fg-secondary)]',   label: 'index' },
 };
 
 function getFileTypeConfig(filePath: string) {
@@ -101,7 +81,7 @@ function getFileTypeConfig(filePath: string) {
   if (name === '_index') return FILE_TYPE_CONFIG['_index'];
   if (filePath.startsWith('modules/')) return FILE_TYPE_CONFIG['module'];
   if (filePath.startsWith('documents/')) return FILE_TYPE_CONFIG['document'];
-  return FILE_TYPE_CONFIG[name] || { icon: FileText, color: 'text-slate-500', label: 'doc' };
+  return FILE_TYPE_CONFIG[name] || { icon: FileText, color: 'text-[var(--fg-secondary)]', label: 'doc' };
 }
 
 /** 来源标签配置 */
@@ -136,132 +116,6 @@ function formatDate(dateStr: string | undefined): string {
   if (diff < 604800_000) return `${Math.floor(diff / 86400_000)} d ago`;
   return d.toLocaleDateString('zh-CN');
 }
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  return `${(bytes / 1024).toFixed(1)} KB`;
-}
-
-/* ═══════════════════════════════════════════════════════
- *  Stats Overview Cards
- * ═══════════════════════════════════════════════════════ */
-
-/** 内联统计指标（用于 Header 右侧） */
-const InlineStats: React.FC<{
-  meta: WikiMeta | null;
-  filesCount: number;
-}> = ({ meta, filesCount }) => {
-  const { t } = useI18n();
-  const aiPolished = meta?.files?.filter(f => f.polished).length || 0;
-  const synced = meta?.files?.filter(f => f.source).length || 0;
-
-  return (
-    <div className="flex items-center gap-3 text-xs">
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
-        <FileText size={14} className="text-slate-400" />
-        <span className="text-slate-500">{t('wiki.fileCount', { count: filesCount })}</span>
-        {aiPolished > 0 && (
-          <span className="text-violet-500 ml-1">（AI {aiPolished}）</span>
-        )}
-      </div>
-      {synced > 0 && (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-100">
-          <Download size={14} className="text-orange-400" />
-          <span className="text-orange-600">{t('wiki.synced')} <strong className="text-orange-700">{synced}</strong></span>
-        </div>
-      )}
-      {meta?.generatedAt && (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
-          <Clock size={14} className="text-emerald-400" />
-          <span className="text-emerald-600">{formatDate(meta.generatedAt)}</span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* ═══════════════════════════════════════════════════════
- *  Generation Progress (Pipeline)
- * ═══════════════════════════════════════════════════════ */
-
-const GenerationProgress: React.FC<{
-  task: WikiStatus['task'];
-  onAbort: () => void;
-}> = ({ task, onAbort }) => {
-  const { t } = useI18n();
-  if (task.status !== 'running') return null;
-
-  const currentPhaseIndex = PHASE_ORDER.indexOf(task.phase || '');
-
-  return (
-    <div className="bg-white border border-blue-200 rounded-xl p-5 mb-6 shadow-sm">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <Loader2 size={ICON_SIZES.lg} className="text-blue-600 animate-spin" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-800">{t('wiki.wikiGenerating')}</h3>
-            <p className="text-sm text-slate-500">{task.message || t('common.loading')}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-lg font-bold text-blue-600 font-mono">{task.progress || 0}%</span>
-          <button
-            onClick={onAbort}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-lg border border-red-200 hover:bg-red-100 transition-colors"
-          >
-            <Square size={ICON_SIZES.sm} />
-            {t('common.stop')}
-          </button>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div className="w-full bg-slate-100 rounded-full h-2 mb-4">
-        <div
-          className="bg-gradient-to-r from-blue-500 to-blue-400 h-2 rounded-full transition-all duration-500 ease-out"
-          style={{ width: `${Math.max(task.progress || 0, 2)}%` }}
-        />
-      </div>
-
-      {/* Phase pipeline */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-1">
-        {PHASE_ORDER.map((phaseKey, index) => {
-          const cfg = PHASE_CONFIG[phaseKey];
-          const Icon = cfg?.icon || CircleDot;
-          const isDone = index < currentPhaseIndex;
-          const isCurrent = index === currentPhaseIndex;
-
-          return (
-            <React.Fragment key={phaseKey}>
-              {index > 0 && (
-                <div className={`w-3 h-px flex-shrink-0 ${isDone ? 'bg-emerald-400' : 'bg-slate-200'}`} />
-              )}
-              <div
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs whitespace-nowrap transition-all flex-shrink-0 ${
-                  isDone    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                  isCurrent ? 'bg-blue-50 text-blue-700 border border-blue-300 shadow-sm' :
-                              'bg-slate-50 text-slate-400 border border-slate-100'
-                }`}
-              >
-                {isDone ? (
-                  <CheckCircle size={12} className="text-emerald-500" />
-                ) : isCurrent ? (
-                  <Loader2 size={12} className="text-blue-500 animate-spin" />
-                ) : (
-                  <Icon size={12} />
-                )}
-                <span className="hidden sm:inline">{cfg?.label || phaseKey}</span>
-              </div>
-            </React.Fragment>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
 
 /* ═══════════════════════════════════════════════════════
  *  Status Banner
@@ -425,15 +279,15 @@ const FileTree: React.FC<{
             <div key={node.path}>
               <button
                 onClick={() => toggleDir(node.path)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--fg-secondary)] hover:bg-[var(--bg-subtle)] rounded-lg transition-colors"
               >
                 {isExpanded
-                  ? <ChevronDown size={14} className="text-slate-400 flex-shrink-0" />
-                  : <ChevronRight size={14} className="text-slate-400 flex-shrink-0" />
+                  ? <ChevronDown size={14} className="text-[var(--fg-muted)] flex-shrink-0" />
+                  : <ChevronRight size={14} className="text-[var(--fg-muted)] flex-shrink-0" />
                 }
                 <FolderOpen size={14} className="text-amber-500 flex-shrink-0" />
                 <span className="font-medium truncate">{DIR_LABELS[node.name] || node.name}</span>
-                <span className="ml-auto text-xs text-slate-400">{filteredChildren?.length || 0}</span>
+                <span className="ml-auto text-xs text-[var(--fg-muted)]">{filteredChildren?.length || 0}</span>
               </button>
               {isExpanded && filteredChildren && (
                 <div className="ml-3">
@@ -467,7 +321,7 @@ const FileTreeItem: React.FC<{
       className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-all ${
         isActive
           ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm'
-          : 'text-slate-600 hover:bg-slate-50'
+          : 'text-[var(--fg-secondary)] hover:bg-[var(--bg-subtle)]'
       }`}
     >
       <Icon size={14} className={`flex-shrink-0 ${isActive ? 'text-blue-500' : config.color}`} />
@@ -510,22 +364,22 @@ const DocumentReader: React.FC<{
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0">
+      <div className="flex items-center justify-between px-5 py-3 bg-[var(--bg-subtle)] border-b border-[var(--border-default)] flex-shrink-0">
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
-            className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors lg:hidden"
+            className="p-1.5 hover:bg-[var(--bg-subtle)] rounded-lg transition-colors lg:hidden"
             title={t('wiki.backToList')}
           >
             <ArrowLeft size={ICON_SIZES.md} />
           </button>
           <div className="flex items-center gap-1 text-sm">
-            <BookOpen size={14} className="text-slate-400" />
-            <span className="text-slate-400">wiki</span>
+            <BookOpen size={14} className="text-[var(--fg-muted)]" />
+            <span className="text-[var(--fg-muted)]">wiki</span>
             {breadcrumbs.map((bc, i) => (
               <React.Fragment key={i}>
-                <ChevronRight size={12} className="text-slate-300" />
-                <span className={bc.isLast ? 'font-medium text-slate-700' : 'text-slate-400'}>{bc.label}</span>
+                <ChevronRight size={12} className="text-[var(--fg-muted)]" />
+                <span className={bc.isLast ? 'font-medium text-[var(--fg-primary)]' : 'text-[var(--fg-muted)]'}>{bc.label}</span>
               </React.Fragment>
             ))}
           </div>
@@ -541,14 +395,14 @@ const DocumentReader: React.FC<{
           {fileMeta?.source && (() => {
             const sc = SOURCE_CONFIG[fileMeta.source];
             return (
-              <span className={`flex items-center gap-1 text-xs border px-2 py-0.5 rounded-full ${sc?.bg || 'bg-slate-50 border-slate-200'} ${sc?.color || 'text-slate-600'}`}>
+              <span className={`flex items-center gap-1 text-xs border px-2 py-0.5 rounded-full ${sc?.bg || 'bg-[var(--bg-subtle)] border-[var(--border-default)]'} ${sc?.color || 'text-[var(--fg-secondary)]'}`}>
                 {sc?.label || fileMeta.source}
               </span>
             );
           })()}
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 text-xs text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] hover:bg-[var(--bg-subtle)] rounded-md transition-colors"
           >
             {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
             {copied ? t('wiki.copySuccess') : t('wiki.copyBtn')}
@@ -579,15 +433,15 @@ const DocumentReader: React.FC<{
 const EmptyState: React.FC = () => {
   const { t } = useI18n();
   return (
-  <div className="h-72 flex flex-col items-center justify-center bg-white rounded-2xl border border-dashed border-slate-200 text-slate-400">
-    <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center mb-4">
-      <BookOpen size={32} className="text-slate-300" />
+  <div className="h-72 flex flex-col items-center justify-center bg-[var(--bg-surface)] rounded-2xl border border-dashed border-[var(--border-default)] text-[var(--fg-muted)]">
+    <div className="w-16 h-16 rounded-2xl bg-[var(--bg-subtle)] flex items-center justify-center mb-4">
+      <BookOpen size={32} className="text-[var(--fg-muted)]" />
     </div>
-    <p className="text-sm font-medium text-slate-500">{t('wiki.emptyTitle')}</p>
-    <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-slate-400">
+    <p className="text-sm font-medium text-[var(--fg-secondary)]">{t('wiki.emptyTitle')}</p>
+    <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-[var(--fg-muted)]">
       {t('wiki.emptyDesc')}
     </p>
-    <p className="mt-3 text-[11px] text-slate-400">
+    <p className="mt-3 text-[11px] text-[var(--fg-muted)]">
       {t('wiki.emptyHint')}
     </p>
   </div>
@@ -629,13 +483,13 @@ const ContentPlaceholder: React.FC<{
               <Bot size={36} className="text-blue-500 animate-pulse" />
             </div>
           </div>
-          <h3 className="text-lg font-semibold text-slate-700 mb-1">{t('wiki.wikiGenerating')}</h3>
-          <p className="text-sm text-slate-500 max-w-md text-center leading-relaxed">
+          <h3 className="text-lg font-semibold text-[var(--fg-primary)] mb-1">{t('wiki.wikiGenerating')}</h3>
+          <p className="text-sm text-[var(--fg-secondary)] max-w-md text-center leading-relaxed">
             {message || t('wiki.generating')}
           </p>
           {typeof progress === 'number' && (
             <div className="mt-4 w-48">
-              <div className="w-full bg-slate-100 rounded-full h-2">
+              <div className="w-full bg-[var(--bg-subtle)] rounded-full h-2">
                 <div
                   className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-700 ease-out"
                   style={{ width: `${Math.max(progress, 3)}%` }}
@@ -650,11 +504,11 @@ const ContentPlaceholder: React.FC<{
       {/* 常规选择文件提示 + 快捷入口 */}
       {!isGenerating && (
         <div className="text-center mb-8">
-          <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <FileText size={24} className="text-slate-400" />
+          <div className="w-12 h-12 bg-[var(--bg-subtle)] rounded-xl flex items-center justify-center mx-auto mb-3">
+            <FileText size={24} className="text-[var(--fg-muted)]" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-700">{t('wiki.selectFile')}</h3>
-          <p className="text-sm text-slate-500 mt-1">{t('wiki.selectPlaceholder')}</p>
+          <h3 className="text-lg font-semibold text-[var(--fg-primary)]">{t('wiki.selectFile')}</h3>
+          <p className="text-sm text-[var(--fg-secondary)] mt-1">{t('wiki.selectPlaceholder')}</p>
         </div>
       )}
 
@@ -676,7 +530,7 @@ const ContentPlaceholder: React.FC<{
       </div>
 
       {meta && (
-        <div className="mt-8 text-center text-xs text-slate-400">
+        <div className="mt-8 text-center text-xs text-[var(--fg-muted)]">
           {meta.generatedAt && `${t('wiki.lastGenerated')}: ${new Date(meta.generatedAt).toLocaleString()}`}
           {meta.duration != null && ` · ${t('wiki.duration')} ${formatDuration(meta.duration)}`}
           {meta.version && ` · v${meta.version}`}
@@ -776,15 +630,6 @@ const WikiView: React.FC = () => {
     }
   };
 
-  const handleAbort = async () => {
-    try {
-      await api.wikiAbort();
-      await loadStatus();
-    } catch (err: any) {
-      console.error('Wiki abort failed:', err);
-    }
-  };
-
   const handleFileSelect = async (filePath: string) => {
     if (filePath === 'meta.json') return;
     setSelectedFile(filePath);
@@ -865,20 +710,20 @@ const WikiView: React.FC = () => {
           {/* Split Layout: Tree + Content */}
           <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
             {/* Sidebar — 固定，独立滚动 */}
-            <div className={`w-64 flex-shrink-0 bg-white border border-slate-200 rounded-xl flex flex-col overflow-hidden ${
+            <div className={`w-64 flex-shrink-0 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-xl flex flex-col overflow-hidden ${
               selectedFile ? 'hidden lg:flex' : ''
             }`}>
               {/* Sidebar Header — 标题 + 搜索 + 操作 */}
-              <div className="px-3 pt-3 pb-2 border-b border-slate-100 shrink-0">
+              <div className="px-3 pt-3 pb-2 border-b border-[var(--border-default)] shrink-0">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <BookOpen size={16} className="text-blue-500" />
-                    <span className="text-sm font-semibold text-slate-700">Wiki</span>
-                    {meta?.version && <span className="text-[10px] text-slate-300">v{meta.version}</span>}
+                    <span className="text-sm font-semibold text-[var(--fg-primary)]">Wiki</span>
+                    {meta?.version && <span className="text-[10px] text-[var(--fg-muted)]">v{meta.version}</span>}
                   </div>
                   <div className="flex items-center gap-1">
                     {wikiExists && (
-                      <span className="text-[10px] text-slate-400">{t('wiki.fileCount', { count: displayFiles.length })}</span>
+                      <span className="text-[10px] text-[var(--fg-muted)]">{t('wiki.fileCount', { count: displayFiles.length })}</span>
                     )}
                     {status.task.status !== 'running' && wikiExists && (
                       <button
@@ -892,13 +737,13 @@ const WikiView: React.FC = () => {
                   </div>
                 </div>
                 <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]" />
                   <input
                     type="text"
                     placeholder={t('wiki.searchPlaceholder')}
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
+                    className="w-full pl-8 pr-3 py-2 text-sm bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300 transition-all"
                   />
                 </div>
               </div>
@@ -914,8 +759,8 @@ const WikiView: React.FC = () => {
               </div>
               {/* Sidebar Footer — 生成时间 */}
               {meta?.generatedAt && (
-                <div className="px-3 py-2 border-t border-slate-100 shrink-0">
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <div className="px-3 py-2 border-t border-[var(--border-default)] shrink-0">
+                  <div className="flex items-center gap-1.5 text-[10px] text-[var(--fg-muted)]">
                     <Clock size={10} />
                     <span>{formatDate(meta.generatedAt)}</span>
                     {meta.duration != null && <span>· {formatDuration(meta.duration)}</span>}
@@ -925,7 +770,7 @@ const WikiView: React.FC = () => {
             </div>
 
             {/* Content Area — 独立滚动 */}
-            <div className={`flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col min-h-0 ${
+            <div className={`flex-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-xl overflow-hidden flex flex-col min-h-0 ${
               !selectedFile ? 'hidden lg:flex' : ''
             }`}>
               {selectedFile ? (

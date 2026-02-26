@@ -8,7 +8,7 @@
  *   4. t('pagination.showing', { start: 1, end: 10, total: 100 })
  */
 
-import React, { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from 'react';
 import { zh } from './locales/zh';
 import { en } from './locales/en';
 import type { Locale } from './types';

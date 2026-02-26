@@ -1,17 +1,23 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Edit3, Trash2, Tag, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BookOpenCheck, ChevronLeft, ChevronRight, Eye, Save, Loader2, Link2, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Maximize2, Minimize2, Code2, Hash, Layers, Globe, FolderOpen } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BookOpenCheck, Eye, Save, Link2, Plus, Search, ArrowUp, ArrowDown, Code2, Layers, Globe, MoreHorizontal, Clock } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { Recipe } from '../../types';
 import { categoryConfigs } from '../../constants';
 import Pagination from '../Shared/Pagination';
-import MarkdownWithHighlight from '../Shared/MarkdownWithHighlight';
 import HighlightedCodeEditor from '../Shared/HighlightedCodeEditor';
-import CodeBlock from '../Shared/CodeBlock';
 import api from '../../api';
+import DrawerMeta from '../Shared/DrawerMeta';
+import type { BadgeItem, MetaItem } from '../Shared/DrawerMeta';
+import DrawerContent from '../Shared/DrawerContent';
 import { notify } from '../../utils/notification';
 import { ICON_SIZES } from '../../constants/icons';
-import PageOverlay from '../Shared/PageOverlay';
 import { useI18n } from '../../i18n';
+import { cn } from '../../lib/utils';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { Drawer } from '../Layout/Drawer';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '../ui/DropdownMenu';
+import Select from '../ui/Select';
 
 /* ── Config ── */
 const kindConfig: Record<string, { label: string; color: string; bg: string; border: string; icon: React.ElementType }> = {
@@ -46,17 +52,6 @@ interface RecipesViewProps {
 function getDisplayName(recipe: Recipe): string {
   const raw = recipe.name || (recipe as any).title || 'Untitled';
   return raw.replace(/\.md$/i, '');
-}
-
-function getContentStr(recipe: Recipe): string {
-  const c = recipe.content;
-  if (!c) return '';
-  if (typeof c === 'string') return c;
-  // V3: 将 code 和 markdown 都包含在搜索/显示字符串中（两者不互斥）
-  const parts: string[] = [];
-  if (c.pattern) parts.push(c.pattern);
-  if (c.markdown) parts.push(c.markdown);
-  return parts.length > 0 ? parts.join('\n\n') : JSON.stringify(c, null, 2);
 }
 
 function getCodePattern(recipe: Recipe): string {
@@ -122,7 +117,6 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   const { isWide: drawerWide, toggle: toggleDrawerWide } = useDrawerWide();
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [drawerMode, setDrawerMode] = useState<'view' | 'edit'>('view');
-  const [editContent, setEditContent] = useState('');
   const [editForm, setEditForm] = useState<{
     title: string;
     description: string;
@@ -155,7 +149,6 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   const openDrawer = (recipe: Recipe) => {
     setSelectedRecipe(recipe);
     setDrawerMode('view');
-    setEditContent(getContentStr(recipe));
     setEditForm({
       title: recipe.name?.replace(/\.md$/, '') || '',
       description: recipe.description || '',
@@ -232,8 +225,10 @@ const RecipesView: React.FC<RecipesViewProps> = ({
     return map;
   }, [recipes, idTitleMapProp]);
 
+  const [relationBusy, setRelationBusy] = useState(false);
+
   const handleAddRelation = async (type: string, targetName: string) => {
-    if (!selectedRecipe) return;
+    if (!selectedRecipe || relationBusy) return;
     const currentRelations: Record<string, any[]> = {};
     if (selectedRecipe.relations) {
       for (const [k, v] of Object.entries(selectedRecipe.relations)) currentRelations[k] = [...v];
@@ -241,38 +236,52 @@ const RecipesView: React.FC<RecipesViewProps> = ({
     const existing = currentRelations[type] || [];
     const targetId = targetName.replace(/\.md$/i, '');
     if (existing.some((r: any) => {
-      const id = typeof r === 'string' ? r : r.id || r.title || '';
+      const id = typeof r === 'string' ? r : r.target || r.id || r.title || '';
       return id.replace(/\.md$/i, '').toLowerCase() === targetId.toLowerCase();
     })) return;
     currentRelations[type] = [...existing, targetId];
+
+    // 乐观更新：先更新本地状态，再发请求
+    const previousRecipe = selectedRecipe;
+    setSelectedRecipe({ ...selectedRecipe, relations: currentRelations });
+    setIsAddingRelation(false); setRelationSearchQuery('');
+    setRelationBusy(true);
     try {
       await api.updateRecipeRelations(selectedRecipe.id || selectedRecipe.name, currentRelations);
-      setSelectedRecipe({ ...selectedRecipe, relations: currentRelations });
-      setIsAddingRelation(false); setRelationSearchQuery('');
-      onRefresh?.();
     } catch (err: any) {
+      // 回滚
+      setSelectedRecipe(previousRecipe);
       notify(err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
+    } finally {
+      setRelationBusy(false);
     }
   };
 
   const handleRemoveRelation = async (type: string, targetName: string) => {
-    if (!selectedRecipe) return;
+    if (!selectedRecipe || relationBusy) return;
     const currentRelations: Record<string, any[]> = {};
     if (selectedRecipe.relations) {
       for (const [k, v] of Object.entries(selectedRecipe.relations)) currentRelations[k] = [...v];
     }
     const existing = currentRelations[type] || [];
     currentRelations[type] = existing.filter((r: any) => {
-      const id = typeof r === 'string' ? r : r.id || r.title || '';
+      const id = typeof r === 'string' ? r : r.target || r.id || r.title || '';
       return id.replace(/\.md$/i, '').toLowerCase() !== targetName.replace(/\.md$/i, '').toLowerCase();
     });
     if (currentRelations[type].length === 0) delete currentRelations[type];
+
+    // 乐观更新：先更新本地状态，再发请求
+    const previousRecipe = selectedRecipe;
+    setSelectedRecipe({ ...selectedRecipe, relations: currentRelations });
+    setRelationBusy(true);
     try {
       await api.updateRecipeRelations(selectedRecipe.id || selectedRecipe.name, currentRelations);
-      setSelectedRecipe({ ...selectedRecipe, relations: currentRelations });
-      onRefresh?.();
     } catch (err: any) {
+      // 回滚
+      setSelectedRecipe(previousRecipe);
       notify(err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
+    } finally {
+      setRelationBusy(false);
     }
   };
 
@@ -330,68 +339,21 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   const goToNext = () => { if (currentIndex < sortedRecipes.length - 1) openDrawer(sortedRecipes[currentIndex + 1]); };
 
   /* ── Badge row ── */
-  const BadgeRow: React.FC<{ recipe: Recipe; compact?: boolean }> = ({ recipe, compact }) => {
+  /** 卡片列表用的精简标签行（纯文本） */
+  const BadgeRow: React.FC<{ recipe: Recipe; compact?: boolean }> = ({ recipe }) => {
     const kc = recipe.kind ? kindConfig[recipe.kind] : null;
-    const KindIcon = kc?.icon || FileText;
     const category = recipe.category || 'Utility';
-    const catCfg = categoryConfigs[category] || categoryConfigs.Utility;
-    const CatIcon = catCfg.icon;
     const kt = recipe.knowledgeType;
-    const sz = compact ? 'text-[8px]' : 'text-[9px]';
+    const items: string[] = [];
+    if (kc) items.push(kc.label);
+    if (category) items.push(category);
+    if (kt && knowledgeTypeLabelKeys[kt]) items.push(t(knowledgeTypeLabelKeys[kt]));
+    if (recipe.language) items.push(recipe.language.toUpperCase());
+    if (recipe.trigger) items.push(recipe.trigger);
     return (
-      <div className="flex flex-wrap items-center gap-1.5">
-        {kc && (
-          <span className={`${sz} font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border ${kc.bg} ${kc.color} ${kc.border}`}>
-            <KindIcon size={compact ? 9 : 10} />{kc.label}
-          </span>
-        )}
-        <span className={`${sz} font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1 border ${catCfg.bg} ${catCfg.color} ${catCfg.border}`}>
-          <CatIcon size={compact ? 9 : 10} />{category}
-        </span>
-        {kt && (
-          <span className={`${sz} font-medium px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100`}>{knowledgeTypeLabelKeys[kt] ? t(knowledgeTypeLabelKeys[kt]) : kt}</span>
-        )}
-        {recipe.language && (
-          <span className={`${sz} font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase`}>{recipe.language}</span>
-        )}
-        {recipe.trigger && (
-          <span className={`${sz} font-mono font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100`}>{recipe.trigger}</span>
-        )}
-      </div>
-    );
-  };
-
-  /* ── Metadata row: only non-empty fields ── */
-  const MetadataRow: React.FC<{ recipe: Recipe }> = ({ recipe }) => {
-    const items: { icon: React.ElementType; iconClass: string; label: string; value: string; mono?: boolean }[] = [];
-    if (recipe.scope) items.push({ icon: Globe, iconClass: 'text-teal-400', label: t('candidates.path'), value: recipe.scope === 'universal' ? t('common.all') : recipe.scope === 'project-specific' ? t('candidates.category') : recipe.scope });
-    if (recipe.complexity) items.push({ icon: Layers, iconClass: 'text-orange-400', label: t('candidates.category'), value: recipe.complexity === 'advanced' ? t('candidates.confidenceHigh') : recipe.complexity === 'intermediate' ? t('candidates.confidenceMedium') : recipe.complexity === 'basic' ? t('candidates.confidenceLow') : recipe.complexity });
-    if (recipe.difficulty && recipe.difficulty !== recipe.complexity) items.push({ icon: Layers, iconClass: 'text-amber-400', label: t('candidates.category'), value: recipe.difficulty });
-    if (recipe.moduleName) items.push({ icon: Layers, iconClass: 'text-purple-400', label: t('candidates.category'), value: recipe.moduleName, mono: true });
-    if (recipe.source && recipe.source !== 'unknown') items.push({ icon: Globe, iconClass: 'text-violet-400', label: t('recipes.sourceLabel'), value: recipe.source === 'bootstrap-scan' ? t('recipes.sourceBootstrap') : recipe.source === 'agent' ? t('recipes.sourceAiScan') : recipe.source });
-    if (recipe.version) items.push({ icon: Hash, iconClass: 'text-slate-400', label: t('candidates.language'), value: recipe.version });
-    if (recipe.updatedAt && isValidTimestamp(recipe.updatedAt)) items.push({ icon: Hash, iconClass: 'text-slate-400', label: t('candidates.updatedAt'), value: formatDate(recipe.updatedAt) });
-    if (items.length === 0 && !recipe.sourceFile) return null;
-    return (
-      <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs">
-        {items.map((item, i) => {
-          const Icon = item.icon;
-          return (
-            <div key={i} className="flex items-center gap-1.5">
-              <Icon size={11} className={`${item.iconClass} shrink-0`} />
-              <span className="text-slate-400">{item.label}</span>
-              <span className={`font-medium text-slate-600 ${item.mono ? 'font-mono text-[11px]' : ''}`}>{item.value}</span>
-            </div>
-          );
-        })}
-        {recipe.sourceFile && (
-          <div className="flex items-center gap-1.5 basis-full mt-0.5">
-            <FolderOpen size={11} className="text-slate-300 shrink-0" />
-            <span className="text-slate-400">{t('candidates.path')}</span>
-            <code className="font-mono text-[11px] text-slate-500 break-all" title={recipe.sourceFile}>{recipe.sourceFile}</code>
-          </div>
-        )}
-      </div>
+      <span className="text-[11px] text-[var(--fg-muted)] truncate">
+        {items.join('  ·  ')}
+      </span>
     );
   };
 
@@ -399,15 +361,14 @@ const RecipesView: React.FC<RecipesViewProps> = ({
     <div className="relative">
       {recipes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <BookOpenCheck size={48} className="text-slate-200 mb-4" />
-          <p className="font-medium text-slate-600 mb-1">{t('recipes.noResults')}</p>
-          <p className="text-sm text-slate-400">{t('recipes.noContent')}</p>
+          <BookOpenCheck size={48} className="text-[var(--fg-muted)] mb-4 opacity-40" />
+          <p className="font-medium text-[var(--fg-secondary)] mb-1">{t('recipes.noResults')}</p>
+          <p className="text-sm text-[var(--fg-muted)]">{t('recipes.noContent')}</p>
         </div>
       ) : (
         <>
-          {/* ── Sort bar ── */}
-          <div className="flex items-center gap-2 mb-4 text-xs">
-            <ArrowUpDown size={14} className="text-slate-400 shrink-0" />
+          {/* ── Stats bar: kind filter tabs ── */}
+          <div className="flex items-center gap-1.5 mb-4 border-b border-[var(--border-default)] pb-3">
             {sortOptions.map(opt => {
               const active = sortKey === opt.key;
               return (
@@ -418,96 +379,85 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     else { setSortKey(opt.key); setSortDir(opt.defaultDir); }
                     setCurrentPage(1);
                   }}
-                  className={`px-2 py-1 rounded-md flex items-center gap-0.5 transition-colors ${
-                    active ? 'bg-blue-50 text-blue-700 font-medium border border-blue-200' : 'text-slate-500 hover:bg-slate-100 border border-transparent'
-                  }`}
+                  className={cn(
+                    "px-4 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1",
+                    active
+                      ? "bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent-emphasis)]"
+                      : "text-[var(--fg-muted)] hover:bg-[var(--bg-subtle)] border border-transparent"
+                  )}
                 >
                   {opt.label}
                   {active && sortKey !== 'default' && (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                 </button>
               );
             })}
-            <span className="ml-auto text-slate-400">{t('recipes.totalCount', { count: recipes.length })}</span>
+            <span className="ml-auto text-xs text-[var(--fg-muted)]">{t('recipes.totalCount', { count: recipes.length })}</span>
           </div>
 
-          {/* ══════════ Card grid ══════════ */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* ══════════ Card list (Resend style — divider, no outer border) ══════════ */}
+          <div>
             {paginatedRecipes.map(recipe => {
               const displayName = getDisplayName(recipe);
-              const codePattern = getCodePattern(recipe);
               const summary = recipe.description || recipe.usageGuide || '';
               const isSelected = selectedRecipe && getDisplayName(selectedRecipe) === displayName;
+              const kc = recipe.kind ? kindConfig[recipe.kind] : null;
               return (
                 <div
                   key={recipe.id || displayName}
                   onClick={() => openDrawer(recipe)}
-                  className={`bg-white rounded-xl border shadow-sm hover:shadow-md transition-all group relative cursor-pointer overflow-hidden ${
-                    isSelected ? 'border-blue-300 ring-1 ring-blue-200' : 'border-slate-200'
-                  }`}
+                  className={cn(
+                    "group relative cursor-pointer py-4 px-4 rounded-lg transition-colors hover:bg-[var(--bg-subtle)] after:absolute after:bottom-0 after:left-4 after:right-4 after:h-px after:bg-[var(--border-default)] last:after:hidden",
+                    isSelected && "bg-[var(--accent-subtle)]"
+                  )}
                 >
-                  <div className="absolute top-3 right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button onClick={e => { e.stopPropagation(); openDrawer(recipe); setDrawerMode('edit'); }} className="p-1.5 bg-white/90 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors shadow-sm border border-slate-100" title={t('recipes.editRecipe')}><Edit3 size={ICON_SIZES.sm} /></button>
-                    <button onClick={e => { e.stopPropagation(); handleDeleteRecipe(recipe.name || (recipe as any).id); }} className="p-1.5 bg-white/90 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors shadow-sm border border-slate-100" title={t('recipes.deleteRecipe')}><Trash2 size={ICON_SIZES.sm} /></button>
-                  </div>
-                  <div className="px-5 pt-4 pb-3">
-                    <h3 className="font-bold text-slate-900 text-sm mb-2 pr-16 break-words leading-snug">{displayName}</h3>
-                    <BadgeRow recipe={recipe} compact />
-                  </div>
-                  {recipe.tags && recipe.tags.length > 0 && (
-                    <div className="px-5 pb-2 flex flex-wrap gap-1">
-                      {recipe.tags.slice(0, 4).map((tag, i) => (
-                        <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 flex items-center gap-0.5"><Tag size={7} />{tag}</span>
-                      ))}
-                      {recipe.tags.length > 4 && <span className="text-[9px] text-slate-400">+{recipe.tags.length - 4}</span>}
-                    </div>
-                  )}
-                  {summary && (
-                    <div className="px-5 pb-3">
-                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{summary.replace(/^#+\s*/gm, '').replace(/\*\*/g, '')}</p>
-                    </div>
-                  )}
-                  {recipe.content?.markdown && (
-                    <div className="mx-4 mb-2">
-                      <div className="flex items-center gap-1 mb-1 px-0.5">
-                        <FileText size={9} className="text-blue-400" />
-                        <span className="text-[9px] font-bold text-blue-400 uppercase">Markdown</span>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-[var(--fg-primary)] text-sm break-words leading-snug truncate">{displayName}</h3>
+                        {kc && (
+                          <Badge variant={kc.label === 'Rule' ? 'red' : kc.label === 'Pattern' ? 'blue' : 'default'} className="text-[9px] uppercase shrink-0">
+                            {kc.label}
+                          </Badge>
+                        )}
+                        {recipe.stats?.authority != null && recipe.stats.authority >= 4 && (
+                          <span className="text-amber-500 text-[11px] shrink-0">★ {recipe.stats.authority}</span>
+                        )}
                       </div>
-                      <div className="bg-blue-50/30 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-800/40 rounded-lg px-3 py-2 max-h-[60px] overflow-hidden">
-                        <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
-                          {recipe.content.markdown.replace(/^#+\s*/gm, '').replace(/\*\*/g, '').replace(/```[\s\S]*?```/g, '').trim().slice(0, 200)}
-                        </p>
+                      {summary && (
+                        <p className="text-xs text-[var(--fg-secondary)] line-clamp-1 leading-relaxed mb-1.5">{summary.replace(/^#+\s*/gm, '').replace(/\*\*/g, '')}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <BadgeRow recipe={recipe} compact />
+                        {recipe.tags && recipe.tags.length > 0 && (
+                          <span className="text-[11px] text-[var(--fg-muted)]">
+                            {recipe.tags.slice(0, 3).join(', ')}
+                            {recipe.tags.length > 3 && ` +${recipe.tags.length - 3}`}
+                          </span>
+                        )}
                       </div>
                     </div>
-                  )}
-                  {codePattern && (
-                    <div className="mx-4 mb-3">
-                      <div className="flex items-center gap-1 mb-1 px-0.5">
-                        <FileCode size={9} className="text-emerald-400" />
-                        <span className="text-[9px] font-bold text-emerald-400 uppercase">Code</span>
-                      </div>
-                      <div className="rounded-lg overflow-hidden max-h-[120px]">
-                        <CodeBlock code={codePattern.split('\n').slice(0, 6).join('\n')} language={getCodeLang(recipe)} />
-                      </div>
+                    {/* ⋯ action menu */}
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm" onClick={e => e.stopPropagation()}>
+                            <MoreHorizontal size={14} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={e => { e.stopPropagation(); openDrawer(recipe); }}>
+                            <Eye size={14} className="mr-2" /> {t('common.preview')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={e => { e.stopPropagation(); openDrawer(recipe); setDrawerMode('edit'); }}>
+                            <Edit3 size={14} className="mr-2" /> {t('common.edit')}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-[var(--status-error)]" onClick={e => { e.stopPropagation(); handleDeleteRecipe(recipe.name || (recipe as any).id); }}>
+                            <Trash2 size={14} className="mr-2" /> {t('recipes.deleteRecipe')}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                  )}
-                  <div className="px-5 py-2.5 bg-slate-50/80 dark:bg-[#252a36] border-t border-slate-100 dark:border-slate-700 flex items-center gap-3 text-[10px] text-slate-400">
-                    <span className="font-bold text-amber-600">★ {recipe.stats?.authority ?? 0}</span>
-                    <span>{t('recipes.usageCount', { count: recipe.stats ? (recipe.stats.guardUsageCount + recipe.stats.humanUsageCount + recipe.stats.aiUsageCount) : 0 })}</span>
-                    {recipe.source && recipe.source !== 'unknown' && (
-                      <>
-                        <span className="text-slate-200">|</span>
-                        <span>{recipe.source === 'bootstrap-scan' ? t('recipes.sourceBootstrap') : recipe.source === 'agent' ? t('recipes.sourceAiScan') : recipe.source}</span>
-                      </>
-                    )}
-                    {recipe.moduleName && (
-                      <>
-                        <span className="text-slate-200">|</span>
-                        <span className="font-mono">{recipe.moduleName}</span>
-                      </>
-                    )}
-                    {recipe.relations && Object.values(recipe.relations).flat().length > 0 && (
-                      <span className="ml-auto text-purple-500 font-medium">{t('recipes.relations')} {Object.values(recipe.relations).flat().length}</span>
-                    )}
                   </div>
                 </div>
               );
@@ -538,68 +488,54 @@ const RecipesView: React.FC<RecipesViewProps> = ({
         const contentV3 = recipe.content;
 
         return (
-          <PageOverlay className="z-30 flex justify-end" onClick={closeDrawer}>
-            <PageOverlay.Backdrop />
-            <div
-              className={`relative h-full bg-white dark:bg-[#1e1e1e] shadow-2xl flex flex-col ${drawerWide ? 'w-[min(92vw,1100px)]' : 'w-[min(92vw,800px)]'}`}
-              style={{ animation: 'slideInRight 0.25s ease-out' }}
-              onClick={e => e.stopPropagation()}
-            >
+          <Drawer open={!!selectedRecipe} onClose={closeDrawer} size={drawerWide ? 'xl' : 'md-lg'}>
               {/* ── Header ── */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-b from-white to-slate-50/50 dark:from-[#252526] dark:to-[#1e1e1e] shrink-0">
-                <div className="flex-1 min-w-0 mr-3">
-                  <h3 className="font-bold text-slate-800 text-lg leading-snug break-words">{displayName}</h3>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={goToPrev} disabled={currentIndex <= 0} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title={t('common.back')}><ChevronLeft size={ICON_SIZES.md} /></button>
-                  <span className="text-xs text-slate-400 tabular-nums">{currentIndex + 1}/{sortedRecipes.length}</span>
-                  <button onClick={goToNext} disabled={currentIndex >= sortedRecipes.length - 1} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30" title={t('common.more')}><ChevronRight size={ICON_SIZES.md} /></button>
-                  <div className="w-px h-5 bg-slate-200 mx-1" />
-                  <div className="flex bg-slate-100 p-0.5 rounded-lg mr-1">
-                    <button onClick={() => setDrawerMode('view')} className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${drawerMode === 'view' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}><Eye size={ICON_SIZES.sm} /> {t('common.preview')}</button>
-                    <button onClick={() => { setDrawerMode('edit'); }} className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${drawerMode === 'edit' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}><Edit3 size={ICON_SIZES.sm} /> {t('common.edit')}</button>
+              <Drawer.Header title={displayName}>
+                <Drawer.Nav currentIndex={currentIndex} total={sortedRecipes.length} onPrev={goToPrev} onNext={goToNext} />
+                <Drawer.HeaderActions>
+                  <div className="flex bg-[var(--bg-subtle)] p-0.5 rounded-lg mr-1">
+                    <button onClick={() => setDrawerMode('view')} className={cn("px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1", drawerMode === 'view' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--accent)]' : 'text-[var(--fg-muted)] hover:text-[var(--fg-secondary)]')}><Eye size={ICON_SIZES.sm} /> {t('common.preview')}</button>
+                    <button onClick={() => { setDrawerMode('edit'); }} className={cn("px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1", drawerMode === 'edit' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--accent)]' : 'text-[var(--fg-muted)] hover:text-[var(--fg-secondary)]')}><Edit3 size={ICON_SIZES.sm} /> {t('common.edit')}</button>
                   </div>
-                  <button onClick={toggleDrawerWide} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400" title={drawerWide ? t('common.collapse') : t('common.expand')}>
-                    {drawerWide ? <Minimize2 size={ICON_SIZES.md} /> : <Maximize2 size={ICON_SIZES.md} />}
-                  </button>
-                  <button onClick={() => { handleDeleteRecipe(recipe.name || (recipe as any).id); closeDrawer(); }} className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title={t('recipes.deleteRecipe')}><Trash2 size={ICON_SIZES.md} /></button>
-                  <button onClick={closeDrawer} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><X size={ICON_SIZES.md} /></button>
-                </div>
-              </div>
+                  <Drawer.WidthToggle isWide={drawerWide} onToggle={toggleDrawerWide} />
+                  <Button variant="danger" size="icon-sm" onClick={() => { handleDeleteRecipe(recipe.name || (recipe as any).id); closeDrawer(); }}><Trash2 size={16} /></Button>
+                  <Drawer.CloseButton onClose={closeDrawer} />
+                </Drawer.HeaderActions>
+              </Drawer.Header>
 
               {drawerMode === 'edit' ? (
                 <>
-                  <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                  <Drawer.Body padded>
                     {/* 标题 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('recipes.recipeDetail')}</label>
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block">{t('recipes.recipeDetail')}</label>
                       <input
                         type="text"
                         value={editForm.title}
                         onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-300"
+                        className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] focus:border-[var(--accent-emphasis)]"
                       />
                     </div>
 
                     {/* 描述 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('recipes.description')}</label>
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block">{t('recipes.description')}</label>
                       <textarea
                         value={editForm.description}
                         onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
                         rows={2}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                        className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] resize-none"
                       />
                     </div>
 
                     {/* 标签 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('recipes.tags')}</label>
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block">{t('recipes.tags')}</label>
                       <div className="flex flex-wrap gap-1.5 mb-2">
                         {editForm.tags.map((tag, i) => (
-                          <span key={i} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 font-medium">
+                          <span key={i} className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--border-default)] font-medium">
                             {tag}
-                            <button onClick={() => setEditForm(f => ({ ...f, tags: f.tags.filter((_, idx) => idx !== i) }))} className="text-blue-400 hover:text-red-500"><X size={10} /></button>
+                            <button onClick={() => setEditForm(f => ({ ...f, tags: f.tags.filter((_, idx) => idx !== i) }))} className="text-[var(--fg-muted)] hover:text-[var(--status-error)]"><X size={10} /></button>
                           </span>
                         ))}
                       </div>
@@ -615,31 +551,31 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                             }
                           }}
                           placeholder={t('recipes.tags')}
-                          className="flex-1 px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          className="flex-1 px-3 py-1.5 text-xs border border-[var(--border-default)] rounded-lg bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)]"
                         />
                       </div>
                     </div>
 
                     {/* Markdown 文档 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block flex items-center gap-1.5">
-                        <FileText size={11} className="text-blue-400" /> {t('recipes.markdown')}
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block flex items-center gap-1.5">
+                        <FileText size={11} className="text-[var(--accent)]" /> {t('recipes.markdown')}
                       </label>
                       <textarea
                         value={editForm.markdown}
                         onChange={e => setEditForm(f => ({ ...f, markdown: e.target.value }))}
                         rows={4}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y font-mono"
+                        className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] resize-y font-mono"
                         placeholder={t('recipes.markdown')}
                       />
                     </div>
 
                     {/* 代码 / 标准用法 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block flex items-center gap-1.5">
-                        <Code2 size={11} className="text-emerald-500" /> {t('recipes.code')}
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block flex items-center gap-1.5">
+                        <Code2 size={11} className="text-[var(--status-success)]" /> {t('recipes.code')}
                       </label>
-                      <div className="border border-slate-200 rounded-lg overflow-hidden" style={{ minHeight: 200 }}>
+                      <div className="border border-[var(--border-default)] rounded-lg overflow-hidden" style={{ minHeight: 200 }}>
                         <HighlightedCodeEditor
                           value={editForm.codePattern}
                           onChange={v => setEditForm(f => ({ ...f, codePattern: v }))}
@@ -652,89 +588,111 @@ const RecipesView: React.FC<RecipesViewProps> = ({
 
                     {/* 设计原理 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('recipes.designRationale')}</label>
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-1.5 block">{t('recipes.designRationale')}</label>
                       <textarea
                         value={editForm.rationale}
                         onChange={e => setEditForm(f => ({ ...f, rationale: e.target.value }))}
                         rows={3}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"
+                        className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg bg-[var(--bg-root)] text-[var(--fg-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] resize-y"
                         placeholder={t('recipes.designRationale')}
                       />
                     </div>
-                  </div>
-                  <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-between shrink-0">
+                  </Drawer.Body>
+                  <Drawer.Footer>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-400">{t('recipes.qualityAuthorityScore')}</span>
-                      <select className="font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg outline-none text-[10px]" value={recipe.stats?.authority ?? 3} onChange={e => handleSetAuthority(parseInt(e.target.value))}>
-                        {[1,2,3,4,5].map(v => <option key={v} value={v}>{'⭐'.repeat(v)} {v}</option>)}
-                      </select>
+                      <span className="text-xs text-[var(--fg-muted)]">{t('recipes.qualityAuthorityScore')}</span>
+                      <Select
+                        value={String(recipe.stats?.authority ?? 3)}
+                        onChange={v => handleSetAuthority(parseInt(v))}
+                        options={[1,2,3,4,5].map(v => ({ value: String(v), label: `${'⭐'.repeat(v)} ${v}` }))}
+                        size="xs"
+                        className="font-bold text-amber-600 bg-amber-50 border-amber-100"
+                      />
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => setDrawerMode('view')} disabled={isSaving} className="px-4 py-1.5 text-sm text-slate-600 font-medium rounded-lg hover:bg-slate-50">{t('common.cancel')}</button>
-                      <button onClick={handleSaveInDrawer} disabled={isSaving} className="px-5 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg flex items-center gap-1.5 hover:bg-blue-700 disabled:opacity-60">
-                        {isSaving ? <Loader2 size={ICON_SIZES.sm} className="animate-spin" /> : <Save size={ICON_SIZES.sm} />}
+                      <Button variant="ghost" onClick={() => setDrawerMode('view')} disabled={isSaving}>{t('common.cancel')}</Button>
+                      <Button variant="primary" onClick={handleSaveInDrawer} disabled={isSaving} loading={isSaving}>
+                        {!isSaving && <Save size={ICON_SIZES.sm} />}
                         {isSaving ? t('common.saving') : t('common.save')}
-                      </button>
+                      </Button>
                     </div>
-                  </div>
+                  </Drawer.Footer>
                 </>
               ) : (
                 /* ═══ View mode — V3 structured ═══ */
-                <div className="flex-1 overflow-y-auto">
+                <Drawer.Body>
 
-                  {/* 1. Badges + Metadata — only non-empty */}
-                  <div className="px-6 py-4 border-b border-slate-100 space-y-3">
-                    <BadgeRow recipe={recipe} />
-                    <MetadataRow recipe={recipe} />
-                  </div>
-
-                  {/* 2. Tags */}
-                  {recipe.tags && recipe.tags.length > 0 && (
-                    <div className="px-6 py-3 border-b border-slate-100 flex flex-wrap items-center gap-1.5">
-                      <Tag size={11} className="text-slate-300 mr-0.5" />
-                      {recipe.tags.map((tag, i) => (
-                        <span key={i} className="text-[9px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 font-medium">{tag}</span>
-                      ))}
-                    </div>
-                  )}
+                  {/* 1–2. Badges + Metadata + Tags */}
+                  <DrawerMeta
+                    badges={(() => {
+                      const kc = recipe.kind ? kindConfig[recipe.kind] : null;
+                      const category = recipe.category || 'Utility';
+                      const catCfg = categoryConfigs[category] || categoryConfigs['All'];
+                      const b: BadgeItem[] = [];
+                      if (kc) b.push({ label: kc.label, className: `${kc.bg} ${kc.color} ${kc.border}`, icon: kc.icon });
+                      b.push({ label: category, className: `font-bold uppercase ${catCfg?.bg || 'bg-[var(--bg-subtle)]'} ${catCfg?.color || 'text-[var(--fg-muted)]'} ${catCfg?.border || 'border-[var(--border-default)]'}` });
+                      if (recipe.knowledgeType) b.push({ label: knowledgeTypeLabelKeys[recipe.knowledgeType] ? t(knowledgeTypeLabelKeys[recipe.knowledgeType]) : recipe.knowledgeType, className: 'bg-purple-50 text-purple-700 border-purple-200' });
+                      if (recipe.language) b.push({ label: recipe.language, className: 'uppercase font-bold text-[var(--fg-secondary)] bg-[var(--bg-subtle)] border-[var(--border-default)]' });
+                      if (recipe.trigger) b.push({ label: recipe.trigger, className: 'font-mono font-bold bg-amber-50 text-amber-700 border-amber-200' });
+                      if (recipe.source && recipe.source !== 'unknown') b.push({ label: recipe.source, className: 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)] border-[var(--border-default)]' });
+                      return b;
+                    })()}
+                    metadata={(() => {
+                      const m: MetaItem[] = [];
+                      if (recipe.scope) m.push({ icon: Globe, iconClass: 'text-teal-400', label: t('candidates.path'), value: recipe.scope === 'universal' ? t('common.all') : recipe.scope === 'project-specific' ? t('candidates.category') : recipe.scope });
+                      if (recipe.complexity) m.push({ icon: Layers, iconClass: 'text-orange-400', label: t('candidates.category'), value: recipe.complexity === 'advanced' ? t('candidates.confidenceHigh') : recipe.complexity === 'intermediate' ? t('candidates.confidenceMedium') : recipe.complexity === 'basic' ? t('candidates.confidenceLow') : recipe.complexity });
+                      if (recipe.source && recipe.source !== 'unknown') m.push({ icon: Globe, iconClass: 'text-violet-400', label: t('recipes.sourceLabel'), value: recipe.source === 'bootstrap-scan' ? t('recipes.sourceBootstrap') : recipe.source === 'agent' ? t('recipes.sourceAiScan') : recipe.source });
+                      if (recipe.updatedAt && isValidTimestamp(recipe.updatedAt)) m.push({ icon: Clock, iconClass: 'text-[var(--fg-muted)]', label: t('candidates.updatedAt'), value: formatDate(recipe.updatedAt) });
+                      return m;
+                    })()}
+                    tags={recipe.tags}
+                    id={recipe.id}
+                    sourceFile={recipe.sourceFile}
+                    sourceFileLabel={t('candidates.path')}
+                  />
 
                   {/* 3. Relations — 上方显眼位置 */}
-                  <div className="px-6 py-4 border-b border-slate-100">
+                  <div className="px-6 py-4 border-b border-[var(--border-default)]">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        <Link2 size={12} className="text-purple-400" />
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">{t('recipes.relations')}</label>
+                        <Link2 size={12} className={cn("text-purple-400", relationBusy && "animate-spin")} />
+                        <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase">{t('recipes.relations')}</label>
                         {(() => {
                           const total = recipe.relations ? Object.values(recipe.relations).flat().length : 0;
-                          return total > 0 ? <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-bold">{total}</span> : null;
+                          return total > 0 ? <Badge variant="blue" className="text-[9px]">{total}</Badge> : null;
                         })()}
                       </div>
-                      <button
+                      <Button
+                        variant={isAddingRelation ? "secondary" : "primary"}
+                        size="sm"
                         onClick={() => { setIsAddingRelation(!isAddingRelation); setRelationSearchQuery(''); }}
-                        className={`text-[9px] px-2 py-0.5 rounded font-bold flex items-center gap-1 transition-colors ${isAddingRelation ? 'bg-slate-200 text-slate-600' : 'bg-purple-500 text-white hover:bg-purple-600'}`}
                       >
                         {isAddingRelation ? <><X size={10} /> {t('common.cancel')}</> : <><Plus size={10} /> {t('recipes.editBtn')}</>}
-                      </button>
+                      </Button>
                     </div>
                     {isAddingRelation && (
-                      <div className="mb-3 bg-purple-50/80 dark:bg-purple-900/20 border border-purple-200 rounded-lg p-3 space-y-2">
+                      <div className="mb-3 bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-lg p-3 space-y-2">
                         <div className="flex items-center gap-2">
-                          <select value={newRelationType} onChange={e => setNewRelationType(e.target.value)} className="text-[10px] font-bold bg-white dark:bg-[#1e1e1e] border border-purple-200 text-purple-700 rounded px-2 py-1 outline-none">
-                            {RELATION_TYPES.map(t => <option key={t.key} value={t.key}>{t.icon} {t.label}</option>)}
-                          </select>
+                          <Select
+                            value={newRelationType}
+                            onChange={v => setNewRelationType(v)}
+                            options={RELATION_TYPES.map(t => ({ value: t.key, label: `${t.icon} ${t.label}` }))}
+                            size="xs"
+                            className="font-bold"
+                          />
                           <div className="flex-1 relative">
-                            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300" />
-                            <input type="text" placeholder={t('recipes.searchPlaceholder')} value={relationSearchQuery} onChange={e => setRelationSearchQuery(e.target.value)} className="w-full text-xs bg-white dark:bg-[#1e1e1e] border border-purple-200 rounded pl-7 pr-2 py-1 outline-none" autoFocus />
+                            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--fg-muted)]" />
+                            <input type="text" placeholder={t('recipes.searchPlaceholder')} value={relationSearchQuery} onChange={e => setRelationSearchQuery(e.target.value)} className="w-full text-xs bg-[var(--bg-root)] border border-[var(--border-default)] rounded pl-7 pr-2 py-1 outline-none text-[var(--fg-primary)]" autoFocus />
                           </div>
                         </div>
                         {relationSearchQuery.length > 0 && (
-                          <div className="max-h-36 overflow-y-auto rounded border border-purple-100 bg-white dark:bg-[#1e1e1e] divide-y divide-slate-100">
+                          <div className="max-h-36 overflow-y-auto rounded border border-[var(--border-default)] bg-[var(--bg-root)] divide-y divide-[var(--border-default)]">
                             {(() => {
                               const filtered = recipes.filter(r => {
                                 if (getDisplayName(r) === displayName) return false;
                                 return getDisplayName(r).toLowerCase().includes(relationSearchQuery.toLowerCase());
                               }).slice(0, 10);
-                              if (!filtered.length) return <div className="text-xs text-slate-400 py-3 text-center">{t('recipes.noResults')}</div>;
+                              if (!filtered.length) return <div className="text-xs text-[var(--fg-muted)] py-3 text-center">{t('recipes.noResults')}</div>;
                               return filtered.map(r => {
                                 const rName = getDisplayName(r);
                                 const linked = recipe.relations && Object.values(recipe.relations).flat().some((rel: any) => {
@@ -742,9 +700,9 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                                   return id.replace(/\.md$/i, '').toLowerCase() === rName.toLowerCase();
                                 });
                                 return (
-                                  <div key={rName} className={`flex items-center justify-between px-3 py-1.5 text-xs ${linked ? 'bg-slate-50 text-slate-400' : 'hover:bg-purple-50 cursor-pointer'}`} onClick={() => !linked && handleAddRelation(newRelationType, rName)}>
+                                  <div key={rName} className={cn("flex items-center justify-between px-3 py-1.5 text-xs", linked || relationBusy ? "bg-[var(--bg-subtle)] text-[var(--fg-muted)]" : "hover:bg-[var(--bg-subtle)] cursor-pointer")} onClick={() => !linked && !relationBusy && handleAddRelation(newRelationType, rName)}>
                                     <span className="font-medium truncate mr-2">{rName}</span>
-                                    {linked ? <span className="text-[9px] text-slate-400 font-bold shrink-0">{t('recipes.relations')}</span> : <span className="text-[9px] text-purple-600 font-bold shrink-0">+ {t('recipes.editBtn')}</span>}
+                                    {linked ? <span className="text-[9px] text-[var(--fg-muted)] font-bold shrink-0">{t('recipes.relations')}</span> : <span className="text-[9px] text-[var(--accent)] font-bold shrink-0">+ {t('recipes.editBtn')}</span>}
                                   </div>
                                 );
                               });
@@ -760,7 +718,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                           if (!items || !Array.isArray(items) || items.length === 0) return null;
                           return (
                             <div key={key} className="flex items-start gap-2">
-                              <span className="text-[10px] font-mono text-slate-500 shrink-0 whitespace-nowrap pt-0.5">{icon} {label}</span>
+                              <span className="text-[10px] font-mono text-[var(--fg-muted)] shrink-0 whitespace-nowrap pt-0.5">{icon} {label}</span>
                               <div className="flex flex-wrap gap-1">
                                 {items.map((r: any, ri: number) => {
                                   const itemName = typeof r === 'string' ? r : r.target || r.id || r.title || JSON.stringify(r);
@@ -769,14 +727,28 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                                   return (
                                     <span
                                       key={ri}
-                                      className={`group/rel inline-flex items-center gap-1 px-1.5 py-0.5 border rounded text-[10px] font-mono transition-colors ${
-                                        found ? 'bg-purple-50 border-purple-200 text-purple-700 cursor-pointer hover:bg-purple-100' : 'bg-white border-slate-200 text-slate-600'
-                                      }`}
+                                      className={cn(
+                                        "group/rel inline-flex items-center gap-1 px-1.5 py-0.5 border rounded text-[10px] font-mono transition-colors",
+                                        found ? 'bg-[var(--accent-subtle)] border-[var(--accent-emphasis)] text-[var(--accent)] cursor-pointer hover:brightness-95' : 'bg-[var(--bg-root)] border-[var(--border-default)] text-[var(--fg-secondary)]'
+                                      )}
                                       onClick={() => found && openDrawer(found)}
                                       title={found ? t('candidates.viewDetail') : displayLabel}
                                     >
                                       {displayLabel.replace(/\.md$/i, '')}
-                                      <button onClick={e => { e.stopPropagation(); handleRemoveRelation(key, itemName); }} className="opacity-0 group-hover/rel:opacity-100 text-red-400 hover:text-red-600 transition-opacity ml-0.5" title={t('common.delete')}><X size={10} /></button>
+                                      <button
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          if (relationBusy) return;
+                                          if (window.confirm(`${t('common.delete')}: ${displayLabel.replace(/\.md$/i, '')}?`)) {
+                                            handleRemoveRelation(key, itemName);
+                                          }
+                                        }}
+                                        disabled={relationBusy}
+                                        className="opacity-0 group-hover/rel:opacity-100 text-[var(--danger)] hover:text-[var(--danger)] transition-opacity ml-1 p-0.5 rounded hover:bg-[var(--danger-subtle)]"
+                                        title={t('common.delete')}
+                                      >
+                                        <X size={10} />
+                                      </button>
                                     </span>
                                   );
                                 })}
@@ -786,32 +758,32 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                         })}
                       </div>
                     ) : !isAddingRelation && (
-                      <div className="text-xs text-slate-300 py-2 text-center">{t('recipes.noContent')}</div>
+                      <div className="text-xs text-[var(--fg-muted)] py-2 text-center">{t('recipes.noContent')}</div>
                     )}
                   </div>
 
                   {/* 4. Stats */}
-                  <div className="px-6 py-3 border-b border-slate-100">
+                  <div className="px-6 py-3 border-b border-[var(--border-default)]">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="bg-amber-50/60 dark:bg-amber-900/20 rounded-xl p-3 text-center border border-amber-100 dark:border-amber-800/40">
-                        <div className="text-lg font-bold text-amber-700">{recipe.stats?.authority ?? '—'}</div>
-                        <div className="text-[10px] text-amber-500 font-medium">{t('recipes.qualityAuthorityScore')}</div>
+                      <div className="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-default)]">
+                        <div className="text-lg font-bold text-amber-600">{recipe.stats?.authority ?? '—'}</div>
+                        <div className="text-[10px] text-[var(--fg-muted)] font-medium">{t('recipes.qualityAuthorityScore')}</div>
                       </div>
-                      <div className="bg-blue-50/60 dark:bg-blue-900/20 rounded-xl p-3 text-center border border-blue-100 dark:border-blue-800/40">
-                        <div className="text-lg font-bold text-blue-700">{recipe.stats?.authorityScore != null ? recipe.stats.authorityScore.toFixed(1) : '—'}</div>
-                        <div className="text-[10px] text-blue-500 font-medium">{t('recipes.qualityGreat')}</div>
+                      <div className="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-default)]">
+                        <div className="text-lg font-bold text-[var(--accent)]">{recipe.stats?.authorityScore != null ? recipe.stats.authorityScore.toFixed(1) : '—'}</div>
+                        <div className="text-[10px] text-[var(--fg-muted)] font-medium">{t('recipes.qualityGreat')}</div>
                       </div>
-                      <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                        <div className="text-lg font-bold text-slate-800">{recipe.stats ? (recipe.stats.guardUsageCount + recipe.stats.humanUsageCount + recipe.stats.aiUsageCount) : 0}</div>
-                        <div className="text-[10px] text-slate-400 font-medium">{t('recipes.qualitySolid')}</div>
+                      <div className="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-default)]">
+                        <div className="text-lg font-bold text-[var(--fg-primary)]">{recipe.stats ? (recipe.stats.guardUsageCount + recipe.stats.humanUsageCount + recipe.stats.aiUsageCount) : 0}</div>
+                        <div className="text-[10px] text-[var(--fg-muted)] font-medium">{t('recipes.qualitySolid')}</div>
                       </div>
-                      <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                        <div className="text-sm font-bold text-slate-700">{formatDate(recipe.stats?.lastUsedAt) || t('recipes.noContent')}</div>
-                        <div className="text-[10px] text-slate-400 font-medium">{t('recipes.qualityGood')}</div>
+                      <div className="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-default)]">
+                        <div className="text-sm font-bold text-[var(--fg-secondary)]">{formatDate(recipe.stats?.lastUsedAt) || t('recipes.noContent')}</div>
+                        <div className="text-[10px] text-[var(--fg-muted)] font-medium">{t('recipes.qualityGood')}</div>
                       </div>
                     </div>
                     {recipe.stats != null && (recipe.stats.guardUsageCount > 0 || recipe.stats.humanUsageCount > 0 || recipe.stats.aiUsageCount > 0) && (
-                      <div className="flex items-center gap-4 mt-2 text-[10px] text-slate-400">
+                      <div className="flex items-center gap-4 mt-2 text-[10px] text-[var(--fg-muted)]">
                         <span>Guard: {recipe.stats.guardUsageCount}</span>
                         <span>Human: {recipe.stats.humanUsageCount}</span>
                         <span>AI: {recipe.stats.aiUsageCount}</span>
@@ -820,187 +792,54 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   </div>
 
                   {/* 4. Reasoning — V3 推理信息 */}
-                  {recipe.reasoning && (recipe.reasoning.whyStandard || (recipe.reasoning.sources && recipe.reasoning.sources.length > 0)) && (
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                        <Lightbulb size={11} className="text-amber-400" /> {t('recipes.reasoning')}
-                      </label>
-                      <div className="bg-amber-50/30 dark:bg-amber-900/15 border border-amber-100 dark:border-amber-800/40 rounded-xl p-4 space-y-2.5">
-                        {recipe.reasoning.whyStandard && (
-                          <p className="text-sm text-slate-700 leading-relaxed">{recipe.reasoning.whyStandard}</p>
-                        )}
-                        {recipe.reasoning.sources && recipe.reasoning.sources.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-[10px] text-slate-400 font-bold">{t('recipes.sourceColon')}</span>
-                            {recipe.reasoning.sources.map((src, i) => (
-                              <code key={i} className="text-[10px] px-2 py-0.5 bg-white border border-amber-200 rounded text-amber-700 font-mono">{src}</code>
-                            ))}
-                          </div>
-                        )}
-                        {recipe.reasoning.confidence != null && recipe.reasoning.confidence > 0 && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-slate-400 font-bold">{t('recipes.confidenceColon')}</span>
-                            <div className="flex-1 max-w-[160px] h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-amber-400 rounded-full"
-                                style={{ width: `${Math.round(recipe.reasoning.confidence * 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] font-bold text-amber-600">{Math.round(recipe.reasoning.confidence * 100)}%</span>
-                          </div>
-                        )}
-                        {recipe.reasoning.alternatives && recipe.reasoning.alternatives.length > 0 && (
-                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                            <span className="text-[10px] text-slate-400 font-bold">{t('recipes.alternativesLabel')}</span>
-                            {recipe.reasoning.alternatives.map((alt, i) => (
-                              <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600">{alt}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  <DrawerContent.Reasoning
+                    reasoning={recipe.reasoning}
+                    labels={{ section: t('recipes.reasoning'), source: t('recipes.sourceColon'), confidence: t('recipes.confidenceColon'), alternatives: t('recipes.alternativesLabel') }}
+                  />
 
                   {/* 5. Quality — V3 质量评级 */}
-                  {recipe.quality && recipe.quality.grade && recipe.quality.grade !== 'F' && (
-                    <div className="px-6 py-3 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.qualityGrade')}</label>
-                      <div className="flex items-center gap-4">
-                        <span className={`text-2xl font-black ${
-                          recipe.quality.grade === 'A' ? 'text-emerald-600' :
-                          recipe.quality.grade === 'B' ? 'text-blue-600' :
-                          recipe.quality.grade === 'C' ? 'text-amber-600' :
-                          recipe.quality.grade === 'D' ? 'text-orange-600' : 'text-slate-400'
-                        }`}>{recipe.quality.grade}</span>
-                        <div className="flex-1 grid grid-cols-3 gap-2 text-[10px]">
-                          {recipe.quality.completeness != null && recipe.quality.completeness > 0 && (
-                            <div className="text-center">
-                              <div className="font-bold text-slate-700">{recipe.quality.completeness}</div>
-                              <div className="text-slate-400">{t('recipes.qualityCompleteness')}</div>
-                            </div>
-                          )}
-                          {recipe.quality.adaptation != null && recipe.quality.adaptation > 0 && (
-                            <div className="text-center">
-                              <div className="font-bold text-slate-700">{recipe.quality.adaptation}</div>
-                              <div className="text-slate-400">{t('recipes.qualityAdaptation')}</div>
-                            </div>
-                          )}
-                          {recipe.quality.documentation != null && recipe.quality.documentation > 0 && (
-                            <div className="text-center">
-                              <div className="font-bold text-slate-700">{recipe.quality.documentation}</div>
-                              <div className="text-slate-400">{t('recipes.qualityDocumentation')}</div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <DrawerContent.Quality
+                    quality={recipe.quality}
+                    labels={{ section: t('recipes.qualityGrade'), completeness: t('recipes.qualityCompleteness'), adaptation: t('recipes.qualityAdaptation'), documentation: t('recipes.qualityDocumentation') }}
+                  />
 
                   {/* 6. Description / Summary */}
-                  {recipe.description && (
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">{t('recipes.description')}</label>
-                      <p className="text-sm text-slate-600 leading-relaxed">{recipe.description}</p>
-                    </div>
-                  )}
+                  <DrawerContent.Description label={t('recipes.description')} text={recipe.description} />
 
                   {/* 7. Markdown 文档 */}
-                  {contentV3?.markdown && (
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                        <FileText size={11} className="text-blue-400" /> {t('recipes.markdown')}
-                      </label>
-                      <div className="bg-blue-50/30 dark:bg-blue-900/15 border border-blue-100 dark:border-blue-800/40 rounded-xl p-4">
-                        <div className="markdown-body text-sm text-slate-700 leading-relaxed">
-                          <MarkdownWithHighlight content={contentV3.markdown} />
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <DrawerContent.MarkdownSection label={t('recipes.markdown')} content={contentV3?.markdown} />
 
                   {/* 6. Headers */}
-                  {recipe.headers && recipe.headers.length > 0 && (
-                    <div className="px-6 py-3 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.headers')}</label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {recipe.headers.map((h, i) => (
-                          <code key={i} className="px-2.5 py-1 bg-violet-50 text-violet-700 border border-violet-100 rounded-md text-[10px] font-mono font-medium">{h}</code>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <DrawerContent.Headers label={t('recipes.headers')} headers={recipe.headers} />
 
                   {/* 7. Code / 标准用法 */}
-                  {codePattern && (
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                        <FileCode size={11} className="text-emerald-500" /> {t('recipes.code')}
-                      </label>
-                      <CodeBlock code={codePattern} language={codeLang} showLineNumbers />
-                    </div>
-                  )}
+                  <DrawerContent.CodePattern label={t('recipes.code')} code={codePattern} language={codeLang} />
 
                   {/* 8. Rationale */}
-                  {contentV3?.rationale && (
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.designRationale')}</label>
-                      <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                        <p className="text-sm text-slate-600 leading-relaxed">{contentV3.rationale}</p>
-                      </div>
-                    </div>
-                  )}
+                  <DrawerContent.Rationale label={t('recipes.designRationale')} text={contentV3?.rationale} />
 
                   {/* 9. Steps */}
-                  {contentV3?.steps && contentV3.steps.length > 0 && (
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.steps')}</label>
-                      <div className="space-y-2">
-                        {contentV3.steps.map((step: any, i: number) => {
-                          if (typeof step === 'string') {
-                            return (
-                              <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100 flex items-start gap-2.5">
-                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
-                                <p className="text-xs text-slate-700 leading-relaxed">{step}</p>
-                              </div>
-                            );
-                          }
-                          const title = typeof step.title === 'string' ? step.title : '';
-                          const desc = typeof step.description === 'string' ? step.description : '';
-                          const code = typeof step.code === 'string' ? step.code : '';
-                          return (
-                            <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full w-5 h-5 flex items-center justify-center shrink-0">{i + 1}</span>
-                                {title && <span className="text-xs font-bold text-slate-700">{title}</span>}
-                              </div>
-                              {desc && <p className="text-xs text-slate-600 ml-7 leading-relaxed">{desc}</p>}
-                              {code && <pre className="text-[11px] font-mono bg-slate-800 text-green-300 p-2.5 rounded-md mt-1.5 ml-7 overflow-x-auto whitespace-pre-wrap">{code}</pre>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                  <DrawerContent.Steps label={t('recipes.steps')} steps={contentV3?.steps} />
 
                   {/* 10. Code Changes */}
                   {contentV3?.codeChanges && contentV3.codeChanges.length > 0 && (
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.codeChanges')}</label>
+                    <div className="px-6 py-4 border-b border-[var(--border-default)]">
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-2 block">{t('recipes.codeChanges')}</label>
                       <div className="space-y-2">
                         {contentV3.codeChanges.map((change, i) => (
-                          <div key={i} className="border border-slate-200 rounded-lg overflow-hidden">
-                            <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
-                              <FileCode size={11} className="text-blue-400" />
-                              <code className="text-[10px] font-mono text-slate-600">{change.file}</code>
+                          <div key={i} className="border border-[var(--border-default)] rounded-lg overflow-hidden">
+                            <div className="px-3 py-1.5 bg-[var(--bg-subtle)] border-b border-[var(--border-default)] flex items-center gap-2">
+                              <FileCode size={11} className="text-[var(--accent)]" />
+                              <code className="text-[10px] font-mono text-[var(--fg-secondary)]">{change.file}</code>
                             </div>
-                            {change.explanation && <p className="text-[11px] text-slate-500 px-3 py-1.5 border-b border-slate-100 bg-yellow-50/30">{change.explanation}</p>}
-                            <div className="p-2 bg-red-50/20 border-b border-slate-100">
-                              <div className="text-[9px] font-bold text-red-400 mb-0.5 uppercase">Before</div>
-                              <pre className="text-[11px] text-slate-600 whitespace-pre-wrap break-words font-mono">{change.before || t('recipes.emptyValue')}</pre>
+                            {change.explanation && <p className="text-[11px] text-[var(--fg-muted)] px-3 py-1.5 border-b border-[var(--border-default)] bg-[var(--bg-subtle)]">{change.explanation}</p>}
+                            <div className="p-2 bg-red-50/10 border-b border-[var(--border-default)]">
+                              <div className="text-[9px] font-bold text-[var(--status-error)] mb-0.5 uppercase">Before</div>
+                              <pre className="text-[11px] text-[var(--fg-secondary)] whitespace-pre-wrap break-words font-mono">{change.before || t('recipes.emptyValue')}</pre>
                             </div>
-                            <div className="p-2 bg-emerald-50/20">
-                              <div className="text-[9px] font-bold text-emerald-500 mb-0.5 uppercase">After</div>
-                              <pre className="text-[11px] text-slate-700 whitespace-pre-wrap break-words font-mono">{change.after}</pre>
+                            <div className="p-2 bg-emerald-50/10">
+                              <div className="text-[9px] font-bold text-[var(--status-success)] mb-0.5 uppercase">After</div>
+                              <pre className="text-[11px] text-[var(--fg-primary)] whitespace-pre-wrap break-words font-mono">{change.after}</pre>
                             </div>
                           </div>
                         ))}
@@ -1010,48 +849,24 @@ const RecipesView: React.FC<RecipesViewProps> = ({
 
                   {/* 11. Verification */}
                   {contentV3?.verification && (
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('recipes.validation')}</label>
-                      <div className="bg-teal-50/50 border border-teal-100 rounded-xl p-4 space-y-1.5">
-                        {contentV3.verification.method && <p className="text-xs text-slate-600"><span className="font-bold text-teal-600">{t('recipes.verificationMethod')}</span> {contentV3.verification.method}</p>}
-                        {contentV3.verification.expectedResult && <p className="text-xs text-slate-600"><span className="font-bold text-teal-600">{t('recipes.verificationExpected')}</span> {contentV3.verification.expectedResult}</p>}
+                    <div className="px-6 py-4 border-b border-[var(--border-default)]">
+                      <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-2 block">{t('recipes.validation')}</label>
+                      <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-xl p-4 space-y-1.5">
+                        {contentV3.verification.method && <p className="text-xs text-[var(--fg-secondary)]"><span className="font-bold text-[var(--status-success)]">{t('recipes.verificationMethod')}</span> {contentV3.verification.method}</p>}
+                        {contentV3.verification.expectedResult && <p className="text-xs text-[var(--fg-secondary)]"><span className="font-bold text-[var(--status-success)]">{t('recipes.verificationExpected')}</span> {contentV3.verification.expectedResult}</p>}
                         {contentV3.verification.testCode && <pre className="text-[11px] font-mono bg-slate-800 text-green-300 p-2.5 rounded-md overflow-x-auto whitespace-pre-wrap mt-1">{contentV3.verification.testCode}</pre>}
                       </div>
                     </div>
                   )}
 
                   {/* 12. Constraints */}
-                  {recipe.constraints && (() => {
-                    const c = recipe.constraints;
-                    const total = (c.guards?.length || 0) + (c.boundaries?.length || 0) + (c.preconditions?.length || 0) + (c.sideEffects?.length || 0);
-                    if (!total) return null;
-                    return (
-                      <div className="px-6 py-4 border-b border-slate-100">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block flex items-center gap-1.5">
-                          <Shield size={11} className="text-amber-500" /> {t('recipes.constraints')} <span className="text-amber-500 font-mono">{total}</span>
-                        </label>
-                        <div className="space-y-1.5 text-xs text-slate-600">
-                          {c.guards?.map((g, i) => (
-                            <div key={i} className="flex gap-1.5 items-start">
-                              <span className={`text-xs mt-0.5 ${g.severity === 'error' ? 'text-red-500' : 'text-yellow-500'}`}>●</span>
-                              <code className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">{g.pattern}</code>
-                              {g.message && <span className="text-[10px] text-slate-400">— {g.message}</span>}
-                            </div>
-                          ))}
-                          {c.boundaries?.map((b, i) => <div key={i} className="flex gap-1.5"><span className="text-orange-400">●</span>{b}</div>)}
-                          {c.preconditions?.map((p, i) => <div key={i} className="flex gap-1.5"><span className="text-blue-400">◆</span>{p}</div>)}
-                          {c.sideEffects?.map((s, i) => <div key={i} className="flex gap-1.5"><span className="text-pink-400">⚡</span>{s}</div>)}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  <DrawerContent.Constraints label={t('recipes.constraints')} constraints={recipe.constraints} />
 
                   {/* end of view sections */}
 
-                </div>
+                </Drawer.Body>
               )}
-            </div>
-          </PageOverlay>
+          </Drawer>
         );
       })()}
     </div>

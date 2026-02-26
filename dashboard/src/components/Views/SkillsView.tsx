@@ -36,7 +36,7 @@ interface SkillDetail {
 
 /** createdBy 标签配置 */
 const CREATED_BY_CONFIG: Record<string, { label: string; color: string; icon: typeof Bot }> = {
-  'manual':      { label: 'manual',     color: 'bg-slate-100 text-slate-600',   icon: User },
+  'manual':      { label: 'manual',     color: 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)]',   icon: User },
   'user-ai':     { label: 'user-ai',  color: 'bg-violet-100 text-violet-600', icon: Sparkles },
   'system-ai':   { label: 'system-ai',     color: 'bg-amber-100 text-amber-600',   icon: Cpu },
   'external-ai': { label: 'external-ai',  color: 'bg-cyan-100 text-cyan-600',     icon: Bot },
@@ -263,8 +263,8 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
             <BookOpen size={20} className="text-violet-600" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg xl:text-xl font-bold text-slate-800">{t('skills.title')}</h2>
-            <p className="text-sm text-slate-500">
+            <h2 className="text-lg xl:text-xl font-bold text-[var(--fg-primary)]">{t('skills.title')}</h2>
+            <p className="text-sm text-[var(--fg-secondary)]">
               {t('skills.subtitle')}
             </p>
           </div>
@@ -281,7 +281,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
           </button>
           <button
             onClick={fetchSkills}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            className="p-2 rounded-lg text-[var(--fg-muted)] hover:text-[var(--fg-secondary)] hover:bg-[var(--bg-subtle)] transition-colors"
             title={t('common.refresh')}
           >
             <RefreshCw size={16} />
@@ -297,7 +297,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       </div>
 
       {/* ── Filter tabs ── */}
-      <div className="flex items-center gap-1 mb-4 p-1 bg-slate-100 rounded-lg w-fit">
+      <div className="flex items-center gap-1 mb-4 p-1 bg-[var(--bg-subtle)] rounded-lg w-fit">
         {([
           { key: 'all' as const, label: t('common.all'), count: skills.length },
           { key: 'project' as const, label: t('skills.filterProject'), count: projectCount, icon: FolderOpen },
@@ -308,14 +308,14 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
             onClick={() => setFilter(f.key)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
               filter === f.key
-                ? 'bg-white text-violet-700 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-[var(--bg-surface)] text-violet-700 shadow-sm'
+                : 'text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]'
             }`}
           >
             {f.icon && <f.icon size={12} />}
             {f.label}
             <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] ${
-              filter === f.key ? 'bg-violet-100 text-violet-600' : 'bg-slate-200 text-slate-500'
+              filter === f.key ? 'bg-violet-100 text-violet-600' : 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)]'
             }`}>{f.count}</span>
           </button>
         ))}
@@ -346,19 +346,19 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
           ) : (
             <div className="space-y-2">
               {suggestions.map(s => (
-                <div key={s.name} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-amber-100">
+                <div key={s.name} className="flex items-start gap-3 p-3 bg-[var(--bg-surface)] rounded-lg border border-amber-100">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-xs font-semibold text-slate-800">{s.name}</span>
+                      <span className="font-mono text-xs font-semibold text-[var(--fg-primary)]">{s.name}</span>
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
                         s.priority === 'high' ? 'bg-red-100 text-red-600'
                         : s.priority === 'medium' ? 'bg-amber-100 text-amber-600'
-                        : 'bg-slate-100 text-slate-500'
+                        : 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)]'
                       }`}>{s.priority}</span>
-                      <span className="text-[10px] text-slate-400">{s.source}</span>
+                      <span className="text-[10px] text-[var(--fg-muted)]">{s.source}</span>
                     </div>
-                    <p className="text-xs text-slate-600 mb-1">{s.description}</p>
-                    <p className="text-[11px] text-slate-400 line-clamp-2">{s.rationale}</p>
+                    <p className="text-xs text-[var(--fg-secondary)] mb-1">{s.description}</p>
+                    <p className="text-[11px] text-[var(--fg-muted)] line-clamp-2">{s.rationale}</p>
                   </div>
                   <button
                     onClick={() => handleCreateFromSuggestion(s)}
@@ -387,7 +387,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
               <Loader2 size={24} className="animate-spin text-violet-400" />
             </div>
           ) : filteredSkills.length === 0 ? (
-            <div className="text-center py-20 text-slate-400">
+            <div className="text-center py-20 text-[var(--fg-muted)]">
               <BookOpen size={40} className="mx-auto mb-3 opacity-40" />
               <p>{t('skills.noResults')}</p>
             </div>
@@ -399,12 +399,12 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                 className={`w-full text-left p-4 rounded-xl border transition-all ${
                   selectedSkill?.skillName === skill.name
                     ? 'border-violet-300 bg-violet-50 shadow-sm'
-                    : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm'
+                    : 'border-[var(--border-default)] bg-[var(--bg-surface)] hover:border-[var(--border-emphasis)] hover:shadow-sm'
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <div className={`mt-0.5 shrink-0 ${
-                    selectedSkill?.skillName === skill.name ? 'text-violet-500' : 'text-slate-400'
+                    selectedSkill?.skillName === skill.name ? 'text-violet-500' : 'text-[var(--fg-muted)]'
                   }`}>
                     {selectedSkill?.skillName === skill.name ? (
                       <ChevronDown size={16} />
@@ -414,7 +414,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-sm font-semibold text-slate-800">{skill.name}</span>
+                      <span className="font-mono text-sm font-semibold text-[var(--fg-primary)]">{skill.name}</span>
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                         skill.source === 'builtin'
                           ? 'bg-blue-100 text-blue-600'
@@ -433,7 +433,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                         );
                       })()}
                     </div>
-                    <p className="text-xs text-slate-500 line-clamp-2">{skill.summary}</p>
+                    <p className="text-xs text-[var(--fg-secondary)] line-clamp-2">{skill.summary}</p>
                     {skill.useCase && (
                       <p className="text-[11px] text-violet-500 mt-1 italic">
                         {t('skills.useCase')}：{skill.useCase}
@@ -447,7 +447,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
         </div>
 
         {/* Detail panel */}
-        <div className="w-1/2 overflow-y-auto border border-slate-200 rounded-xl bg-white">
+        <div className="w-1/2 overflow-y-auto border border-[var(--border-default)] rounded-xl bg-[var(--bg-surface)]">
           {loadingDetail ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 size={24} className="animate-spin text-violet-400" />
@@ -455,7 +455,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
           ) : selectedSkill ? (
             <div className="h-full flex flex-col">
               {/* Detail header */}
-              <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)]">
                 <div className="flex items-center gap-2">
                   <FileText size={16} className="text-violet-500" />
                   <span className="font-mono font-semibold text-sm">{selectedSkill.skillName}</span>
@@ -478,10 +478,10 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                   })()}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400">{selectedSkill.charCount} {t('skills.chars')}</span>
+                  <span className="text-[10px] text-[var(--fg-muted)]">{selectedSkill.charCount} {t('skills.chars')}</span>
                   <button
                     onClick={handleCopy}
-                    className="p-1.5 rounded-md hover:bg-slate-100 transition-colors text-slate-400 hover:text-slate-600"
+                    className="p-1.5 rounded-md hover:bg-[var(--bg-subtle)] transition-colors text-[var(--fg-muted)] hover:text-[var(--fg-secondary)]"
                     title={t('common.copy')}
                   >
                     {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
@@ -490,14 +490,14 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                     <>
                       <button
                         onClick={handleStartEdit}
-                        className="p-1.5 rounded-md hover:bg-blue-50 transition-colors text-slate-400 hover:text-blue-600"
+                        className="p-1.5 rounded-md hover:bg-blue-50 transition-colors text-[var(--fg-muted)] hover:text-blue-600"
                         title={t('common.edit')}
                       >
                         <Pencil size={14} />
                       </button>
                       <button
                         onClick={() => setConfirmDelete(true)}
-                        className="p-1.5 rounded-md hover:bg-red-50 transition-colors text-slate-400 hover:text-red-500"
+                        className="p-1.5 rounded-md hover:bg-red-50 transition-colors text-[var(--fg-muted)] hover:text-red-500"
                         title={t('common.delete')}
                       >
                         <Trash2 size={14} />
@@ -516,7 +516,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                       </button>
                       <button
                         onClick={handleCancelEdit}
-                        className="px-2.5 py-1 border border-slate-200 text-slate-500 rounded-md hover:bg-slate-50 transition-colors text-xs"
+                        className="px-2.5 py-1 border border-[var(--border-default)] text-[var(--fg-secondary)] rounded-md hover:bg-[var(--bg-subtle)] transition-colors text-xs"
                       >
                         {t('common.cancel')}
                       </button>
@@ -527,8 +527,8 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
 
               {/* Related skills */}
               {selectedSkill.relatedSkills.length > 0 && (
-                <div className="px-4 py-2 border-b border-slate-50 flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold">{t('skills.related')}:</span>
+                <div className="px-4 py-2 border-b border-[var(--border-default)] flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] text-[var(--fg-muted)] uppercase font-bold">{t('skills.related')}:</span>
                   {selectedSkill.relatedSkills.map(rs => (
                     <button
                       key={rs}
@@ -547,11 +547,11 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                   <textarea
                     value={editContent}
                     onChange={e => setEditContent(e.target.value)}
-                    className="w-full h-full min-h-[300px] text-xs text-slate-700 font-mono leading-relaxed border border-blue-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none bg-blue-50/30"
+                    className="w-full h-full min-h-[300px] text-xs text-[var(--fg-primary)] font-mono leading-relaxed border border-blue-200 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none bg-blue-50/30"
                     spellCheck={false}
                   />
                 ) : (
-                  <pre className="whitespace-pre-wrap text-xs text-slate-700 font-mono leading-relaxed">
+                  <pre className="whitespace-pre-wrap text-xs text-[var(--fg-primary)] font-mono leading-relaxed">
                     {selectedSkill.content}
                   </pre>
                 )}
@@ -559,16 +559,16 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
                 {/* Delete confirmation overlay */}
                 {confirmDelete && (
                   <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-10">
-                    <div className="bg-white border border-red-200 rounded-xl shadow-lg p-6 max-w-sm text-center">
+                    <div className="bg-[var(--bg-surface)] border border-red-200 rounded-xl shadow-lg p-6 max-w-sm text-center">
                       <Trash2 size={32} className="mx-auto mb-3 text-red-400" />
-                      <h3 className="font-semibold text-slate-800 mb-2">{t('skills.deleteConfirm')}</h3>
-                      <p className="text-sm text-slate-500 mb-4">
+                      <h3 className="font-semibold text-[var(--fg-primary)] mb-2">{t('skills.deleteConfirm')}</h3>
+                      <p className="text-sm text-[var(--fg-secondary)] mb-4">
                         {t('skills.deleteSkillConfirmMsg', { name: selectedSkill.skillName })}
                       </p>
                       <div className="flex gap-3 justify-center">
                         <button
                           onClick={() => setConfirmDelete(false)}
-                          className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 text-sm"
+                          className="px-4 py-2 border border-[var(--border-default)] text-[var(--fg-secondary)] rounded-lg hover:bg-[var(--bg-subtle)] text-sm"
                         >
                           {t('common.cancel')}
                         </button>
@@ -587,7 +587,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full text-slate-400">
+            <div className="flex items-center justify-center h-full text-[var(--fg-muted)]">
               <div className="text-center">
                 <BookOpen size={40} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">{t('skills.selectToView')}</p>
@@ -735,27 +735,27 @@ const CreateSkillModal: React.FC<{
   return (
     <PageOverlay className="z-40 flex items-center justify-center">
       <PageOverlay.Backdrop className="bg-black/40 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-[720px] max-h-[85vh] flex flex-col">
+        <div className="relative bg-[var(--bg-surface)] rounded-2xl shadow-2xl w-[720px] max-h-[85vh] flex flex-col">
         {/* Modal header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-default)]">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center">
               <Sparkles size={16} className="text-violet-600" />
             </div>
             <h3 className="font-bold text-lg">{t('skills.addSkill')}</h3>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-            <X size={18} className="text-slate-400" />
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--bg-subtle)] transition-colors">
+            <X size={18} className="text-[var(--fg-muted)]" />
           </button>
         </div>
 
         {/* Mode toggle */}
         <div className="px-6 pt-4">
-          <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+          <div className="inline-flex items-center gap-1 p-1 bg-[var(--bg-subtle)] rounded-lg">
             <button
               onClick={() => setMode('ai')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                mode === 'ai' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                mode === 'ai' ? 'bg-[var(--bg-surface)] text-violet-700 shadow-sm' : 'text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]'
               }`}
             >
               <Sparkles size={12} />
@@ -764,7 +764,7 @@ const CreateSkillModal: React.FC<{
             <button
               onClick={() => setMode('manual')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                mode === 'manual' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                mode === 'manual' ? 'bg-[var(--bg-surface)] text-violet-700 shadow-sm' : 'text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]'
               }`}
             >
               <FileText size={12} />
@@ -779,7 +779,7 @@ const CreateSkillModal: React.FC<{
             /* AI mode */
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                <label className="block text-sm font-medium text-[var(--fg-primary)] mb-1.5">
                   {t('skills.describeSkill')}
                 </label>
                 <div className="relative">
@@ -787,7 +787,7 @@ const CreateSkillModal: React.FC<{
                     value={aiPrompt}
                     onChange={e => setAiPrompt(e.target.value)}
                     placeholder={t('skillsView.placeholderDesc')}
-                    className="w-full h-32 px-4 py-3 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
+                    className="w-full h-32 px-4 py-3 border border-[var(--border-default)] rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
                     disabled={generating}
                   />
                 </div>
@@ -815,19 +815,19 @@ const CreateSkillModal: React.FC<{
             <div className="space-y-4">
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    {t('skills.skillName')} <span className="text-slate-400 text-xs">(kebab-case)</span>
+                  <label className="block text-sm font-medium text-[var(--fg-primary)] mb-1.5">
+                    {t('skills.skillName')} <span className="text-[var(--fg-muted)] text-xs">(kebab-case)</span>
                   </label>
                   <input
                     type="text"
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="my-custom-skill"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
+                    className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <label className="block text-sm font-medium text-[var(--fg-primary)] mb-1.5">
                     {t('skills.skillDescription')}
                   </label>
                   <input
@@ -835,19 +835,19 @@ const CreateSkillModal: React.FC<{
                     value={description}
                     onChange={e => setDescription(e.target.value)}
                     placeholder={t('skillsView.placeholderName')}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
+                    className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  {t('skills.skillContent')} <span className="text-slate-400 text-xs">(Markdown)</span>
+                <label className="block text-sm font-medium text-[var(--fg-primary)] mb-1.5">
+                  {t('skills.skillContent')} <span className="text-[var(--fg-muted)] text-xs">(Markdown)</span>
                 </label>
                 <textarea
                   value={content}
                   onChange={e => setContent(e.target.value)}
                   placeholder={t('skillsView.placeholderContent')}
-                  className="w-full h-64 px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 leading-relaxed"
+                  className="w-full h-64 px-4 py-3 border border-[var(--border-default)] rounded-xl text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 leading-relaxed"
                 />
               </div>
             </div>
@@ -862,10 +862,10 @@ const CreateSkillModal: React.FC<{
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3">
+        <div className="px-6 py-4 border-t border-[var(--border-default)] flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 transition-colors"
+            className="px-4 py-2 text-sm text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] transition-colors"
           >
             {t('common.cancel')}
           </button>

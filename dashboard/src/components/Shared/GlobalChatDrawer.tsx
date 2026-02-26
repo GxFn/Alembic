@@ -120,21 +120,21 @@ const DiffView: React.FC<{
   onToggleField?: (field: string) => void;
 }> = ({ diff, excludedFields = [], onToggleField }) => {
   const { t } = useI18n();
-  if (diff.length === 0) return <p className="text-xs text-slate-400 italic py-2">{t('globalChat.diff.noChanges')}</p>;
+  if (diff.length === 0) return <p className="text-xs text-[var(--fg-muted)] italic py-2">{t('globalChat.diff.noChanges')}</p>;
   return (
     <div className="space-y-2 mt-2">
       {diff.map((d) => {
         const excluded = excludedFields.includes(d.field);
         return (
-          <div key={d.field} className={`border rounded-lg overflow-hidden transition-opacity ${excluded ? 'border-slate-100 opacity-45' : 'border-slate-200'}`}>
-            <div className={`px-2.5 py-1.5 border-b flex items-center gap-1.5 ${excluded ? 'bg-slate-50/50 border-slate-100' : 'bg-slate-50 border-slate-200'}`}>
-              <ArrowRight size={10} className={excluded ? 'text-slate-300' : 'text-emerald-500'} />
-              <span className={`text-[10px] font-bold flex-1 ${excluded ? 'text-slate-400 line-through' : 'text-slate-600'}`}>{d.label}</span>
+          <div key={d.field} className={`border rounded-lg overflow-hidden transition-opacity ${excluded ? 'border-[var(--border-default)] opacity-45' : 'border-[var(--border-default)]'}`}>
+            <div className={`px-2.5 py-1.5 border-b flex items-center gap-1.5 ${excluded ? 'bg-[var(--bg-subtle)] border-[var(--border-default)]' : 'bg-[var(--bg-subtle)] border-[var(--border-default)]'}`}>
+              <ArrowRight size={10} className={excluded ? 'text-[var(--fg-muted)]' : 'text-emerald-500'} />
+              <span className={`text-[10px] font-bold flex-1 ${excluded ? 'text-[var(--fg-muted)] line-through' : 'text-[var(--fg-secondary)]'}`}>{d.label}</span>
               {onToggleField && (
                 excluded ? (
                   <button
                     onClick={() => onToggleField(d.field)}
-                    className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-slate-200 text-slate-500 hover:bg-emerald-100 hover:text-emerald-600 transition-colors"
+                    className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-[var(--bg-subtle)] text-[var(--fg-secondary)] hover:bg-emerald-100 hover:text-emerald-600 transition-colors"
                     title={t('globalChat.diff.excludedRestore')}
                   >
                     {t('globalChat.diff.excludedRestore')}
@@ -142,7 +142,7 @@ const DiffView: React.FC<{
                 ) : (
                   <button
                     onClick={() => onToggleField(d.field)}
-                    className="group flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-medium rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    className="group flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-medium rounded-full text-[var(--fg-muted)] hover:bg-red-50 hover:text-red-500 transition-colors"
                     title={t('globalChat.diff.exclude')}
                   >
                     <XIcon size={10} className="opacity-60 group-hover:opacity-100" />
@@ -153,15 +153,15 @@ const DiffView: React.FC<{
             </div>
             {!excluded && (
               <>
-                <div className="p-2 bg-red-50/30 border-b border-slate-200">
+                <div className="p-2 bg-red-50/30 border-b border-[var(--border-default)]">
                   <div className="text-[9px] font-bold text-red-400 mb-0.5 uppercase">{t('globalChat.diff.before')}</div>
-                  <pre className="text-[11px] text-slate-600 whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono leading-relaxed scrollbar-light">
-                    {d.before || <span className="italic text-slate-300">{t('globalChat.diff.empty')}</span>}
+                  <pre className="text-[11px] text-[var(--fg-secondary)] whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono leading-relaxed scrollbar-light">
+                    {d.before || <span className="italic text-[var(--fg-muted)]">{t('globalChat.diff.empty')}</span>}
                   </pre>
                 </div>
                 <div className="p-2 bg-emerald-50/30">
                   <div className="text-[9px] font-bold text-emerald-500 mb-0.5 uppercase">{t('globalChat.diff.after')}</div>
-                  <pre className="text-[11px] text-slate-700 whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono leading-relaxed scrollbar-light">
+                  <pre className="text-[11px] text-[var(--fg-primary)] whitespace-pre-wrap break-words max-h-40 overflow-auto font-mono leading-relaxed scrollbar-light">
                     {d.after}
                   </pre>
                 </div>
@@ -465,15 +465,15 @@ export const GlobalChatPanel: React.FC = () => {
   }, [handleSend]);
 
   return (
-    <aside className="w-[420px] h-full bg-white border-l border-slate-200 flex flex-col shrink-0">
+    <aside className="w-[420px] h-full bg-[var(--bg-surface)] border-l border-[var(--border-default)] flex flex-col shrink-0">
       {/* Header */}
-      <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between shrink-0">
+      <div className="px-4 h-[var(--topbar-height)] border-b border-[var(--border-default)] flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-center">
             {isRefineMode ? <Sparkles className="text-emerald-500" size={16} /> : <MessageSquare className="text-blue-600" size={16} />}
           </div>
           <div>
-            <h3 className="text-[13px] font-bold text-slate-800 flex items-center gap-2">
+            <h3 className="text-[13px] font-bold text-[var(--fg-primary)] flex items-center gap-2">
               {isRefineMode ? t('globalChat.refineTitle') : t('globalChat.chatTitle')}
               {isRefineMode && isBatchRefine && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-medium">
@@ -481,30 +481,30 @@ export const GlobalChatPanel: React.FC = () => {
                 </span>
               )}
             </h3>
-            <p className="text-[10px] text-slate-400 truncate max-w-[250px]">
+            <p className="text-[10px] text-[var(--fg-muted)] truncate max-w-[250px]">
               {isRefineMode ? currentRefineCandidate?.title || t('globalChat.refineSubtitle') : t('globalChat.chatSubtitle')}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1">
           {isRefineMode && (
-            <button onClick={handleExitRefine} className="px-2 py-1 text-[10px] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors">{t('globalChat.exitRefine')}</button>
+            <button onClick={handleExitRefine} className="px-2 py-1 text-[10px] font-medium text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] hover:bg-[var(--bg-subtle)] rounded-md transition-colors">{t('globalChat.exitRefine')}</button>
           )}
           {!isRefineMode && messages.length > 0 && (
             <button onClick={() => { panelTopicIdRef.current = null; setMessages([]); chatHistoryRef.current = []; setLastPrompt(''); }}
-              className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" title={t('globalChat.newTopic')}>
-              <Plus size={16} className="text-slate-400" />
+              className="p-1.5 hover:bg-[var(--bg-subtle)] rounded-lg transition-colors" title={t('globalChat.newTopic')}>
+              <Plus size={16} className="text-[var(--fg-muted)]" />
             </button>
           )}
-          <button onClick={close} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" title={t('globalChat.closeChat')}>
-            <X size={16} className="text-slate-400" />
+          <button onClick={close} className="p-1.5 hover:bg-[var(--bg-subtle)] rounded-lg transition-colors" title={t('globalChat.closeChat')}>
+            <X size={16} className="text-[var(--fg-muted)]" />
           </button>
         </div>
       </div>
 
       {/* 润色上下文卡片 */}
       {isRefineMode && currentRefineCandidate && (
-        <div className="border-b border-slate-100 bg-emerald-50/30 px-4 py-2 shrink-0">
+        <div className="border-b border-[var(--border-default)] bg-emerald-50/30 px-4 py-2 shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-emerald-700 truncate flex-1">{currentRefineCandidate.title}</span>
             {currentRefineCandidate.language && (
@@ -521,12 +521,12 @@ export const GlobalChatPanel: React.FC = () => {
             <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mb-3">
               <MessageSquare className="text-blue-500" size={20} />
             </div>
-            <h4 className="text-sm font-bold text-slate-700 mb-1">{t('globalChat.emptyTitle')}</h4>
-            <p className="text-xs text-slate-400 max-w-[280px] leading-relaxed mb-3">{t('globalChat.emptyDesc')}</p>
+            <h4 className="text-sm font-bold text-[var(--fg-primary)] mb-1">{t('globalChat.emptyTitle')}</h4>
+            <p className="text-xs text-[var(--fg-muted)] max-w-[280px] leading-relaxed mb-3">{t('globalChat.emptyDesc')}</p>
             <div className="flex flex-wrap gap-1.5 justify-center">
               {[t('globalChat.quickPrompts.analyzeArch'), t('globalChat.quickPrompts.findDuplicates'), t('globalChat.quickPrompts.suggestOptimize')].map(p => (
                 <button key={p} onClick={() => { setInput(p); inputRef.current?.focus(); }}
-                  className="text-[10px] px-2.5 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700 transition-colors">{p}</button>
+                  className="text-[10px] px-2.5 py-1 rounded-md bg-[var(--bg-subtle)] text-[var(--fg-secondary)] hover:bg-blue-50 hover:text-blue-700 transition-colors">{p}</button>
               ))}
             </div>
           </div>
@@ -554,8 +554,8 @@ export const GlobalChatPanel: React.FC = () => {
           <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[95%] ${
               msg.role === 'user' ? 'bg-blue-600 text-white rounded-2xl rounded-tr-md px-3.5 py-2'
-                : msg.role === 'system' ? 'bg-slate-50 border border-slate-200 text-slate-600 rounded-2xl px-3.5 py-2 w-full'
-                : 'bg-white border border-slate-200 rounded-2xl rounded-tl-md px-3.5 py-2.5 shadow-sm w-full'
+                : msg.role === 'system' ? 'bg-[var(--bg-subtle)] border border-[var(--border-default)] text-[var(--fg-secondary)] rounded-2xl px-3.5 py-2 w-full'
+                : 'bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl rounded-tl-md px-3.5 py-2.5 shadow-sm w-full'
             }`}>
               {msg.role === 'assistant' && (
                 <div className="flex items-center gap-1.5 mb-1.5">
@@ -566,9 +566,9 @@ export const GlobalChatPanel: React.FC = () => {
                 </div>
               )}
               {msg.role === 'assistant' && !msg.diff ? (
-                <MarkdownWithHighlight content={msg.content} className="text-xs text-slate-700" />
+                <MarkdownWithHighlight content={msg.content} className="text-xs text-[var(--fg-primary)]" />
               ) : (
-                <p className={`text-xs leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? '' : msg.role === 'system' ? 'text-slate-500' : 'text-slate-700'}`}>{msg.content}</p>
+                <p className={`text-xs leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? '' : msg.role === 'system' ? 'text-[var(--fg-secondary)]' : 'text-[var(--fg-primary)]'}`}>{msg.content}</p>
               )}
               {msg.diff && msg.diff.length > 0 && (
                 <DiffView
@@ -583,10 +583,10 @@ export const GlobalChatPanel: React.FC = () => {
 
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-md px-3.5 py-2.5 shadow-sm">
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-2xl rounded-tl-md px-3.5 py-2.5 shadow-sm">
               <div className="flex items-center gap-2">
                 <Loader2 size={12} className={`animate-spin ${isRefineMode ? 'text-emerald-500' : 'text-blue-500'}`} />
-                <span className="text-xs text-slate-500">{isRefineMode ? t('globalChat.loading.analyzing') : t('globalChat.loading.thinking')}</span>
+                <span className="text-xs text-[var(--fg-secondary)]">{isRefineMode ? t('globalChat.loading.analyzing') : t('globalChat.loading.thinking')}</span>
                 {abortRef.current && (
                   <button onClick={() => abortRef.current?.abort()}
                     className="ml-1 px-1.5 py-0.5 text-[10px] font-bold text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors">
@@ -607,13 +607,13 @@ export const GlobalChatPanel: React.FC = () => {
         const excludedCount = lastDiffMsg?.excludedFields?.length || 0;
         const activeCount = totalFields - excludedCount;
         return (
-        <div className="px-4 py-2 border-t border-slate-100 bg-emerald-50/50 flex items-center gap-2 shrink-0">
+        <div className="px-4 py-2 border-t border-[var(--border-default)] bg-emerald-50/50 flex items-center gap-2 shrink-0">
           <button onClick={handleRefineAccept} disabled={applying}
             className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-lg shadow-sm disabled:opacity-50">
             {applying ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
             {applying ? t('globalChat.applyingBtn') : excludedCount > 0 ? t('globalChat.confirmApplyN', { i: activeCount, total: totalFields }) : t('globalChat.confirmApply')}
           </button>
-          <button className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
+          <button className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors">
             <RotateCcw size={11} /> {t('globalChat.continueAdjust')}
           </button>
           {isBatchRefine && applied.has(currentRefineId!) && refineCtx!.currentIdx < refineCtx!.candidateIds.length - 1 && (
@@ -627,7 +627,7 @@ export const GlobalChatPanel: React.FC = () => {
 
       {isRefineMode && !hasPendingDiff && !loading && isBatchRefine
         && applied.has(currentRefineId!) && refineCtx!.currentIdx < refineCtx!.candidateIds.length - 1 && (
-        <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-center shrink-0">
+        <div className="px-4 py-2 border-t border-[var(--border-default)] flex items-center justify-center shrink-0">
           <button onClick={handleRefineNext}
             className="flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-700 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors">
             {t('globalChat.nextItem')} ({(refineCtx?.currentIdx ?? 0) + 2}/{refineCtx?.candidateIds.length}) <ChevronRight size={12} />
@@ -636,13 +636,13 @@ export const GlobalChatPanel: React.FC = () => {
       )}
 
       {/* 输入区域 */}
-      <div className="px-4 py-2.5 border-t border-slate-200 bg-white shrink-0">
+      <div className="px-4 py-2.5 border-t border-[var(--border-default)] bg-[var(--bg-surface)] shrink-0">
         <div className="flex gap-2">
           <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
             placeholder={isRefineMode ? t('globalChat.refinePlaceholder') : t('globalChat.chatPlaceholder')} rows={2}
-            className={`flex-1 px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 ${
+            className={`flex-1 px-3 py-2 text-sm border border-[var(--border-default)] rounded-xl focus:outline-none focus:ring-2 ${
               isRefineMode ? 'focus:ring-emerald-200 focus:border-emerald-400' : 'focus:ring-blue-200 focus:border-blue-400'
-            } resize-none placeholder:text-slate-300`}
+            } resize-none placeholder:text-[var(--fg-muted)]`}
             disabled={loading || applying} />
           <button onClick={handleSend} disabled={!input.trim() || loading || applying}
             className={`self-stretch w-9 flex items-center justify-center rounded-xl bg-gradient-to-r ${
@@ -652,7 +652,7 @@ export const GlobalChatPanel: React.FC = () => {
             <Send size={14} />
           </button>
         </div>
-        <p className="text-[9px] text-slate-400 mt-1">
+        <p className="text-[9px] text-[var(--fg-muted)] mt-1">
           {isRefineMode ? t('globalChat.inputHintRefine') : t('globalChat.inputHintChat')}
         </p>
       </div>

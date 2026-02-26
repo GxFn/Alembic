@@ -1,12 +1,13 @@
 import React from 'react';
-import { X, Copy, Loader2 } from 'lucide-react';
+import { Copy, Loader2 } from 'lucide-react';
 import { ScanResultItem, Recipe, SimilarRecipe } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
 import { ICON_SIZES } from '../../constants/icons';
 import CodeBlock from '../Shared/CodeBlock';
 import MarkdownWithHighlight, { stripFrontmatter } from '../Shared/MarkdownWithHighlight';
-import PageOverlay from '../Shared/PageOverlay';
+import { Drawer } from '../Layout/Drawer';
+import { Button } from '../ui/Button';
 import { useI18n } from '../../i18n';
 
 export type { SimilarRecipe };
@@ -110,46 +111,32 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
   };
 
   return (
-    <PageOverlay
-      className="z-30 flex justify-end"
-      onClick={onClose}
-    >
-      <PageOverlay.Backdrop className="bg-black/30 backdrop-blur-[1px]" />
+    <Drawer open onClose={onClose} size="full">
+      {/* Header */}
+      <Drawer.Header title={t('spmCompare.compareTitle')}>
+        <Drawer.HeaderActions>
+          {cand.candidateId && data.targetName && (
+            <Button variant="danger" size="sm" onClick={handleDelete}>{t('spmCompare.deleteCandidate')}</Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleAuditCandidate}
+            disabled={isSavingRecipe}
+          >
+            {isSavingRecipe ? <Loader2 size={ICON_SIZES.xs} className="animate-spin" /> : null}
+            {t('spmCompare.auditCandidate')}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleEditRecipe}>{t('spmCompare.editRecipe')}</Button>
+        </Drawer.HeaderActions>
+        <Drawer.CloseButton onClose={onClose} />
+      </Drawer.Header>
 
-      {/* Drawer — wider for side-by-side */}
-      <div
-        className="relative w-[min(96vw,1280px)] h-full bg-white shadow-2xl flex flex-col"
-        style={{ animation: 'slideInRight 0.25s ease-out' }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <h3 className="font-bold text-slate-800">{t('spmCompare.compareTitle')}</h3>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {cand.candidateId && data.targetName && (
-                <button onClick={handleDelete} className="text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors">{t('spmCompare.deleteCandidate')}</button>
-              )}
-              <button
-                onClick={handleAuditCandidate}
-                disabled={isSavingRecipe}
-                className="text-xs text-blue-600 hover:bg-blue-50 px-2 py-1 rounded disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
-              >
-                {isSavingRecipe ? <Loader2 size={ICON_SIZES.xs} className="animate-spin" /> : null}
-                {t('spmCompare.auditCandidate')}
-              </button>
-              <button onClick={handleEditRecipe} className="text-xs text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded transition-colors">{t('spmCompare.editRecipe')}</button>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors shrink-0 ml-2">
-            <X size={ICON_SIZES.md} />
-          </button>
-        </div>
-
+      <Drawer.Body>
         {/* Similar recipe switcher */}
         {data.similarList.length > 1 && (
-          <div className="flex flex-wrap gap-1.5 px-5 py-2 border-b border-slate-100 bg-slate-50/50 shrink-0">
-            <span className="text-[10px] text-slate-400 font-bold self-center">{t('spmCompare.switchRecipe')}</span>
+          <div className="flex flex-wrap gap-1.5 px-5 py-2 border-b border-[var(--border-default)] bg-[var(--bg-subtle)] shrink-0">
+            <span className="text-[10px] text-[var(--fg-muted)] font-bold self-center">{t('spmCompare.switchRecipe')}</span>
             {data.similarList.map(s => (
               <button
                 key={s.recipeName}
@@ -157,7 +144,7 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
                 className={`text-[10px] font-bold px-2 py-1 rounded transition-colors ${
                   data.recipeName === s.recipeName
                     ? 'bg-emerald-200 text-emerald-800'
-                    : 'bg-white text-emerald-600 hover:bg-emerald-100 border border-emerald-200'
+                    : 'bg-[var(--bg-surface)] text-emerald-600 hover:bg-emerald-100 border border-emerald-200'
                 }`}
               >
                 {s.recipeName.replace(/\.md$/i, '')} {(s.similarity * 100).toFixed(0)}%
@@ -169,26 +156,26 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
         {/* Side-by-side content */}
         <div className="flex-1 flex min-h-0">
           {/* Left: Candidate */}
-          <div className="flex-1 flex flex-col min-w-0 border-r border-slate-200">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-blue-50/40 shrink-0">
+          <div className="flex-1 flex flex-col min-w-0 border-r border-[var(--border-default)]">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border-default)] bg-blue-50/40 shrink-0">
               <span className="text-xs font-bold text-blue-700 truncate">{t('spmCompare.candidateTitle', { title: cand.title || '' })}</span>
               <button onClick={copyCandidate} className="p-1 hover:bg-blue-100 rounded text-blue-500 shrink-0" title={t('spmCompare.copyCandidate')}>
                 <Copy size={ICON_SIZES.xs} />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              <div className="markdown-body text-slate-700 space-y-4">
+              <div className="markdown-body text-[var(--fg-secondary)] space-y-4">
                 <h3 className="text-sm font-bold">Snippet / Code Reference</h3>
                 {(cand.content?.pattern) ? (
                   <CodeBlock code={cand.content?.pattern || ''} language={candLang} className="!overflow-visible" />
                 ) : (
-                  <p className="text-slate-400 italic text-xs">{t('spmCompare.noCode')}</p>
+                  <p className="text-[var(--fg-muted)] italic text-xs">{t('spmCompare.noCode')}</p>
                 )}
                 <h3 className="text-sm font-bold mt-4">{t('spmCompare.aiContextProfile')}</h3>
                 {(cand.content?.markdown || cand.doClause) ? (
                   <MarkdownWithHighlight content={cand.content?.markdown || cand.doClause || ''} />
                 ) : (
-                  <p className="text-slate-400 italic text-xs">{t('spmCompare.noGuide')}</p>
+                  <p className="text-[var(--fg-muted)] italic text-xs">{t('spmCompare.noGuide')}</p>
                 )}
               </div>
             </div>
@@ -196,7 +183,7 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
 
           {/* Right: Recipe */}
           <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-emerald-50/40 shrink-0">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border-default)] bg-emerald-50/40 shrink-0">
               <span className="text-xs font-bold text-emerald-700 truncate">Recipe：{data.recipeName.replace(/\.md$/i, '')}</span>
               <button onClick={copyRecipe} className="p-1 hover:bg-emerald-100 rounded text-emerald-500 shrink-0" title={t('spmCompare.copyRecipe')}>
                 <Copy size={ICON_SIZES.xs} />
@@ -207,8 +194,8 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </PageOverlay>
+      </Drawer.Body>
+    </Drawer>
   );
 };
 

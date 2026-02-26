@@ -7,7 +7,7 @@
  *  L1 — Go AST (lang-go.js): struct/interface/func 提取
  *  L2 — LanguageService: .go 映射、detectPrimary、DimensionCopy
  *  L3 — Enhancement: go-web pack 匹配、extraDimensions、guardRules
- *  L4 — Skills: autosnippet-reference-go 加载
+ *  L4 — (removed: language reference skills no longer bundled)
  *  L5 — 新增基础设施: SUMMARY_EXTRACTORS[go]、IndexingPipeline、extForLang
  *  L6 — Bootstrap 条件维度: go-module-scan
  *
@@ -401,48 +401,6 @@ describe('L3: Go Enhancement Pack (go-web)', () => {
     const dims = grpcPack.getExtraDimensions();
     expect(Array.isArray(dims)).toBe(true);
     expect(dims.length).toBeGreaterThan(0);
-  });
-});
-
-// ══════════════════════════════════════════════════════════════════
-// L4: Skills (autosnippet-reference-go)
-// ══════════════════════════════════════════════════════════════════
-describe('L4: Go Reference Skill', () => {
-  it('SKILL.md should exist', () => {
-    const skillPath = path.resolve(
-      __dirname, '..', '..', 'skills', 'autosnippet-reference-go', 'SKILL.md'
-    );
-    expect(fs.existsSync(skillPath)).toBe(true);
-  });
-
-  it('SKILL.md should contain Go-specific content', () => {
-    const skillPath = path.resolve(
-      __dirname, '..', '..', 'skills', 'autosnippet-reference-go', 'SKILL.md'
-    );
-    const content = fs.readFileSync(skillPath, 'utf8');
-    // Key sections
-    expect(content).toContain('Go');
-    expect(content).toContain('goroutine');
-    expect(content).toContain('error');
-    expect(content).toContain('interface');
-    expect(content).toContain('context');
-    expect(content).toContain('defer');
-  });
-
-  it('SKILL.md should be > 200 lines', () => {
-    const skillPath = path.resolve(
-      __dirname, '..', '..', 'skills', 'autosnippet-reference-go', 'SKILL.md'
-    );
-    const content = fs.readFileSync(skillPath, 'utf8');
-    const lineCount = content.split('\n').length;
-    expect(lineCount).toBeGreaterThan(200);
-  });
-
-  it('LANG_SKILL_MAP should include go', async () => {
-    const mod = await import('../../lib/external/mcp/handlers/bootstrap/skills.js');
-    // skills.js exports LANG_SKILL_MAP or its logic
-    // Just verify the file loads without error
-    expect(mod).toBeDefined();
   });
 });
 

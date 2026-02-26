@@ -54,7 +54,7 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
   const { status, meta } = task;
 
   const statusStyles: Record<string, string> = {
-    skeleton:  'bg-slate-50 border-slate-200',
+    skeleton:  'bg-[var(--bg-subtle)] border-[var(--border-default)]',
     filling:   'bg-blue-50 border-blue-300',
     completed: 'bg-emerald-50 border-emerald-300',
     failed:    'bg-red-50 border-red-300',
@@ -62,8 +62,8 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
 
   const statusBadge: Record<string, React.ReactNode> = {
     skeleton: (
-      <span className="flex items-center gap-1 text-xs text-slate-400">
-        <div className="w-2 h-2 rounded-full bg-slate-300" />
+      <span className="flex items-center gap-1 text-xs text-[var(--fg-muted)]">
+        <div className="w-2 h-2 rounded-full bg-[var(--border-emphasis)]" />
         {t('bootstrap.statusLabels.skeleton')}
       </span>
     ),
@@ -92,7 +92,7 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
       {/* Skeleton shimmer overlay */}
       {status === 'skeleton' && (
         <div className="absolute inset-0 rounded-xl overflow-hidden">
-          <div className="animate-pulse bg-gradient-to-r from-transparent via-slate-200/40 to-transparent h-full w-full" />
+          <div className="animate-pulse bg-gradient-to-r from-transparent via-[var(--border-default)]/40 to-transparent h-full w-full" />
         </div>
       )}
 
@@ -109,13 +109,13 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
             status === 'completed' ? 'bg-emerald-100 text-emerald-600' :
             status === 'filling' ? 'bg-blue-100 text-blue-600' :
             status === 'failed' ? 'bg-red-100 text-red-600' :
-            'bg-slate-100 text-slate-400'
+            'bg-[var(--bg-subtle)] text-[var(--fg-muted)]'
           }`}>
             {getDimIcon(task.id)}
           </div>
           <div>
             <h3 className={`font-medium text-sm ${
-              status === 'skeleton' ? 'text-slate-400' : 'text-slate-800'
+              status === 'skeleton' ? 'text-[var(--fg-muted)]' : 'text-[var(--fg-primary)]'
             }`}>
               {(() => {
                 const key = `bootstrap.pipelineLabels.${meta.dimId}`;
@@ -123,7 +123,7 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
                 return translated !== key ? translated : meta.label;
               })()}
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-[var(--fg-secondary)] mt-0.5">
               {meta.skillWorthy ? 'Skill' : 'Candidate'}
               {task.result && status === 'completed' && (
                 <span className="ml-2 text-emerald-600">
@@ -194,14 +194,14 @@ const ReviewPipelinePanel: React.FC<{ review: ReviewState }> = ({ review }) => {
               className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all duration-300 ${
                 isActive ? 'border-purple-300 bg-purple-100/60' :
                 isDone    ? 'border-emerald-300 bg-emerald-50/60' :
-                            'border-slate-200 bg-white/40'
+                            'border-[var(--border-default)] bg-[var(--bg-surface)]'
               }`}
             >
               {/* Icon */}
               <div className={`flex-shrink-0 p-1.5 rounded-md ${
                 isActive ? 'bg-purple-200 text-purple-700' :
                 isDone    ? 'bg-emerald-100 text-emerald-600' :
-                            'bg-slate-100 text-slate-400'
+                            'bg-[var(--bg-subtle)] text-[var(--fg-muted)]'
               }`}>
                 {icon}
               </div>
@@ -209,8 +209,8 @@ const ReviewPipelinePanel: React.FC<{ review: ReviewState }> = ({ review }) => {
               {/* Label + detail */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className={`text-sm font-medium ${isIdle ? 'text-slate-400' : 'text-slate-800'}`}>{t(labelKey)}</span>
-                  <span className="text-xs text-slate-400">{t(descKey)}</span>
+                  <span className={`text-sm font-medium ${isIdle ? 'text-[var(--fg-muted)]' : 'text-[var(--fg-primary)]'}`}>{t(labelKey)}</span>
+                  <span className="text-xs text-[var(--fg-muted)]">{t(descKey)}</span>
                 </div>
 
                 {/* Round-specific progress details */}
@@ -316,17 +316,17 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
     null;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <div className="bg-[var(--bg-surface)] rounded-2xl border border-[var(--border-default)] shadow-sm p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">{t('bootstrap.title')}</h2>
-          {statusText && <p className="text-sm text-slate-500 mt-0.5">{statusText}</p>}
+          <h2 className="text-lg font-semibold text-[var(--fg-primary)]">{t('bootstrap.title')}</h2>
+          {statusText && <p className="text-sm text-[var(--fg-secondary)] mt-0.5">{statusText}</p>}
         </div>
         {isAllDone && onDismiss && (
           <button
             onClick={onDismiss}
-            className="text-sm px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+            className="text-sm px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--bg-subtle)] text-[var(--fg-secondary)] transition-colors"
           >
             {t('bootstrap.close')}
           </button>
@@ -335,21 +335,21 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
 
       {/* Stats bar — elapsed time, remaining time, tool calls */}
       <div className="flex flex-wrap items-center gap-4 mb-5 text-sm">
-        <div className="flex items-center gap-1.5 text-slate-600">
-          <Clock size={14} className="text-slate-400" />
-          <span>{t('bootstrap.elapsed')} <span className="font-medium text-slate-800">{formatDuration(elapsedMs)}</span></span>
+        <div className="flex items-center gap-1.5 text-[var(--fg-secondary)]">
+          <Clock size={14} className="text-[var(--fg-muted)]" />
+          <span>{t('bootstrap.elapsed')} <span className="font-medium text-[var(--fg-primary)]">{formatDuration(elapsedMs)}</span></span>
         </div>
         {session.status === 'running' && remaining > 0 && estimatedRemainingMs > 0 && (
-          <div className="flex items-center gap-1.5 text-slate-600">
+          <div className="flex items-center gap-1.5 text-[var(--fg-secondary)]">
             <Clock size={14} className="text-blue-400" />
             <span>{t('bootstrap.estimatedRemaining')} <span className="font-medium text-blue-600">{formatDuration(estimatedRemainingMs)}</span></span>
           </div>
         )}
-        <div className="flex items-center gap-1.5 text-slate-600">
-          <Wrench size={14} className="text-slate-400" />
-          <span>{t('bootstrap.toolCalls')} <span className="font-medium text-slate-800">{toolCalls}</span></span>
+        <div className="flex items-center gap-1.5 text-[var(--fg-secondary)]">
+          <Wrench size={14} className="text-[var(--fg-muted)]" />
+          <span>{t('bootstrap.toolCalls')} <span className="font-medium text-[var(--fg-primary)]">{toolCalls}</span></span>
         </div>
-        <div className="text-slate-400 text-xs">
+        <div className="text-[var(--fg-muted)] text-xs">
           {t('bootstrap.dimensions', { done, total: session.total })}
         </div>
       </div>

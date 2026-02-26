@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { Toaster } from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 import { notify } from './utils/notification';
-import { Recipe, ProjectData, SPMTarget, ExtractedRecipe, ScanResultItem, GuardAuditResult, KnowledgeContent, KnowledgeReasoning, KnowledgeQuality, KnowledgeStats, KnowledgeConstraints } from './types';
+import { Recipe, ProjectData, SPMTarget, ExtractedRecipe, ScanResultItem, GuardAuditResult } from './types';
 import { TabType, validTabs } from './constants';
 import { isShellTarget, isSilentTarget, isPendingTarget, getWritePermissionErrorMsg, getSaveErrorMsg } from './utils';
 import api from './api';
@@ -11,12 +12,12 @@ import { usePermission } from './hooks/usePermission';
 import { useBootstrapSocket } from './hooks/useBootstrapSocket';
 import { useI18n } from './i18n';
 import { zh } from './i18n/locales/zh';
-import { useTheme } from './theme';
 import LoginView from './components/Views/LoginView';
 
 // Components
 import Sidebar from './components/Layout/Sidebar';
 import Header from './components/Layout/Header';
+import CommandPalette from './components/Layout/CommandPalette';
 
 import RecipesView from './components/Views/RecipesView';
 import HelpView from './components/Views/HelpView';
@@ -128,7 +129,7 @@ const App: React.FC = () => {
   const auth = useAuth();
   const permission = usePermission(auth.user?.role);
   const bootstrap = useBootstrapSocket();
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
 
   const getTabFromPath = (): TabType => {
   const path = window.location.pathname.replace(/^\//, '').split('/')[0] || '';
@@ -141,8 +142,8 @@ const App: React.FC = () => {
   // State
   const [data, setData] = useState<ProjectData | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>(getTabFromPath());
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [targets, setTargets] = useState<SPMTarget[]>([]);
@@ -358,7 +359,7 @@ const App: React.FC = () => {
 
   const handleSyncSnippets = async () => {
   try {
-    const result = await api.syncSnippets('all');
+    await api.syncSnippets('all');
     notify(t('app.sync.success'), { title: t('app.sync.successTitle') });
   } catch (err) {
     notify(t('app.sync.failedHint'), { title: t('app.sync.failed'), type: 'error' });
@@ -956,8 +957,6 @@ const App: React.FC = () => {
 
   const candidateCount = Object.values(data?.candidates || {}).reduce((acc, curr) => acc + curr.items.length, 0);
 
-  const { isDark: isDarkMode } = useTheme();
-
   // ── 登录门控 ──────────────────────────────────
   if (requireLogin) {
     return <LoginView onLogin={auth.login} isLoading={auth.isLoading} />;
@@ -966,7 +965,7 @@ const App: React.FC = () => {
   return (
   <ErrorBoundary>
   <GlobalChatProvider>
-  <div className={`flex h-screen ${isDarkMode ? 'bg-[#1e1e1e] text-slate-200' : 'bg-slate-50 text-slate-900'} overflow-hidden font-sans`}>
+  <div className="flex h-screen bg-[var(--bg-root)] text-[var(--fg-primary)] overflow-hidden font-sans">
     <Toaster position="top-center" toastOptions={{ duration: 5000, style: { background: 'none', padding: 0, boxShadow: 'none', border: 'none' } }} containerStyle={{ top: 24 }} />
     <Sidebar 
     activeTab={activeTab} 
@@ -978,14 +977,10 @@ const App: React.FC = () => {
     permissionMode={permission.mode}
     onLogout={auth.authEnabled ? auth.logout : undefined}
     projectName={data?.projectName}
-    collapsed={sidebarCollapsed}
-    onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
     />
 
     <main className="flex-1 flex flex-col overflow-hidden relative">
     <Header 
-      searchQuery={searchQuery} 
-      setSearchQuery={setSearchQuery} 
       setShowCreateModal={setShowCreateModal} 
       handleSyncSnippets={handleSyncSnippets} 
       aiConfig={data?.aiConfig}
@@ -993,18 +988,24 @@ const App: React.FC = () => {
       onOpenLlmConfig={() => setShowLlmConfig(true)}
       onBeforeAiSwitch={stopCurrentAiTasks}
       onAiConfigChange={fetchData}
-      onSemanticSearchResults={(results) => {
-      setSemanticResults(results);
-      if (activeTab !== 'recipes') {
-        navigateToTab('recipes');
-      }
-      }}
+      activeTab={activeTab}
+      onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+      projectName={data?.projectName}
+      candidateCount={candidateCount}
     />
 
     <div className={`flex-1 ${activeTab === 'wiki' ? 'overflow-hidden' : 'overflow-y-auto p-4 xl:p-6 2xl:p-8'}`}>
+      <AnimatePresence mode="wait">
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: [0.4, 0, 0.2, 1] } }}
+        exit={{ opacity: 0, transition: { duration: 0.15 } }}
+        className="h-full"
+      >
       {loading ? (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--accent-emphasis)]"></div>
       </div>
       ) : activeTab === 'recipes' ? (
       <RecipesView 
@@ -1126,6 +1127,8 @@ const App: React.FC = () => {
       ) : (
       <AiChatView />
       )}
+      </motion.div>
+      </AnimatePresence>
     </div>
 
     {editingRecipe && (
@@ -1174,6 +1177,19 @@ const App: React.FC = () => {
 
   {/* AI Chat 内联面板 — flex 同层，挤压 main 空间 */}
   <ChatPanelSlot />
+
+  {/* ⌘K Command Palette */}
+  <CommandPalette
+    open={commandPaletteOpen}
+    onOpenChange={setCommandPaletteOpen}
+    navigateToTab={navigateToTab}
+    setShowCreateModal={setShowCreateModal}
+    handleSyncSnippets={handleSyncSnippets}
+    searchQuery={searchQuery}
+    setSearchQuery={setSearchQuery}
+    onOpenLlmConfig={() => setShowLlmConfig(true)}
+    candidateCount={candidateCount}
+  />
   </div>
   </GlobalChatProvider>
   </ErrorBoundary>

@@ -9,7 +9,7 @@
  * 同步 `dark` CSS class 到 <html>，使 Tailwind `dark:` 前缀生效。
  */
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -25,12 +25,6 @@ function getInitialMode(): ThemeMode {
     if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
   } catch { /* SSR / iframe sandbox */ }
   return 'system';
-}
-
-function resolveIsDark(mode: ThemeMode): boolean {
-  if (mode === 'dark') return true;
-  if (mode === 'light') return false;
-  return getSystemDark();
 }
 
 /* ── Context ─────────────────────────────────────────── */

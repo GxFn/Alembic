@@ -3,7 +3,6 @@ import { X, Save, Loader2, Eye, EyeOff, CheckCircle2, AlertTriangle } from 'luci
 import api from '../../api';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
-import { useTheme } from '../../theme';
 
 interface LlmConfigModalProps {
   onClose: () => void;
@@ -20,7 +19,6 @@ const PROVIDERS = [
 
 const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => {
   const { t } = useI18n();
-  const { isDark } = useTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasEnvFile, setHasEnvFile] = useState(false);
@@ -102,13 +100,13 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className={`rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}
+        className="rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden bg-[var(--bg-surface)]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-[#3e3e42]' : 'border-slate-100'}`}>
-          <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>{t('llmConfig.title')}</h2>
-          <button onClick={onClose} className={`p-1 rounded-lg transition-all duration-150 ${isDark ? 'hover:bg-[#3e3e42] text-slate-400 hover:text-slate-200' : 'hover:bg-slate-100 text-slate-400'}`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-default)]">
+          <h2 className="text-lg font-semibold text-[var(--fg-primary)]">{t('llmConfig.title')}</h2>
+          <button onClick={onClose} className="p-1 rounded-lg transition-all duration-150 hover:bg-[var(--bg-subtle)] text-[var(--fg-muted)] hover:text-[var(--fg-primary)]">
             <X size={ICON_SIZES.md} />
           </button>
         </div>
@@ -130,7 +128,7 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
 
               {/* Provider */}
               <div>
-                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{t('llmConfig.provider')}</label>
+                <label className="block text-sm font-medium mb-2 text-[var(--fg-primary)]">{t('llmConfig.provider')}</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {PROVIDERS.map(p => (
                     <button
@@ -139,12 +137,8 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
                       onClick={() => handleProviderChange(p.id)}
                       className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
                         provider === p.id
-                          ? isDark
-                            ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 ring-1 ring-blue-500/30'
-                            : 'bg-blue-50 border-blue-300 text-blue-700 ring-1 ring-blue-200'
-                          : isDark
-                            ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-300 hover:border-slate-500 hover:bg-[#333842]'
-                            : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                          ? 'bg-[var(--accent-subtle)] border-[var(--accent-emphasis)] text-[var(--accent)] ring-1 ring-[var(--accent-emphasis)]/30'
+                          : 'bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--fg-secondary)] hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-subtle)]'
                       }`}
                     >
                       {t(p.labelKey)}
@@ -155,20 +149,20 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
 
               {/* Model */}
               <div>
-                <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{t('llmConfig.model')}</label>
+                <label className="block text-sm font-medium mb-1.5 text-[var(--fg-primary)]">{t('llmConfig.model')}</label>
                 <input
                   type="text"
                   value={model}
                   onChange={e => setModel(e.target.value)}
                   placeholder={selectedProviderInfo?.defaultModel || ''}
-                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 ${isDark ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-200 placeholder-slate-500' : 'border-slate-200'}`}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)]/20 focus:border-[var(--accent-emphasis)] border-[var(--border-default)] bg-[var(--bg-subtle)] text-[var(--fg-primary)]"
                 />
               </div>
 
               {/* API Key */}
               {currentKeyEnv && (
                 <div>
-                  <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <label className="block text-sm font-medium mb-1.5 text-[var(--fg-primary)]">
                     {t('llmConfig.apiKey')}
                     {hasExistingKey && (
                       <span className="ml-2 text-xs text-green-600 font-normal">
@@ -182,12 +176,12 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
                       value={apiKey}
                       onChange={e => setApiKey(e.target.value)}
                       placeholder={hasExistingKey ? t('llmConfig.apiKeyPlaceholderSet') : t('llmConfig.apiKeyPlaceholderEmpty')}
-                      className={`w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 ${isDark ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-200 placeholder-slate-500' : 'border-slate-200'}`}
+                      className="w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)]/20 focus:border-[var(--accent-emphasis)] border-[var(--border-default)] bg-[var(--bg-subtle)] text-[var(--fg-primary)]"
                     />
                     <button
                       type="button"
                       onClick={() => setShowKey(v => !v)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--fg-muted)] hover:text-[var(--fg-secondary)]"
                     >
                       {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -197,15 +191,15 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
 
               {/* Proxy */}
               <div>
-                <label className={`block text-sm font-medium mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                  {t('llmConfig.proxy')} <span className={`text-xs font-normal ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{t('llmConfig.optional')}</span>
+                <label className="block text-sm font-medium mb-1.5 text-[var(--fg-primary)]">
+                  {t('llmConfig.proxy')} <span className="text-xs font-normal text-[var(--fg-muted)]">{t('llmConfig.optional')}</span>
                 </label>
                 <input
                   type="text"
                   value={proxy}
                   onChange={e => setProxy(e.target.value)}
                   placeholder="http://127.0.0.1:7890"
-                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-300 ${isDark ? 'bg-[#2a2d35] border-[#3e3e42] text-slate-200 placeholder-slate-500' : 'border-slate-200'}`}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)]/20 focus:border-[var(--accent-emphasis)] border-[var(--border-default)] bg-[var(--bg-subtle)] text-[var(--fg-primary)]"
                 />
               </div>
             </>
@@ -213,10 +207,10 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
         </div>
 
         {/* Footer */}
-        <div className={`flex items-center justify-end gap-3 px-6 py-4 border-t ${isDark ? 'border-[#3e3e42] bg-[#252526]' : 'border-slate-100 bg-slate-50/50'}`}>
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[var(--border-default)] bg-[var(--bg-subtle)]">
           <button
             onClick={onClose}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-800'}`}
+            className="px-4 py-2 text-sm font-medium transition-colors text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]"
           >
             {t('llmConfig.cancel')}
           </button>

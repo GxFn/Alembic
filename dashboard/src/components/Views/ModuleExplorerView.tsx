@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Zap, Edit3, Cpu, Loader2, Layers, Shield, AlertTriangle, RefreshCw, Trash2, FolderOpen, ChevronRight } from 'lucide-react';
-import { SPMTarget, ExtractedRecipe, ScanResultItem, Recipe, GuardAuditResult, ProjectDirectory } from '../../types';
+import { SPMTarget, ScanResultItem, Recipe, GuardAuditResult, ProjectDirectory } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
 import { ICON_SIZES } from '../../constants/icons';
@@ -94,11 +94,11 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
   const [editingCodeIndex, setEditingCodeIndex] = useState<number | null>(null);
   const [expandedEditIndex, setExpandedEditIndex] = useState<number | null>(null);
   const [similarityMap, setSimilarityMap] = useState<Record<string, SimilarRecipe[]>>({});
-  const [similarityLoading, setSimilarityLoading] = useState<string | null>(null);
+  const [, setSimilarityLoading] = useState<string | null>(null);
   const [compareDrawer, setCompareDrawer] = useState<CompareDrawerData | null>(null);
   const [isContextSearchOpen, setIsContextSearchOpen] = useState(false);
-  const [selectedContextFile, setSelectedContextFile] = useState<string | undefined>();
-  const [selectedContextTarget, setSelectedContextTarget] = useState<string | undefined>();
+  const [selectedContextFile, ] = useState<string | undefined>();
+  const [selectedContextTarget, ] = useState<string | undefined>();
   const fetchedSimilarRef = useRef<Set<string>>(new Set());
   const prevSimilarKeysRef = useRef<string[]>([]);
 
@@ -235,17 +235,17 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
 
   return (
   <div className="flex gap-4 xl:gap-6 2xl:gap-8 h-full">
-    <div className="w-64 xl:w-72 2xl:w-80 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden shrink-0">
+    <div className="w-64 xl:w-72 2xl:w-80 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] flex flex-col overflow-hidden shrink-0">
     {/* ── 标签页切换 ── */}
-    <div className="p-3 bg-slate-50 border-b border-slate-200">
+    <div className="p-3 bg-[var(--bg-subtle)] border-b border-[var(--border-default)]">
       <div className="flex items-center justify-between">
-      <div className="flex items-center gap-0.5 bg-slate-200/60 rounded-lg p-0.5">
+      <div className="flex items-center gap-0.5 bg-[var(--bg-subtle)] rounded-lg p-0.5">
         <button
         onClick={() => setSidebarTab('modules')}
         className={`text-[11px] px-2.5 py-1.5 rounded-md font-bold transition-all ${
           sidebarTab === 'modules'
-          ? 'bg-white text-blue-700 shadow-sm'
-          : 'text-slate-500 hover:text-slate-700'
+          ? 'bg-[var(--bg-surface)] text-blue-700 shadow-sm'
+          : 'text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]'
         }`}
         >
         {t('moduleExplorer.modulesTabLabel', { count: nonShellTargetCount })}
@@ -254,8 +254,8 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         onClick={() => setSidebarTab('folders')}
         className={`text-[11px] px-2.5 py-1.5 rounded-md font-bold transition-all ${
           sidebarTab === 'folders'
-          ? 'bg-white text-blue-700 shadow-sm'
-          : 'text-slate-500 hover:text-slate-700'
+          ? 'bg-[var(--bg-surface)] text-blue-700 shadow-sm'
+          : 'text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]'
         }`}
         >
         {t('moduleExplorer.foldersTabLabel')}
@@ -265,7 +265,7 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         <button
         onClick={handleRefreshProject}
         title={t('moduleExplorer.refreshProject')}
-        className="p-1.5 rounded-md hover:bg-blue-50 text-slate-500 hover:text-blue-600 border border-transparent hover:border-blue-200 transition-all"
+        className="p-1.5 rounded-md hover:bg-blue-50 text-[var(--fg-secondary)] hover:text-blue-600 border border-transparent hover:border-blue-200 transition-all"
         >
         <RefreshCw size={ICON_SIZES.md} />
         </button>
@@ -280,7 +280,7 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
       const isSelected = selectedTargetName === tgt.name;
       const isVirtual = tgt.isVirtual || tgt.discovererId === 'folder-scan';
       const lang = tgt.language || '';
-      const langBadgeClass = LANG_COLORS[lang] || 'bg-slate-100 text-slate-500 border-slate-200';
+      const langBadgeClass = LANG_COLORS[lang] || 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)] border-[var(--border-default)]';
       const subtitle = tgt.packageName && tgt.packageName !== tgt.name ? tgt.packageName : (tgt.discovererName || '');
       return (
         <button 
@@ -288,8 +288,8 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         onClick={() => handleScanTarget(tgt)} 
         disabled={isScanning}
         className={`w-full text-left p-3 rounded-lg flex items-center justify-between group transition-all border ${
-          isScanning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'
-        } ${isSelected ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-transparent'} ${isShell ? 'opacity-90' : ''}`}
+          isScanning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[var(--bg-subtle)]'
+        } ${isSelected ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-[var(--bg-surface)] border-transparent'} ${isShell ? 'opacity-90' : ''}`}
         >
         <div className={`flex flex-col max-w-[85%] ${isShell ? 'opacity-60' : ''}`}>
           <div className="flex items-center gap-2">
@@ -301,17 +301,17 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
             </span>
           )}
           </div>
-          {subtitle && <span className="text-[10px] text-slate-400 truncate pl-3">{subtitle}</span>}
+          {subtitle && <span className="text-[10px] text-[var(--fg-muted)] truncate pl-3">{subtitle}</span>}
         </div>
         {isShell ? (
-          <span className="text-[9px] font-bold text-slate-300 border border-slate-100 px-1 rounded">SHELL</span>
+          <span className="text-[9px] font-bold text-[var(--fg-muted)] border border-[var(--border-default)] px-1 rounded">SHELL</span>
         ) : isVirtual && onRemoveCustomFolder ? (
           <div className="flex items-center gap-0.5 shrink-0">
           <Zap size={ICON_SIZES.sm} className={`${isSelected ? 'text-blue-500 opacity-100' : 'text-blue-500 opacity-0 group-hover:opacity-100'} transition-opacity`} />
           <button
             onClick={(e) => { e.stopPropagation(); onRemoveCustomFolder(tgt.path || ''); }}
             title={t('moduleExplorer.removeFolder')}
-            className="p-0.5 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+            className="p-0.5 rounded text-[var(--fg-muted)] hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
           >
             <Trash2 size={12} />
           </button>
@@ -326,12 +326,12 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
       ) : (
       <>
       {loadingDirs ? (
-        <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+        <div className="flex flex-col items-center justify-center py-12 text-[var(--fg-muted)]">
         <Loader2 size={ICON_SIZES.lg} className="animate-spin mb-3 opacity-40" />
         <p className="text-xs">{t('moduleExplorer.scanningDirs')}</p>
         </div>
       ) : projectDirs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+        <div className="flex flex-col items-center justify-center py-12 text-[var(--fg-muted)]">
         <FolderOpen size={ICON_SIZES.xl} className="mb-3 opacity-20" />
         <p className="text-xs text-center px-4 leading-relaxed">
           {t('moduleExplorer.noDirs')}
@@ -339,7 +339,7 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         </div>
       ) : (
         projectDirs.map(dir => {
-        const dirLangClass = LANG_COLORS[dir.language] || 'bg-slate-100 text-slate-500 border-slate-200';
+        const dirLangClass = LANG_COLORS[dir.language] || 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)] border-[var(--border-default)]';
         return (
           <button
           key={dir.path}
@@ -352,7 +352,7 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
           `}
           style={{ paddingLeft: `${dir.depth * 14 + 10}px` }}
           >
-          <FolderOpen size={ICON_SIZES.sm} className={dir.hasSourceFiles ? 'text-emerald-500 shrink-0' : 'text-slate-300 shrink-0'} />
+          <FolderOpen size={ICON_SIZES.sm} className={dir.hasSourceFiles ? 'text-emerald-500 shrink-0' : 'text-[var(--fg-muted)] shrink-0'} />
           <span className="text-sm font-medium flex-1 truncate">{dir.name}</span>
           {dir.hasSourceFiles && dir.language !== 'unknown' && (
             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${dirLangClass}`}>
@@ -360,22 +360,22 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
             </span>
           )}
           {dir.hasSourceFiles && (
-            <span className="text-[10px] text-slate-400 shrink-0">{t('moduleExplorer.sourceFileCount', { count: dir.sourceFileCount })}</span>
+            <span className="text-[10px] text-[var(--fg-muted)] shrink-0">{t('moduleExplorer.sourceFileCount', { count: dir.sourceFileCount })}</span>
           )}
-          <ChevronRight size={12} className="text-slate-300 shrink-0" />
+          <ChevronRight size={12} className="text-[var(--fg-muted)] shrink-0" />
           </button>
         );
         })
       )}
-      <div className="px-3 py-2 text-[10px] text-slate-400 text-center">
+      <div className="px-3 py-2 text-[10px] text-[var(--fg-muted)] text-center">
         {t('moduleExplorer.selectFolderHint')}
       </div>
       </>
       )}
     </div>
     </div>
-    <div className="flex-1 bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden relative">
-    <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-sm flex justify-between items-center">
+    <div className="flex-1 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-default)] flex flex-col overflow-hidden relative">
+    <div className="p-4 bg-[var(--bg-subtle)] border-b border-[var(--border-default)] font-bold text-sm flex justify-between items-center">
       <div className="flex items-center gap-2">
       {selectedTargetName === '__project__' ? (
         <>
@@ -395,17 +395,17 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         </>
       ) : (
         <>
-        <Edit3 size={ICON_SIZES.md} className="text-slate-400" />
+        <Edit3 size={ICON_SIZES.md} className="text-[var(--fg-muted)]" />
         <span>{t('moduleExplorer.reviewResults')}</span>
         </>
       )}
-      {scanResults.length > 0 && <span className="text-slate-400 font-normal text-xs ml-1">({t('moduleExplorer.resultsCount', { count: scanResults.length })}{scanResults[0]?.trigger ? t('moduleExplorer.candidateSuffix') : ''})</span>}
+      {scanResults.length > 0 && <span className="text-[var(--fg-muted)] font-normal text-xs ml-1">({t('moduleExplorer.resultsCount', { count: scanResults.length })}{scanResults[0]?.trigger ? t('moduleExplorer.candidateSuffix') : ''})</span>}
       </div>
     </div>
     
     <div className="flex-1 overflow-y-auto p-6 space-y-8 relative">
       {isScanning && (
-      <div className="absolute inset-0 bg-white/90 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center text-blue-600 px-4 xl:px-8 overflow-y-auto">
+      <div className="absolute inset-0 bg-[var(--bg-surface)] backdrop-blur-[2px] z-10 flex flex-col items-center justify-center text-blue-600 px-4 xl:px-8 overflow-y-auto">
         <div className="relative mb-6">
         <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
         <Cpu size={ICON_SIZES.xxl} className="absolute inset-0 m-auto text-blue-600 animate-pulse" />
@@ -413,23 +413,23 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         <p className="font-bold text-lg animate-pulse mb-1">
         {selectedTargetName === '__project__' ? t('moduleExplorer.fullProjectScanning') : t('moduleExplorer.moduleScanLabel', { name: selectedTargetName || '...' })}
         </p>
-        <p className="text-sm text-slate-500 mb-4">{scanProgress.status}</p>
-        <div className="w-full max-w-md bg-slate-100 rounded-full h-2.5 overflow-hidden">
+        <p className="text-sm text-[var(--fg-secondary)] mb-4">{scanProgress.status}</p>
+        <div className="w-full max-w-md bg-[var(--bg-subtle)] rounded-full h-2.5 overflow-hidden">
         <div
           className="h-full bg-blue-600 rounded-full transition-all duration-500 ease-out"
           style={{ width: `${Math.min(scanProgress.total ? (scanProgress.current / scanProgress.total) * 100 : 0, 98)}%` }}
         />
         </div>
-        <p className="text-xs text-slate-400 mt-3">
+        <p className="text-xs text-[var(--fg-muted)] mt-3">
         {scanProgress.total ? `${Math.round((scanProgress.current / scanProgress.total) * 100)}%` : '0%'}
         </p>
       </div>
       )}
 
       {!isScanning && scanResults.length === 0 && (
-      <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center">
+      <div className="h-full flex flex-col items-center justify-center text-[var(--fg-muted)] text-center">
         <Box size={ICON_SIZES.xxxl} className="mb-4 opacity-20" />
-        <p className="font-medium text-slate-600">{t('moduleExplorer.knowledgeExtract')}</p>
+        <p className="font-medium text-[var(--fg-secondary)]">{t('moduleExplorer.knowledgeExtract')}</p>
         <p className="text-xs mt-2 max-w-sm leading-relaxed">
         {t('moduleExplorer.knowledgeExtractHint')}
         </p>
@@ -441,16 +441,16 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
       <div className={`rounded-xl border p-4 ${guardAudit.summary.totalViolations > 0 ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
         <div className="flex items-center gap-2 mb-2">
         <Shield size={ICON_SIZES.md} className={guardAudit.summary.totalViolations > 0 ? 'text-amber-600' : 'text-emerald-600'} />
-        <span className="text-sm font-bold text-slate-700">{t('moduleExplorer.guardAuditSummary')}</span>
+        <span className="text-sm font-bold text-[var(--fg-primary)]">{t('moduleExplorer.guardAuditSummary')}</span>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">PROJECT SCAN</span>
         </div>
         <div className="flex flex-wrap gap-3 xl:gap-6 text-sm">
         <div className="flex items-center gap-1.5">
-          <span className="text-slate-500">{t('moduleExplorer.auditedFiles')}</span>
-          <span className="font-bold text-slate-700">{guardAudit.summary.totalFiles}</span>
+          <span className="text-[var(--fg-secondary)]">{t('moduleExplorer.auditedFiles')}</span>
+          <span className="font-bold text-[var(--fg-primary)]">{guardAudit.summary.totalFiles}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-slate-500">{t('moduleExplorer.totalViolationsLabel')}</span>
+          <span className="text-[var(--fg-secondary)]">{t('moduleExplorer.totalViolationsLabel')}</span>
           <span className={`font-bold ${guardAudit.summary.totalViolations > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>{guardAudit.summary.totalViolations}</span>
         </div>
         {guardAudit.summary.errors > 0 && (

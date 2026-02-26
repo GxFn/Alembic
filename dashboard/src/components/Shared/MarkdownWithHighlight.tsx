@@ -165,7 +165,7 @@ const markdownComponents = (showLineNumbers: boolean) => ({
       );
     }
     return (
-      <code className="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded text-[0.9em] font-mono border border-slate-200/60" {...props}>
+      <code className="px-1.5 py-0.5 bg-[var(--bg-subtle)] text-[var(--fg-primary)] rounded text-[0.9em] font-mono border border-[var(--border-default)]" {...props}>
         {children}
       </code>
     );
@@ -174,28 +174,28 @@ const markdownComponents = (showLineNumbers: boolean) => ({
   p: ({ children }: any) => <p className="mb-4 leading-7 last:mb-0">{children}</p>,
   h1: ({ children, ...props }: any) => {
     const id = typeof children === 'string' ? children.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/(^-|-$)/g, '') : undefined;
-    return <h1 id={id} className="text-[1.75rem] font-bold mb-4 mt-8 first:mt-0 pb-2 border-b border-slate-200/70 text-slate-900 leading-tight scroll-mt-20" {...props}>{children}</h1>;
+    return <h1 id={id} className="text-[1.75rem] font-bold mb-4 mt-8 first:mt-0 pb-2 border-b border-[var(--border-default)] text-[var(--fg-primary)] leading-tight scroll-mt-20" {...props}>{children}</h1>;
   },
   h2: ({ children, ...props }: any) => {
     const id = typeof children === 'string' ? children.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/(^-|-$)/g, '') : undefined;
-    return <h2 id={id} className="text-xl font-bold mb-3 mt-8 pb-1.5 border-b border-slate-100 text-slate-800 leading-snug scroll-mt-20" {...props}>{children}</h2>;
+    return <h2 id={id} className="text-xl font-bold mb-3 mt-8 pb-1.5 border-b border-[var(--border-default)] text-[var(--fg-primary)] leading-snug scroll-mt-20" {...props}>{children}</h2>;
   },
   h3: ({ children, ...props }: any) => {
     const id = typeof children === 'string' ? children.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/(^-|-$)/g, '') : undefined;
-    return <h3 id={id} className="text-lg font-semibold mb-2 mt-6 text-slate-800 leading-snug scroll-mt-20" {...props}>{children}</h3>;
+    return <h3 id={id} className="text-lg font-semibold mb-2 mt-6 text-[var(--fg-primary)] leading-snug scroll-mt-20" {...props}>{children}</h3>;
   },
   h4: ({ children, ...props }: any) => {
     const id = typeof children === 'string' ? children.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-').replace(/(^-|-$)/g, '') : undefined;
-    return <h4 id={id} className="text-base font-semibold mb-2 mt-5 text-slate-700 scroll-mt-20" {...props}>{children}</h4>;
+    return <h4 id={id} className="text-base font-semibold mb-2 mt-5 text-[var(--fg-primary)] scroll-mt-20" {...props}>{children}</h4>;
   },
-  strong: ({ children }: any) => <strong className="font-semibold text-slate-900">{children}</strong>,
-  em: ({ children }: any) => <em className="italic text-slate-600">{children}</em>,
-  del: ({ children }: any) => <del className="line-through text-slate-400">{children}</del>,
-  hr: () => <hr className="my-8 border-0 h-px bg-slate-200" />,
+  strong: ({ children }: any) => <strong className="font-semibold text-[var(--fg-primary)]">{children}</strong>,
+  em: ({ children }: any) => <em className="italic text-[var(--fg-secondary)]">{children}</em>,
+  del: ({ children }: any) => <del className="line-through text-[var(--fg-muted)]">{children}</del>,
+  hr: () => <hr className="my-8 border-0 h-px bg-[var(--border-default)]" />,
 
   /* ── Lists ── */
-  ul: ({ children }: any) => <ul className="list-disc pl-6 mb-4 space-y-1.5 marker:text-slate-400">{children}</ul>,
-  ol: ({ children }: any) => <ol className="list-decimal pl-6 mb-4 space-y-1.5 marker:text-slate-500">{children}</ol>,
+  ul: ({ children }: any) => <ul className="list-disc pl-6 mb-4 space-y-1.5 marker:text-[var(--fg-muted)]">{children}</ul>,
+  ol: ({ children }: any) => <ol className="list-decimal pl-6 mb-4 space-y-1.5 marker:text-[var(--fg-secondary)]">{children}</ol>,
   li: ({ children, ...props }: any) => {
     const node = props.node;
     const isTask = node?.children?.[0]?.type === 'element' && node?.children?.[0]?.tagName === 'input';
@@ -204,7 +204,7 @@ const markdownComponents = (showLineNumbers: boolean) => ({
 
   /* ── Blockquote ── */
   blockquote: ({ children }: any) => (
-    <blockquote className="border-l-4 border-blue-300 bg-blue-50/40 pl-4 pr-3 py-2 my-4 text-slate-600 rounded-r-lg [&>p]:mb-2 [&>p:last-child]:mb-0">
+    <blockquote className="border-l-4 border-blue-300 bg-blue-50/40 pl-4 pr-3 py-2 my-4 text-[var(--fg-secondary)] rounded-r-lg [&>p]:mb-2 [&>p:last-child]:mb-0">
       {children}
     </blockquote>
   ),
@@ -225,24 +225,24 @@ const markdownComponents = (showLineNumbers: boolean) => ({
     );
   },
   img: ({ src, alt }: any) => (
-    <img src={src} alt={alt || ''} className="max-w-full h-auto rounded-lg border border-slate-200 my-4" loading="lazy" />
+    <img src={src} alt={alt || ''} className="max-w-full h-auto rounded-lg border border-[var(--border-default)] my-4" loading="lazy" />
   ),
 
   /* ── Table (GFM) ── */
   table: ({ children }: any) => (
-    <div className="my-5 overflow-x-auto rounded-lg border border-slate-200">
+    <div className="my-5 overflow-x-auto rounded-lg border border-[var(--border-default)]">
       <table className="w-full border-collapse text-sm">{children}</table>
     </div>
   ),
-  thead: ({ children }: any) => <thead className="bg-slate-50 border-b border-slate-200">{children}</thead>,
-  tbody: ({ children }: any) => <tbody className="divide-y divide-slate-100">{children}</tbody>,
-  tr: ({ children }: any) => <tr className="hover:bg-slate-50/50 transition-colors">{children}</tr>,
-  th: ({ children }: any) => <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">{children}</th>,
-  td: ({ children }: any) => <td className="px-4 py-2.5 text-slate-700 align-top">{children}</td>,
+  thead: ({ children }: any) => <thead className="bg-[var(--bg-subtle)] border-b border-[var(--border-default)]">{children}</thead>,
+  tbody: ({ children }: any) => <tbody className="divide-y divide-[var(--border-default)]">{children}</tbody>,
+  tr: ({ children }: any) => <tr className="hover:bg-[var(--bg-subtle)] transition-colors">{children}</tr>,
+  th: ({ children }: any) => <th className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--fg-secondary)] uppercase tracking-wider">{children}</th>,
+  td: ({ children }: any) => <td className="px-4 py-2.5 text-[var(--fg-primary)] align-top">{children}</td>,
 
   /* ── Input (GFM task list checkboxes) ── */
   input: ({ checked }: any) => (
-    <input type="checkbox" checked={checked} readOnly className="mt-1 w-4 h-4 rounded border-slate-300 text-blue-600 cursor-default" />
+    <input type="checkbox" checked={checked} readOnly className="mt-1 w-4 h-4 rounded border-[var(--border-default)] text-blue-600 cursor-default" />
   ),
 });
 
@@ -273,7 +273,7 @@ const MarkdownWithHighlight: React.FC<MarkdownWithHighlightProps> = ({
   }, [content, doStrip]);
 
   return (
-    <div className={`markdown-body text-slate-700 ${className}`}>
+    <div className={`markdown-body text-[var(--fg-primary)] ${className}`}>
       {segments.map((seg, i) =>
         seg.type === 'mermaid' ? (
           <MermaidBlock key={`mermaid-${i}`} code={seg.content} />

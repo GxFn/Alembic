@@ -88,6 +88,15 @@ export const zh = {
     langSwitch: '中 / EN',
   },
 
+  /* ═══════════════════════════ commandPalette ═══════════════════════════ */
+  commandPalette: {
+    searchPlaceholder: '搜索知识、命令、页面...',
+    noResults: '没有找到结果',
+    recent: '最近',
+    pages: '页面',
+    commands: '命令',
+  },
+
   /* ═══════════════════════════════ login ═══════════════════════════════ */
   login: {
     title: 'AutoSnippet',
@@ -135,11 +144,11 @@ export const zh = {
     batchDeleteConfirm: '确定删除选中的 {count} 条 Recipe？',
     batchDeleteDone: '已删除 {count} 条',
     qualityAuthorityScore: '权威分',
-    qualityExcellent: 'Excellent',
+    qualityExcellent: '优秀', 
     qualityGreat: 'Great',
     qualitySolid: 'Solid',
     qualityGood: 'Good',
-    qualityBasic: 'Basic',
+    qualityBasic: '基础',
     knowledgeType: '类型',
     typeSnippet: 'Snippet',
     typeKnowledge: 'Knowledge',
@@ -1533,8 +1542,8 @@ export const zh = {
   /* ═══════════════════════════════ globalChat ═════════════════════════ */
   globalChat: {
     refineFields: {
-      summary: '摘要',
-      code: '代码/标准用法',
+      summary: '描述',
+      code: '代码 / 标准用法',
       markdown: 'Markdown 文档',
       rationale: '设计原理',
       tags: '标签',
@@ -1552,7 +1561,7 @@ export const zh = {
       empty: '（空）',
     },
     system: {
-      refinePrefix: '🎯 润色模式 — **{title}**\n\n当前摘要: {description}\n\n**输入润色指令，AI 将根据你的指令定向修改候选内容**，下方有常用指令可直接点击使用。',
+      refinePrefix: '🎯 润色模式 — **{title}**\n\n当前描述: {description}\n\n**输入润色指令，AI 将根据你的指令定向修改候选内容**，下方有常用指令可直接点击使用。',
       noDescription: '(无)',
       changesApplied: '✅ 变更已应用到候选！',
       exitedRefine: '已退出润色模式，回到通用对话。',
@@ -1579,7 +1588,7 @@ export const zh = {
       addExamples: '增加具体使用案例，不要修改其他内容',
       optimizeComments: '优化代码注释和说明',
       addCaveats: '补充常见错误用法和注意事项',
-      improveSummary: '提升摘要质量，更简洁专业',
+      improveSummary: '提升描述质量，更简洁专业',
       addPerformance: '补充性能注意事项',
     },
     loading: {
@@ -1596,7 +1605,7 @@ export const zh = {
     nextItem: '下一条',
     inputHintRefine: 'Enter 发送 · Shift+Enter 换行 · 先预览再应用',
     inputHintChat: 'Enter 发送 · Shift+Enter 换行',
-    refinePlaceholder: '输入定向润色指令，如"增加使用案例"、"优化摘要"...',
+    refinePlaceholder: '输入定向润色指令，如"增加使用案例"、"优化描述"...',
     chatPlaceholder: '输入你的问题...',
     applySuccess: '候选内容已更新为润色后版本',
     applySuccessTitle: '润色已应用',

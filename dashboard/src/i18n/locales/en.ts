@@ -91,6 +91,15 @@ export const en: DeepString<typeof zh> = {
     langSwitch: 'EN / 中',
   },
 
+  /* ═══════════════════════════ commandPalette ═══════════════════════════ */
+  commandPalette: {
+    searchPlaceholder: 'Search knowledge, commands, pages...',
+    noResults: 'No results found',
+    recent: 'Recent',
+    pages: 'Pages',
+    commands: 'Commands',
+  },
+
   /* ═══════════════════════════════ login ═══════════════════════════════ */
   login: {
     title: 'AutoSnippet',
@@ -1536,7 +1545,7 @@ export const en: DeepString<typeof zh> = {
   /* ═══════════════════════════════ globalChat ═════════════════════════ */
   globalChat: {
     refineFields: {
-      summary: 'Summary',
+      summary: 'Description',
       code: 'Code / Standard Usage',
       markdown: 'Markdown Document',
       rationale: 'Design Rationale',

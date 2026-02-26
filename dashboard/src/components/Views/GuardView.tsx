@@ -5,6 +5,7 @@ import { notify } from '../../utils/notification';
 import { GITHUB_ISSUES_NEW_GUARD_URL, LANGUAGE_OPTIONS } from '../../constants';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
+import Select from '../ui/Select';
 
 interface GuardRule {
   message: string;
@@ -244,7 +245,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
   }, [ruleEntries, langFilter, severityFilter]);
 
   if (loading) {
-  return <div className="p-6 text-slate-500">{t('common.loading')}</div>;
+  return <div className="p-6 text-[var(--fg-secondary)]">{t('common.loading')}</div>;
   }
 
   return (
@@ -256,8 +257,8 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
       <Shield className="text-blue-600" size={20} />
       </div>
       <div className="min-w-0">
-      <h2 className="text-lg xl:text-xl font-bold text-slate-800">{t('guard.title')}</h2>
-      <p className="text-xs text-slate-400 mt-0.5 truncate">
+      <h2 className="text-lg xl:text-xl font-bold text-[var(--fg-primary)]">{t('guard.title')}</h2>
+      <p className="text-xs text-[var(--fg-muted)] mt-0.5 truncate">
         {t('guard.summary')}
         {projectLanguages.length > 0 && (
         <span className="ml-1.5">· {t('guard.currentProject')}：{projectLanguages.map(l => langLabel(l)).join(' / ')}</span>
@@ -270,7 +271,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
       href={GITHUB_ISSUES_NEW_GUARD_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-600 bg-slate-50 border border-slate-200 hover:bg-slate-100"
+      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-[var(--fg-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-default)] hover:bg-[var(--bg-subtle)]"
       >
       <ExternalLink size={14} /> {t('guard.reportIssue')}
       </a>
@@ -292,9 +293,9 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
       </button>
       )}
       <div className="flex items-center gap-3 text-xs">
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100">
-        <Shield size={14} className="text-slate-400" />
-        <span className="text-slate-500">{t('guard.tableHeaders.rule')} <strong className="text-slate-700">{ruleEntries.length}</strong></span>
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-default)]">
+        <Shield size={14} className="text-[var(--fg-muted)]" />
+        <span className="text-[var(--fg-secondary)]">{t('guard.tableHeaders.rule')} <strong className="text-[var(--fg-primary)]">{ruleEntries.length}</strong></span>
       </div>
       {totalViolations > 0 && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-100">
@@ -312,15 +313,15 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     {/* AI 写入规则：默认折叠，点击标题行展开 */}
     {showAiWriteRule && (
     <section className="mb-6">
-    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+    <div className="p-4 bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-xl space-y-3">
       <div>
-      <label htmlFor="semantic-input" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.aiGenRuleDesc')}</label>
+      <label htmlFor="semantic-input" className="block text-xs font-medium text-[var(--fg-secondary)] mb-1">{t('guard.aiGenRuleDesc')}</label>
       <textarea
       id="semantic-input"
       name="semanticInput"
         value={semanticInput}
         onChange={e => { setSemanticInput(e.target.value); setAddRuleError(''); }}
-        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-y min-h-[80px]"
+        className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm resize-y min-h-[80px]"
         placeholder={t('guard.aiGenPlaceholder')}
         rows={3}
       />
@@ -342,64 +343,66 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
       >
         {showAddRule ? t('common.collapse') : t('common.expand')}
       </button>
-      {addRuleForm.ruleId && <span className="text-xs text-slate-500">{t('guard.generatedRuleId')}：{addRuleForm.ruleId}</span>}
+      {addRuleForm.ruleId && <span className="text-xs text-[var(--fg-secondary)]">{t('guard.generatedRuleId')}：{addRuleForm.ruleId}</span>}
       </div>
     </div>
     {showAddRule && (
-      <form onSubmit={handleAddRule} className="mt-3 p-4 bg-white border border-slate-200 rounded-xl space-y-3">
+      <form onSubmit={handleAddRule} className="mt-3 p-4 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-xl space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-        <label htmlFor="rule-id" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.ruleId')}</label>
+        <label htmlFor="rule-id" className="block text-xs font-medium text-[var(--fg-secondary)] mb-1">{t('guard.ruleId')}</label>
         <input
         id="rule-id"
         name="ruleId"
           type="text"
           value={addRuleForm.ruleId}
           onChange={e => setAddRuleForm(f => ({ ...f, ruleId: e.target.value }))}
-          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+          className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm"
           placeholder="my-rule-id"
         />
         </div>
         <div>
-        <label htmlFor="rule-severity" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.severity')}</label>
-        <select
-        id="rule-severity"
-        name="severity"
+        <label htmlFor="rule-severity" className="block text-xs font-medium text-[var(--fg-secondary)] mb-1">{t('guard.severity')}</label>
+        <Select
+          id="rule-severity"
+          name="severity"
           value={addRuleForm.severity}
-          onChange={e => setAddRuleForm(f => ({ ...f, severity: e.target.value as 'error' | 'warning' }))}
-          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-        >
-          <option value="warning">warning</option>
-          <option value="error">error</option>
-        </select>
+          onChange={v => setAddRuleForm(f => ({ ...f, severity: v as 'error' | 'warning' }))}
+          options={[
+            { value: 'warning', label: 'warning' },
+            { value: 'error', label: 'error' },
+          ]}
+          size="md"
+          className="w-full"
+        />
         </div>
       </div>
       <div>
-      <label htmlFor="rule-message" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.message')}</label>
+      <label htmlFor="rule-message" className="block text-xs font-medium text-[var(--fg-secondary)] mb-1">{t('guard.message')}</label>
       <input
         id="rule-message"
         name="message"
         type="text"
         value={addRuleForm.message}
         onChange={e => setAddRuleForm(f => ({ ...f, message: e.target.value }))}
-        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+        className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm"
         placeholder={t('guard.aiGenPlaceholder')}
         />
       </div>
       <div>
-      <label htmlFor="rule-pattern" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.patternLabel')}</label>
+      <label htmlFor="rule-pattern" className="block text-xs font-medium text-[var(--fg-secondary)] mb-1">{t('guard.patternLabel')}</label>
       <input
         id="rule-pattern"
         name="pattern"
         type="text"
         value={addRuleForm.pattern}
         onChange={e => setAddRuleForm(f => ({ ...f, pattern: e.target.value }))}
-        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono"
+        className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm font-mono"
         placeholder="dispatch_sync\\s*\\([^)]*main"
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">{t('guard.languagesLabel')}</label>
+        <label className="block text-xs font-medium text-[var(--fg-secondary)] mb-1">{t('guard.languagesLabel')}</label>
         <div className="flex gap-3 flex-wrap">
         {(projectLanguages.length > 0
           ? LANGUAGE_OPTIONS.filter(o => projectLanguages.includes(o.id))
@@ -413,29 +416,31 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         </div>
       </div>
       <div>
-      <label htmlFor="rule-dimension" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.dimensionLabel')}</label>
-      <select
-      id="rule-dimension"
-      name="dimension"
+      <label htmlFor="rule-dimension" className="block text-xs font-medium text-[var(--fg-secondary)] mb-1">{t('guard.dimensionLabel')}</label>
+      <Select
+        id="rule-dimension"
+        name="dimension"
         value={addRuleForm.dimension}
-        onChange={e => setAddRuleForm(f => ({ ...f, dimension: e.target.value as '' | 'file' | 'target' | 'project' }))}
-        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
-      >
-        <option value="">{t('guard.dimNoLimit')}</option>
-        <option value="file">{t('guard.dimFile')}</option>
-        <option value="target">{t('guard.dimTarget')}</option>
-        <option value="project">{t('guard.dimProject')}</option>
-        </select>
+        onChange={v => setAddRuleForm(f => ({ ...f, dimension: v as '' | 'file' | 'target' | 'project' }))}
+        options={[
+          { value: '', label: t('guard.dimNoLimit') },
+          { value: 'file', label: t('guard.dimFile') },
+          { value: 'target', label: t('guard.dimTarget') },
+          { value: 'project', label: t('guard.dimProject') },
+        ]}
+        size="md"
+        className="w-full"
+      />
       </div>
       <div>
-      <label htmlFor="rule-note" className="block text-xs font-medium text-slate-600 mb-1">{t('guard.noteLabel')}</label>
+      <label htmlFor="rule-note" className="block text-xs font-medium text-[var(--fg-secondary)] mb-1">{t('guard.noteLabel')}</label>
       <input
         id="rule-note"
         name="note"
         type="text"
         value={addRuleForm.note}
         onChange={e => setAddRuleForm(f => ({ ...f, note: e.target.value }))}
-        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+        className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm"
         placeholder={t('guard.notePlaceholder')}
         />
       </div>
@@ -443,7 +448,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         <button type="submit" disabled={addRuleSubmitting} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
         {addRuleSubmitting ? t('common.saving') : t('common.confirm')}
         </button>
-        <button type="button" onClick={() => setShowAddRule(false)} className="px-4 py-2 text-slate-600 text-sm rounded-lg hover:bg-slate-100">
+        <button type="button" onClick={() => setShowAddRule(false)} className="px-4 py-2 text-[var(--fg-secondary)] text-sm rounded-lg hover:bg-[var(--bg-subtle)]">
         {t('common.collapse')}
         </button>
       </div>
@@ -456,28 +461,28 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     <section className="mb-8">
     {/* ── 规则筛选栏 ── */}
     <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-      <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-        <Filter size={14} className="text-slate-400" />
+      <h3 className="text-sm font-semibold text-[var(--fg-primary)] flex items-center gap-1.5">
+        <Filter size={14} className="text-[var(--fg-muted)]" />
         {t('guard.tableHeaders.rule')}
-        <span className="text-slate-400 font-normal">（{filteredEntries.length}/{ruleEntries.length}）</span>
+        <span className="text-[var(--fg-muted)] font-normal">（{filteredEntries.length}/{ruleEntries.length}）</span>
       </h3>
       <div className="flex items-center gap-2 flex-wrap">
         {/* 严重性筛选 */}
         <div className="flex items-center gap-1 text-xs">
           <button onClick={() => setSeverityFilter('all')}
-            className={`px-2 py-1 rounded-md border transition-all ${severityFilter === 'all' ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+            className={`px-2 py-1 rounded-md border transition-all ${severityFilter === 'all' ? 'bg-slate-700 text-white border-slate-700' : 'bg-[var(--bg-surface)] text-[var(--fg-secondary)] border-[var(--border-default)] hover:bg-[var(--bg-subtle)]'}`}>
             {t('common.all')}
           </button>
           <button onClick={() => setSeverityFilter('error')}
-            className={`px-2 py-1 rounded-md border transition-all flex items-center gap-1 ${severityFilter === 'error' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-600 border-red-200 hover:bg-red-50'}`}>
+            className={`px-2 py-1 rounded-md border transition-all flex items-center gap-1 ${severityFilter === 'error' ? 'bg-red-600 text-white border-red-600' : 'bg-[var(--bg-surface)] text-red-600 border-red-200 hover:bg-red-50'}`}>
             <AlertCircle size={12} /> error <span className="opacity-70">({severityCounts.error})</span>
           </button>
           <button onClick={() => setSeverityFilter('warning')}
-            className={`px-2 py-1 rounded-md border transition-all flex items-center gap-1 ${severityFilter === 'warning' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-amber-600 border-amber-200 hover:bg-amber-50'}`}>
+            className={`px-2 py-1 rounded-md border transition-all flex items-center gap-1 ${severityFilter === 'warning' ? 'bg-amber-500 text-white border-amber-500' : 'bg-[var(--bg-surface)] text-amber-600 border-amber-200 hover:bg-amber-50'}`}>
             <AlertTriangle size={12} /> warning <span className="opacity-70">({severityCounts.warning})</span>
           </button>
           <button onClick={() => setSeverityFilter('info')}
-            className={`px-2 py-1 rounded-md border transition-all flex items-center gap-1 ${severityFilter === 'info' ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'}`}>
+            className={`px-2 py-1 rounded-md border transition-all flex items-center gap-1 ${severityFilter === 'info' ? 'bg-blue-500 text-white border-blue-500' : 'bg-[var(--bg-surface)] text-blue-600 border-blue-200 hover:bg-blue-50'}`}>
             <Info size={12} /> info <span className="opacity-70">({severityCounts.info})</span>
           </button>
         </div>
@@ -486,14 +491,14 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     {/* ── 语言标签栏 ── */}
     <div className="flex items-center gap-1.5 mb-3 flex-wrap">
       <button onClick={() => setLangFilter('all')}
-        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${langFilter === 'all' ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${langFilter === 'all' ? 'bg-slate-700 text-white border-slate-700' : 'bg-[var(--bg-surface)] text-[var(--fg-secondary)] border-[var(--border-default)] hover:bg-[var(--bg-subtle)]'}`}>
         {t('guard.allLanguages')}
       </button>
       {presentLanguages.map(lang => {
         const count = ruleEntries.filter(([, r]) => (r.languages || []).includes(lang)).length;
         return (
           <button key={lang} onClick={() => setLangFilter(langFilter === lang ? 'all' : lang)}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${langFilter === lang ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${langFilter === lang ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-[var(--bg-surface)] text-[var(--fg-secondary)] border-[var(--border-default)] hover:bg-[var(--bg-subtle)]'}`}>
             {langLabel(lang)} <span className="opacity-60">({count})</span>
           </button>
         );
@@ -507,26 +512,26 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         <span className="ml-1 font-mono text-[11px] text-indigo-500">{t('guard.codeLevelConfigPath')}</span>
       </div>
     </div>
-    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+    <div className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-xl overflow-hidden">
       <table className="w-full text-sm">
-      <thead className="bg-slate-50 border-b border-slate-200">
+      <thead className="bg-[var(--bg-subtle)] border-b border-[var(--border-default)]">
         <tr>
-        <th className="text-left py-2 px-4 font-medium text-slate-600">{t('guard.ruleId')}</th>
-        <th className="text-left py-2 px-4 font-medium text-slate-600 w-20">{t('guard.severity')}</th>
-        <th className="text-left py-2 px-4 font-medium text-slate-600">{t('guard.message')}</th>
-        <th className="text-left py-2 px-4 font-medium text-slate-600 w-28">{t('guard.languagesLabel')}</th>
-        <th className="text-left py-2 px-4 font-medium text-slate-600 w-20">{t('guard.category')}</th>
+        <th className="text-left py-2 px-4 font-medium text-[var(--fg-secondary)]">{t('guard.ruleId')}</th>
+        <th className="text-left py-2 px-4 font-medium text-[var(--fg-secondary)] w-20">{t('guard.severity')}</th>
+        <th className="text-left py-2 px-4 font-medium text-[var(--fg-secondary)]">{t('guard.message')}</th>
+        <th className="text-left py-2 px-4 font-medium text-[var(--fg-secondary)] w-28">{t('guard.languagesLabel')}</th>
+        <th className="text-left py-2 px-4 font-medium text-[var(--fg-secondary)] w-20">{t('guard.category')}</th>
         </tr>
       </thead>
       <tbody>
         {filteredEntries.length === 0 ? (
-        <tr><td colSpan={5} className="py-4 px-4 text-slate-500 text-center">
+        <tr><td colSpan={5} className="py-4 px-4 text-[var(--fg-secondary)] text-center">
           {ruleEntries.length === 0 ? t('common.noData') : t('guard.noMatchingRules')}
         </td></tr>
         ) : (
         filteredEntries.map(([id, r]) => (
-          <tr key={id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-          <td className="py-2 px-4 font-mono text-xs text-slate-700">{id}</td>
+          <tr key={id} className="border-b border-[var(--border-default)] last:border-0 hover:bg-[var(--bg-subtle)]">
+          <td className="py-2 px-4 font-mono text-xs text-[var(--fg-primary)]">{id}</td>
           <td className="py-2 px-4">
             <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
               r.severity === 'error' ? 'bg-red-100 text-red-700'
@@ -536,7 +541,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
             {r.severity}
             </span>
           </td>
-          <td className="py-2 px-4 text-slate-700">
+          <td className="py-2 px-4 text-[var(--fg-primary)]">
             {ruleMsg(id, r.message)}
             {r.fixSuggestion && (
               <span className="ml-1.5 text-xs text-emerald-600" title={ruleFix(id, r.fixSuggestion)}>💡</span>
@@ -551,7 +556,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
             ))}
             </div>
           </td>
-          <td className="py-2 px-4 text-xs text-slate-500">
+          <td className="py-2 px-4 text-xs text-[var(--fg-secondary)]">
             {categoryLabel((r as any).category)}
           </td>
           </tr>
@@ -564,11 +569,11 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
 
     {/* 违反记录 */}
     <section>
-    <h3 className="text-sm font-semibold text-slate-700 mb-3">
+    <h3 className="text-sm font-semibold text-[var(--fg-primary)] mb-3">
       {t('guard.violationRecords', { runs: runs.length, count: totalViolations })}
     </h3>
     {runs.length === 0 ? (
-      <div className="bg-slate-50 border border-slate-200 rounded-xl py-12 text-center text-slate-500">
+      <div className="bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-xl py-12 text-center text-[var(--fg-secondary)]">
       {t('guard.noViolations')}
       </div>
     ) : (
@@ -577,15 +582,15 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         const isExpanded = expandedRunId === run.id;
         const hasViolations = run.violations.length > 0;
         return (
-        <div key={run.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div key={run.id} className="bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-xl overflow-hidden">
           <button
           type="button"
           onClick={() => setExpandedRunId(isExpanded ? null : run.id)}
-          className="w-full flex items-center gap-2 py-3 px-4 text-left hover:bg-slate-50 transition-colors"
+          className="w-full flex items-center gap-2 py-3 px-4 text-left hover:bg-[var(--bg-subtle)] transition-colors"
           >
           {isExpanded ? <ChevronDown size={ICON_SIZES.md} /> : <ChevronRight size={ICON_SIZES.md} />}
-          <span className="font-mono text-sm text-slate-700">{run.filePath}</span>
-          <span className="text-xs text-slate-400">
+          <span className="font-mono text-sm text-[var(--fg-primary)]">{run.filePath}</span>
+          <span className="text-xs text-[var(--fg-muted)]">
             {new Date(run.triggeredAt).toLocaleString()}
           </span>
           {hasViolations ? (
@@ -593,13 +598,13 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
             <AlertTriangle size={ICON_SIZES.sm} /> {t('guard.totalViolations', { count: run.violations.length })}
             </span>
           ) : (
-            <span className="ml-auto text-slate-400 text-xs">{t('guard.noViolations')}</span>
+            <span className="ml-auto text-[var(--fg-muted)] text-xs">{t('guard.noViolations')}</span>
           )}
           </button>
           {isExpanded && (
-          <div className="border-t border-slate-100 bg-slate-50/50 dark:bg-[#283040] p-4">
+          <div className="border-t border-[var(--border-default)] bg-[var(--bg-subtle)] p-4">
             {run.violations.length === 0 ? (
-            <p className="text-sm text-slate-500">{t('guard.noViolations')}</p>
+            <p className="text-sm text-[var(--fg-secondary)]">{t('guard.noViolations')}</p>
             ) : (
             <ul className="space-y-2">
               {run.violations.map((v, i) => {
@@ -613,16 +618,16 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
                 )}
                 <div className="flex-1 space-y-1.5">
                 <div>
-                  <span className="font-mono text-xs text-slate-500">[{v.ruleId}] {v.filePath ? `${v.filePath}:${v.line}` : `L${v.line}`}</span>
+                  <span className="font-mono text-xs text-[var(--fg-secondary)]">[{v.ruleId}] {v.filePath ? `${v.filePath}:${v.line}` : `L${v.line}`}</span>
                   {v.dimension && (
-                  <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
+                  <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-[var(--bg-subtle)] text-[var(--fg-secondary)]">
                     {v.dimension === 'file' ? t('guard.dimFile') : v.dimension === 'target' ? t('guard.dimTarget') : t('guard.dimProject')}
                   </span>
                   )}
-                  <span className="text-slate-700 ml-2">{ruleMsg(v.ruleId, v.message)}</span>
+                  <span className="text-[var(--fg-primary)] ml-2">{ruleMsg(v.ruleId, v.message)}</span>
                 </div>
                 {v.snippet && (
-                  <pre className="text-xs text-slate-600 bg-[#f1f5f9] dark:bg-[#0f1219] dark:text-slate-400 dark:border dark:border-slate-700 p-2 rounded overflow-x-auto">
+                  <pre className="text-xs text-[var(--fg-secondary)] bg-[var(--bg-subtle)] p-2 rounded overflow-x-auto">
                   {v.snippet}
                   </pre>
                 )}
@@ -632,7 +637,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
                   {matchedRule.rationale && (
                     <div className="flex items-start gap-1.5">
                     <BookOpen size={12} className="text-blue-500 shrink-0 mt-0.5" />
-                    <div><span className="font-bold text-blue-700">{t('guard.rationale')}：</span><span className="text-slate-600">{matchedRule.rationale}</span></div>
+                    <div><span className="font-bold text-blue-700">{t('guard.rationale')}：</span><span className="text-[var(--fg-secondary)]">{matchedRule.rationale}</span></div>
                     </div>
                   )}
                   {matchedRule.fixSuggestions && matchedRule.fixSuggestions.length > 0 && (
@@ -640,7 +645,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
                     <Wrench size={12} className="text-emerald-500 shrink-0 mt-0.5" />
                     <div>
                       <span className="font-bold text-emerald-700">{t('guard.fixSuggestion')}：</span>
-                      <ul className="mt-0.5 space-y-0.5 text-slate-600">
+                      <ul className="mt-0.5 space-y-0.5 text-[var(--fg-secondary)]">
                       {matchedRule.fixSuggestions.map((s, j) => (
                         <li key={j} className="flex items-start gap-1">
                         <span className="text-emerald-400 mt-0.5">•</span>
@@ -666,7 +671,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
                     </div>
                   )}
                   {!matchedRule.rationale && matchedRule.note && (
-                    <div className="text-slate-500 italic">{t('guard.noteLabel')}：{matchedRule.note}</div>
+                    <div className="text-[var(--fg-secondary)] italic">{t('guard.noteLabel')}：{matchedRule.note}</div>
                   )}
                   </div>
                 )}
