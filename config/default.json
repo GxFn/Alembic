@@ -61,5 +61,12 @@
       "rust-excessive-unsafe": 3,
       "dart-excessive-late": 3
     }
+  },
+  "taskGraph": {
+    "decision": {
+      "staleDays": 30,
+      "maxActiveInPrime": 20,
+      "maxStaleInPrime": 10
+    }
   }
 }

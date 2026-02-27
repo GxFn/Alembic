@@ -53,9 +53,9 @@ function NavButton({
           <item.icon size={18} className="shrink-0" />
           {/* 小圆点 badge */}
           {item.badge != null && (
-            <span className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center">
-              <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-[var(--warning)] opacity-60" />
-              <span className="relative inline-flex rounded-full h-[18px] min-w-[18px] px-1 items-center justify-center bg-[var(--warning)] text-[9px] font-bold text-white">{item.badge}</span>
+            <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 items-center justify-center">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--warning)] opacity-40" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--warning)]" />
             </span>
           )}
         </button>

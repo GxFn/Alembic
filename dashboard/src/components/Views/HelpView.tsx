@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Rocket, Database, Zap, Search, Shield, Code, GitBranch, MessageSquare, Terminal, FileCode, List, ChevronDown, ChevronRight, Layers, RefreshCw, ArrowRightLeft, BarChart3, Network, MonitorSmartphone } from 'lucide-react';
+import { BookOpen, Rocket, Database, Zap, Search, Shield, Code, GitBranch, MessageSquare, Terminal, FileCode, List, ChevronDown, ChevronRight, Layers, RefreshCw, ArrowRightLeft, BarChart3, Network, MonitorSmartphone, Lock } from 'lucide-react';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
 import TokenUsageChart from '../Charts/TokenUsageChart';
@@ -226,6 +226,18 @@ const HelpView: React.FC = () => {
                   <li dangerouslySetInnerHTML={{ __html: t('help.ideIntegrationBullet1') }} />
                   <li dangerouslySetInnerHTML={{ __html: t('help.ideIntegrationBullet2') }} />
                   <li dangerouslySetInnerHTML={{ __html: t('help.ideIntegrationBullet3') }} />
+                </ul>
+              </div>
+              <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                <h4 className="font-semibold text-orange-900 mb-2 flex items-center gap-2">
+                  <Lock size={ICON_SIZES.lg} />
+                  {t('help.securityLabel')}
+                </h4>
+                <p className="text-orange-800 text-sm mb-3">{t('help.securityDesc')}</p>
+                <ul className="text-orange-700 text-xs space-y-1 list-disc list-inside">
+                  <li dangerouslySetInnerHTML={{ __html: t('help.securityBullet1') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.securityBullet2') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.securityBullet3') }} />
                 </ul>
               </div>
             </div>

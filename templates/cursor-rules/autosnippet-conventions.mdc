@@ -9,6 +9,16 @@ These rules are aligned with `.github/copilot-instructions.md` and jointly provi
 
 These rules are written when installing AutoSnippet Skills (`asd install:cursor-skill`) and should be followed in Cursor sessions.
 
+## 强制规则（必须遵守）
+
+1. **每次收到用户消息，第一步调 `autosnippet_ready()`** — 加载最新决策和任务上下文，跳过会导致回答与团队约定矛盾。
+2. **当用户明确同意/否决某方案时，立即调用 `autosnippet_decide` 持久化**（record/revise/unpin）— 先写入团队记忆，再继续后续动作。
+3. **禁止直接修改** 知识库目录内容（`AutoSnippet/recipes/`、`.autosnippet/` 等）。
+4. **优先使用 Recipe** 作为项目标准；源代码仅作补充。
+5. MCP 检索优先：使用 `autosnippet_search`（auto 融合模式）。
+6. MCP 调用失败时，**不要在同一轮重复重试**，回退到已读文档或静态上下文。
+7. Skills 负责语义与流程，MCP 负责能力与调用；不要在 Skill 内硬编码 URL/HTTP。
+
 ## Semantics vs capabilities
 
 - **Skills provide semantics**: When to use, workflows, and comparisons are described in Skills. Use natural language prompts in Cursor (e.g. "scan targets", "find recipe examples", "batch extract candidates") to trigger the appropriate Skill; AI intelligently interprets your request and activates the corresponding Skill logic.
@@ -40,6 +50,7 @@ Recipes are classified into three kinds:
 - **Do not edit** `AutoSnippet/recipes/` or `.autosnippet/` directly; all Recipe/Snippet changes go through Dashboard or MCP tools and are saved after human review.
 - **Search**: Use MCP tools `autosnippet_search` (recommended, auto mode BM25 + semantic fusion) or `autosnippet_context_search` (context-aware with session history). Also available: `autosnippet_keyword_search` (exact match) and `autosnippet_semantic_search` (vector).
 - **Retry policy**: If an MCP call fails, do not retry within the same agent turn; fall back to static docs or already-read context.
+- **Decision persistence**: When the user explicitly agrees/disagrees with a plan, call `autosnippet_decide({ operation: "record" | "revise" | "unpin" })` **immediately** before continuing. Persist first, execute second.
 - **Adoption tracking**: Tool `autosnippet_confirm_usage` records that a Recipe was adopted or applied (affects usage stats and authority ranking). Show it when the user explicitly adopts a recipe, not immediately after presenting one.
 - **Batch scan**: Ask Cursor in natural language (e.g. "scan all targets in this project", "batch extract candidates") to trigger the batch-scan workflow. The workflow calls `autosnippet_get_targets` → `autosnippet_get_target_files` → extract per file → `autosnippet_submit_candidates` automatically.
 - **Cold start**: Use `autosnippet_bootstrap_knowledge` for full project knowledge initialization covering 9 dimensions. Phase 5.5 auto-generates 4 Project Skills (code-standard, architecture, project-profile, agent-guidelines) to `AutoSnippet/skills/`.

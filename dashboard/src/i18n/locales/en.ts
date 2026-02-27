@@ -1112,6 +1112,12 @@ export const en: DeepString<typeof zh> = {
     ideIntegrationBullet1: '<strong>MCP Server</strong>: 20 tools + Skills auto-discovery',
     ideIntegrationBullet2: '<strong>VSCode Extension</strong>: lm.registerTool + Guard Diagnostics + CodeLens',
     ideIntegrationBullet3: '<strong>Editor Directives</strong>: <code class="bg-slate-100 px-1 rounded text-xs">// as:search</code> / <code class="bg-slate-100 px-1 rounded text-xs">as:create</code> / <code class="bg-slate-100 px-1 rounded text-xs">as:audit</code>',
+    // Security & Permissions component card
+    securityLabel: 'Security & Permissions',
+    securityDesc: '3-layer permission architecture + constitution governance, constraining AI boundaries',
+    securityBullet1: '<strong>Constitution</strong>: YAML-defined roles + permission matrix + governance rules',
+    securityBullet2: '<strong>Gateway Interception</strong>: Unified MCP write-op validation, AI cannot modify Recipes directly',
+    securityBullet3: '<strong>Audit Trail</strong>: Full-chain operation logs + <code class="bg-slate-100 px-1 rounded text-xs">checkWriteSafety</code> file protection',
     constitutionSecurity: 'Constitution / Gateway Security',
     constitutionSecurityDesc: 'Triple security: permission check + constitution rules + audit trail',
     archConstitutionBullet1: '<strong>Gateway Permission</strong>: MCP write ops intercepted by Gateway layer',

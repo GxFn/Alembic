@@ -4,6 +4,29 @@
 
 ---
 
+## [3.2.3] - 2026-02-27
+
+### 新增
+
+- **MCP 通道 Decision 自动注入（P0）**：非 ready/decide/task 工具的响应自动附带 `_activeDecisions` 摘要，Agent 即使跳过 ready 也能看到团队决策
+- **VS Code Decision 缓存（P1）**：taskTool.ts 增加 30s TTL 缓存 + 防并发 pending promise，连续操作从双倍 HTTP 降至 1 次 prime + N 次缓存命中
+- **Result Compaction 三层响应（P1）**：decisions 按 summary/compact/full 三层级返回，ready 返回 compact（120字摘要），注入仅 id+title，decide(list) 返回完整数据
+- **决策过期检测（P2）**：prime() 运行时按 createdAt + 阈值检测 stale decisions（默认 30 天，`ASD_DECISION_STALE_DAYS` 环境变量可覆盖），过期决策单独返回并提示清理
+- **Session 管理（P3）**：MCP 连接级 session 追踪（id/readyCalled/toolCallCount/toolsUsed），未调 ready 时注入更强决策提醒，health 响应包含 session 信息
+
+### 改进
+
+- **模板强化 autosnippet_decide 提示**：copilot-instructions.md + cursor-rules 三模板同步增加"用户同意/否决方案时立即调用 decide 持久化"的强制规则
+- **Decision 注入使用 service 公共 API**：`_fetchDecisionsSummary` 通过 `taskService.list()` 而非直接访问 repo，维护服务层封装
+
+### 修复
+
+- **空 decisions 缓存穿透**：缓存有效性判断从 `decisions.length > 0` 改为 `fetchedAt > 0`，避免无决策项目反复查 DB
+- **`_refreshCacheFromReady` 空决策不更新**：始终更新 fetchedAt，即使 decisions 为空
+- **HTTP _prime stale count 缺失**：HTTP 路由的 prime 响应增加 stale count，与 MCP ready handler 保持一致
+
+---
+
 ## [3.2.0] - 2026-02-26
 
 ### 新增

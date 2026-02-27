@@ -33,6 +33,8 @@ jobs:
         run: asd setup --dir .
 
       - name: Run Guard CI check
+        id: guard-check
+        continue-on-error: true
         run: |
           asd guard:ci . \
             --report json \
@@ -79,3 +81,22 @@ jobs:
             } catch (err) {
               console.log('Could not post PR comment:', err.message);
             }
+
+      - name: Evaluate Guard results
+        if: always()
+        run: |
+          if [ ! -f guard-report.json ]; then
+            echo "⚠️ Guard report not found, skipping evaluation"
+            exit 0
+          fi
+          STATUS=$(node -e "const r=JSON.parse(require('fs').readFileSync('guard-report.json','utf8'));console.log(r.qualityGate.status)")
+          SCORE=$(node -e "const r=JSON.parse(require('fs').readFileSync('guard-report.json','utf8'));console.log(r.qualityGate.score)")
+          ERRORS=$(node -e "const r=JSON.parse(require('fs').readFileSync('guard-report.json','utf8'));console.log(r.summary.errors)")
+          WARNINGS=$(node -e "const r=JSON.parse(require('fs').readFileSync('guard-report.json','utf8'));console.log(r.summary.warnings)")
+          echo "Quality Gate: $STATUS  Score: $SCORE/100"
+          echo "Errors: $ERRORS  Warnings: $WARNINGS"
+          if [ "$STATUS" = "FAIL" ]; then
+            echo "❌ Quality Gate FAIL — see Guard report for details"
+            exit 1
+          fi
+          echo "✅ Quality Gate passed"

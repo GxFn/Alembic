@@ -34,7 +34,7 @@ let guardDiagnostics: GuardDiagnostics;
 // ─────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext) {
-  // ── lm.registerTool 代理层（tokenBudget 感知）──
+  // ── lm.registerTool 代理层（#asd 工具引用通道）──
   try {
     registerTaskTool(context);
   } catch (err: any) {

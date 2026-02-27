@@ -5,13 +5,21 @@ alwaysApply: true
 
 # AutoSnippet TaskGraph Workflow
 
+## 强制首动作
+
+> **每次收到用户消息，第一步调 `autosnippet_ready()`** — 加载最新决策和任务上下文。
+> 此规则适用于所有消息（问题、追问、确认、单词回复）。跳过会导致回答与决策矛盾。
+>
+> **当用户明确同意/否决某方案时，立即调 `autosnippet_decide(...)`** — 先持久化团队记忆，再继续执行。
+
 ## 任务管理
 
-1. 新会话开始 → `autosnippet_task(operation: "prime")`
-2. 编码前 → `claim`，完成后 → `close`
-3. 遇到错误 → `fail`（不要跳过）
-4. 发现新工作 → `create` + `dep_add(depType: "discovered-from")`
-5. MCP 调用失败 → 不要在同一轮重复重试
+1. **每次收到消息** → `autosnippet_ready()` 加载决策与就绪任务（**不可跳过**）
+2. **用户同意/否决方案时** → `autosnippet_decide({ operation: "record" | "revise" | "unpin" })` 先持久化决策再继续
+3. 编码前 → `autosnippet_task({ operation: "claim" })`，完成后 → `close`
+4. 遇到错误 → `fail`（不要跳过）
+5. 发现新工作 → `create` + `dep_add(depType: "discovered-from")`
+6. MCP 调用失败 → 不要在同一轮重复重试
 
 ## Guard 诊断响应
 
@@ -27,13 +35,14 @@ alwaysApply: true
 ## 上下文压力
 
 - `_contextHint` 包含 `CONTEXT_PRESSURE:WARNING` → 总结已完成工作，继续
-- `_contextHint` 包含 `CONTEXT_PRESSURE:CRITICAL` → 立即 prime 恢复上下文
+- `_contextHint` 包含 `CONTEXT_PRESSURE:CRITICAL` → 立即 `autosnippet_ready()` 恢复上下文
 
 ## 任务操作速查
 
 | 操作 | 用途 |
 |------|------|
-| `prime` | 恢复会话上下文（新会话必做） |
+| `autosnippet_ready()` | **每次收到消息第一步调用** — 加载决策 + 就绪任务 + 知识上下文 |
+| `autosnippet_decide(record/revise/unpin)` | **用户同意/否决方案时立即调用** — 先持久化再继续 |
 | `claim(id)` | 开始处理任务 |
 | `close(id)` | 完成任务 → 返回 newlyReady |
 | `fail(id, reason)` | 标记失败 |

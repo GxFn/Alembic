@@ -1109,6 +1109,12 @@ export const zh = {
     ideIntegrationBullet1: '<strong>MCP Server</strong>：20 个工具 + Skills 自动发现',
     ideIntegrationBullet2: '<strong>VSCode Extension</strong>：lm.registerTool + Guard Diagnostics + CodeLens',
     ideIntegrationBullet3: '<strong>Editor Directives</strong>：<code class="bg-slate-100 px-1 rounded text-xs">// as:search</code> / <code class="bg-slate-100 px-1 rounded text-xs">as:create</code> / <code class="bg-slate-100 px-1 rounded text-xs">as:audit</code>',
+    // Security & Permissions component card
+    securityLabel: '安全与权限',
+    securityDesc: '三层权限架构 + 宪法治理，约束 AI 操作边界',
+    securityBullet1: '<strong>Constitution 宪法</strong>：YAML 定义角色 + 权限矩阵 + 治理规则',
+    securityBullet2: '<strong>Gateway 拦截</strong>：MCP 写操作统一校验，AI 不能直接修改 Recipe',
+    securityBullet3: '<strong>审计追踪</strong>：全链路操作日志 + <code class="bg-slate-100 px-1 rounded text-xs">checkWriteSafety</code> 文件保护',
     constitutionSecurity: 'Constitution / Gateway 安全模型',
     constitutionSecurityDesc: '三重安全保障：权限校验 + 宪法规则 + 审计追踪',
     archConstitutionBullet1: '<strong>Gateway 权限</strong>：MCP 写操作经 Gateway 层统一拦截',
