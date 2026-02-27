@@ -31,6 +31,7 @@ roles:
     permissions:
       - "read:recipes"
       - "read:guard_rules"
+      - "guard_rule:check_code"
       - "create:candidates"
       - "candidate:update"
       - "knowledge:create"
