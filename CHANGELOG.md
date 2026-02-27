@@ -4,6 +4,15 @@
 
 ---
 
+## [3.2.4] - 2026-02-27
+
+### 修复
+
+- **Guard 权限缺失**：`external_agent` 角色补充 `guard_rule:check_code` 权限，修复 `autosnippet_guard` files 模式 PERMISSION_DENIED 错误
+- **模板注入单一源**：SetupService 注入逻辑改为从 `copilot-instructions.md` 标记区段提取，消除双份维护；AgentInstructionsGenerator 补齐 ready-first + decide-immediately 约束
+
+---
+
 ## [3.2.3] - 2026-02-27
 
 ### 新增
