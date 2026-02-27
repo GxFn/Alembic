@@ -1,3 +1,4 @@
+<!-- autosnippet:begin -->
 <!-- On every human message, call autosnippet_ready() as your first action. No exceptions. -->
 <!-- On any explicit user agreement/disagreement about a plan/decision, call autosnippet_decide(...) immediately to persist team memory. -->
 
@@ -175,3 +176,4 @@ Skill 包含：完整的 V3 字段格式、JSON 示例模板、维度分析策�
 ---
 <!-- REMINDER: If you have not yet called autosnippet_ready(), do it now before responding. -->
 <!-- REMINDER: If user has explicitly agreed/disagreed with a plan, call autosnippet_decide(...) before continuing. -->
+<!-- autosnippet:end -->
