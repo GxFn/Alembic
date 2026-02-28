@@ -116,7 +116,7 @@ TaskGraph 把团队约定和任务状态存在 `.autosnippet/autosnippet.db` 里
 |-----|---------|----------|
 | **VS Code** | 扩展 + MCP | Agent Mode 中 `#asd` 引用工具；搜索、指令、CodeLens、Guard |
 | **Cursor** | MCP + Rules | `.cursor/mcp.json` + `.cursor/rules/` |
-| **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP 工具；支持 hooks |
+| **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP 工具；支持 plugins |
 | **Trae / Qoder** | MCP | `asd setup` 自动生成 |
 | **Xcode** | 文件监听 | `asd watch` + 文件指令 + Snippet 同步 |
 
