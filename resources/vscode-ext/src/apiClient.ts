@@ -322,4 +322,131 @@ export class ApiClient {
       req.end();
     });
   }
+
+  // ─── Remote Command API（飞书 → IDE 桥接） ──────────
+
+  /**
+   * 轮询获取一条待执行的远程指令
+   */
+  async getRemotePending(): Promise<{ id: string; command: string; source: string; userName: string } | null> {
+    try {
+      const resp = await this._get('/remote/pending');
+      return resp?.success ? resp.data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 认领指令（标记为 running）
+   */
+  async claimRemoteCommand(id: string): Promise<boolean> {
+    try {
+      const resp = await this._post(`/remote/claim/${id}`, {});
+      return resp?.success === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 回写执行结果
+   */
+  async postRemoteResult(id: string, result: string, status: string = 'completed'): Promise<boolean> {
+    try {
+      const resp = await this._post(`/remote/result/${id}`, { result, status });
+      return resp?.success === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 查询飞书连接状态（用于自动探测）
+   */
+  async getRemoteLarkStatus(): Promise<{ connected: boolean; queue?: Record<string, number> } | null> {
+    try {
+      const resp = await this._get('/remote/lark/status');
+      return resp?.success ? resp.data : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 发送飞书主动通知
+   */
+  async sendLarkNotify(text: string): Promise<boolean> {
+    try {
+      const resp = await this._post('/remote/notify', { text });
+      return resp?.success === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 清理积压的 pending 指令（IDE 重连时调用）
+   * 返回被清理的指令数量，0 表示无积压
+   */
+  async flushStaleCommands(): Promise<{ flushed: number; commands: Array<{ id: string; command: string; age: number }> }> {
+    try {
+      const resp = await this._post('/remote/flush', {});
+      if (resp?.success) {
+        return { flushed: resp.flushed || 0, commands: resp.commands || [] };
+      }
+      return { flushed: 0, commands: [] };
+    } catch {
+      return { flushed: 0, commands: [] };
+    }
+  }
+
+  /**
+   * Long-poll: 等待服务端有新的飞书消息写入队列
+   * 服务端有新消息时立即返回 { hasNew: true }，无消息则等到超时返回 { hasNew: false }
+   */
+  async waitForNewCommand(timeout: number, signal?: AbortSignal): Promise<{ hasNew: boolean }> {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+
+      const req = http.request(
+        {
+          hostname: this.host,
+          port: this.port,
+          path: `/api/v1/remote/wait?timeout=${timeout}`,
+          method: 'GET',
+          timeout: timeout + 5000, // 额外 5s 余量
+        },
+        (res) => {
+          let body = '';
+          res.on('data', (chunk) => (body += chunk));
+          res.on('end', () => {
+            try {
+              const data = JSON.parse(body);
+              resolve({ hasNew: data?.hasNew === true });
+            } catch {
+              resolve({ hasNew: false });
+            }
+          });
+        }
+      );
+
+      req.on('error', (err) => reject(err));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ hasNew: false });
+      });
+
+      // 支持 AbortSignal
+      const onAbort = () => {
+        req.destroy();
+        reject(new DOMException('Aborted', 'AbortError'));
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      req.on('close', () => signal?.removeEventListener('abort', onAbort));
+
+      req.end();
+    });
+  }
+
 }

@@ -5,6 +5,6 @@ alwaysApply: true
 
 # AutoSnippet Project Skills
 
-本项目已注册 1 个自定义 Skill。使用 `autosnippet_load_skill` 工具加载完整内容。
+本项目已注册 1 个自定义 Skill。使用 `autosnippet_skill({ operation: "load", name })` 加载完整内容。
 
-- **count-api-endpoints**: 统计当前项目中的 API 接口数量
+- **test-isolation-guide**: Guidelines for ensuring test isolation, managing environment variables, and cleaning up temporary resources.

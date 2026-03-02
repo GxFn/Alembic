@@ -1,6 +1,6 @@
 {
   "name": "autosnippet",
-  "version": "3.2.6",
+  "version": "3.2.7",
   "description": "Extract code patterns into a knowledge base for AI coding assistants",
   "type": "module",
   "main": "lib/bootstrap.js",
@@ -72,7 +72,18 @@
     "url": "git+https://github.com/GxFn/AutoSnippet.git"
   },
   "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.59.0",
     "@modelcontextprotocol/sdk": "^1.25.3",
+    "@protobufjs/aspromise": "^1.1.2",
+    "@protobufjs/base64": "^1.1.2",
+    "@protobufjs/codegen": "^2.0.4",
+    "@protobufjs/eventemitter": "^1.1.0",
+    "@protobufjs/fetch": "^1.1.0",
+    "@protobufjs/float": "^1.0.2",
+    "@protobufjs/inquire": "^1.1.0",
+    "@protobufjs/path": "^1.1.2",
+    "@protobufjs/pool": "^1.1.0",
+    "@protobufjs/utf8": "^1.1.0",
     "better-sqlite3": "^9.2.2",
     "chokidar": "^3.6.0",
     "commander": "^11.1.0",

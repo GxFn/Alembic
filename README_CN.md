@@ -117,6 +117,7 @@ TaskGraph 把团队约定和任务状态存在 `.autosnippet/autosnippet.db` 里
 | **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP 工具；支持 hooks |
 | **Trae / Qoder** | MCP | `asd setup` 自动生成 |
 | **Xcode** | 文件监听 | `asd watch` + 文件指令 + Snippet 同步 |
+| **飞书 (Lark)** | Bot + WebSocket | 手机发消息 → IDE 通过 Copilot Agent Mode 执行 |
 
 所有配置由 `asd setup` 自动生成。更新后运行 `asd upgrade` 刷新。
 
@@ -168,6 +169,20 @@ your-project/
 ```
 
 Recipe 是 Markdown 文件。SQLite 只是读缓存。数据库坏了 `asd sync` 一下就行。
+
+## 飞书远程编程
+
+用手机写代码。在飞书发消息 → 注入 VS Code Copilot Agent Mode → 结果回传飞书。任务通知会附带 IDE 窗口截图。
+
+```
+手机 (飞书)  →  飞书云端 (WSS)  →  本地 API Server  →  VS Code  →  Copilot Agent Mode
+    ↑                                                                      |
+    └────────────────────────── 结果通知 + 截图 ──────────────────────────┘
+```
+
+系统命令：`/help` `/status` `/queue` `/cancel` `/clear` `/ping` `/screen`
+
+详见 [飞书接入指南](docs/lark-integration.md)。
 
 ## 配置
 

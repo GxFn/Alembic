@@ -44,6 +44,18 @@
       {
         "command": "autosnippet.status",
         "title": "AutoSnippet: Show Connection Status"
+      },
+      {
+        "command": "autosnippet.toggleRemotePoller",
+        "title": "AutoSnippet: Toggle Remote Command Poller"
+      },
+      {
+        "command": "autosnippet.startRemotePoller",
+        "title": "AutoSnippet: Start Remote Command Poller"
+      },
+      {
+        "command": "autosnippet.stopRemotePoller",
+        "title": "AutoSnippet: Stop Remote Command Poller"
       }
     ],
     "configuration": {
@@ -78,6 +90,11 @@
           "type": "number",
           "default": 2000,
           "description": "Duration (ms) to highlight inserted code"
+        },
+        "autosnippet.enableRemotePoller": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable remote command polling (飞书/Lark Bot → IDE bridge). When enabled, the extension polls for remote commands and injects them into Copilot Chat."
         }
       }
     },
