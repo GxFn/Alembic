@@ -408,7 +408,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               title={t('candidates.enrichTitle')}
             >
               {enrichingAll ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-              {enrichingAll ? t('common.loading') : t('candidates.aiRefine')}
+              {enrichingAll ? t('common.loading') : t('candidates.aiEnrich')}
             </button>
           )}
           {/* ② 内容润色：改善描述质量 + 推断关联 */}
@@ -461,7 +461,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             {targetNames.map((targetName) => {
               const isSilent = isSilentTarget(targetName);
               const silentLabel = SILENT_LABEL_KEYS[targetName] ? t(SILENT_LABEL_KEYS[targetName]) : undefined;
-              const group = data!.candidates[targetName];
+              const group = data?.candidates[targetName];
               const count = group?.items?.length ?? 0;
               const isSelected = effectiveTarget === targetName;
               const catCfg = categoryConfigs[targetName] || categoryConfigs['All'];
@@ -516,19 +516,6 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             <p className="mt-3 text-[11px] text-[var(--fg-muted)]">
               或 <code className="text-blue-600 bg-blue-50 px-1 rounded">asd ais --all</code> {t('candidates.fullScanBtn')}
               <code className="text-blue-600 bg-blue-50 px-1 rounded ml-1">asd candidate</code> {t('candidates.clipboardCreate')}
-            </p>
-          </div>
-        )}
-
-        {/* Bootstrap 进行中且无候选内容时，显示等待提示 */}
-        {(!data?.candidates || Object.keys(data.candidates).length === 0) && isBootstrapping && (
-          <div className="h-72 flex flex-col items-center justify-center bg-[var(--bg-surface)] rounded-2xl border border-dashed border-violet-200 text-[var(--fg-muted)]">
-            <div className="w-16 h-16 rounded-2xl bg-violet-50 flex items-center justify-center mb-4">
-              <Loader2 size={32} className="text-violet-400 animate-spin" />
-            </div>
-            <p className="text-sm font-medium text-violet-600">{t('common.loading')}</p>
-            <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-[var(--fg-muted)]">
-              {t('candidates.scanningHint')}
             </p>
           </div>
         )}
@@ -673,7 +660,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   {paginatedItems.map((cand) => {
                     const isExpanded = expandedId === cand.id;
                     const confidence = cand.reasoning?.confidence ?? null;
-                    const overall = (cand.quality?.overall ?? 0) > 0 ? cand.quality!.overall : null;
+                    const overall = (cand.quality?.overall ?? 0) > 0 ? (cand.quality?.overall ?? null) : null;
                     const similarList = similarityMap[cand.id] || [];
                     const firstSimilar = similarList[0] || null;
 

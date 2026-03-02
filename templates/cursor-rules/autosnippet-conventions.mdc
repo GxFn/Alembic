@@ -11,13 +11,62 @@ These rules are written when installing AutoSnippet Skills (`asd install:cursor-
 
 ## 强制规则（必须遵守）
 
-1. **每次收到用户消息，第一步调 `autosnippet_ready()`** — 加载最新决策和任务上下文，跳过会导致回答与团队约定矛盾。
-2. **当用户明确同意/否决某方案时，立即调用 `autosnippet_decide` 持久化**（record/revise/unpin）— 先写入团队记忆，再继续后续动作。
+1. **每次收到用户消息，第一步调 `autosnippet_task({ operation: "prime" })`** — 加载最新决策和任务上下文，跳过会导致回答与团队约定矛盾。
+2. **当用户明确同意/否决某方案时，立即调用 `autosnippet_task({ operation: "record_decision" })` 持久化**（record_decision/revise_decision/unpin_decision）— 先写入团队记忆，再继续后续动作。
 3. **禁止直接修改** 知识库目录内容（`AutoSnippet/recipes/`、`.autosnippet/` 等）。
 4. **优先使用 Recipe** 作为项目标准；源代码仅作补充。
 5. MCP 检索优先：使用 `autosnippet_search`（auto 融合模式）。
 6. MCP 调用失败时，**不要在同一轮重复重试**，回退到已读文档或静态上下文。
 7. Skills 负责语义与流程，MCP 负责能力与调用；不要在 Skill 内硬编码 URL/HTTP。
+
+## CRITICAL: You Operate autosnippet_task — The User Doesn't
+
+You are the task operator. Users speak naturally; you translate to task operations.
+DO NOT tell users to call autosnippet_task. That's YOUR job.
+
+- WRONG: "你可以调用 autosnippet_task({ operation: 'create' }) 来创建任务"
+- RIGHT: *(你自己调用 create，然后告诉用户 "已创建任务 asd-42: 修复登录 bug")*
+
+## Task Tracking Rules (MANDATORY)
+
+1. **MUST prime on EVERY message** — No exceptions. Even follow-up messages.
+2. **MUST create task for non-trivial work** — ≥2 files OR ≥10 lines → create BEFORE starting.
+3. **MUST claim before coding** — `claim(id)` then code.
+4. **MUST close when done** — `close(id, reason)` with meaningful reason.
+5. **MUST handle unfinished tasks first** — prime shows in-progress → ask user: Continue, Defer, Abandon? Do NOT auto-resume.
+6. **NEVER skip prime** — Even for simple questions.
+7. **NEVER start new work with open in-progress tasks** — Handle existing first.
+8. **NEVER leave tasks in in_progress when session ends** — Close or defer everything.
+9. **NEVER tell the user to run task commands** — You are the operator.
+
+When in doubt → create a task. When idle → `autosnippet_task({ operation: "ready" })`.
+
+**When NOT to create**: Quick questions, single-file trivial fixes (<10 lines), code explanation, running tests. Rule: <2min AND ≤1 file AND <10 lines → no task.
+
+## User Says → You Run
+
+| User Says | Your Action |
+|---|---|
+| "帮我修 bug" / "fix this" | `create` → `claim` → code → `close` |
+| "做功能" / "implement" | `create` → `claim` → code → `close` |
+| "继续" / "continue" | resume in-progress → code → `close` |
+| "先不做了" / "pause" | `defer(id, reason)` |
+| "不做了" / "abandon" | `fail(id, reason)` |
+| "太大了" / "break down" | `decompose(id, subtasks)` |
+| "有什么要做的" / "next" | `ready()` → present list |
+| "就这么定了" / "agreed" | `record_decision(...)` |
+| Quick question | No task. Just answer. |
+
+## Session Closing Protocol
+
+Before ending work, you MUST complete this checklist:
+
+- [ ] Close every claimed task: `close(id, reason)` with what was accomplished
+- [ ] Defer any incomplete task: `defer(id, reason)` with why and what remains
+- [ ] Verify: zero tasks in in_progress state
+- [ ] If prime showed ready tasks, mention them for next session
+
+**Work is not done until all tasks are closed or deferred.**
 
 ## Semantics vs capabilities
 
@@ -50,7 +99,7 @@ Recipes are classified into three kinds:
 - **Do not edit** `AutoSnippet/recipes/` or `.autosnippet/` directly; all Recipe/Snippet changes go through Dashboard or MCP tools and are saved after human review.
 - **Search**: Use MCP tools `autosnippet_search` (recommended, auto mode BM25 + semantic fusion) or `autosnippet_context_search` (context-aware with session history). Also available: `autosnippet_keyword_search` (exact match) and `autosnippet_semantic_search` (vector).
 - **Retry policy**: If an MCP call fails, do not retry within the same agent turn; fall back to static docs or already-read context.
-- **Decision persistence**: When the user explicitly agrees/disagrees with a plan, call `autosnippet_decide({ operation: "record" | "revise" | "unpin" })` **immediately** before continuing. Persist first, execute second.
+- **Decision persistence**: When the user explicitly agrees/disagrees with a plan, call `autosnippet_task({ operation: "record_decision" | "revise_decision" | "unpin_decision" })` **immediately** before continuing. Persist first, execute second.
 - **Adoption tracking**: Tool `autosnippet_confirm_usage` records that a Recipe was adopted or applied (affects usage stats and authority ranking). Show it when the user explicitly adopts a recipe, not immediately after presenting one.
 - **Batch scan**: Ask Cursor in natural language (e.g. "scan all targets in this project", "batch extract candidates") to trigger the batch-scan workflow. The workflow calls `autosnippet_get_targets` → `autosnippet_get_target_files` → extract per file → `autosnippet_submit_candidates` automatically.
 - **Cold start**: Use `autosnippet_bootstrap_knowledge` for full project knowledge initialization covering 9 dimensions. Phase 5.5 auto-generates 4 Project Skills (code-standard, architecture, project-profile, agent-guidelines) to `AutoSnippet/skills/`.

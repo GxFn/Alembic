@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(asd *)",
+      "Bash(curl -s * localhost:3000/*)",
+      "mcp__autosnippet__*"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "bash .claude/hooks/autosnippet-session.sh"
+      }
+    ],
+    "PreCompact": [
+      {
+        "command": "bash .claude/hooks/autosnippet-session.sh --brief"
+      }
+    ]
+  }
+}

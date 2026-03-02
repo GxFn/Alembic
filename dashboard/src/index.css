@@ -1008,6 +1008,96 @@ html.dark {
   animation: shimmer 1.5s infinite;
 }
 
+/* ── AI Thinking Shimmer — 候选骨架屏专用 ────────────── */
+
+/* 高光从左侧划过的骨架块（浅色背景） */
+.ai-shimmer-block {
+  background: linear-gradient(
+    90deg,
+    var(--bg-subtle) 0%,
+    rgba(139, 92, 246, 0.08) 20%,
+    rgba(139, 92, 246, 0.15) 50%,
+    rgba(139, 92, 246, 0.08) 80%,
+    var(--bg-subtle) 100%
+  );
+  background-size: 300% 100%;
+  animation: ai-shimmer 3.2s ease-in-out infinite;
+}
+.dark .ai-shimmer-block {
+  background: linear-gradient(
+    90deg,
+    var(--bg-subtle) 0%,
+    rgba(139, 92, 246, 0.1) 20%,
+    rgba(139, 92, 246, 0.2) 50%,
+    rgba(139, 92, 246, 0.1) 80%,
+    var(--bg-subtle) 100%
+  );
+  background-size: 300% 100%;
+}
+
+/* 高光从左侧划过的骨架块（深色代码区域） */
+.ai-shimmer-block-dark {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(139, 92, 246, 0.12) 20%,
+    rgba(139, 92, 246, 0.22) 50%,
+    rgba(139, 92, 246, 0.12) 80%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 300% 100%;
+  animation: ai-shimmer 3.2s ease-in-out infinite;
+}
+
+@keyframes ai-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 卡片整体入场动画 */
+.ai-shimmer-card {
+  animation: ai-card-fade-in 0.4s ease-out both;
+}
+@keyframes ai-card-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 思考状态底部流光条 */
+.ai-thinking-bar {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(139, 92, 246, 0.6) 30%,
+    rgba(124, 58, 237, 0.9) 50%,
+    rgba(139, 92, 246, 0.6) 70%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: ai-thinking-bar-slide 3s ease-in-out infinite;
+}
+@keyframes ai-thinking-bar-slide {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 思考状态跳动圆点 */
+.ai-thinking-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: rgba(139, 92, 246, 0.7);
+  animation: ai-thinking-bounce 2s ease-in-out infinite;
+}
+.dark .ai-thinking-dot {
+  background-color: rgba(167, 139, 250, 0.8);
+}
+@keyframes ai-thinking-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30%           { transform: translateY(-4px); opacity: 1; }
+}
+
 /* Button press — scale(0.98) on active */
 button:active:not(:disabled),
 [role="button"]:active:not(:disabled) {

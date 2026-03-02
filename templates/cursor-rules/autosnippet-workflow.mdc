@@ -1,52 +1,76 @@
 ---
-description: AutoSnippet TaskGraph & Guard 工作流 — 任务管理 + 诊断闭环
+description: AutoSnippet Task Tracking — 任务管理 + 行为规则
 alwaysApply: true
 ---
 
-# AutoSnippet TaskGraph Workflow
+# AutoSnippet Task Workflow
 
-## 强制首动作
+## CRITICAL: You Operate autosnippet_task — The User Doesn't
 
-> **每次收到用户消息，第一步调 `autosnippet_ready()`** — 加载最新决策和任务上下文。
-> 此规则适用于所有消息（问题、追问、确认、单词回复）。跳过会导致回答与决策矛盾。
->
-> **当用户明确同意/否决某方案时，立即调 `autosnippet_decide(...)`** — 先持久化团队记忆，再继续执行。
+You are the task operator. Users speak naturally; you translate to task operations.
+DO NOT tell users to call autosnippet_task. That's YOUR job.
 
-## 任务管理
+## Task Tracking Rules (MANDATORY)
 
-1. **每次收到消息** → `autosnippet_ready()` 加载决策与就绪任务（**不可跳过**）
-2. **用户同意/否决方案时** → `autosnippet_decide({ operation: "record" | "revise" | "unpin" })` 先持久化决策再继续
-3. 编码前 → `autosnippet_task({ operation: "claim" })`，完成后 → `close`
-4. 遇到错误 → `fail`（不要跳过）
-5. 发现新工作 → `create` + `dep_add(depType: "discovered-from")`
-6. MCP 调用失败 → 不要在同一轮重复重试
+1. **MUST prime on EVERY message** — `autosnippet_task({ operation: "prime" })` BEFORE anything else. No exceptions.
+2. **MUST create task for non-trivial work** — ≥2 files OR ≥10 lines → create BEFORE starting.
+3. **MUST claim before coding** — `claim(id)` then code.
+4. **MUST close when done** — `close(id, reason)` with meaningful reason.
+5. **MUST handle unfinished tasks first** — prime shows in-progress → ask user: Continue, Defer, Abandon?
+6. **NEVER skip prime** — Even for follow-up messages.
+7. **NEVER start new work with open in-progress tasks** — Handle existing first.
+8. **NEVER leave tasks in in_progress when session ends** — Close or defer everything.
+9. **NEVER tell the user to run task commands** — You are the operator.
 
-## Guard 诊断响应
+When in doubt → create a task. When idle → `autosnippet_task({ operation: "ready" })`.
+**When NOT to create**: <2min AND ≤1 file AND <10 lines → no task.
 
-当编辑器出现 "AutoSnippet Guard" 诊断时：
-1. 读取 ruleId → `autosnippet_search(query: ruleId)`
-2. 按 Recipe 的 doClause + coreCode 修改代码
-3. 保存并确认诊断消失
+## User Says → You Run
 
-## 知识搜索
+| User Says | Your Action |
+|---|---|
+| "帮我修 bug" / "fix this" | `create` → `claim` → code → `close` |
+| "做功能" / "implement" | `create` → `claim` → code → `close` |
+| "继续" / "continue" | resume in-progress → code → `close` |
+| "先不做了" / "pause" | `defer(id, reason)` |
+| "不做了" / "abandon" | `fail(id, reason)` |
+| "太大了" / "break down" | `decompose(id, subtasks)` |
+| "有什么要做的" / "next" | `ready()` → present list |
+| "就这么定了" / "agreed" | `record_decision(...)` |
+| Quick question | No task. Just answer. |
 
-编码前搜索相关知识：`autosnippet_search(query: "相关关键词")`
+## Decision Persistence
+
+**用户同意/否决方案时** → `autosnippet_task({ operation: "record_decision" | "revise_decision" | "unpin_decision" })` 先持久化决策再继续
+
+## Session Closing Protocol
+
+Before ending work, you MUST complete this checklist:
+
+- [ ] Close every claimed task: `close(id, reason)` with what was accomplished
+- [ ] Defer any incomplete task: `defer(id, reason)` with why and what remains
+- [ ] Verify: zero tasks in in_progress state
+- [ ] If prime showed ready tasks, mention them for next session
+
+**Work is not done until all tasks are closed or deferred.**
 
 ## 上下文压力
 
 - `_contextHint` 包含 `CONTEXT_PRESSURE:WARNING` → 总结已完成工作，继续
-- `_contextHint` 包含 `CONTEXT_PRESSURE:CRITICAL` → 立即 `autosnippet_ready()` 恢复上下文
+- `_contextHint` 包含 `CONTEXT_PRESSURE:CRITICAL` → 立即 prime 恢复上下文
 
 ## 任务操作速查
 
 | 操作 | 用途 |
 |------|------|
-| `autosnippet_ready()` | **每次收到消息第一步调用** — 加载决策 + 就绪任务 + 知识上下文 |
-| `autosnippet_decide(record/revise/unpin)` | **用户同意/否决方案时立即调用** — 先持久化再继续 |
+| `autosnippet_task({ operation: "prime" })` | **每次收到消息第一步调用** — 加载决策 + 就绪任务 + 规则提醒 |
+| `autosnippet_task({ operation: "record_decision" / "revise_decision" / "unpin_decision" })` | **用户同意/否决方案时立即调用** — 先持久化再继续 |
+| `create(title)` | 创建新任务 |
 | `claim(id)` | 开始处理任务 |
-| `close(id)` | 完成任务 → 返回 newlyReady |
+| `close(id, reason)` | 完成任务 → 返回 newlyReady |
 | `fail(id, reason)` | 标记失败 |
 | `defer(id, reason)` | 延后处理 |
 | `progress(id, desc)` | 更新进度 |
-| `create(title)` | 创建新任务 |
-| `ready` | 获取就绪任务（带知识上下文） |
+| `ready` | 获取就绪任务 |
+| `decompose(id, subtasks)` | 拆分大任务 |
+| `stats` | 项目统计 |

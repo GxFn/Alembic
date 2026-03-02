@@ -4,6 +4,33 @@
 
 ---
 
+## [3.2.5] - 2026-03-02
+
+### 新增
+
+- **FileManifest + FileDeployer 统一部署引擎**：20 条 MANIFEST 项 + 9 种部署策略，SetupService 从 1350→559 行（-59%）、UpgradeService 从 504→100 行（-80%）
+- **CliLogger 轻量 CLI 日志模块**：替换 bin/cli.js 全部 108 处 `console.log/error/warn`，stdout/stderr 分流 + `ASD_DEBUG` 调试模式
+- **MCP 工具合并 ready/decide → task**：`autosnippet_ready` + `autosnippet_decide` 合入 `autosnippet_task`（prime/record_decision/revise_decision/unpin_decision/list_decisions），工具数从 22→20
+- **Guard 增量检查模式**：`autosnippet_guard` 无参数时自动检测 git diff 增量文件并检查，violation 内联 recipe 修复指南
+- **Claude Code Hooks 模板**：`templates/claude-code/`（commands + hooks + settings.json）替代已废弃的 `claude-hooks.yaml`
+- **Cursor Hooks 模板**：`templates/cursor-hooks/`（commands + hooks + hooks.json）
+- **Chat Memory 三层架构**：ActiveContext / PersistentMemory / SessionStore + MemoryCoordinator 统一协调
+
+### 改进
+
+- **ExplorationTracker 统一替代 PhaseRouter + ReasoningLayer**：ChatAgent 内部探索追踪从双组件简化为单一组件
+- **CLI mirror 命令扩展**：从 2 类型（rules/skills）扩展至 5 类型（rules/skills/hooks/commands/hooks.json）
+- **Bootstrap Orchestrator 重构**：EpisodicMemory 缓存策略优化、IncrementalBootstrap 增量逻辑改进
+- **Dashboard CandidatesView 精简**：移除未使用的 CandidatesSkeleton 组件及相关引用
+- **VSCode 扩展 Guard Diagnostics 优化**：guardDiagnostics.ts 重构优化实时反馈逻辑
+
+### 修复
+
+- **Guard 规则 js-no-console-log 合规**：bin/cli.js 生产代码全部使用 CliLogger，消除 Guard 违规
+- **CLI stale 命令清理**：移除不存在的 `asd compliance` 引用，更新 `upgrade` 描述
+
+---
+
 ## [3.2.4] - 2026-02-27
 
 ### 修复

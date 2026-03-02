@@ -103,12 +103,10 @@ asd ui           # 打开 Dashboard 审核扫描结果
 
 TaskGraph 把团队约定和任务状态存在 `.autosnippet/autosnippet.db` 里——AI 助手不会每次对话都从零开始。
 
-- **`autosnippet_ready`** — 加载活跃约定和待办任务到上下文。会话开始时调用。
-- **`autosnippet_decide`** — 保存团队共识（如 "API 字段统一用 camelCase"），跨会话持久生效。
-- **`autosnippet_task`** — 任务 CRUD：create / claim / close / fail / defer / progress / decompose。
+- **`autosnippet_task`** — 统一任务与决策管理：`prime` 加载活跃约定和待办任务到上下文；`record_decision` / `revise_decision` / `unpin_decision` 保存团队共识；`create` / `claim` / `close` / `fail` / `defer` / `progress` / `decompose` 管理任务。
 - **自动注入** — 后续每次工具调用自动携带活跃约定。
 
-通过 CLI `asd task`、MCP 工具（`autosnippet_ready` / `autosnippet_decide` / `autosnippet_task`）、或 VS Code Agent Mode 里的 `#asd` 使用。
+通过 CLI `asd task`、MCP 工具 `autosnippet_task`、或 VS Code Agent Mode 里的 `#asd` 使用。
 
 ## IDE 支持
 
@@ -116,7 +114,7 @@ TaskGraph 把团队约定和任务状态存在 `.autosnippet/autosnippet.db` 里
 |-----|---------|----------|
 | **VS Code** | 扩展 + MCP | Agent Mode 中 `#asd` 引用工具；搜索、指令、CodeLens、Guard |
 | **Cursor** | MCP + Rules | `.cursor/mcp.json` + `.cursor/rules/` |
-| **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP 工具；支持 plugins |
+| **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP 工具；支持 hooks |
 | **Trae / Qoder** | MCP | `asd setup` 自动生成 |
 | **Xcode** | 文件监听 | `asd watch` + 文件指令 + Snippet 同步 |
 

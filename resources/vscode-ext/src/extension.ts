@@ -4,9 +4,14 @@
  * 功能对标 Xcode 工作流：
  *   1. `// as:s <query>` → 搜索知识库 → QuickPick 选择 → editor.edit() 插入代码
  *   2. `// as:c`         → 从选区/剪贴板创建候选知识条目
- *   3. `// as:a`         → 对当前文件/项目运行 Guard 审计
+ *   3. `// as:a`         → 对当前文件/项目运行 Guard 审计 → 波浪线提示
  *   4. CodeLens          → 指令行上方显示操作按钮
  *   5. 状态栏            → API Server 连接状态指示
+ *
+ * Guard 工作方式：
+ *   - **用户手动**：写 `// as:a` 后保存 → 波浪线显示 violations
+ *   - **Agent MCP**：调 `autosnippet_task({ operation: "guard_review" })` → 返回 violations
+ *   - 不再在每次保存时自动检查（避免干扰开发流程）
  *
  * 架构：
  *   Extension ←→ ApiClient ←→ AutoSnippet API Server (asd ui / asd start)
@@ -58,11 +63,9 @@ export function activate(context: vscode.ExtensionContext) {
   }
   context.subscriptions.push(statusBar);
 
-  // ── Guard Diagnostics（onDidSave → Guard API → 波浪线）──
+  // ── Guard Diagnostics（仅 // as:a 触发 → Guard API → 波浪线）──
   guardDiagnostics = new GuardDiagnostics();
-  if (config.get<boolean>('enableGuardDiagnostics', true)) {
-    guardDiagnostics.register(context);
-  }
+  guardDiagnostics.register(context);
 
   // ── Guard Code Actions（灯泡菜单：搜索知识库修复）──
   registerGuardCodeActions(context);

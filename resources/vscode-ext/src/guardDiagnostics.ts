@@ -2,13 +2,18 @@
  * Guard Diagnostics — VS Code DiagnosticCollection 集成
  *
  * 核心能力：
- *   1. onDidSave → 调 Guard API → 写入 DiagnosticCollection → 波浪线
- *   2. 诊断消息面向 Agent 优化（嵌入 ruleId + MCP 搜索指令）
+ *   1. `// as:a` 指令触发 → 调 Guard API → 写入 DiagnosticCollection → 波浪线
+ *   2. 诊断消息面向用户优化（嵌入 ruleId + 修复建议）
  *   3. 修复检测（违规消失时记录 fixedViolations）
+ *
+ * 设计：
+ *   - 不自动在每次保存时检查（避免干扰开发流程）
+ *   - 用户写 `// as:a` 后保存才触发 Guard 检查（主动式质量审查）
+ *   - Agent 通过 MCP guard_review 获取 violations（不依赖波浪线）
  *
  * 架构：
  *   Extension ← HTTP → API Server (Guard API /api/v1/guard/file)
- *   Extension → DiagnosticCollection → Agent reads diagnostics
+ *   Extension → DiagnosticCollection → 用户看到波浪线
  */
 
 import * as vscode from 'vscode';
@@ -52,10 +57,7 @@ const DIAGNOSTIC_SOURCE = 'AutoSnippet Guard';
 
 export class GuardDiagnostics {
   private diagnosticCollection: vscode.DiagnosticCollection;
-  private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
   private enabled: boolean = true;
-  /** debounce 延迟（ms），防止频繁保存 */
-  private debounceDelay: number = 300;
   /** 输出通道用于调试日志 */
   private outputChannel: vscode.OutputChannel;
 
@@ -65,28 +67,16 @@ export class GuardDiagnostics {
   }
 
   /**
-   * 注册 onDidSave 事件绑定
+   * 注册事件绑定
+   * - 不再 onDidSave 自动检查
+   * - 波浪线只通过 checkFile() 手动触发（由 // as:a 指令或命令触发）
    * @param context Extension context for disposal
    */
   register(context: vscode.ExtensionContext): void {
-    // onDidSave → Guard 检查
-    context.subscriptions.push(
-      vscode.workspace.onDidSaveTextDocument((document) => {
-        if (!this.enabled) { return; }
-        this._debounceCheck(document);
-      })
-    );
-
-    // 文件关闭时清除对应诊断 + 取消待执行的 debounce
+    // 文件关闭时清除对应诊断
     context.subscriptions.push(
       vscode.workspace.onDidCloseTextDocument((document) => {
         this.diagnosticCollection.delete(document.uri);
-        const key = document.uri.toString();
-        const timer = this.debounceTimers.get(key);
-        if (timer) {
-          clearTimeout(timer);
-          this.debounceTimers.delete(key);
-        }
       })
     );
 
@@ -145,33 +135,11 @@ export class GuardDiagnostics {
    * Dispose
    */
   dispose(): void {
-    for (const timer of this.debounceTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.debounceTimers.clear();
     this.diagnosticCollection.dispose();
     this.outputChannel.dispose();
   }
 
   // ═══ 内部方法 ═══════════════════════════════════════
-
-  /**
-   * debounce 保存事件，避免频繁保存导致的密集 API 调用
-   */
-  private _debounceCheck(document: vscode.TextDocument): void {
-    const key = document.uri.toString();
-    const existing = this.debounceTimers.get(key);
-    if (existing) {
-      clearTimeout(existing);
-    }
-
-    const timer = setTimeout(() => {
-      this.debounceTimers.delete(key);
-      this.checkFile(document);
-    }, this.debounceDelay);
-
-    this.debounceTimers.set(key, timer);
-  }
 
   /**
    * 调用 Guard API
@@ -254,22 +222,21 @@ export class GuardDiagnostics {
   }
 
   /**
-   * 构建面向 Agent 优化的诊断消息
+   * 构建面向用户的诊断消息
    *
-   * 双重受众：
-   *   - 人类：看到违规描述 + 修复建议
-   *   - Agent：看到 ruleId + MCP 搜索指令
+   * 用户在编辑器中看到波浪线时的信息：
+   *   - ruleId + 违规描述
+   *   - 修复建议（如果有）
+   *   - 灯泡菜单可搜索知识库
    */
   private _buildDiagnosticMessage(violation: GuardViolation): string {
     const { ruleId, message, fixSuggestion } = violation;
 
-    let msg = `[AutoSnippet Guard] ${ruleId}: ${message}`;
+    let msg = `[${ruleId}] ${message}`;
 
     if (fixSuggestion) {
-      msg += `\n修复建议: ${fixSuggestion}`;
+      msg += `\n💡 ${fixSuggestion}`;
     }
-
-    msg += `\n搜 autosnippet_search('${ruleId}') 查找正确写法。`;
 
     return msg;
   }

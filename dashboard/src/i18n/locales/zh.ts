@@ -240,6 +240,7 @@ export const zh = {
     approveSuccess: '已批准为 Recipe',
     rejectSuccess: '已拒绝',
     aiRefine: 'AI 润色',
+    aiEnrich: 'AI 补齐',
     viewDetail: '查看详情',
     selectAll: '全选',
     deselectAll: '取消全选',

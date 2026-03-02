@@ -1,6 +1,5 @@
 /**
- * ReasoningTrace + ExplorationTracker 单元测试
- * (原 ReasoningLayer 测试已迁移到 ExplorationTracker)
+ * ActiveContext (原 ReasoningTrace) + ExplorationTracker 单元测试
  */
 import { jest } from '@jest/globals';
 
@@ -10,7 +9,7 @@ jest.unstable_mockModule('../../lib/infrastructure/logging/Logger.js', () => ({
   default: { getInstance: () => mockLogger },
 }));
 
-const { ReasoningTrace } = await import('../../lib/service/chat/ReasoningTrace.js');
+const { ActiveContext: ReasoningTrace } = await import('../../lib/service/chat/memory/ActiveContext.js');
 const { ExplorationTracker } = await import('../../lib/service/chat/ExplorationTracker.js');
 
 // ─── ReasoningTrace ─────────────────────────────────────

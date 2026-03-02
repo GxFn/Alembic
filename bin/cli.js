@@ -9,18 +9,20 @@
  *   asd ais [Target]    - AI 扫描 Target → 直接发布 Recipes
  *   asd search <query>  - 搜索知识库
  *   asd guard <file>    - Guard 检查
+ *   asd guard:ci [path] - CI/CD Guard 合规检查
  *   asd watch           - 文件监控
- *   asd compliance      - 合规评估
  *   asd server          - 启动 API 服务
- *   asd status          - 环境状态
  *   asd ui              - 启动 Dashboard UI
+ *   asd upgrade         - 升级 IDE 集成
  *   asd mirror          - 镜像 .cursor/ → .qoder/ .trae/
+ *   asd status          - 环境状态
  */
 
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
+import { cli } from '../lib/cli/CliLogger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -89,7 +91,7 @@ program
   .action(async (opts) => {
     const projectRoot = resolve(opts.dir);
     if (opts.skipGuard) {
-      console.log('ℹ️  Guard 审计已跳过');
+      cli.log('ℹ️  Guard 审计已跳过');
     }
 
     try {
@@ -111,7 +113,7 @@ program
       spinner.stop();
 
       if (opts.json) {
-        console.log(JSON.stringify(result, null, 2));
+        cli.json(result);
       } else {
         // 输出骨架报告
         const report = result.report || {};
@@ -121,11 +123,11 @@ program
         const astSummary = result.astSummary;
         const framework = result.analysisFramework || {};
 
-        console.log('\n📊 Coldstart Report');
-        console.log(`${'─'.repeat(50)}`);
+        cli.log('\n📊 Coldstart Report');
+        cli.log(`${'─'.repeat(50)}`);
 
         if (targets.length > 0) {
-          console.log(`\n  Targets: ${targets.map(t => t.name || t).join(', ')}`);
+          cli.log(`\n  Targets: ${targets.map(t => t.name || t).join(', ')}`);
         }
 
         if (Object.keys(langStats).length > 0) {
@@ -133,40 +135,40 @@ program
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5)
             .map(([ext, count]) => `${ext}(${count})`);
-          console.log(`  Languages: ${langParts.join(', ')}`);
+          cli.log(`  Languages: ${langParts.join(', ')}`);
         }
 
         // AST 分析
         if (astSummary) {
           if (astSummary.metrics) {
-            console.log(`  AST Metrics: ${JSON.stringify(astSummary.metrics)}`);
+            cli.log(`  AST Metrics: ${JSON.stringify(astSummary.metrics)}`);
           }
         }
 
         // SPM 依赖
         if (report.phases?.spmDependencyGraph) {
           const spm = report.phases.spmDependencyGraph;
-          console.log(`  SPM Dependencies: ${spm.packageCount ?? '?'} packages`);
+          cli.log(`  SPM Dependencies: ${spm.packageCount ?? '?'} packages`);
         }
 
         // Guard 审计
         if (guardSummary) {
-          console.log(`  Guard: ${guardSummary.totalViolations ?? guardSummary.total ?? '?'} violations (${guardSummary.errors ?? '?'} errors, ${guardSummary.warnings ?? '?'} warnings)`);
+          cli.log(`  Guard: ${guardSummary.totalViolations ?? guardSummary.total ?? '?'} violations (${guardSummary.errors ?? '?'} errors, ${guardSummary.warnings ?? '?'} warnings)`);
         }
 
         // 维度分析框架
         if (framework.dimensions) {
-          console.log('\n  Analysis Dimensions:');
+          cli.log('\n  Analysis Dimensions:');
           for (const dim of framework.dimensions) {
             const type = dim.skillWorthy ? (dim.dualOutput ? 'Dual' : 'Skill') : 'Candidate';
-            console.log(`    ${type.padEnd(10)} ${dim.id || dim.name || '?'}`);
+            cli.log(`    ${type.padEnd(10)} ${dim.id || dim.name || '?'}`);
           }
         }
         if (result.bootstrapSession) {
           const session = result.bootstrapSession;
-          console.log(`\n  Session: ${session.id || 'N/A'} (${session.status || 'unknown'})`);
+          cli.log(`\n  Session: ${session.id || 'N/A'} (${session.status || 'unknown'})`);
         }
-        console.log('');
+        cli.blank();
       }
 
       // 等待模式: 轮询 BootstrapTaskManager 直到所有维度完成
@@ -210,12 +212,12 @@ program
               if (!opts.json) {
                 const succeeded = sessionStatus.tasks.filter((t) => t.status === 'done').length;
                 const failed = sessionStatus.tasks.filter((t) => t.status === 'error').length;
-                console.log(`\n  Results: ${succeeded} succeeded, ${failed} failed`);
+                cli.log(`\n  Results: ${succeeded} succeeded, ${failed} failed`);
                 for (const t of sessionStatus.tasks) {
                   const icon = t.status === 'done' ? '✅' : '❌';
-                  console.log(`    ${icon} ${t.meta?.label || t.id}`);
+                  cli.log(`    ${icon} ${t.meta?.label || t.id}`);
                 }
-                console.log('');
+                cli.blank();
               }
               break;
             }
@@ -228,15 +230,13 @@ program
           waitSpinner.warn('AI 填充超时（10 分钟），可通过 asd ui 查看进度');
         }
       } else if (!opts.json) {
-        console.log('  💡 AI 填充已在后台运行。用 --wait 等待完成，或用 asd ui 查看进度。');
+        cli.log('  💡 AI 填充已在后台运行。用 --wait 等待完成，或用 asd ui 查看进度。');
       }
 
       await bootstrap.shutdown();
     } catch (err) {
-      console.error(`\n❌ ${err.message}`);
-      if (process.env.ASD_DEBUG === '1') {
-        console.error(err.stack);
-      }
+      cli.error(`\n❌ ${err.message}`);
+      cli.debug(err.stack);
       process.exit(1);
     }
   });
@@ -254,10 +254,10 @@ program
   .action(async (target, opts) => {
     const projectRoot = resolve(opts.dir);
     if (target) {
-      console.log(`Target: ${target}`);
+      cli.log(`Target: ${target}`);
     }
     if (opts.dryRun) {
-      console.log('ℹ️  Dry-run mode: no Recipes will be published');
+      cli.log('ℹ️  Dry-run mode: no Recipes will be published');
     }
 
     try {
@@ -277,33 +277,31 @@ program
       spinner.stop();
 
       if (opts.json) {
-        console.log(JSON.stringify(report, null, 2));
+        cli.json(report);
       } else {
-        console.log(`\n📝 AI Scan Report`);
-        console.log(`  Files scanned: ${report.files}`);
-        console.log(`  Published:     ${report.published}`);
-        console.log(`  Skipped:       ${report.skipped || 0}`);
+        cli.log(`\n📝 AI Scan Report`);
+        cli.log(`  Files scanned: ${report.files}`);
+        cli.log(`  Published:     ${report.published}`);
+        cli.log(`  Skipped:       ${report.skipped || 0}`);
         if (report.errors.length > 0) {
-          console.log(`  Errors:        ${report.errors.length}`);
+          cli.log(`  Errors:        ${report.errors.length}`);
           for (const err of report.errors.slice(0, 10)) {
-            console.log(`    ❌ ${err}`);
+            cli.log(`    ❌ ${err}`);
           }
           if (report.errors.length > 10) {
-            console.log(`    ... and ${report.errors.length - 10} more`);
+            cli.log(`    ... and ${report.errors.length - 10} more`);
           }
         }
         if (!opts.dryRun && report.published > 0) {
-          console.log(`\n  ✅ ${report.published} Recipes published successfully.`);
+          cli.log(`\n  ✅ ${report.published} Recipes published successfully.`);
         }
-        console.log('');
+        cli.blank();
       }
 
       await bootstrap.shutdown();
     } catch (err) {
-      console.error(`\n❌ ${err.message}`);
-      if (process.env.ASD_DEBUG === '1') {
-        console.error(err.stack);
-      }
+      cli.error(`\n❌ ${err.message}`);
+      cli.debug(err.stack);
       process.exit(1);
     }
   });
@@ -328,23 +326,23 @@ program
       });
 
       if (results.items.length === 0) {
-        console.log('No results found.');
+        cli.log('No results found.');
       } else {
-        console.log(`\n🔍 ${results.items.length} result(s) for "${query}"\n`);
+        cli.log(`\n🔍 ${results.items.length} result(s) for "${query}"\n`);
         for (const item of results.items) {
           const badge = item.type === 'recipe' ? '📘' : item.type === 'solution' ? '💡' : '🛡️';
           const score = item.score ? ` [${(item.score * 100).toFixed(0)}%]` : '';
-          console.log(`  ${badge} ${item.title || item.trigger || item.id}${score}`);
+          cli.log(`  ${badge} ${item.title || item.trigger || item.id}${score}`);
           if (item.description) {
-            console.log(`     ${item.description.slice(0, 100)}`);
+            cli.log(`     ${item.description.slice(0, 100)}`);
           }
         }
-        console.log('');
+        cli.blank();
       }
 
       await bootstrap.shutdown();
     } catch (err) {
-      console.error('Error:', err.message);
+      cli.error('Error:', err.message);
       process.exit(1);
     }
   });
@@ -361,7 +359,7 @@ program
     try {
       const filePath = resolve(file);
       if (!existsSync(filePath)) {
-        console.error(`File not found: ${filePath}`);
+        cli.error(`File not found: ${filePath}`);
         process.exit(1);
       }
 
@@ -374,26 +372,26 @@ program
       const violations = engine.checkCode(code, language, { scope: opts.scope });
 
       if (opts.json) {
-        console.log(JSON.stringify({ violations, summary: { total: violations.length, errors: violations.filter(v => v.severity === 'error').length, warnings: violations.filter(v => v.severity === 'warning').length } }, null, 2));
+        cli.json({ violations, summary: { total: violations.length, errors: violations.filter(v => v.severity === 'error').length, warnings: violations.filter(v => v.severity === 'warning').length } });
       } else if (violations.length === 0) {
-        console.log('✅ No violations found.');
+        cli.log('✅ No violations found.');
       } else {
         const errors = violations.filter((v) => v.severity === 'error');
         const warnings = violations.filter((v) => v.severity === 'warning');
-        console.log(`\n🔍 Guard: ${violations.length} violation(s) — ${errors.length} error(s), ${warnings.length} warning(s)\n`);
+        cli.log(`\n🔍 Guard: ${violations.length} violation(s) — ${errors.length} error(s), ${warnings.length} warning(s)\n`);
         for (const v of violations) {
           const icon = v.severity === 'error' ? '❌' : v.severity === 'warning' ? '⚠️' : 'ℹ️';
-          console.log(`  ${icon} [${v.ruleId}] ${v.message}`);
-          if (v.line) console.log(`    Line ${v.line}: ${v.snippet || ''}`);
-          if (v.fixSuggestion) console.log(`    💡 Fix: ${v.fixSuggestion}`);
+          cli.log(`  ${icon} [${v.ruleId}] ${v.message}`);
+          if (v.line) cli.log(`    Line ${v.line}: ${v.snippet || ''}`);
+          if (v.fixSuggestion) cli.log(`    💡 Fix: ${v.fixSuggestion}`);
         }
-        console.log('');
+        cli.blank();
       }
 
       await bootstrap.shutdown();
       process.exit(violations.some((v) => v.severity === 'error') ? 1 : 0);
     } catch (err) {
-      console.error('Error:', err.message);
+      cli.error('Error:', err.message);
       process.exit(1);
     }
   });
@@ -432,9 +430,9 @@ program
         if (opts.output) {
           const { writeFileSync } = await import('node:fs');
           writeFileSync(opts.output, output, 'utf8');
-          console.log(`Report written to ${opts.output}`);
+          cli.log(`Report written to ${opts.output}`);
         } else {
-          console.log(output);
+          cli.log(output);
         }
       } else {
         reporter.printReport(report, { format: opts.report });
@@ -454,10 +452,8 @@ program
       }
       process.exit(0);
     } catch (err) {
-      console.error('Error:', err.message);
-      if (process.env.ASD_DEBUG === '1') {
-        console.error(err.stack);
-      }
+      cli.error(`Error: ${err.message}`);
+      cli.debug(err.stack);
       process.exit(1);
     }
   });
@@ -484,7 +480,7 @@ program
           .split('\n')
           .filter(Boolean);
       } catch (_err) {
-        console.error('❌ 无法获取 git staged 文件（是否在 git 仓库中？）');
+        cli.error('❌ 无法获取 git staged 文件（是否在 git 仓库中？）');
         process.exit(1);
       }
 
@@ -520,32 +516,30 @@ program
       const { summary } = result;
 
       if (opts.json) {
-        console.log(JSON.stringify({ files: result.files, summary }, null, 2));
+        cli.json({ files: result.files, summary });
       } else if (summary.totalViolations === 0) {
-        console.log(`✅ ${sourceFiles.length} staged file(s) checked — no violations.`);
+        cli.log(`✅ ${sourceFiles.length} staged file(s) checked — no violations.`);
       } else {
-        console.log(`\n🔍 Guard (staged): ${summary.totalViolations} violation(s) in ${sourceFiles.length} file(s)\n`);
+        cli.log(`\n🔍 Guard (staged): ${summary.totalViolations} violation(s) in ${sourceFiles.length} file(s)\n`);
         const filesWithIssues = result.files.filter((f) => f.summary.total > 0);
         for (const file of filesWithIssues.slice(0, 10)) {
-          console.log(`  📄 ${file.filePath || file.path}`);
+          cli.log(`  📄 ${file.filePath || file.path}`);
           for (const v of file.violations.slice(0, 5)) {
             const icon = v.severity === 'error' ? '❌' : '⚠️';
-            console.log(`    ${icon} [${v.ruleId}] ${v.message}`);
+            cli.log(`    ${icon} [${v.ruleId}] ${v.message}`);
           }
           if (file.violations.length > 5) {
-            console.log(`    ... and ${file.violations.length - 5} more`);
+            cli.log(`    ... and ${file.violations.length - 5} more`);
           }
         }
-        console.log('');
+        cli.blank();
       }
 
       await bootstrap.shutdown();
       process.exit(summary.totalErrors > 0 ? 1 : 0);
     } catch (err) {
-      console.error('Error:', err.message);
-      if (process.env.ASD_DEBUG === '1') {
-        console.error(err.stack);
-      }
+      cli.error(`Error: ${err.message}`);
+      cli.debug(err.stack);
       process.exit(1);
     }
   });
@@ -596,10 +590,8 @@ program
         process.exit(0);
       });
     } catch (err) {
-      console.error('Error:', err.message);
-      if (process.env.ASD_DEBUG === '1') {
-        console.error(err.stack);
-      }
+      cli.error(`Error: ${err.message}`);
+      cli.debug(err.stack);
       process.exit(1);
     }
   });
@@ -686,10 +678,8 @@ program
         signalCollector.start();
         global._signalCollector = signalCollector;
       } catch (scErr) {
-        console.warn(`⚠️  SignalCollector failed to start: ${scErr.message}`);
-        if (process.env.ASD_DEBUG === '1') {
-          console.error(scErr.stack);
-        }
+        cli.warn(`⚠️  SignalCollector failed to start: ${scErr.message}`);
+        cli.debug(scErr.stack);
       }
 
       // 3. 启动文件监听器（仅 iOS/macOS 项目 — Xcode 工作流）
@@ -779,17 +769,15 @@ program
           if (isDebugMode) {
           }
         } catch (watchErr) {
-          console.warn(`⚠️  File watcher failed to start: ${watchErr.message}`);
-          if (process.env.ASD_DEBUG === '1') {
-            console.error(watchErr.stack);
-          }
+          cli.warn(`⚠️  File watcher failed to start: ${watchErr.message}`);
+          cli.debug(watchErr.stack);
         }
       } else if (process.env.ASD_DEBUG === '1') {
       }
     } catch (err) {
-      console.error(`❌ API server failed to start: ${err.message}`);
+      cli.error(`❌ API server failed to start: ${err.message}`);
       if (err.code === 'EADDRINUSE') {
-        console.error(
+        cli.error(
           `   Port ${port} is already in use. Kill it with: lsof -ti:${port} | xargs kill -9`
         );
       }
@@ -836,7 +824,7 @@ program
       });
 
       vite.on('error', (err) => {
-        console.error(`❌ Vite failed to start: ${err.message}`);
+        cli.error(`❌ Vite failed to start: ${err.message}`);
       });
 
       process.on('SIGINT', () => {
@@ -853,35 +841,35 @@ program
   .command('status')
   .description('检查环境状态')
   .action(async () => {
-    console.log('\n  AutoSnippet Environment Status');
-    console.log(`  ${'─'.repeat(40)}`);
+    cli.log('\n  AutoSnippet Environment Status');
+    cli.log(`  ${'─'.repeat(40)}`);
 
     // AI 配置
     const { getAiConfigInfo } = await import('../lib/external/ai/AiFactory.js');
     const aiInfo = getAiConfigInfo();
-    console.log(`  AI Provider:  ${aiInfo.provider || 'not configured'}`);
-    if (aiInfo.model) console.log(`  AI Model:     ${aiInfo.model}`);
+    cli.log(`  AI Provider:  ${aiInfo.provider || 'not configured'}`);
+    if (aiInfo.model) cli.log(`  AI Model:     ${aiInfo.model}`);
 
     // 检查数据库
     const dbPath = join(process.cwd(), '.autosnippet', 'autosnippet.db');
     const dbExists = existsSync(dbPath);
-    console.log(`  Database:     ${dbExists ? '✅ ' + dbPath : '❌ not found'}`);
+    cli.log(`  Database:     ${dbExists ? '✅ ' + dbPath : '❌ not found'}`);
 
     // 检查 .autosnippet 目录
     const asdDir = join(process.cwd(), '.autosnippet');
-    console.log(`  Workspace:    ${existsSync(asdDir) ? '✅ .autosnippet/' : '❌ not initialized (run asd setup)'}`);
+    cli.log(`  Workspace:    ${existsSync(asdDir) ? '✅ .autosnippet/' : '❌ not initialized (run asd setup)'}`);
 
     // 检查依赖
-    console.log('  Dependencies:');
+    cli.log('  Dependencies:');
     for (const dep of ['better-sqlite3', 'commander', 'express']) {
       try {
         await import(dep);
-        console.log(`    ✅ ${dep}`);
+        cli.log(`    ✅ ${dep}`);
       } catch {
-        console.log(`    ❌ ${dep} (missing)`);
+        cli.log(`    ❌ ${dep} (missing)`);
       }
     }
-    console.log('');
+    cli.blank();
   });
 
 // ─────────────────────────────────────────────────────
@@ -889,7 +877,7 @@ program
 // ─────────────────────────────────────────────────────
 program
   .command('upgrade')
-  .description('升级 IDE 集成：MCP 配置、Skills、Cursor Rules、Copilot Instructions')
+  .description('升级 IDE 集成（全量：MCP + Rules + Hooks + Instructions + Skills + Constitution + .gitignore）')
   .option('-d, --dir <path>', '项目目录', '.')
   .option('--skills-only', '仅更新 Skills')
   .option('--mcp-only', '仅更新 MCP 配置')
@@ -918,22 +906,22 @@ program
     try {
       const pipeline = container.get('cursorDeliveryPipeline');
       const result = await pipeline.deliver();
-      console.log('\n  Cursor Rules Delivery');
-      console.log(`  ${'─'.repeat(40)}`);
-      console.log(`  Channel A: ${result.channelA?.count ?? '?'} always-on rules`);
-      console.log(`  Channel B: ${result.channelB?.count ?? Object.keys(result.channelB?.topics || {}).length} topic rules`);
-      console.log(`  Channel C: ${result.channelC?.count ?? '?'} skills (${result.channelC?.errors ?? 0} errors)`);
+      cli.log('\n  Cursor Rules Delivery');
+      cli.log(`  ${'─'.repeat(40)}`);
+      cli.log(`  Channel A: ${result.channelA?.count ?? '?'} always-on rules`);
+      cli.log(`  Channel B: ${result.channelB?.count ?? Object.keys(result.channelB?.topics || {}).length} topic rules`);
+      cli.log(`  Channel C: ${result.channelC?.count ?? '?'} skills (${result.channelC?.errors ?? 0} errors)`);
       if (result.channelC.errors > 0) {
-        console.log(`  ⚠️  ${result.channelC.errors} skill(s) failed to deliver`);
+        cli.log(`  ⚠️  ${result.channelC.errors} skill(s) failed to deliver`);
       }
 
       if (opts.verbose && result.channelB.topics) {
-        console.log('\n  Channel B Topics:');
+        cli.log('\n  Channel B Topics:');
         for (const [topic, info] of Object.entries(result.channelB.topics)) {
-          console.log(`    ${topic}: ${info.count ?? info.rules?.length ?? '?'} rules`);
+          cli.log(`    ${topic}: ${info.count ?? info.rules?.length ?? '?'} rules`);
         }
       }
-      console.log('');
+      cli.blank();
     } finally {
       await bootstrap.shutdown?.();
     }
@@ -961,18 +949,18 @@ taskCmd
       if (opts.status) filters.status = opts.status;
       const tasks = await svc.list(filters, { limit: parseInt(opts.limit, 10) });
       if (tasks.length === 0) {
-        console.log('No tasks found.');
+        cli.log('No tasks found.');
       } else {
-        console.log(`\n  ID               Status        Priority  Title`);
-        console.log(`  ${'─'.repeat(70)}`);
+        cli.log(`\n  ID               Status        Priority  Title`);
+        cli.log(`  ${'─'.repeat(70)}`);
         for (const t of tasks) {
           const j = t.toJSON ? t.toJSON() : t;
           const id = (j.id || '').padEnd(16);
           const status = (j.status || '').padEnd(13);
           const pri = String(j.priority ?? '-').padEnd(9);
-          console.log(`  ${id} ${status} ${pri} ${j.title}`);
+          cli.log(`  ${id} ${status} ${pri} ${j.title}`);
         }
-        console.log(`\n  Total: ${tasks.length}\n`);
+        cli.log(`\n  Total: ${tasks.length}\n`);
       }
     } finally {
       await bootstrap.shutdown?.();
@@ -994,19 +982,19 @@ taskCmd
         withKnowledge: true,
       });
       if (tasks.length === 0) {
-        console.log('No ready tasks.');
+        cli.log('No ready tasks.');
       } else {
         for (const t of tasks) {
           const j = t.toJSON ? t.toJSON() : t;
-          console.log(`\n  ▸ ${j.id} — ${j.title} (P${j.priority ?? '?'})`);
+          cli.log(`\n  ▸ ${j.id} — ${j.title} (P${j.priority ?? '?'})`);
           if (t.knowledgeContext?.relatedKnowledge?.length) {
-            console.log(`    Knowledge: ${t.knowledgeContext.relatedKnowledge.map(k => k.title).join(', ')}`);
+            cli.log(`    Knowledge: ${t.knowledgeContext.relatedKnowledge.map(k => k.title).join(', ')}`);
           }
           if (t.knowledgeContext?.guardRules?.length) {
-            console.log(`    Guard: ${t.knowledgeContext.guardRules.map(r => r.title).join(', ')}`);
+            cli.log(`    Guard: ${t.knowledgeContext.guardRules.map(r => r.title).join(', ')}`);
           }
         }
-        console.log('');
+        cli.blank();
       }
     } finally {
       await bootstrap.shutdown?.();
@@ -1023,24 +1011,24 @@ taskCmd
     try {
       const svc = container.get('taskGraphService');
       const result = await svc.prime({ withKnowledge: true });
-      console.log(`\n  TaskGraph Prime`);
-      console.log(`  ${'─'.repeat(40)}`);
-      console.log(`  In Progress: ${result.inProgress.length}`);
-      console.log(`  Ready:       ${result.ready.length}`);
-      console.log(`  Stats:       ${JSON.stringify(result.stats)}`);
+      cli.log(`\n  TaskGraph Prime`);
+      cli.log(`  ${'─'.repeat(40)}`);
+      cli.log(`  In Progress: ${result.inProgress.length}`);
+      cli.log(`  Ready:       ${result.ready.length}`);
+      cli.log(`  Stats:       ${JSON.stringify(result.stats)}`);
       if (result.inProgress.length > 0) {
-        console.log(`\n  ▸ In Progress:`);
+        cli.log(`\n  ▸ In Progress:`);
         for (const t of result.inProgress) {
-          console.log(`    ${t.id} — ${t.title}`);
+          cli.log(`    ${t.id} — ${t.title}`);
         }
       }
       if (result.ready.length > 0) {
-        console.log(`\n  ▸ Ready:`);
+        cli.log(`\n  ▸ Ready:`);
         for (const t of result.ready) {
-          console.log(`    ${t.id} — ${t.title}`);
+          cli.log(`    ${t.id} — ${t.title}`);
         }
       }
-      console.log('');
+      cli.blank();
     } finally {
       await bootstrap.shutdown?.();
     }
@@ -1056,12 +1044,12 @@ taskCmd
     try {
       const svc = container.get('taskGraphService');
       const stats = await svc.stats();
-      console.log(`\n  TaskGraph Statistics`);
-      console.log(`  ${'─'.repeat(30)}`);
+      cli.log(`\n  TaskGraph Statistics`);
+      cli.log(`  ${'─'.repeat(30)}`);
       for (const [key, val] of Object.entries(stats)) {
-        console.log(`  ${key.padEnd(15)} ${val}`);
+        cli.log(`  ${key.padEnd(15)} ${val}`);
       }
-      console.log('');
+      cli.blank();
     } finally {
       await bootstrap.shutdown?.();
     }
@@ -1081,11 +1069,14 @@ program
 
     const cursorDir = join(projectRoot, '.cursor');
     if (!existsSync(cursorDir)) {
-      console.error('❌ 未找到 .cursor/ 目录，请先运行 asd setup 或 asd cursor-rules');
+      cli.error('❌ 未找到 .cursor/ 目录，请先运行 asd setup 或 asd cursor-rules');
       process.exit(1);
     }
 
     for (const target of targets) {
+      let count = 0;
+
+      // 1. 镜像 rules/ — autosnippet- 前缀文件（.mdc → .md 改名）
       const cursorRulesDir = join(cursorDir, 'rules');
       if (existsSync(cursorRulesDir)) {
         const targetRulesDir = join(projectRoot, target, 'rules');
@@ -1096,9 +1087,11 @@ program
         for (const file of files) {
           const destName = file.endsWith('.mdc') ? file.replace(/\.mdc$/, '.md') : file;
           copyFileSync(join(cursorRulesDir, file), join(targetRulesDir, destName));
+          count++;
         }
       }
 
+      // 2. 镜像 skills/ — autosnippet- 前缀目录
       const cursorSkillsDir = join(cursorDir, 'skills');
       if (existsSync(cursorSkillsDir)) {
         const targetSkillsDir = join(projectRoot, target, 'skills');
@@ -1107,8 +1100,34 @@ program
         );
         for (const dir of skillDirs) {
           _copyDirRecursive(join(cursorSkillsDir, dir.name), join(targetSkillsDir, dir.name));
+          count++;
         }
       }
+
+      // 3. 镜像 hooks/ — hook 脚本（全覆盖）
+      const cursorHooksDir = join(cursorDir, 'hooks');
+      if (existsSync(cursorHooksDir)) {
+        _copyDirRecursive(cursorHooksDir, join(projectRoot, target, 'hooks'));
+        count++;
+      }
+
+      // 4. 镜像 commands/ — 斜杠命令（全覆盖）
+      const cursorCommandsDir = join(cursorDir, 'commands');
+      if (existsSync(cursorCommandsDir)) {
+        _copyDirRecursive(cursorCommandsDir, join(projectRoot, target, 'commands'));
+        count++;
+      }
+
+      // 5. 镜像 hooks.json
+      const hooksJson = join(cursorDir, 'hooks.json');
+      if (existsSync(hooksJson)) {
+        mkdirSync(join(projectRoot, target), { recursive: true });
+        copyFileSync(hooksJson, join(projectRoot, target, 'hooks.json'));
+        count++;
+      }
+
+      const label = target.replace('.', '').charAt(0).toUpperCase() + target.slice(2);
+      cli.log(`  ✅ ${label}: ${count} item(s) mirrored`);
     }
   });
 
@@ -1140,7 +1159,7 @@ program
     const { KnowledgeSyncService } = await import('../lib/cli/KnowledgeSyncService.js');
     const syncService = new KnowledgeSyncService(projectRoot);
     if (opts.dryRun) {
-      console.log('ℹ️  Dry-run mode: no changes will be written');
+      cli.log('ℹ️  Dry-run mode: no changes will be written');
     }
 
     // 通过 Bootstrap 打开目标项目的 DB
@@ -1153,7 +1172,7 @@ program
     const { bootstrap, container } = await initContainer({ projectRoot });
     const db = container.get('database')?.getDb?.();
     if (!db) {
-      console.error('❌ 无法打开数据库，请先运行 asd setup');
+      cli.error('❌ 无法打开数据库，请先运行 asd setup');
       process.exit(1);
     }
 
@@ -1163,27 +1182,27 @@ program
         force: opts.force,
       });
 
-      console.log('\n  Knowledge Sync Report');
-      console.log(`  ${'─'.repeat(40)}`);
-      console.log(`  Created:   ${report.created ?? 0}`);
-      console.log(`  Updated:   ${report.updated ?? 0}`);
-      console.log(`  Unchanged: ${report.unchanged ?? 0}`);
-      console.log(`  Deleted:   ${report.deleted ?? 0}`);
+      cli.log('\n  Knowledge Sync Report');
+      cli.log(`  ${'─'.repeat(40)}`);
+      cli.log(`  Created:   ${report.created ?? 0}`);
+      cli.log(`  Updated:   ${report.updated ?? 0}`);
+      cli.log(`  Unchanged: ${report.unchanged ?? 0}`);
+      cli.log(`  Deleted:   ${report.deleted ?? 0}`);
 
       if (report.violations.length > 0) {
-        console.log(`\n  ⚠️  Violations (${report.violations.length}):`);
+        cli.log(`\n  ⚠️  Violations (${report.violations.length}):`);
         for (const v of report.violations) {
-          console.log(`    ❌ ${v.file || v.id}: ${v.message || v}`);
+          cli.log(`    ❌ ${v.file || v.id}: ${v.message || v}`);
         }
       }
 
       if (report.orphaned.length > 0) {
-        console.log(`\n  👻 Orphaned entries (${report.orphaned.length}):`);
+        cli.log(`\n  👻 Orphaned entries (${report.orphaned.length}):`);
         for (const id of report.orphaned) {
-          console.log(`    ${id}`);
+          cli.log(`    ${id}`);
         }
       }
-      console.log('');
+      cli.blank();
     } finally {
       await bootstrap.shutdown?.();
     }

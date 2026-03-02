@@ -118,9 +118,7 @@ Recipe is the core knowledge unit. V3 uses a unified structured model:
 
 | Tool | Description |
 |------|-------------|
-| `autosnippet_ready` | Session entry point — loads decisions + ready tasks (call FIRST) |
-| `autosnippet_decide` | Decision management (`operation`: record/revise/unpin/list) |
-| `autosnippet_task` | Task CRUD (`operation`: create/ready/claim/close/fail/defer/progress/stats/decompose) |
+| `autosnippet_task` | Unified task & decision management (`operation`: prime/create/claim/close/fail/defer/progress/decompose/record_decision/revise_decision/unpin_decision/list_decisions) |
 
 ### Skills Management
 

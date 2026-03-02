@@ -243,6 +243,7 @@ export const en: DeepString<typeof zh> = {
     approveSuccess: 'Approved as Recipe',
     rejectSuccess: 'Rejected',
     aiRefine: 'AI Refine',
+    aiEnrich: 'AI Enrich',
     viewDetail: 'View Detail',
     selectAll: 'Select all',
     deselectAll: 'Deselect all',

@@ -39,6 +39,8 @@ roles:
       - "submit:knowledge"
       - "read:audit_logs:self"
       - "knowledge:bootstrap"
+      - "task:create"
+      - "task:update"
       - "create:skills"
       - "update:skills"
       - "delete:skills"
