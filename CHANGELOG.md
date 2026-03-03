@@ -4,6 +4,37 @@
 
 ---
 
+## [3.2.8] - 2026-03-03
+
+### 新增
+
+- **CallGraph 静态分析引擎**：`lib/core/analysis/` 新增 7 个模块（CallGraphAnalyzer、CallSiteExtractor、CallEdgeResolver、DataFlowInferrer、ImportPathResolver、ImportRecord、SymbolTableBuilder），支持跨文件调用图构建
+- **8 语言 Discoverer 全面增强**：TypeScript / Swift / Python / Go / Java / Kotlin / Rust / Dart 语言解析器大幅扩展（+1884 行），补全 class/struct/enum/protocol/trait/interface 等复合类型的字段与方法抽取
+- **MCP structure 工具扩展**：`autosnippet_structure` 新增 `call_graph` action，返回项目调用图
+- **MCP wiki 工具增强**：`autosnippet_wiki` 新增 `architecture` action，生成架构文档
+- **Bootstrap 冷启动多阶段优化**：orchestrator 管线新增进度追踪、阶段细分、EpisodicMemory 改进
+- **CursorDeliveryPipeline 扩展**：Cursor 交付管线增加上下文丰富与多步骤编排（+168 行）
+- **CodeEntityGraph 调用图集成**：知识图谱新增调用关系边、跨文件依赖追踪（+329 行）
+
+### 改进
+
+- **SpmService → SpmHelper 重构**：1495→811 行（-46%），删除 13 个废弃方法和 6 个无用字段，删除旧 SpmService.js
+- **SPM 依赖图 umbrella 包过滤**：SpmDiscoverer 跳过无 targets/products 的伞形包（如 BiliDemo 根包），避免多余节点
+- **ModuleService 去重 GenericDiscoverer**：当存在专用 Discoverer 时跳过 Generic 的输出，防止重复根节点
+- **resolveCurrentTarget 修复**：Xcode 主 App 目标文件不再错误回退到 SPM 首节点，避免误报跨包依赖
+- **Dashboard BootstrapProgressView 重构**：进度视图布局优化，新增阶段详情展示
+- **Dashboard CandidatesView i18n**：候选视图新增中英文国际化支持
+- **ExplorationTracker 增强**：探索追踪器新增深度控制与回溯策略
+- **HandoffProtocol 改进**：Agent 交接协议增加上下文传递字段
+- **PackageSwiftParser 健壮性**：SPM Package.swift 解析器边界情况修复
+
+### 修复
+
+- **冷启动语言检测**：修复多语言项目 bootstrap 阶段语言识别不准确的问题
+- **Xcode `// as:s` 误报依赖缺失**：主 App 目标中使用 snippet 指令不再触发假阳性跨包依赖警告
+
+---
+
 ## [3.2.6] - 2026-03-02
 
 ### 修复

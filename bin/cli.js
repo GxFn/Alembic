@@ -108,6 +108,7 @@ program
         skipGuard: opts.skipGuard || false,
         contentMaxLines: 120,
         loadSkills: opts.skills !== false,
+        skipAsyncFill: !opts.wait,   // CLI 非 --wait 模式: 跳过异步 AI 填充 (DB 将被关闭)
       });
 
       spinner.stop();
@@ -234,6 +235,12 @@ program
       }
 
       await bootstrap.shutdown();
+      // 等待 stdout 刷新完成后再退出 (避免管道输出截断)
+      if (process.stdout.writableLength > 0) {
+        await new Promise((resolve) => process.stdout.once('drain', resolve));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50)); // 确保管道缓冲区完全刷新
+      process.exit(0);
     } catch (err) {
       cli.error(`\n❌ ${err.message}`);
       cli.debug(err.stack);

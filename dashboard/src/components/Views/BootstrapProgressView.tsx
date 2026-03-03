@@ -123,33 +123,30 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
                 return translated !== key ? translated : meta.label;
               })()}
             </h3>
-            <p className="text-xs text-[var(--fg-secondary)] mt-0.5">
-              {meta.skillWorthy ? 'Skill' : 'Candidate'}
-              {task.result && status === 'completed' && (
-                <span className="ml-2 text-emerald-600">
-                  {(() => {
-                    const r = task.result as Record<string, unknown>;
-                    const sourceCount = (r.sourceCount as number) ?? 0;
-                    const extracted = (r.extracted as number) ?? 0;
-                    if (r.type === 'empty') return t('bootstrap.noMatch');
-                    if (r.type === 'skill') {
-                      if (r.empty) return t('bootstrap.noMatch');
-                      // dualOutput 维度同时有 Skill + Candidate
-                      return extracted > 0
-                        ? t('bootstrap.featuresAndCandidates', { sourceCount, extracted })
-                        : t('bootstrap.featuresOnly', { sourceCount });
-                    }
-                    // candidate 类型
-                    return extracted > 0 ? t('bootstrap.candidatesOnly', { extracted }) : t('bootstrap.noMatch');
-                  })()}
-                </span>
-              )}
-              {task.error && status === 'failed' && (
-                <span className="ml-2 text-red-500 truncate max-w-[200px] inline-block align-bottom">
-                  {task.error}
-                </span>
-              )}
-            </p>
+            {status === 'completed' && task.result && (
+              <p className="text-xs text-emerald-600 mt-0.5">
+                {(() => {
+                  const r = task.result as Record<string, unknown>;
+                  const sourceCount = (r.sourceCount as number) ?? 0;
+                  const extracted = (r.extracted as number) ?? 0;
+                  if (r.type === 'empty') return t('bootstrap.noMatch');
+                  if (r.type === 'skill') {
+                    if (r.empty) return t('bootstrap.noMatch');
+                    return extracted > 0
+                      ? t('bootstrap.featuresAndCandidates', { sourceCount, extracted })
+                      : t('bootstrap.featuresOnly', { sourceCount });
+                  }
+                  if (extracted > 0) return t('bootstrap.candidatesOnly', { extracted });
+                  if (r.skillPending) return t('bootstrap.skillPending');
+                  return t('bootstrap.noMatch');
+                })()}
+              </p>
+            )}
+            {status === 'failed' && task.error && (
+              <p className="text-xs text-red-500 mt-0.5 truncate max-w-[240px]">
+                {task.error}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex-shrink-0">

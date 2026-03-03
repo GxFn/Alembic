@@ -409,6 +409,24 @@ describe('ActiveContext', () => {
       expect(findingTexts).toContain('Architecture uses MVC pattern');
     });
 
+    test('noteKeyFinding — evidence 为数组时自动转 string', () => {
+      const ctx = new ActiveContext();
+      // AI 可能传入 array 类型的 evidence
+      ctx.noteKeyFinding('Pattern found', ['file.m:45', 'file2.m:78'], 8);
+
+      const distilled = ctx.distill();
+      expect(typeof distilled.keyFindings[0].evidence).toBe('string');
+      expect(distilled.keyFindings[0].evidence).toBe('file.m:45, file2.m:78');
+    });
+
+    test('noteKeyFinding — evidence 为 object 时自动转 string', () => {
+      const ctx = new ActiveContext();
+      ctx.noteKeyFinding('Pattern found', { file: 'test.m', line: 10 }, 7);
+
+      const distilled = ctx.distill();
+      expect(typeof distilled.keyFindings[0].evidence).toBe('string');
+    });
+
     test('getHighPriorityFindings — 获取高优先级发现', () => {
       const ctx = new ActiveContext();
       // Default importance is 5, getHighPriorityFindings filters >= 7
@@ -555,6 +573,26 @@ describe('SessionStore', () => {
       const report = ss.getDimensionReport('dim-1');
       expect(report).toBeDefined();
       expect(report.analysisText).toBe('Found 3 patterns');
+    });
+
+    test('storeDimensionReport — evidence 非 string 不崩溃', () => {
+      const ss = new SessionStore();
+      // AI 可能返回 evidence 为 array 类型
+      ss.storeDimensionReport('dim-array-ev', {
+        analysisText: 'test',
+        findings: [
+          { finding: 'pattern', evidence: ['file.m:45', 'file2.m:78'], importance: 8 },
+          { finding: 'pattern2', evidence: { file: 'a.m' }, importance: 5 },
+          { finding: 'pattern3', evidence: 123, importance: 3 },
+        ],
+      });
+      const report = ss.getDimensionReport('dim-array-ev');
+      expect(report).toBeDefined();
+      expect(report.findings).toHaveLength(3);
+      // 所有 evidence 应被转为 string
+      for (const f of report.findings) {
+        expect(typeof f.evidence).toBe('string');
+      }
     });
 
     test('getCompletedDimensions', () => {

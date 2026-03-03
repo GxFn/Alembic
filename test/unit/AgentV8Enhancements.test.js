@@ -244,7 +244,7 @@ describe('review_my_output tool', () => {
  * ──────────────────────────────────────────── */
 describe('tools registry completeness', () => {
   it('should have 58 tools', () => {
-    expect(ALL_TOOLS.length).toBe(58);
+    expect(ALL_TOOLS.length).toBe(59);
   });
 
   it('should include all three new meta tools', () => {

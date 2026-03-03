@@ -520,6 +520,19 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
           </div>
         )}
 
+        {/* Bootstrap 进行中且无候选内容时，显示等待提示 */}
+        {(!data?.candidates || Object.keys(data.candidates).length === 0) && isBootstrapping && (
+          <div className="h-72 flex flex-col items-center justify-center bg-[var(--bg-surface)] rounded-2xl border border-dashed border-violet-500/30 text-[var(--fg-muted)]">
+            <div className="w-16 h-16 rounded-2xl bg-violet-500/10 flex items-center justify-center mb-4">
+              <Loader2 size={32} className="text-violet-400 animate-spin" />
+            </div>
+            <p className="text-sm font-medium text-violet-400">{t('common.loading')}</p>
+            <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-[var(--fg-muted)]">
+              {t('candidates.scanningHint')}
+            </p>
+          </div>
+        )}
+
         {data && effectiveTarget && sortedEntries
           .filter(([name]) => name === effectiveTarget)
           .map(([targetName, group]) => {

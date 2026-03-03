@@ -341,7 +341,7 @@ describe('P1: semantic_search_code', () => {
  * ════════════════════════════════════════════════════════════ */
 describe('P2: ALL_TOOLS integrity', () => {
   test('contains 57 tools (54 original + 3 agent-memory)', () => {
-    expect(ALL_TOOLS.length).toBe(58);
+    expect(ALL_TOOLS.length).toBe(59);
   });
 
   test('all new tools have name, description, parameters, handler', () => {
@@ -359,5 +359,73 @@ describe('P2: ALL_TOOLS integrity', () => {
     const names = ALL_TOOLS.map((t) => t.name);
     const unique = new Set(names);
     expect(unique.size).toBe(names.length);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════
+ *  P3: query_call_graph tool structure & edge cases
+ * ════════════════════════════════════════════════════════════ */
+describe('P3: query_call_graph tool', () => {
+  test('exists in ALL_TOOLS with correct schema', () => {
+    const tool = findTool('query_call_graph');
+    expect(tool).toBeDefined();
+    expect(typeof tool.handler).toBe('function');
+    expect(tool.parameters.properties.methodName).toBeDefined();
+    expect(tool.parameters.properties.direction).toBeDefined();
+    expect(tool.parameters.properties.direction.enum).toEqual(
+      expect.arrayContaining(['callers', 'callees', 'both', 'impact', 'search'])
+    );
+    expect(tool.parameters.required).toEqual(['methodName']);
+  });
+
+  test('handler returns error when DB unavailable', async () => {
+    const tool = findTool('query_call_graph');
+    // no container → graceful error
+    const result = await tool.handler({ methodName: 'Foo.bar' }, {});
+    expect(typeof result).toBe('string');
+    expect(result).toMatch(/不可用|未初始化|失败/);
+  });
+
+  test('handler returns error when methodName missing', async () => {
+    const tool = findTool('query_call_graph');
+    const result = await tool.handler({}, {});
+    expect(result).toMatch(/methodName/);
+  });
+
+  test('supports snake_case parameter aliases', async () => {
+    const tool = findTool('query_call_graph');
+    // method_name alias — should still return error about DB, not about missing param
+    const result = await tool.handler({ method_name: 'Foo.bar' }, {});
+    expect(result).not.toMatch(/methodName 参数/);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════
+ *  P4: Cross-language tool descriptions
+ * ════════════════════════════════════════════════════════════ */
+describe('P4: Cross-language tool descriptions', () => {
+  test('get_project_overview mentions multi-language support', () => {
+    const tool = findTool('get_project_overview');
+    expect(tool.description).toMatch(/Swift|Java|Python|TS/);
+  });
+
+  test('get_class_info is cross-language', () => {
+    const tool = findTool('get_class_info');
+    expect(tool.description).toMatch(/跨语言/);
+  });
+
+  test('get_protocol_info is cross-language', () => {
+    const tool = findTool('get_protocol_info');
+    expect(tool.description).toMatch(/接口|trait/);
+  });
+
+  test('get_method_overrides is cross-language', () => {
+    const tool = findTool('get_method_overrides');
+    expect(tool.description).toMatch(/跨语言/);
+  });
+
+  test('query_code_graph includes method entity type', () => {
+    const tool = findTool('query_code_graph');
+    expect(tool.parameters.properties.entity_type.enum).toContain('method');
   });
 });
