@@ -11,6 +11,7 @@
     "postinstall": "node scripts/postinstall-safe.js",
     "prepublishOnly": "npm run build:dashboard && node scripts/build-native-ui.js",
     "build:native-ui": "swiftc resources/native-ui/main.swift resources/native-ui/combined-window.swift -o resources/native-ui/native-ui -framework AppKit",
+    "build:screenshot": "swiftc -O -framework ScreenCaptureKit -framework AppKit resources/native-ui/screenshot.swift -o resources/native-ui/screenshot",
     "install:cursor-skill": "node scripts/install-cursor-skill.js",
     "install:cursor-skill:mcp": "node scripts/install-cursor-skill.js --mcp",
     "install:vscode-copilot": "node scripts/install-vscode-copilot.js",
@@ -116,6 +117,8 @@
     "resources/native-ui/main.swift",
     "resources/native-ui/combined-window.swift",
     "resources/native-ui/native-ui",
+    "resources/native-ui/screenshot.swift",
+    "resources/native-ui/screenshot",
     "resources/native-ui/README.md",
     "resources/openChrome.applescript",
     "resources/grammars"

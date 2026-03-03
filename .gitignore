@@ -12,9 +12,11 @@ SPMTest/
 # native-ui 源码不忽略（resources 下）
 !resources/native-ui/main.swift
 !resources/native-ui/combined-window.swift
+!resources/native-ui/screenshot.swift
 # Swift 构建产物
 tools/parse-package/.build/
 resources/native-ui/native-ui
+resources/native-ui/screenshot
 
 # macOS 系统文件
 .DS_Store
