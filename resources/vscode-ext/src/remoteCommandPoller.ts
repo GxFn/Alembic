@@ -1,7 +1,12 @@
 /**
  * Remote Command Poller — 飞书 → IDE 桥接的 VSCode 侧
  *
- * 健壮性改进:
+ * 架构 (v2 自然语言路由):
+ *   飞书消息 → IntentClassifier → bot_agent (服务端直接处理)
+ *                                → ide_agent (写入队列 → 本扩展 poll → Copilot)
+ *                                → system (服务端直接处理)
+ *
+ * 本扩展只处理 ide_agent 路由的编程任务:
  *   ✓ 自动探测服务端 → 自动启动
  *   ✓ 会话连续性 — 首条 newChat，后续 followUp 追加
  *   ✓ 可靠注入 — open+query 一步到位，失败重试 2 次

@@ -333,7 +333,7 @@ Install code snippets to IDE (Xcode / VS Code).
 
 #### `POST /ai/chat`
 
-AI conversation (ChatAgent).
+AI conversation (AgentRuntime).
 
 **Request Body:**
 ```json

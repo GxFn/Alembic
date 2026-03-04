@@ -97,13 +97,13 @@ program
     try {
       const { bootstrap, container } = await initContainer({ projectRoot });
 
-      // 使用与前端 POST /spm/bootstrap 完全相同的入口: chatAgent.executeTool('bootstrap_knowledge')
-      const chatAgent = container.get('chatAgent');
+      // 通过 Agent 统一管道执行 bootstrap_knowledge
+      const agentFactory = container.get('agentFactory');
 
       const ora = (await import('ora')).default;
       const spinner = ora('Phase 1-4: 收集文件、AST 分析、SPM 依赖、Guard 审计...').start();
 
-      const result = await chatAgent.executeTool('bootstrap_knowledge', {
+      const result = await agentFactory.bootstrapKnowledge({
         maxFiles: parseInt(opts.maxFiles, 10),
         skipGuard: opts.skipGuard || false,
         contentMaxLines: 120,
@@ -665,12 +665,13 @@ program
           '../lib/infrastructure/realtime/RealtimeService.js'
         );
         const db = container.get('database');
-        const chatAgent = container.get('chatAgent');
+        const agentFactory = container.get('agentFactory');
 
         const signalCollector = new SignalCollector({
           projectRoot,
           database: db,
-          chatAgent,
+          agentFactory,
+          container,
           mode: process.env.ASD_SIGNAL_MODE || 'auto',
           intervalMs: parseInt(process.env.ASD_SIGNAL_INTERVAL || '3600000', 10),
           onSuggestions: (suggestions) => {

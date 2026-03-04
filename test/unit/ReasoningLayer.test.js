@@ -9,8 +9,8 @@ jest.unstable_mockModule('../../lib/infrastructure/logging/Logger.js', () => ({
   default: { getInstance: () => mockLogger },
 }));
 
-const { ActiveContext: ReasoningTrace } = await import('../../lib/service/chat/memory/ActiveContext.js');
-const { ExplorationTracker } = await import('../../lib/service/chat/ExplorationTracker.js');
+const { ActiveContext: ReasoningTrace } = await import('../../lib/service/agent/memory/ActiveContext.js');
+const { ExplorationTracker } = await import('../../lib/service/agent/context/ExplorationTracker.js');
 
 // ─── ReasoningTrace ─────────────────────────────────────
 describe('ReasoningTrace', () => {

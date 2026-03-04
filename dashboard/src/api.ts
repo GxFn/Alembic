@@ -1339,11 +1339,6 @@ export const api = {
     await http.post('/violations/clear');
   },
 
-  async generateGuardRule(ruleData: any): Promise<any> {
-    const res = await http.post('/violations/rules/generate', ruleData);
-    return res.data?.data || {};
-  },
-
   async saveGuardRule(ruleData: any): Promise<any> {
     const res = await http.post('/rules', ruleData);
     return res.data?.data || {};

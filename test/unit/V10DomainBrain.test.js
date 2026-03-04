@@ -9,7 +9,7 @@ import { jest } from '@jest/globals';
 let ALL_TOOLS;
 
 beforeAll(async () => {
-  const toolsMod = await import('../../lib/service/chat/tools.js');
+  const toolsMod = await import('../../lib/service/agent/tools/index.js');
   ALL_TOOLS = toolsMod.ALL_TOOLS || toolsMod.default;
 });
 
@@ -340,8 +340,8 @@ describe('P1: semantic_search_code', () => {
  *  P2: Tool count & ALL_TOOLS integrity
  * ════════════════════════════════════════════════════════════ */
 describe('P2: ALL_TOOLS integrity', () => {
-  test('contains 57 tools (54 original + 3 agent-memory)', () => {
-    expect(ALL_TOOLS.length).toBe(59);
+  test('contains 58 tools', () => {
+    expect(ALL_TOOLS.length).toBe(58);
   });
 
   test('all new tools have name, description, parameters, handler', () => {

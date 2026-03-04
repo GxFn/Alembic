@@ -53,10 +53,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
   const [projectLanguages, setProjectLanguages] = useState<string[]>([]);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showAiWriteRule, setShowAiWriteRule] = useState(false);
   const [showAddRule, setShowAddRule] = useState(false);
-  const [semanticInput, setSemanticInput] = useState('');
-  const [generating, setGenerating] = useState(false);
   const [addRuleForm, setAddRuleForm] = useState({
   ruleId: '',
   message: '',
@@ -110,36 +107,6 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
   }));
   };
 
-  const handleGenerateRule = async () => {
-  if (!semanticInput.trim()) {
-    setAddRuleError(t('guard.aiGenPlaceholder'));
-    return;
-  }
-  setAddRuleError('');
-  setGenerating(true);
-  try {
-    const res = await api.generateGuardRule({
-    description: semanticInput.trim()
-    });
-    const data = res;
-    const dim = (data as { dimension?: string }).dimension;
-    setAddRuleForm({
-    ruleId: data.ruleId || '',
-    message: data.message || '',
-    severity: data.severity === 'error' ? 'error' : 'warning',
-    pattern: data.pattern || '',
-    languages: Array.isArray(data.languages) && data.languages.length > 0 ? data.languages : [],
-    note: data.note != null ? String(data.note) : '',
-    dimension: dim === 'file' || dim === 'target' || dim === 'project' ? dim : ''
-    });
-    setShowAddRule(true);
-  } catch (err: any) {
-    setAddRuleError(err?.response?.data?.error || err?.message || t('guard.aiGenFailed'));
-  } finally {
-    setGenerating(false);
-  }
-  };
-
   const handleAddRule = async (e: React.FormEvent) => {
   e.preventDefault();
   setAddRuleError('');
@@ -159,7 +126,6 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     ...(addRuleForm.dimension ? { dimension: addRuleForm.dimension } : {})
     });
     setAddRuleForm({ ruleId: '', message: '', severity: 'warning', pattern: '', languages: [], note: '', dimension: '' });
-    setSemanticInput('');
     setShowAddRule(false);
     fetchGuard();
     onRefresh?.();
@@ -277,11 +243,11 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
       </a>
       <button
       type="button"
-      onClick={() => setShowAiWriteRule(!showAiWriteRule)}
+      onClick={() => setShowAddRule(!showAddRule)}
       className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100"
       >
-      {showAiWriteRule ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-      {t('guard.aiGenRule')}
+      {showAddRule ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+      {t('guard.addRule')}
       </button>
       {runs.length > 0 && (
       <button
@@ -310,44 +276,10 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     {/* ── 内容区域 ── */}
     <div className="flex-1 overflow-y-auto pr-1 pb-6">
 
-    {/* AI 写入规则：默认折叠，点击标题行展开 */}
-    {showAiWriteRule && (
-    <section className="mb-6">
-    <div className="p-4 bg-[var(--bg-subtle)] border border-[var(--border-default)] rounded-xl space-y-3">
-      <div>
-      <label htmlFor="semantic-input" className="block text-xs font-medium text-[var(--fg-secondary)] mb-1">{t('guard.aiGenRuleDesc')}</label>
-      <textarea
-      id="semantic-input"
-      name="semanticInput"
-        value={semanticInput}
-        onChange={e => { setSemanticInput(e.target.value); setAddRuleError(''); }}
-        className="w-full px-3 py-2 border border-[var(--border-default)] rounded-lg text-sm resize-y min-h-[80px]"
-        placeholder={t('guard.aiGenPlaceholder')}
-        rows={3}
-      />
-      <button
-        type="button"
-        onClick={handleGenerateRule}
-        disabled={generating || !semanticInput.trim()}
-        className="mt-2 px-4 py-2 bg-slate-600 text-white text-sm rounded-lg hover:bg-slate-700 disabled:opacity-50"
-      >
-        {generating ? t('guard.aiGenerating') : t('guard.aiGenRule')}
-      </button>
-      {addRuleError && <p className="mt-2 text-sm text-red-600">{addRuleError}</p>}
-      </div>
-      <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => setShowAddRule(!showAddRule)}
-        className="text-sm font-medium text-blue-600 hover:text-blue-700"
-      >
-        {showAddRule ? t('common.collapse') : t('common.expand')}
-      </button>
-      {addRuleForm.ruleId && <span className="text-xs text-[var(--fg-secondary)]">{t('guard.generatedRuleId')}：{addRuleForm.ruleId}</span>}
-      </div>
-    </div>
+    {/* 手动添加规则表单 */}
     {showAddRule && (
-      <form onSubmit={handleAddRule} className="mt-3 p-4 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-xl space-y-3">
+    <section className="mb-6">
+      <form onSubmit={handleAddRule} className="p-4 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-xl space-y-3">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
         <label htmlFor="rule-id" className="block text-xs font-medium text-[var(--fg-secondary)] mb-1">{t('guard.ruleId')}</label>
@@ -453,7 +385,6 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
         </button>
       </div>
       </form>
-    )}
     </section>
     )}
 

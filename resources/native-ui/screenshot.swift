@@ -117,13 +117,16 @@ func run() async {
         exit(0)
     }
 
-    // 确定截取目标
+    // 确定截取目标 — 统一使用 desktopIndependentWindow（亮屏/息屏均可用）
     var filter: SCContentFilter
 
+    // 筛选有效窗口（面积 > 100x100，排除菜单栏等微型窗口）
+    let validWindows = content.windows.filter { $0.frame.width > 100 && $0.frame.height > 100 }
+
     if let title = args.windowTitle {
-        // 模糊匹配窗口标题或 app 名，选面积最大的（避免匹配到菜单栏等小窗口）
+        // 模糊匹配窗口标题或 app 名，选面积最大的
         let pattern = title.lowercased()
-        let candidates = content.windows.filter { w in
+        let candidates = validWindows.filter { w in
             let wTitle = (w.title ?? "").lowercased()
             let appName = (w.owningApplication?.applicationName ?? "").lowercased()
             return wTitle.contains(pattern) || appName.contains(pattern)
@@ -131,8 +134,8 @@ func run() async {
         let matched = candidates.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height })
 
         guard let window = matched else {
-            let windowList: String = content.windows.prefix(20).compactMap {
-                "\($0.owningApplication?.applicationName ?? "?") - \($0.title ?? "(no title)")"
+            let windowList: String = validWindows.prefix(20).compactMap {
+                "\($0.owningApplication?.applicationName ?? "?") - \($0.title ?? "(no title)") [\(Int($0.frame.width))x\(Int($0.frame.height))]"
             }.joined(separator: "\n  ")
             fputs("{\"error\":\"No window matching '\(title)'. Available:\\n  \(windowList)\"}\n", stderr)
             exit(1)
@@ -140,12 +143,12 @@ func run() async {
 
         filter = SCContentFilter(desktopIndependentWindow: window)
     } else {
-        // 截取主屏幕
-        guard let display = content.displays.first else {
-            fputs("{\"error\":\"No display found\"}\n", stderr)
+        // 未指定窗口 — 自动选最大窗口
+        guard let largest = validWindows.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else {
+            fputs("{\"error\":\"No capturable window available\"}\n", stderr)
             exit(1)
         }
-        filter = SCContentFilter(display: display, excludingWindows: [])
+        filter = SCContentFilter(desktopIndependentWindow: largest)
     }
 
     // 配置截图参数

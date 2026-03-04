@@ -333,7 +333,7 @@ asd ui -p 3000              # API + Dashboard
 
 #### `POST /ai/chat`
 
-AI 对话（ChatAgent）。
+AI 对话（AgentRuntime）。
 
 **请求体：**
 ```json

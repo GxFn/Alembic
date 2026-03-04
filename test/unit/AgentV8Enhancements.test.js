@@ -6,7 +6,7 @@ import { jest } from '@jest/globals';
 let ALL_TOOLS;
 
 beforeAll(async () => {
-  const toolsMod = await import('../../lib/service/chat/tools.js');
+  const toolsMod = await import('../../lib/service/agent/tools/index.js');
   ALL_TOOLS = toolsMod.ALL_TOOLS || toolsMod.default;
 });
 
@@ -244,7 +244,7 @@ describe('review_my_output tool', () => {
  * ──────────────────────────────────────────── */
 describe('tools registry completeness', () => {
   it('should have 58 tools', () => {
-    expect(ALL_TOOLS.length).toBe(59);
+    expect(ALL_TOOLS.length).toBe(58);
   });
 
   it('should include all three new meta tools', () => {

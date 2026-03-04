@@ -30,7 +30,7 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
        │         │          │
 ┌──────▼─────────▼──────────▼─────────────────────────────┐
 │                   Service Layer                          │
-│  ChatAgent · Knowledge · Guard · Search · Bootstrap     │
+│  AgentRuntime · Knowledge · Guard · Search · Bootstrap     │
 │  Cursor · Quality · Recipe · Skills · Wiki · Automation │
 │  Snippet · Module                                        │
 └──────────────────────┬──────────────────────────────────┘
@@ -96,7 +96,7 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 
 | 子域 | 核心类 | 职责 |
 |------|--------|------|
-| **chat** | `ChatAgent` (2291 行) | ReAct 推理循环 + DAG 任务管线，54 个内置工具 |
+| **chat** | `AgentRuntime` | ReAct 推理循环 + DAG 任务管线，54 个内置工具 |
 | **knowledge** | `KnowledgeService` | 知识条目 CRUD、图谱、实体图、置信度路由 |
 | **guard** | `GuardService` / `GuardCheckEngine` | 50+ 内置规则引擎（正则 + AST 语义） |
 | **search** | `SearchEngine` / `RetrievalFunnel` | 4 层检索漏斗（keyword → semantic → fusion → rerank） |

@@ -10,7 +10,11 @@ export default defineConfig({
         timeout: 300000,      // 5 分钟（AI 扫描需要较长时间）
         configure: (proxy) => {
           proxy.on('error', (err) => {
+            if (err.message?.includes('EPIPE') || err.message?.includes('ECONNRESET')) return;
             console.log('[vite-proxy] error:', err.message);
+          });
+          proxy.on('proxyReqWs', (_proxyReq, _req, socket) => {
+            socket.on('error', () => {}); // 静默 WS EPIPE
           });
         },
       },
@@ -20,9 +24,16 @@ export default defineConfig({
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('error', () => {});  // 静默 EPIPE / 连接重置错误
+          proxy.on('proxyReqWs', (_proxyReq, _req, socket) => {
+            socket.on('error', () => {});
+          });
         },
       },
-    }
+    },
+    // 静默 Vite HMR WebSocket 代理的 EPIPE 错误
+    hmr: {
+      server: undefined, // 使用默认 HMR server
+    },
   },
   build: {
     chunkSizeWarningLimit: 1500,

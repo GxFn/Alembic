@@ -23,9 +23,9 @@ jest.unstable_mockModule('../../lib/infrastructure/logging/Logger.js', () => ({
 }));
 
 // ── Dynamic imports (ESM-safe) ──────────────────────────
-const { MemoryCoordinator } = await import('../../lib/service/chat/memory/MemoryCoordinator.js');
-const { ActiveContext } = await import('../../lib/service/chat/memory/ActiveContext.js');
-const { SessionStore } = await import('../../lib/service/chat/memory/SessionStore.js');
+const { MemoryCoordinator } = await import('../../lib/service/agent/memory/MemoryCoordinator.js');
+const { ActiveContext } = await import('../../lib/service/agent/memory/ActiveContext.js');
+const { SessionStore } = await import('../../lib/service/agent/memory/SessionStore.js');
 
 // ══════════════════════════════════════════════════════════
 //  1. MemoryCoordinator
@@ -831,7 +831,7 @@ describe('PersistentMemory', () => {
       // 尝试加载 better-sqlite3 (如果可用)
       const dbMod = await import('better-sqlite3');
       Database = dbMod.default;
-      const pmMod = await import('../../lib/service/chat/memory/PersistentMemory.js');
+      const pmMod = await import('../../lib/service/agent/memory/PersistentMemory.js');
       PersistentMemory = pmMod.PersistentMemory;
     } catch {
       // better-sqlite3 不可用 → 跳过 PersistentMemory 测试
@@ -840,7 +840,7 @@ describe('PersistentMemory', () => {
   });
 
   test('PersistentMemory 模块可导入', async () => {
-    const mod = await import('../../lib/service/chat/memory/PersistentMemory.js');
+    const mod = await import('../../lib/service/agent/memory/PersistentMemory.js');
     expect(mod.PersistentMemory).toBeDefined();
     // 向后兼容别名
     expect(mod.ProjectSemanticMemory).toBeDefined();
@@ -854,7 +854,7 @@ describe('PersistentMemory', () => {
     return new PersistentMemory(db, { logger: mockLogger });
   };
 
-  describe('继承 ProjectSemanticMemory API', () => {
+  describe('PersistentMemory 核心 API', () => {
     test('add + get — 基本 CRUD', () => {
       const pm = createInMemoryPM();
       if (!pm) return; // skip if no sqlite
@@ -1078,7 +1078,7 @@ describe('PersistentMemory', () => {
 
 describe('Memory module exports', () => {
   test('memory/index.js 导出所有模块', async () => {
-    const mod = await import('../../lib/service/chat/memory/index.js');
+    const mod = await import('../../lib/service/agent/memory/index.js');
     expect(mod.MemoryCoordinator).toBeDefined();
     expect(mod.ActiveContext).toBeDefined();
     expect(mod.SessionStore).toBeDefined();

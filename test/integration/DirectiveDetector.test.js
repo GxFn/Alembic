@@ -187,14 +187,6 @@ class VC: UIViewController {
       expect(REGEX.SEARCH_MARK.test('// autosnippet:search keyword')).toBe(true);
     });
 
-    it('DRAFT_FILE 匹配草稿文件', () => {
-      expect(REGEX.DRAFT_FILE.test('_draft_networking.md')).toBe(true);
-      expect(REGEX.DRAFT_FILE.test('_draft_UI.md')).toBe(true);
-      expect(REGEX.DRAFT_FILE.test('_DRAFT_test.md')).toBe(true);
-      expect(REGEX.DRAFT_FILE.test('draft.md')).toBe(false);
-      expect(REGEX.DRAFT_FILE.test('_draft_test.txt')).toBe(false);
-    });
-
     it('HEADER_OBJC 匹配 ObjC 头文件指令', () => {
       expect(REGEX.HEADER_OBJC.test('// as:include <MyModule/Header.h>')).toBe(true);
       expect(REGEX.HEADER_OBJC.test('// autosnippet:include <MyModule/Header.h>')).toBe(true);
