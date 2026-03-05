@@ -4,6 +4,25 @@
 
 ---
 
+## [3.2.9] - 2026-03-05
+
+### 修复
+
+- **跨维度去重修复**：orchestrator 共享 globalSubmittedTitles/Patterns，防止不同维度产出重复候选
+- **双重 recordToolCall 修复**：移除 orchestrator onToolCall 中的冗余 ac.recordToolCall，由 traceRecord 中间件统一处理
+- **Token 用量持久化**：orchestrator 新增 tokenUsageStore.record() + broadcastTokenUsageUpdated，补齐维度级 token 记录
+- **submit_with_check 验证链修复**：validator 返回值补充 status:'rejected'、content schema 声明 rationale 必填、retry prompt 增加 rationale 指引
+- **拒绝门控检测增强**：producerRejectionGateEvaluator 和 retryPromptBuilder 新增 reason==='validation_failed' 检测
+
+### 改进
+
+- **Nudge 日志维度标记**：AgentRuntime 4 处 Nudge console.log 新增 dim=xxx 标签，区分维度来源
+- **阶段级超时控制**：AgentRuntime #shouldExit 新增 per-stage budget.timeoutMs 检查；PipelineStrategy 新增硬超时保护 (budget + 30s)
+- **ToolExecutionPipeline 上下文透传**：向工具执行注入 source/logger/aiProvider 及维度上下文
+- **Preset 超时配置**：Analyst (300s)、Producer (180s)、Retry (120s) 阶段独立超时
+
+---
+
 ## [3.2.8] - 2026-03-03
 
 ### 新增
