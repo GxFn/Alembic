@@ -4,6 +4,21 @@
 
 ---
 
+## [3.2.10] - 2026-03-05
+
+### 修复
+
+- **PipelineStrategy retry ContextWindow 保留**：retry 同一阶段时不再清空 ContextWindow，避免 LLM 丢失全部分析上下文导致连续空响应 (`strategies.js`)
+- **SUMMARIZE 空响应 grace 重试**：SUMMARIZE 阶段空响应不再直接跳过，与 ExplorationTracker 的 2 轮 grace 机制对齐，给 LLM 额外重试机会 (`AgentRuntime.js`)
+- **submitToolName 透传增强**：从 stage 配置 + strategyContext 双重来源解析 submitToolName，确保首阶段和 retry 时 tracker 一致，扫描管线 `collect_scan_recipe` 正确跳过 ForcedSummary (`strategies.js`)
+
+### 改进
+
+- **PipelineStrategy 阶段级日志**：新增阶段启动/完成的结构化日志，输出 budget、timeout、tracker、tool calls 等关键指标，便于诊断管线执行流程 (`strategies.js`)
+- **ExplorationTracker metrics 增强**：`getMetrics()` 新增 `phaseRounds` 字段，新增 `get metrics()` 便捷 getter (`ExplorationTracker.js`)
+
+---
+
 ## [3.2.9] - 2026-03-05
 
 ### 修复

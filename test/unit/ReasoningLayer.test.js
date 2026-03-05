@@ -308,6 +308,8 @@ describe('ReasoningTrace — 迁入方法', () => {
         '2. 新步骤验证缓存策略和数据持久化逻辑',
       ].join('\n');
 
+      // 已有 plan 时必须先 expectPlan() 授权才能覆盖
+      trace.expectPlan();
       expect(trace.extractAndSetPlan(newText, 5)).toBe(true);
 
       const plan = trace.getPlan();
@@ -316,6 +318,23 @@ describe('ReasoningTrace — 迁入方法', () => {
 
       const history = trace.getPlanHistory();
       expect(history).toHaveLength(1);
+    });
+
+    test('已有 plan 时未 expectPlan 不覆盖 (防 reflection 误捕获)', () => {
+      trace.setPlan('1. 旧步骤获取项目概览和目录结构信息\n2. 旧步骤搜索代码库中的关键实现', 1);
+
+      const reflectionLikeText = [
+        '根据分析：',
+        '1. 到目前为止最重要的发现是网络层采用了统一的拦截器模式',
+        '2. 还有缓存策略方面未覆盖',
+        '3. 下一步应该分析错误处理和重试逻辑',
+      ].join('\n');
+
+      // 没有 expectPlan() 调用 → 拒绝覆盖
+      expect(trace.extractAndSetPlan(reflectionLikeText, 5)).toBe(false);
+      // 旧 plan 保留不变
+      const plan = trace.getPlan();
+      expect(plan.steps[0].description).toContain('旧步骤');
     });
 
     test('无计划文本返回 false', () => {
