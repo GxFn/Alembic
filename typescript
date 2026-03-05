@@ -1,0 +1,38 @@
+Script started on Thu Mar  5 09:32:29 2026
+[1m[7m%[27m[1m[0m                                                                                ]2;gaoxuefeng@gaoxuefengdeMacBook-Pro:~/Documents/github/AutoSnippet]1;..b/AutoSnippet]7;file://gaoxuefengdeMacBook-Pro.local/Users/gaoxuefeng/Documents/github/AutoSnippet\[0m[27m[24m[J[01;32m➜  [36mAutoSnippet[00m [K[?1h=[?2004h[0m[27m[24m[J[01;32m➜  [36mAutoSnippet[00m [01;34mgit:([31mmain[34m) [33m✗[00m [K[?2004l
+[1m[7m%[27m[1m[0m                                                                                ]2;gaoxuefeng@gaoxuefengdeMacBook-Pro:~/Documents/github/AutoSnippet]1;..b/AutoSnippet]7;file://gaoxuefengdeMacBook-Pro.local/Users/gaoxuefeng/Documents/github/AutoSnippet\[0m[27m[24m[J[01;31m➜  [36mAutoSnippet[00m [01;34mgit:([31mmain[34m) [33m✗[00m [K[?1h=[?2004h  echo "done"[12D [32me[32mc[32mh[32mo[39m [33m"[33md[33mo[33mn[33me[33m"[39m[?1l>[?2004l
+]2;echo "done"]1;echodone
+[1m[7m%[27m[1m[0m                                                                                ]2;gaoxuefeng@gaoxuefengdeMacBook-Pro:~/Documents/github/AutoSnippet]1;..b/AutoSnippet]7;file://gaoxuefengdeMacBook-Pro.local/Users/gaoxuefeng/Documents/github/AutoSnippet\[0m[27m[24m[J[01;32m➜  [36mAutoSnippet[00m [01;34mgit:([31mmain[34m) [33m✗[00m [K[?1h=[?2004h[?2004l
+[1m[7m%[27m[1m[0m                                                                                ]2;gaoxuefeng@gaoxuefengdeMacBook-Pro:~/Documents/github/AutoSnippet]1;..b/AutoSnippet]7;file://gaoxuefengdeMacBook-Pro.local/Users/gaoxuefeng/Documents/github/AutoSnippet\[0m[27m[24m[J[01;31m➜  [36mAutoSnippet[00m [01;34mgit:([31mmain[34m) [33m✗[00m [K[?1h=[?2004h  node scratch/verify-pipeline.mjs[33D [32mn[32mo[32md[32me[39m [4ms[4mc[4mr[4ma[4mt[4mc[4mh[4m/[4mv[4me[4mr[4mi[4mf[4my[4m-[4mp[4mi[4mp[4me[4ml[4mi[4mn[4me[4m.[4mm[4mj[4ms[24m[?1l>[?2004l
+]2;node scratch/verify-pipeline.mjs]1;node=== SCAN_TASK_CONFIGS ===
+keys: extract, summarize
+relations removed: [33mtrue[39m
+
+=== extract pipeline ===
+stages: analyze -> quality_gate -> produce -> rejection_gate
+produce budget: [33m24[39m iter, 180s
+retryBudget: [33m5[39m iter, 120s
+has rejection_gate: [33mtrue[39m
+
+=== summarize pipeline ===
+stages: analyze -> quality_gate -> produce -> rejection_gate
+produce budget: [33m12[39m iter, 120s
+retryBudget: [33m3[39m iter, 60s
+has rejection_gate: [33mtrue[39m
+
+=== relations pipeline ===
+stages: explore -> synthesize
+explore caps: knowledge_production, code_analysis
+explore budget: [33m20[39m iter, 300s
+synthesize caps: (none)
+synthesize budget: [33m4[39m iter, 60s
+
+ALL OK
+[1m[7m%[27m[1m[0m                                                                                ]2;gaoxuefeng@gaoxuefengdeMacBook-Pro:~/Documents/github/AutoSnippet]1;..b/AutoSnippet]7;file://gaoxuefengdeMacBook-Pro.local/Users/gaoxuefeng/Documents/github/AutoSnippet\[0m[27m[24m[J[01;32m➜  [36mAutoSnippet[00m [01;34mgit:([31mmain[34m) [33m✗[00m [K[?1h=[?2004h[?2004l
+[1m[7m%[27m[1m[0m                                                                                ]2;gaoxuefeng@gaoxuefengdeMacBook-Pro:~/Documents/github/AutoSnippet]1;..b/AutoSnippet]7;file://gaoxuefengdeMacBook-Pro.local/Users/gaoxuefeng/Documents/github/AutoSnippet\[0m[27m[24m[J[01;31m➜  [36mAutoSnippet[00m [01;34mgit:([31mmain[34m) [33m✗[00m [K[?1h=[?2004h  git diff --stat[16D [32mg[32mi[32mt[39m[12C[?1l>[?2004l
+]2;git diff --stat]1;git lib/http/routes/recipes.js                 |   6 [32m+[m[31m-[m
+ lib/service/agent/AgentFactory.js          | 120 [32m++++++++++++[m[31m-------[m
+ lib/service/agent/domain/ChatAgentTasks.js |   8 [32m+[m[31m-[m
+ lib/service/agent/domain/scan-prompts.js   | 181 [32m++++++++++++++++++++++[m[31m-------[m
+ 4 files changed, 224 insertions(+), 91 deletions(-)
+[1m[7m%[27m[1m[0m                                                                                ]2;gaoxuefeng@gaoxuefengdeMacBook-Pro:~/Documents/github/AutoSnippet]1;..b/AutoSnippet]7;file://gaoxuefengdeMacBook-Pro.local/Users/gaoxuefeng/Documents/github/AutoSnippet\[0m[27m[24m[J[01;32m➜  [36mAutoSnippet[00m [01;34mgit:([31mmain[34m) [33m✗[00m [K[?1h=[?2004h
