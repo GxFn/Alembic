@@ -4,14 +4,23 @@
  * 统一承载代码片段 (pattern) 或 Markdown 全文 (markdown)，
  * 以及设计原理、实施步骤、代码变更、验证方式。
  */
+interface ContentProps {
+  pattern?: string;
+  markdown?: string;
+  rationale?: string;
+  steps?: Array<{ title?: string; description?: string; code?: string }>;
+  codeChanges?: Array<{ file: string; before: string; after: string; explanation: string }>;
+  verification?: { method?: string; expected_result?: string; test_code?: string } | null;
+}
+
 export class Content {
-  codeChanges: any;
-  markdown: any;
-  pattern: any;
-  rationale: any;
-  steps: any;
-  verification: any;
-  constructor(props: any = {}) {
+  codeChanges: Array<{ file: string; before: string; after: string; explanation: string }>;
+  markdown: string;
+  pattern: string;
+  rationale: string;
+  steps: Array<{ title?: string; description?: string; code?: string }>;
+  verification: { method?: string; expected_result?: string; test_code?: string } | null;
+  constructor(props: ContentProps = {}) {
     /** @type {string} 代码片段 */
     this.pattern = props.pattern ?? '';
     /** @type {string} Markdown 全文（与 pattern 二选一） */
@@ -31,7 +40,7 @@ export class Content {
    * @param {Content|Object|null} input
    * @returns {Content}
    */
-  static from(input: any) {
+  static from(input: unknown): Content {
     if (input instanceof Content) {
       return input;
     }
@@ -45,7 +54,7 @@ export class Content {
         return new Content();
       }
     }
-    return new Content(input);
+    return new Content(input as ContentProps);
   }
 
   /**
@@ -75,8 +84,8 @@ export class Content {
    * @param {Object} data
    * @returns {Content}
    */
-  static fromJSON(data: any) {
-    return new Content(data);
+  static fromJSON(data: unknown): Content {
+    return new Content(data as ContentProps);
   }
 }
 

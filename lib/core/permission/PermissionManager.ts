@@ -1,14 +1,26 @@
 import Logger from '../../infrastructure/logging/Logger.js';
 import { PermissionDenied } from '../../shared/errors/BaseError.js';
+import type { Constitution } from '../constitution/Constitution.js';
+
+export interface PermissionCheckResult {
+  allowed: boolean;
+  reason: string;
+}
+
+export interface PermissionCheck {
+  actor: string;
+  action: string;
+  resource: string;
+}
 
 /**
  * PermissionManager - 权限管理器
  * 基于 3-tuple 模型：(actor, action, resource)
  */
 export class PermissionManager {
-  constitution: any;
-  logger: any;
-  constructor(constitution: any) {
+  constitution: Constitution;
+  logger: ReturnType<typeof Logger.getInstance>;
+  constructor(constitution: Constitution) {
     this.constitution = constitution;
     this.logger = Logger.getInstance();
   }
@@ -16,7 +28,7 @@ export class PermissionManager {
   /**
    * 检查权限（3-tuple: actor, action, resource）
    */
-  check(actor: any, action: any, resource: any) {
+  check(actor: string, action: string, resource: string | undefined): PermissionCheckResult {
     // 获取角色定义
     const role = this.constitution.getRole(actor);
 
@@ -127,7 +139,7 @@ export class PermissionManager {
    * - read:recipes -> read:recipes（已规范化）
    * - perm_external_agent_read_recipes -> read:recipes（测试使用的格式）
    */
-  _normalizeAction(action: any) {
+  _normalizeAction(action: string): string {
     // 如果已经包含冒号，直接返回
     if (action.includes(':')) {
       return action;
@@ -141,7 +153,9 @@ export class PermissionManager {
       if (parts.length >= 4) {
         // 尝试找到 action 部分（常见的 action 包括 read, create, delete, submit, approve, reject）
         const commonActions = ['read', 'create', 'delete', 'submit', 'approve', 'reject', 'write'];
-        const actionIndex = parts.findIndex((p: any, i: any) => i > 1 && commonActions.includes(p));
+        const actionIndex = parts.findIndex(
+          (p: string, i: number) => i > 1 && commonActions.includes(p)
+        );
 
         if (actionIndex !== -1) {
           // 提取从 action 开始的部分，用冒号连接
@@ -160,9 +174,14 @@ export class PermissionManager {
   /**
    * 检查特殊权限
    */
-  checkSpecialPermissions(actor: any, action: any, resource: any, permissions: any) {
+  checkSpecialPermissions(
+    actor: string,
+    action: string,
+    resource: string | undefined,
+    permissions: string[]
+  ): boolean {
     // 例如：read:audit_logs:self - 只能读自己的审计日志
-    if (action === 'read' && resource.startsWith('/audit_logs')) {
+    if (action === 'read' && resource?.startsWith('/audit_logs')) {
       if (permissions.includes('read:audit_logs:self')) {
         // 可以进一步验证：resource 是否包含 actor 的 ID
         return true;
@@ -178,7 +197,7 @@ export class PermissionManager {
    *      /candidates/456 → candidates
    *      { type: 'recipes', id: '123' } → recipes
    */
-  getResourceType(resource: any) {
+  getResourceType(resource: string | Record<string, unknown> | undefined): string {
     if (typeof resource === 'string') {
       // 处理路径： /recipes/123 → recipes
       const match = resource.match(/^\/([^/]+)/);
@@ -194,7 +213,7 @@ export class PermissionManager {
 
     if (typeof resource === 'object' && resource.type) {
       // 处理对象：{ type: 'recipes', id: '123' }
-      return resource.type;
+      return String(resource.type);
     }
 
     return 'unknown';
@@ -203,7 +222,7 @@ export class PermissionManager {
   /**
    * 强制权限检查（失败时抛异常）
    */
-  enforce(actor: any, action: any, resource: any) {
+  enforce(actor: string, action: string, resource: string | undefined): boolean {
     const result = this.check(actor, action, resource);
 
     if (!result.allowed) {
@@ -225,8 +244,10 @@ export class PermissionManager {
   /**
    * 批量检查权限
    */
-  checkMultiple(checks: any) {
-    return checks.map(({ actor, action, resource }: any) => ({
+  checkMultiple(
+    checks: PermissionCheck[]
+  ): Array<PermissionCheck & { result: PermissionCheckResult }> {
+    return checks.map(({ actor, action, resource }: PermissionCheck) => ({
       actor,
       action,
       resource,
@@ -237,7 +258,7 @@ export class PermissionManager {
   /**
    * 获取角色的所有权限
    */
-  getRolePermissions(actor: any) {
+  getRolePermissions(actor: string): string[] {
     const role = this.constitution.getRole(actor);
     return role ? role.permissions : [];
   }
@@ -245,7 +266,7 @@ export class PermissionManager {
   /**
    * 获取角色的约束条件
    */
-  getRoleConstraints(actor: any) {
+  getRoleConstraints(actor: string): string[] {
     const role = this.constitution.getRole(actor);
     return role ? role.constraints : [];
   }

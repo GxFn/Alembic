@@ -12,7 +12,7 @@
  *       已迁移至 web-tree-sitter (WASM)，无原生编译依赖。
  */
 
-import { ImportRecord } from '../analysis/ImportRecord.js';
+import { ImportRecord, type ImportRecordMeta } from '../analysis/ImportRecord.js';
 
 function walkDart(root: any, ctx: any) {
   _walkNode(root, ctx, null);
@@ -41,7 +41,7 @@ function _walkNode(node: any, ctx: any, parentClassName: any) {
           // const hideClause = text.match(/\bhide\s+([\w\s,]+)/);
 
           let symbols = ['*'];
-          let kind = 'namespace';
+          let kind: ImportRecordMeta['kind'] = 'namespace';
           if (showClause) {
             symbols = showClause[1]
               .split(',')

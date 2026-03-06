@@ -23,22 +23,29 @@ export const RELATION_BUCKETS = [
   'references', // 引用
 ];
 
+export interface RelationEntry {
+  target: string;
+  description: string;
+}
+
+type RelationBuckets = Record<string, Array<string | Partial<RelationEntry>>>;
+
 export class Relations {
-  _b: any;
-  constructor(buckets: any = {}) {
+  _b: Record<string, RelationEntry[]>;
+  constructor(buckets: RelationBuckets = {}) {
     /** @type {Object.<string, Array<{target:string, description:string}>>} */
     this._b = {};
     for (const k of RELATION_BUCKETS) {
       const vals = buckets[k] || [];
       this._b[k] = vals
-        .map((r: any) => {
+        .map((r: string | Partial<RelationEntry>) => {
           // 兼容字符串数组：AI prompt 可能返回 ["recipeName"] 而非 [{target,description}]
           if (typeof r === 'string') {
             return r.trim() ? { target: r.trim(), description: '' } : null;
           }
           return { target: r.target || '', description: r.description || '' };
         })
-        .filter(Boolean);
+        .filter((entry): entry is RelationEntry => entry !== null);
     }
   }
 
@@ -47,7 +54,7 @@ export class Relations {
    * @param {Relations|Array|Object|null} input
    * @returns {Relations}
    */
-  static from(input: any) {
+  static from(input: unknown): Relations {
     if (input instanceof Relations) {
       return input;
     }
@@ -63,30 +70,31 @@ export class Relations {
     }
     if (Array.isArray(input)) {
       // 扁平数组 → 自动分桶
-      const buckets: Record<string, any> = {};
+      const buckets: Record<string, RelationEntry[]> = {};
       for (const rel of input) {
-        const bucket = rel.type || 'related';
+        const item = rel as Record<string, string>;
+        const bucket = item.type || 'related';
         if (!buckets[bucket]) {
           buckets[bucket] = [];
         }
         buckets[bucket].push({
-          target: rel.target || '',
-          description: rel.description || '',
+          target: item.target || '',
+          description: item.description || '',
         });
       }
       return new Relations(buckets);
     }
-    return new Relations(input);
+    return new Relations(input as RelationBuckets);
   }
 
   /**
    * 扁平视图（仅 Dashboard 渲染用）
    * @returns {Array<{type:string, target:string, description:string}>}
    */
-  toFlatArray() {
+  toFlatArray(): Array<{ type: string; target: string; description: string }> {
     const result: Array<{ type: string; target: string; description: string }> = [];
     for (const [type, list] of Object.entries(this._b)) {
-      for (const r of list as any) {
+      for (const r of list) {
         result.push({ type, ...r });
       }
     }
@@ -98,7 +106,7 @@ export class Relations {
    * @param {string} type
    * @returns {Array<{target:string, description:string}>}
    */
-  getByType(type: any) {
+  getByType(type: string): RelationEntry[] {
     return this._b[type] || [];
   }
 
@@ -106,8 +114,8 @@ export class Relations {
    * 是否为空
    * @returns {boolean}
    */
-  isEmpty() {
-    return Object.values(this._b).every((l: any) => l.length === 0);
+  isEmpty(): boolean {
+    return Object.values(this._b).every((l) => l.length === 0);
   }
 
   /**
@@ -117,11 +125,11 @@ export class Relations {
    * @param {string} description
    * @returns {Relations}
    */
-  add(type: any, target: any, description = '') {
+  add(type: string, target: string, description = ''): Relations {
     if (!this._b[type]) {
       this._b[type] = [];
     }
-    if (!this._b[type].some((r: any) => r.target === target)) {
+    if (!this._b[type].some((r) => r.target === target)) {
       this._b[type].push({ target, description });
     }
     return this;
@@ -133,9 +141,9 @@ export class Relations {
    * @param {string} target 目标
    * @returns {Relations}
    */
-  remove(type: any, target: any) {
+  remove(type: string, target: string): Relations {
     if (this._b[type]) {
-      this._b[type] = this._b[type].filter((r: any) => r.target !== target);
+      this._b[type] = this._b[type].filter((r) => r.target !== target);
     }
     return this;
   }
@@ -152,7 +160,7 @@ export class Relations {
    * @param {Object|Array} data
    * @returns {Relations}
    */
-  static fromJSON(data: any) {
+  static fromJSON(data: unknown): Relations {
     return Relations.from(data);
   }
 }

@@ -30,7 +30,7 @@ const VALID_TRANSITIONS = {
  * @param {string} lifecycle
  * @returns {string}
  */
-export function normalizeLifecycle(lifecycle: any) {
+export function normalizeLifecycle(lifecycle: string): string {
   if (Object.values(Lifecycle).includes(lifecycle)) {
     return lifecycle;
   }
@@ -43,7 +43,7 @@ export function normalizeLifecycle(lifecycle: any) {
  * @param {string} to
  * @returns {boolean}
  */
-export function isValidTransition(from: any, to: any) {
+export function isValidTransition(from: string, to: string): boolean {
   const normalFrom = normalizeLifecycle(from);
   const normalTo = normalizeLifecycle(to);
   const allowed = VALID_TRANSITIONS[normalFrom];
@@ -55,7 +55,7 @@ export function isValidTransition(from: any, to: any) {
  * @param {string} lifecycle
  * @returns {boolean}
  */
-export function isValidLifecycle(lifecycle: any) {
+export function isValidLifecycle(lifecycle: string): boolean {
   return Object.values(Lifecycle).includes(lifecycle);
 }
 
@@ -64,7 +64,7 @@ export function isValidLifecycle(lifecycle: any) {
  * @param {string} lifecycle
  * @returns {boolean}
  */
-export function isCandidate(lifecycle: any) {
+export function isCandidate(lifecycle: string): boolean {
   const normalized = normalizeLifecycle(lifecycle);
   return normalized === Lifecycle.PENDING;
 }
@@ -94,8 +94,11 @@ const KIND_MAP = {
  * @param {string} knowledgeType
  * @returns {'rule'|'pattern'|'fact'}
  */
-export function inferKind(knowledgeType: any) {
-  return (KIND_MAP as Record<string, any>)[knowledgeType] || 'pattern';
+export function inferKind(knowledgeType: string): 'rule' | 'pattern' | 'fact' {
+  return ((KIND_MAP as Record<string, string>)[knowledgeType] || 'pattern') as
+    | 'rule'
+    | 'pattern'
+    | 'fact';
 }
 
 export default Lifecycle;

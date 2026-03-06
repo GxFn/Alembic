@@ -10,7 +10,11 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
 import { LanguageService } from '../../shared/LanguageService.js';
-import { ProjectDiscoverer } from './ProjectDiscoverer.js';
+import {
+  type DiscoveredFile,
+  type DiscoveredTarget,
+  ProjectDiscoverer,
+} from './ProjectDiscoverer.js';
 
 const EXCLUDE_DIRS = new Set([
   'node_modules',
@@ -38,7 +42,7 @@ const SOURCE_EXTENSIONS = LanguageService.sourceExts;
 
 export class GenericDiscoverer extends ProjectDiscoverer {
   #projectRoot: string | null = null;
-  #targets: any[] = [];
+  #targets: DiscoveredTarget[] = [];
   #primaryLang = 'unknown';
 
   get id() {
@@ -48,24 +52,24 @@ export class GenericDiscoverer extends ProjectDiscoverer {
     return 'Generic (directory scan)';
   }
 
-  async detect(projectRoot: any) {
+  async detect(projectRoot: string) {
     // 始终匹配
     return { match: true, confidence: 0.1, reason: 'Generic fallback discoverer' };
   }
 
-  async load(projectRoot: any) {
+  async load(projectRoot: string) {
     this.#projectRoot = projectRoot;
     this.#targets = [];
 
     // 统计语言分布
-    const langStats: Record<string, any> = {};
+    const langStats: Record<string, number> = {};
     this.#scanLangStats(projectRoot, langStats, 0);
 
     // 找到主语言
     let maxCount = 0;
     for (const [lang, count] of Object.entries(langStats)) {
-      if ((count as number) > maxCount) {
-        maxCount = count as number;
+      if (count > maxCount) {
+        maxCount = count;
         this.#primaryLang = lang;
       }
     }
@@ -114,7 +118,7 @@ export class GenericDiscoverer extends ProjectDiscoverer {
     return this.#targets;
   }
 
-  async getTargetFiles(target: any) {
+  async getTargetFiles(target: DiscoveredTarget) {
     const targetPath =
       typeof target === 'string'
         ? this.#targets.find((t) => t.name === target)?.path || this.#projectRoot
@@ -124,7 +128,7 @@ export class GenericDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files: any[] = [];
+    const files: DiscoveredFile[] = [];
     this.#collectFiles(targetPath, targetPath, files);
     return files;
   }
@@ -136,7 +140,7 @@ export class GenericDiscoverer extends ProjectDiscoverer {
 
   // ── 内部实现 ──
 
-  #scanLangStats(dir: any, stats: any, depth: any) {
+  #scanLangStats(dir: string, stats: Record<string, number>, depth: number) {
     if (depth > 5) {
       return; // 限制深度, 只采样
     }
@@ -165,7 +169,7 @@ export class GenericDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  #collectFiles(dir: any, rootDir: any, files: any, depth = 0) {
+  #collectFiles(dir: string, rootDir: string, files: DiscoveredFile[], depth = 0) {
     if (depth > 15) {
       return;
     }

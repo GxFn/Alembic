@@ -9,7 +9,7 @@
  */
 
 import { extractCallSitesTS } from '../analysis/CallSiteExtractor.js';
-import { ImportRecord } from '../analysis/ImportRecord.js';
+import { ImportRecord, type ImportRecordMeta } from '../analysis/ImportRecord.js';
 
 function walkTypeScript(root: any, ctx: any) {
   _walkTSNode(root, ctx, null);
@@ -479,8 +479,8 @@ function _parseTSVariableDecl(node: any, ctx: any, parentClassName: any) {
  * @returns {{ symbols: string[], kind: string, alias: string|null, isTypeOnly: boolean }}
  */
 function _parseImportClause(importNode: any) {
-  const symbols: any | '*'[] = [];
-  let kind = 'side-effect';
+  const symbols: string[] = [];
+  let kind: ImportRecordMeta['kind'] = 'side-effect';
   let alias: any = null;
   let isTypeOnly = false;
 

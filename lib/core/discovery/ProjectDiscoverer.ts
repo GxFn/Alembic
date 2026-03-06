@@ -11,7 +11,7 @@ export interface DiscoveredTarget {
   path: string;
   type: string;
   language?: string;
-  framework?: string;
+  framework?: string | null;
   metadata?: Record<string, any>;
   [key: string]: any;
 }
@@ -33,7 +33,14 @@ export interface DependencyEdge {
 export interface DependencyGraph {
   nodes: (
     | string
-    | { id: string; label?: string; type?: string; fullPath?: string; indirect?: boolean }
+    | {
+        id: string;
+        label?: string;
+        type?: string;
+        fullPath?: string;
+        indirect?: boolean;
+        [key: string]: unknown;
+      }
   )[];
   edges: DependencyEdge[];
 }
@@ -42,14 +49,16 @@ export class ProjectDiscoverer {
   /**
    * 检测此 Discoverer 是否适用于给定项目
    */
-  async detect(projectRoot: any): Promise<{ match: boolean; confidence: number; reason: string }> {
+  async detect(
+    projectRoot: string
+  ): Promise<{ match: boolean; confidence: number; reason: string }> {
     throw new Error('Not implemented');
   }
 
   /**
    * 加载项目结构（解析配置文件、构建依赖图）
    */
-  async load(projectRoot: any): Promise<void> {
+  async load(projectRoot: string): Promise<void> {
     throw new Error('Not implemented');
   }
 
@@ -63,7 +72,7 @@ export class ProjectDiscoverer {
   /**
    * 获取指定 Target 下的源码文件列表
    */
-  async getTargetFiles(target: any): Promise<DiscoveredFile[]> {
+  async getTargetFiles(target: DiscoveredTarget): Promise<DiscoveredFile[]> {
     throw new Error('Not implemented');
   }
 

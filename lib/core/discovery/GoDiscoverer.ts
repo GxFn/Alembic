@@ -8,7 +8,12 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
-import { ProjectDiscoverer } from './ProjectDiscoverer.js';
+import {
+  type DependencyGraph,
+  type DiscoveredFile,
+  type DiscoveredTarget,
+  ProjectDiscoverer,
+} from './ProjectDiscoverer.js';
 
 const SOURCE_EXTENSIONS = new Set(['.go']);
 
@@ -26,8 +31,8 @@ const EXCLUDE_DIRS = new Set([
 
 export class GoDiscoverer extends ProjectDiscoverer {
   #projectRoot: string | null = null;
-  #targets: any[] = [];
-  #depGraph: { nodes: any[]; edges: any[] } = { nodes: [], edges: [] };
+  #targets: DiscoveredTarget[] = [];
+  #depGraph: DependencyGraph = { nodes: [], edges: [] };
   #modulePath: string | null = null;
 
   get id() {
@@ -37,9 +42,9 @@ export class GoDiscoverer extends ProjectDiscoverer {
     return 'Go (modules)';
   }
 
-  async detect(projectRoot: any) {
+  async detect(projectRoot: string) {
     let confidence = 0;
-    const reasons: any[] = [];
+    const reasons: string[] = [];
 
     if (existsSync(join(projectRoot, 'go.mod'))) {
       confidence = 0.92;
@@ -77,7 +82,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     };
   }
 
-  async load(projectRoot: any) {
+  async load(projectRoot: string) {
     this.#projectRoot = projectRoot;
     this.#targets = [];
     this.#depGraph = { nodes: [], edges: [] };
@@ -85,7 +90,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     // 解析 go.mod
     this.#modulePath = this.#parseGoMod(projectRoot);
     const projectName = this.#modulePath
-      ? this.#modulePath.split('/').pop()
+      ? (this.#modulePath.split('/').pop() ?? basename(projectRoot))
       : basename(projectRoot);
 
     // 主 Target — 始终覆盖整个 module（Go 项目根目录递归收集所有 .go 文件）
@@ -134,7 +139,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     return this.#targets;
   }
 
-  async getTargetFiles(target: any) {
+  async getTargetFiles(target: DiscoveredTarget) {
     const targetPath =
       typeof target === 'string'
         ? this.#targets.find((t) => t.name === target)?.path || this.#projectRoot
@@ -144,7 +149,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files: any[] = [];
+    const files: DiscoveredFile[] = [];
     this.#collectGoFiles(targetPath, targetPath, files);
     return files;
   }
@@ -158,7 +163,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
   /**
    * 解析 go.mod 提取 module path
    */
-  #parseGoMod(projectRoot: any) {
+  #parseGoMod(projectRoot: string) {
     const goModPath = join(projectRoot, 'go.mod');
     if (!existsSync(goModPath)) {
       return null;
@@ -175,8 +180,8 @@ export class GoDiscoverer extends ProjectDiscoverer {
   /**
    * 发现 Go 标准约定目录: pkg/, internal/, api/
    */
-  #discoverConventionDirs(projectRoot: any) {
-    const dirs: any[] = [];
+  #discoverConventionDirs(projectRoot: string) {
+    const dirs: DiscoveredTarget[] = [];
     const conventionNames = [
       { name: 'pkg', type: 'library' },
       { name: 'internal', type: 'library' },
@@ -218,13 +223,13 @@ export class GoDiscoverer extends ProjectDiscoverer {
   /**
    * 发现 cmd/ 下的子命令—每个含 main.go 的子目录为一个 binary Target
    */
-  #discoverCmdTargets(projectRoot: any) {
+  #discoverCmdTargets(projectRoot: string) {
     const cmdDir = join(projectRoot, 'cmd');
     if (!existsSync(cmdDir)) {
       return [];
     }
 
-    const targets: any[] = [];
+    const targets: DiscoveredTarget[] = [];
     const framework = this.#detectFramework(projectRoot);
 
     try {
@@ -271,7 +276,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
   /**
    * 检测 Go Web 框架
    */
-  #detectFramework(projectRoot: any) {
+  #detectFramework(projectRoot: string) {
     const goModPath = join(projectRoot, 'go.mod');
     if (!existsSync(goModPath)) {
       return null;
@@ -311,10 +316,10 @@ export class GoDiscoverer extends ProjectDiscoverer {
   /**
    * 发现内部子包——目录中包含 .go 文件即为一个 Go package
    */
-  #discoverInternalPackages(projectRoot: any) {
+  #discoverInternalPackages(projectRoot: string) {
     const nodeSet = new Set(this.#depGraph.nodes.map((n) => (typeof n === 'string' ? n : n.id)));
 
-    const walk = (dir: any, relPath: any, depth: any) => {
+    const walk = (dir: string, relPath: string, depth: number) => {
       if (depth > 6) {
         return;
       }
@@ -352,7 +357,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
   /**
    * 解析 go.mod 依赖到 depGraph（同时将直接依赖添加为 node）
    */
-  #parseDependencies(projectRoot: any) {
+  #parseDependencies(projectRoot: string) {
     const goModPath = join(projectRoot, 'go.mod');
     if (!existsSync(goModPath)) {
       return;
@@ -364,8 +369,8 @@ export class GoDiscoverer extends ProjectDiscoverer {
         ? this.#depGraph.nodes[0]
         : this.#depGraph.nodes[0]?.id || 'root';
 
-    const addExtDep = (fullPath: any, indirect: any) => {
-      const shortName = fullPath.split('/').pop();
+    const addExtDep = (fullPath: string, indirect: boolean) => {
+      const shortName = fullPath.split('/').pop() ?? fullPath;
       // 添加为 node（如果不存在）
       if (!nodeSet.has(shortName)) {
         this.#depGraph.nodes.push({
@@ -418,26 +423,26 @@ export class GoDiscoverer extends ProjectDiscoverer {
   /**
    * 解析内部 Go import 语句，构建子包间依赖关系
    */
-  #parseInternalImports(projectRoot: any) {
+  #parseInternalImports(projectRoot: string) {
     if (!this.#modulePath) {
       return;
     }
 
     const internalNodes = new Set(
-      this.#depGraph.nodes
-        .filter((n) => typeof n === 'object' && n.type === 'internal')
-        .map((n) => n.id)
+      this.#depGraph.nodes.flatMap((n) =>
+        typeof n === 'object' && n.type === 'internal' ? [n.id] : []
+      )
     );
 
     // 也包含根包
     const rootNodeId =
       typeof this.#depGraph.nodes[0] === 'string'
         ? this.#depGraph.nodes[0]
-        : this.#depGraph.nodes[0]?.id;
+        : (this.#depGraph.nodes[0]?.id ?? '');
 
-    const edgeSet = new Set();
+    const edgeSet = new Set<string>();
 
-    const scanPkgImports = (dir: any, pkgId: any) => {
+    const scanPkgImports = (dir: string, pkgId: string) => {
       try {
         const entries = readdirSync(dir);
         for (const entry of entries) {
@@ -480,11 +485,11 @@ export class GoDiscoverer extends ProjectDiscoverer {
    * 从 import 行中匹配内部包引用
    */
   #matchInternalImport(
-    line: any,
-    fromPkgId: any,
-    rootNodeId: any,
-    internalNodes: any,
-    edgeSet: any
+    line: string,
+    fromPkgId: string,
+    rootNodeId: string,
+    internalNodes: Set<string>,
+    edgeSet: Set<string>
   ) {
     const match = line.match(/"([^"]+)"/);
     if (!match) {
@@ -500,7 +505,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     const relImport = importPath.slice(this.#modulePath!.length + 1);
 
     // 确定目标节点
-    let targetId: any = null;
+    let targetId: string | null = null;
     if (internalNodes.has(relImport)) {
       targetId = relImport;
     } else {
@@ -529,7 +534,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
   /**
    * 递归收集 .go 文件
    */
-  #collectGoFiles(dir: any, rootDir: any, files: any, depth = 0) {
+  #collectGoFiles(dir: string, rootDir: string, files: DiscoveredFile[], depth = 0) {
     if (depth > 15) {
       return;
     }
@@ -554,6 +559,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
               name: entry.name,
               path: fullPath,
               relativePath: relative(rootDir, fullPath),
+              language: 'go',
               content,
             });
           } catch {

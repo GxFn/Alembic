@@ -164,7 +164,7 @@
   },
   "lint-staged": {
     "*.{ts,js,mjs,cjs}": [
-      "biome check --fix --no-errors-on-unmatched",
+      "biome check --fix --no-errors-on-unmatched --diagnostic-level=error",
       "biome format --write --no-errors-on-unmatched"
     ]
   }

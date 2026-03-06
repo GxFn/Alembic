@@ -6,6 +6,7 @@ import {
   Lifecycle,
   normalizeLifecycle,
 } from './Lifecycle.js';
+import type { Guard } from './values/Constraints.js';
 import { Constraints, Content, Quality, Reasoning, Relations, Stats } from './values/index.js';
 
 /* ═══════════════════════════════════════════════════════════
@@ -17,55 +18,120 @@ import { Constraints, Content, Quality, Reasoning, Relations, Stats } from './va
  *   deprecated → 已废弃
  * ═══════════════════════════════════════════════════════════ */
 
+export interface KnowledgeEntryProps {
+  id?: string;
+  title?: string;
+  description?: string;
+  lifecycle?: string;
+  lifecycleHistory?: Array<{ from: string; to: string; at: number }>;
+  autoApprovable?: boolean;
+  language?: string;
+  category?: string;
+  knowledgeType?: string;
+  kind?: string;
+  complexity?: string;
+  scope?: string;
+  difficulty?: string | null;
+  tags?: string[];
+  trigger?: string;
+  topicHint?: string;
+  whenClause?: string;
+  doClause?: string;
+  dontClause?: string;
+  coreCode?: string;
+  usageGuide?: string;
+  content?: unknown;
+  relations?: unknown;
+  constraints?: unknown;
+  reasoning?: unknown;
+  quality?: unknown;
+  stats?: unknown;
+  headers?: string[];
+  headerPaths?: string[];
+  moduleName?: string;
+  includeHeaders?: boolean;
+  agentNotes?: string | null;
+  aiInsight?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: number | null;
+  rejectionReason?: string | null;
+  source?: string;
+  sourceFile?: string | null;
+  sourceCandidateId?: string | null;
+  createdBy?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  publishedAt?: number | null;
+  publishedBy?: string | null;
+  [key: string]: unknown;
+}
+
 export class KnowledgeEntry {
-  agentNotes: any;
-  aiInsight: any;
-  autoApprovable: any;
-  category: any;
-  complexity: any;
-  constraints: any;
-  content: any;
-  coreCode: any;
-  createdAt: any;
-  createdBy: any;
-  description: any;
-  difficulty: any;
-  doClause: any;
-  dontClause: any;
-  headerPaths: any;
-  headers: any;
-  id: any;
-  includeHeaders: any;
-  kind: any;
-  knowledgeType: any;
-  language: any;
-  lifecycle: any;
-  lifecycleHistory: any;
-  moduleName: any;
-  publishedAt: any;
-  publishedBy: any;
-  quality: any;
-  reasoning: any;
-  rejectionReason: any;
-  relations: any;
-  reviewedAt: any;
-  reviewedBy: any;
-  scope: any;
-  source: any;
-  sourceCandidateId: any;
-  sourceFile: any;
-  stats: any;
-  tags: any;
-  title: any;
-  topicHint: any;
-  trigger: any;
-  updatedAt: any;
-  usageGuide: any;
-  whenClause: any;
-  /**
-   * @param {Object} props
-   */
-  constructor(props: any = {}) {
+  // Identification
+  id: string;
+  title: string;
+  description: string;
+
+  // Lifecycle
+  lifecycle: string;
+  lifecycleHistory: Array<{ from: string; to: string; at: number }>;
+  autoApprovable: boolean;
+
+  // Language & Classification
+  language: string;
+  category: string;
+  knowledgeType: string;
+  kind: string;
+  complexity: string;
+  scope: string;
+  difficulty: string | null;
+  tags: string[];
+
+  // Cursor delivery fields
+  trigger: string;
+  topicHint: string;
+  whenClause: string;
+  doClause: string;
+  dontClause: string;
+  coreCode: string;
+  usageGuide: string;
+
+  // Value objects
+  content: Content;
+  relations: Relations;
+  constraints: Constraints;
+  reasoning: Reasoning;
+  quality: Quality;
+  stats: Stats;
+
+  // Code headers (ObjC/Swift)
+  headers: string[];
+  headerPaths: string[];
+  moduleName: string;
+  includeHeaders: boolean;
+
+  // AI
+  agentNotes: string | null;
+  aiInsight: string | null;
+
+  // Review
+  reviewedBy: string | null;
+  reviewedAt: number | null;
+  rejectionReason: string | null;
+
+  // Source
+  source: string;
+  sourceFile: string | null;
+  sourceCandidateId: string | null;
+
+  // Timestamps
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+  publishedAt: number | null;
+  publishedBy: string | null;
+
+  constructor(props: KnowledgeEntryProps = {}) {
     // ── 标识 ──
     this.id = props.id || uuidv4();
     this.title = props.title || '';
@@ -138,7 +204,7 @@ export class KnowledgeEntry {
    * @param {string} publisher
    * @returns {{ success: boolean, error?: string }}
    */
-  publish(publisher: any) {
+  publish(publisher: string): { success: boolean; error?: string } {
     if (!this.isValid()) {
       return { success: false, error: '内容不完整，无法发布' };
     }
@@ -155,7 +221,7 @@ export class KnowledgeEntry {
    * @param {string} reason
    * @returns {{ success: boolean, error?: string }}
    */
-  deprecate(reason: any) {
+  deprecate(reason: string): { success: boolean; error?: string } {
     const result = this._transition(Lifecycle.DEPRECATED);
     if (result.success) {
       this.rejectionReason = reason;
@@ -220,7 +286,7 @@ export class KnowledgeEntry {
       return [];
     }
 
-    const regexRules = this.constraints.getRegexGuards().map((g: any) => ({
+    const regexRules = this.constraints.getRegexGuards().map((g: Guard) => ({
       id: g.id || this.id,
       type: 'regex',
       name: g.message || this.title,
@@ -232,7 +298,7 @@ export class KnowledgeEntry {
       fixSuggestion: g.fix_suggestion || null,
     }));
 
-    const astRules = this.constraints.getAstGuards().map((g: any) => ({
+    const astRules = this.constraints.getAstGuards().map((g: Guard) => ({
       id: g.id || `${this.id}:ast`,
       type: 'ast',
       name: g.message || this.title,
@@ -253,7 +319,7 @@ export class KnowledgeEntry {
   static SYSTEM_TAG_PREFIXES = ['dimension:', 'bootstrap:', 'internal:', 'system:'];
 
   /** 判断是否为系统内部标签 */
-  static isSystemTag(tag: any) {
+  static isSystemTag(tag: string): boolean {
     return KnowledgeEntry.SYSTEM_TAG_PREFIXES.some((p) => tag.startsWith(p));
   }
 
@@ -317,11 +383,11 @@ export class KnowledgeEntry {
    * @param {Object} data
    * @returns {KnowledgeEntry}
    */
-  static fromJSON(data: any) {
+  static fromJSON(data: unknown): KnowledgeEntry {
     if (!data) {
       return new KnowledgeEntry();
     }
-    return new KnowledgeEntry(data);
+    return new KnowledgeEntry(data as KnowledgeEntryProps);
   }
 
   /* ═══ 私有 ═══════════════════════════════════════════ */
@@ -330,7 +396,7 @@ export class KnowledgeEntry {
    * @param {string} to
    * @returns {{ success: boolean, error?: string }}
    */
-  _transition(to: any) {
+  _transition(to: string): { success: boolean; error?: string } {
     if (!isValidTransition(this.lifecycle, to)) {
       return {
         success: false,

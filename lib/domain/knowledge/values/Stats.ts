@@ -3,14 +3,25 @@
  *
  * 记录知识条目的使用统计：浏览、采用、应用、Guard 命中、搜索命中、权威分。
  */
+type StatsCounter = 'views' | 'adoptions' | 'applications' | 'guardHits' | 'searchHits';
+
+interface StatsProps {
+  views?: number;
+  adoptions?: number;
+  applications?: number;
+  guardHits?: number;
+  searchHits?: number;
+  authority?: number;
+}
+
 export class Stats {
-  adoptions: any;
-  applications: any;
-  authority: any;
-  guardHits: any;
-  searchHits: any;
-  views: any;
-  constructor(props: any = {}) {
+  adoptions: number;
+  applications: number;
+  authority: number;
+  guardHits: number;
+  searchHits: number;
+  views: number;
+  constructor(props: StatsProps = {}) {
     /** @type {number} 浏览次数 */
     this.views = props.views ?? 0;
     /** @type {number} 采用次数 */
@@ -30,7 +41,7 @@ export class Stats {
    * @param {Stats|Object|null} input
    * @returns {Stats}
    */
-  static from(input: any) {
+  static from(input: unknown): Stats {
     if (input instanceof Stats) {
       return input;
     }
@@ -41,7 +52,7 @@ export class Stats {
         return new Stats();
       }
     }
-    return new Stats(input || {});
+    return new Stats((input || {}) as StatsProps);
   }
 
   /**
@@ -50,10 +61,8 @@ export class Stats {
    * @param {number} delta
    * @returns {Stats}
    */
-  increment(counter: any, delta = 1) {
-    if (counter in this && typeof (this as any)[counter] === 'number') {
-      (this as any)[counter] += delta;
-    }
+  increment(counter: StatsCounter, delta = 1): Stats {
+    this[counter] += delta;
     return this;
   }
 
@@ -76,7 +85,7 @@ export class Stats {
    * @param {Object} data
    * @returns {Stats}
    */
-  static fromJSON(data: any) {
+  static fromJSON(data: unknown): Stats {
     return Stats.from(data);
   }
 }

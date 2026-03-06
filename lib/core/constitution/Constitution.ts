@@ -1,33 +1,65 @@
 import fs from 'node:fs';
 import yaml from 'js-yaml';
 
+export interface ConstitutionRule {
+  id: string;
+  check: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+export interface ConstitutionRole {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+  constraints: string[];
+  requires_capability?: string[];
+  [key: string]: unknown;
+}
+
+export interface ConstitutionConfig {
+  version?: string;
+  effective_date?: string;
+  priorities?: ConstitutionPriority[];
+  rules?: ConstitutionRule[];
+  roles?: ConstitutionRole[];
+  capabilities?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface ConstitutionPriority {
+  id: number;
+  [key: string]: unknown;
+}
+
 /**
  * Constitution - 宪法加载与管理
  */
 export class Constitution {
-  priorities: any;
-  roles: any;
-  rules: any;
-  config: any;
-  configPath: any;
-  constructor(configPath: any) {
+  priorities: ConstitutionPriority[];
+  roles: Map<string, ConstitutionRole>;
+  rules: ConstitutionRule[];
+  config: ConstitutionConfig;
+  configPath: string;
+  constructor(configPath: string) {
     this.configPath = configPath;
     this.config = this.loadConfig();
     this.priorities = this.config.priorities || [];
     this.rules = this.config.rules || [];
-    this.roles = new Map(this.config.roles?.map((r: any) => [r.id, r]) || []);
+    this.roles = new Map(this.config.roles?.map((r: ConstitutionRole) => [r.id, r]) || []);
   }
 
   /**
    * 加载宪法配置
    */
-  loadConfig() {
+  loadConfig(): ConstitutionConfig {
     if (!fs.existsSync(this.configPath)) {
       throw new Error(`Constitution file not found: ${this.configPath}`);
     }
 
     const content = fs.readFileSync(this.configPath, 'utf8');
-    return yaml.load(content);
+    return yaml.load(content) as ConstitutionConfig;
   }
 
   /**
@@ -54,7 +86,7 @@ export class Constitution {
   /**
    * 获取角色需要的能力列表
    */
-  getRoleRequiredCapabilities(roleId: any) {
+  getRoleRequiredCapabilities(roleId: string) {
     const role = this.getRole(roleId);
     return role ? role.requires_capability || [] : [];
   }
@@ -62,21 +94,21 @@ export class Constitution {
   /**
    * 获取特定优先级
    */
-  getPriority(id: any) {
-    return this.priorities.find((p: any) => p.id === id);
+  getPriority(id: number) {
+    return this.priorities.find((p: ConstitutionPriority) => p.id === id);
   }
 
   /**
    * 获取角色定义
    */
-  getRole(roleId: any) {
+  getRole(roleId: string) {
     return this.roles.get(roleId);
   }
 
   /**
    * 获取角色权限
    */
-  getRolePermissions(roleId: any) {
+  getRolePermissions(roleId: string) {
     const role = this.getRole(roleId);
     return role ? role.permissions : [];
   }
@@ -84,7 +116,7 @@ export class Constitution {
   /**
    * 获取角色约束
    */
-  getRoleConstraints(roleId: any) {
+  getRoleConstraints(roleId: string) {
     const role = this.getRole(roleId);
     return role ? role.constraints : [];
   }
@@ -99,7 +131,7 @@ export class Constitution {
   /**
    * 验证角色是否存在
    */
-  hasRole(roleId: any) {
+  hasRole(roleId: string) {
     return this.roles.has(roleId);
   }
 
@@ -110,7 +142,7 @@ export class Constitution {
     this.config = this.loadConfig();
     this.priorities = this.config.priorities || [];
     this.rules = this.config.rules || [];
-    this.roles = new Map(this.config.roles?.map((r: any) => [r.id, r]) || []);
+    this.roles = new Map(this.config.roles?.map((r: ConstitutionRole) => [r.id, r]) || []);
   }
 
   /**
@@ -121,11 +153,11 @@ export class Constitution {
       version: this.config.version,
       effectiveDate: this.config.effective_date,
       priorities: this.priorities,
-      rules: this.rules.map((r: any) => ({
+      rules: this.rules.map((r: ConstitutionRule) => ({
         id: r.id,
         description: r.description,
       })),
-      roles: Array.from(this.roles.values()).map((r: any) => ({
+      roles: Array.from(this.roles.values()).map((r: ConstitutionRole) => ({
         id: r.id,
         name: r.name,
         description: r.description,

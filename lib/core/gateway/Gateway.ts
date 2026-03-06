@@ -3,6 +3,65 @@ import { v4 as uuidv4 } from 'uuid';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { InternalError } from '../../shared/errors/BaseError.js';
 
+export interface GatewayConfig {
+  [key: string]: unknown;
+}
+
+export interface GatewayRequest {
+  actor: string;
+  action: string;
+  resource?: string;
+  data?: Record<string, unknown>;
+  session?: string;
+  confirmed?: boolean;
+}
+
+export interface GatewayContext {
+  requestId: string;
+  actor: string;
+  action: string;
+  resource: string | undefined;
+  data: Record<string, unknown>;
+  session: string | undefined;
+  startTime: number;
+}
+
+export interface GatewayResult {
+  success: boolean;
+  requestId: string;
+  data?: unknown;
+  error?: { message: string; code: string; statusCode: number };
+  duration?: number;
+}
+
+interface AuditLogger {
+  log(entry: Record<string, unknown>): Promise<void>;
+}
+
+interface EventBus {
+  emit(event: string, data: Record<string, unknown>): void;
+}
+
+interface ConstitutionLike {
+  getRules?(): unknown[];
+  rules?: unknown[];
+}
+
+interface ConstitutionValidatorLike {
+  enforce(request: Record<string, unknown>): Promise<unknown>;
+}
+
+interface PermissionManagerLike {
+  enforce(actor: string, action: string, resource: string | undefined): void;
+}
+
+export interface GatewayDependencies {
+  constitution?: ConstitutionLike | null;
+  constitutionValidator?: ConstitutionValidatorLike | null;
+  permissionManager?: PermissionManagerLike | null;
+  auditLogger?: AuditLogger | null;
+}
+
 /**
  * Gateway - 统一网关
  * 所有操作的唯一入口。
@@ -11,15 +70,15 @@ import { InternalError } from '../../shared/errors/BaseError.js';
  *   validate → guard → route → audit
  */
 export class Gateway extends EventEmitter {
-  auditLogger: any;
-  config: any;
-  constitution: any;
-  constitutionValidator: any;
-  eventBus: any;
-  logger: any;
-  permissionManager: any;
-  routes: any;
-  constructor(config?: any) {
+  auditLogger: AuditLogger | null;
+  config: GatewayConfig | undefined;
+  constitution: ConstitutionLike | null;
+  constitutionValidator: ConstitutionValidatorLike | null;
+  eventBus: EventBus | null;
+  logger;
+  permissionManager: PermissionManagerLike | null;
+  routes: Map<string, (ctx: GatewayContext) => Promise<unknown>>;
+  constructor(config?: GatewayConfig) {
     super();
     this.config = config;
     this.logger = Logger.getInstance();
@@ -36,17 +95,22 @@ export class Gateway extends EventEmitter {
   /**
    * 设置依赖
    */
-  setDependencies({ constitution, constitutionValidator, permissionManager, auditLogger }: any) {
-    this.constitution = constitution;
-    this.constitutionValidator = constitutionValidator;
-    this.permissionManager = permissionManager;
-    this.auditLogger = auditLogger;
+  setDependencies({
+    constitution,
+    constitutionValidator,
+    permissionManager,
+    auditLogger,
+  }: GatewayDependencies) {
+    this.constitution = constitution ?? null;
+    this.constitutionValidator = constitutionValidator ?? null;
+    this.permissionManager = permissionManager ?? null;
+    this.auditLogger = auditLogger ?? null;
   }
 
   /**
    * 注册路由处理器
    */
-  register(action: any, handler: any) {
+  register(action: string, handler: (ctx: GatewayContext) => Promise<unknown>) {
     if (this.routes.has(action)) {
       throw new Error(`Action '${action}' is already registered`);
     }
@@ -64,7 +128,7 @@ export class Gateway extends EventEmitter {
   /**
    * 执行操作（主入口）
    */
-  async execute(request: any) {
+  async execute(request: GatewayRequest): Promise<GatewayResult> {
     const requestId = uuidv4();
     const startTime = Date.now();
 
@@ -136,7 +200,7 @@ export class Gateway extends EventEmitter {
    * 仅检查权限与宪法（不执行业务逻辑）
    * 用于 MCP Gateway gating
    */
-  async checkOnly(request: any) {
+  async checkOnly(request: GatewayRequest) {
     const requestId = uuidv4();
     const startTime = Date.now();
 
@@ -175,7 +239,7 @@ export class Gateway extends EventEmitter {
   /**
    * validate — 验证请求格式
    */
-  validateRequest(request: any) {
+  validateRequest(request: GatewayRequest) {
     if (!request.actor) {
       throw new InternalError('Missing required field: actor');
     }
@@ -187,7 +251,7 @@ export class Gateway extends EventEmitter {
   /**
    * guard — 权限检查 + 宪法验证
    */
-  async guard(context: any) {
+  async guard(context: GatewayContext) {
     // 权限检查
     if (this.permissionManager) {
       this.permissionManager.enforce(context.actor, context.action, context.resource);
@@ -207,7 +271,7 @@ export class Gateway extends EventEmitter {
   /**
    * route — 路由到处理器
    */
-  async routeToHandler(context: any) {
+  async routeToHandler(context: GatewayContext) {
     const handler = this.routes.get(context.action);
 
     if (!handler) {
@@ -220,7 +284,7 @@ export class Gateway extends EventEmitter {
   /**
    * audit — 记录成功
    */
-  async auditSuccess(context: any, result: any) {
+  async auditSuccess(context: GatewayContext, result: unknown) {
     if (!this.auditLogger) {
       return;
     }
@@ -246,7 +310,10 @@ export class Gateway extends EventEmitter {
   /**
    * audit — 记录失败
    */
-  async auditFailure(context: any, error: any) {
+  async auditFailure(
+    context: GatewayContext,
+    error: { message: string; code?: string; statusCode?: number }
+  ) {
     if (!this.auditLogger) {
       return;
     }

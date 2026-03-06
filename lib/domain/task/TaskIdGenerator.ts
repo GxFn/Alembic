@@ -11,13 +11,20 @@ import { v4 as uuidv4 } from 'uuid';
  *
  * 前缀 'asd-'，与 Beads 的 'bd-' 区分。
  */
+interface DbHandle {
+  prepare(sql: string): {
+    get(...params: unknown[]): Record<string, unknown> | undefined;
+    run(...params: unknown[]): unknown;
+  };
+}
+
 export class TaskIdGenerator {
-  _db: any;
-  _prefix: any;
+  _db: DbHandle;
+  _prefix: string;
   /**
    * @param {import('better-sqlite3').Database} db - raw SQLite handle
    */
-  constructor(db: any) {
+  constructor(db: DbHandle) {
     this._db = db;
     this._prefix = 'asd';
   }
@@ -26,7 +33,7 @@ export class TaskIdGenerator {
    * 生成新的短 Hash ID
    * @returns {string} 如 'asd-a1b2'
    */
-  generate() {
+  generate(): string {
     const taskCount = this._getTaskCount();
     const hashLen = taskCount < 500 ? 4 : taskCount < 1500 ? 5 : 6;
 
@@ -58,27 +65,27 @@ export class TaskIdGenerator {
    * @param {string} parentId
    * @returns {string}
    */
-  generateChild(parentId: any) {
+  generateChild(parentId: string): string {
     const parent = this._db.prepare('SELECT child_seq FROM tasks WHERE id = ?').get(parentId);
 
     if (!parent) {
       throw new Error(`Parent task not found: ${parentId}`);
     }
 
-    const nextSeq = (parent.child_seq || 0) + 1;
+    const nextSeq = ((parent.child_seq as number) || 0) + 1;
     this._db.prepare('UPDATE tasks SET child_seq = ? WHERE id = ?').run(nextSeq, parentId);
 
     return `${parentId}.${nextSeq}`;
   }
 
   /** @private */
-  _getTaskCount() {
+  _getTaskCount(): number {
     const row = this._db.prepare('SELECT COUNT(*) as cnt FROM tasks').get();
-    return row?.cnt || 0;
+    return (row?.cnt as number) || 0;
   }
 
   /** @private */
-  _exists(id: any) {
+  _exists(id: string): boolean {
     const row = this._db.prepare('SELECT 1 FROM tasks WHERE id = ?').get(id);
     return !!row;
   }

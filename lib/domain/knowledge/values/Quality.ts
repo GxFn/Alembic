@@ -3,13 +3,21 @@
  *
  * 4 维度评分 + 综合分 + 等级。
  */
+interface QualityProps {
+  completeness?: number;
+  adaptation?: number;
+  documentation?: number;
+  overall?: number;
+  grade?: string;
+}
+
 export class Quality {
-  adaptation: any;
-  completeness: any;
-  documentation: any;
-  grade: any;
-  overall: any;
-  constructor(props: any = {}) {
+  adaptation: number;
+  completeness: number;
+  documentation: number;
+  grade: string;
+  overall: number;
+  constructor(props: QualityProps = {}) {
     /** @type {number} 内容完整度 (0-1) */
     this.completeness = props.completeness ?? 0;
     /** @type {number} 项目适配度 (0-1) */
@@ -27,7 +35,7 @@ export class Quality {
    * @param {Quality|Object|null} input
    * @returns {Quality}
    */
-  static from(input: any) {
+  static from(input: unknown): Quality {
     if (input instanceof Quality) {
       return input;
     }
@@ -38,7 +46,7 @@ export class Quality {
         return new Quality();
       }
     }
-    return new Quality(input || {});
+    return new Quality((input || {}) as QualityProps);
   }
 
   /**
@@ -57,7 +65,7 @@ export class Quality {
    * @param {number} score 0-1
    * @returns {string}
    */
-  static calcGrade(score: any) {
+  static calcGrade(score: number): string {
     if (score >= 0.9) {
       return 'A';
     }
@@ -91,7 +99,7 @@ export class Quality {
    * @param {Object} data
    * @returns {Quality}
    */
-  static fromJSON(data: any) {
+  static fromJSON(data: unknown): Quality {
     return Quality.from(data);
   }
 }

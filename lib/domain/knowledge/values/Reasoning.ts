@@ -1,13 +1,21 @@
 /**
  * Reasoning — 推理值对象
  */
+interface ReasoningProps {
+  whyStandard?: string;
+  sources?: string[];
+  confidence?: number;
+  qualitySignals?: Record<string, number>;
+  alternatives?: string[];
+}
+
 export class Reasoning {
-  alternatives: any;
-  confidence: any;
-  qualitySignals: any;
-  sources: any;
-  whyStandard: any;
-  constructor(props: any = {}) {
+  alternatives: string[];
+  confidence: number;
+  qualitySignals: Record<string, number>;
+  sources: string[];
+  whyStandard: string;
+  constructor(props: ReasoningProps = {}) {
     /** @type {string} 为什么遵循标准 */
     this.whyStandard = props.whyStandard ?? '';
     /** @type {string[]} 来源列表 */
@@ -25,7 +33,7 @@ export class Reasoning {
    * @param {Reasoning|Object|null} input
    * @returns {Reasoning}
    */
-  static from(input: any) {
+  static from(input: unknown): Reasoning {
     if (input instanceof Reasoning) {
       return input;
     }
@@ -39,7 +47,7 @@ export class Reasoning {
         return new Reasoning();
       }
     }
-    return new Reasoning(input);
+    return new Reasoning(input as ReasoningProps);
   }
 
   /**
@@ -75,8 +83,8 @@ export class Reasoning {
    * @param {Object} data
    * @returns {Reasoning}
    */
-  static fromJSON(data: any) {
-    return new Reasoning(data);
+  static fromJSON(data: unknown): Reasoning {
+    return new Reasoning(data as ReasoningProps);
   }
 }
 

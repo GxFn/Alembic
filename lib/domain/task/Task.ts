@@ -1,5 +1,56 @@
 import { createHash } from 'node:crypto';
 
+export interface TaskProps {
+  id?: string | null;
+  parentId?: string | null;
+  childSeq?: number;
+  title?: string;
+  description?: string;
+  design?: string;
+  acceptance?: string;
+  notes?: string;
+  status?: string;
+  priority?: number;
+  taskType?: string;
+  closeReason?: string;
+  failCount?: number;
+  lastFailReason?: string;
+  contentHash?: string | null;
+  assignee?: string;
+  createdBy?: string;
+  createdAt?: number;
+  updatedAt?: number;
+  closedAt?: number | null;
+  knowledgeContext?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface TaskRow {
+  id?: unknown;
+  parent_id?: unknown;
+  child_seq?: unknown;
+  title?: unknown;
+  description?: unknown;
+  design?: unknown;
+  acceptance?: unknown;
+  notes?: unknown;
+  status?: unknown;
+  priority?: unknown;
+  task_type?: unknown;
+  close_reason?: unknown;
+  content_hash?: unknown;
+  fail_count?: unknown;
+  last_fail_reason?: unknown;
+  assignee?: unknown;
+  created_by?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
+  closed_at?: unknown;
+  metadata?: unknown;
+  [key: string]: unknown;
+}
+
 /**
  * Task — 任务实体
  *
@@ -14,29 +65,29 @@ import { createHash } from 'node:crypto';
  *   Knowledge Bridge    → knowledgeContext (运行时，不持久化)
  */
 export class Task {
-  acceptance: any;
-  assignee: any;
-  childSeq: any;
-  closeReason: any;
-  closedAt: any;
-  contentHash: any;
-  createdAt: any;
-  createdBy: any;
-  description: any;
-  design: any;
-  failCount: any;
-  id: any;
-  lastFailReason: any;
-  metadata: any;
-  notes: any;
-  parentId: any;
-  priority: any;
-  status: any;
-  taskType: any;
-  title: any;
-  updatedAt: any;
-  knowledgeContext: any;
-  constructor(props: any = {}) {
+  acceptance: string;
+  assignee: string;
+  childSeq: number;
+  closeReason: string;
+  closedAt: number | null;
+  contentHash: string | null;
+  createdAt: number;
+  createdBy: string;
+  description: string;
+  design: string;
+  failCount: number;
+  id: string | null;
+  lastFailReason: string;
+  metadata: Record<string, unknown>;
+  notes: string;
+  parentId: string | null;
+  priority: number;
+  status: string;
+  taskType: string;
+  title: string;
+  updatedAt: number;
+  knowledgeContext: Record<string, unknown> | null;
+  constructor(props: TaskProps = {}) {
     // ── Core Identification ──
     this.id = props.id || null;
     this.parentId = props.parentId || null;
@@ -142,7 +193,7 @@ export class Task {
     this.updatedAt = Math.floor(Date.now() / 1000);
   }
 
-  fail(reason: any) {
+  fail(reason: string) {
     if (this.status === 'closed') {
       throw new Error('Cannot fail a closed task');
     }
@@ -237,47 +288,47 @@ export class Task {
     };
   }
 
-  static fromJSON(data: any) {
+  static fromJSON(data: unknown): Task {
     if (!data) {
       return new Task();
     }
-    return new Task(data);
+    return new Task(data as TaskProps);
   }
 
   /**
    * 从数据库行构造 Task（snake_case → camelCase）
    */
-  static fromRow(row: any) {
+  static fromRow(row: TaskRow | null): Task | null {
     if (!row) {
       return null;
     }
     return new Task({
-      id: row.id,
-      parentId: row.parent_id,
-      childSeq: row.child_seq,
-      title: row.title,
-      description: row.description,
-      design: row.design,
-      acceptance: row.acceptance,
-      notes: row.notes,
-      status: row.status,
-      priority: row.priority,
-      taskType: row.task_type,
-      closeReason: row.close_reason,
-      contentHash: row.content_hash,
-      failCount: row.fail_count,
-      lastFailReason: row.last_fail_reason,
-      assignee: row.assignee,
-      createdBy: row.created_by,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      closedAt: row.closed_at,
+      id: row.id as string | undefined,
+      parentId: row.parent_id as string | null | undefined,
+      childSeq: row.child_seq as number | undefined,
+      title: row.title as string | undefined,
+      description: row.description as string | undefined,
+      design: row.design as string | undefined,
+      acceptance: row.acceptance as string | undefined,
+      notes: row.notes as string | undefined,
+      status: row.status as string | undefined,
+      priority: row.priority as number | undefined,
+      taskType: row.task_type as string | undefined,
+      closeReason: row.close_reason as string | undefined,
+      contentHash: row.content_hash as string | null | undefined,
+      failCount: row.fail_count as number | undefined,
+      lastFailReason: row.last_fail_reason as string | undefined,
+      assignee: row.assignee as string | undefined,
+      createdBy: row.created_by as string | undefined,
+      createdAt: row.created_at as number | undefined,
+      updatedAt: row.updated_at as number | undefined,
+      closedAt: row.closed_at as number | null | undefined,
       metadata: (() => {
         if (typeof row.metadata !== 'string') {
-          return row.metadata || {};
+          return (row.metadata as Record<string, unknown>) || {};
         }
         try {
-          return JSON.parse(row.metadata);
+          return JSON.parse(row.metadata) as Record<string, unknown>;
         } catch {
           return {};
         }

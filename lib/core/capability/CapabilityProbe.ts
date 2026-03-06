@@ -19,24 +19,34 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 
-/**
- * @typedef {'admin' | 'contributor' | 'visitor'} ProbeResult
- * @typedef {{ result: ProbeResult, cachedAt: number, expiresAt: number, detail: string }} ProbeCache
- */
+export type ProbeResult = 'admin' | 'contributor' | 'visitor';
+
+export interface ProbeCache {
+  result: ProbeResult;
+  cachedAt: number;
+  expiresAt: number;
+  detail: string;
+}
+
+export interface CapabilityProbeOptions {
+  subRepoPath?: string;
+  cacheTTL?: number;
+  noRemote?: 'allow' | 'deny';
+}
 
 export class CapabilityProbe {
-  subRepoPath: any;
-  _cache: any;
-  cacheTTL: any;
-  logger: any;
-  noRemote: any;
+  subRepoPath: string | null;
+  _cache: ProbeCache | null;
+  cacheTTL: number;
+  logger;
+  noRemote: 'allow' | 'deny';
   /**
    * @param {object} options
    * @param {string} [options.subRepoPath]  子仓库根路径（默认 cwd/AutoSnippet）
    * @param {number} [options.cacheTTL]     缓存 TTL（秒），默认 86400
    * @param {string} [options.noRemote]     无 remote 策略: 'allow' | 'deny'
    */
-  constructor(options: any = {}) {
+  constructor(options: CapabilityProbeOptions = {}) {
     this.logger = Logger.getInstance();
     this.subRepoPath = options.subRepoPath || this._detectSubRepo();
     this.cacheTTL = (options.cacheTTL ?? 86400) * 1000; // 转为 ms
@@ -54,7 +64,7 @@ export class CapabilityProbe {
    * 执行探测，返回角色级别
    * @returns {ProbeResult}
    */
-  probe() {
+  probe(): ProbeResult {
     // 命中缓存
     if (this._cache && Date.now() < this._cache.expiresAt) {
       this.logger.debug('CapabilityProbe: cache hit', { result: this._cache.result });
@@ -82,7 +92,7 @@ export class CapabilityProbe {
    * @param {ProbeResult} probeResult
    * @returns {string}
    */
-  toRole(probeResult: any) {
+  toRole(probeResult: ProbeResult): string {
     // 本地运行 AutoSnippet 的用户 = 项目 Owner = developer
     // 探针级别的 admin/contributor/visitor 仅做信息记录，角色统一为 developer
     switch (probeResult) {
@@ -95,7 +105,7 @@ export class CapabilityProbe {
    * 一步到位：探测并返回角色
    * @returns {string} Constitution role ID
    */
-  probeRole() {
+  probeRole(): string {
     return this.toRole(this.probe());
   }
 
@@ -130,7 +140,7 @@ export class CapabilityProbe {
    * 自动检测子仓库路径
    * @returns {string | null}
    */
-  _detectSubRepo() {
+  _detectSubRepo(): string | null {
     // 常见路径：cwd/AutoSnippet 或 .autosnippet/AutoSnippet
     const candidates = [
       path.resolve(process.cwd(), 'AutoSnippet'),
@@ -154,7 +164,7 @@ export class CapabilityProbe {
    * 执行实际探测
    * @returns {ProbeResult}
    */
-  _runProbe() {
+  _runProbe(): ProbeResult {
     // Case 1: 子仓库路径不存在 → 个人项目模式，全权限
     if (!this.subRepoPath || !fs.existsSync(this.subRepoPath)) {
       this.logger.debug('CapabilityProbe: no sub-repo — personal project, granting admin');
@@ -190,7 +200,7 @@ export class CapabilityProbe {
    * @param {string} repoPath
    * @returns {boolean}
    */
-  _isGitRepo(repoPath: any) {
+  _isGitRepo(repoPath: string): boolean {
     try {
       execSync('git rev-parse --git-dir', {
         cwd: repoPath,
@@ -207,7 +217,7 @@ export class CapabilityProbe {
    * @param {string} repoPath
    * @returns {boolean}
    */
-  _hasRemote(repoPath: any) {
+  _hasRemote(repoPath: string): boolean {
     try {
       const output = execSync('git remote', {
         cwd: repoPath,
@@ -226,7 +236,7 @@ export class CapabilityProbe {
    * @param {string} repoPath
    * @returns {ProbeResult}
    */
-  _probePush(repoPath: any) {
+  _probePush(repoPath: string): ProbeResult {
     try {
       execSync('git push --dry-run 2>&1', {
         cwd: repoPath,

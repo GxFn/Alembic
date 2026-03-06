@@ -8,7 +8,12 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
-import { ProjectDiscoverer } from './ProjectDiscoverer.js';
+import {
+  type DependencyGraph,
+  type DiscoveredFile,
+  type DiscoveredTarget,
+  ProjectDiscoverer,
+} from './ProjectDiscoverer.js';
 
 const SOURCE_EXTENSIONS = new Set(['.dart']);
 
@@ -33,8 +38,8 @@ const EXCLUDE_DIRS = new Set([
 
 export class DartDiscoverer extends ProjectDiscoverer {
   #projectRoot: string | null = null;
-  #targets: any[] = [];
-  #depGraph: { nodes: any[]; edges: any[] } = { nodes: [], edges: [] };
+  #targets: DiscoveredTarget[] = [];
+  #depGraph: DependencyGraph = { nodes: [], edges: [] };
   #packageName: string | null = null;
 
   get id() {
@@ -44,9 +49,9 @@ export class DartDiscoverer extends ProjectDiscoverer {
     return 'Dart / Flutter';
   }
 
-  async detect(projectRoot: any) {
+  async detect(projectRoot: string) {
     let confidence = 0;
-    const reasons: any[] = [];
+    const reasons: string[] = [];
 
     if (existsSync(join(projectRoot, 'pubspec.yaml'))) {
       confidence = 0.92;
@@ -89,7 +94,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     };
   }
 
-  async load(projectRoot: any) {
+  async load(projectRoot: string) {
     this.#projectRoot = projectRoot;
     this.#targets = [];
     this.#depGraph = { nodes: [], edges: [] };
@@ -103,7 +108,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
 
     // 主 Target — lib/
     this.#targets.push({
-      name: this.#packageName,
+      name: this.#packageName!,
       path: join(projectRoot, 'lib'),
       type: 'library',
       language: 'dart',
@@ -115,7 +120,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
         flutterVersion: pubspec?.environment?.flutter || null,
       },
     });
-    this.#depGraph.nodes.push(this.#packageName);
+    this.#depGraph.nodes.push(this.#packageName!);
 
     // bin/ — CLI 应用入口
     const binDir = join(projectRoot, 'bin');
@@ -168,7 +173,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     return this.#targets;
   }
 
-  async getTargetFiles(target: any) {
+  async getTargetFiles(target: DiscoveredTarget) {
     const targetPath =
       typeof target === 'string'
         ? this.#targets.find((t) => t.name === target)?.path || this.#projectRoot
@@ -178,7 +183,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files: any[] = [];
+    const files: DiscoveredFile[] = [];
     this.#collectDartFiles(targetPath, targetPath, files);
     return files;
   }
@@ -192,7 +197,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 解析 pubspec.yaml（简易 YAML 解析，不引入三方依赖）
    */
-  #parsePubspec(projectRoot: any) {
+  #parsePubspec(projectRoot: string) {
     const pubspecPath = join(projectRoot, 'pubspec.yaml');
     if (!existsSync(pubspecPath)) {
       return null;
@@ -209,7 +214,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
    * 极简 YAML 解析器 — 仅支持顶层和一层嵌套的 key: value
    * 用于解析 pubspec.yaml 中的 name, dependencies, environment 等
    */
-  #parseSimpleYaml(content: any) {
+  #parseSimpleYaml(content: string) {
     const result: Record<string, any> = {};
     let currentSection: string | null = null;
 
@@ -253,7 +258,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 检测 Flutter/Dart 框架
    */
-  #detectFramework(pubspec: any) {
+  #detectFramework(pubspec: Record<string, any> | null) {
     if (!pubspec) {
       return null;
     }
@@ -301,7 +306,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 发现 Melos 多包工作区中的子包
    */
-  #discoverMelosPackages(projectRoot: any) {
+  #discoverMelosPackages(projectRoot: string) {
     const melosPath = join(projectRoot, 'melos.yaml');
     if (!existsSync(melosPath)) {
       return;
@@ -366,15 +371,18 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 解析 pubspec.yaml 依赖到 depGraph
    */
-  #parseDependencies(pubspec: any) {
+  #parseDependencies(pubspec: Record<string, any> | null) {
     if (!pubspec) {
       return;
     }
 
     const nodeSet = new Set(this.#depGraph.nodes.map((n) => (typeof n === 'string' ? n : n.id)));
     const rootNode = this.#packageName;
+    if (!rootNode) {
+      return;
+    }
 
-    const addDep = (name: any, isDev: any) => {
+    const addDep = (name: string, isDev: boolean) => {
       if (!nodeSet.has(name)) {
         this.#depGraph.nodes.push({
           id: name,
@@ -413,7 +421,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 解析内部 Dart import 语句，构建包内模块依赖关系
    */
-  #parseInternalImports(projectRoot: any) {
+  #parseInternalImports(projectRoot: string) {
     const libDir = join(projectRoot, 'lib');
     if (!existsSync(libDir)) {
       return;
@@ -439,7 +447,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     }
 
     // 扫描 import 语句
-    const scanDir = (dir: any) => {
+    const scanDir = (dir: string) => {
       try {
         const entries = readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
@@ -451,7 +459,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
             try {
               const content = readFileSync(join(dir, entry.name), 'utf8');
               const relDir = relative(libDir, dir);
-              const fromModule = relDir ? `lib/${relDir.split('/')[0]}` : this.#packageName;
+              const fromModule = relDir ? `lib/${relDir.split('/')[0]}` : (this.#packageName ?? '');
 
               // 匹配 import 'package:xxx/yyy.dart'
               const imports = content.matchAll(/import\s+['"]package:(\w+)\/([^'"]+)['"]/g);
@@ -490,7 +498,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 递归收集 .dart 文件
    */
-  #collectDartFiles(dir: any, rootDir: any, files: any, depth = 0) {
+  #collectDartFiles(dir: string, rootDir: string, files: DiscoveredFile[], depth = 0) {
     if (depth > 15) {
       return;
     }
@@ -515,6 +523,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
               name: entry.name,
               path: fullPath,
               relativePath: relative(rootDir, fullPath),
+              language: 'dart',
               content,
             });
           } catch {

@@ -6,16 +6,18 @@
  * 若全部未命中，回退到 GenericDiscoverer（目录扫描兜底）。
  */
 
+import type { ProjectDiscoverer } from './ProjectDiscoverer.js';
+
 export class DiscovererRegistry {
   /** @type {import('./ProjectDiscoverer.js').ProjectDiscoverer[]} */
-  #discoverers: any[] = [];
+  #discoverers: ProjectDiscoverer[] = [];
 
   /**
    * 注册一个 Discoverer 实现
    * @param {import('./ProjectDiscoverer.js').ProjectDiscoverer} discoverer
    * @returns {DiscovererRegistry} this 支持链式调用
    */
-  register(discoverer: any) {
+  register(discoverer: ProjectDiscoverer) {
     this.#discoverers.push(discoverer);
     return this;
   }
@@ -25,7 +27,7 @@ export class DiscovererRegistry {
    * @param {string} projectRoot
    * @returns {Promise<import('./ProjectDiscoverer.js').ProjectDiscoverer>}
    */
-  async detect(projectRoot: any) {
+  async detect(projectRoot: string) {
     const results = await Promise.all(
       this.#discoverers.map(async (d) => ({
         discoverer: d,
@@ -57,7 +59,7 @@ export class DiscovererRegistry {
    * @param {string} projectRoot
    * @returns {Promise<Array<{ discoverer: import('./ProjectDiscoverer.js').ProjectDiscoverer, confidence: number }>>}
    */
-  async detectAll(projectRoot: any) {
+  async detectAll(projectRoot: string) {
     const results = await Promise.all(
       this.#discoverers.map(async (d) => ({
         discoverer: d,

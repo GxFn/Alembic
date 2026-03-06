@@ -4,12 +4,29 @@
  * 包含 Guard 规则 (regex + ast)、边界约束、前置条件、副作用。
  * Guard 规则预留 AST 类型，为语义规则做前瞻设计。
  */
+export interface Guard {
+  id: string | null;
+  type: 'regex' | 'ast';
+  pattern: string | null;
+  ast_query: Record<string, unknown> | null;
+  message: string;
+  severity: 'error' | 'warning' | 'info';
+  fix_suggestion: string | null;
+}
+
+interface ConstraintsProps {
+  guards?: Array<Record<string, unknown>>;
+  boundaries?: string[];
+  preconditions?: string[];
+  sideEffects?: string[];
+}
+
 export class Constraints {
-  boundaries: any;
-  guards: any;
-  preconditions: any;
-  sideEffects: any;
-  constructor(props: any = {}) {
+  boundaries: string[];
+  guards: Guard[];
+  preconditions: string[];
+  sideEffects: string[];
+  constructor(props: ConstraintsProps = {}) {
     /** @type {Array<Guard>} Guard 规则列表 */
     this.guards = (props.guards || []).map(Constraints._normalizeGuard);
     /** @type {string[]} 边界约束 */
@@ -25,7 +42,7 @@ export class Constraints {
    * @param {Constraints|Object|null} input
    * @returns {Constraints}
    */
-  static from(input: any) {
+  static from(input: unknown): Constraints {
     if (input instanceof Constraints) {
       return input;
     }
@@ -39,7 +56,7 @@ export class Constraints {
         return new Constraints();
       }
     }
-    return new Constraints(input);
+    return new Constraints(input as ConstraintsProps);
   }
 
   /**
@@ -47,15 +64,15 @@ export class Constraints {
    * @param {Object} g
    * @returns {Guard}
    */
-  static _normalizeGuard(g: any) {
+  static _normalizeGuard(g: Record<string, unknown>): Guard {
     return {
-      id: g.id || null,
-      type: g.type || (g.ast_query ? 'ast' : 'regex'),
-      pattern: g.pattern || null,
-      ast_query: g.ast_query || null,
-      message: g.message || '',
-      severity: g.severity || 'warning',
-      fix_suggestion: g.fix_suggestion || null,
+      id: (g.id as string) || null,
+      type: ((g.type as string) || (g.ast_query ? 'ast' : 'regex')) as Guard['type'],
+      pattern: (g.pattern as string) || null,
+      ast_query: (g.ast_query as Record<string, unknown>) || null,
+      message: (g.message as string) || '',
+      severity: ((g.severity as string) || 'warning') as Guard['severity'],
+      fix_suggestion: (g.fix_suggestion as string) || null,
     };
   }
 
@@ -63,16 +80,16 @@ export class Constraints {
    * 获取 regex 类型的 Guard 规则
    * @returns {Array<Guard>}
    */
-  getRegexGuards() {
-    return this.guards.filter((g: any) => g.type === 'regex' && g.pattern);
+  getRegexGuards(): Guard[] {
+    return this.guards.filter((g) => g.type === 'regex' && g.pattern);
   }
 
   /**
    * 获取 ast 类型的 Guard 规则
    * @returns {Array<Guard>}
    */
-  getAstGuards() {
-    return this.guards.filter((g: any) => g.type === 'ast' && g.ast_query);
+  getAstGuards(): Guard[] {
+    return this.guards.filter((g) => g.type === 'ast' && g.ast_query);
   }
 
   /**
@@ -80,7 +97,7 @@ export class Constraints {
    * @param {Object} guard
    * @returns {Constraints}
    */
-  addGuard(guard: any) {
+  addGuard(guard: Record<string, unknown>): Constraints {
     this.guards.push(Constraints._normalizeGuard(guard));
     return this;
   }
@@ -123,20 +140,11 @@ export class Constraints {
    * @param {Object} data
    * @returns {Constraints}
    */
-  static fromJSON(data: any) {
+  static fromJSON(data: unknown): Constraints {
     return Constraints.from(data);
   }
 }
 
-/**
- * @typedef {Object} Guard
- * @property {?string} id          - Guard 唯一标识
- * @property {'regex'|'ast'} type  类型
- * @property {?string} pattern     - regex pattern (type=regex 时)
- * @property {?Object} ast_query   - AST 查询 (type=ast 时)
- * @property {string}  message     错误/警告消息
- * @property {'error'|'warning'|'info'} severity 严重级别
- * @property {?string} fix_suggestion 关联修复 Recipe 的 trigger
- */
+export type { Guard as GuardType };
 
 export default Constraints;

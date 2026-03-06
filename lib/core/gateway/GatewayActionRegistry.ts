@@ -8,6 +8,7 @@
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { Gateway, GatewayContext } from './Gateway.js';
 
 const logger = Logger.getInstance();
 
@@ -16,124 +17,124 @@ const logger = Logger.getInstance();
  * @param {import('./Gateway.js').Gateway} gateway
  * @param {import('../../injection/ServiceContainer.js').ServiceContainer} container
  */
-export function registerGatewayActions(gateway: any, container: any) {
+export function registerGatewayActions(gateway: Gateway, container: { get(name: string): any }) {
   // ========== Knowledge Actions (V3: replaces Candidate + Recipe) ==========
 
-  gateway.register('candidate:create', async (ctx: any) => {
+  gateway.register('candidate:create', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.create(ctx.data, {
       userId: ctx.actor,
     });
   });
 
-  gateway.register('candidate:approve', async (ctx: any) => {
+  gateway.register('candidate:approve', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.approve(ctx.data.candidateId, {
       userId: ctx.actor,
     });
   });
 
-  gateway.register('candidate:reject', async (ctx: any) => {
+  gateway.register('candidate:reject', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.reject(ctx.data.candidateId, ctx.data.reason, {
       userId: ctx.actor,
     });
   });
 
-  gateway.register('candidate:apply_to_recipe', async (ctx: any) => {
+  gateway.register('candidate:apply_to_recipe', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.publish(ctx.data.candidateId, { userId: ctx.actor });
   });
 
-  gateway.register('candidate:list', async (ctx: any) => {
+  gateway.register('candidate:list', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.list(ctx.data.filters, ctx.data.pagination);
   });
 
-  gateway.register('candidate:search', async (ctx: any) => {
+  gateway.register('candidate:search', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.search(ctx.data.keyword, ctx.data.pagination);
   });
 
-  gateway.register('candidate:get_stats', async (ctx: any) => {
+  gateway.register('candidate:get_stats', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.getStats();
   });
 
-  gateway.register('candidate:get', async (ctx: any) => {
+  gateway.register('candidate:get', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.get(ctx.data.id);
   });
 
-  gateway.register('candidate:delete', async (ctx: any) => {
+  gateway.register('candidate:delete', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.delete(ctx.data.candidateId, { userId: ctx.actor });
   });
 
   // ========== Recipe Actions (V3: routed to knowledgeService) ==========
 
-  gateway.register('recipe:create', async (ctx: any) => {
+  gateway.register('recipe:create', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.create(ctx.data, {
       userId: ctx.actor,
     });
   });
 
-  gateway.register('recipe:publish', async (ctx: any) => {
+  gateway.register('recipe:publish', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.publish(ctx.data.recipeId, {
       userId: ctx.actor,
     });
   });
 
-  gateway.register('recipe:deprecate', async (ctx: any) => {
+  gateway.register('recipe:deprecate', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.deprecate(ctx.data.recipeId, ctx.data.reason, {
       userId: ctx.actor,
     });
   });
 
-  gateway.register('recipe:update_quality', async (ctx: any) => {
+  gateway.register('recipe:update_quality', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.updateQuality(ctx.data.recipeId, ctx.data.metrics);
   });
 
-  gateway.register('recipe:adopt', async (ctx: any) => {
+  gateway.register('recipe:adopt', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.incrementUsage(ctx.data.recipeId, 'adoption');
   });
 
-  gateway.register('recipe:apply', async (ctx: any) => {
+  gateway.register('recipe:apply', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.incrementUsage(ctx.data.recipeId, 'application');
   });
 
-  gateway.register('recipe:list', async (ctx: any) => {
+  gateway.register('recipe:list', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.list(ctx.data.filters, ctx.data.pagination);
   });
 
-  gateway.register('recipe:search', async (ctx: any) => {
+  gateway.register('recipe:search', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.search(ctx.data.keyword, ctx.data.pagination);
   });
 
-  gateway.register('recipe:get_stats', async (ctx: any) => {
+  gateway.register('recipe:get_stats', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.getStats();
   });
 
-  gateway.register('recipe:get', async (ctx: any) => {
+  gateway.register('recipe:get', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.get(ctx.data.id);
   });
 
-  gateway.register('recipe:get_recommendations', async (ctx: any) => {
+  gateway.register('recipe:get_recommendations', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.list({ lifecycle: 'active' }, { page: 1, pageSize: ctx.data.limit || 10 });
   });
 
-  gateway.register('recipe:delete', async (ctx: any) => {
+  gateway.register('recipe:delete', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.delete(ctx.data.recipeId, {
       userId: ctx.actor,
@@ -142,7 +143,7 @@ export function registerGatewayActions(gateway: any, container: any) {
 
   // ========== Guard Rule Actions ==========
 
-  gateway.register('guard_rule:create', async (ctx: any) => {
+  gateway.register('guard_rule:create', async (ctx: GatewayContext) => {
     const service = container.get('guardService');
     return service.createRule(ctx.data, {
       userId: ctx.actor,
@@ -151,47 +152,47 @@ export function registerGatewayActions(gateway: any, container: any) {
     });
   });
 
-  gateway.register('guard_rule:enable', async (ctx: any) => {
+  gateway.register('guard_rule:enable', async (ctx: GatewayContext) => {
     const service = container.get('guardService');
     return service.enableRule(ctx.data.ruleId, {
       userId: ctx.actor,
     });
   });
 
-  gateway.register('guard_rule:disable', async (ctx: any) => {
+  gateway.register('guard_rule:disable', async (ctx: GatewayContext) => {
     const service = container.get('guardService');
     return service.disableRule(ctx.data.ruleId, ctx.data.reason, {
       userId: ctx.actor,
     });
   });
 
-  gateway.register('guard_rule:check_code', async (ctx: any) => {
+  gateway.register('guard_rule:check_code', async (ctx: GatewayContext) => {
     const service = container.get('guardService');
     return service.checkCode(ctx.data.code, ctx.data.options);
   });
 
-  gateway.register('guard_rule:import_from_recipe', async (ctx: any) => {
+  gateway.register('guard_rule:import_from_recipe', async (ctx: GatewayContext) => {
     // importRulesFromRecipe 已废弃，使用 createRule 代替
     const service = container.get('guardService');
     return service.createRule(ctx.data, { userId: ctx.actor });
   });
 
-  gateway.register('guard_rule:list', async (ctx: any) => {
+  gateway.register('guard_rule:list', async (ctx: GatewayContext) => {
     const service = container.get('guardService');
     return service.listRules(ctx.data.filters, ctx.data.pagination);
   });
 
-  gateway.register('guard_rule:search', async (ctx: any) => {
+  gateway.register('guard_rule:search', async (ctx: GatewayContext) => {
     const service = container.get('guardService');
     return service.searchRules(ctx.data.keyword, ctx.data.pagination);
   });
 
-  gateway.register('guard_rule:get_stats', async (ctx: any) => {
+  gateway.register('guard_rule:get_stats', async (ctx: GatewayContext) => {
     const service = container.get('guardService');
     return service.getRuleStats();
   });
 
-  gateway.register('guard_rule:get', async (ctx: any) => {
+  gateway.register('guard_rule:get', async (ctx: GatewayContext) => {
     const repo = container.get('knowledgeRepository');
     return repo.findById(ctx.data.id);
   });
@@ -200,14 +201,14 @@ export function registerGatewayActions(gateway: any, container: any) {
 
   // ========== Knowledge Update (enrich/refine) ==========
 
-  gateway.register('candidate:update', async (ctx: any) => {
+  gateway.register('candidate:update', async (ctx: GatewayContext) => {
     const service = container.get('knowledgeService');
     return service.update(ctx.data.id, ctx.data, { userId: ctx.actor });
   });
 
   // ========== Search ==========
 
-  gateway.register('search:query', async (ctx: any) => {
+  gateway.register('search:query', async (ctx: GatewayContext) => {
     const service = container.get('searchEngine');
     return service.search(ctx.data.keyword, ctx.data.options);
   });
@@ -221,7 +222,12 @@ export function registerGatewayActions(gateway: any, container: any) {
  * 辅助函数: 创建 Gateway 请求对象
  * 用于路由层格式化请求
  */
-export function buildGatewayRequest(req: any, action: any, resource: any, data: any = {}) {
+export function buildGatewayRequest(
+  req: { headers: Record<string, string | undefined>; ip?: string },
+  action: string,
+  resource: string,
+  data: Record<string, unknown> = {}
+) {
   return {
     actor: req.headers['x-user-id'] || 'anonymous',
     action,

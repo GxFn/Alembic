@@ -1,5 +1,26 @@
 import { v4 as uuidv4 } from 'uuid';
 
+export interface SnippetProps {
+  id?: string;
+  identifier?: string;
+  title?: string;
+  language?: string;
+  category?: string;
+  completion?: string;
+  summary?: string;
+  code?: string | string[];
+  targets?: Record<string, { installed?: boolean; path?: string | null }>;
+  installed?: boolean;
+  installedPath?: string | null;
+  sourceRecipeId?: string | null;
+  sourceCandidateId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdBy?: string | null;
+  createdAt?: number;
+  updatedAt?: number;
+  [key: string]: unknown;
+}
+
 /**
  * Snippet - 代码片段实体
  *
@@ -8,28 +29,28 @@ import { v4 as uuidv4 } from 'uuid';
  * - Snippet: 具体的、可安装的代码片段（支持多 IDE: Xcode / VSCode / Cursor）
  */
 export class Snippet {
-  category: any;
-  code: any;
-  completion: any;
-  createdAt: any;
-  createdBy: any;
-  id: any;
-  identifier: any;
-  language: any;
-  metadata: any;
-  sourceCandidateId: any;
-  sourceRecipeId: any;
-  summary: any;
-  targets: any;
-  title: any;
-  updatedAt: any;
-  constructor(props: any) {
+  category: string;
+  code: string;
+  completion: string;
+  createdAt: number;
+  createdBy: string | null;
+  id: string;
+  identifier: string;
+  language: string;
+  metadata: Record<string, unknown> | null;
+  sourceCandidateId: string | null;
+  sourceRecipeId: string | null;
+  summary: string;
+  targets: Record<string, { installed?: boolean; path?: string | null }>;
+  title: string;
+  updatedAt: number;
+  constructor(props: SnippetProps) {
     this.id = props.id || uuidv4();
-    this.identifier = props.identifier; // 唯一标识符（如 com.autosnippet.guard-let）
-    this.title = props.title;
+    this.identifier = props.identifier || ''; // 唯一标识符（如 com.autosnippet.guard-let）
+    this.title = props.title || '';
     this.language = props.language || 'unknown';
-    this.category = props.category;
-    this.completion = props.completion; // 自动补全触发词
+    this.category = props.category || '';
+    this.completion = props.completion || ''; // 自动补全触发词
     this.summary = props.summary || '';
     this.code = Array.isArray(props.code) ? props.code.join('\n') : props.code || '';
 
@@ -57,18 +78,18 @@ export class Snippet {
    * 是否已安装到指定 IDE (不传则检查任意)
    * @param {string} [target] - 'xcode' | 'vscode'
    */
-  isInstalled(target?: any) {
+  isInstalled(target?: string): boolean {
     if (target) {
       return !!this.targets[target]?.installed;
     }
-    return Object.values(this.targets).some((t: any) => t?.installed);
+    return Object.values(this.targets).some((t: { installed?: boolean }) => t?.installed);
   }
 
   /**
    * 获取指定 IDE 的安装路径
    * @param {string} target
    */
-  getInstalledPath(target: any) {
+  getInstalledPath(target: string): string | null {
     return this.targets[target]?.path || null;
   }
 
@@ -114,7 +135,7 @@ export class Snippet {
   /**
    * 从 JSON 创建 Snippet
    */
-  static fromJSON(data: any) {
+  static fromJSON(data: SnippetProps): Snippet {
     return new Snippet(data);
   }
 }

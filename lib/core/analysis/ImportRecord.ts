@@ -18,12 +18,19 @@
  *   rec.symbols;            // ['UserRepo']
  */
 
+export interface ImportRecordMeta {
+  symbols?: string[];
+  alias?: string | null;
+  kind?: 'named' | 'default' | 'namespace' | 'side-effect' | 'dynamic';
+  isTypeOnly?: boolean;
+}
+
 export class ImportRecord {
-  alias: any;
-  isTypeOnly: any;
-  kind: any;
-  path: any;
-  symbols: any;
+  alias: string | null;
+  isTypeOnly: boolean;
+  kind: 'named' | 'default' | 'namespace' | 'side-effect' | 'dynamic';
+  path: string;
+  symbols: string[];
   /**
    * @param {string} path 导入路径原始字符串
    * @param {object} [meta]
@@ -32,7 +39,7 @@ export class ImportRecord {
    * @param {'named'|'default'|'namespace'|'side-effect'} [meta.kind] 导入方式
    * @param {boolean} [meta.isTypeOnly] 是否为类型导入 (TypeScript)
    */
-  constructor(path: any, meta: any = {}) {
+  constructor(path: string, meta: ImportRecordMeta = {}) {
     this.path = String(path);
     this.symbols = meta.symbols || [];
     this.alias = meta.alias || null;
@@ -46,35 +53,35 @@ export class ImportRecord {
     return this.path;
   }
 
-  includes(s: any) {
+  includes(s: string): boolean {
     return this.path.includes(s);
   }
 
-  startsWith(s: any) {
+  startsWith(s: string): boolean {
     return this.path.startsWith(s);
   }
 
-  endsWith(s: any) {
+  endsWith(s: string): boolean {
     return this.path.endsWith(s);
   }
 
-  indexOf(s: any) {
+  indexOf(s: string): number {
     return this.path.indexOf(s);
   }
 
-  replace(a: any, b: any) {
+  replace(a: string | RegExp, b: string): string {
     return this.path.replace(a, b);
   }
 
-  match(re: any) {
+  match(re: RegExp): RegExpMatchArray | null {
     return this.path.match(re);
   }
 
-  split(sep: any) {
+  split(sep: string | RegExp): string[] {
     return this.path.split(sep);
   }
 
-  trim() {
+  trim(): string {
     return this.path.trim();
   }
 
@@ -102,7 +109,7 @@ export class ImportRecord {
    * @param {string} symbolName
    * @returns {boolean}
    */
-  hasSymbol(symbolName: any) {
+  hasSymbol(symbolName: string): boolean {
     return this.symbols.includes(symbolName) || this.symbols.includes('*');
   }
 }

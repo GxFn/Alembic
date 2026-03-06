@@ -123,7 +123,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
     const offset = (page - 1) * pageSize;
 
     const conditions: string[] = [];
-    const params: any | {} | string[] = [];
+    const params: any[] = [];
 
     const { _tagLike, _search, lifecycle: lcFilter, ...normalFilters } = filters;
 

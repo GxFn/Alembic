@@ -18,14 +18,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export class ImportPathResolver {
-  fileIndex: any;
-  pathAliases: any;
-  projectRoot: any;
+  fileIndex: Map<string, string>;
+  pathAliases: Array<{ prefix: string; targets: string[] }>;
+  projectRoot: string;
   /**
    * @param {string} projectRoot 项目根目录
    * @param {string[]} allFiles 项目内所有文件的相对路径
    */
-  constructor(projectRoot: any, allFiles: any) {
+  constructor(projectRoot: string, allFiles: string[]) {
     this.projectRoot = projectRoot;
     /** @type {Map<string, string>} normalizedPath → actualFilePath */
     this.fileIndex = new Map();
@@ -69,7 +69,7 @@ export class ImportPathResolver {
    * @param {string} projectRoot
    * @private
    */
-  _loadTsconfigPaths(projectRoot: any) {
+  _loadTsconfigPaths(projectRoot: string) {
     const candidates = ['tsconfig.json', 'tsconfig.app.json', 'jsconfig.json'];
     for (const name of candidates) {
       try {
@@ -120,7 +120,7 @@ export class ImportPathResolver {
    * @param {string} importerFile 当前文件路径 (相对路径)
    * @returns {string|null} 解析后的文件路径 (相对) 或 null (外部依赖)
    */
-  resolve(importPath: any, importerFile: any) {
+  resolve(importPath: string | { toString(): string }, importerFile: string) {
     const pathStr = String(importPath);
 
     // 1. 跳过外部依赖 (先检查 alias，再判断外部)
@@ -163,14 +163,14 @@ export class ImportPathResolver {
    * @returns {string|null}
    * @private
    */
-  _resolveAlias(importPath: any) {
+  _resolveAlias(importPath: string): string | null {
     for (const { prefix, targets } of this.pathAliases) {
       if (importPath === prefix || importPath.startsWith(`${prefix}/`)) {
         const remainder = importPath === prefix ? '' : importPath.slice(prefix.length + 1);
         for (const target of targets) {
           const resolved = remainder ? path.normalize(path.join(target, remainder)) : target;
           if (this.fileIndex.has(resolved)) {
-            return this.fileIndex.get(resolved);
+            return this.fileIndex.get(resolved) ?? null;
           }
         }
       }
@@ -183,7 +183,7 @@ export class ImportPathResolver {
    * @param {string} importPath
    * @returns {boolean}
    */
-  _isExternal(importPath: any) {
+  _isExternal(importPath: string): boolean {
     // 相对路径不是外部
     if (importPath.startsWith('.') || importPath.startsWith('/')) {
       return false;

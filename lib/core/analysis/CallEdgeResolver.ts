@@ -12,32 +12,80 @@
  *   SymbolTable + ImportPathResolver + CallSite[] → ResolvedEdge[]
  */
 
-/**
- * @typedef {object} ResolvedEdge
- * @property {string} caller 调用者 FQN e.g. "src/service/UserService.ts::UserService.getUser"
- * @property {string} callee 被调用者 FQN e.g. "src/repository/UserRepo.ts::UserRepo.findById"
- * @property {string} callType - 'function'|'method'|'constructor'|'super'|'static'
- * @property {string} resolveMethod - 'direct'|'inferred'|'cha'
- * @property {number} line 调用点行号
- * @property {string} file 调用者文件
- * @property {boolean} isAwait
- */
+import type { ImportPathResolver } from './ImportPathResolver.js';
+
+export interface ResolvedEdge {
+  caller: string;
+  callee: string;
+  callType: string;
+  resolveMethod: string;
+  line: number;
+  file: string;
+  isAwait: boolean;
+  argCount: number;
+}
+
+interface SymbolDeclaration {
+  name: string;
+  className?: string;
+  kind?: string;
+  file: string;
+  [key: string]: unknown;
+}
+
+interface SymbolTable {
+  declarations: Map<string, SymbolDeclaration>;
+  fileImports: Map<
+    string,
+    Array<{ path?: string; symbols?: string[]; alias?: string; toString(): string }>
+  >;
+  instantiatedClasses?: Set<string>;
+  propertyTypes?: Map<string, Map<string, string>>;
+}
+
+interface CallSite {
+  callee: string;
+  callerMethod: string;
+  callerClass: string | null;
+  callType: string;
+  receiver: string | null;
+  receiverType: string | null;
+  argCount: number;
+  line: number;
+  isAwait: boolean;
+}
+
+interface InheritanceEdge {
+  from: string;
+  to: string;
+  type: string;
+}
+
+interface FileDecl {
+  name: string;
+  qualifiedName: string;
+  fqn: string;
+}
 
 export class CallEdgeResolver {
-  classNames: any;
-  fileIndex: any;
-  importResolver: any;
-  inheritanceGraph: any;
-  instantiatedClasses: any;
-  nameIndex: any;
-  propertyTypes: any;
-  symbolTable: any;
+  classNames: Set<string>;
+  fileIndex: Map<string, FileDecl[]>;
+  importResolver: ImportPathResolver;
+  inheritanceGraph: InheritanceEdge[];
+  instantiatedClasses: Set<string>;
+  nameIndex: Map<string, string[]>;
+  propertyTypes: Map<string, Map<string, string>>;
+  symbolTable: SymbolTable;
   /**
    * @param {import('./SymbolTableBuilder.js').SymbolTable} symbolTable
    * @param {import('./ImportPathResolver.js').ImportPathResolver} importResolver
    * @param {Array<{from: string, to: string, type: string}>} [inheritanceGraph=[]] 继承图边
    */
-  constructor(symbolTable: any, importResolver: any, inheritanceGraph: any[] = []) {
+  constructor(
+    symbolTable: SymbolTable,
+    importResolver: ImportPathResolver,
+    inheritanceGraph: InheritanceEdge[] = []
+  ) {
     this.symbolTable = symbolTable;
     this.importResolver = importResolver;
     this.inheritanceGraph = inheritanceGraph;
@@ -68,13 +116,13 @@ export class CallEdgeResolver {
         if (!this.nameIndex.has(name)) {
           this.nameIndex.set(name, []);
         }
-        this.nameIndex.get(name).push(fqn);
+        this.nameIndex.get(name)?.push(fqn);
       }
       // 文件级索引
       if (!this.fileIndex.has(decl.file)) {
         this.fileIndex.set(decl.file, []);
       }
-      this.fileIndex.get(decl.file).push({ name: decl.name, qualifiedName, fqn });
+      this.fileIndex.get(decl.file)?.push({ name: decl.name, qualifiedName, fqn });
 
       // Phase 5.3: 收集类名用于快速 DI 推断
       if (decl.kind === 'class') {
@@ -90,8 +138,8 @@ export class CallEdgeResolver {
    * @param {string} callerFile 调用者文件路径 (相对)
    * @returns {ResolvedEdge[]}
    */
-  resolveFile(callSites: any, callerFile: any) {
-    const edges: any[] = [];
+  resolveFile(callSites: CallSite[], callerFile: string): ResolvedEdge[] {
+    const edges: ResolvedEdge[] = [];
     const fileImports = this.symbolTable.fileImports.get(callerFile) || [];
 
     // 构建局部 import 映射: symbolName → { file, namespace }
@@ -117,7 +165,10 @@ export class CallEdgeResolver {
   /**
    * @private 构建局部 import 映射
    */
-  _buildImportMap(fileImports: any, callerFile: any) {
+  _buildImportMap(
+    fileImports: Array<{ path?: string; symbols?: string[]; alias?: string; toString(): string }>,
+    callerFile: string
+  ): Map<string, { file: string; namespace: boolean }> {
     /** @type {Map<string, { file: string, namespace: boolean }>} */
     const importedSymbols = new Map();
 
@@ -152,7 +203,11 @@ export class CallEdgeResolver {
   /**
    * @private 解析单个调用点
    */
-  _resolveCallSite(cs: any, callerFile: any, importedSymbols: any) {
+  _resolveCallSite(
+    cs: CallSite,
+    callerFile: string,
+    importedSymbols: Map<string, { file: string; namespace: boolean }>
+  ): ResolvedEdge | null {
     const callerFqn = `${callerFile}::${cs.callerClass ? `${cs.callerClass}.` : ''}${cs.callerMethod}`;
 
     // Priority 0: super.xxx() — 父类方法调用 (CHA 解析，禁止 fallthrough 防止自引用边)
@@ -254,7 +309,7 @@ export class CallEdgeResolver {
       const implicitThisCandidates = this._findInFile(
         `${cs.callerClass}.${cs.callee}`,
         callerFile
-      ).filter((fqn: any) => fqn !== callerFqn);
+      ).filter((fqn: string) => fqn !== callerFqn);
       if (implicitThisCandidates.length > 0) {
         return this._makeEdge(callerFqn, implicitThisCandidates[0], 'direct', cs, callerFile);
       }
@@ -268,7 +323,7 @@ export class CallEdgeResolver {
     // Priority 3: 同文件内的函数调用
     // 过滤 callerFqn 防止同名方法重载(overload)产生假自引用边
     const localCandidates = this._findInFile(cs.callee, callerFile).filter(
-      (fqn: any) => fqn !== callerFqn
+      (fqn: string) => fqn !== callerFqn
     );
     if (localCandidates.length > 0) {
       return this._makeEdge(callerFqn, localCandidates[0], 'direct', cs, callerFile);
@@ -276,7 +331,7 @@ export class CallEdgeResolver {
     // 也尝试 Class.method 格式
     if (cs.receiver && !importedSymbols.has(cs.receiver)) {
       const qualifiedLocal = this._findInFile(`${cs.receiver}.${cs.callee}`, callerFile).filter(
-        (fqn: any) => fqn !== callerFqn
+        (fqn: string) => fqn !== callerFqn
       );
       if (qualifiedLocal.length > 0) {
         return this._makeEdge(callerFqn, qualifiedLocal[0], 'direct', cs, callerFile);
@@ -286,7 +341,7 @@ export class CallEdgeResolver {
     // Priority 4: 全局搜索 (唯一匹配才采用)
     // 过滤 callerFqn 防止全局唯一命名碰撞自己
     const globalCandidates = (this.nameIndex.get(cs.callee) || []).filter(
-      (fqn: any) => fqn !== callerFqn
+      (fqn: string) => fqn !== callerFqn
     );
     if (globalCandidates.length === 1) {
       return this._makeEdge(callerFqn, globalCandidates[0], 'inferred', cs, callerFile);
@@ -294,7 +349,7 @@ export class CallEdgeResolver {
 
     // Phase 5.3 RTA: 多个全局候选 → 用实例化集合过滤
     if (globalCandidates.length > 1 && this.instantiatedClasses.size > 0) {
-      const rtaFiltered = globalCandidates.filter((fqn: any) => {
+      const rtaFiltered = globalCandidates.filter((fqn: string) => {
         if (fqn === callerFqn) {
           return false; // 排除自己
         }
@@ -328,7 +383,7 @@ export class CallEdgeResolver {
    * @param {string} className 起始类名
    * @returns {string|null} 找到的 FQN 或 null
    */
-  _resolveByCHA(methodName: any, className: any) {
+  _resolveByCHA(methodName: string, className: string): string | null {
     if (!this.inheritanceGraph || this.inheritanceGraph.length === 0) {
       return null;
     }
@@ -341,7 +396,7 @@ export class CallEdgeResolver {
 
     while (queue.length > 0 && depth < MAX_DEPTH) {
       depth++;
-      const nextQueue: any[] = [];
+      const nextQueue: string[] = [];
       for (const current of queue) {
         // 查找 current 的所有父类 (inherits 和 conforms 类型的边)
         for (const edge of this.inheritanceGraph) {
@@ -380,7 +435,7 @@ export class CallEdgeResolver {
    * @param {string} fieldName
    * @returns {string|null}
    */
-  _inferFieldType(fieldName: any) {
+  _inferFieldType(fieldName: string): string | null {
     // 去除前导下划线
     const cleaned = fieldName.replace(/^_+/, '');
     if (!cleaned) {
@@ -400,20 +455,26 @@ export class CallEdgeResolver {
    * @param {string} file
    * @returns {string[]} 匹配的 FQN 列表
    */
-  _findInFile(name: any, file: any) {
+  _findInFile(name: string, file: string): string[] {
     const fileDecls = this.fileIndex.get(file);
     if (!fileDecls) {
       return [];
     }
     return fileDecls
-      .filter((d: any) => d.name === name || d.qualifiedName === name)
-      .map((d: any) => d.fqn);
+      .filter((d: FileDecl) => d.name === name || d.qualifiedName === name)
+      .map((d: FileDecl) => d.fqn);
   }
 
   /**
    * @private 构建 ResolvedEdge
    */
-  _makeEdge(callerFqn: any, calleeFqn: any, resolveMethod: any, cs: any, callerFile: any) {
+  _makeEdge(
+    callerFqn: string,
+    calleeFqn: string,
+    resolveMethod: string,
+    cs: CallSite,
+    callerFile: string
+  ): ResolvedEdge {
     return {
       caller: callerFqn,
       callee: calleeFqn,

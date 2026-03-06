@@ -9,7 +9,12 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, extname, join, relative, resolve } from 'node:path';
 import { inferLang } from '../../external/mcp/handlers/LanguageExtensions.js';
-import { ProjectDiscoverer } from './ProjectDiscoverer.js';
+import {
+  type DependencyGraph,
+  type DiscoveredFile,
+  type DiscoveredTarget,
+  ProjectDiscoverer,
+} from './ProjectDiscoverer.js';
 
 const SOURCE_EXTENSIONS = new Set([
   '.ts',
@@ -37,9 +42,9 @@ const EXCLUDE_DIRS = new Set([
 
 export class NodeDiscoverer extends ProjectDiscoverer {
   #projectRoot: string | null = null;
-  #packageJson: any = null;
-  #targets: any[] = [];
-  #depGraph: { nodes: any[]; edges: any[] } = { nodes: [], edges: [] };
+  #packageJson: Record<string, any> | null = null;
+  #targets: DiscoveredTarget[] = [];
+  #depGraph: DependencyGraph = { nodes: [], edges: [] };
 
   get id() {
     return 'node';
@@ -48,9 +53,9 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return 'Node.js (npm/pnpm/yarn)';
   }
 
-  async detect(projectRoot: any) {
+  async detect(projectRoot: string) {
     let confidence = 0;
-    const reasons: any[] = [];
+    const reasons: string[] = [];
 
     if (existsSync(join(projectRoot, 'package.json'))) {
       confidence = 0.9;
@@ -108,7 +113,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     };
   }
 
-  async load(projectRoot: any) {
+  async load(projectRoot: string) {
     this.#projectRoot = projectRoot;
     this.#targets = [];
     this.#depGraph = { nodes: [], edges: [] };
@@ -136,7 +141,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
           continue;
         }
         const wsPkgPath = join(wsAbsPath, 'package.json');
-        let wsPkg: any = {};
+        let wsPkg: Record<string, any> = {};
         if (existsSync(wsPkgPath)) {
           try {
             wsPkg = JSON.parse(readFileSync(wsPkgPath, 'utf8'));
@@ -165,7 +170,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     } else {
       // 单包模式
       const framework = this.#detectFramework(this.#packageJson);
-      const name = this.#packageJson.name || basename(projectRoot);
+      const name = this.#packageJson?.name || basename(projectRoot);
       const type = this.#inferTargetType(this.#packageJson);
 
       this.#targets.push({
@@ -187,7 +192,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return this.#targets;
   }
 
-  async getTargetFiles(target: any) {
+  async getTargetFiles(target: DiscoveredTarget) {
     const targetPath =
       typeof target === 'string'
         ? this.#targets.find((t) => t.name === target)?.path || this.#projectRoot
@@ -197,7 +202,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files: any[] = [];
+    const files: DiscoveredFile[] = [];
     this.#collectFiles(targetPath, targetPath, files);
     return files;
   }
@@ -208,11 +213,11 @@ export class NodeDiscoverer extends ProjectDiscoverer {
 
   // ── 内部实现 ──
 
-  #resolveWorkspaces(projectRoot: any) {
-    const paths: string | any[] = [];
+  #resolveWorkspaces(projectRoot: string) {
+    const paths: string[] = [];
 
     // npm/yarn workspaces (from package.json)
-    const workspaces = this.#packageJson.workspaces;
+    const workspaces = this.#packageJson?.workspaces;
     if (workspaces) {
       const patterns = Array.isArray(workspaces) ? workspaces : workspaces.packages || [];
       for (const pattern of patterns) {
@@ -304,7 +309,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return paths;
   }
 
-  #detectFramework(pkg: any) {
+  #detectFramework(pkg: Record<string, any> | null) {
     if (!pkg) {
       return null;
     }
@@ -352,7 +357,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return null;
   }
 
-  #inferTargetType(pkg: any) {
+  #inferTargetType(pkg: Record<string, any> | null) {
     if (!pkg) {
       return 'library';
     }
@@ -379,7 +384,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return 'library';
   }
 
-  #collectFiles(dir: any, rootDir: any, files: any, depth = 0) {
+  #collectFiles(dir: string, rootDir: string, files: DiscoveredFile[], depth = 0) {
     if (depth > 15) {
       return; // 防止过深递归
     }
@@ -415,7 +420,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  #buildWorkspaceDeps(workspacePaths: any) {
+  #buildWorkspaceDeps(workspacePaths: string[]) {
     // 收集所有 workspace 包名
     const nameToPath = new Map();
     for (const t of this.#targets) {

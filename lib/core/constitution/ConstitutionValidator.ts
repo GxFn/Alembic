@@ -1,5 +1,30 @@
 import Logger from '../../infrastructure/logging/Logger.js';
 import { ConstitutionViolation } from '../../shared/errors/BaseError.js';
+import type { Constitution, ConstitutionRule } from './Constitution.js';
+
+export interface ValidationRequest {
+  actor?: string;
+  action?: string;
+  resource?: string;
+  data?: Record<string, unknown>;
+  confirmed?: boolean;
+  authorized?: boolean;
+  code?: string;
+  [key: string]: unknown;
+}
+
+export interface Violation {
+  rule: string;
+  reason: string;
+  suggestion: string;
+}
+
+export interface ValidationResult {
+  compliant: boolean;
+  violations: Violation[];
+}
+
+type RuleChecker = (req: ValidationRequest, rule: ConstitutionRule) => Violation | null;
 
 /**
  * ConstitutionValidator — 数据守护验证器
@@ -8,10 +33,10 @@ import { ConstitutionViolation } from '../../shared/errors/BaseError.js';
  * 每条规则对应 constitution.yaml 中的一个 rule.check 值。
  */
 export class ConstitutionValidator {
-  checkers: any;
-  constitution: any;
-  logger: any;
-  constructor(constitution: any) {
+  checkers: Record<string, RuleChecker>;
+  constitution: Constitution;
+  logger: ReturnType<typeof Logger.getInstance>;
+  constructor(constitution: Constitution) {
     this.constitution = constitution;
     this.logger = Logger.getInstance();
 
@@ -27,8 +52,8 @@ export class ConstitutionValidator {
   /**
    * 验证操作，返回违规列表
    */
-  async validate(request: any) {
-    const violations: any[] = [];
+  async validate(request: ValidationRequest): Promise<ValidationResult> {
+    const violations: Violation[] = [];
     const rules = this.constitution.getRules?.() || this.constitution.rules || [];
 
     for (const rule of rules) {
@@ -64,7 +89,7 @@ export class ConstitutionValidator {
   /**
    * 强制验证（违规时抛异常）
    */
-  async enforce(request: any) {
+  async enforce(request: ValidationRequest): Promise<ValidationResult> {
     const result = await this.validate(request);
     if (!result.compliant) {
       throw new ConstitutionViolation(result.violations);
@@ -75,7 +100,7 @@ export class ConstitutionValidator {
   // ─── 规则检查器 ────────────────────────────────────────
 
   /** 删除操作需要确认 */
-  _checkDestructive(req: any, rule: any) {
+  _checkDestructive(req: ValidationRequest, rule: ConstitutionRule): Violation | null {
     const destructive = ['delete', 'remove', 'destroy', 'purge', 'batch_delete'];
     if (!destructive.some((w) => req.action?.toLowerCase().includes(w))) {
       return null;
@@ -87,7 +112,7 @@ export class ConstitutionValidator {
   }
 
   /** 创建候选/Recipe 需要内容 */
-  _checkContent(req: any, rule: any) {
+  _checkContent(req: ValidationRequest, rule: ConstitutionRule): Violation | null {
     const verb = this._verb(req.action);
     const res = this._resource(req.action, req.resource);
     const isCreation =
@@ -110,7 +135,7 @@ export class ConstitutionValidator {
   }
 
   /** AI 不能直接创建/批准 Recipe */
-  _checkAiRecipe(req: any, rule: any) {
+  _checkAiRecipe(req: ValidationRequest, rule: ConstitutionRule): Violation | null {
     if (!this._isAI(req.actor)) {
       return null;
     }
@@ -133,7 +158,7 @@ export class ConstitutionValidator {
   }
 
   /** 批量操作需要授权 */
-  _checkBatch(req: any, rule: any) {
+  _checkBatch(req: ValidationRequest, rule: ConstitutionRule): Violation | null {
     if (!req.action?.includes('batch_')) {
       return null;
     }
@@ -145,14 +170,14 @@ export class ConstitutionValidator {
 
   // ─── 辅助方法 ──────────────────────────────────────────
 
-  _verb(action: any) {
+  _verb(action: string | undefined): string {
     if (!action) {
       return '';
     }
-    return action.includes(':') ? action.split(':').pop() : action;
+    return action.includes(':') ? (action.split(':').pop() ?? '') : action;
   }
 
-  _resource(action: any, resource: any) {
+  _resource(action: string | undefined, resource: string | undefined): string {
     if (action?.includes(':')) {
       return action.split(':')[0];
     }
@@ -163,31 +188,46 @@ export class ConstitutionValidator {
     return resource || '';
   }
 
-  _isAI(actor: any) {
+  _isAI(actor: string | undefined): boolean {
     return ['external_agent', 'chat_agent'].some((a) => actor?.toLowerCase().includes(a));
   }
 
   // ─── 旧格式兼容 ───────────────────────────────────────
 
   /** 兼容旧 priorities 格式 */
-  async _checkLegacyPriority(priority: any, request: any) {
-    const violations: { rule: any; reason: string; suggestion: string }[] = [];
+  async _checkLegacyPriority(
+    priority: { id: number; [key: string]: unknown },
+    request: ValidationRequest
+  ): Promise<Violation[]> {
+    const violations: Violation[] = [];
     if (priority.id === 1) {
-      const v = this._checkDestructive(request, { id: 'destructive_confirm' });
+      const v = this._checkDestructive(request, {
+        id: 'destructive_confirm',
+        check: 'destructive_needs_confirmation',
+      });
       if (v) {
         violations.push(v);
       }
-      const v2 = this._checkContent(request, { id: 'content_required' });
+      const v2 = this._checkContent(request, {
+        id: 'content_required',
+        check: 'creation_needs_content',
+      });
       if (v2) {
         violations.push(v2);
       }
     }
     if (priority.id === 2) {
-      const v = this._checkAiRecipe(request, { id: 'ai_no_direct_recipe' });
+      const v = this._checkAiRecipe(request, {
+        id: 'ai_no_direct_recipe',
+        check: 'ai_cannot_approve_recipe',
+      });
       if (v) {
         violations.push(v);
       }
-      const v2 = this._checkBatch(request, { id: 'batch_authorized' });
+      const v2 = this._checkBatch(request, {
+        id: 'batch_authorized',
+        check: 'batch_needs_authorization',
+      });
       if (v2) {
         violations.push(v2);
       }

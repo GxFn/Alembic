@@ -13,42 +13,75 @@
  *   { callEdges, dataFlowEdges, stats }
  */
 
-import { CallEdgeResolver } from './CallEdgeResolver.js';
+import { CallEdgeResolver, type ResolvedEdge } from './CallEdgeResolver.js';
 import { DataFlowInferrer } from './DataFlowInferrer.js';
 import { ImportPathResolver } from './ImportPathResolver.js';
 import { SymbolTableBuilder } from './SymbolTableBuilder.js';
 
-/**
- * @typedef {object} CallGraphResult
- * @property {import('./CallEdgeResolver.js').ResolvedEdge[]} callEdges
- * @property {import('./DataFlowInferrer.js').DataFlowEdge[]} dataFlowEdges
- * @property {CallGraphStats} stats
- */
+export interface FileSummary {
+  file: string;
+  callSites?: CallSite[];
+  [key: string]: unknown;
+}
 
-/**
- * @typedef {object} CallGraphStats
- * @property {number} totalCallSites 总调用点数
- * @property {number} resolvedCallSites 成功解析的调用点数
- * @property {number} resolvedRate 解析成功率 (0-1)
- * @property {number} totalEdges 总边数 (call + data_flow)
- * @property {number} filesProcessed 处理的文件数
- * @property {number} symbolCount 符号表大小
- * @property {number} durationMs 总耗时
- */
+export interface AstProjectSummary {
+  fileSummaries: FileSummary[];
+  inheritanceGraph?: Array<{ from: string; to: string; type: string }>;
+  [key: string]: unknown;
+}
 
-/**
- * @typedef {object} AnalyzeOptions
- * @property {number} [timeout=15000] 超时(ms)
- * @property {number} [maxCallSitesPerFile=500] 每文件最多调用点
- * @property {number} [minConfidence=0.5] 最低置信度
- */
+export interface AnalyzeOptions {
+  timeout?: number;
+  maxCallSitesPerFile?: number;
+  minConfidence?: number;
+}
+
+export interface CallGraphStats {
+  totalCallSites: number;
+  resolvedCallSites: number;
+  resolvedRate: number;
+  totalEdges: number;
+  filesProcessed: number;
+  symbolCount: number;
+  durationMs: number;
+  tier?: string;
+  partial?: boolean;
+  incremental?: boolean;
+  processedFiles?: number;
+  totalFiles?: number;
+  changedFiles?: number;
+  affectedFiles?: number;
+}
+
+export interface CallGraphResult {
+  callEdges: ResolvedEdge[];
+  dataFlowEdges: DataFlowEdge[];
+  stats: CallGraphStats;
+}
+
+interface CallSite {
+  callee: string;
+  callerMethod: string;
+  callerClass: string | null;
+  callType: string;
+  receiver: string | null;
+  receiverType: string | null;
+  argCount: number;
+  line: number;
+  isAwait: boolean;
+  [key: string]: unknown;
+}
+
+interface DataFlowEdge {
+  [key: string]: unknown;
+}
 
 export class CallGraphAnalyzer {
-  projectRoot: any;
+  projectRoot: string;
   /**
    * @param {string} projectRoot
    */
-  constructor(projectRoot: any) {
+  constructor(projectRoot: string) {
     this.projectRoot = projectRoot;
   }
 
@@ -59,7 +92,10 @@ export class CallGraphAnalyzer {
    * @param {AnalyzeOptions} [options]
    * @returns {Promise<CallGraphResult>}
    */
-  async analyze(astProjectSummary: any, options: any = {}) {
+  async analyze(
+    astProjectSummary: AstProjectSummary,
+    options: AnalyzeOptions = {}
+  ): Promise<CallGraphResult> {
     const t0 = Date.now();
     const timeout = options.timeout || 15_000;
     const maxCallSitesPerFile = options.maxCallSitesPerFile || 500;
@@ -83,7 +119,11 @@ export class CallGraphAnalyzer {
    * @param {AnalyzeOptions} [options]
    * @returns {Promise<CallGraphResult>}
    */
-  async analyzeIncremental(astProjectSummary: any, changedFiles: any, options: any = {}) {
+  async analyzeIncremental(
+    astProjectSummary: AstProjectSummary,
+    changedFiles: string[],
+    options: AnalyzeOptions = {}
+  ): Promise<CallGraphResult> {
     const t0 = Date.now();
     const timeout = options.timeout || 15_000;
     const maxCallSitesPerFile = options.maxCallSitesPerFile || 500;
@@ -104,7 +144,7 @@ export class CallGraphAnalyzer {
     const symbolTable = SymbolTableBuilder.build(astProjectSummary);
 
     // ── Step 2: 构建 ImportPathResolver ──
-    const allFiles = astProjectSummary.fileSummaries.map((f: any) => f.file);
+    const allFiles = astProjectSummary.fileSummaries.map((f: FileSummary) => f.file);
     const importResolver = new ImportPathResolver(this.projectRoot, allFiles);
 
     // ── Step 3: 找到依赖变更文件的所有文件 (reverse dependency) ──
@@ -125,8 +165,12 @@ export class CallGraphAnalyzer {
     const tier = _computeTier(fileCount);
     const useCHA = tier === 'full-cha';
     const inheritanceGraph = useCHA ? astProjectSummary.inheritanceGraph || [] : [];
-    const callEdgeResolver = new CallEdgeResolver(symbolTable, importResolver, inheritanceGraph);
-    const allCallEdges: any[] = [];
+    const callEdgeResolver = new CallEdgeResolver(
+      symbolTable as ConstructorParameters<typeof CallEdgeResolver>[0],
+      importResolver,
+      inheritanceGraph
+    );
+    const allCallEdges: ResolvedEdge[] = [];
     let totalCallSites = 0;
     let processedFiles = 0;
 
@@ -144,7 +188,7 @@ export class CallGraphAnalyzer {
       if (Date.now() > deadline) {
         return {
           callEdges: allCallEdges,
-          dataFlowEdges: DataFlowInferrer.infer(allCallEdges),
+          dataFlowEdges: DataFlowInferrer.infer(allCallEdges) as DataFlowEdge[],
           stats: {
             totalCallSites,
             resolvedCallSites: allCallEdges.length,
@@ -177,7 +221,7 @@ export class CallGraphAnalyzer {
     }
 
     // ── Step 5: 推断数据流 ──
-    const dataFlowEdges = DataFlowInferrer.infer(allCallEdges);
+    const dataFlowEdges = DataFlowInferrer.infer(allCallEdges) as DataFlowEdge[];
 
     return {
       callEdges: allCallEdges,
@@ -214,7 +258,11 @@ export class CallGraphAnalyzer {
    * @param {number} maxCallSitesPerFile
    * @param {number} deadline - Date.now() + timeout
    */
-  async _doAnalyze(astProjectSummary: any, maxCallSitesPerFile: any, deadline: any) {
+  async _doAnalyze(
+    astProjectSummary: AstProjectSummary,
+    maxCallSitesPerFile: number,
+    deadline: number
+  ): Promise<CallGraphResult> {
     const fileCount = astProjectSummary.fileSummaries.length;
 
     // ── 分级降级 ──
@@ -248,17 +296,23 @@ export class CallGraphAnalyzer {
     const symbolTable = SymbolTableBuilder.build(astProjectSummary);
 
     // ── Step 3: 构建 ImportPathResolver (全量文件索引) ──
-    const allFiles = astProjectSummary.fileSummaries.map((f: any) => f.file);
+    const allFiles = astProjectSummary.fileSummaries.map((f: FileSummary) => f.file);
     const importResolver = new ImportPathResolver(this.projectRoot, allFiles);
 
     // ── Step 4: 解析调用边 (逐文件 + 超时检查) ──
     const useCHA = tier === 'full-cha';
     const inheritanceGraph = useCHA ? astProjectSummary.inheritanceGraph || [] : [];
-    const callEdgeResolver = new CallEdgeResolver(symbolTable, importResolver, inheritanceGraph);
-    const allCallEdges: any[] = [];
+    const callEdgeResolver = new CallEdgeResolver(
+      symbolTable as ConstructorParameters<typeof CallEdgeResolver>[0],
+      importResolver,
+      inheritanceGraph
+    );
+    const allCallEdges: ResolvedEdge[] = [];
     let totalCallSites = 0;
     let processedFiles = 0;
-    const totalFiles = fileSummaries.filter((f: any) => f.callSites?.length > 0).length;
+    const totalFiles = fileSummaries.filter(
+      (f: FileSummary) => (f.callSites?.length ?? 0) > 0
+    ).length;
 
     for (const fileSummary of fileSummaries) {
       const callSites = fileSummary.callSites || [];
@@ -268,7 +322,7 @@ export class CallGraphAnalyzer {
 
       // ── 渐进式超时: 每文件检查 deadline ──
       if (Date.now() > deadline) {
-        const dataFlowEdges = DataFlowInferrer.infer(allCallEdges);
+        const dataFlowEdges = DataFlowInferrer.infer(allCallEdges) as DataFlowEdge[];
         return {
           callEdges: allCallEdges,
           dataFlowEdges,
@@ -302,7 +356,7 @@ export class CallGraphAnalyzer {
     }
 
     // ── Step 5: 推断数据流 ──
-    const dataFlowEdges = DataFlowInferrer.infer(allCallEdges);
+    const dataFlowEdges = DataFlowInferrer.infer(allCallEdges) as DataFlowEdge[];
 
     // ── Stats ──
     const stats = {
@@ -322,7 +376,7 @@ export class CallGraphAnalyzer {
   /**
    * @private 空结果
    */
-  _emptyResult(durationMs: any) {
+  _emptyResult(durationMs: number): CallGraphResult {
     return {
       callEdges: [],
       dataFlowEdges: [],
@@ -346,7 +400,7 @@ export class CallGraphAnalyzer {
  * @param {number} fileCount
  * @returns {'full-cha'|'full'|'sampled'|'import-only'}
  */
-function _computeTier(fileCount: any) {
+function _computeTier(fileCount: number): 'full-cha' | 'full' | 'sampled' | 'import-only' {
   if (fileCount < 100) {
     return 'full-cha';
   }
@@ -365,16 +419,16 @@ function _computeTier(fileCount: any) {
  * @param {number} limit
  * @returns {object[]}
  */
-function _sampleCoreFiles(fileSummaries: any, limit: any) {
+function _sampleCoreFiles(fileSummaries: FileSummary[], limit: number): FileSummary[] {
   const CORE_DIRS = /\/(src|lib|app|core|pkg|internal|domain|service|controller|handler|api)\//i;
-  const scored = fileSummaries.map((f: any) => ({
+  const scored = fileSummaries.map((f: FileSummary) => ({
     f,
     score: CORE_DIRS.test(f.file) ? 2 : 1,
     callSiteCount: f.callSites?.length || 0,
   }));
   // 排序: 核心目录优先，有调用点的优先
-  scored.sort((a: any, b: any) => b.score - a.score || b.callSiteCount - a.callSiteCount);
-  return scored.slice(0, limit).map((s: any) => s.f);
+  scored.sort((a, b) => b.score - a.score || b.callSiteCount - a.callSiteCount);
+  return scored.slice(0, limit).map((s) => s.f);
 }
 
 export default CallGraphAnalyzer;

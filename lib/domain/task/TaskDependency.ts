@@ -33,8 +33,8 @@ const BLOCKING_TYPES = new Set([DepType.BLOCKS, DepType.WAITS_FOR]);
  * @param {string} depType
  * @returns {boolean}
  */
-export function affectsReadyWork(depType: any) {
-  return BLOCKING_TYPES.has(depType);
+export function affectsReadyWork(depType: string): boolean {
+  return (BLOCKING_TYPES as Set<string>).has(depType);
 }
 
 /**
@@ -42,8 +42,8 @@ export function affectsReadyWork(depType: any) {
  * @param {string} depType
  * @returns {boolean}
  */
-export function isValidDepType(depType: any) {
-  return ALL_DEP_TYPES.includes(depType);
+export function isValidDepType(depType: string): boolean {
+  return (ALL_DEP_TYPES as readonly string[]).includes(depType);
 }
 
 export default DepType;
