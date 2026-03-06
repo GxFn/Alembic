@@ -60,7 +60,7 @@ export class ValidationError extends BaseError {
 export class NotFoundError extends BaseError {
   resource: any;
   resourceId: any;
-  constructor(message, resource, resourceId) {
+  constructor(message, resource?, resourceId?) {
     // 如果没有提供 message，那么第一个参数就是 resource
     let finalMessage = message;
     let finalResource = resource;

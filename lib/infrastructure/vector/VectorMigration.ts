@@ -45,8 +45,7 @@ export class VectorMigration {
         const items = JSON.parse(raw);
         const itemList = Array.isArray(items)
           ? items
-          // @ts-expect-error TS migration: TS2698
-          : Object.entries(items).map(([id, item]) => ({ ...item, id }));
+          : Object.entries(items).map(([id, item]) => ({ ...(item as any), id }));
 
         if (itemList.length > 0) {
           // 过滤有效条目并批量插入

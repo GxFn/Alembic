@@ -32,12 +32,10 @@ const VSCODE_LANGUAGE_MAP = {
 const BUNDLE_FILENAME = 'autosnippet.code-snippets';
 
 export class VSCodeCodec extends SnippetCodec {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'vscode';
   }
 
-  // @ts-expect-error TS migration: TS2416
   get fileExtension() {
     return '.code-snippets';
   }

@@ -83,7 +83,7 @@ router.get(
       /* not registered */
     }
     const builtInEntries = guardCheckEngine
-      ? Object.entries(guardCheckEngine.getBuiltInRules())
+      ? (Object.entries(guardCheckEngine.getBuiltInRules()) as [string, any][])
       : [];
     const dbRuleIds = new Set(mappedDbRules.map((r) => r.id));
     const builtInRules = builtInEntries
@@ -91,19 +91,12 @@ router.get(
       .map(([id, r]) => ({
         id,
         ruleId: id,
-        // @ts-expect-error TS migration: TS2339
         message: r.message,
-        // @ts-expect-error TS migration: TS2339
         severity: r.severity,
-        // @ts-expect-error TS migration: TS2339
         pattern: r.pattern,
-        // @ts-expect-error TS migration: TS2339
         languages: r.languages || [],
-        // @ts-expect-error TS migration: TS2339
         dimension: r.dimension || 'file',
-        // @ts-expect-error TS migration: TS2339
         category: r.category || '',
-        // @ts-expect-error TS migration: TS2339
         fixSuggestion: r.fixSuggestion || '',
         note: '',
         enabled: true,

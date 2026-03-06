@@ -334,8 +334,7 @@ export async function runPhase1_7_CallGraph(astProjectSummary, projectRoot, cont
 
       callGraphResult = ceg.populateCallGraph(result.callEdges, result.dataFlowEdges);
 
-      // @ts-expect-error TS migration: TS2339
-      const partialTag = result.stats.partial ? ' [partial]' : '';
+      const partialTag = (result.stats as any).partial ? ' [partial]' : '';
       const incrTag = isIncremental ? ' [incremental]' : '';
       logger.info(
         `[Bootstrap] Call Graph${incrTag}${partialTag}: ${result.callEdges.length} call edges, ` +
@@ -605,13 +604,12 @@ export async function runPhase4_DimensionResolve(params) {
  */
 export async function runAllPhases(projectRoot, ctx, options: any = {}) {
   const warnings = [];
-  const report = options.generateReport ? { phases: {}, startTime: Date.now() } : null;
+  const report: any = options.generateReport ? { phases: {}, startTime: Date.now() } : null;
 
   // 路径安全守卫
   if (!pathGuard.configured) {
     const { default: Bootstrap } = await import('../../../../../bootstrap.js');
-    // @ts-expect-error TS migration: TS2554
-    Bootstrap.configurePathGuard(projectRoot);
+    (Bootstrap as any).configurePathGuard(projectRoot);
   }
 
   // ── 清除旧数据 (if requested) ──
@@ -631,7 +629,6 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
   const phase1 = await runPhase1_FileCollection(projectRoot, ctx.logger, options);
   let { allFiles, allTargets, discoverer, langStats } = phase1;
 
-  // @ts-expect-error TS migration: TS2339
   if (report) report.phases.fileCollection = { fileCount: allFiles.length, targetCount: allTargets.length, ms: Date.now() - p1Start };
 
   if (allFiles.length === 0) {
@@ -663,7 +660,6 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
         const ib = new IncrementalBootstrap(db, projectRoot, { logger: ctx.logger });
         const dimIds = baseDimensions.map(d => d.id);
         incrementalPlan = await ib.evaluate(allFiles, dimIds);
-        // @ts-expect-error TS migration: TS2339
         if (report) report.phases.incremental = { plan: incrementalPlan };
         ctx.logger.info(`[Bootstrap] Incremental mode: ${incrementalPlan.mode}, affected: ${incrementalPlan.affectedDimensions?.length || 0}`);
       } else {
@@ -680,7 +676,6 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
     generateAstContext: options.generateAstContext || false,
   });
   warnings.push(...phase1_5.warnings);
-  // @ts-expect-error TS migration: TS2339
   if (report) report.phases.ast = { classCount: phase1_5.astProjectSummary?.classes?.length || 0, ms: Date.now() - p15Start };
 
   // ── Phase 1.6: Entity Graph ──
@@ -689,7 +684,6 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
     phase1_5.astProjectSummary, projectRoot, ctx.container, ctx.logger
   );
   warnings.push(...phase1_6.warnings);
-  // @ts-expect-error TS migration: TS2339
   if (report) report.phases.entityGraph = { entityCount: phase1_6.codeEntityResult?.entitiesUpserted || 0, edgeCount: phase1_6.codeEntityResult?.edgesCreated || 0, ms: Date.now() - p16Start };
 
   // ── Phase 1.7: Call Graph (Phase 5) ──
@@ -698,7 +692,6 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
     phase1_5.astProjectSummary, projectRoot, ctx.container, ctx.logger
   );
   warnings.push(...phase1_7.warnings);
-  // @ts-expect-error TS migration: TS2339
   if (report) report.phases.callGraph = { result: phase1_7.callGraphResult, ms: Date.now() - p17Start };
 
   // ── Phase 2: 依赖图 ──
@@ -707,7 +700,6 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
     discoverer, ctx.container, ctx.logger, options.sourceTag || 'bootstrap'
   );
   warnings.push(...phase2.warnings);
-  // @ts-expect-error TS migration: TS2339
   if (report) report.phases.depGraph = { edgesWritten: phase2.depEdgesWritten || 0, ms: Date.now() - p2Start };
 
   // ── Phase 2.1: Module 实体 ──
@@ -720,7 +712,6 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
     summaryPrefix: options.summaryPrefix || 'Bootstrap scan',
   });
   warnings.push(...phase3.warnings);
-  // @ts-expect-error TS migration: TS2339
   if (report) report.phases.guard = { ruleCount: phase3.guardAudit?.rules?.length || 0, ms: Date.now() - p3Start };
 
   // ── Phase 4: 维度解析 + Enhancement Pack ──
@@ -733,7 +724,6 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
     allFiles,
     logger: ctx.logger,
   });
-  // @ts-expect-error TS migration: TS2339
   if (report) report.phases.dimension = { activeDimCount: phase4.activeDimensions?.length || 0, detectedFrameworks: phase4.detectedFrameworks, ms: Date.now() - p4Start };
 
   // 如果 Enhancement Pack 产生了新的 guardAudit，覆盖 Phase 3 的结果
@@ -752,7 +742,6 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
   });
 
   // 完成报告
-  // @ts-expect-error TS migration: TS2339
   if (report) report.totalMs = Date.now() - report.startTime;
 
   return {

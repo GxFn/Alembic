@@ -168,8 +168,7 @@ export class ConversationStore {
    * @param {number} [opts.limit=20]
    * @returns {Array}
    */
-  // @ts-expect-error TS migration: TS2339
-  list({ category, limit = 20 } = {}) {
+  list({ category, limit = 20 }: any = {}) {
     const index = this.#loadIndex();
     let results = index;
     if (category) {
@@ -286,8 +285,7 @@ export class ConversationStore {
    * @param {'user'|'system'} [opts.category] 只清理特定类别
    * @returns {{ deleted: number }}
    */
-  // @ts-expect-error TS migration: TS2339
-  cleanup({ maxAgeDays = 30, category } = {}) {
+  cleanup({ maxAgeDays = 30, category }: any = {}) {
     const index = this.#loadIndex();
     const cutoff = Date.now() - maxAgeDays * 86400000;
     let deleted = 0;

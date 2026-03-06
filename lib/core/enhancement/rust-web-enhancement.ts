@@ -12,15 +12,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class RustWebEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'rust-web';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Rust Web (Axum/Actix-web/Rocket/Warp) Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return {
       languages: ['rust'],

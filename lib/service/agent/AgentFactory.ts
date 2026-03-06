@@ -164,8 +164,7 @@ export class AgentFactory {
    * @param {string} [opts.lang] 项目语言 (透传给 sharedState._projectLanguage)
    * @returns {{ contextWindow: ContextWindow, tracker: ExplorationTracker, trace: import('./memory/ActiveContext.js').ActiveContext, activeContext: import('./memory/ActiveContext.js').ActiveContext, memoryCoordinator: MemoryCoordinator, outputType: string, dimId: string, sharedState: Object, source: string, scopeId: string }}
    */
-  // @ts-expect-error TS migration: TS2339
-  buildSystemContext({ budget, trackerStrategy = 'analyst', label = 'default', lang } = {}) {
+  buildSystemContext({ budget, trackerStrategy = 'analyst', label = 'default', lang }: any = {}) {
     // 创建轻量级 MemoryCoordinator (scan 场景无 PersistentMemory/SessionStore)
     const mc = new MemoryCoordinator({ mode: 'bootstrap' });
     const scopeId = `scan:${label}`;
@@ -267,8 +266,7 @@ export class AgentFactory {
    * @param {boolean} [opts.comprehensive]   深度扫描标志
    * @returns {Promise<Object>}              - task-specific JSON
    */
-  // @ts-expect-error TS migration: TS2339
-  async scanKnowledge({ label, files, task = 'extract', lang, comprehensive } = {}) {
+  async scanKnowledge({ label, files, task = 'extract', lang, comprehensive }: any = {}) {
     const taskConfig = SCAN_TASK_CONFIGS[task];
     if (!taskConfig) {
       throw new Error(`Unknown scanKnowledge task: "${task}". Available: ${Object.keys(SCAN_TASK_CONFIGS).join(', ')}`);
@@ -283,7 +281,6 @@ export class AgentFactory {
     // summarize (单文件) 使用较低预算
     const analyzeMaxIter = task === 'summarize' ? 12 : 24;
     const stages = buildScanPipelineStages({
-      // @ts-expect-error TS migration: TS2353
       task,
       producePrompt,
       analyzeCaps,
@@ -313,7 +310,6 @@ export class AgentFactory {
 
     // ── 完整的系统级多轮基础设施 (含 MemoryCoordinator 管理 ActiveContext) ──
     const systemCtx = this.buildSystemContext({
-      // @ts-expect-error TS migration: TS2353
       budget: { maxIterations: analyzeMaxIter },
       trackerStrategy: 'analyst',
       label: `${task}:${label}`,

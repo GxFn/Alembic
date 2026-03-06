@@ -45,12 +45,9 @@ export function gatewayMiddleware() {
 
       if (!result.success) {
         const err = new Error(result.error.message);
-        // @ts-expect-error TS migration: TS2339
-        err.statusCode = result.error.statusCode || 500;
-        // @ts-expect-error TS migration: TS2339
-        err.code = result.error.code;
-        // @ts-expect-error TS migration: TS2339
-        err.requestId = result.requestId;
+        (err as any).statusCode = result.error.statusCode || 500;
+        (err as any).code = result.error.code;
+        (err as any).requestId = result.requestId;
         throw err;
       }
 

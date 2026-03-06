@@ -239,7 +239,6 @@ export const PRESETS = Object.freeze({
       }),
       () => new SafetyPolicy({
         allowedSenders: process.env.ASD_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
-        // @ts-expect-error TS migration: TS2353
         fileScope: process.env.ASD_PROJECT_ROOT || null,
       }),
     ],

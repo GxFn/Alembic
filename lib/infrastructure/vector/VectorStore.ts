@@ -8,7 +8,7 @@ export class VectorStore {
    * 初始化存储
    * @returns {Promise<void>}
    */
-  async init() {
+  async init(): Promise<void> {
     throw new Error('Not implemented: init()');
   }
 
@@ -16,7 +16,7 @@ export class VectorStore {
    * 插入或更新文档
    * @param {{ id: string, content: string, vector: number[], metadata: object }} item
    */
-  async upsert(item) {
+  async upsert(item: any): Promise<void> {
     throw new Error('Not implemented: upsert()');
   }
 
@@ -24,7 +24,7 @@ export class VectorStore {
    * 批量 upsert
    * @param {Array} items
    */
-  async batchUpsert(items) {
+  async batchUpsert(items: any[]): Promise<void> {
     // 分批并行处理，避免 O(N) 串行延迟
     const BATCH_SIZE = 50;
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
@@ -37,7 +37,7 @@ export class VectorStore {
    * 删除文档
    * @param {string} id
    */
-  async remove(id) {
+  async remove(id: any): Promise<void> {
     throw new Error('Not implemented: remove()');
   }
 
@@ -46,7 +46,7 @@ export class VectorStore {
    * @param {string} id
    * @returns {Promise<object|null>}
    */
-  async getById(id) {
+  async getById(id: any): Promise<any | null> {
     throw new Error('Not implemented: getById()');
   }
 
@@ -56,7 +56,7 @@ export class VectorStore {
    * @param {object} options - { topK, filter, minScore }
    * @returns {Promise<Array<{ item: object, score: number }>>}
    */
-  async searchVector(queryVector, options: any = {}) {
+  async searchVector(queryVector: any, options: any = {}): Promise<Array<{ item: any; score: number }>> {
     throw new Error('Not implemented: searchVector()');
   }
 
@@ -65,7 +65,7 @@ export class VectorStore {
    * @param {object} filter - { type, category, language, tags, ... }
    * @returns {Promise<Array>}
    */
-  async searchByFilter(filter) {
+  async searchByFilter(filter: any): Promise<any[]> {
     throw new Error('Not implemented: searchByFilter()');
   }
 
@@ -73,14 +73,14 @@ export class VectorStore {
    * 列出所有 ID
    * @returns {Promise<string[]>}
    */
-  async listIds() {
+  async listIds(): Promise<string[]> {
     throw new Error('Not implemented: listIds()');
   }
 
   /**
    * 清空存储
    */
-  async clear() {
+  async clear(): Promise<void> {
     throw new Error('Not implemented: clear()');
   }
 
@@ -88,7 +88,7 @@ export class VectorStore {
    * 获取统计信息
    * @returns {Promise<{ count: number, indexSize: number }>}
    */
-  async getStats() {
+  async getStats(): Promise<{ count: number; indexSize: number }> {
     throw new Error('Not implemented: getStats()');
   }
 
@@ -96,7 +96,7 @@ export class VectorStore {
    * 销毁: 释放资源, 清理定时器等
    * 子类可选实现; 默认无操作
    */
-  destroy() {
+  destroy(): void {
     // no-op by default
   }
 }

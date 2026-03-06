@@ -42,21 +42,18 @@ export class RecipeExtractor {
    */
   extractFromContent(content, filename = 'unknown', filePath = '') {
     // 1. 解析 frontmatter
-    const { frontmatter, body } = this.#parseFrontmatter(content);
+    const { frontmatter, body }: any = this.#parseFrontmatter(content);
 
     // 2. 提取标题
-    // @ts-expect-error TS migration: TS2339
     const title = frontmatter.title || this.#extractTitle(body) || filename.replace(/\.[^.]+$/, '');
 
     // 3. 提取代码块
     const codeBlocks = this.#extractCodeBlocks(body);
 
     // 4. 推断语言
-    // @ts-expect-error TS migration: TS2339
     const language = frontmatter.language || this.#inferLanguage(body, filename, codeBlocks);
 
     // 5. 推断分类
-    // @ts-expect-error TS migration: TS2339
     const category = frontmatter.category || this.#inferCategory(title, body, language);
 
     // 6. 语义标签
@@ -75,13 +72,11 @@ export class RecipeExtractor {
       : null;
 
     return {
-      // @ts-expect-error TS migration: TS2339
       id: frontmatter.id || this.#generateId(filePath || filename),
       title,
       language,
       category,
       code: codeBlocks.map((b) => b.code).join('\n\n'),
-      // @ts-expect-error TS migration: TS2339
       description: frontmatter.description || this.#extractDescription(body),
       content: body,
       filePath,

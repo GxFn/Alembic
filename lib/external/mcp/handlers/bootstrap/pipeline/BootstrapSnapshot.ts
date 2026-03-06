@@ -45,8 +45,7 @@ export class BootstrapSnapshot {
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  // @ts-expect-error TS migration: TS2339
-  constructor(db, { logger } = {}) {
+  constructor(db, { logger }: any = {}) {
     if (!db) {
       throw new Error('BootstrapSnapshot requires a database instance');
     }
@@ -101,15 +100,11 @@ export class BootstrapSnapshot {
 
     // 构建维度-文件映射
     const dimensionMeta = {};
-    for (const [dimId, stat] of Object.entries(dimensionStats || {})) {
+    for (const [dimId, stat] of Object.entries(dimensionStats || {}) as [string, any][]) {
       dimensionMeta[dimId] = {
-        // @ts-expect-error TS migration: TS2339
         candidateCount: stat.candidateCount || 0,
-        // @ts-expect-error TS migration: TS2339
         analysisChars: stat.analysisChars || 0,
-        // @ts-expect-error TS migration: TS2339
         referencedFiles: stat.referencedFiles || 0,
-        // @ts-expect-error TS migration: TS2339
         durationMs: stat.durationMs || 0,
       };
     }
@@ -138,8 +133,7 @@ export class BootstrapSnapshot {
       });
 
       // 维度-文件关联
-      for (const [dimId, stat] of Object.entries(dimensionStats || {})) {
-        // @ts-expect-error TS migration: TS2339
+      for (const [dimId, stat] of Object.entries(dimensionStats || {}) as [string, any][]) {
         const refFiles = stat.referencedFilesList || [];
         for (const filePath of refFiles) {
           const rel =
@@ -317,9 +311,8 @@ export class BootstrapSnapshot {
 
     // 1. 从快照的 dimensionMeta 推断 — 查找维度引用了哪些变更文件
     const dimFileMap = this.#getDimFileMap(snapshot.id);
-    for (const [dimId, files] of Object.entries(dimFileMap)) {
+    for (const [dimId, files] of Object.entries(dimFileMap) as [string, any][]) {
       for (const changedFile of changedFiles) {
-        // @ts-expect-error TS migration: TS2339
         if (files.has(changedFile)) {
           affected.add(dimId);
           break;

@@ -31,8 +31,7 @@ export class QualityScorer {
 
     let totalScore = 0;
     for (const [dim, weight] of Object.entries(this.#weights)) {
-      // @ts-expect-error TS migration: TS2363
-      totalScore += (dimensions[dim] || 0) * weight;
+      totalScore += ((dimensions[dim] || 0) as number) * (weight as number);
     }
 
     totalScore = Math.min(1, Math.max(0, totalScore));

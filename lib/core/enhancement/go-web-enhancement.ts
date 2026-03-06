@@ -9,15 +9,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class GoWebEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'go-web';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Go Web (Gin/Echo/Fiber/Chi) Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return {
       languages: ['go'],

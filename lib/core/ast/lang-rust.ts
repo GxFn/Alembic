@@ -491,10 +491,8 @@ function detectRustPatterns(root, lang, methods, properties, classes) {
   }
 
   // Builder pattern: struct 有 builder() 或一系列链式 with_*/set_* 方法
-  for (const [typeName, methodList] of Object.entries(typeMethodMap)) {
-    // @ts-expect-error TS migration: TS2339
+  for (const [typeName, methodList] of Object.entries(typeMethodMap) as [string, any[]][]) {
     const hasBuilder = methodList.some((m) => m.name === 'builder' || m.name === 'build');
-    // @ts-expect-error TS migration: TS2339
     const chainMethods = methodList.filter((m) => /^(?:with_|set_|add_)/.test(m.name));
     if (hasBuilder || chainMethods.length >= 3) {
       patterns.push({
@@ -548,15 +546,12 @@ function detectRustPatterns(root, lang, methods, properties, classes) {
   }
 
   // Trait impl richness: types with many methods suggest impl-heavy design
-  for (const [typeName, methodList] of Object.entries(typeMethodMap)) {
-    // @ts-expect-error TS migration: TS2339
+  for (const [typeName, methodList] of Object.entries(typeMethodMap) as [string, any[]][]) {
     if (methodList.length >= 3) {
-      // @ts-expect-error TS migration: TS2339
       const traitImpls = new Set(methodList.filter((m) => m.traitImpl).map((m) => m.traitImpl));
       patterns.push({
         type: 'impl-rich',
         className: typeName,
-        // @ts-expect-error TS migration: TS2339
         methodCount: methodList.length,
         traitImplCount: traitImpls.size,
         confidence: 0.7,
@@ -633,8 +628,7 @@ function _detectDerives(classes, patterns) {
       }
     }
   }
-  const commonDerives = Object.entries(deriveCounts)
-    // @ts-expect-error TS migration: TS2365
+  const commonDerives = (Object.entries(deriveCounts) as [string, number][])
     .filter(([, count]) => count >= 2)
     .map(([name, count]) => ({ name, count }));
 

@@ -132,16 +132,14 @@ export function buildTierReflection(tierIndex, tierResults, sessionStore) {
 
   // 多维度引用的文件 = 跨维度热点
   for (const [file, count] of Object.entries(fileMentions)) {
-    // @ts-expect-error TS migration: TS2365
-    if (count >= 2) {
+    if ((count as number) >= 2) {
       crossDimensionPatterns.push(`文件 "${file}" 被 ${count} 个维度引用 — 可能是系统核心组件`);
     }
   }
 
   // 多维度提及的关键词
   for (const [word, count] of Object.entries(keywordMentions)) {
-    // @ts-expect-error TS migration: TS2365
-    if (count >= 3) {
+    if ((count as number) >= 3) {
       crossDimensionPatterns.push(`关键词 "${word}" 出现 ${count} 次 — 跨维度关联主题`);
     }
   }

@@ -29,6 +29,9 @@ jobs:
       - name: Install dashboard dependencies
         run: cd dashboard && npm ci
 
+      - name: Build TypeScript
+        run: npm run build
+
       - name: Build Dashboard
         run: npm run build:dashboard
 

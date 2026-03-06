@@ -28,8 +28,7 @@ export class SkillAdvisor {
    * @param {object} [opts]
    * @param {object} [opts.database] - better-sqlite3 实例（可选）
    */
-  // @ts-expect-error TS migration: TS2339
-  constructor(projectRoot, { database } = {}) {
+  constructor(projectRoot, { database }: any = {}) {
     this.#projectRoot = projectRoot;
     this.#db = database || null;
   }

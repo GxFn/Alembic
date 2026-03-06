@@ -9,6 +9,8 @@
     "declarationMap": true,
     "sourceMap": true,
     "strict": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,

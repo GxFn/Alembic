@@ -21,13 +21,12 @@ router.get('/health', async (req, res) => {
     const cacheAdapter = getCacheAdapter();
     const cacheHealth = await cacheAdapter.healthCheck();
 
-    let realtimeHealth = { healthy: false, message: 'WebSocket 未启用' };
+    let realtimeHealth: any = { healthy: false, message: 'WebSocket 未启用' };
     try {
       const realtimeService = getRealtimeService();
       const clientCount = realtimeService.getConnectedClients();
       realtimeHealth = {
         healthy: true,
-        // @ts-expect-error TS migration: TS2353
         connectedClients: clientCount,
         message: `${clientCount} 个客户端已连接`,
       };
@@ -118,8 +117,7 @@ router.get('/errors/search', (req, res) => {
       severity,
       startDate,
       endDate,
-      // @ts-expect-error TS migration: TS2345
-      limit: limit ? parseInt(limit) : 100,
+      limit: limit ? parseInt(limit as string) : 100,
     });
 
     res.json({
@@ -166,13 +164,13 @@ router.get('/cache', (req, res) => {
  */
 router.post('/cache/clear', async (req, res) => {
   // 角色检查：仅 admin 可操作
-  // @ts-expect-error TS migration: TS2339
-  const role = req.resolvedRole || 'visitor';
+  const role = (req as any).resolvedRole || 'visitor';
   if (role !== 'developer') {
-    return res.status(403).json({
+    res.status(403).json({
       success: false,
       error: { message: '仅管理员可清空缓存' },
     });
+    return;
   }
 
   try {
@@ -292,20 +290,21 @@ router.get('/dashboard', async (req, res) => {
  */
 router.post('/reset', (req, res) => {
   if (process.env.NODE_ENV === 'production') {
-    return res.status(403).json({
+    res.status(403).json({
       success: false,
       error: { message: '生产环境不允许重置监控统计' },
     });
+    return;
   }
 
   // 角色检查：仅 admin 可操作
-  // @ts-expect-error TS migration: TS2339
-  const role = req.resolvedRole || 'visitor';
+  const role = (req as any).resolvedRole || 'visitor';
   if (role !== 'developer') {
-    return res.status(403).json({
+    res.status(403).json({
       success: false,
       error: { message: '仅管理员可重置监控统计' },
     });
+    return;
   }
 
   try {

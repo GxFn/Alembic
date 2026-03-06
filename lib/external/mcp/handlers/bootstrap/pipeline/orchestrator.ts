@@ -411,8 +411,8 @@ export async function fillDimensionsV3(fillContext) {
   }
 
   const candidateResults = { created: 0, failed: 0, errors: [] };
-  const dimensionCandidates = {};
-  const dimensionStats = {}; // P4.2: 维度级统计
+  const dimensionCandidates: Record<string, any> = {};
+  const dimensionStats: Record<string, any> = {}; // P4.2: 维度级统计
 
   // ── 跨维度去重集合 (实例级持久化，等效旧 ChatAgent.#globalSubmittedTitles/Patterns) ──
   const globalSubmittedTitles = new Set();
@@ -562,8 +562,7 @@ export async function fillDimensionsV3(fillContext) {
         const produceStage = {
           ...presetStages[2],
           promptBuilder: (ctx) => {
-            // @ts-expect-error TS migration: TS2554
-            memoryCoordinator.allocateBudget('producer');
+            (memoryCoordinator as any).allocateBudget('producer');
             return presetStages[2].promptBuilder(ctx);
           },
         };
@@ -1029,7 +1028,6 @@ export async function fillDimensionsV3(fillContext) {
       // 收集所有维度产出的候选 (从 Producer toolCalls 中提取)
       const allCandidates: any[] = [];
       for (const dimData of Object.values(dimensionCandidates)) {
-        // @ts-expect-error TS migration: TS2339
         const toolCalls = dimData?.producerResult?.toolCalls || [];
         for (const tc of toolCalls) {
           const toolName = tc.tool || tc.name;
@@ -1071,10 +1069,9 @@ export async function fillDimensionsV3(fillContext) {
       const consolidator = new EpisodicConsolidator(semanticMemory, { logger });
 
       consolidationResult = consolidator.consolidate(sessionStore, {
-        // @ts-expect-error TS migration: TS2353
         bootstrapSession: sessionId,
         clearPrevious: true, // 全量冷启动: 先清除旧的 bootstrap 记忆
-      });
+      } as any);
 
       const smStats = semanticMemory.getStats();
       logger.info(
@@ -1101,16 +1098,12 @@ export async function fillDimensionsV3(fillContext) {
   // P4.1: 汇总所有维度 token 用量
   const totalTokenUsage = { input: 0, output: 0 };
   const totalToolCalls = Object.values(dimensionStats).reduce(
-    // @ts-expect-error TS migration: TS2339
     (sum, s) => sum + (s.toolCallCount || 0),
     0
   );
   for (const stat of Object.values(dimensionStats)) {
-    // @ts-expect-error TS migration: TS2339
     if (stat.tokenUsage) {
-      // @ts-expect-error TS migration: TS2339
       totalTokenUsage.input += stat.tokenUsage.input || 0;
-      // @ts-expect-error TS migration: TS2339
       totalTokenUsage.output += stat.tokenUsage.output || 0;
     }
   }
@@ -1193,19 +1186,12 @@ export async function fillDimensionsV3(fillContext) {
 
     for (const [dimId, stat] of Object.entries(dimensionStats)) {
       report.dimensions[dimId] = {
-        // @ts-expect-error TS migration: TS2339
         candidatesSubmitted: stat.candidateCount || 0,
-        // @ts-expect-error TS migration: TS2339
         candidatesRejected: stat.rejectedCount || 0,
-        // @ts-expect-error TS migration: TS2339
         analysisChars: stat.analysisChars || 0,
-        // @ts-expect-error TS migration: TS2339
         referencedFiles: stat.referencedFiles || 0,
-        // @ts-expect-error TS migration: TS2339
         durationMs: stat.durationMs || 0,
-        // @ts-expect-error TS migration: TS2339
         toolCallCount: stat.toolCallCount || 0,
-        // @ts-expect-error TS migration: TS2339
         tokenUsage: stat.tokenUsage || { input: 0, output: 0 },
       };
     }

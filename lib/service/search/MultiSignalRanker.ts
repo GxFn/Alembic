@@ -232,8 +232,7 @@ export class MultiSignalRanker {
     const customWeights = options.scenarioWeights || {};
     const remapped = {};
     for (const [scenario, weights] of Object.entries(customWeights)) {
-      // @ts-expect-error TS migration: TS2698
-      remapped[scenario] = { ...weights };
+      remapped[scenario] = { ...(weights as any) };
       if ('seasonality' in remapped[scenario] && !('contextMatch' in remapped[scenario])) {
         remapped[scenario].contextMatch = remapped[scenario].seasonality;
         delete remapped[scenario].seasonality;
@@ -261,8 +260,7 @@ export class MultiSignalRanker {
       let totalScore = 0;
 
       for (const [name, signal] of Object.entries(this.#signals)) {
-        // @ts-expect-error TS migration: TS2339
-        const value = signal.compute(candidate, context);
+        const value = (signal as any).compute(candidate, context);
         signals[name] = value;
         // 向后兼容: 旧配置可能用 "seasonality" 而非 "contextMatch"
         const weight =

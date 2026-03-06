@@ -41,16 +41,13 @@ export class NodeDiscoverer extends ProjectDiscoverer {
   #targets = [];
   #depGraph = { nodes: [], edges: [] };
 
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'node';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Node.js (npm/pnpm/yarn)';
   }
 
-  // @ts-expect-error TS migration: TS2416
   async detect(projectRoot) {
     let confidence = 0;
     const reasons = [];
@@ -186,12 +183,10 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     this.#addExternalDeps();
   }
 
-  // @ts-expect-error TS migration: TS2416
   async listTargets() {
     return this.#targets;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getTargetFiles(target) {
     const targetPath =
       typeof target === 'string'
@@ -207,7 +202,6 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return files;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getDependencyGraph() {
     return this.#depGraph;
   }

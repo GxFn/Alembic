@@ -36,8 +36,7 @@ export async function handleSearch(watcher, fullPath, relativePath, searchLine) 
         context: { intent: 'generate' },
       });
       // auto 零结果 → keyword (SQL LIKE) 兆底
-      // @ts-expect-error TS migration: TS2339
-      if (!results || (results.items || []).length === 0) {
+      if (!results || ((results as any).items || []).length === 0) {
         results = await searchEngine.search(query, { limit: 10, mode: 'keyword' });
       }
     } catch {

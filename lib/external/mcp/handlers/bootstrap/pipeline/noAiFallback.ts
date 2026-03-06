@@ -170,18 +170,15 @@ function _buildProjectProfile({
   const lines = ['## 项目技术画像', ''];
 
   // 语言统计
-  const sortedLangs = Object.entries(langStats || {})
-    // @ts-expect-error TS migration: TS2362
+  const sortedLangs = (Object.entries(langStats || {}) as [string, number][])
     .sort(([, a], [, b]) => b - a)
     .slice(0, 8);
   if (sortedLangs.length > 0) {
     lines.push('### 语言分布', '');
     lines.push('| 语言 | 文件数 | 占比 |');
     lines.push('|------|--------|------|');
-    // @ts-expect-error TS migration: TS2365
     const total = sortedLangs.reduce((s, [, c]) => s + c, 0);
     for (const [lang, count] of sortedLangs) {
-      // @ts-expect-error TS migration: TS2362
       lines.push(`| ${lang} | ${count} | ${((count / total) * 100).toFixed(1)}% |`);
     }
     lines.push('');
@@ -292,8 +289,8 @@ function _buildArchitecture({ depGraphData, allTargets, targetFileMap, primaryLa
     lines.push('');
 
     // 入度/出度分析
-    const inDeg = {};
-    const outDeg = {};
+    const inDeg: Record<string, number> = {};
+    const outDeg: Record<string, number> = {};
     for (const e of depGraphData.edges) {
       const from = typeof e.from === 'string' ? e.from : e.source;
       const to = typeof e.to === 'string' ? e.to : e.target;
@@ -307,7 +304,6 @@ function _buildArchitecture({ depGraphData, allTargets, targetFileMap, primaryLa
 
     // 核心模块（被依赖最多）
     const coreModules = Object.entries(inDeg)
-      // @ts-expect-error TS migration: TS2362
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5);
     if (coreModules.length > 0) {
@@ -334,20 +330,17 @@ function _buildArchitecture({ depGraphData, allTargets, targetFileMap, primaryLa
   if (categories.length > 0) {
     lines.push('### ObjC Category 扩展', '');
     // 按基类分组
-    const byBase = {};
+    const byBase: Record<string, any[]> = {};
     for (const cat of categories) {
       const base = cat.className || cat.baseClass || cat.name?.split('(')[0] || 'Unknown';
       if (!byBase[base]) byBase[base] = [];
       byBase[base].push(cat);
     }
-    // @ts-expect-error TS migration: TS2339
     const sortedBases = Object.entries(byBase).sort(([, a], [, b]) => b.length - a.length);
     lines.push(`共 **${categories.length}** 个 Category，分布在 **${sortedBases.length}** 个基类上：`, '');
     for (const [base, cats] of sortedBases.slice(0, 10)) {
-      // @ts-expect-error TS migration: TS2339
       const catNames = cats.map(c => c.categoryName || c.name || '').filter(Boolean).slice(0, 5).join(', ');
       const loc = cats[0]?.file ? ` (来源: ${_basename(cats[0].file)})` : '';
-      // @ts-expect-error TS migration: TS2339
       lines.push(`- \`${base}\` — ${cats.length} 个 Category${catNames ? ': ' + catNames : ''}${loc}`);
     }
     if (sortedBases.length > 10) {
@@ -416,7 +409,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
     lines.push('### 类命名模式', '');
 
     // 检测常见后缀
-    const suffixCounts = {};
+    const suffixCounts: Record<string, number> = {};
     const COMMON_SUFFIXES = [
       'Service',
       'Manager',
@@ -443,9 +436,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
       }
     }
     usedSuffixes = Object.entries(suffixCounts)
-      // @ts-expect-error TS migration: TS2365
       .filter(([, c]) => c > 0)
-      // @ts-expect-error TS migration: TS2362
       .sort(([, a], [, b]) => b - a);
     if (usedSuffixes.length > 0) {
       lines.push('| 后缀约定 | 类数量 | 推断角色 |');
@@ -556,7 +547,7 @@ function _buildBestPractice({ guardAudit, primaryLang }) {
   }
 
   // 聚合所有违规
-  const ruleStats = {};
+  const ruleStats: Record<string, { count: number; severity: string; message: string; files: Set<string>; fixSuggestion: string | null }> = {};
   for (const f of guardAudit.files) {
     for (const v of f.violations || []) {
       if (!ruleStats[v.ruleId]) {
@@ -573,7 +564,6 @@ function _buildBestPractice({ guardAudit, primaryLang }) {
     }
   }
 
-  // @ts-expect-error TS migration: TS2339
   const sortedRules = Object.entries(ruleStats).sort(([, a], [, b]) => b.count - a.count);
 
   if (sortedRules.length === 0) {
@@ -592,19 +582,16 @@ function _buildBestPractice({ guardAudit, primaryLang }) {
   lines.push('|------|--------|--------|-----------|------|');
   for (const [ruleId, stat] of sortedRules.slice(0, 15)) {
     lines.push(
-      // @ts-expect-error TS migration: TS2339
       `| \`${ruleId}\` | ${stat.severity} | ${stat.count} | ${stat.files.size} | ${stat.message} |`
     );
   }
   lines.push('');
 
   // 修复建议
-  // @ts-expect-error TS migration: TS2339
   const withFix = sortedRules.filter(([, s]) => s.fixSuggestion);
   if (withFix.length > 0) {
     lines.push('### 修复建议', '');
     for (const [ruleId, stat] of withFix.slice(0, 10)) {
-      // @ts-expect-error TS migration: TS2339
       lines.push(`- **${ruleId}**: ${stat.fixSuggestion}`);
     }
     lines.push('');
@@ -619,7 +606,6 @@ function _buildBestPractice({ guardAudit, primaryLang }) {
   // 生成 coreCode (P3): Guard 规则摘要
   const codeLines = ['// Guard 高频违规规则'];
   for (const [ruleId, stat] of sortedRules.slice(0, 5)) {
-    // @ts-expect-error TS migration: TS2339
     codeLines.push(`// ${ruleId}: ${stat.message} (${stat.count}次)`);
   }
 
@@ -646,7 +632,7 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }) {
 
   // 从 Guard 高频违规推断
   if (guardAudit?.files?.length) {
-    const ruleStats = {};
+    const ruleStats: Record<string, { count: number; message: string; severity: string }> = {};
     for (const f of guardAudit.files) {
       for (const v of f.violations || []) {
         ruleStats[v.ruleId] = ruleStats[v.ruleId] || {
@@ -658,22 +644,17 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }) {
       }
     }
     const topErrors = Object.entries(ruleStats)
-      // @ts-expect-error TS migration: TS2339
       .filter(([, s]) => s.severity === 'error')
-      // @ts-expect-error TS migration: TS2339
       .sort(([, a], [, b]) => b.count - a.count)
       .slice(0, 8);
     const topWarnings = Object.entries(ruleStats)
-      // @ts-expect-error TS migration: TS2339
       .filter(([, s]) => s.severity === 'warning')
-      // @ts-expect-error TS migration: TS2339
       .sort(([, a], [, b]) => b.count - a.count)
       .slice(0, 8);
 
     if (topErrors.length > 0) {
       lines.push('### 必须（must）- 基于 error 级违规', '');
       for (const [ruleId, stat] of topErrors) {
-        // @ts-expect-error TS migration: TS2339
         lines.push(`- ❌ **${ruleId}**: ${stat.message} (项目中出现 ${stat.count} 次)`);
       }
       lines.push('');
@@ -681,7 +662,6 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }) {
     if (topWarnings.length > 0) {
       lines.push('### 建议（should）- 基于 warning 级违规', '');
       for (const [ruleId, stat] of topWarnings) {
-        // @ts-expect-error TS migration: TS2339
         lines.push(`- ⚠️ **${ruleId}**: ${stat.message} (${stat.count} 处)`);
       }
       lines.push('');
@@ -722,7 +702,6 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }) {
     codeLines.push(`// 过长方法: ${astProjectSummary.projectMetrics.longMethods.length} 个 → 新方法应 <50行`);
   }
 
-  // @ts-expect-error TS migration: TS2345
   return _makeCandidate({
     title: 'Agent 开发注意事项',
     knowledgeType: 'boundary-constraint',
@@ -735,6 +714,7 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }) {
     doClause: '新代码嵌套不超过 4 层，方法不超过 50 行，圈复杂度 <10',
     dontClause: '不要引入 Guard 已标记的反模式',
     whenClause: '在本项目中编写任何代码时',
+    sources: ['bootstrap-scan'],
   });
 }
 

@@ -423,18 +423,16 @@ export class LanguageService {
       return 'unknown';
     }
     // 按规范化语言聚合计数（避免 ObjC 的 .h/.m/.mm 分散）
-    const aggregated = {};
+    const aggregated: Record<string, number> = {};
     for (const [ext, count] of Object.entries(langStats)) {
       const lang = BARE_EXT_TO_LANG[ext] || ext;
-      aggregated[lang] = (aggregated[lang] || 0) + count;
+      aggregated[lang] = (aggregated[lang] || 0) + (count as number);
     }
     let best = 'unknown',
       bestCount = 0;
     for (const [lang, count] of Object.entries(aggregated)) {
-      // @ts-expect-error TS migration: TS2365
       if (count > bestCount && KNOWN_PROGRAMMING_LANGS.has(lang)) {
         best = lang;
-        // @ts-expect-error TS migration: TS2322
         bestCount = count;
       }
     }
@@ -450,14 +448,13 @@ export class LanguageService {
     if (!langStats || typeof langStats !== 'object') {
       return [];
     }
-    const aggregated = {};
+    const aggregated: Record<string, number> = {};
     for (const [ext, count] of Object.entries(langStats)) {
       const lang = BARE_EXT_TO_LANG[ext] || ext;
-      aggregated[lang] = (aggregated[lang] || 0) + count;
+      aggregated[lang] = (aggregated[lang] || 0) + (count as number);
     }
     return Object.entries(aggregated)
       .filter(([lang]) => KNOWN_PROGRAMMING_LANGS.has(lang))
-      // @ts-expect-error TS migration: TS2362
       .sort((a, b) => b[1] - a[1])
       .map(([lang, count]) => ({ lang, count }));
   }
@@ -482,9 +479,7 @@ export class LanguageService {
       return { primary: 'unknown', secondary: [], all: [], totalFiles: 0, isMultiLang: false };
     }
 
-    // @ts-expect-error TS migration: TS2365
     const totalFiles = all.reduce((s, e) => s + e.count, 0);
-    // @ts-expect-error TS migration: TS2362
     const enriched = all.map((e) => ({ ...e, ratio: e.count / totalFiles }));
     const primary = enriched[0].lang;
     const secondary = enriched
@@ -680,9 +675,9 @@ export class LanguageService {
     }
 
     // ── Path 2: 扫描构建系统标记文件 ──
-    const seenEco = new Set();
+    const seenEco = new Set<string>();
 
-    const scanDir = (dir) => {
+    const scanDir = (dir: string) => {
       try {
         for (const marker of BUILD_SYSTEM_MARKERS) {
           if (seenEco.has(marker.eco)) {
@@ -714,25 +709,20 @@ export class LanguageService {
 
     // Level 1..maxDepth: 子目录（支持 monorepo）
     if (seenEco.size === 0 && maxDepth >= 1) {
-      /** @type {Array<[string, number]>} */
-      const queue = [[projectRoot, 0]];
+      const queue: [string, number][] = [[projectRoot, 0]];
       while (queue.length > 0) {
-        const [dir, depth] = queue.shift();
+        const [dir, depth] = queue.shift()!;
         if (depth >= maxDepth) {
           continue;
         }
         try {
-          // @ts-expect-error TS migration: TS2769
           for (const ent of readdirSync(dir, { withFileTypes: true })) {
             if (!ent.isDirectory() || ent.name.startsWith('.') || SCAN_SKIP_DIRS.has(ent.name)) {
               continue;
             }
-            // @ts-expect-error TS migration: TS2345
             const sub = join(dir, ent.name);
             scanDir(sub);
-            // @ts-expect-error TS migration: TS2365
             if (depth + 1 < maxDepth) {
-              // @ts-expect-error TS migration: TS2365
               queue.push([sub, depth + 1]);
             }
           }
@@ -745,7 +735,6 @@ export class LanguageService {
     // ── 将生态 ID 转为语言 ID ──
     const langSet = new Set();
     for (const eco of seenEco) {
-      // @ts-expect-error TS migration: TS2538
       for (const lang of ECO_TO_LANGS[eco] || []) {
         langSet.add(lang);
       }

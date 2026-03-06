@@ -89,7 +89,7 @@ export class AiProvider {
    * @param {object} context - {history: [], temperature, maxTokens}
    * @returns {Promise<string>}
    */
-  async chat(prompt, context: any = {}) {
+  async chat(prompt: any, context: any = {}): Promise<string> {
     throw new Error(`${this.name}.chat() not implemented`);
   }
 
@@ -98,7 +98,7 @@ export class AiProvider {
    * @param {string} code
    * @returns {Promise<object>}
    */
-  async summarize(code) {
+  async summarize(code: any): Promise<any> {
     throw new Error(`${this.name}.summarize() not implemented`);
   }
 
@@ -107,7 +107,7 @@ export class AiProvider {
    * @param {string|string[]} text
    * @returns {Promise<number[]|number[][]>}
    */
-  async embed(text) {
+  async embed(text: any): Promise<number[] | number[][]> {
     throw new Error(`${this.name}.embed() not implemented`);
   }
 
@@ -118,7 +118,6 @@ export class AiProvider {
    */
   async probe() {
     const result = await this.chat('ping', { maxTokens: 16, temperature: 0 });
-    // @ts-expect-error TS migration: TS1345
     return !!result;
   }
 
@@ -126,7 +125,7 @@ export class AiProvider {
    * 检查是否支持 embedding
    * @returns {boolean}
    */
-  supportsEmbedding() {
+  supportsEmbedding(): boolean {
     return true;
   }
 
@@ -135,7 +134,7 @@ export class AiProvider {
    * 子类（如 GoogleGeminiProvider）覆盖返回 true
    * @returns {boolean}
    */
-  get supportsNativeToolCalling() {
+  get supportsNativeToolCalling(): boolean {
     return false;
   }
 
@@ -162,7 +161,7 @@ export class AiProvider {
    * @param {number} [opts.maxTokens=8192]
    * @returns {Promise<{text: string|null, functionCalls: Array<{id: string, name: string, args: object}>|null}>}
    */
-  async chatWithTools(prompt, opts: any = {}) {
+  async chatWithTools(prompt: any, opts: any = {}): Promise<{ text: string | null; functionCalls: any[] | null }> {
     // 默认降级: 忽略 tools/toolChoice，走纯文本 chat()
     const messages = opts.messages || [];
     const history = messages
@@ -198,13 +197,12 @@ export class AiProvider {
    * @param {string} [opts.systemPrompt] 可选系统指令
    * @returns {Promise<any>} 解析后的 JSON 对象/数组，解析失败返回 null
    */
-  async chatWithStructuredOutput(prompt, opts: any = {}) {
+  async chatWithStructuredOutput(prompt: any, opts: any = {}): Promise<any> {
     const response = await this.chat(prompt, {
       temperature: opts.temperature ?? 0.3,
       maxTokens: opts.maxTokens ?? 32768,
       systemPrompt: opts.systemPrompt,
     });
-    // @ts-expect-error TS migration: TS1345
     if (!response || response.trim().length === 0) {
       return null;
     }
@@ -277,8 +275,7 @@ export class AiProvider {
 
     // 使用 LanguageService 推断主语言
     const primaryLang = LanguageService.detectPrimary(extCounts);
-    // @ts-expect-error TS migration: TS2362
-    const dominant = Object.entries(extCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+    const dominant = Object.entries(extCounts).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || '';
 
     // iOS/macOS (Swift / Objective-C)
     if (primaryLang === 'swift' || primaryLang === 'objectivec') {
@@ -739,10 +736,9 @@ ${items}`;
     if (this._circuitState === 'OPEN') {
       const elapsed = Date.now() - (this._circuitOpenedAt || 0);
       if (elapsed < (this._circuitCooldownMs || 30000)) {
-        const err = new Error(
+        const err: any = new Error(
           `AI 服务熔断中 (连续 ${this._circuitFailures} 次失败)，${Math.ceil(((this._circuitCooldownMs || 30000) - elapsed) / 1000)}s 后恢复`
         );
-        // @ts-expect-error TS migration: TS2339
         err.code = 'CIRCUIT_OPEN';
         throw err;
       }

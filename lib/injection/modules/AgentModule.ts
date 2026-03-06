@@ -22,13 +22,12 @@ export function register(c) {
   c.singleton(
     'agentFactory',
     (ct) =>
-      // @ts-expect-error TS migration: TS2345
       new AgentFactory({
         container: ct,
         toolRegistry: ct.get('toolRegistry'),
         aiProvider: ct.singletons.aiProvider || null,
         projectRoot: ct.singletons._projectRoot || process.cwd(),
-      }),
+      } as any),
     { aiDependent: true }
   );
 

@@ -66,8 +66,7 @@ export const getProjectOverview = {
     ];
 
     // 语言分布
-    // @ts-expect-error TS migration: TS2362
-    const langEntries = Object.entries(langStats).sort((a, b) => b[1] - a[1]);
+    const langEntries = Object.entries(langStats).sort((a, b) => (b[1] as number) - (a[1] as number));
     if (langEntries.length > 0) {
       lines.push(``, `── 语言分布 ──`);
       for (const [ext, count] of langEntries) {

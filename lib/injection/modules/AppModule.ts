@@ -86,13 +86,12 @@ export function register(c) {
   });
 
   c.singleton('cursorDeliveryPipeline', (ct) =>
-    // @ts-expect-error TS migration: TS2345
     new CursorDeliveryPipeline({
       knowledgeService: ct.get('knowledgeService'),
       projectRoot: ct.singletons._projectRoot || process.cwd(),
       database: ct.get('database'),
       logger: ct.logger,
-    })
+    } as any)
   );
 
   // ═══ TaskGraph ═══

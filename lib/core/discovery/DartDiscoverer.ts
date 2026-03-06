@@ -37,16 +37,13 @@ export class DartDiscoverer extends ProjectDiscoverer {
   #depGraph = { nodes: [], edges: [] };
   #packageName = null;
 
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'dart';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Dart / Flutter';
   }
 
-  // @ts-expect-error TS migration: TS2416
   async detect(projectRoot) {
     let confidence = 0;
     const reasons = [];
@@ -99,11 +96,9 @@ export class DartDiscoverer extends ProjectDiscoverer {
 
     // 解析 pubspec.yaml
     const pubspec = this.#parsePubspec(projectRoot);
-    // @ts-expect-error TS migration: TS2339
     this.#packageName = pubspec?.name || basename(projectRoot);
 
     const framework = this.#detectFramework(pubspec);
-    // @ts-expect-error TS migration: TS2339
     const isFlutter = framework === 'flutter' || !!pubspec?.dependencies?.flutter;
 
     // 主 Target — lib/
@@ -116,9 +111,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
       metadata: {
         packageName: this.#packageName,
         isFlutter,
-        // @ts-expect-error TS migration: TS2339
         sdkVersion: pubspec?.environment?.sdk || null,
-        // @ts-expect-error TS migration: TS2339
         flutterVersion: pubspec?.environment?.flutter || null,
       },
     });
@@ -171,12 +164,10 @@ export class DartDiscoverer extends ProjectDiscoverer {
     this.#parseInternalImports(projectRoot);
   }
 
-  // @ts-expect-error TS migration: TS2416
   async listTargets() {
     return this.#targets;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getTargetFiles(target) {
     const targetPath =
       typeof target === 'string'
@@ -192,7 +183,6 @@ export class DartDiscoverer extends ProjectDiscoverer {
     return files;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getDependencyGraph() {
     return this.#depGraph;
   }
@@ -220,8 +210,8 @@ export class DartDiscoverer extends ProjectDiscoverer {
    * 用于解析 pubspec.yaml 中的 name, dependencies, environment 等
    */
   #parseSimpleYaml(content) {
-    const result = {};
-    let currentSection = null;
+    const result: Record<string, any> = {};
+    let currentSection: string | null = null;
 
     for (const line of content.split('\n')) {
       // 跳过注释和空行
@@ -332,7 +322,6 @@ export class DartDiscoverer extends ProjectDiscoverer {
           const pkgDir = join(packagesDir, entry.name);
           if (existsSync(join(pkgDir, 'pubspec.yaml'))) {
             const subPubspec = this.#parsePubspec(pkgDir);
-            // @ts-expect-error TS migration: TS2339
             const pkgName = subPubspec?.name || entry.name;
             this.#targets.push({
               name: `packages/${pkgName}`,
@@ -357,7 +346,6 @@ export class DartDiscoverer extends ProjectDiscoverer {
           const appDir = join(appsDir, entry.name);
           if (existsSync(join(appDir, 'pubspec.yaml'))) {
             const subPubspec = this.#parsePubspec(appDir);
-            // @ts-expect-error TS migration: TS2339
             const appName = subPubspec?.name || entry.name;
             this.#targets.push({
               name: `apps/${appName}`,

@@ -14,15 +14,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class VueEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'vue';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Vue 3.5 / Nuxt Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return { languages: ['typescript', 'javascript'], frameworks: ['vue', 'nuxt'] };
   }

@@ -108,10 +108,8 @@ export class ContextWindow {
     let contextSize = 32_000; // 默认回退值
     if (modelName) {
       for (const [pattern, size] of ContextWindow.MODEL_CONTEXT_WINDOWS) {
-        // @ts-expect-error TS migration: TS2339
-        if (pattern.test(modelName)) {
-          // @ts-expect-error TS migration: TS2322
-          contextSize = size;
+        if ((pattern as RegExp).test(modelName)) {
+          contextSize = size as number;
           break;
         }
       }

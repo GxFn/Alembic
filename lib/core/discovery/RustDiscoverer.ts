@@ -30,16 +30,13 @@ export class RustDiscoverer extends ProjectDiscoverer {
   #depGraph = { nodes: [], edges: [] };
   #crateName = null;
 
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'rust';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Rust (Cargo)';
   }
 
-  // @ts-expect-error TS migration: TS2416
   async detect(projectRoot) {
     let confidence = 0;
     const reasons = [];
@@ -139,12 +136,10 @@ export class RustDiscoverer extends ProjectDiscoverer {
     this.#discoverInternalModules(projectRoot);
   }
 
-  // @ts-expect-error TS migration: TS2416
   async listTargets() {
     return this.#targets;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getTargetFiles(target) {
     const targetPath =
       typeof target === 'string'
@@ -160,7 +155,6 @@ export class RustDiscoverer extends ProjectDiscoverer {
     return files;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getDependencyGraph() {
     return this.#depGraph;
   }

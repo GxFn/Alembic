@@ -278,8 +278,7 @@ function generateContextForAgent(projectSummary) {
     lines.push(`### 检测到的设计模式`);
     for (const [type, stat] of Object.entries(patternStats)) {
       lines.push(
-        // @ts-expect-error TS migration: TS2339
-        `- **${type}**: ${stat.count} 处 (${stat.files.slice(0, 3).join(', ')}${stat.files.length > 3 ? '...' : ''})`
+        `- **${type}**: ${(stat as any).count} 处 (${(stat as any).files.slice(0, 3).join(', ')}${(stat as any).files.length > 3 ? '...' : ''})`
       );
     }
     lines.push('');
@@ -622,8 +621,7 @@ function _aggregateMetrics(fileSummaries) {
     totalMethods: allMethods.length,
     totalClasses: allClasses.length,
     avgMethodsPerClass:
-      // @ts-expect-error TS migration: TS2362
-      classCounts.length > 0 ? classCounts.reduce((a, b) => a + b, 0) / classCounts.length : 0,
+      classCounts.length > 0 ? (classCounts as number[]).reduce((a, b) => a + b, 0) / classCounts.length : 0,
     maxNestingDepth:
       allMethods.length > 0 ? Math.max(...allMethods.map((m) => m.nestingDepth || 0)) : 0,
     longMethods: allMethods

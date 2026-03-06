@@ -602,16 +602,14 @@ let _lastPollAt = 0;
  */
 function wakeWaiters() {
   for (const resolve of _waiters) {
-    // @ts-expect-error TS migration: TS2349
-    resolve({ hasNew: true });
+    (resolve as Function)({ hasNew: true });
   }
   _waiters.clear();
 }
 
 router.get('/wait', (req, res) => {
   _lastPollAt = Date.now();
-  // @ts-expect-error TS migration: TS2345
-  const timeout = Math.min(parseInt(req.query.timeout) || 25000, 60000);
+  const timeout = Math.min(parseInt(req.query.timeout as string) || 25000, 60000);
   let resolved = false;
 
   const resolve = (data) => {

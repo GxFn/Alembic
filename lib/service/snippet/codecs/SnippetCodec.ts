@@ -10,12 +10,12 @@
  */
 export class SnippetCodec {
   /** @returns {string} codec 标识 ('xcode' | 'vscode') */
-  get id() {
+  get id(): string {
     throw new Error('SnippetCodec.id is abstract');
   }
 
-  /** @returns {string} 输出文件的扩展名 ('.codesnippet' | '.code-snippets') */
-  get fileExtension() {
+  /** 输出文件的扩展名 ('.codesnippet' | '.code-snippets') */
+  get fileExtension(): string {
     throw new Error('SnippetCodec.fileExtension is abstract');
   }
 
@@ -24,7 +24,7 @@ export class SnippetCodec {
    * @param {object} spec
    * @returns {string}
    */
-  generate(spec) {
+  generate(spec: any): string {
     throw new Error('SnippetCodec.generate() is abstract');
   }
 
@@ -35,7 +35,7 @@ export class SnippetCodec {
    * @param {object[]} specs
    * @returns {string | Array<{ filename: string, content: string }>}
    */
-  generateBundle(specs) {
+  generateBundle(specs: any[]): string | Array<{ filename: string; content: string }> {
     throw new Error('SnippetCodec.generateBundle() is abstract');
   }
 
@@ -44,7 +44,7 @@ export class SnippetCodec {
    * @param {string} [projectRoot]
    * @returns {string}
    */
-  getInstallDir(projectRoot) {
+  getInstallDir(projectRoot?: any): string {
     throw new Error('SnippetCodec.getInstallDir() is abstract');
   }
 
@@ -53,7 +53,7 @@ export class SnippetCodec {
    * @param {string} lang
    * @returns {string}
    */
-  mapLanguage(lang) {
+  mapLanguage(lang: any): string {
     throw new Error('SnippetCodec.mapLanguage() is abstract');
   }
 
@@ -61,7 +61,7 @@ export class SnippetCodec {
    * 获取 bundle 文件名 (VSCode = 'autosnippet.code-snippets', Xcode = per-file)
    * @returns {string|null}
    */
-  getBundleFilename() {
+  getBundleFilename(): string | null {
     return null;
   }
 }

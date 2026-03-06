@@ -48,8 +48,7 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
   );
   if (projectInfo.languages) {
     parts.push(
-      `语言分布: ${Object.entries(projectInfo.languages)
-        // @ts-expect-error TS migration: TS2362
+      `语言分布: ${(Object.entries(projectInfo.languages) as [string, number][])
         .sort((a, b) => b[1] - a[1])
         .map(([l, c]) => `${l}(${c})`)
         .join(', ')}`
@@ -295,7 +294,7 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
       parts.push('## 任务: 撰写代码模式与最佳实践文档');
       parts.push('');
 
-      const groups = {};
+      const groups: Record<string, any[]> = {};
       for (const r of knowledgeInfo.recipes) {
         const json = r.toJSON ? r.toJSON() : r;
         const cat = json.category || 'Other';
@@ -306,9 +305,7 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
       }
 
       for (const [cat, items] of Object.entries(groups).sort()) {
-        // @ts-expect-error TS migration: TS2339
         parts.push(`### ${cat} (${items.length} 条)`);
-        // @ts-expect-error TS migration: TS2339
         for (const item of items.slice(0, 8)) {
           parts.push(`- ${item.title}: ${item.description || 'N/A'}`);
           if (item.doClause) {
@@ -370,11 +367,9 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
       parts.push(`## 任务: 撰写${il}参考文档`);
       parts.push('');
 
-      const protoByModule = astInfo.protocolNamesByModule || {};
+      const protoByModule: Record<string, string[]> = astInfo.protocolNamesByModule || {};
       for (const [mod, protos] of Object.entries(protoByModule).sort()) {
-        // @ts-expect-error TS migration: TS2339
         if (protos.length > 0) {
-          // @ts-expect-error TS migration: TS2339
           parts.push(`### ${mod} 模块: ${protos.join(', ')}`);
         }
       }
@@ -638,8 +633,7 @@ export function renderIndex(project, ast, modules, knowledge, isZh, allTopics) {
     lines.push('');
   } else if (project.sourceFilesByModule && Object.keys(project.sourceFilesByModule).length >= 2) {
     // 无 moduleService targets → 使用 sourceFilesByModule 推断的模块
-    const sfm = project.sourceFilesByModule;
-    // @ts-expect-error TS migration: TS2339
+    const sfm: Record<string, string[]> = project.sourceFilesByModule;
     const sorted = Object.entries(sfm).sort((a, b) => b[1].length - a[1].length);
     lines.push(`## ${isZh ? '模块总览' : 'Module Overview'}`);
     lines.push('');
@@ -658,7 +652,6 @@ export function renderIndex(project, ast, modules, knowledge, isZh, allTopics) {
       const nameCol = hasDoc ? `[${modName}](modules/${slug(modName)}.md)` : modName;
       const purpose = inferModulePurpose(modName, [], [], modFiles);
       const desc = purpose ? (isZh ? purpose.zh : purpose.en) : '-';
-      // @ts-expect-error TS migration: TS2339
       lines.push(`| ${nameCol} | ${modFiles.length} | ${desc} |`);
     }
     lines.push('');
@@ -672,11 +665,9 @@ export function renderIndex(project, ast, modules, knowledge, isZh, allTopics) {
       `| ${isZh ? '语言' : 'Language'} | ${isZh ? '文件数' : 'Files'} | ${isZh ? '占比' : 'Share'} |`
     );
     lines.push('|--------|-------|------|');
-    // @ts-expect-error TS migration: TS2365
-    const total = Object.values(project.languages).reduce((a, b) => a + b, 0);
-    // @ts-expect-error TS migration: TS2362
-    for (const [lang, count] of Object.entries(project.languages).sort((a, b) => b[1] - a[1])) {
-      // @ts-expect-error TS migration: TS2365
+    const langMap: Record<string, number> = project.languages;
+    const total = Object.values(langMap).reduce((a, b) => a + b, 0);
+    for (const [lang, count] of Object.entries(langMap).sort((a, b) => b[1] - a[1])) {
       const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
       lines.push(`| ${lang} | ${count} | ${pct}% |`);
     }
@@ -774,12 +765,10 @@ export function renderArchitecture(project, ast, modules, isZh, codeEntityGraph)
     lines.push('');
   } else if (project.sourceFilesByModule && Object.keys(project.sourceFilesByModule).length >= 2) {
     // 无 moduleService → 从 sourceFilesByModule 推断模块结构图
-    const sfm = project.sourceFilesByModule;
+    const sfm: Record<string, string[]> = project.sourceFilesByModule;
     // 只显示有实质内容的模块（>= 2 个文件），避免单文件噪声
     const sorted = Object.entries(sfm)
-      // @ts-expect-error TS migration: TS2339
       .filter(([, files]) => files.length >= 2)
-      // @ts-expect-error TS migration: TS2339
       .sort((a, b) => b[1].length - a[1].length);
     const topModules = sorted.slice(0, 15);
 
@@ -806,7 +795,6 @@ export function renderArchitecture(project, ast, modules, isZh, codeEntityGraph)
     for (const [modName, modFiles] of topModules) {
       const purpose = inferModulePurpose(modName, [], [], modFiles);
       const desc = purpose ? (isZh ? purpose.zh : purpose.en) : '-';
-      // @ts-expect-error TS migration: TS2339
       lines.push(`| ${modName} | ${modFiles.length} | ${desc} |`);
     }
     lines.push('');
@@ -996,7 +984,7 @@ export function renderModule(target, ast, knowledge, isZh, projectInfo) {
     lines.push('');
 
     // 按语言统计
-    const langCount = {};
+    const langCount: Record<string, number> = {};
     for (const f of moduleFiles) {
       const ext = path.extname(f);
       const lang = LanguageService.displayNameFromExt(ext);
@@ -1005,8 +993,7 @@ export function renderModule(target, ast, knowledge, isZh, projectInfo) {
 
     lines.push(`| ${isZh ? '语言' : 'Language'} | ${isZh ? '文件数' : 'Files'} |`);
     lines.push('|--------|-------|');
-    // @ts-expect-error TS migration: TS2362
-    for (const [lang, count] of Object.entries(langCount).sort((a, b) => b - a)) {
+    for (const [lang, count] of Object.entries(langCount).sort((a, b) => b[1] - a[1])) {
       lines.push(`| ${lang} | ${count} |`);
     }
     lines.push('');
@@ -1066,7 +1053,7 @@ export function renderPatterns(knowledge, isZh) {
   ];
 
   // 按 category 分组
-  const groups = {};
+  const groups: Record<string, any[]> = {};
   for (const r of knowledge.recipes) {
     const json = r.toJSON ? r.toJSON() : r;
     const cat = json.category || 'Other';
@@ -1087,21 +1074,17 @@ export function renderPatterns(knowledge, isZh) {
   lines.push('');
 
   for (const [cat, items] of Object.entries(groups).sort()) {
-    // @ts-expect-error TS migration: TS2339
     lines.push(`## ${cat} (${items.length})`);
     lines.push('');
 
     // 分类概述
     lines.push(
       isZh
-        // @ts-expect-error TS migration: TS2339
         ? `${cat} 分类包含 ${items.length} 条规则，覆盖了该领域的核心规范。`
-        // @ts-expect-error TS migration: TS2339
         : `The ${cat} category contains ${items.length} rules covering core conventions in this area.`
     );
     lines.push('');
 
-    // @ts-expect-error TS migration: TS2488
     for (const item of items) {
       lines.push(`### ${item.title}`);
       lines.push('');
@@ -1284,8 +1267,7 @@ export function renderGettingStarted(project, modules, ast, isZh) {
 
   // ── 源文件统计 (增强无 moduleService 场景) ──
   if (modules.targets.length === 0 && project.sourceFilesByModule) {
-    const sfm = project.sourceFilesByModule;
-    // @ts-expect-error TS migration: TS2339
+    const sfm: Record<string, string[]> = project.sourceFilesByModule;
     const modEntries = Object.entries(sfm).sort((a, b) => b[1].length - a[1].length);
     if (modEntries.length > 0) {
       lines.push(`## ${isZh ? '项目模块概览' : 'Module Overview'}`);
@@ -1297,7 +1279,6 @@ export function renderGettingStarted(project, modules, ast, isZh) {
       for (const [modName, modFiles] of modEntries.slice(0, 15)) {
         const purpose = inferModulePurpose(modName, [], [], modFiles);
         const desc = purpose ? (isZh ? purpose.zh : purpose.en) : '-';
-        // @ts-expect-error TS migration: TS2339
         lines.push(`| ${modName} | ${modFiles.length} | ${desc} |`);
       }
       lines.push('');
@@ -1518,11 +1499,10 @@ export function renderProtocolReference(ast, isZh, projectInfo) {
   lines.push('');
 
   // 按模块分组
-  const protoByModule = ast.protocolNamesByModule || {};
+  const protoByModule: Record<string, string[]> = ast.protocolNamesByModule || {};
   const grouped = new Set();
 
   for (const [mod, protos] of Object.entries(protoByModule).sort()) {
-    // @ts-expect-error TS migration: TS2339
     if (protos.length === 0) {
       continue;
     }
@@ -1530,13 +1510,10 @@ export function renderProtocolReference(ast, isZh, projectInfo) {
     lines.push('');
     lines.push(
       isZh
-        // @ts-expect-error TS migration: TS2339
         ? `${mod} 模块定义了 ${protos.length} 个${il}:`
-        // @ts-expect-error TS migration: TS2339
         : `${mod} module defines ${protos.length} ${il}:`
     );
     lines.push('');
-    // @ts-expect-error TS migration: TS2339
     for (const p of protos.sort()) {
       lines.push(`- \`${p}\``);
       grouped.add(p);
@@ -1632,8 +1609,7 @@ export function renderFolderOverview(profiles, projectInfo, isZh) {
       fp.totalSize > 1024 * 1024
         ? `${(fp.totalSize / 1024 / 1024).toFixed(1)}MB`
         : `${(fp.totalSize / 1024).toFixed(1)}KB`;
-    const langs = Object.entries(fp.langBreakdown)
-      // @ts-expect-error TS migration: TS2362
+    const langs = (Object.entries(fp.langBreakdown) as [string, number][])
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([l]) => l)
@@ -1646,16 +1622,14 @@ export function renderFolderOverview(profiles, projectInfo, isZh) {
   lines.push('');
 
   // ── 命名约定总结 ──
-  const allPatterns = {};
+  const allPatterns: Record<string, number> = {};
   for (const fp of profiles) {
     for (const p of fp.namingPatterns) {
       allPatterns[p] = (allPatterns[p] || 0) + 1;
     }
   }
   const commonPatterns = Object.entries(allPatterns)
-    // @ts-expect-error TS migration: TS2365
     .filter(([, c]) => c >= 2)
-    // @ts-expect-error TS migration: TS2362
     .sort((a, b) => b[1] - a[1]);
 
   if (commonPatterns.length > 0) {
@@ -1782,11 +1756,9 @@ export function renderFolderProfile(fp, projectInfo, isZh) {
     `| ${isZh ? '语言' : 'Language'} | ${isZh ? '文件数' : 'Files'} | ${isZh ? '占比' : 'Share'} |`
   );
   lines.push('|--------|-------|------|');
-  // @ts-expect-error TS migration: TS2365
-  const total = Object.values(fp.langBreakdown).reduce((a, b) => a + b, 0);
-  // @ts-expect-error TS migration: TS2362
-  for (const [lang, count] of Object.entries(fp.langBreakdown).sort((a, b) => b[1] - a[1])) {
-    // @ts-expect-error TS migration: TS2365
+  const langBreakdown: Record<string, number> = fp.langBreakdown;
+  const total = Object.values(langBreakdown).reduce((a, b) => a + b, 0);
+  for (const [lang, count] of Object.entries(langBreakdown).sort((a, b) => b[1] - a[1])) {
     const pct = total > 0 ? ((count / total) * 100).toFixed(0) : 0;
     lines.push(`| ${lang} | ${count} | ${pct}% |`);
   }

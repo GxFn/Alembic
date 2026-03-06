@@ -13,15 +13,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class ReactEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'react';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'React 19 Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return { languages: ['typescript', 'javascript'], frameworks: ['react', 'nextjs'] };
   }

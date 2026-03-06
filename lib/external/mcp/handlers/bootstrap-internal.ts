@@ -150,16 +150,11 @@ export async function bootstrapKnowledge(ctx, args) {
         categories: astProjectSummary?.categories?.length || 0,
         patterns: Object.keys(astProjectSummary?.patternStats || {}),
       },
-      // @ts-expect-error TS migration: TS2339
-      codeEntityGraph: phaseReport?.phases?.entityGraph || { entityCount: 0, edgeCount: 0, ms: 0 },
-      // @ts-expect-error TS migration: TS2339
-      callGraph: phaseReport?.phases?.callGraph ? {
-        // @ts-expect-error TS migration: TS2339
-        entities: phaseReport.phases.callGraph.result?.entitiesUpserted || 0,
-        // @ts-expect-error TS migration: TS2339
-        edges: phaseReport.phases.callGraph.result?.edgesCreated || 0,
-        // @ts-expect-error TS migration: TS2339
-        ms: phaseReport.phases.callGraph.ms || 0,
+      codeEntityGraph: (phaseReport as any)?.phases?.entityGraph || { entityCount: 0, edgeCount: 0, ms: 0 },
+      callGraph: (phaseReport as any)?.phases?.callGraph ? {
+        entities: (phaseReport as any).phases.callGraph.result?.entitiesUpserted || 0,
+        edges: (phaseReport as any).phases.callGraph.result?.edgesCreated || 0,
+        ms: (phaseReport as any).phases.callGraph.ms || 0,
       } : { entities: 0, edges: 0, ms: 0 },
       dependencyGraph: { edgesWritten: depEdgesWritten || 0 },
       enhancementPacks: {
@@ -185,7 +180,7 @@ export async function bootstrapKnowledge(ctx, args) {
   // ═══════════════════════════════════════════════════════════
   // Phase 4.5: 构建响应 — filesByTarget + analysisFramework
   // ═══════════════════════════════════════════════════════════
-  const targetFileMap = {};
+  const targetFileMap: Record<string, any[]> = {};
   for (const f of allFiles) {
     if (!targetFileMap[f.targetName]) {
       targetFileMap[f.targetName] = [];
@@ -211,7 +206,7 @@ export async function bootstrapKnowledge(ctx, args) {
 
   const dimensions = activeDimensions;
 
-  const responseData = {
+  const responseData: any = {
     report,
     targets: targetsSummary || allTargets.map((t) => {
       const name = typeof t === 'string' ? t : t.name;
@@ -227,16 +222,13 @@ export async function bootstrapKnowledge(ctx, args) {
     // 避免 500+ 文件清单导致响应过大。完整文件列表保留在服务端供 Phase 5 使用。
     filesByTarget: Object.fromEntries(
       Object.entries(targetFileMap).map(([target, files]) => {
-        // @ts-expect-error TS migration: TS2488
         const sorted = [...files].sort((a, b) => (b.priority || 0) - (a.priority || 0));
         const top = sorted.slice(0, 10);
         return [
           target,
           {
-            // @ts-expect-error TS migration: TS2339
             totalFiles: files.length,
             topFiles: top.map(({ content, ...meta }) => meta),
-            // @ts-expect-error TS migration: TS2339
             ...(files.length > 10 ? { truncated: true } : {}),
           },
         ];
@@ -253,10 +245,8 @@ export async function bootstrapKnowledge(ctx, args) {
       : null,
     languageStats: langStats,
     primaryLanguage: primaryLang,
-    // @ts-expect-error TS migration: TS2339
-    secondaryLanguages: langProfile.secondary,
-    // @ts-expect-error TS migration: TS2339
-    isMultiLang: langProfile.isMultiLang,
+    secondaryLanguages: (langProfile as any).secondary,
+    isMultiLang: (langProfile as any).isMultiLang,
     languageExtension: buildLanguageExtension(primaryLang),
     guardSummary: guardAudit
       ? {
@@ -357,13 +347,9 @@ export async function bootstrapKnowledge(ctx, args) {
   }
 
   // 立即构建骨架响应
-  // @ts-expect-error TS migration: TS2339
   responseData.bootstrapSession = bootstrapSession ? bootstrapSession.toJSON() : null;
-  // @ts-expect-error TS migration: TS2339
   responseData.bootstrapCandidates = { created: 0, failed: 0, errors: [], status: 'filling' };
-  // @ts-expect-error TS migration: TS2339
   responseData.autoSkills = { created: 0, failed: 0, skills: [], errors: [], status: 'filling' };
-  // @ts-expect-error TS migration: TS2339
   responseData.message = `Bootstrap 骨架已创建: ${allFiles.length} files, ${allTargets.length} targets, ${taskDefs.length} 个维度任务已排队，正在后台逐一填充...`;
 
   // ── 异步后台填充（fire-and-forget）──

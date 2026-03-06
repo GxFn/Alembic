@@ -67,8 +67,7 @@ export class AgentMessage {
    * @param {Record<string, any>} [opts.metadata] 元数据
    * @param {Function} [opts.replyFn] 回复函数
    */
-  // @ts-expect-error TS migration: TS2339
-  constructor({ content, channel = Channel.HTTP, session, sender, metadata, replyFn } = {}) {
+  constructor({ content, channel = Channel.HTTP, session, sender, metadata, replyFn }: any = {}) {
     this.id = randomUUID();
     this.content = content || '';
     this.channel = channel;
@@ -102,7 +101,6 @@ export class AgentMessage {
   static fromHttp(req, replyFn) {
     const body = req.body || {};
     return new AgentMessage({
-      // @ts-expect-error TS migration: TS2353
       content: body.prompt || body.message || body.content || '',
       channel: Channel.HTTP,
       session: {
@@ -132,7 +130,6 @@ export class AgentMessage {
   static fromLark(larkMsg, replyFn) {
     return new AgentMessage({
       content: larkMsg.text || larkMsg.content || '',
-      // @ts-expect-error TS migration: TS2322
       channel: Channel.LARK,
       session: {
         id: larkMsg.chatId || randomUUID(),
@@ -162,7 +159,6 @@ export class AgentMessage {
   static fromCli(input, opts: any = {}) {
     return new AgentMessage({
       content: input,
-      // @ts-expect-error TS migration: TS2322
       channel: Channel.CLI,
       session: { id: opts.sessionId || 'cli-session', history: opts.history || [] },
       sender: { id: 'cli-user', type: 'user' },
@@ -182,7 +178,6 @@ export class AgentMessage {
   static internal(content, opts: any = {}) {
     return new AgentMessage({
       content,
-      // @ts-expect-error TS migration: TS2322
       channel: Channel.INTERNAL,
       session: opts.session || { id: opts.sessionId || randomUUID(), history: opts.history || [] },
       sender: {
@@ -206,7 +201,6 @@ export class AgentMessage {
   static fromMcp(mcpReq, replyFn) {
     return new AgentMessage({
       content: mcpReq.prompt || mcpReq.content || mcpReq.arguments?.prompt || '',
-      // @ts-expect-error TS migration: TS2322
       channel: Channel.MCP,
       session: {
         id: mcpReq.sessionId || randomUUID(),

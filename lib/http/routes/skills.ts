@@ -50,8 +50,7 @@ router.get(
 router.get(
   '/signal-status',
   asyncHandler(async (_req, res) => {
-    // @ts-expect-error TS migration: TS2339
-    const { _signalCollector } = global;
+    const { _signalCollector } = global as any;
     if (!_signalCollector) {
       return res.json({ success: true, data: { running: false, mode: 'off', snapshot: null } });
     }

@@ -175,8 +175,7 @@ export class ExclusionManager {
     }
     if (config.ruleExclusions) {
       for (const [ruleId, list] of Object.entries(config.ruleExclusions)) {
-        // @ts-expect-error TS migration: TS2488
-        for (const e of list) {
+        for (const e of list as any) {
           this.addRuleExclusion(ruleId, e.filePath, e);
         }
       }

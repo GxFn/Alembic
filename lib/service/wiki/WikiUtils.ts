@@ -875,10 +875,8 @@ function _detectNamingPatterns(fileNames) {
   }
 
   // 出现 ≥2 次的后缀视为命名约定
-  // @ts-expect-error TS migration: TS2362
-  for (const [suffix, count] of Object.entries(suffixes).sort((a, b) => b[1] - a[1])) {
-    // @ts-expect-error TS migration: TS2365
-    if (count >= 2) {
+  for (const [suffix, count] of Object.entries(suffixes).sort((a, b) => (b[1] as number) - (a[1] as number))) {
+    if ((count as number) >= 2) {
       patterns.push(`*${suffix}: ${count}`);
     }
   }

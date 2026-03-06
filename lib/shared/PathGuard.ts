@@ -37,7 +37,7 @@ export class PathGuardError extends Error {
    * @param {string} projectRoot 当前项目根目录
    * @param {string} [reason] 拦截原因
    */
-  constructor(targetPath, projectRoot, reason) {
+  constructor(targetPath, projectRoot, reason?) {
     const msg = reason
       ? `[PathGuard] ${reason}: "${targetPath}"`
       : `[PathGuard] 写入路径越界: "${targetPath}" 不在允许范围内。`;
@@ -154,7 +154,6 @@ class PathGuard {
     }
 
     if (!targetPath || typeof targetPath !== 'string') {
-      // @ts-expect-error TS migration: TS2554
       throw new PathGuardError(String(targetPath), this.#projectRoot);
     }
 
@@ -178,7 +177,6 @@ class PathGuard {
     }
 
     // 越界
-    // @ts-expect-error TS migration: TS2554
     throw new PathGuardError(resolved, this.#projectRoot);
   }
 

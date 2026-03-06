@@ -135,10 +135,8 @@ export class IndexingPipeline {
 
         // 标记需要清理的旧 chunk
         for (const existId of existingIds) {
-          // @ts-expect-error TS migration: TS2339
-          if (existId.startsWith(`${baseId}_`)) {
-            // @ts-expect-error TS migration: TS2339
-            const idx = Number.parseInt(existId.split('_').pop(), 10);
+          if ((existId as string).startsWith(`${baseId}_`)) {
+            const idx = Number.parseInt((existId as string).split('_').pop(), 10);
             if (idx >= chunks.length) {
               staleIds.push(existId);
             }

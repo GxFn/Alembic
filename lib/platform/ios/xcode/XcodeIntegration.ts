@@ -137,8 +137,7 @@ export async function insertHeaders(watcher, fullPath, headers, opts: any = {}) 
     if (opts.moduleName && !inferredModules.includes(opts.moduleName)) {
       inferredModules.push(opts.moduleName);
     }
-    // @ts-expect-error TS migration: TS2345
-    const thirdPartyModules = inferredModules.filter((m) => !_SYSTEM_FRAMEWORKS.has(m));
+    const thirdPartyModules = inferredModules.filter((m) => !(_SYSTEM_FRAMEWORKS as any).has(m));
     if (thirdPartyModules.length > 0) {
       try {
         const { ServiceContainer } = await import('../../../injection/ServiceContainer.js');
@@ -213,8 +212,7 @@ export async function insertHeaders(watcher, fullPath, headers, opts: any = {}) 
     const headerModules = inferModulesFromHeaders([headerTrimmed]);
     if (spmService && currentTarget && !opts.skipDepCheck) {
       for (const mod of headerModules) {
-        // @ts-expect-error TS migration: TS2345
-        if (_SYSTEM_FRAMEWORKS.has(mod) || mod === currentTarget) {
+        if ((_SYSTEM_FRAMEWORKS as any).has(mod) || mod === currentTarget) {
           continue;
         }
 
@@ -454,8 +452,7 @@ async function _preflightDeps(fullPath, headers, selected, NU) {
   if (selected.moduleName && !inferredModules.includes(selected.moduleName)) {
     inferredModules.push(selected.moduleName);
   }
-  // @ts-expect-error TS migration: TS2345
-  const thirdPartyModules = inferredModules.filter((m) => !_SYSTEM_FRAMEWORKS.has(m));
+  const thirdPartyModules = inferredModules.filter((m) => !(_SYSTEM_FRAMEWORKS as any).has(m));
   if (thirdPartyModules.length === 0) {
     return result;
   }

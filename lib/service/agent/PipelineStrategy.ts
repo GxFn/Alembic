@@ -37,12 +37,10 @@ export class PipelineStrategy extends Strategy {
     this.#maxRetries = maxRetries;
   }
 
-  // @ts-expect-error TS migration: TS2416
   get name() {
     return 'pipeline';
   }
 
-  // @ts-expect-error TS migration: TS2416
   async execute(runtime, message, opts: any = {}) {
     const bus = AgentEventBus.getInstance();
     const ctx = {
@@ -81,13 +79,11 @@ export class PipelineStrategy extends Strategy {
 
     // 最终回复 = 最后一个执行阶段的输出
     const lastStage = Object.values(ctx.phaseResults)
-      // @ts-expect-error TS migration: TS2339
-      .filter((r) => r.reply)
+      .filter((r: any) => r.reply)
       .pop();
 
     return {
-      // @ts-expect-error TS migration: TS2339
-      reply: lastStage?.reply || '',
+      reply: (lastStage as any)?.reply || '',
       toolCalls: ctx.totalToolCalls,
       tokenUsage: ctx.totalTokenUsage,
       iterations: ctx.totalIterations,

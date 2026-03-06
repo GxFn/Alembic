@@ -155,8 +155,7 @@ export async function taskQualityAudit(context, { threshold = 0.6, maxCount = 10
  * 任务: Guard 完整扫描
  * 对代码运行全部 Guard 规则 + 生成修复建议
  */
-// @ts-expect-error TS migration: TS2339
-export async function taskGuardFullScan(context, { code, language, filePath } = {}) {
+export async function taskGuardFullScan(context, { code, language, filePath }: any = {}) {
   const { invokeAgent, aiProvider } = context;
 
   if (!code) {

@@ -86,8 +86,7 @@ export class Relations {
   toFlatArray() {
     const result = [];
     for (const [type, list] of Object.entries(this._b)) {
-      // @ts-expect-error TS migration: TS2488
-      for (const r of list) {
+      for (const r of list as any) {
         result.push({ type, ...r });
       }
     }
@@ -108,8 +107,7 @@ export class Relations {
    * @returns {boolean}
    */
   isEmpty() {
-    // @ts-expect-error TS migration: TS2339
-    return Object.values(this._b).every((l) => l.length === 0);
+    return Object.values(this._b).every((l: any) => l.length === 0);
   }
 
   /**

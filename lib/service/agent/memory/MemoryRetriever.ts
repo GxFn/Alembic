@@ -60,8 +60,7 @@ export class MemoryRetriever {
    * @param {string} [opts.type]
    * @returns {Array<object>} 按 score 降序排列
    */
-  // @ts-expect-error TS migration: TS2339
-  retrieve(query, { limit = 10, source, type } = {}) {
+  retrieve(query, { limit = 10, source, type }: any = {}) {
     const all = this.#store.getAllActive({ source, type });
     if (all.length === 0) return [];
 
@@ -131,8 +130,7 @@ export class MemoryRetriever {
    * @param {number} [opts.tokenBudget]
    * @returns {string} Markdown 格式
    */
-  // @ts-expect-error TS migration: TS2339
-  toPromptSection({ source, query, limit = 15, tokenBudget } = {}) {
+  toPromptSection({ source, query, limit = 15, tokenBudget }: any = {}) {
     if (tokenBudget && tokenBudget > 0) {
       const EST_TOKENS_PER_MEMORY = 30;
       const HEADER_TOKENS = 15;
@@ -146,7 +144,6 @@ export class MemoryRetriever {
     let memories;
 
     if (query) {
-      // @ts-expect-error TS migration: TS2353
       memories = this.retrieve(query, { limit, source });
     } else {
       memories = this.#store
@@ -181,8 +178,7 @@ export class MemoryRetriever {
    * @param {string} [opts.source]
    * @returns {Array<object>}
    */
-  // @ts-expect-error TS migration: TS2339
-  load(limit = 20, { source } = {}) {
+  load(limit = 20, { source }: any = {}) {
     const rows = this.#store
       .getAllActive({ source })
       .sort((a, b) => {

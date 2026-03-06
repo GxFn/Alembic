@@ -130,10 +130,8 @@ export async function bootstrapExternal(ctx) {
   const projectMeta = {
     name: path.basename(projectRoot),
     primaryLanguage: primaryLang,
-    // @ts-expect-error TS migration: TS2339
-    secondaryLanguages: langProfile.secondary || [],
-    // @ts-expect-error TS migration: TS2339
-    isMultiLang: langProfile.isMultiLang || false,
+    secondaryLanguages: (langProfile as any).secondary || [],
+    isMultiLang: (langProfile as any).isMultiLang || false,
     fileCount: allFiles.length,
     projectType: phaseResults.discoverer.id,
     projectRoot,

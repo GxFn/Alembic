@@ -80,7 +80,6 @@ export class JsonVectorAdapter extends VectorStore {
   /**
    * 向量相似度搜索（余弦相似度）
    */
-  // @ts-expect-error TS migration: TS2416
   async searchVector(queryVector, options: any = {}) {
     const { topK = 10, filter = null, minScore = 0 } = options;
 
@@ -171,7 +170,6 @@ export class JsonVectorAdapter extends VectorStore {
     return this.#applyFilter([...this.#data.values()], filter);
   }
 
-  // @ts-expect-error TS migration: TS2416
   async listIds() {
     return [...this.#data.keys()];
   }
@@ -182,7 +180,6 @@ export class JsonVectorAdapter extends VectorStore {
     this.#autoSave();
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getStats() {
     let indexSize = 0;
     try {
@@ -254,8 +251,7 @@ export class JsonVectorAdapter extends VectorStore {
       } else if (typeof items === 'object') {
         // 兼容旧格式 { id: item }
         for (const [id, item] of Object.entries(items)) {
-          // @ts-expect-error TS migration: TS2698
-          this.#data.set(id, { ...item, id });
+          this.#data.set(id, { ...(item as any), id });
         }
       }
     } catch {

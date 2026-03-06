@@ -71,8 +71,7 @@ router.get(
       // SPM 格式兼容：从 packages 构建图
       if (level === 'target') {
         for (const [pkgName, pkgInfo] of Object.entries(graph.packages)) {
-          // @ts-expect-error TS migration: TS2339
-          const targetsInfo = pkgInfo?.targetsInfo || {};
+          const targetsInfo = (pkgInfo as any)?.targetsInfo || {};
           for (const [targetName, info] of Object.entries(targetsInfo)) {
             const id = `${pkgName}::${targetName}`;
             nodes.push({
@@ -81,8 +80,7 @@ router.get(
               type: 'target',
               packageName: pkgName,
             });
-            // @ts-expect-error TS migration: TS2339
-            for (const d of info?.dependencies || []) {
+            for (const d of (info as any)?.dependencies || []) {
               if (!d?.name) {
                 continue;
               }
@@ -100,8 +98,7 @@ router.get(
           targets: graph.packages[id]?.targets,
         }));
         for (const [from, tos] of Object.entries(graph.edges || {})) {
-          // @ts-expect-error TS migration: TS2488
-          for (const to of tos || []) {
+          for (const to of (tos as any) || []) {
             edges.push({ from, to, source: 'base' });
           }
         }
@@ -397,7 +394,8 @@ router.post(
 router.get('/scan/events/:sessionId', (req, res) => {
   const session = getStreamSession(req.params.sessionId);
   if (!session) {
-    return res.status(404).json({ success: false, error: 'Session not found or expired' });
+    res.status(404).json({ success: false, error: 'Session not found or expired' });
+    return;
   }
 
   // ─── SSE Headers ───

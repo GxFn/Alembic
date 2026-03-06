@@ -257,9 +257,8 @@ export class GuardService {
   /**
    * 查询规则列表 (kind='rule' + knowledgeType='boundary-constraint')
    */
-  async listRules(filters: any = {}, pagination = {}) {
+  async listRules(filters: any = {}, pagination: any = {}) {
     try {
-      // @ts-expect-error TS migration: TS2339
       const { page = 1, pageSize = 20 } = pagination;
       return this.knowledgeRepository.findWithPagination(
         { kind: 'rule', knowledgeType: 'boundary-constraint' },

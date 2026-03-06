@@ -963,10 +963,8 @@ export class ModuleService {
     let maxLang = 'unknown';
     let maxCount = 0;
     for (const [lang, count] of Object.entries(langCount)) {
-      // @ts-expect-error TS migration: TS2365
-      if (count > maxCount) {
-        // @ts-expect-error TS migration: TS2322
-        maxCount = count;
+      if ((count as number) > maxCount) {
+        maxCount = count as number;
         maxLang = lang;
       }
     }

@@ -290,12 +290,10 @@ router.post(
     const contextWindow = factory.createContextWindow({ isSystem: false });
 
     // ── 创建 Runtime 并注入 onProgress ──
-    // @ts-expect-error TS migration: TS2554
-    const message = AgentMessage.fromHttp(req);
+    const message = (AgentMessage as any).fromHttp(req);
     // 加载持久化历史到 message
     if (effectiveHistory.length > 0) {
-      // @ts-expect-error TS migration: TS2540
-      message.history = effectiveHistory;
+      (message as any).history = effectiveHistory;
     }
 
     const runtime = factory.createChat({
@@ -646,8 +644,7 @@ router.post(
 
     // 同步到当前进程环境变量（热生效）
     for (const [k, v] of Object.entries(updates)) {
-      // @ts-expect-error TS migration: TS2322
-      process.env[k] = v;
+      process.env[k] = String(v);
     }
 
     // 尝试热切换 AI Provider（包括依赖 AI 的所有服务）
@@ -716,7 +713,6 @@ router.post(
 
     // AgentMessage 构建
     const message = new AgentMessage({
-      // @ts-expect-error TS migration: TS2353
       content: prompt,
       channel: Channel.HTTP,
       session: { id: session.sessionId, history },
@@ -775,8 +771,7 @@ router.post(
       })
       .catch((err) => {
         logger.warn('SSE session error', { sessionId: session.sessionId, error: err.message });
-        // @ts-expect-error TS migration: TS2554
-        session.error(err.message);
+        (session as any).error(err.message);
       });
   })
 );
@@ -795,7 +790,8 @@ router.post(
 router.get('/chat/events/:sessionId', (req, res) => {
   const session = getStreamSession(req.params.sessionId);
   if (!session) {
-    return res.status(404).json({ success: false, error: 'Session not found or expired' });
+    res.status(404).json({ success: false, error: 'Session not found or expired' });
+    return;
   }
 
   // ─── SSE Headers ───

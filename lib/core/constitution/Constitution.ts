@@ -125,12 +125,9 @@ export class Constitution {
         id: r.id,
         description: r.description,
       })),
-      roles: Array.from(this.roles.values()).map((r) => ({
-        // @ts-expect-error TS migration: TS2339
+      roles: Array.from(this.roles.values()).map((r: any) => ({
         id: r.id,
-        // @ts-expect-error TS migration: TS2339
         name: r.name,
-        // @ts-expect-error TS migration: TS2339
         description: r.description,
       })),
     };

@@ -12,15 +12,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class NodeServerEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'node-server';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Node.js Server (Express/Fastify/NestJS) Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return { languages: ['typescript', 'javascript'], frameworks: ['node-server', 'nestjs'] };
   }

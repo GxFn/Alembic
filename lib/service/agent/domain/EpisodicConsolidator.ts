@@ -68,8 +68,7 @@ export class EpisodicConsolidator {
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  // @ts-expect-error TS migration: TS2339
-  constructor(semanticMemory, { logger } = {}) {
+  constructor(semanticMemory, { logger }: any = {}) {
     this.#semanticMemory = semanticMemory;
     this.#logger = logger || Logger.getInstance();
   }
@@ -83,8 +82,7 @@ export class EpisodicConsolidator {
    * @param {boolean} [opts.clearPrevious=false] 是否先清除旧的 bootstrap 记忆
    * @returns {{ findings: object, insights: object, textFacts: object, total: object }}
    */
-  // @ts-expect-error TS migration: TS2339
-  consolidate(sessionStore, { bootstrapSession, clearPrevious = false } = {}) {
+  consolidate(sessionStore, { bootstrapSession, clearPrevious = false }: any = {}) {
     const t0 = Date.now();
 
     // 可选: 清除旧的 bootstrap 记忆 (全量重跑场景)
@@ -204,7 +202,6 @@ export class EpisodicConsolidator {
           source: 'bootstrap',
           importance: 7, // 跨维度发现通常较重要
           sourceDimension: `tier-${ref.tierIndex + 1}-reflection`,
-          // @ts-expect-error TS migration: TS2554
           relatedEntities: this.#extractEntities(pattern),
           tags: ref.completedDimensions || [],
         });
@@ -242,7 +239,6 @@ export class EpisodicConsolidator {
           importance: f.importance || 7,
           sourceDimension: f.dimId || `tier-${ref.tierIndex + 1}`,
           sourceEvidence: f.evidence || '',
-          // @ts-expect-error TS migration: TS2554
           relatedEntities: this.#extractEntities(content),
           tags: [f.dimId, 'tier-reflection'].filter(Boolean),
         });
@@ -293,7 +289,6 @@ export class EpisodicConsolidator {
             source: 'bootstrap',
             importance: 4, // 正则提取的置信度偏低
             sourceDimension: dimId,
-            // @ts-expect-error TS migration: TS2554
             relatedEntities: this.#extractEntities(fullMatch),
             tags: [dimId, 'text-extracted'],
           });
@@ -322,7 +317,6 @@ export class EpisodicConsolidator {
             source: 'bootstrap',
             importance: 4,
             sourceDimension: dimId,
-            // @ts-expect-error TS migration: TS2554
             relatedEntities: this.#extractEntities(fullMatch),
             tags: [dimId, 'text-extracted'],
           });
@@ -347,7 +341,7 @@ export class EpisodicConsolidator {
    * @param {string} [evidence]
    * @returns {string[]}
    */
-  #extractEntities(text, evidence) {
+  #extractEntities(text, evidence = undefined) {
     const entities = new Set();
 
     // 大驼峰类名 (至少 2 个大写字母)

@@ -130,8 +130,7 @@ function _walkJavaClassBody(body, ctx, className) {
       case 'class_declaration': {
         // 内部类
         const inner = _parseJavaClass(child);
-        // @ts-expect-error TS migration: TS2551
-        inner.outerClass = className;
+        (inner as any).outerClass = className;
         ctx.classes.push(inner);
         const innerBody = child.namedChildren.find((c) => c.type === 'class_body');
         if (innerBody) {
@@ -322,10 +321,8 @@ function detectJavaPatterns(root, lang, methods, properties, classes) {
     }
   }
 
-  for (const [cls, methodList] of Object.entries(classMethodMap)) {
-    // @ts-expect-error TS migration: TS2339
+  for (const [cls, methodList] of Object.entries(classMethodMap) as [string, any[]][]) {
     const _hasPrivateConstructor = methodList.some((m) => m.isConstructor);
-    // @ts-expect-error TS migration: TS2339
     const hasGetInstance = methodList.some(
       (m) => m.isClassMethod && /^getInstance$|^get$/.test(m.name)
     );

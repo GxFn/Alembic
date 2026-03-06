@@ -325,8 +325,7 @@ export async function dimensionComplete(ctx, args) {
           });
           const wikiResult = await wikiGen.generate();
           logger.info(
-            // @ts-expect-error TS migration: TS2339
-            `[DimensionComplete] Auto Wiki generation: ${wikiResult?.totalPages || 0} pages`
+            `[DimensionComplete] Auto Wiki generation: ${(wikiResult as any)?.totalPages || 0} pages`
           );
         }
       } catch (e: any) {
@@ -344,7 +343,6 @@ export async function dimensionComplete(ctx, args) {
           const semanticMemory = new PersistentMemory(db, { logger });
           const consolidator = new EpisodicConsolidator(semanticMemory, { logger });
           const result = await consolidator.consolidate(session.sessionStore, {
-            // @ts-expect-error TS migration: TS2353
             bootstrapSession: session.id,
             clearPrevious: true,
           });

@@ -33,16 +33,13 @@ export class PythonDiscoverer extends ProjectDiscoverer {
   #depGraph = { nodes: [], edges: [] };
   #projectName = null;
 
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'python';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Python (pip/poetry/pdm)';
   }
 
-  // @ts-expect-error TS migration: TS2416
   async detect(projectRoot) {
     let confidence = 0;
     const reasons = [];
@@ -131,12 +128,10 @@ export class PythonDiscoverer extends ProjectDiscoverer {
     this.#parseDependencies(projectRoot, pyproject);
   }
 
-  // @ts-expect-error TS migration: TS2416
   async listTargets() {
     return this.#targets;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getTargetFiles(target) {
     const targetPath =
       typeof target === 'string'
@@ -152,7 +147,6 @@ export class PythonDiscoverer extends ProjectDiscoverer {
     return files;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getDependencyGraph() {
     return this.#depGraph;
   }
@@ -331,23 +325,20 @@ export class PythonDiscoverer extends ProjectDiscoverer {
    * 不做完整 TOML 解析, 只用正则提取关键信息
    */
   #parsePyprojectToml(content) {
-    const result = { project: {} };
+    const result: { project: Record<string, any> } = { project: {} };
 
     // [project] name
     const nameMatch = content.match(/\[project\][\s\S]*?name\s*=\s*["']([^"']+)["']/);
     if (nameMatch) {
-      // @ts-expect-error TS migration: TS2339
       result.project.name = nameMatch[1];
     }
 
     // [project] dependencies — 简化提取数组
     const depsMatch = content.match(/\[project\][\s\S]*?dependencies\s*=\s*\[([\s\S]*?)\]/);
     if (depsMatch) {
-      // @ts-expect-error TS migration: TS2339
       result.project.dependencies = [];
       const items = depsMatch[1].matchAll(/["']([^"']+)["']/g);
       for (const m of items) {
-        // @ts-expect-error TS migration: TS2339
         result.project.dependencies.push(m[1]);
       }
     }

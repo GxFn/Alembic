@@ -57,12 +57,11 @@ export class Snippet {
    * 是否已安装到指定 IDE (不传则检查任意)
    * @param {string} [target] - 'xcode' | 'vscode'
    */
-  isInstalled(target) {
+  isInstalled(target?) {
     if (target) {
       return !!this.targets[target]?.installed;
     }
-    // @ts-expect-error TS migration: TS2339
-    return Object.values(this.targets).some((t) => t?.installed);
+    return Object.values(this.targets).some((t: any) => t?.installed);
   }
 
   /**
@@ -102,7 +101,6 @@ export class Snippet {
       code: this.code,
       targets: this.targets,
       // 向后兼容: 保留 installed 字段 (任意 IDE 已安装即为 true)
-      // @ts-expect-error TS migration: TS2554
       installed: this.isInstalled(),
       sourceRecipeId: this.sourceRecipeId,
       sourceCandidateId: this.sourceCandidateId,

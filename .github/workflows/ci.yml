@@ -25,6 +25,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      - run: npm run build
       - run: cd dashboard && npm ci
       - run: npm run build:dashboard
 
@@ -39,6 +40,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      - run: npm run build
       - run: cd dashboard && npm ci
       - run: npm run build:dashboard
 
@@ -109,6 +111,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      - run: npm run build
       - run: npm run test:unit
 
   integration-tests:
@@ -122,12 +125,13 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      - run: npm run build
 
       - name: Show Node/npm version
         run: node -v && npm -v
 
       - name: Run integration tests
-        run: npm run test:integration -- --verbose --forceExit 2>&1 | tee /tmp/integration-test.log
+        run: npm run test:integration 2>&1 | tee /tmp/integration-test.log
         env:
           ASD_DISABLE_WRITE_GUARD: '1'
           ASD_DISABLE_RATE_LIMIT: '1'

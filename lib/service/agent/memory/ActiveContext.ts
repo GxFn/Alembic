@@ -41,19 +41,17 @@ const TOOL_COMPRESS_STRATEGIES = {
     const lines = [];
     if (matches.length > 0) {
       lines.push(`搜索到 ${matches.length} 个匹配`);
-      const fileGroups = {};
+      const fileGroups: Record<string, any> = {};
       for (const m of matches) {
         if (!fileGroups[m.file]) fileGroups[m.file] = [];
         fileGroups[m.file].push(m.line);
       }
       for (const [file, lineNums] of Object.entries(fileGroups).slice(0, 8)) {
-        // @ts-expect-error TS migration: TS2339
         lines.push(`  ${file}: L${lineNums.slice(0, 3).join(',')}`);
       }
     }
     for (const [pattern, sub] of Object.entries(batchResults).slice(0, 5)) {
-      // @ts-expect-error TS migration: TS2339
-      const subMatches = sub.matches || [];
+      const subMatches = (sub as any).matches || [];
       lines.push(`  [${pattern}] ${subMatches.length} 个匹配`);
       for (const m of subMatches.slice(0, 3)) {
         lines.push(`    ${m.file}:${m.line}`);
@@ -325,9 +323,8 @@ export class ActiveContext {
    * @param {number} [importance=5] 重要性 1-10
    * @param {number} [round=0] 当前轮次
    */
-  noteKeyFinding(finding, evidence = '', importance = 5, round = 0) {
+  noteKeyFinding(finding, evidence: any = '', importance = 5, round = 0) {
     // P0 Fix: 防御性保证 evidence 是 string (AI 可能传入 array/object)
-    // @ts-expect-error TS migration: TS2339
     const safeEvidence = typeof evidence === 'string' ? evidence : Array.isArray(evidence) ? evidence.join(', ') : evidence ? String(evidence) : '';
     this.#scratchpad.push({
       finding,
@@ -723,8 +720,7 @@ export class ActiveContext {
         const matches = result?.matches || [];
         const batchResults = result?.batchResults;
         const totalMatches = batchResults
-          // @ts-expect-error TS migration: TS2339
-          ? Object.values(batchResults).reduce((s, br) => s + (br.matches?.length || 0), 0)
+          ? Object.values(batchResults).reduce((s, br: any) => s + (br.matches?.length || 0), 0)
           : matches.length;
         meta.keyFacts.push(`${totalMatches} matches found`);
         if (isNew) meta.keyFacts.push('new files discovered');

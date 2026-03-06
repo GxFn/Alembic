@@ -32,8 +32,7 @@ export class SystemPromptBuilder {
    * @param {string}   [opts.lang]
    * @param {object}   [opts.memoryConfig]
    */
-  // @ts-expect-error TS migration: TS2339
-  constructor({ persona, fileCache, lang, memoryConfig } = {}) {
+  constructor({ persona, fileCache, lang, memoryConfig }: any = {}) {
     this.#persona = persona || null;
     this.#fileCache = fileCache || null;
     this.#lang = lang || null;

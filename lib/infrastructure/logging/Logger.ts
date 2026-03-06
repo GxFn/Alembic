@@ -45,8 +45,7 @@ const LEVEL_COLORS = {
  * - 其他 info/debug: 一行精简格式
  */
 const compactConsoleFormat = winston.format.printf(({ level, message, timestamp, ...meta }) => {
-  // @ts-expect-error TS migration: TS2769
-  const ts = new Date(timestamp).toLocaleTimeString('en-US', {
+  const ts = new Date(timestamp as string).toLocaleTimeString('en-US', {
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
@@ -57,15 +56,13 @@ const compactConsoleFormat = winston.format.printf(({ level, message, timestamp,
   const lc = LEVEL_COLORS[rawLevel] || C.gray;
 
   // 静音高频噪音日志
-  // @ts-expect-error TS migration: TS2339
-  if (rawLevel === 'info' && MUTED_PREFIXES.some((p) => message.startsWith(p))) {
+  if (rawLevel === 'info' && MUTED_PREFIXES.some((p) => (message as string).startsWith(p))) {
     return ''; // 返回空字符串会被 winston 跳过
   }
 
   // 判断是否为 Agent 相关日志
   const isAgentLog = AGENT_TAGS.some(
-    // @ts-expect-error TS migration: TS2339
-    (tag) => message.includes(tag) || message.startsWith(`[${tag}]`)
+    (tag) => (message as string).includes(tag) || (message as string).startsWith(`[${tag}]`)
   );
 
   if (isAgentLog) {
@@ -83,8 +80,7 @@ const compactConsoleFormat = winston.format.printf(({ level, message, timestamp,
     const status = Number(statusCode);
     const sc = status >= 500 ? C.red : status >= 400 ? C.yellow : C.dimGray;
     const dur =
-      // @ts-expect-error TS migration: TS2345
-      parseInt(duration) > 1000
+      parseInt(String(duration)) > 1000
         ? `${C.yellow}${duration}${C.reset}`
         : `${C.dimGray}${duration}${C.reset}`;
     return `${C.dimGray}${ts}${C.reset} ${lc}${rawLevel}${C.reset} ${C.dimGray}${method}${C.reset} ${C.gray}${reqPath}${C.reset} ${sc}${statusCode}${C.reset} ${dur}`;

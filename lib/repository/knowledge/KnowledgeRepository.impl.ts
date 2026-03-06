@@ -53,8 +53,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    */
   async update(id, updates) {
     try {
-      const existing = await this.findById(id);
-      // @ts-expect-error TS migration: TS1345
+      const existing: any = await this.findById(id);
       if (!existing) {
         throw new Error(`Knowledge entry not found: ${id}`);
       }
@@ -76,7 +75,6 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
 
       // 部分更新 — 合并到现有实体
       const merged = KnowledgeEntry.fromJSON({
-        // @ts-expect-error TS migration: TS2339
         ...existing.toJSON(),
         ...updates,
         updatedAt: unixNow(),
@@ -123,8 +121,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @override
    */
   async findWithPagination(filters: any = {}, options = {}) {
-    // @ts-expect-error TS migration: TS2339
-    const { page = 1, pageSize = 20, orderBy = 'createdAt', order = 'DESC' } = options;
+    const { page = 1, pageSize = 20, orderBy = 'createdAt', order = 'DESC' } = options as any;
     const offset = (page - 1) * pageSize;
 
     const conditions = [];

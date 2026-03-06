@@ -113,8 +113,7 @@ export class SignalDetector {
         }
       }
       for (const sub of Object.values(batchResults)) {
-        // @ts-expect-error TS migration: TS2339
-        for (const m of sub.matches || []) {
+        for (const m of (sub as any).matches || []) {
           if (m.file && !this.#metrics.uniqueFiles.has(m.file)) {
             this.#metrics.uniqueFiles.add(m.file);
             foundNew = true;

@@ -59,8 +59,7 @@ export class EventAggregator {
    * @param {object} [opts]
    * @param {string} [opts.dedupeId] 去重标识（默认为 JSON hash）
    */
-  // @ts-expect-error TS migration: TS2339
-  push(key, event, { dedupeId } = {}) {
+  push(key, event, { dedupeId }: any = {}) {
     // 去重检查
     const dedupe = dedupeId || this.#hashEvent(key, event);
     const lastSeen = this.#dedupeMap.get(dedupe);

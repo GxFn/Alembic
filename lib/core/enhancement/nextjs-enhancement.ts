@@ -14,15 +14,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class NextjsEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'nextjs';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Next.js 15 App Router Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return { languages: ['typescript', 'javascript'], frameworks: ['nextjs'] };
   }

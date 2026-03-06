@@ -650,8 +650,7 @@ export default class ProjectGraph {
 
     // 恢复 conformance (Set)
     for (const [cls, protos] of Object.entries(data.conformance || {})) {
-      // @ts-expect-error TS migration: TS2769
-      graph.#conformance.set(cls, new Set(protos));
+      graph.#conformance.set(cls, new Set(protos as any));
     }
 
     // 恢复 files

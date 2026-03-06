@@ -138,8 +138,7 @@ export class BootstrapTaskManager {
   /** @type {Function|null} 获取 RealtimeService 的 getter（延迟获取，避免循环依赖） */
   #getRealtimeService = null;
 
-  // @ts-expect-error TS migration: TS2339
-  constructor({ eventBus, getRealtimeService } = {}) {
+  constructor({ eventBus, getRealtimeService }: any = {}) {
     this.#eventBus = eventBus || null;
     this.#getRealtimeService = getRealtimeService || null;
   }

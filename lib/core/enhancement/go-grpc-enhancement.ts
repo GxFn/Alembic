@@ -12,15 +12,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class GoGrpcEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'go-grpc';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Go gRPC Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return { languages: ['go'], frameworks: ['grpc'] };
   }

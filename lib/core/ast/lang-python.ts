@@ -281,12 +281,10 @@ function detectPyPatterns(root, lang, methods, properties, classes) {
     }
   }
   for (const [cls, methodNames] of Object.entries(classMethodMap)) {
-    // @ts-expect-error TS migration: TS2339
-    if (methodNames.includes('__enter__') && methodNames.includes('__exit__')) {
+    if ((methodNames as any).includes('__enter__') && (methodNames as any).includes('__exit__')) {
       patterns.push({ type: 'context-manager', className: cls, confidence: 0.95 });
     }
-    // @ts-expect-error TS migration: TS2339
-    if (methodNames.includes('__iter__') && methodNames.includes('__next__')) {
+    if ((methodNames as any).includes('__iter__') && (methodNames as any).includes('__next__')) {
       patterns.push({ type: 'iterator', className: cls, confidence: 0.9 });
     }
   }

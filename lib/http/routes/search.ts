@@ -78,8 +78,7 @@ router.get(
     }
 
     const totalResults = Object.values(results).reduce(
-      // @ts-expect-error TS migration: TS2339
-      (sum, r) => sum + (r.total || r.items?.length || 0),
+      (sum, r: any) => sum + (r.total || r.items?.length || 0),
       0
     );
 

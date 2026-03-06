@@ -425,10 +425,9 @@ export class KnowledgeService {
    * @param {Object} filters - { lifecycle, kind, language, category, knowledgeType, source, tag }
    * @param {Object} pagination - { page, pageSize }
    */
-  async list(filters: any = {}, pagination = {}) {
+  async list(filters: any = {}, pagination: any = {}) {
     try {
       const { lifecycle, kind, language, category, knowledgeType, source, tag, scope } = filters;
-      // @ts-expect-error TS migration: TS2339
       const { page = 1, pageSize = 20 } = pagination;
 
       const dbFilters: any = {};

@@ -570,16 +570,13 @@ export class WikiGenerator {
     } else if (shouldUseInferredModules) {
       // 无有效模块边界(无 targets 或 generic 单 target) → 从 sourceFilesByModule 推断模块
       const sfm = projectInfo.sourceFilesByModule || {};
-      // @ts-expect-error TS migration: TS2339
-      const sorted = Object.entries(sfm).sort((a, b) => b[1].length - a[1].length);
+      const sorted = (Object.entries(sfm) as [string, any][]).sort((a, b) => b[1].length - a[1].length);
       for (const [modName, modFiles] of sorted) {
-        // @ts-expect-error TS migration: TS2339
         if (modFiles.length < 2) {
           continue;
         }
         const classCount = (astInfo.classNamesByModule?.[modName] || []).length;
         const protoCount = (astInfo.protocolNamesByModule?.[modName] || []).length;
-        // @ts-expect-error TS migration: TS2339
         const richness = modFiles.length + classCount * 2 + protoCount * 2;
         if (richness < 3) {
           continue;
@@ -612,8 +609,7 @@ export class WikiGenerator {
         groups[cat].push(json);
       }
 
-      // @ts-expect-error TS migration: TS2339
-      const catEntries = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+      const catEntries = (Object.entries(groups) as [string, any][]).sort((a, b) => b[1].length - a[1].length);
 
       if (catEntries.length <= 3 || knowledgeInfo.recipes.length < 15) {
         // 合并为一篇
@@ -627,7 +623,6 @@ export class WikiGenerator {
       } else {
         // 按分类拆分为多篇
         for (const [cat, items] of catEntries) {
-          // @ts-expect-error TS migration: TS2339
           if (items.length < 2) {
             continue;
           }
@@ -636,7 +631,6 @@ export class WikiGenerator {
             path: `patterns/${slug(cat)}.md`,
             title: isZh ? `${cat} 模式` : `${cat} Patterns`,
             type: 'pattern-category',
-            // @ts-expect-error TS migration: TS2339
             priority: 30 + items.length,
             _patternData: { category: cat, recipes: items },
           });

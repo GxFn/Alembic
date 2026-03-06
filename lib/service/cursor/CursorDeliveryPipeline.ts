@@ -103,8 +103,8 @@ export class CursorDeliveryPipeline {
       if (archResult) {
         stats.channelB.topicCount++;
         stats.channelB.totalTokens += archResult.tokensUsed;
-        // @ts-expect-error TS migration: TS2339
-        stats.channelB.topics['call-architecture'] = {
+        (stats.channelB as any).topics = (stats.channelB as any).topics || {};
+        (stats.channelB as any).topics['call-architecture'] = {
           patternsCount: archResult.insightsCount,
           factsCount: 0,
           tokensUsed: archResult.tokensUsed,

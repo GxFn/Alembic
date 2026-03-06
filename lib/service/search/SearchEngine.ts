@@ -128,14 +128,10 @@ export class BM25Scorer {
     if (!doc) return false; // 已被标记删除
 
     // 递减 docFreq
-    for (const token of new Set(doc.tokens)) {
-      // @ts-expect-error TS migration: TS2538
+    for (const token of new Set(doc.tokens) as Set<string>) {
       if (this.docFreq[token]) {
-        // @ts-expect-error TS migration: TS2538
         this.docFreq[token]--;
-        // @ts-expect-error TS migration: TS2538
         if (this.docFreq[token] <= 0) {
-          // @ts-expect-error TS migration: TS2538
           delete this.docFreq[token];
         }
       }

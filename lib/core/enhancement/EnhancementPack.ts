@@ -11,18 +11,18 @@
  */
 
 export class EnhancementPack {
-  /** 增强包 ID @returns {string} */
-  get id() {
+  /** 增强包 ID */
+  get id(): string {
     throw new Error('Not implemented');
   }
 
-  /** 适用条件 @returns {{ languages: string[], frameworks?: string[] }} */
-  get conditions() {
+  /** 适用条件 */
+  get conditions(): { languages: string[]; frameworks?: string[] } {
     throw new Error('Not implemented');
   }
 
-  /** 人类可读名称 @returns {string} */
-  get displayName() {
+  /** 人类可读名称 */
+  get displayName(): string {
     return this.id;
   }
 
@@ -41,7 +41,7 @@ export class EnhancementPack {
    *
    * @returns {Array<object>}
    */
-  getExtraDimensions() {
+  getExtraDimensions(): any[] {
     return [];
   }
 
@@ -49,7 +49,7 @@ export class EnhancementPack {
    * 额外的 Guard 规则
    * @returns {Array<object>}
    */
-  getGuardRules() {
+  getGuardRules(): any[] {
     return [];
   }
 
@@ -58,7 +58,7 @@ export class EnhancementPack {
    * @param {object} astSummary - analyzeFile/analyzeProject 的返回值
    * @returns {Array<{ type: string, className?: string, line?: number, confidence: number }>}
    */
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any): any[] {
     return [];
   }
 
@@ -68,7 +68,7 @@ export class EnhancementPack {
    * @param {string} ext 文件扩展名 (含 .)
    * @returns {{ content: string, lang: string } | null}
    */
-  preprocessFile(content, ext) {
+  preprocessFile(content: any, ext: any): { content: string; lang: string } | null {
     return null;
   }
 
@@ -76,7 +76,7 @@ export class EnhancementPack {
    * Reference Skill 路径（Bootstrap 时自动加载，相对于 skills/ 目录）
    * @returns {string|null}
    */
-  getReferenceSkillPath() {
+  getReferenceSkillPath(): string | null {
     return null;
   }
 }

@@ -142,7 +142,7 @@ export function getProjectSkillsPath(projectRoot) {
  * @param {string} projectRoot
  * @param {object} [rootSpec] 项目 spec 对象（可选）
  */
-export function getProjectRecipesPath(projectRoot, rootSpec) {
+export function getProjectRecipesPath(projectRoot, rootSpec?) {
   const dir = rootSpec?.recipes?.dir || rootSpec?.skills?.dir || null;
   if (dir) {
     return path.join(projectRoot, dir);

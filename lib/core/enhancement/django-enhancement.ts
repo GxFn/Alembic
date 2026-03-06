@@ -15,15 +15,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class DjangoEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'django';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Django / DRF Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return { languages: ['python'], frameworks: ['django'] };
   }

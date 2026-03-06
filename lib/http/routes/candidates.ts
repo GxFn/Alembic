@@ -652,7 +652,8 @@ router.post(
 router.get('/refine-preview/events/:sessionId', (req, res) => {
   const session = getStreamSession(req.params.sessionId);
   if (!session) {
-    return res.status(404).json({ success: false, error: 'Session not found or expired' });
+    res.status(404).json({ success: false, error: 'Session not found or expired' });
+    return;
   }
 
   // ─── SSE Headers ───

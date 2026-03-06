@@ -115,8 +115,7 @@ export class HttpServer {
         this.logger.info('Performance monitor initialized');
 
         // 初始化错误追踪
-        // @ts-expect-error TS migration: TS2554
-        this.errorTracker = initErrorTracker();
+        this.errorTracker = (initErrorTracker as any)();
         this.logger.info('Error tracker initialized');
       }
     } catch (error: any) {
@@ -402,8 +401,7 @@ export class HttpServer {
   async stop() {
     return new Promise((resolve, reject) => {
       if (!this.server) {
-        // @ts-expect-error TS migration: TS2794
-        return resolve();
+        return resolve(undefined);
       }
 
       // 停止性能监控
@@ -437,8 +435,7 @@ export class HttpServer {
         this.logger.info('HTTP Server stopped', {
           timestamp: new Date().toISOString(),
         });
-        // @ts-expect-error TS migration: TS2794
-        resolve();
+        resolve(undefined);
       });
     });
   }

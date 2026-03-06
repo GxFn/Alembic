@@ -523,8 +523,7 @@ export class GuardCheckEngine {
       // 跳过与 BUILT_IN_RULES 重复的模式（通过比较 pattern 源文本）
       const rulePatternStr =
         rule.pattern instanceof RegExp ? rule.pattern.source : String(rule.pattern || '');
-      const isDuplicate = Object.entries(this._builtInRules).some(([, builtIn]) => {
-        // @ts-expect-error TS migration: TS2339
+      const isDuplicate = (Object.entries(this._builtInRules) as [string, any][]).some(([, builtIn]) => {
         return builtIn.pattern === rulePatternStr;
       });
       if (isDuplicate) {
@@ -629,32 +628,22 @@ export class GuardCheckEngine {
 
     // 合并内置规则（不覆盖同名数据库规则）
     const existingIds = new Set(rules.map((r) => r.id || r.name));
-    for (const [ruleId, rule] of Object.entries(this._builtInRules)) {
+    for (const [ruleId, rule] of Object.entries(this._builtInRules) as [string, any][]) {
       if (!existingIds.has(ruleId)) {
         rules.push({
           id: ruleId,
           name: ruleId,
-          // @ts-expect-error TS migration: TS2339
           message: rule.message,
-          // @ts-expect-error TS migration: TS2339
           pattern: rule.pattern,
-          // @ts-expect-error TS migration: TS2339
           languages: rule.languages,
-          // @ts-expect-error TS migration: TS2339
           severity: rule.severity,
-          // @ts-expect-error TS migration: TS2339
           dimension: rule.dimension || 'file',
-          // @ts-expect-error TS migration: TS2339
           category: rule.category || '',
           source: 'built-in',
           type: 'regex',
-          // @ts-expect-error TS migration: TS2339
           fixSuggestion: rule.fixSuggestion || null,
-          // @ts-expect-error TS migration: TS2339
           ...(rule.excludePaths ? { excludePaths: rule.excludePaths } : {}),
-          // @ts-expect-error TS migration: TS2339
           ...(rule.skipComments ? { skipComments: true } : {}),
-          // @ts-expect-error TS migration: TS2339
           ...(rule.skipTestBlocks ? { skipTestBlocks: true } : {}),
         });
       }

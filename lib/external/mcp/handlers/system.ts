@@ -186,15 +186,12 @@ export function capabilities() {
   const tools = visibleTools.map((t) => {
     const props = t.inputSchema.properties || {};
     const requiredSet = new Set(t.inputSchema.required || []);
-    const params = Object.entries(props).map(([key, schema]) => ({
+    const params = Object.entries(props).map(([key, schema]: [string, any]) => ({
       name: key,
       type: schema.type || 'any',
       required: requiredSet.has(key),
-      // @ts-expect-error TS migration: TS2339
       ...(schema.default !== undefined ? { default: schema.default } : {}),
-      // @ts-expect-error TS migration: TS2339
       ...(schema.enum ? { enum: schema.enum } : {}),
-      // @ts-expect-error TS migration: TS2339
       ...(schema.description ? { description: schema.description } : {}),
     }));
     const gatewayInfo = TOOL_GATEWAY_MAP[t.name];

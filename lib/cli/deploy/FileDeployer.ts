@@ -65,8 +65,7 @@ export class FileDeployer {
    * @param {{ filter?: string[] }} options 可选过滤部署的 category
    * @returns {{ deployed: string[], skipped: string[], errors: Array<{id: string, error: string}> }}
    */
-  // @ts-expect-error TS migration: TS2339
-  deployAll(mode, { filter } = {}) {
+  deployAll(mode, { filter }: any = {}) {
     const applicable = MANIFEST.filter((entry) => {
       if (entry.on !== 'both' && entry.on !== mode) return false;
       if (filter && !filter.includes(entry.category)) return false;
@@ -449,7 +448,6 @@ export class FileDeployer {
     /** 注入 autoApprove */
     injectAutoApprove() {
       try {
-        // @ts-expect-error TS migration: TS2554
         injectAutoApprove(this.projectRoot);
         return true;
       } catch {

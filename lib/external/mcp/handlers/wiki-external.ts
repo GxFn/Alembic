@@ -290,8 +290,7 @@ export async function wikiFinalize(ctx, args) {
       hash: f.hash,
       size: f.size,
     }));
-    // @ts-expect-error TS migration: TS2741
-    dedupResult = dedup(files, wikiDir, () => {});
+    dedupResult = dedup(files, wikiDir, () => {}) as any;
   } catch (e: any) {
     logger.warn(`[wiki-finalize] Dedup check failed: ${e.message}`);
   }

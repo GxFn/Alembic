@@ -56,7 +56,6 @@ router.get(
 
     const snippet = await snippetFactory.getSnippet(req.params.id);
     if (!snippet) {
-      // @ts-expect-error TS migration: TS2554
       throw new NotFoundError('Snippet (recipe)', req.params.id);
     }
 

@@ -78,7 +78,6 @@ function loadRecipesFromDisk(recipesDir) {
 export function findSimilarRecipes(projectRoot, candidate, opts: any = {}) {
   const threshold = opts.threshold ?? 0.7;
   const topK = opts.topK ?? 5;
-  // @ts-expect-error TS migration: TS2554
   const recipesDir = getProjectRecipesPath(projectRoot);
   const recipes = loadRecipesFromDisk(recipesDir);
 

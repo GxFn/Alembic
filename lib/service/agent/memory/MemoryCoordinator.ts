@@ -118,7 +118,6 @@ export class MemoryCoordinator {
     this.#logger = Logger.getInstance();
 
     // 应用默认预算
-    // @ts-expect-error TS migration: TS2554
     this.allocateBudget(this.#mode === 'user' ? 'user' : 'analyst');
   }
 
@@ -132,8 +131,7 @@ export class MemoryCoordinator {
    * @param {number} options.totalContextBudget 模型总上下文 token 数
    * @param {string} [options.model]
    */
-  // @ts-expect-error TS migration: TS2339
-  configure({ totalContextBudget, model } = {}) {
+  configure({ totalContextBudget, model }: any = {}) {
     if (totalContextBudget) {
       // 记忆 section 约占总上下文的 12.5%
       this.#totalBudget = Math.round(totalContextBudget * 0.125);
@@ -145,7 +143,7 @@ export class MemoryCoordinator {
    * @param {'user'|'analyst'|'producer'} mode
    * @param {number} [totalTokens] 覆盖总预算
    */
-  allocateBudget(mode, totalTokens) {
+  allocateBudget(mode, totalTokens?) {
     if (totalTokens) {
       this.#totalBudget = totalTokens;
     }

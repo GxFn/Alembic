@@ -35,33 +35,29 @@ export class Capability {
   /** @param {Object} [_opts] */
   constructor(_opts: any = {}) {}
 
-  /** @type {string} 能力名称 */
-  get name() { throw new Error('Subclass must implement name'); }
+  /** 能力名称 */
+  get name(): string { throw new Error('Subclass must implement name'); }
 
-  /** @type {string} 系统提示词片段 */
-  get promptFragment() { throw new Error('Subclass must implement promptFragment'); }
+  /** 系统提示词片段 */
+  get promptFragment(): string { throw new Error('Subclass must implement promptFragment'); }
 
-  /** @type {string[]} 工具白名单 */
-  get tools() { return []; }
+  /** 工具白名单 */
+  get tools(): string[] { return []; }
 
   /**
    * 构建 prompt 时调用，可注入动态上下文
-   * @param {Object} _context - { message, memory, projectBriefing, lang, ... }
-   * @returns {string|null} 额外的 prompt 片段
    */
-  buildContext(_context) { return null; }
+  buildContext(_context: any): string | null { return null; }
 
   /**
    * 每轮 ReAct 步骤前的钩子
-   * @param {Object} _stepState 当前步骤状态
    */
-  onBeforeStep(_stepState) {}
+  onBeforeStep(_stepState: any) {}
 
   /**
    * 每轮 ReAct 步骤后的钩子
-   * @param {Object} _stepResult 步骤结果
    */
-  onAfterStep(_stepResult) {}
+  onAfterStep(_stepResult: any) {}
 }
 
 // ─── Conversation — 对话能力 ─────────────────────
@@ -95,10 +91,8 @@ export class Conversation extends Capability {
     } catch { this.#soulContent = null; }
   }
 
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'conversation'; }
 
-  // @ts-expect-error TS migration: TS2416
   get promptFragment() {
     return `## 对话能力
 你是 AutoSnippet 知识管理助手。
@@ -176,10 +170,8 @@ export class Conversation extends Capability {
  */
 export class CodeAnalysis extends Capability {
 
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'code_analysis'; }
 
-  // @ts-expect-error TS migration: TS2416
   get promptFragment() {
     return `## 代码分析能力
 你是高级软件架构师，可以深度分析代码结构。
@@ -225,10 +217,8 @@ export class CodeAnalysis extends Capability {
  */
 export class KnowledgeProduction extends Capability {
 
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'knowledge_production'; }
 
-  // @ts-expect-error TS migration: TS2416
   get promptFragment() {
     return `## 知识生产能力
 你是知识管理专家，将代码分析转化为结构化知识候选。
@@ -285,10 +275,8 @@ export class SystemInteraction extends Capability {
     this.#projectRoot = opts.projectRoot || process.cwd();
   }
 
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'system_interaction'; }
 
-  // @ts-expect-error TS migration: TS2416
   get promptFragment() {
     return `## 系统交互能力
 你可以在本地环境中执行终端命令、写入文件、探索项目。
@@ -345,10 +333,8 @@ export class SystemInteraction extends Capability {
  */
 export class ScanProduction extends Capability {
 
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'scan_production'; }
 
-  // @ts-expect-error TS migration: TS2416
   get promptFragment() {
     return `## 知识生产能力
 你是知识管理专家，将代码分析转化为结构化知识候选。

@@ -19,7 +19,7 @@ export class Gateway extends EventEmitter {
   logger: any;
   permissionManager: any;
   routes: any;
-  constructor(config) {
+  constructor(config?) {
     super();
     this.config = config;
     this.logger = Logger.getInstance();

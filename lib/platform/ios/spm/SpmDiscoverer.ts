@@ -21,16 +21,13 @@ export class SpmDiscoverer extends ProjectDiscoverer {
   /** @type {Array<{ pkgPath: string, parsed: object }>} */
   #parsedPackages = [];
 
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'spm';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Swift Package Manager (SPM)';
   }
 
-  // @ts-expect-error TS migration: TS2416
   async detect(projectRoot) {
     // 检查项目根是否有 Package.swift
     const hasRoot = existsSync(join(projectRoot, 'Package.swift'));
@@ -77,7 +74,6 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  // @ts-expect-error TS migration: TS2416
   async listTargets() {
     if (!this.#parser) {
       return [];
@@ -104,7 +100,6 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     return targets;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getTargetFiles(target) {
     if (!this.#parser) {
       return [];
@@ -153,7 +148,6 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     }));
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getDependencyGraph() {
     if (!this.#projectRoot || !this.#parser) {
       return { nodes: [], edges: [] };

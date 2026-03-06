@@ -211,8 +211,7 @@ export class HnswVectorAdapter extends VectorStore {
       const items = JSON.parse(raw);
       const itemList = Array.isArray(items)
         ? items
-        // @ts-expect-error TS migration: TS2698
-        : Object.entries(items).map(([id, item]) => ({ ...item, id }));
+        : Object.entries(items).map(([id, item]) => ({ ...(item as any), id }));
 
       for (const item of itemList) {
         if (!item?.id) continue;
@@ -356,7 +355,6 @@ export class HnswVectorAdapter extends VectorStore {
     }
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getById(id) {
     if (!this.#metadata.has(id) && !this.#contents.has(id)) {
       return null;
@@ -536,7 +534,6 @@ export class HnswVectorAdapter extends VectorStore {
     }));
   }
 
-  // @ts-expect-error TS migration: TS2416
   async searchByFilter(filter) {
     const results = [];
     for (const [id, meta] of this.#metadata) {
@@ -548,7 +545,6 @@ export class HnswVectorAdapter extends VectorStore {
     return results;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async listIds() {
     return [...this.#metadata.keys()];
   }
@@ -572,7 +568,6 @@ export class HnswVectorAdapter extends VectorStore {
     }
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getStats() {
     const stats = this.#index.getStats();
     return {

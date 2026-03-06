@@ -187,8 +187,7 @@ export class MemoryStore {
    * @param {string} [opts.type]
    * @returns {Array<object>} raw rows
    */
-  // @ts-expect-error TS migration: TS2339
-  getAllActive({ source, type } = {}) {
+  getAllActive({ source, type }: any = {}) {
     const now = new Date().toISOString();
     if (source && type) {
       return this.#stmts.getAllActiveBySourceAndType.all({ now, source, type });
@@ -232,8 +231,7 @@ export class MemoryStore {
    * @param {string} [opts.source]
    * @returns {number}
    */
-  // @ts-expect-error TS migration: TS2339
-  size({ source } = {}) {
+  size({ source }: any = {}) {
     if (source) {
       return (
         this.#db

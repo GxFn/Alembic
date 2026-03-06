@@ -40,7 +40,6 @@ export class MockProvider extends AiProvider {
     };
   }
 
-  // @ts-expect-error TS migration: TS2416
   async embed(text) {
     this.callLog.push({ method: 'embed', text: Array.isArray(text) ? text.length : 1 });
     const dim = 768;

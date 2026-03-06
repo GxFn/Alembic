@@ -63,12 +63,10 @@ export function runCodeLevelChecks(code, language, lines, options: any = {}) {
         categories[key].push({ line: i + 1, snippet: lines[i].trim().slice(0, 120) });
       }
       for (const [key, occs] of Object.entries(categories)) {
-        // @ts-expect-error TS migration: TS2339
-        if (occs.length <= 1) {
+        if ((occs as any).length <= 1) {
           continue;
         }
-        // @ts-expect-error TS migration: TS2339
-        for (let j = 1; j < occs.length; j++) {
+        for (let j = 1; j < (occs as any).length; j++) {
           violations.push({
             ruleId: 'objc-duplicate-category',
             message: `同文件内 Category 重名：${key}，首次在第 ${occs[0].line} 行`,

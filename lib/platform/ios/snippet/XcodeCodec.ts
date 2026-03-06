@@ -48,12 +48,10 @@ const PLIST_TEMPLATE = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>`;
 
 export class XcodeCodec extends SnippetCodec {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'xcode';
   }
 
-  // @ts-expect-error TS migration: TS2416
   get fileExtension() {
     return '.codesnippet';
   }

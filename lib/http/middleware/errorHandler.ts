@@ -74,8 +74,7 @@ export function mapDomainError(error) {
       status: 404,
       code: 'NOT_FOUND_ERROR',
       message: error.message,
-      // @ts-expect-error TS migration: TS2339
-      details: error.details,
+      details: (error as any).details,
     };
   }
 
@@ -84,8 +83,7 @@ export function mapDomainError(error) {
       status: 403,
       code: 'PERMISSION_DENIED_ERROR',
       message: error.message,
-      // @ts-expect-error TS migration: TS2339
-      details: error.details,
+      details: (error as any).details,
     };
   }
 

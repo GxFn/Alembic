@@ -489,7 +489,7 @@ export function computeKnowledgeHash(content) {
  */
 export function parseKnowledgeMarkdown(content, relPath) {
   const fmMatch = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
-  const data = {};
+  const data: Record<string, any> = {};
 
   if (fmMatch) {
     const fmLines = fmMatch[1].split('\n');
@@ -611,26 +611,20 @@ export function parseKnowledgeMarkdown(content, relPath) {
     const body = bodyMatch[1].trim();
 
     // 如果 content 中没有 pattern，从 body 代码块提取
-    // @ts-expect-error TS migration: TS2339
     if (!data.content?.pattern) {
       const codeMatch = body.match(/```\w*\n([\s\S]*?)```/);
       if (codeMatch) {
-        // @ts-expect-error TS migration: TS2339
         data.content = data.content || {};
-        // @ts-expect-error TS migration: TS2339
         data.content.pattern = codeMatch[1].trimEnd();
       }
     }
 
     // 如果 content 中没有 markdown 且 body 看起来是 Markdown 文章
-    // @ts-expect-error TS migration: TS2339
     if (!data.content?.markdown && !data.content?.pattern) {
       const isMarkdownArticle =
         body.includes('— 项目特写') || (body.startsWith('#') && body.length > 200);
       if (isMarkdownArticle) {
-        // @ts-expect-error TS migration: TS2339
         data.content = data.content || {};
-        // @ts-expect-error TS migration: TS2339
         data.content.markdown = body;
       }
     }
@@ -638,16 +632,13 @@ export function parseKnowledgeMarkdown(content, relPath) {
 
   // ── 元数据补充 ──
   if (relPath) {
-    // @ts-expect-error TS migration: TS2339
     data.sourceFile = relPath;
   }
 
   // ── fallback: title 从 body heading 提取 ──
-  // @ts-expect-error TS migration: TS2339
   if (!data.title) {
     const headingMatch = content.match(/^##?\s+(.+)$/m);
     if (headingMatch) {
-      // @ts-expect-error TS migration: TS2339
       data.title = headingMatch[1].trim();
     }
   }

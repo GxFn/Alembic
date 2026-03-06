@@ -90,8 +90,7 @@ export class RuleLearner {
    */
   getProblematicRules() {
     const results = [];
-    for (const [ruleId, stat] of Object.entries(this.#data.ruleStats)) {
-      // @ts-expect-error TS migration: TS2339
+    for (const [ruleId, stat] of Object.entries(this.#data.ruleStats) as [string, any][]) {
       if (stat.triggers < PROBLEMATIC_THRESHOLD.minTriggers) {
         continue;
       }
@@ -171,31 +170,25 @@ export class RuleLearner {
 
     // 策略 2: 高触发 + 高精度内置规则 → 建议创建项目定制版
     const allStats = this.getAllStats();
-    for (const [ruleId, stat] of Object.entries(allStats)) {
+    for (const [ruleId, stat] of Object.entries(allStats) as [string, any][]) {
       if (
-        // @ts-expect-error TS migration: TS2339
         stat.triggers > RULE_LEARNER.HIGH_TRIGGER_COUNT &&
-        // @ts-expect-error TS migration: TS2339
         (stat.metrics?.precision ?? 1) > RULE_LEARNER.HIGH_PRECISION
       ) {
         suggestions.push({
           type: 'specialize',
           ruleId,
-          // @ts-expect-error TS migration: TS2339
           message: `规则 ${ruleId} 触发 ${stat.triggers} 次且精准度高 (${((stat.metrics?.precision ?? 1) * 100).toFixed(0)}%)，建议创建项目定制版本`,
           confidence: RULE_LEARNER.CONFIDENCE_SPECIALIZE,
-          // @ts-expect-error TS migration: TS2339
           evidence: stat.metrics,
         });
       }
     }
 
     // 策略 3: 长期无触发的规则 → 可能不适用
-    for (const [ruleId, stat] of Object.entries(allStats)) {
-      // @ts-expect-error TS migration: TS2339
+    for (const [ruleId, stat] of Object.entries(allStats) as [string, any][]) {
       if (stat.triggers === 0 && stat.lastTriggered) {
         const daysSinceLastTrigger =
-          // @ts-expect-error TS migration: TS2339
           (Date.now() - new Date(stat.lastTriggered).getTime()) / 86400000;
         if (daysSinceLastTrigger > RULE_LEARNER.UNUSED_DAYS_THRESHOLD) {
           suggestions.push({
@@ -205,7 +198,6 @@ export class RuleLearner {
             confidence: RULE_LEARNER.CONFIDENCE_REVIEW,
             evidence: {
               daysSinceLastTrigger: Math.round(daysSinceLastTrigger),
-              // @ts-expect-error TS migration: TS2339
               triggers: stat.triggers,
             },
           });

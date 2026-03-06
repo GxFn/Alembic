@@ -14,15 +14,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class RustTokioEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'rust-tokio';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Rust Tokio/Async Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return {
       languages: ['rust'],

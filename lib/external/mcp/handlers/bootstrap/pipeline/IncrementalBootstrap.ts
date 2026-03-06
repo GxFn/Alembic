@@ -38,8 +38,7 @@ export class IncrementalBootstrap {
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  // @ts-expect-error TS migration: TS2339
-  constructor(db, projectRoot, { logger } = {}) {
+  constructor(db, projectRoot, { logger }: any = {}) {
     this.#snapshot = new BootstrapSnapshot(db, { logger });
     this.#logger = logger || null;
     this.#projectRoot = projectRoot;

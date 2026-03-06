@@ -153,8 +153,7 @@ export function isASTChunkerAvailable(language) {
  * @param {number} [options.maxChunkTokens=512]
  * @returns {Array<{ content: string, metadata: object }>}
  */
-export function chunkByAST(content, language, metadata: any = {}, options = {}) {
-  // @ts-expect-error TS migration: TS2339
+export function chunkByAST(content, language, metadata: any = {}, options: any = {}) {
   const { maxChunkTokens = 512 } = options;
 
   if (!content || content.trim().length === 0) return [];

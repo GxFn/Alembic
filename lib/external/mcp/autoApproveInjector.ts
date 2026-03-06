@@ -81,7 +81,7 @@ export function markAutoApproveNeeded(projectRoot, logger) {
  * @param {object} [logger]    日志实例（可选）
  * @returns {boolean} 是否成功写入（false = 文件不存在或无 autosnippet 配置）
  */
-export function injectAutoApprove(projectRoot, logger) {
+export function injectAutoApprove(projectRoot, logger?) {
   const configPath = path.join(projectRoot, '.cursor', 'mcp.json');
 
   // 如果 .cursor/mcp.json 不存在，不做任何操作（不创建文件）

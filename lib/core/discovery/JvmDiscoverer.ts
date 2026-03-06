@@ -32,16 +32,13 @@ export class JvmDiscoverer extends ProjectDiscoverer {
   #depGraph = { nodes: [], edges: [] };
   #buildSystem = null; // 'gradle' | 'maven'
 
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'jvm';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return `JVM (${this.#buildSystem === 'maven' ? 'Maven' : 'Gradle'})`;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async detect(projectRoot) {
     let confidence = 0;
     const reasons = [];
@@ -96,12 +93,10 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  // @ts-expect-error TS migration: TS2416
   async listTargets() {
     return this.#targets;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getTargetFiles(target) {
     const targetObj =
       typeof target === 'string' ? this.#targets.find((t) => t.name === target) : target;
@@ -134,7 +129,6 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     return files;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getDependencyGraph() {
     return this.#depGraph;
   }

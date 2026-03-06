@@ -416,8 +416,7 @@ export class GoogleGeminiProvider extends AiProvider {
       const err = new Error(
         'Google Gemini API Key 未配置。请在 .env 中设置 ASD_GOOGLE_API_KEY，或运行 asd setup 完成配置。'
       );
-      // @ts-expect-error TS migration: TS2339
-      err.code = 'API_KEY_MISSING';
+      (err as any).code = 'API_KEY_MISSING';
       throw err;
     }
 
@@ -454,11 +453,9 @@ export class GoogleGeminiProvider extends AiProvider {
           /* ignore */
         }
         const err = new Error(`Gemini API error: ${res.status}${detail ? ` — ${detail}` : ''}`);
-        // @ts-expect-error TS migration: TS2339
-        err.status = res.status;
+        (err as any).status = res.status;
         if (retryAfterMs > 0) {
-          // @ts-expect-error TS migration: TS2339
-          err.retryAfterMs = retryAfterMs;
+          (err as any).retryAfterMs = retryAfterMs;
         }
         throw err;
       }

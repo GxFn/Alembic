@@ -70,7 +70,6 @@ export class ClaudeProvider extends AiProvider {
    * @param {object} opts 统一参数
    * @returns {Promise<{text: string|null, functionCalls: Array<{id, name, args}>|null}>}
    */
-  // @ts-expect-error TS migration: TS2416
   async chatWithTools(prompt, opts: any = {}) {
     const {
       messages: unifiedMessages,
@@ -265,7 +264,6 @@ export class ClaudeProvider extends AiProvider {
     );
   }
 
-  // @ts-expect-error TS migration: TS2416
   async embed(_text) {
     // Claude 不支持嵌入 API，返回空数组触发降级
     return [];
@@ -277,10 +275,9 @@ export class ClaudeProvider extends AiProvider {
 
   async _post(url, body) {
     if (!this.apiKey) {
-      const err = new Error(
+      const err: any = new Error(
         'Claude API Key 未配置。请在 .env 中设置 ASD_CLAUDE_API_KEY，或运行 asd setup 完成配置。'
       );
-      // @ts-expect-error TS migration: TS2339
       err.code = 'API_KEY_MISSING';
       throw err;
     }
@@ -301,8 +298,7 @@ export class ClaudeProvider extends AiProvider {
       });
 
       if (!res.ok) {
-        const err = new Error(`Claude API error: ${res.status}`);
-        // @ts-expect-error TS migration: TS2339
+        const err: any = new Error(`Claude API error: ${res.status}`);
         err.status = res.status;
         throw err;
       }

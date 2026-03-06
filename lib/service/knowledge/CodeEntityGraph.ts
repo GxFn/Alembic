@@ -162,23 +162,20 @@ export class CodeEntityGraph {
       }
 
       // ── 设计模式 (从 patternStats) ──
-      for (const [patternType, stat] of Object.entries(astSummary.patternStats || {})) {
+      for (const [patternType, stat] of Object.entries(astSummary.patternStats || {}) as [string, any][]) {
         const patternId = `pattern:${patternType}`;
         this.#upsertEntity({
           entityId: patternId,
           entityType: 'pattern',
           name: patternType,
           metadata: {
-            // @ts-expect-error TS migration: TS2339
             count: stat.count,
-            // @ts-expect-error TS migration: TS2339
             files: stat.files?.slice(0, 10),
           },
         });
         entities++;
 
         // 实例 → uses_pattern 边
-        // @ts-expect-error TS migration: TS2339
         for (const inst of (stat.instances || []).slice(0, 50)) {
           const className = inst.className || inst.name;
           if (className) {

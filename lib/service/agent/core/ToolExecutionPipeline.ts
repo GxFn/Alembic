@@ -156,7 +156,7 @@ export const allowlistGate = {
   before(call, ctx) {
     const schemas = ctx.loopCtx?.toolSchemas;
     // 如果没有 schema 列表（全工具模式），跳过检查
-    if (!schemas || schemas.length === 0) return;
+    if (!schemas || schemas.length === 0) return undefined;
 
     const allowedNames = new Set(schemas.map(s => s.name || s.function?.name));
     if (!allowedNames.has(call.name)) {
@@ -170,6 +170,7 @@ export const allowlistGate = {
         },
       };
     }
+    return undefined;
   },
 };
 
@@ -188,6 +189,7 @@ export const safetyGate = {
       );
       return { blocked: true, result: { error: check.reason } };
     }
+    return undefined;
   },
 };
 
@@ -200,7 +202,7 @@ export const cacheCheck = {
   name: 'cacheCheck',
   before(call, ctx) {
     const mc = ctx.loopCtx.memoryCoordinator;
-    if (!mc) return;
+    if (!mc) return undefined;
     const cached = mc.getCachedResult?.(call.name, call.args);
     if (cached !== null && cached !== undefined) {
       ctx.runtime.logger.info(
@@ -208,6 +210,7 @@ export const cacheCheck = {
       );
       return { result: cached };
     }
+    return undefined;
   },
 };
 

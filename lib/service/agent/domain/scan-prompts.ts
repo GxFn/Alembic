@@ -143,18 +143,13 @@ content.markdown 字段必须是「项目特写」：
  * @returns {Object[]} PipelineStrategy stages 数组
  */
 export function buildScanPipelineStages({
-  // @ts-expect-error TS migration: TS2339
   task,
-  // @ts-expect-error TS migration: TS2339
   producePrompt,
-  // @ts-expect-error TS migration: TS2339
   analyzeCaps,
-  // @ts-expect-error TS migration: TS2339
   produceCaps,
-  // @ts-expect-error TS migration: TS2339
   files,
   analyzeMaxIter = 24,
-} = {}) {
+}: any = {}) {
   // ── Stage 1: Analyze ──
   const analyzeStage = {
     name: 'analyze',
@@ -239,11 +234,10 @@ export function buildScanPipelineStages({
     }),
   };
 
-  const stages = [analyzeStage, qualityGateStage, produceStage];
+  const stages: any[] = [analyzeStage, qualityGateStage, produceStage];
 
   // ── Stage 4: Rejection Gate (仅工具驱动模式) ──
   if (isToolDriven) {
-    // @ts-expect-error TS migration: TS2345
     stages.push({
       name: 'rejection_gate',
       gate: {

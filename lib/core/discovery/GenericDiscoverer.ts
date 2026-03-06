@@ -41,16 +41,13 @@ export class GenericDiscoverer extends ProjectDiscoverer {
   #targets = [];
   #primaryLang = 'unknown';
 
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'generic';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Generic (directory scan)';
   }
 
-  // @ts-expect-error TS migration: TS2416
   async detect(projectRoot) {
     // 始终匹配
     return { match: true, confidence: 0.1, reason: 'Generic fallback discoverer' };
@@ -67,10 +64,8 @@ export class GenericDiscoverer extends ProjectDiscoverer {
     // 找到主语言
     let maxCount = 0;
     for (const [lang, count] of Object.entries(langStats)) {
-      // @ts-expect-error TS migration: TS2365
-      if (count > maxCount) {
-        // @ts-expect-error TS migration: TS2322
-        maxCount = count;
+      if ((count as number) > maxCount) {
+        maxCount = count as number;
         this.#primaryLang = lang;
       }
     }
@@ -115,12 +110,10 @@ export class GenericDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  // @ts-expect-error TS migration: TS2416
   async listTargets() {
     return this.#targets;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getTargetFiles(target) {
     const targetPath =
       typeof target === 'string'
@@ -136,7 +129,6 @@ export class GenericDiscoverer extends ProjectDiscoverer {
     return files;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getDependencyGraph() {
     // GenericDiscoverer 无法推断依赖图
     return { nodes: this.#targets.map((t) => t.name), edges: [] };

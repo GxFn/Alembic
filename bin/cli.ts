@@ -133,8 +133,7 @@ program
 
         if (Object.keys(langStats).length > 0) {
           const langParts = Object.entries(langStats)
-            // @ts-expect-error TS migration: TS2362
-            .sort((a, b) => b[1] - a[1])
+            .sort((a, b) => (b[1] as number) - (a[1] as number))
             .slice(0, 5)
             .map(([ext, count]) => `${ext}(${count})`);
           cli.log(`  Languages: ${langParts.join(', ')}`);
@@ -825,8 +824,7 @@ program
         const install = spawn('npm', ['install'], { cwd: dashboardDir, stdio: 'inherit' });
         await new Promise((resolve, reject) => {
           install.on('close', (code) =>
-            // @ts-expect-error TS migration: TS2794
-            code === 0 ? resolve() : reject(new Error(`npm install exited with ${code}`))
+            code === 0 ? resolve(undefined) : reject(new Error(`npm install exited with ${code}`))
           );
         });
       }
@@ -935,8 +933,7 @@ program
       if (opts.verbose && result.channelB.topics) {
         cli.log('\n  Channel B Topics:');
         for (const [topic, info] of Object.entries(result.channelB.topics)) {
-          // @ts-expect-error TS migration: TS2339
-          cli.log(`    ${topic}: ${info.count ?? info.rules?.length ?? '?'} rules`);
+          cli.log(`    ${topic}: ${(info as any).count ?? (info as any).rules?.length ?? '?'} rules`);
         }
       }
       cli.blank();
@@ -1253,8 +1250,7 @@ async function initContainer(opts: any = {}) {
 
   // 配置路径安全守卫 — 阻止写操作逃逸到项目外
   const { default: Bootstrap } = await import('../lib/bootstrap.js');
-  // @ts-expect-error TS migration: TS2554
-  Bootstrap.configurePathGuard(projectRoot);
+  (Bootstrap as any).configurePathGuard(projectRoot);
 
   const bootstrap = await initBootstrap();
   const { getServiceContainer } = await import('../lib/injection/ServiceContainer.js');

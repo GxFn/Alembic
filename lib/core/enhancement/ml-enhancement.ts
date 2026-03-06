@@ -14,15 +14,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class MLEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'python-ml';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Python AI/ML (PyTorch/HuggingFace) Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return { languages: ['python'], frameworks: ['ml'] };
   }

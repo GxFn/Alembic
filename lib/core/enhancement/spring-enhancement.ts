@@ -6,15 +6,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class SpringEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'spring';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Spring Boot Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return { languages: ['java', 'kotlin'], frameworks: ['spring'] };
   }

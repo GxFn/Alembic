@@ -25,35 +25,19 @@ import _path from 'node:path';
  */
 export class Policy {
   /** @type {string} 策略名称 */
-  get name() { throw new Error('Subclass must implement name'); }
+  get name(): string { throw new Error('Subclass must implement name'); }
 
-  /**
-   * 执行前校验 — 拒绝不满足条件的请求
-   * @param {Object} _context - { message, capabilities, budget }
-   * @returns {{ ok: boolean, reason?: string }}
-   */
-  validateBefore(_context) { return { ok: true }; }
+  /** 执行前校验 — 拒绝不满足条件的请求 */
+  validateBefore(_context: any): { ok: boolean; reason?: string } { return { ok: true }; }
 
-  /**
-   * 执行中校验 — 每轮 ReAct 步骤后检查
-   * @param {Object} _stepState - { iteration, toolCalls, tokenUsage, startTime, reply }
-   * @returns {{ ok: boolean, action?: 'continue'|'stop'|'warn', reason?: string }}
-   */
-  validateDuring(_stepState) { return { ok: true, action: 'continue' }; }
+  /** 执行中校验 — 每轮 ReAct 步骤后检查 */
+  validateDuring(_stepState: any): { ok: boolean; action?: string; reason?: string } { return { ok: true, action: 'continue' }; }
 
-  /**
-   * 执行后校验 — 对最终结果质量把关
-   * @param {Object} _result - { reply, toolCalls, tokenUsage, iterations }
-   * @returns {{ ok: boolean, reason?: string }}
-   */
-  validateAfter(_result) { return { ok: true }; }
+  /** 执行后校验 — 对最终结果质量把关 */
+  validateAfter(_result: any): { ok: boolean; reason?: string } { return { ok: true }; }
 
-  /**
-   * 修改配置 — 在执行前注入额外约束
-   * @param {Object} config
-   * @returns {Object} 修改后的 config
-   */
-  applyToConfig(config) { return config; }
+  /** 修改配置 — 在执行前注入额外约束 */
+  applyToConfig(config: any): any { return config; }
 }
 
 // ─── BudgetPolicy — 资源预算 ─────────────────
@@ -93,7 +77,6 @@ export class BudgetPolicy extends Policy {
     this.#temperature = temperature;
   }
 
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'budget'; }
 
   get maxIterations() { return this.#maxIterations; }
@@ -171,12 +154,11 @@ export class SafetyPolicy extends Policy {
    * @param {string[]} [opts.requireApprovalFor] 需要人工确认的工具名
    */
   constructor({
-    // @ts-expect-error TS migration: TS2339
     fileScope,
     allowedSenders = [],
     commandBlacklist = [],
     requireApprovalFor = [],
-  } = {}) {
+  }: any = {}) {
     super();
     this.#fileScope = fileScope || null;
     this.#allowedSenders = allowedSenders;
@@ -184,7 +166,6 @@ export class SafetyPolicy extends Policy {
     this.#requireApprovalFor = requireApprovalFor;
   }
 
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'safety'; }
 
   validateBefore(context) {
@@ -268,9 +249,8 @@ export class QualityGatePolicy extends Policy {
     minEvidenceLength = 500,
     minFileRefs = 3,
     minToolCalls = 2,
-    // @ts-expect-error TS migration: TS2339
     customValidator,
-  } = {}) {
+  }: any = {}) {
     super();
     this.#minEvidenceLength = minEvidenceLength;
     this.#minFileRefs = minFileRefs;
@@ -278,7 +258,6 @@ export class QualityGatePolicy extends Policy {
     this.#customValidator = customValidator || null;
   }
 
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'quality_gate'; }
 
   validateAfter(result) {

@@ -133,8 +133,7 @@ function _walkKtClassBody(body, ctx, className) {
       }
       case 'class_declaration': {
         const inner = _parseKtClass(child);
-        // @ts-expect-error TS migration: TS2551
-        inner.outerClass = className;
+        (inner as any).outerClass = className;
         ctx.classes.push(inner);
         // Phase 5.3: Extract primary constructor params for inner classes too
         _extractKtConstructorProperties(child, ctx, inner.name);

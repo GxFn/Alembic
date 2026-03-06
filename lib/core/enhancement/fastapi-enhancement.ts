@@ -13,15 +13,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class FastAPIEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'fastapi';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'FastAPI Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return { languages: ['python'], frameworks: ['fastapi'] };
   }

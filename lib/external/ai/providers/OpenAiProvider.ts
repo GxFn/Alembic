@@ -277,10 +277,9 @@ export class OpenAiProvider extends AiProvider {
     // Ollama 使用固定 dummy key，不需要校验
     if (!this.apiKey && this.name !== 'ollama') {
       const envKey = this.name === 'deepseek' ? 'ASD_DEEPSEEK_API_KEY' : 'ASD_OPENAI_API_KEY';
-      const err = new Error(
+      const err: any = new Error(
         `${this.name} API Key 未配置。请在 .env 中设置 ${envKey}，或运行 asd setup 完成配置。`
       );
-      // @ts-expect-error TS migration: TS2339
       err.code = 'API_KEY_MISSING';
       throw err;
     }
@@ -300,8 +299,7 @@ export class OpenAiProvider extends AiProvider {
       });
 
       if (!res.ok) {
-        const err = new Error(`${this.name} API error: ${res.status}`);
-        // @ts-expect-error TS migration: TS2339
+        const err: any = new Error(`${this.name} API error: ${res.status}`);
         err.status = res.status;
         throw err;
       }

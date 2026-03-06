@@ -36,7 +36,7 @@ export class Strategy {
   constructor(_opts: any = {}) {}
 
   /** @type {string} */
-  get name() { throw new Error('Subclass must implement name'); }
+  get name(): string { throw new Error('Subclass must implement name'); }
 
   /**
    * 执行策略
@@ -53,7 +53,7 @@ export class Strategy {
    * @property {number} iterations 总循环次数
    * @property {Object} [phases] 阶段详情 (Pipeline/FanOut)
    */
-  async execute(_runtime, _message, _opts) {
+  async execute(_runtime: any, _message: any, _opts?: any): Promise<any> {
     throw new Error('Subclass must implement execute()');
   }
 }
@@ -71,7 +71,6 @@ export class Strategy {
  * 等价于 Anthropic 的 "Augmented LLM" 模式。
  */
 export class SingleStrategy extends Strategy {
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'single'; }
 
   async execute(runtime, message, opts: any = {}) {
@@ -120,15 +119,13 @@ export class FanOutStrategy extends Strategy {
    * @param {Object} [opts.tiers] - { 1: { concurrency: 3 }, 2: { concurrency: 2 }, ... }
    * @param {Function} [opts.merge] 自定义合并函数 (results[]) => finalResult
    */
-  // @ts-expect-error TS migration: TS2339
-  constructor({ itemStrategy, tiers, merge } = {}) {
+  constructor({ itemStrategy, tiers, merge }: any = {}) {
     super();
     this.#itemStrategy = itemStrategy || new SingleStrategy();
     this.#tiers = tiers || { 1: { concurrency: 3 } };
     this.#merge = merge || FanOutStrategy.#defaultMerge;
   }
 
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'fan_out'; }
 
   /**
@@ -149,15 +146,13 @@ export class FanOutStrategy extends Strategy {
     const tierGroups = this.#groupByTier(items);
     const allResults = [];
 
-    // @ts-expect-error TS migration: TS2362
-    for (const [tier, tierItems] of Object.entries(tierGroups).sort(([a], [b]) => a - b)) {
+    for (const [tier, tierItems] of Object.entries(tierGroups).sort(([a], [b]) => Number(a) - Number(b))) {
       const tierConfig = this.#tiers[tier] || this.#tiers[1] || { concurrency: 2 };
 
       bus.publish(AgentEvents.PROGRESS, {
         type: 'fan_out_tier_start',
         tier: Number(tier),
-        // @ts-expect-error TS migration: TS2339
-        count: tierItems.length,
+        count: (tierItems as any).length,
         concurrency: tierConfig.concurrency,
       });
 
@@ -282,7 +277,6 @@ export class AdaptiveStrategy extends Strategy {
     };
   }
 
-  // @ts-expect-error TS migration: TS2416
   get name() { return 'adaptive'; }
 
   async execute(runtime, message, opts: any = {}) {
@@ -295,20 +289,14 @@ export class AdaptiveStrategy extends Strategy {
       selectedStrategy: complexity,
     });
 
-    switch (complexity) {
-      case 'fan_out':
-        if (this.#strategies.fanOut) {
-          return this.#strategies.fanOut.execute(runtime, message, opts);
-        }
-        // fallthrough
-      case 'pipeline':
-        if (this.#strategies.pipeline) {
-          return this.#strategies.pipeline.execute(runtime, message, opts);
-        }
-        // fallthrough
-      default:
-        return this.#strategies.single.execute(runtime, message, opts);
+    // fan_out → pipeline → single 降级链
+    if (complexity === 'fan_out' && this.#strategies.fanOut) {
+      return this.#strategies.fanOut.execute(runtime, message, opts);
     }
+    if ((complexity === 'fan_out' || complexity === 'pipeline') && this.#strategies.pipeline) {
+      return this.#strategies.pipeline.execute(runtime, message, opts);
+    }
+    return this.#strategies.single.execute(runtime, message, opts);
   }
 
   /**

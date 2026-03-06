@@ -30,16 +30,13 @@ export class GoDiscoverer extends ProjectDiscoverer {
   #depGraph = { nodes: [], edges: [] };
   #modulePath = null;
 
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'go';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Go (modules)';
   }
 
-  // @ts-expect-error TS migration: TS2416
   async detect(projectRoot) {
     let confidence = 0;
     const reasons = [];
@@ -133,12 +130,10 @@ export class GoDiscoverer extends ProjectDiscoverer {
     this.#parseInternalImports(projectRoot);
   }
 
-  // @ts-expect-error TS migration: TS2416
   async listTargets() {
     return this.#targets;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getTargetFiles(target) {
     const targetPath =
       typeof target === 'string'
@@ -154,7 +149,6 @@ export class GoDiscoverer extends ProjectDiscoverer {
     return files;
   }
 
-  // @ts-expect-error TS migration: TS2416
   async getDependencyGraph() {
     return this.#depGraph;
   }

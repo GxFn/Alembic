@@ -88,8 +88,7 @@ export class FeedbackCollector {
       counts[e.recipeId] = (counts[e.recipeId] || 0) + 1;
     }
     return Object.entries(counts)
-      // @ts-expect-error TS migration: TS2362
-      .sort(([, a], [, b]) => b - a)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
       .slice(0, n)
       .map(([recipeId, count]) => ({ recipeId, count }));
   }

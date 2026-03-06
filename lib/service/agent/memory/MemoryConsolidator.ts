@@ -65,8 +65,7 @@ export class MemoryConsolidator {
    * @param {string} [opts.bootstrapSession]
    * @returns {{ added: number, updated: number, merged: number, skipped: number, replaced?: number }}
    */
-  // @ts-expect-error TS migration: TS2339
-  consolidate(candidateMemories, { bootstrapSession } = {}) {
+  consolidate(candidateMemories, { bootstrapSession }: any = {}) {
     // Phase 1: 冲突预解决
     const { processed, replaced } = this.#preResolveConflicts(candidateMemories);
 

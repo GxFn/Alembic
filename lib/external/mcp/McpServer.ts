@@ -102,7 +102,6 @@ export class McpServer {
         process.chdir(projectRoot);
       }
 
-      // @ts-expect-error TS migration: TS2554
       Bootstrap.configurePathGuard(projectRoot);
 
       this.bootstrap = new Bootstrap();

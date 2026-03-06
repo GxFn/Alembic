@@ -196,20 +196,15 @@ ${depthHint}
     }
   } else if (dimensionContext) {
     const snapshot = dimensionContext.buildContextForDimension(dimConfig.id);
-    const prevDims = Object.entries(snapshot.previousDimensions);
+    const prevDims = Object.entries(snapshot.previousDimensions) as [string, any][];
     if (prevDims.length > 0) {
       parts.push(`## 前序维度分析摘要（避免重复探索）`);
       for (const [dimId, digest] of prevDims) {
-        // @ts-expect-error TS migration: TS2339
         parts.push(`### ${dimId}\n${digest.summary || '(无摘要)'}`);
-        // @ts-expect-error TS migration: TS2339
         if (digest.keyFindings?.length > 0) {
-          // @ts-expect-error TS migration: TS2339
           parts.push(`关键发现: ${digest.keyFindings.join('; ')}`);
         }
-        // @ts-expect-error TS migration: TS2339
         if (digest.crossRefs?.[dimConfig.id]) {
-          // @ts-expect-error TS migration: TS2339
           parts.push(`💡 对本维度的建议: ${digest.crossRefs[dimConfig.id]}`);
         }
       }

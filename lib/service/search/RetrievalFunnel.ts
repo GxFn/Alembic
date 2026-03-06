@@ -78,8 +78,7 @@ export class RetrievalFunnel {
     if (matchedIndices.length === 0) {
       return [];
     }
-    // @ts-expect-error TS migration: TS2538
-    return matchedIndices.map((idx) => candidates[idx]);
+    return matchedIndices.map((idx) => candidates[idx as number]);
   }
 
   /**

@@ -30,7 +30,6 @@ async function main() {
       process.chdir(projectRoot);
     }
 
-    // @ts-expect-error TS migration: TS2554
     Bootstrap.configurePathGuard(projectRoot);
 
     // 初始化应用程序引导

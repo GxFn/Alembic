@@ -38,7 +38,6 @@ export function register(c) {
 
   c.singleton('auditStore', (ct) => new AuditStore(ct.get('database')));
   c.singleton('auditLogger', (ct) => new AuditLogger(ct.get('auditStore')));
-  // @ts-expect-error TS migration: TS2554
   c.singleton('gateway', () => new Gateway());
   c.singleton('eventBus', () => new EventBus({ maxListeners: 30 }));
 

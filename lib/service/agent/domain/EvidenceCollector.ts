@@ -185,8 +185,7 @@ export class EvidenceCollector {
     // 批量搜索
     if (Object.keys(batchResults).length > 0) {
       for (const [pattern, sub] of Object.entries(batchResults)) {
-        // @ts-expect-error TS migration: TS2339
-        const subMatches = sub.matches || [];
+        const subMatches = (sub as any).matches || [];
         if (subMatches.length === 0) {
           this.#addNegativeSignal(pattern);
         } else {
@@ -462,8 +461,7 @@ export class EvidenceCollector {
       case 'semantic_search_code':
         return (
           (result.matches?.length > 0) ||
-          // @ts-expect-error TS migration: TS2339
-          Object.values(result.batchResults || {}).some((r) => r.matches?.length > 0)
+          Object.values(result.batchResults || {}).some((r: any) => r.matches?.length > 0)
         );
       case 'get_class_info':
         return !!result.className;

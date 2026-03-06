@@ -32,15 +32,11 @@ const CODE_LANGUAGES = new Set([
  * @param {object} options - { strategy, maxChunkTokens, overlapTokens, useAST }
  * @returns {Array<{ content: string, metadata: object }>}
  */
-export function chunk(content, metadata: any = {}, options = {}) {
+export function chunk(content, metadata: any = {}, options: any = {}) {
   const {
-    // @ts-expect-error TS migration: TS2339
     strategy = 'auto',
-    // @ts-expect-error TS migration: TS2339
     maxChunkTokens = DEFAULT_MAX_CHUNK_TOKENS,
-    // @ts-expect-error TS migration: TS2339
     overlapTokens = DEFAULT_OVERLAP_TOKENS,
-    // @ts-expect-error TS migration: TS2339
     useAST = true,
   } = options;
 

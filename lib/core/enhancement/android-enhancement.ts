@@ -6,15 +6,12 @@
 import { EnhancementPack } from './EnhancementPack.js';
 
 class AndroidEnhancement extends EnhancementPack {
-  // @ts-expect-error TS migration: TS2416
   get id() {
     return 'android';
   }
-  // @ts-expect-error TS migration: TS2416
   get displayName() {
     return 'Android (Kotlin/Java) Enhancement';
   }
-  // @ts-expect-error TS migration: TS2416
   get conditions() {
     return { languages: ['kotlin', 'java'], frameworks: ['android'] };
   }

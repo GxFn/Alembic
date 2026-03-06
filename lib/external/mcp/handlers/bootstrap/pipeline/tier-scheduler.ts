@@ -57,7 +57,7 @@ class Semaphore {
   async acquire() {
     if (this.#permits > 0) {
       this.#permits--;
-      return;
+      return undefined;
     }
     return new Promise((resolve) => {
       this.#queue.push(resolve);

@@ -192,8 +192,7 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
             }
           }
         }
-        const topFuncPrefixes = Object.entries(funcPrefixes)
-          // @ts-expect-error TS migration: TS2362
+        const topFuncPrefixes = (Object.entries(funcPrefixes) as [string, number][])
           .sort(([, a], [, b]) => b - a)
           .slice(0, 5);
         if (topFuncPrefixes.length > 0) {
@@ -206,8 +205,7 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
       if (Object.keys(prefixStats).length > 0) {
         starters.namingPatterns = {
           hint: '项目类名前缀分布 — 用于分析命名约定',
-          data: Object.entries(prefixStats)
-            // @ts-expect-error TS migration: TS2362
+          data: (Object.entries(prefixStats) as [string, number][])
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5)
             .map(([prefix, count]) => `${prefix}* (${count} classes)`),
@@ -242,8 +240,7 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
           baseClasses[cls.superclass] = (baseClasses[cls.superclass] || 0) + 1;
         }
       }
-      const topBases = Object.entries(baseClasses)
-        // @ts-expect-error TS migration: TS2362
+      const topBases = (Object.entries(baseClasses) as [string, number][])
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5);
       if (topBases.length > 0) {
@@ -356,17 +353,14 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
         if (!catByBase[base]) catByBase[base] = [];
         catByBase[base].push(cat.name || '(anonymous)');
       }
-      const topBases = Object.entries(catByBase)
-        // @ts-expect-error TS migration: TS2339
+      const topBases = (Object.entries(catByBase) as [string, string[]][])
         .sort((a, b) => b[1].length - a[1].length)
         .slice(0, 8);
       starters.categorySummary = {
         hint: `项目定义了 ${categories.length} 个 Category — 关注命名前缀、功能归类、与基类的关系`,
         data: topBases.map(([base, cats]) => ({
           baseClass: base,
-          // @ts-expect-error TS migration: TS2339
           categoryCount: cats.length,
-          // @ts-expect-error TS migration: TS2339
           categories: cats.slice(0, 5),
         })),
       };
@@ -605,8 +599,7 @@ function summarizeGuardFindings(guardAudit) {
   }
 
   // 取 top-5 violations
-  const topViolations = Object.values(ruleMap)
-    // @ts-expect-error TS migration: TS2339
+  const topViolations = (Object.values(ruleMap) as any[])
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 

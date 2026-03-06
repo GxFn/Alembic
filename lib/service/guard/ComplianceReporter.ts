@@ -70,6 +70,7 @@ export class ComplianceReporter {
   engine: any;
   exclusionManager: any;
   logger: any;
+  qualityGateConfig: any;
   ruleLearner: any;
   violationsStore: any;
   /**
@@ -90,7 +91,6 @@ export class ComplianceReporter {
     this.violationsStore = violationsStore;
     this.ruleLearner = ruleLearner;
     this.exclusionManager = exclusionManager;
-    // @ts-expect-error TS migration: TS2339
     this.qualityGateConfig = {
       maxErrors: QUALITY_GATE.MAX_ERRORS,
       maxWarnings: QUALITY_GATE.MAX_WARNINGS,
@@ -109,7 +109,6 @@ export class ComplianceReporter {
    * @returns {Promise<ComplianceReport>}
    */
   async generate(projectRoot, options: any = {}) {
-    // @ts-expect-error TS migration: TS2339
     const thresholds = { ...this.qualityGateConfig, ...(options.qualityGate || {}) };
     const maxFiles = options.maxFiles || 500;
 
@@ -202,17 +201,12 @@ export class ComplianceReporter {
     try {
       if (this.ruleLearner?.getAllStats) {
         const allStats = this.ruleLearner.getAllStats();
-        ruleHealth = Object.entries(allStats).map(([ruleId, stat]) => ({
+        ruleHealth = (Object.entries(allStats) as [string, any][]).map(([ruleId, stat]) => ({
           ruleId,
-          // @ts-expect-error TS migration: TS2339
           precision: stat.metrics?.precision ?? 1,
-          // @ts-expect-error TS migration: TS2339
           recall: stat.metrics?.recall ?? 1,
-          // @ts-expect-error TS migration: TS2339
           f1: stat.metrics?.f1 ?? 1,
-          // @ts-expect-error TS migration: TS2339
           triggers: stat.triggers || 0,
-          // @ts-expect-error TS migration: TS2339
           warning: (stat.metrics?.precision ?? 1) < 0.5 ? '高误报' : null,
         }));
       }

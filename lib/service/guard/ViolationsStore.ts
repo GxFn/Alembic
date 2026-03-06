@@ -183,8 +183,7 @@ export class ViolationsStore {
     this.clearRuns();
   }
 
-  // @ts-expect-error TS migration: TS2339
-  async clear({ ruleId, file } = {}) {
+  async clear({ ruleId, file }: any = {}) {
     if (file) {
       this.#db.prepare('DELETE FROM guard_violations WHERE file_path = ?').run(file);
     } else {

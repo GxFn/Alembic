@@ -405,10 +405,8 @@ export class SessionStore {
     if (Array.isArray(focusKeywordsOrOpts)) {
       focusKeywords = focusKeywordsOrOpts;
     } else if (typeof focusKeywordsOrOpts === 'object') {
-      // @ts-expect-error TS migration: TS2339
-      focusKeywords = focusKeywordsOrOpts.focusKeywords || [];
-      // @ts-expect-error TS migration: TS2339
-      tokenBudget = focusKeywordsOrOpts.tokenBudget || Infinity;
+      focusKeywords = (focusKeywordsOrOpts as any).focusKeywords || [];
+      tokenBudget = (focusKeywordsOrOpts as any).tokenBudget || Infinity;
     }
 
     const parts = [];
