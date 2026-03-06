@@ -10,12 +10,12 @@ export class Constitution {
   rules: any;
   config: any;
   configPath: any;
-  constructor(configPath) {
+  constructor(configPath: any) {
     this.configPath = configPath;
     this.config = this.loadConfig();
     this.priorities = this.config.priorities || [];
     this.rules = this.config.rules || [];
-    this.roles = new Map(this.config.roles?.map((r) => [r.id, r]) || []);
+    this.roles = new Map(this.config.roles?.map((r: any) => [r.id, r]) || []);
   }
 
   /**
@@ -54,7 +54,7 @@ export class Constitution {
   /**
    * 获取角色需要的能力列表
    */
-  getRoleRequiredCapabilities(roleId) {
+  getRoleRequiredCapabilities(roleId: any) {
     const role = this.getRole(roleId);
     return role ? role.requires_capability || [] : [];
   }
@@ -62,21 +62,21 @@ export class Constitution {
   /**
    * 获取特定优先级
    */
-  getPriority(id) {
-    return this.priorities.find((p) => p.id === id);
+  getPriority(id: any) {
+    return this.priorities.find((p: any) => p.id === id);
   }
 
   /**
    * 获取角色定义
    */
-  getRole(roleId) {
+  getRole(roleId: any) {
     return this.roles.get(roleId);
   }
 
   /**
    * 获取角色权限
    */
-  getRolePermissions(roleId) {
+  getRolePermissions(roleId: any) {
     const role = this.getRole(roleId);
     return role ? role.permissions : [];
   }
@@ -84,7 +84,7 @@ export class Constitution {
   /**
    * 获取角色约束
    */
-  getRoleConstraints(roleId) {
+  getRoleConstraints(roleId: any) {
     const role = this.getRole(roleId);
     return role ? role.constraints : [];
   }
@@ -99,7 +99,7 @@ export class Constitution {
   /**
    * 验证角色是否存在
    */
-  hasRole(roleId) {
+  hasRole(roleId: any) {
     return this.roles.has(roleId);
   }
 
@@ -110,7 +110,7 @@ export class Constitution {
     this.config = this.loadConfig();
     this.priorities = this.config.priorities || [];
     this.rules = this.config.rules || [];
-    this.roles = new Map(this.config.roles?.map((r) => [r.id, r]) || []);
+    this.roles = new Map(this.config.roles?.map((r: any) => [r.id, r]) || []);
   }
 
   /**
@@ -121,7 +121,7 @@ export class Constitution {
       version: this.config.version,
       effectiveDate: this.config.effective_date,
       priorities: this.priorities,
-      rules: this.rules.map((r) => ({
+      rules: this.rules.map((r: any) => ({
         id: r.id,
         description: r.description,
       })),

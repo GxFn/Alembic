@@ -64,11 +64,11 @@ class SpringEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: { type: string; className: any; line: any; confidence: number }[] = [];
     for (const cls of astSummary.classes || []) {
       const annos = cls.annotations || [];
-      if (annos.some((a) => /@RestController/.test(a))) {
+      if (annos.some((a: any) => /@RestController/.test(a))) {
         patterns.push({
           type: 'spring-rest-controller',
           className: cls.name,
@@ -76,7 +76,7 @@ class SpringEnhancement extends EnhancementPack {
           confidence: 0.95,
         });
       }
-      if (annos.some((a) => /@Service/.test(a))) {
+      if (annos.some((a: any) => /@Service/.test(a))) {
         patterns.push({
           type: 'spring-service',
           className: cls.name,
@@ -84,7 +84,7 @@ class SpringEnhancement extends EnhancementPack {
           confidence: 0.95,
         });
       }
-      if (annos.some((a) => /@Repository/.test(a))) {
+      if (annos.some((a: any) => /@Repository/.test(a))) {
         patterns.push({
           type: 'spring-repository',
           className: cls.name,
@@ -92,7 +92,7 @@ class SpringEnhancement extends EnhancementPack {
           confidence: 0.95,
         });
       }
-      if (annos.some((a) => /@Entity/.test(a))) {
+      if (annos.some((a: any) => /@Entity/.test(a))) {
         patterns.push({
           type: 'jpa-entity',
           className: cls.name,
@@ -100,7 +100,7 @@ class SpringEnhancement extends EnhancementPack {
           confidence: 0.95,
         });
       }
-      if (annos.some((a) => /@Configuration/.test(a))) {
+      if (annos.some((a: any) => /@Configuration/.test(a))) {
         patterns.push({
           type: 'spring-configuration',
           className: cls.name,

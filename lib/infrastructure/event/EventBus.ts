@@ -6,7 +6,7 @@
 import { EventEmitter } from 'node:events';
 
 export class EventBus extends EventEmitter {
-  #history;
+  #history: any[];
   #historyLimit;
 
   constructor(options: any = {}) {
@@ -19,7 +19,7 @@ export class EventBus extends EventEmitter {
   /**
    * 同步 emit + 记录历史
    */
-  emit(eventName, ...args) {
+  emit(eventName: any, ...args: any[]) {
     this.#recordEvent(eventName, args);
     return super.emit(eventName, ...args);
   }
@@ -29,7 +29,7 @@ export class EventBus extends EventEmitter {
    * @param {string} eventName
    * @param  {...any} args
    */
-  async emitAsync(eventName, ...args) {
+  async emitAsync(eventName: any, ...args: any[]) {
     this.#recordEvent(eventName, args);
     const listeners = this.listeners(eventName);
     for (const listener of listeners) {
@@ -70,7 +70,7 @@ export class EventBus extends EventEmitter {
 
   // ─── 私有 ─────────────────────────────────────────────
 
-  #recordEvent(eventName, args) {
+  #recordEvent(eventName: any, args: any) {
     this.#history.push({
       event: eventName,
       timestamp: new Date().toISOString(),

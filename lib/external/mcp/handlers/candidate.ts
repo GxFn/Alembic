@@ -10,7 +10,7 @@ import { envelope } from '../envelope.js';
 
 // ─── 校验 & 去重 ───────────────────────────────────────────
 
-export async function validateCandidate(ctx, args) {
+export async function validateCandidate(ctx: any, args: any) {
   const c = args.candidate || {};
   const errors: any[] = [];
   const warnings: any[] = [];
@@ -98,7 +98,7 @@ export async function validateCandidate(ctx, args) {
   });
 }
 
-export async function checkDuplicate(ctx, args) {
+export async function checkDuplicate(ctx: any, args: any) {
   // SimilarityService 直接读磁盘 .md 文件，不依赖 Repository
   const { findSimilarRecipes } = await import('../../../service/candidate/SimilarityService.js');
   const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
@@ -115,7 +115,7 @@ export async function checkDuplicate(ctx, args) {
 
 // ─── 语义字段缺失诊断（无 AI 依赖） ──────────────────────────
 
-export async function enrichCandidates(ctx, args) {
+export async function enrichCandidates(ctx: any, args: any) {
   const ids = args.candidateIds;
   if (!Array.isArray(ids) || ids.length === 0) {
     throw new Error('candidateIds array is required and must not be empty');
@@ -140,16 +140,16 @@ export async function enrichCandidates(ctx, args) {
   const RECIPE_READY_KEYS = [
     {
       key: 'category',
-      check: (v) =>
+      check: (v: any) =>
         v &&
         ['View', 'Service', 'Tool', 'Model', 'Network', 'Storage', 'UI', 'Utility'].includes(v),
       hint: 'category 必须为 8 标准值之一',
     },
-    { key: 'trigger', check: (v) => v?.startsWith('@'), hint: 'trigger 必须以 @ 开头' },
-    { key: 'description', check: (v) => !!v, hint: '知识条目描述' },
+    { key: 'trigger', check: (v: any) => v?.startsWith('@'), hint: 'trigger 必须以 @ 开头' },
+    { key: 'description', check: (v: any) => !!v, hint: '知识条目描述' },
     {
       key: 'headers',
-      check: (v) => Array.isArray(v) && v.length > 0,
+      check: (v: any) => Array.isArray(v) && v.length > 0,
       hint: '完整 import 语句数组',
     },
   ];

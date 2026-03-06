@@ -115,7 +115,7 @@ class LangChainEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── Chain / Runnable classes ──
@@ -132,7 +132,7 @@ class LangChainEnhancement extends EnhancementPack {
 
     // ── @tool decorated functions ──
     for (const m of astSummary.methods || []) {
-      if (m.decorators?.some((d) => /@tool/.test(d))) {
+      if (m.decorators?.some((d: any) => /@tool/.test(d))) {
         patterns.push({
           type: 'langchain-tool',
           methodName: m.name,
@@ -210,7 +210,7 @@ class LangChainEnhancement extends EnhancementPack {
 
     // ── LangChain ecosystem imports ──
     const lcImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('langchain') ||
         imp.includes('langgraph') ||
         imp.includes('langsmith') ||

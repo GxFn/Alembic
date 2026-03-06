@@ -62,7 +62,7 @@ async function main() {
     });
 
     // 优雅关闭
-    const handleShutdown = async (signal) => {
+    const handleShutdown = async (signal: any) => {
       logger.info(`Received ${signal}, shutting down gracefully...`, {
         timestamp: new Date().toISOString(),
       });

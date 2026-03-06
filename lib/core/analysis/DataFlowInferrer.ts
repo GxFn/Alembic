@@ -24,7 +24,7 @@ export class DataFlowInferrer {
    * @param {import('./CallEdgeResolver.js').ResolvedEdge[]} resolvedEdges
    * @returns {DataFlowEdge[]}
    */
-  static infer(resolvedEdges) {
+  static infer(resolvedEdges: any) {
     /** @type {DataFlowEdge[]} */
     const dataFlowEdges: any[] = [];
 

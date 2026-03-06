@@ -66,14 +66,14 @@ export function getWikiTask() {
  * 外部设置 wikiTask 状态（供 bootstrap orchestrator 等外部流程同步使用）
  * @param {Partial<typeof wikiTask>} patch
  */
-export function patchWikiTask(patch) {
+export function patchWikiTask(patch: any) {
   Object.assign(wikiTask, patch);
 }
 
 /**
  * 创建 WikiGenerator 实例
  */
-function createGenerator(container) {
+function createGenerator(container: any) {
   const projectRoot =
     container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
 
@@ -116,7 +116,7 @@ function createGenerator(container) {
     projectGraph,
     codeEntityGraph,
     aiProvider: container.singletons?.aiProvider || null,
-    onProgress: (phase, progress, message) => {
+    onProgress: (phase: any, progress: any, message: any) => {
       wikiTask.phase = phase;
       wikiTask.progress = progress;
       wikiTask.message = message;
@@ -147,7 +147,7 @@ function createGenerator(container) {
 
 router.post(
   '/generate',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     if (wikiTask.status === 'running') {
       return res.status(409).json({
         success: false,
@@ -205,7 +205,7 @@ router.post(
 
 router.post(
   '/update',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     if (wikiTask.status === 'running') {
       return res.status(409).json({
         success: false,
@@ -249,7 +249,7 @@ router.post(
 
 router.post(
   '/abort',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     if (wikiTask.status !== 'running' || !currentGenerator) {
       return res.json({ success: true, message: '没有正在运行的 Wiki 任务' });
     }
@@ -267,7 +267,7 @@ router.post(
 
 router.get(
   '/status',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
 
     // 如果没有活跃任务，从磁盘读取元数据
@@ -296,7 +296,7 @@ router.get(
 
 router.get(
   '/files',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
     const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
 
@@ -305,7 +305,7 @@ router.get(
     }
 
     const files: { path: string; name: string; size: number; modifiedAt: string }[] = [];
-    const readDir = (dir, prefix = '') => {
+    const readDir = (dir: any, prefix = '') => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
         if (entry.isDirectory()) {
@@ -335,7 +335,7 @@ router.get(
 
 router.get(
   '/file/*',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
     const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
     const requestedPath = req.params[0];

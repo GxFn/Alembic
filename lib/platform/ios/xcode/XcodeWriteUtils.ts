@@ -12,14 +12,14 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { saveEventFilter } from './SaveEventFilter.js';
 
-export function sleep(ms) {
+export function sleep(ms: any) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
  * 在 import 行末尾附加来源标记注释
  */
-export function withAutoSnippetNote(importLine) {
+export function withAutoSnippetNote(importLine: any) {
   if (!importLine) {
     return importLine;
   }
@@ -36,7 +36,7 @@ export function withAutoSnippetNote(importLine) {
  *   block    — 循环/反向依赖，禁止插入
  *   review   — 依赖缺失但可添加，需用户确认
  */
-export function evaluateDepResult(ensureResult, from, to) {
+export function evaluateDepResult(ensureResult: any, from: any, to: any) {
   if (ensureResult.exists) {
     return { action: 'continue' };
   }
@@ -52,7 +52,7 @@ export function evaluateDepResult(ensureResult, from, to) {
  * @param {object} ctx - { spmService, currentTarget, mod, ensureResult, NU, depWarnings, label }
  * @returns {{ blocked: boolean }}
  */
-export function handleDepReview(ctx) {
+export function handleDepReview(ctx: any) {
   const { spmService, currentTarget, mod, ensureResult, NU, depWarnings, label = '' } = ctx;
 
   const fixMode = spmService.getFixMode();
@@ -109,7 +109,7 @@ export function handleDepReview(ctx) {
  * @param {object} CM          ClipboardManager 模块
  * @returns {boolean}
  */
-export function writeImportLineXcode(importLine, insertLine, XA, CM) {
+export function writeImportLineXcode(importLine: any, insertLine: any, XA: any, CM: any) {
   if (!XA.isXcodeRunning()) {
     return false;
   }
@@ -138,7 +138,7 @@ export function writeImportLineXcode(importLine, insertLine, XA, CM) {
  * 纯文件写入插入单条 import。
  * Xcode 会因文件变更而自动 reload。
  */
-export function writeImportLineFile(filePath, importLine, isSwift) {
+export function writeImportLineFile(filePath: any, importLine: any, isSwift: any) {
   try {
     const content = readFileSync(filePath, 'utf8');
     const lines = content.split('\n');
@@ -173,7 +173,7 @@ export function writeImportLineFile(filePath, importLine, isSwift) {
 /**
  * 查找文件中最后一个 import 行的行号（1-based，0 表示无 import）
  */
-export function getLastImportLine(filePath) {
+export function getLastImportLine(filePath: any) {
   try {
     if (!existsSync(filePath)) {
       return 0;
@@ -204,9 +204,9 @@ export function getLastImportLine(filePath) {
  * 如果 headers 插入在 trigger 行之前（import 区），trigger 行号需要向下偏移。
  */
 export function computePasteLineNumber(
-  triggerLineNumber,
-  headerInsertCount,
-  filePath,
+  triggerLineNumber: any,
+  headerInsertCount: any,
+  filePath: any,
   options: any = {}
 ) {
   const expectedCount = Number.isFinite(options.expectedHeaderCount)

@@ -48,7 +48,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return 'Node.js (npm/pnpm/yarn)';
   }
 
-  async detect(projectRoot) {
+  async detect(projectRoot: any) {
     let confidence = 0;
     const reasons: any[] = [];
 
@@ -108,7 +108,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     };
   }
 
-  async load(projectRoot) {
+  async load(projectRoot: any) {
     this.#projectRoot = projectRoot;
     this.#targets = [];
     this.#depGraph = { nodes: [], edges: [] };
@@ -187,7 +187,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return this.#targets;
   }
 
-  async getTargetFiles(target) {
+  async getTargetFiles(target: any) {
     const targetPath =
       typeof target === 'string'
         ? this.#targets.find((t) => t.name === target)?.path || this.#projectRoot
@@ -208,7 +208,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
 
   // ── 内部实现 ──
 
-  #resolveWorkspaces(projectRoot) {
+  #resolveWorkspaces(projectRoot: any) {
     const paths: string | any[] = [];
 
     // npm/yarn workspaces (from package.json)
@@ -304,7 +304,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return paths;
   }
 
-  #detectFramework(pkg) {
+  #detectFramework(pkg: any) {
     if (!pkg) {
       return null;
     }
@@ -352,7 +352,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return null;
   }
 
-  #inferTargetType(pkg) {
+  #inferTargetType(pkg: any) {
     if (!pkg) {
       return 'library';
     }
@@ -379,7 +379,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     return 'library';
   }
 
-  #collectFiles(dir, rootDir, files, depth = 0) {
+  #collectFiles(dir: any, rootDir: any, files: any, depth = 0) {
     if (depth > 15) {
       return; // 防止过深递归
     }
@@ -415,7 +415,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  #buildWorkspaceDeps(workspacePaths) {
+  #buildWorkspaceDeps(workspacePaths: any) {
     // 收集所有 workspace 包名
     const nameToPath = new Map();
     for (const t of this.#targets) {

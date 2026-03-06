@@ -23,7 +23,7 @@
  * @param {object} ctx
  * @returns {import('../../../core/ast/ProjectGraph.js').default|null}
  */
-function _getProjectGraph(ctx) {
+function _getProjectGraph(ctx: any) {
   try {
     return ctx.container?.get('projectGraph') || null;
   } catch {
@@ -44,7 +44,7 @@ export const getProjectOverview = {
     type: 'object',
     properties: {},
   },
-  handler: async (_params, ctx) => {
+  handler: async (_params: any, ctx: any) => {
     const graph = _getProjectGraph(ctx);
     if (!graph) {
       return 'AST 分析不可用 — ProjectGraph 未构建。请检查 tree-sitter 是否已安装。';
@@ -108,7 +108,7 @@ export const getClassHierarchy = {
       className: { type: 'string', description: '类名 (可选, 不填则返回完整层级)' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const graph = _getProjectGraph(ctx);
     if (!graph) {
       return 'AST 分析不可用 — ProjectGraph 未构建。';
@@ -134,7 +134,7 @@ export const getClassHierarchy = {
 
     // 全量: 找出所有根类 (没有父类或父类不在项目中的类)
     const allClasses = graph.getAllClassNames();
-    const roots = allClasses.filter((c) => {
+    const roots = allClasses.filter((c: any) => {
       const chain = graph.getInheritanceChain(c);
       return chain.length <= 1 || !allClasses.includes(chain[1]);
     });
@@ -172,7 +172,7 @@ export const getClassInfo = {
     },
     required: ['className'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const graph = _getProjectGraph(ctx);
     if (!graph) {
       return 'AST 分析不可用 — ProjectGraph 未构建。';
@@ -208,8 +208,8 @@ export const getClassInfo = {
 
     if (info.methods.length > 0) {
       lines.push(``, `── 方法 (${info.methods.length}) ──`);
-      const classMethods = info.methods.filter((m) => m.isClassMethod);
-      const instanceMethods = info.methods.filter((m) => !m.isClassMethod);
+      const classMethods = info.methods.filter((m: any) => m.isClassMethod);
+      const instanceMethods = info.methods.filter((m: any) => !m.isClassMethod);
       for (const m of classMethods) {
         const cx = m.complexity > 3 ? ` [复杂度:${m.complexity}]` : '';
         lines.push(`  + ${m.selector} → ${m.returnType}${cx}`);
@@ -223,7 +223,7 @@ export const getClassInfo = {
     if (cats.length > 0) {
       lines.push(``, `── 扩展 (${cats.length}) ──`);
       for (const cat of cats) {
-        const methodNames = cat.methods.map((m) => m.selector).join(', ');
+        const methodNames = cat.methods.map((m: any) => m.selector).join(', ');
         lines.push(`  ${info.name}(${cat.categoryName}) — ${cat.filePath} — [${methodNames}]`);
       }
     }
@@ -254,7 +254,7 @@ export const getProtocolInfo = {
     },
     required: ['protocolName'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const graph = _getProjectGraph(ctx);
     if (!graph) {
       return 'AST 分析不可用 — ProjectGraph 未构建。';
@@ -315,7 +315,7 @@ export const getMethodOverrides = {
     },
     required: ['className', 'methodName'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const graph = _getProjectGraph(ctx);
     if (!graph) {
       return 'AST 分析不可用 — ProjectGraph 未构建。';
@@ -356,7 +356,7 @@ export const getCategoryMap = {
       },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const graph = _getProjectGraph(ctx);
     if (!graph) {
       return 'AST 分析不可用 — ProjectGraph 未构建。';
@@ -385,9 +385,9 @@ export const getCategoryMap = {
     // 全量概览
     const allClasses = graph.getAllClassNames();
     const withCats = allClasses
-      .map((c) => ({ name: c, cats: graph.getCategoryExtensions(c) }))
-      .filter((x) => x.cats.length > 0)
-      .sort((a, b) => b.cats.length - a.cats.length);
+      .map((c: any) => ({ name: c, cats: graph.getCategoryExtensions(c) }))
+      .filter((x: any) => x.cats.length > 0)
+      .sort((a: any, b: any) => b.cats.length - a.cats.length);
 
     if (withCats.length === 0) {
       return '项目中没有发现 Category 扩展。';
@@ -395,7 +395,7 @@ export const getCategoryMap = {
 
     const lines = [`📂 项目 Category 概览 (${withCats.length} 个类有 Category):`];
     for (const { name, cats } of withCats.slice(0, 30)) {
-      const catNames = cats.map((c) => c.categoryName).join(', ');
+      const catNames = cats.map((c: any) => c.categoryName).join(', ');
       lines.push(`  ${name} — ${cats.length} 个: (${catNames})`);
     }
     if (withCats.length > 30) {
@@ -419,7 +419,7 @@ export const getPreviousAnalysis = {
     type: 'object',
     properties: {},
   },
-  handler: async (_params, ctx) => {
+  handler: async (_params: any, ctx: any) => {
     // 从 ctx._dimensionMeta 读取前序分析
     const meta = ctx._dimensionMeta;
     if (!meta || !meta.previousAnalysis) {
@@ -482,7 +482,7 @@ export const noteFinding = {
     },
     required: ['finding'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     // v5.0: 通过 MemoryCoordinator
     const coordinator = ctx._memoryCoordinator;
     if (coordinator) {
@@ -529,7 +529,7 @@ export const getPreviousEvidence = {
     },
     required: ['query'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     // v5.0: 通过 MemoryCoordinator 获取 SessionStore
     const coordinator = ctx._memoryCoordinator;
     const sessionStore = coordinator?.getSessionStore();
@@ -598,7 +598,7 @@ export const queryCodeGraph = {
     },
     required: ['action', 'entity_id'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     try {
       // 优先从 container 获取单例 CEG，避免每次创建新实例
       let ceg = ctx?.container?.get?.('codeEntityGraph');
@@ -657,7 +657,7 @@ export const queryCodeGraph = {
           if (protos.length === 0) {
             return `\`${params.entity_id}\` 没有已知的协议遵循。`;
           }
-          return `📋 \`${params.entity_id}\` 遵循: ${protos.map((p) => `\`${p}\``).join(', ')}`;
+          return `📋 \`${params.entity_id}\` 遵循: ${protos.map((p: any) => `\`${p}\``).join(', ')}`;
         }
 
         case 'impact': {
@@ -760,7 +760,7 @@ export const queryCallGraph = {
     },
     required: ['methodName'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     try {
       // 前置: 必填参数校验 (fail-fast)
       const methodName = params.methodName || params.method_name;

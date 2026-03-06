@@ -37,7 +37,7 @@ export class RetrievalFunnel {
    * @param {object} context - { intent, language, userLevel, sessionHistory, ... }
    * @returns {Promise<Array>} - ranked results
    */
-  async execute(query, candidates, context: any = {}) {
+  async execute(query: any, candidates: any, context: any = {}) {
     if (!candidates || candidates.length === 0) {
       return [];
     }
@@ -71,7 +71,7 @@ export class RetrievalFunnel {
   /**
    * Layer 1: 倒排索引关键词过滤
    */
-  #keywordFilter(query, candidates) {
+  #keywordFilter(query: any, candidates: any) {
     const index = buildInvertedIndex(candidates);
     const matchedIndices = lookup(index, query);
 
@@ -84,7 +84,7 @@ export class RetrievalFunnel {
   /**
    * Layer 2: 语义重排 — Cross-Encoder AI 评分（降级 Jaccard）
    */
-  async #semanticRerank(query, candidates) {
+  async #semanticRerank(query: any, candidates: any) {
     return this.#crossEncoder.rerank(query, candidates);
   }
 }

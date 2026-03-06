@@ -51,7 +51,7 @@ export class FileDeployer {
   /**
    * @param {{ projectRoot: string, force?: boolean }} options
    */
-  constructor({ projectRoot, force = false }) {
+  constructor({ projectRoot, force = false }: any) {
     this.projectRoot = resolve(projectRoot);
     this.projectName = this.projectRoot.split('/').pop();
     this.force = force;
@@ -65,7 +65,7 @@ export class FileDeployer {
    * @param {{ filter?: string[] }} options 可选过滤部署的 category
    * @returns {{ deployed: string[], skipped: string[], errors: Array<{id: string, error: string}> }}
    */
-  deployAll(mode, { filter }: any = {}) {
+  deployAll(mode: any, { filter }: any = {}) {
     const applicable = MANIFEST.filter((entry) => {
       if (entry.on !== 'both' && entry.on !== mode) {
         return false;
@@ -101,7 +101,7 @@ export class FileDeployer {
    * @param {string} category
    * @param {'setup'|'upgrade'} mode
    */
-  deployCategory(category, mode) {
+  deployCategory(category: any, mode: any) {
     return this.deployAll(mode, { filter: [category] });
   }
 
@@ -112,7 +112,7 @@ export class FileDeployer {
    * @param {'setup'|'upgrade'} mode
    * @returns {boolean} 是否实际写入了文件
    */
-  _deployOne(entry, mode) {
+  _deployOne(entry: any, mode: any) {
     switch (entry.strategy) {
       case 'overwrite':
         return this._strategyOverwrite(entry);
@@ -140,7 +140,7 @@ export class FileDeployer {
   /* ═══ 策略实现 ═══════════════════════════════════════ */
 
   /** overwrite — AutoSnippet 完全拥有，始终覆盖 */
-  _strategyOverwrite(entry) {
+  _strategyOverwrite(entry: any) {
     const src = join(TEMPLATES_DIR, entry.src);
     if (!existsSync(src)) {
       return false;
@@ -156,7 +156,7 @@ export class FileDeployer {
   }
 
   /** overwrite-dir — 递归覆盖目录 */
-  _strategyOverwriteDir(entry) {
+  _strategyOverwriteDir(entry: any) {
     const srcDir = join(TEMPLATES_DIR, entry.src);
     if (!existsSync(srcDir)) {
       return false;
@@ -183,7 +183,7 @@ export class FileDeployer {
   }
 
   /** signature-safe — 有 AutoSnippet 签名才覆盖 */
-  _strategySignatureSafe(entry, mode) {
+  _strategySignatureSafe(entry: any, mode: any) {
     const src = join(TEMPLATES_DIR, entry.src);
     if (!existsSync(src)) {
       return false;
@@ -221,10 +221,10 @@ export class FileDeployer {
   }
 
   /** create-only — 仅在不存在时创建 */
-  _strategyCreateOnly(entry) {
+  _strategyCreateOnly(entry: any) {
     let dest;
     if (entry.resolveDest) {
-      dest = this._resolvers[entry.resolveDest]?.call(this);
+      dest = (this._resolvers as any)[entry.resolveDest]?.call(this);
       if (!dest) {
         return false;
       }
@@ -255,7 +255,7 @@ export class FileDeployer {
   }
 
   /** merge-json — 读取现有 JSON，合并 autosnippet 键 */
-  _strategyMergeJson(entry) {
+  _strategyMergeJson(entry: any) {
     const dest = join(this.projectRoot, entry.dest);
     mkdirSync(dirname(dest), { recursive: true });
 
@@ -281,7 +281,7 @@ export class FileDeployer {
   }
 
   /** merge-gitignore — 增量追加规则 + 迁移旧格式 */
-  _strategyMergeGitignore(_entry) {
+  _strategyMergeGitignore(_entry: any) {
     const giPath = join(this.projectRoot, '.gitignore');
     let content = existsSync(giPath) ? readFileSync(giPath, 'utf8') : '';
     let changed = false;
@@ -326,7 +326,7 @@ export class FileDeployer {
   }
 
   /** backup-overwrite — 备份旧文件后覆盖 */
-  _strategyBackupOverwrite(entry) {
+  _strategyBackupOverwrite(entry: any) {
     const src = join(TEMPLATES_DIR, entry.src);
     if (!existsSync(src)) {
       return false;
@@ -357,7 +357,7 @@ export class FileDeployer {
   }
 
   /** inject-marker — 在 autosnippet:begin/end 标记间注入 */
-  _strategyInjectMarker(entry) {
+  _strategyInjectMarker(entry: any) {
     const BEGIN_MARKER = '<!-- autosnippet:begin -->';
     const END_MARKER = '<!-- autosnippet:end -->';
 
@@ -399,8 +399,8 @@ export class FileDeployer {
   }
 
   /** generate — 自定义生成逻辑 */
-  _strategyGenerate(entry) {
-    const fn = this._generators[entry.generate];
+  _strategyGenerate(entry: any) {
+    const fn = (this._generators as any)[entry.generate];
     if (!fn) {
       throw new Error(`Unknown generator: ${entry.generate}`);
     }
@@ -409,7 +409,7 @@ export class FileDeployer {
 
   /* ═══ 自定义生成器 ═══════════════════════════════════ */
 
-  _generators = {
+  _generators: any = {
     /** AGENTS.md 静态骨架 */
     generateAgentsMd() {
       const claudePath = join(this.projectRoot, 'CLAUDE.md');
@@ -557,7 +557,7 @@ export class FileDeployer {
 
   /* ═══ Destination Resolvers ══════════════════════════ */
 
-  _resolvers = {
+  _resolvers: any = {
     /** 解析 pre-commit hook 的目标路径 */
     resolvePreCommitDest() {
       const huskyDir = join(this.projectRoot, '.husky');
@@ -576,7 +576,7 @@ export class FileDeployer {
   /* ═══ Helpers ════════════════════════════════════════ */
 
   /** 递归复制目录 */
-  _copyDirRecursive(srcDir, destDir, chmod = false) {
+  _copyDirRecursive(srcDir: any, destDir: any, chmod = false): boolean {
     if (!existsSync(srcDir)) {
       return false;
     }
@@ -603,7 +603,7 @@ export class FileDeployer {
   }
 
   /** chmod +x */
-  _chmodExec(filePath) {
+  _chmodExec(filePath: any) {
     try {
       execSync(`chmod +x "${filePath}"`, { stdio: 'pipe' });
     } catch {

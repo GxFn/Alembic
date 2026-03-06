@@ -86,7 +86,7 @@ const MAX_WRITE_SIZE = 512 * 1024;
 /**
  * 硬编码黑名单检查 — 工具层兜底, 无论是否有 SafetyPolicy 都生效
  */
-function _isHardBlacklisted(command) {
+function _isHardBlacklisted(command: any) {
   for (const pattern of HARDCODED_BLACKLIST) {
     if (pattern.test(command)) {
       return true;
@@ -98,7 +98,7 @@ function _isHardBlacklisted(command) {
 /**
  * 无 SafetyPolicy 时的白名单兜底
  */
-function _isFallbackSafe(command) {
+function _isFallbackSafe(command: any) {
   const trimmed = command.trim();
   return FALLBACK_SAFE_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
 }
@@ -106,7 +106,7 @@ function _isFallbackSafe(command) {
 /**
  * 截断过长输出
  */
-function _truncate(text, max = MAX_OUTPUT_LENGTH) {
+function _truncate(text: any, max = MAX_OUTPUT_LENGTH) {
   if (!text || text.length <= max) {
     return text;
   }
@@ -116,7 +116,7 @@ function _truncate(text, max = MAX_OUTPUT_LENGTH) {
 /**
  * 获取 projectRoot — 优先从 context 获取, 兜底用 cwd
  */
-function _getProjectRoot(ctx) {
+function _getProjectRoot(ctx: any) {
   return ctx.projectRoot || ctx.container?.get?.('projectRoot') || process.cwd();
 }
 
@@ -150,7 +150,7 @@ export const runSafeCommand = {
     },
     required: ['command'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const { command, cwd, timeout } = params;
     const projectRoot = _getProjectRoot(ctx);
 
@@ -271,7 +271,7 @@ export const writeProjectFile = {
     },
     required: ['filePath', 'content'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const { filePath, content, append } = params;
     const projectRoot = _getProjectRoot(ctx);
 
@@ -375,7 +375,7 @@ export const getEnvironmentInfo = {
     },
     required: [],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const sections = params.sections || ['all'];
     const all = sections.includes('all');
     const projectRoot = _getProjectRoot(ctx);

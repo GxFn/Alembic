@@ -5,14 +5,14 @@
 
 // ── ObjC AST 遍历 ──
 
-function walkObjC(root, ctx) {
+function walkObjC(root: any, ctx: any) {
   for (let i = 0; i < root.namedChildCount; i++) {
     const node = root.namedChild(i);
 
     switch (node.type) {
       case 'preproc_include': {
         const pathNode = node.namedChildren.find(
-          (c) => c.type === 'string_literal' || c.type === 'system_lib_string'
+          (c: any) => c.type === 'string_literal' || c.type === 'system_lib_string'
         );
         if (pathNode) {
           ctx.imports.push(pathNode.text.replace(/^["<]|[">]$/g, ''));
@@ -74,8 +74,8 @@ function walkObjC(root, ctx) {
   }
 }
 
-function _parseObjCInterface(node) {
-  const identifiers = node.namedChildren.filter((c) => c.type === 'identifier');
+function _parseObjCInterface(node: any) {
+  const identifiers = node.namedChildren.filter((c: any) => c.type === 'identifier');
   const name = identifiers[0]?.text || 'Unknown';
 
   const isCategory =
@@ -92,11 +92,11 @@ function _parseObjCInterface(node) {
   }
 
   const protocols: any[] = [];
-  const protoList = node.namedChildren.find((c) => c.type === 'parameterized_arguments');
+  const protoList = node.namedChildren.find((c: any) => c.type === 'parameterized_arguments');
   if (protoList) {
     for (const child of protoList.namedChildren) {
       if (child.type === 'type_name') {
-        const ti = child.namedChildren.find((c) => c.type === 'type_identifier');
+        const ti = child.namedChildren.find((c: any) => c.type === 'type_identifier');
         if (ti) {
           protocols.push(ti.text);
         }
@@ -127,10 +127,10 @@ function _parseObjCInterface(node) {
   return result;
 }
 
-function _parseObjCProtocol(node) {
+function _parseObjCProtocol(node: any) {
   const name = _findIdentifier(node) || 'Unknown';
   const inherits: any[] = [];
-  const protoRef = node.namedChildren.find((c) => c.type === 'protocol_reference_list');
+  const protoRef = node.namedChildren.find((c: any) => c.type === 'protocol_reference_list');
   if (protoRef) {
     for (const child of protoRef.namedChildren) {
       if (child.type === 'identifier') {
@@ -161,7 +161,7 @@ function _parseObjCProtocol(node) {
   return { name, inherits, methods, line: node.startPosition.row + 1 };
 }
 
-function _parseObjCMethodDecl(node, className) {
+function _parseObjCMethodDecl(node: any, className: any) {
   const isClassMethod = node.text.trimStart().startsWith('+');
   const name = _findIdentifier(node) || 'unknown';
 
@@ -174,12 +174,12 @@ function _parseObjCMethodDecl(node, className) {
   }
 
   let returnType = 'void';
-  const methodType = node.namedChildren.find((c) => c.type === 'method_type');
+  const methodType = node.namedChildren.find((c: any) => c.type === 'method_type');
   if (methodType) {
-    const tn = methodType.namedChildren.find((c) => c.type === 'type_name');
+    const tn = methodType.namedChildren.find((c: any) => c.type === 'type_name');
     if (tn) {
       const ti = tn.namedChildren.find(
-        (c) => c.type === 'type_identifier' || c.type === 'primitive_type'
+        (c: any) => c.type === 'type_identifier' || c.type === 'primitive_type'
       );
       if (ti) {
         returnType = ti.text;
@@ -207,7 +207,7 @@ function _parseObjCMethodDecl(node, className) {
   };
 }
 
-function _parseObjCMethodDef(node, className) {
+function _parseObjCMethodDef(node: any, className: any) {
   const isClassMethod = node.text.trimStart().startsWith('+');
   const name = _findIdentifier(node) || 'unknown';
 
@@ -219,7 +219,7 @@ function _parseObjCMethodDef(node, className) {
     }
   }
 
-  const body = node.namedChildren.find((c) => c.type === 'compound_statement');
+  const body = node.namedChildren.find((c: any) => c.type === 'compound_statement');
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
@@ -237,13 +237,15 @@ function _parseObjCMethodDef(node, className) {
   };
 }
 
-function _parseObjCProperty(node, className) {
+function _parseObjCProperty(node: any, className: any) {
   const attrs: any[] = [];
-  const attrDecl = node.namedChildren.find((c) => c.type === 'property_attributes_declaration');
+  const attrDecl = node.namedChildren.find(
+    (c: any) => c.type === 'property_attributes_declaration'
+  );
   if (attrDecl) {
     for (const attr of attrDecl.namedChildren) {
       if (attr.type === 'property_attribute') {
-        const id = attr.namedChildren.find((c) => c.type === 'identifier');
+        const id = attr.namedChildren.find((c: any) => c.type === 'identifier');
         if (id) {
           attrs.push(id.text);
         }
@@ -253,21 +255,21 @@ function _parseObjCProperty(node, className) {
 
   let propName = 'unknown';
   let propType = 'id';
-  const structDecl = node.namedChildren.find((c) => c.type === 'struct_declaration');
+  const structDecl = node.namedChildren.find((c: any) => c.type === 'struct_declaration');
   if (structDecl) {
-    const ti = structDecl.namedChildren.find((c) => c.type === 'type_identifier');
+    const ti = structDecl.namedChildren.find((c: any) => c.type === 'type_identifier');
     if (ti) {
       propType = ti.text;
     }
 
-    const sd = structDecl.namedChildren.find((c) => c.type === 'struct_declarator');
+    const sd = structDecl.namedChildren.find((c: any) => c.type === 'struct_declarator');
     if (sd) {
-      const findName = (n) => {
+      const findName = (n: any): any => {
         if (n.type === 'identifier') {
           return n.text;
         }
         for (let j = 0; j < n.namedChildCount; j++) {
-          const r = findName(n.namedChild(j));
+          const r: any = findName(n.namedChild(j));
           if (r) {
             return r;
           }
@@ -289,7 +291,7 @@ function _parseObjCProperty(node, className) {
 
 // ── ObjC 模式检测 ──
 
-function detectObjCPatterns(root, lang, methods, properties, classes) {
+function detectObjCPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   // ObjC 特有的模式检测交由 AstAnalyzer 内的通用 _detectPatterns 处理
   // 此函数可扩展 ObjC 特有模式（如 Category 模式）
   return [];
@@ -297,7 +299,7 @@ function detectObjCPatterns(root, lang, methods, properties, classes) {
 
 // ── 工具函数 ──
 
-function _findIdentifier(node) {
+function _findIdentifier(node: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
     if (
@@ -311,7 +313,7 @@ function _findIdentifier(node) {
   return null;
 }
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_statement',
@@ -326,13 +328,13 @@ function _estimateComplexity(node) {
     'guard_statement',
     'for_in_expression',
   ]);
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
     if (n.type === 'binary_expression') {
       const op = n.children?.find(
-        (c) => c.type === '&&' || c.type === '||' || c.text === '&&' || c.text === '||'
+        (c: any) => c.type === '&&' || c.type === '||' || c.text === '&&' || c.text === '||'
       );
       if (op) {
         complexity++;
@@ -346,7 +348,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_statement',
     'for_statement',
@@ -372,7 +374,7 @@ let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }
-export function setGrammar(grammar) {
+export function setGrammar(grammar: any) {
   _grammar = grammar;
 }
 

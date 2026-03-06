@@ -10,7 +10,7 @@ export class KnowledgeRepository {
    * @param {import('./KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {Promise<import('./KnowledgeEntry.js').KnowledgeEntry>}
    */
-  async create(entry) {
+  async create(entry: any) {
     throw new Error('Not implemented');
   }
 
@@ -19,7 +19,7 @@ export class KnowledgeRepository {
    * @param {string} id
    * @returns {Promise<import('./KnowledgeEntry.js').KnowledgeEntry|null>}
    */
-  async findById(id) {
+  async findById(id: any) {
     throw new Error('Not implemented');
   }
 
@@ -39,7 +39,7 @@ export class KnowledgeRepository {
    * @param {Object} pagination
    * @returns {Promise<{ data: KnowledgeEntry[], pagination: Object }>}
    */
-  async findByLifecycle(lifecycle, pagination: any = {}) {
+  async findByLifecycle(lifecycle: any, pagination: any = {}) {
     throw new Error('Not implemented');
   }
 
@@ -49,7 +49,7 @@ export class KnowledgeRepository {
    * @param {Object} options - { page, pageSize, lifecycle }
    * @returns {Promise<{ data: KnowledgeEntry[], pagination: Object }>}
    */
-  async findByKind(kind, options: any = {}) {
+  async findByKind(kind: any, options: any = {}) {
     throw new Error('Not implemented');
   }
 
@@ -67,7 +67,7 @@ export class KnowledgeRepository {
    * @param {Object} pagination
    * @returns {Promise<{ data: KnowledgeEntry[], pagination: Object }>}
    */
-  async findByLanguage(language, pagination: any = {}) {
+  async findByLanguage(language: any, pagination: any = {}) {
     throw new Error('Not implemented');
   }
 
@@ -77,7 +77,7 @@ export class KnowledgeRepository {
    * @param {Object} pagination
    * @returns {Promise<{ data: KnowledgeEntry[], pagination: Object }>}
    */
-  async findByCategory(category, pagination: any = {}) {
+  async findByCategory(category: any, pagination: any = {}) {
     throw new Error('Not implemented');
   }
 
@@ -87,7 +87,7 @@ export class KnowledgeRepository {
    * @param {Object} pagination
    * @returns {Promise<{ data: KnowledgeEntry[], pagination: Object }>}
    */
-  async search(keyword, pagination: any = {}) {
+  async search(keyword: any, pagination: any = {}) {
     throw new Error('Not implemented');
   }
 
@@ -97,7 +97,7 @@ export class KnowledgeRepository {
    * @param {Object} updates - wire format 的部分字段
    * @returns {Promise<import('./KnowledgeEntry.js').KnowledgeEntry>}
    */
-  async update(id, updates) {
+  async update(id: any, updates: any) {
     throw new Error('Not implemented');
   }
 
@@ -106,7 +106,7 @@ export class KnowledgeRepository {
    * @param {string} id
    * @returns {Promise<boolean>}
    */
-  async delete(id) {
+  async delete(id: any) {
     throw new Error('Not implemented');
   }
 

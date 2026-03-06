@@ -50,10 +50,10 @@ const MAX_INTERVAL_MS = 24 * 60 * 60 * 1000; // 最长 24 小时
 const SNAPSHOT_FILE = 'signal-snapshot.json';
 
 export class SignalCollector {
-  #projectRoot;
-  #db;
-  #agentFactory; // AgentFactory 实例 — 统一 Agent 系统
-  #container; // ServiceContainer — 用于获取 aiProvider 等
+  #projectRoot: any;
+  #db: any;
+  #agentFactory: any; // AgentFactory 实例 — 统一 Agent 系统
+  #container: any; // ServiceContainer — 用于获取 aiProvider 等
   #mode; // 'off' | 'suggest' | 'auto'
   #intervalMs;
   #timer: ReturnType<typeof setTimeout> | null = null;
@@ -83,7 +83,7 @@ export class SignalCollector {
     mode = 'auto',
     intervalMs = DEFAULT_INTERVAL_MS,
     onSuggestions = null as any,
-  }) {
+  }: any) {
     this.#projectRoot = projectRoot;
     this.#db = database;
     this.#agentFactory = agentFactory;
@@ -100,7 +100,7 @@ export class SignalCollector {
     // 信号聚类引擎: 外部推送的事件（file_change, guard_violation 等）
     // 在时间窗口内聚合，避免高频操作重复触发 AI 分析
     this.#aggregator = new EventAggregator({ windowMs: 10_000, dedupeMs: 120_000 });
-    this.#aggregator.on('batch', (key, events) => {
+    this.#aggregator.on('batch', (key: any, events: any) => {
       this.#logger.info(`[SignalCollector] aggregated batch: ${key} × ${events.length}`);
       // 有聚合事件时提前触发 tick（取消当前定时器，立即执行）
       if (this.#timer && !this.#running) {
@@ -155,7 +155,7 @@ export class SignalCollector {
    * @param {string} key 事件类型（如 'file_change', 'guard_violation', 'candidate_submit'）
    * @param {object} event 事件数据
    */
-  pushEvent(key, event) {
+  pushEvent(key: any, event: any) {
     if (this.#mode === 'off') {
       return;
     }
@@ -174,12 +174,12 @@ export class SignalCollector {
   }
 
   /** 从 pendingSuggestions 中移除已创建的 Skill */
-  removePendingSuggestion(name) {
+  removePendingSuggestion(name: any) {
     if (!this.#snapshot.pendingSuggestions?.length) {
       return;
     }
     this.#snapshot.pendingSuggestions = this.#snapshot.pendingSuggestions.filter(
-      (s) => s.name !== name
+      (s: any) => s.name !== name
     );
     if (this.#snapshot.lastResult) {
       this.#snapshot.lastResult.newSuggestions = this.#snapshot.pendingSuggestions.length;
@@ -187,7 +187,7 @@ export class SignalCollector {
     this.#saveSnapshot();
   }
 
-  setMode(mode) {
+  setMode(mode: any) {
     if (!['off', 'suggest', 'auto'].includes(mode)) {
       return;
     }
@@ -237,7 +237,7 @@ export class SignalCollector {
 
       // 5. 过滤已推送
       const newSuggestions = suggestions.filter(
-        (s) => !this.#snapshot.pushedNames.includes(s.name)
+        (s: any) => !this.#snapshot.pushedNames.includes(s.name)
       );
 
       // 6. 更新快照
@@ -251,7 +251,7 @@ export class SignalCollector {
       };
       // 持久化 AI 生成的建议，供前端直接读取
       if (newSuggestions.length > 0) {
-        this.#snapshot.pendingSuggestions = newSuggestions.map((s) => ({
+        this.#snapshot.pendingSuggestions = newSuggestions.map((s: any) => ({
           name: s.name,
           description: s.description || s.reason || '',
           rationale: s.rationale || s.reason || '',
@@ -279,7 +279,7 @@ export class SignalCollector {
 
         // 检测 AI 是否在 auto 模式下自主调用了 create_skill
         if (this.#mode === 'auto' && toolCalls?.length) {
-          const created = toolCalls.filter((tc) => tc.tool === 'create_skill');
+          const created = toolCalls.filter((tc: any) => tc.tool === 'create_skill');
           if (created.length > 0) {
             if (!this.#snapshot.autoCreated) {
               this.#snapshot.autoCreated = [];
@@ -325,7 +325,7 @@ export class SignalCollector {
     }
   }
 
-  #scheduleNext(delayMs) {
+  #scheduleNext(delayMs: any) {
     if (this.#mode === 'off') {
       return;
     }
@@ -470,7 +470,7 @@ export class SignalCollector {
   //  AI Prompt 构建
   // ═══════════════════════════════════════════════════════
 
-  #buildAnalysisPrompt(signals) {
+  #buildAnalysisPrompt(signals: any) {
     const modeInstruction =
       this.#mode === 'auto'
         ? '你处于 auto 模式：除了推荐之外，对于高优先级的建议，请直接调用 create_skill 工具自动创建 Skill。'
@@ -530,7 +530,7 @@ ${JSON.stringify(signals.codeChanges, null, 2)}
    * @param {string} reply - AgentRuntime.execute() 的回复文本
    * @returns {{ suggestions: Array, nextIntervalMinutes: number|null, summary: string }}
    */
-  #parseStructuredReply(reply) {
+  #parseStructuredReply(reply: any) {
     const defaultResult = { suggestions: [], nextIntervalMinutes: null, summary: '' };
     if (!reply) {
       return defaultResult;

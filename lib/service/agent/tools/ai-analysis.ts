@@ -26,7 +26,7 @@ export const enrichCandidate = {
     },
     required: ['candidateIds'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     if (!ctx.aiProvider) {
       return { error: 'AI provider not available' };
     }
@@ -61,7 +61,7 @@ export const refineBootstrapCandidates = {
       dryRun: { type: 'boolean', description: '仅预览 AI 润色结果，不写入数据库' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     if (!ctx.aiProvider) {
       return { error: 'AI provider not available' };
     }

@@ -14,7 +14,7 @@ export { RelationType };
 export class KnowledgeGraphService {
   db: any;
   logger: any;
-  constructor(db) {
+  constructor(db: any) {
     this.db = typeof db?.getDb === 'function' ? db.getDb() : db;
     this.logger = Logger.getInstance();
   }
@@ -22,7 +22,7 @@ export class KnowledgeGraphService {
   /**
    * 添加关系边
    */
-  addEdge(fromId, fromType, toId, toType, relation, metadata: any = {}) {
+  addEdge(fromId: any, fromType: any, toId: any, toType: any, relation: any, metadata: any = {}) {
     const now = Math.floor(Date.now() / 1000);
     try {
       this.db
@@ -52,7 +52,7 @@ export class KnowledgeGraphService {
   /**
    * 删除关系边
    */
-  removeEdge(fromId, fromType, toId, toType, relation) {
+  removeEdge(fromId: any, fromType: any, toId: any, toType: any, relation: any) {
     this.db
       .prepare(`
       DELETE FROM knowledge_edges WHERE from_id = ? AND from_type = ? AND to_id = ? AND to_type = ? AND relation = ?
@@ -63,7 +63,7 @@ export class KnowledgeGraphService {
   /**
    * 查询某个节点的所有关系
    */
-  getEdges(nodeId, nodeType, direction = 'both') {
+  getEdges(nodeId: any, nodeType: any, direction = 'both') {
     const outgoing =
       direction === 'both' || direction === 'out'
         ? this.db
@@ -87,7 +87,7 @@ export class KnowledgeGraphService {
   /**
    * 查询指定关系类型的连接
    */
-  getRelated(nodeId, nodeType, relation) {
+  getRelated(nodeId: any, nodeType: any, relation: any) {
     const rows = this.db
       .prepare(`
       SELECT * FROM knowledge_edges WHERE from_id = ? AND from_type = ? AND relation = ?
@@ -102,7 +102,7 @@ export class KnowledgeGraphService {
   /**
    * 查找两个节点之间的路径 (BFS, 最大深度 5)
    */
-  findPath(fromId, fromType, toId, toType, maxDepth = 5) {
+  findPath(fromId: any, fromType: any, toId: any, toType: any, maxDepth = 5) {
     const visited = new Set();
     const queue = [{ id: fromId, type: fromType, path: [] as any[] }];
 
@@ -149,7 +149,7 @@ export class KnowledgeGraphService {
   /**
    * 获取节点的影响范围（下游依赖分析）
    */
-  getImpactAnalysis(nodeId, nodeType, maxDepth = 3) {
+  getImpactAnalysis(nodeId: any, nodeType: any, maxDepth = 3) {
     const impacted = new Map();
     const queue = [{ id: nodeId, type: nodeType, depth: 0 }];
 
@@ -189,7 +189,7 @@ export class KnowledgeGraphService {
   /**
    * @param {string} [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部
    */
-  getStats(nodeType) {
+  getStats(nodeType: any) {
     const typeFilter = nodeType
       ? ` WHERE from_type = '${nodeType}' AND to_type = '${nodeType}'`
       : '';
@@ -211,7 +211,7 @@ export class KnowledgeGraphService {
 
     return {
       totalEdges: edgeCount.total,
-      byRelation: Object.fromEntries(byRelation.map((r) => [r.relation, r.count])),
+      byRelation: Object.fromEntries(byRelation.map((r: any) => [r.relation, r.count])),
       nodeTypes: byType,
     };
   }
@@ -221,7 +221,7 @@ export class KnowledgeGraphService {
    * @param {number} [limit=500] 最大返回条数
    * @param {string} [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部
    */
-  getAllEdges(limit = 500, nodeType) {
+  getAllEdges(limit = 500, nodeType: any) {
     let sql, params;
     if (nodeType) {
       sql = `SELECT * FROM knowledge_edges WHERE from_type = ? AND to_type = ? ORDER BY updated_at DESC LIMIT ?`;
@@ -236,7 +236,7 @@ export class KnowledgeGraphService {
 
   // Private
 
-  _mapEdge(row) {
+  _mapEdge(row: any) {
     return {
       id: row.id,
       fromId: row.from_id,
@@ -254,7 +254,7 @@ export class KnowledgeGraphService {
 
 let instance: any = null;
 
-export function initKnowledgeGraphService(db) {
+export function initKnowledgeGraphService(db: any) {
   instance = new KnowledgeGraphService(db);
   return instance;
 }

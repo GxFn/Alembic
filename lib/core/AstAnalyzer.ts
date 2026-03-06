@@ -36,7 +36,7 @@ const _langPlugins = new Map();
  * @param {string} langId 语言标识 (e.g. 'objectivec', 'swift', 'typescript')
  * @param {LangPlugin} plugin
  */
-export function registerLanguage(langId, plugin) {
+export function registerLanguage(langId: any, plugin: any) {
   _langPlugins.set(langId, plugin);
   // 清除 parser cache 以便下次使用新语法
   _parserCache.delete(langId);
@@ -54,7 +54,7 @@ export function registerLanguage(langId, plugin) {
  * @param {boolean} [options.extractCallSites=true] 是否提取调用点 (Phase 5)
  * @returns {AstSummary | null}
  */
-function analyzeFile(source, lang, options: any = {}) {
+function analyzeFile(source: any, lang: any, options: any = {}) {
   const plugin = _langPlugins.get(lang);
   if (!plugin) {
     return null; // 无插件 → 优雅降级
@@ -131,7 +131,7 @@ function analyzeFile(source, lang, options: any = {}) {
  * @param {{ preprocessFile?: (content: string, ext: string) => { content: string, lang: string } | null }} [options]
  * @returns {ProjectAstSummary}
  */
-function analyzeProject(files, lang, options) {
+function analyzeProject(files: any, lang: any, options: any) {
   const fileSummaries: any[] = [];
   const allClasses: any[] = [];
   const allProtocols: any[] = [];
@@ -219,7 +219,7 @@ function analyzeProject(files, lang, options) {
  * @param {ProjectAstSummary} projectSummary
  * @returns {string}
  */
-function generateContextForAgent(projectSummary) {
+function generateContextForAgent(projectSummary: any) {
   const lines = ['## 项目代码结构分析（AST）', ''];
 
   // 类型声明概览
@@ -246,11 +246,11 @@ function generateContextForAgent(projectSummary) {
   }
 
   // 协议遵循
-  const conformances = classes.filter((c) => c.protocols && c.protocols.length > 0);
+  const conformances = classes.filter((c: any) => c.protocols && c.protocols.length > 0);
   if (conformances.length > 0) {
     lines.push(`### 协议遵循`);
     for (const c of conformances.slice(0, 20)) {
-      lines.push(`- \`${c.name}\` → ${c.protocols.map((p) => `\`${p}\``).join(', ')}`);
+      lines.push(`- \`${c.name}\` → ${c.protocols.map((p: any) => `\`${p}\``).join(', ')}`);
     }
     if (conformances.length > 20) {
       lines.push(`- ... (共 ${conformances.length} 个)`);
@@ -264,7 +264,7 @@ function generateContextForAgent(projectSummary) {
     for (const cat of categories.slice(0, 15)) {
       const methodNames = (cat.methods || [])
         .slice(0, 5)
-        .map((m) => m.name)
+        .map((m: any) => m.name)
         .join(', ');
       lines.push(`- \`${cat.className}(${cat.categoryName})\` → ${methodNames || '(无方法)'}`);
     }
@@ -328,7 +328,7 @@ function supportedLanguages() {
 
 const _parserCache = new Map();
 
-function _getParser(lang) {
+function _getParser(lang: any) {
   const ParserClass = getParserClass();
   if (!ParserClass) {
     return null;
@@ -362,7 +362,7 @@ function _getParser(lang) {
  * @param {string} lang 语言 ID (如 'javascript', 'typescript', 'python' 等)
  * @returns {{ rootNode: object, tree: object } | null} tree-sitter 的 rootNode, 或 null (不支持/解析失败)
  */
-function parseToTree(source, lang) {
+function parseToTree(source: any, lang: any) {
   const parser = _getParser(lang);
   if (!parser) {
     return null;
@@ -384,7 +384,7 @@ function parseToTree(source, lang) {
 // 内部实现 — 设计模式检测（通用回退，插件可提供自己的 detectPatterns）
 // ──────────────────────────────────────────────────────────────────
 
-function _detectPatterns(root, lang, methods, properties, classes) {
+function _detectPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   const patterns: any[] = [];
 
   // Singleton 检测
@@ -448,7 +448,7 @@ function _detectPatterns(root, lang, methods, properties, classes) {
 // 内部实现 — 继承图谱
 // ──────────────────────────────────────────────────────────────────
 
-function _buildInheritanceGraph(classes, protocols, categories) {
+function _buildInheritanceGraph(classes: any, protocols: any, categories: any) {
   const edges: { from: any; to: any; type: string } | { from: string; to: any; type: string }[] =
     [];
 
@@ -493,10 +493,10 @@ function _buildInheritanceGraph(classes, protocols, categories) {
   return edges;
 }
 
-function _renderInheritanceTree(edges) {
+function _renderInheritanceTree(edges: any) {
   // 找出根节点（只被继承不继承其他的）
-  const allTargets = new Set(edges.map((e) => e.to));
-  const allSources = new Set(edges.map((e) => e.from));
+  const allTargets = new Set(edges.map((e: any) => e.to));
+  const allSources = new Set(edges.map((e: any) => e.from));
   const roots = [...allTargets].filter((t) => !allSources.has(t)).slice(0, 5);
 
   const childMap: Record<string, any> = {};
@@ -511,7 +511,7 @@ function _renderInheritanceTree(edges) {
   }
 
   const lines: string[] = [];
-  function render(name, prefix, isLast) {
+  function render(name: any, prefix: any, isLast: any) {
     const connector = prefix.length === 0 ? '' : isLast ? '└─ ' : '├─ ';
     lines.push(prefix + connector + name);
     const children = childMap[name] || [];
@@ -532,7 +532,7 @@ function _renderInheritanceTree(edges) {
 // 内部实现 — 代码质量指标
 // ──────────────────────────────────────────────────────────────────
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_statement',
@@ -549,14 +549,14 @@ function _estimateComplexity(node) {
     'for_in_expression',
   ]);
 
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
     // && / || 也增加复杂度
     if (n.type === 'binary_expression') {
       const op = n.children?.find(
-        (c) => c.type === '&&' || c.type === '||' || c.text === '&&' || c.text === '||'
+        (c: any) => c.type === '&&' || c.type === '||' || c.text === '&&' || c.text === '||'
       );
       if (op) {
         complexity++;
@@ -571,7 +571,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_statement',
     'for_statement',
@@ -594,23 +594,25 @@ function _maxNesting(node, depth) {
   return max;
 }
 
-function _computeMetrics(root, lang, methods) {
-  const defs = methods.filter((m) => m.kind === 'definition');
-  const totalBodyLines = defs.reduce((sum, m) => sum + (m.bodyLines || 0), 0);
+function _computeMetrics(root: any, lang: any, methods: any) {
+  const defs = methods.filter((m: any) => m.kind === 'definition');
+  const totalBodyLines = defs.reduce((sum: any, m: any) => sum + (m.bodyLines || 0), 0);
 
   return {
     methodCount: defs.length,
     avgBodyLines: defs.length > 0 ? totalBodyLines / defs.length : 0,
-    maxComplexity: defs.length > 0 ? Math.max(...defs.map((m) => m.complexity || 1)) : 0,
-    maxNestingDepth: defs.length > 0 ? Math.max(...defs.map((m) => m.nestingDepth || 0)) : 0,
-    longMethods: defs.filter((m) => (m.bodyLines || 0) > 50),
-    complexMethods: defs.filter((m) => (m.complexity || 1) > 10),
+    maxComplexity: defs.length > 0 ? Math.max(...defs.map((m: any) => m.complexity || 1)) : 0,
+    maxNestingDepth: defs.length > 0 ? Math.max(...defs.map((m: any) => m.nestingDepth || 0)) : 0,
+    longMethods: defs.filter((m: any) => (m.bodyLines || 0) > 50),
+    complexMethods: defs.filter((m: any) => (m.complexity || 1) > 10),
   };
 }
 
-function _aggregateMetrics(fileSummaries) {
-  const allMethods = fileSummaries.flatMap((f) => f.methods.filter((m) => m.kind === 'definition'));
-  const allClasses = fileSummaries.flatMap((f) => f.classes);
+function _aggregateMetrics(fileSummaries: any) {
+  const allMethods = fileSummaries.flatMap((f: any) =>
+    f.methods.filter((m: any) => m.kind === 'definition')
+  );
+  const allClasses = fileSummaries.flatMap((f: any) => f.classes);
 
   const methodsByClass: Record<string, any> = {};
   for (const m of allMethods) {
@@ -631,10 +633,10 @@ function _aggregateMetrics(fileSummaries) {
         ? (classCounts as number[]).reduce((a, b) => a + b, 0) / classCounts.length
         : 0,
     maxNestingDepth:
-      allMethods.length > 0 ? Math.max(...allMethods.map((m) => m.nestingDepth || 0)) : 0,
+      allMethods.length > 0 ? Math.max(...allMethods.map((m: any) => m.nestingDepth || 0)) : 0,
     longMethods: allMethods
-      .filter((m) => (m.bodyLines || 0) > 50)
-      .map((m) => ({
+      .filter((m: any) => (m.bodyLines || 0) > 50)
+      .map((m: any) => ({
         name: m.name,
         className: m.className,
         lines: m.bodyLines,
@@ -642,8 +644,8 @@ function _aggregateMetrics(fileSummaries) {
         line: m.line,
       })),
     complexMethods: allMethods
-      .filter((m) => (m.complexity || 1) > 10)
-      .map((m) => ({
+      .filter((m: any) => (m.complexity || 1) > 10)
+      .map((m: any) => ({
         name: m.name,
         className: m.className,
         complexity: m.complexity,
@@ -657,7 +659,7 @@ function _aggregateMetrics(fileSummaries) {
 // 工具函数
 // ──────────────────────────────────────────────────────────────────
 
-function _findIdentifier(node) {
+function _findIdentifier(node: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
     if (
@@ -682,7 +684,7 @@ function _findIdentifier(node) {
  * @param {string} targetCallee  目标调用，如 'URLSession.shared', 'dispatch_sync'
  * @returns {Array<{ line: number, snippet: string, enclosingClass: string|null }>}
  */
-function findCallExpressions(source, lang, targetCallee) {
+function findCallExpressions(source: any, lang: any, targetCallee: any) {
   const parser = _getParser(lang);
   if (!parser) {
     return [];
@@ -692,7 +694,7 @@ function findCallExpressions(source, lang, targetCallee) {
   const results: { line: any; snippet: any; enclosingClass: any }[] = [];
   const lines = source.split(/\r?\n/);
 
-  function walk(node, enclosingClass) {
+  function walk(node: any, enclosingClass: any) {
     // 更新当前所处的类
     let currentClass = enclosingClass;
     if (
@@ -760,7 +762,7 @@ function findCallExpressions(source, lang, targetCallee) {
  *   requiredContext: 如果不在此上下文中出现则报告
  * @returns {Array<{ line: number, snippet: string, context: string|null }>}
  */
-function findPatternInContext(source, lang, pattern, contextFilter: any = {}) {
+function findPatternInContext(source: any, lang: any, pattern: any, contextFilter: any = {}) {
   const parser = _getParser(lang);
   if (!parser) {
     return [];
@@ -770,7 +772,7 @@ function findPatternInContext(source, lang, pattern, contextFilter: any = {}) {
   const results: { line: any; snippet: any; context: any }[] = [];
   const lines = source.split(/\r?\n/);
 
-  function getEnclosingMethodName(node) {
+  function getEnclosingMethodName(node: any) {
     let current = node.parent;
     while (current) {
       if (
@@ -788,7 +790,7 @@ function findPatternInContext(source, lang, pattern, contextFilter: any = {}) {
     return null;
   }
 
-  function getEnclosingClassName(node) {
+  function getEnclosingClassName(node: any) {
     let current = node.parent;
     while (current) {
       if (
@@ -806,7 +808,7 @@ function findPatternInContext(source, lang, pattern, contextFilter: any = {}) {
     return null;
   }
 
-  function walk(node) {
+  function walk(node: any) {
     const nodeText = node.text || '';
     if (nodeText.includes(pattern) && node.childCount === 0) {
       // 叶节点匹配
@@ -857,7 +859,7 @@ function findPatternInContext(source, lang, pattern, contextFilter: any = {}) {
  * @param {string} protocolName  协议名
  * @returns {{ conforms: boolean, classFound: boolean, classDeclLine: number|null }}
  */
-function checkProtocolConformance(source, lang, className, protocolName) {
+function checkProtocolConformance(source: any, lang: any, className: any, protocolName: any) {
   const summary = analyzeFile(source, lang);
   if (!summary) {
     return { conforms: false, classFound: false, classDeclLine: null };

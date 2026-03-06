@@ -31,7 +31,7 @@ let _sessionManager: any = null;
  * @param {object} container - ServiceContainer
  * @returns {BootstrapSessionManager}
  */
-function getSessionManager(container) {
+function getSessionManager(container: any) {
   // 优先使用容器注册的 (如果已注册)
   try {
     const mgr = container.get('bootstrapSessionManager');
@@ -68,7 +68,7 @@ function getSessionManager(container) {
  * @param {object} ctx - { container, logger, startedAt }
  * @returns {Promise<object>} - envelope({ success, data: MissionBriefing })
  */
-export async function bootstrapExternal(ctx) {
+export async function bootstrapExternal(ctx: any) {
   const t0 = Date.now();
   const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
 
@@ -191,7 +191,7 @@ export async function bootstrapExternal(ctx) {
  * @param {string} [sessionId]
  * @returns {import('./bootstrap/BootstrapSession.js').BootstrapSession|null}
  */
-export function getActiveSession(container, sessionId) {
+export function getActiveSession(container: any, sessionId: any) {
   const mgr = getSessionManager(container);
   return mgr.getSession(sessionId);
 }

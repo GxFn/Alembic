@@ -19,7 +19,7 @@ export class ActionPipeline {
    * @param {string} type 触发类型
    * @param {function} handler - async (trigger, context) => result
    */
-  register(type, handler) {
+  register(type: any, handler: any) {
     this.#actions.set(type, handler);
   }
 
@@ -29,7 +29,7 @@ export class ActionPipeline {
    * @param {object} context
    * @returns {Promise<{ success: boolean, result?: any, error?: string }>}
    */
-  async execute(trigger, context) {
+  async execute(trigger: any, context: any) {
     const handler = this.#actions.get(trigger.type);
     if (!handler) {
       // 尝试通用 handler
@@ -51,7 +51,7 @@ export class ActionPipeline {
     return [...this.#actions.keys()];
   }
 
-  async #runHandler(handler, trigger, context) {
+  async #runHandler(handler: any, trigger: any, context: any) {
     try {
       const result = await handler(trigger, context);
       return { success: true, result };

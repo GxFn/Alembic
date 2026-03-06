@@ -8,7 +8,7 @@ import path from 'node:path';
 import { envelope } from '../envelope.js';
 import { TIER_ORDER, TOOL_GATEWAY_MAP, TOOLS } from '../tools.js';
 
-export async function health(ctx) {
+export async function health(ctx: any) {
   const checks = { database: false, gateway: false, vectorStore: false };
   const issues: string[] = [];
   let knowledgeBase: any = null;
@@ -180,8 +180,10 @@ export function capabilities() {
 
   // 根据当前 tier 决定可见工具
   const tierName = process.env.ASD_MCP_TIER || 'agent';
-  const maxTier = TIER_ORDER[tierName] ?? TIER_ORDER.agent;
-  const visibleTools = TOOLS.filter((t) => (TIER_ORDER[t.tier || 'agent'] ?? 0) <= maxTier);
+  const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;
+  const visibleTools = TOOLS.filter(
+    (t) => ((TIER_ORDER as Record<string, number>)[t.tier || 'agent'] ?? 0) <= maxTier
+  );
 
   const tools = visibleTools.map((t) => {
     const props = t.inputSchema.properties || {};
@@ -194,12 +196,12 @@ export function capabilities() {
       ...(schema.enum ? { enum: schema.enum } : {}),
       ...(schema.description ? { description: schema.description } : {}),
     }));
-    const gatewayInfo = TOOL_GATEWAY_MAP[t.name];
+    const gatewayInfo = (TOOL_GATEWAY_MAP as Record<string, any>)[t.name];
     return {
       name: t.name,
       tier: t.tier || 'agent',
       description: t.description,
-      category: CATEGORY_MAP[t.name] || 'other',
+      category: (CATEGORY_MAP as Record<string, string>)[t.name] || 'other',
       gatewayGated: !!gatewayInfo,
       params,
     };

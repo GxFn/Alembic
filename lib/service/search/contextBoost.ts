@@ -19,7 +19,7 @@ import { tokenize } from './InvertedIndex.js';
  * @param {string} [context.language]
  * @returns {Array} - 含 contextScore / contextBoost 字段的排序列表
  */
-export function contextBoost(items, context: any = {}) {
+export function contextBoost(items: any, context: any = {}) {
   const { sessionHistory = [], language } = context;
   if (!sessionHistory.length) {
     return items;
@@ -35,7 +35,7 @@ export function contextBoost(items, context: any = {}) {
   }
 
   return items
-    .map((item) => {
+    .map((item: any) => {
       let boost = 0;
 
       // 会话上下文匹配
@@ -56,5 +56,5 @@ export function contextBoost(items, context: any = {}) {
       const contextScore = baseScore * (1 + boost);
       return { ...item, contextScore, contextBoost: boost };
     })
-    .sort((a, b) => b.contextScore - a.contextScore);
+    .sort((a: any, b: any) => b.contextScore - a.contextScore);
 }

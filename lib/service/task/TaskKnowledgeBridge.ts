@@ -15,7 +15,7 @@ export class TaskKnowledgeBridge {
   /**
    * @param {import('../../service/search/SearchEngine.js').SearchEngine} searchEngine
    */
-  constructor(searchEngine) {
+  constructor(searchEngine: any) {
     this._search = searchEngine;
     this.logger = Logger.getInstance();
   }
@@ -27,7 +27,7 @@ export class TaskKnowledgeBridge {
    * @param {import('../../domain/task/Task.js').Task[]} tasks
    * @returns {Promise<import('../../domain/task/Task.js').Task[]>}
    */
-  async enrichWithKnowledge(tasks) {
+  async enrichWithKnowledge(tasks: any) {
     if (!tasks || tasks.length === 0) {
       return tasks;
     }
@@ -35,9 +35,9 @@ export class TaskKnowledgeBridge {
       return tasks;
     }
 
-    const results = await Promise.allSettled(tasks.map((task) => this._buildContext(task)));
+    const results = await Promise.allSettled(tasks.map((task: any) => this._buildContext(task)));
 
-    return tasks.map((task, i) => {
+    return tasks.map((task: any, i: any) => {
       if (results[i].status === 'fulfilled' && results[i].value) {
         task.knowledgeContext = results[i].value;
       }
@@ -49,7 +49,7 @@ export class TaskKnowledgeBridge {
    * 为单个任务构建知识上下文
    * @private
    */
-  async _buildContext(task) {
+  async _buildContext(task: any) {
     const query = `${task.title} ${task.description}`.trim();
     if (!query) {
       return null;
@@ -62,18 +62,18 @@ export class TaskKnowledgeBridge {
       });
 
       const allResults = searchResult?.items || searchResult?.results || [];
-      const knowledge = allResults.filter((r) => r.kind !== 'rule').slice(0, 3);
-      const guardRules = allResults.filter((r) => r.kind === 'rule').slice(0, 5);
+      const knowledge = allResults.filter((r: any) => r.kind !== 'rule').slice(0, 3);
+      const guardRules = allResults.filter((r: any) => r.kind === 'rule').slice(0, 5);
 
       return {
-        relatedKnowledge: knowledge.map((k) => ({
+        relatedKnowledge: knowledge.map((k: any) => ({
           id: k.id,
           title: k.title,
           kind: k.kind,
           trigger: k.trigger,
           actionHint: k.actionHint || k.doClause || '',
         })),
-        guardRules: guardRules.map((r) => ({
+        guardRules: guardRules.map((r: any) => ({
           id: r.id,
           title: r.title,
           trigger: r.trigger,

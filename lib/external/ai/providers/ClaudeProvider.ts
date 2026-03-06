@@ -30,7 +30,7 @@ export class ClaudeProvider extends AiProvider {
     return true;
   }
 
-  async chat(prompt, context: any = {}) {
+  async chat(prompt: any, context: any = {}) {
     const { history = [], temperature = 0.7, maxTokens = 4096 } = context;
     const messages: { role: any; content: any } | { role: string; content: any }[] = [];
 
@@ -47,7 +47,7 @@ export class ClaudeProvider extends AiProvider {
     };
 
     const data = await this._post(`${CLAUDE_BASE}/messages`, body);
-    const textBlock = (data?.content || []).find((c) => c.type === 'text');
+    const textBlock = (data?.content || []).find((c: any) => c.type === 'text');
     return textBlock?.text || '';
   }
 
@@ -66,7 +66,7 @@ export class ClaudeProvider extends AiProvider {
    * @param {object} opts 统一参数
    * @returns {Promise<{text: string|null, functionCalls: Array<{id, name, args}>|null}>}
    */
-  async chatWithTools(prompt, opts: any = {}) {
+  async chatWithTools(prompt: any, opts: any = {}) {
     const {
       messages: unifiedMessages,
       toolSchemas,
@@ -97,7 +97,7 @@ export class ClaudeProvider extends AiProvider {
     // 工具声明 + tool_choice
     // toolChoice='none' 时不传 tools（Anthropic 没有 'none' tool_choice）
     if (toolChoice !== 'none' && toolSchemas?.length > 0) {
-      body.tools = toolSchemas.map((s) => ({
+      body.tools = toolSchemas.map((s: any) => ({
         name: s.name,
         description: s.description || '',
         input_schema: s.parameters || { type: 'object', properties: {} },
@@ -126,13 +126,13 @@ export class ClaudeProvider extends AiProvider {
    * Anthropic 要求消息交替 user/assistant。连续 tool results 合并为一个 user 消息。
    * 连续同角色消息（如 L2/L3 压缩后的摘要）自动合并以避免 400 错误。
    */
-  #convertMessages(messages) {
+  #convertMessages(messages: any) {
     const result: any[] = [];
 
     /**
      * 推入 result，如果上一个 entry 同角色则合并 content
      */
-    const pushOrMerge = (entry) => {
+    const pushOrMerge = (entry: any) => {
       const last = result[result.length - 1];
       if (last && last.role === entry.role) {
         // Anthropic content 可以是 string 或 array
@@ -203,7 +203,7 @@ export class ClaudeProvider extends AiProvider {
    *   content[]: { type: 'text', text } | { type: 'tool_use', id, name, input }
    *   stop_reason: 'end_turn' | 'tool_use' | 'max_tokens'
    */
-  #parseToolResponse(data) {
+  #parseToolResponse(data: any) {
     // 提取 token 用量 (Claude usage)
     const usage = data?.usage
       ? {
@@ -250,7 +250,7 @@ export class ClaudeProvider extends AiProvider {
     };
   }
 
-  async summarize(code) {
+  async summarize(code: any) {
     const prompt = `请对以下代码生成结构化摘要，返回 JSON 格式 {title, description, language, patterns: [], keyAPIs: []}:\n\n${code}`;
     return (
       (await this.chatWithStructuredOutput(prompt, {
@@ -260,7 +260,7 @@ export class ClaudeProvider extends AiProvider {
     );
   }
 
-  async embed(_text) {
+  async embed(_text: any) {
     // Claude 不支持嵌入 API，返回空数组触发降级
     return [];
   }
@@ -269,7 +269,7 @@ export class ClaudeProvider extends AiProvider {
     return false;
   }
 
-  async _post(url, body) {
+  async _post(url: any, body: any) {
     if (!this.apiKey) {
       const err: any = new Error(
         'Claude API Key 未配置。请在 .env 中设置 ASD_CLAUDE_API_KEY，或运行 asd setup 完成配置。'

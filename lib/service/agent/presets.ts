@@ -62,7 +62,7 @@ export const PRESETS = Object.freeze({
     capabilities: ['conversation', 'code_analysis'],
     strategy: { type: 'single' },
     policies: [
-      (config) =>
+      (config: any) =>
         new BudgetPolicy({
           maxIterations: config?.maxIterations ?? 8,
           maxTokens: config?.maxTokens ?? 4096,
@@ -111,7 +111,7 @@ export const PRESETS = Object.freeze({
             timeoutMs: 300_000,
           },
           systemPrompt: ANALYST_SYSTEM_PROMPT,
-          promptBuilder: (ctx) =>
+          promptBuilder: (ctx: any) =>
             buildAnalystPrompt(
               ctx.dimConfig,
               ctx.projectInfo,
@@ -120,7 +120,7 @@ export const PRESETS = Object.freeze({
               ctx.semanticMemory,
               ctx.codeEntityGraph
             ),
-          retryPromptBuilder: (retryCtx, _origPrompt, prev) => {
+          retryPromptBuilder: (retryCtx: any, _origPrompt: any, prev: any) => {
             const prevAnalysis = prev.analyze?.reply || '';
             const retryHint = buildRetryPrompt(retryCtx.reason);
             return `${prevAnalysis}\n\n⚠️ 上述分析未通过质量检查: ${retryCtx.reason}\n\n${retryHint}`;
@@ -145,7 +145,7 @@ export const PRESETS = Object.freeze({
           // 供 ExplorationTracker 精确控制 PRODUCE→SUMMARIZE 转换时机
           budget: { ...PRODUCER_BUDGET, temperature: 0.3, timeoutMs: 180_000 },
           systemPrompt: PRODUCER_SYSTEM_PROMPT,
-          promptBuilder: (ctx) =>
+          promptBuilder: (ctx: any) =>
             buildProducerPromptV2(
               ctx.gateArtifact, // 来自 quality_gate 的 AnalysisArtifact
               ctx.dimConfig,
@@ -153,12 +153,12 @@ export const PRESETS = Object.freeze({
             ),
           // 拒绝率过高时: 缩减预算 + 特定修复 prompt (对齐旧 ProducerAgent 的 rejection retry)
           retryBudget: { maxIterations: 5, temperature: 0.3, timeoutMs: 120_000 },
-          retryPromptBuilder: (retryCtx, _origPrompt, prev) => {
+          retryPromptBuilder: (retryCtx: any, _origPrompt: any, prev: any) => {
             const prevProduce = prev.produce;
-            const submitCalls = (prevProduce?.toolCalls || []).filter((tc) =>
+            const submitCalls = (prevProduce?.toolCalls || []).filter((tc: any) =>
               ['submit_knowledge', 'submit_with_check'].includes(tc.tool || tc.name)
             );
-            const rejected = submitCalls.filter((tc) => {
+            const rejected = submitCalls.filter((tc: any) => {
               const res = tc.result;
               if (!res) {
                 return false;
@@ -195,14 +195,14 @@ export const PRESETS = Object.freeze({
       ],
     },
     policies: [
-      (config) =>
+      (config: any) =>
         new BudgetPolicy({
           maxIterations: config?.maxIterations ?? 24,
           maxTokens: config?.maxTokens ?? 4096,
           temperature: config?.temperature ?? 0.3,
           timeoutMs: config?.timeoutMs ?? 600_000,
         }),
-      (config) =>
+      (config: any) =>
         new QualityGatePolicy({
           minEvidenceLength: config?.minEvidenceLength ?? 500,
           minFileRefs: config?.minFileRefs ?? 3,
@@ -226,7 +226,7 @@ export const PRESETS = Object.freeze({
     capabilities: ['conversation', 'code_analysis'],
     strategy: { type: 'single' },
     policies: [
-      (config) =>
+      (config: any) =>
         new BudgetPolicy({
           maxIterations: config?.maxIterations ?? 12,
           maxTokens: config?.maxTokens ?? 4096,
@@ -257,7 +257,7 @@ export const PRESETS = Object.freeze({
     capabilities: ['conversation', 'code_analysis', 'system_interaction'],
     strategy: { type: 'single' },
     policies: [
-      (config) =>
+      (config: any) =>
         new BudgetPolicy({
           maxIterations: config?.maxIterations ?? 6,
           maxTokens: config?.maxTokens ?? 2048,
@@ -290,7 +290,7 @@ export const PRESETS = Object.freeze({
  * @param {Object} strategyConfig - { type: 'single'|'pipeline'|'fan_out'|'adaptive', ...opts }
  * @returns {import('./strategies.js').Strategy}
  */
-export function resolveStrategy(strategyConfig) {
+export function resolveStrategy(strategyConfig: any): any {
   if (!strategyConfig) {
     return new SingleStrategy();
   }
@@ -306,7 +306,7 @@ export function resolveStrategy(strategyConfig) {
       });
 
     case 'fan_out': {
-      const itemStrategy = strategyConfig.itemStrategy
+      const itemStrategy: any = strategyConfig.itemStrategy
         ? resolveStrategy(strategyConfig.itemStrategy)
         : new SingleStrategy();
       return new FanOutStrategy({
@@ -335,8 +335,8 @@ export function resolveStrategy(strategyConfig) {
  * @param {Object} [overrides] 覆盖 preset 中的特定字段
  * @returns {PresetConfig & { strategyInstance: Strategy }}
  */
-export function getPreset(presetName, overrides: any = {}) {
-  const preset = PRESETS[presetName];
+export function getPreset(presetName: any, overrides: any = {}) {
+  const preset = (PRESETS as Record<string, any>)[presetName];
   if (!preset) {
     throw new Error(
       `Unknown preset: "${presetName}". Available: ${Object.keys(PRESETS).join(', ')}`

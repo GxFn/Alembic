@@ -8,18 +8,18 @@
 // JavaScript walker 与 TypeScript walker 结构相同
 // 复用 lang-typescript 的 walker 逻辑
 
-function walkJavaScript(root, ctx) {
+function walkJavaScript(root: any, ctx: any) {
   _walkJSNode(root, ctx, null);
 }
 
-function _walkJSNode(node, ctx, parentClassName) {
+function _walkJSNode(node: any, ctx: any, parentClassName: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
 
     switch (child.type) {
       case 'import_statement': {
         const source = child.namedChildren.find(
-          (c) => c.type === 'string' || c.type === 'string_fragment'
+          (c: any) => c.type === 'string' || c.type === 'string_fragment'
         );
         if (source) {
           ctx.imports.push(source.text.replace(/^['"]|['"]$/g, ''));
@@ -37,7 +37,7 @@ function _walkJSNode(node, ctx, parentClassName) {
       case 'class_declaration': {
         const classInfo = _parseJSClass(child);
         ctx.classes.push(classInfo);
-        const body = child.namedChildren.find((c) => c.type === 'class_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (body) {
           _walkJSClassBody(body, ctx, classInfo.name);
         }
@@ -67,16 +67,17 @@ function _walkJSNode(node, ctx, parentClassName) {
   }
 }
 
-function _walkJSClassBody(body, ctx, className) {
+function _walkJSClassBody(body: any, ctx: any, className: any) {
   for (let i = 0; i < body.namedChildCount; i++) {
     const child = body.namedChild(i);
     if (child.type === 'method_definition') {
       const name =
-        child.namedChildren.find((c) => c.type === 'property_identifier' || c.type === 'identifier')
-          ?.text || 'unknown';
+        child.namedChildren.find(
+          (c: any) => c.type === 'property_identifier' || c.type === 'identifier'
+        )?.text || 'unknown';
 
       const isStatic = child.text.trimStart().startsWith('static');
-      const bodyNode = child.namedChildren.find((c) => c.type === 'statement_block');
+      const bodyNode = child.namedChildren.find((c: any) => c.type === 'statement_block');
       const bodyLines = bodyNode ? bodyNode.endPosition.row - bodyNode.startPosition.row + 1 : 0;
 
       ctx.methods.push({
@@ -90,7 +91,7 @@ function _walkJSClassBody(body, ctx, className) {
         kind: 'definition',
       });
     } else if (child.type === 'field_definition' || child.type === 'public_field_definition') {
-      const name = child.namedChildren.find((c) => c.type === 'property_identifier')?.text;
+      const name = child.namedChildren.find((c: any) => c.type === 'property_identifier')?.text;
       if (name) {
         ctx.properties.push({ name, className, line: child.startPosition.row + 1 });
       }
@@ -98,16 +99,16 @@ function _walkJSClassBody(body, ctx, className) {
   }
 }
 
-function _parseJSClass(node) {
-  const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
+function _parseJSClass(node: any) {
+  const name = node.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'Unknown';
   let superclass: any = null;
 
   for (const child of node.namedChildren) {
     if (child.type === 'class_heritage') {
-      const ext = child.namedChildren.find((c) => c.type === 'extends_clause');
+      const ext = child.namedChildren.find((c: any) => c.type === 'extends_clause');
       if (ext) {
         const typeNode = ext.namedChildren.find(
-          (c) => c.type === 'identifier' || c.type === 'member_expression'
+          (c: any) => c.type === 'identifier' || c.type === 'member_expression'
         );
         if (typeNode) {
           superclass = typeNode.text;
@@ -126,9 +127,9 @@ function _parseJSClass(node) {
   };
 }
 
-function _parseJSFunction(node, className) {
-  const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
-  const body = node.namedChildren.find((c) => c.type === 'statement_block');
+function _parseJSFunction(node: any, className: any) {
+  const name = node.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'unknown';
+  const body = node.namedChildren.find((c: any) => c.type === 'statement_block');
   const isAsync = node.text.trimStart().startsWith('async');
 
   return {
@@ -144,15 +145,15 @@ function _parseJSFunction(node, className) {
   };
 }
 
-function _parseJSVariableDecl(node, ctx, parentClassName) {
+function _parseJSVariableDecl(node: any, ctx: any, parentClassName: any) {
   for (const child of node.namedChildren) {
     if (child.type === 'variable_declarator') {
-      const nameNode = child.namedChildren.find((c) => c.type === 'identifier');
+      const nameNode = child.namedChildren.find((c: any) => c.type === 'identifier');
       const valueNode = child.namedChildren.find(
-        (c) => c.type === 'arrow_function' || c.type === 'function'
+        (c: any) => c.type === 'arrow_function' || c.type === 'function'
       );
       if (nameNode && valueNode) {
-        const body = valueNode.namedChildren.find((c) => c.type === 'statement_block');
+        const body = valueNode.namedChildren.find((c: any) => c.type === 'statement_block');
         ctx.methods.push({
           name: nameNode.text,
           className: parentClassName,
@@ -168,7 +169,7 @@ function _parseJSVariableDecl(node, ctx, parentClassName) {
   }
 }
 
-function detectJSPatterns(root, lang, methods, properties, classes) {
+function detectJSPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   const patterns: any[] = [];
 
   for (const m of methods) {
@@ -200,7 +201,7 @@ function detectJSPatterns(root, lang, methods, properties, classes) {
 
 // ── 工具函数 ──
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_statement',
@@ -212,12 +213,12 @@ function _estimateComplexity(node) {
     'catch_clause',
     'ternary_expression',
   ]);
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
     if (n.type === 'binary_expression') {
-      const op = n.children?.find((c) => c.text === '&&' || c.text === '||');
+      const op = n.children?.find((c: any) => c.text === '&&' || c.text === '||');
       if (op) {
         complexity++;
       }
@@ -230,7 +231,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_statement',
     'for_statement',
@@ -256,7 +257,7 @@ let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }
-export function setGrammar(grammar) {
+export function setGrammar(grammar: any) {
   _grammar = grammar;
 }
 

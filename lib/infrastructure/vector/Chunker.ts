@@ -43,7 +43,7 @@ const CODE_LANGUAGES = new Set([
  * @param {object} options - { strategy, maxChunkTokens, overlapTokens, useAST }
  * @returns {Array<{ content: string, metadata: object }>}
  */
-export function chunk(content, metadata: any = {}, options: any = {}) {
+export function chunk(content: any, metadata: any = {}, options: any = {}) {
   const {
     strategy = 'auto',
     maxChunkTokens = DEFAULT_MAX_CHUNK_TOKENS,
@@ -101,7 +101,7 @@ export function chunk(content, metadata: any = {}, options: any = {}) {
 /**
  * 按 Markdown 标题分段
  */
-function chunkBySection(content, metadata, maxChunkTokens) {
+function chunkBySection(content: any, metadata: any, maxChunkTokens: any) {
   const sections: { title: string; content: string }[] = [];
   const lines = content.split('\n');
   let currentTitle = '';
@@ -180,7 +180,7 @@ function chunkBySection(content, metadata, maxChunkTokens) {
 /**
  * 固定大小分块（带重叠）
  */
-function chunkFixed(content, metadata, maxChunkTokens, overlapTokens) {
+function chunkFixed(content: any, metadata: any, maxChunkTokens: any, overlapTokens: any) {
   const maxChars = maxChunkTokens * 4;
   const overlapChars = overlapTokens * 4;
   const results: { content: any; metadata: any }[] = [];

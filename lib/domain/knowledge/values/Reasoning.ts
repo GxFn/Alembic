@@ -25,7 +25,7 @@ export class Reasoning {
    * @param {Reasoning|Object|null} input
    * @returns {Reasoning}
    */
-  static from(input) {
+  static from(input: any) {
     if (input instanceof Reasoning) {
       return input;
     }
@@ -75,7 +75,7 @@ export class Reasoning {
    * @param {Object} data
    * @returns {Reasoning}
    */
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     return new Reasoning(data);
   }
 }

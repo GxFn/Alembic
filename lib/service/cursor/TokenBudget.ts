@@ -22,7 +22,7 @@ export const BUDGET = {
  * @param {number} budget - token 上限
  * @returns {{ kept: string[], dropped: number, tokensUsed: number }}
  */
-export function truncateToTokenBudget(lines, budget) {
+export function truncateToTokenBudget(lines: any, budget: any) {
   const kept: any[] = [];
   let tokensUsed = 0;
   let dropped = 0;

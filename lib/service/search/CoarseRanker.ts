@@ -21,13 +21,13 @@ export class CoarseRanker {
    * @param {Array} candidates 需有 bm25Score、semanticScore 等字段
    * @returns {Array} - sorted with coarseScore
    */
-  rank(candidates) {
+  rank(candidates: any) {
     if (!candidates || candidates.length === 0) {
       return [];
     }
 
     // 动态权重调整：semantic 不可用时将其权重按比例重分配给其他维度
-    const hasSemanticScores = candidates.some((c) => (c.semanticScore || 0) > 0);
+    const hasSemanticScores = candidates.some((c: any) => (c.semanticScore || 0) > 0);
     const effectiveWeights = { ...this.#weights };
     if (!hasSemanticScores && effectiveWeights.semantic > 0) {
       const semWeight = effectiveWeights.semantic;
@@ -35,7 +35,8 @@ export class CoarseRanker {
       if (otherTotal > 0) {
         for (const key of Object.keys(effectiveWeights)) {
           if (key !== 'semantic') {
-            effectiveWeights[key] += (effectiveWeights[key] / otherTotal) * semWeight;
+            (effectiveWeights as Record<string, any>)[key] +=
+              ((effectiveWeights as Record<string, any>)[key] / otherTotal) * semWeight;
           }
         }
       }
@@ -43,10 +44,11 @@ export class CoarseRanker {
     }
 
     // BM25 分数 max-based 归一化（保留相对排序，避免 clamp 截断高分差异）
-    const maxBm25 = candidates.reduce((m, c) => Math.max(m, c.bm25Score || c.score || 0), 0) || 1;
+    const maxBm25 =
+      candidates.reduce((m: any, c: any) => Math.max(m, c.bm25Score || c.score || 0), 0) || 1;
 
     return candidates
-      .map((c) => {
+      .map((c: any) => {
         const bm25 = Math.min((c.bm25Score || c.score || 0) / maxBm25, 1.0);
         const semantic = this.#normalize(c.semanticScore || 0);
         const quality = this.#computeQuality(c);
@@ -66,7 +68,7 @@ export class CoarseRanker {
           coarseSignals: { bm25, semantic, quality, freshness, popularity },
         };
       })
-      .sort((a, b) => b.coarseScore - a.coarseScore);
+      .sort((a: any, b: any) => b.coarseScore - a.coarseScore);
   }
 
   /**
@@ -75,7 +77,7 @@ export class CoarseRanker {
    * - 结构质量 30%: 有 category + language + tags
    * - 代码可读性 30%: 合理长度、有注释
    */
-  #computeQuality(candidate) {
+  #computeQuality(candidate: any) {
     let score = 0;
 
     // 内容完整性 (40%)
@@ -100,7 +102,7 @@ export class CoarseRanker {
     return Math.min(score, 1.0);
   }
 
-  #computeFreshness(candidate) {
+  #computeFreshness(candidate: any) {
     const updated = candidate.updatedAt || candidate.lastModified || candidate.createdAt;
     if (!updated) {
       return 0.5;
@@ -119,12 +121,12 @@ export class CoarseRanker {
     return Math.exp((-Math.LN2 * ageDays) / 180); // 半衰期 180 天
   }
 
-  #computePopularity(candidate) {
+  #computePopularity(candidate: any) {
     const usage = candidate.usageCount || 0;
     return usage > 0 ? Math.min(Math.log10(usage + 1) / 3, 1.0) : 0;
   }
 
-  #normalize(value) {
+  #normalize(value: any) {
     return Math.min(Math.max(value, 0), 1.0);
   }
 }

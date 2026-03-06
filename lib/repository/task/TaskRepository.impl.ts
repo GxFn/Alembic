@@ -26,7 +26,7 @@ export class TaskRepositoryImpl {
   /**
    * @param {import('../../infrastructure/database/DatabaseConnection.js').default} database
    */
-  constructor(database) {
+  constructor(database: any) {
     this.db = database.getDb();
     this.logger = Logger.getInstance();
     this._prepareStatements();
@@ -136,7 +136,7 @@ export class TaskRepositoryImpl {
    * @param {Task} task
    * @returns {Task}
    */
-  create(task) {
+  create(task: any) {
     const row = this._entityToRow(task);
     this._insertStmt.run(row);
     return this.findById(task.id);
@@ -147,7 +147,7 @@ export class TaskRepositoryImpl {
    * @param {string} id
    * @returns {Task|null}
    */
-  findById(id) {
+  findById(id: any) {
     const row = this._findByIdStmt.get(id);
     return row ? Task.fromRow(row) : null;
   }
@@ -157,7 +157,7 @@ export class TaskRepositoryImpl {
    * @param {string} hash
    * @returns {Task|null}
    */
-  findByContentHash(hash) {
+  findByContentHash(hash: any) {
     if (!hash) {
       return null;
     }
@@ -171,7 +171,7 @@ export class TaskRepositoryImpl {
    * @param {object} fields 部分字段 (camelCase)
    * @returns {Task}
    */
-  update(id, fields) {
+  update(id: any, fields: any) {
     const columnMap = {
       status: 'status',
       priority: 'priority',
@@ -193,7 +193,7 @@ export class TaskRepositoryImpl {
     const values: any[] = [];
 
     for (const [key, value] of Object.entries(fields)) {
-      const col = columnMap[key];
+      const col = (columnMap as Record<string, any>)[key];
       if (!col) {
         continue;
       }
@@ -223,7 +223,7 @@ export class TaskRepositoryImpl {
    * @param {string} id
    * @returns {boolean}
    */
-  delete(id) {
+  delete(id: any) {
     const result = this._deleteStmt.run(id);
     return result.changes > 0;
   }
@@ -264,7 +264,7 @@ export class TaskRepositoryImpl {
     params.push(limit, offset);
 
     const rows = this.db.prepare(sql).all(...params);
-    return rows.map((r) => Task.fromRow(r));
+    return rows.map((r: any) => Task.fromRow(r));
   }
 
   // ═══ 依赖管理 ═══════════════════════════════════════
@@ -272,36 +272,36 @@ export class TaskRepositoryImpl {
   /**
    * 添加依赖
    */
-  addDependency(taskId, dependsOnId, depType) {
+  addDependency(taskId: any, dependsOnId: any, depType: any) {
     this._addDepStmt.run(taskId, dependsOnId, depType, Math.floor(Date.now() / 1000));
   }
 
   /**
    * 删除依赖
    */
-  removeDependency(taskId, dependsOnId, depType) {
+  removeDependency(taskId: any, dependsOnId: any, depType: any) {
     this._removeDepStmt.run(taskId, dependsOnId, depType);
   }
 
   /**
    * 获取任务的所有依赖
    */
-  getDependencies(taskId) {
+  getDependencies(taskId: any) {
     return this._getDepsStmt.all(taskId);
   }
 
   /**
    * 获取依赖此任务的所有任务
    */
-  getDependents(dependsOnId) {
+  getDependents(dependsOnId: any) {
     return this._getDependentsStmt.all(dependsOnId);
   }
 
   /**
    * 获取阻塞某任务的所有任务（含任务详情）
    */
-  getBlockers(taskId) {
-    return this._getBlockersStmt.all(taskId).map((r) => Task.fromRow(r));
+  getBlockers(taskId: any) {
+    return this._getBlockersStmt.all(taskId).map((r: any) => Task.fromRow(r));
   }
 
   /**
@@ -310,7 +310,7 @@ export class TaskRepositoryImpl {
    * @param {string} toId
    * @returns {boolean}
    */
-  hasReachablePath(fromId, toId) {
+  hasReachablePath(fromId: any, toId: any) {
     const row = this._reachableStmt.get(fromId, toId);
     return !!row;
   }
@@ -322,7 +322,7 @@ export class TaskRepositoryImpl {
    * @param {Function} fn
    * @returns {*}
    */
-  inTransaction(fn) {
+  inTransaction(fn: any) {
     const txn = this.db.transaction(fn);
     return txn();
   }
@@ -349,7 +349,14 @@ export class TaskRepositoryImpl {
   /**
    * 记录任务事件
    */
-  logEvent(taskId, eventType, oldValue = null, newValue = null, comment = null, actor = 'agent') {
+  logEvent(
+    taskId: any,
+    eventType: any,
+    oldValue = null,
+    newValue = null,
+    comment = null,
+    actor = 'agent'
+  ) {
     this._logEventStmt.run(
       taskId,
       eventType,
@@ -368,7 +375,7 @@ export class TaskRepositoryImpl {
    * @param {Task} task
    * @returns {object}
    */
-  _entityToRow(task) {
+  _entityToRow(task: any) {
     return {
       id: task.id,
       parent_id: task.parentId || null,
@@ -413,14 +420,14 @@ const ALLOWED_DIRECTIONS = new Set(['ASC', 'DESC']);
  * @param {string} [orderBy]
  * @returns {string}
  */
-function _sanitizeOrderBy(orderBy) {
+function _sanitizeOrderBy(orderBy: any) {
   if (!orderBy) {
     return 'priority ASC, created_at ASC';
   }
   return (
     orderBy
       .split(',')
-      .map((clause) => {
+      .map((clause: any) => {
         const parts = clause.trim().split(/\s+/);
         const field = parts[0];
         if (!ALLOWED_ORDER_FIELDS.has(field)) {

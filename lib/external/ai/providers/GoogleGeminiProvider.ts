@@ -34,7 +34,7 @@ export class GoogleGeminiProvider extends AiProvider {
     return true;
   }
 
-  async chat(prompt, context: any = {}) {
+  async chat(prompt: any, context: any = {}) {
     return this._withRetry(async () => {
       const { history = [], temperature = 0.7, maxTokens = 8192, systemPrompt } = context;
       const contents: { role: string; parts: { text: any }[] }[] = [];
@@ -81,7 +81,7 @@ export class GoogleGeminiProvider extends AiProvider {
    * @param {number} [opts.maxTokens=8192]
    * @returns {Promise<{text: string|null, functionCalls: Array<{id, name, args}>|null}>}
    */
-  async chatWithTools(prompt, opts: any = {}) {
+  async chatWithTools(prompt: any, opts: any = {}) {
     return this._withRetry(async () => {
       const {
         messages,
@@ -110,7 +110,7 @@ export class GoogleGeminiProvider extends AiProvider {
       if (toolSchemas?.length > 0) {
         body.tools = [
           {
-            functionDeclarations: toolSchemas.map((s) => this.#toFunctionDeclaration(s)),
+            functionDeclarations: toolSchemas.map((s: any) => this.#toFunctionDeclaration(s)),
           },
         ];
       }
@@ -145,14 +145,14 @@ export class GoogleGeminiProvider extends AiProvider {
    * Gemini 要求严格交替 user/model 角色。
    * 连续同角色消息（如 L2/L3 压缩后的摘要）自动合并 parts 以避免 400 错误。
    */
-  #convertMessages(messages) {
+  #convertMessages(messages: any) {
     const contents: any[] = [];
     let pendingToolResults: { functionResponse: { name: any; response: { result: any } } }[] = [];
 
     /**
      * 推入 contents，如果上一个 entry 同角色则合并 parts
      */
-    const pushOrMerge = (entry) => {
+    const pushOrMerge = (entry: any) => {
       const last = contents[contents.length - 1];
       if (last && last.role === entry.role) {
         last.parts.push(...entry.parts);
@@ -213,7 +213,7 @@ export class GoogleGeminiProvider extends AiProvider {
   /**
    * toolChoice → Gemini mode
    */
-  #toGeminiMode(toolChoice) {
+  #toGeminiMode(toolChoice: any) {
     switch (toolChoice) {
       case 'required':
         return 'ANY';
@@ -227,7 +227,7 @@ export class GoogleGeminiProvider extends AiProvider {
   /**
    * 标准 tool schema → Gemini functionDeclaration
    */
-  #toFunctionDeclaration(schema) {
+  #toFunctionDeclaration(schema: any) {
     return {
       name: schema.name,
       description: schema.description || '',
@@ -239,7 +239,7 @@ export class GoogleGeminiProvider extends AiProvider {
    * 清理 JSON Schema 使之兼容 Gemini API 的 OpenAPI 子集（递归）
    * Gemini API 不支持 default、examples 等 JSON Schema 扩展字段
    */
-  #sanitizeSchemaForGemini(schema) {
+  #sanitizeSchemaForGemini(schema: any) {
     if (!schema || typeof schema !== 'object') {
       return { type: 'object', properties: {} };
     }
@@ -277,7 +277,7 @@ export class GoogleGeminiProvider extends AiProvider {
    * 解析 Gemini API 响应 — 提取 functionCall 或 text
    * 返回统一格式（含生成的 id）
    */
-  #parseToolResponse(data) {
+  #parseToolResponse(data: any) {
     const content = data?.candidates?.[0]?.content;
 
     // 提取 token 用量 (Gemini usageMetadata)
@@ -329,7 +329,7 @@ export class GoogleGeminiProvider extends AiProvider {
     };
   }
 
-  async summarize(code) {
+  async summarize(code: any) {
     const prompt = `请对以下代码生成结构化摘要，返回 JSON 格式 {title, description, language, patterns: [], keyAPIs: []}:\n\n${code}`;
     return (
       (await this.chatWithStructuredOutput(prompt, {
@@ -345,7 +345,7 @@ export class GoogleGeminiProvider extends AiProvider {
    * 使用 responseMimeType: 'application/json' 强制 Gemini 返回合法 JSON。
    * 可选传入 responseSchema 做编译期校验（Gemini 1.5+ / Gemini 2+）。
    */
-  async chatWithStructuredOutput(prompt, opts: any = {}) {
+  async chatWithStructuredOutput(prompt: any, opts: any = {}) {
     return this._withRetry(async () => {
       const { schema, temperature = 0.3, maxTokens = 32768, systemPrompt } = opts;
 
@@ -387,7 +387,7 @@ export class GoogleGeminiProvider extends AiProvider {
     });
   }
 
-  async embed(text) {
+  async embed(text: any) {
     const texts = Array.isArray(text) ? text : [text];
     const results: any[] = [];
 
@@ -401,14 +401,14 @@ export class GoogleGeminiProvider extends AiProvider {
       const url = `${GEMINI_BASE}/${EMBED_MODEL}:batchEmbedContents?key=${this.apiKey}`;
       const data = await this._post(url, { requests });
       if (data?.embeddings) {
-        results.push(...data.embeddings.map((e) => e.values));
+        results.push(...data.embeddings.map((e: any) => e.values));
       }
     }
 
     return Array.isArray(text) ? results : results[0] || [];
   }
 
-  async _post(url, body) {
+  async _post(url: any, body: any) {
     if (!this.apiKey) {
       const err = new Error(
         'Google Gemini API Key 未配置。请在 .env 中设置 ASD_GOOGLE_API_KEY，或运行 asd setup 完成配置。'

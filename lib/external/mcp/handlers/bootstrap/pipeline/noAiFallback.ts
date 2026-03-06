@@ -23,7 +23,7 @@ const logger = Logger.getInstance();
  * @param {object} fillContext 与 fillDimensionsV3 相同的上下文
  * @returns {Promise<{ candidates: object[], skills: object[], report: object }>}
  */
-export async function runNoAiFallback(fillContext) {
+export async function runNoAiFallback(fillContext: any) {
   const {
     // ctx and projectRoot are part of fillContext API but unused in fallback path
     dimensions,
@@ -177,7 +177,7 @@ function _buildProjectProfile({
   allTargets,
   allFiles,
   astProjectSummary,
-}) {
+}: any) {
   const lines = ['## 项目技术画像', ''];
 
   // 语言统计
@@ -254,7 +254,7 @@ function _buildProjectProfile({
     codeParts.push(
       `// Target: ${allTargets
         .slice(0, 8)
-        .map((t) => (typeof t === 'string' ? t : t.name))
+        .map((t: any) => (typeof t === 'string' ? t : t.name))
         .join(', ')}`
     );
   }
@@ -286,7 +286,7 @@ function _buildArchitecture({
   targetFileMap,
   primaryLang,
   astProjectSummary,
-}) {
+}: any) {
   if (!depGraphData?.edges?.length && allTargets.length < 2) {
     return null;
   }
@@ -339,7 +339,7 @@ function _buildArchitecture({
     }
 
     // 叶子模块（不被任何模块依赖）
-    const leafModules = allTargets.filter((t) => !inDeg[t] && outDeg[t]);
+    const leafModules = allTargets.filter((t: any) => !inDeg[t] && outDeg[t]);
     if (leafModules.length > 0) {
       lines.push('### 叶子模块（仅依赖他人）', '');
       for (const mod of leafModules.slice(0, 8)) {
@@ -423,7 +423,7 @@ function _buildArchitecture({
   });
 }
 
-function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
+function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }: any) {
   if (!astProjectSummary) {
     return null;
   }
@@ -498,7 +498,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
         Impl: '接口实现',
       };
       for (const [sfx, count] of usedSuffixes) {
-        lines.push(`| *${sfx} | ${count} | ${roleMap[sfx] || sfx} |`);
+        lines.push(`| *${sfx} | ${count} | ${(roleMap as Record<string, string>)[sfx] || sfx} |`);
       }
       lines.push('');
     }
@@ -583,7 +583,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
   });
 }
 
-function _buildBestPractice({ guardAudit, primaryLang }) {
+function _buildBestPractice({ guardAudit, primaryLang }: any) {
   if (!guardAudit?.files?.length) {
     return null;
   }
@@ -679,7 +679,7 @@ function _buildBestPractice({ guardAudit, primaryLang }) {
   });
 }
 
-function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }) {
+function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }: any) {
   const lines = ['## Agent 开发注意事项', ''];
   lines.push('> 以下规则基于项目静态分析自动生成，AI Agent 在本项目中编写代码时应遵守。', '');
 
@@ -730,7 +730,7 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }) {
     }
     if (m.complexMethods?.length > 0) {
       const avgComplexity =
-        m.complexMethods.reduce((s, c) => s + c.complexity, 0) / m.complexMethods.length;
+        m.complexMethods.reduce((s: any, c: any) => s + c.complexity, 0) / m.complexMethods.length;
       lines.push(
         `- 已有 ${m.complexMethods.length} 个高复杂度方法 (avg ${avgComplexity.toFixed(1)}) — 新方法圈复杂度应 <10`
       );
@@ -780,7 +780,7 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }) {
 // ═══════════════════════════════════════════════════════════
 
 /** 从绝对/相对路径取文件名 */
-function _basename(fp) {
+function _basename(fp: any) {
   if (!fp) {
     return '';
   }
@@ -801,7 +801,7 @@ function _makeCandidate({
   dontClause,
   whenClause,
   sources,
-}) {
+}: any) {
   return {
     title,
     content: { pattern: coreCode || '', markdown, rationale },
@@ -824,7 +824,7 @@ function _makeCandidate({
   };
 }
 
-function _wrapAsSkill(dimId, label, markdown) {
+function _wrapAsSkill(dimId: any, label: any, markdown: any) {
   return {
     dimId,
     name: `project-${dimId}`,
@@ -839,7 +839,7 @@ function _wrapAsSkill(dimId, label, markdown) {
   };
 }
 
-function _markDimDone(taskManager, sessionId, dimId, type) {
+function _markDimDone(taskManager: any, sessionId: any, dimId: any, type: any) {
   try {
     if (taskManager && sessionId) {
       taskManager.markTaskCompleted(dimId, { type, reason: type });

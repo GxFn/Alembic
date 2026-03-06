@@ -73,7 +73,7 @@ export class SingleStrategy extends Strategy {
     return 'single';
   }
 
-  async execute(runtime, message, opts: any = {}) {
+  async execute(runtime: any, message: any, opts: any = {}) {
     return runtime.reactLoop(message.content, {
       history: message.history,
       context: message.metadata.context || {},
@@ -136,7 +136,7 @@ export class FanOutStrategy extends Strategy {
    * @param {Object} opts
    * @param {Array<{id: string, label: string, tier?: number, prompt?: string, guide?: string}>} opts.items 子任务列表
    */
-  async execute(runtime, message, opts: any = {}) {
+  async execute(runtime: any, message: any, opts: any = {}) {
     const { items = [] } = opts;
     const bus = AgentEventBus.getInstance()!;
 
@@ -168,7 +168,7 @@ export class FanOutStrategy extends Strategy {
       // 按并发度分批执行
       const chunks = this.#chunk(tierItems, tierConfig.concurrency);
       for (const chunk of chunks) {
-        const chunkPromises = chunk.map(async (item) => {
+        const chunkPromises = chunk.map(async (item: any) => {
           const itemMessage = AgentMessage.internal(
             item.prompt || `${message.content}\n\n## 当前维度: ${item.label}\n${item.guide || ''}`,
             {
@@ -219,7 +219,7 @@ export class FanOutStrategy extends Strategy {
     return this.#merge(allResults);
   }
 
-  #groupByTier(items) {
+  #groupByTier(items: any) {
     const groups: Record<string, any> = {};
     for (const item of items) {
       const tier = item.tier || 1;
@@ -231,7 +231,7 @@ export class FanOutStrategy extends Strategy {
     return groups;
   }
 
-  #chunk(arr, size) {
+  #chunk(arr: any, size: any) {
     const chunks: any[] = [];
     for (let i = 0; i < arr.length; i += size) {
       chunks.push(arr.slice(i, i + size));
@@ -239,21 +239,21 @@ export class FanOutStrategy extends Strategy {
     return chunks;
   }
 
-  static #defaultMerge(results) {
-    const successful = results.filter((r) => r.status === 'completed');
-    const failed = results.filter((r) => r.status === 'failed');
+  static #defaultMerge(results: any) {
+    const successful = results.filter((r: any) => r.status === 'completed');
+    const failed = results.filter((r: any) => r.status === 'failed');
     return {
       reply: [
         `## 执行总结\n完成: ${successful.length}, 失败: ${failed.length}\n`,
-        ...successful.map((r) => `### ${r.label}\n${r.reply || '(无输出)'}`),
-        ...failed.map((r) => `### ${r.label} ❌\n${r.error}`),
+        ...successful.map((r: any) => `### ${r.label}\n${r.reply || '(无输出)'}`),
+        ...failed.map((r: any) => `### ${r.label} ❌\n${r.error}`),
       ].join('\n\n'),
-      toolCalls: results.flatMap((r) => r.toolCalls || []),
+      toolCalls: results.flatMap((r: any) => r.toolCalls || []),
       tokenUsage: {
-        input: results.reduce((sum, r) => sum + (r.tokenUsage?.input || 0), 0),
-        output: results.reduce((sum, r) => sum + (r.tokenUsage?.output || 0), 0),
+        input: results.reduce((sum: any, r: any) => sum + (r.tokenUsage?.input || 0), 0),
+        output: results.reduce((sum: any, r: any) => sum + (r.tokenUsage?.output || 0), 0),
       },
-      iterations: results.reduce((sum, r) => sum + (r.iterations || 0), 0),
+      iterations: results.reduce((sum: any, r: any) => sum + (r.iterations || 0), 0),
       itemResults: results,
     };
   }
@@ -300,7 +300,7 @@ export class AdaptiveStrategy extends Strategy {
     return 'adaptive';
   }
 
-  async execute(runtime, message, opts: any = {}) {
+  async execute(runtime: any, message: any, opts: any = {}) {
     const complexity = this.#assessComplexity(message, opts);
     const bus = AgentEventBus.getInstance()!;
 
@@ -323,7 +323,7 @@ export class AdaptiveStrategy extends Strategy {
   /**
    * 复杂度评估
    */
-  #assessComplexity(message, opts) {
+  #assessComplexity(message: any, opts: any) {
     const text = message.content.toLowerCase();
 
     // 有显式 items → fan_out
@@ -354,15 +354,15 @@ export const StrategyRegistry = {
     ['adaptive', AdaptiveStrategy],
   ]),
 
-  create(name, opts: any = {}) {
+  create(name: any, opts: any = {}) {
     const Cls = this._registry.get(name);
     if (!Cls) {
       throw new Error(`Unknown strategy: ${name}`);
     }
-    return new Cls(opts);
+    return new (Cls as any)(opts);
   },
 
-  register(name, cls) {
+  register(name: any, cls: any) {
     this._registry.set(name, cls);
   },
 };

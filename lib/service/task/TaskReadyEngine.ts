@@ -17,7 +17,7 @@ export class TaskReadyEngine {
   /**
    * @param {import('better-sqlite3').Database} db - raw SQLite handle
    */
-  constructor(db) {
+  constructor(db: any) {
     this._db = db;
     this._prepareStatements();
   }
@@ -99,7 +99,7 @@ export class TaskReadyEngine {
   getReadyWork(options: any = {}) {
     const limit = Math.max(1, Math.min(options.limit || 10, 200));
     const rows = this._readyStmt.all(limit);
-    return rows.map((r) => Task.fromRow(r));
+    return rows.map((r: any) => Task.fromRow(r));
   }
 
   /**
@@ -108,8 +108,8 @@ export class TaskReadyEngine {
    */
   getBlockedWork() {
     const rows = this._blockedStmt.all();
-    return rows.map((r) => ({
-      ...Task.fromRow(r)!.toJSON(),
+    return rows.map((r: any) => ({
+      ...Task.fromRow(r)?.toJSON(),
       blockedBy: r.blocked_by ? r.blocked_by.split(',') : [],
     }));
   }
@@ -119,10 +119,10 @@ export class TaskReadyEngine {
    * @param {string} taskId
    * @returns {Array<Object>} 带 depth 的任务列表
    */
-  getDependencyTree(taskId) {
+  getDependencyTree(taskId: any) {
     const rows = this._depTreeStmt.all(taskId);
-    return rows.map((r) => ({
-      ...Task.fromRow(r)!.toJSON(),
+    return rows.map((r: any) => ({
+      ...Task.fromRow(r)?.toJSON(),
       depth: r.depth,
     }));
   }

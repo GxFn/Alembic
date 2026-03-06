@@ -37,7 +37,7 @@ export class PathGuardError extends Error {
    * @param {string} projectRoot 当前项目根目录
    * @param {string} [reason] 拦截原因
    */
-  constructor(targetPath, projectRoot, reason?) {
+  constructor(targetPath: any, projectRoot: any, reason?: any) {
     const msg = reason
       ? `[PathGuard] ${reason}: "${targetPath}"`
       : `[PathGuard] 写入路径越界: "${targetPath}" 不在允许范围内。`;
@@ -93,7 +93,7 @@ class PathGuard {
    * @param {string} [opts.knowledgeBaseDir='AutoSnippet'] 知识库目录名
    * @param {string[]} [opts.extraAllowPaths] 额外允许的路径前缀
    */
-  configure({ projectRoot, packageRoot, knowledgeBaseDir, extraAllowPaths = [] }) {
+  configure({ projectRoot, packageRoot, knowledgeBaseDir, extraAllowPaths = [] }: any) {
     if (!projectRoot || !path.isAbsolute(projectRoot)) {
       throw new Error(`[PathGuard] projectRoot 必须是绝对路径，收到: "${projectRoot}"`);
     }
@@ -136,7 +136,7 @@ class PathGuard {
    * 设置知识库目录名（可在 configure 之后延迟设置）
    * @param {string} dirName 如 'AutoSnippet'、'Knowledge' 等
    */
-  setKnowledgeBaseDir(dirName) {
+  setKnowledgeBaseDir(dirName: any) {
     if (dirName && typeof dirName === 'string') {
       this.#knowledgeBaseDir = dirName;
     }
@@ -148,7 +148,7 @@ class PathGuard {
    * @param {string} targetPath 要写入的绝对路径
    * @throws {PathGuardError}
    */
-  assertSafe(targetPath) {
+  assertSafe(targetPath: any) {
     if (!this.#configured) {
       return;
     }
@@ -187,7 +187,7 @@ class PathGuard {
    * @param {string} targetPath 要创建的绝对路径
    * @throws {PathGuardError}
    */
-  assertProjectWriteSafe(targetPath) {
+  assertProjectWriteSafe(targetPath: any) {
     if (!this.#configured) {
       return;
     }
@@ -237,7 +237,7 @@ class PathGuard {
    * @param {string} targetPath
    * @returns {boolean}
    */
-  isSafe(targetPath) {
+  isSafe(targetPath: any) {
     try {
       this.assertSafe(targetPath);
       return true;
@@ -251,7 +251,7 @@ class PathGuard {
    * @param {string} targetPath
    * @returns {boolean}
    */
-  isProjectWriteSafe(targetPath) {
+  isProjectWriteSafe(targetPath: any) {
     try {
       this.assertProjectWriteSafe(targetPath);
       return true;
@@ -266,7 +266,7 @@ class PathGuard {
    * @param {string} relativePath
    * @returns {string} 绝对路径
    */
-  resolveProjectPath(relativePath) {
+  resolveProjectPath(relativePath: any) {
     if (!this.#configured || !this.#projectRoot) {
       // 未配置时 fallback 到 cwd（向后兼容）
       return path.resolve(relativePath);
@@ -290,7 +290,7 @@ class PathGuard {
   /**
    * resolved 是否在 base 目录下
    */
-  #isUnder(resolved, base) {
+  #isUnder(resolved: any, base: any) {
     return resolved === base || resolved.startsWith(base + path.sep);
   }
 

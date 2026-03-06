@@ -17,7 +17,7 @@ export class TaskIdGenerator {
   /**
    * @param {import('better-sqlite3').Database} db - raw SQLite handle
    */
-  constructor(db) {
+  constructor(db: any) {
     this._db = db;
     this._prefix = 'asd';
   }
@@ -58,7 +58,7 @@ export class TaskIdGenerator {
    * @param {string} parentId
    * @returns {string}
    */
-  generateChild(parentId) {
+  generateChild(parentId: any) {
     const parent = this._db.prepare('SELECT child_seq FROM tasks WHERE id = ?').get(parentId);
 
     if (!parent) {
@@ -78,7 +78,7 @@ export class TaskIdGenerator {
   }
 
   /** @private */
-  _exists(id) {
+  _exists(id: any) {
     const row = this._db.prepare('SELECT 1 FROM tasks WHERE id = ?').get(id);
     return !!row;
   }

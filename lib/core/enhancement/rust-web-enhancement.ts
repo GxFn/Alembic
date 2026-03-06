@@ -95,7 +95,7 @@ class RustWebEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── Handler functions (async fn with web extractor params) ──
@@ -196,7 +196,9 @@ class RustWebEnhancement extends EnhancementPack {
       }
       // Derive-heavy DTOs used as Json<T>, Query<T>, Path<T>
       if (cls.derives && cls.derives.length >= 2) {
-        const hasSerdeDerive = cls.derives.some((d) => d === 'Deserialize' || d === 'Serialize');
+        const hasSerdeDerive = cls.derives.some(
+          (d: any) => d === 'Deserialize' || d === 'Serialize'
+        );
         if (hasSerdeDerive) {
           const nameLower = cls.name.toLowerCase();
           if (
@@ -241,7 +243,7 @@ class RustWebEnhancement extends EnhancementPack {
 
     // ── Web framework imports ──
     const webImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('actix_web') ||
         imp.includes('axum') ||
         imp.includes('rocket') ||

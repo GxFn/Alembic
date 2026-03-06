@@ -73,7 +73,7 @@ content.markdown 字段必须是「项目特写」：
 - 文件读取失败时，直接使用分析文本中已有的代码和描述来提交候选
 - 永远不要因为文件读取失败而跳过知识点 — 分析文本已经包含足够信息
 - 先提交候选，再考虑是否需要读取更多代码（提交优先于验证）`,
-    fallback: (label) => ({ targetName: label, extracted: 0, recipes: [] }),
+    fallback: (label: any) => ({ targetName: label, extracted: 0, recipes: [] }),
   },
 
   // ─── summarize: 代码摘要（工具驱动，与 extract 管线对齐） ──────
@@ -106,7 +106,7 @@ content.markdown 字段必须是「项目特写」：
 - kind 选择: 优先 pattern（代码模式）或 fact（技术事实）
 - 必填: trigger (@kebab-case)、doClause (英文祈使句)、content.rationale
 - content.markdown 必须包含代码块，展示核心实现`,
-    fallback: (label) => ({ targetName: label, extracted: 0, recipes: [] }),
+    fallback: (label: any) => ({ targetName: label, extracted: 0, recipes: [] }),
   },
 };
 
@@ -159,7 +159,7 @@ export function buildScanPipelineStages({
       timeoutMs: 300_000, // 5 min (与冷启动对齐)
     },
     systemPrompt: ANALYST_SYSTEM_PROMPT,
-    retryPromptBuilder: (retryCtx, _origPrompt, prev) => {
+    retryPromptBuilder: (retryCtx: any, _origPrompt: any, prev: any) => {
       const prevAnalysis = prev.analyze?.reply || '';
       const retryHint = buildRetryPrompt(retryCtx.reason);
       return `${prevAnalysis}\n\n⚠️ 上述分析未通过质量检查: ${retryCtx.reason}\n\n${retryHint}`;
@@ -202,7 +202,7 @@ export function buildScanPipelineStages({
     // 使用 promptBuilder (而非 promptTransform) — 与冷启动对齐
     // promptBuilder 接收 gateArtifact (来自 quality_gate 的 AnalysisArtifact)，
     // 注入结构化 findings + 代码证据到 prompt，而非仅传入 analyze.reply 纯文本
-    promptBuilder: (ctx) => {
+    promptBuilder: (ctx: any) => {
       return buildScanProducerPrompt(ctx, files, task);
     },
     // retry 配置 (拒绝率过高时缩减预算)
@@ -213,12 +213,12 @@ export function buildScanPipelineStages({
             temperature: 0.3,
             timeoutMs: isSummarize ? 60_000 : 120_000,
           },
-          retryPromptBuilder: (retryCtx, _origPrompt, prev) => {
+          retryPromptBuilder: (retryCtx: any, _origPrompt: any, prev: any) => {
             const prevProduce = prev.produce;
-            const submitCalls = (prevProduce?.toolCalls || []).filter((tc) =>
+            const submitCalls = (prevProduce?.toolCalls || []).filter((tc: any) =>
               submitToolNames.includes(tc.tool || tc.name)
             );
-            const rejected = submitCalls.filter((tc) => {
+            const rejected = submitCalls.filter((tc: any) => {
               const res = tc.result;
               if (!res) {
                 return false;
@@ -250,7 +250,7 @@ export function buildScanPipelineStages({
     stages.push({
       name: 'rejection_gate',
       gate: {
-        evaluator: (source, phaseResults, ctx) =>
+        evaluator: (source: any, phaseResults: any, ctx: any) =>
           producerRejectionGateEvaluator(source, phaseResults, {
             ...ctx,
             submitToolNames,
@@ -282,7 +282,7 @@ export function buildScanPipelineStages({
  * @param {'extract'|'summarize'} task 任务类型
  * @returns {string}
  */
-function buildScanProducerPrompt(ctx, files, task) {
+function buildScanProducerPrompt(ctx: any, files: any, task: any) {
   const artifact = ctx.gateArtifact;
   const analysis = ctx.phaseResults?.analyze?.reply || '';
 
@@ -346,7 +346,7 @@ function buildScanProducerPrompt(ctx, files, task) {
   // Fallback: analyze reply 不足时直接提供源代码
   const fileCtx = (files || [])
     .slice(0, 15)
-    .map((f) => {
+    .map((f: any) => {
       const body =
         (f.content || '').length > 1200
           ? `${f.content.slice(0, 1200)}\n// ... (truncated)`
@@ -448,7 +448,7 @@ export function buildRelationsPipelineStages({
         timeoutMs: 60_000,
       },
       systemPrompt: RELATIONS_SYNTHESIZE_PROMPT,
-      promptTransform: (_input, prev) => {
+      promptTransform: (_input: any, prev: any) => {
         const exploration = prev.explore?.reply || '';
         return `基于以下知识图谱探索结果，输出结构化关系 JSON。\n\n## 探索结果\n${exploration}`;
       },

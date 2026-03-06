@@ -12,7 +12,7 @@ import { ALL_TOOLS } from '../../service/agent/tools/index.js';
 import { ToolRegistry } from '../../service/agent/tools/ToolRegistry.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
 
-export function register(c) {
+export function register(c: any) {
   c.singleton('toolRegistry', () => {
     const registry = new ToolRegistry();
     registry.registerAll(ALL_TOOLS);
@@ -21,7 +21,7 @@ export function register(c) {
 
   c.singleton(
     'agentFactory',
-    (ct) =>
+    (ct: any) =>
       new AgentFactory({
         container: ct,
         toolRegistry: ct.get('toolRegistry'),

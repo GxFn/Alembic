@@ -16,7 +16,7 @@ function getBaseUrl() {
   return process.env.ASD_UI_URL || Defaults.DEFAULT_ASD_UI_URL || 'http://localhost:3000';
 }
 
-function request(method, urlStr) {
+function request(method: any, urlStr: any) {
   const url = new URL(urlStr);
   const client = url.protocol === 'https:' ? https : http;
   const opts = {

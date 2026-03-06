@@ -11,18 +11,18 @@
 import { extractCallSitesTS } from '../analysis/CallSiteExtractor.js';
 import { ImportRecord } from '../analysis/ImportRecord.js';
 
-function walkTypeScript(root, ctx) {
+function walkTypeScript(root: any, ctx: any) {
   _walkTSNode(root, ctx, null);
 }
 
-function _walkTSNode(node, ctx, parentClassName) {
+function _walkTSNode(node: any, ctx: any, parentClassName: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
 
     switch (child.type) {
       case 'import_statement': {
         const source = child.namedChildren.find(
-          (c) => c.type === 'string' || c.type === 'string_fragment'
+          (c: any) => c.type === 'string' || c.type === 'string_fragment'
         );
         if (source) {
           const importPath = source.text.replace(/^['"]|['"]$/g, '');
@@ -49,7 +49,7 @@ function _walkTSNode(node, ctx, parentClassName) {
       case 'class_declaration': {
         const classInfo = _parseTSClass(child);
         ctx.classes.push(classInfo);
-        const body = child.namedChildren.find((c) => c.type === 'class_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (body) {
           _walkTSClassBody(body, ctx, classInfo.name);
         }
@@ -60,7 +60,7 @@ function _walkTSNode(node, ctx, parentClassName) {
         const classInfo: any = _parseTSClass(child);
         classInfo.abstract = true;
         ctx.classes.push(classInfo);
-        const body = child.namedChildren.find((c) => c.type === 'class_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (body) {
           _walkTSClassBody(body, ctx, classInfo.name);
         }
@@ -75,7 +75,7 @@ function _walkTSNode(node, ctx, parentClassName) {
 
       case 'type_alias_declaration': {
         const name =
-          child.namedChildren.find((c) => c.type === 'type_identifier')?.text || 'Unknown';
+          child.namedChildren.find((c: any) => c.type === 'type_identifier')?.text || 'Unknown';
         ctx.classes.push({
           name,
           kind: 'type',
@@ -86,7 +86,8 @@ function _walkTSNode(node, ctx, parentClassName) {
       }
 
       case 'enum_declaration': {
-        const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
+        const name =
+          child.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'Unknown';
         ctx.classes.push({
           name,
           kind: 'enum',
@@ -122,7 +123,7 @@ function _walkTSNode(node, ctx, parentClassName) {
   }
 }
 
-function _walkTSClassBody(body, ctx, className) {
+function _walkTSClassBody(body: any, ctx: any, className: any) {
   for (let i = 0; i < body.namedChildCount; i++) {
     const child = body.namedChild(i);
 
@@ -150,7 +151,7 @@ function _walkTSClassBody(body, ctx, className) {
 
       case 'method_signature': {
         const name =
-          child.namedChildren.find((c) => c.type === 'property_identifier')?.text || 'unknown';
+          child.namedChildren.find((c: any) => c.type === 'property_identifier')?.text || 'unknown';
         ctx.methods.push({
           name,
           className,
@@ -162,7 +163,7 @@ function _walkTSClassBody(body, ctx, className) {
 
       case 'property_signature': {
         const name =
-          child.namedChildren.find((c) => c.type === 'property_identifier')?.text || 'unknown';
+          child.namedChildren.find((c: any) => c.type === 'property_identifier')?.text || 'unknown';
         ctx.properties.push({
           name,
           className,
@@ -174,10 +175,10 @@ function _walkTSClassBody(body, ctx, className) {
   }
 }
 
-function _parseTSClass(node) {
+function _parseTSClass(node: any) {
   const name =
-    node.namedChildren.find((c) => c.type === 'type_identifier' || c.type === 'identifier')?.text ||
-    'Unknown';
+    node.namedChildren.find((c: any) => c.type === 'type_identifier' || c.type === 'identifier')
+      ?.text || 'Unknown';
 
   let superclass: any = null;
   const protocols: any[] = [];
@@ -186,7 +187,7 @@ function _parseTSClass(node) {
       for (const clause of child.namedChildren) {
         if (clause.type === 'extends_clause') {
           const typeNode = clause.namedChildren.find(
-            (c) => c.type === 'identifier' || c.type === 'member_expression'
+            (c: any) => c.type === 'identifier' || c.type === 'member_expression'
           );
           if (typeNode) {
             superclass = typeNode.text;
@@ -222,8 +223,8 @@ function _parseTSClass(node) {
   };
 }
 
-function _parseTSInterface(node) {
-  const name = node.namedChildren.find((c) => c.type === 'type_identifier')?.text || 'Unknown';
+function _parseTSInterface(node: any) {
+  const name = node.namedChildren.find((c: any) => c.type === 'type_identifier')?.text || 'Unknown';
   const inherits: any[] = [];
 
   for (const child of node.namedChildren) {
@@ -239,9 +240,9 @@ function _parseTSInterface(node) {
   return { name, inherits, line: node.startPosition.row + 1 };
 }
 
-function _parseTSFunction(node, className) {
-  const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
-  const body = node.namedChildren.find((c) => c.type === 'statement_block');
+function _parseTSFunction(node: any, className: any) {
+  const name = node.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'unknown';
+  const body = node.namedChildren.find((c: any) => c.type === 'statement_block');
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
@@ -262,10 +263,10 @@ function _parseTSFunction(node, className) {
   };
 }
 
-function _parseTSMethod(node, className) {
+function _parseTSMethod(node: any, className: any) {
   const name =
     node.namedChildren.find(
-      (c) =>
+      (c: any) =>
         c.type === 'property_identifier' ||
         c.type === 'identifier' ||
         c.type === 'computed_property_name'
@@ -273,7 +274,7 @@ function _parseTSMethod(node, className) {
 
   const isStatic = node.text.trimStart().startsWith('static');
   const isAsync = node.text.includes('async');
-  const body = node.namedChildren.find((c) => c.type === 'statement_block');
+  const body = node.namedChildren.find((c: any) => c.type === 'statement_block');
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
@@ -291,8 +292,8 @@ function _parseTSMethod(node, className) {
   };
 }
 
-function _parseTSProperty(node, className) {
-  const name = node.namedChildren.find((c) => c.type === 'property_identifier')?.text || null;
+function _parseTSProperty(node: any, className: any) {
+  const name = node.namedChildren.find((c: any) => c.type === 'property_identifier')?.text || null;
   if (!name) {
     return null;
   }
@@ -330,14 +331,14 @@ function _parseTSProperty(node, className) {
  * @param {object} parentNode - AST node that may contain a type_annotation child
  * @returns {string|null}
  */
-function _extractTypeAnnotation(parentNode) {
-  const typeAnnotNode = parentNode.namedChildren.find((c) => c.type === 'type_annotation');
+function _extractTypeAnnotation(parentNode: any) {
+  const typeAnnotNode = parentNode.namedChildren.find((c: any) => c.type === 'type_annotation');
   if (!typeAnnotNode) {
     return null;
   }
 
   const typeNode = typeAnnotNode.namedChildren.find(
-    (c) =>
+    (c: any) =>
       c.type === 'type_identifier' ||
       c.type === 'generic_type' ||
       c.type === 'nested_type_identifier'
@@ -362,9 +363,9 @@ function _extractTypeAnnotation(parentNode) {
  * @param {string} className
  * @returns {Array} - property objects
  */
-function _extractTSConstructorProperties(constructorNode, className) {
+function _extractTSConstructorProperties(constructorNode: any, className: any) {
   const properties: any[] = [];
-  const params = constructorNode.namedChildren.find((c) => c.type === 'formal_parameters');
+  const params = constructorNode.namedChildren.find((c: any) => c.type === 'formal_parameters');
   if (!params) {
     return properties;
   }
@@ -377,7 +378,7 @@ function _extractTSConstructorProperties(constructorNode, className) {
     // Check for accessibility modifier (public, private, protected) or readonly
     // These turn constructor params into class properties
     const hasAccessibility = param.namedChildren.some(
-      (c) => c.type === 'accessibility_modifier' || c.type === 'override_modifier'
+      (c: any) => c.type === 'accessibility_modifier' || c.type === 'override_modifier'
     );
     const hasReadonly = param.text.includes('readonly');
 
@@ -385,7 +386,7 @@ function _extractTSConstructorProperties(constructorNode, className) {
       continue; // Not a property declaration
     }
 
-    const nameNode = param.namedChildren.find((c) => c.type === 'identifier');
+    const nameNode = param.namedChildren.find((c: any) => c.type === 'identifier');
     const name = nameNode?.text;
     if (!name) {
       continue;
@@ -417,15 +418,15 @@ function _extractTSConstructorProperties(constructorNode, className) {
   return properties;
 }
 
-function _parseTSVariableDecl(node, ctx, parentClassName) {
+function _parseTSVariableDecl(node: any, ctx: any, parentClassName: any) {
   for (const child of node.namedChildren) {
     if (child.type === 'variable_declarator') {
-      const nameNode = child.namedChildren.find((c) => c.type === 'identifier');
+      const nameNode = child.namedChildren.find((c: any) => c.type === 'identifier');
       const valueNode = child.namedChildren.find(
-        (c) => c.type === 'arrow_function' || c.type === 'function'
+        (c: any) => c.type === 'arrow_function' || c.type === 'function'
       );
       if (nameNode && valueNode) {
-        const body = valueNode.namedChildren.find((c) => c.type === 'statement_block');
+        const body = valueNode.namedChildren.find((c: any) => c.type === 'statement_block');
         ctx.methods.push({
           name: nameNode.text,
           className: parentClassName,
@@ -441,7 +442,7 @@ function _parseTSVariableDecl(node, ctx, parentClassName) {
 
       // CJS require(): const x = require('path') / const { a, b } = require('path')
       // Dynamic import(): const mod = await import('./module')
-      const callNode = child.namedChildren.find((c) => c.type === 'call_expression');
+      const callNode = child.namedChildren.find((c: any) => c.type === 'call_expression');
       if (callNode) {
         const requireImport = _parseCJSRequire(callNode, child);
         if (requireImport) {
@@ -455,9 +456,9 @@ function _parseTSVariableDecl(node, ctx, parentClassName) {
         }
       }
       // await import() — await wraps the call_expression
-      const awaitNode = child.namedChildren.find((c) => c.type === 'await_expression');
+      const awaitNode = child.namedChildren.find((c: any) => c.type === 'await_expression');
       if (awaitNode) {
-        const awaitedCall = awaitNode.namedChildren.find((c) => c.type === 'call_expression');
+        const awaitedCall = awaitNode.namedChildren.find((c: any) => c.type === 'call_expression');
         if (awaitedCall) {
           const dynamicImport = _parseDynamicImport(awaitedCall, child);
           if (dynamicImport) {
@@ -477,7 +478,7 @@ function _parseTSVariableDecl(node, ctx, parentClassName) {
  * @param {TreeSitterNode} importNode - import_statement 节点
  * @returns {{ symbols: string[], kind: string, alias: string|null, isTypeOnly: boolean }}
  */
-function _parseImportClause(importNode) {
+function _parseImportClause(importNode: any) {
   const symbols: any | '*'[] = [];
   let kind = 'side-effect';
   let alias: any = null;
@@ -502,7 +503,7 @@ function _parseImportClause(importNode) {
             if (specifier.type === 'import_specifier') {
               // 收集 specifier 中的所有 identifier / type_identifier
               const identifiers = specifier.namedChildren.filter(
-                (c) => c.type === 'identifier' || c.type === 'type_identifier'
+                (c: any) => c.type === 'identifier' || c.type === 'type_identifier'
               );
               // import { A as B } → identifiers = [A, B] → push B (本地名)
               // import { A }     → identifiers = [A]     → push A
@@ -515,7 +516,7 @@ function _parseImportClause(importNode) {
           // namespace import: import * as M from '...'
           kind = 'namespace';
           symbols.push('*');
-          const aliasNode = clauseChild.namedChildren.find((c) => c.type === 'identifier');
+          const aliasNode = clauseChild.namedChildren.find((c: any) => c.type === 'identifier');
           if (aliasNode) {
             alias = aliasNode.text;
           }
@@ -534,7 +535,7 @@ function _parseImportClause(importNode) {
  * @param {TreeSitterNode} declaratorNode - variable_declarator 节点 (包含 lhs 绑定)
  * @returns {ImportRecord|null}
  */
-function _parseCJSRequire(callNode, declaratorNode) {
+function _parseCJSRequire(callNode: any, declaratorNode: any) {
   // 检查 callee 是否为 'require'
   const callee = callNode.namedChildren[0];
   if (!callee || callee.type !== 'identifier' || callee.text !== 'require') {
@@ -542,7 +543,7 @@ function _parseCJSRequire(callNode, declaratorNode) {
   }
 
   // 提取 require 参数中的路径字符串
-  const args = callNode.namedChildren.find((c) => c.type === 'arguments');
+  const args = callNode.namedChildren.find((c: any) => c.type === 'arguments');
   if (!args || args.namedChildCount === 0) {
     return null;
   }
@@ -583,7 +584,7 @@ function _parseCJSRequire(callNode, declaratorNode) {
         symbols.push(prop.text);
       } else if (prop.type === 'pair_pattern' || prop.type === 'pair') {
         // { readFile: rf } → 使用本地名 rf
-        const identifiers = prop.namedChildren.filter((c) => c.type === 'identifier');
+        const identifiers = prop.namedChildren.filter((c: any) => c.type === 'identifier');
         if (identifiers.length > 0) {
           symbols.push(identifiers[identifiers.length - 1].text);
         }
@@ -606,7 +607,7 @@ function _parseCJSRequire(callNode, declaratorNode) {
  * @param {TreeSitterNode} declaratorNode - variable_declarator 节点
  * @returns {ImportRecord|null}
  */
-function _parseDynamicImport(callNode, declaratorNode) {
+function _parseDynamicImport(callNode: any, declaratorNode: any) {
   // 动态 import() 在 tree-sitter 中解析为 call_expression, callee 是 'import'
   const callee = callNode.namedChildren[0];
   if (!callee) {
@@ -617,7 +618,7 @@ function _parseDynamicImport(callNode, declaratorNode) {
     return null;
   }
 
-  const args = callNode.namedChildren.find((c) => c.type === 'arguments');
+  const args = callNode.namedChildren.find((c: any) => c.type === 'arguments');
   if (!args || args.namedChildCount === 0) {
     return null;
   }
@@ -644,7 +645,7 @@ function _parseDynamicImport(callNode, declaratorNode) {
 
 // ── TS/JS 模式检测 ──
 
-function detectTSPatterns(root, lang, methods, properties, classes) {
+function detectTSPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   const patterns: any[] = [];
 
   // Singleton: export const xxx = new Xxx() or getInstance()
@@ -734,7 +735,7 @@ function detectTSPatterns(root, lang, methods, properties, classes) {
 
 // ── 工具函数 ──
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_statement',
@@ -747,12 +748,12 @@ function _estimateComplexity(node) {
     'ternary_expression',
     'conditional_expression',
   ]);
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
     if (n.type === 'binary_expression') {
-      const op = n.children?.find((c) => c.text === '&&' || c.text === '||');
+      const op = n.children?.find((c: any) => c.text === '&&' || c.text === '||');
       if (op) {
         complexity++;
       }
@@ -765,7 +766,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_statement',
     'for_statement',
@@ -791,7 +792,7 @@ let _tsGrammar: any = null;
 function getGrammar() {
   return _tsGrammar;
 }
-export function setGrammar(grammar) {
+export function setGrammar(grammar: any) {
   _tsGrammar = grammar;
 }
 
@@ -808,7 +809,7 @@ let _tsxGrammar: any = null;
 function getTsxGrammar() {
   return _tsxGrammar;
 }
-export function setTsxGrammar(grammar) {
+export function setTsxGrammar(grammar: any) {
   _tsxGrammar = grammar;
 }
 

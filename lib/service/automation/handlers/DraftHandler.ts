@@ -10,7 +10,7 @@ import { LanguageService } from '../../../shared/LanguageService.js';
  * @param {string} relativePath
  * @param {string} content
  */
-export async function handleDraft(watcher, fullPath, relativePath, content) {
+export async function handleDraft(watcher: any, fullPath: any, relativePath: any, content: any) {
   if (!content || content.trim().length < 20) {
     return;
   }
@@ -19,8 +19,8 @@ export async function handleDraft(watcher, fullPath, relativePath, content) {
     const { RecipeParser } = await import('../../recipe/RecipeParser.js');
     const parser = new RecipeParser();
 
-    const normalize = (arr) =>
-      arr.map((r) => ({
+    const normalize = (arr: any) =>
+      arr.map((r: any) => ({
         title: r.title,
         summary: r.summary || r.description || '',
         trigger: r.trigger,

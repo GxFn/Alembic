@@ -85,7 +85,7 @@ export class ExplorationTracker {
    * @param {object} strategy 策略配置对象
    * @param {object} budget 预算配置 { maxIterations, searchBudget, ... }
    */
-  constructor(strategy, budget) {
+  constructor(strategy: any, budget: any) {
     this.#strategy = strategy;
     this.#budget = {
       maxIterations: 24,
@@ -114,7 +114,7 @@ export class ExplorationTracker {
    * @param {object} budget 预算配置
    * @returns {ExplorationTracker|null} - User 模式返回 null
    */
-  static resolve(opts, budget) {
+  static resolve(opts: any, budget: any) {
     const { source = 'user', strategy: strategyName, dimensionMeta } = opts;
     const isSystem = source === 'system';
 
@@ -199,7 +199,7 @@ export class ExplorationTracker {
    * @param {object} trace 推理链
    * @returns {{ type: string, text: string }|null}
    */
-  getNudge(trace) {
+  getNudge(trace: any) {
     // 委托 NudgeGenerator
     const nudge = this.#nudgeGenerator.generate(this.#buildNudgeState(), trace);
     if (nudge) {
@@ -262,7 +262,7 @@ export class ExplorationTracker {
    * @param {*} result
    * @returns {{ isNew: boolean }}
    */
-  recordToolCall(toolName, args, result) {
+  recordToolCall(toolName: any, args: any, result: any) {
     this.#metrics.totalToolCalls++;
     const isNew = this.#signalDetector.detect(toolName, args, result);
 
@@ -391,7 +391,7 @@ export class ExplorationTracker {
    * 记录被截断的工具调用数量
    * @param {number} count
    */
-  recordTruncatedCalls(count) {
+  recordTruncatedCalls(count: any) {
     if (count > 0) {
       this.#logger.warn(
         `[ExplorationTracker] ${count} tool calls truncated (MAX_TOOL_CALLS_PER_ITER)`
@@ -453,7 +453,7 @@ export class ExplorationTracker {
    * 更新计划进度 — 委托 PlanTracker
    * @param {object} trace
    */
-  updatePlanProgress(trace) {
+  updatePlanProgress(trace: any) {
     if (!this.#strategy.enablePlanning) {
       return;
     }
@@ -465,7 +465,7 @@ export class ExplorationTracker {
    * @param {object} trace
    * @returns {{ score: number, breakdown: object }}
    */
-  getQualityMetrics(trace) {
+  getQualityMetrics(trace: any) {
     return this.#planTracker.getQualityMetrics(trace);
   }
 
@@ -521,7 +521,7 @@ export class ExplorationTracker {
     return false;
   }
 
-  #transitionTo(newPhase) {
+  #transitionTo(newPhase: any) {
     const oldPhase = this.#phase;
     this.#transitionFromPhase = oldPhase;
     this.#phase = newPhase;

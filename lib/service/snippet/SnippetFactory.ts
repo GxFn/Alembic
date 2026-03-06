@@ -19,7 +19,7 @@ export class SnippetFactory {
   /**
    * @param {object} [knowledgeRepository] - KnowledgeRepositoryImpl（可选）
    */
-  constructor(knowledgeRepository) {
+  constructor(knowledgeRepository: any) {
     this._recipeRepo = knowledgeRepository || null;
   }
 
@@ -29,7 +29,7 @@ export class SnippetFactory {
    * 注册一个 IDE codec
    * @param {import('./codecs/SnippetCodec.js').SnippetCodec} codec
    */
-  registerCodec(codec) {
+  registerCodec(codec: any) {
     this.#codecs.set(codec.id, codec);
   }
 
@@ -38,7 +38,7 @@ export class SnippetFactory {
    * @param {string} target - 'xcode' | 'vscode'
    * @returns {import('./codecs/SnippetCodec.js').SnippetCodec|undefined}
    */
-  getCodec(target) {
+  getCodec(target: any) {
     return this.#codecs.get(target);
   }
 
@@ -55,7 +55,7 @@ export class SnippetFactory {
   /**
    * 运行时注入 knowledgeRepository（用于延迟绑定场景）
    */
-  setKnowledgeRepository(repo) {
+  setKnowledgeRepository(repo: any) {
     this._recipeRepo = repo;
   }
 
@@ -88,13 +88,13 @@ export class SnippetFactory {
     }
 
     const recipes = result?.data || result?.items || [];
-    return recipes.map((r) => this.fromRecipe(r));
+    return recipes.map((r: any) => this.fromRecipe(r));
   }
 
   /**
    * 从单个 Recipe ID 实时生成 Snippet
    */
-  async getSnippet(recipeId) {
+  async getSnippet(recipeId: any) {
     if (!this._recipeRepo) {
       return null;
     }
@@ -113,7 +113,7 @@ export class SnippetFactory {
    * @param {string} [target='xcode'] - codec ID
    * @returns {string}
    */
-  generate(spec, target = 'xcode') {
+  generate(spec: any, target = 'xcode') {
     const codec = this.#resolveCodec(target);
     return codec.generate(spec);
   }
@@ -124,9 +124,9 @@ export class SnippetFactory {
    * @param {string} [target='xcode']
    * @returns {Array<{ filename: string, content: string, spec: object }> | { filename: string, content: string, specs: object[] }}
    */
-  generateBatch(recipes, target = 'xcode') {
+  generateBatch(recipes: any, target = 'xcode') {
     const codec = this.#resolveCodec(target);
-    const specs = recipes.map((r) => this.fromRecipe(r));
+    const specs = recipes.map((r: any) => this.fromRecipe(r));
 
     const bundleFilename = codec.getBundleFilename();
     if (bundleFilename) {
@@ -139,7 +139,7 @@ export class SnippetFactory {
     }
 
     // Xcode 模式: 每个 snippet 一个文件
-    return specs.map((spec) => ({
+    return specs.map((spec: any) => ({
       filename: `${spec.identifier}${codec.fileExtension}`,
       content: codec.generate(spec),
       spec,
@@ -153,7 +153,7 @@ export class SnippetFactory {
    * @param {object} recipe - { id, title, trigger, code, description, language }
    * @returns {object} - SnippetSpec
    */
-  fromRecipe(recipe) {
+  fromRecipe(recipe: any) {
     return {
       identifier: `com.autosnippet.${recipe.id || this.#slugify(recipe.title)}`,
       title: recipe.title,
@@ -170,7 +170,7 @@ export class SnippetFactory {
    * @param {string} target
    * @returns {import('./codecs/SnippetCodec.js').SnippetCodec}
    */
-  #resolveCodec(target) {
+  #resolveCodec(target: any) {
     const codec = this.#codecs.get(target);
     if (!codec) {
       throw new Error(
@@ -180,7 +180,7 @@ export class SnippetFactory {
     return codec;
   }
 
-  #slugify(str) {
+  #slugify(str: any) {
     if (!str) {
       return 'unnamed';
     }

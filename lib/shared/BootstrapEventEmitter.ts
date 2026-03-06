@@ -17,7 +17,7 @@ export class BootstrapEventEmitter {
   /**
    * @param {object} container - DI Container
    */
-  constructor(container) {
+  constructor(container: any) {
     this.#eventBus = null;
     this.#taskManager = null;
 
@@ -45,7 +45,7 @@ export class BootstrapEventEmitter {
    * @param {boolean} [data.skillCreated] 是否生成了 Skill
    * @param {number} [data.recipesBound] 关联的 recipe 数量
    */
-  emitDimensionComplete(dimId, data: any = {}) {
+  emitDimensionComplete(dimId: any, data: any = {}) {
     // TaskManager 标记
     try {
       this.#taskManager?.markTaskCompleted?.(dimId, data);
@@ -71,7 +71,7 @@ export class BootstrapEventEmitter {
    * @param {number} totalDimensions 总维度数
    * @param {string} [source] 来源标识
    */
-  emitAllComplete(sessionId, totalDimensions, source = 'unknown') {
+  emitAllComplete(sessionId: any, totalDimensions: any, source = 'unknown') {
     try {
       this.#eventBus?.emit?.('bootstrap:all-completed', {
         sessionId,
@@ -88,7 +88,7 @@ export class BootstrapEventEmitter {
    *
    * @param {string} dimId 维度 ID
    */
-  emitDimensionStart(dimId) {
+  emitDimensionStart(dimId: any) {
     try {
       this.#taskManager?.markTaskFilling?.(dimId);
     } catch {
@@ -102,7 +102,7 @@ export class BootstrapEventEmitter {
    * @param {string} dimId 维度 ID
    * @param {Error} error 错误对象
    */
-  emitDimensionFailed(dimId, error) {
+  emitDimensionFailed(dimId: any, error: any) {
     try {
       this.#taskManager?.markTaskFailed?.(dimId, error);
     } catch {
@@ -125,7 +125,7 @@ export class BootstrapEventEmitter {
    * @param {string} event 事件名
    * @param {object} data 事件数据
    */
-  emitProgress(event, data: any = {}) {
+  emitProgress(event: any, data: any = {}) {
     try {
       this.#eventBus?.emit?.(event, data);
     } catch {

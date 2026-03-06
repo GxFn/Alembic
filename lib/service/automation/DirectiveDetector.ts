@@ -45,7 +45,7 @@ export const REGEX = {
  * @param {string} filename
  * @returns {string}
  */
-function _inferLanguage(filename) {
+function _inferLanguage(filename: any) {
   return LanguageService.inferLang(filename);
 }
 
@@ -58,7 +58,7 @@ function _inferLanguage(filename) {
  *             createLine: string|null, createOption: string|null,
  *             guardLine: string|null, searchLine: string|null, isSwift: boolean, language: string }}
  */
-export function detectTriggers(data, filename) {
+export function detectTriggers(data: any, filename: any) {
   const language = _inferLanguage(filename);
   const isSwift = language === 'swift';
   // Import/header 自动插入目前仅支持 ObjC/Swift（Xcode 工作流）
@@ -119,7 +119,7 @@ export function detectTriggers(data, filename) {
   return triggers;
 }
 
-function _isHeaderDirective(line) {
+function _isHeaderDirective(line: any) {
   return (
     line.startsWith(MARKS.HEADER_INCLUDE) ||
     line.startsWith(MARKS.HEADER_IMPORT) ||
@@ -128,12 +128,12 @@ function _isHeaderDirective(line) {
   );
 }
 
-function _isGuardDirective(line) {
+function _isGuardDirective(line: any) {
   // 精确匹配: // as:audit 或 // as:a，后面只能是空格或行尾
   return /^\/\/\s*as:(?:audit|a)(?:\s|$)/.test(line);
 }
 
-function _isSearchDirective(line) {
+function _isSearchDirective(line: any) {
   return (
     line.startsWith(MARKS.SEARCH_SHORT) ||
     line.startsWith(MARKS.SEARCH_LONG) ||

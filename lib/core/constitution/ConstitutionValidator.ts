@@ -11,7 +11,7 @@ export class ConstitutionValidator {
   checkers: any;
   constitution: any;
   logger: any;
-  constructor(constitution) {
+  constructor(constitution: any) {
     this.constitution = constitution;
     this.logger = Logger.getInstance();
 
@@ -27,7 +27,7 @@ export class ConstitutionValidator {
   /**
    * 验证操作，返回违规列表
    */
-  async validate(request) {
+  async validate(request: any) {
     const violations: any[] = [];
     const rules = this.constitution.getRules?.() || this.constitution.rules || [];
 
@@ -64,7 +64,7 @@ export class ConstitutionValidator {
   /**
    * 强制验证（违规时抛异常）
    */
-  async enforce(request) {
+  async enforce(request: any) {
     const result = await this.validate(request);
     if (!result.compliant) {
       throw new ConstitutionViolation(result.violations);
@@ -75,7 +75,7 @@ export class ConstitutionValidator {
   // ─── 规则检查器 ────────────────────────────────────────
 
   /** 删除操作需要确认 */
-  _checkDestructive(req, rule) {
+  _checkDestructive(req: any, rule: any) {
     const destructive = ['delete', 'remove', 'destroy', 'purge', 'batch_delete'];
     if (!destructive.some((w) => req.action?.toLowerCase().includes(w))) {
       return null;
@@ -87,7 +87,7 @@ export class ConstitutionValidator {
   }
 
   /** 创建候选/Recipe 需要内容 */
-  _checkContent(req, rule) {
+  _checkContent(req: any, rule: any) {
     const verb = this._verb(req.action);
     const res = this._resource(req.action, req.resource);
     const isCreation =
@@ -110,7 +110,7 @@ export class ConstitutionValidator {
   }
 
   /** AI 不能直接创建/批准 Recipe */
-  _checkAiRecipe(req, rule) {
+  _checkAiRecipe(req: any, rule: any) {
     if (!this._isAI(req.actor)) {
       return null;
     }
@@ -133,7 +133,7 @@ export class ConstitutionValidator {
   }
 
   /** 批量操作需要授权 */
-  _checkBatch(req, rule) {
+  _checkBatch(req: any, rule: any) {
     if (!req.action?.includes('batch_')) {
       return null;
     }
@@ -145,14 +145,14 @@ export class ConstitutionValidator {
 
   // ─── 辅助方法 ──────────────────────────────────────────
 
-  _verb(action) {
+  _verb(action: any) {
     if (!action) {
       return '';
     }
     return action.includes(':') ? action.split(':').pop() : action;
   }
 
-  _resource(action, resource) {
+  _resource(action: any, resource: any) {
     if (action?.includes(':')) {
       return action.split(':')[0];
     }
@@ -163,14 +163,14 @@ export class ConstitutionValidator {
     return resource || '';
   }
 
-  _isAI(actor) {
+  _isAI(actor: any) {
     return ['external_agent', 'chat_agent'].some((a) => actor?.toLowerCase().includes(a));
   }
 
   // ─── 旧格式兼容 ───────────────────────────────────────
 
   /** 兼容旧 priorities 格式 */
-  async _checkLegacyPriority(priority, request) {
+  async _checkLegacyPriority(priority: any, request: any) {
     const violations: { rule: any; reason: string; suggestion: string }[] = [];
     if (priority.id === 1) {
       const v = this._checkDestructive(request, { id: 'destructive_confirm' });

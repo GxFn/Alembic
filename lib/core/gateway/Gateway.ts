@@ -19,7 +19,7 @@ export class Gateway extends EventEmitter {
   logger: any;
   permissionManager: any;
   routes: any;
-  constructor(config?) {
+  constructor(config?: any) {
     super();
     this.config = config;
     this.logger = Logger.getInstance();
@@ -36,7 +36,7 @@ export class Gateway extends EventEmitter {
   /**
    * 设置依赖
    */
-  setDependencies({ constitution, constitutionValidator, permissionManager, auditLogger }) {
+  setDependencies({ constitution, constitutionValidator, permissionManager, auditLogger }: any) {
     this.constitution = constitution;
     this.constitutionValidator = constitutionValidator;
     this.permissionManager = permissionManager;
@@ -46,7 +46,7 @@ export class Gateway extends EventEmitter {
   /**
    * 注册路由处理器
    */
-  register(action, handler) {
+  register(action: any, handler: any) {
     if (this.routes.has(action)) {
       throw new Error(`Action '${action}' is already registered`);
     }
@@ -64,7 +64,7 @@ export class Gateway extends EventEmitter {
   /**
    * 执行操作（主入口）
    */
-  async execute(request) {
+  async execute(request: any) {
     const requestId = uuidv4();
     const startTime = Date.now();
 
@@ -136,7 +136,7 @@ export class Gateway extends EventEmitter {
    * 仅检查权限与宪法（不执行业务逻辑）
    * 用于 MCP Gateway gating
    */
-  async checkOnly(request) {
+  async checkOnly(request: any) {
     const requestId = uuidv4();
     const startTime = Date.now();
 
@@ -175,7 +175,7 @@ export class Gateway extends EventEmitter {
   /**
    * validate — 验证请求格式
    */
-  validateRequest(request) {
+  validateRequest(request: any) {
     if (!request.actor) {
       throw new InternalError('Missing required field: actor');
     }
@@ -187,7 +187,7 @@ export class Gateway extends EventEmitter {
   /**
    * guard — 权限检查 + 宪法验证
    */
-  async guard(context) {
+  async guard(context: any) {
     // 权限检查
     if (this.permissionManager) {
       this.permissionManager.enforce(context.actor, context.action, context.resource);
@@ -207,7 +207,7 @@ export class Gateway extends EventEmitter {
   /**
    * route — 路由到处理器
    */
-  async routeToHandler(context) {
+  async routeToHandler(context: any) {
     const handler = this.routes.get(context.action);
 
     if (!handler) {
@@ -220,7 +220,7 @@ export class Gateway extends EventEmitter {
   /**
    * audit — 记录成功
    */
-  async auditSuccess(context, result) {
+  async auditSuccess(context: any, result: any) {
     if (!this.auditLogger) {
       return;
     }
@@ -246,7 +246,7 @@ export class Gateway extends EventEmitter {
   /**
    * audit — 记录失败
    */
-  async auditFailure(context, error) {
+  async auditFailure(context: any, error: any) {
     if (!this.auditLogger) {
       return;
     }

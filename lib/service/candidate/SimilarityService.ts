@@ -11,7 +11,7 @@ import { jaccardSimilarity, tokenizeForSimilarity } from '../../shared/similarit
 /**
  * 计算候选与单个 Recipe 的综合相似度
  */
-function computeSimilarity(candidate, recipe) {
+function computeSimilarity(candidate: any, recipe: any) {
   const titleSim = jaccardSimilarity(
     tokenizeForSimilarity(candidate.title),
     tokenizeForSimilarity(recipe.title)
@@ -31,13 +31,13 @@ function computeSimilarity(candidate, recipe) {
 /**
  * 从磁盘读取所有 Recipe MD 文件并提取基本结构
  */
-function loadRecipesFromDisk(recipesDir) {
+function loadRecipesFromDisk(recipesDir: any) {
   const recipes: { file: string; title: string; summary: string; code: string }[] = [];
   if (!fs.existsSync(recipesDir)) {
     return recipes;
   }
 
-  const walk = (dir) => {
+  const walk = (dir: any) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.name.startsWith('.')) {
         continue;
@@ -75,7 +75,7 @@ function loadRecipesFromDisk(recipesDir) {
  * @param {object} [opts] - { threshold: 0.7, topK: 5 }
  * @returns {Array<{file, title, similarity}>}
  */
-export function findSimilarRecipes(projectRoot, candidate, opts: any = {}) {
+export function findSimilarRecipes(projectRoot: any, candidate: any, opts: any = {}) {
   const threshold = opts.threshold ?? 0.7;
   const topK = opts.topK ?? 5;
   const recipesDir = getProjectRecipesPath(projectRoot);

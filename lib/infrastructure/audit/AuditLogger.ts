@@ -6,7 +6,7 @@ import Logger from '../../infrastructure/logging/Logger.js';
 export class AuditLogger {
   auditStore: any;
   logger: any;
-  constructor(auditStore) {
+  constructor(auditStore: any) {
     this.auditStore = auditStore;
     this.logger = Logger.getInstance();
   }
@@ -17,7 +17,7 @@ export class AuditLogger {
    *   Gateway 风格: { actor, action, resource, result, data, duration }
    *   Service 风格: { actor, action, resourceType, resourceId, details, timestamp }
    */
-  async log(entry) {
+  async log(entry: any) {
     // 兼容 Service 层传入 resourceType + resourceId（而非 resource）
     const resource =
       entry.resource ||
@@ -67,7 +67,7 @@ export class AuditLogger {
   /**
    * 格式化资源
    */
-  formatResource(resource) {
+  formatResource(resource: any) {
     if (typeof resource === 'string') {
       return resource;
     }
@@ -82,28 +82,28 @@ export class AuditLogger {
   /**
    * 查询审计日志
    */
-  async query(filters) {
+  async query(filters: any) {
     return await this.auditStore.query(filters);
   }
 
   /**
    * 获取特定请求的日志
    */
-  async getByRequestId(requestId) {
+  async getByRequestId(requestId: any) {
     return await this.auditStore.findByRequestId(requestId);
   }
 
   /**
    * 获取特定角色的日志
    */
-  async getByActor(actor, limit = 100) {
+  async getByActor(actor: any, limit = 100) {
     return await this.auditStore.findByActor(actor, limit);
   }
 
   /**
    * 获取特定操作的日志
    */
-  async getByAction(action, limit = 100) {
+  async getByAction(action: any, limit = 100) {
     return await this.auditStore.findByAction(action, limit);
   }
 
@@ -117,7 +117,7 @@ export class AuditLogger {
   /**
    * 统计审计数据
    */
-  async getStats(timeRange) {
+  async getStats(timeRange: any) {
     return await this.auditStore.getStats(timeRange);
   }
 }

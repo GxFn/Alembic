@@ -18,7 +18,7 @@ const logger = Logger.getInstance();
  */
 router.post(
   '/install',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const knowledgeRepository = container.get('knowledgeRepository');
     const target = req.body?.target || 'all';
@@ -29,7 +29,7 @@ router.post(
       { page: 1, pageSize: 9999 }
     );
     const recipes = (result?.data || result?.items || [])
-      .map((r) => ({
+      .map((r: any) => ({
         id: r.id,
         title: r.title,
         trigger: r.trigger,
@@ -37,7 +37,7 @@ router.post(
         description: r.description || r.summaryCn || '',
         language: r.language || 'unknown',
       }))
-      .filter((r) => r.code.trim().length > 0);
+      .filter((r: any) => r.code.trim().length > 0);
 
     const installResults: any = {};
 
@@ -75,7 +75,7 @@ router.post(
  */
 router.post(
   '/spm-map',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
 
     const moduleService = container.get('moduleService');
@@ -95,7 +95,7 @@ router.post(
  */
 router.post(
   '/embed',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const indexingPipeline = container.get('indexingPipeline');
 
@@ -121,7 +121,7 @@ router.post(
  */
 router.get(
   '/status',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
 
     const status = {
@@ -171,7 +171,7 @@ router.get(
  */
 router.get(
   '/files/tree',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const fs = await import('node:fs');
     const path = await import('node:path');
     const container = getServiceContainer();
@@ -192,7 +192,7 @@ router.get(
     /**
      * Recursively scan dir, returning FileNode or null if folder has no matching files.
      */
-    function scanDir(dirPath) {
+    function scanDir(dirPath: any) {
       const dirName = path.default.basename(dirPath);
       if (SKIP_DIRS.has(dirName)) {
         return null;
@@ -267,7 +267,7 @@ router.get(
  */
 router.get(
   '/files/read',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const filePath = req.query.path;
     if (!filePath) {
       return res
@@ -306,7 +306,7 @@ router.get(
  */
 router.post(
   '/files/save',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { path: filePath, content } = req.body;
     if (!filePath || content === undefined) {
       return res.status(400).json({

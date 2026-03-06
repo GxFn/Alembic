@@ -41,7 +41,7 @@ export class SymbolTableBuilder {
    * @param {object} projectSummary - analyzeProject() 返回的 ProjectAstSummary
    * @returns {SymbolTable}
    */
-  static build(projectSummary) {
+  static build(projectSummary: any) {
     /** @type {SymbolTable} */
     const table = {
       declarations: new Map(),
@@ -119,7 +119,7 @@ export class SymbolTableBuilder {
       table.fileExports.set(filePath, exportNames);
 
       // 6. 注册导入 (兼容 string 和 ImportRecord)
-      const imports = (fileSummary.imports || []).map((imp) =>
+      const imports = (fileSummary.imports || []).map((imp: any) =>
         imp instanceof ImportRecord ? imp : new ImportRecord(String(imp))
       );
       table.fileImports.set(filePath, imports);
@@ -161,7 +161,7 @@ export class SymbolTableBuilder {
  * @param {Array} exports
  * @returns {string[]}
  */
-function _extractExportNames(exports) {
+function _extractExportNames(exports: any) {
   const names: string | any | 'default'[] = [];
 
   for (const exp of exports) {
@@ -193,7 +193,7 @@ function _extractExportNames(exports) {
       // export { A, B, C }
       const namedMatch = text.match(/export\s*\{([^}]+)\}/);
       if (namedMatch) {
-        const items = namedMatch[1].split(',').map((s) => {
+        const items = namedMatch[1].split(',').map((s: any) => {
           // 处理 "A as B" 的情况
           const parts = s.trim().split(/\s+as\s+/);
           return parts[parts.length - 1].trim();
@@ -212,7 +212,7 @@ function _extractExportNames(exports) {
  * @param {string[]} exportNames
  * @returns {boolean}
  */
-function _isExported(name, exportNames) {
+function _isExported(name: any, exportNames: any) {
   return exportNames.includes(name) || exportNames.includes('default');
 }
 

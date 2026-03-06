@@ -20,7 +20,7 @@ export class PluginManager {
    * @param {object} plugin 插件对象，需有 init()/destroy() 方法
    * @param {{ priority?: number, description?: string }} meta
    */
-  register(name, plugin, meta: any = {}) {
+  register(name: any, plugin: any, meta: any = {}) {
     this.#plugins.set(name, {
       plugin,
       enabled: true,
@@ -34,7 +34,7 @@ export class PluginManager {
   /**
    * 卸载插件
    */
-  unregister(name) {
+  unregister(name: any) {
     const entry = this.#plugins.get(name);
     if (entry?.plugin?.destroy) {
       try {
@@ -49,7 +49,7 @@ export class PluginManager {
   /**
    * 启用/禁用插件
    */
-  setEnabled(name, enabled) {
+  setEnabled(name: any, enabled: any) {
     const entry = this.#plugins.get(name);
     if (entry) {
       entry.enabled = enabled;
@@ -106,7 +106,7 @@ export class PluginManager {
   /**
    * 获取插件实例
    */
-  getPlugin(name) {
+  getPlugin(name: any) {
     return this.#plugins.get(name)?.plugin || null;
   }
 
@@ -115,7 +115,7 @@ export class PluginManager {
    * @param {string} hookName
    * @param  {...any} args
    */
-  async callHook(hookName, ...args) {
+  async callHook(hookName: any, ...args: any[]) {
     const results: Array<{ name: string; result: any }> = [];
     for (const { name, entry } of this.#getSorted()) {
       if (!entry.enabled || !entry.plugin[hookName]) {

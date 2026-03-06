@@ -18,7 +18,7 @@ const _reviewRounds = new Map(); // projectRoot → round count
 const _lastReviewPassed = new Map(); // projectRoot → boolean
 const MAX_REVIEW_ROUNDS = 5;
 
-export async function guardCheck(ctx, args) {
+export async function guardCheck(ctx: any, args: any) {
   const { GuardCheckEngine, detectLanguage } = await import(
     '../../../service/guard/GuardCheckEngine.js'
   );
@@ -72,8 +72,8 @@ export async function guardCheck(ctx, args) {
       violations,
       summary: {
         total: violations.length,
-        errors: violations.filter((v) => v.severity === 'error').length,
-        warnings: violations.filter((v) => v.severity === 'warning').length,
+        errors: violations.filter((v: any) => v.severity === 'error').length,
+        warnings: violations.filter((v: any) => v.severity === 'warning').length,
       },
       ...(warnings.length ? { warnings } : {}),
     },
@@ -81,7 +81,7 @@ export async function guardCheck(ctx, args) {
   });
 }
 
-export async function guardAuditFiles(ctx, args) {
+export async function guardAuditFiles(ctx: any, args: any) {
   if (!Array.isArray(args.files) || args.files.length === 0) {
     throw new Error('files array is required and must not be empty');
   }
@@ -99,7 +99,7 @@ export async function guardAuditFiles(ctx, args) {
 
   // 补充缺失的 content（从磁盘读取）
   // 相对路径自动转绝对路径，避免 MCP 进程 cwd 不在项目目录时读不到文件
-  const filesToAudit = args.files.map((f) => {
+  const filesToAudit = args.files.map((f: any) => {
     const absPath = path.isAbsolute(f.path) ? f.path : path.resolve(projectRoot, f.path);
     return {
       path: absPath,
@@ -137,7 +137,7 @@ export async function guardAuditFiles(ctx, args) {
     success: true,
     data: {
       summary: result.summary,
-      files: result.files.map((f) => ({
+      files: result.files.map((f: any) => ({
         filePath: f.filePath,
         language: f.language,
         violations: f.violations,
@@ -166,7 +166,7 @@ export async function guardAuditFiles(ctx, args) {
  * @param {object} ctx - MCP context with container
  * @param {object} args - { files?: string[] }
  */
-export async function guardReview(ctx, args) {
+export async function guardReview(ctx: any, args: any) {
   const { GuardCheckEngine, detectLanguage } = await import(
     '../../../service/guard/GuardCheckEngine.js'
   );
@@ -201,9 +201,9 @@ export async function guardReview(ctx, args) {
   if (args.files && Array.isArray(args.files) && args.files.length > 0) {
     // files 参数: string[] — 简化版，自动读取文件内容
     filePaths = args.files
-      .map((f) => (typeof f === 'string' ? f : f.path || f))
-      .map((f) => (path.isAbsolute(f) ? f : path.resolve(projectRoot, f)))
-      .filter((f) => fs.existsSync(f));
+      .map((f: any) => (typeof f === 'string' ? f : f.path || f))
+      .map((f: any) => (path.isAbsolute(f) ? f : path.resolve(projectRoot, f)))
+      .filter((f: any) => fs.existsSync(f));
     fileSource = 'explicit';
   } else {
     // 无参数 → 自动检测 git 变更文件
@@ -242,8 +242,8 @@ export async function guardReview(ctx, args) {
 
       const fileSummary = {
         total: violations.length,
-        errors: violations.filter((v) => v.severity === 'error').length,
-        warnings: violations.filter((v) => v.severity === 'warning').length,
+        errors: violations.filter((v: any) => v.severity === 'error').length,
+        warnings: violations.filter((v: any) => v.severity === 'warning').length,
       };
 
       totalViolations += violations.length;
@@ -251,7 +251,7 @@ export async function guardReview(ctx, args) {
       totalWarnings += fileSummary.warnings;
 
       // 内联 recipe 修复指南
-      const enriched = violations.map((v) => {
+      const enriched = violations.map((v: any) => {
         const base: any = {
           ruleId: v.ruleId,
           message: v.message,
@@ -318,7 +318,7 @@ export async function guardReview(ctx, args) {
     const details = violatingFiles
       .map(
         (f) =>
-          `  ${path.basename(f.filePath)}: ${f.violations.map((v) => `L${v.line} ${v.ruleId}`).join(', ')}`
+          `  ${path.basename(f.filePath)}: ${f.violations.map((v: any) => `L${v.line} ${v.ruleId}`).join(', ')}`
       )
       .join('\n');
 
@@ -359,7 +359,7 @@ export async function guardReview(ctx, args) {
  * 预加载所有 rule 类型 recipe 的修复字段
  * 构建 guardId → recipe 映射
  */
-function _loadRuleRecipes(ctx) {
+function _loadRuleRecipes(ctx: any) {
   const map = new Map();
   try {
     const db =
@@ -408,7 +408,7 @@ function _loadRuleRecipes(ctx) {
 
 // ═══ Git Diff 检测 ═══════════════════════════════════════
 
-function _getProjectRoot(ctx) {
+function _getProjectRoot(ctx: any) {
   const root = ctx.container?.singletons?._projectRoot;
   if (root) {
     return root;
@@ -439,7 +439,7 @@ const SOURCE_EXTS = new Set([
   '.svelte',
 ]);
 
-function _detectChangedFiles(projectRoot) {
+function _detectChangedFiles(projectRoot: any) {
   const root = projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
   try {
     const diffOutput = execSync(
@@ -464,7 +464,7 @@ function _detectChangedFiles(projectRoot) {
 
 // ═══ 项目扫描 ════════════════════════════════════════════
 
-export async function scanProject(ctx, args) {
+export async function scanProject(ctx: any, args: any) {
   const maxFiles = args.maxFiles || 200;
   const includeContent = args.includeContent || false;
   const contentMaxLines = args.contentMaxLines || 100;
@@ -481,7 +481,7 @@ export async function scanProject(ctx, args) {
     service = new SpmHelper(projectRoot);
   }
   await service.load();
-  const allTargets = await service.listTargets();
+  const allTargets = await (service as any).listTargets();
 
   if (!allTargets || allTargets.length === 0) {
     return envelope({
@@ -496,7 +496,7 @@ export async function scanProject(ctx, args) {
   const allFiles: any[] = [];
   for (const t of allTargets) {
     try {
-      const fileList = await service.getTargetFiles(t);
+      const fileList = await (service as any).getTargetFiles(t);
       for (const f of fileList) {
         const fp = typeof f === 'string' ? f : f.path;
         if (seenPaths.has(fp)) {
@@ -582,15 +582,19 @@ export async function scanProject(ctx, args) {
   return envelope({
     success: true,
     data: {
-      targets: allTargets.map((t) => ({ name: t.name, type: t.type, packageName: t.packageName })),
+      targets: allTargets.map((t: any) => ({
+        name: t.name,
+        type: t.type,
+        packageName: t.packageName,
+      })),
       files: fileSummary,
       fileCount: allFiles.length,
       guardAudit: guardAudit
         ? {
             summary: guardAudit.summary,
             filesWithViolations: (guardAudit.files || [])
-              .filter((f) => f.violations.length > 0)
-              .map((f) => ({
+              .filter((f: any) => f.violations.length > 0)
+              .map((f: any) => ({
                 filePath: f.filePath,
                 language: f.language,
                 violations: f.violations,
@@ -615,7 +619,7 @@ export async function scanProject(ctx, args) {
  * @param {Function} GuardCheckEngine 引擎构造函数（用于回退）
  * @returns {import('../../../service/guard/GuardCheckEngine.js').GuardCheckEngine}
  */
-function _getOrCreateEngine(ctx, GuardCheckEngine) {
+function _getOrCreateEngine(ctx: any, GuardCheckEngine: any) {
   try {
     const engine = ctx.container.get('guardCheckEngine');
     if (engine) {
@@ -633,7 +637,7 @@ function _getOrCreateEngine(ctx, GuardCheckEngine) {
  * 幂等 — 已注入的引擎直接跳过，避免每次请求重复加载 EnhancementRegistry
  * 静默失败 — Enhancement Pack 不可用不应阻断 Guard 审计
  */
-async function _injectEnhancementGuardRules(engine, ctx) {
+async function _injectEnhancementGuardRules(engine: any, ctx: any) {
   // 幂等保护: 已注入则跳过
   if (engine.isEpInjected?.()) {
     return;

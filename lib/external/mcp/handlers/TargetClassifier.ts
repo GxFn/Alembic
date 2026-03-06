@@ -7,7 +7,7 @@
  */
 
 /** 根据 Target 名称推断模块职责 */
-export function inferTargetRole(targetName) {
+export function inferTargetRole(targetName: any) {
   const n = targetName.toLowerCase();
   if (/core|kit|shared|common|foundation|base/i.test(n)) {
     return 'core';
@@ -49,7 +49,7 @@ export function inferTargetRole(targetName) {
 }
 
 /** 根据文件名推断分析优先级 */
-export function inferFilePriority(filename) {
+export function inferFilePriority(filename: any) {
   const n = filename.toLowerCase();
   // High: core definitions, services, protocols, configs
   if (

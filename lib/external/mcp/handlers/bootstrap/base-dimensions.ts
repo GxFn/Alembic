@@ -236,18 +236,18 @@ export const baseDimensions = [
  * @returns {Array} 适用的维度列表
  */
 export function resolveActiveDimensions(
-  allDimensions,
-  primaryLang,
+  allDimensions: any,
+  primaryLang: any,
   detectedFrameworks: any[] = []
 ) {
-  return allDimensions.filter((dim) => {
+  return allDimensions.filter((dim: any) => {
     if (!dim.conditions) {
       return true; // 无条件 → 通用维度
     }
     const langMatch = !dim.conditions.languages || dim.conditions.languages.includes(primaryLang);
     const fwMatch =
       !dim.conditions.frameworks ||
-      dim.conditions.frameworks.some((f) => detectedFrameworks.includes(f));
+      dim.conditions.frameworks.some((f: any) => detectedFrameworks.includes(f));
     // languages 必须匹配；frameworks 为可选增强（有 frameworks 条件时必须至少命中一个）
     return langMatch && (dim.conditions.frameworks ? fwMatch : true);
   });

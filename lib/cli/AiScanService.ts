@@ -23,7 +23,7 @@ export class AiScanService {
    * @param {object} opts.container   ServiceContainer 实例
    * @param {string} opts.projectRoot 项目根目录
    */
-  constructor({ container, projectRoot }) {
+  constructor({ container, projectRoot }: any) {
     this.container = container;
     this.projectRoot = projectRoot;
     this.logger = Logger.getInstance();
@@ -36,7 +36,7 @@ export class AiScanService {
    * @param {object}      opts        { maxFiles, dryRun, concurrency }
    * @returns {Promise<{ published: number, files: number, errors: string[] }>}
    */
-  async scan(targetName, opts: any = {}) {
+  async scan(targetName: any, opts: any = {}) {
     const { maxFiles = 200, dryRun = false } = opts;
     const report = { published: 0, files: 0, errors: [] as string[], skipped: 0 };
 
@@ -144,7 +144,7 @@ export class AiScanService {
   /**
    * 收集 Target 源文件
    */
-  async _collectFiles(targetName, maxFiles) {
+  async _collectFiles(targetName: any, maxFiles: any) {
     const files: { name: any; path: any; relativePath: any; targetName: any }[] = [];
 
     try {
@@ -219,7 +219,7 @@ export class AiScanService {
   /**
    * 递归扫描目录（fallback）
    */
-  _walkDir(dir, files, maxFiles, targetName) {
+  _walkDir(dir: any, files: any, maxFiles: any, targetName: any) {
     if (files.length >= maxFiles) {
       return;
     }
@@ -278,7 +278,7 @@ export class AiScanService {
   /**
    * 从文件名推断语言
    */
-  _inferLanguage(filename) {
+  _inferLanguage(filename: any) {
     return LanguageService.inferLang(filename);
   }
 }

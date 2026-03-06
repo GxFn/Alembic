@@ -21,7 +21,7 @@ export class GraphCache {
   /**
    * @param {string} projectRoot 项目根目录
    */
-  constructor(projectRoot) {
+  constructor(projectRoot: any) {
     this.#cacheDir = join(projectRoot, '.autosnippet', 'cache');
     this.#logger = Logger.getInstance();
   }
@@ -32,7 +32,7 @@ export class GraphCache {
    * @param {object} data 要缓存的数据
    * @param {object} meta 元信息（含 hash、timestamp 等）
    */
-  save(key, data, meta: any = {}) {
+  save(key: any, data: any, meta: any = {}) {
     try {
       if (!existsSync(this.#cacheDir)) {
         mkdirSync(this.#cacheDir, { recursive: true });
@@ -56,7 +56,7 @@ export class GraphCache {
    * @param {string} key 缓存键名
    * @returns {{ data: object, [key: string]: any } | null}
    */
-  load(key) {
+  load(key: any) {
     try {
       const filePath = join(this.#cacheDir, `${key}.json`);
       if (!existsSync(filePath)) {
@@ -76,7 +76,7 @@ export class GraphCache {
    * @param {string} currentHash 当前内容的 hash
    * @returns {boolean}
    */
-  isValid(key, currentHash) {
+  isValid(key: any, currentHash: any) {
     const cached = this.load(key);
     if (!cached) {
       return false;
@@ -88,7 +88,7 @@ export class GraphCache {
    * 删除缓存
    * @param {string} key
    */
-  invalidate(key) {
+  invalidate(key: any) {
     try {
       const filePath = join(this.#cacheDir, `${key}.json`);
       if (existsSync(filePath)) {
@@ -105,7 +105,7 @@ export class GraphCache {
    * @param {string} filePath 文件绝对路径
    * @returns {string} sha256 hex (前 16 字符)
    */
-  computeFileHash(filePath) {
+  computeFileHash(filePath: any) {
     try {
       const content = readFileSync(filePath, 'utf-8');
       return this.computeContentHash(content);
@@ -119,7 +119,7 @@ export class GraphCache {
    * @param {string} content
    * @returns {string} sha256 hex (前 16 字符)
    */
-  computeContentHash(content) {
+  computeContentHash(content: any) {
     return createHash('sha256').update(content).digest('hex').substring(0, 16);
   }
 
@@ -129,7 +129,7 @@ export class GraphCache {
    * @param {string} projectRoot 项目根目录
    * @returns {Object<string, string>} { relativePath: hash }
    */
-  computeFileHashes(filePaths, projectRoot) {
+  computeFileHashes(filePaths: any, projectRoot: any) {
     const hashes: Record<string, any> = {};
     for (const fp of filePaths) {
       const rel = relative(projectRoot, fp);

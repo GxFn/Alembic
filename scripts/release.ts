@@ -28,31 +28,31 @@ const _colors = {
   bold: '\x1b[1m',
 };
 
-function log(message, color = 'reset') {}
+function log(message: any, color = 'reset') {}
 
-function success(message) {
+function success(message: any) {
   log(`✅ ${message}`, 'green');
 }
 
-function error(message) {
+function error(message: any) {
   log(`❌ ${message}`, 'red');
 }
 
-function warning(message) {
+function warning(message: any) {
   log(`⚠️  ${message}`, 'yellow');
 }
 
-function info(message) {
+function info(message: any) {
   log(`ℹ️  ${message}`, 'blue');
 }
 
-function header(message) {
+function header(message: any) {
   log(`\n${'='.repeat(60)}`, 'bold');
   log(`  ${message}`, 'bold');
   log(`${'='.repeat(60)}`, 'bold');
 }
 
-function exec(command, options: any = {}) {
+function exec(command: any, options: any = {}) {
   try {
     return execSync(command, {
       encoding: 'utf8',
@@ -270,12 +270,12 @@ class ReleaseChecker {
 
     if (this.errors.length > 0) {
       error(`发现 ${this.errors.length} 个错误：`);
-      this.errors.forEach((err, i) => {});
+      this.errors.forEach((err: any, i: any) => {});
     }
 
     if (this.warnings.length > 0) {
       warning(`发现 ${this.warnings.length} 个警告：`);
-      this.warnings.forEach((warn, i) => {});
+      this.warnings.forEach((warn: any, i: any) => {});
     }
 
     return this.errors.length === 0;
@@ -283,7 +283,7 @@ class ReleaseChecker {
 }
 
 // 发布流程
-function release(versionType, checker) {
+function release(versionType: any, checker: any) {
   header(`开始发布流程 (${versionType})`);
 
   // 读取当前版本
@@ -390,7 +390,7 @@ function main() {
       output: process.stdout,
     });
 
-    readline.question('> ', (answer) => {
+    readline.question('> ', (answer: any) => {
       readline.close();
 
       if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {

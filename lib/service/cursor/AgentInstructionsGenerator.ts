@@ -72,7 +72,7 @@ export class AgentInstructionsGenerator {
    * @param {string} projectName
    * @param {Object} [logger]
    */
-  constructor(projectRoot, projectName = 'Project', logger = console) {
+  constructor(projectRoot: any, projectName = 'Project', logger = console) {
     this.projectRoot = projectRoot;
     this.projectName = projectName;
     this.logger = logger;
@@ -140,12 +140,12 @@ export class AgentInstructionsGenerator {
    * 从知识条目构建共享内容段
    * @private
    */
-  _buildSections({ rules, patterns, skills }) {
+  _buildSections({ rules, patterns, skills }: any) {
     // 编码规则（Channel A 格式，一行一条）
     const ruleLines = rules
       .slice(0, AGENT_BUDGET.MAX_RULES)
-      .filter((e) => e.doClause)
-      .map((e) => {
+      .filter((e: any) => e.doClause)
+      .map((e: any) => {
         const langPrefix = e.language && e.scope !== 'universal' ? `[${e.language}] ` : '';
         const doText = e.doClause.replace(/\.+$/, '');
         let line = `${langPrefix}${doText}`;
@@ -167,8 +167,8 @@ export class AgentInstructionsGenerator {
     // 架构模式（摘要表格行）
     const patternRows = patterns
       .slice(0, AGENT_BUDGET.MAX_PATTERNS)
-      .filter((e) => e.trigger && e.doClause)
-      .map((e) => {
+      .filter((e: any) => e.trigger && e.doClause)
+      .map((e: any) => {
         const trigger = e.trigger.startsWith('@') ? e.trigger : `@${e.trigger}`;
         const when = (e.whenClause || '').substring(0, 60);
         const doText = (e.doClause || '').substring(0, 80);
@@ -176,7 +176,7 @@ export class AgentInstructionsGenerator {
       });
 
     // Skills 列表
-    const skillLines = skills.slice(0, AGENT_BUDGET.MAX_SKILLS).map((s) => `- \`${s}\``);
+    const skillLines = skills.slice(0, AGENT_BUDGET.MAX_SKILLS).map((s: any) => `- \`${s}\``);
 
     // MCP 工具列表
     const toolLines = MCP_TOOLS_SUMMARY.map((t) => `- \`${t.name}\` — ${t.desc}`);
@@ -189,7 +189,7 @@ export class AgentInstructionsGenerator {
   /**
    * @private
    */
-  _writeAgentsMd(sections) {
+  _writeAgentsMd(sections: any) {
     const lines = [
       `# ${this.projectName} — Agent Instructions`,
       '',
@@ -251,7 +251,7 @@ export class AgentInstructionsGenerator {
   /**
    * @private
    */
-  _writeClaudeMd(sections) {
+  _writeClaudeMd(sections: any) {
     const lines = [
       `# ${this.projectName} — Claude Code Instructions`,
       '',
@@ -333,7 +333,7 @@ export class AgentInstructionsGenerator {
    * 替代原有的静态模板复制
    * @private
    */
-  _writeCopilotInstructions(sections) {
+  _writeCopilotInstructions(sections: any) {
     const lines = [
       '# AutoSnippet Copilot Instructions',
       '',

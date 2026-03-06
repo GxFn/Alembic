@@ -30,7 +30,7 @@ export class Stats {
    * @param {Stats|Object|null} input
    * @returns {Stats}
    */
-  static from(input) {
+  static from(input: any) {
     if (input instanceof Stats) {
       return input;
     }
@@ -50,9 +50,9 @@ export class Stats {
    * @param {number} delta
    * @returns {Stats}
    */
-  increment(counter, delta = 1) {
-    if (counter in this && typeof this[counter] === 'number') {
-      this[counter] += delta;
+  increment(counter: any, delta = 1) {
+    if (counter in this && typeof (this as any)[counter] === 'number') {
+      (this as any)[counter] += delta;
     }
     return this;
   }
@@ -76,7 +76,7 @@ export class Stats {
    * @param {Object} data
    * @returns {Stats}
    */
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     return Stats.from(data);
   }
 }

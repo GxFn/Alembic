@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 export class DatabaseConnection {
   config: any;
   db: any;
-  constructor(config) {
+  constructor(config: any) {
     this.config = config;
     this.db = null;
   }

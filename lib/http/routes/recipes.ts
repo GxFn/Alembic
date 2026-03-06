@@ -53,7 +53,7 @@ function resetTask() {
  */
 router.post(
   '/discover-relations',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { batchSize: _batchSize = 20 } = req.body;
 
     // 如果已有任务在运行，返回当前状态
@@ -159,7 +159,7 @@ router.post(
  */
 router.get(
   '/discover-relations/status',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const data = { ...discoverTask };
 
     // 计算实时 elapsed

@@ -25,7 +25,7 @@ const logger = Logger.getInstance();
 
 // ── 辅助：安全获取容器服务 ──────────────────────────────────
 
-function tryGet(container, name) {
+function tryGet(container: any, name: any) {
   try {
     return container.get(name);
   } catch {
@@ -46,7 +46,7 @@ function tryGet(container, name) {
  * @param {object} ctx  - { container, logger, startedAt }
  * @param {object} args - { language?: 'zh'|'en', sessionId?: string }
  */
-export async function wikiPlan(ctx, args) {
+export async function wikiPlan(ctx: any, args: any) {
   const t0 = Date.now();
   const language = args.language || 'zh';
   const container = ctx.container;
@@ -77,7 +77,7 @@ export async function wikiPlan(ctx, args) {
     projectInfo = {
       name: path.basename(projectRoot),
       root: projectRoot,
-      sourceFiles: allFiles.map((f) => f.relativePath),
+      sourceFiles: allFiles.map((f: any) => f.relativePath),
       languages: cachedData.langStats || {},
       primaryLanguage: cachedData.primaryLang || 'unknown',
       sourceFilesByModule: filesByModule,
@@ -102,8 +102,8 @@ export async function wikiPlan(ctx, args) {
       protocolsByModule[mod].push(p.name);
     }
     astInfo = {
-      classes: (ast.classes || []).map((c) => c.name),
-      protocols: (ast.protocols || []).map((p) => p.name),
+      classes: (ast.classes || []).map((c: any) => c.name),
+      protocols: (ast.protocols || []).map((p: any) => p.name),
       overview: ast.projectMetrics || null,
       classNamesByModule: classesByModule,
       protocolNamesByModule: protocolsByModule,
@@ -111,7 +111,7 @@ export async function wikiPlan(ctx, args) {
 
     // moduleInfo: 从依赖图和 targets 构建
     moduleInfo = {
-      targets: (cachedData.targetsSummary || []).map((t) => ({
+      targets: (cachedData.targetsSummary || []).map((t: any) => ({
         name: t.name,
         type: t.type,
         fileCount: t.fileCount,
@@ -236,7 +236,7 @@ export async function wikiPlan(ctx, args) {
  * @param {object} ctx  - { container, logger, startedAt }
  * @param {object} args - { articlesWritten: string[] }
  */
-export async function wikiFinalize(ctx, args) {
+export async function wikiFinalize(ctx: any, args: any) {
   const t0 = Date.now();
   const { articlesWritten } = args;
 
@@ -394,7 +394,7 @@ export async function wikiFinalize(ctx, args) {
 //  内部辅助函数
 // ════════════════════════════════════════════════════════════
 
-function _ensureDir(dir) {
+function _ensureDir(dir: any) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -403,7 +403,7 @@ function _ensureDir(dir) {
 /**
  * 为主题生成写作指南
  */
-function _buildWritingGuide(topic, isZh) {
+function _buildWritingGuide(topic: any, isZh: any) {
   const guides = {
     overview: isZh
       ? '撰写完整的项目概述文档。包含: 项目简介(解释项目做什么)、模块总览(表格形式)、技术栈分析、核心数据指标。底部包含导航索引，链接到其他 wiki 文档。'
@@ -435,7 +435,7 @@ function _buildWritingGuide(topic, isZh) {
   };
 
   return (
-    guides[topic.type] ||
+    (guides as Record<string, any>)[topic.type] ||
     (isZh
       ? '撰写详细的技术文档，结构清晰，内容准确。'
       : 'Write detailed technical documentation with clear structure and accurate content.')
@@ -445,7 +445,7 @@ function _buildWritingGuide(topic, isZh) {
 /**
  * 为主题构建数据包
  */
-function _buildTopicDataBundle(topic, structuredData) {
+function _buildTopicDataBundle(topic: any, structuredData: any) {
   const { projectInfo, astInfo, moduleInfo, knowledgeInfo } = structuredData;
   const bundle: any = {};
 
@@ -458,7 +458,7 @@ function _buildTopicDataBundle(topic, structuredData) {
       bundle.buildSystems = projectInfo.buildSystems;
       bundle.languages = projectInfo.languages;
       bundle.moduleCount = moduleInfo.targets?.length || 0;
-      bundle.moduleList = (moduleInfo.targets || []).map((t) => ({
+      bundle.moduleList = (moduleInfo.targets || []).map((t: any) => ({
         name: t.name,
         type: t.type || t.info?.type || 'unknown',
         fileCount: t.sourceFileCount || t.info?.sourceFileCount || 0,
@@ -469,7 +469,7 @@ function _buildTopicDataBundle(topic, structuredData) {
       break;
 
     case 'architecture':
-      bundle.modules = (moduleInfo.targets || []).map((t) => ({
+      bundle.modules = (moduleInfo.targets || []).map((t: any) => ({
         name: t.name,
         type: t.type || t.info?.type || 'unknown',
         path: t.path || t.info?.path || '',
@@ -535,7 +535,7 @@ function _buildTopicDataBundle(topic, structuredData) {
     case 'pattern-category': {
       const pd = topic._patternData || {};
       bundle.category = pd.category;
-      bundle.recipes = (pd.recipes || []).map((r) => ({
+      bundle.recipes = (pd.recipes || []).map((r: any) => ({
         title: r.title || r.name,
         trigger: r.trigger || r.name,
         kind: r.kind || 'pattern',
@@ -551,7 +551,7 @@ function _buildTopicDataBundle(topic, structuredData) {
       break;
 
     case 'folder-overview':
-      bundle.folderProfiles = (topic._folderProfiles || []).map((fp) => ({
+      bundle.folderProfiles = (topic._folderProfiles || []).map((fp: any) => ({
         relPath: fp.relPath,
         fileCount: fp.fileCount,
         languages: fp.languages,
@@ -582,7 +582,7 @@ function _buildTopicDataBundle(topic, structuredData) {
 /**
  * 构建写作指导手册
  */
-function _buildWritingGuidelines(isZh) {
+function _buildWritingGuidelines(isZh: any) {
   return {
     language: isZh ? 'zh' : 'en',
     style: isZh

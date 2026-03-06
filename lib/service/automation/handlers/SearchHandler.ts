@@ -10,7 +10,12 @@ import Logger from '../../../infrastructure/logging/Logger.js';
  * @param {string} relativePath
  * @param {string} searchLine
  */
-export async function handleSearch(watcher, fullPath, relativePath, searchLine) {
+export async function handleSearch(
+  watcher: any,
+  fullPath: any,
+  relativePath: any,
+  searchLine: any
+) {
   const query = searchLine.replace(/^\/\/\s*(?:autosnippet|as):(?:search|s)\s*/, '').trim();
 
   if (!query) {
@@ -55,7 +60,7 @@ export async function handleSearch(watcher, fullPath, relativePath, searchLine) 
   const items = normalizeSearchResults(results);
 
   // Xcode 代码插入场景: 有实际代码的结果优先展示
-  items.sort((a, b) => {
+  items.sort((a: any, b: any) => {
     const aHasCode = a.code && a.code !== '(无预览内容)' && a.code.length > 30 ? 1 : 0;
     const bHasCode = b.code && b.code !== '(无预览内容)' && b.code.length > 30 ? 1 : 0;
     return bHasCode - aHasCode;
@@ -101,14 +106,14 @@ export async function handleSearch(watcher, fullPath, relativePath, searchLine) 
 /**
  * 将搜索结果标准化为 NativeUI 可展示格式
  */
-export function normalizeSearchResults(results) {
+export function normalizeSearchResults(results: any) {
   if (!results) {
     return [];
   }
   const arr = Array.isArray(results) ? results : results.items || [];
 
   return arr
-    .map((r) => {
+    .map((r: any) => {
       let code = '';
       let explanation = '';
       let headers: any[] = [];
@@ -198,7 +203,7 @@ export function normalizeSearchResults(results) {
         trigger: r.trigger || r.completionKey || '',
       };
     })
-    .filter((item) => item.title);
+    .filter((item: any) => item.title);
 }
 
 /**
@@ -209,7 +214,7 @@ export function normalizeSearchResults(results) {
  *
  * 支持: #import, @import, #include, import (Swift)
  */
-function _separateImportsFromCode(code) {
+function _separateImportsFromCode(code: any) {
   if (!code || code === '(无预览内容)') {
     return { cleanedCode: code, extractedHeaders: [] };
   }
@@ -261,7 +266,7 @@ function _separateImportsFromCode(code) {
  * @param {string} md - Markdown 文本
  * @returns {string} 提取出的纯代码，或空字符串
  */
-function _extractCodeFromMarkdown(md) {
+function _extractCodeFromMarkdown(md: any) {
   if (!md) {
     return '';
   }
@@ -285,7 +290,7 @@ function _extractCodeFromMarkdown(md) {
  * @param {string} md - Markdown 文本
  * @returns {string} 纯文本
  */
-function _stripMarkdownFormatting(md) {
+function _stripMarkdownFormatting(md: any) {
   if (!md) {
     return '';
   }

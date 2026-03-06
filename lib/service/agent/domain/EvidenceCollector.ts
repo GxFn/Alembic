@@ -63,7 +63,7 @@ export class EvidenceCollector {
    * @param {object} toolCall - { tool/name, params/args, result }
    * @param {number} [round=0] 调用序号
    */
-  processToolCall(toolCall, round = 0) {
+  processToolCall(toolCall: any, round = 0) {
     const tool = toolCall.tool || toolCall.name;
     const args = toolCall.params || toolCall.args || {};
     const result = toolCall.result;
@@ -130,7 +130,7 @@ export class EvidenceCollector {
    * read_project_file — 提取代码片段
    * 支持批量读取 (result.files) 和单文件读取 (result.content)
    */
-  #extractFileEvidence(args, result) {
+  #extractFileEvidence(args: any, result: any) {
     // 字符串结果 — 可能是错误消息或直接内容
     if (typeof result === 'string') {
       if (this.#isErrorString(result)) {
@@ -169,7 +169,7 @@ export class EvidenceCollector {
    * search_project_code / semantic_search_code — 提取匹配 + 负空间信号
    * 支持批量搜索 (result.batchResults) 和单模式搜索 (result.matches)
    */
-  #extractSearchEvidence(args, result) {
+  #extractSearchEvidence(args: any, result: any) {
     const patterns = this.#extractSearchPatterns(args);
 
     if (typeof result === 'string') {
@@ -219,7 +219,7 @@ export class EvidenceCollector {
   /**
    * get_class_info — 提取类结构 → evidenceMap
    */
-  #extractClassEvidence(args, result) {
+  #extractClassEvidence(args: any, result: any) {
     if (typeof result !== 'object' || !result) {
       return;
     }
@@ -243,7 +243,7 @@ export class EvidenceCollector {
     if (result.methods?.length) {
       const names = result.methods
         .slice(0, 5)
-        .map((m) => (typeof m === 'string' ? m : m.name || m.selector || '?'));
+        .map((m: any) => (typeof m === 'string' ? m : m.name || m.selector || '?'));
       parts.push(`Methods(${result.methods.length}): ${names.join(', ')}`);
     }
     if (result.properties?.length) {
@@ -257,7 +257,7 @@ export class EvidenceCollector {
   /**
    * get_protocol_info — 提取协议结构 → evidenceMap
    */
-  #extractProtocolEvidence(args, result) {
+  #extractProtocolEvidence(args: any, result: any) {
     if (typeof result !== 'object' || !result) {
       return;
     }
@@ -286,7 +286,7 @@ export class EvidenceCollector {
   /**
    * get_file_summary — 提取文件级摘要 → evidenceMap
    */
-  #extractFileSummary(args, result) {
+  #extractFileSummary(args: any, result: any) {
     const filePath = args.filePath || (typeof result === 'object' && result?.filePath);
     if (!filePath) {
       return;
@@ -308,7 +308,7 @@ export class EvidenceCollector {
   // ─── 内部辅助 ─────────────────────────────────────────
 
   /** 获取或创建 evidence entry */
-  #getOrCreateEntry(filePath) {
+  #getOrCreateEntry(filePath: any) {
     let entry = this.#evidenceMap.get(filePath);
     if (!entry) {
       entry = { filePath, codeSnippets: [], summary: '' };
@@ -318,7 +318,7 @@ export class EvidenceCollector {
   }
 
   /** 向 evidenceMap 添加代码片段 (带预算控制) */
-  #addCodeSnippet(filePath, content, startLine = 1) {
+  #addCodeSnippet(filePath: any, content: any, startLine = 1) {
     if (!filePath || !content) {
       return;
     }
@@ -352,7 +352,7 @@ export class EvidenceCollector {
   }
 
   /** 向 evidenceMap 添加搜索匹配 */
-  #addSearchMatch(match, searchNote) {
+  #addSearchMatch(match: any, searchNote: any) {
     if (!match?.file) {
       return;
     }
@@ -366,7 +366,7 @@ export class EvidenceCollector {
     }
 
     // 去重: 同一行不重复添加
-    if (entry.codeSnippets.some((s) => s.startLine === match.line)) {
+    if (entry.codeSnippets.some((s: any) => s.startLine === match.line)) {
       return;
     }
 
@@ -380,7 +380,7 @@ export class EvidenceCollector {
   }
 
   /** 添加负空间信号 (去重) */
-  #addNegativeSignal(pattern) {
+  #addNegativeSignal(pattern: any) {
     if (!pattern) {
       return;
     }
@@ -395,12 +395,12 @@ export class EvidenceCollector {
   }
 
   /** 检测错误字符串 */
-  #isErrorString(str) {
+  #isErrorString(str: any) {
     return /not found|error|不存在|无法|failed/i.test(str);
   }
 
   /** 从搜索参数中提取搜索模式 */
-  #extractSearchPatterns(args) {
+  #extractSearchPatterns(args: any) {
     if (args.patterns && Array.isArray(args.patterns)) {
       return args.patterns;
     }
@@ -414,7 +414,7 @@ export class EvidenceCollector {
   }
 
   /** 推断工具调用意图 — WHY */
-  #inferIntent(tool, args) {
+  #inferIntent(tool: any, args: any) {
     switch (tool) {
       case 'read_project_file':
         if (args.filePaths?.length) {
@@ -461,7 +461,7 @@ export class EvidenceCollector {
   }
 
   /** 生成工具结果摘要 — WHAT */
-  #summarizeResult(tool, result) {
+  #summarizeResult(tool: any, result: any) {
     if (result == null) {
       return '(no result)';
     }
@@ -507,7 +507,7 @@ export class EvidenceCollector {
   }
 
   /** 判断工具调用是否有效 (获取到新信息) */
-  #isEffective(tool, result) {
+  #isEffective(tool: any, result: any) {
     if (!result) {
       return false;
     }

@@ -9,8 +9,8 @@ import {
   ValidationError,
 } from '../../shared/errors/index.js';
 
-export function errorHandler(logger) {
-  return (error, req, res, next) => {
+export function errorHandler(logger: any) {
+  return (error: any, req: any, res: any, next: any) => {
     const status = error.statusCode || error.status || 500;
     const code = error.code || 'INTERNAL_ERROR';
     const message = error.message || 'Internal server error';
@@ -41,8 +41,8 @@ export function errorHandler(logger) {
 /**
  * 异步路由错误包装
  */
-export function asyncHandler(fn) {
-  return (req, res, next) => {
+export function asyncHandler(fn: any) {
+  return (req: any, res: any, next: any) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
@@ -50,7 +50,7 @@ export function asyncHandler(fn) {
 /**
  * 将领域错误转换为 HTTP 错误
  */
-export function mapDomainError(error) {
+export function mapDomainError(error: any) {
   if (error instanceof ValidationError) {
     return {
       status: 400,

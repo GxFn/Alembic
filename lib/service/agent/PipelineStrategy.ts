@@ -26,7 +26,7 @@ const _pipelineLogger = Logger.getInstance();
 
 export class PipelineStrategy extends Strategy {
   /** @type {Array<Object>} */
-  #stages;
+  #stages: any[];
 
   /** @type {number} 最大重试次数 (Gate 失败时全局兜底) */
   #maxRetries;
@@ -41,7 +41,7 @@ export class PipelineStrategy extends Strategy {
     return 'pipeline';
   }
 
-  async execute(runtime, message, opts: any = {}) {
+  async execute(runtime: any, message: any, opts: any = {}) {
     const bus = AgentEventBus.getInstance();
     const ctx = {
       phaseResults: {},
@@ -109,7 +109,7 @@ export class PipelineStrategy extends Strategy {
    *
    * @returns {'break'|'continue'|number} - break/continue 或 retry 回退索引 (i-1)
    */
-  #processGate(stage, stageIndex, ctx, bus) {
+  #processGate(stage: any, stageIndex: any, ctx: any, bus: any) {
     const { phaseResults, strategyContext } = ctx;
     const sourceName = stage.source || this.#prevStageName(stage);
     const source = phaseResults[sourceName];
@@ -198,13 +198,13 @@ export class PipelineStrategy extends Strategy {
   /**
    * 执行单个 Pipeline 阶段
    */
-  async #executeStage(runtime, message, stage, ctx, bus) {
+  async #executeStage(runtime: any, message: any, stage: any, ctx: any, bus: any) {
     const { phaseResults, strategyContext } = ctx;
 
     bus.publish(AgentEvents.PROGRESS, {
       type: 'pipeline_stage_start',
       stage: stage.name,
-      capabilities: stage.capabilities?.map((c) => (typeof c === 'string' ? c : c.name)),
+      capabilities: stage.capabilities?.map((c: any) => (typeof c === 'string' ? c : c.name)),
     });
 
     // 构建阶段 prompt
@@ -284,7 +284,7 @@ export class PipelineStrategy extends Strategy {
   /**
    * 构建阶段 prompt (优先级: retryPromptBuilder > promptBuilder > promptTransform > 原始)
    */
-  #buildStagePrompt(stage, message, phaseResults, strategyContext, ctx) {
+  #buildStagePrompt(stage: any, message: any, phaseResults: any, strategyContext: any, ctx: any) {
     let prompt;
     if (phaseResults._retryContext && stage.retryPromptBuilder) {
       prompt = stage.retryPromptBuilder(phaseResults._retryContext, message.content, phaseResults);
@@ -312,7 +312,7 @@ export class PipelineStrategy extends Strategy {
   /**
    * 为阶段解析 ExplorationTracker
    */
-  #resolveStageTracker(stage, ctx, strategyContext, effectiveBudget) {
+  #resolveStageTracker(stage: any, ctx: any, strategyContext: any, effectiveBudget: any) {
     let stageTracker = strategyContext.tracker || null;
     const submitToolName = stage.submitToolName || strategyContext.submitToolName || undefined;
 
@@ -342,16 +342,16 @@ export class PipelineStrategy extends Strategy {
    * 执行 reactLoop 并添加硬超时保护
    */
   async #runWithTimeout(
-    runtime,
-    stagePrompt,
-    message,
-    stage,
-    effectiveBudget,
-    ctxWin,
-    stageTracker,
-    strategyContext,
-    phaseResults,
-    bus
+    runtime: any,
+    stagePrompt: any,
+    message: any,
+    stage: any,
+    effectiveBudget: any,
+    ctxWin: any,
+    stageTracker: any,
+    strategyContext: any,
+    phaseResults: any,
+    bus: any
   ) {
     const reactPromise = runtime.reactLoop(stagePrompt, {
       history: message.history,
@@ -379,7 +379,7 @@ export class PipelineStrategy extends Strategy {
 
     // 硬超时 = budget.timeoutMs + 30s 缓冲
     const hardLimitMs = stageTimeoutMs + 30_000;
-    let hardTimer;
+    let hardTimer: any;
 
     return Promise.race([
       reactPromise,
@@ -413,7 +413,7 @@ export class PipelineStrategy extends Strategy {
   /**
    * 质量门控评估 (向后兼容: 阈值模式)
    */
-  #evaluateGate(gateConfig, phaseResults, sourceName) {
+  #evaluateGate(gateConfig: any, phaseResults: any, sourceName: any) {
     const source = phaseResults[sourceName];
     if (!source?.reply) {
       return { pass: false, reason: `No output from stage "${sourceName}"` };
@@ -453,7 +453,7 @@ export class PipelineStrategy extends Strategy {
   /**
    * 找到当前 gate 之前最近的执行阶段索引 (用于 retry 回退)
    */
-  #findPrevExecStageIdx(currentIdx) {
+  #findPrevExecStageIdx(currentIdx: any) {
     for (let j = currentIdx - 1; j >= 0; j--) {
       if (!this.#stages[j].gate) {
         return j;
@@ -462,7 +462,7 @@ export class PipelineStrategy extends Strategy {
     return -1;
   }
 
-  #prevStageName(currentStage) {
+  #prevStageName(currentStage: any) {
     const idx = this.#stages.indexOf(currentStage);
     for (let i = idx - 1; i >= 0; i--) {
       if (!this.#stages[i].gate && this.#stages[i].name) {

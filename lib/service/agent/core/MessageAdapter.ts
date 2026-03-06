@@ -25,7 +25,7 @@ export class MessageAdapter {
    * 追加用户消息
    * @param {string} _text
    */
-  appendUserMessage(_text) {
+  appendUserMessage(_text: any) {
     throw new Error('not implemented');
   }
 
@@ -33,7 +33,7 @@ export class MessageAdapter {
    * 追加助手纯文本回复
    * @param {string} _text
    */
-  appendAssistantText(_text) {
+  appendAssistantText(_text: any) {
     throw new Error('not implemented');
   }
 
@@ -42,7 +42,7 @@ export class MessageAdapter {
    * @param {string|null} _text
    * @param {Array} _calls - functionCalls 数组
    */
-  appendAssistantWithToolCalls(_text, _calls) {
+  appendAssistantWithToolCalls(_text: any, _calls: any) {
     throw new Error('not implemented');
   }
 
@@ -52,7 +52,7 @@ export class MessageAdapter {
    * @param {string} _name
    * @param {string} _content
    */
-  appendToolResult(_callId, _name, _content) {
+  appendToolResult(_callId: any, _name: any, _content: any) {
     throw new Error('not implemented');
   }
 
@@ -60,7 +60,7 @@ export class MessageAdapter {
    * 追加系统/用户 nudge 消息
    * @param {string} _text
    */
-  appendUserNudge(_text) {
+  appendUserNudge(_text: any) {
     throw new Error('not implemented');
   }
 
@@ -101,7 +101,7 @@ export class MessageAdapter {
    * @param {*} rawResult 工具原始返回值
    * @returns {string}
    */
-  formatToolResult(toolName, rawResult) {
+  formatToolResult(toolName: any, rawResult: any) {
     const quota = this.getToolResultQuota();
     return limitToolResult(toolName, rawResult, quota);
   }
@@ -124,7 +124,7 @@ export class ContextWindowAdapter extends MessageAdapter {
   /**
    * @param {import('../context/ContextWindow.js').ContextWindow} ctxWin
    */
-  constructor(ctxWin) {
+  constructor(ctxWin: any) {
     super();
     this.#ctxWin = ctxWin;
   }
@@ -134,23 +134,23 @@ export class ContextWindowAdapter extends MessageAdapter {
     return this.#ctxWin;
   }
 
-  appendUserMessage(text) {
+  appendUserMessage(text: any) {
     this.#ctxWin.appendUserMessage(text);
   }
 
-  appendAssistantText(text) {
+  appendAssistantText(text: any) {
     this.#ctxWin.appendAssistantText(text);
   }
 
-  appendAssistantWithToolCalls(text, calls) {
+  appendAssistantWithToolCalls(text: any, calls: any) {
     this.#ctxWin.appendAssistantWithToolCalls(text, calls);
   }
 
-  appendToolResult(callId, name, content) {
+  appendToolResult(callId: any, name: any, content: any) {
     this.#ctxWin.appendToolResult(callId, name, content);
   }
 
-  appendUserNudge(text) {
+  appendUserNudge(text: any) {
     this.#ctxWin.appendUserNudge(text);
   }
 
@@ -185,23 +185,23 @@ export class SimpleArrayAdapter extends MessageAdapter {
   /** @type {Array<Object>} */
   #messages: any[] = [];
 
-  appendUserMessage(text) {
+  appendUserMessage(text: any) {
     this.#messages.push({ role: 'user', content: text });
   }
 
-  appendAssistantText(text) {
+  appendAssistantText(text: any) {
     this.#messages.push({ role: 'assistant', content: text });
   }
 
-  appendAssistantWithToolCalls(text, calls) {
+  appendAssistantWithToolCalls(text: any, calls: any) {
     this.#messages.push({ role: 'assistant', content: text, toolCalls: calls });
   }
 
-  appendToolResult(callId, name, content) {
+  appendToolResult(callId: any, name: any, content: any) {
     this.#messages.push({ role: 'tool', toolCallId: callId, name, content });
   }
 
-  appendUserNudge(text) {
+  appendUserNudge(text: any) {
     this.#messages.push({ role: 'user', content: text });
   }
 
@@ -235,7 +235,7 @@ export class SimpleArrayAdapter extends MessageAdapter {
  * @param {import('../context/ContextWindow.js').ContextWindow|null|undefined} contextWindow
  * @returns {MessageAdapter}
  */
-export function createMessageAdapter(contextWindow) {
+export function createMessageAdapter(contextWindow: any) {
   if (contextWindow) {
     return new ContextWindowAdapter(contextWindow);
   }

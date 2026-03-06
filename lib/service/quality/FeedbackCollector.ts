@@ -13,7 +13,7 @@ export class FeedbackCollector {
   #events; // [{ type, recipeId, data, timestamp }]
   #maxEvents;
 
-  constructor(projectRoot, options: any = {}) {
+  constructor(projectRoot: any, options: any = {}) {
     const kbDir = options.knowledgeBaseDir || 'AutoSnippet';
     this.#feedbackPath = join(projectRoot, kbDir, 'feedback.json');
     pathGuard.assertProjectWriteSafe(this.#feedbackPath);
@@ -28,7 +28,7 @@ export class FeedbackCollector {
    * @param {string} recipeId
    * @param {object} data 任意附加数据 (rating, comment, etc.)
    */
-  record(type, recipeId, data: any = {}) {
+  record(type: any, recipeId: any, data: any = {}) {
     this.#events.push({
       type,
       recipeId,
@@ -48,18 +48,19 @@ export class FeedbackCollector {
    * @param {string} recipeId
    * @returns {{ views: number, clicks: number, copies: number, avgRating: number, feedbackCount: number }}
    */
-  getRecipeStats(recipeId) {
-    const events = this.#events.filter((e) => e.recipeId === recipeId);
+  getRecipeStats(recipeId: any) {
+    const events = this.#events.filter((e: any) => e.recipeId === recipeId);
     const ratings = events
-      .filter((e) => e.type === 'rate' && e.data.rating)
-      .map((e) => e.data.rating);
+      .filter((e: any) => e.type === 'rate' && e.data.rating)
+      .map((e: any) => e.data.rating);
 
     return {
-      views: events.filter((e) => e.type === 'view').length,
-      clicks: events.filter((e) => e.type === 'click').length,
-      copies: events.filter((e) => e.type === 'copy' || e.type === 'insert').length,
-      avgRating: ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0,
-      feedbackCount: events.filter((e) => e.type === 'feedback').length,
+      views: events.filter((e: any) => e.type === 'view').length,
+      clicks: events.filter((e: any) => e.type === 'click').length,
+      copies: events.filter((e: any) => e.type === 'copy' || e.type === 'insert').length,
+      avgRating:
+        ratings.length > 0 ? ratings.reduce((a: any, b: any) => a + b, 0) / ratings.length : 0,
+      feedbackCount: events.filter((e: any) => e.type === 'feedback').length,
       totalEvents: events.length,
     };
   }
@@ -75,7 +76,7 @@ export class FeedbackCollector {
     return {
       totalEvents: this.#events.length,
       byType,
-      uniqueRecipes: new Set(this.#events.map((e) => e.recipeId)).size,
+      uniqueRecipes: new Set(this.#events.map((e: any) => e.recipeId)).size,
     };
   }
 
@@ -127,7 +128,7 @@ export class FeedbackCollector {
     }
   }
 
-  #migrateOldPath(projectRoot, internalDir) {
+  #migrateOldPath(projectRoot: any, internalDir: any) {
     try {
       const oldPath = join(projectRoot, internalDir, 'feedback.json');
       if (existsSync(oldPath) && !existsSync(this.#feedbackPath)) {

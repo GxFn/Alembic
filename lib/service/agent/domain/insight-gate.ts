@@ -25,7 +25,7 @@ import { EvidenceCollector } from './EvidenceCollector.js';
  * 清理 Analyst 分析文本中可能泄漏的系统 nudge / graceful exit 指令。
  * 这些内容如果传给 Producer，会干扰其正常工作流。
  */
-export function sanitizeAnalysisText(text) {
+export function sanitizeAnalysisText(text: any) {
   if (!text) {
     return '';
   }
@@ -79,7 +79,11 @@ export function sanitizeAnalysisText(text) {
  * @param {object} [projectGraph] - ProjectGraph 实例
  * @returns {AnalysisReport}
  */
-export function buildAnalysisReport(analystResult, dimensionId, projectGraph: any = null) {
+export function buildAnalysisReport(
+  analystResult: any,
+  dimensionId: any,
+  projectGraph: any = null
+) {
   const referencedFiles = new Set();
   const searchQueries: any[] = [];
   const classesExplored: any[] = [];
@@ -189,8 +193,8 @@ export function buildAnalysisReport(analystResult, dimensionId, projectGraph: an
  * @returns {AnalysisArtifact}
  */
 export function buildAnalysisArtifact(
-  analystResult,
-  dimensionId,
+  analystResult: any,
+  dimensionId: any,
   projectGraph: any = null,
   activeContext: any = null
 ) {
@@ -205,7 +209,7 @@ export function buildAnalysisArtifact(
   const evidence = collector.build();
 
   const distilled = activeContext?.distill() || { keyFindings: [], toolCallSummary: [] };
-  const findings = distilled.keyFindings.map((f) => ({
+  const findings = distilled.keyFindings.map((f: any) => ({
     finding: f.finding,
     evidence:
       typeof f.evidence === 'string'
@@ -268,7 +272,7 @@ export function buildAnalysisArtifact(
  *   evidenceScore (30%) — 证据充分性
  *   coherenceScore (20%) — 分析连贯性
  */
-function buildQualityScores(analysisText, findings, evidence) {
+function buildQualityScores(analysisText: any, findings: any, evidence: any) {
   const scores: any = {};
 
   const uniqueFilesRead = evidence.evidenceMap?.size || 0;
@@ -278,15 +282,17 @@ function buildQualityScores(analysisText, findings, evidence) {
   );
   scores.depthScore = Math.min(100, uniqueFilesRead * 15 + snippetCount * 5);
 
-  const toolTypes = new Set((evidence.explorationLog || []).map((e) => e.tool));
+  const toolTypes = new Set((evidence.explorationLog || []).map((e: any) => e.tool));
   const logLen = evidence.explorationLog?.length || 0;
   const effectiveRatio =
-    logLen > 0 ? (evidence.explorationLog || []).filter((e) => e.effective).length / logLen : 0;
+    logLen > 0
+      ? (evidence.explorationLog || []).filter((e: any) => e.effective).length / logLen
+      : 0;
   scores.breadthScore = Math.min(100, toolTypes.size * 20 + effectiveRatio * 40);
 
   const findingCount = findings?.length || 0;
   const evidencedFindings = (findings || []).filter(
-    (f) => f.evidence && f.evidence.length > 0
+    (f: any) => f.evidence && f.evidence.length > 0
   ).length;
   scores.evidenceScore =
     findingCount > 0
@@ -341,14 +347,14 @@ function buildQualityScores(analysisText, findings, evidence) {
  * @param {string} [options.outputType] - 'analysis' | 'dual' | 'candidate'
  * @returns {{ pass: boolean, reason?: string, action?: 'retry' | 'degrade' }}
  */
-export function analysisQualityGate(report, options: any = {}) {
+export function analysisQualityGate(report: any, options: any = {}) {
   if (report.qualityReport?.scores) {
     return applyGateThresholds(report.qualityReport, options);
   }
   return analysisQualityGateV1(report, options);
 }
 
-function applyGateThresholds(qualityReport, options: any = {}) {
+function applyGateThresholds(qualityReport: any, options: any = {}) {
   const { totalScore } = qualityReport;
   const needsCandidates = options.outputType === 'dual' || options.outputType === 'candidate';
   const threshold = needsCandidates ? 60 : 45;
@@ -370,7 +376,7 @@ function applyGateThresholds(qualityReport, options: any = {}) {
   };
 }
 
-function analysisQualityGateV1(report, options: any = {}) {
+function analysisQualityGateV1(report: any, options: any = {}) {
   const needsCandidates = options.outputType === 'dual' || options.outputType === 'candidate';
   const minChars = needsCandidates ? 400 : 200;
   const minFileRefs = needsCandidates ? 3 : 2;
@@ -410,7 +416,7 @@ function analysisQualityGateV1(report, options: any = {}) {
  * @param {string} reason - Gate 失败原因
  * @returns {string}
  */
-export function buildRetryPrompt(reason) {
+export function buildRetryPrompt(reason: any) {
   const hints = {
     'Analysis too short':
       '你的分析不够深入。请使用更多工具（get_class_info、read_project_file、search_project_code）查看实际代码，输出至少 500 字的分析。',
@@ -420,7 +426,10 @@ export function buildRetryPrompt(reason) {
       '请将分析组织成结构化的段落，使用编号列表或标题来区分不同的发现。每个发现应包含具体的文件路径和代码位置。',
   };
 
-  return hints[reason] || '请更深入地分析代码，引用至少 3 个具体文件，每个发现都要有代码证据。';
+  return (
+    (hints as Record<string, any>)[reason] ||
+    '请更深入地分析代码，引用至少 3 个具体文件，每个发现都要有代码证据。'
+  );
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -438,7 +447,7 @@ export function buildRetryPrompt(reason) {
  * @param {object} strategyContext - orchestrator 注入的运行时上下文
  * @returns {{ action: 'pass'|'retry'|'degrade', reason: string, artifact: object }}
  */
-export function insightGateEvaluator(source, phaseResults, strategyContext: any = {}) {
+export function insightGateEvaluator(source: any, phaseResults: any, strategyContext: any = {}) {
   if (!source?.reply) {
     return { action: 'degrade', reason: 'No analysis output', artifact: null };
   }

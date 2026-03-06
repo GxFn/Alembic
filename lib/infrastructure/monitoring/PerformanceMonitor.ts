@@ -41,7 +41,7 @@ export class PerformanceMonitor {
    * Express 中间件
    */
   middleware() {
-    return (req, res, next) => {
+    return (req: any, res: any, next: any) => {
       const startTime = Date.now();
       const route = `${req.method} ${req.path}`;
 
@@ -69,7 +69,7 @@ export class PerformanceMonitor {
   /**
    * 记录请求
    */
-  recordRequest(requestData) {
+  recordRequest(requestData: any) {
     const { route, statusCode, duration } = requestData;
 
     // 总体统计
@@ -150,7 +150,7 @@ export class PerformanceMonitor {
 
     // 平均响应时间
     if (this.metrics.responseTimes.length > 0) {
-      const sum = this.metrics.responseTimes.reduce((acc, val) => acc + val, 0);
+      const sum = this.metrics.responseTimes.reduce((acc: any, val: any) => acc + val, 0);
       this.metrics.averageResponseTime = Math.round(sum / this.metrics.responseTimes.length);
     }
 
@@ -186,7 +186,7 @@ export class PerformanceMonitor {
     const topEndpoints = Array.from(this.metrics.endpoints.entries())
       .sort((a: any, b: any) => b[1].count - a[1].count)
       .slice(0, 10)
-      .map(([route, stats]) => ({
+      .map(([route, stats]: any) => ({
         route,
         ...stats,
         avgDuration: Math.round(stats.avgDuration),
@@ -195,7 +195,7 @@ export class PerformanceMonitor {
     const slowestEndpoints = Array.from(this.metrics.endpoints.entries())
       .sort((a: any, b: any) => b[1].avgDuration - a[1].avgDuration)
       .slice(0, 10)
-      .map(([route, stats]) => ({
+      .map(([route, stats]: any) => ({
         route,
         avgDuration: Math.round(stats.avgDuration),
         count: stats.count,
@@ -215,7 +215,7 @@ export class PerformanceMonitor {
       },
       topEndpoints,
       slowestEndpoints,
-      recentSlowRequests: this.metrics.slowRequests.slice(-10).map((req) => ({
+      recentSlowRequests: this.metrics.slowRequests.slice(-10).map((req: any) => ({
         route: req.route,
         duration: `${req.duration}ms`,
         timestamp: req.timestamp,

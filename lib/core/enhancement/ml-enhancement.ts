@@ -127,7 +127,7 @@ class MLEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── nn.Module subclasses ──
@@ -244,7 +244,7 @@ class MLEnhancement extends EnhancementPack {
 
     // ── ML ecosystem imports ──
     const mlImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('torch') ||
         imp.includes('tensorflow') ||
         imp.includes('transformers') ||

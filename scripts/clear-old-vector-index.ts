@@ -20,17 +20,17 @@ if (!fs.existsSync(vectorIndexPath)) {
 
 // 检查索引格式
 const data = JSON.parse(fs.readFileSync(vectorIndexPath, 'utf8'));
-const hasOldFormat = data.items?.some((item) =>
+const hasOldFormat = data.items?.some((item: any) =>
   item.metadata?.sourcePath?.startsWith('AutoSnippet/recipes/')
 );
 
 if (!hasOldFormat) {
   process.exit(0);
 }
-const oldItems = data.items.filter((item) =>
+const oldItems = data.items.filter((item: any) =>
   item.metadata?.sourcePath?.startsWith('AutoSnippet/recipes/')
 );
-oldItems.slice(0, 3).forEach((_item) => {});
+oldItems.slice(0, 3).forEach((_item: any) => {});
 
 // 删除旧索引
 try {

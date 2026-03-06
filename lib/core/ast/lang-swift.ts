@@ -9,18 +9,18 @@ import { ImportRecord } from '../analysis/ImportRecord.js';
 
 // ── Swift AST 遍历 ──
 
-function walkSwift(root, ctx) {
+function walkSwift(root: any, ctx: any) {
   _walkSwiftNode(root, ctx, null);
 }
 
-function _walkSwiftNode(node, ctx, parentClassName) {
+function _walkSwiftNode(node: any, ctx: any, parentClassName: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
 
     switch (child.type) {
       case 'import_declaration': {
         const mod = child.namedChildren.find(
-          (c) => c.type === 'identifier' || c.type === 'simple_identifier'
+          (c: any) => c.type === 'identifier' || c.type === 'simple_identifier'
         );
         if (mod) {
           ctx.imports.push(
@@ -36,7 +36,7 @@ function _walkSwiftNode(node, ctx, parentClassName) {
         const classInfo = _parseSwiftTypeDecl(child);
         ctx.classes.push(classInfo);
         const body = child.namedChildren.find(
-          (c) => c.type === 'class_body' || c.type === 'struct_body' || c.type === 'enum_body'
+          (c: any) => c.type === 'class_body' || c.type === 'struct_body' || c.type === 'enum_body'
         );
         if (body) {
           _walkSwiftNode(body, ctx, classInfo.name);
@@ -53,7 +53,7 @@ function _walkSwiftNode(node, ctx, parentClassName) {
       case 'extension_declaration': {
         const extInfo = _parseSwiftExtension(child);
         ctx.categories.push(extInfo);
-        const body = child.namedChildren.find((c) => c.type === 'extension_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'extension_body');
         if (body) {
           _walkSwiftNode(body, ctx, extInfo.className);
         }
@@ -86,20 +86,21 @@ function _walkSwiftNode(node, ctx, parentClassName) {
   }
 }
 
-function _parseSwiftTypeDecl(node) {
+function _parseSwiftTypeDecl(node: any) {
   const name =
-    node.namedChildren.find((c) => c.type === 'type_identifier' || c.type === 'simple_identifier')
-      ?.text || 'Unknown';
+    node.namedChildren.find(
+      (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+    )?.text || 'Unknown';
   const kind = node.type.replace('_declaration', '');
 
   const _superclass = null;
   const protocols: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'inheritance_specifier') {
-      const typeNode = child.namedChildren.find((c) => c.type === 'user_type');
+      const typeNode = child.namedChildren.find((c: any) => c.type === 'user_type');
       if (typeNode) {
         const typeName = typeNode.namedChildren.find(
-          (c) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+          (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
         )?.text;
         if (typeName) {
           protocols.push(typeName);
@@ -130,17 +131,18 @@ function _parseSwiftTypeDecl(node) {
   };
 }
 
-function _parseSwiftProtocol(node) {
+function _parseSwiftProtocol(node: any) {
   const name =
-    node.namedChildren.find((c) => c.type === 'type_identifier' || c.type === 'simple_identifier')
-      ?.text || 'Unknown';
+    node.namedChildren.find(
+      (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+    )?.text || 'Unknown';
   const inherits: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'inheritance_specifier') {
-      const t = child.namedChildren.find((c) => c.type === 'user_type');
+      const t = child.namedChildren.find((c: any) => c.type === 'user_type');
       if (t) {
         const n = t.namedChildren.find(
-          (c) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+          (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
         );
         if (n) {
           inherits.push(n.text);
@@ -151,17 +153,17 @@ function _parseSwiftProtocol(node) {
   return { name, inherits, line: node.startPosition.row + 1 };
 }
 
-function _parseSwiftExtension(node) {
+function _parseSwiftExtension(node: any) {
   const className =
-    node.namedChildren.find((c) => c.type === 'user_type' || c.type === 'type_identifier')?.text ||
-    'Unknown';
+    node.namedChildren.find((c: any) => c.type === 'user_type' || c.type === 'type_identifier')
+      ?.text || 'Unknown';
   const protocols: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'inheritance_specifier') {
-      const t = child.namedChildren.find((c) => c.type === 'user_type');
+      const t = child.namedChildren.find((c: any) => c.type === 'user_type');
       if (t) {
         const n = t.namedChildren.find(
-          (c) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+          (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
         );
         if (n) {
           protocols.push(n.text);
@@ -171,7 +173,7 @@ function _parseSwiftExtension(node) {
   }
 
   const methods: any[] = [];
-  const body = node.namedChildren.find((c) => c.type === 'extension_body');
+  const body = node.namedChildren.find((c: any) => c.type === 'extension_body');
   if (body) {
     for (const child of body.namedChildren) {
       if (child.type === 'function_declaration') {
@@ -189,8 +191,9 @@ function _parseSwiftExtension(node) {
   };
 }
 
-function _parseSwiftFunction(node, className) {
-  const name = node.namedChildren.find((c) => c.type === 'simple_identifier')?.text || 'unknown';
+function _parseSwiftFunction(node: any, className: any) {
+  const name =
+    node.namedChildren.find((c: any) => c.type === 'simple_identifier')?.text || 'unknown';
 
   const modifiers: any[] = [];
   for (const child of node.namedChildren) {
@@ -200,7 +203,7 @@ function _parseSwiftFunction(node, className) {
   }
   const isClassMethod = modifiers.some((m) => /\b(static|class)\b/.test(m));
 
-  const body = node.namedChildren.find((c) => c.type === 'function_body');
+  const body = node.namedChildren.find((c: any) => c.type === 'function_body');
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
@@ -217,10 +220,10 @@ function _parseSwiftFunction(node, className) {
   };
 }
 
-function _parseSwiftProperty(node, className) {
+function _parseSwiftProperty(node: any, className: any) {
   const name =
-    node.namedChildren.find((c) => c.type === 'simple_identifier' || c.type === 'pattern')?.text ||
-    null;
+    node.namedChildren.find((c: any) => c.type === 'simple_identifier' || c.type === 'pattern')
+      ?.text || null;
   if (!name) {
     return null;
   }
@@ -247,13 +250,13 @@ function _parseSwiftProperty(node, className) {
 
 // ── Swift 模式检测 ──
 
-function detectSwiftPatterns(root, lang, methods, properties, classes) {
+function detectSwiftPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   return [];
 }
 
 // ── 工具函数 ──
 
-function _findIdentifier(node) {
+function _findIdentifier(node: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
     if (
@@ -267,7 +270,7 @@ function _findIdentifier(node) {
   return null;
 }
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_statement',
@@ -281,13 +284,13 @@ function _estimateComplexity(node) {
     'ternary_expression',
     'guard_statement',
   ]);
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
     if (n.type === 'binary_expression') {
       const op = n.children?.find(
-        (c) => c.type === '&&' || c.type === '||' || c.text === '&&' || c.text === '||'
+        (c: any) => c.type === '&&' || c.type === '||' || c.text === '&&' || c.text === '||'
       );
       if (op) {
         complexity++;
@@ -301,7 +304,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_statement',
     'for_statement',
@@ -331,7 +334,7 @@ function _maxNesting(node, depth) {
  * @param {object} ctx
  * @param {string} _lang
  */
-function extractCallSitesSwift(root, ctx, _lang) {
+function extractCallSitesSwift(root: any, ctx: any, _lang: any) {
   const scopes = _collectSwiftScopes(root);
   for (const scope of scopes) {
     _extractSwiftCallSitesFromBody(scope.body, scope.className, scope.methodName, ctx);
@@ -341,10 +344,10 @@ function extractCallSitesSwift(root, ctx, _lang) {
 /**
  * 递归收集 Swift 中所有函数体作用域
  */
-function _collectSwiftScopes(root) {
+function _collectSwiftScopes(root: any) {
   const scopes: any[] = [];
 
-  function visit(node, className) {
+  function visit(node: any, className: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
 
@@ -354,37 +357,37 @@ function _collectSwiftScopes(root) {
         child.type === 'enum_declaration'
       ) {
         const name = child.namedChildren.find(
-          (c) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+          (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
         )?.text;
         const body = child.namedChildren.find(
-          (c) => c.type === 'class_body' || c.type === 'struct_body' || c.type === 'enum_body'
+          (c: any) => c.type === 'class_body' || c.type === 'struct_body' || c.type === 'enum_body'
         );
         if (body) {
           visit(body, name || className);
         }
       } else if (child.type === 'extension_declaration') {
         const extName = child.namedChildren.find(
-          (c) => c.type === 'user_type' || c.type === 'type_identifier'
+          (c: any) => c.type === 'user_type' || c.type === 'type_identifier'
         )?.text;
-        const body = child.namedChildren.find((c) => c.type === 'extension_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'extension_body');
         if (body) {
           visit(body, extName || className);
         }
       } else if (child.type === 'function_declaration') {
         const name =
-          child.namedChildren.find((c) => c.type === 'simple_identifier')?.text || 'unknown';
-        const body = child.namedChildren.find((c) => c.type === 'function_body');
+          child.namedChildren.find((c: any) => c.type === 'simple_identifier')?.text || 'unknown';
+        const body = child.namedChildren.find((c: any) => c.type === 'function_body');
         if (body) {
           scopes.push({ body, className, methodName: name });
         }
       } else if (child.type === 'property_declaration') {
         // computed property with getter
         const computed = child.namedChildren.find(
-          (c) => c.type === 'computed_property' || c.type === 'willSet_didSet_block'
+          (c: any) => c.type === 'computed_property' || c.type === 'willSet_didSet_block'
         );
         if (computed) {
           const propName = child.namedChildren.find(
-            (c) => c.type === 'simple_identifier' || c.type === 'pattern'
+            (c: any) => c.type === 'simple_identifier' || c.type === 'pattern'
           )?.text;
           scopes.push({ body: computed, className, methodName: `get_${propName || 'prop'}` });
         }
@@ -399,7 +402,7 @@ function _collectSwiftScopes(root) {
 /**
  * 从 Swift function body 中递归提取调用点
  */
-function _extractSwiftCallSitesFromBody(bodyNode, className, methodName, ctx) {
+function _extractSwiftCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;
   }
@@ -422,7 +425,7 @@ function _extractSwiftCallSitesFromBody(bodyNode, className, methodName, ctx) {
     'type',
   ]);
 
-  function walk(node) {
+  function walk(node: any) {
     if (!node || node.type === 'ERROR' || node.isMissing) {
       return;
     }
@@ -486,7 +489,7 @@ function _extractSwiftCallSitesFromBody(bodyNode, className, methodName, ctx) {
 
       // Count arguments
       const callSuffix = node.namedChildren.find(
-        (c) => c.type === 'call_suffix' || c.type === 'value_arguments'
+        (c: any) => c.type === 'call_suffix' || c.type === 'value_arguments'
       );
       const argCount = callSuffix ? callSuffix.namedChildCount : 0;
 
@@ -518,7 +521,7 @@ function _extractSwiftCallSitesFromBody(bodyNode, className, methodName, ctx) {
     walkChildren(node);
   }
 
-  function walkChildren(node) {
+  function walkChildren(node: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       walk(node.namedChild(i));
     }
@@ -533,7 +536,7 @@ let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }
-export function setGrammar(grammar) {
+export function setGrammar(grammar: any) {
   _grammar = grammar;
 }
 

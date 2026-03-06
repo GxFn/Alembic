@@ -17,7 +17,7 @@ const MAX_BATCH_SIZE = 100;
 /**
  * 将 Recipe 实体 → Guard 规则扁平格式（Dashboard GuardView 期望）
  */
-function mapRecipeToGuardRule(r) {
+function mapRecipeToGuardRule(r: any) {
   const guards = r.constraints?.guards || [];
   const firstGuard = guards[0] || {};
   return {
@@ -42,7 +42,7 @@ function mapRecipeToGuardRule(r) {
  */
 router.get(
   '/',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { severity, category, enabled, sourceRecipe, keyword } = req.query;
     const page = safeInt(req.query.page, 1);
     const pageSize = safeInt(req.query.limit, 20, 1, 100);
@@ -85,7 +85,7 @@ router.get(
     const builtInEntries = guardCheckEngine
       ? (Object.entries(guardCheckEngine.getBuiltInRules()) as [string, any][])
       : [];
-    const dbRuleIds = new Set(mappedDbRules.map((r) => r.id));
+    const dbRuleIds = new Set(mappedDbRules.map((r: any) => r.id));
     const builtInRules = builtInEntries
       .filter(([id]) => !dbRuleIds.has(id))
       .map(([id, r]) => ({
@@ -139,7 +139,7 @@ router.get(
  */
 router.get(
   '/stats',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const guardService = container.get('guardService');
     const stats = await guardService.getRuleStats();
@@ -153,7 +153,7 @@ router.get(
  */
 router.get(
   '/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const recipeRepo = container.get('knowledgeRepository');
@@ -175,7 +175,7 @@ router.get(
  */
 router.post(
   '/',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     // 兼容前端 GuardView 发来的字段名
     const name = req.body.name || req.body.ruleId;
     const description = req.body.description || req.body.message || '';
@@ -211,7 +211,7 @@ router.post(
  */
 router.post(
   '/batch-enable',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { ids } = req.body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -251,7 +251,7 @@ router.post(
  */
 router.post(
   '/batch-disable',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { ids, reason } = req.body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -293,7 +293,7 @@ router.post(
  */
 router.patch(
   '/:id/enable',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const guardService = container.get('guardService');
@@ -310,7 +310,7 @@ router.patch(
  */
 router.patch(
   '/:id/disable',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const { reason } = req.body;
 
@@ -329,7 +329,7 @@ router.patch(
  */
 router.post(
   '/check',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { code, language, ruleIds } = req.body;
 
     if (!code) {
@@ -350,7 +350,7 @@ router.post(
  */
 router.post(
   '/import-from-recipe',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { recipeId, rules } = req.body;
 
     if (!recipeId) {
@@ -384,7 +384,7 @@ router.post(
  */
 router.get(
   '/compliance',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const reporter = container.get('complianceReporter');
     const projectRoot = req.query.path || process.env.ASD_PROJECT_DIR || process.cwd();

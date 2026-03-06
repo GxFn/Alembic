@@ -26,7 +26,7 @@ export const checkDuplicate = {
       threshold: { type: 'number', description: '相似度阈值，默认 0.5' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     let cand = params.candidate;
     const projectRoot = params.projectRoot || ctx.projectRoot;
     const threshold = params.threshold ?? 0.5;
@@ -98,7 +98,7 @@ export const addGraphEdge = {
     },
     required: ['fromId', 'fromType', 'toId', 'toType', 'relation'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const kgService = ctx.container.get('knowledgeGraphService');
     return kgService.addEdge(
       params.fromId,

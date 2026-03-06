@@ -57,7 +57,7 @@ export class ErrorTracker {
    * Express 错误处理中间件
    */
   errorHandler() {
-    return (err, req, res, next) => {
+    return (err: any, req: any, res: any, next: any) => {
       const errorData = {
         message: err.message,
         stack: err.stack,
@@ -90,7 +90,7 @@ export class ErrorTracker {
   /**
    * 记录错误
    */
-  trackError(errorData) {
+  trackError(errorData: any) {
     // 添加到内存
     this.errors.push(errorData);
     if (this.errors.length > this.config.maxErrorsInMemory) {
@@ -141,7 +141,7 @@ export class ErrorTracker {
   /**
    * 写入文件
    */
-  _writeToFile(errorData) {
+  _writeToFile(errorData: any) {
     try {
       const date = new Date().toISOString().split('T')[0];
       const fileName = `errors-${date}.log`;
@@ -164,7 +164,7 @@ export class ErrorTracker {
   _checkAlertThreshold() {
     const oneMinuteAgo = Date.now() - 60000;
     const recentErrorCount = this.errors.filter(
-      (err) => new Date(err.timestamp).getTime() > oneMinuteAgo
+      (err: any) => new Date(err.timestamp).getTime() > oneMinuteAgo
     ).length;
 
     if (recentErrorCount >= this.config.alertThreshold) {
@@ -181,14 +181,14 @@ export class ErrorTracker {
     const oneHourAgo = now - 3600000;
 
     const recentErrorsCount = this.errors.filter(
-      (err) => new Date(err.timestamp).getTime() > oneHourAgo
+      (err: any) => new Date(err.timestamp).getTime() > oneHourAgo
     ).length;
 
     if (recentErrorsCount > 0) {
       Logger.info('📋 错误报告 (最近1小时)', {
         totalErrors: recentErrorsCount,
         criticalErrors: this.criticalErrors.filter(
-          (err) => new Date(err.timestamp).getTime() > oneHourAgo
+          (err: any) => new Date(err.timestamp).getTime() > oneHourAgo
         ).length,
         topErrorTypes: this._getTopErrorTypes(5),
       });
@@ -202,7 +202,7 @@ export class ErrorTracker {
     return Array.from(this.errorCounts.entries())
       .sort((a: any, b: any) => b[1] - a[1])
       .slice(0, limit)
-      .map(([type, count]) => ({ type, count }));
+      .map(([type, count]: any) => ({ type, count }));
   }
 
   /**
@@ -214,11 +214,11 @@ export class ErrorTracker {
     const oneDayAgo = now - 86400000;
 
     const lastHourErrors = this.errors.filter(
-      (err) => new Date(err.timestamp).getTime() > oneHourAgo
+      (err: any) => new Date(err.timestamp).getTime() > oneHourAgo
     );
 
     const last24HoursErrors = this.errors.filter(
-      (err) => new Date(err.timestamp).getTime() > oneDayAgo
+      (err: any) => new Date(err.timestamp).getTime() > oneDayAgo
     );
 
     return {
@@ -230,7 +230,7 @@ export class ErrorTracker {
         uniqueErrorTypes: this.errorCounts.size,
       },
       topErrorTypes: this._getTopErrorTypes(10),
-      recentErrors: this.recentErrors.slice(0, 10).map((err) => ({
+      recentErrors: this.recentErrors.slice(0, 10).map((err: any) => ({
         type: err.type,
         message: err.message,
         route: err.route,
@@ -238,7 +238,7 @@ export class ErrorTracker {
         severity: err.severity,
         timestamp: err.timestamp,
       })),
-      criticalErrors: this.criticalErrors.slice(0, 10).map((err) => ({
+      criticalErrors: this.criticalErrors.slice(0, 10).map((err: any) => ({
         type: err.type,
         message: err.message,
         route: err.route,
@@ -254,7 +254,7 @@ export class ErrorTracker {
   _getErrorsByRoute() {
     const routeErrors = new Map();
 
-    this.errors.forEach((err) => {
+    this.errors.forEach((err: any) => {
       const route = err.route;
       routeErrors.set(route, (routeErrors.get(route) || 0) + 1);
     });
@@ -324,7 +324,7 @@ let errorTrackerInstance: any = null;
 /**
  * 初始化错误追踪
  */
-export function initErrorTracker(options) {
+export function initErrorTracker(options: any) {
   if (errorTrackerInstance) {
     return errorTrackerInstance;
   }

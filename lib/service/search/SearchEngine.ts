@@ -21,7 +21,7 @@ const BM25_B = 0.75;
  * 英文: camelCase / PascalCase 拆分 + 小写化
  * 中文: 单字 + 二元组（bigram）— 无需分词词典即可支持子串匹配
  */
-export function tokenize(text) {
+export function tokenize(text: any) {
   if (!text) {
     return [];
   }
@@ -30,7 +30,7 @@ export function tokenize(text) {
   // 拆全大写前缀：URLSession → URL Session, UITableView → UI Table View
   expanded = expanded.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
   const normalized = expanded.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, ' ');
-  const rawTokens = normalized.split(/[\s_-]+/).filter((t) => t.length >= 1);
+  const rawTokens = normalized.split(/[\s_-]+/).filter((t: any) => t.length >= 1);
 
   const tokens: any[] = [];
   // CJK 正则（中日韩统一表意文字 + 扩展区）
@@ -92,7 +92,7 @@ export class BM25Scorer {
   /**
    * 添加文档到索引
    */
-  addDocument(id, text, meta: any = {}) {
+  addDocument(id: any, text: any, meta: any = {}) {
     // 如果 id 已存在，先移除旧版本（确保幂等）
     if (this._idIndex.has(id)) {
       this.removeDocument(id);
@@ -119,7 +119,7 @@ export class BM25Scorer {
    * 采用标记删除 + 懒清理策略：将文档标记为 null，当空洞率 > 30% 时自动压缩
    * @returns {boolean} 是否成功移除
    */
-  removeDocument(id) {
+  removeDocument(id: any) {
     const idx = this._idIndex.get(id);
     if (idx === undefined) {
       return false;
@@ -158,7 +158,7 @@ export class BM25Scorer {
   /**
    * 更新文档（增量: remove + add）
    */
-  updateDocument(id, text, meta: any = {}) {
+  updateDocument(id: any, text: any, meta: any = {}) {
     this.removeDocument(id);
     this.addDocument(id, text, meta);
   }
@@ -166,7 +166,7 @@ export class BM25Scorer {
   /**
    * 检查文档是否存在
    */
-  hasDocument(id) {
+  hasDocument(id: any) {
     return this._idIndex.has(id);
   }
 
@@ -174,7 +174,7 @@ export class BM25Scorer {
    * 压缩 documents 数组，清除 tombstone 空洞
    */
   _compact() {
-    const alive = this.documents.filter((d) => d !== null);
+    const alive = this.documents.filter((d: any) => d !== null);
     this.documents = alive;
     this._idIndex.clear();
     for (let i = 0; i < alive.length; i++) {
@@ -185,7 +185,7 @@ export class BM25Scorer {
   /**
    * 查询文档，返回按 BM25 分数排序的结果
    */
-  search(query, limit = 20) {
+  search(query: any, limit = 20) {
     const queryTokens = tokenize(query);
     if (queryTokens.length === 0) {
       return [];
@@ -255,7 +255,7 @@ export class SearchEngine {
   logger: any;
   scorer: any;
   vectorStore: any;
-  constructor(db, options: any = {}) {
+  constructor(db: any, options: any = {}) {
     this.db = typeof db?.getDb === 'function' ? db.getDb() : db;
     this.logger = Logger.getInstance();
     this.aiProvider = options.aiProvider || null;
@@ -332,7 +332,7 @@ export class SearchEngine {
    * @param {string} query 搜索关键词
    * @param {object} options - {type, limit, mode, useAI}
    */
-  async search(query, options: any = {}) {
+  async search(query: any, options: any = {}) {
     const { type = 'all', limit = 20, mode = 'keyword', context } = options;
     const shouldRank = options.rank ?? mode !== 'keyword';
 
@@ -383,7 +383,7 @@ export class SearchEngine {
                 sparseSearchFn: () => bm25Items,
               });
               // 将 RRF 结果映射为标准格式
-              results = rrfResults.map((r) => {
+              results = rrfResults.map((r: any) => {
                 const base = r.data?.item || r.data || {};
                 return {
                   id: r.id,
@@ -500,7 +500,7 @@ export class SearchEngine {
    * CrossEncoder 仅在构造时传入 crossEncoderReranker 且 AI 可用时生效，
    * 否则自动跳过（零额外开销）。
    */
-  async _applyRanking(items, query, context: any = {}) {
+  async _applyRanking(items: any, query: any, context: any = {}) {
     let normalized = this._normalizeForRanking(items);
 
     // Optional: Cross-Encoder semantic rerank (AI → Jaccard fallback)
@@ -517,7 +517,7 @@ export class SearchEngine {
     if (context?.sessionHistory?.length > 0) {
       ranked = contextBoost(ranked, context);
     }
-    return ranked.map((r) => ({
+    return ranked.map((r: any) => ({
       ...r,
       recallScore: r.bm25Score || 0,
       score: r.contextScore || r.rankerScore || r.coarseScore || r.bm25Score || 0,
@@ -528,8 +528,8 @@ export class SearchEngine {
    * 将召回结果转换为 Ranker 所需格式（解析 content JSON、映射信号字段）
    * 保留原始 content 供下游消费者使用
    */
-  _normalizeForRanking(items) {
-    return items.map((item) => {
+  _normalizeForRanking(items: any) {
+    return items.map((item: any) => {
       let codeText = '';
       if (item.content) {
         try {
@@ -564,10 +564,10 @@ export class SearchEngine {
    * 关键词搜索 - 直接 SQL LIKE
    * 返回包含 kind 字段的完整结果，使用 ESCAPE 防止通配符注入
    */
-  _keywordSearch(query, type, limit) {
+  _keywordSearch(query: any, type: any, limit: any) {
     const results: any[] = [];
     // 转义 LIKE 通配符 (% → \%, _ → \_)
-    const escaped = query.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+    const escaped = query.replace(/[%_\\]/g, (ch: any) => `\\${ch}`);
     const pattern = `%${escaped}%`;
 
     if (
@@ -626,12 +626,12 @@ export class SearchEngine {
   /**
    * BM25 排序搜索
    */
-  _bm25Search(query, type, limit) {
+  _bm25Search(query: any, type: any, limit: any) {
     let results = this.scorer.search(query, limit * 2);
 
     if (type !== 'all') {
       // All types now map to 'recipe' since everything is unified
-      results = results.filter((r) => {
+      results = results.filter((r: any) => {
         if (type === 'rule') {
           return r.meta.knowledgeType === 'boundary-constraint';
         }
@@ -639,7 +639,7 @@ export class SearchEngine {
       });
     }
 
-    const items = results.slice(0, limit).map((r) => ({
+    const items = results.slice(0, limit).map((r: any) => ({
       id: r.id,
       title: r.meta.title,
       trigger: r.meta.trigger || '',
@@ -670,7 +670,7 @@ export class SearchEngine {
    * 降级到 BM25 如果 AI 不可用
    * @returns {Promise<{ items: Array, actualMode: string }>}
    */
-  async _semanticSearch(query, type, limit) {
+  async _semanticSearch(query: any, type: any, limit: any) {
     if (!this.aiProvider) {
       this.logger.debug('AI provider not available, falling back to BM25');
       return { items: this._bm25Search(query, type, limit), actualMode: 'bm25' };
@@ -690,7 +690,7 @@ export class SearchEngine {
             const hybrid = await this.vectorStore.hybridSearch(queryEmbedding, query, {
               topK: limit * 2,
             });
-            vectorResults = hybrid.map((r) => ({
+            vectorResults = hybrid.map((r: any) => ({
               id: r.item.id,
               similarity: r.score,
               score: r.score,
@@ -701,7 +701,7 @@ export class SearchEngine {
             vectorResults = await this.vectorStore.query(queryEmbedding, limit * 2);
           }
           if (vectorResults && vectorResults.length > 0) {
-            let results = vectorResults.map((vr) => ({
+            let results = vectorResults.map((vr: any) => ({
               id: vr.id,
               title: vr.metadata?.title || vr.id,
               type: 'recipe',
@@ -710,7 +710,7 @@ export class SearchEngine {
               score: Math.round((vr.similarity || vr.score || 0) * 1000) / 1000,
             }));
             if (type !== 'all') {
-              results = results.filter((r) => {
+              results = results.filter((r: any) => {
                 if (type === 'rule') {
                   return r.kind === 'rule';
                 }
@@ -742,12 +742,12 @@ export class SearchEngine {
    * 补充详细字段（content / description / trigger / delivery 字段）— 批量 IN 查询
    * 用于向量搜索结果与 BM25 结果的一致性
    */
-  _supplementDetails(items) {
+  _supplementDetails(items: any) {
     if (!items || items.length === 0) {
       return;
     }
     try {
-      const ids = items.map((it) => it.id);
+      const ids = items.map((it: any) => it.id);
       const placeholders = ids.map(() => '?').join(',');
       let rows: any[] = [];
       try {
@@ -903,7 +903,7 @@ export class SearchEngine {
    * 从 DB 行构建索引文本
    * @private
    */
-  _buildDocText(r) {
+  _buildDocText(r: any) {
     let contentText = '';
     try {
       const content = JSON.parse(r.content || '{}');
@@ -937,7 +937,7 @@ export class SearchEngine {
    * 从 DB 行构建文档 meta
    * @private
    */
-  _buildDocMeta(r) {
+  _buildDocMeta(r: any) {
     let parsedTags: any[] = [];
     try {
       parsedTags = JSON.parse(r.tags || '[]');
@@ -993,7 +993,7 @@ export class SearchEngine {
     };
   }
 
-  _getCache(key) {
+  _getCache(key: any) {
     const entry = this._cache.get(key);
     if (!entry) {
       return null;
@@ -1008,7 +1008,7 @@ export class SearchEngine {
     return entry.data;
   }
 
-  _setCache(key, data) {
+  _setCache(key: any, data: any) {
     // LRU：超限时批量淘汰最旧的 20%
     if (this._cache.size > 500) {
       const toDelete = Math.floor(this._cache.size * 0.2);

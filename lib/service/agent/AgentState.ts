@@ -63,13 +63,13 @@ const DEFAULT_TRANSITIONS = [
 
 export class AgentState extends EventEmitter {
   /** @type {string} 当前阶段 */
-  #phase;
+  #phase: any;
   /** @type {Object} 用户自定义状态数据 */
   #data;
   /** @type {Transition[]} */
-  #transitions;
+  #transitions: any[];
   /** @type {Array<{phase: string, data: Object, timestamp: number}>} */
-  #history;
+  #history: any[];
   /** @type {boolean} 是否保留历史 */
   #keepHistory;
 
@@ -124,7 +124,7 @@ export class AgentState extends EventEmitter {
    * @param {Object} [payload={}] 附加数据（合并到 state.data）
    * @returns {boolean} 是否成功转移
    */
-  send(event, payload: any = {}) {
+  send(event: any, payload: any = {}) {
     const transition = this.#findTransition(event);
     if (!transition) {
       return false;
@@ -166,7 +166,7 @@ export class AgentState extends EventEmitter {
    * 直接更新状态数据（不触发阶段转移）
    * @param {Object} patch 要合并的数据
    */
-  update(patch) {
+  update(patch: any) {
     this.#data = { ...this.#data, ...patch };
     this.emit('update', { phase: this.#phase, patch });
   }
@@ -198,7 +198,7 @@ export class AgentState extends EventEmitter {
    * @param {Object} snapshot
    * @returns {AgentState}
    */
-  static fromJSON(snapshot, opts: any = {}) {
+  static fromJSON(snapshot: any, opts: any = {}) {
     const state = new AgentState({
       initialData: snapshot.data || {},
       initialPhase: snapshot.phase || AgentPhase.IDLE,
@@ -213,7 +213,7 @@ export class AgentState extends EventEmitter {
 
   // ─── 私有方法 ────────────────────────────────
 
-  #findTransition(event) {
+  #findTransition(event: any) {
     // 精确匹配优先
     const exact = this.#transitions.find((t) => t.from === this.#phase && t.event === event);
     if (exact) {

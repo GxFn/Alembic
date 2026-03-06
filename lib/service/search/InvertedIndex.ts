@@ -13,7 +13,7 @@ export { tokenize };
  * @param {Array<{ id: string, content: string }>} documents
  * @returns {Map<string, Set<number>>}
  */
-export function buildInvertedIndex(documents) {
+export function buildInvertedIndex(documents: any) {
   const index = new Map();
 
   for (let i = 0; i < documents.length; i++) {
@@ -40,7 +40,7 @@ export function buildInvertedIndex(documents) {
  * @param {string} query
  * @returns {number[]} - document indices
  */
-export function lookup(invertedIndex, query) {
+export function lookup(invertedIndex: any, query: any) {
   const queryTokens = tokenize(query);
   if (queryTokens.length === 0) {
     return [];
@@ -65,7 +65,7 @@ export function lookup(invertedIndex, query) {
  * @param {string} query
  * @returns {number[]}
  */
-export function lookupAll(invertedIndex, query) {
+export function lookupAll(invertedIndex: any, query: any) {
   const queryTokens = tokenize(query);
   if (queryTokens.length === 0) {
     return [];

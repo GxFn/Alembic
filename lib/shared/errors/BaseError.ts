@@ -4,7 +4,7 @@
 export class BaseError extends Error {
   code: any;
   statusCode: any;
-  constructor(message, code, statusCode = 500) {
+  constructor(message: any, code: any, statusCode = 500) {
     super(message);
     this.code = code;
     this.statusCode = statusCode;
@@ -26,7 +26,7 @@ export class BaseError extends Error {
  * PermissionDenied - 权限拒绝错误
  */
 export class PermissionDenied extends BaseError {
-  constructor(message) {
+  constructor(message: any) {
     super(message, 'PERMISSION_DENIED', 403);
   }
 }
@@ -36,8 +36,8 @@ export class PermissionDenied extends BaseError {
  */
 export class ConstitutionViolation extends BaseError {
   violations: any;
-  constructor(violations) {
-    const message = `Constitution violation: ${violations.map((v) => v.rule).join(', ')}`;
+  constructor(violations: any) {
+    const message = `Constitution violation: ${violations.map((v: any) => v.rule).join(', ')}`;
     super(message, 'CONSTITUTION_VIOLATION', 400);
     this.violations = violations;
   }
@@ -48,7 +48,7 @@ export class ConstitutionViolation extends BaseError {
  */
 export class ValidationError extends BaseError {
   details: any;
-  constructor(message, details: any = {}) {
+  constructor(message: any, details: any = {}) {
     super(message, 'VALIDATION_ERROR', 400);
     this.details = details;
   }
@@ -60,7 +60,7 @@ export class ValidationError extends BaseError {
 export class NotFoundError extends BaseError {
   resource: any;
   resourceId: any;
-  constructor(message, resource?, resourceId?) {
+  constructor(message: any, resource?: any, resourceId?: any) {
     // 如果没有提供 message，那么第一个参数就是 resource
     let finalMessage = message;
     let finalResource = resource;
@@ -83,7 +83,7 @@ export class NotFoundError extends BaseError {
  */
 export class ConflictError extends BaseError {
   details: any;
-  constructor(message, details) {
+  constructor(message: any, details: any) {
     super(message, 'CONFLICT', 409);
     this.details = details;
   }
@@ -93,7 +93,7 @@ export class ConflictError extends BaseError {
  * InternalError - 内部错误
  */
 export class InternalError extends BaseError {
-  constructor(message) {
+  constructor(message: any) {
     super(message, 'INTERNAL_ERROR', 500);
   }
 }

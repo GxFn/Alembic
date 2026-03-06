@@ -38,7 +38,7 @@ export class MemoryRetriever {
    * @param {object} [opts]
    * @param {Function} [opts.embeddingFn] 向量嵌入函数
    */
-  constructor(store, opts: any = {}) {
+  constructor(store: any, opts: any = {}) {
     this.#store = store;
     this.#embeddingFn = typeof opts.embeddingFn === 'function' ? opts.embeddingFn : null;
   }
@@ -60,7 +60,7 @@ export class MemoryRetriever {
    * @param {string} [opts.type]
    * @returns {Array<object>} 按 score 降序排列
    */
-  retrieve(query, { limit = 10, source, type }: any = {}) {
+  retrieve(query: any, { limit = 10, source, type }: any = {}) {
     const all = this.#store.getAllActive({ source, type });
     if (all.length === 0) {
       return [];
@@ -70,7 +70,7 @@ export class MemoryRetriever {
     const lowerQuery = (query || '').toLowerCase();
     const queryTokens = MemoryRetriever.#tokenizeWords(lowerQuery);
 
-    const scored = all.map((m) => {
+    const scored = all.map((m: any) => {
       // Recency: 指数衰减 (半衰期 7 天)
       const lastAccess = m.last_accessed_at
         ? new Date(m.last_accessed_at).getTime()
@@ -95,7 +95,7 @@ export class MemoryRetriever {
       };
     });
 
-    scored.sort((a, b) => b._score - a._score);
+    scored.sort((a: any, b: any) => b._score - a._score);
 
     // 更新访问计数 (只更新返回的)
     const topN = scored.slice(0, limit);
@@ -113,9 +113,9 @@ export class MemoryRetriever {
    * @param {number} [opts.limit=5]
    * @returns {Array<object>}
    */
-  search(content, { limit = 5 } = {}) {
+  search(content: any, { limit = 5 } = {}) {
     const results = this.#store.findSimilar(content, null, limit);
-    return results.map((r) => MemoryStore.deserialize(r));
+    return results.map((r: any) => MemoryStore.deserialize(r));
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -150,20 +150,20 @@ export class MemoryRetriever {
     } else {
       memories = this.#store
         .getAllActive({ source })
-        .sort((a, b) => {
+        .sort((a: any, b: any) => {
           const scoreA = (a.importance || 5) * 0.6 + (a.access_count || 0) * 0.4;
           const scoreB = (b.importance || 5) * 0.6 + (b.access_count || 0) * 0.4;
           return scoreB - scoreA;
         })
         .slice(0, limit)
-        .map((m) => MemoryStore.deserialize(m));
+        .map((m: any) => MemoryStore.deserialize(m));
     }
 
     if (memories.length === 0) {
       return '';
     }
 
-    const lines = memories.map((m) => {
+    const lines = memories.map((m: any) => {
       const badge = m.importance >= 8 ? '⚠️' : m.importance >= 5 ? '📌' : '💡';
       return `- ${badge} [${m.type}] ${m.content}`;
     });
@@ -185,13 +185,13 @@ export class MemoryRetriever {
   load(limit = 20, { source }: any = {}) {
     const rows = this.#store
       .getAllActive({ source })
-      .sort((a, b) => {
+      .sort((a: any, b: any) => {
         const tA = new Date(a.updated_at).getTime();
         const tB = new Date(b.updated_at).getTime();
         return tB - tA;
       })
       .slice(0, limit);
-    return rows.map((r) => ({
+    return rows.map((r: any) => ({
       ts: r.updated_at,
       type: r.type,
       content: r.content,
@@ -204,7 +204,7 @@ export class MemoryRetriever {
    * 兼容 Memory.append() — 添加一条记忆 (自动去重)
    * @param {object} entry
    */
-  append(entry) {
+  append(entry: any) {
     const content = (entry.content || '').trim().substring(0, 500);
     if (!content) {
       return;
@@ -231,7 +231,7 @@ export class MemoryRetriever {
   // ═══════════════════════════════════════════════════════════
 
   /** 设置向量嵌入函数 */
-  setEmbeddingFunction(fn) {
+  setEmbeddingFunction(fn: any) {
     this.#embeddingFn = typeof fn === 'function' ? fn : null;
   }
 
@@ -246,7 +246,7 @@ export class MemoryRetriever {
    * @param {string} content
    * @returns {number|null}
    */
-  computeEmbeddingRelevance(query, content) {
+  computeEmbeddingRelevance(query: any, content: any) {
     if (!this.#embeddingFn) {
       return null;
     }
@@ -261,7 +261,7 @@ export class MemoryRetriever {
   // Private: 相关性计算
   // ═══════════════════════════════════════════════════════════
 
-  static #computeRelevance(lowerQuery, queryTokens, content) {
+  static #computeRelevance(lowerQuery: any, queryTokens: any, content: any) {
     if (!lowerQuery || !content) {
       return 0;
     }
@@ -292,15 +292,15 @@ export class MemoryRetriever {
     return Math.min(1.0, tokenOverlap * 0.5 + substringMatch + partialMatch);
   }
 
-  static #tokenizeWords(text) {
+  static #tokenizeWords(text: any) {
     if (!text) {
       return new Set();
     }
     return new Set(
       text
         .split(/[\s,;:!?。，；：！？\-_/\\|()[\]{}'"<>]+/)
-        .filter((t) => t.length >= 2)
-        .map((t) => t.toLowerCase())
+        .filter((t: any) => t.length >= 2)
+        .map((t: any) => t.toLowerCase())
     );
   }
 }

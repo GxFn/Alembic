@@ -27,7 +27,7 @@ export class ContextCollector {
     };
   }
 
-  #detectLanguage(filePath) {
+  #detectLanguage(filePath: any) {
     if (!filePath) {
       return null;
     }

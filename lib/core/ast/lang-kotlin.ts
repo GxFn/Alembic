@@ -8,11 +8,11 @@
 
 import { ImportRecord } from '../analysis/ImportRecord.js';
 
-function walkKotlin(root, ctx) {
+function walkKotlin(root: any, ctx: any) {
   _walkKtNode(root, ctx, null);
 }
 
-function _walkKtNode(node, ctx, parentClassName) {
+function _walkKtNode(node: any, ctx: any, parentClassName: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
 
@@ -20,7 +20,7 @@ function _walkKtNode(node, ctx, parentClassName) {
       case 'import_header':
       case 'import_directive': {
         const id = child.namedChildren.find(
-          (c) => c.type === 'identifier' || c.type === 'user_type'
+          (c: any) => c.type === 'identifier' || c.type === 'user_type'
         );
         if (id) {
           const fullPath = id.text; // e.g. com.example.MyClass or com.example.myFunc
@@ -29,9 +29,9 @@ function _walkKtNode(node, ctx, parentClassName) {
           // Kotlin: import com.example.* (wildcard)
           const isWildcard = child.text.includes('.*');
           // Kotlin: import com.example.MyClass as Alias
-          const aliasNode = child.namedChildren.find((c) => c.type === 'import_alias');
+          const aliasNode = child.namedChildren.find((c: any) => c.type === 'import_alias');
           const alias = aliasNode?.namedChildren?.find(
-            (c) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+            (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
           )?.text;
 
           if (isWildcard) {
@@ -57,7 +57,7 @@ function _walkKtNode(node, ctx, parentClassName) {
         // class UserService(private val repo: UserRepo) → property { name: 'repo', typeAnnotation: 'UserRepo' }
         _extractKtConstructorProperties(child, ctx, classInfo.name);
 
-        const body = child.namedChildren.find((c) => c.type === 'class_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (body) {
           _walkKtClassBody(body, ctx, classInfo.name);
         }
@@ -67,7 +67,7 @@ function _walkKtNode(node, ctx, parentClassName) {
       case 'object_declaration': {
         const name =
           child.namedChildren.find(
-            (c) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+            (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
           )?.text || 'Unknown';
         ctx.classes.push({
           name,
@@ -75,7 +75,7 @@ function _walkKtNode(node, ctx, parentClassName) {
           line: child.startPosition.row + 1,
           endLine: child.endPosition.row + 1,
         });
-        const body = child.namedChildren.find((c) => c.type === 'class_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (body) {
           _walkKtClassBody(body, ctx, name);
         }
@@ -108,7 +108,7 @@ function _walkKtNode(node, ctx, parentClassName) {
   }
 }
 
-function _walkKtClassBody(body, ctx, className) {
+function _walkKtClassBody(body: any, ctx: any, className: any) {
   for (let i = 0; i < body.namedChildCount; i++) {
     const child = body.namedChild(i);
 
@@ -125,7 +125,7 @@ function _walkKtClassBody(body, ctx, className) {
         break;
       }
       case 'companion_object': {
-        const companionBody = child.namedChildren.find((c) => c.type === 'class_body');
+        const companionBody = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (companionBody) {
           _walkKtClassBody(companionBody, ctx, className);
         }
@@ -137,7 +137,7 @@ function _walkKtClassBody(body, ctx, className) {
         ctx.classes.push(inner);
         // Phase 5.3: Extract primary constructor params for inner classes too
         _extractKtConstructorProperties(child, ctx, inner.name);
-        const innerBody = child.namedChildren.find((c) => c.type === 'class_body');
+        const innerBody = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (innerBody) {
           _walkKtClassBody(innerBody, ctx, inner.name);
         }
@@ -146,7 +146,7 @@ function _walkKtClassBody(body, ctx, className) {
       case 'object_declaration': {
         const name =
           child.namedChildren.find(
-            (c) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+            (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
           )?.text || 'Unknown';
         ctx.classes.push({
           name,
@@ -154,7 +154,7 @@ function _walkKtClassBody(body, ctx, className) {
           outerClass: className,
           line: child.startPosition.row + 1,
         });
-        const objBody = child.namedChildren.find((c) => c.type === 'class_body');
+        const objBody = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (objBody) {
           _walkKtClassBody(objBody, ctx, name);
         }
@@ -164,10 +164,11 @@ function _walkKtClassBody(body, ctx, className) {
   }
 }
 
-function _parseKtClass(node) {
+function _parseKtClass(node: any) {
   const name =
-    node.namedChildren.find((c) => c.type === 'type_identifier' || c.type === 'simple_identifier')
-      ?.text || 'Unknown';
+    node.namedChildren.find(
+      (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+    )?.text || 'Unknown';
 
   // 检查修饰符: data, sealed, abstract, open, enum
   const modifiers: any[] = [];
@@ -208,7 +209,9 @@ function _parseKtClass(node) {
   }
 
   // 注解
-  const annotations = node.namedChildren.filter((c) => c.type === 'annotation').map((a) => a.text);
+  const annotations = node.namedChildren
+    .filter((c: any) => c.type === 'annotation')
+    .map((a: any) => a.text);
 
   return {
     name,
@@ -222,9 +225,12 @@ function _parseKtClass(node) {
   };
 }
 
-function _parseKtFunction(node, className) {
-  const name = node.namedChildren.find((c) => c.type === 'simple_identifier')?.text || 'unknown';
-  const body = node.namedChildren.find((c) => c.type === 'function_body' || c.type === 'block');
+function _parseKtFunction(node: any, className: any) {
+  const name =
+    node.namedChildren.find((c: any) => c.type === 'simple_identifier')?.text || 'unknown';
+  const body = node.namedChildren.find(
+    (c: any) => c.type === 'function_body' || c.type === 'block'
+  );
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
@@ -240,11 +246,11 @@ function _parseKtFunction(node, className) {
   const isOverride = modifiers.some((m) => /\boverride\b/.test(m));
 
   // 检测扩展函数: fun Type.name()
-  const receiverType = node.namedChildren.find((c) => c.type === 'user_type');
+  const receiverType = node.namedChildren.find((c: any) => c.type === 'user_type');
   const isExtension =
     !!receiverType &&
     receiverType.startPosition.column <
-      (node.namedChildren.find((c) => c.type === 'simple_identifier')?.startPosition?.column ||
+      (node.namedChildren.find((c: any) => c.type === 'simple_identifier')?.startPosition?.column ||
         999);
 
   return {
@@ -262,10 +268,10 @@ function _parseKtFunction(node, className) {
   };
 }
 
-function _parseKtProperty(node, className) {
+function _parseKtProperty(node: any, className: any) {
   const name =
     node.namedChildren.find(
-      (c) => c.type === 'simple_identifier' || c.type === 'variable_declaration'
+      (c: any) => c.type === 'simple_identifier' || c.type === 'variable_declaration'
     )?.text || null;
   if (!name) {
     return null;
@@ -283,10 +289,10 @@ function _parseKtProperty(node, className) {
   let typeAnnotation: any = null;
 
   // 1. Try from variable_declaration child
-  const varDecl = node.namedChildren.find((c) => c.type === 'variable_declaration');
+  const varDecl = node.namedChildren.find((c: any) => c.type === 'variable_declaration');
   if (varDecl) {
     const typeNode = varDecl.namedChildren.find(
-      (c) => c.type === 'user_type' || c.type === 'nullable_type'
+      (c: any) => c.type === 'user_type' || c.type === 'nullable_type'
     );
     if (typeNode) {
       typeAnnotation = _extractKtTypeName(typeNode);
@@ -296,7 +302,7 @@ function _parseKtProperty(node, className) {
   // 2. Fallback: try direct children (lateinit var patterns)
   if (!typeAnnotation) {
     const typeNode = node.namedChildren.find(
-      (c) => c.type === 'user_type' || c.type === 'nullable_type'
+      (c: any) => c.type === 'user_type' || c.type === 'nullable_type'
     );
     if (typeNode) {
       typeAnnotation = _extractKtTypeName(typeNode);
@@ -311,7 +317,7 @@ function _parseKtProperty(node, className) {
     }
   }
   // Also check modifiers block
-  const modifiers = node.namedChildren.find((c) => c.type === 'modifiers');
+  const modifiers = node.namedChildren.find((c: any) => c.type === 'modifiers');
   if (modifiers) {
     for (const child of modifiers.namedChildren) {
       if (child.type === 'annotation' || child.type === 'single_annotation') {
@@ -346,8 +352,8 @@ function _parseKtProperty(node, className) {
  * @param {object} ctx - walker context
  * @param {string} className
  */
-function _extractKtConstructorProperties(classNode, ctx, className) {
-  const primaryCtor = classNode.namedChildren.find((c) => c.type === 'primary_constructor');
+function _extractKtConstructorProperties(classNode: any, ctx: any, className: any) {
+  const primaryCtor = classNode.namedChildren.find((c: any) => c.type === 'primary_constructor');
   if (!primaryCtor) {
     return;
   }
@@ -365,7 +371,7 @@ function _extractKtConstructorProperties(classNode, ctx, className) {
       continue;
     }
 
-    const name = param.namedChildren.find((c) => c.type === 'simple_identifier')?.text;
+    const name = param.namedChildren.find((c: any) => c.type === 'simple_identifier')?.text;
     if (!name) {
       continue;
     }
@@ -373,7 +379,7 @@ function _extractKtConstructorProperties(classNode, ctx, className) {
     // Extract type annotation
     let typeAnnotation: any = null;
     const typeNode = param.namedChildren.find(
-      (c) => c.type === 'user_type' || c.type === 'nullable_type'
+      (c: any) => c.type === 'user_type' || c.type === 'nullable_type'
     );
     if (typeNode) {
       typeAnnotation = _extractKtTypeName(typeNode);
@@ -418,9 +424,9 @@ function _extractKtConstructorProperties(classNode, ctx, className) {
  * Phase 5.3: Extract Kotlin type name from user_type or nullable_type node
  * Strips generics and nullable marker
  */
-function _extractKtTypeName(typeNode) {
+function _extractKtTypeName(typeNode: any) {
   if (typeNode.type === 'nullable_type') {
-    const inner = typeNode.namedChildren.find((c) => c.type === 'user_type');
+    const inner = typeNode.namedChildren.find((c: any) => c.type === 'user_type');
     if (inner) {
       const text = inner.text;
       const bracketIdx = text.indexOf('<');
@@ -434,9 +440,9 @@ function _extractKtTypeName(typeNode) {
   return bracketIdx > 0 ? text.slice(0, bracketIdx) : text;
 }
 
-function _collectTypeRefs(node) {
+function _collectTypeRefs(node: any) {
   const refs: any[] = [];
-  function walk(n) {
+  function walk(n: any) {
     if (n.type === 'user_type' || n.type === 'type_identifier' || n.type === 'simple_identifier') {
       refs.push(n.text);
       return;
@@ -451,7 +457,7 @@ function _collectTypeRefs(node) {
 
 // ── Kotlin 模式检测 ──
 
-function detectKtPatterns(root, lang, methods, properties, classes) {
+function detectKtPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   const patterns: any[] = [];
 
   // Singleton: object declaration
@@ -508,10 +514,10 @@ function detectKtPatterns(root, lang, methods, properties, classes) {
 
   // Android patterns
   for (const cls of classes) {
-    if (cls.annotations?.some((a) => /@Composable/.test(a))) {
+    if (cls.annotations?.some((a: any) => /@Composable/.test(a))) {
       patterns.push({ type: 'composable', className: cls.name, line: cls.line, confidence: 0.95 });
     }
-    if (cls.annotations?.some((a) => /@HiltAndroidApp|@AndroidEntryPoint/.test(a))) {
+    if (cls.annotations?.some((a: any) => /@HiltAndroidApp|@AndroidEntryPoint/.test(a))) {
       patterns.push({ type: 'hilt-di', className: cls.name, line: cls.line, confidence: 0.95 });
     }
     if (cls.superclass && /ViewModel$/.test(cls.superclass)) {
@@ -532,7 +538,7 @@ function detectKtPatterns(root, lang, methods, properties, classes) {
 
 // ── 工具函数 ──
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_expression',
@@ -543,7 +549,7 @@ function _estimateComplexity(node) {
     'catch_block',
     'try_expression',
   ]);
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
@@ -558,7 +564,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_expression',
     'for_statement',
@@ -583,7 +589,7 @@ function _maxNesting(node, depth) {
 /**
  * 从 Kotlin AST root 提取所有调用点
  */
-function extractCallSitesKotlin(root, ctx, _lang) {
+function extractCallSitesKotlin(root: any, ctx: any, _lang: any) {
   const scopes = _collectKtScopes(root);
   for (const scope of scopes) {
     _extractKtCallSitesFromBody(scope.body, scope.className, scope.methodName, ctx);
@@ -593,45 +599,45 @@ function extractCallSitesKotlin(root, ctx, _lang) {
 /**
  * 递归收集 Kotlin 中所有函数体作用域
  */
-function _collectKtScopes(root) {
+function _collectKtScopes(root: any) {
   const scopes: any[] = [];
 
-  function visit(node, className) {
+  function visit(node: any, className: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
 
       if (child.type === 'class_declaration' || child.type === 'object_declaration') {
         const name = child.namedChildren.find(
-          (c) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+          (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
         )?.text;
-        const body = child.namedChildren.find((c) => c.type === 'class_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (body) {
           visit(body, name || className);
         }
       } else if (child.type === 'companion_object') {
-        const body = child.namedChildren.find((c) => c.type === 'class_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (body) {
           visit(body, className);
         }
       } else if (child.type === 'function_declaration') {
         const name =
-          child.namedChildren.find((c) => c.type === 'simple_identifier')?.text || 'unknown';
+          child.namedChildren.find((c: any) => c.type === 'simple_identifier')?.text || 'unknown';
         const body = child.namedChildren.find(
-          (c) => c.type === 'function_body' || c.type === 'block'
+          (c: any) => c.type === 'function_body' || c.type === 'block'
         );
         if (body) {
           scopes.push({ body, className, methodName: name });
         }
       } else if (child.type === 'property_declaration') {
         // property with getter/setter or initializer with lambda
-        const getter = child.namedChildren.find((c) => c.type === 'getter');
-        const setter = child.namedChildren.find((c) => c.type === 'setter');
+        const getter = child.namedChildren.find((c: any) => c.type === 'getter');
+        const setter = child.namedChildren.find((c: any) => c.type === 'setter');
         const propName = child.namedChildren.find(
-          (c) => c.type === 'simple_identifier' || c.type === 'variable_declaration'
+          (c: any) => c.type === 'simple_identifier' || c.type === 'variable_declaration'
         )?.text;
         if (getter) {
           const body = getter.namedChildren.find(
-            (c) => c.type === 'function_body' || c.type === 'block'
+            (c: any) => c.type === 'function_body' || c.type === 'block'
           );
           if (body) {
             scopes.push({ body, className, methodName: `get_${propName || 'prop'}` });
@@ -639,7 +645,7 @@ function _collectKtScopes(root) {
         }
         if (setter) {
           const body = setter.namedChildren.find(
-            (c) => c.type === 'function_body' || c.type === 'block'
+            (c: any) => c.type === 'function_body' || c.type === 'block'
           );
           if (body) {
             scopes.push({ body, className, methodName: `set_${propName || 'prop'}` });
@@ -656,7 +662,7 @@ function _collectKtScopes(root) {
 /**
  * 从 Kotlin function body 中递归提取调用点
  */
-function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
+function _extractKtCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;
   }
@@ -688,7 +694,7 @@ function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
     'with',
   ]);
 
-  function walk(node) {
+  function walk(node: any) {
     if (!node || node.type === 'ERROR' || node.isMissing) {
       return;
     }
@@ -746,7 +752,7 @@ function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
 
       // 计算参数数量
       const valueArgs = node.namedChildren.find(
-        (c) => c.type === 'call_suffix' || c.type === 'value_arguments'
+        (c: any) => c.type === 'call_suffix' || c.type === 'value_arguments'
       );
       const argCount = valueArgs ? valueArgs.namedChildCount : 0;
 
@@ -768,7 +774,7 @@ function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
       }
       // also check trailing lambda
       const lambda = node.namedChildren.find(
-        (c) => c.type === 'annotated_lambda' || c.type === 'lambda_literal'
+        (c: any) => c.type === 'annotated_lambda' || c.type === 'lambda_literal'
       );
       if (lambda) {
         walkChildren(lambda);
@@ -779,7 +785,7 @@ function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
     walkChildren(node);
   }
 
-  function walkChildren(node) {
+  function walkChildren(node: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       walk(node.namedChild(i));
     }
@@ -794,7 +800,7 @@ let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }
-export function setGrammar(grammar) {
+export function setGrammar(grammar: any) {
   _grammar = grammar;
 }
 

@@ -138,7 +138,7 @@ export class KnowledgeEntry {
    * @param {string} publisher
    * @returns {{ success: boolean, error?: string }}
    */
-  publish(publisher) {
+  publish(publisher: any) {
     if (!this.isValid()) {
       return { success: false, error: '内容不完整，无法发布' };
     }
@@ -155,7 +155,7 @@ export class KnowledgeEntry {
    * @param {string} reason
    * @returns {{ success: boolean, error?: string }}
    */
-  deprecate(reason) {
+  deprecate(reason: any) {
     const result = this._transition(Lifecycle.DEPRECATED);
     if (result.success) {
       this.rejectionReason = reason;
@@ -220,7 +220,7 @@ export class KnowledgeEntry {
       return [];
     }
 
-    const regexRules = this.constraints.getRegexGuards().map((g) => ({
+    const regexRules = this.constraints.getRegexGuards().map((g: any) => ({
       id: g.id || this.id,
       type: 'regex',
       name: g.message || this.title,
@@ -232,7 +232,7 @@ export class KnowledgeEntry {
       fixSuggestion: g.fix_suggestion || null,
     }));
 
-    const astRules = this.constraints.getAstGuards().map((g) => ({
+    const astRules = this.constraints.getAstGuards().map((g: any) => ({
       id: g.id || `${this.id}:ast`,
       type: 'ast',
       name: g.message || this.title,
@@ -253,7 +253,7 @@ export class KnowledgeEntry {
   static SYSTEM_TAG_PREFIXES = ['dimension:', 'bootstrap:', 'internal:', 'system:'];
 
   /** 判断是否为系统内部标签 */
-  static isSystemTag(tag) {
+  static isSystemTag(tag: any) {
     return KnowledgeEntry.SYSTEM_TAG_PREFIXES.some((p) => tag.startsWith(p));
   }
 
@@ -317,7 +317,7 @@ export class KnowledgeEntry {
    * @param {Object} data
    * @returns {KnowledgeEntry}
    */
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     if (!data) {
       return new KnowledgeEntry();
     }
@@ -330,7 +330,7 @@ export class KnowledgeEntry {
    * @param {string} to
    * @returns {{ success: boolean, error?: string }}
    */
-  _transition(to) {
+  _transition(to: any) {
     if (!isValidTransition(this.lifecycle, to)) {
       return {
         success: false,

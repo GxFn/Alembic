@@ -36,7 +36,7 @@ export class RecipeCandidateValidator {
    * @param {object} candidate
    * @returns {{ valid: boolean, errors: string[], warnings: string[] }}
    */
-  validate(candidate) {
+  validate(candidate: any) {
     const errors: any[] = [];
     const warnings: any[] = [];
 
@@ -154,7 +154,7 @@ export class RecipeCandidateValidator {
    * @param {object[]} candidates
    * @returns {{ valid: object[], invalid: object[], summary: { total: number, validCount: number, invalidCount: number } }}
    */
-  validateBatch(candidates) {
+  validateBatch(candidates: any) {
     const valid: any[] = [];
     const invalid: any[] = [];
 

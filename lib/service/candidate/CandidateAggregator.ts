@@ -20,7 +20,7 @@ const TITLE_SIMILARITY_THRESHOLD = 0.85;
  * @param {number} [opts.threshold] 自定义相似度阈值 (0-1)
  * @returns {{ items: Array, duplicates: Array<{item: any, duplicateOf: string}> }}
  */
-export function aggregateCandidates(items, opts: any = {}) {
+export function aggregateCandidates(items: any, opts: any = {}) {
   if (!Array.isArray(items) || items.length === 0) {
     return { items: [], duplicates: [] };
   }

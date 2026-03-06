@@ -34,7 +34,13 @@ export class KnowledgeService {
    * @param {import('./ConfidenceRouter.js').ConfidenceRouter} [options.confidenceRouter]
    * @param {import('../quality/QualityScorer.js').QualityScorer} [options.qualityScorer]
    */
-  constructor(repository, auditLogger, gateway, knowledgeGraphService, options: any = {}) {
+  constructor(
+    repository: any,
+    auditLogger: any,
+    gateway: any,
+    knowledgeGraphService: any,
+    options: any = {}
+  ) {
     this.repository = repository;
     this.auditLogger = auditLogger;
     this.gateway = gateway;
@@ -59,7 +65,7 @@ export class KnowledgeService {
    * @param {Object} context - { userId }
    * @returns {Promise<KnowledgeEntry>}
    */
-  async create(data, context) {
+  async create(data: any, context: any) {
     try {
       this._validateCreateInput(data);
 
@@ -130,7 +136,7 @@ export class KnowledgeService {
           .run('onKnowledgeCreated', saved, {
             userId: context.userId,
           })
-          .catch((err) =>
+          .catch((err: any) =>
             this.logger.warn('SkillHook onKnowledgeCreated error', { error: err.message })
           );
       }
@@ -150,7 +156,7 @@ export class KnowledgeService {
    * @param {string} id
    * @returns {Promise<KnowledgeEntry>}
    */
-  async get(id) {
+  async get(id: any) {
     const entry = await this.repository.findById(id);
     if (!entry) {
       throw new NotFoundError('Knowledge entry not found', 'knowledge', id);
@@ -165,7 +171,7 @@ export class KnowledgeService {
    * @param {Object} context - { userId }
    * @returns {Promise<KnowledgeEntry>}
    */
-  async update(id, data, context) {
+  async update(id: any, data: any, context: any) {
     try {
       const _entry = await this._findOrThrow(id);
 
@@ -245,11 +251,11 @@ export class KnowledgeService {
 
           // tags 需要特殊处理：API 返回时已过滤系统标签，保存时需要合并回来
           case 'tags': {
-            const existingSystemTags = (_entry.tags || []).filter((t) =>
+            const existingSystemTags = (_entry.tags || []).filter((t: any) =>
               KnowledgeEntry.isSystemTag(t)
             );
             const incomingUserTags = (data.tags || []).filter(
-              (t) => !KnowledgeEntry.isSystemTag(t)
+              (t: any) => !KnowledgeEntry.isSystemTag(t)
             );
             dbUpdates.tags = [...incomingUserTags, ...existingSystemTags];
             break;
@@ -299,7 +305,7 @@ export class KnowledgeService {
    * @param {Object} context - { userId }
    * @returns {Promise<{ success: boolean, id: string }>}
    */
-  async delete(id, context) {
+  async delete(id: any, context: any) {
     try {
       const entry = await this._findOrThrow(id);
 
@@ -336,7 +342,7 @@ export class KnowledgeService {
   /**
    * 发布 (pending → active) — 仅开发者可执行
    */
-  async publish(id, context) {
+  async publish(id: any, context: any) {
     const result = await this._lifecycleTransition(id, 'publish', context, {
       entityArgs: [context.userId],
     });
@@ -370,7 +376,7 @@ export class KnowledgeService {
   /**
    * 弃用 (pending|active → deprecated)
    */
-  async deprecate(id, reason, context) {
+  async deprecate(id: any, reason: any, context: any) {
     if (!reason || reason.trim().length === 0) {
       throw new ValidationError('Deprecation reason is required');
     }
@@ -382,39 +388,39 @@ export class KnowledgeService {
   /**
    * 重新激活 (deprecated → pending)
    */
-  async reactivate(id, context) {
+  async reactivate(id: any, context: any) {
     return this._lifecycleTransition(id, 'reactivate', context);
   }
 
   // ── 向后兼容别名 ──
 
   /** @deprecated 简化后所有条目直接进 pending */
-  async submit(id, context) {
+  async submit(id: any, context: any) {
     return this.get(id);
   }
 
   /** @deprecated 简化后 approve = publish */
-  async approve(id, context) {
+  async approve(id: any, context: any) {
     return this.publish(id, context);
   }
 
   /** @deprecated 简化后无需 autoApprove */
-  async autoApprove(id, context) {
+  async autoApprove(id: any, context: any) {
     return this.get(id);
   }
 
   /** @deprecated 简化后 reject = deprecate */
-  async reject(id, reason, context) {
+  async reject(id: any, reason: any, context: any) {
     return this.deprecate(id, reason, context);
   }
 
   /** @deprecated 简化后 toDraft = reactivate */
-  async toDraft(id, context) {
+  async toDraft(id: any, context: any) {
     return this.reactivate(id, context);
   }
 
   /** @deprecated 简化后 fastTrack = publish */
-  async fastTrack(id, context) {
+  async fastTrack(id: any, context: any) {
     return this.publish(id, context);
   }
 
@@ -469,7 +475,7 @@ export class KnowledgeService {
   /**
    * 按 Kind 查询
    */
-  async listByKind(kind, pagination: any = {}) {
+  async listByKind(kind: any, pagination: any = {}) {
     try {
       const { page = 1, pageSize = 20 } = pagination;
       return this.repository.findByKind(kind, { page, pageSize });
@@ -482,7 +488,7 @@ export class KnowledgeService {
   /**
    * 搜索
    */
-  async search(keyword, pagination: any = {}) {
+  async search(keyword: any, pagination: any = {}) {
     try {
       const { page = 1, pageSize = 20 } = pagination;
       return this.repository.search(keyword, { page, pageSize });
@@ -517,7 +523,7 @@ export class KnowledgeService {
    * @param {'adoption'|'application'|'guard_hit'|'view'|'success'} type
    * @param {Object} [options] - { actor, feedback }
    */
-  async incrementUsage(id, type = 'adoption', options: any = {}) {
+  async incrementUsage(id: any, type = 'adoption', options: any = {}) {
     try {
       const entry = await this._findOrThrow(id);
       entry.stats.increment(type);
@@ -549,7 +555,7 @@ export class KnowledgeService {
    * @param {string} id
    * @param {Object} [context] - { userId }
    */
-  async updateQuality(id, context: any = {}) {
+  async updateQuality(id: any, context: any = {}) {
     try {
       const entry = await this._findOrThrow(id);
 
@@ -601,7 +607,7 @@ export class KnowledgeService {
   /**
    * 统一生命周期转换编排
    */
-  async _lifecycleTransition(id, method, context, options: any = {}) {
+  async _lifecycleTransition(id: any, method: any, context: any, options: any = {}) {
     try {
       const entry = await this._findOrThrow(id);
       const prevLifecycle = entry.lifecycle;
@@ -683,7 +689,7 @@ export class KnowledgeService {
   /**
    * 查找或抛出 NotFoundError
    */
-  async _findOrThrow(id) {
+  async _findOrThrow(id: any) {
     const entry = await this.repository.findById(id);
     if (!entry) {
       throw new NotFoundError('Knowledge entry not found', 'knowledge', id);
@@ -694,7 +700,7 @@ export class KnowledgeService {
   /**
    * 验证创建输入
    */
-  _validateCreateInput(data) {
+  _validateCreateInput(data: any) {
     if (!data.title || !data.title.trim()) {
       throw new ValidationError('Title is required');
     }
@@ -710,7 +716,7 @@ export class KnowledgeService {
    * 为 QualityScorer 适配输入
    * QualityScorer 需要: title, trigger, code, language, category, summary, usageGuide, headers, tags
    */
-  _adaptForScorer(entry) {
+  _adaptForScorer(entry: any) {
     // 从 Stats 值对象提取 engagement 指标，映射到 QualityScorer 期望的 views/clicks/rating
     const stats = entry.stats && typeof entry.stats === 'object' ? entry.stats : {};
     return {
@@ -737,7 +743,7 @@ export class KnowledgeService {
    * @param {string} id 新创建的条目 ID
    * @param {KnowledgeEntry} entry 条目实体
    */
-  async _autoDiscoverRelations(id, entry) {
+  async _autoDiscoverRelations(id: any, entry: any) {
     const gs = this._knowledgeGraphService;
     if (!gs) {
       return;
@@ -814,7 +820,7 @@ export class KnowledgeService {
   /**
    * 将 relations 同步到 knowledge_edges 表
    */
-  _syncRelationsToGraph(id, relations) {
+  _syncRelationsToGraph(id: any, relations: any) {
     const gs = this._knowledgeGraphService;
     if (!gs) {
       return;
@@ -856,7 +862,7 @@ export class KnowledgeService {
   /**
    * 删除所有关联边
    */
-  _removeAllEdges(id) {
+  _removeAllEdges(id: any) {
     const gs = this._knowledgeGraphService;
     if (!gs) {
       return;
@@ -874,7 +880,7 @@ export class KnowledgeService {
   /**
    * 落盘到 .md 文件 + 回写 sourceFile
    */
-  _persistToFile(entry) {
+  _persistToFile(entry: any) {
     if (!this._fileWriter) {
       return;
     }
@@ -882,7 +888,7 @@ export class KnowledgeService {
       const oldSourceFile = entry.sourceFile;
       this._fileWriter.persist(entry);
       if (entry.sourceFile && entry.sourceFile !== oldSourceFile) {
-        this.repository.update(entry.id, { sourceFile: entry.sourceFile }).catch((err) => {
+        this.repository.update(entry.id, { sourceFile: entry.sourceFile }).catch((err: any) => {
           this.logger.warn('Failed to update sourceFile in DB', {
             id: entry.id,
             error: err.message,
@@ -900,7 +906,7 @@ export class KnowledgeService {
   /**
    * 删除 .md 文件
    */
-  _removeFile(entry) {
+  _removeFile(entry: any) {
     if (!this._fileWriter) {
       return;
     }
@@ -916,7 +922,7 @@ export class KnowledgeService {
 
   /* ═══ 审计日志 ═══════════════════════════════════════ */
 
-  async _audit(action, id, actor, details: any = {}) {
+  async _audit(action: any, id: any, actor: any, details: any = {}) {
     try {
       await this.auditLogger.log({
         action,

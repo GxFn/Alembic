@@ -112,12 +112,12 @@ export const ANALYST_BUDGET = {
  * @returns {string}
  */
 export function buildAnalystPrompt(
-  dimConfig,
-  projectInfo,
-  dimensionContext,
-  episodicMemory,
-  semanticMemory,
-  codeEntityGraph
+  dimConfig: any,
+  projectInfo: any,
+  dimensionContext: any,
+  episodicMemory: any,
+  semanticMemory: any,
+  codeEntityGraph: any
 ) {
   const parts: any[] = [];
 
@@ -152,10 +152,10 @@ export function buildAnalystPrompt(
   } else if (dimConfig.guide) {
     const items = dimConfig.guide
       .split(/[、，,/]/)
-      .map((s) => s.trim())
+      .map((s: any) => s.trim())
       .filter(Boolean);
     if (items.length > 1) {
-      parts.push(`重点关注:\n${items.map((f) => `- ${f}`).join('\n')}`);
+      parts.push(`重点关注:\n${items.map((f: any) => `- ${f}`).join('\n')}`);
     } else {
       parts.push(`重点关注: ${dimConfig.guide}`);
     }

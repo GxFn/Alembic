@@ -36,7 +36,7 @@ const STRUCTURE_CHECK_THRESHOLD = 500;
  * 去除列表标记、编号、代码围栏、引用标记等结构性前缀，
  * 避免 category-scan 等维度中大量结构相似但内容不同的行被误判为重复。
  */
-function normalizeLine(line) {
+function normalizeLine(line: any) {
   return line
     .trim()
     .replace(/^[-*•]\s+/, '') // strip list markers
@@ -51,7 +51,7 @@ function normalizeLine(line) {
 /**
  * 检测最长连续重复块长度 — AI 循环的核心特征
  */
-function maxConsecutiveDuplicates(lines) {
+function maxConsecutiveDuplicates(lines: any) {
   let max = 0;
   let current = 0;
   for (let i = 1; i < lines.length; i++) {
@@ -70,7 +70,7 @@ function maxConsecutiveDuplicates(lines) {
 /**
  * 去除连续重复行 — 将连续 N 行相同内容压缩为 1 行
  */
-function deduplicateConsecutive(text) {
+function deduplicateConsecutive(text: any) {
   const lines = text.split('\n');
   const result = [lines[0]];
   for (let i = 1; i < lines.length; i++) {
@@ -96,7 +96,7 @@ function deduplicateConsecutive(text) {
  * @param {string} analysisText - Analyst 或外部 Agent 的分析文本
  * @returns {{ pass: boolean, reason: string|null, deduplicatedText?: string }}
  */
-function validateSkillQuality(analysisText) {
+function validateSkillQuality(analysisText: any) {
   // 1. 文本过短
   if (!analysisText || analysisText.trim().length < MIN_ANALYSIS_LENGTH) {
     return {
@@ -106,8 +106,8 @@ function validateSkillQuality(analysisText) {
   }
 
   // 2. 重复检测 — 规范化后比较，避免结构性前缀导致误判
-  const textLines = analysisText.split('\n').filter((l) => l.trim().length > 0);
-  const normalizedLines = textLines.map(normalizeLine).filter((l) => l.length > 0);
+  const textLines = analysisText.split('\n').filter((l: any) => l.trim().length > 0);
+  const normalizedLines = textLines.map(normalizeLine).filter((l: any) => l.length > 0);
   const uniqueNormalized = new Set(normalizedLines);
   const uniqueRatio =
     normalizedLines.length > 0 ? uniqueNormalized.size / normalizedLines.length : 1;
@@ -146,7 +146,7 @@ function validateSkillQuality(analysisText) {
     /^[-*]\s*[❌⚠✅🔴🟡🟢•]/u.test(analysisText) ||
     /\*\*[^*]+\*\*/.test(analysisText) ||
     // 补充: 多段落（≥3 个非空段落）视为有基本结构
-    analysisText.split(/\n\s*\n/).filter((p) => p.trim().length > 0).length >= 3;
+    analysisText.split(/\n\s*\n/).filter((p: any) => p.trim().length > 0).length >= 3;
   if (!hasStructure && analysisText.length < STRUCTURE_CHECK_THRESHOLD) {
     return {
       pass: false,
@@ -179,8 +179,8 @@ function validateSkillQuality(analysisText) {
  * @returns {string} - Skill Markdown 内容
  */
 function buildSkillContent(
-  dim,
-  analysisText,
+  dim: any,
+  analysisText: any,
   referencedFiles: any[] = [],
   keyFindings: any[] = [],
   source = 'bootstrap'
@@ -237,9 +237,9 @@ function buildSkillContent(
  * @returns {Promise<{ success: boolean, skillName: string, error?: string }>}
  */
 export async function generateSkill(
-  ctx,
-  dim,
-  analysisText,
+  ctx: any,
+  dim: any,
+  analysisText: any,
   referencedFiles: any[] = [],
   keyFindings: any[] = [],
   source = 'bootstrap'

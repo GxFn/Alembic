@@ -11,13 +11,13 @@
 
 import { ImportRecord } from '../analysis/ImportRecord.js';
 
-function walkGo(root, ctx) {
+function walkGo(root: any, ctx: any) {
   for (let i = 0; i < root.namedChildCount; i++) {
     const child = root.namedChild(i);
 
     switch (child.type) {
       case 'package_clause': {
-        const pkgId = child.namedChildren.find((c) => c.type === 'package_identifier');
+        const pkgId = child.namedChildren.find((c: any) => c.type === 'package_identifier');
         if (pkgId) {
           ctx.metadata = ctx.metadata || {};
           ctx.metadata.packageName = pkgId.text;
@@ -26,7 +26,7 @@ function walkGo(root, ctx) {
       }
 
       case 'import_declaration': {
-        const specList = child.namedChildren.find((c) => c.type === 'import_spec_list');
+        const specList = child.namedChildren.find((c: any) => c.type === 'import_spec_list');
         if (specList) {
           for (let j = 0; j < specList.namedChildCount; j++) {
             const spec = specList.namedChild(j);
@@ -39,7 +39,7 @@ function walkGo(root, ctx) {
           }
         } else {
           // 单行 import
-          const spec = child.namedChildren.find((c) => c.type === 'import_spec');
+          const spec = child.namedChildren.find((c: any) => c.type === 'import_spec');
           if (spec) {
             const rec = _parseGoImportSpec(spec);
             if (rec) {
@@ -85,19 +85,19 @@ function walkGo(root, ctx) {
 
 // ── Type Declaration ─────────────────────────────────────────
 
-function _walkTypeDeclaration(node, ctx) {
+function _walkTypeDeclaration(node: any, ctx: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const spec = node.namedChild(i);
     if (spec.type !== 'type_spec') {
       continue;
     }
 
-    const nameNode = spec.namedChildren.find((c) => c.type === 'type_identifier');
+    const nameNode = spec.namedChildren.find((c: any) => c.type === 'type_identifier');
     const name = nameNode?.text || 'Unknown';
 
     // 判断是 struct / interface / type alias
-    const structType = spec.namedChildren.find((c) => c.type === 'struct_type');
-    const ifaceType = spec.namedChildren.find((c) => c.type === 'interface_type');
+    const structType = spec.namedChildren.find((c: any) => c.type === 'struct_type');
+    const ifaceType = spec.namedChildren.find((c: any) => c.type === 'interface_type');
 
     if (structType) {
       _parseStruct(name, structType, spec, ctx);
@@ -115,11 +115,11 @@ function _walkTypeDeclaration(node, ctx) {
   }
 }
 
-function _parseStruct(name, structNode, specNode, ctx) {
+function _parseStruct(name: any, structNode: any, specNode: any, ctx: any) {
   const fields: any[] = [];
   const embeddedTypes: any[] = [];
 
-  const fieldList = structNode.namedChildren.find((c) => c.type === 'field_declaration_list');
+  const fieldList = structNode.namedChildren.find((c: any) => c.type === 'field_declaration_list');
   if (fieldList) {
     for (let i = 0; i < fieldList.namedChildCount; i++) {
       const field = fieldList.namedChild(i);
@@ -127,7 +127,7 @@ function _parseStruct(name, structNode, specNode, ctx) {
         continue;
       }
 
-      const fieldId = field.namedChildren.find((c) => c.type === 'field_identifier');
+      const fieldId = field.namedChildren.find((c: any) => c.type === 'field_identifier');
       if (fieldId) {
         // Named field
         const fieldName = fieldId.text;
@@ -142,7 +142,7 @@ function _parseStruct(name, structNode, specNode, ctx) {
       } else {
         // Embedded type (anonymous field)
         const typeId = field.namedChildren.find(
-          (c) => c.type === 'type_identifier' || c.type === 'qualified_type'
+          (c: any) => c.type === 'type_identifier' || c.type === 'qualified_type'
         );
         if (typeId) {
           embeddedTypes.push(typeId.text);
@@ -163,7 +163,7 @@ function _parseStruct(name, structNode, specNode, ctx) {
   });
 }
 
-function _parseInterface(name, ifaceNode, specNode, ctx) {
+function _parseInterface(name: any, ifaceNode: any, specNode: any, ctx: any) {
   const methods: any[] = [];
   const embeddedInterfaces: any[] = [];
 
@@ -171,21 +171,21 @@ function _parseInterface(name, ifaceNode, specNode, ctx) {
     const child = ifaceNode.namedChild(i);
 
     if (child.type === 'method_elem') {
-      const methodName = child.namedChildren.find((c) => c.type === 'field_identifier');
+      const methodName = child.namedChildren.find((c: any) => c.type === 'field_identifier');
       if (methodName) {
         methods.push(methodName.text);
       }
     } else if (child.type === 'type_elem') {
       // Embedded interface / type constraint
       const typeId = child.namedChildren.find(
-        (c) => c.type === 'type_identifier' || c.type === 'qualified_type'
+        (c: any) => c.type === 'type_identifier' || c.type === 'qualified_type'
       );
       if (typeId) {
         embeddedInterfaces.push(typeId.text);
       }
     } else if (child.type === 'constraint_elem') {
       // Go generics type constraint
-      const typeId = child.namedChildren.find((c) => c.type === 'type_identifier');
+      const typeId = child.namedChildren.find((c: any) => c.type === 'type_identifier');
       if (typeId) {
         embeddedInterfaces.push(typeId.text);
       }
@@ -203,17 +203,17 @@ function _parseInterface(name, ifaceNode, specNode, ctx) {
 
 // ── Function & Method ────────────────────────────────────────
 
-function _parseFunctionDecl(node) {
-  const nameNode = node.namedChildren.find((c) => c.type === 'identifier');
+function _parseFunctionDecl(node: any) {
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'identifier');
   const name = nameNode?.text;
   if (!name) {
     return null;
   }
 
-  const params = node.namedChildren.find((c) => c.type === 'parameter_list');
+  const params = node.namedChildren.find((c: any) => c.type === 'parameter_list');
   const paramCount = params ? _countParams(params) : 0;
 
-  const body = node.namedChildren.find((c) => c.type === 'block');
+  const body = node.namedChildren.find((c: any) => c.type === 'block');
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
@@ -232,37 +232,39 @@ function _parseFunctionDecl(node) {
   };
 }
 
-function _parseMethodDecl(node) {
+function _parseMethodDecl(node: any) {
   // 第一个 parameter_list 是 receiver
-  const paramLists = node.namedChildren.filter((c) => c.type === 'parameter_list');
+  const paramLists = node.namedChildren.filter((c: any) => c.type === 'parameter_list');
   const receiverList = paramLists[0];
   const paramList = paramLists[1];
 
   let receiverType: any = null;
   let isPointerReceiver = false;
   if (receiverList) {
-    const paramDecl = receiverList.namedChildren.find((c) => c.type === 'parameter_declaration');
+    const paramDecl = receiverList.namedChildren.find(
+      (c: any) => c.type === 'parameter_declaration'
+    );
     if (paramDecl) {
-      const pointer = paramDecl.namedChildren.find((c) => c.type === 'pointer_type');
+      const pointer = paramDecl.namedChildren.find((c: any) => c.type === 'pointer_type');
       if (pointer) {
         isPointerReceiver = true;
-        const typeId = pointer.namedChildren.find((c) => c.type === 'type_identifier');
+        const typeId = pointer.namedChildren.find((c: any) => c.type === 'type_identifier');
         receiverType = typeId?.text || null;
       } else {
-        const typeId = paramDecl.namedChildren.find((c) => c.type === 'type_identifier');
+        const typeId = paramDecl.namedChildren.find((c: any) => c.type === 'type_identifier');
         receiverType = typeId?.text || null;
       }
     }
   }
 
-  const nameNode = node.namedChildren.find((c) => c.type === 'field_identifier');
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'field_identifier');
   const name = nameNode?.text;
   if (!name) {
     return null;
   }
 
   const paramCount = paramList ? _countParams(paramList) : 0;
-  const body = node.namedChildren.find((c) => c.type === 'block');
+  const body = node.namedChildren.find((c: any) => c.type === 'block');
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
@@ -284,14 +286,14 @@ function _parseMethodDecl(node) {
 
 // ── Var / Const ──────────────────────────────────────────────
 
-function _walkVarConstDecl(node, ctx) {
+function _walkVarConstDecl(node: any, ctx: any) {
   const isConst = node.type === 'const_declaration';
   for (let i = 0; i < node.namedChildCount; i++) {
     const spec = node.namedChild(i);
     if (spec.type !== 'const_spec' && spec.type !== 'var_spec') {
       continue;
     }
-    const nameNode = spec.namedChildren.find((c) => c.type === 'identifier');
+    const nameNode = spec.namedChildren.find((c: any) => c.type === 'identifier');
     if (nameNode) {
       ctx.properties.push({
         name: nameNode.text,
@@ -306,7 +308,7 @@ function _walkVarConstDecl(node, ctx) {
 
 // ── Go Pattern Detection ─────────────────────────────────────
 
-function detectGoPatterns(root, lang, methods, properties, classes) {
+function detectGoPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   const patterns: any[] = [];
 
   // 构建 struct → methods 索引
@@ -326,9 +328,9 @@ function detectGoPatterns(root, lang, methods, properties, classes) {
       continue;
     }
     // 检查是否有 package-level var 指向此 struct
-    const hasPackageVar = properties.some((p) => !p.className && !p.isConst && !p.isExported);
+    const hasPackageVar = properties.some((p: any) => !p.className && !p.isConst && !p.isExported);
     const hasNewFunc = methods.some(
-      (m) => !m.className && /^(?:New|Get|Default)/.test(m.name) && m.isExported
+      (m: any) => !m.className && /^(?:New|Get|Default)/.test(m.name) && m.isExported
     );
     if (hasPackageVar && hasNewFunc) {
       patterns.push({
@@ -386,9 +388,9 @@ function detectGoPatterns(root, lang, methods, properties, classes) {
   return patterns;
 }
 
-function _detectGoroutines(root, patterns) {
+function _detectGoroutines(root: any, patterns: any) {
   let count = 0;
-  function walk(node) {
+  function walk(node: any) {
     if (node.type === 'go_statement') {
       count++;
     }
@@ -406,10 +408,10 @@ function _detectGoroutines(root, patterns) {
   }
 }
 
-function _detectChannels(root, patterns) {
+function _detectChannels(root: any, patterns: any) {
   let chanMakeCount = 0;
   let selectCount = 0;
-  function walk(node) {
+  function walk(node: any) {
     if (node.type === 'channel_type') {
       chanMakeCount++;
     }
@@ -433,20 +435,20 @@ function _detectChannels(root, patterns) {
 
 // ── Utility ──────────────────────────────────────────────────
 
-function _countParams(paramList) {
+function _countParams(paramList: any) {
   let count = 0;
   for (let i = 0; i < paramList.namedChildCount; i++) {
     const child = paramList.namedChild(i);
     if (child.type === 'parameter_declaration' || child.type === 'variadic_parameter_declaration') {
       // Each identifier in the same declaration is a parameter
-      const ids = child.namedChildren.filter((c) => c.type === 'identifier');
+      const ids = child.namedChildren.filter((c: any) => c.type === 'identifier');
       count += Math.max(ids.length, 1);
     }
   }
   return count;
 }
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_statement',
@@ -458,12 +460,12 @@ function _estimateComplexity(node) {
     'select_statement',
     'communication_case',
   ]);
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
     if (n.type === 'binary_expression') {
-      const op = n.children?.find((c) => c.text === '&&' || c.text === '||');
+      const op = n.children?.find((c: any) => c.text === '&&' || c.text === '||');
       if (op) {
         complexity++;
       }
@@ -476,7 +478,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_statement',
     'for_statement',
@@ -510,15 +512,15 @@ function _maxNesting(node, depth) {
  * @param {TreeSitterNode} spec - import_spec 节点
  * @returns {ImportRecord|null}
  */
-function _parseGoImportSpec(spec) {
-  const strLit = spec.namedChildren.find((c) => c.type === 'interpreted_string_literal');
+function _parseGoImportSpec(spec: any) {
+  const strLit = spec.namedChildren.find((c: any) => c.type === 'interpreted_string_literal');
   if (!strLit) {
     return null;
   }
 
   const importPath = strLit.text.replace(/"/g, '');
   const aliasNode = spec.namedChildren.find(
-    (c) =>
+    (c: any) =>
       c.type === 'package_identifier' ||
       c.type === 'dot' ||
       c.type === 'blank_identifier' ||
@@ -562,7 +564,7 @@ function _parseGoImportSpec(spec) {
  * @param {object} ctx
  * @param {string} _lang
  */
-function extractCallSitesGo(root, ctx, _lang) {
+function extractCallSitesGo(root: any, ctx: any, _lang: any) {
   const scopes = _collectGoScopes(root);
   for (const scope of scopes) {
     _extractGoCallSitesFromBody(scope.body, scope.className, scope.methodName, ctx);
@@ -572,33 +574,37 @@ function extractCallSitesGo(root, ctx, _lang) {
 /**
  * 收集 Go 中所有函数/方法作用域
  */
-function _collectGoScopes(root) {
+function _collectGoScopes(root: any) {
   const scopes: { body: any; className: null; methodName: any }[] = [];
   for (let i = 0; i < root.namedChildCount; i++) {
     const child = root.namedChild(i);
 
     if (child.type === 'function_declaration') {
-      const name = child.namedChildren.find((c) => c.type === 'identifier')?.text;
-      const body = child.namedChildren.find((c) => c.type === 'block');
+      const name = child.namedChildren.find((c: any) => c.type === 'identifier')?.text;
+      const body = child.namedChildren.find((c: any) => c.type === 'block');
       if (name && body) {
         scopes.push({ body, className: null, methodName: name });
       }
     } else if (child.type === 'method_declaration') {
-      const name = child.namedChildren.find((c) => c.type === 'field_identifier')?.text;
-      const body = child.namedChildren.find((c) => c.type === 'block');
+      const name = child.namedChildren.find((c: any) => c.type === 'field_identifier')?.text;
+      const body = child.namedChildren.find((c: any) => c.type === 'block');
       // 提取 receiver type
-      const paramLists = child.namedChildren.filter((c) => c.type === 'parameter_list');
+      const paramLists = child.namedChildren.filter((c: any) => c.type === 'parameter_list');
       let receiverType: any = null;
       if (paramLists[0]) {
         const paramDecl = paramLists[0].namedChildren.find(
-          (c) => c.type === 'parameter_declaration'
+          (c: any) => c.type === 'parameter_declaration'
         );
         if (paramDecl) {
-          const pointer = paramDecl.namedChildren.find((c) => c.type === 'pointer_type');
+          const pointer = paramDecl.namedChildren.find((c: any) => c.type === 'pointer_type');
           if (pointer) {
-            receiverType = pointer.namedChildren.find((c) => c.type === 'type_identifier')?.text;
+            receiverType = pointer.namedChildren.find(
+              (c: any) => c.type === 'type_identifier'
+            )?.text;
           } else {
-            receiverType = paramDecl.namedChildren.find((c) => c.type === 'type_identifier')?.text;
+            receiverType = paramDecl.namedChildren.find(
+              (c: any) => c.type === 'type_identifier'
+            )?.text;
           }
         }
       }
@@ -613,7 +619,7 @@ function _collectGoScopes(root) {
 /**
  * 从 Go block 中递归提取调用点
  */
-function _extractGoCallSitesFromBody(bodyNode, className, methodName, ctx) {
+function _extractGoCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;
   }
@@ -641,7 +647,7 @@ function _extractGoCallSitesFromBody(bodyNode, className, methodName, ctx) {
     'encoding',
   ]);
 
-  function walk(node) {
+  function walk(node: any) {
     if (!node || node.type === 'ERROR' || node.isMissing) {
       return;
     }
@@ -694,7 +700,7 @@ function _extractGoCallSitesFromBody(bodyNode, className, methodName, ctx) {
       }
 
       // 计算参数数量
-      const args = node.namedChildren.find((c) => c.type === 'argument_list');
+      const args = node.namedChildren.find((c: any) => c.type === 'argument_list');
       const argCount = args ? args.namedChildCount : 0;
 
       ctx.callSites.push({
@@ -725,7 +731,7 @@ function _extractGoCallSitesFromBody(bodyNode, className, methodName, ctx) {
     walkChildren(node);
   }
 
-  function walkChildren(node) {
+  function walkChildren(node: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       walk(node.namedChild(i));
     }
@@ -740,7 +746,7 @@ let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }
-export function setGrammar(grammar) {
+export function setGrammar(grammar: any) {
   _grammar = grammar;
 }
 

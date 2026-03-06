@@ -31,7 +31,7 @@ export class Relations {
     for (const k of RELATION_BUCKETS) {
       const vals = buckets[k] || [];
       this._b[k] = vals
-        .map((r) => {
+        .map((r: any) => {
           // 兼容字符串数组：AI prompt 可能返回 ["recipeName"] 而非 [{target,description}]
           if (typeof r === 'string') {
             return r.trim() ? { target: r.trim(), description: '' } : null;
@@ -47,7 +47,7 @@ export class Relations {
    * @param {Relations|Array|Object|null} input
    * @returns {Relations}
    */
-  static from(input) {
+  static from(input: any) {
     if (input instanceof Relations) {
       return input;
     }
@@ -98,7 +98,7 @@ export class Relations {
    * @param {string} type
    * @returns {Array<{target:string, description:string}>}
    */
-  getByType(type) {
+  getByType(type: any) {
     return this._b[type] || [];
   }
 
@@ -117,11 +117,11 @@ export class Relations {
    * @param {string} description
    * @returns {Relations}
    */
-  add(type, target, description = '') {
+  add(type: any, target: any, description = '') {
     if (!this._b[type]) {
       this._b[type] = [];
     }
-    if (!this._b[type].some((r) => r.target === target)) {
+    if (!this._b[type].some((r: any) => r.target === target)) {
       this._b[type].push({ target, description });
     }
     return this;
@@ -133,9 +133,9 @@ export class Relations {
    * @param {string} target 目标
    * @returns {Relations}
    */
-  remove(type, target) {
+  remove(type: any, target: any) {
     if (this._b[type]) {
-      this._b[type] = this._b[type].filter((r) => r.target !== target);
+      this._b[type] = this._b[type].filter((r: any) => r.target !== target);
     }
     return this;
   }
@@ -152,7 +152,7 @@ export class Relations {
    * @param {Object|Array} data
    * @returns {Relations}
    */
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     return Relations.from(data);
   }
 }

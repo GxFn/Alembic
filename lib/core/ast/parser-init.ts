@@ -36,6 +36,7 @@ export async function initParser() {
 
   try {
     // web-tree-sitter ESM: 导出 { Parser, Language, ... } 命名空间
+    // @ts-ignore
     const mod = await import('web-tree-sitter');
     _namespace = mod.default || mod;
     // v0.25 导出 { Parser, Language, ... }，需要提取 Parser 类
@@ -69,7 +70,7 @@ export function isParserReady() {
  * @param {string} wasmFileName 如 'tree-sitter-javascript.wasm'
  * @returns {Promise<object|null>} Language 对象，失败返回 null
  */
-export async function loadLanguageWasm(wasmFileName) {
+export async function loadLanguageWasm(wasmFileName: any) {
   if (!_initialized || !_namespace) {
     return null;
   }

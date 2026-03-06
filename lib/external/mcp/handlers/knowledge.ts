@@ -8,7 +8,7 @@ import { envelope } from '../envelope.js';
 
 // ─── 限流 ──────────────────────────────────────────────────
 
-async function _checkRateLimit(toolName, clientId) {
+async function _checkRateLimit(toolName: any, clientId: any) {
   const { checkRecipeSave } = await import('../../../http/middleware/RateLimiter.js');
   const projectRoot = process.cwd();
   const limitCheck = checkRecipeSave(projectRoot, clientId || process.env.USER || 'mcp-client');
@@ -34,7 +34,7 @@ async function _checkRateLimit(toolName, clientId) {
  * 注意: QualityScorer 评分已统一为 KnowledgeService.create() 后置执行 (R9)。
  * _enrichToV3 不再内联 QualityScorer，避免外部路径双重评分。
  */
-function _enrichToV3(args, container) {
+function _enrichToV3(args: any, container: any) {
   const data: any = { ...args };
 
   // 来源标记（非 Cursor 职责）
@@ -80,7 +80,7 @@ function _enrichToV3(args, container) {
  * MCP wire format → V3 增强 → KnowledgeService.create()
  * 增强包括：source='mcp'、reasoning 默认值、Delivery 字段补齐、QualityScorer、语义标签。
  */
-export async function submitKnowledge(ctx, args) {
+export async function submitKnowledge(ctx: any, args: any) {
   // 限流
   const blocked = await _checkRateLimit('autosnippet_submit_knowledge', args.client_id);
   if (blocked) {
@@ -129,7 +129,7 @@ export async function submitKnowledge(ctx, args) {
 /**
  * 批量知识提交 (autosnippet_submit_knowledge_batch)
  */
-export async function submitKnowledgeBatch(ctx, args) {
+export async function submitKnowledgeBatch(ctx: any, args: any) {
   if (!args.target_name || !Array.isArray(args.items) || args.items.length === 0) {
     throw new Error('需要 target_name 与 items（非空数组）');
   }
@@ -148,7 +148,7 @@ export async function submitKnowledgeBatch(ctx, args) {
         '../../../service/candidate/CandidateAggregator.js'
       );
       // 对 title 字段做去重
-      const readinessItems = items.map((it) => ({
+      const readinessItems = items.map((it: any) => ({
         ...it,
         code: it.content?.pattern || it.code || '',
       }));
@@ -156,7 +156,7 @@ export async function submitKnowledgeBatch(ctx, args) {
       // 保留原始 items 顺序中去重后的
       if (result.items && result.items.length < items.length) {
         const titles = new Set(result.items.map((it) => it.title));
-        items = items.filter((it) => titles.has(it.title));
+        items = items.filter((it: any) => titles.has(it.title));
       }
     } catch {
       // CandidateAggregator 加载失败时降级：不去重
@@ -274,7 +274,7 @@ export async function submitKnowledgeBatch(ctx, args) {
  */
 const MCP_ALLOWED_LIFECYCLE_ACTIONS = new Set(['reactivate']);
 
-export async function knowledgeLifecycle(ctx, args) {
+export async function knowledgeLifecycle(ctx: any, args: any) {
   const { id, action } = args;
   if (!id || !action) {
     throw new Error('需要 id 和 action');
@@ -313,7 +313,7 @@ export async function knowledgeLifecycle(ctx, args) {
  * 不走 RecipeReadiness 检查（文档无需 doClause/trigger）。
  * 支持 autoApprove — 文档直接进入 active 状态。
  */
-export async function saveDocument(ctx, args) {
+export async function saveDocument(ctx: any, args: any) {
   if (!args.title || !args.title.trim()) {
     throw new Error('title 必填');
   }

@@ -45,7 +45,7 @@ export class MemoryStore {
   /**
    * @param {import('better-sqlite3').Database} db - better-sqlite3 实例 (raw)
    */
-  constructor(db) {
+  constructor(db: any) {
     this.#db = db;
     this.#ensureTable();
     this.#prepareStatements();
@@ -65,7 +65,7 @@ export class MemoryStore {
    * @param {object} memory
    * @returns {{ id: string, action: string }}
    */
-  add(memory) {
+  add(memory: any) {
     const id = `smem_${randomUUID().replace(/-/g, '').substring(0, 12)}`;
     const now = new Date().toISOString();
     const content = (memory.content || '').trim().substring(0, 500);
@@ -102,7 +102,7 @@ export class MemoryStore {
    * @param {object} updates
    * @returns {boolean}
    */
-  update(id, updates) {
+  update(id: any, updates: any) {
     const existing = this.#stmts.getById.get(id);
     if (!existing) {
       return false;
@@ -161,7 +161,7 @@ export class MemoryStore {
    * @param {string} id
    * @returns {boolean}
    */
-  delete(id) {
+  delete(id: any) {
     const result = this.#stmts.deleteById.run(id);
     return result.changes > 0;
   }
@@ -171,7 +171,7 @@ export class MemoryStore {
    * @param {string} id
    * @returns {object|null}
    */
-  get(id) {
+  get(id: any) {
     const row = this.#stmts.getById.get(id);
     return row ? MemoryStore.deserialize(row) : null;
   }
@@ -206,7 +206,7 @@ export class MemoryStore {
    * @param {string|null} type
    * @returns {Array<object>}
    */
-  getCandidates(type) {
+  getCandidates(type: any) {
     const now = new Date().toISOString();
     return type ? this.#stmts.getByContent.all({ type, now }) : this.#stmts.getAll.all({ now });
   }
@@ -215,7 +215,7 @@ export class MemoryStore {
    * 更新访问计数
    * @param {string} id
    */
-  touchAccess(id) {
+  touchAccess(id: any) {
     try {
       this.#stmts.touchAccess.run({ id, now: new Date().toISOString() });
     } catch {
@@ -319,8 +319,8 @@ export class MemoryStore {
 
     return {
       total,
-      byType: Object.fromEntries(byType.map((r) => [r.type, r.cnt])),
-      bySource: Object.fromEntries(bySource.map((r) => [r.source, r.cnt])),
+      byType: Object.fromEntries(byType.map((r: any) => [r.type, r.cnt])),
+      bySource: Object.fromEntries(bySource.map((r: any) => [r.source, r.cnt])),
       avgImportance: Math.round(avgImportance * 10) / 10,
     };
   }
@@ -347,18 +347,18 @@ export class MemoryStore {
    * @param {number} limit 返回条数
    * @returns {Array<object>} 带 similarity 和 related_memories_raw 字段的 raw rows
    */
-  findSimilar(content, type, limit) {
+  findSimilar(content: any, type: any, limit: any) {
     const candidates = this.getCandidates(type);
     const lowerContent = content.toLowerCase();
     const contentTokens = tokenizeForSimilarity(lowerContent);
 
     const scored = candidates
-      .map((row) => {
+      .map((row: any) => {
         const similarity = MemoryStore.computeSimilarity(contentTokens, lowerContent, row.content);
         return { ...row, similarity, related_memories_raw: row.related_memories };
       })
-      .filter((r) => r.similarity > 0.1)
-      .sort((a, b) => b.similarity - a.similarity);
+      .filter((r: any) => r.similarity > 0.1)
+      .sort((a: any, b: any) => b.similarity - a.similarity);
 
     return scored.slice(0, limit);
   }
@@ -370,7 +370,7 @@ export class MemoryStore {
    * @param {string} contentB
    * @returns {number} 0.0-1.0
    */
-  static computeSimilarity(tokensA, lowerA, contentB) {
+  static computeSimilarity(tokensA: any, lowerA: any, contentB: any) {
     const lowerB = (contentB || '').toLowerCase();
     const tokensB = tokenizeForSimilarity(lowerB);
 
@@ -391,7 +391,7 @@ export class MemoryStore {
    * @param {Function} fn
    * @returns {Function}
    */
-  transaction(fn) {
+  transaction(fn: any) {
     return this.#db.transaction(fn);
   }
 
@@ -404,7 +404,7 @@ export class MemoryStore {
    * @param {object} row
    * @returns {object}
    */
-  static deserialize(row) {
+  static deserialize(row: any) {
     return {
       id: row.id,
       type: row.type,
@@ -425,7 +425,7 @@ export class MemoryStore {
     };
   }
 
-  static safeParseJSON(str, fallback) {
+  static safeParseJSON(str: any, fallback: any) {
     try {
       return str ? JSON.parse(str) : fallback;
     } catch {

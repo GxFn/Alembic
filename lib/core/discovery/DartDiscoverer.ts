@@ -44,7 +44,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     return 'Dart / Flutter';
   }
 
-  async detect(projectRoot) {
+  async detect(projectRoot: any) {
     let confidence = 0;
     const reasons: any[] = [];
 
@@ -89,7 +89,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     };
   }
 
-  async load(projectRoot) {
+  async load(projectRoot: any) {
     this.#projectRoot = projectRoot;
     this.#targets = [];
     this.#depGraph = { nodes: [], edges: [] };
@@ -168,7 +168,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     return this.#targets;
   }
 
-  async getTargetFiles(target) {
+  async getTargetFiles(target: any) {
     const targetPath =
       typeof target === 'string'
         ? this.#targets.find((t) => t.name === target)?.path || this.#projectRoot
@@ -192,7 +192,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 解析 pubspec.yaml（简易 YAML 解析，不引入三方依赖）
    */
-  #parsePubspec(projectRoot) {
+  #parsePubspec(projectRoot: any) {
     const pubspecPath = join(projectRoot, 'pubspec.yaml');
     if (!existsSync(pubspecPath)) {
       return null;
@@ -209,7 +209,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
    * 极简 YAML 解析器 — 仅支持顶层和一层嵌套的 key: value
    * 用于解析 pubspec.yaml 中的 name, dependencies, environment 等
    */
-  #parseSimpleYaml(content) {
+  #parseSimpleYaml(content: any) {
     const result: Record<string, any> = {};
     let currentSection: string | null = null;
 
@@ -253,7 +253,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 检测 Flutter/Dart 框架
    */
-  #detectFramework(pubspec) {
+  #detectFramework(pubspec: any) {
     if (!pubspec) {
       return null;
     }
@@ -301,7 +301,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 发现 Melos 多包工作区中的子包
    */
-  #discoverMelosPackages(projectRoot) {
+  #discoverMelosPackages(projectRoot: any) {
     const melosPath = join(projectRoot, 'melos.yaml');
     if (!existsSync(melosPath)) {
       return;
@@ -366,7 +366,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 解析 pubspec.yaml 依赖到 depGraph
    */
-  #parseDependencies(pubspec) {
+  #parseDependencies(pubspec: any) {
     if (!pubspec) {
       return;
     }
@@ -374,7 +374,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     const nodeSet = new Set(this.#depGraph.nodes.map((n) => (typeof n === 'string' ? n : n.id)));
     const rootNode = this.#packageName;
 
-    const addDep = (name, isDev) => {
+    const addDep = (name: any, isDev: any) => {
       if (!nodeSet.has(name)) {
         this.#depGraph.nodes.push({
           id: name,
@@ -413,7 +413,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 解析内部 Dart import 语句，构建包内模块依赖关系
    */
-  #parseInternalImports(projectRoot) {
+  #parseInternalImports(projectRoot: any) {
     const libDir = join(projectRoot, 'lib');
     if (!existsSync(libDir)) {
       return;
@@ -439,7 +439,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     }
 
     // 扫描 import 语句
-    const scanDir = (dir) => {
+    const scanDir = (dir: any) => {
       try {
         const entries = readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
@@ -490,7 +490,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
   /**
    * 递归收集 .dart 文件
    */
-  #collectDartFiles(dir, rootDir, files, depth = 0) {
+  #collectDartFiles(dir: any, rootDir: any, files: any, depth = 0) {
     if (depth > 15) {
       return;
     }

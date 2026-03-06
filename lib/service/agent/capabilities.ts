@@ -132,7 +132,7 @@ export class Conversation extends Capability {
     ];
   }
 
-  buildContext(context) {
+  buildContext(context: any) {
     const parts: any | string[] = [];
 
     // SOUL.md 人格注入
@@ -163,7 +163,7 @@ export class Conversation extends Capability {
     return parts.length > 0 ? parts.join('\n\n') : null;
   }
 
-  onAfterStep(stepResult) {
+  onAfterStep(stepResult: any) {
     // 缓存工具结果到记忆
     if (this.#memoryCoordinator && stepResult.toolCalls?.length > 0) {
       try {
@@ -417,12 +417,12 @@ export const CapabilityRegistry = {
    * @param {Object} [opts]
    * @returns {Capability}
    */
-  create(name, opts: any = {}) {
+  create(name: any, opts: any = {}) {
     const Cls = this._registry.get(name);
     if (!Cls) {
       throw new Error(`Unknown capability: ${name}`);
     }
-    return new Cls(opts);
+    return new (Cls as any)(opts);
   },
 
   /**
@@ -430,7 +430,7 @@ export const CapabilityRegistry = {
    * @param {string} name
    * @param {typeof Capability} cls
    */
-  register(name, cls) {
+  register(name: any, cls: any) {
     this._registry.set(name, cls);
   },
 

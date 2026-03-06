@@ -20,7 +20,7 @@ export class VectorMigration {
    * @param {import('./HnswVectorAdapter.js').HnswVectorAdapter} adapter - HNSW 适配器实例
    * @returns {Promise<'new'|'migrated'|'binary'>}
    */
-  static async migrate(indexDir, adapter) {
+  static async migrate(indexDir: any, adapter: any) {
     const jsonPath = join(indexDir, 'vector_index.json');
     const hnswPath = join(indexDir, 'vector_index.asvec');
 
@@ -84,7 +84,7 @@ export class VectorMigration {
    * @param {string} indexDir
    * @returns {boolean}
    */
-  static needsMigration(indexDir) {
+  static needsMigration(indexDir: any) {
     const jsonPath = join(indexDir, 'vector_index.json');
     const hnswPath = join(indexDir, 'vector_index.asvec');
     return existsSync(jsonPath) && !existsSync(hnswPath);

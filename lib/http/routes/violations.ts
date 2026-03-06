@@ -17,7 +17,7 @@ const _logger = Logger.getInstance();
  */
 router.get(
   '/',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const violationsStore = container.get('violationsStore');
 
@@ -51,7 +51,7 @@ router.get(
  */
 router.get(
   '/stats',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const violationsStore = container.get('violationsStore');
 
@@ -70,7 +70,7 @@ router.get(
  */
 router.post(
   '/clear',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const violationsStore = container.get('violationsStore');
 

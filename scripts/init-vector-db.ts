@@ -26,12 +26,12 @@ if (!fs.existsSync(logPath)) {
 }
 
 const logger = {
-  log: (msg) => {
+  log: (msg: any) => {
     const timestamp = new Date().toISOString();
     const logMsg = `[${timestamp}] ${msg}`;
     fs.appendFileSync(path.join(logPath, 'init-vector-db.log'), `${logMsg}\n`);
   },
-  error: (msg, err) => {
+  error: (msg: any, err: any) => {
     const timestamp = new Date().toISOString();
     const logMsg = `[${timestamp}] ERROR: ${msg}`;
     console.error(logMsg);
@@ -259,7 +259,7 @@ function verifySystemStatus() {
       logger.log(`  ✅ 验证: ${file}`);
     } else {
       logger.log(`  ⚠️  警告: ${file} 不存在`);
-      status.components[file] = false;
+      (status.components as Record<string, boolean>)[file] = false;
     }
   }
 

@@ -44,7 +44,7 @@ export class PersistentMemory {
    * @param {object}   [opts.logger]
    * @param {Function} [opts.embeddingFn]
    */
-  constructor(db, opts: any = {}) {
+  constructor(db: any, opts: any = {}) {
     const { logger, embeddingFn } = typeof opts === 'object' && opts !== null ? opts : {};
     if (!db) {
       throw new Error('PersistentMemory requires a database instance');
@@ -63,22 +63,22 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 添加一条记忆 */
-  add(memory) {
+  add(memory: any) {
     return this.#store.add(memory);
   }
 
   /** 更新已有记忆 */
-  update(id, updates) {
+  update(id: any, updates: any) {
     return this.#store.update(id, updates);
   }
 
   /** 删除一条记忆 */
-  delete(id) {
+  delete(id: any) {
     return this.#store.delete(id);
   }
 
   /** 按 ID 获取 */
-  get(id) {
+  get(id: any) {
     return this.#store.get(id);
   }
 
@@ -87,7 +87,7 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 智能固化 (ADD / UPDATE / MERGE / NOOP + 冲突解决) */
-  consolidate(candidateMemories, opts) {
+  consolidate(candidateMemories: any, opts: any) {
     return this.#consolidator.consolidate(candidateMemories, opts);
   }
 
@@ -96,12 +96,12 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 三维打分综合检索 */
-  retrieve(query, opts) {
+  retrieve(query: any, opts: any) {
     return this.#retriever.retrieve(query, opts);
   }
 
   /** 简单文本搜索 */
-  search(content, opts) {
+  search(content: any, opts: any) {
     return this.#retriever.search(content, opts);
   }
 
@@ -110,17 +110,17 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 预算感知 Prompt section */
-  toPromptSection(opts) {
+  toPromptSection(opts: any) {
     return this.#retriever.toPromptSection(opts);
   }
 
   /** 兼容 Memory.load() */
-  load(limit, opts) {
+  load(limit: any, opts: any) {
     return this.#retriever.load(limit, opts);
   }
 
   /** 兼容 Memory.append() */
-  append(entry) {
+  append(entry: any) {
     return this.#retriever.append(entry);
   }
 
@@ -129,7 +129,7 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 记忆总数 */
-  size(opts) {
+  size(opts: any) {
     return this.#store.size(opts);
   }
 
@@ -159,7 +159,7 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 从旧版 Memory.js JSONL 文件迁移 */
-  async migrateFromLegacy(projectRoot) {
+  async migrateFromLegacy(projectRoot: any) {
     return this.#consolidator.migrateFromLegacy(projectRoot);
   }
 
@@ -167,7 +167,7 @@ export class PersistentMemory {
   // 向量嵌入接口 — 委托 MemoryRetriever
   // ═══════════════════════════════════════════════════════════
 
-  setEmbeddingFunction(fn) {
+  setEmbeddingFunction(fn: any) {
     this.#retriever.setEmbeddingFunction(fn);
   }
 
@@ -175,7 +175,7 @@ export class PersistentMemory {
     return this.#retriever.getEmbeddingFunction();
   }
 
-  computeEmbeddingRelevance(query, content) {
+  computeEmbeddingRelevance(query: any, content: any) {
     return this.#retriever.computeEmbeddingRelevance(query, content);
   }
 
@@ -183,7 +183,7 @@ export class PersistentMemory {
   // Private
   // ═══════════════════════════════════════════════════════════
 
-  #log(msg) {
+  #log(msg: any) {
     const formatted = `[PersistentMemory] ${msg}`;
     if (this.#logger?.info) {
       this.#logger.info(formatted);

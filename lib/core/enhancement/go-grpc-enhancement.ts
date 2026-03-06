@@ -82,7 +82,7 @@ class GoGrpcEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── gRPC Service Implementations ──
@@ -91,11 +91,11 @@ class GoGrpcEnhancement extends EnhancementPack {
         continue;
       }
       // Structs embedding Unimplemented*Server
-      if (cls.embeddedTypes?.some((t) => /^Unimplemented\w+Server$/.test(t))) {
+      if (cls.embeddedTypes?.some((t: any) => /^Unimplemented\w+Server$/.test(t))) {
         patterns.push({
           type: 'go-grpc-service-impl',
           className: cls.name,
-          embeds: cls.embeddedTypes.filter((t) => /Unimplemented/.test(t)),
+          embeds: cls.embeddedTypes.filter((t: any) => /Unimplemented/.test(t)),
           line: cls.line,
           confidence: 0.95,
         });
@@ -141,7 +141,7 @@ class GoGrpcEnhancement extends EnhancementPack {
 
     // ── Protobuf imports ──
     const pbImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('/pb') || imp.includes('/proto') || imp.includes('google.golang.org/grpc')
     );
     if (pbImports.length > 0) {

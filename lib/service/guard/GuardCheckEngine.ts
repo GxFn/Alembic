@@ -484,7 +484,7 @@ export class GuardCheckEngine {
   _guardConfig: any;
   db: any;
   logger: any;
-  constructor(db, options: any = {}) {
+  constructor(db: any, options: any = {}) {
     this.db = typeof db?.getDb === 'function' ? db.getDb() : db;
     this.logger = Logger.getInstance();
     this._builtInRules = BUILT_IN_RULES;
@@ -508,7 +508,7 @@ export class GuardCheckEngine {
    * 与 BUILT_IN_RULES 合并检查，自动跳过 ruleId 重复的规则
    * @param {Array<{ruleId: string, pattern: RegExp|string, severity: string, message: string, category?: string, dimension?: string, languages?: string[], fixSuggestion?: string}>} rules
    */
-  injectExternalRules(rules) {
+  injectExternalRules(rules: any) {
     if (!Array.isArray(rules)) {
       return;
     }
@@ -667,7 +667,7 @@ export class GuardCheckEngine {
           !r.languages?.length ||
           r.languages.includes(language) ||
           r.languages.includes(langNorm) ||
-          r.languages.some((l) => LanguageService.toGuardLangId(l) === langNorm)
+          r.languages.some((l: any) => LanguageService.toGuardLangId(l) === langNorm)
       );
     }
 
@@ -682,7 +682,9 @@ export class GuardCheckEngine {
     if (this._astRulesCache?.length) {
       let astRules = this._astRulesCache;
       if (language) {
-        astRules = astRules.filter((r) => !r.languages?.length || r.languages.includes(language));
+        astRules = astRules.filter(
+          (r: any) => !r.languages?.length || r.languages.includes(language)
+        );
       }
       rules.push(...astRules);
     }
@@ -697,7 +699,7 @@ export class GuardCheckEngine {
    * @param {object} options - {scope, filePath}
    * @returns {Array<{ruleId, message, severity, line, snippet, dimension?, fixSuggestion?}>}
    */
-  checkCode(code, language, options: any = {}) {
+  checkCode(code: any, language: any, options: any = {}) {
     const { scope = null, filePath = '' } = options;
     const violations: any[] = [];
 
@@ -723,7 +725,7 @@ export class GuardCheckEngine {
         target: ['file', 'target'],
         file: ['file'],
       };
-      const allowedDimensions = SCOPE_HIERARCHY[scope] || [scope];
+      const allowedDimensions = (SCOPE_HIERARCHY as Record<string, any>)[scope] || [scope];
       rules = rules.filter((r) => !r.dimension || allowedDimensions.includes(r.dimension));
     }
 
@@ -811,7 +813,7 @@ export class GuardCheckEngine {
    * @param {string} language 语言标识
    * @returns {Array} violations
    */
-  _runAstRuleChecks(code, language) {
+  _runAstRuleChecks(code: any, language: any) {
     // AST 语言标准化 — 通过 LanguageService 判断是否为已知编程语言
     const astLang = LanguageService.isKnownLang(language)
       ? language
@@ -824,7 +826,7 @@ export class GuardCheckEngine {
 
     // 获取缓存中的 AST 规则
     const astRules = (this._astRulesCache || []).filter(
-      (r) => !r.languages?.length || r.languages.includes(language)
+      (r: any) => !r.languages?.length || r.languages.includes(language)
     );
     if (astRules.length === 0) {
       return [];
@@ -951,7 +953,7 @@ export class GuardCheckEngine {
    * 将 Guard 命中计数回写到对应 Recipe 的 guard_hit_count
    * @param {Array<{ruleId: string}>} violations
    */
-  trackGuardHits(violations) {
+  trackGuardHits(violations: any) {
     if (!violations?.length || !this.db) {
       return;
     }
@@ -996,7 +998,7 @@ export class GuardCheckEngine {
    * @param {string} code 文件内容
    * @param {object} options - {scope}
    */
-  auditFile(filePath, code, options: any = {}) {
+  auditFile(filePath: any, code: any, options: any = {}) {
     const language = detectLanguage(filePath);
     const violations = this.checkCode(code, language, { ...options, filePath });
     return {
@@ -1017,7 +1019,7 @@ export class GuardCheckEngine {
    * @param {object} options - {scope: 'file'|'target'|'project'}
    * @returns {{files, summary, crossFileViolations}}
    */
-  auditFiles(files, options: any = {}) {
+  auditFiles(files: any, options: any = {}) {
     const results: any[] = [];
     let totalViolations = 0;
     let totalErrors = 0;

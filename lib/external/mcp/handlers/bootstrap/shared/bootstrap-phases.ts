@@ -78,7 +78,7 @@ const ASD_GENERATED_PATH_SEGMENTS = [
  * @param {string} filePath
  * @returns {boolean}
  */
-export function isAutoSnippetGenerated(filePath) {
+export function isAutoSnippetGenerated(filePath: any) {
   const base = path.basename(filePath);
   if (ASD_GENERATED_BASENAMES.has(base)) {
     return true;
@@ -104,7 +104,7 @@ export function isAutoSnippetGenerated(filePath) {
  * @param {PhaseOptions} options
  * @returns {Promise<{ allFiles: Array, allTargets: Array, discoverer: object, langStats: object }>}
  */
-export async function runPhase1_FileCollection(projectRoot, logger, options: any = {}) {
+export async function runPhase1_FileCollection(projectRoot: any, logger: any, options: any = {}) {
   const maxFiles = options.maxFiles || 500;
 
   const { getDiscovererRegistry } = await import('../../../../../core/discovery/index.js');
@@ -178,7 +178,12 @@ export async function runPhase1_FileCollection(projectRoot, logger, options: any
  * @param {boolean} [options.generateAstContext=false] 是否生成 astContext 文本
  * @returns {Promise<{ astProjectSummary: object|null, astContext: string, warnings: string[] }>}
  */
-export async function runPhase1_5_AstAnalysis(allFiles, langStats, logger, options: any = {}) {
+export async function runPhase1_5_AstAnalysis(
+  allFiles: any,
+  langStats: any,
+  logger: any,
+  options: any = {}
+) {
   const warnings: string[] = [];
   let astProjectSummary: any = null;
   let astContext = '';
@@ -205,7 +210,7 @@ export async function runPhase1_5_AstAnalysis(allFiles, langStats, logger, optio
   const primaryLangEarly = detectPrimaryLanguage(langStats);
   if (astIsAvailable() && primaryLangEarly) {
     try {
-      const astFiles = allFiles.map((f) => ({
+      const astFiles = allFiles.map((f: any) => ({
         name: f.name,
         relativePath: f.relativePath,
         content: f.content,
@@ -218,7 +223,9 @@ export async function runPhase1_5_AstAnalysis(allFiles, langStats, logger, optio
           '../../../../../core/enhancement/index.js'
         );
         const enhReg = await initEnhancementRegistry();
-        const preprocessPack = enhReg.all().find((p) => typeof p.preprocessFile === 'function');
+        const preprocessPack = enhReg
+          .all()
+          .find((p: any) => typeof p.preprocessFile === 'function');
         if (preprocessPack) {
           sfcPreprocessor = preprocessPack.preprocessFile.bind(preprocessPack);
         }
@@ -269,7 +276,12 @@ export async function runPhase1_5_AstAnalysis(allFiles, langStats, logger, optio
  * @param {object} logger
  * @returns {Promise<{ codeEntityResult: object|null, warnings: string[] }>}
  */
-export async function runPhase1_6_EntityGraph(astProjectSummary, projectRoot, container, logger) {
+export async function runPhase1_6_EntityGraph(
+  astProjectSummary: any,
+  projectRoot: any,
+  container: any,
+  logger: any
+) {
   const warnings: string[] = [];
   let codeEntityResult: any = null;
 
@@ -312,10 +324,10 @@ export async function runPhase1_6_EntityGraph(astProjectSummary, projectRoot, co
  * @returns {Promise<{ callGraphResult: object|null, warnings: string[] }>}
  */
 export async function runPhase1_7_CallGraph(
-  astProjectSummary,
-  projectRoot,
-  container,
-  logger,
+  astProjectSummary: any,
+  projectRoot: any,
+  container: any,
+  logger: any,
   incrementalOpts: any = null
 ) {
   const warnings: string[] = [];
@@ -327,7 +339,7 @@ export async function runPhase1_7_CallGraph(
 
   // 检查是否有 callSites 数据 (Phase 5 提取)
   const hasCallSites = astProjectSummary.fileSummaries.some(
-    (f) => f.callSites && f.callSites.length > 0
+    (f: any) => f.callSites && f.callSites.length > 0
   );
   if (!hasCallSites) {
     logger.info('[Bootstrap] Call Graph skipped: no call sites extracted');
@@ -399,9 +411,9 @@ export async function runPhase1_7_CallGraph(
  * @returns {Promise<{ depGraphData: object|null, depEdgesWritten: number, warnings: string[] }>}
  */
 export async function runPhase2_DependencyGraph(
-  discoverer,
-  container,
-  logger,
+  discoverer: any,
+  container: any,
+  logger: any,
   sourceTag = 'bootstrap'
 ) {
   const warnings: string[] = [];
@@ -444,7 +456,12 @@ export async function runPhase2_DependencyGraph(
  * @param {object} container
  * @param {object} logger
  */
-export async function runPhase2_1_ModuleEntities(depGraphData, projectRoot, container, logger) {
+export async function runPhase2_1_ModuleEntities(
+  depGraphData: any,
+  projectRoot: any,
+  container: any,
+  logger: any
+) {
   if (!depGraphData?.nodes?.length) {
     return;
   }
@@ -475,7 +492,12 @@ export async function runPhase2_1_ModuleEntities(depGraphData, projectRoot, cont
  * @param {string}  [options.summaryPrefix='Bootstrap scan'] - ViolationsStore 摘要前缀
  * @returns {Promise<{ guardAudit: object|null, guardEngine: object|null, warnings: string[] }>}
  */
-export async function runPhase3_GuardAudit(allFiles, container, logger, options: any = {}) {
+export async function runPhase3_GuardAudit(
+  allFiles: any,
+  container: any,
+  logger: any,
+  options: any = {}
+) {
   const warnings: string[] = [];
   let guardAudit: any = null;
   let guardEngine: any = null;
@@ -488,7 +510,7 @@ export async function runPhase3_GuardAudit(allFiles, container, logger, options:
     const { GuardCheckEngine } = await import('../../../../../service/guard/GuardCheckEngine.js');
     const db = container.get('database');
     guardEngine = new GuardCheckEngine(db);
-    const guardFiles = allFiles.map((f) => ({ path: f.path, content: f.content }));
+    const guardFiles = allFiles.map((f: any) => ({ path: f.path, content: f.content }));
     guardAudit = guardEngine.auditFiles(guardFiles, { scope: 'project' });
 
     // 写入 ViolationsStore
@@ -538,13 +560,13 @@ export async function runPhase3_GuardAudit(allFiles, container, logger, options:
  *   guardAudit: object|null
  * }>}
  */
-export async function runPhase4_DimensionResolve(params) {
+export async function runPhase4_DimensionResolve(params: any) {
   const { primaryLang, langStats, allTargets, astProjectSummary, guardEngine, allFiles, logger } =
     params;
 
   // 框架检测
   const detectedFrameworks = allTargets
-    .map((t) => (typeof t === 'object' ? t.framework : null))
+    .map((t: any) => (typeof t === 'object' ? t.framework : null))
     .filter(Boolean);
 
   // 条件维度过滤
@@ -566,7 +588,7 @@ export async function runPhase4_DimensionResolve(params) {
 
       // 追加额外维度
       for (const dim of pack.getExtraDimensions()) {
-        if (!activeDimensions.some((d) => d.id === dim.id)) {
+        if (!activeDimensions.some((d: any) => d.id === dim.id)) {
           activeDimensions.push(dim);
         }
       }
@@ -582,7 +604,7 @@ export async function runPhase4_DimensionResolve(params) {
         try {
           const patterns = pack.detectPatterns(astProjectSummary);
           if (patterns.length > 0) {
-            enhancementPatterns.push(...patterns.map((p) => ({ ...p, source: pack.id })));
+            enhancementPatterns.push(...patterns.map((p: any) => ({ ...p, source: pack.id })));
           }
         } catch {
           /* graceful degradation */
@@ -592,7 +614,7 @@ export async function runPhase4_DimensionResolve(params) {
 
     if (matchedPacks.length > 0) {
       logger.info(
-        `[Bootstrap] Enhancement packs: ${matchedPacks.map((p) => p.id).join(', ')} → ` +
+        `[Bootstrap] Enhancement packs: ${matchedPacks.map((p: any) => p.id).join(', ')} → ` +
           `+${activeDimensions.length - baseDimensions.length} dims, ${enhancementGuardRules.length} guard rules, ${enhancementPatterns.length} patterns`
       );
     }
@@ -604,7 +626,7 @@ export async function runPhase4_DimensionResolve(params) {
   if (enhancementGuardRules.length > 0 && guardEngine) {
     try {
       guardEngine.injectExternalRules(enhancementGuardRules);
-      const guardFiles = allFiles.map((f) => ({ path: f.path, content: f.content }));
+      const guardFiles = allFiles.map((f: any) => ({ path: f.path, content: f.content }));
       guardAudit = guardEngine.auditFiles(guardFiles, { scope: 'project' });
       logger.info(
         `[Bootstrap] Guard re-audit with ${guardEngine.getExternalRuleCount()} Enhancement Pack rules → ${guardAudit.summary.totalViolations} total violations`
@@ -649,7 +671,7 @@ export async function runPhase4_DimensionResolve(params) {
  * @param {string}  [options.summaryPrefix='Bootstrap scan']
  * @returns {Promise<PhaseResults>}
  */
-export async function runAllPhases(projectRoot, ctx, options: any = {}) {
+export async function runAllPhases(projectRoot: any, ctx: any, options: any = {}) {
   const warnings: any[] = [];
   const report: any = options.generateReport ? { phases: {}, startTime: Date.now() } : null;
 
@@ -837,7 +859,7 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
   const finalGuardAudit = phase4.guardAudit || phase3.guardAudit;
 
   // Targets 摘要
-  const targetsSummary = allTargets.map((t) => {
+  const targetsSummary = allTargets.map((t: any) => {
     const name = typeof t === 'string' ? t : t.name;
     return {
       name,

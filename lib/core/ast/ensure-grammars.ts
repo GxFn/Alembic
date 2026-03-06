@@ -41,7 +41,7 @@ const LANG_TO_WASM = {
 /**
  * 检查 .wasm 文件是否存在
  */
-function isWasmAvailable(wasmFileName) {
+function isWasmAvailable(wasmFileName: any) {
   return fs.existsSync(path.join(GRAMMARS_DIR, wasmFileName));
 }
 
@@ -56,7 +56,7 @@ function isWasmAvailable(wasmFileName) {
  * @param {object} [options.logger] - Logger 实例（可选）
  * @returns {Promise<{installed: string[], skipped: string[], failed: string[], alreadyAvailable: string[]}>}
  */
-export async function ensureGrammars(detectedLanguages, options: any = {}) {
+export async function ensureGrammars(detectedLanguages: any, options: any = {}) {
   const { logger } = options;
 
   const result = {
@@ -71,7 +71,7 @@ export async function ensureGrammars(detectedLanguages, options: any = {}) {
   }
 
   for (const lang of detectedLanguages) {
-    const wasmFile = LANG_TO_WASM[lang];
+    const wasmFile = (LANG_TO_WASM as Record<string, any>)[lang];
     if (!wasmFile) {
       result.skipped.push(lang);
       continue;
@@ -115,12 +115,12 @@ export async function reloadPlugins() {
  * @param {Record<string, number>} langStats - { swift: 120, m: 80, ts: 200 }
  * @returns {string[]} 需要的语言 ID 列表
  */
-export function inferLanguagesFromStats(langStats) {
+export function inferLanguagesFromStats(langStats: any) {
   const bareMap = LanguageService.bareExtToLangMap;
 
   const langs = new Set();
   for (const ext of Object.keys(langStats)) {
-    const lang = ext === 'tsx' ? 'tsx' : bareMap[ext];
+    const lang = ext === 'tsx' ? 'tsx' : (bareMap as Record<string, any>)[ext];
     if (lang) {
       langs.add(lang);
     }

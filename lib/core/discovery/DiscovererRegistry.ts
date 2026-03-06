@@ -15,7 +15,7 @@ export class DiscovererRegistry {
    * @param {import('./ProjectDiscoverer.js').ProjectDiscoverer} discoverer
    * @returns {DiscovererRegistry} this 支持链式调用
    */
-  register(discoverer) {
+  register(discoverer: any) {
     this.#discoverers.push(discoverer);
     return this;
   }
@@ -25,7 +25,7 @@ export class DiscovererRegistry {
    * @param {string} projectRoot
    * @returns {Promise<import('./ProjectDiscoverer.js').ProjectDiscoverer>}
    */
-  async detect(projectRoot) {
+  async detect(projectRoot: any) {
     const results = await Promise.all(
       this.#discoverers.map(async (d) => ({
         discoverer: d,
@@ -57,7 +57,7 @@ export class DiscovererRegistry {
    * @param {string} projectRoot
    * @returns {Promise<Array<{ discoverer: import('./ProjectDiscoverer.js').ProjectDiscoverer, confidence: number }>>}
    */
-  async detectAll(projectRoot) {
+  async detectAll(projectRoot: any) {
     const results = await Promise.all(
       this.#discoverers.map(async (d) => ({
         discoverer: d,

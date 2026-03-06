@@ -104,7 +104,7 @@ export class BudgetPolicy extends Policy {
     return this.#temperature;
   }
 
-  validateDuring(stepState) {
+  validateDuring(stepState: any) {
     if (stepState.iteration >= this.#maxIterations) {
       return {
         ok: false,
@@ -122,7 +122,7 @@ export class BudgetPolicy extends Policy {
     return { ok: true, action: 'continue' };
   }
 
-  applyToConfig(config) {
+  applyToConfig(config: any) {
     return {
       ...config,
       budget: {
@@ -214,7 +214,7 @@ export class SafetyPolicy extends Policy {
     return 'safety';
   }
 
-  validateBefore(context) {
+  validateBefore(context: any) {
     // 发送者鉴权
     if (this.#allowedSenders.length > 0) {
       const senderId = context.message?.sender?.id;
@@ -230,7 +230,7 @@ export class SafetyPolicy extends Policy {
    * @param {string} command
    * @returns {{ safe: boolean, reason?: string }}
    */
-  checkCommand(command) {
+  checkCommand(command: any) {
     for (const pattern of this.#commandBlacklist) {
       if (pattern.test(command)) {
         return { safe: false, reason: `Blocked: matches dangerous pattern ${pattern}` };
@@ -244,7 +244,7 @@ export class SafetyPolicy extends Policy {
    * @param {string} filePath
    * @returns {{ safe: boolean, reason?: string }}
    */
-  checkFilePath(filePath) {
+  checkFilePath(filePath: any) {
     if (!this.#fileScope) {
       return { safe: true };
     }
@@ -263,11 +263,11 @@ export class SafetyPolicy extends Policy {
    * 是否需要人工确认
    * @param {string} toolName
    */
-  needsApproval(toolName) {
+  needsApproval(toolName: any) {
     return this.#requireApprovalFor.includes(toolName);
   }
 
-  applyToConfig(config) {
+  applyToConfig(config: any) {
     return {
       ...config,
       safetyPolicy: this,
@@ -313,7 +313,7 @@ export class QualityGatePolicy extends Policy {
     return 'quality_gate';
   }
 
-  validateAfter(result) {
+  validateAfter(result: any) {
     const reasons: string | any[] = [];
 
     if (result.reply && result.reply.length < this.#minEvidenceLength) {
@@ -382,11 +382,11 @@ export class PolicyEngine {
    * @param {new (...args: any[]) => T} PolicyClass
    * @returns {T|null}
    */
-  get(PolicyClass) {
+  get(PolicyClass: any) {
     return this.#policies.find((p) => p instanceof PolicyClass) || null;
   }
 
-  validateBefore(context) {
+  validateBefore(context: any) {
     for (const policy of this.#policies) {
       const result = policy.validateBefore(context);
       if (!result.ok) {
@@ -396,7 +396,7 @@ export class PolicyEngine {
     return { ok: true };
   }
 
-  validateDuring(stepState) {
+  validateDuring(stepState: any) {
     for (const policy of this.#policies) {
       const result = policy.validateDuring(stepState);
       if (!result.ok) {
@@ -406,7 +406,7 @@ export class PolicyEngine {
     return { ok: true, action: 'continue' };
   }
 
-  validateAfter(result) {
+  validateAfter(result: any) {
     for (const policy of this.#policies) {
       const val = policy.validateAfter(result);
       if (!val.ok) {
@@ -416,7 +416,7 @@ export class PolicyEngine {
     return { ok: true };
   }
 
-  applyToConfig(config) {
+  applyToConfig(config: any) {
     let result = config;
     for (const policy of this.#policies) {
       result = policy.applyToConfig(result);
@@ -449,7 +449,7 @@ export class PolicyEngine {
    * @param {Object} args 工具参数
    * @returns {{ ok: boolean, reason?: string }}
    */
-  validateToolCall(toolName, args) {
+  validateToolCall(toolName: any, args: any) {
     const safety = this.get(SafetyPolicy);
     if (!safety) {
       return { ok: true };

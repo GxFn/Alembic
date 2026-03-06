@@ -13,7 +13,7 @@
  * 1. check_duplicate → 若发现相似 ≥ 0.7 则建议合并
  * 2. 顺便返回质量评估建议
  */
-export async function taskCheckAndSubmit(context, { candidate, projectRoot }) {
+export async function taskCheckAndSubmit(context: any, { candidate, projectRoot }: any) {
   const { invokeAgent, aiProvider } = context;
 
   // Step 1: 查重
@@ -24,7 +24,7 @@ export async function taskCheckAndSubmit(context, { candidate, projectRoot }) {
   });
 
   // Step 2: 如果有高相似度，使用 AI 分析是否真正重复
-  const highSim = (duplicates.similar || []).filter((d) => d.similarity >= 0.7);
+  const highSim = (duplicates.similar || []).filter((d: any) => d.similarity >= 0.7);
   let aiVerdict: any = null;
   if (highSim.length > 0 && aiProvider) {
     const verdictPrompt = `以下新候选代码与已有 Recipe 高度相似，请判断是否真正重复。
@@ -34,7 +34,7 @@ export async function taskCheckAndSubmit(context, { candidate, projectRoot }) {
 - Code: ${(candidate.code || '').substring(0, 1000)}
 
 相似 Recipe:
-${highSim.map((s) => `- ${s.title} (相似度: ${s.similarity})`).join('\n')}
+${highSim.map((s: any) => `- ${s.title} (相似度: ${s.similarity})`).join('\n')}
 
 请回答: DUPLICATE（真正重复）/ SIMILAR（相似但不同，建议保留并标注关系）/ UNIQUE（误判，可放心提交）
 只回答一个词。`;
@@ -63,7 +63,7 @@ ${highSim.map((s) => `- ${s.title} (相似度: ${s.similarity})`).join('\n')}
  * 任务: 批量发现 Recipe 间的知识图谱关系
  * 委托给 AgentFactory.discoverRelations (独立 Explore → Synthesize 管线)
  */
-export async function taskDiscoverAllRelations(context, { batchSize = 20 } = {}) {
+export async function taskDiscoverAllRelations(context: any, { batchSize = 20 } = {}) {
   const { container } = context;
   const agentFactory = container.get('agentFactory');
   return agentFactory.discoverRelations({ batchSize });
@@ -72,7 +72,7 @@ export async function taskDiscoverAllRelations(context, { batchSize = 20 } = {})
 /**
  * 任务: 批量 AI 补全候选语义字段
  */
-export async function taskFullEnrich(context, { status = 'pending', maxCount = 50 } = {}) {
+export async function taskFullEnrich(context: any, { status = 'pending', maxCount = 50 } = {}) {
   const { invokeAgent, container } = context;
 
   const knowledgeService = container.get('knowledgeService');
@@ -87,7 +87,7 @@ export async function taskFullEnrich(context, { status = 'pending', maxCount = 5
   }
 
   // 筛选缺失语义字段的候选
-  const needEnrich = candidates.filter((c) => {
+  const needEnrich = candidates.filter((c: any) => {
     const m = c.metadata || {};
     return !m.rationale || !m.knowledgeType || !m.complexity;
   });
@@ -97,7 +97,7 @@ export async function taskFullEnrich(context, { status = 'pending', maxCount = 5
   }
 
   const result = await invokeAgent('enrich_candidate', {
-    candidateIds: needEnrich.map((c) => c.id).slice(0, 20),
+    candidateIds: needEnrich.map((c: any) => c.id).slice(0, 20),
   });
 
   return result;
@@ -107,7 +107,7 @@ export async function taskFullEnrich(context, { status = 'pending', maxCount = 5
  * 任务: 批量质量审计全部 Recipe
  * 对活跃 Recipe 逐个评分，返回低于阈值的列表
  */
-export async function taskQualityAudit(context, { threshold = 0.6, maxCount = 100 } = {}) {
+export async function taskQualityAudit(context: any, { threshold = 0.6, maxCount = 100 } = {}) {
   const { invokeAgent, container } = context;
 
   const knowledgeService = container.get('knowledgeService');
@@ -127,7 +127,8 @@ export async function taskQualityAudit(context, { threshold = 0.6, maxCount = 10
   for (const recipe of recipes) {
     const scoreResult = await invokeAgent('quality_score', { recipe });
     if (scoreResult.grade) {
-      gradeDistribution[scoreResult.grade] = (gradeDistribution[scoreResult.grade] || 0) + 1;
+      (gradeDistribution as Record<string, number>)[scoreResult.grade] =
+        ((gradeDistribution as Record<string, number>)[scoreResult.grade] || 0) + 1;
     }
     if (scoreResult.score < threshold) {
       lowQuality.push({
@@ -155,7 +156,7 @@ export async function taskQualityAudit(context, { threshold = 0.6, maxCount = 10
  * 任务: Guard 完整扫描
  * 对代码运行全部 Guard 规则 + 生成修复建议
  */
-export async function taskGuardFullScan(context, { code, language, filePath }: any = {}) {
+export async function taskGuardFullScan(context: any, { code, language, filePath }: any = {}) {
   const { invokeAgent, aiProvider } = context;
 
   if (!code) {
@@ -176,7 +177,7 @@ export async function taskGuardFullScan(context, { code, language, filePath }: a
       const violationSummary = (checkResult.violations || [])
         .slice(0, 5)
         .map(
-          (v) =>
+          (v: any) =>
             `- [${v.severity}] ${v.message || v.ruleName} (line ${v.line || v.matches?.[0]?.line || '?'})`
         )
         .join('\n');

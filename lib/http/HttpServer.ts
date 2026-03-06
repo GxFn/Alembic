@@ -197,7 +197,7 @@ export class HttpServer {
     this.app.use(gatewayMiddleware());
 
     // 请求超时设置（AI 扫描类路由需要更长时间，SSE 流式路由需要更长时间）
-    this.app.use((req, res, next) => {
+    this.app.use((req: any, res: any, next: any) => {
       const isLongRunning =
         req.path.includes('/spm/scan') ||
         req.path.includes('/spm/bootstrap') ||
@@ -234,7 +234,7 @@ export class HttpServer {
     const apiPrefix = '/api/v1';
 
     // OpenAPI 规范
-    this.app.get('/api-spec', (req, res) => {
+    this.app.get('/api-spec', (req: any, res: any) => {
       res.json(apiSpec);
     });
 
@@ -245,7 +245,7 @@ export class HttpServer {
     this.app.use(`${apiPrefix}/auth`, authRouter);
 
     // 权限探针端点
-    this.app.get(`${apiPrefix}/auth/probe`, (req, res) => {
+    this.app.get(`${apiPrefix}/auth/probe`, (req: any, res: any) => {
       const role = req.resolvedRole || 'visitor';
       const user = req.resolvedUser || 'anonymous';
       const mode =
@@ -316,7 +316,7 @@ export class HttpServer {
     this.app.use(`${apiPrefix}/remote`, remoteRouter);
 
     // 根路径 — 返回 API 元信息（避免外部探测产生无意义 404）
-    this.app.all('/', (req, res) => {
+    this.app.all('/', (req: any, res: any) => {
       res.json({
         name: 'AutoSnippet API',
         version: '2.0',
@@ -326,7 +326,7 @@ export class HttpServer {
     });
 
     // 404 处理（使用 app.all 确保 layer.route 存在，mountDashboard 依赖此属性定位并重排路由栈）
-    this.app.all('*', (req, res) => {
+    this.app.all('*', (req: any, res: any) => {
       res.status(404).json({
         success: false,
         error: {
@@ -377,7 +377,7 @@ export class HttpServer {
           resolve(this.server);
         });
 
-        this.server.on('error', (error) => {
+        this.server.on('error', (error: any) => {
           this.logger.error('HTTP Server error', {
             error: error.message,
             code: error.code,
@@ -423,7 +423,7 @@ export class HttpServer {
         }
       }
 
-      this.server.close((error) => {
+      this.server.close((error: any) => {
         if (error) {
           this.logger.error('Error stopping HTTP Server', {
             error: error.message,
@@ -452,7 +452,7 @@ export class HttpServer {
    * 必须在 initialize() + start() 之后调用
    * @param {string} distDir - dashboard/dist 目录的绝对路径
    */
-  mountDashboard(distDir) {
+  mountDashboard(distDir: any) {
     // 从路由栈中移除最后的 404 catch-all 和根路径 handler
     const layers = this.app._router.stack;
     // 倒序弹出最后 2 层（404 + root handler）
@@ -471,7 +471,7 @@ export class HttpServer {
     this.app.use(express.static(distDir));
 
     // SPA fallback: 非 API / 非 socket.io 请求返回 index.html
-    this.app.get('*', (req, res, next) => {
+    this.app.get('*', (req: any, res: any, next: any) => {
       if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
         return next();
       }

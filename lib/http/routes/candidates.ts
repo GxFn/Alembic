@@ -22,7 +22,7 @@ const logger = Logger.getInstance();
  */
 router.post(
   '/enrich',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { candidateIds } = req.body;
     if (!Array.isArray(candidateIds) || candidateIds.length === 0) {
       throw new ValidationError('candidateIds array is required and must not be empty');
@@ -168,7 +168,7 @@ router.post(
  */
 router.post(
   '/bootstrap-refine',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { candidateIds, userPrompt, dryRun } = req.body;
 
     const container = getServiceContainer();
@@ -191,7 +191,7 @@ router.post(
  * 从 KnowledgeEntry 提取前端 DiffView 所需的 before 字段
  * 与前端 extractBefore() 保持一致
  */
-function extractBeforeFields(json) {
+function extractBeforeFields(json: any) {
   return {
     title: json.title || '',
     description: json.description || '',
@@ -212,7 +212,7 @@ function extractBeforeFields(json) {
  * @param {string} userPrompt 用户输入的润色指令
  * @returns {string}
  */
-function buildRefinePrompt(before, userPrompt) {
+function buildRefinePrompt(before: any, userPrompt: any) {
   return `你是一位知识库条目润色助手。你必须**严格按照用户指令**修改知识条目。
 
 ## ⭐ JSON key 规范（最高优先级）
@@ -296,7 +296,7 @@ ${userPrompt}
 /**
  * 将 AI 返回的润色结果合并到 before 上生成 after，并构造 knowledgeService.update() 所需的 updateData
  */
-function buildUpdateFromRefineResult(before, parsed) {
+function buildUpdateFromRefineResult(before: any, parsed: any) {
   // ─── key 别名归一化：AI 可能返回不精确的 key，统一映射到标准 key ───
   const KEY_ALIASES = {
     // description 别名
@@ -363,7 +363,9 @@ function buildUpdateFromRefineResult(before, parsed) {
     if (VALID_KEYS.has(key)) {
       normalized[key] = value;
     } else {
-      const mapped = KEY_ALIASES[key] || KEY_ALIASES[key.toLowerCase()];
+      const mapped =
+        (KEY_ALIASES as Record<string, string>)[key] ||
+        (KEY_ALIASES as Record<string, string>)[key.toLowerCase()];
       if (mapped && !(mapped in normalized)) {
         normalized[mapped] = value;
       }
@@ -448,7 +450,7 @@ function buildUpdateFromRefineResult(before, parsed) {
  */
 router.post(
   '/refine-preview',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { candidateId, userPrompt } = req.body;
     if (!candidateId) {
       throw new ValidationError('candidateId is required');
@@ -506,7 +508,7 @@ router.post(
  */
 router.post(
   '/refine-preview-stream',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { candidateId, userPrompt } = req.body;
     if (!candidateId) {
       throw new ValidationError('candidateId is required');
@@ -668,7 +670,7 @@ router.get('/refine-preview/events/:sessionId', (req, res) => {
     res.socket.setTimeout(0);
   }
 
-  function writeEvent(event) {
+  function writeEvent(event: any) {
     if (res.writableEnded) {
       return;
     }
@@ -690,7 +692,7 @@ router.get('/refine-preview/events/:sessionId', (req, res) => {
   }
 
   // 2) 订阅实时事件
-  const unsubscribe = session.on((event) => {
+  const unsubscribe = session.on((event: any) => {
     writeEvent(event);
     if (event.type === 'stream:done' || event.type === 'stream:error') {
       unsubscribe();
@@ -725,7 +727,7 @@ router.get('/refine-preview/events/:sessionId', (req, res) => {
  */
 router.post(
   '/refine-apply',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { candidateId, userPrompt, preview } = req.body;
     if (!candidateId) {
       throw new ValidationError('candidateId is required');

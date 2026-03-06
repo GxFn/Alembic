@@ -17,8 +17,8 @@ import { GuardService } from '../../service/guard/GuardService.js';
 import { RuleLearner } from '../../service/guard/RuleLearner.js';
 import { ViolationsStore } from '../../service/guard/ViolationsStore.js';
 
-export function register(c) {
-  c.singleton('guardService', (ct) => {
+export function register(c: any) {
+  c.singleton('guardService', (ct: any) => {
     let guardCheckEngine: any = null;
     try {
       guardCheckEngine = ct.get('guardCheckEngine');
@@ -35,24 +35,24 @@ export function register(c) {
     );
   });
 
-  c.singleton('guardCheckEngine', (ct) => {
+  c.singleton('guardCheckEngine', (ct: any) => {
     const config = ct.singletons._config || {};
     return new GuardCheckEngine(ct.get('database'), { guardConfig: config.guard || {} });
   });
 
-  c.singleton('exclusionManager', (ct) => {
+  c.singleton('exclusionManager', (ct: any) => {
     const projectRoot = ct.singletons._projectRoot || process.cwd();
     return new ExclusionManager(projectRoot);
   });
 
-  c.singleton('ruleLearner', (ct) => {
+  c.singleton('ruleLearner', (ct: any) => {
     const projectRoot = ct.singletons._projectRoot || process.cwd();
     return new RuleLearner(projectRoot);
   });
 
-  c.singleton('violationsStore', (ct) => new ViolationsStore(ct.get('database').getDb()));
+  c.singleton('violationsStore', (ct: any) => new ViolationsStore(ct.get('database').getDb()));
 
-  c.singleton('complianceReporter', (ct) => {
+  c.singleton('complianceReporter', (ct: any) => {
     const config = ct.singletons._config || {};
     return new ComplianceReporter(
       ct.get('guardCheckEngine'),
@@ -65,7 +65,7 @@ export function register(c) {
 
   c.singleton(
     'guardFeedbackLoop',
-    (ct) =>
+    (ct: any) =>
       new GuardFeedbackLoop(ct.get('violationsStore'), ct.get('feedbackCollector'), {
         guardCheckEngine: ct.get('guardCheckEngine'),
       })

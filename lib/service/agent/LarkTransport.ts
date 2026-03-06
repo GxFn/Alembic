@@ -65,7 +65,7 @@ export class LarkTransport {
   /**
    * @param {LarkTransportConfig} config
    */
-  constructor(config) {
+  constructor(config: any) {
     this.#agentFactory = config.agentFactory;
     this.#replyFn = config.replyFn;
     this.#sendFn = config.sendFn;
@@ -100,7 +100,7 @@ export class LarkTransport {
    * @param {Object} data 飞书 im.message.receive_v1 事件数据
    * @returns {Promise<void>}
    */
-  async receive(data) {
+  async receive(data: any) {
     const message = data?.message || data?.event?.message || {};
     const sender = data?.sender || data?.event?.sender || {};
     const messageId = message.message_id;
@@ -167,7 +167,7 @@ export class LarkTransport {
     // ── 路由处理 ──
     switch (classification.intent) {
       case Intent.SYSTEM:
-        await this.#handleSystem(classification.action, messageId, text);
+        await this.#handleSystem((classification as any).action, messageId, text);
         break;
 
       case Intent.IDE_AGENT:
@@ -186,7 +186,7 @@ export class LarkTransport {
   /**
    * 系统操作 — 直接处理，不走 Agent
    */
-  async #handleSystem(action, messageId, _text) {
+  async #handleSystem(action: any, messageId: any, _text: any) {
     switch (action) {
       case 'status':
         if (this.#getStatusFn) {
@@ -267,7 +267,7 @@ export class LarkTransport {
    * `>` 前缀命令 → 使用 remote-exec preset 在服务端直接执行（含 SafetyPolicy 白名单）
    * 其他 IDE 编程任务 → 转发到 VSCode Copilot Agent Mode
    */
-  async #handleIdeAgent(text, messageId, chatId, senderId, senderName) {
+  async #handleIdeAgent(text: any, messageId: any, chatId: any, senderId: any, senderName: any) {
     // ── `>` 前缀: 远程执行命令 ──
     if (text.startsWith('>')) {
       const command = text.slice(1).trim();
@@ -317,7 +317,13 @@ export class LarkTransport {
   /**
    * 远程命令执行 — 使用 remote-exec preset（含 SafetyPolicy 命令白名单）
    */
-  async #handleRemoteExec(command, messageId, chatId, senderId, senderName) {
+  async #handleRemoteExec(
+    command: any,
+    messageId: any,
+    chatId: any,
+    senderId: any,
+    senderName: any
+  ) {
     await this.#reply(messageId, `⚡ 正在执行: \`${command.slice(0, 60)}\`...`);
 
     try {
@@ -339,7 +345,7 @@ export class LarkTransport {
       // 使用 remote-exec preset — 包含 SafetyPolicy 命令白名单 + fileScope
       const runtime = this.#agentFactory.createRemoteExec({
         lang: 'zh',
-        onProgress: (event) => {
+        onProgress: (event: any) => {
           if (event.type === 'tool_call') {
             this.#send(`🔧 执行: ${event.tool || 'unknown'}...`).catch(() => {});
           }
@@ -367,7 +373,7 @@ export class LarkTransport {
   /**
    * Bot Agent 知识任务 — 服务端 AgentRuntime 直接处理
    */
-  async #handleBotAgent(text, messageId, chatId, senderId, senderName) {
+  async #handleBotAgent(text: any, messageId: any, chatId: any, senderId: any, senderName: any) {
     // 进度提示
     await this.#reply(messageId, '🤔 正在思考...');
 
@@ -396,7 +402,7 @@ export class LarkTransport {
       // 创建 Lark Runtime 并执行 — 使用 lark preset（含 SafetyPolicy 鉴权）
       const runtime = this.#agentFactory.createLark({
         lang: 'zh',
-        onProgress: (event) => {
+        onProgress: (event: any) => {
           // 工具调用时发送进度
           if (event.type === 'tool_call') {
             this.#send(`🔧 调用工具: ${event.tool || 'unknown'}...`).catch(() => {});
@@ -437,7 +443,7 @@ export class LarkTransport {
    * @param {string} chatId
    * @returns {string|null} conversationId (ConversationStore 不可用时返回 null)
    */
-  #resolveConversationId(chatId) {
+  #resolveConversationId(chatId: any) {
     if (!this.#conversationStore || !chatId) {
       return null;
     }
@@ -450,7 +456,7 @@ export class LarkTransport {
     // 从索引中查找已有的 lark 对话 (通过 title 匹配 chatId)
     try {
       const existing = this.#conversationStore.list({ category: 'lark', limit: 100 });
-      const match = existing.find((e) => e.title === chatId);
+      const match = existing.find((e: any) => e.title === chatId);
       if (match) {
         this.#chatConversationMap.set(chatId, match.id);
         return match.id;
@@ -475,7 +481,7 @@ export class LarkTransport {
   /**
    * 获取指定会话的历史
    */
-  #getHistory(chatId) {
+  #getHistory(chatId: any) {
     // 优先使用 ConversationStore 持久化历史
     const convId = this.#resolveConversationId(chatId);
     if (convId && this.#conversationStore) {
@@ -494,21 +500,21 @@ export class LarkTransport {
   /**
    * 获取最近对话的可读文本 (给 IntentClassifier 提供上下文)
    */
-  #getRecentHistoryText(chatId) {
+  #getRecentHistoryText(chatId: any) {
     const history = this.#getHistory(chatId);
     if (history.length === 0) {
       return '';
     }
     return history
       .slice(-6)
-      .map((h) => `${h.role}: ${h.content.slice(0, 100)}`)
+      .map((h: any) => `${h.role}: ${h.content.slice(0, 100)}`)
       .join('\n');
   }
 
   /**
    * 追加对话记录 (双写: ConversationStore + 内存降级)
    */
-  #appendHistory(chatId, role, content) {
+  #appendHistory(chatId: any, role: any, content: any) {
     if (!chatId) {
       return;
     }
@@ -539,13 +545,13 @@ export class LarkTransport {
   //  飞书消息发送
   // ═══════════════════════════════════════════════════
 
-  async #reply(messageId, text) {
+  async #reply(messageId: any, text: any) {
     if (this.#replyFn) {
       await this.#replyFn(messageId, text);
     }
   }
 
-  async #send(text) {
+  async #send(text: any) {
     if (this.#sendFn) {
       await this.#sendFn(text);
     }

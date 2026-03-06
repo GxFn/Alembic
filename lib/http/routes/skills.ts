@@ -23,7 +23,7 @@ const router = express.Router();
  */
 router.get(
   '/',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: any, res: any) => {
     const raw = listSkills();
     let parsed;
     try {
@@ -49,7 +49,7 @@ router.get(
  */
 router.get(
   '/signal-status',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: any, res: any) => {
     const { _signalCollector } = global as any;
     if (!_signalCollector) {
       return res.json({ success: true, data: { running: false, mode: 'off', snapshot: null } });
@@ -73,7 +73,7 @@ router.get(
  */
 router.get(
   '/suggest',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const ctx = { container: req.app.locals?.container || null };
     const raw = await suggestSkills(ctx);
     let parsed;
@@ -101,7 +101,7 @@ router.get(
  */
 router.get(
   '/:name',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { name } = req.params;
     const { section } = req.query;
 
@@ -132,7 +132,7 @@ router.get(
  */
 router.post(
   '/',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { name, description, content, overwrite, createdBy } = req.body;
 
     if (!name || !description || !content) {
@@ -178,7 +178,7 @@ router.post(
  */
 router.put(
   '/:name',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { name } = req.params;
     const { description, content } = req.body;
 
@@ -217,7 +217,7 @@ router.put(
  */
 router.delete(
   '/:name',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { name } = req.params;
 
     const raw = deleteSkill(null, { name });

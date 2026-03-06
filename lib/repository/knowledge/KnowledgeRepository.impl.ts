@@ -10,7 +10,7 @@ import { BaseRepository } from '../base/BaseRepository.js';
  * 全链路 camelCase — DB 列名 = 实体属性名。
  */
 export class KnowledgeRepositoryImpl extends BaseRepository {
-  constructor(database) {
+  constructor(database: any) {
     super(database, 'knowledge_entries');
     this.logger = Logger.getInstance();
   }
@@ -22,7 +22,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @param {KnowledgeEntry} entry
    * @returns {Promise<KnowledgeEntry>}
    */
-  async create(entry) {
+  async create(entry: any) {
     if (!entry || !entry.isValid()) {
       throw new Error('Invalid knowledge entry: title + content required');
     }
@@ -49,7 +49,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @param {Object|KnowledgeEntry} updates
    * @returns {Promise<KnowledgeEntry>}
    */
-  async update(id, updates) {
+  async update(id: any, updates: any) {
     try {
       const existing: any = await this.findById(id);
       if (!existing) {
@@ -102,7 +102,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @param {string} id
    * @returns {Promise<boolean>}
    */
-  async delete(id) {
+  async delete(id: any) {
     try {
       const result = this.db.prepare('DELETE FROM knowledge_entries WHERE id = ?').run(id);
       return result.changes > 0;
@@ -143,12 +143,12 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
 
     if (_tagLike) {
       conditions.push(`tags LIKE ?`);
-      const escaped = _tagLike.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+      const escaped = _tagLike.replace(/[%_\\]/g, (ch: any) => `\\${ch}`);
       params.push(`%"${escaped}"%`);
     }
 
     if (_search) {
-      const escaped = _search.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+      const escaped = _search.replace(/[%_\\]/g, (ch: any) => `\\${ch}`);
       const like = `%${escaped}%`;
       conditions.push(
         `(title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR trigger LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\' OR tags LIKE ? ESCAPE '\\')`
@@ -169,7 +169,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
       .all(...params, pageSize, offset);
 
     return {
-      data: data.map((row) => this._rowToEntity(row)),
+      data: data.map((row: any) => this._rowToEntity(row)),
       pagination: { page, pageSize, total, pages: Math.ceil(total / pageSize) },
     };
   }
@@ -177,14 +177,14 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
   /**
    * 根据生命周期状态查询
    */
-  async findByLifecycle(lifecycle, pagination: any = {}) {
+  async findByLifecycle(lifecycle: any, pagination: any = {}) {
     return this.findWithPagination({ lifecycle }, pagination);
   }
 
   /**
    * 根据 kind 查询
    */
-  async findByKind(kind, options: any = {}) {
+  async findByKind(kind: any, options: any = {}) {
     const { lifecycle, ...pagination } = options;
     const filters: any = { kind };
     if (lifecycle) {
@@ -205,7 +205,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
         WHERE kind = 'rule' AND lifecycle = 'active'
       `)
         .all();
-      return rows.map((row) => this._rowToEntity(row));
+      return rows.map((row: any) => this._rowToEntity(row));
     } catch (error: any) {
       this.logger.error('Error finding active rules', { error: error.message });
       throw error;
@@ -215,21 +215,21 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
   /**
    * 根据语言查询
    */
-  async findByLanguage(language, pagination: any = {}) {
+  async findByLanguage(language: any, pagination: any = {}) {
     return this.findWithPagination({ language }, pagination);
   }
 
   /**
    * 根据分类查询
    */
-  async findByCategory(category, pagination: any = {}) {
+  async findByCategory(category: any, pagination: any = {}) {
     return this.findWithPagination({ category }, pagination);
   }
 
   /**
    * 搜索
    */
-  async search(keyword, pagination: any = {}) {
+  async search(keyword: any, pagination: any = {}) {
     return this.findWithPagination({ _search: keyword }, pagination);
   }
 
@@ -264,7 +264,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @param {Object} row
    * @returns {KnowledgeEntry}
    */
-  _rowToEntity(row) {
+  _rowToEntity(row: any) {
     if (!row) {
       return null;
     }
@@ -294,7 +294,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @param {KnowledgeEntry} e
    * @returns {Object}
    */
-  _entityToRow(e) {
+  _entityToRow(e: any) {
     const now = unixNow();
     return {
       id: e.id,
@@ -347,7 +347,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * 覆写 BaseRepository 的 _mapRowToEntity
    * @override
    */
-  _mapRowToEntity(row) {
+  _mapRowToEntity(row: any) {
     return this._rowToEntity(row);
   }
 }

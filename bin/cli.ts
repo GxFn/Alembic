@@ -45,7 +45,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // 优雅关闭 — 防止 SIGINT/SIGTERM 时资源泄漏
-const handleSignal = (signal) => {
+const handleSignal = (signal: any) => {
   process.stderr.write(`[asd] Received ${signal}, exiting…\n`);
   process.exit(0);
 };
@@ -128,7 +128,7 @@ program
         cli.log(`${'─'.repeat(50)}`);
 
         if (targets.length > 0) {
-          cli.log(`\n  Targets: ${targets.map((t) => t.name || t).join(', ')}`);
+          cli.log(`\n  Targets: ${targets.map((t: any) => t.name || t).join(', ')}`);
         }
 
         if (Object.keys(langStats).length > 0) {
@@ -196,9 +196,9 @@ program
 
             const total = sessionStatus.tasks.length;
             const done = sessionStatus.tasks.filter(
-              (t) => t.status === 'done' || t.status === 'error'
+              (t: any) => t.status === 'done' || t.status === 'error'
             ).length;
-            const current = sessionStatus.tasks.find((t) => t.status === 'running');
+            const current = sessionStatus.tasks.find((t: any) => t.status === 'running');
             const statusText = current
               ? `[${done}/${total}] 正在处理: ${current.meta?.label || current.id}`
               : `[${done}/${total}] 等待中...`;
@@ -213,8 +213,10 @@ program
 
               // 输出各维度结果
               if (!opts.json) {
-                const succeeded = sessionStatus.tasks.filter((t) => t.status === 'done').length;
-                const failed = sessionStatus.tasks.filter((t) => t.status === 'error').length;
+                const succeeded = sessionStatus.tasks.filter(
+                  (t: any) => t.status === 'done'
+                ).length;
+                const failed = sessionStatus.tasks.filter((t: any) => t.status === 'error').length;
                 cli.log(`\n  Results: ${succeeded} succeeded, ${failed} failed`);
                 for (const t of sessionStatus.tasks) {
                   const icon = t.status === 'done' ? '✅' : '❌';
@@ -394,15 +396,15 @@ program
           violations,
           summary: {
             total: violations.length,
-            errors: violations.filter((v) => v.severity === 'error').length,
-            warnings: violations.filter((v) => v.severity === 'warning').length,
+            errors: violations.filter((v: any) => v.severity === 'error').length,
+            warnings: violations.filter((v: any) => v.severity === 'warning').length,
           },
         });
       } else if (violations.length === 0) {
         cli.log('✅ No violations found.');
       } else {
-        const errors = violations.filter((v) => v.severity === 'error');
-        const warnings = violations.filter((v) => v.severity === 'warning');
+        const errors = violations.filter((v: any) => v.severity === 'error');
+        const warnings = violations.filter((v: any) => v.severity === 'warning');
         cli.log(
           `\n🔍 Guard: ${violations.length} violation(s) — ${errors.length} error(s), ${warnings.length} warning(s)\n`
         );
@@ -420,7 +422,7 @@ program
       }
 
       await bootstrap.shutdown();
-      process.exit(violations.some((v) => v.severity === 'error') ? 1 : 0);
+      process.exit(violations.some((v: any) => v.severity === 'error') ? 1 : 0);
     } catch (err: any) {
       cli.error(`Error: ${err.message}`);
       process.exit(1);
@@ -554,7 +556,7 @@ program
         cli.log(
           `\n🔍 Guard (staged): ${summary.totalViolations} violation(s) in ${sourceFiles.length} file(s)\n`
         );
-        const filesWithIssues = result.files.filter((f) => f.summary.total > 0);
+        const filesWithIssues = result.files.filter((f: any) => f.summary.total > 0);
         for (const file of filesWithIssues.slice(0, 10)) {
           cli.log(`  📄 ${file.filePath || file.path}`);
           for (const v of file.violations.slice(0, 5)) {
@@ -605,7 +607,7 @@ program
       // IDE + 扩展名自动检测
       let exts: any = null;
       if (opts.ext) {
-        exts = opts.ext.split(',').map((e) => e.trim());
+        exts = opts.ext.split(',').map((e: any) => e.trim());
       }
       // 不指定 --ext 时，FileWatcher 内部根据 IDE 检测结果使用默认模式
 
@@ -700,7 +702,7 @@ program
           container,
           mode: process.env.ASD_SIGNAL_MODE || 'auto',
           intervalMs: parseInt(process.env.ASD_SIGNAL_INTERVAL || '3600000', 10),
-          onSuggestions: (suggestions) => {
+          onSuggestions: (suggestions: any) => {
             try {
               const realtime = getRealtimeService();
               realtime.broadcastEvent('skill:suggestions', { suggestions });
@@ -710,7 +712,7 @@ program
           },
         });
         signalCollector.start();
-        global._signalCollector = signalCollector;
+        (globalThis as any)._signalCollector = signalCollector;
       } catch (scErr: any) {
         cli.warn(`⚠️  SignalCollector failed to start: ${scErr.message}`);
         cli.debug(scErr.stack);
@@ -1037,11 +1039,13 @@ taskCmd
           cli.log(`\n  ▸ ${j.id} — ${j.title} (P${j.priority ?? '?'})`);
           if (t.knowledgeContext?.relatedKnowledge?.length) {
             cli.log(
-              `    Knowledge: ${t.knowledgeContext.relatedKnowledge.map((k) => k.title).join(', ')}`
+              `    Knowledge: ${t.knowledgeContext.relatedKnowledge.map((k: any) => k.title).join(', ')}`
             );
           }
           if (t.knowledgeContext?.guardRules?.length) {
-            cli.log(`    Guard: ${t.knowledgeContext.guardRules.map((r) => r.title).join(', ')}`);
+            cli.log(
+              `    Guard: ${t.knowledgeContext.guardRules.map((r: any) => r.title).join(', ')}`
+            );
           }
         }
         cli.blank();
@@ -1182,7 +1186,7 @@ program
   });
 
 /** @private 递归复制目录（mirror 命令用） */
-function _copyDirRecursive(src, dest) {
+function _copyDirRecursive(src: any, dest: any) {
   mkdirSync(dest, { recursive: true });
   for (const entry of readdirSync(src, { withFileTypes: true })) {
     const srcPath = join(src, entry.name);

@@ -108,7 +108,7 @@ export class AgentEventBus extends EventEmitter {
    * @param {string} [opts.target] 目标 agentId
    * @param {string} [opts.correlationId] 关联 ID
    */
-  publish(type, payload: any = {}, opts: any = {}) {
+  publish(type: any, payload: any = {}, opts: any = {}) {
     this.#eventCount++;
     const event = {
       type,
@@ -148,7 +148,7 @@ export class AgentEventBus extends EventEmitter {
    * @param {Function} handler 处理函数 (event) => void
    * @returns {Function} 取消订阅函数
    */
-  subscribe(type, handler) {
+  subscribe(type: any, handler: any) {
     if (!this.#subscriptions.has(type)) {
       this.#subscriptions.set(type, []);
     }
@@ -174,7 +174,7 @@ export class AgentEventBus extends EventEmitter {
    * @param {string} [opts.source] 发送者
    * @returns {Promise<AgentEvent>} 响应事件
    */
-  async request(requestType, payload: any = {}, opts: any = {}) {
+  async request(requestType: any, payload: any = {}, opts: any = {}) {
     const correlationId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const timeout = opts.timeout || 30_000;
 

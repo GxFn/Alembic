@@ -45,11 +45,11 @@ export class SnippetInstaller {
     return this.#snippetsDirOverride || this.#codec?.getInstallDir(process.cwd()) || '';
   }
 
-  setSnippetFactory(factory) {
+  setSnippetFactory(factory: any) {
     this.#snippetFactory = factory;
   }
 
-  setCodec(codec) {
+  setCodec(codec: any) {
     this.#codec = codec;
   }
 
@@ -61,7 +61,7 @@ export class SnippetInstaller {
    * @param {string} [projectRoot] - VSCode 需要 projectRoot 确定 .vscode/ 路径
    * @returns {{ success: boolean, path: string, message: string }}
    */
-  install(spec, projectRoot) {
+  install(spec: any, projectRoot: any) {
     this.#assertCodec();
     try {
       const dir = this.#resolveDir(projectRoot);
@@ -90,14 +90,14 @@ export class SnippetInstaller {
    * @param {string} [projectRoot]
    * @returns {{ success: boolean, count: number, successCount: number, errorCount: number, details: Array }}
    */
-  installFromRecipes(recipes, projectRoot) {
+  installFromRecipes(recipes: any, projectRoot: any) {
     this.#assertCodec();
     this.#assertFactory();
 
     const dir = this.#resolveDir(projectRoot);
     this.#ensureDir(dir);
 
-    const specs = recipes.map((r) => this.#snippetFactory.fromRecipe(r));
+    const specs = recipes.map((r: any) => this.#snippetFactory.fromRecipe(r));
     const bundleFilename = this.#codec.getBundleFilename();
 
     if (bundleFilename) {
@@ -130,7 +130,7 @@ export class SnippetInstaller {
    * @param {string} [projectRoot]
    * @returns {Array<{ filename: string, path: string }>}
    */
-  listInstalled(projectRoot) {
+  listInstalled(projectRoot: any) {
     const dir = this.#resolveDir(projectRoot);
     if (!existsSync(dir)) {
       return [];
@@ -172,7 +172,7 @@ export class SnippetInstaller {
    * @param {string} [projectRoot]
    * @returns {{ success: boolean, message: string }}
    */
-  uninstall(identifier, projectRoot) {
+  uninstall(identifier: any, projectRoot: any) {
     const dir = this.#resolveDir(projectRoot);
     const bundleFilename = this.#codec?.getBundleFilename();
 
@@ -197,7 +197,7 @@ export class SnippetInstaller {
    * @param {string} [projectRoot]
    * @returns {{ success: boolean, removed: number }}
    */
-  cleanAll(projectRoot) {
+  cleanAll(projectRoot: any) {
     const dir = this.#resolveDir(projectRoot);
     const bundleFilename = this.#codec?.getBundleFilename();
 
@@ -239,14 +239,14 @@ export class SnippetInstaller {
     }
   }
 
-  #resolveDir(projectRoot) {
+  #resolveDir(projectRoot: any) {
     if (this.#snippetsDirOverride) {
       return this.#snippetsDirOverride;
     }
     return this.#codec?.getInstallDir(projectRoot || process.cwd()) || '';
   }
 
-  #ensureDir(dir) {
+  #ensureDir(dir: any) {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
@@ -255,7 +255,7 @@ export class SnippetInstaller {
   /**
    * VSCode bundle: 将单个 spec 追加/更新到 bundle JSON
    */
-  #installToBundle(spec, dir, bundleFilename) {
+  #installToBundle(spec: any, dir: any, bundleFilename: any) {
     const bundlePath = join(dir, bundleFilename);
     let bundle: Record<string, any> = {};
     if (existsSync(bundlePath)) {
@@ -278,7 +278,7 @@ export class SnippetInstaller {
   /**
    * VSCode bundle: 一次性写入完整 bundle
    */
-  #installBundleFromSpecs(specs, dir, bundleFilename, totalCount) {
+  #installBundleFromSpecs(specs: any, dir: any, bundleFilename: any, totalCount: any) {
     try {
       const content = this.#codec.generateBundle(specs);
       const bundlePath = join(dir, bundleFilename);
@@ -304,7 +304,7 @@ export class SnippetInstaller {
   /**
    * VSCode bundle: 从 JSON 中移除一个 snippet
    */
-  #removeFromBundle(identifier, dir, bundleFilename) {
+  #removeFromBundle(identifier: any, dir: any, bundleFilename: any) {
     const bundlePath = join(dir, bundleFilename);
     if (!existsSync(bundlePath)) {
       return { success: false, message: `Bundle not found: ${bundleFilename}` };

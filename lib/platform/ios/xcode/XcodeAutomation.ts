@@ -21,7 +21,7 @@ const OSASCRIPT_TIMEOUT = 5000;
  * @param {number} n 原始行号
  * @returns {number} 安全的 1-based 行号
  */
-function _safeLine(n) {
+function _safeLine(n: any) {
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
@@ -30,7 +30,7 @@ function _safeLine(n) {
  * @param {string[]} args  osascript 参数数组（每对 `-e`, `script`）
  * @returns {boolean}
  */
-function _run(args) {
+function _run(args: any) {
   try {
     const res = spawnSync('osascript', args, { stdio: 'ignore', timeout: OSASCRIPT_TIMEOUT });
     return res.status === 0;
@@ -92,7 +92,7 @@ export function isXcodeFrontmost() {
  * @param {number} lineNumber 1-based 行号
  * @returns {boolean} 是否成功
  */
-export function jumpToLineInXcode(lineNumber) {
+export function jumpToLineInXcode(lineNumber: any) {
   if (!isXcodeRunning()) {
     return false;
   }
@@ -127,7 +127,7 @@ export function jumpToLineInXcode(lineNumber) {
  * @param {number} lineNumber 1-based 行号
  * @returns {boolean} 是否成功
  */
-export function cutLineInXcode(lineNumber) {
+export function cutLineInXcode(lineNumber: any) {
   if (!isXcodeRunning()) {
     return false;
   }
@@ -174,7 +174,7 @@ export function cutLineInXcode(lineNumber) {
  * @param {number} lineNumber 1-based 行号
  * @returns {boolean} 是否成功
  */
-export function deleteLineContentInXcode(lineNumber) {
+export function deleteLineContentInXcode(lineNumber: any) {
   if (!isXcodeRunning()) {
     return false;
   }
@@ -286,7 +286,7 @@ export function selectAndPasteInXcode() {
  * @param {number} lineNumber 1-based 行号
  * @returns {boolean} 是否成功
  */
-export function insertAtLineStartInXcode(lineNumber) {
+export function insertAtLineStartInXcode(lineNumber: any) {
   if (!isXcodeRunning()) {
     return false;
   }

@@ -95,7 +95,7 @@ export default class ProjectGraph {
   #overview: any = null;
 
   /** @type {string} 项目根目录 */
-  #projectRoot;
+  #projectRoot: any;
 
   /** @type {number} 构建耗时 ms */
   #buildTimeMs = 0;
@@ -113,7 +113,7 @@ export default class ProjectGraph {
    * @param {number} [options.timeoutMs=30000]
    * @returns {Promise<ProjectGraph>}
    */
-  static async build(projectRoot, options: any = {}) {
+  static async build(projectRoot: any, options: any = {}) {
     if (!isAvailable()) {
       throw new Error('Tree-sitter not available — cannot build ProjectGraph');
     }
@@ -173,7 +173,7 @@ export default class ProjectGraph {
    * @param {string} className
    * @returns {ClassInfo|null}
    */
-  getClassInfo(className) {
+  getClassInfo(className: any) {
     return this.#classes.get(className) || null;
   }
 
@@ -182,7 +182,7 @@ export default class ProjectGraph {
    * @param {string} protocolName
    * @returns {ProtocolInfo|null}
    */
-  getProtocolInfo(protocolName) {
+  getProtocolInfo(protocolName: any) {
     return this.#protocols.get(protocolName) || null;
   }
 
@@ -191,7 +191,7 @@ export default class ProjectGraph {
    * @param {string} className
    * @returns {string[]} [className, parent, grandparent, ...]
    */
-  getInheritanceChain(className) {
+  getInheritanceChain(className: any) {
     const chain: any[] = [];
     let current = className;
     const visited = new Set();
@@ -208,7 +208,7 @@ export default class ProjectGraph {
    * @param {string} className
    * @returns {string[]}
    */
-  getSubclasses(className) {
+  getSubclasses(className: any) {
     const subs: any[] = [];
     for (const [child, parent] of this.#inheritance) {
       if (parent === className) {
@@ -223,7 +223,7 @@ export default class ProjectGraph {
    * @param {string} className
    * @returns {string[]}
    */
-  getAllDescendants(className) {
+  getAllDescendants(className: any) {
     const result: any[] = [];
     const queue = [className];
     const visited = new Set();
@@ -245,7 +245,7 @@ export default class ProjectGraph {
    * @param {string} className
    * @returns {CategoryInfo[]}
    */
-  getCategoryExtensions(className) {
+  getCategoryExtensions(className: any) {
     return this.#categories.get(className) || [];
   }
 
@@ -255,13 +255,13 @@ export default class ProjectGraph {
    * @param {string} methodName 方法名或 selector
    * @returns {OverrideInfo[]}
    */
-  getMethodOverrides(className, methodName) {
+  getMethodOverrides(className: any, methodName: any) {
     const descendants = this.getAllDescendants(className);
     const overrides: { className: any; method: any; filePath: any }[] = [];
 
     for (const desc of descendants) {
       const methods = this.#methodsByClass.get(desc) || [];
-      const match = methods.find((m) => m.name === methodName || m.selector === methodName);
+      const match = methods.find((m: any) => m.name === methodName || m.selector === methodName);
       if (match) {
         overrides.push({
           className: desc,
@@ -279,7 +279,7 @@ export default class ProjectGraph {
    * @param {string} className
    * @returns {MethodInfo[]}
    */
-  getClassMethods(className) {
+  getClassMethods(className: any) {
     return this.#methodsByClass.get(className) || [];
   }
 
@@ -288,7 +288,7 @@ export default class ProjectGraph {
    * @param {string} relativePath
    * @returns {FileSymbols|null}
    */
-  getFileSymbols(relativePath) {
+  getFileSymbols(relativePath: any) {
     return this.#files.get(relativePath) || null;
   }
 
@@ -306,7 +306,7 @@ export default class ProjectGraph {
    * @param {number} [limit=20]
    * @returns {string[]}
    */
-  searchClasses(query, limit = 20) {
+  searchClasses(query: any, limit = 20) {
     const lower = query.toLowerCase();
     const results: any[] = [];
     for (const name of this.#classes.keys()) {
@@ -387,7 +387,7 @@ export default class ProjectGraph {
   /**
    * 索引单个文件的解析结果
    */
-  #indexFileSummary(relativePath, summary) {
+  #indexFileSummary(relativePath: any, summary: any) {
     const fileSymbols = {
       path: relativePath,
       lang: summary.lang,
@@ -503,7 +503,7 @@ export default class ProjectGraph {
         categoryName: cat.categoryName || 'ext',
         filePath: relativePath,
         line: cat.line,
-        methods: (cat.methods || []).map((m) => ({
+        methods: (cat.methods || []).map((m: any) => ({
           name: m.name,
           selector: m.selector || m.name,
           line: m.line,
@@ -577,7 +577,7 @@ export default class ProjectGraph {
       const allMethods = this.#methodsByClass.get(className) || [];
       // 只补充 classInfo.methods 中没有的方法
       const existingNames = new Set(
-        classInfo.methods.map((m) => `${m.isClassMethod ? '+' : '-'}${m.name}`)
+        classInfo.methods.map((m: any) => `${m.isClassMethod ? '+' : '-'}${m.name}`)
       );
       for (const m of allMethods) {
         const key = `${m.isClassMethod ? '+' : '-'}${m.name}`;
@@ -596,8 +596,8 @@ export default class ProjectGraph {
    * @returns {object}
    */
   toJSON() {
-    const mapToObj = (map) => Object.fromEntries(map);
-    const mapOfSetsToObj = (map) => {
+    const mapToObj = (map: any) => Object.fromEntries(map);
+    const mapOfSetsToObj = (map: any) => {
       const obj: Record<string, any> = {};
       for (const [k, v] of map) {
         obj[k] = [...v];
@@ -623,7 +623,7 @@ export default class ProjectGraph {
    * @param {object} data toJSON() 输出的对象
    * @returns {ProjectGraph}
    */
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     const graph = new ProjectGraph();
     graph.#projectRoot = data.projectRoot || '';
     graph.#buildTimeMs = data.buildTimeMs || 0;
@@ -673,7 +673,7 @@ export default class ProjectGraph {
    * @param {object} [options]
    * @returns {Promise<{ added: number, updated: number, deleted: number }>}
    */
-  async incrementalUpdate(changedPaths, deletedPaths: any[] = [], options: any = {}) {
+  async incrementalUpdate(changedPaths: any, deletedPaths: any[] = [], options: any = {}) {
     const { analyzeFile, isAvailable } = await import('../AstAnalyzer.js');
     if (!isAvailable()) {
       return { added: 0, updated: 0, deleted: 0 };
@@ -771,11 +771,11 @@ export default class ProjectGraph {
  * @param {object} opts
  * @returns {string[]}
  */
-function collectSourceFiles(dir, extensions, opts) {
+function collectSourceFiles(dir: any, extensions: any, opts: any) {
   const results: string[] = [];
   const extSet = new Set(extensions);
 
-  function walk(currentDir) {
+  function walk(currentDir: any) {
     if (results.length >= opts.maxFiles) {
       return;
     }
@@ -796,7 +796,7 @@ function collectSourceFiles(dir, extensions, opts) {
       const relativePath = path.relative(dir, fullPath);
 
       // 排除模式检查
-      if (opts.excludePatterns.some((p) => relativePath.includes(p))) {
+      if (opts.excludePatterns.some((p: any) => relativePath.includes(p))) {
         continue;
       }
 

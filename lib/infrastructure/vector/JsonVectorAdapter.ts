@@ -15,7 +15,7 @@ export class JsonVectorAdapter extends VectorStore {
   #data; // Map<id, { id, content, vector, metadata }>
   #dirty;
 
-  constructor(projectRoot, options: any = {}) {
+  constructor(projectRoot: any, options: any = {}) {
     super();
     const contextDir = options.contextDir || '.autosnippet/context/index';
     this.#indexPath = options.indexPath || join(projectRoot, contextDir, 'vector_index.json');
@@ -35,7 +35,7 @@ export class JsonVectorAdapter extends VectorStore {
     this.#load();
   }
 
-  async upsert(item) {
+  async upsert(item: any) {
     if (!item?.id) {
       throw new Error('Item must have an id');
     }
@@ -50,7 +50,7 @@ export class JsonVectorAdapter extends VectorStore {
     this.#autoSave();
   }
 
-  async batchUpsert(items) {
+  async batchUpsert(items: any) {
     for (const item of items) {
       if (!item?.id) {
         continue;
@@ -67,20 +67,20 @@ export class JsonVectorAdapter extends VectorStore {
     this.#autoSave();
   }
 
-  async remove(id) {
+  async remove(id: any) {
     this.#data.delete(id);
     this.#dirty = true;
     this.#autoSave();
   }
 
-  async getById(id) {
+  async getById(id: any) {
     return this.#data.get(id) || null;
   }
 
   /**
    * 向量相似度搜索（余弦相似度）
    */
-  async searchVector(queryVector, options: any = {}) {
+  async searchVector(queryVector: any, options: any = {}) {
     const { topK = 10, filter = null, minScore = 0 } = options;
 
     if (!queryVector || queryVector.length === 0) {
@@ -111,7 +111,7 @@ export class JsonVectorAdapter extends VectorStore {
   /**
    * 混合搜索：向量 70% + 关键词 30%
    */
-  async hybridSearch(queryVector, queryText, options: any = {}) {
+  async hybridSearch(queryVector: any, queryText: any, options: any = {}) {
     const { topK = 10, filter = null } = options;
 
     let candidates = [...this.#data.values()];
@@ -133,7 +133,7 @@ export class JsonVectorAdapter extends VectorStore {
           const text = (item.content || '').toLowerCase();
           const query = queryText.toLowerCase();
           const words = query.split(/\s+/);
-          const hits = words.filter((w) => text.includes(w)).length;
+          const hits = words.filter((w: any) => text.includes(w)).length;
           keywordScore = words.length > 0 ? hits / words.length : 0;
         }
 
@@ -155,7 +155,7 @@ export class JsonVectorAdapter extends VectorStore {
    * query() — SearchEngine / RetrievalFunnel 使用的向量搜索别名
    * 接口: query(vector, topK) → Array<{ id, similarity, metadata }>
    */
-  async query(queryVector, topK = 10) {
+  async query(queryVector: any, topK = 10) {
     const results = await this.searchVector(queryVector, { topK });
     return results.map((r) => ({
       id: r.item.id,
@@ -166,7 +166,7 @@ export class JsonVectorAdapter extends VectorStore {
     }));
   }
 
-  async searchByFilter(filter) {
+  async searchByFilter(filter: any) {
     return this.#applyFilter([...this.#data.values()], filter);
   }
 
@@ -200,8 +200,8 @@ export class JsonVectorAdapter extends VectorStore {
 
   // --- 私有方法 ---
 
-  #applyFilter(items, filter) {
-    return items.filter((item) => {
+  #applyFilter(items: any, filter: any) {
+    return items.filter((item: any) => {
       const meta = item.metadata || {};
       if (filter.type && meta.type !== filter.type) {
         return false;
@@ -220,7 +220,7 @@ export class JsonVectorAdapter extends VectorStore {
       }
       if (filter.tags && Array.isArray(filter.tags)) {
         const itemTags = meta.tags || [];
-        if (!filter.tags.some((t) => itemTags.includes(t))) {
+        if (!filter.tags.some((t: any) => itemTags.includes(t))) {
           return false;
         }
       }
@@ -231,7 +231,7 @@ export class JsonVectorAdapter extends VectorStore {
     });
   }
 
-  #cosineSimilarity(a, b) {
+  #cosineSimilarity(a: any, b: any) {
     return cosineSimilarity(a, b);
   }
 

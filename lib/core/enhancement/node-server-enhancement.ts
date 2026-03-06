@@ -133,7 +133,7 @@ class NodeServerEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── Express/Koa middleware ((req, res, next) signature) ──
@@ -145,7 +145,7 @@ class NodeServerEnhancement extends EnhancementPack {
 
     // ── NestJS Controllers ──
     for (const cls of astSummary.classes || []) {
-      if (cls.decorators?.some((d) => /@Controller/.test(d))) {
+      if (cls.decorators?.some((d: any) => /@Controller/.test(d))) {
         patterns.push({
           type: 'nestjs-controller',
           className: cls.name,
@@ -153,7 +153,7 @@ class NodeServerEnhancement extends EnhancementPack {
           confidence: 0.95,
         });
       }
-      if (cls.decorators?.some((d) => /@Injectable/.test(d))) {
+      if (cls.decorators?.some((d: any) => /@Injectable/.test(d))) {
         patterns.push({
           type: 'nestjs-injectable',
           className: cls.name,
@@ -161,7 +161,7 @@ class NodeServerEnhancement extends EnhancementPack {
           confidence: 0.95,
         });
       }
-      if (cls.decorators?.some((d) => /@Module/.test(d))) {
+      if (cls.decorators?.some((d: any) => /@Module/.test(d))) {
         patterns.push({
           type: 'nestjs-module',
           className: cls.name,
@@ -242,7 +242,7 @@ class NodeServerEnhancement extends EnhancementPack {
 
     // ── Node framework imports ──
     const serverImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('express') ||
         imp.includes('fastify') ||
         imp.includes('@nestjs') ||

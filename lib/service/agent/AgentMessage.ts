@@ -87,7 +87,7 @@ export class AgentMessage {
    * 向发送方回复
    * @param {string} text
    */
-  async reply(text) {
+  async reply(text: any) {
     if (this.replyFn) {
       await this.replyFn(text);
     }
@@ -100,7 +100,7 @@ export class AgentMessage {
    * @param {Object} req - Express request
    * @param {Function} [replyFn] - SSE 或 JSON 回复
    */
-  static fromHttp(req, replyFn) {
+  static fromHttp(req: any, replyFn: any) {
     const body = req.body || {};
     return new AgentMessage({
       content: body.prompt || body.message || body.content || '',
@@ -129,7 +129,7 @@ export class AgentMessage {
    * @param {Object} larkMsg 飞书消息对象
    * @param {Function} replyFn 飞书回复函数
    */
-  static fromLark(larkMsg, replyFn) {
+  static fromLark(larkMsg: any, replyFn: any) {
     return new AgentMessage({
       content: larkMsg.text || larkMsg.content || '',
       channel: Channel.LARK,
@@ -158,7 +158,7 @@ export class AgentMessage {
    * @param {string} input 命令行输入
    * @param {Object} [opts]
    */
-  static fromCli(input, opts: any = {}) {
+  static fromCli(input: any, opts: any = {}) {
     return new AgentMessage({
       content: input,
       channel: Channel.CLI,
@@ -177,7 +177,7 @@ export class AgentMessage {
    * @param {string} content 消息内容
    * @param {Object} [opts]
    */
-  static internal(content, opts: any = {}) {
+  static internal(content: any, opts: any = {}) {
     return new AgentMessage({
       content,
       channel: Channel.INTERNAL,
@@ -200,7 +200,7 @@ export class AgentMessage {
    * @param {Object} mcpReq - MCP tool call request
    * @param {Function} [replyFn] 回复函数
    */
-  static fromMcp(mcpReq, replyFn) {
+  static fromMcp(mcpReq: any, replyFn: any) {
     return new AgentMessage({
       content: mcpReq.prompt || mcpReq.content || mcpReq.arguments?.prompt || '',
       channel: Channel.MCP,

@@ -11,14 +11,14 @@
 
 import { ImportRecord } from '../analysis/ImportRecord.js';
 
-function walkRust(root, ctx) {
+function walkRust(root: any, ctx: any) {
   for (let i = 0; i < root.namedChildCount; i++) {
     const child = root.namedChild(i);
     _walkNode(child, ctx);
   }
 }
 
-function _walkNode(node, ctx) {
+function _walkNode(node: any, ctx: any) {
   switch (node.type) {
     case 'use_declaration': {
       _parseUseDecl(node, ctx);
@@ -86,9 +86,9 @@ function _walkNode(node, ctx) {
 
 // ── Use Declaration ──────────────────────────────────────────
 
-function _parseUseDecl(node, ctx) {
+function _parseUseDecl(node: any, ctx: any) {
   const argNode = node.namedChildren.find(
-    (c) =>
+    (c: any) =>
       c.type === 'use_wildcard' ||
       c.type === 'use_list' ||
       c.type === 'use_as_clause' ||
@@ -105,9 +105,11 @@ function _parseUseDecl(node, ctx) {
   if (argNode.type === 'use_as_clause') {
     // use crate::mod::Foo as Bar
     const pathNode = argNode.namedChildren.find(
-      (c) => c.type === 'scoped_identifier' || c.type === 'identifier'
+      (c: any) => c.type === 'scoped_identifier' || c.type === 'identifier'
     );
-    const aliasNode = argNode.namedChildren.find((c) => c.type === 'identifier' && c !== pathNode);
+    const aliasNode = argNode.namedChildren.find(
+      (c: any) => c.type === 'identifier' && c !== pathNode
+    );
     const fullPath = pathNode?.text || text;
     const segments = fullPath.split('::');
     const lastName = segments[segments.length - 1];
@@ -131,7 +133,7 @@ function _parseUseDecl(node, ctx) {
       const symbolsStr = match[2];
       const symbols = symbolsStr
         .split(',')
-        .map((s) => s.trim().split('::').pop().split(' as ')[0].trim())
+        .map((s: any) => s.trim().split('::').pop().split(' as ')[0].trim())
         .filter(Boolean);
       ctx.imports.push(new ImportRecord(prefix, { symbols, kind: 'named' }));
     } else {
@@ -153,15 +155,15 @@ function _parseUseDecl(node, ctx) {
 
 // ── Mod Item ─────────────────────────────────────────────────
 
-function _parseModItem(node, ctx) {
-  const nameNode = node.namedChildren.find((c) => c.type === 'identifier');
+function _parseModItem(node: any, ctx: any) {
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'identifier');
   if (nameNode) {
     ctx.metadata = ctx.metadata || {};
     ctx.metadata.modules = ctx.metadata.modules || [];
     ctx.metadata.modules.push(nameNode.text);
   }
   // 如果是 inline mod { ... }，递归内部声明
-  const body = node.namedChildren.find((c) => c.type === 'declaration_list');
+  const body = node.namedChildren.find((c: any) => c.type === 'declaration_list');
   if (body) {
     for (let i = 0; i < body.namedChildCount; i++) {
       _walkNode(body.namedChild(i), ctx);
@@ -171,22 +173,22 @@ function _parseModItem(node, ctx) {
 
 // ── Struct ───────────────────────────────────────────────────
 
-function _parseStruct(node, ctx) {
-  const nameNode = node.namedChildren.find((c) => c.type === 'type_identifier');
+function _parseStruct(node: any, ctx: any) {
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'type_identifier');
   const name = nameNode?.text || 'Unknown';
 
   const fields: any | string[] = [];
   const derives = _extractDerives(node);
 
   // Named fields (struct Foo { field: Type })
-  const fieldList = node.namedChildren.find((c) => c.type === 'field_declaration_list');
+  const fieldList = node.namedChildren.find((c: any) => c.type === 'field_declaration_list');
   if (fieldList) {
     for (let i = 0; i < fieldList.namedChildCount; i++) {
       const field = fieldList.namedChild(i);
       if (field.type !== 'field_declaration') {
         continue;
       }
-      const fieldId = field.namedChildren.find((c) => c.type === 'field_identifier');
+      const fieldId = field.namedChildren.find((c: any) => c.type === 'field_identifier');
       if (fieldId) {
         const isPublic = _hasPubVisibility(field);
         ctx.properties.push({
@@ -201,7 +203,9 @@ function _parseStruct(node, ctx) {
   }
 
   // Tuple struct fields (struct Foo(Type1, Type2))
-  const orderedFields = node.namedChildren.find((c) => c.type === 'ordered_field_declaration_list');
+  const orderedFields = node.namedChildren.find(
+    (c: any) => c.type === 'ordered_field_declaration_list'
+  );
   if (orderedFields) {
     let idx = 0;
     for (let i = 0; i < orderedFields.namedChildCount; i++) {
@@ -238,18 +242,18 @@ function _parseStruct(node, ctx) {
 
 // ── Enum ─────────────────────────────────────────────────────
 
-function _parseEnum(node, ctx) {
-  const nameNode = node.namedChildren.find((c) => c.type === 'type_identifier');
+function _parseEnum(node: any, ctx: any) {
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'type_identifier');
   const name = nameNode?.text || 'Unknown';
   const derives = _extractDerives(node);
 
   const variants: any[] = [];
-  const body = node.namedChildren.find((c) => c.type === 'enum_variant_list');
+  const body = node.namedChildren.find((c: any) => c.type === 'enum_variant_list');
   if (body) {
     for (let i = 0; i < body.namedChildCount; i++) {
       const variant = body.namedChild(i);
       if (variant.type === 'enum_variant') {
-        const variantName = variant.namedChildren.find((c) => c.type === 'identifier');
+        const variantName = variant.namedChildren.find((c: any) => c.type === 'identifier');
         if (variantName) {
           variants.push(variantName.text);
         }
@@ -272,15 +276,15 @@ function _parseEnum(node, ctx) {
 
 // ── Trait ─────────────────────────────────────────────────────
 
-function _parseTrait(node, ctx) {
-  const nameNode = node.namedChildren.find((c) => c.type === 'type_identifier');
+function _parseTrait(node: any, ctx: any) {
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'type_identifier');
   const name = nameNode?.text || 'Unknown';
 
   const methods: any[] = [];
   const superTraits: any[] = [];
 
   // Trait bounds (trait Foo: Bar + Baz)
-  const bounds = node.namedChildren.find((c) => c.type === 'trait_bounds');
+  const bounds = node.namedChildren.find((c: any) => c.type === 'trait_bounds');
   if (bounds) {
     for (let i = 0; i < bounds.namedChildCount; i++) {
       const bound = bounds.namedChild(i);
@@ -295,12 +299,12 @@ function _parseTrait(node, ctx) {
   }
 
   // Trait body — collect method signatures
-  const body = node.namedChildren.find((c) => c.type === 'declaration_list');
+  const body = node.namedChildren.find((c: any) => c.type === 'declaration_list');
   if (body) {
     for (let i = 0; i < body.namedChildCount; i++) {
       const item = body.namedChild(i);
       if (item.type === 'function_signature_item' || item.type === 'function_item') {
-        const methodName = item.namedChildren.find((c) => c.type === 'identifier');
+        const methodName = item.namedChildren.find((c: any) => c.type === 'identifier');
         if (methodName) {
           methods.push(methodName.text);
         }
@@ -319,20 +323,20 @@ function _parseTrait(node, ctx) {
 
 // ── Impl Block ───────────────────────────────────────────────
 
-function _parseImpl(node, ctx) {
+function _parseImpl(node: any, ctx: any) {
   // impl Type { ... } 或 impl Trait for Type { ... }
   let selfType: any = null;
   let traitName: any = null;
 
   const typeIdNodes = node.namedChildren.filter(
-    (c) =>
+    (c: any) =>
       c.type === 'type_identifier' ||
       c.type === 'scoped_type_identifier' ||
       c.type === 'generic_type'
   );
 
   // 检查是否有 "for" — trait impl
-  const hasFor = node.children?.some((c) => c.type === 'for');
+  const hasFor = node.children?.some((c: any) => c.type === 'for');
 
   if (hasFor && typeIdNodes.length >= 2) {
     traitName = typeIdNodes[0]?.text;
@@ -341,7 +345,7 @@ function _parseImpl(node, ctx) {
     selfType = typeIdNodes[0]?.text;
   }
 
-  const body = node.namedChildren.find((c) => c.type === 'declaration_list');
+  const body = node.namedChildren.find((c: any) => c.type === 'declaration_list');
   if (!body || !selfType) {
     return;
   }
@@ -357,22 +361,22 @@ function _parseImpl(node, ctx) {
   }
 }
 
-function _parseImplMethod(node, selfType, traitName) {
-  const nameNode = node.namedChildren.find((c) => c.type === 'identifier');
+function _parseImplMethod(node: any, selfType: any, traitName: any) {
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'identifier');
   const name = nameNode?.text;
   if (!name) {
     return null;
   }
 
-  const params = node.namedChildren.find((c) => c.type === 'parameters');
+  const params = node.namedChildren.find((c: any) => c.type === 'parameters');
   const { paramCount, hasSelfParam } = params
     ? _countRustParams(params)
     : { paramCount: 0, hasSelfParam: false };
 
   const isPublic = _hasPubVisibility(node);
-  const isAsync = node.children?.some((c) => c.text === 'async') || false;
+  const isAsync = node.children?.some((c: any) => c.text === 'async') || false;
 
-  const body = node.namedChildren.find((c) => c.type === 'block');
+  const body = node.namedChildren.find((c: any) => c.type === 'block');
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
@@ -395,21 +399,21 @@ function _parseImplMethod(node, selfType, traitName) {
 
 // ── Function Item (free fn) ──────────────────────────────────
 
-function _parseFunctionItem(node) {
-  const nameNode = node.namedChildren.find((c) => c.type === 'identifier');
+function _parseFunctionItem(node: any) {
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'identifier');
   const name = nameNode?.text;
   if (!name) {
     return null;
   }
 
-  const params = node.namedChildren.find((c) => c.type === 'parameters');
+  const params = node.namedChildren.find((c: any) => c.type === 'parameters');
   const { paramCount } = params ? _countRustParams(params) : { paramCount: 0 };
 
   const isPublic = _hasPubVisibility(node);
-  const isAsync = node.children?.some((c) => c.text === 'async') || false;
-  const isUnsafe = node.children?.some((c) => c.text === 'unsafe') || false;
+  const isAsync = node.children?.some((c: any) => c.text === 'async') || false;
+  const isUnsafe = node.children?.some((c: any) => c.text === 'unsafe') || false;
 
-  const body = node.namedChildren.find((c) => c.type === 'block');
+  const body = node.namedChildren.find((c: any) => c.type === 'block');
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
@@ -432,9 +436,9 @@ function _parseFunctionItem(node) {
 
 // ── Const / Static ───────────────────────────────────────────
 
-function _parseConstStatic(node, ctx) {
+function _parseConstStatic(node: any, ctx: any) {
   const isConst = node.type === 'const_item';
-  const nameNode = node.namedChildren.find((c) => c.type === 'identifier');
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'identifier');
   if (nameNode) {
     ctx.properties.push({
       name: nameNode.text,
@@ -449,8 +453,8 @@ function _parseConstStatic(node, ctx) {
 
 // ── Type Alias ───────────────────────────────────────────────
 
-function _parseTypeAlias(node, ctx) {
-  const nameNode = node.namedChildren.find((c) => c.type === 'type_identifier');
+function _parseTypeAlias(node: any, ctx: any) {
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'type_identifier');
   if (nameNode) {
     ctx.classes.push({
       name: nameNode.text,
@@ -463,8 +467,8 @@ function _parseTypeAlias(node, ctx) {
 
 // ── Macro Definition ─────────────────────────────────────────
 
-function _parseMacroDef(node, ctx) {
-  const nameNode = node.namedChildren.find((c) => c.type === 'identifier');
+function _parseMacroDef(node: any, ctx: any) {
+  const nameNode = node.namedChildren.find((c: any) => c.type === 'identifier');
   if (nameNode) {
     ctx.metadata = ctx.metadata || {};
     ctx.metadata.macros = ctx.metadata.macros || [];
@@ -477,7 +481,7 @@ function _parseMacroDef(node, ctx) {
 
 // ── Rust Pattern Detection ───────────────────────────────────
 
-function detectRustPatterns(root, lang, methods, properties, classes) {
+function detectRustPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   const patterns: any[] = [];
 
   // 构建 type → methods 索引
@@ -572,9 +576,9 @@ function detectRustPatterns(root, lang, methods, properties, classes) {
   return patterns;
 }
 
-function _detectUnsafe(root, patterns) {
+function _detectUnsafe(root: any, patterns: any) {
   let count = 0;
-  function walk(node) {
+  function walk(node: any) {
     if (node.type === 'unsafe_block') {
       count++;
     }
@@ -592,12 +596,12 @@ function _detectUnsafe(root, patterns) {
   }
 }
 
-function _detectAsync(root, patterns) {
+function _detectAsync(root: any, patterns: any) {
   let asyncFnCount = 0;
   let awaitCount = 0;
-  function walk(node) {
+  function walk(node: any) {
     if (node.type === 'function_item' || node.type === 'function_signature_item') {
-      const isAsync = node.children?.some((c) => c.text === 'async');
+      const isAsync = node.children?.some((c: any) => c.text === 'async');
       if (isAsync) {
         asyncFnCount++;
       }
@@ -620,7 +624,7 @@ function _detectAsync(root, patterns) {
   }
 }
 
-function _detectDerives(classes, patterns) {
+function _detectDerives(classes: any, patterns: any) {
   const deriveCounts: Record<string, any> = {};
   for (const cls of classes) {
     if (cls.derives) {
@@ -644,7 +648,7 @@ function _detectDerives(classes, patterns) {
 
 // ── Helper: Extract #[derive(...)] ──────────────────────────
 
-function _extractDerives(node) {
+function _extractDerives(node: any) {
   const derives: any[] = [];
   // Look at preceding siblings (attribute_item nodes)
   if (node.parent) {
@@ -665,7 +669,7 @@ function _extractDerives(node) {
       const text = sib.text;
       const deriveMatch = text.match(/#\[derive\(([^)]+)\)\]/);
       if (deriveMatch) {
-        const items = deriveMatch[1].split(',').map((s) => s.trim());
+        const items = deriveMatch[1].split(',').map((s: any) => s.trim());
         derives.push(...items);
       }
     }
@@ -675,13 +679,15 @@ function _extractDerives(node) {
 
 // ── Helper: Visibility ──────────────────────────────────────
 
-function _hasPubVisibility(node) {
-  return node.children?.some((c) => c.type === 'visibility_modifier' || c.text === 'pub') || false;
+function _hasPubVisibility(node: any) {
+  return (
+    node.children?.some((c: any) => c.type === 'visibility_modifier' || c.text === 'pub') || false
+  );
 }
 
 // ── Helper: Count Parameters ────────────────────────────────
 
-function _countRustParams(paramList) {
+function _countRustParams(paramList: any) {
   let paramCount = 0;
   let hasSelfParam = false;
 
@@ -699,7 +705,7 @@ function _countRustParams(paramList) {
 
 // ── Utility: Complexity ─────────────────────────────────────
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_expression',
@@ -711,12 +717,12 @@ function _estimateComplexity(node) {
     'match_expression',
     'match_arm',
   ]);
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
     if (n.type === 'binary_expression') {
-      const op = n.children?.find((c) => c.text === '&&' || c.text === '||');
+      const op = n.children?.find((c: any) => c.text === '&&' || c.text === '||');
       if (op) {
         complexity++;
       }
@@ -729,7 +735,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_expression',
     'if_let_expression',
@@ -761,7 +767,7 @@ function _maxNesting(node, depth) {
  * @param {object} ctx
  * @param {string} _lang
  */
-function extractCallSitesRust(root, ctx, _lang) {
+function extractCallSitesRust(root: any, ctx: any, _lang: any) {
   const scopes = _collectRustScopes(root);
   for (const scope of scopes) {
     _extractRustCallSitesFromBody(scope.body, scope.className, scope.methodName, ctx);
@@ -771,40 +777,40 @@ function extractCallSitesRust(root, ctx, _lang) {
 /**
  * 递归收集 Rust 中所有函数/方法体作用域
  */
-function _collectRustScopes(root) {
+function _collectRustScopes(root: any) {
   const scopes: { body: any; className: any; methodName: any }[] = [];
 
-  function visit(node, className) {
+  function visit(node: any, className: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
 
       if (child.type === 'impl_item') {
         // impl Type { ... } or impl Trait for Type { ... }
         const typeIdNodes = child.namedChildren.filter(
-          (c) =>
+          (c: any) =>
             c.type === 'type_identifier' ||
             c.type === 'scoped_type_identifier' ||
             c.type === 'generic_type'
         );
-        const hasFor = child.children?.some((c) => c.type === 'for');
+        const hasFor = child.children?.some((c: any) => c.type === 'for');
         let selfType: any = null;
         if (hasFor && typeIdNodes.length >= 2) {
           selfType = typeIdNodes[1]?.text;
         } else if (typeIdNodes.length >= 1) {
           selfType = typeIdNodes[0]?.text;
         }
-        const body = child.namedChildren.find((c) => c.type === 'declaration_list');
+        const body = child.namedChildren.find((c: any) => c.type === 'declaration_list');
         if (body) {
           visit(body, selfType || className);
         }
       } else if (child.type === 'function_item') {
-        const name = child.namedChildren.find((c) => c.type === 'identifier')?.text;
-        const body = child.namedChildren.find((c) => c.type === 'block');
+        const name = child.namedChildren.find((c: any) => c.type === 'identifier')?.text;
+        const body = child.namedChildren.find((c: any) => c.type === 'block');
         if (name && body) {
           scopes.push({ body, className, methodName: name });
         }
       } else if (child.type === 'mod_item') {
-        const body = child.namedChildren.find((c) => c.type === 'declaration_list');
+        const body = child.namedChildren.find((c: any) => c.type === 'declaration_list');
         if (body) {
           visit(body, null);
         }
@@ -819,7 +825,7 @@ function _collectRustScopes(root) {
 /**
  * 从 Rust block 中递归提取调用点
  */
-function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
+function _extractRustCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;
   }
@@ -851,7 +857,7 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
     'trace',
   ]);
 
-  function walk(node, isAwaited) {
+  function walk(node: any, isAwaited: any) {
     if (!node || node.type === 'ERROR' || node.isMissing) {
       return;
     }
@@ -925,7 +931,7 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
         callType = 'function';
       }
 
-      const args = node.namedChildren.find((c) => c.type === 'arguments');
+      const args = node.namedChildren.find((c: any) => c.type === 'arguments');
       const argCount = args ? args.namedChildCount : 0;
 
       ctx.callSites.push({
@@ -949,11 +955,11 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
     // method_call_expression: obj.method(args) — Rust-specific
     if (node.type === 'method_call_expression') {
       const valueNode = node.namedChildren.find(
-        (c) =>
+        (c: any) =>
           c.type !== 'field_identifier' && c.type !== 'arguments' && c.type !== 'type_arguments'
       );
-      const nameNode = node.namedChildren.find((c) => c.type === 'field_identifier');
-      const args = node.namedChildren.find((c) => c.type === 'arguments');
+      const nameNode = node.namedChildren.find((c: any) => c.type === 'field_identifier');
+      const args = node.namedChildren.find((c: any) => c.type === 'arguments');
 
       const callee = nameNode?.text || 'unknown';
       const receiver = valueNode?.text?.slice(0, 80) || null;
@@ -994,7 +1000,7 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
 
     // macro_invocation: some_macro!(args) — skip noise macros
     if (node.type === 'macro_invocation') {
-      const macroName = node.namedChildren.find((c) => c.type === 'identifier')?.text;
+      const macroName = node.namedChildren.find((c: any) => c.type === 'identifier')?.text;
       if (macroName && !RUST_NOISE.has(macroName) && !RUST_NOISE.has(macroName.replace(/!$/, ''))) {
         // Only record non-noise macros as function calls
         ctx.callSites.push({
@@ -1016,7 +1022,7 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
     walkChildren(node, false);
   }
 
-  function walkChildren(node, isAwaited) {
+  function walkChildren(node: any, isAwaited: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       walk(node.namedChild(i), isAwaited);
     }
@@ -1031,7 +1037,7 @@ let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }
-export function setGrammar(grammar) {
+export function setGrammar(grammar: any) {
   _grammar = grammar;
 }
 

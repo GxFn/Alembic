@@ -64,10 +64,10 @@ export class IndexingPipeline {
     }
   }
 
-  setVectorStore(store) {
+  setVectorStore(store: any) {
     this.#vectorStore = store;
   }
-  setAiProvider(provider) {
+  setAiProvider(provider: any) {
     this.#aiProvider = provider;
     if (provider) {
       this.#batchEmbedder = new BatchEmbedder(provider, {
@@ -158,7 +158,7 @@ export class IndexingPipeline {
       try {
         vectorMap = await this.#batchEmbedder.embedAll(
           allChunks.map((c) => ({ id: c.id, content: c.content })),
-          (embedded, total) => {
+          (embedded: any, total: any) => {
             stats.embedded = embedded;
             onProgress?.({ phase: 'embed', embedded, total });
           }
@@ -228,11 +228,11 @@ export class IndexingPipeline {
   /**
    * 计算内容 hash
    */
-  hashContent(content) {
+  hashContent(content: any) {
     return createHash('sha256').update(content).digest('hex').slice(0, 16);
   }
 
-  #walkDir(dir, files) {
+  #walkDir(dir: any, files: any) {
     try {
       const entries = readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
@@ -258,7 +258,7 @@ export class IndexingPipeline {
     }
   }
 
-  #detectLanguage(filePath) {
+  #detectLanguage(filePath: any) {
     const lang = LanguageService.inferLang(filePath);
     return lang === 'unknown' ? 'text' : lang;
   }

@@ -15,7 +15,7 @@ import { envelope } from '../envelope.js';
  * 构建 actionHint — "whenClause → doClause" 的一句话可操作摘要。
  * Agent 在列表/搜索中即可判断是否需要深入获取该条目。
  */
-function _buildActionHint(json) {
+function _buildActionHint(json: any) {
   const doText = json.doClause || '';
   const whenText = json.whenClause || '';
   if (!doText && !whenText) {
@@ -27,7 +27,7 @@ function _buildActionHint(json) {
 /**
  * 只保留非空关系桶，压缩 Relations 输出体积。
  */
-function _compactRelations(relations) {
+function _compactRelations(relations: any) {
   if (!relations) {
     return undefined;
   }
@@ -47,7 +47,7 @@ function _compactRelations(relations) {
  * 移除: quality, stats, scope, tags, knowledgeType, 重复的 status/statistics
  * 新增: actionHint
  */
-function _projectItem(r) {
+function _projectItem(r: any) {
   const json = typeof r.toJSON === 'function' ? r.toJSON() : r;
   return {
     id: json.id,
@@ -74,7 +74,7 @@ function _projectItem(r) {
  *                    publishedAt/By, headerPaths, includeHeaders, quality.*, stats.*,
  *                    reasoning.sources/qualitySignals/alternatives, content.codeChanges/verification
  */
-function _projectForAgent(json) {
+function _projectForAgent(json: any) {
   // content 精简：保留 pattern/markdown/rationale/steps，去除 codeChanges/verification
   const content = json.content
     ? {
@@ -140,7 +140,7 @@ function _projectForAgent(json) {
   };
 }
 
-export async function listByKind(ctx, kind, args) {
+export async function listByKind(ctx: any, kind: any, args: any) {
   const ks = ctx.container.get('knowledgeService');
   const filters: any = { kind };
   if (args.language) {
@@ -158,7 +158,7 @@ export async function listByKind(ctx, kind, args) {
   });
 }
 
-export async function listRecipes(ctx, args) {
+export async function listRecipes(ctx: any, args: any) {
   const ks = ctx.container.get('knowledgeService');
   const filters: any = {};
   if (args.kind) {
@@ -188,7 +188,7 @@ export async function listRecipes(ctx, args) {
   });
 }
 
-export async function getRecipe(ctx, args) {
+export async function getRecipe(ctx: any, args: any) {
   if (!args.id) {
     throw new Error('id is required');
   }
@@ -203,7 +203,7 @@ export async function getRecipe(ctx, args) {
   return envelope({ success: true, data: projected, meta: { tool: 'autosnippet_get_recipe' } });
 }
 
-export async function recipeInsights(ctx, args) {
+export async function recipeInsights(ctx: any, args: any) {
   if (!args.id) {
     throw new Error('id is required');
   }
@@ -276,7 +276,7 @@ export async function recipeInsights(ctx, args) {
   return envelope({ success: true, data: insights, meta: { tool: 'autosnippet_recipe_insights' } });
 }
 
-export async function confirmUsage(ctx, args) {
+export async function confirmUsage(ctx: any, args: any) {
   if (!args.recipeId) {
     throw new Error('recipeId is required');
   }

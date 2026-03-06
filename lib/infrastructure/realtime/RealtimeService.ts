@@ -11,7 +11,7 @@ export class RealtimeService {
   /**
    * @param {import('http').Server} httpServer
    */
-  constructor(httpServer) {
+  constructor(httpServer: any) {
     this.io = new SocketIOServer(httpServer, {
       cors: {
         origin: '*',
@@ -29,7 +29,7 @@ export class RealtimeService {
    * 设置事件处理器
    */
   setupEventHandlers() {
-    this.io.on('connection', (socket) => {
+    this.io.on('connection', (socket: any) => {
       Logger.debug(`[Socket.io] Client connected: ${socket.id}`);
 
       // 加入通知房间
@@ -61,7 +61,7 @@ export class RealtimeService {
   /**
    * 广播候选人创建事件
    */
-  broadcastCandidateCreated(candidate) {
+  broadcastCandidateCreated(candidate: any) {
     this.io.to('notifications').emit('candidate-created', {
       type: 'candidate_created',
       candidate,
@@ -72,7 +72,7 @@ export class RealtimeService {
   /**
    * 广播候选人状态变化事件
    */
-  broadcastCandidateStatusChanged(candidateId, newStatus, oldStatus) {
+  broadcastCandidateStatusChanged(candidateId: any, newStatus: any, oldStatus: any) {
     this.io.to('notifications').emit('candidate-status-changed', {
       type: 'candidate_status_changed',
       candidateId,
@@ -95,7 +95,7 @@ export class RealtimeService {
   /**
    * 广播食谱创建事件
    */
-  broadcastRecipeCreated(recipe) {
+  broadcastRecipeCreated(recipe: any) {
     this.io.to('notifications').emit('recipe-created', {
       type: 'recipe_created',
       recipe,
@@ -106,7 +106,7 @@ export class RealtimeService {
   /**
    * 广播食谱发布事件
    */
-  broadcastRecipePublished(recipeId, recipe) {
+  broadcastRecipePublished(recipeId: any, recipe: any) {
     this.io.to('notifications').emit('recipe-published', {
       type: 'recipe_published',
       recipeId,
@@ -118,7 +118,7 @@ export class RealtimeService {
   /**
    * 广播规则创建事件
    */
-  broadcastRuleCreated(rule) {
+  broadcastRuleCreated(rule: any) {
     this.io.to('notifications').emit('rule-created', {
       type: 'rule_created',
       rule,
@@ -129,7 +129,7 @@ export class RealtimeService {
   /**
    * 广播规则状态变化事件
    */
-  broadcastRuleStatusChanged(ruleId, enabled) {
+  broadcastRuleStatusChanged(ruleId: any, enabled: any) {
     this.io.to('notifications').emit('rule-status-changed', {
       type: 'rule_status_changed',
       ruleId,
@@ -141,7 +141,7 @@ export class RealtimeService {
   /**
    * 广播通用事件
    */
-  broadcastEvent(eventName, data) {
+  broadcastEvent(eventName: any, data: any) {
     // 直接透传 data（不包装 type/timestamp），保持与前端 hook 期望的数据结构一致
     this.io.to('notifications').emit(eventName, data);
   }
@@ -164,7 +164,7 @@ export class RealtimeService {
 // 单例实例
 let realtimeService: RealtimeService | null = null;
 
-export function initRealtimeService(httpServer) {
+export function initRealtimeService(httpServer: any) {
   if (!realtimeService) {
     realtimeService = new RealtimeService(httpServer);
     Logger.info('✅ RealtimeService initialized');

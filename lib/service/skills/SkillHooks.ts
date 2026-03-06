@@ -78,7 +78,7 @@ export class SkillHooks {
    * @param  {...any} args
    * @returns {Promise<any>} 最后一个返回值（用于 blocking hooks 如 onCandidateSubmit）
    */
-  async run(hookName, ...args) {
+  async run(hookName: any, ...args: any[]) {
     const handlers = this.hooks.get(hookName);
     if (!handlers || handlers.length === 0) {
       return undefined;
@@ -102,14 +102,14 @@ export class SkillHooks {
   /**
    * 检查是否有任何钩子注册
    */
-  has(hookName) {
+  has(hookName: any) {
     const handlers = this.hooks.get(hookName);
     return handlers && handlers.length > 0;
   }
 
   // ─── Internal ──────────────────────────────────────────
 
-  async #loadFromDir(dir, loaded) {
+  async #loadFromDir(dir: any, loaded: any) {
     let dirs;
     try {
       dirs = fs

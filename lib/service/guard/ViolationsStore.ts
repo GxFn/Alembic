@@ -12,7 +12,7 @@ export class ViolationsStore {
   /**
    * @param {import('better-sqlite3').Database} db - SQLite 数据库实例
    */
-  constructor(db) {
+  constructor(db: any) {
     this.#db = db;
   }
 
@@ -23,7 +23,7 @@ export class ViolationsStore {
    * @param {{ filePath: string, violations: object[], summary?: string }} run
    * @returns {string} runId
    */
-  appendRun(run) {
+  appendRun(run: any) {
     const id = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const now = Math.floor(Date.now() / 1000);
 
@@ -61,17 +61,17 @@ export class ViolationsStore {
    */
   getRuns() {
     const rows = this.#db.prepare('SELECT * FROM guard_violations ORDER BY created_at ASC').all();
-    return rows.map((r) => this.#rowToRun(r));
+    return rows.map((r: any) => this.#rowToRun(r));
   }
 
   /**
    * 按文件路径查询历史
    */
-  getRunsByFile(filePath) {
+  getRunsByFile(filePath: any) {
     const rows = this.#db
       .prepare('SELECT * FROM guard_violations WHERE file_path = ? ORDER BY created_at ASC')
       .all(filePath);
-    return rows.map((r) => this.#rowToRun(r));
+    return rows.map((r: any) => this.#rowToRun(r));
   }
 
   /**
@@ -81,7 +81,7 @@ export class ViolationsStore {
     const rows = this.#db
       .prepare('SELECT * FROM guard_violations ORDER BY created_at DESC, rowid DESC LIMIT ?')
       .all(n);
-    return rows.reverse().map((r) => this.#rowToRun(r));
+    return rows.reverse().map((r: any) => this.#rowToRun(r));
   }
 
   /**
@@ -142,8 +142,8 @@ export class ViolationsStore {
       return {
         errorsChange: 0,
         warningsChange: 0,
-        latestErrors: latest.filter((v) => v.severity === 'error').length,
-        latestWarnings: latest.filter((v) => v.severity === 'warning').length,
+        latestErrors: latest.filter((v: any) => v.severity === 'error').length,
+        latestWarnings: latest.filter((v: any) => v.severity === 'warning').length,
         previousErrors: 0,
         previousWarnings: 0,
         hasHistory: false,
@@ -151,10 +151,10 @@ export class ViolationsStore {
     }
 
     const [prev, latest] = recent;
-    const latestErrors = latest.violations.filter((v) => v.severity === 'error').length;
-    const latestWarnings = latest.violations.filter((v) => v.severity === 'warning').length;
-    const previousErrors = prev.violations.filter((v) => v.severity === 'error').length;
-    const previousWarnings = prev.violations.filter((v) => v.severity === 'warning').length;
+    const latestErrors = latest.violations.filter((v: any) => v.severity === 'error').length;
+    const latestWarnings = latest.violations.filter((v: any) => v.severity === 'warning').length;
+    const previousErrors = prev.violations.filter((v: any) => v.severity === 'error').length;
+    const previousWarnings = prev.violations.filter((v: any) => v.severity === 'warning').length;
 
     return {
       errorsChange: latestErrors - previousErrors,
@@ -216,14 +216,14 @@ export class ViolationsStore {
     const total = this.#db.prepare(countSql).get(...countParams).c;
 
     return {
-      data: rows.map((r) => this.#rowToRun(r)),
+      data: rows.map((r: any) => this.#rowToRun(r)),
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     };
   }
 
   // ─── 内部 ─────────────────────────────────────────────
 
-  #rowToRun(row) {
+  #rowToRun(row: any) {
     return {
       id: row.id,
       filePath: row.file_path,

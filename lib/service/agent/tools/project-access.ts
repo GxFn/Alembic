@@ -26,7 +26,7 @@ const DECL_RE =
   /^\s*(@property\b|@interface\b|@protocol\b|@class\b|@synthesize\b|@dynamic\b|@end\b|NS_ASSUME_NONNULL|#import\b|#include\b|#define\b)/;
 const TYPE_DECL_RE = /^\s*\w[\w<>*\s]+[\s*]+_?\w+\s*;$/;
 
-function _scoreSearchLine(line) {
+function _scoreSearchLine(line: any) {
   const t = line.trim();
   if (DECL_RE.test(t)) {
     return -2;
@@ -53,13 +53,13 @@ function _scoreSearchLine(line) {
  * 收集项目文件列表 — 抽取为公用函数，供单次和批量搜索复用。
  * 优先使用内存缓存（bootstrap 场景），否则从磁盘递归读取。
  */
-async function _getProjectFiles(params, ctx) {
+async function _getProjectFiles(params: any, ctx: any) {
   const { fileFilter } = params;
   const projectRoot = ctx.projectRoot || process.cwd();
 
   let extFilter: any = null;
   if (fileFilter) {
-    const exts = fileFilter.split(',').map((e) => e.trim().replace(/^\./, ''));
+    const exts = fileFilter.split(',').map((e: any) => e.trim().replace(/^\./, ''));
     extFilter = new RegExp(`\\.(${exts.join('|')})$`, 'i');
   }
 
@@ -85,7 +85,7 @@ async function _getProjectFiles(params, ctx) {
   } else {
     files = [];
     const MAX_FILE_SIZE = 512 * 1024;
-    const walk = (dir, relBase = '') => {
+    const walk = (dir: any, relBase = '') => {
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
@@ -183,7 +183,7 @@ export const searchProjectCode = {
     },
     required: [],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     // ── 去重缓存初始化 ──
     const state = ctx._sharedState || ctx;
     if (!state._searchCache) {
@@ -352,7 +352,7 @@ export const readProjectFile = {
     },
     required: [],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     // ── 去重缓存初始化 ──
     const state = ctx._sharedState || ctx;
     if (!state._readCache) {
@@ -501,7 +501,7 @@ export const listProjectStructure = {
       },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const directory = params.directory || '';
     const depth = Math.min(params.depth ?? 3, 5);
     const includeStats = params.includeStats !== false;
@@ -517,9 +517,14 @@ export const listProjectStructure = {
     }
 
     const treeLines: string[] = [];
-    const stats = { totalFiles: 0, totalDirs: 0, byLanguage: {}, totalLines: 0 };
+    const stats = {
+      totalFiles: 0,
+      totalDirs: 0,
+      byLanguage: {} as Record<string, any>,
+      totalLines: 0,
+    };
 
-    const walk = (dir, relBase, currentDepth, prefix) => {
+    const walk = (dir: any, relBase: any, currentDepth: any, prefix: any) => {
       if (currentDepth > depth) {
         return;
       }
@@ -687,7 +692,7 @@ export const getFileSummary = {
     },
     required: ['filePath'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const filePath = params.filePath || params.file_path || params.path || params.file;
     const projectRoot = ctx.projectRoot || process.cwd();
 
@@ -745,7 +750,7 @@ export const getFileSummary = {
       return result;
     }
 
-    const extract = (regex) => {
+    const extract = (regex: any) => {
       const matches: any[] = [];
       let m;
       regex.lastIndex = 0;
@@ -790,7 +795,7 @@ export const semanticSearchCode = {
     },
     required: ['query'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const query = params.query || params.search || params.keyword;
     const topK = Math.min(params.topK ?? 5, 20);
     const { category, language } = params;
@@ -843,7 +848,7 @@ export const semanticSearchCode = {
           mode: 'keyword-fallback',
           query,
           message: 'AI Provider 不支持 embedding，已降级到关键词匹配',
-          results: results.map((r) => ({
+          results: results.map((r: any) => ({
             id: r.item.id,
             content: (r.item.content || '').slice(0, 500),
             score: Math.round(r.score * 100) / 100,
@@ -866,7 +871,7 @@ export const semanticSearchCode = {
         return {
           mode: 'vector',
           query,
-          results: results.map((r) => ({
+          results: results.map((r: any) => ({
             id: r.item.id,
             content: (r.item.content || '').slice(0, 500),
             score: Math.round(r.score * 100) / 100,
@@ -890,10 +895,14 @@ export const semanticSearchCode = {
       const actualMode = result?.mode || 'bm25';
 
       if (category) {
-        items = items.filter((i) => (i.category || '').toLowerCase() === category.toLowerCase());
+        items = items.filter(
+          (i: any) => (i.category || '').toLowerCase() === category.toLowerCase()
+        );
       }
       if (language) {
-        items = items.filter((i) => (i.language || '').toLowerCase() === language.toLowerCase());
+        items = items.filter(
+          (i: any) => (i.language || '').toLowerCase() === language.toLowerCase()
+        );
       }
       items = items.slice(0, topK);
 
@@ -902,7 +911,7 @@ export const semanticSearchCode = {
         query,
         degraded: actualMode !== 'semantic',
         totalResults: items.length,
-        results: items.map((item) => ({
+        results: items.map((item: any) => ({
           id: item.id,
           title: item.title || '',
           content: (item.content || item.description || '').slice(0, 500),

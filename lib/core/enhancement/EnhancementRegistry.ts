@@ -13,7 +13,7 @@ export class EnhancementRegistry {
    * 注册增强包
    * @param {import('./EnhancementPack.js').EnhancementPack} pack
    */
-  register(pack) {
+  register(pack: any) {
     this.#packs.push(pack);
     return this;
   }
@@ -24,7 +24,7 @@ export class EnhancementRegistry {
    * @param {string[]} detectedFrameworks
    * @returns {import('./EnhancementPack.js').EnhancementPack[]}
    */
-  resolve(primaryLang, detectedFrameworks: any[] = []) {
+  resolve(primaryLang: any, detectedFrameworks: any[] = []) {
     return this.#packs.filter((pack) => {
       const cond = pack.conditions;
       if (!cond) {
@@ -32,7 +32,7 @@ export class EnhancementRegistry {
       }
       const langMatch = !cond.languages || cond.languages.includes(primaryLang);
       const fwMatch =
-        !cond.frameworks || cond.frameworks.some((f) => detectedFrameworks.includes(f));
+        !cond.frameworks || cond.frameworks.some((f: any) => detectedFrameworks.includes(f));
       return langMatch && (cond.frameworks ? fwMatch : true);
     });
   }

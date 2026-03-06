@@ -40,7 +40,7 @@ const CURSOR_DELIVERY_FIELDS = new Set([
  * @param {string} code
  * @returns {string}
  */
-function codeFingerprint(code) {
+function codeFingerprint(code: any) {
   return (code || '')
     .replace(/\/\/[^\n]*/g, '') // 移除单行注释
     .replace(/\/\*[\s\S]*?\*\//g, '') // 移除多行注释
@@ -56,7 +56,7 @@ function codeFingerprint(code) {
  * @param {object} candidate
  * @returns {'strict'|'document'|'fallback'}
  */
-function detectMode(candidate) {
+function detectMode(candidate: any) {
   if (candidate.knowledgeType === 'dev-document') {
     return 'document';
   }
@@ -95,7 +95,7 @@ export class UnifiedValidator {
    * @param {boolean}                        [options.skipUniqueness=false] 跳过去重检查
    * @returns {{ pass: boolean, errors: string[], warnings: string[] }}
    */
-  validate(candidate, options: any = {}) {
+  validate(candidate: any, options: any = {}) {
     const errors: any[] = [];
     const warnings: any[] = [];
 
@@ -131,7 +131,7 @@ export class UnifiedValidator {
    * @param {string[]} errors
    * @param {string[]} warnings
    */
-  #checkFields(candidate, mode, systemInjected, errors, warnings) {
+  #checkFields(candidate: any, mode: any, systemInjected: any, errors: any, warnings: any) {
     for (const field of V3_FIELD_SPEC) {
       const { name, level, rule } = field;
 
@@ -219,7 +219,7 @@ export class UnifiedValidator {
    * @param {string[]} errors
    * @param {string[]} warnings
    */
-  #checkContentQuality(candidate, mode, errors, warnings) {
+  #checkContentQuality(candidate: any, mode: any, errors: any, warnings: any) {
     const markdown = candidate.content?.markdown || '';
 
     // markdown ≥ 200 字符
@@ -271,7 +271,7 @@ export class UnifiedValidator {
 
     // 内容过于简单
     if (markdown && markdown.length > 0 && markdown.length >= 200) {
-      const lines = markdown.split('\n').filter((l) => l.trim().length > 0);
+      const lines = markdown.split('\n').filter((l: any) => l.trim().length > 0);
       if (lines.length <= 2 && !/```[\s\S]*?```/.test(markdown)) {
         warnings.push(`内容仅 ${lines.length} 行 — 建议包含更多代码片段和设计意图描述`);
       }
@@ -284,7 +284,7 @@ export class UnifiedValidator {
    * @param {object} candidate
    * @param {string[]} errors
    */
-  #checkUniqueness(candidate, errors) {
+  #checkUniqueness(candidate: any, errors: any) {
     const title = (candidate.title || '').toLowerCase().trim();
     if (title && this.#titles.has(title)) {
       errors.push(`标题重复: "${candidate.title}"`);
@@ -306,7 +306,7 @@ export class UnifiedValidator {
    * @param {string} title
    * @param {string} [pattern] 代码模式
    */
-  recordSubmission(title, pattern) {
+  recordSubmission(title: any, pattern: any) {
     if (title) {
       this.#titles.add(title.toLowerCase().trim());
     }
@@ -326,7 +326,7 @@ export class UnifiedValidator {
    * @param {string} path 如 'content.markdown' 或 'reasoning.sources'
    * @returns {*}
    */
-  #getNestedValue(obj, path) {
+  #getNestedValue(obj: any, path: any) {
     const parts = path.split('.');
     let current = obj;
     for (const part of parts) {
@@ -344,7 +344,7 @@ export class UnifiedValidator {
    * @param {FieldDef} field
    * @returns {boolean}
    */
-  #isMissing(value, field) {
+  #isMissing(value: any, field: any) {
     if (value === undefined || value === null) {
       return true;
     }

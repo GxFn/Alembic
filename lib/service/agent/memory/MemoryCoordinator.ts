@@ -79,7 +79,7 @@ export class MemoryCoordinator {
   // ── Config ──
   #mode; // 'user' | 'bootstrap'
   #totalBudget;
-  #budgetAllocation;
+  #budgetAllocation: any;
 
   // ── Tier 3: Persistent (跨会话) ──
   #persistentMemory; // PersistentMemory
@@ -90,7 +90,7 @@ export class MemoryCoordinator {
 
   // ── Tier 1: Dimension (维度级) ──
   #activeContexts; // Map<scopeId, ActiveContext>
-  #currentScopeId;
+  #currentScopeId: any;
 
   #logger;
   #completedScopes;
@@ -143,11 +143,11 @@ export class MemoryCoordinator {
    * @param {'user'|'analyst'|'producer'} mode
    * @param {number} [totalTokens] 覆盖总预算
    */
-  allocateBudget(mode, totalTokens?) {
+  allocateBudget(mode: any, totalTokens?: any) {
     if (totalTokens) {
       this.#totalBudget = totalTokens;
     }
-    const profile = BUDGET_PROFILES[mode] || BUDGET_PROFILES.analyst;
+    const profile = (BUDGET_PROFILES as Record<string, any>)[mode] || BUDGET_PROFILES.analyst;
     this.#budgetAllocation = {
       activeContext: Math.round(this.#totalBudget * profile.activeContext),
       sessionStore: Math.round(this.#totalBudget * profile.sessionStore),
@@ -175,7 +175,7 @@ export class MemoryCoordinator {
    * @returns {number}
    */
   getMessageBudget(
-    totalContextBudget,
+    totalContextBudget: any,
     systemPromptEstimate = 2000,
     toolSchemaEstimate = 3000,
     safetyMargin = 3000
@@ -303,7 +303,7 @@ export class MemoryCoordinator {
    * @param {number} round 当前迭代轮次
    * @param {boolean} [cacheHit=false] 本次是否缓存命中
    */
-  recordObservation(toolName, args, result, round, cacheHit = false) {
+  recordObservation(toolName: any, args: any, result: any, round: any, cacheHit = false) {
     try {
       // ActiveContext 的数据记录由 trace.recordToolCall() 处理，
       // 此处只处理缓存写入。
@@ -328,7 +328,7 @@ export class MemoryCoordinator {
    * @param {string} [scopeId] 显式指定 scope (并行安全)
    * @returns {string} 响应消息
    */
-  noteFinding(finding, evidence, importance, round, scopeId) {
+  noteFinding(finding: any, evidence: any, importance: any, round: any, scopeId: any) {
     try {
       const ac = scopeId ? this.getActiveContext(scopeId) : this.#getCurrentActiveContext();
       if (ac) {
@@ -353,7 +353,7 @@ export class MemoryCoordinator {
    * @param {string} reply - AI 回复
    * @param {'user'|'system'} source
    */
-  extractFromConversation(prompt, reply, source) {
+  extractFromConversation(prompt: any, reply: any, source: any) {
     // §7.6 step 4: 只写 PersistentMemory (不再双写 Memory.js)
     if (!this.#persistentMemory) {
       return;
@@ -413,7 +413,7 @@ export class MemoryCoordinator {
    * @param {object} args
    * @returns {*|null}
    */
-  getCachedResult(toolName, args) {
+  getCachedResult(toolName: any, args: any) {
     try {
       if (NON_CACHEABLE_TOOLS.has(toolName)) {
         return null;
@@ -430,7 +430,7 @@ export class MemoryCoordinator {
    * @param {object} args
    * @param {*} result
    */
-  cacheToolResult(toolName, args, result) {
+  cacheToolResult(toolName: any, args: any, result: any) {
     try {
       if (NON_CACHEABLE_TOOLS.has(toolName)) {
         return;
@@ -453,7 +453,7 @@ export class MemoryCoordinator {
    * @param {boolean} [config.lightweight=false] 轻量模式 (User Chat)
    * @returns {object} - WorkingMemory (Phase 2) / ActiveContext (Phase 3)
    */
-  createDimensionScope(scopeId, config: any = {}) {
+  createDimensionScope(scopeId: any, config: any = {}) {
     this.#currentScopeId = scopeId;
 
     // Phase 3: 创建 ActiveContext 实例
@@ -471,7 +471,7 @@ export class MemoryCoordinator {
    * @param {string} scopeId
    * @param {object} [report] 附加报告数据
    */
-  completeDimension(scopeId, report) {
+  completeDimension(scopeId: any, report: any) {
     try {
       const ac = this.#activeContexts.get(scopeId);
       const distilled = ac ? ac.distill() : null;
@@ -524,7 +524,7 @@ export class MemoryCoordinator {
    * @param {string} [scopeId]
    * @returns {object|null}
    */
-  getActiveContext(scopeId) {
+  getActiveContext(scopeId: any) {
     const id = scopeId || this.#currentScopeId;
     if (!id) {
       return null;
@@ -565,7 +565,7 @@ export class MemoryCoordinator {
    * @param {string} conversationId
    * @param {object} aiProvider
    */
-  async onConversationUpdated(conversationId, aiProvider) {
+  async onConversationUpdated(conversationId: any, aiProvider: any) {
     if (!this.#conversationLog || !aiProvider) {
       return;
     }
@@ -587,7 +587,7 @@ export class MemoryCoordinator {
    * 保存 checkpoint
    * @param {string} projectRoot
    */
-  async checkpoint(projectRoot) {
+  async checkpoint(projectRoot: any) {
     try {
       if (this.#sessionStore?.saveCheckpoint) {
         await this.#sessionStore.saveCheckpoint(projectRoot);
@@ -602,7 +602,7 @@ export class MemoryCoordinator {
    * @param {string} projectRoot
    * @returns {Promise<boolean>}
    */
-  async restore(projectRoot) {
+  async restore(projectRoot: any) {
     try {
       if (this.#sessionStore?.loadCheckpoint) {
         return await this.#sessionStore.loadCheckpoint(projectRoot);
@@ -683,7 +683,7 @@ export class MemoryCoordinator {
    * @param {string} text
    * @returns {number}
    */
-  #estimateTokens(text) {
+  #estimateTokens(text: any) {
     if (!text) {
       return 0;
     }

@@ -53,7 +53,7 @@ const compactConsoleFormat = winston.format.printf(({ level, message, timestamp,
   });
   // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape sequence stripping
   const rawLevel = level.replace(/\u001b\[\d+m/g, ''); // 去 ANSI
-  const lc = LEVEL_COLORS[rawLevel] || C.gray;
+  const lc = (LEVEL_COLORS as Record<string, any>)[rawLevel] || C.gray;
 
   // 静音高频噪音日志
   if (rawLevel === 'info' && MUTED_PREFIXES.some((p) => (message as string).startsWith(p))) {
@@ -172,19 +172,19 @@ export class Logger {
     return this.instance!;
   }
 
-  static debug(message, meta: any = {}) {
+  static debug(message: any, meta: any = {}) {
     this.getInstance().debug(message, meta);
   }
 
-  static info(message, meta: any = {}) {
+  static info(message: any, meta: any = {}) {
     this.getInstance().info(message, meta);
   }
 
-  static warn(message, meta: any = {}) {
+  static warn(message: any, meta: any = {}) {
     this.getInstance().warn(message, meta);
   }
 
-  static error(message, meta: any = {}) {
+  static error(message: any, meta: any = {}) {
     this.getInstance().error(message, meta);
   }
 }

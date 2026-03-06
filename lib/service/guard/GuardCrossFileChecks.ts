@@ -11,7 +11,7 @@
  * @param {string} importPath 相对路径如 './foo' 或 '../bar/baz'
  * @returns {string|null}
  */
-export function resolveImportPath(fromDir, importPath) {
+export function resolveImportPath(fromDir: any, importPath: any) {
   try {
     const parts = `${fromDir}/${importPath}`.split('/');
     const resolved: string[] = [];
@@ -41,7 +41,7 @@ export function resolveImportPath(fromDir, importPath) {
  * @param {string} filePath
  * @returns {string}
  */
-export function normalizeFilePath(filePath) {
+export function normalizeFilePath(filePath: any) {
   return filePath.replace(/\.(js|ts|jsx|tsx|mjs|mts)$/, '').replace(/\/index$/, '');
 }
 
@@ -52,10 +52,10 @@ export function normalizeFilePath(filePath) {
  * @param {string[]} [options.disabledRules] 禁用的规则 ID 列表
  * @returns {Array<{ruleId, message, severity, locations}>}
  */
-export function runCrossFileChecks(files, options: any = {}) {
+export function runCrossFileChecks(files: any, options: any = {}) {
   const violations: any[] = [];
   const disabledSet = new Set(options.disabledRules || []);
-  const isDisabled = (ruleId) => disabledSet.has(ruleId);
+  const isDisabled = (ruleId: any) => disabledSet.has(ruleId);
 
   // ── ObjC Category 跨文件重名检查 ──
   if (!isDisabled('objc-cross-file-duplicate-category')) {
@@ -91,8 +91,8 @@ export function runCrossFileChecks(files, options: any = {}) {
         continue;
       }
 
-      const hFiles = locations.filter((l) => l.filePath.endsWith('.h'));
-      const mFiles = locations.filter((l) => !l.filePath.endsWith('.h'));
+      const hFiles = locations.filter((l: any) => l.filePath.endsWith('.h'));
+      const mFiles = locations.filter((l: any) => !l.filePath.endsWith('.h'));
       const hasDuplicateH = hFiles.length > 1;
       const hasDuplicateM = mFiles.length > 1;
       const tooMany = locations.length > 2;
@@ -309,7 +309,7 @@ export function runCrossFileChecks(files, options: any = {}) {
 
     for (const [key, locations] of swiftExtMethodMap) {
       if (locations.length > 1) {
-        const uniqueFiles = new Set(locations.map((l) => l.filePath));
+        const uniqueFiles = new Set(locations.map((l: any) => l.filePath));
         if (uniqueFiles.size > 1) {
           violations.push({
             ruleId: 'swift-cross-file-extension-conflict',

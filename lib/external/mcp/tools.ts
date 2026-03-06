@@ -27,19 +27,21 @@ export const TOOL_GATEWAY_MAP = {
   autosnippet_wiki_finalize: { action: 'knowledge:create', resource: 'knowledge' },
   // guard 写操作（仅 files 模式）
   autosnippet_guard: {
-    resolver: (args) =>
+    resolver: (args: any) =>
       args?.files && Array.isArray(args.files)
         ? { action: 'guard_rule:check_code', resource: 'guard_rules' }
         : null, // code 模式只读，跳过 Gateway
   },
   // skill 写操作（create/update/delete）
   autosnippet_skill: {
-    resolver: (args) =>
-      ({
-        create: { action: 'create:skills', resource: 'skills' },
-        update: { action: 'update:skills', resource: 'skills' },
-        delete: { action: 'delete:skills', resource: 'skills' },
-      })[args?.operation] || null, // list/load/suggest 只读
+    resolver: (args: any) =>
+      (
+        ({
+          create: { action: 'create:skills', resource: 'skills' },
+          update: { action: 'update:skills', resource: 'skills' },
+          delete: { action: 'delete:skills', resource: 'skills' },
+        }) as Record<string, any>
+      )[args?.operation] || null, // list/load/suggest 只读
   },
   // 知识提交
   autosnippet_submit_knowledge: { action: 'knowledge:create', resource: 'knowledge' },
@@ -47,20 +49,22 @@ export const TOOL_GATEWAY_MAP = {
   autosnippet_save_document: { action: 'knowledge:create', resource: 'knowledge' },
   // task 写操作（create/claim/close/fail/defer/decompose/dep_add + decision 写操作）
   autosnippet_task: {
-    resolver: (args) =>
-      ({
-        create: { action: 'task:create', resource: 'tasks' },
-        claim: { action: 'task:update', resource: 'tasks' },
-        close: { action: 'task:update', resource: 'tasks' },
-        fail: { action: 'task:update', resource: 'tasks' },
-        defer: { action: 'task:update', resource: 'tasks' },
-        progress: { action: 'task:update', resource: 'tasks' },
-        decompose: { action: 'task:create', resource: 'tasks' },
-        dep_add: { action: 'task:update', resource: 'tasks' },
-        record_decision: { action: 'task:create', resource: 'tasks' },
-        revise_decision: { action: 'task:update', resource: 'tasks' },
-        unpin_decision: { action: 'task:update', resource: 'tasks' },
-      })[args?.operation] || null, // prime/ready/show/list/blocked/dep_tree/stats/list_decisions 只读
+    resolver: (args: any) =>
+      (
+        ({
+          create: { action: 'task:create', resource: 'tasks' },
+          claim: { action: 'task:update', resource: 'tasks' },
+          close: { action: 'task:update', resource: 'tasks' },
+          fail: { action: 'task:update', resource: 'tasks' },
+          defer: { action: 'task:update', resource: 'tasks' },
+          progress: { action: 'task:update', resource: 'tasks' },
+          decompose: { action: 'task:create', resource: 'tasks' },
+          dep_add: { action: 'task:update', resource: 'tasks' },
+          record_decision: { action: 'task:create', resource: 'tasks' },
+          revise_decision: { action: 'task:update', resource: 'tasks' },
+          unpin_decision: { action: 'task:update', resource: 'tasks' },
+        }) as Record<string, any>
+      )[args?.operation] || null, // prime/ready/show/list/blocked/dep_tree/stats/list_decisions 只读
   },
   // admin 工具
   autosnippet_enrich_candidates: { action: 'knowledge:update', resource: 'knowledge' },

@@ -39,7 +39,7 @@ export class SignalDetector {
   /**
    * @param {{ uniqueFiles: Set<string>, uniquePatterns: Set<string>, uniqueQueries: Set<string> }} metrics
    */
-  constructor(metrics) {
+  constructor(metrics: any) {
     this.#metrics = metrics;
   }
 
@@ -51,7 +51,7 @@ export class SignalDetector {
    * @param {*} result
    * @returns {boolean} 是否包含新信息
    */
-  detect(toolName, args, result) {
+  detect(toolName: any, args: any, result: any) {
     switch (toolName) {
       case 'search_project_code':
         return this.#detectSearchSignal(args, result);
@@ -86,7 +86,7 @@ export class SignalDetector {
 
   // ─── 内部检测方法 ──────────────────────────────
 
-  #detectSearchSignal(args, result) {
+  #detectSearchSignal(args: any, result: any) {
     let foundNew = false;
     const pattern = args?.pattern || '';
     const patterns = args?.patterns || [];
@@ -124,7 +124,7 @@ export class SignalDetector {
     return foundNew;
   }
 
-  #detectFileReadSignal(args) {
+  #detectFileReadSignal(args: any) {
     let foundNew = false;
     const fp = args?.filePath || '';
     const fps = args?.filePaths || [];
@@ -141,7 +141,7 @@ export class SignalDetector {
     return foundNew;
   }
 
-  #detectListSignal(args) {
+  #detectListSignal(args: any) {
     const dir = args?.directory || '/';
     const qKey = `list:${dir}`;
     if (!this.#metrics.uniqueQueries.has(qKey)) {
@@ -151,7 +151,7 @@ export class SignalDetector {
     return false;
   }
 
-  #detectQuerySignal(toolName, args) {
+  #detectQuerySignal(toolName: any, args: any) {
     const queryTarget = args?.className || args?.protocolName || args?.name || '';
     const qKey = `${toolName}:${queryTarget}`;
     if (!this.#metrics.uniqueQueries.has(qKey)) {
@@ -161,7 +161,7 @@ export class SignalDetector {
     return false;
   }
 
-  #detectSingletonQuery(key) {
+  #detectSingletonQuery(key: any) {
     if (!this.#metrics.uniqueQueries.has(key)) {
       this.#metrics.uniqueQueries.add(key);
       return true;
@@ -169,7 +169,7 @@ export class SignalDetector {
     return false;
   }
 
-  #detectGenericSignal(toolName, args) {
+  #detectGenericSignal(toolName: any, args: any) {
     const qKey = `${toolName}:${JSON.stringify(args || {}).substring(0, 80)}`;
     if (!this.#metrics.uniqueQueries.has(qKey)) {
       this.#metrics.uniqueQueries.add(qKey);

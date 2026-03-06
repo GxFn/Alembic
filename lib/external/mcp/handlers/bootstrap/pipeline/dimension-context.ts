@@ -35,7 +35,7 @@ export class DimensionContext {
    * @param {object} [projectContext.astMetrics]
    * @param {object} [projectContext.guardSummary]
    */
-  constructor(projectContext) {
+  constructor(projectContext: any) {
     /** @type {object} 项目基础信息 */
     this.projectContext = projectContext;
 
@@ -52,7 +52,7 @@ export class DimensionContext {
    * @param {string} dimId 维度 ID
    * @param {DimensionDigest} digest 维度分析摘要
    */
-  addDimensionDigest(dimId, digest) {
+  addDimensionDigest(dimId: any, digest: any) {
     this.completedDimensions.set(dimId, {
       ...digest,
       dimId,
@@ -66,7 +66,7 @@ export class DimensionContext {
    * @param {string} dimId
    * @param {object} candidateInfo - { title, subTopic, summary }
    */
-  addSubmittedCandidate(dimId, candidateInfo) {
+  addSubmittedCandidate(dimId: any, candidateInfo: any) {
     this.submittedCandidates.push({
       dimId,
       title: candidateInfo.title || '',
@@ -81,7 +81,7 @@ export class DimensionContext {
    * @param {string} currentDimId 当前维度 ID
    * @returns {DimensionContextSnapshot}
    */
-  buildContextForDimension(currentDimId) {
+  buildContextForDimension(currentDimId: any) {
     const previousDimensions: Record<string, any> = {};
     for (const [id, digest] of this.completedDimensions) {
       previousDimensions[id] = {
@@ -97,7 +97,7 @@ export class DimensionContext {
     return {
       project: this.projectContext,
       previousDimensions,
-      existingCandidates: this.submittedCandidates.map((c) => ({
+      existingCandidates: this.submittedCandidates.map((c: any) => ({
         dimId: c.dimId,
         title: c.title,
         subTopic: c.subTopic,
@@ -112,8 +112,8 @@ export class DimensionContext {
    * @param {string} dimId
    * @returns {Array<CandidateSummary>}
    */
-  getExistingCandidatesForDimension(dimId) {
-    return this.submittedCandidates.filter((c) => c.dimId === dimId);
+  getExistingCandidatesForDimension(dimId: any) {
+    return this.submittedCandidates.filter((c: any) => c.dimId === dimId);
   }
 
   /**
@@ -144,7 +144,9 @@ export class DimensionContext {
         lines.push(`- 缺口: ${digest.gaps.join('; ')}`);
       }
       if (digest.remainingTasks?.length) {
-        lines.push(`- 遗留任务: ${digest.remainingTasks.map((t) => t.signal || t).join('; ')}`);
+        lines.push(
+          `- 遗留任务: ${digest.remainingTasks.map((t: any) => t.signal || t).join('; ')}`
+        );
       }
       lines.push('');
     }
@@ -168,7 +170,7 @@ export class DimensionContext {
    * @param {object} json
    * @returns {DimensionContext}
    */
-  static fromJSON(json) {
+  static fromJSON(json: any) {
     const ctx = new DimensionContext(json.projectContext);
     for (const [id, digest] of Object.entries(json.completedDimensions || {})) {
       ctx.completedDimensions.set(id, digest);
@@ -187,7 +189,7 @@ export class DimensionContext {
  * @param {string} reply - Agent 的完整回复文本
  * @returns {DimensionDigest|null}
  */
-export function parseDimensionDigest(reply) {
+export function parseDimensionDigest(reply: any) {
   if (!reply || typeof reply !== 'string') {
     return null;
   }

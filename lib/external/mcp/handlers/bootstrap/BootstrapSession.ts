@@ -43,7 +43,7 @@ export class BootstrapSession {
    * @param {Array}  opts.dimensions  激活的维度定义列表
    * @param {object} [opts.projectContext] 传给 EpisodicMemory 的项目元数据
    */
-  constructor({ projectRoot, dimensions, projectContext = {} }) {
+  constructor({ projectRoot, dimensions, projectContext = {} }: any) {
     this.id = `bs-${crypto.randomUUID()}`;
     this.projectRoot = projectRoot;
     this.dimensions = dimensions;
@@ -79,8 +79,8 @@ export class BootstrapSession {
       total: this.dimensions.length,
       completedDimIds: [...this.completedDimensions.keys()],
       remainingDimIds: this.dimensions
-        .map((d) => d.id)
-        .filter((id) => !this.completedDimensions.has(id)),
+        .map((d: any) => d.id)
+        .filter((id: any) => !this.completedDimensions.has(id)),
     };
   }
 
@@ -89,7 +89,7 @@ export class BootstrapSession {
    * @param {string} dimId
    * @returns {boolean}
    */
-  isDimensionComplete(dimId) {
+  isDimensionComplete(dimId: any) {
     return this.completedDimensions.has(dimId);
   }
 
@@ -101,7 +101,7 @@ export class BootstrapSession {
    * @param {object} report - { analysisText, findings, referencedFiles, recipeIds, candidateCount }
    * @returns {{ updated: boolean, qualityReport: object|null }} - updated=true 表示覆盖了已有记录
    */
-  markDimensionComplete(dimId, report) {
+  markDimensionComplete(dimId: any, report: any) {
     const updated = this.completedDimensions.has(dimId);
 
     this.completedDimensions.set(dimId, {
@@ -113,7 +113,7 @@ export class BootstrapSession {
     // keyFindings 是字符串数组，需转换为 SessionStore 期望的 { finding, importance } 格式
     this.sessionStore.storeDimensionReport(dimId, {
       analysisText: report.analysisText,
-      findings: (report.keyFindings || []).map((f) => ({ finding: f, importance: 7 })),
+      findings: (report.keyFindings || []).map((f: any) => ({ finding: f, importance: 7 })),
       referencedFiles: report.referencedFiles || [],
       candidatesSummary: [],
     });
@@ -136,7 +136,7 @@ export class BootstrapSession {
    * @param {string} fromDimId 来源维度
    * @param {Record<string, string>} hints - { targetDimId: hintText }
    */
-  storeHints(fromDimId, hints) {
+  storeHints(fromDimId: any, hints: any) {
     if (!hints || typeof hints !== 'object') {
       return;
     }
@@ -147,7 +147,7 @@ export class BootstrapSession {
       }
       // 去重：同源维度只保留最新 hint
       this.crossDimensionHints[targetDim] = this.crossDimensionHints[targetDim].filter(
-        (h) => h.fromDim !== fromDimId
+        (h: any) => h.fromDim !== fromDimId
       );
       this.crossDimensionHints[targetDim].push({
         fromDim: fromDimId,
@@ -180,7 +180,7 @@ export class BootstrapSession {
    * 缓存 Phase 1-4 分析结果
    * @param {object} cache - { files, astData, entityGraph, depGraph, guardFindings, skills, ... }
    */
-  setPhaseCache(cache) {
+  setPhaseCache(cache: any) {
     this.phaseCache = cache;
   }
 
@@ -226,7 +226,7 @@ export class BootstrapSessionManager {
    * @param {object} opts 传给 BootstrapSession 构造函数的参数
    * @returns {BootstrapSession}
    */
-  createSession(opts) {
+  createSession(opts: any) {
     // 如果有旧的未过期 session，先标记过期
     if (this._activeSession && !this._activeSession.isExpired) {
       this._activeSession.expiresAt = Date.now(); // 强制过期
@@ -240,7 +240,7 @@ export class BootstrapSessionManager {
    * @param {string} [sessionId] 可选，用于验证 session ID
    * @returns {BootstrapSession|null}
    */
-  getSession(sessionId) {
+  getSession(sessionId: any) {
     if (!this._activeSession) {
       return null;
     }

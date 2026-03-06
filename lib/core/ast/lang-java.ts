@@ -8,18 +8,18 @@
 
 import { ImportRecord } from '../analysis/ImportRecord.js';
 
-function walkJava(root, ctx) {
+function walkJava(root: any, ctx: any) {
   _walkJavaNode(root, ctx, null);
 }
 
-function _walkJavaNode(node, ctx, parentClassName) {
+function _walkJavaNode(node: any, ctx: any, parentClassName: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
 
     switch (child.type) {
       case 'import_declaration': {
-        const isStatic = child.namedChildren.some((c) => c.text === 'static');
-        const path = child.namedChildren.find((c) => c.type === 'scoped_identifier');
+        const isStatic = child.namedChildren.some((c: any) => c.text === 'static');
+        const path = child.namedChildren.find((c: any) => c.type === 'scoped_identifier');
         if (path) {
           const fullPath = path.text; // e.g. com.example.MyClass or com.example.MyClass.myMethod
           const segments = fullPath.split('.');
@@ -44,7 +44,7 @@ function _walkJavaNode(node, ctx, parentClassName) {
       }
 
       case 'package_declaration': {
-        const pkg = child.namedChildren.find((c) => c.type === 'scoped_identifier');
+        const pkg = child.namedChildren.find((c: any) => c.type === 'scoped_identifier');
         if (pkg) {
           ctx.metadata = ctx.metadata || {};
           ctx.metadata.packageName = pkg.text;
@@ -55,7 +55,7 @@ function _walkJavaNode(node, ctx, parentClassName) {
       case 'class_declaration': {
         const classInfo = _parseJavaClass(child);
         ctx.classes.push(classInfo);
-        const body = child.namedChildren.find((c) => c.type === 'class_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (body) {
           _walkJavaClassBody(body, ctx, classInfo.name);
         }
@@ -65,7 +65,7 @@ function _walkJavaNode(node, ctx, parentClassName) {
       case 'interface_declaration': {
         const ifaceInfo = _parseJavaInterface(child);
         ctx.protocols.push(ifaceInfo);
-        const body = child.namedChildren.find((c) => c.type === 'interface_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'interface_body');
         if (body) {
           _walkJavaInterfaceBody(body, ctx, ifaceInfo.name);
         }
@@ -73,7 +73,8 @@ function _walkJavaNode(node, ctx, parentClassName) {
       }
 
       case 'enum_declaration': {
-        const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
+        const name =
+          child.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'Unknown';
         ctx.classes.push({
           name,
           kind: 'enum',
@@ -84,7 +85,8 @@ function _walkJavaNode(node, ctx, parentClassName) {
       }
 
       case 'record_declaration': {
-        const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
+        const name =
+          child.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'Unknown';
         ctx.classes.push({
           name,
           kind: 'record',
@@ -103,7 +105,7 @@ function _walkJavaNode(node, ctx, parentClassName) {
   }
 }
 
-function _walkJavaClassBody(body, ctx, className) {
+function _walkJavaClassBody(body: any, ctx: any, className: any) {
   for (let i = 0; i < body.namedChildCount; i++) {
     const child = body.namedChild(i);
 
@@ -130,7 +132,7 @@ function _walkJavaClassBody(body, ctx, className) {
         const inner = _parseJavaClass(child);
         (inner as any).outerClass = className;
         ctx.classes.push(inner);
-        const innerBody = child.namedChildren.find((c) => c.type === 'class_body');
+        const innerBody = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (innerBody) {
           _walkJavaClassBody(innerBody, ctx, inner.name);
         }
@@ -143,7 +145,8 @@ function _walkJavaClassBody(body, ctx, className) {
         break;
       }
       case 'enum_declaration': {
-        const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
+        const name =
+          child.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'Unknown';
         ctx.classes.push({
           name,
           kind: 'enum',
@@ -156,7 +159,7 @@ function _walkJavaClassBody(body, ctx, className) {
   }
 }
 
-function _walkJavaInterfaceBody(body, ctx, ifaceName) {
+function _walkJavaInterfaceBody(body: any, ctx: any, ifaceName: any) {
   for (let i = 0; i < body.namedChildCount; i++) {
     const child = body.namedChild(i);
     if (child.type === 'method_declaration') {
@@ -165,14 +168,14 @@ function _walkJavaInterfaceBody(body, ctx, ifaceName) {
   }
 }
 
-function _parseJavaClass(node) {
-  const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
+function _parseJavaClass(node: any) {
+  const name = node.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'Unknown';
   let superclass: any = null;
   const protocols: any[] = [];
 
   for (const child of node.namedChildren) {
     if (child.type === 'superclass') {
-      const typeId = child.namedChildren.find((c) => c.type === 'type_identifier');
+      const typeId = child.namedChildren.find((c: any) => c.type === 'type_identifier');
       if (typeId) {
         superclass = typeId.text;
       }
@@ -192,11 +195,11 @@ function _parseJavaClass(node) {
 
   // 提取注解
   const annotations = node.namedChildren
-    .filter((c) => c.type === 'marker_annotation' || c.type === 'annotation')
-    .map((a) => a.text);
+    .filter((c: any) => c.type === 'marker_annotation' || c.type === 'annotation')
+    .map((a: any) => a.text);
 
   // 修饰符
-  const modifiers = node.namedChildren.find((c) => c.type === 'modifiers');
+  const modifiers = node.namedChildren.find((c: any) => c.type === 'modifiers');
   const isAbstract = modifiers?.text?.includes('abstract') || false;
 
   return {
@@ -211,8 +214,8 @@ function _parseJavaClass(node) {
   };
 }
 
-function _parseJavaInterface(node) {
-  const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
+function _parseJavaInterface(node: any) {
+  const name = node.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'Unknown';
   const inherits: any[] = [];
 
   for (const child of node.namedChildren) {
@@ -232,19 +235,19 @@ function _parseJavaInterface(node) {
   return { name, inherits, line: node.startPosition.row + 1 };
 }
 
-function _parseJavaMethod(node, className) {
-  const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
-  const modifiers = node.namedChildren.find((c) => c.type === 'modifiers');
+function _parseJavaMethod(node: any, className: any) {
+  const name = node.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'unknown';
+  const modifiers = node.namedChildren.find((c: any) => c.type === 'modifiers');
   const isStatic = modifiers?.text?.includes('static') || false;
 
-  const body = node.namedChildren.find((c) => c.type === 'block');
+  const body = node.namedChildren.find((c: any) => c.type === 'block');
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
 
   const annotations = node.namedChildren
-    .filter((c) => c.type === 'marker_annotation' || c.type === 'annotation')
-    .map((a) => a.text);
+    .filter((c: any) => c.type === 'marker_annotation' || c.type === 'annotation')
+    .map((a: any) => a.text);
 
   return {
     name,
@@ -259,27 +262,27 @@ function _parseJavaMethod(node, className) {
   };
 }
 
-function _parseJavaField(node, className) {
-  const declNode = node.namedChildren.find((c) => c.type === 'variable_declarator');
-  const name = declNode?.namedChildren?.find((c) => c.type === 'identifier')?.text;
+function _parseJavaField(node: any, className: any) {
+  const declNode = node.namedChildren.find((c: any) => c.type === 'variable_declarator');
+  const name = declNode?.namedChildren?.find((c: any) => c.type === 'identifier')?.text;
   if (!name) {
     return null;
   }
 
-  const modifiers = node.namedChildren.find((c) => c.type === 'modifiers');
+  const modifiers = node.namedChildren.find((c: any) => c.type === 'modifiers');
   const isStatic = modifiers?.text?.includes('static') || false;
   const isFinal = modifiers?.text?.includes('final') || false;
   const isPrivate = modifiers?.text?.includes('private') || false;
 
   const annotations = node.namedChildren
-    .filter((c) => c.type === 'marker_annotation' || c.type === 'annotation')
-    .map((a) => a.text);
+    .filter((c: any) => c.type === 'marker_annotation' || c.type === 'annotation')
+    .map((a: any) => a.text);
 
   // Phase 5.3: Extract field type for DI resolution
   // field_declaration: [modifiers] type_identifier variable_declarator
   let typeAnnotation: any = null;
   const typeNode = node.namedChildren.find(
-    (c) =>
+    (c: any) =>
       c.type === 'type_identifier' ||
       c.type === 'generic_type' ||
       c.type === 'scoped_type_identifier'
@@ -305,7 +308,7 @@ function _parseJavaField(node, className) {
 
 // ── Java 模式检测 ──
 
-function detectJavaPatterns(root, lang, methods, properties, classes) {
+function detectJavaPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   const patterns: any[] = [];
 
   // Singleton: private constructor + static getInstance
@@ -329,7 +332,7 @@ function detectJavaPatterns(root, lang, methods, properties, classes) {
     }
 
     // Builder pattern: 内部 Builder 类
-    const builderClass = classes.find((c) => c.name === 'Builder' && c.outerClass === cls);
+    const builderClass = classes.find((c: any) => c.name === 'Builder' && c.outerClass === cls);
     if (builderClass) {
       patterns.push({ type: 'builder', className: cls, confidence: 0.9 });
     }
@@ -350,7 +353,7 @@ function detectJavaPatterns(root, lang, methods, properties, classes) {
 
   // DI: @Inject/@Autowired
   for (const p of properties) {
-    if (p.annotations?.some((a) => /@Inject|@Autowired/.test(a))) {
+    if (p.annotations?.some((a: any) => /@Inject|@Autowired/.test(a))) {
       patterns.push({
         type: 'dependency-injection',
         className: p.className,
@@ -361,7 +364,7 @@ function detectJavaPatterns(root, lang, methods, properties, classes) {
     }
   }
   for (const m of methods) {
-    if (m.annotations?.some((a) => /@Inject|@Autowired/.test(a))) {
+    if (m.annotations?.some((a: any) => /@Inject|@Autowired/.test(a))) {
       patterns.push({
         type: 'dependency-injection',
         className: m.className,
@@ -374,7 +377,7 @@ function detectJavaPatterns(root, lang, methods, properties, classes) {
 
   // Spring annotations
   for (const cls of classes) {
-    if (cls.annotations?.some((a) => /@RestController|@Controller/.test(a))) {
+    if (cls.annotations?.some((a: any) => /@RestController|@Controller/.test(a))) {
       patterns.push({
         type: 'rest-controller',
         className: cls.name,
@@ -382,13 +385,13 @@ function detectJavaPatterns(root, lang, methods, properties, classes) {
         confidence: 0.95,
       });
     }
-    if (cls.annotations?.some((a) => /@Service/.test(a))) {
+    if (cls.annotations?.some((a: any) => /@Service/.test(a))) {
       patterns.push({ type: 'service', className: cls.name, line: cls.line, confidence: 0.9 });
     }
-    if (cls.annotations?.some((a) => /@Repository/.test(a))) {
+    if (cls.annotations?.some((a: any) => /@Repository/.test(a))) {
       patterns.push({ type: 'repository', className: cls.name, line: cls.line, confidence: 0.9 });
     }
-    if (cls.annotations?.some((a) => /@Entity/.test(a))) {
+    if (cls.annotations?.some((a: any) => /@Entity/.test(a))) {
       patterns.push({ type: 'entity', className: cls.name, line: cls.line, confidence: 0.95 });
     }
   }
@@ -398,7 +401,7 @@ function detectJavaPatterns(root, lang, methods, properties, classes) {
 
 // ── 工具函数 ──
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_statement',
@@ -411,12 +414,12 @@ function _estimateComplexity(node) {
     'ternary_expression',
     'do_statement',
   ]);
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
     if (n.type === 'binary_expression') {
-      const op = n.children?.find((c) => c.text === '&&' || c.text === '||');
+      const op = n.children?.find((c: any) => c.text === '&&' || c.text === '||');
       if (op) {
         complexity++;
       }
@@ -429,7 +432,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_statement',
     'for_statement',
@@ -456,7 +459,7 @@ function _maxNesting(node, depth) {
  * 从 Java AST root 提取所有调用点
  * 遍历 method_declaration / constructor_declaration 中的 block → method_invocation / object_creation_expression
  */
-function extractCallSitesJava(root, ctx, _lang) {
+function extractCallSitesJava(root: any, ctx: any, _lang: any) {
   const scopes = _collectJavaScopes(root);
   for (const scope of scopes) {
     _extractJavaCallSitesFromBody(scope.body, scope.className, scope.methodName, ctx);
@@ -466,10 +469,10 @@ function extractCallSitesJava(root, ctx, _lang) {
 /**
  * 递归收集 Java 中所有方法体作用域
  */
-function _collectJavaScopes(root) {
+function _collectJavaScopes(root: any) {
   const scopes: { body: any; className: any; methodName: any }[] = [];
 
-  function visit(node, className) {
+  function visit(node: any, className: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
 
@@ -478,22 +481,23 @@ function _collectJavaScopes(root) {
         child.type === 'enum_declaration' ||
         child.type === 'record_declaration'
       ) {
-        const name = child.namedChildren.find((c) => c.type === 'identifier')?.text;
+        const name = child.namedChildren.find((c: any) => c.type === 'identifier')?.text;
         const body = child.namedChildren.find(
-          (c) => c.type === 'class_body' || c.type === 'enum_body'
+          (c: any) => c.type === 'class_body' || c.type === 'enum_body'
         );
         if (body) {
           visit(body, name || className);
         }
       } else if (child.type === 'interface_declaration') {
-        const name = child.namedChildren.find((c) => c.type === 'identifier')?.text;
-        const body = child.namedChildren.find((c) => c.type === 'interface_body');
+        const name = child.namedChildren.find((c: any) => c.type === 'identifier')?.text;
+        const body = child.namedChildren.find((c: any) => c.type === 'interface_body');
         if (body) {
           visit(body, name || className);
         }
       } else if (child.type === 'method_declaration' || child.type === 'constructor_declaration') {
-        const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || '<init>';
-        const body = child.namedChildren.find((c) => c.type === 'block');
+        const name =
+          child.namedChildren.find((c: any) => c.type === 'identifier')?.text || '<init>';
+        const body = child.namedChildren.find((c: any) => c.type === 'block');
         if (body) {
           scopes.push({ body, className, methodName: name });
         }
@@ -508,7 +512,7 @@ function _collectJavaScopes(root) {
 /**
  * 从 Java method body 中递归提取调用点
  */
-function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
+function _extractJavaCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;
   }
@@ -536,7 +540,7 @@ function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
     'Set',
   ]);
 
-  function walk(node) {
+  function walk(node: any) {
     if (!node || node.type === 'ERROR' || node.isMissing) {
       return;
     }
@@ -545,8 +549,8 @@ function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
       // obj.method(args) or method(args)
       // In Java tree-sitter: namedChildren = [object?, name(identifier), argument_list]
       // The method name is the LAST identifier before argument_list
-      const identifiers = node.namedChildren.filter((c) => c.type === 'identifier');
-      const args = node.namedChildren.find((c) => c.type === 'argument_list');
+      const identifiers = node.namedChildren.filter((c: any) => c.type === 'identifier');
+      const args = node.namedChildren.find((c: any) => c.type === 'argument_list');
       const argCount = args ? args.namedChildCount : 0;
 
       let callee,
@@ -611,12 +615,12 @@ function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
     if (node.type === 'object_creation_expression') {
       // new ClassName(args)
       const typeNode = node.namedChildren.find(
-        (c) =>
+        (c: any) =>
           c.type === 'type_identifier' ||
           c.type === 'generic_type' ||
           c.type === 'scoped_type_identifier'
       );
-      const args = node.namedChildren.find((c) => c.type === 'argument_list');
+      const args = node.namedChildren.find((c: any) => c.type === 'argument_list');
       const argCount = args ? args.namedChildCount : 0;
 
       const typeName = typeNode?.text || 'Unknown';
@@ -642,7 +646,7 @@ function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
     walkChildren(node);
   }
 
-  function walkChildren(node) {
+  function walkChildren(node: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       walk(node.namedChild(i));
     }
@@ -657,7 +661,7 @@ let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }
-export function setGrammar(grammar) {
+export function setGrammar(grammar: any) {
   _grammar = grammar;
 }
 

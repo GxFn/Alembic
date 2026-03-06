@@ -10,7 +10,7 @@ export class PolicyEngine {
    * @param {{ layerOrder?: string[] }} config - layerOrder 定义分层顺序，低层不应依赖高层
    * @returns {{ passed: boolean, violations: object[] }}
    */
-  check(graph, config: any = {}) {
+  check(graph: any, config: any = {}) {
     const violations: any[] = [];
 
     // 1. 检查循环依赖
@@ -27,7 +27,7 @@ export class PolicyEngine {
     // 2. 检查反向依赖 (低层依赖高层)
     if (config.layerOrder && config.layerOrder.length > 0) {
       const layerIndex = new Map();
-      config.layerOrder.forEach((layer, idx) => layerIndex.set(layer, idx));
+      config.layerOrder.forEach((layer: any, idx: any) => layerIndex.set(layer, idx));
 
       for (const node of graph.getNodes()) {
         const nodeLayer = this.#findLayer(node, layerIndex);
@@ -69,7 +69,7 @@ export class PolicyEngine {
    * @param {string} to
    * @returns {{ allowed: boolean, reason?: string }}
    */
-  canAddDependency(graph, from, to) {
+  canAddDependency(graph: any, from: any, to: any) {
     // 检查是否会导致循环
     if (graph.isReachable(to, from)) {
       return { allowed: false, reason: `添加 ${from} → ${to} 会导致循环依赖` };
@@ -79,7 +79,7 @@ export class PolicyEngine {
 
   // ─── 私有 ─────────────────────────────────────────────
 
-  #findLayer(nodeName, layerIndex) {
+  #findLayer(nodeName: any, layerIndex: any) {
     // 尝试精确匹配或前缀匹配
     for (const [layer, idx] of layerIndex) {
       if (nodeName === layer || nodeName.startsWith(layer)) {

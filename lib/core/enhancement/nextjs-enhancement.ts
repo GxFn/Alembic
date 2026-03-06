@@ -131,7 +131,7 @@ class NextjsEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── App Router file conventions ──
@@ -209,7 +209,7 @@ class NextjsEnhancement extends EnhancementPack {
 
     // ── Next.js specific imports ──
     const nextImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('next/') ||
         imp.includes('next/server') ||
         imp.includes('next/navigation') ||

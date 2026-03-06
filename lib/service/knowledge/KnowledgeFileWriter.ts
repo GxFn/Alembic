@@ -73,7 +73,7 @@ export class KnowledgeFileWriter {
   /**
    * @param {string} projectRoot 项目根目录
    */
-  constructor(projectRoot) {
+  constructor(projectRoot: any) {
     this.projectRoot = projectRoot;
     this.recipesDir = path.join(projectRoot, RECIPES_DIR);
     this.candidatesDir = path.join(projectRoot, CANDIDATES_DIR);
@@ -87,7 +87,7 @@ export class KnowledgeFileWriter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {string}
    */
-  serialize(entry) {
+  serialize(entry: any) {
     const json = entry.toJSON();
     const lines = ['---'];
 
@@ -165,7 +165,7 @@ export class KnowledgeFileWriter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {string}
    */
-  _buildBody(entry) {
+  _buildBody(entry: any) {
     const c = entry.content;
     const lines: any[] = [];
 
@@ -257,7 +257,7 @@ export class KnowledgeFileWriter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {string|null} 写入的文件路径，失败返回 null
    */
-  persist(entry) {
+  persist(entry: any) {
     try {
       if (!entry?.id || !entry?.title) {
         this.logger.warn('Cannot persist knowledge entry: missing id or title');
@@ -304,7 +304,7 @@ export class KnowledgeFileWriter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {boolean}
    */
-  remove(entry) {
+  remove(entry: any) {
     if (!entry?.id) {
       return false;
     }
@@ -351,7 +351,7 @@ export class KnowledgeFileWriter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {string|null} 新的文件路径
    */
-  moveOnLifecycleChange(entry) {
+  moveOnLifecycleChange(entry: any) {
     const oldPath = entry.sourceFile ? path.join(this.projectRoot, entry.sourceFile) : null;
 
     const { dir: newDir, filename } = this._resolveFilePath(entry);
@@ -382,7 +382,7 @@ export class KnowledgeFileWriter {
    * 计算文件存储路径
    * @returns {{ dir: string, filename: string }}
    */
-  _resolveFilePath(entry) {
+  _resolveFilePath(entry: any) {
     const baseDir = entry.isCandidate() ? this.candidatesDir : this.recipesDir;
     const category = (entry.category || 'general').toLowerCase();
     const dir = path.join(baseDir, category);
@@ -393,7 +393,7 @@ export class KnowledgeFileWriter {
   /**
    * 清理旧文件（category 变更或 lifecycle 切换场景）
    */
-  _cleanupOldFile(entry, newPath) {
+  _cleanupOldFile(entry: any, newPath: any) {
     if (!entry.sourceFile) {
       return;
     }
@@ -446,7 +446,7 @@ export class KnowledgeFileWriter {
    * 通过 id 扫描所有 .md 文件来删除
    * @returns {boolean}
    */
-  _removeByIdScan(id) {
+  _removeByIdScan(id: any) {
     for (const baseDir of [this.candidatesDir, this.recipesDir]) {
       if (!fs.existsSync(baseDir)) {
         continue;
@@ -474,7 +474,7 @@ export class KnowledgeFileWriter {
  * @param {string} content
  * @returns {string} 16 字符 hex
  */
-export function computeKnowledgeHash(content) {
+export function computeKnowledgeHash(content: any) {
   const cleaned = content.replace(/^_contentHash:.*\n?/m, '').trim();
   return createHash('sha256').update(cleaned, 'utf8').digest('hex').slice(0, 16);
 }
@@ -487,7 +487,7 @@ export function computeKnowledgeHash(content) {
  * @param {string} [relPath]  相对路径（用于溯源）
  * @returns {Object} wire format JSON
  */
-export function parseKnowledgeMarkdown(content, relPath) {
+export function parseKnowledgeMarkdown(content: any, relPath: any) {
   const fmMatch = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
   const data: Record<string, any> = {};
 
@@ -655,7 +655,7 @@ export function parseKnowledgeMarkdown(content, relPath) {
  * @param {string} id
  * @returns {string} 文件名（含 .md 后缀）
  */
-function _slugFilename(trigger, title, id) {
+function _slugFilename(trigger: any, title: any, id: any) {
   // 优先用 trigger
   if (trigger) {
     const clean = trigger
@@ -688,7 +688,7 @@ function _slugFilename(trigger, title, id) {
 /**
  * 将 YAML 值安全序列化
  */
-function _yamlValue(key, val) {
+function _yamlValue(key: any, val: any) {
   if (typeof val === 'number' || typeof val === 'boolean') {
     return String(val);
   }
@@ -704,7 +704,7 @@ function _yamlValue(key, val) {
  * 递归扫描目录，删除包含指定 id 的 .md 文件
  * @returns {boolean}
  */
-function _walkAndRemoveById(dir, id) {
+function _walkAndRemoveById(dir: any, id: any) {
   if (!fs.existsSync(dir)) {
     return false;
   }

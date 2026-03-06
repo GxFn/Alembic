@@ -50,7 +50,7 @@ const logger = Logger.getInstance();
  *
  * @param {object} fillContext 由 bootstrapKnowledge 构建的上下文
  */
-export async function fillDimensionsV3(fillContext) {
+export async function fillDimensionsV3(fillContext: any) {
   const {
     ctx,
     dimensions,
@@ -294,7 +294,7 @@ export async function fillDimensionsV3(fillContext) {
 
   // v4.0: SessionStore — 替代 EpisodicMemory + ToolResultCache
   // v5.0: 增量模式下从快照恢复已完成维度的记忆
-  let sessionStore;
+  let sessionStore: any;
   if (isIncremental && incrementalPlan.restoredEpisodic) {
     sessionStore = incrementalPlan.restoredEpisodic;
     const restoredDims = sessionStore.getCompletedDimensions();
@@ -370,7 +370,7 @@ export async function fillDimensionsV3(fillContext) {
   const scheduler = new TierScheduler();
 
   // 包含所有维度（含 Enhancement Pack 动态追加的维度）
-  const activeDimIds = dimensions.map((d) => d.id);
+  const activeDimIds = dimensions.map((d: any) => d.id);
 
   // v5.0: 增量模式 — 仅执行受影响维度, 跳过未变更维度
   const incrementalSkippedDims: any[] = [];
@@ -429,7 +429,7 @@ export async function fillDimensionsV3(fillContext) {
   /**
    * 执行单个维度: Analyst → Gate → Producer
    */
-  async function executeDimension(dimId) {
+  async function executeDimension(dimId: any) {
     // v5.0: 增量模式 — 跳过未受影响的维度 (使用历史 EpisodicMemory)
     if (incrementalSkippedDims.includes(dimId)) {
       const report = sessionStore.getDimensionReport(dimId);
@@ -493,7 +493,7 @@ export async function fillDimensionsV3(fillContext) {
       return cpResult;
     }
 
-    const dim = dimensions.find((d) => d.id === dimId);
+    const dim = dimensions.find((d: any) => d.id === dimId);
     if (!dim) {
       return { candidateCount: 0, error: 'dimension not found' };
     }
@@ -501,7 +501,7 @@ export async function fillDimensionsV3(fillContext) {
     // 合并 v3 配置和原始维度配置 — 优先使用 getFullDimensionConfig()
     // Enhancement Pack 动态维度可能不在 DIMENSION_CONFIGS_V3 中 — 从 dim 本身构建配置
     const fullConfig = getFullDimensionConfig(dimId);
-    const v3Config = DIMENSION_CONFIGS_V3[dimId];
+    const v3Config = (DIMENSION_CONFIGS_V3 as Record<string, any>)[dimId];
     const dimConfig = fullConfig
       ? {
           ...fullConfig,
@@ -549,7 +549,7 @@ export async function fillDimensionsV3(fillContext) {
       const analystScopeId = `${dimId}:analyst`;
       memoryCoordinator.createDimensionScope(analystScopeId);
 
-      const v3OutputType = DIMENSION_CONFIGS_V3[dimId]?.outputType;
+      const v3OutputType = (DIMENSION_CONFIGS_V3 as Record<string, any>)[dimId]?.outputType;
       const needsCandidates = v3OutputType
         ? v3OutputType !== 'skill'
         : !dimConfig.skillWorthy || dimConfig.dualOutput;
@@ -569,9 +569,9 @@ export async function fillDimensionsV3(fillContext) {
         // 候选维度: Analyze→QualityGate→Produce→RejectionGate
         const produceStage = {
           ...presetStages[2],
-          promptBuilder: (ctx) => {
+          promptBuilder: (ctx: any) => {
             (memoryCoordinator as any).allocateBudget('producer');
-            return presetStages[2].promptBuilder!(ctx);
+            return presetStages[2].promptBuilder?.(ctx);
           },
         };
         stages = [
@@ -673,7 +673,7 @@ export async function fillDimensionsV3(fillContext) {
           ? artifact.referencedFiles
           : [
               ...new Set(
-                runtimeToolCalls.flatMap((tc) => {
+                runtimeToolCalls.flatMap((tc: any) => {
                   const a = tc?.args || tc?.params || {};
                   const files: any | string[] = [];
                   if (typeof a.filePath === 'string' && a.filePath.trim()) {
@@ -706,11 +706,11 @@ export async function fillDimensionsV3(fillContext) {
       };
 
       // ── Producer 结果统计 ──
-      const submitCalls = runtimeToolCalls.filter((tc) => {
+      const submitCalls = runtimeToolCalls.filter((tc: any) => {
         const tool = tc?.tool || tc?.name;
         return tool === 'submit_knowledge' || tool === 'submit_with_check';
       });
-      const successCount = submitCalls.filter((tc) => {
+      const successCount = submitCalls.filter((tc: any) => {
         const res = tc?.result;
         if (!res) {
           return true;
@@ -792,7 +792,7 @@ export async function fillDimensionsV3(fillContext) {
             '',
             '### 关键发现',
             '',
-            ...findings.slice(0, 10).map((f, i) => {
+            ...findings.slice(0, 10).map((f: any, i: any) => {
               const text = typeof f === 'string' ? f : f.finding;
               return `${i + 1}. ${text}`;
             }),
@@ -903,7 +903,7 @@ export async function fillDimensionsV3(fillContext) {
       activeDimIds,
       tierHints,
       shouldAbort: () => taskManager && !taskManager.isSessionValid(sessionId),
-      onTierComplete: (tierIndex, tierResults) => {
+      onTierComplete: (tierIndex: any, tierResults: any) => {
         const tierStats = [...tierResults.values()];
         const totalCandidates = tierStats.reduce((s, r) => s + (r.candidateCount || 0), 0);
         logger.info(
@@ -985,9 +985,9 @@ export async function fillDimensionsV3(fillContext) {
         // 从 SessionStore 获取结构化发现，供 Skill 生成使用
         const dimReport = sessionStore.getDimensionReport(dim.id);
         const keyFindings = (dimReport?.findings || [])
-          .sort((a, b) => (b.importance || 5) - (a.importance || 5))
+          .sort((a: any, b: any) => (b.importance || 5) - (a.importance || 5))
           .slice(0, 10)
-          .map((f) => f.finding);
+          .map((f: any) => f.finding);
 
         // 当 analysisText 过短（如 force-exit 时 AI 仅输出 JSON digest 被清洗后）
         // 从 distilled findings 合成补充文本，避免 Skill 质量门控拦截
@@ -1001,7 +1001,7 @@ export async function fillDimensionsV3(fillContext) {
             '',
             '## 关键发现',
             '',
-            ...keyFindings.map((f, i) => `${i + 1}. ${f}`),
+            ...keyFindings.map((f: any, i: any) => `${i + 1}. ${f}`),
           ];
           if (distilled?.toolCallSummary?.length > 0) {
             synthesized.push('', '## 探索记录', '');
@@ -1375,7 +1375,7 @@ export async function fillDimensionsV3(fillContext) {
       projectGraph, // 来自 Step 0.5 构建的 ProjectGraph
       codeEntityGraph,
       aiProvider: wikiContainer.singletons?.aiProvider || null,
-      onProgress: (phase, progress, message) => {
+      onProgress: (phase: any, progress: any, message: any) => {
         // 同步到 wiki 路由的任务状态
         patchWikiTask?.({ phase, progress, message });
         // 通过 Socket.io 推送进度
@@ -1442,7 +1442,7 @@ export async function fillDimensionsV3(fillContext) {
  * @param {string} projectRoot
  * @param {object} ctx - { container, logger }
  */
-async function clearSnapshotsImpl(projectRoot, ctx) {
+async function clearSnapshotsImpl(projectRoot: any, ctx: any) {
   try {
     const db = ctx.container.get('database');
     if (db) {

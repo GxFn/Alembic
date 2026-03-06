@@ -31,7 +31,7 @@ export class HnswVectorAdapter extends VectorStore {
   /** @type {Map<string, string>} id → content */
   #contents;
   /** @type {ScalarQuantizer|null} */
-  #quantizer;
+  #quantizer: any;
   /** @type {number} 向量维度 (首次 upsert 自动检测) */
   #dimension = 0;
   /** @type {boolean} 数据是否已修改 */
@@ -63,7 +63,7 @@ export class HnswVectorAdapter extends VectorStore {
    * @param {number} [options.flushBatchSize=100]
    * @param {boolean} [options.walEnabled=true] - 启用 WAL 持久化
    */
-  constructor(projectRoot, options: any = {}) {
+  constructor(projectRoot: any, options: any = {}) {
     super();
     this.#config = {
       M: options.M || 16,
@@ -252,7 +252,7 @@ export class HnswVectorAdapter extends VectorStore {
     }
   }
 
-  async upsert(item) {
+  async upsert(item: any) {
     if (!item?.id) {
       throw new Error('Item must have an id');
     }
@@ -299,7 +299,7 @@ export class HnswVectorAdapter extends VectorStore {
     }
   }
 
-  async batchUpsert(items) {
+  async batchUpsert(items: any) {
     const walOps: { t: 1; id: any; c: any; v: unknown[]; m: any }[] = [];
 
     for (const item of items) {
@@ -348,7 +348,7 @@ export class HnswVectorAdapter extends VectorStore {
     }
   }
 
-  async remove(id) {
+  async remove(id: any) {
     this.#index.removePoint(id);
     this.#metadata.delete(id);
     this.#contents.delete(id);
@@ -362,7 +362,7 @@ export class HnswVectorAdapter extends VectorStore {
     }
   }
 
-  async getById(id) {
+  async getById(id: any) {
     if (!this.#metadata.has(id) && !this.#contents.has(id)) {
       return null;
     }
@@ -385,7 +385,7 @@ export class HnswVectorAdapter extends VectorStore {
    * - Pass 1 (粗排): SQ8 量化距离在 HNSW 图中遍历, 获取 efSearch 个候选
    * - Pass 2 (精排): Float32 精确余弦距离对候选重排, 返回 top-K
    */
-  async searchVector(queryVector, options: any = {}) {
+  async searchVector(queryVector: any, options: any = {}) {
     const { topK = 10, filter = null, minScore = 0 } = options;
 
     if (!queryVector || queryVector.length === 0) {
@@ -437,7 +437,7 @@ export class HnswVectorAdapter extends VectorStore {
    *
    * score = α × 1/(k+rank_dense) + (1-α) × 1/(k+rank_sparse)
    */
-  async hybridSearch(queryVector, queryText, options: any = {}) {
+  async hybridSearch(queryVector: any, queryText: any, options: any = {}) {
     const { topK = 10, filter = null, rrfK = 60, alpha = 0.5 } = options;
     const expandedK = topK * 3;
 
@@ -500,13 +500,13 @@ export class HnswVectorAdapter extends VectorStore {
    * @param {object|null} filter
    * @returns {Array<{ id: string, score: number }>}
    */
-  #keywordSearch(queryText, limit, filter) {
+  #keywordSearch(queryText: any, limit: any, filter: any) {
     if (!queryText) {
       return [];
     }
 
     const queryLower = queryText.toLowerCase();
-    const words = queryLower.split(/\s+/).filter((w) => w.length > 0);
+    const words = queryLower.split(/\s+/).filter((w: any) => w.length > 0);
     if (words.length === 0) {
       return [];
     }
@@ -521,7 +521,7 @@ export class HnswVectorAdapter extends VectorStore {
       }
 
       const textLower = content.toLowerCase();
-      const hits = words.filter((w) => textLower.includes(w)).length;
+      const hits = words.filter((w: any) => textLower.includes(w)).length;
       const keywordScore = hits / words.length;
 
       if (keywordScore > 0) {
@@ -534,7 +534,7 @@ export class HnswVectorAdapter extends VectorStore {
   /**
    * query() — SearchEngine / RetrievalFunnel 使用的向量搜索别名
    */
-  async query(queryVector, topK = 10) {
+  async query(queryVector: any, topK = 10) {
     const results = await this.searchVector(queryVector, { topK });
     return results.map((r) => ({
       id: r.item.id,
@@ -545,7 +545,7 @@ export class HnswVectorAdapter extends VectorStore {
     }));
   }
 
-  async searchByFilter(filter) {
+  async searchByFilter(filter: any) {
     const results: { id: any; content: any; metadata: any }[] = [];
     for (const [id, meta] of this.#metadata) {
       const item = { id, content: this.#contents.get(id) || '', metadata: meta };
@@ -608,7 +608,7 @@ export class HnswVectorAdapter extends VectorStore {
       flushIntervalMs: this.#config.flushIntervalMs,
       flushBatchSize: this.#config.flushBatchSize,
       onPersist: () => this.#persist(),
-      onReplay: (op) => this.#replayOp(op),
+      onReplay: (op: any) => this.#replayOp(op),
     });
   }
 
@@ -616,7 +616,7 @@ export class HnswVectorAdapter extends VectorStore {
    * 重放 WAL 操作 (启动时恢复崩溃前未刷盘的操作)
    * @param {object} op - WAL 操作
    */
-  #replayOp(op) {
+  #replayOp(op: any) {
     switch (op.t) {
       case WAL_OP.UPSERT: {
         const vector = op.v || [];
@@ -755,7 +755,7 @@ export class HnswVectorAdapter extends VectorStore {
 
   // ── 过滤 ──
 
-  #matchFilter(item, filter) {
+  #matchFilter(item: any, filter: any) {
     const meta = item.metadata || {};
     if (filter.type && meta.type !== filter.type) {
       return false;
@@ -774,7 +774,7 @@ export class HnswVectorAdapter extends VectorStore {
     }
     if (filter.tags && Array.isArray(filter.tags)) {
       const itemTags = meta.tags || [];
-      if (!filter.tags.some((t) => itemTags.includes(t))) {
+      if (!filter.tags.some((t: any) => itemTags.includes(t))) {
         return false;
       }
     }

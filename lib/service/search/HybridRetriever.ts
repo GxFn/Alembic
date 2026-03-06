@@ -111,7 +111,7 @@ export class HybridRetriever {
    * @param {function} [options.sparseSearchFn] - 外部 sparse 搜索函数 (query, limit) => results[]
    * @returns {Promise<Array>}
    */
-  async search(query, queryVector, options: any = {}) {
+  async search(query: any, queryVector: any, options: any = {}) {
     const { topK = 10, alpha = this.#defaultAlpha, filter = null, sparseSearchFn = null } = options;
     const expandedK = topK * 3; // 每路召回更多候选以提高融合质量
 

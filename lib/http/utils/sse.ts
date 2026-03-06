@@ -15,7 +15,7 @@
  * @param {'chat'|'refine'} scene 场景标识
  * @returns {{ send, end, error, isDisconnected, sessionId }}
  */
-export function createSSESession(req, res, scene) {
+export function createSSESession(req: any, res: any, scene: any) {
   // ─── SSE Headers ───
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -41,7 +41,7 @@ export function createSSESession(req, res, scene) {
   const sessionId = Math.random().toString(36).slice(2, 10);
 
   /** 安全写入一段 SSE 数据 */
-  function _write(data) {
+  function _write(data: any) {
     if (disconnected || res.writableEnded) {
       return false;
     }
@@ -75,7 +75,7 @@ export function createSSESession(req, res, scene) {
      * 发送一个 SSE 事件
      * @param {object} event 必须包含 type 字段
      */
-    send(event) {
+    send(event: any) {
       if (disconnected || res.writableEnded) {
         return;
       }
@@ -107,7 +107,7 @@ export function createSSESession(req, res, scene) {
      * @param {string} message
      * @param {string} [code]
      */
-    error(message, code) {
+    error(message: any, code: any) {
       clearInterval(heartbeat);
       if (disconnected || res.writableEnded) {
         return;

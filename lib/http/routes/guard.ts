@@ -37,7 +37,7 @@ const router = express.Router();
  */
 router.post(
   '/file',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { filePath, content, language } = req.body;
 
     if (!filePath) {
@@ -75,7 +75,7 @@ router.post(
     const violations = engine.checkCode(code, lang, { filePath });
 
     // 格式化违规消息面向 Agent
-    const formattedViolations = violations.map((v) => ({
+    const formattedViolations = violations.map((v: any) => ({
       ...v,
       // 面向 Agent 的诊断消息格式
       diagnosticMessage: _buildDiagnosticMessage(v),
@@ -83,9 +83,9 @@ router.post(
 
     const summary = {
       total: violations.length,
-      errors: violations.filter((v) => v.severity === 'error').length,
-      warnings: violations.filter((v) => v.severity === 'warning').length,
-      infos: violations.filter((v) => v.severity === 'info').length,
+      errors: violations.filter((v: any) => v.severity === 'error').length,
+      warnings: violations.filter((v: any) => v.severity === 'warning').length,
+      infos: violations.filter((v: any) => v.severity === 'info').length,
     };
 
     // GuardFeedbackLoop: 检测修复 + confirmUsage
@@ -132,7 +132,7 @@ router.post(
  */
 router.post(
   '/batch',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { files } = req.body;
 
     if (!Array.isArray(files) || files.length === 0) {
@@ -187,9 +187,9 @@ router.post(
 
       const summary = {
         total: violations.length,
-        errors: violations.filter((v) => v.severity === 'error').length,
-        warnings: violations.filter((v) => v.severity === 'warning').length,
-        infos: violations.filter((v) => v.severity === 'info').length,
+        errors: violations.filter((v: any) => v.severity === 'error').length,
+        warnings: violations.filter((v: any) => v.severity === 'warning').length,
+        infos: violations.filter((v: any) => v.severity === 'info').length,
       };
 
       totalErrors += summary.errors;
@@ -198,7 +198,7 @@ router.post(
       results.push({
         filePath: file.filePath,
         language: lang,
-        violations: violations.map((v) => ({
+        violations: violations.map((v: any) => ({
           ...v,
           diagnosticMessage: _buildDiagnosticMessage(v),
         })),
@@ -228,7 +228,7 @@ router.post(
  * @param {Function} GuardCheckEngine - GuardCheckEngine class
  * @returns {Promise<object>} engine
  */
-async function _getEngine(container, GuardCheckEngine) {
+async function _getEngine(container: any, GuardCheckEngine: any) {
   let engine;
   try {
     engine = container.get('guardCheckEngine');
@@ -265,7 +265,7 @@ async function _getEngine(container, GuardCheckEngine) {
  * @param {object} violation
  * @returns {string}
  */
-function _buildDiagnosticMessage(violation) {
+function _buildDiagnosticMessage(violation: any) {
   const { ruleId, message, fixSuggestion } = violation;
 
   let msg = `[AutoSnippet Guard] ${ruleId}: ${message}`;

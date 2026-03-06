@@ -151,10 +151,10 @@ export class SessionStore {
    * @param {string} dimId
    * @param {object} report
    */
-  storeDimensionReport(dimId, report) {
+  storeDimensionReport(dimId: any, report: any) {
     // findings 统一形状: { finding: string, evidence: string, importance: number }
     // P0 Fix: evidence 可能是 array/object，强制 string
-    const findings = (report.findings || []).map((f) => ({
+    const findings = (report.findings || []).map((f: any) => ({
       finding: f.finding || '',
       evidence:
         typeof f.evidence === 'string'
@@ -216,7 +216,7 @@ export class SessionStore {
    * @param {string} dimId
    * @returns {DimensionReport|undefined}
    */
-  getDimensionReport(dimId) {
+  getDimensionReport(dimId: any) {
     return this.#dimensionReports.get(dimId);
   }
 
@@ -235,7 +235,7 @@ export class SessionStore {
    * @param {string} filePath
    * @param {object} evidence
    */
-  addEvidence(filePath, evidence) {
+  addEvidence(filePath: any, evidence: any) {
     if (!this.#evidenceStore.has(filePath)) {
       this.#evidenceStore.set(filePath, []);
     }
@@ -249,7 +249,7 @@ export class SessionStore {
    * @param {string} filePath
    * @returns {Finding[]}
    */
-  getEvidenceForFile(filePath) {
+  getEvidenceForFile(filePath: any) {
     return this.#evidenceStore.get(filePath) || [];
   }
 
@@ -258,7 +258,7 @@ export class SessionStore {
    * @param {string} [dimId]
    * @returns {Array<{filePath: string, evidence: object}>}
    */
-  searchEvidence(query, dimId) {
+  searchEvidence(query: any, dimId: any) {
     const results: { filePath: any; evidence: any }[] = [];
     const lowerQuery = query.toLowerCase();
     for (const [filePath, evidences] of this.#evidenceStore) {
@@ -284,7 +284,7 @@ export class SessionStore {
    * @param {string} dimId
    * @param {CandidateSummary} candidate
    */
-  addSubmittedCandidate(dimId, candidate) {
+  addSubmittedCandidate(dimId: any, candidate: any) {
     if (!this.#submittedCandidates.has(dimId)) {
       this.#submittedCandidates.set(dimId, []);
     }
@@ -304,7 +304,7 @@ export class SessionStore {
    * @param {string} dimId
    * @param {object} digest
    */
-  addDimensionDigest(dimId, digest) {
+  addDimensionDigest(dimId: any, digest: any) {
     const existing = this.#dimensionReports.get(dimId);
     if (existing) {
       existing.digest = digest;
@@ -313,7 +313,7 @@ export class SessionStore {
         dimId,
         completedAt: Date.now(),
         analysisText: digest.summary || '',
-        findings: (digest.keyFindings || []).map((f) => ({
+        findings: (digest.keyFindings || []).map((f: any) => ({
           finding: typeof f === 'string' ? f : f.finding || '',
           evidence: '',
           importance: 5,
@@ -352,7 +352,7 @@ export class SessionStore {
    * @param {number} tierIndex
    * @param {TierReflection} reflection
    */
-  addTierReflection(tierIndex, reflection) {
+  addTierReflection(tierIndex: any, reflection: any) {
     this.#tierReflections.push(reflection);
     this.#logger.info(
       `[SessionStore] Tier ${tierIndex + 1} reflection: ` +
@@ -373,7 +373,7 @@ export class SessionStore {
    * @param {string} currentDimId
    * @returns {string|null}
    */
-  getRelevantReflections(currentDimId) {
+  getRelevantReflections(currentDimId: any) {
     if (this.#tierReflections.length === 0) {
       return null;
     }
@@ -413,7 +413,7 @@ export class SessionStore {
    * @param {string[]|object} [focusKeywordsOrOpts] 关键词数组或 options 对象
    * @returns {string}
    */
-  buildContextForDimension(currentDimId, focusKeywordsOrOpts: any[] = []) {
+  buildContextForDimension(currentDimId: any, focusKeywordsOrOpts: any[] = []) {
     // 兼容两种调用方式: (dimId, keywords[]) 或 (dimId, { focusKeywords, tokenBudget })
     let focusKeywords: any[] = [];
     let tokenBudget = Infinity;
@@ -448,7 +448,7 @@ export class SessionStore {
       // B1 fix: 优先 findings，为空时从 workingMemoryDistilled 补充
       let findings = report.findings;
       if ((!findings || findings.length === 0) && report.workingMemoryDistilled?.keyFindings) {
-        findings = report.workingMemoryDistilled.keyFindings.map((f) => ({
+        findings = report.workingMemoryDistilled.keyFindings.map((f: any) => ({
           finding: f.finding || '',
           evidence: f.evidence || '',
           importance: f.importance || 5,
@@ -470,7 +470,7 @@ export class SessionStore {
       const candidates = this.#submittedCandidates.get(dimId) || [];
       if (candidates.length > 0) {
         parts.push(
-          `已提交 ${candidates.length} 个候选: ${candidates.map((c) => c.title).join(', ')}`
+          `已提交 ${candidates.length} 个候选: ${candidates.map((c: any) => c.title).join(', ')}`
         );
       }
     }
@@ -520,7 +520,7 @@ export class SessionStore {
    * @param {string} currentDimId
    * @returns {object}
    */
-  buildContextSnapshot(currentDimId) {
+  buildContextSnapshot(currentDimId: any) {
     const previousDimensions: Record<string, any> = {};
     for (const [dimId, report] of this.#dimensionReports) {
       if (dimId === currentDimId) {
@@ -529,7 +529,7 @@ export class SessionStore {
       previousDimensions[dimId] = report.digest || {
         summary: report.analysisText?.substring(0, 300) || '',
         candidateCount: report.candidatesSummary?.length || 0,
-        keyFindings: report.findings?.map((f) => f.finding) || [],
+        keyFindings: report.findings?.map((f: any) => f.finding) || [],
         crossRefs: {},
         gaps: [],
       };
@@ -550,7 +550,7 @@ export class SessionStore {
    * @param {string} dimId
    * @returns {{ keyFindings: Array, toolCallSummary: Array, referencedFiles: string[] }|null}
    */
-  getDistilledForProducer(dimId) {
+  getDistilledForProducer(dimId: any) {
     const report = this.#dimensionReports.get(dimId);
     if (!report) {
       return null;
@@ -573,7 +573,7 @@ export class SessionStore {
    * @param {object} args
    * @returns {*|null}
    */
-  getCachedResult(toolName, args) {
+  getCachedResult(toolName: any, args: any) {
     if (NON_CACHEABLE.has(toolName)) {
       return null;
     }
@@ -622,7 +622,7 @@ export class SessionStore {
    * @param {object} args
    * @param {*} result
    */
-  cacheToolResult(toolName, args, result) {
+  cacheToolResult(toolName: any, args: any, result: any) {
     if (NON_CACHEABLE.has(toolName)) {
       return;
     }
@@ -656,7 +656,7 @@ export class SessionStore {
    * @param {object} args
    * @returns {*|null}
    */
-  get(toolName, args) {
+  get(toolName: any, args: any) {
     return this.getCachedResult(toolName, args);
   }
 
@@ -666,7 +666,7 @@ export class SessionStore {
    * @param {object} args
    * @param {*} result
    */
-  set(toolName, args, result) {
+  set(toolName: any, args: any, result: any) {
     this.cacheToolResult(toolName, args, result);
   }
 
@@ -677,7 +677,7 @@ export class SessionStore {
   /**
    * @param {string} projectRoot
    */
-  async saveCheckpoint(projectRoot) {
+  async saveCheckpoint(projectRoot: any) {
     const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');
     try {
       fs.mkdirSync(checkpointDir, { recursive: true });
@@ -713,7 +713,7 @@ export class SessionStore {
    * @param {string} projectRoot
    * @returns {Promise<boolean>}
    */
-  async loadCheckpoint(projectRoot) {
+  async loadCheckpoint(projectRoot: any) {
     // Try new format first, then legacy
     const newPath = path.join(
       projectRoot,
@@ -785,7 +785,7 @@ export class SessionStore {
     };
   }
 
-  static fromJSON(json) {
+  static fromJSON(json: any) {
     const store = new SessionStore({ projectContext: json.projectContext || {} });
     if (json.dimensionReports) {
       for (const [k, v] of Object.entries(json.dimensionReports)) {
@@ -895,7 +895,7 @@ export class SessionStore {
   /**
    * 从 findings 中选择与当前焦点最相关的
    */
-  #selectRelevantFindings(findings, focusKeywords, limit) {
+  #selectRelevantFindings(findings: any, focusKeywords: any, limit: any) {
     if (!findings || findings.length === 0) {
       return [];
     }
@@ -908,7 +908,7 @@ export class SessionStore {
 
     return [...findings]
       .map((f) => {
-        const relevance = focusKeywords.some((kw) =>
+        const relevance = focusKeywords.some((kw: any) =>
           (f.finding || '').toLowerCase().includes(kw.toLowerCase())
         )
           ? 1

@@ -17,7 +17,7 @@ export class BaseRepository {
   /** @type {Set<string>|null} lazily-populated column whitelist */
   #columnWhitelist: any = null;
 
-  constructor(database, tableName) {
+  constructor(database: any, tableName: any) {
     // 校验 tableName 防止 SQL 注入（与列名使用相同的标识符规则）
     if (!SAFE_IDENTIFIER_RE.test(tableName)) {
       throw new Error(`Invalid table name: ${tableName}`);
@@ -32,7 +32,7 @@ export class BaseRepository {
    * Rejects anything that doesn't match /^[a-zA-Z_]\w*$/ or
    * is not a real column in the table.
    */
-  _assertSafeColumn(key) {
+  _assertSafeColumn(key: any) {
     if (!SAFE_COLUMN_RE.test(key)) {
       throw new Error(`Invalid column name: ${key}`);
     }
@@ -40,7 +40,7 @@ export class BaseRepository {
     if (!this.#columnWhitelist) {
       try {
         const cols = this.db.prepare(`PRAGMA table_info(${this.tableName})`).all();
-        this.#columnWhitelist = new Set(cols.map((c) => c.name));
+        this.#columnWhitelist = new Set(cols.map((c: any) => c.name));
       } catch {
         this.#columnWhitelist = new Set();
       }
@@ -53,14 +53,14 @@ export class BaseRepository {
   /**
    * 创建实体
    */
-  async create(entity): Promise<any> {
+  async create(entity: any): Promise<any> {
     throw new Error('create() must be implemented in subclass');
   }
 
   /**
    * 根据 ID 获取实体
    */
-  async findById(id) {
+  async findById(id: any) {
     try {
       const stmt = this.db.prepare(`
         SELECT * FROM ${this.tableName} WHERE id = ? LIMIT 1
@@ -104,7 +104,7 @@ export class BaseRepository {
       const stmt = this.db.prepare(query);
       const rows = stmt.all(...params);
 
-      return rows.map((row) => this._mapRowToEntity(row));
+      return rows.map((row: any) => this._mapRowToEntity(row));
     } catch (error: any) {
       this.logger.error(`Error finding all in ${this.tableName}`, {
         error: error.message,
@@ -147,7 +147,7 @@ export class BaseRepository {
       const data = dataStmt.all(...params.slice(0, Object.keys(filters).length), pageSize, offset);
 
       return {
-        data: data.map((row) => this._mapRowToEntity(row)),
+        data: data.map((row: any) => this._mapRowToEntity(row)),
         pagination: {
           page,
           pageSize,
@@ -166,7 +166,7 @@ export class BaseRepository {
   /**
    * 更新实体
    */
-  async update(id, updates) {
+  async update(id: any, updates: any) {
     try {
       const updateKeys = Object.keys(updates);
       const updateValues = Object.values(updates);
@@ -197,7 +197,7 @@ export class BaseRepository {
   /**
    * 删除实体
    */
-  async delete(id) {
+  async delete(id: any) {
     try {
       const stmt = this.db.prepare(`
         DELETE FROM ${this.tableName} WHERE id = ?
@@ -244,14 +244,14 @@ export class BaseRepository {
   /**
    * 映射行数据到实体（由子类实现）
    */
-  _mapRowToEntity(row) {
+  _mapRowToEntity(row: any) {
     throw new Error('_mapRowToEntity() must be implemented in subclass');
   }
 
   /**
    * 映射实体到行数据（由子类实现）
    */
-  _mapEntityToRow(entity) {
+  _mapEntityToRow(entity: any) {
     throw new Error('_mapEntityToRow() must be implemented in subclass');
   }
 }

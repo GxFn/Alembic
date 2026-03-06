@@ -33,7 +33,7 @@ export class Bootstrap {
    * @param {string} projectRoot 用户项目的绝对路径
    * @param {string} [knowledgeBaseDir] 知识库目录名（如 'AutoSnippet'）
    */
-  static configurePathGuard(projectRoot, knowledgeBaseDir?) {
+  static configurePathGuard(projectRoot: any, knowledgeBaseDir?: any) {
     if (!pathGuard.configured && projectRoot) {
       const packageRoot = path.resolve(__dirname, '..');
       pathGuard.configure({ projectRoot, packageRoot, knowledgeBaseDir });
@@ -215,7 +215,7 @@ export class Bootstrap {
   /**
    * 获取组件
    */
-  getComponent(name) {
+  getComponent(name: any) {
     return this.components[name];
   }
 

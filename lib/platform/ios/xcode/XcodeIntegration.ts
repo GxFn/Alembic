@@ -107,7 +107,7 @@ const _SYSTEM_FRAMEWORKS = new Set([
  * @param {object}   [opts]
  * @returns {Promise<{inserted: string[], skipped: string[], cancelled: boolean}>}
  */
-export async function insertHeaders(watcher, fullPath, headers, opts: any = {}) {
+export async function insertHeaders(watcher: any, fullPath: any, headers: any, opts: any = {}) {
   const XA = await import('./XcodeAutomation.js');
   const CM = await import('../../../infrastructure/external/ClipboardManager.js');
   const NU = await import('../../../infrastructure/external/NativeUi.js');
@@ -298,7 +298,12 @@ export async function insertHeaders(watcher, fullPath, headers, opts: any = {}) 
  *
  * @param {import('../../../service/automation/FileWatcher.js').FileWatcher} watcher
  */
-export async function insertCodeToXcode(watcher, fullPath, selected, triggerLine) {
+export async function insertCodeToXcode(
+  watcher: any,
+  fullPath: any,
+  selected: any,
+  triggerLine: any
+) {
   const XA = await import('./XcodeAutomation.js');
   const CM = await import('../../../infrastructure/external/ClipboardManager.js');
   const NU = await import('../../../infrastructure/external/NativeUi.js');
@@ -308,7 +313,7 @@ export async function insertCodeToXcode(watcher, fullPath, selected, triggerLine
     return;
   }
 
-  const headersToInsert = (selected.headers || []).filter((h) => h?.trim());
+  const headersToInsert = (selected.headers || []).filter((h: any) => h?.trim());
   const isSwift = fullPath.endsWith('.swift');
 
   // ═══════════════════════════════════════════════════════
@@ -378,7 +383,7 @@ export async function insertCodeToXcode(watcher, fullPath, selected, triggerLine
     while (codeLines.length > 0 && !codeLines[codeLines.length - 1].trim()) {
       codeLines.pop();
     }
-    const indentedLines = codeLines.map((line) => (line ? indent + line : line));
+    const indentedLines = codeLines.map((line: any) => (line ? indent + line : line));
     const indentedCode = indentedLines.join('\n');
 
     // ── Step 5: 插入 Headers ──
@@ -444,7 +449,7 @@ export async function insertCodeToXcode(watcher, fullPath, selected, triggerLine
  * 不实际写入文件，只检查并弹窗确认。
  * 返回 { blocked: true } 表示有依赖被阻止或用户取消。
  */
-async function _preflightDeps(fullPath, headers, selected, NU) {
+async function _preflightDeps(fullPath: any, headers: any, selected: any, NU: any) {
   const result: any = { blocked: false };
 
   // 始终从所有 headers 推断模块（不仅依赖 selected.moduleName）
@@ -536,11 +541,11 @@ async function _preflightDeps(fullPath, headers, selected, NU) {
 // ═══════════════════════════════════════════════════════════════
 
 async function _fileInsertFallback(
-  fullPath,
-  selected,
-  triggerLine,
-  headersToInsert,
-  watcher,
+  fullPath: any,
+  selected: any,
+  triggerLine: any,
+  headersToInsert: any,
+  watcher: any,
   opts: any = {}
 ) {
   // 先写 headers
@@ -580,7 +585,7 @@ async function _fileInsertFallback(
       while (codeLines.length > 0 && !codeLines[codeLines.length - 1].trim()) {
         codeLines.pop();
       }
-      const indentedLines = codeLines.map((line) => (line ? indent + line : line));
+      const indentedLines = codeLines.map((line: any) => (line ? indent + line : line));
 
       while (indentedLines.length > 0 && !indentedLines[indentedLines.length - 1].trim()) {
         indentedLines.pop();
@@ -604,7 +609,7 @@ async function _fileInsertFallback(
 // §14 注释标记生成
 // ═══════════════════════════════════════════════════════════════
 
-function _generateInsertMarker(filePath, selected) {
+function _generateInsertMarker(filePath: any, selected: any) {
   try {
     const ext = (filePath.match(/\.[^.]+$/) || [''])[0].toLowerCase();
     const trigger = selected.trigger ? `[${selected.trigger}]` : '';
@@ -644,7 +649,7 @@ function _generateInsertMarker(filePath, selected) {
 /**
  * 查找触发行的行号（1-based，-1 表示未找到）
  */
-export function findTriggerLineNumber(content, triggerLine) {
+export function findTriggerLineNumber(content: any, triggerLine: any) {
   if (!content || !triggerLine) {
     return -1;
   }
@@ -661,7 +666,7 @@ export function findTriggerLineNumber(content, triggerLine) {
 /**
  * 查找 import 语句的插入位置（0-based 行索引，在最后一个 import 之后）
  */
-export function findImportInsertLine(content, isSwift) {
+export function findImportInsertLine(content: any, isSwift: any) {
   const lines = content.split('\n');
   let lastImportLine = -1;
   for (let i = 0; i < lines.length; i++) {

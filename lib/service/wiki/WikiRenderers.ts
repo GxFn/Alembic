@@ -34,7 +34,7 @@ import {
  * @param {object|null} codeEntityGraph
  * @returns {string}
  */
-export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
+export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityGraph: any) {
   const { projectInfo, astInfo, moduleInfo, knowledgeInfo } = data;
   const parts: any[] = [];
   const langTerms = getLangTerms(projectInfo.primaryLanguage || 'unknown');
@@ -62,8 +62,8 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
       parts.push('');
 
       // 项目类型
-      const buildTypes = (projectInfo.buildSystems || []).map((b) => b.buildTool);
-      if (projectInfo.hasPackageSwift && !buildTypes.some((t) => t.includes('SPM'))) {
+      const buildTypes = (projectInfo.buildSystems || []).map((b: any) => b.buildTool);
+      if (projectInfo.hasPackageSwift && !buildTypes.some((t: any) => t.includes('SPM'))) {
         buildTypes.push('SPM');
       }
       if (projectInfo.hasPodfile && !buildTypes.includes('CocoaPods')) {
@@ -83,7 +83,7 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
         for (const t of moduleInfo.targets) {
           const files = getModuleSourceFiles(t, projectInfo);
           const cls = astInfo.classNamesByModule?.[t.name]?.length || 0;
-          const deps = (t.dependencies || t.info?.dependencies || []).map((d) =>
+          const deps = (t.dependencies || t.info?.dependencies || []).map((d: any) =>
             typeof d === 'string' ? d : d.name
           );
           parts.push(
@@ -103,7 +103,7 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
       }
 
       // 可用的其他文档（用于导航链接）
-      const otherTopics = (topic._allTopics || []).filter((t) => t.type !== 'overview');
+      const otherTopics = (topic._allTopics || []).filter((t: any) => t.type !== 'overview');
       if (otherTopics.length > 0) {
         parts.push('### 需要包含的导航链接');
         for (const t of otherTopics) {
@@ -127,7 +127,7 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
       if (moduleInfo.targets.length > 0) {
         parts.push('### 模块及依赖关系');
         for (const t of moduleInfo.targets) {
-          const deps = (t.dependencies || t.info?.dependencies || []).map((d) =>
+          const deps = (t.dependencies || t.info?.dependencies || []).map((d: any) =>
             typeof d === 'string' ? d : d.name
           );
           parts.push(
@@ -193,7 +193,9 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
       parts.push('');
 
       if (deps.length > 0) {
-        parts.push(`### 依赖: ${deps.map((d) => (typeof d === 'string' ? d : d.name)).join(', ')}`);
+        parts.push(
+          `### 依赖: ${deps.map((d: any) => (typeof d === 'string' ? d : d.name)).join(', ')}`
+        );
         parts.push('');
       }
 
@@ -209,13 +211,13 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
 
       // 关键源文件名（帮助 AI 推断模块功能）
       if (moduleFiles.length > 0) {
-        const keyFiles = moduleFiles.slice(0, 25).map((f) => path.basename(f));
+        const keyFiles = moduleFiles.slice(0, 25).map((f: any) => path.basename(f));
         parts.push(`### 关键源文件: ${keyFiles.join(', ')}`);
         parts.push('');
       }
 
       // 相关 recipes
-      const related = knowledgeInfo.recipes.filter((r) => {
+      const related = knowledgeInfo.recipes.filter((r: any) => {
         const json = r.toJSON ? r.toJSON() : r;
         return (
           json.moduleName === target.name ||
@@ -250,7 +252,7 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
       // 列出检测到的构建系统
       const bs = projectInfo.buildSystems || [];
       if (bs.length > 0) {
-        parts.push(`构建系统: ${bs.map((b) => b.buildTool).join(', ')}`);
+        parts.push(`构建系统: ${bs.map((b: any) => b.buildTool).join(', ')}`);
       } else {
         // 兼容旧数据
         if (projectInfo.hasPackageSwift) {
@@ -266,13 +268,13 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
       parts.push('');
 
       if (moduleInfo.targets.length > 0) {
-        const mainTargets = moduleInfo.targets.filter((t) => t.type !== 'test');
-        const testTargets = moduleInfo.targets.filter((t) => t.type === 'test');
+        const mainTargets = moduleInfo.targets.filter((t: any) => t.type !== 'test');
+        const testTargets = moduleInfo.targets.filter((t: any) => t.type === 'test');
         if (mainTargets.length > 0) {
-          parts.push(`主要 Target: ${mainTargets.map((t) => t.name).join(', ')}`);
+          parts.push(`主要 Target: ${mainTargets.map((t: any) => t.name).join(', ')}`);
         }
         if (testTargets.length > 0) {
-          parts.push(`测试 Target: ${testTargets.map((t) => t.name).join(', ')}`);
+          parts.push(`测试 Target: ${testTargets.map((t: any) => t.name).join(', ')}`);
         }
         parts.push('');
       }
@@ -502,7 +504,7 @@ export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
  * @param {object|null} codeEntityGraph
  * @returns {string}
  */
-export function buildFallbackArticle(topic, data, isZh, codeEntityGraph) {
+export function buildFallbackArticle(topic: any, data: any, isZh: any, codeEntityGraph: any) {
   const { projectInfo, astInfo, moduleInfo, knowledgeInfo } = data;
 
   switch (topic.type) {
@@ -534,7 +536,14 @@ export function buildFallbackArticle(topic, data, isZh, codeEntityGraph) {
 /**
  * 渲染项目概述页 (index.md)
  */
-export function renderIndex(project, ast, modules, knowledge, isZh, allTopics) {
+export function renderIndex(
+  project: any,
+  ast: any,
+  modules: any,
+  knowledge: any,
+  isZh: any,
+  allTopics: any
+) {
   const title = isZh ? '项目概述' : 'Project Overview';
   const langTerms = getLangTerms(project.primaryLanguage || 'unknown');
   const tl = isZh ? langTerms.typeLabel.zh : langTerms.typeLabel.en;
@@ -574,8 +583,8 @@ export function renderIndex(project, ast, modules, knowledge, isZh, allTopics) {
     (project.primaryLanguage ? LanguageService.displayName(project.primaryLanguage) : 'Software');
 
   const overview = ast.overview || {};
-  const mainTargets = modules.targets.filter((t) => t.type !== 'test');
-  const testTargets = modules.targets.filter((t) => t.type === 'test');
+  const mainTargets = modules.targets.filter((t: any) => t.type !== 'test');
+  const testTargets = modules.targets.filter((t: any) => t.type === 'test');
 
   if (isZh) {
     lines.push(
@@ -623,7 +632,7 @@ export function renderIndex(project, ast, modules, knowledge, isZh, allTopics) {
       const classCount = ast.classNamesByModule?.[t.name]?.length || 0;
       const protoCount = ast.protocolNamesByModule?.[t.name]?.length || 0;
       const hasDoc = allTopics?.some(
-        (tp) => tp.type === 'module' && tp._moduleData?.target.name === t.name
+        (tp: any) => tp.type === 'module' && tp._moduleData?.target.name === t.name
       );
       const nameCol = hasDoc ? `[${t.name}](modules/${slug(t.name)}.md)` : t.name;
       lines.push(
@@ -648,7 +657,7 @@ export function renderIndex(project, ast, modules, knowledge, isZh, allTopics) {
     );
     lines.push('|--------|--------|------|');
     for (const [modName, modFiles] of sorted.slice(0, 15)) {
-      const hasDoc = allTopics?.some((tp) => tp.type === 'module' && tp.title === modName);
+      const hasDoc = allTopics?.some((tp: any) => tp.type === 'module' && tp.title === modName);
       const nameCol = hasDoc ? `[${modName}](modules/${slug(modName)}.md)` : modName;
       const purpose = inferModulePurpose(modName, [], [], modFiles);
       const desc = purpose ? (isZh ? purpose.zh : purpose.en) : '-';
@@ -698,7 +707,7 @@ export function renderIndex(project, ast, modules, knowledge, isZh, allTopics) {
   lines.push('');
 
   // ── 文档导航 (动态，基于实际生成的主题) ──
-  const navTopics = (allTopics || []).filter((t) => t.type !== 'overview');
+  const navTopics = (allTopics || []).filter((t: any) => t.type !== 'overview');
   if (navTopics.length > 0) {
     lines.push('---');
     lines.push('');
@@ -722,7 +731,13 @@ export function renderIndex(project, ast, modules, knowledge, isZh, allTopics) {
  * @param {boolean} isZh
  * @param {object|null} codeEntityGraph
  */
-export function renderArchitecture(project, ast, modules, isZh, codeEntityGraph) {
+export function renderArchitecture(
+  project: any,
+  ast: any,
+  modules: any,
+  isZh: any,
+  codeEntityGraph: any
+) {
   const lines = [
     `# ${isZh ? '架构总览' : 'Architecture Overview'}`,
     '',
@@ -857,7 +872,7 @@ export function renderArchitecture(project, ast, modules, isZh, codeEntityGraph)
 /**
  * 渲染模块详情文档 (modules/{name}.md)
  */
-export function renderModule(target, ast, knowledge, isZh, projectInfo) {
+export function renderModule(target: any, ast: any, knowledge: any, isZh: any, projectInfo: any) {
   const langTerms = getLangTerms(projectInfo?.primaryLanguage || 'unknown');
   const tl = isZh ? langTerms.typeLabel.zh : langTerms.typeLabel.en;
   const il = isZh ? langTerms.interfaceLabel.zh : langTerms.interfaceLabel.en;
@@ -1001,7 +1016,7 @@ export function renderModule(target, ast, knowledge, isZh, projectInfo) {
 
   // ── 该模块相关的 Recipes ──
   if (knowledge.recipes.length > 0) {
-    const related = knowledge.recipes.filter((r) => {
+    const related = knowledge.recipes.filter((r: any) => {
       const json = r.toJSON ? r.toJSON() : r;
       return (
         json.moduleName === target.name ||
@@ -1044,7 +1059,7 @@ export function renderModule(target, ast, knowledge, isZh, projectInfo) {
 /**
  * 渲染代码模式文档 (patterns.md)
  */
-export function renderPatterns(knowledge, isZh) {
+export function renderPatterns(knowledge: any, isZh: any) {
   const lines = [
     `# ${isZh ? '代码模式与最佳实践' : 'Code Patterns & Best Practices'}`,
     '',
@@ -1123,7 +1138,7 @@ export function renderPatterns(knowledge, isZh) {
 /**
  * 快速上手指南 (非 AI 降级模板)
  */
-export function renderGettingStarted(project, modules, ast, isZh) {
+export function renderGettingStarted(project: any, modules: any, ast: any, isZh: any) {
   const lines = [
     `# ${isZh ? '快速上手' : 'Getting Started'}`,
     '',
@@ -1133,7 +1148,7 @@ export function renderGettingStarted(project, modules, ast, isZh) {
 
   // 从 buildSystems 或 legacy 字段推断
   const bs = project.buildSystems || [];
-  const ecoSet = new Set(bs.map((b) => b.eco));
+  const ecoSet = new Set(bs.map((b: any) => b.eco));
 
   // ── 环境要求 (按检测到的生态系统动态生成) ──
   lines.push(`## ${isZh ? '环境要求' : 'Prerequisites'}`);
@@ -1141,7 +1156,7 @@ export function renderGettingStarted(project, modules, ast, isZh) {
   if (ecoSet.has('spm') || project.hasPackageSwift) {
     lines.push(isZh ? '- Swift 5.5+ (推荐 Swift 5.9+)' : '- Swift 5.5+ (Swift 5.9+ recommended)');
     lines.push(isZh ? '- Xcode 14+' : '- Xcode 14+');
-    const hasCocoaPods = bs.some((b) => b.buildTool === 'CocoaPods');
+    const hasCocoaPods = bs.some((b: any) => b.buildTool === 'CocoaPods');
     if (hasCocoaPods || project.hasPodfile) {
       lines.push(isZh ? '- CocoaPods 1.10+' : '- CocoaPods 1.10+');
     }
@@ -1160,14 +1175,14 @@ export function renderGettingStarted(project, modules, ast, isZh) {
   }
   if (ecoSet.has('node')) {
     lines.push(isZh ? '- Node.js 18+ (推荐 20 LTS)' : '- Node.js 18+ (20 LTS recommended)');
-    const hasYarn = bs.some((b) => b.buildTool === 'Yarn');
-    const hasPnpm = bs.some((b) => b.buildTool === 'pnpm');
+    const hasYarn = bs.some((b: any) => b.buildTool === 'Yarn');
+    const hasPnpm = bs.some((b: any) => b.buildTool === 'pnpm');
     lines.push(hasYarn ? '- Yarn' : hasPnpm ? '- pnpm' : '- npm');
   }
   if (ecoSet.has('python')) {
     lines.push(isZh ? '- Python 3.8+' : '- Python 3.8+');
-    const hasPipenv = bs.some((b) => b.buildTool === 'Pipenv');
-    const hasPoetry = bs.some((b) => b.buildTool === 'Poetry');
+    const hasPipenv = bs.some((b: any) => b.buildTool === 'Pipenv');
+    const hasPoetry = bs.some((b: any) => b.buildTool === 'Poetry');
     if (hasPipenv) {
       lines.push('- Pipenv');
     } else if (hasPoetry) {
@@ -1182,7 +1197,7 @@ export function renderGettingStarted(project, modules, ast, isZh) {
     lines.push('- Cargo');
   }
   if (ecoSet.has('jvm')) {
-    const hasGradle = bs.some((b) => b.buildTool?.startsWith('Gradle'));
+    const hasGradle = bs.some((b: any) => b.buildTool?.startsWith('Gradle'));
     lines.push(isZh ? '- JDK 17+' : '- JDK 17+');
     lines.push(hasGradle ? '- Gradle' : '- Maven');
   }
@@ -1204,8 +1219,8 @@ export function renderGettingStarted(project, modules, ast, isZh) {
   lines.push('```');
   lines.push(`${project.name}/`);
   if (modules.targets.length > 0) {
-    const mainTargets = modules.targets.filter((t) => t.type !== 'test');
-    const testTargets = modules.targets.filter((t) => t.type === 'test');
+    const mainTargets = modules.targets.filter((t: any) => t.type !== 'test');
+    const testTargets = modules.targets.filter((t: any) => t.type === 'test');
     if (mainTargets.length > 0) {
       const srcDir = ecoSet.has('spm') || project.hasPackageSwift ? 'Sources' : 'src';
       lines.push(`├── ${srcDir}/`);
@@ -1287,7 +1302,7 @@ export function renderGettingStarted(project, modules, ast, isZh) {
 
   // ── 模块说明 ──
   if (modules.targets.length > 0) {
-    const mainTargets = modules.targets.filter((t) => t.type !== 'test');
+    const mainTargets = modules.targets.filter((t: any) => t.type !== 'test');
     if (mainTargets.length > 0) {
       lines.push(`## ${isZh ? '核心模块' : 'Core Modules'}`);
       lines.push('');
@@ -1324,7 +1339,7 @@ const BUILD_SYSTEM_FILES = Object.fromEntries(
  * 按生态系统输出构建步骤
  * @private
  */
-function _pushBuildSteps(lines, buildSys, projectName, isZh) {
+function _pushBuildSteps(lines: any, buildSys: any, projectName: any, isZh: any) {
   const { eco, buildTool } = buildSys;
 
   lines.push(`### ${isZh ? `使用 ${buildTool}` : `Using ${buildTool}`}`);
@@ -1428,7 +1443,7 @@ function _pushBuildSteps(lines, buildSys, projectName, isZh) {
 /**
  * 按分类拆分的代码模式文档
  */
-export function renderPatternCategory(patternData, isZh) {
+export function renderPatternCategory(patternData: any, isZh: any) {
   const { category, recipes } = patternData;
   const lines = [
     `# ${category}`,
@@ -1480,7 +1495,7 @@ export function renderPatternCategory(patternData, isZh) {
 /**
  * 协议参考文档
  */
-export function renderProtocolReference(ast, isZh, projectInfo) {
+export function renderProtocolReference(ast: any, isZh: any, projectInfo: any) {
   const langTerms = getLangTerms(projectInfo?.primaryLanguage || 'unknown');
   const il = isZh ? langTerms.interfaceLabel.zh : langTerms.interfaceLabel.en;
 
@@ -1522,7 +1537,7 @@ export function renderProtocolReference(ast, isZh, projectInfo) {
   }
 
   // 未分组的接口类型
-  const ungrouped = ast.protocols.filter((p) => !grouped.has(p));
+  const ungrouped = ast.protocols.filter((p: any) => !grouped.has(p));
   if (ungrouped.length > 0) {
     lines.push(`## ${isZh ? `其他${il}` : `Other ${il}`}`);
     lines.push('');
@@ -1547,7 +1562,7 @@ export function renderProtocolReference(ast, isZh, projectInfo) {
  * @param {boolean} isZh
  * @returns {string}
  */
-export function renderFolderOverview(profiles, projectInfo, isZh) {
+export function renderFolderOverview(profiles: any, projectInfo: any, isZh: any) {
   const lines = [
     `# ${isZh ? '项目结构分析' : 'Project Structure Analysis'}`,
     '',
@@ -1571,7 +1586,7 @@ export function renderFolderOverview(profiles, projectInfo, isZh) {
   lines.push(`    Root["${projectInfo.name}"]`);
 
   // 只显示深度 = 1 的顶层文件夹
-  const topLevel = profiles.filter((fp) => fp.depth === 1);
+  const topLevel = profiles.filter((fp: any) => fp.depth === 1);
 
   for (const fp of topLevel) {
     const sid = mermaidId(fp.name);
@@ -1580,7 +1595,7 @@ export function renderFolderOverview(profiles, projectInfo, isZh) {
   }
 
   // 画 import 关系边
-  const folderNames = new Set(profiles.map((fp) => fp.name));
+  const folderNames = new Set(profiles.map((fp: any) => fp.name));
   for (const fp of profiles) {
     const fromId = mermaidId(fp.name);
     for (const imp of fp.imports) {
@@ -1687,7 +1702,7 @@ export function renderFolderOverview(profiles, projectInfo, isZh) {
  * @param {boolean} isZh
  * @returns {string}
  */
-export function renderFolderProfile(fp, projectInfo, isZh) {
+export function renderFolderProfile(fp: any, projectInfo: any, isZh: any) {
   const lines = [
     `# ${fp.name}`,
     '',
@@ -1742,7 +1757,7 @@ export function renderFolderProfile(fp, projectInfo, isZh) {
     lines.push(
       `> ${fp.readme
         .split('\n')
-        .filter((l) => l.trim())
+        .filter((l: any) => l.trim())
         .slice(0, 5)
         .join('\n> ')}`
     );
@@ -1865,7 +1880,7 @@ export function renderFolderProfile(fp, projectInfo, isZh) {
 /**
  * 构建 AI 系统 Prompt (V3 — 撰写完整文章，非润色骨架)
  */
-export function buildAiSystemPrompt(isZh) {
+export function buildAiSystemPrompt(isZh: any) {
   if (isZh) {
     return [
       '你是 AutoSnippet Repo Wiki 文档撰写专家。',

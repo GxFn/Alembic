@@ -39,7 +39,7 @@ export class ServiceContainer {
    * @param {{ aiDependent?: boolean }} [options] 选项
    *   - aiDependent: 标记为 AI Provider 依赖项，热重载时自动清除缓存
    */
-  singleton(name, factory, options: any = {}) {
+  singleton(name: any, factory: any, options: any = {}) {
     if (options.aiDependent) {
       this._aiDependentSingletons = this._aiDependentSingletons || [];
       if (!this._aiDependentSingletons.includes(name)) {
@@ -188,7 +188,7 @@ export class ServiceContainer {
    *
    * @param {import('../external/ai/AiProvider.js').AiProvider} newProvider
    */
-  reloadAiProvider(newProvider) {
+  reloadAiProvider(newProvider: any) {
     const old = this.singletons.aiProvider;
     this.singletons.aiProvider = newProvider;
 
@@ -249,7 +249,7 @@ export class ServiceContainer {
    * 设置默认 UI 语言偏好（影响 Agent 回复语言）
    * @param {'zh'|'en'|null} lang
    */
-  setLang(lang) {
+  setLang(lang: any) {
     this.singletons._lang = lang || null;
   }
 
@@ -280,14 +280,14 @@ export class ServiceContainer {
   /**
    * 注册服务或工厂函数
    */
-  register(name, factory) {
+  register(name: any, factory: any) {
     this.services[name] = factory;
   }
 
   /**
    * 获取服务（通过工厂函数）
    */
-  get(name) {
+  get(name: any) {
     if (!this.services[name]) {
       throw new Error(`Service '${name}' not found in container`);
     }
@@ -315,7 +315,7 @@ export class ServiceContainer {
    * @param {object} [options] 传递给 ProjectGraph.build() 的选项
    * @returns {Promise<import('../core/ast/ProjectGraph.js').default|null>}
    */
-  async buildProjectGraph(projectRoot, options: any = {}) {
+  async buildProjectGraph(projectRoot: any, options: any = {}) {
     if (this.singletons.projectGraph) {
       return this.singletons.projectGraph;
     }
@@ -348,7 +348,7 @@ export class ServiceContainer {
           // 完全命中
           this.singletons.projectGraph = graph;
           this.logger.info(
-            `[ServiceContainer] ProjectGraph ⚡ 缓存命中 (${graph.getOverview()!.totalClasses} classes, ` +
+            `[ServiceContainer] ProjectGraph ⚡ 缓存命中 (${graph.getOverview()?.totalClasses} classes, ` +
               `${Date.now() - startTime}ms)`
           );
           return graph;
@@ -397,7 +397,7 @@ export class ServiceContainer {
    * @param {object} options
    * @returns {string[]}
    */
-  #collectSourceFilePaths(projectRoot, options: any = {}) {
+  #collectSourceFilePaths(projectRoot: any, options: any = {}) {
     const DEFAULTS_EXT = { '.m': true, '.h': true, '.swift': true };
     const extSet = new Set(options.extensions || Object.keys(DEFAULTS_EXT));
     const excludePatterns = options.excludePatterns || [
@@ -416,7 +416,7 @@ export class ServiceContainer {
     const maxFileSizeBytes = options.maxFileSizeBytes || 500_000;
     const results: string[] = [];
 
-    function walk(dir) {
+    function walk(dir: any) {
       if (results.length >= maxFiles) {
         return;
       }
@@ -432,7 +432,7 @@ export class ServiceContainer {
         }
         const fullPath = pathJoin(dir, entry.name);
         const relativePath = pathRelative(projectRoot, fullPath);
-        if (excludePatterns.some((p) => relativePath.includes(p))) {
+        if (excludePatterns.some((p: any) => relativePath.includes(p))) {
           continue;
         }
         if (entry.isDirectory()) {

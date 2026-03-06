@@ -16,7 +16,7 @@ const router = express.Router();
  */
 router.get(
   '/',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const snippetFactory = container.get('snippetFactory');
 
@@ -50,7 +50,7 @@ router.get(
  */
 router.get(
   '/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const snippetFactory = container.get('snippetFactory');
 

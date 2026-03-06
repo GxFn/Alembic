@@ -38,7 +38,7 @@ class BootstrapSession {
   status: any;
   summary: any;
   tasks: any;
-  constructor(sessionId) {
+  constructor(sessionId: any) {
     this.id = sessionId;
     this.startedAt = Date.now();
     this.completedAt = null;
@@ -47,7 +47,7 @@ class BootstrapSession {
     this.summary = null; // 完成后的摘要
   }
 
-  addTask(taskId, meta) {
+  addTask(taskId: any, meta: any) {
     this.tasks.set(taskId, {
       id: taskId,
       status: TaskStatus.SKELETON,
@@ -59,7 +59,7 @@ class BootstrapSession {
     });
   }
 
-  getTask(taskId) {
+  getTask(taskId: any) {
     return this.tasks.get(taskId);
   }
 
@@ -155,11 +155,11 @@ export class BootstrapTaskManager {
    * @param {Array<{id: string, meta: object}>} taskDefs 任务定义列表
    * @returns {BootstrapSession}
    */
-  startSession(taskDefs) {
+  startSession(taskDefs: any) {
     // ── 并发锁：如果上一个 session 还在运行，先中止 ──
     if (this.isRunning) {
       Logger.warn(
-        `[Bootstrap] Previous session ${this.#currentSession!.id} still running — aborting before starting new session`
+        `[Bootstrap] Previous session ${this.#currentSession?.id} still running — aborting before starting new session`
       );
       this.abortSession('Superseded by new bootstrap request');
     }
@@ -174,7 +174,7 @@ export class BootstrapTaskManager {
     Logger.info(`[Bootstrap] Session ${sessionId} started with ${taskDefs.length} tasks`);
     this.#emit('bootstrap:started', {
       sessionId,
-      tasks: taskDefs.map((t) => ({ id: t.id, ...t.meta })),
+      tasks: taskDefs.map((t: any) => ({ id: t.id, ...t.meta })),
       total: taskDefs.length,
       startedAt: this.#currentSession.startedAt,
     });
@@ -239,7 +239,7 @@ export class BootstrapTaskManager {
    * @param {string} sessionId
    * @returns {boolean}
    */
-  isSessionValid(sessionId) {
+  isSessionValid(sessionId: any) {
     // Session 在 running 或 completed 状态都有效 — completed 表示维度填充完成，
     // 但 Phase 5.5 Skills 生成仍需运行。只有被新 session 替代时才无效。
     return (
@@ -253,7 +253,7 @@ export class BootstrapTaskManager {
   /**
    * 标记单个任务开始填充
    */
-  markTaskFilling(taskId) {
+  markTaskFilling(taskId: any) {
     const session = this.#currentSession;
     if (!session) {
       return;
@@ -280,7 +280,7 @@ export class BootstrapTaskManager {
    * @param {string} taskId
    * @param {object} result 填充结果摘要 { created, items, ... }
    */
-  markTaskCompleted(taskId, result: any = {}) {
+  markTaskCompleted(taskId: any, result: any = {}) {
     const session = this.#currentSession;
     if (!session) {
       return;
@@ -318,7 +318,7 @@ export class BootstrapTaskManager {
   /**
    * 标记单个任务失败
    */
-  markTaskFailed(taskId, error) {
+  markTaskFailed(taskId: any, error: any) {
     const session = this.#currentSession;
     if (!session) {
       return;
@@ -381,7 +381,7 @@ export class BootstrapTaskManager {
    * @param {string} eventName 事件名（如 'refine:started'）
    * @param {object} data      事件负载
    */
-  emitProgress(eventName, data) {
+  emitProgress(eventName: any, data: any) {
     this.#emit(eventName, data);
   }
 
@@ -425,7 +425,7 @@ export class BootstrapTaskManager {
   /**
    * 发射事件到 EventBus + 推送到前端 Socket.io
    */
-  #emit(eventName, data) {
+  #emit(eventName: any, data: any) {
     // EventBus（供后端监听者使用）
     if (this.#eventBus) {
       try {

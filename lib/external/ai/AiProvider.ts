@@ -71,7 +71,7 @@ export class AiProvider {
     }
   }
 
-  _setRateLimitWindow(waitMs) {
+  _setRateLimitWindow(waitMs: any) {
     const safeWait = Math.max(0, Number(waitMs) || 0);
     if (safeWait <= 0) {
       return;
@@ -171,8 +171,8 @@ export class AiProvider {
     // 默认降级: 忽略 tools/toolChoice，走纯文本 chat()
     const messages = opts.messages || [];
     const history = messages
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({
+      .filter((m: any) => m.role === 'user' || m.role === 'assistant')
+      .map((m: any) => ({
         role: m.role === 'assistant' ? 'assistant' : 'user',
         content: m.content || '',
       }));
@@ -220,7 +220,7 @@ export class AiProvider {
   /**
    * 内部日志辅助（子类可通过 this.logger 覆盖）
    */
-  _log(level, message) {
+  _log(level: any, message: any) {
     try {
       if (this.logger && typeof this.logger[level] === 'function') {
         this.logger[level](message);
@@ -236,7 +236,7 @@ export class AiProvider {
    * @param {string} [lang] 语言代码，如 'zh', 'en'
    * @returns {string} 语言指令段落（为空则返回空字符串）
    */
-  _buildLangInstruction(lang) {
+  _buildLangInstruction(lang: any) {
     if (!lang || lang === 'en') {
       return '';
     }
@@ -272,7 +272,7 @@ export class AiProvider {
   /**
    * 根据文件扩展名检测语言特征，返回提示词适配参数
    */
-  _detectLanguageProfile(filesContent) {
+  _detectLanguageProfile(filesContent: any) {
     const extCounts: Record<string, any> = {};
     for (const f of filesContent) {
       const ext = (f.name || '').split('.').pop()?.toLowerCase() || '';
@@ -437,7 +437,7 @@ export class AiProvider {
    * @param {Array<object>} candidates 候选对象数组，每项至少含 {code, language, title?}
    * @returns {Promise<Array<object>>} enriched 候选数组（仅含补全的字段）
    */
-  async enrichCandidates(candidates, options: any = {}) {
+  async enrichCandidates(candidates: any, options: any = {}) {
     const prompt = this._buildEnrichPrompt(candidates, options);
     const parsed = await this.chatWithStructuredOutput(prompt, {
       openChar: '[',
@@ -450,9 +450,9 @@ export class AiProvider {
   /**
    * 构建 enrichCandidates 提示词
    */
-  _buildEnrichPrompt(candidates, options: any = {}) {
+  _buildEnrichPrompt(candidates: any, options: any = {}) {
     const items = candidates
-      .map((c, i) => {
+      .map((c: any, i: any) => {
         const existing: string[] = [];
         if (c.rationale) {
           existing.push(`rationale: ${c.rationale}`);
@@ -563,7 +563,7 @@ ${items}`;
    * 代理感知的 fetch — 自动检测代理并使用 undici ProxyAgent。
    * 子类的 _post() 应调用此方法替代全局 fetch()。
    */
-  async _fetch(url, options: any = {}) {
+  async _fetch(url: any, options: any = {}) {
     const proxyUrl = this._resolveProxyUrl();
 
     if (proxyUrl) {
@@ -584,7 +584,7 @@ ${items}`;
    * 从 LLM 响应提取 JSON (extractJSON kept below)
    * 支持截断修复：当 AI 输出被 token 限制截断时，尝试关闭未完成的 JSON 结构
    */
-  extractJSON(text, openChar = '{', closeChar = '}') {
+  extractJSON(text: any, openChar = '{', closeChar = '}') {
     if (!text) {
       return null;
     }
@@ -619,7 +619,7 @@ ${items}`;
    * 策略 1（主路径）: 字符级解析找到最后一个完整的顶层 {...} 对象
    * 策略 2（回退路径）: 正则 + 渐进 JSON.parse 尝试（应对代码段中未转义引号导致 inString 追踪失效）
    */
-  _repairTruncatedArray(text) {
+  _repairTruncatedArray(text: any) {
     // ── 策略 1：字符级深度追踪 ──
     const charResult = this._repairByCharTracking(text);
     if (charResult) {
@@ -638,7 +638,7 @@ ${items}`;
   /**
    * 字符级深度追踪修复（原逻辑，处理标准 JSON）
    */
-  _repairByCharTracking(text) {
+  _repairByCharTracking(text: any) {
     let depth = 0;
     let inString = false;
     let isEscaped = false;
@@ -683,7 +683,7 @@ ${items}`;
    * 正则回退修复 — 不依赖 inString 追踪
    * 寻找所有 "},\s*{" 或 "}\s*]" 边界，从后往前尝试 JSON.parse
    */
-  _repairByRegexFallback(text) {
+  _repairByRegexFallback(text: any) {
     // 收集所有 "}" 后跟 "," 或空白的位置（可能是对象边界）
     const candidates: any[] = [];
     const re = /\}[\s,]*(?=\s*[[{]|$)/g;
@@ -705,7 +705,7 @@ ${items}`;
   /**
    * 在指定位置截断并尝试闭合 JSON 数组
    */
-  _tryRepairAt(text, endPos) {
+  _tryRepairAt(text: any, endPos: any) {
     let repaired = text.slice(0, endPos + 1);
     // 去掉尾逗号
     repaired = repaired.replace(/,\s*$/, '');
@@ -738,7 +738,7 @@ ${items}`;
    *
    * 这避免了 AI 服务宕机时无意义的重试风暴。
    */
-  async _withRetry(fn, retries = this.maxRetries, baseDelay = 2000) {
+  async _withRetry(fn: any, retries = this.maxRetries, baseDelay = 2000) {
     // ── 熔断器检查 ──
     if (this._circuitState === 'OPEN') {
       const elapsed = Date.now() - (this._circuitOpenedAt || 0);

@@ -43,7 +43,7 @@ export class SystemPromptBuilder {
    * 更新文件缓存引用 (bootstrap 场景: allFiles 注入后更新)
    * @param {Array|null} files
    */
-  setFileCache(files) {
+  setFileCache(files: any) {
     this.#fileCache = files;
   }
 
@@ -54,7 +54,7 @@ export class SystemPromptBuilder {
    * @param {object} context 额外上下文
    * @returns {string}
    */
-  build(caps, context: any = {}) {
+  build(caps: any, context: any = {}) {
     const parts: any[] = [];
 
     // Persona (角色定义)
@@ -65,7 +65,7 @@ export class SystemPromptBuilder {
     // fileCache 文件清单
     if (this.#fileCache && this.#fileCache.length > 0) {
       const fileList = this.#fileCache
-        .map((f) => {
+        .map((f: any) => {
           const lines = f.content ? f.content.split('\n').length : 0;
           const name = f.name || f.relativePath || 'unknown';
           return `- ${name} (${lines} 行${f.language ? `, ${f.language}` : ''})`;
@@ -112,7 +112,7 @@ export class SystemPromptBuilder {
    * @param {object}  opts.budget 预算配置
    * @returns {string} 可能追加了轮次预算段的提示词
    */
-  static injectBudget(prompt, { source, tracker, budget }) {
+  static injectBudget(prompt: any, { source, tracker, budget }: any) {
     if (source !== 'system' || !tracker || prompt.includes('轮次预算')) {
       return prompt;
     }

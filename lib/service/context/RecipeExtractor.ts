@@ -25,7 +25,7 @@ export class RecipeExtractor {
    * @param {string} filePath
    * @returns {object|null}
    */
-  extractFromFile(filePath) {
+  extractFromFile(filePath: any) {
     if (!existsSync(filePath)) {
       return null;
     }
@@ -40,7 +40,7 @@ export class RecipeExtractor {
    * @param {string} filePath
    * @returns {object}
    */
-  extractFromContent(content, filename = 'unknown', filePath = '') {
+  extractFromContent(content: any, filename = 'unknown', filePath = '') {
     // 1. 解析 frontmatter
     const { frontmatter, body }: any = this.#parseFrontmatter(content);
 
@@ -94,7 +94,7 @@ export class RecipeExtractor {
 
   // --- Frontmatter ---
 
-  #parseFrontmatter(content) {
+  #parseFrontmatter(content: any) {
     const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
     if (!match) {
       return { frontmatter: {}, body: content };
@@ -112,7 +112,7 @@ export class RecipeExtractor {
           value = value
             .slice(1, -1)
             .split(',')
-            .map((s) => s.trim().replace(/^['"]|['"]$/g, ''));
+            .map((s: any) => s.trim().replace(/^['"]|['"]$/g, ''));
         } else if (value === 'true') {
           value = true;
         } else if (value === 'false') {
@@ -131,14 +131,14 @@ export class RecipeExtractor {
 
   // --- Title ---
 
-  #extractTitle(body) {
+  #extractTitle(body: any) {
     const match = body.match(/^#\s+(.+)/m);
     return match ? match[1].trim() : null;
   }
 
   // --- Code Blocks ---
 
-  #extractCodeBlocks(body) {
+  #extractCodeBlocks(body: any) {
     const blocks: { language: any; code: any; startIndex: any }[] = [];
     const regex = /```(\w*)\n([\s\S]*?)```/g;
     let match;
@@ -154,7 +154,7 @@ export class RecipeExtractor {
 
   // --- Language Detection ---
 
-  #inferLanguage(body, filename, codeBlocks) {
+  #inferLanguage(body: any, filename: any, codeBlocks: any) {
     // 从代码块推断
     if (codeBlocks.length > 0) {
       const lang = codeBlocks[0].language;
@@ -191,7 +191,7 @@ export class RecipeExtractor {
 
   // --- Category ---
 
-  #inferCategory(title, body, language) {
+  #inferCategory(title: any, body: any, language: any) {
     const text = `${title} ${body}`.toLowerCase();
     const categories = [
       {
@@ -236,10 +236,10 @@ export class RecipeExtractor {
 
   // --- Semantic Tags ---
 
-  #extractSemanticTags(body, codeBlocks) {
+  #extractSemanticTags(body: any, codeBlocks: any) {
     const tags = new Set();
     const text = body.toLowerCase();
-    const code = codeBlocks.map((b) => b.code).join('\n');
+    const code = codeBlocks.map((b: any) => b.code).join('\n');
 
     // 关键词标签
     const tagPatterns = [
@@ -265,12 +265,12 @@ export class RecipeExtractor {
 
   // --- Quality Analysis ---
 
-  #analyzeCodeQuality(codeBlocks, body) {
+  #analyzeCodeQuality(codeBlocks: any, body: any) {
     if (codeBlocks.length === 0) {
       return { score: 0.5, hasCode: false };
     }
 
-    const allCode = codeBlocks.map((b) => b.code).join('\n');
+    const allCode = codeBlocks.map((b: any) => b.code).join('\n');
     let score = 0.5;
 
     // 有测试 +0.1
@@ -308,7 +308,7 @@ export class RecipeExtractor {
 
   // --- Description ---
 
-  #extractDescription(body) {
+  #extractDescription(body: any) {
     // 取第一段非标题非代码的文本
     const lines = body.split('\n');
     const paragraphs: any[] = [];
@@ -338,7 +338,7 @@ export class RecipeExtractor {
 
   // --- ID Generation ---
 
-  #generateId(input) {
+  #generateId(input: any) {
     return createHash('md5').update(input).digest('hex').slice(0, 12);
   }
 }

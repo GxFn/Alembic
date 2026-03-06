@@ -27,13 +27,13 @@ const SILENT_PATHS = [
 /**
  * 从 originalUrl 中提取 pathname（去除 query string）
  */
-function extractPath(originalUrl) {
+function extractPath(originalUrl: any) {
   const idx = originalUrl.indexOf('?');
   return idx === -1 ? originalUrl : originalUrl.slice(0, idx);
 }
 
-export function requestLogger(logger) {
-  return (req, res, next) => {
+export function requestLogger(logger: any) {
+  return (req: any, res: any, next: any) => {
     const startTime = Date.now();
     // 在中间件进入时捕获 originalUrl — 此值不会被 Express 路由修改
     const originalPath = extractPath(req.originalUrl);

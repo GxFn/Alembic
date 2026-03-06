@@ -8,7 +8,7 @@ import { PermissionDenied } from '../../shared/errors/BaseError.js';
 export class PermissionManager {
   constitution: any;
   logger: any;
-  constructor(constitution) {
+  constructor(constitution: any) {
     this.constitution = constitution;
     this.logger = Logger.getInstance();
   }
@@ -16,7 +16,7 @@ export class PermissionManager {
   /**
    * 检查权限（3-tuple: actor, action, resource）
    */
-  check(actor, action, resource) {
+  check(actor: any, action: any, resource: any) {
     // 获取角色定义
     const role = this.constitution.getRole(actor);
 
@@ -127,7 +127,7 @@ export class PermissionManager {
    * - read:recipes -> read:recipes（已规范化）
    * - perm_external_agent_read_recipes -> read:recipes（测试使用的格式）
    */
-  _normalizeAction(action) {
+  _normalizeAction(action: any) {
     // 如果已经包含冒号，直接返回
     if (action.includes(':')) {
       return action;
@@ -141,7 +141,7 @@ export class PermissionManager {
       if (parts.length >= 4) {
         // 尝试找到 action 部分（常见的 action 包括 read, create, delete, submit, approve, reject）
         const commonActions = ['read', 'create', 'delete', 'submit', 'approve', 'reject', 'write'];
-        const actionIndex = parts.findIndex((p, i) => i > 1 && commonActions.includes(p));
+        const actionIndex = parts.findIndex((p: any, i: any) => i > 1 && commonActions.includes(p));
 
         if (actionIndex !== -1) {
           // 提取从 action 开始的部分，用冒号连接
@@ -160,7 +160,7 @@ export class PermissionManager {
   /**
    * 检查特殊权限
    */
-  checkSpecialPermissions(actor, action, resource, permissions) {
+  checkSpecialPermissions(actor: any, action: any, resource: any, permissions: any) {
     // 例如：read:audit_logs:self - 只能读自己的审计日志
     if (action === 'read' && resource.startsWith('/audit_logs')) {
       if (permissions.includes('read:audit_logs:self')) {
@@ -178,7 +178,7 @@ export class PermissionManager {
    *      /candidates/456 → candidates
    *      { type: 'recipes', id: '123' } → recipes
    */
-  getResourceType(resource) {
+  getResourceType(resource: any) {
     if (typeof resource === 'string') {
       // 处理路径： /recipes/123 → recipes
       const match = resource.match(/^\/([^/]+)/);
@@ -203,7 +203,7 @@ export class PermissionManager {
   /**
    * 强制权限检查（失败时抛异常）
    */
-  enforce(actor, action, resource) {
+  enforce(actor: any, action: any, resource: any) {
     const result = this.check(actor, action, resource);
 
     if (!result.allowed) {
@@ -225,8 +225,8 @@ export class PermissionManager {
   /**
    * 批量检查权限
    */
-  checkMultiple(checks) {
-    return checks.map(({ actor, action, resource }) => ({
+  checkMultiple(checks: any) {
+    return checks.map(({ actor, action, resource }: any) => ({
       actor,
       action,
       resource,
@@ -237,7 +237,7 @@ export class PermissionManager {
   /**
    * 获取角色的所有权限
    */
-  getRolePermissions(actor) {
+  getRolePermissions(actor: any) {
     const role = this.constitution.getRole(actor);
     return role ? role.permissions : [];
   }
@@ -245,7 +245,7 @@ export class PermissionManager {
   /**
    * 获取角色的约束条件
    */
-  getRoleConstraints(actor) {
+  getRoleConstraints(actor: any) {
     const role = this.constitution.getRole(actor);
     return role ? role.constraints : [];
   }

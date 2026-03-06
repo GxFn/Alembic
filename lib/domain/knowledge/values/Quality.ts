@@ -27,7 +27,7 @@ export class Quality {
    * @param {Quality|Object|null} input
    * @returns {Quality}
    */
-  static from(input) {
+  static from(input: any) {
     if (input instanceof Quality) {
       return input;
     }
@@ -57,7 +57,7 @@ export class Quality {
    * @param {number} score 0-1
    * @returns {string}
    */
-  static calcGrade(score) {
+  static calcGrade(score: any) {
     if (score >= 0.9) {
       return 'A';
     }
@@ -91,7 +91,7 @@ export class Quality {
    * @param {Object} data
    * @returns {Quality}
    */
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     return Quality.from(data);
   }
 }

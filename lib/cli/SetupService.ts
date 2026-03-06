@@ -71,7 +71,7 @@ export class SetupService {
   /**
    * @param {{ projectRoot: string, force?: boolean }} options
    */
-  constructor(options) {
+  constructor(options: any) {
     this.projectRoot = resolve(options.projectRoot);
     this.projectName = this.projectRoot.split('/').pop();
     this.force = options.force || false;
@@ -124,7 +124,7 @@ export class SetupService {
   }
 
   /** @private 格式化步骤结果的简要信息 */
-  _formatStepDetail(r) {
+  _formatStepDetail(r: any) {
     if (!r) {
       return '';
     }
@@ -143,8 +143,8 @@ export class SetupService {
 
   printSummary() {
     const results = this._results || [];
-    const _ok = results.filter((r) => r.ok).length;
-    const _fail = results.filter((r) => !r.ok).length;
+    const _ok = results.filter((r: any) => r.ok).length;
+    const _fail = results.filter((r: any) => !r.ok).length;
   }
 
   /* ═══ Step 1: 运行时目录与配置 ═══════════════════════ */
@@ -476,7 +476,7 @@ export class SetupService {
    * @private 从 AutoSnippet/recipes/*.md + candidates/*.md 同步到 DB 缓存
    * 委托 KnowledgeSyncService 执行全字段同步（setup 场景跳过违规记录）
    */
-  async _syncRecipesToDB(db) {
+  async _syncRecipesToDB(db: any) {
     const { KnowledgeSyncService } = await import('./KnowledgeSyncService.js');
     const syncService = new KnowledgeSyncService(this.projectRoot);
     const report = syncService.sync(db, { skipViolations: true });
@@ -545,7 +545,7 @@ export class SetupService {
   }
 
   /** @private 在指定目录执行 git 命令 */
-  _git(args, cwd) {
+  _git(args: any, cwd: any) {
     try {
       return execSync(`git ${args.join(' ')}`, {
         cwd,

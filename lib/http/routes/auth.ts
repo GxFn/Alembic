@@ -43,7 +43,7 @@ if (!process.env.ASD_AUTH_SECRET) {
 //  Token helpers
 // ═══════════════════════════════════════════════════════
 
-function createToken(username) {
+function createToken(username: any) {
   const payload = {
     sub: username,
     role: 'developer',
@@ -55,7 +55,7 @@ function createToken(username) {
   return `${payloadB64}.${sig}`;
 }
 
-function verifyToken(token) {
+function verifyToken(token: any) {
   if (!token || typeof token !== 'string') {
     return null;
   }
@@ -93,7 +93,7 @@ function verifyToken(token) {
  */
 router.post(
   '/login',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { username, password } = req.body || {};
 
     if (!username || !password) {
@@ -136,7 +136,7 @@ router.post(
  */
 router.get(
   '/me',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
     const payload = verifyToken(token);

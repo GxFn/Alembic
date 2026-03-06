@@ -19,7 +19,7 @@ export class RuleLearner {
   #learnerPath;
   #data; // { ruleStats: { [ruleId]: { triggers, correct, falsePositive, falseNegative } } }
 
-  constructor(projectRoot, options: any = {}) {
+  constructor(projectRoot: any, options: any = {}) {
     const kbDir = options.knowledgeBaseDir || 'AutoSnippet';
     this.#learnerPath = join(projectRoot, kbDir, 'guard-learner.json');
     pathGuard.assertProjectWriteSafe(this.#learnerPath);
@@ -32,7 +32,7 @@ export class RuleLearner {
    * @param {string} ruleId
    * @param {{ filePath?: string, message?: string }} context
    */
-  recordTrigger(ruleId, context: any = {}) {
+  recordTrigger(ruleId: any, context: any = {}) {
     const stat = this.#ensureStat(ruleId);
     stat.triggers++;
     const now = new Date().toISOString();
@@ -48,7 +48,7 @@ export class RuleLearner {
    * @param {string} ruleId
    * @param {'correct'|'falsePositive'|'falseNegative'} feedbackType
    */
-  recordFeedback(ruleId, feedbackType) {
+  recordFeedback(ruleId: any, feedbackType: any) {
     const stat = this.#ensureStat(ruleId);
     if (feedbackType === 'correct') {
       stat.correct++;
@@ -66,7 +66,7 @@ export class RuleLearner {
    * @param {string} ruleId
    * @returns {{ precision: number, recall: number, f1: number, triggers: number, falsePositiveRate: number }}
    */
-  getMetrics(ruleId) {
+  getMetrics(ruleId: any) {
     const stat = this.#data.ruleStats[ruleId];
     if (!stat || stat.triggers === 0) {
       return { precision: 1, recall: 1, f1: 1, triggers: 0, falsePositiveRate: 0 };
@@ -214,7 +214,7 @@ export class RuleLearner {
    * @param {string} ruleId
    * @returns {{ status: string, triggers: number, precision: number, recommendation: string, daysSinceFirstTrigger?: number }}
    */
-  trackRuleEffectiveness(ruleId) {
+  trackRuleEffectiveness(ruleId: any) {
     const stat = this.#data.ruleStats[ruleId];
     if (!stat) {
       return { status: 'no_data', triggers: 0, precision: 1, recommendation: 'monitor' };
@@ -265,7 +265,7 @@ export class RuleLearner {
 
   // ─── 私有 ─────────────────────────────────────────────
 
-  #ensureStat(ruleId) {
+  #ensureStat(ruleId: any) {
     if (!this.#data.ruleStats[ruleId]) {
       this.#data.ruleStats[ruleId] = {
         triggers: 0,
@@ -305,7 +305,7 @@ export class RuleLearner {
     }
   }
 
-  #migrateOldPath(projectRoot, internalDir) {
+  #migrateOldPath(projectRoot: any, internalDir: any) {
     try {
       const oldPath = join(projectRoot, internalDir, 'guard-learner.json');
       if (existsSync(oldPath) && !existsSync(this.#learnerPath)) {

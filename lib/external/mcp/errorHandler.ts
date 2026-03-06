@@ -27,7 +27,7 @@ const logger = Logger.getInstance();
  * @param {Error} err
  * @returns {string}
  */
-function inferErrorCode(err) {
+function inferErrorCode(err: any) {
   if (err instanceof ValidationError) {
     return 'VALIDATION_ERROR';
   }
@@ -62,8 +62,8 @@ function inferErrorCode(err) {
  *     // ... 正常返回 envelope(...)
  *   });
  */
-export function wrapHandler(toolName, handlerFn) {
-  return async function wrappedHandler(ctx, args) {
+export function wrapHandler(toolName: any, handlerFn: any) {
+  return async function wrappedHandler(ctx: any, args: any) {
     const t0 = Date.now();
     try {
       return await handlerFn(ctx, args);
@@ -103,7 +103,7 @@ export function wrapHandler(toolName, handlerFn) {
  *   import * as rawSearchHandlers from './handlers/search.js';
  *   const searchHandlers = wrapHandlers('autosnippet', rawSearchHandlers);
  */
-export function wrapHandlers(prefix, handlersModule) {
+export function wrapHandlers(prefix: any, handlersModule: any) {
   const wrapped: Record<string, any> = {};
   for (const [key, fn] of Object.entries(handlersModule)) {
     if (typeof fn === 'function') {

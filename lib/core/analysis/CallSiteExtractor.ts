@@ -40,7 +40,7 @@
  * @param {object} ctx - walker context (含 classes, methods, callSites, references 等)
  * @param {string} lang 语言标识
  */
-export function extractCallSitesTS(root, ctx, lang) {
+export function extractCallSitesTS(root: any, ctx: any, lang: any) {
   // 收集所有 function/method body 节点与其上下文
   const scopes = _collectTSScopes(root);
 
@@ -57,10 +57,10 @@ export function extractCallSitesTS(root, ctx, lang) {
  * @param {TreeSitterNode} root
  * @returns {Array<{ body: TreeSitterNode, className: string|null, methodName: string }>}
  */
-function _collectTSScopes(root) {
+function _collectTSScopes(root: any) {
   const scopes: { body: any; className: any; methodName: any }[] = [];
 
-  function walk(node, className) {
+  function walk(node: any, className: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
 
@@ -68,9 +68,10 @@ function _collectTSScopes(root) {
         case 'class_declaration':
         case 'abstract_class_declaration': {
           const name =
-            child.namedChildren.find((c) => c.type === 'type_identifier' || c.type === 'identifier')
-              ?.text || null;
-          const body = child.namedChildren.find((c) => c.type === 'class_body');
+            child.namedChildren.find(
+              (c: any) => c.type === 'type_identifier' || c.type === 'identifier'
+            )?.text || null;
+          const body = child.namedChildren.find((c: any) => c.type === 'class_body');
           if (body && name) {
             walk(body, name);
           }
@@ -80,12 +81,12 @@ function _collectTSScopes(root) {
         case 'method_definition': {
           const name =
             child.namedChildren.find(
-              (c) =>
+              (c: any) =>
                 c.type === 'property_identifier' ||
                 c.type === 'identifier' ||
                 c.type === 'computed_property_name'
             )?.text || 'unknown';
-          const body = child.namedChildren.find((c) => c.type === 'statement_block');
+          const body = child.namedChildren.find((c: any) => c.type === 'statement_block');
           if (body) {
             scopes.push({ body, className, methodName: name });
           }
@@ -93,8 +94,9 @@ function _collectTSScopes(root) {
         }
 
         case 'function_declaration': {
-          const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
-          const body = child.namedChildren.find((c) => c.type === 'statement_block');
+          const name =
+            child.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'unknown';
+          const body = child.namedChildren.find((c: any) => c.type === 'statement_block');
           if (body) {
             scopes.push({ body, className, methodName: name });
           }
@@ -106,12 +108,12 @@ function _collectTSScopes(root) {
           // const foo = () => { ... }
           for (const decl of child.namedChildren) {
             if (decl.type === 'variable_declarator') {
-              const nameNode = decl.namedChildren.find((c) => c.type === 'identifier');
+              const nameNode = decl.namedChildren.find((c: any) => c.type === 'identifier');
               const valueNode = decl.namedChildren.find(
-                (c) => c.type === 'arrow_function' || c.type === 'function'
+                (c: any) => c.type === 'arrow_function' || c.type === 'function'
               );
               if (nameNode && valueNode) {
-                const body = valueNode.namedChildren.find((c) => c.type === 'statement_block');
+                const body = valueNode.namedChildren.find((c: any) => c.type === 'statement_block');
                 if (body) {
                   scopes.push({ body, className, methodName: nameNode.text });
                 }
@@ -152,12 +154,12 @@ function _collectTSScopes(root) {
  * @param {string} methodName 所在方法名
  * @param {object} ctx - walker context
  */
-function _extractCallSitesFromBody(bodyNode, className, methodName, ctx) {
+function _extractCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;
   }
 
-  function walk(node, isAwaited) {
+  function walk(node: any, isAwaited: any) {
     // 跳过语法错误节点 (Issue #17: 防御性处理)
     if (!node || node.type === 'ERROR' || node.isMissing) {
       return;
@@ -177,7 +179,7 @@ function _extractCallSitesFromBody(bodyNode, className, methodName, ctx) {
         ctx.callSites.push(callSite);
       }
       // 继续遍历参数中的嵌套调用
-      const args = node.namedChildren.find((c) => c.type === 'arguments');
+      const args = node.namedChildren.find((c: any) => c.type === 'arguments');
       if (args) {
         for (let i = 0; i < args.namedChildCount; i++) {
           walk(args.namedChild(i), false);
@@ -188,7 +190,7 @@ function _extractCallSitesFromBody(bodyNode, className, methodName, ctx) {
 
     if (node.type === 'new_expression') {
       const ctor = node.namedChildren.find(
-        (c) => c.type === 'identifier' || c.type === 'member_expression'
+        (c: any) => c.type === 'identifier' || c.type === 'member_expression'
       );
       if (ctor) {
         ctx.callSites.push({
@@ -204,7 +206,7 @@ function _extractCallSitesFromBody(bodyNode, className, methodName, ctx) {
         });
       }
       // 继续遍历参数中的嵌套调用
-      const args = node.namedChildren.find((c) => c.type === 'arguments');
+      const args = node.namedChildren.find((c: any) => c.type === 'arguments');
       if (args) {
         for (let i = 0; i < args.namedChildCount; i++) {
           walk(args.namedChild(i), false);
@@ -217,16 +219,18 @@ function _extractCallSitesFromBody(bodyNode, className, methodName, ctx) {
     // <MyComponent /> 或 <MyComponent>...</MyComponent> → 视为 constructor 调用
     if (node.type === 'jsx_self_closing_element' || node.type === 'jsx_opening_element') {
       const tagNode =
-        node.namedChildren.find((c) => c.type === 'identifier' || c.type === 'jsx_identifier') ||
         node.namedChildren.find(
-          (c) => c.type === 'member_expression' || c.type === 'jsx_member_expression'
+          (c: any) => c.type === 'identifier' || c.type === 'jsx_identifier'
+        ) ||
+        node.namedChildren.find(
+          (c: any) => c.type === 'member_expression' || c.type === 'jsx_member_expression'
         );
       if (tagNode) {
         const tagName = tagNode.text;
         // 仅大写开头为组件 (小写为 HTML 原生标签如 div, span)
         if (tagName && /^[A-Z]/.test(tagName)) {
           // 计算 JSX 属性数量作为 argCount
-          const attrNodes = node.namedChildren.filter((c) => c.type === 'jsx_attribute');
+          const attrNodes = node.namedChildren.filter((c: any) => c.type === 'jsx_attribute');
           ctx.callSites.push({
             callee: tagName,
             callerMethod: methodName,
@@ -271,7 +275,7 @@ function _extractCallSitesFromBody(bodyNode, className, methodName, ctx) {
  * @param {boolean} isAwaited 是否被 await
  * @returns {CallSite|null}
  */
-function _parseTSCallExpression(node, className, methodName, isAwaited) {
+function _parseTSCallExpression(node: any, className: any, methodName: any, isAwaited: any) {
   const func = node.namedChildren[0]; // call_expression 的第一个子节点是被调用者
   if (!func) {
     return null;
@@ -284,8 +288,8 @@ function _parseTSCallExpression(node, className, methodName, isAwaited) {
 
   if (func.type === 'member_expression') {
     // obj.method() — method call
-    const object = func.namedChildren.find((c) => c.type !== 'property_identifier');
-    const prop = func.namedChildren.find((c) => c.type === 'property_identifier');
+    const object = func.namedChildren.find((c: any) => c.type !== 'property_identifier');
+    const prop = func.namedChildren.find((c: any) => c.type === 'property_identifier');
     receiver = object?.text || null;
     callee = prop?.text || func.text;
     callType = 'method';
@@ -346,7 +350,7 @@ function _parseTSCallExpression(node, className, methodName, isAwaited) {
  * @param {object} ctx - walker context
  * @param {string} lang 语言标识
  */
-export function extractCallSitesPython(root, ctx, lang) {
+export function extractCallSitesPython(root: any, ctx: any, lang: any) {
   const scopes = _collectPyScopes(root);
 
   for (const scope of scopes) {
@@ -360,17 +364,17 @@ export function extractCallSitesPython(root, ctx, lang) {
  * @param {TreeSitterNode} root
  * @returns {Array<{ body: TreeSitterNode, className: string|null, methodName: string }>}
  */
-function _collectPyScopes(root) {
+function _collectPyScopes(root: any) {
   const scopes: { body: any; className: any; methodName: any }[] = [];
 
-  function walk(node, className) {
+  function walk(node: any, className: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
 
       switch (child.type) {
         case 'class_definition': {
-          const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || null;
-          const body = child.namedChildren.find((c) => c.type === 'block');
+          const name = child.namedChildren.find((c: any) => c.type === 'identifier')?.text || null;
+          const body = child.namedChildren.find((c: any) => c.type === 'block');
           if (body && name) {
             walk(body, name);
           }
@@ -378,8 +382,9 @@ function _collectPyScopes(root) {
         }
 
         case 'function_definition': {
-          const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
-          const body = child.namedChildren.find((c) => c.type === 'block');
+          const name =
+            child.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'unknown';
+          const body = child.namedChildren.find((c: any) => c.type === 'block');
           if (body) {
             scopes.push({ body, className, methodName: name });
           }
@@ -389,18 +394,19 @@ function _collectPyScopes(root) {
         case 'decorated_definition': {
           // decorator 后面跟着 function_definition 或 class_definition
           const actualDef = child.namedChildren.find(
-            (c) => c.type === 'class_definition' || c.type === 'function_definition'
+            (c: any) => c.type === 'class_definition' || c.type === 'function_definition'
           );
           if (actualDef?.type === 'class_definition') {
-            const name = actualDef.namedChildren.find((c) => c.type === 'identifier')?.text || null;
-            const body = actualDef.namedChildren.find((c) => c.type === 'block');
+            const name =
+              actualDef.namedChildren.find((c: any) => c.type === 'identifier')?.text || null;
+            const body = actualDef.namedChildren.find((c: any) => c.type === 'block');
             if (body && name) {
               walk(body, name);
             }
           } else if (actualDef?.type === 'function_definition') {
             const name =
-              actualDef.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
-            const body = actualDef.namedChildren.find((c) => c.type === 'block');
+              actualDef.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'unknown';
+            const body = actualDef.namedChildren.find((c: any) => c.type === 'block');
             if (body) {
               scopes.push({ body, className, methodName: name });
             }
@@ -429,12 +435,12 @@ function _collectPyScopes(root) {
  * @param {string} methodName
  * @param {object} ctx
  */
-function _extractPyCallSitesFromBody(bodyNode, className, methodName, ctx) {
+function _extractPyCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;
   }
 
-  function walk(node, isAwaited) {
+  function walk(node: any, isAwaited: any) {
     // 跳过语法错误节点 (Issue #17: 防御性处理)
     if (!node || node.type === 'ERROR' || node.isMissing) {
       return;
@@ -453,7 +459,7 @@ function _extractPyCallSitesFromBody(bodyNode, className, methodName, ctx) {
         ctx.callSites.push(callSite);
       }
       // 继续遍历参数中的嵌套调用
-      const argList = node.namedChildren.find((c) => c.type === 'argument_list');
+      const argList = node.namedChildren.find((c: any) => c.type === 'argument_list');
       if (argList) {
         for (let i = 0; i < argList.namedChildCount; i++) {
           walk(argList.namedChild(i), false);
@@ -480,7 +486,7 @@ function _extractPyCallSitesFromBody(bodyNode, className, methodName, ctx) {
  * @param {boolean} isAwaited
  * @returns {CallSite|null}
  */
-function _parsePyCallExpression(node, className, methodName, isAwaited) {
+function _parsePyCallExpression(node: any, className: any, methodName: any, isAwaited: any) {
   // Python call 节点: function 是第一个 named child
   const func = node.namedChildren[0];
   if (!func) {
@@ -495,10 +501,10 @@ function _parsePyCallExpression(node, className, methodName, isAwaited) {
   if (func.type === 'attribute') {
     // obj.method() — method call
     const object = func.namedChildren.find(
-      (c) => c.type !== 'identifier' || c === func.namedChildren[0]
+      (c: any) => c.type !== 'identifier' || c === func.namedChildren[0]
     );
     const prop = func.namedChildren.find(
-      (c) => c.type === 'identifier' && c !== func.namedChildren[0]
+      (c: any) => c.type === 'identifier' && c !== func.namedChildren[0]
     );
 
     // attribute 节点结构: object.attribute — 第一个子节点是 object, 第二个是 attribute name
@@ -569,7 +575,7 @@ const _extractors = new Map([
  * @param {string} lang
  * @returns {((root: TreeSitterNode, ctx: object, lang: string) => void)|null}
  */
-export function getCallSiteExtractor(lang) {
+export function getCallSiteExtractor(lang: any) {
   return _extractors.get(lang) || null;
 }
 
@@ -581,7 +587,7 @@ export function getCallSiteExtractor(lang) {
  * @param {object} ctx
  * @param {string} lang
  */
-export function defaultExtractCallSites(root, ctx, lang) {
+export function defaultExtractCallSites(root: any, ctx: any, lang: any) {
   // 对于未适配的语言，暂不提取（降级为空）
   // Phase 5.1 将逐步增加 Go / Rust / Java / Kotlin 等
 }
@@ -591,8 +597,8 @@ export function defaultExtractCallSites(root, ctx, lang) {
 /**
  * 计算参数数量 (TS/JS)
  */
-function _countArgs(node) {
-  const args = node.namedChildren.find((c) => c.type === 'arguments');
+function _countArgs(node: any) {
+  const args = node.namedChildren.find((c: any) => c.type === 'arguments');
   if (!args) {
     return 0;
   }
@@ -602,8 +608,8 @@ function _countArgs(node) {
 /**
  * 计算参数数量 (Python)
  */
-function _countPyArgs(node) {
-  const args = node.namedChildren.find((c) => c.type === 'argument_list');
+function _countPyArgs(node: any) {
+  const args = node.namedChildren.find((c: any) => c.type === 'argument_list');
   if (!args) {
     return 0;
   }
@@ -617,7 +623,7 @@ function _countPyArgs(node) {
  * @param {string|null} receiver
  * @returns {boolean}
  */
-function _isNoiseCall(callee, receiver) {
+function _isNoiseCall(callee: any, receiver: any) {
   // 常见内置调用噪声
   const NOISE_RECEIVERS = new Set([
     'console',

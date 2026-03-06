@@ -47,7 +47,7 @@ function _linuxBackend() {
 }
 
 /** 缓存 Linux 后端检测结果 */
-let _cachedLinuxBackend;
+let _cachedLinuxBackend: any;
 function getLinuxBackend() {
   if (_cachedLinuxBackend === undefined) {
     _cachedLinuxBackend = _linuxBackend();
@@ -92,7 +92,7 @@ export function read() {
  * @param {string} text
  * @returns {boolean}
  */
-export function write(text) {
+export function write(text: any) {
   try {
     if (PLATFORM === 'darwin') {
       execSync('pbcopy', { input: text, timeout: TIMEOUT, stdio: ['pipe', 'ignore', 'ignore'] });
@@ -140,7 +140,7 @@ export function write(text) {
  * @param {Function} fn 在剪贴板保存期间执行的函数
  * @returns {Promise<*>} fn 的返回值
  */
-export async function withClipboardSave(fn) {
+export async function withClipboardSave(fn: any) {
   const saved = read();
   try {
     return await fn();

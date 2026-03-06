@@ -14,12 +14,12 @@
 import { LanguageService } from '../../../shared/LanguageService.js';
 
 /** 根据文件扩展名推断语言 — 委托给 LanguageService（唯一来源） */
-export function inferLang(filename) {
+export function inferLang(filename: any) {
   return LanguageService.inferLang(filename);
 }
 
 /** 从 langStats 推断主语言 — 委托给 LanguageService（唯一来源） */
-export function detectPrimaryLanguage(langStats) {
+export function detectPrimaryLanguage(langStats: any) {
   return LanguageService.detectPrimary(langStats);
 }
 
@@ -31,7 +31,7 @@ export function detectPrimaryLanguage(langStats) {
  * JS/TS 共享扩展生成器（根据具体 lang 微调差异点）
  * @param {'javascript'|'typescript'} lang
  */
-function _buildJsTsEntry(lang) {
+function _buildJsTsEntry(lang: any) {
   const isTs = lang === 'typescript';
   return {
     extraDimensions: [
@@ -949,7 +949,7 @@ const LANG_REGISTRY = Object.freeze({
  * @param {string} lang 规范化语言 ID (如 'swift', 'typescript')
  * @returns {{ language: string, customFields: object, extraDimensions: object[], typicalPatterns: string[], commonAntiPatterns: object[], suggestedGuardRules: object[], agentCautions: string[] }}
  */
-export function buildLanguageExtension(lang) {
+export function buildLanguageExtension(lang: any) {
   const base = {
     language: lang,
     customFields: {},
@@ -967,7 +967,7 @@ export function buildLanguageExtension(lang) {
   }
 
   // 其他语言从注册表查找
-  const entry = LANG_REGISTRY[lang];
+  const entry = (LANG_REGISTRY as Record<string, any>)[lang];
   if (entry) {
     return Object.assign(base, entry);
   }

@@ -45,7 +45,7 @@ export class CursorDeliveryPipeline {
    * @param {string} [options.projectName] 项目名称
    * @param {Object} [options.logger] 日志器
    */
-  constructor({ knowledgeService, projectRoot, projectName, logger, database }) {
+  constructor({ knowledgeService, projectRoot, projectName, logger, database }: any) {
     this.knowledgeService = knowledgeService;
     this.projectRoot = projectRoot;
     this.projectName = projectName || this._inferProjectName(projectRoot);
@@ -174,7 +174,7 @@ export class CursorDeliveryPipeline {
       );
       const pendingItems = this._extractItems(pending);
       // 过滤高置信度 pending（quality.confidence >= PENDING_MIN 或无 quality 字段）
-      const highConfPending = pendingItems.filter((e) => {
+      const highConfPending = pendingItems.filter((e: any) => {
         const conf = e.quality?.confidence;
         return conf === undefined || conf === null || conf >= KNOWLEDGE_CONFIDENCE.PENDING_MIN;
       });
@@ -190,7 +190,7 @@ export class CursorDeliveryPipeline {
    * 从 KnowledgeService.list() 返回值提取条目数组
    * @private
    */
-  _extractItems(result) {
+  _extractItems(result: any) {
     if (Array.isArray(result)) {
       return result;
     }
@@ -208,7 +208,7 @@ export class CursorDeliveryPipeline {
    * dev-document 类型单独分流，不进入 Channel A/B 压缩
    * @private
    */
-  _classify(entries) {
+  _classify(entries: any) {
     const rules: any[] = [],
       patterns: any[] = [],
       facts: any[] = [],
@@ -231,7 +231,7 @@ export class CursorDeliveryPipeline {
    * 排序 — 质量分 + 统计使用量
    * @private
    */
-  _rank(entries) {
+  _rank(entries: any) {
     return [...entries].sort((a, b) => {
       const scoreA = this._rankScore(a);
       const scoreB = this._rankScore(b);
@@ -243,7 +243,7 @@ export class CursorDeliveryPipeline {
    * 计算排名分
    * @private
    */
-  _rankScore(entry) {
+  _rankScore(entry: any) {
     let score = 0;
     score +=
       (entry.quality?.confidence || KNOWLEDGE_CONFIDENCE.RANK_DEFAULT) *
@@ -262,7 +262,7 @@ export class CursorDeliveryPipeline {
    * Channel A 生成
    * @private
    */
-  _generateChannelA(rules) {
+  _generateChannelA(rules: any) {
     const topRules = this._rank(rules).slice(0, BUDGET.CHANNEL_A_MAX_RULES);
     const ruleLines = this.compressor.compressToRuleLine(topRules);
 
@@ -284,7 +284,7 @@ export class CursorDeliveryPipeline {
    * @param {Array} [facts=[]] - kind='fact' 的知识条目
    * @private
    */
-  _generateChannelB(patterns, facts: any[] = []) {
+  _generateChannelB(patterns: any, facts: any[] = []) {
     const result = { topicCount: 0, patternsCount: 0, factsCount: 0, totalTokens: 0, topics: {} };
 
     if (patterns.length === 0 && facts.length === 0) {
@@ -336,7 +336,7 @@ export class CursorDeliveryPipeline {
       result.patternsCount += compressed.length;
       result.factsCount += factLines.length;
       result.totalTokens += writeResult.tokensUsed;
-      result.topics[topic] = {
+      (result.topics as Record<string, any>)[topic] = {
         patternsCount: compressed.length,
         factsCount: factLines.length,
         tokensUsed: writeResult.tokensUsed,
@@ -517,7 +517,7 @@ export class CursorDeliveryPipeline {
    * 从文件路径中提取层级目录 (第一或第二级有意义的目录)
    * @private
    */
-  _extractLayerDir(filePath) {
+  _extractLayerDir(filePath: any) {
     if (!filePath) {
       return null;
     }
@@ -566,7 +566,7 @@ export class CursorDeliveryPipeline {
    * .cursor/skills/autosnippet-devdocs/references/ 目录
    * @private
    */
-  _generateChannelD(documents) {
+  _generateChannelD(documents: any) {
     const result = { documentsCount: 0, filesWritten: 0, filePaths: [] as string[] };
     if (!documents || documents.length === 0) {
       return result;
@@ -649,7 +649,7 @@ export class CursorDeliveryPipeline {
    * 生成 AGENTS.md / CLAUDE.md / .github/copilot-instructions.md
    * @private
    */
-  _generateChannelF(rules, patterns) {
+  _generateChannelF(rules: any, patterns: any) {
     try {
       // 收集可用 Skills 名称
       const skillsDir = path.join(this.projectRoot, 'AutoSnippet', 'skills');
@@ -695,7 +695,7 @@ export class CursorDeliveryPipeline {
    * 文件名安全 slug 化
    * @private
    */
-  _slugify(text) {
+  _slugify(text: any) {
     return (
       text
         .toLowerCase()
@@ -711,7 +711,7 @@ export class CursorDeliveryPipeline {
    * @param {string} targetDirName 目标目录名，如 '.qoder' 或 '.trae'
    * @private
    */
-  _mirrorToIDE(targetDirName) {
+  _mirrorToIDE(targetDirName: any) {
     try {
       const cursorDir = path.join(this.projectRoot, '.cursor');
       const targetDir = path.join(this.projectRoot, targetDirName);
@@ -760,7 +760,7 @@ export class CursorDeliveryPipeline {
    * 递归复制目录
    * @private
    */
-  _copyDirRecursive(src, dest) {
+  _copyDirRecursive(src: any, dest: any) {
     fs.mkdirSync(dest, { recursive: true });
     for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
       const srcPath = path.join(src, entry.name);
@@ -777,7 +777,7 @@ export class CursorDeliveryPipeline {
    * 从项目路径推断项目名称
    * @private
    */
-  _inferProjectName(projectRoot) {
+  _inferProjectName(projectRoot: any) {
     return path.basename(projectRoot);
   }
 }

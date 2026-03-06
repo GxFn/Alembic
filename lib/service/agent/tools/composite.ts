@@ -33,7 +33,7 @@ export const analyzeCode = {
     },
     required: ['code'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const { code, language, filePath } = params;
     const results: any = {};
 
@@ -97,7 +97,7 @@ export const knowledgeOverview = {
       limit: { type: 'number', description: '每类返回数量，默认 5' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const { includeTopRecipes = true, limit = 5 } = params;
     const result: any = {};
 
@@ -201,7 +201,7 @@ export const submitWithCheck = {
     },
     required: getInternalAgentRequiredFields(),
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const projectRoot = ctx.projectRoot;
 
     // ── Bootstrap 维度类型校验 ──
@@ -291,7 +291,9 @@ export const submitWithCheck = {
 
       const systemFields = {
         language: ctx._projectLanguage || '',
-        category: dimMeta ? DIMENSION_DISPLAY_GROUP[dimMeta.id] || dimMeta.id : 'general',
+        category: dimMeta
+          ? (DIMENSION_DISPLAY_GROUP as Record<string, any>)[dimMeta.id] || dimMeta.id
+          : 'general',
         knowledgeType: dimMeta?.allowedKnowledgeTypes?.[0] || 'code-pattern',
         source: ctx.source === 'system' ? 'bootstrap' : 'agent',
       };
@@ -326,7 +328,8 @@ export const submitWithCheck = {
       };
 
       if (dimMeta && ctx.source === 'system') {
-        const displayGroup = DIMENSION_DISPLAY_GROUP[dimMeta.id] || dimMeta.id;
+        const displayGroup =
+          (DIMENSION_DISPLAY_GROUP as Record<string, any>)[dimMeta.id] || dimMeta.id;
         data.tags = [...new Set([...(data.tags || []), displayGroup])];
       }
 
@@ -381,16 +384,16 @@ export const getToolDetails = {
     },
     required: ['toolName'],
   },
-  handler: async ({ toolName }, context) => {
+  handler: async ({ toolName }: any, context: any) => {
     const registry = context.container?.get('toolRegistry');
     if (!registry) {
       return { error: 'ToolRegistry not available' };
     }
 
     const schemas = registry.getToolSchemas();
-    const found = schemas.find((t) => t.name === toolName);
+    const found = schemas.find((t: any) => t.name === toolName);
     if (!found) {
-      const allNames = schemas.map((t) => t.name);
+      const allNames = schemas.map((t: any) => t.name);
       return {
         error: `Tool "${toolName}" not found`,
         availableTools: allNames,
@@ -438,7 +441,7 @@ export const planTask = {
     },
     required: ['steps', 'strategy'],
   },
-  handler: async (params, context) => {
+  handler: async (params: any, context: any) => {
     const plan = {
       steps: params.steps || [],
       strategy: params.strategy || '',
@@ -469,9 +472,9 @@ export const reviewMyOutput = {
       },
     },
   },
-  handler: async (params, context) => {
+  handler: async (params: any, context: any) => {
     const submitted = (context._sessionToolCalls || []).filter(
-      (tc) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check'
+      (tc: any) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check'
     );
 
     if (submitted.length === 0) {
@@ -561,7 +564,7 @@ export const reviewMyOutput = {
     }
 
     const issueLines = issues.flatMap(({ title, issues: iss }) =>
-      iss.map((i) => `• "${title}": ${i}`)
+      iss.map((i: any) => `• "${title}": ${i}`)
     );
 
     return {

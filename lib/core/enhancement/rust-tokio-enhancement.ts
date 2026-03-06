@@ -107,7 +107,7 @@ class RustTokioEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── Async functions (potential task entry points) ──
@@ -206,7 +206,7 @@ class RustTokioEnhancement extends EnhancementPack {
 
     // ── Tokio/async imports ──
     const asyncImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('tokio') ||
         imp.includes('async_std') ||
         imp.includes('futures') ||

@@ -4,7 +4,7 @@
  * 飞书/Telegram 等 IM 远程指令队列表
  * VSCode 扩展轮询 pending → 注入 Copilot Chat → 回写结果
  */
-export default function migrate(db) {
+export default function migrate(db: any) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS remote_commands (
       id              TEXT PRIMARY KEY,

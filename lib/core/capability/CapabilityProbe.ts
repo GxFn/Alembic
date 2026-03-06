@@ -82,7 +82,7 @@ export class CapabilityProbe {
    * @param {ProbeResult} probeResult
    * @returns {string}
    */
-  toRole(probeResult) {
+  toRole(probeResult: any) {
     // 本地运行 AutoSnippet 的用户 = 项目 Owner = developer
     // 探针级别的 admin/contributor/visitor 仅做信息记录，角色统一为 developer
     switch (probeResult) {
@@ -190,7 +190,7 @@ export class CapabilityProbe {
    * @param {string} repoPath
    * @returns {boolean}
    */
-  _isGitRepo(repoPath) {
+  _isGitRepo(repoPath: any) {
     try {
       execSync('git rev-parse --git-dir', {
         cwd: repoPath,
@@ -207,7 +207,7 @@ export class CapabilityProbe {
    * @param {string} repoPath
    * @returns {boolean}
    */
-  _hasRemote(repoPath) {
+  _hasRemote(repoPath: any) {
     try {
       const output = execSync('git remote', {
         cwd: repoPath,
@@ -226,7 +226,7 @@ export class CapabilityProbe {
    * @param {string} repoPath
    * @returns {ProbeResult}
    */
-  _probePush(repoPath) {
+  _probePush(repoPath: any) {
     try {
       execSync('git push --dry-run 2>&1', {
         cwd: repoPath,

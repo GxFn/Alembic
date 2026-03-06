@@ -32,7 +32,7 @@ export class KnowledgeSyncService {
   /**
    * @param {string} projectRoot
    */
-  constructor(projectRoot) {
+  constructor(projectRoot: any) {
     this.projectRoot = projectRoot;
     this.recipesDir = path.join(projectRoot, RECIPES_DIR);
     this.candidatesDir = path.join(projectRoot, CANDIDATES_DIR);
@@ -51,7 +51,7 @@ export class KnowledgeSyncService {
    * @param {boolean} [opts.skipViolations=false] 跳过违规记录（setup 场景）
    * @returns {{ synced: number, created: number, updated: number, violations: string[], orphaned: string[], skipped: number }}
    */
-  sync(db, opts: any = {}) {
+  sync(db: any, opts: any = {}) {
     const { dryRun = false, force = false, skipViolations = false } = opts;
 
     const report = {
@@ -151,13 +151,13 @@ export class KnowledgeSyncService {
    * @param {string} prefix 相对路径前缀 (e.g. 'AutoSnippet/candidates')
    * @returns {{ absPath: string, relPath: string }[]}
    */
-  _collectMdFiles(dir, prefix) {
+  _collectMdFiles(dir: any, prefix: any) {
     if (!fs.existsSync(dir)) {
       return [];
     }
 
     const results: { absPath: string; relPath: string }[] = [];
-    const walk = (curDir, base) => {
+    const walk = (curDir: any, base: any) => {
       for (const entry of fs.readdirSync(curDir, { withFileTypes: true })) {
         const full = path.join(curDir, entry.name);
         const rel = base ? `${base}/${entry.name}` : entry.name;
@@ -182,7 +182,7 @@ export class KnowledgeSyncService {
    * 从 parseKnowledgeMarkdown 的结果构建 DB row
    * wire format → DB 列映射（与 KnowledgeRepository.impl 对齐）
    */
-  _buildDbRow(parsed, relPath, rawContent) {
+  _buildDbRow(parsed: any, relPath: any, rawContent: any) {
     const now = Math.floor(Date.now() / 1000);
 
     // 内容 hash
@@ -239,7 +239,7 @@ export class KnowledgeSyncService {
   /**
    * 准备 upsert 语句（INSERT ... ON CONFLICT DO UPDATE 全字段）
    */
-  _prepareUpsert(db) {
+  _prepareUpsert(db: any) {
     const cols = [
       'id',
       'title',
@@ -304,14 +304,14 @@ export class KnowledgeSyncService {
   /**
    * 检查 entry 是否已存在于 DB
    */
-  _entryExists(db, id) {
+  _entryExists(db: any, id: any) {
     const row = db.prepare('SELECT 1 FROM knowledge_entries WHERE id = ?').get(id);
     return !!row;
   }
 
   /* ═══ 违规记录 ═══════════════════════════════════════════ */
 
-  _prepareAuditInsert(db) {
+  _prepareAuditInsert(db: any) {
     try {
       return db.prepare(`
         INSERT INTO audit_logs (id, timestamp, actor, actor_context, action, resource, operation_data, result, error_message, duration)
@@ -322,7 +322,7 @@ export class KnowledgeSyncService {
     }
   }
 
-  _logViolation(stmt, entryId, filePath, expectedHash, actualHash) {
+  _logViolation(stmt: any, entryId: any, filePath: any, expectedHash: any, actualHash: any) {
     try {
       stmt.run(
         randomUUID(),
@@ -350,7 +350,7 @@ export class KnowledgeSyncService {
    * 检测 DB 中存在但 .md 已删除的 Entry → 标记 deprecated
    * @returns {string[]} 孤儿 entry id 列表
    */
-  _detectOrphans(db, syncedIds, dryRun) {
+  _detectOrphans(db: any, syncedIds: any, dryRun: any) {
     const orphanIds: any[] = [];
     try {
       const rows = db

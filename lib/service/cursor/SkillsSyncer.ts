@@ -76,7 +76,7 @@ export class SkillsSyncer {
    * @param {string} projectName 项目名称
    * @param {Object} [knowledgeService] 可选，用于生成 references/RECIPES.md
    */
-  constructor(projectRoot, projectName = 'Project', knowledgeService = null) {
+  constructor(projectRoot: any, projectName = 'Project', knowledgeService = null) {
     this.projectRoot = projectRoot;
     this.projectName = projectName;
     this.knowledgeService = knowledgeService;
@@ -111,7 +111,8 @@ export class SkillsSyncer {
         }
 
         const targetName =
-          SKILL_NAME_MAP[dirName] || `autosnippet-${dirName.replace(/^project-/, '')}`;
+          (SKILL_NAME_MAP as Record<string, string>)[dirName] ||
+          `autosnippet-${dirName.replace(/^project-/, '')}`;
         const targetSkillDir = path.join(this.targetDir, targetName);
 
         // 创建目标目录
@@ -142,14 +143,14 @@ export class SkillsSyncer {
    * 转换 SKILL.md 格式 — 从 AutoSnippet 格式到 Cursor Agent Skills 标准
    * @private
    */
-  _convertSkillMd(source, targetName, sourceDirName) {
+  _convertSkillMd(source: any, targetName: any, sourceDirName: any) {
     // 提取原始内容（去掉 frontmatter）
     const bodyMatch = source.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
     const body = bodyMatch ? bodyMatch[1].trim() : source.trim();
 
     // 获取描述
     const descTemplate =
-      SKILL_DESC_MAP[targetName] ||
+      (SKILL_DESC_MAP as Record<string, string>)[targetName] ||
       `Knowledge and patterns from {project}. Use when working with ${sourceDirName.replace(/^project-/, '')} related code.`;
     const description = descTemplate.replace(/\{project\}/g, this.projectName);
 
@@ -186,7 +187,7 @@ export class SkillsSyncer {
    * 生成 references/RECIPES.md
    * @private
    */
-  async _generateRecipes(targetSkillDir, sourceDirName) {
+  async _generateRecipes(targetSkillDir: any, sourceDirName: any) {
     const refsDir = path.join(targetSkillDir, 'references');
     fs.mkdirSync(refsDir, { recursive: true });
 
@@ -239,7 +240,7 @@ export class SkillsSyncer {
    * 生成使用场景列表
    * @private
    */
-  _generateUseCases(sourceDirName) {
+  _generateUseCases(sourceDirName: any) {
     const casesMap = {
       'project-architecture': [
         '- Creating new modules, services, or managers',
@@ -307,7 +308,7 @@ export class SkillsSyncer {
       ],
     };
     return (
-      casesMap[sourceDirName] || [
+      (casesMap as Record<string, string[]>)[sourceDirName] || [
         '- Working with code related to this dimension',
         '- Need guidance on project-specific patterns',
       ]
@@ -317,8 +318,8 @@ export class SkillsSyncer {
   /**
    * @private
    */
-  _capitalizeWords(str) {
-    return str.replace(/\b\w/g, (c) => c.toUpperCase());
+  _capitalizeWords(str: any) {
+    return str.replace(/\b\w/g, (c: any) => c.toUpperCase());
   }
 }
 

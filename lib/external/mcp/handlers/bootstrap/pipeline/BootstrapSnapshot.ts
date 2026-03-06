@@ -38,14 +38,14 @@ export class BootstrapSnapshot {
   #logger;
 
   /** @type {object} */
-  #stmts;
+  #stmts: any;
 
   /**
    * @param {import('better-sqlite3').Database} db - better-sqlite3 实例
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  constructor(db, { logger }: any = {}) {
+  constructor(db: any, { logger }: any = {}) {
     if (!db) {
       throw new Error('BootstrapSnapshot requires a database instance');
     }
@@ -74,7 +74,7 @@ export class BootstrapSnapshot {
    * @param {string[]} [params.affectedDims] 增量时受影响的维度
    * @returns {string} 快照 ID
    */
-  save(params) {
+  save(params: any) {
     const {
       sessionId,
       projectRoot,
@@ -169,7 +169,7 @@ export class BootstrapSnapshot {
    * 清除项目的所有快照 — 用于手动重新冷启动时强制全量
    * @param {string} projectRoot
    */
-  clearProject(projectRoot) {
+  clearProject(projectRoot: any) {
     try {
       const rows = this.#stmts.listByProject.all(projectRoot, 9999);
       for (const row of rows) {
@@ -187,7 +187,7 @@ export class BootstrapSnapshot {
    * @param {string} projectRoot
    * @returns {object|null} 快照数据
    */
-  getLatest(projectRoot) {
+  getLatest(projectRoot: any) {
     const row = this.#stmts.getLatest.get(projectRoot);
     if (!row) {
       return null;
@@ -200,7 +200,7 @@ export class BootstrapSnapshot {
    * @param {string} id
    * @returns {object|null}
    */
-  getById(id) {
+  getById(id: any) {
     const row = this.#stmts.getById.get(id);
     if (!row) {
       return null;
@@ -214,8 +214,8 @@ export class BootstrapSnapshot {
    * @param {number} [limit=10]
    * @returns {Array<object>}
    */
-  list(projectRoot, limit = 10) {
-    return this.#stmts.listByProject.all(projectRoot, limit).map((r) => this.#deserialize(r));
+  list(projectRoot: any, limit = 10) {
+    return this.#stmts.listByProject.all(projectRoot, limit).map((r: any) => this.#deserialize(r));
   }
 
   // ─── 增量 Diff 计算 ──────────────────────────────────
@@ -228,7 +228,7 @@ export class BootstrapSnapshot {
    * @param {string} projectRoot
    * @returns {{ added: string[], modified: string[], deleted: string[], unchanged: string[], changeRatio: number }}
    */
-  computeDiff(snapshot, currentFiles, projectRoot) {
+  computeDiff(snapshot: any, currentFiles: any, projectRoot: any) {
     const oldHashes = snapshot.fileHashes || {};
 
     // 计算当前文件 hash
@@ -278,7 +278,7 @@ export class BootstrapSnapshot {
    * @param {string[]} allDimIds 所有可用维度 ID
    * @returns {{ mode: 'incremental'|'full', dimensions: string[], skippedDimensions: string[], reason: string }}
    */
-  inferAffectedDimensions(snapshot, diff, allDimIds) {
+  inferAffectedDimensions(snapshot: any, diff: any, allDimIds: any) {
     const changeRatio =
       (diff.added.length + diff.modified.length + diff.deleted.length) /
       (diff.added.length +
@@ -336,8 +336,8 @@ export class BootstrapSnapshot {
       affected.add('project-profile');
     }
 
-    const dimensions = allDimIds.filter((d) => affected.has(d));
-    const skippedDimensions = allDimIds.filter((d) => !affected.has(d));
+    const dimensions = allDimIds.filter((d: any) => affected.has(d));
+    const skippedDimensions = allDimIds.filter((d: any) => !affected.has(d));
 
     return {
       mode: 'incremental',
@@ -354,7 +354,7 @@ export class BootstrapSnapshot {
    * @param {string} snapshotId
    * @returns {Object<string, Set<string>>}
    */
-  #getDimFileMap(snapshotId) {
+  #getDimFileMap(snapshotId: any) {
     const rows = this.#stmts.getDimFiles.all(snapshotId);
     const map: Record<string, any> = {};
     for (const row of rows) {
@@ -371,7 +371,7 @@ export class BootstrapSnapshot {
    * @param {string} filePath
    * @returns {string[]}
    */
-  #inferDimsByFileType(filePath) {
+  #inferDimsByFileType(filePath: any) {
     const ext = filePath.split('.').pop()?.toLowerCase() || '';
     const name = filePath.split('/').pop()?.toLowerCase() || '';
 
@@ -455,14 +455,14 @@ export class BootstrapSnapshot {
 
   // ─── 内部方法 ─────────────────────────────────────────
 
-  #computeContentHash(content) {
+  #computeContentHash(content: any) {
     return createHash('sha256')
       .update(content || '')
       .digest('hex')
       .substring(0, 16);
   }
 
-  #readFileContent(filePath) {
+  #readFileContent(filePath: any) {
     try {
       return readFileSync(filePath, 'utf-8');
     } catch {
@@ -470,7 +470,7 @@ export class BootstrapSnapshot {
     }
   }
 
-  #enforceCapacity(projectRoot) {
+  #enforceCapacity(projectRoot: any) {
     try {
       this.#stmts.enforceCapacity.run(projectRoot, projectRoot, MAX_SNAPSHOTS);
     } catch (err: any) {
@@ -478,7 +478,7 @@ export class BootstrapSnapshot {
     }
   }
 
-  #deserialize(row) {
+  #deserialize(row: any) {
     return {
       id: row.id,
       sessionId: row.session_id,
@@ -500,7 +500,7 @@ export class BootstrapSnapshot {
     };
   }
 
-  #safeParseJSON(str, fallback) {
+  #safeParseJSON(str: any, fallback: any) {
     try {
       return str ? JSON.parse(str) : fallback;
     } catch {
@@ -508,7 +508,7 @@ export class BootstrapSnapshot {
     }
   }
 
-  #log(msg, level = 'info') {
+  #log(msg: any, level = 'info') {
     if (this.#logger) {
       this.#logger[level]?.(`[BootstrapSnapshot] ${msg}`);
     }

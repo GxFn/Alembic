@@ -18,7 +18,7 @@
  * @param {string} text 待估算的文本
  * @returns {number} 估算 token 数（向上取整）
  */
-export function estimateTokens(text) {
+export function estimateTokens(text: any) {
   if (!text) {
     return 0;
   }
@@ -42,7 +42,7 @@ export function estimateTokens(text) {
  * @param {string} text
  * @returns {number}
  */
-export function estimateTokensFast(text) {
+export function estimateTokensFast(text: any) {
   if (!text) {
     return 0;
   }

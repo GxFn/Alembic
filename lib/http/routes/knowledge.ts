@@ -29,7 +29,7 @@ const MAX_BATCH_SIZE = 100;
  */
 router.get(
   '/',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { lifecycle, kind, category, language, knowledgeType, scope, keyword, tag, source } =
       req.query;
     const page = safeInt(req.query.page, 1);
@@ -80,7 +80,7 @@ router.get(
  */
 router.get(
   '/stats',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
     const stats = await knowledgeService.getStats();
@@ -94,7 +94,7 @@ router.get(
  */
 router.get(
   '/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -111,7 +111,7 @@ router.get(
  */
 router.post(
   '/',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const data = req.body;
 
     if (!data.title || !data.content) {
@@ -136,7 +136,7 @@ router.post(
  */
 router.patch(
   '/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -153,7 +153,7 @@ router.patch(
  */
 router.delete(
   '/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -172,7 +172,7 @@ router.delete(
  */
 router.patch(
   '/:id/publish',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -189,7 +189,7 @@ router.patch(
  */
 router.patch(
   '/:id/deprecate',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const { reason } = req.body;
 
@@ -212,7 +212,7 @@ router.patch(
  */
 router.patch(
   '/:id/reactivate',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -232,7 +232,7 @@ router.patch(
  */
 router.post(
   '/batch-publish',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { ids } = req.body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -278,7 +278,7 @@ router.post(
  */
 router.post(
   '/:id/usage',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const { type = 'adoption', feedback } = req.body;
     const context = getContext(req);
@@ -297,7 +297,7 @@ router.post(
  */
 router.patch(
   '/:id/quality',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const context = getContext(req);
 

@@ -140,7 +140,7 @@ class VueEnhancement extends EnhancementPack {
   /**
    * .vue SFC 预处理 → 提取 <script> / <script setup> 块
    */
-  preprocessFile(content, ext) {
+  preprocessFile(content: any, ext: any) {
     if (ext !== '.vue') {
       return null;
     }
@@ -161,7 +161,7 @@ class VueEnhancement extends EnhancementPack {
     return null;
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── Composable functions ──
@@ -223,7 +223,7 @@ class VueEnhancement extends EnhancementPack {
 
     // ── Vue ecosystem imports ──
     const vueImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('vue') ||
         imp.includes('pinia') ||
         imp.includes('vue-router') ||

@@ -54,7 +54,7 @@ export class NudgeGenerator {
    * @param {object|null} trace - ActiveContext 实例 (反思用)
    * @returns {{ type: string, text: string }|null}
    */
-  generate(state, trace) {
+  generate(state: any, trace: any) {
     const {
       phase: _phase,
       metrics: m,
@@ -120,7 +120,7 @@ export class NudgeGenerator {
    * @param {NudgeState} state
    * @returns {string}
    */
-  buildTransitionNudge(state) {
+  buildTransitionNudge(state: any) {
     const { metrics: m, strategy, submitToolName } = state;
     const fromPhase = state.transitionFromPhase;
     const toPhase = state.phase;
@@ -177,7 +177,7 @@ export class NudgeGenerator {
    * @param {NudgeState} state
    * @returns {string}
    */
-  getPhaseContext(state) {
+  getPhaseContext(state: any) {
     const { phase, metrics: m, budget: b, isTerminalPhase } = state;
     const remaining = b.maxIterations - m.iteration;
 
@@ -199,7 +199,7 @@ export class NudgeGenerator {
 
   // ─── 内部方法 ──────────────────────────────────
 
-  #generateForceExit(m, b, strategy, submitToolName) {
+  #generateForceExit(m: any, b: any, strategy: any, submitToolName: any) {
     const submitCount = m.submitCount;
     // v5.1: Analyst 策略使用纯文本输出
     if (strategy.name === 'analyst') {
@@ -243,7 +243,7 @@ export class NudgeGenerator {
    * @param {object|null} trace
    * @returns {{ type: string, text: string }|null}
    */
-  #checkReflection(state, trace) {
+  #checkReflection(state: any, trace: any) {
     const { phase, metrics: m, budget: b, strategy, isTerminalPhase } = state;
 
     // 终结阶段（SUMMARIZE）不应触发反思 — 此时应输出最终结果而非继续探索
@@ -282,7 +282,7 @@ export class NudgeGenerator {
 
     if (summary.thoughts?.length > 0) {
       parts.push(
-        `\n你最近的思考方向:\n${summary.thoughts.map((t, i) => `  ${i + 1}. ${t}`).join('\n')}`
+        `\n你最近的思考方向:\n${summary.thoughts.map((t: any, i: any) => `  ${i + 1}. ${t}`).join('\n')}`
       );
     }
 
@@ -297,7 +297,7 @@ export class NudgeGenerator {
     if (strategy.enablePlanning) {
       const plan = trace?.getPlan?.();
       if (plan?.steps?.length > 0) {
-        const doneCount = plan.steps.filter((s) => s.status === 'done').length;
+        const doneCount = plan.steps.filter((s: any) => s.status === 'done').length;
         parts.push(`\n📋 计划进度: ${doneCount}/${plan.steps.length} 步骤已完成`);
       }
     }
@@ -323,7 +323,7 @@ export class NudgeGenerator {
    * @param {NudgeState} state
    * @returns {string|null}
    */
-  #getPhaseHint(state) {
+  #getPhaseHint(state: any) {
     const { phase, metrics: m, budget: b, submitToolName } = state;
 
     switch (phase) {
@@ -362,7 +362,7 @@ export class NudgeGenerator {
    * @param {string} phase
    * @returns {string}
    */
-  static #getPhaseLabel(phase) {
+  static #getPhaseLabel(phase: any) {
     switch (phase) {
       case 'SCAN':
         return '扫描阶段';

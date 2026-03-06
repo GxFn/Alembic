@@ -47,7 +47,7 @@ export class MemoryConsolidator {
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  constructor(store, opts: any = {}) {
+  constructor(store: any, opts: any = {}) {
     this.#store = store;
     this.#logger = opts.logger || null;
   }
@@ -64,7 +64,7 @@ export class MemoryConsolidator {
    * @param {string} [opts.bootstrapSession]
    * @returns {{ added: number, updated: number, merged: number, skipped: number, replaced?: number }}
    */
-  consolidate(candidateMemories, { bootstrapSession }: any = {}) {
+  consolidate(candidateMemories: any, { bootstrapSession }: any = {}) {
     // Phase 1: 冲突预解决
     const { processed, replaced } = this.#preResolveConflicts(candidateMemories);
 
@@ -140,7 +140,7 @@ export class MemoryConsolidator {
    * @param {string} projectRoot
    * @returns {Promise<{ migrated: number, skipped: number, error?: string }>}
    */
-  async migrateFromLegacy(projectRoot) {
+  async migrateFromLegacy(projectRoot: any) {
     const legacyPath = path.join(projectRoot, '.autosnippet', 'memory.jsonl');
 
     if (!fs.existsSync(legacyPath)) {
@@ -207,7 +207,7 @@ export class MemoryConsolidator {
    * @param {Array<object>} candidates
    * @returns {{ processed: Array<object>, replaced: number }}
    */
-  #preResolveConflicts(candidates) {
+  #preResolveConflicts(candidates: any) {
     if (!candidates || candidates.length === 0) {
       return { processed: [], replaced: 0 };
     }
@@ -224,7 +224,7 @@ export class MemoryConsolidator {
 
       try {
         const similar = this.#store.findSimilar(content, null, 3);
-        const deserialized = similar.map((r) => MemoryStore.deserialize(r));
+        const deserialized = similar.map((r: any) => MemoryStore.deserialize(r));
         let conflictResolved = false;
 
         for (const existing of deserialized) {
@@ -266,7 +266,7 @@ export class MemoryConsolidator {
    * @param {string} contentB
    * @returns {boolean}
    */
-  static #detectContradiction(contentA, contentB) {
+  static #detectContradiction(contentA: any, contentB: any) {
     if (!contentA || !contentB) {
       return false;
     }
@@ -301,7 +301,7 @@ export class MemoryConsolidator {
    * @param {string} text
    * @returns {Set<string>}
    */
-  static #extractTopicWords(text) {
+  static #extractTopicWords(text: any) {
     if (!text) {
       return new Set();
     }
@@ -309,7 +309,7 @@ export class MemoryConsolidator {
     const tokens = text
       .toLowerCase()
       .split(/[\s,;:!?。，；：！？\-_/\\|()[\]{}'"<>·、]+/)
-      .filter((t) => t.length >= 2);
+      .filter((t: any) => t.length >= 2);
 
     const stopWords = new Set([
       '我们',
@@ -366,7 +366,7 @@ export class MemoryConsolidator {
       'some',
     ]);
 
-    return new Set(tokens.filter((t) => !stopWords.has(t)));
+    return new Set(tokens.filter((t: any) => !stopWords.has(t)));
   }
 
   /**
@@ -374,7 +374,7 @@ export class MemoryConsolidator {
    * @param {string} legacyType
    * @returns {string}
    */
-  static #mapLegacyType(legacyType) {
+  static #mapLegacyType(legacyType: any) {
     switch (legacyType) {
       case 'preference':
         return 'preference';
@@ -383,7 +383,7 @@ export class MemoryConsolidator {
     }
   }
 
-  #log(msg) {
+  #log(msg: any) {
     const formatted = `[MemoryConsolidator] ${msg}`;
     if (this.#logger?.info) {
       this.#logger.info(formatted);

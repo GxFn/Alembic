@@ -50,7 +50,7 @@ class AndroidEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: { type: string; className: any; line: any; confidence: number }[] = [];
     for (const cls of astSummary.classes || []) {
       // ViewModel
@@ -84,11 +84,11 @@ class AndroidEnhancement extends EnhancementPack {
       }
       // Hilt DI
       const annos = cls.annotations || [];
-      if (annos.some((a) => /@HiltAndroidApp|@AndroidEntryPoint/.test(a))) {
+      if (annos.some((a: any) => /@HiltAndroidApp|@AndroidEntryPoint/.test(a))) {
         patterns.push({ type: 'hilt-di', className: cls.name, line: cls.line, confidence: 0.95 });
       }
       // Composable (class-level)
-      if (annos.some((a) => /@Composable/.test(a))) {
+      if (annos.some((a: any) => /@Composable/.test(a))) {
         patterns.push({
           type: 'composable',
           className: cls.name,

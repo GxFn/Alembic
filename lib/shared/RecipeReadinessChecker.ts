@@ -34,7 +34,7 @@ const WHITELISTED_CATEGORIES = ['bootstrap', 'knowledge', 'general'];
  * @param {object} item  扁平字段对象（title, trigger, description …）
  * @returns {{ ready: boolean, missing: string[], suggestions: string[] }}
  */
-export function checkRecipeReadiness(item) {
+export function checkRecipeReadiness(item: any) {
   const validator = new UnifiedValidator();
   const result = validator.validate(item, {
     skipUniqueness: true, // readiness 检查不做去重
@@ -63,7 +63,7 @@ export function checkRecipeReadiness(item) {
 /**
  * 从 Candidate 的 metadata 对象展开为扁平字段后检查 readiness。
  */
-export function checkReadinessFromCandidate(candidate) {
+export function checkReadinessFromCandidate(candidate: any) {
   const meta = candidate.metadata || {};
   const flat = {
     ...meta,

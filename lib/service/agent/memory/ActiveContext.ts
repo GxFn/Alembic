@@ -32,7 +32,7 @@ import Logger from '../../../infrastructure/logging/Logger.js';
  * 工具特化压缩策略 — 不同工具返回不同结构，压缩时保留最有价值的部分
  */
 const TOOL_COMPRESS_STRATEGIES = {
-  search_project_code(result) {
+  search_project_code(result: any) {
     if (typeof result !== 'object') {
       return String(result).substring(0, 600);
     }
@@ -62,7 +62,7 @@ const TOOL_COMPRESS_STRATEGIES = {
     return lines.join('\n');
   },
 
-  read_project_file(result) {
+  read_project_file(result: any) {
     if (typeof result !== 'object') {
       return String(result).substring(0, 600);
     }
@@ -79,7 +79,7 @@ const TOOL_COMPRESS_STRATEGIES = {
     return `文件 ${result.path || '?'} (${totalLines} 行)`;
   },
 
-  get_class_info(result) {
+  get_class_info(result: any) {
     if (typeof result !== 'object') {
       return String(result).substring(0, 600);
     }
@@ -99,7 +99,7 @@ const TOOL_COMPRESS_STRATEGIES = {
     return lines.join('\n');
   },
 
-  get_class_hierarchy(result) {
+  get_class_hierarchy(result: any) {
     if (typeof result !== 'object') {
       return String(result).substring(0, 600);
     }
@@ -107,14 +107,14 @@ const TOOL_COMPRESS_STRATEGIES = {
     return `类层级: ${Array.isArray(classes) ? classes.length : 0} 个类`;
   },
 
-  get_project_overview(result) {
+  get_project_overview(result: any) {
     if (typeof result !== 'object') {
       return String(result).substring(0, 800);
     }
     return JSON.stringify(result).substring(0, 800);
   },
 
-  list_project_structure(result) {
+  list_project_structure(result: any) {
     if (typeof result !== 'object') {
       return String(result).substring(0, 600);
     }
@@ -126,7 +126,7 @@ const TOOL_COMPRESS_STRATEGIES = {
 /**
  * 默认压缩 — 截断到 maxChars
  */
-function defaultCompress(result, maxChars = 600) {
+function defaultCompress(result: any, maxChars = 600) {
   const str = typeof result === 'string' ? result : JSON.stringify(result);
   if (str.length <= maxChars) {
     return str;
@@ -193,7 +193,7 @@ export class ActiveContext {
    * 开始新一轮推理
    * @param {number} iteration 轮次编号
    */
-  startRound(iteration) {
+  startRound(iteration: any) {
     if (this.#currentRound) {
       this.endRound(); // 安全关闭上一轮
     }
@@ -228,7 +228,7 @@ export class ActiveContext {
    * 记录 AI 的推理文本（从 aiResult.text 提取）
    * @param {string} text
    */
-  setThought(text) {
+  setThought(text: any) {
     if (this.#currentRound && text) {
       this.#currentRound.thought = text;
     }
@@ -242,7 +242,7 @@ export class ActiveContext {
    * @param {*} result 工具返回的原始结果
    * @param {boolean} isNew 是否发现新信息 (由 ExplorationTracker.recordToolCall 提供)
    */
-  recordToolCall(toolName, args, result, isNew) {
+  recordToolCall(toolName: any, args: any, result: any, isNew: any) {
     const round = this.#currentRound?.iteration || 0;
 
     // ── RT 部分: Action + Observation ──
@@ -273,7 +273,7 @@ export class ActiveContext {
    * @param {string} toolName
    * @param {object} params
    */
-  addAction(toolName, params) {
+  addAction(toolName: any, params: any) {
     this.#currentRound?.actions.push({ tool: toolName, params });
   }
 
@@ -282,7 +282,7 @@ export class ActiveContext {
    * @param {string} toolName
    * @param {object} meta
    */
-  addObservation(toolName, meta) {
+  addObservation(toolName: any, meta: any) {
     this.#currentRound?.observations.push({ tool: toolName, ...meta });
   }
 
@@ -292,7 +292,7 @@ export class ActiveContext {
    * @param {*} result
    * @param {number} round
    */
-  observe(toolName, result, round) {
+  observe(toolName: any, result: any, round: any) {
     if (this.#lightweight) {
       return;
     }
@@ -309,7 +309,7 @@ export class ActiveContext {
    * 记录反思内容 (ExplorationTracker 使用, L5 修复)
    * @param {string} text
    */
-  setReflection(text) {
+  setReflection(text: any) {
     if (this.#currentRound && text) {
       this.#currentRound.reflection = text;
     }
@@ -319,7 +319,7 @@ export class ActiveContext {
    * 记录轮次摘要
    * @param {object} summary - { newInfoCount, totalCalls, submits, cumulativeFiles, cumulativePatterns }
    */
-  setRoundSummary(summary) {
+  setRoundSummary(summary: any) {
     if (this.#currentRound) {
       this.#currentRound.roundSummary = summary;
     }
@@ -337,7 +337,7 @@ export class ActiveContext {
    * @param {number} [importance=5] 重要性 1-10
    * @param {number} [round=0] 当前轮次
    */
-  noteKeyFinding(finding, evidence: any = '', importance = 5, round = 0) {
+  noteKeyFinding(finding: any, evidence: any = '', importance = 5, round = 0) {
     // P0 Fix: 防御性保证 evidence 是 string (AI 可能传入 array/object)
     const safeEvidence =
       typeof evidence === 'string'
@@ -374,7 +374,7 @@ export class ActiveContext {
    * @param {number} iteration 当前轮次
    * @returns {boolean} 是否成功提取到计划
    */
-  extractAndSetPlan(text, iteration) {
+  extractAndSetPlan(text: any, iteration: any) {
     const planText = this.#extractPlanFromText(text);
     if (!planText) {
       return false;
@@ -408,7 +408,7 @@ export class ActiveContext {
    * @param {string} planText
    * @param {number} iteration
    */
-  setPlan(planText, iteration) {
+  setPlan(planText: any, iteration: any) {
     this.#setPlan(planText, iteration);
   }
 
@@ -417,7 +417,7 @@ export class ActiveContext {
    * @param {string} replanText
    * @param {number} iteration
    */
-  updatePlan(replanText, iteration) {
+  updatePlan(replanText: any, iteration: any) {
     this.#updatePlan(replanText, iteration);
   }
 
@@ -431,7 +431,7 @@ export class ActiveContext {
     }
     return {
       ...this.#plan,
-      steps: this.#plan.steps.map((s) => ({ ...s })),
+      steps: this.#plan.steps.map((s: any) => ({ ...s })),
     };
   }
 
@@ -448,7 +448,7 @@ export class ActiveContext {
    * @returns {Array<Plan>}
    */
   getPlanHistory() {
-    return this.#planHistory.map((p) => ({ ...p, steps: p.steps.map((s) => ({ ...s })) }));
+    return this.#planHistory.map((p) => ({ ...p, steps: p.steps.map((s: any) => ({ ...s })) }));
   }
 
   /**
@@ -588,10 +588,10 @@ export class ActiveContext {
       .filter((r) => r.thought)
       .map((r) => (r.thought.length > 100 ? `${r.thought.substring(0, 100)}…` : r.thought));
 
-    const tools = recent.flatMap((r) => r.actions.map((a) => a.tool));
+    const tools = recent.flatMap((r) => r.actions.map((a: any) => a.tool));
 
     const newInfoCount = recent.reduce(
-      (c, r) => c + r.observations.filter((o) => o.gotNewInfo).length,
+      (c, r) => c + r.observations.filter((o: any) => o.gotNewInfo).length,
       0
     );
     const totalObs = recent.reduce((c, r) => c + r.observations.length, 0);
@@ -673,7 +673,7 @@ export class ActiveContext {
         ? {
             plan: {
               text: this.#plan.text,
-              steps: this.#plan.steps.map((s) => ({ ...s })),
+              steps: this.#plan.steps.map((s: any) => ({ ...s })),
               createdAtIteration: this.#plan.createdAtIteration,
               lastUpdatedAtIteration: this.#plan.lastUpdatedAtIteration,
             },
@@ -688,13 +688,13 @@ export class ActiveContext {
    * @param {object} json - toJSON() 的输出
    * @returns {ActiveContext}
    */
-  static fromJSON(json) {
+  static fromJSON(json: any) {
     const ctx = new ActiveContext();
     if (json.rounds) {
-      ctx.#rounds = json.rounds.map((r) => ({ ...r }));
+      ctx.#rounds = json.rounds.map((r: any) => ({ ...r }));
     }
     if (json.scratchpad) {
-      ctx.#scratchpad = json.scratchpad.map((f) => ({ ...f }));
+      ctx.#scratchpad = json.scratchpad.map((f: any) => ({ ...f }));
     }
     if (json.totalObservations) {
       ctx.#totalObservations = json.totalObservations;
@@ -702,7 +702,7 @@ export class ActiveContext {
     if (json.plan) {
       ctx.#plan = {
         text: json.plan.text,
-        steps: json.plan.steps.map((s) => ({ ...s })),
+        steps: json.plan.steps.map((s: any) => ({ ...s })),
         createdAtIteration: json.plan.createdAtIteration,
         lastUpdatedAtIteration: json.plan.lastUpdatedAtIteration,
       };
@@ -738,7 +738,7 @@ export class ActiveContext {
    * @param {boolean} isNew 由 ExplorationTracker.recordToolCall 提供
    * @returns {{ gotNewInfo: boolean, resultType: string, keyFacts: string[], resultSize: number }}
    */
-  static buildObservationMeta(toolName, args, result, isNew) {
+  static buildObservationMeta(toolName: any, args: any, result: any, isNew: any) {
     const meta = {
       gotNewInfo: isNew,
       resultType: 'unknown',
@@ -825,8 +825,8 @@ export class ActiveContext {
    * @param {{toolName: string, result: any, round: number}} observation
    * @returns {{toolName: string, round: number, summary: string}}
    */
-  #compressObservation(observation) {
-    const strategy = TOOL_COMPRESS_STRATEGIES[observation.toolName];
+  #compressObservation(observation: any) {
+    const strategy = (TOOL_COMPRESS_STRATEGIES as Record<string, any>)[observation.toolName];
     let summary;
     try {
       summary = strategy ? strategy(observation.result) : defaultCompress(observation.result);
@@ -845,7 +845,7 @@ export class ActiveContext {
    * @param {string} text
    * @returns {number}
    */
-  #estimateTokens(text) {
+  #estimateTokens(text: any) {
     return Math.ceil((text || '').length / 4);
   }
 
@@ -855,7 +855,7 @@ export class ActiveContext {
    * @param {string} planText
    * @param {number} iteration
    */
-  #setPlan(planText, iteration) {
+  #setPlan(planText: any, iteration: any) {
     this.#plan = {
       text: planText,
       steps: this.#parsePlanSteps(planText),
@@ -868,12 +868,12 @@ export class ActiveContext {
    * @param {string} replanText
    * @param {number} iteration
    */
-  #updatePlan(replanText, iteration) {
+  #updatePlan(replanText: any, iteration: any) {
     if (!this.#plan) {
       this.#setPlan(replanText, iteration);
       return;
     }
-    this.#planHistory.push({ ...this.#plan, steps: this.#plan.steps.map((s) => ({ ...s })) });
+    this.#planHistory.push({ ...this.#plan, steps: this.#plan.steps.map((s: any) => ({ ...s })) });
     this.#plan.text = replanText;
     this.#plan.steps = this.#parsePlanSteps(replanText);
     this.#plan.lastUpdatedAtIteration = iteration;
@@ -884,7 +884,7 @@ export class ActiveContext {
    * @param {string} text
    * @returns {Array<PlanStep>}
    */
-  #parsePlanSteps(text) {
+  #parsePlanSteps(text: any) {
     if (!text) {
       return [];
     }
@@ -908,7 +908,7 @@ export class ActiveContext {
    * @param {string} text
    * @returns {string[]}
    */
-  #extractKeywords(text) {
+  #extractKeywords(text: any) {
     const quoted = [...text.matchAll(/[`"']([A-Za-z_]\w{2,})[`"']/g)].map((m) => m[1]);
     const camelCase = [...text.matchAll(/\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b/g)].map((m) => m[0]);
     const acronyms = [...text.matchAll(/\b([A-Z]{2,}[a-z]\w+)\b/g)].map((m) => m[0]);
@@ -920,7 +920,7 @@ export class ActiveContext {
    * @param {string} text
    * @returns {string|null}
    */
-  #extractPlanFromText(text) {
+  #extractPlanFromText(text: any) {
     if (!text || text.length < 30) {
       return null;
     }

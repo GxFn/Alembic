@@ -59,7 +59,7 @@ export class XcodeCodec extends SnippetCodec {
   /**
    * SnippetSpec → plist XML 字符串
    */
-  generate(spec) {
+  generate(spec: any) {
     if (!spec?.identifier || !spec?.code) {
       throw new Error('Snippet spec must have identifier and code');
     }
@@ -81,8 +81,8 @@ export class XcodeCodec extends SnippetCodec {
   /**
    * Xcode: 每个 snippet 一个文件 → 返回 Array<{ filename, content }>
    */
-  generateBundle(specs) {
-    return specs.map((spec) => ({
+  generateBundle(specs: any) {
+    return specs.map((spec: any) => ({
       filename: `${spec.identifier}${this.fileExtension}`,
       content: this.generate(spec),
     }));
@@ -91,17 +91,19 @@ export class XcodeCodec extends SnippetCodec {
   /**
    * Xcode snippets 全局目录 (macOS only)
    */
-  getInstallDir(_projectRoot) {
+  getInstallDir(_projectRoot: any) {
     return join(homedir(), 'Library/Developer/Xcode/UserData/CodeSnippets');
   }
 
-  mapLanguage(lang) {
-    return XCODE_LANGUAGE_MAP[lang?.toLowerCase()] || XCODE_LANGUAGE_MAP.swift;
+  mapLanguage(lang: any) {
+    return (
+      (XCODE_LANGUAGE_MAP as Record<string, any>)[lang?.toLowerCase()] || XCODE_LANGUAGE_MAP.swift
+    );
   }
 }
 
 /** XML 特殊字符转义 */
-function escapeXml(str) {
+function escapeXml(str: any) {
   if (!str) {
     return '';
   }

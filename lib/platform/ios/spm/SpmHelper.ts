@@ -35,7 +35,7 @@ export class SpmHelper {
   /** @type {GraphCache} 磁盘缓存层 */
   #graphCache;
 
-  constructor(projectRoot, options: any = {}) {
+  constructor(projectRoot: any, options: any = {}) {
     this.#projectRoot = projectRoot;
     this.#parser = options.parser || new PackageSwiftParser(projectRoot);
     this.#graph = options.graph || new DependencyGraph();
@@ -66,7 +66,7 @@ export class SpmHelper {
       const rootParsed = this.#parser.parse(packagePath);
       const hasNoTargets = !rootParsed?.targets || rootParsed.targets.length === 0;
       const hasLocalDeps = (rootParsed?.dependencies || []).some(
-        (d) => d.type === 'local' || d.path
+        (d: any) => d.type === 'local' || d.path
       );
       if (hasNoTargets && hasLocalDeps) {
         // 聚合根模式：根 Package.swift 仅声明 local path 依赖，target 在子包里
@@ -86,7 +86,7 @@ export class SpmHelper {
       return null;
     }
 
-    const combinedHash = allPaths.map((p) => this.#graphCache.computeFileHash(p)).join(':');
+    const combinedHash = allPaths.map((p: any) => this.#graphCache.computeFileHash(p)).join(':');
 
     // ── 尝试命中缓存 ──
     const cached = this.#graphCache.load('spm-graph');
@@ -131,7 +131,7 @@ export class SpmHelper {
    * @param {string[]} allPaths Package.swift 路径数组
    * @returns {object|null}
    */
-  #loadMultiPackage(allPaths) {
+  #loadMultiPackage(allPaths: any) {
     this.#logger.info(`[SpmHelper] 发现 ${allPaths.length} 个 Package.swift，逐一解析...`);
     const mergedTargets: any[] = [];
     let lastName = 'multi-package';
@@ -179,7 +179,7 @@ export class SpmHelper {
   /**
    * 将当前内存状态序列化到缓存
    */
-  #saveToCache(contentHash, parsedResult) {
+  #saveToCache(contentHash: any, parsedResult: any) {
     const graphJSON = this.#graph.toJSON();
     const targetPackageEntries = [...this.#targetPackageMap.entries()];
     const packageDepEntries = [...this.#packageDepGraph.entries()].map(([k, v]) => [k, [...v]]);
@@ -200,7 +200,7 @@ export class SpmHelper {
   /**
    * 从缓存数据恢复内存状态
    */
-  #restoreFromCache(data) {
+  #restoreFromCache(data: any) {
     // 恢复 DependencyGraph
     this.#graph.clear();
     for (const node of data.graphNodes || []) {
@@ -229,7 +229,7 @@ export class SpmHelper {
    * 解析所有 Package.swift 中的 .package(path: "...") 声明，构建包级依赖图
    * @param {{ path: string, parsed: object }[]} allParsed
    */
-  #buildPackageDepGraph(allParsed) {
+  #buildPackageDepGraph(allParsed: any) {
     this.#packageDepGraph.clear();
 
     // 初始化所有包节点
@@ -269,7 +269,7 @@ export class SpmHelper {
    * @param {string} toPkgPath 目标包的 Package.swift 路径
    * @returns {boolean}
    */
-  _canReachPackage(fromPkgPath, toPkgPath) {
+  _canReachPackage(fromPkgPath: any, toPkgPath: any) {
     if (fromPkgPath === toPkgPath) {
       return true;
     }
@@ -301,7 +301,7 @@ export class SpmHelper {
    * @param {string} targetName
    * @returns {{ packageName: string, packagePath: string } | null}
    */
-  getPackageForTarget(targetName) {
+  getPackageForTarget(targetName: any) {
     return this.#targetPackageMap.get(targetName) || null;
   }
 
@@ -328,7 +328,7 @@ export class SpmHelper {
    * @param {string} to 目标 target
    * @returns {{ exists: boolean, canAdd: boolean, reason?: string, crossPackage?: boolean }}
    */
-  ensureDependency(from, to) {
+  ensureDependency(from: any, to: any) {
     if (this.#graph.isReachable(from, to)) {
       return { exists: true, canAdd: true };
     }
@@ -372,7 +372,7 @@ export class SpmHelper {
    * @param {string} to 目标 target
    * @returns {{ ok: boolean, changed: boolean, file?: string, error?: string, crossPackage?: boolean }}
    */
-  addDependency(from, to) {
+  addDependency(from: any, to: any) {
     // 安全检查
     const check = this.#policy.canAddDependency(this.#graph, from, to);
     if (!check.allowed) {
@@ -474,7 +474,7 @@ export class SpmHelper {
    * @param {{ packageName: string, packagePath: string }} toPkg 目标包信息
    * @returns {{ changed: boolean, content: string }}
    */
-  #ensurePackageDependency(content, fromPkgPath, toPkg) {
+  #ensurePackageDependency(content: any, fromPkgPath: any, toPkg: any) {
     const fromDir = dirname(fromPkgPath);
     const toDir = dirname(toPkg.packagePath);
     const relPath = relative(fromDir, toDir).split(sep).join('/');
@@ -523,7 +523,7 @@ export class SpmHelper {
    * @param {string} filePath 源文件绝对路径
    * @returns {string|null} target 名称，未匹配返回 null
    */
-  resolveCurrentTarget(filePath) {
+  resolveCurrentTarget(filePath: any) {
     try {
       const packagePath = this.#parser.findPackageSwift(dirname(filePath));
       if (!packagePath) {

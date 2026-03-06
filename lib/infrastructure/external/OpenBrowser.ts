@@ -18,7 +18,7 @@ const __dirname = dirname(__filename);
 
 const IS_MAC = process.platform === 'darwin';
 
-function isAppInstalled(appName) {
+function isAppInstalled(appName: any) {
   if (!IS_MAC) {
     return false;
   }
@@ -67,7 +67,7 @@ export function hasMacOSBrowserControlGranted() {
  * @param {string} url 要打开的地址
  * @param {string} [baseUrlForLookup] 可选 base URL，按 base 查找标签后导航到 url
  */
-export function openBrowserReuseTab(url, baseUrlForLookup) {
+export function openBrowserReuseTab(url: any, baseUrlForLookup: any) {
   const skipReuse =
     process.env.ASD_UI_NO_REUSE_TAB === '1' || process.env.ASD_UI_OPEN_REUSE === '0';
 
@@ -123,7 +123,7 @@ export function openBrowserReuseTab(url, baseUrlForLookup) {
 /**
  * 回退 open 方式
  */
-async function _fallbackOpen(url) {
+async function _fallbackOpen(url: any) {
   try {
     const open = (await import('open')).default;
     open(url).catch((err) => {

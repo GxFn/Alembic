@@ -53,7 +53,7 @@ export class TopicClassifier {
    * @param {Array<Object>} entries - KnowledgeEntry 数组 (kind='pattern')
    * @returns {Object<string, Array<Object>>} { topic: [entries] }
    */
-  group(entries) {
+  group(entries: any) {
     const grouped: any = {};
     const unmatched: any[] = [];
 
@@ -88,27 +88,27 @@ export class TopicClassifier {
    * @param {Array<Object>} entries
    * @returns {string}
    */
-  buildDescription(topic, entries) {
-    const topicDef = TOPIC_MAP[topic];
+  buildDescription(topic: any, entries: any) {
+    const topicDef = (TOPIC_MAP as Record<string, any>)[topic];
     const baseKeywords = topicDef
       ? topicDef.descriptionKeywords
       : entries
-          .map((e) => e.title || '')
+          .map((e: any) => e.title || '')
           .filter(Boolean)
           .join(', ');
 
     // 从 entries 提取动态关键词（tags + whenClause + title/description）
-    const entryKeywords = entries.flatMap((e) => this._extractKeywords(e)).filter(Boolean);
+    const entryKeywords = entries.flatMap((e: any) => this._extractKeywords(e)).filter(Boolean);
     // 从 tags 直接提取（tags 本身就是高质量关键词）
     const tagKeywords = entries
-      .flatMap((e) => e.tags || [])
-      .map((t) => t.toLowerCase())
-      .filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
+      .flatMap((e: any) => e.tags || [])
+      .map((t: any) => t.toLowerCase())
+      .filter((t: any) => t.length >= 2 && !STOP_WORDS.has(t));
     // 从 whenClause 提取（包含触发场景信息）
     const whenKeywords = entries
-      .flatMap((e) => (e.whenClause || '').match(/[a-zA-Z]{3,}/g) || [])
-      .map((w) => w.toLowerCase())
-      .filter((w) => !STOP_WORDS.has(w));
+      .flatMap((e: any) => (e.whenClause || '').match(/[a-zA-Z]{3,}/g) || [])
+      .map((w: any) => w.toLowerCase())
+      .filter((w: any) => !STOP_WORDS.has(w));
 
     const allExtra = [...new Set([...tagKeywords, ...whenKeywords, ...entryKeywords])].slice(0, 15);
     const extra = allExtra.length > 0 ? `, ${allExtra.join(', ')}` : '';
@@ -120,7 +120,7 @@ export class TopicClassifier {
    * 分类单个 entry 到主题 — 直读 AI 预计算的 topicHint
    * @private
    */
-  _classifyEntry(entry) {
+  _classifyEntry(entry: any) {
     return entry.topicHint || null; // AI 没给 → null → 归入 general
   }
 
@@ -128,7 +128,7 @@ export class TopicClassifier {
    * 从 entry 提取关键词
    * @private
    */
-  _extractKeywords(entry) {
+  _extractKeywords(entry: any) {
     const text = `${entry.title || ''} ${entry.description || ''}`;
     // 提取英文关键词（3+ 字母）
     const words = text.match(/[a-zA-Z]{3,}/g) || [];
@@ -139,7 +139,7 @@ export class TopicClassifier {
   /**
    * @private
    */
-  _topicLabel(topic) {
+  _topicLabel(topic: any) {
     const labels = {
       networking: 'Networking',
       ui: 'UI',
@@ -148,7 +148,7 @@ export class TopicClassifier {
       conventions: 'Conventions',
       general: 'General',
     };
-    return labels[topic] || topic.charAt(0).toUpperCase() + topic.slice(1);
+    return (labels as Record<string, any>)[topic] || topic.charAt(0).toUpperCase() + topic.slice(1);
   }
 }
 

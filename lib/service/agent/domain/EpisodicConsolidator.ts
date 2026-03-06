@@ -68,7 +68,7 @@ export class EpisodicConsolidator {
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  constructor(semanticMemory, { logger }: any = {}) {
+  constructor(semanticMemory: any, { logger }: any = {}) {
     this.#semanticMemory = semanticMemory;
     this.#logger = logger || Logger.getInstance();
   }
@@ -82,7 +82,7 @@ export class EpisodicConsolidator {
    * @param {boolean} [opts.clearPrevious=false] 是否先清除旧的 bootstrap 记忆
    * @returns {{ findings: object, insights: object, textFacts: object, total: object }}
    */
-  consolidate(sessionStore, { bootstrapSession, clearPrevious = false }: any = {}) {
+  consolidate(sessionStore: any, { bootstrapSession, clearPrevious = false }: any = {}) {
     const t0 = Date.now();
 
     // 可选: 清除旧的 bootstrap 记忆 (全量重跑场景)
@@ -137,7 +137,7 @@ export class EpisodicConsolidator {
    *
    * 每个 finding 映射为一条 fact，importance 直接继承。
    */
-  #extractFromFindings(sessionStore) {
+  #extractFromFindings(sessionStore: any) {
     const memories: any[] = [];
     const completedDims = sessionStore.getCompletedDimensions();
 
@@ -185,7 +185,7 @@ export class EpisodicConsolidator {
    * suggestionsForNextTier → insight (分析建议)
    * topFindings 中重要性 ≥ 7 的 → fact (高优先级重复确认)
    */
-  #extractFromReflections(sessionStore) {
+  #extractFromReflections(sessionStore: any) {
     const memories: any[] = [];
     const json = sessionStore.toJSON();
     const reflections = json.tierReflections || [];
@@ -253,7 +253,7 @@ export class EpisodicConsolidator {
    *
    * 仅提取高置信度的简短陈述 (≤100 字), 避免噪音。
    */
-  #extractFromAnalysisText(sessionStore) {
+  #extractFromAnalysisText(sessionStore: any) {
     const memories: any[] = [];
     const seen = new Set(); // 去重
     const completedDims = sessionStore.getCompletedDimensions();
@@ -341,7 +341,7 @@ export class EpisodicConsolidator {
    * @param {string} [evidence]
    * @returns {string[]}
    */
-  #extractEntities(text, evidence: any = undefined) {
+  #extractEntities(text: any, evidence: any = undefined) {
     const entities = new Set();
 
     // 大驼峰类名 (至少 2 个大写字母)

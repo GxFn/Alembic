@@ -29,7 +29,7 @@ export const graphImpactAnalysis = {
     },
     required: ['recipeId'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const kgService = ctx.container.get('knowledgeGraphService');
     const impacted = kgService.getImpactAnalysis(params.recipeId, 'recipe', params.maxDepth || 3);
     return { recipeId: params.recipeId, impactedCount: impacted.length, impacted };
@@ -50,7 +50,7 @@ export const rebuildIndex = {
       dryRun: { type: 'boolean', description: '仅预览不实际写入，默认 false' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const pipeline = ctx.container.get('indexingPipeline');
     return pipeline.run({ force: params.force || false, dryRun: params.dryRun || false });
   },
@@ -73,7 +73,7 @@ export const queryAuditLog = {
       limit: { type: 'number', description: '返回数量，默认 20' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const auditLogger = ctx.container.get('auditLogger');
     const { action, actor, limit = 20 } = params;
 
@@ -105,7 +105,7 @@ export const loadSkill = {
     },
     required: ['skillName'],
   },
-  handler: async (params) => {
+  handler: async (params: any) => {
     // 项目级 Skills 优先（覆盖同名内置 Skill）
     const projectSkillPath = path.join(PROJECT_SKILLS_DIR, params.skillName, 'SKILL.md');
     const builtinSkillPath = path.join(SKILLS_DIR, params.skillName, 'SKILL.md');
@@ -155,7 +155,7 @@ export const createSkillTool = {
     },
     required: ['name', 'description', 'content'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const { createSkill } = await import('../../../external/mcp/handlers/skill.js');
     // 根据 Agent 的 source 推断 createdBy
     const createdBy = ctx?.source === 'system' ? 'system-ai' : 'user-ai';
@@ -180,7 +180,7 @@ export const suggestSkills = {
     properties: {},
     required: [],
   },
-  handler: async (_params, ctx) => {
+  handler: async (_params: any, ctx: any) => {
     const { SkillAdvisor } = await import('../../skills/SkillAdvisor.js');
     const database = ctx?.container?.get?.('database') || null;
     const projectRoot = ctx?.projectRoot || process.cwd();
@@ -212,7 +212,7 @@ export const bootstrapKnowledgeTool = {
       },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const { bootstrapKnowledge } = await import(
       '../../../external/mcp/handlers/bootstrap-internal.js'
     );

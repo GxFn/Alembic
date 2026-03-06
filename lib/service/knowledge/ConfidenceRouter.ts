@@ -46,7 +46,7 @@ export class ConfidenceRouter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {Promise<{ action: 'auto_approve'|'pending'|'reject', reason: string, confidence?: number }>}
    */
-  async route(entry) {
+  async route(entry: any) {
     const confidence = entry.reasoning?.confidence ?? 0;
     const source = entry.source || 'manual';
     const isTrusted = this._config.trustedSources.includes(source);
@@ -144,7 +144,7 @@ export class ConfidenceRouter {
   /**
    * 估算内容长度
    */
-  _estimateContentLength(entry) {
+  _estimateContentLength(entry: any) {
     const content = entry.content;
     if (!content) {
       return 0;
@@ -154,7 +154,7 @@ export class ConfidenceRouter {
       content.pattern,
       content.rationale,
       content.markdown,
-      ...(content.steps || []).map((s) => (typeof s === 'string' ? s : s?.description || '')),
+      ...(content.steps || []).map((s: any) => (typeof s === 'string' ? s : s?.description || '')),
     ].filter(Boolean);
 
     return parts.reduce((sum, p) => sum + p.length, 0);

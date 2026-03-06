@@ -57,7 +57,7 @@ export class ToolExecutionPipeline {
    * @param {ToolMiddleware} middleware
    * @returns {this}
    */
-  use(middleware) {
+  use(middleware: any) {
     this.#middlewares.push(middleware);
     return this;
   }
@@ -74,7 +74,7 @@ export class ToolExecutionPipeline {
    * @param {ToolExecContext} context - { runtime, loopCtx, iteration }
    * @returns {Promise<{ result: *, metadata: ToolMetadata }>}
    */
-  async execute(call, context) {
+  async execute(call: any, context: any) {
     let toolResult: any = null;
     const metadata = { cacheHit: false, blocked: false, isNew: false, durationMs: 0 };
 
@@ -153,14 +153,14 @@ export class ToolExecutionPipeline {
  */
 export const allowlistGate = {
   name: 'allowlistGate',
-  before(call, ctx) {
+  before(call: any, ctx: any) {
     const schemas = ctx.loopCtx?.toolSchemas;
     // 如果没有 schema 列表（全工具模式），跳过检查
     if (!schemas || schemas.length === 0) {
       return undefined;
     }
 
-    const allowedNames = new Set(schemas.map((s) => s.name || s.function?.name));
+    const allowedNames = new Set(schemas.map((s: any) => s.name || s.function?.name));
     if (!allowedNames.has(call.name)) {
       ctx.runtime.logger.warn(
         `[ToolPipeline] ⛔ Tool "${call.name}" not in allowlist — blocked (hallucinated call)`
@@ -183,7 +183,7 @@ export const allowlistGate = {
  */
 export const safetyGate = {
   name: 'safetyGate',
-  before(call, ctx) {
+  before(call: any, ctx: any) {
     const check = ctx.runtime.policies.validateToolCall(call.name, call.args);
     if (!check.ok) {
       ctx.runtime.logger.warn(
@@ -202,7 +202,7 @@ export const safetyGate = {
  */
 export const cacheCheck = {
   name: 'cacheCheck',
-  before(call, ctx) {
+  before(call: any, ctx: any) {
     const mc = ctx.loopCtx.memoryCoordinator;
     if (!mc) {
       return undefined;
@@ -223,7 +223,7 @@ export const cacheCheck = {
  */
 export const observationRecord = {
   name: 'observationRecord',
-  after(call, result, ctx, meta) {
+  after(call: any, result: any, ctx: any, meta: any) {
     ctx.loopCtx.memoryCoordinator?.recordObservation?.(
       call.name,
       call.args,
@@ -241,7 +241,7 @@ export const observationRecord = {
  */
 export const trackerSignal = {
   name: 'trackerSignal',
-  after(call, result, ctx, meta) {
+  after(call: any, result: any, ctx: any, meta: any) {
     if (ctx.loopCtx.tracker) {
       const r = ctx.loopCtx.tracker.recordToolCall(call.name, call.args, result);
       meta.isNew = r.isNew;
@@ -256,7 +256,7 @@ export const trackerSignal = {
  */
 export const traceRecord = {
   name: 'traceRecord',
-  after(call, result, ctx, meta) {
+  after(call: any, result: any, ctx: any, meta: any) {
     ctx.loopCtx.trace?.recordToolCall(call.name, call.args, result, meta.isNew);
   },
 };
@@ -268,7 +268,7 @@ export const traceRecord = {
  */
 export const submitDedup = {
   name: 'submitDedup',
-  after(call, result, ctx, meta) {
+  after(call: any, result: any, ctx: any, meta: any) {
     const { sharedState } = ctx.loopCtx;
     if (!sharedState) {
       return;
@@ -315,10 +315,10 @@ export const submitDedup = {
  */
 export const progressEmitter = {
   name: 'progressEmitter',
-  before(call, ctx) {
+  before(call: any, ctx: any) {
     ctx.runtime.emitProgress?.('tool_call', { tool: call.name, args: call.args });
   },
-  after(call, result, ctx, meta) {
+  after(call: any, result: any, ctx: any, meta: any) {
     ctx.runtime.emitProgress?.('tool_end', {
       tool: call.name,
       duration: meta.durationMs,
@@ -336,7 +336,7 @@ export const progressEmitter = {
  */
 export const eventBusPublisher = {
   name: 'eventBusPublisher',
-  before(call, ctx) {
+  before(call: any, ctx: any) {
     if (ctx.runtime.bus?.publish) {
       ctx.runtime.bus.publish(
         'tool:call:start',
@@ -348,7 +348,7 @@ export const eventBusPublisher = {
       );
     }
   },
-  after(call, result, ctx, meta) {
+  after(call: any, result: any, ctx: any, meta: any) {
     if (ctx.runtime.bus?.publish) {
       ctx.runtime.bus.publish(
         'tool:call:end',

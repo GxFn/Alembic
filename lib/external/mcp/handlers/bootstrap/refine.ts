@@ -16,7 +16,7 @@ import { envelope } from '../../envelope.js';
  * @param {object} ctx  MCP context { container, logger }
  * @param {object} args { candidateIds?: string[], userPrompt?: string, dryRun?: boolean }
  */
-export async function bootstrapRefine(ctx, args) {
+export async function bootstrapRefine(ctx: any, args: any) {
   const t0 = Date.now();
   const knowledgeService = ctx.container.get('knowledgeService');
   const aiProvider = ctx.container.get('aiProvider');
@@ -33,7 +33,7 @@ export async function bootstrapRefine(ctx, args) {
   let onProgress: any = null;
   try {
     const taskManager = ctx.container.get('bootstrapTaskManager');
-    onProgress = (eventName, data) => taskManager.emitProgress(eventName, data);
+    onProgress = (eventName: any, data: any) => taskManager.emitProgress(eventName, data);
   } catch {
     /* optional */
   }
@@ -53,7 +53,9 @@ export async function bootstrapRefine(ctx, args) {
       { lifecycle: 'pending', source: 'bootstrap' },
       { page: 1, pageSize: 200 }
     );
-    entries = (result.items || []).map((e) => (typeof e.toJSON === 'function' ? e.toJSON() : e));
+    entries = (result.items || []).map((e: any) =>
+      typeof e.toJSON === 'function' ? e.toJSON() : e
+    );
   }
 
   if (entries.length === 0) {
@@ -64,7 +66,10 @@ export async function bootstrapRefine(ctx, args) {
     });
   }
 
-  onProgress?.('refine:started', { total: entries.length, candidateIds: entries.map((e) => e.id) });
+  onProgress?.('refine:started', {
+    total: entries.length,
+    candidateIds: entries.map((e: any) => e.id),
+  });
 
   // 2. 收集已发布 Recipe 标题（关联关系只能指向已发布 Recipe，不能在候选之间互关联）
   let publishedTitles: any[] = [];
@@ -73,7 +78,7 @@ export async function bootstrapRefine(ctx, args) {
       { lifecycle: 'active' },
       { page: 1, pageSize: 200 }
     );
-    publishedTitles = (published.items || []).map((e) => e.title).filter(Boolean);
+    publishedTitles = (published.items || []).map((e: any) => e.title).filter(Boolean);
   } catch {
     /* ignore */
   }
@@ -244,7 +249,9 @@ ${refineInstruction}
         if (VALID_KEYS.has(key)) {
           normalized[key] = value;
         } else {
-          const mapped = KEY_ALIASES[key] || KEY_ALIASES[key.toLowerCase?.()];
+          const mapped =
+            (KEY_ALIASES as Record<string, any>)[key] ||
+            (KEY_ALIASES as Record<string, any>)[key.toLowerCase?.()];
           if (mapped && !(mapped in normalized)) {
             normalized[mapped] = value;
           }
@@ -252,7 +259,7 @@ ${refineInstruction}
       }
       for (const k of VALID_KEYS) {
         if (!(k in normalized)) {
-          normalized[k] = before[k];
+          normalized[k] = (before as Record<string, any>)[k];
         }
       }
 

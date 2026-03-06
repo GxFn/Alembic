@@ -68,7 +68,7 @@ export class CodeEntityGraph {
    * @param {string} [options.projectRoot]
    * @param {import('winston').Logger} [options.logger]
    */
-  constructor(db, options: any = {}) {
+  constructor(db: any, options: any = {}) {
     this.db = typeof db?.getDb === 'function' ? db.getDb() : db;
     this.projectRoot = options.projectRoot || '';
     this.log = options.logger || logger;
@@ -88,7 +88,7 @@ export class CodeEntityGraph {
    * @param {object} astSummary - analyzeProject() 产出的 ProjectAstSummary
    * @returns {GraphPopulateResult}
    */
-  populateFromAst(astSummary) {
+  populateFromAst(astSummary: any) {
     if (!astSummary) {
       return { entitiesUpserted: 0, edgesCreated: 0, durationMs: 0 };
     }
@@ -211,7 +211,7 @@ export class CodeEntityGraph {
    * @param {object} depGraphData - spm.getDependencyGraph() 产出
    * @returns {GraphPopulateResult}
    */
-  populateFromSpm(depGraphData) {
+  populateFromSpm(depGraphData: any) {
     if (!depGraphData) {
       return { entitiesUpserted: 0, edgesCreated: 0, durationMs: 0 };
     }
@@ -247,7 +247,7 @@ export class CodeEntityGraph {
    * @param {Array<{title: string, relations: object}>} candidates 扁平关系数组或 Relations 对象
    * @returns {GraphPopulateResult}
    */
-  populateFromCandidateRelations(candidates) {
+  populateFromCandidateRelations(candidates: any) {
     if (!candidates?.length) {
       return { entitiesUpserted: 0, edgesCreated: 0, durationMs: 0 };
     }
@@ -312,7 +312,7 @@ export class CodeEntityGraph {
    * @param {string} [entityType]
    * @returns {CodeEntity|null}
    */
-  getEntity(entityId, entityType) {
+  getEntity(entityId: any, entityType: any) {
     let row;
     if (entityType) {
       row = this.stmts.getEntity.get(entityId, entityType, this.projectRoot);
@@ -330,9 +330,9 @@ export class CodeEntityGraph {
    * @param {number} [limit=200]
    * @returns {CodeEntity[]}
    */
-  listEntities(entityType, limit = 200) {
+  listEntities(entityType: any, limit = 200) {
     const rows = this.stmts.listByType.all(entityType, this.projectRoot, limit);
-    return rows.map((r) => this.#mapEntity(r));
+    return rows.map((r: any) => this.#mapEntity(r));
   }
 
   /**
@@ -343,7 +343,7 @@ export class CodeEntityGraph {
    * @param {number} [options.limit=20]
    * @returns {CodeEntity[]}
    */
-  searchEntities(query, options: any = {}) {
+  searchEntities(query: any, options: any = {}) {
     const pattern = `%${query}%`;
     let sql = `SELECT * FROM code_entities WHERE project_root = ? AND name LIKE ?`;
     const params = [this.projectRoot, pattern];
@@ -356,7 +356,7 @@ export class CodeEntityGraph {
     return this.db
       .prepare(sql)
       .all(...params)
-      .map((r) => this.#mapEntity(r));
+      .map((r: any) => this.#mapEntity(r));
   }
 
   /**
@@ -366,7 +366,7 @@ export class CodeEntityGraph {
    * @param {'both'|'out'|'in'} [direction='both']
    * @returns {{ outgoing: EntityEdge[], incoming: EntityEdge[] }}
    */
-  getEntityEdges(entityId, entityType, direction = 'both') {
+  getEntityEdges(entityId: any, entityType: any, direction = 'both') {
     const outgoing =
       direction === 'both' || direction === 'out'
         ? this.db
@@ -390,7 +390,7 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=10]
    * @returns {string[]} 继承链 [class, parent, grandparent, ...]
    */
-  getInheritanceChain(className, maxDepth = 10) {
+  getInheritanceChain(className: any, maxDepth = 10) {
     const chain = [className];
     let current = className;
     for (let i = 0; i < maxDepth; i++) {
@@ -416,7 +416,7 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=3]
    * @returns {Array<{ id: string, type: string, depth: number, relation: string }>}
    */
-  getDescendants(entityId, entityType, maxDepth = 3) {
+  getDescendants(entityId: any, entityType: any, maxDepth = 3) {
     const results: { id: any; type: any; depth: any; relation: string }[] = [];
     const visited = new Set();
     const queue = [{ id: entityId, type: entityType, depth: 0 }];
@@ -467,14 +467,14 @@ export class CodeEntityGraph {
    * @param {string} className
    * @returns {string[]}
    */
-  getConformances(className) {
+  getConformances(className: any) {
     const rows = this.db
       .prepare(
         `SELECT to_id FROM knowledge_edges 
        WHERE from_id = ? AND from_type IN ('class', 'category') AND relation = 'conforms'`
       )
       .all(className);
-    return rows.map((r) => r.to_id);
+    return rows.map((r: any) => r.to_id);
   }
 
   /**
@@ -486,7 +486,7 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=5]
    * @returns {{ found: boolean, path: EntityEdge[], depth: number }}
    */
-  findPath(fromId, fromType, toId, toType, maxDepth = 5) {
+  findPath(fromId: any, fromType: any, toId: any, toType: any, maxDepth = 5) {
     const visited = new Set();
     const queue = [{ id: fromId, type: fromType, path: [] as any[] }];
 
@@ -533,7 +533,7 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=3]
    * @returns {Array<{ id: string, type: string, relation: string, depth: number }>}
    */
-  getImpactRadius(entityId, entityType, maxDepth = 3) {
+  getImpactRadius(entityId: any, entityType: any, maxDepth = 3) {
     const impacted: { id: any; type: any; relation: any; depth: any }[] = [];
     const visited = new Set();
     const queue = [{ id: entityId, type: entityType, depth: 0 }];
@@ -602,11 +602,11 @@ export class CodeEntityGraph {
       .all();
 
     return {
-      entities: Object.fromEntries(entityStats.map((s) => [s.entity_type, s.count])),
-      edges: Object.fromEntries(edgeStats.map((s) => [s.relation, s.count])),
-      totalEntities: entityStats.reduce((sum, s) => sum + s.count, 0),
-      totalEdges: edgeStats.reduce((sum, s) => sum + s.count, 0),
-      hotNodes: hotNodes.map((n) => ({ id: n.to_id, type: n.to_type, inDegree: n.in_degree })),
+      entities: Object.fromEntries(entityStats.map((s: any) => [s.entity_type, s.count])),
+      edges: Object.fromEntries(edgeStats.map((s: any) => [s.relation, s.count])),
+      totalEntities: entityStats.reduce((sum: any, s: any) => sum + s.count, 0),
+      totalEdges: edgeStats.reduce((sum: any, s: any) => sum + s.count, 0),
+      hotNodes: hotNodes.map((n: any) => ({ id: n.to_id, type: n.to_type, inDegree: n.in_degree })),
     };
   }
 
@@ -695,7 +695,7 @@ export class CodeEntityGraph {
                LIMIT 3`
             )
             .all(row.to_id);
-          const callerNames = topCallers.map((c) => `\`${c.from_id}\``).join(', ');
+          const callerNames = topCallers.map((c: any) => `\`${c.from_id}\``).join(', ');
           lines.push(
             `- \`${row.to_id}\` ← ${row.call_count} 次调用 (${callerNames}${topCallers.length < row.call_count ? '...' : ''})`
           );
@@ -731,7 +731,7 @@ export class CodeEntityGraph {
    * @param {Array<{ from: string, to: string, flowType: string, direction: string }>} dataFlowEdges
    * @returns {GraphPopulateResult}
    */
-  populateCallGraph(callEdges, dataFlowEdges) {
+  populateCallGraph(callEdges: any, dataFlowEdges: any) {
     const t0 = Date.now();
     let edges = 0;
     let entities = 0;
@@ -838,7 +838,7 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=2]
    * @returns {Array<{ caller: string, depth: number, callType: string }>}
    */
-  getCallers(methodId, maxDepth = 2) {
+  getCallers(methodId: any, maxDepth = 2) {
     const results: { caller: any; depth: any; callType: any }[] = [];
     const visited = new Set();
     const queue = [{ id: methodId, depth: 0 }];
@@ -875,7 +875,7 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=2]
    * @returns {Array<{ callee: string, depth: number, callType: string }>}
    */
-  getCallees(methodId, maxDepth = 2) {
+  getCallees(methodId: any, maxDepth = 2) {
     const results: { callee: any; depth: any; callType: any }[] = [];
     const visited = new Set();
     const queue = [{ id: methodId, depth: 0 }];
@@ -912,7 +912,7 @@ export class CodeEntityGraph {
    * @param {string} methodId - "ClassName.methodName"
    * @returns {{ directCallers: number, transitiveCallers: number, affectedFiles: string[] }}
    */
-  getCallImpactRadius(methodId) {
+  getCallImpactRadius(methodId: any) {
     const callers = this.getCallers(methodId, 3);
     const affectedFiles = new Set();
 
@@ -939,7 +939,7 @@ export class CodeEntityGraph {
    * @param {string} fqn
    * @returns {string}
    */
-  _extractEntityId(fqn) {
+  _extractEntityId(fqn: any) {
     if (fqn.includes('::')) {
       return fqn.split('::')[1];
     }
@@ -969,7 +969,7 @@ export class CodeEntityGraph {
    * @param {string[]} filePaths 变更文件的相对路径列表
    * @returns {{ deletedEdges: number, deletedEntities: number }}
    */
-  clearCallGraphForFiles(filePaths) {
+  clearCallGraphForFiles(filePaths: any) {
     if (!filePaths?.length) {
       return { deletedEdges: 0, deletedEntities: 0 };
     }
@@ -1088,7 +1088,7 @@ export class CodeEntityGraph {
   // Private — Helpers
   // ────────────────────────────────────────────
 
-  #upsertEntity(entity) {
+  #upsertEntity(entity: any) {
     const now = Math.floor(Date.now() / 1000);
     this.stmts.upsert.run(
       entity.entityId,
@@ -1105,7 +1105,7 @@ export class CodeEntityGraph {
     );
   }
 
-  #addEdge(fromId, fromType, toId, toType, relation, metadata: any = {}) {
+  #addEdge(fromId: any, fromType: any, toId: any, toType: any, relation: any, metadata: any = {}) {
     const now = Math.floor(Date.now() / 1000);
     try {
       this.stmts.addEdge.run(
@@ -1130,11 +1130,11 @@ export class CodeEntityGraph {
   /**
    * 从 AST 数据推断实体类型
    */
-  #inferEntityType(name, astSummary) {
+  #inferEntityType(name: any, astSummary: any) {
     if (!name) {
       return 'class'; // guard against undefined
     }
-    if (astSummary.protocols?.some((p) => p.name === name)) {
+    if (astSummary.protocols?.some((p: any) => p.name === name)) {
       return 'protocol';
     }
     if (name.includes('(') && name.includes(')')) {
@@ -1146,7 +1146,7 @@ export class CodeEntityGraph {
   /**
    * 映射 Relations 桶名到图谱边类型
    */
-  #mapRelationType(type) {
+  #mapRelationType(type: any) {
     const mapping = {
       inherits: 'inherits',
       implements: 'conforms',
@@ -1163,10 +1163,10 @@ export class CodeEntityGraph {
       enforces: 'enforces',
       references: 'references',
     };
-    return mapping[type] || 'related';
+    return (mapping as Record<string, any>)[type] || 'related';
   }
 
-  #mapEdge(row) {
+  #mapEdge(row: any) {
     return {
       fromId: row.from_id,
       fromType: row.from_type,
@@ -1178,7 +1178,7 @@ export class CodeEntityGraph {
     };
   }
 
-  #mapEntity(row) {
+  #mapEntity(row: any) {
     return {
       entityId: row.entity_id,
       entityType: row.entity_type,

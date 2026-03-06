@@ -46,7 +46,7 @@ export class PlanTracker {
    * @param {object|null} trace - ActiveContext 实例
    * @returns {{ type: string, text: string }|null}
    */
-  checkPlanning(state, trace) {
+  checkPlanning(state: any, trace: any) {
     const { metrics, budget: b, strategy } = state;
     const m = metrics;
 
@@ -98,8 +98,8 @@ export class PlanTracker {
       parts.push(`📋 计划进度回顾 (第 ${m.iteration}/${b.maxIterations} 轮):`);
     }
 
-    const doneSteps = plan.steps.filter((s) => s.status === 'done');
-    const pendingSteps = plan.steps.filter((s) => s.status === 'pending');
+    const doneSteps = plan.steps.filter((s: any) => s.status === 'done');
+    const pendingSteps = plan.steps.filter((s: any) => s.status === 'pending');
     if (doneSteps.length > 0) {
       parts.push(`\n✅ 已完成 (${doneSteps.length}/${plan.steps.length}):`);
       for (const s of doneSteps) {
@@ -133,7 +133,7 @@ export class PlanTracker {
    *
    * @param {object|null} trace - ActiveContext 实例
    */
-  updatePlanProgress(trace) {
+  updatePlanProgress(trace: any) {
     const steps = trace?.getPlanStepsMutable?.() || [];
     if (steps.length === 0) {
       return;
@@ -143,7 +143,7 @@ export class PlanTracker {
     if (this.#pendingReplan) {
       const plan = trace?.getPlan?.();
       if (plan) {
-        this.#planProgress.coveredSteps = plan.steps.filter((s) => s.status === 'done').length;
+        this.#planProgress.coveredSteps = plan.steps.filter((s: any) => s.status === 'done').length;
         this.#planProgress.totalSteps = plan.steps.length;
         this.#planProgress.unplannedActions = 0;
         this.#planProgress.consecutiveOffPlan = 0;
@@ -174,7 +174,7 @@ export class PlanTracker {
       this.#planProgress.consecutiveOffPlan++;
     }
 
-    this.#planProgress.coveredSteps = steps.filter((s) => s.status === 'done').length;
+    this.#planProgress.coveredSteps = steps.filter((s: any) => s.status === 'done').length;
     this.#planProgress.totalSteps = steps.length;
     this.#planProgress.deviationScore =
       steps.length > 0 ? 1 - this.#planProgress.coveredSteps / steps.length : 0;
@@ -185,7 +185,7 @@ export class PlanTracker {
    * @param {object|null} trace
    * @returns {{ score: number, breakdown: object }}
    */
-  getQualityMetrics(trace) {
+  getQualityMetrics(trace: any) {
     const stats = trace?.getStats?.() || {
       totalRounds: 0,
       thoughtCount: 0,
@@ -252,7 +252,7 @@ export class PlanTracker {
 
   // ─── 内部方法 ──────────────────────────────────
 
-  #buildPlanElicitationPrompt(maxIter) {
+  #buildPlanElicitationPrompt(maxIter: any) {
     return [
       `📋 在开始探索前，请先制定一个简要的探索计划。`,
       ``,
@@ -278,7 +278,7 @@ export class PlanTracker {
    * @param {object} action - { tool, params }
    * @returns {object|null}
    */
-  #findMatchingStep(steps, action) {
+  #findMatchingStep(steps: any, action: any) {
     const toolName = action.tool;
     const argsStr = JSON.stringify(action.params || {}).toLowerCase();
 
@@ -289,7 +289,7 @@ export class PlanTracker {
 
       // 策略 1: 关键词匹配
       if (step.keywords?.length > 0) {
-        const matched = step.keywords.some((kw) => argsStr.includes(kw.toLowerCase()));
+        const matched = step.keywords.some((kw: any) => argsStr.includes(kw.toLowerCase()));
         if (matched) {
           return step;
         }

@@ -21,7 +21,7 @@ const logger = Logger.getInstance();
  */
 router.get(
   '/targets',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
 
@@ -45,7 +45,7 @@ router.get(
  */
 router.get(
   '/dep-graph',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
 
@@ -125,7 +125,7 @@ router.get(
  */
 router.get(
   '/browse-dirs',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
 
@@ -154,7 +154,7 @@ router.get(
  */
 router.post(
   '/scan-folder',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { path: folderPath, options = {} } = req.body;
 
     if (!folderPath) {
@@ -181,7 +181,7 @@ router.post(
  */
 router.post(
   '/scan-folder/stream',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { path: folderPath, options = {} } = req.body;
 
     if (!folderPath) {
@@ -203,7 +203,7 @@ router.post(
       try {
         const result = await moduleService.scanFolder(folderPath, {
           ...options,
-          onProgress: (evt) => {
+          onProgress: (evt: any) => {
             if (session) {
               session.push(evt);
             }
@@ -237,7 +237,7 @@ router.post(
  */
 router.post(
   '/target-files',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { target, targetName } = req.body;
 
     if (!target && !targetName) {
@@ -252,7 +252,7 @@ router.post(
     let resolvedTarget = target;
     if (!resolvedTarget && targetName) {
       const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t) => t.name === targetName);
+      resolvedTarget = targets.find((t: any) => t.name === targetName);
       if (!resolvedTarget) {
         return res.status(404).json({
           success: false,
@@ -280,7 +280,7 @@ router.post(
  */
 router.post(
   '/scan',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { target, targetName, options = {} } = req.body;
 
     if (!target && !targetName) {
@@ -295,7 +295,7 @@ router.post(
     let resolvedTarget = target;
     if (!resolvedTarget && targetName) {
       const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t) => t.name === targetName);
+      resolvedTarget = targets.find((t: any) => t.name === targetName);
       if (!resolvedTarget) {
         return res.status(404).json({
           success: false,
@@ -325,7 +325,7 @@ router.post(
  */
 router.post(
   '/scan/stream',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { target, targetName, options = {} } = req.body;
 
     if (!target && !targetName) {
@@ -340,7 +340,7 @@ router.post(
     let resolvedTarget = target;
     if (!resolvedTarget && targetName) {
       const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t) => t.name === targetName);
+      resolvedTarget = targets.find((t: any) => t.name === targetName);
       if (!resolvedTarget) {
         return res.status(404).json({
           success: false,
@@ -365,7 +365,7 @@ router.post(
         });
         const result = await moduleService.scanTarget(resolvedTarget, {
           ...options,
-          onProgress(event) {
+          onProgress(event: any) {
             session.send(event);
           },
         });
@@ -412,7 +412,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
     res.socket.setTimeout(0);
   }
 
-  function writeEvent(event) {
+  function writeEvent(event: any) {
     if (res.writableEnded) {
       return;
     }
@@ -434,7 +434,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
   }
 
   // 2) 订阅实时事件
-  const unsubscribe = session.on((event) => {
+  const unsubscribe = session.on((event: any) => {
     writeEvent(event);
     if (event.type === 'stream:done' || event.type === 'stream:error') {
       unsubscribe();
@@ -465,7 +465,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
  */
 router.post(
   '/scan-project',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { options = {} } = req.body;
 
     const container = getServiceContainer();
@@ -488,7 +488,7 @@ router.post(
  */
 router.post(
   '/update-map',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
 
@@ -510,7 +510,7 @@ router.post(
  */
 router.get(
   '/project-info',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
 
@@ -530,7 +530,7 @@ router.get(
  */
 router.post(
   '/bootstrap',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
 
     const container = getServiceContainer();
@@ -561,7 +561,7 @@ router.post(
  */
 router.get(
   '/bootstrap/status',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
 
     let taskManager: any = null;

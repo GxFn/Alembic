@@ -23,7 +23,7 @@ export class DependencyGraph {
    * 从 PackageSwiftParser 的解析结果构建图
    * @param {{ targets: { name: string, dependencies: string[] }[] }} parsed
    */
-  buildFromParsed(parsed) {
+  buildFromParsed(parsed: any) {
     this.clear();
     for (const target of parsed.targets || []) {
       this.addNode(target.name);
@@ -39,7 +39,7 @@ export class DependencyGraph {
   /**
    * 添加节点
    */
-  addNode(name) {
+  addNode(name: any) {
     this.#nodes.add(name);
     if (!this.#adjacency.has(name)) {
       this.#adjacency.set(name, new Set());
@@ -52,7 +52,7 @@ export class DependencyGraph {
   /**
    * 添加边: from 依赖 to
    */
-  addEdge(from, to) {
+  addEdge(from: any, to: any) {
     this.addNode(from);
     this.addNode(to);
     this.#adjacency.get(from).add(to);
@@ -62,7 +62,7 @@ export class DependencyGraph {
   /**
    * BFS 可达性检查
    */
-  isReachable(from, to) {
+  isReachable(from: any, to: any) {
     if (from === to) {
       return true;
     }
@@ -95,7 +95,7 @@ export class DependencyGraph {
     const black = new Set();
     const path: any[] = [];
 
-    const dfs = (node) => {
+    const dfs = (node: any) => {
       white.delete(node);
       gray.add(node);
       path.push(node);
@@ -187,14 +187,14 @@ export class DependencyGraph {
   /**
    * 获取节点的直接依赖
    */
-  getDependencies(node) {
+  getDependencies(node: any) {
     return [...(this.#adjacency.get(node) || [])];
   }
 
   /**
    * 获取节点的直接依赖者 (谁依赖了这个节点)
    */
-  getDependents(node) {
+  getDependents(node: any) {
     return [...(this.#reverseAdj.get(node) || [])];
   }
 

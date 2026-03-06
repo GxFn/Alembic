@@ -33,7 +33,7 @@ export class OpenAiProvider extends AiProvider {
     return true;
   }
 
-  async chat(prompt, context: any = {}) {
+  async chat(prompt: any, context: any = {}) {
     return this._withRetry(async () => {
       const { history = [], temperature = 0.7, maxTokens = 4096 } = context;
       const messages: { role: any; content: any } | { role: string; content: any }[] = [];
@@ -65,7 +65,7 @@ export class OpenAiProvider extends AiProvider {
    * @param {object} opts 统一参数
    * @returns {Promise<{text: string|null, functionCalls: Array<{id, name, args}>|null}>}
    */
-  async chatWithTools(prompt, opts: any = {}) {
+  async chatWithTools(prompt: any, opts: any = {}) {
     return this._withRetry(async () => {
       const {
         messages: unifiedMessages,
@@ -91,7 +91,7 @@ export class OpenAiProvider extends AiProvider {
         } else if (msg.role === 'assistant') {
           const m: any = { role: 'assistant', content: msg.content || null };
           if (msg.toolCalls?.length > 0) {
-            m.tool_calls = msg.toolCalls.map((tc) => ({
+            m.tool_calls = msg.toolCalls.map((tc: any) => ({
               id: tc.id,
               type: 'function',
               function: {
@@ -119,7 +119,7 @@ export class OpenAiProvider extends AiProvider {
 
       // 标准 tool schemas → OpenAI tools format
       if (toolSchemas?.length > 0) {
-        body.tools = toolSchemas.map((s) => ({
+        body.tools = toolSchemas.map((s: any) => ({
           type: 'function',
           function: {
             name: s.name,
@@ -149,7 +149,7 @@ export class OpenAiProvider extends AiProvider {
    * OpenAI 返回格式:
    *   choices[0].message.tool_calls[]: { id, type: 'function', function: { name, arguments(JSON str) } }
    */
-  #parseToolResponse(data) {
+  #parseToolResponse(data: any) {
     const choice = data?.choices?.[0];
 
     // 提取 token 用量 (OpenAI usage)
@@ -170,8 +170,8 @@ export class OpenAiProvider extends AiProvider {
 
     if (message?.tool_calls?.length > 0) {
       const functionCalls = message.tool_calls
-        .filter((tc) => tc.type === 'function')
-        .map((tc) => ({
+        .filter((tc: any) => tc.type === 'function')
+        .map((tc: any) => ({
           id: tc.id,
           name: tc.function.name,
           args: (() => {
@@ -185,7 +185,7 @@ export class OpenAiProvider extends AiProvider {
 
       if (functionCalls.length > 0) {
         this.logger.debug(
-          `[OpenAI] native function calls: ${functionCalls.map((fc) => fc.name).join(', ')}`
+          `[OpenAI] native function calls: ${functionCalls.map((fc: any) => fc.name).join(', ')}`
         );
         return { text, functionCalls, usage };
       }
@@ -194,7 +194,7 @@ export class OpenAiProvider extends AiProvider {
     return { text, functionCalls: null, usage };
   }
 
-  async summarize(code) {
+  async summarize(code: any) {
     const prompt = `请对以下代码生成结构化摘要，返回 JSON 格式 {title, description, language, patterns: [], keyAPIs: []}:\n\n${code}`;
     return (
       (await this.chatWithStructuredOutput(prompt, {
@@ -210,7 +210,7 @@ export class OpenAiProvider extends AiProvider {
    * 使用 response_format: { type: 'json_object' } 强制返回合法 JSON。
    * 兼容 DeepSeek / Ollama 等 OpenAI-Compatible API。
    */
-  async chatWithStructuredOutput(prompt, opts: any = {}) {
+  async chatWithStructuredOutput(prompt: any, opts: any = {}) {
     return this._withRetry(async () => {
       const { temperature = 0.3, maxTokens = 32768, systemPrompt } = opts;
 
@@ -246,7 +246,7 @@ export class OpenAiProvider extends AiProvider {
     });
   }
 
-  async embed(text) {
+  async embed(text: any) {
     const texts = Array.isArray(text) ? text : [text];
 
     try {
@@ -257,8 +257,8 @@ export class OpenAiProvider extends AiProvider {
 
       const data = await this._post(`${this.baseUrl}/embeddings`, body);
       const embeddings = (data?.data || [])
-        .sort((a, b) => a.index - b.index)
-        .map((d) => d.embedding);
+        .sort((a: any, b: any) => a.index - b.index)
+        .map((d: any) => d.embedding);
 
       if (embeddings.length === 0) {
         return Array.isArray(text) ? [] : [];
@@ -270,7 +270,7 @@ export class OpenAiProvider extends AiProvider {
     }
   }
 
-  async _post(url, body) {
+  async _post(url: any, body: any) {
     // Ollama 使用固定 dummy key，不需要校验
     if (!this.apiKey && this.name !== 'ollama') {
       const envKey = this.name === 'deepseek' ? 'ASD_DEEPSEEK_API_KEY' : 'ASD_OPENAI_API_KEY';

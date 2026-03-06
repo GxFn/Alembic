@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-function parseArgs(argv) {
+function parseArgs(argv: any) {
   const args: Record<string, any> = {};
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
@@ -29,13 +29,13 @@ function parseArgs(argv) {
   return args;
 }
 
-function ensureDir(dir) {
+function ensureDir(dir: any) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }
 
-function walk(dir, exts, out) {
+function walk(dir: any, exts: any, out: any) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = path.join(dir, e.name);
@@ -53,15 +53,15 @@ function walk(dir, exts, out) {
   }
 }
 
-function toTitle(base) {
-  return base.replace(/[-_]+/g, ' ').replace(/\b\w/g, (s) => s.toUpperCase());
+function toTitle(base: any) {
+  return base.replace(/[-_]+/g, ' ').replace(/\b\w/g, (s: any) => s.toUpperCase());
 }
 
-function toTrigger(base) {
+function toTrigger(base: any) {
   return base.replace(/\s+/g, '-').toLowerCase();
 }
 
-function readSnippet(filePath, maxChars) {
+function readSnippet(filePath: any, maxChars: any) {
   const raw = fs.readFileSync(filePath, 'utf8');
   if (raw.length <= maxChars) {
     return raw;
@@ -69,7 +69,7 @@ function readSnippet(filePath, maxChars) {
   return `${raw.slice(0, maxChars)}\n// ... (truncated)`;
 }
 
-function detectLanguageByExt(ext) {
+function detectLanguageByExt(ext: any) {
   const map = {
     '.swift': 'swift',
     '.m': 'objectivec',
@@ -87,10 +87,10 @@ function detectLanguageByExt(ext) {
     '.rs': 'rust',
     '.rb': 'ruby',
   };
-  return map[ext] || 'text';
+  return (map as Record<string, any>)[ext] || 'text';
 }
 
-function buildRecipe({ title, trigger, language, sourceFile, snippet }) {
+function buildRecipe({ title, trigger, language, sourceFile, snippet }: any) {
   const fence = '```';
   return [
     '---',

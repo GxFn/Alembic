@@ -30,7 +30,7 @@ const COMPLETED_KEEP = 60 * 1000;
  * @param {'chat'|'refine'} scene 场景标识
  * @returns {StreamSession}
  */
-export function createStreamSession(scene) {
+export function createStreamSession(scene: any) {
   const sessionId = `ss_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const emitter = new EventEmitter();
   emitter.setMaxListeners(20);
@@ -48,7 +48,7 @@ export function createStreamSession(scene) {
      * 缓冲 + 广播一个事件
      * @param {object} event 必须包含 type 字段
      */
-    send(event) {
+    send(event: any) {
       const payload = { ...event, ts: event.ts || Date.now() };
       session.buffer.push(payload);
       emitter.emit('event', payload);
@@ -78,7 +78,7 @@ export function createStreamSession(scene) {
      * @param {string} message
      * @param {string} [code]
      */
-    error(message, code) {
+    error(message: any, code: any) {
       if (session.completed) {
         return;
       }
@@ -97,7 +97,7 @@ export function createStreamSession(scene) {
      * @param {(event: object) => void} handler
      * @returns {() => void} unsubscribe 函数
      */
-    on(handler) {
+    on(handler: any) {
       emitter.on('event', handler);
       return () => emitter.removeListener('event', handler);
     },
@@ -119,6 +119,6 @@ export function createStreamSession(scene) {
  * @param {string} sessionId
  * @returns {StreamSession|undefined}
  */
-export function getStreamSession(sessionId) {
+export function getStreamSession(sessionId: any) {
   return _sessions.get(sessionId);
 }

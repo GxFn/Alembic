@@ -74,7 +74,7 @@ export { bootstrapRefine };
  * @param {number} [args.contentMaxLines=120] 每文件读取最大行数
  * @param {boolean} [args.incremental=true] 是否启用增量 Bootstrap (自动检测变更, 仅重跑受影响维度)
  */
-export async function bootstrapKnowledge(ctx, args) {
+export async function bootstrapKnowledge(ctx: any, args: any) {
   const t0 = Date.now();
   const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
 
@@ -185,7 +185,7 @@ export async function bootstrapKnowledge(ctx, args) {
       },
       guardAudit: {
         totalViolations: guardAudit?.summary?.totalViolations || 0,
-        filesWithViolations: (guardAudit?.files || []).filter((f) => f.violations.length > 0)
+        filesWithViolations: (guardAudit?.files || []).filter((f: any) => f.violations.length > 0)
           .length,
         skipped: skipGuard,
         enhancementRulesInjected: enhancementGuardRules?.length || 0,
@@ -222,7 +222,11 @@ export async function bootstrapKnowledge(ctx, args) {
   // 每个 target 内按 priority 排序
   for (const tName of Object.keys(targetFileMap)) {
     const prio = { high: 0, medium: 1, low: 2 };
-    targetFileMap[tName].sort((a, b) => (prio[a.priority] || 1) - (prio[b.priority] || 1));
+    targetFileMap[tName].sort(
+      (a, b) =>
+        ((prio as Record<string, any>)[a.priority] || 1) -
+        ((prio as Record<string, any>)[b.priority] || 1)
+    );
   }
 
   const dimensions = activeDimensions;
@@ -231,7 +235,7 @@ export async function bootstrapKnowledge(ctx, args) {
     report,
     targets:
       targetsSummary ||
-      allTargets.map((t) => {
+      allTargets.map((t: any) => {
         const name = typeof t === 'string' ? t : t.name;
         return {
           name,
@@ -259,7 +263,7 @@ export async function bootstrapKnowledge(ctx, args) {
     ),
     dependencyGraph: depGraphData
       ? {
-          nodes: (depGraphData.nodes || []).map((n) => ({
+          nodes: (depGraphData.nodes || []).map((n: any) => ({
             id: typeof n === 'string' ? n : n.id,
             label: typeof n === 'string' ? n : n.label,
           })),
@@ -280,10 +284,10 @@ export async function bootstrapKnowledge(ctx, args) {
       : null,
     guardViolationFiles: guardAudit
       ? (guardAudit.files || [])
-          .filter((f) => f.violations.length > 0)
-          .map((f) => ({
+          .filter((f: any) => f.violations.length > 0)
+          .map((f: any) => ({
             filePath: f.filePath,
-            violations: f.violations.map((v) => ({
+            violations: f.violations.map((v: any) => ({
               ruleId: v.ruleId,
               severity: v.severity,
               message: v.message,
@@ -296,8 +300,8 @@ export async function bootstrapKnowledge(ctx, args) {
     // 注意：anti-pattern 已移除，代码问题由 Guard 独立处理
     analysisFramework: {
       dimensions,
-      skillWorthyDimensions: dimensions.filter((d) => d.skillWorthy).map((d) => d.id),
-      candidateOnlyDimensions: dimensions.filter((d) => !d.skillWorthy).map((d) => d.id),
+      skillWorthyDimensions: dimensions.filter((d: any) => d.skillWorthy).map((d: any) => d.id),
+      candidateOnlyDimensions: dimensions.filter((d: any) => !d.skillWorthy).map((d: any) => d.id),
       candidateRequiredFields: getInternalAgentRequiredFields(),
       submissionTool: 'autosnippet_submit_knowledge_batch',
       expectedOutput: `候选知识（微观代码维度：code-pattern/best-practice/event-and-data-flow + 语言条件扫描）+ Project Skills（宏观叙事维度：code-standard/architecture/project-profile/agent-guidelines + 语言条件扫描）— 共 ${dimensions.length} 个维度`,
@@ -347,7 +351,7 @@ export async function bootstrapKnowledge(ctx, args) {
   // ═══════════════════════════════════════════════════════════
 
   // 构建任务定义列表
-  const taskDefs = dimensions.map((dim) => ({
+  const taskDefs = dimensions.map((dim: any) => ({
     id: dim.id,
     meta: {
       type: dim.skillWorthy ? 'skill' : 'candidate',

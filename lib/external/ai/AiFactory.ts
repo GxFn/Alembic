@@ -32,7 +32,7 @@ const DEEPSEEK_BASE = 'https://api.deepseek.com/v1';
  */
 export function createProvider(options: any = {}) {
   const provider = options.provider || process.env.ASD_AI_PROVIDER || 'google';
-  const ProviderClass = PROVIDER_MAP[provider.toLowerCase()];
+  const ProviderClass = (PROVIDER_MAP as Record<string, any>)[provider.toLowerCase()];
 
   if (!ProviderClass) {
     throw new Error(
@@ -84,7 +84,7 @@ export function autoDetectProvider() {
       ollama: null, // Ollama 不需要 key
       mock: null,
     };
-    const requiredKeyEnv = keyEnvMap[explicit.toLowerCase()];
+    const requiredKeyEnv = (keyEnvMap as Record<string, any>)[explicit.toLowerCase()];
     if (requiredKeyEnv && !process.env[requiredKeyEnv]) {
       logger.warn(
         `[AiFactory] ASD_AI_PROVIDER=${explicit} 但 ${requiredKeyEnv} 未配置，尝试自动探测其他可用 provider…`
@@ -134,7 +134,7 @@ const PROVIDER_KEY_MAP = {
  * @param {string} currentProvider
  * @returns {string[]}
  */
-export function getAvailableFallbacks(currentProvider) {
+export function getAvailableFallbacks(currentProvider: any) {
   const fallbacks: string[] = [];
   for (const [name, envKey] of Object.entries(PROVIDER_KEY_MAP)) {
     if (name === currentProvider) {
@@ -151,7 +151,7 @@ export function getAvailableFallbacks(currentProvider) {
 /**
  * 判断是否为地理限制 / 不可恢复的 provider 级错误（应触发 fallback）
  */
-export function isGeoOrProviderError(err) {
+export function isGeoOrProviderError(err: any) {
   const msg = (err.message || '').toLowerCase();
   return (
     /user location is not supported|failed_precondition|unsupported.*(region|country|location)|geo|blocked/i.test(

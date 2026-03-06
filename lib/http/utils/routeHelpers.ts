@@ -10,7 +10,7 @@ import { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
  * @param {import('express').Request} req
  * @returns {{ userId: string, ip: string, userAgent: string }}
  */
-export function getContext(req) {
+export function getContext(req: any) {
   return {
     userId: req.headers['x-user-id'] || 'anonymous',
     ip: req.ip,
@@ -26,7 +26,7 @@ export function getContext(req) {
  * @param {number} [max=1000]    最大值
  * @returns {number}
  */
-export function safeInt(value, defaultValue, min = 1, max = 1000) {
+export function safeInt(value: any, defaultValue: any, min = 1, max = 1000) {
   const parsed = parseInt(value, 10);
   if (Number.isNaN(parsed)) {
     return defaultValue;
@@ -41,11 +41,11 @@ export function safeInt(value, defaultValue, min = 1, max = 1000) {
  * @param {KnowledgeEntry|Object} entryOrJson  实体或 toJSON 输出
  * @returns {Object} 过滤后的 JSON
  */
-export function sanitizeForAPI(entryOrJson) {
+export function sanitizeForAPI(entryOrJson: any) {
   const json =
     typeof entryOrJson?.toJSON === 'function' ? entryOrJson.toJSON() : { ...entryOrJson };
   if (Array.isArray(json.tags)) {
-    json.tags = json.tags.filter((t) => !KnowledgeEntry.isSystemTag(t));
+    json.tags = json.tags.filter((t: any) => !KnowledgeEntry.isSystemTag(t));
   }
   return json;
 }
@@ -55,7 +55,7 @@ export function sanitizeForAPI(entryOrJson) {
  * @param {{ data: Array, pagination: Object }} result
  * @returns {{ data: Array, pagination: Object }}
  */
-export function sanitizePaginatedForAPI(result) {
+export function sanitizePaginatedForAPI(result: any) {
   if (!result?.data) {
     return result;
   }

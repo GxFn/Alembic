@@ -115,7 +115,7 @@ export class AgentRuntime {
   /**
    * @param {RuntimeConfig} config
    */
-  constructor(config) {
+  constructor(config: any) {
     this.id = config.id || `runtime_${randomUUID().slice(0, 8)}`;
     this.presetName = config.presetName || 'custom';
     this.aiProvider = config.aiProvider;
@@ -150,7 +150,7 @@ export class AgentRuntime {
       {
         agentId: this.id,
         preset: this.presetName,
-        capabilities: this.capabilities.map((c) => c.name),
+        capabilities: this.capabilities.map((c: any) => c.name),
         strategy: this.strategy?.name,
       },
       { source: this.id }
@@ -175,7 +175,7 @@ export class AgentRuntime {
    * @property {Object} [phases] - Pipeline/FanOut 阶段详情
    * @property {Object} state 状态快照
    */
-  async execute(message, opts: any = {}) {
+  async execute(message: any, opts: any = {}) {
     this.startTime = Date.now();
     this.iterationCount = 0;
     this.toolCallHistory = [];
@@ -293,7 +293,7 @@ export class AgentRuntime {
    *   仅在第一轮生效，后续轮次恢复正常 toolChoice 逻辑。
    * @returns {Promise<AgentResult>}
    */
-  async reactLoop(prompt, opts: any = {}) {
+  async reactLoop(prompt: any, opts: any = {}) {
     const ctx = this.#initLoop(prompt, opts);
 
     // ─── ReAct 主循环 (编排骨架) ─────
@@ -358,7 +358,7 @@ export class AgentRuntime {
    * @param {Object} opts
    * @returns {LoopContext}
    */
-  #initLoop(prompt, opts) {
+  #initLoop(prompt: any, opts: any) {
     const {
       history = [],
       context = {},
@@ -427,7 +427,7 @@ export class AgentRuntime {
       {
         agentId: this.id,
         prompt: prompt.slice(0, 100),
-        capabilities: caps.map((c) => c.name),
+        capabilities: caps.map((c: any) => c.name),
       },
       { source: this.id }
     );
@@ -456,7 +456,7 @@ export class AgentRuntime {
    * @param {LoopContext} ctx
    * @returns {boolean} true = 应退出循环
    */
-  #shouldExit(ctx) {
+  #shouldExit(ctx: any) {
     // ExplorationTracker: tick + 退出检查
     if (ctx.tracker) {
       ctx.tracker.tick();
@@ -511,7 +511,7 @@ export class AgentRuntime {
    * @param {LoopContext} ctx
    * @returns {{ toolChoice: string, effectiveSystemPrompt: string, effectivePrompt: string }}
    */
-  #prepareIteration(ctx) {
+  #prepareIteration(ctx: any) {
     const { tracker, trace, capabilities: _capabilities, messages, prompt } = ctx;
     const maxIterations = ctx.maxIterations;
 
@@ -583,7 +583,7 @@ export class AgentRuntime {
    * @param {string} effectivePrompt
    * @returns {Promise<Object|null>} llmResult 或 null (表示应退出)
    */
-  async #callLLM(ctx, toolChoice, effectiveSystemPrompt, effectivePrompt) {
+  async #callLLM(ctx: any, toolChoice: any, effectiveSystemPrompt: any, effectivePrompt: any) {
     this.bus.publish(
       AgentEvents.LLM_CALL_START,
       {
@@ -691,7 +691,7 @@ export class AgentRuntime {
    * AI 错误处理 — 熔断器感知 + 2-strike 策略
    * @returns {Promise<Object|null>} - continueResult() 或 null (退出)
    */
-  async #handleAiError(ctx, aiErr) {
+  async #handleAiError(ctx: any, aiErr: any) {
     ctx.consecutiveAiErrors++;
     this.logger.warn(
       `[AgentRuntime] AI call failed (attempt ${ctx.consecutiveAiErrors}): ${aiErr.message}`
@@ -730,7 +730,7 @@ export class AgentRuntime {
    * @param {string} effectiveSystemPrompt 用于 budget 耗尽时的摘要调用
    * @returns {Promise<boolean>} true = 应退出循环
    */
-  async #processToolCalls(ctx, llmResult, effectiveSystemPrompt) {
+  async #processToolCalls(ctx: any, llmResult: any, effectiveSystemPrompt: any) {
     const { tracker, trace, messages } = ctx;
 
     // 工具调用数量限制
@@ -805,9 +805,9 @@ export class AgentRuntime {
       let resultStr = messages.formatToolResult(fc.name, toolResult);
 
       // 提交去重: pipeline 中间件已标记 metadata
-      if (metadata.dedupMessage) {
-        resultStr = metadata.dedupMessage;
-      } else if (metadata.isSubmit) {
+      if ((metadata as any).dedupMessage) {
+        resultStr = (metadata as any).dedupMessage;
+      } else if ((metadata as any).isSubmit) {
         roundSubmitCount++;
       }
 
@@ -895,7 +895,7 @@ export class AgentRuntime {
    * @param {Object} llmResult
    * @returns {boolean} true = 应退出循环
    */
-  #processTextResponse(ctx, llmResult) {
+  #processTextResponse(ctx: any, llmResult: any) {
     const { tracker, trace, messages } = ctx;
 
     if (tracker) {
@@ -943,12 +943,12 @@ export class AgentRuntime {
    * @param {LoopContext} ctx
    * @returns {Promise<Object>}
    */
-  async #finalize(ctx) {
+  async #finalize(ctx: any) {
     // Scan pipeline: 所有结果在 toolCalls 中 (collect_scan_recipe)，不需要文本回复
     // 直接跳过 forced summary，避免浪费一次 LLM 调用
     if (!ctx.lastReply && ctx.tracker?.submitToolName === 'collect_scan_recipe') {
       const recipeCount = ctx.toolCalls.filter(
-        (tc) => (tc.tool || tc.name) === 'collect_scan_recipe'
+        (tc: any) => (tc.tool || tc.name) === 'collect_scan_recipe'
       ).length;
       ctx.lastReply = `[scan complete: ${recipeCount} recipes collected]`;
     }
@@ -999,7 +999,7 @@ export class AgentRuntime {
    * 注入内存文件缓存（bootstrap 场景: allFiles 已在内存中，避免重复磁盘读取）
    * @param {Array|null} files - [{ relativePath, content, name }]
    */
-  setFileCache(files) {
+  setFileCache(files: any) {
     this.#fileCache = files;
     this.#promptBuilder.setFileCache(files);
   }
@@ -1017,7 +1017,7 @@ export class AgentRuntime {
   /**
    * 发送进度事件 (公开方法，供 ToolExecutionPipeline 中间件调用)
    */
-  emitProgress(type, data: any = {}) {
+  emitProgress(type: any, data: any = {}) {
     this.#emitProgress(type, data);
   }
 
@@ -1030,7 +1030,7 @@ export class AgentRuntime {
    * 第 2+ 次调用时状态已不在 IDLE，直接 send('start') 会抛错。
    * 此方法在转移不合法时静默跳过，保证多阶段执行不中断。
    */
-  #safeTransition(event, payload: any = {}) {
+  #safeTransition(event: any, payload: any = {}) {
     try {
       this.state.send(event, payload);
     } catch {
@@ -1042,7 +1042,7 @@ export class AgentRuntime {
    * 收集所有 Capability 的工具白名单
    * 如果任一 Capability tools 为空数组, 返回空 (使用全部工具)
    */
-  #collectTools(caps) {
+  #collectTools(caps: any) {
     const toolSet = new Set();
     let hasUnlimited = false;
     for (const cap of caps) {
@@ -1065,19 +1065,19 @@ export class AgentRuntime {
   /**
    * 解析 capability 名称为实例 (Pipeline 阶段覆盖时调用)
    */
-  #resolveCapabilities(capNames) {
+  #resolveCapabilities(capNames: any) {
     if (capNames == null) {
       return this.capabilities;
     }
     if (capNames.length === 0) {
       return []; // explicit empty = no tools
     }
-    return capNames.map((name) => {
+    return capNames.map((name: any) => {
       if (typeof name === 'object' && name instanceof Capability) {
         return name;
       }
       // 先在已加载的 capabilities 中查找
-      const existing = this.capabilities.find((c) => c.name === name);
+      const existing = this.capabilities.find((c: any) => c.name === name);
       if (existing) {
         return existing;
       }
@@ -1089,7 +1089,7 @@ export class AgentRuntime {
   /**
    * 发送进度事件
    */
-  #emitProgress(type, data: any = {}) {
+  #emitProgress(type: any, data: any = {}) {
     const event = {
       type,
       agentId: this.id,

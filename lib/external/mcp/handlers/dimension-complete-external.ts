@@ -42,7 +42,7 @@ const logger = Logger.getInstance();
  * @param {object} [args.crossDimensionHints] 对其他维度的建议
  * @returns {Promise<object>}
  */
-export async function dimensionComplete(ctx, args) {
+export async function dimensionComplete(ctx: any, args: any) {
   const t0 = Date.now();
   const {
     sessionId,
@@ -105,11 +105,11 @@ export async function dimensionComplete(ctx, args) {
   }
 
   // ── 查找维度定义 ──
-  const dim = session.dimensions.find((d) => d.id === dimensionId);
+  const dim = session.dimensions.find((d: any) => d.id === dimensionId);
   if (!dim) {
     return envelope({
       success: false,
-      message: `Unknown dimensionId: "${dimensionId}". Valid dimensions: ${session.dimensions.map((d) => d.id).join(', ')}`,
+      message: `Unknown dimensionId: "${dimensionId}". Valid dimensions: ${session.dimensions.map((d: any) => d.id).join(', ')}`,
       errorCode: 'VALIDATION_ERROR',
       meta: { tool: 'autosnippet_dimension_complete' },
     });
@@ -146,7 +146,7 @@ export async function dimensionComplete(ctx, args) {
   if (submittedRecipeIds.length === 0) {
     try {
       const submissions = session.submissionTracker.getSubmissions(dimensionId);
-      const recoveredIds = submissions.map((s) => s.recipeId).filter(Boolean);
+      const recoveredIds = submissions.map((s: any) => s.recipeId).filter(Boolean);
       if (recoveredIds.length > 0) {
         submittedRecipeIds = recoveredIds;
         logger.debug(
@@ -424,7 +424,7 @@ export async function dimensionComplete(ctx, args) {
       accumulatedEvidence.negativeSignals.length > 0)
   ) {
     evidenceHints = {
-      previousSubmissions: accumulatedEvidence.completedDimSummaries.map((s) => ({
+      previousSubmissions: accumulatedEvidence.completedDimSummaries.map((s: any) => ({
         dimId: s.dimId,
         submissionCount: s.submissionCount,
         titles: s.titles,
@@ -442,7 +442,7 @@ export async function dimensionComplete(ctx, args) {
                 analysisSummary: (report.analysisText || '').substring(0, 500),
                 keyFindings: (report.findings || [])
                   .slice(0, 5)
-                  .map((f) => f.finding || f.content || ''),
+                  .map((f: any) => f.finding || f.content || ''),
               });
             }
           }
@@ -455,7 +455,7 @@ export async function dimensionComplete(ctx, args) {
         accumulatedEvidence.sharedFiles.length > 0 ? accumulatedEvidence.sharedFiles : undefined,
       negativeSignals:
         accumulatedEvidence.negativeSignals.length > 0
-          ? accumulatedEvidence.negativeSignals.map((s) => s.pattern)
+          ? accumulatedEvidence.negativeSignals.map((s: any) => s.pattern)
           : undefined,
       usedTriggers:
         accumulatedEvidence.usedTriggers.length > 0 ? accumulatedEvidence.usedTriggers : undefined,

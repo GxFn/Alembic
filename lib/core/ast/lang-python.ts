@@ -11,22 +11,22 @@
 import { extractCallSitesPython } from '../analysis/CallSiteExtractor.js';
 import { ImportRecord } from '../analysis/ImportRecord.js';
 
-function walkPython(root, ctx) {
+function walkPython(root: any, ctx: any) {
   _walkPyNode(root, ctx, null);
 }
 
-function _walkPyNode(node, ctx, parentClassName) {
+function _walkPyNode(node: any, ctx: any, parentClassName: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
 
     switch (child.type) {
       case 'import_statement': {
-        const modNode = child.namedChildren.find((c) => c.type === 'dotted_name');
+        const modNode = child.namedChildren.find((c: any) => c.type === 'dotted_name');
         if (modNode) {
           // import mod / import mod as alias
-          const aliasNode = child.namedChildren.find((c) => c.type === 'aliased_import');
+          const aliasNode = child.namedChildren.find((c: any) => c.type === 'aliased_import');
           const alias =
-            aliasNode?.namedChildren?.find((c) => c.type === 'identifier')?.text || null;
+            aliasNode?.namedChildren?.find((c: any) => c.type === 'identifier')?.text || null;
           ctx.imports.push(
             new ImportRecord(modNode.text, {
               symbols: ['*'],
@@ -40,7 +40,7 @@ function _walkPyNode(node, ctx, parentClassName) {
 
       case 'import_from_statement': {
         const modNode = child.namedChildren.find(
-          (c) => c.type === 'dotted_name' || c.type === 'relative_import'
+          (c: any) => c.type === 'dotted_name' || c.type === 'relative_import'
         );
         if (modNode) {
           const importPath = modNode.text;
@@ -51,7 +51,7 @@ function _walkPyNode(node, ctx, parentClassName) {
               importedNames.push(c.text);
             } else if (c.type === 'aliased_import') {
               const nameNode = c.namedChildren.find(
-                (n) => n.type === 'dotted_name' || n.type === 'identifier'
+                (n: any) => n.type === 'dotted_name' || n.type === 'identifier'
               );
               if (nameNode) {
                 importedNames.push(nameNode.text);
@@ -75,7 +75,7 @@ function _walkPyNode(node, ctx, parentClassName) {
         ctx.classes.push(classInfo);
 
         // 递归遍历类体
-        const body = child.namedChildren.find((c) => c.type === 'block');
+        const body = child.namedChildren.find((c: any) => c.type === 'block');
         if (body) {
           _walkPyClassBody(body, ctx, classInfo.name);
         }
@@ -91,20 +91,20 @@ function _walkPyNode(node, ctx, parentClassName) {
       case 'decorated_definition': {
         // decorated_definition 包含 decorator + 实际定义
         const actualDef = child.namedChildren.find(
-          (c) => c.type === 'class_definition' || c.type === 'function_definition'
+          (c: any) => c.type === 'class_definition' || c.type === 'function_definition'
         );
         const decorators = child.namedChildren
-          .filter((c) => c.type === 'decorator')
-          .map((d) => d.text);
+          .filter((c: any) => c.type === 'decorator')
+          .map((d: any) => d.text);
 
         if (actualDef?.type === 'class_definition') {
           const classInfo: any = _parsePyClass(actualDef);
           classInfo.decorators = decorators;
-          if (decorators.some((d) => d.includes('dataclass'))) {
+          if (decorators.some((d: any) => d.includes('dataclass'))) {
             classInfo.isDataclass = true;
           }
           ctx.classes.push(classInfo);
-          const body = actualDef.namedChildren.find((c) => c.type === 'block');
+          const body = actualDef.namedChildren.find((c: any) => c.type === 'block');
           if (body) {
             _walkPyClassBody(body, ctx, classInfo.name);
           }
@@ -119,9 +119,9 @@ function _walkPyNode(node, ctx, parentClassName) {
       case 'expression_statement': {
         // 模块级赋值 → properties
         if (!parentClassName) {
-          const assignNode = child.namedChildren.find((c) => c.type === 'assignment');
+          const assignNode = child.namedChildren.find((c: any) => c.type === 'assignment');
           if (assignNode) {
-            const nameNode = assignNode.namedChildren.find((c) => c.type === 'identifier');
+            const nameNode = assignNode.namedChildren.find((c: any) => c.type === 'identifier');
             if (nameNode && /^[A-Z_][A-Z_0-9]*$/.test(nameNode.text)) {
               ctx.properties.push({
                 name: nameNode.text,
@@ -144,7 +144,7 @@ function _walkPyNode(node, ctx, parentClassName) {
   }
 }
 
-function _walkPyClassBody(body, ctx, className) {
+function _walkPyClassBody(body: any, ctx: any, className: any) {
   for (let i = 0; i < body.namedChildCount; i++) {
     const child = body.namedChild(i);
 
@@ -152,21 +152,21 @@ function _walkPyClassBody(body, ctx, className) {
       const func = _parsePyFunction(child, className);
       ctx.methods.push(func);
     } else if (child.type === 'decorated_definition') {
-      const actualDef = child.namedChildren.find((c) => c.type === 'function_definition');
+      const actualDef = child.namedChildren.find((c: any) => c.type === 'function_definition');
       const decorators = child.namedChildren
-        .filter((c) => c.type === 'decorator')
-        .map((d) => d.text);
+        .filter((c: any) => c.type === 'decorator')
+        .map((d: any) => d.text);
 
       if (actualDef) {
         const func: any = _parsePyFunction(actualDef, className);
         func.decorators = decorators;
-        if (decorators.some((d) => d.includes('staticmethod'))) {
+        if (decorators.some((d: any) => d.includes('staticmethod'))) {
           func.isStaticMethod = true;
         }
-        if (decorators.some((d) => d.includes('classmethod'))) {
+        if (decorators.some((d: any) => d.includes('classmethod'))) {
           func.isClassMethod = true;
         }
-        if (decorators.some((d) => d.includes('property'))) {
+        if (decorators.some((d: any) => d.includes('property'))) {
           // 作为属性处理
           ctx.properties.push({
             name: func.name,
@@ -179,9 +179,9 @@ function _walkPyClassBody(body, ctx, className) {
       }
     } else if (child.type === 'expression_statement') {
       // 类级别赋值
-      const assign = child.namedChildren.find((c) => c.type === 'assignment');
+      const assign = child.namedChildren.find((c: any) => c.type === 'assignment');
       if (assign) {
-        const nameNode = assign.namedChildren.find((c) => c.type === 'identifier');
+        const nameNode = assign.namedChildren.find((c: any) => c.type === 'identifier');
         if (nameNode) {
           ctx.properties.push({
             name: nameNode.text,
@@ -194,16 +194,16 @@ function _walkPyClassBody(body, ctx, className) {
   }
 }
 
-function _parsePyClass(node) {
-  const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
+function _parsePyClass(node: any) {
+  const name = node.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'Unknown';
   const _superclass = null;
   const protocols: any[] = [];
 
   // bases
-  const argList = node.namedChildren.find((c) => c.type === 'argument_list');
+  const argList = node.namedChildren.find((c: any) => c.type === 'argument_list');
   if (argList) {
     const bases = argList.namedChildren.filter(
-      (c) => c.type === 'identifier' || c.type === 'attribute'
+      (c: any) => c.type === 'identifier' || c.type === 'attribute'
     );
     for (let i = 0; i < bases.length; i++) {
       const baseName = bases[i].text;
@@ -230,19 +230,19 @@ function _parsePyClass(node) {
   };
 }
 
-function _parsePyFunction(node, className) {
-  const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
-  const body = node.namedChildren.find((c) => c.type === 'block');
+function _parsePyFunction(node: any, className: any) {
+  const name = node.namedChildren.find((c: any) => c.type === 'identifier')?.text || 'unknown';
+  const body = node.namedChildren.find((c: any) => c.type === 'block');
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
 
   // 检查是否有 self 参数
-  const params = node.namedChildren.find((c) => c.type === 'parameters');
+  const params = node.namedChildren.find((c: any) => c.type === 'parameters');
   let hasSelf = false;
   const isAsync = node.text.trimStart().startsWith('async');
   if (params) {
-    const firstParam = params.namedChildren.find((c) => c.type === 'identifier');
+    const firstParam = params.namedChildren.find((c: any) => c.type === 'identifier');
     hasSelf = firstParam?.text === 'self';
   }
 
@@ -262,7 +262,7 @@ function _parsePyFunction(node, className) {
 
 // ── Python 模式检测 ──
 
-function detectPyPatterns(root, lang, methods, properties, classes) {
+function detectPyPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   const patterns: any[] = [];
 
   // Singleton: 模块级实例
@@ -303,7 +303,7 @@ function detectPyPatterns(root, lang, methods, properties, classes) {
     if (cls.isDataclass) {
       patterns.push({ type: 'dataclass', className: cls.name, line: cls.line, confidence: 0.95 });
     }
-    if (cls.protocols?.some((p) => p === 'BaseModel' || p.endsWith('.BaseModel'))) {
+    if (cls.protocols?.some((p: any) => p === 'BaseModel' || p.endsWith('.BaseModel'))) {
       patterns.push({
         type: 'pydantic-model',
         className: cls.name,
@@ -317,7 +317,7 @@ function detectPyPatterns(root, lang, methods, properties, classes) {
   for (const m of methods) {
     if (
       m.decorators?.some(
-        (d) =>
+        (d: any) =>
           d.includes('app.route') ||
           d.includes('app.get') ||
           d.includes('app.post') ||
@@ -339,7 +339,7 @@ function detectPyPatterns(root, lang, methods, properties, classes) {
 
 // ── 工具函数 ──
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_statement',
@@ -351,7 +351,7 @@ function _estimateComplexity(node) {
     'conditional_expression',
     'list_comprehension',
   ]);
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
@@ -366,7 +366,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_statement',
     'for_statement',
@@ -392,7 +392,7 @@ let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }
-export function setGrammar(grammar) {
+export function setGrammar(grammar: any) {
   _grammar = grammar;
 }
 

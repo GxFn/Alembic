@@ -25,7 +25,7 @@ const COLDSTART_SKILL_NAME = 'autosnippet-coldstart';
  * @param {object} logger
  * @returns {{ coldstartSkill: string|null, loaded: string[] }}
  */
-export function loadBootstrapSkills(_primaryLanguage, logger) {
+export function loadBootstrapSkills(_primaryLanguage: any, logger: any) {
   const result: { coldstartSkill: string | null; loaded: string[] } = {
     coldstartSkill: null,
     loaded: [],
@@ -56,7 +56,7 @@ export function loadBootstrapSkills(_primaryLanguage, logger) {
  * @param {object} skillContext 由 loadBootstrapSkills 返回
  * @returns {{ guides: Record<string, string>, sectionMap: Record<string, Array<{title: string, content: string, keywords: string[]}>> }}
  */
-export function extractSkillDimensionGuides(skillContext) {
+export function extractSkillDimensionGuides(skillContext: any) {
   const guides: Record<string, any> = {}; // dimId → summary guide text
   const sectionMap: Record<string, any> = {}; // dimId → [{title, content, keywords}]
 
@@ -93,12 +93,12 @@ export function extractSkillDimensionGuides(skillContext) {
  * @param {Record<string, Array>} skillSections - sectionMap 部分（per-candidate 匹配用）
  * @returns {Array} 增强后的维度数组（原数组不变，返回新数组）
  */
-export function enhanceDimensions(dimensions, skillGuides, skillSections) {
+export function enhanceDimensions(dimensions: any, skillGuides: any, skillSections: any) {
   if (!skillGuides || Object.keys(skillGuides).length === 0) {
     return dimensions;
   }
 
-  return dimensions.map((dim) => {
+  return dimensions.map((dim: any) => {
     const extra = skillGuides[dim.id];
     if (!extra) {
       return dim;

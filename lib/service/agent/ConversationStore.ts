@@ -37,7 +37,7 @@ export class ConversationStore {
   /**
    * @param {string} projectRoot 用户项目根目录
    */
-  constructor(projectRoot) {
+  constructor(projectRoot: any) {
     this.#dir = path.join(projectRoot, '.autosnippet', 'conversations');
     this.#indexPath = path.join(this.#dir, 'index.json');
     this.#logger = Logger.getInstance();
@@ -89,7 +89,7 @@ export class ConversationStore {
    * @param {string} conversationId
    * @param {{ role: string, content: string }} message
    */
-  append(conversationId, message) {
+  append(conversationId: any, message: any) {
     try {
       fs.mkdirSync(this.#dir, { recursive: true });
       const filePath = this.#conversationPath(conversationId);
@@ -102,7 +102,7 @@ export class ConversationStore {
 
       // 更新索引
       const index = this.#loadIndex();
-      const entry = index.find((e) => e.id === conversationId);
+      const entry = index.find((e: any) => e.id === conversationId);
       if (entry) {
         entry.updatedAt = new Date().toISOString();
         entry.messageCount = (entry.messageCount || 0) + 1;
@@ -130,7 +130,7 @@ export class ConversationStore {
    * @param {number} [opts.tokenBudget] - token 预算
    * @returns {{ role: string, content: string }[]}
    */
-  load(conversationId, { tokenBudget = DEFAULT_TOKEN_BUDGET } = {}) {
+  load(conversationId: any, { tokenBudget = DEFAULT_TOKEN_BUDGET } = {}) {
     try {
       const filePath = this.#conversationPath(conversationId);
       if (!fs.existsSync(filePath)) {
@@ -172,7 +172,7 @@ export class ConversationStore {
     const index = this.#loadIndex();
     let results = index;
     if (category) {
-      results = results.filter((e) => e.category === category);
+      results = results.filter((e: any) => e.category === category);
     }
     return results.slice(0, limit);
   }
@@ -181,10 +181,10 @@ export class ConversationStore {
    * 删除对话
    * @param {string} conversationId
    */
-  delete(conversationId) {
+  delete(conversationId: any) {
     this.#deleteConversationFile(conversationId);
     const index = this.#loadIndex();
-    const filtered = index.filter((e) => e.id !== conversationId);
+    const filtered = index.filter((e: any) => e.id !== conversationId);
     this.#saveIndex(filtered);
   }
 
@@ -197,7 +197,7 @@ export class ConversationStore {
    * @param {object} opts.aiProvider - AI Provider 实例
    * @returns {Promise<boolean>} 是否成功压缩
    */
-  async summarize(conversationId, { aiProvider }) {
+  async summarize(conversationId: any, { aiProvider }: any) {
     if (!aiProvider) {
       return false;
     }
@@ -261,7 +261,7 @@ export class ConversationStore {
 
       // 更新索引
       const index = this.#loadIndex();
-      const entry = index.find((e) => e.id === conversationId);
+      const entry = index.find((e: any) => e.id === conversationId);
       if (entry) {
         entry.hasSummary = true;
         entry.messageCount = newMessages.length;
@@ -290,7 +290,7 @@ export class ConversationStore {
     const cutoff = Date.now() - maxAgeDays * 86400000;
     let deleted = 0;
 
-    const kept = index.filter((entry) => {
+    const kept = index.filter((entry: any) => {
       if (category && entry.category !== category) {
         return true;
       }
@@ -316,7 +316,7 @@ export class ConversationStore {
    * @param {string} text
    * @returns {number}
    */
-  estimateTokens(text) {
+  estimateTokens(text: any) {
     return _estimateTokens(text);
   }
 
@@ -328,14 +328,14 @@ export class ConversationStore {
    * 将消息列表裁剪到 token 预算内
    * 策略: 保留首条摘要(如有) + 最新消息，丢弃中间旧消息
    */
-  #fitWithinBudget(messages, tokenBudget) {
+  #fitWithinBudget(messages: any, tokenBudget: any) {
     if (messages.length === 0) {
       return [];
     }
 
     // 计算总 token
     let totalTokens = 0;
-    const tokenCounts = messages.map((m) => {
+    const tokenCounts = messages.map((m: any) => {
       const tokens = this.estimateTokens(m.content);
       totalTokens += tokens;
       return tokens;
@@ -381,11 +381,11 @@ export class ConversationStore {
     return result;
   }
 
-  #conversationPath(id) {
+  #conversationPath(id: any) {
     return path.join(this.#dir, `${id}.jsonl`);
   }
 
-  #deleteConversationFile(id) {
+  #deleteConversationFile(id: any) {
     try {
       const filePath = this.#conversationPath(id);
       if (fs.existsSync(filePath)) {
@@ -407,7 +407,7 @@ export class ConversationStore {
     return [];
   }
 
-  #saveIndex(index) {
+  #saveIndex(index: any) {
     try {
       fs.mkdirSync(this.#dir, { recursive: true });
       fs.writeFileSync(this.#indexPath, JSON.stringify(index, null, 2), 'utf-8');

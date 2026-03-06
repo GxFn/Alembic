@@ -58,18 +58,18 @@ const colors = {
   red: '\x1b[31m',
 };
 
-function log(msg, color = 'reset') {
+function log(msg: any, color = 'reset') {
   if (!isQuiet) {
   }
 }
 
-function error(msg) {
+function error(msg: any) {
   console.error(colors.red + msg + colors.reset);
 }
 
 // ============ 助手函数 ============
 
-function readJsonFile(filePath, defaultValue: any = {}) {
+function readJsonFile(filePath: any, defaultValue: any = {}) {
   if (!fs.existsSync(filePath)) {
     return defaultValue;
   }
@@ -82,7 +82,7 @@ function readJsonFile(filePath, defaultValue: any = {}) {
   }
 }
 
-function writeJsonFile(filePath, data) {
+function writeJsonFile(filePath: any, data: any) {
   try {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');

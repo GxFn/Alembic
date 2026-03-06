@@ -28,7 +28,7 @@ export class SkillAdvisor {
    * @param {object} [opts]
    * @param {object} [opts.database] - better-sqlite3 实例（可选）
    */
-  constructor(projectRoot, { database }: any = {}) {
+  constructor(projectRoot: any, { database }: any = {}) {
     this.#projectRoot = projectRoot;
     this.#db = database || null;
   }
@@ -91,7 +91,11 @@ export class SkillAdvisor {
 
     // 按优先级排序：high > medium > low
     const priorityOrder = { high: 0, medium: 1, low: 2 };
-    suggestions.sort((a, b) => (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2));
+    suggestions.sort(
+      (a, b) =>
+        ((priorityOrder as Record<string, any>)[a.priority] || 2) -
+        ((priorityOrder as Record<string, any>)[b.priority] || 2)
+    );
 
     return {
       suggestions,
@@ -352,7 +356,7 @@ export class SkillAdvisor {
 /**
  * 字符串转 kebab-case（简化版）
  */
-function _kebab(str) {
+function _kebab(str: any) {
   return (str || 'unknown')
     .replace(/[^a-zA-Z0-9\s-]/g, '')
     .replace(/\s+/g, '-')

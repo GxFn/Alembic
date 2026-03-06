@@ -73,9 +73,9 @@ export const DIMENSION_CONFIGS_V3 = {
  * @param {string} dimId 维度 ID
  * @returns {object|null} 完整维度配置，或 null（未知维度）
  */
-export function getFullDimensionConfig(dimId) {
+export function getFullDimensionConfig(dimId: any) {
   const base = baseDimensions.find((d) => d.id === dimId);
-  const v3 = DIMENSION_CONFIGS_V3[dimId];
+  const v3 = (DIMENSION_CONFIGS_V3 as Record<string, any>)[dimId];
   if (!base) {
     return null;
   }
@@ -119,7 +119,7 @@ export function getFullDimensionConfig(dimId) {
  * @param {import('../../../../../service/agent/memory/SessionStore.js').SessionStore} sessionStore
  * @returns {object} TierReflection
  */
-export function buildTierReflection(tierIndex, tierResults, sessionStore) {
+export function buildTierReflection(tierIndex: any, tierResults: any, sessionStore: any) {
   const completedDimensions = [...tierResults.keys()];
 
   // 收集本 Tier 所有维度的 findings
@@ -152,7 +152,7 @@ export function buildTierReflection(tierIndex, tierResults, sessionStore) {
       }
     }
     // 统计关键词
-    const words = (f.finding || '').split(/[\s,，。.]+/).filter((w) => w.length > 3);
+    const words = (f.finding || '').split(/[\s,，。.]+/).filter((w: any) => w.length > 3);
     for (const w of words) {
       keywordMentions[w] = (keywordMentions[w] || 0) + 1;
     }

@@ -16,7 +16,7 @@ import { envelope } from '../envelope.js';
  * @param {object} ctx - { container }
  * @param {object} args - { operation, ...params }
  */
-export async function taskHandler(ctx, args) {
+export async function taskHandler(ctx: any, args: any) {
   const taskService = ctx.container.get('taskGraphService');
 
   let result;
@@ -90,7 +90,7 @@ export async function taskHandler(ctx, args) {
 
 // ── create ──
 
-async function _create(svc, args) {
+async function _create(svc: any, args: any) {
   if (!args.title) {
     return envelope({
       success: false,
@@ -119,14 +119,14 @@ async function _create(svc, args) {
 
 // ── ready ──
 
-async function _ready(svc, args) {
+async function _ready(svc: any, args: any) {
   const tasks = await svc.ready({
     limit: args.limit || 10,
     withKnowledge: args.withKnowledge !== false,
   });
   return envelope({
     success: true,
-    data: tasks.map((t) => (t.toJSON ? t.toJSON() : t)),
+    data: tasks.map((t: any) => (t.toJSON ? t.toJSON() : t)),
     message: `${tasks.length} task(s) ready`,
     meta: { tool: 'autosnippet_task' },
   });
@@ -134,7 +134,7 @@ async function _ready(svc, args) {
 
 // ── claim ──
 
-async function _claim(svc, args) {
+async function _claim(svc: any, args: any) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -153,7 +153,7 @@ async function _claim(svc, args) {
 
 // ── close ──
 
-async function _close(ctx, svc, args) {
+async function _close(ctx: any, svc: any, args: any) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -176,7 +176,7 @@ async function _close(ctx, svc, args) {
 
 // ── fail ──
 
-async function _fail(svc, args) {
+async function _fail(svc: any, args: any) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -195,7 +195,7 @@ async function _fail(svc, args) {
 
 // ── defer ──
 
-async function _defer(svc, args) {
+async function _defer(svc: any, args: any) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -214,7 +214,7 @@ async function _defer(svc, args) {
 
 // ── progress ──
 
-async function _progress(svc, args) {
+async function _progress(svc: any, args: any) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -234,7 +234,7 @@ async function _progress(svc, args) {
 
 // ── decompose ──
 
-async function _decompose(svc, args) {
+async function _decompose(svc: any, args: any) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -252,7 +252,7 @@ async function _decompose(svc, args) {
   const tasks = await svc.decompose(args.id, args.subtasks);
   return envelope({
     success: true,
-    data: tasks.map((t) => (t.toJSON ? t.toJSON() : t)),
+    data: tasks.map((t: any) => (t.toJSON ? t.toJSON() : t)),
     message: `Decomposed ${args.id} into ${tasks.length} subtasks`,
     meta: { tool: 'autosnippet_task' },
   });
@@ -260,7 +260,7 @@ async function _decompose(svc, args) {
 
 // ── show ──
 
-async function _show(svc, args) {
+async function _show(svc: any, args: any) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -285,7 +285,7 @@ async function _show(svc, args) {
 
 // ── list ──
 
-async function _list(svc, args) {
+async function _list(svc: any, args: any) {
   const filters: any = {};
   if (args.status) {
     filters.status = args.status;
@@ -297,7 +297,7 @@ async function _list(svc, args) {
   const tasks = await svc.list(filters, { limit: args.limit || 20 });
   return envelope({
     success: true,
-    data: tasks.map((t) => t.toJSON()),
+    data: tasks.map((t: any) => t.toJSON()),
     message: `${tasks.length} task(s)`,
     meta: { tool: 'autosnippet_task' },
   });
@@ -305,7 +305,7 @@ async function _list(svc, args) {
 
 // ── blocked ──
 
-async function _blocked(svc) {
+async function _blocked(svc: any) {
   const tasks = await svc.blocked();
   return envelope({
     success: true,
@@ -317,7 +317,7 @@ async function _blocked(svc) {
 
 // ── dep_add ──
 
-async function _depAdd(svc, args) {
+async function _depAdd(svc: any, args: any) {
   if (!args.id || !args.dependsOn) {
     return envelope({
       success: false,
@@ -335,7 +335,7 @@ async function _depAdd(svc, args) {
 
 // ── dep_tree ──
 
-async function _depTree(svc, args) {
+async function _depTree(svc: any, args: any) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -354,7 +354,7 @@ async function _depTree(svc, args) {
 
 // ── stats ──
 
-async function _stats(svc) {
+async function _stats(svc: any) {
   const stats = await svc.stats();
   return envelope({
     success: true,
@@ -365,7 +365,7 @@ async function _stats(svc) {
 
 // ═══ Session (prime) ═══════════════════════════════════
 
-async function _prime(svc, args) {
+async function _prime(svc: any, args: any) {
   const result = await svc.prime({
     limit: args.limit || 10,
     withKnowledge: args.withKnowledge !== false,
@@ -373,7 +373,7 @@ async function _prime(svc, args) {
 
   const decisionCount = (result.decisions || []).length;
   const staleCount = (result.staleDecisions || []).length;
-  const decisionTitles = (result.decisions || []).map((d) => d.title).join('; ');
+  const decisionTitles = (result.decisions || []).map((d: any) => d.title).join('; ');
   const statsLine = `${result.inProgress.length} in-progress, ${result.ready.length} ready, ${result.stats.total} total`;
 
   // ── Behavioral Rules Reminder (survives compaction) ──
@@ -411,7 +411,7 @@ async function _prime(svc, args) {
   // ── Resume Prompt: 有 inProgress 任务时，提示 Agent 让用户选择 ──
   if (result.inProgress.length > 0) {
     const taskList = result.inProgress
-      .map((t) => {
+      .map((t: any) => {
         const age = t.updatedAt
           ? `${Math.floor((Date.now() / 1000 - t.updatedAt) / 86400)}d ago`
           : '';
@@ -433,7 +433,7 @@ async function _prime(svc, args) {
         '',
         "Wait for the user's answer. Do NOT auto-resume.",
       ].join('\n'),
-      taskIds: result.inProgress.map((t) => t.id),
+      taskIds: result.inProgress.map((t: any) => t.id),
     };
 
     message += ` ⏸️ ${result.inProgress.length} unfinished task(s) — ask user before resuming.`;
@@ -449,7 +449,7 @@ async function _prime(svc, args) {
 
 // ═══ Decisions ═══════════════════════════════════════
 
-async function _recordDecision(svc, args) {
+async function _recordDecision(svc: any, args: any) {
   if (!args.title) {
     return envelope({
       success: false,
@@ -481,7 +481,7 @@ async function _recordDecision(svc, args) {
   });
 }
 
-async function _reviseDecision(svc, args) {
+async function _reviseDecision(svc: any, args: any) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -521,7 +521,7 @@ async function _reviseDecision(svc, args) {
   });
 }
 
-async function _unpinDecision(svc, args) {
+async function _unpinDecision(svc: any, args: any) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -538,11 +538,11 @@ async function _unpinDecision(svc, args) {
   });
 }
 
-async function _listDecisions(svc) {
+async function _listDecisions(svc: any) {
   const decisions = await svc.list({ status: 'pinned', taskType: 'decision' }, { limit: 50 });
   return envelope({
     success: true,
-    data: decisions.map((d) => d.toJSON()),
+    data: decisions.map((d: any) => d.toJSON()),
     message: `${decisions.length} active decision(s)`,
     meta: { tool: 'autosnippet_task' },
   });
@@ -561,7 +561,7 @@ const PRIORITY_LABELS = ['P0 紧急', 'P1 高', 'P2 中', 'P3 低', 'P4 微'];
  * @param {string} text
  * @returns {Promise<boolean>}
  */
-async function _sendLarkViaApi(text) {
+async function _sendLarkViaApi(text: any) {
   try {
     const port = process.env.PORT || 3000;
     const resp = await fetch(`http://localhost:${port}/api/v1/remote/notify`, {
@@ -612,7 +612,7 @@ async function _sendScreenshotViaApi(caption = '') {
  * 根据任务操作向飞书发送进度通知（异步非阻塞）
  * result 是 envelope() 返回的 { success, data, message, meta }
  */
-async function _notifyTaskProgress(operation, args, result) {
+async function _notifyTaskProgress(operation: any, args: any, result: any) {
   if (!result || result.success === false) {
     return;
   }

@@ -46,7 +46,7 @@ export function roleResolverMiddleware(options: any = {}) {
   // 预加载 verifyToken（异步但不阻塞中间件注册）
   const verifyTokenPromise = getVerifyToken();
 
-  return (req, _res, next) => {
+  return (req: any, _res: any, next: any) => {
     // 已有 x-user-id header（MCP / 内部调用）→ 直接信任
     if (
       req.headers['x-user-id'] &&

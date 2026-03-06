@@ -21,7 +21,7 @@ export const listGuardRules = {
       limit: { type: 'number', description: '返回数量上限，默认 50' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const { language, includeBuiltIn = true, limit = 50 } = params;
     const results: any[] = [];
 
@@ -40,7 +40,7 @@ export const listGuardRules = {
         const guardCheckEngine = ctx.container.get('guardCheckEngine');
         const builtIn = guardCheckEngine
           .getRules(language || null)
-          .filter((r) => r.source === 'built-in');
+          .filter((r: any) => r.source === 'built-in');
         results.push(...builtIn);
       } catch {
         /* not available */
@@ -63,7 +63,7 @@ export const getRecommendations = {
       limit: { type: 'number', description: '返回数量，默认 10' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     // V3: 推荐 = 活跃条目按使用量排序
     return knowledgeService.list(
@@ -88,7 +88,7 @@ export const guardCheckCode = {
     },
     required: ['code'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const { code, language, scope = 'file' } = params;
 
     // 优先用 GuardCheckEngine（内置 + DB 规则）
@@ -126,7 +126,7 @@ export const queryViolations = {
       statsOnly: { type: 'boolean', description: '仅返回统计数据，默认 false' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const { file, limit = 20, statsOnly = false } = params;
     const store = ctx.container.get('violationsStore');
 

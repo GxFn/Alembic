@@ -147,13 +147,15 @@ export class McpServer {
     // ── ListTools: 按 tier 过滤 ──
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       const tierName = process.env.ASD_MCP_TIER || 'agent';
-      const maxTier = TIER_ORDER[tierName] ?? TIER_ORDER.agent;
-      const visible = TOOLS.filter((t) => (TIER_ORDER[t.tier || 'agent'] ?? 0) <= maxTier);
+      const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;
+      const visible = TOOLS.filter(
+        (t) => ((TIER_ORDER as Record<string, number>)[t.tier || 'agent'] ?? 0) <= maxTier
+      );
       return { tools: visible };
     });
 
     // ── CallTool: 路由到 handler ──
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
       const { name, arguments: args } = request.params;
       const t0 = Date.now();
       try {
@@ -179,7 +181,7 @@ export class McpServer {
     });
   }
 
-  async _handleToolCall(name, args) {
+  async _handleToolCall(name: any, args: any) {
     // ── Gateway 权限 gating（写操作） ──
     await this._gatewayGate(name, args);
 
@@ -232,7 +234,7 @@ export class McpServer {
    * @param {string} toolName
    * @param {object} result - handler 返回的 envelope 对象
    */
-  async _injectDecisions(toolName, result) {
+  async _injectDecisions(toolName: any, result: any) {
     // ── P3: Session 统计 ──
     this._session.toolCallCount++;
     this._session.toolsUsed.add(toolName);
@@ -320,7 +322,7 @@ export class McpServer {
         { status: 'pinned', taskType: 'decision' },
         { limit: 50 }
       );
-      cache.decisions = pinned.map((d) => ({
+      cache.decisions = pinned.map((d: any) => ({
         id: d.id,
         title: d.title,
       }));
@@ -336,11 +338,11 @@ export class McpServer {
    * 从 ready 响应结果中刷新缓存（避免额外 DB 查询）
    * @private
    */
-  _refreshCacheFromReady(readyResult) {
+  _refreshCacheFromReady(readyResult: any) {
     try {
       // readyResult 是 envelope({ data: { decisions: [...] } })
       const decisions = readyResult?.data?.decisions || [];
-      this._decisionCache.decisions = decisions.map((d) => ({
+      this._decisionCache.decisions = decisions.map((d: any) => ({
         id: d.id,
         title: d.title,
       }));
@@ -354,36 +356,41 @@ export class McpServer {
    * 解析工具名到 handler 函数（V3 整合版）
    * @private
    */
-  _resolveHandler(name) {
+  _resolveHandler(name: any) {
     const HANDLER_MAP = {
       // ── Agent 层 (18) ──
-      autosnippet_health: (ctx) => systemHandlers.health(ctx),
+      autosnippet_health: (ctx: any) => systemHandlers.health(ctx),
       autosnippet_capabilities: () => systemHandlers.capabilities(),
-      autosnippet_search: (ctx, args) => consolidated.consolidatedSearch(ctx, args),
-      autosnippet_knowledge: (ctx, args) => consolidated.consolidatedKnowledge(ctx, args),
-      autosnippet_structure: (ctx, args) => consolidated.consolidatedStructure(ctx, args),
-      autosnippet_call_context: (ctx, args) => consolidated.consolidatedCallContext(ctx, args),
-      autosnippet_graph: (ctx, args) => consolidated.consolidatedGraph(ctx, args),
-      autosnippet_guard: (ctx, args) => consolidated.consolidatedGuard(ctx, args),
-      autosnippet_submit_knowledge: (ctx, args) => consolidated.enhancedSubmitKnowledge(ctx, args),
-      autosnippet_submit_knowledge_batch: (ctx, args) =>
+      autosnippet_search: (ctx: any, args: any) => consolidated.consolidatedSearch(ctx, args),
+      autosnippet_knowledge: (ctx: any, args: any) => consolidated.consolidatedKnowledge(ctx, args),
+      autosnippet_structure: (ctx: any, args: any) => consolidated.consolidatedStructure(ctx, args),
+      autosnippet_call_context: (ctx: any, args: any) =>
+        consolidated.consolidatedCallContext(ctx, args),
+      autosnippet_graph: (ctx: any, args: any) => consolidated.consolidatedGraph(ctx, args),
+      autosnippet_guard: (ctx: any, args: any) => consolidated.consolidatedGuard(ctx, args),
+      autosnippet_submit_knowledge: (ctx: any, args: any) =>
+        consolidated.enhancedSubmitKnowledge(ctx, args),
+      autosnippet_submit_knowledge_batch: (ctx: any, args: any) =>
         knowledgeHandlers.submitKnowledgeBatch(ctx, args),
-      autosnippet_save_document: (ctx, args) => knowledgeHandlers.saveDocument(ctx, args),
-      autosnippet_skill: (ctx, args) => consolidated.consolidatedSkill(ctx, args),
-      autosnippet_task: (ctx, args) => taskHandler(ctx, args),
+      autosnippet_save_document: (ctx: any, args: any) => knowledgeHandlers.saveDocument(ctx, args),
+      autosnippet_skill: (ctx: any, args: any) => consolidated.consolidatedSkill(ctx, args),
+      autosnippet_task: (ctx: any, args: any) => taskHandler(ctx, args),
       // ── External Agent Bootstrap (v3.1) ──
-      autosnippet_bootstrap: (ctx, _args) => bootstrapExternal(ctx),
-      autosnippet_dimension_complete: (ctx, args) => dimensionComplete(ctx, args),
-      autosnippet_wiki_plan: (ctx, args) => wikiPlan(ctx, args),
-      autosnippet_wiki_finalize: (ctx, args) => wikiFinalize(ctx, args),
+      autosnippet_bootstrap: (ctx: any, _args: any) => bootstrapExternal(ctx),
+      autosnippet_dimension_complete: (ctx: any, args: any) => dimensionComplete(ctx, args),
+      autosnippet_wiki_plan: (ctx: any, args: any) => wikiPlan(ctx, args),
+      autosnippet_wiki_finalize: (ctx: any, args: any) => wikiFinalize(ctx, args),
       // ── Admin 层 (+4) ──
-      autosnippet_enrich_candidates: (ctx, args) => candidateHandlers.enrichCandidates(ctx, args),
-      autosnippet_knowledge_lifecycle: (ctx, args) =>
+      autosnippet_enrich_candidates: (ctx: any, args: any) =>
+        candidateHandlers.enrichCandidates(ctx, args),
+      autosnippet_knowledge_lifecycle: (ctx: any, args: any) =>
         knowledgeHandlers.knowledgeLifecycle(ctx, args),
-      autosnippet_validate_candidate: (ctx, args) => candidateHandlers.validateCandidate(ctx, args),
-      autosnippet_check_duplicate: (ctx, args) => candidateHandlers.checkDuplicate(ctx, args),
+      autosnippet_validate_candidate: (ctx: any, args: any) =>
+        candidateHandlers.validateCandidate(ctx, args),
+      autosnippet_check_duplicate: (ctx: any, args: any) =>
+        candidateHandlers.checkDuplicate(ctx, args),
     };
-    return HANDLER_MAP[name] || null;
+    return (HANDLER_MAP as Record<string, any>)[name] || null;
   }
 
   /**
@@ -391,8 +398,8 @@ export class McpServer {
    * 只读工具直接跳过（不在 TOOL_GATEWAY_MAP 中）
    * 支持动态 resolver（operation-based 工具按参数解析 action/resource）
    */
-  async _gatewayGate(toolName, args) {
-    let mapping = TOOL_GATEWAY_MAP[toolName];
+  async _gatewayGate(toolName: any, args: any) {
+    let mapping = (TOOL_GATEWAY_MAP as Record<string, any>)[toolName];
     if (!mapping) {
       return; // 只读工具，跳过
     }
@@ -456,9 +463,9 @@ export class McpServer {
     await this.server.connect(transport);
 
     const tierName = process.env.ASD_MCP_TIER || 'agent';
-    const maxTier = TIER_ORDER[tierName] ?? TIER_ORDER.agent;
+    const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;
     const visibleCount = TOOLS.filter(
-      (t) => (TIER_ORDER[t.tier || 'agent'] ?? 0) <= maxTier
+      (t) => ((TIER_ORDER as Record<string, number>)[t.tier || 'agent'] ?? 0) <= maxTier
     ).length;
 
     this.logger.info(`MCP Server started (stdio) — ${visibleCount} tools [tier=${tierName}]`);

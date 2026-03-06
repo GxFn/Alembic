@@ -17,7 +17,7 @@ export class MockProvider extends AiProvider {
     this.callLog = [];
   }
 
-  async chat(prompt, context: any = {}) {
+  async chat(prompt: any, context: any = {}) {
     this.callLog.push({ method: 'chat', prompt, context });
     if (this.responses.chat) {
       return this.responses.chat;
@@ -25,7 +25,7 @@ export class MockProvider extends AiProvider {
     return `Mock response for: ${prompt.slice(0, 80)}`;
   }
 
-  async summarize(code) {
+  async summarize(code: any) {
     this.callLog.push({ method: 'summarize', code: code?.slice(0, 80) });
     if (this.responses.summarize) {
       return this.responses.summarize;
@@ -39,7 +39,7 @@ export class MockProvider extends AiProvider {
     };
   }
 
-  async embed(text) {
+  async embed(text: any) {
     this.callLog.push({ method: 'embed', text: Array.isArray(text) ? text.length : 1 });
     const dim = 768;
     const makeVector = () => Array.from({ length: dim }, () => Math.random() * 2 - 1);

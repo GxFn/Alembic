@@ -25,7 +25,7 @@ export class BatchEmbedder {
    * @param {number} [options.batchSize=32]
    * @param {number} [options.maxConcurrency=2]
    */
-  constructor(aiProvider, options: any = {}) {
+  constructor(aiProvider: any, options: any = {}) {
     this.#aiProvider = aiProvider;
     this.#batchSize = options.batchSize || 32;
     this.#maxConcurrency = options.maxConcurrency || 2;
@@ -38,7 +38,7 @@ export class BatchEmbedder {
    * @param {function} [onProgress] - (embedded, total) => void
    * @returns {Promise<Map<string, number[]>>} id → vector
    */
-  async embedAll(items, onProgress) {
+  async embedAll(items: any, onProgress: any) {
     if (!this.#aiProvider || typeof this.#aiProvider.embed !== 'function') {
       return new Map();
     }
@@ -68,18 +68,18 @@ export class BatchEmbedder {
    * @param {Array<{ id: string, content: string }>} items
    * @returns {Promise<Map<string, number[]>>}
    */
-  async #embedBatch(items) {
+  async #embedBatch(items: any) {
     const result = new Map();
 
     try {
       // 截断过长文本 (8K 字符限制)
-      const texts = items.map((item) => (item.content || '').slice(0, 8000));
+      const texts = items.map((item: any) => (item.content || '').slice(0, 8000));
       const vectors = await this.#aiProvider.embed(texts);
 
       // embed(string[]) 返回 number[][] — OpenAiProvider 已支持
       if (Array.isArray(vectors) && Array.isArray(vectors[0])) {
         // 批量返回
-        items.forEach((item, idx) => {
+        items.forEach((item: any, idx: any) => {
           if (vectors[idx]) {
             result.set(item.id, vectors[idx]);
           }
@@ -127,7 +127,7 @@ export class BatchEmbedder {
    * @param {number} size
    * @returns {Array<Array>}
    */
-  #chunkArray(arr, size) {
+  #chunkArray(arr: any, size: any) {
     const chunks: any[] = [];
     for (let i = 0; i < arr.length; i += size) {
       chunks.push(arr.slice(i, i + size));

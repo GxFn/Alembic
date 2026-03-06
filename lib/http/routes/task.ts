@@ -26,7 +26,7 @@ const router = express.Router();
  */
 router.post(
   '/',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const taskService = container.get('taskGraphService');
 
@@ -74,7 +74,7 @@ router.post(
 /**
  * 操作路由 — 与 MCP handler/task.js 保持一致
  */
-async function _dispatch(svc, operation, params) {
+async function _dispatch(svc: any, operation: any, params: any) {
   switch (operation) {
     case 'create':
       return _create(svc, params);
@@ -119,7 +119,7 @@ async function _dispatch(svc, operation, params) {
 
 // ── create ──
 
-async function _create(svc, args) {
+async function _create(svc: any, args: any) {
   if (!args.title) {
     return { success: false, message: 'title is required' };
   }
@@ -143,21 +143,21 @@ async function _create(svc, args) {
 
 // ── ready ──
 
-async function _ready(svc, args) {
+async function _ready(svc: any, args: any) {
   const tasks = await svc.ready({
     limit: args.limit || 5,
     withKnowledge: args.withKnowledge !== false,
   });
   return {
     success: true,
-    data: tasks.map((t) => (t.toJSON ? t.toJSON() : t)),
+    data: tasks.map((t: any) => (t.toJSON ? t.toJSON() : t)),
     count: tasks.length,
   };
 }
 
 // ── claim ──
 
-async function _claim(svc, args) {
+async function _claim(svc: any, args: any) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -167,7 +167,7 @@ async function _claim(svc, args) {
 
 // ── close ──
 
-async function _close(svc, args) {
+async function _close(svc: any, args: any) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -182,7 +182,7 @@ async function _close(svc, args) {
 
 // ── fail ──
 
-async function _fail(svc, args) {
+async function _fail(svc: any, args: any) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -192,7 +192,7 @@ async function _fail(svc, args) {
 
 // ── defer ──
 
-async function _defer(svc, args) {
+async function _defer(svc: any, args: any) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -202,7 +202,7 @@ async function _defer(svc, args) {
 
 // ── progress ──
 
-async function _progress(svc, args) {
+async function _progress(svc: any, args: any) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -212,11 +212,11 @@ async function _progress(svc, args) {
 
 // ── prime ──
 
-async function _prime(svc) {
+async function _prime(svc: any) {
   const result = await svc.prime({ withKnowledge: true });
   const decisionCount = (result.decisions || []).length;
   const staleCount = (result.staleDecisions || []).length;
-  const decisionTitles = (result.decisions || []).map((d) => d.title).join('; ');
+  const decisionTitles = (result.decisions || []).map((d: any) => d.title).join('; ');
   const statsLine = `${result.inProgress.length} in-progress, ${result.ready.length} ready, ${result.stats.total} total`;
 
   // ── Behavioral Rules Reminder (synced with MCP handler) ──
@@ -246,7 +246,7 @@ async function _prime(svc) {
   // ── Resume Prompt: 有 inProgress 任务时，提示 Agent 让用户选择 ──
   if (result.inProgress.length > 0) {
     const taskList = result.inProgress
-      .map((t) => {
+      .map((t: any) => {
         const age = t.updatedAt
           ? `${Math.floor((Date.now() / 1000 - t.updatedAt) / 86400)}d ago`
           : '';
@@ -268,7 +268,7 @@ async function _prime(svc) {
         '',
         "Wait for the user's answer. Do NOT auto-resume.",
       ].join('\n'),
-      taskIds: result.inProgress.map((t) => t.id),
+      taskIds: result.inProgress.map((t: any) => t.id),
     };
   }
 
@@ -293,7 +293,7 @@ async function _prime(svc) {
 
 // ── decompose ──
 
-async function _decompose(svc, args) {
+async function _decompose(svc: any, args: any) {
   const epicId = args.parentId || args.id;
   const subtasks = args.children || args.subtasks;
   if (!epicId) {
@@ -305,14 +305,14 @@ async function _decompose(svc, args) {
   const tasks = await svc.decompose(epicId, subtasks);
   return {
     success: true,
-    data: tasks.map((t) => t.toJSON()),
+    data: tasks.map((t: any) => t.toJSON()),
     count: tasks.length,
   };
 }
 
 // ── show ──
 
-async function _show(svc, args) {
+async function _show(svc: any, args: any) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -325,32 +325,32 @@ async function _show(svc, args) {
 
 // ── list ──
 
-async function _list(svc, args) {
+async function _list(svc: any, args: any) {
   const tasks = await svc.list(
     { status: args.status, taskType: args.taskType, parentId: args.parentId },
     { limit: args.limit || 50 }
   );
   return {
     success: true,
-    data: tasks.map((t) => t.toJSON()),
+    data: tasks.map((t: any) => t.toJSON()),
     count: tasks.length,
   };
 }
 
 // ── blocked ──
 
-async function _blocked(svc) {
+async function _blocked(svc: any) {
   const tasks = await svc.blocked();
   return {
     success: true,
-    data: tasks.map((t) => (t.toJSON ? t.toJSON() : t)),
+    data: tasks.map((t: any) => (t.toJSON ? t.toJSON() : t)),
     count: tasks.length,
   };
 }
 
 // ── dep_add ──
 
-async function _depAdd(svc, args) {
+async function _depAdd(svc: any, args: any) {
   if (!args.taskId || !args.dependsOn) {
     return { success: false, message: 'taskId and dependsOn are required' };
   }
@@ -363,7 +363,7 @@ async function _depAdd(svc, args) {
 
 // ── dep_tree ──
 
-async function _depTree(svc, args) {
+async function _depTree(svc: any, args: any) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -373,14 +373,14 @@ async function _depTree(svc, args) {
 
 // ── stats ──
 
-async function _stats(svc) {
+async function _stats(svc: any) {
   const stats = await svc.stats();
   return { success: true, data: stats };
 }
 
 // ── record_decision ──
 
-async function _recordDecision(svc, args) {
+async function _recordDecision(svc: any, args: any) {
   if (!args.title) {
     return { success: false, message: 'title is required' };
   }
@@ -405,7 +405,7 @@ async function _recordDecision(svc, args) {
 
 // ── revise_decision ──
 
-async function _reviseDecision(svc, args) {
+async function _reviseDecision(svc: any, args: any) {
   if (!args.id) {
     return { success: false, message: 'id of old decision is required' };
   }
@@ -434,7 +434,7 @@ async function _reviseDecision(svc, args) {
 
 // ── unpin_decision ──
 
-async function _unpinDecision(svc, args) {
+async function _unpinDecision(svc: any, args: any) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }

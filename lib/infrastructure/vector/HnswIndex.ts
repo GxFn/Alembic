@@ -29,7 +29,7 @@ class MinHeap {
     return this.#data[0] || null;
   }
 
-  push(nodeIdx, dist) {
+  push(nodeIdx: any, dist: any) {
     this.#data.push({ nodeIdx, dist });
     this.#siftUp(this.#data.length - 1);
   }
@@ -51,7 +51,7 @@ class MinHeap {
     return [...this.#data];
   }
 
-  #siftUp(i) {
+  #siftUp(i: any) {
     const data = this.#data;
     while (i > 0) {
       const parent = (i - 1) >> 1;
@@ -63,7 +63,7 @@ class MinHeap {
     }
   }
 
-  #siftDown(i) {
+  #siftDown(i: any) {
     const data = this.#data;
     const n = data.length;
     while (true) {
@@ -97,7 +97,7 @@ class MaxHeap {
     return this.#data[0] || null;
   }
 
-  push(nodeIdx, dist) {
+  push(nodeIdx: any, dist: any) {
     this.#data.push({ nodeIdx, dist });
     this.#siftUp(this.#data.length - 1);
   }
@@ -120,7 +120,7 @@ class MaxHeap {
     return [...this.#data].sort((a, b) => a.dist - b.dist);
   }
 
-  #siftUp(i) {
+  #siftUp(i: any) {
     const data = this.#data;
     while (i > 0) {
       const parent = (i - 1) >> 1;
@@ -132,7 +132,7 @@ class MaxHeap {
     }
   }
 
-  #siftDown(i) {
+  #siftDown(i: any) {
     const data = this.#data;
     const n = data.length;
     while (true) {
@@ -208,7 +208,7 @@ export class HnswIndex {
    * @param {Float32Array|number[]} b
    * @returns {number}
    */
-  distance(a, b) {
+  distance(a: any, b: any) {
     if (this.#distanceFn) {
       return this.#distanceFn(a, b);
     }
@@ -229,7 +229,7 @@ export class HnswIndex {
    * 确保 graphs 数组至少有 level+1 层
    * @param {number} level
    */
-  #ensureLevel(level) {
+  #ensureLevel(level: any) {
     while (this.graphs.length <= level) {
       this.graphs.push(new Map());
     }
@@ -241,7 +241,7 @@ export class HnswIndex {
    * @param {number} nodeIdx
    * @returns {Set<number>}
    */
-  #getNeighbors(level, nodeIdx) {
+  #getNeighbors(level: any, nodeIdx: any) {
     const graph = this.graphs[level];
     if (!graph) {
       return new Set();
@@ -261,7 +261,7 @@ export class HnswIndex {
    * @param {object} [options]
    * @param {Uint8Array} [options.qvector] - 预量化向量 (SQ8), 用于 2-pass 搜索加速
    */
-  addPoint(id, vector, options: any = {}) {
+  addPoint(id: any, vector: any, options: any = {}) {
     // 如果 id 已存在, 先移除旧的 (支持更新)
     if (this.idToIndex.has(id)) {
       this.removePoint(id);
@@ -327,7 +327,7 @@ export class HnswIndex {
    * 完整的 compaction 可在持久化时做
    * @param {string} id
    */
-  removePoint(id) {
+  removePoint(id: any) {
     const nodeIdx = this.idToIndex.get(id);
     if (nodeIdx === undefined) {
       return;
@@ -387,7 +387,7 @@ export class HnswIndex {
    * 为所有现有节点批量设置量化向量
    * @param {import('./ScalarQuantizer.js').ScalarQuantizer} quantizer
    */
-  setQuantizedVectors(quantizer) {
+  setQuantizedVectors(quantizer: any) {
     for (const node of this.nodes) {
       if (node && node.vector.length > 0) {
         node.qvector = quantizer.encode(node.vector);
@@ -410,7 +410,7 @@ export class HnswIndex {
    * @param {import('./ScalarQuantizer.js').ScalarQuantizer} [options.quantizer]
    * @returns {Array<{ id: string, nodeIdx: number, dist: number }>}
    */
-  searchKnn(queryVector, k = 10, options: any = {}) {
+  searchKnn(queryVector: any, k = 10, options: any = {}) {
     if (this.entryPoint === -1 || this.nodes.length === 0) {
       return [];
     }
@@ -469,7 +469,13 @@ export class HnswIndex {
    * @param {Uint8Array|null} quantizedQuery - SQ8 编码后的查询向量 (可选)
    * @returns {number} 最近节点的 index
    */
-  #greedySearch(query, entryNodeIdx, level, quantizer = null, quantizedQuery = null) {
+  #greedySearch(
+    query: any,
+    entryNodeIdx: any,
+    level: any,
+    quantizer = null,
+    quantizedQuery = null
+  ) {
     let current = entryNodeIdx;
     const currentNode = this.nodes[current];
     if (!currentNode) {
@@ -508,7 +514,14 @@ export class HnswIndex {
    * @param {Uint8Array|null} quantizedQuery
    * @returns {Array<{ nodeIdx: number, dist: number }>} 按距离升序排列
    */
-  #searchLayer(query, entryNodeIdx, ef, level, quantizer = null, quantizedQuery = null) {
+  #searchLayer(
+    query: any,
+    entryNodeIdx: any,
+    ef: any,
+    level: any,
+    quantizer = null,
+    quantizedQuery = null
+  ) {
     const entryNode = this.nodes[entryNodeIdx];
     if (!entryNode) {
       return [];
@@ -571,7 +584,7 @@ export class HnswIndex {
    * @param {Uint8Array|null} quantizedQuery
    * @returns {number}
    */
-  #dist(query, node, quantizer, quantizedQuery) {
+  #dist(query: any, node: any, quantizer: any, quantizedQuery: any) {
     if (quantizer && quantizedQuery && node.qvector) {
       return quantizer.distance(quantizedQuery, node.qvector);
     }
@@ -584,8 +597,8 @@ export class HnswIndex {
    * @param {number} maxNeighbors
    * @returns {Array<{ nodeIdx: number, dist: number }>}
    */
-  #selectNeighborsSimple(candidates, maxNeighbors) {
-    return candidates.sort((a, b) => a.dist - b.dist).slice(0, maxNeighbors);
+  #selectNeighborsSimple(candidates: any, maxNeighbors: any) {
+    return candidates.sort((a: any, b: any) => a.dist - b.dist).slice(0, maxNeighbors);
   }
 
   /**
@@ -595,7 +608,7 @@ export class HnswIndex {
    * @param {number} level
    * @param {number} maxNeighbors
    */
-  #pruneConnections(nodeIdx, level, maxNeighbors) {
+  #pruneConnections(nodeIdx: any, level: any, maxNeighbors: any) {
     const node = this.nodes[nodeIdx];
     if (!node) {
       return;
@@ -666,7 +679,7 @@ export class HnswIndex {
    * @param {object} data - serialize() 的返回值
    * @returns {HnswIndex}
    */
-  static deserialize(data) {
+  static deserialize(data: any) {
     const index = new HnswIndex({
       M: data.M,
       efConstruct: data.efConstruct,
@@ -675,7 +688,7 @@ export class HnswIndex {
     index.M0 = data.M0;
     index.entryPoint = data.entryPoint;
     index.maxLevel = data.maxLevel;
-    index.nodes = data.nodes.map((n) =>
+    index.nodes = data.nodes.map((n: any) =>
       n ? { id: n.id, vector: new Float32Array(n.vector), level: n.level } : null
     );
 
@@ -688,7 +701,7 @@ export class HnswIndex {
     }
 
     // 恢复 graphs
-    index.graphs = data.graphs.map((entries) => {
+    index.graphs = data.graphs.map((entries: any) => {
       const graph = new Map();
       for (const [nodeIdx, neighbors] of entries) {
         graph.set(nodeIdx, new Set(neighbors));
@@ -703,7 +716,7 @@ export class HnswIndex {
    * 批量插入 (比逐个 addPoint 更高效的初始构建)
    * @param {Array<{ id: string, vector: Float32Array|number[] }>} items
    */
-  addPoints(items) {
+  addPoints(items: any) {
     for (const item of items) {
       this.addPoint(item.id, item.vector);
     }
@@ -737,7 +750,7 @@ export class HnswIndex {
  * @param {Float32Array|number[]} b
  * @returns {number}
  */
-export function cosineDistance(a, b) {
+export function cosineDistance(a: any, b: any) {
   if (!a || !b || a.length === 0 || b.length === 0) {
     return 1;
   }

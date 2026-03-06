@@ -33,7 +33,7 @@ export const DIMENSION_DISPLAY_GROUP = {
  * @param {object} [logger]
  * @returns {{ status: string, reason: string } | null} 不合法返回 rejected，合法返回 null
  */
-export function checkDimensionType(dimensionMeta, params, logger) {
+export function checkDimensionType(dimensionMeta: any, params: any, logger: any) {
   // 1. Skill-only 维度不允许提交 Candidate
   if (dimensionMeta.outputType === 'skill') {
     logger?.info(

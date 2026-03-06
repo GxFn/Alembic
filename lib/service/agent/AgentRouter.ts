@@ -104,7 +104,7 @@ export class AgentRouter {
    * 设置 AI Provider (用于 LLM 路由)
    * @param {import('../../external/ai/AiProvider.js').AiProvider} provider
    */
-  setAiProvider(provider) {
+  setAiProvider(provider: any) {
     this.#aiProvider = provider;
   }
 
@@ -112,7 +112,7 @@ export class AgentRouter {
    * 设置执行器 — Factory 提供的 (presetName, message, opts) => AgentResult
    * @param {Function} executor
    */
-  setExecutor(executor) {
+  setExecutor(executor: any) {
     this.#executor = executor;
   }
 
@@ -125,7 +125,7 @@ export class AgentRouter {
    * @param {Object} [opts.strategyOpts] 策略特定选项 (如 FanOut 的 items)
    * @returns {Promise<{preset: string, result: Object}>}
    */
-  async route(message, opts: any = {}) {
+  async route(message: any, opts: any = {}) {
     // 1. 手动指定
     let preset = opts.preset || message.metadata?.mode;
 
@@ -174,7 +174,7 @@ export class AgentRouter {
    * @param {import('./AgentMessage.js').AgentMessage} message
    * @returns {Promise<string>} preset name
    */
-  async classify(message) {
+  async classify(message: any) {
     let preset = message.metadata?.mode;
     if (!preset) {
       preset = this.#matchChannel(message);
@@ -195,7 +195,7 @@ export class AgentRouter {
    * 飞书消息默认 → lark preset (知识管理对话)
    * 飞书终端命令 (> 开头) → remote-exec
    */
-  #matchChannel(message) {
+  #matchChannel(message: any) {
     if (message.channel === Channel.LARK) {
       const text = message.content.trim();
       // 飞书消息以 > 或 $ 开头 → 终端命令
@@ -208,7 +208,7 @@ export class AgentRouter {
     return null;
   }
 
-  #matchKeyword(prompt) {
+  #matchKeyword(prompt: any) {
     for (const route of KEYWORD_ROUTES) {
       for (const re of route.keywords) {
         if (re.test(prompt)) {
@@ -219,7 +219,7 @@ export class AgentRouter {
     return null;
   }
 
-  async #classifyWithLLM(prompt) {
+  async #classifyWithLLM(prompt: any) {
     try {
       const result = await this.#aiProvider.chatWithTools(
         `Classify this user message into the correct preset: "${prompt.slice(0, 300)}"`,

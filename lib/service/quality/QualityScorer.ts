@@ -20,7 +20,7 @@ export class QualityScorer {
    * @param {object} recipe - Recipe 对象 (title, trigger, code, language, category, summary, usageGuide, headers, tags, views, clicks, rating)
    * @returns {{ score: number, dimensions: object, grade: string }}
    */
-  score(recipe) {
+  score(recipe: any) {
     const dimensions = {
       completeness: this.#scoreCompleteness(recipe),
       format: this.#scoreFormat(recipe),
@@ -31,7 +31,8 @@ export class QualityScorer {
 
     let totalScore = 0;
     for (const [dim, weight] of Object.entries(this.#weights)) {
-      totalScore += ((dimensions[dim] || 0) as number) * (weight as number);
+      totalScore +=
+        (((dimensions as Record<string, any>)[dim] || 0) as number) * (weight as number);
     }
 
     totalScore = Math.min(1, Math.max(0, totalScore));
@@ -46,8 +47,8 @@ export class QualityScorer {
   /**
    * 批量评分
    */
-  scoreBatch(recipes) {
-    return recipes.map((r) => ({ recipe: r, ...this.score(r) }));
+  scoreBatch(recipes: any) {
+    return recipes.map((r: any) => ({ recipe: r, ...this.score(r) }));
   }
 
   /**
@@ -62,7 +63,7 @@ export class QualityScorer {
   /**
    * 完整性: title(0.25) + trigger(0.25) + code(0.3) + usageGuide(0.2)
    */
-  #scoreCompleteness(r) {
+  #scoreCompleteness(r: any) {
     let s = 0;
     if (r.title?.trim()) {
       s += 0.25;
@@ -82,7 +83,7 @@ export class QualityScorer {
   /**
    * 格式: trigger 格式(0.5) + language 合法性(0.5)
    */
-  #scoreFormat(r) {
+  #scoreFormat(r: any) {
     let s = 0;
     if (r.trigger) {
       if (
@@ -116,7 +117,7 @@ export class QualityScorer {
   /**
    * 代码质量: 长度适中(0.3) + 无 TODO(0.2) + 有注释(0.3) + 有错误处理(0.2)
    */
-  #scoreCodeQuality(r) {
+  #scoreCodeQuality(r: any) {
     if (!r.code) {
       return 0;
     }
@@ -151,7 +152,7 @@ export class QualityScorer {
   /**
    * 元数据: category(0.35) + tags/headers(0.35) + summary(0.3)
    */
-  #scoreMetadata(r) {
+  #scoreMetadata(r: any) {
     let s = 0;
     if (r.category?.trim()) {
       s += 0.35;
@@ -168,7 +169,7 @@ export class QualityScorer {
   /**
    * 互动: views(0.3) + clicks(0.3) + rating(0.4)
    */
-  #scoreEngagement(r) {
+  #scoreEngagement(r: any) {
     let s = 0;
     if (r.views && r.views > 0) {
       s += Math.min(0.3, (r.views / 100) * 0.3);
@@ -185,7 +186,7 @@ export class QualityScorer {
   /**
    * 分数转等级
    */
-  #toGrade(score) {
+  #toGrade(score: any) {
     if (score >= QUALITY_GRADES.A) {
       return 'A';
     }

@@ -40,7 +40,7 @@ function _getProjectSkillsDir() {
  * 返回 { description, createdBy, createdAt }，缺失字段为 null。
  * 同时兼容旧格式（无 createdBy 的 SKILL.md）。
  */
-function _parseSkillMeta(skillName, baseDir = SKILLS_DIR) {
+function _parseSkillMeta(skillName: any, baseDir = SKILLS_DIR) {
   try {
     const content = fs.readFileSync(path.join(baseDir, skillName, 'SKILL.md'), 'utf8');
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -76,7 +76,7 @@ function _parseSkillMeta(skillName, baseDir = SKILLS_DIR) {
 /**
  * Skill 适用场景映射 — 帮助 Agent 判断何时该加载哪个 Skill
  */
-const SKILL_USE_CASES = {
+const SKILL_USE_CASES: Record<string, string> = {
   'autosnippet-intent': '不确定该用哪个能力时，先加载此 Skill 做意图路由',
   'autosnippet-coldstart': '冷启动/初始化知识库时的完整 9 维度分析指南',
   'autosnippet-analysis': '深度项目分析 — 扫描 + 语义补齐 + 缺口填充',
@@ -146,8 +146,8 @@ export function listSkills() {
     // _meta：附带 SignalCollector 推荐计数（如果后台服务可用）
     let suggestionCount = 0;
     try {
-      if (global._signalCollector) {
-        const snapshot = global._signalCollector.getSnapshot();
+      if ((global as any)._signalCollector) {
+        const snapshot = (global as any)._signalCollector.getSnapshot();
         suggestionCount = snapshot?.lastResult?.newSuggestions || 0;
       }
     } catch {
@@ -182,7 +182,7 @@ export function listSkills() {
  * @param {object} args  { skillName: string, section?: string }
  * @returns {string} JSON envelope
  */
-export function loadSkill(_ctx, args) {
+export function loadSkill(_ctx: any, args: any) {
   const { skillName, section } = args || {};
 
   if (!skillName) {
@@ -271,7 +271,7 @@ export function loadSkill(_ctx, args) {
  * @param {object} args  { name, description, content, overwrite? }
  * @returns {string} JSON envelope
  */
-export function createSkill(_ctx, args) {
+export function createSkill(_ctx: any, args: any) {
   const {
     name,
     description,
@@ -366,8 +366,8 @@ export function createSkill(_ctx, args) {
 
   // ── 清理 SignalCollector 已创建的 pendingSuggestions ──
   try {
-    if (global._signalCollector) {
-      global._signalCollector.removePendingSuggestion(name);
+    if ((global as any)._signalCollector) {
+      (global as any)._signalCollector.removePendingSuggestion(name);
     }
   } catch {
     /* silent */
@@ -464,7 +464,7 @@ function _regenerateEditorIndex() {
  * @param {object} args  { name: string }
  * @returns {string} JSON envelope
  */
-export function deleteSkill(_ctx, args) {
+export function deleteSkill(_ctx: any, args: any) {
   const { name } = args || {};
 
   if (!name) {
@@ -545,7 +545,7 @@ export function deleteSkill(_ctx, args) {
  * @param {object} args  { name, description?, content? }
  * @returns {string} JSON envelope
  */
-export function updateSkill(_ctx, args) {
+export function updateSkill(_ctx: any, args: any) {
   const { name, description, content } = args || {};
 
   if (!name) {
@@ -604,7 +604,7 @@ export function updateSkill(_ctx, args) {
     }
 
     // 解析已有字段
-    const getField = (fm, key) => {
+    const getField = (fm: any, key: any) => {
       const m = fm.match(new RegExp(`^${key}:\\s*(.+?)$`, 'm'));
       return m ? m[1].trim() : null;
     };
@@ -670,7 +670,7 @@ export function updateSkill(_ctx, args) {
  * @param {object} ctx  MCP context（含 container）
  * @returns {Promise<string>} JSON envelope
  */
-export async function suggestSkills(ctx) {
+export async function suggestSkills(ctx: any) {
   try {
     const { SkillAdvisor } = await import('../../../service/skills/SkillAdvisor.js');
     const dbConn = ctx?.container?.get?.('database') || null;
@@ -694,7 +694,7 @@ export async function suggestSkills(ctx) {
 /**
  * 推荐相关 Skills（基于静态映射）
  */
-function _getRelatedSkills(skillName) {
+function _getRelatedSkills(skillName: any) {
   const relations = {
     'autosnippet-coldstart': [
       'autosnippet-analysis',
@@ -719,5 +719,5 @@ function _getRelatedSkills(skillName) {
     'autosnippet-lifecycle': ['autosnippet-candidates', 'autosnippet-concepts'],
     'autosnippet-intent': [],
   };
-  return relations[skillName] || [];
+  return (relations as Record<string, string[]>)[skillName] || [];
 }

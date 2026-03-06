@@ -16,7 +16,7 @@ import { FileDeployer } from './deploy/FileDeployer.js';
 export class UpgradeService {
   projectRoot: any;
   projectName: any;
-  constructor(options) {
+  constructor(options: any) {
     this.projectRoot = resolve(options.projectRoot);
     this.projectName = this.projectRoot.split('/').pop();
   }

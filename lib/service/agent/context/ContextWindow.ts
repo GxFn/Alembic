@@ -101,7 +101,7 @@ export class ContextWindow {
    * @param {{ isSystem?: boolean }} [opts] - isSystem 为 true 时给予更高预算
    * @returns {number} 建议的 token 预算
    */
-  static resolveTokenBudget(modelName, opts: any = {}) {
+  static resolveTokenBudget(modelName: any, opts: any = {}) {
     const { isSystem = false } = opts;
 
     // 1. 查找模型上下文窗口大小
@@ -144,7 +144,7 @@ export class ContextWindow {
    * 追加用户消息
    * @param {string} content
    */
-  appendUserMessage(content) {
+  appendUserMessage(content: any) {
     this.#messages.push({ role: 'user', content });
   }
 
@@ -154,7 +154,7 @@ export class ContextWindow {
    * 独立命名以便审计和搜索。
    * @param {string} content
    */
-  appendUserNudge(content) {
+  appendUserNudge(content: any) {
     this.#messages.push({ role: 'user', content });
   }
 
@@ -163,7 +163,7 @@ export class ContextWindow {
    * @param {string|null} text - assistant 文本
    * @param {Array} toolCalls - [{id, name, args}]
    */
-  appendAssistantWithToolCalls(text, toolCalls) {
+  appendAssistantWithToolCalls(text: any, toolCalls: any) {
     this.#messages.push({
       role: 'assistant',
       content: text || null,
@@ -177,7 +177,7 @@ export class ContextWindow {
    * @param {string} name 工具名
    * @param {string} content 工具返回内容（已经过 ToolResultLimiter 截断）
    */
-  appendToolResult(toolCallId, name, content) {
+  appendToolResult(toolCallId: any, name: any, content: any) {
     this.#messages.push({
       role: 'tool',
       toolCallId,
@@ -190,7 +190,7 @@ export class ContextWindow {
    * 追加 assistant 纯文本消息（无工具调用）
    * @param {string} text
    */
-  appendAssistantText(text) {
+  appendAssistantText(text: any) {
     this.#messages.push({
       role: 'assistant',
       content: text,
@@ -301,7 +301,7 @@ export class ContextWindow {
    *   Provider 层（GoogleGeminiProvider / ClaudeProvider）的 #convertMessages
    *   已通过 pushOrMerge 自动合并连续同角色消息来处理此情况。
    */
-  #spliceAndSummarize(keepFrom, level) {
+  #spliceAndSummarize(keepFrom: any, level: any) {
     const removed = this.#messages.slice(1, keepFrom);
 
     // 从被移除的消息中提取已提交候选标题
@@ -466,7 +466,7 @@ export class ContextWindow {
    * 从消息中提取已提交候选到 compactedSubmits
    * @param {number} fromIdx 从哪个索引开始扫描
    */
-  #extractCompactedSubmits(fromIdx) {
+  #extractCompactedSubmits(fromIdx: any) {
     for (let i = fromIdx; i < this.#messages.length; i++) {
       const m = this.#messages[i];
       if (m.role === 'assistant' && m.toolCalls) {
@@ -519,7 +519,7 @@ export class ContextWindow {
  * @param {{ maxChars: number, maxMatches: number }} quota 动态配额
  * @returns {string} 压缩后的结果字符串
  */
-export function limitToolResult(toolName, result, quota) {
+export function limitToolResult(toolName: any, result: any, quota: any) {
   const { maxChars = 4000, maxMatches = 10 } = quota;
 
   // submit_knowledge / submit_with_check 结果很短，不截断
@@ -566,7 +566,7 @@ export function limitToolResult(toolName, result, quota) {
  * search_project_code 返回格式:
  *   { matches: [{ file, line, code, context, score }], total, searchedFiles }
  */
-function limitSearchResult(result, maxMatches, maxChars) {
+function limitSearchResult(result: any, maxMatches: any, maxChars: any) {
   if (typeof result === 'string') {
     return result.length > maxChars ? `${result.substring(0, maxChars)}\n... [truncated]` : result;
   }
@@ -578,7 +578,7 @@ function limitSearchResult(result, maxMatches, maxChars) {
   // 深拷贝避免修改原对象
   const limited = { ...result };
   if (Array.isArray(limited.matches)) {
-    limited.matches = limited.matches.slice(0, maxMatches).map((m) => {
+    limited.matches = limited.matches.slice(0, maxMatches).map((m: any) => {
       const copy = { ...m };
       // 截断每个匹配的 context 字段（多行文本）
       if (copy.context && typeof copy.context === 'string') {
@@ -610,7 +610,7 @@ function limitSearchResult(result, maxMatches, maxChars) {
  * 限制搜索结果（返回对象） — 用于批量模式，避免 JSON.stringify → JSON.parse 往返
  * 当源码含控制字符时，stringify→substring 截断会破坏 JSON 结构导致 parse 失败
  */
-function limitSearchResultObj(result, maxMatches, maxChars) {
+function limitSearchResultObj(result: any, maxMatches: any, maxChars: any) {
   if (!result || typeof result !== 'object') {
     return result || {};
   }
@@ -620,7 +620,7 @@ function limitSearchResultObj(result, maxMatches, maxChars) {
 
   const limited = { ...result };
   if (Array.isArray(limited.matches)) {
-    limited.matches = limited.matches.slice(0, maxMatches).map((m) => {
+    limited.matches = limited.matches.slice(0, maxMatches).map((m: any) => {
       const copy = { ...m };
       if (copy.context && typeof copy.context === 'string') {
         const contextLines = copy.context.split('\n');
@@ -648,7 +648,7 @@ function limitSearchResultObj(result, maxMatches, maxChars) {
 /**
  * 限制文件内容 — 截断 content 字段
  */
-function limitFileContent(result, maxChars) {
+function limitFileContent(result: any, maxChars: any) {
   if (typeof result === 'string') {
     return result.length > maxChars ? `${result.substring(0, maxChars)}\n... [truncated]` : result;
   }

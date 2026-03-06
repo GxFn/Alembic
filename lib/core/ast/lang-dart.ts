@@ -14,11 +14,11 @@
 
 import { ImportRecord } from '../analysis/ImportRecord.js';
 
-function walkDart(root, ctx) {
+function walkDart(root: any, ctx: any) {
   _walkNode(root, ctx, null);
 }
 
-function _walkNode(node, ctx, parentClassName) {
+function _walkNode(node: any, ctx: any, parentClassName: any) {
   for (let i = 0; i < node.namedChildCount; i++) {
     const child = node.namedChild(i);
 
@@ -45,7 +45,7 @@ function _walkNode(node, ctx, parentClassName) {
           if (showClause) {
             symbols = showClause[1]
               .split(',')
-              .map((s) => s.trim())
+              .map((s: any) => s.trim())
               .filter(Boolean);
             kind = 'named';
           }
@@ -77,7 +77,7 @@ function _walkNode(node, ctx, parentClassName) {
 
       case 'type_alias': {
         const nameNode = child.namedChildren.find(
-          (c) => c.type === 'identifier' || c.type === 'type_identifier'
+          (c: any) => c.type === 'identifier' || c.type === 'type_identifier'
         );
         if (nameNode) {
           ctx.classes.push({
@@ -125,9 +125,9 @@ function _walkNode(node, ctx, parentClassName) {
 
 // ── Class ────────────────────────────────────────────────────
 
-function _parseClassDef(node, ctx) {
+function _parseClassDef(node: any, ctx: any) {
   const nameNode = node.namedChildren.find(
-    (c) => c.type === 'identifier' || c.type === 'type_identifier'
+    (c: any) => c.type === 'identifier' || c.type === 'type_identifier'
   );
   const name = nameNode?.text || 'Unknown';
 
@@ -137,16 +137,16 @@ function _parseClassDef(node, ctx) {
 
   // 父类 (extends)
   let superclass: any = null;
-  const superClause = node.namedChildren.find((c) => c.type === 'superclass');
+  const superClause = node.namedChildren.find((c: any) => c.type === 'superclass');
   if (superClause) {
     const superType = superClause.namedChildren.find(
-      (c) => c.type === 'type_identifier' || c.type === 'identifier'
+      (c: any) => c.type === 'type_identifier' || c.type === 'identifier'
     );
     superclass = superType?.text || null;
   }
 
   // 实现的接口 (implements)
-  const implClause = node.namedChildren.find((c) => c.type === 'interfaces');
+  const implClause = node.namedChildren.find((c: any) => c.type === 'interfaces');
   const protocols: any[] = [];
   if (implClause) {
     for (let i = 0; i < implClause.namedChildCount; i++) {
@@ -158,7 +158,7 @@ function _parseClassDef(node, ctx) {
   }
 
   // Mixin (with)
-  const mixinClause = node.namedChildren.find((c) => c.type === 'mixins');
+  const mixinClause = node.namedChildren.find((c: any) => c.type === 'mixins');
   const mixins: any[] = [];
   if (mixinClause) {
     for (let i = 0; i < mixinClause.namedChildCount; i++) {
@@ -188,13 +188,13 @@ function _parseClassDef(node, ctx) {
   });
 
   // Walk class body
-  const body = node.namedChildren.find((c) => c.type === 'class_body');
+  const body = node.namedChildren.find((c: any) => c.type === 'class_body');
   if (body) {
     _walkClassBody(body, ctx, name);
   }
 }
 
-function _walkClassBody(body, ctx, className) {
+function _walkClassBody(body: any, ctx: any, className: any) {
   for (let i = 0; i < body.namedChildCount; i++) {
     const child = body.namedChild(i);
 
@@ -222,7 +222,7 @@ function _walkClassBody(body, ctx, className) {
 
       case 'constructor_signature': {
         const nameNode = child.namedChildren.find(
-          (c) => c.type === 'identifier' || c.type === 'constructor_name'
+          (c: any) => c.type === 'identifier' || c.type === 'constructor_name'
         );
         const isFactory = child.text.trimStart().startsWith('factory');
         ctx.methods.push({
@@ -249,14 +249,14 @@ function _walkClassBody(body, ctx, className) {
 
 // ── Mixin ────────────────────────────────────────────────────
 
-function _parseMixinDecl(node, ctx) {
+function _parseMixinDecl(node: any, ctx: any) {
   const nameNode = node.namedChildren.find(
-    (c) => c.type === 'identifier' || c.type === 'type_identifier'
+    (c: any) => c.type === 'identifier' || c.type === 'type_identifier'
   );
   const name = nameNode?.text || 'Unknown';
 
   const onClause = node.namedChildren.find(
-    (c) => c.type === 'on_clause' || c.type === 'superclass'
+    (c: any) => c.type === 'on_clause' || c.type === 'superclass'
   );
   const constraints: any[] = [];
   if (onClause) {
@@ -277,7 +277,7 @@ function _parseMixinDecl(node, ctx) {
     endLine: node.endPosition.row + 1,
   });
 
-  const body = node.namedChildren.find((c) => c.type === 'class_body');
+  const body = node.namedChildren.find((c: any) => c.type === 'class_body');
   if (body) {
     _walkClassBody(body, ctx, name);
   }
@@ -285,14 +285,16 @@ function _parseMixinDecl(node, ctx) {
 
 // ── Extension ────────────────────────────────────────────────
 
-function _parseExtensionDecl(node, ctx) {
+function _parseExtensionDecl(node: any, ctx: any) {
   const nameNode = node.namedChildren.find(
-    (c) => c.type === 'identifier' || c.type === 'type_identifier'
+    (c: any) => c.type === 'identifier' || c.type === 'type_identifier'
   );
   const name = nameNode?.text || 'anonymous_extension';
 
   // on Type
-  const onType = node.namedChildren.find((c) => c.type === 'type_identifier' && c !== nameNode);
+  const onType = node.namedChildren.find(
+    (c: any) => c.type === 'type_identifier' && c !== nameNode
+  );
 
   ctx.categories.push({
     name,
@@ -302,7 +304,7 @@ function _parseExtensionDecl(node, ctx) {
   });
 
   const body = node.namedChildren.find(
-    (c) => c.type === 'class_body' || c.type === 'extension_body'
+    (c: any) => c.type === 'class_body' || c.type === 'extension_body'
   );
   if (body) {
     _walkClassBody(body, ctx, name);
@@ -311,9 +313,9 @@ function _parseExtensionDecl(node, ctx) {
 
 // ── Enum ─────────────────────────────────────────────────────
 
-function _parseEnumDecl(node, ctx) {
+function _parseEnumDecl(node: any, ctx: any) {
   const nameNode = node.namedChildren.find(
-    (c) => c.type === 'identifier' || c.type === 'type_identifier'
+    (c: any) => c.type === 'identifier' || c.type === 'type_identifier'
   );
   const name = nameNode?.text || 'Unknown';
 
@@ -327,9 +329,9 @@ function _parseEnumDecl(node, ctx) {
 
 // ── Function / Method ────────────────────────────────────────
 
-function _parseFunctionDef(node, className) {
+function _parseFunctionDef(node: any, className: any) {
   const nameNode = node.namedChildren.find(
-    (c) => c.type === 'identifier' || c.type === 'function_name'
+    (c: any) => c.type === 'identifier' || c.type === 'function_name'
   );
   const name = nameNode?.text;
   if (!name) {
@@ -340,7 +342,9 @@ function _parseFunctionDef(node, className) {
   const isAsync = node.text.includes('async') || node.text.includes('async*');
   const isOverride = node.text.includes('@override');
 
-  const body = node.namedChildren.find((c) => c.type === 'function_body' || c.type === 'block');
+  const body = node.namedChildren.find(
+    (c: any) => c.type === 'function_body' || c.type === 'block'
+  );
   const bodyLines = body ? body.endPosition.row - body.startPosition.row + 1 : 0;
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
@@ -363,9 +367,9 @@ function _parseFunctionDef(node, className) {
 
 // ── Property / Field ─────────────────────────────────────────
 
-function _parsePropertyDecl(node, className) {
+function _parsePropertyDecl(node: any, className: any) {
   const nameNode = node.namedChildren.find(
-    (c) => c.type === 'identifier' || c.type === 'initialized_identifier'
+    (c: any) => c.type === 'identifier' || c.type === 'initialized_identifier'
   );
   if (!nameNode) {
     return null;
@@ -392,7 +396,7 @@ function _parsePropertyDecl(node, className) {
 
 // ── Dart Pattern Detection ───────────────────────────────────
 
-function detectDartPatterns(root, lang, methods, properties, classes) {
+function detectDartPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   const patterns: any[] = [];
 
   // 构建 class → methods/properties 索引
@@ -475,10 +479,10 @@ function detectDartPatterns(root, lang, methods, properties, classes) {
     const classMethods = classMethodMap[cls.name] || [];
     const classProps = classPropMap[cls.name] || [];
     const hasPrivateConstructor = classMethods.some(
-      (m) => m.kind === 'constructor' && m.name.startsWith('_')
+      (m: any) => m.kind === 'constructor' && m.name.startsWith('_')
     );
-    const hasStaticInstance = classProps.some((p) => p.isStatic && (p.isFinal || p.isConst));
-    const hasFactoryConstructor = classMethods.some((m) => m.kind === 'factory');
+    const hasStaticInstance = classProps.some((p: any) => p.isStatic && (p.isFinal || p.isConst));
+    const hasFactoryConstructor = classMethods.some((m: any) => m.kind === 'factory');
 
     if (hasPrivateConstructor && (hasStaticInstance || hasFactoryConstructor)) {
       patterns.push({
@@ -520,7 +524,7 @@ function detectDartPatterns(root, lang, methods, properties, classes) {
     }
 
     // Freezed pattern — @freezed/@Freezed annotation + with _$ClassName mixin
-    if (cls.mixins?.some((m) => m.startsWith('_$'))) {
+    if (cls.mixins?.some((m: any) => m.startsWith('_$'))) {
       patterns.push({
         type: 'freezed',
         className: cls.name,
@@ -549,9 +553,9 @@ function detectDartPatterns(root, lang, methods, properties, classes) {
   return patterns;
 }
 
-function _detectExtensions(root, patterns) {
+function _detectExtensions(root: any, patterns: any) {
   let count = 0;
-  function walk(node) {
+  function walk(node: any) {
     if (node.type === 'extension_declaration') {
       count++;
     }
@@ -569,9 +573,9 @@ function _detectExtensions(root, patterns) {
   }
 }
 
-function _detectStreamUsage(root, patterns) {
+function _detectStreamUsage(root: any, patterns: any) {
   let streamCount = 0;
-  function walk(node) {
+  function walk(node: any) {
     if (node.type === 'type_identifier' && node.text === 'Stream') {
       streamCount++;
     }
@@ -597,9 +601,9 @@ function _detectStreamUsage(root, patterns) {
 
 // ── Utility ──────────────────────────────────────────────────
 
-function _countChildParams(node) {
+function _countChildParams(node: any) {
   let count = 0;
-  function walk(n) {
+  function walk(n: any) {
     if (
       n.type === 'formal_parameter' ||
       n.type === 'normal_formal_parameter' ||
@@ -616,7 +620,7 @@ function _countChildParams(node) {
   return count;
 }
 
-function _estimateComplexity(node) {
+function _estimateComplexity(node: any) {
   let complexity = 1;
   const BRANCH_TYPES = new Set([
     'if_statement',
@@ -630,7 +634,7 @@ function _estimateComplexity(node) {
     'catch_clause',
     'conditional_expression', // ternary ? :
   ]);
-  function walk(n) {
+  function walk(n: any) {
     if (BRANCH_TYPES.has(n.type)) {
       complexity++;
     }
@@ -648,7 +652,7 @@ function _estimateComplexity(node) {
   return complexity;
 }
 
-function _maxNesting(node, depth) {
+function _maxNesting(node: any, depth: any) {
   const NESTING_TYPES = new Set([
     'if_statement',
     'for_statement',
@@ -679,7 +683,7 @@ function _maxNesting(node, depth) {
  * @param {object} ctx
  * @param {string} _lang
  */
-function extractCallSitesDart(root, ctx, _lang) {
+function extractCallSitesDart(root: any, ctx: any, _lang: any) {
   const scopes = _collectDartScopes(root);
   for (const scope of scopes) {
     _extractDartCallSitesFromBody(scope.body, scope.className, scope.methodName, ctx);
@@ -689,35 +693,35 @@ function extractCallSitesDart(root, ctx, _lang) {
 /**
  * 递归收集 Dart 中所有函数/方法体作用域
  */
-function _collectDartScopes(root) {
+function _collectDartScopes(root: any) {
   const scopes: any[] = [];
 
-  function visit(node, className) {
+  function visit(node: any, className: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
 
       if (child.type === 'class_definition') {
         const name = child.namedChildren.find(
-          (c) => c.type === 'identifier' || c.type === 'type_identifier'
+          (c: any) => c.type === 'identifier' || c.type === 'type_identifier'
         )?.text;
-        const body = child.namedChildren.find((c) => c.type === 'class_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (body) {
           visit(body, name || className);
         }
       } else if (child.type === 'mixin_declaration') {
         const name = child.namedChildren.find(
-          (c) => c.type === 'identifier' || c.type === 'type_identifier'
+          (c: any) => c.type === 'identifier' || c.type === 'type_identifier'
         )?.text;
-        const body = child.namedChildren.find((c) => c.type === 'class_body');
+        const body = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (body) {
           visit(body, name || className);
         }
       } else if (child.type === 'extension_declaration') {
         const name = child.namedChildren.find(
-          (c) => c.type === 'identifier' || c.type === 'type_identifier'
+          (c: any) => c.type === 'identifier' || c.type === 'type_identifier'
         )?.text;
         const body = child.namedChildren.find(
-          (c) => c.type === 'class_body' || c.type === 'extension_body'
+          (c: any) => c.type === 'class_body' || c.type === 'extension_body'
         );
         if (body) {
           visit(body, name || className);
@@ -731,19 +735,20 @@ function _collectDartScopes(root) {
         let name;
         if (child.type === 'method_signature' || child.type === 'function_signature') {
           // method_signature 可能包含嵌套 function_signature
-          const funcSig = child.namedChildren.find((c) => c.type === 'function_signature') || child;
+          const funcSig =
+            child.namedChildren.find((c: any) => c.type === 'function_signature') || child;
           name = funcSig.namedChildren.find(
-            (c) => c.type === 'identifier' || c.type === 'function_name'
+            (c: any) => c.type === 'identifier' || c.type === 'function_name'
           )?.text;
         } else {
           name = child.namedChildren.find(
-            (c) => c.type === 'identifier' || c.type === 'function_name'
+            (c: any) => c.type === 'identifier' || c.type === 'function_name'
           )?.text;
         }
 
         // tree-sitter-dart: function_body 可能是子节点或下一个兄弟节点
         let body = child.namedChildren.find(
-          (c) => c.type === 'function_body' || c.type === 'block'
+          (c: any) => c.type === 'function_body' || c.type === 'block'
         );
         // 如果 body 不在子节点中，检查下一个兄弟节点 (tree-sitter-dart 的 sibling 结构)
         if (!body && i + 1 < node.namedChildCount) {
@@ -757,9 +762,9 @@ function _collectDartScopes(root) {
           scopes.push({ body, className, methodName: name });
         }
       } else if (child.type === 'getter_signature' || child.type === 'setter_signature') {
-        const name = child.namedChildren.find((c) => c.type === 'identifier')?.text;
+        const name = child.namedChildren.find((c: any) => c.type === 'identifier')?.text;
         let body = child.namedChildren.find(
-          (c) => c.type === 'function_body' || c.type === 'block'
+          (c: any) => c.type === 'function_body' || c.type === 'block'
         );
         if (!body && i + 1 < node.namedChildCount) {
           const nextSibling = node.namedChild(i + 1);
@@ -788,7 +793,7 @@ function _collectDartScopes(root) {
  *               + selector("(args)")
  * 因此需要 sibling-aware scanning，避免逐个 walk 子节点时丢失上下文。
  */
-function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
+function _extractDartCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;
   }
@@ -807,9 +812,9 @@ function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
   ]);
 
   /** 在 selectorNode 的子树中查找 arguments / argument_part */
-  function findArgs(selectorNode) {
+  function findArgs(selectorNode: any) {
     return selectorNode.namedChildren.find(
-      (c) => c.type === 'arguments' || c.type === 'argument_part'
+      (c: any) => c.type === 'arguments' || c.type === 'argument_part'
     );
   }
 
@@ -817,7 +822,7 @@ function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
    * 尝试从 parent.namedChild(idx) 开始消费一条调用链。
    * 成功 → 返回消费到的最后一个子节点索引；失败 → 返回 null。
    */
-  function tryConsumeCall(parent, idx, startNode, isAwaited) {
+  function tryConsumeCall(parent: any, idx: any, startNode: any, isAwaited: any) {
     const sib1 = parent.namedChild(idx + 1);
     if (!sib1) {
       return null;
@@ -905,7 +910,7 @@ function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
    * 以 sibling-aware 方式扫描 node 的 namedChildren。
    * 当发现调用起始节点(identifier / this / super)时，尝试消费完整调用链并跳过已消费兄弟。
    */
-  function scanChildren(node, isAwaited) {
+  function scanChildren(node: any, isAwaited: any) {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
 
@@ -919,7 +924,7 @@ function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
       if (child.type === 'function_expression_invocation' || child.type === 'method_invocation') {
         _processDartCall(child, className, methodName, ctx, isAwaited, DART_NOISE);
         const args = child.namedChildren.find(
-          (c) => c.type === 'arguments' || c.type === 'argument_part'
+          (c: any) => c.type === 'arguments' || c.type === 'argument_part'
         );
         if (args) {
           scanChildren(args, false);
@@ -960,7 +965,14 @@ function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
 /**
  * 处理 Dart 函数/方法调用节点
  */
-function _processDartCall(node, className, methodName, ctx, isAwaited, DART_NOISE) {
+function _processDartCall(
+  node: any,
+  className: any,
+  methodName: any,
+  ctx: any,
+  isAwaited: any,
+  DART_NOISE: any
+) {
   const text = node.text || '';
   const callMatch = text.match(/^(?:(\w[\w.]*?)\.)?(\w+)\s*\(/);
   if (!callMatch) {
@@ -993,7 +1005,9 @@ function _processDartCall(node, className, methodName, ctx, isAwaited, DART_NOIS
     }
   }
 
-  const args = node.namedChildren.find((c) => c.type === 'arguments' || c.type === 'argument_part');
+  const args = node.namedChildren.find(
+    (c: any) => c.type === 'arguments' || c.type === 'argument_part'
+  );
   const argCount = args ? args.namedChildCount : 0;
 
   ctx.callSites.push({
@@ -1015,7 +1029,7 @@ let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }
-export function setGrammar(grammar) {
+export function setGrammar(grammar: any) {
   _grammar = grammar;
 }
 

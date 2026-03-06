@@ -164,7 +164,7 @@ const CLASSIFY_SYSTEM_PROMPT = `你是一个意图分类器。用户通过飞书
 
 export class IntentClassifier {
   /** @type {import('../../external/ai/AiProvider.js').AiProvider|null} */
-  #aiProvider;
+  #aiProvider: any;
   #logger;
 
   /**
@@ -183,7 +183,7 @@ export class IntentClassifier {
    * @param {Object} [context] 额外上下文 (如对话历史、最近操作)
    * @returns {Promise<ClassificationResult>}
    */
-  async classify(text, context: any = {}) {
+  async classify(text: any, context: any = {}) {
     if (!text?.trim()) {
       return { intent: Intent.BOT_AGENT, confidence: 1, reasoning: '空消息', method: 'rule' };
     }
@@ -234,7 +234,7 @@ export class IntentClassifier {
   /**
    * 系统操作匹配 (优先级最高)
    */
-  #matchSystem(text) {
+  #matchSystem(text: any) {
     for (const rule of SYSTEM_RULES) {
       if (rule.pattern.test(text)) {
         return {
@@ -252,7 +252,7 @@ export class IntentClassifier {
   /**
    * 强信号关键词匹配
    */
-  #matchRules(text) {
+  #matchRules(text: any) {
     let ideScore = 0;
     let botScore = 0;
     const ideMatches: string[] = [];
@@ -309,7 +309,7 @@ export class IntentClassifier {
   /**
    * LLM 分类
    */
-  async #classifyWithLLM(text, context: any = {}) {
+  async #classifyWithLLM(text: any, context: any = {}) {
     try {
       const userMsg = context.recentHistory
         ? `最近对话:\n${context.recentHistory}\n\n当前消息: "${text}"`

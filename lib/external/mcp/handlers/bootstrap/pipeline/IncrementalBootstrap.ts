@@ -38,7 +38,7 @@ export class IncrementalBootstrap {
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  constructor(db, projectRoot, { logger }: any = {}) {
+  constructor(db: any, projectRoot: any, { logger }: any = {}) {
     this.#snapshot = new BootstrapSnapshot(db, { logger });
     this.#logger = logger || null;
     this.#projectRoot = projectRoot;
@@ -61,7 +61,7 @@ export class IncrementalBootstrap {
    * @property {string} reason 人类可读的决策原因
    * @property {object|null} restoredEpisodic 从快照恢复的 EpisodicMemory (仅增量时)
    */
-  evaluate(currentFiles, allDimIds) {
+  evaluate(currentFiles: any, allDimIds: any) {
     try {
       // 1. 加载上次快照
       const previousSnapshot = this.#snapshot.getLatest(this.#projectRoot);
@@ -161,7 +161,7 @@ export class IncrementalBootstrap {
    * @param {IncrementalPlan} [params.plan] - evaluate() 返回的计划 (增量时)
    * @returns {string} 快照 ID
    */
-  saveSnapshot(params) {
+  saveSnapshot(params: any) {
     const { sessionId, allFiles, dimensionStats, episodicMemory, meta = {}, plan = null } = params;
 
     // 构建带 referencedFilesList 的 dimensionStats
@@ -202,7 +202,7 @@ export class IncrementalBootstrap {
     return this.#snapshot;
   }
 
-  #log(msg, level = 'info') {
+  #log(msg: any, level = 'info') {
     if (this.#logger) {
       this.#logger[level]?.(`[IncrementalBootstrap] ${msg}`);
     }

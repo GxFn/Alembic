@@ -157,7 +157,7 @@ class ReactEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── Custom Hooks ──
@@ -231,7 +231,7 @@ class ReactEnhancement extends EnhancementPack {
 
     // ── React imports ──
     const reactImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('react') ||
         imp.includes('zustand') ||
         imp.includes('jotai') ||

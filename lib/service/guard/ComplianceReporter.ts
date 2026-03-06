@@ -19,7 +19,7 @@ import { collectSourceFilesWithContent } from './SourceFileCollector.js';
 /**
  * Quality Gate 评分算法
  */
-function computeScore(summary, ruleHealth: any[] = []) {
+function computeScore(summary: any, ruleHealth: any[] = []) {
   let score = 100;
 
   // 扣分：每个 error/warning/info 按常量权重扣分
@@ -47,7 +47,7 @@ function computeScore(summary, ruleHealth: any[] = []) {
 /**
  * 判定 Quality Gate 状态
  */
-function evaluateGate(summary, score, thresholds) {
+function evaluateGate(summary: any, score: any, thresholds: any) {
   const {
     maxErrors = QUALITY_GATE.MAX_ERRORS,
     maxWarnings = QUALITY_GATE.MAX_WARNINGS,
@@ -81,10 +81,10 @@ export class ComplianceReporter {
    * @param {object} qualityGateConfig - { maxErrors, maxWarnings, minScore }
    */
   constructor(
-    guardCheckEngine,
-    violationsStore,
-    ruleLearner,
-    exclusionManager,
+    guardCheckEngine: any,
+    violationsStore: any,
+    ruleLearner: any,
+    exclusionManager: any,
     qualityGateConfig: any = {}
   ) {
     this.engine = guardCheckEngine;
@@ -108,7 +108,7 @@ export class ComplianceReporter {
    * @param {number} [options.maxFiles] 最大扫描文件数
    * @returns {Promise<ComplianceReport>}
    */
-  async generate(projectRoot, options: any = {}) {
+  async generate(projectRoot: any, options: any = {}) {
     const thresholds = { ...this.qualityGateConfig, ...(options.qualityGate || {}) };
     const maxFiles = options.maxFiles || 500;
 
@@ -126,7 +126,7 @@ export class ComplianceReporter {
         continue;
       }
 
-      const filteredViolations = fileResult.violations.filter((v) => {
+      const filteredViolations = fileResult.violations.filter((v: any) => {
         // isRuleExcluded 内部已检查全局排除
         if (this.exclusionManager?.isRuleExcluded?.(v.ruleId, fileResult.filePath)) {
           return false;
@@ -139,9 +139,9 @@ export class ComplianceReporter {
         violations: filteredViolations,
         summary: {
           total: filteredViolations.length,
-          errors: filteredViolations.filter((v) => v.severity === 'error').length,
-          warnings: filteredViolations.filter((v) => v.severity === 'warning').length,
-          infos: filteredViolations.filter((v) => v.severity === 'info').length,
+          errors: filteredViolations.filter((v: any) => v.severity === 'error').length,
+          warnings: filteredViolations.filter((v: any) => v.severity === 'warning').length,
+          infos: filteredViolations.filter((v: any) => v.severity === 'info').length,
         },
       });
     }
@@ -232,7 +232,7 @@ export class ComplianceReporter {
     try {
       if (this.violationsStore?.appendRun) {
         const allViolations = filteredFiles.flatMap((f) =>
-          f.violations.map((v) => ({ ...v, filePath: f.filePath }))
+          f.violations.map((v: any) => ({ ...v, filePath: f.filePath }))
         );
         this.violationsStore.appendRun({
           filePath: projectRoot,
@@ -265,7 +265,7 @@ export class ComplianceReporter {
    * @param {object} report - generate() 产出的报告
    * @param {object} options - { format: 'text' | 'markdown' | 'json' }
    */
-  printReport(report, options: any = {}) {
+  printReport(report: any, options: any = {}) {
     const { format = 'text' } = options;
 
     if (format === 'json') {
@@ -281,7 +281,7 @@ export class ComplianceReporter {
     this._printText(report);
   }
 
-  _printText(report) {
+  _printText(report: any) {
     const { qualityGate, summary, topViolations, fileHotspots, trend } = report;
 
     const gateIcon =
@@ -321,7 +321,7 @@ export class ComplianceReporter {
     this.logger.info(lines.join('\n'));
   }
 
-  _printMarkdown(report) {
+  _printMarkdown(report: any) {
     const { qualityGate, summary, topViolations, fileHotspots, trend } = report;
     const lines: any[] = [];
 

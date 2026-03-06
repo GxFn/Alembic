@@ -90,7 +90,7 @@ const STYLE_GUIDE = buildProducerStyleGuide();
  * @param {object} projectInfo - { name }
  * @returns {string}
  */
-export function buildProducerPrompt(analysisReport, dimConfig, projectInfo) {
+export function buildProducerPrompt(analysisReport: any, dimConfig: any, projectInfo: any) {
   const parts: any[] = [];
 
   parts.push(`将以下对 ${projectInfo.name} 项目 "${dimConfig.label}" 维度的分析，转化为知识候选:`);
@@ -124,7 +124,7 @@ export function buildProducerPrompt(analysisReport, dimConfig, projectInfo) {
  * @param {object} projectInfo
  * @returns {string}
  */
-export function buildProducerPromptV2(artifact, dimConfig, projectInfo) {
+export function buildProducerPromptV2(artifact: any, dimConfig: any, projectInfo: any) {
   const parts: any[] = [];
 
   parts.push(`将以下对 ${projectInfo.name} 项目 "${dimConfig.label}" 维度的分析，转化为知识候选:`);
@@ -192,7 +192,7 @@ export function buildProducerPromptV2(artifact, dimConfig, projectInfo) {
  * @param {Map<string, import('./EvidenceCollector.js').EvidenceEntry>} evidenceMap
  * @returns {string|null}
  */
-export function buildCodeContextSection(evidenceMap) {
+export function buildCodeContextSection(evidenceMap: any) {
   if (!evidenceMap || evidenceMap.size === 0) {
     return null;
   }
@@ -250,7 +250,11 @@ export function buildCodeContextSection(evidenceMap) {
  * @param {object} _strategyContext
  * @returns {{ action: 'pass'|'retry', reason: string }}
  */
-export function producerRejectionGateEvaluator(source, _phaseResults, _strategyContext: any = {}) {
+export function producerRejectionGateEvaluator(
+  source: any,
+  _phaseResults: any,
+  _strategyContext: any = {}
+) {
   if (!source?.toolCalls) {
     return { action: 'pass', reason: '' };
   }
@@ -260,10 +264,10 @@ export function producerRejectionGateEvaluator(source, _phaseResults, _strategyC
     'submit_knowledge',
     'submit_with_check',
   ];
-  const submitCalls = (source.toolCalls || []).filter((tc) =>
+  const submitCalls = (source.toolCalls || []).filter((tc: any) =>
     submitToolNames.includes(tc.tool || tc.name)
   );
-  const rejected = submitCalls.filter((tc) => {
+  const rejected = submitCalls.filter((tc: any) => {
     const res = tc.result;
     if (!res) {
       return false;

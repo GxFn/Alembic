@@ -36,21 +36,21 @@ class CliLogger {
   }
 
   /** 信息提示 → stdout（语义同 log） */
-  info(msg) {
+  info(msg: any) {
     if (!this.#quiet) {
       process.stdout.write(`${msg}\n`);
     }
   }
 
   /** 成功提示 → stdout */
-  success(msg) {
+  success(msg: any) {
     if (!this.#quiet) {
       process.stdout.write(`${msg}\n`);
     }
   }
 
   /** JSON 格式输出 → stdout */
-  json(obj) {
+  json(obj: any) {
     process.stdout.write(`${JSON.stringify(obj, null, 2)}\n`);
   }
 
@@ -64,17 +64,17 @@ class CliLogger {
   // ── stderr 输出 ──────────────────────────────────
 
   /** 错误信息 → stderr */
-  error(msg) {
+  error(msg: any) {
     process.stderr.write(`${msg}\n`);
   }
 
   /** 警告信息 → stderr */
-  warn(msg) {
+  warn(msg: any) {
     process.stderr.write(`${msg}\n`);
   }
 
   /** 调试信息 → stderr（仅 ASD_DEBUG=1 时输出） */
-  debug(msg) {
+  debug(msg: any) {
     if (process.env.ASD_DEBUG === '1') {
       process.stderr.write(`${msg}\n`);
     }

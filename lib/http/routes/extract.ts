@@ -21,7 +21,7 @@ const logger = Logger.getInstance();
  */
 router.post(
   '/path',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { relativePath, projectRoot: bodyRoot } = req.body;
 
     if (!relativePath) {
@@ -107,7 +107,7 @@ router.post(
  */
 router.post(
   '/text',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { text, language, relativePath, projectRoot: bodyRoot } = req.body;
 
     if (!text) {

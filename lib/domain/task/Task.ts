@@ -142,7 +142,7 @@ export class Task {
     this.updatedAt = Math.floor(Date.now() / 1000);
   }
 
-  fail(reason) {
+  fail(reason: any) {
     if (this.status === 'closed') {
       throw new Error('Cannot fail a closed task');
     }
@@ -237,7 +237,7 @@ export class Task {
     };
   }
 
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     if (!data) {
       return new Task();
     }
@@ -247,7 +247,7 @@ export class Task {
   /**
    * 从数据库行构造 Task（snake_case → camelCase）
    */
-  static fromRow(row) {
+  static fromRow(row: any) {
     if (!row) {
       return null;
     }

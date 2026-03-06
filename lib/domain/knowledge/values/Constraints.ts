@@ -25,7 +25,7 @@ export class Constraints {
    * @param {Constraints|Object|null} input
    * @returns {Constraints}
    */
-  static from(input) {
+  static from(input: any) {
     if (input instanceof Constraints) {
       return input;
     }
@@ -47,7 +47,7 @@ export class Constraints {
    * @param {Object} g
    * @returns {Guard}
    */
-  static _normalizeGuard(g) {
+  static _normalizeGuard(g: any) {
     return {
       id: g.id || null,
       type: g.type || (g.ast_query ? 'ast' : 'regex'),
@@ -64,7 +64,7 @@ export class Constraints {
    * @returns {Array<Guard>}
    */
   getRegexGuards() {
-    return this.guards.filter((g) => g.type === 'regex' && g.pattern);
+    return this.guards.filter((g: any) => g.type === 'regex' && g.pattern);
   }
 
   /**
@@ -72,7 +72,7 @@ export class Constraints {
    * @returns {Array<Guard>}
    */
   getAstGuards() {
-    return this.guards.filter((g) => g.type === 'ast' && g.ast_query);
+    return this.guards.filter((g: any) => g.type === 'ast' && g.ast_query);
   }
 
   /**
@@ -80,7 +80,7 @@ export class Constraints {
    * @param {Object} guard
    * @returns {Constraints}
    */
-  addGuard(guard) {
+  addGuard(guard: any) {
     this.guards.push(Constraints._normalizeGuard(guard));
     return this;
   }
@@ -123,7 +123,7 @@ export class Constraints {
    * @param {Object} data
    * @returns {Constraints}
    */
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     return Constraints.from(data);
   }
 }

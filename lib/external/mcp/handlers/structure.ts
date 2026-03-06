@@ -29,8 +29,8 @@ async function _getLoadedDiscoverer() {
   return _discovererCache;
 }
 
-function _findTarget(targets, targetName) {
-  const t = targets.find((t) => t.name === targetName);
+function _findTarget(targets: any, targetName: any) {
+  const t = targets.find((t: any) => t.name === targetName);
   if (!t) {
     throw new Error(`Target not found: ${targetName}`);
   }
@@ -38,12 +38,12 @@ function _findTarget(targets, targetName) {
 }
 
 /** 推断语言 — 委托给 LanguageService */
-function _inferLang(filename) {
+function _inferLang(filename: any) {
   return LanguageService.inferLang(filename);
 }
 
 /** 推断 Target 职责 */
-function _inferTargetRole(targetName) {
+function _inferTargetRole(targetName: any) {
   const n = targetName.toLowerCase();
   if (/core|kit|shared|common|foundation|base/i.test(n)) {
     return 'core';
@@ -88,7 +88,7 @@ function _inferTargetRole(targetName) {
 // Handler: getTargets
 // ═══════════════════════════════════════════════════════════
 
-export async function getTargets(ctx, args: any = {}) {
+export async function getTargets(ctx: any, args: any = {}) {
   const { discoverer, targets } = await _getLoadedDiscoverer();
   const includeSummary = args.includeSummary !== false; // 默认 true
 
@@ -140,7 +140,7 @@ export async function getTargets(ctx, args: any = {}) {
 // Handler: getTargetFiles
 // ═══════════════════════════════════════════════════════════
 
-export async function getTargetFiles(ctx, args) {
+export async function getTargetFiles(ctx: any, args: any) {
   if (!args.targetName) {
     throw new Error('targetName is required');
   }
@@ -205,7 +205,7 @@ export async function getTargetFiles(ctx, args) {
 // Handler: getTargetMetadata
 // ═══════════════════════════════════════════════════════════
 
-export async function getTargetMetadata(ctx, args) {
+export async function getTargetMetadata(ctx: any, args: any) {
   if (!args.targetName) {
     throw new Error('targetName is required');
   }
@@ -252,12 +252,12 @@ export async function getTargetMetadata(ctx, args) {
     if (graphService) {
       const edges = graphService.getEdges(target.name, 'module', 'both');
       meta.graphEdges = {
-        outgoing: (edges.outgoing || []).map((e) => ({
+        outgoing: (edges.outgoing || []).map((e: any) => ({
           toId: e.toId,
           toType: e.toType,
           relation: e.relation,
         })),
-        incoming: (edges.incoming || []).map((e) => ({
+        incoming: (edges.incoming || []).map((e: any) => ({
           fromId: e.fromId,
           fromType: e.fromType,
           relation: e.relation,
@@ -271,7 +271,7 @@ export async function getTargetMetadata(ctx, args) {
   return envelope({ success: true, data: meta, meta: { tool: 'autosnippet_structure' } });
 }
 
-export async function graphQuery(ctx, args) {
+export async function graphQuery(ctx: any, args: any) {
   const graphService = ctx.container.get('knowledgeGraphService');
   if (!graphService) {
     return envelope({
@@ -304,7 +304,7 @@ export async function graphQuery(ctx, args) {
   return envelope({ success: true, data, meta: { tool: 'autosnippet_graph' } });
 }
 
-export async function graphImpact(ctx, args) {
+export async function graphImpact(ctx: any, args: any) {
   const graphService = ctx.container.get('knowledgeGraphService');
   if (!graphService) {
     return envelope({
@@ -345,7 +345,7 @@ export async function graphImpact(ctx, args) {
 /**
  * 降级：从 knowledge_entries.relations 提取关系（不依赖 knowledge_edges 表）
  */
-async function _fallbackRelationsFromRecipe(ctx, nodeId, relation, direction) {
+async function _fallbackRelationsFromRecipe(ctx: any, nodeId: any, relation: any, direction: any) {
   try {
     const knowledgeService = ctx.container.get('knowledgeService');
     const entry = await knowledgeService.get(nodeId);
@@ -429,7 +429,7 @@ async function _fallbackRelationsFromRecipe(ctx, nodeId, relation, direction) {
 /**
  * 降级：从 knowledge_entries.relations 反查受影响的条目
  */
-async function _fallbackImpactFromRecipe(ctx, nodeId) {
+async function _fallbackImpactFromRecipe(ctx: any, nodeId: any) {
   try {
     const knowledgeRepo = ctx.container.get('knowledgeRepository');
     const rows = knowledgeRepo.db
@@ -467,7 +467,7 @@ async function _fallbackImpactFromRecipe(ctx, nodeId) {
 
 // ─── graph_path — 路径查找 ─────────────────────────────────
 
-export async function graphPath(ctx, args) {
+export async function graphPath(ctx: any, args: any) {
   if (!args.fromId || !args.toId) {
     throw new Error('fromId and toId are required');
   }
@@ -503,7 +503,7 @@ export async function graphPath(ctx, args) {
 /**
  * 降级路径查找：只能发现 1-hop 直接关系
  */
-async function _fallbackPathFromRecipe(ctx, fromId, toId) {
+async function _fallbackPathFromRecipe(ctx: any, fromId: any, toId: any) {
   try {
     const knowledgeService = ctx.container.get('knowledgeService');
     const entry = await knowledgeService.get(fromId);
@@ -545,7 +545,7 @@ async function _fallbackPathFromRecipe(ctx, fromId, toId) {
  * autosnippet_call_context handler
  * 查询方法的调用者、被调用者、影响半径
  */
-export async function callContext(ctx, args) {
+export async function callContext(ctx: any, args: any) {
   if (!args.methodName) {
     throw new Error('Missing required parameter: methodName');
   }
@@ -603,7 +603,7 @@ export async function callContext(ctx, args) {
 
 // ─── graph_stats — 图谱统计 ────────────────────────────────
 
-export async function graphStats(ctx) {
+export async function graphStats(ctx: any) {
   const graphService = ctx.container.get('knowledgeGraphService');
   if (!graphService) {
     return envelope({

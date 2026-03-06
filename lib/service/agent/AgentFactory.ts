@@ -56,7 +56,7 @@ export class AgentFactory {
     memoryCoordinator,
     projectBriefing,
     projectRoot,
-  }) {
+  }: any) {
     this.#container = container;
     this.#toolRegistry = toolRegistry;
     this.#aiProvider = aiProvider;
@@ -81,7 +81,7 @@ export class AgentFactory {
 
     const router = new AgentRouter();
     router.setAiProvider(this.#aiProvider);
-    router.setExecutor((presetName, message, opts) => {
+    router.setExecutor((presetName: any, message: any, opts: any) => {
       const runtime = this.createRuntime(presetName, opts);
       return runtime.execute(message, opts.strategyOpts || opts);
     });
@@ -102,17 +102,17 @@ export class AgentFactory {
    * @param {Object} [overrides] 覆盖 preset 配置
    * @returns {AgentRuntime}
    */
-  createRuntime(presetName, overrides: any = {}) {
+  createRuntime(presetName: any, overrides: any = {}) {
     const preset = getPreset(presetName, overrides);
 
     // 实例化 Capabilities
-    const capabilities = preset.capabilities.map((name) => {
+    const capabilities = preset.capabilities.map((name: any) => {
       const opts = this.#getCapabilityOpts(name);
       return CapabilityRegistry.create(name, opts);
     });
 
     // 实例化 Policies — 支持工厂函数延迟实例化 (Preset 中 policy 可为 instance 或 factory)
-    const resolvedPolicies = (preset.policies || []).map((policyOrFactory) =>
+    const resolvedPolicies = (preset.policies || []).map((policyOrFactory: any) =>
       typeof policyOrFactory === 'function' ? policyOrFactory(overrides) : policyOrFactory
     );
     const policyEngine = new PolicyEngine(resolvedPolicies);
@@ -280,7 +280,7 @@ export class AgentFactory {
    * @returns {Promise<Object>}              - task-specific JSON
    */
   async scanKnowledge({ label, files, task = 'extract', lang, comprehensive }: any = {}) {
-    const taskConfig = SCAN_TASK_CONFIGS[task];
+    const taskConfig = (SCAN_TASK_CONFIGS as Record<string, any>)[task];
     if (!taskConfig) {
       throw new Error(
         `Unknown scanKnowledge task: "${task}". Available: ${Object.keys(SCAN_TASK_CONFIGS).join(', ')}`
@@ -340,8 +340,8 @@ export class AgentFactory {
     // ── 提取结果 — extract 和 summarize 统一从 toolCalls 提取 ──
     const allToolCalls = result.toolCalls || [];
     const recipes = allToolCalls
-      .filter((tc) => (tc.tool || tc.name) === 'collect_scan_recipe')
-      .map((tc) => {
+      .filter((tc: any) => (tc.tool || tc.name) === 'collect_scan_recipe')
+      .map((tc: any) => {
         const res = tc.result;
         if (res && typeof res === 'object' && res.status === 'collected' && res.recipe) {
           return res.recipe;
@@ -419,7 +419,7 @@ export class AgentFactory {
    * @param {string} [usageGuide] 中文使用指南
    * @returns {Promise<{ summaryEn?: string, usageGuideEn?: string, error?: string }>}
    */
-  async translateToEnglish(summary, usageGuide) {
+  async translateToEnglish(summary: any, usageGuide: any) {
     if (!summary && !usageGuide) {
       return { summaryEn: '', usageGuideEn: '' };
     }
@@ -492,7 +492,7 @@ export class AgentFactory {
    * @param {Object} params 工具参数
    * @returns {Promise<*>} 工具原始返回值
    */
-  async invokeAgent(toolName, params) {
+  async invokeAgent(toolName: any, params: any) {
     return this.#toolRegistry.execute(toolName, params, this.#makeToolContext());
   }
 
@@ -504,7 +504,7 @@ export class AgentFactory {
    * @param {Object} fallback 解析失败时的默认值
    * @returns {Object}
    */
-  #parseJsonResponse(text, fallback) {
+  #parseJsonResponse(text: any, fallback: any) {
     if (!text) {
       return fallback;
     }
@@ -542,7 +542,7 @@ export class AgentFactory {
   /**
    * 获取 Capability 实例化时需要的依赖注入参数
    */
-  #getCapabilityOpts(capabilityName) {
+  #getCapabilityOpts(capabilityName: any) {
     switch (capabilityName) {
       case 'conversation':
         return {

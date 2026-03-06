@@ -26,14 +26,14 @@ import { SearchEngine } from '../../service/search/SearchEngine.js';
 import { DimensionCopy } from '../../shared/DimensionCopyRegistry.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 
-export function register(c) {
+export function register(c: any) {
   // ═══ Knowledge ═══
 
-  c.singleton('confidenceRouter', (ct) => new ConfidenceRouter({}, ct.get('qualityScorer')));
+  c.singleton('confidenceRouter', (ct: any) => new ConfidenceRouter({}, ct.get('qualityScorer')));
 
   c.singleton(
     'knowledgeService',
-    (ct) =>
+    (ct: any) =>
       new KnowledgeService(
         ct.get('knowledgeRepository'),
         ct.get('auditLogger'),
@@ -48,9 +48,9 @@ export function register(c) {
       )
   );
 
-  c.singleton('knowledgeGraphService', (ct) => new KnowledgeGraphService(ct.get('database')));
+  c.singleton('knowledgeGraphService', (ct: any) => new KnowledgeGraphService(ct.get('database')));
 
-  c.singleton('codeEntityGraph', (ct) => {
+  c.singleton('codeEntityGraph', (ct: any) => {
     const projectRoot = ct.singletons._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
     return new CodeEntityGraph(ct.get('database'), { projectRoot });
   });
@@ -59,7 +59,7 @@ export function register(c) {
 
   c.singleton(
     'searchEngine',
-    (ct) => {
+    (ct: any) => {
       const aiProvider = ct.singletons.aiProvider || null;
       const embedProvider = ct.singletons._embedProvider || aiProvider;
       return new SearchEngine(ct.get('database'), {
@@ -77,7 +77,7 @@ export function register(c) {
 
   c.singleton(
     'retrievalFunnel',
-    (ct) => {
+    (ct: any) => {
       const aiProvider = ct.singletons.aiProvider || null;
       const embedProvider = ct.singletons._embedProvider || aiProvider;
       return new RetrievalFunnel({
@@ -88,7 +88,7 @@ export function register(c) {
     { aiDependent: true }
   );
 
-  c.singleton('vectorStore', (ct) => {
+  c.singleton('vectorStore', (ct: any) => {
     const projectRoot = ct.singletons._projectRoot || process.cwd();
     const config = ct.singletons._config?.vector || {};
     const adapter = config.adapter || 'auto';
@@ -134,7 +134,7 @@ export function register(c) {
 
   c.singleton(
     'indexingPipeline',
-    (ct) => {
+    (ct: any) => {
       const aiProvider = ct.singletons.aiProvider || null;
       const embedProvider = ct.singletons._embedProvider || aiProvider;
       return new IndexingPipeline({
@@ -145,7 +145,7 @@ export function register(c) {
     { aiDependent: true }
   );
 
-  c.singleton('hybridRetriever', (ct) => {
+  c.singleton('hybridRetriever', (ct: any) => {
     const config = ct.singletons._config?.vector?.hybrid || {};
     return new HybridRetriever({
       vectorStore: ct.get('vectorStore'),

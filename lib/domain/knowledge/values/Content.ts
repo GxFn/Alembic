@@ -31,7 +31,7 @@ export class Content {
    * @param {Content|Object|null} input
    * @returns {Content}
    */
-  static from(input) {
+  static from(input: any) {
     if (input instanceof Content) {
       return input;
     }
@@ -75,7 +75,7 @@ export class Content {
    * @param {Object} data
    * @returns {Content}
    */
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     return new Content(data);
   }
 }

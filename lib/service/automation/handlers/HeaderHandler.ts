@@ -12,7 +12,13 @@ import { basename } from 'node:path';
  * @param {string[]} importArray
  * @param {boolean} isSwift
  */
-export async function handleHeader(watcher, fullPath, headerLine, importArray, isSwift) {
+export async function handleHeader(
+  watcher: any,
+  fullPath: any,
+  headerLine: any,
+  importArray: any,
+  isSwift: any
+) {
   try {
     const HeaderResolver = await import('../../../infrastructure/paths/HeaderResolver.js');
     const parsed = HeaderResolver.parseImportLine(headerLine);

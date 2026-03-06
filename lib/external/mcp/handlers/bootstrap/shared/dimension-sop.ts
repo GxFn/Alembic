@@ -786,8 +786,8 @@ export const PRE_SUBMIT_CHECKLIST = {
  * @param {string} dimId 维度 ID
  * @returns {object|null} - SOP 配置，未定义时返回 null
  */
-export function getDimensionSOP(dimId) {
-  return DIMENSION_SOP[dimId] || null;
+export function getDimensionSOP(dimId: any) {
+  return (DIMENSION_SOP as Record<string, any>)[dimId] || null;
 }
 
 /**
@@ -800,8 +800,8 @@ export function getDimensionSOP(dimId) {
  * @param {string} [guideText] - fallback: baseDimension.guide 文本
  * @returns {string[]} 关键词列表（短语级，用于 includes() 匹配）
  */
-export function getDimensionFocusKeywords(dimId, guideText = '') {
-  const sop = DIMENSION_SOP[dimId];
+export function getDimensionFocusKeywords(dimId: any, guideText = '') {
+  const sop = (DIMENSION_SOP as Record<string, any>)[dimId];
   if (sop?.focusKeywords?.length > 0) {
     return sop.focusKeywords;
   }
@@ -820,7 +820,7 @@ export function getDimensionFocusKeywords(dimId, guideText = '') {
  * @param {object} sop - SOP 配置
  * @returns {string} 紧凑的文本表示
  */
-export function sopToCompactText(sop) {
+export function sopToCompactText(sop: any) {
   if (!sop?.steps) {
     return '';
   }

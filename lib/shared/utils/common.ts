@@ -14,7 +14,7 @@
  * @param {*} [fallback=null] 解析失败时的回退值
  * @returns {*}
  */
-export function safeJsonParse(value, fallback = null) {
+export function safeJsonParse(value: any, fallback = null) {
   if (value == null || value === 'null' || value === '') {
     return fallback;
   }
@@ -36,7 +36,7 @@ export function safeJsonParse(value, fallback = null) {
  * @param {*} [fallback='{}'] 值为空时的回退
  * @returns {string}
  */
-export function safeJsonStringify(value, fallback = '{}') {
+export function safeJsonStringify(value: any, fallback = '{}') {
   if (value == null) {
     return fallback;
   }
@@ -66,7 +66,7 @@ export function unixNow() {
  * @param {string} fallback
  * @returns {string}
  */
-export function strOr(value, fallback = '') {
+export function strOr(value: any, fallback = '') {
   if (typeof value === 'string' && value.trim()) {
     return value;
   }

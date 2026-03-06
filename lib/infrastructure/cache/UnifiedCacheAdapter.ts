@@ -24,7 +24,7 @@ export class UnifiedCacheAdapter {
   /**
    * 获取缓存值
    */
-  async get(key) {
+  async get(key: any) {
     try {
       return this.memoryService.get(key);
     } catch (error: any) {
@@ -36,7 +36,7 @@ export class UnifiedCacheAdapter {
   /**
    * 设置缓存值
    */
-  async set(key, value, ttlSeconds = 300) {
+  async set(key: any, value: any, ttlSeconds = 300) {
     try {
       this.memoryService.set(key, value, ttlSeconds);
       return true;
@@ -49,7 +49,7 @@ export class UnifiedCacheAdapter {
   /**
    * 删除缓存
    */
-  async delete(key) {
+  async delete(key: any) {
     try {
       return this.memoryService.delete(key);
     } catch (error: any) {

@@ -11,7 +11,7 @@ import path from 'node:path';
  * @param {string} filePath
  * @returns {Promise<string|null>}
  */
-export async function findTargetRootDir(filePath) {
+export async function findTargetRootDir(filePath: any) {
   let current = path.dirname(path.resolve(filePath));
   for (let i = 0; i < 10; i++) {
     try {
@@ -36,7 +36,7 @@ export async function findTargetRootDir(filePath) {
 /**
  * 向上查找 Package.swift
  */
-export async function findPackageSwiftPath(filePath) {
+export async function findPackageSwiftPath(filePath: any) {
   let current = path.dirname(path.resolve(filePath));
   for (let i = 0; i < 15; i++) {
     const candidate = path.join(current, 'Package.swift');
@@ -55,7 +55,7 @@ export async function findPackageSwiftPath(filePath) {
 /**
  * 简易解析 Package.swift，提取 targets 数组和包名
  */
-export async function parsePackageSwift(packagePath) {
+export async function parsePackageSwift(packagePath: any) {
   try {
     const content = fs.readFileSync(packagePath, 'utf8');
     const nameMatch = content.match(/name:\s*"([^"]+)"/);
@@ -80,7 +80,7 @@ export async function parsePackageSwift(packagePath) {
  * @param {string|null} moduleName 模块名（可选，用于优先匹配模块子目录）
  * @returns {Promise<string|null>}
  */
-export async function findSubHeaderPath(rootDir, headerName, moduleName) {
+export async function findSubHeaderPath(rootDir: any, headerName: any, moduleName: any) {
   if (!rootDir || !headerName) {
     return null;
   }
@@ -99,7 +99,7 @@ export async function findSubHeaderPath(rootDir, headerName, moduleName) {
   return _findFile(rootDir, target);
 }
 
-function _findFile(dir, filename, maxDepth = 8, depth = 0) {
+function _findFile(dir: any, filename: any, maxDepth = 8, depth = 0): any {
   if (depth > maxDepth || !fs.existsSync(dir)) {
     return null;
   }
@@ -113,7 +113,7 @@ function _findFile(dir, filename, maxDepth = 8, depth = 0) {
         return full;
       }
       if (entry.isDirectory()) {
-        const found = _findFile(full, filename, maxDepth, depth + 1);
+        const found: any = _findFile(full, filename, maxDepth, depth + 1);
         if (found) {
           return found;
         }

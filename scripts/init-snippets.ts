@@ -81,8 +81,8 @@ class XcodeInitializer {
     return true;
   }
 
-  generatePlist(snippet) {
-    const escapeXml = (s) =>
+  generatePlist(snippet: any) {
+    const escapeXml = (s: any) =>
       String(s || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -165,7 +165,7 @@ class VSCodeInitializer {
   filename: any;
   projectRoot: any;
   vscodeDir: any;
-  constructor(projectRoot) {
+  constructor(projectRoot: any) {
     this.projectRoot = projectRoot || process.cwd();
     this.vscodeDir = path.join(this.projectRoot, '.vscode');
     this.filename = 'autosnippet-triggers.code-snippets';
@@ -235,7 +235,7 @@ class VSCodeInitializer {
 export class SnippetInitializer {
   vscode: any;
   xcode: any;
-  constructor(projectRoot) {
+  constructor(projectRoot: any) {
     this.xcode = new XcodeInitializer();
     this.vscode = new VSCodeInitializer(projectRoot);
   }
@@ -284,7 +284,7 @@ export class SnippetInitializer {
 // 导出供其他脚本使用
 export default {
   SnippetInitializer,
-  initialize: async (projectRoot, target) => {
+  initialize: async (projectRoot: any, target: any) => {
     const init = new SnippetInitializer(projectRoot);
     return init.initialize(target);
   },

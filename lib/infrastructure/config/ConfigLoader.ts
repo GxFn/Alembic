@@ -45,7 +45,7 @@ export class ConfigLoader {
     return this.config;
   }
 
-  static _deepMerge(target, source) {
+  static _deepMerge(target: any, source: any) {
     const output = { ...target };
     for (const key of Object.keys(source)) {
       if (
@@ -64,7 +64,7 @@ export class ConfigLoader {
     return output;
   }
 
-  static get(key) {
+  static get(key: any) {
     if (!this.config) {
       this.load();
     }
@@ -82,7 +82,7 @@ export class ConfigLoader {
     return value;
   }
 
-  static has(key) {
+  static has(key: any) {
     try {
       this.get(key);
       return true;
@@ -91,7 +91,7 @@ export class ConfigLoader {
     }
   }
 
-  static set(key, value) {
+  static set(key: any, value: any) {
     if (!this.config) {
       this.load();
     }

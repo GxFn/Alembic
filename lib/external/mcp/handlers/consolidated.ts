@@ -26,7 +26,7 @@ import * as structureHandlers from './structure.js';
  *   semantic    → semanticSearch()
  *   context     → contextSearch()
  */
-export async function consolidatedSearch(ctx, args) {
+export async function consolidatedSearch(ctx: any, args: any) {
   const mode = args.mode || 'auto';
   switch (mode) {
     case 'keyword':
@@ -49,7 +49,7 @@ export async function consolidatedSearch(ctx, args) {
  *   insights     → recipeInsights()
  *   confirm_usage → confirmUsage()
  */
-export async function consolidatedKnowledge(ctx, args) {
+export async function consolidatedKnowledge(ctx: any, args: any) {
   const op = args.operation || 'list';
   switch (op) {
     case 'list': {
@@ -85,7 +85,7 @@ export async function consolidatedKnowledge(ctx, args) {
  *   files          → getTargetFiles()
  *   metadata       → getTargetMetadata()
  */
-export async function consolidatedStructure(ctx, args) {
+export async function consolidatedStructure(ctx: any, args: any) {
   const op = args.operation || 'targets';
   switch (op) {
     case 'targets':
@@ -104,7 +104,7 @@ export async function consolidatedStructure(ctx, args) {
 /**
  * 调用链上下文查询：直接转发到 structure.callContext
  */
-export async function consolidatedCallContext(ctx, args) {
+export async function consolidatedCallContext(ctx: any, args: any) {
   return structureHandlers.callContext(ctx, args);
 }
 
@@ -117,7 +117,7 @@ export async function consolidatedCallContext(ctx, args) {
  *   path    → graphPath()
  *   stats   → graphStats()
  */
-export async function consolidatedGraph(ctx, args) {
+export async function consolidatedGraph(ctx: any, args: any) {
   const op = args.operation;
   if (!op) {
     throw new Error('Missing required parameter: operation. Expected: query, impact, path, stats');
@@ -144,7 +144,7 @@ export async function consolidatedGraph(ctx, args) {
  *   有 files     → guardReview()    (指定文件 + inline recipe) — files 为 string[] 或 {path}[]
  *   有 code      → guardCheck()     (单文件内联检查)
  */
-export async function consolidatedGuard(ctx, args) {
+export async function consolidatedGuard(ctx: any, args: any) {
   // 有 code → 单文件检查（旧模式）
   if (args.code) {
     return guardHandlers.guardCheck(ctx, args);
@@ -165,7 +165,7 @@ export async function consolidatedGuard(ctx, args) {
  *   delete  → deleteSkill()
  *   suggest → suggestSkills()
  */
-export async function consolidatedSkill(ctx, args) {
+export async function consolidatedSkill(ctx: any, args: any) {
   const op = args.operation;
   if (!op) {
     throw new Error(
@@ -209,7 +209,7 @@ export async function consolidatedSkill(ctx, args) {
  *   - 不降级：缺字段不自动补全，要求 Agent 一次性生成完整数据
  *   - 不重复提交：拒绝时不创建任何记录，Agent 需补齐后重新调用
  */
-export async function enhancedSubmitKnowledge(ctx, args) {
+export async function enhancedSubmitKnowledge(ctx: any, args: any) {
   const { submitKnowledge } = await import('./knowledge.js');
   const { UnifiedValidator } = await import('../../../shared/UnifiedValidator.js');
   const { envelope } = await import('../envelope.js');
@@ -290,7 +290,7 @@ export async function enhancedSubmitKnowledge(ctx, args) {
  * 记录成功提交到活跃 BootstrapSession 的 submissionTracker
  * 静默失败 — tracker 不可用时不影响提交本身
  */
-function _trackSubmission(ctx, args, recipeId) {
+function _trackSubmission(ctx: any, args: any, recipeId: any) {
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager');
     const session = sessionManager?.getSession?.();
@@ -312,7 +312,7 @@ function _trackSubmission(ctx, args, recipeId) {
 /**
  * 记录拒绝到活跃 BootstrapSession 的 submissionTracker
  */
-function _trackRejection(ctx, args) {
+function _trackRejection(ctx: any, args: any) {
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager');
     const session = sessionManager?.getSession?.();

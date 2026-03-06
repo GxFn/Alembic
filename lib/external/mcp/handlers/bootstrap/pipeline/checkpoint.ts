@@ -29,10 +29,10 @@ const CHECKPOINT_TTL_MS = 3600_000; // 1小时内有效
  * @param {object} [digest] - DimensionDigest
  */
 export async function saveDimensionCheckpoint(
-  projectRoot,
-  sessionId,
-  dimId,
-  result,
+  projectRoot: any,
+  sessionId: any,
+  dimId: any,
+  result: any,
   digest = null
 ) {
   try {
@@ -52,7 +52,7 @@ export async function saveDimensionCheckpoint(
  * @param {string} projectRoot
  * @returns {Promise<Map<string, object>>} dimId → checkpoint data
  */
-export async function loadCheckpoints(projectRoot) {
+export async function loadCheckpoints(projectRoot: any) {
   const checkpoints = new Map();
   try {
     const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');
@@ -82,7 +82,7 @@ export async function loadCheckpoints(projectRoot) {
  * 清理 checkpoint 目录
  * @param {string} projectRoot
  */
-export async function clearCheckpoints(projectRoot) {
+export async function clearCheckpoints(projectRoot: any) {
   try {
     const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');
     pathGuard.assertSafe(checkpointDir);

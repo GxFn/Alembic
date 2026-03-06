@@ -20,7 +20,7 @@ const logger = Logger.getInstance();
  */
 router.get(
   '/',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { q, type = 'all', mode = 'keyword' } = req.query;
     const limit = safeInt(req.query.limit, 20, 1, 100);
     const page = safeInt(req.query.page, 1);
@@ -102,7 +102,7 @@ router.get(
  */
 router.get(
   '/graph',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { nodeId, nodeType, relation, direction = 'both' } = req.query;
 
     if (!nodeId || !nodeType) {
@@ -130,7 +130,7 @@ router.get(
  */
 router.get(
   '/graph/impact',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { nodeId, nodeType } = req.query;
     const maxDepth = safeInt(req.query.maxDepth, 3, 1, 5);
 
@@ -157,7 +157,7 @@ router.get(
  */
 router.get(
   '/graph/all',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const limit = safeInt(req.query.limit, 500, 1, 2000);
 
     const container = getServiceContainer();
@@ -219,7 +219,7 @@ router.get(
  */
 router.get(
   '/graph/stats',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const container = getServiceContainer();
     const graphService = container.get('knowledgeGraphService');
 
@@ -239,7 +239,7 @@ router.get(
  */
 router.post(
   '/context-aware',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { keyword, limit, language, sessionHistory } = req.body;
     if (!keyword || !keyword.trim()) {
       throw new ValidationError('keyword is required');
@@ -262,7 +262,7 @@ router.post(
       const items = result?.items || [];
       if (items.length > 0) {
         source = result.ranked ? 'search-engine+ranking' : 'search-engine';
-        results = items.map((r) => {
+        results = items.map((r: any) => {
           let contentStr = '';
           try {
             const c =
@@ -296,7 +296,7 @@ router.post(
         const knowledgeService = container.get('knowledgeService');
         const list = await knowledgeService.search(keyword, { page: 1, pageSize });
         const items = list.data || list.items || [];
-        results = items.map((r) => ({
+        results = items.map((r: any) => ({
           name: `${r.title || r.id}.md`,
           content: r.content?.pattern || r.content?.markdown || '',
           similarity: 1,
@@ -334,7 +334,7 @@ router.post(
  */
 router.post(
   '/similarity',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { code, targetName, candidateId, candidate } = req.body;
     const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
 
@@ -399,7 +399,7 @@ router.post(
  */
 router.post(
   '/xcode-simulate',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { keyword, currentFile, language, limit = 10 } = req.body;
     if (!keyword) {
       throw new ValidationError('keyword is required');
@@ -422,7 +422,7 @@ router.post(
           currentFile,
         },
       });
-      results = (result?.items || []).map((r) => {
+      results = (result?.items || []).map((r: any) => {
         let contentStr = '';
         try {
           const c =

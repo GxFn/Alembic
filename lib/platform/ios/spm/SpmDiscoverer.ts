@@ -28,7 +28,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     return 'Swift Package Manager (SPM)';
   }
 
-  async detect(projectRoot) {
+  async detect(projectRoot: any) {
     // 检查项目根是否有 Package.swift
     const hasRoot = existsSync(join(projectRoot, 'Package.swift'));
     if (hasRoot) {
@@ -56,7 +56,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     return { match: false, confidence: 0, reason: 'No Package.swift found' };
   }
 
-  async load(projectRoot) {
+  async load(projectRoot: any) {
     this.#projectRoot = projectRoot;
     this.#parser = new PackageSwiftParser(projectRoot);
     this.#parsedPackages = [];
@@ -100,7 +100,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     return targets;
   }
 
-  async getTargetFiles(target) {
+  async getTargetFiles(target: any) {
     if (!this.#parser) {
       return [];
     }
@@ -110,7 +110,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     // 找到 target 所在的包目录和自定义 path
     let sourcesDir: any = null;
     for (const { pkgPath, parsed } of this.#parsedPackages) {
-      const matchTarget = parsed.targets?.find((t) => t.name === targetName);
+      const matchTarget = parsed.targets?.find((t: any) => t.name === targetName);
       if (matchTarget) {
         const pkgDir = dirname(pkgPath);
         // 优先使用 target 声明的自定义 path
@@ -276,7 +276,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
    * @param {string} dir 源码根目录
    * @returns {{ name: string, path: string, relativePath: string }[]}
    */
-  #walkSourceFiles(dir) {
+  #walkSourceFiles(dir: any) {
     const CODE_EXTS = new Set(['.swift', '.m', '.h', '.c', '.cpp', '.mm']);
     const SKIP_DIRS = new Set([
       'node_modules',
@@ -291,7 +291,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     const MAX_FILES = 300;
     const files: { name: any; path: string; relativePath: any }[] = [];
 
-    const walk = (d, rel = '') => {
+    const walk = (d: any, rel = '') => {
       if (files.length >= MAX_FILES) {
         return;
       }
@@ -331,7 +331,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     return files;
   }
 
-  #inferLang(filePath) {
+  #inferLang(filePath: any) {
     return LanguageService.inferLang(filePath);
   }
 }

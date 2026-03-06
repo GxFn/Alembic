@@ -15,7 +15,7 @@ import { getServiceContainer } from '../../injection/ServiceContainer.js';
  * Express 中间件：将 Gateway 注入到 req 对象
  */
 export function gatewayMiddleware() {
-  return (req, res, next) => {
+  return (req: any, res: any, next: any) => {
     /**
      * Gateway 快捷执行方法
      * @param {string} action 操作标识 (如 'candidate:create')
@@ -23,7 +23,7 @@ export function gatewayMiddleware() {
      * @param {object} data 请求数据
      * @returns {Promise<{success: boolean, data?: any, error?: object, requestId: string}>}
      */
-    req.gw = async (action, resource, data: any = {}) => {
+    req.gw = async (action: any, resource: any, data: any = {}) => {
       const container = getServiceContainer();
       const gateway = container.get('gateway');
 

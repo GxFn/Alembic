@@ -90,7 +90,7 @@ export class ExternalSubmissionTracker {
    * @param {object} submissionArgs - submit_knowledge 的原始参数
    * @param {string} recipeId 提交成功后返回的 recipe ID
    */
-  recordSubmission(dimId, submissionArgs, recipeId) {
+  recordSubmission(dimId: any, submissionArgs: any, recipeId: any) {
     if (!this.#dimensionSubmissions.has(dimId)) {
       this.#dimensionSubmissions.set(dimId, []);
     }
@@ -137,7 +137,7 @@ export class ExternalSubmissionTracker {
    * @param {string} title 被拒绝候选的标题
    * @param {string} reason 拒绝原因
    */
-  recordRejection(dimId, title, reason) {
+  recordRejection(dimId: any, title: any, reason: any) {
     if (!this.#rejections.has(dimId)) {
       this.#rejections.set(dimId, []);
     }
@@ -160,7 +160,7 @@ export class ExternalSubmissionTracker {
    * @param {string} analysisText
    * @param {string} dimId
    */
-  extractNegativeSignals(analysisText, dimId) {
+  extractNegativeSignals(analysisText: any, dimId: any) {
     if (!analysisText) {
       return;
     }
@@ -188,7 +188,7 @@ export class ExternalSubmissionTracker {
    * @param {string} source
    * @param {string} [dimId]
    */
-  #addNegativeSignal(pattern, source, dimId) {
+  #addNegativeSignal(pattern: any, source: any, dimId: any) {
     if (this.#negativeSignals.length >= MAX_NEGATIVE_SIGNALS) {
       return;
     }
@@ -225,7 +225,7 @@ export class ExternalSubmissionTracker {
    * @param {string[]} [referencedFiles] 引用文件列表
    * @returns {DimensionQualityReport}
    */
-  buildQualityReport(dimId, analysisText = '', referencedFiles: any[] = []) {
+  buildQualityReport(dimId: any, analysisText = '', referencedFiles: any[] = []) {
     const submissions = this.#dimensionSubmissions.get(dimId) || [];
     const rejections = this.#rejections.get(dimId) || [];
     const scores: any = {};
@@ -233,7 +233,7 @@ export class ExternalSubmissionTracker {
 
     // §1: coverageScore — 提交数量 + 引用文件覆盖
     const submissionCount = submissions.length;
-    const uniqueSources = new Set(submissions.flatMap((s) => s.sources));
+    const uniqueSources = new Set(submissions.flatMap((s: any) => s.sources));
     const fileCount = new Set([...uniqueSources, ...referencedFiles]).size;
     scores.coverageScore = Math.min(100, submissionCount * 20 + fileCount * 8);
     if (submissionCount < 3) {
@@ -246,12 +246,12 @@ export class ExternalSubmissionTracker {
     // §2: evidenceScore — 提交内容丰富度
     const avgContentLen =
       submissions.length > 0
-        ? submissions.reduce((sum, s) => sum + s.contentLength, 0) / submissions.length
+        ? submissions.reduce((sum: any, s: any) => sum + s.contentLength, 0) / submissions.length
         : 0;
-    const hasCoreCode = submissions.filter((s) => s.coreCodePreview.length > 0).length;
+    const hasCoreCode = submissions.filter((s: any) => s.coreCodePreview.length > 0).length;
     const avgConfidence =
       submissions.length > 0
-        ? submissions.reduce((sum, s) => sum + s.confidence, 0) / submissions.length
+        ? submissions.reduce((sum: any, s: any) => sum + s.confidence, 0) / submissions.length
         : 0;
     scores.evidenceScore = Math.min(
       100,
@@ -267,9 +267,9 @@ export class ExternalSubmissionTracker {
     }
 
     // §3: diversityScore — 知识类型 + category 多样性
-    const uniqueTypes = new Set(submissions.map((s) => s.knowledgeType));
-    const uniqueCategories = new Set(submissions.map((s) => s.category));
-    const uniqueKinds = new Set(submissions.map((s) => s.kind));
+    const uniqueTypes = new Set(submissions.map((s: any) => s.knowledgeType));
+    const uniqueCategories = new Set(submissions.map((s: any) => s.category));
+    const uniqueKinds = new Set(submissions.map((s: any) => s.kind));
     scores.diversityScore = Math.min(
       100,
       uniqueTypes.size * 25 + uniqueCategories.size * 15 + uniqueKinds.size * 20
@@ -316,7 +316,7 @@ export class ExternalSubmissionTracker {
    * @param {string} currentDimId 当前维度 (将排除在结果之外)
    * @returns {object} - { completedDimSummaries, sharedFiles, negativeSignals, usedTriggers }
    */
-  getAccumulatedEvidence(currentDimId) {
+  getAccumulatedEvidence(currentDimId: any) {
     const completedDimSummaries: any[] = [];
 
     for (const [dimId, submissions] of this.#dimensionSubmissions) {
@@ -327,9 +327,9 @@ export class ExternalSubmissionTracker {
       completedDimSummaries.push({
         dimId,
         submissionCount: submissions.length,
-        titles: submissions.map((s) => s.title),
-        knowledgeTypes: [...new Set(submissions.map((s) => s.knowledgeType))],
-        referencedFiles: [...new Set(submissions.flatMap((s) => s.sources))].slice(0, 15),
+        titles: submissions.map((s: any) => s.title),
+        knowledgeTypes: [...new Set(submissions.map((s: any) => s.knowledgeType))],
+        referencedFiles: [...new Set(submissions.flatMap((s: any) => s.sources))].slice(0, 15),
       });
     }
 
@@ -356,7 +356,7 @@ export class ExternalSubmissionTracker {
    * @param {string} dimId
    * @returns {SubmissionRecord[]}
    */
-  getSubmissions(dimId) {
+  getSubmissions(dimId: any) {
     return this.#dimensionSubmissions.get(dimId) || [];
   }
 

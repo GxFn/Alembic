@@ -32,7 +32,7 @@ export class ImportRecord {
    * @param {'named'|'default'|'namespace'|'side-effect'} [meta.kind] 导入方式
    * @param {boolean} [meta.isTypeOnly] 是否为类型导入 (TypeScript)
    */
-  constructor(path, meta: any = {}) {
+  constructor(path: any, meta: any = {}) {
     this.path = String(path);
     this.symbols = meta.symbols || [];
     this.alias = meta.alias || null;
@@ -46,31 +46,31 @@ export class ImportRecord {
     return this.path;
   }
 
-  includes(s) {
+  includes(s: any) {
     return this.path.includes(s);
   }
 
-  startsWith(s) {
+  startsWith(s: any) {
     return this.path.startsWith(s);
   }
 
-  endsWith(s) {
+  endsWith(s: any) {
     return this.path.endsWith(s);
   }
 
-  indexOf(s) {
+  indexOf(s: any) {
     return this.path.indexOf(s);
   }
 
-  replace(a, b) {
+  replace(a: any, b: any) {
     return this.path.replace(a, b);
   }
 
-  match(re) {
+  match(re: any) {
     return this.path.match(re);
   }
 
-  split(sep) {
+  split(sep: any) {
     return this.path.split(sep);
   }
 
@@ -102,7 +102,7 @@ export class ImportRecord {
    * @param {string} symbolName
    * @returns {boolean}
    */
-  hasSymbol(symbolName) {
+  hasSymbol(symbolName: any) {
     return this.symbols.includes(symbolName) || this.symbols.includes('*');
   }
 }

@@ -22,7 +22,7 @@ const SOURCE_EXTS = LanguageService.sourceExts;
 /**
  * 递归收集目录下所有源文件路径
  */
-async function collectSourceFiles(dir) {
+async function collectSourceFiles(dir: any) {
   const { readdir } = await import('node:fs/promises');
   const files: string[] = [];
 
@@ -42,7 +42,7 @@ async function collectSourceFiles(dir) {
     '__pycache__',
   ]);
 
-  async function walk(currentDir) {
+  async function walk(currentDir: any) {
     let entries;
     try {
       entries = await readdir(currentDir, { withFileTypes: true });
@@ -74,7 +74,7 @@ async function collectSourceFiles(dir) {
  * @param {string} code      当前文件内容
  * @param {string} guardLine 触发行原文
  */
-export async function handleGuard(watcher, fullPath, code, guardLine) {
+export async function handleGuard(watcher: any, fullPath: any, code: any, guardLine: any) {
   const rest = guardLine.replace(/^\/\/\s*as:(?:audit|a|lint|l|guard|g)\s*/, '').trim();
   const scopeArg = rest.toLowerCase();
   const isScope = SCOPE_KEYWORDS.has(scopeArg);
@@ -142,11 +142,11 @@ export async function handleGuard(watcher, fullPath, code, guardLine) {
         watcher._notify?.(
           `${scopeLabel}审计: ${summary.totalViolations} 个问题 (${summary.errors ?? 0} 错误, ${summary.warnings ?? 0} 警告)`
         );
-        const filesWithIssues = report.files.filter((f) => f.summary.total > 0);
+        const filesWithIssues = report.files.filter((f: any) => f.summary.total > 0);
         for (const file of filesWithIssues.slice(0, 10)) {
           const _rel = file.filePath.replace(`${scanRoot}/`, '');
-          const errors = file.violations.filter((v) => v.severity === 'error');
-          const warnings = file.violations.filter((v) => v.severity === 'warning');
+          const errors = file.violations.filter((v: any) => v.severity === 'error');
+          const warnings = file.violations.filter((v: any) => v.severity === 'warning');
           for (const _v of errors.slice(0, 5)) {
           }
           if (errors.length > 5) {
@@ -198,15 +198,22 @@ export async function handleGuard(watcher, fullPath, code, guardLine) {
 /**
  * 检查单个文件并打印结果
  */
-function _auditSingleFile(watcher, engine, fullPath, code, detectLanguage, scope = 'file') {
+function _auditSingleFile(
+  watcher: any,
+  engine: any,
+  fullPath: any,
+  code: any,
+  detectLanguage: any,
+  scope = 'file'
+) {
   const language = detectLanguage(fullPath);
   const violations = engine.checkCode(code, language, { scope });
 
   if (violations.length === 0) {
     watcher._notify?.('审计通过 ✅ 无违规');
   } else {
-    const errors = violations.filter((v) => v.severity === 'error');
-    const warnings = violations.filter((v) => v.severity === 'warning');
+    const errors = violations.filter((v: any) => v.severity === 'error');
+    const warnings = violations.filter((v: any) => v.severity === 'warning');
     watcher._notify?.(
       `审计: ${violations.length} 个问题 (${errors.length} 错误, ${warnings.length} 警告)`
     );

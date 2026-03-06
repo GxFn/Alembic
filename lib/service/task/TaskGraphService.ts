@@ -33,7 +33,13 @@ export class TaskGraphService {
    * @param {object} [auditLogger]
    * @param {import('../../domain/task/TaskIdGenerator.js').TaskIdGenerator} idGenerator
    */
-  constructor(repository, readyEngine, knowledgeBridge, auditLogger, idGenerator) {
+  constructor(
+    repository: any,
+    readyEngine: any,
+    knowledgeBridge: any,
+    auditLogger: any,
+    idGenerator: any
+  ) {
     this.repo = repository;
     this.readyEngine = readyEngine;
     this.bridge = knowledgeBridge || null;
@@ -49,7 +55,7 @@ export class TaskGraphService {
    * @param {object} data - { title, description, design, acceptance, priority, taskType, parentId }
    * @returns {Promise<{ task: Task, isDuplicate: boolean }>}
    */
-  async create(data) {
+  async create(data: any) {
     const task = new Task(data);
     task.computeContentHash();
     task.validate();
@@ -91,7 +97,7 @@ export class TaskGraphService {
    * @param {Array<object>} subtasks - [{ title, description, priority, taskType, blockedByIndex }]
    * @returns {Promise<Task[]>}
    */
-  async decompose(epicId, subtasks) {
+  async decompose(epicId: any, subtasks: any) {
     const epic = this.repo.findById(epicId);
     if (!epic) {
       throw new Error(`Epic not found: ${epicId}`);
@@ -162,7 +168,7 @@ export class TaskGraphService {
    * @param {string} [assignee='agent']
    * @returns {Promise<Task>}
    */
-  async claim(id, assignee = 'agent') {
+  async claim(id: any, assignee = 'agent') {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -188,7 +194,7 @@ export class TaskGraphService {
    * @param {string} [reason='Completed']
    * @returns {Promise<{ task: Task, newlyReady: string[] }>}
    */
-  async close(id, reason = 'Completed') {
+  async close(id: any, reason = 'Completed') {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -218,7 +224,7 @@ export class TaskGraphService {
    * @param {string} reason
    * @returns {Promise<Task>}
    */
-  async fail(id, reason) {
+  async fail(id: any, reason: any) {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -243,7 +249,7 @@ export class TaskGraphService {
    * @param {string} [reason='']
    * @returns {Promise<Task>}
    */
-  async defer(id, reason = '') {
+  async defer(id: any, reason = '') {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -267,7 +273,7 @@ export class TaskGraphService {
    * @param {string} note
    * @returns {Promise<Task>}
    */
-  async progress(id, note) {
+  async progress(id: any, note: any) {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -293,7 +299,7 @@ export class TaskGraphService {
    * @param {string} dependsOnId
    * @param {string} [depType='blocks']
    */
-  async addDependency(taskId, dependsOnId, depType = 'blocks') {
+  async addDependency(taskId: any, dependsOnId: any, depType = 'blocks') {
     if (taskId === dependsOnId) {
       throw new Error('Self-dependency is not allowed');
     }
@@ -342,7 +348,7 @@ export class TaskGraphService {
    * @param {string} id
    * @returns {Promise<Task|null>}
    */
-  async show(id) {
+  async show(id: any) {
     return this.repo.findById(id);
   }
 
@@ -359,7 +365,7 @@ export class TaskGraphService {
   /**
    * 依赖树
    */
-  async depTree(taskId) {
+  async depTree(taskId: any) {
     return this.readyEngine.getDependencyTree(taskId);
   }
 
@@ -394,8 +400,8 @@ export class TaskGraphService {
     );
 
     const result: any = {
-      inProgress: inProgress.map((t) => t.toJSON()),
-      ready: readyTasks.map((t) => (t.toJSON ? t.toJSON() : t)),
+      inProgress: inProgress.map((t: any) => t.toJSON()),
+      ready: readyTasks.map((t: any) => (t.toJSON ? t.toJSON() : t)),
       stats: statistics,
     };
 
@@ -470,7 +476,7 @@ export class TaskGraphService {
    * @param {object} params - { title, description, rationale, tags, relatedTaskId }
    * @returns {Promise<{ task: Task, isDuplicate: boolean }>}
    */
-  async recordDecision({ title, description, rationale, tags, relatedTaskId }) {
+  async recordDecision({ title, description, rationale, tags, relatedTaskId }: any) {
     if (!title) {
       throw new Error('Decision title is required');
     }
@@ -531,7 +537,7 @@ export class TaskGraphService {
    * @param {object} params - { oldDecisionId, title, description, rationale, reason }
    * @returns {Promise<{ newDecision: Task, oldDecisionId: string }>}
    */
-  async reviseDecision({ oldDecisionId, title, description, rationale, reason }) {
+  async reviseDecision({ oldDecisionId, title, description, rationale, reason }: any) {
     // 事务前验证
     const oldDecision = this.repo.findById(oldDecisionId);
     if (!oldDecision) {
@@ -592,7 +598,7 @@ export class TaskGraphService {
    * @param {string} [reason='']
    * @returns {Promise<Task>}
    */
-  async unpinDecision(id, reason = '') {
+  async unpinDecision(id: any, reason = '') {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Decision not found: ${id}`);
@@ -643,7 +649,7 @@ export class TaskGraphService {
    * 查找因 closedTaskId 完成而新解除阻塞的任务
    * @private
    */
-  _checkNewlyUnblocked(closedTaskId) {
+  _checkNewlyUnblocked(closedTaskId: any) {
     const dependents = this.repo.getDependents(closedTaskId);
     const newlyReady: any[] = [];
 
@@ -670,7 +676,7 @@ export class TaskGraphService {
   /**
    * @private
    */
-  _logEvent(taskId, eventType, oldValue, newValue) {
+  _logEvent(taskId: any, eventType: any, oldValue: any, newValue: any) {
     try {
       this.repo.logEvent(taskId, eventType, oldValue, newValue);
     } catch (err: any) {

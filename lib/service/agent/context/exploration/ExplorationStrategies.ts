@@ -29,25 +29,27 @@ export function createBootstrapStrategy(isSkillOnly = false) {
       ...(isSkillOnly
         ? {
             'EXPLORE→SUMMARIZE': {
-              onMetrics: (m, b) => m.submitCount > 0 || m.searchRoundsInPhase >= b.searchBudget,
+              onMetrics: (m: any, b: any) =>
+                m.submitCount > 0 || m.searchRoundsInPhase >= b.searchBudget,
               onTextResponse: true,
             },
           }
         : {
             'EXPLORE→PRODUCE': {
-              onMetrics: (m, b) => m.submitCount > 0 || m.searchRoundsInPhase >= b.searchBudget,
+              onMetrics: (m: any, b: any) =>
+                m.submitCount > 0 || m.searchRoundsInPhase >= b.searchBudget,
               onTextResponse: true,
             },
             'PRODUCE→SUMMARIZE': {
-              onMetrics: (m, b) =>
+              onMetrics: (m: any, b: any) =>
                 m.submitCount >= b.maxSubmits ||
                 (m.submitCount > 0 && m.roundsSinceSubmit >= b.idleRoundsToExit) ||
                 (m.phaseRounds >= b.searchBudgetGrace && m.submitCount === 0),
-              onTextResponse: (m, b) => m.submitCount >= b.softSubmitLimit,
+              onTextResponse: (m: any, b: any) => m.submitCount >= b.softSubmitLimit,
             },
           }),
     },
-    getToolChoice: (phase, m, b) => {
+    getToolChoice: (phase: any, m: any, b: any) => {
       if (phase === 'SUMMARIZE') {
         return 'none';
       }
@@ -72,21 +74,21 @@ export const STRATEGY_ANALYST = {
   phases: ['SCAN', 'EXPLORE', 'VERIFY', 'SUMMARIZE'],
   transitions: {
     'SCAN→EXPLORE': {
-      onMetrics: (m) => m.iteration >= 3,
+      onMetrics: (m: any) => m.iteration >= 3,
       onTextResponse: false,
     },
     'EXPLORE→VERIFY': {
-      onMetrics: (m, b) =>
+      onMetrics: (m: any, b: any) =>
         m.searchRoundsInPhase >= Math.floor(b.maxIterations * 0.6) || m.roundsSinceNewInfo >= 3,
       onTextResponse: false,
     },
     'VERIFY→SUMMARIZE': {
-      onMetrics: (m, b) =>
+      onMetrics: (m: any, b: any) =>
         m.iteration >= Math.floor(b.maxIterations * 0.8) || m.roundsSinceNewInfo >= 2,
       onTextResponse: true,
     },
   },
-  getToolChoice: (phase) => {
+  getToolChoice: (phase: any) => {
     if (phase === 'SUMMARIZE') {
       return 'none';
     }
@@ -113,14 +115,14 @@ export const STRATEGY_PRODUCER = {
   phases: ['PRODUCE', 'SUMMARIZE'],
   transitions: {
     'PRODUCE→SUMMARIZE': {
-      onMetrics: (m, b) =>
+      onMetrics: (m: any, b: any) =>
         m.submitCount >= b.maxSubmits ||
         (m.submitCount > 0 && m.roundsSinceSubmit >= b.idleRoundsToExit) ||
         (m.phaseRounds >= b.searchBudgetGrace && m.submitCount === 0),
-      onTextResponse: (m, b) => m.submitCount >= b.softSubmitLimit,
+      onTextResponse: (m: any, b: any) => m.submitCount >= b.softSubmitLimit,
     },
   },
-  getToolChoice: (phase) => (phase === 'SUMMARIZE' ? 'none' : 'auto'),
+  getToolChoice: (phase: any) => (phase === 'SUMMARIZE' ? 'none' : 'auto'),
   enableReflection: false,
   reflectionInterval: 0,
   enablePlanning: false,

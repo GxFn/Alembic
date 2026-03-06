@@ -88,7 +88,7 @@ class GoWebEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── Struct-based Handler / Controller ──

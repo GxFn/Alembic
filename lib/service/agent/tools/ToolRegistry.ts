@@ -60,7 +60,7 @@ export class ToolRegistry {
    * @param {object} toolDef.parameters   - JSON Schema 格式的参数定义
    * @param {Function} toolDef.handler    - async (params, context) => result
    */
-  register(toolDef) {
+  register(toolDef: any) {
     const { name, description, handler, parameters = {} } = toolDef;
     if (!name || !handler) {
       throw new Error('Tool must have name and handler');
@@ -72,7 +72,7 @@ export class ToolRegistry {
    * 批量注册
    * @param {Array<object>} defs
    */
-  registerAll(defs) {
+  registerAll(defs: any) {
     for (const def of defs) {
       this.register(def);
     }
@@ -84,7 +84,7 @@ export class ToolRegistry {
    * @param {string[]} [allowedTools] 限制返回的工具列表（不传则返回全部）
    * @returns {Array<{name: string, description: string, parameters: object}>}
    */
-  getToolSchemas(allowedTools) {
+  getToolSchemas(allowedTools: any) {
     const schemas: { name: any; description: any; parameters: any }[] = [];
     for (const [name, tool] of this.#tools) {
       if (allowedTools && !allowedTools.includes(name)) {
@@ -106,7 +106,7 @@ export class ToolRegistry {
    * @param {object} context - { container, aiProvider, projectRoot, ... }
    * @returns {Promise<any>}
    */
-  async execute(name, params, context: any = {}) {
+  async execute(name: any, params: any, context: any = {}) {
     const tool = this.#tools.get(name);
     if (!tool) {
       throw new Error(`Tool '${name}' not found`);
@@ -142,7 +142,7 @@ export class ToolRegistry {
    *   2. snake_case → camelCase 自动转换
    *   3. 常用别名表兜底
    */
-  #normalizeParams(params, schema) {
+  #normalizeParams(params: any, schema: any) {
     if (!params || typeof params !== 'object') {
       return params || {};
     }
@@ -170,7 +170,7 @@ export class ToolRegistry {
       }
 
       // 3. 常用别名映射
-      const aliased = PARAM_ALIASES[key];
+      const aliased = (PARAM_ALIASES as Record<string, any>)[key];
       if (aliased && schemaKeys.has(aliased)) {
         result[aliased] = value;
         continue;
@@ -193,7 +193,7 @@ export class ToolRegistry {
   /**
    * 检查工具是否存在
    */
-  has(name) {
+  has(name: any) {
     return this.#tools.has(name);
   }
 

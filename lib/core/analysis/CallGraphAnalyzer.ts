@@ -48,7 +48,7 @@ export class CallGraphAnalyzer {
   /**
    * @param {string} projectRoot
    */
-  constructor(projectRoot) {
+  constructor(projectRoot: any) {
     this.projectRoot = projectRoot;
   }
 
@@ -59,7 +59,7 @@ export class CallGraphAnalyzer {
    * @param {AnalyzeOptions} [options]
    * @returns {Promise<CallGraphResult>}
    */
-  async analyze(astProjectSummary, options: any = {}) {
+  async analyze(astProjectSummary: any, options: any = {}) {
     const t0 = Date.now();
     const timeout = options.timeout || 15_000;
     const maxCallSitesPerFile = options.maxCallSitesPerFile || 500;
@@ -83,7 +83,7 @@ export class CallGraphAnalyzer {
    * @param {AnalyzeOptions} [options]
    * @returns {Promise<CallGraphResult>}
    */
-  async analyzeIncremental(astProjectSummary, changedFiles, options: any = {}) {
+  async analyzeIncremental(astProjectSummary: any, changedFiles: any, options: any = {}) {
     const t0 = Date.now();
     const timeout = options.timeout || 15_000;
     const maxCallSitesPerFile = options.maxCallSitesPerFile || 500;
@@ -104,7 +104,7 @@ export class CallGraphAnalyzer {
     const symbolTable = SymbolTableBuilder.build(astProjectSummary);
 
     // ── Step 2: 构建 ImportPathResolver ──
-    const allFiles = astProjectSummary.fileSummaries.map((f) => f.file);
+    const allFiles = astProjectSummary.fileSummaries.map((f: any) => f.file);
     const importResolver = new ImportPathResolver(this.projectRoot, allFiles);
 
     // ── Step 3: 找到依赖变更文件的所有文件 (reverse dependency) ──
@@ -214,7 +214,7 @@ export class CallGraphAnalyzer {
    * @param {number} maxCallSitesPerFile
    * @param {number} deadline - Date.now() + timeout
    */
-  async _doAnalyze(astProjectSummary, maxCallSitesPerFile, deadline) {
+  async _doAnalyze(astProjectSummary: any, maxCallSitesPerFile: any, deadline: any) {
     const fileCount = astProjectSummary.fileSummaries.length;
 
     // ── 分级降级 ──
@@ -248,7 +248,7 @@ export class CallGraphAnalyzer {
     const symbolTable = SymbolTableBuilder.build(astProjectSummary);
 
     // ── Step 3: 构建 ImportPathResolver (全量文件索引) ──
-    const allFiles = astProjectSummary.fileSummaries.map((f) => f.file);
+    const allFiles = astProjectSummary.fileSummaries.map((f: any) => f.file);
     const importResolver = new ImportPathResolver(this.projectRoot, allFiles);
 
     // ── Step 4: 解析调用边 (逐文件 + 超时检查) ──
@@ -258,7 +258,7 @@ export class CallGraphAnalyzer {
     const allCallEdges: any[] = [];
     let totalCallSites = 0;
     let processedFiles = 0;
-    const totalFiles = fileSummaries.filter((f) => f.callSites?.length > 0).length;
+    const totalFiles = fileSummaries.filter((f: any) => f.callSites?.length > 0).length;
 
     for (const fileSummary of fileSummaries) {
       const callSites = fileSummary.callSites || [];
@@ -322,7 +322,7 @@ export class CallGraphAnalyzer {
   /**
    * @private 空结果
    */
-  _emptyResult(durationMs) {
+  _emptyResult(durationMs: any) {
     return {
       callEdges: [],
       dataFlowEdges: [],
@@ -346,7 +346,7 @@ export class CallGraphAnalyzer {
  * @param {number} fileCount
  * @returns {'full-cha'|'full'|'sampled'|'import-only'}
  */
-function _computeTier(fileCount) {
+function _computeTier(fileCount: any) {
   if (fileCount < 100) {
     return 'full-cha';
   }
@@ -365,16 +365,16 @@ function _computeTier(fileCount) {
  * @param {number} limit
  * @returns {object[]}
  */
-function _sampleCoreFiles(fileSummaries, limit) {
+function _sampleCoreFiles(fileSummaries: any, limit: any) {
   const CORE_DIRS = /\/(src|lib|app|core|pkg|internal|domain|service|controller|handler|api)\//i;
-  const scored = fileSummaries.map((f) => ({
+  const scored = fileSummaries.map((f: any) => ({
     f,
     score: CORE_DIRS.test(f.file) ? 2 : 1,
     callSiteCount: f.callSites?.length || 0,
   }));
   // 排序: 核心目录优先，有调用点的优先
-  scored.sort((a, b) => b.score - a.score || b.callSiteCount - a.callSiteCount);
-  return scored.slice(0, limit).map((s) => s.f);
+  scored.sort((a: any, b: any) => b.score - a.score || b.callSiteCount - a.callSiteCount);
+  return scored.slice(0, limit).map((s: any) => s.f);
 }
 
 export default CallGraphAnalyzer;

@@ -23,7 +23,7 @@ export class Snippet {
   targets: any;
   title: any;
   updatedAt: any;
-  constructor(props) {
+  constructor(props: any) {
     this.id = props.id || uuidv4();
     this.identifier = props.identifier; // 唯一标识符（如 com.autosnippet.guard-let）
     this.title = props.title;
@@ -57,7 +57,7 @@ export class Snippet {
    * 是否已安装到指定 IDE (不传则检查任意)
    * @param {string} [target] - 'xcode' | 'vscode'
    */
-  isInstalled(target?) {
+  isInstalled(target?: any) {
     if (target) {
       return !!this.targets[target]?.installed;
     }
@@ -68,7 +68,7 @@ export class Snippet {
    * 获取指定 IDE 的安装路径
    * @param {string} target
    */
-  getInstalledPath(target) {
+  getInstalledPath(target: any) {
     return this.targets[target]?.path || null;
   }
 
@@ -114,7 +114,7 @@ export class Snippet {
   /**
    * 从 JSON 创建 Snippet
    */
-  static fromJSON(data) {
+  static fromJSON(data: any) {
     return new Snippet(data);
   }
 }

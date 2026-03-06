@@ -13,7 +13,7 @@ export class AutomationOrchestrator {
   #contextCollector;
   #pipeline;
   #logger;
-  #history;
+  #history: any[];
 
   constructor(options: any = {}) {
     this.#triggerResolver = options.triggerResolver || new TriggerResolver();
@@ -29,7 +29,7 @@ export class AutomationOrchestrator {
    * @param {object} context 原始上下文
    * @returns {Promise<{ success: boolean, result?: any, error?: string, resolvedTrigger: object }>}
    */
-  async run(trigger, context: any = {}) {
+  async run(trigger: any, context: any = {}) {
     const resolvedTrigger = this.#triggerResolver.resolve(trigger);
     const collectedContext = this.#contextCollector.collect(context);
 
@@ -56,7 +56,7 @@ export class AutomationOrchestrator {
   /**
    * 注册动作处理器
    */
-  registerAction(type, handler) {
+  registerAction(type: any, handler: any) {
     this.#pipeline.register(type, handler);
   }
 

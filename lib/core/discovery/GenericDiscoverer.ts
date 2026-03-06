@@ -48,12 +48,12 @@ export class GenericDiscoverer extends ProjectDiscoverer {
     return 'Generic (directory scan)';
   }
 
-  async detect(projectRoot) {
+  async detect(projectRoot: any) {
     // 始终匹配
     return { match: true, confidence: 0.1, reason: 'Generic fallback discoverer' };
   }
 
-  async load(projectRoot) {
+  async load(projectRoot: any) {
     this.#projectRoot = projectRoot;
     this.#targets = [];
 
@@ -114,7 +114,7 @@ export class GenericDiscoverer extends ProjectDiscoverer {
     return this.#targets;
   }
 
-  async getTargetFiles(target) {
+  async getTargetFiles(target: any) {
     const targetPath =
       typeof target === 'string'
         ? this.#targets.find((t) => t.name === target)?.path || this.#projectRoot
@@ -136,7 +136,7 @@ export class GenericDiscoverer extends ProjectDiscoverer {
 
   // ── 内部实现 ──
 
-  #scanLangStats(dir, stats, depth) {
+  #scanLangStats(dir: any, stats: any, depth: any) {
     if (depth > 5) {
       return; // 限制深度, 只采样
     }
@@ -165,7 +165,7 @@ export class GenericDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  #collectFiles(dir, rootDir, files, depth = 0) {
+  #collectFiles(dir: any, rootDir: any, files: any, depth = 0) {
     if (depth > 15) {
       return;
     }

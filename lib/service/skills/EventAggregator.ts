@@ -59,7 +59,7 @@ export class EventAggregator {
    * @param {object} [opts]
    * @param {string} [opts.dedupeId] 去重标识（默认为 JSON hash）
    */
-  push(key, event, { dedupeId }: any = {}) {
+  push(key: any, event: any, { dedupeId }: any = {}) {
     // 去重检查
     const dedupe = dedupeId || this.#hashEvent(key, event);
     const lastSeen = this.#dedupeMap.get(dedupe);
@@ -94,7 +94,7 @@ export class EventAggregator {
    * @param {'batch'} eventName
    * @param {(key: string, events: any[]) => void} fn
    */
-  on(eventName, fn) {
+  on(eventName: any, fn: any) {
     if (!this.#listeners.has(eventName)) {
       this.#listeners.set(eventName, []);
     }
@@ -137,7 +137,7 @@ export class EventAggregator {
 
   // ── 内部方法 ──
 
-  #flush(key) {
+  #flush(key: any) {
     const bucket = this.#buckets.get(key);
     if (!bucket || bucket.events.length === 0) {
       return;
@@ -173,7 +173,7 @@ export class EventAggregator {
     this.#logger.debug(`[EventAggregator] flushed ${events.length} events for key "${key}"`);
   }
 
-  #hashEvent(key, event) {
+  #hashEvent(key: any, event: any) {
     // 简单 hash: key + 事件关键字段
     const significant: any = { key };
     if (event.filePath) {

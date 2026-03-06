@@ -117,7 +117,7 @@ class FastAPIEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── Pydantic models ──
@@ -135,7 +135,7 @@ class FastAPIEnhancement extends EnhancementPack {
     // ── FastAPI route handlers ──
     for (const m of astSummary.methods || []) {
       if (
-        m.decorators?.some((d) =>
+        m.decorators?.some((d: any) =>
           /@(?:app|router)\.(?:get|post|put|delete|patch|options|head)/.test(d)
         )
       ) {
@@ -196,7 +196,7 @@ class FastAPIEnhancement extends EnhancementPack {
 
     // ── FastAPI ecosystem imports ──
     const fastapiImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('fastapi') ||
         imp.includes('pydantic') ||
         imp.includes('sqlalchemy') ||

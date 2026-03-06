@@ -32,7 +32,7 @@ export const searchRecipes = {
       limit: { type: 'number', description: '返回数量上限，默认 10' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     const { keyword, category, language, knowledgeType, limit = 10 } = params;
 
@@ -71,7 +71,7 @@ export const searchCandidates = {
       limit: { type: 'number', description: '返回数量上限，默认 10' },
     },
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     const { keyword, status, language, category, limit = 10 } = params;
 
@@ -108,7 +108,7 @@ export const getRecipeDetail = {
     },
     required: ['recipeId'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     try {
       const entry = await knowledgeService.get(params.recipeId);
@@ -127,7 +127,7 @@ export const getProjectStats = {
   description:
     '获取项目知识库的整体统计：Recipe 数量/分类分布、候选项数量/状态分布、知识图谱节点/边数。',
   parameters: { type: 'object', properties: {} },
-  handler: async (_params, ctx) => {
+  handler: async (_params: any, ctx: any) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     const stats = await knowledgeService.getStats();
 
@@ -161,7 +161,7 @@ export const searchKnowledge = {
     },
     required: ['query'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const { query, topK = 5 } = params;
 
     // 优先使用 SearchEngine（有 BM25 + 向量搜索）
@@ -169,7 +169,7 @@ export const searchKnowledge = {
       const searchEngine = ctx.container.get('searchEngine');
       const results = await searchEngine.search(query, { limit: topK });
       if (results && results.length > 0) {
-        const enriched = results.slice(0, topK).map((r, i) => ({
+        const enriched = results.slice(0, topK).map((r: any, i: any) => ({
           ...r,
           reasoning: {
             whyRelevant:
@@ -201,7 +201,7 @@ export const searchKnowledge = {
       const allRecipes = allResult?.items || [];
 
       // 规范化为 funnel 输入格式
-      const candidates = allRecipes.map((r) => ({
+      const candidates = allRecipes.map((r: any) => ({
         id: r.id,
         title: r.title,
         content: r.content || r.code || '',
@@ -249,7 +249,7 @@ export const getRelatedRecipes = {
     },
     required: ['recipeId'],
   },
-  handler: async (params, ctx) => {
+  handler: async (params: any, ctx: any) => {
     const kgService = ctx.container.get('knowledgeGraphService');
     const { recipeId, relation } = params;
 

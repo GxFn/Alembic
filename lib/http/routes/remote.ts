@@ -42,7 +42,7 @@ function getDb() {
 }
 
 let _tableReady = false;
-function ensureTable(db) {
+function ensureTable(db: any) {
   if (_tableReady) {
     return;
   }
@@ -88,7 +88,7 @@ const _allowedUserIds = (process.env.ASD_LARK_ALLOWED_USERS || '')
   .map((s) => s.trim())
   .filter(Boolean);
 
-function isUserAllowed(userId) {
+function isUserAllowed(userId: any) {
   // 未配置白名单 → 放行所有（向后兼容）
   if (_allowedUserIds.length === 0) {
     return true;
@@ -101,7 +101,7 @@ function isUserAllowed(userId) {
 const _processedMsgIds = new Map();
 const MSG_DEDUP_TTL = 5 * 60 * 1000;
 
-function isDuplicate(messageId) {
+function isDuplicate(messageId: any) {
   if (!messageId) {
     return false;
   }
@@ -434,7 +434,7 @@ async function getStatusText() {
  * @param {Object} meta - { chatId, messageId, senderId, senderName }
  * @returns {Promise<{id: string}>}
  */
-async function enqueueIdeCommand(command, meta: any = {}) {
+async function enqueueIdeCommand(command: any, meta: any = {}) {
   const db = getDb();
   ensureTable(db);
   const id = genId();
@@ -474,7 +474,7 @@ function _getProjectRoot() {
 //  飞书消息处理 — 通过 LarkTransport 路由
 // ═══════════════════════════════════════════════════════
 
-async function handleLarkMessage(data) {
+async function handleLarkMessage(data: any) {
   const message = data?.message || data?.event?.message || {};
   const messageId = message.message_id;
   const chatId = message.chat_id;
@@ -523,21 +523,21 @@ async function handleLarkMessage(data) {
 
 router.post(
   '/lark/start',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: any, res: any) => {
     res.json(await startLarkWS());
   })
 );
 
 router.post(
   '/lark/stop',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: any, res: any) => {
     res.json(stopLarkWS());
   })
 );
 
 router.get(
   '/lark/status',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: any, res: any) => {
     const config = getLarkConfig();
     const queueInfo: Record<string, any> = {};
     try {
@@ -571,7 +571,7 @@ router.get(
 
 router.post(
   '/lark/event',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const body = req.body;
     if (body.type === 'url_verification') {
       return res.json({ challenge: body.challenge });
@@ -595,7 +595,7 @@ router.post(
 
 router.get(
   '/pending',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: any, res: any) => {
     _lastPollAt = Date.now();
     const db = getDb();
     ensureTable(db);
@@ -620,7 +620,7 @@ router.get(
 
 router.post(
   '/claim/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const db = getDb();
     ensureTable(db);
@@ -644,7 +644,7 @@ router.post(
 
 router.post(
   '/result/:id',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { id } = req.params;
     const { result, status = 'completed' } = req.body;
     const db = getDb();
@@ -675,7 +675,7 @@ router.post(
 
 router.get(
   '/history',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const db = getDb();
     ensureTable(db);
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
@@ -712,7 +712,7 @@ router.get('/wait', (req, res) => {
   const timeout = Math.min(parseInt(req.query.timeout as string) || 25000, 60000);
   let resolved = false;
 
-  const resolve = (data) => {
+  const resolve = (data: any) => {
     if (resolved) {
       return;
     }
@@ -738,7 +738,7 @@ router.get('/wait', (req, res) => {
 // POST /flush — IDE 重连时清理所有积压的 pending 指令
 router.post(
   '/flush',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const db = getDb();
     ensureTable(db);
 
@@ -759,7 +759,7 @@ router.post(
       "UPDATE remote_commands SET status = 'cancelled', result = '🗑 IDE 重连时自动清理（积压指令）', completed_at = ? WHERE status = 'pending'"
     ).run(now);
 
-    const summaries = pending.map((r) => ({
+    const summaries = pending.map((r: any) => ({
       id: r.id,
       command: r.command?.slice(0, 60) || '',
       age: now - r.created_at,
@@ -769,7 +769,8 @@ router.post(
 
     // 飞书通知
     const lines = summaries.map(
-      (s, i) => `  ${i + 1}. ${s.command}${s.command.length >= 60 ? '…' : ''} (${s.age}s ago)`
+      (s: any, i: any) =>
+        `  ${i + 1}. ${s.command}${s.command.length >= 60 ? '…' : ''} (${s.age}s ago)`
     );
     sendLarkNotification(
       `🗑 IDE 重连，已清理 ${pending.length} 条积压指令：\n${lines.join('\n')}`
@@ -781,7 +782,7 @@ router.post(
 
 router.post(
   '/send',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { command } = req.body;
     if (!command?.trim()) {
       return res.status(400).json({ success: false, message: 'command required' });
@@ -799,7 +800,7 @@ router.post(
 // POST /api/v1/remote/notify — 通用通知（扩展/外部模块主动推送飞书）
 router.post(
   '/notify',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { text } = req.body;
     if (!text?.trim()) {
       return res.status(400).json({ success: false, message: 'text required' });
@@ -812,7 +813,7 @@ router.post(
 // POST /api/v1/remote/screenshot — 截取 IDE 窗口并发送到飞书
 router.post(
   '/screenshot',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: any, res: any) => {
     const { caption } = req.body || {};
     const result = await sendLarkScreenshot(caption || '');
     res.json(result);
@@ -855,7 +856,7 @@ async function getTenantToken() {
   }
 }
 
-async function replyLark(messageId, text) {
+async function replyLark(messageId: any, text: any) {
   if (!messageId) {
     return;
   }
@@ -946,7 +947,7 @@ async function captureIDEScreenshot(opts: any = {}) {
  * @param {string} filePath 本地图片路径
  * @returns {Promise<{imageKey: string|null, error: string|null}>}
  */
-async function _uploadImageToLark(filePath) {
+async function _uploadImageToLark(filePath: any) {
   const token = await getTenantToken();
   if (!token) {
     return { imageKey: null, error: '获取 tenant_access_token 失败' };
@@ -981,7 +982,7 @@ async function _uploadImageToLark(filePath) {
  * @param {string} imageKey
  * @returns {Promise<boolean>}
  */
-async function _sendLarkImageMsg(imageKey) {
+async function _sendLarkImageMsg(imageKey: any) {
   if (!_activeChatId || !_wsConnected) {
     return false;
   }
@@ -1081,7 +1082,7 @@ export async function sendLarkScreenshot(caption = '') {
 let _activeChatId = '';
 
 /** 持久化 active chat_id 到数据库 */
-function _persistActiveChatId(chatId) {
+function _persistActiveChatId(chatId: any) {
   try {
     const db = getDb();
     db.exec(
@@ -1140,7 +1141,7 @@ function _restoreActiveChatId() {
  * @param {string} text 纯文本通知内容
  * @returns {Promise<boolean>} 发送是否成功
  */
-export async function sendLarkNotification(text) {
+export async function sendLarkNotification(text: any) {
   if (!_activeChatId || !_wsConnected) {
     return false;
   }

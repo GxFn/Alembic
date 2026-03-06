@@ -44,7 +44,7 @@ const AUTO_APPROVE_TOOLS = [
 ];
 
 /** 标记文件路径 */
-function _markerPath(projectRoot) {
+function _markerPath(projectRoot: any) {
   return path.join(projectRoot, '.autosnippet', '.auto-approve-pending');
 }
 
@@ -58,7 +58,7 @@ function _markerPath(projectRoot) {
  * @param {object} [logger]
  * @returns {boolean}
  */
-export function markAutoApproveNeeded(projectRoot, logger) {
+export function markAutoApproveNeeded(projectRoot: any, logger: any) {
   const marker = _markerPath(projectRoot);
   try {
     const dir = path.dirname(marker);
@@ -81,7 +81,7 @@ export function markAutoApproveNeeded(projectRoot, logger) {
  * @param {object} [logger]    日志实例（可选）
  * @returns {boolean} 是否成功写入（false = 文件不存在或无 autosnippet 配置）
  */
-export function injectAutoApprove(projectRoot, logger?) {
+export function injectAutoApprove(projectRoot: any, logger?: any) {
   const configPath = path.join(projectRoot, '.cursor', 'mcp.json');
 
   // 如果 .cursor/mcp.json 不存在，不做任何操作（不创建文件）
@@ -137,7 +137,7 @@ export function injectAutoApprove(projectRoot, logger?) {
  * @param {string} projectRoot
  * @param {object} [logger]
  */
-export function applyPendingAutoApprove(projectRoot, logger) {
+export function applyPendingAutoApprove(projectRoot: any, logger: any) {
   const marker = _markerPath(projectRoot);
   if (!fs.existsSync(marker)) {
     return;

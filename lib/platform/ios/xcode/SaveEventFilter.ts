@@ -62,7 +62,7 @@ class SaveEventFilter {
    *
    * @param {string} filePath 绝对路径
    */
-  markSelfWrite(filePath) {
+  markSelfWrite(filePath: any) {
     this._selfWrites.set(filePath, Date.now());
   }
 
@@ -73,7 +73,7 @@ class SaveEventFilter {
    * @param {string} content  文件当前的完整内容
    * @returns {{ process: boolean, reason: string }}
    */
-  shouldProcess(filePath, content) {
+  shouldProcess(filePath: any, content: any) {
     if (!isFilterEnabled()) {
       return { process: true, reason: 'filter-disabled' };
     }
@@ -114,7 +114,7 @@ class SaveEventFilter {
    * @param {string} filePath 绝对路径
    * @param {string} content 处理后的文件内容
    */
-  updateHash(filePath, content) {
+  updateHash(filePath: any, content: any) {
     this._contentHashes.set(filePath, this._hash(content));
   }
 
@@ -125,7 +125,7 @@ class SaveEventFilter {
    * @param {string} filePath 绝对路径
    * @param {string} newContent 即将写入的新内容
    */
-  markWrite(filePath, newContent) {
+  markWrite(filePath: any, newContent: any) {
     this.markSelfWrite(filePath);
     this._contentHashes.set(filePath, this._hash(newContent));
   }
@@ -133,14 +133,14 @@ class SaveEventFilter {
   /**
    * 清除某文件的所有状态（通常不需要调用）
    */
-  clear(filePath) {
+  clear(filePath: any) {
     this._selfWrites.delete(filePath);
     this._contentHashes.delete(filePath);
   }
 
   /* ────────── 内部方法 ────────── */
 
-  _hash(content) {
+  _hash(content: any) {
     return createHash('md5').update(content).digest('hex');
   }
 

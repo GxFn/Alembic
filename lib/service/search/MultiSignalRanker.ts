@@ -52,7 +52,7 @@ const SCENARIO_WEIGHTS = {
  * 相关性信号 — BM25 + 标题匹配 + 内容匹配
  */
 export class RelevanceSignal {
-  compute(candidate, context) {
+  compute(candidate: any, context: any) {
     let score = candidate.bm25Score || candidate.score || 0;
     const query = (context.query || '').toLowerCase();
     if (!query) {
@@ -73,7 +73,7 @@ export class RelevanceSignal {
     }
     // 标题单词匹配
     const queryWords = query.split(/\s+/);
-    const titleHits = queryWords.filter((w) => title.includes(w)).length;
+    const titleHits = queryWords.filter((w: any) => title.includes(w)).length;
     score += (titleHits / queryWords.length) * 0.2;
     // 内容匹配
     if (content.includes(query)) {
@@ -88,7 +88,7 @@ export class RelevanceSignal {
  * 权威性信号 — 基于质量评分、使用次数、作者
  */
 export class AuthoritySignal {
-  compute(candidate) {
+  compute(candidate: any) {
     let score = 0;
     if (candidate.qualityScore) {
       score += (candidate.qualityScore / 100) * 0.5;
@@ -107,7 +107,7 @@ export class AuthoritySignal {
  * 时间衰减信号
  */
 export class RecencySignal {
-  compute(candidate) {
+  compute(candidate: any) {
     const updated = candidate.updatedAt || candidate.lastModified || candidate.createdAt;
     if (!updated) {
       return 0.5;
@@ -134,7 +134,7 @@ export class RecencySignal {
  * usageCount 1 → 0.10, 10 → 0.37, 100 → 0.67, 1000+ → 1.0
  */
 export class PopularitySignal {
-  compute(candidate) {
+  compute(candidate: any) {
     const usage = candidate.usageCount || 0;
     if (usage <= 0) {
       return 0;
@@ -148,10 +148,11 @@ export class PopularitySignal {
  * 难度信号 — 用于学习场景的难度匹配
  */
 export class DifficultySignal {
-  compute(candidate, context) {
+  compute(candidate: any, context: any) {
     const levels = { beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
-    const candidateLevel = levels[candidate.difficulty || 'intermediate'] || 2;
-    const userLevel = levels[context.userLevel || 'intermediate'] || 2;
+    const candidateLevel =
+      (levels as Record<string, number>)[candidate.difficulty || 'intermediate'] || 2;
+    const userLevel = (levels as Record<string, number>)[context.userLevel || 'intermediate'] || 2;
     // 难度匹配：越接近用户等级得分越高
     const diff = Math.abs(candidateLevel - userLevel);
     return Math.max(0, 1 - diff * 0.3);
@@ -163,7 +164,7 @@ export class DifficultySignal {
  * (原 SeasonalitySignal，重命名以准确反映实际语义)
  */
 export class ContextMatchSignal {
-  compute(candidate, context) {
+  compute(candidate: any, context: any) {
     let score = 0;
 
     // 语言匹配（最强上下文信号）
@@ -182,8 +183,8 @@ export class ContextMatchSignal {
 
     // 标签重叠
     if (context.tags?.length > 0 && candidate.tags?.length > 0) {
-      const ctxTags = new Set(context.tags.map((t) => t.toLowerCase()));
-      const hits = candidate.tags.filter((t) => ctxTags.has(t.toLowerCase())).length;
+      const ctxTags = new Set(context.tags.map((t: any) => t.toLowerCase()));
+      const hits = candidate.tags.filter((t: any) => ctxTags.has(t.toLowerCase())).length;
       if (hits > 0) {
         score += 0.25 * Math.min(hits / ctxTags.size, 1);
       }
@@ -207,8 +208,8 @@ const LANGUAGE_FAMILIES = {
   python: ['cython'],
 };
 
-function _isRelatedLanguage(a, b) {
-  const related = LANGUAGE_FAMILIES[a?.toLowerCase()] || [];
+function _isRelatedLanguage(a: any, b: any) {
+  const related = (LANGUAGE_FAMILIES as Record<string, string[]>)[a?.toLowerCase()] || [];
   return related.includes(b?.toLowerCase());
 }
 
@@ -247,15 +248,16 @@ export class MultiSignalRanker {
    * @param {object} context - { query, scenario, language, userLevel, ... }
    * @returns {Array} - sorted candidates with rankerScore
    */
-  rank(candidates, context: any = {}) {
+  rank(candidates: any, context: any = {}) {
     if (!candidates || candidates.length === 0) {
       return [];
     }
 
     const scenario = context.scenario || context.intent || 'default';
-    const weights = this.#scenarioWeights[scenario] || this.#scenarioWeights.default;
+    const weights =
+      (this.#scenarioWeights as Record<string, any>)[scenario] || this.#scenarioWeights.default;
 
-    const scored = candidates.map((candidate) => {
+    const scored = candidates.map((candidate: any) => {
       const signals: Record<string, any> = {};
       let totalScore = 0;
 
@@ -274,6 +276,6 @@ export class MultiSignalRanker {
       };
     });
 
-    return scored.sort((a, b) => b.rankerScore - a.rankerScore);
+    return scored.sort((a: any, b: any) => b.rankerScore - a.rankerScore);
   }
 }

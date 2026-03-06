@@ -119,7 +119,7 @@ class DjangoEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary) {
+  detectPatterns(astSummary: any) {
     const patterns: any[] = [];
 
     // ── Django Models ──
@@ -200,7 +200,7 @@ class DjangoEnhancement extends EnhancementPack {
 
     // ── Signal handler functions ──
     for (const m of astSummary.methods || []) {
-      if (m.decorators?.some((d) => /receiver/.test(d))) {
+      if (m.decorators?.some((d: any) => /receiver/.test(d))) {
         patterns.push({
           type: 'django-signal-handler',
           methodName: m.name,
@@ -212,7 +212,7 @@ class DjangoEnhancement extends EnhancementPack {
 
     // ── Celery tasks ──
     for (const m of astSummary.methods || []) {
-      if (m.decorators?.some((d) => /@(?:shared_task|app\.task|task)/.test(d))) {
+      if (m.decorators?.some((d: any) => /@(?:shared_task|app\.task|task)/.test(d))) {
         patterns.push({
           type: 'django-celery-task',
           methodName: m.name,
@@ -224,7 +224,7 @@ class DjangoEnhancement extends EnhancementPack {
 
     // ── Django ecosystem imports ──
     const djangoImports = (astSummary.imports || []).filter(
-      (imp) =>
+      (imp: any) =>
         imp.includes('django') ||
         imp.includes('rest_framework') ||
         imp.includes('celery') ||

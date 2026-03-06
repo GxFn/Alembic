@@ -93,7 +93,7 @@ if (skillDirs.length === 0) {
   process.exit(0);
 }
 
-function getRecipesDir(root) {
+function getRecipesDir(root: any) {
   try {
     // 尝试查找 boxspec.json 来确定 recipes 目录
     const specCandidates = [
@@ -115,7 +115,7 @@ function getRecipesDir(root) {
   return path.join(root, defaults.RECIPES_DIR);
 }
 
-function collectMdFiles(dir, baseDir, list: any[] = []) {
+function collectMdFiles(dir: any, baseDir: any, list: any[] = []) {
   if (!fs.existsSync(dir)) {
     return list;
   }
@@ -136,13 +136,13 @@ function collectMdFiles(dir, baseDir, list: any[] = []) {
 /**
  * 从 Markdown 的 YAML frontmatter 中提取指定字段（轻量实现，不依赖 YAML 库）
  */
-function extractFrontmatterFields(content) {
+function extractFrontmatterFields(content: any) {
   const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!m) {
     return {};
   }
   const block = m[1];
-  const extract = (key) => {
+  const extract = (key: any) => {
     const re = new RegExp(`^${key}:\s*["']?(.+?)["']?\s*$`, 'm');
     const match = block.match(re);
     return match ? match[1].trim() : null;
@@ -165,7 +165,7 @@ function extractFrontmatterFields(content) {
  * V2: 生成轻量 Recipe 索引（title | trigger | category | summary）
  * Agent 需要详情时调用 MCP: autosnippet_knowledge({ operation: "get" }) / autosnippet_search
  */
-function buildProjectRecipesContext(projectRoot) {
+function buildProjectRecipesContext(projectRoot: any) {
   const recipesDir = getRecipesDir(projectRoot);
   if (!fs.existsSync(recipesDir)) {
     return null;
@@ -235,7 +235,7 @@ function buildProjectRecipesContext(projectRoot) {
   return lines.join('');
 }
 
-function buildSpmmapSummary(projectRoot) {
+function buildSpmmapSummary(projectRoot: any) {
   const spmmapPath = path.join(projectRoot, defaults.SPMMAP_PATH);
   if (!fs.existsSync(spmmapPath)) {
     return null;

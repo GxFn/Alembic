@@ -101,7 +101,7 @@ export class WikiGenerator {
    * @param {Function} [deps.onProgress] - (phase, progress, message) => void
    * @param {object} [deps.options]
    */
-  constructor(deps) {
+  constructor(deps: any) {
     this.projectRoot = deps.projectRoot;
     this.moduleService = deps.moduleService || null;
     this.knowledgeService = deps.knowledgeService || null;
@@ -304,7 +304,7 @@ export class WikiGenerator {
     }
     walkDir(
       this.projectRoot,
-      (filePath) => {
+      (filePath: any) => {
         const ext = path.extname(filePath);
         if (extMap[ext]) {
           info.sourceFiles.push(path.relative(this.projectRoot, filePath));
@@ -481,7 +481,7 @@ export class WikiGenerator {
    *
    * @returns {Array<{id: string, path: string, title: string, type: string, priority: number}>}
    */
-  _discoverTopics(projectInfo, astInfo, moduleInfo, knowledgeInfo) {
+  _discoverTopics(projectInfo: any, astInfo: any, moduleInfo: any, knowledgeInfo: any) {
     const topics: any[] = [];
     const isZh = this.options.language === 'zh';
     const langTerms = getLangTerms(projectInfo.primaryLanguage);
@@ -766,16 +766,16 @@ export class WikiGenerator {
    * @param {object} structuredData - { projectInfo, astInfo, moduleInfo, knowledgeInfo }
    * @returns {Promise<Array<{path: string, hash: string, size: number}>>}
    */
-  async _composeArticles(topics, structuredData) {
+  async _composeArticles(topics: any, structuredData: any) {
     const files: any[] = [];
     const isZh = this.options.language === 'zh';
     const MIN_ARTICLE_CHARS = 200;
 
     // 确保必要的子目录存在
     this._ensureDir(this.wikiDir);
-    const needsModulesDir = topics.some((t) => t.path.startsWith('modules/'));
-    const needsPatternsDir = topics.some((t) => t.path.startsWith('patterns/'));
-    const needsFoldersDir = topics.some((t) => t.path.startsWith('folders/'));
+    const needsModulesDir = topics.some((t: any) => t.path.startsWith('modules/'));
+    const needsPatternsDir = topics.some((t: any) => t.path.startsWith('patterns/'));
+    const needsFoldersDir = topics.some((t: any) => t.path.startsWith('folders/'));
     if (needsModulesDir) {
       this._ensureDir(path.join(this.wikiDir, 'modules'));
     }
@@ -933,8 +933,8 @@ export class WikiGenerator {
   /**
    * 为同步目录生成索引页
    */
-  _generateSyncIndex(synced, isZh) {
-    const docFiles = synced.filter((f) => f.path.startsWith('documents/'));
+  _generateSyncIndex(synced: any, isZh: any) {
+    const docFiles = synced.filter((f: any) => f.path.startsWith('documents/'));
 
     if (docFiles.length > 0) {
       const lines = [
@@ -954,7 +954,7 @@ export class WikiGenerator {
     }
   }
 
-  _emit(phase, progress, message) {
+  _emit(phase: any, progress: any, message: any) {
     try {
       this.onProgress(phase, progress, message);
     } catch {
@@ -962,13 +962,13 @@ export class WikiGenerator {
     }
   }
 
-  _ensureDir(dir) {
+  _ensureDir(dir: any) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
   }
 
-  _writeFile(relativePath, content) {
+  _writeFile(relativePath: any, content: any) {
     const fullPath = path.join(this.wikiDir, relativePath);
     this._ensureDir(path.dirname(fullPath));
     fs.writeFileSync(fullPath, content, 'utf-8');
@@ -977,7 +977,7 @@ export class WikiGenerator {
     return { path: relativePath, hash, size: Buffer.byteLength(content) };
   }
 
-  _writeMeta(files, startTime, dedupResult) {
+  _writeMeta(files: any, startTime: any, dedupResult: any) {
     const meta = {
       version: '3.0.0',
       generator: 'AutoSnippet WikiGenerator V3',
@@ -985,7 +985,7 @@ export class WikiGenerator {
       duration: Date.now() - startTime,
       projectRoot: this.projectRoot,
       language: this.options.language,
-      files: files.map((f) => ({
+      files: files.map((f: any) => ({
         path: f.path,
         hash: f.hash,
         size: f.size,
@@ -1011,7 +1011,7 @@ export class WikiGenerator {
   }
 
   /** 检测源码是否有变更（简化：对比 sourceHash） */
-  _detectChanges(meta) {
+  _detectChanges(meta: any) {
     if (!meta?.sourceHash) {
       return true;
     }
@@ -1026,7 +1026,7 @@ export class WikiGenerator {
       const names: string[] = [];
       walkDir(
         this.projectRoot,
-        (filePath) => {
+        (filePath: any) => {
           const ext = path.extname(filePath);
           if (extSet.has(ext)) {
             const stat = fs.statSync(filePath);

@@ -8,7 +8,7 @@
  *   - 需要专门的索引优化就绪检测查询
  *   - 避免与知识图谱互相污染
  */
-export default function migrate(db) {
+export default function migrate(db: any) {
   // ── tasks 表 ──
   db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (

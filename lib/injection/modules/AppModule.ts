@@ -30,7 +30,7 @@ import { TaskGraphService } from '../../service/task/TaskGraphService.js';
 import { TaskKnowledgeBridge } from '../../service/task/TaskKnowledgeBridge.js';
 import { TaskReadyEngine } from '../../service/task/TaskReadyEngine.js';
 
-export function register(c) {
+export function register(c: any) {
   // ═══ Quality + Recipe ═══
 
   c.singleton('qualityScorer', () => new QualityScorer());
@@ -38,42 +38,42 @@ export function register(c) {
   c.singleton('recipeCandidateValidator', () => new RecipeCandidateValidator());
   c.register('recipeExtractor', () => c.singletons._recipeExtractor || null);
 
-  c.singleton('feedbackCollector', (ct) => {
+  c.singleton('feedbackCollector', (ct: any) => {
     const projectRoot = ct.singletons._projectRoot || process.cwd();
     return new FeedbackCollector(projectRoot);
   });
 
-  c.singleton('tokenUsageStore', (ct) => new TokenUsageStore(ct.get('database').getDb()));
+  c.singleton('tokenUsageStore', (ct: any) => new TokenUsageStore(ct.get('database').getDb()));
 
   // ═══ Snippet ═══
 
-  c.singleton('snippetFactory', (ct) => {
+  c.singleton('snippetFactory', (ct: any) => {
     const factory = new SnippetFactory(ct.get('knowledgeRepository'));
     factory.registerCodec(new XcodeCodec());
     factory.registerCodec(new VSCodeCodec());
     return factory;
   });
 
-  c.singleton('snippetInstaller', (ct) => {
+  c.singleton('snippetInstaller', (ct: any) => {
     const factory = ct.get('snippetFactory');
     return new SnippetInstaller({ codec: factory.getCodec('xcode'), snippetFactory: factory });
   });
 
-  c.singleton('vscodeSnippetInstaller', (ct) => {
+  c.singleton('vscodeSnippetInstaller', (ct: any) => {
     const factory = ct.get('snippetFactory');
     return new SnippetInstaller({ codec: factory.getCodec('vscode'), snippetFactory: factory });
   });
 
   // ═══ Platform + Automation ═══
 
-  c.singleton('spmService', (ct) => {
+  c.singleton('spmService', (ct: any) => {
     const projectRoot = ct.singletons._projectRoot || process.cwd();
     return new SpmHelper(projectRoot);
   });
 
   c.singleton('automationOrchestrator', () => new AutomationOrchestrator());
 
-  c.singleton('moduleService', (ct) => {
+  c.singleton('moduleService', (ct: any) => {
     const projectRoot = ct.singletons._projectRoot || process.cwd();
     return new ModuleService(projectRoot, {
       agentFactory: ct.get('agentFactory'),
@@ -87,7 +87,7 @@ export function register(c) {
 
   c.singleton(
     'cursorDeliveryPipeline',
-    (ct) =>
+    (ct: any) =>
       new CursorDeliveryPipeline({
         knowledgeService: ct.get('knowledgeService'),
         projectRoot: ct.singletons._projectRoot || process.cwd(),
@@ -98,12 +98,12 @@ export function register(c) {
 
   // ═══ TaskGraph ═══
 
-  c.singleton('taskIdGenerator', (ct) => new TaskIdGenerator(ct.get('database').getDb()));
-  c.singleton('taskReadyEngine', (ct) => new TaskReadyEngine(ct.get('database').getDb()));
-  c.singleton('taskKnowledgeBridge', (ct) => new TaskKnowledgeBridge(ct.get('searchEngine')));
+  c.singleton('taskIdGenerator', (ct: any) => new TaskIdGenerator(ct.get('database').getDb()));
+  c.singleton('taskReadyEngine', (ct: any) => new TaskReadyEngine(ct.get('database').getDb()));
+  c.singleton('taskKnowledgeBridge', (ct: any) => new TaskKnowledgeBridge(ct.get('searchEngine')));
   c.singleton(
     'taskGraphService',
-    (ct) =>
+    (ct: any) =>
       new TaskGraphService(
         ct.get('taskRepository'),
         ct.get('taskReadyEngine'),
@@ -118,6 +118,6 @@ export function register(c) {
  * 初始化 RecipeExtractor 实例 (在 initialize 期间调用)
  * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
-export function initRecipeExtractor(c) {
+export function initRecipeExtractor(c: any) {
   c.singletons._recipeExtractor = new RecipeExtractor();
 }

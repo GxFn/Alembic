@@ -105,7 +105,7 @@ export class ModuleService {
    * @param {object} [options.guardCheckEngine]
    * @param {object} [options.violationsStore]
    */
-  constructor(projectRoot, options: any = {}) {
+  constructor(projectRoot: any, options: any = {}) {
     this.#projectRoot = projectRoot;
     this.#registry = getDiscovererRegistry();
     this.#logger = Logger.getInstance();
@@ -241,7 +241,7 @@ export class ModuleService {
    * 各 Discoverer 返回 { name, path, type, language, framework, metadata }
    * 前端还需要 { packageName, packagePath, targetDir, info } 等扩展字段
    */
-  #normalizeTarget(t, discoverer) {
+  #normalizeTarget(t: any, discoverer: any) {
     return {
       ...t,
       // 兼容字段 — 如果 discoverer 已设置则保留，否则从通用字段推导
@@ -262,7 +262,7 @@ export class ModuleService {
    * @param {import('../../core/discovery/ProjectDiscoverer.js').DiscoveredTarget|string} target
    * @returns {Promise<import('../../core/discovery/ProjectDiscoverer.js').DiscoveredFile[]>}
    */
-  async getTargetFiles(target) {
+  async getTargetFiles(target: any) {
     await this.#ensureLoaded();
 
     const targetObj = typeof target === 'string' ? { name: target } : target;
@@ -285,7 +285,7 @@ export class ModuleService {
     for (const { discoverer } of this.#activeDiscoverers) {
       try {
         const targets = await discoverer.listTargets();
-        if (targets.some((t) => t.name === targetObj.name)) {
+        if (targets.some((t: any) => t.name === targetObj.name)) {
           return discoverer.getTargetFiles(targetObj);
         }
       } catch {}
@@ -393,7 +393,7 @@ export class ModuleService {
    * AI 扫描 Target 发现候选项
    * 完整管线: 读文件 → AI 提取 → Header 解析 → 工具增强
    */
-  async scanTarget(target, options: any = {}) {
+  async scanTarget(target: any, options: any = {}) {
     await this.#ensureLoaded();
 
     const targetName = typeof target === 'string' ? target : target?.name;
@@ -410,7 +410,7 @@ export class ModuleService {
       };
     }
 
-    const scannedFilesMeta = fileList.map((f) => {
+    const scannedFilesMeta = fileList.map((f: any) => {
       const filePath = typeof f === 'string' ? f : f.path;
       return { name: _pathBasename(filePath), path: f.relativePath || _pathBasename(filePath) };
     });
@@ -419,7 +419,7 @@ export class ModuleService {
     // 2. 读取文件内容
     onProgress?.({ type: 'scan:reading', count: fileList.length });
     const files = fileList
-      .map((f) => {
+      .map((f: any) => {
         const filePath = typeof f === 'string' ? f : f.path;
         try {
           return {
@@ -439,7 +439,7 @@ export class ModuleService {
       return { recipes: [], scannedFiles: [], message: 'All source files unreadable' };
     }
 
-    const scannedFiles = files.map((f) => ({ name: f.name, path: f.relativePath }));
+    const scannedFiles = files.map((f: any) => ({ name: f.name, path: f.relativePath }));
     this.#logger.info(`[ModuleService] scanTarget: ${targetName}, ${files.length} files`);
 
     // 3. AI 提取
@@ -467,7 +467,7 @@ export class ModuleService {
       for (const recipe of recipes) {
         const headerList = recipe.headers || [];
         recipe.headerPaths = await Promise.all(
-          headerList.map((h) => HeaderResolver.resolveHeaderRelativePath(h, targetRootDir))
+          headerList.map((h: any) => HeaderResolver.resolveHeaderRelativePath(h, targetRootDir))
         );
         recipe.moduleName = targetName;
       }
@@ -703,7 +703,7 @@ export class ModuleService {
    * @param {object} [options] - scanTarget options (onProgress 等)
    * @returns {Promise<{ recipes: any[], scannedFiles: any[], message?: string }>}
    */
-  async scanFolder(folderPath, options: any = {}) {
+  async scanFolder(folderPath: any, options: any = {}) {
     await this.#ensureLoaded();
 
     const absPath = _pathIsAbsolute(folderPath)
@@ -737,7 +737,7 @@ export class ModuleService {
   }
 
   /** 静态语义标准化 */
-  static normalizeSemanticFields(recipe) {
+  static normalizeSemanticFields(recipe: any) {
     return recipe;
   }
 
@@ -748,7 +748,7 @@ export class ModuleService {
   /**
    * Discoverer ID → 语言映射
    */
-  #discovererToLanguage(id) {
+  #discovererToLanguage(id: any) {
     const map = {
       spm: 'swift',
       node: 'javascript',
@@ -757,7 +757,7 @@ export class ModuleService {
       python: 'python',
       generic: 'unknown',
     };
-    return map[id] || 'unknown';
+    return (map as Record<string, any>)[id] || 'unknown';
   }
 
   /**
@@ -766,7 +766,7 @@ export class ModuleService {
    * AgentFactory.scanKnowledge 内部创建 insight Agent，
    * Agent(LLM) 直接分析代码 + 使用 AST 工具，输出 Recipe JSON。
    */
-  async #aiExtractRecipes(targetName, files) {
+  async #aiExtractRecipes(targetName: any, files: any) {
     if (!this.#agentFactory) {
       return [];
     }
@@ -803,7 +803,7 @@ export class ModuleService {
   /**
    * 质量评分 enrichment
    */
-  #enrichRecipes(recipes) {
+  #enrichRecipes(recipes: any) {
     for (const recipe of recipes) {
       if (!recipe.quality && this.#qualityScorer) {
         try {
@@ -825,7 +825,7 @@ export class ModuleService {
   /**
    * 目录遍历 — 浏览子目录结构
    */
-  #walkDirsForBrowse(dir, dirs, depth, maxDepth) {
+  #walkDirsForBrowse(dir: any, dirs: any, depth: any, maxDepth: any) {
     if (depth >= maxDepth) {
       return;
     }
@@ -870,7 +870,7 @@ export class ModuleService {
   /**
    * 递归统计目录下源码文件数（限深度 + 上限 999 防止超大目录卡顿）
    */
-  #countSourceFilesDeep(dir, maxDepth, depth = 0) {
+  #countSourceFilesDeep(dir: any, maxDepth: any, depth = 0) {
     if (depth >= maxDepth) {
       return 0;
     }
@@ -896,7 +896,7 @@ export class ModuleService {
   /**
    * 从目录收集源码文件列表
    */
-  #collectFolderFiles(dirPath, maxDepth = 15) {
+  #collectFolderFiles(dirPath: any, maxDepth = 15) {
     const files: any[] = [];
     this.#walkCollectSourceFiles(dirPath, dirPath, files, 0, maxDepth);
     return files;
@@ -905,7 +905,7 @@ export class ModuleService {
   /**
    * 递归收集源码文件
    */
-  #walkCollectSourceFiles(dir, rootDir, files, depth, maxDepth) {
+  #walkCollectSourceFiles(dir: any, rootDir: any, files: any, depth: any, maxDepth: any) {
     if (depth > maxDepth || files.length > 500) {
       return;
     }
@@ -942,7 +942,7 @@ export class ModuleService {
   /**
    * 检测目录主要编程语言
    */
-  #detectFolderLanguage(dirPath) {
+  #detectFolderLanguage(dirPath: any) {
     const langCount: Record<string, any> = {};
     try {
       const entries = readdirSync(dirPath, { withFileTypes: true });
@@ -977,7 +977,7 @@ export class ModuleService {
   /**
    * 目录遍历兜底（收集源码文件）
    */
-  #walkProjectForFiles(allFiles, seenPaths, maxFiles) {
+  #walkProjectForFiles(allFiles: any, seenPaths: any, maxFiles: any) {
     const srcDirs = [
       'Sources',
       'src',
@@ -992,7 +992,7 @@ export class ModuleService {
       'pkg',
     ];
 
-    const walkDir = (dir, targetName) => {
+    const walkDir = (dir: any, targetName: any) => {
       if (allFiles.length >= maxFiles) {
         return;
       }

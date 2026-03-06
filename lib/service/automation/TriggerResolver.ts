@@ -9,7 +9,7 @@ export class TriggerResolver {
    * @param {object|string} trigger
    * @returns {{ type: string, name?: string, params?: object, raw: any }}
    */
-  resolve(trigger) {
+  resolve(trigger: any) {
     if (typeof trigger === 'string') {
       return this.#resolveString(trigger);
     }
@@ -26,7 +26,7 @@ export class TriggerResolver {
     return { type: 'unknown', raw: trigger };
   }
 
-  #resolveString(input) {
+  #resolveString(input: any) {
     const trimmed = input.trim();
 
     // 检测 as:xxx 格式
@@ -54,7 +54,7 @@ export class TriggerResolver {
     return { type: 'custom', name: trimmed, params: {}, raw: input };
   }
 
-  #mapDirectiveType(name) {
+  #mapDirectiveType(name: any) {
     const map = {
       search: 'search',
       s: 'search',
@@ -66,6 +66,6 @@ export class TriggerResolver {
       import: 'injection',
       alink: 'alink',
     };
-    return map[name] || 'directive';
+    return (map as Record<string, any>)[name] || 'directive';
   }
 }

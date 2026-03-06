@@ -31,7 +31,7 @@ export class CacheService {
    * @param {string} key
    * @returns {any|null}
    */
-  get(key) {
+  get(key: any) {
     const entry = this.cache.get(key);
 
     if (!entry) {
@@ -53,7 +53,7 @@ export class CacheService {
    * @param {any} value
    * @param {number} ttlSeconds 默认 300 秒
    */
-  set(key, value, ttlSeconds = 300) {
+  set(key: any, value: any, ttlSeconds = 300) {
     const expiresAt = Date.now() + ttlSeconds * 1000;
     this.cache.set(key, { value, expiresAt });
   }
@@ -63,7 +63,7 @@ export class CacheService {
    * @param {string} key
    * @returns {boolean}
    */
-  delete(key) {
+  delete(key: any) {
     return this.cache.delete(key);
   }
 
@@ -113,29 +113,29 @@ export class CacheService {
  * 缓存键生成器
  */
 export class CacheKeyBuilder {
-  static candidate(id) {
+  static candidate(id: any) {
     return `candidate:${id}`;
   }
 
-  static candidatesList(page, limit, status) {
+  static candidatesList(page: any, limit: any, status: any) {
     const baseKey = `candidates:list:${page}:${limit}`;
     return status ? `${baseKey}:${status}` : baseKey;
   }
 
-  static recipe(id) {
+  static recipe(id: any) {
     return `recipe:${id}`;
   }
 
-  static recipesList(page, limit, category) {
+  static recipesList(page: any, limit: any, category: any) {
     const baseKey = `recipes:list:${page}:${limit}`;
     return category ? `${baseKey}:${category}` : baseKey;
   }
 
-  static rule(id) {
+  static rule(id: any) {
     return `rule:${id}`;
   }
 
-  static rulesList(page, limit, status) {
+  static rulesList(page: any, limit: any, status: any) {
     const baseKey = `rules:list:${page}:${limit}`;
     return status ? `${baseKey}:${status}` : baseKey;
   }

@@ -3,14 +3,14 @@
  */
 export class AuditStore {
   db: any;
-  constructor(db) {
+  constructor(db: any) {
     this.db = db.getDb();
   }
 
   /**
    * 保存审计日志
    */
-  async save(entry) {
+  async save(entry: any) {
     const stmt = this.db.prepare(`
       INSERT INTO audit_logs (
         id,
@@ -86,7 +86,7 @@ export class AuditStore {
   /**
    * 根据请求 ID 查询
    */
-  findByRequestId(requestId) {
+  findByRequestId(requestId: any) {
     const stmt = this.db.prepare('SELECT * FROM audit_logs WHERE id = ?');
     return stmt.get(requestId);
   }
@@ -94,7 +94,7 @@ export class AuditStore {
   /**
    * 根据角色查询
    */
-  findByActor(actor, limit = 100) {
+  findByActor(actor: any, limit = 100) {
     const stmt = this.db.prepare(`
       SELECT * FROM audit_logs
       WHERE actor = ?
@@ -107,7 +107,7 @@ export class AuditStore {
   /**
    * 根据操作查询
    */
-  findByAction(action, limit = 100) {
+  findByAction(action: any, limit = 100) {
     const stmt = this.db.prepare(`
       SELECT * FROM audit_logs
       WHERE action = ?
@@ -120,7 +120,7 @@ export class AuditStore {
   /**
    * 根据结果查询
    */
-  findByResult(result, limit = 100) {
+  findByResult(result: any, limit = 100) {
     const stmt = this.db.prepare(`
       SELECT * FROM audit_logs
       WHERE result = ?

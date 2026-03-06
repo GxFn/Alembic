@@ -120,7 +120,7 @@ export const collectScanRecipe = {
    * 验证通过后返回 { status: 'collected', recipe: {...} }，
    * AgentFactory.scanKnowledge() 从 toolCalls 结果中提取 recipes。
    */
-  handler: async (params, _ctx) => {
+  handler: async (params: any, _ctx: any) => {
     // ── 基本验证 ──
     const errors: any[] = [];
 

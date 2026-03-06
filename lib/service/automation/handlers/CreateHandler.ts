@@ -15,7 +15,12 @@ import { REGEX } from '../DirectiveDetector.js';
  * @param {string} relativePath
  * @param {string} createOption 'c' | 'f' | undefined
  */
-export async function handleCreate(watcher, fullPath, relativePath, createOption) {
+export async function handleCreate(
+  watcher: any,
+  fullPath: any,
+  relativePath: any,
+  createOption: any
+) {
   const XA = await import('../../../platform/ios/xcode/XcodeAutomation.js');
   const CM = await import('../../../infrastructure/external/ClipboardManager.js');
 
@@ -76,12 +81,12 @@ export async function handleCreate(watcher, fullPath, relativePath, createOption
 /**
  * 静默创建候选（从剪贴板文本解析 Recipe 并提交）
  */
-async function silentCreateCandidate(watcher, text, relativePath) {
+async function silentCreateCandidate(watcher: any, text: any, relativePath: any) {
   const { RecipeParser } = await import('../../recipe/RecipeParser.js');
   const parser = new RecipeParser();
 
-  const normalize = (arr) =>
-    arr.map((r) => ({
+  const normalize = (arr: any) =>
+    arr.map((r: any) => ({
       title: r.title,
       summary: r.summary || r.description || '',
       trigger: r.trigger,
@@ -94,7 +99,7 @@ async function silentCreateCandidate(watcher, text, relativePath) {
 
   // 先尝试批量解析（仅对 Recipe Markdown 格式有效）
   const allRecipes = parser.parseAll(text);
-  const validRecipes = allRecipes.filter((r) => r.title?.trim());
+  const validRecipes = allRecipes.filter((r: any) => r.title?.trim());
   if (validRecipes.length > 0) {
     const items = normalize(validRecipes);
     await watcher._resolveHeadersIfNeeded(items[0], relativePath, text);
@@ -177,7 +182,7 @@ async function silentCreateCandidate(watcher, text, relativePath) {
 /**
  * 查找 // as:c 的行号 (1-based)
  */
-export function findCreateLineNumber(content) {
+export function findCreateLineNumber(content: any) {
   if (!content) {
     return -1;
   }
@@ -191,6 +196,6 @@ export function findCreateLineNumber(content) {
   return -1;
 }
 
-function _sleep(ms) {
+function _sleep(ms: any) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

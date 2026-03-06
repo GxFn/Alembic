@@ -39,7 +39,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     return `JVM (${this.#buildSystem === 'maven' ? 'Maven' : 'Gradle'})`;
   }
 
-  async detect(projectRoot) {
+  async detect(projectRoot: any) {
     let confidence = 0;
     const reasons: string[] = [];
 
@@ -73,7 +73,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     };
   }
 
-  async load(projectRoot) {
+  async load(projectRoot: any) {
     this.#projectRoot = projectRoot;
     this.#targets = [];
     this.#depGraph = { nodes: [], edges: [] };
@@ -97,7 +97,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     return this.#targets;
   }
 
-  async getTargetFiles(target) {
+  async getTargetFiles(target: any) {
     const targetObj =
       typeof target === 'string' ? this.#targets.find((t) => t.name === target) : target;
 
@@ -135,7 +135,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
 
   // ── Gradle ──
 
-  #loadGradle(projectRoot) {
+  #loadGradle(projectRoot: any) {
     // 解析 settings.gradle 找子模块
     const submodules = this.#parseGradleSettings(projectRoot);
 
@@ -184,7 +184,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     this.#parseGradleExternalDeps(projectRoot);
   }
 
-  #parseGradleSettings(projectRoot) {
+  #parseGradleSettings(projectRoot: any) {
     const modules: string[] = [];
     for (const fname of ['settings.gradle', 'settings.gradle.kts']) {
       const settingsPath = join(projectRoot, fname);
@@ -219,7 +219,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     return [...new Set(modules)];
   }
 
-  #detectGradleFramework(dir) {
+  #detectGradleFramework(dir: any) {
     for (const fname of ['build.gradle', 'build.gradle.kts']) {
       const buildPath = join(dir, fname);
       if (!existsSync(buildPath)) {
@@ -246,7 +246,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     return null;
   }
 
-  #inferGradleTargetType(dir, name) {
+  #inferGradleTargetType(dir: any, name: any) {
     for (const fname of ['build.gradle', 'build.gradle.kts']) {
       const buildPath = join(dir, fname);
       if (!existsSync(buildPath)) {
@@ -270,7 +270,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     return 'library';
   }
 
-  #parseGradleModuleDeps(projectRoot, submodules) {
+  #parseGradleModuleDeps(projectRoot: any, submodules: any) {
     const moduleSet = new Set(submodules);
     for (const mod of submodules) {
       const modPath = resolve(projectRoot, mod.replace(/:/g, '/'));
@@ -296,7 +296,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  #parseGradleExternalDeps(projectRoot) {
+  #parseGradleExternalDeps(projectRoot: any) {
     for (const fname of ['build.gradle', 'build.gradle.kts']) {
       const buildPath = join(projectRoot, fname);
       if (!existsSync(buildPath)) {
@@ -328,7 +328,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
 
   // ── Maven ──
 
-  #loadMaven(projectRoot) {
+  #loadMaven(projectRoot: any) {
     const pomPath = join(projectRoot, 'pom.xml');
     if (!existsSync(pomPath)) {
       return;
@@ -379,7 +379,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     this.#parseMavenDeps(pomContent);
   }
 
-  #parseMavenModules(pomContent) {
+  #parseMavenModules(pomContent: any) {
     const modules: any[] = [];
     const moduleMatches = pomContent.matchAll(/<module>([^<]+)<\/module>/g);
     for (const m of moduleMatches) {
@@ -388,7 +388,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     return modules;
   }
 
-  #detectMavenFramework(dir) {
+  #detectMavenFramework(dir: any) {
     const pomPath = join(dir, 'pom.xml');
     if (!existsSync(pomPath)) {
       return null;
@@ -407,7 +407,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     return null;
   }
 
-  #parseMavenDeps(pomContent) {
+  #parseMavenDeps(pomContent: any) {
     const rootTarget = this.#targets[0]?.name;
     if (!rootTarget) {
       return;
@@ -430,7 +430,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
 
   // ── 共用工具 ──
 
-  #detectPrimaryLang(dir) {
+  #detectPrimaryLang(dir: any) {
     let javaCount = 0;
     let kotlinCount = 0;
 
@@ -466,7 +466,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     return kotlinCount > javaCount ? 'kotlin' : 'java';
   }
 
-  #collectFiles(dir, rootDir, files, depth = 0) {
+  #collectFiles(dir: any, rootDir: any, files: any, depth = 0) {
     if (depth > 15) {
       return;
     }
@@ -500,7 +500,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  #extractXmlValue(xml, tag) {
+  #extractXmlValue(xml: any, tag: any) {
     const match = xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
     return match ? match[1].trim() : null;
   }

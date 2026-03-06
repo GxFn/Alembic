@@ -108,7 +108,7 @@ export class LoopContext {
   /**
    * @param {LoopContextConfig} config
    */
-  constructor(config) {
+  constructor(config: any) {
     this.messages = config.messages;
     this.tracker = config.tracker || null;
     this.trace = config.trace || null;
@@ -145,7 +145,7 @@ export class LoopContext {
    * 累加 token 用量到循环级统计
    * @param {Object} usage - { inputTokens, outputTokens }
    */
-  addTokenUsage(usage) {
+  addTokenUsage(usage: any) {
     if (!usage) {
       return;
     }

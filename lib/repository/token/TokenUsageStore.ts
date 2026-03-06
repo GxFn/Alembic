@@ -22,7 +22,7 @@ export class TokenUsageStore {
   /**
    * @param {import('better-sqlite3').Database} db
    */
-  constructor(db) {
+  constructor(db: any) {
     this.#db = db;
     this.#logger = Logger.getInstance();
 
@@ -77,7 +77,7 @@ export class TokenUsageStore {
    * 记录一次 AI 调用的 token 消耗
    * @param {{ source: string, dimension?: string, provider?: string, model?: string, inputTokens: number, outputTokens: number, durationMs?: number, toolCalls?: number, sessionId?: string }} record
    */
-  record(record) {
+  record(record: any) {
     try {
       const now = Date.now();
       const total = (record.inputTokens || 0) + (record.outputTokens || 0);

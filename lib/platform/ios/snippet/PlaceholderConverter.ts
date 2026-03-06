@@ -19,12 +19,12 @@ export class PlaceholderConverter {
    * @param {string} code
    * @returns {string}
    */
-  static xcodeToVSCode(code) {
+  static xcodeToVSCode(code: any) {
     if (!code) {
       return '';
     }
     let index = 0;
-    return code.replace(/<#(.*?)#>/g, (_match, inner) => {
+    return code.replace(/<#(.*?)#>/g, (_match: any, inner: any) => {
       index++;
       // <#T##Label##Type#> → Label (parts[1])
       // <#T##Type#>        → Type  (parts[1])
@@ -40,14 +40,14 @@ export class PlaceholderConverter {
    * @param {string} code
    * @returns {string}
    */
-  static vscodeToXcode(code) {
+  static vscodeToXcode(code: any) {
     if (!code) {
       return '';
     }
     return (
       code
         // ${1:name} → <#name#>
-        .replace(/\$\{(\d+):([^}]*)}/g, (_m, _n, label) => `<#${label}#>`)
+        .replace(/\$\{(\d+):([^}]*)}/g, (_m: any, _n: any, label: any) => `<#${label}#>`)
         // ${1} → <#value#>
         .replace(/\$\{(\d+)}/g, '<#value#>')
         // $0 → remove (Xcode has no final cursor)

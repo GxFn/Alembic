@@ -10,7 +10,7 @@ import { getServiceContainer } from '../../../injection/ServiceContainer.js';
 /**
  * @param {string} alinkLine
  */
-export async function handleAlink(alinkLine) {
+export async function handleAlink(alinkLine: any) {
   const { TRIGGER_SYMBOL } = await import('../../../infrastructure/config/TriggerSymbol.js');
   let completionKey: any = null;
   const alinkMark = 'alink';
@@ -18,7 +18,7 @@ export async function handleAlink(alinkLine) {
   if (alinkLine.includes(TRIGGER_SYMBOL)) {
     const parts = alinkLine
       .split(TRIGGER_SYMBOL)
-      .map((p) => p.trim())
+      .map((p: any) => p.trim())
       .filter(Boolean);
     if (parts.length >= 2 && parts[parts.length - 1] === alinkMark) {
       completionKey = parts[parts.length - 2];
@@ -50,7 +50,7 @@ export async function handleAlink(alinkLine) {
         // 若精确匹配失败，尝试模糊搜索
         if (!recipeId) {
           try {
-            const escaped = completionKey.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+            const escaped = completionKey.replace(/[%_\\]/g, (ch: any) => `\\${ch}`);
             const row = rawDb
               .prepare(
                 "SELECT id FROM knowledge_entries WHERE (trigger LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\') AND lifecycle = 'active' LIMIT 1"

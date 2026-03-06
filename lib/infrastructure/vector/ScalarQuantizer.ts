@@ -25,7 +25,7 @@ export class ScalarQuantizer {
   /**
    * @param {number} dimension 向量维度
    */
-  constructor(dimension) {
+  constructor(dimension: any) {
     this.#dimension = dimension;
     this.#mins = new Float32Array(dimension);
     this.#maxs = new Float32Array(dimension);
@@ -44,7 +44,7 @@ export class ScalarQuantizer {
    * 训练量化器 — 从一批向量中统计 per-dimension min/max
    * @param {Array<Float32Array|number[]>} vectors 训练集 (建议 ≥ 100 条)
    */
-  train(vectors) {
+  train(vectors: any) {
     if (!vectors || vectors.length === 0) {
       throw new Error('ScalarQuantizer.train() requires at least 1 vector');
     }
@@ -83,7 +83,7 @@ export class ScalarQuantizer {
    * @param {Float32Array|number[]} vector
    * @returns {Uint8Array}
    */
-  encode(vector) {
+  encode(vector: any) {
     if (!this.#trained) {
       throw new Error('ScalarQuantizer not trained. Call train() first.');
     }
@@ -108,8 +108,8 @@ export class ScalarQuantizer {
    * @param {Array<Float32Array|number[]>} vectors
    * @returns {Uint8Array[]}
    */
-  encodeBatch(vectors) {
-    return vectors.map((v) => this.encode(v));
+  encodeBatch(vectors: any) {
+    return vectors.map((v: any) => this.encode(v));
   }
 
   /**
@@ -117,7 +117,7 @@ export class ScalarQuantizer {
    * @param {Uint8Array} quantized
    * @returns {Float32Array}
    */
-  decode(quantized) {
+  decode(quantized: any) {
     if (!this.#trained) {
       throw new Error('ScalarQuantizer not trained.');
     }
@@ -142,7 +142,7 @@ export class ScalarQuantizer {
    * @param {Uint8Array} b
    * @returns {number} 距离值 (越小越相似)
    */
-  distance(a, b) {
+  distance(a: any, b: any) {
     const dim = this.#dimension;
     let sum = 0;
     for (let i = 0; i < dim; i++) {
@@ -163,7 +163,7 @@ export class ScalarQuantizer {
    * @param {Float32Array|number[]} originalB
    * @returns {{ coarse: number, fine: number }}
    */
-  hybridDistance(quantizedA, originalA, quantizedB, originalB) {
+  hybridDistance(quantizedA: any, originalA: any, quantizedB: any, originalB: any) {
     return {
       coarse: this.distance(quantizedA, quantizedB),
       fine: ScalarQuantizer.#cosineDistanceFloat(originalA, originalB),
@@ -176,7 +176,7 @@ export class ScalarQuantizer {
    * @param {Float32Array|number[]} b
    * @returns {number}
    */
-  static #cosineDistanceFloat(a, b) {
+  static #cosineDistanceFloat(a: any, b: any) {
     if (!a || !b || a.length === 0) {
       return 1;
     }
@@ -210,7 +210,7 @@ export class ScalarQuantizer {
    * @param {{ dimension: number, mins: number[], maxs: number[] }} data
    * @returns {ScalarQuantizer}
    */
-  static deserialize(data) {
+  static deserialize(data: any) {
     const q = new ScalarQuantizer(data.dimension);
     q.#mins = new Float32Array(data.mins);
     q.#maxs = new Float32Array(data.maxs);

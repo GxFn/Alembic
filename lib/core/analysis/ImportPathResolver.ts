@@ -25,7 +25,7 @@ export class ImportPathResolver {
    * @param {string} projectRoot 项目根目录
    * @param {string[]} allFiles 项目内所有文件的相对路径
    */
-  constructor(projectRoot, allFiles) {
+  constructor(projectRoot: any, allFiles: any) {
     this.projectRoot = projectRoot;
     /** @type {Map<string, string>} normalizedPath → actualFilePath */
     this.fileIndex = new Map();
@@ -69,7 +69,7 @@ export class ImportPathResolver {
    * @param {string} projectRoot
    * @private
    */
-  _loadTsconfigPaths(projectRoot) {
+  _loadTsconfigPaths(projectRoot: any) {
     const candidates = ['tsconfig.json', 'tsconfig.app.json', 'jsconfig.json'];
     for (const name of candidates) {
       try {
@@ -120,7 +120,7 @@ export class ImportPathResolver {
    * @param {string} importerFile 当前文件路径 (相对路径)
    * @returns {string|null} 解析后的文件路径 (相对) 或 null (外部依赖)
    */
-  resolve(importPath, importerFile) {
+  resolve(importPath: any, importerFile: any) {
     const pathStr = String(importPath);
 
     // 1. 跳过外部依赖 (先检查 alias，再判断外部)
@@ -163,7 +163,7 @@ export class ImportPathResolver {
    * @returns {string|null}
    * @private
    */
-  _resolveAlias(importPath) {
+  _resolveAlias(importPath: any) {
     for (const { prefix, targets } of this.pathAliases) {
       if (importPath === prefix || importPath.startsWith(`${prefix}/`)) {
         const remainder = importPath === prefix ? '' : importPath.slice(prefix.length + 1);
@@ -183,7 +183,7 @@ export class ImportPathResolver {
    * @param {string} importPath
    * @returns {boolean}
    */
-  _isExternal(importPath) {
+  _isExternal(importPath: any) {
     // 相对路径不是外部
     if (importPath.startsWith('.') || importPath.startsWith('/')) {
       return false;

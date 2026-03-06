@@ -37,7 +37,7 @@ const SNIPPET_HEADING_RE = /##\s+Snippet\s*\/\s*Code\s+Reference/i;
 const USAGE_HEADING_RE = /##\s+AI\s+Context\s*\/\s*Usage\s+Guide/i;
 const FENCED_CODE_RE = /```(\w*)\r?\n([\s\S]*?)```/;
 
-function findProjectRoot(startDir) {
+function findProjectRoot(startDir: any) {
   let current = startDir;
   while (current && current !== path.dirname(current)) {
     const candidate = path.join(current, 'AutoSnippet', 'AutoSnippet.boxspec.json');
@@ -49,7 +49,7 @@ function findProjectRoot(startDir) {
   return null;
 }
 
-function readAllMarkdownFiles(dir) {
+function readAllMarkdownFiles(dir: any) {
   const results: string[] = [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
@@ -63,7 +63,7 @@ function readAllMarkdownFiles(dir) {
   return results;
 }
 
-function parseFrontmatter(text) {
+function parseFrontmatter(text: any) {
   const out: Record<string, any> = {};
   const match = text.match(FRONTMATTER_RE);
   if (!match || !match[1]) {
@@ -105,7 +105,7 @@ function parseFrontmatter(text) {
   return out;
 }
 
-function parseInlineArray(str) {
+function parseInlineArray(str: any) {
   try {
     const parsed = JSON.parse(str.replace(/'/g, '"'));
     return Array.isArray(parsed) ? parsed : [String(parsed)];
@@ -114,7 +114,7 @@ function parseInlineArray(str) {
   }
 }
 
-function normalizeValue(value) {
+function normalizeValue(value: any) {
   if (value == null) {
     return '';
   }
@@ -131,7 +131,7 @@ function normalizeValue(value) {
   return trimmed;
 }
 
-function toArray(value) {
+function toArray(value: any) {
   if (Array.isArray(value)) {
     return value;
   }
@@ -141,7 +141,7 @@ function toArray(value) {
   return [String(value)];
 }
 
-function auditRecipe(filePath, content) {
+function auditRecipe(filePath: any, content: any) {
   const issues: any[] = [];
   const fm: any = parseFrontmatter(content);
   const body = content.replace(FRONTMATTER_RE, '');

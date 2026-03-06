@@ -40,7 +40,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
     return 'Python (pip/poetry/pdm)';
   }
 
-  async detect(projectRoot) {
+  async detect(projectRoot: any) {
     let confidence = 0;
     const reasons: any[] = [];
 
@@ -81,7 +81,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
     };
   }
 
-  async load(projectRoot) {
+  async load(projectRoot: any) {
     this.#projectRoot = projectRoot;
     this.#targets = [];
     this.#depGraph = { nodes: [], edges: [] };
@@ -132,7 +132,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
     return this.#targets;
   }
 
-  async getTargetFiles(target) {
+  async getTargetFiles(target: any) {
     const targetPath =
       typeof target === 'string'
         ? this.#targets.find((t) => t.name === target)?.path || this.#projectRoot
@@ -153,7 +153,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
 
   // ── 内部实现 ──
 
-  #discoverPackages(projectRoot, pyproject) {
+  #discoverPackages(projectRoot: any, pyproject: any) {
     const packages: { name: string; path: string; isTest: boolean }[] = [];
 
     // src/ 布局优先
@@ -203,7 +203,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
     return packages;
   }
 
-  #detectFramework(projectRoot, pyproject) {
+  #detectFramework(projectRoot: any, pyproject: any) {
     const deps = this.#extractDependencyNames(projectRoot, pyproject);
 
     if (deps.has('django')) {
@@ -236,7 +236,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
     return null;
   }
 
-  #extractDependencyNames(projectRoot, pyproject) {
+  #extractDependencyNames(projectRoot: any, pyproject: any) {
     const names = new Set();
 
     // From pyproject.toml
@@ -277,7 +277,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
     return names;
   }
 
-  #parseDependencies(projectRoot, pyproject) {
+  #parseDependencies(projectRoot: any, pyproject: any) {
     const names = this.#extractDependencyNames(projectRoot, pyproject);
     const rootTarget = this.#targets[0]?.name;
     if (!rootTarget) {
@@ -289,7 +289,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  #collectPyFiles(dir, rootDir, files, depth = 0) {
+  #collectPyFiles(dir: any, rootDir: any, files: any, depth = 0) {
     if (depth > 15) {
       return;
     }
@@ -324,7 +324,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
    * 简易 TOML 解析器 — 仅提取本项目需要的字段
    * 不做完整 TOML 解析, 只用正则提取关键信息
    */
-  #parsePyprojectToml(content) {
+  #parsePyprojectToml(content: any) {
     const result: { project: Record<string, any> } = { project: {} };
 
     // [project] name

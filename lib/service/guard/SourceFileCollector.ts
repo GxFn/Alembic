@@ -51,12 +51,12 @@ const SKIP_DIRS = new Set([
  * @param {number} [options.maxFiles] 最大文件数量（默认无限制）
  * @returns {Promise<string[]>} 文件路径列表
  */
-export async function collectSourceFiles(dir, options: any = {}) {
+export async function collectSourceFiles(dir: any, options: any = {}) {
   const { extensions = SOURCE_EXTS, skipDirs = SKIP_DIRS, maxFiles = Infinity } = options;
 
   const files: string[] = [];
 
-  async function walk(currentDir) {
+  async function walk(currentDir: any) {
     if (files.length >= maxFiles) {
       return;
     }
@@ -97,7 +97,7 @@ export async function collectSourceFiles(dir, options: any = {}) {
  * @param {object} options - collectSourceFiles 选项
  * @returns {Promise<Array<{path: string, content: string}>>}
  */
-export async function collectSourceFilesWithContent(dir, options: any = {}) {
+export async function collectSourceFilesWithContent(dir: any, options: any = {}) {
   const paths = await collectSourceFiles(dir, options);
   const results: any[] = [];
 
