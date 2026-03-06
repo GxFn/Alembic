@@ -72,7 +72,8 @@ AutoSnippet/
 # 测试数据库（运行时生成）
 data/
 
-# 构建产物（可选：若需提交 dist 可删此行）
+# 构建产物
+dist/
 dashboard/dist/
 
 # VSCode Extension 构建产物

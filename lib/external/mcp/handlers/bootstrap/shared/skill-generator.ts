@@ -1,0 +1,268 @@
+/**
+ * skill-generator.js — 标准化 Skill 生成 + 质量门控
+ *
+ * 内部 Agent (orchestrator.js Step 4) 和外部 Agent (dimension-complete.js)
+ * 共享相同的 Skill 内容构建和质量门控逻辑。
+ *
+ * 调用方:
+ *   - orchestrator.js (内部 Agent) — Phase 5.5 Project Skill 生成
+ *   - dimension-complete-external.js (外部 Agent) — 维度完成时 Skill 生成
+ *
+ * @module bootstrap/shared/skill-generator
+ */
+
+import Logger from '../../../../../infrastructure/logging/Logger.js';
+
+const logger = Logger.getInstance();
+
+// ── 常量 ────────────────────────────────────────────────────
+
+/** Skill 分析文本最低字符数 */
+const MIN_ANALYSIS_LENGTH = 100;
+
+/** 重复率硬拒绝阈值（全局唯一率低于此值 → 尝试去重挽救） */
+const HARD_REJECT_RATIO = 0.10;
+
+/** 连续重复块阈值（连续相同行 ≥ 此值 → AI 循环信号） */
+const CONSECUTIVE_DUPE_THRESHOLD = 8;
+
+/** 短文本结构化豁免阈值（低于此字符数的文本必须有结构化内容） */
+const STRUCTURE_CHECK_THRESHOLD = 500;
+
+// ── 质量门控 ────────────────────────────────────────────────
+
+/**
+ * 规范化行文本 — 用于去重比较
+ * 去除列表标记、编号、代码围栏、引用标记等结构性前缀，
+ * 避免 category-scan 等维度中大量结构相似但内容不同的行被误判为重复。
+ */
+function normalizeLine(line) {
+  return line
+    .trim()
+    .replace(/^[-*•]\s+/, '')       // strip list markers
+    .replace(/^\d+\.\s+/, '')       // strip numbered list
+    .replace(/^[`>]+\s*/, '')       // strip code/quote markers
+    .replace(/^#{1,3}\s+/, '')      // strip Markdown headings
+    .replace(/\(来源[:：].*?\)/g, '') // strip source annotations
+    .replace(/\s+/g, ' ')          // collapse whitespace
+    .trim();
+}
+
+/**
+ * 检测最长连续重复块长度 — AI 循环的核心特征
+ */
+function maxConsecutiveDuplicates(lines) {
+  let max = 0;
+  let current = 0;
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i] === lines[i - 1] && lines[i].length > 0) {
+      current++;
+      if (current > max) max = current;
+    } else {
+      current = 0;
+    }
+  }
+  return max;
+}
+
+/**
+ * 去除连续重复行 — 将连续 N 行相同内容压缩为 1 行
+ */
+function deduplicateConsecutive(text) {
+  const lines = text.split('\n');
+  const result = [lines[0]];
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() !== lines[i - 1].trim() || lines[i].trim().length === 0) {
+      result.push(lines[i]);
+    }
+  }
+  return result.join('\n');
+}
+
+/**
+ * 验证分析文本是否满足 Skill 生成的质量门控
+ *
+ * 门控规则:
+ *   1. 文本长度 ≥ 100 字符
+ *   2. 重复检测 (两层):
+ *      a. 连续重复块 ≥ 8 行 → AI 循环信号 → 去重后挽救
+ *      b. 规范化后全局唯一率 < 0.10 → 极端重复 → 去重后挽救
+ *   3. 短文本（<500 字符）必须包含结构化内容（标题/列表/代码块）
+ *
+ * 挽救机制: 当检测到重复时，先去除连续重复行，如果去重后文本 ≥ 100 字符则放行。
+ *
+ * @param {string} analysisText - Analyst 或外部 Agent 的分析文本
+ * @returns {{ pass: boolean, reason: string|null, deduplicatedText?: string }}
+ */
+function validateSkillQuality(analysisText) {
+  // 1. 文本过短
+  if (!analysisText || analysisText.trim().length < MIN_ANALYSIS_LENGTH) {
+    return {
+      pass: false,
+      reason: `analysisText too short (${analysisText?.trim().length || 0} chars, min ${MIN_ANALYSIS_LENGTH})`,
+    };
+  }
+
+  // 2. 重复检测 — 规范化后比较，避免结构性前缀导致误判
+  const textLines = analysisText.split('\n').filter((l) => l.trim().length > 0);
+  const normalizedLines = textLines.map(normalizeLine).filter((l) => l.length > 0);
+  const uniqueNormalized = new Set(normalizedLines);
+  const uniqueRatio = normalizedLines.length > 0 ? uniqueNormalized.size / normalizedLines.length : 1;
+
+  // 连续重复块检测（AI 循环的核心特征）
+  const maxConsDupes = maxConsecutiveDuplicates(normalizedLines);
+
+  const isRepetitive = (normalizedLines.length > 30 && uniqueRatio < HARD_REJECT_RATIO)
+    || maxConsDupes >= CONSECUTIVE_DUPE_THRESHOLD;
+
+  if (isRepetitive) {
+    // ── 挽救: 去除连续重复后重新评估 ──
+    const cleaned = deduplicateConsecutive(analysisText);
+    if (cleaned.trim().length >= MIN_ANALYSIS_LENGTH) {
+      logger.info(
+        `[SkillGenerator] Repetition detected (${uniqueNormalized.size}/${normalizedLines.length} unique, ` +
+        `ratio ${uniqueRatio.toFixed(2)}, maxConsec ${maxConsDupes}), salvaged via dedup ` +
+        `(${analysisText.length} → ${cleaned.length} chars)`
+      );
+      return { pass: true, reason: null, deduplicatedText: cleaned };
+    }
+    return {
+      pass: false,
+      reason: `repetitive content detected (${uniqueNormalized.size}/${normalizedLines.length} unique, ratio ${uniqueRatio.toFixed(2)}, maxConsec ${maxConsDupes}) — dedup salvage also too short (${cleaned.trim().length} chars)`,
+    };
+  }
+
+  // 3. 内容中不包含项目特定标记（无 Markdown 标题、列表、代码块等结构化内容）
+  const hasStructure =
+    /^#{1,3}\s.+/m.test(analysisText) ||
+    /^\d+\.\s/m.test(analysisText) ||
+    /^[-*•]\s/m.test(analysisText) ||
+    /```[\s\S]*?```/.test(analysisText) ||
+    // 补充: emoji 前缀列表 (❌/⚠️/✅/•) 和加粗标记也视为结构化内容
+    /^[-*]\s*[❌⚠️✅🔴🟡🟢•]/.test(analysisText) ||
+    /\*\*[^*]+\*\*/.test(analysisText) ||
+    // 补充: 多段落（≥3 个非空段落）视为有基本结构
+    (analysisText.split(/\n\s*\n/).filter(p => p.trim().length > 0).length >= 3);
+  if (!hasStructure && analysisText.length < STRUCTURE_CHECK_THRESHOLD) {
+    return {
+      pass: false,
+      reason: 'no structured content detected',
+    };
+  }
+
+  return { pass: true, reason: null };
+}
+
+// ── Skill 内容构建 ─────────────────────────────────────────
+
+/**
+ * 构建 Skill 的 Markdown 内容
+ *
+ * 标准化格式:
+ *   # {维度标题}
+ *   > Auto-generated by Bootstrap ({source}). Sources: N files analyzed.
+ *   ## 关键发现 (如果有)
+ *   - ...
+ *   {分析正文}
+ *   ## Referenced Files (如果有)
+ *   - `file1`
+ *
+ * @param {object} dim 维度定义 { id, label }
+ * @param {string} analysisText 分析报告全文
+ * @param {string[]} [referencedFiles=[]] 引用的文件路径列表
+ * @param {string[]} [keyFindings=[]] 关键发现摘要
+ * @param {string} [source='bootstrap'] 来源标签 (bootstrap-v3 / external-agent-bootstrap)
+ * @returns {string} - Skill Markdown 内容
+ */
+function buildSkillContent(dim, analysisText, referencedFiles: any[] = [], keyFindings: any[] = [], source = 'bootstrap') {
+  const parts = [];
+
+  // Header
+  parts.push(`# ${dim.label || dim.id}`);
+  parts.push('');
+  parts.push(`> Auto-generated by Bootstrap (${source}). Sources: ${referencedFiles.length} files analyzed.`);
+  parts.push('');
+
+  // Key findings 摘要
+  if (keyFindings.length > 0) {
+    parts.push('## 关键发现');
+    parts.push('');
+    for (const finding of keyFindings) {
+      parts.push(`- ${finding}`);
+    }
+    parts.push('');
+  }
+
+  // 主体分析
+  parts.push(analysisText);
+
+  // 引用文件
+  if (referencedFiles.length > 0) {
+    parts.push('');
+    parts.push('## Referenced Files');
+    parts.push('');
+    for (const file of referencedFiles.slice(0, 20)) {
+      parts.push(`- \`${file}\``);
+    }
+  }
+
+  return parts.filter((p) => p !== undefined).join('\n');
+}
+
+// ── Skill 生成 ─────────────────────────────────────────────
+
+/**
+ * generateSkill — 标准化 Skill 生成入口
+ *
+ * 执行流程: 质量门控 → 内容构建 → createSkill 调用
+ *
+ * @param {object} ctx - { container, logger }
+ * @param {object} dim 维度定义 { id, label, skillWorthy, skillMeta }
+ * @param {string} analysisText 分析报告全文
+ * @param {string[]} [referencedFiles=[]] 引用的文件
+ * @param {string[]} [keyFindings=[]] 关键发现
+ * @param {string} [source='bootstrap'] 来源标签
+ * @returns {Promise<{ success: boolean, skillName: string, error?: string }>}
+ */
+export async function generateSkill(ctx, dim, analysisText, referencedFiles: any[] = [], keyFindings: any[] = [], source = 'bootstrap') {
+  const skillName = dim.skillMeta?.name || `project-${dim.id}`;
+
+  // 1. 质量门控
+  const validation = validateSkillQuality(analysisText);
+  if (!validation.pass) {
+    logger.warn(`[SkillGenerator] Skill "${dim.id}" skipped — ${validation.reason}`);
+    return { success: false, skillName, error: validation.reason };
+  }
+
+  // 1.5. 如果触发了去重挽救，使用清理后的文本
+  const effectiveText = validation.deduplicatedText || analysisText;
+
+  // 2. 内容构建
+  const skillContent = buildSkillContent(dim, effectiveText, referencedFiles, keyFindings, source);
+
+  // 3. 创建 Skill
+  try {
+    const { createSkill } = await import('../../skill.js');
+    const skillDescription = dim.skillMeta?.description || `Auto-generated skill for ${dim.label}`;
+
+    const result = createSkill(ctx, {
+      name: skillName,
+      description: skillDescription,
+      content: skillContent,
+      overwrite: true,
+      createdBy: source,
+    });
+
+    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+    if (parsed?.success) {
+      logger.info(`[SkillGenerator] Skill "${skillName}" created for "${dim.id}" (${source})`);
+      return { success: true, skillName };
+    }
+
+    const errorMsg = parsed?.error?.message || 'createSkill returned failure';
+    throw new Error(errorMsg);
+  } catch (e: any) {
+    logger.warn(`[SkillGenerator] Skill generation failed for "${dim.id}": ${e.message}`);
+    return { success: false, skillName, error: e.message };
+  }
+}
