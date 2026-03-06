@@ -986,7 +986,7 @@ export const en: DeepString<typeof zh> = {
     // Component card bullets
     bootstrapBullet1: '14 dimensions (7 universal + 7 language), auto-activated by lang/framework',
     bootstrapBullet2: 'Dual-path: Analyst/Producer AI pipeline or IDE Agent + MCP',
-    bootstrapBullet3: 'Tree-sitter 11-lang AST + 8 Discoverers + CallGraph, incremental diff rescan',
+    bootstrapBullet3: 'Auto by-products: Repo Wiki + 4 Project Skills + Phase 6 AI refinement',
     candidatesBullet1: 'V3 format 16+ required fields, Reasoning strong validation',
     candidatesBullet2: 'Jaccard 0.85 dedup + strict boundary: Agent can only submit',
     candidatesBullet3: 'Sources: AI scan / Cursor / clipboard / Dashboard, full lifecycle mgmt',
@@ -994,7 +994,7 @@ export const en: DeepString<typeof zh> = {
     recipeBullet2: '<code class="bg-blue-100 px-1 rounded">kind=rule</code> auto-becomes Guard rule: knowledge→standard→detection loop',
     recipeBullet3: '.md = single source of truth, <code class="bg-blue-100 px-1 rounded">asd sync</code> incremental → DB',
     chatAgentCompBullet1: 'Unified AgentRuntime + 4 strategies + CoALA (Perceive→Memory→Reason→Act)',
-    chatAgentCompBullet2: '3-tier memory + 3-level context compression + 15+ model adapters',
+    chatAgentCompBullet2: '3-tier memory + 3-level context compression + 5-provider auto-fallback',
     chatAgentCompBullet3: 'AgentRouter 5-level cascade: manual→channel→keyword→LLM→default chat',
     searchPipelineBullet1: 'Inverted index → Cross-Encoder AI rerank → E-E-A-T coarse → 6-signal fine rank',
     searchPipelineBullet2: 'Custom CJK/English BM25 tokenizer + session context-aware reranking',

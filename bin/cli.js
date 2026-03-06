@@ -320,8 +320,10 @@ program
   .command('search <query>')
   .description('搜索知识库')
   .option('-t, --type <type>', '搜索类型: all, recipe, solution, rule', 'all')
-  .option('-m, --mode <mode>', '搜索模式: keyword, bm25, semantic', 'bm25')
+  .option('-m, --mode <mode>', '搜索模式: keyword, bm25, semantic, auto', 'bm25')
   .option('-l, --limit <n>', '结果数量', '10')
+  .option('-r, --rank', '启用排序管线 (CoarseRanker + MultiSignalRanker)')
+  .option('-o, --output <format>', '输出格式: text, json', 'text')
   .action(async (query, opts) => {
     try {
       const { bootstrap, container } = await initContainer();
@@ -330,12 +332,17 @@ program
         type: opts.type,
         mode: opts.mode,
         limit: parseInt(opts.limit, 10),
+        rank: opts.rank || false,
       });
 
-      if (results.items.length === 0) {
+      if (opts.output === 'json') {
+        cli.log(JSON.stringify(results, null, 2));
+      } else if (results.items.length === 0) {
         cli.log('No results found.');
       } else {
-        cli.log(`\n🔍 ${results.items.length} result(s) for "${query}"\n`);
+        const modeInfo = results.mode || opts.mode;
+        const rankInfo = results.ranked ? ', ranked' : '';
+        cli.log(`\n🔍 ${results.items.length} result(s) for "${query}" [mode: ${modeInfo}${rankInfo}]\n`);
         for (const item of results.items) {
           const badge = item.type === 'recipe' ? '📘' : item.type === 'solution' ? '💡' : '🛡️';
           const score = item.score ? ` [${(item.score * 100).toFixed(0)}%]` : '';

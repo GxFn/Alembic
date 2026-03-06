@@ -1290,25 +1290,6 @@ export const api = {
     };
   },
 
-  /** @deprecated 使用 search(query, { mode: 'semantic' }) */
-  async semanticSearch(keyword: string, limit: number = 10): Promise<any[]> {
-    const data = await this.search(keyword, { mode: 'semantic', limit });
-    return data.items.map((r: any) => ({
-      name: (r.title || r.name || '') + '.md',
-      content: r.content?.pattern || r.content?.markdown || r.content?.code || '',
-      similarity: r.score || 0,
-      metadata: { type: 'recipe', name: (r.title || r.name || '') + '.md' },
-    }));
-  },
-
-  /** @deprecated 使用 search(query, { context: {...} }) */
-  async contextAwareSearch(data: any): Promise<any> {
-    const res = await http
-      .post('/search/context-aware', data)
-      .catch(() => ({ data: { data: {} } }));
-    return res.data?.data || {};
-  },
-
   async xcodeSimulateSearch(data: any): Promise<any> {
     const res = await http
       .post('/search/xcode-simulate', data)
@@ -1349,24 +1330,6 @@ export const api = {
   /** Stub — not fully implemented */
   async insertAtSearchMark(_data: any): Promise<{ success: boolean }> {
     return { success: false };
-  },
-
-  /** @deprecated 使用 search(query, { mode: 'bm25', type: 'recipe', signal }) */
-  async searchRecipesForModal(
-    q: string,
-    signal?: AbortSignal,
-  ): Promise<{ results: Array<{ name: string; path: string; content: string; qualityScore?: number; recommendReason?: string }>; total: number }> {
-    const data = await this.search(q, { mode: 'bm25', type: 'recipe', signal });
-    return {
-      results: data.items.map((r: any) => ({
-        name: (r.title || r.name || '') + '.md',
-        path: '',
-        content: r.content,
-        qualityScore: (r.quality || {}).overall || r.qualityScore || 0,
-        recommendReason: '',
-      })),
-      total: data.total,
-    };
   },
 
   // ── Skills ──────────────────────────────────────────

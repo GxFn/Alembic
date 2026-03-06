@@ -45,8 +45,26 @@
   },
   "vector": {
     "enabled": true,
+    "adapter": "auto",
     "dimensions": 768,
-    "indexPath": "./data/vector-index"
+    "indexPath": "./data/vector-index",
+    "hnsw": {
+      "M": 16,
+      "efConstruct": 200,
+      "efSearch": 100
+    },
+    "quantize": "auto",
+    "quantizeThreshold": 3000,
+    "persistence": {
+      "format": "binary",
+      "flushIntervalMs": 2000,
+      "flushBatchSize": 100
+    },
+    "hybrid": {
+      "enabled": true,
+      "rrfK": 60,
+      "alpha": 0.5
+    }
   },
   "qualityGate": {
     "maxErrors": 0,

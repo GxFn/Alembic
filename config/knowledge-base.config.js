@@ -4,9 +4,10 @@
  */
 
 export default {
-  // Vector Database 配置
+  // Vector Database 配置 (v2: 使用内置 HNSW, 无需外部服务)
   vectorDb: {
-    type: 'milvus',
+    // 保留 Milvus 配置以兼容旧版 — 新版默认使用内置 HNSW
+    type: process.env.VECTOR_DB_TYPE || 'hnsw',
     connection: {
       uri: process.env.MILVUS_URI || 'http://localhost:19530',
       dbName: 'autosnippet',
@@ -21,15 +22,22 @@ export default {
     timeoutMs: 30000,
   },
 
-  // 索引配置
+  // 索引配置 (v2: 集成 BatchEmbedder + Chunker v2)
   indexing: {
-    batchSize: 32,
+    batchSize: 32,              // embed 每批大小
+    maxConcurrency: 2,          // embed 并行请求数
     embeddingModel: 'text-embedding-3-small', // OpenAI embedding model
     embeddingDimension: 768,
     cachePath: '.autosnippet/cache',
     enableCaching: true,
     cacheExpiry: 7 * 24 * 60 * 60, // 7 days in seconds
     maxCacheSize: 500, // Maximum number of cached embeddings
+    chunking: {
+      strategy: 'auto',         // 'auto' | 'ast' | 'section' | 'fixed' | 'whole'
+      maxChunkTokens: 512,
+      overlapTokens: 50,
+      useAST: true,             // auto 策略时启用 AST 语法感知分块
+    },
   },
 
   // 检索漏斗配置

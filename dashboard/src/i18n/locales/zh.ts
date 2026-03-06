@@ -983,7 +983,7 @@ export const zh = {
     // Component card bullets
     bootstrapBullet1: '14 维度知识提取（7 通用 + 7 语言），按语言/框架自动激活',
     bootstrapBullet2: '双路径：Analyst/Producer AI 管线 或 IDE Agent + MCP',
-    bootstrapBullet3: 'Tree-sitter 11 语言 AST + 8 Discoverer + 调用图，增量 diff 重扫',
+    bootstrapBullet3: '副产品自动生成：Repo Wiki + 4 Project Skills + Phase 6 AI 润色',
     candidatesBullet1: 'V3 格式 16+ 必填字段，Reasoning 强验证',
     candidatesBullet2: 'Jaccard 0.85 去重 + 严格权限：Agent 只能提交候选',
     candidatesBullet3: '来源：AI 扫描 / Cursor / 剪贴板 / Dashboard，完整生命周期管理',
@@ -991,7 +991,7 @@ export const zh = {
     recipeBullet2: '<code class="bg-blue-100 px-1 rounded">kind=rule</code> 自动成为 Guard 规则，知识→规范→检测闭环',
     recipeBullet3: '.md = 唯一数据源，<code class="bg-blue-100 px-1 rounded">asd sync</code> 增量同步 → DB',
     chatAgentCompBullet1: '统一 AgentRuntime + 4 策略 + CoALA（感知→记忆→推理→行动）',
-    chatAgentCompBullet2: '三层记忆 + 三级上下文压缩 + 15+ 模型适配',
+    chatAgentCompBullet2: '三层记忆 + 三级上下文压缩 + 5 Provider 自动 fallback',
     chatAgentCompBullet3: 'AgentRouter 5 级意图级联：手动→渠道→关键词→LLM→默认 chat',
     searchPipelineBullet1: '倒排索引召回 → Cross-Encoder AI 重排 → E-E-A-T 粗排 → 6 信号精排',
     searchPipelineBullet2: '自研中英文 BM25 分词 + 会话上下文感知重排',
