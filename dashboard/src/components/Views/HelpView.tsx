@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Rocket, Database, Zap, Search, Shield, Code, GitBranch, MessageSquare, Terminal, FileCode, List, ChevronDown, ChevronRight, Layers, RefreshCw, ArrowRightLeft, BarChart3, Network, MonitorSmartphone, Lock } from 'lucide-react';
+import { BookOpen, Rocket, Database, Zap, Search, Shield, Code, GitBranch, MessageSquare, Terminal, FileCode, List, ChevronDown, ChevronRight, Layers, RefreshCw, ArrowRightLeft, BarChart3, Network, MonitorSmartphone, Lock, Brain } from 'lucide-react';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
 import TokenUsageChart from '../Charts/TokenUsageChart';
@@ -87,8 +87,9 @@ const HelpView: React.FC = () => {
             <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
               <div className="bg-amber-600 text-white rounded-full w-8 h-8 flex items-center justify-center mb-3 font-bold">4</div>
               <h3 className="font-semibold text-[var(--fg-primary)] mb-2">{t('help.step4Title')}</h3>
-              <p className="text-[var(--fg-secondary)] text-sm mb-1">{t('help.step4Desc1')}</p>
-              <p className="text-[var(--fg-secondary)] text-sm">{t('help.step4Desc2')}</p>
+              <pre className="bg-amber-100/70 text-amber-900 px-3 py-2 rounded text-xs overflow-x-auto whitespace-pre-wrap break-all mb-2"><code>asd coldstart</code></pre>
+              <p className="text-[var(--fg-secondary)] text-xs">{t('help.step4Desc1')}</p>
+              <p className="text-[var(--fg-secondary)] text-xs">{t('help.step4Desc2')}</p>
             </div>
           </div>
         </Section>
@@ -128,10 +129,11 @@ const HelpView: React.FC = () => {
             </div>
           </div>
 
-          {/* 五大组件 */}
+          {/* 核心组件 — Agent 优先，知识生产管线紧邻 */}
           <div>
             <h3 className="text-lg font-semibold text-[var(--fg-primary)] mb-3">{t('help.coreComponents')}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 [&_li]:break-words">
+              {/* 1. Bootstrap — 知识生产起点 */}
               <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                 <h4 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
                   <Zap size={ICON_SIZES.lg} />
@@ -139,11 +141,12 @@ const HelpView: React.FC = () => {
                 </h4>
                 <p className="text-green-800 text-sm mb-3">{t('help.bootstrapDesc')}</p>
                 <ul className="text-green-700 text-xs space-y-1 list-disc list-inside">
-                  <li>{t('help.bootstrapBullet1')}</li>
-                  <li>{t('help.bootstrapBullet2')}</li>
+                  <li dangerouslySetInnerHTML={{ __html: t('help.bootstrapBullet1') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.bootstrapBullet2') }} />
                   <li dangerouslySetInnerHTML={{ __html: t('help.bootstrapBullet3') }} />
                 </ul>
               </div>
+              {/* 2. Candidates — 知识生产中间态 */}
               <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
                 <h4 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
                   <List size={ICON_SIZES.lg} />
@@ -151,11 +154,12 @@ const HelpView: React.FC = () => {
                 </h4>
                 <p className="text-purple-800 text-sm mb-3">{t('help.candidatesDesc')}</p>
                 <ul className="text-purple-700 text-xs space-y-1 list-disc list-inside">
-                  <li>{t('help.candidatesBullet1')}</li>
-                  <li>{t('help.candidatesBullet2')}</li>
-                  <li>{t('help.candidatesBullet3')}</li>
+                  <li dangerouslySetInnerHTML={{ __html: t('help.candidatesBullet1') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.candidatesBullet2') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.candidatesBullet3') }} />
                 </ul>
               </div>
+              {/* 3. Recipe — 知识生产终态 */}
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                 <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
                   <FileCode size={ICON_SIZES.lg} />
@@ -164,10 +168,11 @@ const HelpView: React.FC = () => {
                 <p className="text-blue-800 text-sm mb-3">{t('help.recipeDesc')}</p>
                 <ul className="text-blue-700 text-xs space-y-1 list-disc list-inside">
                   <li dangerouslySetInnerHTML={{ __html: t('help.recipeBullet1') }} />
-                  <li>{t('help.recipeBullet2')}</li>
+                  <li dangerouslySetInnerHTML={{ __html: t('help.recipeBullet2') }} />
                   <li dangerouslySetInnerHTML={{ __html: t('help.recipeBullet3') }} />
                 </ul>
               </div>
+              {/* 5. Agent Runtime */}
               <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
                 <h4 className="font-semibold text-indigo-900 mb-2 flex items-center gap-2">
                   <ArrowRightLeft size={ICON_SIZES.lg} />
@@ -175,11 +180,12 @@ const HelpView: React.FC = () => {
                 </h4>
                 <p className="text-indigo-800 text-sm mb-3">{t('help.chatAgentDesc')}</p>
                 <ul className="text-indigo-700 text-xs space-y-1 list-disc list-inside">
-                  <li>{t('help.chatAgentCompBullet1')}</li>
-                  <li>{t('help.chatAgentCompBullet2')}</li>
-                  <li>{t('help.chatAgentCompBullet3')}</li>
+                  <li dangerouslySetInnerHTML={{ __html: t('help.chatAgentCompBullet1') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.chatAgentCompBullet2') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.chatAgentCompBullet3') }} />
                 </ul>
               </div>
+              {/* 6. Search Pipeline */}
               <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
                 <h4 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
                   <Search size={ICON_SIZES.lg} />
@@ -187,23 +193,12 @@ const HelpView: React.FC = () => {
                 </h4>
                 <p className="text-amber-800 text-sm mb-3">{t('help.searchPipelineDesc')}</p>
                 <ul className="text-amber-700 text-xs space-y-1 list-disc list-inside">
-                  <li>{t('help.searchPipelineBullet1')}</li>
-                  <li>{t('help.searchPipelineBullet2')}</li>
-                  <li>{t('help.searchPipelineBullet3')}</li>
+                  <li dangerouslySetInnerHTML={{ __html: t('help.searchPipelineBullet1') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.searchPipelineBullet2') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.searchPipelineBullet3') }} />
                 </ul>
               </div>
-              <div className="bg-rose-50 rounded-lg p-4 border border-rose-200">
-                <h4 className="font-semibold text-rose-900 mb-2 flex items-center gap-2">
-                  <Shield size={ICON_SIZES.lg} />
-                  {t('help.guardLabel')}
-                </h4>
-                <p className="text-rose-800 text-sm mb-3">{t('help.guardDesc')}</p>
-                <ul className="text-rose-700 text-xs space-y-1 list-disc list-inside">
-                  <li>{t('help.guardCompBullet1')}</li>
-                  <li dangerouslySetInnerHTML={{ __html: t('help.guardCompBullet2') }} />
-                  <li dangerouslySetInnerHTML={{ __html: t('help.guardCompBullet3') }} />
-                </ul>
-              </div>
+              {/* 6. TaskGraph */}
               <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
                 <h4 className="font-semibold text-cyan-900 mb-2 flex items-center gap-2">
                   <Network size={ICON_SIZES.lg} />
@@ -211,11 +206,25 @@ const HelpView: React.FC = () => {
                 </h4>
                 <p className="text-cyan-800 text-sm mb-3">{t('help.taskGraphDesc')}</p>
                 <ul className="text-cyan-700 text-xs space-y-1 list-disc list-inside">
-                  <li>{t('help.taskGraphBullet1')}</li>
-                  <li>{t('help.taskGraphBullet2')}</li>
+                  <li dangerouslySetInnerHTML={{ __html: t('help.taskGraphBullet1') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.taskGraphBullet2') }} />
                   <li dangerouslySetInnerHTML={{ __html: t('help.taskGraphBullet3') }} />
                 </ul>
               </div>
+              {/* 7. Guard */}
+              <div className="bg-rose-50 rounded-lg p-4 border border-rose-200">
+                <h4 className="font-semibold text-rose-900 mb-2 flex items-center gap-2">
+                  <Shield size={ICON_SIZES.lg} />
+                  {t('help.guardLabel')}
+                </h4>
+                <p className="text-rose-800 text-sm mb-3">{t('help.guardDesc')}</p>
+                <ul className="text-rose-700 text-xs space-y-1 list-disc list-inside">
+                  <li dangerouslySetInnerHTML={{ __html: t('help.guardCompBullet1') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.guardCompBullet2') }} />
+                  <li dangerouslySetInnerHTML={{ __html: t('help.guardCompBullet3') }} />
+                </ul>
+              </div>
+              {/* 8. IDE Integration */}
               <div className="bg-teal-50 rounded-lg p-4 border border-teal-200">
                 <h4 className="font-semibold text-teal-900 mb-2 flex items-center gap-2">
                   <MonitorSmartphone size={ICON_SIZES.lg} />
@@ -228,6 +237,7 @@ const HelpView: React.FC = () => {
                   <li dangerouslySetInnerHTML={{ __html: t('help.ideIntegrationBullet3') }} />
                 </ul>
               </div>
+              {/* 9. Security */}
               <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
                 <h4 className="font-semibold text-orange-900 mb-2 flex items-center gap-2">
                   <Lock size={ICON_SIZES.lg} />
@@ -301,6 +311,109 @@ const HelpView: React.FC = () => {
                 <span>→</span>
                 <span className="italic">{t('help.loopStep1')}</span>
                 <span className="inline-block w-8 h-px bg-blue-400/50" />
+              </div>
+            </div>
+          </div>
+        </Section>
+
+        {/* Agent 架构 */}
+        <Section id="agent-arch" title={t('help.agentArchTitle')} icon={<Brain size={ICON_SIZES.xl} className="text-blue-600" />} isExpanded={expandedSections.has('agent-arch')} onToggle={toggleSection}>
+          <p className="text-[var(--fg-secondary)] text-sm mb-5">{t('help.agentArchDesc')}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {/* Preset Modes */}
+            <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+                  <Layers size={ICON_SIZES.lg} className="text-indigo-600" />
+                </div>
+                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.agentArchPresetTitle')}</h3>
+              </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.agentArchPresetDesc')}</p>
+              <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetChat') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetInsight') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetLark') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchPresetRemoteExec') }} />
+              </ul>
+            </div>
+            {/* Strategies */}
+            <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                  <GitBranch size={ICON_SIZES.lg} className="text-emerald-600" />
+                </div>
+                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.agentArchStrategyTitle')}</h3>
+              </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.agentArchStrategyDesc')}</p>
+              <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchStrategySingle') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchStrategyPipeline') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchStrategyFanOut') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchStrategyAdaptive') }} />
+              </ul>
+            </div>
+            {/* Capabilities */}
+            <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                  <Zap size={ICON_SIZES.lg} className="text-blue-600" />
+                </div>
+                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.agentArchCapTitle')}</h3>
+              </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.agentArchCapDesc')}</p>
+              <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchCapConversation') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchCapCodeAnalysis') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchCapKnowledgeProd') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchCapScanProd') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchCapSystem') }} />
+              </ul>
+            </div>
+            {/* Memory */}
+            <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
+                  <Database size={ICON_SIZES.lg} className="text-purple-600" />
+                </div>
+                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.agentArchMemoryTitle')}</h3>
+              </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.agentArchMemoryDesc')}</p>
+              <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchMemoryWorking') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchMemorySession') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchMemoryPersistent') }} />
+              </ul>
+            </div>
+            {/* Context Management */}
+            <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                  <ArrowRightLeft size={ICON_SIZES.lg} className="text-amber-600" />
+                </div>
+                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.agentArchContextTitle')}</h3>
+              </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.agentArchContextDesc')}</p>
+              <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchContextWindow') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchContextTracker') }} />
+              </ul>
+            </div>
+            {/* Tools & Router */}
+            <div className="border border-[var(--border-default)] rounded-lg p-5 hover:shadow-lg transition-shadow">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
+                  <Terminal size={ICON_SIZES.lg} className="text-rose-600" />
+                </div>
+                <h3 className="font-semibold text-[var(--fg-primary)]">{t('help.agentArchToolsTitle')}</h3>
+              </div>
+              <p className="text-[var(--fg-secondary)] text-xs mb-3">{t('help.agentArchToolsDesc')}</p>
+              <ul className="text-[var(--fg-secondary)] text-sm space-y-2 list-disc list-inside">
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchToolsInternal') }} />
+                <li dangerouslySetInnerHTML={{ __html: t('help.agentArchToolsMcp') }} />
+              </ul>
+              <div className="mt-3 pt-3 border-t border-[var(--border-default)]">
+                <p className="text-xs font-semibold text-[var(--fg-primary)] mb-1">{t('help.agentArchRouterTitle')}</p>
+                <p className="text-xs text-[var(--fg-secondary)]">{t('help.agentArchRouterDesc')}</p>
               </div>
             </div>
           </div>
@@ -498,6 +611,7 @@ const HelpView: React.FC = () => {
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>knowledge</code></td><td className="px-3 py-2 border-b">{t('help.mcpKnowledgeDesc')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>structure</code></td><td className="px-3 py-2 border-b">{t('help.mcpStructureDesc')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>graph</code></td><td className="px-3 py-2 border-b">{t('help.mcpGraphDesc')}</td></tr>
+                  <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>call_context</code></td><td className="px-3 py-2 border-b">{t('help.mcpCallContextDesc')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>guard</code></td><td className="px-3 py-2 border-b">{t('help.mcpGuardDesc')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>submit_knowledge</code> / <code>submit_knowledge_batch</code> / <code>save_document</code></td><td className="px-3 py-2 border-b">{t('help.mcpSubmitDesc')}</td></tr>
                   <tr><td className="px-3 py-2 border-b font-medium">agent</td><td className="px-3 py-2 border-b"><code>skill</code></td><td className="px-3 py-2 border-b">{t('help.mcpSkillDesc')}</td></tr>

@@ -44,26 +44,14 @@ That's it. After you approve some candidates, they become **Recipes** — struct
 ## How It Works
 
 ```
-┌────────────┐    ┌────────────┐    ┌────────────┐    ┌────────────┐    ┌────────────┐
-│  ① Setup   │──→ │ ② Cold    │──→ │ ③ Target  │──→ │ ④ Review   │──→ │ ⑤ IDE      │
-│  asd setup │    │   Start    │    │   Scan     │    │  Dashboard │    │  Delivery  │
-└────────────┘    └────────────┘    └────────────┘    └────────────┘    └─────┬──────┘
-                                                                              │
-      ┌───────────────────────────────────────────────────────────────────────┘
-      ↓
-┌────────────┐    ┌────────────┐
-│ ⑥ AI Codes │──→ │ ⑦ New      │──→  Back to ③
-│ by Rules   │    │  Patterns  │
-└────────────┘    └────────────┘
+asd setup → asd coldstart → Dashboard review → IDE AI consumes Recipes → write code → asd ais rescan → loop
 ```
 
-1. **`asd setup`** — Creates the workspace, SQLite DB, MCP configs for your IDEs, installs the VS Code extension.
-2. **`asd coldstart`** — Scans your codebase from multiple angles (architecture, naming, error handling, etc.). Produces **Candidates** — pattern drafts for you to review.
-3. **Review in Dashboard** — Approve, edit, or reject. Approved candidates become Recipes.
-4. **IDE picks them up** — Via MCP, Cursor Rules, or Agent Skills. When AI generates code, it checks your Recipes first.
-5. **Keep going** — As you write new code, scan again. The knowledge base grows with your project.
-
-You can also scan specific modules with `asd ais <target>`. Better yet, just describe what you want in Cursor using natural language — the AI will automatically invoke the knowledge base to scan and submit patterns for you.
+1. **`asd setup`** — Creates workspace, SQLite DB, MCP configs, installs VS Code extension.
+2. **`asd coldstart`** — Multi-angle codebase scan, produces **Candidates**.
+3. **Review in Dashboard** — Approve, edit, or reject. Approved → Recipe.
+4. **IDE picks them up** — Via MCP, Cursor Rules, Agent Skills, or TaskGraph task context.
+5. **Keep going** — `asd ais <target>` for targeted scans, or describe what you want in Cursor.
 
 ## Dual Pipeline — Internal Agent & External Agent
 
@@ -81,30 +69,26 @@ Every core capability works through two fully independent pipelines. Pick whiche
 
 If no AI is available at all, a rule-based fallback still extracts basic knowledge from AST and Guard data.
 
-> **LLM quality matters.** Higher-capability models (Claude Opus/Sonnet, GPT-4o, Gemini 2.5 Pro) produce significantly better results — more accurate patterns, richer architectural insights, fewer false positives.
+> **LLM quality matters.** Higher-capability models (Claude Opus 4 / Sonnet 4, GPT-5, Gemini 3 Pro) produce significantly better results — more accurate patterns, richer architectural insights, fewer false positives.
 
-## What's in the Box
+## Dashboard
 
-**Pattern extraction** — AI reads your code, identifies reusable patterns, and structures them as Recipes with code, explanation, metadata, and usage guidelines. Supports ObjC, Swift, TypeScript, JavaScript, Python, Java, Kotlin, Go, Ruby (9 languages via Tree-sitter AST).
+Run `asd ui` to manage everything in one place:
 
-**Search** — BM25 keyword matching → semantic reranking → quality scoring → multi-signal ranking. Works in Chinese and English.
+<div align="center">
+<img src="docs/images/dashboard-help-en.png" alt="Dashboard Help" width="800" />
+</div>
 
-**Guard** — Regex and AST-based compliance rules derived from your Recipes. Run on files, modules, or the whole project. Hooks into CI with `asd guard:ci` and git pre-commit with `asd guard:staged`.
+## Features
 
-**Dashboard** — Web UI (`asd ui`) for everything: browsing Recipes, reviewing Candidates, AI chat, knowledge graph visualization, Guard reports, module explorer, project wiki generation, and LLM config.
-
-**IDE integration** — MCP server (works with Cursor, VS Code, Qoder, Trae), VS Code extension (search, directives, CodeLens, Guard), Xcode support (file watcher, auto-insertion, snippet sync).
-
-**AI providers** — Google Gemini, OpenAI, Claude, DeepSeek, Ollama (local), with auto-fallback between them. Or no AI at all — the knowledge base works without it.
-
-## Persistent Decisions & Context
-
-TaskGraph stores team decisions and task status in `.autosnippet/autosnippet.db` — AI assistants don't start from scratch every conversation.
-
-- **`autosnippet_task`** — Unified task & decision management: `prime` loads active decisions + tasks at session start; `record_decision` / `revise_decision` / `unpin_decision` persist team agreements; `create` / `claim` / `close` / `fail` / `defer` / `progress` / `decompose` for task CRUD.
-- **Auto-inject** — Every subsequent tool call carries active decisions automatically.
-
-Access via CLI `asd task`, MCP tool `autosnippet_task`, or `#asd` in VS Code Agent Mode.
+| Feature | Description |
+|---------|-------------|
+| **Pattern Extraction** | AI reads code → identifies reusable patterns → structures as Recipe. 9 languages (Tree-sitter AST) |
+| **Search** | BM25 keyword → semantic rerank → quality score → multi-signal ranking. Chinese & English |
+| **Guard** | Regex + AST compliance rules. `asd guard:ci` for CI, `asd guard:staged` for pre-commit |
+| **CallGraph** | Static call graph analysis across 8 languages. MCP `call_graph` + `call_context` |
+| **TaskGraph** | DAG task orchestration + tokenBudget-aware + persistent team decisions |
+| **AI Providers** | Gemini, OpenAI, Claude, DeepSeek, Ollama, with auto-fallback |
 
 ## IDE Support
 
@@ -172,14 +156,6 @@ Recipes are Markdown files. SQLite is a read cache. If the DB breaks, `asd sync`
 
 Code from your phone. Send messages in Lark (Feishu) → they get injected into VS Code Copilot Agent Mode → results sent back to Lark. Task notifications with IDE screenshots are pushed back automatically.
 
-```
-Phone (Lark)  →  Feishu Cloud (WSS)  →  Local API Server  →  VS Code  →  Copilot Agent Mode
-     ↑                                                                         |
-     └─────────────────────── Result notification + Screenshot ────────────────┘
-```
-
-System commands: `/help` `/status` `/queue` `/cancel` `/clear` `/ping` `/screen`
-
 See [Lark Integration Guide](docs/lark-integration.en.md) for setup instructions.
 
 ## Configuration
@@ -201,15 +177,21 @@ ASD_AI_MODEL=llama3
 ## Architecture
 
 ```
-IDE Layer          Cursor · VS Code · Trae · Qoder · Xcode · Dashboard
-                                      │
-                              MCP Server + HTTP API
-                                      │
-Service Layer      Search · Knowledge · Guard · Chat · Bootstrap · Wiki
-                                      │
-Core Layer         AST (9 lang) · KnowledgeGraph · RetrievalFunnel · QualityScorer
-                                      │
-Infrastructure     SQLite · VectorStore · EventBus · AuditLog · DI Container (40+)
+IDE Layer           Cursor · VS Code · Trae · Qoder · Xcode · Dashboard · Lark
+                                        │
+                               MCP Server (22 tools) + HTTP API
+                                        │
+Agent Layer         AgentRouter → Preset → AgentRuntime (ReAct loop)
+                    ├── Strategy: Single / Pipeline / FanOut / Adaptive
+                    ├── Capability: Conversation · CodeAnalysis · KnowledgeProduction · System
+                    ├── Policy: Budget · Safety · QualityGate
+                    └── Memory: ActiveContext → SessionStore → PersistentMemory
+                                        │
+Service Layer       Search · Knowledge · Guard · Chat · Bootstrap · Wiki · TaskGraph
+                                        │
+Core Layer          AST (9 lang) · CallGraph (8 lang) · KnowledgeGraph · RetrievalFunnel · QualityScorer
+                                        │
+Infrastructure      SQLite · VectorStore · EventBus · AuditLog · DI Container (40+) · ContextWindow
 ```
 
 ## Requirements

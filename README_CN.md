@@ -44,28 +44,14 @@ asd ui           # 打开 Dashboard 审核扫描结果
 ## 工作流
 
 ```
-┌────────────┐    ┌────────────┐    ┌────────────┐    ┌────────────┐    ┌────────────┐
-│  ① 初始化   │──→ │ ② 冷启动   │──→ │ ③ 精细扫描  │──→ │ ④ 审核    │──→ │ ⑤ IDE 交付  │
-│  asd setup │    │ coldstart  │    │  asd ais   │    │ Dashboard  │    │            │
-└────────────┘    └────────────┘    └────────────┘    └────────────┘    └─────┬──────┘
-                                                                              │
-      ┌───────────────────────────────────────────────────────────────────────┘
-      ↓
-┌────────────┐    ┌────────────┐
-│ ⑥ AI 按    │──→ │ ⑦ 新模式    │──→  回到 ③
-│ 规范生成    │    │  再沉淀     │
-└────────────┘    └────────────┘
+asd setup → asd coldstart → Dashboard 审核 → IDE AI 消费 Recipe → 写新代码 → asd ais 再扫描 → 循环
 ```
 
-整个流程是个循环：
-
 1. **`asd setup`** — 创建工作空间、SQLite 数据库、各 IDE 的 MCP 配置，安装 VS Code 扩展。
-2. **`asd coldstart`** — 从多个角度扫描代码库（架构、命名、错误处理等），生成 **Candidate** —— 等你审核的模式草稿。
-3. **在 Dashboard 审核** — 通过、编辑、或者拒绝。通过的就变成 Recipe。
-4. **IDE 自动获取** — 通过 MCP、Cursor Rules 或 Agent Skills。AI 生成代码前会先查你的 Recipe。
-5. **持续迭代** — 写了新代码再扫描一次。知识库随项目一起成长。
-
-也可以用 `asd ais <target>` 扫描特定模块。更推荐的方式是在 Cursor 里直接用自然语言描述你想要提取的模式，AI 会自动调用知识库完成扫描和提交。
+2. **`asd coldstart`** — 多角度扫描代码库，生成 **Candidate**。
+3. **Dashboard 审核** — 通过、编辑、拒绝。通过的变成 Recipe。
+4. **IDE 自动获取** — 通过 MCP、Cursor Rules、Agent Skills，或由 TaskGraph 随任务注入上下文。
+5. **持续迭代** — `asd ais <target>` 扫描特定模块，或在 Cursor 里用自然语言描述。
 
 ## 双管线 — 内部 Agent & 外部 Agent
 
@@ -83,30 +69,26 @@ asd ui           # 打开 Dashboard 审核扫描结果
 
 如果完全没有 AI，规则化降级仍能从 AST 和 Guard 数据中提取基础知识。
 
-> **LLM 质量直接影响产出效果。** 能力更强的模型（Claude Opus/Sonnet、GPT-4o、Gemini 2.5 Pro）产出更准确的模式、更丰富的架构洞察、更少的误报。
+> **LLM 质量直接影响产出效果。** 能力更强的模型（Claude Opus 4 / Sonnet 4、GPT-5、Gemini 3 Pro）产出更准确的模式、更丰富的架构洞察、更少的误报。
 
-## 都有什么
+## Dashboard
 
-**模式提取** — AI 读你的代码，识别可复用的模式，结构化为 Recipe（代码 + 说明 + 元数据 + 使用指南）。支持 ObjC、Swift、TypeScript、JavaScript、Python、Java、Kotlin、Go、Ruby，共 9 种语言（Tree-sitter AST）。
+`asd ui` 启动 Dashboard，在一个界面管理所有功能：
 
-**搜索** — BM25 关键词匹配 → 语义重排 → 质量评分 → 多信号排序。中英文都行。
+<div align="center">
+<img src="docs/images/dashboard-help.png" alt="Dashboard 使用说明" width="800" />
+</div>
 
-**Guard** — 基于 Recipe 衍生出的正则 + AST 合规规则。可以检查文件、模块、整个项目。`asd guard:ci` 接 CI，`asd guard:staged` 接 pre-commit hook。
+## 功能概览
 
-**Dashboard** — Web 管理界面（`asd ui`）：Recipe 浏览、Candidate 审核、AI 对话、知识图谱、Guard 报告、模块探查、项目 Wiki 生成、LLM 配置，都在里面。
-
-**IDE 集成** — MCP Server（Cursor、VS Code、Qoder、Trae 通用）、VS Code 扩展（搜索、指令、CodeLens、Guard）、Xcode 支持（文件监听、自动插入、Snippet 同步）。
-
-**AI Provider** — Google Gemini、OpenAI、Claude、DeepSeek、Ollama（本地），Provider 间自动 fallback。不配 AI 也能用——知识库本身不依赖它。
-
-## 持久化约定与上下文
-
-TaskGraph 把团队约定和任务状态存在 `.autosnippet/autosnippet.db` 里——AI 助手不会每次对话都从零开始。
-
-- **`autosnippet_task`** — 统一任务与决策管理：`prime` 加载活跃约定和待办任务到上下文；`record_decision` / `revise_decision` / `unpin_decision` 保存团队共识；`create` / `claim` / `close` / `fail` / `defer` / `progress` / `decompose` 管理任务。
-- **自动注入** — 后续每次工具调用自动携带活跃约定。
-
-通过 CLI `asd task`、MCP 工具 `autosnippet_task`、或 VS Code Agent Mode 里的 `#asd` 使用。
+| 功能 | 说明 |
+|------|------|
+| **模式提取** | AI 读代码 → 识别可复用模式 → 结构化为 Recipe。9 种语言（Tree-sitter AST） |
+| **搜索** | BM25 关键词 → 语义重排 → 质量评分 → 多信号排序。中英文 |
+| **Guard** | 正则 + AST 合规规则。`asd guard:ci` 接 CI，`asd guard:staged` 接 pre-commit |
+| **调用图** | 8 种语言静态调用图分析。MCP `call_graph` + `call_context` 查询 |
+| **TaskGraph** | DAG 任务编排 + tokenBudget 感知 + 团队约定持久化 |
+| **AI Provider** | Gemini、OpenAI、Claude、DeepSeek、Ollama，自动 fallback |
 
 ## IDE 支持
 
@@ -174,14 +156,6 @@ Recipe 是 Markdown 文件。SQLite 只是读缓存。数据库坏了 `asd sync`
 
 用手机写代码。在飞书发消息 → 注入 VS Code Copilot Agent Mode → 结果回传飞书。任务通知会附带 IDE 窗口截图。
 
-```
-手机 (飞书)  →  飞书云端 (WSS)  →  本地 API Server  →  VS Code  →  Copilot Agent Mode
-    ↑                                                                      |
-    └────────────────────────── 结果通知 + 截图 ──────────────────────────┘
-```
-
-系统命令：`/help` `/status` `/queue` `/cancel` `/clear` `/ping` `/screen`
-
 详见 [飞书接入指南](docs/lark-integration.md)。
 
 ## 配置
@@ -203,15 +177,21 @@ ASD_AI_MODEL=llama3
 ## 架构
 
 ```
-IDE 接入层      Cursor · VS Code · Trae · Qoder · Xcode · Dashboard
-                                    │
-                            MCP Server + HTTP API
-                                    │
-服务层          Search · Knowledge · Guard · Chat · Bootstrap · Wiki
-                                    │
-核心层          AST (9 lang) · KnowledgeGraph · RetrievalFunnel · QualityScorer
-                                    │
-基础设施        SQLite · VectorStore · EventBus · AuditLog · DI Container (40+)
+IDE 接入层       Cursor · VS Code · Trae · Qoder · Xcode · Dashboard · 飞书
+                                     │
+                            MCP Server（22 工具）+ HTTP API
+                                     │
+Agent 层         AgentRouter → Preset → AgentRuntime（ReAct 循环）
+                 ├── Strategy: Single / Pipeline / FanOut / Adaptive
+                 ├── Capability: Conversation · CodeAnalysis · KnowledgeProduction · System
+                 ├── Policy: Budget · Safety · QualityGate
+                 └── Memory: ActiveContext → SessionStore → PersistentMemory
+                                     │
+服务层           Search · Knowledge · Guard · Chat · Bootstrap · Wiki · TaskGraph
+                                     │
+核心层           AST（9 lang）· CallGraph（8 lang）· KnowledgeGraph · RetrievalFunnel · QualityScorer
+                                     │
+基础设施         SQLite · VectorStore · EventBus · AuditLog · DI Container（40+）· ContextWindow
 ```
 
 ## 系统要求
