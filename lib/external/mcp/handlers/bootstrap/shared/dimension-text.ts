@@ -18,7 +18,10 @@
  * @module bootstrap/shared/dimension-text
  */
 
-import { getRequiredFieldNames, getRequiredFieldsDescription } from '../../../../../shared/FieldSpec.js';
+import {
+  getRequiredFieldNames,
+  getRequiredFieldsDescription,
+} from '../../../../../shared/FieldSpec.js';
 
 // ═══════════════════════════════════════════════════════════
 // 提交 Schema 定义
@@ -205,7 +208,10 @@ export function buildInternalNextSteps(dimensions) {
     '4. 使用 autosnippet_skill({ operation: "load", name }) 加载自动生成的 Project Skills',
     '',
     '== 宏观维度 → Project Skills ==',
-    `宏观维度（${dimensions.filter((d) => d.skillWorthy).map((d) => d.id).join('/')}）`,
+    `宏观维度（${dimensions
+      .filter((d) => d.skillWorthy)
+      .map((d) => d.id)
+      .join('/')}）`,
     '自动生成 Project Skill 到 AutoSnippet/skills/，可通过 autosnippet_skill({ operation: "load" }) 加载。',
   ];
 }
@@ -219,7 +225,7 @@ export const BOOTSTRAP_COMPLETE_ACTIONS = [
     prompt:
       '知识库初始化完成！Cursor Rules 已自动生成到 .cursor/rules/ 目录。如果生成失败，你可以手动触发 Cursor Delivery。',
     tool: 'autosnippet_cursor_delivery',
-    auto: true,  // R4: 已自动触发，此条仅为通知
+    auto: true, // R4: 已自动触发，此条仅为通知
   },
   {
     action: 'wiki_generate',

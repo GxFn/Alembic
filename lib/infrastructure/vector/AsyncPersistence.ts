@@ -15,21 +15,14 @@
  * @module infrastructure/vector/AsyncPersistence
  */
 
-import {
-  existsSync,
-  readFileSync,
-  appendFileSync,
-  unlinkSync,
-  mkdirSync,
-} from 'node:fs';
-import { writeFile } from 'node:fs/promises';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 // ── WAL 操作类型 ──
 export const WAL_OP = Object.freeze({
   UPSERT: 1,
   REMOVE: 2,
-  CLEAR:  3,
+  CLEAR: 3,
 });
 
 /**
@@ -41,7 +34,7 @@ const CRC32_TABLE = (() => {
   for (let i = 0; i < 256; i++) {
     let crc = i;
     for (let j = 0; j < 8; j++) {
-      crc = crc & 1 ? (crc >>> 1) ^ 0xEDB88320 : crc >>> 1;
+      crc = crc & 1 ? (crc >>> 1) ^ 0xedb88320 : crc >>> 1;
     }
     table[i] = crc;
   }
@@ -55,11 +48,11 @@ const CRC32_TABLE = (() => {
  */
 function crc32(str) {
   const bytes = Buffer.from(str, 'utf-8');
-  let crc = 0xFFFFFFFF;
+  let crc = 0xffffffff;
   for (let i = 0; i < bytes.length; i++) {
-    crc = (crc >>> 8) ^ CRC32_TABLE[(crc ^ bytes[i]) & 0xFF];
+    crc = (crc >>> 8) ^ CRC32_TABLE[(crc ^ bytes[i]) & 0xff];
   }
-  return ((crc ^ 0xFFFFFFFF) >>> 0).toString(16).padStart(8, '0');
+  return ((crc ^ 0xffffffff) >>> 0).toString(16).padStart(8, '0');
 }
 
 export class AsyncPersistence {
@@ -136,7 +129,9 @@ export class AsyncPersistence {
    * @param {object} [op.m] - metadata (upsert)
    */
   appendWal(op) {
-    if (!this.#enabled) return;
+    if (!this.#enabled) {
+      return;
+    }
 
     this.#pendingOps.push(op);
     this.#writeWalEntry(op);
@@ -162,7 +157,9 @@ export class AsyncPersistence {
    * 调度 flush (debounced)
    */
   #scheduleFlush() {
-    if (this.#flushing) return;
+    if (this.#flushing) {
+      return;
+    }
 
     // 积累够多操作时立即 flush
     if (this.#pendingOps.length >= this.#flushBatchSize) {
@@ -171,20 +168,28 @@ export class AsyncPersistence {
     }
 
     // 否则 debounced
-    if (this.#flushTimer) return;
+    if (this.#flushTimer) {
+      return;
+    }
     this.#flushTimer = setTimeout(() => {
       this.#flushTimer = null;
       this.#doFlush();
     }, this.#flushIntervalMs);
-    if (this.#flushTimer?.unref) this.#flushTimer.unref();
+    if (this.#flushTimer?.unref) {
+      this.#flushTimer.unref();
+    }
   }
 
   /**
    * 执行 flush: 写入完整 .asvec + 清理 WAL
    */
   async #doFlush() {
-    if (this.#flushing) return;
-    if (this.#pendingOps.length === 0) return;
+    if (this.#flushing) {
+      return;
+    }
+    if (this.#pendingOps.length === 0) {
+      return;
+    }
 
     this.#flushing = true;
     const ops = this.#pendingOps.splice(0);
@@ -223,8 +228,12 @@ export class AsyncPersistence {
    * @returns {{ replayed: number, skipped: number }}
    */
   recover() {
-    if (!this.#enabled) return { replayed: 0, skipped: 0 };
-    if (!existsSync(this.#walPath)) return { replayed: 0, skipped: 0 };
+    if (!this.#enabled) {
+      return { replayed: 0, skipped: 0 };
+    }
+    if (!existsSync(this.#walPath)) {
+      return { replayed: 0, skipped: 0 };
+    }
 
     let replayed = 0;
     let skipped = 0;

@@ -22,7 +22,6 @@
  * @module strategies
  */
 
-import { randomUUID } from 'node:crypto';
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
 import { AgentMessage } from './AgentMessage.js';
 
@@ -32,11 +31,10 @@ import { AgentMessage } from './AgentMessage.js';
  * Strategy 基类 — 定义 Agent 如何组织工作
  */
 export class Strategy {
-  /** @param {Object} [_opts] */
-  constructor(_opts: any = {}) {}
-
   /** @type {string} */
-  get name(): string { throw new Error('Subclass must implement name'); }
+  get name(): string {
+    throw new Error('Subclass must implement name');
+  }
 
   /**
    * 执行策略
@@ -71,7 +69,9 @@ export class Strategy {
  * 等价于 Anthropic 的 "Augmented LLM" 模式。
  */
 export class SingleStrategy extends Strategy {
-  get name() { return 'single'; }
+  get name() {
+    return 'single';
+  }
 
   async execute(runtime, message, opts: any = {}) {
     return runtime.reactLoop(message.content, {
@@ -126,7 +126,9 @@ export class FanOutStrategy extends Strategy {
     this.#merge = merge || FanOutStrategy.#defaultMerge;
   }
 
-  get name() { return 'fan_out'; }
+  get name() {
+    return 'fan_out';
+  }
 
   /**
    * @param {Object} runtime
@@ -139,14 +141,21 @@ export class FanOutStrategy extends Strategy {
     const bus = AgentEventBus.getInstance();
 
     if (items.length === 0) {
-      return { reply: 'No items to process', toolCalls: [], tokenUsage: { input: 0, output: 0 }, iterations: 0 };
+      return {
+        reply: 'No items to process',
+        toolCalls: [],
+        tokenUsage: { input: 0, output: 0 },
+        iterations: 0,
+      };
     }
 
     // 按 tier 分组
     const tierGroups = this.#groupByTier(items);
     const allResults = [];
 
-    for (const [tier, tierItems] of Object.entries(tierGroups).sort(([a], [b]) => Number(a) - Number(b))) {
+    for (const [tier, tierItems] of Object.entries(tierGroups).sort(
+      ([a], [b]) => Number(a) - Number(b)
+    )) {
       const tierConfig = this.#tiers[tier] || this.#tiers[1] || { concurrency: 2 };
 
       bus.publish(AgentEvents.PROGRESS, {
@@ -183,7 +192,15 @@ export class FanOutStrategy extends Strategy {
             });
             return { id: item.id, label: item.label, status: 'completed', ...result };
           } catch (err: any) {
-            return { id: item.id, label: item.label, status: 'failed', error: err.message, reply: '', toolCalls: [], tokenUsage: { input: 0, output: 0 } };
+            return {
+              id: item.id,
+              label: item.label,
+              status: 'failed',
+              error: err.message,
+              reply: '',
+              toolCalls: [],
+              tokenUsage: { input: 0, output: 0 },
+            };
           }
         });
 
@@ -194,8 +211,8 @@ export class FanOutStrategy extends Strategy {
       bus.publish(AgentEvents.PROGRESS, {
         type: 'fan_out_tier_done',
         tier: Number(tier),
-        completed: allResults.filter(r => r.status === 'completed').length,
-        failed: allResults.filter(r => r.status === 'failed').length,
+        completed: allResults.filter((r) => r.status === 'completed').length,
+        failed: allResults.filter((r) => r.status === 'failed').length,
       });
     }
 
@@ -206,7 +223,9 @@ export class FanOutStrategy extends Strategy {
     const groups = {};
     for (const item of items) {
       const tier = item.tier || 1;
-      if (!groups[tier]) groups[tier] = [];
+      if (!groups[tier]) {
+        groups[tier] = [];
+      }
       groups[tier].push(item);
     }
     return groups;
@@ -221,15 +240,15 @@ export class FanOutStrategy extends Strategy {
   }
 
   static #defaultMerge(results) {
-    const successful = results.filter(r => r.status === 'completed');
-    const failed = results.filter(r => r.status === 'failed');
+    const successful = results.filter((r) => r.status === 'completed');
+    const failed = results.filter((r) => r.status === 'failed');
     return {
       reply: [
         `## 执行总结\n完成: ${successful.length}, 失败: ${failed.length}\n`,
-        ...successful.map(r => `### ${r.label}\n${r.reply || '(无输出)'}`),
-        ...failed.map(r => `### ${r.label} ❌\n${r.error}`),
+        ...successful.map((r) => `### ${r.label}\n${r.reply || '(无输出)'}`),
+        ...failed.map((r) => `### ${r.label} ❌\n${r.error}`),
       ].join('\n\n'),
-      toolCalls: results.flatMap(r => r.toolCalls || []),
+      toolCalls: results.flatMap((r) => r.toolCalls || []),
       tokenUsage: {
         input: results.reduce((sum, r) => sum + (r.tokenUsage?.input || 0), 0),
         output: results.reduce((sum, r) => sum + (r.tokenUsage?.output || 0), 0),
@@ -277,7 +296,9 @@ export class AdaptiveStrategy extends Strategy {
     };
   }
 
-  get name() { return 'adaptive'; }
+  get name() {
+    return 'adaptive';
+  }
 
   async execute(runtime, message, opts: any = {}) {
     const complexity = this.#assessComplexity(message, opts);
@@ -306,7 +327,9 @@ export class AdaptiveStrategy extends Strategy {
     const text = message.content.toLowerCase();
 
     // 有显式 items → fan_out
-    if (opts.items?.length > 1) return 'fan_out';
+    if (opts.items?.length > 1) {
+      return 'fan_out';
+    }
 
     // 关键词启发
     if (/冷启动|cold[\s-]?start|bootstrap|全项目|所有.*维度|all.*dimensions/i.test(text)) {
@@ -333,7 +356,9 @@ export const StrategyRegistry = {
 
   create(name, opts: any = {}) {
     const Cls = this._registry.get(name);
-    if (!Cls) throw new Error(`Unknown strategy: ${name}`);
+    if (!Cls) {
+      throw new Error(`Unknown strategy: ${name}`);
+    }
     return new Cls(opts);
   },
 

@@ -7,15 +7,15 @@
  *   code: string    → 单文件内联检查
  */
 
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
 import { envelope } from '../envelope.js';
 
 // ═══ Review 轮次追踪（模块私有） ═══════════════════
 
-const _reviewRounds = new Map();      // projectRoot → round count
-const _lastReviewPassed = new Map();  // projectRoot → boolean
+const _reviewRounds = new Map(); // projectRoot → round count
+const _lastReviewPassed = new Map(); // projectRoot → boolean
 const MAX_REVIEW_ROUNDS = 5;
 
 export async function guardCheck(ctx, args) {
@@ -94,9 +94,7 @@ export async function guardAuditFiles(ctx, args) {
 
   // 解析项目根路径（用于相对路径转绝对路径）
   const projectRoot =
-    ctx.container?.singletons?._projectRoot ||
-    process.env.ASD_PROJECT_DIR ||
-    process.cwd();
+    ctx.container?.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
 
   // 补充缺失的 content（从磁盘读取）
   // 相对路径自动转绝对路径，避免 MCP 进程 cwd 不在项目目录时读不到文件
@@ -183,7 +181,13 @@ export async function guardReview(ctx, args) {
     _lastReviewPassed.set(projectRoot, true); // 强制通过
     return envelope({
       success: true,
-      data: { passed: true, files: [], totalViolations: 0, reviewRound: round, maxRoundsReached: true },
+      data: {
+        passed: true,
+        files: [],
+        totalViolations: 0,
+        reviewRound: round,
+        maxRoundsReached: true,
+      },
       message: `⚠️ Guard review round ${round} exceeds max ${MAX_REVIEW_ROUNDS}. Force-passing. Remaining issues should be tracked as follow-up.`,
       meta: { tool: 'autosnippet_guard', mode: 'review' },
     });
@@ -196,9 +200,9 @@ export async function guardReview(ctx, args) {
   if (args.files && Array.isArray(args.files) && args.files.length > 0) {
     // files 参数: string[] — 简化版，自动读取文件内容
     filePaths = args.files
-      .map(f => typeof f === 'string' ? f : (f.path || f))
-      .map(f => path.isAbsolute(f) ? f : path.resolve(projectRoot, f))
-      .filter(f => fs.existsSync(f));
+      .map((f) => (typeof f === 'string' ? f : f.path || f))
+      .map((f) => (path.isAbsolute(f) ? f : path.resolve(projectRoot, f)))
+      .filter((f) => fs.existsSync(f));
     fileSource = 'explicit';
   } else {
     // 无参数 → 自动检测 git 变更文件
@@ -237,8 +241,8 @@ export async function guardReview(ctx, args) {
 
       const fileSummary = {
         total: violations.length,
-        errors: violations.filter(v => v.severity === 'error').length,
-        warnings: violations.filter(v => v.severity === 'warning').length,
+        errors: violations.filter((v) => v.severity === 'error').length,
+        warnings: violations.filter((v) => v.severity === 'warning').length,
       };
 
       totalViolations += violations.length;
@@ -246,7 +250,7 @@ export async function guardReview(ctx, args) {
       totalWarnings += fileSummary.warnings;
 
       // 内联 recipe 修复指南
-      const enriched = violations.map(v => {
+      const enriched = violations.map((v) => {
         const base: any = {
           ruleId: v.ruleId,
           message: v.message,
@@ -270,8 +274,10 @@ export async function guardReview(ctx, args) {
       results.push({ filePath: fp, language: lang, violations: enriched, summary: fileSummary });
     } catch (err: any) {
       results.push({
-        filePath: fp, error: `Cannot read: ${err.message}`,
-        violations: [], summary: { total: 0, errors: 0, warnings: 0 },
+        filePath: fp,
+        error: `Cannot read: ${err.message}`,
+        violations: [],
+        summary: { total: 0, errors: 0, warnings: 0 },
       });
     }
   }
@@ -292,22 +298,28 @@ export async function guardReview(ctx, args) {
     for (const r of results) {
       if (r.violations.length > 0) {
         violationsStore.appendRun({
-          filePath: r.filePath, violations: r.violations,
+          filePath: r.filePath,
+          violations: r.violations,
           summary: `guard review round ${round}: ${r.summary.errors}E ${r.summary.warnings}W`,
         });
       }
     }
-  } catch { /* optional */ }
+  } catch {
+    /* optional */
+  }
 
   // 7. 构造消息
   let message;
   if (passed) {
     message = `✅ Guard review passed (round ${round}). ${filePaths.length} file(s) checked, 0 violations.`;
   } else {
-    const violatingFiles = results.filter(r => r.violations.length > 0);
-    const details = violatingFiles.map(f =>
-      `  ${path.basename(f.filePath)}: ${f.violations.map(v => `L${v.line} ${v.ruleId}`).join(', ')}`
-    ).join('\n');
+    const violatingFiles = results.filter((r) => r.violations.length > 0);
+    const details = violatingFiles
+      .map(
+        (f) =>
+          `  ${path.basename(f.filePath)}: ${f.violations.map((v) => `L${v.line} ${v.ruleId}`).join(', ')}`
+      )
+      .join('\n');
 
     message = [
       `⚠️ Guard review round ${round}: ${totalViolations} violation(s) in ${violatingFiles.length} file(s).`,
@@ -328,7 +340,12 @@ export async function guardReview(ctx, args) {
       fileSource,
       files: results,
       totalViolations,
-      summary: { total: totalViolations, errors: totalErrors, warnings: totalWarnings, filesChecked: filePaths.length },
+      summary: {
+        total: totalViolations,
+        errors: totalErrors,
+        warnings: totalWarnings,
+        filesChecked: filePaths.length,
+      },
     },
     message,
     meta: { tool: 'autosnippet_guard', mode: 'review' },
@@ -344,16 +361,19 @@ export async function guardReview(ctx, args) {
 function _loadRuleRecipes(ctx) {
   const map = new Map();
   try {
-    const db = typeof ctx.container.get('database')?.getDb === 'function'
-      ? ctx.container.get('database').getDb()
-      : ctx.container.get('database');
+    const db =
+      typeof ctx.container.get('database')?.getDb === 'function'
+        ? ctx.container.get('database').getDb()
+        : ctx.container.get('database');
 
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(`
       SELECT id, title, doClause, dontClause, coreCode, constraints
       FROM knowledge_entries
       WHERE (kind = 'rule' OR knowledgeType = 'boundary-constraint')
         AND lifecycle = 'active'
-    `).all();
+    `)
+      .all();
 
     for (const row of rows) {
       try {
@@ -361,13 +381,27 @@ function _loadRuleRecipes(ctx) {
         const guards = constraints.guards || [];
         for (const g of guards) {
           if (g.id) {
-            map.set(g.id, { title: row.title, doClause: row.doClause, dontClause: row.dontClause, coreCode: row.coreCode });
+            map.set(g.id, {
+              title: row.title,
+              doClause: row.doClause,
+              dontClause: row.dontClause,
+              coreCode: row.coreCode,
+            });
           }
         }
-      } catch { /* skip */ }
-      map.set(row.id, { title: row.title, doClause: row.doClause, dontClause: row.dontClause, coreCode: row.coreCode });
+      } catch {
+        /* skip */
+      }
+      map.set(row.id, {
+        title: row.title,
+        doClause: row.doClause,
+        dontClause: row.dontClause,
+        coreCode: row.coreCode,
+      });
     }
-  } catch { /* DB not available */ }
+  } catch {
+    /* DB not available */
+  }
   return map;
 }
 
@@ -375,16 +409,33 @@ function _loadRuleRecipes(ctx) {
 
 function _getProjectRoot(ctx) {
   const root = ctx.container?.singletons?._projectRoot;
-  if (root) return root;
+  if (root) {
+    return root;
+  }
   return process.env.ASD_PROJECT_DIR || process.cwd();
 }
 
 const SOURCE_EXTS = new Set([
-  '.m', '.mm', '.h', '.swift',
-  '.js', '.ts', '.jsx', '.tsx',
-  '.py', '.rb', '.java', '.kt', '.go', '.rs',
-  '.c', '.cpp', '.cc', '.cs',
-  '.vue', '.svelte',
+  '.m',
+  '.mm',
+  '.h',
+  '.swift',
+  '.js',
+  '.ts',
+  '.jsx',
+  '.tsx',
+  '.py',
+  '.rb',
+  '.java',
+  '.kt',
+  '.go',
+  '.rs',
+  '.c',
+  '.cpp',
+  '.cc',
+  '.cs',
+  '.vue',
+  '.svelte',
 ]);
 
 function _detectChangedFiles(projectRoot) {
@@ -394,14 +445,17 @@ function _detectChangedFiles(projectRoot) {
       'git diff --name-only HEAD 2>/dev/null; git diff --staged --name-only 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null',
       { cwd: root, encoding: 'utf8', timeout: 5000 }
     );
-    const files = [...new Set(
-      diffOutput.split('\n')
-        .map(f => f.trim())
-        .filter(f => f && SOURCE_EXTS.has(path.extname(f).toLowerCase()))
-    )];
+    const files = [
+      ...new Set(
+        diffOutput
+          .split('\n')
+          .map((f) => f.trim())
+          .filter((f) => f && SOURCE_EXTS.has(path.extname(f).toLowerCase()))
+      ),
+    ];
     return files
-      .map(f => path.isAbsolute(f) ? f : path.resolve(root, f))
-      .filter(f => fs.existsSync(f));
+      .map((f) => (path.isAbsolute(f) ? f : path.resolve(root, f)))
+      .filter((f) => fs.existsSync(f));
   } catch {
     return [];
   }

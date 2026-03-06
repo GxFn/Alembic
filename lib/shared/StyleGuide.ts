@@ -7,7 +7,7 @@
  * @module shared/StyleGuide
  */
 
-import { V3_FIELD_SPEC, FieldLevel, VALID_KINDS } from './FieldSpec.js';
+import { FieldLevel, V3_FIELD_SPEC } from './FieldSpec.js';
 
 // ── 「项目特写」写作指南全文 ────────────────────────────────
 
@@ -42,9 +42,24 @@ export function getCursorDeliverySpec() {
 
   for (const field of V3_FIELD_SPEC) {
     // 跳过嵌套字段和非 Cursor 交付字段容器
-    if (field.name.includes('.')) continue;
-    if (['content', 'reasoning', 'title', 'description', 'headers',
-         'category', 'language', 'knowledgeType', 'usageGuide'].includes(field.name)) continue;
+    if (field.name.includes('.')) {
+      continue;
+    }
+    if (
+      [
+        'content',
+        'reasoning',
+        'title',
+        'description',
+        'headers',
+        'category',
+        'language',
+        'knowledgeType',
+        'usageGuide',
+      ].includes(field.name)
+    ) {
+      continue;
+    }
 
     if (field.level === FieldLevel.REQUIRED) {
       required.push(`- ${field.name}: ${field.rule}`);

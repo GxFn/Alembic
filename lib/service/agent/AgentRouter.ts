@@ -22,7 +22,7 @@
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
-import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
+import { AgentEventBus } from './AgentEventBus.js';
 import { Channel } from './AgentMessage.js';
 
 /**
@@ -53,7 +53,7 @@ const KEYWORD_ROUTES = [
   {
     preset: PresetName.REMOTE_EXEC,
     keywords: [
-      /^[>$]\s*/,  // 以 > 或 $ 开头 = 终端命令
+      /^[>$]\s*/, // 以 > 或 $ 开头 = 终端命令
       /运行命令|执行命令|run.*command|exec.*command/i,
     ],
   },
@@ -71,7 +71,8 @@ const ROUTE_CLASSIFICATION_SCHEMA = {
       preset: {
         type: 'string',
         enum: ['chat', 'insight', 'lark', 'remote-exec'],
-        description: 'The preset to route to. chat=conversation, insight=code analysis and knowledge extraction, lark=Lark knowledge management, remote-exec=terminal commands',
+        description:
+          'The preset to route to. chat=conversation, insight=code analysis and knowledge extraction, lark=Lark knowledge management, remote-exec=terminal commands',
       },
       confidence: {
         type: 'number',
@@ -131,23 +132,31 @@ export class AgentRouter {
     // 2. 渠道特征路由
     if (!preset) {
       preset = this.#matchChannel(message);
-      if (preset) this.#logger.info(`[AgentRouter] Channel match → ${preset}`);
+      if (preset) {
+        this.#logger.info(`[AgentRouter] Channel match → ${preset}`);
+      }
     }
 
     // 3. 关键词匹配
     if (!preset) {
       preset = this.#matchKeyword(message.content);
-      if (preset) this.#logger.info(`[AgentRouter] Keyword match → ${preset}`);
+      if (preset) {
+        this.#logger.info(`[AgentRouter] Keyword match → ${preset}`);
+      }
     }
 
     // 4. LLM 分类
     if (!preset && this.#aiProvider) {
       preset = await this.#classifyWithLLM(message.content);
-      if (preset) this.#logger.info(`[AgentRouter] LLM classification → ${preset}`);
+      if (preset) {
+        this.#logger.info(`[AgentRouter] LLM classification → ${preset}`);
+      }
     }
 
     // 5. 默认 → chat
-    if (!preset) preset = PresetName.CHAT;
+    if (!preset) {
+      preset = PresetName.CHAT;
+    }
 
     // 执行
     if (!this.#executor) {
@@ -167,9 +176,15 @@ export class AgentRouter {
    */
   async classify(message) {
     let preset = message.metadata?.mode;
-    if (!preset) preset = this.#matchChannel(message);
-    if (!preset) preset = this.#matchKeyword(message.content);
-    if (!preset && this.#aiProvider) preset = await this.#classifyWithLLM(message.content);
+    if (!preset) {
+      preset = this.#matchChannel(message);
+    }
+    if (!preset) {
+      preset = this.#matchKeyword(message.content);
+    }
+    if (!preset && this.#aiProvider) {
+      preset = await this.#classifyWithLLM(message.content);
+    }
     return preset || PresetName.CHAT;
   }
 
@@ -178,13 +193,15 @@ export class AgentRouter {
   /**
    * 渠道特征路由
    * 飞书消息默认 → lark preset (知识管理对话)
-   * 飞书终端命令 (> 开头) → remote-exec    
+   * 飞书终端命令 (> 开头) → remote-exec
    */
   #matchChannel(message) {
     if (message.channel === Channel.LARK) {
       const text = message.content.trim();
       // 飞书消息以 > 或 $ 开头 → 终端命令
-      if (/^[>$]\s*/.test(text)) return PresetName.REMOTE_EXEC;
+      if (/^[>$]\s*/.test(text)) {
+        return PresetName.REMOTE_EXEC;
+      }
       // 默认走 lark preset (知识管理对话)
       return PresetName.LARK;
     }
@@ -194,7 +211,9 @@ export class AgentRouter {
   #matchKeyword(prompt) {
     for (const route of KEYWORD_ROUTES) {
       for (const re of route.keywords) {
-        if (re.test(prompt)) return route.preset;
+        if (re.test(prompt)) {
+          return route.preset;
+        }
       }
     }
     return null;
@@ -207,8 +226,9 @@ export class AgentRouter {
         {
           messages: [],
           toolSchemas: [ROUTE_CLASSIFICATION_SCHEMA],
-        toolChoice: 'required',
-          systemPrompt: 'You classify user intents for an AI coding assistant. Respond by calling the classify_intent function.',
+          toolChoice: 'required',
+          systemPrompt:
+            'You classify user intents for an AI coding assistant. Respond by calling the classify_intent function.',
           temperature: 0,
           maxTokens: 200,
         }
@@ -216,7 +236,9 @@ export class AgentRouter {
 
       if (result.functionCalls?.[0]?.args?.preset) {
         const classified = result.functionCalls[0].args;
-        if (classified.confidence > 0.6) return classified.preset;
+        if (classified.confidence > 0.6) {
+          return classified.preset;
+        }
       }
     } catch (err: any) {
       this.#logger.warn(`[AgentRouter] LLM classification failed: ${err.message}`);

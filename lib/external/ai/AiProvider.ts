@@ -38,7 +38,10 @@ export class AiProvider {
     this._circuitCooldownMs = 30_000; // 初始冷却 30 秒
 
     // ── Provider 级全局并发闸门 + 429 冷却窗 ──
-    this._maxConcurrency = Math.max(1, Number(config.maxConcurrency || process.env.ASD_AI_MAX_CONCURRENCY || 4));
+    this._maxConcurrency = Math.max(
+      1,
+      Number(config.maxConcurrency || process.env.ASD_AI_MAX_CONCURRENCY || 4)
+    );
     this._activeRequests = 0;
     this._requestQueue = [];
     this._rateLimitedUntil = 0;
@@ -161,7 +164,10 @@ export class AiProvider {
    * @param {number} [opts.maxTokens=8192]
    * @returns {Promise<{text: string|null, functionCalls: Array<{id: string, name: string, args: object}>|null}>}
    */
-  async chatWithTools(prompt: any, opts: any = {}): Promise<{ text: string | null; functionCalls: any[] | null }> {
+  async chatWithTools(
+    prompt: any,
+    opts: any = {}
+  ): Promise<{ text: string | null; functionCalls: any[] | null }> {
     // 默认降级: 忽略 tools/toolChoice，走纯文本 chat()
     const messages = opts.messages || [];
     const history = messages
@@ -275,7 +281,8 @@ export class AiProvider {
 
     // 使用 LanguageService 推断主语言
     const primaryLang = LanguageService.detectPrimary(extCounts);
-    const dominant = Object.entries(extCounts).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || '';
+    const dominant =
+      Object.entries(extCounts).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || '';
 
     // iOS/macOS (Swift / Objective-C)
     if (primaryLang === 'swift' || primaryLang === 'objectivec') {

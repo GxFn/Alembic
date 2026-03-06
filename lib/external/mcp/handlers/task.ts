@@ -92,7 +92,11 @@ export async function taskHandler(ctx, args) {
 
 async function _create(svc, args) {
   if (!args.title) {
-    return envelope({ success: false, message: 'title is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'title is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const { task, isDuplicate } = await svc.create({
     title: args.title,
@@ -132,7 +136,11 @@ async function _ready(svc, args) {
 
 async function _claim(svc, args) {
   if (!args.id) {
-    return envelope({ success: false, message: 'id is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'id is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const task = await svc.claim(args.id);
   return envelope({
@@ -147,7 +155,11 @@ async function _claim(svc, args) {
 
 async function _close(ctx, svc, args) {
   if (!args.id) {
-    return envelope({ success: false, message: 'id is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'id is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
 
   const { task, newlyReady } = await svc.close(args.id, args.reason || 'Completed');
@@ -166,7 +178,11 @@ async function _close(ctx, svc, args) {
 
 async function _fail(svc, args) {
   if (!args.id) {
-    return envelope({ success: false, message: 'id is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'id is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const task = await svc.fail(args.id, args.reason || 'Agent execution failed');
   return envelope({
@@ -181,7 +197,11 @@ async function _fail(svc, args) {
 
 async function _defer(svc, args) {
   if (!args.id) {
-    return envelope({ success: false, message: 'id is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'id is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const task = await svc.defer(args.id, args.reason || '');
   return envelope({
@@ -196,7 +216,11 @@ async function _defer(svc, args) {
 
 async function _progress(svc, args) {
   if (!args.id) {
-    return envelope({ success: false, message: 'id is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'id is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const note = args.reason || args.description || '';
   const task = await svc.progress(args.id, note);
@@ -212,10 +236,18 @@ async function _progress(svc, args) {
 
 async function _decompose(svc, args) {
   if (!args.id) {
-    return envelope({ success: false, message: 'Epic id is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'Epic id is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   if (!args.subtasks || !Array.isArray(args.subtasks) || args.subtasks.length === 0) {
-    return envelope({ success: false, message: 'subtasks array is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'subtasks array is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const tasks = await svc.decompose(args.id, args.subtasks);
   return envelope({
@@ -230,11 +262,19 @@ async function _decompose(svc, args) {
 
 async function _show(svc, args) {
   if (!args.id) {
-    return envelope({ success: false, message: 'id is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'id is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const task = await svc.show(args.id);
   if (!task) {
-    return envelope({ success: false, message: `Task not found: ${args.id}`, meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: `Task not found: ${args.id}`,
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   return envelope({
     success: true,
@@ -247,8 +287,12 @@ async function _show(svc, args) {
 
 async function _list(svc, args) {
   const filters: any = {};
-  if (args.status) filters.status = args.status;
-  if (args.taskType) filters.taskType = args.taskType;
+  if (args.status) {
+    filters.status = args.status;
+  }
+  if (args.taskType) {
+    filters.taskType = args.taskType;
+  }
 
   const tasks = await svc.list(filters, { limit: args.limit || 20 });
   return envelope({
@@ -293,7 +337,11 @@ async function _depAdd(svc, args) {
 
 async function _depTree(svc, args) {
   if (!args.id) {
-    return envelope({ success: false, message: 'id is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'id is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const tree = await svc.depTree(args.id);
   return envelope({
@@ -362,12 +410,14 @@ async function _prime(svc, args) {
 
   // ── Resume Prompt: 有 inProgress 任务时，提示 Agent 让用户选择 ──
   if (result.inProgress.length > 0) {
-    const taskList = result.inProgress.map((t) => {
-      const age = t.updatedAt
-        ? `${Math.floor((Date.now() / 1000 - t.updatedAt) / 86400)}d ago`
-        : '';
-      return `• **${t.id}** — ${t.title}${age ? ` (${age})` : ''}`;
-    }).join('\n');
+    const taskList = result.inProgress
+      .map((t) => {
+        const age = t.updatedAt
+          ? `${Math.floor((Date.now() / 1000 - t.updatedAt) / 86400)}d ago`
+          : '';
+        return `• **${t.id}** — ${t.title}${age ? ` (${age})` : ''}`;
+      })
+      .join('\n');
 
     result._resumePrompt = {
       instruction: [
@@ -381,7 +431,7 @@ async function _prime(svc, args) {
         '2. **Defer** — pause it and work on something else',
         '3. **Abandon** — close/fail it and start fresh',
         '',
-        'Wait for the user\'s answer. Do NOT auto-resume.',
+        "Wait for the user's answer. Do NOT auto-resume.",
       ].join('\n'),
       taskIds: result.inProgress.map((t) => t.id),
     };
@@ -401,10 +451,18 @@ async function _prime(svc, args) {
 
 async function _recordDecision(svc, args) {
   if (!args.title) {
-    return envelope({ success: false, message: 'title is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'title is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   if (!args.description) {
-    return envelope({ success: false, message: 'description is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'description is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const { task, isDuplicate } = await svc.recordDecision({
     title: args.title,
@@ -425,13 +483,25 @@ async function _recordDecision(svc, args) {
 
 async function _reviseDecision(svc, args) {
   if (!args.id) {
-    return envelope({ success: false, message: 'id of old decision is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'id of old decision is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   if (!args.title) {
-    return envelope({ success: false, message: 'title of new decision is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'title of new decision is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   if (!args.description) {
-    return envelope({ success: false, message: 'description of new decision is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'description of new decision is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const result = await svc.reviseDecision({
     oldDecisionId: args.id,
@@ -453,7 +523,11 @@ async function _reviseDecision(svc, args) {
 
 async function _unpinDecision(svc, args) {
   if (!args.id) {
-    return envelope({ success: false, message: 'id is required', meta: { tool: 'autosnippet_task' } });
+    return envelope({
+      success: false,
+      message: 'id is required',
+      meta: { tool: 'autosnippet_task' },
+    });
   }
   const task = await svc.unpinDecision(args.id, args.reason || '');
   return envelope({
@@ -539,7 +613,9 @@ async function _sendScreenshotViaApi(caption = '') {
  * result 是 envelope() 返回的 { success, data, message, meta }
  */
 async function _notifyTaskProgress(operation, args, result) {
-  if (!result || result.success === false) return;
+  if (!result || result.success === false) {
+    return;
+  }
 
   const data = result.data;
   let text = '';
@@ -550,7 +626,8 @@ async function _notifyTaskProgress(operation, args, result) {
       const id = data?.id || '';
       const type = data?.taskType || args.taskType || 'task';
       const pri = PRIORITY_LABELS[data?.priority ?? args.priority ?? 2] || 'P2';
-      const dup = result.message?.includes('Duplicate') || result.message?.startsWith('⚠') ? ' (重复)' : '';
+      const dup =
+        result.message?.includes('Duplicate') || result.message?.startsWith('⚠') ? ' (重复)' : '';
       text = `📋 新任务${dup}: ${id}\n${title}\n类型: ${type} | ${pri}`;
       break;
     }
@@ -587,18 +664,19 @@ async function _notifyTaskProgress(operation, args, result) {
     case 'progress': {
       const id = data?.id || args.id;
       const note = args.reason || args.description || '';
-      text = note
-        ? `📝 进度: ${id}\n${note.slice(0, 200)}`
-        : `📝 进度: ${id}`;
+      text = note ? `📝 进度: ${id}\n${note.slice(0, 200)}` : `📝 进度: ${id}`;
       break;
     }
     case 'decompose': {
       const epicId = args.id;
       const count = Array.isArray(data) ? data.length : 0;
       const subTitles = Array.isArray(data)
-        ? data.slice(0, 5).map((t, i) => `  ${i + 1}. ${t.title || t.id}`).join('\n')
+        ? data
+            .slice(0, 5)
+            .map((t, i) => `  ${i + 1}. ${t.title || t.id}`)
+            .join('\n')
         : '';
-      text = `📂 拆解: ${epicId} → ${count} 个子任务${subTitles ? '\n' + subTitles : ''}`;
+      text = `📂 拆解: ${epicId} → ${count} 个子任务${subTitles ? `\n${subTitles}` : ''}`;
       break;
     }
     case 'record_decision': {

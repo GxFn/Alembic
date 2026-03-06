@@ -123,7 +123,7 @@ export class BootstrapSession {
     const qualityReport = this.submissionTracker.buildQualityReport(
       dimId,
       report.analysisText,
-      report.referencedFiles || [],
+      report.referencedFiles || []
     );
 
     return { updated, qualityReport };
@@ -137,7 +137,9 @@ export class BootstrapSession {
    * @param {Record<string, string>} hints - { targetDimId: hintText }
    */
   storeHints(fromDimId, hints) {
-    if (!hints || typeof hints !== 'object') return;
+    if (!hints || typeof hints !== 'object') {
+      return;
+    }
 
     for (const [targetDim, hintText] of Object.entries(hints)) {
       if (!this.crossDimensionHints[targetDim]) {
@@ -239,9 +241,15 @@ export class BootstrapSessionManager {
    * @returns {BootstrapSession|null}
    */
   getSession(sessionId) {
-    if (!this._activeSession) return null;
-    if (this._activeSession.isExpired) return null;
-    if (sessionId && this._activeSession.id !== sessionId) return null;
+    if (!this._activeSession) {
+      return null;
+    }
+    if (this._activeSession.isExpired) {
+      return null;
+    }
+    if (sessionId && this._activeSession.id !== sessionId) {
+      return null;
+    }
     return this._activeSession;
   }
 

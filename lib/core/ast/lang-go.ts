@@ -32,7 +32,9 @@ function walkGo(root, ctx) {
             const spec = specList.namedChild(j);
             if (spec.type === 'import_spec') {
               const rec = _parseGoImportSpec(spec);
-              if (rec) ctx.imports.push(rec);
+              if (rec) {
+                ctx.imports.push(rec);
+              }
             }
           }
         } else {
@@ -40,7 +42,9 @@ function walkGo(root, ctx) {
           const spec = child.namedChildren.find((c) => c.type === 'import_spec');
           if (spec) {
             const rec = _parseGoImportSpec(spec);
-            if (rec) ctx.imports.push(rec);
+            if (rec) {
+              ctx.imports.push(rec);
+            }
           }
         }
         break;
@@ -507,15 +511,18 @@ function _maxNesting(node, depth) {
  * @returns {ImportRecord|null}
  */
 function _parseGoImportSpec(spec) {
-  const strLit = spec.namedChildren.find(
-    (c) => c.type === 'interpreted_string_literal'
-  );
-  if (!strLit) return null;
+  const strLit = spec.namedChildren.find((c) => c.type === 'interpreted_string_literal');
+  if (!strLit) {
+    return null;
+  }
 
   const importPath = strLit.text.replace(/"/g, '');
   const aliasNode = spec.namedChildren.find(
-    (c) => c.type === 'package_identifier' || c.type === 'dot' || c.type === 'blank_identifier'
-      || (c.type === 'identifier' && (c.text === '.' || c.text === '_'))
+    (c) =>
+      c.type === 'package_identifier' ||
+      c.type === 'dot' ||
+      c.type === 'blank_identifier' ||
+      (c.type === 'identifier' && (c.text === '.' || c.text === '_'))
   );
 
   if (aliasNode) {
@@ -583,7 +590,9 @@ function _collectGoScopes(root) {
       const paramLists = child.namedChildren.filter((c) => c.type === 'parameter_list');
       let receiverType = null;
       if (paramLists[0]) {
-        const paramDecl = paramLists[0].namedChildren.find((c) => c.type === 'parameter_declaration');
+        const paramDecl = paramLists[0].namedChildren.find(
+          (c) => c.type === 'parameter_declaration'
+        );
         if (paramDecl) {
           const pointer = paramDecl.namedChildren.find((c) => c.type === 'pointer_type');
           if (pointer) {
@@ -605,22 +614,49 @@ function _collectGoScopes(root) {
  * 从 Go block 中递归提取调用点
  */
 function _extractGoCallSitesFromBody(bodyNode, className, methodName, ctx) {
-  if (!bodyNode) return;
+  if (!bodyNode) {
+    return;
+  }
 
   const GO_NOISE = new Set([
-    'fmt', 'log', 'errors', 'strings', 'strconv', 'math', 'sort',
-    'time', 'sync', 'context', 'reflect', 'unsafe', 'os', 'io',
-    'bytes', 'bufio', 'regexp', 'path', 'filepath', 'encoding',
+    'fmt',
+    'log',
+    'errors',
+    'strings',
+    'strconv',
+    'math',
+    'sort',
+    'time',
+    'sync',
+    'context',
+    'reflect',
+    'unsafe',
+    'os',
+    'io',
+    'bytes',
+    'bufio',
+    'regexp',
+    'path',
+    'filepath',
+    'encoding',
   ]);
 
   function walk(node) {
-    if (!node || node.type === 'ERROR' || node.isMissing) return;
+    if (!node || node.type === 'ERROR' || node.isMissing) {
+      return;
+    }
 
     if (node.type === 'call_expression') {
       const func = node.namedChildren[0];
-      if (!func) { walkChildren(node); return; }
+      if (!func) {
+        walkChildren(node);
+        return;
+      }
 
-      let callee, receiver = null, receiverType = null, callType;
+      let callee,
+        receiver = null,
+        receiverType = null,
+        callType;
 
       if (func.type === 'selector_expression') {
         // pkg.Func() or obj.Method()
@@ -633,7 +669,8 @@ function _extractGoCallSitesFromBody(bodyNode, className, methodName, ctx) {
           if (receiver && /^[a-z]/.test(receiver) && !GO_NOISE.has(receiver)) {
             receiverType = null; // instance method
           } else if (GO_NOISE.has(receiver)) {
-            walkChildren(node); return; // skip noise
+            walkChildren(node);
+            return; // skip noise
           } else {
             receiverType = receiver;
             callType = 'static';
@@ -673,7 +710,9 @@ function _extractGoCallSitesFromBody(bodyNode, className, methodName, ctx) {
       });
 
       // 遍历参数中的嵌套调用
-      if (args) { walkChildren(args); }
+      if (args) {
+        walkChildren(args);
+      }
       return;
     }
 

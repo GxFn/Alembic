@@ -20,21 +20,22 @@
  * @module presets
  */
 
-import { BudgetPolicy, SafetyPolicy, QualityGatePolicy } from './policies.js';
-import { SingleStrategy, FanOutStrategy, AdaptiveStrategy } from './strategies.js';
-import { PipelineStrategy } from './PipelineStrategy.js';
-
 // v3.0: 导入 Insight 领域函数 (domain/ 模块)
 import {
-  buildAnalystPrompt, ANALYST_SYSTEM_PROMPT, ANALYST_BUDGET,
+  ANALYST_BUDGET,
+  ANALYST_SYSTEM_PROMPT,
+  buildAnalystPrompt,
 } from './domain/insight-analyst.js';
+import { buildRetryPrompt, insightGateEvaluator } from './domain/insight-gate.js';
 import {
-  insightGateEvaluator, buildRetryPrompt,
-} from './domain/insight-gate.js';
-import {
-  buildProducerPromptV2, PRODUCER_SYSTEM_PROMPT, PRODUCER_BUDGET,
+  buildProducerPromptV2,
+  PRODUCER_BUDGET,
+  PRODUCER_SYSTEM_PROMPT,
   producerRejectionGateEvaluator,
 } from './domain/insight-producer.js';
+import { PipelineStrategy } from './PipelineStrategy.js';
+import { BudgetPolicy, QualityGatePolicy, SafetyPolicy } from './policies.js';
+import { AdaptiveStrategy, FanOutStrategy, SingleStrategy } from './strategies.js';
 
 // ─── Preset 定义 ──────────────────────────────
 
@@ -53,7 +54,6 @@ import {
  * 所有内置 Preset
  */
 export const PRESETS = Object.freeze({
-
   // ─── chat: 通用对话 ──────────────────────
 
   chat: {
@@ -62,12 +62,13 @@ export const PRESETS = Object.freeze({
     capabilities: ['conversation', 'code_analysis'],
     strategy: { type: 'single' },
     policies: [
-      (config) => new BudgetPolicy({
-        maxIterations: config?.maxIterations ?? 8,
-        maxTokens: config?.maxTokens ?? 4096,
-        temperature: config?.temperature ?? 0.7,
-        timeoutMs: config?.timeoutMs ?? 120_000,
-      }),
+      (config) =>
+        new BudgetPolicy({
+          maxIterations: config?.maxIterations ?? 8,
+          maxTokens: config?.maxTokens ?? 4096,
+          temperature: config?.temperature ?? 0.7,
+          timeoutMs: config?.timeoutMs ?? 120_000,
+        }),
     ],
     persona: {
       role: 'assistant',
@@ -93,7 +94,8 @@ export const PRESETS = Object.freeze({
 
   insight: {
     name: '洞察',
-    description: '深度代码分析 + 知识提取。增强 PipelineStrategy: Analyze→QualityGate→Produce→RejectionGate。',
+    description:
+      '深度代码分析 + 知识提取。增强 PipelineStrategy: Analyze→QualityGate→Produce→RejectionGate。',
     capabilities: ['code_analysis', 'knowledge_production'],
     strategy: {
       type: 'pipeline',
@@ -103,12 +105,21 @@ export const PRESETS = Object.freeze({
         {
           name: 'analyze',
           capabilities: ['code_analysis'],
-          budget: { maxIterations: ANALYST_BUDGET.maxIterations, temperature: 0.4, timeoutMs: 300_000 },
+          budget: {
+            maxIterations: ANALYST_BUDGET.maxIterations,
+            temperature: 0.4,
+            timeoutMs: 300_000,
+          },
           systemPrompt: ANALYST_SYSTEM_PROMPT,
-          promptBuilder: (ctx) => buildAnalystPrompt(
-            ctx.dimConfig, ctx.projectInfo,
-            ctx.dimContext, ctx.sessionStore, ctx.semanticMemory, ctx.codeEntityGraph,
-          ),
+          promptBuilder: (ctx) =>
+            buildAnalystPrompt(
+              ctx.dimConfig,
+              ctx.projectInfo,
+              ctx.dimContext,
+              ctx.sessionStore,
+              ctx.semanticMemory,
+              ctx.codeEntityGraph
+            ),
           retryPromptBuilder: (retryCtx, _origPrompt, prev) => {
             const prevAnalysis = prev.analyze?.reply || '';
             const retryHint = buildRetryPrompt(retryCtx.reason);
@@ -134,21 +145,32 @@ export const PRESETS = Object.freeze({
           // 供 ExplorationTracker 精确控制 PRODUCE→SUMMARIZE 转换时机
           budget: { ...PRODUCER_BUDGET, temperature: 0.3, timeoutMs: 180_000 },
           systemPrompt: PRODUCER_SYSTEM_PROMPT,
-          promptBuilder: (ctx) => buildProducerPromptV2(
-            ctx.gateArtifact,  // 来自 quality_gate 的 AnalysisArtifact
-            ctx.dimConfig, ctx.projectInfo,
-          ),
+          promptBuilder: (ctx) =>
+            buildProducerPromptV2(
+              ctx.gateArtifact, // 来自 quality_gate 的 AnalysisArtifact
+              ctx.dimConfig,
+              ctx.projectInfo
+            ),
           // 拒绝率过高时: 缩减预算 + 特定修复 prompt (对齐旧 ProducerAgent 的 rejection retry)
           retryBudget: { maxIterations: 5, temperature: 0.3, timeoutMs: 120_000 },
           retryPromptBuilder: (retryCtx, _origPrompt, prev) => {
             const prevProduce = prev.produce;
-            const submitCalls = (prevProduce?.toolCalls || []).filter(tc =>
-              ['submit_knowledge', 'submit_with_check'].includes(tc.tool || tc.name));
-            const rejected = submitCalls.filter(tc => {
+            const submitCalls = (prevProduce?.toolCalls || []).filter((tc) =>
+              ['submit_knowledge', 'submit_with_check'].includes(tc.tool || tc.name)
+            );
+            const rejected = submitCalls.filter((tc) => {
               const res = tc.result;
-              if (!res) return false;
-              if (typeof res === 'string') return res.includes('rejected') || res.includes('error');
-              return res.status === 'rejected' || res.status === 'error' || res.reason === 'validation_failed';
+              if (!res) {
+                return false;
+              }
+              if (typeof res === 'string') {
+                return res.includes('rejected') || res.includes('error');
+              }
+              return (
+                res.status === 'rejected' ||
+                res.status === 'error' ||
+                res.reason === 'validation_failed'
+              );
             }).length;
             return `你的 ${rejected} 个提交被拒绝了。请根据拒绝原因改进后重新提交，确保:
 1. content 必须是对象: { markdown: "...", rationale: "...", pattern: "..." }
@@ -173,17 +195,19 @@ export const PRESETS = Object.freeze({
       ],
     },
     policies: [
-      (config) => new BudgetPolicy({
-        maxIterations: config?.maxIterations ?? 24,
-        maxTokens: config?.maxTokens ?? 4096,
-        temperature: config?.temperature ?? 0.3,
-        timeoutMs: config?.timeoutMs ?? 600_000,
-      }),
-      (config) => new QualityGatePolicy({
-        minEvidenceLength: config?.minEvidenceLength ?? 500,
-        minFileRefs: config?.minFileRefs ?? 3,
-        minToolCalls: config?.minToolCalls ?? 3,
-      }),
+      (config) =>
+        new BudgetPolicy({
+          maxIterations: config?.maxIterations ?? 24,
+          maxTokens: config?.maxTokens ?? 4096,
+          temperature: config?.temperature ?? 0.3,
+          timeoutMs: config?.timeoutMs ?? 600_000,
+        }),
+      (config) =>
+        new QualityGatePolicy({
+          minEvidenceLength: config?.minEvidenceLength ?? 500,
+          minFileRefs: config?.minFileRefs ?? 3,
+          minToolCalls: config?.minToolCalls ?? 3,
+        }),
     ],
     persona: {
       role: 'analyst',
@@ -202,15 +226,17 @@ export const PRESETS = Object.freeze({
     capabilities: ['conversation', 'code_analysis'],
     strategy: { type: 'single' },
     policies: [
-      (config) => new BudgetPolicy({
-        maxIterations: config?.maxIterations ?? 12,
-        maxTokens: config?.maxTokens ?? 4096,
-        temperature: config?.temperature ?? 0.7,
-        timeoutMs: config?.timeoutMs ?? 180_000,
-      }),
-      () => new SafetyPolicy({
-        allowedSenders: process.env.ASD_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
-      }),
+      (config) =>
+        new BudgetPolicy({
+          maxIterations: config?.maxIterations ?? 12,
+          maxTokens: config?.maxTokens ?? 4096,
+          temperature: config?.temperature ?? 0.7,
+          timeoutMs: config?.timeoutMs ?? 180_000,
+        }),
+      () =>
+        new SafetyPolicy({
+          allowedSenders: process.env.ASD_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
+        }),
     ],
     persona: {
       role: 'assistant',
@@ -231,16 +257,18 @@ export const PRESETS = Object.freeze({
     capabilities: ['conversation', 'code_analysis', 'system_interaction'],
     strategy: { type: 'single' },
     policies: [
-      (config) => new BudgetPolicy({
-        maxIterations: config?.maxIterations ?? 6,
-        maxTokens: config?.maxTokens ?? 2048,
-        temperature: config?.temperature ?? 0.5,
-        timeoutMs: config?.timeoutMs ?? 60_000,
-      }),
-      () => new SafetyPolicy({
-        allowedSenders: process.env.ASD_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
-        fileScope: process.env.ASD_PROJECT_ROOT || null,
-      }),
+      (config) =>
+        new BudgetPolicy({
+          maxIterations: config?.maxIterations ?? 6,
+          maxTokens: config?.maxTokens ?? 2048,
+          temperature: config?.temperature ?? 0.5,
+          timeoutMs: config?.timeoutMs ?? 60_000,
+        }),
+      () =>
+        new SafetyPolicy({
+          allowedSenders: process.env.ASD_LARK_ALLOWED_USERS?.split(',').filter(Boolean) || [],
+          fileScope: process.env.ASD_PROJECT_ROOT || null,
+        }),
     ],
     persona: {
       role: 'assistant',
@@ -252,7 +280,6 @@ export const PRESETS = Object.freeze({
       tiers: ['working', 'episodic'],
     },
   },
-
 });
 
 // ─── Preset 解析器 ────────────────────────────
@@ -264,7 +291,9 @@ export const PRESETS = Object.freeze({
  * @returns {import('./strategies.js').Strategy}
  */
 export function resolveStrategy(strategyConfig) {
-  if (!strategyConfig) return new SingleStrategy();
+  if (!strategyConfig) {
+    return new SingleStrategy();
+  }
 
   switch (strategyConfig.type) {
     case 'single':
@@ -308,7 +337,11 @@ export function resolveStrategy(strategyConfig) {
  */
 export function getPreset(presetName, overrides: any = {}) {
   const preset = PRESETS[presetName];
-  if (!preset) throw new Error(`Unknown preset: "${presetName}". Available: ${Object.keys(PRESETS).join(', ')}`);
+  if (!preset) {
+    throw new Error(
+      `Unknown preset: "${presetName}". Available: ${Object.keys(PRESETS).join(', ')}`
+    );
+  }
 
   const merged = {
     ...preset,

@@ -357,24 +357,30 @@ export class CursorDeliveryPipeline {
    * @returns {{ insightsCount: number, tokensUsed: number, filePath: string }|null}
    */
   _generateCallGraphArchitectureRules() {
-    if (!this.database) return null;
+    if (!this.database) {
+      return null;
+    }
 
     try {
       const db = typeof this.database.getDb === 'function' ? this.database.getDb() : this.database;
 
       // 查询调用边中的跨目录调用模式
-      const callEdges = db.prepare(
-        `SELECT from_id, to_id, metadata_json FROM knowledge_edges
+      const callEdges = db
+        .prepare(
+          `SELECT from_id, to_id, metadata_json FROM knowledge_edges
          WHERE relation = 'calls' AND metadata_json LIKE '%phase5%'`
-      ).all();
+        )
+        .all();
 
-      if (!callEdges || callEdges.length < 5) return null;
+      if (!callEdges || callEdges.length < 5) {
+        return null;
+      }
 
       // 提取 caller/callee 对应的文件路径
       const entityFiles = new Map();
-      const entities = db.prepare(
-        `SELECT entity_id, file_path FROM code_entities WHERE entity_type = 'method'`
-      ).all();
+      const entities = db
+        .prepare(`SELECT entity_id, file_path FROM code_entities WHERE entity_type = 'method'`)
+        .all();
       for (const e of entities) {
         entityFiles.set(e.entity_id, e.file_path);
       }
@@ -384,18 +390,26 @@ export class CursorDeliveryPipeline {
       for (const edge of callEdges) {
         const callerFile = entityFiles.get(edge.from_id);
         const calleeFile = entityFiles.get(edge.to_id);
-        if (!callerFile || !calleeFile || callerFile === calleeFile) continue;
+        if (!callerFile || !calleeFile || callerFile === calleeFile) {
+          continue;
+        }
 
         const callerDir = this._extractLayerDir(callerFile);
         const calleeDir = this._extractLayerDir(calleeFile);
-        if (!callerDir || !calleeDir || callerDir === calleeDir) continue;
+        if (!callerDir || !calleeDir || callerDir === calleeDir) {
+          continue;
+        }
 
-        if (!dirCalls.has(callerDir)) dirCalls.set(callerDir, new Map());
+        if (!dirCalls.has(callerDir)) {
+          dirCalls.set(callerDir, new Map());
+        }
         const targets = dirCalls.get(callerDir);
         targets.set(calleeDir, (targets.get(calleeDir) || 0) + 1);
       }
 
-      if (dirCalls.size === 0) return null;
+      if (dirCalls.size === 0) {
+        return null;
+      }
 
       // 检测架构层: 入度高(被调用多)的目录是底层服务, 出度高(调用多)的是上层
       const dirInDegree = new Map();
@@ -414,12 +428,14 @@ export class CursorDeliveryPipeline {
 
       // 分层推断: 按 (inDegree - outDegree) 排序, 值越大 = 越底层
       const allDirs = new Set([...dirInDegree.keys(), ...dirOutDegree.keys()]);
-      const layers = [...allDirs].map((dir) => ({
-        dir,
-        inDegree: dirInDegree.get(dir) || 0,
-        outDegree: dirOutDegree.get(dir) || 0,
-        layerScore: (dirInDegree.get(dir) || 0) - (dirOutDegree.get(dir) || 0),
-      })).sort((a, b) => b.layerScore - a.layerScore);
+      const layers = [...allDirs]
+        .map((dir) => ({
+          dir,
+          inDegree: dirInDegree.get(dir) || 0,
+          outDegree: dirOutDegree.get(dir) || 0,
+          layerScore: (dirInDegree.get(dir) || 0) - (dirOutDegree.get(dir) || 0),
+        }))
+        .sort((a, b) => b.layerScore - a.layerScore);
 
       // 分层标签
       const total = layers.length;
@@ -432,9 +448,13 @@ export class CursorDeliveryPipeline {
         for (let i = 0; i < layers.length && i < 10; i++) {
           const l = layers[i];
           let layerLabel;
-          if (i < total * 0.33) layerLabel = '🔽 low-level (service/repository)';
-          else if (i < total * 0.66) layerLabel = '↔️ mid-level (business logic)';
-          else layerLabel = '🔼 high-level (controller/UI)';
+          if (i < total * 0.33) {
+            layerLabel = '🔽 low-level (service/repository)';
+          } else if (i < total * 0.66) {
+            layerLabel = '↔️ mid-level (business logic)';
+          } else {
+            layerLabel = '🔼 high-level (controller/UI)';
+          }
 
           lines.push(`- \`${l.dir}/\` — ${layerLabel} (in:${l.inDegree} out:${l.outDegree})`);
           insightsCount++;
@@ -460,16 +480,23 @@ export class CursorDeliveryPipeline {
         lines.push('');
       }
 
-      if (insightsCount === 0) return null;
+      if (insightsCount === 0) {
+        return null;
+      }
 
       // 构建 description (用于 smart rule 关联性判断)
       const dirList = layers.map((l) => l.dir).join(', ');
-      const description = `Architecture layer analysis for ${this.projectName}. ` +
+      const description =
+        `Architecture layer analysis for ${this.projectName}. ` +
         `Relevant when editing files in: ${dirList}. ` +
         `Call graph shows ${callEdges.length} cross-file call relationships.`;
 
       const body = lines.join('\n');
-      const writeResult = this.rulesGenerator.writeSmartRules('call-architecture', body, description);
+      const writeResult = this.rulesGenerator.writeSmartRules(
+        'call-architecture',
+        body,
+        description
+      );
 
       this.logger.info?.(
         `[CursorDelivery] Channel B+: call-architecture — ${insightsCount} insights → ${writeResult.filePath}`
@@ -491,7 +518,9 @@ export class CursorDeliveryPipeline {
    * @private
    */
   _extractLayerDir(filePath) {
-    if (!filePath) return null;
+    if (!filePath) {
+      return null;
+    }
     const parts = filePath.split('/').filter(Boolean);
     // 跳过 src/ lib/ app/ 等通用前缀
     const skipPrefixes = new Set(['src', 'lib', 'app', 'pkg', 'internal', 'cmd']);

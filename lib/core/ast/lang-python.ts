@@ -8,8 +8,8 @@
  * Phase 5: 新增 ImportRecord 结构化导入 + extractCallSites 调用点提取
  */
 
-import { ImportRecord } from '../analysis/ImportRecord.js';
 import { extractCallSitesPython } from '../analysis/CallSiteExtractor.js';
+import { ImportRecord } from '../analysis/ImportRecord.js';
 
 function walkPython(root, ctx) {
   _walkPyNode(root, ctx, null);
@@ -25,12 +25,15 @@ function _walkPyNode(node, ctx, parentClassName) {
         if (modNode) {
           // import mod / import mod as alias
           const aliasNode = child.namedChildren.find((c) => c.type === 'aliased_import');
-          const alias = aliasNode?.namedChildren?.find((c) => c.type === 'identifier')?.text || null;
-          ctx.imports.push(new ImportRecord(modNode.text, {
-            symbols: ['*'],
-            alias: alias || modNode.text.split('.').pop(),
-            kind: 'namespace',
-          }));
+          const alias =
+            aliasNode?.namedChildren?.find((c) => c.type === 'identifier')?.text || null;
+          ctx.imports.push(
+            new ImportRecord(modNode.text, {
+              symbols: ['*'],
+              alias: alias || modNode.text.split('.').pop(),
+              kind: 'namespace',
+            })
+          );
         }
         break;
       }
@@ -47,16 +50,22 @@ function _walkPyNode(node, ctx, parentClassName) {
             if (c.type === 'dotted_name' && c !== modNode) {
               importedNames.push(c.text);
             } else if (c.type === 'aliased_import') {
-              const nameNode = c.namedChildren.find((n) => n.type === 'dotted_name' || n.type === 'identifier');
-              if (nameNode) importedNames.push(nameNode.text);
+              const nameNode = c.namedChildren.find(
+                (n) => n.type === 'dotted_name' || n.type === 'identifier'
+              );
+              if (nameNode) {
+                importedNames.push(nameNode.text);
+              }
             } else if (c.type === 'wildcard_import') {
               importedNames.push('*');
             }
           }
-          ctx.imports.push(new ImportRecord(importPath, {
-            symbols: importedNames.length > 0 ? importedNames : [],
-            kind: importedNames.includes('*') ? 'namespace' : 'named',
-          }));
+          ctx.imports.push(
+            new ImportRecord(importPath, {
+              symbols: importedNames.length > 0 ? importedNames : [],
+              kind: importedNames.includes('*') ? 'namespace' : 'named',
+            })
+          );
         }
         break;
       }

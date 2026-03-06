@@ -25,7 +25,11 @@ interface TreeSitterNode {
   child(index: number): TreeSitterNode | null;
   namedChild(index: number): TreeSitterNode | null;
   childForFieldName(name: string): TreeSitterNode | null;
-  descendantsOfType(type: string | string[], start?: { row: number; column: number }, end?: { row: number; column: number }): TreeSitterNode[];
+  descendantsOfType(
+    type: string | string[],
+    start?: { row: number; column: number },
+    end?: { row: number; column: number }
+  ): TreeSitterNode[];
   toString(): string;
   [key: string]: any;
 }

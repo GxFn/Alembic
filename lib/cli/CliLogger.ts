@@ -30,17 +30,23 @@ class CliLogger {
 
   /** 普通信息输出 → stdout */
   log(msg = '') {
-    if (!this.#quiet) process.stdout.write(`${msg}\n`);
+    if (!this.#quiet) {
+      process.stdout.write(`${msg}\n`);
+    }
   }
 
   /** 信息提示 → stdout（语义同 log） */
   info(msg) {
-    if (!this.#quiet) process.stdout.write(`${msg}\n`);
+    if (!this.#quiet) {
+      process.stdout.write(`${msg}\n`);
+    }
   }
 
   /** 成功提示 → stdout */
   success(msg) {
-    if (!this.#quiet) process.stdout.write(`${msg}\n`);
+    if (!this.#quiet) {
+      process.stdout.write(`${msg}\n`);
+    }
   }
 
   /** JSON 格式输出 → stdout */
@@ -50,7 +56,9 @@ class CliLogger {
 
   /** 空行 → stdout */
   blank() {
-    if (!this.#quiet) process.stdout.write('\n');
+    if (!this.#quiet) {
+      process.stdout.write('\n');
+    }
   }
 
   // ── stderr 输出 ──────────────────────────────────

@@ -141,5 +141,3 @@ export const queryViolations = {
     return store.list({}, { page: 1, limit });
   },
 };
-
-

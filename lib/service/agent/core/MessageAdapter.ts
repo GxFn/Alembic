@@ -25,20 +25,26 @@ export class MessageAdapter {
    * 追加用户消息
    * @param {string} _text
    */
-  appendUserMessage(_text) { throw new Error('not implemented'); }
+  appendUserMessage(_text) {
+    throw new Error('not implemented');
+  }
 
   /**
    * 追加助手纯文本回复
    * @param {string} _text
    */
-  appendAssistantText(_text) { throw new Error('not implemented'); }
+  appendAssistantText(_text) {
+    throw new Error('not implemented');
+  }
 
   /**
    * 追加助手带工具调用的回复
    * @param {string|null} _text
    * @param {Array} _calls - functionCalls 数组
    */
-  appendAssistantWithToolCalls(_text, _calls) { throw new Error('not implemented'); }
+  appendAssistantWithToolCalls(_text, _calls) {
+    throw new Error('not implemented');
+  }
 
   /**
    * 追加工具执行结果
@@ -46,36 +52,48 @@ export class MessageAdapter {
    * @param {string} _name
    * @param {string} _content
    */
-  appendToolResult(_callId, _name, _content) { throw new Error('not implemented'); }
+  appendToolResult(_callId, _name, _content) {
+    throw new Error('not implemented');
+  }
 
   /**
    * 追加系统/用户 nudge 消息
    * @param {string} _text
    */
-  appendUserNudge(_text) { throw new Error('not implemented'); }
+  appendUserNudge(_text) {
+    throw new Error('not implemented');
+  }
 
   /**
    * 导出当前消息列表 (供 LLM 调用)
    * @returns {Array<{role: string, content: string}>}
    */
-  toMessages() { throw new Error('not implemented'); }
+  toMessages() {
+    throw new Error('not implemented');
+  }
 
   /**
    * 重置到仅保留初始 prompt (错误恢复)
    */
-  resetToPromptOnly() { throw new Error('not implemented'); }
+  resetToPromptOnly() {
+    throw new Error('not implemented');
+  }
 
   /**
    * 获取工具结果限额
    * @returns {{ maxChars: number, maxMatches: number }}
    */
-  getToolResultQuota() { throw new Error('not implemented'); }
+  getToolResultQuota() {
+    throw new Error('not implemented');
+  }
 
   /**
    * 压缩检查 — 如果消息过多则自动压缩
    * @returns {{ level: number, removed: number }}
    */
-  compactIfNeeded() { throw new Error('not implemented'); }
+  compactIfNeeded() {
+    throw new Error('not implemented');
+  }
 
   /**
    * 格式化工具结果字符串 (统一 limitToolResult 调用)
@@ -194,7 +212,9 @@ export class SimpleArrayAdapter extends MessageAdapter {
   resetToPromptOnly() {
     const first = this.#messages[0];
     this.#messages.length = 0;
-    if (first) this.#messages.push(first);
+    if (first) {
+      this.#messages.push(first);
+    }
   }
 
   getToolResultQuota() {

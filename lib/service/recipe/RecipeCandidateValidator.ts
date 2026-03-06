@@ -5,12 +5,12 @@
  * 核心变更：用 content 对象替代旧版 code 字符串。
  */
 
-import { LanguageService } from '../../shared/LanguageService.js';
 import { getRequiredFieldNames } from '../../shared/FieldSpec.js';
+import { LanguageService } from '../../shared/LanguageService.js';
 
 /* ── V3 必填字段（从 FieldSpec 获取顶层字段，排除嵌套和容器字段） ── */
-const REQUIRED_FIELDS = getRequiredFieldNames().filter(f =>
-  !['content', 'headers', 'reasoning', 'knowledgeType', 'usageGuide'].includes(f)
+const REQUIRED_FIELDS = getRequiredFieldNames().filter(
+  (f) => !['content', 'headers', 'reasoning', 'knowledgeType', 'usageGuide'].includes(f)
 );
 
 /* ── 需要 content 子对象有内容 ── */

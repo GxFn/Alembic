@@ -8,7 +8,6 @@ import { AiProvider } from '../AiProvider.js';
 export class MockProvider extends AiProvider {
   callLog: any;
 
-
   responses: any;
   constructor(config: any = {}) {
     super(config);

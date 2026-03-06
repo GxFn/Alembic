@@ -45,7 +45,11 @@ export class DatabaseConnection {
     }
 
     this.db = new Database(resolvedDbPath, {
-      verbose: this.config.verbose ? (msg) => process.stderr.write(`[SQL] ${msg}\n`) : null,
+      verbose: this.config.verbose
+        ? (msg: unknown) => {
+            process.stderr.write(`[SQL] ${msg}\n`);
+          }
+        : undefined,
     });
 
     // 启用 WAL 模式（Write-Ahead Logging）

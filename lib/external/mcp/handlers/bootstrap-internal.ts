@@ -47,18 +47,14 @@
  *   bootstrap/projectSkills.js ← Phase 5.5 Project Skill 生成（内部 Agent 专用）
  */
 
+import { getInternalAgentRequiredFields } from '../../../shared/FieldSpec.js';
 import { envelope } from '../envelope.js';
-import {
-  clearCheckpoints,
-  clearSnapshots,
-  fillDimensionsV3,
-} from './bootstrap/pipeline/orchestrator.js';
+import { fillDimensionsV3 } from './bootstrap/pipeline/orchestrator.js';
 import { bootstrapRefine } from './bootstrap/refine.js';
-import { buildInternalNextSteps } from './bootstrap/shared/dimension-text.js';
 import { runAllPhases } from './bootstrap/shared/bootstrap-phases.js';
+import { buildInternalNextSteps } from './bootstrap/shared/dimension-text.js';
 import { buildLanguageExtension, inferLang } from './LanguageExtensions.js';
 import { inferFilePriority, inferTargetRole } from './TargetClassifier.js';
-import { getInternalAgentRequiredFields } from '../../../shared/FieldSpec.js';
 
 export { bootstrapRefine };
 
@@ -111,13 +107,27 @@ export async function bootstrapKnowledge(ctx, args) {
   }
 
   const {
-    allFiles, allTargets, discoverer, langStats, primaryLang,
-    astProjectSummary, astContext,
-    depGraphData, depEdgesWritten,
-    guardAudit, guardEngine,
-    activeDimensions, enhancementPackInfo, enhancementPatterns, enhancementGuardRules,
-    langProfile, targetsSummary, incrementalPlan, detectedFrameworks,
-    warnings: phaseWarnings, report: phaseReport,
+    allFiles,
+    allTargets,
+    discoverer,
+    langStats,
+    primaryLang,
+    astProjectSummary,
+    astContext,
+    depGraphData,
+    depEdgesWritten,
+    guardAudit,
+    guardEngine: _guardEngine,
+    activeDimensions,
+    enhancementPackInfo,
+    enhancementPatterns,
+    enhancementGuardRules,
+    langProfile,
+    targetsSummary,
+    incrementalPlan,
+    detectedFrameworks: _detectedFrameworks,
+    warnings: _phaseWarnings,
+    report: phaseReport,
   } = phaseResults;
 
   // 构建兼容的 report 对象（保持原有 API 格式）
@@ -130,32 +140,42 @@ export async function bootstrapKnowledge(ctx, args) {
         files: allFiles.length,
         truncated: allFiles.length >= maxFiles,
       },
-      incrementalEvaluation: incrementalPlan ? {
-        mode: incrementalPlan.mode,
-        canIncremental: incrementalPlan.canIncremental,
-        affectedDimensions: incrementalPlan.affectedDimensions,
-        skippedDimensions: incrementalPlan.skippedDimensions,
-        reason: incrementalPlan.reason,
-        diff: incrementalPlan.diff ? {
-          added: incrementalPlan.diff.added.length,
-          modified: incrementalPlan.diff.modified.length,
-          deleted: incrementalPlan.diff.deleted.length,
-          unchanged: incrementalPlan.diff.unchanged.length,
-          changeRatio: incrementalPlan.diff.changeRatio,
-        } : null,
-      } : undefined,
+      incrementalEvaluation: incrementalPlan
+        ? {
+            mode: incrementalPlan.mode,
+            canIncremental: incrementalPlan.canIncremental,
+            affectedDimensions: incrementalPlan.affectedDimensions,
+            skippedDimensions: incrementalPlan.skippedDimensions,
+            reason: incrementalPlan.reason,
+            diff: incrementalPlan.diff
+              ? {
+                  added: incrementalPlan.diff.added.length,
+                  modified: incrementalPlan.diff.modified.length,
+                  deleted: incrementalPlan.diff.deleted.length,
+                  unchanged: incrementalPlan.diff.unchanged.length,
+                  changeRatio: incrementalPlan.diff.changeRatio,
+                }
+              : null,
+          }
+        : undefined,
       astAnalysis: {
         classes: astProjectSummary?.classes?.length || 0,
         protocols: astProjectSummary?.protocols?.length || 0,
         categories: astProjectSummary?.categories?.length || 0,
         patterns: Object.keys(astProjectSummary?.patternStats || {}),
       },
-      codeEntityGraph: (phaseReport as any)?.phases?.entityGraph || { entityCount: 0, edgeCount: 0, ms: 0 },
-      callGraph: (phaseReport as any)?.phases?.callGraph ? {
-        entities: (phaseReport as any).phases.callGraph.result?.entitiesUpserted || 0,
-        edges: (phaseReport as any).phases.callGraph.result?.edgesCreated || 0,
-        ms: (phaseReport as any).phases.callGraph.ms || 0,
-      } : { entities: 0, edges: 0, ms: 0 },
+      codeEntityGraph: (phaseReport as any)?.phases?.entityGraph || {
+        entityCount: 0,
+        edgeCount: 0,
+        ms: 0,
+      },
+      callGraph: (phaseReport as any)?.phases?.callGraph
+        ? {
+            entities: (phaseReport as any).phases.callGraph.result?.entitiesUpserted || 0,
+            edges: (phaseReport as any).phases.callGraph.result?.edgesCreated || 0,
+            ms: (phaseReport as any).phases.callGraph.ms || 0,
+          }
+        : { entities: 0, edges: 0, ms: 0 },
       dependencyGraph: { edgesWritten: depEdgesWritten || 0 },
       enhancementPacks: {
         matched: enhancementPackInfo,
@@ -165,7 +185,8 @@ export async function bootstrapKnowledge(ctx, args) {
       },
       guardAudit: {
         totalViolations: guardAudit?.summary?.totalViolations || 0,
-        filesWithViolations: (guardAudit?.files || []).filter((f) => f.violations.length > 0).length,
+        filesWithViolations: (guardAudit?.files || []).filter((f) => f.violations.length > 0)
+          .length,
         skipped: skipGuard,
         enhancementRulesInjected: enhancementGuardRules?.length || 0,
       },
@@ -208,16 +229,18 @@ export async function bootstrapKnowledge(ctx, args) {
 
   const responseData: any = {
     report,
-    targets: targetsSummary || allTargets.map((t) => {
-      const name = typeof t === 'string' ? t : t.name;
-      return {
-        name,
-        type: t.type || 'target',
-        packageName: t.packageName || undefined,
-        inferredRole: inferTargetRole(name),
-        fileCount: (targetFileMap[name] || []).length,
-      };
-    }),
+    targets:
+      targetsSummary ||
+      allTargets.map((t) => {
+        const name = typeof t === 'string' ? t : t.name;
+        return {
+          name,
+          type: t.type || 'target',
+          packageName: t.packageName || undefined,
+          inferredRole: inferTargetRole(name),
+          fileCount: (targetFileMap[name] || []).length,
+        };
+      }),
     // 响应中只返回每个 target 的高优先级文件摘要（不含 content），
     // 避免 500+ 文件清单导致响应过大。完整文件列表保留在服务端供 Phase 5 使用。
     filesByTarget: Object.fromEntries(

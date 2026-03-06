@@ -158,7 +158,9 @@ async function _ready(svc, args) {
 // ── claim ──
 
 async function _claim(svc, args) {
-  if (!args.id) return { success: false, message: 'id is required' };
+  if (!args.id) {
+    return { success: false, message: 'id is required' };
+  }
   const task = await svc.claim(args.id, args.assignee || 'agent');
   return { success: true, data: task.toJSON() };
 }
@@ -166,7 +168,9 @@ async function _claim(svc, args) {
 // ── close ──
 
 async function _close(svc, args) {
-  if (!args.id) return { success: false, message: 'id is required' };
+  if (!args.id) {
+    return { success: false, message: 'id is required' };
+  }
   const { task, newlyReady } = await svc.close(args.id, args.reason || 'Completed');
   return {
     success: true,
@@ -179,7 +183,9 @@ async function _close(svc, args) {
 // ── fail ──
 
 async function _fail(svc, args) {
-  if (!args.id) return { success: false, message: 'id is required' };
+  if (!args.id) {
+    return { success: false, message: 'id is required' };
+  }
   const task = await svc.fail(args.id, args.reason || '');
   return { success: true, data: task.toJSON() };
 }
@@ -187,7 +193,9 @@ async function _fail(svc, args) {
 // ── defer ──
 
 async function _defer(svc, args) {
-  if (!args.id) return { success: false, message: 'id is required' };
+  if (!args.id) {
+    return { success: false, message: 'id is required' };
+  }
   const task = await svc.defer(args.id, args.reason || '');
   return { success: true, data: task.toJSON() };
 }
@@ -195,7 +203,9 @@ async function _defer(svc, args) {
 // ── progress ──
 
 async function _progress(svc, args) {
-  if (!args.id) return { success: false, message: 'id is required' };
+  if (!args.id) {
+    return { success: false, message: 'id is required' };
+  }
   const task = await svc.progress(args.id, args.note || args.description || '');
   return { success: true, data: task.toJSON() };
 }
@@ -235,12 +245,14 @@ async function _prime(svc) {
 
   // ── Resume Prompt: 有 inProgress 任务时，提示 Agent 让用户选择 ──
   if (result.inProgress.length > 0) {
-    const taskList = result.inProgress.map((t) => {
-      const age = t.updatedAt
-        ? `${Math.floor((Date.now() / 1000 - t.updatedAt) / 86400)}d ago`
-        : '';
-      return `• **${t.id}** — ${t.title}${age ? ` (${age})` : ''}`;
-    }).join('\n');
+    const taskList = result.inProgress
+      .map((t) => {
+        const age = t.updatedAt
+          ? `${Math.floor((Date.now() / 1000 - t.updatedAt) / 86400)}d ago`
+          : '';
+        return `• **${t.id}** — ${t.title}${age ? ` (${age})` : ''}`;
+      })
+      .join('\n');
 
     result._resumePrompt = {
       instruction: [
@@ -254,7 +266,7 @@ async function _prime(svc) {
         '2. **Defer** — pause it and work on something else',
         '3. **Abandon** — close/fail it and start fresh',
         '',
-        'Wait for the user\'s answer. Do NOT auto-resume.',
+        "Wait for the user's answer. Do NOT auto-resume.",
       ].join('\n'),
       taskIds: result.inProgress.map((t) => t.id),
     };
@@ -284,7 +296,9 @@ async function _prime(svc) {
 async function _decompose(svc, args) {
   const epicId = args.parentId || args.id;
   const subtasks = args.children || args.subtasks;
-  if (!epicId) return { success: false, message: 'parentId (or id) is required' };
+  if (!epicId) {
+    return { success: false, message: 'parentId (or id) is required' };
+  }
   if (!subtasks || !Array.isArray(subtasks)) {
     return { success: false, message: 'children (or subtasks) array is required' };
   }
@@ -299,9 +313,13 @@ async function _decompose(svc, args) {
 // ── show ──
 
 async function _show(svc, args) {
-  if (!args.id) return { success: false, message: 'id is required' };
+  if (!args.id) {
+    return { success: false, message: 'id is required' };
+  }
   const task = await svc.show(args.id);
-  if (!task) return { success: false, message: `Task ${args.id} not found` };
+  if (!task) {
+    return { success: false, message: `Task ${args.id} not found` };
+  }
   return { success: true, data: task.toJSON() };
 }
 
@@ -346,7 +364,9 @@ async function _depAdd(svc, args) {
 // ── dep_tree ──
 
 async function _depTree(svc, args) {
-  if (!args.id) return { success: false, message: 'id is required' };
+  if (!args.id) {
+    return { success: false, message: 'id is required' };
+  }
   const tree = await svc.depTree(args.id);
   return { success: true, data: tree };
 }
@@ -361,8 +381,12 @@ async function _stats(svc) {
 // ── record_decision ──
 
 async function _recordDecision(svc, args) {
-  if (!args.title) return { success: false, message: 'title is required' };
-  if (!args.description) return { success: false, message: 'description is required' };
+  if (!args.title) {
+    return { success: false, message: 'title is required' };
+  }
+  if (!args.description) {
+    return { success: false, message: 'description is required' };
+  }
   const { task, isDuplicate } = await svc.recordDecision({
     title: args.title,
     description: args.description,
@@ -382,10 +406,15 @@ async function _recordDecision(svc, args) {
 // ── revise_decision ──
 
 async function _reviseDecision(svc, args) {
-  if (!args.id) return { success: false, message: 'id of old decision is required' };
-  if (!args.title) return { success: false, message: 'title of new decision is required' };
-  if (!args.description)
+  if (!args.id) {
+    return { success: false, message: 'id of old decision is required' };
+  }
+  if (!args.title) {
+    return { success: false, message: 'title of new decision is required' };
+  }
+  if (!args.description) {
     return { success: false, message: 'description of new decision is required' };
+  }
   const result = await svc.reviseDecision({
     oldDecisionId: args.id,
     title: args.title,
@@ -406,7 +435,9 @@ async function _reviseDecision(svc, args) {
 // ── unpin_decision ──
 
 async function _unpinDecision(svc, args) {
-  if (!args.id) return { success: false, message: 'id is required' };
+  if (!args.id) {
+    return { success: false, message: 'id is required' };
+  }
   const task = await svc.unpinDecision(args.id, args.reason || '');
   return {
     success: true,

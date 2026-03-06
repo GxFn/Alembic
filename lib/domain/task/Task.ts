@@ -83,7 +83,9 @@ export class Task {
       throw new Error('Cannot claim a closed task');
     }
     if (this.status === 'pinned') {
-      throw new Error('Cannot claim a pinned decision. Use unpin_decision or revise_decision instead.');
+      throw new Error(
+        'Cannot claim a pinned decision. Use unpin_decision or revise_decision instead.'
+      );
     }
     this.status = 'in_progress';
     this.assignee = assignee;
@@ -92,7 +94,9 @@ export class Task {
 
   close(reason = 'Completed') {
     if (this.status === 'pinned') {
-      throw new Error('Cannot close a pinned decision directly. Use unpin_decision or revise_decision instead.');
+      throw new Error(
+        'Cannot close a pinned decision directly. Use unpin_decision or revise_decision instead.'
+      );
     }
     this.status = 'closed';
     this.closeReason = reason;
@@ -127,7 +131,9 @@ export class Task {
 
   defer(reason = '') {
     if (this.status === 'pinned') {
-      throw new Error('Cannot defer a pinned decision. Use unpin_decision or revise_decision instead.');
+      throw new Error(
+        'Cannot defer a pinned decision. Use unpin_decision or revise_decision instead.'
+      );
     }
     this.status = 'deferred';
     if (reason) {
@@ -141,7 +147,9 @@ export class Task {
       throw new Error('Cannot fail a closed task');
     }
     if (this.status === 'pinned') {
-      throw new Error('Cannot fail a pinned decision. Use unpin_decision or revise_decision instead.');
+      throw new Error(
+        'Cannot fail a pinned decision. Use unpin_decision or revise_decision instead.'
+      );
     }
     this.status = 'open';
     this.failCount += 1;
@@ -169,7 +177,12 @@ export class Task {
     if (this.title.length > 500) {
       throw new Error(`title must be 500 characters or less (got ${this.title.length})`);
     }
-    if (typeof this.priority !== 'number' || !Number.isInteger(this.priority) || this.priority < 0 || this.priority > 4) {
+    if (
+      typeof this.priority !== 'number' ||
+      !Number.isInteger(this.priority) ||
+      this.priority < 0 ||
+      this.priority > 4
+    ) {
       throw new Error(`priority must be an integer between 0 and 4 (got ${this.priority})`);
     }
     const validStatuses = ['open', 'in_progress', 'deferred', 'closed', 'pinned'];
@@ -225,7 +238,9 @@ export class Task {
   }
 
   static fromJSON(data) {
-    if (!data) return new Task();
+    if (!data) {
+      return new Task();
+    }
     return new Task(data);
   }
 
@@ -233,7 +248,9 @@ export class Task {
    * 从数据库行构造 Task（snake_case → camelCase）
    */
   static fromRow(row) {
-    if (!row) return null;
+    if (!row) {
+      return null;
+    }
     return new Task({
       id: row.id,
       parentId: row.parent_id,
@@ -256,8 +273,14 @@ export class Task {
       updatedAt: row.updated_at,
       closedAt: row.closed_at,
       metadata: (() => {
-        if (typeof row.metadata !== 'string') return row.metadata || {};
-        try { return JSON.parse(row.metadata); } catch { return {}; }
+        if (typeof row.metadata !== 'string') {
+          return row.metadata || {};
+        }
+        try {
+          return JSON.parse(row.metadata);
+        } catch {
+          return {};
+        }
       })(),
     });
   }

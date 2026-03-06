@@ -28,13 +28,13 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkWriteSafety, safeCopyFile } from '../../service/cursor/FileProtection.js';
 import { injectAutoApprove } from '../../external/mcp/autoApproveInjector.js';
+import { checkWriteSafety, safeCopyFile } from '../../service/cursor/FileProtection.js';
 import {
-  MANIFEST,
-  GITIGNORE_RULES,
-  GITIGNORE_MIGRATIONS,
   buildMcpServerEntry,
+  GITIGNORE_MIGRATIONS,
+  GITIGNORE_RULES,
+  MANIFEST,
 } from './FileManifest.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -67,8 +67,12 @@ export class FileDeployer {
    */
   deployAll(mode, { filter }: any = {}) {
     const applicable = MANIFEST.filter((entry) => {
-      if (entry.on !== 'both' && entry.on !== mode) return false;
-      if (filter && !filter.includes(entry.category)) return false;
+      if (entry.on !== 'both' && entry.on !== mode) {
+        return false;
+      }
+      if (filter && !filter.includes(entry.category)) {
+        return false;
+      }
       return true;
     });
 
@@ -138,19 +142,25 @@ export class FileDeployer {
   /** overwrite — AutoSnippet 完全拥有，始终覆盖 */
   _strategyOverwrite(entry) {
     const src = join(TEMPLATES_DIR, entry.src);
-    if (!existsSync(src)) return false;
+    if (!existsSync(src)) {
+      return false;
+    }
 
     const dest = join(this.projectRoot, entry.dest);
     mkdirSync(dirname(dest), { recursive: true });
     copyFileSync(src, dest);
-    if (entry.chmod) this._chmodExec(dest);
+    if (entry.chmod) {
+      this._chmodExec(dest);
+    }
     return true;
   }
 
   /** overwrite-dir — 递归覆盖目录 */
   _strategyOverwriteDir(entry) {
     const srcDir = join(TEMPLATES_DIR, entry.src);
-    if (!existsSync(srcDir)) return false;
+    if (!existsSync(srcDir)) {
+      return false;
+    }
 
     const destDir = join(this.projectRoot, entry.dest);
     const copied = this._copyDirRecursive(srcDir, destDir, entry.chmod);
@@ -160,7 +170,11 @@ export class FileDeployer {
       for (const rel of entry.cleanup) {
         const old = join(this.projectRoot, rel);
         if (existsSync(old)) {
-          try { unlinkSync(old); } catch { /* ignore */ }
+          try {
+            unlinkSync(old);
+          } catch {
+            /* ignore */
+          }
         }
       }
     }
@@ -171,7 +185,9 @@ export class FileDeployer {
   /** signature-safe — 有 AutoSnippet 签名才覆盖 */
   _strategySignatureSafe(entry, mode) {
     const src = join(TEMPLATES_DIR, entry.src);
-    if (!existsSync(src)) return false;
+    if (!existsSync(src)) {
+      return false;
+    }
 
     const dest = join(this.projectRoot, entry.dest);
     mkdirSync(dirname(dest), { recursive: true });
@@ -209,22 +225,32 @@ export class FileDeployer {
     let dest;
     if (entry.resolveDest) {
       dest = this._resolvers[entry.resolveDest]?.call(this);
-      if (!dest) return false;
+      if (!dest) {
+        return false;
+      }
     } else {
       dest = join(this.projectRoot, entry.dest);
     }
 
-    if (existsSync(dest) && !this.force) return false;
+    if (existsSync(dest) && !this.force) {
+      return false;
+    }
 
     const { canWrite } = checkWriteSafety(dest);
-    if (!canWrite) return false;
+    if (!canWrite) {
+      return false;
+    }
 
     const src = join(TEMPLATES_DIR, entry.src);
-    if (!existsSync(src)) return false;
+    if (!existsSync(src)) {
+      return false;
+    }
 
     mkdirSync(dirname(dest), { recursive: true });
     copyFileSync(src, dest);
-    if (entry.chmod) this._chmodExec(dest);
+    if (entry.chmod) {
+      this._chmodExec(dest);
+    }
     return true;
   }
 
@@ -235,11 +261,17 @@ export class FileDeployer {
 
     let config = {};
     if (existsSync(dest)) {
-      try { config = JSON.parse(readFileSync(dest, 'utf8')); } catch { /* */ }
+      try {
+        config = JSON.parse(readFileSync(dest, 'utf8'));
+      } catch {
+        /* */
+      }
     }
 
     const parentKey = entry.jsonKey;
-    if (!config[parentKey]) config[parentKey] = {};
+    if (!config[parentKey]) {
+      config[parentKey] = {};
+    }
 
     const ide = entry.id === 'vscode-mcp' ? 'vscode' : 'cursor';
     config[parentKey].autosnippet = buildMcpServerEntry(this.projectRoot, ide);
@@ -266,7 +298,7 @@ export class FileDeployer {
     for (const rule of GITIGNORE_RULES) {
       const pattern = rule.pattern;
       // 对 negation 规则 (!xxx) 检查原模式
-      const checkStr = rule.negation ? pattern : pattern.replace(/[[\]*?]/g, '\\$&');
+      const _checkStr = rule.negation ? pattern : pattern.replace(/[[\]*?]/g, '\\$&');
       if (!content.includes(pattern)) {
         const prefix = rule.comment ? `\n# ${rule.comment}\n` : '';
         content += `${prefix}${pattern}\n`;
@@ -278,7 +310,9 @@ export class FileDeployer {
     const lines = content.split('\n');
     const hasIgnoreAS = lines.some((l) => {
       const t = l.trim();
-      return (t === 'AutoSnippet/' || t === 'AutoSnippet') && !t.startsWith('#') && !t.startsWith('!');
+      return (
+        (t === 'AutoSnippet/' || t === 'AutoSnippet') && !t.startsWith('#') && !t.startsWith('!')
+      );
     });
     if (hasIgnoreAS && !lines.some((l) => l.trim() === '!AutoSnippet/')) {
       content += `\n# AutoSnippet 知识库必须入库（取消上方忽略）\n!AutoSnippet/\n`;
@@ -294,12 +328,16 @@ export class FileDeployer {
   /** backup-overwrite — 备份旧文件后覆盖 */
   _strategyBackupOverwrite(entry) {
     const src = join(TEMPLATES_DIR, entry.src);
-    if (!existsSync(src)) return false;
+    if (!existsSync(src)) {
+      return false;
+    }
 
     // 需要目标目录存在
     if (entry.requireDir) {
       const reqDir = join(this.projectRoot, entry.requireDir);
-      if (!existsSync(reqDir)) return false;
+      if (!existsSync(reqDir)) {
+        return false;
+      }
     }
 
     const dest = join(this.projectRoot, entry.dest);
@@ -307,7 +345,9 @@ export class FileDeployer {
     if (existsSync(dest)) {
       const oldContent = readFileSync(dest, 'utf8');
       const newContent = readFileSync(src, 'utf8');
-      if (oldContent === newContent) return false; // 无变化
+      if (oldContent === newContent) {
+        return false; // 无变化
+      }
       copyFileSync(dest, `${dest}.bak`); // 备份
     }
 
@@ -322,12 +362,16 @@ export class FileDeployer {
     const END_MARKER = '<!-- autosnippet:end -->';
 
     const src = join(TEMPLATES_DIR, entry.src);
-    if (!existsSync(src)) return false;
+    if (!existsSync(src)) {
+      return false;
+    }
 
     const templateContent = readFileSync(src, 'utf8');
     const beginIdx = templateContent.indexOf(BEGIN_MARKER);
     const endIdx = templateContent.indexOf(END_MARKER);
-    if (beginIdx === -1 || endIdx === -1) return false;
+    if (beginIdx === -1 || endIdx === -1) {
+      return false;
+    }
 
     const snippet = templateContent.slice(beginIdx, endIdx + END_MARKER.length);
     const dest = join(this.projectRoot, entry.dest);
@@ -340,7 +384,7 @@ export class FileDeployer {
         // 替换现有段落
         const updated = existing.replace(
           new RegExp(`${BEGIN_MARKER}[\\s\\S]*?${END_MARKER}`),
-          snippet,
+          snippet
         );
         writeFileSync(dest, updated);
         return true;
@@ -369,13 +413,19 @@ export class FileDeployer {
     /** AGENTS.md 静态骨架 */
     generateAgentsMd() {
       const claudePath = join(this.projectRoot, 'CLAUDE.md');
-      if (existsSync(claudePath)) return false; // 有 CLAUDE.md 时跳过
+      if (existsSync(claudePath)) {
+        return false; // 有 CLAUDE.md 时跳过
+      }
 
       const agentsPath = join(this.projectRoot, 'AGENTS.md');
-      if (existsSync(agentsPath) && !this.force) return false;
+      if (existsSync(agentsPath) && !this.force) {
+        return false;
+      }
 
       const { canWrite } = checkWriteSafety(agentsPath);
-      if (!canWrite) return false;
+      if (!canWrite) {
+        return false;
+      }
 
       const content = [
         `# ${this.projectName} — Agent Instructions`,
@@ -413,7 +463,9 @@ export class FileDeployer {
     /** 安装 Cursor Skills */
     installSkills() {
       const installScript = join(REPO_ROOT, 'scripts', 'install-cursor-skill.js');
-      if (!existsSync(installScript)) return false;
+      if (!existsSync(installScript)) {
+        return false;
+      }
 
       try {
         execSync(`node "${installScript}"`, {
@@ -430,10 +482,14 @@ export class FileDeployer {
     /** 确保 AutoSnippet/skills/ 目录存在 */
     ensureSkillsDir() {
       const autoDir = join(this.projectRoot, 'AutoSnippet');
-      if (!existsSync(autoDir)) return false;
+      if (!existsSync(autoDir)) {
+        return false;
+      }
 
       const skillsDir = join(autoDir, 'skills');
-      if (existsSync(skillsDir)) return false;
+      if (existsSync(skillsDir)) {
+        return false;
+      }
 
       mkdirSync(skillsDir, { recursive: true });
       return true;
@@ -459,7 +515,9 @@ export class FileDeployer {
     installVSCodeExtension() {
       const extDir = join(REPO_ROOT, 'resources', 'vscode-ext');
       const pkgJson = join(extDir, 'package.json');
-      if (!existsSync(pkgJson)) return false;
+      if (!existsSync(pkgJson)) {
+        return false;
+      }
 
       try {
         // 编译 TypeScript
@@ -472,7 +530,9 @@ export class FileDeployer {
         });
 
         const vsixPath = join(extDir, 'autosnippet.vsix');
-        if (!existsSync(vsixPath)) return false;
+        if (!existsSync(vsixPath)) {
+          return false;
+        }
 
         // 探测可用 IDE CLI
         const cliCandidates = ['code', 'cursor', 'codex'];
@@ -483,7 +543,9 @@ export class FileDeployer {
             execSync(`which ${cli}`, { stdio: 'pipe' });
             execSync(`${cli} --install-extension "${vsixPath}" --force`, { stdio: 'pipe' });
             installed.push(cli);
-          } catch { /* CLI 不可用 */ }
+          } catch {
+            /* CLI 不可用 */
+          }
         }
 
         return installed.length > 0;
@@ -515,7 +577,9 @@ export class FileDeployer {
 
   /** 递归复制目录 */
   _copyDirRecursive(srcDir, destDir, chmod = false) {
-    if (!existsSync(srcDir)) return false;
+    if (!existsSync(srcDir)) {
+      return false;
+    }
     let copied = false;
 
     const entries = readdirSync(srcDir, { withFileTypes: true });
@@ -542,7 +606,9 @@ export class FileDeployer {
   _chmodExec(filePath) {
     try {
       execSync(`chmod +x "${filePath}"`, { stdio: 'pipe' });
-    } catch { /* Windows — ignore */ }
+    } catch {
+      /* Windows — ignore */
+    }
   }
 
   /** 异步触发 Cursor Delivery Pipeline */

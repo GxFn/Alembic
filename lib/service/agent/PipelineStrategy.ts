@@ -17,9 +17,9 @@
  * @module PipelineStrategy
  */
 
+import Logger from '../../infrastructure/logging/Logger.js';
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
 import { ExplorationTracker } from './context/ExplorationTracker.js';
-import Logger from '../../infrastructure/logging/Logger.js';
 import { Strategy, StrategyRegistry } from './strategies.js';
 
 const _pipelineLogger = Logger.getInstance();
@@ -60,10 +60,16 @@ export class PipelineStrategy extends Strategy {
 
       // ── Quality Gate 阶段 ──
       if (stage.gate) {
-        if (ctx.degraded) continue;
+        if (ctx.degraded) {
+          continue;
+        }
         const gateAction = this.#processGate(stage, i, ctx, bus);
-        if (gateAction === 'break') break;
-        if (gateAction === 'continue') continue;
+        if (gateAction === 'break') {
+          break;
+        }
+        if (gateAction === 'continue') {
+          continue;
+        }
         if (typeof gateAction === 'number') {
           i = gateAction; // retry: jump back
           continue;
@@ -72,7 +78,9 @@ export class PipelineStrategy extends Strategy {
       }
 
       // ── 执行阶段 ──
-      if (ctx.degraded && stage.skipOnDegrade !== false) continue;
+      if (ctx.degraded && stage.skipOnDegrade !== false) {
+        continue;
+      }
 
       await this.#executeStage(runtime, message, stage, ctx, bus);
     }
@@ -138,10 +146,14 @@ export class PipelineStrategy extends Strategy {
       reason: gateResult.reason || '',
       artifact: gateResult.artifact || null,
     };
-    if (gateResult.artifact) ctx.gateArtifact = gateResult.artifact;
+    if (gateResult.artifact) {
+      ctx.gateArtifact = gateResult.artifact;
+    }
 
     // 三态处理
-    if (gateResult.action === 'pass') return 'continue';
+    if (gateResult.action === 'pass') {
+      return 'continue';
+    }
 
     if (gateResult.action === 'degrade') {
       ctx.degraded = true;
@@ -166,12 +178,16 @@ export class PipelineStrategy extends Strategy {
         }
       }
       // 重试次数耗尽
-      if (stage.skipOnFail !== false) return 'break';
+      if (stage.skipOnFail !== false) {
+        return 'break';
+      }
       return 'continue';
     }
 
     // 兜底: 未知 action
-    if (stage.skipOnFail !== false) return 'break';
+    if (stage.skipOnFail !== false) {
+      return 'break';
+    }
     return 'continue';
   }
 
@@ -211,22 +227,16 @@ export class PipelineStrategy extends Strategy {
     }
 
     // ExplorationTracker (per-stage)
-    const stageTracker = this.#resolveStageTracker(
-      stage,
-      ctx,
-      strategyContext,
-      effectiveBudget
-    );
+    const stageTracker = this.#resolveStageTracker(stage, ctx, strategyContext, effectiveBudget);
 
     ctx.lastExecutedStageName = stage.name;
     ctx.execStageCount++;
 
-    const submitToolName =
-      stage.submitToolName || strategyContext.submitToolName || undefined;
+    const submitToolName = stage.submitToolName || strategyContext.submitToolName || undefined;
     _pipelineLogger.info(
       `[PipelineStrategy] ▶ Stage "${stage.name}"${isRetry ? ' (retry)' : ''} — ` +
         `budget: ${effectiveBudget?.maxIterations || '∞'} iters, ` +
-        `timeout: ${effectiveBudget?.timeoutMs ? effectiveBudget.timeoutMs / 1000 + 's' : '∞'}, ` +
+        `timeout: ${effectiveBudget?.timeoutMs ? `${effectiveBudget.timeoutMs / 1000}s` : '∞'}, ` +
         `tracker: ${stageTracker?.constructor?.name || 'none'}` +
         `${submitToolName ? `, submitTool: ${submitToolName}` : ''}`
     );
@@ -293,7 +303,9 @@ export class PipelineStrategy extends Strategy {
     }
 
     // 清除已消费的 retryContext
-    if (phaseResults._retryContext) delete phaseResults._retryContext;
+    if (phaseResults._retryContext) {
+      delete phaseResults._retryContext;
+    }
     return prompt;
   }
 
@@ -302,8 +314,7 @@ export class PipelineStrategy extends Strategy {
    */
   #resolveStageTracker(stage, ctx, strategyContext, effectiveBudget) {
     let stageTracker = strategyContext.tracker || null;
-    const submitToolName =
-      stage.submitToolName || strategyContext.submitToolName || undefined;
+    const submitToolName = stage.submitToolName || strategyContext.submitToolName || undefined;
 
     if (stageTracker && ctx.execStageCount > 0) {
       const trackerStrategy =
@@ -362,7 +373,9 @@ export class PipelineStrategy extends Strategy {
     });
 
     const stageTimeoutMs = effectiveBudget?.timeoutMs;
-    if (!stageTimeoutMs) return reactPromise;
+    if (!stageTimeoutMs) {
+      return reactPromise;
+    }
 
     // 硬超时 = budget.timeoutMs + 30s 缓冲
     const hardLimitMs = stageTimeoutMs + 30_000;
@@ -371,10 +384,7 @@ export class PipelineStrategy extends Strategy {
     return Promise.race([
       reactPromise,
       new Promise((_, reject) => {
-        hardTimer = setTimeout(
-          () => reject(new Error('__STAGE_HARD_TIMEOUT__')),
-          hardLimitMs
-        );
+        hardTimer = setTimeout(() => reject(new Error('__STAGE_HARD_TIMEOUT__')), hardLimitMs);
       }),
     ])
       .catch((err) => {
@@ -432,12 +442,12 @@ export class PipelineStrategy extends Strategy {
 
     if (gateConfig.custom && typeof gateConfig.custom === 'function') {
       const customResult = gateConfig.custom(source);
-      if (!customResult.pass) reasons.push(customResult.reason);
+      if (!customResult.pass) {
+        reasons.push(customResult.reason);
+      }
     }
 
-    return reasons.length === 0
-      ? { pass: true }
-      : { pass: false, reason: reasons.join('; ') };
+    return reasons.length === 0 ? { pass: true } : { pass: false, reason: reasons.join('; ') };
   }
 
   /**
@@ -445,7 +455,9 @@ export class PipelineStrategy extends Strategy {
    */
   #findPrevExecStageIdx(currentIdx) {
     for (let j = currentIdx - 1; j >= 0; j--) {
-      if (!this.#stages[j].gate) return j;
+      if (!this.#stages[j].gate) {
+        return j;
+      }
     }
     return -1;
   }

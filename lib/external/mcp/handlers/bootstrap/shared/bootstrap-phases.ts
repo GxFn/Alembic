@@ -27,9 +27,9 @@ import {
 import { DimensionCopy } from '../../../../../shared/DimensionCopyRegistry.js';
 import { LanguageService } from '../../../../../shared/LanguageService.js';
 import pathGuard from '../../../../../shared/PathGuard.js';
+import { detectPrimaryLanguage } from '../../LanguageExtensions.js';
+import { inferTargetRole } from '../../TargetClassifier.js';
 import { baseDimensions, resolveActiveDimensions } from '../base-dimensions.js';
-import { buildLanguageExtension, detectPrimaryLanguage, inferLang } from '../../LanguageExtensions.js';
-import { inferFilePriority, inferTargetRole } from '../../TargetClassifier.js';
 
 // ── 类型定义 ────────────────────────────────────────────────
 
@@ -67,11 +67,9 @@ import { inferFilePriority, inferTargetRole } from '../../TargetClassifier.js';
 
 // ── R13: AutoSnippet 生成物黑名单 ─────────────────────────
 
-const ASD_GENERATED_BASENAMES = new Set([
-  'AGENTS.md', 'CLAUDE.md', 'copilot-instructions.md',
-]);
+const ASD_GENERATED_BASENAMES = new Set(['AGENTS.md', 'CLAUDE.md', 'copilot-instructions.md']);
 const ASD_GENERATED_PATH_SEGMENTS = [
-  `${path.sep}.cursor${path.sep}`,     // .cursor/rules/*.mdc
+  `${path.sep}.cursor${path.sep}`, // .cursor/rules/*.mdc
   `${path.sep}.github${path.sep}copilot-instructions.md`,
 ];
 
@@ -82,11 +80,17 @@ const ASD_GENERATED_PATH_SEGMENTS = [
  */
 export function isAutoSnippetGenerated(filePath) {
   const base = path.basename(filePath);
-  if (ASD_GENERATED_BASENAMES.has(base)) return true;
-  for (const seg of ASD_GENERATED_PATH_SEGMENTS) {
-    if (filePath.includes(seg)) return true;
+  if (ASD_GENERATED_BASENAMES.has(base)) {
+    return true;
   }
-  if (base.endsWith('.mdc')) return true;
+  for (const seg of ASD_GENERATED_PATH_SEGMENTS) {
+    if (filePath.includes(seg)) {
+      return true;
+    }
+  }
+  if (base.endsWith('.mdc')) {
+    return true;
+  }
   return false;
 }
 
@@ -118,8 +122,12 @@ export async function runPhase1_FileCollection(projectRoot, logger, options: any
       const fileList = await discoverer.getTargetFiles(t);
       for (const f of fileList) {
         const fp = typeof f === 'string' ? f : f.path;
-        if (seenPaths.has(fp)) continue;
-        if (isAutoSnippetGenerated(fp)) continue; // R13: skip generated files
+        if (seenPaths.has(fp)) {
+          continue;
+        }
+        if (isAutoSnippetGenerated(fp)) {
+          continue; // R13: skip generated files
+        }
         seenPaths.add(fp);
         try {
           const content = fs.readFileSync(fp, 'utf8');
@@ -130,11 +138,19 @@ export async function runPhase1_FileCollection(projectRoot, logger, options: any
             content,
             targetName: typeof t === 'string' ? t : t.name,
           });
-        } catch { /* skip unreadable */ }
-        if (allFiles.length >= maxFiles) break;
+        } catch {
+          /* skip unreadable */
+        }
+        if (allFiles.length >= maxFiles) {
+          break;
+        }
       }
-    } catch { /* skip target */ }
-    if (allFiles.length >= maxFiles) break;
+    } catch {
+      /* skip target */
+    }
+    if (allFiles.length >= maxFiles) {
+      break;
+    }
   }
 
   // 语言统计
@@ -197,13 +213,17 @@ export async function runPhase1_5_AstAnalysis(allFiles, langStats, logger, optio
       // SFC 预处理 (.vue / .svelte)
       let sfcPreprocessor = null;
       try {
-        const { initEnhancementRegistry } = await import('../../../../../core/enhancement/index.js');
+        const { initEnhancementRegistry } = await import(
+          '../../../../../core/enhancement/index.js'
+        );
         const enhReg = await initEnhancementRegistry();
         const preprocessPack = enhReg.all().find((p) => typeof p.preprocessFile === 'function');
         if (preprocessPack) {
           sfcPreprocessor = preprocessPack.preprocessFile.bind(preprocessPack);
         }
-      } catch { /* Enhancement 未加载 */ }
+      } catch {
+        /* Enhancement 未加载 */
+      }
 
       astProjectSummary = analyzeProject(astFiles, primaryLangEarly, {
         preprocessFile: sfcPreprocessor,
@@ -216,9 +236,13 @@ export async function runPhase1_5_AstAnalysis(allFiles, langStats, logger, optio
 
       logger.info(
         `[Bootstrap] AST: ${astProjectSummary.classes.length} classes, ` +
-        `${astProjectSummary.protocols.length} protocols` +
-        (astProjectSummary.categories ? `, ${astProjectSummary.categories.length} categories` : '') +
-        (astProjectSummary.patternStats ? `, ${Object.keys(astProjectSummary.patternStats).length} patterns` : '')
+          `${astProjectSummary.protocols.length} protocols` +
+          (astProjectSummary.categories
+            ? `, ${astProjectSummary.categories.length} categories`
+            : '') +
+          (astProjectSummary.patternStats
+            ? `, ${Object.keys(astProjectSummary.patternStats).length} patterns`
+            : '')
       );
     } catch (e: any) {
       logger.warn(`[Bootstrap] AST analysis failed (degraded): ${e.message}`);
@@ -250,7 +274,9 @@ export async function runPhase1_6_EntityGraph(astProjectSummary, projectRoot, co
 
   if (astProjectSummary) {
     try {
-      const { CodeEntityGraph } = await import('../../../../../service/knowledge/CodeEntityGraph.js');
+      const { CodeEntityGraph } = await import(
+        '../../../../../service/knowledge/CodeEntityGraph.js'
+      );
       const db = container.get('database');
       if (db) {
         const ceg = new CodeEntityGraph(db, { projectRoot });
@@ -284,7 +310,13 @@ export async function runPhase1_6_EntityGraph(astProjectSummary, projectRoot, co
  * @param {string[]} [incrementalOpts.changedFiles] 变更文件的相对路径
  * @returns {Promise<{ callGraphResult: object|null, warnings: string[] }>}
  */
-export async function runPhase1_7_CallGraph(astProjectSummary, projectRoot, container, logger, incrementalOpts = null) {
+export async function runPhase1_7_CallGraph(
+  astProjectSummary,
+  projectRoot,
+  container,
+  logger,
+  incrementalOpts = null
+) {
   const warnings = [];
   let callGraphResult = null;
 
@@ -338,8 +370,8 @@ export async function runPhase1_7_CallGraph(astProjectSummary, projectRoot, cont
       const incrTag = isIncremental ? ' [incremental]' : '';
       logger.info(
         `[Bootstrap] Call Graph${incrTag}${partialTag}: ${result.callEdges.length} call edges, ` +
-        `${result.dataFlowEdges.length} data flow edges, ` +
-        `resolution rate: ${(result.stats.resolvedRate * 100).toFixed(1)}%`
+          `${result.dataFlowEdges.length} data flow edges, ` +
+          `resolution rate: ${(result.stats.resolvedRate * 100).toFixed(1)}%`
       );
     } else if (result) {
       logger.info(
@@ -365,7 +397,12 @@ export async function runPhase1_7_CallGraph(astProjectSummary, projectRoot, cont
  * @param {string} [sourceTag='bootstrap'] - edge 的 source 标签后缀
  * @returns {Promise<{ depGraphData: object|null, depEdgesWritten: number, warnings: string[] }>}
  */
-export async function runPhase2_DependencyGraph(discoverer, container, logger, sourceTag = 'bootstrap') {
+export async function runPhase2_DependencyGraph(
+  discoverer,
+  container,
+  logger,
+  sourceTag = 'bootstrap'
+) {
   const warnings = [];
   let depGraphData = null;
   let depEdgesWritten = 0;
@@ -376,10 +413,16 @@ export async function runPhase2_DependencyGraph(discoverer, container, logger, s
     if (knowledgeGraphService) {
       for (const edge of depGraphData.edges || []) {
         const result = knowledgeGraphService.addEdge(
-          edge.from, 'module', edge.to, 'module', 'depends_on',
+          edge.from,
+          'module',
+          edge.to,
+          'module',
+          'depends_on',
           { weight: 1.0, source: `${discoverer.id}-${sourceTag}` }
         );
-        if (result?.success) depEdgesWritten++;
+        if (result?.success) {
+          depEdgesWritten++;
+        }
       }
     }
   } catch (e: any) {
@@ -401,7 +444,9 @@ export async function runPhase2_DependencyGraph(discoverer, container, logger, s
  * @param {object} logger
  */
 export async function runPhase2_1_ModuleEntities(depGraphData, projectRoot, container, logger) {
-  if (!depGraphData?.nodes?.length) return;
+  if (!depGraphData?.nodes?.length) {
+    return;
+  }
 
   try {
     const { CodeEntityGraph } = await import('../../../../../service/knowledge/CodeEntityGraph.js');
@@ -458,7 +503,9 @@ export async function runPhase3_GuardAudit(allFiles, container, logger, options:
           });
         }
       }
-    } catch { /* ViolationsStore not available */ }
+    } catch {
+      /* ViolationsStore not available */
+    }
   } catch (e: any) {
     logger.warn(`[Bootstrap] Guard audit failed: ${e.message}`);
     warnings.push(`Guard audit failed: ${e.message}`);
@@ -491,11 +538,8 @@ export async function runPhase3_GuardAudit(allFiles, container, logger, options:
  * }>}
  */
 export async function runPhase4_DimensionResolve(params) {
-  const {
-    primaryLang, langStats, allTargets,
-    astProjectSummary, guardEngine, allFiles,
-    logger,
-  } = params;
+  const { primaryLang, langStats, allTargets, astProjectSummary, guardEngine, allFiles, logger } =
+    params;
 
   // 框架检测
   const detectedFrameworks = allTargets
@@ -503,7 +547,7 @@ export async function runPhase4_DimensionResolve(params) {
     .filter(Boolean);
 
   // 条件维度过滤
-  let activeDimensions = resolveActiveDimensions(baseDimensions, primaryLang, detectedFrameworks);
+  const activeDimensions = resolveActiveDimensions(baseDimensions, primaryLang, detectedFrameworks);
 
   // Enhancement Pack 动态追加
   const enhancementPackInfo = [];
@@ -539,14 +583,16 @@ export async function runPhase4_DimensionResolve(params) {
           if (patterns.length > 0) {
             enhancementPatterns.push(...patterns.map((p) => ({ ...p, source: pack.id })));
           }
-        } catch { /* graceful degradation */ }
+        } catch {
+          /* graceful degradation */
+        }
       }
     }
 
     if (matchedPacks.length > 0) {
       logger.info(
         `[Bootstrap] Enhancement packs: ${matchedPacks.map((p) => p.id).join(', ')} → ` +
-        `+${activeDimensions.length - baseDimensions.length} dims, ${enhancementGuardRules.length} guard rules, ${enhancementPatterns.length} patterns`
+          `+${activeDimensions.length - baseDimensions.length} dims, ${enhancementGuardRules.length} guard rules, ${enhancementPatterns.length} patterns`
       );
     }
   } catch (enhErr: any) {
@@ -627,22 +673,38 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
   // ── Phase 1: 文件收集 ──
   const p1Start = Date.now();
   const phase1 = await runPhase1_FileCollection(projectRoot, ctx.logger, options);
-  let { allFiles, allTargets, discoverer, langStats } = phase1;
+  const { allFiles, allTargets, discoverer, langStats } = phase1;
 
-  if (report) report.phases.fileCollection = { fileCount: allFiles.length, targetCount: allTargets.length, ms: Date.now() - p1Start };
+  if (report) {
+    report.phases.fileCollection = {
+      fileCount: allFiles.length,
+      targetCount: allTargets.length,
+      ms: Date.now() - p1Start,
+    };
+  }
 
   if (allFiles.length === 0) {
     return {
-      allFiles, langStats,
-      primaryLang: null, discoverer, allTargets,
-      astProjectSummary: null, astContext: '',
-      codeEntityResult: null, callGraphResult: null,
-      depGraphData: null, depEdgesWritten: 0,
-      guardAudit: null, guardEngine: null,
-      activeDimensions: [], enhancementPackInfo: [],
-      enhancementPatterns: [], enhancementGuardRules: [],
+      allFiles,
+      langStats,
+      primaryLang: null,
+      discoverer,
+      allTargets,
+      astProjectSummary: null,
+      astContext: '',
+      codeEntityResult: null,
+      callGraphResult: null,
+      depGraphData: null,
+      depEdgesWritten: 0,
+      guardAudit: null,
+      guardEngine: null,
+      activeDimensions: [],
+      enhancementPackInfo: [],
+      enhancementPatterns: [],
+      enhancementGuardRules: [],
       langProfile: {},
-      targetsSummary: [], warnings,
+      targetsSummary: [],
+      warnings,
       report: report || {},
       incrementalPlan: null,
       detectedFrameworks: [],
@@ -658,10 +720,14 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
       const db = ctx.container?.resolve?.('db') ?? ctx.db;
       if (db) {
         const ib = new IncrementalBootstrap(db, projectRoot, { logger: ctx.logger });
-        const dimIds = baseDimensions.map(d => d.id);
+        const dimIds = baseDimensions.map((d) => d.id);
         incrementalPlan = await ib.evaluate(allFiles, dimIds);
-        if (report) report.phases.incremental = { plan: incrementalPlan };
-        ctx.logger.info(`[Bootstrap] Incremental mode: ${incrementalPlan.mode}, affected: ${incrementalPlan.affectedDimensions?.length || 0}`);
+        if (report) {
+          report.phases.incremental = { plan: incrementalPlan };
+        }
+        ctx.logger.info(
+          `[Bootstrap] Incremental mode: ${incrementalPlan.mode}, affected: ${incrementalPlan.affectedDimensions?.length || 0}`
+        );
       } else {
         warnings.push('incremental: db not available, falling back to full');
       }
@@ -676,31 +742,58 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
     generateAstContext: options.generateAstContext || false,
   });
   warnings.push(...phase1_5.warnings);
-  if (report) report.phases.ast = { classCount: phase1_5.astProjectSummary?.classes?.length || 0, ms: Date.now() - p15Start };
+  if (report) {
+    report.phases.ast = {
+      classCount: phase1_5.astProjectSummary?.classes?.length || 0,
+      ms: Date.now() - p15Start,
+    };
+  }
 
   // ── Phase 1.6: Entity Graph ──
   const p16Start = Date.now();
   const phase1_6 = await runPhase1_6_EntityGraph(
-    phase1_5.astProjectSummary, projectRoot, ctx.container, ctx.logger
+    phase1_5.astProjectSummary,
+    projectRoot,
+    ctx.container,
+    ctx.logger
   );
   warnings.push(...phase1_6.warnings);
-  if (report) report.phases.entityGraph = { entityCount: phase1_6.codeEntityResult?.entitiesUpserted || 0, edgeCount: phase1_6.codeEntityResult?.edgesCreated || 0, ms: Date.now() - p16Start };
+  if (report) {
+    report.phases.entityGraph = {
+      entityCount: phase1_6.codeEntityResult?.entitiesUpserted || 0,
+      edgeCount: phase1_6.codeEntityResult?.edgesCreated || 0,
+      ms: Date.now() - p16Start,
+    };
+  }
 
   // ── Phase 1.7: Call Graph (Phase 5) ──
   const p17Start = Date.now();
   const phase1_7 = await runPhase1_7_CallGraph(
-    phase1_5.astProjectSummary, projectRoot, ctx.container, ctx.logger
+    phase1_5.astProjectSummary,
+    projectRoot,
+    ctx.container,
+    ctx.logger
   );
   warnings.push(...phase1_7.warnings);
-  if (report) report.phases.callGraph = { result: phase1_7.callGraphResult, ms: Date.now() - p17Start };
+  if (report) {
+    report.phases.callGraph = { result: phase1_7.callGraphResult, ms: Date.now() - p17Start };
+  }
 
   // ── Phase 2: 依赖图 ──
   const p2Start = Date.now();
   const phase2 = await runPhase2_DependencyGraph(
-    discoverer, ctx.container, ctx.logger, options.sourceTag || 'bootstrap'
+    discoverer,
+    ctx.container,
+    ctx.logger,
+    options.sourceTag || 'bootstrap'
   );
   warnings.push(...phase2.warnings);
-  if (report) report.phases.depGraph = { edgesWritten: phase2.depEdgesWritten || 0, ms: Date.now() - p2Start };
+  if (report) {
+    report.phases.depGraph = {
+      edgesWritten: phase2.depEdgesWritten || 0,
+      ms: Date.now() - p2Start,
+    };
+  }
 
   // ── Phase 2.1: Module 实体 ──
   await runPhase2_1_ModuleEntities(phase2.depGraphData, projectRoot, ctx.container, ctx.logger);
@@ -712,19 +805,32 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
     summaryPrefix: options.summaryPrefix || 'Bootstrap scan',
   });
   warnings.push(...phase3.warnings);
-  if (report) report.phases.guard = { ruleCount: phase3.guardAudit?.rules?.length || 0, ms: Date.now() - p3Start };
+  if (report) {
+    report.phases.guard = {
+      ruleCount: phase3.guardAudit?.rules?.length || 0,
+      ms: Date.now() - p3Start,
+    };
+  }
 
   // ── Phase 4: 维度解析 + Enhancement Pack ──
   const p4Start = Date.now();
   const primaryLang = detectPrimaryLanguage(langStats);
   const phase4 = await runPhase4_DimensionResolve({
-    primaryLang, langStats, allTargets,
+    primaryLang,
+    langStats,
+    allTargets,
     astProjectSummary: phase1_5.astProjectSummary,
     guardEngine: phase3.guardEngine,
     allFiles,
     logger: ctx.logger,
   });
-  if (report) report.phases.dimension = { activeDimCount: phase4.activeDimensions?.length || 0, detectedFrameworks: phase4.detectedFrameworks, ms: Date.now() - p4Start };
+  if (report) {
+    report.phases.dimension = {
+      activeDimCount: phase4.activeDimensions?.length || 0,
+      detectedFrameworks: phase4.detectedFrameworks,
+      ms: Date.now() - p4Start,
+    };
+  }
 
   // 如果 Enhancement Pack 产生了新的 guardAudit，覆盖 Phase 3 的结果
   const finalGuardAudit = phase4.guardAudit || phase3.guardAudit;
@@ -742,7 +848,9 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
   });
 
   // 完成报告
-  if (report) report.totalMs = Date.now() - report.startTime;
+  if (report) {
+    report.totalMs = Date.now() - report.startTime;
+  }
 
   return {
     allFiles,
@@ -766,9 +874,8 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
     detectedFrameworks: phase4.detectedFrameworks,
     targetsSummary,
     warnings,
-    report,                // NEW: Phase 级报告 (null if generateReport=false)
-    incrementalPlan,       // NEW: 增量评估结果 (null if incremental=false)
+    report, // NEW: Phase 级报告 (null if generateReport=false)
+    incrementalPlan, // NEW: 增量评估结果 (null if incremental=false)
     isEmpty: false,
   };
 }
-

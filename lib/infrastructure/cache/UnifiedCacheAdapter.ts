@@ -88,7 +88,7 @@ export class UnifiedCacheAdapter {
 }
 
 // 单例实例
-let cacheAdapterInstance = null;
+let cacheAdapterInstance: UnifiedCacheAdapter | null = null;
 
 /**
  * 初始化统一缓存适配器

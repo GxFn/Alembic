@@ -88,7 +88,9 @@ export class AiScanService {
 
         // 委托 AgentFactory.scanKnowledge — Agent(LLM) 直接分析
         const extractResult = await this.agentFactory.scanKnowledge({
-          label: file.targetName, files: fileData, task: 'extract',
+          label: file.targetName,
+          files: fileData,
+          task: 'extract',
         });
         const recipes = extractResult.recipes || [];
 

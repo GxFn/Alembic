@@ -13,8 +13,8 @@
  * 插件注册入口: lib/core/ast/index.js
  */
 
+import { defaultExtractCallSites, getCallSiteExtractor } from './analysis/CallSiteExtractor.js';
 import { getParserClass, isParserReady } from './ast/parser-init.js';
-import { getCallSiteExtractor, defaultExtractCallSites } from './analysis/CallSiteExtractor.js';
 
 // ──────────────────────────────────────────────────────────────────
 // 插件注册表
@@ -86,7 +86,8 @@ function analyzeFile(source, lang, options: any = {}) {
 
   // Phase 5: 可选的 call site 提取 pass (post-walk extraction)
   if (options.extractCallSites !== false) {
-    const extractor = plugin.extractCallSites || getCallSiteExtractor(lang) || defaultExtractCallSites;
+    const extractor =
+      plugin.extractCallSites || getCallSiteExtractor(lang) || defaultExtractCallSites;
     try {
       extractor(root, ctx, lang);
     } catch (_e: any) {
@@ -363,7 +364,9 @@ function _getParser(lang) {
  */
 function parseToTree(source, lang) {
   const parser = _getParser(lang);
-  if (!parser) return null;
+  if (!parser) {
+    return null;
+  }
   try {
     const tree = parser.parse(source);
     return tree?.rootNode ? { rootNode: tree.rootNode, tree } : null;
@@ -471,7 +474,9 @@ function _buildInheritanceGraph(classes, protocols, categories) {
     // 兼容 ObjC category (className/categoryName) 和 Dart extension (name/targetClass)
     const catClassName = cat.className || cat.targetClass;
     const catCategoryName = cat.categoryName || cat.name;
-    if (!catClassName) continue; // 跳过无法确定目标类的 category
+    if (!catClassName) {
+      continue; // 跳过无法确定目标类的 category
+    }
     edges.push({
       from: `${catClassName}(${catCategoryName})`,
       to: catClassName,
@@ -621,7 +626,9 @@ function _aggregateMetrics(fileSummaries) {
     totalMethods: allMethods.length,
     totalClasses: allClasses.length,
     avgMethodsPerClass:
-      classCounts.length > 0 ? (classCounts as number[]).reduce((a, b) => a + b, 0) / classCounts.length : 0,
+      classCounts.length > 0
+        ? (classCounts as number[]).reduce((a, b) => a + b, 0) / classCounts.length
+        : 0,
     maxNestingDepth:
       allMethods.length > 0 ? Math.max(...allMethods.map((m) => m.nestingDepth || 0)) : 0,
     longMethods: allMethods

@@ -26,7 +26,16 @@ export const DIMENSION_SOP = {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   'code-standard': {
-    focusKeywords: ['命名约定', '类名前缀', '方法签名', '注释风格', '文件组织', 'camelCase', 'PascalCase', '代码规范'],
+    focusKeywords: [
+      '命名约定',
+      '类名前缀',
+      '方法签名',
+      '注释风格',
+      '文件组织',
+      'camelCase',
+      'PascalCase',
+      '代码规范',
+    ],
     steps: [
       {
         phase: '1. 全局扫描',
@@ -66,11 +75,26 @@ export const DIMENSION_SOP = {
   },
 
   'code-pattern': {
-    focusKeywords: ['设计模式', '单例', 'Singleton', '工厂', 'Factory', '委托', 'Delegate', '观察者', 'Observer', 'Builder', '继承', 'Extension', 'Category'],
+    focusKeywords: [
+      '设计模式',
+      '单例',
+      'Singleton',
+      '工厂',
+      'Factory',
+      '委托',
+      'Delegate',
+      '观察者',
+      'Observer',
+      'Builder',
+      '继承',
+      'Extension',
+      'Category',
+    ],
     steps: [
       {
         phase: '1. 模式识别',
-        action: '搜索常见设计模式关键词: Singleton/shared/default, Factory/create/build, Delegate/protocol, Observer/notify',
+        action:
+          '搜索常见设计模式关键词: Singleton/shared/default, Factory/create/build, Delegate/protocol, Observer/notify',
         expectedOutput: '列出项目中使用的设计模式类型及代表性实现',
         tools: ['grep_search 搜索单例、工厂、委托、观察者等关键词'],
       },
@@ -143,7 +167,17 @@ export const DIMENSION_SOP = {
   },
 
   'best-practice': {
-    focusKeywords: ['错误处理', 'Error Handling', '并发安全', '线程安全', '内存管理', '日志', '测试', 'logging', 'concurrency'],
+    focusKeywords: [
+      '错误处理',
+      'Error Handling',
+      '并发安全',
+      '线程安全',
+      '内存管理',
+      '日志',
+      '测试',
+      'logging',
+      'concurrency',
+    ],
     steps: [
       {
         phase: '1. 错误处理扫描',
@@ -153,7 +187,8 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '2. 并发与安全分析',
-        action: '搜索锁/队列/线程相关代码（dispatch_queue/mutex/synchronized/async-await），分析并发安全策略',
+        action:
+          '搜索锁/队列/线程相关代码（dispatch_queue/mutex/synchronized/async-await），分析并发安全策略',
         expectedOutput: '并发模式 + 线程安全约束',
         tools: ['grep_search 搜索并发相关关键词'],
       },
@@ -182,11 +217,25 @@ export const DIMENSION_SOP = {
   },
 
   'event-and-data-flow': {
-    focusKeywords: ['事件', 'Delegate', 'Notification', 'Block', 'Closure', 'callback', '数据流', '状态管理', 'KVO', '响应式', '持久化', 'Observable'],
+    focusKeywords: [
+      '事件',
+      'Delegate',
+      'Notification',
+      'Block',
+      'Closure',
+      'callback',
+      '数据流',
+      '状态管理',
+      'KVO',
+      '响应式',
+      '持久化',
+      'Observable',
+    ],
     steps: [
       {
         phase: '1. 事件机制扫描',
-        action: '搜索 Delegate/Protocol、Notification、Callback/Closure/Block、EventEmitter 等事件传播机制',
+        action:
+          '搜索 Delegate/Protocol、Notification、Callback/Closure/Block、EventEmitter 等事件传播机制',
         expectedOutput: '事件传播机制清单 + 各机制使用频率统计',
         tools: ['grep_search 搜索事件相关关键词'],
       },
@@ -221,13 +270,25 @@ export const DIMENSION_SOP = {
   },
 
   'project-profile': {
-    focusKeywords: ['技术栈', '目录结构', '三方依赖', '基础设施', '生命周期', '启动流程', 'Runtime', '入口点'],
+    focusKeywords: [
+      '技术栈',
+      '目录结构',
+      '三方依赖',
+      '基础设施',
+      '生命周期',
+      '启动流程',
+      'Runtime',
+      '入口点',
+    ],
     steps: [
       {
         phase: '1. 项目结构概览',
         action: '浏览根目录和核心子目录，识别模块划分和技术栈',
         expectedOutput: '技术栈清单、目录结构图、模块列表',
-        tools: ['list_dir 浏览目录', 'read_file 阅读配置文件(Package.swift/Podfile/package.json 等)'],
+        tools: [
+          'list_dir 浏览目录',
+          'read_file 阅读配置文件(Package.swift/Podfile/package.json 等)',
+        ],
       },
       {
         phase: '2. 依赖与基础设施',
@@ -261,7 +322,17 @@ export const DIMENSION_SOP = {
   },
 
   'agent-guidelines': {
-    focusKeywords: ['强制规范', '约束', '废弃 API', 'deprecated', '线程安全', '内存约束', 'TODO', 'FIXME', '架构约束'],
+    focusKeywords: [
+      '强制规范',
+      '约束',
+      '废弃 API',
+      'deprecated',
+      '线程安全',
+      '内存约束',
+      'TODO',
+      'FIXME',
+      '架构约束',
+    ],
     steps: [
       {
         phase: '1. 综合前序维度发现',
@@ -276,7 +347,8 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '3. 推导隐式约束',
-        action: '从代码模式中推导隐式约束（如"所有 Manager 必须是单例"、"网络请求必须通过 BaseRequest"）',
+        action:
+          '从代码模式中推导隐式约束（如"所有 Manager 必须是单例"、"网络请求必须通过 BaseRequest"）',
         expectedOutput: '隐式约束规则 + 代码证据',
       },
       {
@@ -306,7 +378,17 @@ export const DIMENSION_SOP = {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   'objc-deep-scan': {
-    focusKeywords: ['#define', '宏', 'macro', 'extern', 'static', '常量', 'Swizzling', 'hook', 'Method Swizzling'],
+    focusKeywords: [
+      '#define',
+      '宏',
+      'macro',
+      'extern',
+      'static',
+      '常量',
+      'Swizzling',
+      'hook',
+      'Method Swizzling',
+    ],
     steps: [
       {
         phase: '1. 宏定义扫描',
@@ -346,13 +428,26 @@ export const DIMENSION_SOP = {
   },
 
   'category-scan': {
-    focusKeywords: ['Category', 'Extension', 'Foundation', 'UIKit', '分类方法', 'NSString', 'UIView', 'NSArray'],
+    focusKeywords: [
+      'Category',
+      'Extension',
+      'Foundation',
+      'UIKit',
+      '分类方法',
+      'NSString',
+      'UIView',
+      'NSArray',
+    ],
     steps: [
       {
         phase: '1. Category 文件定位',
-        action: '搜索 Foundation/UIKit 基础类的 Category 文件（NSString+/UIView+/NSDictionary+ 等）',
+        action:
+          '搜索 Foundation/UIKit 基础类的 Category 文件（NSString+/UIView+/NSDictionary+ 等）',
         expectedOutput: 'Category 文件列表 + 基类分类统计',
-        tools: ['file_search 搜索 +Extension/+Category 文件', 'grep_search 搜索 @interface.*Category'],
+        tools: [
+          'file_search 搜索 +Extension/+Category 文件',
+          'grep_search 搜索 @interface.*Category',
+        ],
       },
       {
         phase: '2. 逐方法分析',
@@ -386,7 +481,15 @@ export const DIMENSION_SOP = {
   },
 
   'module-export-scan': {
-    focusKeywords: ['export', 'barrel', 're-export', 'index.ts', 'public API', 'tree-shaking', 'import'],
+    focusKeywords: [
+      'export',
+      'barrel',
+      're-export',
+      'index.ts',
+      'public API',
+      'tree-shaking',
+      'import',
+    ],
     steps: [
       {
         phase: '1. barrel export 扫描',
@@ -425,7 +528,17 @@ export const DIMENSION_SOP = {
   },
 
   'framework-convention-scan': {
-    focusKeywords: ['组件', 'component', '状态管理', 'store', '路由', 'router', '样式', 'CSS', 'data fetching'],
+    focusKeywords: [
+      '组件',
+      'component',
+      '状态管理',
+      'store',
+      '路由',
+      'router',
+      '样式',
+      'CSS',
+      'data fetching',
+    ],
     steps: [
       {
         phase: '1. 组件结构分析',
@@ -465,7 +578,15 @@ export const DIMENSION_SOP = {
   },
 
   'python-package-scan': {
-    focusKeywords: ['__init__', 'import', 'type hints', 'decorator', '__all__', 'package', 'module'],
+    focusKeywords: [
+      '__init__',
+      'import',
+      'type hints',
+      'decorator',
+      '__all__',
+      'package',
+      'module',
+    ],
     steps: [
       {
         phase: '1. 包结构分析',
@@ -505,7 +626,17 @@ export const DIMENSION_SOP = {
   },
 
   'jvm-annotation-scan': {
-    focusKeywords: ['@Inject', '@Autowired', '@Component', '@Entity', '@Table', '@RestController', 'annotation', 'DI', 'ORM'],
+    focusKeywords: [
+      '@Inject',
+      '@Autowired',
+      '@Component',
+      '@Entity',
+      '@Table',
+      '@RestController',
+      'annotation',
+      'DI',
+      'ORM',
+    ],
     steps: [
       {
         phase: '1. DI 注解扫描',
@@ -622,8 +753,7 @@ export const PRE_SUBMIT_CHECKLIST = {
       good: {
         content:
           '## BD 前缀单例管理类\n\n项目中所有 Manager 单例类使用 BD 前缀 + sharedInstance 模式...\n\n### 项目选择了什么\n18 个 Manager 类中 16 个使用此模式...\n\n```objc\n@interface BDVideoManager : NSObject\n+ (instancetype)sharedInstance;\n@end\n```\n(来源: BDVideoManager.h:12)',
-        doClause:
-          'Use BD prefix and sharedInstance class method for all singleton Manager classes',
+        doClause: 'Use BD prefix and sharedInstance class method for all singleton Manager classes',
         coreCode:
           '+ (instancetype)sharedInstance {\n    static id instance;\n    static dispatch_once_t onceToken;\n    dispatch_once(&onceToken, ^{ instance = [[self alloc] init]; });\n    return instance;\n}',
       },
@@ -679,8 +809,8 @@ export function getDimensionFocusKeywords(dimId, guideText = '') {
   if (guideText) {
     return guideText
       .split(/[、，,/·]/) // 中文顿号、逗号、英文逗号、斜杠、中文间隔号
-      .map(s => s.trim())
-      .filter(s => s.length >= 2 && s.length <= 30);
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 2 && s.length <= 30);
   }
   return [];
 }
@@ -691,7 +821,9 @@ export function getDimensionFocusKeywords(dimId, guideText = '') {
  * @returns {string} 紧凑的文本表示
  */
 export function sopToCompactText(sop) {
-  if (!sop?.steps) return '';
+  if (!sop?.steps) {
+    return '';
+  }
   const lines = [];
   for (const step of sop.steps) {
     lines.push(`${step.phase}: ${step.action}`);

@@ -188,7 +188,12 @@ export function buildAnalysisReport(analystResult, dimensionId, projectGraph = n
  * @param {object} [activeContext] - ActiveContext 实例
  * @returns {AnalysisArtifact}
  */
-export function buildAnalysisArtifact(analystResult, dimensionId, projectGraph = null, activeContext = null) {
+export function buildAnalysisArtifact(
+  analystResult,
+  dimensionId,
+  projectGraph = null,
+  activeContext = null
+) {
   const toolCalls = analystResult.toolCalls || [];
 
   const baseReport = buildAnalysisReport(analystResult, dimensionId, projectGraph);
@@ -202,7 +207,14 @@ export function buildAnalysisArtifact(analystResult, dimensionId, projectGraph =
   const distilled = activeContext?.distill() || { keyFindings: [], toolCallSummary: [] };
   const findings = distilled.keyFindings.map((f) => ({
     finding: f.finding,
-    evidence: typeof f.evidence === 'string' ? f.evidence : Array.isArray(f.evidence) ? f.evidence.join(', ') : f.evidence ? String(f.evidence) : '',
+    evidence:
+      typeof f.evidence === 'string'
+        ? f.evidence
+        : Array.isArray(f.evidence)
+          ? f.evidence.join(', ')
+          : f.evidence
+            ? String(f.evidence)
+            : '',
     importance: f.importance,
   }));
 
@@ -211,11 +223,7 @@ export function buildAnalysisArtifact(analystResult, dimensionId, projectGraph =
     allFiles.add(filePath);
   }
 
-  const qualityReport = buildQualityScores(
-    baseReport.analysisText,
-    findings,
-    evidence,
-  );
+  const qualityReport = buildQualityScores(baseReport.analysisText, findings, evidence);
 
   return {
     // Layer 1: Core
@@ -266,19 +274,20 @@ function buildQualityScores(analysisText, findings, evidence) {
   const uniqueFilesRead = evidence.evidenceMap?.size || 0;
   const snippetCount = [...(evidence.evidenceMap?.values() || [])].reduce(
     (sum, e) => sum + e.codeSnippets.length,
-    0,
+    0
   );
   scores.depthScore = Math.min(100, uniqueFilesRead * 15 + snippetCount * 5);
 
   const toolTypes = new Set((evidence.explorationLog || []).map((e) => e.tool));
   const logLen = evidence.explorationLog?.length || 0;
-  const effectiveRatio = logLen > 0
-    ? (evidence.explorationLog || []).filter((e) => e.effective).length / logLen
-    : 0;
+  const effectiveRatio =
+    logLen > 0 ? (evidence.explorationLog || []).filter((e) => e.effective).length / logLen : 0;
   scores.breadthScore = Math.min(100, toolTypes.size * 20 + effectiveRatio * 40);
 
   const findingCount = findings?.length || 0;
-  const evidencedFindings = (findings || []).filter((f) => f.evidence && f.evidence.length > 0).length;
+  const evidencedFindings = (findings || []).filter(
+    (f) => f.evidence && f.evidence.length > 0
+  ).length;
   scores.evidenceScore =
     findingCount > 0
       ? Math.min(100, (evidencedFindings / findingCount) * 60 + findingCount * 10)
@@ -292,20 +301,26 @@ function buildQualityScores(analysisText, findings, evidence) {
     (textLen > 500 ? 40 : textLen / 12.5) +
       (hasHeaders ? 20 : 0) +
       (hasLists ? 20 : 0) +
-      (findingCount >= 3 ? 20 : findingCount * 7),
+      (findingCount >= 3 ? 20 : findingCount * 7)
   );
 
   const totalScore = Math.round(
     scores.depthScore * 0.3 +
       scores.breadthScore * 0.2 +
       scores.evidenceScore * 0.3 +
-      scores.coherenceScore * 0.2,
+      scores.coherenceScore * 0.2
   );
 
   const suggestions = [];
-  if (scores.depthScore < 50) suggestions.push('Need more read_project_file to examine code');
-  if (scores.evidenceScore < 50) suggestions.push('Findings lack file-level evidence');
-  if (scores.coherenceScore < 50) suggestions.push('Analysis text is too short or unstructured');
+  if (scores.depthScore < 50) {
+    suggestions.push('Need more read_project_file to examine code');
+  }
+  if (scores.evidenceScore < 50) {
+    suggestions.push('Findings lack file-level evidence');
+  }
+  if (scores.coherenceScore < 50) {
+    suggestions.push('Analysis text is too short or unstructured');
+  }
 
   return { scores, totalScore, suggestions };
 }

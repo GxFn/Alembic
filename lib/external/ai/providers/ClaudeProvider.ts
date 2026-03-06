@@ -14,10 +14,6 @@ const CLAUDE_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
 
 export class ClaudeProvider extends AiProvider {
-
-
-
-
   constructor(config: any = {}) {
     super(config);
     this.name = 'claude';

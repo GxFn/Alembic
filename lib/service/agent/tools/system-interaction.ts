@@ -28,7 +28,7 @@ const execFileAsync = promisify(execFile);
 
 /** 工具层兜底: 始终拒绝的危险命令模式 (无论 SafetyPolicy 是否注入) */
 const HARDCODED_BLACKLIST = [
-  /\brm\s+-rf\s+[\/~]/,
+  /\brm\s+-rf\s+[/~]/,
   /\bsudo\b/,
   /\bmkfs\b/,
   /\bdd\s+if=/,
@@ -39,17 +39,37 @@ const HARDCODED_BLACKLIST = [
   /\bpasswd\b/,
   /\bkillall\b/,
   /\bfork\s*bomb/i,
-  /:\(\)\s*\{\s*:\|:\s*&\s*\}\s*;/,  // fork bomb pattern
+  /:\(\)\s*\{\s*:\|:\s*&\s*\}\s*;/, // fork bomb pattern
 ];
 
 /** 工具层兜底: 无 SafetyPolicy 时仅允许的安全命令前缀 */
 const FALLBACK_SAFE_PREFIXES = [
-  'ls', 'cat', 'head', 'tail', 'grep', 'find', 'wc',
-  'echo', 'pwd', 'date', 'which', 'file', 'stat',
-  'git log', 'git status', 'git diff', 'git branch', 'git show',
-  'npm list', 'npm outdated', 'node -v', 'npm -v',
-  'python --version', 'python3 --version',
-  'env', 'printenv',
+  'ls',
+  'cat',
+  'head',
+  'tail',
+  'grep',
+  'find',
+  'wc',
+  'echo',
+  'pwd',
+  'date',
+  'which',
+  'file',
+  'stat',
+  'git log',
+  'git status',
+  'git diff',
+  'git branch',
+  'git show',
+  'npm list',
+  'npm outdated',
+  'node -v',
+  'npm -v',
+  'python --version',
+  'python3 --version',
+  'env',
+  'printenv',
 ];
 
 /** 命令执行超时 (ms) */
@@ -68,7 +88,9 @@ const MAX_WRITE_SIZE = 512 * 1024;
  */
 function _isHardBlacklisted(command) {
   for (const pattern of HARDCODED_BLACKLIST) {
-    if (pattern.test(command)) return true;
+    if (pattern.test(command)) {
+      return true;
+    }
   }
   return false;
 }
@@ -78,14 +100,16 @@ function _isHardBlacklisted(command) {
  */
 function _isFallbackSafe(command) {
   const trimmed = command.trim();
-  return FALLBACK_SAFE_PREFIXES.some(prefix => trimmed.startsWith(prefix));
+  return FALLBACK_SAFE_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
 }
 
 /**
  * 截断过长输出
  */
 function _truncate(text, max = MAX_OUTPUT_LENGTH) {
-  if (!text || text.length <= max) return text;
+  if (!text || text.length <= max) {
+    return text;
+  }
   return `${text.slice(0, max)}\n\n... [输出已截断, 共 ${text.length} 字符]`;
 }
 
@@ -150,7 +174,8 @@ export const runSafeCommand = {
       // 无 SafetyPolicy 时使用白名单兜底
       if (!_isFallbackSafe(command)) {
         return {
-          error: `无安全策略: 命令 "${command}" 不在安全白名单中。` +
+          error:
+            `无安全策略: 命令 "${command}" 不在安全白名单中。` +
             `允许的命令前缀: ${FALLBACK_SAFE_PREFIXES.join(', ')}`,
         };
       }
@@ -177,7 +202,7 @@ export const runSafeCommand = {
       const { stdout, stderr } = await execFileAsync('sh', ['-c', command], {
         cwd: workDir,
         timeout: effectiveTimeout,
-        maxBuffer: 1024 * 1024,    // 1MB 缓冲
+        maxBuffer: 1024 * 1024, // 1MB 缓冲
         env: {
           ...process.env,
           // 禁用交互式 pager
@@ -402,30 +427,31 @@ export const getEnvironmentInfo = {
     if (all || sections.includes('git')) {
       info.git = {};
       try {
-        const { stdout: branch } = await execFileAsync(
-          'git', ['branch', '--show-current'],
-          { cwd: projectRoot, timeout: 5000 },
-        );
+        const { stdout: branch } = await execFileAsync('git', ['branch', '--show-current'], {
+          cwd: projectRoot,
+          timeout: 5000,
+        });
         info.git.branch = branch.trim();
 
-        const { stdout: status } = await execFileAsync(
-          'git', ['status', '--porcelain'],
-          { cwd: projectRoot, timeout: 5000 },
-        );
+        const { stdout: status } = await execFileAsync('git', ['status', '--porcelain'], {
+          cwd: projectRoot,
+          timeout: 5000,
+        });
         const lines = status.trim().split('\n').filter(Boolean);
         info.git.dirty = lines.length > 0;
         info.git.changedFiles = lines.length;
 
         const { stdout: lastCommit } = await execFileAsync(
-          'git', ['log', '-1', '--format=%h %s (%cr)'],
-          { cwd: projectRoot, timeout: 5000 },
+          'git',
+          ['log', '-1', '--format=%h %s (%cr)'],
+          { cwd: projectRoot, timeout: 5000 }
         );
         info.git.lastCommit = lastCommit.trim();
 
-        const { stdout: remoteUrl } = await execFileAsync(
-          'git', ['remote', 'get-url', 'origin'],
-          { cwd: projectRoot, timeout: 5000 },
-        );
+        const { stdout: remoteUrl } = await execFileAsync('git', ['remote', 'get-url', 'origin'], {
+          cwd: projectRoot,
+          timeout: 5000,
+        });
         info.git.remote = remoteUrl.trim();
       } catch {
         info.git.error = '非 Git 仓库或 Git 未安装';
@@ -448,7 +474,9 @@ export const getEnvironmentInfo = {
           info.project.type = pkg.type || 'commonjs';
           info.project.dependencies = Object.keys(pkg.dependencies || {}).length;
           info.project.devDependencies = Object.keys(pkg.devDependencies || {}).length;
-        } catch { /* invalid package.json */ }
+        } catch {
+          /* invalid package.json */
+        }
       }
 
       // Podfile / Cartfile / build.gradle / CMakeLists / Makefile 检测

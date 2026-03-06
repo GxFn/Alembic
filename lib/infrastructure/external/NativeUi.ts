@@ -29,11 +29,17 @@ let _lazyBuildAttempted = false;
  * 只调用一次，结果缓存到 _lazyBuildAttempted
  */
 function _tryLazyBuild() {
-  if (_lazyBuildAttempted) return;
+  if (_lazyBuildAttempted) {
+    return;
+  }
   _lazyBuildAttempted = true;
 
-  if (process.platform !== 'darwin') return;
-  if (!existsSync(NATIVE_UI_SRC) || !existsSync(NATIVE_UI_COMBINED)) return;
+  if (process.platform !== 'darwin') {
+    return;
+  }
+  if (!existsSync(NATIVE_UI_SRC) || !existsSync(NATIVE_UI_COMBINED)) {
+    return;
+  }
 
   try {
     execSync('which swiftc', { stdio: 'pipe' });

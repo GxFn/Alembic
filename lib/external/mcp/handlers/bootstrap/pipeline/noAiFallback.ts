@@ -72,7 +72,13 @@ export async function runNoAiFallback(fillContext) {
 
   // ── 2. Architecture ──
   try {
-    const arch = _buildArchitecture({ depGraphData, allTargets, targetFileMap, primaryLang, astProjectSummary });
+    const arch = _buildArchitecture({
+      depGraphData,
+      allTargets,
+      targetFileMap,
+      primaryLang,
+      astProjectSummary,
+    });
     if (arch) {
       candidates.push(arch);
       skills.push(_wrapAsSkill('architecture', '模块架构', arch.content.markdown));
@@ -235,10 +241,17 @@ function _buildProjectProfile({
     }
   }
   if (astProjectSummary) {
-    codeParts.push(`// 类: ${astProjectSummary.classes?.length || 0}, 协议: ${astProjectSummary.protocols?.length || 0}, 方法: ${astProjectSummary.projectMetrics?.totalMethods || 0}`);
+    codeParts.push(
+      `// 类: ${astProjectSummary.classes?.length || 0}, 协议: ${astProjectSummary.protocols?.length || 0}, 方法: ${astProjectSummary.projectMetrics?.totalMethods || 0}`
+    );
   }
   if (allTargets.length > 0) {
-    codeParts.push(`// Target: ${allTargets.slice(0, 8).map(t => typeof t === 'string' ? t : t.name).join(', ')}`);
+    codeParts.push(
+      `// Target: ${allTargets
+        .slice(0, 8)
+        .map((t) => (typeof t === 'string' ? t : t.name))
+        .join(', ')}`
+    );
   }
 
   const markdown = lines.join('\n');
@@ -262,7 +275,13 @@ function _buildProjectProfile({
   });
 }
 
-function _buildArchitecture({ depGraphData, allTargets, targetFileMap, primaryLang, astProjectSummary }) {
+function _buildArchitecture({
+  depGraphData,
+  allTargets,
+  targetFileMap,
+  primaryLang,
+  astProjectSummary,
+}) {
   if (!depGraphData?.edges?.length && allTargets.length < 2) {
     return null;
   }
@@ -333,15 +352,26 @@ function _buildArchitecture({ depGraphData, allTargets, targetFileMap, primaryLa
     const byBase: Record<string, any[]> = {};
     for (const cat of categories) {
       const base = cat.className || cat.baseClass || cat.name?.split('(')[0] || 'Unknown';
-      if (!byBase[base]) byBase[base] = [];
+      if (!byBase[base]) {
+        byBase[base] = [];
+      }
       byBase[base].push(cat);
     }
     const sortedBases = Object.entries(byBase).sort(([, a], [, b]) => b.length - a.length);
-    lines.push(`共 **${categories.length}** 个 Category，分布在 **${sortedBases.length}** 个基类上：`, '');
+    lines.push(
+      `共 **${categories.length}** 个 Category，分布在 **${sortedBases.length}** 个基类上：`,
+      ''
+    );
     for (const [base, cats] of sortedBases.slice(0, 10)) {
-      const catNames = cats.map(c => c.categoryName || c.name || '').filter(Boolean).slice(0, 5).join(', ');
+      const catNames = cats
+        .map((c) => c.categoryName || c.name || '')
+        .filter(Boolean)
+        .slice(0, 5)
+        .join(', ');
       const loc = cats[0]?.file ? ` (来源: ${_basename(cats[0].file)})` : '';
-      lines.push(`- \`${base}\` — ${cats.length} 个 Category${catNames ? ': ' + catNames : ''}${loc}`);
+      lines.push(
+        `- \`${base}\` — ${cats.length} 个 Category${catNames ? `: ${catNames}` : ''}${loc}`
+      );
     }
     if (sortedBases.length > 10) {
       lines.push(`- ...及 ${sortedBases.length - 10} 个其他基类`);
@@ -352,14 +382,17 @@ function _buildArchitecture({ depGraphData, allTargets, targetFileMap, primaryLa
   // 生成代码块 (P3)
   const codeLines: any[] = [];
   if (depGraphData?.edges?.length > 0) {
-    codeLines.push('// 模块依赖关系 (共 ' + depGraphData.edges.length + ' 条)');
+    codeLines.push(`// 模块依赖关系 (共 ${depGraphData.edges.length} 条)`);
     const seen = new Set();
     for (const e of depGraphData.edges.slice(0, 15)) {
       const from = typeof e.from === 'string' ? e.from : e.source;
       const to = typeof e.to === 'string' ? e.to : e.target;
       if (from && to) {
         const key = `${from} -> ${to}`;
-        if (!seen.has(key)) { codeLines.push(key); seen.add(key); }
+        if (!seen.has(key)) {
+          codeLines.push(key);
+          seen.add(key);
+        }
       }
     }
   }
@@ -478,7 +511,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
     if (metrics.complexMethods?.length > 0) {
       lines.push(`- 高圈复杂度方法: ${metrics.complexMethods.length} 个`);
       for (const m of metrics.complexMethods.slice(0, 5)) {
-        const loc = m.file ? ` (来源: ${_basename(m.file)}${m.line ? ':' + m.line : ''})` : '';
+        const loc = m.file ? ` (来源: ${_basename(m.file)}${m.line ? `:${m.line}` : ''})` : '';
         lines.push(
           `  - \`${m.className ? `${m.className}.` : ''}${m.name}\` — complexity ${m.complexity}${loc}`
         );
@@ -488,8 +521,10 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
       lines.push(`- 过长方法: ${metrics.longMethods.length} 个`);
       for (const m of metrics.longMethods.slice(0, 5)) {
         const bodyLen = m.lines || m.bodyLines || '?';
-        const loc = m.file ? ` (来源: ${_basename(m.file)}${m.line ? ':' + m.line : ''})` : '';
-        lines.push(`  - \`${m.className ? `${m.className}.` : ''}${m.name}\` — ${bodyLen} 行${loc}`);
+        const loc = m.file ? ` (来源: ${_basename(m.file)}${m.line ? `:${m.line}` : ''})` : '';
+        lines.push(
+          `  - \`${m.className ? `${m.className}.` : ''}${m.name}\` — ${bodyLen} 行${loc}`
+        );
       }
     }
     lines.push('');
@@ -499,7 +534,9 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
   const sourceFiles = new Set();
   if (metrics) {
     for (const m of (metrics.longMethods || []).concat(metrics.complexMethods || [])) {
-      if (m.file) sourceFiles.add(m.file);
+      if (m.file) {
+        sourceFiles.add(m.file);
+      }
     }
   }
 
@@ -516,7 +553,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
     codeLines.push('// 过长方法示例 (应重构)');
     for (const m of metrics.longMethods.slice(0, 3)) {
       const bodyLen = m.lines || m.bodyLines || '?';
-      codeLines.push(`// ${m.className ? m.className + '.' : ''}${m.name} — ${bodyLen} 行`);
+      codeLines.push(`// ${m.className ? `${m.className}.` : ''}${m.name} — ${bodyLen} 行`);
     }
   }
 
@@ -547,7 +584,16 @@ function _buildBestPractice({ guardAudit, primaryLang }) {
   }
 
   // 聚合所有违规
-  const ruleStats: Record<string, { count: number; severity: string; message: string; files: Set<string>; fixSuggestion: string | null }> = {};
+  const ruleStats: Record<
+    string,
+    {
+      count: number;
+      severity: string;
+      message: string;
+      files: Set<string>;
+      fixSuggestion: string | null;
+    }
+  > = {};
   for (const f of guardAudit.files) {
     for (const v of f.violations || []) {
       if (!ruleStats[v.ruleId]) {
@@ -600,7 +646,9 @@ function _buildBestPractice({ guardAudit, primaryLang }) {
   // 收集违规文件路径 (P4)
   const violationFiles = new Set();
   for (const f of guardAudit.files) {
-    if (f.violations?.length > 0 && f.filePath) violationFiles.add(f.filePath);
+    if (f.violations?.length > 0 && f.filePath) {
+      violationFiles.add(f.filePath);
+    }
   }
 
   // 生成 coreCode (P3): Guard 规则摘要
@@ -696,10 +744,14 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }) {
   // 生成 coreCode (P3)
   const codeLines = ['// Agent 强制规则'];
   if (astProjectSummary?.projectMetrics?.maxNestingDepth >= 5) {
-    codeLines.push(`// 最大嵌套: ${astProjectSummary.projectMetrics.maxNestingDepth} → 新代码应 <4`);
+    codeLines.push(
+      `// 最大嵌套: ${astProjectSummary.projectMetrics.maxNestingDepth} → 新代码应 <4`
+    );
   }
   if (astProjectSummary?.projectMetrics?.longMethods?.length > 0) {
-    codeLines.push(`// 过长方法: ${astProjectSummary.projectMetrics.longMethods.length} 个 → 新方法应 <50行`);
+    codeLines.push(
+      `// 过长方法: ${astProjectSummary.projectMetrics.longMethods.length} 个 → 新方法应 <50行`
+    );
   }
 
   return _makeCandidate({
@@ -724,14 +776,26 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }) {
 
 /** 从绝对/相对路径取文件名 */
 function _basename(fp) {
-  if (!fp) return '';
+  if (!fp) {
+    return '';
+  }
   const idx = fp.lastIndexOf('/');
   return idx >= 0 ? fp.slice(idx + 1) : fp;
 }
 
 function _makeCandidate({
-  title, knowledgeType, category, language, markdown, rationale,
-  coreCode, trigger, doClause, dontClause, whenClause, sources,
+  title,
+  knowledgeType,
+  category,
+  language,
+  markdown,
+  rationale,
+  coreCode,
+  trigger,
+  doClause,
+  dontClause,
+  whenClause,
+  sources,
 }) {
   return {
     title,

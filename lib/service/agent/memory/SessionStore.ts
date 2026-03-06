@@ -156,7 +156,14 @@ export class SessionStore {
     // P0 Fix: evidence 可能是 array/object，强制 string
     const findings = (report.findings || []).map((f) => ({
       finding: f.finding || '',
-      evidence: typeof f.evidence === 'string' ? f.evidence : Array.isArray(f.evidence) ? f.evidence.join(', ') : f.evidence ? String(f.evidence) : '',
+      evidence:
+        typeof f.evidence === 'string'
+          ? f.evidence
+          : Array.isArray(f.evidence)
+            ? f.evidence.join(', ')
+            : f.evidence
+              ? String(f.evidence)
+              : '',
       importance: f.importance || 5,
     }));
 
@@ -256,7 +263,9 @@ export class SessionStore {
     const lowerQuery = query.toLowerCase();
     for (const [filePath, evidences] of this.#evidenceStore) {
       for (const ev of evidences) {
-        if (dimId && ev.dimId !== dimId) continue;
+        if (dimId && ev.dimId !== dimId) {
+          continue;
+        }
         const matchesFile = filePath.toLowerCase().includes(lowerQuery);
         const matchesFinding = (ev.finding || '').toLowerCase().includes(lowerQuery);
         if (matchesFile || matchesFinding) {
@@ -365,7 +374,9 @@ export class SessionStore {
    * @returns {string|null}
    */
   getRelevantReflections(currentDimId) {
-    if (this.#tierReflections.length === 0) return null;
+    if (this.#tierReflections.length === 0) {
+      return null;
+    }
     const parts = [];
     for (const ref of this.#tierReflections) {
       parts.push(`### Tier ${ref.tierIndex + 1} 综合洞察`);
@@ -377,11 +388,15 @@ export class SessionStore {
       }
       if (ref.crossDimensionPatterns?.length > 0) {
         parts.push('**跨维度模式**:');
-        for (const p of ref.crossDimensionPatterns) parts.push(`- ${p}`);
+        for (const p of ref.crossDimensionPatterns) {
+          parts.push(`- ${p}`);
+        }
       }
       if (ref.suggestionsForNextTier?.length > 0) {
         parts.push('**对后续维度的建议**:');
-        for (const s of ref.suggestionsForNextTier) parts.push(`- ${s}`);
+        for (const s of ref.suggestionsForNextTier) {
+          parts.push(`- ${s}`);
+        }
       }
     }
     return parts.length > 0 ? parts.join('\n') : null;
@@ -414,7 +429,9 @@ export class SessionStore {
       ([id]) => id !== currentDimId
     );
 
-    if (completedDims.length === 0 && this.#tierReflections.length === 0) return '';
+    if (completedDims.length === 0 && this.#tierReflections.length === 0) {
+      return '';
+    }
 
     parts.push('## 前序维度分析成果（避免重复探索）');
 
@@ -443,7 +460,9 @@ export class SessionStore {
         parts.push('**具体发现**:');
         for (const f of relevantFindings) {
           let line = `- [${f.importance}/10] ${f.finding}`;
-          if (f.evidence) line += ` _(${f.evidence})_`;
+          if (f.evidence) {
+            line += ` _(${f.evidence})_`;
+          }
           parts.push(line);
         }
       }
@@ -478,7 +497,9 @@ export class SessionStore {
 
     // §4: Tier Reflection
     const reflections = this.getRelevantReflections(currentDimId);
-    if (reflections) parts.push(reflections);
+    if (reflections) {
+      parts.push(reflections);
+    }
 
     // Token 预算裁剪
     let result = parts.join('\n');
@@ -487,7 +508,7 @@ export class SessionStore {
       if (estimatedTokens > tokenBudget) {
         // 粗略裁剪
         const maxChars = tokenBudget * 4;
-        result = result.substring(0, maxChars) + '\n…(truncated due to budget)';
+        result = `${result.substring(0, maxChars)}\n…(truncated due to budget)`;
       }
     }
 
@@ -502,7 +523,9 @@ export class SessionStore {
   buildContextSnapshot(currentDimId) {
     const previousDimensions = {};
     for (const [dimId, report] of this.#dimensionReports) {
-      if (dimId === currentDimId) continue;
+      if (dimId === currentDimId) {
+        continue;
+      }
       previousDimensions[dimId] = report.digest || {
         summary: report.analysisText?.substring(0, 300) || '',
         candidateCount: report.candidatesSummary?.length || 0,
@@ -529,7 +552,9 @@ export class SessionStore {
    */
   getDistilledForProducer(dimId) {
     const report = this.#dimensionReports.get(dimId);
-    if (!report) return null;
+    if (!report) {
+      return null;
+    }
 
     return {
       keyFindings: report.workingMemoryDistilled?.keyFindings || [],
@@ -549,7 +574,9 @@ export class SessionStore {
    * @returns {*|null}
    */
   getCachedResult(toolName, args) {
-    if (NON_CACHEABLE.has(toolName)) return null;
+    if (NON_CACHEABLE.has(toolName)) {
+      return null;
+    }
 
     if (toolName === 'search_project_code') {
       const pattern = args?.pattern || '';
@@ -596,7 +623,9 @@ export class SessionStore {
    * @param {*} result
    */
   cacheToolResult(toolName, args, result) {
-    if (NON_CACHEABLE.has(toolName)) return;
+    if (NON_CACHEABLE.has(toolName)) {
+      return;
+    }
 
     if (toolName === 'search_project_code') {
       const pattern = args?.pattern || '';
@@ -674,9 +703,7 @@ export class SessionStore {
         JSON.stringify(data, null, 2),
         'utf-8'
       );
-      this.#logger.info(
-        `[SessionStore] Checkpoint saved: ${this.#dimensionReports.size} reports`
-      );
+      this.#logger.info(`[SessionStore] Checkpoint saved: ${this.#dimensionReports.size} reports`);
     } catch (err: any) {
       this.#logger.warn(`[SessionStore] Failed to save checkpoint: ${err.message}`);
     }
@@ -688,12 +715,24 @@ export class SessionStore {
    */
   async loadCheckpoint(projectRoot) {
     // Try new format first, then legacy
-    const newPath = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint', 'session-store.json');
-    const legacyPath = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint', 'episodic-memory.json');
+    const newPath = path.join(
+      projectRoot,
+      '.autosnippet',
+      'bootstrap-checkpoint',
+      'session-store.json'
+    );
+    const legacyPath = path.join(
+      projectRoot,
+      '.autosnippet',
+      'bootstrap-checkpoint',
+      'episodic-memory.json'
+    );
     const checkpointPath = fs.existsSync(newPath) ? newPath : legacyPath;
 
     try {
-      if (!fs.existsSync(checkpointPath)) return false;
+      if (!fs.existsSync(checkpointPath)) {
+        return false;
+      }
 
       const raw = fs.readFileSync(checkpointPath, 'utf-8');
       const data = JSON.parse(raw);
@@ -712,17 +751,19 @@ export class SessionStore {
           this.#dimensionReports.set(dimId, report);
         }
       }
-      if (data.crossReferences) this.#crossReferences = data.crossReferences;
-      if (data.tierReflections) this.#tierReflections = data.tierReflections;
+      if (data.crossReferences) {
+        this.#crossReferences = data.crossReferences;
+      }
+      if (data.tierReflections) {
+        this.#tierReflections = data.tierReflections;
+      }
       if (data.submittedCandidates) {
         for (const [dimId, candidates] of Object.entries(data.submittedCandidates)) {
           this.#submittedCandidates.set(dimId, candidates);
         }
       }
 
-      this.#logger.info(
-        `[SessionStore] Checkpoint loaded: ${this.#dimensionReports.size} reports`
-      );
+      this.#logger.info(`[SessionStore] Checkpoint loaded: ${this.#dimensionReports.size} reports`);
       return true;
     } catch (err: any) {
       this.#logger.warn(`[SessionStore] Failed to load checkpoint: ${err.message}`);
@@ -751,8 +792,12 @@ export class SessionStore {
         store.#dimensionReports.set(k, v);
       }
     }
-    if (json.crossReferences) store.#crossReferences = json.crossReferences;
-    if (json.tierReflections) store.#tierReflections = json.tierReflections;
+    if (json.crossReferences) {
+      store.#crossReferences = json.crossReferences;
+    }
+    if (json.tierReflections) {
+      store.#tierReflections = json.tierReflections;
+    }
     if (json.submittedCandidates) {
       for (const [k, v] of Object.entries(json.submittedCandidates)) {
         store.#submittedCandidates.set(k, v);
@@ -772,7 +817,9 @@ export class SessionStore {
   getAllReferencedFiles() {
     const files = new Set();
     for (const report of this.#dimensionReports.values()) {
-      for (const f of report.referencedFiles) files.add(f);
+      for (const f of report.referencedFiles) {
+        files.add(f);
+      }
     }
     return files;
   }
@@ -783,13 +830,16 @@ export class SessionStore {
    */
   getStats() {
     const totalFindings = [...this.#dimensionReports.values()].reduce(
-      (sum, r) => sum + r.findings.length, 0
+      (sum, r) => sum + r.findings.length,
+      0
     );
     const totalEvidence = [...this.#evidenceStore.values()].reduce(
-      (sum, arr) => sum + arr.length, 0
+      (sum, arr) => sum + arr.length,
+      0
     );
     const totalCandidates = [...this.#submittedCandidates.values()].reduce(
-      (sum, arr) => sum + arr.length, 0
+      (sum, arr) => sum + arr.length,
+      0
     );
     const { hits, misses } = this.#cacheStats;
     return {
@@ -802,9 +852,7 @@ export class SessionStore {
       referencedFiles: this.getAllReferencedFiles().size,
       cache: {
         ...this.#cacheStats,
-        hitRate: hits + misses > 0
-          ? `${((hits / (hits + misses)) * 100).toFixed(1)}%`
-          : '0%',
+        hitRate: hits + misses > 0 ? `${((hits / (hits + misses)) * 100).toFixed(1)}%` : '0%',
         searchCacheSize: this.#searchCache.size,
         fileCacheSize: this.#fileCache.size,
       },
@@ -848,7 +896,9 @@ export class SessionStore {
    * 从 findings 中选择与当前焦点最相关的
    */
   #selectRelevantFindings(findings, focusKeywords, limit) {
-    if (!findings || findings.length === 0) return [];
+    if (!findings || findings.length === 0) {
+      return [];
+    }
 
     if (!focusKeywords || focusKeywords.length === 0) {
       return [...findings]
@@ -860,7 +910,9 @@ export class SessionStore {
       .map((f) => {
         const relevance = focusKeywords.some((kw) =>
           (f.finding || '').toLowerCase().includes(kw.toLowerCase())
-        ) ? 1 : 0;
+        )
+          ? 1
+          : 0;
         return { ...f, _score: relevance * 10 + (f.importance || 5) };
       })
       .sort((a, b) => b._score - a._score)
@@ -872,7 +924,9 @@ export class SessionStore {
    * 清理过期缓存条目 (F13)
    */
   #evictExpired() {
-    if (this.#ttlMs <= 0) return;
+    if (this.#ttlMs <= 0) {
+      return;
+    }
     const now = Date.now();
     let evicted = 0;
     for (const [key, entry] of this.#searchCache) {

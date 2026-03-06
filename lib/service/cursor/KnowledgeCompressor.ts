@@ -160,9 +160,7 @@ export class KnowledgeCompressor {
       .filter((e) => e.title)
       .map((e) => {
         const summary = e.description || e.content?.markdown || '';
-        const shortSummary = summary.length > 150
-          ? `${summary.slice(0, 147)}...`
-          : summary;
+        const shortSummary = summary.length > 150 ? `${summary.slice(0, 147)}...` : summary;
         return { title: e.title, summary: shortSummary };
       });
   }
@@ -173,7 +171,9 @@ export class KnowledgeCompressor {
    * @returns {string}
    */
   formatFactLines(factLines) {
-    if (factLines.length === 0) return '';
+    if (factLines.length === 0) {
+      return '';
+    }
     const lines = ['', '## Context Facts', ''];
     for (const f of factLines) {
       if (f.summary) {

@@ -21,8 +21,19 @@ const DEFAULT_OVERLAP_TOKENS = 50;
 
 /** 代码语言集合 (可使用 AST 分块) */
 const CODE_LANGUAGES = new Set([
-  'javascript', 'typescript', 'tsx', 'python', 'java', 'kotlin',
-  'go', 'swift', 'rust', 'dart', 'objectivec', 'objective-c', 'objc',
+  'javascript',
+  'typescript',
+  'tsx',
+  'python',
+  'java',
+  'kotlin',
+  'go',
+  'swift',
+  'rust',
+  'dart',
+  'objectivec',
+  'objective-c',
+  'objc',
 ]);
 
 /**
@@ -63,7 +74,12 @@ export function chunk(content, metadata: any = {}, options: any = {}) {
 
   switch (selectedStrategy) {
     case 'whole':
-      return [{ content, metadata: { ...metadata, chunkIndex: 0, totalChunks: 1, chunkStrategy: 'whole' } }];
+      return [
+        {
+          content,
+          metadata: { ...metadata, chunkIndex: 0, totalChunks: 1, chunkStrategy: 'whole' },
+        },
+      ];
     case 'ast': {
       // AST 分块, 失败时 fallback 到 fixed
       const astChunks = chunkByAST(content, language, metadata, { maxChunkTokens });

@@ -4,7 +4,6 @@
  */
 
 import { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
-import { getRequiredFieldsDescription } from '../../../shared/FieldSpec.js';
 import { envelope } from '../envelope.js';
 
 // ─── 限流 ──────────────────────────────────────────────────
@@ -183,9 +182,12 @@ export async function submitKnowledgeBatch(ctx, args) {
     if (session?.submissionTracker) {
       const progress = session.getProgress();
       // 优先使用 Agent 显式传递的 dimensionId，其次推断 remainingDimIds[0]
-      currentDimId = args.dimensionId || progress.remainingDimIds[0] || args.target_name || 'unknown';
+      currentDimId =
+        args.dimensionId || progress.remainingDimIds[0] || args.target_name || 'unknown';
     }
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
 
   for (let i = 0; i < items.length; i++) {
     // ── 严格前置校验：缺少必要字段的条目直接拒绝，不入库 ──
@@ -201,8 +203,13 @@ export async function submitKnowledgeBatch(ctx, args) {
       if (session?.submissionTracker && currentDimId) {
         try {
           session.submissionTracker.recordRejection(
-            currentDimId, items[i].title || '(untitled)', validation.errors.join(', '));
-        } catch { /* best effort */ }
+            currentDimId,
+            items[i].title || '(untitled)',
+            validation.errors.join(', ')
+          );
+        } catch {
+          /* best effort */
+        }
       }
       // 记录标题/指纹供后续去重检测
       validator.recordSubmission(items[i].title, items[i].content?.pattern);
@@ -220,7 +227,9 @@ export async function submitKnowledgeBatch(ctx, args) {
       if (session?.submissionTracker && currentDimId && entry?.id) {
         try {
           session.submissionTracker.recordSubmission(currentDimId, items[i], entry.id);
-        } catch { /* best effort */ }
+        } catch {
+          /* best effort */
+        }
       }
     } catch (err: any) {
       itemErrors.push({ index: i, title: items[i].title || '(untitled)', error: err.message });

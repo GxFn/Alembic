@@ -875,7 +875,9 @@ function _detectNamingPatterns(fileNames) {
   }
 
   // 出现 ≥2 次的后缀视为命名约定
-  for (const [suffix, count] of Object.entries(suffixes).sort((a, b) => (b[1] as number) - (a[1] as number))) {
+  for (const [suffix, count] of Object.entries(suffixes).sort(
+    (a, b) => (b[1] as number) - (a[1] as number)
+  )) {
     if ((count as number) >= 2) {
       patterns.push(`*${suffix}: ${count}`);
     }

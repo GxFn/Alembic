@@ -38,6 +38,8 @@
       "suspicious": {
         "noVar": "error",
         "noDoubleEquals": "error",
+        "noExplicitAny": "warn",
+        "noImplicitAnyLet": "warn",
         "noAssignInExpressions": "off",
         "noConsole": {
           "level": "warn",

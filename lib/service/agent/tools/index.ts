@@ -5,10 +5,7 @@
  */
 
 // ── AI 分析类 (2) ──
-import {
-  enrichCandidate,
-  refineBootstrapCandidates,
-} from './ai-analysis.js';
+import { enrichCandidate, refineBootstrapCandidates } from './ai-analysis.js';
 // ── AST 结构化分析 + Agent Memory (11) ──
 import {
   getCategoryMap,
@@ -34,12 +31,7 @@ import {
 } from './composite.js';
 
 // ── Guard 安全类 (4) ──
-import {
-  getRecommendations,
-  guardCheckCode,
-  listGuardRules,
-  queryViolations,
-} from './guard.js';
+import { getRecommendations, guardCheckCode, listGuardRules, queryViolations } from './guard.js';
 // ── 基础设施类 (7) ──
 import {
   bootstrapKnowledgeTool,
@@ -52,14 +44,6 @@ import {
 } from './infrastructure.js';
 // ── 知识图谱类 (2) ──
 import { addGraphEdge, checkDuplicate } from './knowledge-graph.js';
-// ── 扫描 Recipe 收集 (1) ──
-import { collectScanRecipe } from './scan-recipe.js';
-// ── 系统交互类 (3) ──
-import {
-  getEnvironmentInfo,
-  runSafeCommand,
-  writeProjectFile,
-} from './system-interaction.js';
 // ── 生命周期操作类 (11) ──
 import {
   approveCandidate,
@@ -91,6 +75,10 @@ import {
   searchKnowledge,
   searchRecipes,
 } from './query.js';
+// ── 扫描 Recipe 收集 (1) ──
+import { collectScanRecipe } from './scan-recipe.js';
+// ── 系统交互类 (3) ──
+import { getEnvironmentInfo, runSafeCommand, writeProjectFile } from './system-interaction.js';
 
 // ── Re-export 所有工具 ──
 export {

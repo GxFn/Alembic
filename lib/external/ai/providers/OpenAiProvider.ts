@@ -13,10 +13,7 @@ import { AiProvider } from '../AiProvider.js';
 const OPENAI_BASE = 'https://api.openai.com/v1';
 
 export class OpenAiProvider extends AiProvider {
-
-
   embedModel: any;
-
 
   constructor(config: any = {}) {
     super(config);

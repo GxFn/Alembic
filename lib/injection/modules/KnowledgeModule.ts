@@ -12,15 +12,15 @@
 
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { getEnhancementRegistry } from '../../core/enhancement/index.js';
+import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter.js';
 import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
-import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter.js';
 import { CodeEntityGraph } from '../../service/knowledge/CodeEntityGraph.js';
 import { ConfidenceRouter } from '../../service/knowledge/ConfidenceRouter.js';
 import { KnowledgeGraphService } from '../../service/knowledge/KnowledgeGraphService.js';
 import { KnowledgeService } from '../../service/knowledge/KnowledgeService.js';
-import { HybridRetriever } from '../../service/search/HybridRetriever.js';
 import { CrossEncoderReranker } from '../../service/search/CrossEncoderReranker.js';
+import { HybridRetriever } from '../../service/search/HybridRetriever.js';
 import { RetrievalFunnel } from '../../service/search/RetrievalFunnel.js';
 import { SearchEngine } from '../../service/search/SearchEngine.js';
 import { DimensionCopy } from '../../shared/DimensionCopyRegistry.js';
@@ -31,26 +31,27 @@ export function register(c) {
 
   c.singleton('confidenceRouter', (ct) => new ConfidenceRouter({}, ct.get('qualityScorer')));
 
-  c.singleton('knowledgeService', (ct) =>
-    new KnowledgeService(
-      ct.get('knowledgeRepository'),
-      ct.get('auditLogger'),
-      ct.get('gateway'),
-      ct.get('knowledgeGraphService'),
-      {
-        fileWriter: ct.get('knowledgeFileWriter'),
-        skillHooks: ct.get('skillHooks'),
-        confidenceRouter: ct.get('confidenceRouter'),
-        qualityScorer: ct.get('qualityScorer'),
-      }
-    )
+  c.singleton(
+    'knowledgeService',
+    (ct) =>
+      new KnowledgeService(
+        ct.get('knowledgeRepository'),
+        ct.get('auditLogger'),
+        ct.get('gateway'),
+        ct.get('knowledgeGraphService'),
+        {
+          fileWriter: ct.get('knowledgeFileWriter'),
+          skillHooks: ct.get('skillHooks'),
+          confidenceRouter: ct.get('confidenceRouter'),
+          qualityScorer: ct.get('qualityScorer'),
+        }
+      )
   );
 
   c.singleton('knowledgeGraphService', (ct) => new KnowledgeGraphService(ct.get('database')));
 
   c.singleton('codeEntityGraph', (ct) => {
-    const projectRoot =
-      ct.singletons._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
+    const projectRoot = ct.singletons._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
     return new CodeEntityGraph(ct.get('database'), { projectRoot });
   });
 

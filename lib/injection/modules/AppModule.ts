@@ -11,8 +11,9 @@
  * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
-import { SpmHelper } from '../../platform/ios/spm/SpmHelper.js';
+import { TaskIdGenerator } from '../../domain/task/TaskIdGenerator.js';
 import { XcodeCodec } from '../../platform/ios/snippet/XcodeCodec.js';
+import { SpmHelper } from '../../platform/ios/spm/SpmHelper.js';
 import { TokenUsageStore } from '../../repository/token/TokenUsageStore.js';
 import { AutomationOrchestrator } from '../../service/automation/AutomationOrchestrator.js';
 import { RecipeExtractor } from '../../service/context/RecipeExtractor.js';
@@ -25,10 +26,9 @@ import { RecipeParser } from '../../service/recipe/RecipeParser.js';
 import { VSCodeCodec } from '../../service/snippet/codecs/VSCodeCodec.js';
 import { SnippetFactory } from '../../service/snippet/SnippetFactory.js';
 import { SnippetInstaller } from '../../service/snippet/SnippetInstaller.js';
-import { TaskIdGenerator } from '../../domain/task/TaskIdGenerator.js';
-import { TaskReadyEngine } from '../../service/task/TaskReadyEngine.js';
-import { TaskKnowledgeBridge } from '../../service/task/TaskKnowledgeBridge.js';
 import { TaskGraphService } from '../../service/task/TaskGraphService.js';
+import { TaskKnowledgeBridge } from '../../service/task/TaskKnowledgeBridge.js';
+import { TaskReadyEngine } from '../../service/task/TaskReadyEngine.js';
 
 export function register(c) {
   // ═══ Quality + Recipe ═══
@@ -85,13 +85,15 @@ export function register(c) {
     });
   });
 
-  c.singleton('cursorDeliveryPipeline', (ct) =>
-    new CursorDeliveryPipeline({
-      knowledgeService: ct.get('knowledgeService'),
-      projectRoot: ct.singletons._projectRoot || process.cwd(),
-      database: ct.get('database'),
-      logger: ct.logger,
-    } as any)
+  c.singleton(
+    'cursorDeliveryPipeline',
+    (ct) =>
+      new CursorDeliveryPipeline({
+        knowledgeService: ct.get('knowledgeService'),
+        projectRoot: ct.singletons._projectRoot || process.cwd(),
+        database: ct.get('database'),
+        logger: ct.logger,
+      } as any)
   );
 
   // ═══ TaskGraph ═══
@@ -99,14 +101,16 @@ export function register(c) {
   c.singleton('taskIdGenerator', (ct) => new TaskIdGenerator(ct.get('database').getDb()));
   c.singleton('taskReadyEngine', (ct) => new TaskReadyEngine(ct.get('database').getDb()));
   c.singleton('taskKnowledgeBridge', (ct) => new TaskKnowledgeBridge(ct.get('searchEngine')));
-  c.singleton('taskGraphService', (ct) =>
-    new TaskGraphService(
-      ct.get('taskRepository'),
-      ct.get('taskReadyEngine'),
-      ct.get('taskKnowledgeBridge'),
-      ct.get('auditLogger'),
-      ct.get('taskIdGenerator')
-    )
+  c.singleton(
+    'taskGraphService',
+    (ct) =>
+      new TaskGraphService(
+        ct.get('taskRepository'),
+        ct.get('taskReadyEngine'),
+        ct.get('taskKnowledgeBridge'),
+        ct.get('auditLogger'),
+        ct.get('taskIdGenerator')
+      )
   );
 }
 

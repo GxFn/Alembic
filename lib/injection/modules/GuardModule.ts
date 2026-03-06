@@ -25,9 +25,14 @@ export function register(c) {
     } catch {
       /* not yet available */
     }
-    return new GuardService(ct.get('knowledgeRepository'), ct.get('auditLogger'), ct.get('gateway'), {
-      guardCheckEngine,
-    });
+    return new GuardService(
+      ct.get('knowledgeRepository'),
+      ct.get('auditLogger'),
+      ct.get('gateway'),
+      {
+        guardCheckEngine,
+      }
+    );
   });
 
   c.singleton('guardCheckEngine', (ct) => {
@@ -58,9 +63,11 @@ export function register(c) {
     );
   });
 
-  c.singleton('guardFeedbackLoop', (ct) =>
-    new GuardFeedbackLoop(ct.get('violationsStore'), ct.get('feedbackCollector'), {
-      guardCheckEngine: ct.get('guardCheckEngine'),
-    })
+  c.singleton(
+    'guardFeedbackLoop',
+    (ct) =>
+      new GuardFeedbackLoop(ct.get('violationsStore'), ct.get('feedbackCollector'), {
+        guardCheckEngine: ct.get('guardCheckEngine'),
+      })
   );
 }

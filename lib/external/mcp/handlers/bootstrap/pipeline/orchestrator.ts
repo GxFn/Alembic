@@ -17,25 +17,27 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import Logger from '../../../../../infrastructure/logging/Logger.js';
-import { EpisodicConsolidator } from '../../../../../service/agent/domain/EpisodicConsolidator.js';
-import { PersistentMemory } from '../../../../../service/agent/memory/PersistentMemory.js';
-import { MemoryCoordinator } from '../../../../../service/agent/memory/MemoryCoordinator.js';
-import { SessionStore } from '../../../../../service/agent/memory/SessionStore.js';
 import { AgentMessage } from '../../../../../service/agent/AgentMessage.js';
-import { BudgetPolicy } from '../../../../../service/agent/policies.js';
-import { PRESETS } from '../../../../../service/agent/presets.js';
-import { ANALYST_BUDGET } from '../../../../../service/agent/domain/insight-analyst.js';
-import { ContextWindow } from '../../../../../service/agent/context/ContextWindow.js';
 import { ExplorationTracker } from '../../../../../service/agent/context/ExplorationTracker.js';
-import { clearCheckpoints, loadCheckpoints, saveDimensionCheckpoint } from './checkpoint.js';
-import { buildTierReflection, DIMENSION_CONFIGS_V3, getFullDimensionConfig } from './dimension-configs.js';
+import { EpisodicConsolidator } from '../../../../../service/agent/domain/EpisodicConsolidator.js';
+import { ANALYST_BUDGET } from '../../../../../service/agent/domain/insight-analyst.js';
+import { MemoryCoordinator } from '../../../../../service/agent/memory/MemoryCoordinator.js';
+import { PersistentMemory } from '../../../../../service/agent/memory/PersistentMemory.js';
+import { SessionStore } from '../../../../../service/agent/memory/SessionStore.js';
+import { PRESETS } from '../../../../../service/agent/presets.js';
+import { BootstrapEventEmitter } from '../../../../../shared/BootstrapEventEmitter.js';
 import { getDimensionFocusKeywords } from '../shared/dimension-sop.js';
+import { generateSkill } from '../shared/skill-generator.js';
+import { clearCheckpoints, loadCheckpoints, saveDimensionCheckpoint } from './checkpoint.js';
+import {
+  buildTierReflection,
+  DIMENSION_CONFIGS_V3,
+  getFullDimensionConfig,
+} from './dimension-configs.js';
 import { DimensionContext, parseDimensionDigest } from './dimension-context.js';
 import { IncrementalBootstrap } from './IncrementalBootstrap.js';
-import { TierScheduler } from './tier-scheduler.js';
 import { runNoAiFallback } from './noAiFallback.js';
-import { generateSkill } from '../shared/skill-generator.js';
-import { BootstrapEventEmitter } from '../../../../../shared/BootstrapEventEmitter.js';
+import { TierScheduler } from './tier-scheduler.js';
 
 const logger = Logger.getInstance();
 
@@ -207,7 +209,9 @@ export async function fillDimensionsV3(fillContext) {
       // ── R7: No-AI 降级路径完成后也触发 Cursor Delivery ──
       if (persistedCount > 0 || skillsCreated > 0) {
         try {
-          const { getServiceContainer } = await import('../../../../../injection/ServiceContainer.js');
+          const { getServiceContainer } = await import(
+            '../../../../../injection/ServiceContainer.js'
+          );
           const deliveryContainer = getServiceContainer();
           if (deliveryContainer.services.cursorDeliveryPipeline) {
             const pipeline = deliveryContainer.get('cursorDeliveryPipeline');
@@ -220,7 +224,9 @@ export async function fillDimensionsV3(fillContext) {
             );
           }
         } catch (deliveryErr: any) {
-          logger.warn(`[Bootstrap-fallback] CursorDelivery failed (non-blocking): ${deliveryErr.message}`);
+          logger.warn(
+            `[Bootstrap-fallback] CursorDelivery failed (non-blocking): ${deliveryErr.message}`
+          );
         }
       }
 
@@ -260,7 +266,9 @@ export async function fillDimensionsV3(fillContext) {
   // ═══════════════════════════════════════════════════════════
   // Step 1: 构建 Agents + 上下文
   // ═══════════════════════════════════════════════════════════
-  logger.info('[Insight-v7] Using unified AgentRuntime pipeline (no legacy Analyst/Producer wrappers)');
+  logger.info(
+    '[Insight-v7] Using unified AgentRuntime pipeline (no legacy Analyst/Producer wrappers)'
+  );
 
   // 注入文件缓存到容器 (v7.2: 通过容器传递)
   ctx.container.singletons._fileCache = allFiles;
@@ -613,7 +621,7 @@ export async function fillDimensionsV3(fillContext) {
         // B3 fix: 透传完整 ANALYST_BUDGET (searchBudget/maxSubmits/softSubmitLimit/idleRoundsToExit)
         tracker: ExplorationTracker.resolve(
           { source: 'system', strategy: 'analyst' },
-          { ...ANALYST_BUDGET },
+          { ...ANALYST_BUDGET }
         ),
         trace: memoryCoordinator.getActiveContext(analystScopeId),
         memoryCoordinator,
@@ -637,7 +645,10 @@ export async function fillDimensionsV3(fillContext) {
       const runResult = await Promise.race([
         runtime.execute(message, { strategyContext }),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error(`Bootstrap runtime timeout for "${dimId}"`)), outerTimeoutMs),
+          setTimeout(
+            () => reject(new Error(`Bootstrap runtime timeout for "${dimId}"`)),
+            outerTimeoutMs
+          )
         ),
       ]);
 
@@ -657,19 +668,28 @@ export async function fillDimensionsV3(fillContext) {
       const combinedTokenUsage = runResult?.tokenUsage || { input: 0, output: 0 };
 
       // 引用文件: 优先从 artifact 取, 回退从 toolCalls 提取
-      const referencedFiles = artifact.referencedFiles?.length > 0
-        ? artifact.referencedFiles
-        : [...new Set(runtimeToolCalls.flatMap((tc) => {
-            const a = tc?.args || tc?.params || {};
-            const files = [];
-            if (typeof a.filePath === 'string' && a.filePath.trim()) files.push(a.filePath.trim());
-            if (Array.isArray(a.filePaths)) {
-              for (const f of a.filePaths) {
-                if (typeof f === 'string' && f.trim()) files.push(f.trim());
-              }
-            }
-            return files;
-          }))];
+      const referencedFiles =
+        artifact.referencedFiles?.length > 0
+          ? artifact.referencedFiles
+          : [
+              ...new Set(
+                runtimeToolCalls.flatMap((tc) => {
+                  const a = tc?.args || tc?.params || {};
+                  const files = [];
+                  if (typeof a.filePath === 'string' && a.filePath.trim()) {
+                    files.push(a.filePath.trim());
+                  }
+                  if (Array.isArray(a.filePaths)) {
+                    for (const f of a.filePaths) {
+                      if (typeof f === 'string' && f.trim()) {
+                        files.push(f.trim());
+                      }
+                    }
+                  }
+                  return files;
+                })
+              ),
+            ];
 
       const analysisReport = {
         dimensionId: dimId,
@@ -686,14 +706,18 @@ export async function fillDimensionsV3(fillContext) {
       };
 
       // ── Producer 结果统计 ──
-      const submitCalls = runtimeToolCalls.filter(tc => {
+      const submitCalls = runtimeToolCalls.filter((tc) => {
         const tool = tc?.tool || tc?.name;
         return tool === 'submit_knowledge' || tool === 'submit_with_check';
       });
-      const successCount = submitCalls.filter(tc => {
+      const successCount = submitCalls.filter((tc) => {
         const res = tc?.result;
-        if (!res) return true;
-        if (typeof res === 'string') return !res.includes('rejected') && !res.includes('error');
+        if (!res) {
+          return true;
+        }
+        if (typeof res === 'string') {
+          return !res.includes('rejected') && !res.includes('error');
+        }
         return res.status !== 'rejected' && res.status !== 'error';
       }).length;
       const rejectedCount = submitCalls.length - successCount;
@@ -711,10 +735,13 @@ export async function fillDimensionsV3(fillContext) {
 
       // ── Memory Update ──
       const ac = memoryCoordinator.getActiveContext(analystScopeId);
-      const distilled = ac ? ac.distill() : { keyFindings: [], totalObservations: 0, toolCallSummary: [] };
+      const distilled = ac
+        ? ac.distill()
+        : { keyFindings: [], totalObservations: 0, toolCallSummary: [] };
       sessionStore.storeDimensionReport(dimId, {
         analysisText: analysisReport.analysisText,
-        findings: analysisReport.findings.length > 0 ? analysisReport.findings : distilled.keyFindings,
+        findings:
+          analysisReport.findings.length > 0 ? analysisReport.findings : distilled.keyFindings,
         referencedFiles: analysisReport.referencedFiles || [],
         candidatesSummary: [],
         workingMemoryDistilled: distilled,
@@ -723,7 +750,7 @@ export async function fillDimensionsV3(fillContext) {
       logger.info(
         `[Insight-v3] Dimension "${dimId}": analysis=${analysisReport.analysisText.length} chars, ` +
           `files=${analysisReport.referencedFiles.length}, findings=${(analysisReport.findings || distilled.keyFindings).length}, ` +
-          `toolCalls=${runtimeToolCalls.length}, degraded=${runResult?.degraded || false} (${Date.now() - dimStartTime}ms)`,
+          `toolCalls=${runtimeToolCalls.length}, degraded=${runResult?.degraded || false} (${Date.now() - dimStartTime}ms)`
       );
 
       // ── Token 用量持久化 (fire-and-forget) ──
@@ -745,9 +772,13 @@ export async function fillDimensionsV3(fillContext) {
           try {
             const realtime = ctx.container?.get?.('realtimeService');
             realtime?.broadcastTokenUsageUpdated?.();
-          } catch { /* optional */ }
+          } catch {
+            /* optional */
+          }
         }
-      } catch { /* token logging should never break execution */ }
+      } catch {
+        /* token logging should never break execution */
+      }
 
       // ── v5.1: analysisText 过短补强 ──
       if (needsCandidates && analysisReport.analysisText.length < 100) {
@@ -777,7 +808,7 @@ export async function fillDimensionsV3(fillContext) {
           analysisReport.analysisText = synthesized.join('\n');
           logger.info(
             `[Insight-v3] analysisText 补强 "${dimId}": ${originalLen} → ${analysisReport.analysisText.length} chars ` +
-              `(from ${findings.length} findings)`,
+              `(from ${findings.length} findings)`
           );
         }
       }
@@ -981,12 +1012,17 @@ export async function fillDimensionsV3(fillContext) {
           effectiveText = synthesized.join('\n');
           logger.info(
             `[Insight-v3] Skill "${dim.id}": analysisText too short (${analysisText.trim().length} chars), ` +
-            `synthesized from ${keyFindings.length} findings → ${effectiveText.length} chars`
+              `synthesized from ${keyFindings.length} findings → ${effectiveText.length} chars`
           );
         }
 
         const result = await generateSkill(
-          ctx, dim, effectiveText, referencedFiles, keyFindings, 'bootstrap-v3'
+          ctx,
+          dim,
+          effectiveText,
+          referencedFiles,
+          keyFindings,
+          'bootstrap-v3'
         );
 
         if (result.success) {
@@ -1292,10 +1328,14 @@ export async function fillDimensionsV3(fillContext) {
     try {
       const wikiRoute = await import('../../../../../http/routes/wiki.js');
       patchWikiTask = wikiRoute.patchWikiTask;
-    } catch { /* ok */ }
+    } catch {
+      /* ok */
+    }
     try {
       realtimeService = wikiContainer.singletons?.realtimeService || null;
-    } catch { /* ok */ }
+    } catch {
+      /* ok */
+    }
 
     // 标记任务开始
     patchWikiTask?.({
@@ -1342,9 +1382,14 @@ export async function fillDimensionsV3(fillContext) {
         if (realtimeService) {
           try {
             realtimeService.broadcastEvent('wiki:progress', {
-              phase, progress, message, timestamp: Date.now(),
+              phase,
+              progress,
+              message,
+              timestamp: Date.now(),
             });
-          } catch { /* non-critical */ }
+          } catch {
+            /* non-critical */
+          }
         }
       },
       options: { language: process.env.ASD_WIKI_LANG || 'zh' },
@@ -1363,7 +1408,7 @@ export async function fillDimensionsV3(fillContext) {
       status: wikiResult.success ? 'done' : 'error',
       finishedAt: Date.now(),
       result: wikiResult,
-      error: wikiResult.success ? null : (wikiResult.error || 'Unknown error'),
+      error: wikiResult.success ? null : wikiResult.error || 'Unknown error',
       progress: 100,
     });
     if (realtimeService) {
@@ -1373,7 +1418,9 @@ export async function fillDimensionsV3(fillContext) {
           filesGenerated: wikiResult.filesGenerated,
           duration: wikiResult.duration,
         });
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
     }
   } catch (wikiErr: any) {
     logger.warn(`[Insight-v3] Wiki generation failed (non-blocking): ${wikiErr.message}`);
@@ -1384,7 +1431,9 @@ export async function fillDimensionsV3(fillContext) {
         finishedAt: Date.now(),
         error: wikiErr.message,
       });
-    } catch { /* ok */ }
+    } catch {
+      /* ok */
+    }
   }
 }
 

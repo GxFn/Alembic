@@ -348,7 +348,11 @@ function _collectSwiftScopes(root) {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
 
-      if (child.type === 'class_declaration' || child.type === 'struct_declaration' || child.type === 'enum_declaration') {
+      if (
+        child.type === 'class_declaration' ||
+        child.type === 'struct_declaration' ||
+        child.type === 'enum_declaration'
+      ) {
         const name = child.namedChildren.find(
           (c) => c.type === 'type_identifier' || c.type === 'simple_identifier'
         )?.text;
@@ -367,7 +371,8 @@ function _collectSwiftScopes(root) {
           visit(body, extName || className);
         }
       } else if (child.type === 'function_declaration') {
-        const name = child.namedChildren.find((c) => c.type === 'simple_identifier')?.text || 'unknown';
+        const name =
+          child.namedChildren.find((c) => c.type === 'simple_identifier')?.text || 'unknown';
         const body = child.namedChildren.find((c) => c.type === 'function_body');
         if (body) {
           scopes.push({ body, className, methodName: name });
@@ -395,23 +400,45 @@ function _collectSwiftScopes(root) {
  * 从 Swift function body 中递归提取调用点
  */
 function _extractSwiftCallSitesFromBody(bodyNode, className, methodName, ctx) {
-  if (!bodyNode) return;
+  if (!bodyNode) {
+    return;
+  }
 
   const SWIFT_NOISE = new Set([
-    'print', 'debugPrint', 'dump', 'fatalError', 'precondition', 'preconditionFailure',
-    'assert', 'assertionFailure', 'NSLog',
-    'min', 'max', 'abs', 'stride', 'zip', 'type',
+    'print',
+    'debugPrint',
+    'dump',
+    'fatalError',
+    'precondition',
+    'preconditionFailure',
+    'assert',
+    'assertionFailure',
+    'NSLog',
+    'min',
+    'max',
+    'abs',
+    'stride',
+    'zip',
+    'type',
   ]);
 
   function walk(node) {
-    if (!node || node.type === 'ERROR' || node.isMissing) return;
+    if (!node || node.type === 'ERROR' || node.isMissing) {
+      return;
+    }
 
     // call_expression in Swift tree-sitter
     if (node.type === 'call_expression') {
       const func = node.namedChildren[0];
-      if (!func) { walkChildren(node); return; }
+      if (!func) {
+        walkChildren(node);
+        return;
+      }
 
-      let callee, receiver = null, receiverType = null, callType;
+      let callee,
+        receiver = null,
+        receiverType = null,
+        callType;
       let isAwait = false;
 
       // Check if parent is await
@@ -443,10 +470,15 @@ function _extractSwiftCallSitesFromBody(bodyNode, className, methodName, ctx) {
         }
       } else if (func.type === 'simple_identifier' || func.type === 'identifier') {
         callee = func.text;
-        if (SWIFT_NOISE.has(callee)) { walkChildren(node); return; }
+        if (SWIFT_NOISE.has(callee)) {
+          walkChildren(node);
+          return;
+        }
         // PascalCase → constructor (Swift initializer)
         callType = /^[A-Z]/.test(callee) ? 'constructor' : 'function';
-        if (callType === 'constructor') receiverType = callee;
+        if (callType === 'constructor') {
+          receiverType = callee;
+        }
       } else {
         callee = func.text?.slice(0, 80) || 'unknown';
         callType = 'function';
@@ -471,7 +503,9 @@ function _extractSwiftCallSitesFromBody(bodyNode, className, methodName, ctx) {
       });
 
       // walk arguments for nested calls
-      if (callSuffix) walkChildren(callSuffix);
+      if (callSuffix) {
+        walkChildren(callSuffix);
+      }
       return;
     }
 

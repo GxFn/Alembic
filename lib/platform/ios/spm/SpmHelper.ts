@@ -65,11 +65,15 @@ export class SpmHelper {
     if (packagePath) {
       const rootParsed = this.#parser.parse(packagePath);
       const hasNoTargets = !rootParsed?.targets || rootParsed.targets.length === 0;
-      const hasLocalDeps = (rootParsed?.dependencies || []).some(d => d.type === 'local' || d.path);
+      const hasLocalDeps = (rootParsed?.dependencies || []).some(
+        (d) => d.type === 'local' || d.path
+      );
       if (hasNoTargets && hasLocalDeps) {
         // 聚合根模式：根 Package.swift 仅声明 local path 依赖，target 在子包里
         allPaths = this.#parser.findAllPackageSwifts(this.#projectRoot);
-        this.#logger.info(`[SpmHelper] 聚合根检测: 根无 target 但有 ${rootParsed.dependencies.length} 个 local dep，切换多包模式`);
+        this.#logger.info(
+          `[SpmHelper] 聚合根检测: 根无 target 但有 ${rootParsed.dependencies.length} 个 local dep，切换多包模式`
+        );
       } else {
         allPaths = [packagePath];
       }

@@ -96,7 +96,9 @@ export class ExternalSubmissionTracker {
     }
 
     const submissions = this.#dimensionSubmissions.get(dimId);
-    if (submissions.length >= MAX_SUBMISSIONS_PER_DIM) return;
+    if (submissions.length >= MAX_SUBMISSIONS_PER_DIM) {
+      return;
+    }
 
     const record = {
       recipeId,
@@ -159,7 +161,9 @@ export class ExternalSubmissionTracker {
    * @param {string} dimId
    */
   extractNegativeSignals(analysisText, dimId) {
-    if (!analysisText) return;
+    if (!analysisText) {
+      return;
+    }
 
     const negativePatterns = [
       // 中文负空间
@@ -185,12 +189,14 @@ export class ExternalSubmissionTracker {
    * @param {string} [dimId]
    */
   #addNegativeSignal(pattern, source, dimId) {
-    if (this.#negativeSignals.length >= MAX_NEGATIVE_SIGNALS) return;
+    if (this.#negativeSignals.length >= MAX_NEGATIVE_SIGNALS) {
+      return;
+    }
 
     // 去重: 相同 pattern 不重复添加
     const normalized = pattern.toLowerCase().substring(0, 80);
     const exists = this.#negativeSignals.some(
-      (s) => s.pattern.toLowerCase().substring(0, 80) === normalized,
+      (s) => s.pattern.toLowerCase().substring(0, 80) === normalized
     );
     if (!exists) {
       this.#negativeSignals.push({ pattern, source, dimId });
@@ -229,10 +235,7 @@ export class ExternalSubmissionTracker {
     const submissionCount = submissions.length;
     const uniqueSources = new Set(submissions.flatMap((s) => s.sources));
     const fileCount = new Set([...uniqueSources, ...referencedFiles]).size;
-    scores.coverageScore = Math.min(
-      100,
-      submissionCount * 20 + fileCount * 8,
-    );
+    scores.coverageScore = Math.min(100, submissionCount * 20 + fileCount * 8);
     if (submissionCount < 3) {
       suggestions.push(`只提交了 ${submissionCount} 条候选，建议至少 3 条以充分覆盖维度`);
     }
@@ -241,18 +244,20 @@ export class ExternalSubmissionTracker {
     }
 
     // §2: evidenceScore — 提交内容丰富度
-    const avgContentLen = submissions.length > 0
-      ? submissions.reduce((sum, s) => sum + s.contentLength, 0) / submissions.length
-      : 0;
+    const avgContentLen =
+      submissions.length > 0
+        ? submissions.reduce((sum, s) => sum + s.contentLength, 0) / submissions.length
+        : 0;
     const hasCoreCode = submissions.filter((s) => s.coreCodePreview.length > 0).length;
-    const avgConfidence = submissions.length > 0
-      ? submissions.reduce((sum, s) => sum + s.confidence, 0) / submissions.length
-      : 0;
+    const avgConfidence =
+      submissions.length > 0
+        ? submissions.reduce((sum, s) => sum + s.confidence, 0) / submissions.length
+        : 0;
     scores.evidenceScore = Math.min(
       100,
       (avgContentLen > 400 ? 40 : avgContentLen / 10) +
         (hasCoreCode / Math.max(submissions.length, 1)) * 30 +
-        avgConfidence * 30,
+        avgConfidence * 30
     );
     if (avgContentLen < 200) {
       suggestions.push('候选内容平均长度偏短，建议包含更多代码引用和项目上下文');
@@ -267,7 +272,7 @@ export class ExternalSubmissionTracker {
     const uniqueKinds = new Set(submissions.map((s) => s.kind));
     scores.diversityScore = Math.min(
       100,
-      uniqueTypes.size * 25 + uniqueCategories.size * 15 + uniqueKinds.size * 20,
+      uniqueTypes.size * 25 + uniqueCategories.size * 15 + uniqueKinds.size * 20
     );
 
     // §4: coherenceScore — analysisText 结构化程度
@@ -280,7 +285,7 @@ export class ExternalSubmissionTracker {
       (textLen > 500 ? 30 : textLen / 17) +
         (hasHeaders ? 25 : 0) +
         (hasLists ? 20 : 0) +
-        (hasCodeBlocks ? 25 : 0),
+        (hasCodeBlocks ? 25 : 0)
     );
     if (textLen < 200) {
       suggestions.push('分析文本过短，建议包含更详细的代码分析过程');
@@ -291,7 +296,7 @@ export class ExternalSubmissionTracker {
       scores.coverageScore * 0.3 +
         scores.evidenceScore * 0.3 +
         scores.diversityScore * 0.2 +
-        scores.coherenceScore * 0.2,
+        scores.coherenceScore * 0.2
     );
 
     // 门控阈值
@@ -315,7 +320,9 @@ export class ExternalSubmissionTracker {
     const completedDimSummaries = [];
 
     for (const [dimId, submissions] of this.#dimensionSubmissions) {
-      if (dimId === currentDimId) continue;
+      if (dimId === currentDimId) {
+        continue;
+      }
 
       completedDimSummaries.push({
         dimId,

@@ -14,17 +14,23 @@
 
 import {
   FieldLevel,
-  V3_FIELD_SPEC,
   STANDARD_CATEGORIES,
-  WHITELISTED_CATEGORIES,
+  V3_FIELD_SPEC,
   VALID_KINDS,
+  WHITELISTED_CATEGORIES,
 } from './FieldSpec.js';
 import { LanguageService } from './LanguageService.js';
 
 // ── Cursor 交付字段集合（document 模式跳过这些） ────────────
 
 const CURSOR_DELIVERY_FIELDS = new Set([
-  'trigger', 'kind', 'doClause', 'dontClause', 'whenClause', 'coreCode', 'topicHint',
+  'trigger',
+  'kind',
+  'doClause',
+  'dontClause',
+  'whenClause',
+  'coreCode',
+  'topicHint',
 ]);
 
 // ── 代码指纹工具函数 ───────────────────────────────────────
@@ -36,9 +42,9 @@ const CURSOR_DELIVERY_FIELDS = new Set([
  */
 function codeFingerprint(code) {
   return (code || '')
-    .replace(/\/\/[^\n]*/g, '')          // 移除单行注释
-    .replace(/\/\*[\s\S]*?\*\//g, '')    // 移除多行注释
-    .replace(/[\s]+/g, '')               // 移除所有空白
+    .replace(/\/\/[^\n]*/g, '') // 移除单行注释
+    .replace(/\/\*[\s\S]*?\*\//g, '') // 移除多行注释
+    .replace(/[\s]+/g, '') // 移除所有空白
     .toLowerCase()
     .slice(0, 200);
 }
@@ -142,7 +148,9 @@ export class UnifiedValidator {
       const value = this.#getNestedValue(candidate, name);
       const missing = this.#isMissing(value, field);
 
-      if (!missing) continue;
+      if (!missing) {
+        continue;
+      }
 
       if (level === FieldLevel.REQUIRED) {
         if (mode === 'fallback') {
@@ -161,12 +169,16 @@ export class UnifiedValidator {
 
     // content 必须是对象
     if (candidate.content && typeof candidate.content !== 'object') {
-      errors.push('⚠️ content 必须是 JSON 对象（不是字符串！）。正确格式: { "markdown": "...", "rationale": "..." }');
+      errors.push(
+        '⚠️ content 必须是 JSON 对象（不是字符串！）。正确格式: { "markdown": "...", "rationale": "..." }'
+      );
     }
 
     // reasoning 必须是对象
     if (candidate.reasoning && typeof candidate.reasoning !== 'object') {
-      errors.push('⚠️ reasoning 必须是 JSON 对象（不是字符串！）。正确格式: { "whyStandard": "...", "sources": [...], "confidence": 0.85 }');
+      errors.push(
+        '⚠️ reasoning 必须是 JSON 对象（不是字符串！）。正确格式: { "whyStandard": "...", "sources": [...], "confidence": 0.85 }'
+      );
     }
 
     // kind 值校验
@@ -180,11 +192,13 @@ export class UnifiedValidator {
     }
 
     // category 值校验
-    if (candidate.category &&
-        !STANDARD_CATEGORIES.includes(candidate.category) &&
-        !WHITELISTED_CATEGORIES.includes(candidate.category)) {
+    if (
+      candidate.category &&
+      !STANDARD_CATEGORIES.includes(candidate.category) &&
+      !WHITELISTED_CATEGORIES.includes(candidate.category)
+    ) {
       warnings.push(
-        `category "${candidate.category}" 非标准值，应为: ${STANDARD_CATEGORIES.join('/')}（bootstrap/knowledge 等特殊来源可忽略此建议）`,
+        `category "${candidate.category}" 非标准值，应为: ${STANDARD_CATEGORIES.join('/')}（bootstrap/knowledge 等特殊来源可忽略此建议）`
       );
     }
 
@@ -192,7 +206,7 @@ export class UnifiedValidator {
     const lang = candidate.language?.toLowerCase();
     if (lang && !LanguageService.isKnownLang(lang) && lang !== 'objc' && lang !== 'markdown') {
       warnings.push(
-        `language "${candidate.language}" — 请使用标准语言标识 (swift/typescript/python/java/kotlin 等)`,
+        `language "${candidate.language}" — 请使用标准语言标识 (swift/typescript/python/java/kotlin 等)`
       );
     }
   }
@@ -210,12 +224,18 @@ export class UnifiedValidator {
 
     // markdown ≥ 200 字符
     if (markdown && markdown.length > 0 && markdown.length < 200) {
-      errors.push(`content.markdown 过短 (${markdown.length} 字符, 最少 200)。请包含代码片段和项目上下文描述。`);
+      errors.push(
+        `content.markdown 过短 (${markdown.length} 字符, 最少 200)。请包含代码片段和项目上下文描述。`
+      );
     }
 
     // 代码块存在性
-    if (markdown && markdown.length >= 200 && !(/```[\s\S]*?```/.test(markdown)) &&
-        !(/\.\w{1,10}(:\d+)?/.test(markdown))) {
+    if (
+      markdown &&
+      markdown.length >= 200 &&
+      !/```[\s\S]*?```/.test(markdown) &&
+      !/\.\w{1,10}(:\d+)?/.test(markdown)
+    ) {
       errors.push('content.markdown 中必须包含至少一个代码块或文件引用');
     }
 
@@ -235,7 +255,9 @@ export class UnifiedValidator {
       if (coreCode) {
         const firstChar = coreCode[0];
         if (firstChar === '}' || firstChar === ')' || firstChar === ']') {
-          errors.push(`coreCode 以 "${firstChar}" 开头 — 代码片段不完整，请包含完整的函数/方法/表达式`);
+          errors.push(
+            `coreCode 以 "${firstChar}" 开头 — 代码片段不完整，请包含完整的函数/方法/表达式`
+          );
         }
       }
     }
@@ -243,14 +265,14 @@ export class UnifiedValidator {
     // 通用知识检测
     const genericPatterns = [/^(Singleton|Factory|Observer|MVC|MVVM) (pattern|模式)$/i];
     const title = candidate.title || '';
-    if (genericPatterns.some(p => p.test(title.trim()))) {
+    if (genericPatterns.some((p) => p.test(title.trim()))) {
       errors.push(`标题过于通用: "${title}" — 请加上项目特定的上下文`);
     }
 
     // 内容过于简单
     if (markdown && markdown.length > 0 && markdown.length >= 200) {
-      const lines = markdown.split('\n').filter(l => l.trim().length > 0);
-      if (lines.length <= 2 && !(/```[\s\S]*?```/.test(markdown))) {
+      const lines = markdown.split('\n').filter((l) => l.trim().length > 0);
+      if (lines.length <= 2 && !/```[\s\S]*?```/.test(markdown)) {
         warnings.push(`内容仅 ${lines.length} 行 — 建议包含更多代码片段和设计意图描述`);
       }
     }
@@ -308,7 +330,9 @@ export class UnifiedValidator {
     const parts = path.split('.');
     let current = obj;
     for (const part of parts) {
-      if (current == null || typeof current !== 'object') return undefined;
+      if (current == null || typeof current !== 'object') {
+        return undefined;
+      }
       current = current[part];
     }
     return current;
@@ -321,17 +345,25 @@ export class UnifiedValidator {
    * @returns {boolean}
    */
   #isMissing(value, field) {
-    if (value === undefined || value === null) return true;
+    if (value === undefined || value === null) {
+      return true;
+    }
 
     if (field.type === 'string') {
       return typeof value !== 'string' || !value.trim();
     }
     if (field.type === 'array') {
-      if (!Array.isArray(value)) return true;
+      if (!Array.isArray(value)) {
+        return true;
+      }
       // reasoning.sources 必须非空
-      if (field.name === 'reasoning.sources') return value.length === 0;
+      if (field.name === 'reasoning.sources') {
+        return value.length === 0;
+      }
       // headers 允许空数组
-      if (field.name === 'headers') return false;
+      if (field.name === 'headers') {
+        return false;
+      }
       return false;
     }
     if (field.type === 'object') {

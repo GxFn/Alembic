@@ -7,6 +7,7 @@
  * @module PlanTracker
  */
 import { DEFAULT_REPLAN_INTERVAL } from './ExplorationStrategies.js';
+
 // ─── 常量 ──────────────────────────────────────────────
 
 /** 默认偏差阈值 */
@@ -60,21 +61,29 @@ export class PlanTracker {
 
     // 有计划时: 检查 replan
     const plan = trace?.getPlan?.();
-    if (!plan) return null;
+    if (!plan) {
+      return null;
+    }
 
     const progress = this.#planProgress;
     const interval = strategy.replanInterval || DEFAULT_REPLAN_INTERVAL;
 
     const baseIteration = progress.lastReplanIteration || plan.createdAtIteration;
-    const periodicTrigger = interval > 0 && m.iteration > 1 && m.iteration - baseIteration >= interval;
+    const periodicTrigger =
+      interval > 0 && m.iteration > 1 && m.iteration - baseIteration >= interval;
     const deviationTrigger =
       progress.consecutiveOffPlan >= 3 ||
       (progress.totalSteps > 0 && progress.deviationScore > DEFAULT_DEVIATION_THRESHOLD);
 
-    if (!periodicTrigger && !deviationTrigger) return null;
+    if (!periodicTrigger && !deviationTrigger) {
+      return null;
+    }
 
     // 冷却间隔
-    if (progress.lastReplanIteration && m.iteration - progress.lastReplanIteration < MIN_REPLAN_GAP) {
+    if (
+      progress.lastReplanIteration &&
+      m.iteration - progress.lastReplanIteration < MIN_REPLAN_GAP
+    ) {
       return null;
     }
 
@@ -93,11 +102,15 @@ export class PlanTracker {
     const pendingSteps = plan.steps.filter((s) => s.status === 'pending');
     if (doneSteps.length > 0) {
       parts.push(`\n✅ 已完成 (${doneSteps.length}/${plan.steps.length}):`);
-      for (const s of doneSteps) parts.push(`  - ${s.description}`);
+      for (const s of doneSteps) {
+        parts.push(`  - ${s.description}`);
+      }
     }
     if (pendingSteps.length > 0) {
       parts.push(`\n⏳ 未完成 (${pendingSteps.length}/${plan.steps.length}):`);
-      for (const s of pendingSteps) parts.push(`  - ${s.description}`);
+      for (const s of pendingSteps) {
+        parts.push(`  - ${s.description}`);
+      }
     }
     if (progress.unplannedActions > 0) {
       parts.push(`\n⚡ 计划外行为: ${progress.unplannedActions} 次`);
@@ -122,7 +135,9 @@ export class PlanTracker {
    */
   updatePlanProgress(trace) {
     const steps = trace?.getPlanStepsMutable?.() || [];
-    if (steps.length === 0) return;
+    if (steps.length === 0) {
+      return;
+    }
 
     // 处理 pending replan
     if (this.#pendingReplan) {
@@ -137,7 +152,9 @@ export class PlanTracker {
     }
 
     const actions = trace?.getCurrentRoundActions?.() || [];
-    if (actions.length === 0) return;
+    if (actions.length === 0) {
+      return;
+    }
 
     let matchedThisRound = false;
 
@@ -169,7 +186,13 @@ export class PlanTracker {
    * @returns {{ score: number, breakdown: object }}
    */
   getQualityMetrics(trace) {
-    const stats = trace?.getStats?.() || { totalRounds: 0, thoughtCount: 0, totalActions: 0, totalObservations: 0, reflectionCount: 0 };
+    const stats = trace?.getStats?.() || {
+      totalRounds: 0,
+      thoughtCount: 0,
+      totalActions: 0,
+      totalObservations: 0,
+      reflectionCount: 0,
+    };
     const totalRounds = stats.totalRounds || 1;
 
     const thoughtRatio = stats.thoughtCount / totalRounds;
@@ -195,13 +218,15 @@ export class PlanTracker {
             reflectionRatio * 0.15 +
             actionEfficiency * 0.15 +
             observationCoverage * 0.15 +
-            planScore * 0.25) * 100
+            planScore * 0.25) *
+            100
         )
       : Math.round(
           (thoughtRatio * 0.4 +
             reflectionRatio * 0.2 +
             actionEfficiency * 0.2 +
-            observationCoverage * 0.2) * 100
+            observationCoverage * 0.2) *
+            100
         );
 
     const breakdown = {
@@ -258,40 +283,74 @@ export class PlanTracker {
     const argsStr = JSON.stringify(action.params || {}).toLowerCase();
 
     for (const step of steps) {
-      if (step.status === 'done') continue;
+      if (step.status === 'done') {
+        continue;
+      }
 
       // 策略 1: 关键词匹配
       if (step.keywords?.length > 0) {
         const matched = step.keywords.some((kw) => argsStr.includes(kw.toLowerCase()));
-        if (matched) return step;
+        if (matched) {
+          return step;
+        }
       }
 
       // 策略 2: 工具类型 → 步骤描述的语义匹配
       const desc = step.description.toLowerCase();
       if (
         toolName === 'get_project_overview' &&
-        (desc.includes('概览') || desc.includes('overview') || desc.includes('结构') || desc.includes('项目'))
-      ) return step;
+        (desc.includes('概览') ||
+          desc.includes('overview') ||
+          desc.includes('结构') ||
+          desc.includes('项目'))
+      ) {
+        return step;
+      }
       if (
         toolName === 'list_project_structure' &&
         (desc.includes('目录') || desc.includes('结构') || desc.includes('structure'))
-      ) return step;
+      ) {
+        return step;
+      }
       if (
         (toolName === 'get_class_info' || toolName === 'get_class_hierarchy') &&
-        (desc.includes('继承') || desc.includes('类') || desc.includes('hierarchy') || desc.includes('class'))
-      ) return step;
+        (desc.includes('继承') ||
+          desc.includes('类') ||
+          desc.includes('hierarchy') ||
+          desc.includes('class'))
+      ) {
+        return step;
+      }
       if (
         toolName === 'read_project_file' &&
-        (desc.includes('阅读') || desc.includes('read') || desc.includes('深入') || desc.includes('查看') || desc.includes('文件'))
-      ) return step;
+        (desc.includes('阅读') ||
+          desc.includes('read') ||
+          desc.includes('深入') ||
+          desc.includes('查看') ||
+          desc.includes('文件'))
+      ) {
+        return step;
+      }
       if (
         toolName === 'search_project_code' &&
-        (desc.includes('搜索') || desc.includes('search') || desc.includes('查找') || desc.includes('分析'))
-      ) return step;
+        (desc.includes('搜索') ||
+          desc.includes('search') ||
+          desc.includes('查找') ||
+          desc.includes('分析'))
+      ) {
+        return step;
+      }
       if (
         (toolName === 'query_code_graph' || toolName === 'query_call_graph') &&
-        (desc.includes('图谱') || desc.includes('graph') || desc.includes('调用') || desc.includes('call') || desc.includes('关系') || desc.includes('依赖'))
-      ) return step;
+        (desc.includes('图谱') ||
+          desc.includes('graph') ||
+          desc.includes('调用') ||
+          desc.includes('call') ||
+          desc.includes('关系') ||
+          desc.includes('依赖'))
+      ) {
+        return step;
+      }
     }
 
     return null;

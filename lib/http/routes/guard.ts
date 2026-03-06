@@ -162,7 +162,9 @@ router.post(
     let totalWarnings = 0;
 
     for (const file of files) {
-      if (!file.filePath) continue;
+      if (!file.filePath) {
+        continue;
+      }
 
       let code = file.content;
       if (!code) {
@@ -238,9 +240,7 @@ async function _getEngine(container, GuardCheckEngine) {
   // 注入 Enhancement Pack Guard 规则
   if (!engine.isEpInjected()) {
     try {
-      const { getEnhancementRegistry } = await import(
-        '../../core/enhancement/index.js'
-      );
+      const { getEnhancementRegistry } = await import('../../core/enhancement/index.js');
       const registry = getEnhancementRegistry();
       if (registry) {
         const guardRules = registry.getGuardRules?.() || [];

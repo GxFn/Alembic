@@ -84,7 +84,7 @@ export class Relations {
    * @returns {Array<{type:string, target:string, description:string}>}
    */
   toFlatArray() {
-    const result = [];
+    const result: Array<{ type: string; target: string; description: string }> = [];
     for (const [type, list] of Object.entries(this._b)) {
       for (const r of list as any) {
         result.push({ type, ...r });

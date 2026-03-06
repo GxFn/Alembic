@@ -50,7 +50,9 @@ export class HybridRetriever {
     // Dense RRF 分数
     denseResults.forEach((result, rank) => {
       const id = result.item?.id || result.id;
-      if (!id) return;
+      if (!id) {
+        return;
+      }
       const existing = scores.get(id) || {
         id,
         denseRank: Infinity,
@@ -67,7 +69,9 @@ export class HybridRetriever {
     // Sparse RRF 分数
     sparseResults.forEach((result, rank) => {
       const id = result.id;
-      if (!id) return;
+      if (!id) {
+        return;
+      }
       const existing = scores.get(id) || {
         id,
         denseRank: Infinity,
@@ -84,9 +88,7 @@ export class HybridRetriever {
     });
 
     // 按 RRF 分数降序排列
-    const fused = [...scores.values()]
-      .sort((a, b) => b.rrfScore - a.rrfScore)
-      .slice(0, topK);
+    const fused = [...scores.values()].sort((a, b) => b.rrfScore - a.rrfScore).slice(0, topK);
 
     // 归一化 score 到 [0, 1] 方便下游使用
     const maxRrf = fused.length > 0 ? fused[0].rrfScore : 1;

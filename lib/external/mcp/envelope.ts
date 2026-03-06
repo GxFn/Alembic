@@ -13,7 +13,8 @@
  * @returns {object} 标准化响应对象
  */
 export function envelope({ success, data = null, message = '', meta = {}, errorCode = null }: any) {
-  const respTime = typeof (meta as any).responseTimeMs === 'number' ? (meta as any).responseTimeMs : undefined;
+  const respTime =
+    typeof (meta as any).responseTimeMs === 'number' ? (meta as any).responseTimeMs : undefined;
   const tool = typeof (meta as any).tool === 'string' ? (meta as any).tool : undefined;
   const source = typeof (meta as any).source === 'string' ? (meta as any).source : undefined;
   const version = typeof (meta as any).version === 'string' ? (meta as any).version : '2.0.0';

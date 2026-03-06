@@ -193,7 +193,9 @@ export function buildProducerPromptV2(artifact, dimConfig, projectInfo) {
  * @returns {string|null}
  */
 export function buildCodeContextSection(evidenceMap) {
-  if (!evidenceMap || evidenceMap.size === 0) return null;
+  if (!evidenceMap || evidenceMap.size === 0) {
+    return null;
+  }
 
   const parts = ['## 📄 Analyst 已读取的代码 (直接引用, 无需 read_file)'];
   let totalChars = 0;
@@ -204,7 +206,9 @@ export function buildCodeContextSection(evidenceMap) {
     .sort((a, b) => b.codeSnippets.length - a.codeSnippets.length);
 
   for (const entry of sortedEntries) {
-    if (totalChars >= BUDGET) break;
+    if (totalChars >= BUDGET) {
+      break;
+    }
 
     const header = `### ${entry.filePath}${entry.role ? ` (${entry.role})` : ''}`;
     parts.push(header);
@@ -216,7 +220,9 @@ export function buildCodeContextSection(evidenceMap) {
     }
 
     for (const snippet of entry.codeSnippets.slice(0, 2)) {
-      if (totalChars >= BUDGET) break;
+      if (totalChars >= BUDGET) {
+        break;
+      }
       const codeBlock = `\`\`\`\n// L${snippet.startLine}-${snippet.endLine}\n${snippet.content}\n\`\`\``;
       if (snippet.analystNote) {
         parts.push(`> ${snippet.analystNote}`);
@@ -250,16 +256,24 @@ export function producerRejectionGateEvaluator(source, _phaseResults, _strategyC
   }
 
   // 可配置的提交工具名 — bootstrap 用 submit_knowledge/submit_with_check，scan 用 collect_scan_recipe
-  const submitToolNames = _strategyContext.submitToolNames
-    || ['submit_knowledge', 'submit_with_check'];
-  const submitCalls = (source.toolCalls || []).filter(tc =>
-    submitToolNames.includes(tc.tool || tc.name),
+  const submitToolNames = _strategyContext.submitToolNames || [
+    'submit_knowledge',
+    'submit_with_check',
+  ];
+  const submitCalls = (source.toolCalls || []).filter((tc) =>
+    submitToolNames.includes(tc.tool || tc.name)
   );
-  const rejected = submitCalls.filter(tc => {
+  const rejected = submitCalls.filter((tc) => {
     const res = tc.result;
-    if (!res) return false;
-    if (typeof res === 'string') return res.includes('rejected') || res.includes('error');
-    return res.status === 'rejected' || res.status === 'error' || res.reason === 'validation_failed';
+    if (!res) {
+      return false;
+    }
+    if (typeof res === 'string') {
+      return res.includes('rejected') || res.includes('error');
+    }
+    return (
+      res.status === 'rejected' || res.status === 'error' || res.reason === 'validation_failed'
+    );
   }).length;
   const success = submitCalls.length - rejected;
 

@@ -9,7 +9,6 @@
  */
 
 import { UnifiedValidator } from './UnifiedValidator.js';
-import { LanguageService } from './LanguageService.js';
 
 const STANDARD_CATEGORIES = [
   'View',

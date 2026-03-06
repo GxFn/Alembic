@@ -47,7 +47,7 @@ export async function produceForcedSummary({
   );
 
   const candidateCount = toolCalls.filter(
-    tc => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check'
+    (tc) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check'
   ).length;
 
   let finalReply;
@@ -62,8 +62,11 @@ export async function produceForcedSummary({
 
   // 收集工具调用摘要
   const submitSummary = toolCalls
-    .filter(tc => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check')
-    .map((tc, i) => `${i + 1}. ${tc.args?.title || tc.args?.category || tc.params?.title || tc.params?.category || 'untitled'}`)
+    .filter((tc) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check')
+    .map(
+      (tc, i) =>
+        `${i + 1}. ${tc.args?.title || tc.args?.category || tc.params?.title || tc.params?.category || 'untitled'}`
+    )
     .join('\n');
 
   try {
@@ -111,7 +114,8 @@ ${toolContextSummary}
 - 关键发现用列表项罗列
 - 如果发现了架构模式或最佳实践，用简短代码块举例
 - 语言自然流畅，像一份技术分析报告`;
-      systemPrompt = '你是项目分析助手。请用纯 Markdown 格式输出结构清晰的分析总结，只输出人类可读的自然语言文档，不要输出 JSON 格式的数据。';
+      systemPrompt =
+        '你是项目分析助手。请用纯 Markdown 格式输出结构清晰的分析总结，只输出人类可读的自然语言文档，不要输出 JSON 格式的数据。';
     }
 
     // 用空 messages 避免累积上下文导致 400
@@ -137,8 +141,8 @@ ${toolContextSummary}
     if (isSystem) {
       // system 源兜底: 合成 dimensionDigest JSON
       const titles = toolCalls
-        .filter(tc => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check')
-        .map(tc => tc.args?.title || tc.params?.title || 'untitled');
+        .filter((tc) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check')
+        .map((tc) => tc.args?.title || tc.params?.title || 'untitled');
       finalReply = `\`\`\`json
 {
   "dimensionDigest": {
@@ -152,19 +156,23 @@ ${toolContextSummary}
 \`\`\``;
     } else {
       // user 源兜底: 合成 Markdown 摘要
-      const toolNames = [...new Set(toolCalls.map(tc => tc.tool))];
+      const toolNames = [...new Set(toolCalls.map((tc) => tc.tool))];
       const filesRead = toolCalls
-        .filter(tc => tc.tool === 'read_project_file')
-        .flatMap(tc => {
+        .filter((tc) => tc.tool === 'read_project_file')
+        .flatMap((tc) => {
           const p = tc.args || tc.params || {};
-          if (p.filePaths) return p.filePaths;
-          if (p.filePath) return [p.filePath];
+          if (p.filePaths) {
+            return p.filePaths;
+          }
+          if (p.filePath) {
+            return [p.filePath];
+          }
           return [];
         })
         .slice(0, 10);
       const searches = toolCalls
-        .filter(tc => tc.tool === 'search_project_code' || tc.tool === 'semantic_search_code')
-        .map(tc => {
+        .filter((tc) => tc.tool === 'search_project_code' || tc.tool === 'semantic_search_code')
+        .map((tc) => {
           const p = tc.args || tc.params || {};
           return p.patterns?.[0] || p.query || p.pattern;
         })
@@ -173,12 +181,12 @@ ${toolContextSummary}
 
       finalReply = `## 分析总结\n\n通过 **${toolCalls.length} 次工具调用**探索了项目代码。\n\n`;
       if (searches.length > 0) {
-        finalReply += `### 搜索的关键词\n${searches.map(s => `- \`${s}\``).join('\n')}\n\n`;
+        finalReply += `### 搜索的关键词\n${searches.map((s) => `- \`${s}\``).join('\n')}\n\n`;
       }
       if (filesRead.length > 0) {
-        finalReply += `### 读取的文件\n${filesRead.map(f => `- \`${f}\``).join('\n')}\n\n`;
+        finalReply += `### 读取的文件\n${filesRead.map((f) => `- \`${f}\``).join('\n')}\n\n`;
       }
-      finalReply += `### 使用的工具\n${toolNames.map(t => `- ${t}`).join('\n')}\n\n`;
+      finalReply += `### 使用的工具\n${toolNames.map((t) => `- ${t}`).join('\n')}\n\n`;
       finalReply += '> ⚠️ AI 服务异常，未能生成完整分析。请稍后重试或缩小分析范围。';
     }
   }
@@ -196,64 +204,80 @@ function buildToolContextForUserSummary(toolCalls) {
   const sections = [];
 
   // 目录结构探索
-  const structureCalls = toolCalls.filter(tc => tc.tool === 'list_project_structure');
+  const structureCalls = toolCalls.filter((tc) => tc.tool === 'list_project_structure');
   if (structureCalls.length > 0) {
-    const dirs = structureCalls.map(tc => (tc.args || tc.params)?.directory || '/').slice(0, 5);
-    sections.push(`**目录探索**: ${dirs.map(d => `\`${d}\``).join(', ')}`);
+    const dirs = structureCalls.map((tc) => (tc.args || tc.params)?.directory || '/').slice(0, 5);
+    sections.push(`**目录探索**: ${dirs.map((d) => `\`${d}\``).join(', ')}`);
   }
 
   // 项目概况
-  const overviewCalls = toolCalls.filter(tc => tc.tool === 'get_project_overview');
+  const overviewCalls = toolCalls.filter((tc) => tc.tool === 'get_project_overview');
   if (overviewCalls.length > 0) {
     sections.push('**项目概况**: 已获取');
   }
 
   // 代码搜索
   const searchCalls = toolCalls.filter(
-    tc => tc.tool === 'search_project_code' || tc.tool === 'semantic_search_code'
+    (tc) => tc.tool === 'search_project_code' || tc.tool === 'semantic_search_code'
   );
   if (searchCalls.length > 0) {
     const queries = searchCalls
-      .map(tc => {
+      .map((tc) => {
         const p = tc.args || tc.params || {};
         return p.patterns?.[0] || p.query || p.pattern;
       })
       .filter(Boolean)
       .slice(0, 8);
-    sections.push(`**代码搜索** (${searchCalls.length} 次): ${queries.map(q => `\`${q}\``).join(', ')}`);
+    sections.push(
+      `**代码搜索** (${searchCalls.length} 次): ${queries.map((q) => `\`${q}\``).join(', ')}`
+    );
   }
 
   // 文件读取
-  const readCalls = toolCalls.filter(tc => tc.tool === 'read_project_file');
+  const readCalls = toolCalls.filter((tc) => tc.tool === 'read_project_file');
   if (readCalls.length > 0) {
     const files = readCalls
-      .flatMap(tc => {
+      .flatMap((tc) => {
         const p = tc.args || tc.params || {};
-        if (p.filePaths) return p.filePaths;
-        if (p.filePath) return [p.filePath];
+        if (p.filePaths) {
+          return p.filePaths;
+        }
+        if (p.filePath) {
+          return [p.filePath];
+        }
         return [];
       })
       .slice(0, 10);
-    sections.push(`**文件读取** (${readCalls.length} 次): ${files.map(f => `\`${f}\``).join(', ')}`);
+    sections.push(
+      `**文件读取** (${readCalls.length} 次): ${files.map((f) => `\`${f}\``).join(', ')}`
+    );
   }
 
   // AST 分析
-  const astCalls = toolCalls.filter(tc =>
-    ['get_class_hierarchy', 'get_class_info', 'get_protocol_info', 'get_method_overrides', 'get_category_map'].includes(tc.tool)
+  const astCalls = toolCalls.filter((tc) =>
+    [
+      'get_class_hierarchy',
+      'get_class_info',
+      'get_protocol_info',
+      'get_method_overrides',
+      'get_category_map',
+    ].includes(tc.tool)
   );
   if (astCalls.length > 0) {
     const entities = astCalls
-      .map(tc => {
+      .map((tc) => {
         const p = tc.args || tc.params || {};
         return p.className || p.name || p.protocolName || p.rootClass;
       })
       .filter(Boolean)
       .slice(0, 5);
-    sections.push(`**AST 结构分析** (${astCalls.length} 次): ${entities.map(e => `\`${e}\``).join(', ')}`);
+    sections.push(
+      `**AST 结构分析** (${astCalls.length} 次): ${entities.map((e) => `\`${e}\``).join(', ')}`
+    );
   }
 
   // 知识库搜索
-  const kbCalls = toolCalls.filter(tc =>
+  const kbCalls = toolCalls.filter((tc) =>
     ['search_knowledge', 'search_recipes', 'knowledge_overview'].includes(tc.tool)
   );
   if (kbCalls.length > 0) {

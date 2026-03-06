@@ -10,11 +10,11 @@
 
 /** QualityScorer 维度权重 */
 export const QUALITY_WEIGHTS = Object.freeze({
-  completeness: 0.30,
+  completeness: 0.3,
   format: 0.25,
   codeQuality: 0.25,
-  metadata: 0.10,
-  engagement: 0.10,
+  metadata: 0.1,
+  engagement: 0.1,
 });
 
 /** QualityScorer 等级分界线 */

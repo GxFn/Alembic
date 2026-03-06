@@ -116,7 +116,7 @@ export class PluginManager {
    * @param  {...any} args
    */
   async callHook(hookName, ...args) {
-    const results = [];
+    const results: Array<{ name: string; result: any }> = [];
     for (const { name, entry } of this.#getSorted()) {
       if (!entry.enabled || !entry.plugin[hookName]) {
         continue;

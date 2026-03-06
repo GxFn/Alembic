@@ -40,7 +40,14 @@
     "init:snippets": "node dist/scripts/init-snippets.js init",
     "list:snippets": "node dist/scripts/init-snippets.js list",
     "remove:snippets": "node dist/scripts/init-snippets.js remove",
-    "diagnose:mcp": "node dist/scripts/diagnose-mcp.js"
+    "diagnose:mcp": "node dist/scripts/diagnose-mcp.js",
+    "lint": "biome check lib/ bin/ config/ scripts/",
+    "lint:fix": "biome check --fix lib/ bin/ config/ scripts/",
+    "format": "biome format --write lib/ bin/ config/ scripts/",
+    "typecheck": "tsc --noEmit",
+    "typecheck:strict": "tsc -p tsconfig.strict.json || true",
+    "check": "npm run typecheck && npm run lint",
+    "prepare": "husky"
   },
   "author": "gaoxuefeng",
   "license": "MIT",
@@ -142,6 +149,8 @@
     "@types/node": "^20.10.6",
     "@types/supertest": "^7.2.0",
     "@types/uuid": "^10.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.2",
     "nodemon": "^3.1.13",
     "prettier": "^3.1.1",
     "supertest": "^6.3.3",
@@ -152,5 +161,11 @@
     "minimatch": "^10.2.2",
     "diff": "^8.0.3",
     "glob": "^11.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs,cjs}": [
+      "biome check --fix --no-errors-on-unmatched",
+      "biome format --write --no-errors-on-unmatched"
+    ]
   }
 }

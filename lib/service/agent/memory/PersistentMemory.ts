@@ -21,9 +21,9 @@
  * @module PersistentMemory
  */
 
-import { MemoryStore } from './MemoryStore.js';
-import { MemoryRetriever } from './MemoryRetriever.js';
 import { MemoryConsolidator } from './MemoryConsolidator.js';
+import { MemoryRetriever } from './MemoryRetriever.js';
+import { MemoryStore } from './MemoryStore.js';
 
 export class PersistentMemory {
   /** @type {MemoryStore} */

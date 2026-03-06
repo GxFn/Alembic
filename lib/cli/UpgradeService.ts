@@ -9,11 +9,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { FileDeployer } from './deploy/FileDeployer.js';
 

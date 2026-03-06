@@ -61,7 +61,7 @@ export async function parsePackageSwift(packagePath) {
     const nameMatch = content.match(/name:\s*"([^"]+)"/);
     const name = nameMatch?.[1] || path.basename(path.dirname(packagePath));
 
-    const targets = [];
+    const targets: string[] = [];
     const targetRe = /\.(?:target|testTarget|executableTarget)\s*\(\s*name:\s*"([^"]+)"/g;
     let m;
     while ((m = targetRe.exec(content)) !== null) {

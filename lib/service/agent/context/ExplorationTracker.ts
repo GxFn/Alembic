@@ -28,9 +28,9 @@ import {
   STRATEGY_ANALYST,
   STRATEGY_PRODUCER,
 } from './exploration/ExplorationStrategies.js';
-import { SignalDetector, SEARCH_TOOLS } from './exploration/SignalDetector.js';
 import { NudgeGenerator } from './exploration/NudgeGenerator.js';
 import { PlanTracker } from './exploration/PlanTracker.js';
+import { SEARCH_TOOLS, SignalDetector } from './exploration/SignalDetector.js';
 
 // ─── ExplorationTracker 主类 ─────────────────────────────
 
@@ -207,7 +207,7 @@ export class ExplorationTracker {
       if (nudge.type === 'convergence') {
         this.#logger.info(
           `[ExplorationTracker] 📊 Exploration saturated at iter ${this.#metrics.iteration}/${this.#budget.maxIterations} — ` +
-          `files=${this.#metrics.uniqueFiles.size}, patterns=${this.#metrics.uniquePatterns.size}, staleRounds=${this.#metrics.roundsSinceNewInfo}`
+            `files=${this.#metrics.uniqueFiles.size}, patterns=${this.#metrics.uniquePatterns.size}, staleRounds=${this.#metrics.roundsSinceNewInfo}`
         );
       } else if (nudge.type === 'budget_warning') {
         this.#logger.info(
@@ -248,7 +248,9 @@ export class ExplorationTracker {
    * @returns {'required'|'auto'|'none'}
    */
   getToolChoice() {
-    if (this.isGracefulExit) return 'none';
+    if (this.isGracefulExit) {
+      return 'none';
+    }
     return this.#strategy.getToolChoice(this.#phase, this.#metrics, this.#budget);
   }
 
@@ -265,7 +267,11 @@ export class ExplorationTracker {
     const isNew = this.#signalDetector.detect(toolName, args, result);
 
     // Submit 追踪
-    if (toolName === 'submit_knowledge' || toolName === 'submit_with_check' || toolName === 'collect_scan_recipe') {
+    if (
+      toolName === 'submit_knowledge' ||
+      toolName === 'submit_with_check' ||
+      toolName === 'collect_scan_recipe'
+    ) {
       const status = typeof result === 'object' ? result?.status : 'ok';
       const isRejected = status === 'rejected';
       const isError = status === 'error';
@@ -355,11 +361,12 @@ export class ExplorationTracker {
         return { isFinalAnswer: true, needsDigestNudge: false, shouldContinue: false, nudge: null };
       }
 
-      const nudge = this.#strategy.name === 'analyst'
-        ? `请**停止调用工具**，直接输出你的完整分析报告。用 Markdown 格式，包含具体文件路径、类名和代码模式。至少涵盖 3 个核心发现。\n\n**现在开始输出你的分析报告。**\n⚠️ 严禁在回复中复制本条指令文字，只输出你自己的分析。`
-        : `请在回复中直接输出 dimensionDigest JSON 总结（用 \`\`\`json 包裹）：\n` +
-          `\`\`\`json\n{"dimensionDigest":{"summary":"分析总结(100-200字)","candidateCount":${submitCount},"keyFindings":["关键发现"],"crossRefs":{},"gaps":["未覆盖方面"],"remainingTasks":[{"signal":"未处理的信号/主题","reason":"未完成原因","priority":"high|medium|low","searchHints":["建议搜索词"]}]}}\n\`\`\`\n> 如果所有信号都已覆盖，remainingTasks 留空数组 \`[]\`。\n` +
-          `⚠️ 严禁在回复中复制本条指令文字，只输出 JSON。`;
+      const nudge =
+        this.#strategy.name === 'analyst'
+          ? `请**停止调用工具**，直接输出你的完整分析报告。用 Markdown 格式，包含具体文件路径、类名和代码模式。至少涵盖 3 个核心发现。\n\n**现在开始输出你的分析报告。**\n⚠️ 严禁在回复中复制本条指令文字，只输出你自己的分析。`
+          : `请在回复中直接输出 dimensionDigest JSON 总结（用 \`\`\`json 包裹）：\n` +
+            `\`\`\`json\n{"dimensionDigest":{"summary":"分析总结(100-200字)","candidateCount":${submitCount},"keyFindings":["关键发现"],"crossRefs":{},"gaps":["未覆盖方面"],"remainingTasks":[{"signal":"未处理的信号/主题","reason":"未完成原因","priority":"high|medium|low","searchHints":["建议搜索词"]}]}}\n\`\`\`\n> 如果所有信号都已覆盖，remainingTasks 留空数组 \`[]\`。\n` +
+            `⚠️ 严禁在回复中复制本条指令文字，只输出 JSON。`;
       return {
         isFinalAnswer: false,
         needsDigestNudge: true,
@@ -370,9 +377,10 @@ export class ExplorationTracker {
 
     // 非终结阶段收到文本
     if (this.#phase === 'PRODUCE' || this.#phase === 'EXPLORE') {
-      const nudge = (this.#phase === 'PRODUCE' && this.#submitToolName !== 'collect_scan_recipe')
-        ? `你的分析很好。请继续调用 ${this.#submitToolName} 提交你发现的知识候选，每个值得记录的模式/实践都应该提交。`
-        : null;
+      const nudge =
+        this.#phase === 'PRODUCE' && this.#submitToolName !== 'collect_scan_recipe'
+          ? `你的分析很好。请继续调用 ${this.#submitToolName} 提交你发现的知识候选，每个值得记录的模式/实践都应该提交。`
+          : null;
       return { isFinalAnswer: false, needsDigestNudge: false, shouldContinue: true, nudge };
     }
 
@@ -399,8 +407,7 @@ export class ExplorationTracker {
 
   get isHardExit() {
     return (
-      this.#gracefulExitRound != null &&
-      this.#metrics.iteration >= this.#gracefulExitRound + 2
+      this.#gracefulExitRound != null && this.#metrics.iteration >= this.#gracefulExitRound + 2
     );
   }
 
@@ -447,7 +454,9 @@ export class ExplorationTracker {
    * @param {object} trace
    */
   updatePlanProgress(trace) {
-    if (!this.#strategy.enablePlanning) return;
+    if (!this.#strategy.enablePlanning) {
+      return;
+    }
     this.#planTracker.updatePlanProgress(trace);
   }
 
@@ -465,15 +474,19 @@ export class ExplorationTracker {
   #checkMetricsTransition() {
     const transitions = this.#strategy.transitions;
     const nextPhaseIndex = this.#strategy.phases.indexOf(this.#phase) + 1;
-    if (nextPhaseIndex >= this.#strategy.phases.length) return;
+    if (nextPhaseIndex >= this.#strategy.phases.length) {
+      return;
+    }
 
     const nextPhase = this.#strategy.phases[nextPhaseIndex];
     const transKey = `${this.#phase}→${nextPhase}`;
     const rule = transitions[transKey];
-    if (!rule) return;
+    if (!rule) {
+      return;
+    }
 
     const condition = typeof rule === 'function' ? rule : rule.onMetrics;
-    if (condition && condition(this.#metrics, this.#budget)) {
+    if (condition?.(this.#metrics, this.#budget)) {
       this.#transitionTo(nextPhase);
     }
   }
@@ -481,12 +494,16 @@ export class ExplorationTracker {
   #checkTextTransition() {
     const transitions = this.#strategy.transitions;
     const nextPhaseIndex = this.#strategy.phases.indexOf(this.#phase) + 1;
-    if (nextPhaseIndex >= this.#strategy.phases.length) return false;
+    if (nextPhaseIndex >= this.#strategy.phases.length) {
+      return false;
+    }
 
     const nextPhase = this.#strategy.phases[nextPhaseIndex];
     const transKey = `${this.#phase}→${nextPhase}`;
     const rule = transitions[transKey];
-    if (!rule) return false;
+    if (!rule) {
+      return false;
+    }
 
     let shouldTransition = false;
     if (typeof rule === 'object' && rule.onTextResponse !== undefined) {

@@ -14,9 +14,6 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const EMBED_MODEL = 'models/gemini-embedding-001';
 
 export class GoogleGeminiProvider extends AiProvider {
-
-
-
   constructor(config: any = {}) {
     super({
       ...config,

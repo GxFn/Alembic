@@ -235,7 +235,11 @@ export const baseDimensions = [
  * @param {string[]} detectedFrameworks 检测到的框架
  * @returns {Array} 适用的维度列表
  */
-export function resolveActiveDimensions(allDimensions, primaryLang, detectedFrameworks: any[] = []) {
+export function resolveActiveDimensions(
+  allDimensions,
+  primaryLang,
+  detectedFrameworks: any[] = []
+) {
   return allDimensions.filter((dim) => {
     if (!dim.conditions) {
       return true; // 无条件 → 通用维度

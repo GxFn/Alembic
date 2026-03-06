@@ -152,8 +152,7 @@ export class SignalDetector {
   }
 
   #detectQuerySignal(toolName, args) {
-    const queryTarget =
-      args?.className || args?.protocolName || args?.name || '';
+    const queryTarget = args?.className || args?.protocolName || args?.name || '';
     const qKey = `${toolName}:${queryTarget}`;
     if (!this.#metrics.uniqueQueries.has(qKey)) {
       this.#metrics.uniqueQueries.add(qKey);

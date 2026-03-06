@@ -162,7 +162,7 @@ export class RealtimeService {
 }
 
 // 单例实例
-let realtimeService = null;
+let realtimeService: RealtimeService | null = null;
 
 export function initRealtimeService(httpServer) {
   if (!realtimeService) {

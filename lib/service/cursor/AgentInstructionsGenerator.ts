@@ -55,7 +55,10 @@ const MCP_TOOLS_SUMMARY = [
   { name: 'autosnippet_skill', desc: 'Skill management (list/load/create/update/delete/suggest)' },
   { name: 'autosnippet_save_document', desc: 'Save development document (auto-publish)' },
   { name: 'autosnippet_bootstrap', desc: 'Project cold-start & scan (knowledge/refine/scan)' },
-  { name: 'autosnippet_task', desc: 'Unified task & decision management: prime (session entry, CALL FIRST) / create/claim/close/fail/defer/progress/decompose (task CRUD) / record_decision/revise_decision/unpin_decision/list_decisions (decisions)' },
+  {
+    name: 'autosnippet_task',
+    desc: 'Unified task & decision management: prime (session entry, CALL FIRST) / create/claim/close/fail/defer/progress/decompose (task CRUD) / record_decision/revise_decision/unpin_decision/list_decisions (decisions)',
+  },
   { name: 'autosnippet_health', desc: 'Service health & KB statistics' },
   { name: 'autosnippet_capabilities', desc: 'List all available MCP tools (self-discovery)' },
 ];
@@ -395,10 +398,10 @@ export class AgentInstructionsGenerator {
    */
   _renderConstraints() {
     return [
-      '## CRITICAL: You Operate autosnippet_task — The User Doesn\'t',
+      "## CRITICAL: You Operate autosnippet_task — The User Doesn't",
       '',
       'You are the task operator. Users speak naturally; you translate to task operations.',
-      'DO NOT tell users to call autosnippet_task. That\'s YOUR job.',
+      "DO NOT tell users to call autosnippet_task. That's YOUR job.",
       '',
       '- WRONG: "You can run autosnippet_task({ operation: \'create\' }) to create a task"',
       '- RIGHT: *(you run create yourself and tell the user "Created task asd-42: Fix login bug")*',

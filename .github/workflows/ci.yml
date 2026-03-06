@@ -16,7 +16,7 @@ env:
 
 jobs:
   build:
-    name: Build
+    name: Build & Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +26,10 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build
+      - run: npm run lint
+      - name: Strict null checks (informational)
+        continue-on-error: true
+        run: npx tsc -p tsconfig.strict.json 2>&1 | tail -3
       - run: cd dashboard && npm ci
       - run: npm run build:dashboard
 

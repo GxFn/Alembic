@@ -14,8 +14,11 @@
  * 25.  get_feedback_stats   反馈统计
  */
 
+import {
+  getInternalAgentRequiredFields,
+  getSystemInjectedFields,
+} from '../../../shared/FieldSpec.js';
 import { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
-import { getInternalAgentRequiredFields, getSystemInjectedFields } from '../../../shared/FieldSpec.js';
 import { checkDimensionType, DIMENSION_DISPLAY_GROUP } from './_shared.js';
 
 // ────────────────────────────────────────────────────────────
@@ -110,16 +113,20 @@ export const submitCandidate = {
       params._category = DIMENSION_DISPLAY_GROUP[dimMeta.id] || dimMeta.id;
 
       // ── UnifiedValidator 统一质量验证（替代 CandidateGuardrail） ──
-      const validator = ctx._validator || new UnifiedValidator({
-        existingTitles: ctx._submittedTitles || new Set(),
-        existingFingerprints: ctx._submittedPatterns || new Set(),
-      });
+      const validator =
+        ctx._validator ||
+        new UnifiedValidator({
+          existingTitles: ctx._submittedTitles || new Set(),
+          existingFingerprints: ctx._submittedPatterns || new Set(),
+        });
       const validResult = validator.validate(params, {
         mode: 'strict',
         systemInjectedFields: getSystemInjectedFields(),
       });
       if (!validResult.pass) {
-        ctx.logger?.info(`[submit_knowledge] ✗ validator rejected: ${validResult.errors.join('; ')}`);
+        ctx.logger?.info(
+          `[submit_knowledge] ✗ validator rejected: ${validResult.errors.join('; ')}`
+        );
         return {
           status: 'rejected',
           error: validResult.errors.join('\n'),

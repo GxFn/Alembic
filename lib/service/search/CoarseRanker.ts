@@ -43,8 +43,7 @@ export class CoarseRanker {
     }
 
     // BM25 分数 max-based 归一化（保留相对排序，避免 clamp 截断高分差异）
-    const maxBm25 =
-      candidates.reduce((m, c) => Math.max(m, c.bm25Score || c.score || 0), 0) || 1;
+    const maxBm25 = candidates.reduce((m, c) => Math.max(m, c.bm25Score || c.score || 0), 0) || 1;
 
     return candidates
       .map((c) => {

@@ -24,12 +24,10 @@ function _walkJavaNode(node, ctx, parentClassName) {
           const fullPath = path.text; // e.g. com.example.MyClass or com.example.MyClass.myMethod
           const segments = fullPath.split('.');
           const lastName = segments[segments.length - 1];
-          // Java wildcard: import com.example.* 
+          // Java wildcard: import com.example.*
           const isWildcard = child.text.includes('.*');
           if (isWildcard) {
-            ctx.imports.push(
-              new ImportRecord(fullPath, { symbols: ['*'], kind: 'namespace' })
-            );
+            ctx.imports.push(new ImportRecord(fullPath, { symbols: ['*'], kind: 'namespace' }));
           } else if (isStatic) {
             // static import: import static com.example.MyClass.method
             ctx.imports.push(
@@ -475,9 +473,15 @@ function _collectJavaScopes(root) {
     for (let i = 0; i < node.namedChildCount; i++) {
       const child = node.namedChild(i);
 
-      if (child.type === 'class_declaration' || child.type === 'enum_declaration' || child.type === 'record_declaration') {
+      if (
+        child.type === 'class_declaration' ||
+        child.type === 'enum_declaration' ||
+        child.type === 'record_declaration'
+      ) {
         const name = child.namedChildren.find((c) => c.type === 'identifier')?.text;
-        const body = child.namedChildren.find((c) => c.type === 'class_body' || c.type === 'enum_body');
+        const body = child.namedChildren.find(
+          (c) => c.type === 'class_body' || c.type === 'enum_body'
+        );
         if (body) {
           visit(body, name || className);
         }
@@ -505,16 +509,37 @@ function _collectJavaScopes(root) {
  * 从 Java method body 中递归提取调用点
  */
 function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
-  if (!bodyNode) return;
+  if (!bodyNode) {
+    return;
+  }
 
   const JAVA_NOISE = new Set([
-    'System', 'Math', 'String', 'Integer', 'Long', 'Double', 'Float',
-    'Boolean', 'Character', 'Byte', 'Short', 'Arrays', 'Collections',
-    'Objects', 'Optional', 'Stream', 'Collectors', 'List', 'Map', 'Set',
+    'System',
+    'Math',
+    'String',
+    'Integer',
+    'Long',
+    'Double',
+    'Float',
+    'Boolean',
+    'Character',
+    'Byte',
+    'Short',
+    'Arrays',
+    'Collections',
+    'Objects',
+    'Optional',
+    'Stream',
+    'Collectors',
+    'List',
+    'Map',
+    'Set',
   ]);
 
   function walk(node) {
-    if (!node || node.type === 'ERROR' || node.isMissing) return;
+    if (!node || node.type === 'ERROR' || node.isMissing) {
+      return;
+    }
 
     if (node.type === 'method_invocation') {
       // obj.method(args) or method(args)
@@ -524,7 +549,10 @@ function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
       const args = node.namedChildren.find((c) => c.type === 'argument_list');
       const argCount = args ? args.namedChildCount : 0;
 
-      let callee, receiver = null, receiverType = null, callType;
+      let callee,
+        receiver = null,
+        receiverType = null,
+        callType;
 
       if (identifiers.length >= 2) {
         // obj.method() — first identifier is receiver, last is method name
@@ -574,14 +602,19 @@ function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
       });
 
       // walk arguments for nested calls
-      if (args) walkChildren(args);
+      if (args) {
+        walkChildren(args);
+      }
       return;
     }
 
     if (node.type === 'object_creation_expression') {
       // new ClassName(args)
       const typeNode = node.namedChildren.find(
-        (c) => c.type === 'type_identifier' || c.type === 'generic_type' || c.type === 'scoped_type_identifier'
+        (c) =>
+          c.type === 'type_identifier' ||
+          c.type === 'generic_type' ||
+          c.type === 'scoped_type_identifier'
       );
       const args = node.namedChildren.find((c) => c.type === 'argument_list');
       const argCount = args ? args.namedChildCount : 0;
@@ -600,7 +633,9 @@ function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
         isAwait: false,
       });
 
-      if (args) walkChildren(args);
+      if (args) {
+        walkChildren(args);
+      }
       return;
     }
 

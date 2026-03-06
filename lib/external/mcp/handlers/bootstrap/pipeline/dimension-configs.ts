@@ -13,7 +13,7 @@
  */
 
 import { baseDimensions } from '../base-dimensions.js';
-import { getDimensionSOP, getDimensionFocusKeywords } from '../shared/dimension-sop.js';
+import { getDimensionFocusKeywords, getDimensionSOP } from '../shared/dimension-sop.js';
 
 // ──────────────────────────────────────────────────────────────────
 // v3.0 维度配置 — 仅保留内部 Agent 专属字段
@@ -21,19 +21,46 @@ import { getDimensionSOP, getDimensionFocusKeywords } from '../shared/dimension-
 // ──────────────────────────────────────────────────────────────────
 
 export const DIMENSION_CONFIGS_V3 = {
-  'project-profile':            { outputType: 'dual',      allowedKnowledgeTypes: ['architecture'] },
-  'objc-deep-scan':             { outputType: 'dual',      allowedKnowledgeTypes: ['code-standard', 'code-pattern'] },
-  'category-scan':              { outputType: 'dual',      allowedKnowledgeTypes: ['code-standard', 'code-pattern'] },
-  'code-standard':              { outputType: 'dual',      allowedKnowledgeTypes: ['code-standard', 'code-style'] },
-  'architecture':               { outputType: 'dual',      allowedKnowledgeTypes: ['architecture', 'module-dependency', 'boundary-constraint'] },
-  'code-pattern':               { outputType: 'candidate', allowedKnowledgeTypes: ['code-pattern', 'code-relation', 'inheritance'] },
-  'event-and-data-flow':        { outputType: 'candidate', allowedKnowledgeTypes: ['call-chain', 'data-flow', 'event-and-data-flow'] },
-  'best-practice':              { outputType: 'candidate', allowedKnowledgeTypes: ['best-practice'] },
-  'agent-guidelines':           { outputType: 'skill',     allowedKnowledgeTypes: ['boundary-constraint', 'code-standard'] },
-  'module-export-scan':         { outputType: 'dual',      allowedKnowledgeTypes: ['code-standard', 'architecture'] },
-  'framework-convention-scan':  { outputType: 'dual',      allowedKnowledgeTypes: ['code-standard', 'architecture'] },
-  'python-package-scan':        { outputType: 'dual',      allowedKnowledgeTypes: ['code-standard', 'architecture'] },
-  'jvm-annotation-scan':        { outputType: 'dual',      allowedKnowledgeTypes: ['code-pattern', 'architecture'] },
+  'project-profile': { outputType: 'dual', allowedKnowledgeTypes: ['architecture'] },
+  'objc-deep-scan': {
+    outputType: 'dual',
+    allowedKnowledgeTypes: ['code-standard', 'code-pattern'],
+  },
+  'category-scan': { outputType: 'dual', allowedKnowledgeTypes: ['code-standard', 'code-pattern'] },
+  'code-standard': { outputType: 'dual', allowedKnowledgeTypes: ['code-standard', 'code-style'] },
+  architecture: {
+    outputType: 'dual',
+    allowedKnowledgeTypes: ['architecture', 'module-dependency', 'boundary-constraint'],
+  },
+  'code-pattern': {
+    outputType: 'candidate',
+    allowedKnowledgeTypes: ['code-pattern', 'code-relation', 'inheritance'],
+  },
+  'event-and-data-flow': {
+    outputType: 'candidate',
+    allowedKnowledgeTypes: ['call-chain', 'data-flow', 'event-and-data-flow'],
+  },
+  'best-practice': { outputType: 'candidate', allowedKnowledgeTypes: ['best-practice'] },
+  'agent-guidelines': {
+    outputType: 'skill',
+    allowedKnowledgeTypes: ['boundary-constraint', 'code-standard'],
+  },
+  'module-export-scan': {
+    outputType: 'dual',
+    allowedKnowledgeTypes: ['code-standard', 'architecture'],
+  },
+  'framework-convention-scan': {
+    outputType: 'dual',
+    allowedKnowledgeTypes: ['code-standard', 'architecture'],
+  },
+  'python-package-scan': {
+    outputType: 'dual',
+    allowedKnowledgeTypes: ['code-standard', 'architecture'],
+  },
+  'jvm-annotation-scan': {
+    outputType: 'dual',
+    allowedKnowledgeTypes: ['code-pattern', 'architecture'],
+  },
 };
 
 // ──────────────────────────────────────────────────────────────────
@@ -47,9 +74,11 @@ export const DIMENSION_CONFIGS_V3 = {
  * @returns {object|null} 完整维度配置，或 null（未知维度）
  */
 export function getFullDimensionConfig(dimId) {
-  const base = baseDimensions.find(d => d.id === dimId);
+  const base = baseDimensions.find((d) => d.id === dimId);
   const v3 = DIMENSION_CONFIGS_V3[dimId];
-  if (!base) return null;
+  if (!base) {
+    return null;
+  }
 
   const sop = getDimensionSOP(dimId);
 
@@ -57,7 +86,8 @@ export function getFullDimensionConfig(dimId) {
     id: dimId,
     label: base.label,
     guide: base.guide,
-    outputType: v3?.outputType || (base.dualOutput ? 'dual' : base.skillWorthy ? 'skill' : 'candidate'),
+    outputType:
+      v3?.outputType || (base.dualOutput ? 'dual' : base.skillWorthy ? 'skill' : 'candidate'),
     allowedKnowledgeTypes: v3?.allowedKnowledgeTypes || base.knowledgeTypes || [],
     skillWorthy: base.skillWorthy || false,
     dualOutput: base.dualOutput || false,

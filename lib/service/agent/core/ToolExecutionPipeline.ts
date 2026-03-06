@@ -156,9 +156,11 @@ export const allowlistGate = {
   before(call, ctx) {
     const schemas = ctx.loopCtx?.toolSchemas;
     // 如果没有 schema 列表（全工具模式），跳过检查
-    if (!schemas || schemas.length === 0) return undefined;
+    if (!schemas || schemas.length === 0) {
+      return undefined;
+    }
 
-    const allowedNames = new Set(schemas.map(s => s.name || s.function?.name));
+    const allowedNames = new Set(schemas.map((s) => s.name || s.function?.name));
     if (!allowedNames.has(call.name)) {
       ctx.runtime.logger.warn(
         `[ToolPipeline] ⛔ Tool "${call.name}" not in allowlist — blocked (hallucinated call)`
@@ -202,12 +204,12 @@ export const cacheCheck = {
   name: 'cacheCheck',
   before(call, ctx) {
     const mc = ctx.loopCtx.memoryCoordinator;
-    if (!mc) return undefined;
+    if (!mc) {
+      return undefined;
+    }
     const cached = mc.getCachedResult?.(call.name, call.args);
     if (cached !== null && cached !== undefined) {
-      ctx.runtime.logger.info(
-        `[ToolPipeline] 🔧 CACHE HIT: ${call.name} → skipped execution`
-      );
+      ctx.runtime.logger.info(`[ToolPipeline] 🔧 CACHE HIT: ${call.name} → skipped execution`);
       return { result: cached };
     }
     return undefined;
@@ -223,7 +225,11 @@ export const observationRecord = {
   name: 'observationRecord',
   after(call, result, ctx, meta) {
     ctx.loopCtx.memoryCoordinator?.recordObservation?.(
-      call.name, call.args, result, ctx.iteration, meta.cacheHit
+      call.name,
+      call.args,
+      result,
+      ctx.iteration,
+      meta.cacheHit
     );
   },
 };
@@ -264,8 +270,12 @@ export const submitDedup = {
   name: 'submitDedup',
   after(call, result, ctx, meta) {
     const { sharedState } = ctx.loopCtx;
-    if (!sharedState) return;
-    if (call.name !== 'submit_knowledge' && call.name !== 'submit_with_check') return;
+    if (!sharedState) {
+      return;
+    }
+    if (call.name !== 'submit_knowledge' && call.name !== 'submit_with_check') {
+      return;
+    }
 
     const title = call.args?.title || call.args?.category || '';
     const isRejected = typeof result === 'object' && result?.status === 'rejected';
@@ -328,20 +338,28 @@ export const eventBusPublisher = {
   name: 'eventBusPublisher',
   before(call, ctx) {
     if (ctx.runtime.bus?.publish) {
-      ctx.runtime.bus.publish('tool:call:start', {
-        agentId: ctx.runtime.id,
-        tool: call.name,
-      }, { source: ctx.runtime.id });
+      ctx.runtime.bus.publish(
+        'tool:call:start',
+        {
+          agentId: ctx.runtime.id,
+          tool: call.name,
+        },
+        { source: ctx.runtime.id }
+      );
     }
   },
   after(call, result, ctx, meta) {
     if (ctx.runtime.bus?.publish) {
-      ctx.runtime.bus.publish('tool:call:end', {
-        agentId: ctx.runtime.id,
-        tool: call.name,
-        durationMs: meta.durationMs,
-        success: !result?.error,
-      }, { source: ctx.runtime.id });
+      ctx.runtime.bus.publish(
+        'tool:call:end',
+        {
+          agentId: ctx.runtime.id,
+          tool: call.name,
+          durationMs: meta.durationMs,
+          success: !result?.error,
+        },
+        { source: ctx.runtime.id }
+      );
     }
   },
 };

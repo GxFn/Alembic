@@ -110,7 +110,7 @@ export const MANIFEST = [
     on: 'both',
     category: 'claude-hooks',
     chmod: true,
-    cleanup: ['.claude/hooks.yaml'],  // 清理旧格式文件
+    cleanup: ['.claude/hooks.yaml'], // 清理旧格式文件
   },
 
   // ═══ Agent Instructions（签名保护）════════════════════
@@ -121,7 +121,7 @@ export const MANIFEST = [
     strategy: 'signature-safe',
     on: 'both',
     category: 'copilot-instructions',
-    fallback: 'inject-marker',  // 签名保护失败时，用标记注入
+    fallback: 'inject-marker', // 签名保护失败时，用标记注入
   },
   {
     id: 'agents-md',
@@ -144,9 +144,9 @@ export const MANIFEST = [
   {
     id: 'pre-commit',
     src: 'pre-commit-guard.sh',
-    dest: null,  // 动态决定：.husky/pre-commit 或 .git/hooks/pre-commit
+    dest: null, // 动态决定：.husky/pre-commit 或 .git/hooks/pre-commit
     strategy: 'create-only',
-    on: 'manual',           // 暂不在 setup 中强制安装 git 工作流
+    on: 'manual', // 暂不在 setup 中强制安装 git 工作流
     category: 'pre-commit-hook',
     chmod: true,
     resolveDest: 'resolvePreCommitDest',

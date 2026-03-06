@@ -263,8 +263,7 @@ export class MultiSignalRanker {
         const value = (signal as any).compute(candidate, context);
         signals[name] = value;
         // 向后兼容: 旧配置可能用 "seasonality" 而非 "contextMatch"
-        const weight =
-          weights[name] ?? (name === 'contextMatch' ? (weights.seasonality ?? 0) : 0);
+        const weight = weights[name] ?? (name === 'contextMatch' ? (weights.seasonality ?? 0) : 0);
         totalScore += value * weight;
       }
 

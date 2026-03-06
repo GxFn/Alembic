@@ -24,24 +24,18 @@ export const DEFAULT_REPLAN_INTERVAL = 8;
 export function createBootstrapStrategy(isSkillOnly = false) {
   return {
     name: 'bootstrap',
-    phases: isSkillOnly
-      ? ['EXPLORE', 'SUMMARIZE']
-      : ['EXPLORE', 'PRODUCE', 'SUMMARIZE'],
+    phases: isSkillOnly ? ['EXPLORE', 'SUMMARIZE'] : ['EXPLORE', 'PRODUCE', 'SUMMARIZE'],
     transitions: {
       ...(isSkillOnly
         ? {
             'EXPLORE→SUMMARIZE': {
-              onMetrics: (m, b) =>
-                m.submitCount > 0 ||
-                m.searchRoundsInPhase >= b.searchBudget,
+              onMetrics: (m, b) => m.submitCount > 0 || m.searchRoundsInPhase >= b.searchBudget,
               onTextResponse: true,
             },
           }
         : {
             'EXPLORE→PRODUCE': {
-              onMetrics: (m, b) =>
-                m.submitCount > 0 ||
-                m.searchRoundsInPhase >= b.searchBudget,
+              onMetrics: (m, b) => m.submitCount > 0 || m.searchRoundsInPhase >= b.searchBudget,
               onTextResponse: true,
             },
             'PRODUCE→SUMMARIZE': {
@@ -49,13 +43,14 @@ export function createBootstrapStrategy(isSkillOnly = false) {
                 m.submitCount >= b.maxSubmits ||
                 (m.submitCount > 0 && m.roundsSinceSubmit >= b.idleRoundsToExit) ||
                 (m.phaseRounds >= b.searchBudgetGrace && m.submitCount === 0),
-              onTextResponse: (m, b) =>
-                m.submitCount >= b.softSubmitLimit,
+              onTextResponse: (m, b) => m.submitCount >= b.softSubmitLimit,
             },
           }),
     },
     getToolChoice: (phase, m, b) => {
-      if (phase === 'SUMMARIZE') return 'none';
+      if (phase === 'SUMMARIZE') {
+        return 'none';
+      }
       if (phase === 'EXPLORE') {
         return m.searchRoundsInPhase >= b.searchBudget - 1 ? 'auto' : 'required';
       }
@@ -82,21 +77,25 @@ export const STRATEGY_ANALYST = {
     },
     'EXPLORE→VERIFY': {
       onMetrics: (m, b) =>
-        m.searchRoundsInPhase >= Math.floor(b.maxIterations * 0.6) ||
-        m.roundsSinceNewInfo >= 3,
+        m.searchRoundsInPhase >= Math.floor(b.maxIterations * 0.6) || m.roundsSinceNewInfo >= 3,
       onTextResponse: false,
     },
     'VERIFY→SUMMARIZE': {
       onMetrics: (m, b) =>
-        m.iteration >= Math.floor(b.maxIterations * 0.8) ||
-        m.roundsSinceNewInfo >= 2,
+        m.iteration >= Math.floor(b.maxIterations * 0.8) || m.roundsSinceNewInfo >= 2,
       onTextResponse: true,
     },
   },
   getToolChoice: (phase) => {
-    if (phase === 'SUMMARIZE') return 'none';
-    if (phase === 'SCAN') return 'required';
-    if (phase === 'EXPLORE') return 'required';
+    if (phase === 'SUMMARIZE') {
+      return 'none';
+    }
+    if (phase === 'SCAN') {
+      return 'required';
+    }
+    if (phase === 'EXPLORE') {
+      return 'required';
+    }
     return 'auto'; // VERIFY
   },
   enableReflection: true,
@@ -118,8 +117,7 @@ export const STRATEGY_PRODUCER = {
         m.submitCount >= b.maxSubmits ||
         (m.submitCount > 0 && m.roundsSinceSubmit >= b.idleRoundsToExit) ||
         (m.phaseRounds >= b.searchBudgetGrace && m.submitCount === 0),
-      onTextResponse: (m, b) =>
-        m.submitCount >= b.softSubmitLimit,
+      onTextResponse: (m, b) => m.submitCount >= b.softSubmitLimit,
     },
   },
   getToolChoice: (phase) => (phase === 'SUMMARIZE' ? 'none' : 'auto'),

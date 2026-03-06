@@ -212,7 +212,7 @@ export function registerGatewayActions(gateway, container) {
     return service.search(ctx.data.keyword, ctx.data.options);
   });
 
-  logger.info('Gateway: All actions registered', {
+  logger?.info('Gateway: All actions registered', {
     actionCount: gateway.getRegisteredActions().length,
   });
 }

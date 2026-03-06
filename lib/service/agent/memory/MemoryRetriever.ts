@@ -62,7 +62,9 @@ export class MemoryRetriever {
    */
   retrieve(query, { limit = 10, source, type }: any = {}) {
     const all = this.#store.getAllActive({ source, type });
-    if (all.length === 0) return [];
+    if (all.length === 0) {
+      return [];
+    }
 
     const now = Date.now();
     const lowerQuery = (query || '').toLowerCase();
@@ -157,7 +159,9 @@ export class MemoryRetriever {
         .map((m) => MemoryStore.deserialize(m));
     }
 
-    if (memories.length === 0) return '';
+    if (memories.length === 0) {
+      return '';
+    }
 
     const lines = memories.map((m) => {
       const badge = m.importance >= 8 ? '⚠️' : m.importance >= 5 ? '📌' : '💡';
@@ -202,7 +206,9 @@ export class MemoryRetriever {
    */
   append(entry) {
     const content = (entry.content || '').trim().substring(0, 500);
-    if (!content) return;
+    if (!content) {
+      return;
+    }
 
     // 去重: 检查是否已有高相似度记忆
     const similar = this.#store.findSimilar(content, entry.type, 1);
@@ -241,7 +247,9 @@ export class MemoryRetriever {
    * @returns {number|null}
    */
   computeEmbeddingRelevance(query, content) {
-    if (!this.#embeddingFn) return null;
+    if (!this.#embeddingFn) {
+      return null;
+    }
     try {
       return this.#embeddingFn(query, content);
     } catch {
@@ -254,15 +262,21 @@ export class MemoryRetriever {
   // ═══════════════════════════════════════════════════════════
 
   static #computeRelevance(lowerQuery, queryTokens, content) {
-    if (!lowerQuery || !content) return 0;
+    if (!lowerQuery || !content) {
+      return 0;
+    }
 
     const lowerContent = content.toLowerCase();
     const contentTokens = MemoryRetriever.#tokenizeWords(lowerContent);
-    if (queryTokens.size === 0) return 0;
+    if (queryTokens.size === 0) {
+      return 0;
+    }
 
     let matchCount = 0;
     for (const t of queryTokens) {
-      if (contentTokens.has(t)) matchCount++;
+      if (contentTokens.has(t)) {
+        matchCount++;
+      }
     }
     const tokenOverlap = matchCount / queryTokens.size;
     const substringMatch = lowerContent.includes(lowerQuery) ? 0.4 : 0;
@@ -279,7 +293,9 @@ export class MemoryRetriever {
   }
 
   static #tokenizeWords(text) {
-    if (!text) return new Set();
+    if (!text) {
+      return new Set();
+    }
     return new Set(
       text
         .split(/[\s,;:!?。，；：！？\-_/\\|()[\]{}'"<>]+/)

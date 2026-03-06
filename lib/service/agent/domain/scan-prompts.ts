@@ -13,9 +13,9 @@
  * @module scan-prompts
  */
 
-import { insightGateEvaluator, buildRetryPrompt } from './insight-gate.js';
-import { producerRejectionGateEvaluator, buildCodeContextSection } from './insight-producer.js';
 import { ANALYST_SYSTEM_PROMPT } from './insight-analyst.js';
+import { buildRetryPrompt, insightGateEvaluator } from './insight-gate.js';
+import { buildCodeContextSection, producerRejectionGateEvaluator } from './insight-producer.js';
 
 /**
  * @typedef {Object} ScanTaskConfig
@@ -33,7 +33,6 @@ import { ANALYST_SYSTEM_PROMPT } from './insight-analyst.js';
  * @type {Record<string, ScanTaskConfig>}
  */
 export const SCAN_TASK_CONFIGS = {
-
   // ─── extract: Recipe 提取（工具驱动，与冷启动 submit_knowledge 字段对齐） ─────
 
   extract: {
@@ -109,7 +108,6 @@ content.markdown 字段必须是「项目特写」：
 - content.markdown 必须包含代码块，展示核心实现`,
     fallback: (label) => ({ targetName: label, extracted: 0, recipes: [] }),
   },
-
 };
 
 // ──────────────────────────────────────────────────────────────────
@@ -208,30 +206,41 @@ export function buildScanPipelineStages({
       return buildScanProducerPrompt(ctx, files, task);
     },
     // retry 配置 (拒绝率过高时缩减预算)
-    ...(isToolDriven ? {
-      retryBudget: { maxIterations: isSummarize ? 3 : 5, temperature: 0.3, timeoutMs: isSummarize ? 60_000 : 120_000 },
-      retryPromptBuilder: (retryCtx, _origPrompt, prev) => {
-        const prevProduce = prev.produce;
-        const submitCalls = (prevProduce?.toolCalls || []).filter(tc =>
-          submitToolNames.includes(tc.tool || tc.name));
-        const rejected = submitCalls.filter(tc => {
-          const res = tc.result;
-          if (!res) return false;
-          if (typeof res === 'string') return res.includes('rejected') || res.includes('error');
-          return res.status === 'rejected' || res.status === 'error';
-        }).length;
-        return `你的 ${rejected} 个提交被拒绝了。请根据拒绝原因改进后重新提交，确保:
+    ...(isToolDriven
+      ? {
+          retryBudget: {
+            maxIterations: isSummarize ? 3 : 5,
+            temperature: 0.3,
+            timeoutMs: isSummarize ? 60_000 : 120_000,
+          },
+          retryPromptBuilder: (retryCtx, _origPrompt, prev) => {
+            const prevProduce = prev.produce;
+            const submitCalls = (prevProduce?.toolCalls || []).filter((tc) =>
+              submitToolNames.includes(tc.tool || tc.name)
+            );
+            const rejected = submitCalls.filter((tc) => {
+              const res = tc.result;
+              if (!res) {
+                return false;
+              }
+              if (typeof res === 'string') {
+                return res.includes('rejected') || res.includes('error');
+              }
+              return res.status === 'rejected' || res.status === 'error';
+            }).length;
+            return `你的 ${rejected} 个提交被拒绝了。请根据拒绝原因改进后重新提交，确保:
 1. content 必须是对象: { markdown: "...", rationale: "...", pattern: "..." }
 2. content.markdown 字段 ≥ 200 字符，含代码块 (\`\`\`)
 3. content.rationale 必填 — 设计原理说明
 4. reasoning.sources 必须是非空数组
 5. 标题使用项目真实类名
 6. 必填: trigger (@kebab-case)、kind (rule/pattern/fact)、doClause (英文祈使句)`;
-      },
-      skipOnDegrade: true,
-    } : {
-      skipOnDegrade: true,
-    }),
+          },
+          skipOnDegrade: true,
+        }
+      : {
+          skipOnDegrade: true,
+        }),
   };
 
   const stages: any[] = [analyzeStage, qualityGateStage, produceStage];
@@ -278,16 +287,20 @@ function buildScanProducerPrompt(ctx, files, task) {
   const analysis = ctx.phaseResults?.analyze?.reply || '';
 
   // ── 有完整 artifact 时 (走 buildAnalysisArtifact 路径) ──
-  if (artifact && artifact.analysisText) {
+  if (artifact?.analysisText) {
     const parts = [];
 
     // §1 分析文本
-    parts.push(`将以下代码分析转化为 collect_scan_recipe 调用。\n\n---\n${artifact.analysisText}\n---`);
+    parts.push(
+      `将以下代码分析转化为 collect_scan_recipe 调用。\n\n---\n${artifact.analysisText}\n---`
+    );
 
     // §2 结构化发现 (来自 ActiveContext scratchpad)
     if (artifact.findings?.length > 0) {
       const findingLines = ['## 关键发现 (Analyst 已确认)'];
-      const sorted = [...artifact.findings].sort((a, b) => (b.importance || 0) - (a.importance || 0));
+      const sorted = [...artifact.findings].sort(
+        (a, b) => (b.importance || 0) - (a.importance || 0)
+      );
       for (const f of sorted) {
         const badge = (f.importance || 0) >= 8 ? '⚠️' : '📋';
         findingLines.push(`${badge} **[${f.importance || 5}/10]** ${f.finding}`);
@@ -331,15 +344,17 @@ function buildScanProducerPrompt(ctx, files, task) {
   }
 
   // Fallback: analyze reply 不足时直接提供源代码
-  const fileCtx = (files || []).slice(0, 15).map(f => {
-    const body = (f.content || '').length > 1200
-      ? f.content.slice(0, 1200) + '\n// ... (truncated)'
-      : (f.content || '');
-    return `### ${f.relativePath || f.name}\n\`\`\`\n${body}\n\`\`\``;
-  }).join('\n\n');
-  const preamble = analysis
-    ? `## 部分分析\n${analysis}\n\n`
-    : '';
+  const fileCtx = (files || [])
+    .slice(0, 15)
+    .map((f) => {
+      const body =
+        (f.content || '').length > 1200
+          ? `${f.content.slice(0, 1200)}\n// ... (truncated)`
+          : f.content || '';
+      return `### ${f.relativePath || f.name}\n\`\`\`\n${body}\n\`\`\``;
+    })
+    .join('\n\n');
+  const preamble = analysis ? `## 部分分析\n${analysis}\n\n` : '';
   return `${preamble}分析以下 ${files?.length || 0} 个源文件，提取知识 Recipe。\n\n${fileCtx}`;
 }
 

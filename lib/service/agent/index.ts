@@ -48,44 +48,40 @@
  *   | remote-exec  | Conv+Analysis+System | Single      | Budget+Safety    |
  */
 
-// ── Infrastructure ──
-export { AgentState, AgentPhase } from './AgentState.js';
 export { AgentEventBus, AgentEvents } from './AgentEventBus.js';
+export { AgentFactory } from './AgentFactory.js';
 export { AgentMessage, Channel } from './AgentMessage.js';
-
+export { AgentRouter, PresetName } from './AgentRouter.js';
 // ── Core ──
 export { AgentRuntime } from './AgentRuntime.js';
-export { AgentRouter, PresetName } from './AgentRouter.js';
-export { AgentFactory } from './AgentFactory.js';
+// ── Infrastructure ──
+export { AgentPhase, AgentState } from './AgentState.js';
 
 // ── Capabilities ──
 export {
   Capability,
-  Conversation,
+  CapabilityRegistry,
   CodeAnalysis,
+  Conversation,
   KnowledgeProduction,
   SystemInteraction,
-  CapabilityRegistry,
 } from './capabilities.js';
-
-// ── Strategies ──
-export {
-  Strategy,
-  SingleStrategy,
-  FanOutStrategy,
-  AdaptiveStrategy,
-  StrategyRegistry,
-} from './strategies.js';
 export { PipelineStrategy } from './PipelineStrategy.js';
-
 // ── Policies ──
 export {
-  Policy,
   BudgetPolicy,
-  SafetyPolicy,
-  QualityGatePolicy,
+  Policy,
   PolicyEngine,
+  QualityGatePolicy,
+  SafetyPolicy,
 } from './policies.js';
-
 // ── Presets ──
-export { PRESETS, getPreset, resolveStrategy } from './presets.js';
+export { getPreset, PRESETS, resolveStrategy } from './presets.js';
+// ── Strategies ──
+export {
+  AdaptiveStrategy,
+  FanOutStrategy,
+  SingleStrategy,
+  Strategy,
+  StrategyRegistry,
+} from './strategies.js';

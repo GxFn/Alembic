@@ -773,22 +773,25 @@ export class ModuleService {
 
     try {
       const result = await this.#agentFactory.scanKnowledge({
-        label: targetName, files, task: 'extract',
+        label: targetName,
+        files,
+        task: 'extract',
       });
       const recipes = result.recipes || [];
 
       if (recipes.length === 0) {
         this.#logger.info(
-          `[ModuleService] Agent 未产出 recipe (${targetName}, ${files.length} files)`,
+          `[ModuleService] Agent 未产出 recipe (${targetName}, ${files.length} files)`
         );
       } else {
-        this.#logger.info(
-          `[ModuleService] Agent 提取 ${recipes.length} recipes (${targetName})`,
-        );
+        this.#logger.info(`[ModuleService] Agent 提取 ${recipes.length} recipes (${targetName})`);
       }
       return recipes;
     } catch (err: any) {
-      if (err.code === 'API_KEY_MISSING' || /API_KEY_MISSING|API.Key.未配置|unregistered callers/i.test(err.message)) {
+      if (
+        err.code === 'API_KEY_MISSING' ||
+        /API_KEY_MISSING|API.Key.未配置|unregistered callers/i.test(err.message)
+      ) {
         this.#logger.info(`[ModuleService] AI 未启用（未配置 API Key），跳过 AI 提取。`);
       } else {
         this.#logger.warn(`[ModuleService] AI extraction failed: ${err.message}`);

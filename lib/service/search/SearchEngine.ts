@@ -8,7 +8,6 @@
 import Logger from '../../infrastructure/logging/Logger.js';
 import { CoarseRanker } from './CoarseRanker.js';
 import { contextBoost } from './contextBoost.js';
-import { CrossEncoderReranker } from './CrossEncoderReranker.js';
 import { MultiSignalRanker } from './MultiSignalRanker.js';
 
 /**
@@ -122,10 +121,14 @@ export class BM25Scorer {
    */
   removeDocument(id) {
     const idx = this._idIndex.get(id);
-    if (idx === undefined) return false;
+    if (idx === undefined) {
+      return false;
+    }
 
     const doc = this.documents[idx];
-    if (!doc) return false; // 已被标记删除
+    if (!doc) {
+      return false; // 已被标记删除
+    }
 
     // 递减 docFreq
     for (const token of new Set(doc.tokens) as Set<string>) {
@@ -191,7 +194,9 @@ export class BM25Scorer {
     const scores = [];
 
     for (const doc of this.documents) {
-      if (!doc) continue; // skip tombstone
+      if (!doc) {
+        continue; // skip tombstone
+      }
       let score = 0;
       const dl = doc.length;
 
@@ -360,7 +365,9 @@ export class SearchEngine {
         // 缓存 BM25 结果, 避免 RRF 降级时重复计算
         let cachedBm25Items = null;
         const getBm25 = () => {
-          if (!cachedBm25Items) cachedBm25Items = this._bm25Search(query, type, recallLimit);
+          if (!cachedBm25Items) {
+            cachedBm25Items = this._bm25Search(query, type, recallLimit);
+          }
           return cachedBm25Items;
         };
 

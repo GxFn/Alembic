@@ -9,7 +9,7 @@
  */
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { basename, dirname, extname, join, relative } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 import { ProjectDiscoverer } from '../../../core/discovery/ProjectDiscoverer.js';
 import { LanguageService } from '../../../shared/LanguageService.js';
 import { PackageSwiftParser } from './PackageSwiftParser.js';
@@ -126,7 +126,9 @@ export class SpmDiscoverer extends ProjectDiscoverer {
             break;
           }
         }
-        if (sourcesDir) break;
+        if (sourcesDir) {
+          break;
+        }
       }
     }
 
@@ -166,7 +168,9 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     const allParsed = [];
     const umbrellaNames = new Set();
     for (const { pkgPath, parsed } of this.#parsedPackages) {
-      if (pkgNameSet.has(parsed.name)) continue;
+      if (pkgNameSet.has(parsed.name)) {
+        continue;
+      }
       pkgNameSet.add(parsed.name);
       allParsed.push({ ...parsed, _dir: dirname(pkgPath) });
 
@@ -210,7 +214,9 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     // ── 第二遍：构建 edges ──
     for (const parsed of allParsed) {
       // 跳过 umbrella 包的边
-      if (umbrellaNames.has(parsed.name)) continue;
+      if (umbrellaNames.has(parsed.name)) {
+        continue;
+      }
 
       // 包级 local path 依赖
       for (const dep of parsed.dependencies || []) {
@@ -272,25 +278,47 @@ export class SpmDiscoverer extends ProjectDiscoverer {
   #walkSourceFiles(dir) {
     const CODE_EXTS = new Set(['.swift', '.m', '.h', '.c', '.cpp', '.mm']);
     const SKIP_DIRS = new Set([
-      'node_modules', '.git', 'dist', 'build', '.build',
-      'DerivedData', 'Pods', 'Carthage',
+      'node_modules',
+      '.git',
+      'dist',
+      'build',
+      '.build',
+      'DerivedData',
+      'Pods',
+      'Carthage',
     ]);
     const MAX_FILES = 300;
     const files = [];
 
     const walk = (d, rel = '') => {
-      if (files.length >= MAX_FILES) return;
+      if (files.length >= MAX_FILES) {
+        return;
+      }
       let entries;
-      try { entries = readdirSync(d); } catch { return; }
+      try {
+        entries = readdirSync(d);
+      } catch {
+        return;
+      }
       for (const entry of entries) {
-        if (files.length >= MAX_FILES) break;
-        if (entry.startsWith('.')) continue;
+        if (files.length >= MAX_FILES) {
+          break;
+        }
+        if (entry.startsWith('.')) {
+          continue;
+        }
         const full = join(d, entry);
         const relPath = rel ? `${rel}/${entry}` : entry;
         let st;
-        try { st = statSync(full); } catch { continue; }
+        try {
+          st = statSync(full);
+        } catch {
+          continue;
+        }
         if (st.isDirectory()) {
-          if (!SKIP_DIRS.has(entry)) walk(full, relPath);
+          if (!SKIP_DIRS.has(entry)) {
+            walk(full, relPath);
+          }
         } else if (CODE_EXTS.has(extname(entry).toLowerCase())) {
           if (st.size <= 512 * 1024) {
             files.push({ name: entry, path: full, relativePath: relPath });

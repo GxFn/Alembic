@@ -19,9 +19,9 @@
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
-import { AgentMessage, Channel } from './AgentMessage.js';
+import { AgentMessage } from './AgentMessage.js';
 import { ConversationStore } from './ConversationStore.js';
-import { IntentClassifier, Intent } from './IntentClassifier.js';
+import { Intent, IntentClassifier } from './IntentClassifier.js';
 
 /**
  * @typedef {Object} LarkTransportConfig
@@ -81,7 +81,9 @@ export class LarkTransport {
       this.#conversationStore = new ConversationStore(projectRoot);
       this.#logger.info('[LarkTransport] ConversationStore initialized');
     } catch (err: any) {
-      this.#logger.warn(`[LarkTransport] ConversationStore init failed, falling back to in-memory: ${err.message}`);
+      this.#logger.warn(
+        `[LarkTransport] ConversationStore init failed, falling back to in-memory: ${err.message}`
+      );
       this.#conversationStore = null;
     }
 
@@ -116,7 +118,9 @@ export class LarkTransport {
       if (this.#recentMsgIds.size > 200) {
         const now = Date.now();
         for (const [id, ts] of this.#recentMsgIds) {
-          if (now - ts > LarkTransport.DEDUP_TTL) this.#recentMsgIds.delete(id);
+          if (now - ts > LarkTransport.DEDUP_TTL) {
+            this.#recentMsgIds.delete(id);
+          }
         }
       }
     }
@@ -146,7 +150,9 @@ export class LarkTransport {
       text = '';
     }
     text = text.replace(/@_user_\d+/g, '').trim();
-    if (!text) return;
+    if (!text) {
+      return;
+    }
 
     this.#logger.info(`[LarkTransport] Received: "${text.slice(0, 80)}" from ${senderName}`);
 
@@ -167,8 +173,6 @@ export class LarkTransport {
       case Intent.IDE_AGENT:
         await this.#handleIdeAgent(text, messageId, chatId, senderId, senderName);
         break;
-
-      case Intent.BOT_AGENT:
       default:
         await this.#handleBotAgent(text, messageId, chatId, senderId, senderName);
         break;
@@ -206,31 +210,34 @@ export class LarkTransport {
         break;
 
       case 'help':
-        await this.#reply(messageId, [
-          '🤖 AutoSnippet 智能助手',
-          '',
-          '直接用自然语言和我对话即可:',
-          '',
-          '📚 知识管理 (我来处理):',
-          '  "搜索项目里关于认证的知识"',
-          '  "解释一下这个项目的架构"',
-          '  "帮我创建一个关于缓存策略的知识"',
-          '  "翻译这段代码注释"',
-          '',
-          '💻 代码编程 (转发到 IDE):',
-          '  "修改 src/auth.ts 的 JWT 验证"',
-          '  "写一个新的 React 组件"',
-          '  "修复这个 TypeScript 报错"',
-          '  "运行一下测试"',
-          '',
-          '🔧 系统操作:',
-          '  "查看状态" — 连接诊断',
-          '  "截图" — 截取 IDE 画面',
-          '  "帮助" — 显示此信息',
-          '',
-          '💡 我会自动判断你的意图类型。',
-          '   知识类任务我直接处理，编程类任务转发到 VSCode。',
-        ].join('\n'));
+        await this.#reply(
+          messageId,
+          [
+            '🤖 AutoSnippet 智能助手',
+            '',
+            '直接用自然语言和我对话即可:',
+            '',
+            '📚 知识管理 (我来处理):',
+            '  "搜索项目里关于认证的知识"',
+            '  "解释一下这个项目的架构"',
+            '  "帮我创建一个关于缓存策略的知识"',
+            '  "翻译这段代码注释"',
+            '',
+            '💻 代码编程 (转发到 IDE):',
+            '  "修改 src/auth.ts 的 JWT 验证"',
+            '  "写一个新的 React 组件"',
+            '  "修复这个 TypeScript 报错"',
+            '  "运行一下测试"',
+            '',
+            '🔧 系统操作:',
+            '  "查看状态" — 连接诊断',
+            '  "截图" — 截取 IDE 画面',
+            '  "帮助" — 显示此信息',
+            '',
+            '💡 我会自动判断你的意图类型。',
+            '   知识类任务我直接处理，编程类任务转发到 VSCode。',
+          ].join('\n')
+        );
         break;
 
       case 'queue':
@@ -279,22 +286,28 @@ export class LarkTransport {
     }
 
     try {
-      const result = await this.#enqueueIdeFn(text, {
-        chatId, messageId, senderId, senderName,
+      const _result = await this.#enqueueIdeFn(text, {
+        chatId,
+        messageId,
+        senderId,
+        senderName,
       });
 
       // 记录到对话历史
       this.#appendHistory(chatId, 'user', text);
       this.#appendHistory(chatId, 'assistant', `[IDE Agent] 已转发: ${text.slice(0, 50)}`);
 
-      await this.#reply(messageId, [
-        '💻 编程任务已转发到 IDE',
-        '',
-        `> ${text.length > 80 ? text.slice(0, 80) + '...' : text}`,
-        '',
-        'Copilot Agent Mode 将自动处理。',
-        '执行结果会回传到这里。',
-      ].join('\n'));
+      await this.#reply(
+        messageId,
+        [
+          '💻 编程任务已转发到 IDE',
+          '',
+          `> ${text.length > 80 ? `${text.slice(0, 80)}...` : text}`,
+          '',
+          'Copilot Agent Mode 将自动处理。',
+          '执行结果会回传到这里。',
+        ].join('\n')
+      );
     } catch (err: any) {
       this.#logger.error(`[LarkTransport] IDE enqueue failed: ${err.message}`);
       await this.#reply(messageId, `❌ 转发失败: ${err.message}`);
@@ -319,7 +332,7 @@ export class LarkTransport {
           messageId,
           messageType: 'text',
         },
-        null,
+        null
       );
       agentMessage.session.history = history;
 
@@ -341,7 +354,7 @@ export class LarkTransport {
 
       const MAX_LEN = 3800;
       if (reply.length > MAX_LEN) {
-        await this.#send(reply.slice(0, MAX_LEN) + '\n\n... (内容过长已截断)');
+        await this.#send(`${reply.slice(0, MAX_LEN)}\n\n... (内容过长已截断)`);
       } else {
         await this.#send(reply);
       }
@@ -374,7 +387,7 @@ export class LarkTransport {
           messageId,
           messageType: 'text',
         },
-        null, // 不设 replyFn — 避免 AgentRuntime 自动回复导致重复发送
+        null // 不设 replyFn — 避免 AgentRuntime 自动回复导致重复发送
       );
 
       // 注入对话历史
@@ -404,12 +417,11 @@ export class LarkTransport {
       // 飞书回复字数限制 ~4000，需截断
       const MAX_LEN = 3800;
       if (reply.length > MAX_LEN) {
-        const truncated = reply.slice(0, MAX_LEN) + '\n\n... (内容过长已截断)';
+        const truncated = `${reply.slice(0, MAX_LEN)}\n\n... (内容过长已截断)`;
         await this.#send(truncated);
       } else {
         await this.#send(reply);
       }
-
     } catch (err: any) {
       this.#logger.error(`[LarkTransport] Bot Agent error: ${err.message}\n${err.stack}`);
       await this.#reply(messageId, `❌ 处理失败: ${err.message}`);
@@ -426,7 +438,9 @@ export class LarkTransport {
    * @returns {string|null} conversationId (ConversationStore 不可用时返回 null)
    */
   #resolveConversationId(chatId) {
-    if (!this.#conversationStore || !chatId) return null;
+    if (!this.#conversationStore || !chatId) {
+      return null;
+    }
 
     // 缓存命中
     if (this.#chatConversationMap.has(chatId)) {
@@ -436,7 +450,7 @@ export class LarkTransport {
     // 从索引中查找已有的 lark 对话 (通过 title 匹配 chatId)
     try {
       const existing = this.#conversationStore.list({ category: 'lark', limit: 100 });
-      const match = existing.find(e => e.title === chatId);
+      const match = existing.find((e) => e.title === chatId);
       if (match) {
         this.#chatConversationMap.set(chatId, match.id);
         return match.id;
@@ -451,7 +465,9 @@ export class LarkTransport {
       this.#chatConversationMap.set(chatId, convId);
       return convId;
     } catch (err: any) {
-      this.#logger.warn(`[LarkTransport] Failed to create conversation for chatId ${chatId}: ${err.message}`);
+      this.#logger.warn(
+        `[LarkTransport] Failed to create conversation for chatId ${chatId}: ${err.message}`
+      );
       return null;
     }
   }
@@ -466,7 +482,9 @@ export class LarkTransport {
       try {
         return this.#conversationStore.load(convId);
       } catch (err: any) {
-        this.#logger.warn(`[LarkTransport] ConversationStore load failed, falling back: ${err.message}`);
+        this.#logger.warn(
+          `[LarkTransport] ConversationStore load failed, falling back: ${err.message}`
+        );
       }
     }
     // 降级到内存
@@ -478,10 +496,12 @@ export class LarkTransport {
    */
   #getRecentHistoryText(chatId) {
     const history = this.#getHistory(chatId);
-    if (history.length === 0) return '';
+    if (history.length === 0) {
+      return '';
+    }
     return history
       .slice(-6)
-      .map(h => `${h.role}: ${h.content.slice(0, 100)}`)
+      .map((h) => `${h.role}: ${h.content.slice(0, 100)}`)
       .join('\n');
   }
 
@@ -489,7 +509,9 @@ export class LarkTransport {
    * 追加对话记录 (双写: ConversationStore + 内存降级)
    */
   #appendHistory(chatId, role, content) {
-    if (!chatId) return;
+    if (!chatId) {
+      return;
+    }
 
     // 写入 ConversationStore（持久化）
     const convId = this.#resolveConversationId(chatId);
@@ -518,11 +540,15 @@ export class LarkTransport {
   // ═══════════════════════════════════════════════════
 
   async #reply(messageId, text) {
-    if (this.#replyFn) await this.#replyFn(messageId, text);
+    if (this.#replyFn) {
+      await this.#replyFn(messageId, text);
+    }
   }
 
   async #send(text) {
-    if (this.#sendFn) await this.#sendFn(text);
+    if (this.#sendFn) {
+      await this.#sendFn(text);
+    }
   }
 }
 

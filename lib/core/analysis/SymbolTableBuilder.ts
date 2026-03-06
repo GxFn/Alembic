@@ -53,7 +53,9 @@ export class SymbolTableBuilder {
       propertyTypes: new Map(),
     };
 
-    if (!projectSummary?.fileSummaries) return table;
+    if (!projectSummary?.fileSummaries) {
+      return table;
+    }
 
     for (const fileSummary of projectSummary.fileSummaries) {
       const filePath = fileSummary.file;
@@ -63,7 +65,9 @@ export class SymbolTableBuilder {
 
       // 2. 注册类声明
       for (const cls of fileSummary.classes || []) {
-        if (!cls.name || cls.name === 'Unknown') continue;
+        if (!cls.name || cls.name === 'Unknown') {
+          continue;
+        }
         const fqn = `${filePath}::${cls.name}`;
         table.declarations.set(fqn, {
           fqn,
@@ -78,7 +82,9 @@ export class SymbolTableBuilder {
 
       // 3. 注册接口/协议声明
       for (const proto of fileSummary.protocols || []) {
-        if (!proto.name || proto.name === 'Unknown') continue;
+        if (!proto.name || proto.name === 'Unknown') {
+          continue;
+        }
         const fqn = `${filePath}::${proto.name}`;
         table.declarations.set(fqn, {
           fqn,
@@ -93,7 +99,9 @@ export class SymbolTableBuilder {
 
       // 4. 注册方法/函数声明
       for (const method of fileSummary.methods || []) {
-        if (!method.name || method.name === 'unknown') continue;
+        if (!method.name || method.name === 'unknown') {
+          continue;
+        }
         const scope = method.className || '';
         const fqn = `${filePath}::${scope ? `${scope}.` : ''}${method.name}`;
         table.declarations.set(fqn, {

@@ -10,8 +10,6 @@ import { BaseRepository } from '../base/BaseRepository.js';
  * 全链路 camelCase — DB 列名 = 实体属性名。
  */
 export class KnowledgeRepositoryImpl extends BaseRepository {
-
-
   constructor(database) {
     super(database, 'knowledge_entries');
     this.logger = Logger.getInstance();

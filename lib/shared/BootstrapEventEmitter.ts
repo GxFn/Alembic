@@ -23,11 +23,15 @@ export class BootstrapEventEmitter {
 
     try {
       this.#eventBus = container.get?.('eventBus') ?? null;
-    } catch { /* eventBus not registered */ }
+    } catch {
+      /* eventBus not registered */
+    }
 
     try {
       this.#taskManager = container.get?.('bootstrapTaskManager') ?? null;
-    } catch { /* taskManager not registered */ }
+    } catch {
+      /* taskManager not registered */
+    }
   }
 
   /**
@@ -45,7 +49,9 @@ export class BootstrapEventEmitter {
     // TaskManager 标记
     try {
       this.#taskManager?.markTaskCompleted?.(dimId, data);
-    } catch { /* non-blocking */ }
+    } catch {
+      /* non-blocking */
+    }
 
     // EventBus 推送
     try {
@@ -53,7 +59,9 @@ export class BootstrapEventEmitter {
         dimensionId: dimId,
         ...data,
       });
-    } catch { /* non-blocking */ }
+    } catch {
+      /* non-blocking */
+    }
   }
 
   /**
@@ -70,7 +78,9 @@ export class BootstrapEventEmitter {
         totalDimensions,
         source,
       });
-    } catch { /* non-blocking */ }
+    } catch {
+      /* non-blocking */
+    }
   }
 
   /**
@@ -81,7 +91,9 @@ export class BootstrapEventEmitter {
   emitDimensionStart(dimId) {
     try {
       this.#taskManager?.markTaskFilling?.(dimId);
-    } catch { /* non-blocking */ }
+    } catch {
+      /* non-blocking */
+    }
   }
 
   /**
@@ -93,14 +105,18 @@ export class BootstrapEventEmitter {
   emitDimensionFailed(dimId, error) {
     try {
       this.#taskManager?.markTaskFailed?.(dimId, error);
-    } catch { /* non-blocking */ }
+    } catch {
+      /* non-blocking */
+    }
 
     try {
       this.#eventBus?.emit?.('bootstrap:task-failed', {
         dimensionId: dimId,
         error: error?.message || String(error),
       });
-    } catch { /* non-blocking */ }
+    } catch {
+      /* non-blocking */
+    }
   }
 
   /**
@@ -112,11 +128,15 @@ export class BootstrapEventEmitter {
   emitProgress(event, data: any = {}) {
     try {
       this.#eventBus?.emit?.(event, data);
-    } catch { /* non-blocking */ }
+    } catch {
+      /* non-blocking */
+    }
 
     try {
       this.#taskManager?.emitProgress?.(event, data);
-    } catch { /* non-blocking */ }
+    } catch {
+      /* non-blocking */
+    }
   }
 }
 

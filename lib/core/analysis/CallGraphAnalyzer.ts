@@ -13,10 +13,10 @@
  *   { callEdges, dataFlowEdges, stats }
  */
 
-import { SymbolTableBuilder } from './SymbolTableBuilder.js';
-import { ImportPathResolver } from './ImportPathResolver.js';
 import { CallEdgeResolver } from './CallEdgeResolver.js';
 import { DataFlowInferrer } from './DataFlowInferrer.js';
+import { ImportPathResolver } from './ImportPathResolver.js';
+import { SymbolTableBuilder } from './SymbolTableBuilder.js';
 
 /**
  * @typedef {object} CallGraphResult
@@ -124,17 +124,21 @@ export class CallGraphAnalyzer {
     const fileCount = astProjectSummary.fileSummaries.length;
     const tier = _computeTier(fileCount);
     const useCHA = tier === 'full-cha';
-    const inheritanceGraph = useCHA ? (astProjectSummary.inheritanceGraph || []) : [];
+    const inheritanceGraph = useCHA ? astProjectSummary.inheritanceGraph || [] : [];
     const callEdgeResolver = new CallEdgeResolver(symbolTable, importResolver, inheritanceGraph);
     const allCallEdges = [];
     let totalCallSites = 0;
     let processedFiles = 0;
 
     for (const fileSummary of astProjectSummary.fileSummaries) {
-      if (!affectedFiles.has(fileSummary.file)) continue;
+      if (!affectedFiles.has(fileSummary.file)) {
+        continue;
+      }
 
       const callSites = fileSummary.callSites || [];
-      if (callSites.length === 0) continue;
+      if (callSites.length === 0) {
+        continue;
+      }
 
       // 超时检查
       if (Date.now() > deadline) {
@@ -249,7 +253,7 @@ export class CallGraphAnalyzer {
 
     // ── Step 4: 解析调用边 (逐文件 + 超时检查) ──
     const useCHA = tier === 'full-cha';
-    const inheritanceGraph = useCHA ? (astProjectSummary.inheritanceGraph || []) : [];
+    const inheritanceGraph = useCHA ? astProjectSummary.inheritanceGraph || [] : [];
     const callEdgeResolver = new CallEdgeResolver(symbolTable, importResolver, inheritanceGraph);
     const allCallEdges = [];
     let totalCallSites = 0;
@@ -258,7 +262,9 @@ export class CallGraphAnalyzer {
 
     for (const fileSummary of fileSummaries) {
       const callSites = fileSummary.callSites || [];
-      if (callSites.length === 0) continue;
+      if (callSites.length === 0) {
+        continue;
+      }
 
       // ── 渐进式超时: 每文件检查 deadline ──
       if (Date.now() > deadline) {
@@ -341,9 +347,15 @@ export class CallGraphAnalyzer {
  * @returns {'full-cha'|'full'|'sampled'|'import-only'}
  */
 function _computeTier(fileCount) {
-  if (fileCount < 100) return 'full-cha';
-  if (fileCount <= 500) return 'full';
-  if (fileCount <= 2000) return 'sampled';
+  if (fileCount < 100) {
+    return 'full-cha';
+  }
+  if (fileCount <= 500) {
+    return 'full';
+  }
+  if (fileCount <= 2000) {
+    return 'sampled';
+  }
   return 'import-only';
 }
 

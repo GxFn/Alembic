@@ -115,7 +115,7 @@ const compactConsoleFormat = winston.format.printf(({ level, message, timestamp,
 
 export class Logger {
   /** @type {WinstonLogger | null} */
-  static instance = null;
+  static instance: import('winston').Logger | null = null;
 
   /**
    * @param {Object} [config]
@@ -132,7 +132,7 @@ export class Logger {
 
       const isMcpMode = process.env.ASD_MCP_MODE === '1';
       const logLevel = process.env.ASD_LOG_LEVEL || config.level || 'info';
-      const transports = [];
+      const transports: winston.transport[] = [];
 
       // Console transport — MCP 模式下完全禁用（任何 stderr 输出都会被 Cursor 标记为 [error]）
       if (config.console !== false && !isMcpMode) {
@@ -169,7 +169,7 @@ export class Logger {
       });
     }
 
-    return this.instance;
+    return this.instance!;
   }
 
   static debug(message, meta: any = {}) {

@@ -133,7 +133,9 @@ export class EvidenceCollector {
   #extractFileEvidence(args, result) {
     // 字符串结果 — 可能是错误消息或直接内容
     if (typeof result === 'string') {
-      if (this.#isErrorString(result)) return;
+      if (this.#isErrorString(result)) {
+        return;
+      }
       const filePath = args.filePath;
       if (filePath) {
         this.#addCodeSnippet(filePath, result, args.startLine || 1);
@@ -141,7 +143,9 @@ export class EvidenceCollector {
       return;
     }
 
-    if (!result || typeof result !== 'object') return;
+    if (!result || typeof result !== 'object') {
+      return;
+    }
 
     // 批量读取: result.files 数组
     if (Array.isArray(result.files)) {
@@ -177,7 +181,9 @@ export class EvidenceCollector {
       return;
     }
 
-    if (!result || typeof result !== 'object') return;
+    if (!result || typeof result !== 'object') {
+      return;
+    }
 
     const matches = result.matches || [];
     const batchResults = result.batchResults || {};
@@ -214,25 +220,35 @@ export class EvidenceCollector {
    * get_class_info — 提取类结构 → evidenceMap
    */
   #extractClassEvidence(args, result) {
-    if (typeof result !== 'object' || !result) return;
+    if (typeof result !== 'object' || !result) {
+      return;
+    }
 
     const className = result.className || args.className;
     const filePath = result.filePath;
-    if (!filePath) return;
+    if (!filePath) {
+      return;
+    }
 
     const entry = this.#getOrCreateEntry(filePath);
     entry.role = entry.role || 'class-definition';
 
     const parts = [`Class: ${className}`];
-    if (result.superClass) parts.push(`Extends: ${result.superClass}`);
-    if (result.protocols?.length) parts.push(`Implements: ${result.protocols.join(', ')}`);
+    if (result.superClass) {
+      parts.push(`Extends: ${result.superClass}`);
+    }
+    if (result.protocols?.length) {
+      parts.push(`Implements: ${result.protocols.join(', ')}`);
+    }
     if (result.methods?.length) {
       const names = result.methods
         .slice(0, 5)
         .map((m) => (typeof m === 'string' ? m : m.name || m.selector || '?'));
       parts.push(`Methods(${result.methods.length}): ${names.join(', ')}`);
     }
-    if (result.properties?.length) parts.push(`Props: ${result.properties.length}`);
+    if (result.properties?.length) {
+      parts.push(`Props: ${result.properties.length}`);
+    }
 
     const classSummary = parts.join(' | ');
     entry.summary = entry.summary ? `${entry.summary}; ${classSummary}` : classSummary;
@@ -242,17 +258,23 @@ export class EvidenceCollector {
    * get_protocol_info — 提取协议结构 → evidenceMap
    */
   #extractProtocolEvidence(args, result) {
-    if (typeof result !== 'object' || !result) return;
+    if (typeof result !== 'object' || !result) {
+      return;
+    }
 
     const protocolName = result.protocolName || args.protocolName;
     const filePath = result.filePath;
-    if (!filePath) return;
+    if (!filePath) {
+      return;
+    }
 
     const entry = this.#getOrCreateEntry(filePath);
     entry.role = entry.role || 'protocol-definition';
 
     const parts = [`Protocol: ${protocolName}`];
-    if (result.methods?.length) parts.push(`Methods: ${result.methods.length}`);
+    if (result.methods?.length) {
+      parts.push(`Methods: ${result.methods.length}`);
+    }
     if (result.conformers?.length) {
       parts.push(`Conformers: ${result.conformers.slice(0, 5).join(', ')}`);
     }
@@ -266,7 +288,9 @@ export class EvidenceCollector {
    */
   #extractFileSummary(args, result) {
     const filePath = args.filePath || (typeof result === 'object' && result?.filePath);
-    if (!filePath) return;
+    if (!filePath) {
+      return;
+    }
 
     const entry = this.#getOrCreateEntry(filePath);
     const summaryText =
@@ -295,19 +319,29 @@ export class EvidenceCollector {
 
   /** 向 evidenceMap 添加代码片段 (带预算控制) */
   #addCodeSnippet(filePath, content, startLine = 1) {
-    if (!filePath || !content) return;
-    if (this.#snippetCharsUsed >= this.#snippetBudget) return;
+    if (!filePath || !content) {
+      return;
+    }
+    if (this.#snippetCharsUsed >= this.#snippetBudget) {
+      return;
+    }
 
     const entry = this.#getOrCreateEntry(filePath);
-    if (entry.codeSnippets.length >= MAX_SNIPPETS_PER_FILE) return;
+    if (entry.codeSnippets.length >= MAX_SNIPPETS_PER_FILE) {
+      return;
+    }
 
     const lines = String(content).split('\n');
     const trimmed = lines.slice(0, MAX_SNIPPET_LINES);
     const snippetContent = trimmed.join('\n');
-    if (!snippetContent) return;
+    if (!snippetContent) {
+      return;
+    }
 
     // 预算检查
-    if (this.#snippetCharsUsed + snippetContent.length > this.#snippetBudget) return;
+    if (this.#snippetCharsUsed + snippetContent.length > this.#snippetBudget) {
+      return;
+    }
 
     entry.codeSnippets.push({
       startLine,
@@ -319,14 +353,22 @@ export class EvidenceCollector {
 
   /** 向 evidenceMap 添加搜索匹配 */
   #addSearchMatch(match, searchNote) {
-    if (!match?.file) return;
+    if (!match?.file) {
+      return;
+    }
 
     const entry = this.#getOrCreateEntry(match.file);
-    if (!match.line || !match.context) return;
-    if (entry.codeSnippets.length >= MAX_SNIPPETS_PER_FILE) return;
+    if (!match.line || !match.context) {
+      return;
+    }
+    if (entry.codeSnippets.length >= MAX_SNIPPETS_PER_FILE) {
+      return;
+    }
 
     // 去重: 同一行不重复添加
-    if (entry.codeSnippets.some((s) => s.startLine === match.line)) return;
+    if (entry.codeSnippets.some((s) => s.startLine === match.line)) {
+      return;
+    }
 
     const ctx = String(match.context).substring(0, 500);
     entry.codeSnippets.push({
@@ -339,8 +381,12 @@ export class EvidenceCollector {
 
   /** 添加负空间信号 (去重) */
   #addNegativeSignal(pattern) {
-    if (!pattern) return;
-    if (this.#negativeSignals.some((ns) => ns.searchPattern === pattern)) return;
+    if (!pattern) {
+      return;
+    }
+    if (this.#negativeSignals.some((ns) => ns.searchPattern === pattern)) {
+      return;
+    }
     this.#negativeSignals.push({
       searchPattern: pattern,
       result: 'not_found',
@@ -355,9 +401,15 @@ export class EvidenceCollector {
 
   /** 从搜索参数中提取搜索模式 */
   #extractSearchPatterns(args) {
-    if (args.patterns && Array.isArray(args.patterns)) return args.patterns;
-    if (args.pattern) return [args.pattern];
-    if (args.query) return [args.query];
+    if (args.patterns && Array.isArray(args.patterns)) {
+      return args.patterns;
+    }
+    if (args.pattern) {
+      return [args.pattern];
+    }
+    if (args.query) {
+      return [args.query];
+    }
     return [];
   }
 
@@ -372,7 +424,9 @@ export class EvidenceCollector {
         return `Read ${args.filePath || '?'}`;
       case 'search_project_code': {
         const pats = this.#extractSearchPatterns(args);
-        if (pats.length > 1) return `Search ${pats.length} patterns: ${pats.slice(0, 3).join(', ')}`;
+        if (pats.length > 1) {
+          return `Search ${pats.length} patterns: ${pats.slice(0, 3).join(', ')}`;
+        }
         return `Search "${pats[0] || '?'}"`;
       }
       case 'semantic_search_code':
@@ -408,15 +462,21 @@ export class EvidenceCollector {
 
   /** 生成工具结果摘要 — WHAT */
   #summarizeResult(tool, result) {
-    if (result == null) return '(no result)';
+    if (result == null) {
+      return '(no result)';
+    }
     if (typeof result === 'string') {
       return result.length > 100 ? `${result.substring(0, 100)}…` : result;
     }
-    if (typeof result !== 'object') return String(result).substring(0, 100);
+    if (typeof result !== 'object') {
+      return String(result).substring(0, 100);
+    }
 
     switch (tool) {
       case 'read_project_file':
-        if (result.files) return `${result.files.length} files read`;
+        if (result.files) {
+          return `${result.files.length} files read`;
+        }
         if (result.content) {
           return `${(result.content || '').split('\n').length} lines from ${result.path || '?'}`;
         }
@@ -427,7 +487,7 @@ export class EvidenceCollector {
         if (batchKeys.length > 0) {
           const total = batchKeys.reduce(
             (s, k) => s + (result.batchResults[k]?.matches?.length || 0),
-            0,
+            0
           );
           return `${total} matches across ${batchKeys.length} patterns`;
         }
@@ -448,11 +508,15 @@ export class EvidenceCollector {
 
   /** 判断工具调用是否有效 (获取到新信息) */
   #isEffective(tool, result) {
-    if (!result) return false;
+    if (!result) {
+      return false;
+    }
     if (typeof result === 'string') {
       return !this.#isErrorString(result) && result.length > 10;
     }
-    if (typeof result !== 'object') return true;
+    if (typeof result !== 'object') {
+      return true;
+    }
 
     switch (tool) {
       case 'read_project_file':
@@ -460,7 +524,7 @@ export class EvidenceCollector {
       case 'search_project_code':
       case 'semantic_search_code':
         return (
-          (result.matches?.length > 0) ||
+          result.matches?.length > 0 ||
           Object.values(result.batchResults || {}).some((r: any) => r.matches?.length > 0)
         );
       case 'get_class_info':

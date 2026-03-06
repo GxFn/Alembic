@@ -42,7 +42,8 @@ export function safeInt(value, defaultValue, min = 1, max = 1000) {
  * @returns {Object} 过滤后的 JSON
  */
 export function sanitizeForAPI(entryOrJson) {
-  const json = typeof entryOrJson?.toJSON === 'function' ? entryOrJson.toJSON() : { ...entryOrJson };
+  const json =
+    typeof entryOrJson?.toJSON === 'function' ? entryOrJson.toJSON() : { ...entryOrJson };
   if (Array.isArray(json.tags)) {
     json.tags = json.tags.filter((t) => !KnowledgeEntry.isSystemTag(t));
   }
@@ -55,7 +56,9 @@ export function sanitizeForAPI(entryOrJson) {
  * @returns {{ data: Array, pagination: Object }}
  */
 export function sanitizePaginatedForAPI(result) {
-  if (!result?.data) return result;
+  if (!result?.data) {
+    return result;
+  }
   return {
     ...result,
     data: result.data.map(sanitizeForAPI),

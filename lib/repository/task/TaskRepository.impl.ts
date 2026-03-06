@@ -158,7 +158,9 @@ export class TaskRepositoryImpl {
    * @returns {Task|null}
    */
   findByContentHash(hash) {
-    if (!hash) return null;
+    if (!hash) {
+      return null;
+    }
     const row = this._findByHashStmt.get(hash);
     return row ? Task.fromRow(row) : null;
   }
@@ -192,12 +194,16 @@ export class TaskRepositoryImpl {
 
     for (const [key, value] of Object.entries(fields)) {
       const col = columnMap[key];
-      if (!col) continue;
+      if (!col) {
+        continue;
+      }
       setClauses.push(`${col} = ?`);
       values.push(key === 'metadata' ? JSON.stringify(value) : value);
     }
 
-    if (setClauses.length === 0) return this.findById(id);
+    if (setClauses.length === 0) {
+      return this.findById(id);
+    }
 
     // 始终更新 updated_at
     if (!fields.updatedAt) {
@@ -392,7 +398,13 @@ export class TaskRepositoryImpl {
 // ═══ 内部工具 ═══════════════════════════════════════
 
 const ALLOWED_ORDER_FIELDS = new Set([
-  'priority', 'created_at', 'updated_at', 'status', 'title', 'task_type', 'closed_at',
+  'priority',
+  'created_at',
+  'updated_at',
+  'status',
+  'title',
+  'task_type',
+  'closed_at',
 ]);
 const ALLOWED_DIRECTIONS = new Set(['ASC', 'DESC']);
 
@@ -402,14 +414,26 @@ const ALLOWED_DIRECTIONS = new Set(['ASC', 'DESC']);
  * @returns {string}
  */
 function _sanitizeOrderBy(orderBy) {
-  if (!orderBy) return 'priority ASC, created_at ASC';
-  return orderBy.split(',').map((clause) => {
-    const parts = clause.trim().split(/\s+/);
-    const field = parts[0];
-    if (!ALLOWED_ORDER_FIELDS.has(field)) return null;
-    const dir = ALLOWED_DIRECTIONS.has(parts[1]?.toUpperCase()) ? parts[1].toUpperCase() : 'ASC';
-    return `${field} ${dir}`;
-  }).filter(Boolean).join(', ') || 'priority ASC, created_at ASC';
+  if (!orderBy) {
+    return 'priority ASC, created_at ASC';
+  }
+  return (
+    orderBy
+      .split(',')
+      .map((clause) => {
+        const parts = clause.trim().split(/\s+/);
+        const field = parts[0];
+        if (!ALLOWED_ORDER_FIELDS.has(field)) {
+          return null;
+        }
+        const dir = ALLOWED_DIRECTIONS.has(parts[1]?.toUpperCase())
+          ? parts[1].toUpperCase()
+          : 'ASC';
+        return `${field} ${dir}`;
+      })
+      .filter(Boolean)
+      .join(', ') || 'priority ASC, created_at ASC'
+  );
 }
 
 export default TaskRepositoryImpl;

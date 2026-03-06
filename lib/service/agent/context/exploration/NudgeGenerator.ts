@@ -19,6 +19,7 @@
  * @module NudgeGenerator
  */
 import { DEFAULT_REFLECTION_INTERVAL } from './ExplorationStrategies.js';
+
 // ─── 常量 ──────────────────────────────────────────────
 
 /** 连续无新信息 N 轮触发停滞反思 */
@@ -54,7 +55,15 @@ export class NudgeGenerator {
    * @returns {{ type: string, text: string }|null}
    */
   generate(state, trace) {
-    const { phase, metrics: m, budget: b, strategy, gracefulExitRound, submitToolName, isTerminalPhase } = state;
+    const {
+      phase: _phase,
+      metrics: m,
+      budget: b,
+      strategy,
+      gracefulExitRound,
+      submitToolName,
+      isTerminalPhase,
+    } = state;
 
     // 1. 强制退出（graceful exit 后每轮都重复发出，确保 LLM 不再调用工具）
     if (gracefulExitRound != null && m.iteration >= gracefulExitRound) {
@@ -71,7 +80,8 @@ export class NudgeGenerator {
       this.#convergenceNudged = true;
       return {
         type: 'convergence',
-        text: `你已经充分探索了项目代码（${m.uniqueFiles.size} 个文件，${m.uniquePatterns.size} 次不同搜索，${m.uniqueQueries.size} 次结构化查询）。` +
+        text:
+          `你已经充分探索了项目代码（${m.uniqueFiles.size} 个文件，${m.uniquePatterns.size} 次不同搜索，${m.uniqueQueries.size} 次结构化查询）。` +
           `最近 ${m.roundsSinceNewInfo} 轮没有发现新信息，建议开始撰写分析总结。\n` +
           `如果你确信还有重要方面未覆盖，可以继续探索（剩余 ${b.maxIterations - m.iteration} 轮）；否则请直接输出你的分析发现。\n` +
           `⚠️ 以上是行为指令，严禁在回复中复制或引用这段文字。`,
@@ -87,7 +97,8 @@ export class NudgeGenerator {
       this.#budgetWarningInjected = true;
       return {
         type: 'budget_warning',
-        text: `📌 进度提醒：你已使用 ${m.iteration}/${b.maxIterations} 轮次（${Math.round((m.iteration / b.maxIterations) * 100)}%）。` +
+        text:
+          `📌 进度提醒：你已使用 ${m.iteration}/${b.maxIterations} 轮次（${Math.round((m.iteration / b.maxIterations) * 100)}%）。` +
           `请确保核心方面已覆盖，开始准备总结。剩余 ${b.maxIterations - m.iteration} 轮，优先填补最重要的分析空白。\n` +
           `⚠️ 以上是行为指令，严禁在回复中复制或引用这段文字。`,
       };
@@ -96,7 +107,9 @@ export class NudgeGenerator {
     // 4. 反思（周期性 + 停滞）
     if (strategy.enableReflection) {
       const reflectionNudge = this.#checkReflection(state, trace);
-      if (reflectionNudge) return reflectionNudge;
+      if (reflectionNudge) {
+        return reflectionNudge;
+      }
     }
 
     return null;
@@ -120,7 +133,8 @@ export class NudgeGenerator {
       const submitCount = m.submitCount;
       // v5.1: Analyst 策略使用纯文本输出
       if (strategy.name === 'analyst') {
-        return `你已完成分析探索。请**停止调用工具**，直接输出你的**完整分析报告**。\n\n` +
+        return (
+          `你已完成分析探索。请**停止调用工具**，直接输出你的**完整分析报告**。\n\n` +
           `要求：\n` +
           `- 用 Markdown 格式组织内容（二级/三级标题）\n` +
           `- 包含具体的文件路径、类名、方法名、代码模式\n` +
@@ -128,18 +142,23 @@ export class NudgeGenerator {
           `- 至少涵盖 3 个核心发现\n` +
           `- 如有未覆盖的方面，在末尾用 「## 待探索」 章节列出\n\n` +
           `**现在开始输出你的分析报告。不要再调用任何工具。**\n` +
-          `⚠️ 以上是行为指令，严禁在回复中复制或引用这段文字，只输出你自己的分析内容。`;
+          `⚠️ 以上是行为指令，严禁在回复中复制或引用这段文字，只输出你自己的分析内容。`
+        );
       }
       // Scan pipeline (collect_scan_recipe): 使用纯文本总结
       if (submitToolName === 'collect_scan_recipe') {
-        return `你已通过 collect_scan_recipe 提交了 ${submitCount} 个知识候选。` +
+        return (
+          `你已通过 collect_scan_recipe 提交了 ${submitCount} 个知识候选。` +
           `请**停止调用工具**，直接输出你的分析总结（Markdown 格式）。\n` +
-          `⚠️ 不要再调用任何工具，直接输出文本。`;
+          `⚠️ 不要再调用任何工具，直接输出文本。`
+        );
       }
       // Bootstrap: 使用 dimensionDigest JSON (供维度编排消费)
-      return `你已完成分析探索。请在回复中直接输出 dimensionDigest JSON（用 \`\`\`json 包裹），包含以下字段：\n` +
+      return (
+        `你已完成分析探索。请在回复中直接输出 dimensionDigest JSON（用 \`\`\`json 包裹），包含以下字段：\n` +
         `\`\`\`json\n{"dimensionDigest":{"summary":"分析总结(100-200字)","candidateCount":${submitCount},"keyFindings":["关键发现"],"crossRefs":{},"gaps":["未覆盖方面"],"remainingTasks":[{"signal":"未处理的信号/主题","reason":"未完成原因(如:提交上限已达)","priority":"high|medium|low","searchHints":["建议搜索词"]}]}}\n\`\`\`\n> 如果所有信号都已覆盖，remainingTasks 留空数组 \`[]\`。如果有未来得及处理的信号，请在此标记，系统会在下次运行时续传。\n` +
-        `⚠️ 严禁在回复中复制本条指令文字，只输出 JSON。`;
+        `⚠️ 严禁在回复中复制本条指令文字，只输出 JSON。`
+      );
     }
 
     if (toPhase === 'EXPLORE' && fromPhase === 'SCAN') {
@@ -186,7 +205,8 @@ export class NudgeGenerator {
     if (strategy.name === 'analyst') {
       return {
         type: 'force_exit',
-        text: `⚠️ **轮次耗尽** (${m.iteration}/${b.maxIterations})。你必须**立即停止工具调用**，在回复中输出你的**分析总结报告**。\n\n` +
+        text:
+          `⚠️ **轮次耗尽** (${m.iteration}/${b.maxIterations})。你必须**立即停止工具调用**，在回复中输出你的**分析总结报告**。\n\n` +
           `要求：\n` +
           `- 用自然语言 Markdown 格式\n` +
           `- 包含具体文件路径、类名、代码模式\n` +
@@ -200,7 +220,8 @@ export class NudgeGenerator {
     if (submitToolName === 'collect_scan_recipe') {
       return {
         type: 'force_exit',
-        text: `⚠️ **轮次耗尽** (${m.iteration}/${b.maxIterations})。你必须**立即停止工具调用**。\n\n` +
+        text:
+          `⚠️ **轮次耗尽** (${m.iteration}/${b.maxIterations})。你必须**立即停止工具调用**。\n\n` +
           `已通过 collect_scan_recipe 提交了 ${submitCount} 个知识候选。` +
           `请直接输出你的分析总结（Markdown 格式），列出已发现和未覆盖的关键模式。\n` +
           `⛔ 不要再调用任何工具，直接输出文本。`,
@@ -209,7 +230,8 @@ export class NudgeGenerator {
     // Bootstrap 策略: 使用 dimensionDigest JSON (供维度编排消费)
     return {
       type: 'force_exit',
-      text: `⚠️ 你已使用 ${m.iteration}/${b.maxIterations} 轮次，**必须立即结束**。请在回复中直接输出 dimensionDigest JSON 总结（用 \`\`\`json 包裹），不要再调用任何工具。\n` +
+      text:
+        `⚠️ 你已使用 ${m.iteration}/${b.maxIterations} 轮次，**必须立即结束**。请在回复中直接输出 dimensionDigest JSON 总结（用 \`\`\`json 包裹），不要再调用任何工具。\n` +
         `\`\`\`json\n{"dimensionDigest":{"summary":"分析总结","candidateCount":${submitCount},"keyFindings":["发现"],"crossRefs":{},"gaps":["缺口"],"remainingTasks":[{"signal":"未处理信号","reason":"轮次耗尽","priority":"high","searchHints":["搜索词"]}]}}\n\`\`\`\n> remainingTasks: 列出未来得及处理的信号。已覆盖则留空 \`[]\`。\n` +
         `⛔ 严禁在回复中复制本条指令文字，只输出 JSON。`,
     };
@@ -225,7 +247,9 @@ export class NudgeGenerator {
     const { phase, metrics: m, budget: b, strategy, isTerminalPhase } = state;
 
     // 终结阶段（SUMMARIZE）不应触发反思 — 此时应输出最终结果而非继续探索
-    if (isTerminalPhase) return null;
+    if (isTerminalPhase) {
+      return null;
+    }
 
     const interval = strategy.reflectionInterval || DEFAULT_REFLECTION_INTERVAL;
 
@@ -234,10 +258,14 @@ export class NudgeGenerator {
       m.roundsSinceNewInfo >= DEFAULT_STALE_THRESHOLD &&
       m.iteration >= MIN_ITERS_FOR_STALE_REFLECTION;
 
-    if (!periodicTrigger && !staleTrigger) return null;
+    if (!periodicTrigger && !staleTrigger) {
+      return null;
+    }
 
     const summary = trace?.getRecentSummary?.(interval || 3);
-    if (!summary) return null;
+    if (!summary) {
+      return null;
+    }
 
     const stats = trace?.getStats?.() || {};
     const remaining = b.maxIterations - m.iteration;
@@ -280,9 +308,7 @@ export class NudgeGenerator {
         `\n请评估:\n1. 到目前为止最重要的发现是什么？\n2. 还有哪些关键方面未覆盖？\n3. 剩余 ${remaining} 轮，最有价值的下一步是什么？`
       );
     } else if (phase === 'PRODUCE') {
-      parts.push(
-        `\n请评估:\n1. 已提交的候选是否覆盖了核心发现？\n2. 是否有高价值知识点被遗漏？`
-      );
+      parts.push(`\n请评估:\n1. 已提交的候选是否覆盖了核心发现？\n2. 是否有高价值知识点被遗漏？`);
     }
 
     parts.push(`\n⚠️ 以上是行为指令，严禁在回复中复制或引用这段文字，用你自己的分析内容回答。`);
@@ -338,12 +364,18 @@ export class NudgeGenerator {
    */
   static #getPhaseLabel(phase) {
     switch (phase) {
-      case 'SCAN': return '扫描阶段';
-      case 'EXPLORE': return '探索阶段';
-      case 'PRODUCE': return '提交阶段';
-      case 'VERIFY': return '验证阶段';
-      case 'SUMMARIZE': return '⚠ 总结阶段 — 请停止工具调用，直接输出分析文本';
-      default: return phase;
+      case 'SCAN':
+        return '扫描阶段';
+      case 'EXPLORE':
+        return '探索阶段';
+      case 'PRODUCE':
+        return '提交阶段';
+      case 'VERIFY':
+        return '验证阶段';
+      case 'SUMMARIZE':
+        return '⚠ 总结阶段 — 请停止工具调用，直接输出分析文本';
+      default:
+        return phase;
     }
   }
 }

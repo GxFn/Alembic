@@ -17,10 +17,9 @@
 
 import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
-import { cosineSimilarity } from '../../shared/similarity.js';
 import { AsyncPersistence, WAL_OP } from './AsyncPersistence.js';
 import { BinaryPersistence } from './BinaryPersistence.js';
-import { HnswIndex, cosineDistance } from './HnswIndex.js';
+import { HnswIndex } from './HnswIndex.js';
 import { ScalarQuantizer } from './ScalarQuantizer.js';
 import { VectorStore } from './VectorStore.js';
 
@@ -204,7 +203,9 @@ export class HnswVectorAdapter extends VectorStore {
    */
   #syncMigrateFromJson() {
     const jsonPath = join(this.#indexDir, 'vector_index.json');
-    if (!existsSync(jsonPath)) return;
+    if (!existsSync(jsonPath)) {
+      return;
+    }
 
     try {
       const raw = readFileSync(jsonPath, 'utf-8');
@@ -214,7 +215,9 @@ export class HnswVectorAdapter extends VectorStore {
         : Object.entries(items).map(([id, item]) => ({ ...(item as any), id }));
 
       for (const item of itemList) {
-        if (!item?.id) continue;
+        if (!item?.id) {
+          continue;
+        }
         const vector = item.vector || [];
         if (vector.length > 0 && this.#dimension === 0) {
           this.#dimension = vector.length;
@@ -241,7 +244,9 @@ export class HnswVectorAdapter extends VectorStore {
       // 重命名旧文件
       try {
         renameSync(jsonPath, `${jsonPath}.bak`);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     } catch {
       // JSON 解析失败, 保持空索引
     }
@@ -298,7 +303,9 @@ export class HnswVectorAdapter extends VectorStore {
     const walOps = [];
 
     for (const item of items) {
-      if (!item?.id) continue;
+      if (!item?.id) {
+        continue;
+      }
 
       const vector = item.vector || [];
       if (vector.length > 0 && this.#dimension === 0) {
@@ -475,9 +482,7 @@ export class HnswVectorAdapter extends VectorStore {
     });
 
     // 按 RRF 分数降序, 归一化到 [0, 1]
-    const fused = [...scores.values()]
-      .sort((a, b) => b.rrfScore - a.rrfScore)
-      .slice(0, topK);
+    const fused = [...scores.values()].sort((a, b) => b.rrfScore - a.rrfScore).slice(0, topK);
 
     const maxScore = fused.length > 0 ? fused[0].rrfScore : 1;
     return fused.map((r) => ({
@@ -496,17 +501,23 @@ export class HnswVectorAdapter extends VectorStore {
    * @returns {Array<{ id: string, score: number }>}
    */
   #keywordSearch(queryText, limit, filter) {
-    if (!queryText) return [];
+    if (!queryText) {
+      return [];
+    }
 
     const queryLower = queryText.toLowerCase();
     const words = queryLower.split(/\s+/).filter((w) => w.length > 0);
-    if (words.length === 0) return [];
+    if (words.length === 0) {
+      return [];
+    }
 
     const results = [];
     for (const [id, content] of this.#contents) {
       if (filter) {
         const item = { metadata: this.#metadata.get(id) || {} };
-        if (!this.#matchFilter(item, filter)) continue;
+        if (!this.#matchFilter(item, filter)) {
+          continue;
+        }
       }
 
       const textLower = content.toLowerCase();
@@ -588,7 +599,9 @@ export class HnswVectorAdapter extends VectorStore {
    * 初始化 WAL (Write-Ahead Log)
    */
   #initWal() {
-    if (!this.#config.walEnabled) return;
+    if (!this.#config.walEnabled) {
+      return;
+    }
     this.#wal = new AsyncPersistence({
       indexPath: this.#indexPath,
       enabled: true,
@@ -650,7 +663,9 @@ export class HnswVectorAdapter extends VectorStore {
   }
 
   #scheduleFlush() {
-    if (this.#flushing) return;
+    if (this.#flushing) {
+      return;
+    }
 
     // 如果积累了足够操作, 立即 flush
     if (this.#pendingOps >= this.#config.flushBatchSize) {
@@ -659,17 +674,23 @@ export class HnswVectorAdapter extends VectorStore {
     }
 
     // 否则 debounced flush
-    if (this.#flushTimer) return;
+    if (this.#flushTimer) {
+      return;
+    }
     this.#flushTimer = setTimeout(() => {
       this.#flushTimer = null;
       this.#doFlush();
     }, this.#config.flushIntervalMs);
     // unref() 使定时器不阻止 Node 进程退出
-    if (this.#flushTimer?.unref) this.#flushTimer.unref();
+    if (this.#flushTimer?.unref) {
+      this.#flushTimer.unref();
+    }
   }
 
   async #doFlush() {
-    if (this.#flushing || !this.#dirty) return;
+    if (this.#flushing || !this.#dirty) {
+      return;
+    }
     this.#flushing = true;
     this.#pendingOps = 0;
     try {
@@ -701,13 +722,17 @@ export class HnswVectorAdapter extends VectorStore {
    * 检查是否需要训练量化器, 训练后批量设置量化向量到 HNSW 节点
    */
   #maybeTrainQuantizer() {
-    if (this.#config.quantize === 'none') return;
+    if (this.#config.quantize === 'none') {
+      return;
+    }
     if (this.#config.quantize === 'auto' && this.#index.size < this.#config.quantizeThreshold) {
       return;
     }
 
     // 已训练则跳过 (除非文档增长 50% 以上需要重训练)
-    if (this.#quantizer?.trained) return;
+    if (this.#quantizer?.trained) {
+      return;
+    }
 
     // 收集训练向量
     const vectors = [];
@@ -717,7 +742,9 @@ export class HnswVectorAdapter extends VectorStore {
       }
     }
 
-    if (vectors.length < 100) return; // 数据太少不训练
+    if (vectors.length < 100) {
+      return; // 数据太少不训练
+    }
 
     this.#quantizer = new ScalarQuantizer(this.#dimension);
     this.#quantizer.train(vectors);
@@ -730,16 +757,30 @@ export class HnswVectorAdapter extends VectorStore {
 
   #matchFilter(item, filter) {
     const meta = item.metadata || {};
-    if (filter.type && meta.type !== filter.type) return false;
-    if (filter.category && meta.category !== filter.category) return false;
-    if (filter.language && meta.language !== filter.language) return false;
-    if (filter.sourcePath && !meta.sourcePath?.includes(filter.sourcePath)) return false;
-    if (filter.module && meta.module !== filter.module) return false;
+    if (filter.type && meta.type !== filter.type) {
+      return false;
+    }
+    if (filter.category && meta.category !== filter.category) {
+      return false;
+    }
+    if (filter.language && meta.language !== filter.language) {
+      return false;
+    }
+    if (filter.sourcePath && !meta.sourcePath?.includes(filter.sourcePath)) {
+      return false;
+    }
+    if (filter.module && meta.module !== filter.module) {
+      return false;
+    }
     if (filter.tags && Array.isArray(filter.tags)) {
       const itemTags = meta.tags || [];
-      if (!filter.tags.some((t) => itemTags.includes(t))) return false;
+      if (!filter.tags.some((t) => itemTags.includes(t))) {
+        return false;
+      }
     }
-    if (filter.deprecated === false && meta.deprecated) return false;
+    if (filter.deprecated === false && meta.deprecated) {
+      return false;
+    }
     return true;
   }
 

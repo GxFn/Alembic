@@ -28,8 +28,12 @@ export class TaskKnowledgeBridge {
    * @returns {Promise<import('../../domain/task/Task.js').Task[]>}
    */
   async enrichWithKnowledge(tasks) {
-    if (!tasks || tasks.length === 0) return tasks;
-    if (!this._search) return tasks;
+    if (!tasks || tasks.length === 0) {
+      return tasks;
+    }
+    if (!this._search) {
+      return tasks;
+    }
 
     const results = await Promise.allSettled(tasks.map((task) => this._buildContext(task)));
 
@@ -47,7 +51,9 @@ export class TaskKnowledgeBridge {
    */
   async _buildContext(task) {
     const query = `${task.title} ${task.description}`.trim();
-    if (!query) return null;
+    if (!query) {
+      return null;
+    }
 
     try {
       const searchResult = await this._search.search(query, {

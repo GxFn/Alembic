@@ -118,10 +118,11 @@ export class TierScheduler {
         const byTier = new Map(); // 0-based tier index → dimId[]
         for (const id of unscheduled) {
           const hint = tierHints?.[id];
-          const tierIdx = (typeof hint === 'number' && hint >= 1 && hint <= effectiveTiers.length)
-            ? hint - 1
-            : 0;
-          if (!byTier.has(tierIdx)) byTier.set(tierIdx, []);
+          const tierIdx =
+            typeof hint === 'number' && hint >= 1 && hint <= effectiveTiers.length ? hint - 1 : 0;
+          if (!byTier.has(tierIdx)) {
+            byTier.set(tierIdx, []);
+          }
           byTier.get(tierIdx).push(id);
         }
         for (const [tierIdx, ids] of byTier) {

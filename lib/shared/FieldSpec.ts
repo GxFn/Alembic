@@ -107,7 +107,7 @@ export const V3_FIELD_SPEC = [
     level: FieldLevel.REQUIRED,
     type: 'string',
     rule: '英文反向约束（描述禁止的做法）',
-    pipeline: "Channel A \"Do NOT\" 后缀 + Channel B **Don't** 行。知识「禁止」维度",
+    pipeline: 'Channel A "Do NOT" 后缀 + Channel B **Don\'t** 行。知识「禁止」维度',
   },
   {
     name: 'whenClause',
@@ -241,18 +241,38 @@ export const V3_FIELD_SPEC = [
 // ── 标准枚举 ────────────────────────────────────────────────
 
 export const STANDARD_CATEGORIES = [
-  'View', 'Service', 'Tool', 'Model', 'Network', 'Storage', 'UI', 'Utility',
+  'View',
+  'Service',
+  'Tool',
+  'Model',
+  'Network',
+  'Storage',
+  'UI',
+  'Utility',
 ];
 
 /** category 白名单 — Bootstrap 维度展示分组 + 特殊流程中的合法 category */
 export const WHITELISTED_CATEGORIES = [
   // Bootstrap 维度展示分组 (DIMENSION_DISPLAY_GROUP 输出值)
-  'architecture', 'best-practice', 'event-and-data-flow', 'objc-deep-scan', 'agent-guidelines',
+  'architecture',
+  'best-practice',
+  'event-and-data-flow',
+  'objc-deep-scan',
+  'agent-guidelines',
   // 维度原始 ID (当 DIMENSION_DISPLAY_GROUP 无映射时作为 fallback)
-  'code-pattern', 'code-standard', 'project-profile', 'category-scan',
-  'module-export-scan', 'framework-convention-scan', 'python-package-scan', 'jvm-annotation-scan',
+  'code-pattern',
+  'code-standard',
+  'project-profile',
+  'category-scan',
+  'module-export-scan',
+  'framework-convention-scan',
+  'python-package-scan',
+  'jvm-annotation-scan',
   // 特殊来源
-  'bootstrap', 'knowledge', 'general', 'documentation',
+  'bootstrap',
+  'knowledge',
+  'general',
+  'documentation',
 ];
 
 export const VALID_KINDS = ['rule', 'pattern', 'fact'];
@@ -263,23 +283,19 @@ export const VALID_TOPIC_HINTS = ['networking', 'ui', 'data', 'architecture', 'c
 
 /** 获取所有 REQUIRED 级别的顶层字段名 */
 export function getRequiredFieldNames() {
-  return V3_FIELD_SPEC
-    .filter(f => f.level === FieldLevel.REQUIRED && !f.name.includes('.'))
-    .map(f => f.name);
+  return V3_FIELD_SPEC.filter((f) => f.level === FieldLevel.REQUIRED && !f.name.includes('.')).map(
+    (f) => f.name
+  );
 }
 
 /** 获取所有 REQUIRED 级别的字段名（含嵌套） */
 export function getAllRequiredFieldNames() {
-  return V3_FIELD_SPEC
-    .filter(f => f.level === FieldLevel.REQUIRED)
-    .map(f => f.name);
+  return V3_FIELD_SPEC.filter((f) => f.level === FieldLevel.REQUIRED).map((f) => f.name);
 }
 
 /** 获取 EXPECTED 级别字段名 */
 export function getExpectedFieldNames() {
-  return V3_FIELD_SPEC
-    .filter(f => f.level === FieldLevel.EXPECTED)
-    .map(f => f.name);
+  return V3_FIELD_SPEC.filter((f) => f.level === FieldLevel.EXPECTED).map((f) => f.name);
 }
 
 /** 获取 AI 在外部路径必须提供的字段（= REQUIRED 全集，因无系统注入） */
@@ -289,16 +305,14 @@ export function getExternalAgentRequiredFields() {
 
 /** 获取 AI 在内部路径必须提供的字段（排除系统注入的 language/category/knowledgeType） */
 export function getInternalAgentRequiredFields() {
-  return V3_FIELD_SPEC
-    .filter(f => f.level === FieldLevel.REQUIRED && !f.name.includes('.') && !f.systemInjected)
-    .map(f => f.name);
+  return V3_FIELD_SPEC.filter(
+    (f) => f.level === FieldLevel.REQUIRED && !f.name.includes('.') && !f.systemInjected
+  ).map((f) => f.name);
 }
 
 /** 获取系统注入的字段名列表 */
 export function getSystemInjectedFields() {
-  return V3_FIELD_SPEC
-    .filter(f => f.systemInjected)
-    .map(f => f.name);
+  return V3_FIELD_SPEC.filter((f) => f.systemInjected).map((f) => f.name);
 }
 
 /**
@@ -306,14 +320,12 @@ export function getSystemInjectedFields() {
  * @returns {string[]}
  */
 export function getRequiredFieldsDescription() {
-  return V3_FIELD_SPEC
-    .filter(f => f.level === FieldLevel.REQUIRED)
-    .map(f => {
-      if (f.name.includes('.')) {
-        return `${f.name} (${f.rule})`;
-      }
+  return V3_FIELD_SPEC.filter((f) => f.level === FieldLevel.REQUIRED).map((f) => {
+    if (f.name.includes('.')) {
       return `${f.name} (${f.rule})`;
-    });
+    }
+    return `${f.name} (${f.rule})`;
+  });
 }
 
 /**
@@ -322,7 +334,7 @@ export function getRequiredFieldsDescription() {
  * @returns {FieldDef|undefined}
  */
 export function getFieldDef(name) {
-  return V3_FIELD_SPEC.find(f => f.name === name);
+  return V3_FIELD_SPEC.find((f) => f.name === name);
 }
 
 /**
@@ -334,10 +346,17 @@ export function getFieldDef(name) {
  * @returns {Record<string, string>}
  */
 export function getCursorDeliverySpec() {
-  const CURSOR_FIELD_NAMES = ['trigger', 'kind', 'doClause', 'dontClause', 'whenClause', 'coreCode'];
+  const CURSOR_FIELD_NAMES = [
+    'trigger',
+    'kind',
+    'doClause',
+    'dontClause',
+    'whenClause',
+    'coreCode',
+  ];
   const result = {};
   for (const name of CURSOR_FIELD_NAMES) {
-    const def = V3_FIELD_SPEC.find(f => f.name === name);
+    const def = V3_FIELD_SPEC.find((f) => f.name === name);
     if (def) {
       const prefix = def.level === FieldLevel.REQUIRED ? '【必填】' : '';
       result[name] = `${prefix}${def.rule}`;
@@ -352,8 +371,8 @@ export function getCursorDeliverySpec() {
  */
 export function getFieldsByLevel() {
   return {
-    required: V3_FIELD_SPEC.filter(f => f.level === FieldLevel.REQUIRED),
-    expected: V3_FIELD_SPEC.filter(f => f.level === FieldLevel.EXPECTED),
-    optional: V3_FIELD_SPEC.filter(f => f.level === FieldLevel.OPTIONAL),
+    required: V3_FIELD_SPEC.filter((f) => f.level === FieldLevel.REQUIRED),
+    expected: V3_FIELD_SPEC.filter((f) => f.level === FieldLevel.EXPECTED),
+    optional: V3_FIELD_SPEC.filter((f) => f.level === FieldLevel.OPTIONAL),
   };
 }

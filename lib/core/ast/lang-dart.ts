@@ -43,13 +43,14 @@ function _walkNode(node, ctx, parentClassName) {
           let symbols = ['*'];
           let kind = 'namespace';
           if (showClause) {
-            symbols = showClause[1].split(',').map((s) => s.trim()).filter(Boolean);
+            symbols = showClause[1]
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
             kind = 'named';
           }
 
-          ctx.imports.push(
-            new ImportRecord(importPath, { symbols, alias, kind })
-          );
+          ctx.imports.push(new ImportRecord(importPath, { symbols, alias, kind }));
         }
         break;
       }
@@ -788,18 +789,27 @@ function _collectDartScopes(root) {
  * 因此需要 sibling-aware scanning，避免逐个 walk 子节点时丢失上下文。
  */
 function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
-  if (!bodyNode) return;
+  if (!bodyNode) {
+    return;
+  }
 
   const DART_NOISE = new Set([
-    'print', 'debugPrint', 'log',
-    'setState', 'notifyListeners',
-    'List', 'Map', 'Set', 'Future', 'Stream',
+    'print',
+    'debugPrint',
+    'log',
+    'setState',
+    'notifyListeners',
+    'List',
+    'Map',
+    'Set',
+    'Future',
+    'Stream',
   ]);
 
   /** 在 selectorNode 的子树中查找 arguments / argument_part */
   function findArgs(selectorNode) {
     return selectorNode.namedChildren.find(
-      (c) => c.type === 'arguments' || c.type === 'argument_part',
+      (c) => c.type === 'arguments' || c.type === 'argument_part'
     );
   }
 
@@ -809,7 +819,9 @@ function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
    */
   function tryConsumeCall(parent, idx, startNode, isAwaited) {
     const sib1 = parent.namedChild(idx + 1);
-    if (!sib1) return null;
+    if (!sib1) {
+      return null;
+    }
 
     // ── Pattern A: identifier + selector("(args)") → 直接调用 ────────
     if (
@@ -849,7 +861,7 @@ function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
       if (methodMatch) {
         const callee = methodMatch[1];
         const receiverText = startNode.text;
-        let receiver = receiverText;
+        const receiver = receiverText;
         let receiverType = null;
         let callType;
 
@@ -907,9 +919,11 @@ function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
       if (child.type === 'function_expression_invocation' || child.type === 'method_invocation') {
         _processDartCall(child, className, methodName, ctx, isAwaited, DART_NOISE);
         const args = child.namedChildren.find(
-          (c) => c.type === 'arguments' || c.type === 'argument_part',
+          (c) => c.type === 'arguments' || c.type === 'argument_part'
         );
-        if (args) scanChildren(args, false);
+        if (args) {
+          scanChildren(args, false);
+        }
         continue;
       }
 
@@ -949,14 +963,18 @@ function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
 function _processDartCall(node, className, methodName, ctx, isAwaited, DART_NOISE) {
   const text = node.text || '';
   const callMatch = text.match(/^(?:(\w[\w.]*?)\.)?(\w+)\s*\(/);
-  if (!callMatch) return;
+  if (!callMatch) {
+    return;
+  }
 
   const receiverText = callMatch[1] || null;
   const callee = callMatch[2];
 
-  if (DART_NOISE.has(callee)) return;
+  if (DART_NOISE.has(callee)) {
+    return;
+  }
 
-  let receiver = receiverText;
+  const receiver = receiverText;
   let receiverType = null;
   let callType;
 
@@ -970,12 +988,12 @@ function _processDartCall(node, className, methodName, ctx, isAwaited, DART_NOIS
     callType = 'method';
   } else {
     callType = /^[A-Z]/.test(callee) ? 'constructor' : 'function';
-    if (callType === 'constructor') receiverType = callee;
+    if (callType === 'constructor') {
+      receiverType = callee;
+    }
   }
 
-  const args = node.namedChildren.find(
-    (c) => c.type === 'arguments' || c.type === 'argument_part'
-  );
+  const args = node.namedChildren.find((c) => c.type === 'arguments' || c.type === 'argument_part');
   const argCount = args ? args.namedChildCount : 0;
 
   ctx.callSites.push({

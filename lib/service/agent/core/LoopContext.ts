@@ -146,7 +146,9 @@ export class LoopContext {
    * @param {Object} usage - { inputTokens, outputTokens }
    */
   addTokenUsage(usage) {
-    if (!usage) return;
+    if (!usage) {
+      return;
+    }
     const inTok = usage.inputTokens || 0;
     const outTok = usage.outputTokens || 0;
     this.tokenUsage.input += inTok;

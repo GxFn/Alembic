@@ -68,9 +68,8 @@ function _collectTSScopes(root) {
         case 'class_declaration':
         case 'abstract_class_declaration': {
           const name =
-            child.namedChildren.find(
-              (c) => c.type === 'type_identifier' || c.type === 'identifier'
-            )?.text || null;
+            child.namedChildren.find((c) => c.type === 'type_identifier' || c.type === 'identifier')
+              ?.text || null;
           const body = child.namedChildren.find((c) => c.type === 'class_body');
           if (body && name) {
             walk(body, name);
@@ -94,8 +93,7 @@ function _collectTSScopes(root) {
         }
 
         case 'function_declaration': {
-          const name =
-            child.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
+          const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
           const body = child.namedChildren.find((c) => c.type === 'statement_block');
           if (body) {
             scopes.push({ body, className, methodName: name });
@@ -155,11 +153,15 @@ function _collectTSScopes(root) {
  * @param {object} ctx - walker context
  */
 function _extractCallSitesFromBody(bodyNode, className, methodName, ctx) {
-  if (!bodyNode) return;
+  if (!bodyNode) {
+    return;
+  }
 
   function walk(node, isAwaited) {
     // 跳过语法错误节点 (Issue #17: 防御性处理)
-    if (!node || node.type === 'ERROR' || node.isMissing) return;
+    if (!node || node.type === 'ERROR' || node.isMissing) {
+      return;
+    }
 
     // await expression → 标记下一层的调用为 awaited
     if (node.type === 'await_expression') {
@@ -216,15 +218,15 @@ function _extractCallSitesFromBody(bodyNode, className, methodName, ctx) {
     if (node.type === 'jsx_self_closing_element' || node.type === 'jsx_opening_element') {
       const tagNode =
         node.namedChildren.find((c) => c.type === 'identifier' || c.type === 'jsx_identifier') ||
-        node.namedChildren.find((c) => c.type === 'member_expression' || c.type === 'jsx_member_expression');
+        node.namedChildren.find(
+          (c) => c.type === 'member_expression' || c.type === 'jsx_member_expression'
+        );
       if (tagNode) {
         const tagName = tagNode.text;
         // 仅大写开头为组件 (小写为 HTML 原生标签如 div, span)
         if (tagName && /^[A-Z]/.test(tagName)) {
           // 计算 JSX 属性数量作为 argCount
-          const attrNodes = node.namedChildren.filter(
-            (c) => c.type === 'jsx_attribute'
-          );
+          const attrNodes = node.namedChildren.filter((c) => c.type === 'jsx_attribute');
           ctx.callSites.push({
             callee: tagName,
             callerMethod: methodName,
@@ -271,7 +273,9 @@ function _extractCallSitesFromBody(bodyNode, className, methodName, ctx) {
  */
 function _parseTSCallExpression(node, className, methodName, isAwaited) {
   const func = node.namedChildren[0]; // call_expression 的第一个子节点是被调用者
-  if (!func) return null;
+  if (!func) {
+    return null;
+  }
 
   let callee;
   let receiver = null;
@@ -365,8 +369,7 @@ function _collectPyScopes(root) {
 
       switch (child.type) {
         case 'class_definition': {
-          const name =
-            child.namedChildren.find((c) => c.type === 'identifier')?.text || null;
+          const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || null;
           const body = child.namedChildren.find((c) => c.type === 'block');
           if (body && name) {
             walk(body, name);
@@ -375,8 +378,7 @@ function _collectPyScopes(root) {
         }
 
         case 'function_definition': {
-          const name =
-            child.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
+          const name = child.namedChildren.find((c) => c.type === 'identifier')?.text || 'unknown';
           const body = child.namedChildren.find((c) => c.type === 'block');
           if (body) {
             scopes.push({ body, className, methodName: name });
@@ -390,8 +392,7 @@ function _collectPyScopes(root) {
             (c) => c.type === 'class_definition' || c.type === 'function_definition'
           );
           if (actualDef?.type === 'class_definition') {
-            const name =
-              actualDef.namedChildren.find((c) => c.type === 'identifier')?.text || null;
+            const name = actualDef.namedChildren.find((c) => c.type === 'identifier')?.text || null;
             const body = actualDef.namedChildren.find((c) => c.type === 'block');
             if (body && name) {
               walk(body, name);
@@ -429,11 +430,15 @@ function _collectPyScopes(root) {
  * @param {object} ctx
  */
 function _extractPyCallSitesFromBody(bodyNode, className, methodName, ctx) {
-  if (!bodyNode) return;
+  if (!bodyNode) {
+    return;
+  }
 
   function walk(node, isAwaited) {
     // 跳过语法错误节点 (Issue #17: 防御性处理)
-    if (!node || node.type === 'ERROR' || node.isMissing) return;
+    if (!node || node.type === 'ERROR' || node.isMissing) {
+      return;
+    }
 
     if (node.type === 'await') {
       for (let i = 0; i < node.namedChildCount; i++) {
@@ -478,7 +483,9 @@ function _extractPyCallSitesFromBody(bodyNode, className, methodName, ctx) {
 function _parsePyCallExpression(node, className, methodName, isAwaited) {
   // Python call 节点: function 是第一个 named child
   const func = node.namedChildren[0];
-  if (!func) return null;
+  if (!func) {
+    return null;
+  }
 
   let callee;
   let receiver = null;
@@ -487,8 +494,12 @@ function _parsePyCallExpression(node, className, methodName, isAwaited) {
 
   if (func.type === 'attribute') {
     // obj.method() — method call
-    const object = func.namedChildren.find((c) => c.type !== 'identifier' || c === func.namedChildren[0]);
-    const prop = func.namedChildren.find((c) => c.type === 'identifier' && c !== func.namedChildren[0]);
+    const object = func.namedChildren.find(
+      (c) => c.type !== 'identifier' || c === func.namedChildren[0]
+    );
+    const prop = func.namedChildren.find(
+      (c) => c.type === 'identifier' && c !== func.namedChildren[0]
+    );
 
     // attribute 节点结构: object.attribute — 第一个子节点是 object, 第二个是 attribute name
     const parts = func.text.split('.');
@@ -582,7 +593,9 @@ export function defaultExtractCallSites(root, ctx, lang) {
  */
 function _countArgs(node) {
   const args = node.namedChildren.find((c) => c.type === 'arguments');
-  if (!args) return 0;
+  if (!args) {
+    return 0;
+  }
   return args.namedChildCount;
 }
 
@@ -591,7 +604,9 @@ function _countArgs(node) {
  */
 function _countPyArgs(node) {
   const args = node.namedChildren.find((c) => c.type === 'argument_list');
-  if (!args) return 0;
+  if (!args) {
+    return 0;
+  }
   return args.namedChildCount;
 }
 
@@ -605,25 +620,79 @@ function _countPyArgs(node) {
 function _isNoiseCall(callee, receiver) {
   // 常见内置调用噪声
   const NOISE_RECEIVERS = new Set([
-    'console', 'Math', 'JSON', 'Object', 'Array', 'String',
-    'Number', 'Boolean', 'Date', 'RegExp', 'Promise', 'Set',
-    'Map', 'WeakMap', 'WeakSet', 'Symbol', 'Reflect', 'Proxy',
-    'parseInt', 'parseFloat',
+    'console',
+    'Math',
+    'JSON',
+    'Object',
+    'Array',
+    'String',
+    'Number',
+    'Boolean',
+    'Date',
+    'RegExp',
+    'Promise',
+    'Set',
+    'Map',
+    'WeakMap',
+    'WeakSet',
+    'Symbol',
+    'Reflect',
+    'Proxy',
+    'parseInt',
+    'parseFloat',
   ]);
 
   const NOISE_CALLEES = new Set([
-    'require', 'import', 'console', 'log', 'warn', 'error', 'info', 'debug',
-    'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
-    'requestAnimationFrame', 'cancelAnimationFrame',
-    'alert', 'confirm', 'prompt',
-    'print', 'len', 'range', 'enumerate', 'zip', 'map', 'filter',
-    'isinstance', 'issubclass', 'hasattr', 'getattr', 'setattr',
-    'str', 'int', 'float', 'bool', 'list', 'dict', 'tuple', 'set',
-    'type', 'super', 'property', 'staticmethod', 'classmethod',
+    'require',
+    'import',
+    'console',
+    'log',
+    'warn',
+    'error',
+    'info',
+    'debug',
+    'setTimeout',
+    'setInterval',
+    'clearTimeout',
+    'clearInterval',
+    'requestAnimationFrame',
+    'cancelAnimationFrame',
+    'alert',
+    'confirm',
+    'prompt',
+    'print',
+    'len',
+    'range',
+    'enumerate',
+    'zip',
+    'map',
+    'filter',
+    'isinstance',
+    'issubclass',
+    'hasattr',
+    'getattr',
+    'setattr',
+    'str',
+    'int',
+    'float',
+    'bool',
+    'list',
+    'dict',
+    'tuple',
+    'set',
+    'type',
+    'super',
+    'property',
+    'staticmethod',
+    'classmethod',
   ]);
 
-  if (receiver && NOISE_RECEIVERS.has(receiver)) return true;
-  if (callee && NOISE_CALLEES.has(callee)) return true;
+  if (receiver && NOISE_RECEIVERS.has(receiver)) {
+    return true;
+  }
+  if (callee && NOISE_CALLEES.has(callee)) {
+    return true;
+  }
 
   return false;
 }

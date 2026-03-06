@@ -24,8 +24,8 @@ export default {
 
   // 索引配置 (v2: 集成 BatchEmbedder + Chunker v2)
   indexing: {
-    batchSize: 32,              // embed 每批大小
-    maxConcurrency: 2,          // embed 并行请求数
+    batchSize: 32, // embed 每批大小
+    maxConcurrency: 2, // embed 并行请求数
     embeddingModel: 'text-embedding-3-small', // OpenAI embedding model
     embeddingDimension: 768,
     cachePath: '.autosnippet/cache',
@@ -33,10 +33,10 @@ export default {
     cacheExpiry: 7 * 24 * 60 * 60, // 7 days in seconds
     maxCacheSize: 500, // Maximum number of cached embeddings
     chunking: {
-      strategy: 'auto',         // 'auto' | 'ast' | 'section' | 'fixed' | 'whole'
+      strategy: 'auto', // 'auto' | 'ast' | 'section' | 'fixed' | 'whole'
       maxChunkTokens: 512,
       overlapTokens: 50,
-      useAST: true,             // auto 策略时启用 AST 语法感知分块
+      useAST: true, // auto 策略时启用 AST 语法感知分块
     },
   },
 

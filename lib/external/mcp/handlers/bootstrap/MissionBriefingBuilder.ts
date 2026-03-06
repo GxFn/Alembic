@@ -14,11 +14,11 @@
  * @module bootstrap/MissionBriefingBuilder
  */
 
-import { TierScheduler } from './pipeline/tier-scheduler.js';
-import { SUBMISSION_SCHEMA, EXAMPLE_TEMPLATES } from './shared/dimension-text.js';
-import { getDimensionSOP, sopToCompactText, PRE_SUBMIT_CHECKLIST } from './shared/dimension-sop.js';
-import { PROJECT_SNAPSHOT_STYLE_GUIDE } from '../../../../shared/StyleGuide.js';
 import { getCursorDeliverySpec } from '../../../../shared/FieldSpec.js';
+import { PROJECT_SNAPSHOT_STYLE_GUIDE } from '../../../../shared/StyleGuide.js';
+import { TierScheduler } from './pipeline/tier-scheduler.js';
+import { getDimensionSOP, PRE_SUBMIT_CHECKLIST, sopToCompactText } from './shared/dimension-sop.js';
+import { EXAMPLE_TEMPLATES, SUBMISSION_SCHEMA } from './shared/dimension-text.js';
 
 // ── 常量 ────────────────────────────────────────────────────
 
@@ -104,8 +104,8 @@ function enrichDimensionTask(dim, tier) {
     knowledgeTypes: dim.knowledgeTypes || [],
     targetCandidateCount: '3-5',
     contentStyle: PROJECT_SNAPSHOT_STYLE_GUIDE.split('\n')
-      .filter(l => !l.startsWith('#') || l.startsWith('##'))
-      .filter(l => l.trim())
+      .filter((l) => !l.startsWith('#') || l.startsWith('##'))
+      .filter((l) => l.trim())
       .slice(0, 12)
       .join('\n'),
     contentQuality:
@@ -173,7 +173,12 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
     const fileSummaries = astData.fileSummaries || [];
 
     // naming-conventions → 前缀/后缀统计 (类名 + 顶层函数名)
-    if (dimId === 'naming-conventions' || dimId === 'code-standard' || dimKeywords.includes('命名') || dimKeywords.includes('naming')) {
+    if (
+      dimId === 'naming-conventions' ||
+      dimId === 'code-standard' ||
+      dimKeywords.includes('命名') ||
+      dimKeywords.includes('naming')
+    ) {
       const prefixStats = {};
       for (const cls of classes) {
         const prefix = (cls.name || '').match(/^[A-Z]{2,4}/)?.[0];
@@ -187,8 +192,12 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
         for (const fs of fileSummaries) {
           for (const m of fs.methods || []) {
             if (!m.className) {
-              const fp = (m.name || '').match(/^(use|handle|get|set|create|make|fetch|on|is|has|with|to)[A-Z]/)?.[1];
-              if (fp) funcPrefixes[fp] = (funcPrefixes[fp] || 0) + 1;
+              const fp = (m.name || '').match(
+                /^(use|handle|get|set|create|make|fetch|on|is|has|with|to)[A-Z]/
+              )?.[1];
+              if (fp) {
+                funcPrefixes[fp] = (funcPrefixes[fp] || 0) + 1;
+              }
             }
           }
         }
@@ -214,8 +223,14 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
     }
 
     // patterns-architecture → 设计模式 + 继承链 + 函数式模式
-    if (dimId === 'patterns-architecture' || dimId === 'architecture' || dimId === 'code-pattern' ||
-        dimKeywords.includes('架构') || dimKeywords.includes('pattern') || dimKeywords.includes('模式')) {
+    if (
+      dimId === 'patterns-architecture' ||
+      dimId === 'architecture' ||
+      dimId === 'code-pattern' ||
+      dimKeywords.includes('架构') ||
+      dimKeywords.includes('pattern') ||
+      dimKeywords.includes('模式')
+    ) {
       if (Object.keys(patterns).length > 0) {
         // 压缩 patterns: 只保留顶层 key → 计数/类型摘要
         const compactPatterns = {};
@@ -252,7 +267,11 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
     }
 
     // 协议/接口相关维度
-    if (dimKeywords.includes('protocol') || dimKeywords.includes('协议') || dimKeywords.includes('interface')) {
+    if (
+      dimKeywords.includes('protocol') ||
+      dimKeywords.includes('协议') ||
+      dimKeywords.includes('interface')
+    ) {
       if (protocols.length > 0) {
         starters.protocolSummary = {
           hint: `项目定义了 ${protocols.length} 个协议/接口`,
@@ -271,12 +290,20 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
     if (classes.length === 0 && totalMethods > 0) {
       // 函数式/模块化代码: 提供函数和导出统计
       const exportCount = fileSummaries.reduce((s, f) => s + (f.exports?.length || 0), 0);
-      const asyncCount = fileSummaries.reduce((s, f) =>
-        s + (f.methods || []).filter(m => m.isAsync).length, 0);
+      const asyncCount = fileSummaries.reduce(
+        (s, f) => s + (f.methods || []).filter((m) => m.isAsync).length,
+        0
+      );
       const complexMethods = astData.projectMetrics?.complexMethods || [];
 
-      if (dimId === 'code-pattern' || dimId === 'best-practice' || dimId === 'event-and-data-flow' ||
-          dimKeywords.includes('模式') || dimKeywords.includes('实践') || dimKeywords.includes('事件')) {
+      if (
+        dimId === 'code-pattern' ||
+        dimId === 'best-practice' ||
+        dimId === 'event-and-data-flow' ||
+        dimKeywords.includes('模式') ||
+        dimKeywords.includes('实践') ||
+        dimKeywords.includes('事件')
+      ) {
         const summary = [
           `${totalMethods} functions across ${fileCount} files`,
           exportCount > 0 ? `${exportCount} exports` : null,
@@ -321,11 +348,17 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
   if (depGraphData?.nodes) {
     const nodeCount = (depGraphData.nodes || []).length;
     const edgeCount = (depGraphData.edges || []).length;
-    if (nodeCount > 0 && (
-      dimId === 'patterns-architecture' || dimId === 'architecture' || dimId === 'data-flow-patterns' ||
-      dimId === 'project-profile' || dimId === 'module-export-scan' ||
-      dimKeywords.includes('架构') || dimKeywords.includes('模块') || dimKeywords.includes('依赖')
-    )) {
+    if (
+      nodeCount > 0 &&
+      (dimId === 'patterns-architecture' ||
+        dimId === 'architecture' ||
+        dimId === 'data-flow-patterns' ||
+        dimId === 'project-profile' ||
+        dimId === 'module-export-scan' ||
+        dimKeywords.includes('架构') ||
+        dimKeywords.includes('模块') ||
+        dimKeywords.includes('依赖'))
+    ) {
       starters.dependencyOverview = {
         hint: `依赖图包含 ${nodeCount} 个模块、${edgeCount} 条依赖 — 分析模块间耦合关系`,
         data: {
@@ -342,15 +375,21 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
   // §4: ObjC Category 关联 — 为 category-scan 和相关维度提供分类证据
   if (astData) {
     const categories = astData.categories || [];
-    if (categories.length > 0 && (
-      dimId === 'category-scan' || dimId === 'category-extension' ||
-      dimKeywords.includes('category') || dimKeywords.includes('分类') || dimKeywords.includes('extension')
-    )) {
+    if (
+      categories.length > 0 &&
+      (dimId === 'category-scan' ||
+        dimId === 'category-extension' ||
+        dimKeywords.includes('category') ||
+        dimKeywords.includes('分类') ||
+        dimKeywords.includes('extension'))
+    ) {
       // 按 baseClass 聚合分类
       const catByBase = {};
       for (const cat of categories) {
         const base = cat.baseClass || cat.extendedClass || 'Unknown';
-        if (!catByBase[base]) catByBase[base] = [];
+        if (!catByBase[base]) {
+          catByBase[base] = [];
+        }
         catByBase[base].push(cat.name || '(anonymous)');
       }
       const topBases = (Object.entries(catByBase) as [string, string[]][])
@@ -368,20 +407,24 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
   }
 
   // §5: 事件/数据流关联 — 为 event-and-data-flow 提供起始证据
-  if (astData && (
-    dimId === 'event-and-data-flow' || dimId === 'data-flow-patterns' ||
-    dimKeywords.includes('事件') || dimKeywords.includes('event') || dimKeywords.includes('数据流')
-  )) {
+  if (
+    astData &&
+    (dimId === 'event-and-data-flow' ||
+      dimId === 'data-flow-patterns' ||
+      dimKeywords.includes('事件') ||
+      dimKeywords.includes('event') ||
+      dimKeywords.includes('数据流'))
+  ) {
     const protocols = astData.protocols || [];
     // 查找 Delegate/DataSource 协议 — ObjC/Swift 的典型事件/数据流模式
-    const delegateProtocols = protocols.filter(p => {
+    const delegateProtocols = protocols.filter((p) => {
       const name = (p.name || '').toLowerCase();
       return name.includes('delegate') || name.includes('datasource');
     });
     if (delegateProtocols.length > 0) {
       starters.delegatePatterns = {
         hint: `发现 ${delegateProtocols.length} 个 Delegate/DataSource 协议 — 项目的核心事件/数据传递通道`,
-        data: delegateProtocols.slice(0, 8).map(p => ({
+        data: delegateProtocols.slice(0, 8).map((p) => ({
           name: p.name,
           methods: p.methodCount || p.methods?.length || 0,
         })),
@@ -389,14 +432,14 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
     }
     // 查找 Notification/Observer 相关类
     const classes = astData.classes || [];
-    const observerClasses = classes.filter(c => {
+    const observerClasses = classes.filter((c) => {
       const name = (c.name || '').toLowerCase();
       return name.includes('observer') || name.includes('notification') || name.includes('event');
     });
     if (observerClasses.length > 0) {
       starters.observerPatterns = {
         hint: `发现 ${observerClasses.length} 个 Observer/Notification/Event 类`,
-        data: observerClasses.slice(0, 5).map(c => c.name),
+        data: observerClasses.slice(0, 5).map((c) => c.name),
       };
     }
   }
@@ -454,7 +497,7 @@ function compressAstForBriefing(astProjectSummary, fileCount) {
       }
       // 合并 protocols
       const existProtos = new Set(existing.protocols || existing.conformedProtocols || []);
-      for (const p of (c.protocols || c.conformedProtocols || [])) {
+      for (const p of c.protocols || c.conformedProtocols || []) {
         existProtos.add(p);
       }
       existing.protocols = [...existProtos];
@@ -543,7 +586,9 @@ function compressAstForBriefing(astProjectSummary, fileCount) {
  * 压缩 Code Entity Graph
  */
 function summarizeEntityGraph(codeEntityResult) {
-  if (!codeEntityResult) return null;
+  if (!codeEntityResult) {
+    return null;
+  }
   return {
     totalEntities: codeEntityResult.entitiesUpserted || 0,
     totalEdges: codeEntityResult.edgesCreated || 0,
@@ -556,7 +601,9 @@ function summarizeEntityGraph(codeEntityResult) {
  * @returns {object|null}
  */
 function summarizeCallGraph(callGraphResult) {
-  if (!callGraphResult) return null;
+  if (!callGraphResult) {
+    return null;
+  }
   return {
     methodEntities: callGraphResult.entitiesUpserted || 0,
     callEdges: callGraphResult.edgesCreated || 0,
@@ -568,7 +615,9 @@ function summarizeCallGraph(callGraphResult) {
  * 压缩 Guard 审计结果
  */
 function summarizeGuardFindings(guardAudit) {
-  if (!guardAudit) return null;
+  if (!guardAudit) {
+    return null;
+  }
 
   // 按 ruleId 聚合 violations
   const ruleMap = {};
@@ -636,7 +685,9 @@ function buildExecutionPlan(activeDimensions) {
   const plan = tiers
     .map((tierDimIds, index) => {
       const filteredDims = tierDimIds.filter((id) => activeDimIds.has(id));
-      if (filteredDims.length === 0) return null;
+      if (filteredDims.length === 0) {
+        return null;
+      }
       return {
         tier: index + 1, // 1-based, 与 tier-scheduler.js 一致
         label: tierLabels[index] || `Tier ${index + 1}`,
@@ -692,9 +743,9 @@ export function buildMissionBriefing({
   targets,
   activeDimensions,
   session,
-  languageExtension,  // §7.1: 语言扩展（反模式、Guard 规则、Agent 注意事项）
-  incrementalPlan,    // §7.3: 增量 Bootstrap 评估结果
-  languageStats,      // §7.4: 完整语言分布统计
+  languageExtension, // §7.1: 语言扩展（反模式、Guard 规则、Agent 注意事项）
+  incrementalPlan, // §7.3: 增量 Bootstrap 评估结果
+  languageStats, // §7.4: 完整语言分布统计
 }) {
   const scheduler = new TierScheduler();
 
@@ -702,12 +753,13 @@ export function buildMissionBriefing({
   const dimensions = activeDimensions.map((dim) => {
     const tierIndex = scheduler.getTierIndex(dim.id);
     // 优先使用 DEFAULT_TIERS 定义；未定义则取 tierHint；兜底 Tier 1
-    const tier = tierIndex >= 0 ? tierIndex + 1 : (typeof dim.tierHint === 'number' ? dim.tierHint : 1);
+    const tier =
+      tierIndex >= 0 ? tierIndex + 1 : typeof dim.tierHint === 'number' ? dim.tierHint : 1;
     const task: any = enrichDimensionTask(dim, tier);
 
     // §7.3: 增量 Bootstrap — 标记维度状态
     if (incrementalPlan) {
-      const dimPlan = incrementalPlan.dimensions?.find(d => d.id === dim.id);
+      const dimPlan = incrementalPlan.dimensions?.find((d) => d.id === dim.id);
       if (dimPlan?.status) {
         task.status = dimPlan.status; // 'pending' | 'skipped-incremental' | 'completed-checkpoint'
       }
@@ -804,19 +856,27 @@ export function buildMissionBriefing({
     }
     // Level 3.5: 进一步压缩 AST 数据 (裁剪 conformers/protocols 列表、categories)
     for (const cls of briefing.ast.classes) {
-      if (cls.protocols?.length > 3) cls.protocols = cls.protocols.slice(0, 3);
+      if (cls.protocols?.length > 3) {
+        cls.protocols = cls.protocols.slice(0, 3);
+      }
       delete cls.file; // 文件路径可省略
     }
     for (const p of briefing.ast.protocols) {
-      if (p.conformers?.length > 3) p.conformers = p.conformers.slice(0, 3);
+      if (p.conformers?.length > 3) {
+        p.conformers = p.conformers.slice(0, 3);
+      }
       delete p.file;
     }
     if (briefing.ast.categories?.length > 5) {
       briefing.ast.categories = briefing.ast.categories.slice(0, 5);
     }
     // 删除 metrics 中的详细列表
-    if (briefing.ast.metrics?.complexMethods) delete briefing.ast.metrics.complexMethods;
-    if (briefing.ast.metrics?.longMethods) delete briefing.ast.metrics.longMethods;
+    if (briefing.ast.metrics?.complexMethods) {
+      delete briefing.ast.metrics.complexMethods;
+    }
+    if (briefing.ast.metrics?.longMethods) {
+      delete briefing.ast.metrics.longMethods;
+    }
 
     // 检查 Level 1-3 后体积是否已达标
     const midSize = JSON.stringify(briefing).length;

@@ -65,7 +65,7 @@ export function markAutoApproveNeeded(projectRoot, logger) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(marker, new Date().toISOString() + '\n');
+    fs.writeFileSync(marker, `${new Date().toISOString()}\n`);
     logger?.info?.('[AutoApprove] Marked for injection on next MCP startup');
     return true;
   } catch (e: any) {
@@ -117,7 +117,7 @@ export function injectAutoApprove(projectRoot, logger?) {
   serverConfig.autoApprove = [...merged].sort();
 
   try {
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+    fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
     logger?.info?.(
       `[AutoApprove] Injected ${AUTO_APPROVE_TOOLS.length} tools into .cursor/mcp.json autoApprove`
     );
@@ -148,7 +148,9 @@ export function applyPendingAutoApprove(projectRoot, logger) {
     // 清除标记
     try {
       fs.unlinkSync(marker);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 }
 

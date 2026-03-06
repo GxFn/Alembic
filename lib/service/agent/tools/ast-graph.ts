@@ -56,7 +56,9 @@ export const getProjectOverview = {
     const langStats = {};
     for (const filePath of graph.getAllFilePaths?.() || []) {
       const ext = filePath.split('.').pop();
-      if (ext) langStats[ext] = (langStats[ext] || 0) + 1;
+      if (ext) {
+        langStats[ext] = (langStats[ext] || 0) + 1;
+      }
     }
 
     const lines = [
@@ -66,7 +68,9 @@ export const getProjectOverview = {
     ];
 
     // 语言分布
-    const langEntries = Object.entries(langStats).sort((a, b) => (b[1] as number) - (a[1] as number));
+    const langEntries = Object.entries(langStats).sort(
+      (a, b) => (b[1] as number) - (a[1] as number)
+    );
     if (langEntries.length > 0) {
       lines.push(``, `── 语言分布 ──`);
       for (const [ext, count] of langEntries) {
@@ -485,7 +489,14 @@ export const noteFinding = {
       const finding = params.finding || '';
       // P0 Fix: AI 可能传入 array/object，强制转为 string
       const rawEvidence = params.evidence;
-      const evidence = typeof rawEvidence === 'string' ? rawEvidence : Array.isArray(rawEvidence) ? rawEvidence.join(', ') : rawEvidence ? String(rawEvidence) : '';
+      const evidence =
+        typeof rawEvidence === 'string'
+          ? rawEvidence
+          : Array.isArray(rawEvidence)
+            ? rawEvidence.join(', ')
+            : rawEvidence
+              ? String(rawEvidence)
+              : '';
       const importance = params.importance || 5;
       const round = ctx._currentRound || 0;
       const scopeId = ctx._dimensionScopeId || undefined;

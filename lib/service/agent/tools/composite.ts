@@ -9,10 +9,13 @@
  * ──  review_my_output   元工具: 自我质量审查
  */
 
+import {
+  getInternalAgentRequiredFields,
+  getSystemInjectedFields,
+} from '../../../shared/FieldSpec.js';
+import { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
 import { findSimilarRecipes } from '../../candidate/SimilarityService.js';
 import { checkDimensionType, DIMENSION_DISPLAY_GROUP } from './_shared.js';
-import { getInternalAgentRequiredFields, getSystemInjectedFields } from '../../../shared/FieldSpec.js';
-import { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
 
 // ────────────────────────────────────────────────────────────
 // 34. analyze_code — 组合工具 (Guard + Recipe 搜索)
@@ -222,16 +225,20 @@ export const submitWithCheck = {
 
     // Step 0.5: UnifiedValidator 质量验证（与 submit_knowledge 对齐）
     if (dimMeta && ctx.source === 'system') {
-      const validator = ctx._validator || new UnifiedValidator({
-        existingTitles: ctx._submittedTitles || new Set(),
-        existingFingerprints: ctx._submittedPatterns || new Set(),
-      });
+      const validator =
+        ctx._validator ||
+        new UnifiedValidator({
+          existingTitles: ctx._submittedTitles || new Set(),
+          existingFingerprints: ctx._submittedPatterns || new Set(),
+        });
       const validResult = validator.validate(params, {
         mode: 'strict',
         systemInjectedFields: getSystemInjectedFields(),
       });
       if (!validResult.pass) {
-        ctx.logger?.info(`[submit_with_check] ✗ validator rejected: ${validResult.errors.join('; ')}`);
+        ctx.logger?.info(
+          `[submit_with_check] ✗ validator rejected: ${validResult.errors.join('; ')}`
+        );
         return {
           submitted: false,
           status: 'rejected',
@@ -328,7 +335,9 @@ export const submitWithCheck = {
       // QualityScorer 自动评分（与 submit_knowledge 对齐）
       try {
         await knowledgeService.updateQuality(created.id, { userId: 'agent' });
-      } catch { /* best effort */ }
+      } catch {
+        /* best effort */
+      }
 
       return {
         submitted: true,

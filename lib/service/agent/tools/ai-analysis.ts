@@ -31,7 +31,9 @@ export const enrichCandidate = {
       return { error: 'AI provider not available' };
     }
     // V3: 使用 MCP handler enrichCandidates 的逻辑
-    const { enrichCandidates: enrichFn } = await import('../../../external/mcp/handlers/candidate.js');
+    const { enrichCandidates: enrichFn } = await import(
+      '../../../external/mcp/handlers/candidate.js'
+    );
     const result = await enrichFn(ctx, { candidateIds: params.candidateIds });
     return result?.data || result;
   },
@@ -64,7 +66,9 @@ export const refineBootstrapCandidates = {
       return { error: 'AI provider not available' };
     }
     // V3: 委托给 bootstrap handler 的 refine 逻辑
-    const { bootstrapRefine } = await import('../../../external/mcp/handlers/bootstrap-internal.js');
+    const { bootstrapRefine } = await import(
+      '../../../external/mcp/handlers/bootstrap-internal.js'
+    );
     const result = await bootstrapRefine(ctx, {
       candidateIds: params.candidateIds,
       userPrompt: params.userPrompt,

@@ -30,12 +30,12 @@ function _walkKtNode(node, ctx, parentClassName) {
           const isWildcard = child.text.includes('.*');
           // Kotlin: import com.example.MyClass as Alias
           const aliasNode = child.namedChildren.find((c) => c.type === 'import_alias');
-          const alias = aliasNode?.namedChildren?.find((c) => c.type === 'type_identifier' || c.type === 'simple_identifier')?.text;
+          const alias = aliasNode?.namedChildren?.find(
+            (c) => c.type === 'type_identifier' || c.type === 'simple_identifier'
+          )?.text;
 
           if (isWildcard) {
-            ctx.imports.push(
-              new ImportRecord(fullPath, { symbols: ['*'], kind: 'namespace' })
-            );
+            ctx.imports.push(new ImportRecord(fullPath, { symbols: ['*'], kind: 'namespace' }));
           } else {
             ctx.imports.push(
               new ImportRecord(fullPath, {
@@ -347,24 +347,28 @@ function _parseKtProperty(node, className) {
  * @param {string} className
  */
 function _extractKtConstructorProperties(classNode, ctx, className) {
-  const primaryCtor = classNode.namedChildren.find(
-    (c) => c.type === 'primary_constructor'
-  );
-  if (!primaryCtor) return;
+  const primaryCtor = classNode.namedChildren.find((c) => c.type === 'primary_constructor');
+  if (!primaryCtor) {
+    return;
+  }
 
   for (const param of primaryCtor.namedChildren) {
-    if (param.type !== 'class_parameter') continue;
+    if (param.type !== 'class_parameter') {
+      continue;
+    }
 
     // Only val/var params become properties
     const text = param.text;
     const isVal = text.includes('val ');
     const isVar = text.includes('var ');
-    if (!isVal && !isVar) continue;
+    if (!isVal && !isVar) {
+      continue;
+    }
 
-    const name = param.namedChildren.find(
-      (c) => c.type === 'simple_identifier'
-    )?.text;
-    if (!name) continue;
+    const name = param.namedChildren.find((c) => c.type === 'simple_identifier')?.text;
+    if (!name) {
+      continue;
+    }
 
     // Extract type annotation
     let typeAnnotation = null;
@@ -378,7 +382,11 @@ function _extractKtConstructorProperties(classNode, ctx, className) {
     // Extract annotations (e.g. @Inject)
     const annotations: any[] = [];
     for (const child of param.namedChildren) {
-      if (child.type === 'annotation' || child.type === 'single_annotation' || child.type === 'modifiers') {
+      if (
+        child.type === 'annotation' ||
+        child.type === 'single_annotation' ||
+        child.type === 'modifiers'
+      ) {
         if (child.type === 'modifiers') {
           for (const mod of child.namedChildren) {
             if (mod.type === 'annotation' || mod.type === 'single_annotation') {
@@ -606,8 +614,11 @@ function _collectKtScopes(root) {
           visit(body, className);
         }
       } else if (child.type === 'function_declaration') {
-        const name = child.namedChildren.find((c) => c.type === 'simple_identifier')?.text || 'unknown';
-        const body = child.namedChildren.find((c) => c.type === 'function_body' || c.type === 'block');
+        const name =
+          child.namedChildren.find((c) => c.type === 'simple_identifier')?.text || 'unknown';
+        const body = child.namedChildren.find(
+          (c) => c.type === 'function_body' || c.type === 'block'
+        );
         if (body) {
           scopes.push({ body, className, methodName: name });
         }
@@ -615,14 +626,24 @@ function _collectKtScopes(root) {
         // property with getter/setter or initializer with lambda
         const getter = child.namedChildren.find((c) => c.type === 'getter');
         const setter = child.namedChildren.find((c) => c.type === 'setter');
-        const propName = child.namedChildren.find((c) => c.type === 'simple_identifier' || c.type === 'variable_declaration')?.text;
+        const propName = child.namedChildren.find(
+          (c) => c.type === 'simple_identifier' || c.type === 'variable_declaration'
+        )?.text;
         if (getter) {
-          const body = getter.namedChildren.find((c) => c.type === 'function_body' || c.type === 'block');
-          if (body) scopes.push({ body, className, methodName: `get_${propName || 'prop'}` });
+          const body = getter.namedChildren.find(
+            (c) => c.type === 'function_body' || c.type === 'block'
+          );
+          if (body) {
+            scopes.push({ body, className, methodName: `get_${propName || 'prop'}` });
+          }
         }
         if (setter) {
-          const body = setter.namedChildren.find((c) => c.type === 'function_body' || c.type === 'block');
-          if (body) scopes.push({ body, className, methodName: `set_${propName || 'prop'}` });
+          const body = setter.namedChildren.find(
+            (c) => c.type === 'function_body' || c.type === 'block'
+          );
+          if (body) {
+            scopes.push({ body, className, methodName: `set_${propName || 'prop'}` });
+          }
         }
       }
     }
@@ -636,23 +657,53 @@ function _collectKtScopes(root) {
  * 从 Kotlin function body 中递归提取调用点
  */
 function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
-  if (!bodyNode) return;
+  if (!bodyNode) {
+    return;
+  }
 
   const KT_NOISE = new Set([
-    'println', 'print', 'require', 'check', 'error', 'TODO',
-    'listOf', 'mapOf', 'setOf', 'mutableListOf', 'mutableMapOf', 'mutableSetOf',
-    'arrayOf', 'intArrayOf', 'emptyList', 'emptyMap', 'emptySet',
-    'lazy', 'repeat', 'run', 'let', 'also', 'apply', 'with',
+    'println',
+    'print',
+    'require',
+    'check',
+    'error',
+    'TODO',
+    'listOf',
+    'mapOf',
+    'setOf',
+    'mutableListOf',
+    'mutableMapOf',
+    'mutableSetOf',
+    'arrayOf',
+    'intArrayOf',
+    'emptyList',
+    'emptyMap',
+    'emptySet',
+    'lazy',
+    'repeat',
+    'run',
+    'let',
+    'also',
+    'apply',
+    'with',
   ]);
 
   function walk(node) {
-    if (!node || node.type === 'ERROR' || node.isMissing) return;
+    if (!node || node.type === 'ERROR' || node.isMissing) {
+      return;
+    }
 
     if (node.type === 'call_expression') {
       const func = node.namedChildren[0];
-      if (!func) { walkChildren(node); return; }
+      if (!func) {
+        walkChildren(node);
+        return;
+      }
 
-      let callee, receiver = null, receiverType = null, callType;
+      let callee,
+        receiver = null,
+        receiverType = null,
+        callType;
 
       if (func.type === 'navigation_expression') {
         // obj.method() or Pkg.func()
@@ -694,7 +745,9 @@ function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
       }
 
       // 计算参数数量
-      const valueArgs = node.namedChildren.find((c) => c.type === 'call_suffix' || c.type === 'value_arguments');
+      const valueArgs = node.namedChildren.find(
+        (c) => c.type === 'call_suffix' || c.type === 'value_arguments'
+      );
       const argCount = valueArgs ? valueArgs.namedChildCount : 0;
 
       ctx.callSites.push({
@@ -710,10 +763,16 @@ function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
       });
 
       // walk arguments for nested calls
-      if (valueArgs) walkChildren(valueArgs);
+      if (valueArgs) {
+        walkChildren(valueArgs);
+      }
       // also check trailing lambda
-      const lambda = node.namedChildren.find((c) => c.type === 'annotated_lambda' || c.type === 'lambda_literal');
-      if (lambda) walkChildren(lambda);
+      const lambda = node.namedChildren.find(
+        (c) => c.type === 'annotated_lambda' || c.type === 'lambda_literal'
+      );
+      if (lambda) {
+        walkChildren(lambda);
+      }
       return;
     }
 

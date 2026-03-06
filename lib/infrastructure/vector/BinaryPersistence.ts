@@ -35,7 +35,7 @@
  * @module infrastructure/vector/BinaryPersistence
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { ScalarQuantizer } from './ScalarQuantizer.js';
@@ -119,7 +119,7 @@ export class BinaryPersistence {
 
     // Flags
     let flags = FLAG_HAS_HNSW_GRAPH;
-    if (quantizer && quantizer.trained) {
+    if (quantizer?.trained) {
       flags |= FLAG_HAS_QUANTIZER;
     }
 
@@ -417,9 +417,13 @@ export class BinaryPersistence {
    */
   static isValid(filePath) {
     try {
-      if (!existsSync(filePath)) return false;
+      if (!existsSync(filePath)) {
+        return false;
+      }
       const buf = readFileSync(filePath);
-      if (buf.length < HEADER_SIZE) return false;
+      if (buf.length < HEADER_SIZE) {
+        return false;
+      }
       const magic = buf.toString('ascii', 0, 5);
       return magic === MAGIC;
     } catch {

@@ -158,7 +158,9 @@ export class AgentEventBus extends EventEmitter {
       const handlers = this.#subscriptions.get(type);
       if (handlers) {
         const idx = handlers.indexOf(handler);
-        if (idx >= 0) handlers.splice(idx, 1);
+        if (idx >= 0) {
+          handlers.splice(idx, 1);
+        }
       }
     };
   }

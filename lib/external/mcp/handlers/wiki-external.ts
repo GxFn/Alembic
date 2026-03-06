@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '../../../infrastructure/logging/Logger.js';
 import { WikiGenerator } from '../../../service/wiki/WikiGenerator.js';
-import { dedup, slug } from '../../../service/wiki/WikiUtils.js';
+import { dedup } from '../../../service/wiki/WikiUtils.js';
 import { envelope } from '../envelope.js';
 import { getActiveSession } from './bootstrap-external.js';
 
@@ -69,13 +69,15 @@ export async function wikiPlan(ctx, args) {
     const filesByModule = {};
     for (const f of allFiles) {
       const mod = f.targetName || '_default';
-      if (!filesByModule[mod]) filesByModule[mod] = [];
+      if (!filesByModule[mod]) {
+        filesByModule[mod] = [];
+      }
       filesByModule[mod].push(f.relativePath);
     }
     projectInfo = {
       name: path.basename(projectRoot),
       root: projectRoot,
-      sourceFiles: allFiles.map(f => f.relativePath),
+      sourceFiles: allFiles.map((f) => f.relativePath),
       languages: cachedData.langStats || {},
       primaryLanguage: cachedData.primaryLang || 'unknown',
       sourceFilesByModule: filesByModule,
@@ -87,17 +89,21 @@ export async function wikiPlan(ctx, args) {
     const protocolsByModule = {};
     for (const cls of ast.classes || []) {
       const mod = cls.targetName || '_default';
-      if (!classesByModule[mod]) classesByModule[mod] = [];
+      if (!classesByModule[mod]) {
+        classesByModule[mod] = [];
+      }
       classesByModule[mod].push(cls.name);
     }
     for (const p of ast.protocols || []) {
       const mod = p.targetName || '_default';
-      if (!protocolsByModule[mod]) protocolsByModule[mod] = [];
+      if (!protocolsByModule[mod]) {
+        protocolsByModule[mod] = [];
+      }
       protocolsByModule[mod].push(p.name);
     }
     astInfo = {
-      classes: (ast.classes || []).map(c => c.name),
-      protocols: (ast.protocols || []).map(p => p.name),
+      classes: (ast.classes || []).map((c) => c.name),
+      protocols: (ast.protocols || []).map((p) => p.name),
       overview: ast.projectMetrics || null,
       classNamesByModule: classesByModule,
       protocolNamesByModule: protocolsByModule,
@@ -105,8 +111,10 @@ export async function wikiPlan(ctx, args) {
 
     // moduleInfo: 从依赖图和 targets 构建
     moduleInfo = {
-      targets: (cachedData.targetsSummary || []).map(t => ({
-        name: t.name, type: t.type, fileCount: t.fileCount,
+      targets: (cachedData.targetsSummary || []).map((t) => ({
+        name: t.name,
+        type: t.type,
+        fileCount: t.fileCount,
       })),
       depGraph: cachedData.depGraphData || null,
     };
@@ -426,9 +434,12 @@ function _buildWritingGuide(topic, isZh) {
       : 'Write detailed directory analysis. Include: purpose, file list with descriptions, entry points, naming patterns, relationships with other directories.',
   };
 
-  return guides[topic.type] || (isZh
-    ? '撰写详细的技术文档，结构清晰，内容准确。'
-    : 'Write detailed technical documentation with clear structure and accurate content.');
+  return (
+    guides[topic.type] ||
+    (isZh
+      ? '撰写详细的技术文档，结构清晰，内容准确。'
+      : 'Write detailed technical documentation with clear structure and accurate content.')
+  );
 }
 
 /**
@@ -465,7 +476,10 @@ function _buildTopicDataBundle(topic, structuredData) {
         dependencies: t.dependencies || t.info?.dependencies || [],
       }));
       bundle.depGraph = moduleInfo.depGraph
-        ? { nodes: moduleInfo.depGraph.nodes?.length || 0, edges: moduleInfo.depGraph.edges?.length || 0 }
+        ? {
+            nodes: moduleInfo.depGraph.nodes?.length || 0,
+            edges: moduleInfo.depGraph.edges?.length || 0,
+          }
         : null;
       // 热实体信息（高入度类/协议）
       bundle.classCount = astInfo.classes?.length || 0;
@@ -503,7 +517,9 @@ function _buildTopicDataBundle(topic, structuredData) {
       for (const r of knowledgeInfo.recipes || []) {
         const json = r.toJSON ? r.toJSON() : r;
         const cat = json.category || 'Other';
-        if (!groups[cat]) groups[cat] = [];
+        if (!groups[cat]) {
+          groups[cat] = [];
+        }
         groups[cat].push({
           title: json.title || json.name,
           trigger: json.trigger || json.name,

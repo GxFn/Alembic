@@ -138,7 +138,9 @@ export function buildAnalystPrompt(
     for (const step of sop.steps) {
       parts.push(`### ${step.phase}`);
       parts.push(step.action);
-      if (step.expectedOutput) parts.push(`→ 预期产出: ${step.expectedOutput}`);
+      if (step.expectedOutput) {
+        parts.push(`→ 预期产出: ${step.expectedOutput}`);
+      }
     }
     // §3.1 常见错误 (关键质量防护)
     if (sop.commonMistakes?.length > 0) {
@@ -148,7 +150,10 @@ export function buildAnalystPrompt(
       }
     }
   } else if (dimConfig.guide) {
-    const items = dimConfig.guide.split(/[、，,/]/).map(s => s.trim()).filter(Boolean);
+    const items = dimConfig.guide
+      .split(/[、，,/]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (items.length > 1) {
       parts.push(`重点关注:\n${items.map((f) => `- ${f}`).join('\n')}`);
     } else {

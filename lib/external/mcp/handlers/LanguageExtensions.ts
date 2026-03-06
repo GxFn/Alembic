@@ -71,11 +71,21 @@ function _buildJsTsEntry(lang) {
       { bad: 'any 类型滥用', why: '丧失类型安全', fix: '定义具体接口或泛型' },
       { bad: '.catch() 空回调', why: '静默吞掉错误', fix: '记录日志或 re-throw' },
       { bad: 'callback hell', why: '嵌套层级过深难以维护', fix: 'async/await 改写' },
-      { bad: 'for...in 遍历数组', why: '遍历原型链属性、顺序不保证', fix: 'for...of 或 Array 方法' },
+      {
+        bad: 'for...in 遍历数组',
+        why: '遍历原型链属性、顺序不保证',
+        fix: 'for...of 或 Array 方法',
+      },
     ],
     suggestedGuardRules: [
       ...(isTs
-        ? [{ pattern: ': any', severity: 'warning', message: '避免 any 类型，使用 unknown 或具体类型' }]
+        ? [
+            {
+              pattern: ': any',
+              severity: 'warning',
+              message: '避免 any 类型，使用 unknown 或具体类型',
+            },
+          ]
         : []),
       { pattern: '\\.catch\\(\\(\\)\\s*=>', severity: 'info', message: 'catch 回调不应为空' },
       { pattern: 'console\\.log', severity: 'info', message: '生产代码移除 console.log' },
@@ -84,7 +94,9 @@ function _buildJsTsEntry(lang) {
     agentCautions: [
       '使用 ESM (import/export) 而非 CJS (require/module.exports)',
       '异步函数必须处理错误 (try-catch 或 .catch)',
-      isTs ? '启用 strict 模式，优先使用 unknown 替代 any' : '使用 JSDoc 或 @ts-check 标注关键函数类型',
+      isTs
+        ? '启用 strict 模式，优先使用 unknown 替代 any'
+        : '使用 JSDoc 或 @ts-check 标注关键函数类型',
       'Node.js 中注意 unhandledRejection 处理',
       '优先使用 structuredClone() 深拷贝，避免 JSON.parse(JSON.stringify())',
     ],
@@ -93,15 +105,32 @@ function _buildJsTsEntry(lang) {
 
 /** @type {Readonly<Record<string, object>>} */
 const LANG_REGISTRY = Object.freeze({
-
   // ── Swift ──────────────────────────────────────────────────
 
   swift: {
     extraDimensions: [
-      { id: 'concurrency', label: 'Swift Concurrency', guide: 'async/await、Actor、@Sendable、TaskGroup、MainActor、AsyncStream 用法' },
-      { id: 'protocol-oriented', label: '面向协议编程', guide: 'Protocol 扩展、条件一致性、PAT (Protocol with Associated Type)、some/any 关键字' },
-      { id: 'property-wrapper', label: 'Property Wrapper', guide: '@Published、@State、@Environment、@Observable (Observation)、自定义 Property Wrapper' },
-      { id: 'value-semantics', label: '值语义', guide: 'struct vs class 决策、COW (Copy-on-Write)、Equatable/Hashable、~Copyable (non-copyable types)' },
+      {
+        id: 'concurrency',
+        label: 'Swift Concurrency',
+        guide: 'async/await、Actor、@Sendable、TaskGroup、MainActor、AsyncStream 用法',
+      },
+      {
+        id: 'protocol-oriented',
+        label: '面向协议编程',
+        guide: 'Protocol 扩展、条件一致性、PAT (Protocol with Associated Type)、some/any 关键字',
+      },
+      {
+        id: 'property-wrapper',
+        label: 'Property Wrapper',
+        guide:
+          '@Published、@State、@Environment、@Observable (Observation)、自定义 Property Wrapper',
+      },
+      {
+        id: 'value-semantics',
+        label: '值语义',
+        guide:
+          'struct vs class 决策、COW (Copy-on-Write)、Equatable/Hashable、~Copyable (non-copyable types)',
+      },
     ],
     typicalPatterns: [
       'Result<Success, Failure> 统一错误处理',
@@ -114,9 +143,21 @@ const LANG_REGISTRY = Object.freeze({
     ],
     commonAntiPatterns: [
       { bad: '强制 try! / as! 解包', why: '运行时 crash', fix: 'guard let / if let / do-catch' },
-      { bad: 'DispatchQueue.main.async 更新 UI', why: 'Swift Concurrency 下造成 data race', fix: '@MainActor' },
-      { bad: '闭包中不用 [weak self]', why: '循环引用导致内存泄漏', fix: '[weak self] / [unowned self]' },
-      { bad: '大量使用 AnyView 擦除类型', why: 'SwiftUI diff 性能下降', fix: '使用泛型或 @ViewBuilder' },
+      {
+        bad: 'DispatchQueue.main.async 更新 UI',
+        why: 'Swift Concurrency 下造成 data race',
+        fix: '@MainActor',
+      },
+      {
+        bad: '闭包中不用 [weak self]',
+        why: '循环引用导致内存泄漏',
+        fix: '[weak self] / [unowned self]',
+      },
+      {
+        bad: '大量使用 AnyView 擦除类型',
+        why: 'SwiftUI diff 性能下降',
+        fix: '使用泛型或 @ViewBuilder',
+      },
     ],
     suggestedGuardRules: [
       { pattern: 'try!', severity: 'warning', message: '避免 force try，使用 do-catch' },
@@ -137,10 +178,26 @@ const LANG_REGISTRY = Object.freeze({
 
   objectivec: {
     extraDimensions: [
-      { id: 'memory-management', label: '内存管理', guide: 'ARC 下的 strong/weak/unsafe_unretained、autorelease、dealloc 模式' },
-      { id: 'category-extension', label: 'Category/Extension', guide: 'Category 方法命名冲突、Class Extension 私有属性' },
-      { id: 'block-pattern', label: 'Block 模式', guide: 'Block 循环引用、__weak/__strong dance、Block 作为回调' },
-      { id: 'nullability', label: 'Nullability 标注', guide: 'nullable/nonnull/NS_ASSUME_NONNULL、与 Swift 互操作' },
+      {
+        id: 'memory-management',
+        label: '内存管理',
+        guide: 'ARC 下的 strong/weak/unsafe_unretained、autorelease、dealloc 模式',
+      },
+      {
+        id: 'category-extension',
+        label: 'Category/Extension',
+        guide: 'Category 方法命名冲突、Class Extension 私有属性',
+      },
+      {
+        id: 'block-pattern',
+        label: 'Block 模式',
+        guide: 'Block 循环引用、__weak/__strong dance、Block 作为回调',
+      },
+      {
+        id: 'nullability',
+        label: 'Nullability 标注',
+        guide: 'nullable/nonnull/NS_ASSUME_NONNULL、与 Swift 互操作',
+      },
     ],
     typicalPatterns: [
       'delegate + protocol 回调模式',
@@ -152,12 +209,24 @@ const LANG_REGISTRY = Object.freeze({
     ],
     commonAntiPatterns: [
       { bad: 'Block 内直接引用 self', why: '循环引用', fix: '__weak + __strong dance' },
-      { bad: '头文件缺少 nullability 标注', why: 'Swift 桥接时全部变为 optional', fix: 'NS_ASSUME_NONNULL + 显式 nullable' },
-      { bad: 'Category 方法不带前缀', why: '与系统方法/其他库冲突', fix: '加项目前缀如 xx_methodName' },
+      {
+        bad: '头文件缺少 nullability 标注',
+        why: 'Swift 桥接时全部变为 optional',
+        fix: 'NS_ASSUME_NONNULL + 显式 nullable',
+      },
+      {
+        bad: 'Category 方法不带前缀',
+        why: '与系统方法/其他库冲突',
+        fix: '加项目前缀如 xx_methodName',
+      },
     ],
     suggestedGuardRules: [
       { pattern: '\\[self\\s', severity: 'warning', message: 'Block 内直接引用 self，考虑 __weak' },
-      { pattern: '@property.*assign.*id', severity: 'warning', message: '对象属性使用 strong/weak 替代 assign' },
+      {
+        pattern: '@property.*assign.*id',
+        severity: 'warning',
+        message: '对象属性使用 strong/weak 替代 assign',
+      },
     ],
     agentCautions: [
       'ObjC 头文件必须包含 NS_ASSUME_NONNULL_BEGIN/END',
@@ -171,10 +240,26 @@ const LANG_REGISTRY = Object.freeze({
 
   python: {
     extraDimensions: [
-      { id: 'type-hints', label: '类型注解', guide: 'typing 模块、Protocol、TypeVar、Generic、dataclass、TypeAlias (3.12+)' },
-      { id: 'async-io', label: '异步 IO', guide: 'asyncio、aiohttp、async generators、TaskGroup (3.11+)' },
-      { id: 'package-structure', label: '包结构', guide: '__init__.py、相对导入、pyproject.toml、src-layout' },
-      { id: 'testing', label: '测试模式', guide: 'pytest fixtures、parametrize、mock/patch、conftest.py 层级' },
+      {
+        id: 'type-hints',
+        label: '类型注解',
+        guide: 'typing 模块、Protocol、TypeVar、Generic、dataclass、TypeAlias (3.12+)',
+      },
+      {
+        id: 'async-io',
+        label: '异步 IO',
+        guide: 'asyncio、aiohttp、async generators、TaskGroup (3.11+)',
+      },
+      {
+        id: 'package-structure',
+        label: '包结构',
+        guide: '__init__.py、相对导入、pyproject.toml、src-layout',
+      },
+      {
+        id: 'testing',
+        label: '测试模式',
+        guide: 'pytest fixtures、parametrize、mock/patch、conftest.py 层级',
+      },
     ],
     typicalPatterns: [
       'dataclass / pydantic BaseModel 数据建模',
@@ -186,15 +271,31 @@ const LANG_REGISTRY = Object.freeze({
       'pathlib.Path 替代 os.path 字符串操作',
     ],
     commonAntiPatterns: [
-      { bad: 'bare except:', why: '捕获所有异常包括 SystemExit/KeyboardInterrupt', fix: 'except Exception as e:' },
-      { bad: '可变默认参数 def f(x: any[]=[])', why: '函数间共享可变状态', fix: 'def f(x=None): x = x or []' },
+      {
+        bad: 'bare except:',
+        why: '捕获所有异常包括 SystemExit/KeyboardInterrupt',
+        fix: 'except Exception as e:',
+      },
+      {
+        bad: '可变默认参数 def f(x: any[]=[])',
+        why: '函数间共享可变状态',
+        fix: 'def f(x=None): x = x or []',
+      },
       { bad: 'import *', why: '污染命名空间、难以追踪来源', fix: '显式导入: from mod import name' },
       { bad: '全局可变状态', why: '并发不安全、测试困难', fix: '依赖注入或函数参数传递' },
     ],
     suggestedGuardRules: [
-      { pattern: 'except:', severity: 'warning', message: '避免 bare except，至少 except Exception' },
+      {
+        pattern: 'except:',
+        severity: 'warning',
+        message: '避免 bare except，至少 except Exception',
+      },
       { pattern: 'import \\*', severity: 'warning', message: '避免 wildcard import，使用显式导入' },
-      { pattern: 'os\\.system\\(', severity: 'error', message: '使用 subprocess.run() 替代 os.system()' },
+      {
+        pattern: 'os\\.system\\(',
+        severity: 'error',
+        message: '使用 subprocess.run() 替代 os.system()',
+      },
       { pattern: 'eval\\(', severity: 'error', message: '禁止 eval()，存在代码注入风险' },
     ],
     agentCautions: [
@@ -210,10 +311,26 @@ const LANG_REGISTRY = Object.freeze({
 
   kotlin: {
     extraDimensions: [
-      { id: 'coroutines', label: '协程', guide: 'suspend、Flow、CoroutineScope、Dispatchers、structured concurrency' },
-      { id: 'null-safety', label: '空安全', guide: '?.、!!、let、elvis ?:、requireNotNull、lateinit' },
-      { id: 'dsl-builder', label: 'DSL/Builder', guide: 'Kotlin DSL、buildList、apply/run/let/also 作用域函数' },
-      { id: 'multiplatform', label: 'Kotlin Multiplatform', guide: 'expect/actual、共享模块、平台特定实现' },
+      {
+        id: 'coroutines',
+        label: '协程',
+        guide: 'suspend、Flow、CoroutineScope、Dispatchers、structured concurrency',
+      },
+      {
+        id: 'null-safety',
+        label: '空安全',
+        guide: '?.、!!、let、elvis ?:、requireNotNull、lateinit',
+      },
+      {
+        id: 'dsl-builder',
+        label: 'DSL/Builder',
+        guide: 'Kotlin DSL、buildList、apply/run/let/also 作用域函数',
+      },
+      {
+        id: 'multiplatform',
+        label: 'Kotlin Multiplatform',
+        guide: 'expect/actual、共享模块、平台特定实现',
+      },
     ],
     typicalPatterns: [
       'sealed class/interface 状态建模',
@@ -226,12 +343,20 @@ const LANG_REGISTRY = Object.freeze({
     ],
     commonAntiPatterns: [
       { bad: '!! 强制非空断言', why: '运行时 NPE', fix: '?.let {} 或 elvis ?: defaultValue' },
-      { bad: 'GlobalScope.launch', why: '泄漏协程，无法取消', fix: '使用 viewModelScope/lifecycleScope' },
+      {
+        bad: 'GlobalScope.launch',
+        why: '泄漏协程，无法取消',
+        fix: '使用 viewModelScope/lifecycleScope',
+      },
       { bad: 'var 过度使用', why: '可变状态难以追踪', fix: '优先使用 val（不可变）' },
     ],
     suggestedGuardRules: [
       { pattern: '!!', severity: 'warning', message: '避免 !! 操作符，使用 ?.let 或 elvis ?:' },
-      { pattern: 'GlobalScope', severity: 'warning', message: '使用结构化并发 scope 替代 GlobalScope' },
+      {
+        pattern: 'GlobalScope',
+        severity: 'warning',
+        message: '使用结构化并发 scope 替代 GlobalScope',
+      },
       { pattern: 'lateinit', severity: 'info', message: '确认 lateinit 使用合理，考虑 lazy 替代' },
     ],
     agentCautions: [
@@ -247,9 +372,18 @@ const LANG_REGISTRY = Object.freeze({
 
   java: {
     extraDimensions: [
-      { id: 'concurrency', label: '并发', guide: 'synchronized、ExecutorService、CompletableFuture、虚拟线程 (21+)、StructuredTaskScope (preview)' },
+      {
+        id: 'concurrency',
+        label: '并发',
+        guide:
+          'synchronized、ExecutorService、CompletableFuture、虚拟线程 (21+)、StructuredTaskScope (preview)',
+      },
       { id: 'generics', label: '泛型', guide: '类型擦除、通配符 <? extends/super>、类型安全容器' },
-      { id: 'modern-java', label: '现代 Java', guide: 'record (16+)、sealed class (17+)、pattern matching (21+)、text block' },
+      {
+        id: 'modern-java',
+        label: '现代 Java',
+        guide: 'record (16+)、sealed class (17+)、pattern matching (21+)、text block',
+      },
     ],
     typicalPatterns: [
       'Builder 模式构造复杂对象',
@@ -261,15 +395,35 @@ const LANG_REGISTRY = Object.freeze({
       'try-with-resources 自动关闭资源',
     ],
     commonAntiPatterns: [
-      { bad: '返回 null 表示不存在', why: '调用方容易忘记 null check', fix: 'Optional<T> 或 @Nullable 标注' },
+      {
+        bad: '返回 null 表示不存在',
+        why: '调用方容易忘记 null check',
+        fix: 'Optional<T> 或 @Nullable 标注',
+      },
       { bad: 'raw type 泛型', why: '运行时 ClassCastException', fix: '指定具体类型参数' },
       { bad: 'catch (Exception e) {}', why: '静默吞掉异常', fix: '至少记录日志或 rethrow' },
-      { bad: 'new Thread().start()', why: '无法管理线程生命周期', fix: 'ExecutorService 或虚拟线程' },
+      {
+        bad: 'new Thread().start()',
+        why: '无法管理线程生命周期',
+        fix: 'ExecutorService 或虚拟线程',
+      },
     ],
     suggestedGuardRules: [
-      { pattern: 'catch\\s*\\(\\s*Exception', severity: 'info', message: '避免宽泛的 Exception catch，使用具体异常类型' },
-      { pattern: '\\.printStackTrace\\(\\)', severity: 'warning', message: '使用日志框架替代 printStackTrace' },
-      { pattern: 'new Thread\\(', severity: 'info', message: '考虑使用 ExecutorService 或虚拟线程' },
+      {
+        pattern: 'catch\\s*\\(\\s*Exception',
+        severity: 'info',
+        message: '避免宽泛的 Exception catch，使用具体异常类型',
+      },
+      {
+        pattern: '\\.printStackTrace\\(\\)',
+        severity: 'warning',
+        message: '使用日志框架替代 printStackTrace',
+      },
+      {
+        pattern: 'new Thread\\(',
+        severity: 'info',
+        message: '考虑使用 ExecutorService 或虚拟线程',
+      },
     ],
     agentCautions: [
       '优先使用 Optional 处理可空返回值',
@@ -284,9 +438,22 @@ const LANG_REGISTRY = Object.freeze({
 
   go: {
     extraDimensions: [
-      { id: 'goroutine', label: 'Goroutine/Channel', guide: '并发模式、channel、select、context 传播、errgroup' },
-      { id: 'error-handling', label: '错误处理', guide: 'error interface、errors.Is/As、sentinel errors、%w wrap、多错误 errors.Join (1.20+)' },
-      { id: 'interface', label: '接口设计', guide: '隐式实现、小接口、io.Reader/Writer 组合、Accept interfaces return structs' },
+      {
+        id: 'goroutine',
+        label: 'Goroutine/Channel',
+        guide: '并发模式、channel、select、context 传播、errgroup',
+      },
+      {
+        id: 'error-handling',
+        label: '错误处理',
+        guide:
+          'error interface、errors.Is/As、sentinel errors、%w wrap、多错误 errors.Join (1.20+)',
+      },
+      {
+        id: 'interface',
+        label: '接口设计',
+        guide: '隐式实现、小接口、io.Reader/Writer 组合、Accept interfaces return structs',
+      },
     ],
     typicalPatterns: [
       'if err != nil { return err }',
@@ -299,14 +466,30 @@ const LANG_REGISTRY = Object.freeze({
     ],
     commonAntiPatterns: [
       { bad: '忽略 error 返回值 _', why: '静默丢失错误信息', fix: '检查并传播 error' },
-      { bad: 'goroutine 无退出控制', why: '泄漏 goroutine', fix: 'context.WithCancel / done channel' },
+      {
+        bad: 'goroutine 无退出控制',
+        why: '泄漏 goroutine',
+        fix: 'context.WithCancel / done channel',
+      },
       { bad: 'init() 函数过度使用', why: '隐式副作用、测试困难', fix: '显式初始化函数 + 依赖注入' },
       { bad: 'sync.Mutex 包级变量', why: '全局可变状态', fix: '封装到 struct 内' },
     ],
     suggestedGuardRules: [
-      { pattern: 'panic\\(', severity: 'warning', message: '仅在不可恢复错误时使用 panic，正常错误返回 error' },
-      { pattern: 'log\\.Fatal', severity: 'info', message: 'log.Fatal 会调用 os.Exit，确认场景合理' },
-      { pattern: 'go func\\(', severity: 'info', message: '确保 goroutine 有退出路径（context/done channel）' },
+      {
+        pattern: 'panic\\(',
+        severity: 'warning',
+        message: '仅在不可恢复错误时使用 panic，正常错误返回 error',
+      },
+      {
+        pattern: 'log\\.Fatal',
+        severity: 'info',
+        message: 'log.Fatal 会调用 os.Exit，确认场景合理',
+      },
+      {
+        pattern: 'go func\\(',
+        severity: 'info',
+        message: '确保 goroutine 有退出路径（context/done channel）',
+      },
     ],
     agentCautions: [
       '函数必须检查并传播 error，不要忽略 _',
@@ -321,10 +504,26 @@ const LANG_REGISTRY = Object.freeze({
 
   rust: {
     extraDimensions: [
-      { id: 'ownership', label: '所有权/借用', guide: 'ownership、borrowing、lifetime、Clone vs Copy、interior mutability (RefCell/Mutex)' },
-      { id: 'error-handling', label: '错误处理', guide: 'Result<T,E>、? 操作符、thiserror/anyhow、自定义 Error enum' },
-      { id: 'trait-system', label: 'Trait 系统', guide: 'trait bound、impl Trait、dyn Trait、derive 宏、blanket impl' },
-      { id: 'async-runtime', label: '异步运行时', guide: 'tokio/async-std、Future、Pin、async trait、select!' },
+      {
+        id: 'ownership',
+        label: '所有权/借用',
+        guide: 'ownership、borrowing、lifetime、Clone vs Copy、interior mutability (RefCell/Mutex)',
+      },
+      {
+        id: 'error-handling',
+        label: '错误处理',
+        guide: 'Result<T,E>、? 操作符、thiserror/anyhow、自定义 Error enum',
+      },
+      {
+        id: 'trait-system',
+        label: 'Trait 系统',
+        guide: 'trait bound、impl Trait、dyn Trait、derive 宏、blanket impl',
+      },
+      {
+        id: 'async-runtime',
+        label: '异步运行时',
+        guide: 'tokio/async-std、Future、Pin、async trait、select!',
+      },
     ],
     typicalPatterns: [
       'Result<T, E> + ? 操作符链式传播',
@@ -338,12 +537,28 @@ const LANG_REGISTRY = Object.freeze({
     commonAntiPatterns: [
       { bad: '.unwrap() / .expect() 泛滥', why: '生产环境 panic', fix: '? 操作符或 match' },
       { bad: '.clone() 逃避借用检查', why: '隐藏性能问题', fix: '重新设计所有权或使用引用' },
-      { bad: 'Arc<Mutex<T>> 过度使用', why: '运行时锁开销', fix: '优先考虑消息传递 (channel) 或更细粒度设计' },
+      {
+        bad: 'Arc<Mutex<T>> 过度使用',
+        why: '运行时锁开销',
+        fix: '优先考虑消息传递 (channel) 或更细粒度设计',
+      },
     ],
     suggestedGuardRules: [
-      { pattern: '\\.unwrap\\(\\)', severity: 'warning', message: '避免 unwrap()，使用 ? 或 expect("reason")' },
-      { pattern: 'unsafe\\s*\\{', severity: 'warning', message: '审查 unsafe 代码块，确保 safety invariant 有文档' },
-      { pattern: 'todo!\\(\\)|unimplemented!\\(\\)', severity: 'info', message: '确认 todo!/unimplemented! 不会进入生产环境' },
+      {
+        pattern: '\\.unwrap\\(\\)',
+        severity: 'warning',
+        message: '避免 unwrap()，使用 ? 或 expect("reason")',
+      },
+      {
+        pattern: 'unsafe\\s*\\{',
+        severity: 'warning',
+        message: '审查 unsafe 代码块，确保 safety invariant 有文档',
+      },
+      {
+        pattern: 'todo!\\(\\)|unimplemented!\\(\\)',
+        severity: 'info',
+        message: '确认 todo!/unimplemented! 不会进入生产环境',
+      },
     ],
     agentCautions: [
       '优先使用借用 (&T / &mut T) 而非 clone',
@@ -358,9 +573,21 @@ const LANG_REGISTRY = Object.freeze({
 
   c: {
     extraDimensions: [
-      { id: 'memory-safety', label: '内存安全', guide: 'malloc/free 配对、指针生命周期、缓冲区溢出防范、AddressSanitizer' },
-      { id: 'preprocessor', label: '预处理器', guide: '#define 宏、条件编译、include guard / #pragma once、X-Macro 模式' },
-      { id: 'api-design', label: 'API 设计', guide: 'opaque pointer(PIMPL)、const 正确性、错误码约定、头文件组织' },
+      {
+        id: 'memory-safety',
+        label: '内存安全',
+        guide: 'malloc/free 配对、指针生命周期、缓冲区溢出防范、AddressSanitizer',
+      },
+      {
+        id: 'preprocessor',
+        label: '预处理器',
+        guide: '#define 宏、条件编译、include guard / #pragma once、X-Macro 模式',
+      },
+      {
+        id: 'api-design',
+        label: 'API 设计',
+        guide: 'opaque pointer(PIMPL)、const 正确性、错误码约定、头文件组织',
+      },
     ],
     typicalPatterns: [
       'struct + 函数指针模拟 OOP',
@@ -371,16 +598,48 @@ const LANG_REGISTRY = Object.freeze({
       'opaque pointer 隐藏实现细节',
     ],
     commonAntiPatterns: [
-      { bad: 'malloc 后不检查 NULL', why: 'OOM 时解引用空指针 → crash', fix: 'if (!ptr) { handle_error(); }' },
-      { bad: '缓冲区无边界检查', why: '缓冲区溢出 → 安全漏洞', fix: '使用 snprintf/strncat + 显式长度参数' },
-      { bad: 'malloc/free 未配对', why: '内存泄漏或 double free', fix: '集中管理资源生命周期、使用 goto cleanup 模式' },
-      { bad: '函数式宏无括号包裹参数', why: '宏展开时运算优先级错误', fix: '#define MAX(a,b) ((a) > (b) ? (a) : (b))' },
+      {
+        bad: 'malloc 后不检查 NULL',
+        why: 'OOM 时解引用空指针 → crash',
+        fix: 'if (!ptr) { handle_error(); }',
+      },
+      {
+        bad: '缓冲区无边界检查',
+        why: '缓冲区溢出 → 安全漏洞',
+        fix: '使用 snprintf/strncat + 显式长度参数',
+      },
+      {
+        bad: 'malloc/free 未配对',
+        why: '内存泄漏或 double free',
+        fix: '集中管理资源生命周期、使用 goto cleanup 模式',
+      },
+      {
+        bad: '函数式宏无括号包裹参数',
+        why: '宏展开时运算优先级错误',
+        fix: '#define MAX(a,b) ((a) > (b) ? (a) : (b))',
+      },
     ],
     suggestedGuardRules: [
-      { pattern: 'gets\\(', severity: 'error', message: '禁止使用 gets()，已被移除（CVE 风险），使用 fgets()' },
-      { pattern: 'sprintf\\(', severity: 'warning', message: '使用 snprintf() 替代 sprintf()，防止缓冲区溢出' },
-      { pattern: 'strcpy\\(', severity: 'warning', message: '使用 strncpy()/strlcpy() 替代 strcpy()' },
-      { pattern: 'atoi\\(', severity: 'info', message: '使用 strtol() 替代 atoi()，可检测解析错误' },
+      {
+        pattern: 'gets\\(',
+        severity: 'error',
+        message: '禁止使用 gets()，已被移除（CVE 风险），使用 fgets()',
+      },
+      {
+        pattern: 'sprintf\\(',
+        severity: 'warning',
+        message: '使用 snprintf() 替代 sprintf()，防止缓冲区溢出',
+      },
+      {
+        pattern: 'strcpy\\(',
+        severity: 'warning',
+        message: '使用 strncpy()/strlcpy() 替代 strcpy()',
+      },
+      {
+        pattern: 'atoi\\(',
+        severity: 'info',
+        message: '使用 strtol() 替代 atoi()，可检测解析错误',
+      },
     ],
     agentCautions: [
       'malloc/calloc 后必须检查返回值是否为 NULL',
@@ -395,10 +654,26 @@ const LANG_REGISTRY = Object.freeze({
 
   cpp: {
     extraDimensions: [
-      { id: 'raii', label: 'RAII / 智能指针', guide: 'unique_ptr、shared_ptr、weak_ptr、自定义 deleter、make_unique/make_shared' },
-      { id: 'templates', label: '模板 / Concepts', guide: '函数模板、类模板、SFINAE、Concepts (C++20)、requires 表达式' },
-      { id: 'move-semantics', label: '移动语义', guide: '右值引用 (&&)、std::move、完美转发 (std::forward)、Rule of 0/3/5' },
-      { id: 'modern-cpp', label: '现代 C++ 特性', guide: 'constexpr、std::optional、std::variant、structured bindings、ranges (C++20)' },
+      {
+        id: 'raii',
+        label: 'RAII / 智能指针',
+        guide: 'unique_ptr、shared_ptr、weak_ptr、自定义 deleter、make_unique/make_shared',
+      },
+      {
+        id: 'templates',
+        label: '模板 / Concepts',
+        guide: '函数模板、类模板、SFINAE、Concepts (C++20)、requires 表达式',
+      },
+      {
+        id: 'move-semantics',
+        label: '移动语义',
+        guide: '右值引用 (&&)、std::move、完美转发 (std::forward)、Rule of 0/3/5',
+      },
+      {
+        id: 'modern-cpp',
+        label: '现代 C++ 特性',
+        guide: 'constexpr、std::optional、std::variant、structured bindings、ranges (C++20)',
+      },
     ],
     typicalPatterns: [
       'RAII 管理资源 (unique_ptr/shared_ptr)',
@@ -410,16 +685,36 @@ const LANG_REGISTRY = Object.freeze({
       'auto + structured bindings 简化声明',
     ],
     commonAntiPatterns: [
-      { bad: 'new/delete 手动管理内存', why: '容易泄漏，异常不安全', fix: 'std::make_unique / std::make_shared' },
+      {
+        bad: 'new/delete 手动管理内存',
+        why: '容易泄漏，异常不安全',
+        fix: 'std::make_unique / std::make_shared',
+      },
       { bad: 'catch(...) 吃掉所有异常', why: '隐藏真实错误', fix: '捕获具体异常类型并处理' },
       { bad: '对象切片 (slicing)', why: '派生类信息丢失', fix: '使用指针/引用传递多态对象' },
-      { bad: '#define 常量/函数', why: '无类型检查、调试困难', fix: 'constexpr 变量 / inline 函数 / 模板' },
+      {
+        bad: '#define 常量/函数',
+        why: '无类型检查、调试困难',
+        fix: 'constexpr 变量 / inline 函数 / 模板',
+      },
     ],
     suggestedGuardRules: [
-      { pattern: '\\bnew\\b(?!.*unique_ptr|.*shared_ptr)', severity: 'warning', message: '优先使用 make_unique/make_shared 替代 raw new' },
+      {
+        pattern: '\\bnew\\b(?!.*unique_ptr|.*shared_ptr)',
+        severity: 'warning',
+        message: '优先使用 make_unique/make_shared 替代 raw new',
+      },
       { pattern: '\\bdelete\\b', severity: 'warning', message: '避免手动 delete，使用智能指针' },
-      { pattern: 'using namespace std', severity: 'info', message: '避免在头文件中使用 using namespace' },
-      { pattern: 'reinterpret_cast', severity: 'warning', message: '审查 reinterpret_cast 使用是否合理' },
+      {
+        pattern: 'using namespace std',
+        severity: 'info',
+        message: '避免在头文件中使用 using namespace',
+      },
+      {
+        pattern: 'reinterpret_cast',
+        severity: 'warning',
+        message: '审查 reinterpret_cast 使用是否合理',
+      },
     ],
     agentCautions: [
       '使用智能指针 (unique_ptr/shared_ptr) 而非 raw new/delete',
@@ -434,9 +729,21 @@ const LANG_REGISTRY = Object.freeze({
 
   ruby: {
     extraDimensions: [
-      { id: 'metaprogramming', label: '元编程', guide: 'define_method、method_missing、class_eval、open class、DSL 构建' },
-      { id: 'block-proc-lambda', label: 'Block/Proc/Lambda', guide: 'yield、block_given?、Proc.new vs lambda、& 转换' },
-      { id: 'convention-over-config', label: '约定优于配置', guide: 'Rails 约定 (命名/目录结构)、ActiveRecord 模式、concern 复用' },
+      {
+        id: 'metaprogramming',
+        label: '元编程',
+        guide: 'define_method、method_missing、class_eval、open class、DSL 构建',
+      },
+      {
+        id: 'block-proc-lambda',
+        label: 'Block/Proc/Lambda',
+        guide: 'yield、block_given?、Proc.new vs lambda、& 转换',
+      },
+      {
+        id: 'convention-over-config',
+        label: '约定优于配置',
+        guide: 'Rails 约定 (命名/目录结构)、ActiveRecord 模式、concern 复用',
+      },
     ],
     typicalPatterns: [
       'block + yield 迭代器模式',
@@ -448,14 +755,34 @@ const LANG_REGISTRY = Object.freeze({
       'frozen_string_literal 优化字符串',
     ],
     commonAntiPatterns: [
-      { bad: 'method_missing 无 respond_to_missing?', why: '反射 API 行为不一致', fix: '同时定义 respond_to_missing?' },
+      {
+        bad: 'method_missing 无 respond_to_missing?',
+        why: '反射 API 行为不一致',
+        fix: '同时定义 respond_to_missing?',
+      },
       { bad: 'Monkey-patch 核心类', why: '全局影响、版本升级冲突', fix: 'Refinements 或委托模式' },
-      { bad: 'N+1 查询 (ActiveRecord)', why: '数据库性能严重退化', fix: 'includes/preload 预加载关联' },
+      {
+        bad: 'N+1 查询 (ActiveRecord)',
+        why: '数据库性能严重退化',
+        fix: 'includes/preload 预加载关联',
+      },
     ],
     suggestedGuardRules: [
-      { pattern: 'eval\\(', severity: 'error', message: '避免 eval，存在代码注入风险，使用 send/public_send' },
-      { pattern: 'method_missing', severity: 'info', message: '确认配套定义了 respond_to_missing?' },
-      { pattern: '\\.find_each|\\.all\\.each', severity: 'info', message: '大数据集使用 find_each / in_batches 分批处理' },
+      {
+        pattern: 'eval\\(',
+        severity: 'error',
+        message: '避免 eval，存在代码注入风险，使用 send/public_send',
+      },
+      {
+        pattern: 'method_missing',
+        severity: 'info',
+        message: '确认配套定义了 respond_to_missing?',
+      },
+      {
+        pattern: '\\.find_each|\\.all\\.each',
+        severity: 'info',
+        message: '大数据集使用 find_each / in_batches 分批处理',
+      },
     ],
     agentCautions: [
       '在文件头添加 # frozen_string_literal: true',
@@ -470,10 +797,26 @@ const LANG_REGISTRY = Object.freeze({
 
   dart: {
     extraDimensions: [
-      { id: 'null-safety', label: '空安全', guide: '?、!、late、required、null-aware operators (?., ??, ??=)' },
-      { id: 'widget-composition', label: 'Widget 组合 (Flutter)', guide: 'StatelessWidget/StatefulWidget、Widget 拆分、const 构造器、InheritedWidget' },
-      { id: 'async-patterns', label: '异步模式', guide: 'Future、Stream、async*/yield*、Isolate 并行计算' },
-      { id: 'state-management', label: '状态管理', guide: 'Provider/Riverpod/Bloc/GetX、单向数据流、响应式编程' },
+      {
+        id: 'null-safety',
+        label: '空安全',
+        guide: '?、!、late、required、null-aware operators (?., ??, ??=)',
+      },
+      {
+        id: 'widget-composition',
+        label: 'Widget 组合 (Flutter)',
+        guide: 'StatelessWidget/StatefulWidget、Widget 拆分、const 构造器、InheritedWidget',
+      },
+      {
+        id: 'async-patterns',
+        label: '异步模式',
+        guide: 'Future、Stream、async*/yield*、Isolate 并行计算',
+      },
+      {
+        id: 'state-management',
+        label: '状态管理',
+        guide: 'Provider/Riverpod/Bloc/GetX、单向数据流、响应式编程',
+      },
     ],
     typicalPatterns: [
       'const 构造器优化 Widget rebuild',
@@ -485,14 +828,34 @@ const LANG_REGISTRY = Object.freeze({
       'sealed class (Dart 3) 穷举模式匹配',
     ],
     commonAntiPatterns: [
-      { bad: '在 build() 中调用 setState 或异步操作', why: '无限重建循环', fix: '在 initState/事件回调中处理' },
-      { bad: '单个 Widget 过大 (>200 行)', why: '难以维护和复用', fix: '拆分为小 Widget + const 子树' },
-      { bad: '滥用 late 关键字', why: '运行时 LateInitializationError', fix: '使用 nullable (?) 或在声明处初始化' },
-      { bad: 'setState 管理全局状态', why: '状态散落、难以追踪', fix: '使用 Provider/Riverpod 等状态管理方案' },
+      {
+        bad: '在 build() 中调用 setState 或异步操作',
+        why: '无限重建循环',
+        fix: '在 initState/事件回调中处理',
+      },
+      {
+        bad: '单个 Widget 过大 (>200 行)',
+        why: '难以维护和复用',
+        fix: '拆分为小 Widget + const 子树',
+      },
+      {
+        bad: '滥用 late 关键字',
+        why: '运行时 LateInitializationError',
+        fix: '使用 nullable (?) 或在声明处初始化',
+      },
+      {
+        bad: 'setState 管理全局状态',
+        why: '状态散落、难以追踪',
+        fix: '使用 Provider/Riverpod 等状态管理方案',
+      },
     ],
     suggestedGuardRules: [
       { pattern: 'print\\(', severity: 'info', message: '生产代码使用 logger 替代 print()' },
-      { pattern: '!\\s*\\.', severity: 'info', message: '审查 ! (force-unwrap) 使用，考虑 ?. 安全访问' },
+      {
+        pattern: '!\\s*\\.',
+        severity: 'info',
+        message: '审查 ! (force-unwrap) 使用，考虑 ?. 安全访问',
+      },
       { pattern: 'dynamic', severity: 'warning', message: '避免 dynamic 类型，使用具体类型或泛型' },
     ],
     agentCautions: [
@@ -508,10 +871,26 @@ const LANG_REGISTRY = Object.freeze({
 
   csharp: {
     extraDimensions: [
-      { id: 'async-await', label: 'async/await', guide: 'Task、ValueTask、IAsyncEnumerable、ConfigureAwait、CancellationToken' },
-      { id: 'linq', label: 'LINQ', guide: '查询表达式、方法链、延迟执行、IQueryable vs IEnumerable' },
-      { id: 'pattern-matching', label: '模式匹配', guide: 'switch expression、is pattern、property pattern、list pattern (C# 11)' },
-      { id: 'dependency-injection', label: '依赖注入', guide: 'IServiceCollection、Scoped/Transient/Singleton、IOptions<T>、Hosted Services' },
+      {
+        id: 'async-await',
+        label: 'async/await',
+        guide: 'Task、ValueTask、IAsyncEnumerable、ConfigureAwait、CancellationToken',
+      },
+      {
+        id: 'linq',
+        label: 'LINQ',
+        guide: '查询表达式、方法链、延迟执行、IQueryable vs IEnumerable',
+      },
+      {
+        id: 'pattern-matching',
+        label: '模式匹配',
+        guide: 'switch expression、is pattern、property pattern、list pattern (C# 11)',
+      },
+      {
+        id: 'dependency-injection',
+        label: '依赖注入',
+        guide: 'IServiceCollection、Scoped/Transient/Singleton、IOptions<T>、Hosted Services',
+      },
     ],
     typicalPatterns: [
       'async Task 方法 + CancellationToken',
@@ -525,13 +904,29 @@ const LANG_REGISTRY = Object.freeze({
     commonAntiPatterns: [
       { bad: 'async void 方法', why: '异常无法捕获、调用方无法 await', fix: '返回 async Task' },
       { bad: '.Result / .Wait() 阻塞', why: '线程池饥饿 / UI 线程死锁', fix: 'await 全程异步' },
-      { bad: 'IDisposable 未 Dispose', why: '资源泄漏 (连接/句柄)', fix: 'using statement/declaration' },
-      { bad: 'catch (Exception: any) { } 空处理', why: '静默吞掉错误', fix: '记录日志或 rethrow (throw;)' },
+      {
+        bad: 'IDisposable 未 Dispose',
+        why: '资源泄漏 (连接/句柄)',
+        fix: 'using statement/declaration',
+      },
+      {
+        bad: 'catch (Exception: any) { } 空处理',
+        why: '静默吞掉错误',
+        fix: '记录日志或 rethrow (throw;)',
+      },
     ],
     suggestedGuardRules: [
       { pattern: 'async void', severity: 'warning', message: '避免 async void，使用 async Task' },
-      { pattern: '\\.Result\\b|\\.Wait\\(', severity: 'warning', message: '避免同步阻塞异步方法，使用 await' },
-      { pattern: 'catch\\s*\\(Exception', severity: 'info', message: '避免宽泛 catch Exception，捕获具体异常类型' },
+      {
+        pattern: '\\.Result\\b|\\.Wait\\(',
+        severity: 'warning',
+        message: '避免同步阻塞异步方法，使用 await',
+      },
+      {
+        pattern: 'catch\\s*\\(Exception',
+        severity: 'info',
+        message: '避免宽泛 catch Exception，捕获具体异常类型',
+      },
     ],
     agentCautions: [
       'async 方法返回 Task/ValueTask，不要 async void',
@@ -541,7 +936,6 @@ const LANG_REGISTRY = Object.freeze({
       '使用 record (C# 9+) 构建不可变数据传输对象',
     ],
   },
-
 });
 
 // ═══════════════════════════════════════════════════════════

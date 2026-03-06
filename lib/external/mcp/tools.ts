@@ -294,7 +294,10 @@ export const TOOLS = [
             '示例: { "pattern": "func example() { ... }", "markdown": "## 标题\\n正文≥200字...", "rationale": "为什么这样设计" }',
           properties: {
             pattern: { type: 'string', description: '核心代码片段（与 markdown 至少提供一个）' },
-            markdown: { type: 'string', description: 'Markdown 正文（≥200字符，与 pattern 至少提供一个）' },
+            markdown: {
+              type: 'string',
+              description: 'Markdown 正文（≥200字符，与 pattern 至少提供一个）',
+            },
             rationale: { type: 'string', description: '设计原理说明（必填）' },
             steps: { type: 'array', items: { type: 'object' } },
             codeChanges: { type: 'array', items: { type: 'object' } },
@@ -332,7 +335,10 @@ export const TOOLS = [
         dontClause: { type: 'string', description: '反向约束（必填，描述禁止的做法）' },
         whenClause: { type: 'string', description: '触发场景（必填，描述何时适用此规则）' },
         topicHint: { type: 'string', description: '主题分组' },
-        coreCode: { type: 'string', description: '精华代码骨架（必填，3-8行，必须语法完整、括号配对）' },
+        coreCode: {
+          type: 'string',
+          description: '精华代码骨架（必填，3-8行，必须语法完整、括号配对）',
+        },
         // ── 可选 ──
         complexity: { type: 'string', enum: ['beginner', 'intermediate', 'advanced'] },
         scope: { type: 'string', enum: ['universal', 'project-specific', 'target-specific'] },
@@ -346,7 +352,11 @@ export const TOOLS = [
             '推理依据（JSON 对象，必填）。示例: { "whyStandard": "28/30 files follow this pattern", "sources": ["src/UserService.ts"], "confidence": 0.85 }',
           properties: {
             whyStandard: { type: 'string', description: '为什么这是标准做法（必填）' },
-            sources: { type: 'array', items: { type: 'string' }, description: '参考的文件路径数组（必填，至少 1 个）' },
+            sources: {
+              type: 'array',
+              items: { type: 'string' },
+              description: '参考的文件路径数组（必填，至少 1 个）',
+            },
             confidence: { type: 'number', description: '置信度 0.0-1.0（推荐 0.7-0.9）' },
             qualitySignals: { type: 'object' },
             alternatives: { type: 'array', items: { type: 'string' } },
@@ -360,7 +370,10 @@ export const TOOLS = [
         client_id: { type: 'string', description: '客户端标识' },
         // ── 增强控制 ──
         skipDuplicateCheck: { type: 'boolean', default: false, description: '跳过去重检测' },
-        dimensionId: { type: 'string', description: 'Bootstrap 维度 ID（可选，冷启动时传递当前维度以改善追踪准确性）' },
+        dimensionId: {
+          type: 'string',
+          description: 'Bootstrap 维度 ID（可选，冷启动时传递当前维度以改善追踪准确性）',
+        },
       },
       required: [
         'title',
@@ -403,7 +416,10 @@ export const TOOLS = [
         source: { type: 'string', default: 'cursor-scan' },
         deduplicate: { type: 'boolean', default: true },
         client_id: { type: 'string' },
-        dimensionId: { type: 'string', description: 'Bootstrap 维度 ID（可选，冷启动时传递当前维度以改善追踪准确性）' },
+        dimensionId: {
+          type: 'string',
+          description: 'Bootstrap 维度 ID（可选，冷启动时传递当前维度以改善追踪准确性）',
+        },
       },
       required: ['target_name', 'items'],
     },
@@ -488,7 +504,10 @@ export const TOOLS = [
       type: 'object',
       properties: {
         sessionId: { type: 'string', description: 'bootstrap 返回的 session.id（可选，自动查找）' },
-        dimensionId: { type: 'string', description: '维度 ID（如 project-profile, language-scans）' },
+        dimensionId: {
+          type: 'string',
+          description: '维度 ID（如 project-profile, language-scans）',
+        },
         submittedRecipeIds: {
           type: 'array',
           items: { type: 'string' },
@@ -575,13 +594,28 @@ export const TOOLS = [
         operation: {
           type: 'string',
           enum: [
-            'prime', 'ready',
-            'create', 'claim', 'close', 'fail', 'defer',
-            'progress', 'show', 'list', 'stats',
-            'blocked', 'decompose', 'dep_add', 'dep_tree',
-            'record_decision', 'revise_decision', 'unpin_decision', 'list_decisions',
+            'prime',
+            'ready',
+            'create',
+            'claim',
+            'close',
+            'fail',
+            'defer',
+            'progress',
+            'show',
+            'list',
+            'stats',
+            'blocked',
+            'decompose',
+            'dep_add',
+            'dep_tree',
+            'record_decision',
+            'revise_decision',
+            'unpin_decision',
+            'list_decisions',
           ],
-          description: 'prime=session entry (CALL FIRST) | ready=ready tasks | record_decision/revise_decision/unpin_decision/list_decisions=decision management | create/claim/close/fail/defer/progress/decompose=task CRUD',
+          description:
+            'prime=session entry (CALL FIRST) | ready=ready tasks | record_decision/revise_decision/unpin_decision/list_decisions=decision management | create/claim/close/fail/defer/progress/decompose=task CRUD',
         },
         title: { type: 'string', description: 'Task title (create)' },
         description: { type: 'string', description: 'Task description (create/progress)' },
@@ -594,16 +628,35 @@ export const TOOLS = [
           description: 'Task type (create)',
         },
         parentId: { type: 'string', description: 'Parent task ID (create subtask)' },
-        id: { type: 'string', description: 'Task ID (claim/close/fail/defer/show/dep_add/dep_tree/progress/revise_decision/unpin_decision)' },
+        id: {
+          type: 'string',
+          description:
+            'Task ID (claim/close/fail/defer/show/dep_add/dep_tree/progress/revise_decision/unpin_decision)',
+        },
         reason: { type: 'string', description: 'Reason (close/fail/defer/unpin_decision)' },
-        rationale: { type: 'string', description: 'Why this decision (record_decision/revise_decision)' },
-        tags: { type: 'array', items: { type: 'string' }, description: 'Classification tags (record_decision)' },
+        rationale: {
+          type: 'string',
+          description: 'Why this decision (record_decision/revise_decision)',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Classification tags (record_decision)',
+        },
         relatedTaskId: { type: 'string', description: 'Related task ID (record_decision)' },
 
         dependsOn: { type: 'string', description: 'Dependency target task ID (dep_add)' },
         depType: {
           type: 'string',
-          enum: ['blocks', 'parent-child', 'waits-for', 'discovered-from', 'related', 'knowledge-ref', 'supersedes'],
+          enum: [
+            'blocks',
+            'parent-child',
+            'waits-for',
+            'discovered-from',
+            'related',
+            'knowledge-ref',
+            'supersedes',
+          ],
           default: 'blocks',
           description: 'Dependency type (dep_add)',
         },
@@ -627,7 +680,10 @@ export const TOOLS = [
               description: { type: 'string' },
               priority: { type: 'number' },
               taskType: { type: 'string' },
-              blockedByIndex: { type: 'number', description: 'Index in subtasks array that blocks this subtask' },
+              blockedByIndex: {
+                type: 'number',
+                description: 'Index in subtasks array that blocks this subtask',
+              },
             },
             required: ['title'],
           },

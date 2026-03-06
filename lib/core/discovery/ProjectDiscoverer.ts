@@ -31,7 +31,10 @@ export interface DependencyEdge {
 }
 
 export interface DependencyGraph {
-  nodes: (string | { id: string; label?: string; type?: string; fullPath?: string; indirect?: boolean })[];
+  nodes: (
+    | string
+    | { id: string; label?: string; type?: string; fullPath?: string; indirect?: boolean }
+  )[];
   edges: DependencyEdge[];
 }
 

@@ -208,9 +208,7 @@ export class MemoryStore {
    */
   getCandidates(type) {
     const now = new Date().toISOString();
-    return type
-      ? this.#stmts.getByContent.all({ type, now })
-      : this.#stmts.getAll.all({ now });
+    return type ? this.#stmts.getByContent.all({ type, now }) : this.#stmts.getAll.all({ now });
   }
 
   /**
@@ -288,7 +286,9 @@ export class MemoryStore {
    */
   enforceCapacity() {
     const count = this.#db.prepare('SELECT COUNT(*) as cnt FROM semantic_memories').get()?.cnt || 0;
-    if (count <= MAX_MEMORIES) return;
+    if (count <= MAX_MEMORIES) {
+      return;
+    }
 
     const excess = count - MAX_MEMORIES;
     this.#db
@@ -374,8 +374,12 @@ export class MemoryStore {
     const lowerB = (contentB || '').toLowerCase();
     const tokensB = tokenizeForSimilarity(lowerB);
 
-    if (tokensA.size === 0 && tokensB.size === 0) return 1.0;
-    if (tokensA.size === 0 || tokensB.size === 0) return 0.0;
+    if (tokensA.size === 0 && tokensB.size === 0) {
+      return 1.0;
+    }
+    if (tokensA.size === 0 || tokensB.size === 0) {
+      return 0.0;
+    }
 
     const jaccard = jaccardSimilarity(tokensA, tokensB);
     const containsBonus = lowerA.includes(lowerB) || lowerB.includes(lowerA) ? 0.3 : 0;

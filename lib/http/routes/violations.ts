@@ -6,7 +6,6 @@
 import express from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { ValidationError } from '../../shared/errors/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = express.Router();

@@ -16,12 +16,12 @@
  */
 
 import Logger from '../../../infrastructure/logging/Logger.js';
-import { envelope } from '../envelope.js';
-import { getActiveSession } from './bootstrap-external.js';
-import { saveDimensionCheckpoint } from './bootstrap/pipeline/checkpoint.js';
-import { generateSkill } from './bootstrap/shared/skill-generator.js';
-import { BOOTSTRAP_COMPLETE_ACTIONS } from './bootstrap/shared/dimension-text.js';
 import { BootstrapEventEmitter } from '../../../shared/BootstrapEventEmitter.js';
+import { envelope } from '../envelope.js';
+import { saveDimensionCheckpoint } from './bootstrap/pipeline/checkpoint.js';
+import { BOOTSTRAP_COMPLETE_ACTIONS } from './bootstrap/shared/dimension-text.js';
+import { generateSkill } from './bootstrap/shared/skill-generator.js';
+import { getActiveSession } from './bootstrap-external.js';
 
 const logger = Logger.getInstance();
 
@@ -132,7 +132,7 @@ export async function dimensionComplete(ctx, args) {
       if (filesFromSources.size > 0) {
         referencedFiles = [...filesFromSources];
         logger.debug(
-          `[DimensionComplete] Auto-recovered ${referencedFiles.length} referencedFiles from submissions for "${dimensionId}"`,
+          `[DimensionComplete] Auto-recovered ${referencedFiles.length} referencedFiles from submissions for "${dimensionId}"`
         );
       }
     } catch {
@@ -150,7 +150,7 @@ export async function dimensionComplete(ctx, args) {
       if (recoveredIds.length > 0) {
         submittedRecipeIds = recoveredIds;
         logger.debug(
-          `[DimensionComplete] Auto-recovered ${submittedRecipeIds.length} submittedRecipeIds from tracker for "${dimensionId}"`,
+          `[DimensionComplete] Auto-recovered ${submittedRecipeIds.length} submittedRecipeIds from tracker for "${dimensionId}"`
         );
       }
     } catch {
@@ -174,22 +174,28 @@ export async function dimensionComplete(ctx, args) {
             if (entry) {
               const existingTags = Array.isArray(entry.tags)
                 ? entry.tags
-                : (typeof entry.tags === 'string' ? JSON.parse(entry.tags) : []);
-              const newTags = [...new Set([
-                ...existingTags,
-                `dimension:${dimensionId}`,
-                `bootstrap:${session.id}`,
-              ])];
-              await knowledgeService.update(recipeId, {
-                category: dimensionId,
-                tags: newTags,
-              }, { userId: 'mcp' });
+                : typeof entry.tags === 'string'
+                  ? JSON.parse(entry.tags)
+                  : [];
+              const newTags = [
+                ...new Set([
+                  ...existingTags,
+                  `dimension:${dimensionId}`,
+                  `bootstrap:${session.id}`,
+                ]),
+              ];
+              await knowledgeService.update(
+                recipeId,
+                {
+                  category: dimensionId,
+                  tags: newTags,
+                },
+                { userId: 'mcp' }
+              );
               recipesBound++;
             }
           } catch (e: any) {
-            logger.debug(
-              `[DimensionComplete] Failed to tag recipe ${recipeId}: ${e.message}`
-            );
+            logger.debug(`[DimensionComplete] Failed to tag recipe ${recipeId}: ${e.message}`);
           }
         }
       }
@@ -205,7 +211,12 @@ export async function dimensionComplete(ctx, args) {
   let skillCreated = false;
   if (dim.skillWorthy) {
     const skillResult = await generateSkill(
-      ctx, dim, analysisText, referencedFiles, keyFindings, 'external-agent-bootstrap'
+      ctx,
+      dim,
+      analysisText,
+      referencedFiles,
+      keyFindings,
+      'external-agent-bootstrap'
     );
     skillCreated = skillResult.success;
     if (!skillCreated) {
@@ -251,8 +262,10 @@ export async function dimensionComplete(ctx, args) {
       // 将每个 keyFinding 创建为知识图谱中的实体
       for (const finding of keyFindings) {
         knowledgeGraphService.addEdge(
-          dimensionId, 'dimension',
-          finding.substring(0, 80), 'finding',
+          dimensionId,
+          'dimension',
+          finding.substring(0, 80),
+          'finding',
           'discovered_in',
           { source: 'external-agent-bootstrap', sessionId: session.id }
         );
@@ -311,7 +324,9 @@ export async function dimensionComplete(ctx, args) {
     // R5: 自动触发 Wiki 生成 (fire-and-forget)
     setImmediate(async () => {
       try {
-        const { getServiceContainer: getWikiContainer } = await import('../../../injection/ServiceContainer.js');
+        const { getServiceContainer: getWikiContainer } = await import(
+          '../../../injection/ServiceContainer.js'
+        );
         const wikiContainer = getWikiContainer();
         const { WikiGenerator } = await import('../../../service/wiki/WikiGenerator.js');
         const moduleService = wikiContainer.get?.('moduleService');
@@ -336,10 +351,14 @@ export async function dimensionComplete(ctx, args) {
     // R6: 全量 Semantic Memory 固化 (fire-and-forget)
     setImmediate(async () => {
       try {
-        const { EpisodicConsolidator } = await import('../../../service/agent/domain/EpisodicConsolidator.js');
+        const { EpisodicConsolidator } = await import(
+          '../../../service/agent/domain/EpisodicConsolidator.js'
+        );
         const db = ctx.container.get?.('database') ?? ctx.container.get?.('db');
         if (db && session.sessionStore) {
-          const { PersistentMemory } = await import('../../../service/agent/memory/PersistentMemory.js');
+          const { PersistentMemory } = await import(
+            '../../../service/agent/memory/PersistentMemory.js'
+          );
           const semanticMemory = new PersistentMemory(db, { logger });
           const consolidator = new EpisodicConsolidator(semanticMemory, { logger });
           const result = await consolidator.consolidate(session.sessionStore, {
@@ -351,7 +370,9 @@ export async function dimensionComplete(ctx, args) {
           );
         }
       } catch (e: any) {
-        logger.warn(`[DimensionComplete] SemanticMemory consolidation failed (non-blocking): ${e.message}`);
+        logger.warn(
+          `[DimensionComplete] SemanticMemory consolidation failed (non-blocking): ${e.message}`
+        );
       }
     });
   }
@@ -379,17 +400,15 @@ export async function dimensionComplete(ctx, args) {
       totalScore: qualityReport.totalScore,
       pass: qualityReport.pass,
       scores: qualityReport.scores,
-      suggestions: qualityReport.suggestions.length > 0
-        ? qualityReport.suggestions
-        : undefined,
+      suggestions: qualityReport.suggestions.length > 0 ? qualityReport.suggestions : undefined,
     };
     if (qualityReport.pass) {
       logger.info(
-        `[DimensionComplete] Quality assessment for "${dimensionId}": score=${qualityReport.totalScore}/100 PASS`,
+        `[DimensionComplete] Quality assessment for "${dimensionId}": score=${qualityReport.totalScore}/100 PASS`
       );
     } else {
       logger.warn(
-        `[DimensionComplete] Quality assessment for "${dimensionId}": score=${qualityReport.totalScore}/100 BELOW_THRESHOLD`,
+        `[DimensionComplete] Quality assessment for "${dimensionId}": score=${qualityReport.totalScore}/100 BELOW_THRESHOLD`
       );
     }
   }
@@ -432,16 +451,16 @@ export async function dimensionComplete(ctx, args) {
           return undefined;
         }
       })(),
-      sharedFiles: accumulatedEvidence.sharedFiles.length > 0
-        ? accumulatedEvidence.sharedFiles
-        : undefined,
-      negativeSignals: accumulatedEvidence.negativeSignals.length > 0
-        ? accumulatedEvidence.negativeSignals.map((s) => s.pattern)
-        : undefined,
-      usedTriggers: accumulatedEvidence.usedTriggers.length > 0
-        ? accumulatedEvidence.usedTriggers
-        : undefined,
-      _note: '以上为前序维度的分析证据，包含分析摘要和关键发现。请利用其中的文件引用和负空间信号，避免重复分析已覆盖的内容',
+      sharedFiles:
+        accumulatedEvidence.sharedFiles.length > 0 ? accumulatedEvidence.sharedFiles : undefined,
+      negativeSignals:
+        accumulatedEvidence.negativeSignals.length > 0
+          ? accumulatedEvidence.negativeSignals.map((s) => s.pattern)
+          : undefined,
+      usedTriggers:
+        accumulatedEvidence.usedTriggers.length > 0 ? accumulatedEvidence.usedTriggers : undefined,
+      _note:
+        '以上为前序维度的分析证据，包含分析摘要和关键发现。请利用其中的文件引用和负空间信号，避免重复分析已覆盖的内容',
     };
   }
 
@@ -456,8 +475,7 @@ export async function dimensionComplete(ctx, args) {
       completedDimensions: progress.completedDimIds,
       remainingDimensions: progress.remainingDimIds,
       isBootstrapComplete: isComplete,
-      accumulatedHints:
-        Object.keys(accumulatedHints).length > 0 ? accumulatedHints : undefined,
+      accumulatedHints: Object.keys(accumulatedHints).length > 0 ? accumulatedHints : undefined,
       // v2: 质量评估反馈
       qualityFeedback,
       // v2: 跨维度证据 (供后续维度利用)
@@ -470,5 +488,3 @@ export async function dimensionComplete(ctx, args) {
     },
   });
 }
-
-

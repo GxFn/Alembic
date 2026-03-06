@@ -162,7 +162,10 @@ export class CodeEntityGraph {
       }
 
       // ── 设计模式 (从 patternStats) ──
-      for (const [patternType, stat] of Object.entries(astSummary.patternStats || {}) as [string, any][]) {
+      for (const [patternType, stat] of Object.entries(astSummary.patternStats || {}) as [
+        string,
+        any,
+      ][]) {
         const patternId = `pattern:${patternType}`;
         this.#upsertEntity({
           entityId: patternId,
@@ -702,9 +705,7 @@ export class CodeEntityGraph {
 
       // 数据流边摘要
       const dataFlowCount = this.db
-        .prepare(
-          `SELECT COUNT(*) as cnt FROM knowledge_edges WHERE relation = 'data_flow'`
-        )
+        .prepare(`SELECT COUNT(*) as cnt FROM knowledge_edges WHERE relation = 'data_flow'`)
         .get();
 
       if (dataFlowCount?.cnt > 0) {
@@ -740,7 +741,9 @@ export class CodeEntityGraph {
       const registeredMethods = new Set();
       for (const edge of callEdges) {
         for (const fqn of [edge.caller, edge.callee]) {
-          if (registeredMethods.has(fqn)) continue;
+          if (registeredMethods.has(fqn)) {
+            continue;
+          }
           registeredMethods.add(fqn);
 
           const entityId = this._extractEntityId(fqn);
@@ -770,8 +773,12 @@ export class CodeEntityGraph {
           agg.callCount++;
           agg.callSites.push({ line: edge.line, isAwait: edge.isAwait });
           // 提升权重: direct 优先
-          if (edge.resolveMethod === 'direct') agg.resolveMethod = 'direct';
-          if (edge.isAwait) agg.hasAwait = true;
+          if (edge.resolveMethod === 'direct') {
+            agg.resolveMethod = 'direct';
+          }
+          if (edge.isAwait) {
+            agg.hasAwait = true;
+          }
         } else {
           aggregated.set(key, {
             callerId,
@@ -838,7 +845,9 @@ export class CodeEntityGraph {
 
     while (queue.length > 0) {
       const { id, depth } = queue.shift();
-      if (depth >= maxDepth || visited.has(id)) continue;
+      if (depth >= maxDepth || visited.has(id)) {
+        continue;
+      }
       visited.add(id);
 
       const callers = this.stmts.getCallers.all(id);
@@ -873,7 +882,9 @@ export class CodeEntityGraph {
 
     while (queue.length > 0) {
       const { id, depth } = queue.shift();
-      if (depth >= maxDepth || visited.has(id)) continue;
+      if (depth >= maxDepth || visited.has(id)) {
+        continue;
+      }
       visited.add(id);
 
       const callees = this.stmts.getCallees.all(id);
@@ -907,7 +918,9 @@ export class CodeEntityGraph {
 
     for (const c of callers) {
       const entity = this.getEntity(c.caller, 'method');
-      if (entity?.filePath) affectedFiles.add(entity.filePath);
+      if (entity?.filePath) {
+        affectedFiles.add(entity.filePath);
+      }
     }
 
     return {
@@ -957,7 +970,9 @@ export class CodeEntityGraph {
    * @returns {{ deletedEdges: number, deletedEntities: number }}
    */
   clearCallGraphForFiles(filePaths) {
-    if (!filePaths?.length) return { deletedEdges: 0, deletedEntities: 0 };
+    if (!filePaths?.length) {
+      return { deletedEdges: 0, deletedEntities: 0 };
+    }
 
     let deletedEdges = 0;
     let deletedEntities = 0;
@@ -993,7 +1008,7 @@ export class CodeEntityGraph {
 
     this.log.info(
       `[CodeEntityGraph] Incremental clear: ${deletedEdges} edges, ${deletedEntities} entities ` +
-      `for ${filePaths.length} files`
+        `for ${filePaths.length} files`
     );
 
     return { deletedEdges, deletedEntities };
@@ -1116,7 +1131,9 @@ export class CodeEntityGraph {
    * 从 AST 数据推断实体类型
    */
   #inferEntityType(name, astSummary) {
-    if (!name) return 'class'; // guard against undefined
+    if (!name) {
+      return 'class'; // guard against undefined
+    }
     if (astSummary.protocols?.some((p) => p.name === name)) {
       return 'protocol';
     }

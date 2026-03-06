@@ -19,7 +19,7 @@ export const DepType = Object.freeze({
   DISCOVERED_FROM: 'discovered-from',
   RELATED: 'related',
   KNOWLEDGE_REF: 'knowledge-ref', // AutoSnippet 独有：关联知识条目
-  SUPERSEDES: 'supersedes',       // 决策演化链：新决策取代旧决策
+  SUPERSEDES: 'supersedes', // 决策演化链：新决策取代旧决策
 });
 
 /** 所有合法的依赖类型值列表 */

@@ -91,19 +91,27 @@ export class AgentState extends EventEmitter {
     this.#data = { ...initialData };
     this.#transitions = [...DEFAULT_TRANSITIONS, ...transitions];
     this.#keepHistory = keepHistory;
-    this.#history = keepHistory ? [{ phase: initialPhase, data: { ...initialData }, timestamp: Date.now() }] : [];
+    this.#history = keepHistory
+      ? [{ phase: initialPhase, data: { ...initialData }, timestamp: Date.now() }]
+      : [];
   }
 
   // ─── 公共 API ────────────────────────────────
 
   /** 当前阶段 */
-  get phase() { return this.#phase; }
+  get phase() {
+    return this.#phase;
+  }
 
   /** 当前状态数据（只读 copy） */
-  get data() { return { ...this.#data }; }
+  get data() {
+    return { ...this.#data };
+  }
 
   /** 状态历史 */
-  get history() { return [...this.#history]; }
+  get history() {
+    return [...this.#history];
+  }
 
   /** Agent 是否处于终态 */
   get isTerminal() {
@@ -169,8 +177,8 @@ export class AgentState extends EventEmitter {
    */
   availableEvents() {
     return this.#transitions
-      .filter(t => t.from === this.#phase || t.from === '*')
-      .map(t => t.event);
+      .filter((t) => t.from === this.#phase || t.from === '*')
+      .map((t) => t.event);
   }
 
   /**
@@ -207,10 +215,12 @@ export class AgentState extends EventEmitter {
 
   #findTransition(event) {
     // 精确匹配优先
-    const exact = this.#transitions.find(t => t.from === this.#phase && t.event === event);
-    if (exact) return exact;
+    const exact = this.#transitions.find((t) => t.from === this.#phase && t.event === event);
+    if (exact) {
+      return exact;
+    }
     // 通配符匹配
-    return this.#transitions.find(t => t.from === '*' && t.event === event);
+    return this.#transitions.find((t) => t.from === '*' && t.event === event);
   }
 }
 

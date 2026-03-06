@@ -8,8 +8,8 @@
  */
 
 import { AgentFactory } from '../../service/agent/AgentFactory.js';
-import { ToolRegistry } from '../../service/agent/tools/ToolRegistry.js';
 import { ALL_TOOLS } from '../../service/agent/tools/index.js';
+import { ToolRegistry } from '../../service/agent/tools/ToolRegistry.js';
 import { SkillHooks } from '../../service/skills/SkillHooks.js';
 
 export function register(c) {

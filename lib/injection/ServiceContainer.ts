@@ -7,13 +7,12 @@ import { initEnhancementRegistry } from '../core/enhancement/index.js';
 import { GraphCache } from '../infrastructure/cache/GraphCache.js';
 // ─── P3: Infrastructure ──────────────────────────────
 import Logger from '../infrastructure/logging/Logger.js';
-
+import * as AgentModule from './modules/AgentModule.js';
+import * as AppModule from './modules/AppModule.js';
+import * as GuardModule from './modules/GuardModule.js';
 // ─── DI Modules ──────────────────────────────────────
 import * as InfraModule from './modules/InfraModule.js';
 import * as KnowledgeModule from './modules/KnowledgeModule.js';
-import * as GuardModule from './modules/GuardModule.js';
-import * as AgentModule from './modules/AgentModule.js';
-import * as AppModule from './modules/AppModule.js';
 
 /**
  * DependencyInjection 容器

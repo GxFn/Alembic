@@ -46,7 +46,9 @@ export class TaskIdGenerator {
     const uuid = uuidv4();
     const hash = createHash('sha256').update(uuid).digest('hex');
     const fallbackId = `${this._prefix}-${hash.substring(0, 6)}`;
-    if (!this._exists(fallbackId)) return fallbackId;
+    if (!this._exists(fallbackId)) {
+      return fallbackId;
+    }
     return `${this._prefix}-${hash.substring(0, 8)}`;
   }
 

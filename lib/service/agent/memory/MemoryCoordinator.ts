@@ -174,8 +174,19 @@ export class MemoryCoordinator {
    * @param {number} [safetyMargin=3000]
    * @returns {number}
    */
-  getMessageBudget(totalContextBudget, systemPromptEstimate = 2000, toolSchemaEstimate = 3000, safetyMargin = 3000) {
-    return totalContextBudget - this.#totalBudget - systemPromptEstimate - toolSchemaEstimate - safetyMargin;
+  getMessageBudget(
+    totalContextBudget,
+    systemPromptEstimate = 2000,
+    toolSchemaEstimate = 3000,
+    safetyMargin = 3000
+  ) {
+    return (
+      totalContextBudget -
+      this.#totalBudget -
+      systemPromptEstimate -
+      toolSchemaEstimate -
+      safetyMargin
+    );
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -251,12 +262,16 @@ export class MemoryCoordinator {
   buildDynamicMemoryPrompt(options: any = {}) {
     try {
       const acBudget = (this.#budgetAllocation.activeContext || 0) + (this._lastSurplus || 0);
-      if (acBudget <= 0) return '';
+      if (acBudget <= 0) {
+        return '';
+      }
 
       const ac = options.scopeId
         ? this.getActiveContext(options.scopeId)
         : this.#getCurrentActiveContext();
-      if (!ac) return '';
+      if (!ac) {
+        return '';
+      }
 
       return ac.buildContext(acBudget) || '';
     } catch (err: any) {
@@ -340,7 +355,9 @@ export class MemoryCoordinator {
    */
   extractFromConversation(prompt, reply, source) {
     // §7.6 step 4: 只写 PersistentMemory (不再双写 Memory.js)
-    if (!this.#persistentMemory) return;
+    if (!this.#persistentMemory) {
+      return;
+    }
 
     try {
       // ── 层 1: 规则快速匹配 (仅 user 源) ──
@@ -398,7 +415,9 @@ export class MemoryCoordinator {
    */
   getCachedResult(toolName, args) {
     try {
-      if (NON_CACHEABLE_TOOLS.has(toolName)) return null;
+      if (NON_CACHEABLE_TOOLS.has(toolName)) {
+        return null;
+      }
       return this.#sessionStore?.getCachedResult(toolName, args) ?? null;
     } catch {
       return null;
@@ -413,7 +432,9 @@ export class MemoryCoordinator {
    */
   cacheToolResult(toolName, args, result) {
     try {
-      if (NON_CACHEABLE_TOOLS.has(toolName)) return;
+      if (NON_CACHEABLE_TOOLS.has(toolName)) {
+        return;
+      }
       this.#sessionStore?.cacheToolResult(toolName, args, result);
     } catch {
       /* non-critical */
@@ -456,13 +477,10 @@ export class MemoryCoordinator {
       const distilled = ac ? ac.distill() : null;
 
       if (distilled && this.#sessionStore && report) {
-        this.#sessionStore.storeDimensionReport(
-          scopeId.replace(/:.*$/, ''),
-          {
-            ...report,
-            workingMemoryDistilled: distilled,
-          }
-        );
+        this.#sessionStore.storeDimensionReport(scopeId.replace(/:.*$/, ''), {
+          ...report,
+          workingMemoryDistilled: distilled,
+        });
       }
 
       // 清理 ActiveContext
@@ -508,7 +526,9 @@ export class MemoryCoordinator {
    */
   getActiveContext(scopeId) {
     const id = scopeId || this.#currentScopeId;
-    if (!id) return null;
+    if (!id) {
+      return null;
+    }
     return this.#activeContexts.get(id) || null;
   }
 
@@ -546,7 +566,9 @@ export class MemoryCoordinator {
    * @param {object} aiProvider
    */
   async onConversationUpdated(conversationId, aiProvider) {
-    if (!this.#conversationLog || !aiProvider) return;
+    if (!this.#conversationLog || !aiProvider) {
+      return;
+    }
     try {
       const messages = this.#conversationLog.load(conversationId, { tokenBudget: Infinity });
       if (messages.length >= 12) {
@@ -598,7 +620,11 @@ export class MemoryCoordinator {
 
   dispose() {
     for (const ac of this.#activeContexts.values()) {
-      try { ac.clear(); } catch { /* non-critical */ }
+      try {
+        ac.clear();
+      } catch {
+        /* non-critical */
+      }
     }
     this.#activeContexts.clear();
     this.#sessionStore = null;
@@ -615,7 +641,9 @@ export class MemoryCoordinator {
    * @returns {ActiveContext|null}
    */
   #getCurrentActiveContext() {
-    if (!this.#currentScopeId) return null;
+    if (!this.#currentScopeId) {
+      return null;
+    }
     return this.#activeContexts.get(this.#currentScopeId) || null;
   }
 
@@ -634,10 +662,14 @@ export class MemoryCoordinator {
    */
   #buildSessionStoreSection(options: any = {}) {
     const ss = this.#sessionStore;
-    if (!ss?.buildContextForDimension) return '';
+    if (!ss?.buildContextForDimension) {
+      return '';
+    }
 
     const dimId = options.currentDimId;
-    if (!dimId) return '';
+    if (!dimId) {
+      return '';
+    }
 
     try {
       return ss.buildContextForDimension(dimId, options.focusKeywords || []) || '';
@@ -652,7 +684,9 @@ export class MemoryCoordinator {
    * @returns {number}
    */
   #estimateTokens(text) {
-    if (!text) return 0;
+    if (!text) {
+      return 0;
+    }
     // 粗略: 英文 ~4 chars/token, 中文 ~2 chars/token
     const cjkCount = (text.match(/[\u4e00-\u9fff\u3000-\u303f]/g) || []).length;
     const restCount = text.length - cjkCount;

@@ -85,7 +85,7 @@ const IDE_STRONG_SIGNALS = [
   // 终端/构建命令
   /运行|执行|run.*command|exec|npm|yarn|pnpm|cargo|go run|python/i,
   /编译|build|compile|部署|deploy/i,
-  // Git 操作  
+  // Git 操作
   /commit|push|pull|merge|branch|rebase|cherry.?pick|stash|git\s+(log|status|diff|show|add|reset|checkout|switch|tag)/i,
   // 代码审查
   /review.*代码|看看.*写得|检查.*实现/i,
@@ -114,14 +114,16 @@ const BOT_STRONG_SIGNALS = [
 
 const CLASSIFY_SCHEMA = {
   name: 'classify_lark_intent',
-  description: 'Classify a Lark message to determine whether it should be handled by the Bot Agent (knowledge management on server) or forwarded to IDE Agent (coding in VSCode)',
+  description:
+    'Classify a Lark message to determine whether it should be handled by the Bot Agent (knowledge management on server) or forwarded to IDE Agent (coding in VSCode)',
   parameters: {
     type: 'object',
     properties: {
       intent: {
         type: 'string',
         enum: ['bot_agent', 'ide_agent'],
-        description: 'bot_agent: knowledge search/management/analysis/conversation tasks handled on the server. ide_agent: code writing/editing/debugging/refactoring/terminal tasks forwarded to VSCode Copilot.',
+        description:
+          'bot_agent: knowledge search/management/analysis/conversation tasks handled on the server. ide_agent: code writing/editing/debugging/refactoring/terminal tasks forwarded to VSCode Copilot.',
       },
       confidence: {
         type: 'number',
@@ -190,12 +192,16 @@ export class IntentClassifier {
 
     // ── Layer 1: 系统操作 (硬编码，零延迟) ──
     const sysMatch = this.#matchSystem(trimmed);
-    if (sysMatch) return sysMatch;
+    if (sysMatch) {
+      return sysMatch;
+    }
 
     // ── Layer 2: 强信号关键词匹配 ──
     const ruleMatch = this.#matchRules(trimmed);
     if (ruleMatch && ruleMatch.confidence >= 0.8) {
-      this.#logger.info(`[IntentClassifier] Rule match: ${ruleMatch.intent} (${ruleMatch.confidence})`);
+      this.#logger.info(
+        `[IntentClassifier] Rule match: ${ruleMatch.intent} (${ruleMatch.confidence})`
+      );
       return ruleMatch;
     }
 
@@ -203,13 +209,17 @@ export class IntentClassifier {
     if (this.#aiProvider && this.#aiProvider.name !== 'mock') {
       const llmResult = await this.#classifyWithLLM(trimmed, context);
       if (llmResult) {
-        this.#logger.info(`[IntentClassifier] LLM: ${llmResult.intent} (${llmResult.confidence}) — ${llmResult.reasoning}`);
+        this.#logger.info(
+          `[IntentClassifier] LLM: ${llmResult.intent} (${llmResult.confidence}) — ${llmResult.reasoning}`
+        );
         return llmResult;
       }
     }
 
     // ── Fallback: 使用规则结果或默认 bot_agent ──
-    if (ruleMatch) return ruleMatch;
+    if (ruleMatch) {
+      return ruleMatch;
+    }
 
     return {
       intent: Intent.BOT_AGENT,
@@ -263,7 +273,9 @@ export class IntentClassifier {
     }
 
     // 没有任何匹配 → null (交给 LLM)
-    if (ideScore === 0 && botScore === 0) return null;
+    if (ideScore === 0 && botScore === 0) {
+      return null;
+    }
 
     // 明确的分差
     if (ideScore > botScore && ideScore >= 2) {

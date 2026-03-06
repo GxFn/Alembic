@@ -43,7 +43,9 @@ const TOOL_COMPRESS_STRATEGIES = {
       lines.push(`搜索到 ${matches.length} 个匹配`);
       const fileGroups: Record<string, any> = {};
       for (const m of matches) {
-        if (!fileGroups[m.file]) fileGroups[m.file] = [];
+        if (!fileGroups[m.file]) {
+          fileGroups[m.file] = [];
+        }
         fileGroups[m.file].push(m.line);
       }
       for (const [file, lineNums] of Object.entries(fileGroups).slice(0, 8)) {
@@ -82,10 +84,18 @@ const TOOL_COMPRESS_STRATEGIES = {
       return String(result).substring(0, 600);
     }
     const lines = [`类 ${result.className || '?'}`];
-    if (result.superClass) lines.push(`  继承: ${result.superClass}`);
-    if (result.protocols?.length) lines.push(`  协议: ${result.protocols.join(', ')}`);
-    if (result.methods?.length) lines.push(`  方法数: ${result.methods.length}`);
-    if (result.properties?.length) lines.push(`  属性数: ${result.properties.length}`);
+    if (result.superClass) {
+      lines.push(`  继承: ${result.superClass}`);
+    }
+    if (result.protocols?.length) {
+      lines.push(`  协议: ${result.protocols.join(', ')}`);
+    }
+    if (result.methods?.length) {
+      lines.push(`  方法数: ${result.methods.length}`);
+    }
+    if (result.properties?.length) {
+      lines.push(`  属性数: ${result.properties.length}`);
+    }
     return lines.join('\n');
   },
 
@@ -118,7 +128,9 @@ const TOOL_COMPRESS_STRATEGIES = {
  */
 function defaultCompress(result, maxChars = 600) {
   const str = typeof result === 'string' ? result : JSON.stringify(result);
-  if (str.length <= maxChars) return str;
+  if (str.length <= maxChars) {
+    return str;
+  }
   return `${str.substring(0, maxChars)}…(truncated)`;
 }
 
@@ -281,7 +293,9 @@ export class ActiveContext {
    * @param {number} round
    */
   observe(toolName, result, round) {
-    if (this.#lightweight) return;
+    if (this.#lightweight) {
+      return;
+    }
     this.#totalObservations++;
     this.#recentObservations.push({ toolName, result, round, timestamp: Date.now() });
     while (this.#recentObservations.length > this.#maxRecentRounds) {
@@ -325,7 +339,14 @@ export class ActiveContext {
    */
   noteKeyFinding(finding, evidence: any = '', importance = 5, round = 0) {
     // P0 Fix: 防御性保证 evidence 是 string (AI 可能传入 array/object)
-    const safeEvidence = typeof evidence === 'string' ? evidence : Array.isArray(evidence) ? evidence.join(', ') : evidence ? String(evidence) : '';
+    const safeEvidence =
+      typeof evidence === 'string'
+        ? evidence
+        : Array.isArray(evidence)
+          ? evidence.join(', ')
+          : evidence
+            ? String(evidence)
+            : '';
     this.#scratchpad.push({
       finding,
       evidence: safeEvidence,
@@ -355,11 +376,15 @@ export class ActiveContext {
    */
   extractAndSetPlan(text, iteration) {
     const planText = this.#extractPlanFromText(text);
-    if (!planText) return false;
+    if (!planText) {
+      return false;
+    }
 
     // Guard: 已有计划时，仅在 expectPlan 授权下才覆盖
     // 防止 reflection/convergence 回复中的编号列表被误捕获为 plan
-    if (this.#plan && !this.#expectingPlan) return false;
+    if (this.#plan && !this.#expectingPlan) {
+      return false;
+    }
 
     this.#expectingPlan = false;
     if (this.#plan) {
@@ -401,7 +426,9 @@ export class ActiveContext {
    * @returns {Plan|null}
    */
   getPlan() {
-    if (!this.#plan) return null;
+    if (!this.#plan) {
+      return null;
+    }
     return {
       ...this.#plan,
       steps: this.#plan.steps.map((s) => ({ ...s })),
@@ -452,7 +479,9 @@ export class ActiveContext {
    * @returns {string} Markdown 格式的上下文块，空字符串表示无内容
    */
   buildContext(tokenBudget = Infinity) {
-    if (this.#lightweight) return '';
+    if (this.#lightweight) {
+      return '';
+    }
 
     const parts = [];
     let remaining = tokenBudget;
@@ -464,7 +493,9 @@ export class ActiveContext {
       for (const f of sorted) {
         const badge = f.importance >= 8 ? '⚠️' : f.importance >= 5 ? '📋' : '💡';
         let line = `- ${badge} [${f.importance}/10] ${f.finding}`;
-        if (f.evidence) line += ` (${f.evidence})`;
+        if (f.evidence) {
+          line += ` (${f.evidence})`;
+        }
         scratchLines.push(line);
       }
       const scratchSection = scratchLines.join('\n');
@@ -484,7 +515,9 @@ export class ActiveContext {
       for (const s of recent) {
         const line = `- [R${s.round}|${s.toolName}] ${s.summary.substring(0, 200)}`;
         const lineTokens = this.#estimateTokens(line);
-        if (lineTokens > remaining) break;
+        if (lineTokens > remaining) {
+          break;
+        }
         obsLines.push(line);
         remaining -= lineTokens;
       }
@@ -547,7 +580,9 @@ export class ActiveContext {
    */
   getRecentSummary(n = 3) {
     const recent = this.#rounds.slice(-n);
-    if (recent.length === 0) return null;
+    if (recent.length === 0) {
+      return null;
+    }
 
     const thoughts = recent
       .filter((r) => r.thought)
@@ -723,7 +758,9 @@ export class ActiveContext {
           ? Object.values(batchResults).reduce((s, br: any) => s + (br.matches?.length || 0), 0)
           : matches.length;
         meta.keyFacts.push(`${totalMatches} matches found`);
-        if (isNew) meta.keyFacts.push('new files discovered');
+        if (isNew) {
+          meta.keyFacts.push('new files discovered');
+        }
         break;
       }
       case 'read_project_file': {
@@ -848,7 +885,9 @@ export class ActiveContext {
    * @returns {Array<PlanStep>}
    */
   #parsePlanSteps(text) {
-    if (!text) return [];
+    if (!text) {
+      return [];
+    }
     const lines = text.split('\n');
     const steps = [];
     for (const line of lines) {
@@ -882,7 +921,9 @@ export class ActiveContext {
    * @returns {string|null}
    */
   #extractPlanFromText(text) {
-    if (!text || text.length < 30) return null;
+    if (!text || text.length < 30) {
+      return null;
+    }
 
     const searchArea = text.substring(0, 2000);
 
@@ -904,10 +945,14 @@ export class ActiveContext {
 
     if (planStart === -1) {
       const listMatch = searchArea.match(/\n\s*1[.)]\s+/);
-      if (listMatch) planStart = listMatch.index;
+      if (listMatch) {
+        planStart = listMatch.index;
+      }
     }
 
-    if (planStart === -1) return null;
+    if (planStart === -1) {
+      return null;
+    }
 
     const remaining = searchArea.substring(planStart);
     const lines = remaining.split('\n');
@@ -925,13 +970,17 @@ export class ActiveContext {
       }
     }
 
-    if (planLines.length < 2) return null;
+    if (planLines.length < 2) {
+      return null;
+    }
 
     // 防御: 拒绝 "大部分是疑问句" 的编号列表
     // reflection nudge 的 "请评估: 1. ...是什么？ 2. ...？" 会被 LLM 回显，
     // 不是真正的探索计划，不能捕获为 plan steps
-    const questionCount = planLines.filter(l => /[？?]\s*$/.test(l.trim())).length;
-    if (questionCount > planLines.length * 0.5) return null;
+    const questionCount = planLines.filter((l) => /[？?]\s*$/.test(l.trim())).length;
+    if (questionCount > planLines.length * 0.5) {
+      return null;
+    }
 
     return planLines.join('\n').trim();
   }

@@ -7,8 +7,8 @@
  */
 
 import { CoarseRanker } from './CoarseRanker.js';
-import { contextBoost } from './contextBoost.js';
 import { CrossEncoderReranker } from './CrossEncoderReranker.js';
+import { contextBoost } from './contextBoost.js';
 import { buildInvertedIndex, lookup } from './InvertedIndex.js';
 import { MultiSignalRanker } from './MultiSignalRanker.js';
 

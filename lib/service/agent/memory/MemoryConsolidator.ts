@@ -23,8 +23,7 @@ const SIMILARITY_MERGE = 0.6; // ≥60% 相关 → MERGE
 // ─── 矛盾检测模式 (Mem0 风格冲突解决) ─────────────────
 
 /** 中文否定/禁止模式 */
-const NEGATION_PATTERNS_ZH =
-  /不(再)?使用|不(再)?用|禁止|废弃|移除|取消|停止|不要|不采用|弃用|淘汰/;
+const NEGATION_PATTERNS_ZH = /不(再)?使用|不(再)?用|禁止|废弃|移除|取消|停止|不要|不采用|弃用|淘汰/;
 
 /** 英文否定/禁止模式 */
 const NEGATION_PATTERNS_EN =
@@ -150,7 +149,9 @@ export class MemoryConsolidator {
 
     try {
       const raw = fs.readFileSync(legacyPath, 'utf-8').trim();
-      if (!raw) return { migrated: 0, skipped: 0 };
+      if (!raw) {
+        return { migrated: 0, skipped: 0 };
+      }
 
       const lines = raw.split('\n').filter(Boolean);
       const candidates = lines
@@ -266,23 +267,31 @@ export class MemoryConsolidator {
    * @returns {boolean}
    */
   static #detectContradiction(contentA, contentB) {
-    if (!contentA || !contentB) return false;
+    if (!contentA || !contentB) {
+      return false;
+    }
 
     const aNeg = NEGATION_PATTERNS_ZH.test(contentA) || NEGATION_PATTERNS_EN.test(contentA);
     const bNeg = NEGATION_PATTERNS_ZH.test(contentB) || NEGATION_PATTERNS_EN.test(contentB);
 
-    if (aNeg === bNeg) return false;
+    if (aNeg === bNeg) {
+      return false;
+    }
 
     const wordsA = MemoryConsolidator.#extractTopicWords(contentA);
     const wordsB = MemoryConsolidator.#extractTopicWords(contentB);
 
     let overlap = 0;
     for (const w of wordsA) {
-      if (wordsB.has(w)) overlap++;
+      if (wordsB.has(w)) {
+        overlap++;
+      }
     }
 
     const minSize = Math.min(wordsA.size, wordsB.size);
-    if (minSize === 0) return false;
+    if (minSize === 0) {
+      return false;
+    }
 
     return overlap >= MIN_TOPIC_OVERLAP_WORDS || overlap / minSize >= MIN_TOPIC_OVERLAP_RATIO;
   }
@@ -293,7 +302,9 @@ export class MemoryConsolidator {
    * @returns {Set<string>}
    */
   static #extractTopicWords(text) {
-    if (!text) return new Set();
+    if (!text) {
+      return new Set();
+    }
 
     const tokens = text
       .toLowerCase()
@@ -301,13 +312,58 @@ export class MemoryConsolidator {
       .filter((t) => t.length >= 2);
 
     const stopWords = new Set([
-      '我们', '使用', '项目', '需要', '可以', '应该', '建议', '目前',
-      '已经', '这个', '那个', '一个', '进行', '通过', '对于',
-      'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-      'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
-      'could', 'should', 'may', 'might', 'shall', 'can', 'this',
-      'that', 'these', 'those', 'with', 'from', 'for', 'and',
-      'but', 'not', 'all', 'any', 'each', 'every', 'some',
+      '我们',
+      '使用',
+      '项目',
+      '需要',
+      '可以',
+      '应该',
+      '建议',
+      '目前',
+      '已经',
+      '这个',
+      '那个',
+      '一个',
+      '进行',
+      '通过',
+      '对于',
+      'the',
+      'is',
+      'are',
+      'was',
+      'were',
+      'be',
+      'been',
+      'being',
+      'have',
+      'has',
+      'had',
+      'do',
+      'does',
+      'did',
+      'will',
+      'would',
+      'could',
+      'should',
+      'may',
+      'might',
+      'shall',
+      'can',
+      'this',
+      'that',
+      'these',
+      'those',
+      'with',
+      'from',
+      'for',
+      'and',
+      'but',
+      'not',
+      'all',
+      'any',
+      'each',
+      'every',
+      'some',
     ]);
 
     return new Set(tokens.filter((t) => !stopWords.has(t)));
@@ -322,8 +378,6 @@ export class MemoryConsolidator {
     switch (legacyType) {
       case 'preference':
         return 'preference';
-      case 'decision':
-      case 'context':
       default:
         return 'fact';
     }

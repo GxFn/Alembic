@@ -2,13 +2,13 @@
 /**
  * postbuild script: Add shebang lines to compiled bin/ files
  * and set executable permissions.
- * 
+ *
  * This runs as a plain .mjs file (not compiled by tsc) because it's
  * part of the build pipeline itself.
  */
 
-import { readFileSync, writeFileSync, chmodSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,10 +26,7 @@ for (const file of binFiles) {
       writeFileSync(filePath, shebang + content);
     }
     chmodSync(filePath, 0o755);
-    console.log(`✓ ${file}: shebang + chmod`);
   } catch (err) {
     console.warn(`⚠ ${file}: ${err.message}`);
   }
 }
-
-console.log('postbuild done.');

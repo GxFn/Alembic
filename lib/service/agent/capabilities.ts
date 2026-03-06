@@ -32,22 +32,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Capability 基类 — 所有技能模块的抽象接口
  */
 export class Capability {
-  /** @param {Object} [_opts] */
-  constructor(_opts: any = {}) {}
-
   /** 能力名称 */
-  get name(): string { throw new Error('Subclass must implement name'); }
+  get name(): string {
+    throw new Error('Subclass must implement name');
+  }
 
   /** 系统提示词片段 */
-  get promptFragment(): string { throw new Error('Subclass must implement promptFragment'); }
+  get promptFragment(): string {
+    throw new Error('Subclass must implement promptFragment');
+  }
 
   /** 工具白名单 */
-  get tools(): string[] { return []; }
+  get tools(): string[] {
+    return [];
+  }
 
   /**
    * 构建 prompt 时调用，可注入动态上下文
    */
-  buildContext(_context: any): string | null { return null; }
+  buildContext(_context: any): string | null {
+    return null;
+  }
 
   /**
    * 每轮 ReAct 步骤前的钩子
@@ -87,11 +92,17 @@ export class Conversation extends Capability {
     // 加载 SOUL.md (人格定义)
     const soulPath = opts.soulPath || path.resolve(__dirname, '../../..', 'SOUL.md');
     try {
-      this.#soulContent = fs.existsSync(soulPath) ? fs.readFileSync(soulPath, 'utf-8').trim() : null;
-    } catch { this.#soulContent = null; }
+      this.#soulContent = fs.existsSync(soulPath)
+        ? fs.readFileSync(soulPath, 'utf-8').trim()
+        : null;
+    } catch {
+      this.#soulContent = null;
+    }
   }
 
-  get name() { return 'conversation'; }
+  get name() {
+    return 'conversation';
+  }
 
   get promptFragment() {
     return `## 对话能力
@@ -141,8 +152,12 @@ export class Conversation extends Capability {
         const memoryContext = this.#memoryCoordinator.buildPromptInjection(
           context.memoryMode || 'user'
         );
-        if (memoryContext) parts.push(`## 记忆上下文\n${memoryContext}`);
-      } catch { /* non-critical */ }
+        if (memoryContext) {
+          parts.push(`## 记忆上下文\n${memoryContext}`);
+        }
+      } catch {
+        /* non-critical */
+      }
     }
 
     return parts.length > 0 ? parts.join('\n\n') : null;
@@ -155,7 +170,9 @@ export class Conversation extends Capability {
         for (const tc of stepResult.toolCalls) {
           this.#memoryCoordinator.cacheToolResult?.(tc.tool, tc.args, tc.result);
         }
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
     }
   }
 }
@@ -169,8 +186,9 @@ export class Conversation extends Capability {
  * 用于: 用户聊天中的代码问题、冷启动分析、目标扫描
  */
 export class CodeAnalysis extends Capability {
-
-  get name() { return 'code_analysis'; }
+  get name() {
+    return 'code_analysis';
+  }
 
   get promptFragment() {
     return `## 代码分析能力
@@ -194,15 +212,24 @@ export class CodeAnalysis extends Capability {
   get tools() {
     return [
       // AST 结构
-      'get_project_overview', 'get_class_hierarchy', 'get_class_info',
-      'get_protocol_info', 'get_method_overrides', 'get_category_map',
+      'get_project_overview',
+      'get_class_hierarchy',
+      'get_class_info',
+      'get_protocol_info',
+      'get_method_overrides',
+      'get_category_map',
       // 搜索与读取
-      'search_project_code', 'read_project_file', 'list_project_structure',
-      'get_file_summary', 'semantic_search_code',
+      'search_project_code',
+      'read_project_file',
+      'list_project_structure',
+      'get_file_summary',
+      'semantic_search_code',
       // 图谱
       'query_code_graph',
       // 探索追踪
-      'get_previous_analysis', 'note_finding', 'get_previous_evidence',
+      'get_previous_analysis',
+      'note_finding',
+      'get_previous_evidence',
     ];
   }
 }
@@ -216,8 +243,9 @@ export class CodeAnalysis extends Capability {
  * 用于: 冷启动提交、扫描后提交、用户主动创建知识
  */
 export class KnowledgeProduction extends Capability {
-
-  get name() { return 'knowledge_production'; }
+  get name() {
+    return 'knowledge_production';
+  }
 
   get promptFragment() {
     return `## 知识生产能力
@@ -242,7 +270,8 @@ export class KnowledgeProduction extends Capability {
     // guard_check_code / validate_candidate 不需要：提交时 UnifiedValidator 已自动校验
     // 额外工具会分散 LLM 注意力，浪费 produce 轮次在验证而非提交上
     return [
-      'submit_knowledge', 'submit_with_check',
+      'submit_knowledge',
+      'submit_with_check',
       'read_project_file', // 获取代码片段用于知识正文
     ];
   }
@@ -275,7 +304,9 @@ export class SystemInteraction extends Capability {
     this.#projectRoot = opts.projectRoot || process.cwd();
   }
 
-  get name() { return 'system_interaction'; }
+  get name() {
+    return 'system_interaction';
+  }
 
   get promptFragment() {
     return `## 系统交互能力
@@ -332,8 +363,9 @@ export class SystemInteraction extends Capability {
  * 用于: scanKnowledge produce 阶段
  */
 export class ScanProduction extends Capability {
-
-  get name() { return 'scan_production'; }
+  get name() {
+    return 'scan_production';
+  }
 
   get promptFragment() {
     return `## 知识生产能力
@@ -356,8 +388,8 @@ export class ScanProduction extends Capability {
 
   get tools() {
     return [
-      'collect_scan_recipe',  // 扫描专用 Recipe 收集
-      'read_project_file',    // 获取代码片段
+      'collect_scan_recipe', // 扫描专用 Recipe 收集
+      'read_project_file', // 获取代码片段
     ];
   }
 }
@@ -388,7 +420,9 @@ export const CapabilityRegistry = {
    */
   create(name, opts: any = {}) {
     const Cls = this._registry.get(name);
-    if (!Cls) throw new Error(`Unknown capability: ${name}`);
+    if (!Cls) {
+      throw new Error(`Unknown capability: ${name}`);
+    }
     return new Cls(opts);
   },
 
@@ -402,7 +436,16 @@ export const CapabilityRegistry = {
   },
 
   /** 所有注册名 */
-  get names() { return [...this._registry.keys()]; },
+  get names() {
+    return [...this._registry.keys()];
+  },
 };
 
-export default { Capability, Conversation, CodeAnalysis, KnowledgeProduction, SystemInteraction, CapabilityRegistry };
+export default {
+  Capability,
+  Conversation,
+  CodeAnalysis,
+  KnowledgeProduction,
+  SystemInteraction,
+  CapabilityRegistry,
+};

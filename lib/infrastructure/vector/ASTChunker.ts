@@ -108,7 +108,9 @@ const LANG_ID_MAP = {
  * @returns {Promise<boolean>} 是否成功初始化
  */
 async function ensureParser() {
-  if (_astReady) return true;
+  if (_astReady) {
+    return true;
+  }
 
   try {
     // 触发 AST 插件的顶层 await loadPlugins()
@@ -130,7 +132,9 @@ async function ensureParser() {
  * @returns {boolean}
  */
 export function isASTChunkerAvailable(language) {
-  if (!_astReady || !_supportedLanguages) return false;
+  if (!_astReady || !_supportedLanguages) {
+    return false;
+  }
   const langId = LANG_ID_MAP[language] || language;
   const supported = _supportedLanguages();
   return supported.includes(langId);
@@ -156,7 +160,9 @@ export function isASTChunkerAvailable(language) {
 export function chunkByAST(content, language, metadata: any = {}, options: any = {}) {
   const { maxChunkTokens = 512 } = options;
 
-  if (!content || content.trim().length === 0) return [];
+  if (!content || content.trim().length === 0) {
+    return [];
+  }
 
   const langId = LANG_ID_MAP[language] || language;
   if (!_astReady || !_parseToTree) {
@@ -164,7 +170,9 @@ export function chunkByAST(content, language, metadata: any = {}, options: any =
   }
 
   const parsed = _parseToTree(content, langId);
-  if (!parsed?.rootNode) return null;
+  if (!parsed?.rootNode) {
+    return null;
+  }
 
   const rootNode = parsed.rootNode;
   const chunks = [];
@@ -173,7 +181,9 @@ export function chunkByAST(content, language, metadata: any = {}, options: any =
   // 遍历根节点的直接子节点
   for (let i = 0; i < rootNode.childCount; i++) {
     const child = rootNode.child(i);
-    if (!child) continue;
+    if (!child) {
+      continue;
+    }
 
     const nodeText = content.slice(child.startIndex, child.endIndex);
     const nodeTokens = estimateTokens(nodeText);
@@ -232,7 +242,9 @@ export function chunkByAST(content, language, metadata: any = {}, options: any =
   }
 
   // 如果 AST 没有产生任何 chunk (例如空文件), 返回 null 让 fallback 处理
-  if (chunks.length === 0) return null;
+  if (chunks.length === 0) {
+    return null;
+  }
 
   // 设置 chunkIndex 和 totalChunks
   for (let i = 0; i < chunks.length; i++) {
@@ -277,7 +289,9 @@ function splitLargeNode(node, source, metadata, maxChunkTokens) {
 
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
-    if (!child) continue;
+    if (!child) {
+      continue;
+    }
 
     const childText = source.slice(child.startIndex, child.endIndex);
     const childTokens = estimateTokens(childText);
@@ -354,7 +368,7 @@ function splitByLines(text, metadata, node, parentName, maxChunkTokens) {
   const chunks = [];
   let current = [];
   let currentTokens = 0;
-  const maxChars = maxChunkTokens * 4;
+  const _maxChars = maxChunkTokens * 4;
 
   for (const line of lines) {
     const lineTokens = estimateTokens(line);
@@ -397,9 +411,7 @@ function splitByLines(text, metadata, node, parentName, maxChunkTokens) {
  */
 function extractNodeName(node) {
   // 常见模式: 节点有 name 子节点
-  const nameNode =
-    node.childForFieldName?.('name') ||
-    node.childForFieldName?.('declarator');
+  const nameNode = node.childForFieldName?.('name') || node.childForFieldName?.('declarator');
 
   if (nameNode) {
     // 可能是 identifier, operator 等

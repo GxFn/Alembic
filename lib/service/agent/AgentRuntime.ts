@@ -30,18 +30,17 @@
 
 import { randomUUID } from 'node:crypto';
 import Logger from '../../infrastructure/logging/Logger.js';
-import { AgentState, AgentPhase } from './AgentState.js';
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
-import { PolicyEngine, BudgetPolicy, SafetyPolicy } from './policies.js';
-import { CapabilityRegistry, Capability } from './capabilities.js';
-import { limitToolResult } from './context/ContextWindow.js';
+import { AgentState } from './AgentState.js';
+import { Capability, CapabilityRegistry } from './capabilities.js';
 import { cleanFinalAnswer } from './core/ChatAgentPrompts.js';
-import { produceForcedSummary } from './forced-summary.js';
-import { createMessageAdapter } from './core/MessageAdapter.js';
+import { continueResult, LLMResultType } from './core/LLMResultType.js';
 import { LoopContext } from './core/LoopContext.js';
-import { createToolPipeline } from './core/ToolExecutionPipeline.js';
-import { LLMResultType, continueResult } from './core/LLMResultType.js';
+import { createMessageAdapter } from './core/MessageAdapter.js';
 import { SystemPromptBuilder } from './core/SystemPromptBuilder.js';
+import { createToolPipeline } from './core/ToolExecutionPipeline.js';
+import { produceForcedSummary } from './forced-summary.js';
+import { PolicyEngine } from './policies.js';
 
 /** 单次迭代允许的最大工具调用数 */
 const MAX_TOOL_CALLS_PER_ITER = 8;
@@ -146,12 +145,16 @@ export class AgentRuntime {
       initialData: { runtimeId: this.id, preset: this.presetName },
     });
 
-    this.bus.publish(AgentEvents.AGENT_CREATED, {
-      agentId: this.id,
-      preset: this.presetName,
-      capabilities: this.capabilities.map(c => c.name),
-      strategy: this.strategy?.name,
-    }, { source: this.id });
+    this.bus.publish(
+      AgentEvents.AGENT_CREATED,
+      {
+        agentId: this.id,
+        preset: this.presetName,
+        capabilities: this.capabilities.map((c) => c.name),
+        strategy: this.strategy?.name,
+      },
+      { source: this.id }
+    );
   }
 
   // ─── 公共 API ─────────────────────────────────
@@ -198,7 +201,10 @@ export class AgentRuntime {
 
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error(`Agent timeout after ${timeoutMs}ms`)), timeoutMs);
+      timeoutId = setTimeout(
+        () => reject(new Error(`Agent timeout after ${timeoutMs}ms`)),
+        timeoutMs
+      );
     });
 
     try {
@@ -225,22 +231,29 @@ export class AgentRuntime {
       result.state = this.state.toJSON();
       result.durationMs = Date.now() - this.startTime;
 
-      this.bus.publish(AgentEvents.AGENT_COMPLETED, {
-        agentId: this.id,
-        preset: this.presetName,
-        iterations: result.iterations,
-        durationMs: result.durationMs,
-      }, { source: this.id });
+      this.bus.publish(
+        AgentEvents.AGENT_COMPLETED,
+        {
+          agentId: this.id,
+          preset: this.presetName,
+          iterations: result.iterations,
+          durationMs: result.durationMs,
+        },
+        { source: this.id }
+      );
 
       return result;
-
     } catch (err: any) {
       clearTimeout(timeoutId);
       this.state.send('error', { error: err.message });
-      this.bus.publish(AgentEvents.AGENT_FAILED, {
-        agentId: this.id,
-        error: err.message,
-      }, { source: this.id });
+      this.bus.publish(
+        AgentEvents.AGENT_FAILED,
+        {
+          agentId: this.id,
+          error: err.message,
+        },
+        { source: this.id }
+      );
       throw err;
     }
   }
@@ -292,16 +305,26 @@ export class AgentRuntime {
       ctx.trace?.startRound(ctx.iteration);
 
       // 退出判定 (tracker + policy)
-      if (this.#shouldExit(ctx)) break;
+      if (this.#shouldExit(ctx)) {
+        break;
+      }
 
       // 迭代准备 (hooks + nudge + compact + toolChoice + prompt)
-      const { toolChoice, effectiveSystemPrompt, effectivePrompt } =
-        this.#prepareIteration(ctx);
+      const { toolChoice, effectiveSystemPrompt, effectivePrompt } = this.#prepareIteration(ctx);
 
       // LLM 调用 (含错误恢复 + 空响应重试)
-      const llmResult = await this.#callLLM(ctx, toolChoice, effectiveSystemPrompt, effectivePrompt);
-      if (!llmResult) break;
-      if (llmResult.type === LLMResultType.CONTINUE) continue;
+      const llmResult = await this.#callLLM(
+        ctx,
+        toolChoice,
+        effectiveSystemPrompt,
+        effectivePrompt
+      );
+      if (!llmResult) {
+        break;
+      }
+      if (llmResult.type === LLMResultType.CONTINUE) {
+        continue;
+      }
 
       // ActiveContext: 记录 AI 的推理文本 + 提取/更新计划
       if (ctx.trace && llmResult.text) {
@@ -312,12 +335,16 @@ export class AgentRuntime {
       // 分支: 有 Tool Call
       if (llmResult.functionCalls?.length > 0) {
         const exitAfterTools = await this.#processToolCalls(ctx, llmResult, effectiveSystemPrompt);
-        if (exitAfterTools) break;
+        if (exitAfterTools) {
+          break;
+        }
         continue;
       }
 
       // 分支: 纯文本回复
-      if (this.#processTextResponse(ctx, llmResult)) break;
+      if (this.#processTextResponse(ctx, llmResult)) {
+        break;
+      }
     }
 
     return this.#finalize(ctx);
@@ -333,9 +360,18 @@ export class AgentRuntime {
    */
   #initLoop(prompt, opts) {
     const {
-      history = [], context = {}, capabilityOverride, budgetOverride,
-      systemPromptOverride, onToolCall,
-      contextWindow, tracker, trace, memoryCoordinator, sharedState, source,
+      history = [],
+      context = {},
+      capabilityOverride,
+      budgetOverride,
+      systemPromptOverride,
+      onToolCall,
+      contextWindow,
+      tracker,
+      trace,
+      memoryCoordinator,
+      sharedState,
+      source,
       toolChoiceOverride,
     } = opts;
 
@@ -368,24 +404,33 @@ export class AgentRuntime {
     messages.appendUserMessage(prompt);
 
     // 预算
-    const budget = budgetOverride || this.policies.getBudget() || {
-      maxIterations: 20, maxTokens: 4096, temperature: 0.7,
-    };
+    const budget = budgetOverride ||
+      this.policies.getBudget() || {
+        maxIterations: 20,
+        maxTokens: 4096,
+        temperature: 0.7,
+      };
 
     // 系统源: 注入轮次预算 (委托 SystemPromptBuilder)
     baseSystemPrompt = SystemPromptBuilder.injectBudget(baseSystemPrompt, {
-      source, tracker, budget,
+      source,
+      tracker,
+      budget,
     });
 
     // 状态转移
     this.#safeTransition('start', { prompt: prompt.slice(0, 100) });
     this.#safeTransition('plan_ready');
 
-    this.bus.publish(AgentEvents.AGENT_STARTED, {
-      agentId: this.id,
-      prompt: prompt.slice(0, 100),
-      capabilities: caps.map(c => c.name),
-    }, { source: this.id });
+    this.bus.publish(
+      AgentEvents.AGENT_STARTED,
+      {
+        agentId: this.id,
+        prompt: prompt.slice(0, 100),
+        capabilities: caps.map((c) => c.name),
+      },
+      { source: this.id }
+    );
 
     return new LoopContext({
       messages,
@@ -437,7 +482,7 @@ export class AgentRuntime {
     // 保证 Analyst/Producer 各自有独立的超时边界，避免一个阶段消耗完所有时长
     if (ctx.budget?.timeoutMs && Date.now() - ctx.loopStartTime > ctx.budget.timeoutMs) {
       this.logger.info(
-        `[AgentRuntime] ⏰ Stage budget timeout: ${ctx.budget.timeoutMs}ms exceeded (elapsed: ${Date.now() - ctx.loopStartTime}ms)`,
+        `[AgentRuntime] ⏰ Stage budget timeout: ${ctx.budget.timeoutMs}ms exceeded (elapsed: ${Date.now() - ctx.loopStartTime}ms)`
       );
       return true;
     }
@@ -467,7 +512,7 @@ export class AgentRuntime {
    * @returns {{ toolChoice: string, effectiveSystemPrompt: string, effectivePrompt: string }}
    */
   #prepareIteration(ctx) {
-    const { tracker, trace, capabilities, messages, prompt } = ctx;
+    const { tracker, trace, capabilities: _capabilities, messages, prompt } = ctx;
     const maxIterations = ctx.maxIterations;
 
     this.#emitProgress('thinking', { iteration: ctx.iteration, maxIterations });
@@ -477,12 +522,8 @@ export class AgentRuntime {
       const nudge = tracker.getNudge(trace);
       if (nudge) {
         messages.appendUserNudge(nudge.text);
-        this.logger.info(
-          `[AgentRuntime] 💬 injected ${nudge.type} nudge at iter ${ctx.iteration}`
-        );
+        this.logger.info(`[AgentRuntime] 💬 injected ${nudge.type} nudge at iter ${ctx.iteration}`);
         const _dim = ctx.sharedState?._dimensionMeta?.id || '';
-        console.log(`\n\x1b[36m━━━ Nudge [${nudge.type}] iter=${ctx.iteration}${_dim ? ` dim=${_dim}` : ''} ━━━\x1b[0m`);
-        console.log(`\x1b[33m${nudge.text}\x1b[0m\n`);
       }
     }
 
@@ -504,9 +545,7 @@ export class AgentRuntime {
     } else if (tracker) {
       toolChoice = tracker.getToolChoice();
     } else {
-      toolChoice = ctx.toolSchemas.length > 0
-        ? (forceSummary ? 'none' : 'auto')
-        : 'none';
+      toolChoice = ctx.toolSchemas.length > 0 ? (forceSummary ? 'none' : 'auto') : 'none';
     }
 
     // 系统提示词增强 (阶段上下文 + 动态记忆)
@@ -522,7 +561,9 @@ export class AgentRuntime {
         mode: ctx.source || 'analyst',
         scopeId: ctx.context?.dimensionScopeId || null,
       });
-      if (wmContext) effectiveSystemPrompt += `\n\n${wmContext}`;
+      if (wmContext) {
+        effectiveSystemPrompt += `\n\n${wmContext}`;
+      }
     }
 
     // 非 tracker 模式的强制摘要提示注入
@@ -543,18 +584,25 @@ export class AgentRuntime {
    * @returns {Promise<Object|null>} llmResult 或 null (表示应退出)
    */
   async #callLLM(ctx, toolChoice, effectiveSystemPrompt, effectivePrompt) {
-    this.bus.publish(AgentEvents.LLM_CALL_START, {
-      agentId: this.id,
-      iteration: ctx.iteration,
-    }, { source: this.id });
+    this.bus.publish(
+      AgentEvents.LLM_CALL_START,
+      {
+        agentId: this.id,
+        iteration: ctx.iteration,
+      },
+      { source: this.id }
+    );
 
     let llmResult;
     try {
       // toolChoice='none' 时不发送 toolSchemas —— 部分 LLM (Gemini) 在看到
       // 工具定义但被禁止调用时会返回空内容，导致 SUMMARIZE 阶段失败
-      const effectiveToolSchemas = toolChoice === 'none'
-        ? undefined
-        : (ctx.toolSchemas.length > 0 ? ctx.toolSchemas : undefined);
+      const effectiveToolSchemas =
+        toolChoice === 'none'
+          ? undefined
+          : ctx.toolSchemas.length > 0
+            ? ctx.toolSchemas
+            : undefined;
       llmResult = await this.aiProvider.chatWithTools(effectivePrompt, {
         messages: ctx.messages.toMessages(),
         toolSchemas: effectiveToolSchemas,
@@ -570,24 +618,28 @@ export class AgentRuntime {
 
     // 累计 Token (runtime 级 + loop 级)
     if (llmResult.usage) {
-      this.tokenUsage.input += (llmResult.usage.inputTokens || 0);
-      this.tokenUsage.output += (llmResult.usage.outputTokens || 0);
+      this.tokenUsage.input += llmResult.usage.inputTokens || 0;
+      this.tokenUsage.output += llmResult.usage.outputTokens || 0;
       ctx.addTokenUsage(llmResult.usage);
     }
 
-    this.bus.publish(AgentEvents.LLM_CALL_END, {
-      agentId: this.id,
-      hasToolCalls: !!llmResult.functionCalls?.length,
-      hasText: !!llmResult.text,
-      usage: llmResult.usage,
-    }, { source: this.id });
+    this.bus.publish(
+      AgentEvents.LLM_CALL_END,
+      {
+        agentId: this.id,
+        hasToolCalls: !!llmResult.functionCalls?.length,
+        hasText: !!llmResult.text,
+        usage: llmResult.usage,
+      },
+      { source: this.id }
+    );
 
     // 空响应重试
     if (!llmResult.text && !llmResult.functionCalls?.length) {
       // B4 fix: SUMMARIZE 阶段也允许重试 — force_exit nudge 刚注入时 LLM 可能
       // 需要额外一轮才能生成有效输出。与 ExplorationTracker 的 2 轮 grace 对齐，
       // 避免 grace 机制被架空。重试次数由 tracker.phaseRounds 控制而非独立计数。
-      const isTerminal = ctx.tracker && (ctx.tracker.phase === 'SUMMARIZE');
+      const isTerminal = ctx.tracker && ctx.tracker.phase === 'SUMMARIZE';
       if (isTerminal) {
         const phaseRounds = ctx.tracker.metrics?.phaseRounds ?? 0;
         if (phaseRounds < 2) {
@@ -596,10 +648,12 @@ export class AgentRuntime {
             `[AgentRuntime] ⚠ empty response in SUMMARIZE — retrying (grace ${phaseRounds + 1}/2)`
           );
           // 不 rollbackTick: 让 tracker 计入 phaseRounds 以便到达 grace 上限退出
-          await new Promise(r => setTimeout(r, 1500));
+          await new Promise((r) => setTimeout(r, 1500));
           return continueResult();
         }
-        this.logger.warn('[AgentRuntime] ⚠ empty response in SUMMARIZE (grace exhausted) — proceeding to forced summary');
+        this.logger.warn(
+          '[AgentRuntime] ⚠ empty response in SUMMARIZE (grace exhausted) — proceeding to forced summary'
+        );
         return null;
       }
       if (ctx.isSystem && ctx.consecutiveEmptyResponses < 2) {
@@ -608,7 +662,7 @@ export class AgentRuntime {
           `[AgentRuntime] ⚠ empty response — retrying (${ctx.consecutiveEmptyResponses}/2)`
         );
         ctx.tracker?.rollbackTick?.();
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 1500));
         // 返回 CONTINUE 信号 — 调用方需重走循环
         return continueResult();
       }
@@ -664,7 +718,7 @@ export class AgentRuntime {
       return null;
     }
 
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 2000));
     return continueResult();
   }
 
@@ -700,10 +754,14 @@ export class AgentRuntime {
     for (const fc of activeCalls) {
       this.#emitProgress('tool_call', { tool: fc.name, args: fc.args });
 
-      this.bus.publish(AgentEvents.TOOL_CALL_START, {
-        agentId: this.id,
-        tool: fc.name,
-      }, { source: this.id });
+      this.bus.publish(
+        AgentEvents.TOOL_CALL_START,
+        {
+          agentId: this.id,
+          tool: fc.name,
+        },
+        { source: this.id }
+      );
 
       // 通过 Pipeline 执行 (safety → cache → execute → observe → track → trace → dedup)
       const { result: toolResult, metadata } = await this.#toolPipeline.execute(fc, {
@@ -717,21 +775,31 @@ export class AgentRuntime {
       ctx.toolCalls.push(toolEntry);
       this.toolCallHistory.push(toolEntry);
 
-      if (metadata.isNew) roundHasNewInfo = true;
+      if (metadata.isNew) {
+        roundHasNewInfo = true;
+      }
       roundToolNames.push(fc.name);
 
       // onToolCall 通知
       const effectiveHook = ctx.onToolCall || this.onToolCall;
       if (effectiveHook) {
-        try { effectiveHook(fc.name, fc.args, toolResult, ctx.iteration); } catch { /* 观察者错误不中断 */ }
+        try {
+          effectiveHook(fc.name, fc.args, toolResult, ctx.iteration);
+        } catch {
+          /* 观察者错误不中断 */
+        }
       }
 
-      this.bus.publish(AgentEvents.TOOL_CALL_END, {
-        agentId: this.id,
-        tool: fc.name,
-        durationMs,
-        success: !toolResult?.error,
-      }, { source: this.id });
+      this.bus.publish(
+        AgentEvents.TOOL_CALL_END,
+        {
+          agentId: this.id,
+          tool: fc.name,
+          durationMs,
+          success: !toolResult?.error,
+        },
+        { source: this.id }
+      );
 
       // 工具结果格式化 (统一通过 MessageAdapter)
       let resultStr = messages.formatToolResult(fc.name, toolResult);
@@ -770,8 +838,6 @@ export class AgentRuntime {
           `[AgentRuntime] 📝 injected ${transitionNudge.type} nudge (${tracker.phase})`
         );
         const _dimT = ctx.sharedState?._dimensionMeta?.id || '';
-        console.log(`\n\x1b[35m━━━ Transition Nudge [${transitionNudge.type}] phase=${tracker.phase}${_dimT ? ` dim=${_dimT}` : ''} ━━━\x1b[0m`);
-        console.log(`\x1b[33m${transitionNudge.text}\x1b[0m\n`);
       }
     }
 
@@ -810,8 +876,8 @@ export class AgentRuntime {
         maxTokens: ctx.budget.maxTokens ?? 4096,
       });
       if (summary.usage) {
-        this.tokenUsage.input += (summary.usage.inputTokens || 0);
-        this.tokenUsage.output += (summary.usage.outputTokens || 0);
+        this.tokenUsage.input += summary.usage.inputTokens || 0;
+        this.tokenUsage.output += summary.usage.outputTokens || 0;
         ctx.addTokenUsage(summary.usage);
       }
       ctx.lastReply = cleanFinalAnswer(summary.text || '');
@@ -851,8 +917,6 @@ export class AgentRuntime {
         messages.appendUserNudge(textResult.nudge);
         this.logger.info('[AgentRuntime] 📝 injected SUMMARIZE nudge (text-triggered transition)');
         const _dimD = ctx.sharedState?._dimensionMeta?.id || '';
-        console.log(`\n\x1b[34m━━━ Digest Nudge [SUMMARIZE]${_dimD ? ` dim=${_dimD}` : ''} ━━━\x1b[0m`);
-        console.log(`\x1b[33m${textResult.nudge}\x1b[0m\n`);
         trace?.endRound?.();
         return false; // continue
       }
@@ -862,8 +926,6 @@ export class AgentRuntime {
         if (textResult.nudge) {
           messages.appendUserNudge(textResult.nudge);
           const _dimC = ctx.sharedState?._dimensionMeta?.id || '';
-          console.log(`\n\x1b[32m━━━ Continue Nudge${_dimC ? ` dim=${_dimC}` : ''} ━━━\x1b[0m`);
-          console.log(`\x1b[33m${textResult.nudge}\x1b[0m\n`);
         }
         trace?.endRound?.();
         return false; // continue
@@ -885,7 +947,9 @@ export class AgentRuntime {
     // Scan pipeline: 所有结果在 toolCalls 中 (collect_scan_recipe)，不需要文本回复
     // 直接跳过 forced summary，避免浪费一次 LLM 调用
     if (!ctx.lastReply && ctx.tracker?.submitToolName === 'collect_scan_recipe') {
-      const recipeCount = ctx.toolCalls.filter(tc => (tc.tool || tc.name) === 'collect_scan_recipe').length;
+      const recipeCount = ctx.toolCalls.filter(
+        (tc) => (tc.tool || tc.name) === 'collect_scan_recipe'
+      ).length;
       ctx.lastReply = `[scan complete: ${recipeCount} recipes collected]`;
     }
 
@@ -902,8 +966,8 @@ export class AgentRuntime {
       });
       ctx.lastReply = forcedResult.reply;
       if (forcedResult.tokenUsage) {
-        this.tokenUsage.input += (forcedResult.tokenUsage.input || 0);
-        this.tokenUsage.output += (forcedResult.tokenUsage.output || 0);
+        this.tokenUsage.input += forcedResult.tokenUsage.input || 0;
+        this.tokenUsage.output += forcedResult.tokenUsage.output || 0;
         ctx.addTokenUsage({
           inputTokens: forcedResult.tokenUsage.input || 0,
           outputTokens: forcedResult.tokenUsage.output || 0,
@@ -921,10 +985,14 @@ export class AgentRuntime {
    */
   abort(reason = 'User aborted') {
     this.#safeTransition('abort', { reason });
-    this.bus.publish(AgentEvents.AGENT_ABORTED, {
-      agentId: this.id,
-      reason,
-    }, { source: this.id });
+    this.bus.publish(
+      AgentEvents.AGENT_ABORTED,
+      {
+        agentId: this.id,
+        reason,
+      },
+      { source: this.id }
+    );
   }
 
   /**
@@ -983,10 +1051,14 @@ export class AgentRuntime {
         hasUnlimited = true;
         break;
       }
-      for (const t of tools) toolSet.add(t);
+      for (const t of tools) {
+        toolSet.add(t);
+      }
     }
     // 合并调用方按需注入的额外工具 (不经 Capability，避免污染共享能力)
-    for (const t of this.#additionalTools) toolSet.add(t);
+    for (const t of this.#additionalTools) {
+      toolSet.add(t);
+    }
     return hasUnlimited ? [] : [...toolSet];
   }
 
@@ -994,13 +1066,21 @@ export class AgentRuntime {
    * 解析 capability 名称为实例 (Pipeline 阶段覆盖时调用)
    */
   #resolveCapabilities(capNames) {
-    if (capNames == null) return this.capabilities;
-    if (capNames.length === 0) return [];  // explicit empty = no tools
-    return capNames.map(name => {
-      if (typeof name === 'object' && name instanceof Capability) return name;
+    if (capNames == null) {
+      return this.capabilities;
+    }
+    if (capNames.length === 0) {
+      return []; // explicit empty = no tools
+    }
+    return capNames.map((name) => {
+      if (typeof name === 'object' && name instanceof Capability) {
+        return name;
+      }
       // 先在已加载的 capabilities 中查找
-      const existing = this.capabilities.find(c => c.name === name);
-      if (existing) return existing;
+      const existing = this.capabilities.find((c) => c.name === name);
+      if (existing) {
+        return existing;
+      }
       // 否则从注册表创建
       return CapabilityRegistry.create(name);
     });
@@ -1010,8 +1090,16 @@ export class AgentRuntime {
    * 发送进度事件
    */
   #emitProgress(type, data: any = {}) {
-    const event = { type, agentId: this.id, preset: this.presetName, ...data, timestamp: Date.now() };
-    if (this.onProgress) this.onProgress(event);
+    const event = {
+      type,
+      agentId: this.id,
+      preset: this.presetName,
+      ...data,
+      timestamp: Date.now(),
+    };
+    if (this.onProgress) {
+      this.onProgress(event);
+    }
     this.bus.publish(AgentEvents.PROGRESS, event, { source: this.id });
   }
 }

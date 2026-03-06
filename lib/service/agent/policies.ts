@@ -25,19 +25,29 @@ import _path from 'node:path';
  */
 export class Policy {
   /** @type {string} 策略名称 */
-  get name(): string { throw new Error('Subclass must implement name'); }
+  get name(): string {
+    throw new Error('Subclass must implement name');
+  }
 
   /** 执行前校验 — 拒绝不满足条件的请求 */
-  validateBefore(_context: any): { ok: boolean; reason?: string } { return { ok: true }; }
+  validateBefore(_context: any): { ok: boolean; reason?: string } {
+    return { ok: true };
+  }
 
   /** 执行中校验 — 每轮 ReAct 步骤后检查 */
-  validateDuring(_stepState: any): { ok: boolean; action?: string; reason?: string } { return { ok: true, action: 'continue' }; }
+  validateDuring(_stepState: any): { ok: boolean; action?: string; reason?: string } {
+    return { ok: true, action: 'continue' };
+  }
 
   /** 执行后校验 — 对最终结果质量把关 */
-  validateAfter(_result: any): { ok: boolean; reason?: string } { return { ok: true }; }
+  validateAfter(_result: any): { ok: boolean; reason?: string } {
+    return { ok: true };
+  }
 
   /** 修改配置 — 在执行前注入额外约束 */
-  applyToConfig(config: any): any { return config; }
+  applyToConfig(config: any): any {
+    return config;
+  }
 }
 
 // ─── BudgetPolicy — 资源预算 ─────────────────
@@ -77,19 +87,37 @@ export class BudgetPolicy extends Policy {
     this.#temperature = temperature;
   }
 
-  get name() { return 'budget'; }
+  get name() {
+    return 'budget';
+  }
 
-  get maxIterations() { return this.#maxIterations; }
-  get maxTokens() { return this.#maxTokens; }
-  get timeoutMs() { return this.#timeoutMs; }
-  get temperature() { return this.#temperature; }
+  get maxIterations() {
+    return this.#maxIterations;
+  }
+  get maxTokens() {
+    return this.#maxTokens;
+  }
+  get timeoutMs() {
+    return this.#timeoutMs;
+  }
+  get temperature() {
+    return this.#temperature;
+  }
 
   validateDuring(stepState) {
     if (stepState.iteration >= this.#maxIterations) {
-      return { ok: false, action: 'stop', reason: `Budget: max iterations (${this.#maxIterations}) reached` };
+      return {
+        ok: false,
+        action: 'stop',
+        reason: `Budget: max iterations (${this.#maxIterations}) reached`,
+      };
     }
     if (Date.now() - stepState.startTime > this.#timeoutMs) {
-      return { ok: false, action: 'stop', reason: `Budget: timeout (${this.#timeoutMs}ms) exceeded` };
+      return {
+        ok: false,
+        action: 'stop',
+        reason: `Budget: timeout (${this.#timeoutMs}ms) exceeded`,
+      };
     }
     return { ok: true, action: 'continue' };
   }
@@ -118,10 +146,9 @@ export class BudgetPolicy extends Policy {
  *   - 不局限于飞书场景 — CLI 远程执行同样适用
  */
 export class SafetyPolicy extends Policy {
-
   /** 危险命令正则黑名单 */
   static DANGEROUS_COMMANDS = Object.freeze([
-    /\brm\s+-rf\s+[\/~]/,
+    /\brm\s+-rf\s+[/~]/,
     /\bsudo\b/,
     /\bmkfs\b/,
     /\bdd\s+if=/,
@@ -135,10 +162,27 @@ export class SafetyPolicy extends Policy {
 
   /** 安全命令前缀白名单 */
   static SAFE_COMMANDS = Object.freeze([
-    'ls', 'cat', 'head', 'tail', 'grep', 'find', 'wc',
-    'echo', 'pwd', 'date', 'which', 'file', 'stat',
-    'git log', 'git status', 'git diff', 'git branch',
-    'npm list', 'npm outdated', 'node -v', 'npm -v',
+    'ls',
+    'cat',
+    'head',
+    'tail',
+    'grep',
+    'find',
+    'wc',
+    'echo',
+    'pwd',
+    'date',
+    'which',
+    'file',
+    'stat',
+    'git log',
+    'git status',
+    'git diff',
+    'git branch',
+    'npm list',
+    'npm outdated',
+    'node -v',
+    'npm -v',
   ]);
 
   #fileScope;
@@ -166,7 +210,9 @@ export class SafetyPolicy extends Policy {
     this.#requireApprovalFor = requireApprovalFor;
   }
 
-  get name() { return 'safety'; }
+  get name() {
+    return 'safety';
+  }
 
   validateBefore(context) {
     // 发送者鉴权
@@ -199,11 +245,16 @@ export class SafetyPolicy extends Policy {
    * @returns {{ safe: boolean, reason?: string }}
    */
   checkFilePath(filePath) {
-    if (!this.#fileScope) return { safe: true };
+    if (!this.#fileScope) {
+      return { safe: true };
+    }
     const resolved = _path.resolve(filePath);
     const scope = _path.resolve(this.#fileScope);
     if (!resolved.startsWith(scope)) {
-      return { safe: false, reason: `File path "${filePath}" outside allowed scope "${this.#fileScope}"` };
+      return {
+        safe: false,
+        reason: `File path "${filePath}" outside allowed scope "${this.#fileScope}"`,
+      };
     }
     return { safe: true };
   }
@@ -258,7 +309,9 @@ export class QualityGatePolicy extends Policy {
     this.#customValidator = customValidator || null;
   }
 
-  get name() { return 'quality_gate'; }
+  get name() {
+    return 'quality_gate';
+  }
 
   validateAfter(result) {
     const reasons = [];
@@ -268,7 +321,7 @@ export class QualityGatePolicy extends Policy {
     }
 
     if (result.reply) {
-      const fileRefCount = (result.reply.match(/[\w\/\-]+\.\w{1,6}/g) || []).length;
+      const fileRefCount = (result.reply.match(/[\w/-]+\.\w{1,6}/g) || []).length;
       if (fileRefCount < this.#minFileRefs) {
         reasons.push(`文件引用不足: ${fileRefCount} < ${this.#minFileRefs}`);
       }
@@ -280,12 +333,12 @@ export class QualityGatePolicy extends Policy {
 
     if (this.#customValidator) {
       const custom = this.#customValidator(result);
-      if (!custom.ok) reasons.push(custom.reason);
+      if (!custom.ok) {
+        reasons.push(custom.reason);
+      }
     }
 
-    return reasons.length === 0
-      ? { ok: true }
-      : { ok: false, reason: reasons.join('; ') };
+    return reasons.length === 0 ? { ok: true } : { ok: false, reason: reasons.join('; ') };
   }
 
   /** 导出为 PipelineStrategy gate 配置格式 */
@@ -319,7 +372,9 @@ export class PolicyEngine {
     this.#policies = policies;
   }
 
-  get policies() { return [...this.#policies]; }
+  get policies() {
+    return [...this.#policies];
+  }
 
   /**
    * 获取特定类型的 Policy
@@ -328,13 +383,15 @@ export class PolicyEngine {
    * @returns {T|null}
    */
   get(PolicyClass) {
-    return this.#policies.find(p => p instanceof PolicyClass) || null;
+    return this.#policies.find((p) => p instanceof PolicyClass) || null;
   }
 
   validateBefore(context) {
     for (const policy of this.#policies) {
       const result = policy.validateBefore(context);
-      if (!result.ok) return result;
+      if (!result.ok) {
+        return result;
+      }
     }
     return { ok: true };
   }
@@ -342,7 +399,9 @@ export class PolicyEngine {
   validateDuring(stepState) {
     for (const policy of this.#policies) {
       const result = policy.validateDuring(stepState);
-      if (!result.ok) return result;
+      if (!result.ok) {
+        return result;
+      }
     }
     return { ok: true, action: 'continue' };
   }
@@ -350,7 +409,9 @@ export class PolicyEngine {
   validateAfter(result) {
     for (const policy of this.#policies) {
       const val = policy.validateAfter(result);
-      if (!val.ok) return val;
+      if (!val.ok) {
+        return val;
+      }
     }
     return { ok: true };
   }
@@ -368,12 +429,14 @@ export class PolicyEngine {
    */
   getBudget() {
     const bp = this.get(BudgetPolicy);
-    return bp ? {
-      maxIterations: bp.maxIterations,
-      maxTokens: bp.maxTokens,
-      timeoutMs: bp.timeoutMs,
-      temperature: bp.temperature,
-    } : null;
+    return bp
+      ? {
+          maxIterations: bp.maxIterations,
+          maxTokens: bp.maxTokens,
+          timeoutMs: bp.timeoutMs,
+          temperature: bp.temperature,
+        }
+      : null;
   }
 
   /**
@@ -388,7 +451,9 @@ export class PolicyEngine {
    */
   validateToolCall(toolName, args) {
     const safety = this.get(SafetyPolicy);
-    if (!safety) return { ok: true };
+    if (!safety) {
+      return { ok: true };
+    }
 
     // 终端命令安全检查
     if (toolName === 'run_safe_command' && args?.command) {

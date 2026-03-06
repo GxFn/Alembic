@@ -108,7 +108,7 @@ program
         skipGuard: opts.skipGuard || false,
         contentMaxLines: 120,
         loadSkills: opts.skills !== false,
-        skipAsyncFill: !opts.wait,   // CLI 非 --wait 模式: 跳过异步 AI 填充 (DB 将被关闭)
+        skipAsyncFill: !opts.wait, // CLI 非 --wait 模式: 跳过异步 AI 填充 (DB 将被关闭)
       });
 
       spinner.stop();
@@ -128,7 +128,7 @@ program
         cli.log(`${'─'.repeat(50)}`);
 
         if (targets.length > 0) {
-          cli.log(`\n  Targets: ${targets.map(t => t.name || t).join(', ')}`);
+          cli.log(`\n  Targets: ${targets.map((t) => t.name || t).join(', ')}`);
         }
 
         if (Object.keys(langStats).length > 0) {
@@ -154,7 +154,9 @@ program
 
         // Guard 审计
         if (guardSummary) {
-          cli.log(`  Guard: ${guardSummary.totalViolations ?? guardSummary.total ?? '?'} violations (${guardSummary.errors ?? '?'} errors, ${guardSummary.warnings ?? '?'} warnings)`);
+          cli.log(
+            `  Guard: ${guardSummary.totalViolations ?? guardSummary.total ?? '?'} violations (${guardSummary.errors ?? '?'} errors, ${guardSummary.warnings ?? '?'} warnings)`
+          );
         }
 
         // 维度分析框架
@@ -342,7 +344,9 @@ program
       } else {
         const modeInfo = results.mode || opts.mode;
         const rankInfo = results.ranked ? ', ranked' : '';
-        cli.log(`\n🔍 ${results.items.length} result(s) for "${query}" [mode: ${modeInfo}${rankInfo}]\n`);
+        cli.log(
+          `\n🔍 ${results.items.length} result(s) for "${query}" [mode: ${modeInfo}${rankInfo}]\n`
+        );
         for (const item of results.items) {
           const badge = item.type === 'recipe' ? '📘' : item.type === 'solution' ? '💡' : '🛡️';
           const score = item.score ? ` [${(item.score * 100).toFixed(0)}%]` : '';
@@ -386,18 +390,31 @@ program
       const violations = engine.checkCode(code, language, { scope: opts.scope });
 
       if (opts.json) {
-        cli.json({ violations, summary: { total: violations.length, errors: violations.filter(v => v.severity === 'error').length, warnings: violations.filter(v => v.severity === 'warning').length } });
+        cli.json({
+          violations,
+          summary: {
+            total: violations.length,
+            errors: violations.filter((v) => v.severity === 'error').length,
+            warnings: violations.filter((v) => v.severity === 'warning').length,
+          },
+        });
       } else if (violations.length === 0) {
         cli.log('✅ No violations found.');
       } else {
         const errors = violations.filter((v) => v.severity === 'error');
         const warnings = violations.filter((v) => v.severity === 'warning');
-        cli.log(`\n🔍 Guard: ${violations.length} violation(s) — ${errors.length} error(s), ${warnings.length} warning(s)\n`);
+        cli.log(
+          `\n🔍 Guard: ${violations.length} violation(s) — ${errors.length} error(s), ${warnings.length} warning(s)\n`
+        );
         for (const v of violations) {
           const icon = v.severity === 'error' ? '❌' : v.severity === 'warning' ? '⚠️' : 'ℹ️';
           cli.log(`  ${icon} [${v.ruleId}] ${v.message}`);
-          if (v.line) cli.log(`    Line ${v.line}: ${v.snippet || ''}`);
-          if (v.fixSuggestion) cli.log(`    💡 Fix: ${v.fixSuggestion}`);
+          if (v.line) {
+            cli.log(`    Line ${v.line}: ${v.snippet || ''}`);
+          }
+          if (v.fixSuggestion) {
+            cli.log(`    💡 Fix: ${v.fixSuggestion}`);
+          }
         }
         cli.blank();
       }
@@ -534,7 +551,9 @@ program
       } else if (summary.totalViolations === 0) {
         cli.log(`✅ ${sourceFiles.length} staged file(s) checked — no violations.`);
       } else {
-        cli.log(`\n🔍 Guard (staged): ${summary.totalViolations} violation(s) in ${sourceFiles.length} file(s)\n`);
+        cli.log(
+          `\n🔍 Guard (staged): ${summary.totalViolations} violation(s) in ${sourceFiles.length} file(s)\n`
+        );
         const filesWithIssues = result.files.filter((f) => f.summary.total > 0);
         for (const file of filesWithIssues.slice(0, 10)) {
           cli.log(`  📄 ${file.filePath || file.path}`);
@@ -863,16 +882,20 @@ program
     const { getAiConfigInfo } = await import('../lib/external/ai/AiFactory.js');
     const aiInfo = getAiConfigInfo();
     cli.log(`  AI Provider:  ${aiInfo.provider || 'not configured'}`);
-    if (aiInfo.model) cli.log(`  AI Model:     ${aiInfo.model}`);
+    if (aiInfo.model) {
+      cli.log(`  AI Model:     ${aiInfo.model}`);
+    }
 
     // 检查数据库
     const dbPath = join(process.cwd(), '.autosnippet', 'autosnippet.db');
     const dbExists = existsSync(dbPath);
-    cli.log(`  Database:     ${dbExists ? '✅ ' + dbPath : '❌ not found'}`);
+    cli.log(`  Database:     ${dbExists ? `✅ ${dbPath}` : '❌ not found'}`);
 
     // 检查 .autosnippet 目录
     const asdDir = join(process.cwd(), '.autosnippet');
-    cli.log(`  Workspace:    ${existsSync(asdDir) ? '✅ .autosnippet/' : '❌ not initialized (run asd setup)'}`);
+    cli.log(
+      `  Workspace:    ${existsSync(asdDir) ? '✅ .autosnippet/' : '❌ not initialized (run asd setup)'}`
+    );
 
     // 检查依赖
     cli.log('  Dependencies:');
@@ -892,7 +915,9 @@ program
 // ─────────────────────────────────────────────────────
 program
   .command('upgrade')
-  .description('升级 IDE 集成（全量：MCP + Rules + Hooks + Instructions + Skills + Constitution + .gitignore）')
+  .description(
+    '升级 IDE 集成（全量：MCP + Rules + Hooks + Instructions + Skills + Constitution + .gitignore）'
+  )
   .option('-d, --dir <path>', '项目目录', '.')
   .option('--skills-only', '仅更新 Skills')
   .option('--mcp-only', '仅更新 MCP 配置')
@@ -924,8 +949,12 @@ program
       cli.log('\n  Cursor Rules Delivery');
       cli.log(`  ${'─'.repeat(40)}`);
       cli.log(`  Channel A: ${result.channelA?.count ?? '?'} always-on rules`);
-      cli.log(`  Channel B: ${result.channelB?.count ?? Object.keys(result.channelB?.topics || {}).length} topic rules`);
-      cli.log(`  Channel C: ${result.channelC?.count ?? '?'} skills (${result.channelC?.errors ?? 0} errors)`);
+      cli.log(
+        `  Channel B: ${result.channelB?.count ?? Object.keys(result.channelB?.topics || {}).length} topic rules`
+      );
+      cli.log(
+        `  Channel C: ${result.channelC?.count ?? '?'} skills (${result.channelC?.errors ?? 0} errors)`
+      );
       if (result.channelC.errors > 0) {
         cli.log(`  ⚠️  ${result.channelC.errors} skill(s) failed to deliver`);
       }
@@ -933,7 +962,9 @@ program
       if (opts.verbose && result.channelB.topics) {
         cli.log('\n  Channel B Topics:');
         for (const [topic, info] of Object.entries(result.channelB.topics)) {
-          cli.log(`    ${topic}: ${(info as any).count ?? (info as any).rules?.length ?? '?'} rules`);
+          cli.log(
+            `    ${topic}: ${(info as any).count ?? (info as any).rules?.length ?? '?'} rules`
+          );
         }
       }
       cli.blank();
@@ -961,7 +992,9 @@ taskCmd
     try {
       const svc = container.get('taskGraphService');
       const filters: any = {};
-      if (opts.status) filters.status = opts.status;
+      if (opts.status) {
+        filters.status = opts.status;
+      }
       const tasks = await svc.list(filters, { limit: parseInt(opts.limit, 10) });
       if (tasks.length === 0) {
         cli.log('No tasks found.');
@@ -1003,10 +1036,12 @@ taskCmd
           const j = t.toJSON ? t.toJSON() : t;
           cli.log(`\n  ▸ ${j.id} — ${j.title} (P${j.priority ?? '?'})`);
           if (t.knowledgeContext?.relatedKnowledge?.length) {
-            cli.log(`    Knowledge: ${t.knowledgeContext.relatedKnowledge.map(k => k.title).join(', ')}`);
+            cli.log(
+              `    Knowledge: ${t.knowledgeContext.relatedKnowledge.map((k) => k.title).join(', ')}`
+            );
           }
           if (t.knowledgeContext?.guardRules?.length) {
-            cli.log(`    Guard: ${t.knowledgeContext.guardRules.map(r => r.title).join(', ')}`);
+            cli.log(`    Guard: ${t.knowledgeContext.guardRules.map((r) => r.title).join(', ')}`);
           }
         }
         cli.blank();

@@ -570,7 +570,9 @@ export class WikiGenerator {
     } else if (shouldUseInferredModules) {
       // 无有效模块边界(无 targets 或 generic 单 target) → 从 sourceFilesByModule 推断模块
       const sfm = projectInfo.sourceFilesByModule || {};
-      const sorted = (Object.entries(sfm) as [string, any][]).sort((a, b) => b[1].length - a[1].length);
+      const sorted = (Object.entries(sfm) as [string, any][]).sort(
+        (a, b) => b[1].length - a[1].length
+      );
       for (const [modName, modFiles] of sorted) {
         if (modFiles.length < 2) {
           continue;
@@ -609,7 +611,9 @@ export class WikiGenerator {
         groups[cat].push(json);
       }
 
-      const catEntries = (Object.entries(groups) as [string, any][]).sort((a, b) => b[1].length - a[1].length);
+      const catEntries = (Object.entries(groups) as [string, any][]).sort(
+        (a, b) => b[1].length - a[1].length
+      );
 
       if (catEntries.length <= 3 || knowledgeInfo.recipes.length < 15) {
         // 合并为一篇

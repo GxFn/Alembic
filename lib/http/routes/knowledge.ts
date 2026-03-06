@@ -9,7 +9,12 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
-import { getContext, safeInt, sanitizeForAPI, sanitizePaginatedForAPI } from '../utils/routeHelpers.js';
+import {
+  getContext,
+  safeInt,
+  sanitizeForAPI,
+  sanitizePaginatedForAPI,
+} from '../utils/routeHelpers.js';
 
 const _logger = Logger.getInstance();
 const router = express.Router();
@@ -245,7 +250,9 @@ router.post(
       ids.map((id) => knowledgeService.publish(id, context))
     );
 
-    const published = results.filter((r) => r.status === 'fulfilled').map((r) => sanitizeForAPI(r.value));
+    const published = results
+      .filter((r) => r.status === 'fulfilled')
+      .map((r) => sanitizeForAPI(r.value));
     const failed = results
       .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message } : null))
       .filter(Boolean);

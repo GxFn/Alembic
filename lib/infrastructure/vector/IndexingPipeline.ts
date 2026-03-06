@@ -13,8 +13,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import { LanguageService } from '../../shared/LanguageService.js';
-import { chunk } from './Chunker.js';
 import { BatchEmbedder } from './BatchEmbedder.js';
+import { chunk } from './Chunker.js';
 
 const SCANNABLE_EXTENSIONS = new Set([
   '.md',
@@ -116,12 +116,16 @@ export class IndexingPipeline {
 
         // 分块 (使用 Chunker v2 - 支持 AST 策略)
         const language = this.#detectLanguage(file.absolutePath);
-        const chunks = chunk(content, {
-          type: file.type,
-          sourcePath: file.relativePath,
-          sourceHash: hash,
-          language,
-        }, this.#chunkingOptions);
+        const chunks = chunk(
+          content,
+          {
+            type: file.type,
+            sourcePath: file.relativePath,
+            sourceHash: hash,
+            language,
+          },
+          this.#chunkingOptions
+        );
         stats.chunked += chunks.length;
 
         // 收集 chunks

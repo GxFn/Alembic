@@ -35,7 +35,9 @@ class MinHeap {
   }
 
   pop() {
-    if (this.#data.length === 0) return null;
+    if (this.#data.length === 0) {
+      return null;
+    }
     const top = this.#data[0];
     const last = this.#data.pop();
     if (this.#data.length > 0 && last) {
@@ -53,7 +55,9 @@ class MinHeap {
     const data = this.#data;
     while (i > 0) {
       const parent = (i - 1) >> 1;
-      if (data[parent].dist <= data[i].dist) break;
+      if (data[parent].dist <= data[i].dist) {
+        break;
+      }
       [data[parent], data[i]] = [data[i], data[parent]];
       i = parent;
     }
@@ -66,9 +70,15 @@ class MinHeap {
       let smallest = i;
       const left = 2 * i + 1;
       const right = 2 * i + 2;
-      if (left < n && data[left].dist < data[smallest].dist) smallest = left;
-      if (right < n && data[right].dist < data[smallest].dist) smallest = right;
-      if (smallest === i) break;
+      if (left < n && data[left].dist < data[smallest].dist) {
+        smallest = left;
+      }
+      if (right < n && data[right].dist < data[smallest].dist) {
+        smallest = right;
+      }
+      if (smallest === i) {
+        break;
+      }
       [data[smallest], data[i]] = [data[i], data[smallest]];
       i = smallest;
     }
@@ -93,7 +103,9 @@ class MaxHeap {
   }
 
   pop() {
-    if (this.#data.length === 0) return null;
+    if (this.#data.length === 0) {
+      return null;
+    }
     const top = this.#data[0];
     const last = this.#data.pop();
     if (this.#data.length > 0 && last) {
@@ -112,7 +124,9 @@ class MaxHeap {
     const data = this.#data;
     while (i > 0) {
       const parent = (i - 1) >> 1;
-      if (data[parent].dist >= data[i].dist) break;
+      if (data[parent].dist >= data[i].dist) {
+        break;
+      }
       [data[parent], data[i]] = [data[i], data[parent]];
       i = parent;
     }
@@ -125,9 +139,15 @@ class MaxHeap {
       let largest = i;
       const left = 2 * i + 1;
       const right = 2 * i + 2;
-      if (left < n && data[left].dist > data[largest].dist) largest = left;
-      if (right < n && data[right].dist > data[largest].dist) largest = right;
-      if (largest === i) break;
+      if (left < n && data[left].dist > data[largest].dist) {
+        largest = left;
+      }
+      if (right < n && data[right].dist > data[largest].dist) {
+        largest = right;
+      }
+      if (largest === i) {
+        break;
+      }
       [data[largest], data[i]] = [data[i], data[largest]];
       i = largest;
     }
@@ -138,19 +158,19 @@ class MaxHeap {
 
 export class HnswIndex {
   // ── 超参数 ──
-  M;             // 每层最大邻居数
-  M0;            // L0 层最大邻居数 (= 2*M)
-  efConstruct;   // 构建时搜索宽度
-  efSearch;      // 查询时搜索宽度
-  mL;            // 层级采样因子 = 1 / ln(M)
+  M; // 每层最大邻居数
+  M0; // L0 层最大邻居数 (= 2*M)
+  efConstruct; // 构建时搜索宽度
+  efSearch; // 查询时搜索宽度
+  mL; // 层级采样因子 = 1 / ln(M)
 
   // ── 存储 ──
   /** @type {Array<{ id: string, vector: Float32Array|number[], level: number }>} */
   nodes = [];
   /** @type {Array<Map<number, Set<number>>>} graphs — per-level adjacency: graphs[level].get(nodeIdx) → Set<neighborIdx> */
   graphs: any[] = [];
-  entryPoint = -1;   // 入口节点索引
-  maxLevel = -1;     // 当前最大层级
+  entryPoint = -1; // 入口节点索引
+  maxLevel = -1; // 当前最大层级
   /** @type {Map<string, number>} id → nodeIdx */
   idToIndex = new Map();
 
@@ -189,7 +209,9 @@ export class HnswIndex {
    * @returns {number}
    */
   distance(a, b) {
-    if (this.#distanceFn) return this.#distanceFn(a, b);
+    if (this.#distanceFn) {
+      return this.#distanceFn(a, b);
+    }
     return cosineDistance(a, b);
   }
 
@@ -221,7 +243,9 @@ export class HnswIndex {
    */
   #getNeighbors(level, nodeIdx) {
     const graph = this.graphs[level];
-    if (!graph) return new Set();
+    if (!graph) {
+      return new Set();
+    }
     let neighbors = graph.get(nodeIdx);
     if (!neighbors) {
       neighbors = new Set();
@@ -305,15 +329,21 @@ export class HnswIndex {
    */
   removePoint(id) {
     const nodeIdx = this.idToIndex.get(id);
-    if (nodeIdx === undefined) return;
+    if (nodeIdx === undefined) {
+      return;
+    }
 
     const node = this.nodes[nodeIdx];
-    if (!node) return;
+    if (!node) {
+      return;
+    }
 
     // 断开所有层级的连接
     for (let level = 0; level <= node.level; level++) {
       const graph = this.graphs[level];
-      if (!graph) continue;
+      if (!graph) {
+        continue;
+      }
 
       const neighbors = graph.get(nodeIdx);
       if (neighbors) {
@@ -391,12 +421,25 @@ export class HnswIndex {
     // Phase 1: 从顶层贪心搜索到 L1 (使用 SQ8 距离加速, 如果可用)
     let current = this.entryPoint;
     for (let level = this.maxLevel; level > 0; level--) {
-      current = this.#greedySearch(queryVector, current, level, use2Pass ? quantizer : null, quantizedQuery);
+      current = this.#greedySearch(
+        queryVector,
+        current,
+        level,
+        use2Pass ? quantizer : null,
+        quantizedQuery
+      );
     }
 
     // Phase 2: L0 层做 efSearch 宽度搜索 (SQ8 粗排)
     const ef = Math.max(this.efSearch, k);
-    const candidates = this.#searchLayer(queryVector, current, ef, 0, use2Pass ? quantizer : null, quantizedQuery);
+    const candidates = this.#searchLayer(
+      queryVector,
+      current,
+      ef,
+      0,
+      use2Pass ? quantizer : null,
+      quantizedQuery
+    );
 
     // Phase 3: 2-pass 精排 — 用 Float32 精确余弦距离重新排序候选
     if (use2Pass) {
@@ -429,7 +472,9 @@ export class HnswIndex {
   #greedySearch(query, entryNodeIdx, level, quantizer = null, quantizedQuery = null) {
     let current = entryNodeIdx;
     const currentNode = this.nodes[current];
-    if (!currentNode) return current;
+    if (!currentNode) {
+      return current;
+    }
 
     let currentDist = this.#dist(query, currentNode, quantizer, quantizedQuery);
 
@@ -439,7 +484,9 @@ export class HnswIndex {
       const neighbors = this.#getNeighbors(level, current);
       for (const neighborIdx of neighbors) {
         const neighbor = this.nodes[neighborIdx];
-        if (!neighbor) continue; // 已删除的节点
+        if (!neighbor) {
+          continue; // 已删除的节点
+        }
         const dist = this.#dist(query, neighbor, quantizer, quantizedQuery);
         if (dist < currentDist) {
           current = neighborIdx;
@@ -463,7 +510,9 @@ export class HnswIndex {
    */
   #searchLayer(query, entryNodeIdx, ef, level, quantizer = null, quantizedQuery = null) {
     const entryNode = this.nodes[entryNodeIdx];
-    if (!entryNode) return [];
+    if (!entryNode) {
+      return [];
+    }
 
     const visited = new Set([entryNodeIdx]);
     const entryDist = this.#dist(query, entryNode, quantizer, quantizedQuery);
@@ -488,11 +537,15 @@ export class HnswIndex {
       // 探索最近候选的邻居
       const neighbors = this.#getNeighbors(level, nearest.nodeIdx);
       for (const neighborIdx of neighbors) {
-        if (visited.has(neighborIdx)) continue;
+        if (visited.has(neighborIdx)) {
+          continue;
+        }
         visited.add(neighborIdx);
 
         const neighbor = this.nodes[neighborIdx];
-        if (!neighbor) continue; // 已删除
+        if (!neighbor) {
+          continue; // 已删除
+        }
 
         const dist = this.#dist(query, neighbor, quantizer, quantizedQuery);
         const currentFarthest = results.peek();
@@ -532,9 +585,7 @@ export class HnswIndex {
    * @returns {Array<{ nodeIdx: number, dist: number }>}
    */
   #selectNeighborsSimple(candidates, maxNeighbors) {
-    return candidates
-      .sort((a, b) => a.dist - b.dist)
-      .slice(0, maxNeighbors);
+    return candidates.sort((a, b) => a.dist - b.dist).slice(0, maxNeighbors);
   }
 
   /**
@@ -546,16 +597,22 @@ export class HnswIndex {
    */
   #pruneConnections(nodeIdx, level, maxNeighbors) {
     const node = this.nodes[nodeIdx];
-    if (!node) return;
+    if (!node) {
+      return;
+    }
 
     const neighbors = this.#getNeighbors(level, nodeIdx);
-    if (neighbors.size <= maxNeighbors) return;
+    if (neighbors.size <= maxNeighbors) {
+      return;
+    }
 
     // 计算所有邻居的距离, 保留最近的
     const scored = [];
     for (const nIdx of neighbors) {
       const nNode = this.nodes[nIdx];
-      if (!nNode) continue;
+      if (!nNode) {
+        continue;
+      }
       scored.push({ nodeIdx: nIdx, dist: this.distance(node.vector, nNode.vector) });
     }
     scored.sort((a, b) => a.dist - b.dist);
@@ -681,7 +738,9 @@ export class HnswIndex {
  * @returns {number}
  */
 export function cosineDistance(a, b) {
-  if (!a || !b || a.length === 0 || b.length === 0) return 1;
+  if (!a || !b || a.length === 0 || b.length === 0) {
+    return 1;
+  }
   const len = Math.min(a.length, b.length);
   let dot = 0;
   let normA = 0;
@@ -692,7 +751,9 @@ export function cosineDistance(a, b) {
     normB += b[i] * b[i];
   }
   const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  if (denom === 0) return 1;
+  if (denom === 0) {
+    return 1;
+  }
   const similarity = dot / denom;
   return 1 - similarity;
 }

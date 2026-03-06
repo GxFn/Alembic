@@ -71,7 +71,8 @@ export const collectScanRecipe = {
       usageGuide: { type: 'string', description: '使用指南（何时/如何使用）' },
       knowledgeType: {
         type: 'string',
-        description: 'code-pattern / architecture / best-practice / code-standard / data-flow / solution 等',
+        description:
+          'code-pattern / architecture / best-practice / code-standard / data-flow / solution 等',
       },
 
       // ── 推理 ──
@@ -80,7 +81,11 @@ export const collectScanRecipe = {
         description: '{ whyStandard: "原因", sources: ["file.ts"], confidence: 0.85 }',
         properties: {
           whyStandard: { type: 'string', description: '为什么这是标准做法（必填）' },
-          sources: { type: 'array', items: { type: 'string' }, description: '参考的文件路径数组（必填）' },
+          sources: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '参考的文件路径数组（必填）',
+          },
           confidence: { type: 'number', description: '置信度 0.0-1.0' },
         },
         required: ['whyStandard', 'sources'],
@@ -91,10 +96,21 @@ export const collectScanRecipe = {
       scope: { type: 'string', enum: ['universal', 'project-specific', 'target-specific'] },
     },
     required: [
-      'title', 'language', 'content', 'kind',
-      'doClause', 'dontClause', 'whenClause', 'coreCode',
-      'category', 'trigger', 'description',
-      'headers', 'usageGuide', 'knowledgeType', 'reasoning',
+      'title',
+      'language',
+      'content',
+      'kind',
+      'doClause',
+      'dontClause',
+      'whenClause',
+      'coreCode',
+      'category',
+      'trigger',
+      'description',
+      'headers',
+      'usageGuide',
+      'knowledgeType',
+      'reasoning',
     ],
   },
 
@@ -119,7 +135,9 @@ export const collectScanRecipe = {
     if (!params.reasoning || typeof params.reasoning !== 'object') {
       errors.push('reasoning 必须是对象');
     } else {
-      if (!params.reasoning.whyStandard) errors.push('reasoning.whyStandard 是必填字段');
+      if (!params.reasoning.whyStandard) {
+        errors.push('reasoning.whyStandard 是必填字段');
+      }
       if (!Array.isArray(params.reasoning.sources) || params.reasoning.sources.length === 0) {
         errors.push('reasoning.sources 必须是非空数组');
       }

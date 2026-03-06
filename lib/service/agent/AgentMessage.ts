@@ -88,7 +88,9 @@ export class AgentMessage {
    * @param {string} text
    */
   async reply(text) {
-    if (this.replyFn) await this.replyFn(text);
+    if (this.replyFn) {
+      await this.replyFn(text);
+    }
   }
 
   // ─── Transport 工厂方法 ─────────────────────
@@ -114,7 +116,7 @@ export class AgentMessage {
       },
       metadata: {
         lang: body.lang,
-        mode: body.mode,       // 手动指定 preset
+        mode: body.mode, // 手动指定 preset
         context: body.context, // 额外上下文
         stream: body.stream ?? true,
       },

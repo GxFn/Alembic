@@ -213,7 +213,9 @@ export const bootstrapKnowledgeTool = {
     },
   },
   handler: async (params, ctx) => {
-    const { bootstrapKnowledge } = await import('../../../external/mcp/handlers/bootstrap-internal.js');
+    const { bootstrapKnowledge } = await import(
+      '../../../external/mcp/handlers/bootstrap-internal.js'
+    );
     const logger = Logger.getInstance();
     const result = await bootstrapKnowledge(
       { container: ctx.container, logger },

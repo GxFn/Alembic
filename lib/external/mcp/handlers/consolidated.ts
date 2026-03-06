@@ -9,10 +9,10 @@
  * autosnippet_bootstrap 已迁移到 bootstrap-external.js（外部 Agent 路径）。
  */
 
+import { getRequiredFieldsDescription } from '../../../shared/FieldSpec.js';
 import * as browseHandlers from './browse.js';
 import * as candidateHandlers from './candidate.js';
 import * as guardHandlers from './guard.js';
-import { getRequiredFieldsDescription } from '../../../shared/FieldSpec.js';
 import * as searchHandlers from './search.js';
 import * as skillHandlers from './skill.js';
 import * as structureHandlers from './structure.js';
@@ -294,11 +294,14 @@ function _trackSubmission(ctx, args, recipeId) {
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager');
     const session = sessionManager?.getSession?.();
-    if (!session?.submissionTracker) return;
+    if (!session?.submissionTracker) {
+      return;
+    }
 
     // 推断当前维度: 优先使用 Agent 显式传递的 dimensionId，其次推断 remainingDimIds[0]
     const progress = session.getProgress();
-    const currentDimId = args.dimensionId || progress.remainingDimIds[0] || args.knowledgeType || 'unknown';
+    const currentDimId =
+      args.dimensionId || progress.remainingDimIds[0] || args.knowledgeType || 'unknown';
 
     session.submissionTracker.recordSubmission(currentDimId, args, recipeId);
   } catch {
@@ -313,12 +316,18 @@ function _trackRejection(ctx, args) {
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager');
     const session = sessionManager?.getSession?.();
-    if (!session?.submissionTracker) return;
+    if (!session?.submissionTracker) {
+      return;
+    }
 
     const progress = session.getProgress();
     const currentDimId = args?.dimensionId || progress.remainingDimIds[0] || 'unknown';
 
-    session.submissionTracker.recordRejection(currentDimId, args?.title || '(untitled)', 'validation failed');
+    session.submissionTracker.recordRejection(
+      currentDimId,
+      args?.title || '(untitled)',
+      'validation failed'
+    );
   } catch {
     // 静默降级
   }

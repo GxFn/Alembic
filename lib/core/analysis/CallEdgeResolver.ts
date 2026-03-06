@@ -65,11 +65,15 @@ export class CallEdgeResolver {
         names.push(qualifiedName);
       }
       for (const name of names) {
-        if (!this.nameIndex.has(name)) this.nameIndex.set(name, []);
+        if (!this.nameIndex.has(name)) {
+          this.nameIndex.set(name, []);
+        }
         this.nameIndex.get(name).push(fqn);
       }
       // 文件级索引
-      if (!this.fileIndex.has(decl.file)) this.fileIndex.set(decl.file, []);
+      if (!this.fileIndex.has(decl.file)) {
+        this.fileIndex.set(decl.file, []);
+      }
       this.fileIndex.get(decl.file).push({ name: decl.name, qualifiedName, fqn });
 
       // Phase 5.3: 收集类名用于快速 DI 推断
@@ -119,7 +123,9 @@ export class CallEdgeResolver {
 
     for (const imp of fileImports) {
       const targetFile = this.importResolver.resolve(imp.path || String(imp), callerFile);
-      if (!targetFile) continue; // 外部依赖, 跳过
+      if (!targetFile) {
+        continue; // 外部依赖, 跳过
+      }
 
       if (imp.symbols && imp.symbols.length > 0) {
         for (const sym of imp.symbols) {
@@ -224,9 +230,7 @@ export class CallEdgeResolver {
         }
       } else {
         // named import: 查找 import 的符号
-        const lookupName = cs.receiver
-          ? `${cs.receiver}.${cs.callee}`
-          : cs.callee;
+        const lookupName = cs.receiver ? `${cs.receiver}.${cs.callee}` : cs.callee;
         let candidates = this._findInFile(lookupName, targetFile);
         if (candidates.length === 0 && cs.receiver) {
           // 可能 import 的是类名，方法是类的方法
@@ -248,8 +252,9 @@ export class CallEdgeResolver {
     if (!cs.receiver && cs.callerClass && cs.callType !== 'constructor') {
       // 2.5a: 同类方法 (精确匹配 Class.method)
       const implicitThisCandidates = this._findInFile(
-        `${cs.callerClass}.${cs.callee}`, callerFile,
-      ).filter(fqn => fqn !== callerFqn);
+        `${cs.callerClass}.${cs.callee}`,
+        callerFile
+      ).filter((fqn) => fqn !== callerFqn);
       if (implicitThisCandidates.length > 0) {
         return this._makeEdge(callerFqn, implicitThisCandidates[0], 'direct', cs, callerFile);
       }
@@ -262,15 +267,17 @@ export class CallEdgeResolver {
 
     // Priority 3: 同文件内的函数调用
     // 过滤 callerFqn 防止同名方法重载(overload)产生假自引用边
-    const localCandidates = this._findInFile(cs.callee, callerFile)
-      .filter(fqn => fqn !== callerFqn);
+    const localCandidates = this._findInFile(cs.callee, callerFile).filter(
+      (fqn) => fqn !== callerFqn
+    );
     if (localCandidates.length > 0) {
       return this._makeEdge(callerFqn, localCandidates[0], 'direct', cs, callerFile);
     }
     // 也尝试 Class.method 格式
     if (cs.receiver && !importedSymbols.has(cs.receiver)) {
-      const qualifiedLocal = this._findInFile(`${cs.receiver}.${cs.callee}`, callerFile)
-        .filter(fqn => fqn !== callerFqn);
+      const qualifiedLocal = this._findInFile(`${cs.receiver}.${cs.callee}`, callerFile).filter(
+        (fqn) => fqn !== callerFqn
+      );
       if (qualifiedLocal.length > 0) {
         return this._makeEdge(callerFqn, qualifiedLocal[0], 'direct', cs, callerFile);
       }
@@ -278,8 +285,9 @@ export class CallEdgeResolver {
 
     // Priority 4: 全局搜索 (唯一匹配才采用)
     // 过滤 callerFqn 防止全局唯一命名碰撞自己
-    const globalCandidates = (this.nameIndex.get(cs.callee) || [])
-      .filter(fqn => fqn !== callerFqn);
+    const globalCandidates = (this.nameIndex.get(cs.callee) || []).filter(
+      (fqn) => fqn !== callerFqn
+    );
     if (globalCandidates.length === 1) {
       return this._makeEdge(callerFqn, globalCandidates[0], 'inferred', cs, callerFile);
     }
@@ -287,11 +295,17 @@ export class CallEdgeResolver {
     // Phase 5.3 RTA: 多个全局候选 → 用实例化集合过滤
     if (globalCandidates.length > 1 && this.instantiatedClasses.size > 0) {
       const rtaFiltered = globalCandidates.filter((fqn) => {
-        if (fqn === callerFqn) return false; // 排除自己
+        if (fqn === callerFqn) {
+          return false; // 排除自己
+        }
         const decl = this.symbolTable.declarations.get(fqn);
-        if (!decl) return false;
+        if (!decl) {
+          return false;
+        }
         // 非类方法 (顶层函数) 不做 RTA 过滤
-        if (!decl.className) return true;
+        if (!decl.className) {
+          return true;
+        }
         // 类方法 → 仅保留实际实例化的类
         return this.instantiatedClasses.has(decl.className);
       });
@@ -315,7 +329,9 @@ export class CallEdgeResolver {
    * @returns {string|null} 找到的 FQN 或 null
    */
   _resolveByCHA(methodName, className) {
-    if (!this.inheritanceGraph || this.inheritanceGraph.length === 0) return null;
+    if (!this.inheritanceGraph || this.inheritanceGraph.length === 0) {
+      return null;
+    }
 
     // BFS 向上遍历继承链 (最多 10 层防止循环)
     const visited = new Set([className]);
@@ -367,7 +383,9 @@ export class CallEdgeResolver {
   _inferFieldType(fieldName) {
     // 去除前导下划线
     const cleaned = fieldName.replace(/^_+/, '');
-    if (!cleaned) return null;
+    if (!cleaned) {
+      return null;
+    }
 
     // camelCase → PascalCase
     const pascalCase = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
@@ -384,10 +402,10 @@ export class CallEdgeResolver {
    */
   _findInFile(name, file) {
     const fileDecls = this.fileIndex.get(file);
-    if (!fileDecls) return [];
-    return fileDecls
-      .filter((d) => d.name === name || d.qualifiedName === name)
-      .map((d) => d.fqn);
+    if (!fileDecls) {
+      return [];
+    }
+    return fileDecls.filter((d) => d.name === name || d.qualifiedName === name).map((d) => d.fqn);
   }
 
   /**

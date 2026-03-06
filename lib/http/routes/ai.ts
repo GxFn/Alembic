@@ -10,17 +10,16 @@ import { createProvider } from '../../external/ai/AiFactory.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { AgentMessage, Channel } from '../../service/agent/AgentMessage.js';
-import { PRESETS } from '../../service/agent/presets.js';
-import { ContextWindow } from '../../service/agent/context/ContextWindow.js';
 import { ConversationStore } from '../../service/agent/ConversationStore.js';
-import { buildProjectBriefing, cleanFinalAnswer } from '../../service/agent/core/ChatAgentPrompts.js';
+import { buildProjectBriefing } from '../../service/agent/core/ChatAgentPrompts.js';
 import {
   taskCheckAndSubmit,
   taskDiscoverAllRelations,
   taskFullEnrich,
-  taskQualityAudit,
   taskGuardFullScan,
+  taskQualityAudit,
 } from '../../service/agent/domain/ChatAgentTasks.js';
+import { PRESETS } from '../../service/agent/presets.js';
 import { ValidationError } from '../../shared/errors/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
@@ -91,9 +90,7 @@ router.get(
       { id: 'mock', label: 'Mock (测试)', defaultModel: 'mock-l3' },
     ].map((p) => ({
       ...p,
-      hasKey: KEY_ENVS[p.id]
-        ? !!process.env[KEY_ENVS[p.id]]
-        : true, // ollama / mock 不需要 key，始终可用
+      hasKey: KEY_ENVS[p.id] ? !!process.env[KEY_ENVS[p.id]] : true, // ollama / mock 不需要 key，始终可用
     }));
 
     res.json({ success: true, data: providers });
@@ -281,13 +278,15 @@ router.post(
     }
 
     // ── 项目概况刷新 ──
-    let projectBriefing = '';
+    let _projectBriefing = '';
     try {
-      projectBriefing = await buildProjectBriefing({ container });
-    } catch { /* 静默降级 */ }
+      _projectBriefing = await buildProjectBriefing({ container });
+    } catch {
+      /* 静默降级 */
+    }
 
     // ── 创建 ContextWindow ──
-    const contextWindow = factory.createContextWindow({ isSystem: false });
+    const _contextWindow = factory.createContextWindow({ isSystem: false });
 
     // ── 创建 Runtime 并注入 onProgress ──
     const message = (AgentMessage as any).fromHttp(req);
@@ -304,9 +303,13 @@ router.post(
           const sessionId = req.body.sseSessionId;
           if (sessionId) {
             const session = getStreamSession(sessionId);
-            if (session) session.send(event);
+            if (session) {
+              session.send(event);
+            }
           }
-        } catch { /* SSE 不可用时静默 */ }
+        } catch {
+          /* SSE 不可用时静默 */
+        }
       },
     });
     const result = await runtime.execute(message);
@@ -315,7 +318,9 @@ router.post(
     if (convStore && effectiveConvId && result.reply) {
       try {
         convStore.append(effectiveConvId, { role: 'assistant', content: result.reply });
-      } catch { /* 静默降级 */ }
+      } catch {
+        /* 静默降级 */
+      }
     }
 
     // ── MemoryCoordinator: 提取记忆 ──
@@ -324,7 +329,9 @@ router.post(
       if (memoryCoordinator) {
         memoryCoordinator.extractFromConversation?.(prompt, result.reply, 'user');
       }
-    } catch { /* 静默降级 */ }
+    } catch {
+      /* 静默降级 */
+    }
 
     // ── Token 用量持久化 ──
     try {
@@ -346,9 +353,13 @@ router.post(
         try {
           const realtime = container.get('realtimeService');
           realtime?.broadcastTokenUsageUpdated?.();
-        } catch { /* optional */ }
+        } catch {
+          /* optional */
+        }
       }
-    } catch { /* token logging should never break execution */ }
+    } catch {
+      /* token logging should never break execution */
+    }
 
     res.json({
       success: true,
@@ -727,7 +738,12 @@ router.post(
         // 将 AgentRuntime 内部事件映射到前端 SSE 协议
         switch (event.type) {
           case 'thinking':
-            session.send({ type: 'step:start', step: event.iteration, maxSteps: event.maxIterations, phase: 'thinking' });
+            session.send({
+              type: 'step:start',
+              step: event.iteration,
+              maxSteps: event.maxIterations,
+              phase: 'thinking',
+            });
             break;
           case 'tool_call':
             session.send({ type: 'tool:start', tool: event.tool, args: event.args });

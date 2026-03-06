@@ -49,9 +49,7 @@ export class BatchEmbedder {
     // 滑动窗口并发控制
     for (let i = 0; i < batches.length; i += this.#maxConcurrency) {
       const window = batches.slice(i, i + this.#maxConcurrency);
-      const batchResults = await Promise.all(
-        window.map((batch) => this.#embedBatch(batch))
-      );
+      const batchResults = await Promise.all(window.map((batch) => this.#embedBatch(batch)));
 
       for (const batchResult of batchResults) {
         for (const [id, vector] of batchResult) {

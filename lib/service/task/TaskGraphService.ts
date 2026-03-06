@@ -93,7 +93,9 @@ export class TaskGraphService {
    */
   async decompose(epicId, subtasks) {
     const epic = this.repo.findById(epicId);
-    if (!epic) throw new Error(`Epic not found: ${epicId}`);
+    if (!epic) {
+      throw new Error(`Epic not found: ${epicId}`);
+    }
     // 决策不可拆解（C6）
     if (epic.taskType === 'decision') {
       throw new Error('Cannot decompose a decision. Decisions are atomic records.');
@@ -124,7 +126,9 @@ export class TaskGraphService {
       // 子任务间的依赖（通过 index 引用，支持单个数字或数组）
       for (let i = 0; i < subtasks.length; i++) {
         const sub = subtasks[i];
-        if (sub.blockedByIndex == null) continue;
+        if (sub.blockedByIndex == null) {
+          continue;
+        }
 
         // 统一为数组处理
         const indices = Array.isArray(sub.blockedByIndex)
@@ -160,7 +164,9 @@ export class TaskGraphService {
    */
   async claim(id, assignee = 'agent') {
     const task = this.repo.findById(id);
-    if (!task) throw new Error(`Task not found: ${id}`);
+    if (!task) {
+      throw new Error(`Task not found: ${id}`);
+    }
 
     const oldStatus = task.status;
     task.claim(assignee);
@@ -184,7 +190,9 @@ export class TaskGraphService {
    */
   async close(id, reason = 'Completed') {
     const task = this.repo.findById(id);
-    if (!task) throw new Error(`Task not found: ${id}`);
+    if (!task) {
+      throw new Error(`Task not found: ${id}`);
+    }
 
     const oldStatus = task.status;
     task.close(reason);
@@ -212,7 +220,9 @@ export class TaskGraphService {
    */
   async fail(id, reason) {
     const task = this.repo.findById(id);
-    if (!task) throw new Error(`Task not found: ${id}`);
+    if (!task) {
+      throw new Error(`Task not found: ${id}`);
+    }
 
     task.fail(reason);
     const saved = this.repo.update(id, {
@@ -235,7 +245,9 @@ export class TaskGraphService {
    */
   async defer(id, reason = '') {
     const task = this.repo.findById(id);
-    if (!task) throw new Error(`Task not found: ${id}`);
+    if (!task) {
+      throw new Error(`Task not found: ${id}`);
+    }
 
     const oldStatus = task.status;
     task.defer(reason);
@@ -257,7 +269,9 @@ export class TaskGraphService {
    */
   async progress(id, note) {
     const task = this.repo.findById(id);
-    if (!task) throw new Error(`Task not found: ${id}`);
+    if (!task) {
+      throw new Error(`Task not found: ${id}`);
+    }
     if (task.status !== 'in_progress') {
       throw new Error(`Cannot update progress: task ${id} is ${task.status}, expected in_progress`);
     }
@@ -457,8 +471,12 @@ export class TaskGraphService {
    * @returns {Promise<{ task: Task, isDuplicate: boolean }>}
    */
   async recordDecision({ title, description, rationale, tags, relatedTaskId }) {
-    if (!title) throw new Error('Decision title is required');
-    if (!description) throw new Error('Decision description is required');
+    if (!title) {
+      throw new Error('Decision title is required');
+    }
+    if (!description) {
+      throw new Error('Decision description is required');
+    }
 
     let formattedDesc = `## Decision\n${description}`;
     if (rationale) {
@@ -516,7 +534,9 @@ export class TaskGraphService {
   async reviseDecision({ oldDecisionId, title, description, rationale, reason }) {
     // 事务前验证
     const oldDecision = this.repo.findById(oldDecisionId);
-    if (!oldDecision) throw new Error(`Decision not found: ${oldDecisionId}`);
+    if (!oldDecision) {
+      throw new Error(`Decision not found: ${oldDecisionId}`);
+    }
     if (oldDecision.status !== 'pinned') {
       throw new Error(`Can only revise pinned decisions (current: ${oldDecision.status})`);
     }
@@ -574,7 +594,9 @@ export class TaskGraphService {
    */
   async unpinDecision(id, reason = '') {
     const task = this.repo.findById(id);
-    if (!task) throw new Error(`Decision not found: ${id}`);
+    if (!task) {
+      throw new Error(`Decision not found: ${id}`);
+    }
     if (task.status !== 'pinned') {
       throw new Error(`Can only unpin pinned decisions (current: ${task.status})`);
     }
@@ -600,14 +622,16 @@ export class TaskGraphService {
    */
   _getDecisionStaleThreshold() {
     try {
-      const config = this.repo?.db
+      const _config = this.repo?.db
         ? null // 通过构造函数传入的 config 优先
         : null;
       // 暂无 config 注入路径，使用环境变量或硬编码默认值
       const envDays = process.env.ASD_DECISION_STALE_DAYS;
       if (envDays !== undefined) {
         const days = Number.parseInt(envDays, 10);
-        if (Number.isFinite(days) && days >= 0) return days * 86400;
+        if (Number.isFinite(days) && days >= 0) {
+          return days * 86400;
+        }
       }
       return 30 * 86400; // 默认 30 天
     } catch {
@@ -625,7 +649,9 @@ export class TaskGraphService {
 
     for (const dep of dependents) {
       // 只关注阻塞型依赖
-      if (dep.dep_type !== 'blocks' && dep.dep_type !== 'waits-for') continue;
+      if (dep.dep_type !== 'blocks' && dep.dep_type !== 'waits-for') {
+        continue;
+      }
 
       // getBlockers 返回"尚未关闭的阻塞者"，空 = 全部完成
       const pendingBlockers = this.repo.getBlockers(dep.task_id);

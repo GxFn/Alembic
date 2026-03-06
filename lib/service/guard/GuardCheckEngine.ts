@@ -523,9 +523,11 @@ export class GuardCheckEngine {
       // 跳过与 BUILT_IN_RULES 重复的模式（通过比较 pattern 源文本）
       const rulePatternStr =
         rule.pattern instanceof RegExp ? rule.pattern.source : String(rule.pattern || '');
-      const isDuplicate = (Object.entries(this._builtInRules) as [string, any][]).some(([, builtIn]) => {
-        return builtIn.pattern === rulePatternStr;
-      });
+      const isDuplicate = (Object.entries(this._builtInRules) as [string, any][]).some(
+        ([, builtIn]) => {
+          return builtIn.pattern === rulePatternStr;
+        }
+      );
       if (isDuplicate) {
         this.logger.debug(`[GuardCheckEngine] Skipping duplicate external rule: ${rule.ruleId}`);
         continue;

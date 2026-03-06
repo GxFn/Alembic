@@ -68,6 +68,7 @@ if (isPublishing) {
   // 确保有执行权限
   try {
     fs.chmodSync(out, 0o755);
-  } catch { /* ignore */ }
-  console.log('✅ native-ui 二进制校验通过 (%s KB)', (stat.size / 1024).toFixed(1));
+  } catch {
+    /* ignore */
+  }
 }

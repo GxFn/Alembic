@@ -54,7 +54,7 @@ function resetTask() {
 router.post(
   '/discover-relations',
   asyncHandler(async (req, res) => {
-    const { batchSize = 20 } = req.body;
+    const { batchSize: _batchSize = 20 } = req.body;
 
     // 如果已有任务在运行，返回当前状态
     if (discoverTask.status === 'running') {

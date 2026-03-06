@@ -18,9 +18,9 @@ import { EventBus } from '../../infrastructure/event/EventBus.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import { KnowledgeFileWriter } from '../../service/knowledge/KnowledgeFileWriter.js';
-import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
 import { TaskRepositoryImpl } from '../../repository/task/TaskRepository.impl.js';
+import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
+import { KnowledgeFileWriter } from '../../service/knowledge/KnowledgeFileWriter.js';
 
 export function register(c) {
   // ═══ Infrastructure ═══

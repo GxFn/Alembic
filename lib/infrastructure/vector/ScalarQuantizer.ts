@@ -56,8 +56,12 @@ export class ScalarQuantizer {
     for (const vec of vectors) {
       for (let i = 0; i < dim; i++) {
         const v = vec[i] || 0;
-        if (v < mins[i]) mins[i] = v;
-        if (v > maxs[i]) maxs[i] = v;
+        if (v < mins[i]) {
+          mins[i] = v;
+        }
+        if (v > maxs[i]) {
+          maxs[i] = v;
+        }
       }
     }
 
@@ -173,9 +177,13 @@ export class ScalarQuantizer {
    * @returns {number}
    */
   static #cosineDistanceFloat(a, b) {
-    if (!a || !b || a.length === 0) return 1;
+    if (!a || !b || a.length === 0) {
+      return 1;
+    }
     const len = Math.min(a.length, b.length);
-    let dot = 0, normA = 0, normB = 0;
+    let dot = 0,
+      normA = 0,
+      normB = 0;
     for (let i = 0; i < len; i++) {
       dot += a[i] * b[i];
       normA += a[i] * a[i];

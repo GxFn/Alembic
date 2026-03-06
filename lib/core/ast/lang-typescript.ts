@@ -8,8 +8,8 @@
  * Phase 5: 新增 ImportRecord 结构化导入 + extractCallSites 调用点提取
  */
 
-import { ImportRecord } from '../analysis/ImportRecord.js';
 import { extractCallSitesTS } from '../analysis/CallSiteExtractor.js';
+import { ImportRecord } from '../analysis/ImportRecord.js';
 
 function walkTypeScript(root, ctx) {
   _walkTSNode(root, ctx, null);
@@ -332,7 +332,9 @@ function _parseTSProperty(node, className) {
  */
 function _extractTypeAnnotation(parentNode) {
   const typeAnnotNode = parentNode.namedChildren.find((c) => c.type === 'type_annotation');
-  if (!typeAnnotNode) return null;
+  if (!typeAnnotNode) {
+    return null;
+  }
 
   const typeNode = typeAnnotNode.namedChildren.find(
     (c) =>
@@ -340,7 +342,9 @@ function _extractTypeAnnotation(parentNode) {
       c.type === 'generic_type' ||
       c.type === 'nested_type_identifier'
   );
-  if (!typeNode) return null;
+  if (!typeNode) {
+    return null;
+  }
 
   // Strip generics: Repository<User> → Repository
   const text = typeNode.text;
@@ -361,10 +365,14 @@ function _extractTypeAnnotation(parentNode) {
 function _extractTSConstructorProperties(constructorNode, className) {
   const properties = [];
   const params = constructorNode.namedChildren.find((c) => c.type === 'formal_parameters');
-  if (!params) return properties;
+  if (!params) {
+    return properties;
+  }
 
   for (const param of params.namedChildren) {
-    if (param.type !== 'required_parameter' && param.type !== 'optional_parameter') continue;
+    if (param.type !== 'required_parameter' && param.type !== 'optional_parameter') {
+      continue;
+    }
 
     // Check for accessibility modifier (public, private, protected) or readonly
     // These turn constructor params into class properties
@@ -373,11 +381,15 @@ function _extractTSConstructorProperties(constructorNode, className) {
     );
     const hasReadonly = param.text.includes('readonly');
 
-    if (!hasAccessibility && !hasReadonly) continue; // Not a property declaration
+    if (!hasAccessibility && !hasReadonly) {
+      continue; // Not a property declaration
+    }
 
     const nameNode = param.namedChildren.find((c) => c.type === 'identifier');
     const name = nameNode?.text;
-    if (!name) continue;
+    if (!name) {
+      continue;
+    }
 
     // Extract type annotation
     const typeAnnotation = _extractTypeAnnotation(param);
@@ -525,21 +537,31 @@ function _parseImportClause(importNode) {
 function _parseCJSRequire(callNode, declaratorNode) {
   // 检查 callee 是否为 'require'
   const callee = callNode.namedChildren[0];
-  if (!callee || callee.type !== 'identifier' || callee.text !== 'require') return null;
+  if (!callee || callee.type !== 'identifier' || callee.text !== 'require') {
+    return null;
+  }
 
   // 提取 require 参数中的路径字符串
   const args = callNode.namedChildren.find((c) => c.type === 'arguments');
-  if (!args || args.namedChildCount === 0) return null;
+  if (!args || args.namedChildCount === 0) {
+    return null;
+  }
 
   const firstArg = args.namedChildren[0];
-  if (!firstArg || (firstArg.type !== 'string' && firstArg.type !== 'template_string')) return null;
+  if (!firstArg || (firstArg.type !== 'string' && firstArg.type !== 'template_string')) {
+    return null;
+  }
 
   const importPath = firstArg.text.replace(/^['"`]|['"`]$/g, '');
-  if (!importPath) return null;
+  if (!importPath) {
+    return null;
+  }
 
   // 解析 lhs 绑定模式
   const lhs = declaratorNode.namedChildren[0]; // identifier or object_pattern
-  if (!lhs) return new ImportRecord(importPath, { symbols: [], kind: 'side-effect' });
+  if (!lhs) {
+    return new ImportRecord(importPath, { symbols: [], kind: 'side-effect' });
+  }
 
   if (lhs.type === 'identifier') {
     // const express = require('express') → namespace import
@@ -554,7 +576,10 @@ function _parseCJSRequire(callNode, declaratorNode) {
     // const { readFile, writeFile } = require('fs')
     const symbols: any[] = [];
     for (const prop of lhs.namedChildren) {
-      if (prop.type === 'shorthand_property_identifier_pattern' || prop.type === 'shorthand_property_identifier') {
+      if (
+        prop.type === 'shorthand_property_identifier_pattern' ||
+        prop.type === 'shorthand_property_identifier'
+      ) {
         symbols.push(prop.text);
       } else if (prop.type === 'pair_pattern' || prop.type === 'pair') {
         // { readFile: rf } → 使用本地名 rf
@@ -584,18 +609,28 @@ function _parseCJSRequire(callNode, declaratorNode) {
 function _parseDynamicImport(callNode, declaratorNode) {
   // 动态 import() 在 tree-sitter 中解析为 call_expression, callee 是 'import'
   const callee = callNode.namedChildren[0];
-  if (!callee) return null;
+  if (!callee) {
+    return null;
+  }
   // tree-sitter 可能将 import() 解析为 identifier('import') 或 special node
-  if (callee.text !== 'import') return null;
+  if (callee.text !== 'import') {
+    return null;
+  }
 
   const args = callNode.namedChildren.find((c) => c.type === 'arguments');
-  if (!args || args.namedChildCount === 0) return null;
+  if (!args || args.namedChildCount === 0) {
+    return null;
+  }
 
   const firstArg = args.namedChildren[0];
-  if (!firstArg || (firstArg.type !== 'string' && firstArg.type !== 'template_string')) return null;
+  if (!firstArg || (firstArg.type !== 'string' && firstArg.type !== 'template_string')) {
+    return null;
+  }
 
   const importPath = firstArg.text.replace(/^['"`]|['"`]$/g, '');
-  if (!importPath) return null;
+  if (!importPath) {
+    return null;
+  }
 
   const lhs = declaratorNode?.namedChildren?.[0];
   const alias = lhs?.type === 'identifier' ? lhs.text : null;

@@ -56,7 +56,10 @@ export class VectorStore {
    * @param {object} options - { topK, filter, minScore }
    * @returns {Promise<Array<{ item: object, score: number }>>}
    */
-  async searchVector(queryVector: any, options: any = {}): Promise<Array<{ item: any; score: number }>> {
+  async searchVector(
+    queryVector: any,
+    options: any = {}
+  ): Promise<Array<{ item: any; score: number }>> {
     throw new Error('Not implemented: searchVector()');
   }
 

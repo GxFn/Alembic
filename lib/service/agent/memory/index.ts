@@ -8,12 +8,12 @@
  * Phase 6: MemoryStore / MemoryRetriever / MemoryConsolidator (PersistentMemory 子模块拆分)
  */
 
-export { MemoryCoordinator } from './MemoryCoordinator.js';
 export { ActiveContext } from './ActiveContext.js';
-export { SessionStore } from './SessionStore.js';
-export { PersistentMemory } from './PersistentMemory.js';
+export { MemoryConsolidator } from './MemoryConsolidator.js';
+export { MemoryCoordinator } from './MemoryCoordinator.js';
+export { MemoryRetriever } from './MemoryRetriever.js';
 
 // PersistentMemory 子模块 — 内部拆分后的独立组件
 export { MemoryStore } from './MemoryStore.js';
-export { MemoryRetriever } from './MemoryRetriever.js';
-export { MemoryConsolidator } from './MemoryConsolidator.js';
+export { PersistentMemory } from './PersistentMemory.js';
+export { SessionStore } from './SessionStore.js';

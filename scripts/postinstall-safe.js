@@ -29,10 +29,14 @@ const NATIVE_UI_COMBINED = path.join(root, 'resources', 'native-ui', 'combined-w
  */
 function tryBuildNativeUi() {
   // 非 macOS 跳过
-  if (process.platform !== 'darwin') return;
+  if (process.platform !== 'darwin') {
+    return;
+  }
 
   // 已有二进制，跳过
-  if (fs.existsSync(NATIVE_UI_BIN)) return;
+  if (fs.existsSync(NATIVE_UI_BIN)) {
+    return;
+  }
 
   // 检查源码是否存在
   if (!fs.existsSync(NATIVE_UI_SRC) || !fs.existsSync(NATIVE_UI_COMBINED)) {
@@ -43,10 +47,6 @@ function tryBuildNativeUi() {
   try {
     execSync('which swiftc', { stdio: 'pipe' });
   } catch {
-    console.log(
-      '💡 Native UI 需要 Swift 编译器。运行 xcode-select --install 后执行：\n' +
-      `   swiftc "${NATIVE_UI_SRC}" "${NATIVE_UI_COMBINED}" -o "${NATIVE_UI_BIN}" -framework AppKit`
-    );
     return;
   }
 
@@ -57,14 +57,8 @@ function tryBuildNativeUi() {
       { cwd: root, stdio: 'pipe', timeout: 120_000 }
     );
     if (fs.existsSync(NATIVE_UI_BIN)) {
-      console.log('✅ Native UI 已自动编译');
     }
-  } catch {
-    console.log(
-      '⚠️  Native UI 自动编译失败，Xcode file watcher 将使用 AppleScript 降级方案。\n' +
-      '   手动编译: npm run build:native-ui（需要 Xcode Command Line Tools）'
-    );
-  }
+  } catch {}
 }
 
 // 检查预构建的二进制文件

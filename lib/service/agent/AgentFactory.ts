@@ -19,12 +19,16 @@ import { AgentMessage } from './AgentMessage.js';
 import { AgentRouter, PresetName } from './AgentRouter.js';
 import { AgentRuntime } from './AgentRuntime.js';
 import { CapabilityRegistry } from './capabilities.js';
-import { BudgetPolicy, PolicyEngine } from './policies.js';
-import { getPreset, resolveStrategy } from './presets.js';
 import { ContextWindow } from './context/ContextWindow.js';
 import { ExplorationTracker } from './context/ExplorationTracker.js';
+import {
+  buildRelationsPipelineStages,
+  buildScanPipelineStages,
+  SCAN_TASK_CONFIGS,
+} from './domain/scan-prompts.js';
 import { MemoryCoordinator } from './memory/MemoryCoordinator.js';
-import { SCAN_TASK_CONFIGS, buildScanPipelineStages, buildRelationsPipelineStages } from './domain/scan-prompts.js';
+import { BudgetPolicy, PolicyEngine } from './policies.js';
+import { getPreset } from './presets.js';
 
 export class AgentFactory {
   #container;
@@ -45,7 +49,14 @@ export class AgentFactory {
    * @param {string} [opts.projectBriefing] 项目概况文本
    * @param {string} [opts.projectRoot] 项目根目录
    */
-  constructor({ container, toolRegistry, aiProvider, memoryCoordinator, projectBriefing, projectRoot }) {
+  constructor({
+    container,
+    toolRegistry,
+    aiProvider,
+    memoryCoordinator,
+    projectBriefing,
+    projectRoot,
+  }) {
     this.#container = container;
     this.#toolRegistry = toolRegistry;
     this.#aiProvider = aiProvider;
@@ -64,7 +75,9 @@ export class AgentFactory {
    * @returns {AgentRouter}
    */
   createRouter() {
-    if (this.#router) return this.#router;
+    if (this.#router) {
+      return this.#router;
+    }
 
     const router = new AgentRouter();
     router.setAiProvider(this.#aiProvider);
@@ -93,13 +106,13 @@ export class AgentFactory {
     const preset = getPreset(presetName, overrides);
 
     // 实例化 Capabilities
-    const capabilities = preset.capabilities.map(name => {
+    const capabilities = preset.capabilities.map((name) => {
       const opts = this.#getCapabilityOpts(name);
       return CapabilityRegistry.create(name, opts);
     });
 
     // 实例化 Policies — 支持工厂函数延迟实例化 (Preset 中 policy 可为 instance 或 factory)
-    const resolvedPolicies = (preset.policies || []).map(policyOrFactory =>
+    const resolvedPolicies = (preset.policies || []).map((policyOrFactory) =>
       typeof policyOrFactory === 'function' ? policyOrFactory(overrides) : policyOrFactory
     );
     const policyEngine = new PolicyEngine(resolvedPolicies);
@@ -176,7 +189,7 @@ export class AgentFactory {
       contextWindow: this.createContextWindow({ isSystem: true }),
       tracker: ExplorationTracker.resolve(
         { source: 'system', strategy: trackerStrategy },
-        budget || {},
+        budget || {}
       ),
       // trace & activeContext 是同一个 ActiveContext 实例
       // trace: AgentRuntime reactLoop 使用 (startRound/setThought/endRound)
@@ -269,7 +282,9 @@ export class AgentFactory {
   async scanKnowledge({ label, files, task = 'extract', lang, comprehensive }: any = {}) {
     const taskConfig = SCAN_TASK_CONFIGS[task];
     if (!taskConfig) {
-      throw new Error(`Unknown scanKnowledge task: "${task}". Available: ${Object.keys(SCAN_TASK_CONFIGS).join(', ')}`);
+      throw new Error(
+        `Unknown scanKnowledge task: "${task}". Available: ${Object.keys(SCAN_TASK_CONFIGS).join(', ')}`
+      );
     }
     const { producePrompt, fallback } = taskConfig;
 
@@ -318,15 +333,15 @@ export class AgentFactory {
 
     // ── 执行 ──
     const message = AgentMessage.internal(
-      `分析 "${label}" 的 ${files?.length || 0} 个源文件。${comprehensive ? '请进行深度分析。' : ''}`,
+      `分析 "${label}" 的 ${files?.length || 0} 个源文件。${comprehensive ? '请进行深度分析。' : ''}`
     );
     const result = await runtime.execute(message, { strategyContext: systemCtx });
 
     // ── 提取结果 — extract 和 summarize 统一从 toolCalls 提取 ──
     const allToolCalls = result.toolCalls || [];
     const recipes = allToolCalls
-      .filter(tc => (tc.tool || tc.name) === 'collect_scan_recipe')
-      .map(tc => {
+      .filter((tc) => (tc.tool || tc.name) === 'collect_scan_recipe')
+      .map((tc) => {
         const res = tc.result;
         if (res && typeof res === 'object' && res.status === 'collected' && res.recipe) {
           return res.recipe;
@@ -387,7 +402,7 @@ export class AgentFactory {
     });
 
     const message = AgentMessage.internal(
-      `探索知识库中所有知识条目之间的语义关系。每批分析约 ${batchSize} 条知识。`,
+      `探索知识库中所有知识条目之间的语义关系。每批分析约 ${batchSize} 条知识。`
     );
     const result = await runtime.execute(message);
 
@@ -411,7 +426,12 @@ export class AgentFactory {
 
     const runtime = this.createChat({
       policies: [
-        new BudgetPolicy({ maxIterations: 1, maxTokens: 4096, temperature: 0.2, timeoutMs: 60_000 }),
+        new BudgetPolicy({
+          maxIterations: 1,
+          maxTokens: 4096,
+          temperature: 0.2,
+          timeoutMs: 60_000,
+        }),
       ],
       persona: {
         description: [
@@ -425,7 +445,7 @@ export class AgentFactory {
     });
 
     const message = AgentMessage.internal(
-      `翻译以下内容为英文，输出纯 JSON：\nsummary: ${summary || '(空)'}\nusageGuide: ${usageGuide || '(空)'}`,
+      `翻译以下内容为英文，输出纯 JSON：\nsummary: ${summary || '(空)'}\nusageGuide: ${usageGuide || '(空)'}`
     );
 
     const result = await runtime.execute(message);
@@ -445,7 +465,9 @@ export class AgentFactory {
    * @returns {Promise<Object>}
    */
   async bootstrapKnowledge(opts: any = {}) {
-    const { bootstrapKnowledge } = await import('../../external/mcp/handlers/bootstrap-internal.js');
+    const { bootstrapKnowledge } = await import(
+      '../../external/mcp/handlers/bootstrap-internal.js'
+    );
     const result = await bootstrapKnowledge(
       { container: this.#container, logger: this.#logger },
       {
@@ -454,7 +476,7 @@ export class AgentFactory {
         contentMaxLines: opts.contentMaxLines || 120,
         loadSkills: opts.loadSkills ?? true,
         skipAsyncFill: opts.skipAsyncFill || false,
-      },
+      }
     );
     const parsed = typeof result === 'string' ? JSON.parse(result) : result;
     return parsed?.data || parsed;
@@ -483,7 +505,9 @@ export class AgentFactory {
    * @returns {Object}
    */
   #parseJsonResponse(text, fallback) {
-    if (!text) return fallback;
+    if (!text) {
+      return fallback;
+    }
     try {
       // 尝试从 markdown 代码块中提取 JSON
       const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);

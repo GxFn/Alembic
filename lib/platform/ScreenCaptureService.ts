@@ -7,9 +7,9 @@
  * 依赖：resources/native-ui/screenshot.swift 编译产物
  */
 
-import { existsSync, mkdirSync, statSync as fstatSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { execSync, execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
+import { existsSync, statSync as fstatSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Logger from '../infrastructure/logging/Logger.js';
 
@@ -30,14 +30,17 @@ let _binaryReady = false;
  * @returns {{ready: boolean, error?: string}}
  */
 function ensureBinary() {
-  if (_binaryReady && existsSync(BINARY_PATH)) return { ready: true };
+  if (_binaryReady && existsSync(BINARY_PATH)) {
+    return { ready: true };
+  }
 
   if (!existsSync(SWIFT_SRC)) {
     return { ready: false, error: `Swift source not found: ${SWIFT_SRC}` };
   }
 
   // 检查是否需要重新编译（源文件比二进制新）
-  const needsBuild = !existsSync(BINARY_PATH) ||
+  const needsBuild =
+    !existsSync(BINARY_PATH) ||
     (() => {
       try {
         const srcTime = fstatSync(SWIFT_SRC).mtimeMs;
@@ -53,7 +56,7 @@ function ensureBinary() {
     try {
       execSync(
         `swiftc -O -framework ScreenCaptureKit -framework AppKit "${SWIFT_SRC}" -o "${BINARY_PATH}"`,
-        { timeout: 60000, stdio: ['pipe', 'pipe', 'pipe'] },
+        { timeout: 60000, stdio: ['pipe', 'pipe', 'pipe'] }
       );
       logger.info('[Screenshot] ✅ Compiled successfully');
     } catch (err: any) {
@@ -74,7 +77,9 @@ function ensureBinary() {
  */
 function exec(args: any[] = []) {
   const check = ensureBinary();
-  if (!check.ready) return { success: false, error: check.error };
+  if (!check.ready) {
+    return { success: false, error: check.error };
+  }
 
   try {
     const stdout = execFileSync(BINARY_PATH, args, {
@@ -131,7 +136,9 @@ export async function screenshot(opts: any = {}) {
   const result = exec(args);
 
   if (result.success && result.data) {
-    logger.info(`[Screenshot] ✅ Captured: ${result.data.path} (${result.data.width}x${result.data.height})`);
+    logger.info(
+      `[Screenshot] ✅ Captured: ${result.data.path} (${result.data.width}x${result.data.height})`
+    );
     return {
       success: true,
       path: result.data.path,
@@ -166,7 +173,9 @@ export async function listWindows() {
  */
 export function isScreenCaptureAvailable() {
   const check = ensureBinary();
-  if (!check.ready) return { available: false, error: check.error };
+  if (!check.ready) {
+    return { available: false, error: check.error };
+  }
 
   // 尝试列出窗口来验证权限
   const result = exec(['--list-windows']);

@@ -43,13 +43,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  writeFileSync,
-} from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FileDeployer } from './deploy/FileDeployer.js';
@@ -443,7 +437,7 @@ export class SetupService {
       projectRoot: this.projectRoot,
       force: this.force,
     });
-    const { deployed, skipped, errors } = deployer.deployAll('setup');
+    const { deployed, skipped: _skipped, errors } = deployer.deployAll('setup');
 
     if (errors.length > 0) {
       for (const { id, error } of errors) {

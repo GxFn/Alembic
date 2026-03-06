@@ -15,8 +15,8 @@
  * @module pipeline/IncrementalBootstrap
  */
 
-import { BootstrapSnapshot } from './BootstrapSnapshot.js';
 import { SessionStore } from '../../../../../service/agent/memory/SessionStore.js';
+import { BootstrapSnapshot } from './BootstrapSnapshot.js';
 
 // ──────────────────────────────────────────────────────────────
 // IncrementalBootstrap 类

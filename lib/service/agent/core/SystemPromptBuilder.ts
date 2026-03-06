@@ -68,7 +68,7 @@ export class SystemPromptBuilder {
         .map((f) => {
           const lines = f.content ? f.content.split('\n').length : 0;
           const name = f.name || f.relativePath || 'unknown';
-          return `- ${name} (${lines} 行${f.language ? ', ' + f.language : ''})`;
+          return `- ${name} (${lines} 行${f.language ? `, ${f.language}` : ''})`;
         })
         .join('\n');
       parts.push(
@@ -85,7 +85,9 @@ export class SystemPromptBuilder {
         lang: this.#lang,
         memoryMode: this.#memoryConfig?.mode,
       });
-      if (dynamicCtx) parts.push(dynamicCtx);
+      if (dynamicCtx) {
+        parts.push(dynamicCtx);
+      }
     }
 
     // 语言要求

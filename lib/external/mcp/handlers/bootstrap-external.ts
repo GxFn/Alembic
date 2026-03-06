@@ -35,8 +35,12 @@ function getSessionManager(container) {
   // 优先使用容器注册的 (如果已注册)
   try {
     const mgr = container.get('bootstrapSessionManager');
-    if (mgr) return mgr;
-  } catch { /* not registered yet */ }
+    if (mgr) {
+      return mgr;
+    }
+  } catch {
+    /* not registered yet */
+  }
 
   // 降级为模块级单例
   if (!_sessionManager) {
@@ -46,7 +50,9 @@ function getSessionManager(container) {
   // 注册到容器，让 submitKnowledgeBatch / consolidated 等 handler 也能访问
   try {
     container.register('bootstrapSessionManager', () => _sessionManager);
-  } catch { /* already registered or container doesn't support register */ }
+  } catch {
+    /* already registered or container doesn't support register */
+  }
 
   return _sessionManager;
 }
@@ -90,10 +96,18 @@ export async function bootstrapExternal(ctx) {
   }
 
   const {
-    allFiles, primaryLang, depGraphData, langStats,
-    astProjectSummary, codeEntityResult, callGraphResult, guardAudit,
-    activeDimensions: dimensions, targetsSummary,
-    langProfile, incrementalPlan,
+    allFiles,
+    primaryLang,
+    depGraphData,
+    langStats,
+    astProjectSummary,
+    codeEntityResult,
+    callGraphResult,
+    guardAudit,
+    activeDimensions: dimensions,
+    targetsSummary,
+    langProfile,
+    incrementalPlan,
   } = phaseResults;
 
   // ═══════════════════════════════════════════════════════════
@@ -148,7 +162,7 @@ export async function bootstrapExternal(ctx) {
     targets: targetsSummary,
     activeDimensions: dimensions,
     session,
-    languageExtension: buildLanguageExtension(primaryLang),  // §7.1
+    languageExtension: buildLanguageExtension(primaryLang), // §7.1
     incrementalPlan,
     languageStats: langStats,
   });
@@ -161,7 +175,7 @@ export async function bootstrapExternal(ctx) {
 
   ctx.logger.info(
     `[BootstrapExternal] Mission Briefing ready: ${allFiles.length} files, ${dimensions.length} dims, ` +
-    `${briefing.meta?.responseSizeKB || '?'}KB — session ${session.id}`
+      `${briefing.meta?.responseSizeKB || '?'}KB — session ${session.id}`
   );
 
   return envelope({

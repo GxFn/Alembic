@@ -96,7 +96,9 @@ function _parseUseDecl(node, ctx) {
       c.type === 'identifier' ||
       c.type === 'scoped_use_list'
   );
-  if (!argNode) return;
+  if (!argNode) {
+    return;
+  }
 
   const text = argNode.text;
 
@@ -119,9 +121,7 @@ function _parseUseDecl(node, ctx) {
   } else if (argNode.type === 'use_wildcard') {
     // use crate::mod::*
     const pathPart = text.replace(/::\*$/, '');
-    ctx.imports.push(
-      new ImportRecord(pathPart, { symbols: ['*'], kind: 'namespace' })
-    );
+    ctx.imports.push(new ImportRecord(pathPart, { symbols: ['*'], kind: 'namespace' }));
   } else if (argNode.type === 'use_list' || argNode.type === 'scoped_use_list') {
     // use crate::mod::{A, B, C}  or  use {A, B}
     // Extract path prefix and symbol list from text
@@ -129,10 +129,11 @@ function _parseUseDecl(node, ctx) {
     if (match) {
       const prefix = match[1];
       const symbolsStr = match[2];
-      const symbols = symbolsStr.split(',').map((s) => s.trim().split('::').pop().split(' as ')[0].trim()).filter(Boolean);
-      ctx.imports.push(
-        new ImportRecord(prefix, { symbols, kind: 'named' })
-      );
+      const symbols = symbolsStr
+        .split(',')
+        .map((s) => s.trim().split('::').pop().split(' as ')[0].trim())
+        .filter(Boolean);
+      ctx.imports.push(new ImportRecord(prefix, { symbols, kind: 'named' }));
     } else {
       ctx.imports.push(new ImportRecord(text));
     }
@@ -780,7 +781,10 @@ function _collectRustScopes(root) {
       if (child.type === 'impl_item') {
         // impl Type { ... } or impl Trait for Type { ... }
         const typeIdNodes = child.namedChildren.filter(
-          (c) => c.type === 'type_identifier' || c.type === 'scoped_type_identifier' || c.type === 'generic_type'
+          (c) =>
+            c.type === 'type_identifier' ||
+            c.type === 'scoped_type_identifier' ||
+            c.type === 'generic_type'
         );
         const hasFor = child.children?.some((c) => c.type === 'for');
         let selfType = null;
@@ -816,17 +820,41 @@ function _collectRustScopes(root) {
  * 从 Rust block 中递归提取调用点
  */
 function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
-  if (!bodyNode) return;
+  if (!bodyNode) {
+    return;
+  }
 
   const RUST_NOISE = new Set([
-    'println', 'eprintln', 'print', 'eprint', 'dbg', 'format',
-    'vec', 'panic', 'assert', 'assert_eq', 'assert_ne', 'debug_assert',
-    'todo', 'unimplemented', 'unreachable', 'cfg',
-    'write', 'writeln', 'log', 'info', 'warn', 'error', 'debug', 'trace',
+    'println',
+    'eprintln',
+    'print',
+    'eprint',
+    'dbg',
+    'format',
+    'vec',
+    'panic',
+    'assert',
+    'assert_eq',
+    'assert_ne',
+    'debug_assert',
+    'todo',
+    'unimplemented',
+    'unreachable',
+    'cfg',
+    'write',
+    'writeln',
+    'log',
+    'info',
+    'warn',
+    'error',
+    'debug',
+    'trace',
   ]);
 
   function walk(node, isAwaited) {
-    if (!node || node.type === 'ERROR' || node.isMissing) return;
+    if (!node || node.type === 'ERROR' || node.isMissing) {
+      return;
+    }
 
     // await expression: expr.await
     if (node.type === 'await_expression') {
@@ -839,9 +867,15 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
     // call_expression: func(args) or Struct::method(args)
     if (node.type === 'call_expression') {
       const func = node.namedChildren[0];
-      if (!func) { walkChildren(node, false); return; }
+      if (!func) {
+        walkChildren(node, false);
+        return;
+      }
 
-      let callee, receiver = null, receiverType = null, callType;
+      let callee,
+        receiver = null,
+        receiverType = null,
+        callType;
 
       if (func.type === 'scoped_identifier' || func.type === 'scoped_type_identifier') {
         // Struct::method() or crate::mod::func()
@@ -877,10 +911,15 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
         }
       } else if (func.type === 'identifier') {
         callee = func.text;
-        if (RUST_NOISE.has(callee)) { walkChildren(node, false); return; }
+        if (RUST_NOISE.has(callee)) {
+          walkChildren(node, false);
+          return;
+        }
         // PascalCase → constructor pattern (rare in Rust — turbofish/struct literal more common)
         callType = /^[A-Z]/.test(callee) ? 'constructor' : 'function';
-        if (callType === 'constructor') receiverType = callee;
+        if (callType === 'constructor') {
+          receiverType = callee;
+        }
       } else {
         callee = func.text?.slice(0, 80) || 'unknown';
         callType = 'function';
@@ -901,14 +940,17 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
         isAwait: isAwaited,
       });
 
-      if (args) walkChildren(args, false);
+      if (args) {
+        walkChildren(args, false);
+      }
       return;
     }
 
     // method_call_expression: obj.method(args) — Rust-specific
     if (node.type === 'method_call_expression') {
       const valueNode = node.namedChildren.find(
-        (c) => c.type !== 'field_identifier' && c.type !== 'arguments' && c.type !== 'type_arguments'
+        (c) =>
+          c.type !== 'field_identifier' && c.type !== 'arguments' && c.type !== 'type_arguments'
       );
       const nameNode = node.namedChildren.find((c) => c.type === 'field_identifier');
       const args = node.namedChildren.find((c) => c.type === 'arguments');
@@ -916,7 +958,7 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
       const callee = nameNode?.text || 'unknown';
       const receiver = valueNode?.text?.slice(0, 80) || null;
       let receiverType = null;
-      let callType = 'method';
+      const callType = 'method';
 
       if (receiver === 'self' || receiver === '&self' || receiver === '&mut self') {
         receiverType = className;
@@ -925,7 +967,10 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
       }
 
       // Skip noise methods
-      if (RUST_NOISE.has(callee)) { walkChildren(node, false); return; }
+      if (RUST_NOISE.has(callee)) {
+        walkChildren(node, false);
+        return;
+      }
 
       const argCount = args ? args.namedChildCount : 0;
 
@@ -941,7 +986,9 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
         isAwait: isAwaited,
       });
 
-      if (args) walkChildren(args, false);
+      if (args) {
+        walkChildren(args, false);
+      }
       return;
     }
 

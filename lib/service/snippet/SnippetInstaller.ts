@@ -106,7 +106,7 @@ export class SnippetInstaller {
     }
 
     // Per-file 模式
-    const details = [];
+    const details: Array<{ success: boolean; path: string; message: any }> = [];
     let successCount = 0;
     let errorCount = 0;
 
