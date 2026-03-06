@@ -349,7 +349,7 @@ program
 
       await bootstrap.shutdown();
     } catch (err) {
-      cli.error('Error:', err.message);
+      cli.error(`Error: ${err.message}`);
       process.exit(1);
     }
   });
@@ -398,7 +398,7 @@ program
       await bootstrap.shutdown();
       process.exit(violations.some((v) => v.severity === 'error') ? 1 : 0);
     } catch (err) {
-      cli.error('Error:', err.message);
+      cli.error(`Error: ${err.message}`);
       process.exit(1);
     }
   });
@@ -1231,7 +1231,7 @@ async function initBootstrap() {
  * 所有需要服务层的 CLI 命令共用此入口，保证依赖注入一致性
  * @param {object}  [opts]
  * @param {string}  [opts.projectRoot]  项目根目录（默认 cwd）
- * @returns {{ bootstrap, container }}
+ * @returns {Promise<{ bootstrap, container }>}
  */
 async function initContainer(opts = {}) {
   const projectRoot = opts.projectRoot || process.cwd();

@@ -92,7 +92,7 @@ func run() async {
     do {
         content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
     } catch {
-        fputs("{\"error\":\"ScreenCaptureKit access denied: \\(error.localizedDescription). Grant Screen Recording permission in System Settings.\"}\n", stderr)
+        fputs("{\"error\":\"ScreenCaptureKit access denied: \(error.localizedDescription). Grant Screen Recording permission in System Settings.\"}\n", stderr)
         exit(1)
     }
 
@@ -164,7 +164,7 @@ func run() async {
     do {
         image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
     } catch {
-        fputs("{\"error\":\"Screenshot failed: \\(error.localizedDescription)\"}\n", stderr)
+        fputs("{\"error\":\"Screenshot failed: \(error.localizedDescription)\"}\n", stderr)
         exit(1)
     }
 

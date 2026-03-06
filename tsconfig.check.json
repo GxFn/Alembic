@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "types": ["node"]
+  },
+  "include": ["lib/**/*.js", "bin/**/*.js", "lib/types/**/*.d.ts"],
+  "exclude": ["node_modules", "dashboard", "scratch", "test"]
+}
