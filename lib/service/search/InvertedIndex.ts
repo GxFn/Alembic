@@ -71,7 +71,7 @@ export function lookupAll(invertedIndex, query) {
     return [];
   }
 
-  let result = null;
+  let result: any = null;
   for (const token of queryTokens) {
     const docs = invertedIndex.get(token);
     if (!docs) {

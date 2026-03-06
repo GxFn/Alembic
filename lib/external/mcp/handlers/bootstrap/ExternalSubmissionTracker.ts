@@ -73,7 +73,7 @@ export class ExternalSubmissionTracker {
   #fileEvidenceMap = new Map();
 
   /** @type {NegativeSignal[]} 负空间信号 */
-  #negativeSignals = [];
+  #negativeSignals: any[] = [];
 
   /** @type {Map<string, string[]>} dimId → 被拒绝的提交标题列表 */
   #rejections = new Map();
@@ -229,7 +229,7 @@ export class ExternalSubmissionTracker {
     const submissions = this.#dimensionSubmissions.get(dimId) || [];
     const rejections = this.#rejections.get(dimId) || [];
     const scores: any = {};
-    const suggestions = [];
+    const suggestions: string[] = [];
 
     // §1: coverageScore — 提交数量 + 引用文件覆盖
     const submissionCount = submissions.length;
@@ -317,7 +317,7 @@ export class ExternalSubmissionTracker {
    * @returns {object} - { completedDimSummaries, sharedFiles, negativeSignals, usedTriggers }
    */
   getAccumulatedEvidence(currentDimId) {
-    const completedDimSummaries = [];
+    const completedDimSummaries: any[] = [];
 
     for (const [dimId, submissions] of this.#dimensionSubmissions) {
       if (dimId === currentDimId) {

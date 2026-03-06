@@ -271,7 +271,7 @@ export class NudgeGenerator {
     const remaining = b.maxIterations - m.iteration;
     const progressPct = Math.round((m.iteration / b.maxIterations) * 100);
 
-    const parts = [];
+    const parts: string[] = [];
     if (staleTrigger) {
       parts.push(
         `📊 停滞反思 (第 ${m.iteration}/${b.maxIterations} 轮, 连续 ${m.roundsSinceNewInfo} 轮无新信息):`

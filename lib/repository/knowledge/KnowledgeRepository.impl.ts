@@ -122,8 +122,8 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
     const { page = 1, pageSize = 20, orderBy = 'createdAt', order = 'DESC' } = options as any;
     const offset = (page - 1) * pageSize;
 
-    const conditions = [];
-    const params = [];
+    const conditions: string[] = [];
+    const params: any | {} | string[] = [];
 
     const { _tagLike, _search, lifecycle: lcFilter, ...normalFilters } = filters;
 
@@ -272,16 +272,16 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
     return new KnowledgeEntry({
       ...row,
       // JSON 列需要 parse
-      lifecycleHistory: safeJsonParse(row.lifecycleHistory, []),
-      tags: safeJsonParse(row.tags, []),
-      content: safeJsonParse(row.content, {}),
-      relations: safeJsonParse(row.relations, {}),
-      constraints: safeJsonParse(row.constraints, {}),
-      reasoning: safeJsonParse(row.reasoning, {}),
-      quality: safeJsonParse(row.quality, {}),
-      stats: safeJsonParse(row.stats, {}),
-      headers: safeJsonParse(row.headers, []),
-      headerPaths: safeJsonParse(row.headerPaths, []),
+      lifecycleHistory: safeJsonParse(row.lifecycleHistory, [] as any),
+      tags: safeJsonParse(row.tags, [] as any),
+      content: safeJsonParse(row.content, {} as any),
+      relations: safeJsonParse(row.relations, {} as any),
+      constraints: safeJsonParse(row.constraints, {} as any),
+      reasoning: safeJsonParse(row.reasoning, {} as any),
+      quality: safeJsonParse(row.quality, {} as any),
+      stats: safeJsonParse(row.stats, {} as any),
+      headers: safeJsonParse(row.headers, [] as any),
+      headerPaths: safeJsonParse(row.headerPaths, [] as any),
       agentNotes: safeJsonParse(row.agentNotes, null),
       // SQLite INTEGER → boolean
       autoApprovable: !!row.autoApprovable,

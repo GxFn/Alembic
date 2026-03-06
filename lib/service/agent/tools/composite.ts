@@ -478,8 +478,8 @@ export const reviewMyOutput = {
       return { status: 'no_candidates', message: '本次会话尚未提交任何候选。' };
     }
 
-    const issues = [];
-    const checked = [];
+    const issues: any[] = [];
+    const checked: { title: any; passed: boolean; issueCount: number }[] = [];
 
     for (const tc of submitted) {
       const p = tc.params || {};
@@ -487,7 +487,7 @@ export const reviewMyOutput = {
       const markdown = contentObj3.markdown || '';
       const title = p.title || '';
       const description = p.description || '';
-      const candidateIssues = [];
+      const candidateIssues: any[] = [];
 
       // 检查 1: 项目特写后缀
       if (!title.includes('— 项目特写') && !markdown.includes('— 项目特写')) {

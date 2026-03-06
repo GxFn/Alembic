@@ -212,7 +212,7 @@ export class MemoryConsolidator {
       return { processed: [], replaced: 0 };
     }
 
-    const processed = [];
+    const processed: any[] = [];
     let replaced = 0;
 
     for (const candidate of candidates) {

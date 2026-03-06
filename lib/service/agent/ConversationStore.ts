@@ -356,7 +356,7 @@ export class ConversationStore {
     }
 
     // 从末尾往前填充
-    const tail = [];
+    const tail: any[] = [];
     for (let i = messages.length - 1; i >= (result.length > 0 ? 1 : 0); i--) {
       if (used + tokenCounts[i] > tokenBudget) {
         break;

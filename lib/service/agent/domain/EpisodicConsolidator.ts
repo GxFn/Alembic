@@ -138,7 +138,7 @@ export class EpisodicConsolidator {
    * 每个 finding 映射为一条 fact，importance 直接继承。
    */
   #extractFromFindings(sessionStore) {
-    const memories = [];
+    const memories: any[] = [];
     const completedDims = sessionStore.getCompletedDimensions();
 
     for (const dimId of completedDims) {
@@ -186,7 +186,7 @@ export class EpisodicConsolidator {
    * topFindings 中重要性 ≥ 7 的 → fact (高优先级重复确认)
    */
   #extractFromReflections(sessionStore) {
-    const memories = [];
+    const memories: any[] = [];
     const json = sessionStore.toJSON();
     const reflections = json.tierReflections || [];
 
@@ -254,7 +254,7 @@ export class EpisodicConsolidator {
    * 仅提取高置信度的简短陈述 (≤100 字), 避免噪音。
    */
   #extractFromAnalysisText(sessionStore) {
-    const memories = [];
+    const memories: any[] = [];
     const seen = new Set(); // 去重
     const completedDims = sessionStore.getCompletedDimensions();
 
@@ -341,7 +341,7 @@ export class EpisodicConsolidator {
    * @param {string} [evidence]
    * @returns {string[]}
    */
-  #extractEntities(text, evidence = undefined) {
+  #extractEntities(text, evidence: any = undefined) {
     const entities = new Set();
 
     // 大驼峰类名 (至少 2 个大写字母)

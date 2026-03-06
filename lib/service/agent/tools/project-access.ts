@@ -57,7 +57,7 @@ async function _getProjectFiles(params, ctx) {
   const { fileFilter } = params;
   const projectRoot = ctx.projectRoot || process.cwd();
 
-  let extFilter = null;
+  let extFilter: any = null;
   if (fileFilter) {
     const exts = fileFilter.split(',').map((e) => e.trim().replace(/^\./, ''));
     extFilter = new RegExp(`\\.(${exts.join('|')})$`, 'i');
@@ -193,7 +193,7 @@ export const searchProjectCode = {
     // ── 批量模式：patterns 数组 ──
     if (Array.isArray(params.patterns) && params.patterns.length > 0) {
       const batchPatterns = params.patterns.slice(0, 10);
-      const batchResults = {};
+      const batchResults: Record<string, any> = {};
       let dedupCount = 0;
       for (const p of batchPatterns) {
         const cacheKey = `${p}|${params.isRegex || false}|${params.fileFilter || ''}`;
@@ -260,7 +260,7 @@ export const searchProjectCode = {
     const { files, skippedThirdParty } = await _getProjectFiles(params, ctx);
 
     // 搜索匹配
-    const matches = [];
+    const matches: { file: any; line: number; code: any; context: string; score: number }[] = [];
     let total = 0;
 
     for (const f of files) {
@@ -285,7 +285,7 @@ export const searchProjectCode = {
         if (matches.length < maxResults) {
           const start = Math.max(0, i - contextLines);
           const end = Math.min(lines.length - 1, i + contextLines);
-          const contextArr = [];
+          const contextArr: any[] = [];
           for (let j = start; j <= end; j++) {
             contextArr.push(lines[j]);
           }
@@ -362,7 +362,7 @@ export const readProjectFile = {
     // ── 批量模式：filePaths 数组 ──
     if (Array.isArray(params.filePaths) && params.filePaths.length > 0) {
       const batchPaths = params.filePaths.slice(0, 8);
-      const batchResults = {};
+      const batchResults: Record<string, any> = {};
       let dedupCount = 0;
       for (const fp of batchPaths) {
         const cacheKey = `${fp}|${params.startLine || 1}|${params.endLine || ''}|${params.maxLines || 100}`;
@@ -427,7 +427,7 @@ export const readProjectFile = {
 
     // 优先从内存缓存读取（bootstrap 场景）
     const fileCache = ctx.fileCache || null;
-    let content = null;
+    let content: any = null;
 
     if (fileCache && Array.isArray(fileCache)) {
       const cached = fileCache.find(
@@ -516,7 +516,7 @@ export const listProjectStructure = {
       return { error: 'Path traversal not allowed.' };
     }
 
-    const treeLines = [];
+    const treeLines: string[] = [];
     const stats = { totalFiles: 0, totalDirs: 0, byLanguage: {}, totalLines: 0 };
 
     const walk = (dir, relBase, currentDepth, prefix) => {
@@ -701,7 +701,7 @@ export const getFileSummary = {
     }
 
     const fileCache = ctx.fileCache || null;
-    let content = null;
+    let content: any = null;
 
     if (fileCache && Array.isArray(fileCache)) {
       const cached = fileCache.find(
@@ -746,7 +746,7 @@ export const getFileSummary = {
     }
 
     const extract = (regex) => {
-      const matches = [];
+      const matches: any[] = [];
       let m;
       regex.lastIndex = 0;
       while ((m = regex.exec(content)) !== null) {
@@ -799,7 +799,7 @@ export const semanticSearchCode = {
       return { error: '参数错误: 请提供 query (自然语言搜索查询)' };
     }
 
-    let searchEngine = null;
+    let searchEngine: any = null;
     try {
       searchEngine = ctx.container?.get('searchEngine');
     } catch {
@@ -807,7 +807,7 @@ export const semanticSearchCode = {
     }
 
     if (!searchEngine) {
-      let vectorStore = null;
+      let vectorStore: any = null;
       try {
         vectorStore = ctx.container?.get('vectorStore');
       } catch {
@@ -822,7 +822,7 @@ export const semanticSearchCode = {
         };
       }
 
-      let aiProvider = null;
+      let aiProvider: any = null;
       try {
         aiProvider = ctx.container?.get('aiProvider');
       } catch {

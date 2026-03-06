@@ -96,8 +96,8 @@ export class UnifiedValidator {
    * @returns {{ pass: boolean, errors: string[], warnings: string[] }}
    */
   validate(candidate, options: any = {}) {
-    const errors = [];
-    const warnings = [];
+    const errors: any[] = [];
+    const warnings: any[] = [];
 
     const mode = options.mode || detectMode(candidate);
     const systemInjected = new Set(options.systemInjectedFields || []);

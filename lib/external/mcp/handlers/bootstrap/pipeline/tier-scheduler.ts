@@ -48,7 +48,7 @@ const DEFAULT_TIERS = [
 
 class Semaphore {
   #permits;
-  #queue = [];
+  #queue: any[] = [];
 
   constructor(permits) {
     this.#permits = permits;

@@ -91,7 +91,7 @@ const STYLE_GUIDE = buildProducerStyleGuide();
  * @returns {string}
  */
 export function buildProducerPrompt(analysisReport, dimConfig, projectInfo) {
-  const parts = [];
+  const parts: any[] = [];
 
   parts.push(`将以下对 ${projectInfo.name} 项目 "${dimConfig.label}" 维度的分析，转化为知识候选:`);
   parts.push(`---\n${analysisReport.analysisText}\n---`);
@@ -125,7 +125,7 @@ export function buildProducerPrompt(analysisReport, dimConfig, projectInfo) {
  * @returns {string}
  */
 export function buildProducerPromptV2(artifact, dimConfig, projectInfo) {
-  const parts = [];
+  const parts: any[] = [];
 
   parts.push(`将以下对 ${projectInfo.name} 项目 "${dimConfig.label}" 维度的分析，转化为知识候选:`);
   parts.push(`---\n${artifact.analysisText}\n---`);

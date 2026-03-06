@@ -565,14 +565,14 @@ export class GuardCheckEngine {
    * 获取所有启用的规则 (数据库 + 内置)
    */
   getRules(language = null) {
-    let rules = [];
+    let rules: any[] = [];
 
     // 从数据库加载自定义规则
     // 优先从 knowledge_entries 表查询（V3），回退到 recipes 表（V2）
     try {
       const now = Date.now();
       if (!this._customRulesCache || now - this._cacheTime > this._cacheTTL) {
-        let rows = [];
+        let rows: any[] = [];
         try {
           rows = this.db
             .prepare(
@@ -586,11 +586,11 @@ export class GuardCheckEngine {
           /* table may not exist */
         }
 
-        const regexRules = [];
-        const astRules = [];
+        const regexRules: any[] = [];
+        const astRules: any[] = [];
 
         for (const r of rows) {
-          let guards = [];
+          let guards: any[] = [];
           try {
             const constraints = JSON.parse(r.constraints || '{}');
             guards = constraints.guards || [];
@@ -699,7 +699,7 @@ export class GuardCheckEngine {
    */
   checkCode(code, language, options: any = {}) {
     const { scope = null, filePath = '' } = options;
-    const violations = [];
+    const violations: any[] = [];
 
     // 获取匹配语言的规则
     let rules = this.getRules(language);
@@ -844,7 +844,7 @@ export class GuardCheckEngine {
       return [];
     }
 
-    const violations = [];
+    const violations: any[] = [];
 
     for (const rule of astRules) {
       const { astQuery } = rule;
@@ -1018,7 +1018,7 @@ export class GuardCheckEngine {
    * @returns {{files, summary, crossFileViolations}}
    */
   auditFiles(files, options: any = {}) {
-    const results = [];
+    const results: any[] = [];
     let totalViolations = 0;
     let totalErrors = 0;
 

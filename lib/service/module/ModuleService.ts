@@ -182,7 +182,7 @@ export class ModuleService {
   async listTargets() {
     await this.#ensureLoaded();
 
-    const allTargets = [];
+    const allTargets: any[] = [];
     const seenNames = new Set();
     let hasRealDiscovererTargets = false;
 
@@ -311,8 +311,8 @@ export class ModuleService {
     await this.#ensureLoaded();
 
     // 合并所有 Discoverer 的依赖图
-    const allNodes = [];
-    const allEdges = [];
+    const allNodes: any[] = [];
+    const allEdges: { from: string; to: string; type: any; source: any }[] = [];
 
     // 如果有专业 Discoverer（非 generic），则跳过 GenericDiscoverer 的依赖图
     // 避免 generic fallback 生成的冗余根节点（如项目名本身）干扰图结构
@@ -514,7 +514,7 @@ export class ModuleService {
 
     // 2. 收集所有源文件（去重）
     const seenPaths = new Set();
-    const allFiles = [];
+    const allFiles: any[] = [];
     const MAX_FILES = options.maxFiles || 200;
 
     if (allTargets && allTargets.length > 0) {
@@ -581,7 +581,7 @@ export class ModuleService {
     }));
 
     // 3. AI 提取 Recipes
-    const allRecipes = [];
+    const allRecipes: any[] = [];
     const PER_BATCH_TIMEOUT = options.batchTimeout || 90000;
     const startTime = Date.now();
     const TOTAL_TIMEOUT = options.totalTimeout || 540000;
@@ -621,7 +621,7 @@ export class ModuleService {
     }
 
     // 4. Guard 审计
-    let guardAudit = null;
+    let guardAudit: any = null;
     if (this.#guardCheckEngine) {
       try {
         const guardFiles = allFiles.map((f) => ({ path: f.path, content: f.content }));
@@ -691,7 +691,7 @@ export class ModuleService {
       return [];
     }
 
-    const dirs = [];
+    const dirs: any[] = [];
     this.#walkDirsForBrowse(root, dirs, 0, maxDepth);
     return dirs;
   }
@@ -897,7 +897,7 @@ export class ModuleService {
    * 从目录收集源码文件列表
    */
   #collectFolderFiles(dirPath, maxDepth = 15) {
-    const files = [];
+    const files: any[] = [];
     this.#walkCollectSourceFiles(dirPath, dirPath, files, 0, maxDepth);
     return files;
   }
@@ -943,7 +943,7 @@ export class ModuleService {
    * 检测目录主要编程语言
    */
   #detectFolderLanguage(dirPath) {
-    const langCount = {};
+    const langCount: Record<string, any> = {};
     try {
       const entries = readdirSync(dirPath, { withFileTypes: true });
       for (const entry of entries) {

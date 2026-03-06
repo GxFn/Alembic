@@ -32,7 +32,7 @@ export function tokenize(text) {
   const normalized = expanded.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, ' ');
   const rawTokens = normalized.split(/[\s_-]+/).filter((t) => t.length >= 1);
 
-  const tokens = [];
+  const tokens: any[] = [];
   // CJK 正则（中日韩统一表意文字 + 扩展区）
   const cjkRe = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
 
@@ -191,7 +191,7 @@ export class BM25Scorer {
       return [];
     }
 
-    const scores = [];
+    const scores: { id: any; score: number; meta: any }[] = [];
 
     for (const doc of this.documents) {
       if (!doc) {
@@ -281,7 +281,7 @@ export class SearchEngine {
     this._cache.clear();
 
     try {
-      let entries = [];
+      let entries: any[] = [];
 
       try {
         entries = this.db
@@ -363,7 +363,7 @@ export class SearchEngine {
     switch (mode) {
       case 'auto': {
         // 缓存 BM25 结果, 避免 RRF 降级时重复计算
-        let cachedBm25Items = null;
+        let cachedBm25Items: any = null;
         const getBm25 = () => {
           if (!cachedBm25Items) {
             cachedBm25Items = this._bm25Search(query, type, recallLimit);
@@ -565,7 +565,7 @@ export class SearchEngine {
    * 返回包含 kind 字段的完整结果，使用 ESCAPE 防止通配符注入
    */
   _keywordSearch(query, type, limit) {
-    const results = [];
+    const results: any[] = [];
     // 转义 LIKE 通配符 (% → \%, _ → \_)
     const escaped = query.replace(/[%_\\]/g, (ch) => `\\${ch}`);
     const pattern = `%${escaped}%`;
@@ -578,7 +578,7 @@ export class SearchEngine {
       type === 'solution'
     ) {
       try {
-        let rows = [];
+        let rows: any[] = [];
         try {
           rows = this.db
             .prepare(
@@ -749,7 +749,7 @@ export class SearchEngine {
     try {
       const ids = items.map((it) => it.id);
       const placeholders = ids.map(() => '?').join(',');
-      let rows = [];
+      let rows: any[] = [];
       try {
         rows = this.db
           .prepare(
@@ -938,7 +938,7 @@ export class SearchEngine {
    * @private
    */
   _buildDocMeta(r) {
-    let parsedTags = [];
+    let parsedTags: any[] = [];
     try {
       parsedTags = JSON.parse(r.tags || '[]');
     } catch {

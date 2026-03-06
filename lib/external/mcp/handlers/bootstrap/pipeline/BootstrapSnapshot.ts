@@ -92,14 +92,14 @@ export class BootstrapSnapshot {
     const now = new Date().toISOString();
 
     // 计算文件指纹
-    const fileHashes = {};
+    const fileHashes: Record<string, any> = {};
     for (const f of allFiles) {
       const rel = f.relativePath || relative(projectRoot, f.path);
       fileHashes[rel] = this.#computeContentHash(f.content || this.#readFileContent(f.path));
     }
 
     // 构建维度-文件映射
-    const dimensionMeta = {};
+    const dimensionMeta: Record<string, any> = {};
     for (const [dimId, stat] of Object.entries(dimensionStats || {}) as [string, any][]) {
       dimensionMeta[dimId] = {
         candidateCount: stat.candidateCount || 0,
@@ -232,15 +232,15 @@ export class BootstrapSnapshot {
     const oldHashes = snapshot.fileHashes || {};
 
     // 计算当前文件 hash
-    const newHashes = {};
+    const newHashes: Record<string, any> = {};
     for (const f of currentFiles) {
       const rel = f.relativePath || relative(projectRoot, f.path);
       newHashes[rel] = this.#computeContentHash(f.content || '');
     }
 
-    const added = [];
-    const modified = [];
-    const unchanged = [];
+    const added: string[] = [];
+    const modified: string[] = [];
+    const unchanged: string[] = [];
 
     // 对比新文件
     for (const [relPath, hash] of Object.entries(newHashes)) {
@@ -356,7 +356,7 @@ export class BootstrapSnapshot {
    */
   #getDimFileMap(snapshotId) {
     const rows = this.#stmts.getDimFiles.all(snapshotId);
-    const map = {};
+    const map: Record<string, any> = {};
     for (const row of rows) {
       if (!map[row.dim_id]) {
         map[row.dim_id] = new Set();
@@ -375,7 +375,7 @@ export class BootstrapSnapshot {
     const ext = filePath.split('.').pop()?.toLowerCase() || '';
     const name = filePath.split('/').pop()?.toLowerCase() || '';
 
-    const dims = [];
+    const dims: any[] = [];
 
     // ObjC 文件 → objc-deep-scan
     if (['m', 'mm', 'h'].includes(ext)) {

@@ -26,7 +26,7 @@ export class DataFlowInferrer {
    */
   static infer(resolvedEdges) {
     /** @type {DataFlowEdge[]} */
-    const dataFlowEdges = [];
+    const dataFlowEdges: any[] = [];
 
     for (const edge of resolvedEdges) {
       // 仅当调用有参数时生成正向数据流 (参数从 caller 流向 callee)

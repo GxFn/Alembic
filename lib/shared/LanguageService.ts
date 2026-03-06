@@ -620,7 +620,7 @@ export class LanguageService {
       return [];
     }
     const nameSet = new Set(entryNames);
-    const results = [];
+    const results: { eco: string; buildTool: string }[] = [];
     const seenEco = new Set();
 
     for (const marker of BUILD_SYSTEM_MARKERS) {

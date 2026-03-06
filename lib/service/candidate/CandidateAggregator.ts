@@ -26,8 +26,8 @@ export function aggregateCandidates(items, opts: any = {}) {
   }
 
   const threshold = opts.threshold ?? TITLE_SIMILARITY_THRESHOLD;
-  const kept = [];
-  const duplicates = [];
+  const kept: any[] = [];
+  const duplicates: { item: any; duplicateOf: any }[] = [];
 
   for (const item of items) {
     const titleTokens = tokenizeForSimilarity(item.title || '');

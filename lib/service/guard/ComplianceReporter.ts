@@ -120,7 +120,7 @@ export class ComplianceReporter {
     const auditResult = this.engine.auditFiles(files, { scope: 'project' });
 
     // 3. 通过 ExclusionManager 过滤被排除的项
-    const filteredFiles = [];
+    const filteredFiles: any[] = [];
     for (const fileResult of auditResult.files || []) {
       if (this.exclusionManager?.isPathExcluded?.(fileResult.filePath)) {
         continue;
@@ -197,7 +197,7 @@ export class ComplianceReporter {
       .slice(0, 20);
 
     // 7. 规则健康度（来自 RuleLearner）
-    let ruleHealth = [];
+    let ruleHealth: any[] = [];
     try {
       if (this.ruleLearner?.getAllStats) {
         const allStats = this.ruleLearner.getAllStats();
@@ -287,7 +287,7 @@ export class ComplianceReporter {
     const gateIcon =
       qualityGate.status === 'PASS' ? '✅' : qualityGate.status === 'WARN' ? '⚠️' : '❌';
 
-    const lines = [];
+    const lines: any[] = [];
     lines.push(`${gateIcon} Quality Gate: ${qualityGate.status}  Score: ${qualityGate.score}/100`);
     lines.push(
       `   Files: ${summary.filesScanned}  Errors: ${summary.errors}  Warnings: ${summary.warnings}  Infos: ${summary.infos || 0}`
@@ -323,7 +323,7 @@ export class ComplianceReporter {
 
   _printMarkdown(report) {
     const { qualityGate, summary, topViolations, fileHotspots, trend } = report;
-    const lines = [];
+    const lines: any[] = [];
 
     lines.push('# Guard Compliance Report');
     lines.push('');

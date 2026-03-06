@@ -91,9 +91,9 @@ export class AgentRouter {
   #logger;
   #bus;
   /** @type {import('../../external/ai/AiProvider.js').AiProvider|null} */
-  #aiProvider = null;
+  #aiProvider: any = null;
   /** @type {Function|null} — (presetName, message, opts) => Promise<AgentResult> */
-  #executor = null;
+  #executor: any = null;
 
   constructor() {
     this.#logger = Logger.getInstance();

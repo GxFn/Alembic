@@ -71,16 +71,16 @@ const PROJECT_ROOT_WRITABLE_FILES = ['.gitignore', '.env'];
 class PathGuard {
   targetPath: any;
   /** @type {string|null} 项目根目录（绝对路径） */
-  #projectRoot = null;
+  #projectRoot: string | null = null;
 
   /** @type {string|null} AutoSnippet 包自身根目录 */
-  #packageRoot = null;
+  #packageRoot: string | null = null;
 
   /** @type {Set<string>} 额外允许的绝对路径前缀 */
-  #allowList = new Set();
+  #allowList = new Set<string>();
 
   /** @type {string|null} 知识库目录名（如 'AutoSnippet'） */
-  #knowledgeBaseDir = null;
+  #knowledgeBaseDir: string | null = null;
 
   /** @type {boolean} 是否已配置 */
   #configured = false;
@@ -154,13 +154,13 @@ class PathGuard {
     }
 
     if (!targetPath || typeof targetPath !== 'string') {
-      throw new PathGuardError(String(targetPath), this.#projectRoot);
+      throw new PathGuardError(String(targetPath), this.#projectRoot!);
     }
 
     const resolved = path.resolve(targetPath);
 
     // 1. 项目目录内 — 允许
-    if (this.#isUnder(resolved, this.#projectRoot)) {
+    if (this.#isUnder(resolved, this.#projectRoot!)) {
       return;
     }
 
@@ -177,7 +177,7 @@ class PathGuard {
     }
 
     // 越界
-    throw new PathGuardError(resolved, this.#projectRoot);
+    throw new PathGuardError(resolved, this.#projectRoot!);
   }
 
   /**
@@ -198,12 +198,12 @@ class PathGuard {
     const resolved = path.resolve(targetPath);
 
     // 如果不在 projectRoot 内（在白名单/packageRoot 中），跳过项目内检查
-    if (!this.#isUnder(resolved, this.#projectRoot)) {
+    if (!this.#isUnder(resolved, this.#projectRoot!)) {
       return;
     }
 
     // 计算相对于 projectRoot 的路径
-    const relative = path.relative(this.#projectRoot, resolved);
+    const relative = path.relative(this.#projectRoot!, resolved);
     const firstSegment = relative.split(path.sep)[0];
 
     // 检查是否在允许的前缀中
@@ -227,7 +227,7 @@ class PathGuard {
     // 不在允许的写入范围内
     throw new PathGuardError(
       resolved,
-      this.#projectRoot,
+      this.#projectRoot!,
       `项目内写入范围受限: "${relative}" 不在允许的目录中（允许: ${[...PROJECT_WRITE_SCOPE_PREFIXES, kbDir || 'AutoSnippet'].join(', ')}）`
     );
   }
@@ -305,10 +305,10 @@ class PathGuard {
 
     // 运行时探测: 查找包含 AutoSnippet.boxspec.json 的子目录
     try {
-      const entries = fs.readdirSync(this.#projectRoot, { withFileTypes: true });
+      const entries = fs.readdirSync(this.#projectRoot!, { withFileTypes: true });
       for (const e of entries) {
         if (e.isDirectory() && !e.name.startsWith('.')) {
-          if (fs.existsSync(path.join(this.#projectRoot, e.name, 'AutoSnippet.boxspec.json'))) {
+          if (fs.existsSync(path.join(this.#projectRoot!, e.name, 'AutoSnippet.boxspec.json'))) {
             this.#knowledgeBaseDir = e.name;
             return e.name;
           }

@@ -45,7 +45,7 @@ function _walkPyNode(node, ctx, parentClassName) {
         if (modNode) {
           const importPath = modNode.text;
           // from mod import A, B, C
-          const importedNames = [];
+          const importedNames: any | '*'[] = [];
           for (const c of child.namedChildren) {
             if (c.type === 'dotted_name' && c !== modNode) {
               importedNames.push(c.text);
@@ -197,7 +197,7 @@ function _walkPyClassBody(body, ctx, className) {
 function _parsePyClass(node) {
   const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
   const _superclass = null;
-  const protocols = [];
+  const protocols: any[] = [];
 
   // bases
   const argList = node.namedChildren.find((c) => c.type === 'argument_list');
@@ -212,7 +212,7 @@ function _parsePyClass(node) {
   }
 
   // 约定: 第一个 base 可能是 superclass（如果不是 Protocol/ABC/Mixin）
-  let detectedSuper = null;
+  let detectedSuper: any = null;
   if (protocols.length > 0) {
     const first = protocols[0];
     if (!/Protocol$|ABC$|Mixin$|Base$/i.test(first)) {
@@ -263,7 +263,7 @@ function _parsePyFunction(node, className) {
 // ── Python 模式检测 ──
 
 function detectPyPatterns(root, lang, methods, properties, classes) {
-  const patterns = [];
+  const patterns: any[] = [];
 
   // Singleton: 模块级实例
   // Factory: create_xxx / build_xxx / make_xxx
@@ -280,7 +280,7 @@ function detectPyPatterns(root, lang, methods, properties, classes) {
   }
 
   // Context Manager: __enter__ + __exit__
-  const classMethodMap = {};
+  const classMethodMap: Record<string, any> = {};
   for (const m of methods) {
     if (m.className) {
       if (!classMethodMap[m.className]) {
@@ -388,7 +388,7 @@ function _maxNesting(node, depth) {
 
 // ── 插件导出 ──
 
-let _grammar = null;
+let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }

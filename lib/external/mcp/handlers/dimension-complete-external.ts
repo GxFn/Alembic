@@ -433,7 +433,7 @@ export async function dimensionComplete(ctx, args) {
       // v3: 从 SessionStore 提取前序维度分析摘要 + 关键发现（对标内部 Agent 的 buildContextForDimension）
       previousDimensionAnalysis: (() => {
         try {
-          const summaries = [];
+          const summaries: { dimId: any; analysisSummary: any; keyFindings: any }[] = [];
           for (const dimSummary of accumulatedEvidence.completedDimSummaries) {
             const report = session.sessionStore.getDimensionReport(dimSummary.dimId);
             if (report) {

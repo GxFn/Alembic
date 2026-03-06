@@ -74,7 +74,7 @@ export class ExplorationTracker {
 
   // ── Graceful exit 控制 ──
   /** @type {number|null} 进入 graceful exit 的轮次 */
-  #gracefulExitRound = null;
+  #gracefulExitRound: number | null = null;
 
   /** @type {boolean} tick 是否已调用（用于 rollback） */
   #ticked = false;

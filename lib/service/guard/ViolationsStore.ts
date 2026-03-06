@@ -197,7 +197,7 @@ export class ViolationsStore {
   async list(filters: any = {}, { page = 1, limit = 20 } = {}) {
     const offset = (page - 1) * limit;
     let sql = 'SELECT * FROM guard_violations';
-    const params = [];
+    const params: any | number[] = [];
 
     if (filters.file) {
       sql += ' WHERE file_path = ?';

@@ -9,6 +9,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "strict": false,
+    "strictNullChecks": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,

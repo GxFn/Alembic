@@ -25,10 +25,10 @@ const EXCLUDE_DIRS = new Set([
 ]);
 
 export class RustDiscoverer extends ProjectDiscoverer {
-  #projectRoot = null;
-  #targets = [];
-  #depGraph = { nodes: [], edges: [] };
-  #crateName = null;
+  #projectRoot: string | null = null;
+  #targets: any[] = [];
+  #depGraph: { nodes: any[]; edges: any[] } = { nodes: [], edges: [] };
+  #crateName: string | null = null;
 
   get id() {
     return 'rust';
@@ -39,7 +39,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
 
   async detect(projectRoot) {
     let confidence = 0;
-    const reasons = [];
+    const reasons: any[] = [];
 
     if (existsSync(join(projectRoot, 'Cargo.toml'))) {
       confidence = 0.92;
@@ -150,7 +150,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files = [];
+    const files: any[] = [];
     this.#collectRsFiles(targetPath, targetPath, files);
     return files;
   }
@@ -219,7 +219,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
         .map((s) => s.replace(/["\s]/g, ''))
         .filter(Boolean);
 
-      const members = [];
+      const members: any[] = [];
       for (const pattern of memberPatterns) {
         if (pattern.includes('*')) {
           // Glob — 展开

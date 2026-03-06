@@ -84,7 +84,7 @@ export class PerformanceMonitor {
     if (!this.metrics.endpoints.has(route)) {
       if (this.metrics.endpoints.size >= 500) {
         // 淘汰最少访问的端点
-        let minKey = null,
+        let minKey: any = null,
           minCount = Infinity;
         for (const [k, v] of this.metrics.endpoints) {
           if (v.count < minCount) {
@@ -184,7 +184,7 @@ export class PerformanceMonitor {
     this.calculateStats(); // 实时计算
 
     const topEndpoints = Array.from(this.metrics.endpoints.entries())
-      .sort((a, b) => b[1].count - a[1].count)
+      .sort((a: any, b: any) => b[1].count - a[1].count)
       .slice(0, 10)
       .map(([route, stats]) => ({
         route,
@@ -193,7 +193,7 @@ export class PerformanceMonitor {
       }));
 
     const slowestEndpoints = Array.from(this.metrics.endpoints.entries())
-      .sort((a, b) => b[1].avgDuration - a[1].avgDuration)
+      .sort((a: any, b: any) => b[1].avgDuration - a[1].avgDuration)
       .slice(0, 10)
       .map(([route, stats]) => ({
         route,
@@ -256,7 +256,7 @@ export class PerformanceMonitor {
 }
 
 // 单例实例
-let performanceMonitorInstance = null;
+let performanceMonitorInstance: any = null;
 
 /**
  * 初始化性能监控

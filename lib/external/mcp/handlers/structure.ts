@@ -11,7 +11,7 @@ import { envelope } from '../envelope.js';
 
 // ─── Discoverer 缓存 ─────────────────────────────────────
 // 同一 projectRoot 在模块生命期内只初始化一次
-let _discovererCache = null; // { projectRoot, discoverer, targets }
+let _discovererCache: any = null; // { projectRoot, discoverer, targets }
 
 async function _getLoadedDiscoverer() {
   const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
@@ -97,13 +97,13 @@ export async function getTargets(ctx, args: any = {}) {
   }
 
   // 带摘要：每个 target 附加文件数、语言统计、推断职责
-  const enriched = [];
-  const globalLangStats = {};
+  const enriched: any[] = [];
+  const globalLangStats: Record<string, any> = {};
   let totalFiles = 0;
 
   for (const t of targets) {
     let fileCount = 0;
-    const langStats = {};
+    const langStats: Record<string, any> = {};
     try {
       const fileList = await discoverer.getTargetFiles(t);
       fileCount = fileList.length;
@@ -154,7 +154,7 @@ export async function getTargetFiles(ctx, args) {
   const contentMaxLines = args.contentMaxLines || 100;
   const maxFiles = args.maxFiles || 500;
 
-  const files = [];
+  const files: any[] = [];
   for (const f of rawFiles) {
     if (files.length >= maxFiles) {
       break;
@@ -183,7 +183,7 @@ export async function getTargetFiles(ctx, args) {
   }
 
   // 文件语言统计
-  const langStats = {};
+  const langStats: Record<string, any> = {};
   for (const f of files) {
     langStats[f.language] = (langStats[f.language] || 0) + 1;
   }
@@ -357,7 +357,13 @@ async function _fallbackRelationsFromRecipe(ctx, nodeId, relation, direction) {
       typeof entry.relations?.toJSON === 'function'
         ? entry.relations.toJSON()
         : entry.relations || {};
-    const outgoing = [];
+    const outgoing: {
+      fromId: any;
+      fromType: string;
+      toId: any;
+      toType: string;
+      relation: string;
+    }[] = [];
     if (direction === 'both' || direction === 'out') {
       for (const [relType, targets] of Object.entries(relJson)) {
         if (relation && relType !== relation) {
@@ -376,7 +382,13 @@ async function _fallbackRelationsFromRecipe(ctx, nodeId, relation, direction) {
     }
 
     // 反向查找：其他条目中 relations 包含当前 nodeId
-    const incoming = [];
+    const incoming: {
+      fromId: any;
+      fromType: string;
+      toId: any;
+      toType: string;
+      relation: string;
+    }[] = [];
     if (direction === 'both' || direction === 'in') {
       const knowledgeRepo = ctx.container.get('knowledgeRepository');
       const reverseRows = knowledgeRepo.db
@@ -426,7 +438,7 @@ async function _fallbackImpactFromRecipe(ctx, nodeId) {
       )
       .all(`%${nodeId}%`, nodeId);
 
-    const impacted = [];
+    const impacted: { id: any; title: any; type: string; relation: string; depth: number }[] = [];
     for (const row of rows) {
       try {
         const rels = JSON.parse(row.relations || '{}');

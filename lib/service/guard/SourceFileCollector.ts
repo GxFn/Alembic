@@ -54,7 +54,7 @@ const SKIP_DIRS = new Set([
 export async function collectSourceFiles(dir, options: any = {}) {
   const { extensions = SOURCE_EXTS, skipDirs = SKIP_DIRS, maxFiles = Infinity } = options;
 
-  const files = [];
+  const files: string[] = [];
 
   async function walk(currentDir) {
     if (files.length >= maxFiles) {
@@ -99,7 +99,7 @@ export async function collectSourceFiles(dir, options: any = {}) {
  */
 export async function collectSourceFilesWithContent(dir, options: any = {}) {
   const paths = await collectSourceFiles(dir, options);
-  const results = [];
+  const results: any[] = [];
 
   for (const filePath of paths) {
     try {

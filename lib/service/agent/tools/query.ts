@@ -132,7 +132,7 @@ export const getProjectStats = {
     const stats = await knowledgeService.getStats();
 
     // 尝试获取知识图谱统计
-    let graphStats = null;
+    let graphStats: any = null;
     try {
       const kgService = ctx.container.get('knowledgeGraphService');
       graphStats = kgService.getStats();

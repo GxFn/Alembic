@@ -53,7 +53,7 @@ export class VSCodeCodec extends SnippetCodec {
    * @returns {string} JSON 字符串
    */
   generateBundle(specs) {
-    const bundle = {};
+    const bundle: Record<string, any> = {};
     for (const spec of specs) {
       const key = `Recipe: ${spec.title || spec.identifier}`;
       bundle[key] = this.#specToEntry(spec);

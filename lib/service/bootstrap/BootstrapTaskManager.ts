@@ -130,13 +130,13 @@ class BootstrapSession {
 
 export class BootstrapTaskManager {
   /** @type {BootstrapSession|null} */
-  #currentSession = null;
+  #currentSession: BootstrapSession | null = null;
 
   /** @type {import('../../infrastructure/event/EventBus.js').EventBus|null} */
-  #eventBus = null;
+  #eventBus: any = null;
 
   /** @type {Function|null} 获取 RealtimeService 的 getter（延迟获取，避免循环依赖） */
-  #getRealtimeService = null;
+  #getRealtimeService: any = null;
 
   constructor({ eventBus, getRealtimeService }: any = {}) {
     this.#eventBus = eventBus || null;
@@ -159,7 +159,7 @@ export class BootstrapTaskManager {
     // ── 并发锁：如果上一个 session 还在运行，先中止 ──
     if (this.isRunning) {
       Logger.warn(
-        `[Bootstrap] Previous session ${this.#currentSession.id} still running — aborting before starting new session`
+        `[Bootstrap] Previous session ${this.#currentSession!.id} still running — aborting before starting new session`
       );
       this.abortSession('Superseded by new bootstrap request');
     }

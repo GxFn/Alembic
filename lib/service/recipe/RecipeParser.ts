@@ -48,7 +48,7 @@ export class RecipeParser {
     const body = text.replace(FRONTMATTER_RE, '').trim();
 
     // 提取代码块
-    const codeBlocks = [];
+    const codeBlocks: { language: any; code: any }[] = [];
     let match;
     const codeRe = /```(\w*)\n([\s\S]*?)```/g;
     while ((match = codeRe.exec(body)) !== null) {
@@ -112,7 +112,7 @@ export class RecipeParser {
       return {};
     }
 
-    const fm = {};
+    const fm: Record<string, any> = {};
     for (const line of match[1].split('\n')) {
       const colonIdx = line.indexOf(':');
       if (colonIdx > 0) {
@@ -257,7 +257,7 @@ export class RecipeParser {
     }
 
     // 提取代码块
-    const codeBlocks = [];
+    const codeBlocks: { language: any; code: any }[] = [];
     const codeRe = /```(\w*)\n([\s\S]*?)```/g;
     let match;
     while ((match = codeRe.exec(text)) !== null) {
@@ -287,7 +287,7 @@ export class RecipeParser {
   }
 
   #extractHeaders(body) {
-    const headers = [];
+    const headers: any[] = [];
     const re = /#import\s+[<"]([^>"]+)[>"]/g;
     let match;
     while ((match = re.exec(body)) !== null) {

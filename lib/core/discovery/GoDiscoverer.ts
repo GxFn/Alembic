@@ -25,10 +25,10 @@ const EXCLUDE_DIRS = new Set([
 ]);
 
 export class GoDiscoverer extends ProjectDiscoverer {
-  #projectRoot = null;
-  #targets = [];
-  #depGraph = { nodes: [], edges: [] };
-  #modulePath = null;
+  #projectRoot: string | null = null;
+  #targets: any[] = [];
+  #depGraph: { nodes: any[]; edges: any[] } = { nodes: [], edges: [] };
+  #modulePath: string | null = null;
 
   get id() {
     return 'go';
@@ -39,7 +39,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
 
   async detect(projectRoot) {
     let confidence = 0;
-    const reasons = [];
+    const reasons: any[] = [];
 
     if (existsSync(join(projectRoot, 'go.mod'))) {
       confidence = 0.92;
@@ -144,7 +144,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files = [];
+    const files: any[] = [];
     this.#collectGoFiles(targetPath, targetPath, files);
     return files;
   }
@@ -176,7 +176,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
    * 发现 Go 标准约定目录: pkg/, internal/, api/
    */
   #discoverConventionDirs(projectRoot) {
-    const dirs = [];
+    const dirs: any[] = [];
     const conventionNames = [
       { name: 'pkg', type: 'library' },
       { name: 'internal', type: 'library' },
@@ -224,7 +224,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const targets = [];
+    const targets: any[] = [];
     const framework = this.#detectFramework(projectRoot);
 
     try {
@@ -491,10 +491,10 @@ export class GoDiscoverer extends ProjectDiscoverer {
     }
 
     // 去掉 module path 前缀得到相对路径
-    const relImport = importPath.slice(this.#modulePath.length + 1);
+    const relImport = importPath.slice(this.#modulePath!.length + 1);
 
     // 确定目标节点
-    let targetId = null;
+    let targetId: any = null;
     if (internalNodes.has(relImport)) {
       targetId = relImport;
     } else {

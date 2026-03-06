@@ -14,7 +14,7 @@
 export function resolveImportPath(fromDir, importPath) {
   try {
     const parts = `${fromDir}/${importPath}`.split('/');
-    const resolved = [];
+    const resolved: string[] = [];
     for (const p of parts) {
       if (p === '.' || p === '') {
         continue;
@@ -53,7 +53,7 @@ export function normalizeFilePath(filePath) {
  * @returns {Array<{ruleId, message, severity, locations}>}
  */
 export function runCrossFileChecks(files, options: any = {}) {
-  const violations = [];
+  const violations: any[] = [];
   const disabledSet = new Set(options.disabledRules || []);
   const isDisabled = (ruleId) => disabledSet.has(ruleId);
 
@@ -268,7 +268,7 @@ export function runCrossFileChecks(files, options: any = {}) {
       }
 
       const lines = content.split(/\r?\n/);
-      let currentExt = null;
+      let currentExt: any = null;
       let braceDepth = 0;
 
       for (let i = 0; i < lines.length; i++) {

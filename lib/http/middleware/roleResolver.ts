@@ -20,7 +20,7 @@ const AUTH_ENABLED =
  * 验证 token 并提取 payload
  * 延迟导入 auth.js 的 verifyToken，避免重复实现
  */
-let _verifyToken = null;
+let _verifyToken: any = null;
 async function getVerifyToken() {
   if (!_verifyToken) {
     try {

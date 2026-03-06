@@ -79,10 +79,10 @@ export function sanitizeAnalysisText(text) {
  * @param {object} [projectGraph] - ProjectGraph 实例
  * @returns {AnalysisReport}
  */
-export function buildAnalysisReport(analystResult, dimensionId, projectGraph = null) {
+export function buildAnalysisReport(analystResult, dimensionId, projectGraph: any = null) {
   const referencedFiles = new Set();
-  const searchQueries = [];
-  const classesExplored = [];
+  const searchQueries: any[] = [];
+  const classesExplored: any[] = [];
 
   for (const call of analystResult.toolCalls || []) {
     const tool = call.tool || call.name;
@@ -191,8 +191,8 @@ export function buildAnalysisReport(analystResult, dimensionId, projectGraph = n
 export function buildAnalysisArtifact(
   analystResult,
   dimensionId,
-  projectGraph = null,
-  activeContext = null
+  projectGraph: any = null,
+  activeContext: any = null
 ) {
   const toolCalls = analystResult.toolCalls || [];
 
@@ -311,7 +311,7 @@ function buildQualityScores(analysisText, findings, evidence) {
       scores.coherenceScore * 0.2
   );
 
-  const suggestions = [];
+  const suggestions: string[] = [];
   if (scores.depthScore < 50) {
     suggestions.push('Need more read_project_file to examine code');
   }

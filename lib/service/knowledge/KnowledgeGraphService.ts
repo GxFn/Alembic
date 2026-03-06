@@ -104,10 +104,10 @@ export class KnowledgeGraphService {
    */
   findPath(fromId, fromType, toId, toType, maxDepth = 5) {
     const visited = new Set();
-    const queue = [{ id: fromId, type: fromType, path: [] }];
+    const queue = [{ id: fromId, type: fromType, path: [] as any[] }];
 
     while (queue.length > 0) {
-      const { id, type, path } = queue.shift();
+      const { id, type, path } = queue.shift()!;
 
       if (path.length >= maxDepth) {
         continue;
@@ -143,7 +143,7 @@ export class KnowledgeGraphService {
       }
     }
 
-    return { found: false, path: [], depth: -1 };
+    return { found: false, path: [] as any[], depth: -1 };
   }
 
   /**
@@ -154,7 +154,7 @@ export class KnowledgeGraphService {
     const queue = [{ id: nodeId, type: nodeType, depth: 0 }];
 
     while (queue.length > 0) {
-      const { id, type, depth } = queue.shift();
+      const { id, type, depth } = queue.shift()!;
       if (depth >= maxDepth) {
         continue;
       }
@@ -252,7 +252,7 @@ export class KnowledgeGraphService {
   }
 }
 
-let instance = null;
+let instance: any = null;
 
 export function initKnowledgeGraphService(db) {
   instance = new KnowledgeGraphService(db);

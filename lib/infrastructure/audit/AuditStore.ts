@@ -45,7 +45,7 @@ export class AuditStore {
    */
   query(filters: any = {}) {
     let sql = 'SELECT * FROM audit_logs WHERE 1=1';
-    const params = [];
+    const params: any[] = [];
 
     if (filters.actor) {
       sql += ' AND actor = ?';

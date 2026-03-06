@@ -314,7 +314,7 @@ export class QualityGatePolicy extends Policy {
   }
 
   validateAfter(result) {
-    const reasons = [];
+    const reasons: string | any[] = [];
 
     if (result.reply && result.reply.length < this.#minEvidenceLength) {
       reasons.push(`分析长度不足: ${result.reply.length} < ${this.#minEvidenceLength}`);

@@ -193,7 +193,7 @@ class VSCodeInitializer {
       return { skipped: true, reason: 'Cannot create .vscode dir' };
     }
 
-    const bundle = {};
+    const bundle: Record<string, any> = {};
     for (const snippet of TRIGGER_SNIPPETS) {
       bundle[snippet.title] = {
         prefix: snippet.shortcut,

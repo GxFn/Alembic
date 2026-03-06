@@ -104,7 +104,7 @@ export function wrapHandler(toolName, handlerFn) {
  *   const searchHandlers = wrapHandlers('autosnippet', rawSearchHandlers);
  */
 export function wrapHandlers(prefix, handlersModule) {
-  const wrapped = {};
+  const wrapped: Record<string, any> = {};
   for (const [key, fn] of Object.entries(handlersModule)) {
     if (typeof fn === 'function') {
       wrapped[key] = wrapHandler(`${prefix}_${key}`, fn);

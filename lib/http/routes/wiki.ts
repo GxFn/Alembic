@@ -26,7 +26,7 @@ const logger = Logger.getInstance();
 
 /* ═══ 进程内 Wiki 任务状态 ═══════════════════════════════ */
 
-let wikiTask = {
+let wikiTask: Record<string, any> = {
   status: 'idle', // idle | running | done | error
   phase: null,
   progress: 0,
@@ -38,7 +38,7 @@ let wikiTask = {
 };
 
 /** @type {WikiGenerator|null} */
-let currentGenerator = null;
+let currentGenerator: any = null;
 
 function resetWikiTask() {
   wikiTask = {
@@ -78,9 +78,9 @@ function createGenerator(container) {
     container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
 
   // 尝试获取可用的服务（非必须的优雅降级）
-  let moduleService = null;
-  let knowledgeService = null;
-  let codeEntityGraph = null;
+  let moduleService: any = null;
+  let knowledgeService: any = null;
+  let codeEntityGraph: any = null;
 
   try {
     moduleService = container.get('moduleService');
@@ -102,7 +102,7 @@ function createGenerator(container) {
   const projectGraph = container.singletons?.projectGraph || null;
 
   // 获取 RealtimeService 用于推送进度
-  let realtimeService = null;
+  let realtimeService: any = null;
   try {
     realtimeService = container.singletons?.realtimeService || null;
   } catch {
@@ -304,7 +304,7 @@ router.get(
       return res.json({ success: true, data: { files: [], exists: false } });
     }
 
-    const files = [];
+    const files: { path: string; name: string; size: number; modifiedAt: string }[] = [];
     const readDir = (dir, prefix = '') => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const rel = prefix ? `${prefix}/${entry.name}` : entry.name;

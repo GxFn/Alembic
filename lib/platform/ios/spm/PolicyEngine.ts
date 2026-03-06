@@ -11,7 +11,7 @@ export class PolicyEngine {
    * @returns {{ passed: boolean, violations: object[] }}
    */
   check(graph, config: any = {}) {
-    const violations = [];
+    const violations: any[] = [];
 
     // 1. 检查循环依赖
     const cycles = graph.detectCycles();

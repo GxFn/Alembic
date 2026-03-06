@@ -24,7 +24,7 @@ const SOURCE_EXTS = LanguageService.sourceExts;
  */
 async function collectSourceFiles(dir) {
   const { readdir } = await import('node:fs/promises');
-  const files = [];
+  const files: string[] = [];
 
   // 跳过的目录
   const SKIP_DIRS = new Set([
@@ -118,7 +118,7 @@ export async function handleGuard(watcher, fullPath, code, guardLine) {
       }
 
       // 读取所有文件内容
-      const fileEntries = [];
+      const fileEntries: any[] = [];
       let readErrors = 0;
       for (const p of sourcePaths) {
         try {

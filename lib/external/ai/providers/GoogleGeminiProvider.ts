@@ -37,7 +37,7 @@ export class GoogleGeminiProvider extends AiProvider {
   async chat(prompt, context: any = {}) {
     return this._withRetry(async () => {
       const { history = [], temperature = 0.7, maxTokens = 8192, systemPrompt } = context;
-      const contents = [];
+      const contents: { role: string; parts: { text: any }[] }[] = [];
 
       for (const h of history) {
         contents.push({
@@ -146,8 +146,8 @@ export class GoogleGeminiProvider extends AiProvider {
    * 连续同角色消息（如 L2/L3 压缩后的摘要）自动合并 parts 以避免 400 错误。
    */
   #convertMessages(messages) {
-    const contents = [];
-    let pendingToolResults = [];
+    const contents: any[] = [];
+    let pendingToolResults: { functionResponse: { name: any; response: { result: any } } }[] = [];
 
     /**
      * 推入 contents，如果上一个 entry 同角色则合并 parts
@@ -182,7 +182,7 @@ export class GoogleGeminiProvider extends AiProvider {
       if (msg.role === 'user') {
         pushOrMerge({ role: 'user', parts: [{ text: msg.content || '' }] });
       } else if (msg.role === 'assistant') {
-        const parts = [];
+        const parts: { text: any } | any[] = [];
         if (msg.content) {
           parts.push({ text: msg.content });
         }
@@ -253,7 +253,7 @@ export class GoogleGeminiProvider extends AiProvider {
 
     // 递归清理 properties
     if (cleaned.properties) {
-      const props = {};
+      const props: Record<string, any> = {};
       for (const [key, val] of Object.entries(cleaned.properties)) {
         props[key] = this.#sanitizeSchemaForGemini(val);
       }
@@ -293,8 +293,8 @@ export class GoogleGeminiProvider extends AiProvider {
       return { text: '', functionCalls: null, usage };
     }
 
-    const functionCalls = [];
-    const textParts = [];
+    const functionCalls: { id: string; name: any; args: any; thoughtSignature: any }[] = [];
+    const textParts: any[] = [];
     let fcIndex = 0;
 
     for (const part of content.parts) {
@@ -389,7 +389,7 @@ export class GoogleGeminiProvider extends AiProvider {
 
   async embed(text) {
     const texts = Array.isArray(text) ? text : [text];
-    const results = [];
+    const results: any[] = [];
 
     for (let i = 0; i < texts.length; i += 100) {
       const batch = texts.slice(i, i + 100);

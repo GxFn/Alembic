@@ -27,10 +27,10 @@ const EXCLUDE_DIRS = new Set([
 ]);
 
 export class JvmDiscoverer extends ProjectDiscoverer {
-  #projectRoot = null;
-  #targets = [];
-  #depGraph = { nodes: [], edges: [] };
-  #buildSystem = null; // 'gradle' | 'maven'
+  #projectRoot: string | null = null;
+  #targets: any[] = [];
+  #depGraph: { nodes: any[]; edges: any[] } = { nodes: [], edges: [] };
+  #buildSystem: string | null = null; // 'gradle' | 'maven'
 
   get id() {
     return 'jvm';
@@ -41,7 +41,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
 
   async detect(projectRoot) {
     let confidence = 0;
-    const reasons = [];
+    const reasons: string[] = [];
 
     // Gradle
     if (
@@ -105,7 +105,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files = [];
+    const files: any[] = [];
     // JVM 约定: src/main/java, src/main/kotlin, src/test/java, src/test/kotlin
     const sourceDirs = [
       join(targetObj.path, 'src', 'main', 'java'),
@@ -185,7 +185,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
   }
 
   #parseGradleSettings(projectRoot) {
-    const modules = [];
+    const modules: string[] = [];
     for (const fname of ['settings.gradle', 'settings.gradle.kts']) {
       const settingsPath = join(projectRoot, fname);
       if (!existsSync(settingsPath)) {
@@ -380,7 +380,7 @@ export class JvmDiscoverer extends ProjectDiscoverer {
   }
 
   #parseMavenModules(pomContent) {
-    const modules = [];
+    const modules: any[] = [];
     const moduleMatches = pomContent.matchAll(/<module>([^<]+)<\/module>/g);
     for (const m of moduleMatches) {
       modules.push(m[1].trim());

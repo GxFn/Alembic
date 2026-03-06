@@ -116,7 +116,8 @@ export async function runPhase1_FileCollection(projectRoot, logger, options: any
   const allTargets = await discoverer.listTargets();
 
   const seenPaths = new Set();
-  const allFiles = [];
+  const allFiles: { name: any; path: any; relativePath: any; content: string; targetName: any }[] =
+    [];
   for (const t of allTargets) {
     try {
       const fileList = await discoverer.getTargetFiles(t);
@@ -154,7 +155,7 @@ export async function runPhase1_FileCollection(projectRoot, logger, options: any
   }
 
   // 语言统计
-  const langStats = {};
+  const langStats: Record<string, any> = {};
   for (const f of allFiles) {
     const ext = path.extname(f.name).replace('.', '') || 'unknown';
     langStats[ext] = (langStats[ext] || 0) + 1;
@@ -178,8 +179,8 @@ export async function runPhase1_FileCollection(projectRoot, logger, options: any
  * @returns {Promise<{ astProjectSummary: object|null, astContext: string, warnings: string[] }>}
  */
 export async function runPhase1_5_AstAnalysis(allFiles, langStats, logger, options: any = {}) {
-  const warnings = [];
-  let astProjectSummary = null;
+  const warnings: string[] = [];
+  let astProjectSummary: any = null;
   let astContext = '';
 
   // Phase 1.5a: 按需安装缺失的 tree-sitter 语法包
@@ -211,7 +212,7 @@ export async function runPhase1_5_AstAnalysis(allFiles, langStats, logger, optio
       }));
 
       // SFC 预处理 (.vue / .svelte)
-      let sfcPreprocessor = null;
+      let sfcPreprocessor: any = null;
       try {
         const { initEnhancementRegistry } = await import(
           '../../../../../core/enhancement/index.js'
@@ -269,8 +270,8 @@ export async function runPhase1_5_AstAnalysis(allFiles, langStats, logger, optio
  * @returns {Promise<{ codeEntityResult: object|null, warnings: string[] }>}
  */
 export async function runPhase1_6_EntityGraph(astProjectSummary, projectRoot, container, logger) {
-  const warnings = [];
-  let codeEntityResult = null;
+  const warnings: string[] = [];
+  let codeEntityResult: any = null;
 
   if (astProjectSummary) {
     try {
@@ -315,10 +316,10 @@ export async function runPhase1_7_CallGraph(
   projectRoot,
   container,
   logger,
-  incrementalOpts = null
+  incrementalOpts: any = null
 ) {
-  const warnings = [];
-  let callGraphResult = null;
+  const warnings: string[] = [];
+  let callGraphResult: any = null;
 
   if (!astProjectSummary?.fileSummaries?.length) {
     return { callGraphResult, warnings };
@@ -403,8 +404,8 @@ export async function runPhase2_DependencyGraph(
   logger,
   sourceTag = 'bootstrap'
 ) {
-  const warnings = [];
-  let depGraphData = null;
+  const warnings: string[] = [];
+  let depGraphData: any = null;
   let depEdgesWritten = 0;
 
   try {
@@ -475,9 +476,9 @@ export async function runPhase2_1_ModuleEntities(depGraphData, projectRoot, cont
  * @returns {Promise<{ guardAudit: object|null, guardEngine: object|null, warnings: string[] }>}
  */
 export async function runPhase3_GuardAudit(allFiles, container, logger, options: any = {}) {
-  const warnings = [];
-  let guardAudit = null;
-  let guardEngine = null;
+  const warnings: string[] = [];
+  let guardAudit: any = null;
+  let guardEngine: any = null;
 
   if (options.skipGuard) {
     return { guardAudit, guardEngine, warnings };
@@ -550,10 +551,10 @@ export async function runPhase4_DimensionResolve(params) {
   const activeDimensions = resolveActiveDimensions(baseDimensions, primaryLang, detectedFrameworks);
 
   // Enhancement Pack 动态追加
-  const enhancementPackInfo = [];
-  const enhancementGuardRules = [];
-  const enhancementPatterns = [];
-  let guardAudit = null;
+  const enhancementPackInfo: { id: any; displayName: any }[] = [];
+  const enhancementGuardRules: any[] = [];
+  const enhancementPatterns: any[] = [];
+  let guardAudit: any = null;
 
   try {
     const { initEnhancementRegistry } = await import('../../../../../core/enhancement/index.js');
@@ -649,7 +650,7 @@ export async function runPhase4_DimensionResolve(params) {
  * @returns {Promise<PhaseResults>}
  */
 export async function runAllPhases(projectRoot, ctx, options: any = {}) {
-  const warnings = [];
+  const warnings: any[] = [];
   const report: any = options.generateReport ? { phases: {}, startTime: Date.now() } : null;
 
   // 路径安全守卫
@@ -713,7 +714,7 @@ export async function runAllPhases(projectRoot, ctx, options: any = {}) {
   }
 
   // ── Incremental evaluation (Phase 1 后执行，需要 allFiles) ──
-  let incrementalPlan = null;
+  let incrementalPlan: any = null;
   if (options.incremental) {
     try {
       const { IncrementalBootstrap } = await import('../pipeline/IncrementalBootstrap.js');

@@ -162,7 +162,7 @@ class VueEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── Composable functions ──
     for (const m of astSummary.methods || []) {

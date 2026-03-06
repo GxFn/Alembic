@@ -36,7 +36,7 @@ export class AgentFactory {
   #aiProvider;
   #logger;
   /** @type {AgentRouter|null} */
-  #router = null;
+  #router: any = null;
   /** @type {Object} 共享的 Capability 实例缓存 (如 MemoryCoordinator) */
   #sharedOpts;
 

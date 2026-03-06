@@ -133,9 +133,9 @@ export class SpmHelper {
    */
   #loadMultiPackage(allPaths) {
     this.#logger.info(`[SpmHelper] 发现 ${allPaths.length} 个 Package.swift，逐一解析...`);
-    const mergedTargets = [];
+    const mergedTargets: any[] = [];
     let lastName = 'multi-package';
-    const allParsed = [];
+    const allParsed: { path: any; parsed: any }[] = [];
 
     this.#graph.clear();
     for (const pkgPath of allPaths) {

@@ -23,7 +23,7 @@ export const listGuardRules = {
   },
   handler: async (params, ctx) => {
     const { language, includeBuiltIn = true, limit = 50 } = params;
-    const results = [];
+    const results: any[] = [];
 
     // 数据库自定义规则
     try {

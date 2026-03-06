@@ -126,7 +126,7 @@ export class CallGraphAnalyzer {
     const useCHA = tier === 'full-cha';
     const inheritanceGraph = useCHA ? astProjectSummary.inheritanceGraph || [] : [];
     const callEdgeResolver = new CallEdgeResolver(symbolTable, importResolver, inheritanceGraph);
-    const allCallEdges = [];
+    const allCallEdges: any[] = [];
     let totalCallSites = 0;
     let processedFiles = 0;
 
@@ -255,7 +255,7 @@ export class CallGraphAnalyzer {
     const useCHA = tier === 'full-cha';
     const inheritanceGraph = useCHA ? astProjectSummary.inheritanceGraph || [] : [];
     const callEdgeResolver = new CallEdgeResolver(symbolTable, importResolver, inheritanceGraph);
-    const allCallEdges = [];
+    const allCallEdges: any[] = [];
     let totalCallSites = 0;
     let processedFiles = 0;
     const totalFiles = fileSummaries.filter((f) => f.callSites?.length > 0).length;

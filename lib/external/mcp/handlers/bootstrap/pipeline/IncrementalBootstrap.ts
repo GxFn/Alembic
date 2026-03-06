@@ -107,7 +107,7 @@ export class IncrementalBootstrap {
       }
 
       // 4. 增量可行 → 尝试恢复 SessionStore
-      let restoredEpisodic = null;
+      let restoredEpisodic: any = null;
       if (previousSnapshot.episodicData) {
         try {
           restoredEpisodic = SessionStore.fromJSON(previousSnapshot.episodicData);

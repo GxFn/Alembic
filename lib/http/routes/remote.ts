@@ -124,8 +124,8 @@ function isDuplicate(messageId) {
 //  飞书 SDK 长连接
 // ═══════════════════════════════════════════════════════
 
-let _wsClient = null;
-let _larkClient = null;
+let _wsClient: any = null;
+let _larkClient: any = null;
 let _wsConnected = false;
 let _wsStarting = false;
 
@@ -323,7 +323,7 @@ setInterval(() => {
 // ═══════════════════════════════════════════════════════
 
 /** @type {LarkTransport|null} */
-let _larkTransport = null;
+let _larkTransport: any = null;
 
 /**
  * 获取或创建 LarkTransport 实例
@@ -539,7 +539,7 @@ router.get(
   '/lark/status',
   asyncHandler(async (_req, res) => {
     const config = getLarkConfig();
-    const queueInfo = {};
+    const queueInfo: Record<string, any> = {};
     try {
       const db = getDb();
       ensureTable(db);

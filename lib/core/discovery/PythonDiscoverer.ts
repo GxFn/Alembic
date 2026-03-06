@@ -28,10 +28,10 @@ const EXCLUDE_DIRS = new Set([
 ]);
 
 export class PythonDiscoverer extends ProjectDiscoverer {
-  #projectRoot = null;
-  #targets = [];
-  #depGraph = { nodes: [], edges: [] };
-  #projectName = null;
+  #projectRoot: string | null = null;
+  #targets: any[] = [];
+  #depGraph: { nodes: any[]; edges: any[] } = { nodes: [], edges: [] };
+  #projectName: string | null = null;
 
   get id() {
     return 'python';
@@ -42,7 +42,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
 
   async detect(projectRoot) {
     let confidence = 0;
-    const reasons = [];
+    const reasons: any[] = [];
 
     if (existsSync(join(projectRoot, 'pyproject.toml'))) {
       confidence = 0.9;
@@ -88,7 +88,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
 
     // 解析 pyproject.toml（简易 TOML 解析）
     const pyprojectPath = join(projectRoot, 'pyproject.toml');
-    let pyproject = null;
+    let pyproject: any = null;
     if (existsSync(pyprojectPath)) {
       pyproject = this.#parsePyprojectToml(readFileSync(pyprojectPath, 'utf8'));
     }
@@ -142,7 +142,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files = [];
+    const files: any[] = [];
     this.#collectPyFiles(targetPath, targetPath, files);
     return files;
   }
@@ -154,7 +154,7 @@ export class PythonDiscoverer extends ProjectDiscoverer {
   // ── 内部实现 ──
 
   #discoverPackages(projectRoot, pyproject) {
-    const packages = [];
+    const packages: { name: string; path: string; isTest: boolean }[] = [];
 
     // src/ 布局优先
     const srcDir = join(projectRoot, 'src');

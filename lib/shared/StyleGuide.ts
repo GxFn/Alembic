@@ -37,8 +37,8 @@ submit_knowledge 的 content.markdown 字段必须是「项目特写」。
  * @returns {string}
  */
 export function getCursorDeliverySpec() {
-  const required = [];
-  const expected = [];
+  const required: string[] = [];
+  const expected: string[] = [];
 
   for (const field of V3_FIELD_SPEC) {
     // 跳过嵌套字段和非 Cursor 交付字段容器
@@ -68,7 +68,7 @@ export function getCursorDeliverySpec() {
     }
   }
 
-  const parts = [];
+  const parts: any[] = [];
   if (required.length > 0) {
     parts.push('### 必填（REQUIRED）');
     parts.push(required.join('\n'));

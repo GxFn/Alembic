@@ -257,7 +257,7 @@ export class SnippetInstaller {
    */
   #installToBundle(spec, dir, bundleFilename) {
     const bundlePath = join(dir, bundleFilename);
-    let bundle = {};
+    let bundle: Record<string, any> = {};
     if (existsSync(bundlePath)) {
       try {
         bundle = JSON.parse(readFileSync(bundlePath, 'utf-8'));

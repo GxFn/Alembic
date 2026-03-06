@@ -24,7 +24,7 @@ import { buildLanguageExtension } from './LanguageExtensions.js';
 
 // ── 进程级 Session 管理器 ─────────────────────────────────────
 
-let _sessionManager = null;
+let _sessionManager: any = null;
 
 /**
  * 获取或创建 BootstrapSessionManager

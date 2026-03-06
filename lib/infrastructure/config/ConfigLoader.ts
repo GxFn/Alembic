@@ -10,8 +10,8 @@ const __dirname = path.dirname(__filename);
  * 直接读取 JSON 配置文件，避免 node-config 模块在 import 阶段就读取配置目录的时序问题
  */
 export class ConfigLoader {
-  static instance = null;
-  static config = null;
+  static instance: any = null;
+  static config: any = null;
 
   static load(env = process.env.NODE_ENV || 'development') {
     if (!this.config) {
@@ -97,7 +97,7 @@ export class ConfigLoader {
     }
 
     const keys = key.split('.');
-    let obj = this.config;
+    let obj: any = this.config;
 
     for (let i = 0; i < keys.length - 1; i++) {
       const k = keys[i];

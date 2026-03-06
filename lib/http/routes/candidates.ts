@@ -36,7 +36,7 @@ router.post(
     const aiProvider = container.get('aiProvider');
 
     // 收集候选条目
-    const candidates = [];
+    const candidates: any[] = [];
     for (const id of candidateIds) {
       try {
         const entry = await knowledgeService.get(id);
@@ -67,10 +67,10 @@ router.post(
     }
 
     let enrichedCount = 0;
-    const results = [];
+    const results: any[] = [];
 
     if (aiProvider) {
-      let enriched = [];
+      let enriched: any[] = [];
       try {
         // 获取用户语言偏好
         let lang = 'en';
@@ -100,7 +100,7 @@ router.post(
           const needsContentMerge =
             (item.rationale && !cand.rationale) ||
             (item.steps && (!cand.steps || cand.steps.length === 0));
-          let contentBase = null;
+          let contentBase: any = null;
           if (needsContentMerge) {
             const entry = await knowledgeService.get(cand.id);
             const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
@@ -549,7 +549,7 @@ router.post(
           { delay: 16000, stage: 'thinking', message: 'AI 深度分析中...' },
           { delay: 28000, stage: 'almost_done', message: '即将完成，请稍候...' },
         ];
-        const progressTimers = [];
+        const progressTimers: ReturnType<typeof setTimeout>[] = [];
         let aiDone = false;
         for (const pm of progressMsgs) {
           const t = setTimeout(() => {
@@ -610,7 +610,7 @@ router.post(
           session.send({ type: 'data:progress', stage: 'fallback', message: 'AI 正在重新生成...' });
           const fullText = await aiProvider.chat(prompt, { temperature: 0.3 });
 
-          let fallbackParsed = null;
+          let fallbackParsed: any = null;
           try {
             const jsonStr = fullText
               .replace(/^```(?:json)?\s*\n?/m, '')

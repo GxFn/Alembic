@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 function parseArgs(argv) {
-  const args = {};
+  const args: Record<string, any> = {};
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) {
@@ -148,7 +148,7 @@ function main() {
 
   ensureDir(outDir);
 
-  const files = [];
+  const files: any[] = [];
   walk(targetDir, exts, files);
 
   let _count = 0;

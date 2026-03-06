@@ -112,7 +112,7 @@ export async function insertHeaders(watcher, fullPath, headers, opts: any = {}) 
   const CM = await import('../../../infrastructure/external/ClipboardManager.js');
   const NU = await import('../../../infrastructure/external/NativeUi.js');
 
-  const result = { inserted: [], skipped: [], cancelled: false };
+  const result = { inserted: [] as string[], skipped: [] as string[], cancelled: false };
   /** @type {Map<string, string>} 模块名 → 提示注释（'提示操作插入'按钮选择时记录） */
   const depWarnings = opts.depWarnings instanceof Map ? new Map(opts.depWarnings) : new Map();
   if (!headers || headers.length === 0) {
@@ -345,9 +345,9 @@ export async function insertCodeToXcode(watcher, fullPath, selected, triggerLine
     const indent = indentMatch ? indentMatch[1] : '';
 
     // ── Step 2: Preflight 预检依赖 ──
-    let preflightDepWarnings = null;
-    let _spmServiceCached = null;
-    let _currentTargetCached = null;
+    let preflightDepWarnings: any = null;
+    let _spmServiceCached: any = null;
+    let _currentTargetCached: any = null;
     if (headersToInsert.length > 0) {
       const preflight: any = await _preflightDeps(fullPath, headersToInsert, selected, NU);
       if (preflight.blocked) {

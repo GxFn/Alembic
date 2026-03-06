@@ -23,7 +23,7 @@ export const BUDGET = {
  * @returns {{ kept: string[], dropped: number, tokensUsed: number }}
  */
 export function truncateToTokenBudget(lines, budget) {
-  const kept = [];
+  const kept: any[] = [];
   let tokensUsed = 0;
   let dropped = 0;
 

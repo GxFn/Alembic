@@ -89,7 +89,7 @@ export function findHeaderRelativePath(headerName, currentFilePath, projectRoot)
     }
 
     // 2. 向上找 Sources/ 或 target 根目录，在其下递归搜索
-    const searchRoots = [];
+    const searchRoots: string | any[] = [];
     if (projectRoot) {
       const sourcesDir = pathResolve(projectRoot, 'Sources');
       if (existsSync(sourcesDir)) {
@@ -262,7 +262,7 @@ export function collectImportsFromFile(filePath, isSwift) {
     }
     const content = readFileSync(filePath, 'utf8');
     const lines = content.split(/\r?\n/);
-    const imports = [];
+    const imports: string[] = [];
     for (const line of lines) {
       const t = line.trim();
       if (isSwift) {
@@ -379,7 +379,7 @@ export function checkImportStatus(importArray, headerLine, isSwift) {
 
       // ── 级别 3: 相似头文件名匹配（case-insensitive） ──
       if (headerFileNameLower) {
-        let importedFileName = null;
+        let importedFileName: any = null;
         const a = impT.match(/<[^/]+\/([^>]+)>/);
         if (a) {
           importedFileName = a[1].toLowerCase();

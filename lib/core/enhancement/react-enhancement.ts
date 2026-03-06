@@ -158,7 +158,7 @@ class ReactEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── Custom Hooks ──
     for (const m of astSummary.methods || []) {

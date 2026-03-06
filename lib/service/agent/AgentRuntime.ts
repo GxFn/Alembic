@@ -108,7 +108,7 @@ export class AgentRuntime {
 
   // ── 执行统计 ──
   iterationCount = 0;
-  toolCallHistory = [];
+  toolCallHistory: any[] = [];
   tokenUsage = { input: 0, output: 0 };
   startTime = 0;
 
@@ -748,7 +748,7 @@ export class AgentRuntime {
 
     let roundSubmitCount = 0;
     let roundHasNewInfo = false;
-    const roundToolNames = [];
+    const roundToolNames: any[] = [];
 
     // 执行每个工具
     for (const fc of activeCalls) {

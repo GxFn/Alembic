@@ -92,7 +92,7 @@ export default class ProjectGraph {
   #methodsByClass = new Map();
 
   /** @type {ProjectOverview} 项目统计缓存 */
-  #overview = null;
+  #overview: any = null;
 
   /** @type {string} 项目根目录 */
   #projectRoot;
@@ -192,7 +192,7 @@ export default class ProjectGraph {
    * @returns {string[]} [className, parent, grandparent, ...]
    */
   getInheritanceChain(className) {
-    const chain = [];
+    const chain: any[] = [];
     let current = className;
     const visited = new Set();
     while (current && !visited.has(current)) {
@@ -209,7 +209,7 @@ export default class ProjectGraph {
    * @returns {string[]}
    */
   getSubclasses(className) {
-    const subs = [];
+    const subs: any[] = [];
     for (const [child, parent] of this.#inheritance) {
       if (parent === className) {
         subs.push(child);
@@ -224,7 +224,7 @@ export default class ProjectGraph {
    * @returns {string[]}
    */
   getAllDescendants(className) {
-    const result = [];
+    const result: any[] = [];
     const queue = [className];
     const visited = new Set();
     while (queue.length > 0) {
@@ -257,7 +257,7 @@ export default class ProjectGraph {
    */
   getMethodOverrides(className, methodName) {
     const descendants = this.getAllDescendants(className);
-    const overrides = [];
+    const overrides: { className: any; method: any; filePath: any }[] = [];
 
     for (const desc of descendants) {
       const methods = this.#methodsByClass.get(desc) || [];
@@ -308,7 +308,7 @@ export default class ProjectGraph {
    */
   searchClasses(query, limit = 20) {
     const lower = query.toLowerCase();
-    const results = [];
+    const results: any[] = [];
     for (const name of this.#classes.keys()) {
       if (name.toLowerCase().includes(lower)) {
         results.push(name);
@@ -332,7 +332,7 @@ export default class ProjectGraph {
     // 按模块 (顶层目录) 统计
     const classesPerModule: any = {};
     const topModules = new Set();
-    const entryPoints = [];
+    const entryPoints: any[] = [];
 
     for (const [filePath, symbols] of this.#files) {
       const parts = filePath.split('/');
@@ -391,9 +391,9 @@ export default class ProjectGraph {
     const fileSymbols = {
       path: relativePath,
       lang: summary.lang,
-      classes: [],
-      protocols: [],
-      categories: [],
+      classes: [] as any[],
+      protocols: [] as any[],
+      categories: [] as any[],
       imports: summary.imports || [],
     };
 
@@ -406,8 +406,8 @@ export default class ProjectGraph {
         endLine: cls.endLine,
         superClass: cls.superclass || null,
         protocols: cls.protocols || [],
-        properties: [],
-        methods: [],
+        properties: [] as any[],
+        methods: [] as any[],
         imports: summary.imports || [],
       };
 
@@ -471,9 +471,9 @@ export default class ProjectGraph {
         filePath: relativePath,
         line: proto.line,
         inherits: proto.inherits || [],
-        requiredMethods: [],
-        optionalMethods: [],
-        conformers: [], // 稍后在 buildReverseIndices 中填充
+        requiredMethods: [] as any[],
+        optionalMethods: [] as any[],
+        conformers: [] as any[], // 稍后在 buildReverseIndices 中填充
       };
 
       for (const m of proto.methods || []) {
@@ -511,7 +511,7 @@ export default class ProjectGraph {
           returnType: m.returnType || 'void',
           paramCount: m.paramCount || 0,
         })),
-        properties: [],
+        properties: [] as any[],
         protocols: cat.protocols || [],
       };
 
@@ -598,7 +598,7 @@ export default class ProjectGraph {
   toJSON() {
     const mapToObj = (map) => Object.fromEntries(map);
     const mapOfSetsToObj = (map) => {
-      const obj = {};
+      const obj: Record<string, any> = {};
       for (const [k, v] of map) {
         obj[k] = [...v];
       }
@@ -772,7 +772,7 @@ export default class ProjectGraph {
  * @returns {string[]}
  */
 function collectSourceFiles(dir, extensions, opts) {
-  const results = [];
+  const results: string[] = [];
   const extSet = new Set(extensions);
 
   function walk(currentDir) {

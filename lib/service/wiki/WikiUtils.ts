@@ -293,7 +293,7 @@ export function getInheritanceRoots(codeEntityGraph) {
   try {
     // 尝试查询继承关系
     const entities = codeEntityGraph.queryEntities?.({ entityType: 'class', limit: 50 }) || [];
-    const roots = [];
+    const roots: { name: any; children: any }[] = [];
     for (const e of entities) {
       const _parents =
         codeEntityGraph.queryEdges?.({ toId: e.entityId, relation: 'inherits' }) || [];
@@ -321,7 +321,7 @@ export function getInheritanceRoots(codeEntityGraph) {
  * @returns {{ removed: string[], kept: number }}
  */
 export function dedup(files, wikiDir, emit) {
-  const removed = [];
+  const removed: any[] = [];
 
   // Layer 1: slug 碰撞（同名文件跨目录）
   const slugMap = new Map(); // slug → first file
@@ -647,7 +647,7 @@ export function profileFolders(projectInfo, options: any = {}) {
   }
 
   // ── 3. 筛选重要文件夹 ──
-  const candidates = [];
+  const candidates: { dir: any; files: any; depth: any }[] = [];
   for (const [dir, files] of folderRecursive) {
     if (files.length < minFiles) {
       continue;
@@ -673,7 +673,7 @@ export function profileFolders(projectInfo, options: any = {}) {
   const selected = _pruneRedundantFolders(candidates.slice(0, maxFolders * 2), maxFolders);
 
   // ── 4. 为每个选中的文件夹生成 Profile ──
-  const profiles = [];
+  const profiles: any[] = [];
 
   for (const { dir, files, depth } of selected) {
     const profile = _buildFolderProfile(dir, files, depth, root, sampleLines);
@@ -698,7 +698,7 @@ export function profileFolders(projectInfo, options: any = {}) {
  * @private
  */
 function _pruneRedundantFolders(candidates, maxFolders) {
-  const kept = [];
+  const kept: any[] = [];
   const removedDirs = new Set();
 
   for (const c of candidates) {
@@ -744,7 +744,7 @@ function _buildFolderProfile(relDir, files, depth, projectRoot, sampleLines) {
   const folderName = path.basename(relDir);
 
   // ── 语言分布 ──
-  const langBreakdown = {};
+  const langBreakdown: Record<string, any> = {};
   let totalSize = 0;
   for (const f of files) {
     const ext = path.extname(f);
@@ -778,7 +778,7 @@ function _buildFolderProfile(relDir, files, depth, projectRoot, sampleLines) {
   const keyFiles = [...new Set([...entryPoints, ...fileSizes.slice(0, 5).map((fs) => fs.file)])];
 
   // ── README 检测 ──
-  let readme = null;
+  let readme: any = null;
   const readmeNames = ['README.md', 'readme.md', 'README.txt', 'README', 'readme.markdown'];
   for (const rn of readmeNames) {
     const rPath = path.join(fullDir, rn);
@@ -836,7 +836,7 @@ function _buildFolderProfile(relDir, files, depth, projectRoot, sampleLines) {
  * @returns {string[]}
  */
 function _detectNamingPatterns(fileNames) {
-  const patterns = [];
+  const patterns: string[] = [];
   const lower = fileNames.map((n) => n.toLowerCase());
 
   // 测试文件
@@ -857,7 +857,7 @@ function _detectNamingPatterns(fileNames) {
   }
 
   // 常见后缀模式
-  const suffixes = {};
+  const suffixes: Record<string, any> = {};
   for (const name of fileNames) {
     const base = path.basename(name, path.extname(name));
     // 检测 CamelCase 后缀: UserController → Controller
@@ -1019,7 +1019,7 @@ function _extractHeaderComment(fullPath) {
     }
 
     // 尝试匹配 # 或 // 开头的连续行注释
-    const lineComments = [];
+    const lineComments: string[] = [];
     for (const line of lines) {
       const stripped = line.trim();
       if (

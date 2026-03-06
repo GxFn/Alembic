@@ -91,7 +91,7 @@ export class CallEdgeResolver {
    * @returns {ResolvedEdge[]}
    */
   resolveFile(callSites, callerFile) {
-    const edges = [];
+    const edges: any[] = [];
     const fileImports = this.symbolTable.fileImports.get(callerFile) || [];
 
     // 构建局部 import 映射: symbolName → { file, namespace }
@@ -341,7 +341,7 @@ export class CallEdgeResolver {
 
     while (queue.length > 0 && depth < MAX_DEPTH) {
       depth++;
-      const nextQueue = [];
+      const nextQueue: any[] = [];
       for (const current of queue) {
         // 查找 current 的所有父类 (inherits 和 conforms 类型的边)
         for (const edge of this.inheritanceGraph) {

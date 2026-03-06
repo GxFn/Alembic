@@ -30,7 +30,7 @@ export async function bootstrapRefine(ctx, args) {
   }
 
   // 接入 BootstrapTaskManager 双通道推送 refine:* 事件
-  let onProgress = null;
+  let onProgress: any = null;
   try {
     const taskManager = ctx.container.get('bootstrapTaskManager');
     onProgress = (eventName, data) => taskManager.emitProgress(eventName, data);
@@ -67,7 +67,7 @@ export async function bootstrapRefine(ctx, args) {
   onProgress?.('refine:started', { total: entries.length, candidateIds: entries.map((e) => e.id) });
 
   // 2. 收集已发布 Recipe 标题（关联关系只能指向已发布 Recipe，不能在候选之间互关联）
-  let publishedTitles = [];
+  let publishedTitles: any[] = [];
   try {
     const published = await knowledgeService.list(
       { lifecycle: 'active' },
@@ -79,8 +79,9 @@ export async function bootstrapRefine(ctx, args) {
   }
 
   // 3. 逐条 AI 润色
-  const results = [];
-  const errors = [];
+  const results: { id: any; title: any; preview?: any; refined?: boolean; fields?: string[] }[] =
+    [];
+  const errors: { id: any; title: any; error: string }[] = [];
   let refined = 0;
   let processed = 0;
 

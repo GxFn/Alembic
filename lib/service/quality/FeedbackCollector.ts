@@ -68,7 +68,7 @@ export class FeedbackCollector {
    * 获取全局统计
    */
   getGlobalStats() {
-    const byType = {};
+    const byType: Record<string, any> = {};
     for (const e of this.#events) {
       byType[e.type] = (byType[e.type] || 0) + 1;
     }
@@ -83,7 +83,7 @@ export class FeedbackCollector {
    * 获取热门 Recipes (by interaction count)
    */
   getTopRecipes(n = 10) {
-    const counts = {};
+    const counts: Record<string, any> = {};
     for (const e of this.#events) {
       counts[e.recipeId] = (counts[e.recipeId] || 0) + 1;
     }

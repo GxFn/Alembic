@@ -36,10 +36,10 @@ const EXCLUDE_DIRS = new Set([
 ]);
 
 export class NodeDiscoverer extends ProjectDiscoverer {
-  #projectRoot = null;
-  #packageJson = null;
-  #targets = [];
-  #depGraph = { nodes: [], edges: [] };
+  #projectRoot: string | null = null;
+  #packageJson: any = null;
+  #targets: any[] = [];
+  #depGraph: { nodes: any[]; edges: any[] } = { nodes: [], edges: [] };
 
   get id() {
     return 'node';
@@ -50,7 +50,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
 
   async detect(projectRoot) {
     let confidence = 0;
-    const reasons = [];
+    const reasons: any[] = [];
 
     if (existsSync(join(projectRoot, 'package.json'))) {
       confidence = 0.9;
@@ -197,7 +197,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files = [];
+    const files: any[] = [];
     this.#collectFiles(targetPath, targetPath, files);
     return files;
   }
@@ -209,7 +209,7 @@ export class NodeDiscoverer extends ProjectDiscoverer {
   // ── 内部实现 ──
 
   #resolveWorkspaces(projectRoot) {
-    const paths = [];
+    const paths: string | any[] = [];
 
     // npm/yarn workspaces (from package.json)
     const workspaces = this.#packageJson.workspaces;

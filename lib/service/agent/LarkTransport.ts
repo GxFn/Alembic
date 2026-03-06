@@ -48,7 +48,7 @@ export class LarkTransport {
   #isUserAllowed;
 
   /** @type {ConversationStore|null} 持久化对话存储 */
-  #conversationStore = null;
+  #conversationStore: any = null;
   /** @type {Map<string, string>} chatId → conversationId 映射缓存 */
   #chatConversationMap = new Map();
 

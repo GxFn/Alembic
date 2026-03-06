@@ -36,10 +36,10 @@ export class EvidenceCollector {
   #evidenceMap = new Map();
 
   /** @type {ExplorationEntry[]} 探索日志 */
-  #explorationLog = [];
+  #explorationLog: any[] = [];
 
   /** @type {NegativeSignal[]} 负空间信号 */
-  #negativeSignals = [];
+  #negativeSignals: any[] = [];
 
   /** @type {number} 代码片段总字符预算 */
   #snippetBudget;

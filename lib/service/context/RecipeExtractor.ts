@@ -100,7 +100,7 @@ export class RecipeExtractor {
       return { frontmatter: {}, body: content };
     }
 
-    const frontmatter = {};
+    const frontmatter: Record<string, any> = {};
     const lines = match[1].split('\n');
     for (const line of lines) {
       const colonIdx = line.indexOf(':');
@@ -139,7 +139,7 @@ export class RecipeExtractor {
   // --- Code Blocks ---
 
   #extractCodeBlocks(body) {
-    const blocks = [];
+    const blocks: { language: any; code: any; startIndex: any }[] = [];
     const regex = /```(\w*)\n([\s\S]*?)```/g;
     let match;
     while ((match = regex.exec(body)) !== null) {
@@ -311,7 +311,7 @@ export class RecipeExtractor {
   #extractDescription(body) {
     // 取第一段非标题非代码的文本
     const lines = body.split('\n');
-    const paragraphs = [];
+    const paragraphs: any[] = [];
     let inCode = false;
 
     for (const line of lines) {

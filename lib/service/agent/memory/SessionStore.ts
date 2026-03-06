@@ -98,9 +98,9 @@ export class SessionStore {
   /** @type {Map<string, Finding[]>} filePath → Evidence[] */
   #evidenceStore = new Map();
   /** @type {CrossReference[]} */
-  #crossReferences = [];
+  #crossReferences: any[] = [];
   /** @type {TierReflection[]} */
-  #tierReflections = [];
+  #tierReflections: any[] = [];
   /** @type {Map<string, CandidateSummary[]>} dimId → candidates */
   #submittedCandidates = new Map();
   /** @type {object} */
@@ -116,7 +116,7 @@ export class SessionStore {
   /** @type {number} */
   #ttlMs;
   /** @type {ReturnType<typeof setInterval>|null} */
-  #cleanupTimer = null;
+  #cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   /** @type {import('winston').Logger} */
   #logger;
@@ -259,7 +259,7 @@ export class SessionStore {
    * @returns {Array<{filePath: string, evidence: object}>}
    */
   searchEvidence(query, dimId) {
-    const results = [];
+    const results: { filePath: any; evidence: any }[] = [];
     const lowerQuery = query.toLowerCase();
     for (const [filePath, evidences] of this.#evidenceStore) {
       for (const ev of evidences) {
@@ -377,7 +377,7 @@ export class SessionStore {
     if (this.#tierReflections.length === 0) {
       return null;
     }
-    const parts = [];
+    const parts: any[] = [];
     for (const ref of this.#tierReflections) {
       parts.push(`### Tier ${ref.tierIndex + 1} 综合洞察`);
       if (ref.topFindings?.length > 0) {
@@ -415,7 +415,7 @@ export class SessionStore {
    */
   buildContextForDimension(currentDimId, focusKeywordsOrOpts: any[] = []) {
     // 兼容两种调用方式: (dimId, keywords[]) 或 (dimId, { focusKeywords, tokenBudget })
-    let focusKeywords = [];
+    let focusKeywords: any[] = [];
     let tokenBudget = Infinity;
     if (Array.isArray(focusKeywordsOrOpts)) {
       focusKeywords = focusKeywordsOrOpts;
@@ -424,7 +424,7 @@ export class SessionStore {
       tokenBudget = (focusKeywordsOrOpts as any).tokenBudget || Infinity;
     }
 
-    const parts = [];
+    const parts: any[] = [];
     const completedDims = [...this.#dimensionReports.entries()].filter(
       ([id]) => id !== currentDimId
     );
@@ -521,7 +521,7 @@ export class SessionStore {
    * @returns {object}
    */
   buildContextSnapshot(currentDimId) {
-    const previousDimensions = {};
+    const previousDimensions: Record<string, any> = {};
     for (const [dimId, report] of this.#dimensionReports) {
       if (dimId === currentDimId) {
         continue;
@@ -534,7 +534,7 @@ export class SessionStore {
         gaps: [],
       };
     }
-    const submittedCandidates = [];
+    const submittedCandidates: any[] = [];
     for (const [, candidates] of this.#submittedCandidates) {
       submittedCandidates.push(...candidates);
     }

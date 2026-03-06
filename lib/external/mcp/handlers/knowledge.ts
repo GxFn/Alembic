@@ -166,16 +166,17 @@ export async function submitKnowledgeBatch(ctx, args) {
   const service = ctx.container.get('knowledgeService');
   const source = args.source || 'cursor-scan';
   let count = 0;
-  const itemErrors = [];
-  const rejectedItems = [];
-  const successIds = []; // 成功入库的 recipe ID 列表，供 dimension_complete 使用
+  const itemErrors: { index: number; title: any; error: any }[] = [];
+  const rejectedItems: { index: number; title: any; missingFields: any[]; suggestions: any[] }[] =
+    [];
+  const successIds: any[] = []; // 成功入库的 recipe ID 列表，供 dimension_complete 使用
 
   // UnifiedValidator — 统一前置校验
   const validator = new UnifiedValidator();
 
   // v2: 获取 BootstrapSession tracker（静默降级）
-  let session = null;
-  let currentDimId = null;
+  let session: any = null;
+  let currentDimId: any = null;
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager');
     session = sessionManager?.getSession?.();

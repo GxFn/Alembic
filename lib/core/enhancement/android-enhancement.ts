@@ -51,7 +51,7 @@ class AndroidEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: { type: string; className: any; line: any; confidence: number }[] = [];
     for (const cls of astSummary.classes || []) {
       // ViewModel
       if (cls.superclass && /ViewModel$/.test(cls.superclass)) {

@@ -273,7 +273,7 @@ export class AiProvider {
    * 根据文件扩展名检测语言特征，返回提示词适配参数
    */
   _detectLanguageProfile(filesContent) {
-    const extCounts = {};
+    const extCounts: Record<string, any> = {};
     for (const f of filesContent) {
       const ext = (f.name || '').split('.').pop()?.toLowerCase() || '';
       extCounts[ext] = (extCounts[ext] || 0) + 1;
@@ -453,7 +453,7 @@ export class AiProvider {
   _buildEnrichPrompt(candidates, options: any = {}) {
     const items = candidates
       .map((c, i) => {
-        const existing = [];
+        const existing: string[] = [];
         if (c.rationale) {
           existing.push(`rationale: ${c.rationale}`);
         }
@@ -685,7 +685,7 @@ ${items}`;
    */
   _repairByRegexFallback(text) {
     // 收集所有 "}" 后跟 "," 或空白的位置（可能是对象边界）
-    const candidates = [];
+    const candidates: any[] = [];
     const re = /\}[\s,]*(?=\s*[[{]|$)/g;
     let m;
     while ((m = re.exec(text)) !== null) {

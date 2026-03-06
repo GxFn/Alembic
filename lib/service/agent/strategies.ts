@@ -138,7 +138,7 @@ export class FanOutStrategy extends Strategy {
    */
   async execute(runtime, message, opts: any = {}) {
     const { items = [] } = opts;
-    const bus = AgentEventBus.getInstance();
+    const bus = AgentEventBus.getInstance()!;
 
     if (items.length === 0) {
       return {
@@ -151,7 +151,7 @@ export class FanOutStrategy extends Strategy {
 
     // 按 tier 分组
     const tierGroups = this.#groupByTier(items);
-    const allResults = [];
+    const allResults: any[] = [];
 
     for (const [tier, tierItems] of Object.entries(tierGroups).sort(
       ([a], [b]) => Number(a) - Number(b)
@@ -220,7 +220,7 @@ export class FanOutStrategy extends Strategy {
   }
 
   #groupByTier(items) {
-    const groups = {};
+    const groups: Record<string, any> = {};
     for (const item of items) {
       const tier = item.tier || 1;
       if (!groups[tier]) {
@@ -232,7 +232,7 @@ export class FanOutStrategy extends Strategy {
   }
 
   #chunk(arr, size) {
-    const chunks = [];
+    const chunks: any[] = [];
     for (let i = 0; i < arr.length; i += size) {
       chunks.push(arr.slice(i, i + size));
     }
@@ -302,7 +302,7 @@ export class AdaptiveStrategy extends Strategy {
 
   async execute(runtime, message, opts: any = {}) {
     const complexity = this.#assessComplexity(message, opts);
-    const bus = AgentEventBus.getInstance();
+    const bus = AgentEventBus.getInstance()!;
 
     bus.publish(AgentEvents.PROGRESS, {
       type: 'adaptive_classification',

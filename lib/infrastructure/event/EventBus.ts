@@ -56,7 +56,7 @@ export class EventBus extends EventEmitter {
    * 获取统计
    */
   getStats() {
-    const events = {};
+    const events: Record<string, any> = {};
     for (const entry of this.#history) {
       events[entry.event] = (events[entry.event] || 0) + 1;
     }

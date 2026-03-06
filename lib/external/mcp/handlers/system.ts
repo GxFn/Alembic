@@ -10,8 +10,8 @@ import { TIER_ORDER, TOOL_GATEWAY_MAP, TOOLS } from '../tools.js';
 
 export async function health(ctx) {
   const checks = { database: false, gateway: false, vectorStore: false };
-  const issues = [];
-  let knowledgeBase = null;
+  const issues: string[] = [];
+  let knowledgeBase: any = null;
 
   // 1) AI 配置
   let aiInfo = { provider: 'unknown', hasKey: false };
@@ -107,7 +107,7 @@ export async function health(ctx) {
   const status = allCritical ? 'ok' : 'degraded';
 
   // 如果 DB 不可用但冷启动仍可执行，附加提示避免 Agent 浪费时间修复 DB
-  const actionHints = [];
+  const actionHints: any[] = [];
   if (!checks.database) {
     actionHints.push(
       'DB 不可用不影响冷启动：autosnippet_bootstrap 不依赖数据库（纯文件系统分析），可直接调用。DB 会在首次 submit_knowledge 时自动重试初始化。'
@@ -152,7 +152,7 @@ export async function health(ctx) {
   });
 }
 
-let _pkgVersion = null;
+let _pkgVersion: any = null;
 
 export function capabilities() {
   // V3 工具分类映射
@@ -206,7 +206,7 @@ export function capabilities() {
   });
 
   // 按分类分组
-  const byCategory = {};
+  const byCategory: Record<string, any> = {};
   for (const t of tools) {
     (byCategory[t.category] || (byCategory[t.category] = [])).push(t.name);
   }

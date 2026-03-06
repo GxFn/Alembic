@@ -16,10 +16,10 @@ import { PackageSwiftParser } from './PackageSwiftParser.js';
 
 export class SpmDiscoverer extends ProjectDiscoverer {
   /** @type {PackageSwiftParser|null} */
-  #parser = null;
-  #projectRoot = null;
+  #parser: PackageSwiftParser | null = null;
+  #projectRoot: string | null = null;
   /** @type {Array<{ pkgPath: string, parsed: object }>} */
-  #parsedPackages = [];
+  #parsedPackages: any[] = [];
 
   get id() {
     return 'spm';
@@ -79,7 +79,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const targets = [];
+    const targets: { name: any; path: string; type: any; language: string; metadata: any }[] = [];
     for (const { pkgPath, parsed } of this.#parsedPackages) {
       const pkgDir = dirname(pkgPath);
       for (const t of parsed.targets || []) {
@@ -108,13 +108,13 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     const targetName = typeof target === 'string' ? target : target.name;
 
     // 找到 target 所在的包目录和自定义 path
-    let sourcesDir = null;
+    let sourcesDir: any = null;
     for (const { pkgPath, parsed } of this.#parsedPackages) {
       const matchTarget = parsed.targets?.find((t) => t.name === targetName);
       if (matchTarget) {
         const pkgDir = dirname(pkgPath);
         // 优先使用 target 声明的自定义 path
-        const candidates = [];
+        const candidates: string[] = [];
         if (matchTarget.path) {
           candidates.push(join(pkgDir, matchTarget.path));
         }
@@ -134,7 +134,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
 
     if (!sourcesDir) {
       // Fallback: projectRoot/Sources/targetName
-      const fallback = join(this.#projectRoot, 'Sources', targetName);
+      const fallback = join(this.#projectRoot!, 'Sources', targetName);
       if (existsSync(fallback)) {
         sourcesDir = fallback;
       } else {
@@ -159,13 +159,14 @@ export class SpmDiscoverer extends ProjectDiscoverer {
       return { nodes: [], edges: [] };
     }
 
-    const nodes = [];
-    const edges = [];
+    const nodes: any[] = [];
+    const edges: { from: any; to: any; type: string } | { from: any; to: string; type: string }[] =
+      [];
     const pkgNameSet = new Set();
     const targetToPkg = new Map();
 
     // ── 第一遍：收集所有 package + target 节点 ──
-    const allParsed = [];
+    const allParsed: any[] = [];
     const umbrellaNames = new Set();
     for (const { pkgPath, parsed } of this.#parsedPackages) {
       if (pkgNameSet.has(parsed.name)) {
@@ -288,7 +289,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
       'Carthage',
     ]);
     const MAX_FILES = 300;
-    const files = [];
+    const files: { name: any; path: string; relativePath: any }[] = [];
 
     const walk = (d, rel = '') => {
       if (files.length >= MAX_FILES) {

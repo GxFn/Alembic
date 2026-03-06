@@ -136,7 +136,7 @@ function _parseClassDef(node, ctx) {
   const isSealed = node.text.trimStart().startsWith('sealed');
 
   // 父类 (extends)
-  let superclass = null;
+  let superclass: any = null;
   const superClause = node.namedChildren.find((c) => c.type === 'superclass');
   if (superClause) {
     const superType = superClause.namedChildren.find(
@@ -147,7 +147,7 @@ function _parseClassDef(node, ctx) {
 
   // 实现的接口 (implements)
   const implClause = node.namedChildren.find((c) => c.type === 'interfaces');
-  const protocols = [];
+  const protocols: any[] = [];
   if (implClause) {
     for (let i = 0; i < implClause.namedChildCount; i++) {
       const t = implClause.namedChild(i);
@@ -159,7 +159,7 @@ function _parseClassDef(node, ctx) {
 
   // Mixin (with)
   const mixinClause = node.namedChildren.find((c) => c.type === 'mixins');
-  const mixins = [];
+  const mixins: any[] = [];
   if (mixinClause) {
     for (let i = 0; i < mixinClause.namedChildCount; i++) {
       const t = mixinClause.namedChild(i);
@@ -258,7 +258,7 @@ function _parseMixinDecl(node, ctx) {
   const onClause = node.namedChildren.find(
     (c) => c.type === 'on_clause' || c.type === 'superclass'
   );
-  const constraints = [];
+  const constraints: any[] = [];
   if (onClause) {
     for (let i = 0; i < onClause.namedChildCount; i++) {
       const t = onClause.namedChild(i);
@@ -393,11 +393,11 @@ function _parsePropertyDecl(node, className) {
 // ── Dart Pattern Detection ───────────────────────────────────
 
 function detectDartPatterns(root, lang, methods, properties, classes) {
-  const patterns = [];
+  const patterns: any[] = [];
 
   // 构建 class → methods/properties 索引
-  const classMethodMap = {};
-  const classPropMap = {};
+  const classMethodMap: Record<string, any> = {};
+  const classPropMap: Record<string, any> = {};
   for (const m of methods) {
     if (m.className) {
       if (!classMethodMap[m.className]) {
@@ -690,7 +690,7 @@ function extractCallSitesDart(root, ctx, _lang) {
  * 递归收集 Dart 中所有函数/方法体作用域
  */
 function _collectDartScopes(root) {
-  const scopes = [];
+  const scopes: any[] = [];
 
   function visit(node, className) {
     for (let i = 0; i < node.namedChildCount; i++) {
@@ -862,7 +862,7 @@ function _extractDartCallSitesFromBody(bodyNode, className, methodName, ctx) {
         const callee = methodMatch[1];
         const receiverText = startNode.text;
         const receiver = receiverText;
-        let receiverType = null;
+        let receiverType: any = null;
         let callType;
 
         if (startNode.type === 'this' || receiver === 'this' || receiver === 'self') {
@@ -975,7 +975,7 @@ function _processDartCall(node, className, methodName, ctx, isAwaited, DART_NOIS
   }
 
   const receiver = receiverText;
-  let receiverType = null;
+  let receiverType: any = null;
   let callType;
 
   if (receiver === 'this' || receiver === 'super') {
@@ -1011,7 +1011,7 @@ function _processDartCall(node, className, methodName, ctx, isAwaited, DART_NOIS
 
 // ── Plugin Export ────────────────────────────────────────────
 
-let _grammar = null;
+let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }

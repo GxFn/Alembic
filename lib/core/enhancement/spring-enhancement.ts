@@ -65,7 +65,7 @@ class SpringEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: { type: string; className: any; line: any; confidence: number }[] = [];
     for (const cls of astSummary.classes || []) {
       const annos = cls.annotations || [];
       if (annos.some((a) => /@RestController/.test(a))) {

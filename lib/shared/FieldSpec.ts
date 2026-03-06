@@ -354,7 +354,7 @@ export function getCursorDeliverySpec() {
     'whenClause',
     'coreCode',
   ];
-  const result = {};
+  const result: Record<string, any> = {};
   for (const name of CURSOR_FIELD_NAMES) {
     const def = V3_FIELD_SPEC.find((f) => f.name === name);
     if (def) {

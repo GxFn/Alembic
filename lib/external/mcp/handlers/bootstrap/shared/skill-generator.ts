@@ -185,7 +185,7 @@ function buildSkillContent(
   keyFindings: any[] = [],
   source = 'bootstrap'
 ) {
-  const parts = [];
+  const parts: any[] = [];
 
   // Header
   parts.push(`# ${dim.label || dim.id}`);

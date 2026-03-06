@@ -52,7 +52,7 @@ function request(method, urlStr) {
     ASD_MCP_TOKEN: process.env.ASD_MCP_TOKEN ? 'set' : 'unset',
   };
 
-  let health = null;
+  let health: any = null;
   let ok = false;
   let msg = '';
   try {

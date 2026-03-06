@@ -39,7 +39,7 @@ export function createStreamSession(scene) {
     sessionId,
     scene,
     /** @type {Array<object>} 事件缓冲区（供 EventSource 连接后回放） */
-    buffer: [],
+    buffer: [] as any[],
     /** 会话是否已结束 */
     completed: false,
     createdAt: Date.now(),

@@ -118,7 +118,7 @@ function exec(args: any[] = []) {
  * @returns {Promise<{success: boolean, path?: string, width?: number, height?: number, error?: string}>}
  */
 export async function screenshot(opts: any = {}) {
-  const args = [];
+  const args: any[] = [];
 
   if (opts.windowTitle) {
     args.push('--window', opts.windowTitle);

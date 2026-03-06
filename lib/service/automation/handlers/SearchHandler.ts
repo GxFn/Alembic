@@ -17,7 +17,7 @@ export async function handleSearch(watcher, fullPath, relativePath, searchLine) 
     return;
   }
 
-  let results = [];
+  let results: any[] = [];
   try {
     const { ServiceContainer } = await import('../../../injection/ServiceContainer.js');
     const container = ServiceContainer.getInstance();
@@ -111,7 +111,7 @@ export function normalizeSearchResults(results) {
     .map((r) => {
       let code = '';
       let explanation = '';
-      let headers = [];
+      let headers: any[] = [];
       if (r.content) {
         try {
           const content = typeof r.content === 'string' ? JSON.parse(r.content) : r.content;
@@ -215,7 +215,7 @@ function _separateImportsFromCode(code) {
   }
   const lines = code.split(/\r?\n/);
   const importRe = /^\s*(#import\s|@import\s|#include\s|import\s)/;
-  const extractedHeaders = [];
+  const extractedHeaders: any[] = [];
   let lastImportIdx = -1;
 
   // 从开头扫描连续 import 块（允许中间有空行）
@@ -266,7 +266,7 @@ function _extractCodeFromMarkdown(md) {
     return '';
   }
   const fencedRe = /```[\w]*\n([\s\S]*?)```/g;
-  const blocks = [];
+  const blocks: any[] = [];
   let match;
   while ((match = fencedRe.exec(md)) !== null) {
     const block = match[1].trim();

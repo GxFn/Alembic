@@ -55,7 +55,7 @@ export class TopicClassifier {
    */
   group(entries) {
     const grouped: any = {};
-    const unmatched = [];
+    const unmatched: any[] = [];
 
     for (const entry of entries) {
       const topic = this._classifyEntry(entry);

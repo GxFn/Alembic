@@ -247,7 +247,7 @@ export async function enhancedSubmitKnowledge(ctx, args) {
   }
 
   // ── 附加去重检测结果（非阻塞） ──
-  let duplicateCheck = null;
+  let duplicateCheck: any = null;
   if (!skipDuplicateCheck) {
     try {
       const dedupCandidate = {

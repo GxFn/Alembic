@@ -89,11 +89,11 @@ export class DependencyGraph {
    * @returns {string[][]} 循环路径列表
    */
   detectCycles() {
-    const cycles = [];
+    const cycles: any[][] = [];
     const white = new Set(this.#nodes);
     const gray = new Set();
     const black = new Set();
-    const path = [];
+    const path: any[] = [];
 
     const dfs = (node) => {
       white.delete(node);
@@ -137,14 +137,14 @@ export class DependencyGraph {
       }
     }
 
-    const queue = [];
+    const queue: any[] = [];
     for (const [node, degree] of inDegree) {
       if (degree === 0) {
         queue.push(node);
       }
     }
 
-    const result = [];
+    const result: undefined[] = [];
     while (queue.length > 0) {
       const node = queue.shift();
       result.push(node);
@@ -223,7 +223,7 @@ export class DependencyGraph {
    * 导出为 JSON (可视化用)
    */
   toJSON() {
-    const edges = [];
+    const edges: { from: any; to: any }[] = [];
     for (const [from, deps] of this.#adjacency) {
       for (const to of deps) {
         edges.push({ from, to });

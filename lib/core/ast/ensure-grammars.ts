@@ -60,10 +60,10 @@ export async function ensureGrammars(detectedLanguages, options: any = {}) {
   const { logger } = options;
 
   const result = {
-    installed: [], // WASM 模式下始终为空（不再运行时安装）
-    skipped: [],
-    failed: [],
-    alreadyAvailable: [],
+    installed: [] as string[], // WASM 模式下始终为空（不再运行时安装）
+    skipped: [] as string[],
+    failed: [] as string[],
+    alreadyAvailable: [] as string[],
   };
 
   if (!detectedLanguages || detectedLanguages.length === 0) {

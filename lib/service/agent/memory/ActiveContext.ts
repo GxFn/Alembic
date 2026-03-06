@@ -38,7 +38,7 @@ const TOOL_COMPRESS_STRATEGIES = {
     }
     const matches = result.matches || [];
     const batchResults = result.batchResults || {};
-    const lines = [];
+    const lines: string[] = [];
     if (matches.length > 0) {
       lines.push(`搜索到 ${matches.length} 个匹配`);
       const fileGroups: Record<string, any> = {};
@@ -141,25 +141,25 @@ function defaultCompress(result, maxChars = 600) {
 export class ActiveContext {
   // ── 子区 1: Scratchpad (从 WorkingMemory 继承, 不可压缩) ──
   /** @type {Array<{finding: string, evidence: string, importance: number, round: number}>} */
-  #scratchpad = [];
+  #scratchpad: any[] = [];
 
   // ── 子区 2: ObservationLog (合并 RT.rounds + WM.observations) ──
   /** @type {Array<Round>} */
-  #rounds = [];
+  #rounds: any[] = [];
   /** @type {Round|null} */
-  #currentRound = null;
+  #currentRound: any = null;
 
   // ── WM 滑动窗口 (保留最近 N 轮原始结果，旧的压缩) ──
   /** @type {Array<{toolName: string, result: any, round: number, timestamp: number}>} */
-  #recentObservations = [];
+  #recentObservations: any[] = [];
   /** @type {Array<{toolName: string, round: number, summary: string}>} */
-  #compressedObservations = [];
+  #compressedObservations: any[] = [];
 
   // ── 子区 3: Plan (从 ReasoningTrace 继承) ──
   /** @type {Plan|null} */
-  #plan = null;
+  #plan: any = null;
   /** @type {Array<Plan>} */
-  #planHistory = [];
+  #planHistory: any[] = [];
   /** @type {boolean} 是否期待下一次响应包含计划 (由 ExplorationTracker 设置) */
   #expectingPlan = false;
 
@@ -483,7 +483,7 @@ export class ActiveContext {
       return '';
     }
 
-    const parts = [];
+    const parts: string[] = [];
     let remaining = tokenBudget;
 
     // §1: Scratchpad (最高优先级 — 不会被压缩)
@@ -742,7 +742,7 @@ export class ActiveContext {
     const meta = {
       gotNewInfo: isNew,
       resultType: 'unknown',
-      keyFacts: [],
+      keyFacts: [] as string[],
       resultSize: 0,
     };
 
@@ -889,7 +889,7 @@ export class ActiveContext {
       return [];
     }
     const lines = text.split('\n');
-    const steps = [];
+    const steps: { description: any; status: string; keywords: any[] }[] = [];
     for (const line of lines) {
       const m = line.match(/^\s*(?:\d+[.)]\s*|[-*]\s+)(.+)/);
       if (m && m[1].trim().length > 5) {
@@ -956,7 +956,7 @@ export class ActiveContext {
 
     const remaining = searchArea.substring(planStart);
     const lines = remaining.split('\n');
-    const planLines = [];
+    const planLines: any[] = [];
     let inList = false;
 
     for (const line of lines) {

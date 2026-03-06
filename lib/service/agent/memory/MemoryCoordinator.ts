@@ -205,7 +205,7 @@ export class MemoryCoordinator {
    * @returns {string}
    */
   buildStaticMemoryPrompt(options: any = {}) {
-    const parts = [];
+    const parts: any[] = [];
     let surplus = 0;
 
     try {

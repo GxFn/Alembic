@@ -15,7 +15,7 @@ export class BaseRepository {
   logger: any;
   tableName: any;
   /** @type {Set<string>|null} lazily-populated column whitelist */
-  #columnWhitelist = null;
+  #columnWhitelist: any = null;
 
   constructor(database, tableName) {
     // 校验 tableName 防止 SQL 注入（与列名使用相同的标识符规则）
@@ -53,7 +53,7 @@ export class BaseRepository {
   /**
    * 创建实体
    */
-  async create(entity) {
+  async create(entity): Promise<any> {
     throw new Error('create() must be implemented in subclass');
   }
 
@@ -87,7 +87,7 @@ export class BaseRepository {
   async findAll(filters: any = {}) {
     try {
       let query = `SELECT * FROM ${this.tableName}`;
-      const params = [];
+      const params: any[] = [];
 
       // 添加过滤条件
       if (Object.keys(filters).length > 0) {
@@ -122,7 +122,7 @@ export class BaseRepository {
 
       let countQuery = `SELECT COUNT(*) as count FROM ${this.tableName}`;
       let query = `SELECT * FROM ${this.tableName}`;
-      const params = [];
+      const params: any[] = [];
 
       // 添加过滤条件
       if (Object.keys(filters).length > 0) {
@@ -219,7 +219,7 @@ export class BaseRepository {
   async count(filters: any = {}) {
     try {
       let query = `SELECT COUNT(*) as count FROM ${this.tableName}`;
-      const params = [];
+      const params: any[] = [];
 
       if (Object.keys(filters).length > 0) {
         const conditions = Object.keys(filters).map((key) => {

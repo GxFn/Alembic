@@ -189,8 +189,8 @@ export class TaskRepositoryImpl {
       metadata: 'metadata',
     };
 
-    const setClauses = [];
-    const values = [];
+    const setClauses: string[] = [];
+    const values: any[] = [];
 
     for (const [key, value] of Object.entries(fields)) {
       const col = columnMap[key];
@@ -235,8 +235,8 @@ export class TaskRepositoryImpl {
    * @returns {Task[]}
    */
   findAll(filters: any = {}, options: any = {}) {
-    const conditions = [];
-    const params = [];
+    const conditions: any[] = [];
+    const params: any | number[] = [];
 
     if (filters.status) {
       conditions.push('status = ?');

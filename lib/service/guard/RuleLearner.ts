@@ -89,7 +89,7 @@ export class RuleLearner {
    * @returns {Array<{ ruleId: string, metrics: object, recommendation: string }>}
    */
   getProblematicRules() {
-    const results = [];
+    const results: any[] = [];
     for (const [ruleId, stat] of Object.entries(this.#data.ruleStats) as [string, any][]) {
       if (stat.triggers < PROBLEMATIC_THRESHOLD.minTriggers) {
         continue;
@@ -115,7 +115,7 @@ export class RuleLearner {
    * 获取所有规则统计
    */
   getAllStats() {
-    const result = {};
+    const result: Record<string, any> = {};
     for (const [ruleId] of Object.entries(this.#data.ruleStats)) {
       result[ruleId] = {
         ...this.#data.ruleStats[ruleId],
@@ -144,7 +144,7 @@ export class RuleLearner {
    * @returns {Array<{ type: string, ruleId: string, message: string, confidence: number, evidence: object }>}
    */
   suggestRules() {
-    const suggestions = [];
+    const suggestions: any[] = [];
 
     // 策略 1: 从高误报规则推导改进建议
     const problematic = this.getProblematicRules();

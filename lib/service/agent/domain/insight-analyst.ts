@@ -119,7 +119,7 @@ export function buildAnalystPrompt(
   semanticMemory,
   codeEntityGraph
 ) {
-  const parts = [];
+  const parts: any[] = [];
 
   // §1 任务描述
   parts.push(

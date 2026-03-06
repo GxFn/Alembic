@@ -59,7 +59,8 @@ export async function guardCheck(ctx, args) {
     /* skillHooks not available */
   }
 
-  const warnings = [];
+  const warnings: '未能识别语言，部分语言相关规则可能未执行。建议提供 language 或 filePath 参数。'[] =
+    [];
   if (language === 'unknown') {
     warnings.push('未能识别语言，部分语言相关规则可能未执行。建议提供 language 或 filePath 参数。');
   }
@@ -194,7 +195,7 @@ export async function guardReview(ctx, args) {
   }
 
   // 1. 确定待检查文件
-  let filePaths = [];
+  let filePaths: any[] = [];
   let fileSource = 'git-diff';
 
   if (args.files && Array.isArray(args.files) && args.files.length > 0) {
@@ -228,7 +229,7 @@ export async function guardReview(ctx, args) {
   await _injectEnhancementGuardRules(engine, ctx);
 
   // 4. 逐文件检查
-  const results = [];
+  const results: any[] = [];
   let totalViolations = 0;
   let totalErrors = 0;
   let totalWarnings = 0;
@@ -492,7 +493,7 @@ export async function scanProject(ctx, args) {
 
   // 收集所有文件（去重）
   const seenPaths = new Set();
-  const allFiles = [];
+  const allFiles: any[] = [];
   for (const t of allTargets) {
     try {
       const fileList = await service.getTargetFiles(t);
@@ -534,7 +535,7 @@ export async function scanProject(ctx, args) {
   }
 
   // Guard 审计
-  let guardAudit = null;
+  let guardAudit: any = null;
   try {
     const { GuardCheckEngine } = await import('../../../service/guard/GuardCheckEngine.js');
     const engine = _getOrCreateEngine(ctx, GuardCheckEngine);
@@ -643,7 +644,7 @@ async function _injectEnhancementGuardRules(engine, ctx) {
     // 使用空语言+空框架列表获取所有已注册的 Pack（不过滤）
     // 这里我们注入 ALL 规则，让 GuardCheckEngine 按 languages 字段自行过滤
     const allPacks = enhReg.all();
-    const allGuardRules = [];
+    const allGuardRules: any[] = [];
     for (const pack of allPacks) {
       try {
         const rules = pack.getGuardRules();

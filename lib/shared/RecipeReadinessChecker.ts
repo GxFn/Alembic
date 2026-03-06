@@ -41,8 +41,8 @@ export function checkRecipeReadiness(item) {
   });
 
   // 转换为旧格式: errors → missing 字段名, warnings → suggestions
-  const missing = [];
-  const suggestions = [];
+  const missing: any[] = [];
+  const suggestions: any[] = [];
 
   for (const error of result.errors) {
     // 从错误消息中提取字段名: "缺少必填字段: fieldName — rule"

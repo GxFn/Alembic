@@ -417,7 +417,7 @@ export class CodeEntityGraph {
    * @returns {Array<{ id: string, type: string, depth: number, relation: string }>}
    */
   getDescendants(entityId, entityType, maxDepth = 3) {
-    const results = [];
+    const results: { id: any; type: any; depth: any; relation: string }[] = [];
     const visited = new Set();
     const queue = [{ id: entityId, type: entityType, depth: 0 }];
 
@@ -426,7 +426,7 @@ export class CodeEntityGraph {
       entityType === 'protocol' ? ['conforms', 'inherits'] : ['inherits', 'extends'];
 
     while (queue.length > 0) {
-      const { id, type, depth } = queue.shift();
+      const { id, type, depth } = queue.shift()!;
       if (depth >= maxDepth) {
         continue;
       }
@@ -488,10 +488,10 @@ export class CodeEntityGraph {
    */
   findPath(fromId, fromType, toId, toType, maxDepth = 5) {
     const visited = new Set();
-    const queue = [{ id: fromId, type: fromType, path: [] }];
+    const queue = [{ id: fromId, type: fromType, path: [] as any[] }];
 
     while (queue.length > 0) {
-      const { id, type, path } = queue.shift();
+      const { id, type, path } = queue.shift()!;
       if (path.length >= maxDepth) {
         continue;
       }
@@ -523,7 +523,7 @@ export class CodeEntityGraph {
       }
     }
 
-    return { found: false, path: [], depth: -1 };
+    return { found: false, path: [] as any[], depth: -1 };
   }
 
   /**
@@ -534,12 +534,12 @@ export class CodeEntityGraph {
    * @returns {Array<{ id: string, type: string, relation: string, depth: number }>}
    */
   getImpactRadius(entityId, entityType, maxDepth = 3) {
-    const impacted = [];
+    const impacted: { id: any; type: any; relation: any; depth: any }[] = [];
     const visited = new Set();
     const queue = [{ id: entityId, type: entityType, depth: 0 }];
 
     while (queue.length > 0) {
-      const { id, type, depth } = queue.shift();
+      const { id, type, depth } = queue.shift()!;
       if (depth >= maxDepth) {
         continue;
       }
@@ -839,12 +839,12 @@ export class CodeEntityGraph {
    * @returns {Array<{ caller: string, depth: number, callType: string }>}
    */
   getCallers(methodId, maxDepth = 2) {
-    const results = [];
+    const results: { caller: any; depth: any; callType: any }[] = [];
     const visited = new Set();
     const queue = [{ id: methodId, depth: 0 }];
 
     while (queue.length > 0) {
-      const { id, depth } = queue.shift();
+      const { id, depth } = queue.shift()!;
       if (depth >= maxDepth || visited.has(id)) {
         continue;
       }
@@ -876,12 +876,12 @@ export class CodeEntityGraph {
    * @returns {Array<{ callee: string, depth: number, callType: string }>}
    */
   getCallees(methodId, maxDepth = 2) {
-    const results = [];
+    const results: { callee: any; depth: any; callType: any }[] = [];
     const visited = new Set();
     const queue = [{ id: methodId, depth: 0 }];
 
     while (queue.length > 0) {
-      const { id, depth } = queue.shift();
+      const { id, depth } = queue.shift()!;
       if (depth >= maxDepth || visited.has(id)) {
         continue;
       }

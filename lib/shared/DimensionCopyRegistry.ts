@@ -424,7 +424,7 @@ export class DimensionCopy {
       }
 
       // 收集次要语言的差异化 guide 片段
-      const secondaryGuides = [];
+      const secondaryGuides: string[] = [];
       const seenFamilies = new Set([primaryFamily]);
       for (const lang of effectiveSecondary) {
         const fam = _langFamily(lang);

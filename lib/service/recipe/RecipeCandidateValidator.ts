@@ -37,8 +37,8 @@ export class RecipeCandidateValidator {
    * @returns {{ valid: boolean, errors: string[], warnings: string[] }}
    */
   validate(candidate) {
-    const errors = [];
-    const warnings = [];
+    const errors: any[] = [];
+    const warnings: any[] = [];
 
     if (!candidate || typeof candidate !== 'object') {
       return { valid: false, errors: ['候选为空或类型错误'], warnings: [] };
@@ -155,8 +155,8 @@ export class RecipeCandidateValidator {
    * @returns {{ valid: object[], invalid: object[], summary: { total: number, validCount: number, invalidCount: number } }}
    */
   validateBatch(candidates) {
-    const valid = [];
-    const invalid = [];
+    const valid: any[] = [];
+    const invalid: any[] = [];
 
     for (const candidate of candidates) {
       const result = this.validate(candidate);

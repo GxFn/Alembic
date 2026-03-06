@@ -359,7 +359,7 @@ export async function bootstrapKnowledge(ctx, args) {
   }));
 
   // 启动 BootstrapTaskManager 会话（通过正式 DI 获取单例）
-  let bootstrapSession = null;
+  let bootstrapSession: any = null;
   try {
     const taskManager = ctx.container.get('bootstrapTaskManager');
     bootstrapSession = taskManager.startSession(taskDefs);

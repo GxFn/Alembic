@@ -36,7 +36,7 @@ import {
  */
 export function buildArticlePrompt(topic, data, isZh, codeEntityGraph) {
   const { projectInfo, astInfo, moduleInfo, knowledgeInfo } = data;
-  const parts = [];
+  const parts: any[] = [];
   const langTerms = getLangTerms(projectInfo.primaryLanguage || 'unknown');
   const tl = isZh ? langTerms.typeLabel.zh : langTerms.typeLabel.en;
   const il = isZh ? langTerms.interfaceLabel.zh : langTerms.interfaceLabel.en;
@@ -553,7 +553,7 @@ export function renderIndex(project, ast, modules, knowledge, isZh, allTopics) {
   lines.push('');
 
   // 从 buildSystems 或 legacy 字段推断项目类型标签
-  const types = [];
+  const types: any[] = [];
   if (project.buildSystems?.length > 0) {
     for (const bs of project.buildSystems) {
       types.push(bs.buildTool);
@@ -1650,7 +1650,7 @@ export function renderFolderOverview(profiles, projectInfo, isZh) {
   }
 
   // ── 依赖关系 ──
-  const allImports = [];
+  const allImports: { from: any; to: any }[] = [];
   for (const fp of profiles) {
     for (const imp of fp.imports) {
       if (folderNames.has(imp) && imp !== fp.name) {

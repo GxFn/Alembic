@@ -96,7 +96,7 @@ class RustWebEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── Handler functions (async fn with web extractor params) ──
     for (const m of astSummary.methods || []) {

@@ -50,7 +50,7 @@ import { SafetyPolicy } from '../policies.js';
 
 export class ToolExecutionPipeline {
   /** @type {ToolMiddleware[]} */
-  #middlewares = [];
+  #middlewares: any[] = [];
 
   /**
    * 注册中间件
@@ -75,7 +75,7 @@ export class ToolExecutionPipeline {
    * @returns {Promise<{ result: *, metadata: ToolMetadata }>}
    */
   async execute(call, context) {
-    let toolResult = null;
+    let toolResult: any = null;
     const metadata = { cacheHit: false, blocked: false, isNew: false, durationMs: 0 };
 
     // ── before 阶段 ──

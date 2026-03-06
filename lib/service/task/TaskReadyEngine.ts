@@ -109,7 +109,7 @@ export class TaskReadyEngine {
   getBlockedWork() {
     const rows = this._blockedStmt.all();
     return rows.map((r) => ({
-      ...Task.fromRow(r).toJSON(),
+      ...Task.fromRow(r)!.toJSON(),
       blockedBy: r.blocked_by ? r.blocked_by.split(',') : [],
     }));
   }
@@ -122,7 +122,7 @@ export class TaskReadyEngine {
   getDependencyTree(taskId) {
     const rows = this._depTreeStmt.all(taskId);
     return rows.map((r) => ({
-      ...Task.fromRow(r).toJSON(),
+      ...Task.fromRow(r)!.toJSON(),
       depth: r.depth,
     }));
   }

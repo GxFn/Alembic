@@ -535,7 +535,7 @@ program
       );
 
       // 读取文件内容并检查
-      const files = [];
+      const files: { path: string; content: string }[] = [];
       for (const f of sourceFiles) {
         const filePath = resolve(f);
         if (existsSync(filePath)) {
@@ -603,7 +603,7 @@ program
       const specPath = Paths.getProjectSpecPath(dir);
 
       // IDE + 扩展名自动检测
-      let exts = null;
+      let exts: any = null;
       if (opts.ext) {
         exts = opts.ext.split(',').map((e) => e.trim());
       }

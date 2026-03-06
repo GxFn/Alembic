@@ -37,13 +37,13 @@ export class HnswVectorAdapter extends VectorStore {
   /** @type {boolean} 数据是否已修改 */
   #dirty = false;
   /** @type {ReturnType<typeof setTimeout>|null} flush 定时器 */
-  #flushTimer = null;
+  #flushTimer: any = null;
   /** @type {number} 待刷盘操作计数 */
   #pendingOps = 0;
   /** @type {boolean} 是否正在刷盘 */
   #flushing = false;
   /** @type {AsyncPersistence|null} WAL 持久化管理 */
-  #wal = null;
+  #wal: any = null;
 
   // ── 配置 ──
   #config;
@@ -300,7 +300,7 @@ export class HnswVectorAdapter extends VectorStore {
   }
 
   async batchUpsert(items) {
-    const walOps = [];
+    const walOps: { t: 1; id: any; c: any; v: unknown[]; m: any }[] = [];
 
     for (const item of items) {
       if (!item?.id) {
@@ -511,7 +511,7 @@ export class HnswVectorAdapter extends VectorStore {
       return [];
     }
 
-    const results = [];
+    const results: { id: any; score: number }[] = [];
     for (const [id, content] of this.#contents) {
       if (filter) {
         const item = { metadata: this.#metadata.get(id) || {} };
@@ -546,7 +546,7 @@ export class HnswVectorAdapter extends VectorStore {
   }
 
   async searchByFilter(filter) {
-    const results = [];
+    const results: { id: any; content: any; metadata: any }[] = [];
     for (const [id, meta] of this.#metadata) {
       const item = { id, content: this.#contents.get(id) || '', metadata: meta };
       if (this.#matchFilter(item, filter)) {
@@ -735,7 +735,7 @@ export class HnswVectorAdapter extends VectorStore {
     }
 
     // 收集训练向量
-    const vectors = [];
+    const vectors: any[] = [];
     for (const node of this.#index.nodes) {
       if (node && node.vector.length > 0) {
         vectors.push(node.vector);

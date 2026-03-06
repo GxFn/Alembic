@@ -19,7 +19,7 @@
  * @returns {Array<{ruleId, message, severity, line, snippet, dimension?, fixSuggestion?}>}
  */
 export function runCodeLevelChecks(code, language, lines, options: any = {}) {
-  const violations = [];
+  const violations: any[] = [];
   const disabledSet = new Set(options.disabledRules || []);
   const thresholds = options.codeLevelThresholds || {};
   /** 判断 ruleId 是否被禁用 */
@@ -49,7 +49,7 @@ export function runCodeLevelChecks(code, language, lines, options: any = {}) {
     // ObjC Category 重名检查 (同文件)
     if (!isDisabled('objc-duplicate-category')) {
       const categoryRegex = /@interface\s+(\w+)\s*\(\s*(\w+)\s*\)/g;
-      const categories = {};
+      const categories: Record<string, any> = {};
       for (let i = 0; i < lines.length; i++) {
         categoryRegex.lastIndex = 0;
         const m = categoryRegex.exec(lines[i]);
@@ -90,7 +90,7 @@ export function runCodeLevelChecks(code, language, lines, options: any = {}) {
       !code.includes('.catch(') &&
       !code.includes('try')
     ) {
-      const thenLines = [];
+      const thenLines: number[] = [];
       for (let i = 0; i < lines.length; i++) {
         if (/\.then\s*\(/.test(lines[i])) {
           thenLines.push(i);
@@ -286,7 +286,7 @@ export function runCodeLevelChecks(code, language, lines, options: any = {}) {
     // .unwrap() 滥用检查 — 生产代码应使用 ? 或 expect()
     if (!isDisabled('rust-excessive-unwrap')) {
       let unwrapCount = 0;
-      const unwrapLines = [];
+      const unwrapLines: number[] = [];
       for (let i = 0; i < lines.length; i++) {
         const trimmed = lines[i].trimStart();
         // 跳过测试代码和注释

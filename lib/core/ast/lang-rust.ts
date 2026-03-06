@@ -175,7 +175,7 @@ function _parseStruct(node, ctx) {
   const nameNode = node.namedChildren.find((c) => c.type === 'type_identifier');
   const name = nameNode?.text || 'Unknown';
 
-  const fields = [];
+  const fields: any | string[] = [];
   const derives = _extractDerives(node);
 
   // Named fields (struct Foo { field: Type })
@@ -243,7 +243,7 @@ function _parseEnum(node, ctx) {
   const name = nameNode?.text || 'Unknown';
   const derives = _extractDerives(node);
 
-  const variants = [];
+  const variants: any[] = [];
   const body = node.namedChildren.find((c) => c.type === 'enum_variant_list');
   if (body) {
     for (let i = 0; i < body.namedChildCount; i++) {
@@ -276,8 +276,8 @@ function _parseTrait(node, ctx) {
   const nameNode = node.namedChildren.find((c) => c.type === 'type_identifier');
   const name = nameNode?.text || 'Unknown';
 
-  const methods = [];
-  const superTraits = [];
+  const methods: any[] = [];
+  const superTraits: any[] = [];
 
   // Trait bounds (trait Foo: Bar + Baz)
   const bounds = node.namedChildren.find((c) => c.type === 'trait_bounds');
@@ -321,8 +321,8 @@ function _parseTrait(node, ctx) {
 
 function _parseImpl(node, ctx) {
   // impl Type { ... } 或 impl Trait for Type { ... }
-  let selfType = null;
-  let traitName = null;
+  let selfType: any = null;
+  let traitName: any = null;
 
   const typeIdNodes = node.namedChildren.filter(
     (c) =>
@@ -478,10 +478,10 @@ function _parseMacroDef(node, ctx) {
 // ── Rust Pattern Detection ───────────────────────────────────
 
 function detectRustPatterns(root, lang, methods, properties, classes) {
-  const patterns = [];
+  const patterns: any[] = [];
 
   // 构建 type → methods 索引
-  const typeMethodMap = {};
+  const typeMethodMap: Record<string, any> = {};
   for (const m of methods) {
     if (m.className) {
       if (!typeMethodMap[m.className]) {
@@ -621,7 +621,7 @@ function _detectAsync(root, patterns) {
 }
 
 function _detectDerives(classes, patterns) {
-  const deriveCounts = {};
+  const deriveCounts: Record<string, any> = {};
   for (const cls of classes) {
     if (cls.derives) {
       for (const d of cls.derives) {
@@ -645,10 +645,10 @@ function _detectDerives(classes, patterns) {
 // ── Helper: Extract #[derive(...)] ──────────────────────────
 
 function _extractDerives(node) {
-  const derives = [];
+  const derives: any[] = [];
   // Look at preceding siblings (attribute_item nodes)
   if (node.parent) {
-    const siblings = [];
+    const siblings: any[] = [];
     for (let i = 0; i < node.parent.namedChildCount; i++) {
       const sib = node.parent.namedChild(i);
       if (sib === node) {
@@ -772,7 +772,7 @@ function extractCallSitesRust(root, ctx, _lang) {
  * 递归收集 Rust 中所有函数/方法体作用域
  */
 function _collectRustScopes(root) {
-  const scopes = [];
+  const scopes: { body: any; className: any; methodName: any }[] = [];
 
   function visit(node, className) {
     for (let i = 0; i < node.namedChildCount; i++) {
@@ -787,7 +787,7 @@ function _collectRustScopes(root) {
             c.type === 'generic_type'
         );
         const hasFor = child.children?.some((c) => c.type === 'for');
-        let selfType = null;
+        let selfType: any = null;
         if (hasFor && typeIdNodes.length >= 2) {
           selfType = typeIdNodes[1]?.text;
         } else if (typeIdNodes.length >= 1) {
@@ -957,7 +957,7 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
 
       const callee = nameNode?.text || 'unknown';
       const receiver = valueNode?.text?.slice(0, 80) || null;
-      let receiverType = null;
+      let receiverType: any = null;
       const callType = 'method';
 
       if (receiver === 'self' || receiver === '&self' || receiver === '&mut self') {
@@ -1027,7 +1027,7 @@ function _extractRustCallSitesFromBody(bodyNode, className, methodName, ctx) {
 
 // ── Plugin Export ────────────────────────────────────────────
 
-let _grammar = null;
+let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }

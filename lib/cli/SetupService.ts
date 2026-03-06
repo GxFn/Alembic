@@ -102,7 +102,7 @@ export class SetupService {
 
   async run() {
     const steps = this.getSteps();
-    const results = [];
+    const results: any[] = [];
     const total = steps.length;
 
     for (let i = 0; i < total; i++) {
@@ -128,7 +128,7 @@ export class SetupService {
     if (!r) {
       return '';
     }
-    const parts = [];
+    const parts: any | string[] = [];
     if (r.configured) {
       parts.push(r.configured.join(', '));
     }

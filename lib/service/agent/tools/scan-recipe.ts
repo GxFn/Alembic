@@ -122,7 +122,7 @@ export const collectScanRecipe = {
    */
   handler: async (params, _ctx) => {
     // ── 基本验证 ──
-    const errors = [];
+    const errors: any[] = [];
 
     if (!params.title || params.title.trim().length === 0) {
       errors.push('title 不能为空');

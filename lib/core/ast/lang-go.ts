@@ -116,8 +116,8 @@ function _walkTypeDeclaration(node, ctx) {
 }
 
 function _parseStruct(name, structNode, specNode, ctx) {
-  const fields = [];
-  const embeddedTypes = [];
+  const fields: any[] = [];
+  const embeddedTypes: any[] = [];
 
   const fieldList = structNode.namedChildren.find((c) => c.type === 'field_declaration_list');
   if (fieldList) {
@@ -164,8 +164,8 @@ function _parseStruct(name, structNode, specNode, ctx) {
 }
 
 function _parseInterface(name, ifaceNode, specNode, ctx) {
-  const methods = [];
-  const embeddedInterfaces = [];
+  const methods: any[] = [];
+  const embeddedInterfaces: any[] = [];
 
   for (let i = 0; i < ifaceNode.namedChildCount; i++) {
     const child = ifaceNode.namedChild(i);
@@ -238,7 +238,7 @@ function _parseMethodDecl(node) {
   const receiverList = paramLists[0];
   const paramList = paramLists[1];
 
-  let receiverType = null;
+  let receiverType: any = null;
   let isPointerReceiver = false;
   if (receiverList) {
     const paramDecl = receiverList.namedChildren.find((c) => c.type === 'parameter_declaration');
@@ -307,10 +307,10 @@ function _walkVarConstDecl(node, ctx) {
 // ── Go Pattern Detection ─────────────────────────────────────
 
 function detectGoPatterns(root, lang, methods, properties, classes) {
-  const patterns = [];
+  const patterns: any[] = [];
 
   // 构建 struct → methods 索引
-  const structMethodMap = {};
+  const structMethodMap: Record<string, any> = {};
   for (const m of methods) {
     if (m.className) {
       if (!structMethodMap[m.className]) {
@@ -573,7 +573,7 @@ function extractCallSitesGo(root, ctx, _lang) {
  * 收集 Go 中所有函数/方法作用域
  */
 function _collectGoScopes(root) {
-  const scopes = [];
+  const scopes: { body: any; className: null; methodName: any }[] = [];
   for (let i = 0; i < root.namedChildCount; i++) {
     const child = root.namedChild(i);
 
@@ -588,7 +588,7 @@ function _collectGoScopes(root) {
       const body = child.namedChildren.find((c) => c.type === 'block');
       // 提取 receiver type
       const paramLists = child.namedChildren.filter((c) => c.type === 'parameter_list');
-      let receiverType = null;
+      let receiverType: any = null;
       if (paramLists[0]) {
         const paramDecl = paramLists[0].namedChildren.find(
           (c) => c.type === 'parameter_declaration'
@@ -654,8 +654,8 @@ function _extractGoCallSitesFromBody(bodyNode, className, methodName, ctx) {
       }
 
       let callee,
-        receiver = null,
-        receiverType = null,
+        receiver: string | null = null,
+        receiverType: string | null = null,
         callType;
 
       if (func.type === 'selector_expression') {
@@ -668,7 +668,7 @@ function _extractGoCallSitesFromBody(bodyNode, className, methodName, ctx) {
           // Go: uppercase receiver might be package name → static
           if (receiver && /^[a-z]/.test(receiver) && !GO_NOISE.has(receiver)) {
             receiverType = null; // instance method
-          } else if (GO_NOISE.has(receiver)) {
+          } else if (GO_NOISE.has(receiver!)) {
             walkChildren(node);
             return; // skip noise
           } else {
@@ -736,7 +736,7 @@ function _extractGoCallSitesFromBody(bodyNode, className, methodName, ctx) {
 
 // ── Plugin Export ────────────────────────────────────────────
 
-let _grammar = null;
+let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }

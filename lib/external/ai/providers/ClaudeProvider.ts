@@ -32,7 +32,7 @@ export class ClaudeProvider extends AiProvider {
 
   async chat(prompt, context: any = {}) {
     const { history = [], temperature = 0.7, maxTokens = 4096 } = context;
-    const messages = [];
+    const messages: { role: any; content: any } | { role: string; content: any }[] = [];
 
     for (const h of history) {
       messages.push({ role: h.role, content: h.content });
@@ -127,7 +127,7 @@ export class ClaudeProvider extends AiProvider {
    * 连续同角色消息（如 L2/L3 压缩后的摘要）自动合并以避免 400 错误。
    */
   #convertMessages(messages) {
-    const result = [];
+    const result: any[] = [];
 
     /**
      * 推入 result，如果上一个 entry 同角色则合并 content
@@ -157,7 +157,7 @@ export class ClaudeProvider extends AiProvider {
         pushOrMerge({ role: 'user', content: msg.content || '' });
         i++;
       } else if (msg.role === 'assistant') {
-        const content = [];
+        const content: any[] = [];
         if (msg.content) {
           content.push({ type: 'text', text: msg.content });
         }
@@ -178,7 +178,7 @@ export class ClaudeProvider extends AiProvider {
         i++;
       } else if (msg.role === 'tool') {
         // 收集连续 tool results → 合并为一个 user 消息
-        const toolResults = [];
+        const toolResults: { type: string; tool_use_id: any; content: any }[] = [];
         while (i < messages.length && messages[i].role === 'tool') {
           toolResults.push({
             type: 'tool_result',
@@ -217,8 +217,8 @@ export class ClaudeProvider extends AiProvider {
       return { text: '', functionCalls: null, usage };
     }
 
-    const functionCalls = [];
-    const textParts = [];
+    const functionCalls: { id: any; name: any; args: any }[] = [];
+    const textParts: any[] = [];
 
     for (const block of data.content) {
       if (block.type === 'tool_use') {

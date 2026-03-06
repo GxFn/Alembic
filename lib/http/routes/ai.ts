@@ -260,7 +260,7 @@ router.post(
     const factory = container.get('agentFactory');
 
     // ── 对话持久化: 从 ConversationStore 加载历史 ──
-    let convStore = null;
+    let convStore: any = null;
     let effectiveHistory = history;
     let effectiveConvId = conversationId || null;
     try {

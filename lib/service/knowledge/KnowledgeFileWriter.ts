@@ -167,7 +167,7 @@ export class KnowledgeFileWriter {
    */
   _buildBody(entry) {
     const c = entry.content;
-    const lines = [];
+    const lines: any[] = [];
 
     if (c.markdown) {
       // Markdown 项目特写 / 完整文章 → 直接输出（去掉可能残留的 frontmatter）

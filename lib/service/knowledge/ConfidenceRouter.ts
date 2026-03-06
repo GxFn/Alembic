@@ -90,7 +90,7 @@ export class ConfidenceRouter {
     }
 
     // ── 阶段 5: 质量评分（可选） ──
-    let qualityScore = null;
+    let qualityScore: any = null;
     if (this._qualityScorer) {
       try {
         const scorerInput = {

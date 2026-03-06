@@ -255,8 +255,8 @@ export class IntentClassifier {
   #matchRules(text) {
     let ideScore = 0;
     let botScore = 0;
-    const ideMatches = [];
-    const botMatches = [];
+    const ideMatches: string[] = [];
+    const botMatches: string[] = [];
 
     for (const re of IDE_STRONG_SIGNALS) {
       if (re.test(text)) {

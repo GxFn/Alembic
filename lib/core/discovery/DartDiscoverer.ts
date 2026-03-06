@@ -32,10 +32,10 @@ const EXCLUDE_DIRS = new Set([
 ]);
 
 export class DartDiscoverer extends ProjectDiscoverer {
-  #projectRoot = null;
-  #targets = [];
-  #depGraph = { nodes: [], edges: [] };
-  #packageName = null;
+  #projectRoot: string | null = null;
+  #targets: any[] = [];
+  #depGraph: { nodes: any[]; edges: any[] } = { nodes: [], edges: [] };
+  #packageName: string | null = null;
 
   get id() {
     return 'dart';
@@ -46,7 +46,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
 
   async detect(projectRoot) {
     let confidence = 0;
-    const reasons = [];
+    const reasons: any[] = [];
 
     if (existsSync(join(projectRoot, 'pubspec.yaml'))) {
       confidence = 0.92;
@@ -178,7 +178,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files = [];
+    const files: any[] = [];
     this.#collectDartFiles(targetPath, targetPath, files);
     return files;
   }

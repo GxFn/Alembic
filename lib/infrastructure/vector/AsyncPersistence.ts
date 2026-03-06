@@ -61,9 +61,9 @@ export class AsyncPersistence {
   /** @type {string} WAL 文件路径 (.wal) */
   #walPath;
   /** @type {Array<object>} 待刷盘操作队列 */
-  #pendingOps = [];
+  #pendingOps: any[] = [];
   /** @type {ReturnType<typeof setTimeout>|null} */
-  #flushTimer = null;
+  #flushTimer: ReturnType<typeof setTimeout> | null = null;
   /** @type {boolean} */
   #flushing = false;
   /** @type {number} flush 间隔 (ms) */

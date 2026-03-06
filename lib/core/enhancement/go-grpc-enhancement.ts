@@ -83,7 +83,7 @@ class GoGrpcEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── gRPC Service Implementations ──
     for (const cls of astSummary.classes || []) {

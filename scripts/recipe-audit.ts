@@ -50,7 +50,7 @@ function findProjectRoot(startDir) {
 }
 
 function readAllMarkdownFiles(dir) {
-  const results = [];
+  const results: string[] = [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
@@ -64,14 +64,14 @@ function readAllMarkdownFiles(dir) {
 }
 
 function parseFrontmatter(text) {
-  const out = {};
+  const out: Record<string, any> = {};
   const match = text.match(FRONTMATTER_RE);
   if (!match || !match[1]) {
     return out;
   }
   const lines = match[1].split(/\r?\n/);
-  let key = null;
-  let valueLines = [];
+  let key: any = null;
+  let valueLines: any[] = [];
   for (const line of lines) {
     const m = line.match(/^(\w+):\s*(.*)$/);
     if (m) {
@@ -142,7 +142,7 @@ function toArray(value) {
 }
 
 function auditRecipe(filePath, content) {
-  const issues = [];
+  const issues: any[] = [];
   const fm: any = parseFrontmatter(content);
   const body = content.replace(FRONTMATTER_RE, '');
   const hasSnippetHeading = SNIPPET_HEADING_RE.test(content);
@@ -209,7 +209,7 @@ function main() {
   }
 
   const files = readAllMarkdownFiles(recipesDir);
-  const results = [];
+  const results: any[] = [];
   for (const file of files) {
     const content = fs.readFileSync(file, 'utf-8');
     results.push(auditRecipe(path.relative(projectRoot, file), content));

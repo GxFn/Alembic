@@ -456,7 +456,7 @@ export class HttpServer {
     // 从路由栈中移除最后的 404 catch-all 和根路径 handler
     const layers = this.app._router.stack;
     // 倒序弹出最后 2 层（404 + root handler）
-    const removedLayers = [];
+    const removedLayers: any[] = [];
     for (let i = layers.length - 1; i >= 0; i--) {
       const layer = layers[i];
       if (layer.route) {

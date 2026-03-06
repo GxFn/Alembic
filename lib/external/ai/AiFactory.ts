@@ -135,7 +135,7 @@ const PROVIDER_KEY_MAP = {
  * @returns {string[]}
  */
 export function getAvailableFallbacks(currentProvider) {
-  const fallbacks = [];
+  const fallbacks: string[] = [];
   for (const [name, envKey] of Object.entries(PROVIDER_KEY_MAP)) {
     if (name === currentProvider) {
       continue;

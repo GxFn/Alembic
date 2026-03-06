@@ -16,7 +16,7 @@ const logger = Logger.getInstance();
 
 /* ═══ 进程内任务状态（单实例足够） ═══════════════════════ */
 
-let discoverTask = {
+let discoverTask: Record<string, any> = {
   status: 'idle', // idle | running | done | error
   startedAt: null,
   finishedAt: null,

@@ -12,7 +12,7 @@ import { getServiceContainer } from '../../../injection/ServiceContainer.js';
  */
 export async function handleAlink(alinkLine) {
   const { TRIGGER_SYMBOL } = await import('../../../infrastructure/config/TriggerSymbol.js');
-  let completionKey = null;
+  let completionKey: any = null;
   const alinkMark = 'alink';
 
   if (alinkLine.includes(TRIGGER_SYMBOL)) {
@@ -31,7 +31,7 @@ export async function handleAlink(alinkLine) {
       const container = getServiceContainer();
       const db = container.get('database');
 
-      let recipeId = null;
+      let recipeId: any = null;
       if (db) {
         const rawDb = typeof db.getDb === 'function' ? db.getDb() : db;
         try {

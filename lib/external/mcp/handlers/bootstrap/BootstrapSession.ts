@@ -162,7 +162,7 @@ export class BootstrapSession {
    */
   getAccumulatedHints() {
     const progress = this.getProgress();
-    const accumulated = {};
+    const accumulated: Record<string, any> = {};
 
     for (const remainingDim of progress.remainingDimIds) {
       const hints = this.crossDimensionHints[remainingDim];

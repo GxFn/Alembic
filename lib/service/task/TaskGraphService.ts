@@ -105,7 +105,7 @@ export class TaskGraphService {
     }
 
     const results = this.repo.inTransaction(() => {
-      const created = [];
+      const created: any[] = [];
 
       for (let i = 0; i < subtasks.length; i++) {
         const sub = subtasks[i];
@@ -403,8 +403,8 @@ export class TaskGraphService {
       // P2: Stale detection — 超过阈值的决策标记为 stale
       const staleThresholdSec = this._getDecisionStaleThreshold();
       const nowSec = Math.floor(Date.now() / 1000);
-      const activeDecisions = [];
-      const staleDecisions = [];
+      const activeDecisions: any[] = [];
+      const staleDecisions: any[] = [];
 
       for (const t of pinnedDecisions) {
         const isStale =
@@ -645,7 +645,7 @@ export class TaskGraphService {
    */
   _checkNewlyUnblocked(closedTaskId) {
     const dependents = this.repo.getDependents(closedTaskId);
-    const newlyReady = [];
+    const newlyReady: any[] = [];
 
     for (const dep of dependents) {
       // 只关注阻塞型依赖

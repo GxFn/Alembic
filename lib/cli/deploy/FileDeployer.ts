@@ -76,9 +76,9 @@ export class FileDeployer {
       return true;
     });
 
-    const deployed = [];
-    const skipped = [];
-    const errors = [];
+    const deployed: string[] = [];
+    const skipped: string[] = [];
+    const errors: { id: string; error: any }[] = [];
 
     for (const entry of applicable) {
       try {
@@ -259,7 +259,7 @@ export class FileDeployer {
     const dest = join(this.projectRoot, entry.dest);
     mkdirSync(dirname(dest), { recursive: true });
 
-    let config = {};
+    let config: Record<string, any> = {};
     if (existsSync(dest)) {
       try {
         config = JSON.parse(readFileSync(dest, 'utf8'));
@@ -536,7 +536,7 @@ export class FileDeployer {
 
         // 探测可用 IDE CLI
         const cliCandidates = ['code', 'cursor', 'codex'];
-        const installed = [];
+        const installed: string[] = [];
 
         for (const cli of cliCandidates) {
           try {

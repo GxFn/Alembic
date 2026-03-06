@@ -96,8 +96,8 @@ export class IndexingPipeline {
 
     // 2. 增量检测 + 分块 (先收集所有 chunks)
     const existingIds = new Set(await this.#vectorStore.listIds());
-    const allChunks = []; // { id, content, metadata }
-    const staleIds = []; // 需要清理的旧 chunk id
+    const allChunks: { id: string; content: any; metadata: any }[] = []; // { id, content, metadata }
+    const staleIds: unknown[] = []; // 需要清理的旧 chunk id
 
     for (const file of files) {
       try {
@@ -140,7 +140,7 @@ export class IndexingPipeline {
         // 标记需要清理的旧 chunk
         for (const existId of existingIds) {
           if ((existId as string).startsWith(`${baseId}_`)) {
-            const idx = Number.parseInt((existId as string).split('_').pop(), 10);
+            const idx = Number.parseInt((existId as string).split('_').pop()!, 10);
             if (idx >= chunks.length) {
               staleIds.push(existId);
             }
@@ -202,7 +202,7 @@ export class IndexingPipeline {
    * @returns {Array<{ absolutePath, relativePath, type }>}
    */
   scan() {
-    const files = [];
+    const files: { absolutePath: string; relativePath: string; type: string }[] = [];
 
     for (const dir of this.#scanDirs) {
       const absDir = join(this.#projectRoot, dir);

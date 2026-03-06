@@ -76,7 +76,7 @@ export async function fillDimensionsV3(fillContext) {
   // ═══════════════════════════════════════════════════════════
   // Step 0: AI 可用性检查 (v7.2: 使用 AgentFactory)
   // ═══════════════════════════════════════════════════════════
-  let agentFactory = null;
+  let agentFactory: any = null;
   try {
     agentFactory = ctx.container.get('agentFactory');
     // 检查 AI Provider 是否可用
@@ -247,7 +247,7 @@ export async function fillDimensionsV3(fillContext) {
   // ═══════════════════════════════════════════════════════════
   // Step 0.5: 构建 ProjectGraph
   // ═══════════════════════════════════════════════════════════
-  let projectGraph = null;
+  let projectGraph: any = null;
   try {
     projectGraph = await ctx.container.buildProjectGraph(projectRoot, {
       maxFiles: 500,
@@ -320,7 +320,7 @@ export async function fillDimensionsV3(fillContext) {
 
   // v4.1: PersistentMemory — 项目级永久语义记忆 (Tier 3)
   // 加载历史 bootstrap 记忆 → 注入 Analyst promptBuilder
-  let semanticMemory = null;
+  let semanticMemory: any = null;
   try {
     const db = ctx.container.get('database');
     if (db) {
@@ -338,7 +338,7 @@ export async function fillDimensionsV3(fillContext) {
   }
 
   // Phase E: CodeEntityGraph — 代码实体关系图谱 (供 Analyst prompt 注入)
-  let codeEntityGraphInst = null;
+  let codeEntityGraphInst: any = null;
   try {
     const { CodeEntityGraph } = await import('../../../../../service/knowledge/CodeEntityGraph.js');
     const db = ctx.container.get('database');
@@ -373,7 +373,7 @@ export async function fillDimensionsV3(fillContext) {
   const activeDimIds = dimensions.map((d) => d.id);
 
   // v5.0: 增量模式 — 仅执行受影响维度, 跳过未变更维度
-  const incrementalSkippedDims = [];
+  const incrementalSkippedDims: any[] = [];
   if (isIncremental) {
     const affected = new Set(incrementalPlan.affectedDimensions);
     for (const dimId of activeDimIds) {
@@ -400,7 +400,7 @@ export async function fillDimensionsV3(fillContext) {
 
   // ── P3: 断点续传 — 加载有效 checkpoints ──
   const completedCheckpoints = await loadCheckpoints(projectRoot);
-  const skippedDims = [];
+  const skippedDims: any[] = [];
   for (const [dimId, checkpoint] of completedCheckpoints) {
     if (activeDimIds.includes(dimId)) {
       // 恢复 DimensionContext 中的 digest
@@ -418,7 +418,7 @@ export async function fillDimensionsV3(fillContext) {
     }
   }
 
-  const candidateResults = { created: 0, failed: 0, errors: [] };
+  const candidateResults = { created: 0, failed: 0, errors: [] as any[] };
   const dimensionCandidates: Record<string, any> = {};
   const dimensionStats: Record<string, any> = {}; // P4.2: 维度级统计
 
@@ -571,7 +571,7 @@ export async function fillDimensionsV3(fillContext) {
           ...presetStages[2],
           promptBuilder: (ctx) => {
             (memoryCoordinator as any).allocateBudget('producer');
-            return presetStages[2].promptBuilder(ctx);
+            return presetStages[2].promptBuilder!(ctx);
           },
         };
         stages = [
@@ -675,7 +675,7 @@ export async function fillDimensionsV3(fillContext) {
               ...new Set(
                 runtimeToolCalls.flatMap((tc) => {
                   const a = tc?.args || tc?.params || {};
-                  const files = [];
+                  const files: any | string[] = [];
                   if (typeof a.filePath === 'string' && a.filePath.trim()) {
                     files.push(a.filePath.trim());
                   }
@@ -817,9 +817,9 @@ export async function fillDimensionsV3(fillContext) {
       const digest = parseDimensionDigest(producerResult.reply) || {
         summary: `v3 分析: ${analysisReport.analysisText.substring(0, 200)}...`,
         candidateCount: producerResult.candidateCount,
-        keyFindings: [],
+        keyFindings: [] as any[],
         crossRefs: {},
-        gaps: [],
+        gaps: [] as any[],
       };
       dimContext.addDimensionDigest(dimId, digest);
       sessionStore.addDimensionDigest(dimId, digest);
@@ -868,7 +868,7 @@ export async function fillDimensionsV3(fillContext) {
 
       // P3: 保存 checkpoint — 仅当有实质分析内容时（避免 degraded/空结果污染后续 run）
       if (analysisReport.analysisText.length >= 50) {
-        await saveDimensionCheckpoint(projectRoot, sessionId, dimId, dimResult, digest);
+        await saveDimensionCheckpoint(projectRoot, sessionId, dimId, dimResult, digest as any);
       } else {
         logger.warn(
           `[Insight-v3] ⚠ 跳过 checkpoint 保存: "${dimId}" analysisText 过短 (${analysisReport.analysisText.length} chars)`
@@ -890,7 +890,7 @@ export async function fillDimensionsV3(fillContext) {
   const t0 = Date.now();
 
   // tierHints: Enhancement Pack 维度通过 tierHint 字段声明首选 Tier
-  const tierHints = {};
+  const tierHints: Record<string, any> = {};
   for (const dim of dimensions) {
     if (typeof dim.tierHint === 'number') {
       tierHints[dim.id] = dim.tierHint;
@@ -963,7 +963,7 @@ export async function fillDimensionsV3(fillContext) {
   // v3: 直接使用 Analyst 的分析文本作为 Skill 内容
   // 使用 shared/skill-generator.js 统一质量门控和内容构建
   // ═══════════════════════════════════════════════════════════
-  const skillResults = { created: 0, failed: 0, skills: [], errors: [] };
+  const skillResults = { created: 0, failed: 0, skills: [] as any[], errors: [] as any[] };
 
   try {
     for (const dim of dimensions) {
@@ -1097,7 +1097,7 @@ export async function fillDimensionsV3(fillContext) {
   // 将 EpisodicMemory 中的发现和洞察提炼为持久化的语义记忆，
   // 存入 SQLite semantic_memories 表，供二次冷启动和日常对话使用。
   // ═══════════════════════════════════════════════════════════
-  let consolidationResult = null;
+  let consolidationResult: any = null;
   try {
     const db = ctx.container.get('database');
     if (db) {
@@ -1323,8 +1323,8 @@ export async function fillDimensionsV3(fillContext) {
     const { WikiGenerator } = await import('../../../../../service/wiki/WikiGenerator.js');
 
     // 同步 wiki 路由的任务状态，让前端轮询 /wiki/status 能看到进度
-    let patchWikiTask = null;
-    let realtimeService = null;
+    let patchWikiTask: any = null;
+    let realtimeService: any = null;
     try {
       const wikiRoute = await import('../../../../../http/routes/wiki.js');
       patchWikiTask = wikiRoute.patchWikiTask;
@@ -1349,7 +1349,7 @@ export async function fillDimensionsV3(fillContext) {
       error: null,
     });
 
-    let moduleService = null,
+    let moduleService: any = null,
       knowledgeService = null,
       codeEntityGraph = null;
     try {

@@ -206,7 +206,7 @@ function buildProjectRecipesContext(projectRoot) {
   }
 
   // 按 category 统计
-  const catCounts = {};
+  const catCounts: Record<string, any> = {};
   for (const rel of mdFiles) {
     try {
       const content = fs.readFileSync(path.join(recipesDir, rel), 'utf8');
@@ -216,7 +216,6 @@ function buildProjectRecipesContext(projectRoot) {
     } catch (_: any) {}
   }
   lines.push('\n## Category Distribution\n\n');
-  // @ts-expect-error TS migration: TS2362
   for (const [cat, count] of Object.entries(catCounts).sort((a, b) => b[1] - a[1])) {
     lines.push(`- **${cat}**: ${count} recipes\n`);
   }

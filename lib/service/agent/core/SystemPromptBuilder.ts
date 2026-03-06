@@ -55,7 +55,7 @@ export class SystemPromptBuilder {
    * @returns {string}
    */
   build(caps, context: any = {}) {
-    const parts = [];
+    const parts: any[] = [];
 
     // Persona (角色定义)
     if (this.#persona?.description) {

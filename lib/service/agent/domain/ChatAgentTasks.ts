@@ -25,7 +25,7 @@ export async function taskCheckAndSubmit(context, { candidate, projectRoot }) {
 
   // Step 2: 如果有高相似度，使用 AI 分析是否真正重复
   const highSim = (duplicates.similar || []).filter((d) => d.similarity >= 0.7);
-  let aiVerdict = null;
+  let aiVerdict: any = null;
   if (highSim.length > 0 && aiProvider) {
     const verdictPrompt = `以下新候选代码与已有 Recipe 高度相似，请判断是否真正重复。
 
@@ -121,7 +121,7 @@ export async function taskQualityAudit(context, { threshold = 0.6, maxCount = 10
     return { total: 0, lowQuality: [], message: 'No active recipes' };
   }
 
-  const lowQuality = [];
+  const lowQuality: { id: any; title: any; score: any; grade: any; dimensions: any }[] = [];
   const gradeDistribution = { A: 0, B: 0, C: 0, D: 0, F: 0 };
 
   for (const recipe of recipes) {
@@ -170,7 +170,7 @@ export async function taskGuardFullScan(context, { code, language, filePath }: a
   });
 
   // Step 2: 如果有违规且 AI 可用，生成修复建议
-  let suggestions = null;
+  let suggestions: any = null;
   if (checkResult.violationCount > 0 && aiProvider) {
     try {
       const violationSummary = (checkResult.violations || [])

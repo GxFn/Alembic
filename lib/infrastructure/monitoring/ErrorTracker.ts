@@ -200,7 +200,7 @@ export class ErrorTracker {
    */
   _getTopErrorTypes(limit = 10) {
     return Array.from(this.errorCounts.entries())
-      .sort((a, b) => b[1] - a[1])
+      .sort((a: any, b: any) => b[1] - a[1])
       .slice(0, limit)
       .map(([type, count]) => ({ type, count }));
   }
@@ -319,7 +319,7 @@ export class ErrorTracker {
 }
 
 // 单例实例
-let errorTrackerInstance = null;
+let errorTrackerInstance: any = null;
 
 /**
  * 初始化错误追踪

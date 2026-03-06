@@ -32,7 +32,7 @@ function computeSimilarity(candidate, recipe) {
  * 从磁盘读取所有 Recipe MD 文件并提取基本结构
  */
 function loadRecipesFromDisk(recipesDir) {
-  const recipes = [];
+  const recipes: { file: string; title: string; summary: string; code: string }[] = [];
   if (!fs.existsSync(recipesDir)) {
     return recipes;
   }
@@ -81,7 +81,7 @@ export function findSimilarRecipes(projectRoot, candidate, opts: any = {}) {
   const recipesDir = getProjectRecipesPath(projectRoot);
   const recipes = loadRecipesFromDisk(recipesDir);
 
-  const results = [];
+  const results: { file: any; title: any; similarity: number }[] = [];
   for (const recipe of recipes) {
     const sim = computeSimilarity(candidate, recipe);
     if (sim >= threshold) {

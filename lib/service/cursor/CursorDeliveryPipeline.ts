@@ -152,7 +152,7 @@ export class CursorDeliveryPipeline {
    * @private
    */
   async _loadEntries() {
-    const allEntries = [];
+    const allEntries: any[] = [];
 
     // 加载 active
     try {
@@ -209,10 +209,10 @@ export class CursorDeliveryPipeline {
    * @private
    */
   _classify(entries) {
-    const rules = [],
-      patterns = [],
-      facts = [],
-      documents = [];
+    const rules: any[] = [],
+      patterns: any[] = [],
+      facts: any[] = [],
+      documents: any[] = [];
     for (const entry of entries) {
       if (entry.knowledgeType === 'dev-document') {
         documents.push(entry);
@@ -422,7 +422,7 @@ export class CursorDeliveryPipeline {
       }
 
       // 生成架构洞察
-      const lines = [];
+      const lines: any[] = [];
       lines.push('## Call Graph Architecture');
       lines.push('');
 
@@ -567,7 +567,7 @@ export class CursorDeliveryPipeline {
    * @private
    */
   _generateChannelD(documents) {
-    const result = { documentsCount: 0, filesWritten: 0, filePaths: [] };
+    const result = { documentsCount: 0, filesWritten: 0, filePaths: [] as string[] };
     if (!documents || documents.length === 0) {
       return result;
     }
@@ -653,7 +653,7 @@ export class CursorDeliveryPipeline {
     try {
       // 收集可用 Skills 名称
       const skillsDir = path.join(this.projectRoot, 'AutoSnippet', 'skills');
-      let skills = [];
+      let skills: any[] = [];
       if (fs.existsSync(skillsDir)) {
         skills = fs
           .readdirSync(skillsDir, { withFileTypes: true })

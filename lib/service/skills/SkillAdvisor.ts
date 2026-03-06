@@ -50,7 +50,7 @@ export class SkillAdvisor {
    */
   suggest() {
     const existingSkills = this.#listExistingProjectSkills();
-    const suggestions = [];
+    const suggestions: any[] = [];
     const analysisContext: any = {};
 
     // ── 维度 1: Guard 违规模式 ──
@@ -109,7 +109,7 @@ export class SkillAdvisor {
   // ═══════════════════════════════════════════════════════
 
   #analyzeGuardPatterns() {
-    const suggestions = [];
+    const suggestions: any[] = [];
     if (!this.#db) {
       return { summary: 'DB 不可用', suggestions };
     }
@@ -156,7 +156,7 @@ export class SkillAdvisor {
   // ═══════════════════════════════════════════════════════
 
   #analyzeMemoryPatterns() {
-    const suggestions = [];
+    const suggestions: any[] = [];
     const memoryPath = path.join(this.#projectRoot, '.autosnippet', 'memory.jsonl');
 
     if (!fs.existsSync(memoryPath)) {
@@ -212,7 +212,7 @@ export class SkillAdvisor {
   // ═══════════════════════════════════════════════════════
 
   #analyzeRecipePatterns() {
-    const suggestions = [];
+    const suggestions: any[] = [];
     if (!this.#db) {
       return { summary: 'DB 不可用', suggestions };
     }
@@ -259,7 +259,7 @@ export class SkillAdvisor {
       }
 
       // 高使用量 Recipe 统计（V3: stats JSON 中的 adoptions + applications）
-      let hotRecipes = [];
+      let hotRecipes: any[] = [];
       try {
         hotRecipes = this.#db
           .prepare(`
@@ -290,7 +290,7 @@ export class SkillAdvisor {
   // ═══════════════════════════════════════════════════════
 
   #analyzeCandidatePatterns() {
-    const suggestions = [];
+    const suggestions: any[] = [];
     if (!this.#db) {
       return { summary: 'DB 不可用', suggestions };
     }

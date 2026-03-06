@@ -88,7 +88,7 @@ export class PlanTracker {
     }
 
     const remaining = b.maxIterations - m.iteration;
-    const parts = [];
+    const parts: any[] = [];
     if (deviationTrigger) {
       parts.push(`📋 计划偏差检查 (第 ${m.iteration}/${b.maxIterations} 轮):`);
       if (progress.consecutiveOffPlan >= 3) {

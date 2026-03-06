@@ -44,7 +44,11 @@ function _parseSkillMeta(skillName, baseDir = SKILLS_DIR) {
   try {
     const content = fs.readFileSync(path.join(baseDir, skillName, 'SKILL.md'), 'utf8');
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
-    const meta = { description: skillName, createdBy: null, createdAt: null };
+    const meta: { description: string; createdBy: string | null; createdAt: string | null } = {
+      description: skillName,
+      createdBy: null,
+      createdAt: null,
+    };
     if (fmMatch) {
       const fm = fmMatch[1];
       const descMatch = fm.match(/^description:\s*(.+?)$/m);
@@ -390,7 +394,7 @@ export function createSkill(_ctx, args) {
 function _regenerateEditorIndex() {
   try {
     // 扫描项目级 Skills
-    const projectSkills = [];
+    const projectSkills: { name: string; summary: any }[] = [];
     const projectSkillsDir = _getProjectSkillsDir();
     try {
       const dirs = fs

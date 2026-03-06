@@ -132,7 +132,7 @@ class NextjsEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── App Router file conventions ──
     for (const m of astSummary.methods || []) {

@@ -102,10 +102,10 @@ export function chunk(content, metadata: any = {}, options: any = {}) {
  * 按 Markdown 标题分段
  */
 function chunkBySection(content, metadata, maxChunkTokens) {
-  const sections = [];
+  const sections: { title: string; content: string }[] = [];
   const lines = content.split('\n');
   let currentTitle = '';
-  let currentContent = [];
+  let currentContent: any[] = [];
 
   for (const line of lines) {
     if (/^#{1,3}\s+/.test(line)) {
@@ -125,8 +125,8 @@ function chunkBySection(content, metadata, maxChunkTokens) {
   }
 
   // 合并过小段落
-  const merged = [];
-  let buffer = null;
+  const merged: any[] = [];
+  let buffer: any = null;
 
   for (const section of sections) {
     if (!buffer) {
@@ -146,7 +146,7 @@ function chunkBySection(content, metadata, maxChunkTokens) {
   }
 
   // 对超大段落做 fixed 分割
-  const results = [];
+  const results: { content: any; metadata: any }[] = [];
   for (let i = 0; i < merged.length; i++) {
     const section = merged[i];
     if (estimateTokens(section.content) > maxChunkTokens) {
@@ -183,7 +183,7 @@ function chunkBySection(content, metadata, maxChunkTokens) {
 function chunkFixed(content, metadata, maxChunkTokens, overlapTokens) {
   const maxChars = maxChunkTokens * 4;
   const overlapChars = overlapTokens * 4;
-  const results = [];
+  const results: { content: any; metadata: any }[] = [];
 
   let start = 0;
   while (start < content.length) {

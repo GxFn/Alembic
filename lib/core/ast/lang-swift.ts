@@ -93,7 +93,7 @@ function _parseSwiftTypeDecl(node) {
   const kind = node.type.replace('_declaration', '');
 
   const _superclass = null;
-  const protocols = [];
+  const protocols: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'inheritance_specifier') {
       const typeNode = child.namedChildren.find((c) => c.type === 'user_type');
@@ -108,7 +108,7 @@ function _parseSwiftTypeDecl(node) {
     }
   }
 
-  let detectedSuper = null;
+  let detectedSuper: any = null;
   if (protocols.length > 0 && kind === 'class') {
     const first = protocols[0];
     if (
@@ -134,7 +134,7 @@ function _parseSwiftProtocol(node) {
   const name =
     node.namedChildren.find((c) => c.type === 'type_identifier' || c.type === 'simple_identifier')
       ?.text || 'Unknown';
-  const inherits = [];
+  const inherits: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'inheritance_specifier') {
       const t = child.namedChildren.find((c) => c.type === 'user_type');
@@ -155,7 +155,7 @@ function _parseSwiftExtension(node) {
   const className =
     node.namedChildren.find((c) => c.type === 'user_type' || c.type === 'type_identifier')?.text ||
     'Unknown';
-  const protocols = [];
+  const protocols: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'inheritance_specifier') {
       const t = child.namedChildren.find((c) => c.type === 'user_type');
@@ -170,7 +170,7 @@ function _parseSwiftExtension(node) {
     }
   }
 
-  const methods = [];
+  const methods: any[] = [];
   const body = node.namedChildren.find((c) => c.type === 'extension_body');
   if (body) {
     for (const child of body.namedChildren) {
@@ -192,7 +192,7 @@ function _parseSwiftExtension(node) {
 function _parseSwiftFunction(node, className) {
   const name = node.namedChildren.find((c) => c.type === 'simple_identifier')?.text || 'unknown';
 
-  const modifiers = [];
+  const modifiers: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'modifiers' || child.type === 'modifier') {
       modifiers.push(child.text);
@@ -225,7 +225,7 @@ function _parseSwiftProperty(node, className) {
     return null;
   }
 
-  const modifiers = [];
+  const modifiers: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'modifiers' || child.type === 'modifier') {
       modifiers.push(child.text);
@@ -342,7 +342,7 @@ function extractCallSitesSwift(root, ctx, _lang) {
  * 递归收集 Swift 中所有函数体作用域
  */
 function _collectSwiftScopes(root) {
-  const scopes = [];
+  const scopes: any[] = [];
 
   function visit(node, className) {
     for (let i = 0; i < node.namedChildCount; i++) {
@@ -436,8 +436,8 @@ function _extractSwiftCallSitesFromBody(bodyNode, className, methodName, ctx) {
       }
 
       let callee,
-        receiver = null,
-        receiverType = null,
+        receiver: string | null = null,
+        receiverType: string | null = null,
         callType;
       let isAwait = false;
 
@@ -458,7 +458,7 @@ function _extractSwiftCallSitesFromBody(bodyNode, className, methodName, ctx) {
           } else if (receiver === 'super') {
             receiverType = className;
             callType = 'super';
-          } else if (/^[A-Z]/.test(receiver)) {
+          } else if (/^[A-Z]/.test(receiver!)) {
             receiverType = receiver;
             callType = 'static';
           } else {
@@ -529,7 +529,7 @@ function _extractSwiftCallSitesFromBody(bodyNode, className, methodName, ctx) {
 
 // ── 插件导出 ──
 
-let _grammar = null;
+let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }

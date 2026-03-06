@@ -59,7 +59,7 @@ export const AgentEvents = Object.freeze({
 
 export class AgentEventBus extends EventEmitter {
   /** @type {AgentEventBus|null} */
-  static #instance = null;
+  static #instance: AgentEventBus | null = null;
   #logger;
   /** @type {Map<string, Function[]>} topic → handlers */
   #subscriptions = new Map();

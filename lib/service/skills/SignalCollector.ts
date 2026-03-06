@@ -56,7 +56,7 @@ export class SignalCollector {
   #container; // ServiceContainer — 用于获取 aiProvider 等
   #mode; // 'off' | 'suggest' | 'auto'
   #intervalMs;
-  #timer = null;
+  #timer: ReturnType<typeof setTimeout> | null = null;
   #running = false;
   #logger;
   #snapshotPath;
@@ -82,7 +82,7 @@ export class SignalCollector {
     container = null,
     mode = 'auto',
     intervalMs = DEFAULT_INTERVAL_MS,
-    onSuggestions = null,
+    onSuggestions = null as any,
   }) {
     this.#projectRoot = projectRoot;
     this.#db = database;

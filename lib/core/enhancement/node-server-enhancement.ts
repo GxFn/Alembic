@@ -134,7 +134,7 @@ class NodeServerEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── Express/Koa middleware ((req, res, next) signature) ──
     for (const m of astSummary.methods || []) {

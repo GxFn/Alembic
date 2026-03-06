@@ -58,8 +58,8 @@ export class KnowledgeSyncService {
       synced: 0,
       created: 0,
       updated: 0,
-      violations: [], // 手动编辑的文件列表
-      orphaned: [], // DB 有但 .md 不存在
+      violations: [] as string[], // 手动编辑的文件列表
+      orphaned: [] as string[], // DB 有但 .md 不存在
       skipped: 0,
     };
 
@@ -156,7 +156,7 @@ export class KnowledgeSyncService {
       return [];
     }
 
-    const results = [];
+    const results: { absPath: string; relPath: string }[] = [];
     const walk = (curDir, base) => {
       for (const entry of fs.readdirSync(curDir, { withFileTypes: true })) {
         const full = path.join(curDir, entry.name);
@@ -351,7 +351,7 @@ export class KnowledgeSyncService {
    * @returns {string[]} 孤儿 entry id 列表
    */
   _detectOrphans(db, syncedIds, dryRun) {
-    const orphanIds = [];
+    const orphanIds: any[] = [];
     try {
       const rows = db
         .prepare(

@@ -69,17 +69,17 @@ function analyzeFile(source, lang, options: any = {}) {
   const root = tree.rootNode;
 
   const ctx = {
-    classes: [],
-    protocols: [],
-    categories: [],
-    methods: [],
-    properties: [],
-    patterns: [],
-    imports: [],
-    exports: [],
+    classes: [] as any[],
+    protocols: [] as any[],
+    categories: [] as any[],
+    methods: [] as any[],
+    properties: [] as any[],
+    patterns: [] as any[],
+    imports: [] as any[],
+    exports: [] as any[],
     // ─── Phase 5 新增 ───
-    callSites: [],
-    references: [],
+    callSites: [] as any[],
+    references: [] as any[],
   };
 
   plugin.walk(root, ctx);
@@ -132,13 +132,13 @@ function analyzeFile(source, lang, options: any = {}) {
  * @returns {ProjectAstSummary}
  */
 function analyzeProject(files, lang, options) {
-  const fileSummaries = [];
-  const allClasses = [];
-  const allProtocols = [];
-  const allCategories = [];
-  const allMethods = [];
-  const allPatterns = [];
-  const allImports = [];
+  const fileSummaries: any[] = [];
+  const allClasses: any[] = [];
+  const allProtocols: any[] = [];
+  const allCategories: any[] = [];
+  const allMethods: any[] = [];
+  const allPatterns: any[] = [];
+  const allImports: any[] = [];
   const preprocessFile = options?.preprocessFile;
 
   for (const file of files) {
@@ -155,22 +155,22 @@ function analyzeProject(files, lang, options) {
       }
     }
 
-    const summary = analyzeFile(content, fileLang);
+    const summary: any = analyzeFile(content, fileLang);
     if (!summary) {
       continue;
     }
 
     fileSummaries.push({ file: file.relativePath, ...summary });
-    allClasses.push(...summary.classes.map((c) => ({ ...c, file: file.relativePath })));
-    allProtocols.push(...summary.protocols.map((p) => ({ ...p, file: file.relativePath })));
-    allCategories.push(...summary.categories.map((c) => ({ ...c, file: file.relativePath })));
-    allMethods.push(...summary.methods.map((m) => ({ ...m, file: file.relativePath })));
-    allPatterns.push(...summary.patterns.map((p) => ({ ...p, file: file.relativePath })));
-    allImports.push(...summary.imports.map((i) => ({ path: i, file: file.relativePath })));
+    allClasses.push(...summary.classes.map((c: any) => ({ ...c, file: file.relativePath })));
+    allProtocols.push(...summary.protocols.map((p: any) => ({ ...p, file: file.relativePath })));
+    allCategories.push(...summary.categories.map((c: any) => ({ ...c, file: file.relativePath })));
+    allMethods.push(...summary.methods.map((m: any) => ({ ...m, file: file.relativePath })));
+    allPatterns.push(...summary.patterns.map((p: any) => ({ ...p, file: file.relativePath })));
+    allImports.push(...summary.imports.map((i: any) => ({ path: i, file: file.relativePath })));
   }
 
   // 将 methodCount 回写到 class 对象（方法按 className 分组统计）
-  const _methodCountByClass = {};
+  const _methodCountByClass: Record<string, any> = {};
   for (const m of allMethods) {
     if (m.className && m.kind === 'definition') {
       _methodCountByClass[m.className] = (_methodCountByClass[m.className] || 0) + 1;
@@ -186,7 +186,7 @@ function analyzeProject(files, lang, options) {
   const inheritanceGraph = _buildInheritanceGraph(allClasses, allProtocols, allCategories);
 
   // 项目级模式统计
-  const patternStats = {};
+  const patternStats: Record<string, any> = {};
   for (const p of allPatterns) {
     if (!patternStats[p.type]) {
       patternStats[p.type] = { count: 0, files: [], instances: [] };
@@ -385,7 +385,7 @@ function parseToTree(source, lang) {
 // ──────────────────────────────────────────────────────────────────
 
 function _detectPatterns(root, lang, methods, properties, classes) {
-  const patterns = [];
+  const patterns: any[] = [];
 
   // Singleton 检测
   for (const m of methods) {
@@ -449,7 +449,8 @@ function _detectPatterns(root, lang, methods, properties, classes) {
 // ──────────────────────────────────────────────────────────────────
 
 function _buildInheritanceGraph(classes, protocols, categories) {
-  const edges = [];
+  const edges: { from: any; to: any; type: string } | { from: string; to: any; type: string }[] =
+    [];
 
   for (const cls of classes) {
     if (cls.superclass) {
@@ -498,7 +499,7 @@ function _renderInheritanceTree(edges) {
   const allSources = new Set(edges.map((e) => e.from));
   const roots = [...allTargets].filter((t) => !allSources.has(t)).slice(0, 5);
 
-  const childMap = {};
+  const childMap: Record<string, any> = {};
   for (const e of edges) {
     if (!childMap[e.to]) {
       childMap[e.to] = [];
@@ -509,7 +510,7 @@ function _renderInheritanceTree(edges) {
     }
   }
 
-  const lines = [];
+  const lines: string[] = [];
   function render(name, prefix, isLast) {
     const connector = prefix.length === 0 ? '' : isLast ? '└─ ' : '├─ ';
     lines.push(prefix + connector + name);
@@ -611,7 +612,7 @@ function _aggregateMetrics(fileSummaries) {
   const allMethods = fileSummaries.flatMap((f) => f.methods.filter((m) => m.kind === 'definition'));
   const allClasses = fileSummaries.flatMap((f) => f.classes);
 
-  const methodsByClass = {};
+  const methodsByClass: Record<string, any> = {};
   for (const m of allMethods) {
     if (m.className) {
       if (!methodsByClass[m.className]) {
@@ -688,7 +689,7 @@ function findCallExpressions(source, lang, targetCallee) {
   }
 
   const tree = parser.parse(source);
-  const results = [];
+  const results: { line: any; snippet: any; enclosingClass: any }[] = [];
   const lines = source.split(/\r?\n/);
 
   function walk(node, enclosingClass) {
@@ -766,7 +767,7 @@ function findPatternInContext(source, lang, pattern, contextFilter: any = {}) {
   }
 
   const tree = parser.parse(source);
-  const results = [];
+  const results: { line: any; snippet: any; context: any }[] = [];
   const lines = source.split(/\r?\n/);
 
   function getEnclosingMethodName(node) {

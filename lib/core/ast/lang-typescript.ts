@@ -179,8 +179,8 @@ function _parseTSClass(node) {
     node.namedChildren.find((c) => c.type === 'type_identifier' || c.type === 'identifier')?.text ||
     'Unknown';
 
-  let superclass = null;
-  const protocols = [];
+  let superclass: any = null;
+  const protocols: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'class_heritage') {
       for (const clause of child.namedChildren) {
@@ -204,7 +204,7 @@ function _parseTSClass(node) {
   }
 
   // 检测装饰器
-  const decorators = [];
+  const decorators: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'decorator') {
       decorators.push(child.text);
@@ -224,7 +224,7 @@ function _parseTSClass(node) {
 
 function _parseTSInterface(node) {
   const name = node.namedChildren.find((c) => c.type === 'type_identifier')?.text || 'Unknown';
-  const inherits = [];
+  const inherits: any[] = [];
 
   for (const child of node.namedChildren) {
     if (child.type === 'extends_type_clause') {
@@ -363,7 +363,7 @@ function _extractTypeAnnotation(parentNode) {
  * @returns {Array} - property objects
  */
 function _extractTSConstructorProperties(constructorNode, className) {
-  const properties = [];
+  const properties: any[] = [];
   const params = constructorNode.namedChildren.find((c) => c.type === 'formal_parameters');
   if (!params) {
     return properties;
@@ -478,9 +478,9 @@ function _parseTSVariableDecl(node, ctx, parentClassName) {
  * @returns {{ symbols: string[], kind: string, alias: string|null, isTypeOnly: boolean }}
  */
 function _parseImportClause(importNode) {
-  const symbols = [];
+  const symbols: any | '*'[] = [];
   let kind = 'side-effect';
-  let alias = null;
+  let alias: any = null;
   let isTypeOnly = false;
 
   // 检查 type-only import: import type { ... }
@@ -645,7 +645,7 @@ function _parseDynamicImport(callNode, declaratorNode) {
 // ── TS/JS 模式检测 ──
 
 function detectTSPatterns(root, lang, methods, properties, classes) {
-  const patterns = [];
+  const patterns: any[] = [];
 
   // Singleton: export const xxx = new Xxx() or getInstance()
   for (const m of methods) {
@@ -787,7 +787,7 @@ function _maxNesting(node, depth) {
 
 // ── 插件导出 ──
 
-let _tsGrammar = null;
+let _tsGrammar: any = null;
 function getGrammar() {
   return _tsGrammar;
 }
@@ -804,7 +804,7 @@ export const plugin = {
 };
 
 // TSX 插件 — 共享 walker，不同 grammar
-let _tsxGrammar = null;
+let _tsxGrammar: any = null;
 function getTsxGrammar() {
   return _tsxGrammar;
 }

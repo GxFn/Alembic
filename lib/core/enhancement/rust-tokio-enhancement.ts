@@ -108,7 +108,7 @@ class RustTokioEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── Async functions (potential task entry points) ──
     let asyncFnCount = 0;

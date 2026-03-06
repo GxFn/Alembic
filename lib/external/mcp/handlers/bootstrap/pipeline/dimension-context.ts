@@ -82,7 +82,7 @@ export class DimensionContext {
    * @returns {DimensionContextSnapshot}
    */
   buildContextForDimension(currentDimId) {
-    const previousDimensions = {};
+    const previousDimensions: Record<string, any> = {};
     for (const [id, digest] of this.completedDimensions) {
       previousDimensions[id] = {
         summary: digest.summary,
@@ -127,7 +127,7 @@ export class DimensionContext {
       return '(尚无已完成维度)';
     }
 
-    const lines = [];
+    const lines: string[] = [];
     for (const [id, digest] of this.completedDimensions) {
       lines.push(`### ${id}`);
       lines.push(`- 摘要: ${digest.summary || '(无)'}`);

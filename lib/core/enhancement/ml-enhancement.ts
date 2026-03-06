@@ -128,7 +128,7 @@ class MLEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── nn.Module subclasses ──
     for (const cls of astSummary.classes || []) {

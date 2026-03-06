@@ -31,7 +31,7 @@ function _compactRelations(relations) {
   if (!relations) {
     return undefined;
   }
-  const compact = {};
+  const compact: Record<string, any> = {};
   for (const [type, list] of Object.entries(relations)) {
     if (Array.isArray(list) && list.length > 0) {
       compact[type] = list;
@@ -215,7 +215,7 @@ export async function recipeInsights(ctx, args) {
   const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
 
   // 聚合关系摘要
-  const relationsSummary = {};
+  const relationsSummary: Record<string, any> = {};
   if (json.relations) {
     for (const [type, targets] of Object.entries(json.relations)) {
       if (Array.isArray(targets) && targets.length > 0) {
@@ -225,7 +225,7 @@ export async function recipeInsights(ctx, args) {
   }
 
   // 约束条件概览
-  const constraintsSummary = {};
+  const constraintsSummary: Record<string, any> = {};
   if (json.constraints) {
     for (const [type, items] of Object.entries(json.constraints)) {
       if (Array.isArray(items) && items.length > 0) {

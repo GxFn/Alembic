@@ -107,7 +107,7 @@ router.get(
 
     // 获取当前项目检测到的语言列表，供前端按项目语言筛选
     // 使用 LanguageService 统一检测（支持 Discoverer + Monorepo 文件标记回退）
-    let projectLanguages = [];
+    let projectLanguages: any[] = [];
     try {
       const moduleService = container.get('moduleService');
       await moduleService.load();

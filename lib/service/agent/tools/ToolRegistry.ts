@@ -85,7 +85,7 @@ export class ToolRegistry {
    * @returns {Array<{name: string, description: string, parameters: object}>}
    */
   getToolSchemas(allowedTools) {
-    const schemas = [];
+    const schemas: { name: any; description: any; parameters: any }[] = [];
     for (const [name, tool] of this.#tools) {
       if (allowedTools && !allowedTools.includes(name)) {
         continue;
@@ -152,8 +152,8 @@ export class ToolRegistry {
       return params;
     }
 
-    const result = {};
-    const unmatched = [];
+    const result: Record<string, any> = {};
+    const unmatched: string[] = [];
 
     for (const [key, value] of Object.entries(params)) {
       // 1. 精确匹配 — 已在 schema 中

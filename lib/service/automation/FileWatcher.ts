@@ -307,7 +307,7 @@ export class FileWatcher {
     }
 
     // 优先 ServiceContainer
-    let serviceError = null;
+    let serviceError: any = null;
     try {
       const { ServiceContainer } = await import('../../injection/ServiceContainer.js');
       const container = ServiceContainer.getInstance();

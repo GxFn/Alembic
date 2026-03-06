@@ -123,7 +123,7 @@ export function buildTierReflection(tierIndex, tierResults, sessionStore) {
   const completedDimensions = [...tierResults.keys()];
 
   // 收集本 Tier 所有维度的 findings
-  const allFindings = [];
+  const allFindings: any[] = [];
   for (const dimId of completedDimensions) {
     const report = sessionStore.getDimensionReport(dimId);
     if (report?.findings) {
@@ -140,7 +140,7 @@ export function buildTierReflection(tierIndex, tierResults, sessionStore) {
 
   // 检测跨维度模式 (多个维度提到同一文件/关键词)
   const fileMentions: any = {};
-  const keywordMentions = {};
+  const keywordMentions: Record<string, any> = {};
 
   for (const f of allFindings) {
     // 统计文件引用频率
@@ -158,7 +158,7 @@ export function buildTierReflection(tierIndex, tierResults, sessionStore) {
     }
   }
 
-  const crossDimensionPatterns = [];
+  const crossDimensionPatterns: string[] = [];
 
   // 多维度引用的文件 = 跨维度热点
   for (const [file, count] of Object.entries(fileMentions)) {
@@ -175,7 +175,7 @@ export function buildTierReflection(tierIndex, tierResults, sessionStore) {
   }
 
   // 为下一 Tier 生成建议
-  const suggestionsForNextTier = [];
+  const suggestionsForNextTier: string[] = [];
 
   // 找出 gaps (各维度报告的未覆盖方面)
   for (const dimId of completedDimensions) {

@@ -133,7 +133,7 @@ export class Conversation extends Capability {
   }
 
   buildContext(context) {
-    const parts = [];
+    const parts: any | string[] = [];
 
     // SOUL.md 人格注入
     if (this.#soulContent) {
@@ -403,8 +403,7 @@ export class ScanProduction extends Capability {
  *   const cap = CapabilityRegistry.create('conversation', { memoryCoordinator });
  */
 export const CapabilityRegistry = {
-  /** @type {Map<string, typeof Capability>} */
-  _registry: new Map([
+  _registry: new Map<string, typeof Capability>([
     ['conversation', Conversation],
     ['code_analysis', CodeAnalysis],
     ['knowledge_production', KnowledgeProduction],

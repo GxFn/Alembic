@@ -129,8 +129,8 @@ async function silentCreateCandidate(watcher, text, relativePath) {
   let summary = '';
   let usageGuide = '';
   let category = 'Utility';
-  let headers = [];
-  let tags = [];
+  let headers: any[] = [];
+  let tags: any[] = [];
   let trigger = '';
 
   // 尝试用 AI 生成摘要信息（但 code 始终保持原文）

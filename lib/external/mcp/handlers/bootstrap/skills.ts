@@ -26,7 +26,10 @@ const COLDSTART_SKILL_NAME = 'autosnippet-coldstart';
  * @returns {{ coldstartSkill: string|null, loaded: string[] }}
  */
 export function loadBootstrapSkills(_primaryLanguage, logger) {
-  const result = { coldstartSkill: null, loaded: [] };
+  const result: { coldstartSkill: string | null; loaded: string[] } = {
+    coldstartSkill: null,
+    loaded: [],
+  };
   const skillPath = path.join(SKILLS_DIR, COLDSTART_SKILL_NAME, 'SKILL.md');
 
   try {
@@ -54,8 +57,8 @@ export function loadBootstrapSkills(_primaryLanguage, logger) {
  * @returns {{ guides: Record<string, string>, sectionMap: Record<string, Array<{title: string, content: string, keywords: string[]}>> }}
  */
 export function extractSkillDimensionGuides(skillContext) {
-  const guides = {}; // dimId → summary guide text
-  const sectionMap = {}; // dimId → [{title, content, keywords}]
+  const guides: Record<string, any> = {}; // dimId → summary guide text
+  const sectionMap: Record<string, any> = {}; // dimId → [{title, content, keywords}]
 
   // ── coldstart 模板: 从 rationale/whyStandard 提取维度指引 ──
   if (skillContext.coldstartSkill) {

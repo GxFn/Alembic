@@ -17,7 +17,7 @@ export class TokenUsageStore {
   #bySourceStmt;
   #summaryStmt;
   /** @type {{ data: object, expireAt: number } | null} */
-  #reportCache = null;
+  #reportCache: { data: any; expireAt: number } | null = null;
 
   /**
    * @param {import('better-sqlite3').Database} db

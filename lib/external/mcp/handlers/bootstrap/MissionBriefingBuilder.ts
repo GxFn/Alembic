@@ -179,7 +179,7 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
       dimKeywords.includes('命名') ||
       dimKeywords.includes('naming')
     ) {
-      const prefixStats = {};
+      const prefixStats: Record<string, any> = {};
       for (const cls of classes) {
         const prefix = (cls.name || '').match(/^[A-Z]{2,4}/)?.[0];
         if (prefix) {
@@ -188,7 +188,7 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
       }
       // 函数式代码: 统计顶层函数命名模式 (useXxx, handleXxx, getXxx, etc.)
       if (classes.length === 0) {
-        const funcPrefixes = {};
+        const funcPrefixes: Record<string, any> = {};
         for (const fs of fileSummaries) {
           for (const m of fs.methods || []) {
             if (!m.className) {
@@ -233,7 +233,7 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
     ) {
       if (Object.keys(patterns).length > 0) {
         // 压缩 patterns: 只保留顶层 key → 计数/类型摘要
-        const compactPatterns = {};
+        const compactPatterns: Record<string, any> = {};
         for (const [key, val] of Object.entries(patterns)) {
           if (typeof val === 'number' || typeof val === 'string' || typeof val === 'boolean') {
             compactPatterns[key] = val;
@@ -249,7 +249,7 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
         };
       }
       // 继承关系分析
-      const baseClasses = {};
+      const baseClasses: Record<string, any> = {};
       for (const cls of classes) {
         if (cls.superclass) {
           baseClasses[cls.superclass] = (baseClasses[cls.superclass] || 0) + 1;
@@ -322,7 +322,7 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
 
   // §2: Guard 违规关联
   if (guardAudit?.files) {
-    const dimRelatedViolations = [];
+    const dimRelatedViolations: { file: any; rule: any; message: any }[] = [];
     for (const fileResult of guardAudit.files) {
       for (const v of fileResult.violations || []) {
         // 粗略匹配: ruleId / message 是否与维度话题相关
@@ -384,7 +384,7 @@ function buildEvidenceStarters(dim, { astData, guardAudit, depGraphData }) {
         dimKeywords.includes('extension'))
     ) {
       // 按 baseClass 聚合分类
-      const catByBase = {};
+      const catByBase: Record<string, any> = {};
       for (const cat of categories) {
         const base = cat.baseClass || cat.extendedClass || 'Unknown';
         if (!catByBase[base]) {
@@ -540,7 +540,7 @@ function compressAstForBriefing(astProjectSummary, fileCount) {
 
   // 压缩 patternStats: 保留计数，移除详细列表
   const rawPatterns = astProjectSummary.patternStats || {};
-  const compressedPatterns = {};
+  const compressedPatterns: Record<string, any> = {};
   for (const [key, val] of Object.entries(rawPatterns)) {
     if (typeof val === 'number' || typeof val === 'string' || typeof val === 'boolean') {
       compressedPatterns[key] = val;
@@ -548,7 +548,7 @@ function compressAstForBriefing(astProjectSummary, fileCount) {
       compressedPatterns[key] = val.length; // 数组 → 计数
     } else if (val && typeof val === 'object') {
       // 嵌套对象: 保留 count/总数，或递归压缩为浅层概要
-      const sub = {};
+      const sub: Record<string, any> = {};
       for (const [sk, sv] of Object.entries(val)) {
         if (typeof sv === 'number' || typeof sv === 'string' || typeof sv === 'boolean') {
           sub[sk] = sv;
@@ -620,7 +620,7 @@ function summarizeGuardFindings(guardAudit) {
   }
 
   // 按 ruleId 聚合 violations
-  const ruleMap = {};
+  const ruleMap: Record<string, any> = {};
 
   // helper: 将单个 violation 累加到 ruleMap
   const addViolation = (v, examplePrefix) => {

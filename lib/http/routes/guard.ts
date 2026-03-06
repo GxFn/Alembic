@@ -89,7 +89,7 @@ router.post(
     };
 
     // GuardFeedbackLoop: 检测修复 + confirmUsage
-    let fixedViolations = [];
+    let fixedViolations: any[] = [];
     try {
       const feedbackLoop = container.get('guardFeedbackLoop');
       fixedViolations = feedbackLoop.processFixDetection({ violations }, filePath);
@@ -157,7 +157,7 @@ router.post(
 
     const engine = await _getEngine(container, GuardCheckEngine);
 
-    const results = [];
+    const results: any[] = [];
     let totalErrors = 0;
     let totalWarnings = 0;
 

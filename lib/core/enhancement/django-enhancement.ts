@@ -120,7 +120,7 @@ class DjangoEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── Django Models ──
     for (const cls of astSummary.classes || []) {

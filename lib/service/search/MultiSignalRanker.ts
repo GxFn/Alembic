@@ -230,7 +230,7 @@ export class MultiSignalRanker {
     };
     // 合并自定义权重，支持旧配置中的 "seasonality" 键向后兼容
     const customWeights = options.scenarioWeights || {};
-    const remapped = {};
+    const remapped: Record<string, any> = {};
     for (const [scenario, weights] of Object.entries(customWeights)) {
       remapped[scenario] = { ...(weights as any) };
       if ('seasonality' in remapped[scenario] && !('contextMatch' in remapped[scenario])) {
@@ -256,7 +256,7 @@ export class MultiSignalRanker {
     const weights = this.#scenarioWeights[scenario] || this.#scenarioWeights.default;
 
     const scored = candidates.map((candidate) => {
-      const signals = {};
+      const signals: Record<string, any> = {};
       let totalScore = 0;
 
       for (const [name, signal] of Object.entries(this.#signals)) {

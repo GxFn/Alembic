@@ -117,7 +117,7 @@ export async function loadPlugins() {
   }
 
   // 2. 按顺序加载所有 .wasm 语法文件（并行加载偶发竞态导致失败）
-  const wasmResults = [];
+  const wasmResults: any[] = [];
   for (const entry of LANG_REGISTRY) {
     try {
       const lang = await loadLanguageWasm(entry.wasmFile);

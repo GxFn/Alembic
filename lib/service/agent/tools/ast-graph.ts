@@ -53,7 +53,7 @@ export const getProjectOverview = {
     const o = graph.getOverview();
 
     // §P2: 从文件扩展名统计语言分布
-    const langStats = {};
+    const langStats: Record<string, any> = {};
     for (const filePath of graph.getAllFilePaths?.() || []) {
       const ext = filePath.split('.').pop();
       if (ext) {

@@ -36,7 +36,7 @@ export class OpenAiProvider extends AiProvider {
   async chat(prompt, context: any = {}) {
     return this._withRetry(async () => {
       const { history = [], temperature = 0.7, maxTokens = 4096 } = context;
-      const messages = [];
+      const messages: { role: any; content: any } | { role: string; content: any }[] = [];
 
       for (const h of history) {
         messages.push({ role: h.role, content: h.content });
@@ -77,7 +77,7 @@ export class OpenAiProvider extends AiProvider {
       } = opts;
 
       // 统一消息 → OpenAI Chat Completions messages
-      const messages = [];
+      const messages: any[] = [];
       if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
       }
@@ -214,7 +214,7 @@ export class OpenAiProvider extends AiProvider {
     return this._withRetry(async () => {
       const { temperature = 0.3, maxTokens = 32768, systemPrompt } = opts;
 
-      const messages = [];
+      const messages: { role: string; content: any }[] = [];
       if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
       }

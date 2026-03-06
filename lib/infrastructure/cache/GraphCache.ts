@@ -130,7 +130,7 @@ export class GraphCache {
    * @returns {Object<string, string>} { relativePath: hash }
    */
   computeFileHashes(filePaths, projectRoot) {
-    const hashes = {};
+    const hashes: Record<string, any> = {};
     for (const fp of filePaths) {
       const rel = relative(projectRoot, fp);
       hashes[rel] = this.computeFileHash(fp);

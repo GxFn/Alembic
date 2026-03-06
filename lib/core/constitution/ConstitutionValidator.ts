@@ -28,7 +28,7 @@ export class ConstitutionValidator {
    * 验证操作，返回违规列表
    */
   async validate(request) {
-    const violations = [];
+    const violations: any[] = [];
     const rules = this.constitution.getRules?.() || this.constitution.rules || [];
 
     for (const rule of rules) {
@@ -171,7 +171,7 @@ export class ConstitutionValidator {
 
   /** 兼容旧 priorities 格式 */
   async _checkLegacyPriority(priority, request) {
-    const violations = [];
+    const violations: { rule: any; reason: string; suggestion: string }[] = [];
     if (priority.id === 1) {
       const v = this._checkDestructive(request, { id: 'destructive_confirm' });
       if (v) {

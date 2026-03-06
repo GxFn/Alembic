@@ -39,9 +39,14 @@ export async function runNoAiFallback(fillContext) {
   const t0 = Date.now();
   logger.info('[Bootstrap-fallback] Starting rule-based fallback (no AI)');
 
-  const candidates = [];
-  const skills = [];
-  const report = { dimensionsProcessed: 0, candidatesCreated: 0, skillsCreated: 0, errors: [] };
+  const candidates: any[] = [];
+  const skills: { dimId: any; name: string; description: string; content: string }[] = [];
+  const report = {
+    dimensionsProcessed: 0,
+    candidatesCreated: 0,
+    skillsCreated: 0,
+    errors: [] as any[],
+  };
 
   // ── 收集原始数据 ──
   const allFiles = fillContext.allFiles || [];
@@ -426,7 +431,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
   const lines = ['## 代码规范发现', ''];
 
   const classes = astProjectSummary.classes || [];
-  const methods = [];
+  const methods: any[] = [];
   // 从 file 级聚合方法
   if (astProjectSummary.files) {
     for (const f of astProjectSummary.files) {
@@ -437,7 +442,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }) {
   }
 
   // 命名模式分析
-  let usedSuffixes = [];
+  let usedSuffixes: any[] = [];
   if (classes.length > 0) {
     lines.push('### 类命名模式', '');
 

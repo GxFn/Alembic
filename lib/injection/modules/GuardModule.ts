@@ -19,7 +19,7 @@ import { ViolationsStore } from '../../service/guard/ViolationsStore.js';
 
 export function register(c) {
   c.singleton('guardService', (ct) => {
-    let guardCheckEngine = null;
+    let guardCheckEngine: any = null;
     try {
       guardCheckEngine = ct.get('guardCheckEngine');
     } catch {

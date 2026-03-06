@@ -221,7 +221,7 @@ export class GuardService {
       guardEntries = guardEntries.filter((e) => !e.language || e.language === language);
     }
 
-    const matches = [];
+    const matches: any[] = [];
     for (const entry of guardEntries) {
       const guards = entry.constraints?.guards || [];
       for (const guard of guards) {

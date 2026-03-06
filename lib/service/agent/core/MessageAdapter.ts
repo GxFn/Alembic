@@ -183,7 +183,7 @@ export class ContextWindowAdapter extends MessageAdapter {
  */
 export class SimpleArrayAdapter extends MessageAdapter {
   /** @type {Array<Object>} */
-  #messages = [];
+  #messages: any[] = [];
 
   appendUserMessage(text) {
     this.#messages.push({ role: 'user', content: text });

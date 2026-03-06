@@ -63,7 +63,7 @@ export class Relations {
     }
     if (Array.isArray(input)) {
       // 扁平数组 → 自动分桶
-      const buckets = {};
+      const buckets: Record<string, any> = {};
       for (const rel of input) {
         const bucket = rel.type || 'related';
         if (!buckets[bucket]) {

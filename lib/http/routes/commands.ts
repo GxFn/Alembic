@@ -205,7 +205,7 @@ router.get(
         return null;
       }
 
-      const children = [];
+      const children: any[] = [];
       for (const entry of entries) {
         if (entry.name.startsWith('.')) {
           continue; // skip hidden

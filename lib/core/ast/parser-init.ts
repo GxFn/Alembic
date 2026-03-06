@@ -20,9 +20,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** 预编译 .wasm 文件存放目录 */
 const GRAMMARS_DIR = path.resolve(__dirname, '..', '..', '..', 'resources', 'grammars');
 
-let Parser = null;
+let Parser: any = null;
 /** web-tree-sitter 模块命名空间 — Language.load 在这里 */
-let _namespace = null;
+let _namespace: any = null;
 let _initialized = false;
 
 /**

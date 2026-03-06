@@ -37,11 +37,11 @@ import { estimateTokensFast } from '../../../shared/token-utils.js';
 
 export class ContextWindow {
   /** @type {Array<Object>} 统一格式消息 */
-  #messages = [];
+  #messages: any[] = [];
   /** @type {number} token 预算（默认 24000，约对应 Gemini 的安全阈值） */
   #tokenBudget;
   /** @type {Array<string>} 被压缩掉的轮次摘要（用于 digest 生成） */
-  #compactionLog = [];
+  #compactionLog: string[] = [];
   /** @type {Set<string>} 被压缩前提取的已提交候选标题 */
   #compactedSubmits = new Set();
   /** @type {Object} 日志器 */
@@ -499,7 +499,7 @@ export class ContextWindow {
    * @returns {Array<number>}
    */
   #findAllToolRoundStarts() {
-    const starts = [];
+    const starts: number[] = [];
     for (let i = 1; i < this.#messages.length; i++) {
       if (this.#messages[i].role === 'assistant' && this.#messages[i].toolCalls?.length > 0) {
         starts.push(i);

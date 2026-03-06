@@ -89,7 +89,7 @@ export class SkillsSyncer {
    * @returns {Promise<{ synced: string[], skipped: string[], errors: string[] }>}
    */
   async sync() {
-    const result = { synced: [], skipped: [], errors: [] };
+    const result = { synced: [] as string[], skipped: [] as string[], errors: [] as string[] };
 
     // 检查源目录是否存在
     if (!fs.existsSync(this.sourceDir)) {
@@ -191,7 +191,7 @@ export class SkillsSyncer {
     fs.mkdirSync(refsDir, { recursive: true });
 
     // 如果有 knowledgeService，查询该维度的 recipes
-    let recipes = [];
+    let recipes: any[] = [];
     if (this.knowledgeService) {
       try {
         const dimension = sourceDirName.replace(/^project-/, '');

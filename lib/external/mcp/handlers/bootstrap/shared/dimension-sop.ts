@@ -824,7 +824,7 @@ export function sopToCompactText(sop) {
   if (!sop?.steps) {
     return '';
   }
-  const lines = [];
+  const lines: string[] = [];
   for (const step of sop.steps) {
     lines.push(`${step.phase}: ${step.action}`);
     if (step.expectedOutput) {

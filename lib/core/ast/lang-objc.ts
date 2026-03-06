@@ -83,15 +83,15 @@ function _parseObjCInterface(node) {
     identifiers.length >= 2 &&
     node.text.indexOf('(') < node.text.indexOf(identifiers[1].text);
 
-  let superclass = null;
-  let categoryName = null;
+  let superclass: any = null;
+  let categoryName: any = null;
   if (isCategory) {
     categoryName = identifiers[1]?.text;
   } else if (identifiers.length >= 2) {
     superclass = identifiers[1]?.text;
   }
 
-  const protocols = [];
+  const protocols: any[] = [];
   const protoList = node.namedChildren.find((c) => c.type === 'parameterized_arguments');
   if (protoList) {
     for (const child of protoList.namedChildren) {
@@ -104,7 +104,7 @@ function _parseObjCInterface(node) {
     }
   }
 
-  const methods = [];
+  const methods: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'method_declaration') {
       methods.push(_parseObjCMethodDecl(child, name));
@@ -129,7 +129,7 @@ function _parseObjCInterface(node) {
 
 function _parseObjCProtocol(node) {
   const name = _findIdentifier(node) || 'Unknown';
-  const inherits = [];
+  const inherits: any[] = [];
   const protoRef = node.namedChildren.find((c) => c.type === 'protocol_reference_list');
   if (protoRef) {
     for (const child of protoRef.namedChildren) {
@@ -139,7 +139,7 @@ function _parseObjCProtocol(node) {
     }
   }
 
-  const methods = [];
+  const methods: any[] = [];
   let isOptional = false;
   for (const child of node.namedChildren) {
     if (child.type === 'qualified_protocol_interface_declaration') {
@@ -165,7 +165,7 @@ function _parseObjCMethodDecl(node, className) {
   const isClassMethod = node.text.trimStart().startsWith('+');
   const name = _findIdentifier(node) || 'unknown';
 
-  const params = [];
+  const params: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'method_parameter') {
       const paramName = _findIdentifier(child);
@@ -211,7 +211,7 @@ function _parseObjCMethodDef(node, className) {
   const isClassMethod = node.text.trimStart().startsWith('+');
   const name = _findIdentifier(node) || 'unknown';
 
-  const params = [];
+  const params: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'method_parameter') {
       const paramName = _findIdentifier(child);
@@ -238,7 +238,7 @@ function _parseObjCMethodDef(node, className) {
 }
 
 function _parseObjCProperty(node, className) {
-  const attrs = [];
+  const attrs: any[] = [];
   const attrDecl = node.namedChildren.find((c) => c.type === 'property_attributes_declaration');
   if (attrDecl) {
     for (const attr of attrDecl.namedChildren) {
@@ -368,7 +368,7 @@ function _maxNesting(node, depth) {
 
 // ── 插件导出 ──
 
-let _grammar = null;
+let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }

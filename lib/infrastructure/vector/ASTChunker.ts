@@ -16,9 +16,9 @@ import { estimateTokens } from '../../shared/token-utils.js';
 
 // AST 相关的延迟加载 (避免 import 时强制初始化 parser)
 let _astReady = false;
-let _parseToTree = null;
-let _isAvailable = null;
-let _supportedLanguages = null;
+let _parseToTree: any = null;
+let _isAvailable: any = null;
+let _supportedLanguages: any = null;
 
 /**
  * 各语言的顶层可分块 AST 节点类型
@@ -175,8 +175,8 @@ export function chunkByAST(content, language, metadata: any = {}, options: any =
   }
 
   const rootNode = parsed.rootNode;
-  const chunks = [];
-  let preambleLines = []; // 非声明代码 (imports, comments 等)
+  const chunks: { content: string; metadata: any } | { content: any; metadata: any }[] = [];
+  let preambleLines: any[] = []; // 非声明代码 (imports, comments 等)
 
   // 遍历根节点的直接子节点
   for (let i = 0; i < rootNode.childCount; i++) {
@@ -268,7 +268,7 @@ export function chunkByAST(content, language, metadata: any = {}, options: any =
  * @returns {Array<{ content: string, metadata: object }>}
  */
 function splitLargeNode(node, source, metadata, maxChunkTokens) {
-  const chunks = [];
+  const chunks: { content: string; metadata: any }[] = [];
   const parentName = extractNodeName(node);
 
   // 如果没有子节点, 按行切割
@@ -283,7 +283,7 @@ function splitLargeNode(node, source, metadata, maxChunkTokens) {
   }
 
   // 按子节点分组, 累积到 maxChunkTokens
-  let currentLines = [];
+  let currentLines: any[] = [];
   let currentTokens = 0;
   let groupStartLine = node.startPosition.row + 1;
 
@@ -365,8 +365,8 @@ function splitLargeNode(node, source, metadata, maxChunkTokens) {
  */
 function splitByLines(text, metadata, node, parentName, maxChunkTokens) {
   const lines = text.split('\n');
-  const chunks = [];
-  let current = [];
+  const chunks: { content: string; metadata: any }[] = [];
+  let current: any[] = [];
   let currentTokens = 0;
   const _maxChars = maxChunkTokens * 4;
 

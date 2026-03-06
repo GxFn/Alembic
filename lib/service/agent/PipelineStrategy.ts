@@ -420,7 +420,7 @@ export class PipelineStrategy extends Strategy {
     }
 
     const reply = source.reply;
-    const reasons = [];
+    const reasons: string | any[] = [];
 
     if (gateConfig.minEvidenceLength && reply.length < gateConfig.minEvidenceLength) {
       reasons.push(`分析长度不足: ${reply.length} < ${gateConfig.minEvidenceLength}`);

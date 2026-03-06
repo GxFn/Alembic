@@ -19,7 +19,7 @@
 
 class MinHeap {
   /** @type {HeapItem[]} */
-  #data = [];
+  #data: { nodeIdx: number; dist: number }[] = [];
 
   get size() {
     return this.#data.length;
@@ -87,7 +87,7 @@ class MinHeap {
 
 class MaxHeap {
   /** @type {HeapItem[]} */
-  #data = [];
+  #data: { nodeIdx: number; dist: number }[] = [];
 
   get size() {
     return this.#data.length;
@@ -166,7 +166,7 @@ export class HnswIndex {
 
   // ── 存储 ──
   /** @type {Array<{ id: string, vector: Float32Array|number[], level: number }>} */
-  nodes = [];
+  nodes: any[] = [];
   /** @type {Array<Map<number, Set<number>>>} graphs — per-level adjacency: graphs[level].get(nodeIdx) → Set<neighborIdx> */
   graphs: any[] = [];
   entryPoint = -1; // 入口节点索引
@@ -175,7 +175,7 @@ export class HnswIndex {
   idToIndex = new Map();
 
   // ── 可选的自定义距离函数 (用于量化空间) ──
-  #distanceFn = null;
+  #distanceFn: any = null;
 
   /**
    * @param {object} options
@@ -526,7 +526,7 @@ export class HnswIndex {
     results.push(entryNodeIdx, entryDist);
 
     while (candidates.size > 0) {
-      const nearest = candidates.pop();
+      const nearest = candidates.pop()!;
       const farthest = results.peek();
 
       // 如果最近候选比当前最差结果还远, 终止
@@ -607,7 +607,7 @@ export class HnswIndex {
     }
 
     // 计算所有邻居的距离, 保留最近的
-    const scored = [];
+    const scored: { nodeIdx: any; dist: any }[] = [];
     for (const nIdx of neighbors) {
       const nNode = this.nodes[nIdx];
       if (!nNode) {
@@ -639,7 +639,7 @@ export class HnswIndex {
   serialize() {
     // 将 graphs Map<Set> 转为可序列化格式
     const serializedGraphs = this.graphs.map((graph) => {
-      const entries = [];
+      const entries: any[][] = [];
       for (const [nodeIdx, neighbors] of graph) {
         entries.push([nodeIdx, [...neighbors]]);
       }

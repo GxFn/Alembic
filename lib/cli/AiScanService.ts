@@ -38,7 +38,7 @@ export class AiScanService {
    */
   async scan(targetName, opts: any = {}) {
     const { maxFiles = 200, dryRun = false } = opts;
-    const report = { published: 0, files: 0, errors: [], skipped: 0 };
+    const report = { published: 0, files: 0, errors: [] as string[], skipped: 0 };
 
     // 1. 初始化 AgentFactory (内置 AI Provider + ToolExecutionPipeline + 中间件)
     try {
@@ -145,7 +145,7 @@ export class AiScanService {
    * 收集 Target 源文件
    */
   async _collectFiles(targetName, maxFiles) {
-    const files = [];
+    const files: { name: any; path: any; relativePath: any; targetName: any }[] = [];
 
     try {
       // 使用 ModuleService（多语言统一入口）

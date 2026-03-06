@@ -32,7 +32,7 @@ const logger = Logger.getInstance();
 export async function produceForcedSummary({
   aiProvider,
   source,
-  toolCalls = [],
+  toolCalls = [] as any[],
   tracker,
   contextWindow,
   prompt,
@@ -201,7 +201,7 @@ ${toolContextSummary}
  * @returns {string}
  */
 function buildToolContextForUserSummary(toolCalls) {
-  const sections = [];
+  const sections: string[] = [];
 
   // 目录结构探索
   const structureCalls = toolCalls.filter((tc) => tc.tool === 'list_project_structure');

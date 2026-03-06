@@ -162,7 +162,7 @@ export class SymbolTableBuilder {
  * @returns {string[]}
  */
 function _extractExportNames(exports) {
-  const names = [];
+  const names: string | any | 'default'[] = [];
 
   for (const exp of exports) {
     if (typeof exp === 'string') {

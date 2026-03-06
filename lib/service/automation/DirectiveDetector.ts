@@ -67,13 +67,13 @@ export function detectTriggers(data, filename) {
   const _currHeaderReg = isSwift ? REGEX.HEADER_SWIFT : REGEX.HEADER_OBJC;
 
   const triggers = {
-    importArray: [],
-    headerLine: null,
-    alinkLine: null,
-    createLine: null,
-    createOption: null,
-    guardLine: null,
-    searchLine: null,
+    importArray: [] as any[],
+    headerLine: null as string | null,
+    alinkLine: null as string | null,
+    createLine: null as string | null,
+    createOption: null as string | null,
+    guardLine: null as string | null,
+    searchLine: null as string | null,
     isSwift, // backward compat
     language, // v3.1 多语言标识
   };

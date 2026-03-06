@@ -10,7 +10,7 @@
 
 import { EnhancementRegistry } from './EnhancementRegistry.js';
 
-let _instance = null;
+let _instance: any = null;
 
 /**
  * 获取全局 EnhancementRegistry 单例

@@ -56,7 +56,7 @@ export class PackageSwiftParser {
       return this.#cache.get(cacheKey);
     }
 
-    const results = [];
+    const results: string[] = [];
     const skipDirs = new Set([
       'node_modules',
       '.git',
@@ -162,7 +162,7 @@ export class PackageSwiftParser {
   }
 
   #extractTargets(content) {
-    const targets = [];
+    const targets: { name: any; type: string; path: any; dependencies: any[] }[] = [];
     const re = /\.(?:target|testTarget|executableTarget)\s*\(/g;
     let match;
 
@@ -195,7 +195,7 @@ export class PackageSwiftParser {
 
         const pathMatch = block.match(/path\s*:\s*"([^"]+)"/);
         const depsMatch = block.match(/dependencies\s*:\s*\[([^\]]*)\]/s);
-        const deps = [];
+        const deps: any[] = [];
         if (depsMatch) {
           const depRe = /\.(?:product|target)\s*\(\s*name\s*:\s*"([^"]+)"/g;
           let dm;
@@ -217,7 +217,7 @@ export class PackageSwiftParser {
   }
 
   #extractDependencies(content) {
-    const deps = [];
+    const deps: ({ url: any; version: any; type: string } | { path: any; type: string })[] = [];
 
     // 1. URL 依赖: .package(url: "...", ...)
     const urlRe = /\.package\s*\(\s*url\s*:\s*"([^"]+)"[^)]*\)/g;
@@ -246,7 +246,7 @@ export class PackageSwiftParser {
   }
 
   #extractProducts(content) {
-    const products = [];
+    const products: { name: any; type: any }[] = [];
     const re = /\.(library|executable)\s*\(\s*name\s*:\s*"([^"]+)"/g;
     let m;
     while ((m = re.exec(content)) !== null) {
@@ -256,7 +256,7 @@ export class PackageSwiftParser {
   }
 
   #extractPlatforms(content) {
-    const platforms = [];
+    const platforms: { name: any; version: any }[] = [];
     const re = /\.(iOS|macOS|tvOS|watchOS|visionOS)\s*\(\s*\.v(\d+(?:_\d+)?)\s*\)/g;
     let m;
     while ((m = re.exec(content)) !== null) {

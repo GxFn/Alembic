@@ -37,7 +37,7 @@ export class MemoryStore {
   #db;
 
   /** @type {object} 预编译 SQL Statements */
-  #stmts = null;
+  #stmts: any = null;
 
   /** @type {Map<string, import('better-sqlite3').Statement>} 动态 update SQL 缓存 */
   #updateStmtCache = new Map();
@@ -109,7 +109,7 @@ export class MemoryStore {
     }
 
     const now = new Date().toISOString();
-    const fields = [];
+    const fields: any[] = [];
     const params: any = { id };
 
     if (updates.content !== undefined) {

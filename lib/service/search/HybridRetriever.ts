@@ -43,7 +43,7 @@ export class HybridRetriever {
    * @param {number} [params.alpha=0.5] - Dense 权重
    * @returns {Array<{ id: string, score: number, rrfScore: number, denseRank: number, sparseRank: number, data: object }>}
    */
-  fuse({ denseResults = [], sparseResults = [], topK = 10, alpha = 0.5 }) {
+  fuse({ denseResults = [] as any[], sparseResults = [] as any[], topK = 10, alpha = 0.5 }) {
     const k = this.#rrfK;
     const scores = new Map();
 

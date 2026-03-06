@@ -158,13 +158,13 @@ export class BinaryPersistence {
     totalSize += graphSectionSize;
 
     // Metadata section
-    const metadataObj = {};
+    const metadataObj: Record<string, any> = {};
     if (metadata) {
       for (const [key, value] of metadata) {
         metadataObj[key] = value;
       }
     }
-    const contentsObj = {};
+    const contentsObj: Record<string, any> = {};
     if (contents) {
       for (const [key, value] of contents) {
         contentsObj[key] = value;
@@ -301,7 +301,7 @@ export class BinaryPersistence {
     offset += 10; // reserved
 
     // ── Quantizer ──
-    let quantizerData = null;
+    let quantizerData: any = null;
     if (flags & FLAG_HAS_QUANTIZER) {
       const mins = new Array(dimension);
       for (let i = 0; i < dimension; i++) {
@@ -317,7 +317,7 @@ export class BinaryPersistence {
     }
 
     // ── Vectors ──
-    const nodes = [];
+    const nodes: { id: any; vector: number[]; level: any }[] = [];
     const idToIndex = new Map();
     for (let i = 0; i < numVectors; i++) {
       const idLen = buf.readUInt16LE(offset);
@@ -338,19 +338,19 @@ export class BinaryPersistence {
     // ── Graph ──
     const numLevels = buf.readUInt16LE(offset);
     offset += 2;
-    const graphs = [];
+    const graphs: any[][] = [];
 
     for (let l = 0; l < numLevels; l++) {
       const numEntries = buf.readUInt32LE(offset);
       offset += 4;
-      const levelEntries = [];
+      const levelEntries: any[][] = [];
 
       for (let e = 0; e < numEntries; e++) {
         const nodeIdx = buf.readUInt32LE(offset);
         offset += 4;
         const numNeighbors = buf.readUInt16LE(offset);
         offset += 2;
-        const neighbors = [];
+        const neighbors: any[] = [];
         for (let n = 0; n < numNeighbors; n++) {
           neighbors.push(buf.readUInt32LE(offset));
           offset += 4;

@@ -184,9 +184,9 @@ router.get(
       nodeMap.get(e.toId).add(e.toType);
     }
 
-    const nodeLabels = {};
-    const nodeTypes = {}; // id → 主要类型（供前端区分渲染）
-    const nodeCategories = {}; // id → category/target 名（供前端分组布局）
+    const nodeLabels: Record<string, any> = {};
+    const nodeTypes: Record<string, any> = {}; // id → 主要类型（供前端区分渲染）
+    const nodeCategories: Record<string, any> = {}; // id → category/target 名（供前端分组布局）
     if (nodeMap.size > 0) {
       const knowledgeRepo = container.get('knowledgeRepository');
       for (const [id, types] of nodeMap) {
@@ -247,7 +247,7 @@ router.post(
     const t0 = Date.now();
     const container = getServiceContainer();
     const pageSize = Math.min(limit || 10, 100);
-    let results = [];
+    let results: any[] = [];
     let source = 'knowledgeService';
 
     // SearchEngine BM25 + 内置 Ranking Pipeline
@@ -407,7 +407,7 @@ router.post(
 
     const container = getServiceContainer();
     const pageSize = Math.min(limit || 10, 50);
-    let results = [];
+    let results: any[] = [];
 
     // 复用 context-aware 搜索，注入 Xcode 上下文
     try {

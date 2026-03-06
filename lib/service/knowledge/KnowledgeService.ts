@@ -744,7 +744,7 @@ export class KnowledgeService {
     }
 
     try {
-      const candidates = [];
+      const candidates: { target: any; relation: string; weight: number }[] = [];
 
       // 仅与已发布 Recipe（active）建立关联，不与其他候选（pending）互关联
       const activeOnly = { lifecycle: Lifecycle.ACTIVE };

@@ -66,7 +66,7 @@ export async function wikiPlan(ctx, args) {
     const ast = cachedData.astProjectSummary;
 
     // projectInfo: 从 bootstrap 文件列表和语言统计构建
-    const filesByModule = {};
+    const filesByModule: Record<string, any> = {};
     for (const f of allFiles) {
       const mod = f.targetName || '_default';
       if (!filesByModule[mod]) {
@@ -85,8 +85,8 @@ export async function wikiPlan(ctx, args) {
     };
 
     // astInfo: 从 AstAnalyzer 结果构建
-    const classesByModule = {};
-    const protocolsByModule = {};
+    const classesByModule: Record<string, any> = {};
+    const protocolsByModule: Record<string, any> = {};
     for (const cls of ast.classes || []) {
       const mod = cls.targetName || '_default';
       if (!classesByModule[mod]) {
@@ -255,9 +255,9 @@ export async function wikiFinalize(ctx, args) {
   const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
 
   // ── 1. 验证文件存在性 ──
-  const missingFiles = [];
-  const thinFiles = [];
-  const fileDetails = [];
+  const missingFiles: any[] = [];
+  const thinFiles: any[] = [];
+  const fileDetails: { path: any; size: number; hash: string }[] = [];
   let totalSize = 0;
 
   for (const relPath of articlesWritten) {
@@ -513,7 +513,7 @@ function _buildTopicDataBundle(topic, structuredData) {
     }
 
     case 'patterns': {
-      const groups = {};
+      const groups: Record<string, any> = {};
       for (const r of knowledgeInfo.recipes || []) {
         const json = r.toJSON ? r.toJSON() : r;
         const cat = json.category || 'Other';

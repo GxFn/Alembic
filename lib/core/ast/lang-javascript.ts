@@ -100,7 +100,7 @@ function _walkJSClassBody(body, ctx, className) {
 
 function _parseJSClass(node) {
   const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
-  let superclass = null;
+  let superclass: any = null;
 
   for (const child of node.namedChildren) {
     if (child.type === 'class_heritage') {
@@ -169,7 +169,7 @@ function _parseJSVariableDecl(node, ctx, parentClassName) {
 }
 
 function detectJSPatterns(root, lang, methods, properties, classes) {
-  const patterns = [];
+  const patterns: any[] = [];
 
   for (const m of methods) {
     if (/^use[A-Z]/.test(m.name) && !m.className) {
@@ -252,7 +252,7 @@ function _maxNesting(node, depth) {
 
 // ── 插件导出 ──
 
-let _grammar = null;
+let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }

@@ -298,7 +298,7 @@ export class WikiGenerator {
     }
 
     // 统计源文件
-    const extMap = {};
+    const extMap: Record<string, any> = {};
     for (const ext of LanguageService.sourceExts) {
       extMap[ext] = LanguageService.displayNameFromExt(ext) || ext;
     }
@@ -366,7 +366,7 @@ export class WikiGenerator {
 
       // 按模块分组类名和协议名 (通过 filePath 推断所属模块)
       const classNamesByModule: any = {};
-      const protocolNamesByModule = {};
+      const protocolNamesByModule: Record<string, any> = {};
 
       for (const name of allClasses) {
         const info = this.projectGraph.getClassInfo(name);
@@ -430,7 +430,7 @@ export class WikiGenerator {
     try {
       await this.moduleService.load();
       const targets = await this.moduleService.listTargets();
-      let depGraph = null;
+      let depGraph: any = null;
       if (this.options.includeDepGraph) {
         try {
           depGraph = await this.moduleService.getDependencyGraph({ level: 'target' });
@@ -482,7 +482,7 @@ export class WikiGenerator {
    * @returns {Array<{id: string, path: string, title: string, type: string, priority: number}>}
    */
   _discoverTopics(projectInfo, astInfo, moduleInfo, knowledgeInfo) {
-    const topics = [];
+    const topics: any[] = [];
     const isZh = this.options.language === 'zh';
     const langTerms = getLangTerms(projectInfo.primaryLanguage);
 
@@ -601,7 +601,7 @@ export class WikiGenerator {
 
     // ── 5. 代码模式/最佳实践 (来自知识库 Recipes) ──
     if (knowledgeInfo.recipes.length > 0) {
-      const groups = {};
+      const groups: Record<string, any> = {};
       for (const r of knowledgeInfo.recipes) {
         const json = r.toJSON ? r.toJSON() : r;
         const cat = json.category || 'Other';
@@ -675,7 +675,7 @@ export class WikiGenerator {
       });
 
       // 按 relPath 去重，避免同一路径重复产出同名文档
-      const folderProfiles = [];
+      const folderProfiles: any[] = [];
       const seenFolderRelPath = new Set();
       for (const fp of rawFolderProfiles) {
         if (seenFolderRelPath.has(fp.relPath)) {
@@ -767,7 +767,7 @@ export class WikiGenerator {
    * @returns {Promise<Array<{path: string, hash: string, size: number}>>}
    */
   async _composeArticles(topics, structuredData) {
-    const files = [];
+    const files: any[] = [];
     const isZh = this.options.language === 'zh';
     const MIN_ARTICLE_CHARS = 200;
 
@@ -808,7 +808,7 @@ export class WikiGenerator {
       const progress = 58 + Math.round((i / topics.length) * 22);
       this._emit(WikiPhase.AI_COMPOSE, progress, `撰写: ${topic.title}`);
 
-      let content = null;
+      let content: any = null;
 
       // === 1. 尝试 AI 撰写完整文章 ===
       if (this.aiProvider) {
@@ -859,7 +859,7 @@ export class WikiGenerator {
     if (overviewTopicIdx >= 0 && writtenTopics.length > 0) {
       const overviewTopic = topics[overviewTopicIdx];
       overviewTopic._allTopics = writtenTopics;
-      let overviewContent = null;
+      let overviewContent: any = null;
       // overview 始终存在于 files 中（因为 priority 最高且始终生成）
       // 重新用实际 writtenTopics 渲染
       overviewContent = buildFallbackArticle(
@@ -895,7 +895,7 @@ export class WikiGenerator {
    * @returns {Array<{path: string, hash: string, size: number, source: string}>}
    */
   _syncCursorDocs() {
-    const synced = [];
+    const synced: any[] = [];
     const isZh = this.options.language === 'zh';
 
     // ── Source 1: Channel D devdocs ──
@@ -1023,7 +1023,7 @@ export class WikiGenerator {
     try {
       const extSet = LanguageService.sourceExts;
       let totalSize = 0;
-      const names = [];
+      const names: string[] = [];
       walkDir(
         this.projectRoot,
         (filePath) => {

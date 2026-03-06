@@ -118,7 +118,7 @@ class FastAPIEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── Pydantic models ──
     for (const cls of astSummary.classes || []) {

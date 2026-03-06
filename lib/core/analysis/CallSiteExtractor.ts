@@ -58,7 +58,7 @@ export function extractCallSitesTS(root, ctx, lang) {
  * @returns {Array<{ body: TreeSitterNode, className: string|null, methodName: string }>}
  */
 function _collectTSScopes(root) {
-  const scopes = [];
+  const scopes: { body: any; className: any; methodName: any }[] = [];
 
   function walk(node, className) {
     for (let i = 0; i < node.namedChildCount; i++) {
@@ -278,8 +278,8 @@ function _parseTSCallExpression(node, className, methodName, isAwaited) {
   }
 
   let callee;
-  let receiver = null;
-  let receiverType = null;
+  let receiver: any = null;
+  let receiverType: any = null;
   let callType;
 
   if (func.type === 'member_expression') {
@@ -361,7 +361,7 @@ export function extractCallSitesPython(root, ctx, lang) {
  * @returns {Array<{ body: TreeSitterNode, className: string|null, methodName: string }>}
  */
 function _collectPyScopes(root) {
-  const scopes = [];
+  const scopes: { body: any; className: any; methodName: any }[] = [];
 
   function walk(node, className) {
     for (let i = 0; i < node.namedChildCount; i++) {
@@ -488,8 +488,8 @@ function _parsePyCallExpression(node, className, methodName, isAwaited) {
   }
 
   let callee;
-  let receiver = null;
-  let receiverType = null;
+  let receiver: any = null;
+  let receiverType: any = null;
   let callType;
 
   if (func.type === 'attribute') {

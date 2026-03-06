@@ -34,7 +34,7 @@ export class RulesGenerator {
     this._ensureDir();
 
     // Token 预算控制
-    const kept = [];
+    const kept: any[] = [];
     let tokens = 0;
     const headerFooterBudget = 100;
     const ruleBudget = BUDGET.CHANNEL_A_MAX - headerFooterBudget;
@@ -75,7 +75,7 @@ export class RulesGenerator {
     if (totalTokens > BUDGET.CHANNEL_B_MAX_PER_FILE) {
       // 截断尾部
       const lines = body.split('\n');
-      const truncated = [];
+      const truncated: any[] = [];
       let used = estimateTokens(description) + 50;
       for (const line of lines) {
         used += estimateTokens(`${line}\n`);

@@ -288,7 +288,7 @@ function buildScanProducerPrompt(ctx, files, task) {
 
   // ── 有完整 artifact 时 (走 buildAnalysisArtifact 路径) ──
   if (artifact?.analysisText) {
-    const parts = [];
+    const parts: string[] = [];
 
     // §1 分析文本
     parts.push(

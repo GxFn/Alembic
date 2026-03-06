@@ -37,8 +37,8 @@ const EXCLUDE_DIRS = new Set([
 const SOURCE_EXTENSIONS = LanguageService.sourceExts;
 
 export class GenericDiscoverer extends ProjectDiscoverer {
-  #projectRoot = null;
-  #targets = [];
+  #projectRoot: string | null = null;
+  #targets: any[] = [];
   #primaryLang = 'unknown';
 
   get id() {
@@ -58,7 +58,7 @@ export class GenericDiscoverer extends ProjectDiscoverer {
     this.#targets = [];
 
     // 统计语言分布
-    const langStats = {};
+    const langStats: Record<string, any> = {};
     this.#scanLangStats(projectRoot, langStats, 0);
 
     // 找到主语言
@@ -124,7 +124,7 @@ export class GenericDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const files = [];
+    const files: any[] = [];
     this.#collectFiles(targetPath, targetPath, files);
     return files;
   }

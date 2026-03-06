@@ -170,7 +170,7 @@ function _parseKtClass(node) {
       ?.text || 'Unknown';
 
   // 检查修饰符: data, sealed, abstract, open, enum
-  const modifiers = [];
+  const modifiers: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'modifiers' || child.type === 'modifier') {
       modifiers.push(child.text);
@@ -193,7 +193,7 @@ function _parseKtClass(node) {
 
   // 继承
   const _superclass = null;
-  const protocols = [];
+  const protocols: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'delegation_specifier' || child.type === 'delegation_specifiers') {
       // 简化处理
@@ -202,7 +202,7 @@ function _parseKtClass(node) {
     }
   }
 
-  let detectedSuper = null;
+  let detectedSuper: any = null;
   if (protocols.length > 0) {
     detectedSuper = protocols[0];
   }
@@ -229,7 +229,7 @@ function _parseKtFunction(node, className) {
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
 
-  const modifiers = [];
+  const modifiers: any[] = [];
   for (const child of node.namedChildren) {
     if (child.type === 'modifiers' || child.type === 'modifier') {
       modifiers.push(child.text);
@@ -280,7 +280,7 @@ function _parseKtProperty(node, className) {
   // Kotlin property types can be in variable_declaration or directly on the node:
   //   val userRepo: UserRepo  →  variable_declaration { simple_identifier, user_type }
   //   lateinit var service: UserService  →  user_type directly on property_declaration
-  let typeAnnotation = null;
+  let typeAnnotation: any = null;
 
   // 1. Try from variable_declaration child
   const varDecl = node.namedChildren.find((c) => c.type === 'variable_declaration');
@@ -371,7 +371,7 @@ function _extractKtConstructorProperties(classNode, ctx, className) {
     }
 
     // Extract type annotation
-    let typeAnnotation = null;
+    let typeAnnotation: any = null;
     const typeNode = param.namedChildren.find(
       (c) => c.type === 'user_type' || c.type === 'nullable_type'
     );
@@ -435,7 +435,7 @@ function _extractKtTypeName(typeNode) {
 }
 
 function _collectTypeRefs(node) {
-  const refs = [];
+  const refs: any[] = [];
   function walk(n) {
     if (n.type === 'user_type' || n.type === 'type_identifier' || n.type === 'simple_identifier') {
       refs.push(n.text);
@@ -452,7 +452,7 @@ function _collectTypeRefs(node) {
 // ── Kotlin 模式检测 ──
 
 function detectKtPatterns(root, lang, methods, properties, classes) {
-  const patterns = [];
+  const patterns: any[] = [];
 
   // Singleton: object declaration
   for (const cls of classes) {
@@ -594,7 +594,7 @@ function extractCallSitesKotlin(root, ctx, _lang) {
  * 递归收集 Kotlin 中所有函数体作用域
  */
 function _collectKtScopes(root) {
-  const scopes = [];
+  const scopes: any[] = [];
 
   function visit(node, className) {
     for (let i = 0; i < node.namedChildCount; i++) {
@@ -701,8 +701,8 @@ function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
       }
 
       let callee,
-        receiver = null,
-        receiverType = null,
+        receiver: string | null = null,
+        receiverType: string | null = null,
         callType;
 
       if (func.type === 'navigation_expression') {
@@ -717,7 +717,7 @@ function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
           } else if (receiver === 'super') {
             receiverType = className;
             callType = 'super';
-          } else if (/^[A-Z]/.test(receiver)) {
+          } else if (/^[A-Z]/.test(receiver!)) {
             receiverType = receiver;
             callType = 'static';
           } else {
@@ -790,7 +790,7 @@ function _extractKtCallSitesFromBody(bodyNode, className, methodName, ctx) {
 
 // ── 插件导出 ──
 
-let _grammar = null;
+let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }

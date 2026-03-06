@@ -12,9 +12,9 @@ import { envelope } from '../envelope.js';
 
 export async function validateCandidate(ctx, args) {
   const c = args.candidate || {};
-  const errors = [];
-  const warnings = [];
-  const suggestions = [];
+  const errors: any[] = [];
+  const warnings: any[] = [];
+  const suggestions: { field: string; value: string }[] = [];
 
   // Layer 1: 核心必填
   if (!c.title?.trim()) {
@@ -154,7 +154,7 @@ export async function enrichCandidates(ctx, args) {
     },
   ];
 
-  const results = [];
+  const results: any[] = [];
   let needsEnrichment = 0;
   let needsRecipeFields = 0;
   for (const id of ids) {
@@ -167,7 +167,7 @@ export async function enrichCandidates(ctx, args) {
       const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
 
       // 语义字段检查
-      const missing = [];
+      const missing: string[] = [];
       for (const keyPath of SEMANTIC_KEYS) {
         const parts = keyPath.split('.');
         let val = json;
@@ -187,7 +187,7 @@ export async function enrichCandidates(ctx, args) {
       }
 
       // Recipe-Ready 字段检查
-      const recipeReadyMissing = [];
+      const recipeReadyMissing: { field: string; hint: string }[] = [];
       for (const { key, check, hint } of RECIPE_READY_KEYS) {
         const val = json[key];
         if (!check(val)) {

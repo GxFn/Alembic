@@ -49,7 +49,7 @@ export class GuardFeedbackLoop {
       const lastRuleIds = new Set((lastRun.violations || []).map((v) => v.ruleId));
       const currentRuleIds = new Set((currentResult.violations || []).map((v) => v.ruleId));
 
-      const fixed = [];
+      const fixed: { ruleId: unknown; filePath: any; fixRecipeId: any }[] = [];
       for (const ruleId of lastRuleIds) {
         if (!currentRuleIds.has(ruleId)) {
           // 该规则的违规已消失 → 修复了

@@ -58,8 +58,10 @@ router.get(
     }
 
     // 标准化为 { nodes, edges } 格式
-    let nodes = [];
-    let edges = [];
+    let nodes: any[] = [];
+    let edges:
+      | { from: string; to: string; source: string }
+      | { from: string; to: any; source: string }[] = [];
 
     if (graph.nodes && graph.edges) {
       // 已经是标准格式
@@ -418,7 +420,7 @@ router.get(
     const container = getServiceContainer();
 
     // 从容器获取 BootstrapTaskManager（正式 DI 注册）
-    let taskManager = null;
+    let taskManager: any = null;
     try {
       taskManager = container.get('bootstrapTaskManager');
     } catch {

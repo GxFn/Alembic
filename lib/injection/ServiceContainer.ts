@@ -332,8 +332,8 @@ export class ServiceContainer {
         const oldHashes = cached.fileHashes || {};
 
         // 计算差异：新增 / 变更 / 删除
-        const changedPaths = [];
-        const newHashes = {};
+        const changedPaths: any[] = [];
+        const newHashes: Record<string, any> = {};
         for (const fp of currentFiles) {
           const rel = pathRelative(projectRoot, fp);
           const h = cache.computeFileHash(fp);
@@ -348,7 +348,7 @@ export class ServiceContainer {
           // 完全命中
           this.singletons.projectGraph = graph;
           this.logger.info(
-            `[ServiceContainer] ProjectGraph ⚡ 缓存命中 (${graph.getOverview().totalClasses} classes, ` +
+            `[ServiceContainer] ProjectGraph ⚡ 缓存命中 (${graph.getOverview()!.totalClasses} classes, ` +
               `${Date.now() - startTime}ms)`
           );
           return graph;
@@ -361,7 +361,7 @@ export class ServiceContainer {
         // 写回缓存
         cache.save('project-graph', graph.toJSON(), { fileHashes: newHashes });
 
-        const overview = graph.getOverview();
+        const overview = graph.getOverview()!;
         this.logger.info(
           `[ServiceContainer] ProjectGraph 增量更新: +${diff.added} ~${diff.updated} -${diff.deleted} ` +
             `(${overview.totalClasses} classes, ${Date.now() - startTime}ms)`
@@ -372,7 +372,7 @@ export class ServiceContainer {
       // ── 无缓存，全量构建 ──
       const graph = await ProjectGraph.build(projectRoot, options);
       this.singletons.projectGraph = graph;
-      const overview = graph.getOverview();
+      const overview = graph.getOverview()!;
 
       // 计算文件 hash 并写入缓存
       const currentFiles = this.#collectSourceFilePaths(projectRoot, options);
@@ -414,7 +414,7 @@ export class ServiceContainer {
     ];
     const maxFiles = options.maxFiles || 500;
     const maxFileSizeBytes = options.maxFileSizeBytes || 500_000;
-    const results = [];
+    const results: string[] = [];
 
     function walk(dir) {
       if (results.length >= maxFiles) {
@@ -455,7 +455,7 @@ export class ServiceContainer {
   }
 }
 
-let containerInstance = null;
+let containerInstance: any = null;
 
 /**
  * 获取全局服务容器实例

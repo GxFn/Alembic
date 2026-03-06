@@ -116,7 +116,7 @@ class LangChainEnhancement extends EnhancementPack {
   }
 
   detectPatterns(astSummary) {
-    const patterns = [];
+    const patterns: any[] = [];
 
     // ── Chain / Runnable classes ──
     for (const cls of astSummary.classes || []) {

@@ -167,8 +167,8 @@ function _walkJavaInterfaceBody(body, ctx, ifaceName) {
 
 function _parseJavaClass(node) {
   const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
-  let superclass = null;
-  const protocols = [];
+  let superclass: any = null;
+  const protocols: any[] = [];
 
   for (const child of node.namedChildren) {
     if (child.type === 'superclass') {
@@ -213,7 +213,7 @@ function _parseJavaClass(node) {
 
 function _parseJavaInterface(node) {
   const name = node.namedChildren.find((c) => c.type === 'identifier')?.text || 'Unknown';
-  const inherits = [];
+  const inherits: any[] = [];
 
   for (const child of node.namedChildren) {
     if (child.type === 'extends_interfaces') {
@@ -277,7 +277,7 @@ function _parseJavaField(node, className) {
 
   // Phase 5.3: Extract field type for DI resolution
   // field_declaration: [modifiers] type_identifier variable_declarator
-  let typeAnnotation = null;
+  let typeAnnotation: any = null;
   const typeNode = node.namedChildren.find(
     (c) =>
       c.type === 'type_identifier' ||
@@ -306,10 +306,10 @@ function _parseJavaField(node, className) {
 // ── Java 模式检测 ──
 
 function detectJavaPatterns(root, lang, methods, properties, classes) {
-  const patterns = [];
+  const patterns: any[] = [];
 
   // Singleton: private constructor + static getInstance
-  const classMethodMap = {};
+  const classMethodMap: Record<string, any> = {};
   for (const m of methods) {
     if (m.className) {
       if (!classMethodMap[m.className]) {
@@ -467,7 +467,7 @@ function extractCallSitesJava(root, ctx, _lang) {
  * 递归收集 Java 中所有方法体作用域
  */
 function _collectJavaScopes(root) {
-  const scopes = [];
+  const scopes: { body: any; className: any; methodName: any }[] = [];
 
   function visit(node, className) {
     for (let i = 0; i < node.namedChildCount; i++) {
@@ -550,8 +550,8 @@ function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
       const argCount = args ? args.namedChildCount : 0;
 
       let callee,
-        receiver = null,
-        receiverType = null,
+        receiver: string | null = null,
+        receiverType: string | null = null,
         callType;
 
       if (identifiers.length >= 2) {
@@ -653,7 +653,7 @@ function _extractJavaCallSitesFromBody(bodyNode, className, methodName, ctx) {
 
 // ── 插件导出 ──
 
-let _grammar = null;
+let _grammar: any = null;
 function getGrammar() {
   return _grammar;
 }
