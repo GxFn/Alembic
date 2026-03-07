@@ -4,6 +4,18 @@
 
 ---
 
+## [3.2.11] - 2026-03-08
+
+### 改进
+
+- **全面类型安全修复**：消除 dashboard 58 处 `catch (err: any)` → `catch (err: unknown)`，新增 `error.ts` 工具模块；api.ts 36+ 处 `any` 替换为具名接口；apiClient.ts 泛型化；12 处 `as any` 强制转换消除
+- **VSCode 扩展类型安全**：5 个文件 `catch (err: any)` 修复；remoteCommandPoller.ts 日志从 console.log 迁移至 OutputChannel
+- **死代码清理**：删除 17 个无用文件（DraftHandler、plugin 系统、7 个废弃脚本、PageContainer、2 个旧测试、Prettier 配置等）
+- **依赖瘦身**：移除 16 个未使用依赖（10×@protobufjs、zod-to-json-schema、drizzle-kit、nodemon、supertest、prismjs、yaml 等）
+- **配置精简**：移除冗余 tsconfig.strict.json / tsconfig.test.json / .prettierrc / .prettierignore / .npmrc
+
+---
+
 ## [3.2.10] - 2026-03-05
 
 ### 修复
