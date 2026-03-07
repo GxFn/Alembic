@@ -32,16 +32,20 @@ import Logger from '../../../infrastructure/logging/Logger.js';
  * 工具特化压缩策略 — 不同工具返回不同结构，压缩时保留最有价值的部分
  */
 const TOOL_COMPRESS_STRATEGIES = {
-  search_project_code(result: any) {
-    if (typeof result !== 'object') {
+  search_project_code(result: unknown) {
+    if (typeof result !== 'object' || result === null) {
       return String(result).substring(0, 600);
     }
-    const matches = result.matches || [];
-    const batchResults = result.batchResults || {};
+    const r = result as Record<string, unknown>;
+    const matches = (Array.isArray(r.matches) ? r.matches : []) as Array<{
+      file: string;
+      line: number;
+    }>;
+    const batchResults = (r.batchResults || {}) as Record<string, Record<string, unknown>>;
     const lines: string[] = [];
     if (matches.length > 0) {
       lines.push(`搜索到 ${matches.length} 个匹配`);
-      const fileGroups: Record<string, any> = {};
+      const fileGroups: Record<string, number[]> = {};
       for (const m of matches) {
         if (!fileGroups[m.file]) {
           fileGroups[m.file] = [];
@@ -53,7 +57,10 @@ const TOOL_COMPRESS_STRATEGIES = {
       }
     }
     for (const [pattern, sub] of Object.entries(batchResults).slice(0, 5)) {
-      const subMatches = (sub as any).matches || [];
+      const subMatches = (Array.isArray(sub.matches) ? sub.matches : []) as Array<{
+        file: string;
+        line: number;
+      }>;
       lines.push(`  [${pattern}] ${subMatches.length} 个匹配`);
       for (const m of subMatches.slice(0, 3)) {
         lines.push(`    ${m.file}:${m.line}`);
@@ -62,63 +69,68 @@ const TOOL_COMPRESS_STRATEGIES = {
     return lines.join('\n');
   },
 
-  read_project_file(result: any) {
-    if (typeof result !== 'object') {
+  read_project_file(result: unknown) {
+    if (typeof result !== 'object' || result === null) {
       return String(result).substring(0, 600);
     }
-    if (result.files) {
-      const lines = [`读取 ${result.files.length} 个文件`];
-      for (const f of result.files.slice(0, 5)) {
+    const r = result as Record<string, unknown>;
+    if (Array.isArray(r.files)) {
+      const files = r.files as Array<{ content?: string; path?: string }>;
+      const lines = [`读取 ${files.length} 个文件`];
+      for (const f of files.slice(0, 5)) {
         const totalLines = (f.content || '').split('\n').length;
         lines.push(`  ${f.path} (${totalLines} 行)`);
       }
       return lines.join('\n');
     }
-    const content = result.content || String(result);
+    const content = (r.content as string) || String(result);
     const totalLines = content.split('\n').length;
-    return `文件 ${result.path || '?'} (${totalLines} 行)`;
+    return `文件 ${(r.path as string) || '?'} (${totalLines} 行)`;
   },
 
-  get_class_info(result: any) {
-    if (typeof result !== 'object') {
+  get_class_info(result: unknown) {
+    if (typeof result !== 'object' || result === null) {
       return String(result).substring(0, 600);
     }
-    const lines = [`类 ${result.className || '?'}`];
-    if (result.superClass) {
-      lines.push(`  继承: ${result.superClass}`);
+    const r = result as Record<string, unknown>;
+    const lines = [`类 ${(r.className as string) || '?'}`];
+    if (r.superClass) {
+      lines.push(`  继承: ${r.superClass}`);
     }
-    if (result.protocols?.length) {
-      lines.push(`  协议: ${result.protocols.join(', ')}`);
+    if (Array.isArray(r.protocols) && r.protocols.length) {
+      lines.push(`  协议: ${(r.protocols as string[]).join(', ')}`);
     }
-    if (result.methods?.length) {
-      lines.push(`  方法数: ${result.methods.length}`);
+    if (Array.isArray(r.methods) && r.methods.length) {
+      lines.push(`  方法数: ${r.methods.length}`);
     }
-    if (result.properties?.length) {
-      lines.push(`  属性数: ${result.properties.length}`);
+    if (Array.isArray(r.properties) && r.properties.length) {
+      lines.push(`  属性数: ${r.properties.length}`);
     }
     return lines.join('\n');
   },
 
-  get_class_hierarchy(result: any) {
-    if (typeof result !== 'object') {
+  get_class_hierarchy(result: unknown) {
+    if (typeof result !== 'object' || result === null) {
       return String(result).substring(0, 600);
     }
-    const classes = result.classes || result.hierarchy || [];
+    const r = result as Record<string, unknown>;
+    const classes = r.classes || r.hierarchy || [];
     return `类层级: ${Array.isArray(classes) ? classes.length : 0} 个类`;
   },
 
-  get_project_overview(result: any) {
-    if (typeof result !== 'object') {
+  get_project_overview(result: unknown) {
+    if (typeof result !== 'object' || result === null) {
       return String(result).substring(0, 800);
     }
     return JSON.stringify(result).substring(0, 800);
   },
 
-  list_project_structure(result: any) {
-    if (typeof result !== 'object') {
+  list_project_structure(result: unknown) {
+    if (typeof result !== 'object' || result === null) {
       return String(result).substring(0, 600);
     }
-    const entries = result.entries || result.children || [];
+    const r = result as Record<string, unknown>;
+    const entries = r.entries || r.children || [];
     return `目录结构: ${Array.isArray(entries) ? entries.length : 0} 个条目`;
   },
 };
@@ -126,7 +138,7 @@ const TOOL_COMPRESS_STRATEGIES = {
 /**
  * 默认压缩 — 截断到 maxChars
  */
-function defaultCompress(result: any, maxChars = 600) {
+function defaultCompress(result: unknown, maxChars = 600) {
   const str = typeof result === 'string' ? result : JSON.stringify(result);
   if (str.length <= maxChars) {
     return str;
@@ -135,51 +147,122 @@ function defaultCompress(result: any, maxChars = 600) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// §2: ActiveContext 类
+// §2: 类型定义 + ActiveContext 类
 // ═══════════════════════════════════════════════════════════
+
+interface ActiveContextOptions {
+  maxRecentRounds?: number;
+  lightweight?: boolean;
+}
+
+interface ScratchpadEntry {
+  finding: string;
+  evidence: string;
+  importance: number;
+  round: number;
+}
+
+interface RoundAction {
+  tool: string;
+  params: Record<string, unknown>;
+}
+
+interface RoundObservation {
+  tool: string;
+  gotNewInfo?: boolean;
+  resultType?: string;
+  keyFacts?: string[];
+  resultSize?: number;
+  [key: string]: unknown;
+}
+
+interface RoundSummary {
+  newInfoCount?: number;
+  totalCalls?: number;
+  submits?: number;
+  cumulativeFiles?: number;
+  cumulativePatterns?: number;
+  [key: string]: unknown;
+}
+
+interface Round {
+  iteration: number;
+  thought: string | null;
+  actions: RoundAction[];
+  observations: RoundObservation[];
+  reflection: string | null;
+  roundSummary: RoundSummary | null;
+  startTime: number;
+  endTime: number | null;
+}
+
+interface PlanStep {
+  description: string;
+  status: string;
+  keywords: string[];
+}
+
+interface Plan {
+  text: string;
+  steps: PlanStep[];
+  createdAtIteration: number;
+  lastUpdatedAtIteration: number;
+}
+
+interface Observation {
+  toolName: string;
+  result: unknown;
+  round: number;
+  timestamp: number;
+}
+
+interface CompressedObservation {
+  toolName: string;
+  round: number;
+  summary: string;
+}
+
+interface ActiveContextJSON {
+  rounds?: Round[];
+  scratchpad?: ScratchpadEntry[];
+  totalObservations?: number;
+  plan?: Plan;
+}
 
 export class ActiveContext {
   // ── 子区 1: Scratchpad (从 WorkingMemory 继承, 不可压缩) ──
-  /** @type {Array<{finding: string, evidence: string, importance: number, round: number}>} */
-  #scratchpad: any[] = [];
+  #scratchpad: ScratchpadEntry[] = [];
 
   // ── 子区 2: ObservationLog (合并 RT.rounds + WM.observations) ──
-  /** @type {Array<Round>} */
-  #rounds: any[] = [];
-  /** @type {Round|null} */
-  #currentRound: any = null;
+  #rounds: Round[] = [];
+  #currentRound: Round | null = null;
 
   // ── WM 滑动窗口 (保留最近 N 轮原始结果，旧的压缩) ──
-  /** @type {Array<{toolName: string, result: any, round: number, timestamp: number}>} */
-  #recentObservations: any[] = [];
-  /** @type {Array<{toolName: string, round: number, summary: string}>} */
-  #compressedObservations: any[] = [];
+  #recentObservations: Observation[] = [];
+  #compressedObservations: CompressedObservation[] = [];
 
   // ── 子区 3: Plan (从 ReasoningTrace 继承) ──
-  /** @type {Plan|null} */
-  #plan: any = null;
-  /** @type {Array<Plan>} */
-  #planHistory: any[] = [];
-  /** @type {boolean} 是否期待下一次响应包含计划 (由 ExplorationTracker 设置) */
+  #plan: Plan | null = null;
+  #planHistory: Plan[] = [];
+  /** 是否期待下一次响应包含计划 (由 ExplorationTracker 设置) */
   #expectingPlan = false;
 
   // ── 配置 ──
-  /** @type {number} 保留最近 N 轮原始观察 */
-  #maxRecentRounds;
-  /** @type {boolean} 轻量模式 (User Chat: 仅 RT 功能，禁用 WM 压缩/Scratchpad) */
-  #lightweight;
-  /** @type {number} 总观察计数 */
+  /** 保留最近 N 轮原始观察 */
+  #maxRecentRounds: number;
+  /** 轻量模式 (User Chat: 仅 RT 功能，禁用 WM 压缩/Scratchpad) */
+  #lightweight: boolean;
+  /** 总观察计数 */
   #totalObservations = 0;
 
-  /** @type {import('winston').Logger} */
-  #logger;
+  #logger: ReturnType<typeof Logger.getInstance>;
 
   /**
    * @param {object} [options]
    * @param {number} [options.maxRecentRounds=3] 保留最近 N 轮原始结果 (WM 滑动窗口)
    * @param {boolean} [options.lightweight=false] 轻量模式: 跳过 WM 的压缩/Scratchpad 逻辑 (D5)
    */
-  constructor(options: any = {}) {
+  constructor(options: ActiveContextOptions = {}) {
     this.#maxRecentRounds = options.maxRecentRounds ?? 3;
     this.#lightweight = options.lightweight ?? false;
     this.#logger = Logger.getInstance();
@@ -193,7 +276,7 @@ export class ActiveContext {
    * 开始新一轮推理
    * @param {number} iteration 轮次编号
    */
-  startRound(iteration: any) {
+  startRound(iteration: number) {
     if (this.#currentRound) {
       this.endRound(); // 安全关闭上一轮
     }
@@ -228,7 +311,7 @@ export class ActiveContext {
    * 记录 AI 的推理文本（从 aiResult.text 提取）
    * @param {string} text
    */
-  setThought(text: any) {
+  setThought(text: string) {
     if (this.#currentRound && text) {
       this.#currentRound.thought = text;
     }
@@ -242,7 +325,7 @@ export class ActiveContext {
    * @param {*} result 工具返回的原始结果
    * @param {boolean} isNew 是否发现新信息 (由 ExplorationTracker.recordToolCall 提供)
    */
-  recordToolCall(toolName: any, args: any, result: any, isNew: any) {
+  recordToolCall(toolName: string, args: Record<string, unknown>, result: unknown, isNew: boolean) {
     const round = this.#currentRound?.iteration || 0;
 
     // ── RT 部分: Action + Observation ──
@@ -262,8 +345,10 @@ export class ActiveContext {
 
       while (this.#recentObservations.length > this.#maxRecentRounds) {
         const oldest = this.#recentObservations.shift();
-        const summary = this.#compressObservation(oldest);
-        this.#compressedObservations.push(summary);
+        if (oldest) {
+          const summary = this.#compressObservation(oldest);
+          this.#compressedObservations.push(summary);
+        }
       }
     }
   }
@@ -273,7 +358,7 @@ export class ActiveContext {
    * @param {string} toolName
    * @param {object} params
    */
-  addAction(toolName: any, params: any) {
+  addAction(toolName: string, params: Record<string, unknown>) {
     this.#currentRound?.actions.push({ tool: toolName, params });
   }
 
@@ -282,7 +367,7 @@ export class ActiveContext {
    * @param {string} toolName
    * @param {object} meta
    */
-  addObservation(toolName: any, meta: any) {
+  addObservation(toolName: string, meta: Record<string, unknown>) {
     this.#currentRound?.observations.push({ tool: toolName, ...meta });
   }
 
@@ -292,7 +377,7 @@ export class ActiveContext {
    * @param {*} result
    * @param {number} round
    */
-  observe(toolName: any, result: any, round: any) {
+  observe(toolName: string, result: unknown, round: number) {
     if (this.#lightweight) {
       return;
     }
@@ -300,8 +385,10 @@ export class ActiveContext {
     this.#recentObservations.push({ toolName, result, round, timestamp: Date.now() });
     while (this.#recentObservations.length > this.#maxRecentRounds) {
       const oldest = this.#recentObservations.shift();
-      const summary = this.#compressObservation(oldest);
-      this.#compressedObservations.push(summary);
+      if (oldest) {
+        const summary = this.#compressObservation(oldest);
+        this.#compressedObservations.push(summary);
+      }
     }
   }
 
@@ -309,7 +396,7 @@ export class ActiveContext {
    * 记录反思内容 (ExplorationTracker 使用, L5 修复)
    * @param {string} text
    */
-  setReflection(text: any) {
+  setReflection(text: string) {
     if (this.#currentRound && text) {
       this.#currentRound.reflection = text;
     }
@@ -319,7 +406,7 @@ export class ActiveContext {
    * 记录轮次摘要
    * @param {object} summary - { newInfoCount, totalCalls, submits, cumulativeFiles, cumulativePatterns }
    */
-  setRoundSummary(summary: any) {
+  setRoundSummary(summary: RoundSummary) {
     if (this.#currentRound) {
       this.#currentRound.roundSummary = summary;
     }
@@ -337,7 +424,7 @@ export class ActiveContext {
    * @param {number} [importance=5] 重要性 1-10
    * @param {number} [round=0] 当前轮次
    */
-  noteKeyFinding(finding: any, evidence: any = '', importance = 5, round = 0) {
+  noteKeyFinding(finding: string, evidence: unknown = '', importance = 5, round = 0) {
     // P0 Fix: 防御性保证 evidence 是 string (AI 可能传入 array/object)
     const safeEvidence =
       typeof evidence === 'string'
@@ -374,7 +461,7 @@ export class ActiveContext {
    * @param {number} iteration 当前轮次
    * @returns {boolean} 是否成功提取到计划
    */
-  extractAndSetPlan(text: any, iteration: any) {
+  extractAndSetPlan(text: string, iteration: number) {
     const planText = this.#extractPlanFromText(text);
     if (!planText) {
       return false;
@@ -408,7 +495,7 @@ export class ActiveContext {
    * @param {string} planText
    * @param {number} iteration
    */
-  setPlan(planText: any, iteration: any) {
+  setPlan(planText: string, iteration: number) {
     this.#setPlan(planText, iteration);
   }
 
@@ -417,7 +504,7 @@ export class ActiveContext {
    * @param {string} replanText
    * @param {number} iteration
    */
-  updatePlan(replanText: any, iteration: any) {
+  updatePlan(replanText: string, iteration: number) {
     this.#updatePlan(replanText, iteration);
   }
 
@@ -431,7 +518,7 @@ export class ActiveContext {
     }
     return {
       ...this.#plan,
-      steps: this.#plan.steps.map((s: any) => ({ ...s })),
+      steps: this.#plan.steps.map((s) => ({ ...s })),
     };
   }
 
@@ -448,7 +535,7 @@ export class ActiveContext {
    * @returns {Array<Plan>}
    */
   getPlanHistory() {
-    return this.#planHistory.map((p) => ({ ...p, steps: p.steps.map((s: any) => ({ ...s })) }));
+    return this.#planHistory.map((p) => ({ ...p, steps: p.steps.map((s) => ({ ...s })) }));
   }
 
   /**
@@ -585,13 +672,13 @@ export class ActiveContext {
     }
 
     const thoughts = recent
-      .filter((r) => r.thought)
+      .filter((r): r is Round & { thought: string } => r.thought !== null)
       .map((r) => (r.thought.length > 100 ? `${r.thought.substring(0, 100)}…` : r.thought));
 
-    const tools = recent.flatMap((r) => r.actions.map((a: any) => a.tool));
+    const tools = recent.flatMap((r) => r.actions.map((a) => a.tool));
 
     const newInfoCount = recent.reduce(
-      (c, r) => c + r.observations.filter((o: any) => o.gotNewInfo).length,
+      (c, r) => c + r.observations.filter((o) => o.gotNewInfo).length,
       0
     );
     const totalObs = recent.reduce((c, r) => c + r.observations.length, 0);
@@ -673,7 +760,7 @@ export class ActiveContext {
         ? {
             plan: {
               text: this.#plan.text,
-              steps: this.#plan.steps.map((s: any) => ({ ...s })),
+              steps: this.#plan.steps.map((s) => ({ ...s })),
               createdAtIteration: this.#plan.createdAtIteration,
               lastUpdatedAtIteration: this.#plan.lastUpdatedAtIteration,
             },
@@ -688,13 +775,13 @@ export class ActiveContext {
    * @param {object} json - toJSON() 的输出
    * @returns {ActiveContext}
    */
-  static fromJSON(json: any) {
+  static fromJSON(json: ActiveContextJSON) {
     const ctx = new ActiveContext();
     if (json.rounds) {
-      ctx.#rounds = json.rounds.map((r: any) => ({ ...r }));
+      ctx.#rounds = json.rounds.map((r) => ({ ...r }));
     }
     if (json.scratchpad) {
-      ctx.#scratchpad = json.scratchpad.map((f: any) => ({ ...f }));
+      ctx.#scratchpad = json.scratchpad.map((f) => ({ ...f }));
     }
     if (json.totalObservations) {
       ctx.#totalObservations = json.totalObservations;
@@ -702,7 +789,7 @@ export class ActiveContext {
     if (json.plan) {
       ctx.#plan = {
         text: json.plan.text,
-        steps: json.plan.steps.map((s: any) => ({ ...s })),
+        steps: json.plan.steps.map((s) => ({ ...s })),
         createdAtIteration: json.plan.createdAtIteration,
         lastUpdatedAtIteration: json.plan.lastUpdatedAtIteration,
       };
@@ -738,7 +825,12 @@ export class ActiveContext {
    * @param {boolean} isNew 由 ExplorationTracker.recordToolCall 提供
    * @returns {{ gotNewInfo: boolean, resultType: string, keyFacts: string[], resultSize: number }}
    */
-  static buildObservationMeta(toolName: any, args: any, result: any, isNew: any) {
+  static buildObservationMeta(
+    toolName: string,
+    args: Record<string, unknown>,
+    result: unknown,
+    isNew: boolean
+  ) {
     const meta = {
       gotNewInfo: isNew,
       resultType: 'unknown',
@@ -749,13 +841,21 @@ export class ActiveContext {
     const resultStr = typeof result === 'string' ? result : JSON.stringify(result || '');
     meta.resultSize = resultStr.length;
 
+    const resultObj =
+      typeof result === 'object' && result !== null ? (result as Record<string, unknown>) : null;
+
     switch (toolName) {
       case 'search_project_code': {
         meta.resultType = 'search';
-        const matches = result?.matches || [];
-        const batchResults = result?.batchResults;
+        const matches = Array.isArray(resultObj?.matches) ? (resultObj.matches as unknown[]) : [];
+        const batchResults = resultObj?.batchResults as
+          | Record<string, Record<string, unknown>>
+          | undefined;
         const totalMatches = batchResults
-          ? Object.values(batchResults).reduce((s, br: any) => s + (br.matches?.length || 0), 0)
+          ? Object.values(batchResults).reduce(
+              (s, br) => s + (Array.isArray(br.matches) ? br.matches.length : 0),
+              0
+            )
           : matches.length;
         meta.keyFacts.push(`${totalMatches} matches found`);
         if (isNew) {
@@ -765,8 +865,8 @@ export class ActiveContext {
       }
       case 'read_project_file': {
         meta.resultType = 'file_content';
-        const fp = args?.filePath || '';
-        const fps = args?.filePaths || [];
+        const fp = (args?.filePath as string) || '';
+        const fps = (args?.filePaths as string[]) || [];
         const allPaths = fp ? [fp, ...fps] : fps;
         meta.keyFacts.push(`read ${allPaths.length} file(s)`);
         break;
@@ -775,14 +875,14 @@ export class ActiveContext {
       case 'submit_with_check': {
         meta.resultType = 'submit';
         meta.gotNewInfo = true;
-        const status = typeof result === 'object' ? result?.status || 'ok' : 'ok';
-        const title = args?.title || '(untitled)';
+        const status = resultObj ? (resultObj.status as string) || 'ok' : 'ok';
+        const title = (args?.title as string) || '(untitled)';
         meta.keyFacts.push(`submit "${title}": ${status}`);
         break;
       }
       case 'list_project_structure': {
         meta.resultType = 'structure';
-        meta.keyFacts.push(`list ${args?.directory || '/'}`);
+        meta.keyFacts.push(`list ${(args?.directory as string) || '/'}`);
         break;
       }
       case 'get_class_info':
@@ -791,7 +891,11 @@ export class ActiveContext {
       case 'get_method_overrides':
       case 'get_category_map': {
         meta.resultType = 'ast_query';
-        const target = args?.className || args?.protocolName || args?.name || '';
+        const target =
+          (args?.className as string) ||
+          (args?.protocolName as string) ||
+          (args?.name as string) ||
+          '';
         meta.keyFacts.push(`${toolName}(${target})`);
         break;
       }
@@ -825,8 +929,10 @@ export class ActiveContext {
    * @param {{toolName: string, result: any, round: number}} observation
    * @returns {{toolName: string, round: number, summary: string}}
    */
-  #compressObservation(observation: any) {
-    const strategy = (TOOL_COMPRESS_STRATEGIES as Record<string, any>)[observation.toolName];
+  #compressObservation(observation: Observation): CompressedObservation {
+    const strategy = (TOOL_COMPRESS_STRATEGIES as Record<string, (result: unknown) => string>)[
+      observation.toolName
+    ];
     let summary;
     try {
       summary = strategy ? strategy(observation.result) : defaultCompress(observation.result);
@@ -845,7 +951,7 @@ export class ActiveContext {
    * @param {string} text
    * @returns {number}
    */
-  #estimateTokens(text: any) {
+  #estimateTokens(text: string) {
     return Math.ceil((text || '').length / 4);
   }
 
@@ -855,7 +961,7 @@ export class ActiveContext {
    * @param {string} planText
    * @param {number} iteration
    */
-  #setPlan(planText: any, iteration: any) {
+  #setPlan(planText: string, iteration: number) {
     this.#plan = {
       text: planText,
       steps: this.#parsePlanSteps(planText),
@@ -868,12 +974,12 @@ export class ActiveContext {
    * @param {string} replanText
    * @param {number} iteration
    */
-  #updatePlan(replanText: any, iteration: any) {
+  #updatePlan(replanText: string, iteration: number) {
     if (!this.#plan) {
       this.#setPlan(replanText, iteration);
       return;
     }
-    this.#planHistory.push({ ...this.#plan, steps: this.#plan.steps.map((s: any) => ({ ...s })) });
+    this.#planHistory.push({ ...this.#plan, steps: this.#plan.steps.map((s) => ({ ...s })) });
     this.#plan.text = replanText;
     this.#plan.steps = this.#parsePlanSteps(replanText);
     this.#plan.lastUpdatedAtIteration = iteration;
@@ -884,12 +990,12 @@ export class ActiveContext {
    * @param {string} text
    * @returns {Array<PlanStep>}
    */
-  #parsePlanSteps(text: any) {
+  #parsePlanSteps(text: string): PlanStep[] {
     if (!text) {
       return [];
     }
     const lines = text.split('\n');
-    const steps: { description: any; status: string; keywords: any[] }[] = [];
+    const steps: PlanStep[] = [];
     for (const line of lines) {
       const m = line.match(/^\s*(?:\d+[.)]\s*|[-*]\s+)(.+)/);
       if (m && m[1].trim().length > 5) {
@@ -908,7 +1014,7 @@ export class ActiveContext {
    * @param {string} text
    * @returns {string[]}
    */
-  #extractKeywords(text: any) {
+  #extractKeywords(text: string): string[] {
     const quoted = [...text.matchAll(/[`"']([A-Za-z_]\w{2,})[`"']/g)].map((m) => m[1]);
     const camelCase = [...text.matchAll(/\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b/g)].map((m) => m[0]);
     const acronyms = [...text.matchAll(/\b([A-Z]{2,}[a-z]\w+)\b/g)].map((m) => m[0]);
@@ -920,7 +1026,7 @@ export class ActiveContext {
    * @param {string} text
    * @returns {string|null}
    */
-  #extractPlanFromText(text: any) {
+  #extractPlanFromText(text: string): string | null {
     if (!text || text.length < 30) {
       return null;
     }
@@ -937,7 +1043,7 @@ export class ActiveContext {
     let planStart = -1;
     for (const marker of planMarkers) {
       const match = searchArea.match(marker);
-      if (match) {
+      if (match && match.index !== undefined) {
         planStart = match.index + match[0].length;
         break;
       }
@@ -945,7 +1051,7 @@ export class ActiveContext {
 
     if (planStart === -1) {
       const listMatch = searchArea.match(/\n\s*1[.)]\s+/);
-      if (listMatch) {
+      if (listMatch && listMatch.index !== undefined) {
         planStart = listMatch.index;
       }
     }
@@ -956,7 +1062,7 @@ export class ActiveContext {
 
     const remaining = searchArea.substring(planStart);
     const lines = remaining.split('\n');
-    const planLines: any[] = [];
+    const planLines: string[] = [];
     let inList = false;
 
     for (const line of lines) {

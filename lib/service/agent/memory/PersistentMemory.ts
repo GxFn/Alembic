@@ -21,22 +21,59 @@
  * @module PersistentMemory
  */
 
+import type {
+  CandidateMemory,
+  ConsolidateOptions,
+  ConsolidateStats,
+} from './MemoryConsolidator.js';
 import { MemoryConsolidator } from './MemoryConsolidator.js';
+import type {
+  AppendEntry,
+  EmbeddingFn,
+  LoadOptions,
+  PromptSectionOptions,
+  RetrieveOptions,
+  ScoredMemory,
+} from './MemoryRetriever.js';
 import { MemoryRetriever } from './MemoryRetriever.js';
+import type {
+  DeserializedMemory,
+  MemoryInput,
+  MemoryUpdates,
+  SqliteDatabase,
+} from './MemoryStore.js';
 import { MemoryStore } from './MemoryStore.js';
+
+/** PersistentMemory 构造选项 */
+export interface PersistentMemoryOptions {
+  logger?: MemoryLogger | null;
+  embeddingFn?: EmbeddingFn;
+}
+
+/** Logger 接口 */
+interface MemoryLogger {
+  info(msg: string): void;
+  warn?(msg: string): void;
+  debug?(msg: string): void;
+}
+
+/** 数据库包装器 (getDb 模式) */
+interface DbWrapper {
+  getDb(): SqliteDatabase;
+}
 
 export class PersistentMemory {
   /** @type {MemoryStore} */
-  #store;
+  #store: MemoryStore;
 
   /** @type {MemoryRetriever} */
-  #retriever;
+  #retriever: MemoryRetriever;
 
   /** @type {MemoryConsolidator} */
-  #consolidator;
+  #consolidator: MemoryConsolidator;
 
-  /** @type {object|null} */
-  #logger;
+  /** @type {MemoryLogger|null} */
+  #logger: MemoryLogger | null;
 
   /**
    * @param {import('better-sqlite3').Database} db - better-sqlite3 实例
@@ -44,12 +81,16 @@ export class PersistentMemory {
    * @param {object}   [opts.logger]
    * @param {Function} [opts.embeddingFn]
    */
-  constructor(db: any, opts: any = {}) {
-    const { logger, embeddingFn } = typeof opts === 'object' && opts !== null ? opts : {};
+  constructor(db: SqliteDatabase | DbWrapper, opts: PersistentMemoryOptions = {}) {
+    const { logger, embeddingFn } =
+      typeof opts === 'object' && opts !== null ? opts : ({} as PersistentMemoryOptions);
     if (!db) {
       throw new Error('PersistentMemory requires a database instance');
     }
-    const rawDb = typeof db?.getDb === 'function' ? db.getDb() : db;
+    const rawDb =
+      typeof (db as DbWrapper)?.getDb === 'function'
+        ? (db as DbWrapper).getDb()
+        : (db as SqliteDatabase);
     this.#logger = logger || null;
 
     // 组装子模块
@@ -63,22 +104,22 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 添加一条记忆 */
-  add(memory: any) {
+  add(memory: MemoryInput) {
     return this.#store.add(memory);
   }
 
   /** 更新已有记忆 */
-  update(id: any, updates: any) {
+  update(id: string, updates: MemoryUpdates) {
     return this.#store.update(id, updates);
   }
 
   /** 删除一条记忆 */
-  delete(id: any) {
+  delete(id: string) {
     return this.#store.delete(id);
   }
 
   /** 按 ID 获取 */
-  get(id: any) {
+  get(id: string): DeserializedMemory | null {
     return this.#store.get(id);
   }
 
@@ -87,7 +128,7 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 智能固化 (ADD / UPDATE / MERGE / NOOP + 冲突解决) */
-  consolidate(candidateMemories: any, opts: any) {
+  consolidate(candidateMemories: CandidateMemory[], opts?: ConsolidateOptions): ConsolidateStats {
     return this.#consolidator.consolidate(candidateMemories, opts);
   }
 
@@ -96,12 +137,12 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 三维打分综合检索 */
-  retrieve(query: any, opts: any) {
+  retrieve(query: string, opts?: RetrieveOptions): ScoredMemory[] {
     return this.#retriever.retrieve(query, opts);
   }
 
   /** 简单文本搜索 */
-  search(content: any, opts: any) {
+  search(content: string, opts?: { limit?: number }): DeserializedMemory[] {
     return this.#retriever.search(content, opts);
   }
 
@@ -110,17 +151,17 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 预算感知 Prompt section */
-  toPromptSection(opts: any) {
+  toPromptSection(opts?: PromptSectionOptions): string {
     return this.#retriever.toPromptSection(opts);
   }
 
   /** 兼容 Memory.load() */
-  load(limit: any, opts: any) {
+  load(limit: number, opts?: LoadOptions) {
     return this.#retriever.load(limit, opts);
   }
 
   /** 兼容 Memory.append() */
-  append(entry: any) {
+  append(entry: AppendEntry) {
     return this.#retriever.append(entry);
   }
 
@@ -129,7 +170,7 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 记忆总数 */
-  size(opts: any) {
+  size(opts?: { source?: string }) {
     return this.#store.size(opts);
   }
 
@@ -159,7 +200,7 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 从旧版 Memory.js JSONL 文件迁移 */
-  async migrateFromLegacy(projectRoot: any) {
+  async migrateFromLegacy(projectRoot: string) {
     return this.#consolidator.migrateFromLegacy(projectRoot);
   }
 
@@ -167,7 +208,7 @@ export class PersistentMemory {
   // 向量嵌入接口 — 委托 MemoryRetriever
   // ═══════════════════════════════════════════════════════════
 
-  setEmbeddingFunction(fn: any) {
+  setEmbeddingFunction(fn: EmbeddingFn | null) {
     this.#retriever.setEmbeddingFunction(fn);
   }
 
@@ -175,7 +216,7 @@ export class PersistentMemory {
     return this.#retriever.getEmbeddingFunction();
   }
 
-  computeEmbeddingRelevance(query: any, content: any) {
+  computeEmbeddingRelevance(query: string, content: string): number | null {
     return this.#retriever.computeEmbeddingRelevance(query, content);
   }
 
@@ -183,7 +224,7 @@ export class PersistentMemory {
   // Private
   // ═══════════════════════════════════════════════════════════
 
-  #log(msg: any) {
+  #log(msg: string) {
     const formatted = `[PersistentMemory] ${msg}`;
     if (this.#logger?.info) {
       this.#logger.info(formatted);

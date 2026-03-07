@@ -12,7 +12,39 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { MemoryInput } from './MemoryStore.js';
 import { MemoryStore } from './MemoryStore.js';
+
+// ─── 类型定义 ──────────────────────────────────────────
+
+/** 候选记忆 (consolidate 入参) */
+export interface CandidateMemory {
+  type?: string;
+  content: string;
+  source?: string;
+  importance?: number;
+}
+
+/** consolidate 返回统计 */
+export interface ConsolidateStats {
+  added: number;
+  updated: number;
+  merged: number;
+  skipped: number;
+  replaced?: number;
+}
+
+/** consolidate 选项 */
+export interface ConsolidateOptions {
+  bootstrapSession?: string;
+}
+
+/** Logger 接口 */
+interface MemoryLogger {
+  info(msg: string): void;
+  warn?(msg: string): void;
+  debug?(msg: string): void;
+}
 
 // ─── 常量 ──────────────────────────────────────────────
 
@@ -37,17 +69,17 @@ const MIN_TOPIC_OVERLAP_RATIO = 0.3;
 
 export class MemoryConsolidator {
   /** @type {MemoryStore} */
-  #store;
+  #store: MemoryStore;
 
-  /** @type {object|null} */
-  #logger;
+  /** @type {MemoryLogger|null} */
+  #logger: MemoryLogger | null;
 
   /**
    * @param {MemoryStore} store
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  constructor(store: any, opts: any = {}) {
+  constructor(store: MemoryStore, opts: { logger?: MemoryLogger | null } = {}) {
     this.#store = store;
     this.#logger = opts.logger || null;
   }
@@ -64,12 +96,15 @@ export class MemoryConsolidator {
    * @param {string} [opts.bootstrapSession]
    * @returns {{ added: number, updated: number, merged: number, skipped: number, replaced?: number }}
    */
-  consolidate(candidateMemories: any, { bootstrapSession }: any = {}) {
+  consolidate(
+    candidateMemories: CandidateMemory[],
+    { bootstrapSession }: ConsolidateOptions = {}
+  ): ConsolidateStats {
     // Phase 1: 冲突预解决
     const { processed, replaced } = this.#preResolveConflicts(candidateMemories);
 
     // Phase 2: 正常 consolidate 流程
-    const stats: any = { added: 0, updated: 0, merged: 0, skipped: 0 };
+    const stats: ConsolidateStats = { added: 0, updated: 0, merged: 0, skipped: 0 };
 
     const runConsolidate = this.#store.transaction(() => {
       for (const candidate of processed) {
@@ -80,7 +115,7 @@ export class MemoryConsolidator {
         }
 
         // 搜索相似记忆 (同 type 优先)
-        const similar = this.#store.findSimilar(content, candidate.type, 3);
+        const similar = this.#store.findSimilar(content, candidate.type ?? null, 3);
 
         if (similar.length === 0) {
           this.#store.add({ ...candidate, bootstrapSession });
@@ -90,14 +125,14 @@ export class MemoryConsolidator {
 
         const topMatch = similar[0];
 
-        if (topMatch.similarity >= SIMILARITY_UPDATE) {
+        if ((topMatch.similarity ?? 0) >= SIMILARITY_UPDATE) {
           // UPDATE: 几乎同义 → 更新重要性和时间戳
           this.#store.update(topMatch.id, {
             importance: Math.max(topMatch.importance, candidate.importance || 5),
             accessCount: topMatch.access_count + 1,
           });
           stats.updated++;
-        } else if (topMatch.similarity >= SIMILARITY_MERGE) {
+        } else if ((topMatch.similarity ?? 0) >= SIMILARITY_MERGE) {
           // MERGE: 相关但不同 → 合并信息
           const mergedContent = `${topMatch.content}; ${content}`.substring(0, 500);
           const existingRelated = MemoryStore.safeParseJSON(topMatch.related_memories_raw, []);
@@ -140,7 +175,9 @@ export class MemoryConsolidator {
    * @param {string} projectRoot
    * @returns {Promise<{ migrated: number, skipped: number, error?: string }>}
    */
-  async migrateFromLegacy(projectRoot: any) {
+  async migrateFromLegacy(
+    projectRoot: string
+  ): Promise<{ migrated: number; skipped: number; error?: string }> {
     const legacyPath = path.join(projectRoot, '.autosnippet', 'memory.jsonl');
 
     if (!fs.existsSync(legacyPath)) {
@@ -192,9 +229,9 @@ export class MemoryConsolidator {
       );
 
       return { migrated, skipped: result.skipped };
-    } catch (err: any) {
-      this.#log(`Legacy migration failed: ${err.message}`);
-      return { migrated: 0, skipped: 0, error: err.message };
+    } catch (err: unknown) {
+      this.#log(`Legacy migration failed: ${(err as Error).message}`);
+      return { migrated: 0, skipped: 0, error: (err as Error).message };
     }
   }
 
@@ -207,12 +244,12 @@ export class MemoryConsolidator {
    * @param {Array<object>} candidates
    * @returns {{ processed: Array<object>, replaced: number }}
    */
-  #preResolveConflicts(candidates: any) {
+  #preResolveConflicts(candidates: CandidateMemory[]) {
     if (!candidates || candidates.length === 0) {
-      return { processed: [], replaced: 0 };
+      return { processed: [] as CandidateMemory[], replaced: 0 };
     }
 
-    const processed: any[] = [];
+    const processed: CandidateMemory[] = [];
     let replaced = 0;
 
     for (const candidate of candidates) {
@@ -224,7 +261,7 @@ export class MemoryConsolidator {
 
       try {
         const similar = this.#store.findSimilar(content, null, 3);
-        const deserialized = similar.map((r: any) => MemoryStore.deserialize(r));
+        const deserialized = similar.map((r) => MemoryStore.deserialize(r));
         let conflictResolved = false;
 
         for (const existing of deserialized) {
@@ -266,7 +303,7 @@ export class MemoryConsolidator {
    * @param {string} contentB
    * @returns {boolean}
    */
-  static #detectContradiction(contentA: any, contentB: any) {
+  static #detectContradiction(contentA: string, contentB: string): boolean {
     if (!contentA || !contentB) {
       return false;
     }
@@ -301,7 +338,7 @@ export class MemoryConsolidator {
    * @param {string} text
    * @returns {Set<string>}
    */
-  static #extractTopicWords(text: any) {
+  static #extractTopicWords(text: string): Set<string> {
     if (!text) {
       return new Set();
     }
@@ -309,7 +346,7 @@ export class MemoryConsolidator {
     const tokens = text
       .toLowerCase()
       .split(/[\s,;:!?。，；：！？\-_/\\|()[\]{}'"<>·、]+/)
-      .filter((t: any) => t.length >= 2);
+      .filter((t) => t.length >= 2);
 
     const stopWords = new Set([
       '我们',
@@ -366,7 +403,7 @@ export class MemoryConsolidator {
       'some',
     ]);
 
-    return new Set(tokens.filter((t: any) => !stopWords.has(t)));
+    return new Set(tokens.filter((t) => !stopWords.has(t)));
   }
 
   /**
@@ -374,7 +411,7 @@ export class MemoryConsolidator {
    * @param {string} legacyType
    * @returns {string}
    */
-  static #mapLegacyType(legacyType: any) {
+  static #mapLegacyType(legacyType: string): string {
     switch (legacyType) {
       case 'preference':
         return 'preference';
@@ -383,7 +420,7 @@ export class MemoryConsolidator {
     }
   }
 
-  #log(msg: any) {
+  #log(msg: string) {
     const formatted = `[MemoryConsolidator] ${msg}`;
     if (this.#logger?.info) {
       this.#logger.info(formatted);

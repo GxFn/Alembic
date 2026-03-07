@@ -28,7 +28,7 @@ import path from 'node:path';
 import Logger from '../../../infrastructure/logging/Logger.js';
 import { CACHE } from '../../../shared/constants.js';
 
-// ── 常量 ──
+// ── 类型定义 ──
 
 /** 副作用工具 — 不缓存结果 (B3 fix) */
 const NON_CACHEABLE = new Set([
@@ -46,71 +46,137 @@ const DEFAULT_TTL_MS = CACHE.DEFAULT_TTL_MS;
 
 // ── 类型定义 ──
 
-/**
- * @typedef {object} DimensionReport
- * @property {string}   dimId
- * @property {number}   completedAt
- * @property {string}   analysisText
- * @property {Array<Finding>} findings
- * @property {string[]} referencedFiles
- * @property {Array<CandidateSummary>} candidatesSummary
- * @property {object|null} workingMemoryDistilled
- * @property {object|null} digest
- */
+/** Finding 结构 */
+export interface Finding {
+  finding: string;
+  evidence?: string;
+  importance: number;
+  dimId?: string;
+  timestamp?: number;
+}
 
-/**
- * @typedef {object} Finding
- * @property {string} finding
- * @property {string} [evidence]
- * @property {number} importance
- */
+/** 候选摘要 */
+export interface CandidateSummary {
+  dimId: string;
+  title: string;
+  subTopic: string;
+  summary: string;
+}
 
-/**
- * @typedef {object} CandidateSummary
- * @property {string} dimId
- * @property {string} title
- * @property {string} subTopic
- * @property {string} summary
- */
+/** 跨维度引用 */
+export interface CrossReference {
+  from: string;
+  to: string;
+  relation: string;
+  detail: string;
+}
 
-/**
- * @typedef {object} CrossReference
- * @property {string} from
- * @property {string} to
- * @property {string} relation
- * @property {string} detail
- */
+/** 层反思 */
+export interface TierReflection {
+  tierIndex: number;
+  completedDimensions: string[];
+  topFindings: Finding[];
+  crossDimensionPatterns: string[];
+  suggestionsForNextTier: string[];
+}
 
-/**
- * @typedef {object} TierReflection
- * @property {number}   tierIndex
- * @property {string[]} completedDimensions
- * @property {Array<Finding>} topFindings
- * @property {string[]} crossDimensionPatterns
- * @property {string[]} suggestionsForNextTier
- */
+/** WorkingMemory 蒸馏内容 */
+export interface WorkingMemoryDistilled {
+  keyFindings?: Finding[];
+  toolCallSummary?: Array<string | { tool: string; summary: string }>;
+  [key: string]: unknown;
+}
+
+/** 维度摘要 */
+export interface DimensionDigest {
+  summary?: string;
+  candidateCount?: number;
+  keyFindings?: Array<string | Finding>;
+  crossRefs?: Record<string, string>;
+  gaps?: string[];
+  [key: string]: unknown;
+}
+
+/** 维度报告 */
+export interface DimensionReport {
+  dimId: string;
+  completedAt: number;
+  analysisText: string;
+  findings: Finding[];
+  referencedFiles: string[];
+  candidatesSummary: CandidateSummary[];
+  workingMemoryDistilled: WorkingMemoryDistilled | null;
+  digest: DimensionDigest | null;
+}
+
+/** 维度报告输入 */
+export interface DimensionReportInput {
+  analysisText?: string;
+  findings?: Array<{
+    finding?: string;
+    evidence?: string | string[] | unknown;
+    importance?: number;
+  }>;
+  referencedFiles?: string[];
+  candidatesSummary?: CandidateSummary[];
+  workingMemoryDistilled?: WorkingMemoryDistilled | null;
+  digest?: DimensionDigest | null;
+}
+
+/** 缓存条目 */
+interface SearchCacheEntry {
+  result: unknown;
+  cachedAt: number;
+  hitCount: number;
+}
+
+interface FileCacheEntry {
+  content: string;
+  cachedAt: number;
+  hitCount: number;
+}
+
+/** SessionStore 构造选项 */
+export interface SessionStoreConfig {
+  projectContext?: Record<string, unknown>;
+  ttlMs?: number;
+  cleanupIntervalMs?: number;
+  /** 项目名 (便捷传入, 会合并到 projectContext) */
+  projectName?: string;
+  primaryLang?: string;
+  fileCount?: number;
+  modules?: string[];
+  [key: string]: unknown;
+}
+
+/** 工具参数 */
+interface ToolArgs {
+  pattern?: string;
+  filePath?: string;
+  [key: string]: unknown;
+}
 
 // ═══════════════════════════════════════════════════════════
 export class SessionStore {
   // ── 子系统 1: DimensionReports (from EpisodicMemory) ──
   /** @type {Map<string, DimensionReport>} */
-  #dimensionReports = new Map();
+  #dimensionReports = new Map<string, DimensionReport>();
   /** @type {Map<string, Finding[]>} filePath → Evidence[] */
-  #evidenceStore = new Map();
+  #evidenceStore = new Map<string, Finding[]>();
   /** @type {CrossReference[]} */
-  #crossReferences: any[] = [];
+  #crossReferences: CrossReference[] = [];
   /** @type {TierReflection[]} */
-  #tierReflections: any[] = [];
+  #tierReflections: TierReflection[] = [];
   /** @type {Map<string, CandidateSummary[]>} dimId → candidates */
-  #submittedCandidates = new Map();
-  /** @type {object} */
-  #projectContext;
+  #submittedCandidates = new Map<string, CandidateSummary[]>();
+  /** @type {Record<string, unknown>} */
+  #projectContext: Record<string, unknown>;
 
   // ── 子系统 2: ReadOnlyCache (from ToolResultCache) ──
-  /** @type {Map<string, {result: any, cachedAt: number, hitCount: number}>} */
-  #searchCache = new Map();
-  /** @type {Map<string, {content: string, cachedAt: number, hitCount: number}>} */
-  #fileCache = new Map();
+  /** @type {Map<string, SearchCacheEntry>} */
+  #searchCache = new Map<string, SearchCacheEntry>();
+  /** @type {Map<string, FileCacheEntry>} */
+  #fileCache = new Map<string, FileCacheEntry>();
   /** @type {{hits: number, misses: number, evictions: number}} */
   #cacheStats = { hits: 0, misses: 0, evictions: 0 };
   /** @type {number} */
@@ -119,15 +185,12 @@ export class SessionStore {
   #cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   /** @type {import('winston').Logger} */
-  #logger;
+  #logger: ReturnType<typeof Logger.getInstance>;
 
   /**
-   * @param {object} [config]
-   * @param {object} [config.projectContext] 项目基础信息
-   * @param {number} [config.ttlMs] 缓存 TTL（毫秒）
-   * @param {number} [config.cleanupIntervalMs] 清理周期
+   * @param {SessionStoreConfig} [config]
    */
-  constructor(config: any = {}) {
+  constructor(config: SessionStoreConfig = {}) {
     this.#projectContext = config.projectContext || {};
     this.#ttlMs = config.ttlMs ?? DEFAULT_TTL_MS;
     this.#logger = Logger.getInstance();
@@ -151,10 +214,10 @@ export class SessionStore {
    * @param {string} dimId
    * @param {object} report
    */
-  storeDimensionReport(dimId: any, report: any) {
+  storeDimensionReport(dimId: string, report: DimensionReportInput) {
     // findings 统一形状: { finding: string, evidence: string, importance: number }
     // P0 Fix: evidence 可能是 array/object，强制 string
-    const findings = (report.findings || []).map((f: any) => ({
+    const findings: Finding[] = (report.findings || []).map((f) => ({
       finding: f.finding || '',
       evidence:
         typeof f.evidence === 'string'
@@ -216,7 +279,7 @@ export class SessionStore {
    * @param {string} dimId
    * @returns {DimensionReport|undefined}
    */
-  getDimensionReport(dimId: any) {
+  getDimensionReport(dimId: string): DimensionReport | undefined {
     return this.#dimensionReports.get(dimId);
   }
 
@@ -235,11 +298,11 @@ export class SessionStore {
    * @param {string} filePath
    * @param {object} evidence
    */
-  addEvidence(filePath: any, evidence: any) {
+  addEvidence(filePath: string, evidence: Omit<Finding, 'timestamp'>) {
     if (!this.#evidenceStore.has(filePath)) {
       this.#evidenceStore.set(filePath, []);
     }
-    this.#evidenceStore.get(filePath).push({
+    this.#evidenceStore.get(filePath)!.push({
       ...evidence,
       timestamp: Date.now(),
     });
@@ -249,7 +312,7 @@ export class SessionStore {
    * @param {string} filePath
    * @returns {Finding[]}
    */
-  getEvidenceForFile(filePath: any) {
+  getEvidenceForFile(filePath: string): Finding[] {
     return this.#evidenceStore.get(filePath) || [];
   }
 
@@ -258,8 +321,8 @@ export class SessionStore {
    * @param {string} [dimId]
    * @returns {Array<{filePath: string, evidence: object}>}
    */
-  searchEvidence(query: any, dimId: any) {
-    const results: { filePath: any; evidence: any }[] = [];
+  searchEvidence(query: string, dimId?: string) {
+    const results: { filePath: string; evidence: Finding }[] = [];
     const lowerQuery = query.toLowerCase();
     for (const [filePath, evidences] of this.#evidenceStore) {
       for (const ev of evidences) {
@@ -284,11 +347,11 @@ export class SessionStore {
    * @param {string} dimId
    * @param {CandidateSummary} candidate
    */
-  addSubmittedCandidate(dimId: any, candidate: any) {
+  addSubmittedCandidate(dimId: string, candidate: Omit<CandidateSummary, 'dimId'>) {
     if (!this.#submittedCandidates.has(dimId)) {
       this.#submittedCandidates.set(dimId, []);
     }
-    this.#submittedCandidates.get(dimId).push({
+    this.#submittedCandidates.get(dimId)!.push({
       dimId,
       title: candidate.title || '',
       subTopic: candidate.subTopic || '',
@@ -304,7 +367,7 @@ export class SessionStore {
    * @param {string} dimId
    * @param {object} digest
    */
-  addDimensionDigest(dimId: any, digest: any) {
+  addDimensionDigest(dimId: string, digest: DimensionDigest) {
     const existing = this.#dimensionReports.get(dimId);
     if (existing) {
       existing.digest = digest;
@@ -313,8 +376,8 @@ export class SessionStore {
         dimId,
         completedAt: Date.now(),
         analysisText: digest.summary || '',
-        findings: (digest.keyFindings || []).map((f: any) => ({
-          finding: typeof f === 'string' ? f : f.finding || '',
+        findings: (digest.keyFindings || []).map((f) => ({
+          finding: typeof f === 'string' ? f : (f as Finding).finding || '',
           evidence: '',
           importance: 5,
         })),
@@ -352,7 +415,7 @@ export class SessionStore {
    * @param {number} tierIndex
    * @param {TierReflection} reflection
    */
-  addTierReflection(tierIndex: any, reflection: any) {
+  addTierReflection(tierIndex: number, reflection: TierReflection) {
     this.#tierReflections.push(reflection);
     this.#logger.info(
       `[SessionStore] Tier ${tierIndex + 1} reflection: ` +
@@ -373,11 +436,11 @@ export class SessionStore {
    * @param {string} currentDimId
    * @returns {string|null}
    */
-  getRelevantReflections(currentDimId: any) {
+  getRelevantReflections(currentDimId: string): string | null {
     if (this.#tierReflections.length === 0) {
       return null;
     }
-    const parts: any[] = [];
+    const parts: string[] = [];
     for (const ref of this.#tierReflections) {
       parts.push(`### Tier ${ref.tierIndex + 1} 综合洞察`);
       if (ref.topFindings?.length > 0) {
@@ -413,18 +476,21 @@ export class SessionStore {
    * @param {string[]|object} [focusKeywordsOrOpts] 关键词数组或 options 对象
    * @returns {string}
    */
-  buildContextForDimension(currentDimId: any, focusKeywordsOrOpts: any[] = []) {
+  buildContextForDimension(
+    currentDimId: string,
+    focusKeywordsOrOpts: string[] | { focusKeywords?: string[]; tokenBudget?: number } = []
+  ) {
     // 兼容两种调用方式: (dimId, keywords[]) 或 (dimId, { focusKeywords, tokenBudget })
-    let focusKeywords: any[] = [];
+    let focusKeywords: string[] = [];
     let tokenBudget = Infinity;
     if (Array.isArray(focusKeywordsOrOpts)) {
       focusKeywords = focusKeywordsOrOpts;
     } else if (typeof focusKeywordsOrOpts === 'object') {
-      focusKeywords = (focusKeywordsOrOpts as any).focusKeywords || [];
-      tokenBudget = (focusKeywordsOrOpts as any).tokenBudget || Infinity;
+      focusKeywords = focusKeywordsOrOpts.focusKeywords || [];
+      tokenBudget = focusKeywordsOrOpts.tokenBudget || Infinity;
     }
 
-    const parts: any[] = [];
+    const parts: string[] = [];
     const completedDims = [...this.#dimensionReports.entries()].filter(
       ([id]) => id !== currentDimId
     );
@@ -445,10 +511,9 @@ export class SessionStore {
         parts.push(`${report.analysisText.substring(0, 300)}…`);
       }
 
-      // B1 fix: 优先 findings，为空时从 workingMemoryDistilled 补充
-      let findings = report.findings;
+      let findings: Finding[] | undefined = report.findings;
       if ((!findings || findings.length === 0) && report.workingMemoryDistilled?.keyFindings) {
-        findings = report.workingMemoryDistilled.keyFindings.map((f: any) => ({
+        findings = report.workingMemoryDistilled.keyFindings.map((f) => ({
           finding: f.finding || '',
           evidence: f.evidence || '',
           importance: f.importance || 5,
@@ -470,7 +535,7 @@ export class SessionStore {
       const candidates = this.#submittedCandidates.get(dimId) || [];
       if (candidates.length > 0) {
         parts.push(
-          `已提交 ${candidates.length} 个候选: ${candidates.map((c: any) => c.title).join(', ')}`
+          `已提交 ${candidates.length} 个候选: ${candidates.map((c) => c.title).join(', ')}`
         );
       }
     }
@@ -520,8 +585,8 @@ export class SessionStore {
    * @param {string} currentDimId
    * @returns {object}
    */
-  buildContextSnapshot(currentDimId: any) {
-    const previousDimensions: Record<string, any> = {};
+  buildContextSnapshot(currentDimId: string) {
+    const previousDimensions: Record<string, DimensionDigest> = {};
     for (const [dimId, report] of this.#dimensionReports) {
       if (dimId === currentDimId) {
         continue;
@@ -529,12 +594,12 @@ export class SessionStore {
       previousDimensions[dimId] = report.digest || {
         summary: report.analysisText?.substring(0, 300) || '',
         candidateCount: report.candidatesSummary?.length || 0,
-        keyFindings: report.findings?.map((f: any) => f.finding) || [],
+        keyFindings: report.findings?.map((f) => f.finding) || [],
         crossRefs: {},
         gaps: [],
       };
     }
-    const submittedCandidates: any[] = [];
+    const submittedCandidates: CandidateSummary[] = [];
     for (const [, candidates] of this.#submittedCandidates) {
       submittedCandidates.push(...candidates);
     }
@@ -550,7 +615,7 @@ export class SessionStore {
    * @param {string} dimId
    * @returns {{ keyFindings: Array, toolCallSummary: Array, referencedFiles: string[] }|null}
    */
-  getDistilledForProducer(dimId: any) {
+  getDistilledForProducer(dimId: string) {
     const report = this.#dimensionReports.get(dimId);
     if (!report) {
       return null;
@@ -573,7 +638,7 @@ export class SessionStore {
    * @param {object} args
    * @returns {*|null}
    */
-  getCachedResult(toolName: any, args: any) {
+  getCachedResult(toolName: string, args: ToolArgs): unknown | null {
     if (NON_CACHEABLE.has(toolName)) {
       return null;
     }
@@ -622,7 +687,7 @@ export class SessionStore {
    * @param {object} args
    * @param {*} result
    */
-  cacheToolResult(toolName: any, args: any, result: any) {
+  cacheToolResult(toolName: string, args: ToolArgs, result: unknown) {
     if (NON_CACHEABLE.has(toolName)) {
       return;
     }
@@ -631,21 +696,32 @@ export class SessionStore {
       const pattern = args?.pattern || '';
       if (pattern) {
         if (this.#searchCache.size >= MAX_SEARCH_CACHE) {
-          const oldestKey = this.#searchCache.keys().next().value;
-          this.#searchCache.delete(oldestKey);
+          const oldestKey = this.#searchCache.keys().next().value as string | undefined;
+          if (oldestKey) {
+            this.#searchCache.delete(oldestKey);
+          }
         }
         this.#searchCache.set(pattern, { result, cachedAt: Date.now(), hitCount: 0 });
       }
     }
     if (toolName === 'read_project_file') {
       const filePath = args?.filePath || '';
-      const content = typeof result === 'object' ? result.content : String(result);
+      const content =
+        typeof result === 'object' && result !== null
+          ? (result as Record<string, unknown>).content
+          : String(result);
       if (filePath && content) {
         if (this.#fileCache.size >= MAX_FILE_CACHE) {
-          const oldestKey = this.#fileCache.keys().next().value;
-          this.#fileCache.delete(oldestKey);
+          const oldestKey = this.#fileCache.keys().next().value as string | undefined;
+          if (oldestKey) {
+            this.#fileCache.delete(oldestKey);
+          }
         }
-        this.#fileCache.set(filePath, { content, cachedAt: Date.now(), hitCount: 0 });
+        this.#fileCache.set(filePath, {
+          content: String(content),
+          cachedAt: Date.now(),
+          hitCount: 0,
+        });
       }
     }
   }
@@ -656,7 +732,7 @@ export class SessionStore {
    * @param {object} args
    * @returns {*|null}
    */
-  get(toolName: any, args: any) {
+  get(toolName: string, args: ToolArgs): unknown | null {
     return this.getCachedResult(toolName, args);
   }
 
@@ -666,7 +742,7 @@ export class SessionStore {
    * @param {object} args
    * @param {*} result
    */
-  set(toolName: any, args: any, result: any) {
+  set(toolName: string, args: ToolArgs, result: unknown) {
     this.cacheToolResult(toolName, args, result);
   }
 
@@ -677,7 +753,7 @@ export class SessionStore {
   /**
    * @param {string} projectRoot
    */
-  async saveCheckpoint(projectRoot: any) {
+  async saveCheckpoint(projectRoot: string) {
     const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');
     try {
       fs.mkdirSync(checkpointDir, { recursive: true });
@@ -704,8 +780,8 @@ export class SessionStore {
         'utf-8'
       );
       this.#logger.info(`[SessionStore] Checkpoint saved: ${this.#dimensionReports.size} reports`);
-    } catch (err: any) {
-      this.#logger.warn(`[SessionStore] Failed to save checkpoint: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[SessionStore] Failed to save checkpoint: ${(err as Error).message}`);
     }
   }
 
@@ -713,7 +789,7 @@ export class SessionStore {
    * @param {string} projectRoot
    * @returns {Promise<boolean>}
    */
-  async loadCheckpoint(projectRoot: any) {
+  async loadCheckpoint(projectRoot: string) {
     // Try new format first, then legacy
     const newPath = path.join(
       projectRoot,
@@ -748,7 +824,7 @@ export class SessionStore {
 
       if (data.dimensionReports) {
         for (const [dimId, report] of Object.entries(data.dimensionReports)) {
-          this.#dimensionReports.set(dimId, report);
+          this.#dimensionReports.set(dimId, report as DimensionReport);
         }
       }
       if (data.crossReferences) {
@@ -759,14 +835,14 @@ export class SessionStore {
       }
       if (data.submittedCandidates) {
         for (const [dimId, candidates] of Object.entries(data.submittedCandidates)) {
-          this.#submittedCandidates.set(dimId, candidates);
+          this.#submittedCandidates.set(dimId, candidates as CandidateSummary[]);
         }
       }
 
       this.#logger.info(`[SessionStore] Checkpoint loaded: ${this.#dimensionReports.size} reports`);
       return true;
-    } catch (err: any) {
-      this.#logger.warn(`[SessionStore] Failed to load checkpoint: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[SessionStore] Failed to load checkpoint: ${(err as Error).message}`);
       return false;
     }
   }
@@ -785,21 +861,27 @@ export class SessionStore {
     };
   }
 
-  static fromJSON(json: any) {
-    const store = new SessionStore({ projectContext: json.projectContext || {} });
+  static fromJSON(json: Record<string, unknown>) {
+    const store = new SessionStore({
+      projectContext: (json.projectContext as Record<string, unknown>) || {},
+    });
     if (json.dimensionReports) {
-      for (const [k, v] of Object.entries(json.dimensionReports)) {
+      for (const [k, v] of Object.entries(
+        json.dimensionReports as Record<string, DimensionReport>
+      )) {
         store.#dimensionReports.set(k, v);
       }
     }
     if (json.crossReferences) {
-      store.#crossReferences = json.crossReferences;
+      store.#crossReferences = json.crossReferences as CrossReference[];
     }
     if (json.tierReflections) {
-      store.#tierReflections = json.tierReflections;
+      store.#tierReflections = json.tierReflections as TierReflection[];
     }
     if (json.submittedCandidates) {
-      for (const [k, v] of Object.entries(json.submittedCandidates)) {
+      for (const [k, v] of Object.entries(
+        json.submittedCandidates as Record<string, CandidateSummary[]>
+      )) {
         store.#submittedCandidates.set(k, v);
       }
     }
@@ -814,8 +896,8 @@ export class SessionStore {
    * 获取所有已引用文件 (去重, F10)
    * @returns {Set<string>}
    */
-  getAllReferencedFiles() {
-    const files = new Set();
+  getAllReferencedFiles(): Set<string> {
+    const files = new Set<string>();
     for (const report of this.#dimensionReports.values()) {
       for (const f of report.referencedFiles) {
         files.add(f);
@@ -895,7 +977,11 @@ export class SessionStore {
   /**
    * 从 findings 中选择与当前焦点最相关的
    */
-  #selectRelevantFindings(findings: any, focusKeywords: any, limit: any) {
+  #selectRelevantFindings(
+    findings: Finding[] | undefined,
+    focusKeywords: string[] | undefined,
+    limit: number
+  ): Finding[] {
     if (!findings || findings.length === 0) {
       return [];
     }
@@ -908,7 +994,7 @@ export class SessionStore {
 
     return [...findings]
       .map((f) => {
-        const relevance = focusKeywords.some((kw: any) =>
+        const relevance = focusKeywords.some((kw) =>
           (f.finding || '').toLowerCase().includes(kw.toLowerCase())
         )
           ? 1

@@ -11,6 +11,7 @@
  * @module MemoryRetriever
  */
 
+import type { DeserializedMemory, MemoryRow } from './MemoryStore.js';
 import { MemoryStore } from './MemoryStore.js';
 
 // ─── 常量 (Generative Agents 三维打分) ────────────────
@@ -26,19 +27,57 @@ const RECENCY_HALF_LIFE_DAYS = 7;
 /** 相似度阈值 (用于 append 去重) */
 const SIMILARITY_UPDATE = 0.85;
 
+/** 带评分的记忆检索结果 */
+export interface ScoredMemory extends DeserializedMemory {
+  _score: number;
+  _recency: number;
+  _relevance: number;
+}
+
+/** 检索选项 */
+export interface RetrieveOptions {
+  limit?: number;
+  source?: string;
+  type?: string;
+}
+
+/** Prompt section 生成选项 */
+export interface PromptSectionOptions {
+  source?: string;
+  query?: string;
+  limit?: number;
+  tokenBudget?: number;
+}
+
+/** Memory.load 兼容选项 */
+export interface LoadOptions {
+  source?: string;
+}
+
+/** Memory.append 兼容入口 */
+export interface AppendEntry {
+  type?: string;
+  content: string;
+  source?: string;
+  ttl?: number | null;
+}
+
+/** 嵌入函数签名 */
+export type EmbeddingFn = (query: string, content: string) => number;
+
 export class MemoryRetriever {
   /** @type {MemoryStore} */
-  #store;
+  #store: MemoryStore;
 
-  /** @type {Function|null} 向量嵌入函数 (ADR-3 预留) */
-  #embeddingFn;
+  /** @type {EmbeddingFn|null} 向量嵌入函数 (ADR-3 预留) */
+  #embeddingFn: EmbeddingFn | null;
 
   /**
    * @param {MemoryStore} store
    * @param {object} [opts]
    * @param {Function} [opts.embeddingFn] 向量嵌入函数
    */
-  constructor(store: any, opts: any = {}) {
+  constructor(store: MemoryStore, opts: { embeddingFn?: EmbeddingFn } = {}) {
     this.#store = store;
     this.#embeddingFn = typeof opts.embeddingFn === 'function' ? opts.embeddingFn : null;
   }
@@ -60,7 +99,7 @@ export class MemoryRetriever {
    * @param {string} [opts.type]
    * @returns {Array<object>} 按 score 降序排列
    */
-  retrieve(query: any, { limit = 10, source, type }: any = {}) {
+  retrieve(query: string, { limit = 10, source, type }: RetrieveOptions = {}): ScoredMemory[] {
     const all = this.#store.getAllActive({ source, type });
     if (all.length === 0) {
       return [];
@@ -70,7 +109,7 @@ export class MemoryRetriever {
     const lowerQuery = (query || '').toLowerCase();
     const queryTokens = MemoryRetriever.#tokenizeWords(lowerQuery);
 
-    const scored = all.map((m: any) => {
+    const scored = all.map((m) => {
       // Recency: 指数衰减 (半衰期 7 天)
       const lastAccess = m.last_accessed_at
         ? new Date(m.last_accessed_at).getTime()
@@ -95,7 +134,7 @@ export class MemoryRetriever {
       };
     });
 
-    scored.sort((a: any, b: any) => b._score - a._score);
+    scored.sort((a, b) => b._score - a._score);
 
     // 更新访问计数 (只更新返回的)
     const topN = scored.slice(0, limit);
@@ -113,9 +152,9 @@ export class MemoryRetriever {
    * @param {number} [opts.limit=5]
    * @returns {Array<object>}
    */
-  search(content: any, { limit = 5 } = {}) {
+  search(content: string, { limit = 5 } = {}): DeserializedMemory[] {
     const results = this.#store.findSimilar(content, null, limit);
-    return results.map((r: any) => MemoryStore.deserialize(r));
+    return results.map((r) => MemoryStore.deserialize(r));
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -132,7 +171,7 @@ export class MemoryRetriever {
    * @param {number} [opts.tokenBudget]
    * @returns {string} Markdown 格式
    */
-  toPromptSection({ source, query, limit = 15, tokenBudget }: any = {}) {
+  toPromptSection({ source, query, limit = 15, tokenBudget }: PromptSectionOptions = {}): string {
     if (tokenBudget && tokenBudget > 0) {
       const EST_TOKENS_PER_MEMORY = 30;
       const HEADER_TOKENS = 15;
@@ -150,20 +189,20 @@ export class MemoryRetriever {
     } else {
       memories = this.#store
         .getAllActive({ source })
-        .sort((a: any, b: any) => {
+        .sort((a, b) => {
           const scoreA = (a.importance || 5) * 0.6 + (a.access_count || 0) * 0.4;
           const scoreB = (b.importance || 5) * 0.6 + (b.access_count || 0) * 0.4;
           return scoreB - scoreA;
         })
         .slice(0, limit)
-        .map((m: any) => MemoryStore.deserialize(m));
+        .map((m) => MemoryStore.deserialize(m));
     }
 
     if (memories.length === 0) {
       return '';
     }
 
-    const lines = memories.map((m: any) => {
+    const lines = memories.map((m) => {
       const badge = m.importance >= 8 ? '⚠️' : m.importance >= 5 ? '📌' : '💡';
       return `- ${badge} [${m.type}] ${m.content}`;
     });
@@ -182,16 +221,16 @@ export class MemoryRetriever {
    * @param {string} [opts.source]
    * @returns {Array<object>}
    */
-  load(limit = 20, { source }: any = {}) {
+  load(limit = 20, { source }: LoadOptions = {}) {
     const rows = this.#store
       .getAllActive({ source })
-      .sort((a: any, b: any) => {
+      .sort((a, b) => {
         const tA = new Date(a.updated_at).getTime();
         const tB = new Date(b.updated_at).getTime();
         return tB - tA;
       })
       .slice(0, limit);
-    return rows.map((r: any) => ({
+    return rows.map((r) => ({
       ts: r.updated_at,
       type: r.type,
       content: r.content,
@@ -204,15 +243,15 @@ export class MemoryRetriever {
    * 兼容 Memory.append() — 添加一条记忆 (自动去重)
    * @param {object} entry
    */
-  append(entry: any) {
+  append(entry: AppendEntry) {
     const content = (entry.content || '').trim().substring(0, 500);
     if (!content) {
       return;
     }
 
     // 去重: 检查是否已有高相似度记忆
-    const similar = this.#store.findSimilar(content, entry.type, 1);
-    if (similar.length > 0 && similar[0].similarity >= SIMILARITY_UPDATE) {
+    const similar = this.#store.findSimilar(content, entry.type ?? null, 1);
+    if (similar.length > 0 && (similar[0].similarity ?? 0) >= SIMILARITY_UPDATE) {
       this.#store.touchAccess(similar[0].id);
       return;
     }
@@ -231,12 +270,12 @@ export class MemoryRetriever {
   // ═══════════════════════════════════════════════════════════
 
   /** 设置向量嵌入函数 */
-  setEmbeddingFunction(fn: any) {
+  setEmbeddingFunction(fn: EmbeddingFn | null) {
     this.#embeddingFn = typeof fn === 'function' ? fn : null;
   }
 
   /** 获取当前嵌入函数 */
-  getEmbeddingFunction() {
+  getEmbeddingFunction(): EmbeddingFn | null {
     return this.#embeddingFn;
   }
 
@@ -246,7 +285,7 @@ export class MemoryRetriever {
    * @param {string} content
    * @returns {number|null}
    */
-  computeEmbeddingRelevance(query: any, content: any) {
+  computeEmbeddingRelevance(query: string, content: string): number | null {
     if (!this.#embeddingFn) {
       return null;
     }
@@ -261,7 +300,7 @@ export class MemoryRetriever {
   // Private: 相关性计算
   // ═══════════════════════════════════════════════════════════
 
-  static #computeRelevance(lowerQuery: any, queryTokens: any, content: any) {
+  static #computeRelevance(lowerQuery: string, queryTokens: Set<string>, content: string): number {
     if (!lowerQuery || !content) {
       return 0;
     }
@@ -292,15 +331,15 @@ export class MemoryRetriever {
     return Math.min(1.0, tokenOverlap * 0.5 + substringMatch + partialMatch);
   }
 
-  static #tokenizeWords(text: any) {
+  static #tokenizeWords(text: string): Set<string> {
     if (!text) {
       return new Set();
     }
     return new Set(
       text
         .split(/[\s,;:!?。，；：！？\-_/\\|()[\]{}'"<>]+/)
-        .filter((t: any) => t.length >= 2)
-        .map((t: any) => t.toLowerCase())
+        .filter((t) => t.length >= 2)
+        .map((t) => t.toLowerCase())
     );
   }
 }

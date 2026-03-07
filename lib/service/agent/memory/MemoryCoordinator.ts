@@ -16,11 +16,70 @@
 
 import Logger from '../../../infrastructure/logging/Logger.js';
 import { ActiveContext } from './ActiveContext.js';
-import { SessionStore } from './SessionStore.js';
+import type { SessionStore } from './SessionStore.js';
+
+// ── 类型定义 ──
+
+/** PersistentMemory 接口 (声明式) */
+interface PersistentMemoryLike {
+  toPromptSection(opts: { source?: string }): string;
+  append(entry: { type: string; content: string; source: string; importance: number }): void;
+}
+
+/** ConversationStore 接口 (声明式) */
+interface ConversationStoreLike {
+  load(conversationId: string, opts?: { tokenBudget?: number }): unknown[];
+  summarize(conversationId: string, opts?: { aiProvider?: unknown }): Promise<unknown>;
+}
+
+/** AiProvider 接口 (声明式) */
+interface AiProviderLike {
+  [key: string]: unknown;
+}
+
+/** 预算分配结构 */
+interface BudgetAllocation {
+  activeContext: number;
+  sessionStore: number;
+  persistentMemory: number;
+  conversationLog: number;
+}
+
+/** 预算 profile */
+interface BudgetProfile {
+  activeContext: number;
+  sessionStore: number;
+  persistentMemory: number;
+  conversationLog: number;
+}
+
+/** MemoryCoordinator 构造选项 */
+export interface MemoryCoordinatorConfig {
+  persistentMemory?: PersistentMemoryLike | null;
+  sessionStore?: SessionStore | null;
+  conversationLog?: ConversationStoreLike | null;
+  mode?: 'user' | 'bootstrap';
+  totalMemoryBudget?: number;
+}
+
+/** 静态记忆 Prompt 选项 */
+export interface StaticMemoryOptions {
+  mode?: 'user' | 'analyst' | 'producer';
+  taskContext?: string;
+  currentDimId?: string;
+  focusKeywords?: string[];
+  scopeId?: string;
+}
+
+/** 维度 scope 配置 */
+export interface DimensionScopeConfig {
+  lightweight?: boolean;
+  maxRecentRounds?: number;
+}
 
 // ── 预算分配策略 (§4.1) ──
 
-const BUDGET_PROFILES = Object.freeze({
+const BUDGET_PROFILES: Record<string, BudgetProfile> = Object.freeze({
   user: {
     activeContext: 0.2,
     sessionStore: 0.0,
@@ -75,25 +134,25 @@ const DECISION_PATTERNS = [
 const MEMORY_TAG_REGEX = /\[MEMORY:(\w+)\]\s*([\s\S]*?)\s*\[\/MEMORY\]/g;
 
 export class MemoryCoordinator {
-  _lastSurplus: any;
+  _lastSurplus = 0;
   // ── Config ──
-  #mode; // 'user' | 'bootstrap'
-  #totalBudget;
-  #budgetAllocation: any;
+  #mode: 'user' | 'bootstrap';
+  #totalBudget: number;
+  #budgetAllocation: BudgetAllocation;
 
   // ── Tier 3: Persistent (跨会话) ──
-  #persistentMemory; // PersistentMemory
-  #conversationLog; // ConversationStore
+  #persistentMemory: PersistentMemoryLike | null;
+  #conversationLog: ConversationStoreLike | null;
 
   // ── Tier 2: Session (会话级) ──
-  #sessionStore; // SessionStore (合并 EpisodicMemory + ToolResultCache)
+  #sessionStore: SessionStore | null;
 
   // ── Tier 1: Dimension (维度级) ──
-  #activeContexts; // Map<scopeId, ActiveContext>
-  #currentScopeId: any;
+  #activeContexts: Map<string, ActiveContext>;
+  #currentScopeId: string | null;
 
-  #logger;
-  #completedScopes;
+  #logger: ReturnType<typeof Logger.getInstance>;
+  #completedScopes: Set<string>;
 
   /**
    * @param {object} config
@@ -103,18 +162,23 @@ export class MemoryCoordinator {
    * @param {'user'|'bootstrap'} [config.mode='bootstrap']
    * @param {number} [config.totalMemoryBudget=4000] 记忆 section 的 token 总预算
    */
-  constructor(config: any = {}) {
+  constructor(config: MemoryCoordinatorConfig = {}) {
     this.#persistentMemory = config.persistentMemory || null;
     this.#sessionStore = config.sessionStore || null;
     this.#conversationLog = config.conversationLog || null;
     this.#mode = config.mode || 'bootstrap';
     this.#totalBudget = config.totalMemoryBudget || DEFAULT_MEMORY_BUDGET;
 
-    this.#activeContexts = new Map();
+    this.#activeContexts = new Map<string, ActiveContext>();
     this.#currentScopeId = null;
-    this.#completedScopes = new Set();
+    this.#completedScopes = new Set<string>();
 
-    this.#budgetAllocation = {};
+    this.#budgetAllocation = {
+      activeContext: 0,
+      sessionStore: 0,
+      persistentMemory: 0,
+      conversationLog: 0,
+    };
     this.#logger = Logger.getInstance();
 
     // 应用默认预算
@@ -131,7 +195,7 @@ export class MemoryCoordinator {
    * @param {number} options.totalContextBudget 模型总上下文 token 数
    * @param {string} [options.model]
    */
-  configure({ totalContextBudget, model }: any = {}) {
+  configure({ totalContextBudget, model }: { totalContextBudget?: number; model?: string } = {}) {
     if (totalContextBudget) {
       // 记忆 section 约占总上下文的 12.5%
       this.#totalBudget = Math.round(totalContextBudget * 0.125);
@@ -143,11 +207,11 @@ export class MemoryCoordinator {
    * @param {'user'|'analyst'|'producer'} mode
    * @param {number} [totalTokens] 覆盖总预算
    */
-  allocateBudget(mode: any, totalTokens?: any) {
+  allocateBudget(mode: 'user' | 'analyst' | 'producer', totalTokens?: number) {
     if (totalTokens) {
       this.#totalBudget = totalTokens;
     }
-    const profile = (BUDGET_PROFILES as Record<string, any>)[mode] || BUDGET_PROFILES.analyst;
+    const profile = BUDGET_PROFILES[mode] || BUDGET_PROFILES.analyst;
     this.#budgetAllocation = {
       activeContext: Math.round(this.#totalBudget * profile.activeContext),
       sessionStore: Math.round(this.#totalBudget * profile.sessionStore),
@@ -175,7 +239,7 @@ export class MemoryCoordinator {
    * @returns {number}
    */
   getMessageBudget(
-    totalContextBudget: any,
+    totalContextBudget: number,
     systemPromptEstimate = 2000,
     toolSchemaEstimate = 3000,
     safetyMargin = 3000
@@ -204,8 +268,8 @@ export class MemoryCoordinator {
    * @param {string[]} [options.focusKeywords] 聚焦关键词
    * @returns {string}
    */
-  buildStaticMemoryPrompt(options: any = {}) {
-    const parts: any[] = [];
+  buildStaticMemoryPrompt(options: StaticMemoryOptions = {}): string {
+    const parts: string[] = [];
     let surplus = 0;
 
     try {
@@ -241,8 +305,10 @@ export class MemoryCoordinator {
         // ConversationLog 通常通过 history 传入，此处预留
         surplus += clBudget;
       }
-    } catch (err: any) {
-      this.#logger.warn(`[MemoryCoordinator] buildStaticMemoryPrompt error: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[MemoryCoordinator] buildStaticMemoryPrompt error: ${(err as Error).message}`
+      );
     }
 
     // 静态 prompt 不做二次重分配 (动态 prompt 使用 surplus)
@@ -259,7 +325,7 @@ export class MemoryCoordinator {
    * @param {string} [options.mode]
    * @returns {string}
    */
-  buildDynamicMemoryPrompt(options: any = {}) {
+  buildDynamicMemoryPrompt(options: StaticMemoryOptions = {}): string {
     try {
       const acBudget = (this.#budgetAllocation.activeContext || 0) + (this._lastSurplus || 0);
       if (acBudget <= 0) {
@@ -274,8 +340,10 @@ export class MemoryCoordinator {
       }
 
       return ac.buildContext(acBudget) || '';
-    } catch (err: any) {
-      this.#logger.warn(`[MemoryCoordinator] buildDynamicMemoryPrompt error: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[MemoryCoordinator] buildDynamicMemoryPrompt error: ${(err as Error).message}`
+      );
       return '';
     }
   }
@@ -285,7 +353,7 @@ export class MemoryCoordinator {
    * @param {object} [options]
    * @returns {string}
    */
-  buildMemoryPrompt(options: any = {}) {
+  buildMemoryPrompt(options: StaticMemoryOptions = {}): string {
     const staticPart = this.buildStaticMemoryPrompt(options);
     const dynamicPart = this.buildDynamicMemoryPrompt(options);
     return [staticPart, dynamicPart].filter(Boolean).join('\n');
@@ -303,7 +371,13 @@ export class MemoryCoordinator {
    * @param {number} round 当前迭代轮次
    * @param {boolean} [cacheHit=false] 本次是否缓存命中
    */
-  recordObservation(toolName: any, args: any, result: any, round: any, cacheHit = false) {
+  recordObservation(
+    toolName: string,
+    args: Record<string, unknown>,
+    result: unknown,
+    round: number,
+    cacheHit = false
+  ) {
     try {
       // ActiveContext 的数据记录由 trace.recordToolCall() 处理，
       // 此处只处理缓存写入。
@@ -314,8 +388,8 @@ export class MemoryCoordinator {
           this.#sessionStore.cacheToolResult(toolName, args, result);
         }
       }
-    } catch (err: any) {
-      this.#logger.warn(`[MemoryCoordinator] recordObservation error: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[MemoryCoordinator] recordObservation error: ${(err as Error).message}`);
     }
   }
 
@@ -328,7 +402,13 @@ export class MemoryCoordinator {
    * @param {string} [scopeId] 显式指定 scope (并行安全)
    * @returns {string} 响应消息
    */
-  noteFinding(finding: any, evidence: any, importance: any, round: any, scopeId: any) {
+  noteFinding(
+    finding: string,
+    evidence: string,
+    importance: number,
+    round: number,
+    scopeId?: string
+  ): string {
     try {
       const ac = scopeId ? this.getActiveContext(scopeId) : this.#getCurrentActiveContext();
       if (ac) {
@@ -336,9 +416,9 @@ export class MemoryCoordinator {
         return `📌 已记录发现 [${importance}/10]: "${finding.substring(0, 80)}" — 当前共 ${ac.scratchpadSize} 条关键发现`;
       }
       return '⚠ 工作记忆未初始化 (仅在 bootstrap 分析期间可用)';
-    } catch (err: any) {
-      this.#logger.warn(`[MemoryCoordinator] noteFinding error: ${err.message}`);
-      return `⚠ 记录发现失败: ${err.message}`;
+    } catch (err: unknown) {
+      this.#logger.warn(`[MemoryCoordinator] noteFinding error: ${(err as Error).message}`);
+      return `⚠ 记录发现失败: ${(err as Error).message}`;
     }
   }
 
@@ -353,7 +433,7 @@ export class MemoryCoordinator {
    * @param {string} reply - AI 回复
    * @param {'user'|'system'} source
    */
-  extractFromConversation(prompt: any, reply: any, source: any) {
+  extractFromConversation(prompt: string, reply: string, source: 'user' | 'system') {
     // §7.6 step 4: 只写 PersistentMemory (不再双写 Memory.js)
     if (!this.#persistentMemory) {
       return;
@@ -413,7 +493,7 @@ export class MemoryCoordinator {
    * @param {object} args
    * @returns {*|null}
    */
-  getCachedResult(toolName: any, args: any) {
+  getCachedResult(toolName: string, args: Record<string, unknown>): unknown | null {
     try {
       if (NON_CACHEABLE_TOOLS.has(toolName)) {
         return null;
@@ -430,7 +510,7 @@ export class MemoryCoordinator {
    * @param {object} args
    * @param {*} result
    */
-  cacheToolResult(toolName: any, args: any, result: any) {
+  cacheToolResult(toolName: string, args: Record<string, unknown>, result: unknown) {
     try {
       if (NON_CACHEABLE_TOOLS.has(toolName)) {
         return;
@@ -453,7 +533,7 @@ export class MemoryCoordinator {
    * @param {boolean} [config.lightweight=false] 轻量模式 (User Chat)
    * @returns {object} - WorkingMemory (Phase 2) / ActiveContext (Phase 3)
    */
-  createDimensionScope(scopeId: any, config: any = {}) {
+  createDimensionScope(scopeId: string, config: DimensionScopeConfig = {}): ActiveContext {
     this.#currentScopeId = scopeId;
 
     // Phase 3: 创建 ActiveContext 实例
@@ -471,7 +551,7 @@ export class MemoryCoordinator {
    * @param {string} scopeId
    * @param {object} [report] 附加报告数据
    */
-  completeDimension(scopeId: any, report: any) {
+  completeDimension(scopeId: string, report?: Record<string, unknown>) {
     try {
       const ac = this.#activeContexts.get(scopeId);
       const distilled = ac ? ac.distill() : null;
@@ -495,8 +575,8 @@ export class MemoryCoordinator {
         this.#currentScopeId = null;
       }
       this.#logger.debug(`[MemoryCoordinator] scope completed: ${scopeId}`);
-    } catch (err: any) {
-      this.#logger.warn(`[MemoryCoordinator] completeDimension error: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[MemoryCoordinator] completeDimension error: ${(err as Error).message}`);
     }
   }
 
@@ -504,13 +584,13 @@ export class MemoryCoordinator {
    * 完成会话: 触发 Consolidator
    * @returns {Promise<{consolidated: number}|null>}
    */
-  async completeSession() {
+  async completeSession(): Promise<{ consolidated: number } | null> {
     try {
       this.#currentScopeId = null;
       this.#logger.info('[MemoryCoordinator] session completed');
       return { consolidated: 0 };
-    } catch (err: any) {
-      this.#logger.warn(`[MemoryCoordinator] completeSession error: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[MemoryCoordinator] completeSession error: ${(err as Error).message}`);
       return null;
     }
   }
@@ -522,9 +602,9 @@ export class MemoryCoordinator {
   /**
    * 获取当前或指定 scope 的 ActiveContext / WorkingMemory
    * @param {string} [scopeId]
-   * @returns {object|null}
+   * @returns {ActiveContext|null}
    */
-  getActiveContext(scopeId: any) {
+  getActiveContext(scopeId?: string): ActiveContext | null {
     const id = scopeId || this.#currentScopeId;
     if (!id) {
       return null;
@@ -565,7 +645,7 @@ export class MemoryCoordinator {
    * @param {string} conversationId
    * @param {object} aiProvider
    */
-  async onConversationUpdated(conversationId: any, aiProvider: any) {
+  async onConversationUpdated(conversationId: string, aiProvider: AiProviderLike | null) {
     if (!this.#conversationLog || !aiProvider) {
       return;
     }
@@ -587,13 +667,13 @@ export class MemoryCoordinator {
    * 保存 checkpoint
    * @param {string} projectRoot
    */
-  async checkpoint(projectRoot: any) {
+  async checkpoint(projectRoot: string) {
     try {
       if (this.#sessionStore?.saveCheckpoint) {
         await this.#sessionStore.saveCheckpoint(projectRoot);
       }
-    } catch (err: any) {
-      this.#logger.warn(`[MemoryCoordinator] checkpoint error: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[MemoryCoordinator] checkpoint error: ${(err as Error).message}`);
     }
   }
 
@@ -602,14 +682,14 @@ export class MemoryCoordinator {
    * @param {string} projectRoot
    * @returns {Promise<boolean>}
    */
-  async restore(projectRoot: any) {
+  async restore(projectRoot: string): Promise<boolean> {
     try {
       if (this.#sessionStore?.loadCheckpoint) {
         return await this.#sessionStore.loadCheckpoint(projectRoot);
       }
       return false;
-    } catch (err: any) {
-      this.#logger.warn(`[MemoryCoordinator] restore error: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[MemoryCoordinator] restore error: ${(err as Error).message}`);
       return false;
     }
   }
@@ -650,7 +730,7 @@ export class MemoryCoordinator {
   /**
    * 构建 PersistentMemory section
    */
-  #buildPersistentMemorySection(options: any = {}) {
+  #buildPersistentMemorySection(options: StaticMemoryOptions = {}): string {
     if (this.#persistentMemory?.toPromptSection) {
       return this.#persistentMemory.toPromptSection({ source: 'user' }) || '';
     }
@@ -660,7 +740,7 @@ export class MemoryCoordinator {
   /**
    * 构建 SessionStore section (legacy: EpisodicMemory)
    */
-  #buildSessionStoreSection(options: any = {}) {
+  #buildSessionStoreSection(options: StaticMemoryOptions = {}): string {
     const ss = this.#sessionStore;
     if (!ss?.buildContextForDimension) {
       return '';
@@ -683,7 +763,7 @@ export class MemoryCoordinator {
    * @param {string} text
    * @returns {number}
    */
-  #estimateTokens(text: any) {
+  #estimateTokens(text: string): number {
     if (!text) {
       return 0;
     }

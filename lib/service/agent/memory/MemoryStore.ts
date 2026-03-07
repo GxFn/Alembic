@@ -23,6 +23,103 @@
 import { randomUUID } from 'node:crypto';
 import { jaccardSimilarity, tokenizeForSimilarity } from '../../../shared/similarity.js';
 
+// ─── 类型定义 ──────────────────────────────────────────
+
+/** better-sqlite3 Database 结构接口 */
+export interface SqliteDatabase {
+  prepare(sql: string): SqliteStatement;
+  exec(sql: string): void;
+  transaction<T extends (...args: unknown[]) => unknown>(fn: T): T;
+}
+
+/** better-sqlite3 Statement 结构接口 */
+export interface SqliteStatement {
+  run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint };
+  get(...params: unknown[]): Record<string, unknown> | undefined;
+  all(...params: unknown[]): Record<string, unknown>[];
+}
+
+/** 数据库行 (raw row from SQLite) */
+export interface MemoryRow {
+  id: string;
+  type: string;
+  content: string;
+  source: string;
+  importance: number;
+  access_count: number;
+  last_accessed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  expires_at: string | null;
+  related_entities: string;
+  related_memories: string;
+  source_dimension: string | null;
+  source_evidence: string | null;
+  bootstrap_session: string | null;
+  tags: string;
+  /** findSimilar 附加字段 */
+  similarity?: number;
+  related_memories_raw?: string;
+}
+
+/** 反序列化后的记忆对象 */
+export interface DeserializedMemory {
+  id: string;
+  type: string;
+  content: string;
+  source: string;
+  importance: number;
+  accessCount: number;
+  lastAccessedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string | null;
+  relatedEntities: string[];
+  relatedMemories: string[];
+  sourceDimension: string | null;
+  sourceEvidence: string | null;
+  bootstrapSession: string | null;
+  tags: string[];
+}
+
+/** 添加记忆时的输入 */
+export interface MemoryInput {
+  type?: string;
+  content: string;
+  source?: string;
+  importance?: number;
+  ttlDays?: number | null;
+  relatedEntities?: string[];
+  sourceDimension?: string | null;
+  sourceEvidence?: string | null;
+  bootstrapSession?: string | null;
+  tags?: string[];
+}
+
+/** 更新记忆时的字段 */
+export interface MemoryUpdates {
+  content?: string;
+  importance?: number;
+  accessCount?: number;
+  relatedEntities?: string[];
+  relatedMemories?: string[];
+  tags?: string[];
+}
+
+/** 预编译语句集合 */
+interface PreparedStatements {
+  insert: SqliteStatement;
+  getById: SqliteStatement;
+  deleteById: SqliteStatement;
+  touchAccess: SqliteStatement;
+  getAllActive: SqliteStatement;
+  getAllActiveBySource: SqliteStatement;
+  getAllActiveByType: SqliteStatement;
+  getAllActiveBySourceAndType: SqliteStatement;
+  getByContent: SqliteStatement;
+  getAll: SqliteStatement;
+}
+
 // ─── 常量 ──────────────────────────────────────────────
 
 /** 最大记忆条数 (防止无限膨胀) */
@@ -34,18 +131,18 @@ const FORGET_DAYS = 90;
 
 export class MemoryStore {
   /** @type {import('better-sqlite3').Database} */
-  #db;
+  #db: SqliteDatabase;
 
   /** @type {object} 预编译 SQL Statements */
-  #stmts: any = null;
+  #stmts: PreparedStatements = null!;
 
-  /** @type {Map<string, import('better-sqlite3').Statement>} 动态 update SQL 缓存 */
-  #updateStmtCache = new Map();
+  /** @type {Map<string, SqliteStatement>} 动态 update SQL 缓存 */
+  #updateStmtCache = new Map<string, SqliteStatement>();
 
   /**
    * @param {import('better-sqlite3').Database} db - better-sqlite3 实例 (raw)
    */
-  constructor(db: any) {
+  constructor(db: SqliteDatabase) {
     this.#db = db;
     this.#ensureTable();
     this.#prepareStatements();
@@ -65,7 +162,7 @@ export class MemoryStore {
    * @param {object} memory
    * @returns {{ id: string, action: string }}
    */
-  add(memory: any) {
+  add(memory: MemoryInput) {
     const id = `smem_${randomUUID().replace(/-/g, '').substring(0, 12)}`;
     const now = new Date().toISOString();
     const content = (memory.content || '').trim().substring(0, 500);
@@ -102,15 +199,15 @@ export class MemoryStore {
    * @param {object} updates
    * @returns {boolean}
    */
-  update(id: any, updates: any) {
-    const existing = this.#stmts.getById.get(id);
+  update(id: string, updates: MemoryUpdates) {
+    const existing = this.#stmts.getById.get(id) as MemoryRow | undefined;
     if (!existing) {
       return false;
     }
 
     const now = new Date().toISOString();
-    const fields: any[] = [];
-    const params: any = { id };
+    const fields: string[] = [];
+    const params: Record<string, unknown> = { id };
 
     if (updates.content !== undefined) {
       fields.push('content = @content');
@@ -161,7 +258,7 @@ export class MemoryStore {
    * @param {string} id
    * @returns {boolean}
    */
-  delete(id: any) {
+  delete(id: string) {
     const result = this.#stmts.deleteById.run(id);
     return result.changes > 0;
   }
@@ -171,8 +268,8 @@ export class MemoryStore {
    * @param {string} id
    * @returns {object|null}
    */
-  get(id: any) {
-    const row = this.#stmts.getById.get(id);
+  get(id: string): DeserializedMemory | null {
+    const row = this.#stmts.getById.get(id) as MemoryRow | undefined;
     return row ? MemoryStore.deserialize(row) : null;
   }
 
@@ -187,18 +284,22 @@ export class MemoryStore {
    * @param {string} [opts.type]
    * @returns {Array<object>} raw rows
    */
-  getAllActive({ source, type }: any = {}) {
+  getAllActive({ source, type }: { source?: string; type?: string } = {}): MemoryRow[] {
     const now = new Date().toISOString();
     if (source && type) {
-      return this.#stmts.getAllActiveBySourceAndType.all({ now, source, type });
+      return this.#stmts.getAllActiveBySourceAndType.all({
+        now,
+        source,
+        type,
+      }) as unknown as MemoryRow[];
     }
     if (source) {
-      return this.#stmts.getAllActiveBySource.all({ now, source });
+      return this.#stmts.getAllActiveBySource.all({ now, source }) as unknown as MemoryRow[];
     }
     if (type) {
-      return this.#stmts.getAllActiveByType.all({ now, type });
+      return this.#stmts.getAllActiveByType.all({ now, type }) as unknown as MemoryRow[];
     }
-    return this.#stmts.getAllActive.all({ now });
+    return this.#stmts.getAllActive.all({ now }) as unknown as MemoryRow[];
   }
 
   /**
@@ -206,16 +307,18 @@ export class MemoryStore {
    * @param {string|null} type
    * @returns {Array<object>}
    */
-  getCandidates(type: any) {
+  getCandidates(type: string | null): MemoryRow[] {
     const now = new Date().toISOString();
-    return type ? this.#stmts.getByContent.all({ type, now }) : this.#stmts.getAll.all({ now });
+    return (type
+      ? this.#stmts.getByContent.all({ type, now })
+      : this.#stmts.getAll.all({ now })) as unknown as MemoryRow[];
   }
 
   /**
    * 更新访问计数
    * @param {string} id
    */
-  touchAccess(id: any) {
+  touchAccess(id: string) {
     try {
       this.#stmts.touchAccess.run({ id, now: new Date().toISOString() });
     } catch {
@@ -229,15 +332,23 @@ export class MemoryStore {
    * @param {string} [opts.source]
    * @returns {number}
    */
-  size({ source }: any = {}) {
+  size({ source }: { source?: string } = {}) {
     if (source) {
       return (
-        this.#db
-          .prepare('SELECT COUNT(*) as cnt FROM semantic_memories WHERE source = ?')
-          .get(source)?.cnt || 0
+        (
+          this.#db
+            .prepare('SELECT COUNT(*) as cnt FROM semantic_memories WHERE source = ?')
+            .get(source) as { cnt: number } | undefined
+        )?.cnt || 0
       );
     }
-    return this.#db.prepare('SELECT COUNT(*) as cnt FROM semantic_memories').get()?.cnt || 0;
+    return (
+      (
+        this.#db.prepare('SELECT COUNT(*) as cnt FROM semantic_memories').get() as
+          | { cnt: number }
+          | undefined
+      )?.cnt || 0
+    );
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -274,7 +385,11 @@ export class MemoryStore {
       stats.archived = archiveResult.changes;
 
       stats.remaining =
-        this.#db.prepare('SELECT COUNT(*) as cnt FROM semantic_memories').get()?.cnt || 0;
+        (
+          this.#db.prepare('SELECT COUNT(*) as cnt FROM semantic_memories').get() as
+            | { cnt: number }
+            | undefined
+        )?.cnt || 0;
     });
 
     runCompact();
@@ -285,7 +400,12 @@ export class MemoryStore {
    * 容量控制
    */
   enforceCapacity() {
-    const count = this.#db.prepare('SELECT COUNT(*) as cnt FROM semantic_memories').get()?.cnt || 0;
+    const count =
+      (
+        this.#db.prepare('SELECT COUNT(*) as cnt FROM semantic_memories').get() as
+          | { cnt: number }
+          | undefined
+      )?.cnt || 0;
     if (count <= MAX_MEMORIES) {
       return;
     }
@@ -307,20 +427,29 @@ export class MemoryStore {
    * @returns {object}
    */
   getStats() {
-    const total = this.#db.prepare('SELECT COUNT(*) as cnt FROM semantic_memories').get()?.cnt || 0;
+    const total =
+      (
+        this.#db.prepare('SELECT COUNT(*) as cnt FROM semantic_memories').get() as
+          | { cnt: number }
+          | undefined
+      )?.cnt || 0;
     const byType = this.#db
       .prepare('SELECT type, COUNT(*) as cnt FROM semantic_memories GROUP BY type')
-      .all();
+      .all() as Array<{ type: string; cnt: number }>;
     const bySource = this.#db
       .prepare('SELECT source, COUNT(*) as cnt FROM semantic_memories GROUP BY source')
-      .all();
+      .all() as Array<{ source: string; cnt: number }>;
     const avgImportance =
-      this.#db.prepare('SELECT AVG(importance) as avg FROM semantic_memories').get()?.avg || 0;
+      (
+        this.#db.prepare('SELECT AVG(importance) as avg FROM semantic_memories').get() as
+          | { avg: number }
+          | undefined
+      )?.avg || 0;
 
     return {
       total,
-      byType: Object.fromEntries(byType.map((r: any) => [r.type, r.cnt])),
-      bySource: Object.fromEntries(bySource.map((r: any) => [r.source, r.cnt])),
+      byType: Object.fromEntries(byType.map((r) => [r.type, r.cnt])),
+      bySource: Object.fromEntries(bySource.map((r) => [r.source, r.cnt])),
       avgImportance: Math.round(avgImportance * 10) / 10,
     };
   }
@@ -347,18 +476,18 @@ export class MemoryStore {
    * @param {number} limit 返回条数
    * @returns {Array<object>} 带 similarity 和 related_memories_raw 字段的 raw rows
    */
-  findSimilar(content: any, type: any, limit: any) {
+  findSimilar(content: string, type: string | null, limit: number): MemoryRow[] {
     const candidates = this.getCandidates(type);
     const lowerContent = content.toLowerCase();
-    const contentTokens = tokenizeForSimilarity(lowerContent);
+    const contentTokens = tokenizeForSimilarity(lowerContent) as Set<string>;
 
     const scored = candidates
-      .map((row: any) => {
+      .map((row) => {
         const similarity = MemoryStore.computeSimilarity(contentTokens, lowerContent, row.content);
         return { ...row, similarity, related_memories_raw: row.related_memories };
       })
-      .filter((r: any) => r.similarity > 0.1)
-      .sort((a: any, b: any) => b.similarity - a.similarity);
+      .filter((r) => r.similarity > 0.1)
+      .sort((a, b) => b.similarity - a.similarity);
 
     return scored.slice(0, limit);
   }
@@ -370,7 +499,7 @@ export class MemoryStore {
    * @param {string} contentB
    * @returns {number} 0.0-1.0
    */
-  static computeSimilarity(tokensA: any, lowerA: any, contentB: any) {
+  static computeSimilarity(tokensA: Set<string>, lowerA: string, contentB: string): number {
     const lowerB = (contentB || '').toLowerCase();
     const tokensB = tokenizeForSimilarity(lowerB);
 
@@ -391,7 +520,7 @@ export class MemoryStore {
    * @param {Function} fn
    * @returns {Function}
    */
-  transaction(fn: any) {
+  transaction<T extends (...args: unknown[]) => unknown>(fn: T): T {
     return this.#db.transaction(fn);
   }
 
@@ -404,7 +533,7 @@ export class MemoryStore {
    * @param {object} row
    * @returns {object}
    */
-  static deserialize(row: any) {
+  static deserialize(row: MemoryRow): DeserializedMemory {
     return {
       id: row.id,
       type: row.type,
@@ -425,7 +554,7 @@ export class MemoryStore {
     };
   }
 
-  static safeParseJSON(str: any, fallback: any) {
+  static safeParseJSON<T>(str: string | null | undefined, fallback: T): T {
     try {
       return str ? JSON.parse(str) : fallback;
     } catch {
