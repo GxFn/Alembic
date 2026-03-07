@@ -350,7 +350,7 @@ const DocumentReader: React.FC<{
   const fileMeta = meta?.files?.find(f => f.path === filePath);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(content);
+    navigator.clipboard.writeText(content).catch(() => { /* clipboard fallback: user denied or insecure context */ });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -625,7 +625,7 @@ const WikiView: React.FC = () => {
         ...prev,
         task: { ...prev.task, status: 'running', progress: 0, message: t('wiki.incrementalUpdating') },
       }));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Wiki update failed:', err);
     }
   };

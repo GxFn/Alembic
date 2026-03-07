@@ -33,12 +33,58 @@ export interface AuditIssue {
   fixSuggestion?: string;
 }
 
+export interface AuditSummary {
+  total?: number;
+  errors?: number;
+  warnings?: number;
+  infos?: number;
+}
+
 export interface AuditResponse {
   success: boolean;
   data: {
-    issues: AuditIssue[];
-    summary?: string;
+    issues?: AuditIssue[];
+    violations?: AuditIssue[];
+    summary?: AuditSummary;
   };
+}
+
+/** Shape of a parsed content block inside a raw search item */
+interface ParsedContent {
+  code?: string;
+  pattern?: string;
+  content?: string;
+  body?: string;
+  snippet?: string;
+  solution?: string;
+  example?: string;
+  rationale?: string;
+  description?: string;
+  summary?: string;
+  explanation?: string;
+  headers?: string[];
+  markdown?: string;
+}
+
+/** Raw item before normalization (from API response) */
+interface RawSearchItem {
+  title?: string;
+  name?: string;
+  id?: string;
+  code?: string;
+  content?: string | ParsedContent;
+  headers?: string | string[];
+  summary?: string;
+  description?: string;
+  moduleName?: string;
+  trigger?: string;
+  completionKey?: string;
+}
+
+/** Generic shape returned by API endpoints */
+interface ApiResponse<T = Record<string, unknown>> {
+  success?: boolean;
+  data?: T;
 }
 
 export class ApiClient {
@@ -63,7 +109,7 @@ export class ApiClient {
    */
   async isServerRunning(): Promise<boolean> {
     try {
-      const res = await this._get('/health');
+      const res = await this._get<ApiResponse>('/health');
       return res?.success === true;
     } catch {
       return false;
@@ -74,9 +120,9 @@ export class ApiClient {
    * 搜索知识库
    */
   async search(query: string, limit: number = 10): Promise<SearchResultItem[]> {
-    const res = await this._get(
+    const res = await this._get<SearchResponse>(
       `/search?q=${encodeURIComponent(query)}&mode=auto&limit=${limit}&rank=true`
-    ) as SearchResponse;
+    );
 
     if (!res?.success || !res.data) {
       return [];
@@ -98,7 +144,7 @@ export class ApiClient {
     filePath?: string;
   }): Promise<{ success: boolean; id?: string; error?: string }> {
     try {
-      const res = await this._post('/knowledge', {
+      const res = await this._post<ApiResponse<{ id?: string }>>('/knowledge', {
         title: data.title,
         content: {
           code: data.code,
@@ -109,16 +155,16 @@ export class ApiClient {
         source: data.filePath ? `vscode:${data.filePath}` : 'vscode:selection',
       });
       return { success: true, id: res?.data?.id };
-    } catch (err: any) {
-      return { success: false, error: err.message };
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 
   /**
    * 审计单个文件 — 调用 Guard API
    */
-  async auditFile(filePath: string, content: string, language: string): Promise<any> {
-    return this._post('/guard/file', { filePath, content, language });
+  async auditFile(filePath: string, content: string, language: string): Promise<AuditResponse> {
+    return this._post<AuditResponse>('/guard/file', { filePath, content, language });
   }
 
   /**
@@ -126,33 +172,36 @@ export class ApiClient {
    */
   async auditBatch(
     files: Array<{ filePath: string; content?: string; language?: string }>
-  ): Promise<any> {
-    return this._post('/guard/batch', { files });
+  ): Promise<AuditResponse> {
+    return this._post<AuditResponse>('/guard/batch', { files });
   }
 
   /**
    * 标准化搜索结果（与 SearchHandler.normalizeSearchResults 对齐）
    */
-  private _normalizeSearchResults(rawItems: any[]): SearchResultItem[] {
+  private _normalizeSearchResults(rawItems: RawSearchItem[]): SearchResultItem[] {
     return rawItems
-      .map((r: any) => {
+      .map((r: RawSearchItem) => {
         let code = '';
         let explanation = '';
         let headers: string[] = [];
 
         // ── 优先从顶层 r.headers 读取（可能是 JSON 字符串或数组）──
         if (r.headers) {
-          let parsed = r.headers;
-          if (typeof parsed === 'string') {
-            try { parsed = JSON.parse(parsed); } catch { parsed = null; }
-          }
-          if (Array.isArray(parsed)) {
-            headers = parsed;
+          if (typeof r.headers === 'string') {
+            try {
+              const parsed: unknown = JSON.parse(r.headers);
+              if (Array.isArray(parsed)) { headers = parsed as string[]; }
+            } catch { /* ignored */ }
+          } else if (Array.isArray(r.headers)) {
+            headers = r.headers;
           }
         }
 
         if (r.content) {
-          const content = typeof r.content === 'string' ? this._tryParse(r.content) : r.content;
+          const content: ParsedContent | null = typeof r.content === 'string'
+            ? (this._tryParse(r.content) as ParsedContent | null)
+            : r.content;
           if (content) {
             code =
               content.code ||
@@ -197,7 +246,7 @@ export class ApiClient {
           code: cleanedCode || '(no code)',
           explanation: explanation || r.summary || r.description || '',
           headers,
-          moduleName: r.moduleName || null,
+          moduleName: r.moduleName || undefined,
           trigger: r.trigger || r.completionKey || '',
         };
       })
@@ -252,7 +301,7 @@ export class ApiClient {
     return blocks.join('\n\n');
   }
 
-  private _tryParse(str: string): any {
+  private _tryParse(str: string): unknown {
     try {
       return JSON.parse(str);
     } catch {
@@ -262,8 +311,8 @@ export class ApiClient {
 
   // ─── HTTP helpers ───
 
-  private _get(path: string): Promise<any> {
-    return new Promise((resolve, reject) => {
+  private _get<T = unknown>(path: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
       const url = `${this.baseUrl}${path}`;
       http
         .get(url, { timeout: 10000 }, (res) => {
@@ -285,8 +334,8 @@ export class ApiClient {
     });
   }
 
-  private _post(path: string, body: any): Promise<any> {
-    return new Promise((resolve, reject) => {
+  private _post<T = unknown>(path: string, body: unknown): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
       const url = new URL(`${this.baseUrl}${path}`);
       const payload = JSON.stringify(body);
       const req = http.request(
@@ -330,8 +379,8 @@ export class ApiClient {
    */
   async getRemotePending(): Promise<{ id: string; command: string; source: string; userName: string } | null> {
     try {
-      const resp = await this._get('/remote/pending');
-      return resp?.success ? resp.data : null;
+      const resp = await this._get<ApiResponse<{ id: string; command: string; source: string; userName: string }>>('/remote/pending');
+      return resp?.success && resp.data ? resp.data : null;
     } catch {
       return null;
     }
@@ -342,7 +391,7 @@ export class ApiClient {
    */
   async claimRemoteCommand(id: string): Promise<boolean> {
     try {
-      const resp = await this._post(`/remote/claim/${id}`, {});
+      const resp = await this._post<ApiResponse>(`/remote/claim/${id}`, {});
       return resp?.success === true;
     } catch {
       return false;
@@ -354,7 +403,7 @@ export class ApiClient {
    */
   async postRemoteResult(id: string, result: string, status: string = 'completed'): Promise<boolean> {
     try {
-      const resp = await this._post(`/remote/result/${id}`, { result, status });
+      const resp = await this._post<ApiResponse>(`/remote/result/${id}`, { result, status });
       return resp?.success === true;
     } catch {
       return false;
@@ -366,8 +415,8 @@ export class ApiClient {
    */
   async getRemoteLarkStatus(): Promise<{ connected: boolean; queue?: Record<string, number> } | null> {
     try {
-      const resp = await this._get('/remote/lark/status');
-      return resp?.success ? resp.data : null;
+      const resp = await this._get<ApiResponse<{ connected: boolean; queue?: Record<string, number> }>>('/remote/lark/status');
+      return resp?.success && resp.data ? resp.data : null;
     } catch {
       return null;
     }
@@ -378,7 +427,7 @@ export class ApiClient {
    */
   async sendLarkNotify(text: string): Promise<boolean> {
     try {
-      const resp = await this._post('/remote/notify', { text });
+      const resp = await this._post<ApiResponse>('/remote/notify', { text });
       return resp?.success === true;
     } catch {
       return false;
@@ -391,7 +440,7 @@ export class ApiClient {
    */
   async flushStaleCommands(): Promise<{ flushed: number; commands: Array<{ id: string; command: string; age: number }> }> {
     try {
-      const resp = await this._post('/remote/flush', {});
+      const resp = await this._post<ApiResponse & { flushed?: number; commands?: Array<{ id: string; command: string; age: number }> }>('/remote/flush', {});
       if (resp?.success) {
         return { flushed: resp.flushed || 0, commands: resp.commands || [] };
       }

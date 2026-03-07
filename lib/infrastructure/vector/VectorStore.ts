@@ -3,6 +3,8 @@
  * 定义向量存储的标准接口，支持 JSON/Milvus 等后端
  */
 
+import { ioLimit } from '#shared/concurrency.js';
+
 export class VectorStore {
   /**
    * 初始化存储
@@ -37,12 +39,8 @@ export class VectorStore {
       metadata: Record<string, unknown>;
     }>
   ): Promise<void> {
-    // 分批并行处理，避免 O(N) 串行延迟
-    const BATCH_SIZE = 50;
-    for (let i = 0; i < items.length; i += BATCH_SIZE) {
-      const batch = items.slice(i, i + BATCH_SIZE);
-      await Promise.all(batch.map((item) => this.upsert(item)));
-    }
+    // p-limit 控制并发，避免批量 upsert 时 OOM 或 DB 锁竞争
+    await Promise.all(items.map((item) => ioLimit(() => this.upsert(item))));
   }
 
   /**

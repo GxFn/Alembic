@@ -14,6 +14,7 @@
 
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SKILLS_DIR as _skillsSrc, PACKAGE_ROOT } from '../lib/shared/package-root.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,8 +27,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as defaults from '../lib/infrastructure/config/Defaults.js';
 
-const autoSnippetRoot = path.join(__dirname, '..');
-const skillsSource = path.join(autoSnippetRoot, 'skills');
+const autoSnippetRoot = PACKAGE_ROOT;
+const skillsSource = _skillsSrc;
 
 let projectRoot = process.cwd();
 

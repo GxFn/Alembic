@@ -4,6 +4,7 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import { CreateSkillBody, UpdateSkillBody } from '#shared/schemas/http-requests.js';
 import {
   createSkill,
   deleteSkill,
@@ -12,8 +13,8 @@ import {
   suggestSkills,
   updateSkill,
 } from '../../external/mcp/handlers/skill.js';
-import { ValidationError } from '../../shared/errors/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
 
@@ -142,12 +143,9 @@ router.get(
  */
 router.post(
   '/',
+  validate(CreateSkillBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { name, description, content, overwrite, createdBy } = req.body;
-
-    if (!name || !description || !content) {
-      throw new ValidationError('name, description, content are all required');
-    }
 
     const raw = createSkill(null, {
       name,
@@ -188,13 +186,10 @@ router.post(
  */
 router.put(
   '/:name',
+  validate(UpdateSkillBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { name } = req.params;
     const { description, content } = req.body;
-
-    if (!description && !content) {
-      throw new ValidationError('At least one of description or content must be provided');
-    }
 
     const raw = updateSkill(null, { name: name as string, description, content });
     let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };

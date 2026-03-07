@@ -11,8 +11,10 @@
 
 import { readFileSync } from 'node:fs';
 import express, { type Request, type Response } from 'express';
+import { GuardBatchBody, GuardFileBody } from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
 
@@ -37,15 +39,9 @@ const router = express.Router();
  */
 router.post(
   '/file',
+  validate(GuardFileBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { filePath, content, language } = req.body;
-
-    if (!filePath) {
-      return void res.status(400).json({
-        success: false,
-        message: 'filePath is required',
-      });
-    }
 
     // 获取文件内容
     let code = content;
@@ -132,23 +128,9 @@ router.post(
  */
 router.post(
   '/batch',
+  validate(GuardBatchBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { files } = req.body;
-
-    if (!Array.isArray(files) || files.length === 0) {
-      return void res.status(400).json({
-        success: false,
-        message: 'files array is required and must not be empty',
-      });
-    }
-
-    // 限制单次批量不超过 50 个文件
-    if (files.length > 50) {
-      return void res.status(400).json({
-        success: false,
-        message: 'Maximum 50 files per batch',
-      });
-    }
 
     const container = getServiceContainer();
     const { GuardCheckEngine, detectLanguage } = await import(

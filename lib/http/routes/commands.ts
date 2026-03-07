@@ -6,7 +6,9 @@
 import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import { FileReadQuery, FileSaveBody } from '../../shared/schemas/http-requests.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate, validateQuery } from '../middleware/validate.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
@@ -267,13 +269,9 @@ router.get(
  */
 router.get(
   '/files/read',
+  validateQuery(FileReadQuery),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const filePath = req.query.path as string | undefined;
-    if (!filePath) {
-      return void res
-        .status(400)
-        .json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'path is required' } });
-    }
+    const filePath = req.query.path as string;
 
     const path = await import('node:path');
     const container = getServiceContainer();
@@ -306,14 +304,9 @@ router.get(
  */
 router.post(
   '/files/save',
+  validate(FileSaveBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { path: filePath, content } = req.body;
-    if (!filePath || content === undefined) {
-      return void res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'path and content required' },
-      });
-    }
 
     const pathMod = await import('node:path');
     const container = getServiceContainer();

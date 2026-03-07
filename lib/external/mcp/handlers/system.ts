@@ -5,6 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { PACKAGE_ROOT } from '../../../shared/package-root.js';
 import { envelope } from '../envelope.js';
 import { TIER_ORDER, TOOL_GATEWAY_MAP, TOOLS } from '../tools.js';
 import type { KnowledgeBaseStats, McpContext } from './types.js';
@@ -17,7 +18,7 @@ export async function health(ctx: McpContext) {
   // 1) AI 配置
   let aiInfo = { provider: 'unknown', hasKey: false };
   try {
-    const { getAiConfigInfo } = await import('../../../external/ai/AiFactory.js');
+    const { getAiConfigInfo } = await import('#external/ai/AiFactory.js');
     aiInfo = getAiConfigInfo();
   } catch (e: unknown) {
     issues.push(`ai: ${e instanceof Error ? e.message : String(e)}`);
@@ -100,8 +101,7 @@ export async function health(ctx: McpContext) {
   // 5) 版本号（从 AutoSnippet 包自身的 package.json 读取，不依赖 cwd）
   if (!_pkgVersion) {
     try {
-      const __dir = path.dirname(new URL(import.meta.url).pathname);
-      const pkgPath = path.resolve(__dir, '../../../../package.json');
+      const pkgPath = path.resolve(PACKAGE_ROOT, 'package.json');
       _pkgVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || '2.0.0';
     } catch {
       _pkgVersion = '2.0.0';

@@ -86,7 +86,7 @@ const Header: React.FC<HeaderProps> = ({
   const refreshTokens = useCallback(() => {
     api.getTokenUsage7Days()
       .then(d => setTokenSummary(d.summary))
-      .catch(() => {});
+      .catch(() => { /* intentionally ignored: token usage is a non-critical metric */ });
   }, []);
 
   useEffect(() => {
@@ -119,7 +119,7 @@ const Header: React.FC<HeaderProps> = ({
 
   const loadProviders = () => {
     if (aiProviders.length === 0) {
-      api.getAiProviders().then(setAiProviders).catch(() => {});
+      api.getAiProviders().then(setAiProviders).catch(() => { /* intentionally ignored: provider list load is best-effort */ });
     }
   };
 

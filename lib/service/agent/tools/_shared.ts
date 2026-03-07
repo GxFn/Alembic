@@ -3,16 +3,14 @@
  */
 
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { SKILLS_DIR as _SKILLS_DIR, PACKAGE_ROOT } from '../../../shared/package-root.js';
 import type { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-export const PROJECT_ROOT = path.resolve(__dirname, '../../../..');
+export const PROJECT_ROOT = PACKAGE_ROOT;
 /** skills/ 目录绝对路径 */
-export const SKILLS_DIR = path.resolve(PROJECT_ROOT, 'skills');
+export const SKILLS_DIR = _SKILLS_DIR;
 /** 项目级 skills 目录 */
-export const PROJECT_SKILLS_DIR = path.resolve(PROJECT_ROOT, '.autosnippet', 'skills');
+export const PROJECT_SKILLS_DIR = path.resolve(PACKAGE_ROOT, '.autosnippet', 'skills');
 
 // Bootstrap 维度展示分组 — 将 9 个细粒度维度合并为 4 个展示组
 export const DIMENSION_DISPLAY_GROUP = {

@@ -1,9 +1,17 @@
 /**
- * TokenUsageStore — Token 消耗持久化存储
+ * TokenUsageStore — Token 消耗持久化存储 (Drizzle ORM)
+ *
  * 写入 AI 调用的 token 用量记录到 SQLite token_usage 表。
  * 提供近 7 日按日/按来源的聚合查询。
+ *
+ * Drizzle 迁移策略：
+ * - INSERT 使用 drizzle 类型安全 API（列名编译期检查）
+ * - 聚合查询保留预编译 raw SQL（DATE() / GROUP BY computed-column
+ *   在 drizzle query builder 中不够直观，保持原有高效预编译语句）
  */
 
+import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
+import { tokenUsage } from '../../infrastructure/database/drizzle/schema.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 
 const MAX_ROWS = 10000; // 自动清理: 保留最近 10000 条
@@ -55,9 +63,9 @@ interface ReportData {
 }
 
 export class TokenUsageStore {
+  #drizzle: DrizzleDB;
   #db;
   #logger;
-  #insertStmt;
   #pruneStmt;
   #dailyStmt;
   #bySourceStmt;
@@ -66,17 +74,14 @@ export class TokenUsageStore {
   #reportCache: { data: ReportData; expireAt: number } | null = null;
 
   /**
-   * @param {import('better-sqlite3').Database} db
+   * @param {import('better-sqlite3').Database} db — raw better-sqlite3 instance
    */
   constructor(db: import('better-sqlite3').Database) {
     this.#db = db;
+    this.#drizzle = getDrizzle();
     this.#logger = Logger.getInstance();
 
-    // 预编译常用语句
-    this.#insertStmt = this.#db.prepare(`
-      INSERT INTO token_usage (timestamp, source, dimension, provider, model, input_tokens, output_tokens, total_tokens, duration_ms, tool_calls, session_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    // 聚合查询保留预编译语句（使用 SQLite 特有函数，drizzle query builder 不方便表达）
     this.#pruneStmt = this.#db.prepare(`
       DELETE FROM token_usage WHERE id NOT IN (
         SELECT id FROM token_usage ORDER BY timestamp DESC LIMIT ?
@@ -121,7 +126,7 @@ export class TokenUsageStore {
 
   /**
    * 记录一次 AI 调用的 token 消耗
-   * @param {{ source: string, dimension?: string, provider?: string, model?: string, inputTokens: number, outputTokens: number, durationMs?: number, toolCalls?: number, sessionId?: string }} record
+   * ★ 使用 drizzle 类型安全 INSERT — 列名拼写编译期检查
    */
   record(record: TokenRecord) {
     try {
@@ -131,19 +136,22 @@ export class TokenUsageStore {
         return; // 跳过无消耗的调用
       }
 
-      this.#insertStmt.run(
-        now,
-        record.source || 'unknown',
-        record.dimension || null,
-        record.provider || null,
-        record.model || null,
-        record.inputTokens || 0,
-        record.outputTokens || 0,
-        total,
-        record.durationMs || null,
-        record.toolCalls || 0,
-        record.sessionId || null
-      );
+      this.#drizzle
+        .insert(tokenUsage)
+        .values({
+          timestamp: now,
+          source: record.source || 'unknown',
+          dimension: record.dimension ?? null,
+          provider: record.provider ?? null,
+          model: record.model ?? null,
+          inputTokens: record.inputTokens || 0,
+          outputTokens: record.outputTokens || 0,
+          totalTokens: total,
+          durationMs: record.durationMs ?? null,
+          toolCalls: record.toolCalls || 0,
+          sessionId: record.sessionId ?? null,
+        })
+        .run();
 
       // 写入后使缓存失效
       this.#reportCache = null;

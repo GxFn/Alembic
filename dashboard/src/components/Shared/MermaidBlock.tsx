@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import mermaid from 'mermaid';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
+import { getErrorMessage } from '../../utils/error';
 
 let idCounter = 0;
 let lastTheme = '';
@@ -57,9 +58,9 @@ const MermaidBlock: React.FC<MermaidBlockProps> = ({ code }) => {
           setSvg(result);
           setError('');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
-          setError(err?.message || 'Mermaid render failed');
+          setError(getErrorMessage(err, 'Mermaid render failed'));
           setSvg('');
         }
         // mermaid.render 失败时可能在 DOM 中残留错误容器，清理

@@ -3,6 +3,7 @@ import { X, Save, Loader2, Eye, EyeOff, CheckCircle2, AlertTriangle } from 'luci
 import api from '../../api';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
+import { getErrorMessage } from '../../utils/error';
 
 interface LlmConfigModalProps {
   onClose: () => void;
@@ -84,8 +85,8 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
         onSaved();
         onClose();
       }, 800);
-    } catch (err: any) {
-      alert(err?.message || t('llmConfig.saveFailed'));
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, t('llmConfig.saveFailed')));
     } finally {
       setSaving(false);
     }

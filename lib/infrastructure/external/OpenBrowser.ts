@@ -11,10 +11,7 @@ import { execFileSync, execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { RESOURCES_DIR } from '../../shared/package-root.js';
 
 const IS_MAC = process.platform === 'darwin';
 
@@ -87,7 +84,7 @@ export function openBrowserReuseTab(url: string, baseUrlForLookup?: string) {
       'Chromium',
     ];
     const availableChromium = chromiumBrowsers.filter(isAppInstalled);
-    const scriptPath = join(__dirname, '../../../resources/openChrome.applescript');
+    const scriptPath = join(RESOURCES_DIR, 'openChrome.applescript');
 
     if (!existsSync(scriptPath)) {
       _fallbackOpen(url);

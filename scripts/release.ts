@@ -8,6 +8,7 @@
 
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DASHBOARD_DIR, PACKAGE_ROOT, RESOURCES_DIR } from '../lib/shared/package-root.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -131,7 +132,7 @@ class ReleaseChecker {
     }
 
     // 检查环境变量配置
-    const envPath = path.join(__dirname, '../.env');
+    const envPath = path.join(PACKAGE_ROOT, '.env');
     if (!fs.existsSync(envPath)) {
       this.errors.push('.env 文件不存在');
       error('.env: 不存在');
@@ -147,7 +148,7 @@ class ReleaseChecker {
       }
 
       // 检查是否有备份
-      const backupPath = path.join(__dirname, '../.env.backup');
+      const backupPath = path.join(PACKAGE_ROOT, '.env.backup');
       if (fs.existsSync(backupPath)) {
         warning('.env.backup 已存在，可能有未完成的发布');
       }
@@ -160,8 +161,8 @@ class ReleaseChecker {
 
     // 备份 .env
     info('备份 .env 文件...');
-    const envPath = path.join(__dirname, '../.env');
-    const backupPath = path.join(__dirname, '../.env.backup');
+    const envPath = path.join(PACKAGE_ROOT, '.env');
+    const backupPath = path.join(PACKAGE_ROOT, '.env.backup');
 
     if (fs.existsSync(envPath)) {
       fs.copyFileSync(envPath, backupPath);
@@ -183,7 +184,7 @@ class ReleaseChecker {
       info('构建 Dashboard...');
       exec('cd dashboard && npm run build');
 
-      const distPath = path.join(__dirname, '../dashboard/dist/index.html');
+      const distPath = path.join(DASHBOARD_DIR, 'dist/index.html');
       if (fs.existsSync(distPath)) {
         success('Dashboard 构建成功');
       } else {
@@ -209,8 +210,8 @@ class ReleaseChecker {
   restoreEnvironment() {
     header('恢复开发环境');
 
-    const envPath = path.join(__dirname, '../.env');
-    const backupPath = path.join(__dirname, '../.env.backup');
+    const envPath = path.join(PACKAGE_ROOT, '.env');
+    const backupPath = path.join(PACKAGE_ROOT, '.env.backup');
 
     if (fs.existsSync(backupPath)) {
       fs.copyFileSync(backupPath, envPath);
@@ -225,7 +226,7 @@ class ReleaseChecker {
   checkBuildArtifacts() {
     header('其他构建产物检查');
 
-    const nativeUI = path.join(__dirname, '../resources/native-ui/native-ui');
+    const nativeUI = path.join(RESOURCES_DIR, 'native-ui/native-ui');
 
     if (!fs.existsSync(nativeUI)) {
       this.warnings.push('Native UI 未构建 (执行 npm run build:native-ui)');

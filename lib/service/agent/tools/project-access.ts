@@ -10,7 +10,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { LanguageService } from '../../../shared/LanguageService.js';
+import { LanguageService } from '#shared/LanguageService.js';
 
 // ─── 本文件内部接口 ─────────────────────────────────────────
 

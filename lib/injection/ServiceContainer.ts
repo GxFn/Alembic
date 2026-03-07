@@ -107,10 +107,11 @@ export class ServiceContainer {
       // 自动探测 AI Provider（供 SearchEngine / Agent / IndexingPipeline 等常驻服务使用）
       if (!this.singletons.aiProvider && this.singletons._aiFactory) {
         try {
-          const aiFactory = this.singletons._aiFactory as Record<string, unknown>;
-          const autoDetectProvider = aiFactory.autoDetectProvider;
-          if (typeof autoDetectProvider === 'function') {
-            this.singletons.aiProvider = autoDetectProvider();
+          const aiFactory = this.singletons._aiFactory as {
+            autoDetectProvider?: () => Record<string, unknown>;
+          };
+          if (typeof aiFactory.autoDetectProvider === 'function') {
+            this.singletons.aiProvider = aiFactory.autoDetectProvider();
             const provider = this.singletons.aiProvider as Record<string, unknown> | null;
             this.logger.info('AI provider injected into container', {
               provider: (provider?.constructor as { name?: string } | undefined)?.name || 'unknown',
@@ -134,19 +135,18 @@ export class ServiceContainer {
           ).supportsEmbedding?.())
       ) {
         try {
-          const aiFactory = (this.singletons._aiFactory || {}) as Record<string, unknown>;
-          const getAvailableFallbacks = aiFactory.getAvailableFallbacks;
-          const createProvider = aiFactory.createProvider as
-            | ((opts: Record<string, unknown>) => Record<string, unknown>)
-            | undefined;
+          const aiFactory = (this.singletons._aiFactory || {}) as {
+            getAvailableFallbacks?: (name: string) => string[];
+            createProvider?: (opts: Record<string, unknown>) => Record<string, unknown>;
+          };
           const providerName = ((currentProvider?.name as string) || '').replace('-', '');
           const fbCandidates =
-            typeof getAvailableFallbacks === 'function'
-              ? (getAvailableFallbacks as (name: string) => string[])(providerName)
+            typeof aiFactory.getAvailableFallbacks === 'function'
+              ? aiFactory.getAvailableFallbacks(providerName)
               : [];
           for (const fb of fbCandidates) {
             try {
-              const fbProvider = createProvider!({ provider: fb });
+              const fbProvider = aiFactory.createProvider!({ provider: fb });
               if (
                 typeof fbProvider.supportsEmbedding === 'function' &&
                 (fbProvider.supportsEmbedding as () => boolean)()
@@ -226,17 +226,16 @@ export class ServiceContainer {
       !(newProvider.supportsEmbedding as () => boolean)()
     ) {
       try {
-        const aiFactory = (this.singletons._aiFactory || {}) as Record<string, unknown>;
-        const getAvailableFallbacks = aiFactory.getAvailableFallbacks;
-        const createProvider = aiFactory.createProvider as
-          | ((opts: Record<string, unknown>) => Record<string, unknown>)
-          | undefined;
-        if (typeof getAvailableFallbacks === 'function') {
+        const aiFactory = (this.singletons._aiFactory || {}) as {
+          getAvailableFallbacks?: (name: string) => string[];
+          createProvider?: (opts: Record<string, unknown>) => Record<string, unknown>;
+        };
+        if (typeof aiFactory.getAvailableFallbacks === 'function') {
           const providerName = ((newProvider.name as string) || '').replace('-', '');
-          const fbCandidates = (getAvailableFallbacks as (name: string) => string[])(providerName);
+          const fbCandidates = aiFactory.getAvailableFallbacks(providerName);
           for (const fb of fbCandidates) {
             try {
-              const fbProvider = createProvider!({ provider: fb });
+              const fbProvider = aiFactory.createProvider!({ provider: fb });
               if (
                 typeof fbProvider.supportsEmbedding === 'function' &&
                 (fbProvider.supportsEmbedding as () => boolean)()

@@ -1,9 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { AppConfigSchema } from '../../shared/schemas/config.js';
 
 /**
  * ConfigLoader - 配置加载器
@@ -13,9 +11,37 @@ export class ConfigLoader {
   static instance: ConfigLoader | null = null;
   static config: Record<string, unknown> | null = null;
 
+  /**
+   * 沿目录树向上查找包含 package.json（name=autosnippet）的目录。
+   * ConfigLoader 是最早加载的模块之一，不能依赖 package-root.ts，因此内联实现。
+   */
+  static _findPackageRoot(): string {
+    let dir = path.dirname(fileURLToPath(import.meta.url));
+    for (let i = 0; i < 10; i++) {
+      const candidate = path.join(dir, 'package.json');
+      if (fs.existsSync(candidate)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(candidate, 'utf-8'));
+          if (pkg.name === 'autosnippet') {
+            return dir;
+          }
+        } catch {
+          /* continue */
+        }
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) {
+        break;
+      }
+      dir = parent;
+    }
+    throw new Error('[ConfigLoader] Could not locate package root');
+  }
+
   static load(env = process.env.NODE_ENV || 'development') {
     if (!this.config) {
-      const configDir = path.join(__dirname, '../../../config');
+      // 使用包根自动发现，避免硬编码 ../../../.. 层级
+      const configDir = path.join(ConfigLoader._findPackageRoot(), 'config');
 
       // 加载默认配置
       const defaultPath = path.join(configDir, 'default.json');
@@ -39,6 +65,16 @@ export class ConfigLoader {
       }
 
       merged.env = env;
+
+      // Zod 运行时校验（非阻塞，仅警告）
+      const result = AppConfigSchema.safeParse(merged);
+      if (!result.success) {
+        const issues = result.error.issues
+          .map((i) => `  ${i.path.join('.')}: ${i.message}`)
+          .join('\n');
+        process.stderr.write(`[ConfigLoader] ⚠️ Config validation warnings:\n${issues}\n`);
+      }
+
       this.config = merged;
     }
 

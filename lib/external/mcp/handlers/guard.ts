@@ -137,9 +137,7 @@ const _lastReviewPassed = new Map(); // projectRoot → boolean
 const MAX_REVIEW_ROUNDS = 5;
 
 export async function guardCheck(ctx: McpContext, args: GuardCheckArgs) {
-  const { GuardCheckEngine, detectLanguage } = await import(
-    '../../../service/guard/GuardCheckEngine.js'
-  );
+  const { GuardCheckEngine, detectLanguage } = await import('#service/guard/GuardCheckEngine.js');
 
   // 输入校验：空代码直接返回
   if (!args.code || !args.code.trim()) {
@@ -205,7 +203,7 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
   }
   const scope = args.scope || 'project';
 
-  const { GuardCheckEngine } = await import('../../../service/guard/GuardCheckEngine.js');
+  const { GuardCheckEngine } = await import('#service/guard/GuardCheckEngine.js');
   const engine = _getOrCreateEngine(ctx, GuardCheckEngine);
 
   // 注入 Enhancement Pack Guard 规则
@@ -286,9 +284,7 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
  * @param {object} args - { files?: string[] }
  */
 export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
-  const { GuardCheckEngine, detectLanguage } = await import(
-    '../../../service/guard/GuardCheckEngine.js'
-  );
+  const { GuardCheckEngine, detectLanguage } = await import('#service/guard/GuardCheckEngine.js');
 
   const projectRoot = _getProjectRoot(ctx);
 
@@ -595,10 +591,10 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
   // 优先使用 ModuleService（多语言统一入口），回退到 SpmHelper
   let service: ModuleServiceLike;
   try {
-    const { ModuleService } = await import('../../../service/module/ModuleService.js');
+    const { ModuleService } = await import('#service/module/ModuleService.js');
     service = new ModuleService(projectRoot) as unknown as ModuleServiceLike;
   } catch {
-    const { SpmHelper } = await import('../../../platform/ios/spm/SpmHelper.js');
+    const { SpmHelper } = await import('#platform/ios/spm/SpmHelper.js');
     service = new SpmHelper(projectRoot) as unknown as ModuleServiceLike;
   }
   await service.load();
@@ -658,7 +654,7 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
   // Guard 审计
   let guardAudit: GuardAuditResult | null = null;
   try {
-    const { GuardCheckEngine } = await import('../../../service/guard/GuardCheckEngine.js');
+    const { GuardCheckEngine } = await import('#service/guard/GuardCheckEngine.js');
     const engine = _getOrCreateEngine(ctx, GuardCheckEngine);
 
     // 注入 Enhancement Pack Guard 规则
@@ -748,7 +744,7 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
  * 优先复用 DI 单例以保持 externalRules / cache 的跨调用一致性
  * @param {object} ctx - MCP context with container
  * @param {Function} GuardCheckEngine 引擎构造函数（用于回退）
- * @returns {import('../../../service/guard/GuardCheckEngine.js').GuardCheckEngine}
+ * @returns {import('#service/guard/GuardCheckEngine.js').GuardCheckEngine}
  */
 function _getOrCreateEngine(ctx: McpContext, GuardCheckEngineCtor: unknown): GuardEngineLike {
   try {
@@ -777,7 +773,7 @@ async function _injectEnhancementGuardRules(
     return;
   }
   try {
-    const { initEnhancementRegistry } = await import('../../../core/enhancement/index.js');
+    const { initEnhancementRegistry } = await import('#core/enhancement/index.js');
     const enhReg = await initEnhancementRegistry();
     // 使用空语言+空框架列表获取所有已注册的 Pack（不过滤）
     // 这里我们注入 ALL 规则，让 GuardCheckEngine 按 languages 字段自行过滤

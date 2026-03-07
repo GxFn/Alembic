@@ -5,10 +5,18 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import { ioLimit } from '#shared/concurrency.js';
+import {
+  BatchPublishBody,
+  CreateKnowledgeBody,
+  DeprecateKnowledgeBody,
+  KnowledgeUsageBody,
+  UpdateKnowledgeBody,
+} from '#shared/schemas/http-requests.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { ValidationError } from '../../shared/errors/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
 import {
   getContext,
   safeInt,
@@ -18,8 +26,6 @@ import {
 
 const _logger = Logger.getInstance();
 const router = express.Router();
-
-const MAX_BATCH_SIZE = 100;
 
 /* ═══ 查询 ═══════════════════════════════════════════════ */
 
@@ -111,12 +117,9 @@ router.get(
  */
 router.post(
   '/',
+  validate(CreateKnowledgeBody),
   asyncHandler(async (req: Request, res: Response) => {
     const data = req.body;
-
-    if (!data.title || !data.content) {
-      throw new ValidationError('title and content are required');
-    }
 
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -136,6 +139,7 @@ router.post(
  */
 router.patch(
   '/:id',
+  validate(UpdateKnowledgeBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const container = getServiceContainer();
@@ -189,13 +193,10 @@ router.patch(
  */
 router.patch(
   '/:id/deprecate',
+  validate(DeprecateKnowledgeBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const { reason } = req.body;
-
-    if (!reason) {
-      throw new ValidationError('reason is required for deprecation');
-    }
 
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -232,22 +233,16 @@ router.patch(
  */
 router.post(
   '/batch-publish',
+  validate(BatchPublishBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { ids } = req.body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      throw new ValidationError('ids array is required and must not be empty');
-    }
-    if (ids.length > MAX_BATCH_SIZE) {
-      throw new ValidationError(`Batch size exceeds limit of ${MAX_BATCH_SIZE}`);
-    }
 
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
     const context = getContext(req);
 
     const results = await Promise.allSettled(
-      ids.map((id) => knowledgeService.publish(id, context))
+      ids.map((id: string) => ioLimit(() => knowledgeService.publish(id, context)))
     );
 
     const published = results
@@ -278,9 +273,10 @@ router.post(
  */
 router.post(
   '/:id/usage',
+  validate(KnowledgeUsageBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { type = 'adoption', feedback } = req.body;
+    const { type, feedback } = req.body;
     const context = getContext(req);
 
     const container = getServiceContainer();

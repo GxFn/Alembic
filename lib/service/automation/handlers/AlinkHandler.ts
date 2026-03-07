@@ -5,7 +5,10 @@
  * 通过数据库查找匹配的 Recipe，打开 Dashboard 详情页。
  */
 
-import { getServiceContainer } from '../../../injection/ServiceContainer.js';
+import { and, eq } from 'drizzle-orm';
+import { getServiceContainer } from '#inject/ServiceContainer.js';
+import { getDrizzle } from '../../../infrastructure/database/drizzle/index.js';
+import { knowledgeEntries } from '../../../infrastructure/database/drizzle/schema.js';
 
 /**
  * @param {string} alinkLine
@@ -35,11 +38,19 @@ export async function handleAlink(alinkLine: string) {
       if (db) {
         const rawDb = typeof db.getDb === 'function' ? db.getDb() : db;
         try {
-          const row = rawDb
-            .prepare(
-              "SELECT id FROM knowledge_entries WHERE trigger = ? AND lifecycle = 'active' LIMIT 1"
+          // ★ Drizzle 类型安全 — 精确匹配 trigger
+          const drizzle = getDrizzle();
+          const row = drizzle
+            .select({ id: knowledgeEntries.id })
+            .from(knowledgeEntries)
+            .where(
+              and(
+                eq(knowledgeEntries.trigger, completionKey),
+                eq(knowledgeEntries.lifecycle, 'active')
+              )
             )
-            .get(completionKey);
+            .limit(1)
+            .get();
           if (row) {
             recipeId = row.id;
           }
@@ -47,17 +58,18 @@ export async function handleAlink(alinkLine: string) {
           // DB 查询失败时回退到搜索
         }
 
-        // 若精确匹配失败，尝试模糊搜索
+        // 若精确匹配失败，尝试模糊搜索（保留 raw SQL — LIKE + ESCAPE）
         if (!recipeId) {
           try {
+            const rawDb2 = typeof db.getDb === 'function' ? db.getDb() : db;
             const escaped = completionKey.replace(/[%_\\]/g, (ch: string) => `\\${ch}`);
-            const row = rawDb
+            const row = rawDb2
               .prepare(
                 "SELECT id FROM knowledge_entries WHERE (trigger LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\') AND lifecycle = 'active' LIMIT 1"
               )
               .get(`%${escaped}%`, `%${escaped}%`);
             if (row) {
-              recipeId = row.id;
+              recipeId = (row as Record<string, unknown>).id as string;
             }
           } catch {
             /* silent */

@@ -38,7 +38,7 @@ function getSearchEngine(ctx: McpContext) {
  * 降级创建 SearchEngine（仅在 container 无法提供时）
  */
 async function getFallbackEngine(ctx: McpContext) {
-  const { SearchEngine } = await import('../../../service/search/SearchEngine.js');
+  const { SearchEngine } = await import('#service/search/SearchEngine.js');
   const db = ctx.container.get('database');
   return new SearchEngine(db);
 }

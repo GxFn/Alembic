@@ -20,7 +20,6 @@
     "framer-motion": "^12.34.0",
     "lucide-react": "^0.563.0",
     "mermaid": "^11.12.3",
-    "prismjs": "^1.30.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hot-toast": "^2.6.0",
@@ -28,8 +27,7 @@
     "react-syntax-highlighter": "^16.1.0",
     "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.3",
-    "tailwind-merge": "^3.5.0",
-    "yaml": "^2.8.2"
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",

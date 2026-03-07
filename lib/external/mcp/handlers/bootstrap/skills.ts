@@ -11,10 +11,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SKILLS_DIR = path.resolve(__dirname, '../../../../../skills');
+import { SKILLS_DIR } from '../../../../shared/package-root.js';
 
 const COLDSTART_SKILL_NAME = 'autosnippet-coldstart';
 

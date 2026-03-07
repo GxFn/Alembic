@@ -1,14 +1,21 @@
 /**
  * AuditStore - 审计日志存储
  */
+import { desc, eq, sql } from 'drizzle-orm';
+import { type DrizzleDB, getDrizzle } from '../database/drizzle/index.js';
+import { auditLogs } from '../database/drizzle/schema.js';
+
 export class AuditStore {
   db: import('better-sqlite3').Database;
+  #drizzle: DrizzleDB;
   constructor(db: { getDb: () => import('better-sqlite3').Database }) {
     this.db = db.getDb();
+    this.#drizzle = getDrizzle();
   }
 
   /**
    * 保存审计日志
+   * ★ Drizzle 类型安全 INSERT
    */
   async save(entry: {
     id: string;
@@ -22,33 +29,21 @@ export class AuditStore {
     error_message: string | null;
     duration: number | null;
   }) {
-    const stmt = this.db.prepare(`
-      INSERT INTO audit_logs (
-        id,
-        timestamp,
-        actor,
-        actor_context,
-        action,
-        resource,
-        operation_data,
-        result,
-        error_message,
-        duration
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      entry.id,
-      entry.timestamp,
-      entry.actor,
-      entry.actor_context,
-      entry.action,
-      entry.resource,
-      entry.operation_data,
-      entry.result,
-      entry.error_message,
-      entry.duration
-    );
+    this.#drizzle
+      .insert(auditLogs)
+      .values({
+        id: entry.id,
+        timestamp: entry.timestamp,
+        actor: entry.actor,
+        actorContext: entry.actor_context,
+        action: entry.action,
+        resource: entry.resource,
+        operationData: entry.operation_data,
+        result: entry.result,
+        errorMessage: entry.error_message,
+        duration: entry.duration,
+      })
+      .run();
   }
 
   /**
@@ -105,49 +100,52 @@ export class AuditStore {
 
   /**
    * 根据请求 ID 查询
+   * ★ Drizzle 类型安全 SELECT
    */
   findByRequestId(requestId: string) {
-    const stmt = this.db.prepare('SELECT * FROM audit_logs WHERE id = ?');
-    return stmt.get(requestId);
+    return this.#drizzle.select().from(auditLogs).where(eq(auditLogs.id, requestId)).get();
   }
 
   /**
    * 根据角色查询
+   * ★ Drizzle 类型安全 SELECT
    */
   findByActor(actor: string, limit = 100) {
-    const stmt = this.db.prepare(`
-      SELECT * FROM audit_logs
-      WHERE actor = ?
-      ORDER BY timestamp DESC
-      LIMIT ?
-    `);
-    return stmt.all(actor, limit);
+    return this.#drizzle
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.actor, actor))
+      .orderBy(desc(auditLogs.timestamp))
+      .limit(limit)
+      .all();
   }
 
   /**
    * 根据操作查询
+   * ★ Drizzle 类型安全 SELECT
    */
   findByAction(action: string, limit = 100) {
-    const stmt = this.db.prepare(`
-      SELECT * FROM audit_logs
-      WHERE action = ?
-      ORDER BY timestamp DESC
-      LIMIT ?
-    `);
-    return stmt.all(action, limit);
+    return this.#drizzle
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, action))
+      .orderBy(desc(auditLogs.timestamp))
+      .limit(limit)
+      .all();
   }
 
   /**
    * 根据结果查询
+   * ★ Drizzle 类型安全 SELECT
    */
   findByResult(result: string, limit = 100) {
-    const stmt = this.db.prepare(`
-      SELECT * FROM audit_logs
-      WHERE result = ?
-      ORDER BY timestamp DESC
-      LIMIT ?
-    `);
-    return stmt.all(result, limit);
+    return this.#drizzle
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.result, result))
+      .orderBy(desc(auditLogs.timestamp))
+      .limit(limit)
+      .all();
   }
 
   /**
@@ -222,6 +220,7 @@ export class AuditStore {
 
   /**
    * 清理过期审计日志
+   * ★ Drizzle 类型安全 DELETE
    * @param {object} [opts]
    * @param {number} [opts.maxAgeDays=90] 保留天数，超过此天数的记录将被删除
    * @returns {{ deleted: number }}
@@ -229,7 +228,10 @@ export class AuditStore {
   cleanup({ maxAgeDays = 90 } = {}) {
     try {
       const cutoff = Date.now() - maxAgeDays * 86400000;
-      const result = this.db.prepare('DELETE FROM audit_logs WHERE timestamp < ?').run(cutoff);
+      const result = this.#drizzle
+        .delete(auditLogs)
+        .where(sql`${auditLogs.timestamp} < ${cutoff}`)
+        .run();
       return { deleted: result.changes || 0 };
     } catch {
       return { deleted: 0 };

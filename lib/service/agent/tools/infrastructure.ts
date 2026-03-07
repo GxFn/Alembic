@@ -12,7 +12,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 import type { ToolHandlerContext } from './_shared.js';
 import { PROJECT_SKILLS_DIR, SKILLS_DIR } from './_shared.js';
 

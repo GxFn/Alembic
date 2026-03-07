@@ -74,7 +74,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
             }))
           );
         })
-        .catch(() => {});
+        .catch(() => { /* intentionally ignored: recent recipes are a non-critical hint */ });
     }
   }, [open]);
 

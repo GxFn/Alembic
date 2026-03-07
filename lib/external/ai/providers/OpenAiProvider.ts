@@ -7,7 +7,7 @@
  *     - 兼容 DeepSeek / Ollama 等 OpenAI-compatible API
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 import {
   AiProvider,
   type AiProviderConfig,

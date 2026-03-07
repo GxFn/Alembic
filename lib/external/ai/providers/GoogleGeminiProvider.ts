@@ -7,7 +7,7 @@
  *     支持 toolChoice: 'auto' | 'required' | 'none'
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 import {
   AiProvider,
   type AiProviderConfig,

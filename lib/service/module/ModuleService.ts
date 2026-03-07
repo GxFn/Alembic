@@ -662,11 +662,13 @@ export class ModuleService {
           path: f.path as string,
           content: f.content as string,
         }));
-        const auditFn = this.#guardCheckEngine.auditFiles as (
-          files: { path: string; content: string }[],
-          opts: Record<string, unknown>
-        ) => Record<string, unknown>;
-        guardAudit = auditFn(guardFiles, { scope: 'project' });
+        const engine = this.#guardCheckEngine as {
+          auditFiles(
+            files: { path: string; content: string }[],
+            opts: Record<string, unknown>
+          ): Record<string, unknown>;
+        };
+        guardAudit = engine.auditFiles(guardFiles, { scope: 'project' });
 
         if (this.#violationsStore && guardAudit && guardAudit.files) {
           const auditFileResults = guardAudit.files as Array<{
@@ -674,12 +676,10 @@ export class ModuleService {
             violations: unknown[];
             summary: { errors: number; warnings: number };
           }>;
-          const appendRun = this.#violationsStore.appendRun as (
-            data: Record<string, unknown>
-          ) => void;
+          const store = this.#violationsStore as { appendRun(data: Record<string, unknown>): void };
           for (const fileResult of auditFileResults) {
             if (fileResult.violations.length > 0) {
-              appendRun({
+              store.appendRun({
                 filePath: fileResult.filePath,
                 violations: fileResult.violations,
                 summary: `Project scan: ${fileResult.summary.errors} errors, ${fileResult.summary.warnings} warnings`,
@@ -831,10 +831,10 @@ export class ModuleService {
     }
 
     try {
-      const scanFn = this.#agentFactory.scanKnowledge as (
-        opts: Record<string, unknown>
-      ) => Promise<Record<string, unknown>>;
-      const result = await scanFn({
+      const factory = this.#agentFactory as {
+        scanKnowledge(opts: Record<string, unknown>): Promise<Record<string, unknown>>;
+      };
+      const result = await factory.scanKnowledge({
         label: targetName,
         files,
         task: 'extract',
@@ -869,10 +869,10 @@ export class ModuleService {
     for (const recipe of recipes) {
       if (!recipe.quality && this.#qualityScorer) {
         try {
-          const scoreFn = this.#qualityScorer.score as (
-            r: Record<string, unknown>
-          ) => Record<string, unknown>;
-          const scoreResult = scoreFn(recipe);
+          const scorer = this.#qualityScorer as {
+            score(r: Record<string, unknown>): Record<string, unknown>;
+          };
+          const scoreResult = scorer.score(recipe);
           recipe.quality = {
             completeness: 0,
             adaptation: 0,

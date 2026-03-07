@@ -56,7 +56,8 @@ describe('AuditLogger & AuditStore', () => {
 
       const entry = await auditStore.findByRequestId('req-002');
       expect(entry.result).toBe('failure');
-      expect(entry.error_message).toBe('Permission denied');
+      // Drizzle 返回 camelCase 属性名
+      expect(entry.errorMessage ?? entry.error_message).toBe('Permission denied');
     });
   });
 

@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
+import { getErrorMessage } from '../utils/error';
 
 export interface AuthUser {
   username: string;
@@ -61,8 +62,8 @@ export function useAuth(): AuthState {
         return { success: true };
       }
       return { success: false, error: data.error?.message || '登录失败' };
-    } catch (err: any) {
-      const msg = err.response?.data?.error?.message || err.message || '网络错误';
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, '网络错误');
       return { success: false, error: msg };
     } finally {
       setIsLoading(false);

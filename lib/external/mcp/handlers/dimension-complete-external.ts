@@ -15,8 +15,8 @@
  * @module handlers/dimension-complete
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
-import { BootstrapEventEmitter } from '../../../shared/BootstrapEventEmitter.js';
+import Logger from '#infra/logging/Logger.js';
+import { BootstrapEventEmitter } from '#shared/BootstrapEventEmitter.js';
 import { envelope } from '../envelope.js';
 import { saveDimensionCheckpoint } from './bootstrap/pipeline/checkpoint.js';
 import { BOOTSTRAP_COMPLETE_ACTIONS } from './bootstrap/shared/dimension-text.js';
@@ -330,7 +330,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
   if (isComplete) {
     // R4: 自动触发 Cursor Delivery
     try {
-      const { getServiceContainer } = await import('../../../injection/ServiceContainer.js');
+      const { getServiceContainer } = await import('#inject/ServiceContainer.js');
       const container = getServiceContainer();
       if (container.services.cursorDeliveryPipeline) {
         const pipeline = container.get('cursorDeliveryPipeline');
@@ -353,10 +353,10 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
     setImmediate(async () => {
       try {
         const { getServiceContainer: getWikiContainer } = await import(
-          '../../../injection/ServiceContainer.js'
+          '#inject/ServiceContainer.js'
         );
         const wikiContainer = getWikiContainer();
-        const { WikiGenerator } = await import('../../../service/wiki/WikiGenerator.js');
+        const { WikiGenerator } = await import('#service/wiki/WikiGenerator.js');
         const moduleService = wikiContainer.get?.('moduleService');
         const knowledgeService = wikiContainer.get?.('knowledgeService');
         if (moduleService && knowledgeService) {
@@ -382,13 +382,11 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
     setImmediate(async () => {
       try {
         const { EpisodicConsolidator } = await import(
-          '../../../service/agent/domain/EpisodicConsolidator.js'
+          '#service/agent/domain/EpisodicConsolidator.js'
         );
         const db = ctx.container.get?.('database') ?? ctx.container.get?.('db');
         if (db && session.sessionStore) {
-          const { PersistentMemory } = await import(
-            '../../../service/agent/memory/PersistentMemory.js'
-          );
+          const { PersistentMemory } = await import('#service/agent/memory/PersistentMemory.js');
           const semanticMemory = new PersistentMemory(db, { logger });
           const consolidator = new EpisodicConsolidator(semanticMemory, { logger });
           const result = await consolidator.consolidate(session.sessionStore, {

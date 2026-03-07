@@ -1,5 +1,8 @@
+import { and, eq } from 'drizzle-orm';
 import type { Logger as WinstonLogger } from 'winston';
 import { inferKind, KnowledgeEntry } from '../../domain/knowledge/index.js';
+import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
+import { knowledgeEntries } from '../../infrastructure/database/drizzle/schema.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { safeJsonParse, safeJsonStringify, unixNow } from '../../shared/utils/common.js';
 import { BaseRepository } from '../base/BaseRepository.js';
@@ -45,23 +48,29 @@ interface KnowledgeCountRow {
 }
 
 /**
- * KnowledgeRepositoryImpl — 统一知识实体仓储实现
+ * KnowledgeRepositoryImpl — 统一知识实体仓储实现 (Drizzle ORM)
  *
  * 面向 knowledge_entries 表的 SQLite 持久化。
  * 全链路 camelCase — DB 列名 = 实体属性名。
+ *
+ * Drizzle 迁移策略：
+ * - CRUD (create/findById/update/delete/findActiveRules) → drizzle 类型安全 API
+ * - 复杂动态查询 (findWithPagination/getStats) → 保留 raw SQL→渐进迁移
  */
 export class KnowledgeRepositoryImpl extends BaseRepository {
+  #drizzle: DrizzleDB;
+
   constructor(database: KnowledgeDatabaseWrapper) {
     super(database, 'knowledge_entries');
     this.logger = Logger.getInstance();
+    this.#drizzle = getDrizzle();
   }
 
   /* ═══ CRUD ═══════════════════════════════════════════ */
 
   /**
    * 创建 KnowledgeEntry
-   * @param {KnowledgeEntry} entry
-   * @returns {Promise<KnowledgeEntry>}
+   * ★ Drizzle 类型安全 INSERT — 列名拼写编译期检查
    */
   async create(entry: KnowledgeEntry) {
     if (!entry || !entry.isValid()) {
@@ -70,10 +79,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
 
     try {
       const row = this._entityToRow(entry);
-      const keys = Object.keys(row);
-      const placeholders = keys.map(() => '?').join(', ');
-      const query = `INSERT INTO knowledge_entries (${keys.join(', ')}) VALUES (${placeholders})`;
-      this.db.prepare(query).run(...Object.values(row));
+      this.#drizzle.insert(knowledgeEntries).values(row).run();
       return this.findById(entry.id);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -87,9 +93,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
 
   /**
    * 更新 KnowledgeEntry（接受完整实体或部分数据）
-   * @param {string} id
-   * @param {Object|KnowledgeEntry} updates
-   * @returns {Promise<KnowledgeEntry>}
+   * ★ Drizzle 类型安全 UPDATE
    */
   async update(id: string, updates: KnowledgeEntry | Record<string, unknown>) {
     try {
@@ -102,13 +106,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
         const fullRow = this._entityToRow(updates);
         const { id: _id, createdAt: _ca, ...row } = fullRow;
         row.updatedAt = unixNow();
-
-        const setClauses = Object.keys(row)
-          .map((k) => `${k} = ?`)
-          .join(', ');
-        this.db
-          .prepare(`UPDATE knowledge_entries SET ${setClauses} WHERE id = ?`)
-          .run(...Object.values(row), id);
+        this.#drizzle.update(knowledgeEntries).set(row).where(eq(knowledgeEntries.id, id)).run();
         return this.findById(id);
       }
 
@@ -120,13 +118,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
       });
       const fullRow2 = this._entityToRow(merged);
       const { id: _id2, createdAt: _ca2, ...row } = fullRow2;
-
-      const setClauses = Object.keys(row)
-        .map((k) => `${k} = ?`)
-        .join(', ');
-      this.db
-        .prepare(`UPDATE knowledge_entries SET ${setClauses} WHERE id = ?`)
-        .run(...Object.values(row), id);
+      this.#drizzle.update(knowledgeEntries).set(row).where(eq(knowledgeEntries.id, id)).run();
       return this.findById(id);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -140,12 +132,14 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
 
   /**
    * 删除
-   * @param {string} id
-   * @returns {Promise<boolean>}
+   * ★ Drizzle 类型安全 DELETE
    */
   async delete(id: string) {
     try {
-      const result = this.db.prepare('DELETE FROM knowledge_entries WHERE id = ?').run(id);
+      const result = this.#drizzle
+        .delete(knowledgeEntries)
+        .where(eq(knowledgeEntries.id, id))
+        .run();
       return result.changes > 0;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -245,17 +239,16 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
 
   /**
    * 查询所有 active 的 rule 类型（Guard 消费热路径）
-   * @returns {Promise<KnowledgeEntry[]>}
+   * ★ Drizzle 类型安全查询
    */
   async findActiveRules() {
     try {
-      const rows = this.db
-        .prepare(`
-        SELECT * FROM knowledge_entries
-        WHERE kind = 'rule' AND lifecycle = 'active'
-      `)
+      const rows = this.#drizzle
+        .select()
+        .from(knowledgeEntries)
+        .where(and(eq(knowledgeEntries.kind, 'rule'), eq(knowledgeEntries.lifecycle, 'active')))
         .all();
-      return rows.map((row: unknown) => this._rowToEntity(row as Record<string, unknown>));
+      return rows.map((row) => this._rowToEntity(row as Record<string, unknown>));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error('Error finding active rules', { error: message });

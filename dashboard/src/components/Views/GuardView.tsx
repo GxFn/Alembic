@@ -6,6 +6,7 @@ import { GITHUB_ISSUES_NEW_GUARD_URL, LANGUAGE_OPTIONS } from '../../constants';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
 import Select from '../ui/Select';
+import { getErrorMessage } from '../../utils/error';
 
 interface GuardRule {
   message: string;
@@ -93,8 +94,8 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     await api.clearViolations();
     fetchGuard();
     onRefresh?.();
-  } catch (err: any) {
-    notify(err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
+  } catch (err: unknown) {
+    notify(getErrorMessage(err, t('common.operationFailed')), { title: t('common.operationFailed'), type: 'error' });
   }
   };
 
@@ -129,8 +130,8 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     setShowAddRule(false);
     fetchGuard();
     onRefresh?.();
-  } catch (err: any) {
-    setAddRuleError(err?.response?.data?.error || err?.message || t('common.saveFailed'));
+  } catch (err: unknown) {
+    setAddRuleError(getErrorMessage(err, t('common.saveFailed')));
   } finally {
     setAddRuleSubmitting(false);
   }
@@ -488,7 +489,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
             </div>
           </td>
           <td className="py-2 px-4 text-xs text-[var(--fg-secondary)]">
-            {categoryLabel((r as any).category)}
+            {categoryLabel(r.category)}
           </td>
           </tr>
         ))
@@ -584,7 +585,7 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
                         <button
                           className="ml-1 text-blue-500 hover:text-blue-700"
                           title={t('guard.copyFixSuggestion')}
-                          onClick={() => navigator.clipboard.writeText(s)}
+                          onClick={() => navigator.clipboard.writeText(s).catch(() => { /* clipboard fallback: user denied or insecure context */ })}
                         >
                           ⎘
                         </button>

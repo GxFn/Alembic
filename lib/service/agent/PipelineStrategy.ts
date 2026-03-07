@@ -21,6 +21,7 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
 import type { AgentMessage } from './AgentMessage.js';
 import { ExplorationTracker } from './context/ExplorationTracker.js';
+import type { PipelineType } from './context/exploration/ExplorationStrategies.js';
 import { Strategy, StrategyRegistry } from './strategies.js';
 
 // ───── Local Types for PipelineStrategy ──────────────────
@@ -86,6 +87,8 @@ interface PipelineStage {
   skipOnDegrade?: boolean;
   skipOnFail?: boolean;
   submitToolName?: string;
+  /** 管线类型标识 — 传递至 ExplorationTracker 用于统一场景判别 */
+  pipelineType?: PipelineType;
   source?: string;
   [key: string]: unknown;
 }
@@ -438,6 +441,9 @@ export class PipelineStrategy extends Strategy {
     const submitToolName = (stage.submitToolName || strategyContext.submitToolName || undefined) as
       | string
       | undefined;
+    const pipelineType = (stage.pipelineType || strategyContext.pipelineType || undefined) as
+      | PipelineType
+      | undefined;
 
     if (stageTracker && ctx.execStageCount > 0) {
       const trackerStrategy =
@@ -447,13 +453,18 @@ export class PipelineStrategy extends Strategy {
         {
           ...(effectiveBudget || {}),
           ...(submitToolName ? { submitToolName } : {}),
+          ...(pipelineType ? { pipelineType } : {}),
         }
       );
     } else if (stageTracker && ctx.execStageCount === 0 && submitToolName) {
       if (stageTracker.submitToolName !== submitToolName) {
         stageTracker = ExplorationTracker.resolve(
           { source: strategyContext.source || 'system', strategy: 'analyst' },
-          { ...(effectiveBudget || {}), submitToolName }
+          {
+            ...(effectiveBudget || {}),
+            submitToolName,
+            ...(pipelineType ? { pipelineType } : {}),
+          }
         );
       }
     }

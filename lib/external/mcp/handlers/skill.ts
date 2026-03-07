@@ -12,13 +12,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { getProjectSkillsPath } from '../../../infrastructure/config/Paths.js';
-import pathGuard from '../../../shared/PathGuard.js';
+import { getProjectSkillsPath } from '#infra/config/Paths.js';
+import pathGuard from '#shared/PathGuard.js';
+import { SKILLS_DIR } from '#shared/package-root.js';
 import type { McpContext } from './types.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SKILLS_DIR = path.resolve(__dirname, '../../../../skills');
 
 /**
  * 获取用户项目根目录（运行时动态解析）
@@ -706,7 +703,7 @@ export function updateSkill(_ctx: McpContext | null, args: UpdateSkillArgs) {
  */
 export async function suggestSkills(ctx: McpContext) {
   try {
-    const { SkillAdvisor } = await import('../../../service/skills/SkillAdvisor.js');
+    const { SkillAdvisor } = await import('#service/skills/SkillAdvisor.js');
     const dbConn = ctx?.container?.get?.('database') || null;
     const database = dbConn?.getDb?.() || dbConn || null;
     const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();

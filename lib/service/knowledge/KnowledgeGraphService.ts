@@ -124,8 +124,8 @@ export class KnowledgeGraphService {
         : [];
 
     return {
-      outgoing: outgoing.map(this._mapEdge),
-      incoming: incoming.map(this._mapEdge),
+      outgoing: outgoing.map((row) => this._mapEdge(row)),
+      incoming: incoming.map((row) => this._mapEdge(row)),
     };
   }
 
@@ -141,7 +141,7 @@ export class KnowledgeGraphService {
     `)
       .all(nodeId, nodeType, relation, nodeId, nodeType, relation);
 
-    return rows.map(this._mapEdge);
+    return rows.map((row) => this._mapEdge(row));
   }
 
   /**
@@ -296,7 +296,7 @@ export class KnowledgeGraphService {
       params = [limit];
     }
     const rows = this.db.prepare(sql).all(...params);
-    return rows.map(this._mapEdge);
+    return rows.map((row) => this._mapEdge(row));
   }
 
   // Private

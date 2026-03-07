@@ -21,8 +21,8 @@
  * @module ContextWindow
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
-import { estimateTokensFast } from '../../../shared/token-utils.js';
+import Logger from '#infra/logging/Logger.js';
+import { estimateTokensFast } from '#shared/token-utils.js';
 
 // ─── 类型定义 ──────────────────────────────────────────
 

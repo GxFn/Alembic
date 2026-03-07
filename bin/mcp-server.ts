@@ -45,18 +45,20 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
-process.on('SIGTERM', () => {
-  process.stderr.write('[MCP] Received SIGTERM, shutting down…\n');
-  process.exit(0);
-});
-process.on('SIGINT', () => {
-  process.stderr.write('[MCP] Received SIGINT, shutting down…\n');
-  process.exit(0);
-});
+// ─── Graceful Shutdown ─────────────────────────────────
+// 使用统一的 shutdown 协调器替代直接 process.exit(0)
+// 确保 DB WAL 刷盘、进行中请求排空、Socket.io 关闭
+const { shutdown } = await import('../lib/shared/shutdown.js');
+shutdown.install();
 
 const { startMcpServer } = await import('../lib/external/mcp/McpServer.js');
 
-startMcpServer().catch((err) => {
-  process.stderr.write(`MCP Server failed to start: ${err.message}\n`);
-  process.exit(1);
-});
+startMcpServer()
+  .then((server) => {
+    // 注册 McpServer 清理 hook（内含 MCP transport close + bootstrap.shutdown + db.close）
+    shutdown.register(() => server.shutdown(), 'mcp-server');
+  })
+  .catch((err) => {
+    process.stderr.write(`MCP Server failed to start: ${err.message}\n`);
+    process.exit(1);
+  });

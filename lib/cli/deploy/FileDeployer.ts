@@ -27,9 +27,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { injectAutoApprove } from '../../external/mcp/autoApproveInjector.js';
 import { checkWriteSafety, safeCopyFile } from '../../service/cursor/FileProtection.js';
+import { PACKAGE_ROOT, TEMPLATES_DIR } from '../../shared/package-root.js';
 import {
   buildMcpServerEntry,
   GITIGNORE_MIGRATIONS,
@@ -37,12 +37,8 @@ import {
   MANIFEST,
 } from './FileManifest.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 /** AutoSnippet 源码仓库根目录 */
-const REPO_ROOT = resolve(__dirname, '..', '..', '..');
-const TEMPLATES_DIR = join(REPO_ROOT, 'templates');
+const REPO_ROOT = PACKAGE_ROOT;
 
 /** Manifest entry type */
 interface ManifestEntry {

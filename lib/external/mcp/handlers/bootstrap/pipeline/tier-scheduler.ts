@@ -17,7 +17,8 @@
  * @module TierScheduler
  */
 
-import Logger from '../../../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
+import { createLimit } from '#shared/concurrency.js';
 
 const logger = Logger.getInstance();
 
@@ -56,38 +57,6 @@ interface TierExecuteOptions {
   shouldAbort?: () => boolean;
   activeDimIds?: string[];
   tierHints?: Record<string, number>;
-}
-
-// ──────────────────────────────────────────────────────────────────
-// 简单信号量 (控制并发)
-// ──────────────────────────────────────────────────────────────────
-
-class Semaphore {
-  #permits;
-  #queue: Array<(value?: unknown) => void> = [];
-
-  constructor(permits: number) {
-    this.#permits = permits;
-  }
-
-  async acquire() {
-    if (this.#permits > 0) {
-      this.#permits--;
-      return undefined;
-    }
-    return new Promise((resolve) => {
-      this.#queue.push(resolve);
-    });
-  }
-
-  release() {
-    if (this.#queue.length > 0) {
-      const resolve = this.#queue.shift()!;
-      resolve();
-    } else {
-      this.#permits++;
-    }
-  }
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -180,7 +149,7 @@ export class TierScheduler {
   }
 
   /**
-   * 执行单个 Tier 内的所有维度 (并发控制)
+   * 执行单个 Tier 内的所有维度 (p-limit 并发控制)
    */
   async #executeTier(
     dimensionIds: string[],
@@ -188,30 +157,25 @@ export class TierScheduler {
     concurrency: number,
     shouldAbort: (() => boolean) | undefined
   ) {
-    const semaphore = new Semaphore(concurrency);
+    const limit = createLimit(concurrency);
     const results = new Map();
 
     await Promise.all(
-      dimensionIds.map(async (dimId: string) => {
-        if (shouldAbort?.()) {
-          return;
-        }
-
-        await semaphore.acquire();
-        try {
+      dimensionIds.map((dimId: string) =>
+        limit(async () => {
           if (shouldAbort?.()) {
             return;
           }
-          const result = await executeDimension(dimId);
-          results.set(dimId, result);
-        } catch (err: unknown) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          logger.error(`[TierScheduler] Dimension "${dimId}" failed: ${errMsg}`);
-          results.set(dimId, { error: errMsg, candidateCount: 0 });
-        } finally {
-          semaphore.release();
-        }
-      })
+          try {
+            const result = await executeDimension(dimId);
+            results.set(dimId, result);
+          } catch (err: unknown) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            logger.error(`[TierScheduler] Dimension "${dimId}" failed: ${errMsg}`);
+            results.set(dimId, { error: errMsg, candidateCount: 0 });
+          }
+        })
+      )
     );
 
     return results;

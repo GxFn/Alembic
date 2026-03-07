@@ -109,8 +109,8 @@ export class GuardDiagnostics {
           );
         }
       }
-    } catch (err: any) {
-      this.outputChannel.appendLine(`[Guard] Check failed for ${filePath}: ${err.message}`);
+    } catch (err: unknown) {
+      this.outputChannel.appendLine(`[Guard] Check failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

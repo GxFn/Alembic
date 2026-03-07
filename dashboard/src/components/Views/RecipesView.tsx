@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Edit3, Trash2, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BookOpenCheck, Eye, Save, Link2, Plus, Search, ArrowUp, ArrowDown, Code2, Layers, Globe, MoreHorizontal, Clock } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
-import { Recipe } from '../../types';
+import { Recipe, KnowledgeEntry } from '../../types';
 import { categoryConfigs } from '../../constants';
 import Pagination from '../Shared/Pagination';
 import HighlightedCodeEditor from '../Shared/HighlightedCodeEditor';
@@ -10,6 +10,7 @@ import DrawerMeta from '../Shared/DrawerMeta';
 import type { BadgeItem, MetaItem } from '../Shared/DrawerMeta';
 import DrawerContent from '../Shared/DrawerContent';
 import { notify } from '../../utils/notification';
+import { getErrorMessage } from '../../utils/error';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
 import { cn } from '../../lib/utils';
@@ -50,7 +51,7 @@ interface RecipesViewProps {
 
 /* ── Helpers ── */
 function getDisplayName(recipe: Recipe): string {
-  const raw = recipe.name || (recipe as any).title || 'Untitled';
+  const raw = recipe.name || (recipe as { title?: string }).title || 'Untitled';
   return raw.replace(/\.md$/i, '');
 }
 
@@ -184,10 +185,10 @@ const RecipesView: React.FC<RecipesViewProps> = ({
           markdown: editForm.markdown,
           rationale: editForm.rationale,
         },
-      } as any);
+      } as Partial<KnowledgeEntry>);
       if (isMountedRef.current) { setDrawerMode('view'); onRefresh?.(); }
-    } catch (err: any) {
-      notify(err?.message || t('common.saveFailed'), { title: t('common.operationFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('common.saveFailed')), { title: t('common.operationFailed'), type: 'error' });
     } finally {
       if (isMountedRef.current) setIsSaving(false);
     }
@@ -198,8 +199,8 @@ const RecipesView: React.FC<RecipesViewProps> = ({
     try {
       await api.setRecipeAuthority(selectedRecipe.id || selectedRecipe.name, authority);
       onRefresh?.();
-    } catch (err: any) {
-      notify(err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('common.operationFailed')), { title: t('common.operationFailed'), type: 'error' });
     }
   };
 
@@ -248,10 +249,10 @@ const RecipesView: React.FC<RecipesViewProps> = ({
     setRelationBusy(true);
     try {
       await api.updateRecipeRelations(selectedRecipe.id || selectedRecipe.name, currentRelations);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 回滚
       setSelectedRecipe(previousRecipe);
-      notify(err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
+      notify(getErrorMessage(err, t('common.operationFailed')), { title: t('common.operationFailed'), type: 'error' });
     } finally {
       setRelationBusy(false);
     }
@@ -276,10 +277,10 @@ const RecipesView: React.FC<RecipesViewProps> = ({
     setRelationBusy(true);
     try {
       await api.updateRecipeRelations(selectedRecipe.id || selectedRecipe.name, currentRelations);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 回滚
       setSelectedRecipe(previousRecipe);
-      notify(err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
+      notify(getErrorMessage(err, t('common.operationFailed')), { title: t('common.operationFailed'), type: 'error' });
     } finally {
       setRelationBusy(false);
     }
@@ -452,7 +453,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                             <Edit3 size={14} className="mr-2" /> {t('common.edit')}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-[var(--status-error)]" onClick={e => { e.stopPropagation(); handleDeleteRecipe(recipe.name || (recipe as any).id); }}>
+                          <DropdownMenuItem className="text-[var(--status-error)]" onClick={e => { e.stopPropagation(); handleDeleteRecipe(recipe.name || recipe.id || ''); }}>
                             <Trash2 size={14} className="mr-2" /> {t('recipes.deleteRecipe')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -498,7 +499,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     <button onClick={() => { setDrawerMode('edit'); }} className={cn("px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1", drawerMode === 'edit' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--accent)]' : 'text-[var(--fg-muted)] hover:text-[var(--fg-secondary)]')}><Edit3 size={ICON_SIZES.sm} /> {t('common.edit')}</button>
                   </div>
                   <Drawer.WidthToggle isWide={drawerWide} onToggle={toggleDrawerWide} />
-                  <Button variant="danger" size="icon-sm" onClick={() => { handleDeleteRecipe(recipe.name || (recipe as any).id); closeDrawer(); }}><Trash2 size={16} /></Button>
+                  <Button variant="danger" size="icon-sm" onClick={() => { handleDeleteRecipe(recipe.name || recipe.id || ''); closeDrawer(); }}><Trash2 size={16} /></Button>
                   <Drawer.CloseButton onClose={closeDrawer} />
                 </Drawer.HeaderActions>
               </Drawer.Header>

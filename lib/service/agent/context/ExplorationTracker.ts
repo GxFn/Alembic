@@ -22,13 +22,14 @@
  * @module ExplorationTracker
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 import type {
   ExplorationBudget,
   ExplorationPhase,
   ExplorationStrategy,
   ExplorationTrace,
   FullExplorationMetrics,
+  PipelineType,
 } from './exploration/ExplorationStrategies.js';
 import {
   createBootstrapStrategy,
@@ -52,6 +53,7 @@ interface ResolveOptions {
 /** 预算输入（带默认值） */
 interface BudgetInput extends Partial<ExplorationBudget> {
   submitToolName?: string;
+  pipelineType?: PipelineType;
 }
 
 // ─── ExplorationTracker 主类 ─────────────────────────────
@@ -102,6 +104,8 @@ export class ExplorationTracker {
   #ticked = false;
   /** @type {string} 提交工具名（用于 nudge 文本生成） */
   #submitToolName = 'submit_knowledge';
+  /** 管线类型标识 — 统一场景判别（替代 submitToolName / strategy.name 字符串比较） */
+  #pipelineType: PipelineType;
 
   /**
    * @param {object} strategy 策略配置对象
@@ -119,6 +123,9 @@ export class ExplorationTracker {
       ...budget,
     };
     this.#submitToolName = budget.submitToolName || 'submit_knowledge';
+    // pipelineType 显式传入 > 从策略名推断默认值
+    this.#pipelineType =
+      budget.pipelineType || (strategy.name === 'analyst' ? 'analyst' : 'bootstrap');
     this.#phase = strategy.phases[0];
     this.#logger = Logger.getInstance();
 
@@ -186,13 +193,18 @@ export class ExplorationTracker {
     return this.#submitToolName;
   }
 
+  /** 管线类型标识 */
+  get pipelineType(): PipelineType {
+    return this.#pipelineType;
+  }
+
   /**
    * 是否应退出主循环
    * @returns {boolean}
    */
   shouldExit() {
-    // Scan pipeline: SUMMARIZE 无消费方，直接退出
-    if (this.#isTerminalPhase() && this.#submitToolName === 'collect_scan_recipe') {
+    // Scan 管线: SUMMARIZE 无消费方，直接退出
+    if (this.#isTerminalPhase() && this.#pipelineType === 'scan') {
       return true;
     }
     // 终结阶段 + 已给了 2 轮 grace → 退出
@@ -356,8 +368,8 @@ export class ExplorationTracker {
     // 4. 如果发生了转换，生成 nudge
     if (this.#justTransitioned) {
       this.#justTransitioned = false;
-      // Scan pipeline: skip SUMMARIZE nudge
-      if (this.#submitToolName === 'collect_scan_recipe' && this.#isTerminalPhase()) {
+      // Scan 管线: skip SUMMARIZE nudge
+      if (this.#pipelineType === 'scan' && this.#isTerminalPhase()) {
         this.#logger.info(
           `[ExplorationTracker] scan pipeline: skip SUMMARIZE nudge, will exit on next tick (submits=${this.#metrics.submitCount})`
         );
@@ -392,12 +404,15 @@ export class ExplorationTracker {
     if (isTerminal && transitioned) {
       const submitCount = m.submitCount;
 
-      if (this.#submitToolName === 'collect_scan_recipe') {
+      // Scan 管线: 所有结果在 toolCalls 中，无需文本总结
+      if (this.#pipelineType === 'scan') {
         return { isFinalAnswer: true, needsDigestNudge: false, shouldContinue: false, nudge: null };
       }
 
+      // Analyst 管线: Markdown 分析报告
+      // Bootstrap 管线: dimensionDigest JSON
       const nudge =
-        this.#strategy.name === 'analyst'
+        this.#pipelineType === 'analyst'
           ? `请**停止调用工具**，直接输出你的完整分析报告。用 Markdown 格式，包含具体文件路径、类名和代码模式。至少涵盖 3 个核心发现。\n\n**现在开始输出你的分析报告。**\n⚠️ 严禁在回复中复制本条指令文字，只输出你自己的分析。`
           : `请在回复中直接输出 dimensionDigest JSON 总结（用 \`\`\`json 包裹）：\n` +
             `\`\`\`json\n{"dimensionDigest":{"summary":"分析总结(100-200字)","candidateCount":${submitCount},"keyFindings":["关键发现"],"crossRefs":{},"gaps":["未覆盖方面"],"remainingTasks":[{"signal":"未处理的信号/主题","reason":"未完成原因","priority":"high|medium|low","searchHints":["建议搜索词"]}]}}\n\`\`\`\n> 如果所有信号都已覆盖，remainingTasks 留空数组 \`[]\`。\n` +
@@ -413,7 +428,7 @@ export class ExplorationTracker {
     // 非终结阶段收到文本
     if (this.#phase === 'PRODUCE' || this.#phase === 'EXPLORE') {
       const nudge =
-        this.#phase === 'PRODUCE' && this.#submitToolName !== 'collect_scan_recipe'
+        this.#phase === 'PRODUCE' && this.#pipelineType !== 'scan'
           ? `你的分析很好。请继续调用 ${this.#submitToolName} 提交你发现的知识候选，每个值得记录的模式/实践都应该提交。`
           : null;
       return { isFinalAnswer: false, needsDigestNudge: false, shouldContinue: true, nudge };
@@ -592,6 +607,7 @@ export class ExplorationTracker {
       strategy: this.#strategy,
       gracefulExitRound: this.#gracefulExitRound,
       submitToolName: this.#submitToolName,
+      pipelineType: this.#pipelineType,
       isTerminalPhase: this.#isTerminalPhase(),
       transitionFromPhase: this.#transitionFromPhase,
     };

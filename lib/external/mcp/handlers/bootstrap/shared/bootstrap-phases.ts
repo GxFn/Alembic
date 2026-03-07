@@ -23,10 +23,10 @@ import {
   analyzeProject,
   isAvailable as astIsAvailable,
   generateContextForAgent,
-} from '../../../../../core/AstAnalyzer.js';
-import { DimensionCopy } from '../../../../../shared/DimensionCopyRegistry.js';
-import { LanguageService } from '../../../../../shared/LanguageService.js';
-import pathGuard from '../../../../../shared/PathGuard.js';
+} from '#core/AstAnalyzer.js';
+import { DimensionCopy } from '#shared/DimensionCopyRegistry.js';
+import { LanguageService } from '#shared/LanguageService.js';
+import pathGuard from '#shared/PathGuard.js';
 import { detectPrimaryLanguage } from '../../LanguageExtensions.js';
 import { inferTargetRole } from '../../TargetClassifier.js';
 import { type BaseDimension, baseDimensions, resolveActiveDimensions } from '../base-dimensions.js';
@@ -263,7 +263,7 @@ export async function runPhase1_FileCollection(
 ) {
   const maxFiles = options.maxFiles || 500;
 
-  const { getDiscovererRegistry } = await import('../../../../../core/discovery/index.js');
+  const { getDiscovererRegistry } = await import('#core/discovery/index.js');
   const registry = getDiscovererRegistry();
   const discoverer = await registry.detect(projectRoot);
   logger.info(`[Bootstrap] Project type: ${discoverer.displayName} (${discoverer.id})`);
@@ -351,7 +351,7 @@ export async function runPhase1_5_AstAnalysis(
   // Phase 1.5a: 按需安装缺失的 tree-sitter 语法包
   try {
     const { ensureGrammars, inferLanguagesFromStats, reloadPlugins } = await import(
-      '../../../../../core/ast/ensure-grammars.js'
+      '#core/ast/ensure-grammars.js'
     );
     const neededLangs = inferLanguagesFromStats(langStats);
     if (neededLangs.length > 0) {
@@ -361,7 +361,7 @@ export async function runPhase1_5_AstAnalysis(
         await reloadPlugins();
       }
     }
-    await import('../../../../../core/ast/index.js');
+    await import('#core/ast/index.js');
   } catch (e: unknown) {
     logger.warn(
       `[Bootstrap] Grammar auto-install skipped: ${e instanceof Error ? e.message : String(e)}`
@@ -385,9 +385,7 @@ export async function runPhase1_5_AstAnalysis(
       ) => { content: string; lang?: string } | null;
       let sfcPreprocessor: AstPreprocessFn | undefined;
       try {
-        const { initEnhancementRegistry } = await import(
-          '../../../../../core/enhancement/index.js'
-        );
+        const { initEnhancementRegistry } = await import('#core/enhancement/index.js');
         const enhReg = await initEnhancementRegistry();
         const preprocessPack = enhReg
           .all()
@@ -463,9 +461,7 @@ export async function runPhase1_6_EntityGraph(
 
   if (astProjectSummary) {
     try {
-      const { CodeEntityGraph } = await import(
-        '../../../../../service/knowledge/CodeEntityGraph.js'
-      );
+      const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
       const db = container.get('database');
       if (db) {
         const ceg = new CodeEntityGraph(db, { projectRoot });
@@ -529,8 +525,8 @@ export async function runPhase1_7_CallGraph(
   }
 
   try {
-    const { CallGraphAnalyzer } = await import('../../../../../core/analysis/CallGraphAnalyzer.js');
-    const { CodeEntityGraph } = await import('../../../../../service/knowledge/CodeEntityGraph.js');
+    const { CallGraphAnalyzer } = await import('#core/analysis/CallGraphAnalyzer.js');
+    const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
 
     const analyzer = new CallGraphAnalyzer(projectRoot);
     const changedFiles = incrementalOpts?.changedFiles;
@@ -660,7 +656,7 @@ export async function runPhase2_1_ModuleEntities(
   }
 
   try {
-    const { CodeEntityGraph } = await import('../../../../../service/knowledge/CodeEntityGraph.js');
+    const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
     const db = container.get('database');
     if (db) {
       const ceg = new CodeEntityGraph(db, { projectRoot });
@@ -702,7 +698,7 @@ export async function runPhase3_GuardAudit(
   }
 
   try {
-    const { GuardCheckEngine } = await import('../../../../../service/guard/GuardCheckEngine.js');
+    const { GuardCheckEngine } = await import('#service/guard/GuardCheckEngine.js');
     const db = container.get('database');
     guardEngine = new GuardCheckEngine(db) as unknown as GuardEngineLike;
     const guardFiles = allFiles.map((f: BootstrapFileEntry) => ({
@@ -777,7 +773,7 @@ export async function runPhase4_DimensionResolve(params: Phase4Params) {
   let guardAudit: GuardAuditLike | null = null;
 
   try {
-    const { initEnhancementRegistry } = await import('../../../../../core/enhancement/index.js');
+    const { initEnhancementRegistry } = await import('#core/enhancement/index.js');
     const enhReg = await initEnhancementRegistry();
     const matchedPacks = enhReg.resolve(primaryLang, detectedFrameworks);
 

@@ -1,15 +1,24 @@
 import type { Database, Statement } from 'better-sqlite3';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { Logger as WinstonLogger } from 'winston';
 import { Task } from '../../domain/task/Task.js';
+import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
+import {
+  taskDependencies,
+  taskEvents,
+  tasks,
+} from '../../infrastructure/database/drizzle/schema.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 
-/** Row shape returned by task_dependencies queries */
+/** Row shape returned by task_dependencies queries (camelCase — matches Drizzle schema) */
 interface TaskDependencyRow {
-  task_id: string;
-  depends_on_id: string;
-  dep_type: string;
-  created_at: number;
-  created_by: string;
+  id: number;
+  taskId: string;
+  dependsOnId: string;
+  depType: string;
+  metadata: string | null;
+  createdAt: number;
+  createdBy: string | null;
 }
 
 /** Row shape returned by task statistics query */
@@ -62,25 +71,19 @@ interface DatabaseWrapper {
 }
 
 /**
- * TaskRepositoryImpl — 任务实体 SQLite 持久化
+ * TaskRepositoryImpl — 任务实体 SQLite 持久化 (Drizzle ORM)
  *
- * 直接操作 better-sqlite3 同步 API，方法签名保持 async 以对齐 DDD 接口约定。
  * DB 列名 snake_case，实体属性 camelCase—— Task.fromRow() / _entityToRow() 负责映射。
+ *
+ * Drizzle 迁移策略：
+ * - CRUD (create/findById/update/delete) → drizzle 类型安全 API
+ * - 依赖管理 (add/remove/get) → drizzle 类型安全 API
+ * - 事件审计 / 统计 → drizzle 类型安全 API
+ * - 环检测 (递归 CTE) / 复杂动态查询 (findAll) → 保留 raw SQL
  */
 export class TaskRepositoryImpl {
-  _addDepStmt!: Statement;
-  _deleteStmt!: Statement;
-  _findByHashStmt!: Statement;
-  _findByIdStmt!: Statement;
-  _getBlockersStmt!: Statement;
-  _getDependentsStmt!: Statement;
-  _getDepsStmt!: Statement;
-  _insertStmt!: Statement;
-  _logEventStmt!: Statement;
   _reachableStmt!: Statement;
-  _removeDepStmt!: Statement;
-  _statsStmt!: Statement;
-  _updateFieldsStmt: Statement | null = null;
+  #drizzle: DrizzleDB;
   db: Database;
   logger: WinstonLogger;
   /**
@@ -89,69 +92,13 @@ export class TaskRepositoryImpl {
   constructor(database: DatabaseWrapper) {
     this.db = database.getDb();
     this.logger = Logger.getInstance();
+    this.#drizzle = getDrizzle();
     this._prepareStatements();
   }
 
-  /** @private 预编译常用语句 */
+  /** @private 预编译复杂查询（仅保留 drizzle 无法表达的递归 CTE） */
   _prepareStatements() {
-    this._insertStmt = this.db.prepare(`
-      INSERT INTO tasks (
-        id, parent_id, child_seq,
-        title, description, design, acceptance, notes,
-        status, priority, task_type, close_reason, content_hash,
-        fail_count, last_fail_reason,
-        assignee, created_by,
-        created_at, updated_at, closed_at,
-        metadata
-      ) VALUES (
-        @id, @parent_id, @child_seq,
-        @title, @description, @design, @acceptance, @notes,
-        @status, @priority, @task_type, @close_reason, @content_hash,
-        @fail_count, @last_fail_reason,
-        @assignee, @created_by,
-        @created_at, @updated_at, @closed_at,
-        @metadata
-      )
-    `);
-
-    this._findByIdStmt = this.db.prepare('SELECT * FROM tasks WHERE id = ? LIMIT 1');
-
-    this._findByHashStmt = this.db.prepare(
-      "SELECT * FROM tasks WHERE content_hash = ? AND status != 'closed' LIMIT 1"
-    );
-
-    this._updateFieldsStmt = null; // 动态构建
-
-    this._deleteStmt = this.db.prepare('DELETE FROM tasks WHERE id = ?');
-
-    // ── 依赖相关 ──
-    this._addDepStmt = this.db.prepare(`
-      INSERT OR IGNORE INTO task_dependencies (task_id, depends_on_id, dep_type, created_at, created_by)
-      VALUES (?, ?, ?, ?, 'agent')
-    `);
-
-    this._removeDepStmt = this.db.prepare(
-      'DELETE FROM task_dependencies WHERE task_id = ? AND depends_on_id = ? AND dep_type = ?'
-    );
-
-    this._getDepsStmt = this.db.prepare(
-      'SELECT * FROM task_dependencies WHERE task_id = ? ORDER BY created_at'
-    );
-
-    this._getDependentsStmt = this.db.prepare(
-      'SELECT * FROM task_dependencies WHERE depends_on_id = ?'
-    );
-
-    this._getBlockersStmt = this.db.prepare(`
-      SELECT t.*
-      FROM task_dependencies td
-      JOIN tasks t ON td.depends_on_id = t.id
-      WHERE td.task_id = ?
-        AND td.dep_type IN ('blocks', 'waits-for')
-        AND t.status != 'closed'
-    `);
-
-    // ── 环检测 (递归 CTE) ──
+    // ── 环检测 (递归 CTE) — drizzle 不支持递归 CTE ──
     this._reachableStmt = this.db.prepare(`
       WITH RECURSIVE reachable(id, depth) AS (
         SELECT depends_on_id, 1
@@ -169,69 +116,51 @@ export class TaskRepositoryImpl {
       )
       SELECT 1 FROM reachable WHERE id = ? LIMIT 1
     `);
-
-    // ── 事件审计 ──
-    this._logEventStmt = this.db.prepare(`
-      INSERT INTO task_events (task_id, event_type, actor, old_value, new_value, comment, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    // ── 统计 ──
-    this._statsStmt = this.db.prepare(`
-      SELECT
-        COUNT(*)                                           as total,
-        SUM(CASE WHEN status = 'open'        THEN 1 ELSE 0 END) as open,
-        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
-        SUM(CASE WHEN status = 'closed'      THEN 1 ELSE 0 END) as closed,
-        SUM(CASE WHEN status = 'deferred'    THEN 1 ELSE 0 END) as deferred,
-        SUM(CASE WHEN status = 'pinned'      THEN 1 ELSE 0 END) as pinned
-      FROM tasks
-    `);
   }
 
   // ═══ CRUD ═══════════════════════════════════════════
 
   /**
    * 创建任务
-   * @param {Task} task
-   * @returns {Task}
+   * ★ Drizzle 类型安全 INSERT
    */
   create(task: Task) {
     const row = this._entityToRow(task);
-    this._insertStmt.run(row);
+    this.#drizzle.insert(tasks).values(row).run();
     return this.findById(task.id!);
   }
 
   /**
    * 按 ID 查询
-   * @param {string} id
-   * @returns {Task|null}
+   * ★ Drizzle 类型安全 SELECT
    */
   findById(id: string) {
-    const row = this._findByIdStmt.get(id) as Record<string, unknown> | undefined;
-    return row ? Task.fromRow(row) : null;
+    const row = this.#drizzle.select().from(tasks).where(eq(tasks.id, id)).get();
+    return row ? Task.fromRow(row as unknown as Record<string, unknown>) : null;
   }
 
   /**
    * 按内容哈希查询（去重用）
-   * @param {string} hash
-   * @returns {Task|null}
+   * ★ Drizzle 类型安全 SELECT
    */
   findByContentHash(hash: string | null) {
     if (!hash) {
       return null;
     }
-    const row = this._findByHashStmt.get(hash) as Record<string, unknown> | undefined;
-    return row ? Task.fromRow(row) : null;
+    const row = this.#drizzle
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.contentHash, hash), sql`${tasks.status} != 'closed'`))
+      .get();
+    return row ? Task.fromRow(row as unknown as Record<string, unknown>) : null;
   }
 
   /**
    * 更新任务字段
-   * @param {string} id
-   * @param {object} fields 部分字段 (camelCase)
-   * @returns {Task}
+   * ★ Drizzle 类型安全 UPDATE
    */
   update(id: string, fields: TaskUpdateFields) {
+    const setObj: Record<string, unknown> = {};
     const columnMap: Record<string, string> = {
       status: 'status',
       priority: 'priority',
@@ -240,51 +169,42 @@ export class TaskRepositoryImpl {
       description: 'description',
       design: 'design',
       acceptance: 'acceptance',
-      closeReason: 'close_reason',
-      closedAt: 'closed_at',
-      updatedAt: 'updated_at',
-      failCount: 'fail_count',
-      lastFailReason: 'last_fail_reason',
-      childSeq: 'child_seq',
+      closeReason: 'closeReason',
+      closedAt: 'closedAt',
+      updatedAt: 'updatedAt',
+      failCount: 'failCount',
+      lastFailReason: 'lastFailReason',
+      childSeq: 'childSeq',
       metadata: 'metadata',
     };
 
-    const setClauses: string[] = [];
-    const values: (string | number | null)[] = [];
-
     for (const [key, value] of Object.entries(fields)) {
-      const col = columnMap[key];
-      if (!col) {
+      const schemaKey = columnMap[key];
+      if (!schemaKey) {
         continue;
       }
-      setClauses.push(`${col} = ?`);
-      values.push(key === 'metadata' ? JSON.stringify(value) : (value as string | number | null));
+      setObj[schemaKey] = key === 'metadata' ? JSON.stringify(value) : value;
     }
 
-    if (setClauses.length === 0) {
+    if (Object.keys(setObj).length === 0) {
       return this.findById(id);
     }
 
-    // 始终更新 updated_at
+    // 始终更新 updatedAt
     if (!fields.updatedAt) {
-      setClauses.push('updated_at = ?');
-      values.push(Math.floor(Date.now() / 1000));
+      setObj.updatedAt = Math.floor(Date.now() / 1000);
     }
 
-    values.push(id);
-    const sql = `UPDATE tasks SET ${setClauses.join(', ')} WHERE id = ?`;
-    this.db.prepare(sql).run(...values);
-
+    this.#drizzle.update(tasks).set(setObj).where(eq(tasks.id, id)).run();
     return this.findById(id);
   }
 
   /**
    * 删除任务
-   * @param {string} id
-   * @returns {boolean}
+   * ★ Drizzle 类型安全 DELETE
    */
   delete(id: string) {
-    const result = this._deleteStmt.run(id);
+    const result = this.#drizzle.delete(tasks).where(eq(tasks.id, id)).run();
     return result.changes > 0;
   }
 
@@ -331,39 +251,80 @@ export class TaskRepositoryImpl {
 
   /**
    * 添加依赖
+   * ★ Drizzle 类型安全 INSERT OR IGNORE
    */
   addDependency(taskId: string, dependsOnId: string, depType: string) {
-    this._addDepStmt.run(taskId, dependsOnId, depType, Math.floor(Date.now() / 1000));
+    this.#drizzle
+      .insert(taskDependencies)
+      .values({
+        taskId,
+        dependsOnId,
+        depType,
+        createdAt: Math.floor(Date.now() / 1000),
+        createdBy: 'agent',
+      })
+      .onConflictDoNothing()
+      .run();
   }
 
   /**
    * 删除依赖
+   * ★ Drizzle 类型安全 DELETE
    */
   removeDependency(taskId: string, dependsOnId: string, depType: string) {
-    this._removeDepStmt.run(taskId, dependsOnId, depType);
+    this.#drizzle
+      .delete(taskDependencies)
+      .where(
+        and(
+          eq(taskDependencies.taskId, taskId),
+          eq(taskDependencies.dependsOnId, dependsOnId),
+          eq(taskDependencies.depType, depType)
+        )
+      )
+      .run();
   }
 
   /**
    * 获取任务的所有依赖
+   * ★ Drizzle 类型安全 SELECT
    */
   getDependencies(taskId: string): TaskDependencyRow[] {
-    return this._getDepsStmt.all(taskId) as TaskDependencyRow[];
+    return this.#drizzle
+      .select()
+      .from(taskDependencies)
+      .where(eq(taskDependencies.taskId, taskId))
+      .orderBy(asc(taskDependencies.createdAt))
+      .all() as TaskDependencyRow[];
   }
 
   /**
    * 获取依赖此任务的所有任务
+   * ★ Drizzle 类型安全 SELECT
    */
   getDependents(dependsOnId: string): TaskDependencyRow[] {
-    return this._getDependentsStmt.all(dependsOnId) as TaskDependencyRow[];
+    return this.#drizzle
+      .select()
+      .from(taskDependencies)
+      .where(eq(taskDependencies.dependsOnId, dependsOnId))
+      .all() as TaskDependencyRow[];
   }
 
   /**
    * 获取阻塞某任务的所有任务（含任务详情）
+   * 保留 raw SQL — JOIN 查询
    */
   getBlockers(taskId: string) {
-    return this._getBlockersStmt
-      .all(taskId)
-      .map((r: unknown) => Task.fromRow(r as Record<string, unknown>));
+    const rows = this.db
+      .prepare(`
+      SELECT t.*
+      FROM task_dependencies td
+      JOIN tasks t ON td.depends_on_id = t.id
+      WHERE td.task_id = ?
+        AND td.dep_type IN ('blocks', 'waits-for')
+        AND t.status != 'closed'
+    `)
+      .all(taskId);
+    return rows.map((r: unknown) => Task.fromRow(r as Record<string, unknown>));
   }
 
   /**
@@ -393,9 +354,21 @@ export class TaskRepositoryImpl {
 
   /**
    * 获取任务统计
+   * 保留 raw SQL — SUM(CASE WHEN) 聚合在 drizzle 中不如直写清晰
    */
   getStatistics() {
-    const row = this._statsStmt.get() as TaskStatsRow;
+    const row = this.db
+      .prepare(`
+      SELECT
+        COUNT(*)                                           as total,
+        SUM(CASE WHEN status = 'open'        THEN 1 ELSE 0 END) as open,
+        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
+        SUM(CASE WHEN status = 'closed'      THEN 1 ELSE 0 END) as closed,
+        SUM(CASE WHEN status = 'deferred'    THEN 1 ELSE 0 END) as deferred,
+        SUM(CASE WHEN status = 'pinned'      THEN 1 ELSE 0 END) as pinned
+      FROM tasks
+    `)
+      .get() as TaskStatsRow;
     return {
       total: row.total || 0,
       open: row.open || 0,
@@ -410,6 +383,7 @@ export class TaskRepositoryImpl {
 
   /**
    * 记录任务事件
+   * ★ Drizzle 类型安全 INSERT
    */
   logEvent(
     taskId: string,
@@ -419,15 +393,18 @@ export class TaskRepositoryImpl {
     comment: string | null = null,
     actor = 'agent'
   ) {
-    this._logEventStmt.run(
-      taskId,
-      eventType,
-      actor,
-      oldValue,
-      newValue,
-      comment,
-      Math.floor(Date.now() / 1000)
-    );
+    this.#drizzle
+      .insert(taskEvents)
+      .values({
+        taskId,
+        eventType,
+        actor,
+        oldValue,
+        newValue,
+        comment,
+        createdAt: Math.floor(Date.now() / 1000),
+      })
+      .run();
   }
 
   // ═══ 私有方法 ═══════════════════════════════════════
@@ -439,9 +416,9 @@ export class TaskRepositoryImpl {
    */
   _entityToRow(task: Task) {
     return {
-      id: task.id,
-      parent_id: task.parentId || null,
-      child_seq: task.childSeq || 0,
+      id: task.id!,
+      parentId: task.parentId || null,
+      childSeq: task.childSeq || 0,
       title: task.title,
       description: task.description || '',
       design: task.design || '',
@@ -449,16 +426,16 @@ export class TaskRepositoryImpl {
       notes: task.notes || '',
       status: task.status,
       priority: task.priority ?? 2,
-      task_type: task.taskType || 'task',
-      close_reason: task.closeReason || '',
-      content_hash: task.contentHash || '',
-      fail_count: task.failCount || 0,
-      last_fail_reason: task.lastFailReason || '',
+      taskType: task.taskType || 'task',
+      closeReason: task.closeReason || '',
+      contentHash: task.contentHash || '',
+      failCount: task.failCount || 0,
+      lastFailReason: task.lastFailReason || '',
       assignee: task.assignee || '',
-      created_by: task.createdBy || 'agent',
-      created_at: task.createdAt,
-      updated_at: task.updatedAt,
-      closed_at: task.closedAt || null,
+      createdBy: task.createdBy || 'agent',
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      closedAt: task.closedAt || null,
       metadata: JSON.stringify(task.metadata || {}),
     };
   }

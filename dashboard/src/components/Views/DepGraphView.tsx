@@ -3,6 +3,7 @@ import { RefreshCw, Layers } from 'lucide-react';
 import api from '../../api';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
+import { getErrorMessage } from '../../utils/error';
 
 interface DepGraphNode {
   id: string;
@@ -135,8 +136,8 @@ const DepGraphView: React.FC = () => {
     projectRoot: raw?.projectRoot ?? null,
     generatedAt: raw?.generatedAt,
     });
-  } catch (err: any) {
-    setError(err.response?.data?.error || err.message || 'Failed to load dependency graph');
+  } catch (err: unknown) {
+    setError(getErrorMessage(err, 'Failed to load dependency graph'));
   } finally {
     setLoading(false);
   }

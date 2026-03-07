@@ -21,8 +21,19 @@ import { readFileSync, unlinkSync } from 'node:fs';
 import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
+import {
+  RemoteCommandRepository,
+  type StatusCounts,
+} from '../../repository/remote/RemoteCommandRepository.js';
 import { LarkTransport } from '../../service/agent/LarkTransport.js';
+import {
+  RemoteHistoryQuery,
+  RemoteNotifyBody,
+  RemoteResultBody,
+  RemoteSendBody,
+} from '../../shared/schemas/http-requests.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate, validateQuery } from '../middleware/validate.js';
 
 /** Lark WS client shape */
 interface LarkWsClient {
@@ -68,28 +79,15 @@ function getDb() {
   return typeof database?.getDb === 'function' ? database.getDb() : database;
 }
 
-let _tableReady = false;
-function ensureTable(db: { exec(sql: string): void }) {
-  if (_tableReady) {
-    return;
+let _repo: RemoteCommandRepository | null = null;
+
+/** 获取或创建 RemoteCommandRepository 单例 */
+function getRepo(): RemoteCommandRepository {
+  if (!_repo) {
+    const db = getDb();
+    _repo = new RemoteCommandRepository(db);
   }
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS remote_commands (
-      id              TEXT PRIMARY KEY,
-      source          TEXT NOT NULL DEFAULT 'lark',
-      chat_id         TEXT,
-      message_id      TEXT,
-      user_id         TEXT,
-      user_name       TEXT,
-      command         TEXT NOT NULL,
-      status          TEXT NOT NULL DEFAULT 'pending',
-      result          TEXT,
-      created_at      INTEGER NOT NULL,
-      claimed_at      INTEGER,
-      completed_at    INTEGER
-    )
-  `);
-  _tableReady = true;
+  return _repo;
 }
 
 function genId() {
@@ -318,25 +316,8 @@ setInterval(async () => {
 
 setInterval(() => {
   try {
-    const db = getDb();
-    ensureTable(db);
-    const now = Math.floor(Date.now() / 1000);
-
-    // pending 超时
-    const pendingTimeout = db
-      .prepare(
-        'UPDATE remote_commands SET status = ?, completed_at = ? WHERE status = ? AND created_at < ?'
-      )
-      .run('timeout', now, 'pending', now - PENDING_TIMEOUT_SEC);
-
-    // running 超时
-    const runningTimeout = db
-      .prepare(
-        'UPDATE remote_commands SET status = ?, completed_at = ? WHERE status = ? AND claimed_at < ?'
-      )
-      .run('timeout', now, 'running', now - RUNNING_TIMEOUT_SEC);
-
-    const total = (pendingTimeout.changes || 0) + (runningTimeout.changes || 0);
+    const repo = getRepo();
+    const total = repo.cleanupTimeouts(PENDING_TIMEOUT_SEC, RUNNING_TIMEOUT_SEC);
     if (total > 0) {
       logger.info(`[Remote] Cleaned ${total} timed-out commands`);
     }
@@ -409,8 +390,7 @@ async function getStatusText() {
   );
 
   try {
-    const db = getDb();
-    ensureTable(db);
+    const repo = getRepo();
 
     const hasWaiters = _waiters.size > 0;
     const pollAge = _lastPollAt > 0 ? now - Math.floor(_lastPollAt / 1000) : -1;
@@ -422,24 +402,16 @@ async function getStatusText() {
       ideOk = true;
       lines.push(`④ IDE 扩展: ✅ 活跃 (${pollAge}秒前有心跳)`);
     } else {
-      const recentClaim = db
-        .prepare(
-          'SELECT claimed_at FROM remote_commands WHERE claimed_at IS NOT NULL ORDER BY claimed_at DESC LIMIT 1'
-        )
-        .get();
-      if (recentClaim?.claimed_at && now - recentClaim.claimed_at < 120) {
+      const recentClaim = repo.findRecentClaim();
+      if (recentClaim && now - recentClaim.claimedAt < 120) {
         ideOk = true;
-        lines.push(`④ IDE 扩展: ✅ 活跃 (${now - recentClaim.claimed_at}秒前有 claim)`);
+        lines.push(`④ IDE 扩展: ✅ 活跃 (${now - recentClaim.claimedAt}秒前有 claim)`);
       } else {
         lines.push('④ IDE 扩展: ⚠️ 未检测到活跃连接');
       }
     }
 
-    const counts: Record<string, number> = {};
-    for (const s of ['pending', 'running', 'completed', 'timeout']) {
-      counts[s] =
-        db.prepare('SELECT COUNT(*) as c FROM remote_commands WHERE status = ?').get(s)?.c || 0;
-    }
+    const counts = repo.getStatusCounts();
     lines.push(
       `⑤ 队列: ${counts.pending} 待执行 | ${counts.running} 执行中 | ${counts.completed} 已完成 | ${counts.timeout} 超时`
     );
@@ -465,29 +437,23 @@ async function getStatusText() {
  * @returns {Promise<{id: string}>}
  */
 async function enqueueIdeCommand(command: string, meta: Record<string, string> = {}) {
-  const db = getDb();
-  ensureTable(db);
+  const repo = getRepo();
   const id = genId();
-  const now = Math.floor(Date.now() / 1000);
 
   if (meta.chatId) {
     _activeChatId = meta.chatId;
     _persistActiveChatId(meta.chatId);
   }
 
-  db.prepare(`
-    INSERT INTO remote_commands (id, source, chat_id, message_id, user_id, user_name, command, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-  `).run(
+  repo.enqueue({
     id,
-    'lark',
-    meta.chatId || '',
-    meta.messageId || '',
-    meta.senderId || '',
-    meta.senderName || 'lark_user',
+    source: 'lark',
+    chatId: meta.chatId,
+    messageId: meta.messageId,
+    userId: meta.senderId,
+    userName: meta.senderName,
     command,
-    now
-  );
+  });
 
   logger.info(`[Remote/Lark] IDE command queued: ${id} — "${command.slice(0, 50)}"`);
   wakeWaiters();
@@ -570,14 +536,10 @@ router.get(
   '/lark/status',
   asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     const config = getLarkConfig();
-    const queueInfo: Record<string, number> = {};
+    let queueInfo: StatusCounts | Record<string, number> = {};
     try {
-      const db = getDb();
-      ensureTable(db);
-      for (const s of ['pending', 'running', 'completed', 'timeout']) {
-        queueInfo[s] =
-          db.prepare('SELECT COUNT(*) as c FROM remote_commands WHERE status = ?').get(s)?.c || 0;
-      }
+      const repo = getRepo();
+      queueInfo = repo.getStatusCounts();
     } catch {
       /* DB 未就绪 */
     }
@@ -628,11 +590,8 @@ router.get(
   '/pending',
   asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     _lastPollAt = Date.now();
-    const db = getDb();
-    ensureTable(db);
-    const row = db
-      .prepare('SELECT * FROM remote_commands WHERE status = ? ORDER BY created_at ASC LIMIT 1')
-      .get('pending');
+    const repo = getRepo();
+    const row = repo.findFirstPending();
     res.json({
       success: true,
       data: row
@@ -640,9 +599,9 @@ router.get(
             id: row.id,
             command: row.command,
             source: row.source,
-            userName: row.user_name,
-            messageId: row.message_id,
-            createdAt: row.created_at,
+            userName: row.userName,
+            messageId: row.messageId,
+            createdAt: row.createdAt,
           }
         : null,
     });
@@ -652,20 +611,17 @@ router.get(
 router.post(
   '/claim/:id',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { id } = req.params;
-    const db = getDb();
-    ensureTable(db);
-    const result = db
-      .prepare('UPDATE remote_commands SET status = ?, claimed_at = ? WHERE id = ? AND status = ?')
-      .run('running', Math.floor(Date.now() / 1000), id, 'pending');
-    if (result.changes === 0) {
+    const id = req.params.id as string;
+    const repo = getRepo();
+    const claimed = repo.claim(id);
+    if (!claimed) {
       return void res.json({ success: false, message: 'Not found or already claimed' });
     }
     // 通知飞书用户：IDE 已开始执行
-    const row = db.prepare('SELECT message_id, command FROM remote_commands WHERE id = ?').get(id);
-    if (row?.message_id) {
+    const row = repo.findById(id);
+    if (row?.messageId) {
       replyLark(
-        row.message_id,
+        row.messageId,
         `🚀 IDE 已开始执行...\n\n> ${(row.command || '').slice(0, 60)}`
       ).catch(() => {});
     }
@@ -675,29 +631,27 @@ router.post(
 
 router.post(
   '/result/:id',
+  validate(RemoteResultBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { id } = req.params;
-    const { result, status = 'completed' } = req.body;
-    const db = getDb();
-    ensureTable(db);
-    const row = db.prepare('SELECT * FROM remote_commands WHERE id = ?').get(id);
+    const id = req.params.id as string;
+    const { result, status } = req.body;
+    const repo = getRepo();
+    const row = repo.findById(id);
     if (!row) {
       return void res.json({ success: false, message: 'Not found' });
     }
 
-    db.prepare(
-      'UPDATE remote_commands SET status = ?, result = ?, completed_at = ? WHERE id = ?'
-    ).run(status, result || '', Math.floor(Date.now() / 1000), id);
+    repo.complete(id, result || '', status);
 
     // 回复飞书
-    if (row.message_id && result) {
+    if (row.messageId && result) {
       const truncated = result.length > 2000 ? `${result.slice(0, 2000)}\n\n... (截断)` : result;
       if (status === 'completed') {
-        await replyLark(row.message_id, truncated);
+        await replyLark(row.messageId, truncated);
       } else {
         const emoji = status === 'failed' ? '❌' : '⚠️';
         const label = status === 'failed' ? '执行失败' : status;
-        await replyLark(row.message_id, `${emoji} ${label}\n\n${truncated}`);
+        await replyLark(row.messageId, `${emoji} ${label}\n\n${truncated}`);
       }
     }
     res.json({ success: true });
@@ -706,13 +660,11 @@ router.post(
 
 router.get(
   '/history',
+  validateQuery(RemoteHistoryQuery),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const db = getDb();
-    ensureTable(db);
-    const limit = Math.min(parseInt(String(req.query.limit), 10) || 20, 100);
-    const rows = db
-      .prepare('SELECT * FROM remote_commands ORDER BY created_at DESC LIMIT ?')
-      .all(limit);
+    const repo = getRepo();
+    const limit = (req.query as unknown as { limit: number }).limit;
+    const rows = repo.getHistory(limit);
     res.json({ success: true, data: rows });
   })
 );
@@ -770,30 +722,18 @@ router.get('/wait', (req, res) => {
 router.post(
   '/flush',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const db = getDb();
-    ensureTable(db);
-
-    // 查出所有 pending 指令的摘要
-    const pending = db
-      .prepare(
-        "SELECT id, command, created_at FROM remote_commands WHERE status = 'pending' ORDER BY created_at ASC"
-      )
-      .all();
+    const repo = getRepo();
+    const pending = repo.flushPending();
 
     if (pending.length === 0) {
       return void res.json({ success: true, flushed: 0, commands: [] });
     }
 
-    // 批量标记为 cancelled
     const now = Math.floor(Date.now() / 1000);
-    db.prepare(
-      "UPDATE remote_commands SET status = 'cancelled', result = '🗑 IDE 重连时自动清理（积压指令）', completed_at = ? WHERE status = 'pending'"
-    ).run(now);
-
-    const summaries = pending.map((r: Record<string, unknown>) => ({
+    const summaries = pending.map((r) => ({
       id: r.id,
-      command: (r.command as string)?.slice(0, 60) || '',
-      age: now - (r.created_at as number),
+      command: r.command?.slice(0, 60) || '',
+      age: now - r.createdAt,
     }));
 
     logger.info(`[Remote] Flushed ${pending.length} stale pending commands on IDE reconnect`);
@@ -813,30 +753,28 @@ router.post(
 
 router.post(
   '/send',
+  validate(RemoteSendBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { command } = req.body;
-    if (!command?.trim()) {
-      return void res.status(400).json({ success: false, message: 'command required' });
-    }
-    const db = getDb();
-    ensureTable(db);
+    const repo = getRepo();
     const id = genId();
-    db.prepare(
-      'INSERT INTO remote_commands (id, source, command, status, user_name, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(id, 'manual', command.trim(), 'pending', 'developer', Math.floor(Date.now() / 1000));
-    res.json({ success: true, data: { id, command: command.trim() } });
+    repo.enqueue({
+      id,
+      source: 'manual',
+      userName: 'developer',
+      command,
+    });
+    res.json({ success: true, data: { id, command } });
   })
 );
 
 // POST /api/v1/remote/notify — 通用通知（扩展/外部模块主动推送飞书）
 router.post(
   '/notify',
+  validate(RemoteNotifyBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { text } = req.body;
-    if (!text?.trim()) {
-      return void res.status(400).json({ success: false, message: 'text required' });
-    }
-    const sent = await sendLarkNotification(text.trim());
+    const sent = await sendLarkNotification(text);
     res.json({ success: sent, message: sent ? 'Sent' : 'Lark not connected or no active chat' });
   })
 );
@@ -1115,15 +1053,8 @@ let _activeChatId = '';
 /** 持久化 active chat_id 到数据库 */
 function _persistActiveChatId(chatId: string) {
   try {
-    const db = getDb();
-    db.exec(
-      `CREATE TABLE IF NOT EXISTS remote_state (key TEXT PRIMARY KEY, value TEXT, updated_at INTEGER)`
-    );
-    db.prepare('INSERT OR REPLACE INTO remote_state (key, value, updated_at) VALUES (?, ?, ?)').run(
-      'active_chat_id',
-      chatId,
-      Math.floor(Date.now() / 1000)
-    );
+    const repo = getRepo();
+    repo.setState('active_chat_id', chatId);
   } catch {
     /* DB 未就绪 */
   }
@@ -1132,15 +1063,12 @@ function _persistActiveChatId(chatId: string) {
 /** 从数据库恢复 active chat_id */
 function _restoreActiveChatId() {
   try {
-    const db = getDb();
-    db.exec(
-      `CREATE TABLE IF NOT EXISTS remote_state (key TEXT PRIMARY KEY, value TEXT, updated_at INTEGER)`
-    );
+    const repo = getRepo();
 
     // 优先从 remote_state 恢复
-    const row = db.prepare('SELECT value FROM remote_state WHERE key = ?').get('active_chat_id');
-    if (row?.value) {
-      _activeChatId = row.value;
+    const value = repo.getState('active_chat_id');
+    if (value) {
+      _activeChatId = value;
       logger.info(
         `[Remote/Lark] Restored active chat from state: ${_activeChatId.slice(0, 12)}...`
       );
@@ -1148,14 +1076,10 @@ function _restoreActiveChatId() {
     }
 
     // 回退：从 remote_commands 取最近有 chat_id 的记录
-    const cmdRow = db
-      .prepare(
-        "SELECT chat_id FROM remote_commands WHERE chat_id != '' ORDER BY created_at DESC LIMIT 1"
-      )
-      .get();
-    if (cmdRow?.chat_id) {
-      _activeChatId = cmdRow.chat_id;
-      _persistActiveChatId(cmdRow.chat_id);
+    const chatId = repo.findRecentChatId();
+    if (chatId) {
+      _activeChatId = chatId;
+      repo.setState('active_chat_id', chatId);
       logger.info(
         `[Remote/Lark] Restored active chat from history: ${_activeChatId.slice(0, 12)}...`
       );

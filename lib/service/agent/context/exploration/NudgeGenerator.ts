@@ -23,6 +23,7 @@ import type {
   ExplorationBudget,
   ExplorationTrace,
   FullExplorationMetrics,
+  PipelineType,
 } from './ExplorationStrategies.js';
 import { DEFAULT_REFLECTION_INTERVAL } from './ExplorationStrategies.js';
 
@@ -44,6 +45,8 @@ interface NudgeState {
   strategy: NudgeStrategy;
   gracefulExitRound: number | null;
   submitToolName: string;
+  /** 管线类型 — 统一场景判别（替代 submitToolName / strategy.name 字符串比较） */
+  pipelineType: PipelineType;
   isTerminalPhase: boolean;
   transitionFromPhase?: string | null;
 }
@@ -89,13 +92,13 @@ export class NudgeGenerator {
       budget: b,
       strategy,
       gracefulExitRound,
-      submitToolName,
+      pipelineType,
       isTerminalPhase,
     } = state;
 
     // 1. 强制退出（graceful exit 后每轮都重复发出，确保 LLM 不再调用工具）
     if (gracefulExitRound != null && m.iteration >= gracefulExitRound) {
-      return this.#generateForceExit(m, b, strategy, submitToolName);
+      return this.#generateForceExit(m, b, strategy, pipelineType);
     }
 
     // 2. 收敛引导（信息饱和 — 仅非终结阶段）
@@ -149,7 +152,7 @@ export class NudgeGenerator {
    * @returns {string}
    */
   buildTransitionNudge(state: NudgeState) {
-    const { metrics: m, strategy, submitToolName } = state;
+    const { metrics: m, pipelineType, submitToolName } = state;
     const fromPhase = state.transitionFromPhase;
     const toPhase = state.phase;
 
@@ -159,8 +162,8 @@ export class NudgeGenerator {
 
     if (toPhase === 'SUMMARIZE') {
       const submitCount = m.submitCount;
-      // v5.1: Analyst 策略使用纯文本输出
-      if (strategy.name === 'analyst') {
+      // Analyst 管线: 纯文本分析报告
+      if (pipelineType === 'analyst') {
         return (
           `你已完成分析探索。请**停止调用工具**，直接输出你的**完整分析报告**。\n\n` +
           `要求：\n` +
@@ -173,8 +176,8 @@ export class NudgeGenerator {
           `⚠️ 以上是行为指令，严禁在回复中复制或引用这段文字，只输出你自己的分析内容。`
         );
       }
-      // Scan pipeline (collect_scan_recipe): 使用纯文本总结
-      if (submitToolName === 'collect_scan_recipe') {
+      // Scan 管线: 纯文本总结
+      if (pipelineType === 'scan') {
         return (
           `你已通过 collect_scan_recipe 提交了 ${submitCount} 个知识候选。` +
           `请**停止调用工具**，直接输出你的分析总结（Markdown 格式）。\n` +
@@ -231,11 +234,11 @@ export class NudgeGenerator {
     m: FullExplorationMetrics,
     b: ExplorationBudget,
     strategy: NudgeStrategy,
-    submitToolName: string
+    pipelineType: PipelineType
   ) {
     const submitCount = m.submitCount;
-    // v5.1: Analyst 策略使用纯文本输出
-    if (strategy.name === 'analyst') {
+    // Analyst 管线: 纯文本分析报告
+    if (pipelineType === 'analyst') {
       return {
         type: 'force_exit',
         text:
@@ -249,8 +252,8 @@ export class NudgeGenerator {
           `⛔ 严禁在回复中复制或引用本条指令的任何文字，只输出你自己的分析。`,
       };
     }
-    // Scan pipeline (collect_scan_recipe): 使用纯文本总结, 不需要 dimensionDigest
-    if (submitToolName === 'collect_scan_recipe') {
+    // Scan 管线: 纯文本总结, 不需要 dimensionDigest
+    if (pipelineType === 'scan') {
       return {
         type: 'force_exit',
         text:
@@ -357,7 +360,7 @@ export class NudgeGenerator {
    * @returns {string|null}
    */
   #getPhaseHint(state: NudgeState) {
-    const { phase, metrics: m, budget: b, submitToolName } = state;
+    const { phase, metrics: m, budget: b, submitToolName, pipelineType } = state;
 
     switch (phase) {
       case 'EXPLORE':
@@ -372,7 +375,7 @@ export class NudgeGenerator {
         }
         if (m.submitCount >= b.softSubmitLimit && b.softSubmitLimit > 0) {
           const remaining = b.maxSubmits - m.submitCount;
-          if (submitToolName === 'collect_scan_recipe') {
+          if (pipelineType === 'scan') {
             return `已提交 ${m.submitCount} 个候选（上限 ${b.maxSubmits}）。${remaining > 0 ? `还可提交 ${remaining} 个。` : ''}如果还有值得记录的发现可以继续提交，否则请输出分析总结。`;
           }
           return `已提交 ${m.submitCount} 个候选（上限 ${b.maxSubmits}）。${remaining > 0 ? `还可提交 ${remaining} 个。` : ''}如果还有值得记录的发现可以继续提交，否则请产出 dimensionDigest 总结。\n⚠️ 如果还有未处理的信号，请在 dimensionDigest 的 remainingTasks 字段中标记，下次运行时会续传。`;

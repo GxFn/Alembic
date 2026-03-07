@@ -9,6 +9,26 @@ import Bootstrap from '../lib/bootstrap.js';
 import HttpServer from '../lib/http/HttpServer.js';
 import Logger from '../lib/infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
+import { shutdown } from '../lib/shared/shutdown.js';
+
+// ─── Graceful Shutdown 协调器 ──────────────────────────
+shutdown.install();
+
+// ─── 进程级错误兜底 ────────────────────────────────────
+process.on('uncaughtException', (error) => {
+  const logger = Logger.getInstance();
+  logger.error('Uncaught Exception', {
+    message: error.message,
+    stack: error.stack,
+  });
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, _promise) => {
+  const logger = Logger.getInstance();
+  logger.error('Unhandled Rejection', { reason });
+  process.exit(1);
+});
 
 async function main() {
   const logger = Logger.getInstance();
@@ -52,7 +72,7 @@ async function main() {
 
     // 创建和启动 HTTP 服务器
     const httpServer = new HttpServer({ port, host });
-    await httpServer.initialize(); // 改为 async 调用
+    await httpServer.initialize();
     await httpServer.start();
 
     logger.info('HTTP API Server is running', {
@@ -61,46 +81,19 @@ async function main() {
       health: `http://${host}:${port}/api/v1/health`,
     });
 
-    // 优雅关闭
-    const handleShutdown = async (signal: any) => {
-      logger.info(`Received ${signal}, shutting down gracefully...`, {
-        timestamp: new Date().toISOString(),
-      });
-
-      await httpServer.stop();
+    // 注册 shutdown hooks（LIFO 顺序：先注册的后执行）
+    // 1. bootstrap.shutdown() — 关闭 DB（含 WAL checkpoint）
+    shutdown.register(async () => {
       await bootstrap.shutdown();
-
-      logger.info('HTTP API Server shut down successfully', {
-        timestamp: new Date().toISOString(),
-      });
-
-      process.exit(0);
-    };
-
-    process.on('SIGTERM', () => handleShutdown('SIGTERM'));
-    process.on('SIGINT', () => handleShutdown('SIGINT'));
-
-    // 处理未捕获的异常
-    process.on('uncaughtException', (error) => {
-      logger.error('Uncaught Exception', {
-        message: error.message,
-        stack: error.stack,
-      });
-      process.exit(1);
-    });
-
-    process.on('unhandledRejection', (reason, promise) => {
-      logger.error('Unhandled Rejection', {
-        reason,
-        promise,
-      });
-      process.exit(1);
-    });
-  } catch (error: any) {
-    logger.error('Failed to start HTTP API Server', {
-      message: error.message,
-      stack: error.stack,
-    });
+    }, 'bootstrap');
+    // 2. HTTP server — 停止接受新连接并等待进行中请求完成
+    shutdown.register(async () => {
+      await httpServer.stop();
+    }, 'http-server');
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    logger.error('Failed to start HTTP API Server', { message: msg, stack });
     process.exit(1);
   }
 }

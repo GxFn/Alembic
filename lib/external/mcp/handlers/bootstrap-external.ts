@@ -16,7 +16,7 @@
  */
 
 import path from 'node:path';
-import type { ServiceContainer } from '../../../injection/ServiceContainer.js';
+import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import { envelope } from '../envelope.js';
 import { BootstrapSessionManager } from './bootstrap/BootstrapSession.js';
 import { buildMissionBriefing } from './bootstrap/MissionBriefingBuilder.js';

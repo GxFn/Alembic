@@ -4,15 +4,22 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import { ioLimit } from '#shared/concurrency.js';
+import {
+  BatchDisableBody,
+  BatchEnableBody,
+  CheckCodeBody,
+  CreateGuardRuleBody,
+  ImportFromRecipeBody,
+} from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { NotFoundError, ValidationError } from '../../shared/errors/index.js';
+import { NotFoundError } from '../../shared/errors/index.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
 import { getContext, safeInt } from '../utils/routeHelpers.js';
 
 const router = express.Router();
-
-const MAX_BATCH_SIZE = 100;
 
 /**
  * 将 Recipe 实体 → Guard 规则扁平格式（Dashboard GuardView 期望）
@@ -180,6 +187,7 @@ router.get(
  */
 router.post(
   '/',
+  validate(CreateGuardRuleBody),
   asyncHandler(async (req: Request, res: Response) => {
     // 兼容前端 GuardView 发来的字段名
     const name = req.body.name || req.body.ruleId;
@@ -188,10 +196,6 @@ router.post(
     const note = req.body.note || sourceReason || '';
     const languages = req.body.languages || (category ? [category] : []);
     const dimension = req.body.dimension || null;
-
-    if (!name || !pattern) {
-      throw new ValidationError('name/ruleId and pattern are required');
-    }
 
     const result = await req.gw('guard_rule:create', 'guard_rules', {
       name,
@@ -216,21 +220,17 @@ router.post(
  */
 router.post(
   '/batch-enable',
+  validate(BatchEnableBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { ids } = req.body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      throw new ValidationError('ids array is required and must not be empty');
-    }
-    if (ids.length > MAX_BATCH_SIZE) {
-      throw new ValidationError(`Batch size exceeds limit of ${MAX_BATCH_SIZE}`);
-    }
 
     const container = getServiceContainer();
     const guardService = container.get('guardService');
     const context = getContext(req);
 
-    const results = await Promise.allSettled(ids.map((id) => guardService.enableRule(id, context)));
+    const results = await Promise.allSettled(
+      ids.map((id: string) => ioLimit(() => guardService.enableRule(id, context)))
+    );
 
     const enabled = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
     const failed = results
@@ -256,22 +256,16 @@ router.post(
  */
 router.post(
   '/batch-disable',
+  validate(BatchDisableBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { ids, reason } = req.body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      throw new ValidationError('ids array is required and must not be empty');
-    }
-    if (ids.length > MAX_BATCH_SIZE) {
-      throw new ValidationError(`Batch size exceeds limit of ${MAX_BATCH_SIZE}`);
-    }
 
     const container = getServiceContainer();
     const guardService = container.get('guardService');
     const context = getContext(req);
 
     const results = await Promise.allSettled(
-      ids.map((id) => guardService.disableRule(id, reason || '', context))
+      ids.map((id: string) => ioLimit(() => guardService.disableRule(id, reason || '', context)))
     );
 
     const disabled = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
@@ -334,12 +328,9 @@ router.patch(
  */
 router.post(
   '/check',
+  validate(CheckCodeBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { code, language, ruleIds } = req.body;
-
-    if (!code) {
-      throw new ValidationError('code is required');
-    }
 
     const container = getServiceContainer();
     const guardService = container.get('guardService');
@@ -355,15 +346,9 @@ router.post(
  */
 router.post(
   '/import-from-recipe',
+  validate(ImportFromRecipeBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { recipeId, rules } = req.body;
-
-    if (!recipeId) {
-      throw new ValidationError('recipeId is required');
-    }
-    if (!Array.isArray(rules) || rules.length === 0) {
-      throw new ValidationError('rules array is required and must not be empty');
-    }
 
     const container = getServiceContainer();
     const guardService = container.get('guardService');

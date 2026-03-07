@@ -13,13 +13,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { LanguageService } from '../../shared/LanguageService.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { RESOURCES_DIR } from '../../shared/package-root.js';
 
 /** .wasm 文件存放目录 */
-const GRAMMARS_DIR = path.resolve(__dirname, '..', '..', '..', 'resources', 'grammars');
+const GRAMMARS_DIR = path.resolve(RESOURCES_DIR, 'grammars');
 
 /**
  * 语言 ID → .wasm 文件名映射

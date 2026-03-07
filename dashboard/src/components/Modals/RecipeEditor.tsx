@@ -8,6 +8,7 @@ import CodeBlock from '../Shared/CodeBlock';
 import { ICON_SIZES } from '../../constants/icons';
 import PageOverlay from '../Shared/PageOverlay';
 import { useI18n } from '../../i18n';
+import { getErrorMessage } from '../../utils/error';
 import Select from '../ui/Select';
 
 interface RecipeEditorProps {
@@ -51,8 +52,8 @@ const RecipeEditor: React.FC<RecipeEditorProps> = ({ editingRecipe, setEditingRe
         const stats = editingRecipe.stats ? { ...editingRecipe.stats, authority } : { ...defaultStats, authority };
         setEditingRecipe({ ...editingRecipe, stats });
       }
-    } catch (err: any) {
-      console.warn(t('recipeEditor.authorityFailed'), err?.message);
+    } catch (err: unknown) {
+      console.warn(t('recipeEditor.authorityFailed'), getErrorMessage(err));
     }
   };
 
@@ -163,7 +164,7 @@ const RecipeEditor: React.FC<RecipeEditorProps> = ({ editingRecipe, setEditingRe
           <div className="border border-[var(--border-default)] rounded-lg overflow-hidden" style={{ minHeight: 180 }}>
           <HighlightedCodeEditor
             value={editingRecipe.content?.markdown || ''}
-            onChange={e => setEditingRecipe({ ...editingRecipe, content: { ...editingRecipe.content, markdown: e } as any })}
+            onChange={e => setEditingRecipe({ ...editingRecipe, content: { ...editingRecipe.content, markdown: e } })}
             language="markdown"
             height="180px"
             showLineNumbers={true}
@@ -179,7 +180,7 @@ const RecipeEditor: React.FC<RecipeEditorProps> = ({ editingRecipe, setEditingRe
           <div className="border border-[var(--border-default)] rounded-lg overflow-hidden" style={{ minHeight: 180 }}>
           <HighlightedCodeEditor
             value={editingRecipe.content?.pattern || ''}
-            onChange={e => setEditingRecipe({ ...editingRecipe, content: { ...editingRecipe.content, pattern: e } as any })}
+            onChange={e => setEditingRecipe({ ...editingRecipe, content: { ...editingRecipe.content, pattern: e } })}
             language={codeLang}
             height="180px"
             showLineNumbers={true}
@@ -194,7 +195,7 @@ const RecipeEditor: React.FC<RecipeEditorProps> = ({ editingRecipe, setEditingRe
           className="w-full px-3 py-2 text-sm border border-[var(--border-default)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)] resize-y"
           rows={3}
           value={editingRecipe.content?.rationale || ''}
-          onChange={e => setEditingRecipe({ ...editingRecipe, content: { ...editingRecipe.content, rationale: e.target.value } as any })}
+          onChange={e => setEditingRecipe({ ...editingRecipe, content: { ...editingRecipe.content, rationale: e.target.value } })}
           placeholder={t('recipeEditor.rationalePlaceholder')}
           />
         </div>

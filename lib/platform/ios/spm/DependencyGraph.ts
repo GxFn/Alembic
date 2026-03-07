@@ -4,7 +4,7 @@
  * 构建 target 级依赖 DAG，支持层级计算、拓扑排序、可达性检查
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 
 export class DependencyGraph {
   #adjacency: Map<string, Set<string>>; // Map<string, Set<string>>

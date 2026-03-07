@@ -15,7 +15,7 @@
  * @module pipeline/IncrementalBootstrap
  */
 
-import { SessionStore } from '../../../../../service/agent/memory/SessionStore.js';
+import { SessionStore } from '#service/agent/memory/SessionStore.js';
 import type { BootstrapFile, LoggerLike, SaveSnapshotParams } from '../../types.js';
 import { BootstrapSnapshot } from './BootstrapSnapshot.js';
 

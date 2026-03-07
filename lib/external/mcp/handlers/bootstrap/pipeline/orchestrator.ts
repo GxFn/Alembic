@@ -16,16 +16,16 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import Logger from '../../../../../infrastructure/logging/Logger.js';
-import { AgentMessage } from '../../../../../service/agent/AgentMessage.js';
-import { ExplorationTracker } from '../../../../../service/agent/context/ExplorationTracker.js';
-import { EpisodicConsolidator } from '../../../../../service/agent/domain/EpisodicConsolidator.js';
-import { ANALYST_BUDGET } from '../../../../../service/agent/domain/insight-analyst.js';
-import { MemoryCoordinator } from '../../../../../service/agent/memory/MemoryCoordinator.js';
-import { PersistentMemory } from '../../../../../service/agent/memory/PersistentMemory.js';
-import { SessionStore } from '../../../../../service/agent/memory/SessionStore.js';
-import { PRESETS } from '../../../../../service/agent/presets.js';
-import { BootstrapEventEmitter } from '../../../../../shared/BootstrapEventEmitter.js';
+import Logger from '#infra/logging/Logger.js';
+import { AgentMessage } from '#service/agent/AgentMessage.js';
+import { ExplorationTracker } from '#service/agent/context/ExplorationTracker.js';
+import { EpisodicConsolidator } from '#service/agent/domain/EpisodicConsolidator.js';
+import { ANALYST_BUDGET } from '#service/agent/domain/insight-analyst.js';
+import { MemoryCoordinator } from '#service/agent/memory/MemoryCoordinator.js';
+import { PersistentMemory } from '#service/agent/memory/PersistentMemory.js';
+import { SessionStore } from '#service/agent/memory/SessionStore.js';
+import { PRESETS } from '#service/agent/presets.js';
+import { BootstrapEventEmitter } from '#shared/BootstrapEventEmitter.js';
 import type { IncrementalPlan, McpContext } from '../../types.js';
 import type { BaseDimension } from '../base-dimensions.js';
 import { getDimensionFocusKeywords } from '../shared/dimension-sop.js';
@@ -395,9 +395,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
       // ── R7: No-AI 降级路径完成后也触发 Cursor Delivery ──
       if (persistedCount > 0 || skillsCreated > 0) {
         try {
-          const { getServiceContainer } = await import(
-            '../../../../../injection/ServiceContainer.js'
-          );
+          const { getServiceContainer } = await import('#inject/ServiceContainer.js');
           const deliveryContainer = getServiceContainer();
           if (deliveryContainer.services.cursorDeliveryPipeline) {
             const pipeline = deliveryContainer.get('cursorDeliveryPipeline');
@@ -536,7 +534,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
   let codeEntityGraphInst: { getTopology(): { totalEntities: number; totalEdges: number } } | null =
     null;
   try {
-    const { CodeEntityGraph } = await import('../../../../../service/knowledge/CodeEntityGraph.js');
+    const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
     const db = ctx.container.get('database');
     if (db) {
       codeEntityGraphInst = new CodeEntityGraph(db, { projectRoot, logger });
@@ -1059,7 +1057,6 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
         type: needsCandidates ? 'candidate' : 'skill',
         extracted: producerResult.candidateCount,
         created: producerResult.candidateCount,
-        skillPending: dimConfig.skillWorthy && producerResult.candidateCount === 0,
         status: 'v3-pipeline-complete',
         degraded: runResult?.degraded || false,
         durationMs: Date.now() - dimStartTime,
@@ -1296,7 +1293,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
   // 完善 inherits/calls/depends_on/data_flow 等语义边。
   // ═══════════════════════════════════════════════════════════
   try {
-    const { CodeEntityGraph } = await import('../../../../../service/knowledge/CodeEntityGraph.js');
+    const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
     const db = ctx.container.get('database');
     if (db) {
       const ceg = new CodeEntityGraph(db, { projectRoot, logger });
@@ -1475,9 +1472,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
 
     // Phase E: 附加 Code Entity Graph 拓扑到报告
     try {
-      const { CodeEntityGraph } = await import(
-        '../../../../../service/knowledge/CodeEntityGraph.js'
-      );
+      const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
       const db = ctx.container.get('database');
       if (db) {
         const ceg = new CodeEntityGraph(db, { projectRoot, logger });
@@ -1543,7 +1538,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
 
   // ── Cursor Delivery: 生成 4 通道交付物料 ──
   try {
-    const { getServiceContainer } = await import('../../../../../injection/ServiceContainer.js');
+    const { getServiceContainer } = await import('#inject/ServiceContainer.js');
     const container = getServiceContainer();
     if (container.services.cursorDeliveryPipeline) {
       const pipeline = container.get('cursorDeliveryPipeline');
@@ -1565,11 +1560,9 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
 
   // ── Repo Wiki: 自动生成项目文档 Wiki ──
   try {
-    const { getServiceContainer: getWikiContainer } = await import(
-      '../../../../../injection/ServiceContainer.js'
-    );
+    const { getServiceContainer: getWikiContainer } = await import('#inject/ServiceContainer.js');
     const wikiContainer = getWikiContainer();
-    const { WikiGenerator } = await import('../../../../../service/wiki/WikiGenerator.js');
+    const { WikiGenerator } = await import('#service/wiki/WikiGenerator.js');
 
     // 同步 wiki 路由的任务状态，让前端轮询 /wiki/status 能看到进度
     let patchWikiTask: ((data: Record<string, unknown>) => void) | null = null;
@@ -1577,7 +1570,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
       broadcastEvent?(event: string, data: Record<string, unknown>): void;
     } | null = null;
     try {
-      const wikiRoute = await import('../../../../../http/routes/wiki.js');
+      const wikiRoute = await import('#http/routes/wiki.js');
       patchWikiTask = wikiRoute.patchWikiTask;
     } catch {
       /* ok */
@@ -1679,7 +1672,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
     const wikiErrMsg = wikiErr instanceof Error ? wikiErr.message : String(wikiErr);
     logger.warn(`[Insight-v3] Wiki generation failed (non-blocking): ${wikiErrMsg}`);
     try {
-      const wikiRoute = await import('../../../../../http/routes/wiki.js');
+      const wikiRoute = await import('#http/routes/wiki.js');
       wikiRoute.patchWikiTask?.({
         status: 'error',
         finishedAt: Date.now(),

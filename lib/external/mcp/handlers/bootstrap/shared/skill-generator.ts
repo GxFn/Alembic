@@ -11,7 +11,7 @@
  * @module bootstrap/shared/skill-generator
  */
 
-import Logger from '../../../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 import type { McpContext } from '../../types.js';
 
 const logger = Logger.getInstance();

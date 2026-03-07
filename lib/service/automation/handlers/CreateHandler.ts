@@ -4,8 +4,8 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { saveEventFilter } from '../../../platform/ios/xcode/SaveEventFilter.js';
-import { LanguageService } from '../../../shared/LanguageService.js';
+import { saveEventFilter } from '#platform/ios/xcode/SaveEventFilter.js';
+import { LanguageService } from '#shared/LanguageService.js';
 import { REGEX } from '../DirectiveDetector.js';
 
 /**

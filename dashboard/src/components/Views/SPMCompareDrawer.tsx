@@ -9,6 +9,7 @@ import MarkdownWithHighlight, { stripFrontmatter } from '../Shared/MarkdownWithH
 import { Drawer } from '../Layout/Drawer';
 import { Button } from '../ui/Button';
 import { useI18n } from '../../i18n';
+import { getErrorMessage } from '../../utils/error';
 
 export type { SimilarRecipe };
 
@@ -60,11 +61,11 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
     const candGuide = cand.content?.markdown || cand.doClause || '';
     if (candCode) parts.push('## Snippet / Code Reference\n\n```' + candLang + '\n' + candCode + '\n```');
     if (candGuide) parts.push('\n## AI Context / Usage Guide\n\n' + candGuide);
-    navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify(t('spmCompare.candidateCopied'), { title: t('spmCompare.copied') }));
+    navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify(t('spmCompare.candidateCopied'), { title: t('spmCompare.copied') })).catch(() => { /* clipboard fallback: user denied or insecure context */ });
   };
   const copyRecipe = () => {
     const text = stripFrontmatter(data.recipeContent);
-    navigator.clipboard.writeText(text).then(() => notify(t('spmCompare.recipeCopied'), { title: t('spmCompare.copied') }));
+    navigator.clipboard.writeText(text).then(() => notify(t('spmCompare.recipeCopied'), { title: t('spmCompare.copied') })).catch(() => { /* clipboard fallback: user denied or insecure context */ });
   };
 
   const switchToRecipe = async (newName: string) => {
@@ -93,8 +94,8 @@ const SPMCompareDrawer: React.FC<SPMCompareDrawerProps> = ({
     try {
       await handleDeleteCandidate(data.targetName, cand.candidateId);
       onClose();
-    } catch (err: any) {
-      notify(err?.message || t('spmCompare.deleteFailed'), { title: t('spmCompare.deleteFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('spmCompare.deleteFailed')), { title: t('spmCompare.deleteFailed'), type: 'error' });
     }
   };
 

@@ -784,7 +784,7 @@ export const en: DeepString<typeof zh> = {
     round2Done: 'Refined {refined}/{total} items',
     round3Done: '{afterDedup} after dedup · {relationsFound} relations',
     noMatch: '✓ No matching content',
-    skillPending: '⏳ Generating Skill…',
+
     featuresOnly: '✓ {sourceCount} features',
     featuresAndCandidates: '✓ {sourceCount} features · {extracted} candidates',
     candidatesOnly: '✓ {extracted} candidates',

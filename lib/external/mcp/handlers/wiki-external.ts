@@ -15,9 +15,9 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import Logger from '../../../infrastructure/logging/Logger.js';
-import { WikiGenerator } from '../../../service/wiki/WikiGenerator.js';
-import { dedup } from '../../../service/wiki/WikiUtils.js';
+import Logger from '#infra/logging/Logger.js';
+import { WikiGenerator } from '#service/wiki/WikiGenerator.js';
+import { dedup } from '#service/wiki/WikiUtils.js';
 import { envelope } from '../envelope.js';
 import { getActiveSession } from './bootstrap-external.js';
 import type { McpContext, McpServiceContainer } from './types.js';

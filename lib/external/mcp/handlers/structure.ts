@@ -5,8 +5,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import * as Paths from '../../../infrastructure/config/Paths.js';
-import { LanguageService } from '../../../shared/LanguageService.js';
+import * as Paths from '#infra/config/Paths.js';
+import { LanguageService } from '#shared/LanguageService.js';
 import { envelope } from '../envelope.js';
 import type { McpContext } from './types.js';
 
@@ -90,7 +90,7 @@ async function _getLoadedDiscoverer() {
   }
 
   // 优先使用 DiscovererRegistry（多语言统一接口）
-  const { getDiscovererRegistry } = await import('../../../core/discovery/index.js');
+  const { getDiscovererRegistry } = await import('#core/discovery/index.js');
   const registry = getDiscovererRegistry();
   const discoverer = await registry.detect(projectRoot);
   await discoverer.load(projectRoot);

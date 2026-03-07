@@ -6,6 +6,7 @@ import {
   Pencil, Trash2, Save,
 } from 'lucide-react';
 import api from '../../api';
+import { getErrorMessage, getErrorStatus } from '../../utils/error';
 import { notify } from '../../utils/notification';
 import PageOverlay from '../Shared/PageOverlay';
 import { useI18n } from '../../i18n';
@@ -79,11 +80,11 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
     try {
       const data = await api.listSkills();
       setSkills(data.skills || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Skills 路由可能未注册 — 静默处理 404
-      const status = err.response?.status;
+      const status = getErrorStatus(err);
       if (status !== 404) {
-        notify(err.message || '', { title: t('skills.fetchFailed'), type: 'error' });
+        notify(getErrorMessage(err, ''), { title: t('skills.fetchFailed'), type: 'error' });
       }
       setSkills([]);
     } finally {
@@ -105,7 +106,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
     try {
       const data = await api.loadSkill(name);
       setSelectedSkill(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       notify(`"${name}" ${t('skills.loadError')}`, { title: t('skills.loadSkillFailed'), type: 'error' });
     } finally {
       setLoadingDetail(false);
@@ -115,7 +116,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
   /* ── Copy content ── */
   const handleCopy = () => {
     if (!selectedSkill?.content) return;
-    navigator.clipboard.writeText(selectedSkill.content);
+    navigator.clipboard.writeText(selectedSkill.content).catch(() => { /* clipboard fallback: user denied or insecure context */ });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -144,8 +145,8 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       // Reload detail
       const data = await api.loadSkill(selectedSkill.skillName);
       setSelectedSkill(data);
-    } catch (err: any) {
-      notify(err.message || '', { title: t('skills.updateFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, ''), { title: t('skills.updateFailed'), type: 'error' });
     } finally {
       setSavingSkill(false);
     }
@@ -163,8 +164,8 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       setEditing(false);
       fetchSkills();
       onRefresh?.();
-    } catch (err: any) {
-      notify(err.message || '', { title: t('skills.deleteFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, ''), { title: t('skills.deleteFailed'), type: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -193,8 +194,8 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       setSuggestions(list);
       // 同步角标数量为实际推荐数
       onSuggestionCountChange?.(list.length);
-    } catch (err: any) {
-      notify(err.message || '', { title: t('skills.aiRecommendFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, ''), { title: t('skills.aiRecommendFailed'), type: 'error' });
       setSuggestions([]);
       onSuggestionCountChange?.(0);
     } finally {
@@ -235,8 +236,8 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
         return next;
       });
       fetchSkills();
-    } catch (err: any) {
-      notify(err.message || '', { title: t('skills.createFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, ''), { title: t('skills.createFailed'), type: 'error' });
     } finally {
       setCreatingSuggestion(null);
     }
@@ -705,8 +706,8 @@ const CreateSkillModal: React.FC<{
       setAiGenerated(true);
       setMode('manual'); // Switch to manual to let user review/edit
       notify(t('skills.checkGenerated'), { title: t('skills.aiGenerated') });
-    } catch (err: any) {
-      setError(t('skills.aiGenFailed') + ': ' + (err.message || ''));
+    } catch (err: unknown) {
+      setError(t('skills.aiGenFailed') + ': ' + getErrorMessage(err, ''));
     } finally {
       setGenerating(false);
     }
@@ -724,9 +725,8 @@ const CreateSkillModal: React.FC<{
       await api.createSkill({ name: name.trim(), description: description.trim(), content: content.trim(), createdBy: aiGenerated ? 'user-ai' : 'manual' });
       notify(t('skills.savedToKB'), { title: `Skill "${name}" ${t('skills.createSuccess')}` });
       onCreated();
-    } catch (err: any) {
-      const msg = err.response?.data?.error?.message || err.message || '';
-      setError(t('skills.createFailed') + ': ' + msg);
+    } catch (err: unknown) {
+      setError(t('skills.createFailed') + ': ' + getErrorMessage(err, ''));
     } finally {
       setSaving(false);
     }

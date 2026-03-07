@@ -13,7 +13,7 @@
  * @module EpisodicConsolidator
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 
 // ────────────────────────────────────────────────────────────
 // 本地类型定义

@@ -9,11 +9,8 @@
  * ──  review_my_output   元工具: 自我质量审查
  */
 
-import {
-  getInternalAgentRequiredFields,
-  getSystemInjectedFields,
-} from '../../../shared/FieldSpec.js';
-import { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
+import { getInternalAgentRequiredFields, getSystemInjectedFields } from '#shared/FieldSpec.js';
+import { UnifiedValidator } from '#shared/UnifiedValidator.js';
 import { findSimilarRecipes } from '../../candidate/SimilarityService.js';
 import {
   checkDimensionType,

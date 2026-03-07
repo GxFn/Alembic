@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import yaml from 'js-yaml';
+import { ConstitutionSchema } from '../../shared/schemas/config.js';
 
 export interface ConstitutionRule {
   id: string;
@@ -59,7 +60,18 @@ export class Constitution {
     }
 
     const content = fs.readFileSync(this.configPath, 'utf8');
-    return yaml.load(content) as ConstitutionConfig;
+    const raw = yaml.load(content) as ConstitutionConfig;
+
+    // Zod 运行时校验
+    const result = ConstitutionSchema.safeParse(raw);
+    if (!result.success) {
+      const issues = result.error.issues
+        .map((i) => `  ${i.path.join('.')}: ${i.message}`)
+        .join('\n');
+      process.stderr.write(`[Constitution] ⚠️ Validation warnings:\n${issues}\n`);
+    }
+
+    return raw;
   }
 
   /**

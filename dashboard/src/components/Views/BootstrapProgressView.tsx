@@ -137,7 +137,6 @@ const TaskCard: React.FC<{ task: BootstrapTask }> = ({ task }) => {
                       : t('bootstrap.featuresOnly', { sourceCount });
                   }
                   if (extracted > 0) return t('bootstrap.candidatesOnly', { extracted });
-                  if (r.skillPending) return t('bootstrap.skillPending');
                   return t('bootstrap.noMatch');
                 })()}
               </p>

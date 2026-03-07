@@ -17,7 +17,9 @@ function showSystemNotification(body: string) {
   const send = () => {
     try {
       new Notification(APP_TITLE, { body, tag: 'autosnippet' });
-    } catch (_) {}
+    } catch (_) {
+      // intentionally ignored: Notification constructor may throw in insecure contexts
+    }
   };
 
   if (Notification.permission === 'granted') {
@@ -27,7 +29,7 @@ function showSystemNotification(body: string) {
   if (Notification.permission !== 'denied') {
     Notification.requestPermission().then((p) => {
       if (p === 'granted') send();
-    });
+    }).catch(() => { /* intentionally ignored: permission request may be dismissed or unavailable */ });
   }
 }
 

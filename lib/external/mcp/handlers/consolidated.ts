@@ -9,7 +9,7 @@
  * autosnippet_bootstrap 已迁移到 bootstrap-external.js（外部 Agent 路径）。
  */
 
-import { getRequiredFieldsDescription } from '../../../shared/FieldSpec.js';
+import { getRequiredFieldsDescription } from '#shared/FieldSpec.js';
 import * as browseHandlers from './browse.js';
 import * as candidateHandlers from './candidate.js';
 import * as guardHandlers from './guard.js';
@@ -222,7 +222,7 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
  */
 export async function enhancedSubmitKnowledge(ctx: McpContext, args: SubmitKnowledgeArgs) {
   const { submitKnowledge } = await import('./knowledge.js');
-  const { UnifiedValidator } = await import('../../../shared/UnifiedValidator.js');
+  const { UnifiedValidator } = await import('#shared/UnifiedValidator.js');
   const { envelope } = await import('../envelope.js');
 
   const skipDuplicateCheck = args.skipDuplicateCheck === true;

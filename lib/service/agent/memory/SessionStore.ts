@@ -25,8 +25,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import Logger from '../../../infrastructure/logging/Logger.js';
-import { CACHE } from '../../../shared/constants.js';
+import Logger from '#infra/logging/Logger.js';
+import { CACHE } from '#shared/constants.js';
 
 // ── 类型定义 ──
 

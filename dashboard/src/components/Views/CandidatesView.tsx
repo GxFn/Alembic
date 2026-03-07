@@ -17,6 +17,7 @@ import DrawerMeta from '../Shared/DrawerMeta';
 import type { BadgeItem, MetaItem } from '../Shared/DrawerMeta';
 import DrawerContent from '../Shared/DrawerContent';
 import { useI18n } from '../../i18n';
+import { getErrorMessage, getErrorStatus } from '../../utils/error';
 import Select from '../ui/Select';
 import { Button } from '../ui/Button';
 import { Drawer } from '../Layout/Drawer';
@@ -210,9 +211,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
       try {
         const recipeData = await api.getRecipeContentByName(normalizedRecipeName);
         recipeContent = recipeData.content;
-      } catch (err: any) {
-        const status = err.response?.status;
-        const message = err.response?.data?.message || err.message;
+      } catch (err: unknown) {
+        const status = getErrorStatus(err);
+        const message = getErrorMessage(err);
         if (status === 404) {
           notify(`"${normalizedRecipeName}" ${t('common.operationFailed')}`, { title: t('common.operationFailed'), type: 'error' });
         } else {
@@ -300,10 +301,11 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
       try {
         const updated = await api.getCandidate(candidateId);
         setCandidateOverrides(prev => ({ ...prev, [candidateId]: updated }));
-      } catch (_) {}
-    } catch (err: any) {
-      const raw = err.response?.data?.error;
-      notify(typeof raw === 'string' ? raw : raw?.message || err.message, { title: t('common.operationFailed'), type: 'error' });
+      } catch (_) {
+        // intentionally ignored: optional drawer refresh after enrichment; page-level data is already up-to-date
+      }
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('common.operationFailed')), { title: t('common.operationFailed'), type: 'error' });
     } finally {
       setEnrichingIds(prev => { const next = new Set(prev); next.delete(candidateId); return next; });
     }
@@ -324,9 +326,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
       }
       notify(`${total}/${items.length} ${t('candidates.batchDeleteDone', { count: total })}`, { title: t('candidates.aiRefine') });
       onRefresh?.();
-    } catch (err: any) {
-      const raw = err.response?.data?.error;
-      notify(typeof raw === 'string' ? raw : raw?.message || err.message, { title: t('common.operationFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('common.operationFailed')), { title: t('common.operationFailed'), type: 'error' });
     } finally {
       setEnrichingAll(false);
     }
@@ -337,7 +338,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
     try {
       const updated = await api.getCandidate(candidateId);
       setCandidateOverrides(prev => ({ ...prev, [candidateId]: updated }));
-    } catch (_) {}
+    } catch (_) {
+      // intentionally ignored: best-effort drawer refresh; stale data is acceptable
+    }
   }, []);
 
   /** Phase 6: AI 润色所有 Bootstrap 候选 — 打开全局 AI Chat 润色模式 */
@@ -603,7 +606,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       <ArrowUpDown size={12} className="text-[var(--fg-muted)]" />
                       <Select
                         value={filters.sort}
-                        onChange={v => setFilters(prev => ({ ...prev, sort: v as any }))}
+                        onChange={v => setFilters(prev => ({ ...prev, sort: v as typeof prev.sort }))}
                         options={[
                           { value: 'default', label: t('candidates.sortNewest') },
                           { value: 'score-desc', label: `${t('candidates.sortConfidence')} ↓` },
@@ -875,8 +878,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                     await api.promoteCandidateToRecipe(cand.id);
                                     notify(t('candidates.approveSuccess'), { title: t('candidates.approveSuccess') });
                                     onRefresh?.();
-                                  } catch (err: any) {
-                                    notify(err.message, { title: t('common.operationFailed'), type: 'error' });
+                                  } catch (err: unknown) {
+                                    notify(getErrorMessage(err, t('common.operationFailed')), { title: t('common.operationFailed'), type: 'error' });
                                   }
                                 }}
                                 className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-colors flex items-center gap-1"
@@ -944,11 +947,11 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 if (compareCand.content?.pattern) parts.push('## Snippet / Code Reference\n\n```' + (compareCandLang || '') + '\n' + compareCand.content.pattern + '\n```');
                 if (compareCand.content?.markdown) parts.push('\n## ' + t('candidates.projectProfile') + '\n\n' + compareCand.content.markdown);
                 else if (compareCand.doClause) parts.push('\n## AI Context / Usage Guide\n\n' + compareCand.doClause);
-                navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify(t('common.copied'), { title: t('common.copied') }));
+                navigator.clipboard.writeText(parts.join('\n') || '').then(() => notify(t('common.copied'), { title: t('common.copied') })).catch(() => { /* clipboard fallback: user denied or insecure context */ });
               };
               const copyRecipe = () => {
                 const text = stripFrontmatter(compareModal.recipeContent);
-                navigator.clipboard.writeText(text).then(() => notify(t('common.copied'), { title: t('common.copied') }));
+                navigator.clipboard.writeText(text).then(() => notify(t('common.copied'), { title: t('common.copied') })).catch(() => { /* clipboard fallback: user denied or insecure context */ });
               };
               const switchToRecipe = async (newName: string) => {
                 if (newName === compareModal.recipeName) return;
@@ -973,8 +976,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 try {
                   await handleDeleteCandidate(compareModal.targetName, compareCand.id);
                   setCompareModal(null);
-                } catch (err: any) {
-                  notify(err?.message || t('common.deleteFailed'), { title: t('common.deleteFailed'), type: 'error' });
+                } catch (err: unknown) {
+                  notify(getErrorMessage(err, t('common.deleteFailed')), { title: t('common.deleteFailed'), type: 'error' });
                 }
               };
               const handleCompareAudit = () => {
@@ -1243,8 +1246,8 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                           await api.promoteCandidateToRecipe(cand.id);
                           notify(t('candidates.approveSuccess'), { title: t('candidates.approveSuccess') });
                           onRefresh?.();
-                        } catch (err: any) {
-                          notify(err.message, { title: t('common.operationFailed'), type: 'error' });
+                        } catch (err: unknown) {
+                          notify(getErrorMessage(err, t('common.operationFailed')), { title: t('common.operationFailed'), type: 'error' });
                         }
                       }}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors"

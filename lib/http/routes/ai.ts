@@ -21,7 +21,20 @@ import {
 } from '../../service/agent/domain/ChatAgentTasks.js';
 import { PRESETS } from '../../service/agent/presets.js';
 import { ValidationError } from '../../shared/errors/index.js';
+import {
+  AiChatBody,
+  AiConfigBody,
+  AiEnvConfigBody,
+  AiFormatUsageGuideBody,
+  AiLangBody,
+  AiStreamBody,
+  AiSummarizeBody,
+  AiTaskBody,
+  AiToolBody,
+  AiTranslateBody,
+} from '../../shared/schemas/http-requests.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
 
 const router = express.Router();
@@ -54,11 +67,9 @@ router.get(
  */
 router.post(
   '/lang',
+  validate(AiLangBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { lang } = req.body;
-    if (lang !== 'zh' && lang !== 'en') {
-      throw new ValidationError('lang must be "zh" or "en"');
-    }
     const container = getContainer();
     container.setLang(lang);
     logger.info(`UI language preference updated to "${lang}"`);
@@ -124,12 +135,9 @@ router.get(
  */
 router.post(
   '/config',
+  validate(AiConfigBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { provider, model } = req.body;
-
-    if (!provider || typeof provider !== 'string') {
-      throw new ValidationError('provider is required');
-    }
 
     // 创建新的 provider 实例验证配置有效
     let newProvider: ReturnType<typeof createProvider>;
@@ -171,12 +179,9 @@ router.post(
  */
 router.post(
   '/summarize',
+  validate(AiSummarizeBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { code, language } = req.body;
-
-    if (!code) {
-      throw new ValidationError('code is required');
-    }
 
     const container = getContainer();
     const factory = container.get('agentFactory');
@@ -200,6 +205,7 @@ router.post(
  */
 router.post(
   '/translate',
+  validate(AiTranslateBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { summary, usageGuide } = req.body;
 
@@ -253,12 +259,9 @@ router.post(
  */
 router.post(
   '/chat',
+  validate(AiChatBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { prompt, history = [], lang, conversationId } = req.body;
-
-    if (!prompt) {
-      throw new ValidationError('prompt is required');
-    }
+    const { prompt, history, lang, conversationId } = req.body;
 
     const container = getContainer();
     const factory = container.get('agentFactory');
@@ -387,12 +390,9 @@ router.post(
  */
 router.post(
   '/agent/tool',
+  validate(AiToolBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { tool, params = {} } = req.body;
-
-    if (!tool) {
-      throw new ValidationError('tool name is required');
-    }
+    const { tool, params } = req.body;
 
     const container = getContainer();
     const factory = container.get('agentFactory');
@@ -421,12 +421,9 @@ const DAG_TASK_HANDLERS = {
 
 router.post(
   '/agent/task',
+  validate(AiTaskBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { task, params = {} } = req.body;
-
-    if (!task) {
-      throw new ValidationError('task name is required');
-    }
+    const { task, params } = req.body;
 
     const container = getContainer();
     const factory = container.get('agentFactory');
@@ -494,6 +491,7 @@ router.get(
  */
 router.post(
   '/format-usage-guide',
+  validate(AiFormatUsageGuideBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { text } = req.body;
 
@@ -607,11 +605,9 @@ router.get(
  */
 router.post(
   '/env-config',
+  validate(AiEnvConfigBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { provider, model, apiKey, proxy } = req.body;
-    if (!provider || typeof provider !== 'string') {
-      throw new ValidationError('provider is required');
-    }
 
     const envPath = _getProjectEnvPath();
     let content = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
@@ -717,11 +713,9 @@ router.post(
  */
 router.post(
   '/chat/stream',
+  validate(AiStreamBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { prompt, history = [], lang } = req.body;
-    if (!prompt) {
-      throw new ValidationError('prompt is required');
-    }
+    const { prompt, history, lang } = req.body;
 
     const container = getContainer();
     const factory = container.get('agentFactory');

@@ -3,14 +3,14 @@
  * submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle
  */
 
-import { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
+import { UnifiedValidator } from '#shared/UnifiedValidator.js';
 import { envelope } from '../envelope.js';
 import type { McpContext, McpServiceContainer } from './types.js';
 
 // ─── 限流 ──────────────────────────────────────────────────
 
 async function _checkRateLimit(toolName: string, clientId: string | undefined) {
-  const { checkRecipeSave } = await import('../../../http/middleware/RateLimiter.js');
+  const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
   const projectRoot = process.cwd();
   const limitCheck = checkRecipeSave(projectRoot, clientId || process.env.USER || 'mcp-client');
   if (!limitCheck.allowed) {
@@ -175,9 +175,7 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
   let items = args.items;
   if (args.deduplicate !== false) {
     try {
-      const { aggregateCandidates } = await import(
-        '../../../service/candidate/CandidateAggregator.js'
-      );
+      const { aggregateCandidates } = await import('#service/candidate/CandidateAggregator.js');
       // 对 title 字段做去重
       const readinessItems = items.map((it) => ({
         ...it,

@@ -28,6 +28,7 @@ export interface TaskProps {
 
 interface TaskRow {
   id?: unknown;
+  // snake_case (raw SQL results)
   parent_id?: unknown;
   child_seq?: unknown;
   title?: unknown;
@@ -48,6 +49,18 @@ interface TaskRow {
   updated_at?: unknown;
   closed_at?: unknown;
   metadata?: unknown;
+  // camelCase (Drizzle ORM results)
+  parentId?: unknown;
+  childSeq?: unknown;
+  taskType?: unknown;
+  closeReason?: unknown;
+  contentHash?: unknown;
+  failCount?: unknown;
+  lastFailReason?: unknown;
+  createdBy?: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  closedAt?: unknown;
   [key: string]: unknown;
 }
 
@@ -302,10 +315,11 @@ export class Task {
     if (!row) {
       return null;
     }
+    // 兼容 raw SQL 返回的 snake_case 和 Drizzle 返回的 camelCase
     return new Task({
       id: row.id as string | undefined,
-      parentId: row.parent_id as string | null | undefined,
-      childSeq: row.child_seq as number | undefined,
+      parentId: (row.parent_id ?? row.parentId) as string | null | undefined,
+      childSeq: (row.child_seq ?? row.childSeq) as number | undefined,
       title: row.title as string | undefined,
       description: row.description as string | undefined,
       design: row.design as string | undefined,
@@ -313,16 +327,16 @@ export class Task {
       notes: row.notes as string | undefined,
       status: row.status as string | undefined,
       priority: row.priority as number | undefined,
-      taskType: row.task_type as string | undefined,
-      closeReason: row.close_reason as string | undefined,
-      contentHash: row.content_hash as string | null | undefined,
-      failCount: row.fail_count as number | undefined,
-      lastFailReason: row.last_fail_reason as string | undefined,
+      taskType: (row.task_type ?? row.taskType) as string | undefined,
+      closeReason: (row.close_reason ?? row.closeReason) as string | undefined,
+      contentHash: (row.content_hash ?? row.contentHash) as string | null | undefined,
+      failCount: (row.fail_count ?? row.failCount) as number | undefined,
+      lastFailReason: (row.last_fail_reason ?? row.lastFailReason) as string | undefined,
       assignee: row.assignee as string | undefined,
-      createdBy: row.created_by as string | undefined,
-      createdAt: row.created_at as number | undefined,
-      updatedAt: row.updated_at as number | undefined,
-      closedAt: row.closed_at as number | null | undefined,
+      createdBy: (row.created_by ?? row.createdBy) as string | undefined,
+      createdAt: (row.created_at ?? row.createdAt) as number | undefined,
+      updatedAt: (row.updated_at ?? row.updatedAt) as number | undefined,
+      closedAt: (row.closed_at ?? row.closedAt) as number | null | undefined,
       metadata: (() => {
         if (typeof row.metadata !== 'string') {
           return (row.metadata as Record<string, unknown>) || {};

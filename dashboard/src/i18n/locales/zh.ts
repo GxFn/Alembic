@@ -781,7 +781,7 @@ export const zh = {
     round2Done: '已精炼 {refined}/{total} 条',
     round3Done: '去重后 {afterDedup} 条 · {relationsFound} 条关系',
     noMatch: '✓ 无匹配内容',
-    skillPending: '⏳ Skill 生成中…',
+
     featuresOnly: '✓ {sourceCount} 项特征',
     featuresAndCandidates: '✓ {sourceCount} 项特征 · {extracted} 条候选',
     candidatesOnly: '✓ {extracted} 条候选',

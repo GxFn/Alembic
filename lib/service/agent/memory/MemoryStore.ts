@@ -21,7 +21,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { jaccardSimilarity, tokenizeForSimilarity } from '../../../shared/similarity.js';
+import { jaccardSimilarity, tokenizeForSimilarity } from '#shared/similarity.js';
 
 // ─── 类型定义 ──────────────────────────────────────────
 

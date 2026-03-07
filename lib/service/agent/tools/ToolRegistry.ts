@@ -10,7 +10,7 @@
  * - 支持 Agent ReAct 循环调用（通过 LLM 推理决定工具调用）
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 
 // ─── 本地类型 ──────────────────────────────────────────
 

@@ -10,8 +10,8 @@
 
 import { existsSync, readdirSync, type Stats, statSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
-import { ProjectDiscoverer } from '../../../core/discovery/ProjectDiscoverer.js';
-import { LanguageService } from '../../../shared/LanguageService.js';
+import { ProjectDiscoverer } from '#core/discovery/ProjectDiscoverer.js';
+import { LanguageService } from '#shared/LanguageService.js';
 import { PackageSwiftParser } from './PackageSwiftParser.js';
 
 export class SpmDiscoverer extends ProjectDiscoverer {

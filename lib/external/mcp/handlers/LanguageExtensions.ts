@@ -11,7 +11,7 @@
  *   覆盖 LanguageService.KNOWN_PROGRAMMING_LANGS 全部 14 种编程语言。
  */
 
-import { LanguageService } from '../../../shared/LanguageService.js';
+import { LanguageService } from '#shared/LanguageService.js';
 
 /** 根据文件扩展名推断语言 — 委托给 LanguageService（唯一来源） */
 export function inferLang(filename: string) {

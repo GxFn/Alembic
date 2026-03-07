@@ -13,6 +13,7 @@ import type {
 } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
+import { getErrorMessage } from '../../utils/error';
 import { categoryConfigs } from '../../constants';
 import { normalizeCode } from '../Shared/CodeBlock';
 import Pagination from '../Shared/Pagination';
@@ -170,8 +171,8 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
         setEntries(result.data || []);
         setTotal(result.pagination?.total || 0);
       }
-    } catch (err: any) {
-      notify(err?.message || t('knowledge.loadFailed'), { title: t('common.loadFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('knowledge.loadFailed')), { title: t('common.loadFailed'), type: 'error' });
     } finally {
       if (isMountedRef.current) setLoading(false);
     }
@@ -231,8 +232,8 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
       setEntries(prev => prev.map(e => e.id === entry.id ? updated : e));
       if (selected?.id === entry.id) setSelected(updated);
       fetchStats();
-    } catch (err: any) {
-      notify(err?.response?.data?.error?.message || err?.message || t('common.operationFailed'), { title: t('common.operationFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('common.operationFailed')), { title: t('common.operationFailed'), type: 'error' });
     } finally {
       if (isMountedRef.current) setActionLoading(false);
     }
@@ -246,8 +247,8 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
       setEntries(prev => prev.filter(e => e.id !== entry.id));
       if (selected?.id === entry.id) setSelected(null);
       fetchStats();
-    } catch (err: any) {
-      notify(err?.message || t('knowledge.deleteFailed'), { title: t('knowledge.deleteFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('knowledge.deleteFailed')), { title: t('knowledge.deleteFailed'), type: 'error' });
     }
   };
 
@@ -260,8 +261,8 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
       notify(t('knowledge.batchPublishResult', { success: result.successCount, fail: result.failureCount }), { title: t('knowledge.batchPublish') });
       setSelectedIds(new Set());
       refresh();
-    } catch (err: any) {
-      notify(err?.message || t('knowledge.batchPublishFailed'), { title: t('common.operationFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('knowledge.batchPublishFailed')), { title: t('common.operationFailed'), type: 'error' });
     } finally {
       setBatchLoading(false);
     }
@@ -281,8 +282,8 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
       const pub = await api.knowledgeBatchPublish(autoIds);
       notify(t('knowledge.autoPublishResult', { count: pub.successCount }), { title: t('knowledge.batchPublishComplete') });
       refresh();
-    } catch (err: any) {
-      notify(err?.message || t('knowledge.batchPublishFailed'), { title: t('common.operationFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('knowledge.batchPublishFailed')), { title: t('common.operationFailed'), type: 'error' });
     } finally {
       setBatchLoading(false);
     }

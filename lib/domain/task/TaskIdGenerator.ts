@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
+import { eq, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
+import { tasks } from '../../infrastructure/database/drizzle/schema.js';
 
 /**
  * TaskIdGenerator — 短 Hash ID 生成器
@@ -21,12 +24,14 @@ interface DbHandle {
 export class TaskIdGenerator {
   _db: DbHandle;
   _prefix: string;
+  #drizzle: DrizzleDB;
   /**
    * @param {import('better-sqlite3').Database} db - raw SQLite handle
    */
   constructor(db: DbHandle) {
     this._db = db;
     this._prefix = 'asd';
+    this.#drizzle = getDrizzle();
   }
 
   /**
@@ -62,31 +67,38 @@ export class TaskIdGenerator {
   /**
    * 生成子任务 ID
    * asd-a3f8 → asd-a3f8.1, asd-a3f8.2, ...
-   * @param {string} parentId
-   * @returns {string}
+   * ★ Drizzle 类型安全 SELECT + UPDATE
    */
   generateChild(parentId: string): string {
-    const parent = this._db.prepare('SELECT child_seq FROM tasks WHERE id = ?').get(parentId);
+    const parent = this.#drizzle
+      .select({ childSeq: tasks.childSeq })
+      .from(tasks)
+      .where(eq(tasks.id, parentId))
+      .get();
 
     if (!parent) {
       throw new Error(`Parent task not found: ${parentId}`);
     }
 
-    const nextSeq = ((parent.child_seq as number) || 0) + 1;
-    this._db.prepare('UPDATE tasks SET child_seq = ? WHERE id = ?').run(nextSeq, parentId);
+    const nextSeq = (parent.childSeq || 0) + 1;
+    this.#drizzle.update(tasks).set({ childSeq: nextSeq }).where(eq(tasks.id, parentId)).run();
 
     return `${parentId}.${nextSeq}`;
   }
 
-  /** @private */
+  /** @private ★ Drizzle 类型安全 COUNT */
   _getTaskCount(): number {
-    const row = this._db.prepare('SELECT COUNT(*) as cnt FROM tasks').get();
-    return (row?.cnt as number) || 0;
+    const row = this.#drizzle.select({ cnt: sql<number>`COUNT(*)` }).from(tasks).get();
+    return row?.cnt || 0;
   }
 
-  /** @private */
+  /** @private ★ Drizzle 类型安全 EXISTS */
   _exists(id: string): boolean {
-    const row = this._db.prepare('SELECT 1 FROM tasks WHERE id = ?').get(id);
+    const row = this.#drizzle
+      .select({ x: sql<number>`1` })
+      .from(tasks)
+      .where(eq(tasks.id, id))
+      .get();
     return !!row;
   }
 }

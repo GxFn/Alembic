@@ -45,6 +45,7 @@ test/integration/reports/
 /diagnose-*.js
 
 # 日志文件
+logs/
 *.log
 /tmp/
 nohup.out

@@ -13,7 +13,7 @@
  * 产出质量标注为 `source: 'rule-based-fallback'`，区别于 AI 分析产出。
  */
 
-import Logger from '../../../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 
 const logger = Logger.getInstance();
 

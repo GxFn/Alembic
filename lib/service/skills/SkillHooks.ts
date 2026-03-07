@@ -15,12 +15,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
 import Logger from '../../infrastructure/logging/Logger.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SKILLS_DIR = path.resolve(__dirname, '../../../skills');
+import { SKILLS_DIR } from '../../shared/package-root.js';
 
 /**
  * 获取项目级 Skills 目录（运行时动态解析）

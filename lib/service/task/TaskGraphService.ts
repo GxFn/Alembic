@@ -707,17 +707,17 @@ export class TaskGraphService {
 
     for (const dep of dependents) {
       // 只关注阻塞型依赖
-      if (dep.dep_type !== 'blocks' && dep.dep_type !== 'waits-for') {
+      if (dep.depType !== 'blocks' && dep.depType !== 'waits-for') {
         continue;
       }
 
       // getBlockers 返回"尚未关闭的阻塞者"，空 = 全部完成
-      const pendingBlockers = this.repo.getBlockers(dep.task_id);
+      const pendingBlockers = this.repo.getBlockers(dep.taskId);
       if (pendingBlockers.length === 0) {
         // 还要检查任务本身状态是 open
-        const task = this.repo.findById(dep.task_id);
+        const task = this.repo.findById(dep.taskId);
         if (task && task.status === 'open') {
-          newlyReady.push(dep.task_id);
+          newlyReady.push(dep.taskId);
         }
       }
     }

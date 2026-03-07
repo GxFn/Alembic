@@ -11,7 +11,9 @@
 
 import crypto from 'node:crypto';
 import express, { type Request, type Response } from 'express';
+import { AuthLoginBody } from '../../shared/schemas/http-requests.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
 
@@ -93,15 +95,9 @@ function verifyToken(token: string | undefined) {
  */
 router.post(
   '/login',
+  validate(AuthLoginBody),
   asyncHandler(async (req: Request, res: Response) => {
-    const { username, password } = req.body || {};
-
-    if (!username || !password) {
-      return void res.status(400).json({
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: '用户名和密码不能为空' },
-      });
-    }
+    const { username, password } = req.body;
 
     // 恒时比较防止时序攻击
     const userOk =

@@ -84,7 +84,11 @@ function mockKnowledgeService() {
  * ════════════════════════════════════════════ */
 
 // Mock RateLimiter — 默认放行
+// 必须同时 mock 相对路径 + #imports 别名，确保动态 import 和静态 import 都被拦截
 vi.mock('../../lib/http/middleware/RateLimiter.js', () => ({
+  checkRecipeSave: vi.fn(() => ({ allowed: true })),
+}));
+vi.mock('#http/middleware/RateLimiter.js', () => ({
   checkRecipeSave: vi.fn(() => ({ allowed: true })),
 }));
 
@@ -92,12 +96,16 @@ vi.mock('../../lib/http/middleware/RateLimiter.js', () => ({
 vi.mock('../../lib/shared/RecipeReadinessChecker.js', () => ({
   checkRecipeReadiness: vi.fn(() => ({ ready: true, missing: [], suggestions: [] })),
 }));
+vi.mock('#shared/RecipeReadinessChecker.js', () => ({
+  checkRecipeReadiness: vi.fn(() => ({ ready: true, missing: [], suggestions: [] })),
+}));
 
 const { submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle } = await import(
   '../../lib/external/mcp/handlers/knowledge.js'
 );
-const { checkRecipeSave } = await import('../../lib/http/middleware/RateLimiter.js');
-const { checkRecipeReadiness } = await import('../../lib/shared/RecipeReadinessChecker.js');
+// 从 #imports 别名导入 mock — 与 handler 内部的 dynamic import 一致
+const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
+const { checkRecipeReadiness } = await import('#shared/RecipeReadinessChecker.js');
 
 describe('MCP Knowledge Handlers', () => {
   let svc;
@@ -169,7 +177,9 @@ describe('MCP Knowledge Handlers', () => {
       expect(result.success).toBe(true);
       expect(result.data.recipeReadyHints).toBeDefined();
       // UnifiedValidator 返回完整错误描述，验证包含字段名即可
-      expect(result.data.recipeReadyHints.missingFields.some(f => f.includes('category'))).toBe(true);
+      expect(result.data.recipeReadyHints.missingFields.some((f) => f.includes('category'))).toBe(
+        true
+      );
     });
 
     test('meta 中应包含 tool 名称', async () => {
@@ -220,7 +230,11 @@ describe('MCP Knowledge Handlers', () => {
             pattern: 'func fetchData() { service.request() }',
             rationale: 'standard network pattern',
           },
-          reasoning: { whyStandard: 'team convention', sources: ['NetworkService.swift'], confidence: 0.8 },
+          reasoning: {
+            whyStandard: 'team convention',
+            sources: ['NetworkService.swift'],
+            confidence: 0.8,
+          },
         },
         {
           title: 'View Layout Setup',

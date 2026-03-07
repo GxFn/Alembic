@@ -4,10 +4,18 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import {
+  ContextAwareSearchBody,
+  GraphImpactQuery,
+  GraphQuery,
+  SearchQuery,
+  SimilarityBody,
+  XcodeSimulateBody,
+} from '#shared/schemas/http-requests.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { ValidationError } from '../../shared/errors/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate, validateQuery } from '../middleware/validate.js';
 import { safeInt } from '../utils/routeHelpers.js';
 
 /** Search result from SearchEngine */
@@ -41,15 +49,14 @@ const logger = Logger.getInstance();
  */
 router.get(
   '/',
+  validateQuery(SearchQuery),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { q, type = 'all', mode = 'keyword' } = req.query;
+    const { q, type = 'all', mode = 'keyword' } = req.query as Record<string, string>;
     const limit = safeInt(req.query.limit, 20, 1, 100);
     const page = safeInt(req.query.page, 1);
-    const groupByKind = req.query.groupByKind === 'true';
-
-    if (!q || !(q as string).trim()) {
-      throw new ValidationError('Search query (q) is required');
-    }
+    const groupByKind =
+      req.query.groupByKind === 'true' ||
+      (req.query as Record<string, unknown>).groupByKind === true;
 
     const container = getServiceContainer();
 
@@ -123,12 +130,9 @@ router.get(
  */
 router.get(
   '/graph',
+  validateQuery(GraphQuery),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { nodeId, nodeType, relation, direction = 'both' } = req.query;
-
-    if (!nodeId || !nodeType) {
-      throw new ValidationError('nodeId and nodeType are required');
-    }
+    const { nodeId, nodeType, relation, direction = 'both' } = req.query as Record<string, string>;
 
     const container = getServiceContainer();
     const graphService = container.get('knowledgeGraphService');
@@ -151,13 +155,10 @@ router.get(
  */
 router.get(
   '/graph/impact',
+  validateQuery(GraphImpactQuery),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { nodeId, nodeType } = req.query;
+    const { nodeId, nodeType } = req.query as Record<string, string>;
     const maxDepth = safeInt(req.query.maxDepth, 3, 1, 5);
-
-    if (!nodeId || !nodeType) {
-      throw new ValidationError('nodeId and nodeType are required');
-    }
 
     const container = getServiceContainer();
     const graphService = container.get('knowledgeGraphService');
@@ -263,11 +264,9 @@ router.get(
  */
 router.post(
   '/context-aware',
+  validate(ContextAwareSearchBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { keyword, limit, language, sessionHistory } = req.body;
-    if (!keyword || !keyword.trim()) {
-      throw new ValidationError('keyword is required');
-    }
     const t0 = Date.now();
     const container = getServiceContainer();
     const pageSize = Math.min(limit || 10, 100);
@@ -358,6 +357,7 @@ router.post(
  */
 router.post(
   '/similarity',
+  validate(SimilarityBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { code, targetName, candidateId, candidate } = req.body;
     const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
@@ -428,11 +428,9 @@ router.post(
  */
 router.post(
   '/xcode-simulate',
+  validate(XcodeSimulateBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { keyword, currentFile, language, limit = 10 } = req.body;
-    if (!keyword) {
-      throw new ValidationError('keyword is required');
-    }
 
     const container = getServiceContainer();
     const pageSize = Math.min(limit || 10, 50);

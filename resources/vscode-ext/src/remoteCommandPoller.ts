@@ -19,6 +19,10 @@
 import * as vscode from 'vscode';
 import type { ApiClient } from './apiClient';
 
+function toErrorMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 // ─── 常量 ─────────────────────────────────────────
 
 /** 空闲时轮询间隔（毫秒）— 作为 long-poll 的回退 */
@@ -53,8 +57,9 @@ export class RemoteCommandPoller implements vscode.Disposable {
   /** 自动审批模式是否已开启 */
   private autoApproveEnabled = false;
   /** 开启前保存的原始值 */
-  private savedAutoApproveValues: Map<string, any> = new Map();
+  private savedAutoApproveValues: Map<string, boolean | undefined> = new Map();
   private statusItem: vscode.StatusBarItem;
+  private readonly out: vscode.OutputChannel;
 
   /** 当前正在执行的指令 ID */
   private activeCommandId: string | null = null;
@@ -70,12 +75,20 @@ export class RemoteCommandPoller implements vscode.Disposable {
   private readonly SESSION_GAP_MS = 5 * 60 * 1000;
 
   constructor(private apiClient: ApiClient) {
+    this.out = vscode.window.createOutputChannel('AutoSnippet Remote');
     this.statusItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Right,
       90
     );
     this.statusItem.command = 'autosnippet.toggleRemotePoller';
     this.updateStatusBar(false);
+  }
+
+  /** 统一日志 — 写入 OutputChannel，不污染 devtools console */
+  private log(msg: string, level: 'info' | 'warn' | 'error' = 'info'): void {
+    const ts = new Date().toISOString().slice(11, 23);
+    const prefix = level === 'info' ? '' : `[${level.toUpperCase()}] `;
+    this.out.appendLine(`[${ts}] ${prefix}${msg}`);
   }
 
   // ═══════════════════════════════════════════════════
@@ -113,7 +126,7 @@ export class RemoteCommandPoller implements vscode.Disposable {
       try {
         const status = await this.apiClient.getRemoteLarkStatus();
         if (status?.connected) {
-          console.log('[RemotePoller] Lark connected detected, auto-starting...');
+          this.log('Lark connected detected, auto-starting...');
           this.start();
           if (this.autoStartTimer) clearInterval(this.autoStartTimer);
           this.autoStartTimer = undefined;
@@ -131,7 +144,7 @@ export class RemoteCommandPoller implements vscode.Disposable {
     this.timer = setInterval(() => this.poll(), POLL_INTERVAL_IDLE);
     this.updateStatusBar(true);
     vscode.window.showInformationMessage('🛰 远程指令轮询已启动');
-    console.log('[RemotePoller] Started');
+    this.log('Started');
     // ── 先清理积压指令，再开始正常轮询 ──
     this.flushThenPoll();
   }
@@ -144,13 +157,13 @@ export class RemoteCommandPoller implements vscode.Disposable {
     try {
       const { flushed } = await this.apiClient.flushStaleCommands();
       if (flushed > 0) {
-        console.log(`[RemotePoller] Flushed ${flushed} stale commands on start`);
+        this.log(`Flushed ${flushed} stale commands on start`);
         vscode.window.showWarningMessage(
           `🗑 已清理 ${flushed} 条积压指令（IDE 离线期间堆积）`
         );
       }
-    } catch (err: any) {
-      console.warn('[RemotePoller] Flush failed:', err?.message);
+    } catch (err: unknown) {
+      this.log(`Flush failed: ${toErrorMsg(err)}`, 'warn');
     }
     // 清理完成后启动正常轮询
     this.poll();
@@ -167,7 +180,7 @@ export class RemoteCommandPoller implements vscode.Disposable {
     this.restoreAutoApprove();
     this.updateStatusBar(false);
     vscode.window.showInformationMessage('🛰 远程指令轮询已停止');
-    console.log('[RemotePoller] Stopped');
+    this.log('Stopped');
   }
 
   toggle(): void {
@@ -181,6 +194,7 @@ export class RemoteCommandPoller implements vscode.Disposable {
     this.stopLongPoll();
     this.restoreAutoApprove();
     this.statusItem.dispose();
+    this.out.dispose();
   }
 
   // ═══════════════════════════════════════════════════
@@ -194,7 +208,7 @@ export class RemoteCommandPoller implements vscode.Disposable {
     try {
       // ── 超时检查 ──
       if (this.activeCommandId && Date.now() - this.activeCommandStart > COMMAND_TIMEOUT_MS) {
-        console.warn(`[RemotePoller] Command timeout: ${this.activeCommandId}`);
+        this.log(`Command timeout: ${this.activeCommandId}`, 'warn');
         await this.apiClient.postRemoteResult(
           this.activeCommandId,
           '⏰ 执行超时（10 分钟），已自动标记。请检查 IDE 状态或重新发送。',
@@ -217,12 +231,12 @@ export class RemoteCommandPoller implements vscode.Disposable {
         return;
       }
 
-      console.log(`[RemotePoller] Got command: ${cmd.id} — ${cmd.command.slice(0, 80)}`);
+      this.log(`Got command: ${cmd.id} — ${cmd.command.slice(0, 80)}`);
 
       // ── 认领 ──
       const claimed = await this.apiClient.claimRemoteCommand(cmd.id);
       if (!claimed) {
-        console.log(`[RemotePoller] Claim failed: ${cmd.id}`);
+        this.log(`Claim failed: ${cmd.id}`, 'warn');
         this.running = false;
         return;
       }
@@ -262,9 +276,9 @@ export class RemoteCommandPoller implements vscode.Disposable {
 
       this.activeCommandId = null;
       this.updateStatusBar(true);
-      console.log(`[RemotePoller] ${status}: ${cmd.id}`);
-    } catch (err: any) {
-      console.error('[RemotePoller] Poll error:', err?.message || err);
+      this.log(`${status}: ${cmd.id}`);
+    } catch (err: unknown) {
+      this.log(`Poll error: ${toErrorMsg(err)}`, 'error');
       this.activeCommandId = null;
     } finally {
       this.running = false;
@@ -309,10 +323,10 @@ export class RemoteCommandPoller implements vscode.Disposable {
 
         this.sessionActive = true;
         this.lastInjectTime = now;
-        console.log(`[RemotePoller] Injected (attempt ${attempt}): ${command.slice(0, 50)}`);
+        this.log(`Injected (attempt ${attempt}): ${command.slice(0, 50)}`);
         return true;
-      } catch (err: any) {
-        console.warn(`[RemotePoller] Inject attempt ${attempt} failed: ${err?.message}`);
+      } catch (err: unknown) {
+        this.log(`Inject attempt ${attempt} failed: ${toErrorMsg(err)}`, 'warn');
         if (attempt < INJECT_MAX_RETRIES) {
           await sleep(1000 * (attempt + 1));
         }
@@ -359,11 +373,11 @@ export class RemoteCommandPoller implements vscode.Disposable {
           this.longPollAbort.signal
         );
         if (resp?.hasNew) {
-          console.log('[RemotePoller] Long-poll: new command arrived, triggering poll');
+          this.log('Long-poll: new command arrived, triggering poll');
           this.poll(); // 立即拾取
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError') break; // 主动取消
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') break; // 主动取消
         // 网络错误 → 短暂等待后重试
         await sleep(2000);
       }
@@ -405,9 +419,9 @@ export class RemoteCommandPoller implements vscode.Disposable {
         await config.update(key, true, vscode.ConfigurationTarget.Global);
       }
       this.autoApproveEnabled = true;
-      console.log('[RemotePoller] Auto-approve enabled');
-    } catch (err: any) {
-      console.error('[RemotePoller] Failed to enable auto-approve:', err?.message);
+      this.log('Auto-approve enabled');
+    } catch (err: unknown) {
+      this.log(`Failed to enable auto-approve: ${toErrorMsg(err)}`, 'error');
     }
   }
 
@@ -424,10 +438,10 @@ export class RemoteCommandPoller implements vscode.Disposable {
       }
       this.savedAutoApproveValues.clear();
       this.autoApproveEnabled = false;
-      console.log('[RemotePoller] Auto-approve restored');
+      this.log('Auto-approve restored');
       this.apiClient.sendLarkNotify('🔒 自动审批模式已关闭').catch(() => {});
-    } catch (err: any) {
-      console.error('[RemotePoller] Failed to restore auto-approve:', err?.message);
+    } catch (err: unknown) {
+      this.log(`Failed to restore auto-approve: ${toErrorMsg(err)}`, 'error');
     }
   }
 

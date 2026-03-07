@@ -6,6 +6,7 @@ import { useChatTopics, ChatMessage } from '../../hooks/useChatTopics';
 import { createStreamEventHandler } from '../../hooks/useChatStream';
 import { useI18n } from '../../i18n';
 import api from '../../api';
+import { getErrorMessage, isAbortError } from '../../utils/error';
 
 /* ═══════════════════════════════════════════════════════════
  * AiChatView — /ai 页面的全屏 AI 聊天界面
@@ -164,12 +165,12 @@ const AiChatView: React.FC = () => {
       const finalText = result.text || getState().answerText;
       chatHistoryRef.current.push({ role: 'model', content: finalText });
       setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: finalText } : m));
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
+    } catch (err: unknown) {
+      if (isAbortError(err)) {
         const partial = t('aiChat.cancelled');
         setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: partial } : m));
       } else {
-        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('aiChat.requestFailed', { error: err.message }) } : m));
+        setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('aiChat.requestFailed', { error: getErrorMessage(err) }) } : m));
       }
     } finally {
       abortRef.current = null;

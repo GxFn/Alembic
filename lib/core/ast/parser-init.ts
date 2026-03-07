@@ -13,12 +13,10 @@
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { RESOURCES_DIR } from '../../shared/package-root.js';
 
 /** 预编译 .wasm 文件存放目录 */
-const GRAMMARS_DIR = path.resolve(__dirname, '..', '..', '..', 'resources', 'grammars');
+const GRAMMARS_DIR = path.resolve(RESOURCES_DIR, 'grammars');
 
 let Parser: any = null;
 /** web-tree-sitter 模块命名空间 — Language.load 在这里 */

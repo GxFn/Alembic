@@ -7,7 +7,7 @@
  *     - tool_result content blocks 用于回传工具执行结果
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 import {
   AiProvider,
   type AiProviderConfig,

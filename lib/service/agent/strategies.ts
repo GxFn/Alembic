@@ -22,6 +22,7 @@
  * @module strategies
  */
 
+import { createLimit } from '#shared/concurrency.js';
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
 import { AgentMessage } from './AgentMessage.js';
 
@@ -239,48 +240,49 @@ export class FanOutStrategy extends Strategy {
         concurrency: tierConfig.concurrency,
       });
 
-      // 按并发度分批执行
-      const chunks = this.#chunk(tierItems, tierConfig.concurrency);
-      for (const chunk of chunks) {
-        const chunkPromises = chunk.map(async (item: FanOutItem) => {
-          const itemMessage = AgentMessage.internal(
-            item.prompt || `${message.content}\n\n## 当前维度: ${item.label}\n${item.guide || ''}`,
-            {
-              sessionId: message.session.id,
-              dimension: item.id,
-              parentAgentId: runtime.id,
-              history: message.history,
-              metadata: { ...message.metadata, dimension: item },
-            }
-          );
+      // p-limit 并发控制（替代手动 chunk 分批）
+      const limit = createLimit(tierConfig.concurrency);
+      const tierResults = await Promise.all(
+        (tierItems as FanOutItem[]).map((item: FanOutItem) =>
+          limit(async () => {
+            const itemMessage = AgentMessage.internal(
+              item.prompt ||
+                `${message.content}\n\n## 当前维度: ${item.label}\n${item.guide || ''}`,
+              {
+                sessionId: message.session.id,
+                dimension: item.id,
+                parentAgentId: runtime.id,
+                history: message.history,
+                metadata: { ...message.metadata, dimension: item },
+              }
+            );
 
-          bus.publish(AgentEvents.PROGRESS, {
-            type: 'fan_out_item_start',
-            itemId: item.id,
-            label: item.label,
-          });
-
-          try {
-            const result = await this.#itemStrategy.execute(runtime, itemMessage, {
-              dimension: item,
-            });
-            return { id: item.id, label: item.label, status: 'completed' as const, ...result };
-          } catch (err: unknown) {
-            return {
-              id: item.id,
+            bus.publish(AgentEvents.PROGRESS, {
+              type: 'fan_out_item_start',
+              itemId: item.id,
               label: item.label,
-              status: 'failed' as const,
-              error: err instanceof Error ? err.message : String(err),
-              reply: '',
-              toolCalls: [],
-              tokenUsage: { input: 0, output: 0 },
-            };
-          }
-        });
+            });
 
-        const chunkResults = await Promise.all(chunkPromises);
-        allResults.push(...chunkResults);
-      }
+            try {
+              const result = await this.#itemStrategy.execute(runtime, itemMessage, {
+                dimension: item,
+              });
+              return { id: item.id, label: item.label, status: 'completed' as const, ...result };
+            } catch (err: unknown) {
+              return {
+                id: item.id,
+                label: item.label,
+                status: 'failed' as const,
+                error: err instanceof Error ? err.message : String(err),
+                reply: '',
+                toolCalls: [],
+                tokenUsage: { input: 0, output: 0 },
+              };
+            }
+          })
+        )
+      );
+      allResults.push(...tierResults);
 
       bus.publish(AgentEvents.PROGRESS, {
         type: 'fan_out_tier_done',
@@ -303,14 +305,6 @@ export class FanOutStrategy extends Strategy {
       groups[tier].push(item);
     }
     return groups;
-  }
-
-  #chunk(arr: FanOutItem[], size: number) {
-    const chunks: FanOutItem[][] = [];
-    for (let i = 0; i < arr.length; i += size) {
-      chunks.push(arr.slice(i, i + size));
-    }
-    return chunks;
   }
 
   static #defaultMerge(results: ItemResult[]): StrategyResult {

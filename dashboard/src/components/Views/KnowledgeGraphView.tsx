@@ -4,6 +4,7 @@ import api from '../../api';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
 import { ICON_SIZES } from '../../constants/icons';
+import { getErrorMessage } from '../../utils/error';
 
 // ─── Types ────────────────────────────────────────────
 
@@ -318,8 +319,8 @@ const KnowledgeGraphView: React.FC = () => {
       setNodeTypes(graphData.nodeTypes || {});
       setNodeCategories(graphData.nodeCategories || {});
       setStats(statsData);
-    } catch (err: any) {
-      setError(err.response?.data?.error || err.message || t('knowledgeGraph.loadFailed'));
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, t('knowledgeGraph.loadFailed')));
     } finally {
       setLoading(false);
     }
@@ -334,7 +335,7 @@ const KnowledgeGraphView: React.FC = () => {
         setDiscovering(true);
         setDiscoverResult(t('knowledgeGraph.discoverAnalyzing', { elapsed: s.elapsed ?? 0 }));
       }
-    }).catch(() => {});
+    }).catch(() => { /* intentionally ignored: discover status check is best-effort */ });
   }, []);
 
   // 轮询任务状态（3s间隔，最多 12 分钟）
@@ -414,9 +415,9 @@ const KnowledgeGraphView: React.FC = () => {
       // started
       setDiscovering(true);
       setDiscoverResult(t('knowledgeGraph.discoverStarted'));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setDiscoverIsError(true);
-      const msg = err?.response?.data?.error?.message || err.message || t('knowledgeGraph.unknownError');
+      const msg = getErrorMessage(err, t('knowledgeGraph.unknownError'));
       if (msg.includes('ChatAgent') || msg.includes('AI Provider')) {
         setDiscoverResult(t('knowledgeGraph.discoverAiUnavailable', { error: msg }));
       } else {

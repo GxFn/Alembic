@@ -14,11 +14,8 @@
  * 25.  get_feedback_stats   反馈统计
  */
 
-import {
-  getInternalAgentRequiredFields,
-  getSystemInjectedFields,
-} from '../../../shared/FieldSpec.js';
-import { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
+import { getInternalAgentRequiredFields, getSystemInjectedFields } from '#shared/FieldSpec.js';
+import { UnifiedValidator } from '#shared/UnifiedValidator.js';
 import { checkDimensionType, DIMENSION_DISPLAY_GROUP, type ToolHandlerContext } from './_shared.js';
 
 // ─── Tool handler param types ──────────────────────────────

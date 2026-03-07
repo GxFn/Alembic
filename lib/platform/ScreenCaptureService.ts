@@ -9,9 +9,9 @@
 
 import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, statSync as fstatSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import Logger from '../infrastructure/logging/Logger.js';
+import { RESOURCES_DIR } from '../shared/package-root.js';
 
 const logger = Logger.getInstance();
 
@@ -33,13 +33,10 @@ interface ScreenshotToolResult {
   error?: string;
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 /** Swift 源文件路径 */
-const SWIFT_SRC = join(__dirname, '../../resources/native-ui/screenshot.swift');
+const SWIFT_SRC = join(RESOURCES_DIR, 'native-ui/screenshot.swift');
 /** 编译产物路径 */
-const BINARY_PATH = join(__dirname, '../../resources/native-ui/screenshot');
+const BINARY_PATH = join(RESOURCES_DIR, 'native-ui/screenshot');
 
 let _binaryReady = false;
 

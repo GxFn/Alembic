@@ -14,8 +14,8 @@
  * @module bootstrap/MissionBriefingBuilder
  */
 
-import { getCursorDeliverySpec } from '../../../../shared/FieldSpec.js';
-import { PROJECT_SNAPSHOT_STYLE_GUIDE } from '../../../../shared/StyleGuide.js';
+import { getCursorDeliverySpec } from '#shared/FieldSpec.js';
+import { PROJECT_SNAPSHOT_STYLE_GUIDE } from '#shared/StyleGuide.js';
 import { TierScheduler } from './pipeline/tier-scheduler.js';
 import { getDimensionSOP, PRE_SUBMIT_CHECKLIST, sopToCompactText } from './shared/dimension-sop.js';
 import { EXAMPLE_TEMPLATES, SUBMISSION_SCHEMA } from './shared/dimension-text.js';

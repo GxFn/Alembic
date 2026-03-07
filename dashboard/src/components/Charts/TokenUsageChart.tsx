@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import api from '../../api';
 import { useI18n } from '../../i18n';
+import { getErrorMessage } from '../../utils/error';
 
 interface DailyRow {
   date: string;
@@ -72,8 +73,8 @@ const TokenUsageChart: React.FC = () => {
         setDaily(data.daily || []);
         setBySource(data.bySource || []);
         setSummary(data.summary || { input_tokens: 0, output_tokens: 0, total_tokens: 0, call_count: 0, avg_per_call: 0 });
-      } catch (e: any) {
-        if (!cancelled) setError(e.message || t('tokenUsageChart.loadFailed'));
+      } catch (e: unknown) {
+        if (!cancelled) setError(getErrorMessage(e, t('tokenUsageChart.loadFailed')));
       } finally {
         if (!cancelled) setLoading(false);
       }

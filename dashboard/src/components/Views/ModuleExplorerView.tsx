@@ -5,6 +5,7 @@ import api from '../../api';
 import { notify } from '../../utils/notification';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
+import { getErrorMessage, getErrorStatus } from '../../utils/error';
 import ContextAwareSearchPanel from './ContextAwareSearchPanel';
 import ScanResultCard from './ScanResultCard';
 import SPMCompareDrawer, { type CompareDrawerData, type SimilarRecipe } from './SPMCompareDrawer';
@@ -194,9 +195,9 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
     try {
     const recipeData = await api.getRecipeContentByName(normalizedRecipeName);
     recipeContent = recipeData.content;
-    } catch (err: any) {
-    const status = err.response?.status;
-    const message = err.response?.data?.message || err.message;
+    } catch (err: unknown) {
+    const status = getErrorStatus(err);
+    const message = getErrorMessage(err);
     if (status === 404) {
       notify(t('moduleExplorer.recipeNotExist', { name: normalizedRecipeName }), { title: t('moduleExplorer.recipeNotExistTitle'), type: 'error' });
     } else {

@@ -22,9 +22,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { PACKAGE_ROOT } from '../../shared/package-root.js';
 
 // ─── Types ──────────────────────────────────────────
 
@@ -123,7 +121,7 @@ export class Conversation extends Capability {
     this.#projectBriefing = opts.projectBriefing || null;
 
     // 加载 SOUL.md (人格定义)
-    const soulPath = opts.soulPath || path.resolve(__dirname, '../../..', 'SOUL.md');
+    const soulPath = opts.soulPath || path.resolve(PACKAGE_ROOT, 'SOUL.md');
     try {
       this.#soulContent = fs.existsSync(soulPath)
         ? fs.readFileSync(soulPath, 'utf-8').trim()

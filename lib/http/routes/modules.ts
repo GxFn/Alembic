@@ -6,10 +6,16 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import {
+  ModuleBootstrapBody,
+  ScanFolderBody,
+  ScanProjectBody,
+  ScanTargetBody,
+} from '#shared/schemas/http-requests.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { ValidationError } from '../../shared/errors/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
 
 const router = express.Router();
@@ -157,12 +163,9 @@ router.get(
  */
 router.post(
   '/scan-folder',
+  validate(ScanFolderBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { path: folderPath, options = {} } = req.body;
-
-    if (!folderPath) {
-      throw new ValidationError('path (relative folder path) is required');
-    }
 
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
@@ -184,12 +187,9 @@ router.post(
  */
 router.post(
   '/scan-folder/stream',
+  validate(ScanFolderBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { path: folderPath, options = {} } = req.body;
-
-    if (!folderPath) {
-      throw new ValidationError('path (relative folder path) is required');
-    }
 
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
@@ -241,12 +241,9 @@ router.post(
  */
 router.post(
   '/target-files',
+  validate(ScanTargetBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { target, targetName } = req.body;
-
-    if (!target && !targetName) {
-      throw new ValidationError('target object or targetName is required');
-    }
 
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
@@ -284,12 +281,9 @@ router.post(
  */
 router.post(
   '/scan',
+  validate(ScanTargetBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { target, targetName, options = {} } = req.body;
-
-    if (!target && !targetName) {
-      throw new ValidationError('target object or targetName is required');
-    }
 
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
@@ -329,12 +323,9 @@ router.post(
  */
 router.post(
   '/scan/stream',
+  validate(ScanTargetBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { target, targetName, options = {} } = req.body;
-
-    if (!target && !targetName) {
-      throw new ValidationError('target object or targetName is required');
-    }
 
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
@@ -469,6 +460,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
  */
 router.post(
   '/scan-project',
+  validate(ScanProjectBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { options = {} } = req.body;
 
@@ -534,6 +526,7 @@ router.get(
  */
 router.post(
   '/bootstrap',
+  validate(ModuleBootstrapBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
 

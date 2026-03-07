@@ -10,8 +10,10 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import { TaskDispatchBody } from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
 
 /** Task record shape from TaskGraphService */
 interface TaskRecord {
@@ -69,6 +71,7 @@ const router = express.Router();
  */
 router.post(
   '/',
+  validate(TaskDispatchBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
     const taskService = container.get('taskGraphService') as TaskGraphSvc;
@@ -80,22 +83,7 @@ router.post(
       });
     }
 
-    const body = req.body;
-    if (!body || typeof body !== 'object') {
-      return void res.status(400).json({
-        success: false,
-        message: 'JSON body is required',
-      });
-    }
-
-    const { operation, ...params } = body;
-
-    if (!operation) {
-      return void res.status(400).json({
-        success: false,
-        message: 'operation is required',
-      });
-    }
+    const { operation, ...params } = req.body;
 
     try {
       const result = await _dispatch(taskService, operation, params);
@@ -155,6 +143,8 @@ async function _dispatch(svc: TaskGraphSvc, operation: string, params: Record<st
       return _reviseDecision(svc, params);
     case 'unpin_decision':
       return _unpinDecision(svc, params);
+    case 'list_decisions':
+      return _list(svc, { ...params, taskType: 'decision', status: params.status || 'pinned' });
     default:
       return { success: false, message: `Unknown operation: ${operation}` };
   }

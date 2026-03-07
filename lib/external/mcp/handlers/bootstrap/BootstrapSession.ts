@@ -16,7 +16,7 @@
  */
 
 import crypto from 'node:crypto';
-import { SessionStore } from '../../../../service/agent/memory/SessionStore.js';
+import { SessionStore } from '#service/agent/memory/SessionStore.js';
 import type { DimensionQualityReport } from './ExternalSubmissionTracker.js';
 import { ExternalSubmissionTracker } from './ExternalSubmissionTracker.js';
 

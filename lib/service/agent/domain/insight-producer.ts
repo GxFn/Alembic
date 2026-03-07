@@ -15,7 +15,7 @@
  * @module insight-producer
  */
 
-import { buildProducerStyleGuide, SUBMIT_REQUIREMENTS } from '../../../shared/StyleGuide.js';
+import { buildProducerStyleGuide, SUBMIT_REQUIREMENTS } from '#shared/StyleGuide.js';
 import type { EvidenceEntry } from './EvidenceCollector.js';
 
 // ──────────────────────────────────────────────────────────────────

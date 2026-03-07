@@ -13,12 +13,13 @@ const __dirname = dirname(__filename);
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { PACKAGE_ROOT } from '../lib/shared/package-root.js';
 
 if (process.platform !== 'darwin') {
   process.exit(0);
 }
 
-const root = path.resolve(__dirname, '..');
+const root = PACKAGE_ROOT;
 const src = path.join(root, 'resources', 'native-ui', 'main.swift');
 const combinedSrc = path.join(root, 'resources', 'native-ui', 'combined-window.swift');
 const out = path.join(root, 'resources', 'native-ui', 'native-ui');

@@ -1,3 +1,4 @@
+import { ioLimit } from '#shared/concurrency.js';
 import type { Task } from '../../domain/task/Task.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 
@@ -40,7 +41,9 @@ export class TaskKnowledgeBridge {
       return tasks;
     }
 
-    const results = await Promise.allSettled(tasks.map((task: Task) => this._buildContext(task)));
+    const results = await Promise.allSettled(
+      tasks.map((task: Task) => ioLimit(() => this._buildContext(task)))
+    );
 
     return tasks.map((task: Task, i: number) => {
       if (results[i].status === 'fulfilled' && results[i].value) {

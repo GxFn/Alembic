@@ -7,9 +7,10 @@ import { basename } from 'node:path';
 import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { ValidationError } from '../../shared/errors/index.js';
 import { LanguageService } from '../../shared/LanguageService.js';
+import { ExtractPathBody, ExtractTextBody } from '../../shared/schemas/http-requests.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
@@ -21,12 +22,9 @@ const logger = Logger.getInstance();
  */
 router.post(
   '/path',
+  validate(ExtractPathBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { relativePath, projectRoot: bodyRoot } = req.body;
-
-    if (!relativePath) {
-      throw new ValidationError('relativePath is required');
-    }
 
     const container = getServiceContainer();
     const recipeParser = container.get('recipeParser');
@@ -107,12 +105,9 @@ router.post(
  */
 router.post(
   '/text',
+  validate(ExtractTextBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { text, language, relativePath, projectRoot: bodyRoot } = req.body;
-
-    if (!text) {
-      throw new ValidationError('text is required');
-    }
 
     const container = getServiceContainer();
     const recipeParser = container.get('recipeParser');

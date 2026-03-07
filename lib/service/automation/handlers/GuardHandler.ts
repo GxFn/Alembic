@@ -11,7 +11,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
-import { LanguageService } from '../../../shared/LanguageService.js';
+import { LanguageService } from '#shared/LanguageService.js';
 
 /** 已知的 scope 关键词 */
 const SCOPE_KEYWORDS = new Set(['file', 'target', 'project', 'all']);

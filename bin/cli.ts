@@ -20,13 +20,12 @@
 
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
+import { DASHBOARD_DIR, PACKAGE_ROOT } from '../lib/shared/package-root.js';
+import { shutdown } from '../lib/shared/shutdown.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const pkgPath = join(__dirname, '..', 'package.json');
+const pkgPath = join(PACKAGE_ROOT, 'package.json');
 const pkg = existsSync(pkgPath) ? JSON.parse(readFileSync(pkgPath, 'utf8')) : { version: '2.0.0' };
 
 // ─── 进程级错误兜底 ────────────────────────────────────
@@ -44,13 +43,8 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
-// 优雅关闭 — 防止 SIGINT/SIGTERM 时资源泄漏
-const handleSignal = (signal: any) => {
-  process.stderr.write(`[asd] Received ${signal}, exiting…\n`);
-  process.exit(0);
-};
-process.on('SIGTERM', () => handleSignal('SIGTERM'));
-process.on('SIGINT', () => handleSignal('SIGINT'));
+// 优雅关闭 — 统一 shutdown 协调器
+shutdown.install();
 
 const program = new Command();
 program.name('asd').description('AutoSnippet V2 - AI 知识库管理工具').version(pkg.version);
@@ -786,7 +780,7 @@ program
 
           // 设置 Dashboard URL 供 watcher 跳转浏览器使用
           // 生产模式用 API 同端口，开发模式用 vite dev 5173
-          const dashDirCheck = join(__dirname, '..', 'dashboard');
+          const dashDirCheck = DASHBOARD_DIR;
           const isProductionDashboard =
             existsSync(join(dashDirCheck, 'dist', 'index.html')) &&
             !existsSync(join(dashDirCheck, 'src'));
@@ -825,7 +819,7 @@ program
     }
 
     // 2. 启动 Dashboard UI
-    const dashboardDir = join(__dirname, '..', 'dashboard');
+    const dashboardDir = DASHBOARD_DIR;
     const distDir = join(dashboardDir, 'dist');
     const hasPrebuilt = existsSync(join(distDir, 'index.html'));
     const hasSrc = existsSync(join(dashboardDir, 'src'));

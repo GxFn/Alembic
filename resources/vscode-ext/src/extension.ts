@@ -30,6 +30,10 @@ import { GuardDiagnostics } from './guardDiagnostics';
 import { registerGuardCodeActions } from './guardCodeAction';
 import { RemoteCommandPoller } from './remoteCommandPoller';
 
+function toErrorMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 let apiClient: ApiClient;
 let statusBar: StatusBar;
 let codeLensProvider: DirectiveCodeLensProvider;
@@ -43,9 +47,9 @@ export function activate(context: vscode.ExtensionContext) {
   // ── lm.registerTool 代理层（#asd 工具引用通道）──
   try {
     registerTaskTool(context);
-  } catch (err: any) {
+  } catch (err: unknown) {
     // lm.registerTool 在低版本 VS Code 可能不存在
-    console.warn('[AutoSnippet] registerTaskTool skipped:', err?.message || err);
+    console.warn('[AutoSnippet] registerTaskTool skipped:', toErrorMsg(err));
   }
 
   try {
@@ -170,9 +174,9 @@ export function activate(context: vscode.ExtensionContext) {
       }
     })
   );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[AutoSnippet] activate() failed:', err);
-    vscode.window.showErrorMessage(`AutoSnippet activation error: ${err.message}`);
+    vscode.window.showErrorMessage(`AutoSnippet activation error: ${toErrorMsg(err)}`);
   }
 }
 
@@ -575,7 +579,7 @@ async function doAudit(
               totalErrors += result.data.summary?.errors || 0;
               totalWarnings += result.data.summary?.warnings || 0;
               // 写入诊断集合（复用 guardDiagnostics 的格式）
-              if (result.data.violations?.length > 0 && guardDiagnostics) {
+              if ((result.data.violations?.length ?? 0) > 0 && guardDiagnostics) {
                 guardDiagnostics.checkFile(doc);
               }
             }
@@ -620,16 +624,16 @@ async function doAudit(
         );
         if (result?.success && result.data) {
           const s = result.data.summary;
-          if (s.total === 0) {
+          if (!s || s.total === 0) {
             vscode.window.showInformationMessage('✅ Guard: No violations found.');
           } else {
             vscode.window.showWarningMessage(
-              `🛡️ Guard: ${s.errors} errors, ${s.warnings} warnings, ${s.infos} info — see Problems panel.`
+              `🛡️ Guard: ${s.errors ?? 0} errors, ${s.warnings ?? 0} warnings, ${s.infos ?? 0} info — see Problems panel.`
             );
           }
         }
-      } catch (err: any) {
-        vscode.window.showErrorMessage(`Guard audit failed: ${err.message}`);
+      } catch (err: unknown) {
+        vscode.window.showErrorMessage(`Guard audit failed: ${toErrorMsg(err)}`);
       }
     }
   );

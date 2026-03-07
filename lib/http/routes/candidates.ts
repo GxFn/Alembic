@@ -4,10 +4,17 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import {
+  BootstrapRefineBody,
+  EnrichBody,
+  RefineApplyBody,
+  RefinePreviewBody,
+} from '#shared/schemas/http-requests.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
 
 const router = express.Router();
@@ -22,14 +29,9 @@ const logger = Logger.getInstance();
  */
 router.post(
   '/enrich',
+  validate(EnrichBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { candidateIds } = req.body;
-    if (!Array.isArray(candidateIds) || candidateIds.length === 0) {
-      throw new ValidationError('candidateIds array is required and must not be empty');
-    }
-    if (candidateIds.length > 20) {
-      throw new ValidationError('Max 20 candidates per enrichment call');
-    }
 
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -178,6 +180,7 @@ router.post(
  */
 router.post(
   '/bootstrap-refine',
+  validate(BootstrapRefineBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { candidateIds, userPrompt, dryRun } = req.body;
 
@@ -463,14 +466,9 @@ function buildUpdateFromRefineResult(
  */
 router.post(
   '/refine-preview',
+  validate(RefinePreviewBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { candidateId, userPrompt } = req.body;
-    if (!candidateId) {
-      throw new ValidationError('candidateId is required');
-    }
-    if (!userPrompt || !userPrompt.trim()) {
-      throw new ValidationError('userPrompt is required');
-    }
 
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -521,14 +519,9 @@ router.post(
  */
 router.post(
   '/refine-preview-stream',
+  validate(RefinePreviewBody),
   asyncHandler(async (req: Request, res: Response) => {
     const { candidateId, userPrompt } = req.body;
-    if (!candidateId) {
-      throw new ValidationError('candidateId is required');
-    }
-    if (!userPrompt || !userPrompt.trim()) {
-      throw new ValidationError('userPrompt is required');
-    }
 
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -740,11 +733,9 @@ router.get('/refine-preview/events/:sessionId', (req, res) => {
  */
 router.post(
   '/refine-apply',
+  validate(RefineApplyBody),
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { candidateId, userPrompt, preview } = req.body;
-    if (!candidateId) {
-      throw new ValidationError('candidateId is required');
-    }
 
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');

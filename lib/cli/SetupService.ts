@@ -44,15 +44,12 @@
 
 import { execSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, resolve } from 'node:path';
+import { PACKAGE_ROOT } from '../shared/package-root.js';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 /** AutoSnippet 源码仓库根目录（定位 templates/ 等资源） */
-const REPO_ROOT = resolve(__dirname, '..', '..');
+const REPO_ROOT = PACKAGE_ROOT;
 
 // ─────────────────────────────────────────────────────
 
@@ -501,13 +498,21 @@ export class SetupService {
 
     try {
       const mod = await import(initScript);
-      const initFn = mod.initialize || mod.default?.initialize || mod.default;
-      if (typeof initFn !== 'function') {
-        return { skipped: true };
+      // 优先使用模块级导出的 initialize 函数（无 this 依赖）
+      // 若 mod.default 是对象则在其上调用 initialize 保留 this
+      if (typeof mod.initialize === 'function') {
+        const result = await mod.initialize(this.projectRoot, 'all');
+        return result;
       }
-
-      const result = await initFn(this.projectRoot, 'all');
-      return result;
+      if (mod.default && typeof mod.default.initialize === 'function') {
+        const result = await mod.default.initialize(this.projectRoot, 'all');
+        return result;
+      }
+      if (typeof mod.default === 'function') {
+        const result = await mod.default(this.projectRoot, 'all');
+        return result;
+      }
+      return { skipped: true };
     } catch (e: unknown) {
       console.warn(`   ⚠️  Snippet 初始化失败：${(e as Error).message}`);
       return { error: (e as Error).message };

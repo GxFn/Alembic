@@ -9,7 +9,7 @@
  */
 
 import { join } from 'node:path';
-import { PlaceholderConverter } from '../../../platform/ios/snippet/PlaceholderConverter.js';
+import { PlaceholderConverter } from '#platform/ios/snippet/PlaceholderConverter.js';
 import type { SnippetSpec } from './SnippetCodec.js';
 import { SnippetCodec } from './SnippetCodec.js';
 

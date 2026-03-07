@@ -24,6 +24,7 @@
 
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TEMPLATES_DIR } from '../lib/shared/package-root.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -187,7 +188,7 @@ function createCopilotInstructions() {
   }
 
   // 从模板文件读取内容
-  const templatePath = path.join(__dirname, '..', 'templates', 'copilot-instructions.md');
+  const templatePath = path.join(TEMPLATES_DIR, 'copilot-instructions.md');
   if (!fs.existsSync(templatePath)) {
     error(`✗ 模板文件不存在: ${templatePath}`);
     return false;

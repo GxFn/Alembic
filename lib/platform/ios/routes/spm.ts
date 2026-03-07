@@ -8,11 +8,11 @@
 
 import type { Request, Response } from 'express';
 import express from 'express';
-import { asyncHandler } from '../../../http/middleware/errorHandler.js';
-import { createStreamSession, getStreamSession } from '../../../http/utils/sse-sessions.js';
-import Logger from '../../../infrastructure/logging/Logger.js';
-import { getServiceContainer } from '../../../injection/ServiceContainer.js';
-import { ValidationError } from '../../../shared/errors/index.js';
+import { asyncHandler } from '#http/middleware/errorHandler.js';
+import { createStreamSession, getStreamSession } from '#http/utils/sse-sessions.js';
+import Logger from '#infra/logging/Logger.js';
+import { getServiceContainer } from '#inject/ServiceContainer.js';
+import { ValidationError } from '#shared/errors/index.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();

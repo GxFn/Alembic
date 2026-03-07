@@ -7,6 +7,7 @@ import { KnowledgeEntry } from '../../types';
 import { useChatTopics, type ChatMessage } from '../../hooks/useChatTopics';
 import { createStreamEventHandler } from '../../hooks/useChatStream';
 import { useI18n } from '../../i18n';
+import { getErrorMessage, isAbortError } from '../../utils/error';
 
 /* ═══════════════════════════════════════════════════════════
  * GlobalChatDrawer — 常驻 AI Chat（同层内联面板）
@@ -103,7 +104,7 @@ function buildDiffFields(before: Record<string, any>, after: Record<string, any>
   return fields;
 }
 
-function extractBefore(cand: KnowledgeEntry): Record<string, any> {
+function extractBefore(cand: KnowledgeEntry): Record<string, unknown> {
   return {
     title: cand.title || '', description: cand.description || '', pattern: cand.content?.pattern || '',
     markdown: cand.content?.markdown || '', rationale: cand.content?.rationale || '',
@@ -373,11 +374,11 @@ export const GlobalChatPanel: React.FC = () => {
           preview: diff.length > 0 ? result.preview ?? undefined : undefined,
           excludedFields: [],
         } : m));
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
+      } catch (err: unknown) {
+        if (isAbortError(err)) {
           setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('globalChat.system.cancelled') } : m));
         } else {
-          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('globalChat.refinePreviewFailed', { error: err.response?.data?.error || err.message }) } : m));
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('globalChat.refinePreviewFailed', { error: getErrorMessage(err) }) } : m));
         }
       } finally {
         abortRef.current = null;
@@ -405,14 +406,14 @@ export const GlobalChatPanel: React.FC = () => {
         chatHistoryRef.current.push({ role: 'model', content: finalText });
         // 最终只保留回答文本
         setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: finalText } : m));
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
+      } catch (err: unknown) {
+        if (isAbortError(err)) {
           const { answerText: partialText, toolLogs } = getState();
           const partial = partialText || (toolLogs.length > 0 ? toolLogs.join('\n') + '\n\n' + t('globalChat.system.cancelled') : t('globalChat.system.cancelled'));
           if (partialText) chatHistoryRef.current.push({ role: 'model', content: partialText });
           setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: partial } : m));
         } else {
-          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('globalChat.requestFailed', { error: err.message }) } : m));
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: t('globalChat.requestFailed', { error: getErrorMessage(err) }) } : m));
         }
       } finally {
         abortRef.current = null;
@@ -434,7 +435,7 @@ export const GlobalChatPanel: React.FC = () => {
         const beforeData = currentRefineCandidate ? extractBefore(currentRefineCandidate) : {};
         for (const field of lastMsg.excludedFields) {
           if (field in beforeData) {
-            (filteredPreview as any)[field] = (beforeData as any)[field];
+            (filteredPreview as Record<string, unknown>)[field] = (beforeData as Record<string, unknown>)[field];
           }
         }
       }
@@ -443,9 +444,8 @@ export const GlobalChatPanel: React.FC = () => {
       refineCtx.onCandidateUpdated?.(currentRefineId);
       setMessages(prev => [...prev, { id: uid(), role: 'system', content: t('globalChat.system.changesApplied'), timestamp: Date.now() }]);
       notify(t('globalChat.applySuccess'), { title: t('globalChat.applySuccessTitle') });
-    } catch (err: any) {
-      const raw = err.response?.data?.error;
-      notify(typeof raw === 'string' ? raw : raw?.message || err.message, { title: t('globalChat.applyFailed'), type: 'error' });
+    } catch (err: unknown) {
+      notify(getErrorMessage(err), { title: t('globalChat.applyFailed'), type: 'error' });
     } finally { setApplying(false); }
   }, [applying, currentRefineId, lastPrompt, refineCtx]);
 

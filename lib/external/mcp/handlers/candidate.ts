@@ -109,7 +109,7 @@ export async function validateCandidate(ctx: McpContext, args: ValidateCandidate
 
 export async function checkDuplicate(ctx: McpContext, args: CheckDuplicateArgs) {
   // SimilarityService 直接读磁盘 .md 文件，不依赖 Repository
-  const { findSimilarRecipes } = await import('../../../service/candidate/SimilarityService.js');
+  const { findSimilarRecipes } = await import('#service/candidate/SimilarityService.js');
   const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
   const candidate = (args.candidate ?? {}) as {
     title: string;

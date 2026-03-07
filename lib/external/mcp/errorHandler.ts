@@ -3,22 +3,24 @@
  *
  * 提供 wrapHandler() 包装函数，将所有 handler 的异常统一转换为
  * envelope 格式的错误响应，确保：
- *   1. 已知业务错误 → 结构化 errorCode + message
- *   2. 未知异常 → 通用 INTERNAL_ERROR + 原始 message
- *   3. 一致的 meta.tool + meta.responseTimeMs
+ *   1. Zod schema 校验 → 结构化 VALIDATION_ERROR (外部输入防御)
+ *   2. 已知业务错误 → 结构化 errorCode + message
+ *   3. 未知异常 → 通用 INTERNAL_ERROR + 原始 message
+ *   4. 一致的 meta.tool + meta.responseTimeMs
  *
  * @module external/mcp/errorHandler
  */
 
-import Logger from '../../infrastructure/logging/Logger.js';
+import { z } from 'zod';
+import Logger from '#infra/logging/Logger.js';
 import {
   ConflictError,
   ConstitutionViolation,
   NotFoundError,
   PermissionDenied,
   ValidationError,
-} from '../../shared/errors/index.js';
-import { envelope } from './envelope.js';
+} from '#shared/errors/index.js';
+import { TOOL_SCHEMAS } from '#shared/schemas/mcp-tools.js';
 
 const logger = Logger.getInstance();
 
@@ -63,73 +65,89 @@ function inferErrorCode(err: unknown): string {
 }
 
 /**
- * 包装 MCP handler 函数，提供统一错误处理
+ * 包装 MCP handler 函数，提供 Zod 输入校验 + 统一错误处理
  *
- * @param {string} toolName 工具名（用于 meta.tool）
+ * 如果 TOOL_SCHEMAS 中存在 toolName 对应的 Zod schema，
+ * 则在 handler 执行前自动校验并 parse（应用 defaults + coercion），
+ * 校验失败返回结构化 VALIDATION_ERROR，不会到达 handler。
+ *
+ * @param {string} toolName 工具名（用于 meta.tool + schema 查找）
  * @param {Function} handlerFn 原始 handler: (ctx, args) => Promise<unknown>
+ * @param {ZodType} [schema] 可选的显式 schema 覆盖（优先于 TOOL_SCHEMAS 自动查找）
  * @returns {Function} 包装后的 handler，保证 *不会* throw
- *
- * @example
- *   import { wrapHandler } from '../errorHandler.js';
- *   export const search = wrapHandler('autosnippet_search', async (ctx, args) => {
- *     // ... 正常返回 envelope(...)
- *   });
  */
-export function wrapHandler(toolName: string, handlerFn: McpHandlerFn) {
+export function wrapHandler(toolName: string, handlerFn: McpHandlerFn, schema?: z.ZodType) {
+  // 确定使用的 schema：显式传入 > TOOL_SCHEMAS 自动查找
+  const zodSchema = schema || TOOL_SCHEMAS[toolName];
+
   return async function wrappedHandler(
     ctx: Record<string, unknown>,
-    args: Record<string, unknown>
+    rawArgs: Record<string, unknown>
   ) {
     const t0 = Date.now();
     try {
-      return await handlerFn(ctx, args);
+      // ★ Zod 校验（如果存在 schema），null/undefined 兜底空对象
+      const safeArgs = rawArgs ?? {};
+      const args = zodSchema ? zodSchema.parse(safeArgs) : safeArgs;
+
+      return await handlerFn(ctx, args as Record<string, unknown>);
     } catch (err: unknown) {
       const elapsed = Date.now() - t0;
+
+      // Zod 校验错误 → 结构化 VALIDATION_ERROR
+      if (err instanceof z.ZodError) {
+        const details = err.issues
+          .map((e: z.core.$ZodIssue) => `${e.path.join('.')}: ${e.message}`)
+          .join('; ');
+        const msg = `输入校验失败: ${details}`;
+        logger.warn(`[MCP:${toolName}] VALIDATION_ERROR: ${msg}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: false,
+                message: msg,
+                errorCode: 'VALIDATION_ERROR',
+                meta: { tool: toolName, responseTimeMs: elapsed },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      // 业务错误 / 未知异常
       const errorCode = inferErrorCode(err);
       const message = (err instanceof Error ? err.message : '') || 'Unknown error';
-      const details = err instanceof Error ? (err as ErrorWithDetails).details : undefined;
+      const errDetails = err instanceof Error ? (err as ErrorWithDetails).details : undefined;
 
       logger.error(`[MCP:${toolName}] ${errorCode}: ${message}`, {
         tool: toolName,
         errorCode,
         durationMs: elapsed,
-        ...(details ? { details } : {}),
+        ...(errDetails ? { details: errDetails } : {}),
       });
 
-      return envelope({
-        success: false,
-        message,
-        errorCode,
-        meta: {
-          tool: toolName,
-          responseTimeMs: elapsed,
-        },
-      });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              message,
+              errorCode,
+              meta: {
+                tool: toolName,
+                responseTimeMs: elapsed,
+              },
+            }),
+          },
+        ],
+        isError: true,
+      };
     }
   };
 }
 
-/**
- * 批量包装一个模块的所有 handler 函数
- *
- * @param {string} prefix 工具名前缀（如 'autosnippet_search'）
- * @param {Record<string, Function>} handlersModule - handler 模块 exports
- * @returns {Record<string, Function>} 包装后的 handlers
- *
- * @example
- *   import * as rawSearchHandlers from './handlers/search.js';
- *   const searchHandlers = wrapHandlers('autosnippet', rawSearchHandlers);
- */
-export function wrapHandlers(prefix: string, handlersModule: Record<string, unknown>) {
-  const wrapped: Record<string, unknown> = {};
-  for (const [key, fn] of Object.entries(handlersModule)) {
-    if (typeof fn === 'function') {
-      wrapped[key] = wrapHandler(`${prefix}_${key}`, fn as McpHandlerFn);
-    } else {
-      wrapped[key] = fn; // 非函数属性原样透传
-    }
-  }
-  return wrapped;
-}
-
-export default { wrapHandler, wrapHandlers };
+export default { wrapHandler };

@@ -7,6 +7,52 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "imports": {
+    "#shared/*": {
+      "asd-dev": "./lib/shared/*",
+      "default": "./dist/lib/shared/*"
+    },
+    "#infra/*": {
+      "asd-dev": "./lib/infrastructure/*",
+      "default": "./dist/lib/infrastructure/*"
+    },
+    "#service/*": {
+      "asd-dev": "./lib/service/*",
+      "default": "./dist/lib/service/*"
+    },
+    "#domain/*": {
+      "asd-dev": "./lib/domain/*",
+      "default": "./dist/lib/domain/*"
+    },
+    "#inject/*": {
+      "asd-dev": "./lib/injection/*",
+      "default": "./dist/lib/injection/*"
+    },
+    "#core/*": {
+      "asd-dev": "./lib/core/*",
+      "default": "./dist/lib/core/*"
+    },
+    "#external/*": {
+      "asd-dev": "./lib/external/*",
+      "default": "./dist/lib/external/*"
+    },
+    "#platform/*": {
+      "asd-dev": "./lib/platform/*",
+      "default": "./dist/lib/platform/*"
+    },
+    "#repo/*": {
+      "asd-dev": "./lib/repository/*",
+      "default": "./dist/lib/repository/*"
+    },
+    "#types/*": {
+      "asd-dev": "./lib/types/*",
+      "default": "./dist/lib/types/*"
+    },
+    "#http/*": {
+      "asd-dev": "./lib/http/*",
+      "default": "./dist/lib/http/*"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "build:check": "tsc --noEmit",
@@ -45,7 +91,6 @@
     "lint:fix": "biome check --fix lib/ bin/ config/ scripts/",
     "format": "biome format --write lib/ bin/ config/ scripts/",
     "typecheck": "tsc --noEmit",
-    "typecheck:strict": "tsc -p tsconfig.strict.json || true",
     "check": "npm run typecheck && npm run lint",
     "prepare": "husky"
   },
@@ -86,32 +131,25 @@
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.59.0",
     "@modelcontextprotocol/sdk": "^1.25.3",
-    "@protobufjs/aspromise": "^1.1.2",
-    "@protobufjs/base64": "^1.1.2",
-    "@protobufjs/codegen": "^2.0.4",
-    "@protobufjs/eventemitter": "^1.1.0",
-    "@protobufjs/fetch": "^1.1.0",
-    "@protobufjs/float": "^1.0.2",
-    "@protobufjs/inquire": "^1.1.0",
-    "@protobufjs/path": "^1.1.2",
-    "@protobufjs/pool": "^1.1.0",
-    "@protobufjs/utf8": "^1.1.0",
     "better-sqlite3": "^9.2.2",
     "chokidar": "^3.6.0",
     "commander": "^11.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "drizzle-orm": "^0.45.1",
     "express": "^4.18.2",
     "helmet": "^7.1.0",
     "js-yaml": "^4.1.0",
     "minimist": "^1.2.5",
     "open": "^8.0.4",
     "ora": "^8.0.1",
+    "p-limit": "^7.3.0",
     "socket.io": "^4.8.1",
     "undici": "^6.23.0",
     "uuid": "^9.0.1",
     "web-tree-sitter": "^0.25.0",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "zod": "^4.3.6"
   },
   "bugs": {
     "url": "https://github.com/GxFn/AutoSnippet/issues"
@@ -147,13 +185,9 @@
     "@types/js-yaml": "^4.0.9",
     "@types/minimist": "^1.2.5",
     "@types/node": "^20.10.6",
-    "@types/supertest": "^7.2.0",
     "@types/uuid": "^10.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.3.2",
-    "nodemon": "^3.1.13",
-    "prettier": "^3.1.1",
-    "supertest": "^6.3.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

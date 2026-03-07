@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import Constitution from './core/constitution/Constitution.js';
 import ConstitutionValidator from './core/constitution/ConstitutionValidator.js';
 import Gateway, { type GatewayConfig } from './core/gateway/Gateway.js';
@@ -12,9 +11,7 @@ import DatabaseConnection from './infrastructure/database/DatabaseConnection.js'
 import Logger from './infrastructure/logging/Logger.js';
 import { SkillHooks } from './service/skills/SkillHooks.js';
 import pathGuard from './shared/PathGuard.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { CONFIG_DIR, PACKAGE_ROOT } from './shared/package-root.js';
 
 /**
  * Bootstrap - 应用程序启动器
@@ -58,8 +55,7 @@ export class Bootstrap {
    */
   static configurePathGuard(projectRoot: string, knowledgeBaseDir?: string) {
     if (!pathGuard.configured && projectRoot) {
-      const packageRoot = path.resolve(__dirname, '..');
-      pathGuard.configure({ projectRoot, packageRoot, knowledgeBaseDir });
+      pathGuard.configure({ projectRoot, packageRoot: PACKAGE_ROOT, knowledgeBaseDir });
     } else if (knowledgeBaseDir) {
       // 已配置但知识库目录名可能后续才知道
       pathGuard.setKnowledgeBaseDir(knowledgeBaseDir);
@@ -115,10 +111,7 @@ export class Bootstrap {
   async loadDotEnv() {
     try {
       // 沿目录树向上查找 .env：cwd → AutoSnippet 包根 → 用户项目根
-      const candidates = [
-        path.resolve(process.cwd(), '.env'),
-        path.resolve(__dirname, '..', '.env'), // AutoSnippet 包根
-      ];
+      const candidates = [path.resolve(process.cwd(), '.env'), path.resolve(PACKAGE_ROOT, '.env')];
       for (const envPath of candidates) {
         if (existsSync(envPath)) {
           const dotenv = await import('dotenv');
@@ -169,7 +162,7 @@ export class Bootstrap {
    * 加载宪法
    */
   async loadConstitution() {
-    const constitutionPath = path.join(__dirname, '../config/constitution.yaml');
+    const constitutionPath = path.join(CONFIG_DIR, 'constitution.yaml');
     const constitution = new Constitution(constitutionPath);
     this.components.constitution = constitution;
     this.components.logger!.info('Constitution loaded', constitution.toJSON());
@@ -232,9 +225,16 @@ export class Bootstrap {
   async shutdown() {
     this.components.logger?.info('AutoSnippet - Shutting down...');
 
-    // 关闭数据库连接
+    // 关闭数据库连接（WAL checkpoint → close）
     if (this.components.db) {
-      await this.components.db.close();
+      try {
+        // 刷盘 WAL — 确保所有待写入数据持久化后再关闭
+        const rawDb = this.components.db.getDb();
+        rawDb.pragma('wal_checkpoint(TRUNCATE)');
+      } catch {
+        // WAL checkpoint 失败不阻断 shutdown
+      }
+      this.components.db.close();
     }
 
     this.components.logger?.info('AutoSnippet - Shutdown complete');

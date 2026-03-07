@@ -576,14 +576,14 @@ export class CodeEntityGraph {
         ? this.db
             .prepare(`SELECT * FROM knowledge_edges WHERE from_id = ? AND from_type = ?`)
             .all(entityId, entityType)
-            .map(this.#mapEdge)
+            .map((row) => this.#mapEdge(row))
         : [];
     const incoming =
       direction === 'both' || direction === 'in'
         ? this.db
             .prepare(`SELECT * FROM knowledge_edges WHERE to_id = ? AND to_type = ?`)
             .all(entityId, entityType)
-            .map(this.#mapEdge)
+            .map((row) => this.#mapEdge(row))
         : [];
     return { outgoing, incoming };
   }

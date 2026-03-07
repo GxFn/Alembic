@@ -18,10 +18,7 @@
  * @module bootstrap/shared/dimension-text
  */
 
-import {
-  getRequiredFieldNames,
-  getRequiredFieldsDescription,
-} from '../../../../../shared/FieldSpec.js';
+import { getRequiredFieldNames, getRequiredFieldsDescription } from '#shared/FieldSpec.js';
 
 // ═══════════════════════════════════════════════════════════
 // 提交 Schema 定义

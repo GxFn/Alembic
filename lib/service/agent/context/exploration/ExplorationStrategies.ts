@@ -16,6 +16,19 @@ export const DEFAULT_REPLAN_INTERVAL = 8;
 
 // ─── 类型定义 ──────────────────────────────────────────
 
+/**
+ * 管线类型标识 — 用于统一的场景判别
+ *
+ * 替代原来散落在 ExplorationTracker / NudgeGenerator / AgentRuntime 中
+ * 通过 `submitToolName === 'collect_scan_recipe'` 或 `strategy.name === 'analyst'`
+ * 进行的隐式场景判别。
+ *
+ *   - scan:      scanKnowledge 管线（extract / summarize），纯文本总结，跳过 SUMMARIZE 阶段
+ *   - bootstrap:  冷启动维度管线，输出 dimensionDigest JSON，经历完整阶段序列
+ *   - analyst:    纯代码分析管线（无 produce），输出 Markdown 分析报告
+ */
+export type PipelineType = 'scan' | 'bootstrap' | 'analyst';
+
 /** 探索指标数据 */
 export interface ExplorationMetrics {
   iteration: number;

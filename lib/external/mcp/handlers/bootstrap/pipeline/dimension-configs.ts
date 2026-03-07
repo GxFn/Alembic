@@ -142,7 +142,7 @@ interface TierSessionStore {
  *
  * @param {number} tierIndex - Tier 索引 (0-based)
  * @param {Map<string, object>} tierResults 本 Tier 的维度结果
- * @param {import('../../../../../service/agent/memory/SessionStore.js').SessionStore} sessionStore
+ * @param {import('#service/agent/memory/SessionStore.js').SessionStore} sessionStore
  * @returns {object} TierReflection
  */
 export function buildTierReflection(

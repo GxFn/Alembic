@@ -11,15 +11,12 @@
 
 import { execFileSync, execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { RESOURCES_DIR } from '../../shared/package-root.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const NATIVE_UI_PATH = join(__dirname, '../../../resources/native-ui/native-ui');
-const NATIVE_UI_SRC = join(__dirname, '../../../resources/native-ui/main.swift');
-const NATIVE_UI_COMBINED = join(__dirname, '../../../resources/native-ui/combined-window.swift');
+const NATIVE_UI_PATH = join(RESOURCES_DIR, 'native-ui/native-ui');
+const NATIVE_UI_SRC = join(RESOURCES_DIR, 'native-ui/main.swift');
+const NATIVE_UI_COMBINED = join(RESOURCES_DIR, 'native-ui/combined-window.swift');
 
 /** 记录是否已尝试过 lazy build，避免重复 */
 let _lazyBuildAttempted = false;

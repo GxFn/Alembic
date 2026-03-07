@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 export type SqliteDatabase = InstanceType<typeof Database>;
 
 import pathGuard from '../../shared/PathGuard.js';
+import { type DrizzleDB, initDrizzle } from './drizzle/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,9 +20,11 @@ const __dirname = path.dirname(__filename);
 export class DatabaseConnection {
   config: { path: string; verbose?: boolean };
   db: SqliteDatabase | null;
+  drizzle: DrizzleDB | null;
   constructor(config: { path: string; verbose?: boolean }) {
     this.config = config;
     this.db = null;
+    this.drizzle = null;
   }
 
   /**
@@ -58,6 +61,9 @@ export class DatabaseConnection {
     // 启用 WAL 模式（Write-Ahead Logging）
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
+
+    // 初始化 Drizzle ORM 包装（与 raw db 共存，操作同一连接）
+    this.drizzle = initDrizzle(this.db);
 
     return this.db;
   }
@@ -129,6 +135,7 @@ export class DatabaseConnection {
     if (this.db) {
       this.db.close();
       this.db = null;
+      this.drizzle = null;
     }
   }
 
@@ -140,6 +147,16 @@ export class DatabaseConnection {
       throw new Error('Database not connected. Call connect() first.');
     }
     return this.db;
+  }
+
+  /**
+   * 获取 Drizzle ORM 实例
+   */
+  getDrizzle(): DrizzleDB {
+    if (!this.drizzle) {
+      throw new Error('Drizzle not initialized. Call connect() first.');
+    }
+    return this.drizzle;
   }
 }
 

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { notify } from './utils/notification';
-import { Recipe, ProjectData, SPMTarget, ExtractedRecipe, ScanResultItem, GuardAuditResult } from './types';
+import { Recipe, ProjectData, SPMTarget, ExtractedRecipe, ScanResultItem, GuardAuditResult, KnowledgeEntry } from './types';
 import { TabType, validTabs } from './constants';
 import { isShellTarget, isSilentTarget, isPendingTarget, getWritePermissionErrorMsg, getSaveErrorMsg } from './utils';
+import { getErrorMessage, isAbortError, isTimeoutError, isAiError, isAxiosCancel } from './utils/error';
 import api from './api';
 import { useAuth } from './hooks/useAuth';
 import { usePermission } from './hooks/usePermission';
@@ -133,7 +133,7 @@ const App: React.FC = () => {
 
   const getTabFromPath = (): TabType => {
   const path = window.location.pathname.replace(/^\//, '').split('/')[0] || '';
-  return (validTabs.includes(path as any) ? path : 'help') as any;
+  return (validTabs as readonly string[]).includes(path) ? (path as TabType) : 'help';
   };
 
   // ── 登录门控标记 ──────────────────────────────────
@@ -284,7 +284,9 @@ const App: React.FC = () => {
       setActiveTab('recipes');
       openRecipeEdit(recipe);
     }
-    } catch (_) {}
+    } catch (_) {
+      // intentionally ignored: URL edit-id decode may fail for malformed URIs
+    }
   }
   }, [data]);
 
@@ -310,12 +312,12 @@ const App: React.FC = () => {
     setShowCreateModal(true);
     const autoScan = params.get('autoScan') === '1';
     if (autoScan) {
-    // as:create -f：先显示 New Recipe 窗口，再在该窗口内自动执行 Scan File（AI 分析），完成后跳转
+
     setTimeout(() => handleCreateFromPathWithSpecifiedPath(path), 500);
     }
   }
 
-  // 清除 action/path 参数，确保下次 // as:c 触发时 URL 不同，浏览器会重新加载
+
   if (action) {
     window.history.replaceState({}, document.title, window.location.pathname);
   }
@@ -332,8 +334,8 @@ const App: React.FC = () => {
     const projectData = await api.fetchData();
     // V3 KnowledgeEntry 字段已全部 camelCase
     setData(projectData);
-  } catch (err: any) {
-    notify(err?.message || t('app.load.failed'), { title: t('app.load.failedTitle'), type: 'error' });
+  } catch (err: unknown) {
+    notify(getErrorMessage(err, t('app.load.failed')), { title: t('app.load.failedTitle'), type: 'error' });
   } finally {
     setLoading(false);
   }
@@ -343,8 +345,8 @@ const App: React.FC = () => {
   try {
     const result = await api.fetchTargets();
     setTargets(result);
-  } catch (err: any) {
-    console.warn('删除候选残留失败:', err?.message);
+  } catch (err: unknown) {
+    console.warn('删除候选残留失败:', getErrorMessage(err));
   }
   };
 
@@ -447,12 +449,11 @@ const App: React.FC = () => {
     setShowCreateModal(false);
     fetchData();
     notify(multipleCount ? t('app.clipboard.resultMulti', { count: multipleCount }) : t('app.extract.normalSuccess'), { title: t('app.clipboard.resultTitle') });
-    } catch (err: any) {
+    } catch (err: unknown) {
     // 区分 AI 错误和其他错误
-    const isAiError = err.response?.data?.aiError === true;
-    const errorMsg = err.response?.data?.error || err.message;
+    const errorMsg = getErrorMessage(err);
     
-    if (isAiError) {
+    if (isAiError(err)) {
       notify(errorMsg, { title: t('app.clipboard.aiFailed'), type: 'error' });
     } else {
       notify(errorMsg, { title: t('common.operationFailed'), type: 'error' });
@@ -536,7 +537,7 @@ const App: React.FC = () => {
       scanMode: 'target' as const,
     }));
     setScanResults(enrichedResults);
-    if (scannedFiles.length > 0) setScanFileList(scannedFiles);
+    if (scannedFiles.length > 0) setScanFileList(scannedFiles.map((f: string) => ({ name: f.split('/').pop() || f, path: f })));
 
     fetchData();
     if (recipes.length > 0) {
@@ -553,14 +554,14 @@ const App: React.FC = () => {
     } else {
     notify(t('app.scan.scanFailedHint'), { title: t('app.scan.scanFailed'), type: 'error' });
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (trickleTimerRef.current) { clearInterval(trickleTimerRef.current); trickleTimerRef.current = null; }
-    if (err.name === 'AbortError') return;
-    const isTimeout = err.message?.includes('timeout');
-    const msg = isTimeout
+    if (isAbortError(err)) return;
+    const timeout = isTimeoutError(err);
+    const msg = timeout
       ? t('app.scan.timeout')
-      : (err.message || t('app.scan.scanError'));
-    notify(msg, { title: isTimeout ? t('app.scan.timeoutTitle') : t('app.scan.scanError'), type: 'error' });
+      : getErrorMessage(err, t('app.scan.scanError'));
+    notify(msg, { title: timeout ? t('app.scan.timeoutTitle') : t('app.scan.scanError'), type: 'error' });
   } finally {
     if (abortControllerRef.current === controller) {
     setIsScanning(false);
@@ -608,12 +609,12 @@ const App: React.FC = () => {
     notify(
       t('app.coldStart.skeletonDetail', { targets: targetCount, files: fileCount, deps: graphEdges }) + guardMsg
     );
-  } catch (err: any) {
-    if (axios.isCancel(err)) return;
-    const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
-    const msg = isTimeout
+  } catch (err: unknown) {
+    if (isAxiosCancel(err)) return;
+    const timeout = isTimeoutError(err);
+    const msg = timeout
       ? t('app.coldStart.timeout')
-      : (err.response?.data?.error || err.message);
+      : getErrorMessage(err);
     notify(msg, { type: 'error' });
   } finally {
     if (abortControllerRef.current === controller) {
@@ -685,13 +686,13 @@ const App: React.FC = () => {
     } else {
     notify(t('app.fullScan.noContent'));
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     clearInterval(progressTimer);
-    if (axios.isCancel(err)) return;
-    const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout');
-    const msg = isTimeout
+    if (isAxiosCancel(err)) return;
+    const timeout = isTimeoutError(err);
+    const msg = timeout
       ? t('app.fullScan.timeout')
-      : (err.response?.data?.error || err.message);
+      : getErrorMessage(err);
     notify(msg, { type: 'error' });
   } finally {
     if (abortControllerRef.current === controller) {
@@ -787,7 +788,9 @@ const App: React.FC = () => {
     if (candTarget && candId) {
     try {
       await api.deleteCandidate(candId);
-    } catch (_) {}
+    } catch (_) {
+      // intentionally ignored: candidate may already be deleted; non-critical cleanup
+    }
     }
     fetchData();
   } catch (err) {
@@ -816,7 +819,7 @@ const App: React.FC = () => {
       kind: editingRecipe.kind,
       language: editingRecipe.language,
       category: editingRecipe.category,
-    } as any);
+    } as Partial<KnowledgeEntry>);
     closeRecipeEdit();
     fetchData();
   } catch (err) {
@@ -878,10 +881,8 @@ const App: React.FC = () => {
     notify(t('app.candidate.pushSuccess'));
     setScanResults(prev => prev.filter((_, i) => i !== index));
     fetchData();
-  } catch (err: any) {
-    const raw = err.response?.data?.error;
-    const msg = typeof raw === 'string' ? raw : raw?.message || t('app.candidate.pushFailed');
-    notify(msg, { type: 'error' });
+  } catch (err: unknown) {
+    notify(getErrorMessage(err, t('app.candidate.pushFailed')), { type: 'error' });
   }
   };
 

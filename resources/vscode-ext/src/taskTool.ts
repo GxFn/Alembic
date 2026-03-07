@@ -106,10 +106,10 @@ export function registerTaskTool(context: vscode.ExtensionContext) {
       let serverResult: Record<string, unknown>;
       try {
         serverResult = await forwardToServer(args);
-      } catch (err: any) {
+      } catch (err: unknown) {
         return textResult({
           success: false,
-          message: `Server unreachable: ${err.message}. Run \`asd server\` in the project directory.`,
+          message: `Server unreachable: ${err instanceof Error ? err.message : String(err)}. Run \`asd server\` in the project directory.`,
         });
       }
 

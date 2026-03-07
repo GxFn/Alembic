@@ -22,7 +22,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import Logger from '../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 import { applyPendingAutoApprove, markAutoApproveNeeded } from './autoApproveInjector.js';
 import { envelope } from './envelope.js';
 import { wrapHandler } from './errorHandler.js';
@@ -165,7 +165,7 @@ export class McpServer {
       const components = await this.bootstrap.initialize();
 
       // 将 Bootstrap 组件注入 ServiceContainer
-      const { getServiceContainer } = await import('../../injection/ServiceContainer.js');
+      const { getServiceContainer } = await import('#inject/ServiceContainer.js');
       this.container = getServiceContainer();
       await (
         this.container as unknown as { initialize(opts: Record<string, unknown>): Promise<void> }
@@ -180,9 +180,7 @@ export class McpServer {
       });
 
       // 注册 Gateway action handlers
-      const { registerGatewayActions } = await import(
-        '../../core/gateway/GatewayActionRegistry.js'
-      );
+      const { registerGatewayActions } = await import('#core/gateway/GatewayActionRegistry.js');
       const gateway = this.container.get('gateway');
       if (gateway) {
         registerGatewayActions(gateway, this.container);

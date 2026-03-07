@@ -49,8 +49,12 @@ describe('Integration: TaskGraph + Guard HTTP API', () => {
   }, 30_000);
 
   afterAll(async () => {
-    if (httpServer) await httpServer.stop();
-    if (bootstrap) await bootstrap.shutdown();
+    if (httpServer) {
+      await httpServer.stop();
+    }
+    if (bootstrap) {
+      await bootstrap.shutdown();
+    }
   });
 
   // ── TaskGraph 任务生命周期 ──────────────────────────
@@ -144,7 +148,8 @@ describe('Integration: TaskGraph + Guard HTTP API', () => {
     it('should reject missing operation', async () => {
       const res = await post('/task', {});
       expect(res.success).toBe(false);
-      expect(res.message).toMatch(/operation.*required/i);
+      // validate middleware returns { error: { code: 'VALIDATION_ERROR', details } }
+      expect(res.error?.code).toBe('VALIDATION_ERROR');
     });
 
     it('should reject unknown operation', async () => {

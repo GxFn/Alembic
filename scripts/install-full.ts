@@ -15,8 +15,9 @@ const __dirname = dirname(__filename);
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { PACKAGE_ROOT } from '../lib/shared/package-root.js';
 
-const rootDir = path.resolve(__dirname, '..');
+const rootDir = PACKAGE_ROOT;
 const withParser =
   process.env.ASD_INSTALL_PARSER === '1' || process.env.ASD_INSTALL_PARSER === 'true';
 const withNativeUi =

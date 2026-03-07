@@ -47,7 +47,7 @@
  *   bootstrap/projectSkills.js ← Phase 5.5 Project Skill 生成（内部 Agent 专用）
  */
 
-import { getInternalAgentRequiredFields } from '../../../shared/FieldSpec.js';
+import { getInternalAgentRequiredFields } from '#shared/FieldSpec.js';
 import { envelope } from '../envelope.js';
 import { fillDimensionsV3 } from './bootstrap/pipeline/orchestrator.js';
 import { bootstrapRefine } from './bootstrap/refine.js';

@@ -4,6 +4,10 @@
  * 最多保留 200 条。
  */
 
+import { asc, desc, eq, sql } from 'drizzle-orm';
+import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
+import { guardViolations } from '../../infrastructure/database/drizzle/schema.js';
+
 const MAX_RUNS = 200;
 
 interface DatabaseLike {
@@ -38,41 +42,40 @@ interface RunOutput {
 
 export class ViolationsStore {
   #db: DatabaseLike;
+  #drizzle: DrizzleDB;
 
   /**
    * @param {import('better-sqlite3').Database} db - SQLite 数据库实例
    */
   constructor(db: DatabaseLike) {
     this.#db = db;
+    this.#drizzle = getDrizzle();
   }
 
   // ─── 写入 ─────────────────────────────────────────────
 
   /**
    * 追加一次 Guard 运行记录
-   * @param {{ filePath: string, violations: object[], summary?: string }} run
-   * @returns {string} runId
+   * ★ Drizzle 类型安全 INSERT + raw SQL 截断
    */
   appendRun(run: RunInput) {
     const id = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const now = Math.floor(Date.now() / 1000);
 
-    this.#db
-      .prepare(`
-      INSERT INTO guard_violations (id, file_path, triggered_at, violation_count, summary, violations_json, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `)
-      .run(
+    this.#drizzle
+      .insert(guardViolations)
+      .values({
         id,
-        run.filePath || '',
-        new Date().toISOString(),
-        (run.violations || []).length,
-        run.summary || '',
-        JSON.stringify(run.violations || []),
-        now
-      );
+        filePath: run.filePath || '',
+        triggeredAt: new Date().toISOString(),
+        violationCount: (run.violations || []).length,
+        summary: run.summary || '',
+        violationsJson: JSON.stringify(run.violations || []),
+        createdAt: now,
+      })
+      .run();
 
-    // 超限截断：保留最新 MAX_RUNS 条
+    // 超限截断：保留最新 MAX_RUNS 条（子查询保留 raw SQL）
     this.#db
       .prepare(`
       DELETE FROM guard_violations WHERE id NOT IN (
@@ -88,29 +91,42 @@ export class ViolationsStore {
 
   /**
    * 获取所有运行记录（最新在后）
+   * ★ Drizzle 类型安全 SELECT
    */
   getRuns() {
-    const rows = this.#db.prepare('SELECT * FROM guard_violations ORDER BY created_at ASC').all();
+    const rows = this.#drizzle
+      .select()
+      .from(guardViolations)
+      .orderBy(asc(guardViolations.createdAt))
+      .all();
     return rows.map((r) => this.#rowToRun(r));
   }
 
   /**
    * 按文件路径查询历史
+   * ★ Drizzle 类型安全 SELECT WHERE
    */
   getRunsByFile(filePath: string) {
-    const rows = this.#db
-      .prepare('SELECT * FROM guard_violations WHERE file_path = ? ORDER BY created_at ASC')
-      .all(filePath);
+    const rows = this.#drizzle
+      .select()
+      .from(guardViolations)
+      .where(eq(guardViolations.filePath, filePath))
+      .orderBy(asc(guardViolations.createdAt))
+      .all();
     return rows.map((r) => this.#rowToRun(r));
   }
 
   /**
    * 获取最近 N 条记录
+   * ★ Drizzle 类型安全 SELECT + ORDER + LIMIT
    */
   getRecentRuns(n = 20) {
-    const rows = this.#db
-      .prepare('SELECT * FROM guard_violations ORDER BY created_at DESC, rowid DESC LIMIT ?')
-      .all(n);
+    const rows = this.#drizzle
+      .select()
+      .from(guardViolations)
+      .orderBy(desc(guardViolations.createdAt), sql`rowid DESC`)
+      .limit(n)
+      .all();
     return rows.reverse().map((r) => this.#rowToRun(r));
   }
 
@@ -201,9 +217,10 @@ export class ViolationsStore {
 
   /**
    * 清空所有记录
+   * ★ Drizzle 类型安全 DELETE
    */
   clearRuns() {
-    this.#db.prepare('DELETE FROM guard_violations').run();
+    this.#drizzle.delete(guardViolations).run();
   }
 
   /**
@@ -215,7 +232,7 @@ export class ViolationsStore {
 
   async clear({ ruleId, file }: { ruleId?: string; file?: string } = {}) {
     if (file) {
-      this.#db.prepare('DELETE FROM guard_violations WHERE file_path = ?').run(file);
+      this.#drizzle.delete(guardViolations).where(eq(guardViolations.filePath, file)).run();
     } else {
       this.clearRuns();
     }
@@ -253,13 +270,17 @@ export class ViolationsStore {
 
   // ─── 内部 ─────────────────────────────────────────────
 
+  /**
+   * 行转运行记录（兼容 raw SQL snake_case 和 Drizzle camelCase）
+   */
   #rowToRun(row: Record<string, unknown>): RunOutput {
+    const violationsRaw = (row.violationsJson ?? row.violations_json) as string | undefined;
     return {
       id: row.id as string,
-      filePath: row.file_path as string,
-      triggeredAt: row.triggered_at as string,
-      violations: row.violations_json ? JSON.parse(row.violations_json as string) : [],
-      violationCount: row.violation_count as number,
+      filePath: (row.filePath ?? row.file_path) as string,
+      triggeredAt: (row.triggeredAt ?? row.triggered_at) as string,
+      violations: violationsRaw ? JSON.parse(violationsRaw) : [],
+      violationCount: (row.violationCount ?? row.violation_count) as number,
       summary: (row.summary as string) || '',
     };
   }

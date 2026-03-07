@@ -2,7 +2,7 @@
  * SearchHandler — 处理 // as:s 指令
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 
 /**
  * @param {import('../FileWatcher.js').FileWatcher} watcher

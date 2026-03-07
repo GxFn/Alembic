@@ -5,7 +5,7 @@
  * - OpenAI: embed(string[]) → number[][]
  * - Gemini: batchEmbedContents → 批量请求
  *
- * 使用滑动窗口并发控制, 避免 API 限流:
+ * 使用 p-limit 并发控制, 避免 API 限流:
  * - 每批 batchSize (默认 32) 条文本
  * - 最多 maxConcurrency (默认 2) 个批次并行
  *
@@ -13,6 +13,8 @@
  *
  * @module infrastructure/vector/BatchEmbedder
  */
+
+import { createLimit } from '#shared/concurrency.js';
 
 export class BatchEmbedder {
   #aiProvider;
@@ -51,20 +53,21 @@ export class BatchEmbedder {
 
     const results = new Map();
     const batches = this.#chunkArray(items, this.#batchSize);
+    const limit = createLimit(this.#maxConcurrency);
 
-    // 滑动窗口并发控制
-    for (let i = 0; i < batches.length; i += this.#maxConcurrency) {
-      const window = batches.slice(i, i + this.#maxConcurrency);
-      const batchResults = await Promise.all(window.map((batch) => this.#embedBatch(batch)));
-
-      for (const batchResult of batchResults) {
-        for (const [id, vector] of batchResult) {
-          results.set(id, vector);
-        }
-      }
-
-      onProgress?.(results.size, items.length);
-    }
+    // p-limit 并发控制
+    const batchResults = await Promise.all(
+      batches.map((batch) =>
+        limit(async () => {
+          const batchResult = await this.#embedBatch(batch);
+          for (const [id, vector] of batchResult) {
+            results.set(id, vector);
+          }
+          onProgress?.(results.size, items.length);
+          return batchResult;
+        })
+      )
+    );
 
     return results;
   }

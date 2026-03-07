@@ -13,7 +13,7 @@
  * @module insight-analyst
  */
 
-import { getDimensionSOP } from '../../../external/mcp/handlers/bootstrap/shared/dimension-sop.js';
+import { getDimensionSOP } from '#external/mcp/handlers/bootstrap/shared/dimension-sop.js';
 
 // ──────────────────────────────────────────────────────────────────
 // 本地类型定义

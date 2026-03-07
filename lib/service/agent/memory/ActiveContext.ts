@@ -22,7 +22,7 @@
  * @module ActiveContext
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 
 // ═══════════════════════════════════════════════════════════
 // §1: 工具压缩策略 (从 WorkingMemory 迁入)

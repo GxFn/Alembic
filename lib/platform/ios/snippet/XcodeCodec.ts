@@ -9,7 +9,7 @@
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { SnippetCodec, type SnippetSpec } from '../../../service/snippet/codecs/SnippetCodec.js';
+import { SnippetCodec, type SnippetSpec } from '#service/snippet/codecs/SnippetCodec.js';
 
 const XCODE_LANGUAGE_MAP = {
   swift: 'Xcode.SourceCodeLanguage.Swift',

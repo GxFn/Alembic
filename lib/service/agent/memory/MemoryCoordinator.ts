@@ -14,7 +14,7 @@
  * @module MemoryCoordinator
  */
 
-import Logger from '../../../infrastructure/logging/Logger.js';
+import Logger from '#infra/logging/Logger.js';
 import { ActiveContext } from './ActiveContext.js';
 import type { SessionStore } from './SessionStore.js';
 

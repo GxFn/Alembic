@@ -638,6 +638,12 @@ export class AgentRuntime {
         messages.appendUserNudge(nudge.text);
         this.logger.info(`[AgentRuntime] 💬 injected ${nudge.type} nudge at iter ${ctx.iteration}`);
         const _dim = ctx.sharedState?._dimensionMeta?.id || '';
+        if (process.env.ASD_MCP_MODE !== '1') {
+          process.stderr.write(
+            `\n\x1b[36m━━━ Nudge [${nudge.type}] iter=${ctx.iteration}${_dim ? ` dim=${_dim}` : ''} ━━━\x1b[0m\n`
+          );
+          process.stderr.write(`\x1b[33m${nudge.text}\x1b[0m\n\n`);
+        }
       }
     }
 
@@ -968,6 +974,12 @@ export class AgentRuntime {
           `[AgentRuntime] 📝 injected ${transitionNudge.type} nudge (${tracker.phase})`
         );
         const _dimT = ctx.sharedState?._dimensionMeta?.id || '';
+        if (process.env.ASD_MCP_MODE !== '1') {
+          process.stderr.write(
+            `\n\x1b[35m━━━ Transition Nudge [${transitionNudge.type}] phase=${tracker.phase}${_dimT ? ` dim=${_dimT}` : ''} ━━━\x1b[0m\n`
+          );
+          process.stderr.write(`\x1b[33m${transitionNudge.text}\x1b[0m\n\n`);
+        }
       }
     }
 
@@ -1047,6 +1059,12 @@ export class AgentRuntime {
         messages.appendUserNudge(textResult.nudge!);
         this.logger.info('[AgentRuntime] 📝 injected SUMMARIZE nudge (text-triggered transition)');
         const _dimD = ctx.sharedState?._dimensionMeta?.id || '';
+        if (process.env.ASD_MCP_MODE !== '1') {
+          process.stderr.write(
+            `\n\x1b[34m━━━ Digest Nudge [SUMMARIZE]${_dimD ? ` dim=${_dimD}` : ''} ━━━\x1b[0m\n`
+          );
+          process.stderr.write(`\x1b[33m${textResult.nudge}\x1b[0m\n\n`);
+        }
         trace?.endRound?.();
         return false; // continue
       }
@@ -1056,6 +1074,12 @@ export class AgentRuntime {
         if (textResult.nudge) {
           messages.appendUserNudge(textResult.nudge);
           const _dimC = ctx.sharedState?._dimensionMeta?.id || '';
+          if (process.env.ASD_MCP_MODE !== '1') {
+            process.stderr.write(
+              `\n\x1b[32m━━━ Continue Nudge${_dimC ? ` dim=${_dimC}` : ''} ━━━\x1b[0m\n`
+            );
+            process.stderr.write(`\x1b[33m${textResult.nudge}\x1b[0m\n\n`);
+          }
         }
         trace?.endRound?.();
         return false; // continue
@@ -1074,9 +1098,9 @@ export class AgentRuntime {
    * @returns {Promise<Object>}
    */
   async #finalize(ctx: LoopContext) {
-    // Scan pipeline: 所有结果在 toolCalls 中 (collect_scan_recipe)，不需要文本回复
+    // Scan 管线: 所有结果在 toolCalls 中 (collect_scan_recipe)，不需要文本回复
     // 直接跳过 forced summary，避免浪费一次 LLM 调用
-    if (!ctx.lastReply && ctx.tracker?.submitToolName === 'collect_scan_recipe') {
+    if (!ctx.lastReply && ctx.tracker?.pipelineType === 'scan') {
       const recipeCount = ctx.toolCalls.filter(
         (tc: ToolCallEntry) => (tc.tool || tc.name) === 'collect_scan_recipe'
       ).length;

@@ -7,8 +7,8 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve as pathResolve, relative, sep } from 'node:path';
-import { GraphCache } from '../../../infrastructure/cache/GraphCache.js';
-import Logger from '../../../infrastructure/logging/Logger.js';
+import { GraphCache } from '#infra/cache/GraphCache.js';
+import Logger from '#infra/logging/Logger.js';
 import { DependencyGraph } from './DependencyGraph.js';
 import { PackageSwiftParser } from './PackageSwiftParser.js';
 import { PolicyEngine } from './PolicyEngine.js';
