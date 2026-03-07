@@ -13,6 +13,13 @@
  * @module service/search/HybridRetriever
  */
 
+interface RetrievalResult {
+  id?: string;
+  item?: { id?: string };
+  score?: number;
+  [key: string]: unknown;
+}
+
 export class HybridRetriever {
   #vectorStore;
   #rrfK;
@@ -24,7 +31,18 @@ export class HybridRetriever {
    * @param {number} [options.rrfK=60] - RRF 常数 (k), 值越大越平滑
    * @param {number} [options.alpha=0.5] - Dense 权重 (1-alpha = Sparse 权重)
    */
-  constructor(options: any = {}) {
+  constructor(
+    options: {
+      vectorStore?: {
+        searchVector: (
+          vector: number[],
+          opts: { topK: number; filter?: unknown }
+        ) => Promise<RetrievalResult[]>;
+      } | null;
+      rrfK?: number;
+      alpha?: number;
+    } = {}
+  ) {
     this.#vectorStore = options.vectorStore || null;
     this.#rrfK = options.rrfK || 60;
     this.#defaultAlpha = options.alpha ?? 0.5;
@@ -37,13 +55,18 @@ export class HybridRetriever {
    * Sparse: BM25 关键词搜索 (由外部传入结果)
    *
    * @param {object} params
-   * @param {Array<{ id: string, score: number, [key: string]: any }>} params.denseResults - 向量搜索结果
-   * @param {Array<{ id: string, score: number, [key: string]: any }>} params.sparseResults - 关键词搜索结果
+   * @param {Array<{ id: string, score: number, [key: string]: unknown }>} params.denseResults - 向量搜索结果
+   * @param {Array<{ id: string, score: number, [key: string]: unknown }>} params.sparseResults - 关键词搜索结果
    * @param {number} [params.topK=10]
    * @param {number} [params.alpha=0.5] - Dense 权重
    * @returns {Array<{ id: string, score: number, rrfScore: number, denseRank: number, sparseRank: number, data: object }>}
    */
-  fuse({ denseResults = [] as any[], sparseResults = [] as any[], topK = 10, alpha = 0.5 }) {
+  fuse({
+    denseResults = [] as RetrievalResult[],
+    sparseResults = [] as RetrievalResult[],
+    topK = 10,
+    alpha = 0.5,
+  }) {
     const k = this.#rrfK;
     const scores = new Map();
 
@@ -111,7 +134,16 @@ export class HybridRetriever {
    * @param {function} [options.sparseSearchFn] - 外部 sparse 搜索函数 (query, limit) => results[]
    * @returns {Promise<Array>}
    */
-  async search(query: any, queryVector: any, options: any = {}) {
+  async search(
+    query: string,
+    queryVector: number[] | null,
+    options: {
+      topK?: number;
+      alpha?: number;
+      filter?: unknown;
+      sparseSearchFn?: ((query: string, limit: number) => RetrievalResult[]) | null;
+    } = {}
+  ) {
     const { topK = 10, alpha = this.#defaultAlpha, filter = null, sparseSearchFn = null } = options;
     const expandedK = topK * 3; // 每路召回更多候选以提高融合质量
 

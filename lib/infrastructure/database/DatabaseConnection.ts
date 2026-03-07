@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
+/** Re-exported type alias so declaration emit can name it */
+export type SqliteDatabase = InstanceType<typeof Database>;
+
 import pathGuard from '../../shared/PathGuard.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -14,9 +17,9 @@ const __dirname = path.dirname(__filename);
  * 这样即使 MCP 服务器的 cwd 不是项目目录，DB 也不会创建到项目外。
  */
 export class DatabaseConnection {
-  config: any;
-  db: any;
-  constructor(config: any) {
+  config: { path: string; verbose?: boolean };
+  db: SqliteDatabase | null;
+  constructor(config: { path: string; verbose?: boolean }) {
     this.config = config;
     this.db = null;
   }
@@ -24,7 +27,7 @@ export class DatabaseConnection {
   /**
    * 连接数据库
    */
-  async connect() {
+  async connect(): Promise<SqliteDatabase> {
     const dbPath = this.config.path;
 
     // 使用 projectRoot（PathGuard 已配置）优先解析相对路径，
@@ -63,6 +66,10 @@ export class DatabaseConnection {
    * 运行所有 migration（支持 .sql 和 .js）
    */
   async runMigrations() {
+    if (!this.db) {
+      throw new Error('Database not connected. Call connect() first.');
+    }
+    const db = this.db;
     const migrationsDir = path.join(__dirname, 'migrations');
     const migrationFiles = fs
       .readdirSync(migrationsDir)
@@ -70,7 +77,7 @@ export class DatabaseConnection {
       .sort();
 
     // 确保 schema_migrations 表存在
-    this.db.exec(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version TEXT PRIMARY KEY,
         applied_at TEXT NOT NULL
@@ -81,7 +88,7 @@ export class DatabaseConnection {
       const version = file.replace(/\.(sql|js)$/, '');
 
       // 检查是否已应用
-      const applied = this.db
+      const applied = db
         .prepare('SELECT version FROM schema_migrations WHERE version = ?')
         .get(version);
 
@@ -92,24 +99,20 @@ export class DatabaseConnection {
           // JS migration: export default function(db) { ... }
           const mod = await import(path.join(migrationsDir, file));
           const migrate = mod.default || mod;
-          const runMigration = this.db.transaction(() => {
-            migrate(this.db);
-            this.db
-              .prepare(
-                'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)'
-              )
-              .run(version, new Date().toISOString());
+          const runMigration = db.transaction(() => {
+            migrate(db);
+            db.prepare(
+              'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)'
+            ).run(version, new Date().toISOString());
           });
           runMigration();
         } else {
           const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-          const runMigration = this.db.transaction(() => {
-            this.db.exec(sql);
-            this.db
-              .prepare(
-                'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)'
-              )
-              .run(version, new Date().toISOString());
+          const runMigration = db.transaction(() => {
+            db.exec(sql);
+            db.prepare(
+              'INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)'
+            ).run(version, new Date().toISOString());
           });
           runMigration();
         }
@@ -132,7 +135,7 @@ export class DatabaseConnection {
   /**
    * 获取数据库实例
    */
-  getDb() {
+  getDb(): SqliteDatabase {
     if (!this.db) {
       throw new Error('Database not connected. Call connect() first.');
     }

@@ -15,6 +15,125 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { relative } from 'node:path';
+import type { LoggerLike } from '../../types.js';
+
+// ──────────────────────────────────────────────────────────────────
+// 本地类型定义
+// ──────────────────────────────────────────────────────────────────
+
+/** 最小化 better-sqlite3 Database 接口 */
+interface SqliteDb {
+  exec(sql: string): void;
+  prepare(sql: string): SqliteStatement;
+  transaction<T extends (...args: unknown[]) => unknown>(fn: T): T;
+}
+
+/** 最小化 Statement 接口 */
+interface SqliteStatement {
+  run(...params: unknown[]): unknown;
+  get(...params: unknown[]): Record<string, unknown> | undefined;
+  all(...params: unknown[]): Record<string, unknown>[];
+}
+
+/** 所有预编译 SQL 语句 */
+interface PreparedStatements {
+  insertSnapshot: SqliteStatement;
+  insertDimFile: SqliteStatement;
+  getLatest: SqliteStatement;
+  getById: SqliteStatement;
+  listByProject: SqliteStatement;
+  getDimFiles: SqliteStatement;
+  enforceCapacity: SqliteStatement;
+  deleteById: SqliteStatement;
+}
+
+/** 快照反序列化结果 */
+export interface SnapshotData {
+  id: string;
+  sessionId: string | null;
+  projectRoot: string;
+  createdAt: string;
+  durationMs: number;
+  fileCount: number;
+  dimensionCount: number;
+  candidateCount: number;
+  primaryLang: string | null;
+  fileHashes: Record<string, string>;
+  dimensionMeta: Record<string, DimensionStatMeta>;
+  episodicData: Record<string, unknown> | null;
+  isIncremental: boolean;
+  parentId: string | null;
+  changedFiles: string[];
+  affectedDims: string[];
+  status: string;
+}
+
+/** 文件条目 */
+interface SnapshotFile {
+  path: string;
+  relativePath?: string;
+  content?: string;
+  targetName?: string;
+}
+
+/** save() 参数 */
+interface SaveParams {
+  sessionId?: string;
+  projectRoot: string;
+  allFiles: SnapshotFile[];
+  dimensionStats?: Record<string, DimensionStatInput>;
+  episodicData?: unknown;
+  meta?: {
+    durationMs?: number;
+    candidateCount?: number;
+    primaryLang?: string;
+    [key: string]: unknown;
+  };
+  isIncremental?: boolean;
+  parentId?: unknown;
+  changedFiles?: string[];
+  affectedDims?: string[];
+}
+
+/** 维度统计输入 */
+interface DimensionStatInput {
+  candidateCount?: number;
+  analysisChars?: number;
+  referencedFiles?: number;
+  durationMs?: number;
+  referencedFilesList?: string[];
+  [key: string]: unknown;
+}
+
+/** 维度元数据（序列化后） */
+interface DimensionStatMeta {
+  candidateCount: number;
+  analysisChars: number;
+  referencedFiles: number;
+  durationMs: number;
+}
+
+/** Diff 结果 */
+export interface DiffResult {
+  added: string[];
+  modified: string[];
+  deleted: string[];
+  unchanged: string[];
+  changeRatio: number;
+}
+
+/** 受影响维度推断结果 */
+interface AffectedDimensionResult {
+  mode: 'incremental' | 'full';
+  dimensions: string[];
+  skippedDimensions: string[];
+  reason: string;
+}
+
+/** db 可能包含 getDb 方法的包装 */
+interface DbWrapper {
+  getDb?: () => SqliteDb;
+}
 
 // ──────────────────────────────────────────────────────────────
 // 常量
@@ -32,24 +151,27 @@ const FULL_REBUILD_THRESHOLD = 0.5;
 
 export class BootstrapSnapshot {
   /** @type {import('better-sqlite3').Database} */
-  #db;
+  #db: SqliteDb;
 
   /** @type {object|null} */
-  #logger;
+  #logger: LoggerLike | null;
 
   /** @type {object} */
-  #stmts: any;
+  #stmts!: PreparedStatements;
 
   /**
    * @param {import('better-sqlite3').Database} db - better-sqlite3 实例
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  constructor(db: any, { logger }: any = {}) {
+  constructor(db: unknown, { logger }: { logger?: LoggerLike | null } = {}) {
     if (!db) {
       throw new Error('BootstrapSnapshot requires a database instance');
     }
-    this.#db = typeof db?.getDb === 'function' ? db.getDb() : db;
+    this.#db =
+      typeof (db as DbWrapper)?.getDb === 'function'
+        ? (db as DbWrapper).getDb!()
+        : (db as SqliteDb);
     this.#logger = logger || null;
 
     this.#ensureTable();
@@ -74,7 +196,7 @@ export class BootstrapSnapshot {
    * @param {string[]} [params.affectedDims] 增量时受影响的维度
    * @returns {string} 快照 ID
    */
-  save(params: any) {
+  save(params: SaveParams): string {
     const {
       sessionId,
       projectRoot,
@@ -92,15 +214,18 @@ export class BootstrapSnapshot {
     const now = new Date().toISOString();
 
     // 计算文件指纹
-    const fileHashes: Record<string, any> = {};
+    const fileHashes: Record<string, string> = {};
     for (const f of allFiles) {
       const rel = f.relativePath || relative(projectRoot, f.path);
       fileHashes[rel] = this.#computeContentHash(f.content || this.#readFileContent(f.path));
     }
 
     // 构建维度-文件映射
-    const dimensionMeta: Record<string, any> = {};
-    for (const [dimId, stat] of Object.entries(dimensionStats || {}) as [string, any][]) {
+    const dimensionMeta: Record<string, DimensionStatMeta> = {};
+    for (const [dimId, stat] of Object.entries(dimensionStats || {}) as [
+      string,
+      DimensionStatInput,
+    ][]) {
       dimensionMeta[dimId] = {
         candidateCount: stat.candidateCount || 0,
         analysisChars: stat.analysisChars || 0,
@@ -133,7 +258,10 @@ export class BootstrapSnapshot {
       });
 
       // 维度-文件关联
-      for (const [dimId, stat] of Object.entries(dimensionStats || {}) as [string, any][]) {
+      for (const [dimId, stat] of Object.entries(dimensionStats || {}) as [
+        string,
+        DimensionStatInput,
+      ][]) {
         const refFiles = stat.referencedFilesList || [];
         for (const filePath of refFiles) {
           const rel =
@@ -169,15 +297,16 @@ export class BootstrapSnapshot {
    * 清除项目的所有快照 — 用于手动重新冷启动时强制全量
    * @param {string} projectRoot
    */
-  clearProject(projectRoot: any) {
+  clearProject(projectRoot: string) {
     try {
-      const rows = this.#stmts.listByProject.all(projectRoot, 9999);
+      const rows = this.#stmts.listByProject.all(projectRoot, 9999) as { id: string }[];
       for (const row of rows) {
         this.#stmts.deleteById.run(row.id);
       }
       this.#log(`Cleared ${rows.length} snapshots for project`);
-    } catch (err: any) {
-      this.#log(`clearProject failed: ${err.message}`, 'warn');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.#log(`clearProject failed: ${msg}`, 'warn');
     }
   }
 
@@ -187,7 +316,7 @@ export class BootstrapSnapshot {
    * @param {string} projectRoot
    * @returns {object|null} 快照数据
    */
-  getLatest(projectRoot: any) {
+  getLatest(projectRoot: string): SnapshotData | null {
     const row = this.#stmts.getLatest.get(projectRoot);
     if (!row) {
       return null;
@@ -200,7 +329,7 @@ export class BootstrapSnapshot {
    * @param {string} id
    * @returns {object|null}
    */
-  getById(id: any) {
+  getById(id: string): SnapshotData | null {
     const row = this.#stmts.getById.get(id);
     if (!row) {
       return null;
@@ -214,8 +343,10 @@ export class BootstrapSnapshot {
    * @param {number} [limit=10]
    * @returns {Array<object>}
    */
-  list(projectRoot: any, limit = 10) {
-    return this.#stmts.listByProject.all(projectRoot, limit).map((r: any) => this.#deserialize(r));
+  list(projectRoot: string, limit = 10): SnapshotData[] {
+    return this.#stmts.listByProject
+      .all(projectRoot, limit)
+      .map((r: Record<string, unknown>) => this.#deserialize(r));
   }
 
   // ─── 增量 Diff 计算 ──────────────────────────────────
@@ -228,11 +359,15 @@ export class BootstrapSnapshot {
    * @param {string} projectRoot
    * @returns {{ added: string[], modified: string[], deleted: string[], unchanged: string[], changeRatio: number }}
    */
-  computeDiff(snapshot: any, currentFiles: any, projectRoot: any) {
+  computeDiff(
+    snapshot: SnapshotData,
+    currentFiles: SnapshotFile[],
+    projectRoot: string
+  ): DiffResult {
     const oldHashes = snapshot.fileHashes || {};
 
     // 计算当前文件 hash
-    const newHashes: Record<string, any> = {};
+    const newHashes: Record<string, string> = {};
     for (const f of currentFiles) {
       const rel = f.relativePath || relative(projectRoot, f.path);
       newHashes[rel] = this.#computeContentHash(f.content || '');
@@ -278,7 +413,11 @@ export class BootstrapSnapshot {
    * @param {string[]} allDimIds 所有可用维度 ID
    * @returns {{ mode: 'incremental'|'full', dimensions: string[], skippedDimensions: string[], reason: string }}
    */
-  inferAffectedDimensions(snapshot: any, diff: any, allDimIds: any) {
+  inferAffectedDimensions(
+    snapshot: SnapshotData,
+    diff: DiffResult,
+    allDimIds: string[]
+  ): AffectedDimensionResult {
     const changeRatio =
       (diff.added.length + diff.modified.length + diff.deleted.length) /
       (diff.added.length +
@@ -311,7 +450,7 @@ export class BootstrapSnapshot {
 
     // 1. 从快照的 dimensionMeta 推断 — 查找维度引用了哪些变更文件
     const dimFileMap = this.#getDimFileMap(snapshot.id);
-    for (const [dimId, files] of Object.entries(dimFileMap) as [string, any][]) {
+    for (const [dimId, files] of Object.entries(dimFileMap) as [string, Set<string>][]) {
       for (const changedFile of changedFiles) {
         if (files.has(changedFile)) {
           affected.add(dimId);
@@ -336,8 +475,8 @@ export class BootstrapSnapshot {
       affected.add('project-profile');
     }
 
-    const dimensions = allDimIds.filter((d: any) => affected.has(d));
-    const skippedDimensions = allDimIds.filter((d: any) => !affected.has(d));
+    const dimensions = allDimIds.filter((d: string) => affected.has(d));
+    const skippedDimensions = allDimIds.filter((d: string) => !affected.has(d));
 
     return {
       mode: 'incremental',
@@ -354,9 +493,9 @@ export class BootstrapSnapshot {
    * @param {string} snapshotId
    * @returns {Object<string, Set<string>>}
    */
-  #getDimFileMap(snapshotId: any) {
-    const rows = this.#stmts.getDimFiles.all(snapshotId);
-    const map: Record<string, any> = {};
+  #getDimFileMap(snapshotId: string): Record<string, Set<string>> {
+    const rows = this.#stmts.getDimFiles.all(snapshotId) as { dim_id: string; file_path: string }[];
+    const map: Record<string, Set<string>> = {};
     for (const row of rows) {
       if (!map[row.dim_id]) {
         map[row.dim_id] = new Set();
@@ -371,11 +510,11 @@ export class BootstrapSnapshot {
    * @param {string} filePath
    * @returns {string[]}
    */
-  #inferDimsByFileType(filePath: any) {
+  #inferDimsByFileType(filePath: string): string[] {
     const ext = filePath.split('.').pop()?.toLowerCase() || '';
     const name = filePath.split('/').pop()?.toLowerCase() || '';
 
-    const dims: any[] = [];
+    const dims: string[] = [];
 
     // ObjC 文件 → objc-deep-scan
     if (['m', 'mm', 'h'].includes(ext)) {
@@ -455,14 +594,14 @@ export class BootstrapSnapshot {
 
   // ─── 内部方法 ─────────────────────────────────────────
 
-  #computeContentHash(content: any) {
+  #computeContentHash(content: string): string {
     return createHash('sha256')
       .update(content || '')
       .digest('hex')
       .substring(0, 16);
   }
 
-  #readFileContent(filePath: any) {
+  #readFileContent(filePath: string): string {
     try {
       return readFileSync(filePath, 'utf-8');
     } catch {
@@ -470,47 +609,51 @@ export class BootstrapSnapshot {
     }
   }
 
-  #enforceCapacity(projectRoot: any) {
+  #enforceCapacity(projectRoot: string) {
     try {
       this.#stmts.enforceCapacity.run(projectRoot, projectRoot, MAX_SNAPSHOTS);
-    } catch (err: any) {
-      this.#log(`Capacity enforcement failed: ${err.message}`, 'warn');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.#log(`Capacity enforcement failed: ${msg}`, 'warn');
     }
   }
 
-  #deserialize(row: any) {
+  #deserialize(row: Record<string, unknown>): SnapshotData {
     return {
-      id: row.id,
-      sessionId: row.session_id,
-      projectRoot: row.project_root,
-      createdAt: row.created_at,
-      durationMs: row.duration_ms,
-      fileCount: row.file_count,
-      dimensionCount: row.dimension_count,
-      candidateCount: row.candidate_count,
-      primaryLang: row.primary_lang,
-      fileHashes: this.#safeParseJSON(row.file_hashes, {}),
-      dimensionMeta: this.#safeParseJSON(row.dimension_meta, {}),
-      episodicData: this.#safeParseJSON(row.episodic_data, null),
+      id: row.id as string,
+      sessionId: (row.session_id as string) ?? null,
+      projectRoot: row.project_root as string,
+      createdAt: row.created_at as string,
+      durationMs: row.duration_ms as number,
+      fileCount: row.file_count as number,
+      dimensionCount: row.dimension_count as number,
+      candidateCount: row.candidate_count as number,
+      primaryLang: (row.primary_lang as string) ?? null,
+      fileHashes: this.#safeParseJSON(row.file_hashes, {} as Record<string, string>),
+      dimensionMeta: this.#safeParseJSON(
+        row.dimension_meta,
+        {} as Record<string, DimensionStatMeta>
+      ),
+      episodicData: this.#safeParseJSON(row.episodic_data, null as Record<string, unknown> | null),
       isIncremental: !!row.is_incremental,
-      parentId: row.parent_id,
-      changedFiles: this.#safeParseJSON(row.changed_files, []),
-      affectedDims: this.#safeParseJSON(row.affected_dims, []),
-      status: row.status,
+      parentId: (row.parent_id as string) ?? null,
+      changedFiles: this.#safeParseJSON(row.changed_files, [] as string[]),
+      affectedDims: this.#safeParseJSON(row.affected_dims, [] as string[]),
+      status: row.status as string,
     };
   }
 
-  #safeParseJSON(str: any, fallback: any) {
+  #safeParseJSON<T>(str: unknown, fallback: T): T {
     try {
-      return str ? JSON.parse(str) : fallback;
+      return str ? JSON.parse(str as string) : fallback;
     } catch {
       return fallback;
     }
   }
 
-  #log(msg: any, level = 'info') {
-    if (this.#logger) {
-      this.#logger[level]?.(`[BootstrapSnapshot] ${msg}`);
+  #log(msg: string, level: 'info' | 'warn' | 'error' | 'debug' = 'info') {
+    if (this.#logger && this.#logger[level]) {
+      this.#logger[level]!(`[BootstrapSnapshot] ${msg}`);
     }
   }
 

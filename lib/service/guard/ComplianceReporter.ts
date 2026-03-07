@@ -16,10 +16,71 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import { COMPLIANCE_SCORING, QUALITY_GATE } from '../../shared/constants.js';
 import { collectSourceFilesWithContent } from './SourceFileCollector.js';
 
+interface ViolationSummary {
+  errors: number;
+  warnings: number;
+  infos?: number;
+  total?: number;
+  filesScanned?: number;
+  totalViolations?: number;
+}
+
+interface RuleHealthEntry {
+  ruleId: string;
+  precision: number;
+  recall: number;
+  f1: number;
+  triggers: number;
+  warning: string | null;
+}
+
+interface QualityGateThresholds {
+  maxErrors?: number;
+  maxWarnings?: number;
+  minScore?: number;
+}
+
+interface GuardCheckEngineLike {
+  auditFiles(
+    files: { path: string; content: string }[],
+    options: { scope: string }
+  ): {
+    files: { filePath: string; violations: ViolationItem[]; summary: ViolationSummary }[];
+    crossFileViolations: ViolationItem[];
+  };
+}
+
+interface ViolationItem {
+  ruleId: string;
+  severity: string;
+  message: string;
+  line?: number;
+  snippet?: string;
+  fixSuggestion?: string;
+  filePath?: string;
+}
+
+interface ViolationsStoreLike {
+  appendRun(run: { filePath: string; violations: ViolationItem[]; summary: string }): string;
+  getTrend(): { errorsChange: number; warningsChange: number; hasHistory: boolean };
+}
+
+interface RuleLearnerLike {
+  getAllStats(): Record<
+    string,
+    { triggers: number; metrics?: { precision?: number; recall?: number; f1?: number } }
+  >;
+}
+
+interface ExclusionManagerLike {
+  isPathExcluded?(filePath: string): boolean;
+  isRuleExcluded?(ruleId: string, filePath: string): boolean;
+}
+
 /**
  * Quality Gate 评分算法
  */
-function computeScore(summary: any, ruleHealth: any[] = []) {
+function computeScore(summary: ViolationSummary, ruleHealth: RuleHealthEntry[] = []) {
   let score = 100;
 
   // 扣分：每个 error/warning/info 按常量权重扣分
@@ -47,7 +108,7 @@ function computeScore(summary: any, ruleHealth: any[] = []) {
 /**
  * 判定 Quality Gate 状态
  */
-function evaluateGate(summary: any, score: any, thresholds: any) {
+function evaluateGate(summary: ViolationSummary, score: number, thresholds: QualityGateThresholds) {
   const {
     maxErrors = QUALITY_GATE.MAX_ERRORS,
     maxWarnings = QUALITY_GATE.MAX_WARNINGS,
@@ -67,12 +128,12 @@ function evaluateGate(summary: any, score: any, thresholds: any) {
 }
 
 export class ComplianceReporter {
-  engine: any;
-  exclusionManager: any;
-  logger: any;
-  qualityGateConfig: any;
-  ruleLearner: any;
-  violationsStore: any;
+  engine: GuardCheckEngineLike;
+  exclusionManager: ExclusionManagerLike | null;
+  logger: ReturnType<typeof Logger.getInstance>;
+  qualityGateConfig: Required<QualityGateThresholds>;
+  ruleLearner: RuleLearnerLike | null;
+  violationsStore: ViolationsStoreLike | null;
   /**
    * @param {import('./GuardCheckEngine.js').GuardCheckEngine} guardCheckEngine
    * @param {import('./ViolationsStore.js').ViolationsStore} violationsStore
@@ -81,11 +142,11 @@ export class ComplianceReporter {
    * @param {object} qualityGateConfig - { maxErrors, maxWarnings, minScore }
    */
   constructor(
-    guardCheckEngine: any,
-    violationsStore: any,
-    ruleLearner: any,
-    exclusionManager: any,
-    qualityGateConfig: any = {}
+    guardCheckEngine: GuardCheckEngineLike,
+    violationsStore: ViolationsStoreLike | null,
+    ruleLearner: RuleLearnerLike | null,
+    exclusionManager: ExclusionManagerLike | null,
+    qualityGateConfig: QualityGateThresholds = {}
   ) {
     this.engine = guardCheckEngine;
     this.violationsStore = violationsStore;
@@ -108,7 +169,10 @@ export class ComplianceReporter {
    * @param {number} [options.maxFiles] 最大扫描文件数
    * @returns {Promise<ComplianceReport>}
    */
-  async generate(projectRoot: any, options: any = {}) {
+  async generate(
+    projectRoot: string,
+    options: { qualityGate?: QualityGateThresholds; maxFiles?: number } = {}
+  ) {
     const thresholds = { ...this.qualityGateConfig, ...(options.qualityGate || {}) };
     const maxFiles = options.maxFiles || 500;
 
@@ -120,13 +184,17 @@ export class ComplianceReporter {
     const auditResult = this.engine.auditFiles(files, { scope: 'project' });
 
     // 3. 通过 ExclusionManager 过滤被排除的项
-    const filteredFiles: any[] = [];
+    const filteredFiles: {
+      filePath: string;
+      violations: ViolationItem[];
+      summary: { total: number; errors: number; warnings: number; infos: number };
+    }[] = [];
     for (const fileResult of auditResult.files || []) {
       if (this.exclusionManager?.isPathExcluded?.(fileResult.filePath)) {
         continue;
       }
 
-      const filteredViolations = fileResult.violations.filter((v: any) => {
+      const filteredViolations = fileResult.violations.filter((v) => {
         // isRuleExcluded 内部已检查全局排除
         if (this.exclusionManager?.isRuleExcluded?.(v.ruleId, fileResult.filePath)) {
           return false;
@@ -139,9 +207,9 @@ export class ComplianceReporter {
         violations: filteredViolations,
         summary: {
           total: filteredViolations.length,
-          errors: filteredViolations.filter((v: any) => v.severity === 'error').length,
-          warnings: filteredViolations.filter((v: any) => v.severity === 'warning').length,
-          infos: filteredViolations.filter((v: any) => v.severity === 'info').length,
+          errors: filteredViolations.filter((v) => v.severity === 'error').length,
+          warnings: filteredViolations.filter((v) => v.severity === 'warning').length,
+          infos: filteredViolations.filter((v) => v.severity === 'info').length,
         },
       });
     }
@@ -197,11 +265,11 @@ export class ComplianceReporter {
       .slice(0, 20);
 
     // 7. 规则健康度（来自 RuleLearner）
-    let ruleHealth: any[] = [];
+    let ruleHealth: RuleHealthEntry[] = [];
     try {
       if (this.ruleLearner?.getAllStats) {
         const allStats = this.ruleLearner.getAllStats();
-        ruleHealth = (Object.entries(allStats) as [string, any][]).map(([ruleId, stat]) => ({
+        ruleHealth = Object.entries(allStats).map(([ruleId, stat]) => ({
           ruleId,
           precision: stat.metrics?.precision ?? 1,
           recall: stat.metrics?.recall ?? 1,
@@ -215,7 +283,11 @@ export class ComplianceReporter {
     }
 
     // 8. 趋势
-    let trend = { errorsChange: 0, warningsChange: 0, hasHistory: false };
+    let trend: { errorsChange: number; warningsChange: number; hasHistory: boolean } = {
+      errorsChange: 0,
+      warningsChange: 0,
+      hasHistory: false,
+    };
     try {
       if (this.violationsStore?.getTrend) {
         trend = this.violationsStore.getTrend();
@@ -232,7 +304,7 @@ export class ComplianceReporter {
     try {
       if (this.violationsStore?.appendRun) {
         const allViolations = filteredFiles.flatMap((f) =>
-          f.violations.map((v: any) => ({ ...v, filePath: f.filePath }))
+          f.violations.map((v) => ({ ...v, filePath: f.filePath }))
         );
         this.violationsStore.appendRun({
           filePath: projectRoot,
@@ -265,7 +337,7 @@ export class ComplianceReporter {
    * @param {object} report - generate() 产出的报告
    * @param {object} options - { format: 'text' | 'markdown' | 'json' }
    */
-  printReport(report: any, options: any = {}) {
+  printReport(report: Record<string, unknown>, options: { format?: string } = {}) {
     const { format = 'text' } = options;
 
     if (format === 'json') {
@@ -281,13 +353,25 @@ export class ComplianceReporter {
     this._printText(report);
   }
 
-  _printText(report: any) {
-    const { qualityGate, summary, topViolations, fileHotspots, trend } = report;
+  _printText(report: Record<string, unknown>) {
+    const { qualityGate, summary, topViolations, fileHotspots, trend } = report as {
+      qualityGate: { status: string; score: number };
+      summary: ViolationSummary;
+      topViolations: {
+        ruleId: string;
+        severity: string;
+        occurrences: number;
+        fileCount: number;
+        fixRecipeId?: string;
+      }[];
+      fileHotspots: { filePath: string; violationCount: number; errorCount: number }[];
+      trend: { hasHistory: boolean; errorsChange: number; warningsChange: number };
+    };
 
     const gateIcon =
       qualityGate.status === 'PASS' ? '✅' : qualityGate.status === 'WARN' ? '⚠️' : '❌';
 
-    const lines: any[] = [];
+    const lines: string[] = [];
     lines.push(`${gateIcon} Quality Gate: ${qualityGate.status}  Score: ${qualityGate.score}/100`);
     lines.push(
       `   Files: ${summary.filesScanned}  Errors: ${summary.errors}  Warnings: ${summary.warnings}  Infos: ${summary.infos || 0}`
@@ -321,9 +405,21 @@ export class ComplianceReporter {
     this.logger.info(lines.join('\n'));
   }
 
-  _printMarkdown(report: any) {
-    const { qualityGate, summary, topViolations, fileHotspots, trend } = report;
-    const lines: any[] = [];
+  _printMarkdown(report: Record<string, unknown>) {
+    const { qualityGate, summary, topViolations, fileHotspots, trend } = report as {
+      qualityGate: { status: string; score: number };
+      summary: ViolationSummary;
+      topViolations: {
+        ruleId: string;
+        severity: string;
+        occurrences: number;
+        fileCount: number;
+        fixRecipeId?: string;
+      }[];
+      fileHotspots: { filePath: string; violationCount: number; errorCount: number }[];
+      trend: { hasHistory: boolean; errorsChange: number; warningsChange: number };
+    };
+    const lines: string[] = [];
 
     lines.push('# Guard Compliance Report');
     lines.push('');

@@ -16,6 +16,104 @@
 
 import { randomUUID } from 'node:crypto';
 
+/** Reply callback type */
+type ReplyFn = (text: string) => Promise<void>;
+
+/** Sender identity */
+interface Sender {
+  id: string;
+  name?: string;
+  type: 'user' | 'system' | 'agent';
+}
+
+/** Session context */
+interface Session {
+  id: string;
+  history?: Array<{ role: string; content: string }>;
+}
+
+/** AgentMessage constructor options */
+interface AgentMessageOptions {
+  content?: string;
+  channel?: string;
+  session?: Session;
+  sender?: Sender;
+  metadata?: Record<string, unknown>;
+  replyFn?: ReplyFn | null;
+}
+
+/** HTTP request body shape */
+interface HttpRequestBody {
+  prompt?: string;
+  message?: string;
+  content?: string;
+  conversationId?: string;
+  sessionId?: string;
+  history?: Array<{ role: string; content: string }>;
+  userId?: string;
+  userName?: string;
+  lang?: string;
+  mode?: string;
+  context?: unknown;
+  stream?: boolean;
+}
+
+/** Minimal Express-like request */
+interface HttpRequest {
+  body?: HttpRequestBody;
+  ip?: string;
+}
+
+/** Lark message shape */
+interface LarkMessage {
+  text?: string;
+  content?: string;
+  chatId?: string;
+  senderId?: string;
+  userId?: string;
+  senderName?: string;
+  messageId?: string;
+  messageType?: string;
+  [key: string]: unknown;
+}
+
+/** CLI options */
+interface CliOptions {
+  sessionId?: string;
+  history?: Array<{ role: string; content: string }>;
+  cwd?: string;
+  mode?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** Internal message options */
+interface InternalMessageOptions {
+  session?: Session;
+  sessionId?: string;
+  history?: Array<{ role: string; content: string }>;
+  sourceAgentId?: string;
+  parentAgentId?: string;
+  dimension?: string;
+  phase?: string;
+  metadata?: Record<string, unknown>;
+  /** Extra pass-through keys (e.g. 'source') */
+  [key: string]: unknown;
+}
+
+/** MCP request shape */
+interface McpRequest {
+  prompt?: string;
+  content?: string;
+  arguments?: Record<string, unknown> & { prompt?: string };
+  sessionId?: string;
+  history?: Array<{ role: string; content: string }>;
+  clientId?: string;
+  clientName?: string;
+  toolName?: string;
+  mode?: string;
+  metadata?: Record<string, unknown>;
+}
+
 /**
  * 通信渠道枚举
  */
@@ -67,7 +165,14 @@ export class AgentMessage {
    * @param {Record<string, any>} [opts.metadata] 元数据
    * @param {Function} [opts.replyFn] 回复函数
    */
-  constructor({ content, channel = Channel.HTTP, session, sender, metadata, replyFn }: any = {}) {
+  constructor({
+    content,
+    channel = Channel.HTTP,
+    session,
+    sender,
+    metadata,
+    replyFn,
+  }: AgentMessageOptions = {}) {
     this.id = randomUUID();
     this.content = content || '';
     this.channel = channel;
@@ -87,7 +192,7 @@ export class AgentMessage {
    * 向发送方回复
    * @param {string} text
    */
-  async reply(text: any) {
+  async reply(text: string) {
     if (this.replyFn) {
       await this.replyFn(text);
     }
@@ -100,8 +205,8 @@ export class AgentMessage {
    * @param {Object} req - Express request
    * @param {Function} [replyFn] - SSE 或 JSON 回复
    */
-  static fromHttp(req: any, replyFn: any) {
-    const body = req.body || {};
+  static fromHttp(req: HttpRequest, replyFn?: ReplyFn) {
+    const body = req.body || ({} as HttpRequestBody);
     return new AgentMessage({
       content: body.prompt || body.message || body.content || '',
       channel: Channel.HTTP,
@@ -129,7 +234,7 @@ export class AgentMessage {
    * @param {Object} larkMsg 飞书消息对象
    * @param {Function} replyFn 飞书回复函数
    */
-  static fromLark(larkMsg: any, replyFn: any) {
+  static fromLark(larkMsg: LarkMessage, replyFn?: ReplyFn | null) {
     return new AgentMessage({
       content: larkMsg.text || larkMsg.content || '',
       channel: Channel.LARK,
@@ -158,7 +263,7 @@ export class AgentMessage {
    * @param {string} input 命令行输入
    * @param {Object} [opts]
    */
-  static fromCli(input: any, opts: any = {}) {
+  static fromCli(input: string, opts: CliOptions = {}) {
     return new AgentMessage({
       content: input,
       channel: Channel.CLI,
@@ -177,7 +282,7 @@ export class AgentMessage {
    * @param {string} content 消息内容
    * @param {Object} [opts]
    */
-  static internal(content: any, opts: any = {}) {
+  static internal(content: string, opts: InternalMessageOptions = {}) {
     return new AgentMessage({
       content,
       channel: Channel.INTERNAL,
@@ -200,7 +305,7 @@ export class AgentMessage {
    * @param {Object} mcpReq - MCP tool call request
    * @param {Function} [replyFn] 回复函数
    */
-  static fromMcp(mcpReq: any, replyFn: any) {
+  static fromMcp(mcpReq: McpRequest, replyFn?: ReplyFn) {
     return new AgentMessage({
       content: mcpReq.prompt || mcpReq.content || mcpReq.arguments?.prompt || '',
       channel: Channel.MCP,

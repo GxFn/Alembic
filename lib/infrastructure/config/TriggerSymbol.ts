@@ -15,7 +15,7 @@ function fromEnv() {
   return DEFAULT_SYMBOL;
 }
 
-function escapeRegExp(s: any) {
+function escapeRegExp(s: string) {
   return s.replace(/[\\^$*+?.()|[\]{}]/g, '\\$&');
 }
 
@@ -29,7 +29,7 @@ export const TRIGGER_SYMBOLS = [TRIGGER_SYMBOL];
 export const TRIGGER_SPLIT_REGEX = new RegExp(`[${TRIGGER_SYMBOLS.map(escapeRegExp).join('')}]`);
 
 /** str 是否以触发符开头 */
-export function hasTriggerPrefix(str: any) {
+export function hasTriggerPrefix(str: string) {
   if (!str || typeof str !== 'string') {
     return false;
   }
@@ -38,7 +38,7 @@ export function hasTriggerPrefix(str: any) {
 }
 
 /** 去掉 str 开头的连续触发符 */
-export function stripTriggerPrefix(str: any) {
+export function stripTriggerPrefix(str: string) {
   if (!str || typeof str !== 'string') {
     return String(str);
   }
@@ -50,7 +50,7 @@ export function stripTriggerPrefix(str: any) {
 }
 
 /** 若 str 不以触发符开头，则加上默认触发符 */
-export function ensureTriggerPrefix(str: any) {
+export function ensureTriggerPrefix(str: string) {
   if (!str || typeof str !== 'string') {
     return str;
   }
@@ -62,7 +62,7 @@ export function ensureTriggerPrefix(str: any) {
 }
 
 /** 获取 str 已带的触发符，否则返回默认触发符 */
-export function getPrefixFromTrigger(str: any) {
+export function getPrefixFromTrigger(str: string) {
   if (!str || typeof str !== 'string') {
     return TRIGGER_SYMBOL;
   }

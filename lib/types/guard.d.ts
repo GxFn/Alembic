@@ -6,7 +6,7 @@ interface ComplianceReport {
   total: number;
   passed: number;
   failed: number;
-  violations: any[];
+  violations: unknown[];
   timestamp: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }

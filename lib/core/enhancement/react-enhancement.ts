@@ -10,7 +10,7 @@
  *   - Suspense / ErrorBoundary
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class ReactEnhancement extends EnhancementPack {
   get id() {
@@ -157,8 +157,8 @@ class ReactEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: any[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
 
     // ── Custom Hooks ──
     for (const m of astSummary.methods || []) {
@@ -231,7 +231,7 @@ class ReactEnhancement extends EnhancementPack {
 
     // ── React imports ──
     const reactImports = (astSummary.imports || []).filter(
-      (imp: any) =>
+      (imp: string) =>
         imp.includes('react') ||
         imp.includes('zustand') ||
         imp.includes('jotai') ||

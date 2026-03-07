@@ -21,6 +21,12 @@ import { SymbolTableBuilder } from './SymbolTableBuilder.js';
 export interface FileSummary {
   file: string;
   callSites?: CallSite[];
+  exports?: Array<string | { name?: string; text?: string }>;
+  classes?: Array<{ name?: string; line?: number; kind?: string }>;
+  protocols?: Array<{ name?: string; line?: number }>;
+  methods?: Array<{ name?: string; className?: string; line?: number }>;
+  imports?: unknown[];
+  properties?: Array<{ name: string; className?: string; typeAnnotation?: string }>;
   [key: string]: unknown;
 }
 
@@ -72,9 +78,8 @@ interface CallSite {
   [key: string]: unknown;
 }
 
-interface DataFlowEdge {
-  [key: string]: unknown;
-}
+// Re-use the canonical DataFlowEdge from DataFlowInferrer
+type DataFlowEdge = import('./DataFlowInferrer.js').DataFlowEdge;
 
 export class CallGraphAnalyzer {
   projectRoot: string;

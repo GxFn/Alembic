@@ -9,6 +9,7 @@
  */
 
 import { findSimilarRecipes } from '../../candidate/SimilarityService.js';
+import type { ToolHandlerContext } from './_shared.js';
 
 // ────────────────────────────────────────────────────────────
 // 10. check_duplicate
@@ -26,16 +27,24 @@ export const checkDuplicate = {
       threshold: { type: 'number', description: '相似度阈值，默认 0.5' },
     },
   },
-  handler: async (params: any, ctx: any) => {
-    let cand = params.candidate;
-    const projectRoot = params.projectRoot || ctx.projectRoot;
-    const threshold = params.threshold ?? 0.5;
+  handler: async (params: Record<string, unknown>, ctx: ToolHandlerContext) => {
+    let cand = params.candidate as
+      | {
+          title: string;
+          summary?: string;
+          description?: string;
+          code: string;
+          [key: string]: unknown;
+        }
+      | undefined;
+    const projectRoot = (params.projectRoot as string) || ctx.projectRoot;
+    const threshold = (params.threshold as number) ?? 0.5;
 
     // 如果提供 candidateId，从数据库读取条目信息
     if (!cand && params.candidateId) {
       try {
         const knowledgeService = ctx.container.get('knowledgeService');
-        const found = await knowledgeService.get(params.candidateId);
+        const found = await knowledgeService.get(params.candidateId as string);
         if (found) {
           const json = typeof found.toJSON === 'function' ? found.toJSON() : found;
           cand = {
@@ -98,15 +107,15 @@ export const addGraphEdge = {
     },
     required: ['fromId', 'fromType', 'toId', 'toType', 'relation'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: Record<string, unknown>, ctx: ToolHandlerContext) => {
     const kgService = ctx.container.get('knowledgeGraphService');
     return kgService.addEdge(
-      params.fromId,
-      params.fromType,
-      params.toId,
-      params.toType,
-      params.relation,
-      { weight: params.weight || 1.0, source: 'manual' }
+      params.fromId as string,
+      params.fromType as string,
+      params.toId as string,
+      params.toType as string,
+      params.relation as string,
+      { weight: (params.weight as number) || 1.0, source: 'manual' }
     );
   },
 };

@@ -6,7 +6,7 @@
  * 此路由仅处理 Recipe 特有的批量 AI 操作。
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -53,13 +53,13 @@ function resetTask() {
  */
 router.post(
   '/discover-relations',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { batchSize: _batchSize = 20 } = req.body;
 
     // 如果已有任务在运行，返回当前状态
     if (discoverTask.status === 'running') {
       const elapsed = Math.round((Date.now() - new Date(discoverTask.startedAt).getTime()) / 1000);
-      return res.json({
+      return void res.json({
         success: true,
         data: {
           status: 'running',
@@ -76,7 +76,7 @@ router.post(
     try {
       agentFactory = container.get('agentFactory');
     } catch {
-      return res.json({
+      return void res.json({
         success: true,
         data: { status: 'error', error: 'AgentFactory 不可用，请检查 AI Provider 配置' },
       });
@@ -91,7 +91,7 @@ router.post(
       );
       const count = items.length || data.length;
       if (count < 2) {
-        return res.json({
+        return void res.json({
           success: true,
           data: {
             status: 'empty',
@@ -128,16 +128,16 @@ router.post(
           batchErrors: discoverTask.batchErrors,
           elapsed: discoverTask.elapsed,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         discoverTask.status = 'error';
         discoverTask.finishedAt = new Date().toISOString();
-        discoverTask.error = err.message;
+        discoverTask.error = (err as Error).message;
         discoverTask.elapsed = Math.round(
           (new Date(discoverTask.finishedAt).getTime() -
             new Date(discoverTask.startedAt).getTime()) /
             1000
         );
-        logger.error('Discover relations failed', { error: err.message });
+        logger.error('Discover relations failed', { error: (err as Error).message });
       }
     })();
 
@@ -159,7 +159,7 @@ router.post(
  */
 router.get(
   '/discover-relations/status',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const data = { ...discoverTask };
 
     // 计算实时 elapsed

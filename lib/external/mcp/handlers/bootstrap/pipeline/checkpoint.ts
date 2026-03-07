@@ -29,10 +29,10 @@ const CHECKPOINT_TTL_MS = 3600_000; // 1小时内有效
  * @param {object} [digest] - DimensionDigest
  */
 export async function saveDimensionCheckpoint(
-  projectRoot: any,
-  sessionId: any,
-  dimId: any,
-  result: any,
+  projectRoot: string,
+  sessionId: string,
+  dimId: string,
+  result: Record<string, unknown>,
   digest = null
 ) {
   try {
@@ -42,8 +42,10 @@ export async function saveDimensionCheckpoint(
       path.join(checkpointDir, `${dimId}.json`),
       JSON.stringify({ dimId, sessionId, ...result, digest, completedAt: Date.now() })
     );
-  } catch (err: any) {
-    logger.warn(`[Bootstrap-v3] checkpoint save failed for "${dimId}": ${err.message}`);
+  } catch (err: unknown) {
+    logger.warn(
+      `[Bootstrap-v3] checkpoint save failed for "${dimId}": ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 
@@ -52,7 +54,7 @@ export async function saveDimensionCheckpoint(
  * @param {string} projectRoot
  * @returns {Promise<Map<string, object>>} dimId → checkpoint data
  */
-export async function loadCheckpoints(projectRoot: any) {
+export async function loadCheckpoints(projectRoot: string) {
   const checkpoints = new Map();
   try {
     const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');
@@ -82,13 +84,13 @@ export async function loadCheckpoints(projectRoot: any) {
  * 清理 checkpoint 目录
  * @param {string} projectRoot
  */
-export async function clearCheckpoints(projectRoot: any) {
+export async function clearCheckpoints(projectRoot: string) {
   try {
     const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');
     pathGuard.assertSafe(checkpointDir);
     await fs.rm(checkpointDir, { recursive: true, force: true });
-  } catch (err: any) {
-    if (err?.name === 'PathGuardError') {
+  } catch (err: unknown) {
+    if ((err as { name?: string })?.name === 'PathGuardError') {
       throw err;
     }
     /* ignore other errors */

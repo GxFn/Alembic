@@ -14,11 +14,24 @@
 
 import { estimateTokens } from '../../shared/token-utils.js';
 
+/** Minimal AST node shape from tree-sitter */
+interface ASTNode {
+  type: string;
+  text?: string;
+  childCount: number;
+  startIndex: number;
+  endIndex: number;
+  startPosition: { row: number; column: number };
+  endPosition: { row: number; column: number };
+  child: (index: number) => ASTNode | null;
+  childForFieldName?: (name: string) => ASTNode | null;
+}
+
 // AST 相关的延迟加载 (避免 import 时强制初始化 parser)
 let _astReady = false;
-let _parseToTree: any = null;
-let _isAvailable: any = null;
-let _supportedLanguages: any = null;
+let _parseToTree: ((content: string, langId: string) => { rootNode: ASTNode } | null) | null = null;
+let _isAvailable: (() => boolean) | null = null;
+let _supportedLanguages: (() => string[]) | null = null;
 
 /**
  * 各语言的顶层可分块 AST 节点类型
@@ -131,7 +144,7 @@ async function ensureParser() {
  * @param {string} language - LanguageService.inferLang() 返回的语言 ID
  * @returns {boolean}
  */
-export function isASTChunkerAvailable(language: any) {
+export function isASTChunkerAvailable(language: string) {
   if (!_astReady || !_supportedLanguages) {
     return false;
   }
@@ -157,14 +170,19 @@ export function isASTChunkerAvailable(language: any) {
  * @param {number} [options.maxChunkTokens=512]
  * @returns {Array<{ content: string, metadata: object }>}
  */
-export function chunkByAST(content: any, language: any, metadata: any = {}, options: any = {}) {
+export function chunkByAST(
+  content: string,
+  language: string,
+  metadata: Record<string, unknown> = {},
+  options: { maxChunkTokens?: number } = {}
+) {
   const { maxChunkTokens = 512 } = options;
 
   if (!content || content.trim().length === 0) {
     return [];
   }
 
-  const langId = (LANG_ID_MAP as Record<string, any>)[language] || language;
+  const langId = (LANG_ID_MAP as Record<string, string>)[language] || language;
   if (!_astReady || !_parseToTree) {
     return null; // 返回 null 表示不支持, 调用方应 fallback
   }
@@ -175,8 +193,8 @@ export function chunkByAST(content: any, language: any, metadata: any = {}, opti
   }
 
   const rootNode = parsed.rootNode;
-  const chunks: { content: string; metadata: any } | { content: any; metadata: any }[] = [];
-  let preambleLines: any[] = []; // 非声明代码 (imports, comments 等)
+  const chunks: Array<{ content: string; metadata: Record<string, unknown> }> = [];
+  let preambleLines: string[] = []; // 非声明代码 (imports, comments 等)
 
   // 遍历根节点的直接子节点
   for (let i = 0; i < rootNode.childCount; i++) {
@@ -267,8 +285,13 @@ export function chunkByAST(content: any, language: any, metadata: any = {}, opti
  * @param {number} maxChunkTokens
  * @returns {Array<{ content: string, metadata: object }>}
  */
-function splitLargeNode(node: any, source: any, metadata: any, maxChunkTokens: any) {
-  const chunks: { content: string; metadata: any }[] = [];
+function splitLargeNode(
+  node: ASTNode,
+  source: string,
+  metadata: Record<string, unknown>,
+  maxChunkTokens: number
+) {
+  const chunks: Array<{ content: string; metadata: Record<string, unknown> }> = [];
   const parentName = extractNodeName(node);
 
   // 如果没有子节点, 按行切割
@@ -283,7 +306,7 @@ function splitLargeNode(node: any, source: any, metadata: any, maxChunkTokens: a
   }
 
   // 按子节点分组, 累积到 maxChunkTokens
-  let currentLines: any[] = [];
+  let currentLines: string[] = [];
   let currentTokens = 0;
   let groupStartLine = node.startPosition.row + 1;
 
@@ -363,10 +386,16 @@ function splitLargeNode(node: any, source: any, metadata: any, maxChunkTokens: a
 /**
  * 按行切割 (最后手段, 当 AST 无法进一步拆分时)
  */
-function splitByLines(text: any, metadata: any, node: any, parentName: any, maxChunkTokens: any) {
+function splitByLines(
+  text: string,
+  metadata: Record<string, unknown>,
+  node: ASTNode,
+  parentName: string | undefined,
+  maxChunkTokens: number
+) {
   const lines = text.split('\n');
-  const chunks: { content: string; metadata: any }[] = [];
-  let current: any[] = [];
+  const chunks: Array<{ content: string; metadata: Record<string, unknown> }> = [];
+  let current: string[] = [];
   let currentTokens = 0;
   const _maxChars = maxChunkTokens * 4;
 
@@ -409,7 +438,7 @@ function splitByLines(text: any, metadata: any, node: any, parentName: any, maxC
  * @param {object} node tree-sitter node
  * @returns {string|undefined}
  */
-function extractNodeName(node: any) {
+function extractNodeName(node: ASTNode): string | undefined {
   // 常见模式: 节点有 name 子节点
   const nameNode = node.childForFieldName?.('name') || node.childForFieldName?.('declarator');
 

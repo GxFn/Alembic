@@ -15,10 +15,16 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { WikiGenerator } from '../../service/wiki/WikiGenerator.js';
+import {
+  type WikiAiProvider,
+  WikiGenerator,
+  type WikiKnowledgeService,
+  type WikiModuleService,
+  type WikiProjectGraph,
+} from '../../service/wiki/WikiGenerator.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = express.Router();
@@ -38,7 +44,7 @@ let wikiTask: Record<string, any> = {
 };
 
 /** @type {WikiGenerator|null} */
-let currentGenerator: any = null;
+let currentGenerator: WikiGenerator | null = null;
 
 function resetWikiTask() {
   wikiTask = {
@@ -66,21 +72,23 @@ export function getWikiTask() {
  * 外部设置 wikiTask 状态（供 bootstrap orchestrator 等外部流程同步使用）
  * @param {Partial<typeof wikiTask>} patch
  */
-export function patchWikiTask(patch: any) {
+export function patchWikiTask(patch: Record<string, unknown>) {
   Object.assign(wikiTask, patch);
 }
 
 /**
  * 创建 WikiGenerator 实例
  */
-function createGenerator(container: any) {
+function createGenerator(container: ReturnType<typeof getServiceContainer>) {
   const projectRoot =
-    container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
+    (container.singletons?._projectRoot as string | undefined) ||
+    process.env.ASD_PROJECT_DIR ||
+    process.cwd();
 
   // 尝试获取可用的服务（非必须的优雅降级）
-  let moduleService: any = null;
-  let knowledgeService: any = null;
-  let codeEntityGraph: any = null;
+  let moduleService: unknown = null;
+  let knowledgeService: unknown = null;
+  let codeEntityGraph: unknown = null;
 
   try {
     moduleService = container.get('moduleService');
@@ -99,10 +107,13 @@ function createGenerator(container: any) {
   }
 
   // 尝试获取已缓存的 ProjectGraph（可能在 bootstrap 中构建过）
-  const projectGraph = container.singletons?.projectGraph || null;
+  const projectGraph = (container.singletons?.projectGraph || null) as Record<
+    string,
+    unknown
+  > | null;
 
   // 获取 RealtimeService 用于推送进度
-  let realtimeService: any = null;
+  let realtimeService: { broadcastEvent?: (name: string, data: unknown) => void } | null = null;
   try {
     realtimeService = container.singletons?.realtimeService || null;
   } catch {
@@ -111,12 +122,12 @@ function createGenerator(container: any) {
 
   const generator = new WikiGenerator({
     projectRoot,
-    moduleService,
-    knowledgeService,
-    projectGraph,
-    codeEntityGraph,
-    aiProvider: container.singletons?.aiProvider || null,
-    onProgress: (phase: any, progress: any, message: any) => {
+    moduleService: moduleService as WikiModuleService | null,
+    knowledgeService: knowledgeService as WikiKnowledgeService | null,
+    projectGraph: projectGraph as WikiProjectGraph | null,
+    codeEntityGraph: codeEntityGraph as Record<string, unknown> | null,
+    aiProvider: (container.singletons?.aiProvider || null) as WikiAiProvider | null,
+    onProgress: (phase: string, progress: number, message: string) => {
       wikiTask.phase = phase;
       wikiTask.progress = progress;
       wikiTask.message = message;
@@ -124,7 +135,7 @@ function createGenerator(container: any) {
       // 通过 Socket.io 推送进度
       if (realtimeService) {
         try {
-          realtimeService.broadcastEvent('wiki:progress', {
+          realtimeService.broadcastEvent?.('wiki:progress', {
             phase,
             progress,
             message,
@@ -147,13 +158,13 @@ function createGenerator(container: any) {
 
 router.post(
   '/generate',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (wikiTask.status === 'running') {
-      return res.status(409).json({
+      return void res.status(409).json({
         success: false,
         error: { code: 'ALREADY_RUNNING', message: 'Wiki 生成正在进行中' },
         data: { progress: wikiTask.progress, phase: wikiTask.phase },
-      });
+      }) as unknown as void;
     }
 
     const container = getServiceContainer();
@@ -173,7 +184,7 @@ router.post(
 
     // 后台执行生成
     try {
-      const result = await generator.generate();
+      const result = (await generator.generate()) as any;
       wikiTask.status = result.success ? 'done' : 'error';
       wikiTask.finishedAt = Date.now();
       wikiTask.result = result;
@@ -182,19 +193,21 @@ router.post(
       }
 
       // 推送完成事件
-      const realtimeService = container.singletons?.realtimeService || null;
+      const realtimeService = (container.singletons?.realtimeService || null) as {
+        broadcastEvent?: (name: string, data: unknown) => void;
+      } | null;
       if (realtimeService) {
-        realtimeService.broadcastEvent('wiki:completed', {
+        realtimeService.broadcastEvent?.('wiki:completed', {
           success: result.success,
           filesGenerated: result.filesGenerated,
           duration: result.duration,
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       wikiTask.status = 'error';
       wikiTask.finishedAt = Date.now();
-      wikiTask.error = err.message;
-      logger.error('[Wiki Route] Generation failed', { error: err.message });
+      wikiTask.error = (err as Error).message;
+      logger.error('[Wiki Route] Generation failed', { error: (err as Error).message });
     }
 
     currentGenerator = null;
@@ -205,12 +218,12 @@ router.post(
 
 router.post(
   '/update',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (wikiTask.status === 'running') {
-      return res.status(409).json({
+      return void res.status(409).json({
         success: false,
         error: { code: 'ALREADY_RUNNING', message: 'Wiki 生成正在进行中' },
-      });
+      }) as unknown as void;
     }
 
     const container = getServiceContainer();
@@ -228,17 +241,17 @@ router.post(
     });
 
     try {
-      const result: any = await generator.update();
+      const result = (await generator.update()) as { success: boolean; error?: string };
       wikiTask.status = result.success ? 'done' : 'error';
       wikiTask.finishedAt = Date.now();
       wikiTask.result = result;
       if (!result.success) {
         wikiTask.error = result.error;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       wikiTask.status = 'error';
       wikiTask.finishedAt = Date.now();
-      wikiTask.error = err.message;
+      wikiTask.error = (err as Error).message;
     }
 
     currentGenerator = null;
@@ -249,9 +262,9 @@ router.post(
 
 router.post(
   '/abort',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (wikiTask.status !== 'running' || !currentGenerator) {
-      return res.json({ success: true, message: '没有正在运行的 Wiki 任务' });
+      return void res.json({ success: true, message: '没有正在运行的 Wiki 任务' });
     }
 
     currentGenerator.abort();
@@ -267,14 +280,14 @@ router.post(
 
 router.get(
   '/status',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
 
     // 如果没有活跃任务，从磁盘读取元数据
     if (wikiTask.status === 'idle') {
       const generator = createGenerator(container);
       const diskStatus = generator.getStatus();
-      return res.json({
+      return void res.json({
         success: true,
         data: {
           task: wikiTask,
@@ -296,16 +309,19 @@ router.get(
 
 router.get(
   '/files',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
     const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
 
     if (!fs.existsSync(wikiDir)) {
-      return res.json({ success: true, data: { files: [], exists: false } });
+      return void res.json({
+        success: true,
+        data: { files: [], exists: false },
+      }) as unknown as void;
     }
 
     const files: { path: string; name: string; size: number; modifiedAt: string }[] = [];
-    const readDir = (dir: any, prefix = '') => {
+    const readDir = (dir: string, prefix = '') => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
         if (entry.isDirectory()) {
@@ -335,25 +351,25 @@ router.get(
 
 router.get(
   '/file/*',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
     const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
     const requestedPath = req.params[0];
 
     if (!requestedPath) {
-      return res.status(400).json({ success: false, error: { message: 'path required' } });
+      return void res.status(400).json({ success: false, error: { message: 'path required' } });
     }
 
     // 安全检查：防止路径穿越
     const fullPath = path.resolve(wikiDir, requestedPath);
     if (!fullPath.startsWith(wikiDir)) {
-      return res
+      return void res
         .status(403)
         .json({ success: false, error: { message: 'Path traversal not allowed' } });
     }
 
     if (!fs.existsSync(fullPath)) {
-      return res.status(404).json({ success: false, error: { message: 'File not found' } });
+      return void res.status(404).json({ success: false, error: { message: 'File not found' } });
     }
 
     const content = fs.readFileSync(fullPath, 'utf-8');

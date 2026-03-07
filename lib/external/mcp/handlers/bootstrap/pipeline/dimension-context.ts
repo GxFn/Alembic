@@ -15,15 +15,58 @@
  * @module pipeline/dimension-context
  */
 
+// ─── Local type definitions ──────────────────────────────
+
+/** Project base info (immutable during a bootstrap session) */
+interface ProjectContext {
+  projectName: string;
+  primaryLang: string;
+  fileCount: number;
+  targetCount: number;
+  modules: string[];
+  depGraph?: Record<string, unknown>;
+  astMetrics?: Record<string, unknown>;
+  guardSummary?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** Summary of a completed dimension's analysis */
+interface DimensionDigest {
+  summary?: string;
+  candidateCount?: number;
+  candidateTitles?: string[];
+  keyFindings?: string[];
+  crossRefs?: Record<string, string>;
+  gaps?: string[];
+  remainingTasks?: Array<{ signal?: string } | string>;
+  dimId?: string;
+  completedAt?: number;
+}
+
+/** Summary of a submitted candidate */
+interface CandidateSummary {
+  dimId: string;
+  title: string;
+  subTopic: string;
+  summary?: string;
+}
+
+/** Serialized form of DimensionContext (for checkpoint restore) */
+interface DimensionContextJSON {
+  projectContext: ProjectContext;
+  completedDimensions?: Record<string, DimensionDigest>;
+  submittedCandidates?: CandidateSummary[];
+}
+
 /**
  * DimensionContext — 跨维度上下文容器
  *
  * 在单次 bootstrap 会话中创建一次，按维度累积上下文。
  */
 export class DimensionContext {
-  completedDimensions: any;
-  projectContext: any;
-  submittedCandidates: any;
+  completedDimensions: Map<string, DimensionDigest>;
+  projectContext: ProjectContext;
+  submittedCandidates: CandidateSummary[];
   /**
    * @param {object} projectContext 项目基础信息 (全程不变)
    * @param {string} projectContext.projectName
@@ -35,7 +78,7 @@ export class DimensionContext {
    * @param {object} [projectContext.astMetrics]
    * @param {object} [projectContext.guardSummary]
    */
-  constructor(projectContext: any) {
+  constructor(projectContext: ProjectContext) {
     /** @type {object} 项目基础信息 */
     this.projectContext = projectContext;
 
@@ -52,7 +95,7 @@ export class DimensionContext {
    * @param {string} dimId 维度 ID
    * @param {DimensionDigest} digest 维度分析摘要
    */
-  addDimensionDigest(dimId: any, digest: any) {
+  addDimensionDigest(dimId: string, digest: DimensionDigest) {
     this.completedDimensions.set(dimId, {
       ...digest,
       dimId,
@@ -66,7 +109,10 @@ export class DimensionContext {
    * @param {string} dimId
    * @param {object} candidateInfo - { title, subTopic, summary }
    */
-  addSubmittedCandidate(dimId: any, candidateInfo: any) {
+  addSubmittedCandidate(
+    dimId: string,
+    candidateInfo: { title?: string; subTopic?: string; summary?: string }
+  ) {
     this.submittedCandidates.push({
       dimId,
       title: candidateInfo.title || '',
@@ -81,8 +127,8 @@ export class DimensionContext {
    * @param {string} currentDimId 当前维度 ID
    * @returns {DimensionContextSnapshot}
    */
-  buildContextForDimension(currentDimId: any) {
-    const previousDimensions: Record<string, any> = {};
+  buildContextForDimension(currentDimId: string) {
+    const previousDimensions: Record<string, Partial<DimensionDigest>> = {};
     for (const [id, digest] of this.completedDimensions) {
       previousDimensions[id] = {
         summary: digest.summary,
@@ -97,7 +143,7 @@ export class DimensionContext {
     return {
       project: this.projectContext,
       previousDimensions,
-      existingCandidates: this.submittedCandidates.map((c: any) => ({
+      existingCandidates: this.submittedCandidates.map((c) => ({
         dimId: c.dimId,
         title: c.title,
         subTopic: c.subTopic,
@@ -112,8 +158,8 @@ export class DimensionContext {
    * @param {string} dimId
    * @returns {Array<CandidateSummary>}
    */
-  getExistingCandidatesForDimension(dimId: any) {
-    return this.submittedCandidates.filter((c: any) => c.dimId === dimId);
+  getExistingCandidatesForDimension(dimId: string) {
+    return this.submittedCandidates.filter((c) => c.dimId === dimId);
   }
 
   /**
@@ -145,7 +191,7 @@ export class DimensionContext {
       }
       if (digest.remainingTasks?.length) {
         lines.push(
-          `- 遗留任务: ${digest.remainingTasks.map((t: any) => t.signal || t).join('; ')}`
+          `- 遗留任务: ${digest.remainingTasks.map((t) => (typeof t === 'string' ? t : t.signal) || String(t)).join('; ')}`
         );
       }
       lines.push('');
@@ -170,7 +216,7 @@ export class DimensionContext {
    * @param {object} json
    * @returns {DimensionContext}
    */
-  static fromJSON(json: any) {
+  static fromJSON(json: DimensionContextJSON) {
     const ctx = new DimensionContext(json.projectContext);
     for (const [id, digest] of Object.entries(json.completedDimensions || {})) {
       ctx.completedDimensions.set(id, digest);
@@ -189,7 +235,7 @@ export class DimensionContext {
  * @param {string} reply - Agent 的完整回复文本
  * @returns {DimensionDigest|null}
  */
-export function parseDimensionDigest(reply: any) {
+export function parseDimensionDigest(reply: string | null | undefined): DimensionDigest | null {
   if (!reply || typeof reply !== 'string') {
     return null;
   }

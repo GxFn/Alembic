@@ -22,12 +22,24 @@ import { envelope } from './envelope.js';
 
 const logger = Logger.getInstance();
 
+/** Error-like object with optional code and details */
+interface ErrorWithDetails extends Error {
+  code?: string;
+  details?: unknown;
+}
+
+/** Handler function signature for MCP tools */
+type McpHandlerFn = (
+  ctx: Record<string, unknown>,
+  args: Record<string, unknown>
+) => Promise<unknown>;
+
 /**
  * 从已知错误类型推断 errorCode
  * @param {Error} err
  * @returns {string}
  */
-function inferErrorCode(err: any) {
+function inferErrorCode(err: unknown): string {
   if (err instanceof ValidationError) {
     return 'VALIDATION_ERROR';
   }
@@ -43,8 +55,9 @@ function inferErrorCode(err: any) {
   if (err instanceof ConstitutionViolation) {
     return 'CONSTITUTION_VIOLATION';
   }
-  if (err.code) {
-    return err.code;
+  const errRecord = err as ErrorWithDetails;
+  if (errRecord.code) {
+    return errRecord.code;
   }
   return 'INTERNAL_ERROR';
 }
@@ -53,7 +66,7 @@ function inferErrorCode(err: any) {
  * 包装 MCP handler 函数，提供统一错误处理
  *
  * @param {string} toolName 工具名（用于 meta.tool）
- * @param {Function} handlerFn 原始 handler: (ctx, args) => Promise<any>
+ * @param {Function} handlerFn 原始 handler: (ctx, args) => Promise<unknown>
  * @returns {Function} 包装后的 handler，保证 *不会* throw
  *
  * @example
@@ -62,21 +75,25 @@ function inferErrorCode(err: any) {
  *     // ... 正常返回 envelope(...)
  *   });
  */
-export function wrapHandler(toolName: any, handlerFn: any) {
-  return async function wrappedHandler(ctx: any, args: any) {
+export function wrapHandler(toolName: string, handlerFn: McpHandlerFn) {
+  return async function wrappedHandler(
+    ctx: Record<string, unknown>,
+    args: Record<string, unknown>
+  ) {
     const t0 = Date.now();
     try {
       return await handlerFn(ctx, args);
-    } catch (err: any) {
+    } catch (err: unknown) {
       const elapsed = Date.now() - t0;
       const errorCode = inferErrorCode(err);
-      const message = err.message || 'Unknown error';
+      const message = (err instanceof Error ? err.message : '') || 'Unknown error';
+      const details = err instanceof Error ? (err as ErrorWithDetails).details : undefined;
 
       logger.error(`[MCP:${toolName}] ${errorCode}: ${message}`, {
         tool: toolName,
         errorCode,
         durationMs: elapsed,
-        ...(err.details ? { details: err.details } : {}),
+        ...(details ? { details } : {}),
       });
 
       return envelope({
@@ -103,11 +120,11 @@ export function wrapHandler(toolName: any, handlerFn: any) {
  *   import * as rawSearchHandlers from './handlers/search.js';
  *   const searchHandlers = wrapHandlers('autosnippet', rawSearchHandlers);
  */
-export function wrapHandlers(prefix: any, handlersModule: any) {
-  const wrapped: Record<string, any> = {};
+export function wrapHandlers(prefix: string, handlersModule: Record<string, unknown>) {
+  const wrapped: Record<string, unknown> = {};
   for (const [key, fn] of Object.entries(handlersModule)) {
     if (typeof fn === 'function') {
-      wrapped[key] = wrapHandler(`${prefix}_${key}`, fn);
+      wrapped[key] = wrapHandler(`${prefix}_${key}`, fn as McpHandlerFn);
     } else {
       wrapped[key] = fn; // 非函数属性原样透传
     }

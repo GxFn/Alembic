@@ -14,7 +14,7 @@ import { PythonDiscoverer } from './PythonDiscoverer.js';
 import { RustDiscoverer } from './RustDiscoverer.js';
 
 /** @type {DiscovererRegistry|null} */
-let _registry: any = null;
+let _registry: DiscovererRegistry | null = null;
 
 /**
  * 获取全局 DiscovererRegistry 单例

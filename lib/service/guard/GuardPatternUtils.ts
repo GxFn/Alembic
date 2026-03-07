@@ -19,7 +19,7 @@ const _regexCache = new Map();
  * @param {RegExp|string} pattern
  * @returns {RegExp}
  */
-export function compilePattern(pattern: any) {
+export function compilePattern(pattern: RegExp | string) {
   if (pattern instanceof RegExp) {
     return pattern;
   }
@@ -46,7 +46,7 @@ export function clearPatternCache() {
  * @param {string} language
  * @returns {boolean[]} 每行是否在测试块内
  */
-export function buildTestBlockMask(lines: any, language: any) {
+export function buildTestBlockMask(lines: string[], language: string) {
   const mask = new Array(lines.length).fill(false);
 
   // 目前仅 Rust 需要 — #[cfg(test)] 内联测试模块
@@ -125,7 +125,7 @@ export function buildTestBlockMask(lines: any, language: any) {
  * @param {string} language
  * @returns {boolean[]} 每行是否为注释行
  */
-export function buildCommentMask(lines: any, language: any) {
+export function buildCommentMask(lines: string[], language: string) {
   const mask = new Array(lines.length).fill(false);
   let inBlock = false; // 是否在 /* ... */ 块内
 
@@ -177,7 +177,7 @@ export function buildCommentMask(lines: any, language: any) {
 /**
  * 从文件扩展名推断语言
  */
-export function detectLanguage(filePath: any) {
+export function detectLanguage(filePath: string) {
   if (!filePath) {
     return 'unknown';
   }

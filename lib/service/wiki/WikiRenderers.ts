@@ -21,6 +21,144 @@ import {
 // Re-export BUILD_SYSTEM_MARKERS for renderGettingStarted internals
 // NOTE: BUILD_SYSTEM_MARKERS is accessed via LanguageService directly where needed
 
+// ═══ Wiki 渲染器内部类型定义 ═══════════════════════════════
+
+interface WikiBuildSystem {
+  buildTool: string;
+  eco: string;
+  file?: string;
+}
+
+interface WikiDependency {
+  name: string;
+  [key: string]: unknown;
+}
+
+interface WikiTarget {
+  name: string;
+  type?: string;
+  path?: string;
+  packageName?: string;
+  dependencies?: (string | WikiDependency)[];
+  info?: {
+    path?: string;
+    dependencies?: (string | WikiDependency)[];
+  };
+}
+
+interface WikiProjectInfo {
+  name: string;
+  primaryLanguage?: string;
+  sourceFiles: string[];
+  languages?: Record<string, number>;
+  buildSystems?: WikiBuildSystem[];
+  hasPackageSwift?: boolean;
+  hasPodfile?: boolean;
+  hasXcodeproj?: boolean;
+  sourceFilesByModule?: Record<string, string[]>;
+  root?: string;
+}
+
+interface WikiAstOverview {
+  totalClasses?: number;
+  totalProtocols?: number;
+  totalMethods?: number;
+  topLevelModules?: string[];
+  classesPerModule?: Record<string, number>;
+  entryPoints?: string[];
+}
+
+interface WikiAstInfo {
+  overview?: WikiAstOverview;
+  classNamesByModule?: Record<string, string[]>;
+  protocolNamesByModule?: Record<string, string[]>;
+  classes: string[];
+  protocols: string[];
+}
+
+interface WikiModuleInfo {
+  targets: WikiTarget[];
+  depGraph?: {
+    edges?: Array<{ from?: string; to?: string }>;
+  };
+}
+
+interface WikiRecipeJson {
+  title?: string;
+  description?: string;
+  category?: string;
+  moduleName?: string;
+  tags?: string[];
+  doClause?: string;
+  dontClause?: string;
+  language?: string;
+  content?: { pattern?: string };
+  reasoning?: { whyStandard?: string };
+}
+
+type WikiRecipe = WikiRecipeJson & { toJSON?: () => WikiRecipeJson };
+
+interface WikiKnowledgeInfo {
+  recipes: WikiRecipe[];
+}
+
+interface WikiCodeEntityGraph {
+  queryEntities?: (filter: Record<string, unknown>) => Array<{ entityId: string; name: string }>;
+  queryEdges?: (
+    filter: Record<string, unknown>
+  ) => Array<{ toId?: string; to_id?: string; fromId?: string }>;
+}
+
+interface WikiFolderProfile {
+  name: string;
+  relPath: string;
+  fileCount: number;
+  totalSize: number;
+  depth: number;
+  langBreakdown: Record<string, number>;
+  keyFiles: string[];
+  fileNames: string[];
+  readme: string | null;
+  purpose: { zh?: string; en?: string } | null;
+  imports: string[];
+  entryPoints: string[];
+  namingPatterns: string[];
+  headerComments: string[];
+}
+
+interface WikiTopic {
+  type: string;
+  id?: string;
+  title?: string;
+  path?: string;
+  priority?: number;
+  _allTopics?: WikiTopic[];
+  _moduleData?: Record<string, unknown>;
+  _patternData?: Record<string, unknown>;
+  _folderProfiles?: Record<string, unknown>[];
+  _folderProfile?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** Narrowed shape of _moduleData for access inside renderers */
+interface WikiModuleData {
+  target: WikiTarget;
+  moduleFiles: string[];
+}
+
+/** Narrowed shape of _patternData for access inside renderers */
+interface WikiPatternData {
+  category: string;
+  recipes: WikiRecipeJson[];
+}
+
+export interface WikiData {
+  projectInfo: WikiProjectInfo;
+  astInfo: WikiAstInfo;
+  moduleInfo: WikiModuleInfo;
+  knowledgeInfo: WikiKnowledgeInfo;
+}
+
 // ═══ AI Prompt 构建 ════════════════════════════════════════
 
 /**
@@ -34,9 +172,14 @@ import {
  * @param {object|null} codeEntityGraph
  * @returns {string}
  */
-export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityGraph: any) {
+export function buildArticlePrompt(
+  topic: WikiTopic,
+  data: WikiData,
+  isZh: boolean,
+  codeEntityGraph: WikiCodeEntityGraph | null
+) {
   const { projectInfo, astInfo, moduleInfo, knowledgeInfo } = data;
-  const parts: any[] = [];
+  const parts: string[] = [];
   const langTerms = getLangTerms(projectInfo.primaryLanguage || 'unknown');
   const tl = isZh ? langTerms.typeLabel.zh : langTerms.typeLabel.en;
   const il = isZh ? langTerms.interfaceLabel.zh : langTerms.interfaceLabel.en;
@@ -62,8 +205,8 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
       parts.push('');
 
       // 项目类型
-      const buildTypes = (projectInfo.buildSystems || []).map((b: any) => b.buildTool);
-      if (projectInfo.hasPackageSwift && !buildTypes.some((t: any) => t.includes('SPM'))) {
+      const buildTypes = (projectInfo.buildSystems || []).map((b: WikiBuildSystem) => b.buildTool);
+      if (projectInfo.hasPackageSwift && !buildTypes.some((t: string) => t.includes('SPM'))) {
         buildTypes.push('SPM');
       }
       if (projectInfo.hasPodfile && !buildTypes.includes('CocoaPods')) {
@@ -83,8 +226,8 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
         for (const t of moduleInfo.targets) {
           const files = getModuleSourceFiles(t, projectInfo);
           const cls = astInfo.classNamesByModule?.[t.name]?.length || 0;
-          const deps = (t.dependencies || t.info?.dependencies || []).map((d: any) =>
-            typeof d === 'string' ? d : d.name
+          const deps = (t.dependencies || t.info?.dependencies || []).map(
+            (d: string | WikiDependency) => (typeof d === 'string' ? d : d.name)
           );
           parts.push(
             `- ${t.name} (${t.type || 'target'}): ${files.length} 文件, ${cls} 个类型${deps.length > 0 ? `, 依赖: ${deps.join(', ')}` : ''}`
@@ -103,7 +246,7 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
       }
 
       // 可用的其他文档（用于导航链接）
-      const otherTopics = (topic._allTopics || []).filter((t: any) => t.type !== 'overview');
+      const otherTopics = (topic._allTopics || []).filter((t: WikiTopic) => t.type !== 'overview');
       if (otherTopics.length > 0) {
         parts.push('### 需要包含的导航链接');
         for (const t of otherTopics) {
@@ -127,8 +270,8 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
       if (moduleInfo.targets.length > 0) {
         parts.push('### 模块及依赖关系');
         for (const t of moduleInfo.targets) {
-          const deps = (t.dependencies || t.info?.dependencies || []).map((d: any) =>
-            typeof d === 'string' ? d : d.name
+          const deps = (t.dependencies || t.info?.dependencies || []).map(
+            (d: string | WikiDependency) => (typeof d === 'string' ? d : d.name)
           );
           parts.push(
             `- ${t.name} (${t.type || 'target'})${deps.length > 0 ? ` → 依赖: ${deps.join(', ')}` : ''}`
@@ -137,7 +280,7 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
         parts.push('');
       }
 
-      if (astInfo.overview?.topLevelModules?.length > 0) {
+      if (astInfo.overview?.topLevelModules && astInfo.overview.topLevelModules.length > 0) {
         parts.push(`### 顶层模块: ${astInfo.overview.topLevelModules.join(', ')}`);
         const cpm = astInfo.overview.classesPerModule || {};
         for (const mod of astInfo.overview.topLevelModules) {
@@ -146,7 +289,7 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
         parts.push('');
       }
 
-      if (astInfo.overview?.entryPoints?.length > 0) {
+      if (astInfo.overview?.entryPoints && astInfo.overview.entryPoints.length > 0) {
         parts.push(`### 入口点: ${astInfo.overview.entryPoints.join(', ')}`);
         parts.push('');
       }
@@ -169,7 +312,7 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
     }
 
     case 'module': {
-      const md = topic._moduleData;
+      const md = topic._moduleData as unknown as WikiModuleData;
       const target = md.target;
       const moduleFiles = md.moduleFiles;
       const moduleClasses = astInfo.classNamesByModule?.[target.name] || [];
@@ -194,7 +337,7 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
 
       if (deps.length > 0) {
         parts.push(
-          `### 依赖: ${deps.map((d: any) => (typeof d === 'string' ? d : d.name)).join(', ')}`
+          `### 依赖: ${deps.map((d: string | WikiDependency) => (typeof d === 'string' ? d : d.name)).join(', ')}`
         );
         parts.push('');
       }
@@ -211,13 +354,13 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
 
       // 关键源文件名（帮助 AI 推断模块功能）
       if (moduleFiles.length > 0) {
-        const keyFiles = moduleFiles.slice(0, 25).map((f: any) => path.basename(f));
+        const keyFiles = moduleFiles.slice(0, 25).map((f: string) => path.basename(f));
         parts.push(`### 关键源文件: ${keyFiles.join(', ')}`);
         parts.push('');
       }
 
       // 相关 recipes
-      const related = knowledgeInfo.recipes.filter((r: any) => {
+      const related = knowledgeInfo.recipes.filter((r: WikiRecipe) => {
         const json = r.toJSON ? r.toJSON() : r;
         return (
           json.moduleName === target.name ||
@@ -252,7 +395,7 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
       // 列出检测到的构建系统
       const bs = projectInfo.buildSystems || [];
       if (bs.length > 0) {
-        parts.push(`构建系统: ${bs.map((b: any) => b.buildTool).join(', ')}`);
+        parts.push(`构建系统: ${bs.map((b: WikiBuildSystem) => b.buildTool).join(', ')}`);
       } else {
         // 兼容旧数据
         if (projectInfo.hasPackageSwift) {
@@ -268,18 +411,18 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
       parts.push('');
 
       if (moduleInfo.targets.length > 0) {
-        const mainTargets = moduleInfo.targets.filter((t: any) => t.type !== 'test');
-        const testTargets = moduleInfo.targets.filter((t: any) => t.type === 'test');
+        const mainTargets = moduleInfo.targets.filter((t: WikiTarget) => t.type !== 'test');
+        const testTargets = moduleInfo.targets.filter((t: WikiTarget) => t.type === 'test');
         if (mainTargets.length > 0) {
-          parts.push(`主要 Target: ${mainTargets.map((t: any) => t.name).join(', ')}`);
+          parts.push(`主要 Target: ${mainTargets.map((t: WikiTarget) => t.name).join(', ')}`);
         }
         if (testTargets.length > 0) {
-          parts.push(`测试 Target: ${testTargets.map((t: any) => t.name).join(', ')}`);
+          parts.push(`测试 Target: ${testTargets.map((t: WikiTarget) => t.name).join(', ')}`);
         }
         parts.push('');
       }
 
-      if (astInfo.overview?.entryPoints?.length > 0) {
+      if (astInfo.overview?.entryPoints && astInfo.overview.entryPoints.length > 0) {
         parts.push(`入口点: ${astInfo.overview.entryPoints.join(', ')}`);
         parts.push('');
       }
@@ -296,7 +439,7 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
       parts.push('## 任务: 撰写代码模式与最佳实践文档');
       parts.push('');
 
-      const groups: Record<string, any[]> = {};
+      const groups: Record<string, WikiRecipeJson[]> = {};
       for (const r of knowledgeInfo.recipes) {
         const json = r.toJSON ? r.toJSON() : r;
         const cat = json.category || 'Other';
@@ -331,7 +474,7 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
     }
 
     case 'pattern-category': {
-      const pd = topic._patternData;
+      const pd = topic._patternData as unknown as WikiPatternData;
       parts.push(`## 任务: 撰写 "${pd.category}" 分类的代码模式文档`);
       parts.push('');
 
@@ -385,7 +528,7 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
     }
 
     case 'folder-overview': {
-      const profiles = topic._folderProfiles || [];
+      const profiles = (topic._folderProfiles || []) as unknown as WikiFolderProfile[];
       parts.push('## 任务: 撰写项目文件夹结构分析文档');
       parts.push('');
       parts.push('注意: 本项目的代码实体（类/函数/协议等）无法通过 AST 自动提取，');
@@ -432,7 +575,7 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
     }
 
     case 'folder-profile': {
-      const fp = topic._folderProfile;
+      const fp = topic._folderProfile as unknown as WikiFolderProfile;
       parts.push(`## 任务: 撰写 "${fp.name}" 目录的深度分析文档`);
       parts.push('');
       parts.push('注意: 本项目的代码实体无法通过 AST 提取，以下分析基于文件夹画像。');
@@ -504,28 +647,54 @@ export function buildArticlePrompt(topic: any, data: any, isZh: any, codeEntityG
  * @param {object|null} codeEntityGraph
  * @returns {string}
  */
-export function buildFallbackArticle(topic: any, data: any, isZh: any, codeEntityGraph: any) {
+export function buildFallbackArticle(
+  topic: WikiTopic,
+  data: WikiData,
+  isZh: boolean,
+  codeEntityGraph: WikiCodeEntityGraph | null
+) {
   const { projectInfo, astInfo, moduleInfo, knowledgeInfo } = data;
 
   switch (topic.type) {
     case 'overview':
-      return renderIndex(projectInfo, astInfo, moduleInfo, knowledgeInfo, isZh, topic._allTopics);
+      return renderIndex(
+        projectInfo,
+        astInfo,
+        moduleInfo,
+        knowledgeInfo,
+        isZh,
+        topic._allTopics || []
+      );
     case 'architecture':
       return renderArchitecture(projectInfo, astInfo, moduleInfo, isZh, codeEntityGraph);
     case 'getting-started':
       return renderGettingStarted(projectInfo, moduleInfo, astInfo, isZh);
     case 'module':
-      return renderModule(topic._moduleData.target, astInfo, knowledgeInfo, isZh, projectInfo);
+      return renderModule(
+        (topic._moduleData as unknown as WikiModuleData).target,
+        astInfo,
+        knowledgeInfo,
+        isZh,
+        projectInfo
+      );
     case 'patterns':
       return renderPatterns(knowledgeInfo, isZh);
     case 'pattern-category':
-      return renderPatternCategory(topic._patternData, isZh);
+      return renderPatternCategory(topic._patternData as unknown as WikiPatternData, isZh);
     case 'reference':
       return renderProtocolReference(astInfo, isZh, projectInfo);
     case 'folder-overview':
-      return renderFolderOverview(topic._folderProfiles, projectInfo, isZh);
+      return renderFolderOverview(
+        topic._folderProfiles as unknown as WikiFolderProfile[],
+        projectInfo,
+        isZh
+      );
     case 'folder-profile':
-      return renderFolderProfile(topic._folderProfile, projectInfo, isZh);
+      return renderFolderProfile(
+        topic._folderProfile as unknown as WikiFolderProfile,
+        projectInfo,
+        isZh
+      );
     default:
       return '';
   }
@@ -537,12 +706,12 @@ export function buildFallbackArticle(topic: any, data: any, isZh: any, codeEntit
  * 渲染项目概述页 (index.md)
  */
 export function renderIndex(
-  project: any,
-  ast: any,
-  modules: any,
-  knowledge: any,
-  isZh: any,
-  allTopics: any
+  project: WikiProjectInfo,
+  ast: WikiAstInfo,
+  modules: WikiModuleInfo,
+  knowledge: WikiKnowledgeInfo,
+  isZh: boolean,
+  allTopics: WikiTopic[]
 ) {
   const title = isZh ? '项目概述' : 'Project Overview';
   const langTerms = getLangTerms(project.primaryLanguage || 'unknown');
@@ -562,8 +731,8 @@ export function renderIndex(
   lines.push('');
 
   // 从 buildSystems 或 legacy 字段推断项目类型标签
-  const types: any[] = [];
-  if (project.buildSystems?.length > 0) {
+  const types: string[] = [];
+  if (project.buildSystems && project.buildSystems.length > 0) {
     for (const bs of project.buildSystems) {
       types.push(bs.buildTool);
     }
@@ -583,8 +752,8 @@ export function renderIndex(
     (project.primaryLanguage ? LanguageService.displayName(project.primaryLanguage) : 'Software');
 
   const overview = ast.overview || {};
-  const mainTargets = modules.targets.filter((t: any) => t.type !== 'test');
-  const testTargets = modules.targets.filter((t: any) => t.type === 'test');
+  const mainTargets = modules.targets.filter((t: WikiTarget) => t.type !== 'test');
+  const testTargets = modules.targets.filter((t: WikiTarget) => t.type === 'test');
 
   if (isZh) {
     lines.push(
@@ -632,7 +801,9 @@ export function renderIndex(
       const classCount = ast.classNamesByModule?.[t.name]?.length || 0;
       const protoCount = ast.protocolNamesByModule?.[t.name]?.length || 0;
       const hasDoc = allTopics?.some(
-        (tp: any) => tp.type === 'module' && tp._moduleData?.target.name === t.name
+        (tp: WikiTopic) =>
+          tp.type === 'module' &&
+          (tp._moduleData as WikiModuleData | undefined)?.target.name === t.name
       );
       const nameCol = hasDoc ? `[${t.name}](modules/${slug(t.name)}.md)` : t.name;
       lines.push(
@@ -657,7 +828,9 @@ export function renderIndex(
     );
     lines.push('|--------|--------|------|');
     for (const [modName, modFiles] of sorted.slice(0, 15)) {
-      const hasDoc = allTopics?.some((tp: any) => tp.type === 'module' && tp.title === modName);
+      const hasDoc = allTopics?.some(
+        (tp: WikiTopic) => tp.type === 'module' && tp.title === modName
+      );
       const nameCol = hasDoc ? `[${modName}](modules/${slug(modName)}.md)` : modName;
       const purpose = inferModulePurpose(modName, [], [], modFiles);
       const desc = purpose ? (isZh ? purpose.zh : purpose.en) : '-';
@@ -707,7 +880,7 @@ export function renderIndex(
   lines.push('');
 
   // ── 文档导航 (动态，基于实际生成的主题) ──
-  const navTopics = (allTopics || []).filter((t: any) => t.type !== 'overview');
+  const navTopics = (allTopics || []).filter((t: WikiTopic) => t.type !== 'overview');
   if (navTopics.length > 0) {
     lines.push('---');
     lines.push('');
@@ -732,11 +905,11 @@ export function renderIndex(
  * @param {object|null} codeEntityGraph
  */
 export function renderArchitecture(
-  project: any,
-  ast: any,
-  modules: any,
-  isZh: any,
-  codeEntityGraph: any
+  project: WikiProjectInfo,
+  ast: WikiAstInfo,
+  modules: WikiModuleInfo,
+  isZh: boolean,
+  codeEntityGraph: WikiCodeEntityGraph | null
 ) {
   const lines = [
     `# ${isZh ? '架构总览' : 'Architecture Overview'}`,
@@ -831,7 +1004,7 @@ export function renderArchitecture(
     }
 
     // 入口点
-    if (ast.overview.entryPoints?.length > 0) {
+    if (ast.overview?.entryPoints && ast.overview.entryPoints.length > 0) {
       lines.push(`## ${isZh ? '入口点' : 'Entry Points'}`);
       lines.push('');
       for (const ep of ast.overview.entryPoints) {
@@ -872,7 +1045,13 @@ export function renderArchitecture(
 /**
  * 渲染模块详情文档 (modules/{name}.md)
  */
-export function renderModule(target: any, ast: any, knowledge: any, isZh: any, projectInfo: any) {
+export function renderModule(
+  target: WikiTarget,
+  ast: WikiAstInfo,
+  knowledge: WikiKnowledgeInfo,
+  isZh: boolean,
+  projectInfo: WikiProjectInfo
+) {
   const langTerms = getLangTerms(projectInfo?.primaryLanguage || 'unknown');
   const tl = isZh ? langTerms.typeLabel.zh : langTerms.typeLabel.en;
   const il = isZh ? langTerms.interfaceLabel.zh : langTerms.interfaceLabel.en;
@@ -918,7 +1097,7 @@ export function renderModule(target: any, ast: any, knowledge: any, isZh: any, p
     lines.push(`| ${isZh ? '所属包' : 'Package'} | ${target.packageName} |`);
   }
   if (target.path || target.info?.path) {
-    lines.push(`| ${isZh ? '路径' : 'Path'} | \`${target.path || target.info.path}\` |`);
+    lines.push(`| ${isZh ? '路径' : 'Path'} | \`${target.path || target.info?.path}\` |`);
   }
   if (moduleFiles.length > 0) {
     lines.push(`| ${isZh ? '源文件数' : 'Source Files'} | ${moduleFiles.length} |`);
@@ -1016,7 +1195,7 @@ export function renderModule(target: any, ast: any, knowledge: any, isZh: any, p
 
   // ── 该模块相关的 Recipes ──
   if (knowledge.recipes.length > 0) {
-    const related = knowledge.recipes.filter((r: any) => {
+    const related = knowledge.recipes.filter((r: WikiRecipe) => {
       const json = r.toJSON ? r.toJSON() : r;
       return (
         json.moduleName === target.name ||
@@ -1059,7 +1238,7 @@ export function renderModule(target: any, ast: any, knowledge: any, isZh: any, p
 /**
  * 渲染代码模式文档 (patterns.md)
  */
-export function renderPatterns(knowledge: any, isZh: any) {
+export function renderPatterns(knowledge: WikiKnowledgeInfo, isZh: boolean) {
   const lines = [
     `# ${isZh ? '代码模式与最佳实践' : 'Code Patterns & Best Practices'}`,
     '',
@@ -1068,7 +1247,7 @@ export function renderPatterns(knowledge: any, isZh: any) {
   ];
 
   // 按 category 分组
-  const groups: Record<string, any[]> = {};
+  const groups: Record<string, WikiRecipeJson[]> = {};
   for (const r of knowledge.recipes) {
     const json = r.toJSON ? r.toJSON() : r;
     const cat = json.category || 'Other';
@@ -1138,7 +1317,12 @@ export function renderPatterns(knowledge: any, isZh: any) {
 /**
  * 快速上手指南 (非 AI 降级模板)
  */
-export function renderGettingStarted(project: any, modules: any, ast: any, isZh: any) {
+export function renderGettingStarted(
+  project: WikiProjectInfo,
+  modules: WikiModuleInfo,
+  ast: WikiAstInfo,
+  isZh: boolean
+) {
   const lines = [
     `# ${isZh ? '快速上手' : 'Getting Started'}`,
     '',
@@ -1148,7 +1332,7 @@ export function renderGettingStarted(project: any, modules: any, ast: any, isZh:
 
   // 从 buildSystems 或 legacy 字段推断
   const bs = project.buildSystems || [];
-  const ecoSet = new Set(bs.map((b: any) => b.eco));
+  const ecoSet = new Set(bs.map((b: WikiBuildSystem) => b.eco));
 
   // ── 环境要求 (按检测到的生态系统动态生成) ──
   lines.push(`## ${isZh ? '环境要求' : 'Prerequisites'}`);
@@ -1156,7 +1340,7 @@ export function renderGettingStarted(project: any, modules: any, ast: any, isZh:
   if (ecoSet.has('spm') || project.hasPackageSwift) {
     lines.push(isZh ? '- Swift 5.5+ (推荐 Swift 5.9+)' : '- Swift 5.5+ (Swift 5.9+ recommended)');
     lines.push(isZh ? '- Xcode 14+' : '- Xcode 14+');
-    const hasCocoaPods = bs.some((b: any) => b.buildTool === 'CocoaPods');
+    const hasCocoaPods = bs.some((b: WikiBuildSystem) => b.buildTool === 'CocoaPods');
     if (hasCocoaPods || project.hasPodfile) {
       lines.push(isZh ? '- CocoaPods 1.10+' : '- CocoaPods 1.10+');
     }
@@ -1175,14 +1359,14 @@ export function renderGettingStarted(project: any, modules: any, ast: any, isZh:
   }
   if (ecoSet.has('node')) {
     lines.push(isZh ? '- Node.js 18+ (推荐 20 LTS)' : '- Node.js 18+ (20 LTS recommended)');
-    const hasYarn = bs.some((b: any) => b.buildTool === 'Yarn');
-    const hasPnpm = bs.some((b: any) => b.buildTool === 'pnpm');
+    const hasYarn = bs.some((b: WikiBuildSystem) => b.buildTool === 'Yarn');
+    const hasPnpm = bs.some((b: WikiBuildSystem) => b.buildTool === 'pnpm');
     lines.push(hasYarn ? '- Yarn' : hasPnpm ? '- pnpm' : '- npm');
   }
   if (ecoSet.has('python')) {
     lines.push(isZh ? '- Python 3.8+' : '- Python 3.8+');
-    const hasPipenv = bs.some((b: any) => b.buildTool === 'Pipenv');
-    const hasPoetry = bs.some((b: any) => b.buildTool === 'Poetry');
+    const hasPipenv = bs.some((b: WikiBuildSystem) => b.buildTool === 'Pipenv');
+    const hasPoetry = bs.some((b: WikiBuildSystem) => b.buildTool === 'Poetry');
     if (hasPipenv) {
       lines.push('- Pipenv');
     } else if (hasPoetry) {
@@ -1197,7 +1381,7 @@ export function renderGettingStarted(project: any, modules: any, ast: any, isZh:
     lines.push('- Cargo');
   }
   if (ecoSet.has('jvm')) {
-    const hasGradle = bs.some((b: any) => b.buildTool?.startsWith('Gradle'));
+    const hasGradle = bs.some((b: WikiBuildSystem) => b.buildTool?.startsWith('Gradle'));
     lines.push(isZh ? '- JDK 17+' : '- JDK 17+');
     lines.push(hasGradle ? '- Gradle' : '- Maven');
   }
@@ -1219,8 +1403,8 @@ export function renderGettingStarted(project: any, modules: any, ast: any, isZh:
   lines.push('```');
   lines.push(`${project.name}/`);
   if (modules.targets.length > 0) {
-    const mainTargets = modules.targets.filter((t: any) => t.type !== 'test');
-    const testTargets = modules.targets.filter((t: any) => t.type === 'test');
+    const mainTargets = modules.targets.filter((t: WikiTarget) => t.type !== 'test');
+    const testTargets = modules.targets.filter((t: WikiTarget) => t.type === 'test');
     if (mainTargets.length > 0) {
       const srcDir = ecoSet.has('spm') || project.hasPackageSwift ? 'Sources' : 'src';
       lines.push(`├── ${srcDir}/`);
@@ -1302,7 +1486,7 @@ export function renderGettingStarted(project: any, modules: any, ast: any, isZh:
 
   // ── 模块说明 ──
   if (modules.targets.length > 0) {
-    const mainTargets = modules.targets.filter((t: any) => t.type !== 'test');
+    const mainTargets = modules.targets.filter((t: WikiTarget) => t.type !== 'test');
     if (mainTargets.length > 0) {
       lines.push(`## ${isZh ? '核心模块' : 'Core Modules'}`);
       lines.push('');
@@ -1339,7 +1523,12 @@ const BUILD_SYSTEM_FILES = Object.fromEntries(
  * 按生态系统输出构建步骤
  * @private
  */
-function _pushBuildSteps(lines: any, buildSys: any, projectName: any, isZh: any) {
+function _pushBuildSteps(
+  lines: string[],
+  buildSys: WikiBuildSystem,
+  projectName: string,
+  isZh: boolean
+) {
   const { eco, buildTool } = buildSys;
 
   lines.push(`### ${isZh ? `使用 ${buildTool}` : `Using ${buildTool}`}`);
@@ -1443,7 +1632,10 @@ function _pushBuildSteps(lines: any, buildSys: any, projectName: any, isZh: any)
 /**
  * 按分类拆分的代码模式文档
  */
-export function renderPatternCategory(patternData: any, isZh: any) {
+export function renderPatternCategory(
+  patternData: { category: string; recipes: WikiRecipeJson[] },
+  isZh: boolean
+) {
   const { category, recipes } = patternData;
   const lines = [
     `# ${category}`,
@@ -1495,7 +1687,11 @@ export function renderPatternCategory(patternData: any, isZh: any) {
 /**
  * 协议参考文档
  */
-export function renderProtocolReference(ast: any, isZh: any, projectInfo: any) {
+export function renderProtocolReference(
+  ast: WikiAstInfo,
+  isZh: boolean,
+  projectInfo: WikiProjectInfo
+) {
   const langTerms = getLangTerms(projectInfo?.primaryLanguage || 'unknown');
   const il = isZh ? langTerms.interfaceLabel.zh : langTerms.interfaceLabel.en;
 
@@ -1537,7 +1733,7 @@ export function renderProtocolReference(ast: any, isZh: any, projectInfo: any) {
   }
 
   // 未分组的接口类型
-  const ungrouped = ast.protocols.filter((p: any) => !grouped.has(p));
+  const ungrouped = ast.protocols.filter((p: string) => !grouped.has(p));
   if (ungrouped.length > 0) {
     lines.push(`## ${isZh ? `其他${il}` : `Other ${il}`}`);
     lines.push('');
@@ -1562,7 +1758,11 @@ export function renderProtocolReference(ast: any, isZh: any, projectInfo: any) {
  * @param {boolean} isZh
  * @returns {string}
  */
-export function renderFolderOverview(profiles: any, projectInfo: any, isZh: any) {
+export function renderFolderOverview(
+  profiles: WikiFolderProfile[],
+  projectInfo: WikiProjectInfo,
+  isZh: boolean
+) {
   const lines = [
     `# ${isZh ? '项目结构分析' : 'Project Structure Analysis'}`,
     '',
@@ -1573,8 +1773,8 @@ export function renderFolderOverview(profiles: any, projectInfo: any, isZh: any)
   // 说明为什么是文件夹分析模式
   lines.push(
     isZh
-      ? `> 💡 本项目的主要语言 (${LanguageService.displayName(projectInfo.primaryLanguage)}) 暂不支持深度 AST 解析，因此使用文件夹画像分析来代替。`
-      : `> 💡 The project's primary language (${LanguageService.displayName(projectInfo.primaryLanguage)}) does not support deep AST analysis yet, so folder profiling is used instead.`
+      ? `> 💡 本项目的主要语言 (${LanguageService.displayName(projectInfo.primaryLanguage!)}) 暂不支持深度 AST 解析，因此使用文件夹画像分析来代替。`
+      : `> 💡 The project's primary language (${LanguageService.displayName(projectInfo.primaryLanguage!)}) does not support deep AST analysis yet, so folder profiling is used instead.`
   );
   lines.push('');
 
@@ -1586,7 +1786,7 @@ export function renderFolderOverview(profiles: any, projectInfo: any, isZh: any)
   lines.push(`    Root["${projectInfo.name}"]`);
 
   // 只显示深度 = 1 的顶层文件夹
-  const topLevel = profiles.filter((fp: any) => fp.depth === 1);
+  const topLevel = profiles.filter((fp: WikiFolderProfile) => fp.depth === 1);
 
   for (const fp of topLevel) {
     const sid = mermaidId(fp.name);
@@ -1595,7 +1795,7 @@ export function renderFolderOverview(profiles: any, projectInfo: any, isZh: any)
   }
 
   // 画 import 关系边
-  const folderNames = new Set(profiles.map((fp: any) => fp.name));
+  const folderNames = new Set(profiles.map((fp: WikiFolderProfile) => fp.name));
   for (const fp of profiles) {
     const fromId = mermaidId(fp.name);
     for (const imp of fp.imports) {
@@ -1665,7 +1865,7 @@ export function renderFolderOverview(profiles: any, projectInfo: any, isZh: any)
   }
 
   // ── 依赖关系 ──
-  const allImports: { from: any; to: any }[] = [];
+  const allImports: { from: string; to: string }[] = [];
   for (const fp of profiles) {
     for (const imp of fp.imports) {
       if (folderNames.has(imp) && imp !== fp.name) {
@@ -1702,7 +1902,11 @@ export function renderFolderOverview(profiles: any, projectInfo: any, isZh: any)
  * @param {boolean} isZh
  * @returns {string}
  */
-export function renderFolderProfile(fp: any, projectInfo: any, isZh: any) {
+export function renderFolderProfile(
+  fp: WikiFolderProfile,
+  projectInfo: WikiProjectInfo,
+  isZh: boolean
+) {
   const lines = [
     `# ${fp.name}`,
     '',
@@ -1757,7 +1961,7 @@ export function renderFolderProfile(fp: any, projectInfo: any, isZh: any) {
     lines.push(
       `> ${fp.readme
         .split('\n')
-        .filter((l: any) => l.trim())
+        .filter((l: string) => l.trim())
         .slice(0, 5)
         .join('\n> ')}`
     );
@@ -1880,7 +2084,7 @@ export function renderFolderProfile(fp: any, projectInfo: any, isZh: any) {
 /**
  * 构建 AI 系统 Prompt (V3 — 撰写完整文章，非润色骨架)
  */
-export function buildAiSystemPrompt(isZh: any) {
+export function buildAiSystemPrompt(isZh: boolean) {
   if (isZh) {
     return [
       '你是 AutoSnippet Repo Wiki 文档撰写专家。',

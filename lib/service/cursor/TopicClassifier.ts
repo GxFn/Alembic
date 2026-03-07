@@ -5,6 +5,8 @@
  * 每个主题对应一个 .mdc 文件，设 alwaysApply: false + 丰富的 description。
  */
 
+import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
+
 /**
  * 主题定义
  * - dimensions: 关联的 bootstrap 维度
@@ -40,7 +42,7 @@ const TOPIC_MAP = {
 };
 
 export class TopicClassifier {
-  projectName: any;
+  projectName: string;
   /**
    * @param {string} projectName 项目名称
    */
@@ -53,9 +55,9 @@ export class TopicClassifier {
    * @param {Array<Object>} entries - KnowledgeEntry 数组 (kind='pattern')
    * @returns {Object<string, Array<Object>>} { topic: [entries] }
    */
-  group(entries: any) {
-    const grouped: any = {};
-    const unmatched: any[] = [];
+  group(entries: KnowledgeEntryProps[]) {
+    const grouped: Record<string, KnowledgeEntryProps[]> = {};
+    const unmatched: KnowledgeEntryProps[] = [];
 
     for (const entry of entries) {
       const topic = this._classifyEntry(entry);
@@ -88,27 +90,31 @@ export class TopicClassifier {
    * @param {Array<Object>} entries
    * @returns {string}
    */
-  buildDescription(topic: any, entries: any) {
-    const topicDef = (TOPIC_MAP as Record<string, any>)[topic];
+  buildDescription(topic: string, entries: KnowledgeEntryProps[]) {
+    const topicDef = (
+      TOPIC_MAP as Record<string, { dimensions: string[]; descriptionKeywords: string }>
+    )[topic];
     const baseKeywords = topicDef
       ? topicDef.descriptionKeywords
       : entries
-          .map((e: any) => e.title || '')
+          .map((e: KnowledgeEntryProps) => e.title || '')
           .filter(Boolean)
           .join(', ');
 
     // 从 entries 提取动态关键词（tags + whenClause + title/description）
-    const entryKeywords = entries.flatMap((e: any) => this._extractKeywords(e)).filter(Boolean);
+    const entryKeywords = entries
+      .flatMap((e: KnowledgeEntryProps) => this._extractKeywords(e))
+      .filter(Boolean);
     // 从 tags 直接提取（tags 本身就是高质量关键词）
     const tagKeywords = entries
-      .flatMap((e: any) => e.tags || [])
-      .map((t: any) => t.toLowerCase())
-      .filter((t: any) => t.length >= 2 && !STOP_WORDS.has(t));
+      .flatMap((e: KnowledgeEntryProps) => e.tags || [])
+      .map((t: string) => t.toLowerCase())
+      .filter((t: string) => t.length >= 2 && !STOP_WORDS.has(t));
     // 从 whenClause 提取（包含触发场景信息）
     const whenKeywords = entries
-      .flatMap((e: any) => (e.whenClause || '').match(/[a-zA-Z]{3,}/g) || [])
-      .map((w: any) => w.toLowerCase())
-      .filter((w: any) => !STOP_WORDS.has(w));
+      .flatMap((e: KnowledgeEntryProps) => (e.whenClause || '').match(/[a-zA-Z]{3,}/g) || [])
+      .map((w: string) => w.toLowerCase())
+      .filter((w: string) => !STOP_WORDS.has(w));
 
     const allExtra = [...new Set([...tagKeywords, ...whenKeywords, ...entryKeywords])].slice(0, 15);
     const extra = allExtra.length > 0 ? `, ${allExtra.join(', ')}` : '';
@@ -120,7 +126,7 @@ export class TopicClassifier {
    * 分类单个 entry 到主题 — 直读 AI 预计算的 topicHint
    * @private
    */
-  _classifyEntry(entry: any) {
+  _classifyEntry(entry: KnowledgeEntryProps) {
     return entry.topicHint || null; // AI 没给 → null → 归入 general
   }
 
@@ -128,7 +134,7 @@ export class TopicClassifier {
    * 从 entry 提取关键词
    * @private
    */
-  _extractKeywords(entry: any) {
+  _extractKeywords(entry: KnowledgeEntryProps) {
     const text = `${entry.title || ''} ${entry.description || ''}`;
     // 提取英文关键词（3+ 字母）
     const words = text.match(/[a-zA-Z]{3,}/g) || [];
@@ -139,7 +145,7 @@ export class TopicClassifier {
   /**
    * @private
    */
-  _topicLabel(topic: any) {
+  _topicLabel(topic: string) {
     const labels = {
       networking: 'Networking',
       ui: 'UI',
@@ -148,7 +154,9 @@ export class TopicClassifier {
       conventions: 'Conventions',
       general: 'General',
     };
-    return (labels as Record<string, any>)[topic] || topic.charAt(0).toUpperCase() + topic.slice(1);
+    return (
+      (labels as Record<string, string>)[topic] || topic.charAt(0).toUpperCase() + topic.slice(1)
+    );
   }
 }
 

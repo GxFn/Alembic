@@ -14,7 +14,7 @@
  * @param {*} [fallback=null] 解析失败时的回退值
  * @returns {*}
  */
-export function safeJsonParse(value: any, fallback = null) {
+export function safeJsonParse(value: unknown, fallback = null) {
   if (value == null || value === 'null' || value === '') {
     return fallback;
   }
@@ -22,7 +22,7 @@ export function safeJsonParse(value: any, fallback = null) {
     return value;
   }
   try {
-    return JSON.parse(value);
+    return JSON.parse(value as string);
   } catch {
     return fallback;
   }
@@ -36,12 +36,12 @@ export function safeJsonParse(value: any, fallback = null) {
  * @param {*} [fallback='{}'] 值为空时的回退
  * @returns {string}
  */
-export function safeJsonStringify(value: any, fallback = '{}') {
+export function safeJsonStringify(value: unknown, fallback = '{}') {
   if (value == null) {
     return fallback;
   }
-  if (typeof value?.toJSON === 'function') {
-    return JSON.stringify(value.toJSON());
+  if (typeof (value as Record<string, unknown>)?.toJSON === 'function') {
+    return JSON.stringify((value as { toJSON(): unknown }).toJSON());
   }
   return JSON.stringify(value);
 }
@@ -66,7 +66,7 @@ export function unixNow() {
  * @param {string} fallback
  * @returns {string}
  */
-export function strOr(value: any, fallback = '') {
+export function strOr(value: unknown, fallback = '') {
   if (typeof value === 'string' && value.trim()) {
     return value;
   }

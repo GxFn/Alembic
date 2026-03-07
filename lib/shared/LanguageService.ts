@@ -326,7 +326,7 @@ export class LanguageService {
    * @param {string} filename
    * @returns {string} 语言 ID，如 'swift', 'typescript', 'python', 'unknown'
    */
-  static inferLang(filename: any) {
+  static inferLang(filename: string) {
     if (!filename || typeof filename !== 'string') {
       return 'unknown';
     }
@@ -343,7 +343,7 @@ export class LanguageService {
    * @param {string} ext 如 '.ts', '.py'
    * @returns {string}
    */
-  static langFromExt(ext: any) {
+  static langFromExt(ext: string) {
     if (!ext || typeof ext !== 'string') {
       return 'unknown';
     }
@@ -365,7 +365,7 @@ export class LanguageService {
    * @param {string} langId 语言 ID（可能是别名）
    * @returns {string} 规范化语言 ID
    */
-  static normalize(langId: any) {
+  static normalize(langId: string) {
     if (!langId || typeof langId !== 'string') {
       return 'unknown';
     }
@@ -385,7 +385,7 @@ export class LanguageService {
    * @param {string} langId
    * @returns {string}
    */
-  static toGuardLangId(langId: any) {
+  static toGuardLangId(langId: string) {
     const id = (langId || '').toLowerCase().replace(/[_-]/g, '');
     return id === 'objectivec' ? 'objc' : langId;
   }
@@ -397,7 +397,7 @@ export class LanguageService {
    * @param {string} langId
    * @returns {string}
    */
-  static displayName(langId: any) {
+  static displayName(langId: string) {
     return LANG_DISPLAY_NAMES[langId] || langId;
   }
 
@@ -406,7 +406,7 @@ export class LanguageService {
    * @param {string} ext 如 '.swift', '.ts'
    * @returns {string}
    */
-  static displayNameFromExt(ext: any) {
+  static displayNameFromExt(ext: string) {
     const lang = EXT_TO_LANG[ext.toLowerCase()];
     return lang ? LANG_DISPLAY_NAMES[lang] || lang : ext;
   }
@@ -418,7 +418,7 @@ export class LanguageService {
    * @param {Record<string, number>} langStats - key = 裸扩展名 (如 'ts', 'm', 'py')，value = 文件数
    * @returns {string} 主语言 ID
    */
-  static detectPrimary(langStats: any) {
+  static detectPrimary(langStats: Record<string, number>) {
     if (!langStats || typeof langStats !== 'object') {
       return 'unknown';
     }
@@ -444,7 +444,7 @@ export class LanguageService {
    * @param {Record<string, number>} langStats
    * @returns {Array<{ lang: string, count: number }>}
    */
-  static detectAll(langStats: any) {
+  static detectAll(langStats: Record<string, number>) {
     if (!langStats || typeof langStats !== 'object') {
       return [];
     }
@@ -472,7 +472,10 @@ export class LanguageService {
    * @param {number} [opts.secondaryThreshold=0.1] 次要语言文件占比阈值（≥此比例才算次要语言）
    * @returns {{ primary: string, secondary: string[], all: Array<{lang:string, count:number, ratio:number}>, totalFiles: number, isMultiLang: boolean }}
    */
-  static detectProfile(langStats: any, opts: any = {}) {
+  static detectProfile(
+    langStats: Record<string, number>,
+    opts: { secondaryThreshold?: number } = {}
+  ) {
     const threshold = opts.secondaryThreshold ?? 0.1;
     const all = LanguageService.detectAll(langStats);
     if (all.length === 0) {
@@ -503,7 +506,7 @@ export class LanguageService {
    * @param {string} langId
    * @returns {boolean}
    */
-  static isKnownLang(langId: any) {
+  static isKnownLang(langId: string) {
     return KNOWN_PROGRAMMING_LANGS.has(langId);
   }
 
@@ -512,7 +515,7 @@ export class LanguageService {
    * @param {string} ext 带 dot，如 '.ts'
    * @returns {boolean}
    */
-  static isSourceExt(ext: any) {
+  static isSourceExt(ext: string) {
     return SOURCE_CODE_EXTS.has(ext.toLowerCase());
   }
 
@@ -553,7 +556,7 @@ export class LanguageService {
    * @param {string} langId 如 'go', 'swift', 'python'
    * @returns {string|null} 如 '.go', '.swift', '.py'；未知返回 null
    */
-  static extForLang(langId: any) {
+  static extForLang(langId: string) {
     if (!langId) {
       return null;
     }
@@ -605,7 +608,7 @@ export class LanguageService {
    * @param {string} ecoId 如 'spm', 'node', 'rust', 'dart'
    * @returns {readonly string[]}
    */
-  static langsForEco(ecoId: any) {
+  static langsForEco(ecoId: string) {
     return ECO_TO_LANGS[ecoId] || [];
   }
 
@@ -615,7 +618,7 @@ export class LanguageService {
    * @param {string[]} entryNames 目录内文件/目录名列表
    * @returns {Array<{ eco: string, buildTool: string }>}
    */
-  static matchBuildMarkers(entryNames: any) {
+  static matchBuildMarkers(entryNames: string[]) {
     if (!Array.isArray(entryNames) || entryNames.length === 0) {
       return [];
     }
@@ -652,7 +655,10 @@ export class LanguageService {
    * @param {number}   [opts.maxDepth=2]    最大扫描深度：0=仅根目录，1=+子目录，2=+孙目录
    * @returns {string[]} 规范化语言 ID 数组（如 ['rust', 'dart']）
    */
-  static detectProjectLanguages(projectRoot: any, opts: any = {}) {
+  static detectProjectLanguages(
+    projectRoot: string,
+    opts: { discovererIds?: string[]; maxDepth?: number } = {}
+  ) {
     if (!projectRoot || typeof projectRoot !== 'string') {
       return [];
     }
@@ -660,7 +666,7 @@ export class LanguageService {
 
     // ── Path 1: 从 Discoverer ID 映射 ──
     if (discovererIds && discovererIds.length > 0) {
-      const nonGeneric = discovererIds.filter((id: any) => id !== 'generic');
+      const nonGeneric = discovererIds.filter((id: string) => id !== 'generic');
       if (nonGeneric.length > 0) {
         const langSet = new Set();
         for (const did of nonGeneric) {

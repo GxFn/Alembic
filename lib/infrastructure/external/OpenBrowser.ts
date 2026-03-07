@@ -18,7 +18,7 @@ const __dirname = dirname(__filename);
 
 const IS_MAC = process.platform === 'darwin';
 
-function isAppInstalled(appName: any) {
+function isAppInstalled(appName: string) {
   if (!IS_MAC) {
     return false;
   }
@@ -67,7 +67,7 @@ export function hasMacOSBrowserControlGranted() {
  * @param {string} url 要打开的地址
  * @param {string} [baseUrlForLookup] 可选 base URL，按 base 查找标签后导航到 url
  */
-export function openBrowserReuseTab(url: any, baseUrlForLookup: any) {
+export function openBrowserReuseTab(url: string, baseUrlForLookup?: string) {
   const skipReuse =
     process.env.ASD_UI_NO_REUSE_TAB === '1' || process.env.ASD_UI_OPEN_REUSE === '0';
 
@@ -108,9 +108,12 @@ export function openBrowserReuseTab(url: any, baseUrlForLookup: any) {
           timeout: 3000,
         });
         return;
-      } catch (_err: any) {
+      } catch (_err: unknown) {
         if (process.env.ASD_DEBUG === '1') {
-          console.error(`[OpenBrowser] AppleScript failed for ${browser}:`, _err.message);
+          console.error(
+            `[OpenBrowser] AppleScript failed for ${browser}:`,
+            (_err as Error).message
+          );
         }
       }
     }
@@ -123,13 +126,13 @@ export function openBrowserReuseTab(url: any, baseUrlForLookup: any) {
 /**
  * 回退 open 方式
  */
-async function _fallbackOpen(url: any) {
+async function _fallbackOpen(url: string) {
   try {
     const open = (await import('open')).default;
     open(url).catch((err) => {
       console.error(`⚠️ 打开浏览器失败: ${err.message}`);
     });
-  } catch (err: any) {
-    console.error(`⚠️ 打开浏览器失败: ${err.message}`);
+  } catch (err: unknown) {
+    console.error(`⚠️ 打开浏览器失败: ${(err as Error).message}`);
   }
 }

@@ -15,7 +15,7 @@ export class JsonVectorAdapter extends VectorStore {
   #data; // Map<id, { id, content, vector, metadata }>
   #dirty;
 
-  constructor(projectRoot: any, options: any = {}) {
+  constructor(projectRoot: string, options: { contextDir?: string; indexPath?: string } = {}) {
     super();
     const contextDir = options.contextDir || '.autosnippet/context/index';
     this.#indexPath = options.indexPath || join(projectRoot, contextDir, 'vector_index.json');
@@ -35,7 +35,12 @@ export class JsonVectorAdapter extends VectorStore {
     this.#load();
   }
 
-  async upsert(item: any) {
+  async upsert(item: {
+    id: string;
+    content?: string;
+    vector?: number[];
+    metadata?: Record<string, unknown>;
+  }) {
     if (!item?.id) {
       throw new Error('Item must have an id');
     }
@@ -50,7 +55,14 @@ export class JsonVectorAdapter extends VectorStore {
     this.#autoSave();
   }
 
-  async batchUpsert(items: any) {
+  async batchUpsert(
+    items: Array<{
+      id: string;
+      content?: string;
+      vector?: number[];
+      metadata?: Record<string, unknown>;
+    }>
+  ) {
     for (const item of items) {
       if (!item?.id) {
         continue;
@@ -67,20 +79,23 @@ export class JsonVectorAdapter extends VectorStore {
     this.#autoSave();
   }
 
-  async remove(id: any) {
+  async remove(id: string) {
     this.#data.delete(id);
     this.#dirty = true;
     this.#autoSave();
   }
 
-  async getById(id: any) {
+  async getById(id: string) {
     return this.#data.get(id) || null;
   }
 
   /**
    * 向量相似度搜索（余弦相似度）
    */
-  async searchVector(queryVector: any, options: any = {}) {
+  async searchVector(
+    queryVector: number[],
+    options: { topK?: number; filter?: Record<string, unknown> | null; minScore?: number } = {}
+  ) {
     const { topK = 10, filter = null, minScore = 0 } = options;
 
     if (!queryVector || queryVector.length === 0) {
@@ -111,7 +126,11 @@ export class JsonVectorAdapter extends VectorStore {
   /**
    * 混合搜索：向量 70% + 关键词 30%
    */
-  async hybridSearch(queryVector: any, queryText: any, options: any = {}) {
+  async hybridSearch(
+    queryVector: number[],
+    queryText: string,
+    options: { topK?: number; filter?: Record<string, unknown> | null } = {}
+  ) {
     const { topK = 10, filter = null } = options;
 
     let candidates = [...this.#data.values()];
@@ -133,7 +152,7 @@ export class JsonVectorAdapter extends VectorStore {
           const text = (item.content || '').toLowerCase();
           const query = queryText.toLowerCase();
           const words = query.split(/\s+/);
-          const hits = words.filter((w: any) => text.includes(w)).length;
+          const hits = words.filter((w) => text.includes(w)).length;
           keywordScore = words.length > 0 ? hits / words.length : 0;
         }
 
@@ -155,7 +174,7 @@ export class JsonVectorAdapter extends VectorStore {
    * query() — SearchEngine / RetrievalFunnel 使用的向量搜索别名
    * 接口: query(vector, topK) → Array<{ id, similarity, metadata }>
    */
-  async query(queryVector: any, topK = 10) {
+  async query(queryVector: number[], topK = 10) {
     const results = await this.searchVector(queryVector, { topK });
     return results.map((r) => ({
       id: r.item.id,
@@ -166,7 +185,7 @@ export class JsonVectorAdapter extends VectorStore {
     }));
   }
 
-  async searchByFilter(filter: any) {
+  async searchByFilter(filter: Record<string, unknown>) {
     return this.#applyFilter([...this.#data.values()], filter);
   }
 
@@ -200,8 +219,11 @@ export class JsonVectorAdapter extends VectorStore {
 
   // --- 私有方法 ---
 
-  #applyFilter(items: any, filter: any) {
-    return items.filter((item: any) => {
+  #applyFilter(
+    items: Array<{ metadata?: Record<string, unknown>; [key: string]: unknown }>,
+    filter: Record<string, unknown>
+  ) {
+    return items.filter((item) => {
       const meta = item.metadata || {};
       if (filter.type && meta.type !== filter.type) {
         return false;
@@ -212,7 +234,10 @@ export class JsonVectorAdapter extends VectorStore {
       if (filter.language && meta.language !== filter.language) {
         return false;
       }
-      if (filter.sourcePath && !meta.sourcePath?.includes(filter.sourcePath)) {
+      if (
+        filter.sourcePath &&
+        !(meta.sourcePath as string | undefined)?.includes(filter.sourcePath as string)
+      ) {
         return false;
       }
       if (filter.module && meta.module !== filter.module) {
@@ -220,7 +245,7 @@ export class JsonVectorAdapter extends VectorStore {
       }
       if (filter.tags && Array.isArray(filter.tags)) {
         const itemTags = meta.tags || [];
-        if (!filter.tags.some((t: any) => itemTags.includes(t))) {
+        if (!(filter.tags as string[]).some((t) => (itemTags as string[]).includes(t))) {
           return false;
         }
       }
@@ -231,7 +256,7 @@ export class JsonVectorAdapter extends VectorStore {
     });
   }
 
-  #cosineSimilarity(a: any, b: any) {
+  #cosineSimilarity(a: number[], b: number[]) {
     return cosineSimilarity(a, b);
   }
 
@@ -251,7 +276,7 @@ export class JsonVectorAdapter extends VectorStore {
       } else if (typeof items === 'object') {
         // 兼容旧格式 { id: item }
         for (const [id, item] of Object.entries(items)) {
-          this.#data.set(id, { ...(item as any), id });
+          this.#data.set(id, { ...(item as Record<string, unknown>), id });
         }
       }
     } catch {

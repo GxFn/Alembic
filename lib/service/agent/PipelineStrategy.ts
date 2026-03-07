@@ -19,19 +19,110 @@
 
 import Logger from '../../infrastructure/logging/Logger.js';
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
+import type { AgentMessage } from './AgentMessage.js';
 import { ExplorationTracker } from './context/ExplorationTracker.js';
 import { Strategy, StrategyRegistry } from './strategies.js';
+
+// ───── Local Types for PipelineStrategy ──────────────────
+
+/** Extended runtime — may carry an optional logger (AgentRuntime provides one) */
+interface PipelineRuntime {
+  id: string;
+  reactLoop(prompt: string, opts?: Record<string, unknown>): Promise<StageResult>;
+  logger?: { info?: (...args: unknown[]) => void };
+}
+
+/** Result of a single stage execution */
+interface StageResult {
+  reply: string;
+  toolCalls: Array<Record<string, unknown>>;
+  tokenUsage: { input: number; output: number };
+  iterations: number;
+  timedOut?: boolean;
+  [key: string]: unknown;
+}
+
+/** Budget configuration for a pipeline stage */
+interface StageBudget {
+  maxIterations?: number;
+  timeoutMs?: number;
+  [key: string]: unknown;
+}
+
+/** Capability reference: plain string name or object with a name property */
+type CapabilityRef = string | { name: string; [key: string]: unknown };
+
+/** Quality Gate configuration */
+interface GateConfig {
+  evaluator?: (
+    source: unknown,
+    phaseResults: Record<string, unknown>,
+    strategyContext: Record<string, unknown>
+  ) => { action?: string; pass?: boolean; reason?: string; artifact?: unknown };
+  maxRetries?: number;
+  minEvidenceLength?: number;
+  minFileRefs?: number;
+  minToolCalls?: number;
+  custom?: (source: Record<string, unknown>) => { pass: boolean; reason?: string };
+  [key: string]: unknown;
+}
+
+/** Pipeline stage definition */
+interface PipelineStage {
+  name: string;
+  gate?: GateConfig;
+  capabilities?: CapabilityRef[];
+  promptBuilder?: (ctx: Record<string, unknown>) => string;
+  retryPromptBuilder?: (
+    retryCtx: { reason?: string; artifact?: unknown },
+    content: string,
+    phaseResults: Record<string, unknown>
+  ) => string;
+  promptTransform?: (content: string, phaseResults: Record<string, unknown>) => string;
+  systemPrompt?: string;
+  onToolCall?: (...args: unknown[]) => unknown;
+  budget?: StageBudget;
+  retryBudget?: StageBudget;
+  skipOnDegrade?: boolean;
+  skipOnFail?: boolean;
+  submitToolName?: string;
+  source?: string;
+  [key: string]: unknown;
+}
+
+/** Pipeline execution context (internal mutable state passed between stages) */
+interface PipelineContext {
+  phaseResults: Record<string, unknown>;
+  strategyContext: Record<string, unknown>;
+  totalToolCalls: Array<Record<string, unknown>>;
+  totalTokenUsage: { input: number; output: number };
+  totalIterations: number;
+  gateArtifact: unknown;
+  degraded: boolean;
+  execStageCount: number;
+  lastExecutedStageName: string | null;
+}
+
+/** Lightweight ContextWindow subset consumed by pipeline stages */
+interface StageContextWindow {
+  resetForNewStage(): void;
+  tokenCount?: number;
+  [key: string]: unknown;
+}
 
 const _pipelineLogger = Logger.getInstance();
 
 export class PipelineStrategy extends Strategy {
   /** @type {Array<Object>} */
-  #stages: any[];
+  #stages: PipelineStage[];
 
   /** @type {number} 最大重试次数 (Gate 失败时全局兜底) */
   #maxRetries;
 
-  constructor({ stages = [], maxRetries = 1 } = {}) {
+  constructor({
+    stages = [],
+    maxRetries = 1,
+  }: { stages?: PipelineStage[]; maxRetries?: number } = {}) {
     super();
     this.#stages = stages;
     this.#maxRetries = maxRetries;
@@ -41,12 +132,16 @@ export class PipelineStrategy extends Strategy {
     return 'pipeline';
   }
 
-  async execute(runtime: any, message: any, opts: any = {}) {
+  async execute(
+    runtime: PipelineRuntime,
+    message: AgentMessage,
+    opts: Record<string, unknown> = {}
+  ) {
     const bus = AgentEventBus.getInstance();
-    const ctx = {
-      phaseResults: {},
-      strategyContext: opts.strategyContext || {},
-      totalToolCalls: [],
+    const ctx: PipelineContext = {
+      phaseResults: {} as Record<string, unknown>,
+      strategyContext: (opts.strategyContext || {}) as Record<string, unknown>,
+      totalToolCalls: [] as Array<Record<string, unknown>>,
       totalTokenUsage: { input: 0, output: 0 },
       totalIterations: 0,
       gateArtifact: null,
@@ -87,11 +182,11 @@ export class PipelineStrategy extends Strategy {
 
     // 最终回复 = 最后一个执行阶段的输出
     const lastStage = Object.values(ctx.phaseResults)
-      .filter((r: any) => r.reply)
+      .filter((r): r is StageResult => r != null && typeof r === 'object' && 'reply' in r)
       .pop();
 
     return {
-      reply: (lastStage as any)?.reply || '',
+      reply: lastStage?.reply || '',
       toolCalls: ctx.totalToolCalls,
       tokenUsage: ctx.totalTokenUsage,
       iterations: ctx.totalIterations,
@@ -109,21 +204,25 @@ export class PipelineStrategy extends Strategy {
    *
    * @returns {'break'|'continue'|number} - break/continue 或 retry 回退索引 (i-1)
    */
-  #processGate(stage: any, stageIndex: any, ctx: any, bus: any) {
+  #processGate(stage: PipelineStage, stageIndex: number, ctx: PipelineContext, bus: AgentEventBus) {
     const { phaseResults, strategyContext } = ctx;
-    const sourceName = stage.source || this.#prevStageName(stage);
+    if (!stage.gate) {
+      return 'continue';
+    }
+    const gate = stage.gate;
+    const sourceName = (stage.source || this.#prevStageName(stage)) as string;
     const source = phaseResults[sourceName];
     let gateResult;
 
     // v3: 自定义评估器 (Bootstrap 用)
-    if (typeof stage.gate.evaluator === 'function') {
-      gateResult = stage.gate.evaluator(source, phaseResults, strategyContext);
+    if (typeof gate.evaluator === 'function') {
+      gateResult = gate.evaluator(source, phaseResults, strategyContext);
       if (!gateResult.action) {
         gateResult.action = gateResult.pass ? 'pass' : 'retry';
       }
     } else {
       // 向后兼容: 阈值评估
-      const legacyResult = this.#evaluateGate(stage.gate, phaseResults, sourceName);
+      const legacyResult = this.#evaluateGate(gate, phaseResults, sourceName);
       gateResult = {
         action: legacyResult.pass ? 'pass' : 'retry',
         pass: legacyResult.pass,
@@ -161,11 +260,11 @@ export class PipelineStrategy extends Strategy {
     }
 
     if (gateResult.action === 'retry') {
-      const maxRetries = stage.gate.maxRetries ?? this.#maxRetries;
+      const maxRetries = gate.maxRetries ?? this.#maxRetries;
       const retryKey = `_retries_${stage.name || 'gate'}`;
-      phaseResults[retryKey] = (phaseResults[retryKey] || 0) + 1;
+      phaseResults[retryKey] = ((phaseResults[retryKey] as number) || 0) + 1;
 
-      if (phaseResults[retryKey] <= maxRetries) {
+      if ((phaseResults[retryKey] as number) <= maxRetries) {
         const prevIdx = this.#findPrevExecStageIdx(stageIndex);
         if (prevIdx >= 0) {
           const retryTargetStage = this.#stages[prevIdx];
@@ -198,13 +297,21 @@ export class PipelineStrategy extends Strategy {
   /**
    * 执行单个 Pipeline 阶段
    */
-  async #executeStage(runtime: any, message: any, stage: any, ctx: any, bus: any) {
+  async #executeStage(
+    runtime: PipelineRuntime,
+    message: AgentMessage,
+    stage: PipelineStage,
+    ctx: PipelineContext,
+    bus: AgentEventBus
+  ) {
     const { phaseResults, strategyContext } = ctx;
 
     bus.publish(AgentEvents.PROGRESS, {
       type: 'pipeline_stage_start',
       stage: stage.name,
-      capabilities: stage.capabilities?.map((c: any) => (typeof c === 'string' ? c : c.name)),
+      capabilities: stage.capabilities?.map((c: CapabilityRef) =>
+        typeof c === 'string' ? c : c.name
+      ),
     });
 
     // 构建阶段 prompt
@@ -216,7 +323,7 @@ export class PipelineStrategy extends Strategy {
     delete phaseResults[`_was_retry_${stage.name}`];
 
     // 阶段隔离 (ContextWindow + ExplorationTracker)
-    const ctxWin = strategyContext.contextWindow || null;
+    const ctxWin = (strategyContext.contextWindow || null) as StageContextWindow | null;
     const isNewStage = ctx.lastExecutedStageName !== stage.name;
     if (ctxWin && ctx.execStageCount > 0 && isNewStage) {
       ctxWin.resetForNewStage();
@@ -232,7 +339,9 @@ export class PipelineStrategy extends Strategy {
     ctx.lastExecutedStageName = stage.name;
     ctx.execStageCount++;
 
-    const submitToolName = stage.submitToolName || strategyContext.submitToolName || undefined;
+    const submitToolName = (stage.submitToolName || strategyContext.submitToolName || undefined) as
+      | string
+      | undefined;
     _pipelineLogger.info(
       `[PipelineStrategy] ▶ Stage "${stage.name}"${isRetry ? ' (retry)' : ''} — ` +
         `budget: ${effectiveBudget?.maxIterations || '∞'} iters, ` +
@@ -284,10 +393,17 @@ export class PipelineStrategy extends Strategy {
   /**
    * 构建阶段 prompt (优先级: retryPromptBuilder > promptBuilder > promptTransform > 原始)
    */
-  #buildStagePrompt(stage: any, message: any, phaseResults: any, strategyContext: any, ctx: any) {
+  #buildStagePrompt(
+    stage: PipelineStage,
+    message: AgentMessage,
+    phaseResults: Record<string, unknown>,
+    strategyContext: Record<string, unknown>,
+    ctx: PipelineContext
+  ) {
     let prompt;
     if (phaseResults._retryContext && stage.retryPromptBuilder) {
-      prompt = stage.retryPromptBuilder(phaseResults._retryContext, message.content, phaseResults);
+      const retryCtx = phaseResults._retryContext as { reason?: string; artifact?: unknown };
+      prompt = stage.retryPromptBuilder(retryCtx, message.content, phaseResults);
       delete phaseResults._retryContext;
     } else if (stage.promptBuilder) {
       prompt = stage.promptBuilder({
@@ -312,9 +428,16 @@ export class PipelineStrategy extends Strategy {
   /**
    * 为阶段解析 ExplorationTracker
    */
-  #resolveStageTracker(stage: any, ctx: any, strategyContext: any, effectiveBudget: any) {
-    let stageTracker = strategyContext.tracker || null;
-    const submitToolName = stage.submitToolName || strategyContext.submitToolName || undefined;
+  #resolveStageTracker(
+    stage: PipelineStage,
+    ctx: PipelineContext,
+    strategyContext: Record<string, unknown>,
+    effectiveBudget: StageBudget | undefined
+  ) {
+    let stageTracker = (strategyContext.tracker || null) as ExplorationTracker | null;
+    const submitToolName = (stage.submitToolName || strategyContext.submitToolName || undefined) as
+      | string
+      | undefined;
 
     if (stageTracker && ctx.execStageCount > 0) {
       const trackerStrategy =
@@ -342,21 +465,21 @@ export class PipelineStrategy extends Strategy {
    * 执行 reactLoop 并添加硬超时保护
    */
   async #runWithTimeout(
-    runtime: any,
-    stagePrompt: any,
-    message: any,
-    stage: any,
-    effectiveBudget: any,
-    ctxWin: any,
-    stageTracker: any,
-    strategyContext: any,
-    phaseResults: any,
-    bus: any
-  ) {
+    runtime: PipelineRuntime,
+    stagePrompt: string,
+    message: AgentMessage,
+    stage: PipelineStage,
+    effectiveBudget: StageBudget | undefined,
+    ctxWin: StageContextWindow | null,
+    stageTracker: ExplorationTracker | null,
+    strategyContext: Record<string, unknown>,
+    phaseResults: Record<string, unknown>,
+    bus: AgentEventBus
+  ): Promise<StageResult> {
     const reactPromise = runtime.reactLoop(stagePrompt, {
       history: message.history,
       context: {
-        ...message.metadata.context,
+        ...((message.metadata.context as Record<string, unknown>) || {}),
         pipelinePhase: stage.name,
         previousPhases: phaseResults,
       },
@@ -379,16 +502,16 @@ export class PipelineStrategy extends Strategy {
 
     // 硬超时 = budget.timeoutMs + 30s 缓冲
     const hardLimitMs = stageTimeoutMs + 30_000;
-    let hardTimer: any;
+    let hardTimer: ReturnType<typeof setTimeout> | undefined;
 
     return Promise.race([
       reactPromise,
-      new Promise((_, reject) => {
+      new Promise<StageResult>((_, reject) => {
         hardTimer = setTimeout(() => reject(new Error('__STAGE_HARD_TIMEOUT__')), hardLimitMs);
       }),
     ])
-      .catch((err) => {
-        if (err.message === '__STAGE_HARD_TIMEOUT__') {
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.message === '__STAGE_HARD_TIMEOUT__') {
           runtime.logger?.info?.(
             `[PipelineStrategy] ⏰ Stage "${stage.name}" hard timeout (${hardLimitMs}ms) — continuing pipeline`
           );
@@ -413,14 +536,14 @@ export class PipelineStrategy extends Strategy {
   /**
    * 质量门控评估 (向后兼容: 阈值模式)
    */
-  #evaluateGate(gateConfig: any, phaseResults: any, sourceName: any) {
-    const source = phaseResults[sourceName];
+  #evaluateGate(gateConfig: GateConfig, phaseResults: Record<string, unknown>, sourceName: string) {
+    const source = phaseResults[sourceName] as StageResult | undefined;
     if (!source?.reply) {
       return { pass: false, reason: `No output from stage "${sourceName}"` };
     }
 
     const reply = source.reply;
-    const reasons: string | any[] = [];
+    const reasons: string[] = [];
 
     if (gateConfig.minEvidenceLength && reply.length < gateConfig.minEvidenceLength) {
       reasons.push(`分析长度不足: ${reply.length} < ${gateConfig.minEvidenceLength}`);
@@ -443,7 +566,7 @@ export class PipelineStrategy extends Strategy {
     if (gateConfig.custom && typeof gateConfig.custom === 'function') {
       const customResult = gateConfig.custom(source);
       if (!customResult.pass) {
-        reasons.push(customResult.reason);
+        reasons.push(customResult.reason ?? '');
       }
     }
 
@@ -453,7 +576,7 @@ export class PipelineStrategy extends Strategy {
   /**
    * 找到当前 gate 之前最近的执行阶段索引 (用于 retry 回退)
    */
-  #findPrevExecStageIdx(currentIdx: any) {
+  #findPrevExecStageIdx(currentIdx: number) {
     for (let j = currentIdx - 1; j >= 0; j--) {
       if (!this.#stages[j].gate) {
         return j;
@@ -462,7 +585,7 @@ export class PipelineStrategy extends Strategy {
     return -1;
   }
 
-  #prevStageName(currentStage: any) {
+  #prevStageName(currentStage: PipelineStage) {
     const idx = this.#stages.indexOf(currentStage);
     for (let i = idx - 1; i >= 0; i--) {
       if (!this.#stages[i].gate && this.#stages[i].name) {

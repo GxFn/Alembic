@@ -3,6 +3,72 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors/index.js';
 import { unixNow } from '../../shared/utils/common.js';
 
+interface KnowledgeRepositoryLike {
+  create(entry: unknown): Promise<{ id: string; title?: string }>;
+  findById(id: string): Promise<{
+    id: string;
+    title?: string;
+    lifecycle?: string;
+    constraints?: { guards?: { pattern?: string; severity?: string; message?: string }[] };
+  } | null>;
+  update(id: string, data: Record<string, unknown>): Promise<unknown>;
+  findActiveRules(): Promise<
+    {
+      id: string;
+      title: string;
+      language?: string;
+      constraints?: { guards?: { pattern: string; severity?: string; message?: string }[] };
+    }[]
+  >;
+  findWithPagination(
+    filter: Record<string, string>,
+    opts: { page: number; pageSize: number }
+  ): Promise<unknown>;
+  search(
+    keyword: string,
+    opts: { page: number; pageSize: number }
+  ): Promise<{ data: { kind: string; knowledgeType: string }[]; total: number }>;
+  getStats(): Promise<unknown>;
+}
+
+interface AuditLoggerLike {
+  log(entry: Record<string, unknown>): Promise<void>;
+}
+
+interface GuardCheckEngineLike {
+  checkCode(
+    code: string,
+    language: string,
+    options?: Record<string, unknown>
+  ): {
+    ruleId: string;
+    severity?: string;
+    message?: string;
+    line?: number;
+    snippet?: string;
+    fixSuggestion?: string;
+    reasoning?: Record<string, unknown>;
+  }[];
+}
+
+interface CreateRuleData {
+  name: string;
+  description: string;
+  pattern?: string;
+  languages?: string[];
+  category?: string;
+  severity?: string;
+  note?: string;
+  sourceReason?: string;
+  type?: string;
+  astQuery?: { queryType: string };
+  fixSuggestion?: string;
+}
+
+interface ActionContext {
+  userId: string;
+}
+
 /**
  * GuardService
  * 管理 Guard 约束规则的生命周期 (V3: 使用 KnowledgeEntry / knowledgeRepository)
@@ -10,11 +76,11 @@ import { unixNow } from '../../shared/utils/common.js';
  * 具体 pattern 存在 constraints.guards[] 里
  */
 export class GuardService {
-  _engine: any;
-  auditLogger: any;
-  gateway: any;
-  knowledgeRepository: any;
-  logger: any;
+  _engine: GuardCheckEngineLike | null;
+  auditLogger: AuditLoggerLike;
+  gateway: unknown;
+  knowledgeRepository: KnowledgeRepositoryLike;
+  logger: ReturnType<typeof Logger.getInstance>;
   /**
    * @param {import('../../domain/knowledge/KnowledgeRepository.js').KnowledgeRepository} knowledgeRepository
    * @param {object} auditLogger
@@ -22,7 +88,12 @@ export class GuardService {
    * @param {object} [deps] 可选依赖注入
    * @param {import('./GuardCheckEngine.js').GuardCheckEngine} [deps.guardCheckEngine] 核心引擎实例
    */
-  constructor(knowledgeRepository: any, auditLogger: any, gateway: any, deps: any = {}) {
+  constructor(
+    knowledgeRepository: KnowledgeRepositoryLike,
+    auditLogger: AuditLoggerLike,
+    gateway: unknown,
+    deps: { guardCheckEngine?: GuardCheckEngineLike } = {}
+  ) {
     this.knowledgeRepository = knowledgeRepository;
     this.auditLogger = auditLogger;
     this.gateway = gateway;
@@ -34,7 +105,7 @@ export class GuardService {
   /**
    * 创建新规则 → 创建一个 kind=rule, knowledgeType=boundary-constraint 的 KnowledgeEntry
    */
-  async createRule(data: any, context: any) {
+  async createRule(data: CreateRuleData, context: ActionContext) {
     try {
       this._validateCreateInput(data);
 
@@ -83,8 +154,8 @@ export class GuardService {
       });
 
       return created;
-    } catch (error: any) {
-      this.logger.error('Error creating guard rule', { error: error.message, data });
+    } catch (error: unknown) {
+      this.logger.error('Error creating guard rule', { error: (error as Error).message, data });
       throw error;
     }
   }
@@ -92,14 +163,16 @@ export class GuardService {
   /**
    * 启用规则（将 lifecycle 设为 active）
    */
-  async enableRule(ruleId: any, context: any) {
+  async enableRule(ruleId: string, context: ActionContext) {
     try {
       const entry = await this.knowledgeRepository.findById(ruleId);
       if (!entry) {
         throw new NotFoundError('Guard rule not found', 'knowledge_entry', ruleId);
       }
       if (entry.lifecycle === 'active') {
-        throw new ConflictError('Rule is already enabled', 'Cannot enable an already enabled rule');
+        throw new ConflictError('Rule is already enabled', {
+          reason: 'Cannot enable an already enabled rule',
+        });
       }
 
       await this.knowledgeRepository.update(ruleId, { lifecycle: 'active' });
@@ -114,8 +187,8 @@ export class GuardService {
       });
 
       return this.knowledgeRepository.findById(ruleId);
-    } catch (error: any) {
-      this.logger.error('Error enabling guard rule', { ruleId, error: error.message });
+    } catch (error: unknown) {
+      this.logger.error('Error enabling guard rule', { ruleId, error: (error as Error).message });
       throw error;
     }
   }
@@ -123,17 +196,16 @@ export class GuardService {
   /**
    * 禁用规则（将 lifecycle 设为 deprecated）
    */
-  async disableRule(ruleId: any, reason: any, context: any) {
+  async disableRule(ruleId: string, reason: string, context: ActionContext) {
     try {
       const entry = await this.knowledgeRepository.findById(ruleId);
       if (!entry) {
         throw new NotFoundError('Guard rule not found', 'knowledge_entry', ruleId);
       }
       if (entry.lifecycle === 'deprecated') {
-        throw new ConflictError(
-          'Rule is already disabled',
-          'Cannot disable an already disabled rule'
-        );
+        throw new ConflictError('Rule is already disabled', {
+          reason: 'Cannot disable an already disabled rule',
+        });
       }
 
       if (!reason || reason.trim().length === 0) {
@@ -155,8 +227,8 @@ export class GuardService {
       });
 
       return this.knowledgeRepository.findById(ruleId);
-    } catch (error: any) {
-      this.logger.error('Error disabling guard rule', { ruleId, error: error.message });
+    } catch (error: unknown) {
+      this.logger.error('Error disabling guard rule', { ruleId, error: (error as Error).message });
       throw error;
     }
   }
@@ -166,7 +238,7 @@ export class GuardService {
    * 优先代理到 GuardCheckEngine（完整管线: 内置 + DB + EP + Code-Level + AST），
    * 若引擎不可用则降级为仅 DB 规则的简化检查
    */
-  async checkCode(code: any, options: any = {}) {
+  async checkCode(code: string, options: { language?: string | null } = {}) {
     try {
       if (!code || code.trim().length === 0) {
         throw new ValidationError('Code is required');
@@ -180,7 +252,7 @@ export class GuardService {
           const violations = this._engine.checkCode(code, language || 'unknown', {
             scope: 'file',
           });
-          return violations.map((v: any) => ({
+          return violations.map((v) => ({
             ruleId: v.ruleId,
             ruleName: v.ruleId,
             severity: v.severity || 'warning',
@@ -191,17 +263,17 @@ export class GuardService {
             ...(v.fixSuggestion ? { fixSuggestion: v.fixSuggestion } : {}),
             ...(v.reasoning ? { reasoning: v.reasoning } : {}),
           }));
-        } catch (engineErr: any) {
+        } catch (engineErr: unknown) {
           this.logger.debug('GuardCheckEngine.checkCode failed, falling back to DB-only check', {
-            error: engineErr.message,
+            error: (engineErr as Error).message,
           });
         }
       }
 
       // ── 降级路径: 仅 DB 规则简化检查 ──
       return this._checkCodeDbOnly(code, { language });
-    } catch (error: any) {
-      this.logger.error('Error checking code against rules', { error: error.message });
+    } catch (error: unknown) {
+      this.logger.error('Error checking code against rules', { error: (error as Error).message });
       throw error;
     }
   }
@@ -210,7 +282,7 @@ export class GuardService {
    * 仅 DB 规则的简化检查（降级路径）
    * @private
    */
-  async _checkCodeDbOnly(code: any, options: any = {}) {
+  async _checkCodeDbOnly(code: string, options: { language?: string | null } = {}) {
     const { language = null } = options;
 
     // V3: 使用 findActiveRules() 查询 kind='rule' + lifecycle='active'
@@ -218,10 +290,17 @@ export class GuardService {
 
     // 按语言过滤
     if (language) {
-      guardEntries = guardEntries.filter((e: any) => !e.language || e.language === language);
+      guardEntries = guardEntries.filter((e) => !e.language || e.language === language);
     }
 
-    const matches: any[] = [];
+    const matches: {
+      ruleId: string;
+      ruleName: string;
+      severity: string;
+      message: string;
+      matches: { match: string; index: number | undefined; line: number }[];
+      matchCount: number;
+    }[] = [];
     for (const entry of guardEntries) {
       const guards = entry.constraints?.guards || [];
       for (const guard of guards) {
@@ -242,10 +321,10 @@ export class GuardService {
               matchCount: codeMatches.length,
             });
           }
-        } catch (e: any) {
+        } catch (e: unknown) {
           this.logger.warn('Error matching guard pattern', {
             entryId: entry.id,
-            error: e.message,
+            error: (e as Error).message,
           });
         }
       }
@@ -257,15 +336,18 @@ export class GuardService {
   /**
    * 查询规则列表 (kind='rule' + knowledgeType='boundary-constraint')
    */
-  async listRules(filters: any = {}, pagination: any = {}) {
+  async listRules(
+    filters: Record<string, unknown> = {},
+    pagination: { page?: number; pageSize?: number } = {}
+  ) {
     try {
       const { page = 1, pageSize = 20 } = pagination;
       return this.knowledgeRepository.findWithPagination(
         { kind: 'rule', knowledgeType: 'boundary-constraint' },
         { page, pageSize }
       );
-    } catch (error: any) {
-      this.logger.error('Error listing rules', { error: error.message, filters });
+    } catch (error: unknown) {
+      this.logger.error('Error listing rules', { error: (error as Error).message, filters });
       throw error;
     }
   }
@@ -273,17 +355,17 @@ export class GuardService {
   /**
    * 搜索规则
    */
-  async searchRules(keyword: any, pagination: any = {}) {
+  async searchRules(keyword: string, pagination: { page?: number; pageSize?: number } = {}) {
     try {
       const { page = 1, pageSize = 20 } = pagination;
       const result = await this.knowledgeRepository.search(keyword, { page, pageSize });
       result.data = (result.data || []).filter(
-        (r: any) => r.kind === 'rule' && r.knowledgeType === 'boundary-constraint'
+        (r) => r.kind === 'rule' && r.knowledgeType === 'boundary-constraint'
       );
       result.total = result.data.length;
       return result;
-    } catch (error: any) {
-      this.logger.error('Error searching rules', { keyword, error: error.message });
+    } catch (error: unknown) {
+      this.logger.error('Error searching rules', { keyword, error: (error as Error).message });
       throw error;
     }
   }
@@ -294,8 +376,8 @@ export class GuardService {
   async getRuleStats() {
     try {
       return this.knowledgeRepository.getStats();
-    } catch (error: any) {
-      this.logger.error('Error getting rule stats', { error: error.message });
+    } catch (error: unknown) {
+      this.logger.error('Error getting rule stats', { error: (error as Error).message });
       throw error;
     }
   }
@@ -304,7 +386,7 @@ export class GuardService {
    * 验证创建输入
    * type='regex' 时 pattern 必须提供；type='ast' 时 astQuery 必须提供
    */
-  _validateCreateInput(data: any) {
+  _validateCreateInput(data: CreateRuleData) {
     if (!data.name || data.name.trim().length === 0) {
       throw new ValidationError('Rule name is required');
     }

@@ -9,6 +9,8 @@
  * 中间件注入 req.resolvedRole 供 gatewayMiddleware 使用。
  */
 
+import type { NextFunction, Request, Response } from 'express';
+import type { CapabilityProbe } from '../../core/capability/CapabilityProbe.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 
 const logger = Logger.getInstance();
@@ -20,7 +22,8 @@ const AUTH_ENABLED =
  * 验证 token 并提取 payload
  * 延迟导入 auth.js 的 verifyToken，避免重复实现
  */
-let _verifyToken: any = null;
+type VerifyTokenFn = (token: string) => { role?: string; sub?: string } | null;
+let _verifyToken: VerifyTokenFn | null = null;
 async function getVerifyToken() {
   if (!_verifyToken) {
     try {
@@ -40,20 +43,20 @@ async function getVerifyToken() {
  * @param {object} options
  * @param {import('../../core/capability/CapabilityProbe.js').CapabilityProbe} [options.capabilityProbe]
  */
-export function roleResolverMiddleware(options: any = {}) {
+export function roleResolverMiddleware(options: { capabilityProbe?: CapabilityProbe } = {}) {
   const { capabilityProbe } = options;
 
   // 预加载 verifyToken（异步但不阻塞中间件注册）
   const verifyTokenPromise = getVerifyToken();
 
-  return (req: any, _res: any, next: any) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
     // 已有 x-user-id header（MCP / 内部调用）→ 直接信任
     if (
       req.headers['x-user-id'] &&
       req.headers['x-user-id'] !== 'anonymous' &&
       req.headers['x-user-id'] !== 'dashboard'
     ) {
-      req.resolvedRole = req.headers['x-user-id'];
+      req.resolvedRole = req.headers['x-user-id'] as string;
       next();
       return;
     }
@@ -96,8 +99,10 @@ export function roleResolverMiddleware(options: any = {}) {
         try {
           req.resolvedRole = capabilityProbe.probeRole();
           req.resolvedUser = `probe:${capabilityProbe.probe()}`;
-        } catch (err: any) {
-          logger.warn('roleResolver: probe failed, defaulting to visitor', { error: err.message });
+        } catch (err: unknown) {
+          logger.warn('roleResolver: probe failed, defaulting to visitor', {
+            error: (err as Error).message,
+          });
           req.resolvedRole = 'visitor';
           req.resolvedUser = 'anonymous';
         }

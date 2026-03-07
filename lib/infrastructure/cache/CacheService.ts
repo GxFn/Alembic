@@ -10,10 +10,10 @@ import Logger from '../logging/Logger.js';
  * 本地缓存实现（无 Redis 依赖）
  */
 export class CacheService {
-  cache: any;
-  cleanupInterval: any;
+  cache: Map<string, { value: unknown; expiresAt: number }>;
+  cleanupInterval: ReturnType<typeof setInterval> | null;
   constructor() {
-    /** @type {Map<string, { value: any, expiresAt: number }>} */
+    /** @type {Map<string, { value: unknown, expiresAt: number }>} */
     this.cache = new Map();
     this.cleanupInterval = null;
 
@@ -31,7 +31,7 @@ export class CacheService {
    * @param {string} key
    * @returns {any|null}
    */
-  get(key: any) {
+  get(key: string) {
     const entry = this.cache.get(key);
 
     if (!entry) {
@@ -53,7 +53,7 @@ export class CacheService {
    * @param {any} value
    * @param {number} ttlSeconds 默认 300 秒
    */
-  set(key: any, value: any, ttlSeconds = 300) {
+  set(key: string, value: unknown, ttlSeconds = 300) {
     const expiresAt = Date.now() + ttlSeconds * 1000;
     this.cache.set(key, { value, expiresAt });
   }
@@ -63,7 +63,7 @@ export class CacheService {
    * @param {string} key
    * @returns {boolean}
    */
-  delete(key: any) {
+  delete(key: string) {
     return this.cache.delete(key);
   }
 
@@ -113,29 +113,29 @@ export class CacheService {
  * 缓存键生成器
  */
 export class CacheKeyBuilder {
-  static candidate(id: any) {
+  static candidate(id: string) {
     return `candidate:${id}`;
   }
 
-  static candidatesList(page: any, limit: any, status: any) {
+  static candidatesList(page: number, limit: number, status?: string) {
     const baseKey = `candidates:list:${page}:${limit}`;
     return status ? `${baseKey}:${status}` : baseKey;
   }
 
-  static recipe(id: any) {
+  static recipe(id: string) {
     return `recipe:${id}`;
   }
 
-  static recipesList(page: any, limit: any, category: any) {
+  static recipesList(page: number, limit: number, category?: string) {
     const baseKey = `recipes:list:${page}:${limit}`;
     return category ? `${baseKey}:${category}` : baseKey;
   }
 
-  static rule(id: any) {
+  static rule(id: string) {
     return `rule:${id}`;
   }
 
-  static rulesList(page: any, limit: any, status: any) {
+  static rulesList(page: number, limit: number, status?: string) {
     const baseKey = `rules:list:${page}:${limit}`;
     return status ? `${baseKey}:${status}` : baseKey;
   }

@@ -11,7 +11,7 @@
  * @param {string} importPath 相对路径如 './foo' 或 '../bar/baz'
  * @returns {string|null}
  */
-export function resolveImportPath(fromDir: any, importPath: any) {
+export function resolveImportPath(fromDir: string, importPath: string) {
   try {
     const parts = `${fromDir}/${importPath}`.split('/');
     const resolved: string[] = [];
@@ -41,7 +41,7 @@ export function resolveImportPath(fromDir: any, importPath: any) {
  * @param {string} filePath
  * @returns {string}
  */
-export function normalizeFilePath(filePath: any) {
+export function normalizeFilePath(filePath: string) {
   return filePath.replace(/\.(js|ts|jsx|tsx|mjs|mts)$/, '').replace(/\/index$/, '');
 }
 
@@ -52,10 +52,20 @@ export function normalizeFilePath(filePath: any) {
  * @param {string[]} [options.disabledRules] 禁用的规则 ID 列表
  * @returns {Array<{ruleId, message, severity, locations}>}
  */
-export function runCrossFileChecks(files: any, options: any = {}) {
-  const violations: any[] = [];
+export interface CrossFileViolation {
+  ruleId: string;
+  message: string;
+  severity: string;
+  locations: { filePath: string; line: number; snippet: string }[];
+}
+
+export function runCrossFileChecks(
+  files: { path: string; content: string }[],
+  options: { disabledRules?: string[] } = {}
+) {
+  const violations: CrossFileViolation[] = [];
   const disabledSet = new Set(options.disabledRules || []);
-  const isDisabled = (ruleId: any) => disabledSet.has(ruleId);
+  const isDisabled = (ruleId: string) => disabledSet.has(ruleId);
 
   // ── ObjC Category 跨文件重名检查 ──
   if (!isDisabled('objc-cross-file-duplicate-category')) {
@@ -91,8 +101,8 @@ export function runCrossFileChecks(files: any, options: any = {}) {
         continue;
       }
 
-      const hFiles = locations.filter((l: any) => l.filePath.endsWith('.h'));
-      const mFiles = locations.filter((l: any) => !l.filePath.endsWith('.h'));
+      const hFiles = locations.filter((l: { filePath: string }) => l.filePath.endsWith('.h'));
+      const mFiles = locations.filter((l: { filePath: string }) => !l.filePath.endsWith('.h'));
       const hasDuplicateH = hFiles.length > 1;
       const hasDuplicateM = mFiles.length > 1;
       const tooMany = locations.length > 2;
@@ -125,7 +135,7 @@ export function runCrossFileChecks(files: any, options: any = {}) {
       /(?:import\s+.+?\s+from\s+['"](.+?)['"]|require\s*\(\s*['"](.+?)['"]\s*\))/g;
 
     for (const { path: filePath, content } of files) {
-      const ext = filePath.split('.').pop()?.toLowerCase();
+      const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
       if (!jsExts.has(ext)) {
         continue;
       }
@@ -183,7 +193,7 @@ export function runCrossFileChecks(files: any, options: any = {}) {
     const jkExts = new Set(['java', 'kt']);
 
     for (const { path: filePath, content } of files) {
-      const ext = filePath.split('.').pop()?.toLowerCase();
+      const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
       if (!jkExts.has(ext)) {
         continue;
       }
@@ -268,7 +278,7 @@ export function runCrossFileChecks(files: any, options: any = {}) {
       }
 
       const lines = content.split(/\r?\n/);
-      let currentExt: any = null;
+      let currentExt: string | null = null;
       let braceDepth = 0;
 
       for (let i = 0; i < lines.length; i++) {
@@ -309,7 +319,7 @@ export function runCrossFileChecks(files: any, options: any = {}) {
 
     for (const [key, locations] of swiftExtMethodMap) {
       if (locations.length > 1) {
-        const uniqueFiles = new Set(locations.map((l: any) => l.filePath));
+        const uniqueFiles = new Set(locations.map((l: { filePath: string }) => l.filePath));
         if (uniqueFiles.size > 1) {
           violations.push({
             ruleId: 'swift-cross-file-extension-conflict',

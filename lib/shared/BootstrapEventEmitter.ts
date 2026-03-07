@@ -9,26 +9,32 @@
 
 export class BootstrapEventEmitter {
   /** @type {object|null} EventBus 实例 */
-  #eventBus;
+  #eventBus: Record<string, (...args: unknown[]) => void> | null;
 
   /** @type {object|null} BootstrapTaskManager 实例 */
-  #taskManager;
+  #taskManager: Record<string, (...args: unknown[]) => void> | null;
 
   /**
    * @param {object} container - DI Container
    */
-  constructor(container: any) {
+  constructor(container: { get?: (name: string) => unknown }) {
     this.#eventBus = null;
     this.#taskManager = null;
 
     try {
-      this.#eventBus = container.get?.('eventBus') ?? null;
+      this.#eventBus = (container.get?.('eventBus') ?? null) as Record<
+        string,
+        (...args: unknown[]) => void
+      > | null;
     } catch {
       /* eventBus not registered */
     }
 
     try {
-      this.#taskManager = container.get?.('bootstrapTaskManager') ?? null;
+      this.#taskManager = (container.get?.('bootstrapTaskManager') ?? null) as Record<
+        string,
+        (...args: unknown[]) => void
+      > | null;
     } catch {
       /* taskManager not registered */
     }
@@ -45,7 +51,7 @@ export class BootstrapEventEmitter {
    * @param {boolean} [data.skillCreated] 是否生成了 Skill
    * @param {number} [data.recipesBound] 关联的 recipe 数量
    */
-  emitDimensionComplete(dimId: any, data: any = {}) {
+  emitDimensionComplete(dimId: string, data: Record<string, unknown> = {}) {
     // TaskManager 标记
     try {
       this.#taskManager?.markTaskCompleted?.(dimId, data);
@@ -71,7 +77,7 @@ export class BootstrapEventEmitter {
    * @param {number} totalDimensions 总维度数
    * @param {string} [source] 来源标识
    */
-  emitAllComplete(sessionId: any, totalDimensions: any, source = 'unknown') {
+  emitAllComplete(sessionId: string, totalDimensions: number, source = 'unknown') {
     try {
       this.#eventBus?.emit?.('bootstrap:all-completed', {
         sessionId,
@@ -88,7 +94,7 @@ export class BootstrapEventEmitter {
    *
    * @param {string} dimId 维度 ID
    */
-  emitDimensionStart(dimId: any) {
+  emitDimensionStart(dimId: string) {
     try {
       this.#taskManager?.markTaskFilling?.(dimId);
     } catch {
@@ -102,7 +108,7 @@ export class BootstrapEventEmitter {
    * @param {string} dimId 维度 ID
    * @param {Error} error 错误对象
    */
-  emitDimensionFailed(dimId: any, error: any) {
+  emitDimensionFailed(dimId: string, error: Error | string) {
     try {
       this.#taskManager?.markTaskFailed?.(dimId, error);
     } catch {
@@ -112,7 +118,7 @@ export class BootstrapEventEmitter {
     try {
       this.#eventBus?.emit?.('bootstrap:task-failed', {
         dimensionId: dimId,
-        error: error?.message || String(error),
+        error: typeof error === 'string' ? error : error?.message,
       });
     } catch {
       /* non-blocking */
@@ -125,7 +131,7 @@ export class BootstrapEventEmitter {
    * @param {string} event 事件名
    * @param {object} data 事件数据
    */
-  emitProgress(event: any, data: any = {}) {
+  emitProgress(event: string, data: Record<string, unknown> = {}) {
     try {
       this.#eventBus?.emit?.(event, data);
     } catch {

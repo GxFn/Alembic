@@ -3,7 +3,7 @@
  * 执行 Install (同步 Snippet 到 IDE)、SPM Map 刷新、Embed (重建索引) 等命令
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -18,7 +18,7 @@ const logger = Logger.getInstance();
  */
 router.post(
   '/install',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
     const knowledgeRepository = container.get('knowledgeRepository');
     const target = req.body?.target || 'all';
@@ -29,25 +29,25 @@ router.post(
       { page: 1, pageSize: 9999 }
     );
     const recipes = (result?.data || result?.items || [])
-      .map((r: any) => ({
+      .map((r: Record<string, unknown>) => ({
         id: r.id,
         title: r.title,
         trigger: r.trigger,
-        code: r.content?.pattern || '',
+        code: (r.content as Record<string, unknown>)?.pattern || '',
         description: r.description || r.summaryCn || '',
         language: r.language || 'unknown',
       }))
-      .filter((r: any) => r.code.trim().length > 0);
+      .filter((r: Record<string, unknown>) => (r.code as string).trim().length > 0);
 
-    const installResults: any = {};
+    const installResults: Record<string, unknown> = {};
 
     // Xcode
     if ((target === 'all' || target === 'xcode') && process.platform === 'darwin') {
       try {
         const xcodeInstaller = container.get('snippetInstaller');
         installResults.xcode = xcodeInstaller.installFromRecipes(recipes);
-      } catch (e: any) {
-        installResults.xcode = { success: false, error: e.message };
+      } catch (e: unknown) {
+        installResults.xcode = { success: false, error: (e as Error).message };
       }
     }
 
@@ -56,8 +56,8 @@ router.post(
       try {
         const vscodeInstaller = container.get('vscodeSnippetInstaller');
         installResults.vscode = vscodeInstaller.installFromRecipes(recipes);
-      } catch (e: any) {
-        installResults.vscode = { success: false, error: e.message };
+      } catch (e: unknown) {
+        installResults.vscode = { success: false, error: (e as Error).message };
       }
     }
 
@@ -75,7 +75,7 @@ router.post(
  */
 router.post(
   '/spm-map',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
 
     const moduleService = container.get('moduleService');
@@ -95,7 +95,7 @@ router.post(
  */
 router.post(
   '/embed',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
     const indexingPipeline = container.get('indexingPipeline');
 
@@ -121,7 +121,7 @@ router.post(
  */
 router.get(
   '/status',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
 
     const status = {
@@ -171,11 +171,11 @@ router.get(
  */
 router.get(
   '/files/tree',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const fs = await import('node:fs');
     const path = await import('node:path');
     const container = getServiceContainer();
-    const projectRoot = container.singletons?._projectRoot || process.cwd();
+    const projectRoot = (container.singletons?._projectRoot as string | undefined) || process.cwd();
 
     const SOURCE_EXTS = new Set(['.h', '.m', '.swift']);
     const SKIP_DIRS = new Set([
@@ -192,7 +192,7 @@ router.get(
     /**
      * Recursively scan dir, returning FileNode or null if folder has no matching files.
      */
-    function scanDir(dirPath: any) {
+    function scanDir(dirPath: string) {
       const dirName = path.default.basename(dirPath);
       if (SKIP_DIRS.has(dirName)) {
         return null;
@@ -205,7 +205,7 @@ router.get(
         return null;
       }
 
-      const children: any[] = [];
+      const children: Record<string, unknown>[] = [];
       for (const entry of entries) {
         if (entry.name.startsWith('.')) {
           continue; // skip hidden
@@ -240,7 +240,7 @@ router.get(
         if (a.type !== b.type) {
           return a.type === 'folder' ? -1 : 1;
         }
-        return a.name.localeCompare(b.name);
+        return (a.name as string).localeCompare(b.name as string);
       });
 
       return {
@@ -267,22 +267,22 @@ router.get(
  */
 router.get(
   '/files/read',
-  asyncHandler(async (req: any, res: any) => {
-    const filePath = req.query.path;
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    const filePath = req.query.path as string | undefined;
     if (!filePath) {
-      return res
+      return void res
         .status(400)
         .json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'path is required' } });
     }
 
     const path = await import('node:path');
     const container = getServiceContainer();
-    const projectRoot = container.singletons?._projectRoot || process.cwd();
+    const projectRoot = (container.singletons?._projectRoot as string | undefined) || process.cwd();
     const resolved = path.default.resolve(projectRoot, filePath);
 
     // 防止路径遍历：确保解析后的路径在 projectRoot 内
     if (!resolved.startsWith(projectRoot + path.default.sep) && resolved !== projectRoot) {
-      return res.status(403).json({
+      return void res.status(403).json({
         success: false,
         error: { code: 'FORBIDDEN', message: 'Access denied: path outside project root' },
       });
@@ -306,10 +306,10 @@ router.get(
  */
 router.post(
   '/files/save',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { path: filePath, content } = req.body;
     if (!filePath || content === undefined) {
-      return res.status(400).json({
+      return void res.status(400).json({
         success: false,
         error: { code: 'VALIDATION_ERROR', message: 'path and content required' },
       });
@@ -317,12 +317,12 @@ router.post(
 
     const pathMod = await import('node:path');
     const container = getServiceContainer();
-    const projectRoot = container.singletons?._projectRoot || process.cwd();
+    const projectRoot = (container.singletons?._projectRoot as string | undefined) || process.cwd();
     const resolved = pathMod.default.resolve(projectRoot, filePath);
 
     // 防止路径遍历：确保解析后的路径在 projectRoot 内
     if (!resolved.startsWith(projectRoot + pathMod.default.sep) && resolved !== projectRoot) {
-      return res.status(403).json({
+      return void res.status(403).json({
         success: false,
         error: { code: 'FORBIDDEN', message: 'Access denied: path outside project root' },
       });
@@ -332,10 +332,11 @@ router.post(
     try {
       fs.default.writeFileSync(resolved, content, 'utf8');
       res.json({ success: true });
-    } catch (err: any) {
-      res
-        .status(500)
-        .json({ success: false, error: { code: 'INTERNAL_ERROR', message: err.message } });
+    } catch (err: unknown) {
+      res.status(500).json({
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: (err as Error).message },
+      });
     }
   })
 );

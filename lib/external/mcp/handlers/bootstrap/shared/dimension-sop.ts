@@ -786,8 +786,26 @@ export const PRE_SUBMIT_CHECKLIST = {
  * @param {string} dimId 维度 ID
  * @returns {object|null} - SOP 配置，未定义时返回 null
  */
-export function getDimensionSOP(dimId: any) {
-  return (DIMENSION_SOP as Record<string, any>)[dimId] || null;
+export function getDimensionSOP(dimId: string) {
+  return (
+    (
+      DIMENSION_SOP as Record<
+        string,
+        {
+          focusKeywords?: string[];
+          steps: Array<{
+            phase: string;
+            action: string;
+            expectedOutput?: string;
+            tools?: string[];
+            qualityChecklist?: string[];
+          }>;
+          timeEstimate?: string;
+          commonMistakes?: string[];
+        }
+      >
+    )[dimId] || null
+  );
 }
 
 /**
@@ -800,9 +818,9 @@ export function getDimensionSOP(dimId: any) {
  * @param {string} [guideText] - fallback: baseDimension.guide 文本
  * @returns {string[]} 关键词列表（短语级，用于 includes() 匹配）
  */
-export function getDimensionFocusKeywords(dimId: any, guideText = '') {
-  const sop = (DIMENSION_SOP as Record<string, any>)[dimId];
-  if (sop?.focusKeywords?.length > 0) {
+export function getDimensionFocusKeywords(dimId: string, guideText = '') {
+  const sop = (DIMENSION_SOP as Record<string, { focusKeywords?: string[] }>)[dimId];
+  if (sop?.focusKeywords && sop.focusKeywords.length > 0) {
     return sop.focusKeywords;
   }
   // fallback: 从 guide 文本按常见分隔符拆分
@@ -820,7 +838,15 @@ export function getDimensionFocusKeywords(dimId: any, guideText = '') {
  * @param {object} sop - SOP 配置
  * @returns {string} 紧凑的文本表示
  */
-export function sopToCompactText(sop: any) {
+export function sopToCompactText(
+  sop:
+    | {
+        steps?: Array<{ phase: string; action: string; expectedOutput?: string }>;
+        commonMistakes?: string[];
+      }
+    | null
+    | undefined
+) {
   if (!sop?.steps) {
     return '';
   }
@@ -831,7 +857,7 @@ export function sopToCompactText(sop: any) {
       lines.push(`  → 预期产出: ${step.expectedOutput}`);
     }
   }
-  if (sop.commonMistakes?.length > 0) {
+  if (sop.commonMistakes && sop.commonMistakes.length > 0) {
     lines.push('\n⚠ 常见错误:');
     for (const m of sop.commonMistakes) {
       lines.push(`  - ${m}`);

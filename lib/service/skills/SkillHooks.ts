@@ -33,13 +33,15 @@ function _getProjectSkillsDir() {
 
 const HOOK_NAMES = ['onCandidateSubmit', 'onRecipeCreated', 'onGuardCheck', 'onBootstrapComplete'];
 
+type HookHandler = (...args: unknown[]) => Promise<unknown> | unknown;
+
 export class SkillHooks {
-  hooks: any;
-  logger: any;
+  hooks: Map<string, HookHandler[]>;
+  logger: ReturnType<typeof Logger.getInstance>;
   constructor() {
     this.logger = Logger.getInstance();
     /** @type {Map<string, Function[]>} hookName → [handler, ...] */
-    this.hooks = new Map(HOOK_NAMES.map((n) => [n, []]));
+    this.hooks = new Map<string, HookHandler[]>(HOOK_NAMES.map((n) => [n, []]));
   }
 
   /**
@@ -59,7 +61,7 @@ export class SkillHooks {
     for (const [skillName, mod] of loaded) {
       for (const hookName of HOOK_NAMES) {
         if (typeof mod[hookName] === 'function') {
-          this.hooks.get(hookName).push(mod[hookName]);
+          this.hooks.get(hookName)!.push(mod[hookName]);
           this.logger.debug(`SkillHook registered: ${skillName}.${hookName}`);
         }
       }
@@ -78,22 +80,29 @@ export class SkillHooks {
    * @param  {...any} args
    * @returns {Promise<any>} 最后一个返回值（用于 blocking hooks 如 onCandidateSubmit）
    */
-  async run(hookName: any, ...args: any[]) {
+  async run(hookName: string, ...args: unknown[]) {
     const handlers = this.hooks.get(hookName);
     if (!handlers || handlers.length === 0) {
       return undefined;
     }
 
-    let result;
+    let result: unknown;
     for (const handler of handlers) {
       try {
         result = await handler(...args);
         // 如果是 blocking hook 且返回 block=true，立即中断
-        if (result?.block) {
+        if (
+          result &&
+          typeof result === 'object' &&
+          'block' in result &&
+          (result as Record<string, unknown>).block
+        ) {
           return result;
         }
-      } catch (err: any) {
-        this.logger.warn(`SkillHook error in ${hookName}`, { error: err.message });
+      } catch (err: unknown) {
+        this.logger.warn(`SkillHook error in ${hookName}`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
     return result;
@@ -102,14 +111,14 @@ export class SkillHooks {
   /**
    * 检查是否有任何钩子注册
    */
-  has(hookName: any) {
+  has(hookName: string) {
     const handlers = this.hooks.get(hookName);
     return handlers && handlers.length > 0;
   }
 
   // ─── Internal ──────────────────────────────────────────
 
-  async #loadFromDir(dir: any, loaded: any) {
+  async #loadFromDir(dir: string, loaded: Map<string, Record<string, HookHandler>>) {
     let dirs;
     try {
       dirs = fs
@@ -128,8 +137,10 @@ export class SkillHooks {
       try {
         const mod = await import(hooksPath);
         loaded.set(name, mod.default || mod);
-      } catch (err: any) {
-        this.logger.warn(`SkillHooks: failed to load ${name}/hooks.js`, { error: err.message });
+      } catch (err: unknown) {
+        this.logger.warn(`SkillHooks: failed to load ${name}/hooks.js`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
   }

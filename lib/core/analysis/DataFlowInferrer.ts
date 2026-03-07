@@ -9,6 +9,17 @@
  * Phase 5.0 只实现 L0 + L1，L2/L3 (参数级/语句级) 留待 Phase 5.2。
  */
 
+import type { ResolvedEdge } from './CallEdgeResolver.js';
+
+export interface DataFlowEdge {
+  from: string;
+  to: string;
+  flowType: 'argument' | 'return-value';
+  direction: 'forward' | 'backward';
+  confidence?: number;
+  [key: string]: unknown;
+}
+
 /**
  * @typedef {object} DataFlowEdge
  * @property {string} from 源 FQN
@@ -24,9 +35,9 @@ export class DataFlowInferrer {
    * @param {import('./CallEdgeResolver.js').ResolvedEdge[]} resolvedEdges
    * @returns {DataFlowEdge[]}
    */
-  static infer(resolvedEdges: any) {
+  static infer(resolvedEdges: ResolvedEdge[]) {
     /** @type {DataFlowEdge[]} */
-    const dataFlowEdges: any[] = [];
+    const dataFlowEdges: DataFlowEdge[] = [];
 
     for (const edge of resolvedEdges) {
       // 仅当调用有参数时生成正向数据流 (参数从 caller 流向 callee)

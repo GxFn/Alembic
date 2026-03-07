@@ -38,7 +38,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { ScalarQuantizer } from './ScalarQuantizer.js';
+import type { ScalarQuantizer } from './ScalarQuantizer.js';
 
 const MAGIC = 'ASVEC';
 const VERSION = 1;
@@ -48,6 +48,17 @@ const HEADER_SIZE = 32;
 const FLAG_HAS_QUANTIZER = 0x01;
 const FLAG_HAS_HNSW_GRAPH = 0x02;
 const FLAG_SQ8_VECTORS = 0x04; // vectors stored as Uint8 rather than Float32
+
+interface HnswSerializedData {
+  M: number;
+  M0: number;
+  efConstruct: number;
+  efSearch: number;
+  entryPoint: number;
+  maxLevel: number;
+  nodes: Array<{ id: string; vector: number[]; level: number } | null>;
+  graphs: [number, number[]][][];
+}
 
 export class BinaryPersistence {
   /**
@@ -60,7 +71,15 @@ export class BinaryPersistence {
    * @param {Map<string, object>} data.metadata - 文档 metadata
    * @param {Map<string, string>} data.contents - 文档 content
    */
-  static save(filePath: any, data: any) {
+  static save(
+    filePath: string,
+    data: {
+      index: { serialize: () => HnswSerializedData };
+      quantizer: ScalarQuantizer | null;
+      metadata: Map<string, unknown>;
+      contents: Map<string, string>;
+    }
+  ) {
     const buffer = BinaryPersistence.encode(data);
     const dir = dirname(filePath);
     if (!existsSync(dir)) {
@@ -74,7 +93,15 @@ export class BinaryPersistence {
    * @param {string} filePath
    * @param {object} data
    */
-  static async saveAsync(filePath: any, data: any) {
+  static async saveAsync(
+    filePath: string,
+    data: {
+      index: { serialize: () => HnswSerializedData };
+      quantizer: ScalarQuantizer | null;
+      metadata: Map<string, unknown>;
+      contents: Map<string, string>;
+    }
+  ) {
     const buffer = BinaryPersistence.encode(data);
     const dir = dirname(filePath);
     if (!existsSync(dir)) {
@@ -88,7 +115,7 @@ export class BinaryPersistence {
    * @param {string} filePath
    * @returns {{ index: object, quantizer: ScalarQuantizer|null, metadata: Map, contents: Map }}
    */
-  static load(filePath: any) {
+  static load(filePath: string) {
     const fileBuffer = readFileSync(filePath);
     return BinaryPersistence.decode(fileBuffer);
   }
@@ -98,12 +125,21 @@ export class BinaryPersistence {
    * @param {object} data
    * @returns {Buffer}
    */
-  static encode(data: any) {
+  static encode(data: {
+    index: { serialize: () => HnswSerializedData };
+    quantizer: ScalarQuantizer | null;
+    metadata: Map<string, unknown>;
+    contents: Map<string, string>;
+  }) {
     const { index, quantizer, metadata, contents } = data;
     const indexData = index.serialize();
 
     // 过滤掉已删除的节点
-    const activeNodes = indexData.nodes.filter((n: any) => n !== null);
+    const activeNodes = indexData.nodes.filter((n) => n !== null) as {
+      id: string;
+      vector: number[];
+      level: number;
+    }[];
     const dimension = activeNodes.length > 0 ? activeNodes[0].vector.length : 0;
     const numVectors = activeNodes.length;
 
@@ -148,23 +184,23 @@ export class BinaryPersistence {
     let graphSectionSize = 2; // numLevels
     for (const levelEntries of indexData.graphs) {
       // 过滤掉已删除节点的条目
-      const validEntries = levelEntries.filter(([idx]: any) => oldToNew.has(idx));
+      const validEntries = levelEntries.filter(([idx]) => oldToNew.has(idx));
       graphSectionSize += 4; // numEntries
       for (const [, neighbors] of validEntries) {
-        const validNeighbors = neighbors.filter((n: any) => oldToNew.has(n));
+        const validNeighbors = neighbors.filter((n) => oldToNew.has(n));
         graphSectionSize += 4 + 2 + validNeighbors.length * 4; // nodeIdx + numNeighbors + neighbors
       }
     }
     totalSize += graphSectionSize;
 
     // Metadata section
-    const metadataObj: Record<string, any> = {};
+    const metadataObj: Record<string, unknown> = {};
     if (metadata) {
       for (const [key, value] of metadata) {
         metadataObj[key] = value;
       }
     }
-    const contentsObj: Record<string, any> = {};
+    const contentsObj: Record<string, unknown> = {};
     if (contents) {
       for (const [key, value] of contents) {
         contentsObj[key] = value;
@@ -204,7 +240,7 @@ export class BinaryPersistence {
 
     // Quantizer section
     if (flags & FLAG_HAS_QUANTIZER) {
-      const qData = quantizer.serialize();
+      const qData = quantizer!.serialize();
       for (let i = 0; i < dimension; i++) {
         buf.writeFloatLE(qData.mins[i] || 0, offset);
         offset += 4;
@@ -236,7 +272,7 @@ export class BinaryPersistence {
     offset += 2;
 
     for (const levelEntries of indexData.graphs) {
-      const validEntries = levelEntries.filter(([idx]: any) => oldToNew.has(idx));
+      const validEntries = levelEntries.filter(([idx]) => oldToNew.has(idx));
       buf.writeUInt32LE(validEntries.length, offset);
       offset += 4;
 
@@ -245,7 +281,7 @@ export class BinaryPersistence {
         buf.writeUInt32LE(newNodeIdx, offset);
         offset += 4;
 
-        const validNeighbors = neighbors.filter((n: any) => oldToNew.has(n));
+        const validNeighbors = neighbors.filter((n) => oldToNew.has(n));
         buf.writeUInt16LE(validNeighbors.length, offset);
         offset += 2;
 
@@ -270,7 +306,7 @@ export class BinaryPersistence {
    * @param {Buffer} buf
    * @returns {{ indexData: object, quantizerData: object|null, metadata: Map, contents: Map, dimension: number }}
    */
-  static decode(buf: any) {
+  static decode(buf: Buffer) {
     let offset = 0;
 
     // ── Header ──
@@ -301,7 +337,7 @@ export class BinaryPersistence {
     offset += 10; // reserved
 
     // ── Quantizer ──
-    let quantizerData: any = null;
+    let quantizerData: { dimension: number; mins: number[]; maxs: number[] } | null = null;
     if (flags & FLAG_HAS_QUANTIZER) {
       const mins = new Array(dimension);
       for (let i = 0; i < dimension; i++) {
@@ -317,7 +353,7 @@ export class BinaryPersistence {
     }
 
     // ── Vectors ──
-    const nodes: { id: any; vector: number[]; level: any }[] = [];
+    const nodes: { id: string; vector: number[]; level: number }[] = [];
     const idToIndex = new Map();
     for (let i = 0; i < numVectors; i++) {
       const idLen = buf.readUInt16LE(offset);
@@ -338,19 +374,19 @@ export class BinaryPersistence {
     // ── Graph ──
     const numLevels = buf.readUInt16LE(offset);
     offset += 2;
-    const graphs: any[][] = [];
+    const graphs: [number, number[]][][] = [];
 
     for (let l = 0; l < numLevels; l++) {
       const numEntries = buf.readUInt32LE(offset);
       offset += 4;
-      const levelEntries: any[][] = [];
+      const levelEntries: [number, number[]][] = [];
 
       for (let e = 0; e < numEntries; e++) {
         const nodeIdx = buf.readUInt32LE(offset);
         offset += 4;
         const numNeighbors = buf.readUInt16LE(offset);
         offset += 2;
-        const neighbors: any[] = [];
+        const neighbors: number[] = [];
         for (let n = 0; n < numNeighbors; n++) {
           neighbors.push(buf.readUInt32LE(offset));
           offset += 4;
@@ -415,7 +451,7 @@ export class BinaryPersistence {
    * @param {string} filePath
    * @returns {boolean}
    */
-  static isValid(filePath: any) {
+  static isValid(filePath: string) {
     try {
       if (!existsSync(filePath)) {
         return false;

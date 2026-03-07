@@ -7,8 +7,205 @@
 
 import Logger from '../../infrastructure/logging/Logger.js';
 import { CoarseRanker } from './CoarseRanker.js';
+import type { SearchItem } from './contextBoost.js';
 import { contextBoost } from './contextBoost.js';
 import { MultiSignalRanker } from './MultiSignalRanker.js';
+
+/** Internal BM25 document representation */
+interface BM25Document {
+  id: string;
+  tokens: string[];
+  tokenFreq: Record<string, number>;
+  length: number;
+  meta: Record<string, unknown>;
+}
+
+/** BM25 search result */
+interface BM25SearchResult {
+  id: string;
+  score: number;
+  meta: Record<string, unknown>;
+}
+
+/** Meta structure produced by _buildDocMeta */
+interface BM25DocMeta {
+  type: string;
+  title: string;
+  trigger: string;
+  status: string | undefined;
+  knowledgeType: string | undefined;
+  kind: string;
+  language: string;
+  category: string;
+  updatedAt: string | null;
+  createdAt: string | null;
+  difficulty: string;
+  tags: string[];
+  usageCount: number;
+  authorityScore: number;
+  qualityScore: number;
+  [key: string]: unknown;
+}
+
+/** Unified search result item flowing through the ranking pipeline */
+interface SearchResultItem {
+  id: string;
+  title?: string;
+  description?: string;
+  trigger?: string;
+  type?: string;
+  kind?: string;
+  status?: string;
+  language?: string;
+  category?: string;
+  score?: number;
+  content?: string;
+  code?: string;
+  headers?: string;
+  moduleName?: string;
+  knowledgeType?: string;
+  bm25Score?: number;
+  qualityScore?: number;
+  usageCount?: number;
+  authorityScore?: number;
+  tags?: string[] | string;
+  difficulty?: string;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+  whenClause?: string;
+  doClause?: string;
+  rankerScore?: number;
+  coarseScore?: number;
+  contextScore?: number;
+  recallScore?: number;
+  [key: string]: unknown;
+}
+
+/** Database row from knowledge_entries table */
+interface DbRow {
+  id: string;
+  title?: string;
+  description?: string;
+  language?: string;
+  category?: string;
+  knowledgeType?: string;
+  kind?: string;
+  content?: string;
+  lifecycle?: string;
+  tags?: string;
+  trigger?: string;
+  difficulty?: string;
+  quality?: string;
+  stats?: string;
+  updatedAt?: string;
+  createdAt?: string;
+  status?: string;
+  headers?: string;
+  moduleName?: string;
+  whenClause?: string;
+  doClause?: string;
+  [key: string]: unknown;
+}
+
+/** Search method options */
+interface SearchOptions {
+  type?: string;
+  limit?: number;
+  mode?: string;
+  context?: RankingContext;
+  rank?: boolean;
+  groupByKind?: boolean;
+  useAI?: boolean;
+  [key: string]: unknown;
+}
+
+/** Context for ranking pipeline */
+interface RankingContext {
+  sessionHistory?: Array<{ content?: string; rawInput?: string }>;
+  language?: string;
+  intent?: string;
+  [key: string]: unknown;
+}
+
+/** Search response envelope */
+interface SearchResponse {
+  items: SearchResultItem[];
+  total: number;
+  query: string;
+  mode?: string;
+  type?: string;
+  ranked?: boolean;
+  byKind?: Record<string, SearchResultItem[]>;
+}
+
+/** Duck-typed database connection (better-sqlite3 style) */
+interface SearchDb {
+  prepare(sql: string): { all(...args: unknown[]): DbRow[] };
+}
+
+/** AI provider with embedding capability */
+interface SearchAiProvider {
+  embed(text: string): Promise<number[]>;
+}
+
+/** Vector store for semantic search */
+interface SearchVectorStore {
+  query(embedding: number[], limit: number): Promise<VectorHit[]>;
+  hybridSearch?(
+    embedding: number[],
+    query: string,
+    options: { topK?: number }
+  ): Promise<VectorHit[]>;
+}
+
+/** Vector search hit */
+interface VectorHit {
+  id: string;
+  similarity?: number;
+  score?: number;
+  content?: string;
+  metadata?: Record<string, unknown>;
+  item?: { id: string; content?: string; metadata?: Record<string, unknown> };
+  [key: string]: unknown;
+}
+
+/** Hybrid retriever for RRF fusion */
+interface SearchHybridRetriever {
+  search(
+    query: string,
+    queryEmbedding: number[],
+    options: {
+      topK?: number;
+      alpha?: number;
+      sparseSearchFn?: () => SearchResultItem[];
+    }
+  ): Promise<RrfHit[]>;
+}
+
+/** Single RRF fusion hit */
+interface RrfHit {
+  id: string;
+  score: number;
+  data?: { item?: Record<string, unknown>; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/** Cross-encoder reranker abstraction */
+interface SearchCrossEncoder {
+  rerank(query: string, candidates: SearchResultItem[]): Promise<SearchResultItem[]>;
+}
+
+/** SearchEngine constructor options */
+interface SearchEngineOptions {
+  aiProvider?: SearchAiProvider | null;
+  vectorStore?: SearchVectorStore | null;
+  hybridRetriever?: SearchHybridRetriever | null;
+  crossEncoderReranker?: SearchCrossEncoder | null;
+  cacheMaxAge?: number;
+  fusionBm25Weight?: number;
+  fusionSemanticWeight?: number;
+  [key: string]: unknown;
+}
 
 /**
  * BM25 参数
@@ -21,7 +218,7 @@ const BM25_B = 0.75;
  * 英文: camelCase / PascalCase 拆分 + 小写化
  * 中文: 单字 + 二元组（bigram）— 无需分词词典即可支持子串匹配
  */
-export function tokenize(text: any) {
+export function tokenize(text: string) {
   if (!text) {
     return [];
   }
@@ -30,9 +227,9 @@ export function tokenize(text: any) {
   // 拆全大写前缀：URLSession → URL Session, UITableView → UI Table View
   expanded = expanded.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
   const normalized = expanded.toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, ' ');
-  const rawTokens = normalized.split(/[\s_-]+/).filter((t: any) => t.length >= 1);
+  const rawTokens = normalized.split(/[\s_-]+/).filter((t: string) => t.length >= 1);
 
-  const tokens: any[] = [];
+  const tokens: string[] = [];
   // CJK 正则（中日韩统一表意文字 + 扩展区）
   const cjkRe = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/;
 
@@ -74,12 +271,12 @@ export function tokenize(text: any) {
  * BM25 评分器
  */
 export class BM25Scorer {
-  _idIndex: any;
-  _totalLength: any;
-  avgLength: any;
-  docFreq: any;
-  documents: any;
-  totalDocs: any;
+  _idIndex: Map<string, number>;
+  _totalLength: number;
+  avgLength: number;
+  docFreq: Record<string, number>;
+  documents: (BM25Document | null)[];
+  totalDocs: number;
   constructor() {
     this.documents = []; // [{id, tokens, tokenFreq, length, meta}]
     this.avgLength = 0;
@@ -92,14 +289,14 @@ export class BM25Scorer {
   /**
    * 添加文档到索引
    */
-  addDocument(id: any, text: any, meta: any = {}) {
+  addDocument(id: string, text: string, meta: Record<string, unknown> = {}) {
     // 如果 id 已存在，先移除旧版本（确保幂等）
     if (this._idIndex.has(id)) {
       this.removeDocument(id);
     }
     const tokens = tokenize(text);
     // 预计算 token frequency map — 避免 search 时 O(T) filter 计算 TF
-    const tokenFreq: any = {};
+    const tokenFreq: Record<string, number> = {};
     for (const t of tokens) {
       tokenFreq[t] = (tokenFreq[t] || 0) + 1;
     }
@@ -119,7 +316,7 @@ export class BM25Scorer {
    * 采用标记删除 + 懒清理策略：将文档标记为 null，当空洞率 > 30% 时自动压缩
    * @returns {boolean} 是否成功移除
    */
-  removeDocument(id: any) {
+  removeDocument(id: string) {
     const idx = this._idIndex.get(id);
     if (idx === undefined) {
       return false;
@@ -158,7 +355,7 @@ export class BM25Scorer {
   /**
    * 更新文档（增量: remove + add）
    */
-  updateDocument(id: any, text: any, meta: any = {}) {
+  updateDocument(id: string, text: string, meta: Record<string, unknown> = {}) {
     this.removeDocument(id);
     this.addDocument(id, text, meta);
   }
@@ -166,7 +363,7 @@ export class BM25Scorer {
   /**
    * 检查文档是否存在
    */
-  hasDocument(id: any) {
+  hasDocument(id: string) {
     return this._idIndex.has(id);
   }
 
@@ -174,7 +371,7 @@ export class BM25Scorer {
    * 压缩 documents 数组，清除 tombstone 空洞
    */
   _compact() {
-    const alive = this.documents.filter((d: any) => d !== null);
+    const alive = this.documents.filter((d): d is BM25Document => d !== null);
     this.documents = alive;
     this._idIndex.clear();
     for (let i = 0; i < alive.length; i++) {
@@ -185,13 +382,13 @@ export class BM25Scorer {
   /**
    * 查询文档，返回按 BM25 分数排序的结果
    */
-  search(query: any, limit = 20) {
+  search(query: string, limit = 20) {
     const queryTokens = tokenize(query);
     if (queryTokens.length === 0) {
       return [];
     }
 
-    const scores: { id: any; score: number; meta: any }[] = [];
+    const scores: BM25SearchResult[] = [];
 
     for (const doc of this.documents) {
       if (!doc) {
@@ -240,30 +437,40 @@ export class BM25Scorer {
  * 整合 BM25 + 关键词 + 可选 AI 增强
  */
 export class SearchEngine {
-  _cache: any;
-  _cacheMaxAge: any;
-  _coarseRanker: any;
-  _crossEncoder: any;
-  _fusionBm25Weight: any;
-  _fusionSemanticWeight: any;
-  _indexed: any;
-  _lastIndexTime: any;
-  _multiSignalRanker: any;
-  aiProvider: any;
-  db: any;
-  hybridRetriever: any;
-  logger: any;
-  scorer: any;
-  vectorStore: any;
-  constructor(db: any, options: any = {}) {
-    this.db = typeof db?.getDb === 'function' ? db.getDb() : db;
+  _cache: Map<string, { data: SearchResponse; time: number }>;
+  _cacheMaxAge: number;
+  _coarseRanker: CoarseRanker;
+  _crossEncoder: SearchCrossEncoder | null;
+  _fusionBm25Weight: number;
+  _fusionSemanticWeight: number;
+  _indexed: boolean;
+  _lastIndexTime: string | null = null;
+  _multiSignalRanker: MultiSignalRanker;
+  aiProvider: SearchAiProvider | null;
+  db: SearchDb;
+  hybridRetriever: SearchHybridRetriever | null;
+  logger: ReturnType<typeof Logger.getInstance>;
+  scorer: BM25Scorer;
+  vectorStore: SearchVectorStore | null;
+  constructor(db: SearchDb & { getDb?: () => SearchDb }, options: SearchEngineOptions = {}) {
+    this.db = (typeof db?.getDb === 'function' ? db.getDb() : db) as SearchDb;
     this.logger = Logger.getInstance();
     this.aiProvider = options.aiProvider || null;
     this.vectorStore = options.vectorStore || null;
     this.hybridRetriever = options.hybridRetriever || null;
     this.scorer = new BM25Scorer();
-    this._coarseRanker = new CoarseRanker(options);
-    this._multiSignalRanker = new MultiSignalRanker(options);
+    this._coarseRanker = new CoarseRanker(
+      options as {
+        bm25Weight?: number;
+        semanticWeight?: number;
+        qualityWeight?: number;
+        freshnessWeight?: number;
+        popularityWeight?: number;
+      }
+    );
+    this._multiSignalRanker = new MultiSignalRanker(
+      options as { scenarioWeights?: Record<string, Record<string, number>> }
+    );
     this._crossEncoder = options.crossEncoderReranker || null;
     this._indexed = false;
     this._cache = new Map();
@@ -281,7 +488,7 @@ export class SearchEngine {
     this._cache.clear();
 
     try {
-      let entries: any[] = [];
+      let entries: DbRow[] = [];
 
       try {
         entries = this.db
@@ -313,8 +520,8 @@ export class SearchEngine {
         entries: entries.length,
         total: this.scorer.totalDocs,
       });
-    } catch (err: any) {
-      this.logger.error('Failed to build search index', { error: err.message });
+    } catch (err: unknown) {
+      this.logger.error('Failed to build search index', { error: (err as Error).message });
     }
   }
 
@@ -332,7 +539,7 @@ export class SearchEngine {
    * @param {string} query 搜索关键词
    * @param {object} options - {type, limit, mode, useAI}
    */
-  async search(query: any, options: any = {}) {
+  async search(query: string, options: SearchOptions = {}) {
     const { type = 'all', limit = 20, mode = 'keyword', context } = options;
     const shouldRank = options.rank ?? mode !== 'keyword';
 
@@ -341,7 +548,7 @@ export class SearchEngine {
     }
 
     // 带 sessionHistory 的上下文搜索不缓存（个性化结果）
-    const hasSessionContext = context?.sessionHistory?.length > 0;
+    const hasSessionContext = (context?.sessionHistory?.length ?? 0) > 0;
     const cacheKey = hasSessionContext
       ? null
       : `${query}:${type}:${limit}:${mode}:${shouldRank ? 'r' : ''}:${options.groupByKind ? 'g' : ''}`;
@@ -357,13 +564,13 @@ export class SearchEngine {
 
     // 排序阶段需要更多候选，过采样 3x
     const recallLimit = shouldRank ? limit * 3 : limit;
-    let results;
+    let results: SearchResultItem[];
     let actualMode = mode;
 
     switch (mode) {
       case 'auto': {
         // 缓存 BM25 结果, 避免 RRF 降级时重复计算
-        let cachedBm25Items: any = null;
+        let cachedBm25Items: SearchResultItem[] | null = null;
         const getBm25 = () => {
           if (!cachedBm25Items) {
             cachedBm25Items = this._bm25Search(query, type, recallLimit);
@@ -380,23 +587,24 @@ export class SearchEngine {
               const rrfResults = await this.hybridRetriever.search(query, queryEmbedding, {
                 topK: recallLimit,
                 alpha: this._fusionSemanticWeight,
-                sparseSearchFn: () => bm25Items,
+                sparseSearchFn: () => bm25Items!,
               });
               // 将 RRF 结果映射为标准格式
-              results = rrfResults.map((r: any) => {
-                const base = r.data?.item || r.data || {};
+              results = rrfResults.map((r: RrfHit) => {
+                const base = (r.data?.item || r.data || {}) as Record<string, unknown>;
+                const baseMeta = (base.metadata || {}) as Record<string, unknown>;
                 return {
                   id: r.id,
-                  title: base.title || base.metadata?.title || r.id,
-                  type: base.type || 'recipe',
-                  kind: base.kind || base.metadata?.kind || 'pattern',
-                  status: base.status || base.metadata?.status || 'active',
+                  title: (base.title || baseMeta.title || r.id) as string,
+                  type: (base.type || 'recipe') as string,
+                  kind: (base.kind || baseMeta.kind || 'pattern') as string,
+                  status: (base.status || baseMeta.status || 'active') as string,
                   score: Math.round(r.score * 1000) / 1000,
-                  content: base.content,
-                  description: base.description,
-                };
+                  content: base.content as string | undefined,
+                  description: base.description as string | undefined,
+                } as SearchResultItem;
               });
-              this._supplementDetails(results);
+              this._supplementDetails(results as SearchResultItem[]);
               actualMode = 'auto(rrf)';
               break;
             }
@@ -413,10 +621,10 @@ export class SearchEngine {
             actualMode: 'bm25',
           })),
         ]);
-        const semItems = semResult.items || [];
+        const semItems = (semResult.items || []) as SearchResultItem[];
         const semActuallyUsed = semResult.actualMode === 'semantic';
         const merged = new Map();
-        for (const it of bm25Items) {
+        for (const it of bm25Items!) {
           merged.set(it.id, { ...it, _bm25: it.score || 0, _sem: 0 });
         }
         for (const it of semItems) {
@@ -452,7 +660,7 @@ export class SearchEngine {
         break;
       case 'semantic': {
         const semResult = await this._semanticSearch(query, type, recallLimit);
-        results = semResult.items || semResult;
+        results = semResult.items;
         actualMode = semResult.actualMode || 'semantic';
         break;
       }
@@ -467,7 +675,7 @@ export class SearchEngine {
     }
     results = results.slice(0, limit);
 
-    const response: any = {
+    const response: SearchResponse = {
       items: results,
       total: results.length,
       query,
@@ -480,7 +688,7 @@ export class SearchEngine {
       response.byKind = { rule: [], pattern: [], fact: [] };
       for (const r of results) {
         const kind = r.kind || 'pattern';
-        (response.byKind[kind] || response.byKind.pattern).push(r);
+        (response.byKind![kind] || response.byKind!.pattern).push(r);
       }
     }
 
@@ -500,24 +708,29 @@ export class SearchEngine {
    * CrossEncoder 仅在构造时传入 crossEncoderReranker 且 AI 可用时生效，
    * 否则自动跳过（零额外开销）。
    */
-  async _applyRanking(items: any, query: any, context: any = {}) {
+  async _applyRanking(items: SearchResultItem[], query: string, context: RankingContext = {}) {
     let normalized = this._normalizeForRanking(items);
 
     // Optional: Cross-Encoder semantic rerank (AI → Jaccard fallback)
     if (this._crossEncoder) {
-      normalized = await this._crossEncoder.rerank(query, normalized);
+      normalized = (await this._crossEncoder.rerank(query, normalized)) as SearchResultItem[];
     }
 
-    let ranked = this._coarseRanker.rank(normalized);
-    ranked = this._multiSignalRanker.rank(ranked, {
-      ...context,
-      query,
-      scenario: context?.intent || 'search',
-    });
-    if (context?.sessionHistory?.length > 0) {
-      ranked = contextBoost(ranked, context);
+    let ranked: SearchResultItem[] = this._coarseRanker.rank(
+      normalized as unknown as Parameters<CoarseRanker['rank']>[0]
+    ) as unknown as SearchResultItem[];
+    ranked = this._multiSignalRanker.rank(
+      ranked as unknown as Parameters<MultiSignalRanker['rank']>[0],
+      {
+        ...context,
+        query,
+        scenario: context?.intent || 'search',
+      }
+    ) as unknown as SearchResultItem[];
+    if ((context?.sessionHistory?.length ?? 0) > 0) {
+      ranked = contextBoost(ranked as SearchItem[], context) as SearchResultItem[];
     }
-    return ranked.map((r: any) => ({
+    return ranked.map((r: SearchResultItem) => ({
       ...r,
       recallScore: r.bm25Score || 0,
       score: r.contextScore || r.rankerScore || r.coarseScore || r.bm25Score || 0,
@@ -528,8 +741,8 @@ export class SearchEngine {
    * 将召回结果转换为 Ranker 所需格式（解析 content JSON、映射信号字段）
    * 保留原始 content 供下游消费者使用
    */
-  _normalizeForRanking(items: any) {
-    return items.map((item: any) => {
+  _normalizeForRanking(items: SearchResultItem[]): SearchResultItem[] {
+    return items.map((item: SearchResultItem) => {
       let codeText = '';
       if (item.content) {
         try {
@@ -564,10 +777,10 @@ export class SearchEngine {
    * 关键词搜索 - 直接 SQL LIKE
    * 返回包含 kind 字段的完整结果，使用 ESCAPE 防止通配符注入
    */
-  _keywordSearch(query: any, type: any, limit: any) {
-    const results: any[] = [];
+  _keywordSearch(query: string, type: string, limit: number) {
+    const results: SearchResultItem[] = [];
     // 转义 LIKE 通配符 (% → \%, _ → \_)
-    const escaped = query.replace(/[%_\\]/g, (ch: any) => `\\${ch}`);
+    const escaped = query.replace(/[%_\\]/g, (ch: string) => `\\${ch}`);
     const pattern = `%${escaped}%`;
 
     if (
@@ -578,7 +791,7 @@ export class SearchEngine {
       type === 'solution'
     ) {
       try {
-        let rows: any[] = [];
+        let rows: DbRow[] = [];
         try {
           rows = this.db
             .prepare(
@@ -611,7 +824,7 @@ export class SearchEngine {
             };
           })
         );
-        results.sort((a, b) => b.score - a.score);
+        results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       } catch {
         /* table may not exist */
       }
@@ -626,38 +839,41 @@ export class SearchEngine {
   /**
    * BM25 排序搜索
    */
-  _bm25Search(query: any, type: any, limit: any) {
+  _bm25Search(query: string, type: string, limit: number) {
     let results = this.scorer.search(query, limit * 2);
 
     if (type !== 'all') {
       // All types now map to 'recipe' since everything is unified
-      results = results.filter((r: any) => {
+      results = results.filter((r: BM25SearchResult) => {
         if (type === 'rule') {
-          return r.meta.knowledgeType === 'boundary-constraint';
+          return (r.meta as Record<string, unknown>).knowledgeType === 'boundary-constraint';
         }
-        return r.meta.type === 'recipe';
+        return (r.meta as Record<string, unknown>).type === 'recipe';
       });
     }
 
-    const items = results.slice(0, limit).map((r: any) => ({
-      id: r.id,
-      title: r.meta.title,
-      trigger: r.meta.trigger || '',
-      type: r.meta.type,
-      kind: r.meta.kind || 'pattern',
-      status: r.meta.status,
-      language: r.meta.language || '',
-      category: r.meta.category || '',
-      score: Math.round(r.score * 1000) / 1000,
-      // 排序信号字段（供 RetrievalFunnel / CoarseRanker / MultiSignalRanker 使用）
-      updatedAt: r.meta.updatedAt || null,
-      createdAt: r.meta.createdAt || null,
-      difficulty: r.meta.difficulty || 'intermediate',
-      tags: r.meta.tags || [],
-      usageCount: r.meta.usageCount || 0,
-      authorityScore: r.meta.authorityScore || 0,
-      qualityScore: r.meta.qualityScore || 0,
-    }));
+    const items: SearchResultItem[] = results.slice(0, limit).map((r: BM25SearchResult) => {
+      const meta = r.meta as BM25DocMeta;
+      return {
+        id: r.id,
+        title: meta.title,
+        trigger: meta.trigger || '',
+        type: meta.type,
+        kind: meta.kind || 'pattern',
+        status: meta.status,
+        language: meta.language || '',
+        category: meta.category || '',
+        score: Math.round(r.score * 1000) / 1000,
+        // 排序信号字段（供 RetrievalFunnel / CoarseRanker / MultiSignalRanker 使用）
+        updatedAt: meta.updatedAt || null,
+        createdAt: meta.createdAt || null,
+        difficulty: meta.difficulty || 'intermediate',
+        tags: meta.tags || [],
+        usageCount: meta.usageCount || 0,
+        authorityScore: meta.authorityScore || 0,
+        qualityScore: meta.qualityScore || 0,
+      };
+    });
 
     // 为每个结果补充 content（NativeUI 预览需要）— 批量 IN 查询替代 N+1
     this._supplementDetails(items);
@@ -670,7 +886,7 @@ export class SearchEngine {
    * 降级到 BM25 如果 AI 不可用
    * @returns {Promise<{ items: Array, actualMode: string }>}
    */
-  async _semanticSearch(query: any, type: any, limit: any) {
+  async _semanticSearch(query: string, type: string, limit: number) {
     if (!this.aiProvider) {
       this.logger.debug('AI provider not available, falling back to BM25');
       return { items: this._bm25Search(query, type, limit), actualMode: 'bm25' };
@@ -690,27 +906,30 @@ export class SearchEngine {
             const hybrid = await this.vectorStore.hybridSearch(queryEmbedding, query, {
               topK: limit * 2,
             });
-            vectorResults = hybrid.map((r: any) => ({
-              id: r.item.id,
+            vectorResults = hybrid.map((r: VectorHit) => ({
+              id: r.item?.id ?? r.id,
               similarity: r.score,
               score: r.score,
-              content: r.item.content,
-              metadata: r.item.metadata || {},
+              content: r.item?.content,
+              metadata: r.item?.metadata || {},
             }));
           } else {
             vectorResults = await this.vectorStore.query(queryEmbedding, limit * 2);
           }
           if (vectorResults && vectorResults.length > 0) {
-            let results = vectorResults.map((vr: any) => ({
-              id: vr.id,
-              title: vr.metadata?.title || vr.id,
-              type: 'recipe',
-              kind: vr.metadata?.kind || 'pattern',
-              status: vr.metadata?.status || 'active',
-              score: Math.round((vr.similarity || vr.score || 0) * 1000) / 1000,
-            }));
+            let results: SearchResultItem[] = vectorResults.map(
+              (vr: VectorHit) =>
+                ({
+                  id: vr.id,
+                  title: (vr.metadata?.title as string) || vr.id,
+                  type: 'recipe',
+                  kind: (vr.metadata?.kind as string) || 'pattern',
+                  status: (vr.metadata?.status as string) || 'active',
+                  score: Math.round((vr.similarity || vr.score || 0) * 1000) / 1000,
+                }) as SearchResultItem
+            );
             if (type !== 'all') {
-              results = results.filter((r: any) => {
+              results = results.filter((r: SearchResultItem) => {
                 if (type === 'rule') {
                   return r.kind === 'rule';
                 }
@@ -722,9 +941,9 @@ export class SearchEngine {
             this._supplementDetails(results);
             return { items: results, actualMode: 'semantic' };
           }
-        } catch (vecErr: any) {
+        } catch (vecErr: unknown) {
           this.logger.warn('Vector store query failed, falling back to BM25', {
-            error: vecErr.message,
+            error: (vecErr as Error).message,
           });
         }
       }
@@ -732,8 +951,10 @@ export class SearchEngine {
       // vectorStore 不可用或无结果，降级到 BM25
       this.logger.debug('Vector search fallback to BM25');
       return { items: this._bm25Search(query, type, limit), actualMode: 'bm25' };
-    } catch (err: any) {
-      this.logger.warn('Semantic search failed, falling back to BM25', { error: err.message });
+    } catch (err: unknown) {
+      this.logger.warn('Semantic search failed, falling back to BM25', {
+        error: (err as Error).message,
+      });
       return { items: this._bm25Search(query, type, limit), actualMode: 'bm25' };
     }
   }
@@ -742,14 +963,14 @@ export class SearchEngine {
    * 补充详细字段（content / description / trigger / delivery 字段）— 批量 IN 查询
    * 用于向量搜索结果与 BM25 结果的一致性
    */
-  _supplementDetails(items: any) {
+  _supplementDetails(items: SearchResultItem[]) {
     if (!items || items.length === 0) {
       return;
     }
     try {
-      const ids = items.map((it: any) => it.id);
+      const ids = items.map((it: SearchResultItem) => it.id);
       const placeholders = ids.map(() => '?').join(',');
-      let rows: any[] = [];
+      let rows: DbRow[] = [];
       try {
         rows = this.db
           .prepare(
@@ -766,7 +987,7 @@ export class SearchEngine {
       for (const item of items) {
         const row = rowMap.get(item.id);
         if (row) {
-          item.content = item.content || row.content || null;
+          item.content = item.content || row.content || undefined;
           item.description = item.description || row.description || '';
           item.trigger = item.trigger || row.trigger || '';
           if (row.headers) {
@@ -846,7 +1067,7 @@ export class SearchEngine {
    *
    * @param {{ force?: boolean }} [opts] - force=true 强制全量重建
    */
-  refreshIndex(opts: any = {}) {
+  refreshIndex(opts: { force?: boolean } = {}) {
     if (opts.force || !this._indexed || !this._lastIndexTime) {
       this._indexed = false;
       this.buildIndex();
@@ -889,10 +1110,10 @@ export class SearchEngine {
       if (added > 0 || removed > 0) {
         this.logger.info('Search index refreshed (incremental)', { added, removed });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 增量失败 → 降级全量重建
       this.logger.warn('Incremental refresh failed, falling back to full rebuild', {
-        error: err.message,
+        error: (err as Error).message,
       });
       this._indexed = false;
       this.buildIndex();
@@ -903,7 +1124,7 @@ export class SearchEngine {
    * 从 DB 行构建索引文本
    * @private
    */
-  _buildDocText(r: any) {
+  _buildDocText(r: DbRow) {
     let contentText = '';
     try {
       const content = JSON.parse(r.content || '{}');
@@ -937,8 +1158,8 @@ export class SearchEngine {
    * 从 DB 行构建文档 meta
    * @private
    */
-  _buildDocMeta(r: any) {
-    let parsedTags: any[] = [];
+  _buildDocMeta(r: DbRow) {
+    let parsedTags: string[] = [];
     try {
       parsedTags = JSON.parse(r.tags || '[]');
     } catch {
@@ -993,7 +1214,7 @@ export class SearchEngine {
     };
   }
 
-  _getCache(key: any) {
+  _getCache(key: string) {
     const entry = this._cache.get(key);
     if (!entry) {
       return null;
@@ -1008,7 +1229,7 @@ export class SearchEngine {
     return entry.data;
   }
 
-  _setCache(key: any, data: any) {
+  _setCache(key: string, data: SearchResponse) {
     // LRU：超限时批量淘汰最旧的 20%
     if (this._cache.size > 500) {
       const toDelete = Math.floor(this._cache.size * 0.2);

@@ -15,6 +15,7 @@ import { extname, join, relative } from 'node:path';
 import { LanguageService } from '../../shared/LanguageService.js';
 import { BatchEmbedder } from './BatchEmbedder.js';
 import { chunk } from './Chunker.js';
+import type { VectorStore } from './VectorStore.js';
 
 const SCANNABLE_EXTENSIONS = new Set([
   '.md',
@@ -43,7 +44,22 @@ export class IndexingPipeline {
   #projectRoot;
   #chunkingOptions; // Chunker v2 透传选项
 
-  constructor(options: any = {}) {
+  constructor(
+    options: {
+      vectorStore?: VectorStore;
+      aiProvider?: { embed: (texts: string | string[]) => Promise<number[] | number[][]> };
+      scanDirs?: string[];
+      projectRoot?: string;
+      batchSize?: number;
+      maxConcurrency?: number;
+      chunking?: {
+        strategy?: string;
+        maxChunkTokens?: number;
+        overlapTokens?: number;
+        useAST?: boolean;
+      };
+    } = {}
+  ) {
     this.#vectorStore = options.vectorStore || null;
     this.#aiProvider = options.aiProvider || null;
     this.#scanDirs = options.scanDirs || ['recipes', 'AutoSnippet/recipes'];
@@ -64,10 +80,12 @@ export class IndexingPipeline {
     }
   }
 
-  setVectorStore(store: any) {
+  setVectorStore(store: VectorStore) {
     this.#vectorStore = store;
   }
-  setAiProvider(provider: any) {
+  setAiProvider(
+    provider: { embed: (texts: string | string[]) => Promise<number[] | number[][]> } | null
+  ) {
     this.#aiProvider = provider;
     if (provider) {
       this.#batchEmbedder = new BatchEmbedder(provider, {
@@ -82,7 +100,13 @@ export class IndexingPipeline {
    * @param {object} options - { force: boolean, dryRun: boolean, onProgress: function }
    * @returns {Promise<{ scanned, chunked, embedded, upserted, skipped, errors }>}
    */
-  async run(options: any = {}) {
+  async run(
+    options: {
+      force?: boolean;
+      dryRun?: boolean;
+      onProgress?: (info: { phase: string; [key: string]: unknown }) => void;
+    } = {}
+  ) {
     const { force = false, dryRun = false, onProgress } = options;
     const stats = { scanned: 0, chunked: 0, embedded: 0, upserted: 0, skipped: 0, errors: 0 };
 
@@ -96,7 +120,7 @@ export class IndexingPipeline {
 
     // 2. 增量检测 + 分块 (先收集所有 chunks)
     const existingIds = new Set(await this.#vectorStore.listIds());
-    const allChunks: { id: string; content: any; metadata: any }[] = []; // { id, content, metadata }
+    const allChunks: { id: string; content: string; metadata: Record<string, unknown> }[] = []; // { id, content, metadata }
     const staleIds: unknown[] = []; // 需要清理的旧 chunk id
 
     for (const file of files) {
@@ -108,7 +132,7 @@ export class IndexingPipeline {
         // 增量检测：hash 未变时跳过
         if (!force) {
           const existing = await this.#vectorStore.getById(`${baseId}_0`);
-          if (existing?.metadata?.sourceHash === hash) {
+          if ((existing?.metadata as Record<string, unknown> | undefined)?.sourceHash === hash) {
             stats.skipped++;
             continue;
           }
@@ -146,7 +170,7 @@ export class IndexingPipeline {
             }
           }
         }
-      } catch (_error: any) {
+      } catch (_error: unknown) {
         stats.errors++;
       }
     }
@@ -158,7 +182,7 @@ export class IndexingPipeline {
       try {
         vectorMap = await this.#batchEmbedder.embedAll(
           allChunks.map((c) => ({ id: c.id, content: c.content })),
-          (embedded: any, total: any) => {
+          (embedded: number, total: number) => {
             stats.embedded = embedded;
             onProgress?.({ phase: 'embed', embedded, total });
           }
@@ -187,7 +211,7 @@ export class IndexingPipeline {
     if (!dryRun) {
       for (const staleId of staleIds) {
         try {
-          await this.#vectorStore.remove(staleId);
+          await this.#vectorStore.remove(staleId as string);
         } catch {
           /* skip cleanup errors */
         }
@@ -228,11 +252,14 @@ export class IndexingPipeline {
   /**
    * 计算内容 hash
    */
-  hashContent(content: any) {
+  hashContent(content: string) {
     return createHash('sha256').update(content).digest('hex').slice(0, 16);
   }
 
-  #walkDir(dir: any, files: any) {
+  #walkDir(
+    dir: string,
+    files: Array<{ absolutePath: string; relativePath: string; type: string }>
+  ) {
     try {
       const entries = readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
@@ -258,7 +285,7 @@ export class IndexingPipeline {
     }
   }
 
-  #detectLanguage(filePath: any) {
+  #detectLanguage(filePath: string) {
     const lang = LanguageService.inferLang(filePath);
     return lang === 'unknown' ? 'text' : lang;
   }

@@ -17,7 +17,7 @@ export const SPEC_FILENAME = 'AutoSnippet.boxspec.json';
 const USER_HOME = process.env.HOME || process.env.USERPROFILE || '';
 
 /** 确保目录存在（静默处理异常），供写入前调用 */
-export function ensureDir(dirPath: any) {
+export function ensureDir(dirPath: string) {
   try {
     // 双层路径安全检查 — 阻止在项目允许范围外创建文件夹
     pathGuard.assertProjectWriteSafe(dirPath);
@@ -51,7 +51,7 @@ export function getSnippetsPath() {
  * @param {string} projectRoot
  * @returns {string}
  */
-export function getVSCodeSnippetsPath(projectRoot: any) {
+export function getVSCodeSnippetsPath(projectRoot: string) {
   return ensureDir(path.join(projectRoot, '.vscode'));
 }
 
@@ -72,7 +72,7 @@ export function getCachePath() {
  * @param {string} projectRoot
  * @returns {string} 知识库目录名（默认 'AutoSnippet'）
  */
-export function getKnowledgeBaseDirName(projectRoot: any) {
+export function getKnowledgeBaseDirName(projectRoot: string) {
   try {
     const entries = fs.readdirSync(projectRoot, { withFileTypes: true });
     for (const e of entries) {
@@ -92,14 +92,14 @@ export function getKnowledgeBaseDirName(projectRoot: any) {
  * 知识库根目录 = projectRoot/{dirContainingBoxspec}
  * 注意：仅返回路径，不创建目录
  */
-export function getProjectKnowledgePath(projectRoot: any) {
+export function getProjectKnowledgePath(projectRoot: string) {
   return path.join(projectRoot, getKnowledgeBaseDirName(projectRoot));
 }
 
 /**
  * Spec 文件路径 = knowledgePath/AutoSnippet.boxspec.json
  */
-export function getProjectSpecPath(projectRoot: any) {
+export function getProjectSpecPath(projectRoot: string) {
   return path.join(getProjectKnowledgePath(projectRoot), SPEC_FILENAME);
 }
 
@@ -107,7 +107,7 @@ export function getProjectSpecPath(projectRoot: any) {
  * 项目内部隐藏数据目录 = knowledgePath/.autosnippet
  * 注意：仅返回路径，不创建目录
  */
-export function getProjectInternalDataPath(projectRoot: any) {
+export function getProjectInternalDataPath(projectRoot: string) {
   return path.join(getProjectKnowledgePath(projectRoot), '.autosnippet');
 }
 
@@ -115,7 +115,7 @@ export function getProjectInternalDataPath(projectRoot: any) {
  * 上下文存储目录 = internalData/context
  * 注意：仅返回路径，不创建目录
  */
-export function getContextStoragePath(projectRoot: any) {
+export function getContextStoragePath(projectRoot: string) {
   return path.join(getProjectInternalDataPath(projectRoot), 'context');
 }
 
@@ -123,7 +123,7 @@ export function getContextStoragePath(projectRoot: any) {
  * 上下文索引目录 = contextStorage/index
  * 注意：仅返回路径，不创建目录
  */
-export function getContextIndexPath(projectRoot: any) {
+export function getContextIndexPath(projectRoot: string) {
   return path.join(getContextStoragePath(projectRoot), 'index');
 }
 
@@ -132,7 +132,7 @@ export function getContextIndexPath(projectRoot: any) {
  * Skills 放在知识库目录下跟随项目走（Git-tracked，用户可见）
  * 注意：仅返回路径，不创建目录
  */
-export function getProjectSkillsPath(projectRoot: any) {
+export function getProjectSkillsPath(projectRoot: string) {
   return path.join(getProjectKnowledgePath(projectRoot), 'skills');
 }
 
@@ -142,7 +142,10 @@ export function getProjectSkillsPath(projectRoot: any) {
  * @param {string} projectRoot
  * @param {object} [rootSpec] 项目 spec 对象（可选）
  */
-export function getProjectRecipesPath(projectRoot: any, rootSpec?: any) {
+export function getProjectRecipesPath(
+  projectRoot: string,
+  rootSpec?: { recipes?: { dir?: string }; skills?: { dir?: string } }
+) {
   const dir = rootSpec?.recipes?.dir || rootSpec?.skills?.dir || null;
   if (dir) {
     return path.join(projectRoot, dir);

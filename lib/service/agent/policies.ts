@@ -18,6 +18,48 @@
 
 import _path from 'node:path';
 
+// ─── Policy Type Definitions ─────────────────
+
+/** 执行前校验的上下文 */
+export interface PolicyContext {
+  message?: {
+    sender?: {
+      id?: string;
+    };
+  };
+  [key: string]: unknown;
+}
+
+/** 执行步骤状态 */
+export interface StepState {
+  iteration: number;
+  startTime: number;
+  [key: string]: unknown;
+}
+
+/** Agent 执行结果 */
+export interface PolicyResult {
+  reply?: string;
+  toolCalls?: unknown[];
+  [key: string]: unknown;
+}
+
+/** SafetyPolicy 构造选项 */
+export interface SafetyPolicyOptions {
+  fileScope?: string;
+  allowedSenders?: string[];
+  commandBlacklist?: RegExp[];
+  requireApprovalFor?: string[];
+}
+
+/** QualityGatePolicy 构造选项 */
+export interface QualityGatePolicyOptions {
+  minEvidenceLength?: number;
+  minFileRefs?: number;
+  minToolCalls?: number;
+  customValidator?: (result: PolicyResult) => { ok: boolean; reason?: string };
+}
+
 // ─── Base Policy ──────────────────────────────
 
 /**
@@ -30,22 +72,22 @@ export class Policy {
   }
 
   /** 执行前校验 — 拒绝不满足条件的请求 */
-  validateBefore(_context: any): { ok: boolean; reason?: string } {
+  validateBefore(_context: PolicyContext): { ok: boolean; reason?: string } {
     return { ok: true };
   }
 
   /** 执行中校验 — 每轮 ReAct 步骤后检查 */
-  validateDuring(_stepState: any): { ok: boolean; action?: string; reason?: string } {
+  validateDuring(_stepState: StepState): { ok: boolean; action?: string; reason?: string } {
     return { ok: true, action: 'continue' };
   }
 
   /** 执行后校验 — 对最终结果质量把关 */
-  validateAfter(_result: any): { ok: boolean; reason?: string } {
+  validateAfter(_result: PolicyResult): { ok: boolean; reason?: string } {
     return { ok: true };
   }
 
   /** 修改配置 — 在执行前注入额外约束 */
-  applyToConfig(config: any): any {
+  applyToConfig(config: Record<string, unknown>): Record<string, unknown> {
     return config;
   }
 }
@@ -104,7 +146,7 @@ export class BudgetPolicy extends Policy {
     return this.#temperature;
   }
 
-  validateDuring(stepState: any) {
+  validateDuring(stepState: StepState) {
     if (stepState.iteration >= this.#maxIterations) {
       return {
         ok: false,
@@ -122,7 +164,7 @@ export class BudgetPolicy extends Policy {
     return { ok: true, action: 'continue' };
   }
 
-  applyToConfig(config: any) {
+  applyToConfig(config: Record<string, unknown>) {
     return {
       ...config,
       budget: {
@@ -202,7 +244,7 @@ export class SafetyPolicy extends Policy {
     allowedSenders = [],
     commandBlacklist = [],
     requireApprovalFor = [],
-  }: any = {}) {
+  }: SafetyPolicyOptions = {}) {
     super();
     this.#fileScope = fileScope || null;
     this.#allowedSenders = allowedSenders;
@@ -214,7 +256,7 @@ export class SafetyPolicy extends Policy {
     return 'safety';
   }
 
-  validateBefore(context: any) {
+  validateBefore(context: PolicyContext) {
     // 发送者鉴权
     if (this.#allowedSenders.length > 0) {
       const senderId = context.message?.sender?.id;
@@ -230,7 +272,7 @@ export class SafetyPolicy extends Policy {
    * @param {string} command
    * @returns {{ safe: boolean, reason?: string }}
    */
-  checkCommand(command: any) {
+  checkCommand(command: string) {
     for (const pattern of this.#commandBlacklist) {
       if (pattern.test(command)) {
         return { safe: false, reason: `Blocked: matches dangerous pattern ${pattern}` };
@@ -244,7 +286,7 @@ export class SafetyPolicy extends Policy {
    * @param {string} filePath
    * @returns {{ safe: boolean, reason?: string }}
    */
-  checkFilePath(filePath: any) {
+  checkFilePath(filePath: string) {
     if (!this.#fileScope) {
       return { safe: true };
     }
@@ -263,11 +305,11 @@ export class SafetyPolicy extends Policy {
    * 是否需要人工确认
    * @param {string} toolName
    */
-  needsApproval(toolName: any) {
+  needsApproval(toolName: string) {
     return this.#requireApprovalFor.includes(toolName);
   }
 
-  applyToConfig(config: any) {
+  applyToConfig(config: Record<string, unknown>): Record<string, unknown> {
     return {
       ...config,
       safetyPolicy: this,
@@ -301,7 +343,7 @@ export class QualityGatePolicy extends Policy {
     minFileRefs = 3,
     minToolCalls = 2,
     customValidator,
-  }: any = {}) {
+  }: QualityGatePolicyOptions = {}) {
     super();
     this.#minEvidenceLength = minEvidenceLength;
     this.#minFileRefs = minFileRefs;
@@ -313,8 +355,8 @@ export class QualityGatePolicy extends Policy {
     return 'quality_gate';
   }
 
-  validateAfter(result: any) {
-    const reasons: string | any[] = [];
+  validateAfter(result: PolicyResult) {
+    const reasons: string[] = [];
 
     if (result.reply && result.reply.length < this.#minEvidenceLength) {
       reasons.push(`分析长度不足: ${result.reply.length} < ${this.#minEvidenceLength}`);
@@ -333,7 +375,7 @@ export class QualityGatePolicy extends Policy {
 
     if (this.#customValidator) {
       const custom = this.#customValidator(result);
-      if (!custom.ok) {
+      if (!custom.ok && custom.reason) {
         reasons.push(custom.reason);
       }
     }
@@ -368,7 +410,7 @@ export class PolicyEngine {
   /** @type {Policy[]} */
   #policies;
 
-  constructor(policies: any[] = []) {
+  constructor(policies: Policy[] = []) {
     this.#policies = policies;
   }
 
@@ -379,14 +421,14 @@ export class PolicyEngine {
   /**
    * 获取特定类型的 Policy
    * @template T
-   * @param {new (...args: any[]) => T} PolicyClass
+   * @param {new (...args: unknown[]) => T} PolicyClass
    * @returns {T|null}
    */
-  get(PolicyClass: any) {
-    return this.#policies.find((p) => p instanceof PolicyClass) || null;
+  get<T extends Policy>(PolicyClass: abstract new (...args: never[]) => T): T | null {
+    return this.#policies.find((p): p is T => p instanceof PolicyClass) ?? null;
   }
 
-  validateBefore(context: any) {
+  validateBefore(context: PolicyContext) {
     for (const policy of this.#policies) {
       const result = policy.validateBefore(context);
       if (!result.ok) {
@@ -396,7 +438,7 @@ export class PolicyEngine {
     return { ok: true };
   }
 
-  validateDuring(stepState: any) {
+  validateDuring(stepState: StepState) {
     for (const policy of this.#policies) {
       const result = policy.validateDuring(stepState);
       if (!result.ok) {
@@ -406,7 +448,7 @@ export class PolicyEngine {
     return { ok: true, action: 'continue' };
   }
 
-  validateAfter(result: any) {
+  validateAfter(result: PolicyResult) {
     for (const policy of this.#policies) {
       const val = policy.validateAfter(result);
       if (!val.ok) {
@@ -416,7 +458,7 @@ export class PolicyEngine {
     return { ok: true };
   }
 
-  applyToConfig(config: any) {
+  applyToConfig(config: Record<string, unknown>) {
     let result = config;
     for (const policy of this.#policies) {
       result = policy.applyToConfig(result);
@@ -449,7 +491,7 @@ export class PolicyEngine {
    * @param {Object} args 工具参数
    * @returns {{ ok: boolean, reason?: string }}
    */
-  validateToolCall(toolName: any, args: any) {
+  validateToolCall(toolName: string, args: Record<string, unknown>) {
     const safety = this.get(SafetyPolicy);
     if (!safety) {
       return { ok: true };
@@ -457,7 +499,7 @@ export class PolicyEngine {
 
     // 终端命令安全检查
     if (toolName === 'run_safe_command' && args?.command) {
-      const check = safety.checkCommand(args.command);
+      const check = safety.checkCommand(args.command as string);
       if (!check.safe) {
         return { ok: false, reason: `[SafetyPolicy] 命令拦截: ${check.reason}` };
       }
@@ -465,7 +507,7 @@ export class PolicyEngine {
 
     // 文件写入路径检查
     if (toolName === 'write_project_file' && args?.filePath) {
-      const check = safety.checkFilePath(args.filePath);
+      const check = safety.checkFilePath(args.filePath as string);
       if (!check.safe) {
         return { ok: false, reason: `[SafetyPolicy] 路径拦截: ${check.reason}` };
       }
@@ -473,7 +515,7 @@ export class PolicyEngine {
 
     // 文件读取路径检查
     if (toolName === 'read_project_file' && args?.filePath) {
-      const check = safety.checkFilePath(args.filePath);
+      const check = safety.checkFilePath(args.filePath as string);
       if (!check.safe) {
         return { ok: false, reason: `[SafetyPolicy] 路径拦截: ${check.reason}` };
       }

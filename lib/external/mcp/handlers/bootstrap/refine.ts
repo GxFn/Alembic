@@ -11,12 +11,19 @@
  */
 
 import { envelope } from '../../envelope.js';
+import type { KnowledgeEntryJSON, McpContext } from '../types.js';
 
 /**
  * @param {object} ctx  MCP context { container, logger }
  * @param {object} args { candidateIds?: string[], userPrompt?: string, dryRun?: boolean }
  */
-export async function bootstrapRefine(ctx: any, args: any) {
+interface BootstrapRefineArgs {
+  candidateIds?: string[];
+  userPrompt?: string;
+  dryRun?: boolean;
+}
+
+export async function bootstrapRefine(ctx: McpContext, args: BootstrapRefineArgs) {
   const t0 = Date.now();
   const knowledgeService = ctx.container.get('knowledgeService');
   const aiProvider = ctx.container.get('aiProvider');
@@ -30,16 +37,17 @@ export async function bootstrapRefine(ctx: any, args: any) {
   }
 
   // 接入 BootstrapTaskManager 双通道推送 refine:* 事件
-  let onProgress: any = null;
+  let onProgress: ((eventName: string, data: Record<string, unknown>) => void) | null = null;
   try {
     const taskManager = ctx.container.get('bootstrapTaskManager');
-    onProgress = (eventName: any, data: any) => taskManager.emitProgress(eventName, data);
+    onProgress = (eventName: string, data: Record<string, unknown>) =>
+      taskManager.emitProgress(eventName, data);
   } catch {
     /* optional */
   }
 
   // 1. 收集待润色条目
-  let entries;
+  let entries: KnowledgeEntryJSON[];
   if (args.candidateIds?.length) {
     entries = [];
     for (const id of args.candidateIds) {
@@ -53,7 +61,7 @@ export async function bootstrapRefine(ctx: any, args: any) {
       { lifecycle: 'pending', source: 'bootstrap' },
       { page: 1, pageSize: 200 }
     );
-    entries = (result.items || []).map((e: any) =>
+    entries = ((result.items || []) as KnowledgeEntryJSON[]).map((e) =>
       typeof e.toJSON === 'function' ? e.toJSON() : e
     );
   }
@@ -68,25 +76,32 @@ export async function bootstrapRefine(ctx: any, args: any) {
 
   onProgress?.('refine:started', {
     total: entries.length,
-    candidateIds: entries.map((e: any) => e.id),
+    candidateIds: entries.map((e) => e.id),
   });
 
   // 2. 收集已发布 Recipe 标题（关联关系只能指向已发布 Recipe，不能在候选之间互关联）
-  let publishedTitles: any[] = [];
+  let publishedTitles: string[] = [];
   try {
     const published = await knowledgeService.list(
       { lifecycle: 'active' },
       { page: 1, pageSize: 200 }
     );
-    publishedTitles = (published.items || []).map((e: any) => e.title).filter(Boolean);
+    publishedTitles = ((published.items || []) as KnowledgeEntryJSON[])
+      .map((e) => e.title)
+      .filter(Boolean);
   } catch {
     /* ignore */
   }
 
   // 3. 逐条 AI 润色
-  const results: { id: any; title: any; preview?: any; refined?: boolean; fields?: string[] }[] =
-    [];
-  const errors: { id: any; title: any; error: string }[] = [];
+  const results: {
+    id: string;
+    title: string;
+    preview?: Record<string, unknown>;
+    refined?: boolean;
+    fields?: string[];
+  }[] = [];
+  const errors: { id: string; title: string; error: string }[] = [];
   let refined = 0;
   let processed = 0;
 
@@ -244,14 +259,14 @@ ${refineInstruction}
         'agentNotes',
         'relations',
       ]);
-      const normalized: any = {};
+      const normalized: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(parsed)) {
         if (VALID_KEYS.has(key)) {
           normalized[key] = value;
         } else {
           const mapped =
-            (KEY_ALIASES as Record<string, any>)[key] ||
-            (KEY_ALIASES as Record<string, any>)[key.toLowerCase?.()];
+            (KEY_ALIASES as Record<string, string>)[key] ||
+            (KEY_ALIASES as Record<string, string>)[key.toLowerCase?.()];
           if (mapped && !(mapped in normalized)) {
             normalized[mapped] = value;
           }
@@ -259,12 +274,12 @@ ${refineInstruction}
       }
       for (const k of VALID_KEYS) {
         if (!(k in normalized)) {
-          normalized[k] = (before as Record<string, any>)[k];
+          normalized[k] = (before as Record<string, unknown>)[k];
         }
       }
 
       // 构建更新数据
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       let changed = false;
 
       if (normalized.description != null && normalized.description !== before.description) {
@@ -305,7 +320,7 @@ ${refineInstruction}
         }
       }
       // content 嵌套写入
-      const contentPatch = { ...(entry.content || {}) };
+      const contentPatch: Record<string, unknown> = { ...(entry.content || {}) };
       let contentChanged = false;
       if (normalized.pattern != null && normalized.pattern !== before.pattern) {
         contentPatch.pattern = normalized.pattern;
@@ -344,12 +359,13 @@ ${refineInstruction}
         progress: Math.round((processed / entries.length) * 100),
         refinedSoFar: refined,
       });
-    } catch (err: any) {
-      errors.push({ id: entry.id, title: entry.title, error: err.message });
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      errors.push({ id: entry.id, title: entry.title, error: errMsg });
       onProgress?.('refine:item-failed', {
         candidateId: entry.id,
         title: entry.title,
-        error: err.message,
+        error: errMsg,
         current: processed,
         total: entries.length,
         progress: Math.round((processed / entries.length) * 100),

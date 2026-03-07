@@ -6,13 +6,43 @@
 
 const MAX_RUNS = 200;
 
+interface DatabaseLike {
+  prepare(sql: string): {
+    run(...params: unknown[]): unknown;
+    get(...params: unknown[]): Record<string, unknown>;
+    all(...params: unknown[]): Record<string, unknown>[];
+  };
+}
+
+interface ViolationRecord {
+  ruleId?: string;
+  severity?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+interface RunInput {
+  filePath?: string;
+  violations?: ViolationRecord[];
+  summary?: string;
+}
+
+interface RunOutput {
+  id: string;
+  filePath: string;
+  triggeredAt: string;
+  violations: ViolationRecord[];
+  violationCount: number;
+  summary: string;
+}
+
 export class ViolationsStore {
-  #db;
+  #db: DatabaseLike;
 
   /**
    * @param {import('better-sqlite3').Database} db - SQLite 数据库实例
    */
-  constructor(db: any) {
+  constructor(db: DatabaseLike) {
     this.#db = db;
   }
 
@@ -23,7 +53,7 @@ export class ViolationsStore {
    * @param {{ filePath: string, violations: object[], summary?: string }} run
    * @returns {string} runId
    */
-  appendRun(run: any) {
+  appendRun(run: RunInput) {
     const id = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const now = Math.floor(Date.now() / 1000);
 
@@ -61,17 +91,17 @@ export class ViolationsStore {
    */
   getRuns() {
     const rows = this.#db.prepare('SELECT * FROM guard_violations ORDER BY created_at ASC').all();
-    return rows.map((r: any) => this.#rowToRun(r));
+    return rows.map((r) => this.#rowToRun(r));
   }
 
   /**
    * 按文件路径查询历史
    */
-  getRunsByFile(filePath: any) {
+  getRunsByFile(filePath: string) {
     const rows = this.#db
       .prepare('SELECT * FROM guard_violations WHERE file_path = ? ORDER BY created_at ASC')
       .all(filePath);
-    return rows.map((r: any) => this.#rowToRun(r));
+    return rows.map((r) => this.#rowToRun(r));
   }
 
   /**
@@ -81,7 +111,7 @@ export class ViolationsStore {
     const rows = this.#db
       .prepare('SELECT * FROM guard_violations ORDER BY created_at DESC, rowid DESC LIMIT ?')
       .all(n);
-    return rows.reverse().map((r: any) => this.#rowToRun(r));
+    return rows.reverse().map((r) => this.#rowToRun(r));
   }
 
   /**
@@ -96,7 +126,7 @@ export class ViolationsStore {
         MAX(triggered_at)        AS lastRunAt
       FROM guard_violations
     `)
-      .get();
+      .get() as { totalRuns: number; totalViolations: number; lastRunAt: string | null };
 
     return {
       totalRuns: row.totalRuns,
@@ -142,8 +172,8 @@ export class ViolationsStore {
       return {
         errorsChange: 0,
         warningsChange: 0,
-        latestErrors: latest.filter((v: any) => v.severity === 'error').length,
-        latestWarnings: latest.filter((v: any) => v.severity === 'warning').length,
+        latestErrors: latest.filter((v) => v.severity === 'error').length,
+        latestWarnings: latest.filter((v) => v.severity === 'warning').length,
         previousErrors: 0,
         previousWarnings: 0,
         hasHistory: false,
@@ -151,10 +181,10 @@ export class ViolationsStore {
     }
 
     const [prev, latest] = recent;
-    const latestErrors = latest.violations.filter((v: any) => v.severity === 'error').length;
-    const latestWarnings = latest.violations.filter((v: any) => v.severity === 'warning').length;
-    const previousErrors = prev.violations.filter((v: any) => v.severity === 'error').length;
-    const previousWarnings = prev.violations.filter((v: any) => v.severity === 'warning').length;
+    const latestErrors = latest.violations.filter((v) => v.severity === 'error').length;
+    const latestWarnings = latest.violations.filter((v) => v.severity === 'warning').length;
+    const previousErrors = prev.violations.filter((v) => v.severity === 'error').length;
+    const previousWarnings = prev.violations.filter((v) => v.severity === 'warning').length;
 
     return {
       errorsChange: latestErrors - previousErrors,
@@ -183,7 +213,7 @@ export class ViolationsStore {
     this.clearRuns();
   }
 
-  async clear({ ruleId, file }: any = {}) {
+  async clear({ ruleId, file }: { ruleId?: string; file?: string } = {}) {
     if (file) {
       this.#db.prepare('DELETE FROM guard_violations WHERE file_path = ?').run(file);
     } else {
@@ -194,10 +224,10 @@ export class ViolationsStore {
   /**
    * 兼容 v2 violations.js 路由的 list()
    */
-  async list(filters: any = {}, { page = 1, limit = 20 } = {}) {
+  async list(filters: { file?: string } = {}, { page = 1, limit = 20 } = {}) {
     const offset = (page - 1) * limit;
     let sql = 'SELECT * FROM guard_violations';
-    const params: any | number[] = [];
+    const params: (string | number)[] = [];
 
     if (filters.file) {
       sql += ' WHERE file_path = ?';
@@ -213,24 +243,24 @@ export class ViolationsStore {
       ? 'SELECT COUNT(*) AS c FROM guard_violations WHERE file_path = ?'
       : 'SELECT COUNT(*) AS c FROM guard_violations';
     const countParams = filters.file ? [filters.file] : [];
-    const total = this.#db.prepare(countSql).get(...countParams).c;
+    const total = (this.#db.prepare(countSql).get(...countParams) as { c: number }).c;
 
     return {
-      data: rows.map((r: any) => this.#rowToRun(r)),
+      data: rows.map((r) => this.#rowToRun(r)),
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     };
   }
 
   // ─── 内部 ─────────────────────────────────────────────
 
-  #rowToRun(row: any) {
+  #rowToRun(row: Record<string, unknown>): RunOutput {
     return {
-      id: row.id,
-      filePath: row.file_path,
-      triggeredAt: row.triggered_at,
-      violations: row.violations_json ? JSON.parse(row.violations_json) : [],
-      violationCount: row.violation_count,
-      summary: row.summary || '',
+      id: row.id as string,
+      filePath: row.file_path as string,
+      triggeredAt: row.triggered_at as string,
+      violations: row.violations_json ? JSON.parse(row.violations_json as string) : [],
+      violationCount: row.violation_count as number,
+      summary: (row.summary as string) || '',
     };
   }
 }

@@ -15,7 +15,69 @@ import {
 } from '../../../shared/FieldSpec.js';
 import { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
 import { findSimilarRecipes } from '../../candidate/SimilarityService.js';
-import { checkDimensionType, DIMENSION_DISPLAY_GROUP } from './_shared.js';
+import {
+  checkDimensionType,
+  DIMENSION_DISPLAY_GROUP,
+  type ToolHandlerContext,
+  type ToolSchemaEntry,
+} from './_shared.js';
+
+// ─── Tool handler param types ──────────────────────────────
+
+export interface AnalyzeCodeParams {
+  code: string;
+  language?: string;
+  filePath?: string;
+}
+
+export interface KnowledgeOverviewParams {
+  includeTopRecipes?: boolean;
+  limit?: number;
+}
+
+export interface SubmitWithCheckParams {
+  content?: { markdown?: string; pattern?: string; rationale?: string; [key: string]: unknown };
+  title?: string;
+  description?: string;
+  trigger?: string;
+  kind?: string;
+  topicHint?: string;
+  whenClause?: string;
+  doClause?: string;
+  dontClause?: string;
+  coreCode?: string;
+  tags?: string[];
+  reasoning?: { whyStandard?: string; sources?: string[]; confidence?: number };
+  headers?: string[];
+  usageGuide?: string;
+  scope?: string;
+  complexity?: string;
+  sourceFile?: string;
+  threshold?: number;
+  knowledgeType?: string;
+  [key: string]: unknown;
+}
+
+export interface PlanTaskParams {
+  steps?: Array<{ id: number; action: string; tool?: string; depends_on?: number[] }>;
+  strategy?: string;
+  estimated_iterations?: number;
+}
+
+export interface ReviewMyOutputParams {
+  check_rules?: string[];
+}
+
+/** Shape of params from previous submit tool calls (used by review_my_output) */
+interface SubmittedCallParams {
+  title?: string;
+  description?: string;
+  content?: { markdown?: string; [key: string]: unknown };
+  trigger?: string;
+  doClause?: string;
+  kind?: string;
+  [key: string]: unknown;
+}
 
 // ────────────────────────────────────────────────────────────
 // 34. analyze_code — 组合工具 (Guard + Recipe 搜索)
@@ -33,9 +95,9 @@ export const analyzeCode = {
     },
     required: ['code'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: AnalyzeCodeParams, ctx: ToolHandlerContext) => {
     const { code, language, filePath } = params;
-    const results: any = {};
+    const results: Record<string, unknown> = {};
 
     // 并行执行 Guard 检查 + Recipe 搜索
     const [guardResult, searchResult] = await Promise.all([
@@ -97,9 +159,9 @@ export const knowledgeOverview = {
       limit: { type: 'number', description: '每类返回数量，默认 5' },
     },
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: KnowledgeOverviewParams, ctx: ToolHandlerContext) => {
     const { includeTopRecipes = true, limit = 5 } = params;
-    const result: any = {};
+    const result: Record<string, unknown> = {};
 
     // 并行获取统计 + 可选的热门列表
     const [statsResult, feedbackResult] = await Promise.all([
@@ -140,7 +202,8 @@ export const knowledgeOverview = {
       result.topRecipes = feedbackResult;
     }
 
-    const recipeCount = result.recipes?.total || result.recipes?.count || 0;
+    const recipes = result.recipes as Record<string, number> | undefined;
+    const recipeCount = recipes?.total || recipes?.count || 0;
     result._meta = {
       confidence: recipeCount > 0 ? 'high' : 'none',
       hint: recipeCount === 0 ? '知识库为空，建议先执行冷启动（bootstrap_knowledge）。' : null,
@@ -201,7 +264,7 @@ export const submitWithCheck = {
     },
     required: getInternalAgentRequiredFields(),
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: SubmitWithCheckParams, ctx: ToolHandlerContext) => {
     const projectRoot = ctx.projectRoot;
 
     // ── Bootstrap 维度类型校验 ──
@@ -292,7 +355,7 @@ export const submitWithCheck = {
       const systemFields = {
         language: ctx._projectLanguage || '',
         category: dimMeta
-          ? (DIMENSION_DISPLAY_GROUP as Record<string, any>)[dimMeta.id] || dimMeta.id
+          ? (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id
           : 'general',
         knowledgeType: dimMeta?.allowedKnowledgeTypes?.[0] || 'code-pattern',
         source: ctx.source === 'system' ? 'bootstrap' : 'agent',
@@ -329,7 +392,7 @@ export const submitWithCheck = {
 
       if (dimMeta && ctx.source === 'system') {
         const displayGroup =
-          (DIMENSION_DISPLAY_GROUP as Record<string, any>)[dimMeta.id] || dimMeta.id;
+          (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id;
         data.tags = [...new Set([...(data.tags || []), displayGroup])];
       }
 
@@ -354,8 +417,8 @@ export const submitWithCheck = {
               : '已提交，无重复风险。',
         },
       };
-    } catch (err: any) {
-      return { submitted: false, reason: 'submit_error', error: err.message };
+    } catch (err: unknown) {
+      return { submitted: false, reason: 'submit_error', error: (err as Error).message };
     }
   },
 };
@@ -384,16 +447,16 @@ export const getToolDetails = {
     },
     required: ['toolName'],
   },
-  handler: async ({ toolName }: any, context: any) => {
+  handler: async ({ toolName }: { toolName: string }, context: ToolHandlerContext) => {
     const registry = context.container?.get('toolRegistry');
     if (!registry) {
       return { error: 'ToolRegistry not available' };
     }
 
     const schemas = registry.getToolSchemas();
-    const found = schemas.find((t: any) => t.name === toolName);
+    const found = schemas.find((t: ToolSchemaEntry) => t.name === toolName);
     if (!found) {
-      const allNames = schemas.map((t: any) => t.name);
+      const allNames = schemas.map((t: ToolSchemaEntry) => t.name);
       return {
         error: `Tool "${toolName}" not found`,
         availableTools: allNames,
@@ -441,7 +504,7 @@ export const planTask = {
     },
     required: ['steps', 'strategy'],
   },
-  handler: async (params: any, context: any) => {
+  handler: async (params: PlanTaskParams, context: ToolHandlerContext) => {
     const plan = {
       steps: params.steps || [],
       strategy: params.strategy || '',
@@ -472,25 +535,28 @@ export const reviewMyOutput = {
       },
     },
   },
-  handler: async (params: any, context: any) => {
+  handler: async (params: ReviewMyOutputParams, context: ToolHandlerContext) => {
     const submitted = (context._sessionToolCalls || []).filter(
-      (tc: any) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check'
+      (tc) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check'
     );
 
     if (submitted.length === 0) {
       return { status: 'no_candidates', message: '本次会话尚未提交任何候选。' };
     }
 
-    const issues: any[] = [];
-    const checked: { title: any; passed: boolean; issueCount: number }[] = [];
+    const issues: Array<{ title: string; issues: string[] }> = [];
+    const checked: { title: string; passed: boolean; issueCount: number }[] = [];
 
     for (const tc of submitted) {
-      const p = tc.params || {};
-      const contentObj3 = p.content && typeof p.content === 'object' ? p.content : {};
+      const p = (tc.params || {}) as SubmittedCallParams;
+      const contentObj3 = (p.content && typeof p.content === 'object' ? p.content : {}) as Record<
+        string,
+        string
+      >;
       const markdown = contentObj3.markdown || '';
       const title = p.title || '';
       const description = p.description || '';
-      const candidateIssues: any[] = [];
+      const candidateIssues: string[] = [];
 
       // 检查 1: 项目特写后缀
       if (!title.includes('— 项目特写') && !markdown.includes('— 项目特写')) {
@@ -564,7 +630,7 @@ export const reviewMyOutput = {
     }
 
     const issueLines = issues.flatMap(({ title, issues: iss }) =>
-      iss.map((i: any) => `• "${title}": ${i}`)
+      iss.map((i: string) => `• "${title}": ${i}`)
     );
 
     return {

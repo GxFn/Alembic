@@ -18,7 +18,35 @@
  *
  * @module NudgeGenerator
  */
+
+import type {
+  ExplorationBudget,
+  ExplorationTrace,
+  FullExplorationMetrics,
+} from './ExplorationStrategies.js';
 import { DEFAULT_REFLECTION_INTERVAL } from './ExplorationStrategies.js';
+
+// ─── 本地类型 ──────────────────────────────────────────
+
+/** 策略配置（NudgeGenerator 所需子集） */
+interface NudgeStrategy {
+  name: string;
+  enableReflection: boolean;
+  reflectionInterval?: number;
+  enablePlanning: boolean;
+}
+
+/** NudgeGenerator 的状态输入 */
+interface NudgeState {
+  phase: string;
+  metrics: FullExplorationMetrics;
+  budget: ExplorationBudget;
+  strategy: NudgeStrategy;
+  gracefulExitRound: number | null;
+  submitToolName: string;
+  isTerminalPhase: boolean;
+  transitionFromPhase?: string | null;
+}
 
 // ─── 常量 ──────────────────────────────────────────────
 
@@ -54,7 +82,7 @@ export class NudgeGenerator {
    * @param {object|null} trace - ActiveContext 实例 (反思用)
    * @returns {{ type: string, text: string }|null}
    */
-  generate(state: any, trace: any) {
+  generate(state: NudgeState, trace: ExplorationTrace | null) {
     const {
       phase: _phase,
       metrics: m,
@@ -120,7 +148,7 @@ export class NudgeGenerator {
    * @param {NudgeState} state
    * @returns {string}
    */
-  buildTransitionNudge(state: any) {
+  buildTransitionNudge(state: NudgeState) {
     const { metrics: m, strategy, submitToolName } = state;
     const fromPhase = state.transitionFromPhase;
     const toPhase = state.phase;
@@ -177,7 +205,7 @@ export class NudgeGenerator {
    * @param {NudgeState} state
    * @returns {string}
    */
-  getPhaseContext(state: any) {
+  getPhaseContext(state: NudgeState) {
     const { phase, metrics: m, budget: b, isTerminalPhase } = state;
     const remaining = b.maxIterations - m.iteration;
 
@@ -199,7 +227,12 @@ export class NudgeGenerator {
 
   // ─── 内部方法 ──────────────────────────────────
 
-  #generateForceExit(m: any, b: any, strategy: any, submitToolName: any) {
+  #generateForceExit(
+    m: FullExplorationMetrics,
+    b: ExplorationBudget,
+    strategy: NudgeStrategy,
+    submitToolName: string
+  ) {
     const submitCount = m.submitCount;
     // v5.1: Analyst 策略使用纯文本输出
     if (strategy.name === 'analyst') {
@@ -243,7 +276,7 @@ export class NudgeGenerator {
    * @param {object|null} trace
    * @returns {{ type: string, text: string }|null}
    */
-  #checkReflection(state: any, trace: any) {
+  #checkReflection(state: NudgeState, trace: ExplorationTrace | null) {
     const { phase, metrics: m, budget: b, strategy, isTerminalPhase } = state;
 
     // 终结阶段（SUMMARIZE）不应触发反思 — 此时应输出最终结果而非继续探索
@@ -282,7 +315,7 @@ export class NudgeGenerator {
 
     if (summary.thoughts?.length > 0) {
       parts.push(
-        `\n你最近的思考方向:\n${summary.thoughts.map((t: any, i: any) => `  ${i + 1}. ${t}`).join('\n')}`
+        `\n你最近的思考方向:\n${summary.thoughts.map((t: string, i: number) => `  ${i + 1}. ${t}`).join('\n')}`
       );
     }
 
@@ -296,8 +329,8 @@ export class NudgeGenerator {
     // Planning 进度附加
     if (strategy.enablePlanning) {
       const plan = trace?.getPlan?.();
-      if (plan?.steps?.length > 0) {
-        const doneCount = plan.steps.filter((s: any) => s.status === 'done').length;
+      if (plan && plan.steps && plan.steps.length > 0) {
+        const doneCount = plan.steps.filter((s: { status: string }) => s.status === 'done').length;
         parts.push(`\n📋 计划进度: ${doneCount}/${plan.steps.length} 步骤已完成`);
       }
     }
@@ -323,7 +356,7 @@ export class NudgeGenerator {
    * @param {NudgeState} state
    * @returns {string|null}
    */
-  #getPhaseHint(state: any) {
+  #getPhaseHint(state: NudgeState) {
     const { phase, metrics: m, budget: b, submitToolName } = state;
 
     switch (phase) {
@@ -362,7 +395,7 @@ export class NudgeGenerator {
    * @param {string} phase
    * @returns {string}
    */
-  static #getPhaseLabel(phase: any) {
+  static #getPhaseLabel(phase: string) {
     switch (phase) {
       case 'SCAN':
         return '扫描阶段';

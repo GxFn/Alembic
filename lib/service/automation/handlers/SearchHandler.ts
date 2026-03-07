@@ -11,10 +11,10 @@ import Logger from '../../../infrastructure/logging/Logger.js';
  * @param {string} searchLine
  */
 export async function handleSearch(
-  watcher: any,
-  fullPath: any,
-  relativePath: any,
-  searchLine: any
+  watcher: import('../FileWatcher.js').FileWatcher,
+  fullPath: string,
+  relativePath: string,
+  searchLine: string
 ) {
   const query = searchLine.replace(/^\/\/\s*(?:autosnippet|as):(?:search|s)\s*/, '').trim();
 
@@ -22,7 +22,7 @@ export async function handleSearch(
     return;
   }
 
-  let results: any[] = [];
+  let results: unknown[] = [];
   try {
     const { ServiceContainer } = await import('../../../injection/ServiceContainer.js');
     const container = ServiceContainer.getInstance();
@@ -41,7 +41,13 @@ export async function handleSearch(
         context: { intent: 'generate' },
       });
       // auto 零结果 → keyword (SQL LIKE) 兆底
-      if (!results || ((results as any).items || []).length === 0) {
+      if (
+        !results ||
+        (Array.isArray(results)
+          ? results
+          : ((results as Record<string, unknown>).items as unknown[]) || []
+        ).length === 0
+      ) {
         results = await searchEngine.search(query, { limit: 10, mode: 'keyword' });
       }
     } catch {
@@ -51,18 +57,18 @@ export async function handleSearch(
         /* 全部失败 */
       }
     }
-  } catch (err: any) {
-    Logger.getInstance().warn('搜索失败', { query, error: err.message });
-    watcher._notify(`搜索「${query}」失败: ${err.message}`);
+  } catch (err: unknown) {
+    Logger.getInstance().warn('搜索失败', { query, error: (err as Error).message });
+    watcher._notify(`搜索「${query}」失败: ${(err as Error).message}`);
     return;
   }
 
   const items = normalizeSearchResults(results);
 
   // Xcode 代码插入场景: 有实际代码的结果优先展示
-  items.sort((a: any, b: any) => {
-    const aHasCode = a.code && a.code !== '(无预览内容)' && a.code.length > 30 ? 1 : 0;
-    const bHasCode = b.code && b.code !== '(无预览内容)' && b.code.length > 30 ? 1 : 0;
+  items.sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+    const aHasCode = a.code && a.code !== '(无预览内容)' && (a.code as string).length > 30 ? 1 : 0;
+    const bHasCode = b.code && b.code !== '(无预览内容)' && (b.code as string).length > 30 ? 1 : 0;
     return bHasCode - aHasCode;
   });
 
@@ -106,17 +112,19 @@ export async function handleSearch(
 /**
  * 将搜索结果标准化为 NativeUI 可展示格式
  */
-export function normalizeSearchResults(results: any) {
+export function normalizeSearchResults(results: unknown) {
   if (!results) {
     return [];
   }
-  const arr = Array.isArray(results) ? results : results.items || [];
+  const arr: Record<string, string>[] = Array.isArray(results)
+    ? results
+    : ((results as Record<string, unknown>).items as Record<string, string>[]) || [];
 
   return arr
-    .map((r: any) => {
+    .map((r: Record<string, string>) => {
       let code = '';
       let explanation = '';
-      let headers: any[] = [];
+      let headers: string[] = [];
       if (r.content) {
         try {
           const content = typeof r.content === 'string' ? JSON.parse(r.content) : r.content;
@@ -185,7 +193,7 @@ export function normalizeSearchResults(results: any) {
 
       // ── 从 code 中分离 #import / @import / import 行，归入 headers ──
       const finalCode = code || r.code || r.description || r.trigger || '(无预览内容)';
-      const { cleanedCode, extractedHeaders } = _separateImportsFromCode(finalCode);
+      const { cleanedCode, extractedHeaders } = _separateImportsFromCode(String(finalCode));
       if (extractedHeaders.length > 0) {
         for (const h of extractedHeaders) {
           if (!headers.some((existing) => existing.trim() === h.trim())) {
@@ -203,7 +211,16 @@ export function normalizeSearchResults(results: any) {
         trigger: r.trigger || r.completionKey || '',
       };
     })
-    .filter((item: any) => item.title);
+    .filter(
+      (item: {
+        title: string;
+        code: string;
+        explanation: string;
+        headers: string[];
+        moduleName: string | null;
+        trigger: string;
+      }) => item.title
+    );
 }
 
 /**
@@ -214,13 +231,13 @@ export function normalizeSearchResults(results: any) {
  *
  * 支持: #import, @import, #include, import (Swift)
  */
-function _separateImportsFromCode(code: any) {
+function _separateImportsFromCode(code: string) {
   if (!code || code === '(无预览内容)') {
     return { cleanedCode: code, extractedHeaders: [] };
   }
   const lines = code.split(/\r?\n/);
   const importRe = /^\s*(#import\s|@import\s|#include\s|import\s)/;
-  const extractedHeaders: any[] = [];
+  const extractedHeaders: string[] = [];
   let lastImportIdx = -1;
 
   // 从开头扫描连续 import 块（允许中间有空行）
@@ -266,12 +283,12 @@ function _separateImportsFromCode(code: any) {
  * @param {string} md - Markdown 文本
  * @returns {string} 提取出的纯代码，或空字符串
  */
-function _extractCodeFromMarkdown(md: any) {
+function _extractCodeFromMarkdown(md: string) {
   if (!md) {
     return '';
   }
   const fencedRe = /```[\w]*\n([\s\S]*?)```/g;
-  const blocks: any[] = [];
+  const blocks: string[] = [];
   let match;
   while ((match = fencedRe.exec(md)) !== null) {
     const block = match[1].trim();
@@ -290,7 +307,7 @@ function _extractCodeFromMarkdown(md: any) {
  * @param {string} md - Markdown 文本
  * @returns {string} 纯文本
  */
-function _stripMarkdownFormatting(md: any) {
+function _stripMarkdownFormatting(md: string) {
   if (!md) {
     return '';
   }

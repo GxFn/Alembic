@@ -83,7 +83,10 @@ export function isNativeUiAvailable() {
  * @param {string} keyword 搜索关键词
  * @returns {number} 选中的索引（0-based），-1 表示取消
  */
-export function showCombinedWindow(items: any, keyword = '') {
+export function showCombinedWindow(
+  items: Array<{ title: string; code: string; explanation?: string; groupSize?: number }>,
+  keyword = ''
+) {
   if (!items || items.length === 0) {
     return -1;
   }
@@ -100,9 +103,9 @@ export function showCombinedWindow(items: any, keyword = '') {
       }).trim();
       const index = parseInt(result, 10);
       return Number.isNaN(index) ? -1 : index;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // exit(1) = 用户取消，直接返回 -1，不降级
-      if (err.status === 1) {
+      if ((err as { status?: number }).status === 1) {
         return -1;
       }
       // 其他错误（崩溃等）才降级到 AppleScript
@@ -130,7 +133,7 @@ export function showCombinedWindow(items: any, keyword = '') {
  * @param {string} prompt 提示文本
  * @returns {number} 选中索引（0-based），-1 取消
  */
-export function showListSelection(items: any, title = 'AutoSnippet', prompt = '请选择：') {
+export function showListSelection(items: string[], title = 'AutoSnippet', prompt = '请选择：') {
   if (!items || items.length === 0) {
     return -1;
   }
@@ -145,9 +148,9 @@ export function showListSelection(items: any, title = 'AutoSnippet', prompt = '�
       }).trim();
       const index = parseInt(result, 10);
       return Number.isNaN(index) ? -1 : index;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // exit(1) = 用户取消，直接返回
-      if (err.status === 1) {
+      if ((err as { status?: number }).status === 1) {
         return -1;
       }
       // 其他错误才降级
@@ -157,7 +160,7 @@ export function showListSelection(items: any, title = 'AutoSnippet', prompt = '�
   // 2. AppleScript
   if (process.platform === 'darwin') {
     try {
-      const listStr = items.map((i: any) => `"${i.replace(/"/g, '\\"')}"`).join(', ');
+      const listStr = items.map((i) => `"${i.replace(/"/g, '\\"')}"`).join(', ');
       const script = `choose from list {${listStr}} with title "${_escAS(title)}" with prompt "${_escAS(prompt)}" default items {"${_escAS(items[0])}"}`;
       const result = execSync(`osascript -e '${script}'`, {
         encoding: 'utf8',
@@ -182,7 +185,7 @@ export function showListSelection(items: any, title = 'AutoSnippet', prompt = '�
  * @param {string} code 代码内容
  * @returns {boolean} 用户是否确认
  */
-export function showPreviewConfirm(title: any, code: any) {
+export function showPreviewConfirm(title: string, code: string) {
   // 1. Swift Helper
   if (isNativeUiAvailable()) {
     try {
@@ -216,7 +219,7 @@ export function showPreviewConfirm(title: any, code: any) {
  * @param {string} message 通知内容
  * @param {string} [title='AutoSnippet']
  */
-export function notify(message: any, title = 'AutoSnippet') {
+export function notify(message: string, title = 'AutoSnippet') {
   try {
     if (process.platform === 'darwin') {
       const safeMsg = message.replace(/"/g, '\\"').replace(/\n/g, '\\n');
@@ -267,7 +270,11 @@ export function notify(message: any, title = 'AutoSnippet') {
  * @param {string} [title='AutoSnippet']
  * @returns {string|null} 点击的按钮名，或 null 表示取消
  */
-export function promptWithButtons(message: any, buttons = ['确认', '取消'], title = 'AutoSnippet') {
+export function promptWithButtons(
+  message: string,
+  buttons = ['确认', '取消'],
+  title = 'AutoSnippet'
+) {
   if (process.platform !== 'darwin') {
     return null;
   }
@@ -284,16 +291,19 @@ export function promptWithButtons(message: any, buttons = ['确认', '取消'], 
 
 /* ────────── 内部实现 ────────── */
 
-function _escAS(str: any) {
+function _escAS(str: string) {
   return String(str || '')
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
     .replace(/\n/g, '\\n');
 }
 
-function _appleScriptCombinedWindow(items: any, keyword: any) {
+function _appleScriptCombinedWindow(
+  items: Array<{ title: string; code: string; explanation?: string; groupSize?: number }>,
+  keyword: string
+) {
   // 两步：先选择，再预览确认
-  const titles = items.map((it: any, i: any) => `${i + 1}. ${it.title || 'Recipe'}`);
+  const titles = items.map((it, i) => `${i + 1}. ${it.title || 'Recipe'}`);
   const idx = showListSelection(titles, 'AutoSnippet Search', `搜索: ${keyword}`);
   if (idx < 0 || idx >= items.length) {
     return -1;
@@ -304,7 +314,10 @@ function _appleScriptCombinedWindow(items: any, keyword: any) {
   return confirmed ? idx : -1;
 }
 
-function _consoleFallback(items: any, keyword: any) {
-  items.forEach((item: any, i: any) => {});
+function _consoleFallback(
+  items: Array<{ title: string; code: string; explanation?: string; groupSize?: number }>,
+  _keyword: string
+) {
+  items.forEach((_item, _i) => {});
   return -1;
 }

@@ -14,6 +14,22 @@
 
 import { ImportRecord } from './ImportRecord.js';
 
+/** Input shape for the project summary from analyzeProject */
+interface ProjectSummaryInput {
+  fileSummaries?: Array<{
+    file: string;
+    exports?: Array<string | { name?: string; text?: string }>;
+    classes?: Array<{ name?: string; line?: number; kind?: string }>;
+    protocols?: Array<{ name?: string; line?: number }>;
+    methods?: Array<{ name?: string; className?: string; line?: number }>;
+    imports?: unknown[];
+    callSites?: Array<{ callType?: string; receiverType?: string | null }>;
+    properties?: Array<{ name: string; className?: string; typeAnnotation?: string }>;
+    [key: string]: unknown;
+  }>;
+  [key: string]: unknown;
+}
+
 /**
  * @typedef {object} SymbolDeclaration
  * @property {string} fqn - Fully Qualified Name e.g. "src/service/UserService.ts::UserService.getUser"
@@ -41,7 +57,7 @@ export class SymbolTableBuilder {
    * @param {object} projectSummary - analyzeProject() 返回的 ProjectAstSummary
    * @returns {SymbolTable}
    */
-  static build(projectSummary: any) {
+  static build(projectSummary: ProjectSummaryInput) {
     /** @type {SymbolTable} */
     const table = {
       declarations: new Map(),
@@ -119,7 +135,7 @@ export class SymbolTableBuilder {
       table.fileExports.set(filePath, exportNames);
 
       // 6. 注册导入 (兼容 string 和 ImportRecord)
-      const imports = (fileSummary.imports || []).map((imp: any) =>
+      const imports = (fileSummary.imports || []).map((imp: unknown) =>
         imp instanceof ImportRecord ? imp : new ImportRecord(String(imp))
       );
       table.fileImports.set(filePath, imports);
@@ -161,8 +177,8 @@ export class SymbolTableBuilder {
  * @param {Array} exports
  * @returns {string[]}
  */
-function _extractExportNames(exports: any) {
-  const names: string | any | 'default'[] = [];
+function _extractExportNames(exports: Array<string | { name?: string; text?: string }>) {
+  const names: string[] = [];
 
   for (const exp of exports) {
     if (typeof exp === 'string') {
@@ -193,7 +209,7 @@ function _extractExportNames(exports: any) {
       // export { A, B, C }
       const namedMatch = text.match(/export\s*\{([^}]+)\}/);
       if (namedMatch) {
-        const items = namedMatch[1].split(',').map((s: any) => {
+        const items = namedMatch[1].split(',').map((s: string) => {
           // 处理 "A as B" 的情况
           const parts = s.trim().split(/\s+as\s+/);
           return parts[parts.length - 1].trim();
@@ -212,7 +228,7 @@ function _extractExportNames(exports: any) {
  * @param {string[]} exportNames
  * @returns {boolean}
  */
-function _isExported(name: any, exportNames: any) {
+function _isExported(name: string, exportNames: string[]) {
   return exportNames.includes(name) || exportNames.includes('default');
 }
 

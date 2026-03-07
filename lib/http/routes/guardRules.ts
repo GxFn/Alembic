@@ -3,7 +3,7 @@
  * 管理代码质量防护规则的 CRUD 和生命周期操作
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { NotFoundError, ValidationError } from '../../shared/errors/index.js';
 import { LanguageService } from '../../shared/LanguageService.js';
@@ -17,19 +17,22 @@ const MAX_BATCH_SIZE = 100;
 /**
  * 将 Recipe 实体 → Guard 规则扁平格式（Dashboard GuardView 期望）
  */
-function mapRecipeToGuardRule(r: any) {
-  const guards = r.constraints?.guards || [];
-  const firstGuard = guards[0] || {};
+function mapRecipeToGuardRule(r: Record<string, unknown>) {
+  const constraints = r.constraints as Record<string, unknown[]> | undefined;
+  const guards = constraints?.guards || [];
+  const firstGuard = (guards[0] || {}) as Record<string, unknown>;
+  const content = r.content as Record<string, unknown> | undefined;
+  const tags = r.tags as string[] | undefined;
   return {
     id: r.id,
     ruleId: r.id,
     message: firstGuard.message || r.description || r.title || '',
     severity: firstGuard.severity || 'warning',
-    pattern: firstGuard.pattern || r.content?.pattern || '',
-    languages: r.tags?.length > 0 ? r.tags : r.language ? [r.language] : [],
-    note: r.content?.rationale || '',
+    pattern: firstGuard.pattern || content?.pattern || '',
+    languages: tags && tags.length > 0 ? tags : r.language ? [r.language] : [],
+    note: content?.rationale || '',
     dimension: r.scope || 'file',
-    rationale: r.content?.rationale || '',
+    rationale: content?.rationale || '',
     sourceRecipe: r.id,
     enabled: r.status === 'active',
   };
@@ -42,7 +45,7 @@ function mapRecipeToGuardRule(r: any) {
  */
 router.get(
   '/',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { severity, category, enabled, sourceRecipe, keyword } = req.query;
     const page = safeInt(req.query.page, 1);
     const pageSize = safeInt(req.query.limit, 20, 1, 100);
@@ -55,7 +58,7 @@ router.get(
     if (keyword) {
       result = await guardService.searchRules(keyword, { page, pageSize });
     } else {
-      const filters: any = {};
+      const filters: Record<string, unknown> = {};
       if (severity) {
         filters.severity = severity;
       }
@@ -83,9 +86,9 @@ router.get(
       /* not registered */
     }
     const builtInEntries = guardCheckEngine
-      ? (Object.entries(guardCheckEngine.getBuiltInRules()) as [string, any][])
+      ? (Object.entries(guardCheckEngine.getBuiltInRules()) as [string, Record<string, unknown>][])
       : [];
-    const dbRuleIds = new Set(mappedDbRules.map((r: any) => r.id));
+    const dbRuleIds = new Set(mappedDbRules.map((r: Record<string, unknown>) => r.id));
     const builtInRules = builtInEntries
       .filter(([id]) => !dbRuleIds.has(id))
       .map(([id, r]) => ({
@@ -107,16 +110,18 @@ router.get(
 
     // 获取当前项目检测到的语言列表，供前端按项目语言筛选
     // 使用 LanguageService 统一检测（支持 Discoverer + Monorepo 文件标记回退）
-    let projectLanguages: any[] = [];
+    let projectLanguages: string[] = [];
     try {
       const moduleService = container.get('moduleService');
       await moduleService.load();
       const info = moduleService.getProjectInfo();
       const discovererIds = info.languages || [];
-      projectLanguages = LanguageService.detectProjectLanguages(process.cwd(), { discovererIds });
+      projectLanguages = LanguageService.detectProjectLanguages(process.cwd(), {
+        discovererIds,
+      }) as string[];
     } catch {
       // moduleService 不可用时纯文件扫描回退
-      projectLanguages = LanguageService.detectProjectLanguages(process.cwd());
+      projectLanguages = LanguageService.detectProjectLanguages(process.cwd()) as string[];
     }
 
     // Guard 内置规则中 objectivec 记为 'objc'，做向后兼容映射
@@ -139,7 +144,7 @@ router.get(
  */
 router.get(
   '/stats',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
     const guardService = container.get('guardService');
     const stats = await guardService.getRuleStats();
@@ -153,14 +158,14 @@ router.get(
  */
 router.get(
   '/:id',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const recipeRepo = container.get('knowledgeRepository');
     const rule = await recipeRepo.findById(id);
 
     if (!rule) {
-      throw new NotFoundError('Guard rule not found', 'recipe', id);
+      throw new NotFoundError('Guard rule not found', 'recipe', id as string);
     }
 
     res.json({ success: true, data: rule });
@@ -175,7 +180,7 @@ router.get(
  */
 router.post(
   '/',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     // 兼容前端 GuardView 发来的字段名
     const name = req.body.name || req.body.ruleId;
     const description = req.body.description || req.body.message || '';
@@ -211,7 +216,7 @@ router.post(
  */
 router.post(
   '/batch-enable',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { ids } = req.body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -251,7 +256,7 @@ router.post(
  */
 router.post(
   '/batch-disable',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { ids, reason } = req.body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -293,7 +298,7 @@ router.post(
  */
 router.patch(
   '/:id/enable',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const guardService = container.get('guardService');
@@ -310,7 +315,7 @@ router.patch(
  */
 router.patch(
   '/:id/disable',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const { reason } = req.body;
 
@@ -329,7 +334,7 @@ router.patch(
  */
 router.post(
   '/check',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { code, language, ruleIds } = req.body;
 
     if (!code) {
@@ -350,7 +355,7 @@ router.post(
  */
 router.post(
   '/import-from-recipe',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { recipeId, rules } = req.body;
 
     if (!recipeId) {
@@ -384,18 +389,18 @@ router.post(
  */
 router.get(
   '/compliance',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
     const reporter = container.get('complianceReporter');
     const projectRoot = req.query.path || process.env.ASD_PROJECT_DIR || process.cwd();
 
     const report = await reporter.generate(projectRoot, {
       qualityGate: {
-        maxErrors: parseInt(req.query.maxErrors) || 0,
-        maxWarnings: parseInt(req.query.maxWarnings) || 20,
-        minScore: parseInt(req.query.minScore) || 70,
+        maxErrors: parseInt(req.query.maxErrors as string) || 0,
+        maxWarnings: parseInt(req.query.maxWarnings as string) || 20,
+        minScore: parseInt(req.query.minScore as string) || 70,
       },
-      maxFiles: parseInt(req.query.maxFiles) || 500,
+      maxFiles: parseInt(req.query.maxFiles as string) || 500,
     });
 
     res.json({ success: true, data: report });

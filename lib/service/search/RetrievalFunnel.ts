@@ -8,7 +8,7 @@
 
 import { CoarseRanker } from './CoarseRanker.js';
 import { CrossEncoderReranker } from './CrossEncoderReranker.js';
-import { contextBoost } from './contextBoost.js';
+import { contextBoost, type SearchContext, type SearchItem } from './contextBoost.js';
 import { buildInvertedIndex, lookup } from './InvertedIndex.js';
 import { MultiSignalRanker } from './MultiSignalRanker.js';
 
@@ -19,14 +19,36 @@ export class RetrievalFunnel {
   #vectorStore;
   #aiProvider;
 
-  constructor(options: any = {}) {
-    this.#multiSignalRanker = new MultiSignalRanker(options);
-    this.#coarseRanker = new CoarseRanker(options);
+  constructor(
+    options: {
+      vectorStore?: unknown;
+      aiProvider?: unknown;
+      logger?: unknown;
+      [key: string]: unknown;
+    } = {}
+  ) {
+    this.#multiSignalRanker = new MultiSignalRanker(
+      options as { scenarioWeights?: Record<string, Record<string, number>> }
+    );
+    this.#coarseRanker = new CoarseRanker(
+      options as {
+        bm25Weight?: number;
+        semanticWeight?: number;
+        qualityWeight?: number;
+        freshnessWeight?: number;
+        popularityWeight?: number;
+      }
+    );
     this.#vectorStore = options.vectorStore || null;
     this.#aiProvider = options.aiProvider || null;
     this.#crossEncoder = new CrossEncoderReranker({
-      aiProvider: this.#aiProvider,
-      logger: options.logger || console,
+      aiProvider: this.#aiProvider as {
+        chatWithStructuredOutput: (
+          prompt: string,
+          opts: Record<string, unknown>
+        ) => Promise<unknown>;
+      } | null,
+      logger: options.logger as { warn?: (...args: unknown[]) => void } | undefined,
     });
   }
 
@@ -37,7 +59,7 @@ export class RetrievalFunnel {
    * @param {object} context - { intent, language, userLevel, sessionHistory, ... }
    * @returns {Promise<Array>} - ranked results
    */
-  async execute(query: any, candidates: any, context: any = {}) {
+  async execute(query: string, candidates: SearchItem[], context: SearchContext = {}) {
     if (!candidates || candidates.length === 0) {
       return [];
     }
@@ -71,7 +93,7 @@ export class RetrievalFunnel {
   /**
    * Layer 1: 倒排索引关键词过滤
    */
-  #keywordFilter(query: any, candidates: any) {
+  #keywordFilter(query: string, candidates: SearchItem[]) {
     const index = buildInvertedIndex(candidates);
     const matchedIndices = lookup(index, query);
 
@@ -84,7 +106,7 @@ export class RetrievalFunnel {
   /**
    * Layer 2: 语义重排 — Cross-Encoder AI 评分（降级 Jaccard）
    */
-  async #semanticRerank(query: any, candidates: any) {
+  async #semanticRerank(query: string, candidates: SearchItem[]) {
     return this.#crossEncoder.rerank(query, candidates);
   }
 }

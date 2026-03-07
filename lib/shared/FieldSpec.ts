@@ -333,7 +333,7 @@ export function getRequiredFieldsDescription() {
  * @param {string} name
  * @returns {FieldDef|undefined}
  */
-export function getFieldDef(name: any) {
+export function getFieldDef(name: string) {
   return V3_FIELD_SPEC.find((f) => f.name === name);
 }
 

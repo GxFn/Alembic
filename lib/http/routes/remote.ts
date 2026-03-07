@@ -18,11 +18,38 @@
 
 import crypto from 'node:crypto';
 import { readFileSync, unlinkSync } from 'node:fs';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { LarkTransport } from '../../service/agent/LarkTransport.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+
+/** Lark WS client shape */
+interface LarkWsClient {
+  close?(): void;
+  start(opts: Record<string, unknown>): Promise<void>;
+}
+
+/** Lark API client shape */
+interface LarkApiClient {
+  auth: { tenantAccessToken: { internal(opts: Record<string, unknown>): Promise<unknown> } };
+  im: {
+    message: {
+      reply(opts: Record<string, unknown>): Promise<unknown>;
+      create(opts: Record<string, unknown>): Promise<unknown>;
+    };
+  };
+}
+
+/** Lark event data shape */
+interface LarkMessageEvent {
+  message?: Record<string, string>;
+  event?: {
+    message?: Record<string, string>;
+    sender?: { sender_id?: Record<string, string> };
+  };
+  sender?: { sender_id?: Record<string, string> };
+}
 
 const router = express.Router();
 const logger = Logger.getInstance();
@@ -42,7 +69,7 @@ function getDb() {
 }
 
 let _tableReady = false;
-function ensureTable(db: any) {
+function ensureTable(db: { exec(sql: string): void }) {
   if (_tableReady) {
     return;
   }
@@ -88,7 +115,7 @@ const _allowedUserIds = (process.env.ASD_LARK_ALLOWED_USERS || '')
   .map((s) => s.trim())
   .filter(Boolean);
 
-function isUserAllowed(userId: any) {
+function isUserAllowed(userId: string) {
   // 未配置白名单 → 放行所有（向后兼容）
   if (_allowedUserIds.length === 0) {
     return true;
@@ -101,7 +128,7 @@ function isUserAllowed(userId: any) {
 const _processedMsgIds = new Map();
 const MSG_DEDUP_TTL = 5 * 60 * 1000;
 
-function isDuplicate(messageId: any) {
+function isDuplicate(messageId: string) {
   if (!messageId) {
     return false;
   }
@@ -124,8 +151,8 @@ function isDuplicate(messageId: any) {
 //  飞书 SDK 长连接
 // ═══════════════════════════════════════════════════════
 
-let _wsClient: any = null;
-let _larkClient: any = null;
+let _wsClient: LarkWsClient | null = null;
+let _larkClient: LarkApiClient | null = null;
 let _wsConnected = false;
 let _wsStarting = false;
 
@@ -162,14 +189,14 @@ async function startLarkWS({ silent = false } = {}) {
       appId: config.appId,
       appSecret: config.appSecret,
       disableTokenCache: false,
-    });
+    }) as unknown as LarkApiClient;
 
     const eventDispatcher = new lark.EventDispatcher({}).register({
       'im.message.receive_v1': async (data) => {
         try {
-          await handleLarkMessage(data);
-        } catch (err: any) {
-          logger.error(`[Remote/Lark] Handler error: ${err.message}`);
+          await handleLarkMessage(data as unknown as LarkMessageEvent);
+        } catch (err: unknown) {
+          logger.error(`[Remote/Lark] Handler error: ${(err as Error).message}`);
         }
       },
     });
@@ -206,12 +233,12 @@ async function startLarkWS({ silent = false } = {}) {
     }
 
     return { success: true, message: 'Connected via WebSocket' };
-  } catch (err: any) {
+  } catch (err: unknown) {
     _wsClient = null;
     _wsConnected = false;
     _wsStarting = false;
-    logger.error(`[Remote/Lark] WSClient start failed: ${err.message}`);
-    return { success: false, message: err.message };
+    logger.error(`[Remote/Lark] WSClient start failed: ${(err as Error).message}`);
+    return { success: false, message: (err as Error).message };
   }
 }
 
@@ -323,7 +350,7 @@ setInterval(() => {
 // ═══════════════════════════════════════════════════════
 
 /** @type {LarkTransport|null} */
-let _larkTransport: any = null;
+let _larkTransport: LarkTransport | null = null;
 
 /**
  * 获取或创建 LarkTransport 实例
@@ -351,15 +378,18 @@ function getLarkTransport() {
       sendFn: sendLarkNotification,
       sendImageFn: sendLarkScreenshot,
       getStatusFn: getStatusText,
-      enqueueIdeFn: enqueueIdeCommand,
+      enqueueIdeFn: enqueueIdeCommand as (
+        command: string,
+        meta: Record<string, unknown>
+      ) => Promise<{ id: string }>,
       isUserAllowed,
       projectRoot: container.get('projectRoot') || process.cwd(),
     });
 
     logger.info('[Remote/Lark] LarkTransport initialized');
     return _larkTransport;
-  } catch (err: any) {
-    logger.warn(`[Remote/Lark] LarkTransport init failed: ${err.message}`);
+  } catch (err: unknown) {
+    logger.warn(`[Remote/Lark] LarkTransport init failed: ${(err as Error).message}`);
     return null;
   }
 }
@@ -405,7 +435,7 @@ async function getStatusText() {
       }
     }
 
-    const counts: any = {};
+    const counts: Record<string, number> = {};
     for (const s of ['pending', 'running', 'completed', 'timeout']) {
       counts[s] =
         db.prepare('SELECT COUNT(*) as c FROM remote_commands WHERE status = ?').get(s)?.c || 0;
@@ -413,8 +443,8 @@ async function getStatusText() {
     lines.push(
       `⑤ 队列: ${counts.pending} 待执行 | ${counts.running} 执行中 | ${counts.completed} 已完成 | ${counts.timeout} 超时`
     );
-  } catch (err: any) {
-    lines.push(`④ IDE 扩展: ❓ 查询失败 (${err.message})`);
+  } catch (err: unknown) {
+    lines.push(`④ IDE 扩展: ❓ 查询失败 (${(err as Error).message})`);
     lines.push('⑤ 队列: ❓ 查询失败');
   }
 
@@ -434,7 +464,7 @@ async function getStatusText() {
  * @param {Object} meta - { chatId, messageId, senderId, senderName }
  * @returns {Promise<{id: string}>}
  */
-async function enqueueIdeCommand(command: any, meta: any = {}) {
+async function enqueueIdeCommand(command: string, meta: Record<string, string> = {}) {
   const db = getDb();
   ensureTable(db);
   const id = genId();
@@ -474,8 +504,8 @@ function _getProjectRoot() {
 //  飞书消息处理 — 通过 LarkTransport 路由
 // ═══════════════════════════════════════════════════════
 
-async function handleLarkMessage(data: any) {
-  const message = data?.message || data?.event?.message || {};
+async function handleLarkMessage(data: LarkMessageEvent) {
+  const message: Record<string, string> = data?.message || data?.event?.message || {};
   const messageId = message.message_id;
   const chatId = message.chat_id;
 
@@ -496,7 +526,8 @@ async function handleLarkMessage(data: any) {
   } else {
     // Transport 未就绪 → 降级为旧队列模式
     logger.warn('[Remote/Lark] Transport not ready, falling back to queue mode');
-    const sender = data?.sender || data?.event?.sender || {};
+    const sender: { sender_id?: Record<string, string> } =
+      data?.sender || data?.event?.sender || {};
     let text = '';
     try {
       const content = JSON.parse(message.content || '{}');
@@ -523,23 +554,23 @@ async function handleLarkMessage(data: any) {
 
 router.post(
   '/lark/start',
-  asyncHandler(async (_req: any, res: any) => {
+  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     res.json(await startLarkWS());
   })
 );
 
 router.post(
   '/lark/stop',
-  asyncHandler(async (_req: any, res: any) => {
+  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     res.json(stopLarkWS());
   })
 );
 
 router.get(
   '/lark/status',
-  asyncHandler(async (_req: any, res: any) => {
+  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     const config = getLarkConfig();
-    const queueInfo: Record<string, any> = {};
+    const queueInfo: Record<string, number> = {};
     try {
       const db = getDb();
       ensureTable(db);
@@ -571,16 +602,16 @@ router.get(
 
 router.post(
   '/lark/event',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const body = req.body;
     if (body.type === 'url_verification') {
-      return res.json({ challenge: body.challenge });
+      return void res.json({ challenge: body.challenge });
     }
     const header = body.header || {};
     const event = body.event || {};
     const larkConfig = getLarkConfig();
     if (larkConfig.verificationToken && header.token !== larkConfig.verificationToken) {
-      return res.status(403).json({ success: false, message: 'Invalid token' });
+      return void res.status(403).json({ success: false, message: 'Invalid token' });
     }
     if (header.event_type === 'im.message.receive_v1') {
       await handleLarkMessage(event);
@@ -595,7 +626,7 @@ router.post(
 
 router.get(
   '/pending',
-  asyncHandler(async (_req: any, res: any) => {
+  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     _lastPollAt = Date.now();
     const db = getDb();
     ensureTable(db);
@@ -620,7 +651,7 @@ router.get(
 
 router.post(
   '/claim/:id',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const db = getDb();
     ensureTable(db);
@@ -628,7 +659,7 @@ router.post(
       .prepare('UPDATE remote_commands SET status = ?, claimed_at = ? WHERE id = ? AND status = ?')
       .run('running', Math.floor(Date.now() / 1000), id, 'pending');
     if (result.changes === 0) {
-      return res.json({ success: false, message: 'Not found or already claimed' });
+      return void res.json({ success: false, message: 'Not found or already claimed' });
     }
     // 通知飞书用户：IDE 已开始执行
     const row = db.prepare('SELECT message_id, command FROM remote_commands WHERE id = ?').get(id);
@@ -644,14 +675,14 @@ router.post(
 
 router.post(
   '/result/:id',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const { result, status = 'completed' } = req.body;
     const db = getDb();
     ensureTable(db);
     const row = db.prepare('SELECT * FROM remote_commands WHERE id = ?').get(id);
     if (!row) {
-      return res.json({ success: false, message: 'Not found' });
+      return void res.json({ success: false, message: 'Not found' });
     }
 
     db.prepare(
@@ -675,10 +706,10 @@ router.post(
 
 router.get(
   '/history',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const db = getDb();
     ensureTable(db);
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const limit = Math.min(parseInt(String(req.query.limit), 10) || 20, 100);
     const rows = db
       .prepare('SELECT * FROM remote_commands ORDER BY created_at DESC LIMIT ?')
       .all(limit);
@@ -712,7 +743,7 @@ router.get('/wait', (req, res) => {
   const timeout = Math.min(parseInt(req.query.timeout as string) || 25000, 60000);
   let resolved = false;
 
-  const resolve = (data: any) => {
+  const resolve = (data: Record<string, unknown>) => {
     if (resolved) {
       return;
     }
@@ -738,7 +769,7 @@ router.get('/wait', (req, res) => {
 // POST /flush — IDE 重连时清理所有积压的 pending 指令
 router.post(
   '/flush',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const db = getDb();
     ensureTable(db);
 
@@ -750,7 +781,7 @@ router.post(
       .all();
 
     if (pending.length === 0) {
-      return res.json({ success: true, flushed: 0, commands: [] });
+      return void res.json({ success: true, flushed: 0, commands: [] });
     }
 
     // 批量标记为 cancelled
@@ -759,17 +790,17 @@ router.post(
       "UPDATE remote_commands SET status = 'cancelled', result = '🗑 IDE 重连时自动清理（积压指令）', completed_at = ? WHERE status = 'pending'"
     ).run(now);
 
-    const summaries = pending.map((r: any) => ({
+    const summaries = pending.map((r: Record<string, unknown>) => ({
       id: r.id,
-      command: r.command?.slice(0, 60) || '',
-      age: now - r.created_at,
+      command: (r.command as string)?.slice(0, 60) || '',
+      age: now - (r.created_at as number),
     }));
 
     logger.info(`[Remote] Flushed ${pending.length} stale pending commands on IDE reconnect`);
 
     // 飞书通知
     const lines = summaries.map(
-      (s: any, i: any) =>
+      (s: { command: string; age: number }, i: number) =>
         `  ${i + 1}. ${s.command}${s.command.length >= 60 ? '…' : ''} (${s.age}s ago)`
     );
     sendLarkNotification(
@@ -782,10 +813,10 @@ router.post(
 
 router.post(
   '/send',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { command } = req.body;
     if (!command?.trim()) {
-      return res.status(400).json({ success: false, message: 'command required' });
+      return void res.status(400).json({ success: false, message: 'command required' });
     }
     const db = getDb();
     ensureTable(db);
@@ -800,10 +831,10 @@ router.post(
 // POST /api/v1/remote/notify — 通用通知（扩展/外部模块主动推送飞书）
 router.post(
   '/notify',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { text } = req.body;
     if (!text?.trim()) {
-      return res.status(400).json({ success: false, message: 'text required' });
+      return void res.status(400).json({ success: false, message: 'text required' });
     }
     const sent = await sendLarkNotification(text.trim());
     res.json({ success: sent, message: sent ? 'Sent' : 'Lark not connected or no active chat' });
@@ -813,7 +844,7 @@ router.post(
 // POST /api/v1/remote/screenshot — 截取 IDE 窗口并发送到飞书
 router.post(
   '/screenshot',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { caption } = req.body || {};
     const result = await sendLarkScreenshot(caption || '');
     res.json(result);
@@ -856,7 +887,7 @@ async function getTenantToken() {
   }
 }
 
-async function replyLark(messageId: any, text: any) {
+async function replyLark(messageId: string, text: string): Promise<void> {
   if (!messageId) {
     return;
   }
@@ -869,8 +900,8 @@ async function replyLark(messageId: any, text: any) {
         data: { content: JSON.stringify({ text }), msg_type: 'text' },
       });
       return;
-    } catch (err: any) {
-      logger.warn(`[Remote/Lark] SDK reply failed: ${err.message}`);
+    } catch (err: unknown) {
+      logger.warn(`[Remote/Lark] SDK reply failed: ${(err as Error).message}`);
     }
   }
 
@@ -900,7 +931,7 @@ async function replyLark(messageId: any, text: any) {
  * @param {string} [opts.windowTitle] 窗口标题关键词（默认 "Code"）
  * @returns {Promise<{path: string|null, error: string|null}>}
  */
-async function captureIDEScreenshot(opts: any = {}) {
+async function captureIDEScreenshot(opts: { windowTitle?: string } = {}) {
   try {
     const { screenshot } = await import('../../platform/ScreenCaptureService.js');
 
@@ -936,9 +967,9 @@ async function captureIDEScreenshot(opts: any = {}) {
     }
 
     return { path: null, error: result.error || 'Screenshot failed' };
-  } catch (err: any) {
-    logger.warn(`[Remote/Screenshot] ScreenCaptureKit error: ${err.message}`);
-    return { path: null, error: err.message };
+  } catch (err: unknown) {
+    logger.warn(`[Remote/Screenshot] ScreenCaptureKit error: ${(err as Error).message}`);
+    return { path: null, error: (err as Error).message };
   }
 }
 
@@ -947,7 +978,7 @@ async function captureIDEScreenshot(opts: any = {}) {
  * @param {string} filePath 本地图片路径
  * @returns {Promise<{imageKey: string|null, error: string|null}>}
  */
-async function _uploadImageToLark(filePath: any) {
+async function _uploadImageToLark(filePath: string) {
   const token = await getTenantToken();
   if (!token) {
     return { imageKey: null, error: '获取 tenant_access_token 失败' };
@@ -971,9 +1002,9 @@ async function _uploadImageToLark(filePath: any) {
     const errMsg = `飞书图片上传失败 (code=${data.code}): ${data.msg || '未知错误'}`;
     logger.warn(`[Remote/Screenshot] Upload failed: code=${data.code} msg=${data.msg}`);
     return { imageKey: null, error: errMsg };
-  } catch (err: any) {
-    logger.warn(`[Remote/Screenshot] Upload error: ${err.message}`);
-    return { imageKey: null, error: `上传异常: ${err.message}` };
+  } catch (err: unknown) {
+    logger.warn(`[Remote/Screenshot] Upload error: ${(err as Error).message}`);
+    return { imageKey: null, error: `上传异常: ${(err as Error).message}` };
   }
 }
 
@@ -982,7 +1013,7 @@ async function _uploadImageToLark(filePath: any) {
  * @param {string} imageKey
  * @returns {Promise<boolean>}
  */
-async function _sendLarkImageMsg(imageKey: any) {
+async function _sendLarkImageMsg(imageKey: string) {
   if (!_activeChatId || !_wsConnected) {
     return false;
   }
@@ -999,8 +1030,8 @@ async function _sendLarkImageMsg(imageKey: any) {
         },
       });
       return true;
-    } catch (err: any) {
-      logger.warn(`[Remote/Screenshot] SDK image send failed: ${err.message}`);
+    } catch (err: unknown) {
+      logger.warn(`[Remote/Screenshot] SDK image send failed: ${(err as Error).message}`);
     }
   }
 
@@ -1082,7 +1113,7 @@ export async function sendLarkScreenshot(caption = '') {
 let _activeChatId = '';
 
 /** 持久化 active chat_id 到数据库 */
-function _persistActiveChatId(chatId: any) {
+function _persistActiveChatId(chatId: string) {
   try {
     const db = getDb();
     db.exec(
@@ -1141,7 +1172,7 @@ function _restoreActiveChatId() {
  * @param {string} text 纯文本通知内容
  * @returns {Promise<boolean>} 发送是否成功
  */
-export async function sendLarkNotification(text: any) {
+export async function sendLarkNotification(text: string) {
   if (!_activeChatId || !_wsConnected) {
     return false;
   }
@@ -1158,8 +1189,8 @@ export async function sendLarkNotification(text: any) {
         },
       });
       return true;
-    } catch (err: any) {
-      logger.warn(`[Remote/Lark] SDK send failed: ${err.message}`);
+    } catch (err: unknown) {
+      logger.warn(`[Remote/Lark] SDK send failed: ${(err as Error).message}`);
     }
   }
 

@@ -5,24 +5,68 @@
  * 支持关系查询、路径分析、PageRank 权重计算
  */
 
+import type { Database } from 'better-sqlite3';
 import { RelationType } from '../../domain/index.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+
+/** SQLite row from knowledge_edges table */
+interface EdgeRow {
+  id: number;
+  from_id: string;
+  from_type: string;
+  to_id: string;
+  to_type: string;
+  relation: string;
+  weight: number;
+  metadata_json: string;
+  created_at: number;
+  updated_at: number;
+}
+
+interface MappedEdge {
+  id: number;
+  fromId: string;
+  fromType: string;
+  toId: string;
+  toType: string;
+  relation: string;
+  weight: number;
+  metadata: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface DbLike {
+  getDb?: () => Database;
+  prepare(sql: string): {
+    run(...params: unknown[]): { changes: number };
+    get(...params: unknown[]): EdgeRow;
+    all(...params: unknown[]): EdgeRow[];
+  };
+}
 
 // Re-export unified RelationType for backward compatibility
 export { RelationType };
 
 export class KnowledgeGraphService {
-  db: any;
-  logger: any;
-  constructor(db: any) {
-    this.db = typeof db?.getDb === 'function' ? db.getDb() : db;
+  db: DbLike;
+  logger: ReturnType<typeof Logger.getInstance>;
+  constructor(db: DbLike) {
+    this.db = typeof db?.getDb === 'function' ? (db.getDb() as unknown as DbLike) : db;
     this.logger = Logger.getInstance();
   }
 
   /**
    * 添加关系边
    */
-  addEdge(fromId: any, fromType: any, toId: any, toType: any, relation: any, metadata: any = {}) {
+  addEdge(
+    fromId: string,
+    fromType: string,
+    toId: string,
+    toType: string,
+    relation: string,
+    metadata: Record<string, unknown> = {}
+  ) {
     const now = Math.floor(Date.now() / 1000);
     try {
       this.db
@@ -43,16 +87,17 @@ export class KnowledgeGraphService {
         );
 
       return { success: true };
-    } catch (error: any) {
-      this.logger.error('Failed to add edge', { fromId, toId, relation, error: error.message });
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error('Failed to add edge', { fromId, toId, relation, error: errMsg });
+      return { success: false, error: errMsg };
     }
   }
 
   /**
    * 删除关系边
    */
-  removeEdge(fromId: any, fromType: any, toId: any, toType: any, relation: any) {
+  removeEdge(fromId: string, fromType: string, toId: string, toType: string, relation: string) {
     this.db
       .prepare(`
       DELETE FROM knowledge_edges WHERE from_id = ? AND from_type = ? AND to_id = ? AND to_type = ? AND relation = ?
@@ -63,7 +108,7 @@ export class KnowledgeGraphService {
   /**
    * 查询某个节点的所有关系
    */
-  getEdges(nodeId: any, nodeType: any, direction = 'both') {
+  getEdges(nodeId: string, nodeType: string, direction = 'both') {
     const outgoing =
       direction === 'both' || direction === 'out'
         ? this.db
@@ -87,7 +132,7 @@ export class KnowledgeGraphService {
   /**
    * 查询指定关系类型的连接
    */
-  getRelated(nodeId: any, nodeType: any, relation: any) {
+  getRelated(nodeId: string, nodeType: string, relation: string) {
     const rows = this.db
       .prepare(`
       SELECT * FROM knowledge_edges WHERE from_id = ? AND from_type = ? AND relation = ?
@@ -102,9 +147,19 @@ export class KnowledgeGraphService {
   /**
    * 查找两个节点之间的路径 (BFS, 最大深度 5)
    */
-  findPath(fromId: any, fromType: any, toId: any, toType: any, maxDepth = 5) {
+  findPath(fromId: string, fromType: string, toId: string, toType: string, maxDepth = 5) {
     const visited = new Set();
-    const queue = [{ id: fromId, type: fromType, path: [] as any[] }];
+    const queue = [
+      {
+        id: fromId,
+        type: fromType,
+        path: [] as {
+          from: { id: string; type: string };
+          to: { id: string; type: string };
+          relation: string;
+        }[],
+      },
+    ];
 
     while (queue.length > 0) {
       const { id, type, path } = queue.shift()!;
@@ -143,13 +198,21 @@ export class KnowledgeGraphService {
       }
     }
 
-    return { found: false, path: [] as any[], depth: -1 };
+    return {
+      found: false,
+      path: [] as {
+        from: { id: string; type: string };
+        to: { id: string; type: string };
+        relation: string;
+      }[],
+      depth: -1,
+    };
   }
 
   /**
    * 获取节点的影响范围（下游依赖分析）
    */
-  getImpactAnalysis(nodeId: any, nodeType: any, maxDepth = 3) {
+  getImpactAnalysis(nodeId: string, nodeType: string, maxDepth = 3) {
     const impacted = new Map();
     const queue = [{ id: nodeId, type: nodeType, depth: 0 }];
 
@@ -189,7 +252,7 @@ export class KnowledgeGraphService {
   /**
    * @param {string} [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部
    */
-  getStats(nodeType: any) {
+  getStats(nodeType?: string) {
     const typeFilter = nodeType
       ? ` WHERE from_type = '${nodeType}' AND to_type = '${nodeType}'`
       : '';
@@ -210,8 +273,10 @@ export class KnowledgeGraphService {
       .all();
 
     return {
-      totalEdges: edgeCount.total,
-      byRelation: Object.fromEntries(byRelation.map((r: any) => [r.relation, r.count])),
+      totalEdges: (edgeCount as unknown as Record<string, number>).total,
+      byRelation: Object.fromEntries(
+        byRelation.map((r) => [r.relation, (r as unknown as Record<string, unknown>).count])
+      ),
       nodeTypes: byType,
     };
   }
@@ -221,7 +286,7 @@ export class KnowledgeGraphService {
    * @param {number} [limit=500] 最大返回条数
    * @param {string} [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部
    */
-  getAllEdges(limit = 500, nodeType: any) {
+  getAllEdges(limit = 500, nodeType?: string) {
     let sql, params;
     if (nodeType) {
       sql = `SELECT * FROM knowledge_edges WHERE from_type = ? AND to_type = ? ORDER BY updated_at DESC LIMIT ?`;
@@ -236,7 +301,7 @@ export class KnowledgeGraphService {
 
   // Private
 
-  _mapEdge(row: any) {
+  _mapEdge(row: EdgeRow): MappedEdge {
     return {
       id: row.id,
       fromId: row.from_id,
@@ -252,14 +317,14 @@ export class KnowledgeGraphService {
   }
 }
 
-let instance: any = null;
+let instance: KnowledgeGraphService | null = null;
 
-export function initKnowledgeGraphService(db: any) {
+export function initKnowledgeGraphService(db: DbLike) {
   instance = new KnowledgeGraphService(db);
   return instance;
 }
 
-export function getKnowledgeGraphService() {
+export function getKnowledgeGraphService(): KnowledgeGraphService | null {
   return instance;
 }
 

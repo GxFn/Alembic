@@ -18,8 +18,8 @@ export class SpmDiscoverer extends ProjectDiscoverer {
   /** @type {PackageSwiftParser|null} */
   #parser: PackageSwiftParser | null = null;
   #projectRoot: string | null = null;
-  /** @type {Array<{ pkgPath: string, parsed: object }>} */
-  #parsedPackages: any[] = [];
+  /** @type {Array<{ pkgPath: string, parsed: ReturnType<PackageSwiftParser['parse']> }>} */
+  #parsedPackages: { pkgPath: string; parsed: ReturnType<PackageSwiftParser['parse']> }[] = [];
 
   get id() {
     return 'spm';
@@ -28,7 +28,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     return 'Swift Package Manager (SPM)';
   }
 
-  async detect(projectRoot: any) {
+  async detect(projectRoot: string) {
     // 检查项目根是否有 Package.swift
     const hasRoot = existsSync(join(projectRoot, 'Package.swift'));
     if (hasRoot) {
@@ -56,7 +56,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     return { match: false, confidence: 0, reason: 'No Package.swift found' };
   }
 
-  async load(projectRoot: any) {
+  async load(projectRoot: string) {
     this.#projectRoot = projectRoot;
     this.#parser = new PackageSwiftParser(projectRoot);
     this.#parsedPackages = [];
@@ -79,7 +79,13 @@ export class SpmDiscoverer extends ProjectDiscoverer {
       return [];
     }
 
-    const targets: { name: any; path: string; type: any; language: string; metadata: any }[] = [];
+    const targets: {
+      name: string;
+      path: string;
+      type: string;
+      language: string;
+      metadata: Record<string, unknown>;
+    }[] = [];
     for (const { pkgPath, parsed } of this.#parsedPackages) {
       const pkgDir = dirname(pkgPath);
       for (const t of parsed.targets || []) {
@@ -100,7 +106,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     return targets;
   }
 
-  async getTargetFiles(target: any) {
+  async getTargetFiles(target: string | { name: string }) {
     if (!this.#parser) {
       return [];
     }
@@ -108,9 +114,9 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     const targetName = typeof target === 'string' ? target : target.name;
 
     // 找到 target 所在的包目录和自定义 path
-    let sourcesDir: any = null;
+    let sourcesDir: string | null = null;
     for (const { pkgPath, parsed } of this.#parsedPackages) {
-      const matchTarget = parsed.targets?.find((t: any) => t.name === targetName);
+      const matchTarget = parsed.targets?.find((t: { name: string }) => t.name === targetName);
       if (matchTarget) {
         const pkgDir = dirname(pkgPath);
         // 优先使用 target 声明的自定义 path
@@ -159,14 +165,22 @@ export class SpmDiscoverer extends ProjectDiscoverer {
       return { nodes: [], edges: [] };
     }
 
-    const nodes: any[] = [];
-    const edges: { from: any; to: any; type: string } | { from: any; to: string; type: string }[] =
-      [];
+    const nodes: {
+      id: string;
+      label: string;
+      type: string;
+      fullPath?: string;
+      targetCount?: number;
+      parent?: string;
+      targetType?: string;
+      indirect?: boolean;
+    }[] = [];
+    const edges: { from: string; to: string; type: string }[] = [];
     const pkgNameSet = new Set();
     const targetToPkg = new Map();
 
     // ── 第一遍：收集所有 package + target 节点 ──
-    const allParsed: any[] = [];
+    const allParsed: (ReturnType<PackageSwiftParser['parse']> & { _dir: string })[] = [];
     const umbrellaNames = new Set();
     for (const { pkgPath, parsed } of this.#parsedPackages) {
       if (pkgNameSet.has(parsed.name)) {
@@ -221,7 +235,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
 
       // 包级 local path 依赖
       for (const dep of parsed.dependencies || []) {
-        if (dep.type === 'local' && dep.path) {
+        if (dep.type === 'local' && 'path' in dep && dep.path) {
           const depPkgSwift = join(parsed._dir, dep.path, 'Package.swift');
           if (existsSync(depPkgSwift)) {
             try {
@@ -237,7 +251,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
               }
             }
           }
-        } else if (dep.url) {
+        } else if ('url' in dep && dep.url) {
           const remoteName = basename(dep.url).replace(/\.git$/, '');
           if (!pkgNameSet.has(remoteName)) {
             pkgNameSet.add(remoteName);
@@ -276,7 +290,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
    * @param {string} dir 源码根目录
    * @returns {{ name: string, path: string, relativePath: string }[]}
    */
-  #walkSourceFiles(dir: any) {
+  #walkSourceFiles(dir: string) {
     const CODE_EXTS = new Set(['.swift', '.m', '.h', '.c', '.cpp', '.mm']);
     const SKIP_DIRS = new Set([
       'node_modules',
@@ -289,9 +303,9 @@ export class SpmDiscoverer extends ProjectDiscoverer {
       'Carthage',
     ]);
     const MAX_FILES = 300;
-    const files: { name: any; path: string; relativePath: any }[] = [];
+    const files: { name: string; path: string; relativePath: string }[] = [];
 
-    const walk = (d: any, rel = '') => {
+    const walk = (d: string, rel = '') => {
       if (files.length >= MAX_FILES) {
         return;
       }
@@ -331,7 +345,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     return files;
   }
 
-  #inferLang(filePath: any) {
+  #inferLang(filePath: string) {
     return LanguageService.inferLang(filePath);
   }
 }

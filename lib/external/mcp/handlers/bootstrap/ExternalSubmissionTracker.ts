@@ -34,52 +34,96 @@ const MAX_NEGATIVE_SIGNALS = 30;
 
 // ── 类型定义 ────────────────────────────────────────────────
 
-/**
- * @typedef {object} SubmissionRecord
- * @property {string} recipeId 提交返回的 recipe ID
- * @property {string} title 候选标题
- * @property {string} knowledgeType 知识类型
- * @property {string} kind - rule/pattern/fact
- * @property {string} category 分类
- * @property {string[]} sources - reasoning.sources (引用文件)
- * @property {string} coreCodePreview - coreCode 前 200 字符
- * @property {number} contentLength - content.markdown 长度
- * @property {number} confidence - reasoning.confidence
- * @property {number} submittedAt 时间戳
- */
+/** 一次 submit_knowledge 的提交记录 */
+interface SubmissionRecord {
+  recipeId: string;
+  title: string;
+  knowledgeType: string;
+  kind: string;
+  category: string;
+  sources: string[];
+  coreCodePreview: string;
+  contentLength: number;
+  confidence: number;
+  submittedAt: number;
+}
 
-/**
- * @typedef {object} NegativeSignal
- * @property {string} pattern 未找到/不存在的模式描述
- * @property {string} source - 'analysisText' | 'rejection'
- * @property {string} [dimId] 来源维度
- */
+/** 负空间信号 */
+interface NegativeSignal {
+  pattern: string;
+  source: string;
+  dimId?: string;
+}
 
-/**
- * @typedef {object} DimensionQualityReport
- * @property {object} scores - { coverageScore, evidenceScore, diversityScore, coherenceScore }
- * @property {number} totalScore 加权总分 (0-100)
- * @property {string[]} suggestions 改进建议
- * @property {boolean} pass 是否通过质量门控
- */
+/** submit_knowledge 原始参数中需要的字段 */
+interface SubmissionArgs {
+  title?: string;
+  knowledgeType?: string;
+  kind?: string;
+  category?: string;
+  trigger?: string;
+  coreCode?: string;
+  content?: { markdown?: string; [key: string]: unknown };
+  reasoning?: { sources?: string[]; confidence?: number; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/** 质量评分 4 维度 */
+interface QualityScores {
+  coverageScore: number;
+  evidenceScore: number;
+  diversityScore: number;
+  coherenceScore: number;
+}
+
+/** 维度级质量报告 */
+export interface DimensionQualityReport {
+  scores: QualityScores;
+  totalScore: number;
+  suggestions: string[];
+  pass: boolean;
+}
+
+/** 跨维度文件共享信息 */
+interface SharedFileInfo {
+  filePath: string;
+  dimensions: string[];
+}
+
+/** 已完成维度摘要（供跨维度证据使用） */
+interface CompletedDimSummary {
+  dimId: string;
+  submissionCount: number;
+  titles: string[];
+  knowledgeTypes: string[];
+  referencedFiles: string[];
+}
+
+/** getAccumulatedEvidence 返回值 */
+export interface AccumulatedEvidence {
+  completedDimSummaries: CompletedDimSummary[];
+  sharedFiles: SharedFileInfo[];
+  negativeSignals: NegativeSignal[];
+  usedTriggers: string[];
+}
 
 // ── 主类 ────────────────────────────────────────────────────
 
 export class ExternalSubmissionTracker {
   /** @type {Map<string, SubmissionRecord[]>} dimId → 提交记录列表 */
-  #dimensionSubmissions = new Map();
+  #dimensionSubmissions = new Map<string, SubmissionRecord[]>();
 
   /** @type {Map<string, Set<string>>} filePath → 引用此文件的 dimId 集合 */
-  #fileEvidenceMap = new Map();
+  #fileEvidenceMap = new Map<string, Set<string>>();
 
   /** @type {NegativeSignal[]} 负空间信号 */
-  #negativeSignals: any[] = [];
+  #negativeSignals: NegativeSignal[] = [];
 
   /** @type {Map<string, string[]>} dimId → 被拒绝的提交标题列表 */
-  #rejections = new Map();
+  #rejections = new Map<string, string[]>();
 
   /** @type {Set<string>} 已使用的唯一 trigger 集合 (跨维度) */
-  #usedTriggers = new Set();
+  #usedTriggers = new Set<string>();
 
   // ─── 提交记录 ─────────────────────────────────────────
 
@@ -90,12 +134,12 @@ export class ExternalSubmissionTracker {
    * @param {object} submissionArgs - submit_knowledge 的原始参数
    * @param {string} recipeId 提交成功后返回的 recipe ID
    */
-  recordSubmission(dimId: any, submissionArgs: any, recipeId: any) {
+  recordSubmission(dimId: string, submissionArgs: SubmissionArgs, recipeId: string) {
     if (!this.#dimensionSubmissions.has(dimId)) {
       this.#dimensionSubmissions.set(dimId, []);
     }
 
-    const submissions = this.#dimensionSubmissions.get(dimId);
+    const submissions = this.#dimensionSubmissions.get(dimId)!;
     if (submissions.length >= MAX_SUBMISSIONS_PER_DIM) {
       return;
     }
@@ -126,7 +170,7 @@ export class ExternalSubmissionTracker {
       if (!this.#fileEvidenceMap.has(filePath)) {
         this.#fileEvidenceMap.set(filePath, new Set());
       }
-      this.#fileEvidenceMap.get(filePath).add(dimId);
+      this.#fileEvidenceMap.get(filePath)!.add(dimId);
     }
   }
 
@@ -137,11 +181,11 @@ export class ExternalSubmissionTracker {
    * @param {string} title 被拒绝候选的标题
    * @param {string} reason 拒绝原因
    */
-  recordRejection(dimId: any, title: any, reason: any) {
+  recordRejection(dimId: string, title: string, reason: string) {
     if (!this.#rejections.has(dimId)) {
       this.#rejections.set(dimId, []);
     }
-    this.#rejections.get(dimId).push(`${title}: ${reason}`);
+    this.#rejections.get(dimId)!.push(`${title}: ${reason}`);
 
     // 拒绝也是一种负空间信号
     this.#addNegativeSignal(`Rejected submission "${title}": ${reason}`, 'rejection', dimId);
@@ -160,7 +204,7 @@ export class ExternalSubmissionTracker {
    * @param {string} analysisText
    * @param {string} dimId
    */
-  extractNegativeSignals(analysisText: any, dimId: any) {
+  extractNegativeSignals(analysisText: string, dimId: string) {
     if (!analysisText) {
       return;
     }
@@ -188,7 +232,7 @@ export class ExternalSubmissionTracker {
    * @param {string} source
    * @param {string} [dimId]
    */
-  #addNegativeSignal(pattern: any, source: any, dimId: any) {
+  #addNegativeSignal(pattern: string, source: string, dimId?: string) {
     if (this.#negativeSignals.length >= MAX_NEGATIVE_SIGNALS) {
       return;
     }
@@ -225,15 +269,19 @@ export class ExternalSubmissionTracker {
    * @param {string[]} [referencedFiles] 引用文件列表
    * @returns {DimensionQualityReport}
    */
-  buildQualityReport(dimId: any, analysisText = '', referencedFiles: any[] = []) {
-    const submissions = this.#dimensionSubmissions.get(dimId) || [];
-    const rejections = this.#rejections.get(dimId) || [];
-    const scores: any = {};
+  buildQualityReport(
+    dimId: string,
+    analysisText = '',
+    referencedFiles: string[] = []
+  ): DimensionQualityReport {
+    const submissions: SubmissionRecord[] = this.#dimensionSubmissions.get(dimId) || [];
+    const rejections: string[] = this.#rejections.get(dimId) || [];
+    const scores = {} as QualityScores;
     const suggestions: string[] = [];
 
     // §1: coverageScore — 提交数量 + 引用文件覆盖
     const submissionCount = submissions.length;
-    const uniqueSources = new Set(submissions.flatMap((s: any) => s.sources));
+    const uniqueSources = new Set(submissions.flatMap((s) => s.sources));
     const fileCount = new Set([...uniqueSources, ...referencedFiles]).size;
     scores.coverageScore = Math.min(100, submissionCount * 20 + fileCount * 8);
     if (submissionCount < 3) {
@@ -246,12 +294,12 @@ export class ExternalSubmissionTracker {
     // §2: evidenceScore — 提交内容丰富度
     const avgContentLen =
       submissions.length > 0
-        ? submissions.reduce((sum: any, s: any) => sum + s.contentLength, 0) / submissions.length
+        ? submissions.reduce((sum: number, s) => sum + s.contentLength, 0) / submissions.length
         : 0;
-    const hasCoreCode = submissions.filter((s: any) => s.coreCodePreview.length > 0).length;
+    const hasCoreCode = submissions.filter((s) => s.coreCodePreview.length > 0).length;
     const avgConfidence =
       submissions.length > 0
-        ? submissions.reduce((sum: any, s: any) => sum + s.confidence, 0) / submissions.length
+        ? submissions.reduce((sum: number, s) => sum + s.confidence, 0) / submissions.length
         : 0;
     scores.evidenceScore = Math.min(
       100,
@@ -267,9 +315,9 @@ export class ExternalSubmissionTracker {
     }
 
     // §3: diversityScore — 知识类型 + category 多样性
-    const uniqueTypes = new Set(submissions.map((s: any) => s.knowledgeType));
-    const uniqueCategories = new Set(submissions.map((s: any) => s.category));
-    const uniqueKinds = new Set(submissions.map((s: any) => s.kind));
+    const uniqueTypes = new Set(submissions.map((s) => s.knowledgeType));
+    const uniqueCategories = new Set(submissions.map((s) => s.category));
+    const uniqueKinds = new Set(submissions.map((s) => s.kind));
     scores.diversityScore = Math.min(
       100,
       uniqueTypes.size * 25 + uniqueCategories.size * 15 + uniqueKinds.size * 20
@@ -316,8 +364,8 @@ export class ExternalSubmissionTracker {
    * @param {string} currentDimId 当前维度 (将排除在结果之外)
    * @returns {object} - { completedDimSummaries, sharedFiles, negativeSignals, usedTriggers }
    */
-  getAccumulatedEvidence(currentDimId: any) {
-    const completedDimSummaries: any[] = [];
+  getAccumulatedEvidence(currentDimId: string): AccumulatedEvidence {
+    const completedDimSummaries: CompletedDimSummary[] = [];
 
     for (const [dimId, submissions] of this.#dimensionSubmissions) {
       if (dimId === currentDimId) {
@@ -327,14 +375,16 @@ export class ExternalSubmissionTracker {
       completedDimSummaries.push({
         dimId,
         submissionCount: submissions.length,
-        titles: submissions.map((s: any) => s.title),
-        knowledgeTypes: [...new Set(submissions.map((s: any) => s.knowledgeType))],
-        referencedFiles: [...new Set(submissions.flatMap((s: any) => s.sources))].slice(0, 15),
+        titles: submissions.map((s: SubmissionRecord) => s.title),
+        knowledgeTypes: [...new Set(submissions.map((s: SubmissionRecord) => s.knowledgeType))],
+        referencedFiles: [
+          ...new Set(submissions.flatMap((s: SubmissionRecord) => s.sources)),
+        ].slice(0, 15),
       });
     }
 
     // 多维度引用的文件 (交叉点)
-    const sharedFiles: any[] = [];
+    const sharedFiles: SharedFileInfo[] = [];
     for (const [filePath, dimIds] of this.#fileEvidenceMap) {
       if (dimIds.size > 1) {
         sharedFiles.push({ filePath, dimensions: [...dimIds] });
@@ -356,7 +406,7 @@ export class ExternalSubmissionTracker {
    * @param {string} dimId
    * @returns {SubmissionRecord[]}
    */
-  getSubmissions(dimId: any) {
+  getSubmissions(dimId: string): SubmissionRecord[] {
     return this.#dimensionSubmissions.get(dimId) || [];
   }
 

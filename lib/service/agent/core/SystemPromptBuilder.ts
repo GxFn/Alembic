@@ -12,18 +12,55 @@
  * @module SystemPromptBuilder
  */
 
-export class SystemPromptBuilder {
-  /** @type {object|null} persona 配置 */
-  #persona;
+import type { Capability } from '../capabilities.js';
 
-  /** @type {Array|null} 文件缓存 */
-  #fileCache;
+/** File cache entry shape */
+interface FileCacheEntry {
+  name?: string;
+  relativePath?: string;
+  content?: string;
+  language?: string;
+}
+
+/** Persona configuration */
+interface Persona {
+  description?: string;
+  [key: string]: unknown;
+}
+
+/** Memory configuration */
+interface MemoryConfig {
+  mode?: string;
+  [key: string]: unknown;
+}
+
+/** SystemPromptBuilder constructor options */
+interface SystemPromptBuilderOptions {
+  persona?: Persona | null;
+  fileCache?: FileCacheEntry[] | null;
+  lang?: string | null;
+  memoryConfig?: MemoryConfig | null;
+}
+
+/** Budget injection options */
+interface BudgetOptions {
+  source?: string;
+  tracker: unknown;
+  budget: { maxIterations?: number; [key: string]: unknown };
+}
+
+export class SystemPromptBuilder {
+  /** @type {Persona|null} persona 配置 */
+  #persona: Persona | null;
+
+  /** @type {FileCacheEntry[]|null} 文件缓存 */
+  #fileCache: FileCacheEntry[] | null;
 
   /** @type {string|null} 语言偏好 */
-  #lang;
+  #lang: string | null;
 
-  /** @type {object|null} 记忆配置 */
-  #memoryConfig;
+  /** @type {MemoryConfig|null} 记忆配置 */
+  #memoryConfig: MemoryConfig | null;
 
   /**
    * @param {object} [opts]
@@ -32,7 +69,7 @@ export class SystemPromptBuilder {
    * @param {string}   [opts.lang]
    * @param {object}   [opts.memoryConfig]
    */
-  constructor({ persona, fileCache, lang, memoryConfig }: any = {}) {
+  constructor({ persona, fileCache, lang, memoryConfig }: SystemPromptBuilderOptions = {}) {
     this.#persona = persona || null;
     this.#fileCache = fileCache || null;
     this.#lang = lang || null;
@@ -43,7 +80,7 @@ export class SystemPromptBuilder {
    * 更新文件缓存引用 (bootstrap 场景: allFiles 注入后更新)
    * @param {Array|null} files
    */
-  setFileCache(files: any) {
+  setFileCache(files: FileCacheEntry[] | null) {
     this.#fileCache = files;
   }
 
@@ -54,8 +91,8 @@ export class SystemPromptBuilder {
    * @param {object} context 额外上下文
    * @returns {string}
    */
-  build(caps: any, context: any = {}) {
-    const parts: any[] = [];
+  build(caps: Capability[], context: Record<string, unknown> = {}) {
+    const parts: string[] = [];
 
     // Persona (角色定义)
     if (this.#persona?.description) {
@@ -65,7 +102,7 @@ export class SystemPromptBuilder {
     // fileCache 文件清单
     if (this.#fileCache && this.#fileCache.length > 0) {
       const fileList = this.#fileCache
-        .map((f: any) => {
+        .map((f: FileCacheEntry) => {
           const lines = f.content ? f.content.split('\n').length : 0;
           const name = f.name || f.relativePath || 'unknown';
           return `- ${name} (${lines} 行${f.language ? `, ${f.language}` : ''})`;
@@ -112,7 +149,7 @@ export class SystemPromptBuilder {
    * @param {object}  opts.budget 预算配置
    * @returns {string} 可能追加了轮次预算段的提示词
    */
-  static injectBudget(prompt: any, { source, tracker, budget }: any) {
+  static injectBudget(prompt: string, { source, tracker, budget }: BudgetOptions) {
     if (source !== 'system' || !tracker || prompt.includes('轮次预算')) {
       return prompt;
     }

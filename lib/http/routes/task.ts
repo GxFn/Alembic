@@ -9,9 +9,52 @@
  *   POST /api/v1/task  — 统一入口（operation 路由）
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+
+/** Task record shape from TaskGraphService */
+interface TaskRecord {
+  id: string;
+  title: string;
+  updatedAt?: number;
+  toJSON(): Record<string, unknown>;
+}
+
+/** Prime result from TaskGraphService */
+interface PrimeResult {
+  inProgress: TaskRecord[];
+  ready: TaskRecord[];
+  decisions: TaskRecord[];
+  staleDecisions?: TaskRecord[];
+  stats: { total: number };
+  _taskRules?: Record<string, unknown>;
+  _resumePrompt?: { instruction: string; taskIds: string[] };
+}
+
+/** Dispatch interface for TaskGraphService */
+interface TaskGraphSvc {
+  create(p: Record<string, unknown>): Promise<{ task: TaskRecord; isDuplicate: boolean }>;
+  ready(p: Record<string, unknown>): Promise<TaskRecord[]>;
+  claim(id: unknown, assignee: unknown): Promise<TaskRecord>;
+  close(id: unknown, reason: unknown): Promise<{ task: TaskRecord; newlyReady: TaskRecord[] }>;
+  fail(id: unknown, reason: unknown): Promise<TaskRecord>;
+  defer(id: unknown, reason: unknown): Promise<TaskRecord>;
+  progress(id: unknown, note: unknown): Promise<TaskRecord>;
+  prime(opts: Record<string, unknown>): Promise<PrimeResult>;
+  decompose(epicId: unknown, subtasks: unknown[]): Promise<TaskRecord[]>;
+  show(id: unknown): Promise<TaskRecord | null>;
+  list(filter: Record<string, unknown>, opts: Record<string, unknown>): Promise<TaskRecord[]>;
+  blocked(): Promise<TaskRecord[]>;
+  addDependency(taskId: unknown, dependsOn: unknown, depType: unknown): Promise<void>;
+  depTree(id: unknown): Promise<unknown>;
+  stats(): Promise<unknown>;
+  recordDecision(p: Record<string, unknown>): Promise<{ task: TaskRecord; isDuplicate: boolean }>;
+  reviseDecision(
+    p: Record<string, unknown>
+  ): Promise<{ newDecision: TaskRecord; oldDecisionId: string }>;
+  unpinDecision(id: unknown, reason: unknown): Promise<TaskRecord>;
+}
 
 const router = express.Router();
 
@@ -22,16 +65,16 @@ const router = express.Router();
  *   { operation: string, ...params }
  *
  * 响应:
- *   { success: boolean, data?: any, message?: string }
+ *   { success: boolean, data?: unknown, message?: string }
  */
 router.post(
   '/',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
-    const taskService = container.get('taskGraphService');
+    const taskService = container.get('taskGraphService') as TaskGraphSvc;
 
     if (!taskService) {
-      return res.status(503).json({
+      return void res.status(503).json({
         success: false,
         message: 'TaskGraphService not available',
       });
@@ -39,7 +82,7 @@ router.post(
 
     const body = req.body;
     if (!body || typeof body !== 'object') {
-      return res.status(400).json({
+      return void res.status(400).json({
         success: false,
         message: 'JSON body is required',
       });
@@ -48,7 +91,7 @@ router.post(
     const { operation, ...params } = body;
 
     if (!operation) {
-      return res.status(400).json({
+      return void res.status(400).json({
         success: false,
         message: 'operation is required',
       });
@@ -57,14 +100,14 @@ router.post(
     try {
       const result = await _dispatch(taskService, operation, params);
       if (result.success === false) {
-        return res.status(400).json(result);
+        return void res.status(400).json(result);
       }
 
-      return res.json(result);
-    } catch (err: any) {
-      return res.status(400).json({
+      return void res.json(result);
+    } catch (err: unknown) {
+      return void res.status(400).json({
         success: false,
-        message: err.message,
+        message: (err as Error).message,
         operation,
       });
     }
@@ -74,7 +117,7 @@ router.post(
 /**
  * 操作路由 — 与 MCP handler/task.js 保持一致
  */
-async function _dispatch(svc: any, operation: any, params: any) {
+async function _dispatch(svc: TaskGraphSvc, operation: string, params: Record<string, unknown>) {
   switch (operation) {
     case 'create':
       return _create(svc, params);
@@ -119,7 +162,7 @@ async function _dispatch(svc: any, operation: any, params: any) {
 
 // ── create ──
 
-async function _create(svc: any, args: any) {
+async function _create(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.title) {
     return { success: false, message: 'title is required' };
   }
@@ -143,21 +186,21 @@ async function _create(svc: any, args: any) {
 
 // ── ready ──
 
-async function _ready(svc: any, args: any) {
+async function _ready(svc: TaskGraphSvc, args: Record<string, unknown>) {
   const tasks = await svc.ready({
     limit: args.limit || 5,
     withKnowledge: args.withKnowledge !== false,
   });
   return {
     success: true,
-    data: tasks.map((t: any) => (t.toJSON ? t.toJSON() : t)),
+    data: tasks.map((t: TaskRecord) => (t.toJSON ? t.toJSON() : t)),
     count: tasks.length,
   };
 }
 
 // ── claim ──
 
-async function _claim(svc: any, args: any) {
+async function _claim(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -167,7 +210,7 @@ async function _claim(svc: any, args: any) {
 
 // ── close ──
 
-async function _close(svc: any, args: any) {
+async function _close(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -182,7 +225,7 @@ async function _close(svc: any, args: any) {
 
 // ── fail ──
 
-async function _fail(svc: any, args: any) {
+async function _fail(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -192,7 +235,7 @@ async function _fail(svc: any, args: any) {
 
 // ── defer ──
 
-async function _defer(svc: any, args: any) {
+async function _defer(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -202,7 +245,7 @@ async function _defer(svc: any, args: any) {
 
 // ── progress ──
 
-async function _progress(svc: any, args: any) {
+async function _progress(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -212,11 +255,11 @@ async function _progress(svc: any, args: any) {
 
 // ── prime ──
 
-async function _prime(svc: any) {
+async function _prime(svc: TaskGraphSvc) {
   const result = await svc.prime({ withKnowledge: true });
   const decisionCount = (result.decisions || []).length;
   const staleCount = (result.staleDecisions || []).length;
-  const decisionTitles = (result.decisions || []).map((d: any) => d.title).join('; ');
+  const decisionTitles = (result.decisions || []).map((d: TaskRecord) => d.title).join('; ');
   const statsLine = `${result.inProgress.length} in-progress, ${result.ready.length} ready, ${result.stats.total} total`;
 
   // ── Behavioral Rules Reminder (synced with MCP handler) ──
@@ -246,7 +289,7 @@ async function _prime(svc: any) {
   // ── Resume Prompt: 有 inProgress 任务时，提示 Agent 让用户选择 ──
   if (result.inProgress.length > 0) {
     const taskList = result.inProgress
-      .map((t: any) => {
+      .map((t: TaskRecord) => {
         const age = t.updatedAt
           ? `${Math.floor((Date.now() / 1000 - t.updatedAt) / 86400)}d ago`
           : '';
@@ -268,7 +311,7 @@ async function _prime(svc: any) {
         '',
         "Wait for the user's answer. Do NOT auto-resume.",
       ].join('\n'),
-      taskIds: result.inProgress.map((t: any) => t.id),
+      taskIds: result.inProgress.map((t: TaskRecord) => t.id),
     };
   }
 
@@ -293,7 +336,7 @@ async function _prime(svc: any) {
 
 // ── decompose ──
 
-async function _decompose(svc: any, args: any) {
+async function _decompose(svc: TaskGraphSvc, args: Record<string, unknown>) {
   const epicId = args.parentId || args.id;
   const subtasks = args.children || args.subtasks;
   if (!epicId) {
@@ -305,14 +348,14 @@ async function _decompose(svc: any, args: any) {
   const tasks = await svc.decompose(epicId, subtasks);
   return {
     success: true,
-    data: tasks.map((t: any) => t.toJSON()),
+    data: tasks.map((t: TaskRecord) => t.toJSON()),
     count: tasks.length,
   };
 }
 
 // ── show ──
 
-async function _show(svc: any, args: any) {
+async function _show(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -325,32 +368,32 @@ async function _show(svc: any, args: any) {
 
 // ── list ──
 
-async function _list(svc: any, args: any) {
+async function _list(svc: TaskGraphSvc, args: Record<string, unknown>) {
   const tasks = await svc.list(
     { status: args.status, taskType: args.taskType, parentId: args.parentId },
     { limit: args.limit || 50 }
   );
   return {
     success: true,
-    data: tasks.map((t: any) => t.toJSON()),
+    data: tasks.map((t: TaskRecord) => t.toJSON()),
     count: tasks.length,
   };
 }
 
 // ── blocked ──
 
-async function _blocked(svc: any) {
+async function _blocked(svc: TaskGraphSvc) {
   const tasks = await svc.blocked();
   return {
     success: true,
-    data: tasks.map((t: any) => (t.toJSON ? t.toJSON() : t)),
+    data: tasks.map((t: TaskRecord) => (t.toJSON ? t.toJSON() : t)),
     count: tasks.length,
   };
 }
 
 // ── dep_add ──
 
-async function _depAdd(svc: any, args: any) {
+async function _depAdd(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.taskId || !args.dependsOn) {
     return { success: false, message: 'taskId and dependsOn are required' };
   }
@@ -363,7 +406,7 @@ async function _depAdd(svc: any, args: any) {
 
 // ── dep_tree ──
 
-async function _depTree(svc: any, args: any) {
+async function _depTree(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }
@@ -373,14 +416,14 @@ async function _depTree(svc: any, args: any) {
 
 // ── stats ──
 
-async function _stats(svc: any) {
+async function _stats(svc: TaskGraphSvc) {
   const stats = await svc.stats();
   return { success: true, data: stats };
 }
 
 // ── record_decision ──
 
-async function _recordDecision(svc: any, args: any) {
+async function _recordDecision(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.title) {
     return { success: false, message: 'title is required' };
   }
@@ -405,7 +448,7 @@ async function _recordDecision(svc: any, args: any) {
 
 // ── revise_decision ──
 
-async function _reviseDecision(svc: any, args: any) {
+async function _reviseDecision(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.id) {
     return { success: false, message: 'id of old decision is required' };
   }
@@ -434,7 +477,7 @@ async function _reviseDecision(svc: any, args: any) {
 
 // ── unpin_decision ──
 
-async function _unpinDecision(svc: any, args: any) {
+async function _unpinDecision(svc: TaskGraphSvc, args: Record<string, unknown>) {
   if (!args.id) {
     return { success: false, message: 'id is required' };
   }

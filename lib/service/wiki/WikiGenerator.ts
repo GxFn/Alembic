@@ -35,7 +35,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { LanguageService } from '../../shared/LanguageService.js';
-import { buildAiSystemPrompt, buildArticlePrompt, buildFallbackArticle } from './WikiRenderers.js';
+import {
+  buildAiSystemPrompt,
+  buildArticlePrompt,
+  buildFallbackArticle,
+  type WikiData,
+} from './WikiRenderers.js';
 import {
   dedup,
   detectBuildSystems,
@@ -48,6 +53,112 @@ import {
 } from './WikiUtils.js';
 
 const logger = Logger.getInstance();
+
+/** Resolved WikiGenerator options */
+interface WikiOptions {
+  wikiDir: string;
+  language: string;
+  maxFiles: number;
+  includeRecipes: boolean;
+  includeDepGraph: boolean;
+  includeComponents: boolean;
+  [key: string]: unknown;
+}
+
+/** WikiGenerator constructor dependencies */
+export interface WikiDeps {
+  projectRoot: string;
+  moduleService?: WikiModuleService | null;
+  knowledgeService?: WikiKnowledgeService | null;
+  projectGraph?: WikiProjectGraph | null;
+  codeEntityGraph?: Record<string, unknown> | null;
+  aiProvider?: WikiAiProvider | null;
+  onProgress?: (phase: string, progress: number, message: string) => void;
+  options?: Partial<WikiOptions>;
+  [key: string]: unknown;
+}
+
+/** Minimal ProjectGraph interface */
+export interface WikiProjectGraph {
+  getOverview(): Record<string, unknown>;
+  getAllClassNames(): string[];
+  getAllProtocolNames(): string[];
+  getClassInfo(name: string): { filePath?: string } | null;
+  getProtocolInfo(name: string): { filePath?: string } | null;
+}
+
+/** Minimal ModuleService interface */
+export interface WikiModuleService {
+  load(): Promise<void>;
+  listTargets(): Promise<WikiModuleTarget[]>;
+  getDependencyGraph?(opts: Record<string, unknown>): Promise<unknown>;
+  getProjectInfo(): Record<string, unknown>;
+}
+
+/** Module target descriptor */
+interface WikiModuleTarget {
+  name: string;
+  path?: string;
+  type?: string;
+  dependencies?: unknown[];
+  info?: { dependencies?: unknown[]; path?: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/** Minimal KnowledgeService interface */
+export interface WikiKnowledgeService {
+  list(filter: Record<string, unknown>): Promise<{
+    data?: Record<string, unknown>[];
+    items?: Record<string, unknown>[];
+    [key: string]: unknown;
+  }>;
+  getStats?(): Promise<Record<string, unknown> | null>;
+}
+
+/** Minimal AiProvider interface */
+export interface WikiAiProvider {
+  chat(prompt: string, options: Record<string, unknown>): Promise<string>;
+}
+
+/** Topic descriptor from _discoverTopics */
+interface WikiTopic {
+  id: string;
+  path: string;
+  title: string;
+  type: string;
+  priority: number;
+  _moduleData?: Record<string, unknown>;
+  _patternData?: Record<string, unknown>;
+  _folderProfiles?: Record<string, unknown>[];
+  _folderProfile?: Record<string, unknown>;
+  _allTopics?: WikiTopic[];
+  [key: string]: unknown;
+}
+
+/** File write result */
+interface WikiFileResult {
+  path: string;
+  hash: string;
+  size: number;
+  source?: string;
+  polished?: boolean;
+}
+
+/** Scan project result */
+interface ProjectScanInfo {
+  name: string;
+  root: string;
+  buildSystems: { eco: string; buildTool: string }[];
+  sourceFiles: string[];
+  languages: Record<string, number>;
+  langProfile: Record<string, unknown> | null;
+  primaryLanguage: string;
+  hasPackageSwift: boolean;
+  hasPodfile: boolean;
+  hasXcodeproj: boolean;
+  sourceFilesByModule: Record<string, string[]>;
+  [key: string]: unknown;
+}
 
 // ─── Wiki 生成阶段 ──────────────────────────────────────────
 
@@ -78,17 +189,17 @@ const DEFAULTS = {
 // ─── WikiGenerator ────────────────────────────────────────────
 
 export class WikiGenerator {
-  projectRoot: any;
-  wikiDir: any;
-  _aborted: any;
-  aiProvider: any;
-  codeEntityGraph: any;
-  knowledgeService: any;
-  metaPath: any;
-  moduleService: any;
-  onProgress: any;
-  options: any;
-  projectGraph: any;
+  projectRoot: string;
+  wikiDir: string;
+  _aborted: boolean;
+  aiProvider: WikiAiProvider | null;
+  codeEntityGraph: Record<string, unknown> | null;
+  knowledgeService: WikiKnowledgeService | null;
+  metaPath: string;
+  moduleService: WikiModuleService | null;
+  onProgress: (phase: string, progress: number, message: string) => void;
+  options: WikiOptions;
+  projectGraph: WikiProjectGraph | null;
   /**
    * @param {object} deps
    * @param {string} deps.projectRoot
@@ -101,7 +212,7 @@ export class WikiGenerator {
    * @param {Function} [deps.onProgress] - (phase, progress, message) => void
    * @param {object} [deps.options]
    */
-  constructor(deps: any) {
+  constructor(deps: WikiDeps) {
     this.projectRoot = deps.projectRoot;
     this.moduleService = deps.moduleService || null;
     this.knowledgeService = deps.knowledgeService || null;
@@ -109,7 +220,7 @@ export class WikiGenerator {
     this.codeEntityGraph = deps.codeEntityGraph || null;
     this.aiProvider = deps.aiProvider || null;
     this.onProgress = deps.onProgress || (() => {});
-    this.options = { ...DEFAULTS, ...deps.options };
+    this.options = { ...DEFAULTS, ...deps.options } as WikiOptions;
 
     this.wikiDir = path.join(this.projectRoot, this.options.wikiDir);
     this.metaPath = path.join(this.wikiDir, 'meta.json');
@@ -162,7 +273,12 @@ export class WikiGenerator {
 
       // Phase 6: Content-driven topic discovery (V3)
       this._emit(WikiPhase.GENERATE, 50, '分析项目数据，发现文档主题...');
-      const structuredData = { projectInfo, astInfo, moduleInfo, knowledgeInfo };
+      const structuredData: WikiData = {
+        projectInfo,
+        astInfo,
+        moduleInfo,
+        knowledgeInfo,
+      } as WikiData;
       const topics = this._discoverTopics(projectInfo, astInfo, moduleInfo, knowledgeInfo);
       if (this._aborted) {
         return this._abortedResult();
@@ -204,10 +320,10 @@ export class WikiGenerator {
         wikiDir: this.wikiDir,
         meta,
       };
-    } catch (err: any) {
-      logger.error('[WikiGenerator] Generation failed', { error: err.message });
-      this._emit('error', -1, `生成失败: ${err.message}`);
-      return { success: false, error: err.message, duration: Date.now() - startTime };
+    } catch (err: unknown) {
+      logger.error('[WikiGenerator] Generation failed', { error: (err as Error).message });
+      this._emit('error', -1, `生成失败: ${(err as Error).message}`);
+      return { success: false, error: (err as Error).message, duration: Date.now() - startTime };
     }
   }
 
@@ -262,7 +378,7 @@ export class WikiGenerator {
    * 扫描项目基本信息
    */
   async _scanProject() {
-    const info: any = {
+    const info: ProjectScanInfo = {
       name: path.basename(this.projectRoot),
       root: this.projectRoot,
       // 通用构建系统检测（替代硬编码 iOS 三件套）
@@ -275,6 +391,7 @@ export class WikiGenerator {
       hasPackageSwift: false,
       hasPodfile: false,
       hasXcodeproj: false,
+      sourceFilesByModule: {},
     };
 
     // 检测项目类型
@@ -298,13 +415,13 @@ export class WikiGenerator {
     }
 
     // 统计源文件
-    const extMap: Record<string, any> = {};
+    const extMap: Record<string, string> = {};
     for (const ext of LanguageService.sourceExts) {
       extMap[ext] = LanguageService.displayNameFromExt(ext) || ext;
     }
     walkDir(
       this.projectRoot,
-      (filePath: any) => {
+      (filePath: string) => {
         const ext = path.extname(filePath);
         if (extMap[ext]) {
           info.sourceFiles.push(path.relative(this.projectRoot, filePath));
@@ -337,7 +454,7 @@ export class WikiGenerator {
     }
 
     // 利用 LanguageService.detectProfile() 获取多语言画像
-    const bareStats: any = {};
+    const bareStats: Record<string, number> = {};
     for (const f of info.sourceFiles) {
       const ext = path.extname(f).replace('.', '');
       if (ext) {
@@ -345,7 +462,7 @@ export class WikiGenerator {
       }
     }
     info.langProfile = LanguageService.detectProfile(bareStats);
-    info.primaryLanguage = info.langProfile.primary;
+    info.primaryLanguage = info.langProfile.primary as string;
 
     this._emit(
       WikiPhase.SCAN,
@@ -365,8 +482,8 @@ export class WikiGenerator {
       const allProtocols = this.projectGraph.getAllProtocolNames();
 
       // 按模块分组类名和协议名 (通过 filePath 推断所属模块)
-      const classNamesByModule: any = {};
-      const protocolNamesByModule: Record<string, any> = {};
+      const classNamesByModule: Record<string, string[]> = {};
+      const protocolNamesByModule: Record<string, string[]> = {};
 
       for (const name of allClasses) {
         const info = this.projectGraph.getClassInfo(name);
@@ -430,10 +547,10 @@ export class WikiGenerator {
     try {
       await this.moduleService.load();
       const targets = await this.moduleService.listTargets();
-      let depGraph: any = null;
+      let depGraph: unknown = null;
       if (this.options.includeDepGraph) {
         try {
-          depGraph = await this.moduleService.getDependencyGraph({ level: 'target' });
+          depGraph = await this.moduleService.getDependencyGraph?.({ level: 'target' });
         } catch {
           /* non-critical */
         }
@@ -441,8 +558,8 @@ export class WikiGenerator {
       const info = this.moduleService.getProjectInfo();
       this._emit(WikiPhase.SPM_PARSE, 40, `模块: ${targets.length} 个 (${info.primaryLanguage})`);
       return { targets, depGraph, projectInfo: info };
-    } catch (err: any) {
-      logger.warn('[WikiGenerator] ModuleService parse failed', { error: err.message });
+    } catch (err: unknown) {
+      logger.warn('[WikiGenerator] ModuleService parse failed', { error: (err as Error).message });
       return { targets: [], depGraph: null };
     }
   }
@@ -465,8 +582,10 @@ export class WikiGenerator {
       const stats = (await this.knowledgeService.getStats?.()) || null;
       this._emit(WikiPhase.KNOWLEDGE, 55, `知识库: ${recipes.length} 条活跃 Recipe`);
       return { recipes: Array.isArray(recipes) ? recipes : [], stats };
-    } catch (err: any) {
-      logger.warn('[WikiGenerator] Knowledge integration failed', { error: err.message });
+    } catch (err: unknown) {
+      logger.warn('[WikiGenerator] Knowledge integration failed', {
+        error: (err as Error).message,
+      });
       return { recipes: [], stats: null };
     }
   }
@@ -481,8 +600,17 @@ export class WikiGenerator {
    *
    * @returns {Array<{id: string, path: string, title: string, type: string, priority: number}>}
    */
-  _discoverTopics(projectInfo: any, astInfo: any, moduleInfo: any, knowledgeInfo: any) {
-    const topics: any[] = [];
+  _discoverTopics(
+    projectInfo: ProjectScanInfo,
+    astInfo: Record<string, unknown>,
+    moduleInfo: {
+      targets: WikiModuleTarget[];
+      depGraph?: unknown;
+      projectInfo?: Record<string, unknown>;
+    },
+    knowledgeInfo: { recipes: Record<string, unknown>[]; stats: Record<string, unknown> | null }
+  ) {
+    const topics: WikiTopic[] = [];
     const isZh = this.options.language === 'zh';
     const langTerms = getLangTerms(projectInfo.primaryLanguage);
 
@@ -514,7 +642,7 @@ export class WikiGenerator {
     }
 
     // ── 3. 快速上手 (需要构建配置或入口点) ──
-    const hasEntryPoints = (astInfo.overview?.entryPoints?.length || 0) > 0;
+    const hasEntryPoints = ((astInfo.overview as any)?.entryPoints?.length || 0) > 0;
     const hasBuildSystem =
       projectInfo.buildSystems.length > 0 ||
       projectInfo.hasPackageSwift ||
@@ -532,7 +660,7 @@ export class WikiGenerator {
     }
 
     // ── 4. 模块深度文档 (仅对实质性模块生成) ──
-    const discoverers = moduleInfo.projectInfo?.discoverers || [];
+    const discoverers = (moduleInfo.projectInfo?.discoverers ?? []) as any[];
     const genericOnlyDiscovery = discoverers.length === 1 && discoverers[0]?.id === 'generic';
     const monolithSingleTarget =
       moduleInfo.targets.length === 1 &&
@@ -546,8 +674,8 @@ export class WikiGenerator {
       // 使用 moduleService 发现的 targets
       for (const target of moduleInfo.targets) {
         const moduleFiles = getModuleSourceFiles(target, projectInfo);
-        const classCount = (astInfo.classNamesByModule?.[target.name] || []).length;
-        const protoCount = (astInfo.protocolNamesByModule?.[target.name] || []).length;
+        const classCount = ((astInfo.classNamesByModule as any)?.[target.name] || []).length;
+        const protoCount = ((astInfo.protocolNamesByModule as any)?.[target.name] || []).length;
         const depCount = (target.dependencies || target.info?.dependencies || []).length;
 
         // 丰富度评分: 文件数 + 类数×2 + 协议数×2 + 依赖数
@@ -570,15 +698,15 @@ export class WikiGenerator {
     } else if (shouldUseInferredModules) {
       // 无有效模块边界(无 targets 或 generic 单 target) → 从 sourceFilesByModule 推断模块
       const sfm = projectInfo.sourceFilesByModule || {};
-      const sorted = (Object.entries(sfm) as [string, any][]).sort(
+      const sorted = (Object.entries(sfm) as [string, string[]][]).sort(
         (a, b) => b[1].length - a[1].length
       );
       for (const [modName, modFiles] of sorted) {
         if (modFiles.length < 2) {
           continue;
         }
-        const classCount = (astInfo.classNamesByModule?.[modName] || []).length;
-        const protoCount = (astInfo.protocolNamesByModule?.[modName] || []).length;
+        const classCount = ((astInfo.classNamesByModule as any)?.[modName] || []).length;
+        const protoCount = ((astInfo.protocolNamesByModule as any)?.[modName] || []).length;
         const richness = modFiles.length + classCount * 2 + protoCount * 2;
         if (richness < 3) {
           continue;
@@ -601,9 +729,9 @@ export class WikiGenerator {
 
     // ── 5. 代码模式/最佳实践 (来自知识库 Recipes) ──
     if (knowledgeInfo.recipes.length > 0) {
-      const groups: Record<string, any> = {};
+      const groups: Record<string, Record<string, unknown>[]> = {};
       for (const r of knowledgeInfo.recipes) {
-        const json = r.toJSON ? r.toJSON() : r;
+        const json = (r as any).toJSON ? (r as any).toJSON() : r;
         const cat = json.category || 'Other';
         if (!groups[cat]) {
           groups[cat] = [];
@@ -611,7 +739,7 @@ export class WikiGenerator {
         groups[cat].push(json);
       }
 
-      const catEntries = (Object.entries(groups) as [string, any][]).sort(
+      const catEntries = (Object.entries(groups) as [string, Record<string, unknown>[]][]).sort(
         (a, b) => b[1].length - a[1].length
       );
 
@@ -643,7 +771,7 @@ export class WikiGenerator {
     }
 
     // ── 6. 协议/接口参考 (数量足够多时) ──
-    if (astInfo.protocols.length >= 8) {
+    if ((astInfo.protocols as unknown[]).length >= 8) {
       const ifaceLabel = isZh ? langTerms.interfaceLabel.zh : langTerms.interfaceLabel.en;
       topics.push({
         id: 'protocols',
@@ -659,7 +787,9 @@ export class WikiGenerator {
     //   a) AST 稀疏: 类/协议 < 5 且无模块文档
     //   b) generic monolith: 仅 generic discoverer + 单 target + 多目录
     //   c) 核心文章过少: 当前主题 ≤ 4 篇 → 用文件夹分析补充内容丰富度
-    const astEntityCount = (astInfo.classes?.length || 0) + (astInfo.protocols?.length || 0);
+    const astEntityCount =
+      ((astInfo.classes as unknown[])?.length || 0) +
+      ((astInfo.protocols as unknown[])?.length || 0);
     const hasModuleDocs = topics.some((t) => t.type === 'module');
     const astSparse = astEntityCount < 5 && !hasModuleDocs;
     const shouldProfileForGenericMonolith =
@@ -675,7 +805,7 @@ export class WikiGenerator {
       });
 
       // 按 relPath 去重，避免同一路径重复产出同名文档
-      const folderProfiles: any[] = [];
+      const folderProfiles: Record<string, unknown>[] = [];
       const seenFolderRelPath = new Set();
       for (const fp of rawFolderProfiles) {
         if (seenFolderRelPath.has(fp.relPath)) {
@@ -704,17 +834,17 @@ export class WikiGenerator {
           if (folderDocCount >= MAX_FOLDER_DOCS) {
             break;
           }
-          if (fp.fileCount < 5) {
+          if ((fp.fileCount as number) < 5) {
             continue;
           }
-          const folderDocSlug = slug(fp.relPath.replaceAll('/', '-'));
+          const folderDocSlug = slug((fp.relPath as string).replaceAll('/', '-'));
           // 文件夹丰富度评分: 文件数 + 入口点×3 + 命名模式数×2 + imports数 + headerComments数×2 + (有README +5)
           const richness =
-            fp.fileCount +
-            fp.entryPoints.length * 3 +
-            fp.namingPatterns.length * 2 +
-            fp.imports.length +
-            fp.headerComments.length * 2 +
+            (fp.fileCount as number) +
+            (fp.entryPoints as unknown[]).length * 3 +
+            (fp.namingPatterns as unknown[]).length * 2 +
+            (fp.imports as unknown[]).length +
+            (fp.headerComments as unknown[]).length * 2 +
             (fp.readme ? 5 : 0);
 
           if (richness < 10) {
@@ -724,7 +854,7 @@ export class WikiGenerator {
           topics.push({
             id: `folder-${folderDocSlug}`,
             path: `folders/${folderDocSlug}.md`,
-            title: fp.relPath,
+            title: fp.relPath as string,
             type: 'folder-profile',
             priority: 45 + Math.min(richness, 25),
             _folderProfile: fp,
@@ -766,16 +896,16 @@ export class WikiGenerator {
    * @param {object} structuredData - { projectInfo, astInfo, moduleInfo, knowledgeInfo }
    * @returns {Promise<Array<{path: string, hash: string, size: number}>>}
    */
-  async _composeArticles(topics: any, structuredData: any) {
-    const files: any[] = [];
+  async _composeArticles(topics: WikiTopic[], structuredData: WikiData) {
+    const files: WikiFileResult[] = [];
     const isZh = this.options.language === 'zh';
     const MIN_ARTICLE_CHARS = 200;
 
     // 确保必要的子目录存在
     this._ensureDir(this.wikiDir);
-    const needsModulesDir = topics.some((t: any) => t.path.startsWith('modules/'));
-    const needsPatternsDir = topics.some((t: any) => t.path.startsWith('patterns/'));
-    const needsFoldersDir = topics.some((t: any) => t.path.startsWith('folders/'));
+    const needsModulesDir = topics.some((t: WikiTopic) => t.path.startsWith('modules/'));
+    const needsPatternsDir = topics.some((t: WikiTopic) => t.path.startsWith('patterns/'));
+    const needsFoldersDir = topics.some((t: WikiTopic) => t.path.startsWith('folders/'));
     if (needsModulesDir) {
       this._ensureDir(path.join(this.wikiDir, 'modules'));
     }
@@ -790,7 +920,7 @@ export class WikiGenerator {
     const systemPrompt = buildAiSystemPrompt(isZh);
 
     // 跟踪实际写入的主题 (用于 overview 导航)
-    const writtenTopics: any[] = [];
+    const writtenTopics: WikiTopic[] = [];
     let overviewTopicIdx = -1;
 
     for (let i = 0; i < topics.length; i++) {
@@ -808,7 +938,7 @@ export class WikiGenerator {
       const progress = 58 + Math.round((i / topics.length) * 22);
       this._emit(WikiPhase.AI_COMPOSE, progress, `撰写: ${topic.title}`);
 
-      let content: any = null;
+      let content: string | null = null;
 
       // === 1. 尝试 AI 撰写完整文章 ===
       if (this.aiProvider) {
@@ -825,8 +955,10 @@ export class WikiGenerator {
             content = aiResult;
             composed++;
           }
-        } catch (err: any) {
-          logger.warn(`[WikiGenerator] AI compose failed for ${topic.id}: ${err.message}`);
+        } catch (err: unknown) {
+          logger.warn(
+            `[WikiGenerator] AI compose failed for ${topic.id}: ${(err as Error).message}`
+          );
         }
       }
 
@@ -844,7 +976,7 @@ export class WikiGenerator {
       }
 
       // 写入文件
-      const fileInfo: any = this._writeFile(topic.path, content);
+      const fileInfo: WikiFileResult = this._writeFile(topic.path, content);
       if (
         composed > 0 &&
         content !== buildFallbackArticle(topic, structuredData, isZh, this.codeEntityGraph)
@@ -859,7 +991,7 @@ export class WikiGenerator {
     if (overviewTopicIdx >= 0 && writtenTopics.length > 0) {
       const overviewTopic = topics[overviewTopicIdx];
       overviewTopic._allTopics = writtenTopics;
-      let overviewContent: any = null;
+      let overviewContent: string | null = null;
       // overview 始终存在于 files 中（因为 priority 最高且始终生成）
       // 重新用实际 writtenTopics 渲染
       overviewContent = buildFallbackArticle(
@@ -895,7 +1027,7 @@ export class WikiGenerator {
    * @returns {Array<{path: string, hash: string, size: number, source: string}>}
    */
   _syncCursorDocs() {
-    const synced: any[] = [];
+    const synced: WikiFileResult[] = [];
     const isZh = this.options.language === 'zh';
 
     // ── Source 1: Channel D devdocs ──
@@ -913,7 +1045,7 @@ export class WikiGenerator {
         try {
           const content = fs.readFileSync(path.join(devdocsDir, file), 'utf-8');
           const header = `<!-- synced from .cursor/skills/autosnippet-devdocs/references/${file} -->\n\n`;
-          const result: any = this._writeFile(`documents/${file}`, header + content);
+          const result: WikiFileResult = this._writeFile(`documents/${file}`, header + content);
           result.source = 'cursor-devdocs';
           synced.push(result);
         } catch {
@@ -933,8 +1065,8 @@ export class WikiGenerator {
   /**
    * 为同步目录生成索引页
    */
-  _generateSyncIndex(synced: any, isZh: any) {
-    const docFiles = synced.filter((f: any) => f.path.startsWith('documents/'));
+  _generateSyncIndex(synced: WikiFileResult[], isZh: boolean) {
+    const docFiles = synced.filter((f: WikiFileResult) => f.path.startsWith('documents/'));
 
     if (docFiles.length > 0) {
       const lines = [
@@ -954,7 +1086,7 @@ export class WikiGenerator {
     }
   }
 
-  _emit(phase: any, progress: any, message: any) {
+  _emit(phase: string, progress: number, message: string) {
     try {
       this.onProgress(phase, progress, message);
     } catch {
@@ -962,13 +1094,13 @@ export class WikiGenerator {
     }
   }
 
-  _ensureDir(dir: any) {
+  _ensureDir(dir: string) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
   }
 
-  _writeFile(relativePath: any, content: any) {
+  _writeFile(relativePath: string, content: string): WikiFileResult {
     const fullPath = path.join(this.wikiDir, relativePath);
     this._ensureDir(path.dirname(fullPath));
     fs.writeFileSync(fullPath, content, 'utf-8');
@@ -977,7 +1109,11 @@ export class WikiGenerator {
     return { path: relativePath, hash, size: Buffer.byteLength(content) };
   }
 
-  _writeMeta(files: any, startTime: any, dedupResult: any) {
+  _writeMeta(
+    files: WikiFileResult[],
+    startTime: number,
+    dedupResult: { removed: string[]; kept: number } | null
+  ) {
     const meta = {
       version: '3.0.0',
       generator: 'AutoSnippet WikiGenerator V3',
@@ -985,7 +1121,7 @@ export class WikiGenerator {
       duration: Date.now() - startTime,
       projectRoot: this.projectRoot,
       language: this.options.language,
-      files: files.map((f: any) => ({
+      files: files.map((f: WikiFileResult) => ({
         path: f.path,
         hash: f.hash,
         size: f.size,
@@ -1011,7 +1147,7 @@ export class WikiGenerator {
   }
 
   /** 检测源码是否有变更（简化：对比 sourceHash） */
-  _detectChanges(meta: any) {
+  _detectChanges(meta: { sourceHash?: string; [key: string]: unknown }) {
     if (!meta?.sourceHash) {
       return true;
     }
@@ -1026,7 +1162,7 @@ export class WikiGenerator {
       const names: string[] = [];
       walkDir(
         this.projectRoot,
-        (filePath: any) => {
+        (filePath: string) => {
           const ext = path.extname(filePath);
           if (extSet.has(ext)) {
             const stat = fs.statSync(filePath);

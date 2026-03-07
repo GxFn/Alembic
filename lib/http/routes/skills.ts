@@ -3,7 +3,7 @@
  * 管理 Agent Skills 的查询、加载和创建（项目级）
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import {
   createSkill,
   deleteSkill,
@@ -23,20 +23,20 @@ const router = express.Router();
  */
 router.get(
   '/',
-  asyncHandler(async (_req: any, res: any) => {
+  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     const raw = listSkills();
     let parsed;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return res.status(500).json({
+      return void res.status(500).json({
         success: false,
         error: { code: 'PARSE_ERROR', message: 'Invalid response from listSkills' },
       });
     }
 
     if (!parsed.success) {
-      return res.status(500).json(parsed);
+      return void res.status(500).json(parsed);
     }
 
     res.json({ success: true, data: parsed.data });
@@ -49,10 +49,16 @@ router.get(
  */
 router.get(
   '/signal-status',
-  asyncHandler(async (_req: any, res: any) => {
-    const { _signalCollector } = global as any;
+  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
+    const { _signalCollector } = global as unknown as Record<
+      string,
+      Record<string, (...args: unknown[]) => unknown>
+    >;
     if (!_signalCollector) {
-      return res.json({ success: true, data: { running: false, mode: 'off', snapshot: null } });
+      return void res.json({
+        success: true,
+        data: { running: false, mode: 'off', snapshot: null },
+      });
     }
     res.json({
       success: true,
@@ -61,7 +67,8 @@ router.get(
         mode: _signalCollector.getMode(),
         snapshot: _signalCollector.getSnapshot(),
         // 返回 AI 的待处理建议，前端可直接展示
-        suggestions: _signalCollector.getSnapshot().pendingSuggestions || [],
+        suggestions:
+          (_signalCollector.getSnapshot() as Record<string, unknown>).pendingSuggestions || [],
       },
     });
   })
@@ -73,21 +80,21 @@ router.get(
  */
 router.get(
   '/suggest',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const ctx = { container: req.app.locals?.container || null };
     const raw = await suggestSkills(ctx);
     let parsed;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return res.status(500).json({
+      return void res.status(500).json({
         success: false,
         error: { code: 'PARSE_ERROR', message: 'Invalid response from suggestSkills' },
       });
     }
 
     if (!parsed.success) {
-      return res.status(500).json(parsed);
+      return void res.status(500).json(parsed);
     }
 
     res.json({ success: true, data: parsed.data });
@@ -101,16 +108,19 @@ router.get(
  */
 router.get(
   '/:name',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { name } = req.params;
     const { section } = req.query;
 
-    const raw = loadSkill(null, { skillName: name, section });
+    const raw = loadSkill(null, {
+      skillName: name as string,
+      section: section as string | undefined,
+    });
     let parsed;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return res.status(500).json({
+      return void res.status(500).json({
         success: false,
         error: { code: 'PARSE_ERROR', message: 'Invalid response from loadSkill' },
       });
@@ -118,7 +128,7 @@ router.get(
 
     if (!parsed.success) {
       const status = parsed.error?.code === 'SKILL_NOT_FOUND' ? 404 : 400;
-      return res.status(status).json(parsed);
+      return void res.status(status).json(parsed);
     }
 
     res.json({ success: true, data: parsed.data });
@@ -132,7 +142,7 @@ router.get(
  */
 router.post(
   '/',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { name, description, content, overwrite, createdBy } = req.body;
 
     if (!name || !description || !content) {
@@ -150,7 +160,7 @@ router.post(
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return res.status(500).json({
+      return void res.status(500).json({
         success: false,
         error: { code: 'PARSE_ERROR', message: 'Invalid response from createSkill' },
       });
@@ -165,7 +175,7 @@ router.post(
             : parsed.error?.code === 'INVALID_NAME'
               ? 400
               : 500;
-      return res.status(status).json(parsed);
+      return void res.status(status).json(parsed);
     }
 
     res.status(201).json({ success: true, data: parsed.data });
@@ -178,7 +188,7 @@ router.post(
  */
 router.put(
   '/:name',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { name } = req.params;
     const { description, content } = req.body;
 
@@ -186,12 +196,12 @@ router.put(
       throw new ValidationError('At least one of description or content must be provided');
     }
 
-    const raw = updateSkill(null, { name, description, content });
+    const raw = updateSkill(null, { name: name as string, description, content });
     let parsed;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return res.status(500).json({
+      return void res.status(500).json({
         success: false,
         error: { code: 'PARSE_ERROR', message: 'Invalid response from updateSkill' },
       });
@@ -204,7 +214,7 @@ router.put(
           : parsed.error?.code === 'BUILTIN_PROTECTED'
             ? 403
             : 500;
-      return res.status(status).json(parsed);
+      return void res.status(status).json(parsed);
     }
 
     res.json({ success: true, data: parsed.data });
@@ -217,15 +227,15 @@ router.put(
  */
 router.delete(
   '/:name',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { name } = req.params;
 
-    const raw = deleteSkill(null, { name });
+    const raw = deleteSkill(null, { name: name as string });
     let parsed;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return res.status(500).json({
+      return void res.status(500).json({
         success: false,
         error: { code: 'PARSE_ERROR', message: 'Invalid response from deleteSkill' },
       });
@@ -238,7 +248,7 @@ router.delete(
           : parsed.error?.code === 'BUILTIN_PROTECTED'
             ? 403
             : 500;
-      return res.status(status).json(parsed);
+      return void res.status(status).json(parsed);
     }
 
     res.json({ success: true, data: parsed.data });

@@ -18,21 +18,21 @@ const logger = Logger.getInstance();
 /**
  * 文本 slug 化
  */
-export function slug(name: any) {
+export function slug(name: string) {
   return name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
 }
 
 /**
  * Mermaid 安全 ID
  */
-export function mermaidId(name: any) {
+export function mermaidId(name: string) {
   return name.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
 /**
  * 遍历目录（排除 build/Pods/DerivedData 等）
  */
-export function walkDir(dir: any, callback: any, maxFiles = 500) {
+export function walkDir(dir: string, callback: (filePath: string) => void, maxFiles = 500) {
   const excludeNames = new Set([
     'Pods',
     'Carthage',
@@ -49,7 +49,7 @@ export function walkDir(dir: any, callback: any, maxFiles = 500) {
   ]);
   let count = 0;
 
-  const walk = (d: any) => {
+  const walk = (d: string) => {
     if (count >= maxFiles) {
       return;
     }
@@ -97,7 +97,7 @@ export function walkDir(dir: any, callback: any, maxFiles = 500) {
  *
  * 兜底: 取第一级目录名
  */
-export function inferModuleFromPath(filePath: any) {
+export function inferModuleFromPath(filePath: string) {
   const parts = filePath.split('/');
 
   // SPM: Sources/{Module}/...
@@ -164,7 +164,10 @@ export function inferModuleFromPath(filePath: any) {
  * 获取某个 Target 对应的源文件列表
  * 按优先级匹配: target.path → target.info.path → sourceFilesByModule[name]
  */
-export function getModuleSourceFiles(target: any, projectInfo: any) {
+export function getModuleSourceFiles(
+  target: { name: string; path?: string; info?: { path?: string } },
+  projectInfo: { sourceFilesByModule?: Record<string, string[]>; sourceFiles?: string[] }
+) {
   const sfm = projectInfo.sourceFilesByModule || {};
   const name = target.name;
 
@@ -177,7 +180,7 @@ export function getModuleSourceFiles(target: any, projectInfo: any) {
   const targetPath = target.path || target.info?.path;
   if (targetPath) {
     const matched = (projectInfo.sourceFiles || []).filter(
-      (f: any) => f.startsWith(`${targetPath}/`) || f.startsWith(targetPath + path.sep)
+      (f: string) => f.startsWith(`${targetPath}/`) || f.startsWith(targetPath + path.sep)
     );
     if (matched.length > 0) {
       return matched;
@@ -199,9 +202,14 @@ export function getModuleSourceFiles(target: any, projectInfo: any) {
  * 基于模块名称和内容推断模块功能
  * 对常见命名模式做智能推断
  */
-export function inferModulePurpose(name: any, classes: any, protocols: any, files: any) {
+export function inferModulePurpose(
+  name: string,
+  classes: string[],
+  protocols: string[],
+  files: string[]
+) {
   const lower = name.toLowerCase();
-  const _fileNames = files.map((f: any) => path.basename(f).toLowerCase());
+  const _fileNames = files.map((f: string) => path.basename(f).toLowerCase());
 
   // 常见模块功能推断规则
   const rules = [
@@ -286,21 +294,31 @@ export function inferModulePurpose(name: any, classes: any, protocols: any, file
  * @param {object|null} codeEntityGraph
  * @returns {Array<{name: string, children: string[]}>}
  */
-export function getInheritanceRoots(codeEntityGraph: any) {
+export function getInheritanceRoots(
+  codeEntityGraph: {
+    queryEntities?: (filter: Record<string, unknown>) => Array<{ entityId: string; name: string }>;
+    queryEdges?: (
+      filter: Record<string, unknown>
+    ) => Array<{ toId?: string; to_id?: string; fromId?: string }>;
+  } | null
+) {
   if (!codeEntityGraph) {
     return [];
   }
   try {
     // 尝试查询继承关系
     const entities = codeEntityGraph.queryEntities?.({ entityType: 'class', limit: 50 }) || [];
-    const roots: { name: any; children: any }[] = [];
+    const roots: { name: string; children: string[] }[] = [];
     for (const e of entities) {
       const _parents =
         codeEntityGraph.queryEdges?.({ toId: e.entityId, relation: 'inherits' }) || [];
       const children =
         codeEntityGraph.queryEdges?.({ fromId: e.entityId, relation: 'inherits' }) || [];
       if (children.length > 0) {
-        roots.push({ name: e.name, children: children.map((c: any) => c.toId || c.to_id) });
+        roots.push({
+          name: e.name,
+          children: children.map((c: { toId?: string; to_id?: string }) => c.toId || c.to_id || ''),
+        });
       }
     }
     return roots.sort((a, b) => (b.children?.length || 0) - (a.children?.length || 0));
@@ -320,8 +338,12 @@ export function getInheritanceRoots(codeEntityGraph: any) {
  * @param {(phase: string, progress: number, message: string) => void} emit
  * @returns {{ removed: string[], kept: number }}
  */
-export function dedup(files: any, wikiDir: any, emit: any) {
-  const removed: any[] = [];
+export function dedup(
+  files: { path: string; hash: string }[],
+  wikiDir: string,
+  emit: (phase: string, progress: number, message: string) => void
+) {
+  const removed: string[] = [];
 
   // Layer 1: slug 碰撞（同名文件跨目录）
   const slugMap = new Map(); // slug → first file
@@ -411,7 +433,7 @@ export function dedup(files: any, wikiDir: any, emit: any) {
  * @param {string} langId - LanguageService langId，如 'swift', 'python', 'go'
  * @returns {{ typeLabel: {zh: string, en: string}, interfaceLabel: {zh: string, en: string}, moduleMetric: {zh: string, en: string} }}
  */
-export function getLangTerms(langId: any) {
+export function getLangTerms(langId: string) {
   const TERMS = {
     swift: {
       typeLabel: { zh: '类/结构体', en: 'Classes/Structs' },
@@ -470,7 +492,16 @@ export function getLangTerms(langId: any) {
     },
   };
   return (
-    (TERMS as Record<string, any>)[langId] || {
+    (
+      TERMS as Record<
+        string,
+        {
+          typeLabel: { zh: string; en: string };
+          interfaceLabel: { zh: string; en: string };
+          moduleMetric: { zh: string; en: string };
+        }
+      >
+    )[langId] || {
       typeLabel: { zh: '类型', en: 'Types' },
       interfaceLabel: { zh: '接口', en: 'Interfaces' },
       moduleMetric: { zh: 'Modules', en: 'Modules' },
@@ -497,7 +528,7 @@ export const BUILD_SYSTEM_MARKERS = LanguageService.buildSystemMarkers;
  * @param {string} [projectRoot] 可选的项目根路径，用于二级检测
  * @returns {Array<{eco: string, buildTool: string}>} 匹配到的构建系统
  */
-export function detectBuildSystems(rootEntryNames: any, projectRoot: any) {
+export function detectBuildSystems(rootEntryNames: string[], projectRoot?: string) {
   // 委托给 LanguageService 做一级匹配
   const results = LanguageService.matchBuildMarkers(rootEntryNames);
   const seenEco = new Set(results.map((r) => r.eco));
@@ -614,7 +645,10 @@ const IMPORT_PATTERNS = [
  * @param {number} [options.sampleLines=40]  每个文件采样行数 (用于 import 提取)
  * @returns {FolderProfile[]}
  */
-export function profileFolders(projectInfo: any, options: any = {}) {
+export function profileFolders(
+  projectInfo: { root: string; sourceFiles?: string[]; [key: string]: unknown },
+  options: { minFiles?: number; maxFolders?: number; sampleLines?: number } = {}
+) {
   const { minFiles = 3, maxFolders = 20, sampleLines = 40 } = options;
 
   const root = projectInfo.root;
@@ -647,7 +681,7 @@ export function profileFolders(projectInfo: any, options: any = {}) {
   }
 
   // ── 3. 筛选重要文件夹 ──
-  const candidates: { dir: any; files: any; depth: any }[] = [];
+  const candidates: { dir: string; files: string[]; depth: number }[] = [];
   for (const [dir, files] of folderRecursive) {
     if (files.length < minFiles) {
       continue;
@@ -673,7 +707,7 @@ export function profileFolders(projectInfo: any, options: any = {}) {
   const selected = _pruneRedundantFolders(candidates.slice(0, maxFolders * 2), maxFolders);
 
   // ── 4. 为每个选中的文件夹生成 Profile ──
-  const profiles: any[] = [];
+  const profiles: Record<string, unknown>[] = [];
 
   for (const { dir, files, depth } of selected) {
     const profile = _buildFolderProfile(dir, files, depth, root, sampleLines);
@@ -684,10 +718,10 @@ export function profileFolders(projectInfo: any, options: any = {}) {
 
   // 按 fileCount 降序 + depth 升序 排序
   profiles.sort((a, b) => {
-    if (b.fileCount !== a.fileCount) {
-      return b.fileCount - a.fileCount;
+    if ((b.fileCount as number) !== (a.fileCount as number)) {
+      return (b.fileCount as number) - (a.fileCount as number);
     }
-    return a.depth - b.depth;
+    return (a.depth as number) - (b.depth as number);
   });
 
   return profiles.slice(0, maxFolders);
@@ -697,8 +731,11 @@ export function profileFolders(projectInfo: any, options: any = {}) {
  * 修剪冗余文件夹: 如果子目录文件数与父目录接近 (>80%), 仅保留父目录
  * @private
  */
-function _pruneRedundantFolders(candidates: any, maxFolders: any) {
-  const kept: any[] = [];
+function _pruneRedundantFolders(
+  candidates: { dir: string; files: string[]; depth: number }[],
+  maxFolders: number
+) {
+  const kept: { dir: string; files: string[]; depth: number }[] = [];
   const removedDirs = new Set();
 
   for (const c of candidates) {
@@ -740,17 +777,17 @@ function _pruneRedundantFolders(candidates: any, maxFolders: any) {
  * @private
  */
 function _buildFolderProfile(
-  relDir: any,
-  files: any,
-  depth: any,
-  projectRoot: any,
-  sampleLines: any
+  relDir: string,
+  files: string[],
+  depth: number,
+  projectRoot: string,
+  sampleLines: number
 ) {
   const fullDir = path.join(projectRoot, relDir);
   const folderName = path.basename(relDir);
 
   // ── 语言分布 ──
-  const langBreakdown: Record<string, any> = {};
+  const langBreakdown: Record<string, number> = {};
   let totalSize = 0;
   for (const f of files) {
     const ext = path.extname(f);
@@ -765,15 +802,15 @@ function _buildFolderProfile(
   }
 
   // ── 文件名列表 ──
-  const fileNames = files.map((f: any) => path.basename(f)).sort();
+  const fileNames = files.map((f: string) => path.basename(f)).sort();
 
   // ── 入口点检测 ──
-  const entryPoints = files.filter((f: any) =>
+  const entryPoints = files.filter((f: string) =>
     ENTRY_POINT_NAMES.has(path.basename(f).toLowerCase())
   );
 
   // ── 重要文件 (大文件 top5 + 入口文件) ──
-  const fileSizes: any[] = [];
+  const fileSizes: { file: string; size: number }[] = [];
   for (const f of files) {
     try {
       const stat = fs.statSync(path.join(projectRoot, f));
@@ -786,7 +823,7 @@ function _buildFolderProfile(
   const keyFiles = [...new Set([...entryPoints, ...fileSizes.slice(0, 5).map((fs) => fs.file)])];
 
   // ── README 检测 ──
-  let readme: any = null;
+  let readme: string | null = null;
   const readmeNames = ['README.md', 'readme.md', 'README.txt', 'README', 'readme.markdown'];
   for (const rn of readmeNames) {
     const rPath = path.join(fullDir, rn);
@@ -808,7 +845,7 @@ function _buildFolderProfile(
   const imports = _extractImports(keyFiles.slice(0, 10), projectRoot, sampleLines, relDir);
 
   // ── 头部注释提取 (从关键文件提取首段注释) ──
-  const headerComments: any[] = [];
+  const headerComments: string[] = [];
   for (const f of keyFiles.slice(0, 3)) {
     const comment = _extractHeaderComment(path.join(projectRoot, f));
     if (comment) {
@@ -831,7 +868,7 @@ function _buildFolderProfile(
     readme,
     purpose: purpose ? purpose : null,
     imports,
-    entryPoints: [...new Set(entryPoints.map((f: any) => path.basename(f)))],
+    entryPoints: [...new Set(entryPoints.map((f: string) => path.basename(f)))],
     namingPatterns,
     headerComments,
   };
@@ -843,13 +880,13 @@ function _buildFolderProfile(
  * @param {string[]} fileNames - basename 列表
  * @returns {string[]}
  */
-function _detectNamingPatterns(fileNames: any) {
+function _detectNamingPatterns(fileNames: string[]) {
   const patterns: string[] = [];
-  const lower = fileNames.map((n: any) => n.toLowerCase());
+  const lower = fileNames.map((n: string) => n.toLowerCase());
 
   // 测试文件
   const testFiles = lower.filter(
-    (n: any) =>
+    (n: string) =>
       n.startsWith('test_') ||
       n.startsWith('test.') ||
       n.endsWith('_test.go') ||
@@ -865,7 +902,7 @@ function _detectNamingPatterns(fileNames: any) {
   }
 
   // 常见后缀模式
-  const suffixes: Record<string, any> = {};
+  const suffixes: Record<string, number> = {};
   for (const name of fileNames) {
     const base = path.basename(name, path.extname(name));
     // 检测 CamelCase 后缀: UserController → Controller
@@ -898,7 +935,12 @@ function _detectNamingPatterns(fileNames: any) {
  * 从文件顶部提取 import/require 语句，推断文件夹级依赖
  * @private
  */
-function _extractImports(keyFiles: any, projectRoot: any, sampleLines: any, currentDir: any) {
+function _extractImports(
+  keyFiles: string[],
+  projectRoot: string,
+  sampleLines: number,
+  currentDir: string
+) {
   const importTargets = new Set();
 
   // Node.js / 常见运行时内置模块 — 不应计入项目文件夹依赖
@@ -1006,7 +1048,7 @@ function _extractImports(keyFiles: any, projectRoot: any, sampleLines: any, curr
  * 提取文件头部注释 (第一个注释块)
  * @private
  */
-function _extractHeaderComment(fullPath: any) {
+function _extractHeaderComment(fullPath: string) {
   try {
     const content = fs.readFileSync(fullPath, 'utf-8');
     const lines = content.split('\n').slice(0, 30);

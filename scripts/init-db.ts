@@ -16,12 +16,12 @@ async function main() {
     const components = await bootstrap.initialize();
 
     // 显示宪法信息
-    const _constitutionInfo = components.constitution.toJSON();
+    const _constitutionInfo = components.constitution!.toJSON();
 
     await bootstrap.shutdown();
     process.exit(0);
-  } catch (error: any) {
-    console.error('\n❌ Initialization failed:', error.message);
+  } catch (error: unknown) {
+    console.error('\n❌ Initialization failed:', error instanceof Error ? error.message : error);
     console.error(error);
     process.exit(1);
   }

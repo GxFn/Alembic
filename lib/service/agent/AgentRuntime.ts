@@ -31,6 +31,7 @@
 import { randomUUID } from 'node:crypto';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
+import type { AgentMessage } from './AgentMessage.js';
 import { AgentState } from './AgentState.js';
 import { Capability, CapabilityRegistry } from './capabilities.js';
 import { cleanFinalAnswer } from './core/ChatAgentPrompts.js';
@@ -41,6 +42,117 @@ import { SystemPromptBuilder } from './core/SystemPromptBuilder.js';
 import { createToolPipeline } from './core/ToolExecutionPipeline.js';
 import { produceForcedSummary } from './forced-summary.js';
 import { PolicyEngine } from './policies.js';
+
+// ── Interfaces ──────────────────────────────────
+
+/** Tool call entry recorded during execution */
+interface ToolCallEntry {
+  tool: string;
+  name?: string;
+  args: Record<string, unknown>;
+  result: unknown;
+  durationMs: number;
+}
+
+/** LLM function call descriptor */
+interface FunctionCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
+/** chatWithTools result from the AI provider */
+interface LLMResult {
+  type?: string;
+  text?: string | null;
+  functionCalls?: FunctionCall[] | null;
+  usage?: { inputTokens?: number; outputTokens?: number };
+}
+
+/** AI error with optional circuit breaker code */
+interface AiError extends Error {
+  code?: string;
+}
+
+/** Progress event emitted to listeners */
+interface ProgressEvent {
+  type: string;
+  agentId: string;
+  preset: string;
+  timestamp: number;
+  [key: string]: unknown;
+}
+
+/** Tool execution pipeline metadata */
+interface ToolMetadata {
+  cacheHit: boolean;
+  blocked: boolean;
+  isNew: boolean;
+  durationMs: number;
+  dedupMessage?: string;
+  isSubmit?: boolean;
+}
+
+/** File cache entry */
+interface FileCacheEntry {
+  relativePath: string;
+  content?: string;
+  name?: string;
+}
+
+interface RuntimeConfig {
+  id?: string;
+  presetName?: string;
+  aiProvider: import('../../external/ai/AiProvider.js').AiProvider;
+  toolRegistry: import('./tools/ToolRegistry.js').ToolRegistry;
+  container?: Record<string, unknown> | null;
+  capabilities?: Capability[];
+  strategy: import('./strategies.js').Strategy;
+  policies?: PolicyEngine;
+  persona?: Record<string, unknown>;
+  memory?: Record<string, unknown>;
+  onProgress?: ((event: ProgressEvent) => void) | null;
+  onToolCall?: ToolCallHook | null;
+  lang?: string | null;
+  projectRoot?: string;
+  additionalTools?: string[];
+}
+
+type ToolCallHook = (
+  name: string,
+  args: Record<string, unknown>,
+  result: unknown,
+  iteration: number
+) => void;
+
+interface AgentResult {
+  reply: string;
+  toolCalls: ToolCallEntry[];
+  tokenUsage: { input: number; output: number };
+  iterations: number;
+  durationMs: number;
+  phases?: Record<string, unknown>;
+  state: Record<string, unknown>;
+  qualityWarning?: string;
+  [key: string]: unknown;
+}
+
+interface ReactLoopOpts {
+  history?: Array<{ role: string; content: string }>;
+  context?: Record<string, unknown>;
+  capabilityOverride?: string[];
+  budgetOverride?: Record<string, unknown>;
+  systemPromptOverride?: string;
+  onToolCall?: ToolCallHook | null;
+  contextWindow?: import('./context/ContextWindow.js').ContextWindow;
+  tracker?: Record<string, unknown>;
+  trace?: Record<string, unknown>;
+  memoryCoordinator?: Record<string, unknown>;
+  sharedState?: Record<string, unknown>;
+  source?: string;
+  toolChoiceOverride?: string | null;
+  [key: string]: unknown;
+}
 
 /** 单次迭代允许的最大工具调用数 */
 const MAX_TOOL_CALLS_PER_ITER = 8;
@@ -64,7 +176,7 @@ const MAX_TOOL_CALLS_PER_ITER = 8;
  */
 
 export class AgentRuntime {
-  onToolCall: any;
+  onToolCall: ToolCallHook | null;
   /** @type {string} */
   id;
   /** @type {string} */
@@ -98,9 +210,9 @@ export class AgentRuntime {
   /** @type {string} */
   #projectRoot;
   /** @type {Array|null} 文件缓存 (bootstrap 场景注入) */
-  #fileCache = null;
+  #fileCache: FileCacheEntry[] | null = null;
   /** @type {string[]} 额外工具白名单 (调用方按需注入，不经 Capability) */
-  #additionalTools: any[] = [];
+  #additionalTools: string[] = [];
   /** @type {import('./core/ToolExecutionPipeline.js').ToolExecutionPipeline} */
   #toolPipeline;
   /** @type {SystemPromptBuilder} */
@@ -108,14 +220,14 @@ export class AgentRuntime {
 
   // ── 执行统计 ──
   iterationCount = 0;
-  toolCallHistory: any[] = [];
+  toolCallHistory: ToolCallEntry[] = [];
   tokenUsage = { input: 0, output: 0 };
   startTime = 0;
 
   /**
    * @param {RuntimeConfig} config
    */
-  constructor(config: any) {
+  constructor(config: RuntimeConfig) {
     this.id = config.id || `runtime_${randomUUID().slice(0, 8)}`;
     this.presetName = config.presetName || 'custom';
     this.aiProvider = config.aiProvider;
@@ -150,7 +262,7 @@ export class AgentRuntime {
       {
         agentId: this.id,
         preset: this.presetName,
-        capabilities: this.capabilities.map((c: any) => c.name),
+        capabilities: this.capabilities.map((c: Capability) => c.name),
         strategy: this.strategy?.name,
       },
       { source: this.id }
@@ -175,7 +287,7 @@ export class AgentRuntime {
    * @property {Object} [phases] - Pipeline/FanOut 阶段详情
    * @property {Object} state 状态快照
    */
-  async execute(message: any, opts: any = {}) {
+  async execute(message: AgentMessage, opts: Record<string, unknown> = {}): Promise<AgentResult> {
     this.startTime = Date.now();
     this.iterationCount = 0;
     this.toolCallHistory = [];
@@ -210,11 +322,13 @@ export class AgentRuntime {
     try {
       // ── 委托给 Strategy ──
       const resultPromise = this.strategy.execute(this, message, opts);
-      const result = await Promise.race([resultPromise, timeoutPromise]);
+      const result = (await Promise.race([resultPromise, timeoutPromise])) as AgentResult;
       clearTimeout(timeoutId);
 
       // ── Policy: 执行后校验 ──
-      const afterCheck = this.policies.validateAfter(result);
+      const afterCheck = this.policies.validateAfter(
+        result as import('./policies.js').PolicyResult
+      );
       if (!afterCheck.ok) {
         this.logger.warn(`[AgentRuntime] Quality check: ${afterCheck.reason}`);
         result.qualityWarning = afterCheck.reason;
@@ -243,14 +357,14 @@ export class AgentRuntime {
       );
 
       return result;
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeoutId);
-      this.state.send('error', { error: err.message });
+      this.state.send('error', { error: (err as Error).message });
       this.bus.publish(
         AgentEvents.AGENT_FAILED,
         {
           agentId: this.id,
-          error: err.message,
+          error: (err as Error).message,
         },
         { source: this.id }
       );
@@ -293,7 +407,7 @@ export class AgentRuntime {
    *   仅在第一轮生效，后续轮次恢复正常 toolChoice 逻辑。
    * @returns {Promise<AgentResult>}
    */
-  async reactLoop(prompt: any, opts: any = {}) {
+  async reactLoop(prompt: string, opts: ReactLoopOpts = {}) {
     const ctx = this.#initLoop(prompt, opts);
 
     // ─── ReAct 主循环 (编排骨架) ─────
@@ -333,7 +447,7 @@ export class AgentRuntime {
       }
 
       // 分支: 有 Tool Call
-      if (llmResult.functionCalls?.length > 0) {
+      if ((llmResult.functionCalls?.length ?? 0) > 0) {
         const exitAfterTools = await this.#processToolCalls(ctx, llmResult, effectiveSystemPrompt);
         if (exitAfterTools) {
           break;
@@ -358,7 +472,7 @@ export class AgentRuntime {
    * @param {Object} opts
    * @returns {LoopContext}
    */
-  #initLoop(prompt: any, opts: any) {
+  #initLoop(prompt: string, opts: ReactLoopOpts) {
     const {
       history = [],
       context = {},
@@ -427,7 +541,7 @@ export class AgentRuntime {
       {
         agentId: this.id,
         prompt: prompt.slice(0, 100),
-        capabilities: caps.map((c: any) => c.name),
+        capabilities: caps.map((c: Capability) => c.name),
       },
       { source: this.id }
     );
@@ -456,7 +570,7 @@ export class AgentRuntime {
    * @param {LoopContext} ctx
    * @returns {boolean} true = 应退出循环
    */
-  #shouldExit(ctx: any) {
+  #shouldExit(ctx: LoopContext): boolean {
     // ExplorationTracker: tick + 退出检查
     if (ctx.tracker) {
       ctx.tracker.tick();
@@ -511,7 +625,7 @@ export class AgentRuntime {
    * @param {LoopContext} ctx
    * @returns {{ toolChoice: string, effectiveSystemPrompt: string, effectivePrompt: string }}
    */
-  #prepareIteration(ctx: any) {
+  #prepareIteration(ctx: LoopContext) {
     const { tracker, trace, capabilities: _capabilities, messages, prompt } = ctx;
     const maxIterations = ctx.maxIterations;
 
@@ -558,8 +672,8 @@ export class AgentRuntime {
     }
     if (ctx.isSystem && ctx.memoryCoordinator) {
       const wmContext = ctx.memoryCoordinator.buildDynamicMemoryPrompt?.({
-        mode: ctx.source || 'analyst',
-        scopeId: ctx.context?.dimensionScopeId || null,
+        mode: (ctx.source || 'analyst') as 'user' | 'analyst' | 'producer',
+        scopeId: (ctx.context?.dimensionScopeId as string) || undefined,
       });
       if (wmContext) {
         effectiveSystemPrompt += `\n\n${wmContext}`;
@@ -583,7 +697,12 @@ export class AgentRuntime {
    * @param {string} effectivePrompt
    * @returns {Promise<Object|null>} llmResult 或 null (表示应退出)
    */
-  async #callLLM(ctx: any, toolChoice: any, effectiveSystemPrompt: any, effectivePrompt: any) {
+  async #callLLM(
+    ctx: LoopContext,
+    toolChoice: string,
+    effectiveSystemPrompt: string,
+    effectivePrompt: string
+  ): Promise<LLMResult | null> {
     this.bus.publish(
       AgentEvents.LLM_CALL_START,
       {
@@ -593,7 +712,7 @@ export class AgentRuntime {
       { source: this.id }
     );
 
-    let llmResult;
+    let llmResult: LLMResult;
     try {
       // toolChoice='none' 时不发送 toolSchemas —— 部分 LLM (Gemini) 在看到
       // 工具定义但被禁止调用时会返回空内容，导致 SUMMARIZE 阶段失败
@@ -603,17 +722,17 @@ export class AgentRuntime {
           : ctx.toolSchemas.length > 0
             ? ctx.toolSchemas
             : undefined;
-      llmResult = await this.aiProvider.chatWithTools(effectivePrompt, {
+      llmResult = (await this.aiProvider.chatWithTools(effectivePrompt, {
         messages: ctx.messages.toMessages(),
         toolSchemas: effectiveToolSchemas,
         toolChoice: effectiveToolSchemas ? toolChoice : undefined,
         systemPrompt: effectiveSystemPrompt,
         temperature: ctx.budget.temperature ?? (ctx.isSystem ? 0.3 : 0.7),
         maxTokens: ctx.budget.maxTokens ?? (ctx.isSystem ? 8192 : 4096),
-      });
+      })) as LLMResult;
       ctx.consecutiveAiErrors = 0;
-    } catch (aiErr: any) {
-      return this.#handleAiError(ctx, aiErr);
+    } catch (aiErr: unknown) {
+      return this.#handleAiError(ctx, aiErr as AiError);
     }
 
     // 累计 Token (runtime 级 + loop 级)
@@ -640,7 +759,7 @@ export class AgentRuntime {
       // 需要额外一轮才能生成有效输出。与 ExplorationTracker 的 2 轮 grace 对齐，
       // 避免 grace 机制被架空。重试次数由 tracker.phaseRounds 控制而非独立计数。
       const isTerminal = ctx.tracker && ctx.tracker.phase === 'SUMMARIZE';
-      if (isTerminal) {
+      if (isTerminal && ctx.tracker) {
         const phaseRounds = ctx.tracker.metrics?.phaseRounds ?? 0;
         if (phaseRounds < 2) {
           ctx.consecutiveEmptyResponses++;
@@ -649,7 +768,7 @@ export class AgentRuntime {
           );
           // 不 rollbackTick: 让 tracker 计入 phaseRounds 以便到达 grace 上限退出
           await new Promise((r) => setTimeout(r, 1500));
-          return continueResult();
+          return continueResult() as LLMResult;
         }
         this.logger.warn(
           '[AgentRuntime] ⚠ empty response in SUMMARIZE (grace exhausted) — proceeding to forced summary'
@@ -664,7 +783,7 @@ export class AgentRuntime {
         ctx.tracker?.rollbackTick?.();
         await new Promise((r) => setTimeout(r, 1500));
         // 返回 CONTINUE 信号 — 调用方需重走循环
-        return continueResult();
+        return continueResult() as LLMResult;
       }
       return null; // 退出
     }
@@ -673,7 +792,11 @@ export class AgentRuntime {
     }
 
     // Graceful exit 保护
-    if (ctx.tracker?.isGracefulExit && llmResult.functionCalls?.length > 0) {
+    if (
+      ctx.tracker?.isGracefulExit &&
+      llmResult.functionCalls?.length &&
+      llmResult.functionCalls.length > 0
+    ) {
       this.logger.warn(
         `[AgentRuntime] ⚠ AI returned ${llmResult.functionCalls.length} tool calls despite toolChoice=none (graceful exit) — ignoring`
       );
@@ -681,7 +804,7 @@ export class AgentRuntime {
         ctx.lastReply = cleanFinalAnswer(llmResult.text);
         return null; // 退出
       }
-      return continueResult();
+      return continueResult() as LLMResult;
     }
 
     return llmResult;
@@ -691,7 +814,7 @@ export class AgentRuntime {
    * AI 错误处理 — 熔断器感知 + 2-strike 策略
    * @returns {Promise<Object|null>} - continueResult() 或 null (退出)
    */
-  async #handleAiError(ctx: any, aiErr: any) {
+  async #handleAiError(ctx: LoopContext, aiErr: AiError): Promise<LLMResult | null> {
     ctx.consecutiveAiErrors++;
     this.logger.warn(
       `[AgentRuntime] AI call failed (attempt ${ctx.consecutiveAiErrors}): ${aiErr.message}`
@@ -719,7 +842,7 @@ export class AgentRuntime {
     }
 
     await new Promise((r) => setTimeout(r, 2000));
-    return continueResult();
+    return continueResult() as LLMResult;
   }
 
   /**
@@ -730,11 +853,11 @@ export class AgentRuntime {
    * @param {string} effectiveSystemPrompt 用于 budget 耗尽时的摘要调用
    * @returns {Promise<boolean>} true = 应退出循环
    */
-  async #processToolCalls(ctx: any, llmResult: any, effectiveSystemPrompt: any) {
+  async #processToolCalls(ctx: LoopContext, llmResult: LLMResult, effectiveSystemPrompt: string) {
     const { tracker, trace, messages } = ctx;
 
     // 工具调用数量限制
-    let activeCalls = llmResult.functionCalls;
+    let activeCalls = llmResult.functionCalls!;
     if (activeCalls.length > MAX_TOOL_CALLS_PER_ITER) {
       this.logger.warn(
         `[AgentRuntime] ⚠ ${activeCalls.length} tool calls, capping to ${MAX_TOOL_CALLS_PER_ITER}`
@@ -748,7 +871,7 @@ export class AgentRuntime {
 
     let roundSubmitCount = 0;
     let roundHasNewInfo = false;
-    const roundToolNames: any[] = [];
+    const roundToolNames: string[] = [];
 
     // 执行每个工具
     for (const fc of activeCalls) {
@@ -771,8 +894,13 @@ export class AgentRuntime {
       });
 
       const durationMs = metadata.durationMs;
-      const toolEntry = { tool: fc.name, args: fc.args, result: toolResult, durationMs };
-      ctx.toolCalls.push(toolEntry);
+      const toolEntry: ToolCallEntry = {
+        tool: fc.name,
+        args: fc.args,
+        result: toolResult,
+        durationMs,
+      };
+      (ctx.toolCalls as ToolCallEntry[]).push(toolEntry);
       this.toolCallHistory.push(toolEntry);
 
       if (metadata.isNew) {
@@ -790,13 +918,15 @@ export class AgentRuntime {
         }
       }
 
+      const toolResultObj = toolResult as Record<string, unknown> | null;
+
       this.bus.publish(
         AgentEvents.TOOL_CALL_END,
         {
           agentId: this.id,
           tool: fc.name,
           durationMs,
-          success: !toolResult?.error,
+          success: !toolResultObj?.error,
         },
         { source: this.id }
       );
@@ -805,9 +935,9 @@ export class AgentRuntime {
       let resultStr = messages.formatToolResult(fc.name, toolResult);
 
       // 提交去重: pipeline 中间件已标记 metadata
-      if ((metadata as any).dedupMessage) {
-        resultStr = (metadata as any).dedupMessage;
-      } else if ((metadata as any).isSubmit) {
+      if ((metadata as ToolMetadata).dedupMessage) {
+        resultStr = (metadata as ToolMetadata).dedupMessage!;
+      } else if ((metadata as ToolMetadata).isSubmit) {
         roundSubmitCount++;
       }
 
@@ -815,8 +945,8 @@ export class AgentRuntime {
       this.#emitProgress('tool_end', {
         tool: fc.name,
         duration: durationMs,
-        status: toolResult?.error ? 'error' : 'ok',
-        error: toolResult?.error || undefined,
+        status: toolResultObj?.error ? 'error' : 'ok',
+        error: (toolResultObj?.error as string | undefined) || undefined,
         resultSize: resultStr.length,
       });
 
@@ -868,13 +998,13 @@ export class AgentRuntime {
 
     // 检查预算 (非 tracker 模式)
     if (!tracker && ctx.iteration >= ctx.maxIterations) {
-      const summary = await this.aiProvider.chatWithTools(ctx.prompt, {
+      const summary = (await this.aiProvider.chatWithTools(ctx.prompt, {
         messages: messages.toMessages(),
         systemPrompt: effectiveSystemPrompt,
         toolChoice: 'none',
         temperature: ctx.budget.temperature ?? 0.7,
         maxTokens: ctx.budget.maxTokens ?? 4096,
-      });
+      })) as LLMResult;
       if (summary.usage) {
         this.tokenUsage.input += summary.usage.inputTokens || 0;
         this.tokenUsage.output += summary.usage.outputTokens || 0;
@@ -895,7 +1025,7 @@ export class AgentRuntime {
    * @param {Object} llmResult
    * @returns {boolean} true = 应退出循环
    */
-  #processTextResponse(ctx: any, llmResult: any) {
+  #processTextResponse(ctx: LoopContext, llmResult: LLMResult) {
     const { tracker, trace, messages } = ctx;
 
     if (tracker) {
@@ -914,7 +1044,7 @@ export class AgentRuntime {
 
       if (textResult.needsDigestNudge) {
         messages.appendAssistantText(llmResult.text || '');
-        messages.appendUserNudge(textResult.nudge);
+        messages.appendUserNudge(textResult.nudge!);
         this.logger.info('[AgentRuntime] 📝 injected SUMMARIZE nudge (text-triggered transition)');
         const _dimD = ctx.sharedState?._dimensionMeta?.id || '';
         trace?.endRound?.();
@@ -943,12 +1073,12 @@ export class AgentRuntime {
    * @param {LoopContext} ctx
    * @returns {Promise<Object>}
    */
-  async #finalize(ctx: any) {
+  async #finalize(ctx: LoopContext) {
     // Scan pipeline: 所有结果在 toolCalls 中 (collect_scan_recipe)，不需要文本回复
     // 直接跳过 forced summary，避免浪费一次 LLM 调用
     if (!ctx.lastReply && ctx.tracker?.submitToolName === 'collect_scan_recipe') {
       const recipeCount = ctx.toolCalls.filter(
-        (tc: any) => (tc.tool || tc.name) === 'collect_scan_recipe'
+        (tc: ToolCallEntry) => (tc.tool || tc.name) === 'collect_scan_recipe'
       ).length;
       ctx.lastReply = `[scan complete: ${recipeCount} recipes collected]`;
     }
@@ -959,7 +1089,7 @@ export class AgentRuntime {
         aiProvider: this.aiProvider,
         source: ctx.source,
         toolCalls: ctx.toolCalls,
-        tracker: ctx.tracker,
+        tracker: ctx.tracker ?? undefined,
         contextWindow: ctx.contextWindow,
         prompt: ctx.prompt,
         tokenUsage: this.tokenUsage,
@@ -999,7 +1129,7 @@ export class AgentRuntime {
    * 注入内存文件缓存（bootstrap 场景: allFiles 已在内存中，避免重复磁盘读取）
    * @param {Array|null} files - [{ relativePath, content, name }]
    */
-  setFileCache(files: any) {
+  setFileCache(files: FileCacheEntry[] | null) {
     this.#fileCache = files;
     this.#promptBuilder.setFileCache(files);
   }
@@ -1017,7 +1147,7 @@ export class AgentRuntime {
   /**
    * 发送进度事件 (公开方法，供 ToolExecutionPipeline 中间件调用)
    */
-  emitProgress(type: any, data: any = {}) {
+  emitProgress(type: string, data: Record<string, unknown> = {}) {
     this.#emitProgress(type, data);
   }
 
@@ -1030,7 +1160,7 @@ export class AgentRuntime {
    * 第 2+ 次调用时状态已不在 IDLE，直接 send('start') 会抛错。
    * 此方法在转移不合法时静默跳过，保证多阶段执行不中断。
    */
-  #safeTransition(event: any, payload: any = {}) {
+  #safeTransition(event: string, payload: Record<string, unknown> = {}) {
     try {
       this.state.send(event, payload);
     } catch {
@@ -1042,7 +1172,7 @@ export class AgentRuntime {
    * 收集所有 Capability 的工具白名单
    * 如果任一 Capability tools 为空数组, 返回空 (使用全部工具)
    */
-  #collectTools(caps: any) {
+  #collectTools(caps: Capability[]) {
     const toolSet = new Set();
     let hasUnlimited = false;
     for (const cap of caps) {
@@ -1065,31 +1195,31 @@ export class AgentRuntime {
   /**
    * 解析 capability 名称为实例 (Pipeline 阶段覆盖时调用)
    */
-  #resolveCapabilities(capNames: any) {
+  #resolveCapabilities(capNames: string[] | null) {
     if (capNames == null) {
       return this.capabilities;
     }
     if (capNames.length === 0) {
       return []; // explicit empty = no tools
     }
-    return capNames.map((name: any) => {
+    return capNames.map((name: string | Capability) => {
       if (typeof name === 'object' && name instanceof Capability) {
         return name;
       }
       // 先在已加载的 capabilities 中查找
-      const existing = this.capabilities.find((c: any) => c.name === name);
+      const existing = this.capabilities.find((c: Capability) => c.name === name);
       if (existing) {
         return existing;
       }
       // 否则从注册表创建
-      return CapabilityRegistry.create(name);
+      return CapabilityRegistry.create(name as string);
     });
   }
 
   /**
    * 发送进度事件
    */
-  #emitProgress(type: any, data: any = {}) {
+  #emitProgress(type: string, data: Record<string, unknown> = {}) {
     const event = {
       type,
       agentId: this.id,

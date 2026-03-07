@@ -9,18 +9,44 @@
 
 import Logger from '../../infrastructure/logging/Logger.js';
 
+interface ViolationsStoreLike {
+  getRunsByFile(filePath: string): { violations: { ruleId: string; fixSuggestion?: string }[] }[];
+}
+
+interface FeedbackCollectorLike {
+  record(action: string, recipeId: string, meta: Record<string, unknown>): void;
+}
+
+interface GuardCheckEngineLike {
+  getRules(): { id: string; fixSuggestion?: string }[];
+}
+
+interface CheckResult {
+  violations: { ruleId: string; fixSuggestion?: string }[];
+}
+
+interface FixedViolation {
+  ruleId: unknown;
+  filePath: string;
+  fixRecipeId: string;
+}
+
 export class GuardFeedbackLoop {
-  feedbackCollector: any;
-  guardCheckEngine: any;
-  logger: any;
-  violationsStore: any;
+  feedbackCollector: FeedbackCollectorLike | null;
+  guardCheckEngine: GuardCheckEngineLike | null;
+  logger: ReturnType<typeof Logger.getInstance>;
+  violationsStore: ViolationsStoreLike | null;
   /**
    * @param {import('./ViolationsStore.js').ViolationsStore} violationsStore
    * @param {import('../quality/FeedbackCollector.js').FeedbackCollector} feedbackCollector
    * @param {object} [options]
    * @param {import('./GuardCheckEngine.js').GuardCheckEngine} [options.guardCheckEngine] 用于查找规则
    */
-  constructor(violationsStore: any, feedbackCollector: any, options: any = {}) {
+  constructor(
+    violationsStore: ViolationsStoreLike | null,
+    feedbackCollector: FeedbackCollectorLike | null,
+    options: { guardCheckEngine?: GuardCheckEngineLike } = {}
+  ) {
     this.violationsStore = violationsStore;
     this.feedbackCollector = feedbackCollector;
     this.guardCheckEngine = options.guardCheckEngine || null;
@@ -33,7 +59,7 @@ export class GuardFeedbackLoop {
    * @param {string} filePath 文件路径
    * @returns {Array<{ ruleId: string, filePath: string, fixRecipeId: string }>} 已修复且有 Recipe 关联的列表
    */
-  detectFixedViolations(currentResult: any, filePath: any) {
+  detectFixedViolations(currentResult: CheckResult, filePath: string) {
     if (!this.violationsStore) {
       return [];
     }
@@ -46,10 +72,10 @@ export class GuardFeedbackLoop {
 
       // 取最近一次运行结果
       const lastRun = previousRuns[previousRuns.length - 1];
-      const lastRuleIds = new Set((lastRun.violations || []).map((v: any) => v.ruleId));
-      const currentRuleIds = new Set((currentResult.violations || []).map((v: any) => v.ruleId));
+      const lastRuleIds = new Set((lastRun.violations || []).map((v) => v.ruleId));
+      const currentRuleIds = new Set((currentResult.violations || []).map((v) => v.ruleId));
 
-      const fixed: { ruleId: unknown; filePath: any; fixRecipeId: any }[] = [];
+      const fixed: FixedViolation[] = [];
       for (const ruleId of lastRuleIds) {
         if (!currentRuleIds.has(ruleId)) {
           // 该规则的违规已消失 → 修复了
@@ -61,8 +87,10 @@ export class GuardFeedbackLoop {
       }
 
       return fixed;
-    } catch (err: any) {
-      this.logger.debug(`[GuardFeedbackLoop] detectFixedViolations error: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.debug(
+        `[GuardFeedbackLoop] detectFixedViolations error: ${(err as Error).message}`
+      );
       return [];
     }
   }
@@ -71,7 +99,7 @@ export class GuardFeedbackLoop {
    * 对已修复的违规自动确认使用
    * @param {Array<{ ruleId: string, filePath: string, fixRecipeId: string }>} fixedList
    */
-  autoConfirmUsage(fixedList: any) {
+  autoConfirmUsage(fixedList: FixedViolation[]) {
     if (!this.feedbackCollector || !fixedList?.length) {
       return;
     }
@@ -87,8 +115,8 @@ export class GuardFeedbackLoop {
         this.logger.info(
           `[GuardFeedbackLoop] Auto-confirmed usage: recipe=${fixRecipeId} from fixing rule=${ruleId}`
         );
-      } catch (err: any) {
-        this.logger.debug(`[GuardFeedbackLoop] autoConfirmUsage error: ${err.message}`);
+      } catch (err: unknown) {
+        this.logger.debug(`[GuardFeedbackLoop] autoConfirmUsage error: ${(err as Error).message}`);
       }
     }
   }
@@ -99,7 +127,7 @@ export class GuardFeedbackLoop {
    * @param {{ violations: Array }} currentResult
    * @param {string} filePath
    */
-  processFixDetection(currentResult: any, filePath: any) {
+  processFixDetection(currentResult: CheckResult, filePath: string) {
     const fixed = this.detectFixedViolations(currentResult, filePath);
     if (fixed.length > 0) {
       this.autoConfirmUsage(fixed);
@@ -127,7 +155,7 @@ export class GuardFeedbackLoop {
    * 增强：当无显式 fixSuggestion 时，以 ruleId 本身作为 fallback recipeId
    * 这允许 Knowledge Base 中以 ruleId 命名的条目自动关联
    */
-  _findFixRecipe(ruleId: any, violations: any) {
+  _findFixRecipe(ruleId: string, violations: { ruleId: string; fixSuggestion?: string }[]) {
     // 先从 violation 本身的 fixSuggestion 查找
     for (const v of violations || []) {
       if (v.ruleId === ruleId && v.fixSuggestion) {
@@ -139,7 +167,7 @@ export class GuardFeedbackLoop {
     if (this.guardCheckEngine) {
       try {
         const rules = this.guardCheckEngine.getRules();
-        const rule = rules.find((r: any) => r.id === ruleId);
+        const rule = rules.find((r) => r.id === ruleId);
         if (rule?.fixSuggestion) {
           return rule.fixSuggestion.replace(/^recipe:/, '');
         }

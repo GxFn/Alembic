@@ -19,7 +19,13 @@ export class ActionPipeline {
    * @param {string} type 触发类型
    * @param {function} handler - async (trigger, context) => result
    */
-  register(type: any, handler: any) {
+  register(
+    type: string,
+    handler: (
+      trigger: Record<string, unknown>,
+      context: Record<string, unknown>
+    ) => Promise<unknown>
+  ) {
     this.#actions.set(type, handler);
   }
 
@@ -27,9 +33,12 @@ export class ActionPipeline {
    * 执行管线
    * @param {{ type: string, name?: string, params?: object }} trigger
    * @param {object} context
-   * @returns {Promise<{ success: boolean, result?: any, error?: string }>}
+   * @returns {Promise<{ success: boolean, result?: unknown, error?: string }>}
    */
-  async execute(trigger: any, context: any) {
+  async execute(
+    trigger: { type: string; name?: string; params?: Record<string, unknown> },
+    context: Record<string, unknown>
+  ) {
     const handler = this.#actions.get(trigger.type);
     if (!handler) {
       // 尝试通用 handler
@@ -51,13 +60,20 @@ export class ActionPipeline {
     return [...this.#actions.keys()];
   }
 
-  async #runHandler(handler: any, trigger: any, context: any) {
+  async #runHandler(
+    handler: (
+      trigger: Record<string, unknown>,
+      context: Record<string, unknown>
+    ) => Promise<unknown>,
+    trigger: Record<string, unknown>,
+    context: Record<string, unknown>
+  ) {
     try {
       const result = await handler(trigger, context);
       return { success: true, result };
-    } catch (err: any) {
-      this.#logger.error(`[ActionPipeline] handler 异常:`, err.message);
-      return { success: false, error: err.message };
+    } catch (err: unknown) {
+      this.#logger.error(`[ActionPipeline] handler 异常:`, (err as Error).message);
+      return { success: false, error: (err as Error).message };
     }
   }
 }

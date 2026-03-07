@@ -1,4 +1,21 @@
+import type { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { QualityScorer } from '../quality/QualityScorer.js';
+
+interface ConfidenceRouterConfig {
+  autoApproveThreshold?: number;
+  rejectThreshold?: number;
+  minContentLength?: number;
+  requireReasoning?: boolean;
+  trustedSources?: string[];
+  trustedAutoApproveThreshold?: number;
+}
+
+interface RouteResult {
+  action: 'auto_approve' | 'pending' | 'reject';
+  reason: string;
+  confidence?: number;
+}
 
 /**
  * ConfidenceRouter — 知识条目自动审核路由器
@@ -28,14 +45,14 @@ const DEFAULT_CONFIG = {
 };
 
 export class ConfidenceRouter {
-  _config: any;
-  _qualityScorer: any;
-  logger: any;
+  _config: Required<typeof DEFAULT_CONFIG>;
+  _qualityScorer: QualityScorer | null;
+  logger: ReturnType<typeof Logger.getInstance>;
   /**
    * @param {Object} [config] 路由配置
    * @param {import('../quality/QualityScorer.js').QualityScorer} [qualityScorer]
    */
-  constructor(config: any = {}, qualityScorer = null) {
+  constructor(config: ConfidenceRouterConfig = {}, qualityScorer: QualityScorer | null = null) {
     this._config = { ...DEFAULT_CONFIG, ...config };
     this._qualityScorer = qualityScorer;
     this.logger = Logger.getInstance();
@@ -46,7 +63,7 @@ export class ConfidenceRouter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {Promise<{ action: 'auto_approve'|'pending'|'reject', reason: string, confidence?: number }>}
    */
-  async route(entry: any) {
+  async route(entry: KnowledgeEntry): Promise<RouteResult> {
     const confidence = entry.reasoning?.confidence ?? 0;
     const source = entry.source || 'manual';
     const isTrusted = this._config.trustedSources.includes(source);
@@ -90,7 +107,7 @@ export class ConfidenceRouter {
     }
 
     // ── 阶段 5: 质量评分（可选） ──
-    let qualityScore: any = null;
+    let qualityScore: number | null = null;
     if (this._qualityScorer) {
       try {
         const scorerInput = {
@@ -99,8 +116,16 @@ export class ConfidenceRouter {
           code: entry.content?.pattern || entry.content?.markdown || '',
           language: entry.language,
           category: entry.category,
-          summary: entry.description || entry.summaryCn || entry.summaryEn || '',
-          usageGuide: entry.usageGuide || entry.usageGuideCn || entry.usageGuideEn || '',
+          summary:
+            entry.description ||
+            (entry as unknown as Record<string, string>).summaryCn ||
+            (entry as unknown as Record<string, string>).summaryEn ||
+            '',
+          usageGuide:
+            entry.usageGuide ||
+            (entry as unknown as Record<string, string>).usageGuideCn ||
+            (entry as unknown as Record<string, string>).usageGuideEn ||
+            '',
           headers: entry.headers || [],
           tags: entry.tags || [],
         };
@@ -144,7 +169,7 @@ export class ConfidenceRouter {
   /**
    * 估算内容长度
    */
-  _estimateContentLength(entry: any) {
+  _estimateContentLength(entry: KnowledgeEntry): number {
     const content = entry.content;
     if (!content) {
       return 0;
@@ -154,7 +179,9 @@ export class ConfidenceRouter {
       content.pattern,
       content.rationale,
       content.markdown,
-      ...(content.steps || []).map((s: any) => (typeof s === 'string' ? s : s?.description || '')),
+      ...(content.steps || []).map((s: unknown) =>
+        typeof s === 'string' ? s : (s as Record<string, string>)?.description || ''
+      ),
     ].filter(Boolean);
 
     return parts.reduce((sum, p) => sum + p.length, 0);

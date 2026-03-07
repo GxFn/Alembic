@@ -22,7 +22,7 @@ const SOURCE_EXTS = LanguageService.sourceExts;
 /**
  * 递归收集目录下所有源文件路径
  */
-async function collectSourceFiles(dir: any) {
+async function collectSourceFiles(dir: string) {
   const { readdir } = await import('node:fs/promises');
   const files: string[] = [];
 
@@ -42,7 +42,7 @@ async function collectSourceFiles(dir: any) {
     '__pycache__',
   ]);
 
-  async function walk(currentDir: any) {
+  async function walk(currentDir: string) {
     let entries;
     try {
       entries = await readdir(currentDir, { withFileTypes: true });
@@ -74,7 +74,12 @@ async function collectSourceFiles(dir: any) {
  * @param {string} code      当前文件内容
  * @param {string} guardLine 触发行原文
  */
-export async function handleGuard(watcher: any, fullPath: any, code: any, guardLine: any) {
+export async function handleGuard(
+  watcher: import('../FileWatcher.js').FileWatcher,
+  fullPath: string,
+  code: string,
+  guardLine: string
+) {
   const rest = guardLine.replace(/^\/\/\s*as:(?:audit|a|lint|l|guard|g)\s*/, '').trim();
   const scopeArg = rest.toLowerCase();
   const isScope = SCOPE_KEYWORDS.has(scopeArg);
@@ -118,7 +123,7 @@ export async function handleGuard(watcher: any, fullPath: any, code: any, guardL
       }
 
       // 读取所有文件内容
-      const fileEntries: any[] = [];
+      const fileEntries: { path: string; content: string }[] = [];
       let readErrors = 0;
       for (const p of sourcePaths) {
         try {
@@ -142,11 +147,17 @@ export async function handleGuard(watcher: any, fullPath: any, code: any, guardL
         watcher._notify?.(
           `${scopeLabel}审计: ${summary.totalViolations} 个问题 (${summary.errors ?? 0} 错误, ${summary.warnings ?? 0} 警告)`
         );
-        const filesWithIssues = report.files.filter((f: any) => f.summary.total > 0);
+        const filesWithIssues = report.files.filter(
+          (f: Record<string, unknown>) => (f.summary as Record<string, number>).total > 0
+        );
         for (const file of filesWithIssues.slice(0, 10)) {
           const _rel = file.filePath.replace(`${scanRoot}/`, '');
-          const errors = file.violations.filter((v: any) => v.severity === 'error');
-          const warnings = file.violations.filter((v: any) => v.severity === 'warning');
+          const errors = file.violations.filter(
+            (v: Record<string, unknown>) => v.severity === 'error'
+          );
+          const warnings = file.violations.filter(
+            (v: Record<string, unknown>) => v.severity === 'warning'
+          );
           for (const _v of errors.slice(0, 5)) {
           }
           if (errors.length > 5) {
@@ -190,8 +201,8 @@ export async function handleGuard(watcher: any, fullPath: any, code: any, guardL
         // 搜索失败不阻塞
       }
     }
-  } catch (err: any) {
-    console.warn(`  ⚠️ Guard 检查失败: ${err.message}`);
+  } catch (err: unknown) {
+    console.warn(`  ⚠️ Guard 检查失败: ${(err as Error).message}`);
   }
 }
 
@@ -199,11 +210,17 @@ export async function handleGuard(watcher: any, fullPath: any, code: any, guardL
  * 检查单个文件并打印结果
  */
 function _auditSingleFile(
-  watcher: any,
-  engine: any,
-  fullPath: any,
-  code: any,
-  detectLanguage: any,
+  watcher: import('../FileWatcher.js').FileWatcher,
+  engine: {
+    checkCode: (
+      code: string,
+      language: string,
+      options: Record<string, unknown>
+    ) => Array<Record<string, unknown>>;
+  },
+  fullPath: string,
+  code: string,
+  detectLanguage: (path: string) => string,
   scope = 'file'
 ) {
   const language = detectLanguage(fullPath);
@@ -212,8 +229,8 @@ function _auditSingleFile(
   if (violations.length === 0) {
     watcher._notify?.('审计通过 ✅ 无违规');
   } else {
-    const errors = violations.filter((v: any) => v.severity === 'error');
-    const warnings = violations.filter((v: any) => v.severity === 'warning');
+    const errors = violations.filter((v: Record<string, unknown>) => v.severity === 'error');
+    const warnings = violations.filter((v: Record<string, unknown>) => v.severity === 'warning');
     watcher._notify?.(
       `审计: ${violations.length} 个问题 (${errors.length} 错误, ${warnings.length} 警告)`
     );

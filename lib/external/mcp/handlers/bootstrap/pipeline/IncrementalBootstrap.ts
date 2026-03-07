@@ -16,6 +16,7 @@
  */
 
 import { SessionStore } from '../../../../../service/agent/memory/SessionStore.js';
+import type { BootstrapFile, LoggerLike, SaveSnapshotParams } from '../../types.js';
 import { BootstrapSnapshot } from './BootstrapSnapshot.js';
 
 // ──────────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ export class IncrementalBootstrap {
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  constructor(db: any, projectRoot: any, { logger }: any = {}) {
+  constructor(db: unknown, projectRoot: string, { logger }: { logger?: LoggerLike | null } = {}) {
     this.#snapshot = new BootstrapSnapshot(db, { logger });
     this.#logger = logger || null;
     this.#projectRoot = projectRoot;
@@ -61,7 +62,7 @@ export class IncrementalBootstrap {
    * @property {string} reason 人类可读的决策原因
    * @property {object|null} restoredEpisodic 从快照恢复的 EpisodicMemory (仅增量时)
    */
-  evaluate(currentFiles: any, allDimIds: any) {
+  evaluate(currentFiles: BootstrapFile[], allDimIds: string[]) {
     try {
       // 1. 加载上次快照
       const previousSnapshot = this.#snapshot.getLatest(this.#projectRoot);
@@ -107,15 +108,20 @@ export class IncrementalBootstrap {
       }
 
       // 4. 增量可行 → 尝试恢复 SessionStore
-      let restoredEpisodic: any = null;
+      let restoredEpisodic: SessionStore | null = null;
       if (previousSnapshot.episodicData) {
         try {
-          restoredEpisodic = SessionStore.fromJSON(previousSnapshot.episodicData);
+          restoredEpisodic = SessionStore.fromJSON(
+            previousSnapshot.episodicData as Record<string, unknown>
+          );
           this.#log(
             `Restored SessionStore: ${restoredEpisodic.getCompletedDimensions().length} dimensions`
           );
-        } catch (err: any) {
-          this.#log(`Failed to restore SessionStore: ${err.message}`, 'warn');
+        } catch (err: unknown) {
+          this.#log(
+            `Failed to restore SessionStore: ${err instanceof Error ? err.message : String(err)}`,
+            'warn'
+          );
         }
       }
 
@@ -134,8 +140,9 @@ export class IncrementalBootstrap {
         reason: inference.reason,
         restoredEpisodic,
       };
-    } catch (err: any) {
-      this.#log(`Incremental evaluation failed: ${err.message} — fallback to full`, 'warn');
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.#log(`Incremental evaluation failed: ${errMsg} — fallback to full`, 'warn');
       return {
         canIncremental: false,
         mode: 'full',
@@ -143,7 +150,7 @@ export class IncrementalBootstrap {
         skippedDimensions: [],
         previousSnapshot: null,
         diff: null,
-        reason: `增量评估失败 (${err.message})，回退全量`,
+        reason: `增量评估失败 (${errMsg})，回退全量`,
         restoredEpisodic: null,
       };
     }
@@ -161,7 +168,7 @@ export class IncrementalBootstrap {
    * @param {IncrementalPlan} [params.plan] - evaluate() 返回的计划 (增量时)
    * @returns {string} 快照 ID
    */
-  saveSnapshot(params: any) {
+  saveSnapshot(params: SaveSnapshotParams) {
     const { sessionId, allFiles, dimensionStats, episodicMemory, meta = {}, plan = null } = params;
 
     // 构建带 referencedFilesList 的 dimensionStats
@@ -202,9 +209,12 @@ export class IncrementalBootstrap {
     return this.#snapshot;
   }
 
-  #log(msg: any, level = 'info') {
+  #log(msg: string, level = 'info') {
     if (this.#logger) {
-      this.#logger[level]?.(`[IncrementalBootstrap] ${msg}`);
+      const fn = (this.#logger as Record<string, ((...args: unknown[]) => void) | undefined>)[
+        level
+      ];
+      fn?.(`[IncrementalBootstrap] ${msg}`);
     }
   }
 }

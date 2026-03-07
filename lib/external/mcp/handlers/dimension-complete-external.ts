@@ -22,6 +22,7 @@ import { saveDimensionCheckpoint } from './bootstrap/pipeline/checkpoint.js';
 import { BOOTSTRAP_COMPLETE_ACTIONS } from './bootstrap/shared/dimension-text.js';
 import { generateSkill } from './bootstrap/shared/skill-generator.js';
 import { getActiveSession } from './bootstrap-external.js';
+import type { McpContext } from './types.js';
 
 const logger = Logger.getInstance();
 
@@ -42,7 +43,19 @@ const logger = Logger.getInstance();
  * @param {object} [args.crossDimensionHints] 对其他维度的建议
  * @returns {Promise<object>}
  */
-export async function dimensionComplete(ctx: any, args: any) {
+interface DimensionCompleteArgs {
+  sessionId?: string;
+  dimensionId?: string;
+  submittedRecipeIds?: string[];
+  analysisText?: string;
+  referencedFiles?: string[];
+  keyFindings?: string[];
+  candidateCount?: number;
+  crossDimensionHints?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export async function dimensionComplete(ctx: McpContext, args: DimensionCompleteArgs) {
   const t0 = Date.now();
   const {
     sessionId,
@@ -87,7 +100,10 @@ export async function dimensionComplete(ctx: any, args: any) {
   }
 
   // ── 获取 Session ──
-  const session = getActiveSession(ctx.container, sessionId);
+  const session = getActiveSession(
+    ctx.container as Parameters<typeof getActiveSession>[0],
+    sessionId
+  );
   if (!session) {
     return envelope({
       success: false,
@@ -105,11 +121,11 @@ export async function dimensionComplete(ctx: any, args: any) {
   }
 
   // ── 查找维度定义 ──
-  const dim = session.dimensions.find((d: any) => d.id === dimensionId);
+  const dim = session.dimensions.find((d: { id: string }) => d.id === dimensionId);
   if (!dim) {
     return envelope({
       success: false,
-      message: `Unknown dimensionId: "${dimensionId}". Valid dimensions: ${session.dimensions.map((d: any) => d.id).join(', ')}`,
+      message: `Unknown dimensionId: "${dimensionId}". Valid dimensions: ${session.dimensions.map((d: { id: string }) => d.id).join(', ')}`,
       errorCode: 'VALIDATION_ERROR',
       meta: { tool: 'autosnippet_dimension_complete' },
     });
@@ -130,7 +146,7 @@ export async function dimensionComplete(ctx: any, args: any) {
         }
       }
       if (filesFromSources.size > 0) {
-        referencedFiles = [...filesFromSources];
+        referencedFiles = [...filesFromSources] as string[];
         logger.debug(
           `[DimensionComplete] Auto-recovered ${referencedFiles.length} referencedFiles from submissions for "${dimensionId}"`
         );
@@ -146,7 +162,9 @@ export async function dimensionComplete(ctx: any, args: any) {
   if (submittedRecipeIds.length === 0) {
     try {
       const submissions = session.submissionTracker.getSubmissions(dimensionId);
-      const recoveredIds = submissions.map((s: any) => s.recipeId).filter(Boolean);
+      const recoveredIds = submissions
+        .map((s) => s.recipeId)
+        .filter((id): id is string => Boolean(id));
       if (recoveredIds.length > 0) {
         submittedRecipeIds = recoveredIds;
         logger.debug(
@@ -194,13 +212,17 @@ export async function dimensionComplete(ctx: any, args: any) {
               );
               recipesBound++;
             }
-          } catch (e: any) {
-            logger.debug(`[DimensionComplete] Failed to tag recipe ${recipeId}: ${e.message}`);
+          } catch (e: unknown) {
+            logger.debug(
+              `[DimensionComplete] Failed to tag recipe ${recipeId}: ${e instanceof Error ? e.message : String(e)}`
+            );
           }
         }
       }
-    } catch (e: any) {
-      logger.warn(`[DimensionComplete] Recipe tagging failed (degraded): ${e.message}`);
+    } catch (e: unknown) {
+      logger.warn(
+        `[DimensionComplete] Recipe tagging failed (degraded): ${e instanceof Error ? e.message : String(e)}`
+      );
     }
   }
 
@@ -248,8 +270,10 @@ export async function dimensionComplete(ctx: any, args: any) {
       recipeIds: submittedRecipeIds,
       skillCreated,
     });
-  } catch (e: any) {
-    logger.warn(`[DimensionComplete] Checkpoint save failed: ${e.message}`);
+  } catch (e: unknown) {
+    logger.warn(
+      `[DimensionComplete] Checkpoint save failed: ${e instanceof Error ? e.message : String(e)}`
+    );
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -271,8 +295,10 @@ export async function dimensionComplete(ctx: any, args: any) {
         );
       }
     }
-  } catch (e: any) {
-    logger.debug(`[DimensionComplete] SemanticMemory fixation skipped: ${e.message}`);
+  } catch (e: unknown) {
+    logger.debug(
+      `[DimensionComplete] SemanticMemory fixation skipped: ${e instanceof Error ? e.message : String(e)}`
+    );
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -317,8 +343,10 @@ export async function dimensionComplete(ctx: any, args: any) {
             `F: ${deliveryResult.channelF?.filesWritten || 0} agent files`
         );
       }
-    } catch (e: any) {
-      logger.warn(`[DimensionComplete] Auto CursorDelivery failed (non-blocking): ${e.message}`);
+    } catch (e: unknown) {
+      logger.warn(
+        `[DimensionComplete] Auto CursorDelivery failed (non-blocking): ${e instanceof Error ? e.message : String(e)}`
+      );
     }
 
     // R5: 自动触发 Wiki 生成 (fire-and-forget)
@@ -340,11 +368,13 @@ export async function dimensionComplete(ctx: any, args: any) {
           });
           const wikiResult = await wikiGen.generate();
           logger.info(
-            `[DimensionComplete] Auto Wiki generation: ${(wikiResult as any)?.totalPages || 0} pages`
+            `[DimensionComplete] Auto Wiki generation: ${(wikiResult as { totalPages?: number })?.totalPages || 0} pages`
           );
         }
-      } catch (e: any) {
-        logger.warn(`[DimensionComplete] Wiki generation failed (non-blocking): ${e.message}`);
+      } catch (e: unknown) {
+        logger.warn(
+          `[DimensionComplete] Wiki generation failed (non-blocking): ${e instanceof Error ? e.message : String(e)}`
+        );
       }
     });
 
@@ -369,9 +399,9 @@ export async function dimensionComplete(ctx: any, args: any) {
             `[DimensionComplete] Semantic Memory consolidation: +${result?.total?.added || 0} ADD, ~${result?.total?.updated || 0} UPDATE`
           );
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         logger.warn(
-          `[DimensionComplete] SemanticMemory consolidation failed (non-blocking): ${e.message}`
+          `[DimensionComplete] SemanticMemory consolidation failed (non-blocking): ${e instanceof Error ? e.message : String(e)}`
         );
       }
     });
@@ -424,16 +454,23 @@ export async function dimensionComplete(ctx: any, args: any) {
       accumulatedEvidence.negativeSignals.length > 0)
   ) {
     evidenceHints = {
-      previousSubmissions: accumulatedEvidence.completedDimSummaries.map((s: any) => ({
-        dimId: s.dimId,
-        submissionCount: s.submissionCount,
-        titles: s.titles,
-        referencedFiles: s.referencedFiles,
-      })),
+      previousSubmissions: accumulatedEvidence.completedDimSummaries.map(
+        (s: {
+          dimId: string;
+          submissionCount: number;
+          titles: string[];
+          referencedFiles: string[];
+        }) => ({
+          dimId: s.dimId,
+          submissionCount: s.submissionCount,
+          titles: s.titles,
+          referencedFiles: s.referencedFiles,
+        })
+      ),
       // v3: 从 SessionStore 提取前序维度分析摘要 + 关键发现（对标内部 Agent 的 buildContextForDimension）
       previousDimensionAnalysis: (() => {
         try {
-          const summaries: { dimId: any; analysisSummary: any; keyFindings: any }[] = [];
+          const summaries: { dimId: string; analysisSummary: string; keyFindings: string[] }[] = [];
           for (const dimSummary of accumulatedEvidence.completedDimSummaries) {
             const report = session.sessionStore.getDimensionReport(dimSummary.dimId);
             if (report) {
@@ -442,7 +479,7 @@ export async function dimensionComplete(ctx: any, args: any) {
                 analysisSummary: (report.analysisText || '').substring(0, 500),
                 keyFindings: (report.findings || [])
                   .slice(0, 5)
-                  .map((f: any) => f.finding || f.content || ''),
+                  .map((f: { finding?: string; content?: string }) => f.finding || f.content || ''),
               });
             }
           }
@@ -455,7 +492,7 @@ export async function dimensionComplete(ctx: any, args: any) {
         accumulatedEvidence.sharedFiles.length > 0 ? accumulatedEvidence.sharedFiles : undefined,
       negativeSignals:
         accumulatedEvidence.negativeSignals.length > 0
-          ? accumulatedEvidence.negativeSignals.map((s: any) => s.pattern)
+          ? accumulatedEvidence.negativeSignals.map((s: { pattern?: string }) => s.pattern)
           : undefined,
       usedTriggers:
         accumulatedEvidence.usedTriggers.length > 0 ? accumulatedEvidence.usedTriggers : undefined,

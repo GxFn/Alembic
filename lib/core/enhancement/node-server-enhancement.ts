@@ -9,7 +9,7 @@
  *   - 错误处理与日志中间件
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class NodeServerEnhancement extends EnhancementPack {
   get id() {
@@ -133,8 +133,8 @@ class NodeServerEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: any[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
 
     // ── Express/Koa middleware ((req, res, next) signature) ──
     for (const m of astSummary.methods || []) {
@@ -145,7 +145,7 @@ class NodeServerEnhancement extends EnhancementPack {
 
     // ── NestJS Controllers ──
     for (const cls of astSummary.classes || []) {
-      if (cls.decorators?.some((d: any) => /@Controller/.test(d))) {
+      if (cls.decorators?.some((d: string) => /@Controller/.test(d))) {
         patterns.push({
           type: 'nestjs-controller',
           className: cls.name,
@@ -153,7 +153,7 @@ class NodeServerEnhancement extends EnhancementPack {
           confidence: 0.95,
         });
       }
-      if (cls.decorators?.some((d: any) => /@Injectable/.test(d))) {
+      if (cls.decorators?.some((d: string) => /@Injectable/.test(d))) {
         patterns.push({
           type: 'nestjs-injectable',
           className: cls.name,
@@ -161,7 +161,7 @@ class NodeServerEnhancement extends EnhancementPack {
           confidence: 0.95,
         });
       }
-      if (cls.decorators?.some((d: any) => /@Module/.test(d))) {
+      if (cls.decorators?.some((d: string) => /@Module/.test(d))) {
         patterns.push({
           type: 'nestjs-module',
           className: cls.name,
@@ -242,7 +242,7 @@ class NodeServerEnhancement extends EnhancementPack {
 
     // ── Node framework imports ──
     const serverImports = (astSummary.imports || []).filter(
-      (imp: any) =>
+      (imp: string) =>
         imp.includes('express') ||
         imp.includes('fastify') ||
         imp.includes('@nestjs') ||

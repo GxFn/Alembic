@@ -9,7 +9,7 @@
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { SnippetCodec } from '../../../service/snippet/codecs/SnippetCodec.js';
+import { SnippetCodec, type SnippetSpec } from '../../../service/snippet/codecs/SnippetCodec.js';
 
 const XCODE_LANGUAGE_MAP = {
   swift: 'Xcode.SourceCodeLanguage.Swift',
@@ -59,7 +59,7 @@ export class XcodeCodec extends SnippetCodec {
   /**
    * SnippetSpec → plist XML 字符串
    */
-  generate(spec: any) {
+  generate(spec: SnippetSpec): string {
     if (!spec?.identifier || !spec?.code) {
       throw new Error('Snippet spec must have identifier and code');
     }
@@ -81,8 +81,8 @@ export class XcodeCodec extends SnippetCodec {
   /**
    * Xcode: 每个 snippet 一个文件 → 返回 Array<{ filename, content }>
    */
-  generateBundle(specs: any) {
-    return specs.map((spec: any) => ({
+  generateBundle(specs: SnippetSpec[]): Array<{ filename: string; content: string }> {
+    return specs.map((spec: SnippetSpec) => ({
       filename: `${spec.identifier}${this.fileExtension}`,
       content: this.generate(spec),
     }));
@@ -91,19 +91,20 @@ export class XcodeCodec extends SnippetCodec {
   /**
    * Xcode snippets 全局目录 (macOS only)
    */
-  getInstallDir(_projectRoot: any) {
+  getInstallDir(_projectRoot: string | undefined) {
     return join(homedir(), 'Library/Developer/Xcode/UserData/CodeSnippets');
   }
 
-  mapLanguage(lang: any) {
+  mapLanguage(lang: string | undefined) {
     return (
-      (XCODE_LANGUAGE_MAP as Record<string, any>)[lang?.toLowerCase()] || XCODE_LANGUAGE_MAP.swift
+      (XCODE_LANGUAGE_MAP as Record<string, string>)[lang?.toLowerCase() ?? ''] ||
+      XCODE_LANGUAGE_MAP.swift
     );
   }
 }
 
 /** XML 特殊字符转义 */
-function escapeXml(str: any) {
+function escapeXml(str: string | null | undefined) {
   if (!str) {
     return '';
   }

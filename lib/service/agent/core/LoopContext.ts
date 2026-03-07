@@ -12,6 +12,61 @@
  * @module core/LoopContext
  */
 
+import type { Capability } from '../capabilities.js';
+import type { ContextWindow } from '../context/ContextWindow.js';
+import type { ExplorationTracker } from '../context/ExplorationTracker.js';
+import type { ActiveContext } from '../memory/ActiveContext.js';
+import type { MemoryCoordinator } from '../memory/MemoryCoordinator.js';
+import type { MessageAdapter } from './MessageAdapter.js';
+
+/** Tool call hook type */
+type ToolCallHook = (name: string, params: Record<string, unknown>, result: unknown) => void;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept various hook signatures from callers; unknown[] breaks contravariant param checks
+type ToolCallHookLike = (...args: any[]) => void;
+
+/** Token usage returned by AI providers */
+interface TokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+/** Shared state between pipeline stages */
+interface SharedState {
+  submittedTitles?: Set<string>;
+  submittedPatterns?: Set<string>;
+  submitToolName?: string;
+  _dimensionMeta?: { id?: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/** Budget configuration */
+interface BudgetConfig {
+  maxIterations?: number;
+  timeoutMs?: number;
+  maxTokens?: number;
+  temperature?: number;
+  [key: string]: unknown;
+}
+
+/** LoopContext configuration — accepts both concrete and duck-typed inputs from callers */
+interface LoopContextConfig {
+  messages: MessageAdapter;
+  tracker?: ExplorationTracker | Record<string, unknown> | null;
+  trace?: ActiveContext | Record<string, unknown> | null;
+  memoryCoordinator?: MemoryCoordinator | Record<string, unknown> | null;
+  sharedState?: SharedState | Record<string, unknown> | null;
+  source?: string;
+  budget: BudgetConfig;
+  capabilities: Capability[];
+  baseSystemPrompt: string;
+  toolSchemas: Array<Record<string, unknown>>;
+  prompt: string;
+  onToolCall?: ToolCallHook | ToolCallHookLike | null;
+  context?: Record<string, unknown>;
+  contextWindow?: ContextWindow | null;
+  toolChoiceOverride?: string | null;
+}
+
 /**
  * @typedef {Object} LoopContextConfig
  * @property {import('./MessageAdapter.js').MessageAdapter} messages 统一消息适配器
@@ -34,19 +89,19 @@ export class LoopContext {
   // ─── 注入依赖 ───
 
   /** @type {import('./MessageAdapter.js').MessageAdapter} 统一消息适配器 */
-  messages;
+  messages: MessageAdapter;
 
   /** @type {Object|null} ExplorationTracker 实例 */
-  tracker;
+  tracker: ExplorationTracker | null;
 
   /** @type {Object|null} ActiveContext 实例 */
-  trace;
+  trace: ActiveContext | null;
 
   /** @type {Object|null} MemoryCoordinator 实例 */
-  memoryCoordinator;
+  memoryCoordinator: MemoryCoordinator | null;
 
   /** @type {Object|null} 共享状态 */
-  sharedState;
+  sharedState: SharedState | null;
 
   // ─── 循环状态 ───
 
@@ -57,7 +112,8 @@ export class LoopContext {
   lastReply = '';
 
   /** @type {Array} 本轮工具调用记录 */
-  toolCalls = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tool call entries have varying shapes (ToolCallEntry, ToolCallRecord, etc.) across callers; no common structural type satisfies all consumers
+  toolCalls: any[] = [];
 
   /** @type {{input: number, output: number}} 本轮 token 用量 */
   tokenUsage = { input: 0, output: 0 };
@@ -76,51 +132,51 @@ export class LoopContext {
   // ─── 配置 (只读) ───
 
   /** @type {string} 来源 'user' | 'system' */
-  source;
+  source: string;
 
   /** @type {Object} 预算配置 */
-  budget;
+  budget: BudgetConfig;
 
   /** @type {import('../capabilities.js').Capability[]} */
-  capabilities;
+  capabilities: Capability[];
 
   /** @type {string} 基础系统提示词 */
-  baseSystemPrompt;
+  baseSystemPrompt: string;
 
   /** @type {Array} 工具 schemas */
-  toolSchemas;
+  toolSchemas: Array<Record<string, unknown>>;
 
   /** @type {string} 原始用户提示 */
-  prompt;
+  prompt: string;
 
   /** @type {Function|null} 工具调用钩子 */
-  onToolCall;
+  onToolCall: ToolCallHook | null;
 
   /** @type {Object} 额外上下文 */
-  context;
+  context: Record<string, unknown>;
 
   /** @type {import('../context/ContextWindow.js').ContextWindow|null} 原始 ContextWindow 引用 */
-  contextWindow;
+  contextWindow: ContextWindow | null;
 
   /** @type {string|null} 首轮 toolChoice 覆盖 ('required'/'auto'/'none') */
-  toolChoiceOverride;
+  toolChoiceOverride: string | null;
 
   /**
    * @param {LoopContextConfig} config
    */
-  constructor(config: any) {
+  constructor(config: LoopContextConfig) {
     this.messages = config.messages;
-    this.tracker = config.tracker || null;
-    this.trace = config.trace || null;
-    this.memoryCoordinator = config.memoryCoordinator || null;
-    this.sharedState = config.sharedState || null;
+    this.tracker = (config.tracker || null) as ExplorationTracker | null;
+    this.trace = (config.trace || null) as ActiveContext | null;
+    this.memoryCoordinator = (config.memoryCoordinator || null) as MemoryCoordinator | null;
+    this.sharedState = (config.sharedState || null) as SharedState | null;
     this.source = config.source || 'user';
     this.budget = config.budget;
     this.capabilities = config.capabilities;
     this.baseSystemPrompt = config.baseSystemPrompt;
     this.toolSchemas = config.toolSchemas;
     this.prompt = config.prompt;
-    this.onToolCall = config.onToolCall || null;
+    this.onToolCall = (config.onToolCall || null) as ToolCallHook | null;
     this.context = config.context || {};
     this.contextWindow = config.contextWindow || null;
     this.toolChoiceOverride = config.toolChoiceOverride || null;
@@ -145,7 +201,7 @@ export class LoopContext {
    * 累加 token 用量到循环级统计
    * @param {Object} usage - { inputTokens, outputTokens }
    */
-  addTokenUsage(usage: any) {
+  addTokenUsage(usage: TokenUsage | null | undefined) {
     if (!usage) {
       return;
     }

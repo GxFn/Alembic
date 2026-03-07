@@ -6,15 +6,15 @@ interface Plan {
   steps: PlanStep[];
   goal: string;
   status: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface PlanStep {
   id: string;
   description: string;
   status: 'pending' | 'running' | 'done' | 'failed';
-  result?: any;
-  [key: string]: any;
+  result?: unknown;
+  [key: string]: unknown;
 }
 
 interface Round {
@@ -23,12 +23,12 @@ interface Round {
   endedAt?: number;
   toolCalls: number;
   hasNewInfo: boolean;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface DistilledContext {
   summary: string;
   keyFacts: string[];
   openQuestions: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 }

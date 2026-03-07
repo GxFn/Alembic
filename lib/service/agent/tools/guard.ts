@@ -6,7 +6,37 @@
  * 13. guard_check_code    Guard 检查代码
  * 14. query_violations    查询违规历史
  */
+import type { ToolHandlerContext } from './_shared.js';
 
+// ─── 类型定义 ────────────────────────────────────────
+
+export interface ListGuardRulesParams {
+  language?: string;
+  includeBuiltIn?: boolean;
+  limit?: number;
+}
+
+export interface GetRecommendationsParams {
+  limit?: number;
+}
+
+export interface GuardCheckCodeParams {
+  code: string;
+  language?: string;
+  scope?: string;
+}
+
+export interface QueryViolationsParams {
+  file?: string;
+  limit?: number;
+  statsOnly?: boolean;
+}
+
+/** Guard 规则记录 */
+export interface GuardRule {
+  source?: string;
+  [key: string]: unknown;
+}
 // ────────────────────────────────────────────────────────────
 // 7b. list_guard_rules
 // ────────────────────────────────────────────────────────────
@@ -21,9 +51,9 @@ export const listGuardRules = {
       limit: { type: 'number', description: '返回数量上限，默认 50' },
     },
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: ListGuardRulesParams, ctx: ToolHandlerContext) => {
     const { language, includeBuiltIn = true, limit = 50 } = params;
-    const results: any[] = [];
+    const results: GuardRule[] = [];
 
     // 数据库自定义规则
     try {
@@ -40,7 +70,7 @@ export const listGuardRules = {
         const guardCheckEngine = ctx.container.get('guardCheckEngine');
         const builtIn = guardCheckEngine
           .getRules(language || null)
-          .filter((r: any) => r.source === 'built-in');
+          .filter((r: GuardRule) => r.source === 'built-in');
         results.push(...builtIn);
       } catch {
         /* not available */
@@ -63,7 +93,7 @@ export const getRecommendations = {
       limit: { type: 'number', description: '返回数量，默认 10' },
     },
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: GetRecommendationsParams, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     // V3: 推荐 = 活跃条目按使用量排序
     return knowledgeService.list(
@@ -88,7 +118,7 @@ export const guardCheckCode = {
     },
     required: ['code'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: GuardCheckCodeParams, ctx: ToolHandlerContext) => {
     const { code, language, scope = 'file' } = params;
 
     // 优先用 GuardCheckEngine（内置 + DB 规则）
@@ -106,8 +136,8 @@ export const guardCheckCode = {
       const guardService = ctx.container.get('guardService');
       const matches = await guardService.checkCode(code, { language });
       return { violationCount: matches.length, violations: matches };
-    } catch (err: any) {
-      return { error: err.message };
+    } catch (err: unknown) {
+      return { error: (err as Error).message };
     }
   },
 };
@@ -126,7 +156,7 @@ export const queryViolations = {
       statsOnly: { type: 'boolean', description: '仅返回统计数据，默认 false' },
     },
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: QueryViolationsParams, ctx: ToolHandlerContext) => {
     const { file, limit = 20, statsOnly = false } = params;
     const store = ctx.container.get('violationsStore');
 

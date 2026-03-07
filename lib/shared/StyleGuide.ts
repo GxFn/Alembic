@@ -68,7 +68,7 @@ export function getCursorDeliverySpec() {
     }
   }
 
-  const parts: any[] = [];
+  const parts: string[] = [];
   if (required.length > 0) {
     parts.push('### 必填（REQUIRED）');
     parts.push(required.join('\n'));

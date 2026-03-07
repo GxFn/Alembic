@@ -9,7 +9,7 @@
  *   - interceptor 链
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class GoGrpcEnhancement extends EnhancementPack {
   get id() {
@@ -82,8 +82,8 @@ class GoGrpcEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: any[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
 
     // ── gRPC Service Implementations ──
     for (const cls of astSummary.classes || []) {
@@ -91,17 +91,17 @@ class GoGrpcEnhancement extends EnhancementPack {
         continue;
       }
       // Structs embedding Unimplemented*Server
-      if (cls.embeddedTypes?.some((t: any) => /^Unimplemented\w+Server$/.test(t))) {
+      if (cls.embeddedTypes?.some((t: string) => /^Unimplemented\w+Server$/.test(t))) {
         patterns.push({
           type: 'go-grpc-service-impl',
           className: cls.name,
-          embeds: cls.embeddedTypes.filter((t: any) => /Unimplemented/.test(t)),
+          embeds: cls.embeddedTypes.filter((t: string) => /Unimplemented/.test(t)),
           line: cls.line,
           confidence: 0.95,
         });
       }
       // Server structs (name ends with Server)
-      if (/Server$/.test(cls.name) && cls.fieldCount > 0) {
+      if (/Server$/.test(cls.name) && (cls.fieldCount ?? 0) > 0) {
         patterns.push({
           type: 'go-grpc-server-struct',
           className: cls.name,
@@ -141,7 +141,7 @@ class GoGrpcEnhancement extends EnhancementPack {
 
     // ── Protobuf imports ──
     const pbImports = (astSummary.imports || []).filter(
-      (imp: any) =>
+      (imp: string) =>
         imp.includes('/pb') || imp.includes('/proto') || imp.includes('google.golang.org/grpc')
     );
     if (pbImports.length > 0) {

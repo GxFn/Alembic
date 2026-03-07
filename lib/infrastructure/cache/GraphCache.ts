@@ -21,7 +21,7 @@ export class GraphCache {
   /**
    * @param {string} projectRoot 项目根目录
    */
-  constructor(projectRoot: any) {
+  constructor(projectRoot: string) {
     this.#cacheDir = join(projectRoot, '.autosnippet', 'cache');
     this.#logger = Logger.getInstance();
   }
@@ -32,7 +32,7 @@ export class GraphCache {
    * @param {object} data 要缓存的数据
    * @param {object} meta 元信息（含 hash、timestamp 等）
    */
-  save(key: any, data: any, meta: any = {}) {
+  save(key: string, data: unknown, meta: Record<string, unknown> = {}) {
     try {
       if (!existsSync(this.#cacheDir)) {
         mkdirSync(this.#cacheDir, { recursive: true });
@@ -46,17 +46,17 @@ export class GraphCache {
       const filePath = join(this.#cacheDir, `${key}.json`);
       writeFileSync(filePath, JSON.stringify(payload), 'utf-8');
       this.#logger.debug(`[GraphCache] saved: ${key} (${JSON.stringify(payload).length} bytes)`);
-    } catch (err: any) {
-      this.#logger.warn(`[GraphCache] save failed for ${key}: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[GraphCache] save failed for ${key}: ${(err as Error).message}`);
     }
   }
 
   /**
    * 加载缓存
    * @param {string} key 缓存键名
-   * @returns {{ data: object, [key: string]: any } | null}
+   * @returns {{ data: object, [key: string]: unknown } | null}
    */
-  load(key: any) {
+  load(key: string) {
     try {
       const filePath = join(this.#cacheDir, `${key}.json`);
       if (!existsSync(filePath)) {
@@ -64,8 +64,8 @@ export class GraphCache {
       }
       const raw = readFileSync(filePath, 'utf-8');
       return JSON.parse(raw);
-    } catch (err: any) {
-      this.#logger.warn(`[GraphCache] load failed for ${key}: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[GraphCache] load failed for ${key}: ${(err as Error).message}`);
       return null;
     }
   }
@@ -76,7 +76,7 @@ export class GraphCache {
    * @param {string} currentHash 当前内容的 hash
    * @returns {boolean}
    */
-  isValid(key: any, currentHash: any) {
+  isValid(key: string, currentHash: string) {
     const cached = this.load(key);
     if (!cached) {
       return false;
@@ -88,15 +88,15 @@ export class GraphCache {
    * 删除缓存
    * @param {string} key
    */
-  invalidate(key: any) {
+  invalidate(key: string) {
     try {
       const filePath = join(this.#cacheDir, `${key}.json`);
       if (existsSync(filePath)) {
         unlinkSync(filePath);
         this.#logger.debug(`[GraphCache] invalidated: ${key}`);
       }
-    } catch (err: any) {
-      this.#logger.warn(`[GraphCache] invalidate failed for ${key}: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[GraphCache] invalidate failed for ${key}: ${(err as Error).message}`);
     }
   }
 
@@ -105,7 +105,7 @@ export class GraphCache {
    * @param {string} filePath 文件绝对路径
    * @returns {string} sha256 hex (前 16 字符)
    */
-  computeFileHash(filePath: any) {
+  computeFileHash(filePath: string) {
     try {
       const content = readFileSync(filePath, 'utf-8');
       return this.computeContentHash(content);
@@ -119,7 +119,7 @@ export class GraphCache {
    * @param {string} content
    * @returns {string} sha256 hex (前 16 字符)
    */
-  computeContentHash(content: any) {
+  computeContentHash(content: string) {
     return createHash('sha256').update(content).digest('hex').substring(0, 16);
   }
 
@@ -129,8 +129,8 @@ export class GraphCache {
    * @param {string} projectRoot 项目根目录
    * @returns {Object<string, string>} { relativePath: hash }
    */
-  computeFileHashes(filePaths: any, projectRoot: any) {
-    const hashes: Record<string, any> = {};
+  computeFileHashes(filePaths: string[], projectRoot: string) {
+    const hashes: Record<string, string> = {};
     for (const fp of filePaths) {
       const rel = relative(projectRoot, fp);
       hashes[rel] = this.computeFileHash(fp);

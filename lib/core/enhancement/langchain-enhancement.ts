@@ -11,7 +11,7 @@
  *   - Streaming / Callback
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class LangChainEnhancement extends EnhancementPack {
   get id() {
@@ -115,8 +115,8 @@ class LangChainEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: any[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
 
     // ── Chain / Runnable classes ──
     for (const cls of astSummary.classes || []) {
@@ -132,7 +132,7 @@ class LangChainEnhancement extends EnhancementPack {
 
     // ── @tool decorated functions ──
     for (const m of astSummary.methods || []) {
-      if (m.decorators?.some((d: any) => /@tool/.test(d))) {
+      if (m.decorators?.some((d: string) => /@tool/.test(d))) {
         patterns.push({
           type: 'langchain-tool',
           methodName: m.name,
@@ -210,7 +210,7 @@ class LangChainEnhancement extends EnhancementPack {
 
     // ── LangChain ecosystem imports ──
     const lcImports = (astSummary.imports || []).filter(
-      (imp: any) =>
+      (imp: string) =>
         imp.includes('langchain') ||
         imp.includes('langgraph') ||
         imp.includes('langsmith') ||

@@ -4,11 +4,11 @@
  */
 
 import Logger from '../logging/Logger.js';
-import { cacheService as memoryCacheService } from './CacheService.js';
+import { type CacheService, cacheService as memoryCacheService } from './CacheService.js';
 
 export class UnifiedCacheAdapter {
-  memoryService: any;
-  mode: any;
+  memoryService: CacheService;
+  mode: string;
   constructor() {
     this.mode = 'memory';
     this.memoryService = memoryCacheService;
@@ -24,11 +24,11 @@ export class UnifiedCacheAdapter {
   /**
    * 获取缓存值
    */
-  async get(key: any) {
+  async get(key: string) {
     try {
       return this.memoryService.get(key);
-    } catch (error: any) {
-      Logger.error(`缓存获取失败 (${key}):`, { error: error.message });
+    } catch (error: unknown) {
+      Logger.error(`缓存获取失败 (${key}):`, { error: (error as Error).message });
       return null;
     }
   }
@@ -36,12 +36,12 @@ export class UnifiedCacheAdapter {
   /**
    * 设置缓存值
    */
-  async set(key: any, value: any, ttlSeconds = 300) {
+  async set(key: string, value: unknown, ttlSeconds = 300) {
     try {
       this.memoryService.set(key, value, ttlSeconds);
       return true;
-    } catch (error: any) {
-      Logger.error(`缓存设置失败 (${key}):`, { error: error.message });
+    } catch (error: unknown) {
+      Logger.error(`缓存设置失败 (${key}):`, { error: (error as Error).message });
       return false;
     }
   }
@@ -49,11 +49,11 @@ export class UnifiedCacheAdapter {
   /**
    * 删除缓存
    */
-  async delete(key: any) {
+  async delete(key: string) {
     try {
       return this.memoryService.delete(key);
-    } catch (error: any) {
-      Logger.error(`缓存删除失败 (${key}):`, { error: error.message });
+    } catch (error: unknown) {
+      Logger.error(`缓存删除失败 (${key}):`, { error: (error as Error).message });
       return false;
     }
   }
@@ -65,8 +65,8 @@ export class UnifiedCacheAdapter {
     try {
       this.memoryService.clear();
       return true;
-    } catch (error: any) {
-      Logger.error('缓存清空失败:', { error: error.message });
+    } catch (error: unknown) {
+      Logger.error('缓存清空失败:', { error: (error as Error).message });
       return false;
     }
   }
@@ -95,7 +95,7 @@ let cacheAdapterInstance: UnifiedCacheAdapter | null = null;
  * @param {Object} [_opts] 预留配置 (目前仅支持 memory 模式)
  * @param {string} [_opts.mode] 缓存模式
  */
-export async function initCacheAdapter(_opts: any = {}) {
+export async function initCacheAdapter(_opts: { mode?: string } = {}) {
   if (cacheAdapterInstance) {
     Logger.warn('缓存适配器已初始化');
     return cacheAdapterInstance;

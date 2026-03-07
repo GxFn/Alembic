@@ -25,6 +25,72 @@
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
 import { AgentMessage } from './AgentMessage.js';
 
+// ─── Type Definitions ──────────────────────────
+
+/** Minimal runtime interface used by strategies (avoids circular import with AgentRuntime) */
+interface StrategyRuntime {
+  id: string;
+  reactLoop(prompt: string, opts?: Record<string, unknown>): Promise<StrategyResult>;
+}
+
+/** Strategy execution result */
+interface StrategyResult {
+  reply: string;
+  toolCalls: Array<Record<string, unknown>>;
+  tokenUsage: { input: number; output: number };
+  iterations: number;
+  [key: string]: unknown;
+}
+
+/** Fan-out sub-task item descriptor */
+interface FanOutItem {
+  id: string;
+  label: string;
+  tier?: number;
+  prompt?: string;
+  guide?: string;
+}
+
+/** Result of a single fan-out item execution */
+interface ItemResult {
+  id: string;
+  label: string;
+  status: 'completed' | 'failed';
+  reply: string;
+  toolCalls: Array<Record<string, unknown>>;
+  tokenUsage: { input: number; output: number };
+  iterations?: number;
+  error?: string;
+  [key: string]: unknown;
+}
+
+/** FanOutStrategy constructor options */
+interface FanOutOpts {
+  itemStrategy?: Strategy;
+  tiers?: Record<string, { concurrency: number }>;
+  merge?: (results: ItemResult[]) => StrategyResult;
+}
+
+/** Options passed to FanOutStrategy.execute */
+interface FanOutExecuteOpts {
+  items?: FanOutItem[];
+  dimension?: FanOutItem;
+  [key: string]: unknown;
+}
+
+/** AdaptiveStrategy constructor options */
+interface AdaptiveStrategies {
+  single?: Strategy;
+  pipeline?: Strategy;
+  fanOut?: Strategy;
+}
+
+/** Options for strategy execution with routing context */
+interface StrategyExecuteOpts {
+  items?: FanOutItem[];
+  [key: string]: unknown;
+}
+
 // ─── Base Strategy ─────────────────────────────
 
 /**
@@ -51,7 +117,11 @@ export class Strategy {
    * @property {number} iterations 总循环次数
    * @property {Object} [phases] 阶段详情 (Pipeline/FanOut)
    */
-  async execute(_runtime: any, _message: any, _opts?: any): Promise<any> {
+  async execute(
+    _runtime: StrategyRuntime,
+    _message: AgentMessage,
+    _opts?: Record<string, unknown>
+  ): Promise<StrategyResult> {
     throw new Error('Subclass must implement execute()');
   }
 }
@@ -73,7 +143,11 @@ export class SingleStrategy extends Strategy {
     return 'single';
   }
 
-  async execute(runtime: any, message: any, opts: any = {}) {
+  async execute(
+    runtime: StrategyRuntime,
+    message: AgentMessage,
+    opts: Record<string, unknown> = {}
+  ) {
     return runtime.reactLoop(message.content, {
       history: message.history,
       context: message.metadata.context || {},
@@ -107,11 +181,11 @@ export class SingleStrategy extends Strategy {
  */
 export class FanOutStrategy extends Strategy {
   /** @type {Strategy} 每个子任务的执行策略 */
-  #itemStrategy;
-  /** @type {Object} 分层并发配置 */
-  #tiers;
-  /** @type {Function} 结果合并函数 */
-  #merge;
+  #itemStrategy!: Strategy;
+  /** @type {Record<string, { concurrency: number }>} 分层并发配置 */
+  #tiers!: Record<string, { concurrency: number }>;
+  /** @type {(results: ItemResult[]) => StrategyResult} 结果合并函数 */
+  #merge!: (results: ItemResult[]) => StrategyResult;
 
   /**
    * @param {Object} opts
@@ -119,7 +193,7 @@ export class FanOutStrategy extends Strategy {
    * @param {Object} [opts.tiers] - { 1: { concurrency: 3 }, 2: { concurrency: 2 }, ... }
    * @param {Function} [opts.merge] 自定义合并函数 (results[]) => finalResult
    */
-  constructor({ itemStrategy, tiers, merge }: any = {}) {
+  constructor({ itemStrategy, tiers, merge }: FanOutOpts = {}) {
     super();
     this.#itemStrategy = itemStrategy || new SingleStrategy();
     this.#tiers = tiers || { 1: { concurrency: 3 } };
@@ -136,7 +210,7 @@ export class FanOutStrategy extends Strategy {
    * @param {Object} opts
    * @param {Array<{id: string, label: string, tier?: number, prompt?: string, guide?: string}>} opts.items 子任务列表
    */
-  async execute(runtime: any, message: any, opts: any = {}) {
+  async execute(runtime: StrategyRuntime, message: AgentMessage, opts: FanOutExecuteOpts = {}) {
     const { items = [] } = opts;
     const bus = AgentEventBus.getInstance()!;
 
@@ -151,7 +225,7 @@ export class FanOutStrategy extends Strategy {
 
     // 按 tier 分组
     const tierGroups = this.#groupByTier(items);
-    const allResults: any[] = [];
+    const allResults: ItemResult[] = [];
 
     for (const [tier, tierItems] of Object.entries(tierGroups).sort(
       ([a], [b]) => Number(a) - Number(b)
@@ -161,14 +235,14 @@ export class FanOutStrategy extends Strategy {
       bus.publish(AgentEvents.PROGRESS, {
         type: 'fan_out_tier_start',
         tier: Number(tier),
-        count: (tierItems as any).length,
+        count: (tierItems as FanOutItem[]).length,
         concurrency: tierConfig.concurrency,
       });
 
       // 按并发度分批执行
       const chunks = this.#chunk(tierItems, tierConfig.concurrency);
       for (const chunk of chunks) {
-        const chunkPromises = chunk.map(async (item: any) => {
+        const chunkPromises = chunk.map(async (item: FanOutItem) => {
           const itemMessage = AgentMessage.internal(
             item.prompt || `${message.content}\n\n## 当前维度: ${item.label}\n${item.guide || ''}`,
             {
@@ -190,13 +264,13 @@ export class FanOutStrategy extends Strategy {
             const result = await this.#itemStrategy.execute(runtime, itemMessage, {
               dimension: item,
             });
-            return { id: item.id, label: item.label, status: 'completed', ...result };
-          } catch (err: any) {
+            return { id: item.id, label: item.label, status: 'completed' as const, ...result };
+          } catch (err: unknown) {
             return {
               id: item.id,
               label: item.label,
-              status: 'failed',
-              error: err.message,
+              status: 'failed' as const,
+              error: err instanceof Error ? err.message : String(err),
               reply: '',
               toolCalls: [],
               tokenUsage: { input: 0, output: 0 },
@@ -219,8 +293,8 @@ export class FanOutStrategy extends Strategy {
     return this.#merge(allResults);
   }
 
-  #groupByTier(items: any) {
-    const groups: Record<string, any> = {};
+  #groupByTier(items: FanOutItem[]) {
+    const groups: Record<string, FanOutItem[]> = {};
     for (const item of items) {
       const tier = item.tier || 1;
       if (!groups[tier]) {
@@ -231,29 +305,32 @@ export class FanOutStrategy extends Strategy {
     return groups;
   }
 
-  #chunk(arr: any, size: any) {
-    const chunks: any[] = [];
+  #chunk(arr: FanOutItem[], size: number) {
+    const chunks: FanOutItem[][] = [];
     for (let i = 0; i < arr.length; i += size) {
       chunks.push(arr.slice(i, i + size));
     }
     return chunks;
   }
 
-  static #defaultMerge(results: any) {
-    const successful = results.filter((r: any) => r.status === 'completed');
-    const failed = results.filter((r: any) => r.status === 'failed');
+  static #defaultMerge(results: ItemResult[]): StrategyResult {
+    const successful = results.filter((r: ItemResult) => r.status === 'completed');
+    const failed = results.filter((r: ItemResult) => r.status === 'failed');
     return {
       reply: [
         `## 执行总结\n完成: ${successful.length}, 失败: ${failed.length}\n`,
-        ...successful.map((r: any) => `### ${r.label}\n${r.reply || '(无输出)'}`),
-        ...failed.map((r: any) => `### ${r.label} ❌\n${r.error}`),
+        ...successful.map((r: ItemResult) => `### ${r.label}\n${r.reply || '(无输出)'}`),
+        ...failed.map((r: ItemResult) => `### ${r.label} ❌\n${r.error}`),
       ].join('\n\n'),
-      toolCalls: results.flatMap((r: any) => r.toolCalls || []),
+      toolCalls: results.flatMap((r: ItemResult) => r.toolCalls || []),
       tokenUsage: {
-        input: results.reduce((sum: any, r: any) => sum + (r.tokenUsage?.input || 0), 0),
-        output: results.reduce((sum: any, r: any) => sum + (r.tokenUsage?.output || 0), 0),
+        input: results.reduce((sum: number, r: ItemResult) => sum + (r.tokenUsage?.input || 0), 0),
+        output: results.reduce(
+          (sum: number, r: ItemResult) => sum + (r.tokenUsage?.output || 0),
+          0
+        ),
       },
-      iterations: results.reduce((sum: any, r: any) => sum + (r.iterations || 0), 0),
+      iterations: results.reduce((sum: number, r: ItemResult) => sum + (r.iterations || 0), 0),
       itemResults: results,
     };
   }
@@ -279,7 +356,7 @@ export class FanOutStrategy extends Strategy {
  * })
  */
 export class AdaptiveStrategy extends Strategy {
-  #strategies;
+  #strategies!: { single: Strategy; pipeline: Strategy | null; fanOut: Strategy | null };
 
   /**
    * @param {Object} [strategies]
@@ -287,7 +364,7 @@ export class AdaptiveStrategy extends Strategy {
    * @param {Strategy} [strategies.pipeline]
    * @param {Strategy} [strategies.fanOut]
    */
-  constructor(strategies: any = {}) {
+  constructor(strategies: AdaptiveStrategies = {}) {
     super();
     this.#strategies = {
       single: strategies.single || new SingleStrategy(),
@@ -300,7 +377,7 @@ export class AdaptiveStrategy extends Strategy {
     return 'adaptive';
   }
 
-  async execute(runtime: any, message: any, opts: any = {}) {
+  async execute(runtime: StrategyRuntime, message: AgentMessage, opts: StrategyExecuteOpts = {}) {
     const complexity = this.#assessComplexity(message, opts);
     const bus = AgentEventBus.getInstance()!;
 
@@ -323,11 +400,11 @@ export class AdaptiveStrategy extends Strategy {
   /**
    * 复杂度评估
    */
-  #assessComplexity(message: any, opts: any) {
+  #assessComplexity(message: AgentMessage, opts: StrategyExecuteOpts) {
     const text = message.content.toLowerCase();
 
     // 有显式 items → fan_out
-    if (opts.items?.length > 1) {
+    if ((opts.items?.length ?? 0) > 1) {
       return 'fan_out';
     }
 
@@ -347,22 +424,22 @@ export class AdaptiveStrategy extends Strategy {
 // ─── Strategy 注册表 ─────────────────────────
 
 export const StrategyRegistry = {
-  _registry: new Map([
+  _registry: new Map<string, typeof Strategy>([
     ['single', SingleStrategy],
     // 'pipeline' 由 PipelineStrategy.js 自注册 (避免循环依赖)
     ['fan_out', FanOutStrategy],
     ['adaptive', AdaptiveStrategy],
   ]),
 
-  create(name: any, opts: any = {}) {
+  create(name: string, opts: Record<string, unknown> = {}): Strategy {
     const Cls = this._registry.get(name);
     if (!Cls) {
       throw new Error(`Unknown strategy: ${name}`);
     }
-    return new (Cls as any)(opts);
+    return Reflect.construct(Cls, [opts]) as Strategy;
   },
 
-  register(name: any, cls: any) {
+  register(name: string, cls: typeof Strategy): void {
     this._registry.set(name, cls);
   },
 };

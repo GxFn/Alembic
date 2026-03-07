@@ -25,11 +25,14 @@ const DEFAULT_MAX_BATCH = 50; // 单次 batch 最大事件数
 const DEFAULT_DEDUPE_MS = 60_000; // 60 秒去重窗口
 
 export class EventAggregator {
-  /** @type {Map<string, { events: any[], timer: ReturnType<typeof setTimeout> }>} */
-  #buckets = new Map();
+  /** @type {Map<string, { events: Record<string, unknown>[], timer: ReturnType<typeof setTimeout> | null }>} */
+  #buckets = new Map<
+    string,
+    { events: Record<string, unknown>[]; timer: ReturnType<typeof setTimeout> | null }
+  >();
   /** @type {Map<string, number>} 已处理事件的 hash → 最后处理时间 */
-  #dedupeMap = new Map();
-  #listeners = new Map();
+  #dedupeMap = new Map<string, number>();
+  #listeners = new Map<string, Array<(key: string, events: Record<string, unknown>[]) => void>>();
   #windowMs;
   #maxBatch;
   #dedupeMs;
@@ -59,7 +62,7 @@ export class EventAggregator {
    * @param {object} [opts]
    * @param {string} [opts.dedupeId] 去重标识（默认为 JSON hash）
    */
-  push(key: any, event: any, { dedupeId }: any = {}) {
+  push(key: string, event: Record<string, unknown>, { dedupeId }: { dedupeId?: string } = {}) {
     // 去重检查
     const dedupe = dedupeId || this.#hashEvent(key, event);
     const lastSeen = this.#dedupeMap.get(dedupe);
@@ -92,13 +95,13 @@ export class EventAggregator {
   /**
    * 注册 batch 事件监听器
    * @param {'batch'} eventName
-   * @param {(key: string, events: any[]) => void} fn
+   * @param {(key: string, events: Record<string, unknown>[]) => void} fn
    */
-  on(eventName: any, fn: any) {
+  on(eventName: string, fn: (key: string, events: Record<string, unknown>[]) => void) {
     if (!this.#listeners.has(eventName)) {
       this.#listeners.set(eventName, []);
     }
-    this.#listeners.get(eventName).push(fn);
+    this.#listeners.get(eventName)!.push(fn);
   }
 
   /**
@@ -137,7 +140,7 @@ export class EventAggregator {
 
   // ── 内部方法 ──
 
-  #flush(key: any) {
+  #flush(key: string) {
     const bucket = this.#buckets.get(key);
     if (!bucket || bucket.events.length === 0) {
       return;
@@ -165,17 +168,19 @@ export class EventAggregator {
     for (const fn of listeners) {
       try {
         fn(key, events);
-      } catch (err: any) {
-        this.#logger.warn(`[EventAggregator] listener error: ${err.message}`);
+      } catch (err: unknown) {
+        this.#logger.warn(
+          `[EventAggregator] listener error: ${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
 
     this.#logger.debug(`[EventAggregator] flushed ${events.length} events for key "${key}"`);
   }
 
-  #hashEvent(key: any, event: any) {
+  #hashEvent(key: string, event: Record<string, unknown>) {
     // 简单 hash: key + 事件关键字段
-    const significant: any = { key };
+    const significant: Record<string, unknown> = { key };
     if (event.filePath) {
       significant.f = event.filePath;
     }

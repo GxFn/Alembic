@@ -1,7 +1,57 @@
-import { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
+import { KnowledgeEntry, type KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
+import type { KnowledgeRepository } from '../../domain/knowledge/KnowledgeRepository.js';
 import { inferKind, Lifecycle } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors/index.js';
+import type { ConfidenceRouter } from './ConfidenceRouter.js';
+import type { KnowledgeFileWriter } from './KnowledgeFileWriter.js';
+import type { KnowledgeGraphService } from './KnowledgeGraphService.js';
+
+interface AuditLoggerLike {
+  log(entry: Record<string, unknown>): Promise<void>;
+}
+
+interface SkillHooksLike {
+  run(
+    hookName: string,
+    ...args: unknown[]
+  ): Promise<{ block?: boolean; reason?: string } | undefined>;
+}
+
+interface QualityScorerLike {
+  score(input: Record<string, unknown>): {
+    score: number;
+    dimensions: Record<string, number>;
+    grade: string;
+  };
+}
+
+interface KnowledgeServiceOptions {
+  fileWriter?: KnowledgeFileWriter | null;
+  skillHooks?: SkillHooksLike | null;
+  confidenceRouter?: ConfidenceRouter | null;
+  qualityScorer?: QualityScorerLike | null;
+}
+
+interface ServiceContext {
+  userId: string;
+}
+
+interface ListFilters {
+  lifecycle?: string;
+  kind?: string;
+  language?: string;
+  category?: string;
+  knowledgeType?: string;
+  source?: string;
+  tag?: string;
+  scope?: string;
+}
+
+interface PaginationOptions {
+  page?: number;
+  pageSize?: number;
+}
 
 /**
  * KnowledgeService — 统一知识服务
@@ -14,15 +64,15 @@ import { ConflictError, NotFoundError, ValidationError } from '../../shared/erro
  * Service 负责编排 Repository / FileWriter / AuditLog / Graph / SkillHooks。
  */
 export class KnowledgeService {
-  _confidenceRouter: any;
-  _fileWriter: any;
-  _knowledgeGraphService: any;
-  _qualityScorer: any;
-  _skillHooks: any;
-  auditLogger: any;
-  gateway: any;
-  logger: any;
-  repository: any;
+  _confidenceRouter: ConfidenceRouter | null;
+  _fileWriter: KnowledgeFileWriter | null;
+  _knowledgeGraphService: KnowledgeGraphService | null;
+  _qualityScorer: QualityScorerLike | null;
+  _skillHooks: SkillHooksLike | null;
+  auditLogger: AuditLoggerLike;
+  gateway: unknown;
+  logger: ReturnType<typeof Logger.getInstance>;
+  repository: KnowledgeRepository;
   /**
    * @param {import('../../domain/knowledge/KnowledgeRepository.js').KnowledgeRepository} repository
    * @param {object} auditLogger
@@ -35,11 +85,11 @@ export class KnowledgeService {
    * @param {import('../quality/QualityScorer.js').QualityScorer} [options.qualityScorer]
    */
   constructor(
-    repository: any,
-    auditLogger: any,
-    gateway: any,
-    knowledgeGraphService: any,
-    options: any = {}
+    repository: KnowledgeRepository,
+    auditLogger: AuditLoggerLike,
+    gateway: unknown,
+    knowledgeGraphService: KnowledgeGraphService | null,
+    options: KnowledgeServiceOptions = {}
   ) {
     this.repository = repository;
     this.auditLogger = auditLogger;
@@ -65,7 +115,7 @@ export class KnowledgeService {
    * @param {Object} context - { userId }
    * @returns {Promise<KnowledgeEntry>}
    */
-  async create(data: any, context: any) {
+  async create(data: KnowledgeEntryProps, context: ServiceContext) {
     try {
       this._validateCreateInput(data);
 
@@ -136,15 +186,17 @@ export class KnowledgeService {
           .run('onKnowledgeCreated', saved, {
             userId: context.userId,
           })
-          .catch((err: any) =>
-            this.logger.warn('SkillHook onKnowledgeCreated error', { error: err.message })
+          .catch((err: unknown) =>
+            this.logger.warn('SkillHook onKnowledgeCreated error', {
+              error: err instanceof Error ? err.message : String(err),
+            })
           );
       }
 
       return saved;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Error creating knowledge entry', {
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         data,
       });
       throw error;
@@ -156,7 +208,7 @@ export class KnowledgeService {
    * @param {string} id
    * @returns {Promise<KnowledgeEntry>}
    */
-  async get(id: any) {
+  async get(id: string) {
     const entry = await this.repository.findById(id);
     if (!entry) {
       throw new NotFoundError('Knowledge entry not found', 'knowledge', id);
@@ -171,7 +223,7 @@ export class KnowledgeService {
    * @param {Object} context - { userId }
    * @returns {Promise<KnowledgeEntry>}
    */
-  async update(id: any, data: any, context: any) {
+  async update(id: string, data: Partial<KnowledgeEntryProps>, context: ServiceContext) {
     try {
       const _entry = await this._findOrThrow(id);
 
@@ -205,7 +257,7 @@ export class KnowledgeService {
         'usageGuide',
       ];
 
-      const dbUpdates: any = {};
+      const dbUpdates: Record<string, unknown> = {};
 
       for (const key of UPDATABLE) {
         if (data[key] === undefined) {
@@ -236,7 +288,7 @@ export class KnowledgeService {
 
           case 'knowledgeType':
             dbUpdates.knowledgeType = data.knowledgeType;
-            dbUpdates.kind = inferKind(data.knowledgeType);
+            dbUpdates.kind = inferKind(data.knowledgeType ?? '');
             break;
 
           // 值对象 / 数组字段 — 直传原始值，Repository._entityToRow 负责序列化
@@ -251,11 +303,11 @@ export class KnowledgeService {
 
           // tags 需要特殊处理：API 返回时已过滤系统标签，保存时需要合并回来
           case 'tags': {
-            const existingSystemTags = (_entry.tags || []).filter((t: any) =>
+            const existingSystemTags = (_entry.tags || []).filter((t: string) =>
               KnowledgeEntry.isSystemTag(t)
             );
             const incomingUserTags = (data.tags || []).filter(
-              (t: any) => !KnowledgeEntry.isSystemTag(t)
+              (t: string) => !KnowledgeEntry.isSystemTag(t)
             );
             dbUpdates.tags = [...incomingUserTags, ...existingSystemTags];
             break;
@@ -290,10 +342,10 @@ export class KnowledgeService {
       });
 
       return updated;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Error updating knowledge entry', {
         id,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -305,7 +357,7 @@ export class KnowledgeService {
    * @param {Object} context - { userId }
    * @returns {Promise<{ success: boolean, id: string }>}
    */
-  async delete(id: any, context: any) {
+  async delete(id: string, context: ServiceContext) {
     try {
       const entry = await this._findOrThrow(id);
 
@@ -328,10 +380,10 @@ export class KnowledgeService {
       });
 
       return { success: true, id };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Error deleting knowledge entry', {
         id,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -342,7 +394,7 @@ export class KnowledgeService {
   /**
    * 发布 (pending → active) — 仅开发者可执行
    */
-  async publish(id: any, context: any) {
+  async publish(id: string, context: ServiceContext) {
     const result = await this._lifecycleTransition(id, 'publish', context, {
       entityArgs: [context.userId],
     });
@@ -376,7 +428,7 @@ export class KnowledgeService {
   /**
    * 弃用 (pending|active → deprecated)
    */
-  async deprecate(id: any, reason: any, context: any) {
+  async deprecate(id: string, reason: string, context: ServiceContext) {
     if (!reason || reason.trim().length === 0) {
       throw new ValidationError('Deprecation reason is required');
     }
@@ -388,39 +440,39 @@ export class KnowledgeService {
   /**
    * 重新激活 (deprecated → pending)
    */
-  async reactivate(id: any, context: any) {
+  async reactivate(id: string, context: ServiceContext) {
     return this._lifecycleTransition(id, 'reactivate', context);
   }
 
   // ── 向后兼容别名 ──
 
   /** @deprecated 简化后所有条目直接进 pending */
-  async submit(id: any, context: any) {
+  async submit(id: string, _context: ServiceContext) {
     return this.get(id);
   }
 
   /** @deprecated 简化后 approve = publish */
-  async approve(id: any, context: any) {
+  async approve(id: string, context: ServiceContext) {
     return this.publish(id, context);
   }
 
   /** @deprecated 简化后无需 autoApprove */
-  async autoApprove(id: any, context: any) {
+  async autoApprove(id: string, _context: ServiceContext) {
     return this.get(id);
   }
 
   /** @deprecated 简化后 reject = deprecate */
-  async reject(id: any, reason: any, context: any) {
+  async reject(id: string, reason: string, context: ServiceContext) {
     return this.deprecate(id, reason, context);
   }
 
   /** @deprecated 简化后 toDraft = reactivate */
-  async toDraft(id: any, context: any) {
+  async toDraft(id: string, context: ServiceContext) {
     return this.reactivate(id, context);
   }
 
   /** @deprecated 简化后 fastTrack = publish */
-  async fastTrack(id: any, context: any) {
+  async fastTrack(id: string, context: ServiceContext) {
     return this.publish(id, context);
   }
 
@@ -431,12 +483,12 @@ export class KnowledgeService {
    * @param {Object} filters - { lifecycle, kind, language, category, knowledgeType, source, tag }
    * @param {Object} pagination - { page, pageSize }
    */
-  async list(filters: any = {}, pagination: any = {}) {
+  async list(filters: ListFilters = {}, pagination: PaginationOptions = {}) {
     try {
       const { lifecycle, kind, language, category, knowledgeType, source, tag, scope } = filters;
       const { page = 1, pageSize = 20 } = pagination;
 
-      const dbFilters: any = {};
+      const dbFilters: Record<string, unknown> = {};
       if (lifecycle) {
         dbFilters.lifecycle = lifecycle;
       }
@@ -463,9 +515,9 @@ export class KnowledgeService {
       }
 
       return this.repository.findWithPagination(dbFilters, { page, pageSize });
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Error listing knowledge entries', {
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         filters,
       });
       throw error;
@@ -475,12 +527,15 @@ export class KnowledgeService {
   /**
    * 按 Kind 查询
    */
-  async listByKind(kind: any, pagination: any = {}) {
+  async listByKind(kind: string, pagination: PaginationOptions = {}) {
     try {
       const { page = 1, pageSize = 20 } = pagination;
       return this.repository.findByKind(kind, { page, pageSize });
-    } catch (error: any) {
-      this.logger.error('Error listing by kind', { kind, error: error.message });
+    } catch (error: unknown) {
+      this.logger.error('Error listing by kind', {
+        kind,
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
@@ -488,14 +543,14 @@ export class KnowledgeService {
   /**
    * 搜索
    */
-  async search(keyword: any, pagination: any = {}) {
+  async search(keyword: string, pagination: PaginationOptions = {}) {
     try {
       const { page = 1, pageSize = 20 } = pagination;
       return this.repository.search(keyword, { page, pageSize });
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Error searching knowledge', {
         keyword,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -507,15 +562,15 @@ export class KnowledgeService {
   async getStats() {
     try {
       return this.repository.getStats();
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Error getting knowledge stats', {
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
   }
 
-  /* ═══ 使用/质量 ═════════════════════════════════════════ */
+  /* ═══ 使用/质量 ═════════════════════════════════════ */
 
   /**
    * 增加使用计数
@@ -523,10 +578,16 @@ export class KnowledgeService {
    * @param {'adoption'|'application'|'guard_hit'|'view'|'success'} type
    * @param {Object} [options] - { actor, feedback }
    */
-  async incrementUsage(id: any, type = 'adoption', options: any = {}) {
+  async incrementUsage(
+    id: string,
+    type = 'adoption',
+    options: { actor?: string; feedback?: string } = {}
+  ) {
     try {
       const entry = await this._findOrThrow(id);
-      entry.stats.increment(type);
+      entry.stats.increment(
+        type as 'views' | 'adoptions' | 'applications' | 'guardHits' | 'searchHits'
+      );
 
       const statsJson = entry.stats.toJSON();
       await this.repository.update(id, {
@@ -541,10 +602,10 @@ export class KnowledgeService {
       this.logger.debug(`Knowledge ${type} incremented`, { id, type });
 
       return entry;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error(`Error incrementing knowledge ${type}`, {
         id,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -555,7 +616,7 @@ export class KnowledgeService {
    * @param {string} id
    * @param {Object} [context] - { userId }
    */
-  async updateQuality(id: any, context: any = {}) {
+  async updateQuality(id: string, context: Partial<ServiceContext> = {}) {
     try {
       const entry = await this._findOrThrow(id);
 
@@ -593,10 +654,10 @@ export class KnowledgeService {
       });
 
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Error updating knowledge quality', {
         id,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -607,22 +668,34 @@ export class KnowledgeService {
   /**
    * 统一生命周期转换编排
    */
-  async _lifecycleTransition(id: any, method: any, context: any, options: any = {}) {
+  async _lifecycleTransition(
+    id: string,
+    method: string,
+    context: ServiceContext,
+    options: { entityArgs?: unknown[] } = {}
+  ) {
     try {
       const entry = await this._findOrThrow(id);
       const prevLifecycle = entry.lifecycle;
 
       const entityArgs = options.entityArgs || [];
-      const result = entry[method](...entityArgs);
+      const result = (
+        entry as unknown as Record<
+          string,
+          (...args: unknown[]) => { success: boolean; error?: string }
+        >
+      )[method](...entityArgs);
 
       if (!result.success) {
-        throw new ConflictError(result.error, `Lifecycle ${method} failed for ${id}`);
+        throw new ConflictError(result.error || 'Lifecycle transition failed', {
+          detail: `Lifecycle ${method} failed for ${id}`,
+        });
       }
 
       // 构建 DB 更新
       // 注意: 不在此处 JSON.stringify — repository.update() 内部
       // 通过 _entityToRow() 统一执行序列化, 传入原始值即可
-      const dbUpdates: any = {
+      const dbUpdates: Record<string, unknown> = {
         lifecycle: entry.lifecycle,
         lifecycleHistory: entry.lifecycleHistory,
         updatedAt: entry.updatedAt,
@@ -656,10 +729,10 @@ export class KnowledgeService {
       if (this._fileWriter) {
         try {
           this._fileWriter.moveOnLifecycleChange(updated);
-        } catch (err: any) {
+        } catch (err: unknown) {
           this.logger.warn('moveOnLifecycleChange failed (non-blocking)', {
             id,
-            error: err.message,
+            error: err instanceof Error ? err.message : String(err),
           });
         }
       }
@@ -677,10 +750,10 @@ export class KnowledgeService {
       });
 
       return updated;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error(`Error in lifecycle ${method}`, {
         id,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
@@ -689,7 +762,7 @@ export class KnowledgeService {
   /**
    * 查找或抛出 NotFoundError
    */
-  async _findOrThrow(id: any) {
+  async _findOrThrow(id: string): Promise<KnowledgeEntry> {
     const entry = await this.repository.findById(id);
     if (!entry) {
       throw new NotFoundError('Knowledge entry not found', 'knowledge', id);
@@ -700,14 +773,19 @@ export class KnowledgeService {
   /**
    * 验证创建输入
    */
-  _validateCreateInput(data: any) {
+  _validateCreateInput(data: KnowledgeEntryProps) {
     if (!data.title || !data.title.trim()) {
       throw new ValidationError('Title is required');
     }
 
     // 内容至少需要 content 对象有内容
-    const c = data.content || {};
-    if (!c.pattern && !c.rationale && !(c.steps?.length > 0) && !c.markdown) {
+    const c = (data.content || {}) as Record<string, unknown>;
+    if (
+      !c.pattern &&
+      !c.rationale &&
+      !((c.steps as unknown[] | undefined)?.length && (c.steps as unknown[]).length > 0) &&
+      !c.markdown
+    ) {
       throw new ValidationError('Content is required (pattern, rationale, steps, or markdown)');
     }
   }
@@ -716,9 +794,12 @@ export class KnowledgeService {
    * 为 QualityScorer 适配输入
    * QualityScorer 需要: title, trigger, code, language, category, summary, usageGuide, headers, tags
    */
-  _adaptForScorer(entry: any) {
+  _adaptForScorer(entry: KnowledgeEntry): Record<string, unknown> {
     // 从 Stats 值对象提取 engagement 指标，映射到 QualityScorer 期望的 views/clicks/rating
-    const stats = entry.stats && typeof entry.stats === 'object' ? entry.stats : {};
+    const stats =
+      entry.stats && typeof entry.stats === 'object'
+        ? (entry.stats as unknown as Record<string, number>)
+        : ({} as Record<string, number>);
     return {
       title: entry.title,
       trigger: entry.trigger,
@@ -743,14 +824,14 @@ export class KnowledgeService {
    * @param {string} id 新创建的条目 ID
    * @param {KnowledgeEntry} entry 条目实体
    */
-  async _autoDiscoverRelations(id: any, entry: any) {
+  async _autoDiscoverRelations(id: string, entry: KnowledgeEntry) {
     const gs = this._knowledgeGraphService;
     if (!gs) {
       return;
     }
 
     try {
-      const candidates: { target: any; relation: string; weight: number }[] = [];
+      const candidates: { target: string; relation: string; weight: number }[] = [];
 
       // 仅与已发布 Recipe（active）建立关联，不与其他候选（pending）互关联
       const activeOnly = { lifecycle: Lifecycle.ACTIVE };
@@ -796,23 +877,24 @@ export class KnowledgeService {
           target: c.target,
           description: 'auto-discovered',
         }));
-        const existingRelations =
+        const existingRelations: Record<string, unknown[]> = (
           typeof entry.relations?.toJSON === 'function'
             ? entry.relations.toJSON()
-            : entry.relations || {};
+            : entry.relations || {}
+        ) as Record<string, unknown[]>;
         const merged = {
           ...existingRelations,
-          related: [...(existingRelations.related || []), ...relatedItems],
+          related: [...(existingRelations['related'] || []), ...relatedItems],
         };
         await this.repository.update(id, {
           relations: JSON.stringify(merged),
           updatedAt: Math.floor(Date.now() / 1000),
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.warn('Auto-discover relations failed (non-blocking)', {
         id,
-        error: err.message,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   }
@@ -820,7 +902,7 @@ export class KnowledgeService {
   /**
    * 将 relations 同步到 knowledge_edges 表
    */
-  _syncRelationsToGraph(id: any, relations: any) {
+  _syncRelationsToGraph(id: string, relations: unknown) {
     const gs = this._knowledgeGraphService;
     if (!gs) {
       return;
@@ -836,25 +918,31 @@ export class KnowledgeService {
       }
 
       // Relations 可能是 Relations 值对象或普通对象
-      const relObj = typeof relations.toJSON === 'function' ? relations.toJSON() : relations;
+      const relObj = (
+        typeof (relations as { toJSON?: () => Record<string, unknown> }).toJSON === 'function'
+          ? (relations as { toJSON: () => Record<string, unknown> }).toJSON()
+          : relations
+      ) as Record<string, unknown[]>;
 
       for (const [relType, targets] of Object.entries(relObj)) {
         if (!Array.isArray(targets)) {
           continue;
         }
         for (const t of targets) {
-          const targetId = t.target || t.id || (typeof t === 'string' ? t : null);
+          const item = t as Record<string, unknown>;
+          const targetId =
+            (item.target as string) || (item.id as string) || (typeof t === 'string' ? t : null);
           if (targetId) {
             gs.addEdge(id, 'knowledge', targetId, 'knowledge', relType, {
-              weight: t.weight || 1.0,
+              weight: (item.weight as number) || 1.0,
             });
           }
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.warn('Failed to sync relations to knowledge_edges', {
         id,
-        error: err.message,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   }
@@ -862,7 +950,7 @@ export class KnowledgeService {
   /**
    * 删除所有关联边
    */
-  _removeAllEdges(id: any) {
+  _removeAllEdges(id: string) {
     const gs = this._knowledgeGraphService;
     if (!gs) {
       return;
@@ -870,17 +958,20 @@ export class KnowledgeService {
 
     try {
       gs.db.prepare(`DELETE FROM knowledge_edges WHERE from_id = ? OR to_id = ?`).run(id, id);
-    } catch (err: any) {
-      this.logger.warn('Failed to remove edges', { id, error: err.message });
+    } catch (err: unknown) {
+      this.logger.warn('Failed to remove edges', {
+        id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
-  /* ═══ 文件落盘 ═══════════════════════════════════════ */
+  /* ═══ 文件落盘 ═════════════════════════════════ */
 
   /**
    * 落盘到 .md 文件 + 回写 sourceFile
    */
-  _persistToFile(entry: any) {
+  _persistToFile(entry: KnowledgeEntry) {
     if (!this._fileWriter) {
       return;
     }
@@ -888,17 +979,17 @@ export class KnowledgeService {
       const oldSourceFile = entry.sourceFile;
       this._fileWriter.persist(entry);
       if (entry.sourceFile && entry.sourceFile !== oldSourceFile) {
-        this.repository.update(entry.id, { sourceFile: entry.sourceFile }).catch((err: any) => {
+        this.repository.update(entry.id, { sourceFile: entry.sourceFile }).catch((err: unknown) => {
           this.logger.warn('Failed to update sourceFile in DB', {
             id: entry.id,
-            error: err.message,
+            error: err instanceof Error ? err.message : String(err),
           });
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.warn('Knowledge file persist failed (non-blocking)', {
         id: entry?.id,
-        error: err.message,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   }
@@ -906,23 +997,28 @@ export class KnowledgeService {
   /**
    * 删除 .md 文件
    */
-  _removeFile(entry: any) {
+  _removeFile(entry: KnowledgeEntry) {
     if (!this._fileWriter) {
       return;
     }
     try {
       this._fileWriter.remove(entry);
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.warn('Knowledge file remove failed (non-blocking)', {
         id: entry?.id,
-        error: err.message,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
   /* ═══ 审计日志 ═══════════════════════════════════════ */
 
-  async _audit(action: any, id: any, actor: any, details: any = {}) {
+  async _audit(
+    action: string,
+    id: string,
+    actor: string,
+    details: Record<string, unknown> | string = {}
+  ) {
     try {
       await this.auditLogger.log({
         action,
@@ -934,11 +1030,11 @@ export class KnowledgeService {
         details: typeof details === 'string' ? details : JSON.stringify(details),
         timestamp: Math.floor(Date.now() / 1000),
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.warn('Audit log failed (non-blocking)', {
         action,
         id,
-        error: err.message,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   }

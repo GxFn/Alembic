@@ -40,7 +40,7 @@ const CURSOR_DELIVERY_FIELDS = new Set([
  * @param {string} code
  * @returns {string}
  */
-function codeFingerprint(code: any) {
+function codeFingerprint(code: string) {
   return (code || '')
     .replace(/\/\/[^\n]*/g, '') // 移除单行注释
     .replace(/\/\*[\s\S]*?\*\//g, '') // 移除多行注释
@@ -56,7 +56,7 @@ function codeFingerprint(code: any) {
  * @param {object} candidate
  * @returns {'strict'|'document'|'fallback'}
  */
-function detectMode(candidate: any) {
+function detectMode(candidate: Record<string, unknown>) {
   if (candidate.knowledgeType === 'dev-document') {
     return 'document';
   }
@@ -80,7 +80,7 @@ export class UnifiedValidator {
    * @param {Set<string>} [options.existingTitles]       预填充已有标题
    * @param {Set<string>} [options.existingFingerprints]  预填充已有代码指纹
    */
-  constructor(options: any = {}) {
+  constructor(options: { existingTitles?: Set<string>; existingFingerprints?: Set<string> } = {}) {
     this.#titles = options.existingTitles || new Set();
     this.#codeFingerprints = options.existingFingerprints || new Set();
   }
@@ -95,9 +95,16 @@ export class UnifiedValidator {
    * @param {boolean}                        [options.skipUniqueness=false] 跳过去重检查
    * @returns {{ pass: boolean, errors: string[], warnings: string[] }}
    */
-  validate(candidate: any, options: any = {}) {
-    const errors: any[] = [];
-    const warnings: any[] = [];
+  validate(
+    candidate: Record<string, unknown>,
+    options: {
+      mode?: 'strict' | 'document' | 'fallback';
+      systemInjectedFields?: string[];
+      skipUniqueness?: boolean;
+    } = {}
+  ) {
+    const errors: string[] = [];
+    const warnings: string[] = [];
 
     const mode = options.mode || detectMode(candidate);
     const systemInjected = new Set(options.systemInjectedFields || []);
@@ -131,7 +138,13 @@ export class UnifiedValidator {
    * @param {string[]} errors
    * @param {string[]} warnings
    */
-  #checkFields(candidate: any, mode: any, systemInjected: any, errors: any, warnings: any) {
+  #checkFields(
+    candidate: Record<string, unknown>,
+    mode: string,
+    systemInjected: Set<string>,
+    errors: string[],
+    warnings: string[]
+  ) {
     for (const field of V3_FIELD_SPEC) {
       const { name, level, rule } = field;
 
@@ -182,20 +195,20 @@ export class UnifiedValidator {
     }
 
     // kind 值校验
-    if (candidate.kind && !VALID_KINDS.includes(candidate.kind)) {
+    if (candidate.kind && !VALID_KINDS.includes(candidate.kind as string)) {
       errors.push(`kind 值无效: "${candidate.kind}" — 取值 rule/pattern/fact`);
     }
 
     // trigger 格式校验
-    if (candidate.trigger && !candidate.trigger.startsWith('@')) {
+    if (candidate.trigger && !(candidate.trigger as string).startsWith('@')) {
       warnings.push(`trigger "${candidate.trigger}" 应以 @ 开头`);
     }
 
     // category 值校验
     if (
       candidate.category &&
-      !STANDARD_CATEGORIES.includes(candidate.category) &&
-      !WHITELISTED_CATEGORIES.includes(candidate.category)
+      !STANDARD_CATEGORIES.includes(candidate.category as string) &&
+      !WHITELISTED_CATEGORIES.includes(candidate.category as string)
     ) {
       warnings.push(
         `category "${candidate.category}" 非标准值，应为: ${STANDARD_CATEGORIES.join('/')}（bootstrap/knowledge 等特殊来源可忽略此建议）`
@@ -203,7 +216,7 @@ export class UnifiedValidator {
     }
 
     // language 校验
-    const lang = candidate.language?.toLowerCase();
+    const lang = (candidate.language as string | undefined)?.toLowerCase();
     if (lang && !LanguageService.isKnownLang(lang) && lang !== 'objc' && lang !== 'markdown') {
       warnings.push(
         `language "${candidate.language}" — 请使用标准语言标识 (swift/typescript/python/java/kotlin 等)`
@@ -219,8 +232,14 @@ export class UnifiedValidator {
    * @param {string[]} errors
    * @param {string[]} warnings
    */
-  #checkContentQuality(candidate: any, mode: any, errors: any, warnings: any) {
-    const markdown = candidate.content?.markdown || '';
+  #checkContentQuality(
+    candidate: Record<string, unknown>,
+    mode: string,
+    errors: string[],
+    warnings: string[]
+  ) {
+    const markdown =
+      ((candidate.content as Record<string, unknown> | undefined)?.markdown as string) || '';
 
     // markdown ≥ 200 字符
     if (markdown && markdown.length > 0 && markdown.length < 200) {
@@ -251,7 +270,7 @@ export class UnifiedValidator {
 
     // coreCode 语法完整性
     if (mode !== 'document') {
-      const coreCode = (candidate.coreCode || '').trim();
+      const coreCode = ((candidate.coreCode as string) || '').trim();
       if (coreCode) {
         const firstChar = coreCode[0];
         if (firstChar === '}' || firstChar === ')' || firstChar === ']') {
@@ -264,14 +283,14 @@ export class UnifiedValidator {
 
     // 通用知识检测
     const genericPatterns = [/^(Singleton|Factory|Observer|MVC|MVVM) (pattern|模式)$/i];
-    const title = candidate.title || '';
+    const title = (candidate.title as string) || '';
     if (genericPatterns.some((p) => p.test(title.trim()))) {
       errors.push(`标题过于通用: "${title}" — 请加上项目特定的上下文`);
     }
 
     // 内容过于简单
     if (markdown && markdown.length > 0 && markdown.length >= 200) {
-      const lines = markdown.split('\n').filter((l: any) => l.trim().length > 0);
+      const lines = markdown.split('\n').filter((l: string) => l.trim().length > 0);
       if (lines.length <= 2 && !/```[\s\S]*?```/.test(markdown)) {
         warnings.push(`内容仅 ${lines.length} 行 — 建议包含更多代码片段和设计意图描述`);
       }
@@ -284,13 +303,15 @@ export class UnifiedValidator {
    * @param {object} candidate
    * @param {string[]} errors
    */
-  #checkUniqueness(candidate: any, errors: any) {
-    const title = (candidate.title || '').toLowerCase().trim();
+  #checkUniqueness(candidate: Record<string, unknown>, errors: string[]) {
+    const title = ((candidate.title as string) || '').toLowerCase().trim();
     if (title && this.#titles.has(title)) {
       errors.push(`标题重复: "${candidate.title}"`);
     }
 
-    const pattern = (candidate.content?.pattern || '').trim();
+    const pattern = (
+      ((candidate.content as Record<string, unknown> | undefined)?.pattern as string) || ''
+    ).trim();
     if (pattern.length >= 30) {
       const fp = codeFingerprint(pattern);
       if (fp.length >= 20 && this.#codeFingerprints.has(fp)) {
@@ -306,7 +327,7 @@ export class UnifiedValidator {
    * @param {string} title
    * @param {string} [pattern] 代码模式
    */
-  recordSubmission(title: any, pattern: any) {
+  recordSubmission(title: string, pattern: string) {
     if (title) {
       this.#titles.add(title.toLowerCase().trim());
     }
@@ -326,14 +347,14 @@ export class UnifiedValidator {
    * @param {string} path 如 'content.markdown' 或 'reasoning.sources'
    * @returns {*}
    */
-  #getNestedValue(obj: any, path: any) {
+  #getNestedValue(obj: Record<string, unknown>, path: string): unknown {
     const parts = path.split('.');
-    let current = obj;
+    let current: unknown = obj;
     for (const part of parts) {
       if (current == null || typeof current !== 'object') {
         return undefined;
       }
-      current = current[part];
+      current = (current as Record<string, unknown>)[part];
     }
     return current;
   }
@@ -344,7 +365,7 @@ export class UnifiedValidator {
    * @param {FieldDef} field
    * @returns {boolean}
    */
-  #isMissing(value: any, field: any) {
+  #isMissing(value: unknown, field: { name: string; type?: string }) {
     if (value === undefined || value === null) {
       return true;
     }

@@ -12,8 +12,8 @@ export interface DiscoveredTarget {
   type: string;
   language?: string;
   framework?: string | null;
-  metadata?: Record<string, any>;
-  [key: string]: any;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface DiscoveredFile {
@@ -21,7 +21,7 @@ export interface DiscoveredFile {
   path: string;
   relativePath: string;
   language: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface DependencyEdge {

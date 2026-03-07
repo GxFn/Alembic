@@ -15,6 +15,75 @@
 
 import Logger from '../../../infrastructure/logging/Logger.js';
 
+// ────────────────────────────────────────────────────────────
+// 本地类型定义
+// ────────────────────────────────────────────────────────────
+
+/** Logger 最小接口 */
+interface ConsolidatorLogger {
+  info(msg: string): void;
+}
+
+/** PersistentMemory 最小接口 */
+interface PersistentMemoryLike {
+  clearBootstrapMemories(): number;
+  compact(): void;
+  consolidate(
+    candidates: CandidateMemoryEntry[],
+    opts?: { bootstrapSession?: string }
+  ): ConsolidateResult;
+}
+
+/** 固化结果 */
+interface ConsolidateResult {
+  added: number;
+  updated: number;
+  merged: number;
+  skipped: number;
+}
+
+/** 候选记忆条目 */
+interface CandidateMemoryEntry {
+  type: string;
+  content: string;
+  source: string;
+  importance: number;
+  sourceDimension?: string;
+  sourceEvidence?: string;
+  relatedEntities?: string[];
+  tags: string[];
+}
+
+/** 维度发现 */
+interface FindingLike {
+  finding?: string;
+  evidence?: string;
+  importance?: number;
+  dimId?: string;
+}
+
+/** 维度报告 */
+interface DimensionReportLike {
+  analysisText?: string;
+  findings?: FindingLike[];
+}
+
+/** Tier 反思 */
+interface TierReflectionLike {
+  tierIndex: number;
+  completedDimensions?: string[];
+  topFindings?: FindingLike[];
+  crossDimensionPatterns?: string[];
+  suggestionsForNextTier?: string[];
+}
+
+/** SessionStore 最小接口 */
+interface SessionStoreLike {
+  getCompletedDimensions(): string[];
+  getDimensionReport(dimId: string): DimensionReportLike | undefined;
+  toJSON(): { tierReflections?: TierReflectionLike[] };
+}
+
 // ──────────────────────────────────────────────────────────────
 // 正则: 从分析文本中提取陈述性知识
 // ──────────────────────────────────────────────────────────────
@@ -58,17 +127,20 @@ const INSIGHT_PATTERNS = [
 
 export class EpisodicConsolidator {
   /** @type {import('../memory/PersistentMemory.js').PersistentMemory} */
-  #semanticMemory;
+  #semanticMemory: PersistentMemoryLike;
 
   /** @type {import('winston').Logger} */
-  #logger;
+  #logger: ConsolidatorLogger;
 
   /**
    * @param {import('../memory/PersistentMemory.js').PersistentMemory} semanticMemory
    * @param {object} [opts]
    * @param {object} [opts.logger]
    */
-  constructor(semanticMemory: any, { logger }: any = {}) {
+  constructor(
+    semanticMemory: PersistentMemoryLike,
+    { logger }: { logger?: ConsolidatorLogger } = {}
+  ) {
     this.#semanticMemory = semanticMemory;
     this.#logger = logger || Logger.getInstance();
   }
@@ -82,7 +154,13 @@ export class EpisodicConsolidator {
    * @param {boolean} [opts.clearPrevious=false] 是否先清除旧的 bootstrap 记忆
    * @returns {{ findings: object, insights: object, textFacts: object, total: object }}
    */
-  consolidate(sessionStore: any, { bootstrapSession, clearPrevious = false }: any = {}) {
+  consolidate(
+    sessionStore: SessionStoreLike,
+    {
+      bootstrapSession,
+      clearPrevious = false,
+    }: { bootstrapSession?: string; clearPrevious?: boolean } = {}
+  ) {
     const t0 = Date.now();
 
     // 可选: 清除旧的 bootstrap 记忆 (全量重跑场景)
@@ -137,8 +215,8 @@ export class EpisodicConsolidator {
    *
    * 每个 finding 映射为一条 fact，importance 直接继承。
    */
-  #extractFromFindings(sessionStore: any) {
-    const memories: any[] = [];
+  #extractFromFindings(sessionStore: SessionStoreLike) {
+    const memories: CandidateMemoryEntry[] = [];
     const completedDims = sessionStore.getCompletedDimensions();
 
     for (const dimId of completedDims) {
@@ -185,8 +263,8 @@ export class EpisodicConsolidator {
    * suggestionsForNextTier → insight (分析建议)
    * topFindings 中重要性 ≥ 7 的 → fact (高优先级重复确认)
    */
-  #extractFromReflections(sessionStore: any) {
-    const memories: any[] = [];
+  #extractFromReflections(sessionStore: SessionStoreLike) {
+    const memories: CandidateMemoryEntry[] = [];
     const json = sessionStore.toJSON();
     const reflections = json.tierReflections || [];
 
@@ -240,7 +318,7 @@ export class EpisodicConsolidator {
           sourceDimension: f.dimId || `tier-${ref.tierIndex + 1}`,
           sourceEvidence: f.evidence || '',
           relatedEntities: this.#extractEntities(content),
-          tags: [f.dimId, 'tier-reflection'].filter(Boolean),
+          tags: [f.dimId, 'tier-reflection'].filter(Boolean) as string[],
         });
       }
     }
@@ -253,8 +331,8 @@ export class EpisodicConsolidator {
    *
    * 仅提取高置信度的简短陈述 (≤100 字), 避免噪音。
    */
-  #extractFromAnalysisText(sessionStore: any) {
-    const memories: any[] = [];
+  #extractFromAnalysisText(sessionStore: SessionStoreLike) {
+    const memories: CandidateMemoryEntry[] = [];
     const seen = new Set(); // 去重
     const completedDims = sessionStore.getCompletedDimensions();
 
@@ -341,8 +419,8 @@ export class EpisodicConsolidator {
    * @param {string} [evidence]
    * @returns {string[]}
    */
-  #extractEntities(text: any, evidence: any = undefined) {
-    const entities = new Set();
+  #extractEntities(text: string, evidence: string | undefined = undefined) {
+    const entities = new Set<string>();
 
     // 大驼峰类名 (至少 2 个大写字母)
     const classNames = (text || '').match(/\b[A-Z][a-zA-Z]*[A-Z][a-zA-Z]*\b/g) || [];

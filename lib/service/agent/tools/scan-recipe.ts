@@ -120,38 +120,59 @@ export const collectScanRecipe = {
    * 验证通过后返回 { status: 'collected', recipe: {...} }，
    * AgentFactory.scanKnowledge() 从 toolCalls 结果中提取 recipes。
    */
-  handler: async (params: any, _ctx: any) => {
+  handler: async (params: Record<string, unknown>, _ctx: unknown) => {
+    // Cast to a shape matching the tool schema for convenient access
+    const p = params as {
+      title?: string;
+      language?: string;
+      description?: string;
+      tags?: string[];
+      content?: { pattern?: string; markdown?: string; rationale?: string };
+      kind?: string;
+      category?: string;
+      trigger?: string;
+      doClause?: string;
+      dontClause?: string;
+      whenClause?: string;
+      coreCode?: string;
+      headers?: string[];
+      usageGuide?: string;
+      knowledgeType?: string;
+      reasoning?: { whyStandard?: string; sources?: string[]; confidence?: number };
+      complexity?: string;
+      scope?: string;
+    };
     // ── 基本验证 ──
-    const errors: any[] = [];
+    const errors: string[] = [];
 
-    if (!params.title || params.title.trim().length === 0) {
+    if (!p.title || p.title.trim().length === 0) {
       errors.push('title 不能为空');
     }
-    if (!params.content || typeof params.content !== 'object') {
+    if (!p.content || typeof p.content !== 'object') {
       errors.push('content 必须是对象');
-    } else if (!params.content.rationale) {
+    } else if (!p.content.rationale) {
       errors.push('content.rationale (设计原理) 是必填字段');
     }
-    if (!params.reasoning || typeof params.reasoning !== 'object') {
+    if (!p.reasoning || typeof p.reasoning !== 'object') {
       errors.push('reasoning 必须是对象');
     } else {
-      if (!params.reasoning.whyStandard) {
+      if (!p.reasoning.whyStandard) {
         errors.push('reasoning.whyStandard 是必填字段');
       }
-      if (!Array.isArray(params.reasoning.sources) || params.reasoning.sources.length === 0) {
+      if (!Array.isArray(p.reasoning.sources) || p.reasoning.sources.length === 0) {
         errors.push('reasoning.sources 必须是非空数组');
       }
     }
-    if (!params.kind || !['rule', 'pattern', 'fact'].includes(params.kind)) {
+    if (!p.kind || !['rule', 'pattern', 'fact'].includes(p.kind)) {
       errors.push('kind 必须是 rule / pattern / fact 之一');
     }
-    if (!params.trigger || !params.trigger.startsWith('@')) {
+    if (!p.trigger || !p.trigger.startsWith('@')) {
       errors.push('trigger 必须以 @ 开头');
     }
-    if (!params.coreCode || params.coreCode.trim().length < 10) {
+    if (!p.coreCode || p.coreCode.trim().length < 10) {
       errors.push('coreCode 必须提供有意义的代码骨架（≥10字符）');
     }
-    if (!params.doClause) {
+    if (!p.doClause) {
       errors.push('doClause (正向指令) 是必填字段');
     }
 
@@ -164,36 +185,36 @@ export const collectScanRecipe = {
     }
 
     // ── 构建标准化 Recipe 对象 ──
-    const contentObj = params.content || {};
-    const reasoning = params.reasoning || {};
+    const contentObj = p.content || {};
+    const reasoning = p.reasoning || {};
 
     const recipe = {
-      title: params.title.trim(),
-      language: params.language || '',
-      description: params.description || '',
-      tags: params.tags || [],
+      title: p.title!.trim(),
+      language: p.language || '',
+      description: p.description || '',
+      tags: p.tags || [],
       content: {
         pattern: contentObj.pattern || '',
         markdown: contentObj.markdown || '',
         rationale: contentObj.rationale || '',
       },
-      kind: params.kind,
-      category: params.category || 'Utility',
-      trigger: params.trigger,
-      doClause: params.doClause || '',
-      dontClause: params.dontClause || '',
-      whenClause: params.whenClause || '',
-      coreCode: params.coreCode || '',
-      headers: params.headers || [],
-      usageGuide: params.usageGuide || '',
-      knowledgeType: params.knowledgeType || 'code-pattern',
+      kind: p.kind,
+      category: p.category || 'Utility',
+      trigger: p.trigger,
+      doClause: p.doClause || '',
+      dontClause: p.dontClause || '',
+      whenClause: p.whenClause || '',
+      coreCode: p.coreCode || '',
+      headers: p.headers || [],
+      usageGuide: p.usageGuide || '',
+      knowledgeType: p.knowledgeType || 'code-pattern',
       reasoning: {
         whyStandard: reasoning.whyStandard || '',
         sources: reasoning.sources || [],
         confidence: reasoning.confidence ?? 0.8,
       },
-      complexity: params.complexity || 'intermediate',
-      scope: params.scope || 'project-specific',
+      complexity: p.complexity || 'intermediate',
+      scope: p.scope || 'project-specific',
     };
 
     return {

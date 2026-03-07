@@ -21,7 +21,7 @@
  * @param {string} lang
  * @returns {string} 语言族 ID
  */
-function _langFamily(lang: any) {
+function _langFamily(lang: string) {
   switch (lang) {
     case 'swift':
     case 'objectivec':
@@ -359,8 +359,10 @@ export class DimensionCopy {
    * @param {string} lang    主语言 ID (如 'python', 'typescript')
    * @returns {{ label: string, guide: string } | null}
    */
-  static get(dimId: any, lang: any) {
-    const entry = (COPY_REGISTRY as Record<string, any>)[dimId];
+  static get(dimId: string, lang: string) {
+    const entry = (
+      COPY_REGISTRY as Record<string, Record<string, { label: string; guide: string }>>
+    )[dimId];
     if (!entry) {
       return null;
     }
@@ -376,7 +378,7 @@ export class DimensionCopy {
    * @param {string} lang 主语言
    * @returns {Array<{ id: string, label: string, guide: string }>} 原数组引用
    */
-  static apply(dimensions: any, lang: any) {
+  static apply(dimensions: Array<{ id: string; label: string; guide: string }>, lang: string) {
     for (const dim of dimensions) {
       const copy = DimensionCopy.get(dim.id, lang);
       if (copy) {
@@ -400,7 +402,11 @@ export class DimensionCopy {
    * @param {string[]} secondary 次要语言 ID 列表
    * @returns {Array<{ id: string, label: string, guide: string }>} 原数组引用
    */
-  static applyMulti(dimensions: any, primary: any, secondary: any[] = []) {
+  static applyMulti(
+    dimensions: Array<{ id: string; label: string; guide: string }>,
+    primary: string,
+    secondary: string[] = []
+  ) {
     if (!secondary || secondary.length === 0) {
       return DimensionCopy.apply(dimensions, primary);
     }
@@ -460,8 +466,10 @@ export class DimensionCopy {
    * @param {string} dimId
    * @returns {string[]}
    */
-  static availableFamilies(dimId: any) {
-    const entry = (COPY_REGISTRY as Record<string, any>)[dimId];
+  static availableFamilies(dimId: string) {
+    const entry = (
+      COPY_REGISTRY as Record<string, Record<string, { label: string; guide: string }>>
+    )[dimId];
     if (!entry) {
       return [];
     }

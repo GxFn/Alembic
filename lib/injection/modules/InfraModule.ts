@@ -22,7 +22,9 @@ import { TaskRepositoryImpl } from '../../repository/task/TaskRepository.impl.js
 import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
 import { KnowledgeFileWriter } from '../../service/knowledge/KnowledgeFileWriter.js';
 
-export function register(c: any) {
+import type { ServiceContainer } from '../ServiceContainer.js';
+
+export function register(c: ServiceContainer) {
   // ═══ Infrastructure ═══
 
   c.register('database', () => {
@@ -36,12 +38,20 @@ export function register(c: any) {
 
   c.register('logger', () => Logger.getInstance());
 
-  c.singleton('auditStore', (ct: any) => new AuditStore(ct.get('database')));
-  c.singleton('auditLogger', (ct: any) => new AuditLogger(ct.get('auditStore')));
+  c.singleton(
+    'auditStore',
+    (ct: ServiceContainer) =>
+      new AuditStore(ct.get('database') as ConstructorParameters<typeof AuditStore>[0])
+  );
+  c.singleton(
+    'auditLogger',
+    (ct: ServiceContainer) =>
+      new AuditLogger(ct.get('auditStore') as ConstructorParameters<typeof AuditLogger>[0])
+  );
   c.singleton('gateway', () => new Gateway());
   c.singleton('eventBus', () => new EventBus({ maxListeners: 30 }));
 
-  c.singleton('bootstrapTaskManager', (ct: any) => {
+  c.singleton('bootstrapTaskManager', (ct: ServiceContainer) => {
     const eventBus = ct.get('eventBus');
     const getRS = () => {
       try {
@@ -50,22 +60,37 @@ export function register(c: any) {
         return null;
       }
     };
-    return new BootstrapTaskManager({ eventBus, getRealtimeService: getRS });
+    return new BootstrapTaskManager({
+      eventBus,
+      getRealtimeService: getRS,
+    } as ConstructorParameters<typeof BootstrapTaskManager>[0]);
   });
 
   // ═══ Repositories ═══
 
-  c.singleton('knowledgeRepository', (ct: any) => new KnowledgeRepositoryImpl(ct.get('database')));
+  c.singleton(
+    'knowledgeRepository',
+    (ct: ServiceContainer) =>
+      new KnowledgeRepositoryImpl(
+        ct.get('database') as ConstructorParameters<typeof KnowledgeRepositoryImpl>[0]
+      )
+  );
 
-  c.singleton('knowledgeFileWriter', (ct: any) => {
-    const projectRoot = ct.singletons._projectRoot || process.cwd();
+  c.singleton('knowledgeFileWriter', (ct: ServiceContainer) => {
+    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
     return new KnowledgeFileWriter(projectRoot);
   });
 
-  c.singleton('knowledgeSyncService', (ct: any) => {
-    const projectRoot = ct.singletons._projectRoot || process.cwd();
+  c.singleton('knowledgeSyncService', (ct: ServiceContainer) => {
+    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
     return new KnowledgeSyncService(projectRoot);
   });
 
-  c.singleton('taskRepository', (ct: any) => new TaskRepositoryImpl(ct.get('database')));
+  c.singleton(
+    'taskRepository',
+    (ct: ServiceContainer) =>
+      new TaskRepositoryImpl(
+        ct.get('database') as ConstructorParameters<typeof TaskRepositoryImpl>[0]
+      )
+  );
 }

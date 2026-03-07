@@ -1,11 +1,11 @@
 import type KnowledgeEntry from './KnowledgeEntry.js';
 
-interface PaginationOptions {
+export interface PaginationOptions {
   page?: number;
   pageSize?: number;
 }
 
-interface PaginatedResult {
+export interface PaginatedResult {
   data: KnowledgeEntry[];
   pagination: Record<string, unknown>;
 }

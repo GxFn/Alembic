@@ -26,7 +26,62 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import { applyPendingAutoApprove, markAutoApproveNeeded } from './autoApproveInjector.js';
 import { envelope } from './envelope.js';
 import { wrapHandler } from './errorHandler.js';
+import type { McpContext, McpServiceContainer } from './handlers/types.js';
 import { TIER_ORDER, TOOL_GATEWAY_MAP, TOOLS } from './tools.js';
+
+// ─── TypeScript Interfaces ──────────────────────────────────
+
+/** Decision entry (id + title pair) */
+interface DecisionEntry {
+  id: string;
+  title: string;
+}
+
+/** Decision cache structure */
+interface DecisionCache {
+  decisions: DecisionEntry[];
+  fetchedAt: number;
+  ttl: number;
+  _pending: Promise<DecisionEntry[]> | null;
+}
+
+/** MCP session tracking */
+interface McpSession {
+  id: string;
+  startedAt: number;
+  readyCalled: boolean;
+  toolCallCount: number;
+  toolsUsed: Set<string>;
+  lastActivityAt: number;
+}
+
+/** McpServer constructor options */
+interface McpServerOptions {
+  container?: McpServiceContainer | null;
+  bootstrap?: BootstrapLike | null;
+}
+
+/** Bootstrap instance minimal shape */
+interface BootstrapLike {
+  initialize(): Promise<Record<string, unknown>>;
+  shutdown(): Promise<void>;
+}
+
+/** Tool handler function (sync or async, compatible with wrapHandler) */
+type ToolHandlerFn = (ctx: McpContext, args: Record<string, unknown>) => Promise<unknown> | unknown;
+
+/** Gateway static mapping */
+interface GatewayStaticMapping {
+  action: string;
+  resource: string;
+}
+
+/** Gateway mapping entry — static or with dynamic resolver */
+interface GatewayMappingEntry {
+  action?: string;
+  resource?: string;
+  resolver?: (args: Record<string, unknown>) => GatewayStaticMapping | null;
+}
 
 // ─── Handler 模块 ─────────────────────────────────────────────
 
@@ -45,21 +100,23 @@ import { wikiFinalize, wikiPlan } from './handlers/wiki-external.js';
 // ─── McpServer 类 ─────────────────────────────────────────────
 
 export class McpServer {
-  container: any;
-  logger: any;
-  _autoApproveMarked: any;
-  _decisionCache: any;
-  _lastTaskOperation: any;
-  _session: any;
-  _startedAt: any;
-  bootstrap: any;
-  server: any;
-  constructor(options: any = {}) {
+  container: McpServiceContainer | null;
+  logger: ReturnType<typeof Logger.getInstance>;
+  _autoApproveMarked: boolean;
+  _decisionCache: DecisionCache;
+  _lastTaskOperation: string;
+  _session: McpSession;
+  _startedAt: number;
+  bootstrap: BootstrapLike | null;
+  server: Server | null;
+  constructor(options: McpServerOptions = {}) {
     this.logger = Logger.getInstance();
     this.container = options.container || null;
     this.bootstrap = options.bootstrap || null;
     this.server = null;
     this._startedAt = Date.now();
+    this._autoApproveMarked = false;
+    this._lastTaskOperation = '';
 
     // ── P0: Decision 注入缓存 ──
     this._decisionCache = {
@@ -110,7 +167,9 @@ export class McpServer {
       // 将 Bootstrap 组件注入 ServiceContainer
       const { getServiceContainer } = await import('../../injection/ServiceContainer.js');
       this.container = getServiceContainer();
-      await this.container.initialize({
+      await (
+        this.container as unknown as { initialize(opts: Record<string, unknown>): Promise<void> }
+      ).initialize({
         db: components.db,
         auditLogger: components.auditLogger,
         gateway: components.gateway,
@@ -145,7 +204,7 @@ export class McpServer {
    */
   _registerHandlers() {
     // ── ListTools: 按 tier 过滤 ──
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+    this.server!.setRequestHandler(ListToolsRequestSchema, async () => {
       const tierName = process.env.ASD_MCP_TIER || 'agent';
       const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;
       const visible = TOOLS.filter(
@@ -155,7 +214,7 @@ export class McpServer {
     });
 
     // ── CallTool: 路由到 handler ──
-    this.server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
+    this.server!.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
       const t0 = Date.now();
       try {
@@ -168,11 +227,12 @@ export class McpServer {
             },
           ],
         };
-      } catch (err: any) {
-        this.logger.error(`MCP tool error: ${name}`, { error: err.message });
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.logger.error(`MCP tool error: ${name}`, { error: errMsg });
         const env = envelope({
           success: false,
-          message: err.message,
+          message: errMsg,
           errorCode: 'TOOL_ERROR',
           meta: { tool: name, responseTimeMs: Date.now() - t0 },
         });
@@ -181,7 +241,7 @@ export class McpServer {
     });
   }
 
-  async _handleToolCall(name: any, args: any) {
+  async _handleToolCall(name: string, args: Record<string, unknown>) {
     // ── Gateway 权限 gating（写操作） ──
     await this._gatewayGate(name, args);
 
@@ -193,11 +253,11 @@ export class McpServer {
       throw new Error(`Unknown tool: ${name}`);
     }
 
-    const wrapped = wrapHandler(name, handler);
+    const wrapped = wrapHandler(name, handler as Parameters<typeof wrapHandler>[1]);
 
     // Track task operation for _injectDecisions
     if (name === 'autosnippet_task') {
-      this._lastTaskOperation = args.operation || '';
+      this._lastTaskOperation = (args.operation as string) || '';
     }
 
     const result = await wrapped(ctx, args);
@@ -234,7 +294,7 @@ export class McpServer {
    * @param {string} toolName
    * @param {object} result - handler 返回的 envelope 对象
    */
-  async _injectDecisions(toolName: any, result: any) {
+  async _injectDecisions(toolName: string, result: unknown) {
     // ── P3: Session 统计 ──
     this._session.toolCallCount++;
     this._session.toolsUsed.add(toolName);
@@ -256,15 +316,16 @@ export class McpServer {
     // 4) 对非 task 操作工具：注入 decisions 摘要
     const decisions = await this._getDecisionsSummary();
     if (decisions.length > 0 && typeof result === 'object' && result !== null) {
-      result._activeDecisions = decisions;
+      const resultObj = result as Record<string, unknown>;
+      resultObj._activeDecisions = decisions;
 
       // P3: 如果 ready 从未被调用，注入更强提醒
       if (!this._session.readyCalled) {
-        result._decisionReminder =
+        resultObj._decisionReminder =
           '⚠️ You have NOT called autosnippet_task({ operation: "prime" }) yet this session. ' +
           'These decisions may affect your work. Call autosnippet_task({ operation: "prime" }) for full context.';
       } else {
-        result._decisionReminder =
+        resultObj._decisionReminder =
           'Respect these team decisions. Call autosnippet_task({ operation: "list_decisions" }) for full details.';
       }
     }
@@ -322,14 +383,15 @@ export class McpServer {
         { status: 'pinned', taskType: 'decision' },
         { limit: 50 }
       );
-      cache.decisions = pinned.map((d: any) => ({
+      cache.decisions = pinned.map((d: { id: string; title: string; [key: string]: unknown }) => ({
         id: d.id,
         title: d.title,
       }));
       cache.fetchedAt = Date.now();
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 查询失败不阻塞，保留旧缓存
-      this.logger.debug('_fetchDecisionsSummary error', { error: err.message });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.logger.debug('_fetchDecisionsSummary error', { error: errMsg });
     }
     return cache.decisions;
   }
@@ -338,11 +400,14 @@ export class McpServer {
    * 从 ready 响应结果中刷新缓存（避免额外 DB 查询）
    * @private
    */
-  _refreshCacheFromReady(readyResult: any) {
+  _refreshCacheFromReady(readyResult: unknown) {
     try {
       // readyResult 是 envelope({ data: { decisions: [...] } })
-      const decisions = readyResult?.data?.decisions || [];
-      this._decisionCache.decisions = decisions.map((d: any) => ({
+      const data = (readyResult as Record<string, unknown> | null)?.data as
+        | Record<string, unknown>
+        | undefined;
+      const decisions = (data?.decisions || []) as DecisionEntry[];
+      this._decisionCache.decisions = decisions.map((d) => ({
         id: d.id,
         title: d.title,
       }));
@@ -356,41 +421,44 @@ export class McpServer {
    * 解析工具名到 handler 函数（V3 整合版）
    * @private
    */
-  _resolveHandler(name: any) {
-    const HANDLER_MAP = {
+  _resolveHandler(name: string): ToolHandlerFn | null {
+    const HANDLER_MAP: Record<string, ToolHandlerFn> = {
       // ── Agent 层 (18) ──
-      autosnippet_health: (ctx: any) => systemHandlers.health(ctx),
+      autosnippet_health: (ctx) => systemHandlers.health(ctx),
       autosnippet_capabilities: () => systemHandlers.capabilities(),
-      autosnippet_search: (ctx: any, args: any) => consolidated.consolidatedSearch(ctx, args),
-      autosnippet_knowledge: (ctx: any, args: any) => consolidated.consolidatedKnowledge(ctx, args),
-      autosnippet_structure: (ctx: any, args: any) => consolidated.consolidatedStructure(ctx, args),
-      autosnippet_call_context: (ctx: any, args: any) =>
-        consolidated.consolidatedCallContext(ctx, args),
-      autosnippet_graph: (ctx: any, args: any) => consolidated.consolidatedGraph(ctx, args),
-      autosnippet_guard: (ctx: any, args: any) => consolidated.consolidatedGuard(ctx, args),
-      autosnippet_submit_knowledge: (ctx: any, args: any) =>
-        consolidated.enhancedSubmitKnowledge(ctx, args),
-      autosnippet_submit_knowledge_batch: (ctx: any, args: any) =>
-        knowledgeHandlers.submitKnowledgeBatch(ctx, args),
-      autosnippet_save_document: (ctx: any, args: any) => knowledgeHandlers.saveDocument(ctx, args),
-      autosnippet_skill: (ctx: any, args: any) => consolidated.consolidatedSkill(ctx, args),
-      autosnippet_task: (ctx: any, args: any) => taskHandler(ctx, args),
+      autosnippet_search: (ctx, args) =>
+        consolidated.consolidatedSearch(
+          ctx,
+          args as Parameters<typeof consolidated.consolidatedSearch>[1]
+        ),
+      autosnippet_knowledge: (ctx, args) => consolidated.consolidatedKnowledge(ctx, args),
+      autosnippet_structure: (ctx, args) => consolidated.consolidatedStructure(ctx, args),
+      autosnippet_call_context: (ctx, args) => consolidated.consolidatedCallContext(ctx, args),
+      autosnippet_graph: (ctx, args) => consolidated.consolidatedGraph(ctx, args),
+      autosnippet_guard: (ctx, args) => consolidated.consolidatedGuard(ctx, args),
+      autosnippet_submit_knowledge: (ctx, args) => consolidated.enhancedSubmitKnowledge(ctx, args),
+      autosnippet_submit_knowledge_batch: (ctx, args) =>
+        knowledgeHandlers.submitKnowledgeBatch(
+          ctx,
+          args as Parameters<typeof knowledgeHandlers.submitKnowledgeBatch>[1]
+        ),
+      autosnippet_save_document: (ctx, args) => knowledgeHandlers.saveDocument(ctx, args),
+      autosnippet_skill: (ctx, args) => consolidated.consolidatedSkill(ctx, args),
+      autosnippet_task: (ctx, args) => taskHandler(ctx, args),
       // ── External Agent Bootstrap (v3.1) ──
-      autosnippet_bootstrap: (ctx: any, _args: any) => bootstrapExternal(ctx),
-      autosnippet_dimension_complete: (ctx: any, args: any) => dimensionComplete(ctx, args),
-      autosnippet_wiki_plan: (ctx: any, args: any) => wikiPlan(ctx, args),
-      autosnippet_wiki_finalize: (ctx: any, args: any) => wikiFinalize(ctx, args),
+      autosnippet_bootstrap: (ctx, _args) =>
+        bootstrapExternal(ctx as Parameters<typeof bootstrapExternal>[0]),
+      autosnippet_dimension_complete: (ctx, args) => dimensionComplete(ctx, args),
+      autosnippet_wiki_plan: (ctx, args) => wikiPlan(ctx, args),
+      autosnippet_wiki_finalize: (ctx, args) => wikiFinalize(ctx, args),
       // ── Admin 层 (+4) ──
-      autosnippet_enrich_candidates: (ctx: any, args: any) =>
-        candidateHandlers.enrichCandidates(ctx, args),
-      autosnippet_knowledge_lifecycle: (ctx: any, args: any) =>
+      autosnippet_enrich_candidates: (ctx, args) => candidateHandlers.enrichCandidates(ctx, args),
+      autosnippet_knowledge_lifecycle: (ctx, args) =>
         knowledgeHandlers.knowledgeLifecycle(ctx, args),
-      autosnippet_validate_candidate: (ctx: any, args: any) =>
-        candidateHandlers.validateCandidate(ctx, args),
-      autosnippet_check_duplicate: (ctx: any, args: any) =>
-        candidateHandlers.checkDuplicate(ctx, args),
+      autosnippet_validate_candidate: (ctx, args) => candidateHandlers.validateCandidate(ctx, args),
+      autosnippet_check_duplicate: (ctx, args) => candidateHandlers.checkDuplicate(ctx, args),
     };
-    return (HANDLER_MAP as Record<string, any>)[name] || null;
+    return HANDLER_MAP[name] ?? null;
   }
 
   /**
@@ -398,8 +466,11 @@ export class McpServer {
    * 只读工具直接跳过（不在 TOOL_GATEWAY_MAP 中）
    * 支持动态 resolver（operation-based 工具按参数解析 action/resource）
    */
-  async _gatewayGate(toolName: any, args: any) {
-    let mapping = (TOOL_GATEWAY_MAP as Record<string, any>)[toolName];
+  async _gatewayGate(toolName: string, args: Record<string, unknown>) {
+    let mapping = (TOOL_GATEWAY_MAP as Record<string, GatewayMappingEntry | undefined>)[toolName] as
+      | GatewayMappingEntry
+      | null
+      | undefined;
     if (!mapping) {
       return; // 只读工具，跳过
     }
@@ -413,7 +484,7 @@ export class McpServer {
     }
 
     try {
-      const gateway = this.container.get('gateway');
+      const gateway = this.container?.get('gateway');
       if (!gateway) {
         return; // Gateway 未初始化，降级放行
       }
@@ -433,16 +504,17 @@ export class McpServer {
       }
 
       this.logger.debug(`MCP Gateway gating passed: ${toolName}`, { requestId: result.requestId });
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 区分 Gateway 自身错误 vs 权限拒绝
+      const errMsg = err instanceof Error ? err.message : String(err);
       if (
-        err.message?.startsWith('[PERMISSION_DENIED]') ||
-        err.message?.startsWith('[CONSTITUTION_VIOLATION]')
+        errMsg.startsWith('[PERMISSION_DENIED]') ||
+        errMsg.startsWith('[CONSTITUTION_VIOLATION]')
       ) {
         throw err;
       }
       // Gateway 内部故障不应阻断业务（降级放行 + 记录）
-      this.logger.error(`MCP Gateway gating error (degraded): ${toolName}`, { error: err.message });
+      this.logger.error(`MCP Gateway gating error (degraded): ${toolName}`, { error: errMsg });
     }
   }
 
@@ -460,7 +532,7 @@ export class McpServer {
     }
 
     const transport = new StdioServerTransport();
-    await this.server.connect(transport);
+    await this.server!.connect(transport);
 
     const tierName = process.env.ASD_MCP_TIER || 'agent';
     const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;

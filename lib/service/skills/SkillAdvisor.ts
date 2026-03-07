@@ -19,6 +19,29 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
 
+export interface SkillSuggestion {
+  name: string;
+  description: string;
+  rationale: string;
+  source: string;
+  priority: 'high' | 'medium' | 'low';
+  signals: Record<string, unknown>;
+}
+
+interface SkillAdvisorOpts {
+  database?: {
+    prepare(sql: string): {
+      all(...args: unknown[]): Record<string, unknown>[];
+      get(...args: unknown[]): Record<string, unknown> | undefined;
+    };
+  } | null;
+}
+
+interface InsightResult {
+  summary: string | Record<string, unknown>;
+  suggestions: SkillSuggestion[];
+}
+
 export class SkillAdvisor {
   #projectRoot;
   #db;
@@ -28,7 +51,7 @@ export class SkillAdvisor {
    * @param {object} [opts]
    * @param {object} [opts.database] - better-sqlite3 实例（可选）
    */
-  constructor(projectRoot: any, { database }: any = {}) {
+  constructor(projectRoot: string, { database }: SkillAdvisorOpts = {}) {
     this.#projectRoot = projectRoot;
     this.#db = database || null;
   }
@@ -50,8 +73,8 @@ export class SkillAdvisor {
    */
   suggest() {
     const existingSkills = this.#listExistingProjectSkills();
-    const suggestions: any[] = [];
-    const analysisContext: any = {};
+    const suggestions: SkillSuggestion[] = [];
+    const analysisContext: Record<string, unknown> = {};
 
     // ── 维度 1: Guard 违规模式 ──
     try {
@@ -93,8 +116,8 @@ export class SkillAdvisor {
     const priorityOrder = { high: 0, medium: 1, low: 2 };
     suggestions.sort(
       (a, b) =>
-        ((priorityOrder as Record<string, any>)[a.priority] || 2) -
-        ((priorityOrder as Record<string, any>)[b.priority] || 2)
+        ((priorityOrder as Record<string, number>)[a.priority] || 2) -
+        ((priorityOrder as Record<string, number>)[b.priority] || 2)
     );
 
     return {
@@ -112,8 +135,8 @@ export class SkillAdvisor {
   //  维度 1: Guard 违规模式分析
   // ═══════════════════════════════════════════════════════
 
-  #analyzeGuardPatterns() {
-    const suggestions: any[] = [];
+  #analyzeGuardPatterns(): InsightResult {
+    const suggestions: SkillSuggestion[] = [];
     if (!this.#db) {
       return { summary: 'DB 不可用', suggestions };
     }
@@ -132,7 +155,7 @@ export class SkillAdvisor {
         ORDER BY cnt DESC
         LIMIT 5
       `)
-        .all();
+        .all() as Array<{ ruleName: string; cnt: number }>;
 
       if (rows.length > 0) {
         const topRule = rows[0];
@@ -159,8 +182,8 @@ export class SkillAdvisor {
   //  维度 2: Memory 偏好分析
   // ═══════════════════════════════════════════════════════
 
-  #analyzeMemoryPatterns() {
-    const suggestions: any[] = [];
+  #analyzeMemoryPatterns(): InsightResult {
+    const suggestions: SkillSuggestion[] = [];
     const memoryPath = path.join(this.#projectRoot, '.autosnippet', 'memory.jsonl');
 
     if (!fs.existsSync(memoryPath)) {
@@ -215,8 +238,8 @@ export class SkillAdvisor {
   //  维度 3: Recipe 分布与使用热度
   // ═══════════════════════════════════════════════════════
 
-  #analyzeRecipePatterns() {
-    const suggestions: any[] = [];
+  #analyzeRecipePatterns(): InsightResult {
+    const suggestions: SkillSuggestion[] = [];
     if (!this.#db) {
       return { summary: 'DB 不可用', suggestions };
     }
@@ -231,7 +254,7 @@ export class SkillAdvisor {
         GROUP BY category
         ORDER BY cnt DESC
       `)
-        .all();
+        .all() as Array<{ category: string; cnt: number }>;
 
       // 按 language 分布
       const languages = this.#db
@@ -263,7 +286,7 @@ export class SkillAdvisor {
       }
 
       // 高使用量 Recipe 统计（V3: stats JSON 中的 adoptions + applications）
-      let hotRecipes: any[] = [];
+      let hotRecipes: Record<string, unknown>[] = [];
       try {
         hotRecipes = this.#db
           .prepare(`
@@ -293,8 +316,8 @@ export class SkillAdvisor {
   //  维度 4: 候选积压分析
   // ═══════════════════════════════════════════════════════
 
-  #analyzeCandidatePatterns() {
-    const suggestions: any[] = [];
+  #analyzeCandidatePatterns(): InsightResult {
+    const suggestions: SkillSuggestion[] = [];
     if (!this.#db) {
       return { summary: 'DB 不可用', suggestions };
     }
@@ -309,7 +332,7 @@ export class SkillAdvisor {
           SUM(CASE WHEN lifecycle='deprecated' THEN 1 ELSE 0 END) as rejected
         FROM knowledge_entries
       `)
-        .get();
+        .get() as { total: number; pending: number; rejected: number } | undefined;
 
       // 大量被拒绝 → 提示候选质量 Skill
       if (stats && stats.rejected >= 10) {
@@ -356,7 +379,7 @@ export class SkillAdvisor {
 /**
  * 字符串转 kebab-case（简化版）
  */
-function _kebab(str: any) {
+function _kebab(str: string) {
   return (str || 'unknown')
     .replace(/[^a-zA-Z0-9\s-]/g, '')
     .replace(/\s+/g, '-')

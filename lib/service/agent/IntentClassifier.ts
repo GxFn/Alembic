@@ -27,6 +27,7 @@
  * @module IntentClassifier
  */
 
+import type { AiProvider } from '../../external/ai/AiProvider.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 
 /**
@@ -164,7 +165,7 @@ const CLASSIFY_SYSTEM_PROMPT = `你是一个意图分类器。用户通过飞书
 
 export class IntentClassifier {
   /** @type {import('../../external/ai/AiProvider.js').AiProvider|null} */
-  #aiProvider: any;
+  #aiProvider: AiProvider | null;
   #logger;
 
   /**
@@ -183,7 +184,7 @@ export class IntentClassifier {
    * @param {Object} [context] 额外上下文 (如对话历史、最近操作)
    * @returns {Promise<ClassificationResult>}
    */
-  async classify(text: any, context: any = {}) {
+  async classify(text: string, context: Record<string, unknown> = {}) {
     if (!text?.trim()) {
       return { intent: Intent.BOT_AGENT, confidence: 1, reasoning: '空消息', method: 'rule' };
     }
@@ -234,7 +235,7 @@ export class IntentClassifier {
   /**
    * 系统操作匹配 (优先级最高)
    */
-  #matchSystem(text: any) {
+  #matchSystem(text: string) {
     for (const rule of SYSTEM_RULES) {
       if (rule.pattern.test(text)) {
         return {
@@ -252,7 +253,7 @@ export class IntentClassifier {
   /**
    * 强信号关键词匹配
    */
-  #matchRules(text: any) {
+  #matchRules(text: string) {
     let ideScore = 0;
     let botScore = 0;
     const ideMatches: string[] = [];
@@ -309,13 +310,14 @@ export class IntentClassifier {
   /**
    * LLM 分类
    */
-  async #classifyWithLLM(text: any, context: any = {}) {
+  async #classifyWithLLM(text: string, context: Record<string, unknown> = {}) {
     try {
-      const userMsg = context.recentHistory
-        ? `最近对话:\n${context.recentHistory}\n\n当前消息: "${text}"`
+      const recentHistory = context.recentHistory as string | undefined;
+      const userMsg = recentHistory
+        ? `最近对话:\n${recentHistory}\n\n当前消息: "${text}"`
         : `用户消息: "${text}"`;
 
-      const result = await this.#aiProvider.chatWithTools(userMsg, {
+      const result = await this.#aiProvider!.chatWithTools(userMsg, {
         messages: [],
         toolSchemas: [CLASSIFY_SCHEMA],
         toolChoice: 'required',
@@ -327,14 +329,16 @@ export class IntentClassifier {
       const call = result.functionCalls?.[0]?.args;
       if (call?.intent) {
         return {
-          intent: call.intent,
-          confidence: call.confidence ?? 0.8,
-          reasoning: call.reasoning || 'LLM 分类',
+          intent: call.intent as string,
+          confidence: (call.confidence as number) ?? 0.8,
+          reasoning: (call.reasoning as string) || 'LLM 分类',
           method: 'llm',
         };
       }
-    } catch (err: any) {
-      this.#logger.warn(`[IntentClassifier] LLM error: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[IntentClassifier] LLM error: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
     return null;
   }

@@ -2,9 +2,9 @@
  * BaseError - 所有错误的基类
  */
 export class BaseError extends Error {
-  code: any;
-  statusCode: any;
-  constructor(message: any, code: any, statusCode = 500) {
+  code: string;
+  statusCode: number;
+  constructor(message: string, code: string, statusCode = 500) {
     super(message);
     this.code = code;
     this.statusCode = statusCode;
@@ -26,7 +26,7 @@ export class BaseError extends Error {
  * PermissionDenied - 权限拒绝错误
  */
 export class PermissionDenied extends BaseError {
-  constructor(message: any) {
+  constructor(message: string) {
     super(message, 'PERMISSION_DENIED', 403);
   }
 }
@@ -35,9 +35,9 @@ export class PermissionDenied extends BaseError {
  * ConstitutionViolation - 宪法违反错误
  */
 export class ConstitutionViolation extends BaseError {
-  violations: any;
-  constructor(violations: any) {
-    const message = `Constitution violation: ${violations.map((v: any) => v.rule).join(', ')}`;
+  violations: Array<{ rule: string }>;
+  constructor(violations: Array<{ rule: string }>) {
+    const message = `Constitution violation: ${violations.map((v) => v.rule).join(', ')}`;
     super(message, 'CONSTITUTION_VIOLATION', 400);
     this.violations = violations;
   }
@@ -47,8 +47,8 @@ export class ConstitutionViolation extends BaseError {
  * ValidationError - 验证错误
  */
 export class ValidationError extends BaseError {
-  details: any;
-  constructor(message: any, details: any = {}) {
+  details: Record<string, unknown>;
+  constructor(message: string, details: Record<string, unknown> = {}) {
     super(message, 'VALIDATION_ERROR', 400);
     this.details = details;
   }
@@ -58,9 +58,9 @@ export class ValidationError extends BaseError {
  * NotFoundError - 资源未找到错误
  */
 export class NotFoundError extends BaseError {
-  resource: any;
-  resourceId: any;
-  constructor(message: any, resource?: any, resourceId?: any) {
+  resource: string | undefined;
+  resourceId: string | undefined;
+  constructor(message: string, resource?: string, resourceId?: string) {
     // 如果没有提供 message，那么第一个参数就是 resource
     let finalMessage = message;
     let finalResource = resource;
@@ -82,8 +82,8 @@ export class NotFoundError extends BaseError {
  * ConflictError - 资源冲突错误
  */
 export class ConflictError extends BaseError {
-  details: any;
-  constructor(message: any, details: any) {
+  details: Record<string, unknown>;
+  constructor(message: string, details: Record<string, unknown>) {
     super(message, 'CONFLICT', 409);
     this.details = details;
   }
@@ -93,7 +93,7 @@ export class ConflictError extends BaseError {
  * InternalError - 内部错误
  */
 export class InternalError extends BaseError {
-  constructor(message: any) {
+  constructor(message: string) {
     super(message, 'INTERNAL_ERROR', 500);
   }
 }

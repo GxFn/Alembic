@@ -6,7 +6,7 @@
  *   - Gin, Echo, Fiber, Chi, Gorilla Mux, Beego
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class GoWebEnhancement extends EnhancementPack {
   get id() {
@@ -88,8 +88,8 @@ class GoWebEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: any[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
 
     // ── Struct-based Handler / Controller ──
     for (const cls of astSummary.classes || []) {
@@ -190,7 +190,7 @@ class GoWebEnhancement extends EnhancementPack {
     // ── Concurrency in web context ──
     // goroutine + channel patterns from lang-go.js
     for (const p of astSummary.patterns || []) {
-      if (p.type === 'goroutine' && p.count > 0) {
+      if (p.type === 'goroutine' && (p.count ?? 0) > 0) {
         patterns.push({
           type: 'go-web-concurrency',
           goroutineCount: p.count,

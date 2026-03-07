@@ -16,6 +16,17 @@ import * as guardHandlers from './guard.js';
 import * as searchHandlers from './search.js';
 import * as skillHandlers from './skill.js';
 import * as structureHandlers from './structure.js';
+import type {
+  ConsolidatedGraphArgs,
+  ConsolidatedGuardArgs,
+  ConsolidatedKnowledgeArgs,
+  ConsolidatedSearchArgs,
+  ConsolidatedSkillArgs,
+  ConsolidatedStructureArgs,
+  DuplicateCheckResult,
+  McpContext,
+  SubmitKnowledgeArgs,
+} from './types.js';
 
 // ─── autosnippet_search (整合 4 → 1) ────────────────────────
 
@@ -26,7 +37,7 @@ import * as structureHandlers from './structure.js';
  *   semantic    → semanticSearch()
  *   context     → contextSearch()
  */
-export async function consolidatedSearch(ctx: any, args: any) {
+export async function consolidatedSearch(ctx: McpContext, args: ConsolidatedSearchArgs) {
   const mode = args.mode || 'auto';
   switch (mode) {
     case 'keyword':
@@ -49,7 +60,7 @@ export async function consolidatedSearch(ctx: any, args: any) {
  *   insights     → recipeInsights()
  *   confirm_usage → confirmUsage()
  */
-export async function consolidatedKnowledge(ctx: any, args: any) {
+export async function consolidatedKnowledge(ctx: McpContext, args: ConsolidatedKnowledgeArgs) {
   const op = args.operation || 'list';
   switch (op) {
     case 'list': {
@@ -85,7 +96,7 @@ export async function consolidatedKnowledge(ctx: any, args: any) {
  *   files          → getTargetFiles()
  *   metadata       → getTargetMetadata()
  */
-export async function consolidatedStructure(ctx: any, args: any) {
+export async function consolidatedStructure(ctx: McpContext, args: ConsolidatedStructureArgs) {
   const op = args.operation || 'targets';
   switch (op) {
     case 'targets':
@@ -104,7 +115,7 @@ export async function consolidatedStructure(ctx: any, args: any) {
 /**
  * 调用链上下文查询：直接转发到 structure.callContext
  */
-export async function consolidatedCallContext(ctx: any, args: any) {
+export async function consolidatedCallContext(ctx: McpContext, args: ConsolidatedStructureArgs) {
   return structureHandlers.callContext(ctx, args);
 }
 
@@ -117,7 +128,7 @@ export async function consolidatedCallContext(ctx: any, args: any) {
  *   path    → graphPath()
  *   stats   → graphStats()
  */
-export async function consolidatedGraph(ctx: any, args: any) {
+export async function consolidatedGraph(ctx: McpContext, args: ConsolidatedGraphArgs) {
   const op = args.operation;
   if (!op) {
     throw new Error('Missing required parameter: operation. Expected: query, impact, path, stats');
@@ -144,7 +155,7 @@ export async function consolidatedGraph(ctx: any, args: any) {
  *   有 files     → guardReview()    (指定文件 + inline recipe) — files 为 string[] 或 {path}[]
  *   有 code      → guardCheck()     (单文件内联检查)
  */
-export async function consolidatedGuard(ctx: any, args: any) {
+export async function consolidatedGuard(ctx: McpContext, args: ConsolidatedGuardArgs) {
   // 有 code → 单文件检查（旧模式）
   if (args.code) {
     return guardHandlers.guardCheck(ctx, args);
@@ -165,7 +176,7 @@ export async function consolidatedGuard(ctx: any, args: any) {
  *   delete  → deleteSkill()
  *   suggest → suggestSkills()
  */
-export async function consolidatedSkill(ctx: any, args: any) {
+export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkillArgs) {
   const op = args.operation;
   if (!op) {
     throw new Error(
@@ -209,7 +220,7 @@ export async function consolidatedSkill(ctx: any, args: any) {
  *   - 不降级：缺字段不自动补全，要求 Agent 一次性生成完整数据
  *   - 不重复提交：拒绝时不创建任何记录，Agent 需补齐后重新调用
  */
-export async function enhancedSubmitKnowledge(ctx: any, args: any) {
+export async function enhancedSubmitKnowledge(ctx: McpContext, args: SubmitKnowledgeArgs) {
   const { submitKnowledge } = await import('./knowledge.js');
   const { UnifiedValidator } = await import('../../../shared/UnifiedValidator.js');
   const { envelope } = await import('../envelope.js');
@@ -247,7 +258,7 @@ export async function enhancedSubmitKnowledge(ctx: any, args: any) {
   }
 
   // ── 附加去重检测结果（非阻塞） ──
-  let duplicateCheck: any = null;
+  let duplicateCheck: DuplicateCheckResult | null = null;
   if (!skipDuplicateCheck) {
     try {
       const dedupCandidate = {
@@ -262,8 +273,8 @@ export async function enhancedSubmitKnowledge(ctx: any, args: any) {
       });
       if (dedupResult?.data) {
         duplicateCheck = {
-          hasSimilar: dedupResult.data.hasDuplicate ?? dedupResult.data.matches?.length > 0,
-          closest: dedupResult.data.matches?.[0] || null,
+          hasSimilar: dedupResult.data.similar?.length > 0,
+          closest: dedupResult.data.similar?.[0] || null,
         };
       }
     } catch {
@@ -273,12 +284,12 @@ export async function enhancedSubmitKnowledge(ctx: any, args: any) {
 
   // 将去重结果附到响应中
   if (result?.data) {
-    result.data.duplicateCheck = duplicateCheck;
+    (result.data as Record<string, unknown>).duplicateCheck = duplicateCheck;
   }
 
   // v2: 记录成功提交到 BootstrapSession tracker
-  if (result?.data?.id) {
-    _trackSubmission(ctx, args, result.data.id);
+  if ((result?.data as Record<string, unknown>)?.id) {
+    _trackSubmission(ctx, args, (result.data as Record<string, unknown>).id as string);
   }
 
   return result;
@@ -290,7 +301,7 @@ export async function enhancedSubmitKnowledge(ctx: any, args: any) {
  * 记录成功提交到活跃 BootstrapSession 的 submissionTracker
  * 静默失败 — tracker 不可用时不影响提交本身
  */
-function _trackSubmission(ctx: any, args: any, recipeId: any) {
+function _trackSubmission(ctx: McpContext, args: SubmitKnowledgeArgs, recipeId: string) {
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager');
     const session = sessionManager?.getSession?.();
@@ -312,7 +323,7 @@ function _trackSubmission(ctx: any, args: any, recipeId: any) {
 /**
  * 记录拒绝到活跃 BootstrapSession 的 submissionTracker
  */
-function _trackRejection(ctx: any, args: any) {
+function _trackRejection(ctx: McpContext, args: SubmitKnowledgeArgs) {
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager');
     const session = sessionManager?.getSession?.();

@@ -26,6 +26,39 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// ─── Types ──────────────────────────────────────────
+
+/** Context input for buildContext method */
+interface ContextInput {
+  projectBriefing?: string | null;
+  memoryMode?: string;
+  [key: string]: unknown;
+}
+
+/** Step result from ReAct loop */
+interface StepResult {
+  toolCalls?: Array<{ tool: string; args: unknown; result: unknown }>;
+  [key: string]: unknown;
+}
+
+/** Memory coordinator interface (subset used by Conversation) */
+interface MemoryCoordinator {
+  buildPromptInjection(mode: string): string | null;
+  cacheToolResult?(tool: string, args: unknown, result: unknown): void;
+}
+
+/** Conversation capability constructor options */
+interface ConversationOpts {
+  memoryCoordinator?: MemoryCoordinator | null;
+  soulPath?: string;
+  projectBriefing?: string | null;
+}
+
+/** SystemInteraction capability constructor options */
+interface SystemInteractionOpts {
+  projectRoot?: string;
+}
+
 // ─── Base Capability ─────────────────────────────────────
 
 /**
@@ -50,19 +83,19 @@ export class Capability {
   /**
    * 构建 prompt 时调用，可注入动态上下文
    */
-  buildContext(_context: any): string | null {
+  buildContext(_context: unknown): string | null {
     return null;
   }
 
   /**
    * 每轮 ReAct 步骤前的钩子
    */
-  onBeforeStep(_stepState: any) {}
+  onBeforeStep(_stepState: unknown) {}
 
   /**
    * 每轮 ReAct 步骤后的钩子
    */
-  onAfterStep(_stepResult: any) {}
+  onAfterStep(_stepResult: unknown) {}
 }
 
 // ─── Conversation — 对话能力 ─────────────────────
@@ -84,7 +117,7 @@ export class Conversation extends Capability {
    * @param {string} [opts.soulPath] - SOUL.md 路径
    * @param {string} [opts.projectBriefing] 项目概况文本
    */
-  constructor(opts: any = {}) {
+  constructor(opts: ConversationOpts = {}) {
     super();
     this.#memoryCoordinator = opts.memoryCoordinator || null;
     this.#projectBriefing = opts.projectBriefing || null;
@@ -132,8 +165,8 @@ export class Conversation extends Capability {
     ];
   }
 
-  buildContext(context: any) {
-    const parts: any | string[] = [];
+  buildContext(context: ContextInput) {
+    const parts: string[] = [];
 
     // SOUL.md 人格注入
     if (this.#soulContent) {
@@ -163,9 +196,9 @@ export class Conversation extends Capability {
     return parts.length > 0 ? parts.join('\n\n') : null;
   }
 
-  onAfterStep(stepResult: any) {
+  onAfterStep(stepResult: StepResult) {
     // 缓存工具结果到记忆
-    if (this.#memoryCoordinator && stepResult.toolCalls?.length > 0) {
+    if (this.#memoryCoordinator && stepResult.toolCalls?.length) {
       try {
         for (const tc of stepResult.toolCalls) {
           this.#memoryCoordinator.cacheToolResult?.(tc.tool, tc.args, tc.result);
@@ -299,7 +332,7 @@ export class SystemInteraction extends Capability {
    * @param {Object} [opts]
    * @param {string} [opts.projectRoot] 项目根目录 (限制操作范围)
    */
-  constructor(opts: any = {}) {
+  constructor(opts: SystemInteractionOpts = {}) {
     super();
     this.#projectRoot = opts.projectRoot || process.cwd();
   }
@@ -417,12 +450,12 @@ export const CapabilityRegistry = {
    * @param {Object} [opts]
    * @returns {Capability}
    */
-  create(name: any, opts: any = {}) {
+  create(name: string, opts: Record<string, unknown> = {}) {
     const Cls = this._registry.get(name);
     if (!Cls) {
       throw new Error(`Unknown capability: ${name}`);
     }
-    return new (Cls as any)(opts);
+    return new (Cls as new (opts: Record<string, unknown>) => Capability)(opts);
   },
 
   /**
@@ -430,7 +463,7 @@ export const CapabilityRegistry = {
    * @param {string} name
    * @param {typeof Capability} cls
    */
-  register(name: any, cls: any) {
+  register(name: string, cls: typeof Capability) {
     this._registry.set(name, cls);
   },
 

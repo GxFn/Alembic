@@ -3,13 +3,24 @@
  * 返回固定/随机数据，不发网络请求
  */
 
-import { AiProvider } from '../AiProvider.js';
+import { AiProvider, type AiProviderConfig, type ChatContext } from '../AiProvider.js';
+
+interface MockResponses {
+  chat?: string;
+  summarize?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface CallLogEntry {
+  method: string;
+  [key: string]: unknown;
+}
 
 export class MockProvider extends AiProvider {
-  callLog: any;
+  callLog: CallLogEntry[];
 
-  responses: any;
-  constructor(config: any = {}) {
+  responses: MockResponses;
+  constructor(config: AiProviderConfig & { responses?: MockResponses } = {}) {
     super(config);
     this.name = 'mock';
     this.model = 'mock-model';
@@ -17,7 +28,7 @@ export class MockProvider extends AiProvider {
     this.callLog = [];
   }
 
-  async chat(prompt: any, context: any = {}) {
+  async chat(prompt: string, context: ChatContext = {}) {
     this.callLog.push({ method: 'chat', prompt, context });
     if (this.responses.chat) {
       return this.responses.chat;
@@ -25,7 +36,7 @@ export class MockProvider extends AiProvider {
     return `Mock response for: ${prompt.slice(0, 80)}`;
   }
 
-  async summarize(code: any) {
+  async summarize(code: string) {
     this.callLog.push({ method: 'summarize', code: code?.slice(0, 80) });
     if (this.responses.summarize) {
       return this.responses.summarize;
@@ -39,7 +50,7 @@ export class MockProvider extends AiProvider {
     };
   }
 
-  async embed(text: any) {
+  async embed(text: string | string[]) {
     this.callLog.push({ method: 'embed', text: Array.isArray(text) ? text.length : 1 });
     const dim = 768;
     const makeVector = () => Array.from({ length: dim }, () => Math.random() * 2 - 1);

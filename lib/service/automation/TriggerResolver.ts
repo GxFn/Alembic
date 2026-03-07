@@ -7,18 +7,18 @@ export class TriggerResolver {
   /**
    * 规范化触发器
    * @param {object|string} trigger
-   * @returns {{ type: string, name?: string, params?: object, raw: any }}
+   * @returns {{ type: string, name?: string, params?: object, raw: unknown }}
    */
-  resolve(trigger: any) {
+  resolve(trigger: string | Record<string, unknown>) {
     if (typeof trigger === 'string') {
       return this.#resolveString(trigger);
     }
 
     if (trigger && typeof trigger === 'object') {
       return {
-        type: trigger.type || 'unknown',
-        name: trigger.name || '',
-        params: trigger.params || {},
+        type: String(trigger.type || 'unknown'),
+        name: String(trigger.name || ''),
+        params: (trigger.params as Record<string, unknown>) || {},
         raw: trigger,
       };
     }
@@ -26,7 +26,7 @@ export class TriggerResolver {
     return { type: 'unknown', raw: trigger };
   }
 
-  #resolveString(input: any) {
+  #resolveString(input: string) {
     const trimmed = input.trim();
 
     // 检测 as:xxx 格式
@@ -54,8 +54,8 @@ export class TriggerResolver {
     return { type: 'custom', name: trimmed, params: {}, raw: input };
   }
 
-  #mapDirectiveType(name: any) {
-    const map = {
+  #mapDirectiveType(name: string) {
+    const map: Record<string, string> = {
       search: 'search',
       s: 'search',
       create: 'create',
@@ -66,6 +66,6 @@ export class TriggerResolver {
       import: 'injection',
       alink: 'alink',
     };
-    return (map as Record<string, any>)[name] || 'directive';
+    return map[name] || 'directive';
   }
 }

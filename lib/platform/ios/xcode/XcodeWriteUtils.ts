@@ -12,14 +12,14 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { saveEventFilter } from './SaveEventFilter.js';
 
-export function sleep(ms: any) {
+export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
  * 在 import 行末尾附加来源标记注释
  */
-export function withAutoSnippetNote(importLine: any) {
+export function withAutoSnippetNote(importLine: string) {
   if (!importLine) {
     return importLine;
   }
@@ -30,13 +30,21 @@ export function withAutoSnippetNote(importLine: any) {
   return `${importLine} ${note}`;
 }
 
+/** 依赖检查结果 */
+interface EnsureResult {
+  exists: boolean;
+  canAdd: boolean;
+  reason?: string;
+  crossPackage?: boolean;
+}
+
 /**
  * 将 SpmHelper.ensureDependency 返回值映射为三种动作：
  *   continue — 依赖已存在
  *   block    — 循环/反向依赖，禁止插入
  *   review   — 依赖缺失但可添加，需用户确认
  */
-export function evaluateDepResult(ensureResult: any, from: any, to: any) {
+export function evaluateDepResult(ensureResult: EnsureResult, from: string, to: string) {
   if (ensureResult.exists) {
     return { action: 'continue' };
   }
@@ -46,13 +54,30 @@ export function evaluateDepResult(ensureResult: any, from: any, to: any) {
   return { action: 'review', reason: ensureResult.reason || 'missingDependency', from, to };
 }
 
+/** 依赖审查上下文 */
+interface DepReviewContext {
+  spmService: {
+    getFixMode(): string;
+    addDependency(from: string, to: string): { ok: boolean; error?: string };
+  };
+  currentTarget: string;
+  mod: string;
+  ensureResult: EnsureResult;
+  NU: {
+    promptWithButtons(msg: string, buttons: string[], title: string): string;
+    notify(msg: string, title: string): void;
+  };
+  depWarnings: Map<string, string>;
+  label?: string;
+}
+
 /**
  * 公共依赖审查弹窗逻辑（insertHeaders 和 _preflightDeps 共享）
  *
  * @param {object} ctx - { spmService, currentTarget, mod, ensureResult, NU, depWarnings, label }
  * @returns {{ blocked: boolean }}
  */
-export function handleDepReview(ctx: any) {
+export function handleDepReview(ctx: DepReviewContext) {
   const { spmService, currentTarget, mod, ensureResult, NU, depWarnings, label = '' } = ctx;
 
   const fixMode = spmService.getFixMode();
@@ -109,7 +134,12 @@ export function handleDepReview(ctx: any) {
  * @param {object} CM          ClipboardManager 模块
  * @returns {boolean}
  */
-export function writeImportLineXcode(importLine: any, insertLine: any, XA: any, CM: any) {
+export function writeImportLineXcode(
+  importLine: string,
+  insertLine: number,
+  XA: { isXcodeRunning(): boolean; insertAtLineStartInXcode(line: number): boolean },
+  CM: { read(): string; write(content: string): boolean }
+) {
   if (!XA.isXcodeRunning()) {
     return false;
   }
@@ -138,7 +168,7 @@ export function writeImportLineXcode(importLine: any, insertLine: any, XA: any, 
  * 纯文件写入插入单条 import。
  * Xcode 会因文件变更而自动 reload。
  */
-export function writeImportLineFile(filePath: any, importLine: any, isSwift: any) {
+export function writeImportLineFile(filePath: string, importLine: string, isSwift: boolean) {
   try {
     const content = readFileSync(filePath, 'utf8');
     const lines = content.split('\n');
@@ -173,7 +203,7 @@ export function writeImportLineFile(filePath: any, importLine: any, isSwift: any
 /**
  * 查找文件中最后一个 import 行的行号（1-based，0 表示无 import）
  */
-export function getLastImportLine(filePath: any) {
+export function getLastImportLine(filePath: string) {
   try {
     if (!existsSync(filePath)) {
       return 0;
@@ -204,13 +234,13 @@ export function getLastImportLine(filePath: any) {
  * 如果 headers 插入在 trigger 行之前（import 区），trigger 行号需要向下偏移。
  */
 export function computePasteLineNumber(
-  triggerLineNumber: any,
-  headerInsertCount: any,
-  filePath: any,
-  options: any = {}
+  triggerLineNumber: number,
+  headerInsertCount: number,
+  filePath: string,
+  options: { expectedHeaderCount?: number; forceOffset?: boolean } = {}
 ) {
   const expectedCount = Number.isFinite(options.expectedHeaderCount)
-    ? options.expectedHeaderCount
+    ? options.expectedHeaderCount!
     : headerInsertCount;
   if (expectedCount > 0) {
     if (options.forceOffset) {

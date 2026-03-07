@@ -7,19 +7,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { envelope } from '../envelope.js';
 import { TIER_ORDER, TOOL_GATEWAY_MAP, TOOLS } from '../tools.js';
+import type { KnowledgeBaseStats, McpContext } from './types.js';
 
-export async function health(ctx: any) {
+export async function health(ctx: McpContext) {
   const checks = { database: false, gateway: false, vectorStore: false };
   const issues: string[] = [];
-  let knowledgeBase: any = null;
+  let knowledgeBase: KnowledgeBaseStats | null = null;
 
   // 1) AI 配置
   let aiInfo = { provider: 'unknown', hasKey: false };
   try {
     const { getAiConfigInfo } = await import('../../../external/ai/AiFactory.js');
     aiInfo = getAiConfigInfo();
-  } catch (e: any) {
-    issues.push(`ai: ${e.message}`);
+  } catch (e: unknown) {
+    issues.push(`ai: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // 2) Database 连通性 + 知识库统计
@@ -62,16 +63,16 @@ export async function health(ctx: any) {
         /* 统计查询失败不影响 health */
       }
     }
-  } catch (e: any) {
-    issues.push(`database: ${e.message}`);
+  } catch (e: unknown) {
+    issues.push(`database: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // 3) Gateway 可用性
   try {
     const gw = ctx.container.get('gateway');
     checks.gateway = !!gw;
-  } catch (e: any) {
-    issues.push(`gateway: ${e.message}`);
+  } catch (e: unknown) {
+    issues.push(`gateway: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // 4) VectorStore 可用性
@@ -81,14 +82,19 @@ export async function health(ctx: any) {
       const vsStats = typeof vs.getStats === 'function' ? await vs.getStats() : null;
       checks.vectorStore = true;
       if (vsStats) {
-        knowledgeBase = knowledgeBase || {};
+        knowledgeBase =
+          knowledgeBase ||
+          ({
+            recipes: { total: 0, active: 0, rules: 0, patterns: 0, facts: 0 },
+            candidates: { total: 0, pending: 0 },
+          } as KnowledgeBaseStats);
         knowledgeBase.vectorIndex = {
           documentCount: vsStats.documentCount ?? vsStats.totalDocuments ?? 0,
         };
       }
     }
-  } catch (e: any) {
-    issues.push(`vectorStore: ${e.message}`);
+  } catch (e: unknown) {
+    issues.push(`vectorStore: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // 5) 版本号（从 AutoSnippet 包自身的 package.json 读取，不依赖 cwd）
@@ -107,7 +113,7 @@ export async function health(ctx: any) {
   const status = allCritical ? 'ok' : 'degraded';
 
   // 如果 DB 不可用但冷启动仍可执行，附加提示避免 Agent 浪费时间修复 DB
-  const actionHints: any[] = [];
+  const actionHints: string[] = [];
   if (!checks.database) {
     actionHints.push(
       'DB 不可用不影响冷启动：autosnippet_bootstrap 不依赖数据库（纯文件系统分析），可直接调用。DB 会在首次 submit_knowledge 时自动重试初始化。'
@@ -127,11 +133,11 @@ export async function health(ctx: any) {
     data: {
       status,
       version: _pkgVersion,
-      uptime: Math.floor((Date.now() - ctx.startedAt) / 1000),
+      uptime: Math.floor((Date.now() - (ctx.startedAt ?? Date.now())) / 1000),
       projectRoot: process.env.ASD_PROJECT_DIR || process.cwd(),
       ai: aiInfo,
       checks,
-      services: ctx.container.getServiceNames(),
+      services: ctx.container.getServiceNames?.() ?? [],
       knowledgeBase,
       // P3: Session 信息
       ...(ctx.session
@@ -152,7 +158,7 @@ export async function health(ctx: any) {
   });
 }
 
-let _pkgVersion: any = null;
+let _pkgVersion: string | null = null;
 
 export function capabilities() {
   // V3 工具分类映射
@@ -188,15 +194,17 @@ export function capabilities() {
   const tools = visibleTools.map((t) => {
     const props = t.inputSchema.properties || {};
     const requiredSet = new Set(t.inputSchema.required || []);
-    const params = Object.entries(props).map(([key, schema]: [string, any]) => ({
-      name: key,
-      type: schema.type || 'any',
-      required: requiredSet.has(key),
-      ...(schema.default !== undefined ? { default: schema.default } : {}),
-      ...(schema.enum ? { enum: schema.enum } : {}),
-      ...(schema.description ? { description: schema.description } : {}),
-    }));
-    const gatewayInfo = (TOOL_GATEWAY_MAP as Record<string, any>)[t.name];
+    const params = Object.entries(props).map(
+      ([key, schema]: [string, Record<string, unknown>]) => ({
+        name: key,
+        type: schema.type || 'any',
+        required: requiredSet.has(key),
+        ...(schema.default !== undefined ? { default: schema.default } : {}),
+        ...(schema.enum ? { enum: schema.enum } : {}),
+        ...(schema.description ? { description: schema.description } : {}),
+      })
+    );
+    const gatewayInfo = (TOOL_GATEWAY_MAP as Record<string, unknown>)[t.name];
     return {
       name: t.name,
       tier: t.tier || 'agent',
@@ -208,7 +216,7 @@ export function capabilities() {
   });
 
   // 按分类分组
-  const byCategory: Record<string, any> = {};
+  const byCategory: Record<string, string[]> = {};
   for (const t of tools) {
     (byCategory[t.category] || (byCategory[t.category] = [])).push(t.name);
   }

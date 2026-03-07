@@ -15,7 +15,104 @@
  * @module insight-gate
  */
 
-import { EvidenceCollector } from './EvidenceCollector.js';
+import {
+  EvidenceCollector,
+  type EvidenceCollectorResult,
+  type ToolCall,
+} from './EvidenceCollector.js';
+
+// ──────────────────────────────────────────────────────────────────
+// 类型定义
+// ──────────────────────────────────────────────────────────────────
+
+/** Analyst 执行结果 */
+interface AnalystResult {
+  reply?: string;
+  toolCalls?: ToolCall[];
+  tokenUsage?: unknown;
+  reasoningQuality?: unknown;
+}
+
+/** ProjectGraph 最小接口 */
+interface ProjectGraphLike {
+  getClassInfo(className: string): { filePath?: string } | null | undefined;
+  getProtocolInfo(protocolName: string): { filePath?: string } | null | undefined;
+}
+
+/** ActiveContext 最小接口 */
+interface ActiveContextLike {
+  distill(): {
+    keyFindings: RawFinding[];
+    toolCallSummary: unknown[];
+  };
+}
+
+/** 工具调用参数 (门控模块内部使用) */
+interface ToolCallArgsLike {
+  filePath?: string;
+  pattern?: string;
+  query?: string;
+  className?: string;
+  protocolName?: string;
+  [key: string]: unknown;
+}
+
+/** 原始发现 (来自 ActiveContext.distill()) */
+interface RawFinding {
+  finding: string;
+  evidence: string | string[] | unknown;
+  importance: number;
+}
+
+/** 标准化发现 */
+interface NormalizedFinding {
+  finding: string;
+  evidence: string;
+  importance: number;
+}
+
+/** 多维度质量评分 */
+interface QualityScores {
+  depthScore: number;
+  breadthScore: number;
+  evidenceScore: number;
+  coherenceScore: number;
+}
+
+/** 质量报告 */
+interface QualityReport {
+  scores: QualityScores;
+  totalScore: number;
+  suggestions: string[];
+}
+
+/** 门控选项 */
+interface GateOptions {
+  outputType?: string;
+}
+
+/** 门控结果 */
+interface GateResult {
+  pass: boolean;
+  reason?: string;
+  action?: 'retry' | 'degrade';
+}
+
+/** 可进行门控评估的分析报告 */
+interface GateableReport {
+  analysisText: string;
+  referencedFiles: string[];
+  qualityReport?: QualityReport;
+}
+
+/** insightGateEvaluator 策略上下文 */
+interface InsightGateStrategyContext {
+  projectGraph?: ProjectGraphLike | null;
+  activeContext?: ActiveContextLike | null;
+  dimId?: string;
+  outputType?: string;
+  [key: string]: unknown;
+}
 
 // ──────────────────────────────────────────────────────────────────
 // AnalysisReport 构建
@@ -25,7 +122,7 @@ import { EvidenceCollector } from './EvidenceCollector.js';
  * 清理 Analyst 分析文本中可能泄漏的系统 nudge / graceful exit 指令。
  * 这些内容如果传给 Producer，会干扰其正常工作流。
  */
-export function sanitizeAnalysisText(text: any) {
+export function sanitizeAnalysisText(text: string) {
   if (!text) {
     return '';
   }
@@ -80,17 +177,17 @@ export function sanitizeAnalysisText(text: any) {
  * @returns {AnalysisReport}
  */
 export function buildAnalysisReport(
-  analystResult: any,
-  dimensionId: any,
-  projectGraph: any = null
+  analystResult: AnalystResult,
+  dimensionId: string,
+  projectGraph: ProjectGraphLike | null = null
 ) {
-  const referencedFiles = new Set();
-  const searchQueries: any[] = [];
-  const classesExplored: any[] = [];
+  const referencedFiles = new Set<string>();
+  const searchQueries: string[] = [];
+  const classesExplored: string[] = [];
 
   for (const call of analystResult.toolCalls || []) {
     const tool = call.tool || call.name;
-    const args = call.params || call.args || {};
+    const args: ToolCallArgsLike = call.params || call.args || {};
     const result = call.result;
 
     switch (tool) {
@@ -101,7 +198,7 @@ export function buildAnalysisReport(
         break;
       case 'search_project_code':
         if (args.pattern || args.query) {
-          searchQueries.push(args.pattern || args.query);
+          searchQueries.push((args.pattern || args.query)!);
         }
         if (typeof result === 'string') {
           const fileMatches = result.match(
@@ -193,10 +290,10 @@ export function buildAnalysisReport(
  * @returns {AnalysisArtifact}
  */
 export function buildAnalysisArtifact(
-  analystResult: any,
-  dimensionId: any,
-  projectGraph: any = null,
-  activeContext: any = null
+  analystResult: AnalystResult,
+  dimensionId: string,
+  projectGraph: ProjectGraphLike | null = null,
+  activeContext: ActiveContextLike | null = null
 ) {
   const toolCalls = analystResult.toolCalls || [];
 
@@ -209,7 +306,7 @@ export function buildAnalysisArtifact(
   const evidence = collector.build();
 
   const distilled = activeContext?.distill() || { keyFindings: [], toolCallSummary: [] };
-  const findings = distilled.keyFindings.map((f: any) => ({
+  const findings = distilled.keyFindings.map((f: RawFinding) => ({
     finding: f.finding,
     evidence:
       typeof f.evidence === 'string'
@@ -272,8 +369,12 @@ export function buildAnalysisArtifact(
  *   evidenceScore (30%) — 证据充分性
  *   coherenceScore (20%) — 分析连贯性
  */
-function buildQualityScores(analysisText: any, findings: any, evidence: any) {
-  const scores: any = {};
+function buildQualityScores(
+  analysisText: string,
+  findings: NormalizedFinding[],
+  evidence: EvidenceCollectorResult
+) {
+  const scores = {} as QualityScores;
 
   const uniqueFilesRead = evidence.evidenceMap?.size || 0;
   const snippetCount = [...(evidence.evidenceMap?.values() || [])].reduce(
@@ -282,17 +383,15 @@ function buildQualityScores(analysisText: any, findings: any, evidence: any) {
   );
   scores.depthScore = Math.min(100, uniqueFilesRead * 15 + snippetCount * 5);
 
-  const toolTypes = new Set((evidence.explorationLog || []).map((e: any) => e.tool));
+  const toolTypes = new Set((evidence.explorationLog || []).map((e) => e.tool));
   const logLen = evidence.explorationLog?.length || 0;
   const effectiveRatio =
-    logLen > 0
-      ? (evidence.explorationLog || []).filter((e: any) => e.effective).length / logLen
-      : 0;
+    logLen > 0 ? (evidence.explorationLog || []).filter((e) => e.effective).length / logLen : 0;
   scores.breadthScore = Math.min(100, toolTypes.size * 20 + effectiveRatio * 40);
 
   const findingCount = findings?.length || 0;
   const evidencedFindings = (findings || []).filter(
-    (f: any) => f.evidence && f.evidence.length > 0
+    (f) => f.evidence && f.evidence.length > 0
   ).length;
   scores.evidenceScore =
     findingCount > 0
@@ -347,14 +446,14 @@ function buildQualityScores(analysisText: any, findings: any, evidence: any) {
  * @param {string} [options.outputType] - 'analysis' | 'dual' | 'candidate'
  * @returns {{ pass: boolean, reason?: string, action?: 'retry' | 'degrade' }}
  */
-export function analysisQualityGate(report: any, options: any = {}) {
+export function analysisQualityGate(report: GateableReport, options: GateOptions = {}): GateResult {
   if (report.qualityReport?.scores) {
     return applyGateThresholds(report.qualityReport, options);
   }
   return analysisQualityGateV1(report, options);
 }
 
-function applyGateThresholds(qualityReport: any, options: any = {}) {
+function applyGateThresholds(qualityReport: QualityReport, options: GateOptions = {}): GateResult {
   const { totalScore } = qualityReport;
   const needsCandidates = options.outputType === 'dual' || options.outputType === 'candidate';
   const threshold = needsCandidates ? 60 : 45;
@@ -376,7 +475,7 @@ function applyGateThresholds(qualityReport: any, options: any = {}) {
   };
 }
 
-function analysisQualityGateV1(report: any, options: any = {}) {
+function analysisQualityGateV1(report: GateableReport, options: GateOptions = {}): GateResult {
   const needsCandidates = options.outputType === 'dual' || options.outputType === 'candidate';
   const minChars = needsCandidates ? 400 : 200;
   const minFileRefs = needsCandidates ? 3 : 2;
@@ -416,7 +515,7 @@ function analysisQualityGateV1(report: any, options: any = {}) {
  * @param {string} reason - Gate 失败原因
  * @returns {string}
  */
-export function buildRetryPrompt(reason: any) {
+export function buildRetryPrompt(reason: string) {
   const hints = {
     'Analysis too short':
       '你的分析不够深入。请使用更多工具（get_class_info、read_project_file、search_project_code）查看实际代码，输出至少 500 字的分析。',
@@ -427,7 +526,7 @@ export function buildRetryPrompt(reason: any) {
   };
 
   return (
-    (hints as Record<string, any>)[reason] ||
+    (hints as Record<string, string>)[reason] ||
     '请更深入地分析代码，引用至少 3 个具体文件，每个发现都要有代码证据。'
   );
 }
@@ -447,16 +546,21 @@ export function buildRetryPrompt(reason: any) {
  * @param {object} strategyContext - orchestrator 注入的运行时上下文
  * @returns {{ action: 'pass'|'retry'|'degrade', reason: string, artifact: object }}
  */
-export function insightGateEvaluator(source: any, phaseResults: any, strategyContext: any = {}) {
-  if (!source?.reply) {
+export function insightGateEvaluator(
+  source: unknown,
+  phaseResults: Record<string, unknown>,
+  strategyContext: Record<string, unknown> = {}
+) {
+  if (!(source as AnalystResult | null | undefined)?.reply) {
     return { action: 'degrade', reason: 'No analysis output', artifact: null };
   }
 
-  const { projectGraph, activeContext, dimId, outputType } = strategyContext;
+  const { projectGraph, activeContext, dimId, outputType } =
+    strategyContext as InsightGateStrategyContext;
 
   const artifact = activeContext
-    ? buildAnalysisArtifact(source, dimId, projectGraph, activeContext)
-    : buildAnalysisReport(source, dimId, projectGraph);
+    ? buildAnalysisArtifact(source as AnalystResult, dimId as string, projectGraph, activeContext)
+    : buildAnalysisReport(source as AnalystResult, dimId as string, projectGraph);
 
   const gate = analysisQualityGate(artifact, { outputType: outputType || 'analysis' });
 

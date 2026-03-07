@@ -11,7 +11,7 @@
  *   - 分布式训练 (DDP / FSDP)
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class MLEnhancement extends EnhancementPack {
   get id() {
@@ -127,8 +127,8 @@ class MLEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: any[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
 
     // ── nn.Module subclasses ──
     for (const cls of astSummary.classes || []) {
@@ -244,7 +244,7 @@ class MLEnhancement extends EnhancementPack {
 
     // ── ML ecosystem imports ──
     const mlImports = (astSummary.imports || []).filter(
-      (imp: any) =>
+      (imp: string) =>
         imp.includes('torch') ||
         imp.includes('tensorflow') ||
         imp.includes('transformers') ||

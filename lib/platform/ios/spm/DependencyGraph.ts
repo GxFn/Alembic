@@ -7,15 +7,15 @@
 import Logger from '../../../infrastructure/logging/Logger.js';
 
 export class DependencyGraph {
-  #adjacency; // Map<string, Set<string>>
-  #reverseAdj; // Map<string, Set<string>>
-  #nodes; // Set<string>
+  #adjacency: Map<string, Set<string>>; // Map<string, Set<string>>
+  #reverseAdj: Map<string, Set<string>>; // Map<string, Set<string>>
+  #nodes: Set<string>; // Set<string>
   #logger;
 
   constructor() {
-    this.#adjacency = new Map();
-    this.#reverseAdj = new Map();
-    this.#nodes = new Set();
+    this.#adjacency = new Map<string, Set<string>>();
+    this.#reverseAdj = new Map<string, Set<string>>();
+    this.#nodes = new Set<string>();
     this.#logger = Logger.getInstance();
   }
 
@@ -23,7 +23,7 @@ export class DependencyGraph {
    * 从 PackageSwiftParser 的解析结果构建图
    * @param {{ targets: { name: string, dependencies: string[] }[] }} parsed
    */
-  buildFromParsed(parsed: any) {
+  buildFromParsed(parsed: { targets: { name: string; dependencies: string[] }[] }) {
     this.clear();
     for (const target of parsed.targets || []) {
       this.addNode(target.name);
@@ -39,7 +39,7 @@ export class DependencyGraph {
   /**
    * 添加节点
    */
-  addNode(name: any) {
+  addNode(name: string) {
     this.#nodes.add(name);
     if (!this.#adjacency.has(name)) {
       this.#adjacency.set(name, new Set());
@@ -52,24 +52,24 @@ export class DependencyGraph {
   /**
    * 添加边: from 依赖 to
    */
-  addEdge(from: any, to: any) {
+  addEdge(from: string, to: string) {
     this.addNode(from);
     this.addNode(to);
-    this.#adjacency.get(from).add(to);
-    this.#reverseAdj.get(to).add(from);
+    this.#adjacency.get(from)!.add(to);
+    this.#reverseAdj.get(to)!.add(from);
   }
 
   /**
    * BFS 可达性检查
    */
-  isReachable(from: any, to: any) {
+  isReachable(from: string, to: string) {
     if (from === to) {
       return true;
     }
     const visited = new Set();
     const queue = [from];
     while (queue.length > 0) {
-      const node = queue.shift();
+      const node = queue.shift()!;
       if (node === to) {
         return true;
       }
@@ -89,13 +89,13 @@ export class DependencyGraph {
    * @returns {string[][]} 循环路径列表
    */
   detectCycles() {
-    const cycles: any[][] = [];
+    const cycles: string[][] = [];
     const white = new Set(this.#nodes);
     const gray = new Set();
     const black = new Set();
-    const path: any[] = [];
+    const path: string[] = [];
 
-    const dfs = (node: any) => {
+    const dfs = (node: string) => {
       white.delete(node);
       gray.add(node);
       path.push(node);
@@ -127,7 +127,7 @@ export class DependencyGraph {
    * @returns {string[]} 若有环则返回部分结果
    */
   topologicalSort() {
-    const inDegree = new Map();
+    const inDegree = new Map<string, number>();
     for (const node of this.#nodes) {
       inDegree.set(node, 0);
     }
@@ -137,19 +137,19 @@ export class DependencyGraph {
       }
     }
 
-    const queue: any[] = [];
+    const queue: string[] = [];
     for (const [node, degree] of inDegree) {
       if (degree === 0) {
         queue.push(node);
       }
     }
 
-    const result: undefined[] = [];
+    const result: string[] = [];
     while (queue.length > 0) {
-      const node = queue.shift();
+      const node = queue.shift()!;
       result.push(node);
       for (const dep of this.#adjacency.get(node) || []) {
-        inDegree.set(dep, inDegree.get(dep) - 1);
+        inDegree.set(dep, (inDegree.get(dep) ?? 0) - 1);
         if (inDegree.get(dep) === 0) {
           queue.push(dep);
         }
@@ -187,14 +187,14 @@ export class DependencyGraph {
   /**
    * 获取节点的直接依赖
    */
-  getDependencies(node: any) {
+  getDependencies(node: string) {
     return [...(this.#adjacency.get(node) || [])];
   }
 
   /**
    * 获取节点的直接依赖者 (谁依赖了这个节点)
    */
-  getDependents(node: any) {
+  getDependents(node: string) {
     return [...(this.#reverseAdj.get(node) || [])];
   }
 
@@ -223,7 +223,7 @@ export class DependencyGraph {
    * 导出为 JSON (可视化用)
    */
   toJSON() {
-    const edges: { from: any; to: any }[] = [];
+    const edges: { from: string; to: string }[] = [];
     for (const [from, deps] of this.#adjacency) {
       for (const to of deps) {
         edges.push({ from, to });

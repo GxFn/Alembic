@@ -12,6 +12,30 @@
 
 import Logger from '../../../infrastructure/logging/Logger.js';
 
+// ─── 本地类型 ──────────────────────────────────────────
+
+/** 工具定义输入 */
+interface ToolDefinition {
+  name: string;
+  description: string;
+  parameters?: Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  handler: Function;
+}
+
+/** 内部存储的工具条目（parameters 已默认化） */
+interface StoredToolEntry {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  handler: (params: Record<string, unknown>, context: Record<string, unknown>) => Promise<unknown>;
+}
+
+/** JSON Schema 参数定义 */
+interface ToolParameterSchema {
+  properties?: Record<string, unknown>;
+}
+
 /**
  * AI 模型常见的参数命名变体 → schema 标准名映射
  * 覆盖 Gemini / GPT / DeepSeek / Claude 常见偏好
@@ -45,7 +69,7 @@ const PARAM_ALIASES = {
 };
 
 export class ToolRegistry {
-  #tools = new Map();
+  #tools = new Map<string, StoredToolEntry>();
   #logger;
 
   constructor() {
@@ -60,19 +84,24 @@ export class ToolRegistry {
    * @param {object} toolDef.parameters   - JSON Schema 格式的参数定义
    * @param {Function} toolDef.handler    - async (params, context) => result
    */
-  register(toolDef: any) {
+  register(toolDef: ToolDefinition) {
     const { name, description, handler, parameters = {} } = toolDef;
     if (!name || !handler) {
       throw new Error('Tool must have name and handler');
     }
-    this.#tools.set(name, { name, description, parameters, handler });
+    this.#tools.set(name, {
+      name,
+      description,
+      parameters,
+      handler: handler as StoredToolEntry['handler'],
+    });
   }
 
   /**
    * 批量注册
    * @param {Array<object>} defs
    */
-  registerAll(defs: any) {
+  registerAll(defs: ToolDefinition[]) {
     for (const def of defs) {
       this.register(def);
     }
@@ -84,8 +113,9 @@ export class ToolRegistry {
    * @param {string[]} [allowedTools] 限制返回的工具列表（不传则返回全部）
    * @returns {Array<{name: string, description: string, parameters: object}>}
    */
-  getToolSchemas(allowedTools: any) {
-    const schemas: { name: any; description: any; parameters: any }[] = [];
+  getToolSchemas(allowedTools?: readonly unknown[] | null) {
+    const schemas: { name: string; description: string; parameters: Record<string, unknown> }[] =
+      [];
     for (const [name, tool] of this.#tools) {
       if (allowedTools && !allowedTools.includes(name)) {
         continue;
@@ -106,7 +136,11 @@ export class ToolRegistry {
    * @param {object} context - { container, aiProvider, projectRoot, ... }
    * @returns {Promise<any>}
    */
-  async execute(name: any, params: any, context: any = {}) {
+  async execute(
+    name: string,
+    params: Record<string, unknown>,
+    context: Record<string, unknown> = {}
+  ) {
     const tool = this.#tools.get(name);
     if (!tool) {
       throw new Error(`Tool '${name}' not found`);
@@ -120,14 +154,15 @@ export class ToolRegistry {
     try {
       const result = await tool.handler(normalized, context);
       return result;
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const e = err as Error & { code?: string };
       // API Key 缺失为配置问题，降为 info 级别
-      if (err.code === 'API_KEY_MISSING') {
-        this.#logger.info(`Tool '${name}' 跳过: ${err.message}`);
+      if (e.code === 'API_KEY_MISSING') {
+        this.#logger.info(`Tool '${name}' 跳过: ${e.message}`);
       } else {
-        this.#logger.error(`Tool '${name}' failed`, { error: err.message });
+        this.#logger.error(`Tool '${name}' failed`, { error: e.message });
       }
-      return { error: err.message };
+      return { error: e.message };
     }
   }
 
@@ -142,7 +177,7 @@ export class ToolRegistry {
    *   2. snake_case → camelCase 自动转换
    *   3. 常用别名表兜底
    */
-  #normalizeParams(params: any, schema: any) {
+  #normalizeParams(params: Record<string, unknown>, schema: ToolParameterSchema) {
     if (!params || typeof params !== 'object') {
       return params || {};
     }
@@ -152,7 +187,7 @@ export class ToolRegistry {
       return params;
     }
 
-    const result: Record<string, any> = {};
+    const result: Record<string, unknown> = {};
     const unmatched: string[] = [];
 
     for (const [key, value] of Object.entries(params)) {
@@ -170,7 +205,7 @@ export class ToolRegistry {
       }
 
       // 3. 常用别名映射
-      const aliased = (PARAM_ALIASES as Record<string, any>)[key];
+      const aliased = (PARAM_ALIASES as Record<string, string>)[key];
       if (aliased && schemaKeys.has(aliased)) {
         result[aliased] = value;
         continue;
@@ -193,7 +228,7 @@ export class ToolRegistry {
   /**
    * 检查工具是否存在
    */
-  has(name: any) {
+  has(name: string) {
     return this.#tools.has(name);
   }
 

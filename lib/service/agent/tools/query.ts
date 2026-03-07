@@ -9,6 +9,51 @@
  * 6. get_related_recipes  知识图谱关联查询
  */
 
+import type { ToolHandlerContext } from './_shared.js';
+
+// ─── Tool handler param types ──────────────────────────────
+
+export interface SearchRecipesParams {
+  keyword?: string;
+  category?: string;
+  language?: string;
+  knowledgeType?: string;
+  limit?: number;
+}
+
+export interface SearchCandidatesParams {
+  keyword?: string;
+  status?: string;
+  language?: string;
+  category?: string;
+  limit?: number;
+}
+
+export interface SearchKnowledgeParams {
+  query: string;
+  topK?: number;
+}
+
+/** Search result item from SearchEngine */
+interface SearchResultEntry {
+  score?: number;
+  matchType?: string;
+  [key: string]: unknown;
+}
+
+/** Knowledge entry from repository */
+interface KnowledgeEntryLike {
+  id: string;
+  title: string;
+  content?: string;
+  code?: string;
+  description?: string;
+  language?: string;
+  category?: string;
+  trigger?: string;
+  [key: string]: unknown;
+}
+
 // ────────────────────────────────────────────────────────────
 // 3. search_recipes
 // ────────────────────────────────────────────────────────────
@@ -32,7 +77,7 @@ export const searchRecipes = {
       limit: { type: 'number', description: '返回数量上限，默认 10' },
     },
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: SearchRecipesParams, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     const { keyword, category, language, knowledgeType, limit = 10 } = params;
 
@@ -40,7 +85,7 @@ export const searchRecipes = {
       return knowledgeService.search(keyword, { page: 1, pageSize: limit });
     }
 
-    const filters: any = { lifecycle: 'active' };
+    const filters: Record<string, string> = { lifecycle: 'active' };
     if (category) {
       filters.category = category;
     }
@@ -71,7 +116,7 @@ export const searchCandidates = {
       limit: { type: 'number', description: '返回数量上限，默认 10' },
     },
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: SearchCandidatesParams, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     const { keyword, status, language, category, limit = 10 } = params;
 
@@ -80,7 +125,7 @@ export const searchCandidates = {
     }
 
     // V3: status 映射为 lifecycle
-    const filters: any = {};
+    const filters: Record<string, string> = {};
     if (status) {
       filters.lifecycle = status;
     }
@@ -108,7 +153,7 @@ export const getRecipeDetail = {
     },
     required: ['recipeId'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: { recipeId: string }, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     try {
       const entry = await knowledgeService.get(params.recipeId);
@@ -127,12 +172,12 @@ export const getProjectStats = {
   description:
     '获取项目知识库的整体统计：Recipe 数量/分类分布、候选项数量/状态分布、知识图谱节点/边数。',
   parameters: { type: 'object', properties: {} },
-  handler: async (_params: any, ctx: any) => {
+  handler: async (_params: Record<string, never>, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     const stats = await knowledgeService.getStats();
 
     // 尝试获取知识图谱统计
-    let graphStats: any = null;
+    let graphStats: Record<string, unknown> | null = null;
     try {
       const kgService = ctx.container.get('knowledgeGraphService');
       graphStats = kgService.getStats();
@@ -161,7 +206,7 @@ export const searchKnowledge = {
     },
     required: ['query'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: SearchKnowledgeParams, ctx: ToolHandlerContext) => {
     const { query, topK = 5 } = params;
 
     // 优先使用 SearchEngine（有 BM25 + 向量搜索）
@@ -169,7 +214,7 @@ export const searchKnowledge = {
       const searchEngine = ctx.container.get('searchEngine');
       const results = await searchEngine.search(query, { limit: topK });
       if (results && results.length > 0) {
-        const enriched = results.slice(0, topK).map((r: any, i: any) => ({
+        const enriched = results.slice(0, topK).map((r: SearchResultEntry, i: number) => ({
           ...r,
           reasoning: {
             whyRelevant:
@@ -201,7 +246,7 @@ export const searchKnowledge = {
       const allRecipes = allResult?.items || [];
 
       // 规范化为 funnel 输入格式
-      const candidates = allRecipes.map((r: any) => ({
+      const candidates = allRecipes.map((r: KnowledgeEntryLike) => ({
         id: r.id,
         title: r.title,
         content: r.content || r.code || '',
@@ -249,7 +294,7 @@ export const getRelatedRecipes = {
     },
     required: ['recipeId'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: { recipeId: string; relation?: string }, ctx: ToolHandlerContext) => {
     const kgService = ctx.container.get('knowledgeGraphService');
     const { recipeId, relation } = params;
 

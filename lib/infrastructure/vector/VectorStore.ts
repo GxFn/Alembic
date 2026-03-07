@@ -16,7 +16,12 @@ export class VectorStore {
    * 插入或更新文档
    * @param {{ id: string, content: string, vector: number[], metadata: object }} item
    */
-  async upsert(item: any): Promise<void> {
+  async upsert(item: {
+    id: string;
+    content: string;
+    vector: number[];
+    metadata: Record<string, unknown>;
+  }): Promise<void> {
     throw new Error('Not implemented: upsert()');
   }
 
@@ -24,7 +29,14 @@ export class VectorStore {
    * 批量 upsert
    * @param {Array} items
    */
-  async batchUpsert(items: any[]): Promise<void> {
+  async batchUpsert(
+    items: Array<{
+      id: string;
+      content: string;
+      vector: number[];
+      metadata: Record<string, unknown>;
+    }>
+  ): Promise<void> {
     // 分批并行处理，避免 O(N) 串行延迟
     const BATCH_SIZE = 50;
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
@@ -37,7 +49,7 @@ export class VectorStore {
    * 删除文档
    * @param {string} id
    */
-  async remove(id: any): Promise<void> {
+  async remove(id: string): Promise<void> {
     throw new Error('Not implemented: remove()');
   }
 
@@ -46,7 +58,7 @@ export class VectorStore {
    * @param {string} id
    * @returns {Promise<object|null>}
    */
-  async getById(id: any): Promise<any | null> {
+  async getById(id: string): Promise<Record<string, unknown> | null> {
     throw new Error('Not implemented: getById()');
   }
 
@@ -57,9 +69,9 @@ export class VectorStore {
    * @returns {Promise<Array<{ item: object, score: number }>>}
    */
   async searchVector(
-    queryVector: any,
-    options: any = {}
-  ): Promise<Array<{ item: any; score: number }>> {
+    queryVector: number[],
+    options: Record<string, unknown> = {}
+  ): Promise<Array<{ item: Record<string, unknown>; score: number }>> {
     throw new Error('Not implemented: searchVector()');
   }
 
@@ -68,7 +80,7 @@ export class VectorStore {
    * @param {object} filter - { type, category, language, tags, ... }
    * @returns {Promise<Array>}
    */
-  async searchByFilter(filter: any): Promise<any[]> {
+  async searchByFilter(filter: Record<string, unknown>): Promise<Record<string, unknown>[]> {
     throw new Error('Not implemented: searchByFilter()');
   }
 

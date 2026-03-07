@@ -107,7 +107,7 @@ export class ImportPathResolver {
 
         // 只加载第一个找到的配置文件
         break;
-      } catch (_e: any) {
+      } catch (_e: unknown) {
         // 配置解析失败，静默跳过
       }
     }

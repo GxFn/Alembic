@@ -14,11 +14,11 @@ import { join, resolve } from 'node:path';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
 export class UpgradeService {
-  projectRoot: any;
-  projectName: any;
-  constructor(options: any) {
+  projectRoot: string;
+  projectName: string;
+  constructor(options: { projectRoot: string }) {
     this.projectRoot = resolve(options.projectRoot);
-    this.projectName = this.projectRoot.split('/').pop();
+    this.projectName = this.projectRoot.split('/').pop() || '';
   }
 
   async run({ skillsOnly = false, mcpOnly = false } = {}) {
@@ -85,8 +85,8 @@ export class UpgradeService {
       if (migrated > 0) {
       } else {
       }
-    } catch (e: any) {
-      console.error(`   ❌ 迁移失败: ${e.message}`);
+    } catch (e: unknown) {
+      console.error(`   ❌ 迁移失败: ${(e as Error).message}`);
     }
   }
 }

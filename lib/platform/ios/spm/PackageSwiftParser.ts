@@ -12,7 +12,7 @@ export class PackageSwiftParser {
   #cache;
   #logger;
 
-  constructor(projectRoot: any) {
+  constructor(projectRoot: string) {
     this.#projectRoot = projectRoot;
     this.#cache = new Map();
     this.#logger = Logger.getInstance();
@@ -67,7 +67,7 @@ export class PackageSwiftParser {
       'DerivedData',
     ]);
 
-    const scan = (dir: any, depth = 0) => {
+    const scan = (dir: string, depth = 0) => {
       if (depth > 5) {
         return; // 限制深度
       }
@@ -98,7 +98,7 @@ export class PackageSwiftParser {
    * @param {string} packagePath
    * @returns {{ path, name, version, targets, dependencies, products, platforms }}
    */
-  parse(packagePath: any) {
+  parse(packagePath: string) {
     if (!packagePath || !existsSync(packagePath)) {
       throw new Error(`Package.swift not found: ${packagePath}`);
     }
@@ -123,7 +123,7 @@ export class PackageSwiftParser {
   /**
    * 获取包摘要
    */
-  getSummary(packagePath: any) {
+  getSummary(packagePath: string) {
     try {
       const parsed = this.parse(packagePath);
       return {
@@ -141,7 +141,7 @@ export class PackageSwiftParser {
   /**
    * 提取 target blocks（公开方法，供外部使用）
    */
-  extractTargets(content: any) {
+  extractTargets(content: string) {
     return this.#extractTargets(content);
   }
 
@@ -151,18 +151,19 @@ export class PackageSwiftParser {
 
   // ─── 私有提取方法 ──────────────────────────────────────
 
-  #extractName(content: any) {
+  #extractName(content: string) {
     const m = content.match(/name\s*:\s*"([^"]+)"/);
     return m ? m[1] : 'unknown';
   }
 
-  #extractVersion(content: any) {
+  #extractVersion(content: string) {
     const m = content.match(/version\s*:\s*"([^"]+)"/);
     return m ? m[1] : '0.0.0';
   }
 
-  #extractTargets(content: any) {
-    const targets: { name: any; type: string; path: any; dependencies: any[] }[] = [];
+  #extractTargets(content: string) {
+    const targets: { name: string; type: string; path: string | null; dependencies: string[] }[] =
+      [];
     const re = /\.(?:target|testTarget|executableTarget)\s*\(/g;
     let match;
 
@@ -195,7 +196,7 @@ export class PackageSwiftParser {
 
         const pathMatch = block.match(/path\s*:\s*"([^"]+)"/);
         const depsMatch = block.match(/dependencies\s*:\s*\[([^\]]*)\]/s);
-        const deps: any[] = [];
+        const deps: string[] = [];
         if (depsMatch) {
           const depRe = /\.(?:product|target)\s*\(\s*name\s*:\s*"([^"]+)"/g;
           let dm;
@@ -216,8 +217,11 @@ export class PackageSwiftParser {
     return targets;
   }
 
-  #extractDependencies(content: any) {
-    const deps: ({ url: any; version: any; type: string } | { path: any; type: string })[] = [];
+  #extractDependencies(content: string) {
+    const deps: (
+      | { url: string; version: string | null; type: string }
+      | { path: string; type: string }
+    )[] = [];
 
     // 1. URL 依赖: .package(url: "...", ...)
     const urlRe = /\.package\s*\(\s*url\s*:\s*"([^"]+)"[^)]*\)/g;
@@ -245,8 +249,8 @@ export class PackageSwiftParser {
     return deps;
   }
 
-  #extractProducts(content: any) {
-    const products: { name: any; type: any }[] = [];
+  #extractProducts(content: string) {
+    const products: { name: string; type: string }[] = [];
     const re = /\.(library|executable)\s*\(\s*name\s*:\s*"([^"]+)"/g;
     let m;
     while ((m = re.exec(content)) !== null) {
@@ -255,8 +259,8 @@ export class PackageSwiftParser {
     return products;
   }
 
-  #extractPlatforms(content: any) {
-    const platforms: { name: any; version: any }[] = [];
+  #extractPlatforms(content: string) {
+    const platforms: { name: string; version: string }[] = [];
     const re = /\.(iOS|macOS|tvOS|watchOS|visionOS)\s*\(\s*\.v(\d+(?:_\d+)?)\s*\)/g;
     let m;
     while ((m = re.exec(content)) !== null) {

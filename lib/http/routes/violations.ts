@@ -3,7 +3,7 @@
  * Guard 违规记录管理、AI 规则生成
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -17,23 +17,23 @@ const _logger = Logger.getInstance();
  */
 router.get(
   '/',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
     const violationsStore = container.get('violationsStore');
 
     const { severity, ruleId, file } = req.query;
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 200);
 
-    const filters: any = {};
+    const filters: Record<string, string> = {};
     if (severity) {
-      filters.severity = severity;
+      filters.severity = String(severity);
     }
     if (ruleId) {
-      filters.ruleId = ruleId;
+      filters.ruleId = String(ruleId);
     }
     if (file) {
-      filters.file = file;
+      filters.file = String(file);
     }
 
     const result = await violationsStore.list(filters, { page, limit });
@@ -51,7 +51,7 @@ router.get(
  */
 router.get(
   '/stats',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
     const violationsStore = container.get('violationsStore');
 
@@ -70,7 +70,7 @@ router.get(
  */
 router.post(
   '/clear',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
     const violationsStore = container.get('violationsStore');
 

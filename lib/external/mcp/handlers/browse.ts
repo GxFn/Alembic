@@ -8,6 +8,13 @@
  */
 
 import { envelope } from '../envelope.js';
+import type {
+  BrowseGetArgs,
+  BrowseListArgs,
+  ConfirmUsageArgs,
+  KnowledgeEntryJSON,
+  McpContext,
+} from './types.js';
 
 // ─── 通用投影辅助 ────────────────────────────────────────────
 
@@ -15,7 +22,7 @@ import { envelope } from '../envelope.js';
  * 构建 actionHint — "whenClause → doClause" 的一句话可操作摘要。
  * Agent 在列表/搜索中即可判断是否需要深入获取该条目。
  */
-function _buildActionHint(json: any) {
+function _buildActionHint(json: KnowledgeEntryJSON) {
   const doText = json.doClause || '';
   const whenText = json.whenClause || '';
   if (!doText && !whenText) {
@@ -27,11 +34,11 @@ function _buildActionHint(json: any) {
 /**
  * 只保留非空关系桶，压缩 Relations 输出体积。
  */
-function _compactRelations(relations: any) {
+function _compactRelations(relations: Record<string, unknown[]> | undefined) {
   if (!relations) {
     return undefined;
   }
-  const compact: Record<string, any> = {};
+  const compact: Record<string, unknown[]> = {};
   for (const [type, list] of Object.entries(relations)) {
     if (Array.isArray(list) && list.length > 0) {
       compact[type] = list;
@@ -47,7 +54,7 @@ function _compactRelations(relations: any) {
  * 移除: quality, stats, scope, tags, knowledgeType, 重复的 status/statistics
  * 新增: actionHint
  */
-function _projectItem(r: any) {
+function _projectItem(r: KnowledgeEntryJSON) {
   const json = typeof r.toJSON === 'function' ? r.toJSON() : r;
   return {
     id: json.id,
@@ -74,14 +81,14 @@ function _projectItem(r: any) {
  *                    publishedAt/By, headerPaths, includeHeaders, quality.*, stats.*,
  *                    reasoning.sources/qualitySignals/alternatives, content.codeChanges/verification
  */
-function _projectForAgent(json: any) {
+function _projectForAgent(json: KnowledgeEntryJSON) {
   // content 精简：保留 pattern/markdown/rationale/steps，去除 codeChanges/verification
   const content = json.content
     ? {
         ...(json.content.pattern ? { pattern: json.content.pattern } : {}),
         ...(json.content.markdown ? { markdown: json.content.markdown } : {}),
         ...(json.content.rationale ? { rationale: json.content.rationale } : {}),
-        ...(json.content.steps?.length > 0 ? { steps: json.content.steps } : {}),
+        ...((json.content.steps?.length ?? 0) > 0 ? { steps: json.content.steps } : {}),
       }
     : undefined;
 
@@ -95,11 +102,13 @@ function _projectForAgent(json: any) {
 
   // constraints 精简：仅保留 guards 和 sideEffects
   const constraints =
-    json.constraints?.guards?.length > 0 || json.constraints?.sideEffects?.length > 0
+    (json.constraints?.guards?.length ?? 0) > 0 || (json.constraints?.sideEffects?.length ?? 0) > 0
       ? {
-          ...(json.constraints.guards?.length > 0 ? { guards: json.constraints.guards } : {}),
-          ...(json.constraints.sideEffects?.length > 0
-            ? { sideEffects: json.constraints.sideEffects }
+          ...((json.constraints?.guards?.length ?? 0) > 0
+            ? { guards: json.constraints!.guards }
+            : {}),
+          ...((json.constraints?.sideEffects?.length ?? 0) > 0
+            ? { sideEffects: json.constraints!.sideEffects }
             : {}),
         }
       : undefined;
@@ -117,7 +126,7 @@ function _projectForAgent(json: any) {
     category: json.category,
     knowledgeType: json.knowledgeType,
     complexity: json.complexity,
-    tags: json.tags?.length > 0 ? json.tags : undefined,
+    tags: (json.tags?.length ?? 0) > 0 ? json.tags : undefined,
 
     // ── Agent 可操作指令（Tier 1 黄金字段） ──
     whenClause: json.whenClause || undefined,
@@ -129,7 +138,7 @@ function _projectForAgent(json: any) {
     content: content && Object.keys(content).length > 0 ? content : undefined,
 
     // ── 上下文 ──
-    headers: json.headers?.length > 0 ? json.headers : undefined,
+    headers: (json.headers?.length ?? 0) > 0 ? json.headers : undefined,
     reasoning: reasoning && Object.keys(reasoning).length > 0 ? reasoning : undefined,
 
     // ── 关系（仅非空桶） ──
@@ -140,9 +149,9 @@ function _projectForAgent(json: any) {
   };
 }
 
-export async function listByKind(ctx: any, kind: any, args: any) {
+export async function listByKind(ctx: McpContext, kind: string, args: BrowseListArgs) {
   const ks = ctx.container.get('knowledgeService');
-  const filters: any = { kind };
+  const filters: Record<string, string> = { kind };
   if (args.language) {
     filters.language = args.language;
   }
@@ -158,9 +167,9 @@ export async function listByKind(ctx: any, kind: any, args: any) {
   });
 }
 
-export async function listRecipes(ctx: any, args: any) {
+export async function listRecipes(ctx: McpContext, args: BrowseListArgs) {
   const ks = ctx.container.get('knowledgeService');
-  const filters: any = {};
+  const filters: Record<string, string> = {};
   if (args.kind) {
     filters.kind = args.kind;
   }
@@ -188,7 +197,7 @@ export async function listRecipes(ctx: any, args: any) {
   });
 }
 
-export async function getRecipe(ctx: any, args: any) {
+export async function getRecipe(ctx: McpContext, args: BrowseGetArgs) {
   if (!args.id) {
     throw new Error('id is required');
   }
@@ -203,7 +212,7 @@ export async function getRecipe(ctx: any, args: any) {
   return envelope({ success: true, data: projected, meta: { tool: 'autosnippet_get_recipe' } });
 }
 
-export async function recipeInsights(ctx: any, args: any) {
+export async function recipeInsights(ctx: McpContext, args: BrowseGetArgs) {
   if (!args.id) {
     throw new Error('id is required');
   }
@@ -215,7 +224,7 @@ export async function recipeInsights(ctx: any, args: any) {
   const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
 
   // 聚合关系摘要
-  const relationsSummary: Record<string, any> = {};
+  const relationsSummary: Record<string, number> = {};
   if (json.relations) {
     for (const [type, targets] of Object.entries(json.relations)) {
       if (Array.isArray(targets) && targets.length > 0) {
@@ -225,7 +234,7 @@ export async function recipeInsights(ctx: any, args: any) {
   }
 
   // 约束条件概览
-  const constraintsSummary: Record<string, any> = {};
+  const constraintsSummary: Record<string, unknown[]> = {};
   if (json.constraints) {
     for (const [type, items] of Object.entries(json.constraints)) {
       if (Array.isArray(items) && items.length > 0) {
@@ -276,7 +285,7 @@ export async function recipeInsights(ctx: any, args: any) {
   return envelope({ success: true, data: insights, meta: { tool: 'autosnippet_recipe_insights' } });
 }
 
-export async function confirmUsage(ctx: any, args: any) {
+export async function confirmUsage(ctx: McpContext, args: ConfirmUsageArgs) {
   if (!args.recipeId) {
     throw new Error('recipeId is required');
   }

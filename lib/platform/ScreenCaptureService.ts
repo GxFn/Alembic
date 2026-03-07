@@ -15,6 +15,24 @@ import Logger from '../infrastructure/logging/Logger.js';
 
 const logger = Logger.getInstance();
 
+/** 截图选项 */
+interface ScreenshotOptions {
+  windowTitle?: string;
+  format?: 'jpeg' | 'png';
+  scale?: number;
+  outputPath?: string;
+}
+
+/** 截图工具返回结果 */
+interface ScreenshotToolResult {
+  path?: string;
+  width?: number;
+  height?: number;
+  format?: string;
+  bytes?: number;
+  error?: string;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -59,8 +77,10 @@ function ensureBinary() {
         { timeout: 60000, stdio: ['pipe', 'pipe', 'pipe'] }
       );
       logger.info('[Screenshot] ✅ Compiled successfully');
-    } catch (err: any) {
-      const stderr = err.stderr?.toString() || err.message;
+    } catch (err: unknown) {
+      const stderr =
+        (err as { stderr?: Buffer }).stderr?.toString() ||
+        (err instanceof Error ? err.message : String(err));
       logger.error(`[Screenshot] Compilation failed: ${stderr}`);
       return { ready: false, error: `Swift compilation failed: ${stderr.slice(0, 200)}` };
     }
@@ -75,7 +95,7 @@ function ensureBinary() {
  * @param {string[]} args - CLI 参数
  * @returns {{success: boolean, data?: object, error?: string}}
  */
-function exec(args: any[] = []) {
+function exec(args: string[] = []) {
   const check = ensureBinary();
   if (!check.ready) {
     return { success: false, error: check.error };
@@ -89,16 +109,17 @@ function exec(args: any[] = []) {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    const result = JSON.parse(stdout.trim());
+    const result: ScreenshotToolResult = JSON.parse(stdout.trim());
     return { success: true, data: result };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const execErr = err as { stderr?: Buffer; message?: string };
     // 尝试从 stderr 中解析 JSON 错误
-    const stderr = err.stderr?.toString() || '';
+    const stderr = execErr.stderr?.toString() || '';
     try {
-      const errObj = JSON.parse(stderr.trim());
+      const errObj: { error?: string } = JSON.parse(stderr.trim());
       return { success: false, error: errObj.error || stderr };
     } catch {
-      return { success: false, error: stderr || err.message };
+      return { success: false, error: stderr || execErr.message };
     }
   }
 }
@@ -117,8 +138,8 @@ function exec(args: any[] = []) {
  * @param {string} [opts.outputPath] 输出路径，默认临时目录
  * @returns {Promise<{success: boolean, path?: string, width?: number, height?: number, error?: string}>}
  */
-export async function screenshot(opts: any = {}) {
-  const args: any[] = [];
+export async function screenshot(opts: ScreenshotOptions = {}) {
+  const args: string[] = [];
 
   if (opts.windowTitle) {
     args.push('--window', opts.windowTitle);

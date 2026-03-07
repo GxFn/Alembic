@@ -20,6 +20,249 @@ import { TierScheduler } from './pipeline/tier-scheduler.js';
 import { getDimensionSOP, PRE_SUBMIT_CHECKLIST, sopToCompactText } from './shared/dimension-sop.js';
 import { EXAMPLE_TEMPLATES, SUBMISSION_SCHEMA } from './shared/dimension-text.js';
 
+// ── 本地类型定义 ────────────────────────────────────────────
+
+/** 维度定义 (来自 base-dimensions.js) */
+interface DimensionDef {
+  id: string;
+  label?: string;
+  guide?: string;
+  knowledgeTypes?: string[];
+  skillWorthy?: boolean;
+  skillMeta?: { name: string; description: string };
+  dualOutput?: boolean;
+  tierHint?: number;
+}
+
+/** AST 类信息 */
+interface AstClassInfo {
+  name: string;
+  superclass?: string;
+  methodCount?: number;
+  methods?: unknown[];
+  protocols?: string[];
+  conformedProtocols?: string[];
+  file?: string;
+  relativePath?: string;
+}
+
+/** AST 协议信息 */
+interface AstProtocolInfo {
+  name: string;
+  file?: string;
+  relativePath?: string;
+  methodCount?: number;
+  methods?: unknown[];
+  conformers?: string[];
+}
+
+/** AST Category 信息 */
+interface AstCategoryInfo {
+  baseClass?: string;
+  extendedClass?: string;
+  name: string;
+  file?: string;
+  relativePath?: string;
+  methods?: (string | { name: string })[];
+}
+
+/** AST 方法信息 */
+interface AstMethodInfo {
+  name: string;
+  className?: string;
+  isAsync?: boolean;
+}
+
+/** AST 文件摘要 */
+interface AstFileSummary {
+  exports?: unknown[];
+  methods?: AstMethodInfo[];
+}
+
+/** 项目度量 */
+interface ProjectMetrics {
+  totalMethods?: number;
+  complexMethods?: unknown[];
+  longMethods?: unknown[];
+  avgMethodsPerClass?: number;
+  maxNestingDepth?: number;
+}
+
+/** AST 项目摘要 */
+interface AstProjectSummary {
+  classes?: AstClassInfo[];
+  protocols?: AstProtocolInfo[];
+  categories?: AstCategoryInfo[];
+  fileSummaries?: AstFileSummary[];
+  patternStats?: Record<string, unknown>;
+  projectMetrics?: ProjectMetrics;
+  fileCount?: number;
+}
+
+/** Guard 违规条目 */
+interface GuardViolationEntry {
+  ruleId: string;
+  message?: string;
+  line?: number;
+  locations?: { filePath: string; line?: number }[];
+}
+
+/** Guard 审计文件条目 */
+interface GuardAuditFileEntry {
+  filePath: string;
+  violations?: GuardViolationEntry[];
+}
+
+/** Guard 审计结果 (用于 Briefing) */
+interface GuardAuditForBriefing {
+  files?: GuardAuditFileEntry[];
+  summary?: { totalErrors?: number; totalViolations?: number };
+  crossFileViolations?: GuardViolationEntry[];
+}
+
+/** 依赖图节点 */
+interface DepGraphNode {
+  id?: string;
+  label?: string;
+  fileCount?: number;
+}
+
+/** 依赖图数据 */
+interface DepGraphData {
+  nodes?: (string | DepGraphNode)[];
+  edges?: unknown[];
+}
+
+/** Code Entity 结果 */
+interface CodeEntityResult {
+  entitiesUpserted?: number;
+  edgesCreated?: number;
+}
+
+/** Call Graph 结果 */
+interface CallGraphResult {
+  entitiesUpserted?: number;
+  edgesCreated?: number;
+  durationMs?: number;
+}
+
+/** Guard rule 聚合条目 */
+interface RuleMapEntry {
+  ruleId: string;
+  count: number;
+  example: string | null;
+}
+
+/** 维度任务 (enrichDimensionTask 返回值) */
+interface DimensionTask {
+  id: string;
+  label?: string;
+  tier: number;
+  outputType: string;
+  status: string;
+  analysisGuide: string | Record<string, unknown>;
+  submissionSpec: { preSubmitChecklist?: Record<string, unknown>; [key: string]: unknown };
+  skillMeta?: { name: string; description: string; format: string };
+  evidenceStarters?: Record<string, { hint: string; data: unknown }>;
+}
+
+/** Evidence starters 选项 */
+interface EvidenceStarterOpts {
+  astData?: AstProjectSummary | null;
+  guardAudit?: GuardAuditForBriefing | null;
+  depGraphData?: DepGraphData | null;
+}
+
+/** Target 信息 */
+interface TargetInfo {
+  name: string;
+  type?: string;
+  inferredRole?: string;
+  fileCount?: number;
+}
+
+/** 增量计划 */
+interface IncrementalPlan {
+  dimensions?: { id: string; status?: string }[];
+}
+
+type PatternValue = number | string | boolean | Record<string, number | string | boolean>;
+
+/** 压缩后的协议 */
+interface CompressedProtocol {
+  name: string;
+  file?: string | null;
+  methodCount: number;
+  conformers?: string[];
+}
+
+/** 压缩后的 AST 类 */
+interface CompressedAstClass {
+  name: string;
+  superclass?: string | null;
+  file?: string | null;
+  methodCount: number;
+  protocols?: string[];
+}
+
+/** Mission Briefing 结构 */
+interface MissionBriefing {
+  projectMeta: Record<string, unknown>;
+  ast: {
+    available: boolean;
+    compressionLevel?: string;
+    summary?: string;
+    classes: CompressedAstClass[];
+    protocols: CompressedProtocol[];
+    categories?: { baseClass?: string; name: string; file?: string | null; methods: string[] }[];
+    patterns?: Record<string, unknown>;
+    metrics?: {
+      totalMethods?: number;
+      avgMethodsPerClass?: number;
+      maxNestingDepth?: number;
+      complexMethods?: number;
+      longMethods?: number;
+    } | null;
+  };
+  codeEntityGraph: { totalEntities: number; totalEdges: number } | null;
+  callGraph: { methodEntities: number; callEdges: number; durationMs: number } | null;
+  dependencyGraph: {
+    nodes: { id: string; label: string; fileCount?: number }[];
+    edges: unknown[];
+  } | null;
+  guardFindings: {
+    totalViolations: number;
+    errors: number;
+    warnings: number;
+    topViolations: RuleMapEntry[];
+  } | null;
+  targets: { name: string; type: string; inferredRole?: string; fileCount?: number }[];
+  dimensions: DimensionTask[];
+  languageExtension: unknown;
+  submissionSchema: Record<string, unknown>;
+  languageStats: Record<string, number> | null;
+  executionPlan: { tiers: unknown[]; totalDimensions: number; workflow: string };
+  session: Record<string, unknown>;
+  meta?: { responseSizeKB: number; compressionLevel: string; warnings?: string[] };
+  [key: string]: unknown;
+}
+
+/** buildMissionBriefing 参数 */
+interface MissionBriefingParams {
+  projectMeta: Record<string, unknown>;
+  astData?: AstProjectSummary | null;
+  codeEntityResult?: CodeEntityResult | null;
+  callGraphResult?: CallGraphResult | null;
+  depGraphData?: DepGraphData | null;
+  guardAudit?: GuardAuditForBriefing | null;
+  targets?: (string | TargetInfo)[];
+  activeDimensions: DimensionDef[];
+  session: { toJSON(): Record<string, unknown> };
+  languageExtension?: unknown;
+  incrementalPlan?: IncrementalPlan | null;
+  languageStats?: Record<string, number> | null;
+}
+
 // ── 常量 ────────────────────────────────────────────────────
 
 /** 响应体积硬上限 (bytes) */
@@ -43,7 +286,7 @@ const SIZE_THRESHOLDS = {
  * @param {number} tier 维度所在 tier 编号 (1/2/3)
  * @returns {object} - Mission Briefing 维度任务对象
  */
-function enrichDimensionTask(dim: any, tier: any) {
+function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
   // ── analysisGuide: SOP 化 — 优先使用维度专属 SOP，否则回退通用指引 ──
   const sop = getDimensionSOP(dim.id);
   let analysisGuide;
@@ -158,8 +401,11 @@ function enrichDimensionTask(dim: any, tier: any) {
  * @param {object} [opts.depGraphData] 依赖图
  * @returns {object|undefined} - evidenceStarters 对象，为空则返回 undefined
  */
-function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: any) {
-  const starters: any = {};
+function buildEvidenceStarters(
+  dim: DimensionDef,
+  { astData, guardAudit, depGraphData }: EvidenceStarterOpts
+) {
+  const starters: Record<string, { hint: string; data: unknown }> = {};
   const dimId = dim.id;
   const dimLabel = (dim.label || '').toLowerCase();
   const dimGuide = (dim.guide || '').toLowerCase();
@@ -179,7 +425,7 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
       dimKeywords.includes('命名') ||
       dimKeywords.includes('naming')
     ) {
-      const prefixStats: Record<string, any> = {};
+      const prefixStats: Record<string, number> = {};
       for (const cls of classes) {
         const prefix = (cls.name || '').match(/^[A-Z]{2,4}/)?.[0];
         if (prefix) {
@@ -188,7 +434,7 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
       }
       // 函数式代码: 统计顶层函数命名模式 (useXxx, handleXxx, getXxx, etc.)
       if (classes.length === 0) {
-        const funcPrefixes: Record<string, any> = {};
+        const funcPrefixes: Record<string, number> = {};
         for (const fs of fileSummaries) {
           for (const m of fs.methods || []) {
             if (!m.className) {
@@ -249,7 +495,7 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
         };
       }
       // 继承关系分析
-      const baseClasses: Record<string, any> = {};
+      const baseClasses: Record<string, number> = {};
       for (const cls of classes) {
         if (cls.superclass) {
           baseClasses[cls.superclass] = (baseClasses[cls.superclass] || 0) + 1;
@@ -275,7 +521,7 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
       if (protocols.length > 0) {
         starters.protocolSummary = {
           hint: `项目定义了 ${protocols.length} 个协议/接口`,
-          data: protocols.slice(0, 8).map((p: any) => ({
+          data: protocols.slice(0, 8).map((p: AstProtocolInfo) => ({
             name: p.name,
             methods: p.methodCount || p.methods?.length || 0,
             conformers: (p.conformers || []).length,
@@ -289,9 +535,13 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
     const fileCount = astData.fileCount || 0;
     if (classes.length === 0 && totalMethods > 0) {
       // 函数式/模块化代码: 提供函数和导出统计
-      const exportCount = fileSummaries.reduce((s: any, f: any) => s + (f.exports?.length || 0), 0);
+      const exportCount = fileSummaries.reduce(
+        (s: number, f: AstFileSummary) => s + (f.exports?.length || 0),
+        0
+      );
       const asyncCount = fileSummaries.reduce(
-        (s: any, f: any) => s + (f.methods || []).filter((m: any) => m.isAsync).length,
+        (s: number, f: AstFileSummary) =>
+          s + (f.methods || []).filter((m: AstMethodInfo) => m.isAsync).length,
         0
       );
       const complexMethods = astData.projectMetrics?.complexMethods || [];
@@ -322,12 +572,12 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
 
   // §2: Guard 违规关联
   if (guardAudit?.files) {
-    const dimRelatedViolations: { file: any; rule: any; message: any }[] = [];
+    const dimRelatedViolations: { file: string; rule: string; message: string }[] = [];
     for (const fileResult of guardAudit.files) {
       for (const v of fileResult.violations || []) {
         // 粗略匹配: ruleId / message 是否与维度话题相关
         const ruleText = `${v.ruleId || ''} ${v.message || ''}`.toLowerCase();
-        if (dimId.split('-').some((word: any) => word.length > 3 && ruleText.includes(word))) {
+        if (dimId.split('-').some((word: string) => word.length > 3 && ruleText.includes(word))) {
           dimRelatedViolations.push({
             file: fileResult.filePath,
             rule: v.ruleId,
@@ -366,7 +616,7 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
           totalEdges: edgeCount,
           topModules: (depGraphData.nodes || [])
             .slice(0, 5)
-            .map((n: any) => (typeof n === 'string' ? n : n.label || n.id)),
+            .map((n: string | DepGraphNode) => (typeof n === 'string' ? n : n.label || n.id)),
         },
       };
     }
@@ -384,7 +634,7 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
         dimKeywords.includes('extension'))
     ) {
       // 按 baseClass 聚合分类
-      const catByBase: Record<string, any> = {};
+      const catByBase: Record<string, string[]> = {};
       for (const cat of categories) {
         const base = cat.baseClass || cat.extendedClass || 'Unknown';
         if (!catByBase[base]) {
@@ -417,14 +667,14 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
   ) {
     const protocols = astData.protocols || [];
     // 查找 Delegate/DataSource 协议 — ObjC/Swift 的典型事件/数据流模式
-    const delegateProtocols = protocols.filter((p: any) => {
+    const delegateProtocols = protocols.filter((p: AstProtocolInfo) => {
       const name = (p.name || '').toLowerCase();
       return name.includes('delegate') || name.includes('datasource');
     });
     if (delegateProtocols.length > 0) {
       starters.delegatePatterns = {
         hint: `发现 ${delegateProtocols.length} 个 Delegate/DataSource 协议 — 项目的核心事件/数据传递通道`,
-        data: delegateProtocols.slice(0, 8).map((p: any) => ({
+        data: delegateProtocols.slice(0, 8).map((p: AstProtocolInfo) => ({
           name: p.name,
           methods: p.methodCount || p.methods?.length || 0,
         })),
@@ -432,14 +682,14 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
     }
     // 查找 Notification/Observer 相关类
     const classes = astData.classes || [];
-    const observerClasses = classes.filter((c: any) => {
+    const observerClasses = classes.filter((c: AstClassInfo) => {
       const name = (c.name || '').toLowerCase();
       return name.includes('observer') || name.includes('notification') || name.includes('event');
     });
     if (observerClasses.length > 0) {
       starters.observerPatterns = {
         hint: `发现 ${observerClasses.length} 个 Observer/Notification/Event 类`,
-        data: observerClasses.slice(0, 5).map((c: any) => c.name),
+        data: observerClasses.slice(0, 5).map((c: AstClassInfo) => c.name),
       };
     }
   }
@@ -456,7 +706,7 @@ function buildEvidenceStarters(dim: any, { astData, guardAudit, depGraphData }: 
  * @param {number} fileCount 项目文件数
  * @returns {object} 压缩后的 AST 数据
  */
-function compressAstForBriefing(astProjectSummary: any, fileCount: any) {
+function compressAstForBriefing(astProjectSummary: AstProjectSummary | null, fileCount: number) {
   if (!astProjectSummary) {
     return { available: false, classes: [], protocols: [], categories: [], patterns: {} };
   }
@@ -522,25 +772,27 @@ function compressAstForBriefing(astProjectSummary: any, fileCount: any) {
     protocols: c.protocols || c.conformedProtocols || [],
   }));
 
-  const compressedProtocols = protocols.slice(0, topN).map((p: any) => ({
+  const compressedProtocols = protocols.slice(0, topN).map((p: AstProtocolInfo) => ({
     name: p.name,
     file: p.file || p.relativePath || null,
     methodCount: p.methodCount || p.methods?.length || 0,
     conformers: p.conformers || [],
   }));
 
-  const compressedCategories = categories.slice(0, topN).map((cat: any) => ({
+  const compressedCategories = categories.slice(0, topN).map((cat: AstCategoryInfo) => ({
     baseClass: cat.baseClass || cat.extendedClass,
     name: cat.name,
     file: cat.file || cat.relativePath || null,
-    methods: (cat.methods || []).map((m: any) => (typeof m === 'string' ? m : m.name)).slice(0, 10),
+    methods: (cat.methods || [])
+      .map((m: string | { name: string }) => (typeof m === 'string' ? m : m.name))
+      .slice(0, 10),
   }));
 
   const summary = `${classes.length} classes, ${protocols.length} protocols, ${categories.length} categories, ${astProjectSummary.projectMetrics?.totalMethods || 0} methods`;
 
   // 压缩 patternStats: 保留计数，移除详细列表
   const rawPatterns = astProjectSummary.patternStats || {};
-  const compressedPatterns: Record<string, any> = {};
+  const compressedPatterns: Record<string, PatternValue> = {};
   for (const [key, val] of Object.entries(rawPatterns)) {
     if (typeof val === 'number' || typeof val === 'string' || typeof val === 'boolean') {
       compressedPatterns[key] = val;
@@ -548,7 +800,7 @@ function compressAstForBriefing(astProjectSummary: any, fileCount: any) {
       compressedPatterns[key] = val.length; // 数组 → 计数
     } else if (val && typeof val === 'object') {
       // 嵌套对象: 保留 count/总数，或递归压缩为浅层概要
-      const sub: Record<string, any> = {};
+      const sub: Record<string, number | string | boolean> = {};
       for (const [sk, sv] of Object.entries(val)) {
         if (typeof sv === 'number' || typeof sv === 'string' || typeof sv === 'boolean') {
           sub[sk] = sv;
@@ -585,7 +837,7 @@ function compressAstForBriefing(astProjectSummary: any, fileCount: any) {
 /**
  * 压缩 Code Entity Graph
  */
-function summarizeEntityGraph(codeEntityResult: any) {
+function summarizeEntityGraph(codeEntityResult: CodeEntityResult | null) {
   if (!codeEntityResult) {
     return null;
   }
@@ -600,7 +852,7 @@ function summarizeEntityGraph(codeEntityResult: any) {
  * @param {object|null} callGraphResult - CodeEntityGraph.populateCallGraph() 返回值
  * @returns {object|null}
  */
-function summarizeCallGraph(callGraphResult: any) {
+function summarizeCallGraph(callGraphResult: CallGraphResult | null) {
   if (!callGraphResult) {
     return null;
   }
@@ -614,16 +866,16 @@ function summarizeCallGraph(callGraphResult: any) {
 /**
  * 压缩 Guard 审计结果
  */
-function summarizeGuardFindings(guardAudit: any) {
+function summarizeGuardFindings(guardAudit: GuardAuditForBriefing | null) {
   if (!guardAudit) {
     return null;
   }
 
   // 按 ruleId 聚合 violations
-  const ruleMap: Record<string, any> = {};
+  const ruleMap: Record<string, RuleMapEntry> = {};
 
   // helper: 将单个 violation 累加到 ruleMap
-  const addViolation = (v: any, examplePrefix: any) => {
+  const addViolation = (v: GuardViolationEntry, examplePrefix: string) => {
     if (!ruleMap[v.ruleId]) {
       ruleMap[v.ruleId] = { ruleId: v.ruleId, count: 0, example: null };
     }
@@ -648,7 +900,7 @@ function summarizeGuardFindings(guardAudit: any) {
   }
 
   // 取 top-5 violations
-  const topViolations = (Object.values(ruleMap) as any[])
+  const topViolations = Object.values(ruleMap)
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
 
@@ -670,10 +922,10 @@ function summarizeGuardFindings(guardAudit: any) {
  * @param {Array} activeDimensions 激活的维度定义
  * @returns {object} - executionPlan 对象
  */
-function buildExecutionPlan(activeDimensions: any) {
+function buildExecutionPlan(activeDimensions: DimensionDef[]) {
   const scheduler = new TierScheduler();
   const tiers = scheduler.getTiers();
-  const activeDimIds = new Set(activeDimensions.map((d: any) => d.id));
+  const activeDimIds = new Set(activeDimensions.map((d: DimensionDef) => d.id));
 
   const tierLabels = ['基础数据层', '规范 + 架构 + 模式', '流转 + 实践 + 总结'];
   const tierNotes = [
@@ -699,7 +951,7 @@ function buildExecutionPlan(activeDimensions: any) {
 
   // 处理不在任何 tier 中的维度（Enhancement Pack 追加的）— 按 tierHint 归入
   const scheduledIds = new Set(tiers.flat());
-  const unscheduled = activeDimensions.filter((d: any) => !scheduledIds.has(d.id));
+  const unscheduled = activeDimensions.filter((d: DimensionDef) => !scheduledIds.has(d.id));
   if (unscheduled.length > 0 && plan.length > 0) {
     for (const dim of unscheduled) {
       const hint = typeof dim.tierHint === 'number' ? dim.tierHint : 1;
@@ -746,20 +998,20 @@ export function buildMissionBriefing({
   languageExtension, // §7.1: 语言扩展（反模式、Guard 规则、Agent 注意事项）
   incrementalPlan, // §7.3: 增量 Bootstrap 评估结果
   languageStats, // §7.4: 完整语言分布统计
-}: any) {
+}: MissionBriefingParams) {
   const scheduler = new TierScheduler();
 
   // ── 构建维度任务列表 (v2: 附带 evidenceStarters) ──
-  const dimensions = activeDimensions.map((dim: any) => {
+  const dimensions = activeDimensions.map((dim: DimensionDef) => {
     const tierIndex = scheduler.getTierIndex(dim.id);
     // 优先使用 DEFAULT_TIERS 定义；未定义则取 tierHint；兜底 Tier 1
     const tier =
       tierIndex >= 0 ? tierIndex + 1 : typeof dim.tierHint === 'number' ? dim.tierHint : 1;
-    const task: any = enrichDimensionTask(dim, tier);
+    const task: DimensionTask = enrichDimensionTask(dim, tier);
 
     // §7.3: 增量 Bootstrap — 标记维度状态
     if (incrementalPlan) {
-      const dimPlan = incrementalPlan.dimensions?.find((d: any) => d.id === dim.id);
+      const dimPlan = incrementalPlan.dimensions?.find((d) => d.id === dim.id);
       if (dimPlan?.status) {
         task.status = dimPlan.status; // 'pending' | 'skipped-incremental' | 'completed-checkpoint'
       }
@@ -775,40 +1027,40 @@ export function buildMissionBriefing({
   });
 
   // ── 选择语言自适应的 example ──
-  const lang = projectMeta.primaryLanguage || 'text';
+  const lang = String(projectMeta.primaryLanguage || 'text');
   const example =
-    (EXAMPLE_TEMPLATES as Record<string, any>)[lang] ||
-    (EXAMPLE_TEMPLATES as Record<string, any>)[lang.toLowerCase()] ||
+    (EXAMPLE_TEMPLATES as Record<string, unknown>)[lang] ||
+    (EXAMPLE_TEMPLATES as Record<string, unknown>)[lang.toLowerCase()] ||
     EXAMPLE_TEMPLATES._default;
 
   // ── 组装 ──
-  const briefing: any = {
+  const briefing: MissionBriefing = {
     projectMeta,
 
-    ast: compressAstForBriefing(astData, projectMeta.fileCount || 0),
+    ast: compressAstForBriefing(astData ?? null, (projectMeta.fileCount as number) || 0),
 
-    codeEntityGraph: summarizeEntityGraph(codeEntityResult),
+    codeEntityGraph: summarizeEntityGraph(codeEntityResult ?? null),
 
-    callGraph: summarizeCallGraph(callGraphResult),
+    callGraph: summarizeCallGraph(callGraphResult ?? null),
 
     dependencyGraph: depGraphData
       ? {
-          nodes: (depGraphData.nodes || []).map((n: any) => ({
-            id: typeof n === 'string' ? n : n.id,
-            label: typeof n === 'string' ? n : n.label,
-            fileCount: n.fileCount || undefined,
+          nodes: (depGraphData.nodes || []).map((n: string | DepGraphNode) => ({
+            id: typeof n === 'string' ? n : n.id || '',
+            label: typeof n === 'string' ? n : n.label || '',
+            fileCount: typeof n === 'string' ? undefined : n.fileCount,
           })),
           edges: (depGraphData.edges || []).slice(0, 100), // 限制边数
         }
       : null,
 
-    guardFindings: summarizeGuardFindings(guardAudit),
+    guardFindings: summarizeGuardFindings(guardAudit ?? null),
 
-    targets: (targets || []).map((t: any) => ({
+    targets: (targets || []).map((t: string | TargetInfo) => ({
       name: typeof t === 'string' ? t : t.name,
-      type: t.type || 'target',
-      inferredRole: t.inferredRole || undefined,
-      fileCount: t.fileCount || undefined,
+      type: typeof t === 'string' ? 'target' : t.type || 'target',
+      inferredRole: typeof t === 'string' ? undefined : t.inferredRole,
+      fileCount: typeof t === 'string' ? undefined : t.fileCount,
     })),
 
     dimensions,
@@ -842,8 +1094,8 @@ export function buildMissionBriefing({
   if (json.length > RESPONSE_SIZE_LIMIT) {
     // ── Level 1-3: 低代价压缩 (裁剪数据量，保留结构) ──
     // Level 1: 裁剪 dependencyGraph edges
-    if (briefing.dependencyGraph?.edges?.length > 30) {
-      briefing.dependencyGraph.edges = briefing.dependencyGraph.edges.slice(0, 30);
+    if ((briefing.dependencyGraph?.edges?.length ?? 0) > 30) {
+      briefing.dependencyGraph!.edges = briefing.dependencyGraph!.edges.slice(0, 30);
     }
     // Level 2: 减少 AST classes
     if (briefing.ast.classes.length > 20) {
@@ -851,26 +1103,26 @@ export function buildMissionBriefing({
     }
     // Level 3: 压缩 protocols
     if (briefing.ast.protocols.length > 10) {
-      briefing.ast.protocols = briefing.ast.protocols.slice(0, 10).map((p: any) => ({
+      briefing.ast.protocols = briefing.ast.protocols.slice(0, 10).map((p) => ({
         name: p.name,
         methodCount: p.methodCount,
       }));
     }
     // Level 3.5: 进一步压缩 AST 数据 (裁剪 conformers/protocols 列表、categories)
     for (const cls of briefing.ast.classes) {
-      if (cls.protocols?.length > 3) {
-        cls.protocols = cls.protocols.slice(0, 3);
+      if ((cls.protocols?.length ?? 0) > 3) {
+        cls.protocols = cls.protocols!.slice(0, 3);
       }
       delete cls.file; // 文件路径可省略
     }
     for (const p of briefing.ast.protocols) {
-      if (p.conformers?.length > 3) {
-        p.conformers = p.conformers.slice(0, 3);
+      if ((p.conformers?.length ?? 0) > 3) {
+        p.conformers = p.conformers!.slice(0, 3);
       }
       delete p.file;
     }
-    if (briefing.ast.categories?.length > 5) {
-      briefing.ast.categories = briefing.ast.categories.slice(0, 5);
+    if ((briefing.ast.categories?.length ?? 0) > 5) {
+      briefing.ast.categories = briefing.ast.categories!.slice(0, 5);
     }
     // 删除 metrics 中的详细列表
     if (briefing.ast.metrics?.complexMethods) {

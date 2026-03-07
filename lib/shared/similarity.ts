@@ -20,15 +20,15 @@
  * @param {number} [n=2] - n-gram 长度
  * @returns {Set<string>} token 集合
  */
-export function tokenizeForSimilarity(text: any, n = 2) {
+export function tokenizeForSimilarity(text: string, n = 2) {
   if (!text) {
-    return new Set();
+    return new Set<string>();
   }
   const lower = text
     .toLowerCase()
     .replace(/[^a-z0-9\u4e00-\u9fff\u3400-\u4dbf]+/g, ' ')
     .trim();
-  const tokens = new Set();
+  const tokens = new Set<string>();
   const words = lower.split(/\s+/);
   for (const w of words) {
     if (w.length >= n) {
@@ -48,7 +48,7 @@ export function tokenizeForSimilarity(text: any, n = 2) {
  * @param {Set<string>} b - token 集合 B
  * @returns {number} 0.0 - 1.0
  */
-export function jaccardSimilarity(a: any, b: any) {
+export function jaccardSimilarity(a: Set<string>, b: Set<string>) {
   if ((!a || a.size === 0) && (!b || b.size === 0)) {
     return 0;
   }
@@ -74,7 +74,7 @@ export function jaccardSimilarity(a: any, b: any) {
  * @param {number[]} b 向量 B
  * @returns {number} 0.0 - 1.0（输入均为正值时）
  */
-export function cosineSimilarity(a: any, b: any) {
+export function cosineSimilarity(a: number[], b: number[]) {
   if (!a || !b || a.length !== b.length || a.length === 0) {
     return 0;
   }
@@ -100,7 +100,11 @@ export function cosineSimilarity(a: any, b: any) {
  * @param {boolean} [opts.substringBonus=false] 是否启用子串包含加分 (+0.3)
  * @returns {number} 0.0 - 1.0
  */
-export function textSimilarity(textA: any, textB: any, opts: any = {}) {
+export function textSimilarity(
+  textA: string,
+  textB: string,
+  opts: { n?: number; substringBonus?: boolean } = {}
+) {
   const { n = 2, substringBonus = false } = opts;
   const tokensA = tokenizeForSimilarity(textA, n);
   const tokensB = tokenizeForSimilarity(textB, n);

@@ -22,7 +22,7 @@ import { basename, dirname, resolve as pathResolve, relative, sep } from 'node:p
  *   import Module (Swift)       → { moduleName: 'Module', headerName: '', isAngle: false, isSwiftImport: true }
  *   Header.h                    → { moduleName: '', headerName: 'Header.h', isAngle: false, isRaw: true }
  */
-export function parseHeaderString(header: any) {
+export function parseHeaderString(header: string) {
   const t = header.trim();
   // #import <Module/Header.h>
   let m = t.match(/^#(?:import|include)\s+<([^/> ]+)\/([^>]+)>/);
@@ -75,7 +75,11 @@ export function parseHeaderString(header: any) {
  * @param {string} [projectRoot] 项目根目录
  * @returns {string|null} 相对路径 (如 "Foo.h" 或 "../SubDir/Foo.h")，null 表示未找到
  */
-export function findHeaderRelativePath(headerName: any, currentFilePath: any, projectRoot: any) {
+export function findHeaderRelativePath(
+  headerName: string,
+  currentFilePath: string,
+  projectRoot: string | null
+) {
   if (!headerName || !currentFilePath) {
     return null;
   }
@@ -132,7 +136,7 @@ export function findHeaderRelativePath(headerName: any, currentFilePath: any, pr
 /**
  * 递归查找文件（限最大深度）
  */
-export function findFileRecursive(dir: any, fileName: any, maxDepth: any): any {
+export function findFileRecursive(dir: string, fileName: string, maxDepth: number): string | null {
   if (maxDepth <= 0) {
     return null;
   }
@@ -152,7 +156,7 @@ export function findFileRecursive(dir: any, fileName: any, maxDepth: any): any {
       const full = pathResolve(dir, e);
       try {
         if (statSync(full).isDirectory()) {
-          const found: any = findFileRecursive(full, fileName, maxDepth - 1);
+          const found: string | null = findFileRecursive(full, fileName, maxDepth - 1);
           if (found) {
             return found;
           }
@@ -185,7 +189,16 @@ export function findFileRecursive(dir: any, fileName: any, maxDepth: any): any {
  *   - projectRoot:      项目根目录（用于搜索头文件物理位置）
  * @returns {string} 格式化后的完整 import 行
  */
-export function resolveHeaderFormat(rawHeader: any, ctx: any) {
+export function resolveHeaderFormat(
+  rawHeader: string,
+  ctx: {
+    currentTarget: string | null;
+    headerModuleName: string | null;
+    isSwift: boolean;
+    fullPath: string;
+    projectRoot: string | null;
+  }
+) {
   const { currentTarget, headerModuleName, isSwift, fullPath, projectRoot } = ctx;
   const parsed = parseHeaderString(rawHeader);
 
@@ -255,7 +268,7 @@ export function resolveHeaderFormat(rawHeader: any, ctx: any) {
 /**
  * 从文件中收集已有的 import 语句
  */
-export function collectImportsFromFile(filePath: any, isSwift: any) {
+export function collectImportsFromFile(filePath: string, isSwift: boolean) {
   try {
     if (!existsSync(filePath)) {
       return [];
@@ -284,7 +297,7 @@ export function collectImportsFromFile(filePath: any, isSwift: any) {
 /**
  * 收集 .m 文件对应 .h 文件中的 imports（ObjC 接口/实现配对去重）
  */
-export function collectImportsFromHeaderFile(sourcePath: any, importArray: any) {
+export function collectImportsFromHeaderFile(sourcePath: string, importArray: string[]) {
   const dotIndex = sourcePath.lastIndexOf('.');
   if (dotIndex <= 0) {
     return;
@@ -318,7 +331,7 @@ export function collectImportsFromHeaderFile(sourcePath: any, importArray: any) 
  * @param {string}   headerLine 待插入的 import 行
  * @param {boolean}  isSwift
  */
-export function checkImportStatus(importArray: any, headerLine: any, isSwift: any) {
+export function checkImportStatus(importArray: string[], headerLine: string, isSwift: boolean) {
   const trimmed = headerLine.trim();
 
   // 提取 module / headerFileName
@@ -379,7 +392,7 @@ export function checkImportStatus(importArray: any, headerLine: any, isSwift: an
 
       // ── 级别 3: 相似头文件名匹配（case-insensitive） ──
       if (headerFileNameLower) {
-        let importedFileName: any = null;
+        let importedFileName: string | null = null;
         const a = impT.match(/<[^/]+\/([^>]+)>/);
         if (a) {
           importedFileName = a[1].toLowerCase();
@@ -410,8 +423,8 @@ export function checkImportStatus(importArray: any, headerLine: any, isSwift: an
  *   import Module (Swift)      → Module
  *   #import "Local.h"          → null
  */
-export function inferModulesFromHeaders(headers: any) {
-  const modules = new Set();
+export function inferModulesFromHeaders(headers: string[]) {
+  const modules = new Set<string>();
   for (const h of headers) {
     const t = h.trim();
     let m;

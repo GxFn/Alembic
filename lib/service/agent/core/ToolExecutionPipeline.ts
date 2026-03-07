@@ -17,47 +17,72 @@
  * @module core/ToolExecutionPipeline
  */
 
+import type { AgentRuntime } from '../AgentRuntime.js';
 import { SafetyPolicy } from '../policies.js';
+import type { LoopContext } from './LoopContext.js';
 
-/**
- * @typedef {Object} ToolCall
- * @property {string} name 工具名称
- * @property {Object} args 工具参数
- * @property {string} id 调用 ID
- */
+/** 工具调用描述 */
+interface ToolCall {
+  name: string;
+  args: Record<string, unknown>;
+  id: string;
+}
 
-/**
- * @typedef {Object} ToolExecContext
- * @property {import('../AgentRuntime.js').AgentRuntime} runtime 运行时实例
- * @property {import('./LoopContext.js').LoopContext} loopCtx 循环上下文
- * @property {number} iteration 当前迭代次数
- */
+/** 工具 Schema 定义 */
+interface ToolSchema {
+  name?: string;
+  function?: { name: string };
+}
 
-/**
- * @typedef {Object} ToolMetadata
- * @property {boolean} cacheHit 是否缓存命中
- * @property {boolean} blocked 是否被安全策略拦截
- * @property {boolean} isNew 是否为新信息 (ExplorationTracker)
- * @property {number} durationMs 执行耗时
- */
+/** 工具执行上下文 */
+interface ToolExecContext {
+  runtime: AgentRuntime;
+  loopCtx: LoopContext;
+  iteration: number;
+}
 
-/**
- * @typedef {Object} ToolMiddleware
- * @property {string} name 中间件名称
- * @property {Function} [before] 前置钩子: (call, ctx, metadata) => { blocked?, result? } | void
- * @property {Function} [after] 后置钩子: (call, result, ctx, metadata) => void
- */
+/** 工具执行元数据 */
+interface ToolMetadata {
+  cacheHit: boolean;
+  blocked: boolean;
+  isNew: boolean;
+  durationMs: number;
+  dedupMessage?: string;
+  isSubmit?: boolean;
+}
+
+/** before 钩子返回值 */
+interface BeforeVerdict {
+  blocked?: boolean;
+  result?: unknown;
+}
+
+/** 工具中间件 */
+interface ToolMiddleware {
+  name: string;
+  before?: (
+    call: ToolCall,
+    ctx: ToolExecContext,
+    metadata: ToolMetadata
+  ) => BeforeVerdict | undefined | void | Promise<BeforeVerdict | undefined | void>;
+  after?: (
+    call: ToolCall,
+    result: unknown,
+    ctx: ToolExecContext,
+    metadata: ToolMetadata
+  ) => void | Promise<void>;
+}
 
 export class ToolExecutionPipeline {
   /** @type {ToolMiddleware[]} */
-  #middlewares: any[] = [];
+  #middlewares: ToolMiddleware[] = [];
 
   /**
    * 注册中间件
    * @param {ToolMiddleware} middleware
    * @returns {this}
    */
-  use(middleware: any) {
+  use(middleware: ToolMiddleware) {
     this.#middlewares.push(middleware);
     return this;
   }
@@ -74,9 +99,9 @@ export class ToolExecutionPipeline {
    * @param {ToolExecContext} context - { runtime, loopCtx, iteration }
    * @returns {Promise<{ result: *, metadata: ToolMetadata }>}
    */
-  async execute(call: any, context: any) {
-    let toolResult: any = null;
-    const metadata = { cacheHit: false, blocked: false, isNew: false, durationMs: 0 };
+  async execute(call: ToolCall, context: ToolExecContext) {
+    let toolResult: unknown = null;
+    const metadata: ToolMetadata = { cacheHit: false, blocked: false, isNew: false, durationMs: 0 };
 
     // ── before 阶段 ──
     for (const mw of this.#middlewares) {
@@ -121,8 +146,8 @@ export class ToolExecutionPipeline {
           _dimensionScopeId: loopCtx.sharedState?._dimensionScopeId || null,
           _currentRound: loopCtx.iteration || 0,
         });
-      } catch (err: any) {
-        toolResult = { error: err.message };
+      } catch (err: unknown) {
+        toolResult = { error: (err as Error).message };
       }
       metadata.durationMs = Date.now() - t0;
     }
@@ -153,14 +178,14 @@ export class ToolExecutionPipeline {
  */
 export const allowlistGate = {
   name: 'allowlistGate',
-  before(call: any, ctx: any) {
-    const schemas = ctx.loopCtx?.toolSchemas;
+  before(call: ToolCall, ctx: ToolExecContext): BeforeVerdict | undefined {
+    const schemas: ToolSchema[] | undefined = ctx.loopCtx?.toolSchemas;
     // 如果没有 schema 列表（全工具模式），跳过检查
     if (!schemas || schemas.length === 0) {
       return undefined;
     }
 
-    const allowedNames = new Set(schemas.map((s: any) => s.name || s.function?.name));
+    const allowedNames = new Set(schemas.map((s: ToolSchema) => s.name || s.function?.name));
     if (!allowedNames.has(call.name)) {
       ctx.runtime.logger.warn(
         `[ToolPipeline] ⛔ Tool "${call.name}" not in allowlist — blocked (hallucinated call)`
@@ -183,7 +208,7 @@ export const allowlistGate = {
  */
 export const safetyGate = {
   name: 'safetyGate',
-  before(call: any, ctx: any) {
+  before(call: ToolCall, ctx: ToolExecContext): BeforeVerdict | undefined {
     const check = ctx.runtime.policies.validateToolCall(call.name, call.args);
     if (!check.ok) {
       ctx.runtime.logger.warn(
@@ -202,7 +227,7 @@ export const safetyGate = {
  */
 export const cacheCheck = {
   name: 'cacheCheck',
-  before(call: any, ctx: any) {
+  before(call: ToolCall, ctx: ToolExecContext): BeforeVerdict | undefined {
     const mc = ctx.loopCtx.memoryCoordinator;
     if (!mc) {
       return undefined;
@@ -223,7 +248,7 @@ export const cacheCheck = {
  */
 export const observationRecord = {
   name: 'observationRecord',
-  after(call: any, result: any, ctx: any, meta: any) {
+  after(call: ToolCall, result: unknown, ctx: ToolExecContext, meta: ToolMetadata) {
     ctx.loopCtx.memoryCoordinator?.recordObservation?.(
       call.name,
       call.args,
@@ -241,7 +266,7 @@ export const observationRecord = {
  */
 export const trackerSignal = {
   name: 'trackerSignal',
-  after(call: any, result: any, ctx: any, meta: any) {
+  after(call: ToolCall, result: unknown, ctx: ToolExecContext, meta: ToolMetadata) {
     if (ctx.loopCtx.tracker) {
       const r = ctx.loopCtx.tracker.recordToolCall(call.name, call.args, result);
       meta.isNew = r.isNew;
@@ -256,7 +281,7 @@ export const trackerSignal = {
  */
 export const traceRecord = {
   name: 'traceRecord',
-  after(call: any, result: any, ctx: any, meta: any) {
+  after(call: ToolCall, result: unknown, ctx: ToolExecContext, meta: ToolMetadata) {
     ctx.loopCtx.trace?.recordToolCall(call.name, call.args, result, meta.isNew);
   },
 };
@@ -268,7 +293,7 @@ export const traceRecord = {
  */
 export const submitDedup = {
   name: 'submitDedup',
-  after(call: any, result: any, ctx: any, meta: any) {
+  after(call: ToolCall, result: unknown, ctx: ToolExecContext, meta: ToolMetadata) {
     const { sharedState } = ctx.loopCtx;
     if (!sharedState) {
       return;
@@ -277,9 +302,11 @@ export const submitDedup = {
       return;
     }
 
-    const title = call.args?.title || call.args?.category || '';
-    const isRejected = typeof result === 'object' && result?.status === 'rejected';
-    const isError = typeof result === 'object' && (result?.error || result?.status === 'error');
+    const title = String(call.args?.title || call.args?.category || '');
+    const resultObj = result as Record<string, unknown> | null;
+    const isRejected = typeof result === 'object' && resultObj?.status === 'rejected';
+    const isError =
+      typeof result === 'object' && (resultObj?.error || resultObj?.status === 'error');
 
     if (!isRejected && !isError && sharedState.submittedTitles) {
       const normalizedTitle = title.toLowerCase().trim();
@@ -289,7 +316,8 @@ export const submitDedup = {
       } else {
         sharedState.submittedTitles.add(normalizedTitle);
         // 模式指纹去重
-        const pattern = call.args?.content?.pattern || '';
+        const contentObj = call.args?.content as Record<string, unknown> | undefined;
+        const pattern = String(contentObj?.pattern || '');
         if (pattern.length >= 30 && sharedState.submittedPatterns) {
           const fp = pattern
             .replace(/\/\/[^\n]*/g, '')
@@ -315,15 +343,16 @@ export const submitDedup = {
  */
 export const progressEmitter = {
   name: 'progressEmitter',
-  before(call: any, ctx: any) {
+  before(call: ToolCall, ctx: ToolExecContext) {
     ctx.runtime.emitProgress?.('tool_call', { tool: call.name, args: call.args });
   },
-  after(call: any, result: any, ctx: any, meta: any) {
+  after(call: ToolCall, result: unknown, ctx: ToolExecContext, meta: ToolMetadata) {
+    const resultObj = result as Record<string, unknown> | null;
     ctx.runtime.emitProgress?.('tool_end', {
       tool: call.name,
       duration: meta.durationMs,
-      status: result?.error ? 'error' : 'ok',
-      error: result?.error || undefined,
+      status: resultObj?.error ? 'error' : 'ok',
+      error: (resultObj?.error as string | undefined) || undefined,
     });
   },
 };
@@ -336,7 +365,7 @@ export const progressEmitter = {
  */
 export const eventBusPublisher = {
   name: 'eventBusPublisher',
-  before(call: any, ctx: any) {
+  before(call: ToolCall, ctx: ToolExecContext) {
     if (ctx.runtime.bus?.publish) {
       ctx.runtime.bus.publish(
         'tool:call:start',
@@ -348,7 +377,8 @@ export const eventBusPublisher = {
       );
     }
   },
-  after(call: any, result: any, ctx: any, meta: any) {
+  after(call: ToolCall, result: unknown, ctx: ToolExecContext, meta: ToolMetadata) {
+    const resultObj = result as Record<string, unknown> | null;
     if (ctx.runtime.bus?.publish) {
       ctx.runtime.bus.publish(
         'tool:call:end',
@@ -356,7 +386,7 @@ export const eventBusPublisher = {
           agentId: ctx.runtime.id,
           tool: call.name,
           durationMs: meta.durationMs,
-          success: !result?.error,
+          success: !resultObj?.error,
         },
         { source: ctx.runtime.id }
       );

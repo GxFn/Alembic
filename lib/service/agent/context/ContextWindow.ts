@@ -24,6 +24,57 @@
 import Logger from '../../../infrastructure/logging/Logger.js';
 import { estimateTokensFast } from '../../../shared/token-utils.js';
 
+// ─── 类型定义 ──────────────────────────────────────────
+
+/** 工具调用信息 */
+interface ToolCallInfo {
+  id: string;
+  name: string;
+  args?: Record<string, unknown>;
+}
+
+/** 上下文窗口中的消息 */
+export interface ContextMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content?: string | null;
+  toolCalls?: ToolCallInfo[];
+  toolCallId?: string;
+  name?: string;
+}
+
+/** 搜索结果匹配项 */
+interface SearchMatch {
+  file?: string;
+  line?: number;
+  code?: string;
+  context?: string;
+  score?: number;
+  lines?: string[];
+  _truncated?: boolean;
+}
+
+/** 搜索结果对象 */
+interface SearchResultLike {
+  matches?: SearchMatch[];
+  batchResults?: Record<string, SearchResultLike>;
+  total?: number;
+  searchedFiles?: number;
+  _note?: string;
+  _raw?: string;
+}
+
+/** 文件内容结果对象 */
+interface FileResultLike {
+  content?: string;
+  batchResults?: Record<string, FileResultLike>;
+}
+
+/** 工具结果配额 */
+interface ToolResultQuota {
+  maxChars?: number;
+  maxMatches?: number;
+}
+
 /**
  * 一组相关消息的原子单元:
  * - assistant(toolCalls) + 所有后续 tool results
@@ -36,8 +87,8 @@ import { estimateTokensFast } from '../../../shared/token-utils.js';
  */
 
 export class ContextWindow {
-  /** @type {Array<Object>} 统一格式消息 */
-  #messages: any[] = [];
+  /** @type {Array<ContextMessage>} 统一格式消息 */
+  #messages: ContextMessage[] = [];
   /** @type {number} token 预算（默认 24000，约对应 Gemini 的安全阈值） */
   #tokenBudget;
   /** @type {Array<string>} 被压缩掉的轮次摘要（用于 digest 生成） */
@@ -101,7 +152,7 @@ export class ContextWindow {
    * @param {{ isSystem?: boolean }} [opts] - isSystem 为 true 时给予更高预算
    * @returns {number} 建议的 token 预算
    */
-  static resolveTokenBudget(modelName: any, opts: any = {}) {
+  static resolveTokenBudget(modelName: string, opts: { isSystem?: boolean } = {}) {
     const { isSystem = false } = opts;
 
     // 1. 查找模型上下文窗口大小
@@ -144,7 +195,7 @@ export class ContextWindow {
    * 追加用户消息
    * @param {string} content
    */
-  appendUserMessage(content: any) {
+  appendUserMessage(content: string) {
     this.#messages.push({ role: 'user', content });
   }
 
@@ -154,7 +205,7 @@ export class ContextWindow {
    * 独立命名以便审计和搜索。
    * @param {string} content
    */
-  appendUserNudge(content: any) {
+  appendUserNudge(content: string) {
     this.#messages.push({ role: 'user', content });
   }
 
@@ -163,7 +214,7 @@ export class ContextWindow {
    * @param {string|null} text - assistant 文本
    * @param {Array} toolCalls - [{id, name, args}]
    */
-  appendAssistantWithToolCalls(text: any, toolCalls: any) {
+  appendAssistantWithToolCalls(text: string | null, toolCalls: ToolCallInfo[]) {
     this.#messages.push({
       role: 'assistant',
       content: text || null,
@@ -177,7 +228,7 @@ export class ContextWindow {
    * @param {string} name 工具名
    * @param {string} content 工具返回内容（已经过 ToolResultLimiter 截断）
    */
-  appendToolResult(toolCallId: any, name: any, content: any) {
+  appendToolResult(toolCallId: string, name: string, content: string) {
     this.#messages.push({
       role: 'tool',
       toolCallId,
@@ -190,7 +241,7 @@ export class ContextWindow {
    * 追加 assistant 纯文本消息（无工具调用）
    * @param {string} text
    */
-  appendAssistantText(text: any) {
+  appendAssistantText(text: string) {
     this.#messages.push({
       role: 'assistant',
       content: text,
@@ -301,7 +352,7 @@ export class ContextWindow {
    *   Provider 层（GoogleGeminiProvider / ClaudeProvider）的 #convertMessages
    *   已通过 pushOrMerge 自动合并连续同角色消息来处理此情况。
    */
-  #spliceAndSummarize(keepFrom: any, level: any) {
+  #spliceAndSummarize(keepFrom: number, level: number) {
     const removed = this.#messages.slice(1, keepFrom);
 
     // 从被移除的消息中提取已提交候选标题
@@ -466,7 +517,7 @@ export class ContextWindow {
    * 从消息中提取已提交候选到 compactedSubmits
    * @param {number} fromIdx 从哪个索引开始扫描
    */
-  #extractCompactedSubmits(fromIdx: any) {
+  #extractCompactedSubmits(fromIdx: number) {
     for (let i = fromIdx; i < this.#messages.length; i++) {
       const m = this.#messages[i];
       if (m.role === 'assistant' && m.toolCalls) {
@@ -487,7 +538,10 @@ export class ContextWindow {
    */
   #findLastToolRoundStart() {
     for (let i = this.#messages.length - 1; i >= 1; i--) {
-      if (this.#messages[i].role === 'assistant' && this.#messages[i].toolCalls?.length > 0) {
+      if (
+        this.#messages[i].role === 'assistant' &&
+        (this.#messages[i].toolCalls?.length ?? 0) > 0
+      ) {
         return i;
       }
     }
@@ -501,7 +555,10 @@ export class ContextWindow {
   #findAllToolRoundStarts() {
     const starts: number[] = [];
     for (let i = 1; i < this.#messages.length; i++) {
-      if (this.#messages[i].role === 'assistant' && this.#messages[i].toolCalls?.length > 0) {
+      if (
+        this.#messages[i].role === 'assistant' &&
+        (this.#messages[i].toolCalls?.length ?? 0) > 0
+      ) {
         starts.push(i);
       }
     }
@@ -519,7 +576,7 @@ export class ContextWindow {
  * @param {{ maxChars: number, maxMatches: number }} quota 动态配额
  * @returns {string} 压缩后的结果字符串
  */
-export function limitToolResult(toolName: any, result: any, quota: any) {
+export function limitToolResult(toolName: string, result: unknown, quota: ToolResultQuota) {
   const { maxChars = 4000, maxMatches = 10 } = quota;
 
   // submit_knowledge / submit_with_check 结果很短，不截断
@@ -530,12 +587,16 @@ export function limitToolResult(toolName: any, result: any, quota: any) {
 
   // search_project_code: 限制匹配数 + 截断上下文（支持批量模式）
   if (toolName === 'search_project_code') {
-    if (result && typeof result === 'object' && result.batchResults) {
+    if (result && typeof result === 'object' && (result as SearchResultLike).batchResults) {
       // 批量模式：对每个 pattern 的结果独立限制（直接操作对象，避免 stringify→parse 往返）
-      const limited = { ...result };
-      const perKeyChars = Math.floor(maxChars / Object.keys(limited.batchResults).length);
-      for (const [key, sub] of Object.entries(limited.batchResults)) {
-        limited.batchResults[key] = limitSearchResultObj(sub, Math.min(maxMatches, 3), perKeyChars);
+      const limited: SearchResultLike = { ...(result as SearchResultLike) };
+      const perKeyChars = Math.floor(maxChars / Object.keys(limited.batchResults!).length);
+      for (const [key, sub] of Object.entries(limited.batchResults!)) {
+        limited.batchResults![key] = limitSearchResultObj(
+          sub,
+          Math.min(maxMatches, 3),
+          perKeyChars
+        );
       }
       const raw = JSON.stringify(limited);
       return raw.length > maxChars ? `${raw.substring(0, maxChars)}\n... [batch truncated]` : raw;
@@ -545,7 +606,7 @@ export function limitToolResult(toolName: any, result: any, quota: any) {
 
   // read_project_file: 限制字符数（支持批量模式）
   if (toolName === 'read_project_file') {
-    if (result && typeof result === 'object' && result.batchResults) {
+    if (result && typeof result === 'object' && (result as FileResultLike).batchResults) {
       const raw = JSON.stringify(result);
       return raw.length > maxChars ? `${raw.substring(0, maxChars)}\n... [batch truncated]` : raw;
     }
@@ -566,7 +627,7 @@ export function limitToolResult(toolName: any, result: any, quota: any) {
  * search_project_code 返回格式:
  *   { matches: [{ file, line, code, context, score }], total, searchedFiles }
  */
-function limitSearchResult(result: any, maxMatches: any, maxChars: any) {
+function limitSearchResult(result: unknown, maxMatches: number, maxChars: number) {
   if (typeof result === 'string') {
     return result.length > maxChars ? `${result.substring(0, maxChars)}\n... [truncated]` : result;
   }
@@ -576,10 +637,11 @@ function limitSearchResult(result: any, maxMatches: any, maxChars: any) {
   }
 
   // 深拷贝避免修改原对象
-  const limited = { ...result };
+  const src = result as SearchResultLike;
+  const limited: SearchResultLike = { ...src };
   if (Array.isArray(limited.matches)) {
-    limited.matches = limited.matches.slice(0, maxMatches).map((m: any) => {
-      const copy = { ...m };
+    limited.matches = limited.matches.slice(0, maxMatches).map((m: SearchMatch) => {
+      const copy: SearchMatch = { ...m };
       // 截断每个匹配的 context 字段（多行文本）
       if (copy.context && typeof copy.context === 'string') {
         const contextLines = copy.context.split('\n');
@@ -594,8 +656,8 @@ function limitSearchResult(result: any, maxMatches: any, maxChars: any) {
       }
       return copy;
     });
-    if (result.matches.length > maxMatches) {
-      limited._note = `Showing ${maxMatches} of ${result.matches.length} matches`;
+    if (src.matches!.length > maxMatches) {
+      limited._note = `Showing ${maxMatches} of ${src.matches!.length} matches`;
     }
   }
 
@@ -610,18 +672,23 @@ function limitSearchResult(result: any, maxMatches: any, maxChars: any) {
  * 限制搜索结果（返回对象） — 用于批量模式，避免 JSON.stringify → JSON.parse 往返
  * 当源码含控制字符时，stringify→substring 截断会破坏 JSON 结构导致 parse 失败
  */
-function limitSearchResultObj(result: any, maxMatches: any, maxChars: any) {
+function limitSearchResultObj(
+  result: unknown,
+  maxMatches: number,
+  maxChars: number
+): SearchResultLike {
   if (!result || typeof result !== 'object') {
-    return result || {};
+    return (result || {}) as SearchResultLike;
   }
   if (typeof result === 'string') {
-    return { _raw: result.substring(0, maxChars) };
+    return { _raw: (result as string).substring(0, maxChars) };
   }
 
-  const limited = { ...result };
+  const src = result as SearchResultLike;
+  const limited: SearchResultLike = { ...src };
   if (Array.isArray(limited.matches)) {
-    limited.matches = limited.matches.slice(0, maxMatches).map((m: any) => {
-      const copy = { ...m };
+    limited.matches = limited.matches.slice(0, maxMatches).map((m: SearchMatch) => {
+      const copy: SearchMatch = { ...m };
       if (copy.context && typeof copy.context === 'string') {
         const contextLines = copy.context.split('\n');
         if (contextLines.length > 7) {
@@ -638,8 +705,8 @@ function limitSearchResultObj(result: any, maxMatches: any, maxChars: any) {
       }
       return copy;
     });
-    if (result.matches.length > maxMatches) {
-      limited._note = `Showing ${maxMatches} of ${result.matches.length} matches`;
+    if (src.matches!.length > maxMatches) {
+      limited._note = `Showing ${maxMatches} of ${src.matches!.length} matches`;
     }
   }
   return limited;
@@ -648,7 +715,7 @@ function limitSearchResultObj(result: any, maxMatches: any, maxChars: any) {
 /**
  * 限制文件内容 — 截断 content 字段
  */
-function limitFileContent(result: any, maxChars: any) {
+function limitFileContent(result: unknown, maxChars: number) {
   if (typeof result === 'string') {
     return result.length > maxChars ? `${result.substring(0, maxChars)}\n... [truncated]` : result;
   }
@@ -657,7 +724,8 @@ function limitFileContent(result: any, maxChars: any) {
     return JSON.stringify(result || {});
   }
 
-  const limited = { ...result };
+  const src = result as FileResultLike;
+  const limited: FileResultLike = { ...src };
   if (limited.content && limited.content.length > maxChars) {
     const lines = limited.content.split('\n');
     let truncated = '';
@@ -667,7 +735,7 @@ function limitFileContent(result: any, maxChars: any) {
       }
       truncated += `${line}\n`;
     }
-    limited.content = `${truncated}... [truncated at ${maxChars} chars, total ${result.content.length}]`;
+    limited.content = `${truncated}... [truncated at ${maxChars} chars, total ${src.content!.length}]`;
   }
 
   return JSON.stringify(limited);

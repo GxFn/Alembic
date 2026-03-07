@@ -10,6 +10,20 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import { RULE_LEARNER } from '../../shared/constants.js';
 import pathGuard from '../../shared/PathGuard.js';
 
+interface RuleStat {
+  triggers: number;
+  correct: number;
+  falsePositive: number;
+  falseNegative: number;
+  firstTriggered: string | null;
+  lastTriggered: string | null;
+  lastFeedback: string | null;
+}
+
+interface LearnerData {
+  ruleStats: Record<string, RuleStat>;
+}
+
 const PROBLEMATIC_THRESHOLD = {
   falsePositiveRate: RULE_LEARNER.PROBLEMATIC_FALSE_POSITIVE_RATE,
   minTriggers: RULE_LEARNER.PROBLEMATIC_MIN_TRIGGERS,
@@ -17,9 +31,12 @@ const PROBLEMATIC_THRESHOLD = {
 
 export class RuleLearner {
   #learnerPath;
-  #data; // { ruleStats: { [ruleId]: { triggers, correct, falsePositive, falseNegative } } }
+  #data: LearnerData;
 
-  constructor(projectRoot: any, options: any = {}) {
+  constructor(
+    projectRoot: string,
+    options: { knowledgeBaseDir?: string; internalDir?: string } = {}
+  ) {
     const kbDir = options.knowledgeBaseDir || 'AutoSnippet';
     this.#learnerPath = join(projectRoot, kbDir, 'guard-learner.json');
     pathGuard.assertProjectWriteSafe(this.#learnerPath);
@@ -32,7 +49,7 @@ export class RuleLearner {
    * @param {string} ruleId
    * @param {{ filePath?: string, message?: string }} context
    */
-  recordTrigger(ruleId: any, context: any = {}) {
+  recordTrigger(ruleId: string, _context: Record<string, unknown> = {}) {
     const stat = this.#ensureStat(ruleId);
     stat.triggers++;
     const now = new Date().toISOString();
@@ -48,7 +65,7 @@ export class RuleLearner {
    * @param {string} ruleId
    * @param {'correct'|'falsePositive'|'falseNegative'} feedbackType
    */
-  recordFeedback(ruleId: any, feedbackType: any) {
+  recordFeedback(ruleId: string, feedbackType: 'correct' | 'falsePositive' | 'falseNegative') {
     const stat = this.#ensureStat(ruleId);
     if (feedbackType === 'correct') {
       stat.correct++;
@@ -66,7 +83,7 @@ export class RuleLearner {
    * @param {string} ruleId
    * @returns {{ precision: number, recall: number, f1: number, triggers: number, falsePositiveRate: number }}
    */
-  getMetrics(ruleId: any) {
+  getMetrics(ruleId: string) {
     const stat = this.#data.ruleStats[ruleId];
     if (!stat || stat.triggers === 0) {
       return { precision: 1, recall: 1, f1: 1, triggers: 0, falsePositiveRate: 0 };
@@ -89,8 +106,12 @@ export class RuleLearner {
    * @returns {Array<{ ruleId: string, metrics: object, recommendation: string }>}
    */
   getProblematicRules() {
-    const results: any[] = [];
-    for (const [ruleId, stat] of Object.entries(this.#data.ruleStats) as [string, any][]) {
+    const results: {
+      ruleId: string;
+      metrics: ReturnType<RuleLearner['getMetrics']>;
+      recommendation: string;
+    }[] = [];
+    for (const [ruleId, stat] of Object.entries(this.#data.ruleStats)) {
       if (stat.triggers < PROBLEMATIC_THRESHOLD.minTriggers) {
         continue;
       }
@@ -115,7 +136,8 @@ export class RuleLearner {
    * 获取所有规则统计
    */
   getAllStats() {
-    const result: Record<string, any> = {};
+    const result: Record<string, RuleStat & { metrics: ReturnType<RuleLearner['getMetrics']> }> =
+      {};
     for (const [ruleId] of Object.entries(this.#data.ruleStats)) {
       result[ruleId] = {
         ...this.#data.ruleStats[ruleId],
@@ -128,7 +150,7 @@ export class RuleLearner {
   /**
    * 重置指定规则或全部统计
    */
-  resetStats(ruleId = null) {
+  resetStats(ruleId: string | null = null) {
     if (ruleId) {
       delete this.#data.ruleStats[ruleId];
     } else {
@@ -144,7 +166,13 @@ export class RuleLearner {
    * @returns {Array<{ type: string, ruleId: string, message: string, confidence: number, evidence: object }>}
    */
   suggestRules() {
-    const suggestions: any[] = [];
+    const suggestions: {
+      type: string;
+      ruleId: string;
+      message: string;
+      confidence: number;
+      evidence: Record<string, unknown>;
+    }[] = [];
 
     // 策略 1: 从高误报规则推导改进建议
     const problematic = this.getProblematicRules();
@@ -186,7 +214,7 @@ export class RuleLearner {
     }
 
     // 策略 3: 长期无触发的规则 → 可能不适用
-    for (const [ruleId, stat] of Object.entries(allStats) as [string, any][]) {
+    for (const [ruleId, stat] of Object.entries(allStats)) {
       if (stat.triggers === 0 && stat.lastTriggered) {
         const daysSinceLastTrigger =
           (Date.now() - new Date(stat.lastTriggered).getTime()) / 86400000;
@@ -214,7 +242,7 @@ export class RuleLearner {
    * @param {string} ruleId
    * @returns {{ status: string, triggers: number, precision: number, recommendation: string, daysSinceFirstTrigger?: number }}
    */
-  trackRuleEffectiveness(ruleId: any) {
+  trackRuleEffectiveness(ruleId: string) {
     const stat = this.#data.ruleStats[ruleId];
     if (!stat) {
       return { status: 'no_data', triggers: 0, precision: 1, recommendation: 'monitor' };
@@ -265,7 +293,7 @@ export class RuleLearner {
 
   // ─── 私有 ─────────────────────────────────────────────
 
-  #ensureStat(ruleId: any) {
+  #ensureStat(ruleId: string): RuleStat {
     if (!this.#data.ruleStats[ruleId]) {
       this.#data.ruleStats[ruleId] = {
         triggers: 0,
@@ -298,14 +326,14 @@ export class RuleLearner {
         mkdirSync(dir, { recursive: true });
       }
       writeFileSync(this.#learnerPath, JSON.stringify(this.#data, null, 2));
-    } catch (err: any) {
+    } catch (err: unknown) {
       Logger.getInstance().warn('RuleLearner: failed to persist learner data', {
-        error: err.message,
+        error: (err as Error).message,
       });
     }
   }
 
-  #migrateOldPath(projectRoot: any, internalDir: any) {
+  #migrateOldPath(projectRoot: string, internalDir: string) {
     try {
       const oldPath = join(projectRoot, internalDir, 'guard-learner.json');
       if (existsSync(oldPath) && !existsSync(this.#learnerPath)) {

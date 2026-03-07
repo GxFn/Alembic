@@ -18,14 +18,29 @@
  * @param {Record<string, number>} [options.codeLevelThresholds] 可配置阈值
  * @returns {Array<{ruleId, message, severity, line, snippet, dimension?, fixSuggestion?}>}
  */
-export function runCodeLevelChecks(code: any, language: any, lines: any, options: any = {}) {
-  const violations: any[] = [];
+interface CodeLevelViolation {
+  ruleId: string;
+  message: string;
+  severity: string;
+  line: number;
+  snippet: string;
+  dimension?: string;
+  fixSuggestion?: string;
+}
+
+export function runCodeLevelChecks(
+  code: string,
+  language: string,
+  lines: string[],
+  options: { disabledRules?: string[]; codeLevelThresholds?: Record<string, number> } = {}
+) {
+  const violations: CodeLevelViolation[] = [];
   const disabledSet = new Set(options.disabledRules || []);
   const thresholds = options.codeLevelThresholds || {};
   /** 判断 ruleId 是否被禁用 */
-  const isDisabled = (ruleId: any) => disabledSet.has(ruleId);
+  const isDisabled = (ruleId: string) => disabledSet.has(ruleId);
   /** 获取可配置阈值，回退到默认值 */
-  const threshold = (ruleId: any, defaultVal: any) => thresholds[ruleId] ?? defaultVal;
+  const threshold = (ruleId: string, defaultVal: number) => thresholds[ruleId] ?? defaultVal;
 
   // ── ObjC ──
   if (language === 'objc') {
@@ -35,7 +50,7 @@ export function runCodeLevelChecks(code: any, language: any, lines: any, options
       code.includes('addObserver') &&
       !code.includes('removeObserver')
     ) {
-      const lineIdx = lines.findIndex((l: any) => /addObserver/.test(l));
+      const lineIdx = lines.findIndex((l) => /addObserver/.test(l));
       violations.push({
         ruleId: 'objc-kvo-missing-remove',
         message: '存在 addObserver 未发现配对 removeObserver，请在 dealloc 或合适时机移除',
@@ -201,11 +216,11 @@ export function runCodeLevelChecks(code: any, language: any, lines: any, options
     if (!isDisabled('java-resource-leak')) {
       const resourcePatterns =
         /new\s+(FileInputStream|FileOutputStream|BufferedReader|BufferedWriter|Connection|Socket|FileReader|FileWriter|Scanner)\s*\(/;
-      const hasResourceAlloc = lines.some((l: any) => resourcePatterns.test(l));
+      const hasResourceAlloc = lines.some((l) => resourcePatterns.test(l));
       const hasTryWithResource = code.includes('try (') || code.includes('try(');
       const hasFinallyClose = code.includes('finally') && code.includes('.close()');
       if (hasResourceAlloc && !hasTryWithResource && !hasFinallyClose) {
-        const lineIdx = lines.findIndex((l: any) => resourcePatterns.test(l));
+        const lineIdx = lines.findIndex((l) => resourcePatterns.test(l));
         violations.push({
           ruleId: 'java-resource-leak',
           message: '资源分配后未使用 try-with-resources 或 finally/close()，可能造成资源泄露',
@@ -226,7 +241,7 @@ export function runCodeLevelChecks(code: any, language: any, lines: any, options
         if (m && m[1] !== 'this' && !m[1].endsWith('.class')) {
           // 检查该变量是否声明为 final
           const varName = m[1];
-          const declaredFinal = lines.some((l: any) =>
+          const declaredFinal = lines.some((l) =>
             new RegExp(`final\\s+\\w+.*\\b${varName}\\b`).test(l)
           );
           if (!declaredFinal) {
@@ -266,7 +281,7 @@ export function runCodeLevelChecks(code: any, language: any, lines: any, options
 
     // runBlocking 在 main/UI 线程 — 可能冻结 UI
     if (!isDisabled('kotlin-run-blocking') && code.includes('runBlocking')) {
-      const lineIdx = lines.findIndex((l: any) => /runBlocking\s*[({]/.test(l));
+      const lineIdx = lines.findIndex((l) => /runBlocking\s*[({]/.test(l));
       if (lineIdx >= 0) {
         violations.push({
           ruleId: 'kotlin-run-blocking',
@@ -345,7 +360,7 @@ export function runCodeLevelChecks(code: any, language: any, lines: any, options
     ) {
       // 检查 dispose 方法后是否还有 async 回调中的 setState
       const disposeIdx = lines.findIndex(
-        (l: any) => /void\s+dispose\s*\(/.test(l) || /\bsuper\.dispose\(\)/.test(l)
+        (l) => /void\s+dispose\s*\(/.test(l) || /\bsuper\.dispose\(\)/.test(l)
       );
       if (disposeIdx >= 0) {
         // 检查是否有 mounted 检查保护

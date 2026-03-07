@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getProjectSkillsPath } from '../../../infrastructure/config/Paths.js';
 import pathGuard from '../../../shared/PathGuard.js';
+import type { McpContext } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = path.resolve(__dirname, '../../../../skills');
@@ -40,7 +41,7 @@ function _getProjectSkillsDir() {
  * 返回 { description, createdBy, createdAt }，缺失字段为 null。
  * 同时兼容旧格式（无 createdBy 的 SKILL.md）。
  */
-function _parseSkillMeta(skillName: any, baseDir = SKILLS_DIR) {
+function _parseSkillMeta(skillName: string, baseDir = SKILLS_DIR) {
   try {
     const content = fs.readFileSync(path.join(baseDir, skillName, 'SKILL.md'), 'utf8');
     const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -146,8 +147,11 @@ export function listSkills() {
     // _meta：附带 SignalCollector 推荐计数（如果后台服务可用）
     let suggestionCount = 0;
     try {
-      if ((global as any)._signalCollector) {
-        const snapshot = (global as any)._signalCollector.getSnapshot();
+      const g = globalThis as unknown as {
+        _signalCollector?: { getSnapshot(): { lastResult?: { newSuggestions?: number } } };
+      };
+      if (g._signalCollector) {
+        const snapshot = g._signalCollector.getSnapshot();
         suggestionCount = snapshot?.lastResult?.newSuggestions || 0;
       }
     } catch {
@@ -163,10 +167,13 @@ export function listSkills() {
         _meta: { signalSuggestions: suggestionCount },
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return JSON.stringify({
       success: false,
-      error: { code: 'SKILLS_READ_ERROR', message: err.message },
+      error: {
+        code: 'SKILLS_READ_ERROR',
+        message: err instanceof Error ? err.message : String(err),
+      },
     });
   }
 }
@@ -182,7 +189,7 @@ export function listSkills() {
  * @param {object} args  { skillName: string, section?: string }
  * @returns {string} JSON envelope
  */
-export function loadSkill(_ctx: any, args: any) {
+export function loadSkill(_ctx: McpContext | null, args: { skillName?: string; section?: string }) {
   const { skillName, section } = args || {};
 
   if (!skillName) {
@@ -271,7 +278,16 @@ export function loadSkill(_ctx: any, args: any) {
  * @param {object} args  { name, description, content, overwrite? }
  * @returns {string} JSON envelope
  */
-export function createSkill(_ctx: any, args: any) {
+interface CreateSkillArgs {
+  name?: string;
+  description?: string;
+  content?: string;
+  overwrite?: boolean;
+  createdBy?: string;
+  title?: string;
+}
+
+export function createSkill(_ctx: McpContext | null, args: CreateSkillArgs) {
   const {
     name,
     description,
@@ -354,10 +370,13 @@ export function createSkill(_ctx: any, args: any) {
     const frontmatter = fmLines.join('\n');
 
     fs.writeFileSync(skillPath, frontmatter + content, 'utf8');
-  } catch (err: any) {
+  } catch (err: unknown) {
     return JSON.stringify({
       success: false,
-      error: { code: 'WRITE_ERROR', message: `Failed to write SKILL.md: ${err.message}` },
+      error: {
+        code: 'WRITE_ERROR',
+        message: `Failed to write SKILL.md: ${err instanceof Error ? err.message : String(err)}`,
+      },
     });
   }
 
@@ -366,8 +385,11 @@ export function createSkill(_ctx: any, args: any) {
 
   // ── 清理 SignalCollector 已创建的 pendingSuggestions ──
   try {
-    if ((global as any)._signalCollector) {
-      (global as any)._signalCollector.removePendingSuggestion(name);
+    const g = globalThis as unknown as {
+      _signalCollector?: { removePendingSuggestion(name: string): void };
+    };
+    if (g._signalCollector) {
+      g._signalCollector.removePendingSuggestion(name);
     }
   } catch {
     /* silent */
@@ -394,7 +416,7 @@ export function createSkill(_ctx: any, args: any) {
 function _regenerateEditorIndex() {
   try {
     // 扫描项目级 Skills
-    const projectSkills: { name: string; summary: any }[] = [];
+    const projectSkills: { name: string; summary: string }[] = [];
     const projectSkillsDir = _getProjectSkillsDir();
     try {
       const dirs = fs
@@ -447,8 +469,8 @@ function _regenerateEditorIndex() {
     fs.writeFileSync(indexPath, mdcContent, 'utf8');
 
     return { success: true, path: indexPath, skillCount: projectSkills.length };
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -464,7 +486,7 @@ function _regenerateEditorIndex() {
  * @param {object} args  { name: string }
  * @returns {string} JSON envelope
  */
-export function deleteSkill(_ctx: any, args: any) {
+export function deleteSkill(_ctx: McpContext | null, args: { name?: string }) {
   const { name } = args || {};
 
   if (!name) {
@@ -502,20 +524,23 @@ export function deleteSkill(_ctx: any, args: any) {
   // ── 路径安全检查 ──
   try {
     pathGuard.assertProjectWriteSafe(skillDir);
-  } catch (err: any) {
+  } catch (err: unknown) {
     return JSON.stringify({
       success: false,
-      error: { code: 'PATH_GUARD', message: err.message },
+      error: { code: 'PATH_GUARD', message: err instanceof Error ? err.message : String(err) },
     });
   }
 
   // ── 删除目录 ──
   try {
     fs.rmSync(skillDir, { recursive: true, force: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return JSON.stringify({
       success: false,
-      error: { code: 'DELETE_ERROR', message: `Failed to delete skill: ${err.message}` },
+      error: {
+        code: 'DELETE_ERROR',
+        message: `Failed to delete skill: ${err instanceof Error ? err.message : String(err)}`,
+      },
     });
   }
 
@@ -545,7 +570,13 @@ export function deleteSkill(_ctx: any, args: any) {
  * @param {object} args  { name, description?, content? }
  * @returns {string} JSON envelope
  */
-export function updateSkill(_ctx: any, args: any) {
+interface UpdateSkillArgs {
+  name?: string;
+  description?: string;
+  content?: string;
+}
+
+export function updateSkill(_ctx: McpContext | null, args: UpdateSkillArgs) {
   const { name, description, content } = args || {};
 
   if (!name) {
@@ -604,7 +635,7 @@ export function updateSkill(_ctx: any, args: any) {
     }
 
     // 解析已有字段
-    const getField = (fm: any, key: any) => {
+    const getField = (fm: string, key: string) => {
       const m = fm.match(new RegExp(`^${key}:\\s*(.+?)$`, 'm'));
       return m ? m[1].trim() : null;
     };
@@ -633,10 +664,13 @@ export function updateSkill(_ctx: any, args: any) {
 
     pathGuard.assertProjectWriteSafe(path.join(projectSkillsDir, name));
     fs.writeFileSync(skillPath, fmLines.join('\n') + newBody, 'utf8');
-  } catch (err: any) {
+  } catch (err: unknown) {
     return JSON.stringify({
       success: false,
-      error: { code: 'UPDATE_ERROR', message: `Failed to update skill: ${err.message}` },
+      error: {
+        code: 'UPDATE_ERROR',
+        message: `Failed to update skill: ${err instanceof Error ? err.message : String(err)}`,
+      },
     });
   }
 
@@ -670,7 +704,7 @@ export function updateSkill(_ctx: any, args: any) {
  * @param {object} ctx  MCP context（含 container）
  * @returns {Promise<string>} JSON envelope
  */
-export async function suggestSkills(ctx: any) {
+export async function suggestSkills(ctx: McpContext) {
   try {
     const { SkillAdvisor } = await import('../../../service/skills/SkillAdvisor.js');
     const dbConn = ctx?.container?.get?.('database') || null;
@@ -683,10 +717,10 @@ export async function suggestSkills(ctx: any) {
       success: true,
       data: result,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return JSON.stringify({
       success: false,
-      error: { code: 'SUGGEST_ERROR', message: err.message },
+      error: { code: 'SUGGEST_ERROR', message: err instanceof Error ? err.message : String(err) },
     });
   }
 }
@@ -694,7 +728,7 @@ export async function suggestSkills(ctx: any) {
 /**
  * 推荐相关 Skills（基于静态映射）
  */
-function _getRelatedSkills(skillName: any) {
+function _getRelatedSkills(skillName: string) {
   const relations = {
     'autosnippet-coldstart': [
       'autosnippet-analysis',

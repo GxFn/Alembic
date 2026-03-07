@@ -13,11 +13,11 @@ import { basename } from 'node:path';
  * @param {boolean} isSwift
  */
 export async function handleHeader(
-  watcher: any,
-  fullPath: any,
-  headerLine: any,
-  importArray: any,
-  isSwift: any
+  watcher: import('../FileWatcher.js').FileWatcher,
+  fullPath: string,
+  headerLine: string,
+  importArray: string[],
+  isSwift: boolean
 ) {
   try {
     const HeaderResolver = await import('../../../infrastructure/paths/HeaderResolver.js');
@@ -48,10 +48,10 @@ export async function handleHeader(
     }
     if (result.inserted.length === 0 && result.skipped.length > 0) {
     }
-  } catch (err: any) {
-    console.warn(`  ⚠️ Header 处理失败: ${err.message}`);
+  } catch (err: unknown) {
+    console.warn(`  ⚠️ Header 处理失败: ${(err as Error).message}`);
     if (process.env.ASD_DEBUG === '1') {
-      console.error(err.stack);
+      console.error((err as Error).stack);
     }
   }
 }

@@ -17,6 +17,36 @@
 
 import { EventEmitter } from 'node:events';
 
+/** Guard condition: returns true if transition is allowed */
+type TransitionGuard = (data: Record<string, unknown>) => boolean;
+/** Side-effect action executed after transition */
+type TransitionAction = (data: Record<string, unknown>, payload: Record<string, unknown>) => void;
+
+/** State transition definition */
+interface Transition {
+  from: string;
+  to: string;
+  event: string;
+  guard?: TransitionGuard;
+  action?: TransitionAction;
+}
+
+/** History entry for state changes */
+interface HistoryEntry {
+  phase: string;
+  data: Record<string, unknown>;
+  timestamp: number;
+  event?: string;
+  from?: string;
+}
+
+/** Snapshot used by toJSON / fromJSON */
+interface AgentStateSnapshot {
+  phase?: string;
+  data?: Record<string, unknown>;
+  history?: HistoryEntry[];
+}
+
 /**
  * Agent 执行阶段枚举
  */
@@ -63,15 +93,15 @@ const DEFAULT_TRANSITIONS = [
 
 export class AgentState extends EventEmitter {
   /** @type {string} 当前阶段 */
-  #phase: any;
+  #phase: string;
   /** @type {Object} 用户自定义状态数据 */
-  #data;
+  #data: Record<string, unknown>;
   /** @type {Transition[]} */
-  #transitions: any[];
+  #transitions: Transition[];
   /** @type {Array<{phase: string, data: Object, timestamp: number}>} */
-  #history: any[];
+  #history: HistoryEntry[];
   /** @type {boolean} 是否保留历史 */
-  #keepHistory;
+  #keepHistory: boolean;
 
   /**
    * @param {Object} [opts]
@@ -82,8 +112,8 @@ export class AgentState extends EventEmitter {
    */
   constructor({
     initialData = {},
-    initialPhase = AgentPhase.IDLE,
-    transitions = [],
+    initialPhase = AgentPhase.IDLE as string,
+    transitions = [] as Transition[],
     keepHistory = true,
   } = {}) {
     super();
@@ -115,7 +145,9 @@ export class AgentState extends EventEmitter {
 
   /** Agent 是否处于终态 */
   get isTerminal() {
-    return [AgentPhase.COMPLETED, AgentPhase.FAILED, AgentPhase.ABORTED].includes(this.#phase);
+    return ([AgentPhase.COMPLETED, AgentPhase.FAILED, AgentPhase.ABORTED] as string[]).includes(
+      this.#phase
+    );
   }
 
   /**
@@ -124,7 +156,7 @@ export class AgentState extends EventEmitter {
    * @param {Object} [payload={}] 附加数据（合并到 state.data）
    * @returns {boolean} 是否成功转移
    */
-  send(event: any, payload: any = {}) {
+  send(event: string, payload: Record<string, unknown> = {}) {
     const transition = this.#findTransition(event);
     if (!transition) {
       return false;
@@ -166,7 +198,7 @@ export class AgentState extends EventEmitter {
    * 直接更新状态数据（不触发阶段转移）
    * @param {Object} patch 要合并的数据
    */
-  update(patch: any) {
+  update(patch: Record<string, unknown>) {
     this.#data = { ...this.#data, ...patch };
     this.emit('update', { phase: this.#phase, patch });
   }
@@ -198,7 +230,10 @@ export class AgentState extends EventEmitter {
    * @param {Object} snapshot
    * @returns {AgentState}
    */
-  static fromJSON(snapshot: any, opts: any = {}) {
+  static fromJSON(
+    snapshot: AgentStateSnapshot,
+    opts: { transitions?: Transition[]; keepHistory?: boolean } = {}
+  ) {
     const state = new AgentState({
       initialData: snapshot.data || {},
       initialPhase: snapshot.phase || AgentPhase.IDLE,
@@ -213,7 +248,7 @@ export class AgentState extends EventEmitter {
 
   // ─── 私有方法 ────────────────────────────────
 
-  #findTransition(event: any) {
+  #findTransition(event: string) {
     // 精确匹配优先
     const exact = this.#transitions.find((t) => t.from === this.#phase && t.event === event);
     if (exact) {

@@ -25,133 +25,169 @@ import { RetrievalFunnel } from '../../service/search/RetrievalFunnel.js';
 import { SearchEngine } from '../../service/search/SearchEngine.js';
 import { DimensionCopy } from '../../shared/DimensionCopyRegistry.js';
 import { LanguageService } from '../../shared/LanguageService.js';
+import type { ServiceContainer } from '../ServiceContainer.js';
 
-export function register(c: any) {
+export function register(c: ServiceContainer) {
   // ═══ Knowledge ═══
 
-  c.singleton('confidenceRouter', (ct: any) => new ConfidenceRouter({}, ct.get('qualityScorer')));
+  c.singleton(
+    'confidenceRouter',
+    (ct: ServiceContainer) =>
+      new ConfidenceRouter(
+        {},
+        ct.get('qualityScorer') as ConstructorParameters<typeof ConfidenceRouter>[1]
+      )
+  );
 
   c.singleton(
     'knowledgeService',
-    (ct: any) =>
+    (ct: ServiceContainer) =>
       new KnowledgeService(
-        ct.get('knowledgeRepository'),
-        ct.get('auditLogger'),
-        ct.get('gateway'),
-        ct.get('knowledgeGraphService'),
+        ct.get('knowledgeRepository') as ConstructorParameters<typeof KnowledgeService>[0],
+        ct.get('auditLogger') as ConstructorParameters<typeof KnowledgeService>[1],
+        ct.get('gateway') as ConstructorParameters<typeof KnowledgeService>[2],
+        ct.get('knowledgeGraphService') as ConstructorParameters<typeof KnowledgeService>[3],
         {
           fileWriter: ct.get('knowledgeFileWriter'),
           skillHooks: ct.get('skillHooks'),
           confidenceRouter: ct.get('confidenceRouter'),
           qualityScorer: ct.get('qualityScorer'),
-        }
+        } as ConstructorParameters<typeof KnowledgeService>[4]
       )
   );
 
-  c.singleton('knowledgeGraphService', (ct: any) => new KnowledgeGraphService(ct.get('database')));
+  c.singleton(
+    'knowledgeGraphService',
+    (ct: ServiceContainer) =>
+      new KnowledgeGraphService(
+        ct.get('database') as ConstructorParameters<typeof KnowledgeGraphService>[0]
+      )
+  );
 
-  c.singleton('codeEntityGraph', (ct: any) => {
-    const projectRoot = ct.singletons._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
-    return new CodeEntityGraph(ct.get('database'), { projectRoot });
+  c.singleton('codeEntityGraph', (ct: ServiceContainer) => {
+    const projectRoot =
+      (ct.singletons._projectRoot as string | undefined) ||
+      process.env.ASD_PROJECT_DIR ||
+      process.cwd();
+    return new CodeEntityGraph(
+      ct.get('database') as ConstructorParameters<typeof CodeEntityGraph>[0],
+      { projectRoot }
+    );
   });
 
   // ═══ Search + Vector ═══
 
   c.singleton(
     'searchEngine',
-    (ct: any) => {
+    (ct: ServiceContainer) => {
       const aiProvider = ct.singletons.aiProvider || null;
       const embedProvider = ct.singletons._embedProvider || aiProvider;
-      return new SearchEngine(ct.get('database'), {
-        aiProvider: embedProvider,
-        vectorStore: ct.get('vectorStore'),
-        hybridRetriever: ct.get('hybridRetriever'),
-        crossEncoderReranker: new CrossEncoderReranker({
+      return new SearchEngine(
+        ct.get('database') as ConstructorParameters<typeof SearchEngine>[0],
+        {
           aiProvider: embedProvider,
-          logger: ct.singletons.logger || console,
-        }),
-      });
+          vectorStore: ct.get('vectorStore'),
+          hybridRetriever: ct.get('hybridRetriever'),
+          crossEncoderReranker: new CrossEncoderReranker({
+            aiProvider: embedProvider,
+            logger: ct.singletons.logger || console,
+          } as ConstructorParameters<typeof CrossEncoderReranker>[0]) as InstanceType<
+            typeof CrossEncoderReranker
+          >,
+        } as unknown as ConstructorParameters<typeof SearchEngine>[1]
+      );
     },
     { aiDependent: true }
   );
 
   c.singleton(
     'retrievalFunnel',
-    (ct: any) => {
+    (ct: ServiceContainer) => {
       const aiProvider = ct.singletons.aiProvider || null;
       const embedProvider = ct.singletons._embedProvider || aiProvider;
       return new RetrievalFunnel({
         vectorStore: ct.get('vectorStore'),
         aiProvider: embedProvider,
-      });
+      } as ConstructorParameters<typeof RetrievalFunnel>[0]);
     },
     { aiDependent: true }
   );
 
-  c.singleton('vectorStore', (ct: any) => {
-    const projectRoot = ct.singletons._projectRoot || process.cwd();
-    const config = ct.singletons._config?.vector || {};
-    const adapter = config.adapter || 'auto';
+  c.singleton('vectorStore', (ct: ServiceContainer) => {
+    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
+    const config =
+      ((ct.singletons._config as Record<string, unknown> | undefined)?.vector as
+        | Record<string, unknown>
+        | undefined) || {};
+    const adapter = (config.adapter as string) || 'auto';
 
     // 根据配置选择适配器
     if (adapter === 'json') {
-      const store = new JsonVectorAdapter(projectRoot);
+      const store = new JsonVectorAdapter(projectRoot as string);
       store.initSync();
       return store;
     }
 
     if (adapter === 'hnsw' || adapter === 'auto') {
       try {
-        const store = new HnswVectorAdapter(projectRoot, {
-          M: config.hnsw?.M,
-          efConstruct: config.hnsw?.efConstruct,
-          efSearch: config.hnsw?.efSearch,
-          quantize: config.quantize,
-          quantizeThreshold: config.quantizeThreshold,
-          flushIntervalMs: config.persistence?.flushIntervalMs,
-          flushBatchSize: config.persistence?.flushBatchSize,
+        const hnsw = (config.hnsw as Record<string, unknown> | undefined) || {};
+        const persistence = (config.persistence as Record<string, unknown> | undefined) || {};
+        const store = new HnswVectorAdapter(projectRoot as string, {
+          M: hnsw.M as number | undefined,
+          efConstruct: hnsw.efConstruct as number | undefined,
+          efSearch: hnsw.efSearch as number | undefined,
+          quantize: config.quantize as string | undefined,
+          quantizeThreshold: config.quantizeThreshold as number | undefined,
+          flushIntervalMs: persistence.flushIntervalMs as number | undefined,
+          flushBatchSize: persistence.flushBatchSize as number | undefined,
         });
         store.initSync();
         return store;
-      } catch (err: any) {
+      } catch (err: unknown) {
         // HNSW 初始化失败, 降级到 JSON — 记录警告便于排查
         const logger = ct.singletons.logger || console;
-        logger.warn?.('[vectorStore] HNSW init failed, falling back to JsonVectorAdapter', {
-          error: err.message,
-          adapter,
-        });
-        const store = new JsonVectorAdapter(projectRoot);
+        (logger as { warn?: (...args: unknown[]) => void }).warn?.(
+          '[vectorStore] HNSW init failed, falling back to JsonVectorAdapter',
+          {
+            error: (err as Error).message,
+            adapter,
+          }
+        );
+        const store = new JsonVectorAdapter(projectRoot as string);
         store.initSync();
         return store;
       }
     }
 
     // 未知适配器, 默认 JSON
-    const store = new JsonVectorAdapter(projectRoot);
+    const store = new JsonVectorAdapter(projectRoot as string);
     store.initSync();
     return store;
   });
 
   c.singleton(
     'indexingPipeline',
-    (ct: any) => {
+    (ct: ServiceContainer) => {
       const aiProvider = ct.singletons.aiProvider || null;
       const embedProvider = ct.singletons._embedProvider || aiProvider;
       return new IndexingPipeline({
         vectorStore: ct.get('vectorStore'),
         aiProvider: embedProvider,
-      });
+      } as ConstructorParameters<typeof IndexingPipeline>[0]);
     },
     { aiDependent: true }
   );
 
-  c.singleton('hybridRetriever', (ct: any) => {
-    const config = ct.singletons._config?.vector?.hybrid || {};
+  c.singleton('hybridRetriever', (ct: ServiceContainer) => {
+    const config = (ct.singletons._config as Record<string, unknown> | undefined)?.vector as
+      | Record<string, unknown>
+      | undefined;
+    const hybrid = (config?.hybrid as Record<string, unknown> | undefined) || {};
     return new HybridRetriever({
       vectorStore: ct.get('vectorStore'),
-      rrfK: config.rrfK || 60,
-      alpha: config.alpha || 0.5,
-    });
+      rrfK: (hybrid.rrfK as number) || 60,
+      alpha: (hybrid.alpha as number) || 0.5,
+    } as ConstructorParameters<typeof HybridRetriever>[0]);
   });
 
   // ═══ Discovery + Shared ═══

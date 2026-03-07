@@ -14,6 +14,82 @@ export const DEFAULT_REFLECTION_INTERVAL = 5;
 /** 默认重规划间隔 */
 export const DEFAULT_REPLAN_INTERVAL = 8;
 
+// ─── 类型定义 ──────────────────────────────────────────
+
+/** 探索指标数据 */
+export interface ExplorationMetrics {
+  iteration: number;
+  submitCount: number;
+  searchRoundsInPhase: number;
+  phaseRounds: number;
+  roundsSinceSubmit: number;
+  roundsSinceNewInfo: number;
+}
+
+/** 探索预算配置 */
+export interface ExplorationBudget {
+  searchBudget: number;
+  maxSubmits: number;
+  idleRoundsToExit: number;
+  searchBudgetGrace: number;
+  softSubmitLimit: number;
+  maxIterations: number;
+}
+
+/** 探索阶段 */
+export type ExplorationPhase = 'SCAN' | 'EXPLORE' | 'PRODUCE' | 'VERIFY' | 'SUMMARIZE';
+
+/** 完整探索指标（含 Set 集合，用于 NudgeGenerator / SignalDetector） */
+export interface FullExplorationMetrics extends ExplorationMetrics {
+  uniqueFiles: Set<string>;
+  uniquePatterns: Set<string>;
+  uniqueQueries: Set<string>;
+  totalToolCalls: number;
+}
+
+/** 转换规则 */
+export interface TransitionRule {
+  onMetrics?: (m: ExplorationMetrics, b: ExplorationBudget) => boolean;
+  onTextResponse?: boolean | ((m: ExplorationMetrics, b: ExplorationBudget) => boolean);
+}
+
+/** 转换条目 */
+export type TransitionEntry =
+  | TransitionRule
+  | ((m: ExplorationMetrics, b: ExplorationBudget) => boolean);
+
+/** 探索策略配置 */
+export interface ExplorationStrategy {
+  name: string;
+  phases: string[];
+  transitions: Record<string, TransitionEntry>;
+  getToolChoice: (
+    phase: ExplorationPhase,
+    m: ExplorationMetrics,
+    b: ExplorationBudget
+  ) => 'required' | 'auto' | 'none';
+  enableReflection: boolean;
+  reflectionInterval: number;
+  enablePlanning: boolean;
+  replanInterval: number;
+}
+
+/** 追踪 trace 接口（ActiveContext 子集） */
+export interface ExplorationTrace {
+  getRecentSummary?(
+    count: number
+  ): { thoughts: string[]; roundCount: number; newInfoRatio: number } | null;
+  getStats?(): Record<string, number>;
+  setReflection?(text: string): void;
+  getPlan?(): {
+    steps: Array<{ description: string; status: string; keywords?: string[] }>;
+    createdAtIteration: number;
+  } | null;
+  expectPlan?(): void;
+  getPlanStepsMutable?(): Array<{ description: string; status: string; keywords?: string[] }>;
+  getCurrentRoundActions?(): Array<{ tool: string; params?: Record<string, unknown> }>;
+}
+
 // ─── 内置策略 ────────────────────────────────────────────
 
 /**
@@ -29,27 +105,28 @@ export function createBootstrapStrategy(isSkillOnly = false) {
       ...(isSkillOnly
         ? {
             'EXPLORE→SUMMARIZE': {
-              onMetrics: (m: any, b: any) =>
+              onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
                 m.submitCount > 0 || m.searchRoundsInPhase >= b.searchBudget,
               onTextResponse: true,
             },
           }
         : {
             'EXPLORE→PRODUCE': {
-              onMetrics: (m: any, b: any) =>
+              onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
                 m.submitCount > 0 || m.searchRoundsInPhase >= b.searchBudget,
               onTextResponse: true,
             },
             'PRODUCE→SUMMARIZE': {
-              onMetrics: (m: any, b: any) =>
+              onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
                 m.submitCount >= b.maxSubmits ||
                 (m.submitCount > 0 && m.roundsSinceSubmit >= b.idleRoundsToExit) ||
                 (m.phaseRounds >= b.searchBudgetGrace && m.submitCount === 0),
-              onTextResponse: (m: any, b: any) => m.submitCount >= b.softSubmitLimit,
+              onTextResponse: (m: ExplorationMetrics, b: ExplorationBudget) =>
+                m.submitCount >= b.softSubmitLimit,
             },
           }),
     },
-    getToolChoice: (phase: any, m: any, b: any) => {
+    getToolChoice: (phase: ExplorationPhase, m: ExplorationMetrics, b: ExplorationBudget) => {
       if (phase === 'SUMMARIZE') {
         return 'none';
       }
@@ -74,21 +151,21 @@ export const STRATEGY_ANALYST = {
   phases: ['SCAN', 'EXPLORE', 'VERIFY', 'SUMMARIZE'],
   transitions: {
     'SCAN→EXPLORE': {
-      onMetrics: (m: any) => m.iteration >= 3,
+      onMetrics: (m: ExplorationMetrics) => m.iteration >= 3,
       onTextResponse: false,
     },
     'EXPLORE→VERIFY': {
-      onMetrics: (m: any, b: any) =>
+      onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
         m.searchRoundsInPhase >= Math.floor(b.maxIterations * 0.6) || m.roundsSinceNewInfo >= 3,
       onTextResponse: false,
     },
     'VERIFY→SUMMARIZE': {
-      onMetrics: (m: any, b: any) =>
+      onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
         m.iteration >= Math.floor(b.maxIterations * 0.8) || m.roundsSinceNewInfo >= 2,
       onTextResponse: true,
     },
   },
-  getToolChoice: (phase: any) => {
+  getToolChoice: (phase: ExplorationPhase) => {
     if (phase === 'SUMMARIZE') {
       return 'none';
     }
@@ -115,14 +192,15 @@ export const STRATEGY_PRODUCER = {
   phases: ['PRODUCE', 'SUMMARIZE'],
   transitions: {
     'PRODUCE→SUMMARIZE': {
-      onMetrics: (m: any, b: any) =>
+      onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
         m.submitCount >= b.maxSubmits ||
         (m.submitCount > 0 && m.roundsSinceSubmit >= b.idleRoundsToExit) ||
         (m.phaseRounds >= b.searchBudgetGrace && m.submitCount === 0),
-      onTextResponse: (m: any, b: any) => m.submitCount >= b.softSubmitLimit,
+      onTextResponse: (m: ExplorationMetrics, b: ExplorationBudget) =>
+        m.submitCount >= b.softSubmitLimit,
     },
   },
-  getToolChoice: (phase: any) => (phase === 'SUMMARIZE' ? 'none' : 'auto'),
+  getToolChoice: (phase: ExplorationPhase) => (phase === 'SUMMARIZE' ? 'none' : 'auto'),
   enableReflection: false,
   reflectionInterval: 0,
   enablePlanning: false,

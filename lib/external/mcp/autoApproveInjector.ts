@@ -19,6 +19,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+/** Minimal logger interface for auto-approve operations */
+interface AutoApproveLogger {
+  info?(...args: unknown[]): void;
+  warn?(...args: unknown[]): void;
+}
+
 /**
  * 所有 agent 层工具（用户日常使用的 15 个）
  * admin 层工具（enrich_candidates, knowledge_lifecycle, validate_candidate, check_duplicate）
@@ -44,7 +50,7 @@ const AUTO_APPROVE_TOOLS = [
 ];
 
 /** 标记文件路径 */
-function _markerPath(projectRoot: any) {
+function _markerPath(projectRoot: string) {
   return path.join(projectRoot, '.autosnippet', '.auto-approve-pending');
 }
 
@@ -58,7 +64,7 @@ function _markerPath(projectRoot: any) {
  * @param {object} [logger]
  * @returns {boolean}
  */
-export function markAutoApproveNeeded(projectRoot: any, logger: any) {
+export function markAutoApproveNeeded(projectRoot: string, logger?: AutoApproveLogger) {
   const marker = _markerPath(projectRoot);
   try {
     const dir = path.dirname(marker);
@@ -68,8 +74,9 @@ export function markAutoApproveNeeded(projectRoot: any, logger: any) {
     fs.writeFileSync(marker, `${new Date().toISOString()}\n`);
     logger?.info?.('[AutoApprove] Marked for injection on next MCP startup');
     return true;
-  } catch (e: any) {
-    logger?.warn?.(`[AutoApprove] Failed to write marker: ${e.message}`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger?.warn?.(`[AutoApprove] Failed to write marker: ${msg}`);
     return false;
   }
 }
@@ -81,7 +88,7 @@ export function markAutoApproveNeeded(projectRoot: any, logger: any) {
  * @param {object} [logger]    日志实例（可选）
  * @returns {boolean} 是否成功写入（false = 文件不存在或无 autosnippet 配置）
  */
-export function injectAutoApprove(projectRoot: any, logger?: any) {
+export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogger) {
   const configPath = path.join(projectRoot, '.cursor', 'mcp.json');
 
   // 如果 .cursor/mcp.json 不存在，不做任何操作（不创建文件）
@@ -122,8 +129,9 @@ export function injectAutoApprove(projectRoot: any, logger?: any) {
       `[AutoApprove] Injected ${AUTO_APPROVE_TOOLS.length} tools into .cursor/mcp.json autoApprove`
     );
     return true;
-  } catch (e: any) {
-    logger?.warn?.(`[AutoApprove] Failed to write .cursor/mcp.json: ${e.message}`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger?.warn?.(`[AutoApprove] Failed to write .cursor/mcp.json: ${msg}`);
     return false;
   }
 }
@@ -137,7 +145,7 @@ export function injectAutoApprove(projectRoot: any, logger?: any) {
  * @param {string} projectRoot
  * @param {object} [logger]
  */
-export function applyPendingAutoApprove(projectRoot: any, logger: any) {
+export function applyPendingAutoApprove(projectRoot: string, logger?: AutoApproveLogger) {
   const marker = _markerPath(projectRoot);
   if (!fs.existsSync(marker)) {
     return;

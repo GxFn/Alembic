@@ -14,6 +14,15 @@
  *    req.originalUrl 始终保持请求的原始 URL，不受路由挂载影响。
  */
 
+import type { NextFunction, Request, Response } from 'express';
+
+/** Minimal logger interface (compatible with winston.Logger) */
+interface AppLogger {
+  info(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
+  debug(message: string, meta?: Record<string, unknown>): void;
+}
+
 // 轮询/心跳路径 — 完全静默
 const SILENT_PATHS = [
   '/api/v1/health',
@@ -27,13 +36,13 @@ const SILENT_PATHS = [
 /**
  * 从 originalUrl 中提取 pathname（去除 query string）
  */
-function extractPath(originalUrl: any) {
+function extractPath(originalUrl: string) {
   const idx = originalUrl.indexOf('?');
   return idx === -1 ? originalUrl : originalUrl.slice(0, idx);
 }
 
-export function requestLogger(logger: any) {
-  return (req: any, res: any, next: any) => {
+export function requestLogger(logger: AppLogger) {
+  return (req: Request, res: Response, next: NextFunction) => {
     const startTime = Date.now();
     // 在中间件进入时捕获 originalUrl — 此值不会被 Express 路由修改
     const originalPath = extractPath(req.originalUrl);

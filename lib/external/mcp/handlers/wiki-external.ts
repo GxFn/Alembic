@@ -20,12 +20,80 @@ import { WikiGenerator } from '../../../service/wiki/WikiGenerator.js';
 import { dedup } from '../../../service/wiki/WikiUtils.js';
 import { envelope } from '../envelope.js';
 import { getActiveSession } from './bootstrap-external.js';
+import type { McpContext, McpServiceContainer } from './types.js';
 
 const logger = Logger.getInstance();
 
+// ── 本地类型定义 ─────────────────────────────────────────
+
+/** Wiki 主题描述符 */
+interface WikiTopicDef {
+  id: string;
+  path: string;
+  title: string;
+  type: string;
+  priority: number;
+  _moduleData?: Record<string, unknown>;
+  _patternData?: { category?: string; recipes?: Record<string, unknown>[]; [key: string]: unknown };
+  _folderProfiles?: Record<string, unknown>[];
+  _folderProfile?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** wikiPlan 参数 */
+interface WikiPlanArgs {
+  language?: 'zh' | 'en';
+  sessionId?: string;
+  [key: string]: unknown;
+}
+
+/** wikiFinalize 参数 */
+interface WikiFinalizeArgs {
+  articlesWritten?: string[];
+  [key: string]: unknown;
+}
+
+/** 文件详情 */
+interface WikiFileDetail {
+  path: string;
+  size: number;
+  hash: string;
+}
+
+/** 结构化数据集 (wikiPlan 内部数据) */
+interface StructuredData {
+  projectInfo: Record<string, unknown>;
+  astInfo: Record<string, unknown>;
+  moduleInfo: Record<string, unknown>;
+  knowledgeInfo: { recipes: Record<string, unknown>[]; stats: Record<string, unknown> | null };
+}
+
+/** 缓存数据中的 AST 摘要 */
+interface CachedAstSummary {
+  classes?: { name: string; targetName?: string }[];
+  protocols?: { name: string; targetName?: string }[];
+  projectMetrics?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** 缓存的文件条目 */
+interface CachedFileEntry {
+  targetName?: string;
+  relativePath: string;
+  [key: string]: unknown;
+}
+
+/** 知识服务最小接口 */
+interface KnowledgeServiceLike {
+  list(
+    filter: Record<string, unknown>
+  ): Promise<{ items?: Record<string, unknown>[]; [key: string]: unknown }>;
+  getStats?(): Promise<Record<string, unknown> | null>;
+}
+
 // ── 辅助：安全获取容器服务 ──────────────────────────────────
 
-function tryGet(container: any, name: any) {
+function tryGet(container: McpServiceContainer, name: string): unknown {
   try {
     return container.get(name);
   } catch {
@@ -46,27 +114,35 @@ function tryGet(container: any, name: any) {
  * @param {object} ctx  - { container, logger, startedAt }
  * @param {object} args - { language?: 'zh'|'en', sessionId?: string }
  */
-export async function wikiPlan(ctx: any, args: any) {
+export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
   const t0 = Date.now();
   const language = args.language || 'zh';
   const container = ctx.container;
-  const projectRoot =
-    container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
+  const projectRoot = String(
+    container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd()
+  );
 
   // ── 优先复用 bootstrap 已有的分析缓存 ──
-  let projectInfo, astInfo, moduleInfo, knowledgeInfo;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- getActiveSession accepts ServiceContainer, container is McpServiceContainer
+  let projectInfo: Record<string, unknown> | undefined,
+    astInfo: Record<string, unknown> | undefined,
+    moduleInfo: Record<string, unknown> | undefined,
+    knowledgeInfo:
+      | { recipes: Record<string, unknown>[]; stats: Record<string, unknown> | null }
+      | undefined;
   let cacheHit = false;
 
-  const session = getActiveSession(container, args.sessionId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- McpServiceContainer is compatible at runtime
+  const session = getActiveSession(container as never, args.sessionId);
   const cachedData = session?.phaseCache;
 
   if (cachedData?.astProjectSummary) {
     // Bootstrap phase cache → WikiGenerator-compatible format 转换
-    const allFiles = cachedData.allFiles || [];
-    const ast = cachedData.astProjectSummary;
+    const allFiles = (cachedData.allFiles || []) as CachedFileEntry[];
+    const ast = cachedData.astProjectSummary as CachedAstSummary;
 
     // projectInfo: 从 bootstrap 文件列表和语言统计构建
-    const filesByModule: Record<string, any> = {};
+    const filesByModule: Record<string, string[]> = {};
     for (const f of allFiles) {
       const mod = f.targetName || '_default';
       if (!filesByModule[mod]) {
@@ -77,16 +153,16 @@ export async function wikiPlan(ctx: any, args: any) {
     projectInfo = {
       name: path.basename(projectRoot),
       root: projectRoot,
-      sourceFiles: allFiles.map((f: any) => f.relativePath),
+      sourceFiles: allFiles.map((f) => f.relativePath),
       languages: cachedData.langStats || {},
-      primaryLanguage: cachedData.primaryLang || 'unknown',
+      primaryLanguage: (cachedData.primaryLang as string) || 'unknown',
       sourceFilesByModule: filesByModule,
       buildSystems: [],
     };
 
     // astInfo: 从 AstAnalyzer 结果构建
-    const classesByModule: Record<string, any> = {};
-    const protocolsByModule: Record<string, any> = {};
+    const classesByModule: Record<string, string[]> = {};
+    const protocolsByModule: Record<string, string[]> = {};
     for (const cls of ast.classes || []) {
       const mod = cls.targetName || '_default';
       if (!classesByModule[mod]) {
@@ -102,8 +178,8 @@ export async function wikiPlan(ctx: any, args: any) {
       protocolsByModule[mod].push(p.name);
     }
     astInfo = {
-      classes: (ast.classes || []).map((c: any) => c.name),
-      protocols: (ast.protocols || []).map((p: any) => p.name),
+      classes: (ast.classes || []).map((c) => c.name),
+      protocols: (ast.protocols || []).map((p) => p.name),
       overview: ast.projectMetrics || null,
       classNamesByModule: classesByModule,
       protocolNamesByModule: protocolsByModule,
@@ -111,7 +187,7 @@ export async function wikiPlan(ctx: any, args: any) {
 
     // moduleInfo: 从依赖图和 targets 构建
     moduleInfo = {
-      targets: (cachedData.targetsSummary || []).map((t: any) => ({
+      targets: ((cachedData.targetsSummary as Record<string, unknown>[]) || []).map((t) => ({
         name: t.name,
         type: t.type,
         fileCount: t.fileCount,
@@ -121,11 +197,11 @@ export async function wikiPlan(ctx: any, args: any) {
 
     // knowledgeInfo: 始终从 DB 获取最新（bootstrap 期间可能已写入知识）
     try {
-      const ks = tryGet(container, 'knowledgeService');
+      const ks = tryGet(container, 'knowledgeService') as KnowledgeServiceLike | null;
       if (ks) {
         const items = await ks.list({ limit: 200 });
         const stats = typeof ks.getStats === 'function' ? await ks.getStats() : null;
-        knowledgeInfo = { recipes: items?.items || items || [], stats };
+        knowledgeInfo = { recipes: (items?.items || []) as Record<string, unknown>[], stats };
       } else {
         knowledgeInfo = { recipes: [], stats: null };
       }
@@ -140,10 +216,10 @@ export async function wikiPlan(ctx: any, args: any) {
     logger.info('[wiki-plan] No bootstrap cache, running fresh scan...');
     const generator = new WikiGenerator({
       projectRoot,
-      moduleService: tryGet(container, 'moduleService'),
-      knowledgeService: tryGet(container, 'knowledgeService'),
-      projectGraph: tryGet(container, 'projectGraph'),
-      codeEntityGraph: tryGet(container, 'codeEntityGraph'),
+      moduleService: tryGet(container, 'moduleService') as WikiGenerator['moduleService'],
+      knowledgeService: tryGet(container, 'knowledgeService') as WikiGenerator['knowledgeService'],
+      projectGraph: tryGet(container, 'projectGraph') as WikiGenerator['projectGraph'],
+      codeEntityGraph: tryGet(container, 'codeEntityGraph') as WikiGenerator['codeEntityGraph'],
       aiProvider: null, // 不需要 AI — 只做规划
       options: { language },
     });
@@ -157,18 +233,29 @@ export async function wikiPlan(ctx: any, args: any) {
   // ── 主题发现（复用 WikiGenerator._discoverTopics） ──
   const generator = new WikiGenerator({
     projectRoot,
-    moduleService: tryGet(container, 'moduleService'),
-    knowledgeService: tryGet(container, 'knowledgeService'),
-    projectGraph: tryGet(container, 'projectGraph'),
-    codeEntityGraph: tryGet(container, 'codeEntityGraph'),
+    moduleService: tryGet(container, 'moduleService') as WikiGenerator['moduleService'],
+    knowledgeService: tryGet(container, 'knowledgeService') as WikiGenerator['knowledgeService'],
+    projectGraph: tryGet(container, 'projectGraph') as WikiGenerator['projectGraph'],
+    codeEntityGraph: tryGet(container, 'codeEntityGraph') as WikiGenerator['codeEntityGraph'],
     aiProvider: null,
     options: { language },
   });
 
-  const rawTopics = generator._discoverTopics(projectInfo, astInfo, moduleInfo, knowledgeInfo);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- projectInfo shape varies between bootstrap/full scan
+  const rawTopics = generator._discoverTopics(
+    projectInfo as any,
+    astInfo as any,
+    moduleInfo as any,
+    knowledgeInfo as any
+  );
 
   // ── 为每个主题构建 dataBundle ──
-  const structuredData = { projectInfo, astInfo, moduleInfo, knowledgeInfo };
+  const structuredData: StructuredData = {
+    projectInfo: projectInfo || {},
+    astInfo: astInfo || {},
+    moduleInfo: moduleInfo || {},
+    knowledgeInfo: knowledgeInfo || { recipes: [], stats: null },
+  };
   const isZh = language === 'zh';
 
   const topics = rawTopics.map((topic) => {
@@ -236,7 +323,7 @@ export async function wikiPlan(ctx: any, args: any) {
  * @param {object} ctx  - { container, logger, startedAt }
  * @param {object} args - { articlesWritten: string[] }
  */
-export async function wikiFinalize(ctx: any, args: any) {
+export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
   const t0 = Date.now();
   const { articlesWritten } = args;
 
@@ -250,14 +337,15 @@ export async function wikiFinalize(ctx: any, args: any) {
   }
 
   const container = ctx.container;
-  const projectRoot =
-    container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
+  const projectRoot = String(
+    container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd()
+  );
   const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
 
   // ── 1. 验证文件存在性 ──
-  const missingFiles: any[] = [];
-  const thinFiles: any[] = [];
-  const fileDetails: { path: any; size: number; hash: string }[] = [];
+  const missingFiles: string[] = [];
+  const thinFiles: string[] = [];
+  const fileDetails: WikiFileDetail[] = [];
   let totalSize = 0;
 
   for (const relPath of articlesWritten) {
@@ -291,16 +379,17 @@ export async function wikiFinalize(ctx: any, args: any) {
   }
 
   // ── 2. 去重检查 ──
-  let dedupResult = { duplicatesFound: 0, removed: [] };
+  let dedupResult: { removed: string[]; kept: number } = { removed: [], kept: 0 };
   try {
     const files = fileDetails.map((f) => ({
       path: f.path,
       hash: f.hash,
       size: f.size,
     }));
-    dedupResult = dedup(files, wikiDir, () => {}) as any;
-  } catch (e: any) {
-    logger.warn(`[wiki-finalize] Dedup check failed: ${e.message}`);
+    dedupResult = dedup(files, wikiDir, () => {});
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.warn(`[wiki-finalize] Dedup check failed: ${msg}`);
   }
 
   // ── 3. 写入 meta.json ──
@@ -313,8 +402,9 @@ export async function wikiFinalize(ctx: any, args: any) {
       options: { language: 'zh' },
     });
     sourceHash = generator._computeSourceHash();
-  } catch (e: any) {
-    logger.warn(`[wiki-finalize] Failed to compute sourceHash: ${e.message}`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.warn(`[wiki-finalize] Failed to compute sourceHash: ${msg}`);
   }
 
   const meta = {
@@ -330,10 +420,11 @@ export async function wikiFinalize(ctx: any, args: any) {
   try {
     _ensureDir(wikiDir);
     fs.writeFileSync(path.join(wikiDir, 'meta.json'), JSON.stringify(meta, null, 2));
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
     return envelope({
       success: false,
-      message: `Failed to write meta.json: ${e.message}`,
+      message: `Failed to write meta.json: ${msg}`,
       errorCode: 'IO_ERROR',
       meta: { tool: 'autosnippet_wiki_finalize' },
     });
@@ -365,8 +456,9 @@ export async function wikiFinalize(ctx: any, args: any) {
         }
       }
     }
-  } catch (e: any) {
-    logger.debug(`[wiki-finalize] Cursor docs sync skipped: ${e.message}`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.debug(`[wiki-finalize] Cursor docs sync skipped: ${msg}`);
   }
 
   return envelope({
@@ -394,7 +486,7 @@ export async function wikiFinalize(ctx: any, args: any) {
 //  内部辅助函数
 // ════════════════════════════════════════════════════════════
 
-function _ensureDir(dir: any) {
+function _ensureDir(dir: string) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -403,7 +495,7 @@ function _ensureDir(dir: any) {
 /**
  * 为主题生成写作指南
  */
-function _buildWritingGuide(topic: any, isZh: any) {
+function _buildWritingGuide(topic: WikiTopicDef, isZh: boolean): string {
   const guides = {
     overview: isZh
       ? '撰写完整的项目概述文档。包含: 项目简介(解释项目做什么)、模块总览(表格形式)、技术栈分析、核心数据指标。底部包含导航索引，链接到其他 wiki 文档。'
@@ -435,7 +527,7 @@ function _buildWritingGuide(topic: any, isZh: any) {
   };
 
   return (
-    (guides as Record<string, any>)[topic.type] ||
+    (guides as Record<string, string>)[topic.type] ||
     (isZh
       ? '撰写详细的技术文档，结构清晰，内容准确。'
       : 'Write detailed technical documentation with clear structure and accurate content.')
@@ -445,47 +537,59 @@ function _buildWritingGuide(topic: any, isZh: any) {
 /**
  * 为主题构建数据包
  */
-function _buildTopicDataBundle(topic: any, structuredData: any) {
+function _buildTopicDataBundle(
+  topic: WikiTopicDef,
+  structuredData: StructuredData
+): Record<string, unknown> {
   const { projectInfo, astInfo, moduleInfo, knowledgeInfo } = structuredData;
-  const bundle: any = {};
+  const bundle: Record<string, unknown> = {};
+
+  // Helper: safely access array-like from Record<string, unknown>
+  const arr = (obj: Record<string, unknown>, key: string): unknown[] =>
+    (Array.isArray(obj[key]) ? obj[key] : []) as unknown[];
+  const rec = (obj: Record<string, unknown>, key: string): Record<string, unknown> =>
+    (obj[key] && typeof obj[key] === 'object' ? obj[key] : {}) as Record<string, unknown>;
 
   switch (topic.type) {
     case 'overview':
       bundle.projectName = projectInfo.name;
-      bundle.sourceFileCount = projectInfo.sourceFiles.length;
+      bundle.sourceFileCount = arr(projectInfo, 'sourceFiles').length;
       bundle.primaryLanguage = projectInfo.primaryLanguage;
       bundle.langProfile = projectInfo.langProfile;
       bundle.buildSystems = projectInfo.buildSystems;
       bundle.languages = projectInfo.languages;
-      bundle.moduleCount = moduleInfo.targets?.length || 0;
-      bundle.moduleList = (moduleInfo.targets || []).map((t: any) => ({
+      bundle.moduleCount = arr(moduleInfo, 'targets').length;
+      bundle.moduleList = (arr(moduleInfo, 'targets') as Record<string, unknown>[]).map((t) => ({
         name: t.name,
-        type: t.type || t.info?.type || 'unknown',
-        fileCount: t.sourceFileCount || t.info?.sourceFileCount || 0,
-        dependencies: (t.dependencies || t.info?.dependencies || []).slice(0, 10),
+        type: t.type || rec(t, 'info').type || 'unknown',
+        fileCount: t.sourceFileCount || rec(t, 'info').sourceFileCount || 0,
+        dependencies: (arr(t, 'dependencies').length > 0
+          ? arr(t, 'dependencies')
+          : arr(rec(t, 'info'), 'dependencies')
+        ).slice(0, 10),
       }));
       bundle.astOverview = astInfo.overview || {};
       bundle.recipeCount = knowledgeInfo.recipes?.length || 0;
       break;
 
     case 'architecture':
-      bundle.modules = (moduleInfo.targets || []).map((t: any) => ({
+      bundle.modules = (arr(moduleInfo, 'targets') as Record<string, unknown>[]).map((t) => ({
         name: t.name,
-        type: t.type || t.info?.type || 'unknown',
-        path: t.path || t.info?.path || '',
-        dependencies: t.dependencies || t.info?.dependencies || [],
+        type: t.type || rec(t, 'info').type || 'unknown',
+        path: t.path || rec(t, 'info').path || '',
+        dependencies: t.dependencies || rec(t, 'info').dependencies || [],
       }));
       bundle.depGraph = moduleInfo.depGraph
         ? {
-            nodes: moduleInfo.depGraph.nodes?.length || 0,
-            edges: moduleInfo.depGraph.edges?.length || 0,
+            nodes: arr(rec(moduleInfo, 'depGraph'), 'nodes').length,
+            edges: arr(rec(moduleInfo, 'depGraph'), 'edges').length,
           }
         : null;
       // 热实体信息（高入度类/协议）
-      bundle.classCount = astInfo.classes?.length || 0;
-      bundle.protocolCount = astInfo.protocols?.length || 0;
-      bundle.hotClasses = (astInfo.classes || []).slice(0, 15);
-      bundle.hotProtocols = (astInfo.protocols || []).slice(0, 10);
+      bundle.classCount = arr(astInfo, 'classes').length;
+      bundle.protocolCount = arr(astInfo, 'protocols').length;
+      bundle.hotClasses = arr(astInfo, 'classes').slice(0, 15);
+      bundle.hotProtocols = arr(astInfo, 'protocols').slice(0, 10);
       break;
 
     case 'getting-started':
@@ -495,28 +599,32 @@ function _buildTopicDataBundle(topic: any, structuredData: any) {
       bundle.hasPackageSwift = projectInfo.hasPackageSwift;
       bundle.hasPodfile = projectInfo.hasPodfile;
       bundle.hasXcodeproj = projectInfo.hasXcodeproj;
-      bundle.entryPoints = astInfo.overview?.entryPoints || [];
+      bundle.entryPoints = arr(rec(astInfo, 'overview'), 'entryPoints');
       break;
 
     case 'module': {
-      const md = topic._moduleData || {};
+      const md = (topic._moduleData || {}) as Record<string, unknown>;
+      const mdTarget = rec(md, 'target');
       bundle.targetInfo = md.target
-        ? { name: md.target.name, type: md.target.type || 'unknown', path: md.target.path || '' }
+        ? { name: mdTarget.name, type: mdTarget.type || 'unknown', path: mdTarget.path || '' }
         : { name: topic.title };
-      bundle.classNames = (astInfo.classNamesByModule?.[topic.title] || []).slice(0, 30);
-      bundle.protocolNames = (astInfo.protocolNamesByModule?.[topic.title] || []).slice(0, 15);
-      bundle.sourceFiles = (md.moduleFiles || []).slice(0, 30);
+      bundle.classNames = arr(rec(astInfo, 'classNamesByModule'), topic.title).slice(0, 30);
+      bundle.protocolNames = arr(rec(astInfo, 'protocolNamesByModule'), topic.title).slice(0, 15);
+      bundle.sourceFiles = arr(md, 'moduleFiles').slice(0, 30);
       bundle.classCount = md.classCount || 0;
       bundle.protoCount = md.protoCount || 0;
-      bundle.dependencies = md.target?.dependencies || md.target?.info?.dependencies || [];
+      bundle.dependencies = mdTarget.dependencies || rec(mdTarget, 'info').dependencies || [];
       break;
     }
 
     case 'patterns': {
-      const groups: Record<string, any> = {};
+      const groups: Record<string, Record<string, unknown>[]> = {};
       for (const r of knowledgeInfo.recipes || []) {
-        const json = r.toJSON ? r.toJSON() : r;
-        const cat = json.category || 'Other';
+        const json: Record<string, unknown> =
+          typeof (r as Record<string, unknown>).toJSON === 'function'
+            ? ((r as Record<string, unknown>).toJSON as () => Record<string, unknown>)()
+            : r;
+        const cat = (json.category as string) || 'Other';
         if (!groups[cat]) {
           groups[cat] = [];
         }
@@ -533,45 +641,48 @@ function _buildTopicDataBundle(topic: any, structuredData: any) {
     }
 
     case 'pattern-category': {
-      const pd = topic._patternData || {};
+      const pd = (topic._patternData || {}) as {
+        category?: string;
+        recipes?: Record<string, unknown>[];
+      };
       bundle.category = pd.category;
-      bundle.recipes = (pd.recipes || []).map((r: any) => ({
+      bundle.recipes = (pd.recipes || []).map((r: Record<string, unknown>) => ({
         title: r.title || r.name,
         trigger: r.trigger || r.name,
         kind: r.kind || 'pattern',
         summary: r.summary || r.description || '',
-        content: r.content?.substring(0, 500) || '', // 截断长内容
+        content: typeof r.content === 'string' ? r.content.substring(0, 500) : '', // 截断长内容
       }));
       break;
     }
 
     case 'reference':
-      bundle.protocols = (astInfo.protocols || []).slice(0, 40);
+      bundle.protocols = arr(astInfo, 'protocols').slice(0, 40);
       bundle.protocolsByModule = astInfo.protocolNamesByModule || {};
       break;
 
     case 'folder-overview':
-      bundle.folderProfiles = (topic._folderProfiles || []).map((fp: any) => ({
+      bundle.folderProfiles = (topic._folderProfiles || []).map((fp: Record<string, unknown>) => ({
         relPath: fp.relPath,
         fileCount: fp.fileCount,
         languages: fp.languages,
-        entryPoints: fp.entryPoints?.slice(0, 5) || [],
-        namingPatterns: fp.namingPatterns?.slice(0, 5) || [],
+        entryPoints: arr(fp, 'entryPoints').slice(0, 5),
+        namingPatterns: arr(fp, 'namingPatterns').slice(0, 5),
         hasReadme: !!fp.readme,
       }));
       break;
 
     case 'folder-profile': {
-      const fp = topic._folderProfile || {};
+      const fp = (topic._folderProfile || {}) as Record<string, unknown>;
       bundle.relPath = fp.relPath;
       bundle.fileCount = fp.fileCount;
       bundle.languages = fp.languages;
-      bundle.files = (fp.files || []).slice(0, 30);
+      bundle.files = arr(fp, 'files').slice(0, 30);
       bundle.entryPoints = fp.entryPoints || [];
       bundle.namingPatterns = fp.namingPatterns || [];
-      bundle.imports = (fp.imports || []).slice(0, 20);
-      bundle.headerComments = (fp.headerComments || []).slice(0, 10);
-      bundle.readme = fp.readme?.substring(0, 500) || null;
+      bundle.imports = arr(fp, 'imports').slice(0, 20);
+      bundle.headerComments = arr(fp, 'headerComments').slice(0, 10);
+      bundle.readme = typeof fp.readme === 'string' ? fp.readme.substring(0, 500) : null;
       break;
     }
   }
@@ -582,7 +693,7 @@ function _buildTopicDataBundle(topic: any, structuredData: any) {
 /**
  * 构建写作指导手册
  */
-function _buildWritingGuidelines(isZh: any) {
+function _buildWritingGuidelines(isZh: boolean) {
   return {
     language: isZh ? 'zh' : 'en',
     style: isZh

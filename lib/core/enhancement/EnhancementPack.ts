@@ -9,7 +9,93 @@
  * - SFC 预处理（.vue → 提取 <script>）
  * - Reference Skill 路径
  */
+/** AST method info from analyzeFile/analyzeProject */
+export interface AstMethodInfo {
+  name: string;
+  className?: string;
+  line?: number;
+  paramCount?: number;
+  isAsync?: boolean;
+  isExported?: boolean;
+  isClassMethod?: boolean;
+  decorators?: string[];
+  annotations?: string[];
+}
 
+/** AST class/struct info */
+export interface AstClassInfo {
+  name: string;
+  line?: number;
+  superclass?: string;
+  kind?: string;
+  methods?: string[];
+  interfaces?: string[];
+  annotations?: string[];
+  decorators?: string[];
+  embeddedTypes?: string[];
+  fieldCount?: number;
+  derives?: string[];
+  traitName?: string;
+}
+
+/** AST protocol/interface info */
+export interface AstProtocolInfo {
+  name: string;
+  line?: number;
+  methods?: string[];
+}
+
+/** Pattern info from AST analysis */
+export interface AstPatternInfo {
+  type: string;
+  count?: number;
+  confidence?: number;
+}
+
+/** analyzeFile/analyzeProject return value */
+export interface AstSummary {
+  methods?: AstMethodInfo[];
+  classes?: AstClassInfo[];
+  imports?: string[];
+  protocols?: AstProtocolInfo[];
+  patterns?: AstPatternInfo[];
+}
+
+/** Detected design pattern */
+export interface DetectedPattern {
+  type: string;
+  className?: string;
+  methodName?: string;
+  line?: number;
+  confidence: number;
+  [key: string]: unknown;
+}
+
+/** Bootstrap extra dimension definition */
+export interface ExtraDimension {
+  id: string;
+  label: string;
+  guide: string;
+  tierHint?: number;
+  knowledgeTypes: string[];
+  skillWorthy?: boolean;
+  dualOutput?: boolean;
+  skillMeta?: {
+    name: string;
+    description: string;
+  };
+}
+
+/** Guard rule definition */
+export interface GuardRule {
+  ruleId: string;
+  category: string;
+  dimension: string;
+  severity: string;
+  languages: string[];
+  pattern: RegExp;
+  message: string;
+}
 export class EnhancementPack {
   /** 增强包 ID */
   get id(): string {
@@ -41,7 +127,7 @@ export class EnhancementPack {
    *
    * @returns {Array<object>}
    */
-  getExtraDimensions(): any[] {
+  getExtraDimensions(): ExtraDimension[] {
     return [];
   }
 
@@ -49,7 +135,7 @@ export class EnhancementPack {
    * 额外的 Guard 规则
    * @returns {Array<object>}
    */
-  getGuardRules(): any[] {
+  getGuardRules(): GuardRule[] {
     return [];
   }
 
@@ -58,7 +144,7 @@ export class EnhancementPack {
    * @param {object} astSummary - analyzeFile/analyzeProject 的返回值
    * @returns {Array<{ type: string, className?: string, line?: number, confidence: number }>}
    */
-  detectPatterns(astSummary: any): any[] {
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
     return [];
   }
 
@@ -68,7 +154,7 @@ export class EnhancementPack {
    * @param {string} ext 文件扩展名 (含 .)
    * @returns {{ content: string, lang: string } | null}
    */
-  preprocessFile(content: any, ext: any): { content: string; lang: string } | null {
+  preprocessFile(content: string, ext: string): { content: string; lang: string } | null {
     return null;
   }
 

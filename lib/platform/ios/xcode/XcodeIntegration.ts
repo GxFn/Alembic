@@ -34,6 +34,49 @@ import {
   writeImportLineXcode,
 } from './XcodeWriteUtils.js';
 
+/** FileWatcher 接口（仅用到的属性） */
+interface FileWatcherLike {
+  projectRoot?: string;
+}
+
+/** 插入选项 */
+interface InsertHeadersOpts {
+  depWarnings?: Map<string, string>;
+  isSwift?: boolean;
+  skipDepCheck?: boolean;
+  moduleName?: string | null;
+  _spmService?: SpmServiceLike | null;
+  _currentTarget?: string | null;
+}
+
+/** 代码片段选择结果 */
+interface SelectedSnippet {
+  code?: string;
+  headers?: string[];
+  moduleName?: string | null;
+  title?: string;
+  name?: string;
+  trigger?: string;
+}
+
+/** SPM 服务接口 */
+interface SpmServiceLike {
+  getFixMode(): string;
+  load(): Promise<void>;
+  resolveCurrentTarget(filePath: string): string | null;
+  ensureDependency(
+    from: string,
+    to: string
+  ): { exists: boolean; canAdd: boolean; reason?: string; crossPackage?: boolean };
+  addDependency(from: string, to: string): { ok: boolean; error?: string };
+}
+
+/** NativeUI 接口 */
+interface NativeUiLike {
+  notify(msg: string, title: string): void;
+  promptWithButtons(msg: string, buttons: string[], title: string): string;
+}
+
 /** 常见 Apple 系统框架（无需 SPM 依赖检查） */
 const _SYSTEM_FRAMEWORKS = new Set([
   'Foundation',
@@ -107,10 +150,17 @@ const _SYSTEM_FRAMEWORKS = new Set([
  * @param {object}   [opts]
  * @returns {Promise<{inserted: string[], skipped: string[], cancelled: boolean}>}
  */
-export async function insertHeaders(watcher: any, fullPath: any, headers: any, opts: any = {}) {
+export async function insertHeaders(
+  watcher: FileWatcherLike | null,
+  fullPath: string,
+  headers: string[],
+  opts: InsertHeadersOpts = {}
+) {
   const XA = await import('./XcodeAutomation.js');
   const CM = await import('../../../infrastructure/external/ClipboardManager.js');
-  const NU = await import('../../../infrastructure/external/NativeUi.js');
+  const NU = (await import(
+    '../../../infrastructure/external/NativeUi.js'
+  )) as unknown as NativeUiLike;
 
   const result = { inserted: [] as string[], skipped: [] as string[], cancelled: false };
   /** @type {Map<string, string>} 模块名 → 提示注释（'提示操作插入'按钮选择时记录） */
@@ -137,7 +187,7 @@ export async function insertHeaders(watcher: any, fullPath: any, headers: any, o
     if (opts.moduleName && !inferredModules.includes(opts.moduleName)) {
       inferredModules.push(opts.moduleName);
     }
-    const thirdPartyModules = inferredModules.filter((m) => !(_SYSTEM_FRAMEWORKS as any).has(m));
+    const thirdPartyModules = inferredModules.filter((m) => !_SYSTEM_FRAMEWORKS.has(m));
     if (thirdPartyModules.length > 0) {
       try {
         const { ServiceContainer } = await import('../../../injection/ServiceContainer.js');
@@ -212,7 +262,7 @@ export async function insertHeaders(watcher: any, fullPath: any, headers: any, o
     const headerModules = inferModulesFromHeaders([headerTrimmed]);
     if (spmService && currentTarget && !opts.skipDepCheck) {
       for (const mod of headerModules) {
-        if ((_SYSTEM_FRAMEWORKS as any).has(mod) || mod === currentTarget) {
+        if (_SYSTEM_FRAMEWORKS.has(mod) || mod === currentTarget) {
           continue;
         }
 
@@ -299,21 +349,23 @@ export async function insertHeaders(watcher: any, fullPath: any, headers: any, o
  * @param {import('../../../service/automation/FileWatcher.js').FileWatcher} watcher
  */
 export async function insertCodeToXcode(
-  watcher: any,
-  fullPath: any,
-  selected: any,
-  triggerLine: any
+  watcher: FileWatcherLike | null,
+  fullPath: string,
+  selected: SelectedSnippet,
+  triggerLine: string
 ) {
   const XA = await import('./XcodeAutomation.js');
   const CM = await import('../../../infrastructure/external/ClipboardManager.js');
-  const NU = await import('../../../infrastructure/external/NativeUi.js');
+  const NU = (await import(
+    '../../../infrastructure/external/NativeUi.js'
+  )) as unknown as NativeUiLike;
 
   const code = selected.code || '';
   if (!code) {
     return;
   }
 
-  const headersToInsert = (selected.headers || []).filter((h: any) => h?.trim());
+  const headersToInsert = (selected.headers || []).filter((h: string) => h?.trim());
   const isSwift = fullPath.endsWith('.swift');
 
   // ═══════════════════════════════════════════════════════
@@ -350,11 +402,11 @@ export async function insertCodeToXcode(
     const indent = indentMatch ? indentMatch[1] : '';
 
     // ── Step 2: Preflight 预检依赖 ──
-    let preflightDepWarnings: any = null;
-    let _spmServiceCached: any = null;
-    let _currentTargetCached: any = null;
+    let preflightDepWarnings: Map<string, string> | null = null;
+    let _spmServiceCached: SpmServiceLike | null = null;
+    let _currentTargetCached: string | null = null;
     if (headersToInsert.length > 0) {
-      const preflight: any = await _preflightDeps(fullPath, headersToInsert, selected, NU);
+      const preflight = await _preflightDeps(fullPath, headersToInsert, selected, NU);
       if (preflight.blocked) {
         return;
       }
@@ -383,7 +435,7 @@ export async function insertCodeToXcode(
     while (codeLines.length > 0 && !codeLines[codeLines.length - 1].trim()) {
       codeLines.pop();
     }
-    const indentedLines = codeLines.map((line: any) => (line ? indent + line : line));
+    const indentedLines = codeLines.map((line: string) => (line ? indent + line : line));
     const indentedCode = indentedLines.join('\n');
 
     // ── Step 5: 插入 Headers ──
@@ -393,7 +445,7 @@ export async function insertCodeToXcode(
         moduleName: selected.moduleName || null,
         isSwift,
         skipDepCheck: true, // Preflight 已检查过
-        depWarnings: preflightDepWarnings,
+        depWarnings: preflightDepWarnings ?? undefined,
         _spmService: _spmServiceCached,
         _currentTarget: _currentTargetCached,
       });
@@ -449,15 +501,25 @@ export async function insertCodeToXcode(
  * 不实际写入文件，只检查并弹窗确认。
  * 返回 { blocked: true } 表示有依赖被阻止或用户取消。
  */
-async function _preflightDeps(fullPath: any, headers: any, selected: any, NU: any) {
-  const result: any = { blocked: false };
+async function _preflightDeps(
+  fullPath: string,
+  headers: string[],
+  selected: SelectedSnippet,
+  NU: NativeUiLike
+) {
+  const result: {
+    blocked: boolean;
+    depWarnings?: Map<string, string>;
+    _spmService?: SpmServiceLike | null;
+    _currentTarget?: string | null;
+  } = { blocked: false };
 
   // 始终从所有 headers 推断模块（不仅依赖 selected.moduleName）
   const inferredModules = inferModulesFromHeaders(headers);
   if (selected.moduleName && !inferredModules.includes(selected.moduleName)) {
     inferredModules.push(selected.moduleName);
   }
-  const thirdPartyModules = inferredModules.filter((m) => !(_SYSTEM_FRAMEWORKS as any).has(m));
+  const thirdPartyModules = inferredModules.filter((m) => !_SYSTEM_FRAMEWORKS.has(m));
   if (thirdPartyModules.length === 0) {
     return result;
   }
@@ -529,8 +591,8 @@ async function _preflightDeps(fullPath: any, headers: any, selected: any, NU: an
     // 缓存 spmService/currentTarget 供下游 insertHeaders 复用
     result._spmService = spmService;
     result._currentTarget = currentTarget;
-  } catch (err: any) {
-    console.warn(`  ⚠️ Preflight 依赖检查异常: ${err.message}`);
+  } catch (err: unknown) {
+    console.warn(`  ⚠️ Preflight 依赖检查异常: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return result;
@@ -541,12 +603,12 @@ async function _preflightDeps(fullPath: any, headers: any, selected: any, NU: an
 // ═══════════════════════════════════════════════════════════════
 
 async function _fileInsertFallback(
-  fullPath: any,
-  selected: any,
-  triggerLine: any,
-  headersToInsert: any,
-  watcher: any,
-  opts: any = {}
+  fullPath: string,
+  selected: SelectedSnippet,
+  triggerLine: string,
+  headersToInsert: string[],
+  watcher: FileWatcherLike | null,
+  opts: { skipDepCheck?: boolean } = {}
 ) {
   // 先写 headers
   if (headersToInsert.length > 0) {
@@ -585,7 +647,7 @@ async function _fileInsertFallback(
       while (codeLines.length > 0 && !codeLines[codeLines.length - 1].trim()) {
         codeLines.pop();
       }
-      const indentedLines = codeLines.map((line: any) => (line ? indent + line : line));
+      const indentedLines = codeLines.map((line: string) => (line ? indent + line : line));
 
       while (indentedLines.length > 0 && !indentedLines[indentedLines.length - 1].trim()) {
         indentedLines.pop();
@@ -600,8 +662,8 @@ async function _fileInsertFallback(
       saveEventFilter.markWrite(fullPath, appendContent);
       writeFileSync(fullPath, appendContent, 'utf8');
     }
-  } catch (err: any) {
-    console.warn(`  ⚠️ 文件写入失败: ${err.message}`);
+  } catch (err: unknown) {
+    console.warn(`  ⚠️ 文件写入失败: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -609,7 +671,7 @@ async function _fileInsertFallback(
 // §14 注释标记生成
 // ═══════════════════════════════════════════════════════════════
 
-function _generateInsertMarker(filePath: any, selected: any) {
+function _generateInsertMarker(filePath: string, selected: SelectedSnippet) {
   try {
     const ext = (filePath.match(/\.[^.]+$/) || [''])[0].toLowerCase();
     const trigger = selected.trigger ? `[${selected.trigger}]` : '';
@@ -649,7 +711,7 @@ function _generateInsertMarker(filePath: any, selected: any) {
 /**
  * 查找触发行的行号（1-based，-1 表示未找到）
  */
-export function findTriggerLineNumber(content: any, triggerLine: any) {
+export function findTriggerLineNumber(content: string, triggerLine: string) {
   if (!content || !triggerLine) {
     return -1;
   }
@@ -666,7 +728,7 @@ export function findTriggerLineNumber(content: any, triggerLine: any) {
 /**
  * 查找 import 语句的插入位置（0-based 行索引，在最后一个 import 之后）
  */
-export function findImportInsertLine(content: any, isSwift: any) {
+export function findImportInsertLine(content: string, isSwift: boolean) {
   const lines = content.split('\n');
   let lastImportLine = -1;
   for (let i = 0; i < lines.length; i++) {

@@ -44,24 +44,81 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import pathGuard from '../../shared/PathGuard.js';
 import { EventAggregator } from './EventAggregator.js';
 
+interface SignalCollectorOpts {
+  projectRoot: string;
+  database?: DatabaseLike | null;
+  agentFactory?: AgentFactoryLike | null;
+  container?: ContainerLike | null;
+  mode?: string;
+  intervalMs?: number;
+  onSuggestions?: ((suggestions: Record<string, unknown>[]) => void) | null;
+}
+
+interface DatabaseLike {
+  prepare(sql: string): {
+    all(...args: unknown[]): Record<string, unknown>[];
+    get(...args: unknown[]): Record<string, unknown> | undefined;
+  };
+}
+
+interface AgentResult {
+  reply?: string;
+  text?: string;
+  toolCalls?: Array<{ tool: string; params?: Record<string, unknown> }>;
+  [key: string]: unknown;
+}
+
+interface AgentFactoryLike {
+  createChat(opts: Record<string, unknown>): { execute(msg: unknown): Promise<AgentResult> };
+}
+
+interface ContainerService {
+  name?: string;
+  extractJSON?: (text: string, open: string, close: string) => Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
+interface ContainerLike {
+  get(name: string): ContainerService | null;
+}
+
+interface SignalSnapshot {
+  lastRun: string | null;
+  totalRuns: number;
+  pushedNames: string[];
+  lastResult: Record<string, unknown> | null;
+  lastAiSummary: string;
+  autoCreated: Array<{ name: string; createdAt: string }>;
+  pendingSuggestions: Record<string, unknown>[];
+}
+
+interface CollectedSignals {
+  guard: Record<string, unknown>[];
+  memory: Record<string, unknown>[];
+  recipes: Record<string, unknown>[];
+  candidates: Record<string, unknown>[];
+  actions: Record<string, unknown>[];
+  codeChanges: string[];
+}
+
 const DEFAULT_INTERVAL_MS = 60 * 60 * 1000; // 1 小时（初始值，AI 可动态调整）
 const MIN_INTERVAL_MS = 5 * 60 * 1000; // 最短 5 分钟
 const MAX_INTERVAL_MS = 24 * 60 * 60 * 1000; // 最长 24 小时
 const SNAPSHOT_FILE = 'signal-snapshot.json';
 
 export class SignalCollector {
-  #projectRoot: any;
-  #db: any;
-  #agentFactory: any; // AgentFactory 实例 — 统一 Agent 系统
-  #container: any; // ServiceContainer — 用于获取 aiProvider 等
-  #mode; // 'off' | 'suggest' | 'auto'
+  #projectRoot: string;
+  #db: DatabaseLike | null;
+  #agentFactory: AgentFactoryLike | null;
+  #container: ContainerLike | null;
+  #mode: string;
   #intervalMs;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #running = false;
   #logger;
   #snapshotPath;
-  #snapshot;
-  #onSuggestions; // callback(suggestions[]) — 由外部注入（如 RealtimeService 推送）
+  #snapshot: SignalSnapshot;
+  #onSuggestions: ((suggestions: Record<string, unknown>[]) => void) | null;
   /** @type {EventAggregator} 信号聚类引擎 */
   #aggregator;
 
@@ -82,8 +139,8 @@ export class SignalCollector {
     container = null,
     mode = 'auto',
     intervalMs = DEFAULT_INTERVAL_MS,
-    onSuggestions = null as any,
-  }: any) {
+    onSuggestions = null as ((suggestions: Record<string, unknown>[]) => void) | null,
+  }: SignalCollectorOpts) {
     this.#projectRoot = projectRoot;
     this.#db = database;
     this.#agentFactory = agentFactory;
@@ -100,7 +157,7 @@ export class SignalCollector {
     // 信号聚类引擎: 外部推送的事件（file_change, guard_violation 等）
     // 在时间窗口内聚合，避免高频操作重复触发 AI 分析
     this.#aggregator = new EventAggregator({ windowMs: 10_000, dedupeMs: 120_000 });
-    this.#aggregator.on('batch', (key: any, events: any) => {
+    this.#aggregator.on('batch', (key: string, events: Record<string, unknown>[]) => {
       this.#logger.info(`[SignalCollector] aggregated batch: ${key} × ${events.length}`);
       // 有聚合事件时提前触发 tick（取消当前定时器，立即执行）
       if (this.#timer && !this.#running) {
@@ -155,7 +212,7 @@ export class SignalCollector {
    * @param {string} key 事件类型（如 'file_change', 'guard_violation', 'candidate_submit'）
    * @param {object} event 事件数据
    */
-  pushEvent(key: any, event: any) {
+  pushEvent(key: string, event: Record<string, unknown>) {
     if (this.#mode === 'off') {
       return;
     }
@@ -174,12 +231,12 @@ export class SignalCollector {
   }
 
   /** 从 pendingSuggestions 中移除已创建的 Skill */
-  removePendingSuggestion(name: any) {
+  removePendingSuggestion(name: string) {
     if (!this.#snapshot.pendingSuggestions?.length) {
       return;
     }
     this.#snapshot.pendingSuggestions = this.#snapshot.pendingSuggestions.filter(
-      (s: any) => s.name !== name
+      (s: Record<string, unknown>) => s.name !== name
     );
     if (this.#snapshot.lastResult) {
       this.#snapshot.lastResult.newSuggestions = this.#snapshot.pendingSuggestions.length;
@@ -187,7 +244,7 @@ export class SignalCollector {
     this.#saveSnapshot();
   }
 
-  setMode(mode: any) {
+  setMode(mode: string) {
     if (!['off', 'suggest', 'auto'].includes(mode)) {
       return;
     }
@@ -224,7 +281,7 @@ export class SignalCollector {
 
       // 3. 调用 Agent 系统进行 AI 分析
       this.#logger.debug('[SignalCollector] invoking Agent for analysis...');
-      const agent = this.#agentFactory.createChat({ lang: 'en' });
+      const agent = this.#agentFactory!.createChat({ lang: 'en' });
       const { AgentMessage } = await import('../agent/AgentMessage.js');
       const message = AgentMessage.internal(prompt, { source: 'signal_collector' });
       const result = await agent.execute(message);
@@ -232,12 +289,12 @@ export class SignalCollector {
       const toolCalls = result?.toolCalls ?? [];
 
       // 4. 解析 AI 响应 — 使用 AiProvider.extractJSON 统一 structured output 解析
-      const parsed = this.#parseStructuredReply(reply);
+      const parsed = this.#parseStructuredReply(reply as string);
       const suggestions = parsed.suggestions || [];
 
       // 5. 过滤已推送
       const newSuggestions = suggestions.filter(
-        (s: any) => !this.#snapshot.pushedNames.includes(s.name)
+        (s: Record<string, unknown>) => !this.#snapshot.pushedNames.includes(s.name as string)
       );
 
       // 6. 更新快照
@@ -251,20 +308,20 @@ export class SignalCollector {
       };
       // 持久化 AI 生成的建议，供前端直接读取
       if (newSuggestions.length > 0) {
-        this.#snapshot.pendingSuggestions = newSuggestions.map((s: any) => ({
-          name: s.name,
-          description: s.description || s.reason || '',
-          rationale: s.rationale || s.reason || '',
-          body: s.body || '',
-          source: s.source || 'signal-collector',
-          priority: s.priority || 'medium',
+        this.#snapshot.pendingSuggestions = newSuggestions.map((s: Record<string, unknown>) => ({
+          name: (s.name as string) || '',
+          description: (s.description as string) || (s.reason as string) || '',
+          rationale: (s.rationale as string) || (s.reason as string) || '',
+          body: (s.body as string) || '',
+          source: (s.source as string) || 'signal-collector',
+          priority: (s.priority as string) || 'medium',
         }));
       }
 
       if (newSuggestions.length > 0) {
         for (const s of newSuggestions) {
-          if (!this.#snapshot.pushedNames.includes(s.name)) {
-            this.#snapshot.pushedNames.push(s.name);
+          if (!this.#snapshot.pushedNames.includes(s.name as string)) {
+            this.#snapshot.pushedNames.push(s.name as string);
           }
         }
 
@@ -272,21 +329,25 @@ export class SignalCollector {
         if (this.#onSuggestions) {
           try {
             this.#onSuggestions(newSuggestions);
-          } catch (err: any) {
-            this.#logger.warn(`[SignalCollector] onSuggestions callback error: ${err.message}`);
+          } catch (err: unknown) {
+            this.#logger.warn(
+              `[SignalCollector] onSuggestions callback error: ${err instanceof Error ? err.message : String(err)}`
+            );
           }
         }
 
         // 检测 AI 是否在 auto 模式下自主调用了 create_skill
         if (this.#mode === 'auto' && toolCalls?.length) {
-          const created = toolCalls.filter((tc: any) => tc.tool === 'create_skill');
+          const created = toolCalls.filter(
+            (tc: Record<string, unknown>) => tc.tool === 'create_skill'
+          );
           if (created.length > 0) {
             if (!this.#snapshot.autoCreated) {
               this.#snapshot.autoCreated = [];
             }
             for (const tc of created) {
               this.#snapshot.autoCreated.push({
-                name: tc.params?.name || 'unknown',
+                name: ((tc.params as Record<string, unknown>)?.name as string) || 'unknown',
                 createdAt: new Date().toISOString(),
               });
             }
@@ -315,8 +376,10 @@ export class SignalCollector {
       this.#scheduleNext(this.#intervalMs);
 
       return { suggestions: newSuggestions, stats: this.#snapshot.lastResult };
-    } catch (err: any) {
-      this.#logger.warn(`[SignalCollector] tick error: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[SignalCollector] tick error: ${err instanceof Error ? err.message : String(err)}`
+      );
       // 出错后也要调度下次（间隔加倍退避）
       this.#scheduleNext(Math.min(this.#intervalMs * 2, MAX_INTERVAL_MS));
       return { suggestions: [], stats: null };
@@ -325,7 +388,7 @@ export class SignalCollector {
     }
   }
 
-  #scheduleNext(delayMs: any) {
+  #scheduleNext(delayMs: number) {
     if (this.#mode === 'off') {
       return;
     }
@@ -470,7 +533,7 @@ export class SignalCollector {
   //  AI Prompt 构建
   // ═══════════════════════════════════════════════════════
 
-  #buildAnalysisPrompt(signals: any) {
+  #buildAnalysisPrompt(signals: CollectedSignals) {
     const modeInstruction =
       this.#mode === 'auto'
         ? '你处于 auto 模式：除了推荐之外，对于高优先级的建议，请直接调用 create_skill 工具自动创建 Skill。'
@@ -530,7 +593,7 @@ ${JSON.stringify(signals.codeChanges, null, 2)}
    * @param {string} reply - AgentRuntime.execute() 的回复文本
    * @returns {{ suggestions: Array, nextIntervalMinutes: number|null, summary: string }}
    */
-  #parseStructuredReply(reply: any) {
+  #parseStructuredReply(reply: string) {
     const defaultResult = { suggestions: [], nextIntervalMinutes: null, summary: '' };
     if (!reply) {
       return defaultResult;
@@ -620,8 +683,10 @@ ${JSON.stringify(signals.codeChanges, null, 2)}
         fs.mkdirSync(dir, { recursive: true });
       }
       fs.writeFileSync(this.#snapshotPath, JSON.stringify(this.#snapshot, null, 2), 'utf-8');
-    } catch (err: any) {
-      this.#logger.warn(`[SignalCollector] snapshot save failed: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[SignalCollector] snapshot save failed: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 

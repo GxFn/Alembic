@@ -18,6 +18,20 @@ const SKILLS_DIR = path.resolve(__dirname, '../../../../../skills');
 
 const COLDSTART_SKILL_NAME = 'autosnippet-coldstart';
 
+/** Minimal logger for bootstrap skill loading */
+interface SkillLogger {
+  info?(...args: unknown[]): void;
+  debug?(...args: unknown[]): void;
+  warn?(...args: unknown[]): void;
+}
+
+/** Dimension-like object passed to enhanceDimensions */
+interface DimensionLike {
+  id: string;
+  guide: string;
+  [key: string]: unknown;
+}
+
 /**
  * 加载 Bootstrap 相关 Skills（仅 coldstart Skill）
  *
@@ -25,7 +39,7 @@ const COLDSTART_SKILL_NAME = 'autosnippet-coldstart';
  * @param {object} logger
  * @returns {{ coldstartSkill: string|null, loaded: string[] }}
  */
-export function loadBootstrapSkills(_primaryLanguage: any, logger: any) {
+export function loadBootstrapSkills(_primaryLanguage: string, logger?: SkillLogger) {
   const result: { coldstartSkill: string | null; loaded: string[] } = {
     coldstartSkill: null,
     loaded: [],
@@ -40,8 +54,9 @@ export function loadBootstrapSkills(_primaryLanguage: any, logger: any) {
     } else {
       logger?.debug?.(`[Bootstrap] Skill not found: ${skillPath}`);
     }
-  } catch (e: any) {
-    logger?.warn?.(`[Bootstrap] Failed to load skill ${COLDSTART_SKILL_NAME}: ${e.message}`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger?.warn?.(`[Bootstrap] Failed to load skill ${COLDSTART_SKILL_NAME}: ${msg}`);
   }
 
   return result;
@@ -56,9 +71,15 @@ export function loadBootstrapSkills(_primaryLanguage: any, logger: any) {
  * @param {object} skillContext 由 loadBootstrapSkills 返回
  * @returns {{ guides: Record<string, string>, sectionMap: Record<string, Array<{title: string, content: string, keywords: string[]}>> }}
  */
-export function extractSkillDimensionGuides(skillContext: any) {
-  const guides: Record<string, any> = {}; // dimId → summary guide text
-  const sectionMap: Record<string, any> = {}; // dimId → [{title, content, keywords}]
+export function extractSkillDimensionGuides(skillContext: {
+  coldstartSkill: string | null;
+  loaded: string[];
+}) {
+  const guides: Record<string, string> = {}; // dimId → summary guide text
+  const sectionMap: Record<
+    string,
+    Array<{ title: string; content: string; keywords: string[] }>
+  > = {}; // dimId → [{title, content, keywords}]
 
   // ── coldstart 模板: 从 rationale/whyStandard 提取维度指引 ──
   if (skillContext.coldstartSkill) {
@@ -93,12 +114,16 @@ export function extractSkillDimensionGuides(skillContext: any) {
  * @param {Record<string, Array>} skillSections - sectionMap 部分（per-candidate 匹配用）
  * @returns {Array} 增强后的维度数组（原数组不变，返回新数组）
  */
-export function enhanceDimensions(dimensions: any, skillGuides: any, skillSections: any) {
+export function enhanceDimensions(
+  dimensions: DimensionLike[],
+  skillGuides: Record<string, string>,
+  skillSections: Record<string, Array<{ title: string; content: string; keywords: string[] }>>
+) {
   if (!skillGuides || Object.keys(skillGuides).length === 0) {
     return dimensions;
   }
 
-  return dimensions.map((dim: any) => {
+  return dimensions.map((dim) => {
     const extra = skillGuides[dim.id];
     if (!extra) {
       return dim;

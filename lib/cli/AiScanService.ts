@@ -14,16 +14,30 @@ import Logger from '../infrastructure/logging/Logger.js';
 import { LanguageService } from '../shared/LanguageService.js';
 
 export class AiScanService {
-  agentFactory: any;
-  container: any;
-  logger: any;
-  projectRoot: any;
+  agentFactory: {
+    scanKnowledge: (opts: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  } | null;
+  container: {
+    get: (name: string) => Record<string, unknown>;
+    singletons?: Record<string, unknown>;
+  };
+  logger: ReturnType<typeof Logger.getInstance>;
+  projectRoot: string;
   /**
    * @param {object} opts
    * @param {object} opts.container   ServiceContainer 实例
    * @param {string} opts.projectRoot 项目根目录
    */
-  constructor({ container, projectRoot }: any) {
+  constructor({
+    container,
+    projectRoot,
+  }: {
+    container: {
+      get: (name: string) => Record<string, unknown>;
+      singletons?: Record<string, unknown>;
+    };
+    projectRoot: string;
+  }) {
     this.container = container;
     this.projectRoot = projectRoot;
     this.logger = Logger.getInstance();
@@ -36,21 +50,21 @@ export class AiScanService {
    * @param {object}      opts        { maxFiles, dryRun, concurrency }
    * @returns {Promise<{ published: number, files: number, errors: string[] }>}
    */
-  async scan(targetName: any, opts: any = {}) {
+  async scan(targetName: string | null, opts: { maxFiles?: number; dryRun?: boolean } = {}) {
     const { maxFiles = 200, dryRun = false } = opts;
     const report = { published: 0, files: 0, errors: [] as string[], skipped: 0 };
 
     // 1. 初始化 AgentFactory (内置 AI Provider + ToolExecutionPipeline + 中间件)
     try {
-      this.agentFactory = this.container.get('agentFactory');
+      this.agentFactory = this.container.get('agentFactory') as typeof this.agentFactory;
       // 验证 AI Provider 可用性
-      const aiProvider = this.container.singletons?.aiProvider;
+      const aiProvider = this.container.singletons?.aiProvider as Record<string, unknown> | null;
       if (!aiProvider || aiProvider.name === 'mock') {
         throw new Error('AI Provider 未配置或为 mock');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       throw new Error(
-        `AI Provider 不可用: ${err.message}\n请在 .env 中配置 ASD_GOOGLE_API_KEY / ASD_OPENAI_API_KEY 等`
+        `AI Provider 不可用: ${(err as Error).message}\n请在 .env 中配置 ASD_GOOGLE_API_KEY / ASD_OPENAI_API_KEY 等`
       );
     }
 
@@ -64,7 +78,13 @@ export class AiScanService {
     }
 
     report.files = files.length;
-    const knowledgeService = this.container.get('knowledgeService');
+    const knowledgeService = this.container.get('knowledgeService') as {
+      create: (
+        data: Record<string, unknown>,
+        opts: Record<string, unknown>
+      ) => Promise<{ id: string }>;
+      publish: (id: string, opts: Record<string, unknown>) => Promise<void>;
+    };
 
     // 3. 按文件调用 AI 提取 (通过 Agent 统一管道)
     for (const file of files) {
@@ -87,7 +107,7 @@ export class AiScanService {
         const fileData = [{ name: file.name, content: truncated }];
 
         // 委托 AgentFactory.scanKnowledge — Agent(LLM) 直接分析
-        const extractResult = await this.agentFactory.scanKnowledge({
+        const extractResult = await this.agentFactory!.scanKnowledge({
           label: file.targetName,
           files: fileData,
           task: 'extract',
@@ -129,12 +149,12 @@ export class AiScanService {
             await knowledgeService.publish(saved.id, { userId: 'ai-scan' });
 
             report.published++;
-          } catch (err: any) {
-            report.errors.push(`${file.name}: recipe publish failed — ${err.message}`);
+          } catch (err: unknown) {
+            report.errors.push(`${file.name}: recipe publish failed — ${(err as Error).message}`);
           }
         }
-      } catch (err: any) {
-        report.errors.push(`${file.name}: ${err.message}`);
+      } catch (err: unknown) {
+        report.errors.push(`${file.name}: ${(err as Error).message}`);
       }
     }
 
@@ -144,8 +164,8 @@ export class AiScanService {
   /**
    * 收集 Target 源文件
    */
-  async _collectFiles(targetName: any, maxFiles: any) {
-    const files: { name: any; path: any; relativePath: any; targetName: any }[] = [];
+  async _collectFiles(targetName: string | null, maxFiles: number) {
+    const files: { name: string; path: string; relativePath: string; targetName: string }[] = [];
 
     try {
       // 使用 ModuleService（多语言统一入口）
@@ -153,8 +173,8 @@ export class AiScanService {
       try {
         const { ModuleService } = await import('../service/module/ModuleService.js');
         service = new ModuleService(this.projectRoot);
-      } catch (e: any) {
-        this.logger.warn(`[AiScanService] ModuleService 加载失败: ${e.message}`);
+      } catch (e: unknown) {
+        this.logger.warn(`[AiScanService] ModuleService 加载失败: ${(e as Error).message}`);
         return files;
       }
       await service.load();
@@ -162,7 +182,7 @@ export class AiScanService {
       const targets = await service.listTargets();
       const filtered = targetName
         ? targets.filter((t) => {
-            const name = typeof t === 'string' ? t : t.name;
+            const name = typeof t === 'string' ? t : String(t.name ?? '');
             return name === targetName || name.toLowerCase() === targetName.toLowerCase();
           })
         : targets;
@@ -173,19 +193,20 @@ export class AiScanService {
 
       const seenPaths = new Set();
       for (const t of filtered) {
-        const tName = typeof t === 'string' ? t : t.name;
+        const tName = typeof t === 'string' ? t : String((t as Record<string, unknown>).name ?? '');
         try {
           const fileList = await service.getTargetFiles(t);
           for (const f of fileList) {
-            const fp = typeof f === 'string' ? f : f.path;
+            const fp = (typeof f === 'string' ? f : f.path) as string;
             if (seenPaths.has(fp)) {
               continue;
             }
             seenPaths.add(fp);
             files.push({
-              name: f.name || path.basename(fp),
+              name: ((f as Record<string, unknown>).name as string) || path.basename(fp),
               path: fp,
-              relativePath: f.relativePath || path.basename(fp),
+              relativePath:
+                ((f as Record<string, unknown>).relativePath as string) || path.basename(fp),
               targetName: tName,
             });
             if (files.length >= maxFiles) {
@@ -199,9 +220,9 @@ export class AiScanService {
           break;
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.warn(
-        `SPM file collection failed: ${err.message}, falling back to directory scan`
+        `SPM file collection failed: ${(err as Error).message}, falling back to directory scan`
       );
       // Fallback: 直接扫描目录
       const srcDirs = ['Sources', 'src', 'lib'];
@@ -219,7 +240,12 @@ export class AiScanService {
   /**
    * 递归扫描目录（fallback）
    */
-  _walkDir(dir: any, files: any, maxFiles: any, targetName: any) {
+  _walkDir(
+    dir: string,
+    files: Array<{ name: string; path: string; relativePath: string; targetName: string }>,
+    maxFiles: number,
+    targetName: string
+  ) {
     if (files.length >= maxFiles) {
       return;
     }
@@ -278,7 +304,7 @@ export class AiScanService {
   /**
    * 从文件名推断语言
    */
-  _inferLanguage(filename: any) {
+  _inferLanguage(filename: string) {
     return LanguageService.inferLang(filename);
   }
 }

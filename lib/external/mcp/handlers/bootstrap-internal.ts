@@ -55,8 +55,81 @@ import { runAllPhases } from './bootstrap/shared/bootstrap-phases.js';
 import { buildInternalNextSteps } from './bootstrap/shared/dimension-text.js';
 import { buildLanguageExtension, inferLang } from './LanguageExtensions.js';
 import { inferFilePriority, inferTargetRole } from './TargetClassifier.js';
+import type { McpContext } from './types.js';
 
 export { bootstrapRefine };
+
+// ─── Local type definitions (bootstrap-internal) ─────
+
+interface BootstrapLogger {
+  info(...args: unknown[]): void;
+  warn(...args: unknown[]): void;
+  error(...args: unknown[]): void;
+}
+
+interface BootstrapMcpContext extends McpContext {
+  logger: BootstrapLogger;
+}
+
+interface BootstrapKnowledgeArgs {
+  maxFiles?: number;
+  skipGuard?: boolean;
+  contentMaxLines?: number;
+  incremental?: boolean;
+  skipAsyncFill?: boolean;
+  loadSkills?: boolean;
+  [key: string]: unknown;
+}
+
+interface TargetFile {
+  name: string;
+  relativePath: string;
+  language: string;
+  totalLines: number;
+  priority: string;
+  content: string;
+  truncated: boolean;
+}
+
+interface GuardViolation {
+  ruleId?: string;
+  severity?: string;
+  message?: string;
+  line?: number;
+}
+
+interface GuardAuditFile {
+  filePath: string;
+  violations: GuardViolation[];
+}
+
+interface DimensionDef {
+  id: string;
+  label?: string;
+  skillWorthy?: boolean;
+  skillMeta?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
+interface PhaseReportShape {
+  phases?: {
+    entityGraph?: { entityCount?: number; edgeCount?: number; ms?: number };
+    callGraph?: {
+      result?: { entitiesUpserted?: number; edgesCreated?: number };
+      ms?: number;
+    };
+  };
+}
+
+interface LangProfileShape {
+  secondary?: string[];
+  isMultiLang?: boolean;
+}
+
+interface BootstrapSessionShape {
+  id: string;
+  toJSON(): Record<string, unknown>;
+}
 
 /**
  * bootstrapKnowledge — 一键初始化知识库 (Skill-aware)
@@ -74,7 +147,7 @@ export { bootstrapRefine };
  * @param {number} [args.contentMaxLines=120] 每文件读取最大行数
  * @param {boolean} [args.incremental=true] 是否启用增量 Bootstrap (自动检测变更, 仅重跑受影响维度)
  */
-export async function bootstrapKnowledge(ctx: any, args: any) {
+export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: BootstrapKnowledgeArgs) {
   const t0 = Date.now();
   const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
 
@@ -164,16 +237,17 @@ export async function bootstrapKnowledge(ctx: any, args: any) {
         categories: astProjectSummary?.categories?.length || 0,
         patterns: Object.keys(astProjectSummary?.patternStats || {}),
       },
-      codeEntityGraph: (phaseReport as any)?.phases?.entityGraph || {
+      codeEntityGraph: (phaseReport as PhaseReportShape)?.phases?.entityGraph || {
         entityCount: 0,
         edgeCount: 0,
         ms: 0,
       },
-      callGraph: (phaseReport as any)?.phases?.callGraph
+      callGraph: (phaseReport as PhaseReportShape)?.phases?.callGraph
         ? {
-            entities: (phaseReport as any).phases.callGraph.result?.entitiesUpserted || 0,
-            edges: (phaseReport as any).phases.callGraph.result?.edgesCreated || 0,
-            ms: (phaseReport as any).phases.callGraph.ms || 0,
+            entities:
+              (phaseReport as PhaseReportShape).phases!.callGraph!.result?.entitiesUpserted || 0,
+            edges: (phaseReport as PhaseReportShape).phases!.callGraph!.result?.edgesCreated || 0,
+            ms: (phaseReport as PhaseReportShape).phases!.callGraph!.ms || 0,
           }
         : { entities: 0, edges: 0, ms: 0 },
       dependencyGraph: { edgesWritten: depEdgesWritten || 0 },
@@ -185,8 +259,9 @@ export async function bootstrapKnowledge(ctx: any, args: any) {
       },
       guardAudit: {
         totalViolations: guardAudit?.summary?.totalViolations || 0,
-        filesWithViolations: (guardAudit?.files || []).filter((f: any) => f.violations.length > 0)
-          .length,
+        filesWithViolations: ((guardAudit?.files || []) as GuardAuditFile[]).filter(
+          (f) => f.violations.length > 0
+        ).length,
         skipped: skipGuard,
         enhancementRulesInjected: enhancementGuardRules?.length || 0,
       },
@@ -201,7 +276,7 @@ export async function bootstrapKnowledge(ctx: any, args: any) {
   // ═══════════════════════════════════════════════════════════
   // Phase 4.5: 构建响应 — filesByTarget + analysisFramework
   // ═══════════════════════════════════════════════════════════
-  const targetFileMap: Record<string, any[]> = {};
+  const targetFileMap: Record<string, TargetFile[]> = {};
   for (const f of allFiles) {
     if (!targetFileMap[f.targetName]) {
       targetFileMap[f.targetName] = [];
@@ -224,23 +299,23 @@ export async function bootstrapKnowledge(ctx: any, args: any) {
     const prio = { high: 0, medium: 1, low: 2 };
     targetFileMap[tName].sort(
       (a, b) =>
-        ((prio as Record<string, any>)[a.priority] || 1) -
-        ((prio as Record<string, any>)[b.priority] || 1)
+        ((prio as Record<string, number>)[a.priority] || 1) -
+        ((prio as Record<string, number>)[b.priority] || 1)
     );
   }
 
-  const dimensions = activeDimensions;
+  const dimensions = activeDimensions as DimensionDef[];
 
-  const responseData: any = {
+  const responseData: Record<string, unknown> = {
     report,
     targets:
       targetsSummary ||
-      allTargets.map((t: any) => {
-        const name = typeof t === 'string' ? t : t.name;
+      allTargets.map((t: unknown) => {
+        const name = typeof t === 'string' ? t : (t as { name: string }).name;
         return {
           name,
-          type: t.type || 'target',
-          packageName: t.packageName || undefined,
+          type: (t as { type?: string }).type || 'target',
+          packageName: (t as { packageName?: string }).packageName || undefined,
           inferredRole: inferTargetRole(name),
           fileCount: (targetFileMap[name] || []).length,
         };
@@ -249,7 +324,9 @@ export async function bootstrapKnowledge(ctx: any, args: any) {
     // 避免 500+ 文件清单导致响应过大。完整文件列表保留在服务端供 Phase 5 使用。
     filesByTarget: Object.fromEntries(
       Object.entries(targetFileMap).map(([target, files]) => {
-        const sorted = [...files].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+        const sorted = [...files].sort(
+          (a, b) => (Number(b.priority) || 0) - (Number(a.priority) || 0)
+        );
         const top = sorted.slice(0, 10);
         return [
           target,
@@ -263,17 +340,19 @@ export async function bootstrapKnowledge(ctx: any, args: any) {
     ),
     dependencyGraph: depGraphData
       ? {
-          nodes: (depGraphData.nodes || []).map((n: any) => ({
-            id: typeof n === 'string' ? n : n.id,
-            label: typeof n === 'string' ? n : n.label,
-          })),
+          nodes: ((depGraphData.nodes || []) as Array<string | { id: string; label: string }>).map(
+            (n) => ({
+              id: typeof n === 'string' ? n : n.id,
+              label: typeof n === 'string' ? n : n.label,
+            })
+          ),
           edges: depGraphData.edges || [],
         }
       : null,
     languageStats: langStats,
     primaryLanguage: primaryLang,
-    secondaryLanguages: (langProfile as any).secondary,
-    isMultiLang: (langProfile as any).isMultiLang,
+    secondaryLanguages: (langProfile as LangProfileShape).secondary,
+    isMultiLang: (langProfile as LangProfileShape).isMultiLang,
     languageExtension: buildLanguageExtension(primaryLang),
     guardSummary: guardAudit
       ? {
@@ -283,11 +362,11 @@ export async function bootstrapKnowledge(ctx: any, args: any) {
         }
       : null,
     guardViolationFiles: guardAudit
-      ? (guardAudit.files || [])
-          .filter((f: any) => f.violations.length > 0)
-          .map((f: any) => ({
+      ? ((guardAudit.files || []) as GuardAuditFile[])
+          .filter((f) => f.violations.length > 0)
+          .map((f) => ({
             filePath: f.filePath,
-            violations: f.violations.map((v: any) => ({
+            violations: f.violations.map((v) => ({
               ruleId: v.ruleId,
               severity: v.severity,
               message: v.message,
@@ -300,8 +379,8 @@ export async function bootstrapKnowledge(ctx: any, args: any) {
     // 注意：anti-pattern 已移除，代码问题由 Guard 独立处理
     analysisFramework: {
       dimensions,
-      skillWorthyDimensions: dimensions.filter((d: any) => d.skillWorthy).map((d: any) => d.id),
-      candidateOnlyDimensions: dimensions.filter((d: any) => !d.skillWorthy).map((d: any) => d.id),
+      skillWorthyDimensions: dimensions.filter((d) => d.skillWorthy).map((d) => d.id),
+      candidateOnlyDimensions: dimensions.filter((d) => !d.skillWorthy).map((d) => d.id),
       candidateRequiredFields: getInternalAgentRequiredFields(),
       submissionTool: 'autosnippet_submit_knowledge_batch',
       expectedOutput: `候选知识（微观代码维度：code-pattern/best-practice/event-and-data-flow + 语言条件扫描）+ Project Skills（宏观叙事维度：code-standard/architecture/project-profile/agent-guidelines + 语言条件扫描）— 共 ${dimensions.length} 个维度`,
@@ -351,7 +430,7 @@ export async function bootstrapKnowledge(ctx: any, args: any) {
   // ═══════════════════════════════════════════════════════════
 
   // 构建任务定义列表
-  const taskDefs = dimensions.map((dim: any) => ({
+  const taskDefs = dimensions.map((dim) => ({
     id: dim.id,
     meta: {
       type: dim.skillWorthy ? 'skill' : 'candidate',
@@ -363,13 +442,13 @@ export async function bootstrapKnowledge(ctx: any, args: any) {
   }));
 
   // 启动 BootstrapTaskManager 会话（通过正式 DI 获取单例）
-  let bootstrapSession: any = null;
+  let bootstrapSession: BootstrapSessionShape | null = null;
   try {
     const taskManager = ctx.container.get('bootstrapTaskManager');
     bootstrapSession = taskManager.startSession(taskDefs);
-  } catch (e: any) {
+  } catch (e: unknown) {
     ctx.logger.warn(
-      `[Bootstrap] BootstrapTaskManager init failed (graceful degradation): ${e.message}`
+      `[Bootstrap] BootstrapTaskManager init failed (graceful degradation): ${e instanceof Error ? e.message : String(e)}`
     );
   }
 

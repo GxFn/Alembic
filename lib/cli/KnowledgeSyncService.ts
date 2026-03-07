@@ -25,14 +25,14 @@ import {
 } from '../service/knowledge/KnowledgeFileWriter.js';
 
 export class KnowledgeSyncService {
-  candidatesDir: any;
-  logger: any;
-  projectRoot: any;
-  recipesDir: any;
+  candidatesDir: string;
+  logger: ReturnType<typeof Logger.getInstance>;
+  projectRoot: string;
+  recipesDir: string;
   /**
    * @param {string} projectRoot
    */
-  constructor(projectRoot: any) {
+  constructor(projectRoot: string) {
     this.projectRoot = projectRoot;
     this.recipesDir = path.join(projectRoot, RECIPES_DIR);
     this.candidatesDir = path.join(projectRoot, CANDIDATES_DIR);
@@ -51,7 +51,16 @@ export class KnowledgeSyncService {
    * @param {boolean} [opts.skipViolations=false] 跳过违规记录（setup 场景）
    * @returns {{ synced: number, created: number, updated: number, violations: string[], orphaned: string[], skipped: number }}
    */
-  sync(db: any, opts: any = {}) {
+  sync(
+    db: {
+      prepare: (sql: string) => {
+        run: (...args: unknown[]) => void;
+        get: (...args: unknown[]) => unknown;
+        all: () => Array<Record<string, unknown>>;
+      };
+    },
+    opts: { dryRun?: boolean; force?: boolean; skipViolations?: boolean } = {}
+  ) {
     const { dryRun = false, force = false, skipViolations = false } = opts;
 
     const report = {
@@ -79,12 +88,12 @@ export class KnowledgeSyncService {
     const auditStmt = dryRun || skipViolations ? null : this._prepareAuditInsert(db);
 
     // ── 3. 逐文件同步 ──
-    const syncedIds = new Set();
+    const syncedIds = new Set<string>();
 
     for (const { absPath, relPath } of mdFiles) {
       try {
         const content = fs.readFileSync(absPath, 'utf8');
-        const parsed: any = parseKnowledgeMarkdown(content, relPath);
+        const parsed = parseKnowledgeMarkdown(content, relPath) as Record<string, unknown>;
 
         if (!parsed.id) {
           this.logger.warn(`KnowledgeSyncService: skip file without id — ${relPath}`);
@@ -92,7 +101,7 @@ export class KnowledgeSyncService {
           continue;
         }
 
-        syncedIds.add(parsed.id);
+        syncedIds.add(parsed.id as string);
 
         // ── 检测手动编辑 ──
         const actualHash = computeKnowledgeHash(content);
@@ -102,15 +111,21 @@ export class KnowledgeSyncService {
         if (isManualEdit) {
           report.violations.push(relPath);
           if (auditStmt) {
-            this._logViolation(auditStmt, parsed.id, relPath, storedHash, actualHash);
+            this._logViolation(
+              auditStmt,
+              parsed.id as string,
+              relPath,
+              storedHash as string,
+              actualHash
+            );
           }
         }
 
         // ── upsert ──
         if (!dryRun) {
-          const existed = this._entryExists(db, parsed.id);
+          const existed = this._entryExists(db, parsed.id as string);
           const row = this._buildDbRow(parsed, relPath, content);
-          upsertStmt.run(...Object.values(row));
+          upsertStmt!.run(...Object.values(row));
 
           if (existed) {
             report.updated++;
@@ -120,9 +135,9 @@ export class KnowledgeSyncService {
         }
 
         report.synced++;
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.logger.error(`KnowledgeSyncService: failed to sync ${relPath}`, {
-          error: err.message,
+          error: (err as Error).message,
         });
         report.skipped++;
       }
@@ -151,13 +166,13 @@ export class KnowledgeSyncService {
    * @param {string} prefix 相对路径前缀 (e.g. 'AutoSnippet/candidates')
    * @returns {{ absPath: string, relPath: string }[]}
    */
-  _collectMdFiles(dir: any, prefix: any) {
+  _collectMdFiles(dir: string, prefix: string) {
     if (!fs.existsSync(dir)) {
       return [];
     }
 
     const results: { absPath: string; relPath: string }[] = [];
-    const walk = (curDir: any, base: any) => {
+    const walk = (curDir: string, base: string) => {
       for (const entry of fs.readdirSync(curDir, { withFileTypes: true })) {
         const full = path.join(curDir, entry.name);
         const rel = base ? `${base}/${entry.name}` : entry.name;
@@ -182,7 +197,7 @@ export class KnowledgeSyncService {
    * 从 parseKnowledgeMarkdown 的结果构建 DB row
    * wire format → DB 列映射（与 KnowledgeRepository.impl 对齐）
    */
-  _buildDbRow(parsed: any, relPath: any, rawContent: any) {
+  _buildDbRow(parsed: Record<string, unknown>, relPath: string, rawContent: string) {
     const now = Math.floor(Date.now() / 1000);
 
     // 内容 hash
@@ -239,7 +254,7 @@ export class KnowledgeSyncService {
   /**
    * 准备 upsert 语句（INSERT ... ON CONFLICT DO UPDATE 全字段）
    */
-  _prepareUpsert(db: any) {
+  _prepareUpsert(db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } }) {
     const cols = [
       'id',
       'title',
@@ -304,14 +319,17 @@ export class KnowledgeSyncService {
   /**
    * 检查 entry 是否已存在于 DB
    */
-  _entryExists(db: any, id: any) {
+  _entryExists(
+    db: { prepare: (sql: string) => { get: (...args: unknown[]) => unknown } },
+    id: string
+  ) {
     const row = db.prepare('SELECT 1 FROM knowledge_entries WHERE id = ?').get(id);
     return !!row;
   }
 
   /* ═══ 违规记录 ═══════════════════════════════════════════ */
 
-  _prepareAuditInsert(db: any) {
+  _prepareAuditInsert(db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } }) {
     try {
       return db.prepare(`
         INSERT INTO audit_logs (id, timestamp, actor, actor_context, action, resource, operation_data, result, error_message, duration)
@@ -322,7 +340,13 @@ export class KnowledgeSyncService {
     }
   }
 
-  _logViolation(stmt: any, entryId: any, filePath: any, expectedHash: any, actualHash: any) {
+  _logViolation(
+    stmt: { run: (...args: unknown[]) => void },
+    entryId: string,
+    filePath: string,
+    expectedHash: string,
+    actualHash: string
+  ) {
     try {
       stmt.run(
         randomUUID(),
@@ -336,10 +360,10 @@ export class KnowledgeSyncService {
         null,
         0
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.warn('KnowledgeSyncService: failed to log violation', {
         entryId,
-        error: err.message,
+        error: (err as Error).message,
       });
     }
   }
@@ -350,8 +374,17 @@ export class KnowledgeSyncService {
    * 检测 DB 中存在但 .md 已删除的 Entry → 标记 deprecated
    * @returns {string[]} 孤儿 entry id 列表
    */
-  _detectOrphans(db: any, syncedIds: any, dryRun: any) {
-    const orphanIds: any[] = [];
+  _detectOrphans(
+    db: {
+      prepare: (sql: string) => {
+        run: (...args: unknown[]) => void;
+        all: () => Array<Record<string, unknown>>;
+      };
+    },
+    syncedIds: Set<string>,
+    dryRun: boolean
+  ) {
+    const orphanIds: string[] = [];
     try {
       const rows = db
         .prepare(
@@ -362,8 +395,8 @@ export class KnowledgeSyncService {
         .all();
 
       for (const row of rows) {
-        if (!syncedIds.has(row.id)) {
-          orphanIds.push(row.id);
+        if (!syncedIds.has(row.id as string)) {
+          orphanIds.push(row.id as string);
           if (!dryRun) {
             const now = Math.floor(Date.now() / 1000);
             db.prepare(
@@ -376,9 +409,9 @@ export class KnowledgeSyncService {
           }
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.warn('KnowledgeSyncService: orphan detection failed', {
-        error: err.message,
+        error: (err as Error).message,
       });
     }
     return orphanIds;

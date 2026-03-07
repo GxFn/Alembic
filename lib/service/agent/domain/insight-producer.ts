@@ -16,6 +16,55 @@
  */
 
 import { buildProducerStyleGuide, SUBMIT_REQUIREMENTS } from '../../../shared/StyleGuide.js';
+import type { EvidenceEntry } from './EvidenceCollector.js';
+
+// ──────────────────────────────────────────────────────────────────
+// 本地类型定义
+// ──────────────────────────────────────────────────────────────────
+
+/** AnalysisReport 最小接口 (v1) */
+interface AnalysisReportLike {
+  analysisText: string;
+  referencedFiles: string[];
+}
+
+/** AnalysisArtifact 最小接口 (v2) */
+interface AnalysisArtifactLike extends AnalysisReportLike {
+  findings: Array<{ finding: string; evidence?: string; importance: number }>;
+  evidenceMap?: Map<string, EvidenceEntry>;
+  negativeSignals: Array<{ searchPattern: string; implication: string }>;
+}
+
+/** 维度配置 */
+interface DimConfig {
+  id: string;
+  label: string;
+  allowedKnowledgeTypes?: string[];
+  outputType?: string;
+}
+
+/** 项目基本信息 */
+interface ProjectInfo {
+  name: string;
+}
+
+/** reactLoop 返回值 (门控评估用) */
+interface ReactLoopResult {
+  toolCalls?: ToolCallRecord[];
+}
+
+/** 工具调用记录 */
+interface ToolCallRecord {
+  tool?: string;
+  name?: string;
+  result?: string | { status?: string; reason?: string };
+}
+
+/** 门控策略上下文 */
+interface GateStrategyContext {
+  submitToolNames?: string[];
+  [key: string]: unknown;
+}
 
 // ──────────────────────────────────────────────────────────────────
 // System Prompt — Producer 专用 (~150 tokens)
@@ -90,8 +139,12 @@ const STYLE_GUIDE = buildProducerStyleGuide();
  * @param {object} projectInfo - { name }
  * @returns {string}
  */
-export function buildProducerPrompt(analysisReport: any, dimConfig: any, projectInfo: any) {
-  const parts: any[] = [];
+export function buildProducerPrompt(
+  analysisReport: AnalysisReportLike,
+  dimConfig: DimConfig,
+  projectInfo: ProjectInfo
+) {
+  const parts: string[] = [];
 
   parts.push(`将以下对 ${projectInfo.name} 项目 "${dimConfig.label}" 维度的分析，转化为知识候选:`);
   parts.push(`---\n${analysisReport.analysisText}\n---`);
@@ -124,8 +177,12 @@ export function buildProducerPrompt(analysisReport: any, dimConfig: any, project
  * @param {object} projectInfo
  * @returns {string}
  */
-export function buildProducerPromptV2(artifact: any, dimConfig: any, projectInfo: any) {
-  const parts: any[] = [];
+export function buildProducerPromptV2(
+  artifact: AnalysisArtifactLike,
+  dimConfig: DimConfig,
+  projectInfo: ProjectInfo
+) {
+  const parts: string[] = [];
 
   parts.push(`将以下对 ${projectInfo.name} 项目 "${dimConfig.label}" 维度的分析，转化为知识候选:`);
   parts.push(`---\n${artifact.analysisText}\n---`);
@@ -192,7 +249,9 @@ export function buildProducerPromptV2(artifact: any, dimConfig: any, projectInfo
  * @param {Map<string, import('./EvidenceCollector.js').EvidenceEntry>} evidenceMap
  * @returns {string|null}
  */
-export function buildCodeContextSection(evidenceMap: any) {
+export function buildCodeContextSection(
+  evidenceMap: Map<string, EvidenceEntry> | null | undefined
+) {
   if (!evidenceMap || evidenceMap.size === 0) {
     return null;
   }
@@ -251,9 +310,9 @@ export function buildCodeContextSection(evidenceMap: any) {
  * @returns {{ action: 'pass'|'retry', reason: string }}
  */
 export function producerRejectionGateEvaluator(
-  source: any,
-  _phaseResults: any,
-  _strategyContext: any = {}
+  source: ReactLoopResult | null | undefined,
+  _phaseResults: unknown,
+  _strategyContext: GateStrategyContext = {}
 ) {
   if (!source?.toolCalls) {
     return { action: 'pass', reason: '' };
@@ -264,10 +323,10 @@ export function producerRejectionGateEvaluator(
     'submit_knowledge',
     'submit_with_check',
   ];
-  const submitCalls = (source.toolCalls || []).filter((tc: any) =>
-    submitToolNames.includes(tc.tool || tc.name)
+  const submitCalls = (source.toolCalls || []).filter((tc: ToolCallRecord) =>
+    submitToolNames.includes(tc.tool || tc.name || '')
   );
-  const rejected = submitCalls.filter((tc: any) => {
+  const rejected = submitCalls.filter((tc: ToolCallRecord) => {
     const res = tc.result;
     if (!res) {
       return false;

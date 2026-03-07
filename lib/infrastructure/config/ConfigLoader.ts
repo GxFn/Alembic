@@ -10,8 +10,8 @@ const __dirname = path.dirname(__filename);
  * 直接读取 JSON 配置文件，避免 node-config 模块在 import 阶段就读取配置目录的时序问题
  */
 export class ConfigLoader {
-  static instance: any = null;
-  static config: any = null;
+  static instance: ConfigLoader | null = null;
+  static config: Record<string, unknown> | null = null;
 
   static load(env = process.env.NODE_ENV || 'development') {
     if (!this.config) {
@@ -19,7 +19,7 @@ export class ConfigLoader {
 
       // 加载默认配置
       const defaultPath = path.join(configDir, 'default.json');
-      let merged: any = {};
+      let merged: Record<string, unknown> = {};
       if (fs.existsSync(defaultPath)) {
         merged = JSON.parse(fs.readFileSync(defaultPath, 'utf8'));
       }
@@ -45,8 +45,11 @@ export class ConfigLoader {
     return this.config;
   }
 
-  static _deepMerge(target: any, source: any) {
-    const output = { ...target };
+  static _deepMerge(
+    target: Record<string, unknown>,
+    source: Record<string, unknown>
+  ): Record<string, unknown> {
+    const output: Record<string, unknown> = { ...target };
     for (const key of Object.keys(source)) {
       if (
         source[key] &&
@@ -56,7 +59,10 @@ export class ConfigLoader {
         typeof target[key] === 'object' &&
         !Array.isArray(target[key])
       ) {
-        output[key] = this._deepMerge(target[key], source[key]);
+        output[key] = this._deepMerge(
+          target[key] as Record<string, unknown>,
+          source[key] as Record<string, unknown>
+        );
       } else {
         output[key] = source[key];
       }
@@ -64,16 +70,16 @@ export class ConfigLoader {
     return output;
   }
 
-  static get(key: any) {
+  static get(key: string): unknown {
     if (!this.config) {
       this.load();
     }
 
     const keys = key.split('.');
-    let value = this.config;
+    let value: unknown = this.config;
 
     for (const k of keys) {
-      value = value?.[k];
+      value = (value as Record<string, unknown>)?.[k];
       if (value === undefined) {
         throw new Error(`Config key not found: ${key}`);
       }
@@ -82,7 +88,7 @@ export class ConfigLoader {
     return value;
   }
 
-  static has(key: any) {
+  static has(key: string) {
     try {
       this.get(key);
       return true;
@@ -91,20 +97,20 @@ export class ConfigLoader {
     }
   }
 
-  static set(key: any, value: any) {
+  static set(key: string, value: unknown) {
     if (!this.config) {
       this.load();
     }
 
     const keys = key.split('.');
-    let obj: any = this.config;
+    let obj: Record<string, unknown> = this.config as Record<string, unknown>;
 
     for (let i = 0; i < keys.length - 1; i++) {
       const k = keys[i];
       if (!obj[k]) {
         obj[k] = {};
       }
-      obj = obj[k];
+      obj = obj[k] as Record<string, unknown>;
     }
 
     obj[keys[keys.length - 1]] = value;

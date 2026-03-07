@@ -15,6 +15,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
 import { checkWriteSafety, safeWriteFile } from './FileProtection.js';
 import { estimateTokens } from './TokenBudget.js';
 
@@ -64,15 +65,19 @@ const MCP_TOOLS_SUMMARY = [
 ];
 
 export class AgentInstructionsGenerator {
-  logger: any;
-  projectName: any;
-  projectRoot: any;
+  logger: { info?: (...args: unknown[]) => void };
+  projectName: string;
+  projectRoot: string;
   /**
    * @param {string} projectRoot
    * @param {string} projectName
    * @param {Object} [logger]
    */
-  constructor(projectRoot: any, projectName = 'Project', logger = console) {
+  constructor(
+    projectRoot: string,
+    projectName = 'Project',
+    logger: { info?: (...args: unknown[]) => void } = console
+  ) {
     this.projectRoot = projectRoot;
     this.projectName = projectName;
     this.logger = logger;
@@ -87,7 +92,15 @@ export class AgentInstructionsGenerator {
    * @param {string[]} params.skills 可用 Skill 名称列表
    * @returns {{ agents: Object, claude: Object, copilot: Object }}
    */
-  generate({ rules = [], patterns = [], skills = [] }) {
+  generate({
+    rules = [],
+    patterns = [],
+    skills = [],
+  }: {
+    rules?: KnowledgeEntryProps[];
+    patterns?: KnowledgeEntryProps[];
+    skills?: string[];
+  } = {}) {
     const startTime = Date.now();
 
     // 构建共享内容块
@@ -140,14 +153,22 @@ export class AgentInstructionsGenerator {
    * 从知识条目构建共享内容段
    * @private
    */
-  _buildSections({ rules, patterns, skills }: any) {
+  _buildSections({
+    rules,
+    patterns,
+    skills,
+  }: {
+    rules: KnowledgeEntryProps[];
+    patterns: KnowledgeEntryProps[];
+    skills: string[];
+  }) {
     // 编码规则（Channel A 格式，一行一条）
     const ruleLines = rules
       .slice(0, AGENT_BUDGET.MAX_RULES)
-      .filter((e: any) => e.doClause)
-      .map((e: any) => {
+      .filter((e: KnowledgeEntryProps) => e.doClause)
+      .map((e: KnowledgeEntryProps) => {
         const langPrefix = e.language && e.scope !== 'universal' ? `[${e.language}] ` : '';
-        const doText = e.doClause.replace(/\.+$/, '');
+        const doText = e.doClause!.replace(/\.+$/, '');
         let line = `${langPrefix}${doText}`;
         if (e.dontClause) {
           // 有明确否定词的统一为 "Do NOT"，否则保留原文（如 "Avoid ..."）
@@ -167,16 +188,16 @@ export class AgentInstructionsGenerator {
     // 架构模式（摘要表格行）
     const patternRows = patterns
       .slice(0, AGENT_BUDGET.MAX_PATTERNS)
-      .filter((e: any) => e.trigger && e.doClause)
-      .map((e: any) => {
-        const trigger = e.trigger.startsWith('@') ? e.trigger : `@${e.trigger}`;
+      .filter((e: KnowledgeEntryProps) => e.trigger && e.doClause)
+      .map((e: KnowledgeEntryProps) => {
+        const trigger = e.trigger!.startsWith('@') ? e.trigger! : `@${e.trigger}`;
         const when = (e.whenClause || '').substring(0, 60);
         const doText = (e.doClause || '').substring(0, 80);
         return `| ${trigger} | ${when} | ${doText} |`;
       });
 
     // Skills 列表
-    const skillLines = skills.slice(0, AGENT_BUDGET.MAX_SKILLS).map((s: any) => `- \`${s}\``);
+    const skillLines = skills.slice(0, AGENT_BUDGET.MAX_SKILLS).map((s: string) => `- \`${s}\``);
 
     // MCP 工具列表
     const toolLines = MCP_TOOLS_SUMMARY.map((t) => `- \`${t.name}\` — ${t.desc}`);
@@ -189,7 +210,12 @@ export class AgentInstructionsGenerator {
   /**
    * @private
    */
-  _writeAgentsMd(sections: any) {
+  _writeAgentsMd(sections: {
+    ruleLines: string[];
+    patternRows: string[];
+    skillLines: string[];
+    toolLines: string[];
+  }) {
     const lines = [
       `# ${this.projectName} — Agent Instructions`,
       '',
@@ -251,7 +277,12 @@ export class AgentInstructionsGenerator {
   /**
    * @private
    */
-  _writeClaudeMd(sections: any) {
+  _writeClaudeMd(sections: {
+    ruleLines: string[];
+    patternRows: string[];
+    skillLines: string[];
+    toolLines: string[];
+  }) {
     const lines = [
       `# ${this.projectName} — Claude Code Instructions`,
       '',
@@ -333,7 +364,12 @@ export class AgentInstructionsGenerator {
    * 替代原有的静态模板复制
    * @private
    */
-  _writeCopilotInstructions(sections: any) {
+  _writeCopilotInstructions(sections: {
+    ruleLines: string[];
+    patternRows: string[];
+    skillLines: string[];
+    toolLines: string[];
+  }) {
     const lines = [
       '# AutoSnippet Copilot Instructions',
       '',

@@ -9,11 +9,53 @@ import { dirname, join } from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 import pathGuard from '../../shared/PathGuard.js';
 
+interface PathExclusion {
+  pattern: string;
+  reason: string;
+  addedAt: string;
+}
+
+interface RuleExclusionEntry {
+  filePath: string;
+  reason: string;
+  addedAt: string;
+}
+
+interface GlobalRuleExclusion {
+  ruleId: string;
+  reason: string;
+  addedAt: string;
+}
+
+interface ExclusionData {
+  pathExclusions: PathExclusion[];
+  ruleExclusions: Record<string, RuleExclusionEntry[]>;
+  globalRuleExclusions: GlobalRuleExclusion[];
+}
+
+interface ExclusionMeta {
+  reason?: string;
+}
+
+interface ViolationInput {
+  ruleId?: string;
+  filePath?: string;
+}
+
+interface ExclusionConfig {
+  pathExclusions?: { pattern: string; reason?: string }[];
+  ruleExclusions?: Record<string, { filePath: string; reason?: string }[]>;
+  globalRuleExclusions?: { ruleId: string; reason?: string }[];
+}
+
 export class ExclusionManager {
   #exclusionsPath;
-  #data; // { pathExclusions: [], ruleExclusions: {}, globalRuleExclusions: [] }
+  #data: ExclusionData;
 
-  constructor(projectRoot: any, options: any = {}) {
+  constructor(
+    projectRoot: string,
+    options: { knowledgeBaseDir?: string; internalDir?: string } = {}
+  ) {
     const kbDir = options.knowledgeBaseDir || 'AutoSnippet';
     this.#exclusionsPath = join(projectRoot, kbDir, 'guard-exclusions.json');
     pathGuard.assertProjectWriteSafe(this.#exclusionsPath);
@@ -29,11 +71,11 @@ export class ExclusionManager {
    * @param {string} pattern
    * @param {{ reason?: string }} meta
    */
-  addPathExclusion(pattern: any, meta: any = {}) {
+  addPathExclusion(pattern: string, meta: ExclusionMeta = {}) {
     if (!pattern) {
       return;
     }
-    const exists = this.#data.pathExclusions.find((e: any) => e.pattern === pattern);
+    const exists = this.#data.pathExclusions.find((e) => e.pattern === pattern);
     if (exists) {
       return;
     }
@@ -48,15 +90,15 @@ export class ExclusionManager {
   /**
    * 检查文件路径是否被排除
    */
-  isPathExcluded(filePath: any) {
-    return this.#data.pathExclusions.some((e: any) => this.#matchGlob(filePath, e.pattern));
+  isPathExcluded(filePath: string) {
+    return this.#data.pathExclusions.some((e) => this.#matchGlob(filePath, e.pattern));
   }
 
   /**
    * 移除路径排除
    */
-  removePathExclusion(pattern: any) {
-    this.#data.pathExclusions = this.#data.pathExclusions.filter((e: any) => e.pattern !== pattern);
+  removePathExclusion(pattern: string) {
+    this.#data.pathExclusions = this.#data.pathExclusions.filter((e) => e.pattern !== pattern);
     this.#save();
   }
 
@@ -67,12 +109,12 @@ export class ExclusionManager {
    * @param {string} ruleId
    * @param {string} filePath
    */
-  addRuleExclusion(ruleId: any, filePath: any, meta: any = {}) {
+  addRuleExclusion(ruleId: string, filePath: string, meta: ExclusionMeta = {}) {
     if (!this.#data.ruleExclusions[ruleId]) {
       this.#data.ruleExclusions[ruleId] = [];
     }
     const list = this.#data.ruleExclusions[ruleId];
-    if (list.find((e: any) => e.filePath === filePath)) {
+    if (list.find((e) => e.filePath === filePath)) {
       return;
     }
     list.push({ filePath, reason: meta.reason || '', addedAt: new Date().toISOString() });
@@ -82,7 +124,7 @@ export class ExclusionManager {
   /**
    * 检查规则在特定文件是否被排除
    */
-  isRuleExcluded(ruleId: any, filePath: any) {
+  isRuleExcluded(ruleId: string, filePath: string) {
     if (this.isRuleGloballyDisabled(ruleId)) {
       return true;
     }
@@ -90,18 +132,18 @@ export class ExclusionManager {
     if (!list) {
       return false;
     }
-    return list.some((e: any) => e.filePath === filePath || this.#matchGlob(filePath, e.filePath));
+    return list.some((e) => e.filePath === filePath || this.#matchGlob(filePath, e.filePath));
   }
 
   /**
    * 移除文件级规则排除
    */
-  removeRuleExclusion(ruleId: any, filePath: any) {
+  removeRuleExclusion(ruleId: string, filePath: string) {
     const list = this.#data.ruleExclusions[ruleId];
     if (!list) {
       return;
     }
-    this.#data.ruleExclusions[ruleId] = list.filter((e: any) => e.filePath !== filePath);
+    this.#data.ruleExclusions[ruleId] = list.filter((e) => e.filePath !== filePath);
     if (this.#data.ruleExclusions[ruleId].length === 0) {
       delete this.#data.ruleExclusions[ruleId];
     }
@@ -113,8 +155,8 @@ export class ExclusionManager {
   /**
    * 全局禁用某条规则
    */
-  addGlobalRuleExclusion(ruleId: any, meta: any = {}) {
-    if (this.#data.globalRuleExclusions.find((e: any) => e.ruleId === ruleId)) {
+  addGlobalRuleExclusion(ruleId: string, meta: ExclusionMeta = {}) {
+    if (this.#data.globalRuleExclusions.find((e) => e.ruleId === ruleId)) {
       return;
     }
     this.#data.globalRuleExclusions.push({
@@ -128,16 +170,16 @@ export class ExclusionManager {
   /**
    * 检查规则是否被全局禁用
    */
-  isRuleGloballyDisabled(ruleId: any) {
-    return this.#data.globalRuleExclusions.some((e: any) => e.ruleId === ruleId);
+  isRuleGloballyDisabled(ruleId: string) {
+    return this.#data.globalRuleExclusions.some((e) => e.ruleId === ruleId);
   }
 
   /**
    * 移除全局规则排除
    */
-  removeGlobalRuleExclusion(ruleId: any) {
+  removeGlobalRuleExclusion(ruleId: string) {
     this.#data.globalRuleExclusions = this.#data.globalRuleExclusions.filter(
-      (e: any) => e.ruleId !== ruleId
+      (e) => e.ruleId !== ruleId
     );
     this.#save();
   }
@@ -149,8 +191,8 @@ export class ExclusionManager {
    * @param {object[]} violations - [{ruleId, filePath, ...}]
    * @returns {object[]} 过滤后的违反列表
    */
-  applyExclusions(violations: any) {
-    return violations.filter((v: any) => {
+  applyExclusions(violations: ViolationInput[]) {
+    return violations.filter((v) => {
       if (v.filePath && this.isPathExcluded(v.filePath)) {
         return false;
       }
@@ -167,7 +209,7 @@ export class ExclusionManager {
   /**
    * 导入排除配置
    */
-  importExclusions(config: any) {
+  importExclusions(config: ExclusionConfig) {
     if (config.pathExclusions) {
       for (const e of config.pathExclusions) {
         this.addPathExclusion(e.pattern, e);
@@ -175,7 +217,7 @@ export class ExclusionManager {
     }
     if (config.ruleExclusions) {
       for (const [ruleId, list] of Object.entries(config.ruleExclusions)) {
-        for (const e of list as any) {
+        for (const e of list) {
           this.addRuleExclusion(ruleId, e.filePath, e);
         }
       }
@@ -196,7 +238,7 @@ export class ExclusionManager {
 
   // ─── 私有方法 ─────────────────────────────────────────
 
-  #matchGlob(filePath: any, pattern: any) {
+  #matchGlob(filePath: string, pattern: string) {
     // 简易 glob 匹配: ** 表示任意路径, * 表示同级任意文件名, ? 表示单个字符
     // 1. 精确正则匹配 (支持 glob 通配符)
     const escaped = pattern
@@ -248,9 +290,9 @@ export class ExclusionManager {
         mkdirSync(dir, { recursive: true });
       }
       writeFileSync(this.#exclusionsPath, JSON.stringify(this.#data, null, 2));
-    } catch (err: any) {
+    } catch (err: unknown) {
       Logger.getInstance().warn('ExclusionManager: failed to persist exclusions', {
-        error: err.message,
+        error: (err as Error).message,
       });
     }
   }
@@ -258,7 +300,7 @@ export class ExclusionManager {
   /**
    * 自动迁移旧路径 .autosnippet/guard-exclusions.json → AutoSnippet/guard-exclusions.json
    */
-  #migrateOldPath(projectRoot: any, internalDir: any) {
+  #migrateOldPath(projectRoot: string, internalDir: string) {
     try {
       const oldPath = join(projectRoot, internalDir, 'guard-exclusions.json');
       if (existsSync(oldPath) && !existsSync(this.#exclusionsPath)) {

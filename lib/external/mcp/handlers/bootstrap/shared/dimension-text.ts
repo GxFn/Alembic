@@ -193,7 +193,9 @@ export const REQUIRED_FIELDS_DESCRIPTION = getRequiredFieldsDescription();
  * @param {Array} dimensions 激活的维度列表
  * @returns {string[]}
  */
-export function buildInternalNextSteps(dimensions: any) {
+export function buildInternalNextSteps(
+  dimensions: ReadonlyArray<{ id: string; skillWorthy?: boolean }>
+) {
   return [
     `✅ Bootstrap 骨架已创建，${dimensions.length} 个维度的 AI 分析任务已在后台启动。`,
     '',
@@ -209,8 +211,8 @@ export function buildInternalNextSteps(dimensions: any) {
     '',
     '== 宏观维度 → Project Skills ==',
     `宏观维度（${dimensions
-      .filter((d: any) => d.skillWorthy)
-      .map((d: any) => d.id)
+      .filter((d) => d.skillWorthy)
+      .map((d) => d.id)
       .join('/')}）`,
     '自动生成 Project Skill 到 AutoSnippet/skills/，可通过 autosnippet_skill({ operation: "load" }) 加载。',
   ];

@@ -8,6 +8,33 @@
 import { getRequiredFieldNames } from '../../shared/FieldSpec.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 
+interface CandidateContent {
+  pattern?: string;
+  markdown?: string;
+  rationale?: string;
+}
+
+interface CandidateReasoning {
+  whyStandard?: string;
+  sources?: unknown[];
+  confidence?: number;
+}
+
+interface RecipeCandidate {
+  title?: string;
+  trigger?: string;
+  kind?: string;
+  category?: string;
+  language?: string;
+  content?: CandidateContent;
+  headers?: unknown[];
+  knowledgeType?: string;
+  usageGuide?: string;
+  reasoning?: CandidateReasoning;
+  tags?: unknown[];
+  [key: string]: unknown;
+}
+
 /* ── V3 必填字段（从 FieldSpec 获取顶层字段，排除嵌套和容器字段） ── */
 const REQUIRED_FIELDS = getRequiredFieldNames().filter(
   (f) => !['content', 'headers', 'reasoning', 'knowledgeType', 'usageGuide'].includes(f)
@@ -36,9 +63,9 @@ export class RecipeCandidateValidator {
    * @param {object} candidate
    * @returns {{ valid: boolean, errors: string[], warnings: string[] }}
    */
-  validate(candidate: any) {
-    const errors: any[] = [];
-    const warnings: any[] = [];
+  validate(candidate: RecipeCandidate) {
+    const errors: string[] = [];
+    const warnings: string[] = [];
 
     if (!candidate || typeof candidate !== 'object') {
       return { valid: false, errors: ['候选为空或类型错误'], warnings: [] };
@@ -154,9 +181,19 @@ export class RecipeCandidateValidator {
    * @param {object[]} candidates
    * @returns {{ valid: object[], invalid: object[], summary: { total: number, validCount: number, invalidCount: number } }}
    */
-  validateBatch(candidates: any) {
-    const valid: any[] = [];
-    const invalid: any[] = [];
+  validateBatch(candidates: RecipeCandidate[]) {
+    const valid: {
+      candidate: RecipeCandidate;
+      valid: boolean;
+      errors: string[];
+      warnings: string[];
+    }[] = [];
+    const invalid: {
+      candidate: RecipeCandidate;
+      valid: boolean;
+      errors: string[];
+      warnings: string[];
+    }[] = [];
 
     for (const candidate of candidates) {
       const result = this.validate(candidate);

@@ -190,8 +190,10 @@ export class CapabilityProbe {
     // Case 4: 有 remote → 执行 git push --dry-run 探测写权限
     try {
       return this._probePush(this.subRepoPath);
-    } catch (err: any) {
-      this.logger.warn('CapabilityProbe: push probe failed', { error: err.message });
+    } catch (err: unknown) {
+      this.logger.warn('CapabilityProbe: push probe failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
       return 'contributor';
     }
   }
@@ -246,8 +248,13 @@ export class CapabilityProbe {
       });
       // 成功 → 有写权限
       return 'admin';
-    } catch (err: any) {
-      const stderr = (err.stderr || err.stdout || err.message || '').toString();
+    } catch (err: unknown) {
+      const execErr = err as {
+        stderr?: string | Buffer;
+        stdout?: string | Buffer;
+        message?: string;
+      };
+      const stderr = (execErr.stderr || execErr.stdout || execErr.message || '').toString();
       // "Everything up-to-date" 也算成功
       if (stderr.includes('Everything up-to-date') || stderr.includes('up to date')) {
         return 'admin';

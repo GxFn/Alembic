@@ -228,6 +228,19 @@ export const baseDimensions = [
 // 维度条件化过滤
 // ═══════════════════════════════════════════════════════════
 
+/** Single dimension definition with optional language/framework conditions */
+export interface BaseDimension {
+  id: string;
+  label: string;
+  guide: string;
+  knowledgeTypes: string[];
+  skillWorthy?: boolean;
+  dualOutput?: boolean;
+  skillMeta?: { name: string; description: string };
+  conditions?: { languages?: string[]; frameworks?: string[] };
+  tierHint?: number;
+}
+
 /**
  * 根据项目主语言和检测到的框架过滤条件维度
  * @param {Array} allDimensions  所有维度定义（含 conditions 字段）
@@ -236,18 +249,18 @@ export const baseDimensions = [
  * @returns {Array} 适用的维度列表
  */
 export function resolveActiveDimensions(
-  allDimensions: any,
-  primaryLang: any,
-  detectedFrameworks: any[] = []
+  allDimensions: BaseDimension[],
+  primaryLang: string,
+  detectedFrameworks: string[] = []
 ) {
-  return allDimensions.filter((dim: any) => {
+  return allDimensions.filter((dim) => {
     if (!dim.conditions) {
       return true; // 无条件 → 通用维度
     }
     const langMatch = !dim.conditions.languages || dim.conditions.languages.includes(primaryLang);
     const fwMatch =
       !dim.conditions.frameworks ||
-      dim.conditions.frameworks.some((f: any) => detectedFrameworks.includes(f));
+      dim.conditions.frameworks.some((f) => detectedFrameworks.includes(f));
     // languages 必须匹配；frameworks 为可选增强（有 frameworks 条件时必须至少命中一个）
     return langMatch && (dim.conditions.frameworks ? fwMatch : true);
   });

@@ -4,7 +4,7 @@
  */
 
 import { basename } from 'node:path';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
@@ -21,7 +21,7 @@ const logger = Logger.getInstance();
  */
 router.post(
   '/path',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { relativePath, projectRoot: bodyRoot } = req.body;
 
     if (!relativePath) {
@@ -74,7 +74,7 @@ router.post(
           aiResult.recipes.length > 0
         ) {
           logger.info('extract/path: AI extraction succeeded', { count: aiResult.recipes.length });
-          return res.json({
+          return void res.json({
             success: true,
             data: {
               result: aiResult.recipes,
@@ -82,9 +82,9 @@ router.post(
             },
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         logger.debug('extract/path: AI extraction failed, using raw fallback', {
-          error: err.message,
+          error: (err as Error).message,
         });
       }
     }
@@ -107,7 +107,7 @@ router.post(
  */
 router.post(
   '/text',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { text, language, relativePath, projectRoot: bodyRoot } = req.body;
 
     if (!text) {
@@ -126,16 +126,16 @@ router.post(
         relativePath,
       });
       // 解析成功，直接返回
-      return res.json({
+      return void res.json({
         success: true,
         data: {
           result: Array.isArray(result) ? result : [result],
           source: 'text',
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.debug('Recipe MD parse failed, trying AI extraction', {
-        error: error.message,
+        error: (error as Error).message,
       });
     }
 
@@ -168,7 +168,7 @@ router.post(
             aiResult.recipes[0]._multipleCount = aiResult.recipes.length;
           }
 
-          return res.json({
+          return void res.json({
             success: true,
             data: {
               result: aiResult.recipes,
@@ -177,9 +177,9 @@ router.post(
           });
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.debug('extract/text: AI extraction failed, using basic fallback', {
-        error: err.message,
+        error: (err as Error).message,
       });
     }
 

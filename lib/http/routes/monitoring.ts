@@ -21,7 +21,7 @@ router.get('/health', async (req, res) => {
     const cacheAdapter = getCacheAdapter();
     const cacheHealth = await cacheAdapter.healthCheck();
 
-    let realtimeHealth: any = { healthy: false, message: 'WebSocket 未启用' };
+    let realtimeHealth: Record<string, unknown> = { healthy: false, message: 'WebSocket 未启用' };
     try {
       const realtimeService = getRealtimeService();
       const clientCount = realtimeService.getConnectedClients();
@@ -30,7 +30,7 @@ router.get('/health', async (req, res) => {
         connectedClients: clientCount,
         message: `${clientCount} 个客户端已连接`,
       };
-    } catch (_error: any) {
+    } catch (_error: unknown) {
       // WebSocket 服务未初始化
     }
 
@@ -49,11 +49,11 @@ router.get('/health', async (req, res) => {
         realtime: realtimeHealth,
       },
     });
-  } catch (error: any) {
-    Logger.error('健康检查失败', { error: error.message });
+  } catch (error: unknown) {
+    Logger.error('健康检查失败', { error: (error as Error).message });
     res.status(500).json({
       success: false,
-      error: { message: error.message },
+      error: { message: (error as Error).message },
     });
   }
 });
@@ -71,11 +71,11 @@ router.get('/performance', (req, res) => {
       success: true,
       data: stats,
     });
-  } catch (error: any) {
-    Logger.error('获取性能统计失败', { error: error.message });
+  } catch (error: unknown) {
+    Logger.error('获取性能统计失败', { error: (error as Error).message });
     res.status(500).json({
       success: false,
-      error: { message: error.message },
+      error: { message: (error as Error).message },
     });
   }
 });
@@ -93,11 +93,11 @@ router.get('/errors', (req, res) => {
       success: true,
       data: stats,
     });
-  } catch (error: any) {
-    Logger.error('获取错误统计失败', { error: error.message });
+  } catch (error: unknown) {
+    Logger.error('获取错误统计失败', { error: (error as Error).message });
     res.status(500).json({
       success: false,
-      error: { message: error.message },
+      error: { message: (error as Error).message },
     });
   }
 });
@@ -112,11 +112,11 @@ router.get('/errors/search', (req, res) => {
     const { type, route, severity, startDate, endDate, limit } = req.query;
 
     const results = errorTracker.searchErrors({
-      type,
-      route,
-      severity,
-      startDate,
-      endDate,
+      type: type as string | undefined,
+      route: route as string | undefined,
+      severity: severity as string | undefined,
+      startDate: startDate as string | undefined,
+      endDate: endDate as string | undefined,
       limit: limit ? parseInt(limit as string) : 100,
     });
 
@@ -127,11 +127,11 @@ router.get('/errors/search', (req, res) => {
         errors: results,
       },
     });
-  } catch (error: any) {
-    Logger.error('搜索错误失败', { error: error.message });
+  } catch (error: unknown) {
+    Logger.error('搜索错误失败', { error: (error as Error).message });
     res.status(500).json({
       success: false,
-      error: { message: error.message },
+      error: { message: (error as Error).message },
     });
   }
 });
@@ -149,11 +149,11 @@ router.get('/cache', (req, res) => {
       success: true,
       data: stats,
     });
-  } catch (error: any) {
-    Logger.error('获取缓存统计失败', { error: error.message });
+  } catch (error: unknown) {
+    Logger.error('获取缓存统计失败', { error: (error as Error).message });
     res.status(500).json({
       success: false,
-      error: { message: error.message },
+      error: { message: (error as Error).message },
     });
   }
 });
@@ -183,11 +183,11 @@ router.post('/cache/clear', async (req, res) => {
       success: true,
       data: { message: '缓存已清空' },
     });
-  } catch (error: any) {
-    Logger.error('清空缓存失败', { error: error.message });
+  } catch (error: unknown) {
+    Logger.error('清空缓存失败', { error: (error as Error).message });
     res.status(500).json({
       success: false,
-      error: { message: error.message },
+      error: { message: (error as Error).message },
     });
   }
 });
@@ -208,7 +208,7 @@ router.get('/realtime', (req, res) => {
         timestamp: new Date().toISOString(),
       },
     });
-  } catch (_error: any) {
+  } catch (_error: unknown) {
     // WebSocket 未启用
     res.json({
       success: true,
@@ -243,7 +243,7 @@ router.get('/dashboard', async (req, res) => {
         enabled: true,
         connectedClients: realtimeService.getConnectedClients(),
       };
-    } catch (_error: any) {
+    } catch (_error: unknown) {
       // WebSocket 未初始化
     }
 
@@ -275,11 +275,11 @@ router.get('/dashboard', async (req, res) => {
         realtime: realtimeStats,
       },
     });
-  } catch (error: any) {
-    Logger.error('获取监控仪表盘数据失败', { error: error.message });
+  } catch (error: unknown) {
+    Logger.error('获取监控仪表盘数据失败', { error: (error as Error).message });
     res.status(500).json({
       success: false,
-      error: { message: error.message },
+      error: { message: (error as Error).message },
     });
   }
 });
@@ -320,11 +320,11 @@ router.post('/reset', (req, res) => {
       success: true,
       data: { message: '监控统计已重置' },
     });
-  } catch (error: any) {
-    Logger.error('重置监控统计失败', { error: error.message });
+  } catch (error: unknown) {
+    Logger.error('重置监控统计失败', { error: (error as Error).message });
     res.status(500).json({
       success: false,
-      error: { message: error.message },
+      error: { message: (error as Error).message },
     });
   }
 });

@@ -17,7 +17,47 @@
 
 import crypto from 'node:crypto';
 import { SessionStore } from '../../../../service/agent/memory/SessionStore.js';
+import type { DimensionQualityReport } from './ExternalSubmissionTracker.js';
 import { ExternalSubmissionTracker } from './ExternalSubmissionTracker.js';
+
+// ── 本地类型定义 ─────────────────────────────────────────────
+
+/** 维度定义 */
+export interface DimensionDef {
+  id: string;
+  label?: string;
+  skillWorthy?: boolean;
+  skillMeta?: { name?: string; description?: string };
+}
+
+/** Bootstrap 会话构造参数 */
+interface BootstrapSessionOpts {
+  projectRoot: string;
+  dimensions: DimensionDef[];
+  projectContext?: Record<string, unknown>;
+}
+
+/** 维度完成报告 */
+interface DimensionReport {
+  analysisText?: string;
+  findings?: string[];
+  keyFindings?: string[];
+  referencedFiles?: string[];
+  recipeIds?: string[];
+  candidateCount?: number;
+  [key: string]: unknown;
+}
+
+/** 维度完成记录（带时间戳） */
+interface DimensionCompletion extends DimensionReport {
+  completedAt: number;
+}
+
+/** 跨维度 hint 条目 */
+interface CrossDimensionHint {
+  fromDim: string;
+  hint: string;
+}
 
 // ── 常量 ────────────────────────────────────────────────────
 
@@ -26,28 +66,28 @@ const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 小时
 // ── BootstrapSession ────────────────────────────────────────
 
 export class BootstrapSession {
-  expiresAt: any;
-  id: any;
-  projectRoot: any;
-  startedAt: any;
-  _activeSession: any;
-  completedDimensions: any;
-  crossDimensionHints: any;
-  dimensions: any;
-  phaseCache: any;
-  sessionStore: any;
-  submissionTracker: any;
+  expiresAt: number;
+  id: string;
+  projectRoot: string;
+  startedAt: number;
+  _activeSession: BootstrapSession | null;
+  completedDimensions: Map<string, DimensionCompletion>;
+  crossDimensionHints: Record<string, CrossDimensionHint[]>;
+  dimensions: DimensionDef[];
+  phaseCache: Record<string, unknown> | null;
+  sessionStore: SessionStore;
+  submissionTracker: ExternalSubmissionTracker;
   /**
    * @param {object} opts
    * @param {string} opts.projectRoot 项目根目录
    * @param {Array}  opts.dimensions  激活的维度定义列表
    * @param {object} [opts.projectContext] 传给 EpisodicMemory 的项目元数据
    */
-  constructor({ projectRoot, dimensions, projectContext = {} }: any) {
+  constructor({ projectRoot, dimensions, projectContext = {} }: BootstrapSessionOpts) {
     this.id = `bs-${crypto.randomUUID()}`;
     this.projectRoot = projectRoot;
     this.dimensions = dimensions;
-    this.completedDimensions = new Map(); // dimId → { report, completedAt, recipeIds }
+    this.completedDimensions = new Map<string, DimensionCompletion>(); // dimId → { report, completedAt, recipeIds }
     this.sessionStore = new SessionStore(projectContext);
 
     /** 外部 Agent 提交追踪 (v2: 对标内部 Agent 的 EvidenceCollector) */
@@ -58,6 +98,8 @@ export class BootstrapSession {
 
     /** 跨维度 hints 收集 */
     this.crossDimensionHints = {}; // targetDimId → [{ fromDim, hint }]
+
+    this._activeSession = null;
 
     this.startedAt = Date.now();
     this.expiresAt = Date.now() + SESSION_TTL_MS;
@@ -79,8 +121,8 @@ export class BootstrapSession {
       total: this.dimensions.length,
       completedDimIds: [...this.completedDimensions.keys()],
       remainingDimIds: this.dimensions
-        .map((d: any) => d.id)
-        .filter((id: any) => !this.completedDimensions.has(id)),
+        .map((d: DimensionDef) => d.id)
+        .filter((id: string) => !this.completedDimensions.has(id)),
     };
   }
 
@@ -89,7 +131,7 @@ export class BootstrapSession {
    * @param {string} dimId
    * @returns {boolean}
    */
-  isDimensionComplete(dimId: any) {
+  isDimensionComplete(dimId: string): boolean {
     return this.completedDimensions.has(dimId);
   }
 
@@ -101,7 +143,10 @@ export class BootstrapSession {
    * @param {object} report - { analysisText, findings, referencedFiles, recipeIds, candidateCount }
    * @returns {{ updated: boolean, qualityReport: object|null }} - updated=true 表示覆盖了已有记录
    */
-  markDimensionComplete(dimId: any, report: any) {
+  markDimensionComplete(
+    dimId: string,
+    report: DimensionReport
+  ): { updated: boolean; qualityReport: DimensionQualityReport } {
     const updated = this.completedDimensions.has(dimId);
 
     this.completedDimensions.set(dimId, {
@@ -113,13 +158,13 @@ export class BootstrapSession {
     // keyFindings 是字符串数组，需转换为 SessionStore 期望的 { finding, importance } 格式
     this.sessionStore.storeDimensionReport(dimId, {
       analysisText: report.analysisText,
-      findings: (report.keyFindings || []).map((f: any) => ({ finding: f, importance: 7 })),
+      findings: (report.keyFindings || []).map((f: string) => ({ finding: f, importance: 7 })),
       referencedFiles: report.referencedFiles || [],
       candidatesSummary: [],
     });
 
     // v2: 从 analysisText 提取负空间信号并计算质量报告
-    this.submissionTracker.extractNegativeSignals(report.analysisText, dimId);
+    this.submissionTracker.extractNegativeSignals(report.analysisText || '', dimId);
     const qualityReport = this.submissionTracker.buildQualityReport(
       dimId,
       report.analysisText,
@@ -136,7 +181,10 @@ export class BootstrapSession {
    * @param {string} fromDimId 来源维度
    * @param {Record<string, string>} hints - { targetDimId: hintText }
    */
-  storeHints(fromDimId: any, hints: any) {
+  storeHints(
+    fromDimId: string,
+    hints: Record<string, string> | Record<string, unknown> | null | undefined
+  ) {
     if (!hints || typeof hints !== 'object') {
       return;
     }
@@ -147,11 +195,11 @@ export class BootstrapSession {
       }
       // 去重：同源维度只保留最新 hint
       this.crossDimensionHints[targetDim] = this.crossDimensionHints[targetDim].filter(
-        (h: any) => h.fromDim !== fromDimId
+        (h: CrossDimensionHint) => h.fromDim !== fromDimId
       );
       this.crossDimensionHints[targetDim].push({
         fromDim: fromDimId,
-        hint: hintText,
+        hint: String(hintText),
       });
     }
   }
@@ -162,7 +210,7 @@ export class BootstrapSession {
    */
   getAccumulatedHints() {
     const progress = this.getProgress();
-    const accumulated: Record<string, any> = {};
+    const accumulated: Record<string, CrossDimensionHint[]> = {};
 
     for (const remainingDim of progress.remainingDimIds) {
       const hints = this.crossDimensionHints[remainingDim];
@@ -180,7 +228,7 @@ export class BootstrapSession {
    * 缓存 Phase 1-4 分析结果
    * @param {object} cache - { files, astData, entityGraph, depGraph, guardFindings, skills, ... }
    */
-  setPhaseCache(cache: any) {
+  setPhaseCache(cache: Record<string, unknown> | null) {
     this.phaseCache = cache;
   }
 
@@ -215,7 +263,7 @@ export class BootstrapSession {
  * 同时只有一个 active session（单项目场景）。
  */
 export class BootstrapSessionManager {
-  _activeSession: any;
+  _activeSession: BootstrapSession | null;
   constructor() {
     /** @type {BootstrapSession|null} */
     this._activeSession = null;
@@ -226,7 +274,7 @@ export class BootstrapSessionManager {
    * @param {object} opts 传给 BootstrapSession 构造函数的参数
    * @returns {BootstrapSession}
    */
-  createSession(opts: any) {
+  createSession(opts: BootstrapSessionOpts): BootstrapSession {
     // 如果有旧的未过期 session，先标记过期
     if (this._activeSession && !this._activeSession.isExpired) {
       this._activeSession.expiresAt = Date.now(); // 强制过期
@@ -240,7 +288,7 @@ export class BootstrapSessionManager {
    * @param {string} [sessionId] 可选，用于验证 session ID
    * @returns {BootstrapSession|null}
    */
-  getSession(sessionId: any) {
+  getSession(sessionId?: string): BootstrapSession | null {
     if (!this._activeSession) {
       return null;
     }

@@ -1,5 +1,27 @@
+import type { Database } from 'better-sqlite3';
+import type { Logger as WinstonLogger } from 'winston';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { unixNow } from '../../shared/utils/common.js';
+
+/** Database connection wrapper interface */
+interface DatabaseWrapper {
+  getDb(): Database;
+}
+
+/** Row returned by PRAGMA table_info */
+interface PragmaColumnInfo {
+  cid: number;
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: unknown;
+  pk: number;
+}
+
+/** Row with count field from COUNT(*) queries */
+interface CountRow {
+  count: number;
+}
 
 /** Only allow safe SQL identifier characters: letters, digits, underscore */
 const SAFE_IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -11,13 +33,13 @@ const SAFE_COLUMN_RE = SAFE_IDENTIFIER_RE;
  * 提供通用的 CRUD 操作和查询功能
  */
 export class BaseRepository {
-  db: any;
-  logger: any;
-  tableName: any;
+  db: Database;
+  logger: WinstonLogger;
+  tableName: string;
   /** @type {Set<string>|null} lazily-populated column whitelist */
-  #columnWhitelist: any = null;
+  #columnWhitelist: Set<string> | null = null;
 
-  constructor(database: any, tableName: any) {
+  constructor(database: DatabaseWrapper, tableName: string) {
     // 校验 tableName 防止 SQL 注入（与列名使用相同的标识符规则）
     if (!SAFE_IDENTIFIER_RE.test(tableName)) {
       throw new Error(`Invalid table name: ${tableName}`);
@@ -32,15 +54,17 @@ export class BaseRepository {
    * Rejects anything that doesn't match /^[a-zA-Z_]\w*$/ or
    * is not a real column in the table.
    */
-  _assertSafeColumn(key: any) {
+  _assertSafeColumn(key: string) {
     if (!SAFE_COLUMN_RE.test(key)) {
       throw new Error(`Invalid column name: ${key}`);
     }
     // Lazily build column whitelist from table pragma
     if (!this.#columnWhitelist) {
       try {
-        const cols = this.db.prepare(`PRAGMA table_info(${this.tableName})`).all();
-        this.#columnWhitelist = new Set(cols.map((c: any) => c.name));
+        const cols = this.db
+          .prepare(`PRAGMA table_info(${this.tableName})`)
+          .all() as PragmaColumnInfo[];
+        this.#columnWhitelist = new Set(cols.map((c) => c.name));
       } catch {
         this.#columnWhitelist = new Set();
       }
@@ -53,14 +77,14 @@ export class BaseRepository {
   /**
    * 创建实体
    */
-  async create(entity: any): Promise<any> {
+  async create(entity: unknown): Promise<unknown> {
     throw new Error('create() must be implemented in subclass');
   }
 
   /**
    * 根据 ID 获取实体
    */
-  async findById(id: any) {
+  async findById(id: string) {
     try {
       const stmt = this.db.prepare(`
         SELECT * FROM ${this.tableName} WHERE id = ? LIMIT 1
@@ -72,10 +96,11 @@ export class BaseRepository {
       }
 
       return this._mapRowToEntity(row);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Error finding by id in ${this.tableName}`, {
         id,
-        error: error.message,
+        error: message,
       });
       throw error;
     }
@@ -84,10 +109,10 @@ export class BaseRepository {
   /**
    * 获取所有实体
    */
-  async findAll(filters: any = {}) {
+  async findAll(filters: Record<string, unknown> = {}) {
     try {
       let query = `SELECT * FROM ${this.tableName}`;
-      const params: any[] = [];
+      const params: unknown[] = [];
 
       // 添加过滤条件
       if (Object.keys(filters).length > 0) {
@@ -104,10 +129,11 @@ export class BaseRepository {
       const stmt = this.db.prepare(query);
       const rows = stmt.all(...params);
 
-      return rows.map((row: any) => this._mapRowToEntity(row));
-    } catch (error: any) {
+      return rows.map((row: unknown) => this._mapRowToEntity(row));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Error finding all in ${this.tableName}`, {
-        error: error.message,
+        error: message,
       });
       throw error;
     }
@@ -116,13 +142,16 @@ export class BaseRepository {
   /**
    * 分页查询
    */
-  async findWithPagination(filters: any = {}, { page = 1, pageSize = 20 } = {}) {
+  async findWithPagination(
+    filters: Record<string, unknown> = {},
+    { page = 1, pageSize = 20 } = {}
+  ) {
     try {
       const offset = (page - 1) * pageSize;
 
       let countQuery = `SELECT COUNT(*) as count FROM ${this.tableName}`;
       let query = `SELECT * FROM ${this.tableName}`;
-      const params: any[] = [];
+      const params: unknown[] = [];
 
       // 添加过滤条件
       if (Object.keys(filters).length > 0) {
@@ -138,7 +167,9 @@ export class BaseRepository {
 
       // 获取总数
       const countStmt = this.db.prepare(countQuery);
-      const countResult = countStmt.get(...params.slice(0, Object.keys(filters).length));
+      const countResult = countStmt.get(
+        ...params.slice(0, Object.keys(filters).length)
+      ) as CountRow;
       const total = countResult.count;
 
       // 获取分页数据
@@ -147,7 +178,7 @@ export class BaseRepository {
       const data = dataStmt.all(...params.slice(0, Object.keys(filters).length), pageSize, offset);
 
       return {
-        data: data.map((row: any) => this._mapRowToEntity(row)),
+        data: data.map((row: unknown) => this._mapRowToEntity(row)),
         pagination: {
           page,
           pageSize,
@@ -155,9 +186,10 @@ export class BaseRepository {
           pages: Math.ceil(total / pageSize),
         },
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Error in pagination for ${this.tableName}`, {
-        error: error.message,
+        error: message,
       });
       throw error;
     }
@@ -166,7 +198,7 @@ export class BaseRepository {
   /**
    * 更新实体
    */
-  async update(id: any, updates: any) {
+  async update(id: string, updates: Record<string, unknown>) {
     try {
       const updateKeys = Object.keys(updates);
       const updateValues = Object.values(updates);
@@ -185,10 +217,11 @@ export class BaseRepository {
       stmt.run(...updateValues, unixNow(), id);
 
       return this.findById(id);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Error updating in ${this.tableName}`, {
         id,
-        error: error.message,
+        error: message,
       });
       throw error;
     }
@@ -197,17 +230,18 @@ export class BaseRepository {
   /**
    * 删除实体
    */
-  async delete(id: any) {
+  async delete(id: string) {
     try {
       const stmt = this.db.prepare(`
         DELETE FROM ${this.tableName} WHERE id = ?
       `);
       const result = stmt.run(id);
       return result.changes > 0;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Error deleting from ${this.tableName}`, {
         id,
-        error: error.message,
+        error: message,
       });
       throw error;
     }
@@ -216,10 +250,10 @@ export class BaseRepository {
   /**
    * 计数
    */
-  async count(filters: any = {}) {
+  async count(filters: Record<string, unknown> = {}) {
     try {
       let query = `SELECT COUNT(*) as count FROM ${this.tableName}`;
-      const params: any[] = [];
+      const params: unknown[] = [];
 
       if (Object.keys(filters).length > 0) {
         const conditions = Object.keys(filters).map((key) => {
@@ -231,11 +265,12 @@ export class BaseRepository {
       }
 
       const stmt = this.db.prepare(query);
-      const result = stmt.get(...params);
+      const result = stmt.get(...params) as CountRow;
       return result.count;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Error counting in ${this.tableName}`, {
-        error: error.message,
+        error: message,
       });
       throw error;
     }
@@ -244,14 +279,14 @@ export class BaseRepository {
   /**
    * 映射行数据到实体（由子类实现）
    */
-  _mapRowToEntity(row: any) {
+  _mapRowToEntity(row: unknown): unknown {
     throw new Error('_mapRowToEntity() must be implemented in subclass');
   }
 
   /**
    * 映射实体到行数据（由子类实现）
    */
-  _mapEntityToRow(entity: any) {
+  _mapEntityToRow(entity: unknown): unknown {
     throw new Error('_mapEntityToRow() must be implemented in subclass');
   }
 }

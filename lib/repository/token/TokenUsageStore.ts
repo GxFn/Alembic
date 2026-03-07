@@ -8,6 +8,52 @@ import Logger from '../../infrastructure/logging/Logger.js';
 
 const MAX_ROWS = 10000; // 自动清理: 保留最近 10000 条
 
+/** Token usage record input */
+interface TokenRecord {
+  source: string;
+  dimension?: string;
+  provider?: string;
+  model?: string;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs?: number;
+  toolCalls?: number;
+  sessionId?: string;
+}
+
+/** Daily aggregation row */
+interface DailyRow {
+  date: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  call_count: number;
+}
+
+/** Source aggregation row */
+interface BySourceRow {
+  source: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  call_count: number;
+}
+
+/** Summary row */
+interface SummaryRow {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  call_count: number;
+}
+
+/** 7-day report data */
+interface ReportData {
+  daily: DailyRow[];
+  bySource: BySourceRow[];
+  summary: SummaryRow & { avg_per_call: number };
+}
+
 export class TokenUsageStore {
   #db;
   #logger;
@@ -17,12 +63,12 @@ export class TokenUsageStore {
   #bySourceStmt;
   #summaryStmt;
   /** @type {{ data: object, expireAt: number } | null} */
-  #reportCache: { data: any; expireAt: number } | null = null;
+  #reportCache: { data: ReportData; expireAt: number } | null = null;
 
   /**
    * @param {import('better-sqlite3').Database} db
    */
-  constructor(db: any) {
+  constructor(db: import('better-sqlite3').Database) {
     this.#db = db;
     this.#logger = Logger.getInstance();
 
@@ -77,7 +123,7 @@ export class TokenUsageStore {
    * 记录一次 AI 调用的 token 消耗
    * @param {{ source: string, dimension?: string, provider?: string, model?: string, inputTokens: number, outputTokens: number, durationMs?: number, toolCalls?: number, sessionId?: string }} record
    */
-  record(record: any) {
+  record(record: TokenRecord) {
     try {
       const now = Date.now();
       const total = (record.inputTokens || 0) + (record.outputTokens || 0);
@@ -106,8 +152,9 @@ export class TokenUsageStore {
       if (Math.random() < 0.01) {
         this.#pruneStmt.run(MAX_ROWS);
       }
-    } catch (err: any) {
-      this.#logger.debug('[TokenUsageStore] record failed', { error: err.message });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.#logger.debug('[TokenUsageStore] record failed', { error: message });
     }
   }
 
@@ -117,27 +164,27 @@ export class TokenUsageStore {
    * 近 7 日按日聚合统计
    * @returns {Array<{ date: string, input_tokens: number, output_tokens: number, total_tokens: number, call_count: number }>}
    */
-  getLast7DaysDaily() {
+  getLast7DaysDaily(): DailyRow[] {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return this.#dailyStmt.all(sevenDaysAgo);
+    return this.#dailyStmt.all(sevenDaysAgo) as DailyRow[];
   }
 
   /**
    * 近 7 日按来源 (source) 聚合统计
    * @returns {Array<{ source: string, input_tokens: number, output_tokens: number, total_tokens: number, call_count: number }>}
    */
-  getLast7DaysBySource() {
+  getLast7DaysBySource(): BySourceRow[] {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return this.#bySourceStmt.all(sevenDaysAgo);
+    return this.#bySourceStmt.all(sevenDaysAgo) as BySourceRow[];
   }
 
   /**
    * 近 7 日总计
    * @returns {{ input_tokens: number, output_tokens: number, total_tokens: number, call_count: number, avg_per_call: number }}
    */
-  getLast7DaysSummary() {
+  getLast7DaysSummary(): SummaryRow & { avg_per_call: number } {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const row = this.#summaryStmt.get(sevenDaysAgo);
+    const row = this.#summaryStmt.get(sevenDaysAgo) as SummaryRow;
     return {
       ...row,
       avg_per_call: row.call_count > 0 ? Math.round(row.total_tokens / row.call_count) : 0,

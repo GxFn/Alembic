@@ -9,15 +9,96 @@
  */
 
 import { envelope } from '../envelope.js';
+import type { McpContext } from './types.js';
+
 // guard is independent — no guardState dependency in task lifecycle
+
+// ─── Local Types ──────────────────────────────────────────
+
+interface TaskLike {
+  id: string;
+  title: string;
+  taskType?: string;
+  priority?: number;
+  failCount?: number;
+  lastFailReason?: string;
+  closeReason?: string;
+  updatedAt?: number;
+  toJSON(): Record<string, unknown>;
+}
+
+interface TaskArgs {
+  operation?: string;
+  id?: string;
+  title?: string;
+  description?: string;
+  design?: string;
+  acceptance?: string;
+  priority?: number;
+  taskType?: string;
+  parentId?: string | null;
+  limit?: number;
+  withKnowledge?: boolean;
+  status?: string;
+  subtasks?: unknown[];
+  dependsOn?: string;
+  depType?: string;
+  reason?: string;
+  rationale?: string;
+  tags?: string[];
+  relatedTaskId?: string | null;
+  [key: string]: unknown;
+}
+
+interface TaskGraphServiceLike {
+  create(opts: Record<string, unknown>): Promise<{ task: TaskLike; isDuplicate: boolean }>;
+  ready(opts: { limit: number; withKnowledge: boolean }): Promise<TaskLike[]>;
+  claim(id: string): Promise<TaskLike>;
+  close(id: string, reason: string): Promise<{ task: TaskLike; newlyReady: unknown[] }>;
+  fail(id: string, reason: string): Promise<TaskLike>;
+  defer(id: string, reason: string): Promise<TaskLike>;
+  progress(id: string, note: string): Promise<TaskLike>;
+  decompose(id: string, subtasks: unknown[]): Promise<TaskLike[]>;
+  show(id: string): Promise<TaskLike | null>;
+  list(filters: Record<string, unknown>, opts: { limit: number }): Promise<TaskLike[]>;
+  blocked(): Promise<unknown[]>;
+  addDependency(id: string, dependsOn: string, depType: string): Promise<void>;
+  depTree(id: string): Promise<unknown[]>;
+  stats(): Promise<Record<string, unknown>>;
+  prime(opts: { limit: number; withKnowledge: boolean }): Promise<PrimeResult>;
+  recordDecision(opts: Record<string, unknown>): Promise<{ task: TaskLike; isDuplicate: boolean }>;
+  reviseDecision(
+    opts: Record<string, unknown>
+  ): Promise<{ newDecision: TaskLike; oldDecisionId: string }>;
+  unpinDecision(id: string, reason: string): Promise<TaskLike>;
+}
+
+interface PrimeResult {
+  decisions: Array<{ title: string; [key: string]: unknown }>;
+  staleDecisions: unknown[];
+  inProgress: Array<{ id: string; title: string; updatedAt?: number; [key: string]: unknown }>;
+  ready: unknown[];
+  stats: { total: number; [key: string]: unknown };
+  _taskRules?: unknown;
+  _resumePrompt?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface EnvelopeResult {
+  success: boolean;
+  errorCode?: string | null;
+  data?: unknown;
+  message?: string;
+  meta?: Record<string, unknown>;
+}
 
 /**
  * 统一入口
  * @param {object} ctx - { container }
  * @param {object} args - { operation, ...params }
  */
-export async function taskHandler(ctx: any, args: any) {
-  const taskService = ctx.container.get('taskGraphService');
+export async function taskHandler(ctx: McpContext, args: TaskArgs) {
+  const taskService = ctx.container.get('taskGraphService') as TaskGraphServiceLike;
 
   let result;
   switch (args.operation) {
@@ -90,7 +171,7 @@ export async function taskHandler(ctx: any, args: any) {
 
 // ── create ──
 
-async function _create(svc: any, args: any) {
+async function _create(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.title) {
     return envelope({
       success: false,
@@ -119,14 +200,14 @@ async function _create(svc: any, args: any) {
 
 // ── ready ──
 
-async function _ready(svc: any, args: any) {
+async function _ready(svc: TaskGraphServiceLike, args: TaskArgs) {
   const tasks = await svc.ready({
     limit: args.limit || 10,
     withKnowledge: args.withKnowledge !== false,
   });
   return envelope({
     success: true,
-    data: tasks.map((t: any) => (t.toJSON ? t.toJSON() : t)),
+    data: tasks.map((t: TaskLike) => (t.toJSON ? t.toJSON() : t)),
     message: `${tasks.length} task(s) ready`,
     meta: { tool: 'autosnippet_task' },
   });
@@ -134,7 +215,7 @@ async function _ready(svc: any, args: any) {
 
 // ── claim ──
 
-async function _claim(svc: any, args: any) {
+async function _claim(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -153,7 +234,7 @@ async function _claim(svc: any, args: any) {
 
 // ── close ──
 
-async function _close(ctx: any, svc: any, args: any) {
+async function _close(ctx: McpContext, svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -176,7 +257,7 @@ async function _close(ctx: any, svc: any, args: any) {
 
 // ── fail ──
 
-async function _fail(svc: any, args: any) {
+async function _fail(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -195,7 +276,7 @@ async function _fail(svc: any, args: any) {
 
 // ── defer ──
 
-async function _defer(svc: any, args: any) {
+async function _defer(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -214,7 +295,7 @@ async function _defer(svc: any, args: any) {
 
 // ── progress ──
 
-async function _progress(svc: any, args: any) {
+async function _progress(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -234,7 +315,7 @@ async function _progress(svc: any, args: any) {
 
 // ── decompose ──
 
-async function _decompose(svc: any, args: any) {
+async function _decompose(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -252,7 +333,7 @@ async function _decompose(svc: any, args: any) {
   const tasks = await svc.decompose(args.id, args.subtasks);
   return envelope({
     success: true,
-    data: tasks.map((t: any) => (t.toJSON ? t.toJSON() : t)),
+    data: tasks.map((t: TaskLike) => (t.toJSON ? t.toJSON() : t)),
     message: `Decomposed ${args.id} into ${tasks.length} subtasks`,
     meta: { tool: 'autosnippet_task' },
   });
@@ -260,7 +341,7 @@ async function _decompose(svc: any, args: any) {
 
 // ── show ──
 
-async function _show(svc: any, args: any) {
+async function _show(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -285,8 +366,8 @@ async function _show(svc: any, args: any) {
 
 // ── list ──
 
-async function _list(svc: any, args: any) {
-  const filters: any = {};
+async function _list(svc: TaskGraphServiceLike, args: TaskArgs) {
+  const filters: { status?: string; taskType?: string } = {};
   if (args.status) {
     filters.status = args.status;
   }
@@ -297,7 +378,7 @@ async function _list(svc: any, args: any) {
   const tasks = await svc.list(filters, { limit: args.limit || 20 });
   return envelope({
     success: true,
-    data: tasks.map((t: any) => t.toJSON()),
+    data: tasks.map((t: TaskLike) => t.toJSON()),
     message: `${tasks.length} task(s)`,
     meta: { tool: 'autosnippet_task' },
   });
@@ -305,7 +386,7 @@ async function _list(svc: any, args: any) {
 
 // ── blocked ──
 
-async function _blocked(svc: any) {
+async function _blocked(svc: TaskGraphServiceLike) {
   const tasks = await svc.blocked();
   return envelope({
     success: true,
@@ -317,7 +398,7 @@ async function _blocked(svc: any) {
 
 // ── dep_add ──
 
-async function _depAdd(svc: any, args: any) {
+async function _depAdd(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id || !args.dependsOn) {
     return envelope({
       success: false,
@@ -335,7 +416,7 @@ async function _depAdd(svc: any, args: any) {
 
 // ── dep_tree ──
 
-async function _depTree(svc: any, args: any) {
+async function _depTree(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -354,7 +435,7 @@ async function _depTree(svc: any, args: any) {
 
 // ── stats ──
 
-async function _stats(svc: any) {
+async function _stats(svc: TaskGraphServiceLike) {
   const stats = await svc.stats();
   return envelope({
     success: true,
@@ -365,7 +446,7 @@ async function _stats(svc: any) {
 
 // ═══ Session (prime) ═══════════════════════════════════
 
-async function _prime(svc: any, args: any) {
+async function _prime(svc: TaskGraphServiceLike, args: TaskArgs) {
   const result = await svc.prime({
     limit: args.limit || 10,
     withKnowledge: args.withKnowledge !== false,
@@ -373,7 +454,7 @@ async function _prime(svc: any, args: any) {
 
   const decisionCount = (result.decisions || []).length;
   const staleCount = (result.staleDecisions || []).length;
-  const decisionTitles = (result.decisions || []).map((d: any) => d.title).join('; ');
+  const decisionTitles = (result.decisions || []).map((d: { title: string }) => d.title).join('; ');
   const statsLine = `${result.inProgress.length} in-progress, ${result.ready.length} ready, ${result.stats.total} total`;
 
   // ── Behavioral Rules Reminder (survives compaction) ──
@@ -411,7 +492,7 @@ async function _prime(svc: any, args: any) {
   // ── Resume Prompt: 有 inProgress 任务时，提示 Agent 让用户选择 ──
   if (result.inProgress.length > 0) {
     const taskList = result.inProgress
-      .map((t: any) => {
+      .map((t: { id: string; title: string; updatedAt?: number }) => {
         const age = t.updatedAt
           ? `${Math.floor((Date.now() / 1000 - t.updatedAt) / 86400)}d ago`
           : '';
@@ -433,7 +514,7 @@ async function _prime(svc: any, args: any) {
         '',
         "Wait for the user's answer. Do NOT auto-resume.",
       ].join('\n'),
-      taskIds: result.inProgress.map((t: any) => t.id),
+      taskIds: result.inProgress.map((t: { id: string }) => t.id),
     };
 
     message += ` ⏸️ ${result.inProgress.length} unfinished task(s) — ask user before resuming.`;
@@ -449,7 +530,7 @@ async function _prime(svc: any, args: any) {
 
 // ═══ Decisions ═══════════════════════════════════════
 
-async function _recordDecision(svc: any, args: any) {
+async function _recordDecision(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.title) {
     return envelope({
       success: false,
@@ -481,7 +562,7 @@ async function _recordDecision(svc: any, args: any) {
   });
 }
 
-async function _reviseDecision(svc: any, args: any) {
+async function _reviseDecision(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -521,7 +602,7 @@ async function _reviseDecision(svc: any, args: any) {
   });
 }
 
-async function _unpinDecision(svc: any, args: any) {
+async function _unpinDecision(svc: TaskGraphServiceLike, args: TaskArgs) {
   if (!args.id) {
     return envelope({
       success: false,
@@ -538,11 +619,11 @@ async function _unpinDecision(svc: any, args: any) {
   });
 }
 
-async function _listDecisions(svc: any) {
+async function _listDecisions(svc: TaskGraphServiceLike) {
   const decisions = await svc.list({ status: 'pinned', taskType: 'decision' }, { limit: 50 });
   return envelope({
     success: true,
-    data: decisions.map((d: any) => d.toJSON()),
+    data: decisions.map((d: TaskLike) => d.toJSON()),
     message: `${decisions.length} active decision(s)`,
     meta: { tool: 'autosnippet_task' },
   });
@@ -561,7 +642,7 @@ const PRIORITY_LABELS = ['P0 紧急', 'P1 高', 'P2 中', 'P3 低', 'P4 微'];
  * @param {string} text
  * @returns {Promise<boolean>}
  */
-async function _sendLarkViaApi(text: any) {
+async function _sendLarkViaApi(text: string): Promise<boolean> {
   try {
     const port = process.env.PORT || 3000;
     const resp = await fetch(`http://localhost:${port}/api/v1/remote/notify`, {
@@ -576,8 +657,10 @@ async function _sendLarkViaApi(text: any) {
     }
     const body = await resp.json();
     return body.success === true;
-  } catch (err: any) {
-    process.stderr.write(`[MCP/Task] Lark notify failed: ${err?.message}\n`);
+  } catch (err: unknown) {
+    process.stderr.write(
+      `[MCP/Task] Lark notify failed: ${err instanceof Error ? err.message : String(err)}\n`
+    );
     return false;
   }
 }
@@ -602,8 +685,10 @@ async function _sendScreenshotViaApi(caption = '') {
     }
     const body = await resp.json();
     return body.success === true;
-  } catch (err: any) {
-    process.stderr.write(`[MCP/Task] Screenshot failed: ${err?.message}\n`);
+  } catch (err: unknown) {
+    process.stderr.write(
+      `[MCP/Task] Screenshot failed: ${err instanceof Error ? err.message : String(err)}\n`
+    );
     return false;
   }
 }
@@ -612,12 +697,12 @@ async function _sendScreenshotViaApi(caption = '') {
  * 根据任务操作向飞书发送进度通知（异步非阻塞）
  * result 是 envelope() 返回的 { success, data, message, meta }
  */
-async function _notifyTaskProgress(operation: any, args: any, result: any) {
+async function _notifyTaskProgress(operation: string, args: TaskArgs, result: EnvelopeResult) {
   if (!result || result.success === false) {
     return;
   }
 
-  const data = result.data;
+  const data = result.data as Record<string, unknown> | undefined;
   let text = '';
 
   switch (operation) {
@@ -625,7 +710,7 @@ async function _notifyTaskProgress(operation: any, args: any, result: any) {
       const title = data?.title || args.title || '';
       const id = data?.id || '';
       const type = data?.taskType || args.taskType || 'task';
-      const pri = PRIORITY_LABELS[data?.priority ?? args.priority ?? 2] || 'P2';
+      const pri = PRIORITY_LABELS[(data?.priority ?? args.priority ?? 2) as number] || 'P2';
       const dup =
         result.message?.includes('Duplicate') || result.message?.startsWith('⚠') ? ' (重复)' : '';
       text = `📋 新任务${dup}: ${id}\n${title}\n类型: ${type} | ${pri}`;
@@ -638,11 +723,11 @@ async function _notifyTaskProgress(operation: any, args: any, result: any) {
       break;
     }
     case 'close': {
-      const closed = data?.closed || data;
+      const closed = (data?.closed || data) as Record<string, unknown> | undefined;
       const title = closed?.title || '';
       const id = closed?.id || args.id;
       const reason = closed?.closeReason || args.reason || '';
-      const readyCount = data?.newlyReady?.length || 0;
+      const readyCount = Array.isArray(data?.newlyReady) ? data.newlyReady.length : 0;
       const readyInfo = readyCount > 0 ? `\n→ ${readyCount} 个任务新就绪` : '';
       text = `✅ 完成: ${id}\n${title}\n原因: ${reason}${readyInfo}`;
       break;
@@ -651,7 +736,7 @@ async function _notifyTaskProgress(operation: any, args: any, result: any) {
       const title = data?.title || '';
       const id = data?.id || args.id;
       const reason = data?.lastFailReason || args.reason || '未知';
-      const count = data?.failCount || 0;
+      const count = Number(data?.failCount || 0);
       text = `❌ 失败: ${id}\n${title}\n原因: ${reason}${count > 1 ? ` (第${count}次)` : ''}`;
       break;
     }
@@ -686,7 +771,8 @@ async function _notifyTaskProgress(operation: any, args: any, result: any) {
     }
     case 'revise_decision': {
       const oldId = data?.superseded || args.id;
-      const newTitle = data?.newDecision?.title || args.title;
+      const newTitle =
+        (data?.newDecision as Record<string, unknown> | undefined)?.title || args.title;
       text = `🔄 决策更新: ${oldId} → ${newTitle}`;
       break;
     }

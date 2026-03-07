@@ -10,14 +10,14 @@ const PRUNE_INTERVAL = 300_000; // 5 分钟清理一次过期 bucket
 /**
  * 清理过期的 bucket 条目，防止内存泄漏
  */
-function _pruneIfNeeded(windowMs: any) {
+function _pruneIfNeeded(windowMs: number) {
   const now = Date.now();
   if (now - _lastPrune < PRUNE_INTERVAL) {
     return;
   }
   _lastPrune = now;
   for (const [key, bucket] of _buckets) {
-    bucket.timestamps = bucket.timestamps.filter((t: any) => now - t < windowMs);
+    bucket.timestamps = bucket.timestamps.filter((t: number) => now - t < windowMs);
     if (bucket.timestamps.length === 0) {
       _buckets.delete(key);
     }
@@ -31,7 +31,11 @@ function _pruneIfNeeded(windowMs: any) {
  * @param {object} [opts] - { windowMs: 60000, maxRequests: 10 }
  * @returns {{ allowed: boolean, retryAfter?: number }}
  */
-export function checkRecipeSave(projectRoot: any, clientId: any, opts: any = {}) {
+export function checkRecipeSave(
+  projectRoot: string,
+  clientId: string,
+  opts: { windowMs?: number; maxRequests?: number } = {}
+) {
   const windowMs = opts.windowMs ?? 60_000;
   const maxRequests = opts.maxRequests ?? 10;
   const key = `${projectRoot}:${clientId}`;
@@ -47,7 +51,7 @@ export function checkRecipeSave(projectRoot: any, clientId: any, opts: any = {})
   }
 
   // 清除过期记录
-  bucket.timestamps = bucket.timestamps.filter((t: any) => now - t < windowMs);
+  bucket.timestamps = bucket.timestamps.filter((t: number) => now - t < windowMs);
 
   if (bucket.timestamps.length >= maxRequests) {
     const oldest = bucket.timestamps[0];

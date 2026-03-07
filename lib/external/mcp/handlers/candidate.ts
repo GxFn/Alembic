@@ -7,13 +7,22 @@
  */
 
 import { envelope } from '../envelope.js';
+import type {
+  CandidateInput,
+  CheckDuplicateArgs,
+  EnrichCandidatesArgs,
+  EnrichResultEntry,
+  McpContext,
+  ValidateCandidateArgs,
+} from './types.js';
 
 // ─── 校验 & 去重 ───────────────────────────────────────────
 
-export async function validateCandidate(ctx: any, args: any) {
-  const c = args.candidate || {};
-  const errors: any[] = [];
-  const warnings: any[] = [];
+export async function validateCandidate(ctx: McpContext, args: ValidateCandidateArgs) {
+  // Cast to CandidateInput — Agent input is runtime-dynamic, validation checks shape
+  const c = (args.candidate || {}) as CandidateInput;
+  const errors: string[] = [];
+  const warnings: string[] = [];
   const suggestions: { field: string; value: string }[] = [];
 
   // Layer 1: 核心必填
@@ -98,11 +107,17 @@ export async function validateCandidate(ctx: any, args: any) {
   });
 }
 
-export async function checkDuplicate(ctx: any, args: any) {
+export async function checkDuplicate(ctx: McpContext, args: CheckDuplicateArgs) {
   // SimilarityService 直接读磁盘 .md 文件，不依赖 Repository
   const { findSimilarRecipes } = await import('../../../service/candidate/SimilarityService.js');
   const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
-  const similar = findSimilarRecipes(projectRoot, args.candidate, {
+  const candidate = (args.candidate ?? {}) as {
+    title: string;
+    code: string;
+    summary?: string;
+    [key: string]: unknown;
+  };
+  const similar = findSimilarRecipes(projectRoot, candidate, {
     threshold: args.threshold ?? 0.7,
     topK: args.topK ?? 5,
   });
@@ -115,7 +130,7 @@ export async function checkDuplicate(ctx: any, args: any) {
 
 // ─── 语义字段缺失诊断（无 AI 依赖） ──────────────────────────
 
-export async function enrichCandidates(ctx: any, args: any) {
+export async function enrichCandidates(ctx: McpContext, args: EnrichCandidatesArgs) {
   const ids = args.candidateIds;
   if (!Array.isArray(ids) || ids.length === 0) {
     throw new Error('candidateIds array is required and must not be empty');
@@ -140,21 +155,25 @@ export async function enrichCandidates(ctx: any, args: any) {
   const RECIPE_READY_KEYS = [
     {
       key: 'category',
-      check: (v: any) =>
-        v &&
+      check: (v: unknown) =>
+        typeof v === 'string' &&
         ['View', 'Service', 'Tool', 'Model', 'Network', 'Storage', 'UI', 'Utility'].includes(v),
       hint: 'category 必须为 8 标准值之一',
     },
-    { key: 'trigger', check: (v: any) => v?.startsWith('@'), hint: 'trigger 必须以 @ 开头' },
-    { key: 'description', check: (v: any) => !!v, hint: '知识条目描述' },
+    {
+      key: 'trigger',
+      check: (v: unknown) => typeof v === 'string' && v.startsWith('@'),
+      hint: 'trigger 必须以 @ 开头',
+    },
+    { key: 'description', check: (v: unknown) => !!v, hint: '知识条目描述' },
     {
       key: 'headers',
-      check: (v: any) => Array.isArray(v) && v.length > 0,
+      check: (v: unknown) => Array.isArray(v) && v.length > 0,
       hint: '完整 import 语句数组',
     },
   ];
 
-  const results: any[] = [];
+  const results: EnrichResultEntry[] = [];
   let needsEnrichment = 0;
   let needsRecipeFields = 0;
   for (const id of ids) {
@@ -212,11 +231,11 @@ export async function enrichCandidates(ctx: any, args: any) {
       if (recipeReadyMissing.length > 0) {
         needsRecipeFields++;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       results.push({
         id,
         found: false,
-        error: err.message,
+        error: err instanceof Error ? err.message : String(err),
         missingFields: [],
         recipeReadyMissing: [],
       });

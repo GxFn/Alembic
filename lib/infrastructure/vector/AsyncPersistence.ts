@@ -46,7 +46,7 @@ const CRC32_TABLE = (() => {
  * @param {string} str
  * @returns {string} 8 位十六进制字符串
  */
-function crc32(str: any) {
+function crc32(str: string) {
   const bytes = Buffer.from(str, 'utf-8');
   let crc = 0xffffffff;
   for (let i = 0; i < bytes.length; i++) {
@@ -61,7 +61,7 @@ export class AsyncPersistence {
   /** @type {string} WAL 文件路径 (.wal) */
   #walPath;
   /** @type {Array<object>} 待刷盘操作队列 */
-  #pendingOps: any[] = [];
+  #pendingOps: Record<string, unknown>[] = [];
   /** @type {ReturnType<typeof setTimeout>|null} */
   #flushTimer: ReturnType<typeof setTimeout> | null = null;
   /** @type {boolean} */
@@ -86,7 +86,14 @@ export class AsyncPersistence {
    * @param {number}   [options.flushIntervalMs=2000]
    * @param {number}   [options.flushBatchSize=100]
    */
-  constructor(options: any) {
+  constructor(options: {
+    indexPath: string;
+    onPersist: () => Promise<void>;
+    onReplay: (op: Record<string, unknown>) => void;
+    enabled?: boolean;
+    flushIntervalMs?: number;
+    flushBatchSize?: number;
+  }) {
     this.#indexPath = options.indexPath;
     this.#walPath = options.indexPath.replace(/\.asvec$/, '.wal');
     this.#onPersist = options.onPersist;
@@ -128,7 +135,7 @@ export class AsyncPersistence {
    * @param {number[]} [op.v] - 向量 (upsert)
    * @param {object} [op.m] - metadata (upsert)
    */
-  appendWal(op: any) {
+  appendWal(op: Record<string, unknown>) {
     if (!this.#enabled) {
       return;
     }
@@ -142,7 +149,7 @@ export class AsyncPersistence {
    * 将单条 WAL 条目追加到磁盘 WAL 文件
    * 格式: JSON\tCRC32_HEX\n
    */
-  #writeWalEntry(op: any) {
+  #writeWalEntry(op: Record<string, unknown>) {
     try {
       const json = JSON.stringify(op);
       const checksum = crc32(json);

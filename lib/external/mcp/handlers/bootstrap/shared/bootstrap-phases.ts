@@ -29,7 +29,159 @@ import { LanguageService } from '../../../../../shared/LanguageService.js';
 import pathGuard from '../../../../../shared/PathGuard.js';
 import { detectPrimaryLanguage } from '../../LanguageExtensions.js';
 import { inferTargetRole } from '../../TargetClassifier.js';
-import { baseDimensions, resolveActiveDimensions } from '../base-dimensions.js';
+import { type BaseDimension, baseDimensions, resolveActiveDimensions } from '../base-dimensions.js';
+
+// ── TypeScript Interfaces ────────────────────────────────────
+
+/** Logger with required info/warn (compatible with Logger singleton) */
+interface PhaseLogger {
+  info(...args: unknown[]): void;
+  warn(...args: unknown[]): void;
+  error?(...args: unknown[]): void;
+  debug?(...args: unknown[]): void;
+}
+
+/** Minimal DI container shape (extends McpServiceContainer pattern) */
+interface PhaseContainer {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DI container: callers know the service type
+  get(name: string): any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic DI container shape
+  [key: string]: any;
+}
+
+/** Single file entry collected during Phase 1 */
+interface BootstrapFileEntry {
+  name: string;
+  path: string;
+  relativePath: string;
+  content: string;
+  targetName: string;
+}
+
+/** Target item — either a plain string or an object with metadata */
+type TargetItem =
+  | string
+  | {
+      name: string;
+      framework?: string;
+      type?: string;
+      packageName?: string;
+      [key: string]: unknown;
+    };
+
+/** Dependency graph data shape */
+interface DepGraphData {
+  nodes?: Array<Record<string, unknown>>;
+  edges?: Array<{ from: string; to: string; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- opaque shapes from external modules; callers expect the real exported types
+type AstProjectSummaryLike = Record<string, any>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- opaque shape from GuardCheckEngine
+type GuardAuditLike = Record<string, any>;
+
+/** Minimal guard engine shape */
+interface GuardEngineLike {
+  auditFiles(
+    files: Array<{ path: string; content: string }>,
+    opts?: Record<string, unknown>
+  ): GuardAuditLike;
+  injectExternalRules(rules: unknown[]): void;
+  getExternalRuleCount(): number;
+  [key: string]: unknown;
+}
+
+/** Enhancement pack shape */
+interface EnhancementPack {
+  id: string;
+  displayName: string;
+  getExtraDimensions(): Array<BaseDimension>;
+  getGuardRules(): unknown[];
+  detectPatterns(summary: AstProjectSummaryLike): Array<Record<string, unknown>>;
+  preprocessFile?: (file: {
+    name: string;
+    content: string;
+  }) => { name: string; content: string } | null;
+  [key: string]: unknown;
+}
+
+/** Minimal discoverer shape */
+interface DiscovererLike {
+  id: string;
+  displayName: string;
+  load(root: string): Promise<void>;
+  listTargets(): Promise<TargetItem[]>;
+  getTargetFiles(
+    target: unknown
+  ): Promise<Array<string | { path: string; name?: string; relativePath?: string }>>;
+  getDependencyGraph(): Promise<DepGraphData>;
+  [key: string]: unknown;
+}
+
+/** Phase 4 dimension resolve params */
+interface Phase4Params {
+  primaryLang: string;
+  langStats: Record<string, number>;
+  allTargets: TargetItem[];
+  astProjectSummary: AstProjectSummaryLike | null;
+  guardEngine: GuardEngineLike | null;
+  allFiles: BootstrapFileEntry[];
+  logger: PhaseLogger;
+}
+
+/** Phase 1 options */
+interface Phase1Options {
+  maxFiles?: number;
+  [key: string]: unknown;
+}
+
+/** Phase 1.5 AST analysis options */
+interface AstAnalysisOptions {
+  generateAstContext?: boolean;
+  [key: string]: unknown;
+}
+
+/** Phase 1.7 incremental call graph options */
+interface IncrementalCallGraphOpts {
+  changedFiles?: string[];
+  [key: string]: unknown;
+}
+
+/** Phase 3 Guard audit options */
+interface GuardAuditOptions {
+  skipGuard?: boolean;
+  summaryPrefix?: string;
+  [key: string]: unknown;
+}
+
+/** runAllPhases context — callers pass McpContext variants with different shapes */
+interface AllPhasesContext {
+  container: PhaseContainer;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic ctx shape; logger/db etc. vary per caller
+  [key: string]: any;
+}
+
+/** runAllPhases options */
+interface AllPhasesOptions {
+  incremental?: boolean;
+  generateReport?: boolean;
+  clearOldData?: boolean;
+  generateAstContext?: boolean;
+  maxFiles?: number;
+  skipGuard?: boolean;
+  sourceTag?: string;
+  summaryPrefix?: string;
+  [key: string]: unknown;
+}
+
+/** Phase report structure */
+export interface PhaseReport {
+  phases: Record<string, Record<string, unknown>>;
+  startTime: number;
+  totalMs?: number;
+  [key: string]: unknown;
+}
 
 // ── 类型定义 ────────────────────────────────────────────────
 
@@ -78,7 +230,7 @@ const ASD_GENERATED_PATH_SEGMENTS = [
  * @param {string} filePath
  * @returns {boolean}
  */
-export function isAutoSnippetGenerated(filePath: any) {
+export function isAutoSnippetGenerated(filePath: string) {
   const base = path.basename(filePath);
   if (ASD_GENERATED_BASENAMES.has(base)) {
     return true;
@@ -104,7 +256,11 @@ export function isAutoSnippetGenerated(filePath: any) {
  * @param {PhaseOptions} options
  * @returns {Promise<{ allFiles: Array, allTargets: Array, discoverer: object, langStats: object }>}
  */
-export async function runPhase1_FileCollection(projectRoot: any, logger: any, options: any = {}) {
+export async function runPhase1_FileCollection(
+  projectRoot: string,
+  logger: PhaseLogger,
+  options: Phase1Options = {}
+) {
   const maxFiles = options.maxFiles || 500;
 
   const { getDiscovererRegistry } = await import('../../../../../core/discovery/index.js');
@@ -115,9 +271,8 @@ export async function runPhase1_FileCollection(projectRoot: any, logger: any, op
   await discoverer.load(projectRoot);
   const allTargets = await discoverer.listTargets();
 
-  const seenPaths = new Set();
-  const allFiles: { name: any; path: any; relativePath: any; content: string; targetName: any }[] =
-    [];
+  const seenPaths = new Set<string>();
+  const allFiles: BootstrapFileEntry[] = [];
   for (const t of allTargets) {
     try {
       const fileList = await discoverer.getTargetFiles(t);
@@ -155,13 +310,18 @@ export async function runPhase1_FileCollection(projectRoot: any, logger: any, op
   }
 
   // 语言统计
-  const langStats: Record<string, any> = {};
+  const langStats: Record<string, number> = {};
   for (const f of allFiles) {
     const ext = path.extname(f.name).replace('.', '') || 'unknown';
     langStats[ext] = (langStats[ext] || 0) + 1;
   }
 
-  return { allFiles, allTargets, discoverer, langStats };
+  return {
+    allFiles,
+    allTargets: allTargets as unknown as TargetItem[],
+    discoverer: discoverer as unknown as DiscovererLike,
+    langStats,
+  };
 }
 
 // ── Phase 1.5: AST 代码结构分析 ────────────────────────────
@@ -179,13 +339,13 @@ export async function runPhase1_FileCollection(projectRoot: any, logger: any, op
  * @returns {Promise<{ astProjectSummary: object|null, astContext: string, warnings: string[] }>}
  */
 export async function runPhase1_5_AstAnalysis(
-  allFiles: any,
-  langStats: any,
-  logger: any,
-  options: any = {}
+  allFiles: BootstrapFileEntry[],
+  langStats: Record<string, number>,
+  logger: PhaseLogger,
+  options: AstAnalysisOptions = {}
 ) {
   const warnings: string[] = [];
-  let astProjectSummary: any = null;
+  let astProjectSummary: AstProjectSummaryLike | null = null;
   let astContext = '';
 
   // Phase 1.5a: 按需安装缺失的 tree-sitter 语法包
@@ -202,22 +362,28 @@ export async function runPhase1_5_AstAnalysis(
       }
     }
     await import('../../../../../core/ast/index.js');
-  } catch (e: any) {
-    logger.warn(`[Bootstrap] Grammar auto-install skipped: ${e.message}`);
+  } catch (e: unknown) {
+    logger.warn(
+      `[Bootstrap] Grammar auto-install skipped: ${e instanceof Error ? e.message : String(e)}`
+    );
   }
 
   // Phase 1.5b: AST 分析
   const primaryLangEarly = detectPrimaryLanguage(langStats);
   if (astIsAvailable() && primaryLangEarly) {
     try {
-      const astFiles = allFiles.map((f: any) => ({
+      const astFiles = allFiles.map((f: BootstrapFileEntry) => ({
         name: f.name,
         relativePath: f.relativePath,
         content: f.content,
       }));
 
       // SFC 预处理 (.vue / .svelte)
-      let sfcPreprocessor: any = null;
+      type AstPreprocessFn = (
+        content: string,
+        ext: string
+      ) => { content: string; lang?: string } | null;
+      let sfcPreprocessor: AstPreprocessFn | undefined;
       try {
         const { initEnhancementRegistry } = await import(
           '../../../../../core/enhancement/index.js'
@@ -225,9 +391,13 @@ export async function runPhase1_5_AstAnalysis(
         const enhReg = await initEnhancementRegistry();
         const preprocessPack = enhReg
           .all()
-          .find((p: any) => typeof p.preprocessFile === 'function');
+          .find(
+            (p) => typeof (p as unknown as Record<string, unknown>).preprocessFile === 'function'
+          );
         if (preprocessPack) {
-          sfcPreprocessor = preprocessPack.preprocessFile.bind(preprocessPack);
+          sfcPreprocessor = (
+            preprocessPack as unknown as { preprocessFile: (...args: unknown[]) => unknown }
+          ).preprocessFile.bind(preprocessPack) as AstPreprocessFn;
         }
       } catch {
         /* Enhancement 未加载 */
@@ -239,7 +409,10 @@ export async function runPhase1_5_AstAnalysis(
 
       // 内部 Agent 专用: 生成 astContext 文本
       if (options.generateAstContext) {
-        astContext = generateContextForAgent(astProjectSummary);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- astProjectSummary flows from analyzeProject return
+        astContext = generateContextForAgent(
+          astProjectSummary as Parameters<typeof generateContextForAgent>[0]
+        );
       }
 
       logger.info(
@@ -252,9 +425,11 @@ export async function runPhase1_5_AstAnalysis(
             ? `, ${Object.keys(astProjectSummary.patternStats).length} patterns`
             : '')
       );
-    } catch (e: any) {
-      logger.warn(`[Bootstrap] AST analysis failed (degraded): ${e.message}`);
-      warnings.push(`AST analysis partially failed: ${e.message}`);
+    } catch (e: unknown) {
+      logger.warn(
+        `[Bootstrap] AST analysis failed (degraded): ${e instanceof Error ? e.message : String(e)}`
+      );
+      warnings.push(`AST analysis partially failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   } else {
     logger.info(
@@ -277,13 +452,14 @@ export async function runPhase1_5_AstAnalysis(
  * @returns {Promise<{ codeEntityResult: object|null, warnings: string[] }>}
  */
 export async function runPhase1_6_EntityGraph(
-  astProjectSummary: any,
-  projectRoot: any,
-  container: any,
-  logger: any
+  astProjectSummary: AstProjectSummaryLike | null,
+  projectRoot: string,
+  container: PhaseContainer,
+  logger: PhaseLogger
 ) {
   const warnings: string[] = [];
-  let codeEntityResult: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- opaque result from CodeEntityGraph.populateFromAst
+  let codeEntityResult: Record<string, any> | null = null;
 
   if (astProjectSummary) {
     try {
@@ -294,14 +470,19 @@ export async function runPhase1_6_EntityGraph(
       if (db) {
         const ceg = new CodeEntityGraph(db, { projectRoot });
         ceg.clearProject();
-        codeEntityResult = ceg.populateFromAst(astProjectSummary);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- AstProjectSummaryLike is structurally compatible at runtime
+        codeEntityResult = ceg.populateFromAst(
+          astProjectSummary as Parameters<typeof ceg.populateFromAst>[0]
+        );
         logger.info(
-          `[Bootstrap] Entity Graph: ${codeEntityResult.entitiesUpserted} entities, ${codeEntityResult.edgesCreated} edges`
+          `[Bootstrap] Entity Graph: ${codeEntityResult!.entitiesUpserted} entities, ${codeEntityResult!.edgesCreated} edges`
         );
       }
-    } catch (e: any) {
-      logger.warn(`[Bootstrap] Entity Graph failed (degraded): ${e.message}`);
-      warnings.push(`Entity Graph failed: ${e.message}`);
+    } catch (e: unknown) {
+      logger.warn(
+        `[Bootstrap] Entity Graph failed (degraded): ${e instanceof Error ? e.message : String(e)}`
+      );
+      warnings.push(`Entity Graph failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -324,14 +505,15 @@ export async function runPhase1_6_EntityGraph(
  * @returns {Promise<{ callGraphResult: object|null, warnings: string[] }>}
  */
 export async function runPhase1_7_CallGraph(
-  astProjectSummary: any,
-  projectRoot: any,
-  container: any,
-  logger: any,
-  incrementalOpts: any = null
+  astProjectSummary: AstProjectSummaryLike | null,
+  projectRoot: string,
+  container: PhaseContainer,
+  logger: PhaseLogger,
+  incrementalOpts: IncrementalCallGraphOpts | null = null
 ) {
   const warnings: string[] = [];
-  let callGraphResult: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- opaque result from CodeEntityGraph.populateCallGraph
+  let callGraphResult: Record<string, any> | null = null;
 
   if (!astProjectSummary?.fileSummaries?.length) {
     return { callGraphResult, warnings };
@@ -339,7 +521,7 @@ export async function runPhase1_7_CallGraph(
 
   // 检查是否有 callSites 数据 (Phase 5 提取)
   const hasCallSites = astProjectSummary.fileSummaries.some(
-    (f: any) => f.callSites && f.callSites.length > 0
+    (f: { callSites?: unknown[]; [key: string]: unknown }) => f.callSites && f.callSites.length > 0
   );
   if (!hasCallSites) {
     logger.info('[Bootstrap] Call Graph skipped: no call sites extracted');
@@ -352,16 +534,22 @@ export async function runPhase1_7_CallGraph(
 
     const analyzer = new CallGraphAnalyzer(projectRoot);
     const changedFiles = incrementalOpts?.changedFiles;
-    const isIncremental = changedFiles?.length > 0 && changedFiles.length <= 10;
+    const isIncremental = (changedFiles?.length ?? 0) > 0 && changedFiles!.length <= 10;
 
     // Phase 5 分析 (带超时保护 + 渐进式 partial result)
     const result = isIncremental
-      ? await analyzer.analyzeIncremental(astProjectSummary, changedFiles, {
-          timeout: 15_000,
-          maxCallSitesPerFile: 500,
-          minConfidence: 0.5,
-        })
-      : await analyzer.analyze(astProjectSummary, {
+      ? // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- AstProjectSummaryLike structurally compatible
+        await analyzer.analyzeIncremental(
+          astProjectSummary as Parameters<typeof analyzer.analyzeIncremental>[0],
+          changedFiles!,
+          {
+            timeout: 15_000,
+            maxCallSitesPerFile: 500,
+            minConfidence: 0.5,
+          }
+        )
+      : // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- AstProjectSummaryLike structurally compatible
+        await analyzer.analyze(astProjectSummary as Parameters<typeof analyzer.analyze>[0], {
           timeout: 15_000,
           maxCallSitesPerFile: 500,
           minConfidence: 0.5,
@@ -374,10 +562,13 @@ export async function runPhase1_7_CallGraph(
 
       // 增量模式: 先删除变更文件的旧边
       if (isIncremental) {
-        ceg.clearCallGraphForFiles(changedFiles);
+        ceg.clearCallGraphForFiles(changedFiles ?? null);
       }
 
-      callGraphResult = ceg.populateCallGraph(result.callEdges, result.dataFlowEdges);
+      callGraphResult = ceg.populateCallGraph(result.callEdges, result.dataFlowEdges) as Record<
+        string,
+        any
+      >;
 
       const partialTag = (result.stats as any).partial ? ' [partial]' : '';
       const incrTag = isIncremental ? ' [incremental]' : '';
@@ -391,9 +582,11 @@ export async function runPhase1_7_CallGraph(
         `[Bootstrap] Call Graph: ${result.stats.totalCallSites} call sites, 0 resolved edges`
       );
     }
-  } catch (e: any) {
-    logger.warn(`[Bootstrap] Call Graph failed (degraded): ${e.message}`);
-    warnings.push(`Call Graph failed: ${e.message}`);
+  } catch (e: unknown) {
+    logger.warn(
+      `[Bootstrap] Call Graph failed (degraded): ${e instanceof Error ? e.message : String(e)}`
+    );
+    warnings.push(`Call Graph failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   return { callGraphResult, warnings };
@@ -411,13 +604,13 @@ export async function runPhase1_7_CallGraph(
  * @returns {Promise<{ depGraphData: object|null, depEdgesWritten: number, warnings: string[] }>}
  */
 export async function runPhase2_DependencyGraph(
-  discoverer: any,
-  container: any,
-  logger: any,
+  discoverer: DiscovererLike,
+  container: PhaseContainer,
+  logger: PhaseLogger,
   sourceTag = 'bootstrap'
 ) {
   const warnings: string[] = [];
-  let depGraphData: any = null;
+  let depGraphData: DepGraphData | null = null;
   let depEdgesWritten = 0;
 
   try {
@@ -438,9 +631,9 @@ export async function runPhase2_DependencyGraph(
         }
       }
     }
-  } catch (e: any) {
-    logger.warn(`[Bootstrap] DepGraph failed: ${e.message}`);
-    warnings.push(`Dependency graph failed: ${e.message}`);
+  } catch (e: unknown) {
+    logger.warn(`[Bootstrap] DepGraph failed: ${e instanceof Error ? e.message : String(e)}`);
+    warnings.push(`Dependency graph failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   return { depGraphData, depEdgesWritten, warnings };
@@ -457,10 +650,10 @@ export async function runPhase2_DependencyGraph(
  * @param {object} logger
  */
 export async function runPhase2_1_ModuleEntities(
-  depGraphData: any,
-  projectRoot: any,
-  container: any,
-  logger: any
+  depGraphData: DepGraphData | null,
+  projectRoot: string,
+  container: PhaseContainer,
+  logger: PhaseLogger
 ) {
   if (!depGraphData?.nodes?.length) {
     return;
@@ -474,8 +667,10 @@ export async function runPhase2_1_ModuleEntities(
       const result = ceg.populateFromSpm(depGraphData);
       logger.info(`[Bootstrap] Entity Graph modules: ${result.entitiesUpserted} entities`);
     }
-  } catch (e: any) {
-    logger.warn(`[Bootstrap] Entity Graph modules failed: ${e.message}`);
+  } catch (e: unknown) {
+    logger.warn(
+      `[Bootstrap] Entity Graph modules failed: ${e instanceof Error ? e.message : String(e)}`
+    );
   }
 }
 
@@ -493,14 +688,14 @@ export async function runPhase2_1_ModuleEntities(
  * @returns {Promise<{ guardAudit: object|null, guardEngine: object|null, warnings: string[] }>}
  */
 export async function runPhase3_GuardAudit(
-  allFiles: any,
-  container: any,
-  logger: any,
-  options: any = {}
+  allFiles: BootstrapFileEntry[],
+  container: PhaseContainer,
+  logger: PhaseLogger,
+  options: GuardAuditOptions = {}
 ) {
   const warnings: string[] = [];
-  let guardAudit: any = null;
-  let guardEngine: any = null;
+  let guardAudit: GuardAuditLike | null = null;
+  let guardEngine: GuardEngineLike | null = null;
 
   if (options.skipGuard) {
     return { guardAudit, guardEngine, warnings };
@@ -509,9 +704,12 @@ export async function runPhase3_GuardAudit(
   try {
     const { GuardCheckEngine } = await import('../../../../../service/guard/GuardCheckEngine.js');
     const db = container.get('database');
-    guardEngine = new GuardCheckEngine(db);
-    const guardFiles = allFiles.map((f: any) => ({ path: f.path, content: f.content }));
-    guardAudit = guardEngine.auditFiles(guardFiles, { scope: 'project' });
+    guardEngine = new GuardCheckEngine(db) as unknown as GuardEngineLike;
+    const guardFiles = allFiles.map((f: BootstrapFileEntry) => ({
+      path: f.path,
+      content: f.content,
+    }));
+    guardAudit = guardEngine!.auditFiles(guardFiles, { scope: 'project' });
 
     // 写入 ViolationsStore
     try {
@@ -529,9 +727,9 @@ export async function runPhase3_GuardAudit(
     } catch {
       /* ViolationsStore not available */
     }
-  } catch (e: any) {
-    logger.warn(`[Bootstrap] Guard audit failed: ${e.message}`);
-    warnings.push(`Guard audit failed: ${e.message}`);
+  } catch (e: unknown) {
+    logger.warn(`[Bootstrap] Guard audit failed: ${e instanceof Error ? e.message : String(e)}`);
+    warnings.push(`Guard audit failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   return { guardAudit, guardEngine, warnings };
@@ -560,23 +758,23 @@ export async function runPhase3_GuardAudit(
  *   guardAudit: object|null
  * }>}
  */
-export async function runPhase4_DimensionResolve(params: any) {
+export async function runPhase4_DimensionResolve(params: Phase4Params) {
   const { primaryLang, langStats, allTargets, astProjectSummary, guardEngine, allFiles, logger } =
     params;
 
   // 框架检测
   const detectedFrameworks = allTargets
-    .map((t: any) => (typeof t === 'object' ? t.framework : null))
-    .filter(Boolean);
+    .map((t: TargetItem) => (typeof t === 'object' ? t.framework : null))
+    .filter(Boolean) as string[];
 
   // 条件维度过滤
   const activeDimensions = resolveActiveDimensions(baseDimensions, primaryLang, detectedFrameworks);
 
   // Enhancement Pack 动态追加
-  const enhancementPackInfo: { id: any; displayName: any }[] = [];
-  const enhancementGuardRules: any[] = [];
-  const enhancementPatterns: any[] = [];
-  let guardAudit: any = null;
+  const enhancementPackInfo: { id: string; displayName: string }[] = [];
+  const enhancementGuardRules: unknown[] = [];
+  const enhancementPatterns: Array<Record<string, unknown>> = [];
+  let guardAudit: GuardAuditLike | null = null;
 
   try {
     const { initEnhancementRegistry } = await import('../../../../../core/enhancement/index.js');
@@ -588,7 +786,7 @@ export async function runPhase4_DimensionResolve(params: any) {
 
       // 追加额外维度
       for (const dim of pack.getExtraDimensions()) {
-        if (!activeDimensions.some((d: any) => d.id === dim.id)) {
+        if (!activeDimensions.some((d: BaseDimension) => d.id === dim.id)) {
           activeDimensions.push(dim);
         }
       }
@@ -604,7 +802,9 @@ export async function runPhase4_DimensionResolve(params: any) {
         try {
           const patterns = pack.detectPatterns(astProjectSummary);
           if (patterns.length > 0) {
-            enhancementPatterns.push(...patterns.map((p: any) => ({ ...p, source: pack.id })));
+            enhancementPatterns.push(
+              ...patterns.map((p: Record<string, unknown>) => ({ ...p, source: pack.id }))
+            );
           }
         } catch {
           /* graceful degradation */
@@ -614,25 +814,32 @@ export async function runPhase4_DimensionResolve(params: any) {
 
     if (matchedPacks.length > 0) {
       logger.info(
-        `[Bootstrap] Enhancement packs: ${matchedPacks.map((p: any) => p.id).join(', ')} → ` +
+        `[Bootstrap] Enhancement packs: ${matchedPacks.map((p) => p.id).join(', ')} → ` +
           `+${activeDimensions.length - baseDimensions.length} dims, ${enhancementGuardRules.length} guard rules, ${enhancementPatterns.length} patterns`
       );
     }
-  } catch (enhErr: any) {
-    logger.warn(`[Bootstrap] Enhancement packs skipped: ${enhErr.message}`);
+  } catch (enhErr: unknown) {
+    logger.warn(
+      `[Bootstrap] Enhancement packs skipped: ${enhErr instanceof Error ? enhErr.message : String(enhErr)}`
+    );
   }
 
   // Enhancement Pack Guard 规则注入 + 补充审计
   if (enhancementGuardRules.length > 0 && guardEngine) {
     try {
       guardEngine.injectExternalRules(enhancementGuardRules);
-      const guardFiles = allFiles.map((f: any) => ({ path: f.path, content: f.content }));
+      const guardFiles = allFiles.map((f: BootstrapFileEntry) => ({
+        path: f.path,
+        content: f.content,
+      }));
       guardAudit = guardEngine.auditFiles(guardFiles, { scope: 'project' });
       logger.info(
-        `[Bootstrap] Guard re-audit with ${guardEngine.getExternalRuleCount()} Enhancement Pack rules → ${guardAudit.summary.totalViolations} total violations`
+        `[Bootstrap] Guard re-audit with ${guardEngine.getExternalRuleCount()} Enhancement Pack rules → ${guardAudit!.summary.totalViolations} total violations`
       );
-    } catch (e: any) {
-      logger.warn(`[Bootstrap] Enhancement Pack guard re-audit failed: ${e.message}`);
+    } catch (e: unknown) {
+      logger.warn(
+        `[Bootstrap] Enhancement Pack guard re-audit failed: ${e instanceof Error ? e.message : String(e)}`
+      );
     }
   }
 
@@ -671,14 +878,20 @@ export async function runPhase4_DimensionResolve(params: any) {
  * @param {string}  [options.summaryPrefix='Bootstrap scan']
  * @returns {Promise<PhaseResults>}
  */
-export async function runAllPhases(projectRoot: any, ctx: any, options: any = {}) {
-  const warnings: any[] = [];
-  const report: any = options.generateReport ? { phases: {}, startTime: Date.now() } : null;
+export async function runAllPhases(
+  projectRoot: string,
+  ctx: AllPhasesContext,
+  options: AllPhasesOptions = {}
+) {
+  const warnings: string[] = [];
+  const report: PhaseReport | null = options.generateReport
+    ? { phases: {}, startTime: Date.now() }
+    : null;
 
   // 路径安全守卫
   if (!pathGuard.configured) {
     const { default: Bootstrap } = await import('../../../../../bootstrap.js');
-    (Bootstrap as any).configurePathGuard(projectRoot);
+    (Bootstrap as { configurePathGuard(root: string): void }).configurePathGuard(projectRoot);
   }
 
   // ── 清除旧数据 (if requested) ──
@@ -686,10 +899,13 @@ export async function runAllPhases(projectRoot: any, ctx: any, options: any = {}
     try {
       const { clearCheckpoints, clearSnapshots } = await import('../pipeline/orchestrator.js');
       await clearCheckpoints(projectRoot);
-      await clearSnapshots(projectRoot, ctx);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- AllPhasesContext structurally compatible with clearSnapshots param
+      await clearSnapshots(projectRoot, ctx as Parameters<typeof clearSnapshots>[1]);
       ctx.logger.info('[Bootstrap] Cleared old checkpoints and snapshots');
-    } catch (err: any) {
-      warnings.push(`clearOldData failed (non-blocking): ${err.message}`);
+    } catch (err: unknown) {
+      warnings.push(
+        `clearOldData failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -736,7 +952,8 @@ export async function runAllPhases(projectRoot: any, ctx: any, options: any = {}
   }
 
   // ── Incremental evaluation (Phase 1 后执行，需要 allFiles) ──
-  let incrementalPlan: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- IncrementalBootstrap.evaluate returns opaque plan object
+  let incrementalPlan: Record<string, any> | null = null;
   if (options.incremental) {
     try {
       const { IncrementalBootstrap } = await import('../pipeline/IncrementalBootstrap.js');
@@ -754,8 +971,10 @@ export async function runAllPhases(projectRoot: any, ctx: any, options: any = {}
       } else {
         warnings.push('incremental: db not available, falling back to full');
       }
-    } catch (err: any) {
-      warnings.push(`incremental evaluation failed (non-blocking): ${err.message}`);
+    } catch (err: unknown) {
+      warnings.push(
+        `incremental evaluation failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -859,12 +1078,12 @@ export async function runAllPhases(projectRoot: any, ctx: any, options: any = {}
   const finalGuardAudit = phase4.guardAudit || phase3.guardAudit;
 
   // Targets 摘要
-  const targetsSummary = allTargets.map((t: any) => {
+  const targetsSummary = (allTargets as TargetItem[]).map((t: TargetItem) => {
     const name = typeof t === 'string' ? t : t.name;
     return {
       name,
-      type: t.type || 'target',
-      packageName: t.packageName || undefined,
+      type: (typeof t === 'object' ? t.type : undefined) || 'target',
+      packageName: (typeof t === 'object' ? t.packageName : undefined) || undefined,
       inferredRole: inferTargetRole(name),
       fileCount: allFiles.filter((f) => f.targetName === name).length,
     };

@@ -25,7 +25,10 @@ export class BatchEmbedder {
    * @param {number} [options.batchSize=32]
    * @param {number} [options.maxConcurrency=2]
    */
-  constructor(aiProvider: any, options: any = {}) {
+  constructor(
+    aiProvider: { embed: (text: string | string[]) => Promise<number[] | number[][]> },
+    options: { batchSize?: number; maxConcurrency?: number } = {}
+  ) {
     this.#aiProvider = aiProvider;
     this.#batchSize = options.batchSize || 32;
     this.#maxConcurrency = options.maxConcurrency || 2;
@@ -38,7 +41,10 @@ export class BatchEmbedder {
    * @param {function} [onProgress] - (embedded, total) => void
    * @returns {Promise<Map<string, number[]>>} id → vector
    */
-  async embedAll(items: any, onProgress: any) {
+  async embedAll(
+    items: Array<{ id: string; content: string }>,
+    onProgress?: (embedded: number, total: number) => void
+  ) {
     if (!this.#aiProvider || typeof this.#aiProvider.embed !== 'function') {
       return new Map();
     }
@@ -68,18 +74,18 @@ export class BatchEmbedder {
    * @param {Array<{ id: string, content: string }>} items
    * @returns {Promise<Map<string, number[]>>}
    */
-  async #embedBatch(items: any) {
+  async #embedBatch(items: Array<{ id: string; content: string }>) {
     const result = new Map();
 
     try {
       // 截断过长文本 (8K 字符限制)
-      const texts = items.map((item: any) => (item.content || '').slice(0, 8000));
+      const texts = items.map((item) => (item.content || '').slice(0, 8000));
       const vectors = await this.#aiProvider.embed(texts);
 
       // embed(string[]) 返回 number[][] — OpenAiProvider 已支持
       if (Array.isArray(vectors) && Array.isArray(vectors[0])) {
         // 批量返回
-        items.forEach((item: any, idx: any) => {
+        items.forEach((item, idx) => {
           if (vectors[idx]) {
             result.set(item.id, vectors[idx]);
           }
@@ -127,8 +133,8 @@ export class BatchEmbedder {
    * @param {number} size
    * @returns {Array<Array>}
    */
-  #chunkArray(arr: any, size: any) {
-    const chunks: any[] = [];
+  #chunkArray<T>(arr: T[], size: number): T[][] {
+    const chunks: T[][] = [];
     for (let i = 0; i < arr.length; i += size) {
       chunks.push(arr.slice(i, i + size));
     }

@@ -12,22 +12,31 @@ import { jaccardSimilarity, tokenizeForSimilarity } from '../../shared/similarit
 /** title 相似度阈值，超过此值视为重复 */
 const TITLE_SIMILARITY_THRESHOLD = 0.85;
 
+interface CandidateItem {
+  title: string;
+  code?: string;
+  [key: string]: unknown;
+}
+
+interface AggregateOpts {
+  threshold?: number;
+}
+
 /**
  * 对候选条目列表进行去重聚合
  *
- * @param {Array<{title: string, code?: string, [key: string]: any}>} items
- * @param {object} [opts]
- * @param {number} [opts.threshold] 自定义相似度阈值 (0-1)
- * @returns {{ items: Array, duplicates: Array<{item: any, duplicateOf: string}> }}
+ * @param {CandidateItem[]} items
+ * @param {AggregateOpts} [opts]
+ * @returns {{ items: CandidateItem[], duplicates: Array<{item: CandidateItem, duplicateOf: string}> }}
  */
-export function aggregateCandidates(items: any, opts: any = {}) {
+export function aggregateCandidates(items: CandidateItem[], opts: AggregateOpts = {}) {
   if (!Array.isArray(items) || items.length === 0) {
     return { items: [], duplicates: [] };
   }
 
   const threshold = opts.threshold ?? TITLE_SIMILARITY_THRESHOLD;
-  const kept: any[] = [];
-  const duplicates: { item: any; duplicateOf: any }[] = [];
+  const kept: CandidateItem[] = [];
+  const duplicates: { item: CandidateItem; duplicateOf: string }[] = [];
 
   for (const item of items) {
     const titleTokens = tokenizeForSimilarity(item.title || '');

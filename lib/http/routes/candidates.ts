@@ -3,7 +3,7 @@
  * 候选条目的 AI 补齐、润色预览/应用
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
@@ -22,7 +22,7 @@ const logger = Logger.getInstance();
  */
 router.post(
   '/enrich',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { candidateIds } = req.body;
     if (!Array.isArray(candidateIds) || candidateIds.length === 0) {
       throw new ValidationError('candidateIds array is required and must not be empty');
@@ -36,7 +36,7 @@ router.post(
     const aiProvider = container.get('aiProvider');
 
     // 收集候选条目
-    const candidates: any[] = [];
+    const candidates: Record<string, unknown>[] = [];
     for (const id of candidateIds) {
       try {
         const entry = await knowledgeService.get(id);
@@ -57,31 +57,31 @@ router.post(
             constraints: json.constraints,
           });
         }
-      } catch (err: any) {
-        logger.warn(`enrich: failed to load candidate ${id}`, { error: err.message });
+      } catch (err: unknown) {
+        logger.warn(`enrich: failed to load candidate ${id}`, { error: (err as Error).message });
       }
     }
 
     if (candidates.length === 0) {
-      return res.json({ success: true, data: { enriched: 0, total: 0, results: [] } });
+      return void res.json({ success: true, data: { enriched: 0, total: 0, results: [] } });
     }
 
     let enrichedCount = 0;
-    const results: any[] = [];
+    const results: Record<string, unknown>[] = [];
 
     if (aiProvider) {
-      let enriched: any[] = [];
+      let enriched: Record<string, unknown>[] = [];
       try {
         // 获取用户语言偏好
         let lang = 'en';
         try {
-          lang = container.getLang?.() || 'en';
+          lang = (container.getLang?.() as string | undefined) || 'en';
         } catch {
           /* lang not available */
         }
         enriched = await aiProvider.enrichCandidates(candidates, { lang });
-      } catch (err: any) {
-        logger.warn('AI enrichCandidates failed', { error: err.message });
+      } catch (err: unknown) {
+        logger.warn('AI enrichCandidates failed', { error: (err as Error).message });
       }
 
       for (const item of enriched) {
@@ -93,14 +93,14 @@ router.post(
         }
 
         try {
-          const updateData: any = {};
+          const updateData: Record<string, unknown> = {};
           let changed = false;
 
           // content 嵌套字段（rationale / steps）共用一次 DB 读取
           const needsContentMerge =
             (item.rationale && !cand.rationale) ||
-            (item.steps && (!cand.steps || cand.steps.length === 0));
-          let contentBase: any = null;
+            (item.steps && (!cand.steps || (cand.steps as unknown[]).length === 0));
+          let contentBase: Record<string, unknown> | null = null;
           if (needsContentMerge) {
             const entry = await knowledgeService.get(cand.id);
             const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
@@ -108,11 +108,11 @@ router.post(
           }
 
           if (item.rationale && !cand.rationale) {
-            contentBase.rationale = item.rationale;
+            contentBase!.rationale = item.rationale;
             changed = true;
           }
-          if (item.steps && (!cand.steps || cand.steps.length === 0)) {
-            contentBase.steps = item.steps;
+          if (item.steps && (!cand.steps || (cand.steps as unknown[]).length === 0)) {
+            contentBase!.steps = item.steps;
             changed = true;
           }
           if (contentBase && changed) {
@@ -131,7 +131,10 @@ router.post(
             updateData.scope = item.scope;
             changed = true;
           }
-          if (item.constraints && !cand.constraints?.preconditions?.length) {
+          if (
+            item.constraints &&
+            !(cand.constraints as Record<string, unknown[]> | undefined)?.preconditions?.length
+          ) {
             updateData.constraints = item.constraints;
             changed = true;
           }
@@ -145,9 +148,16 @@ router.post(
             enriched: changed,
             filledFields: Object.keys(item).filter((k) => k !== 'index'),
           });
-        } catch (err: any) {
-          logger.warn(`enrich: failed to update candidate ${cand.id}`, { error: err.message });
-          results.push({ id: cand.id, enriched: false, filledFields: [], error: err.message });
+        } catch (err: unknown) {
+          logger.warn(`enrich: failed to update candidate ${cand.id}`, {
+            error: (err as Error).message,
+          });
+          results.push({
+            id: cand.id,
+            enriched: false,
+            filledFields: [],
+            error: (err as Error).message,
+          });
         }
       }
     }
@@ -168,7 +178,7 @@ router.post(
  */
 router.post(
   '/bootstrap-refine',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { candidateIds, userPrompt, dryRun } = req.body;
 
     const container = getServiceContainer();
@@ -191,15 +201,15 @@ router.post(
  * 从 KnowledgeEntry 提取前端 DiffView 所需的 before 字段
  * 与前端 extractBefore() 保持一致
  */
-function extractBeforeFields(json: any) {
+function extractBeforeFields(json: Record<string, unknown>) {
   return {
     title: json.title || '',
     description: json.description || '',
-    pattern: json.content?.pattern || '',
-    markdown: json.content?.markdown || '',
-    rationale: json.content?.rationale || '',
+    pattern: (json.content as Record<string, unknown>)?.pattern || '',
+    markdown: (json.content as Record<string, unknown>)?.markdown || '',
+    rationale: (json.content as Record<string, unknown>)?.rationale || '',
     tags: json.tags || [],
-    confidence: json.reasoning?.confidence ?? 0.6,
+    confidence: (json.reasoning as Record<string, unknown>)?.confidence ?? 0.6,
     relations: json.relations || {},
     aiInsight: json.aiInsight || null,
     agentNotes: json.agentNotes || null,
@@ -212,7 +222,7 @@ function extractBeforeFields(json: any) {
  * @param {string} userPrompt 用户输入的润色指令
  * @returns {string}
  */
-function buildRefinePrompt(before: any, userPrompt: any) {
+function buildRefinePrompt(before: Record<string, unknown>, userPrompt: string) {
   return `你是一位知识库条目润色助手。你必须**严格按照用户指令**修改知识条目。
 
 ## ⭐ JSON key 规范（最高优先级）
@@ -251,10 +261,10 @@ function buildRefinePrompt(before: any, userPrompt: any) {
 ${before.description || '（空）'}
 
 【pattern】代码/标准用法
-${(before.pattern || '（空）').substring(0, 3000)}
+${(String(before.pattern || '（空）')).substring(0, 3000)}
 
 【markdown】Markdown 文档
-${(before.markdown || '（空）').substring(0, 3000)}
+${(String(before.markdown || '（空）')).substring(0, 3000)}
 
 【rationale】设计原理
 ${before.rationale || '（空）'}
@@ -296,7 +306,10 @@ ${userPrompt}
 /**
  * 将 AI 返回的润色结果合并到 before 上生成 after，并构造 knowledgeService.update() 所需的 updateData
  */
-function buildUpdateFromRefineResult(before: any, parsed: any) {
+function buildUpdateFromRefineResult(
+  before: Record<string, unknown>,
+  parsed: Record<string, unknown>
+) {
   // ─── key 别名归一化：AI 可能返回不精确的 key，统一映射到标准 key ───
   const KEY_ALIASES = {
     // description 别名
@@ -357,7 +370,7 @@ function buildUpdateFromRefineResult(before: any, parsed: any) {
     'agentNotes',
     'relations',
   ]);
-  const normalized: any = {};
+  const normalized: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(parsed)) {
     if (VALID_KEYS.has(key)) {
@@ -380,7 +393,7 @@ function buildUpdateFromRefineResult(before: any, parsed: any) {
   }
 
   const after = { ...before };
-  const updateData: any = {};
+  const updateData: Record<string, unknown> = {};
   let changed = false;
 
   if (normalized.description != null && normalized.description !== before.description) {
@@ -450,7 +463,7 @@ function buildUpdateFromRefineResult(before: any, parsed: any) {
  */
 router.post(
   '/refine-preview',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { candidateId, userPrompt } = req.body;
     if (!candidateId) {
       throw new ValidationError('candidateId is required');
@@ -477,7 +490,7 @@ router.post(
     const parsed = await aiProvider.chatWithStructuredOutput(prompt, { temperature: 0.3 });
 
     if (!parsed) {
-      return res.json({
+      return void res.json({
         success: true,
         data: { candidateId, before, after: before, preview: {} },
       });
@@ -508,7 +521,7 @@ router.post(
  */
 router.post(
   '/refine-preview-stream',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { candidateId, userPrompt } = req.body;
     if (!candidateId) {
       throw new ValidationError('candidateId is required');
@@ -612,7 +625,7 @@ router.post(
           session.send({ type: 'data:progress', stage: 'fallback', message: 'AI 正在重新生成...' });
           const fullText = await aiProvider.chat(prompt, { temperature: 0.3 });
 
-          let fallbackParsed: any = null;
+          let fallbackParsed: Record<string, unknown> | null = null;
           try {
             const jsonStr = fullText
               .replace(/^```(?:json)?\s*\n?/m, '')
@@ -637,9 +650,9 @@ router.post(
             session.end({ candidateId, before, after: before, preview: null, rawText: fullText });
           }
         }
-      } catch (err: any) {
-        logger.warn('SSE refine-preview stream error', { error: err.message });
-        session.error(err.message, 'REFINE_ERROR');
+      } catch (err: unknown) {
+        logger.warn('SSE refine-preview stream error', { error: (err as Error).message });
+        session.error((err as Error).message, 'REFINE_ERROR');
       }
     });
   })
@@ -670,7 +683,7 @@ router.get('/refine-preview/events/:sessionId', (req, res) => {
     res.socket.setTimeout(0);
   }
 
-  function writeEvent(event: any) {
+  function writeEvent(event: Record<string, unknown>) {
     if (res.writableEnded) {
       return;
     }
@@ -692,7 +705,7 @@ router.get('/refine-preview/events/:sessionId', (req, res) => {
   }
 
   // 2) 订阅实时事件
-  const unsubscribe = session.on((event: any) => {
+  const unsubscribe = session.on((event: Record<string, unknown>) => {
     writeEvent(event);
     if (event.type === 'stream:done' || event.type === 'stream:error') {
       unsubscribe();
@@ -727,7 +740,7 @@ router.get('/refine-preview/events/:sessionId', (req, res) => {
  */
 router.post(
   '/refine-apply',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { candidateId, userPrompt, preview } = req.body;
     if (!candidateId) {
       throw new ValidationError('candidateId is required');
@@ -758,7 +771,7 @@ router.post(
     }
 
     if (!parsed) {
-      return res.json({
+      return void res.json({
         success: true,
         data: { refined: 0, total: 1, candidate: json },
       });
@@ -768,7 +781,7 @@ router.post(
 
     if (changed) {
       // 处理需要嵌套写入的字段
-      const finalUpdate: any = { ...updateData };
+      const finalUpdate: Record<string, unknown> = { ...updateData };
       delete finalUpdate._patternChanged;
       delete finalUpdate._confidenceChanged;
       delete finalUpdate._markdownChanged;

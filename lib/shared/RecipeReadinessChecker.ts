@@ -34,15 +34,15 @@ const WHITELISTED_CATEGORIES = ['bootstrap', 'knowledge', 'general'];
  * @param {object} item  扁平字段对象（title, trigger, description …）
  * @returns {{ ready: boolean, missing: string[], suggestions: string[] }}
  */
-export function checkRecipeReadiness(item: any) {
+export function checkRecipeReadiness(item: Record<string, unknown>) {
   const validator = new UnifiedValidator();
   const result = validator.validate(item, {
     skipUniqueness: true, // readiness 检查不做去重
   });
 
   // 转换为旧格式: errors → missing 字段名, warnings → suggestions
-  const missing: any[] = [];
-  const suggestions: any[] = [];
+  const missing: string[] = [];
+  const suggestions: string[] = [];
 
   for (const error of result.errors) {
     // 从错误消息中提取字段名: "缺少必填字段: fieldName — rule"
@@ -63,9 +63,9 @@ export function checkRecipeReadiness(item: any) {
 /**
  * 从 Candidate 的 metadata 对象展开为扁平字段后检查 readiness。
  */
-export function checkReadinessFromCandidate(candidate: any) {
-  const meta = candidate.metadata || {};
-  const flat = {
+export function checkReadinessFromCandidate(candidate: Record<string, unknown>) {
+  const meta = (candidate.metadata || {}) as Record<string, unknown>;
+  const flat: Record<string, unknown> = {
     ...meta,
     code: candidate.code,
     language: candidate.language,

@@ -108,7 +108,11 @@ export class AgentEventBus extends EventEmitter {
    * @param {string} [opts.target] 目标 agentId
    * @param {string} [opts.correlationId] 关联 ID
    */
-  publish(type: any, payload: any = {}, opts: any = {}) {
+  publish(
+    type: string,
+    payload: Record<string, unknown> = {},
+    opts: { source?: string; target?: string; correlationId?: string } = {}
+  ) {
     this.#eventCount++;
     const event = {
       type,
@@ -128,8 +132,10 @@ export class AgentEventBus extends EventEmitter {
     for (const handler of handlers) {
       try {
         handler(event);
-      } catch (err: any) {
-        this.#logger.warn(`[AgentEventBus] Handler error on ${type}: ${err.message}`);
+      } catch (err: unknown) {
+        this.#logger.warn(
+          `[AgentEventBus] Handler error on ${type}: ${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
 
@@ -148,7 +154,7 @@ export class AgentEventBus extends EventEmitter {
    * @param {Function} handler 处理函数 (event) => void
    * @returns {Function} 取消订阅函数
    */
-  subscribe(type: any, handler: any) {
+  subscribe(type: string, handler: (event: Record<string, unknown>) => void) {
     if (!this.#subscriptions.has(type)) {
       this.#subscriptions.set(type, []);
     }
@@ -174,7 +180,11 @@ export class AgentEventBus extends EventEmitter {
    * @param {string} [opts.source] 发送者
    * @returns {Promise<AgentEvent>} 响应事件
    */
-  async request(requestType: any, payload: any = {}, opts: any = {}) {
+  async request(
+    requestType: string,
+    payload: Record<string, unknown> = {},
+    opts: { timeout?: number; source?: string } = {}
+  ) {
     const correlationId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const timeout = opts.timeout || 30_000;
 

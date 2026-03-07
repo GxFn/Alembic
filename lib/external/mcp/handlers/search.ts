@@ -11,6 +11,13 @@
  */
 
 import { envelope } from '../envelope.js';
+import type {
+  ByKindGroup,
+  McpContext,
+  SearchArgs,
+  SearchResultItem,
+  SlimSearchItem,
+} from './types.js';
 
 // ─── 工具函数 ────────────────────────────────────────────────
 
@@ -18,7 +25,7 @@ import { envelope } from '../envelope.js';
  * 获取 SearchEngine singleton（带 vectorStore + aiProvider）
  * 避免每次调用 new SearchEngine(db) —— 那样没有向量能力、每次重建索引
  */
-function getSearchEngine(ctx: any) {
+function getSearchEngine(ctx: McpContext) {
   try {
     return ctx.container.get('searchEngine');
   } catch {
@@ -30,7 +37,7 @@ function getSearchEngine(ctx: any) {
 /**
  * 降级创建 SearchEngine（仅在 container 无法提供时）
  */
-async function getFallbackEngine(ctx: any) {
+async function getFallbackEngine(ctx: McpContext) {
   const { SearchEngine } = await import('../../../service/search/SearchEngine.js');
   const db = ctx.container.get('database');
   return new SearchEngine(db);
@@ -39,11 +46,13 @@ async function getFallbackEngine(ctx: any) {
 /**
  * 根据 kind 参数过滤 items
  */
-function filterByKind(items: any, kind: any) {
+function filterByKind(items: SearchResultItem[], kind: string) {
   if (!kind || kind === 'all') {
     return items;
   }
-  return items.filter((it: any) => (it.kind || it.metadata?.kind || 'pattern') === kind);
+  return items.filter(
+    (it: SearchResultItem) => (it.kind || it.metadata?.kind || 'pattern') === kind
+  );
 }
 
 /**
@@ -53,7 +62,7 @@ function filterByKind(items: any, kind: any) {
  *       tags, usageCount, authorityScore, qualityScore, headers, moduleName, content(巨大)
  * 新增: actionHint (whenClause → doClause 一句话摘要)
  */
-function _slimSearchItem(item: any) {
+function _slimSearchItem(item: SearchResultItem): SlimSearchItem {
   const doText = item.doClause || '';
   const whenText = item.whenClause || '';
   const actionHint =
@@ -75,11 +84,12 @@ function _slimSearchItem(item: any) {
 /**
  * items → slim byKind 分组
  */
-function _slimGroupByKind(items: any) {
-  const byKind = { rule: [], pattern: [], fact: [] };
+function _slimGroupByKind(items: SlimSearchItem[]): ByKindGroup {
+  const byKind: ByKindGroup = { rule: [], pattern: [], fact: [] };
   for (const it of items) {
     const kind = it.kind || 'pattern';
-    ((byKind as Record<string, any>)[kind] || byKind.pattern).push(it);
+    const bucket = (byKind as unknown as Record<string, SlimSearchItem[]>)[kind] || byKind.pattern;
+    bucket.push(it);
   }
   return byKind;
 }
@@ -92,7 +102,7 @@ function _slimGroupByKind(items: any) {
  * mode=auto（默认）时，同时执行 BM25 + semantic，融合去重取分数最高者。
  * 支持 kind 过滤（rule/pattern/fact）和 byKind 自动分组。
  */
-export async function search(ctx: any, args: any) {
+export async function search(ctx: McpContext, args: SearchArgs) {
   const t0 = Date.now();
   const engine = getSearchEngine(ctx) || (await getFallbackEngine(ctx));
   const query = args.query;
@@ -148,7 +158,7 @@ export async function search(ctx: any, args: any) {
  *
  * 特色：byKind 分组、个性化推荐、会话连续性
  */
-export async function contextSearch(ctx: any, args: any) {
+export async function contextSearch(ctx: McpContext, args: SearchArgs) {
   const t0 = Date.now();
   const engine = getSearchEngine(ctx) || (await getFallbackEngine(ctx));
   const limit = args.limit ?? 5;
@@ -199,7 +209,7 @@ export async function contextSearch(ctx: any, args: any) {
  * - search 对模糊查询更好（BM25 词频权重）
  * - semantic_search 对自然语言意图最好（向量相似度）
  */
-export async function keywordSearch(ctx: any, args: any) {
+export async function keywordSearch(ctx: McpContext, args: SearchArgs) {
   const t0 = Date.now();
   const engine = getSearchEngine(ctx) || (await getFallbackEngine(ctx));
   const query = args.query;
@@ -246,7 +256,7 @@ export async function keywordSearch(ctx: any, args: any) {
  *
  * kind 过滤 + byKind 分组一致性。
  */
-export async function semanticSearch(ctx: any, args: any) {
+export async function semanticSearch(ctx: McpContext, args: SearchArgs) {
   const t0 = Date.now();
   const engine = getSearchEngine(ctx) || (await getFallbackEngine(ctx));
   const query = args.query;

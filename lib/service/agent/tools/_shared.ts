@@ -4,6 +4,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,7 +34,14 @@ export const DIMENSION_DISPLAY_GROUP = {
  * @param {object} [logger]
  * @returns {{ status: string, reason: string } | null} 不合法返回 rejected，合法返回 null
  */
-export function checkDimensionType(dimensionMeta: any, params: any, logger: any) {
+export function checkDimensionType(
+  dimensionMeta: DimensionMeta,
+  params: Record<string, unknown>,
+  logger?: {
+    info(msg: string, ...args: unknown[]): void;
+    warn(msg: string, ...args: unknown[]): void;
+  } | null
+) {
   // 1. Skill-only 维度不允许提交 Candidate
   if (dimensionMeta.outputType === 'skill') {
     logger?.info(
@@ -48,14 +56,56 @@ export function checkDimensionType(dimensionMeta: any, params: any, logger: any)
   // 2. knowledgeType 校验 — 不在允许列表时自动修正为第一个允许类型
   const allowed = dimensionMeta.allowedKnowledgeTypes || [];
   if (allowed.length > 0 && params.knowledgeType) {
-    if (!allowed.includes(params.knowledgeType)) {
+    if (!allowed.includes(params.knowledgeType as string)) {
       const corrected = allowed[0];
       logger?.warn(
-        `[submit_knowledge] knowledgeType "${params.knowledgeType}" → "${corrected}" (auto-corrected for dimension "${dimensionMeta.id}")`
+        `[submit_knowledge] knowledgeType "${params.knowledgeType as string}" → "${corrected}" (auto-corrected for dimension "${dimensionMeta.id}")`
       );
       params.knowledgeType = corrected;
     }
   }
 
   return null;
+}
+
+// ─── Shared tool handler types ─────────────────────────────
+
+/** DI container service lookup (returns dynamic service instances) */
+export interface ServiceContainer {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DI container returns dynamic services
+  get(name: string): any;
+}
+
+/** Dimension metadata injected by bootstrap pipeline */
+export interface DimensionMeta {
+  id: string;
+  outputType?: string;
+  allowedKnowledgeTypes?: string[];
+}
+
+/** Common tool handler context provided by ToolRegistry.execute() */
+export interface ToolHandlerContext {
+  container: ServiceContainer;
+  projectRoot: string;
+  logger?: {
+    info(msg: string, ...args: unknown[]): void;
+    debug(msg: string, ...args: unknown[]): void;
+    warn(msg: string, ...args: unknown[]): void;
+    error?(msg: string, ...args: unknown[]): void;
+  };
+  source?: string;
+  _dimensionMeta?: DimensionMeta;
+  _projectLanguage?: string;
+  _validator?: UnifiedValidator;
+  _submittedTitles?: Set<string>;
+  _submittedPatterns?: Set<string>;
+  _sessionToolCalls?: Array<{ tool: string; params?: Record<string, unknown> }>;
+  [key: string]: unknown;
+}
+
+/** Tool schema entry returned by ToolRegistry.getToolSchemas() */
+export interface ToolSchemaEntry {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
 }

@@ -12,7 +12,7 @@ import { getServiceContainer } from '../lib/injection/ServiceContainer.js';
 
 async function main() {
   const logger = Logger.getInstance();
-  const port = process.env.PORT || 3000;
+  const port = Number(process.env.PORT) || 3000;
   const host = process.env.HOST || 'localhost';
 
   try {

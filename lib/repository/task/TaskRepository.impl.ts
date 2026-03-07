@@ -1,5 +1,65 @@
+import type { Database, Statement } from 'better-sqlite3';
+import type { Logger as WinstonLogger } from 'winston';
 import { Task } from '../../domain/task/Task.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+
+/** Row shape returned by task_dependencies queries */
+interface TaskDependencyRow {
+  task_id: string;
+  depends_on_id: string;
+  dep_type: string;
+  created_at: number;
+  created_by: string;
+}
+
+/** Row shape returned by task statistics query */
+interface TaskStatsRow {
+  total: number;
+  open: number;
+  in_progress: number;
+  closed: number;
+  deferred: number;
+  pinned: number;
+}
+
+/** Filters accepted by findAll */
+interface TaskFilters {
+  status?: string;
+  taskType?: string;
+  assignee?: string;
+  parentId?: string;
+}
+
+/** Options accepted by findAll */
+interface TaskFindOptions {
+  limit?: number;
+  offset?: number;
+  orderBy?: string;
+}
+
+/** Column mapping for update fields */
+interface TaskUpdateFields {
+  status?: string;
+  priority?: number;
+  assignee?: string;
+  notes?: string;
+  description?: string;
+  design?: string;
+  acceptance?: string;
+  closeReason?: string;
+  closedAt?: number | null;
+  updatedAt?: number;
+  failCount?: number;
+  lastFailReason?: string;
+  childSeq?: number;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** Database connection wrapper interface */
+interface DatabaseWrapper {
+  getDb(): Database;
+}
 
 /**
  * TaskRepositoryImpl — 任务实体 SQLite 持久化
@@ -8,25 +68,25 @@ import Logger from '../../infrastructure/logging/Logger.js';
  * DB 列名 snake_case，实体属性 camelCase—— Task.fromRow() / _entityToRow() 负责映射。
  */
 export class TaskRepositoryImpl {
-  _addDepStmt: any;
-  _deleteStmt: any;
-  _findByHashStmt: any;
-  _findByIdStmt: any;
-  _getBlockersStmt: any;
-  _getDependentsStmt: any;
-  _getDepsStmt: any;
-  _insertStmt: any;
-  _logEventStmt: any;
-  _reachableStmt: any;
-  _removeDepStmt: any;
-  _statsStmt: any;
-  _updateFieldsStmt: any;
-  db: any;
-  logger: any;
+  _addDepStmt!: Statement;
+  _deleteStmt!: Statement;
+  _findByHashStmt!: Statement;
+  _findByIdStmt!: Statement;
+  _getBlockersStmt!: Statement;
+  _getDependentsStmt!: Statement;
+  _getDepsStmt!: Statement;
+  _insertStmt!: Statement;
+  _logEventStmt!: Statement;
+  _reachableStmt!: Statement;
+  _removeDepStmt!: Statement;
+  _statsStmt!: Statement;
+  _updateFieldsStmt: Statement | null = null;
+  db: Database;
+  logger: WinstonLogger;
   /**
    * @param {import('../../infrastructure/database/DatabaseConnection.js').default} database
    */
-  constructor(database: any) {
+  constructor(database: DatabaseWrapper) {
     this.db = database.getDb();
     this.logger = Logger.getInstance();
     this._prepareStatements();
@@ -136,10 +196,10 @@ export class TaskRepositoryImpl {
    * @param {Task} task
    * @returns {Task}
    */
-  create(task: any) {
+  create(task: Task) {
     const row = this._entityToRow(task);
     this._insertStmt.run(row);
-    return this.findById(task.id);
+    return this.findById(task.id!);
   }
 
   /**
@@ -147,8 +207,8 @@ export class TaskRepositoryImpl {
    * @param {string} id
    * @returns {Task|null}
    */
-  findById(id: any) {
-    const row = this._findByIdStmt.get(id);
+  findById(id: string) {
+    const row = this._findByIdStmt.get(id) as Record<string, unknown> | undefined;
     return row ? Task.fromRow(row) : null;
   }
 
@@ -157,11 +217,11 @@ export class TaskRepositoryImpl {
    * @param {string} hash
    * @returns {Task|null}
    */
-  findByContentHash(hash: any) {
+  findByContentHash(hash: string | null) {
     if (!hash) {
       return null;
     }
-    const row = this._findByHashStmt.get(hash);
+    const row = this._findByHashStmt.get(hash) as Record<string, unknown> | undefined;
     return row ? Task.fromRow(row) : null;
   }
 
@@ -171,8 +231,8 @@ export class TaskRepositoryImpl {
    * @param {object} fields 部分字段 (camelCase)
    * @returns {Task}
    */
-  update(id: any, fields: any) {
-    const columnMap = {
+  update(id: string, fields: TaskUpdateFields) {
+    const columnMap: Record<string, string> = {
       status: 'status',
       priority: 'priority',
       assignee: 'assignee',
@@ -190,15 +250,15 @@ export class TaskRepositoryImpl {
     };
 
     const setClauses: string[] = [];
-    const values: any[] = [];
+    const values: (string | number | null)[] = [];
 
     for (const [key, value] of Object.entries(fields)) {
-      const col = (columnMap as Record<string, any>)[key];
+      const col = columnMap[key];
       if (!col) {
         continue;
       }
       setClauses.push(`${col} = ?`);
-      values.push(key === 'metadata' ? JSON.stringify(value) : value);
+      values.push(key === 'metadata' ? JSON.stringify(value) : (value as string | number | null));
     }
 
     if (setClauses.length === 0) {
@@ -223,7 +283,7 @@ export class TaskRepositoryImpl {
    * @param {string} id
    * @returns {boolean}
    */
-  delete(id: any) {
+  delete(id: string) {
     const result = this._deleteStmt.run(id);
     return result.changes > 0;
   }
@@ -234,9 +294,9 @@ export class TaskRepositoryImpl {
    * @param {object} options - { limit, offset, orderBy }
    * @returns {Task[]}
    */
-  findAll(filters: any = {}, options: any = {}) {
-    const conditions: any[] = [];
-    const params: any | number[] = [];
+  findAll(filters: TaskFilters = {}, options: TaskFindOptions = {}) {
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
 
     if (filters.status) {
       conditions.push('status = ?');
@@ -264,7 +324,7 @@ export class TaskRepositoryImpl {
     params.push(limit, offset);
 
     const rows = this.db.prepare(sql).all(...params);
-    return rows.map((r: any) => Task.fromRow(r));
+    return rows.map((r: unknown) => Task.fromRow(r as Record<string, unknown>));
   }
 
   // ═══ 依赖管理 ═══════════════════════════════════════
@@ -272,36 +332,38 @@ export class TaskRepositoryImpl {
   /**
    * 添加依赖
    */
-  addDependency(taskId: any, dependsOnId: any, depType: any) {
+  addDependency(taskId: string, dependsOnId: string, depType: string) {
     this._addDepStmt.run(taskId, dependsOnId, depType, Math.floor(Date.now() / 1000));
   }
 
   /**
    * 删除依赖
    */
-  removeDependency(taskId: any, dependsOnId: any, depType: any) {
+  removeDependency(taskId: string, dependsOnId: string, depType: string) {
     this._removeDepStmt.run(taskId, dependsOnId, depType);
   }
 
   /**
    * 获取任务的所有依赖
    */
-  getDependencies(taskId: any) {
-    return this._getDepsStmt.all(taskId);
+  getDependencies(taskId: string): TaskDependencyRow[] {
+    return this._getDepsStmt.all(taskId) as TaskDependencyRow[];
   }
 
   /**
    * 获取依赖此任务的所有任务
    */
-  getDependents(dependsOnId: any) {
-    return this._getDependentsStmt.all(dependsOnId);
+  getDependents(dependsOnId: string): TaskDependencyRow[] {
+    return this._getDependentsStmt.all(dependsOnId) as TaskDependencyRow[];
   }
 
   /**
    * 获取阻塞某任务的所有任务（含任务详情）
    */
-  getBlockers(taskId: any) {
-    return this._getBlockersStmt.all(taskId).map((r: any) => Task.fromRow(r));
+  getBlockers(taskId: string) {
+    return this._getBlockersStmt
+      .all(taskId)
+      .map((r: unknown) => Task.fromRow(r as Record<string, unknown>));
   }
 
   /**
@@ -310,7 +372,7 @@ export class TaskRepositoryImpl {
    * @param {string} toId
    * @returns {boolean}
    */
-  hasReachablePath(fromId: any, toId: any) {
+  hasReachablePath(fromId: string, toId: string) {
     const row = this._reachableStmt.get(fromId, toId);
     return !!row;
   }
@@ -322,7 +384,7 @@ export class TaskRepositoryImpl {
    * @param {Function} fn
    * @returns {*}
    */
-  inTransaction(fn: any) {
+  inTransaction<T>(fn: () => T): T {
     const txn = this.db.transaction(fn);
     return txn();
   }
@@ -333,7 +395,7 @@ export class TaskRepositoryImpl {
    * 获取任务统计
    */
   getStatistics() {
-    const row = this._statsStmt.get();
+    const row = this._statsStmt.get() as TaskStatsRow;
     return {
       total: row.total || 0,
       open: row.open || 0,
@@ -350,11 +412,11 @@ export class TaskRepositoryImpl {
    * 记录任务事件
    */
   logEvent(
-    taskId: any,
-    eventType: any,
-    oldValue = null,
-    newValue = null,
-    comment = null,
+    taskId: string,
+    eventType: string,
+    oldValue: string | null = null,
+    newValue: string | null = null,
+    comment: string | null = null,
     actor = 'agent'
   ) {
     this._logEventStmt.run(
@@ -375,7 +437,7 @@ export class TaskRepositoryImpl {
    * @param {Task} task
    * @returns {object}
    */
-  _entityToRow(task: any) {
+  _entityToRow(task: Task) {
     return {
       id: task.id,
       parent_id: task.parentId || null,
@@ -420,14 +482,14 @@ const ALLOWED_DIRECTIONS = new Set(['ASC', 'DESC']);
  * @param {string} [orderBy]
  * @returns {string}
  */
-function _sanitizeOrderBy(orderBy: any) {
+function _sanitizeOrderBy(orderBy?: string): string {
   if (!orderBy) {
     return 'priority ASC, created_at ASC';
   }
   return (
     orderBy
       .split(',')
-      .map((clause: any) => {
+      .map((clause: string) => {
         const parts = clause.trim().split(/\s+/);
         const field = parts[0];
         if (!ALLOWED_ORDER_FIELDS.has(field)) {

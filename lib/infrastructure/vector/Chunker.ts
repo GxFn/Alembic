@@ -43,7 +43,16 @@ const CODE_LANGUAGES = new Set([
  * @param {object} options - { strategy, maxChunkTokens, overlapTokens, useAST }
  * @returns {Array<{ content: string, metadata: object }>}
  */
-export function chunk(content: any, metadata: any = {}, options: any = {}) {
+export function chunk(
+  content: string,
+  metadata: Record<string, unknown> = {},
+  options: {
+    strategy?: string;
+    maxChunkTokens?: number;
+    overlapTokens?: number;
+    useAST?: boolean;
+  } = {}
+) {
   const {
     strategy = 'auto',
     maxChunkTokens = DEFAULT_MAX_CHUNK_TOKENS,
@@ -56,7 +65,7 @@ export function chunk(content: any, metadata: any = {}, options: any = {}) {
   }
 
   const tokens = estimateTokens(content);
-  const language = metadata.language || '';
+  const language = (metadata.language as string) || '';
 
   // 选择策略
   let selectedStrategy = strategy;
@@ -101,11 +110,15 @@ export function chunk(content: any, metadata: any = {}, options: any = {}) {
 /**
  * 按 Markdown 标题分段
  */
-function chunkBySection(content: any, metadata: any, maxChunkTokens: any) {
+function chunkBySection(
+  content: string,
+  metadata: Record<string, unknown>,
+  maxChunkTokens: number
+) {
   const sections: { title: string; content: string }[] = [];
   const lines = content.split('\n');
   let currentTitle = '';
-  let currentContent: any[] = [];
+  let currentContent: string[] = [];
 
   for (const line of lines) {
     if (/^#{1,3}\s+/.test(line)) {
@@ -125,15 +138,15 @@ function chunkBySection(content: any, metadata: any, maxChunkTokens: any) {
   }
 
   // 合并过小段落
-  const merged: any[] = [];
-  let buffer: any = null;
+  const merged: { title: string; content: string }[] = [];
+  let buffer: { title: string; content: string } | null = null;
 
   for (const section of sections) {
     if (!buffer) {
       buffer = section;
       continue;
     }
-    const combined = `${buffer.content}\n${section.content}`;
+    const combined: string = `${buffer.content}\n${section.content}`;
     if (estimateTokens(combined) <= maxChunkTokens) {
       buffer = { title: buffer.title, content: combined };
     } else {
@@ -146,7 +159,7 @@ function chunkBySection(content: any, metadata: any, maxChunkTokens: any) {
   }
 
   // 对超大段落做 fixed 分割
-  const results: { content: any; metadata: any }[] = [];
+  const results: { content: string; metadata: Record<string, unknown> }[] = [];
   for (let i = 0; i < merged.length; i++) {
     const section = merged[i];
     if (estimateTokens(section.content) > maxChunkTokens) {
@@ -180,10 +193,15 @@ function chunkBySection(content: any, metadata: any, maxChunkTokens: any) {
 /**
  * 固定大小分块（带重叠）
  */
-function chunkFixed(content: any, metadata: any, maxChunkTokens: any, overlapTokens: any) {
+function chunkFixed(
+  content: string,
+  metadata: Record<string, unknown>,
+  maxChunkTokens: number,
+  overlapTokens: number
+) {
   const maxChars = maxChunkTokens * 4;
   const overlapChars = overlapTokens * 4;
-  const results: { content: any; metadata: any }[] = [];
+  const results: { content: string; metadata: Record<string, unknown> }[] = [];
 
   let start = 0;
   while (start < content.length) {

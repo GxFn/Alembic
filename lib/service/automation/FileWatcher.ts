@@ -82,16 +82,16 @@ const DEBOUNCE_DELAY = FILE_WATCHER.DEBOUNCE_DELAY_MS;
 /* ────────── FileWatcher ────────── */
 
 export class FileWatcher {
-  _debounceTimers: any;
-  _timeoutHead: any;
-  _timeoutLink: any;
-  _watcher: any;
-  exts: any;
-  onEvent: any;
-  pathPrefix: any;
-  projectRoot: any;
-  quiet: any;
-  specPath: any;
+  _debounceTimers: Map<string, ReturnType<typeof setTimeout>>;
+  _timeoutHead: ReturnType<typeof setTimeout> | undefined;
+  _timeoutLink: ReturnType<typeof setTimeout> | undefined;
+  _watcher: import('chokidar').FSWatcher | null;
+  exts: string[] | null;
+  onEvent: ((event: string, path: string) => void) | null;
+  pathPrefix: string | null;
+  projectRoot: string;
+  quiet: boolean;
+  specPath: string;
   /**
    * @param {string} specPath  boxspec.json 绝对路径
    * @param {string} projectRoot 项目根目录
@@ -101,7 +101,16 @@ export class FileWatcher {
    * @param {string} [opts.pathPrefix] 可选路径前缀过滤
    * @param {Function} [opts.onEvent] 可选事件回调
    */
-  constructor(specPath: any, projectRoot: any, opts: any = {}) {
+  constructor(
+    specPath: string,
+    projectRoot: string,
+    opts: {
+      quiet?: boolean;
+      pathPrefix?: string;
+      onEvent?: ((event: string, path: string) => void) | null;
+      exts?: string[];
+    } = {}
+  ) {
     this.specPath = specPath;
     this.projectRoot = projectRoot;
     this.quiet = !!opts.quiet;
@@ -110,8 +119,8 @@ export class FileWatcher {
     this.exts = opts.exts || null;
     this._debounceTimers = new Map();
     this._watcher = null;
-    this._timeoutLink = null;
-    this._timeoutHead = null;
+    this._timeoutLink = undefined;
+    this._timeoutHead = undefined;
   }
 
   /**
@@ -120,7 +129,7 @@ export class FileWatcher {
   start() {
     const watchRoot = this.projectRoot;
     const filePattern = this.exts
-      ? this.exts.map((e: any) => `**/*${e.startsWith('.') ? e : `.${e}`}`)
+      ? this.exts.map((e: string) => `**/*${e.startsWith('.') ? e : `.${e}`}`)
       : DEFAULT_FILE_PATTERN;
 
     if (!this.quiet) {
@@ -140,7 +149,7 @@ export class FileWatcher {
       binaryInterval: FILE_WATCHER.BINARY_INTERVAL_MS,
     });
 
-    const handleEvent = (relativePath: any) => {
+    const handleEvent = (relativePath: string) => {
       const fullPath = join(watchRoot, relativePath);
 
       if (process.env.ASD_DEBUG === '1') {
@@ -157,7 +166,7 @@ export class FileWatcher {
 
     this._watcher.on('change', handleEvent);
     this._watcher.on('add', handleEvent);
-    this._watcher.on('error', (err: any) => console.error('文件监听错误:', err.message));
+    this._watcher.on('error', (err: Error) => console.error('文件监听错误:', err.message));
     this._watcher.on('ready', () => {
       if (!this.quiet) {
       }
@@ -186,17 +195,17 @@ export class FileWatcher {
     // 清理 handler 级别的延时定时器
     if (this._timeoutLink) {
       clearTimeout(this._timeoutLink);
-      this._timeoutLink = null;
+      this._timeoutLink = undefined;
     }
     if (this._timeoutHead) {
       clearTimeout(this._timeoutHead);
-      this._timeoutHead = null;
+      this._timeoutHead = undefined;
     }
   }
 
   /* ────────── 内部：文件处理（分派到 handlers） ────────── */
 
-  async _processFile(fullPath: any, relativePath: any) {
+  async _processFile(fullPath: string, relativePath: string) {
     try {
       accessSync(fullPath);
       const stat = statSync(fullPath);
@@ -210,8 +219,8 @@ export class FileWatcher {
     let data;
     try {
       data = readFileSync(fullPath, 'utf8');
-    } catch (err: any) {
-      console.error(`❌ 读取文件失败: ${fullPath}`, err.message);
+    } catch (err: unknown) {
+      console.error(`❌ 读取文件失败: ${fullPath}`, (err as Error).message);
       return;
     }
 
@@ -253,7 +262,7 @@ export class FileWatcher {
     if (triggers.alinkLine) {
       clearTimeout(this._timeoutLink);
       this._timeoutLink = setTimeout(() => {
-        handleAlink(triggers.alinkLine).catch((err) => {
+        handleAlink(triggers.alinkLine!).catch((err) => {
           console.warn(`[Watcher] alink handler failed: ${err.message}`);
         });
       }, DEBOUNCE_DELAY);
@@ -273,7 +282,7 @@ export class FileWatcher {
           handleHeader(
             this,
             fullPath,
-            triggers.headerLine,
+            triggers.headerLine!,
             triggers.importArray,
             triggers.isSwift
           ).catch((err) => {
@@ -289,11 +298,11 @@ export class FileWatcher {
   /**
    * 追加候选项（通过 ServiceContainer 或 HTTP API）
    */
-  async _appendCandidates(items: any, source: any) {
+  async _appendCandidates(items: Record<string, unknown>[], source: string) {
     // 过滤空 title / 空 code 的无效条目
-    const validItems = items.filter((item: any) => {
-      const title = (item.title || '').trim();
-      const code = (item.code || '').trim();
+    const validItems = items.filter((item: Record<string, unknown>) => {
+      const title = String(item.title || '').trim();
+      const code = String(item.code || '').trim();
       if (!title || !code) {
         console.warn(
           `[Watcher] 跳过无效候选: title=${JSON.stringify(title)}, code length=${code.length}`
@@ -307,7 +316,7 @@ export class FileWatcher {
     }
 
     // 优先 ServiceContainer
-    let serviceError: any = null;
+    let serviceError: unknown = null;
     try {
       const { ServiceContainer } = await import('../../injection/ServiceContainer.js');
       const container = ServiceContainer.getInstance();
@@ -333,9 +342,9 @@ export class FileWatcher {
         );
       }
       return;
-    } catch (err: any) {
+    } catch (err: unknown) {
       serviceError = err;
-      console.warn('[Watcher] KnowledgeService 创建失败，尝试 HTTP 回退:', err.message);
+      console.warn('[Watcher] KnowledgeService 创建失败，尝试 HTTP 回退:', (err as Error).message);
     }
 
     // 回退：HTTP API（使用 knowledge 端点而非 candidates）
@@ -362,8 +371,8 @@ export class FileWatcher {
         }
       }
       return;
-    } catch (err: any) {
-      console.warn(`[Watcher] HTTP 候选提交也失败: ${err.message}`);
+    } catch (err: unknown) {
+      console.warn(`[Watcher] HTTP 候选提交也失败: ${(err as Error).message}`);
     }
 
     // 两条路径都失败 → 抛出原始错误
@@ -373,8 +382,8 @@ export class FileWatcher {
   /**
    * 为候选解析头文件
    */
-  async _resolveHeadersIfNeeded(item: any, relativePath: any, text: any) {
-    if (relativePath && (!item.headers || item.headers.length === 0)) {
+  async _resolveHeadersIfNeeded(item: Record<string, unknown>, relativePath: string, text: string) {
+    if (relativePath && (!item.headers || !(item.headers as string[]).length)) {
       try {
         const HeaderResolver = await import('../../infrastructure/paths/HeaderResolver.js');
         const resolved = await HeaderResolver.resolveHeadersForText(
@@ -396,7 +405,7 @@ export class FileWatcher {
   /**
    * 打开 Dashboard 页面
    */
-  _openDashboard(path: any) {
+  _openDashboard(path: string) {
     const base = process.env.ASD_DASHBOARD_URL || 'http://localhost:3000';
     const url = `${base}${path}`;
     import('../../infrastructure/external/OpenBrowser.js')
@@ -407,7 +416,7 @@ export class FileWatcher {
   /**
    * macOS 通知
    */
-  _notify(msg: any) {
+  _notify(msg: string) {
     import('../../infrastructure/external/NativeUi.js')
       .then((NU) => NU.notify(msg))
       .catch(() => {});
@@ -416,7 +425,7 @@ export class FileWatcher {
   /**
    * 防抖
    */
-  _debounce(key: any, fn: any) {
+  _debounce(key: string, fn: () => void) {
     if (this._debounceTimers.has(key)) {
       clearTimeout(this._debounceTimers.get(key));
     }

@@ -39,9 +39,9 @@ function isFocusCheckEnabled() {
 /* ────────── SaveEventFilter ────────── */
 
 class SaveEventFilter {
-  _cleanupInterval: any;
-  _contentHashes: any;
-  _selfWrites: any;
+  _cleanupInterval: ReturnType<typeof setInterval>;
+  _contentHashes: Map<string, string>;
+  _selfWrites: Map<string, number>;
   constructor() {
     /** @type {Map<string, number>} filePath → 最后一次 self-write 的时间戳 */
     this._selfWrites = new Map();
@@ -62,7 +62,7 @@ class SaveEventFilter {
    *
    * @param {string} filePath 绝对路径
    */
-  markSelfWrite(filePath: any) {
+  markSelfWrite(filePath: string) {
     this._selfWrites.set(filePath, Date.now());
   }
 
@@ -73,7 +73,7 @@ class SaveEventFilter {
    * @param {string} content  文件当前的完整内容
    * @returns {{ process: boolean, reason: string }}
    */
-  shouldProcess(filePath: any, content: any) {
+  shouldProcess(filePath: string, content: string) {
     if (!isFilterEnabled()) {
       return { process: true, reason: 'filter-disabled' };
     }
@@ -114,7 +114,7 @@ class SaveEventFilter {
    * @param {string} filePath 绝对路径
    * @param {string} content 处理后的文件内容
    */
-  updateHash(filePath: any, content: any) {
+  updateHash(filePath: string, content: string) {
     this._contentHashes.set(filePath, this._hash(content));
   }
 
@@ -125,7 +125,7 @@ class SaveEventFilter {
    * @param {string} filePath 绝对路径
    * @param {string} newContent 即将写入的新内容
    */
-  markWrite(filePath: any, newContent: any) {
+  markWrite(filePath: string, newContent: string) {
     this.markSelfWrite(filePath);
     this._contentHashes.set(filePath, this._hash(newContent));
   }
@@ -133,14 +133,14 @@ class SaveEventFilter {
   /**
    * 清除某文件的所有状态（通常不需要调用）
    */
-  clear(filePath: any) {
+  clear(filePath: string) {
     this._selfWrites.delete(filePath);
     this._contentHashes.delete(filePath);
   }
 
   /* ────────── 内部方法 ────────── */
 
-  _hash(content: any) {
+  _hash(content: string) {
     return createHash('md5').update(content).digest('hex');
   }
 

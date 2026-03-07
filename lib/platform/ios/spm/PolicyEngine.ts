@@ -3,6 +3,25 @@
  * 检查循环依赖、反向依赖 (违反分层架构原则)、方针约束
  */
 
+import type { DependencyGraph } from './DependencyGraph.js';
+
+/** 策略检查配置 */
+interface PolicyConfig {
+  layerOrder?: string[];
+}
+
+/** 策略违规记录 */
+interface PolicyViolation {
+  type: string;
+  severity: string;
+  message: string;
+  nodes?: string[];
+  from?: string;
+  to?: string;
+  fromLayer?: number;
+  toLayer?: number;
+}
+
 export class PolicyEngine {
   /**
    * 全面策略检查
@@ -10,8 +29,8 @@ export class PolicyEngine {
    * @param {{ layerOrder?: string[] }} config - layerOrder 定义分层顺序，低层不应依赖高层
    * @returns {{ passed: boolean, violations: object[] }}
    */
-  check(graph: any, config: any = {}) {
-    const violations: any[] = [];
+  check(graph: DependencyGraph, config: PolicyConfig = {}) {
+    const violations: PolicyViolation[] = [];
 
     // 1. 检查循环依赖
     const cycles = graph.detectCycles();
@@ -26,8 +45,8 @@ export class PolicyEngine {
 
     // 2. 检查反向依赖 (低层依赖高层)
     if (config.layerOrder && config.layerOrder.length > 0) {
-      const layerIndex = new Map();
-      config.layerOrder.forEach((layer: any, idx: any) => layerIndex.set(layer, idx));
+      const layerIndex = new Map<string, number>();
+      config.layerOrder.forEach((layer: string, idx: number) => layerIndex.set(layer, idx));
 
       for (const node of graph.getNodes()) {
         const nodeLayer = this.#findLayer(node, layerIndex);
@@ -69,7 +88,7 @@ export class PolicyEngine {
    * @param {string} to
    * @returns {{ allowed: boolean, reason?: string }}
    */
-  canAddDependency(graph: any, from: any, to: any) {
+  canAddDependency(graph: DependencyGraph, from: string, to: string) {
     // 检查是否会导致循环
     if (graph.isReachable(to, from)) {
       return { allowed: false, reason: `添加 ${from} → ${to} 会导致循环依赖` };
@@ -79,7 +98,7 @@ export class PolicyEngine {
 
   // ─── 私有 ─────────────────────────────────────────────
 
-  #findLayer(nodeName: any, layerIndex: any) {
+  #findLayer(nodeName: string, layerIndex: Map<string, number>) {
     // 尝试精确匹配或前缀匹配
     for (const [layer, idx] of layerIndex) {
       if (nodeName === layer || nodeName.startsWith(layer)) {

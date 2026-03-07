@@ -12,12 +12,33 @@
  * @param {string}  [opts.errorCode]
  * @returns {object} 标准化响应对象
  */
-export function envelope({ success, data = null, message = '', meta = {}, errorCode = null }: any) {
-  const respTime =
-    typeof (meta as any).responseTimeMs === 'number' ? (meta as any).responseTimeMs : undefined;
-  const tool = typeof (meta as any).tool === 'string' ? (meta as any).tool : undefined;
-  const source = typeof (meta as any).source === 'string' ? (meta as any).source : undefined;
-  const version = typeof (meta as any).version === 'string' ? (meta as any).version : '2.0.0';
+export interface EnvelopeMeta {
+  responseTimeMs?: number;
+  tool?: string;
+  source?: string;
+  version?: string;
+  [key: string]: unknown;
+}
+
+export interface EnvelopeOptions<T = unknown> {
+  success: boolean;
+  data?: T | null;
+  message?: string;
+  meta?: EnvelopeMeta;
+  errorCode?: string | null;
+}
+
+export function envelope<T = unknown>({
+  success,
+  data = null,
+  message = '',
+  meta = {},
+  errorCode = null,
+}: EnvelopeOptions<T>) {
+  const respTime = typeof meta.responseTimeMs === 'number' ? meta.responseTimeMs : undefined;
+  const tool = typeof meta.tool === 'string' ? meta.tool : undefined;
+  const source = typeof meta.source === 'string' ? meta.source : undefined;
+  const version = typeof meta.version === 'string' ? meta.version : '2.0.0';
 
   return {
     success: Boolean(success),

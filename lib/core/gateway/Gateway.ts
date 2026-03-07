@@ -173,13 +173,20 @@ export class Gateway extends EventEmitter {
         data: result,
         duration,
       };
-    } catch (error: any) {
-      await this.auditFailure(context, error);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const errLike = error as { code?: string; statusCode?: number } | undefined;
+
+      await this.auditFailure(context, {
+        message: errMsg,
+        code: errLike?.code,
+        statusCode: errLike?.statusCode,
+      });
 
       const duration = Date.now() - startTime;
       this.logger.error('Gateway: Request failed', {
         requestId,
-        error: error.message,
+        error: errMsg,
         duration: `${duration}ms`,
       });
 
@@ -187,9 +194,9 @@ export class Gateway extends EventEmitter {
         success: false,
         requestId,
         error: {
-          message: error.message,
-          code: error.code || 'INTERNAL_ERROR',
-          statusCode: error.statusCode || 500,
+          message: errMsg,
+          code: errLike?.code || 'INTERNAL_ERROR',
+          statusCode: errLike?.statusCode || 500,
         },
         duration,
       };
@@ -220,15 +227,22 @@ export class Gateway extends EventEmitter {
 
       await this.auditSuccess(context, { checkOnly: true });
       return { success: true, requestId };
-    } catch (error: any) {
-      await this.auditFailure(context, error);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      const errLike = error as { code?: string; statusCode?: number } | undefined;
+
+      await this.auditFailure(context, {
+        message: errMsg,
+        code: errLike?.code,
+        statusCode: errLike?.statusCode,
+      });
       return {
         success: false,
         requestId,
         error: {
-          message: error.message,
-          code: error.code || 'INTERNAL_ERROR',
-          statusCode: error.statusCode || 500,
+          message: errMsg,
+          code: errLike?.code || 'INTERNAL_ERROR',
+          statusCode: errLike?.statusCode || 500,
         },
       };
     }

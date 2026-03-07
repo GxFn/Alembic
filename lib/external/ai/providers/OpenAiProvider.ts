@@ -8,21 +8,31 @@
  */
 
 import Logger from '../../../infrastructure/logging/Logger.js';
-import { AiProvider } from '../AiProvider.js';
+import {
+  AiProvider,
+  type AiProviderConfig,
+  type ApiResponse,
+  type ChatContext,
+  type ChatWithToolsOptions,
+  type ChatWithToolsResult,
+  type StructuredOutputOptions,
+  type ToolSchema,
+  type UnifiedMessage,
+} from '../AiProvider.js';
 
 const OPENAI_BASE = 'https://api.openai.com/v1';
 
 export class OpenAiProvider extends AiProvider {
-  embedModel: any;
+  embedModel: string;
 
-  constructor(config: any = {}) {
+  constructor(config: AiProviderConfig = {}) {
     super(config);
     this.name = config.name || 'openai';
     this.model = config.model || 'gpt-4o-mini';
     this.apiKey = config.apiKey || process.env.ASD_OPENAI_API_KEY || '';
     this.baseUrl = config.baseUrl || OPENAI_BASE;
     this.embedModel = config.embedModel || 'text-embedding-3-small';
-    this.logger = Logger.getInstance();
+    this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
   }
 
   /**
@@ -33,10 +43,10 @@ export class OpenAiProvider extends AiProvider {
     return true;
   }
 
-  async chat(prompt: any, context: any = {}) {
+  async chat(prompt: string, context: ChatContext = {}) {
     return this._withRetry(async () => {
       const { history = [], temperature = 0.7, maxTokens = 4096 } = context;
-      const messages: { role: any; content: any } | { role: string; content: any }[] = [];
+      const messages: Array<{ role: string; content: string }> = [];
 
       for (const h of history) {
         messages.push({ role: h.role, content: h.content });
@@ -65,40 +75,49 @@ export class OpenAiProvider extends AiProvider {
    * @param {object} opts 统一参数
    * @returns {Promise<{text: string|null, functionCalls: Array<{id, name, args}>|null}>}
    */
-  async chatWithTools(prompt: any, opts: any = {}) {
+  async chatWithTools(
+    prompt: string,
+    opts: ChatWithToolsOptions = {}
+  ): Promise<ChatWithToolsResult> {
     return this._withRetry(async () => {
       const {
-        messages: unifiedMessages,
-        toolSchemas,
+        messages: rawMessages,
+        toolSchemas: rawToolSchemas,
         toolChoice = 'auto',
         systemPrompt,
         temperature = 0.7,
         maxTokens = 4096,
       } = opts;
+      const unifiedMessages = rawMessages as UnifiedMessage[] | undefined;
+      const toolSchemas = rawToolSchemas as ToolSchema[] | undefined;
 
       // 统一消息 → OpenAI Chat Completions messages
-      const messages: any[] = [];
+      const messages: Array<Record<string, unknown>> = [];
       if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
       }
 
-      const srcMessages =
-        unifiedMessages?.length > 0 ? unifiedMessages : [{ role: 'user', content: prompt }];
+      const srcMessages: UnifiedMessage[] =
+        unifiedMessages && unifiedMessages.length > 0
+          ? unifiedMessages
+          : [{ role: 'user' as const, content: prompt }];
 
       for (const msg of srcMessages) {
         if (msg.role === 'user') {
           messages.push({ role: 'user', content: msg.content });
         } else if (msg.role === 'assistant') {
-          const m: any = { role: 'assistant', content: msg.content || null };
-          if (msg.toolCalls?.length > 0) {
-            m.tool_calls = msg.toolCalls.map((tc: any) => ({
-              id: tc.id,
-              type: 'function',
-              function: {
-                name: tc.name,
-                arguments: JSON.stringify(tc.args || {}),
-              },
-            }));
+          const m: Record<string, unknown> = { role: 'assistant', content: msg.content || null };
+          if (msg.toolCalls && msg.toolCalls.length > 0) {
+            m.tool_calls = msg.toolCalls.map(
+              (tc: { id: string; name: string; args: Record<string, unknown> }) => ({
+                id: tc.id,
+                type: 'function',
+                function: {
+                  name: tc.name,
+                  arguments: JSON.stringify(tc.args || {}),
+                },
+              })
+            );
           }
           messages.push(m);
         } else if (msg.role === 'tool') {
@@ -110,7 +129,7 @@ export class OpenAiProvider extends AiProvider {
         }
       }
 
-      const body: any = {
+      const body: Record<string, unknown> = {
         model: this.model,
         messages,
         temperature,
@@ -118,8 +137,8 @@ export class OpenAiProvider extends AiProvider {
       };
 
       // 标准 tool schemas → OpenAI tools format
-      if (toolSchemas?.length > 0) {
-        body.tools = toolSchemas.map((s: any) => ({
+      if (toolSchemas && toolSchemas.length > 0) {
+        body.tools = toolSchemas.map((s: ToolSchema) => ({
           type: 'function',
           function: {
             name: s.name,
@@ -149,7 +168,7 @@ export class OpenAiProvider extends AiProvider {
    * OpenAI 返回格式:
    *   choices[0].message.tool_calls[]: { id, type: 'function', function: { name, arguments(JSON str) } }
    */
-  #parseToolResponse(data: any) {
+  #parseToolResponse(data: ApiResponse) {
     const choice = data?.choices?.[0];
 
     // 提取 token 用量 (OpenAI usage)
@@ -170,13 +189,15 @@ export class OpenAiProvider extends AiProvider {
 
     if (message?.tool_calls?.length > 0) {
       const functionCalls = message.tool_calls
-        .filter((tc: any) => tc.type === 'function')
-        .map((tc: any) => ({
-          id: tc.id,
-          name: tc.function.name,
+        .filter((tc: Record<string, unknown>) => tc.type === 'function')
+        .map((tc: Record<string, unknown>) => ({
+          id: tc.id as string,
+          name: (tc.function as Record<string, unknown>).name as string,
           args: (() => {
             try {
-              return JSON.parse(tc.function.arguments || '{}');
+              return JSON.parse(
+                ((tc.function as Record<string, unknown>).arguments as string) || '{}'
+              );
             } catch {
               return {};
             }
@@ -184,8 +205,8 @@ export class OpenAiProvider extends AiProvider {
         }));
 
       if (functionCalls.length > 0) {
-        this.logger.debug(
-          `[OpenAI] native function calls: ${functionCalls.map((fc: any) => fc.name).join(', ')}`
+        this.logger?.debug(
+          `[OpenAI] native function calls: ${functionCalls.map((fc: { name: string }) => fc.name).join(', ')}`
         );
         return { text, functionCalls, usage };
       }
@@ -194,7 +215,7 @@ export class OpenAiProvider extends AiProvider {
     return { text, functionCalls: null, usage };
   }
 
-  async summarize(code: any) {
+  async summarize(code: string) {
     const prompt = `请对以下代码生成结构化摘要，返回 JSON 格式 {title, description, language, patterns: [], keyAPIs: []}:\n\n${code}`;
     return (
       (await this.chatWithStructuredOutput(prompt, {
@@ -210,11 +231,11 @@ export class OpenAiProvider extends AiProvider {
    * 使用 response_format: { type: 'json_object' } 强制返回合法 JSON。
    * 兼容 DeepSeek / Ollama 等 OpenAI-Compatible API。
    */
-  async chatWithStructuredOutput(prompt: any, opts: any = {}) {
+  async chatWithStructuredOutput(prompt: string, opts: StructuredOutputOptions = {}) {
     return this._withRetry(async () => {
       const { temperature = 0.3, maxTokens = 32768, systemPrompt } = opts;
 
-      const messages: { role: string; content: any }[] = [];
+      const messages: Array<{ role: string; content: string }> = [];
       if (systemPrompt) {
         messages.push({ role: 'system', content: systemPrompt });
       }
@@ -246,7 +267,7 @@ export class OpenAiProvider extends AiProvider {
     });
   }
 
-  async embed(text: any) {
+  async embed(text: string | string[]) {
     const texts = Array.isArray(text) ? text : [text];
 
     try {
@@ -257,26 +278,28 @@ export class OpenAiProvider extends AiProvider {
 
       const data = await this._post(`${this.baseUrl}/embeddings`, body);
       const embeddings = (data?.data || [])
-        .sort((a: any, b: any) => a.index - b.index)
-        .map((d: any) => d.embedding);
+        .sort((a: { index: number }, b: { index: number }) => a.index - b.index)
+        .map((d: { embedding: number[] }) => d.embedding);
 
       if (embeddings.length === 0) {
         return Array.isArray(text) ? [] : [];
       }
       return Array.isArray(text) ? embeddings : embeddings[0];
-    } catch (err: any) {
-      this.logger.warn(`${this.name} embed failed, returning empty`, { error: err.message });
+    } catch (err: unknown) {
+      this.logger?.warn(`${this.name} embed failed, returning empty`, {
+        error: (err as Error).message,
+      });
       return Array.isArray(text) ? texts.map(() => []) : [];
     }
   }
 
-  async _post(url: any, body: any) {
+  async _post(url: string, body: Record<string, unknown>): Promise<ApiResponse> {
     // Ollama 使用固定 dummy key，不需要校验
     if (!this.apiKey && this.name !== 'ollama') {
       const envKey = this.name === 'deepseek' ? 'ASD_DEEPSEEK_API_KEY' : 'ASD_OPENAI_API_KEY';
-      const err: any = new Error(
+      const err = new Error(
         `${this.name} API Key 未配置。请在 .env 中设置 ${envKey}，或运行 asd setup 完成配置。`
-      );
+      ) as Error & { code: string };
       err.code = 'API_KEY_MISSING';
       throw err;
     }
@@ -296,7 +319,9 @@ export class OpenAiProvider extends AiProvider {
       });
 
       if (!res.ok) {
-        const err: any = new Error(`${this.name} API error: ${res.status}`);
+        const err = new Error(`${this.name} API error: ${res.status}`) as Error & {
+          status: number;
+        };
         err.status = res.status;
         throw err;
       }

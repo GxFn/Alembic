@@ -260,7 +260,7 @@ export const GITIGNORE_MIGRATIONS = [
  * @param {string} projectRoot
  * @param {'cursor'|'vscode'} ide
  */
-export function buildMcpServerEntry(projectRoot: any, ide: any) {
+export function buildMcpServerEntry(projectRoot: string, ide: 'cursor' | 'vscode') {
   const base = {
     command: 'asd-mcp',
     env: { ASD_PROJECT_DIR: projectRoot },

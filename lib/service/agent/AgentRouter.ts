@@ -23,7 +23,34 @@
 
 import Logger from '../../infrastructure/logging/Logger.js';
 import { AgentEventBus } from './AgentEventBus.js';
-import { Channel } from './AgentMessage.js';
+import { type AgentMessage, Channel } from './AgentMessage.js';
+
+// ─── Types ──────────────────────────────────────────
+
+/** Subset of AiProvider needed by the router */
+interface RouterAiProvider {
+  chatWithTools(
+    prompt: string,
+    opts: Record<string, unknown>
+  ): Promise<{
+    text: string | null;
+    functionCalls: Array<{ id?: string; name?: string; args?: Record<string, unknown> }> | null;
+  }>;
+}
+
+/** Agent executor function */
+type AgentExecutor = (
+  presetName: string,
+  message: AgentMessage,
+  opts: Record<string, unknown>
+) => Promise<unknown>;
+
+/** Options for route() */
+interface RouteOpts {
+  preset?: string;
+  strategyOpts?: Record<string, unknown>;
+  [key: string]: unknown;
+}
 
 /**
  * Preset 名称枚举
@@ -90,10 +117,10 @@ const ROUTE_CLASSIFICATION_SCHEMA = {
 export class AgentRouter {
   #logger;
   #bus;
-  /** @type {import('../../external/ai/AiProvider.js').AiProvider|null} */
-  #aiProvider: any = null;
-  /** @type {Function|null} — (presetName, message, opts) => Promise<AgentResult> */
-  #executor: any = null;
+  /** @type {RouterAiProvider|null} */
+  #aiProvider: RouterAiProvider | null = null;
+  /** @type {AgentExecutor|null} */
+  #executor: AgentExecutor | null = null;
 
   constructor() {
     this.#logger = Logger.getInstance();
@@ -102,17 +129,17 @@ export class AgentRouter {
 
   /**
    * 设置 AI Provider (用于 LLM 路由)
-   * @param {import('../../external/ai/AiProvider.js').AiProvider} provider
+   * @param {RouterAiProvider} provider
    */
-  setAiProvider(provider: any) {
+  setAiProvider(provider: RouterAiProvider) {
     this.#aiProvider = provider;
   }
 
   /**
    * 设置执行器 — Factory 提供的 (presetName, message, opts) => AgentResult
-   * @param {Function} executor
+   * @param {AgentExecutor} executor
    */
-  setExecutor(executor: any) {
+  setExecutor(executor: AgentExecutor) {
     this.#executor = executor;
   }
 
@@ -125,9 +152,10 @@ export class AgentRouter {
    * @param {Object} [opts.strategyOpts] 策略特定选项 (如 FanOut 的 items)
    * @returns {Promise<{preset: string, result: Object}>}
    */
-  async route(message: any, opts: any = {}) {
+  async route(message: AgentMessage, opts: RouteOpts = {}) {
     // 1. 手动指定
-    let preset = opts.preset || message.metadata?.mode;
+    let preset: string | null | undefined =
+      opts.preset || (message.metadata?.mode as string | undefined);
 
     // 2. 渠道特征路由
     if (!preset) {
@@ -174,8 +202,8 @@ export class AgentRouter {
    * @param {import('./AgentMessage.js').AgentMessage} message
    * @returns {Promise<string>} preset name
    */
-  async classify(message: any) {
-    let preset = message.metadata?.mode;
+  async classify(message: AgentMessage) {
+    let preset: string | null | undefined = message.metadata?.mode as string | undefined;
     if (!preset) {
       preset = this.#matchChannel(message);
     }
@@ -195,7 +223,7 @@ export class AgentRouter {
    * 飞书消息默认 → lark preset (知识管理对话)
    * 飞书终端命令 (> 开头) → remote-exec
    */
-  #matchChannel(message: any) {
+  #matchChannel(message: AgentMessage) {
     if (message.channel === Channel.LARK) {
       const text = message.content.trim();
       // 飞书消息以 > 或 $ 开头 → 终端命令
@@ -208,7 +236,7 @@ export class AgentRouter {
     return null;
   }
 
-  #matchKeyword(prompt: any) {
+  #matchKeyword(prompt: string) {
     for (const route of KEYWORD_ROUTES) {
       for (const re of route.keywords) {
         if (re.test(prompt)) {
@@ -219,9 +247,9 @@ export class AgentRouter {
     return null;
   }
 
-  async #classifyWithLLM(prompt: any) {
+  async #classifyWithLLM(prompt: string) {
     try {
-      const result = await this.#aiProvider.chatWithTools(
+      const result = await this.#aiProvider!.chatWithTools(
         `Classify this user message into the correct preset: "${prompt.slice(0, 300)}"`,
         {
           messages: [],
@@ -235,13 +263,17 @@ export class AgentRouter {
       );
 
       if (result.functionCalls?.[0]?.args?.preset) {
-        const classified = result.functionCalls[0].args;
+        const classified = result.functionCalls[0].args as {
+          preset: string;
+          confidence: number;
+          reasoning?: string;
+        };
         if (classified.confidence > 0.6) {
           return classified.preset;
         }
       }
-    } catch (err: any) {
-      this.#logger.warn(`[AgentRouter] LLM classification failed: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[AgentRouter] LLM classification failed: ${(err as Error).message}`);
     }
     return null;
   }

@@ -6,29 +6,29 @@ interface WikiResult {
   totalPages: number;
   pages: { path: string; title: string }[];
   errors: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface ProjectOverview {
   name: string;
   language: string;
-  targets: any[];
-  dependencies: any[];
-  [key: string]: any;
+  targets: unknown[];
+  dependencies: unknown[];
+  [key: string]: unknown;
 }
 
 interface FieldDef {
   name: string;
   type?: string;
   required?: boolean;
-  default?: any;
+  default?: unknown;
   description?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface OverrideInfo {
   field: string;
-  oldValue: any;
-  newValue: any;
-  [key: string]: any;
+  oldValue: unknown;
+  newValue: unknown;
+  [key: string]: unknown;
 }

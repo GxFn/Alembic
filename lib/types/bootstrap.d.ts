@@ -7,14 +7,14 @@ interface DimensionDigest {
   label: string;
   status: string;
   candidateCount: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface DimensionContextSnapshot {
   dimId: string;
-  context: any;
+  context: unknown;
   timestamp: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface CandidateSummary {
@@ -22,5 +22,5 @@ interface CandidateSummary {
   title: string;
   knowledgeType: string;
   score?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }

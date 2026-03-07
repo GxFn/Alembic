@@ -11,7 +11,7 @@
  *   - Parallel Routes / Intercepting Routes
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class NextjsEnhancement extends EnhancementPack {
   get id() {
@@ -131,8 +131,8 @@ class NextjsEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: any[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
 
     // ── App Router file conventions ──
     for (const m of astSummary.methods || []) {
@@ -209,7 +209,7 @@ class NextjsEnhancement extends EnhancementPack {
 
     // ── Next.js specific imports ──
     const nextImports = (astSummary.imports || []).filter(
-      (imp: any) =>
+      (imp: string) =>
         imp.includes('next/') ||
         imp.includes('next/server') ||
         imp.includes('next/navigation') ||

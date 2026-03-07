@@ -3,7 +3,7 @@
  * 条件: { languages: ['kotlin', 'java'], frameworks: ['android'] }
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class AndroidEnhancement extends EnhancementPack {
   get id() {
@@ -50,8 +50,8 @@ class AndroidEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: { type: string; className: any; line: any; confidence: number }[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
     for (const cls of astSummary.classes || []) {
       // ViewModel
       if (cls.superclass && /ViewModel$/.test(cls.superclass)) {
@@ -84,11 +84,11 @@ class AndroidEnhancement extends EnhancementPack {
       }
       // Hilt DI
       const annos = cls.annotations || [];
-      if (annos.some((a: any) => /@HiltAndroidApp|@AndroidEntryPoint/.test(a))) {
+      if (annos.some((a: string) => /@HiltAndroidApp|@AndroidEntryPoint/.test(a))) {
         patterns.push({ type: 'hilt-di', className: cls.name, line: cls.line, confidence: 0.95 });
       }
       // Composable (class-level)
-      if (annos.some((a: any) => /@Composable/.test(a))) {
+      if (annos.some((a: string) => /@Composable/.test(a))) {
         patterns.push({
           type: 'composable',
           className: cls.name,

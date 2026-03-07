@@ -3,12 +3,33 @@
  * 统一搜索接口 - 搜 Recipe（含所有知识类型）
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { safeInt } from '../utils/routeHelpers.js';
+
+/** Search result from SearchEngine */
+interface SearchEngineItem {
+  title?: string;
+  id?: string;
+  content?: string | Record<string, string>;
+  score?: number;
+  authorityScore?: number;
+  qualityScore?: number;
+  usageCount?: number;
+  code?: string;
+  trigger?: string;
+}
+
+/** Knowledge entry from KnowledgeService */
+interface KnowledgeItem {
+  title?: string;
+  id?: string;
+  content?: { pattern?: string; markdown?: string };
+  quality?: { overall?: number };
+}
 
 const router = express.Router();
 const logger = Logger.getInstance();
@@ -20,13 +41,13 @@ const logger = Logger.getInstance();
  */
 router.get(
   '/',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { q, type = 'all', mode = 'keyword' } = req.query;
     const limit = safeInt(req.query.limit, 20, 1, 100);
     const page = safeInt(req.query.page, 1);
     const groupByKind = req.query.groupByKind === 'true';
 
-    if (!q || !q.trim()) {
+    if (!q || !(q as string).trim()) {
       throw new ValidationError('Search query (q) is required');
     }
 
@@ -36,12 +57,12 @@ router.get(
     try {
       const searchEngine = container.get('searchEngine');
       const result = await searchEngine.search(q, { type, limit, mode, groupByKind });
-      return res.json({ success: true, data: result });
-    } catch (err: any) {
-      logger.warn('SearchEngine 搜索失败，降级到传统搜索', { mode, error: err.message });
+      return void res.json({ success: true, data: result });
+    } catch (err: unknown) {
+      logger.warn('SearchEngine 搜索失败，降级到传统搜索', { mode, error: (err as Error).message });
     }
 
-    const results: any = {};
+    const results: Record<string, { items?: unknown[]; total?: number }> = {};
     const pagination = { page, pageSize: limit };
 
     // 搜索知识条目（V3 统一模型）
@@ -49,8 +70,8 @@ router.get(
       try {
         const knowledgeService = container.get('knowledgeService');
         results.recipes = await knowledgeService.search(q, pagination);
-      } catch (err: any) {
-        logger.warn('Knowledge 搜索失败', { query: q, error: err.message });
+      } catch (err: unknown) {
+        logger.warn('Knowledge 搜索失败', { query: q, error: (err as Error).message });
         results.recipes = { items: [], total: 0 };
       }
     }
@@ -60,8 +81,8 @@ router.get(
       try {
         const guardService = container.get('guardService');
         results.rules = await guardService.searchRules(q, pagination);
-      } catch (err: any) {
-        logger.warn('Guard Rule 搜索失败', { query: q, error: err.message });
+      } catch (err: unknown) {
+        logger.warn('Guard Rule 搜索失败', { query: q, error: (err as Error).message });
         results.rules = { items: [], total: 0 };
       }
     }
@@ -71,14 +92,14 @@ router.get(
       try {
         const knowledgeService = container.get('knowledgeService');
         results.candidates = await knowledgeService.search(q, pagination);
-      } catch (err: any) {
-        logger.warn('Candidate 搜索失败', { query: q, error: err.message });
+      } catch (err: unknown) {
+        logger.warn('Candidate 搜索失败', { query: q, error: (err as Error).message });
         results.candidates = { items: [], total: 0 };
       }
     }
 
     const totalResults = Object.values(results).reduce(
-      (sum, r: any) => sum + (r.total || r.items?.length || 0),
+      (sum, r) => sum + (r.total || r.items?.length || 0),
       0
     );
 
@@ -102,7 +123,7 @@ router.get(
  */
 router.get(
   '/graph',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { nodeId, nodeType, relation, direction = 'both' } = req.query;
 
     if (!nodeId || !nodeType) {
@@ -113,7 +134,7 @@ router.get(
     const graphService = container.get('knowledgeGraphService');
 
     if (!graphService) {
-      return res.json({ success: true, data: { outgoing: [], incoming: [] } });
+      return void res.json({ success: true, data: { outgoing: [], incoming: [] } });
     }
 
     const edges = relation
@@ -130,7 +151,7 @@ router.get(
  */
 router.get(
   '/graph/impact',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { nodeId, nodeType } = req.query;
     const maxDepth = safeInt(req.query.maxDepth, 3, 1, 5);
 
@@ -142,7 +163,7 @@ router.get(
     const graphService = container.get('knowledgeGraphService');
 
     if (!graphService) {
-      return res.json({ success: true, data: [] });
+      return void res.json({ success: true, data: [] });
     }
 
     const impact = graphService.getImpactAnalysis(nodeId, nodeType, maxDepth);
@@ -157,14 +178,14 @@ router.get(
  */
 router.get(
   '/graph/all',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const limit = safeInt(req.query.limit, 500, 1, 2000);
 
     const container = getServiceContainer();
     const graphService = container.get('knowledgeGraphService');
 
     if (!graphService) {
-      return res.json({ success: true, data: { edges: [], nodeLabels: {} } });
+      return void res.json({ success: true, data: { edges: [], nodeLabels: {} } });
     }
 
     // 只返回 recipe 类型的关系边；module 依赖已由 /spm/dep-graph 提供
@@ -184,9 +205,9 @@ router.get(
       nodeMap.get(e.toId).add(e.toType);
     }
 
-    const nodeLabels: Record<string, any> = {};
-    const nodeTypes: Record<string, any> = {}; // id → 主要类型（供前端区分渲染）
-    const nodeCategories: Record<string, any> = {}; // id → category/target 名（供前端分组布局）
+    const nodeLabels: Record<string, string> = {};
+    const nodeTypes: Record<string, string> = {}; // id → 主要类型（供前端区分渲染）
+    const nodeCategories: Record<string, string> = {}; // id → category/target 名（供前端分组布局）
     if (nodeMap.size > 0) {
       const knowledgeRepo = container.get('knowledgeRepository');
       for (const [id, types] of nodeMap) {
@@ -219,12 +240,15 @@ router.get(
  */
 router.get(
   '/graph/stats',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
     const graphService = container.get('knowledgeGraphService');
 
     if (!graphService) {
-      return res.json({ success: true, data: { totalEdges: 0, byRelation: {}, nodeTypes: [] } });
+      return void res.json({
+        success: true,
+        data: { totalEdges: 0, byRelation: {}, nodeTypes: [] },
+      });
     }
 
     const nodeType = req.query.nodeType || 'recipe';
@@ -239,7 +263,7 @@ router.get(
  */
 router.post(
   '/context-aware',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { keyword, limit, language, sessionHistory } = req.body;
     if (!keyword || !keyword.trim()) {
       throw new ValidationError('keyword is required');
@@ -247,7 +271,7 @@ router.post(
     const t0 = Date.now();
     const container = getServiceContainer();
     const pageSize = Math.min(limit || 10, 100);
-    let results: any[] = [];
+    let results: Record<string, unknown>[] = [];
     let source = 'knowledgeService';
 
     // SearchEngine BM25 + 内置 Ranking Pipeline
@@ -262,7 +286,7 @@ router.post(
       const items = result?.items || [];
       if (items.length > 0) {
         source = result.ranked ? 'search-engine+ranking' : 'search-engine';
-        results = items.map((r: any) => {
+        results = items.map((r: SearchEngineItem) => {
           let contentStr = '';
           try {
             const c =
@@ -271,7 +295,7 @@ router.post(
                 : r.content || {};
             contentStr = c.pattern || c.markdown || c.code || '';
           } catch {
-            contentStr = r.content || r.code || '';
+            contentStr = (r.content || r.code || '') as string;
           }
           return {
             name: `${r.title || r.id}.md`,
@@ -284,9 +308,9 @@ router.post(
           };
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.warn('SearchEngine context-aware 失败，降级到 KnowledgeService', {
-        error: err.message,
+        error: (err as Error).message,
       });
     }
 
@@ -296,7 +320,7 @@ router.post(
         const knowledgeService = container.get('knowledgeService');
         const list = await knowledgeService.search(keyword, { page: 1, pageSize });
         const items = list.data || list.items || [];
-        results = items.map((r: any) => ({
+        results = items.map((r: KnowledgeItem) => ({
           name: `${r.title || r.id}.md`,
           content: r.content?.pattern || r.content?.markdown || '',
           similarity: 1,
@@ -334,7 +358,7 @@ router.post(
  */
 router.post(
   '/similarity',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { code, targetName, candidateId, candidate } = req.body;
     const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
 
@@ -355,8 +379,11 @@ router.post(
             usageGuide: json.content?.markdown || '',
           };
         }
-      } catch (err: any) {
-        logger.warn('similarity: failed to load candidate', { candidateId, error: err.message });
+      } catch (err: unknown) {
+        logger.warn('similarity: failed to load candidate', {
+          candidateId,
+          error: (err as Error).message,
+        });
       }
     } else if (candidate) {
       candidateObj = {
@@ -370,7 +397,7 @@ router.post(
     }
 
     if (!candidateObj) {
-      return res.json({ success: true, data: { similar: [] } });
+      return void res.json({ success: true, data: { similar: [] } });
     }
 
     try {
@@ -385,8 +412,8 @@ router.post(
       }));
 
       res.json({ success: true, data: { similar: mapped } });
-    } catch (err: any) {
-      logger.warn('similarity search failed', { error: err.message });
+    } catch (err: unknown) {
+      logger.warn('similarity search failed', { error: (err as Error).message });
       res.json({ success: true, data: { similar: [] } });
     }
   })
@@ -399,7 +426,7 @@ router.post(
  */
 router.post(
   '/xcode-simulate',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { keyword, currentFile, language, limit = 10 } = req.body;
     if (!keyword) {
       throw new ValidationError('keyword is required');
@@ -407,7 +434,7 @@ router.post(
 
     const container = getServiceContainer();
     const pageSize = Math.min(limit || 10, 50);
-    let results: any[] = [];
+    let results: Record<string, unknown>[] = [];
 
     // 复用 context-aware 搜索，注入 Xcode 上下文
     try {
@@ -422,7 +449,7 @@ router.post(
           currentFile,
         },
       });
-      results = (result?.items || []).map((r: any) => {
+      results = (result?.items || []).map((r: SearchEngineItem) => {
         let contentStr = '';
         try {
           const c =
@@ -431,7 +458,7 @@ router.post(
               : r.content || {};
           contentStr = c.pattern || c.markdown || c.code || '';
         } catch {
-          contentStr = r.content || '';
+          contentStr = (r.content || '') as string;
         }
         return {
           name: `${r.title || r.id}.md`,
@@ -441,8 +468,8 @@ router.post(
           matchType: result.ranked ? 'ranked' : 'bm25',
         };
       });
-    } catch (err: any) {
-      logger.warn('xcode-simulate search failed', { error: err.message });
+    } catch (err: unknown) {
+      logger.warn('xcode-simulate search failed', { error: (err as Error).message });
     }
 
     res.json({ success: true, data: { results, total: results.length } });

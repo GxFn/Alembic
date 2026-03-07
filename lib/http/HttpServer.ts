@@ -4,9 +4,10 @@
  * 集成监控、缓存和错误追踪
  */
 
+import type { Server } from 'node:http';
 import { join } from 'node:path';
 import cors from 'cors';
-import express from 'express';
+import express, { type Application, type NextFunction, type Request, type Response } from 'express';
 import helmet from 'helmet';
 import { CapabilityProbe } from '../core/capability/CapabilityProbe.js';
 import { registerGatewayActions } from '../core/gateway/GatewayActionRegistry.js';
@@ -42,24 +43,39 @@ import taskRouter from './routes/task.js';
 import violationsRouter from './routes/violations.js';
 import wikiRouter from './routes/wiki.js';
 
+interface HttpServerConfig {
+  port: number;
+  host: string;
+  enableMonitoring: boolean;
+  cacheMode: string;
+  corsOrigin?: string;
+  [key: string]: unknown;
+}
+
+/** Express internal router layer shape (private API, used in mountDashboard) */
+type RouterLayer = { route?: unknown };
+
+/** Type for the winston Logger instance returned by Logger.getInstance() */
+type AppLogger = ReturnType<typeof Logger.getInstance>;
+
 export class HttpServer {
-  app: any;
-  cacheAdapter: any;
-  capabilityProbe: any;
-  config: any;
-  errorTracker: any;
-  logger: any;
-  performanceMonitor: any;
-  realtimeService: any;
-  server: any;
-  constructor(config: any = {}) {
+  app: Application;
+  cacheAdapter: unknown;
+  capabilityProbe: CapabilityProbe | null;
+  config: HttpServerConfig;
+  errorTracker: { errorHandler(): express.ErrorRequestHandler; shutdown(): void } | null;
+  logger: AppLogger;
+  performanceMonitor: { middleware(): express.RequestHandler; shutdown(): void } | null;
+  realtimeService: Record<string, unknown> | null;
+  server: Server | null;
+  constructor(config: Partial<HttpServerConfig> = {}) {
     this.config = {
       port: config.port || 3000,
       host: config.host || 'localhost',
       enableMonitoring: config.enableMonitoring !== false,
       cacheMode: 'memory',
       ...config,
-    };
+    } as HttpServerConfig;
 
     this.logger = Logger.getInstance();
     this.app = express();
@@ -68,6 +84,7 @@ export class HttpServer {
     this.errorTracker = null;
     this.cacheAdapter = null;
     this.realtimeService = null;
+    this.capabilityProbe = null;
   }
 
   /**
@@ -118,10 +135,10 @@ export class HttpServer {
         this.errorTracker = (initErrorTracker as any)();
         this.logger.info('Error tracker initialized');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Failed to initialize services', {
-        error: error.message,
-        stack: error.stack,
+        error: (error as Error).message,
+        stack: (error as Error).stack,
       });
       throw error;
     }
@@ -197,7 +214,7 @@ export class HttpServer {
     this.app.use(gatewayMiddleware());
 
     // 请求超时设置（AI 扫描类路由需要更长时间，SSE 流式路由需要更长时间）
-    this.app.use((req: any, res: any, next: any) => {
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
       const isLongRunning =
         req.path.includes('/spm/scan') ||
         req.path.includes('/spm/bootstrap') ||
@@ -219,9 +236,9 @@ export class HttpServer {
       const gateway = container.get('gateway');
       registerGatewayActions(gateway, container);
       this.logger.info('Gateway actions registered');
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.warn('Gateway action registration skipped', {
-        error: error.message,
+        error: (error as Error).message,
       });
     }
   }
@@ -234,7 +251,7 @@ export class HttpServer {
     const apiPrefix = '/api/v1';
 
     // OpenAPI 规范
-    this.app.get('/api-spec', (req: any, res: any) => {
+    this.app.get('/api-spec', (_req: Request, res: Response) => {
       res.json(apiSpec);
     });
 
@@ -245,7 +262,7 @@ export class HttpServer {
     this.app.use(`${apiPrefix}/auth`, authRouter);
 
     // 权限探针端点
-    this.app.get(`${apiPrefix}/auth/probe`, (req: any, res: any) => {
+    this.app.get(`${apiPrefix}/auth/probe`, (req: Request, res: Response) => {
       const role = req.resolvedRole || 'visitor';
       const user = req.resolvedUser || 'anonymous';
       const mode =
@@ -316,7 +333,7 @@ export class HttpServer {
     this.app.use(`${apiPrefix}/remote`, remoteRouter);
 
     // 根路径 — 返回 API 元信息（避免外部探测产生无意义 404）
-    this.app.all('/', (req: any, res: any) => {
+    this.app.all('/', (_req: Request, res: Response) => {
       res.json({
         name: 'AutoSnippet API',
         version: '2.0',
@@ -326,7 +343,7 @@ export class HttpServer {
     });
 
     // 404 处理（使用 app.all 确保 layer.route 存在，mountDashboard 依赖此属性定位并重排路由栈）
-    this.app.all('*', (req: any, res: any) => {
+    this.app.all('*', (req: Request, res: Response) => {
       res.status(404).json({
         success: false,
         error: {
@@ -366,18 +383,21 @@ export class HttpServer {
 
           // 初始化 WebSocket 服务（使用 HTTP 服务器实例）
           try {
-            this.realtimeService = initRealtimeService(this.server);
+            this.realtimeService = initRealtimeService(this.server!) as unknown as Record<
+              string,
+              unknown
+            >;
             this.logger.info('Realtime service initialized');
-          } catch (error: any) {
+          } catch (error: unknown) {
             this.logger.warn('Failed to initialize realtime service', {
-              error: error.message,
+              error: (error as Error).message,
             });
           }
 
           resolve(this.server);
         });
 
-        this.server.on('error', (error: any) => {
+        this.server.on('error', (error: NodeJS.ErrnoException) => {
           this.logger.error('HTTP Server error', {
             error: error.message,
             code: error.code,
@@ -385,9 +405,9 @@ export class HttpServer {
           });
           reject(error);
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         this.logger.error('Failed to start HTTP Server', {
-          error: error.message,
+          error: (error as Error).message,
           timestamp: new Date().toISOString(),
         });
         reject(error);
@@ -418,12 +438,14 @@ export class HttpServer {
       if (this.realtimeService && typeof this.realtimeService.shutdown === 'function') {
         try {
           this.realtimeService.shutdown();
-        } catch (err: any) {
-          this.logger.warn('Error shutting down realtime service', { error: err.message });
+        } catch (err: unknown) {
+          this.logger.warn('Error shutting down realtime service', {
+            error: (err as Error).message,
+          });
         }
       }
 
-      this.server.close((error: any) => {
+      this.server.close((error) => {
         if (error) {
           this.logger.error('Error stopping HTTP Server', {
             error: error.message,
@@ -452,11 +474,12 @@ export class HttpServer {
    * 必须在 initialize() + start() 之后调用
    * @param {string} distDir - dashboard/dist 目录的绝对路径
    */
-  mountDashboard(distDir: any) {
+  mountDashboard(distDir: string) {
     // 从路由栈中移除最后的 404 catch-all 和根路径 handler
-    const layers = this.app._router.stack;
+    const layers: RouterLayer[] = (this.app as unknown as { _router: { stack: RouterLayer[] } })
+      ._router.stack;
     // 倒序弹出最后 2 层（404 + root handler）
-    const removedLayers: any[] = [];
+    const removedLayers: RouterLayer[] = [];
     for (let i = layers.length - 1; i >= 0; i--) {
       const layer = layers[i];
       if (layer.route) {
@@ -471,7 +494,7 @@ export class HttpServer {
     this.app.use(express.static(distDir));
 
     // SPA fallback: 非 API / 非 socket.io 请求返回 index.html
-    this.app.get('*', (req: any, res: any, next: any) => {
+    this.app.get('*', (req: Request, res: Response, next: NextFunction) => {
       if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
         return next();
       }

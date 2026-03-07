@@ -19,7 +19,40 @@ import {
   getSystemInjectedFields,
 } from '../../../shared/FieldSpec.js';
 import { UnifiedValidator } from '../../../shared/UnifiedValidator.js';
-import { checkDimensionType, DIMENSION_DISPLAY_GROUP } from './_shared.js';
+import { checkDimensionType, DIMENSION_DISPLAY_GROUP, type ToolHandlerContext } from './_shared.js';
+
+// ─── Tool handler param types ──────────────────────────────
+
+export interface SubmitKnowledgeParams {
+  content?: { markdown?: string; pattern?: string; rationale?: string; [key: string]: unknown };
+  title?: string;
+  description?: string;
+  tags?: string[];
+  trigger?: string;
+  kind?: string;
+  topicHint?: string;
+  whenClause?: string;
+  doClause?: string;
+  dontClause?: string;
+  coreCode?: string;
+  reasoning?: { whyStandard?: string; sources?: string[]; confidence?: number };
+  scope?: string;
+  complexity?: string;
+  headers?: string[];
+  knowledgeType?: string;
+  usageGuide?: string;
+  sourceFile?: string;
+  _category?: string;
+  [key: string]: unknown;
+}
+
+export interface SaveDocumentParams {
+  title: string;
+  markdown: string;
+  description?: string;
+  tags?: string[];
+  scope?: string;
+}
 
 // ────────────────────────────────────────────────────────────
 // 16. submit_knowledge
@@ -87,7 +120,7 @@ export const submitCandidate = {
     // FieldSpec 驱动: 内部 Agent 路径排除系统注入字段
     required: getInternalAgentRequiredFields(),
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: SubmitKnowledgeParams, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
 
     // ── Bootstrap 维度类型校验 ──
@@ -110,7 +143,8 @@ export const submitCandidate = {
       }
 
       // Bootstrap 模式: 将 category 覆盖为展示分组 ID
-      params._category = (DIMENSION_DISPLAY_GROUP as Record<string, any>)[dimMeta.id] || dimMeta.id;
+      params._category =
+        (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id;
 
       // ── UnifiedValidator 统一质量验证（替代 CandidateGuardrail） ──
       const validator =
@@ -143,7 +177,7 @@ export const submitCandidate = {
     const systemFields = {
       language: ctx._projectLanguage || '',
       category: dimMeta
-        ? (DIMENSION_DISPLAY_GROUP as Record<string, any>)[dimMeta.id] || dimMeta.id
+        ? (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id
         : 'general',
       knowledgeType: dimMeta?.allowedKnowledgeTypes?.[0] || 'code-pattern',
       source: ctx.source === 'system' ? 'bootstrap' : 'agent',
@@ -191,7 +225,7 @@ export const submitCandidate = {
 
     if (dimMeta && ctx.source === 'system') {
       const displayGroup =
-        (DIMENSION_DISPLAY_GROUP as Record<string, any>)[dimMeta.id] || dimMeta.id;
+        (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id;
       data.tags = [...new Set([...(data.tags || []), displayGroup])];
     }
 
@@ -234,7 +268,7 @@ export const saveDocument = {
     },
     required: ['title', 'markdown'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: SaveDocumentParams, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
 
     const data = {
@@ -301,7 +335,7 @@ export const approveCandidate = {
     },
     required: ['candidateId'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: { candidateId: string }, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     return knowledgeService.approve(params.candidateId, { userId: 'agent' });
   },
@@ -321,7 +355,7 @@ export const rejectCandidate = {
     },
     required: ['candidateId', 'reason'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: { candidateId: string; reason: string }, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     return knowledgeService.reject(params.candidateId, params.reason, { userId: 'agent' });
   },
@@ -340,7 +374,7 @@ export const publishRecipe = {
     },
     required: ['recipeId'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: { recipeId: string }, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     return knowledgeService.publish(params.recipeId, { userId: 'agent' });
   },
@@ -360,7 +394,7 @@ export const deprecateRecipe = {
     },
     required: ['recipeId', 'reason'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: { recipeId: string; reason: string }, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     return knowledgeService.deprecate(params.recipeId, params.reason, { userId: 'agent' });
   },
@@ -380,7 +414,10 @@ export const updateRecipe = {
     },
     required: ['recipeId', 'updates'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (
+    params: { recipeId: string; updates: Record<string, unknown> },
+    ctx: ToolHandlerContext
+  ) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     return knowledgeService.update(params.recipeId, params.updates, { userId: 'agent' });
   },
@@ -400,7 +437,7 @@ export const recordUsage = {
     },
     required: ['recipeId'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: { recipeId: string; type?: string }, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
     const type = params.type || 'adoption';
     await knowledgeService.incrementUsage(params.recipeId, type);
@@ -425,7 +462,10 @@ export const qualityScore = {
       },
     },
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (
+    params: { recipeId?: string; recipe?: Record<string, unknown> },
+    ctx: ToolHandlerContext
+  ) => {
     const qualityScorer = ctx.container.get('qualityScorer');
     let recipe = params.recipe;
 
@@ -463,7 +503,7 @@ export const validateCandidate = {
     },
     required: ['candidate'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: { candidate: Record<string, unknown> }, ctx: ToolHandlerContext) => {
     const validator = ctx.container.get('recipeCandidateValidator');
     return validator.validate(params.candidate);
   },
@@ -482,9 +522,9 @@ export const getFeedbackStats = {
       topN: { type: 'number', description: '热门 Recipe 数量，默认 10' },
     },
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: { recipeId?: string; topN?: number }, ctx: ToolHandlerContext) => {
     const feedbackCollector = ctx.container.get('feedbackCollector');
-    const result: any = {};
+    const result: Record<string, unknown> = {};
 
     result.global = feedbackCollector.getGlobalStats();
     result.topRecipes = feedbackCollector.getTopRecipes(params.topN || 10);

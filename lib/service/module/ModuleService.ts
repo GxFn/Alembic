@@ -79,7 +79,10 @@ export class ModuleService {
   #registry;
 
   /** @type {Array<{ discoverer: import('../../core/discovery/ProjectDiscoverer.js').ProjectDiscoverer, confidence: number }>} */
-  #activeDiscoverers: any[] = [];
+  #activeDiscoverers: Array<{
+    discoverer: import('../../core/discovery/ProjectDiscoverer.js').ProjectDiscoverer;
+    confidence: number;
+  }> = [];
 
   /** @type {boolean} */
   #loaded = false;
@@ -105,7 +108,17 @@ export class ModuleService {
    * @param {object} [options.guardCheckEngine]
    * @param {object} [options.violationsStore]
    */
-  constructor(projectRoot: any, options: any = {}) {
+  constructor(
+    projectRoot: string,
+    options: {
+      agentFactory?: Record<string, unknown> | null;
+      container?: Record<string, unknown> | null;
+      qualityScorer?: Record<string, unknown> | null;
+      recipeExtractor?: Record<string, unknown> | null;
+      guardCheckEngine?: Record<string, unknown> | null;
+      violationsStore?: Record<string, unknown> | null;
+    } = {}
+  ) {
     this.#projectRoot = projectRoot;
     this.#registry = getDiscovererRegistry();
     this.#logger = Logger.getInstance();
@@ -139,9 +152,9 @@ export class ModuleService {
         this.#logger.info(
           `[ModuleService] Loaded discoverer: ${discoverer.displayName} (confidence=${confidence.toFixed(2)})`
         );
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.#logger.warn(
-          `[ModuleService] Failed to load discoverer ${discoverer.id}: ${err.message}`
+          `[ModuleService] Failed to load discoverer ${discoverer.id}: ${(err as Error).message}`
         );
       }
     }
@@ -182,7 +195,7 @@ export class ModuleService {
   async listTargets() {
     await this.#ensureLoaded();
 
-    const allTargets: any[] = [];
+    const allTargets: Record<string, unknown>[] = [];
     const seenNames = new Set();
     let hasRealDiscovererTargets = false;
 
@@ -202,9 +215,9 @@ export class ModuleService {
           allTargets.push(this.#normalizeTarget(t, discoverer));
           hasRealDiscovererTargets = true;
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.#logger.warn(
-          `[ModuleService] listTargets failed for ${discoverer.id}: ${err.message}`
+          `[ModuleService] listTargets failed for ${discoverer.id}: ${(err as Error).message}`
         );
       }
     }
@@ -225,9 +238,9 @@ export class ModuleService {
             seenNames.add(key);
             allTargets.push(this.#normalizeTarget(t, discoverer));
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           this.#logger.warn(
-            `[ModuleService] listTargets failed for ${discoverer.id}: ${err.message}`
+            `[ModuleService] listTargets failed for ${discoverer.id}: ${(err as Error).message}`
           );
         }
       }
@@ -241,11 +254,11 @@ export class ModuleService {
    * 各 Discoverer 返回 { name, path, type, language, framework, metadata }
    * 前端还需要 { packageName, packagePath, targetDir, info } 等扩展字段
    */
-  #normalizeTarget(t: any, discoverer: any) {
+  #normalizeTarget(t: Record<string, unknown>, discoverer: { id: string; displayName: string }) {
     return {
       ...t,
       // 兼容字段 — 如果 discoverer 已设置则保留，否则从通用字段推导
-      packageName: t.packageName || t.metadata?.modulePath || t.name,
+      packageName: t.packageName || (t.metadata as Record<string, unknown>)?.modulePath || t.name,
       packagePath: t.packagePath || t.path || '',
       targetDir: t.targetDir || t.path || '',
       info: t.info || t.metadata || {},
@@ -262,22 +275,24 @@ export class ModuleService {
    * @param {import('../../core/discovery/ProjectDiscoverer.js').DiscoveredTarget|string} target
    * @returns {Promise<import('../../core/discovery/ProjectDiscoverer.js').DiscoveredFile[]>}
    */
-  async getTargetFiles(target: any) {
+  async getTargetFiles(target: string | Record<string, unknown>) {
     await this.#ensureLoaded();
 
     const targetObj = typeof target === 'string' ? { name: target } : target;
     const discovererId = targetObj.discovererId;
 
     // 虚拟目录扫描 — 直接收集文件（无需 discoverer）
-    if (discovererId === 'folder-scan' && targetObj.path && existsSync(targetObj.path)) {
-      return this.#collectFolderFiles(targetObj.path);
+    if (discovererId === 'folder-scan' && targetObj.path && existsSync(targetObj.path as string)) {
+      return this.#collectFolderFiles(targetObj.path as string);
     }
 
     // 如果指定了 discovererId，直接找对应的 discoverer
     if (discovererId) {
       const entry = this.#activeDiscoverers.find((e) => e.discoverer.id === discovererId);
       if (entry) {
-        return entry.discoverer.getTargetFiles(targetObj);
+        return entry.discoverer.getTargetFiles(
+          targetObj as import('../../core/discovery/ProjectDiscoverer.js').DiscoveredTarget
+        );
       }
     }
 
@@ -285,18 +300,20 @@ export class ModuleService {
     for (const { discoverer } of this.#activeDiscoverers) {
       try {
         const targets = await discoverer.listTargets();
-        if (targets.some((t: any) => t.name === targetObj.name)) {
-          return discoverer.getTargetFiles(targetObj);
+        if (targets.some((t) => t.name === targetObj.name)) {
+          return discoverer.getTargetFiles(
+            targetObj as import('../../core/discovery/ProjectDiscoverer.js').DiscoveredTarget
+          );
         }
       } catch {}
     }
 
     // 兜底：如果 target 有 path 属性且目录存在，直接收集
-    if (targetObj.path && existsSync(targetObj.path)) {
+    if (targetObj.path && existsSync(targetObj.path as string)) {
       this.#logger.info(
         `[ModuleService] getTargetFiles fallback: collecting from ${targetObj.path}`
       );
-      return this.#collectFolderFiles(targetObj.path);
+      return this.#collectFolderFiles(targetObj.path as string);
     }
 
     return [];
@@ -305,14 +322,14 @@ export class ModuleService {
   /**
    * 获取依赖关系图
    * @param {{ level?: 'package'|'target' }} [options]
-   * @returns {Promise<{ nodes: any[], edges: any[] }>}
+   * @returns {Promise<{ nodes: Record<string, unknown>[], edges: { from: string; to: string; type: string; source: string }[] }>}
    */
-  async getDependencyGraph(options: any = {}) {
+  async getDependencyGraph(options: { level?: 'package' | 'target' } = {}) {
     await this.#ensureLoaded();
 
     // 合并所有 Discoverer 的依赖图
-    const allNodes: any[] = [];
-    const allEdges: { from: string; to: string; type: any; source: any }[] = [];
+    const allNodes: Record<string, unknown>[] = [];
+    const allEdges: { from: string; to: string; type: string; source: string }[] = [];
 
     // 如果有专业 Discoverer（非 generic），则跳过 GenericDiscoverer 的依赖图
     // 避免 generic fallback 生成的冗余根节点（如项目名本身）干扰图结构
@@ -326,11 +343,12 @@ export class ModuleService {
       }
       try {
         const graph = await discoverer.getDependencyGraph();
-        for (const n of graph.nodes || []) {
-          const id = typeof n === 'string' ? n : n.id || n;
+        for (const _n of graph.nodes || []) {
+          const n = _n as string | Record<string, unknown>;
+          const id = typeof n === 'string' ? n : n.id || _n;
           allNodes.push({
             id: `${discoverer.id}::${id}`,
-            label: typeof n === 'string' ? n : n.label || n.id,
+            label: typeof n === 'string' ? n : ((n.label || n.id) as string),
             type: (typeof n === 'object' && n.type) || options.level || 'module',
             discovererId: discoverer.id,
             ...(typeof n === 'object' && n.fullPath ? { fullPath: n.fullPath } : {}),
@@ -345,9 +363,9 @@ export class ModuleService {
             source: discoverer.id,
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.#logger.warn(
-          `[ModuleService] getDependencyGraph failed for ${discoverer.id}: ${err.message}`
+          `[ModuleService] getDependencyGraph failed for ${discoverer.id}: ${(err as Error).message}`
         );
       }
     }
@@ -393,10 +411,13 @@ export class ModuleService {
    * AI 扫描 Target 发现候选项
    * 完整管线: 读文件 → AI 提取 → Header 解析 → 工具增强
    */
-  async scanTarget(target: any, options: any = {}) {
+  async scanTarget(
+    target: string | Record<string, unknown>,
+    options: { onProgress?: (event: Record<string, unknown>) => void } = {}
+  ) {
     await this.#ensureLoaded();
 
-    const targetName = typeof target === 'string' ? target : target?.name;
+    const targetName = typeof target === 'string' ? target : String(target?.name ?? '');
     const onProgress = options.onProgress;
 
     // 1. 获取源文件列表
@@ -410,8 +431,8 @@ export class ModuleService {
       };
     }
 
-    const scannedFilesMeta = fileList.map((f: any) => {
-      const filePath = typeof f === 'string' ? f : f.path;
+    const scannedFilesMeta = fileList.map((f: Record<string, unknown>) => {
+      const filePath = typeof f === 'string' ? f : (f.path as string);
       return { name: _pathBasename(filePath), path: f.relativePath || _pathBasename(filePath) };
     });
     onProgress?.({ type: 'scan:files-loaded', files: scannedFilesMeta, count: fileList.length });
@@ -419,27 +440,30 @@ export class ModuleService {
     // 2. 读取文件内容
     onProgress?.({ type: 'scan:reading', count: fileList.length });
     const files = fileList
-      .map((f: any) => {
-        const filePath = typeof f === 'string' ? f : f.path;
+      .map((f: Record<string, unknown>) => {
+        const filePath = typeof f === 'string' ? f : (f.path as string);
         try {
           return {
             name: _pathBasename(filePath),
             path: filePath,
-            relativePath: f.relativePath || _pathBasename(filePath),
+            relativePath:
+              ((f as Record<string, unknown>).relativePath as string) || _pathBasename(filePath),
             content: readFileSync(filePath, 'utf8'),
           };
-        } catch (err: any) {
-          this.#logger.warn(`[ModuleService] Failed to read: ${filePath} — ${err.message}`);
+        } catch (err: unknown) {
+          this.#logger.warn(
+            `[ModuleService] Failed to read: ${filePath} — ${(err as Error).message}`
+          );
           return null;
         }
       })
-      .filter(Boolean);
+      .filter((f): f is NonNullable<typeof f> => f !== null);
 
     if (files.length === 0) {
       return { recipes: [], scannedFiles: [], message: 'All source files unreadable' };
     }
 
-    const scannedFiles = files.map((f: any) => ({ name: f.name, path: f.relativePath }));
+    const scannedFiles = files.map((f) => ({ name: f.name, path: f.relativePath }));
     this.#logger.info(`[ModuleService] scanTarget: ${targetName}, ${files.length} files`);
 
     // 3. AI 提取
@@ -453,7 +477,7 @@ export class ModuleService {
     }
 
     onProgress?.({ type: 'scan:ai-extracting', fileCount: files.length, targetName });
-    let recipes = await this.#aiExtractRecipes(targetName, files);
+    let recipes = await this.#aiExtractRecipes(targetName, files as Record<string, unknown>[]);
 
     if (!Array.isArray(recipes)) {
       recipes = [];
@@ -463,27 +487,28 @@ export class ModuleService {
     try {
       const PathFinder = await import('../../infrastructure/paths/PathFinder.js');
       const HeaderResolver = await import('../../infrastructure/paths/HeaderResolver.js');
-      const targetRootDir = await PathFinder.findTargetRootDir(files[0].path);
+      const targetRootDir = await PathFinder.findTargetRootDir(files[0]!.path);
       for (const recipe of recipes) {
-        const headerList = recipe.headers || [];
+        const headerList = (recipe.headers || []) as string[];
         recipe.headerPaths = await Promise.all(
-          headerList.map((h: any) => HeaderResolver.resolveHeaderRelativePath(h, targetRootDir))
+          headerList.map((h: string) => HeaderResolver.resolveHeaderRelativePath(h, targetRootDir!))
         );
         recipe.moduleName = targetName;
       }
-    } catch (err: any) {
-      this.#logger.warn(`[ModuleService] Header resolution failed: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[ModuleService] Header resolution failed: ${(err as Error).message}`);
     }
 
     // 4. 工具增强
     onProgress?.({ type: 'scan:enriching', recipeCount: recipes.length });
     this.#enrichRecipes(recipes);
 
-    const result: any = { recipes, scannedFiles };
+    const result: Record<string, unknown> = { recipes, scannedFiles };
     if (recipes.length === 0) {
       // 检查是否因为 AI Provider mock 导致空结果
       try {
-        const aiProvider = this.#container?.singletons?.aiProvider;
+        const singletons = this.#container?.singletons as Record<string, unknown> | undefined;
+        const aiProvider = singletons?.aiProvider as Record<string, unknown> | undefined;
         if (!aiProvider || aiProvider.name === 'mock') {
           result.noAi = true;
           result.message = 'AI 未配置，已跳过智能提取。请在 .env 中设置 API Key 后重试。';
@@ -505,7 +530,14 @@ export class ModuleService {
   /**
    * 全项目扫描 — 遍历所有 Target，AI 提取候选 + Guard 审计
    */
-  async scanProject(options: any = {}) {
+  async scanProject(
+    options: {
+      maxFiles?: number;
+      batchSize?: number;
+      batchTimeout?: number;
+      totalTimeout?: number;
+    } = {}
+  ) {
     await this.#ensureLoaded();
     this.#logger.info('[ModuleService] scanProject: starting full-project scan');
 
@@ -513,8 +545,8 @@ export class ModuleService {
     const allTargets = await this.listTargets();
 
     // 2. 收集所有源文件（去重）
-    const seenPaths = new Set();
-    const allFiles: any[] = [];
+    const seenPaths = new Set<string>();
+    const allFiles: Record<string, unknown>[] = [];
     const MAX_FILES = options.maxFiles || 200;
 
     if (allTargets && allTargets.length > 0) {
@@ -522,7 +554,7 @@ export class ModuleService {
         try {
           const fileList = await this.getTargetFiles(t);
           for (const f of fileList) {
-            const fp = typeof f === 'string' ? f : f.path;
+            const fp = (typeof f === 'string' ? f : f.path) as string;
             if (seenPaths.has(fp)) {
               continue;
             }
@@ -532,7 +564,7 @@ export class ModuleService {
               allFiles.push({
                 name: _pathBasename(fp),
                 path: fp,
-                relativePath: f.relativePath || _pathBasename(fp),
+                relativePath: (f as Record<string, unknown>).relativePath || _pathBasename(fp),
                 content,
                 targetName: t.name,
               });
@@ -543,8 +575,10 @@ export class ModuleService {
               break;
             }
           }
-        } catch (e: any) {
-          this.#logger.warn(`[ModuleService] scanProject: skipping module ${t.name}: ${e.message}`);
+        } catch (e: unknown) {
+          this.#logger.warn(
+            `[ModuleService] scanProject: skipping module ${t.name}: ${(e as Error).message}`
+          );
         }
         if (allFiles.length >= MAX_FILES) {
           break;
@@ -581,7 +615,7 @@ export class ModuleService {
     }));
 
     // 3. AI 提取 Recipes
-    const allRecipes: any[] = [];
+    const allRecipes: Record<string, unknown>[] = [];
     const PER_BATCH_TIMEOUT = options.batchTimeout || 90000;
     const startTime = Date.now();
     const TOTAL_TIMEOUT = options.totalTimeout || 540000;
@@ -610,9 +644,9 @@ export class ModuleService {
           if (Array.isArray(recipes)) {
             allRecipes.push(...recipes);
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           this.#logger.warn(
-            `[ModuleService] scanProject batch ${batchLabel} failed: ${err.message}`
+            `[ModuleService] scanProject batch ${batchLabel} failed: ${(err as Error).message}`
           );
         }
       }
@@ -621,16 +655,31 @@ export class ModuleService {
     }
 
     // 4. Guard 审计
-    let guardAudit: any = null;
+    let guardAudit: Record<string, unknown> | null = null;
     if (this.#guardCheckEngine) {
       try {
-        const guardFiles = allFiles.map((f) => ({ path: f.path, content: f.content }));
-        guardAudit = this.#guardCheckEngine.auditFiles(guardFiles, { scope: 'project' });
+        const guardFiles = allFiles.map((f) => ({
+          path: f.path as string,
+          content: f.content as string,
+        }));
+        const auditFn = this.#guardCheckEngine.auditFiles as (
+          files: { path: string; content: string }[],
+          opts: Record<string, unknown>
+        ) => Record<string, unknown>;
+        guardAudit = auditFn(guardFiles, { scope: 'project' });
 
-        if (this.#violationsStore && guardAudit.files) {
-          for (const fileResult of guardAudit.files) {
+        if (this.#violationsStore && guardAudit && guardAudit.files) {
+          const auditFileResults = guardAudit.files as Array<{
+            filePath: string;
+            violations: unknown[];
+            summary: { errors: number; warnings: number };
+          }>;
+          const appendRun = this.#violationsStore.appendRun as (
+            data: Record<string, unknown>
+          ) => void;
+          for (const fileResult of auditFileResults) {
             if (fileResult.violations.length > 0) {
-              this.#violationsStore.appendRun({
+              appendRun({
                 filePath: fileResult.filePath,
                 violations: fileResult.violations,
                 summary: `Project scan: ${fileResult.summary.errors} errors, ${fileResult.summary.warnings} warnings`,
@@ -638,13 +687,13 @@ export class ModuleService {
             }
           }
         }
-      } catch (e: any) {
-        this.#logger.warn(`[ModuleService] Guard audit failed: ${e.message}`);
+      } catch (e: unknown) {
+        this.#logger.warn(`[ModuleService] Guard audit failed: ${(e as Error).message}`);
       }
     }
 
     this.#logger.info(
-      `[ModuleService] scanProject complete: ${allRecipes.length} recipes, ${guardAudit?.summary?.totalViolations || 0} violations${timedOut ? ' (partial — timed out)' : ''}`
+      `[ModuleService] scanProject complete: ${allRecipes.length} recipes, ${(guardAudit?.summary as Record<string, unknown> | undefined)?.totalViolations || 0} violations${timedOut ? ' (partial — timed out)' : ''}`
     );
 
     return {
@@ -659,7 +708,7 @@ export class ModuleService {
   /**
    * 刷新模块映射（替代 updateDependencyMap）
    */
-  async updateModuleMap(options: any = {}) {
+  async updateModuleMap(options: Record<string, unknown> = {}) {
     // 重新加载 discoverer
     await this.reload();
     const targets = await this.listTargets();
@@ -691,7 +740,14 @@ export class ModuleService {
       return [];
     }
 
-    const dirs: any[] = [];
+    const dirs: {
+      name: string;
+      path: string;
+      depth: number;
+      language: string;
+      sourceFileCount: number;
+      hasSourceFiles: boolean;
+    }[] = [];
     this.#walkDirsForBrowse(root, dirs, 0, maxDepth);
     return dirs;
   }
@@ -701,9 +757,12 @@ export class ModuleService {
    * 用于 Discoverer 未覆盖的目录（自定义目录名、新语言等）
    * @param {string} folderPath 相对/绝对路径
    * @param {object} [options] - scanTarget options (onProgress 等)
-   * @returns {Promise<{ recipes: any[], scannedFiles: any[], message?: string }>}
+   * @returns {Promise<{ recipes: Record<string, unknown>[], scannedFiles: Record<string, unknown>[], message?: string }>}
    */
-  async scanFolder(folderPath: any, options: any = {}) {
+  async scanFolder(
+    folderPath: string,
+    options: { onProgress?: (event: Record<string, unknown>) => void } = {}
+  ) {
     await this.#ensureLoaded();
 
     const absPath = _pathIsAbsolute(folderPath)
@@ -737,7 +796,7 @@ export class ModuleService {
   }
 
   /** 静态语义标准化 */
-  static normalizeSemanticFields(recipe: any) {
+  static normalizeSemanticFields(recipe: Record<string, unknown>) {
     return recipe;
   }
 
@@ -748,8 +807,8 @@ export class ModuleService {
   /**
    * Discoverer ID → 语言映射
    */
-  #discovererToLanguage(id: any) {
-    const map = {
+  #discovererToLanguage(id: string) {
+    const map: Record<string, string> = {
       spm: 'swift',
       node: 'javascript',
       go: 'go',
@@ -757,7 +816,7 @@ export class ModuleService {
       python: 'python',
       generic: 'unknown',
     };
-    return (map as Record<string, any>)[id] || 'unknown';
+    return map[id] || 'unknown';
   }
 
   /**
@@ -766,18 +825,21 @@ export class ModuleService {
    * AgentFactory.scanKnowledge 内部创建 insight Agent，
    * Agent(LLM) 直接分析代码 + 使用 AST 工具，输出 Recipe JSON。
    */
-  async #aiExtractRecipes(targetName: any, files: any) {
+  async #aiExtractRecipes(targetName: string, files: Record<string, unknown>[]) {
     if (!this.#agentFactory) {
       return [];
     }
 
     try {
-      const result = await this.#agentFactory.scanKnowledge({
+      const scanFn = this.#agentFactory.scanKnowledge as (
+        opts: Record<string, unknown>
+      ) => Promise<Record<string, unknown>>;
+      const result = await scanFn({
         label: targetName,
         files,
         task: 'extract',
       });
-      const recipes = result.recipes || [];
+      const recipes = (result.recipes || []) as Record<string, unknown>[];
 
       if (recipes.length === 0) {
         this.#logger.info(
@@ -787,14 +849,14 @@ export class ModuleService {
         this.#logger.info(`[ModuleService] Agent 提取 ${recipes.length} recipes (${targetName})`);
       }
       return recipes;
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (
-        err.code === 'API_KEY_MISSING' ||
-        /API_KEY_MISSING|API.Key.未配置|unregistered callers/i.test(err.message)
+        (err as Record<string, unknown>).code === 'API_KEY_MISSING' ||
+        /API_KEY_MISSING|API.Key.未配置|unregistered callers/i.test((err as Error).message)
       ) {
         this.#logger.info(`[ModuleService] AI 未启用（未配置 API Key），跳过 AI 提取。`);
       } else {
-        this.#logger.warn(`[ModuleService] AI extraction failed: ${err.message}`);
+        this.#logger.warn(`[ModuleService] AI extraction failed: ${(err as Error).message}`);
       }
       return [];
     }
@@ -803,11 +865,14 @@ export class ModuleService {
   /**
    * 质量评分 enrichment
    */
-  #enrichRecipes(recipes: any) {
+  #enrichRecipes(recipes: Record<string, unknown>[]) {
     for (const recipe of recipes) {
       if (!recipe.quality && this.#qualityScorer) {
         try {
-          const scoreResult = this.#qualityScorer.score(recipe);
+          const scoreFn = this.#qualityScorer.score as (
+            r: Record<string, unknown>
+          ) => Record<string, unknown>;
+          const scoreResult = scoreFn(recipe);
           recipe.quality = {
             completeness: 0,
             adaptation: 0,
@@ -815,8 +880,8 @@ export class ModuleService {
             overall: scoreResult.score ?? 0,
             grade: scoreResult.grade || '',
           };
-        } catch (e: any) {
-          this.#logger.debug(`[ModuleService] QualityScorer failed: ${e.message}`);
+        } catch (e: unknown) {
+          this.#logger.debug(`[ModuleService] QualityScorer failed: ${(e as Error).message}`);
         }
       }
     }
@@ -825,7 +890,19 @@ export class ModuleService {
   /**
    * 目录遍历 — 浏览子目录结构
    */
-  #walkDirsForBrowse(dir: any, dirs: any, depth: any, maxDepth: any) {
+  #walkDirsForBrowse(
+    dir: string,
+    dirs: {
+      name: string;
+      path: string;
+      depth: number;
+      language: string;
+      sourceFileCount: number;
+      hasSourceFiles: boolean;
+    }[],
+    depth: number,
+    maxDepth: number
+  ) {
     if (depth >= maxDepth) {
       return;
     }
@@ -870,7 +947,7 @@ export class ModuleService {
   /**
    * 递归统计目录下源码文件数（限深度 + 上限 999 防止超大目录卡顿）
    */
-  #countSourceFilesDeep(dir: any, maxDepth: any, depth = 0) {
+  #countSourceFilesDeep(dir: string, maxDepth: number, depth = 0) {
     if (depth >= maxDepth) {
       return 0;
     }
@@ -896,8 +973,8 @@ export class ModuleService {
   /**
    * 从目录收集源码文件列表
    */
-  #collectFolderFiles(dirPath: any, maxDepth = 15) {
-    const files: any[] = [];
+  #collectFolderFiles(dirPath: string, maxDepth = 15) {
+    const files: { name: string; path: string; relativePath: string; language: string }[] = [];
     this.#walkCollectSourceFiles(dirPath, dirPath, files, 0, maxDepth);
     return files;
   }
@@ -905,7 +982,13 @@ export class ModuleService {
   /**
    * 递归收集源码文件
    */
-  #walkCollectSourceFiles(dir: any, rootDir: any, files: any, depth: any, maxDepth: any) {
+  #walkCollectSourceFiles(
+    dir: string,
+    rootDir: string,
+    files: { name: string; path: string; relativePath: string; language: string }[],
+    depth: number,
+    maxDepth: number
+  ) {
     if (depth > maxDepth || files.length > 500) {
       return;
     }
@@ -942,8 +1025,8 @@ export class ModuleService {
   /**
    * 检测目录主要编程语言
    */
-  #detectFolderLanguage(dirPath: any) {
-    const langCount: Record<string, any> = {};
+  #detectFolderLanguage(dirPath: string) {
+    const langCount: Record<string, number> = {};
     try {
       const entries = readdirSync(dirPath, { withFileTypes: true });
       for (const entry of entries) {
@@ -977,7 +1060,11 @@ export class ModuleService {
   /**
    * 目录遍历兜底（收集源码文件）
    */
-  #walkProjectForFiles(allFiles: any, seenPaths: any, maxFiles: any) {
+  #walkProjectForFiles(
+    allFiles: Record<string, unknown>[],
+    seenPaths: Set<string>,
+    maxFiles: number
+  ) {
     const srcDirs = [
       'Sources',
       'src',
@@ -992,7 +1079,7 @@ export class ModuleService {
       'pkg',
     ];
 
-    const walkDir = (dir: any, targetName: any) => {
+    const walkDir = (dir: string, targetName: string) => {
       if (allFiles.length >= maxFiles) {
         return;
       }

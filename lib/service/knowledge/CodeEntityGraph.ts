@@ -27,6 +27,197 @@ import Logger from '../../infrastructure/logging/Logger.js';
 
 const logger = Logger.getInstance();
 
+/* ══ Internal interfaces ══════════════════════════════════ */
+
+interface CodeEntityRow {
+  id: number;
+  entity_id: string;
+  entity_type: string;
+  project_root: string;
+  name: string;
+  file_path: string | null;
+  line_number: number | null;
+  superclass: string | null;
+  protocols: string;
+  metadata_json: string;
+  created_at: number;
+  updated_at: number;
+}
+
+interface KnowledgeEdgeRow {
+  id?: number;
+  from_id: string;
+  from_type: string;
+  to_id: string;
+  to_type: string;
+  relation: string;
+  weight: number;
+  metadata_json: string;
+  created_at: number;
+  updated_at: number;
+}
+
+interface CeDbLike {
+  getDb?: () => CeDbLike;
+  transaction(fn: () => void): () => void;
+  exec(sql: string): void;
+  prepare(sql: string): {
+    run(...params: unknown[]): { changes: number };
+    get(...params: unknown[]): Record<string, unknown> | undefined;
+    all(...params: unknown[]): Record<string, unknown>[];
+  };
+}
+
+interface AstClass {
+  name: string;
+  isCategory?: boolean;
+  file?: string;
+  line?: number;
+  endLine?: number;
+  superclass?: string;
+  protocols?: string[];
+}
+
+interface AstProtocol {
+  name: string;
+  file?: string;
+  line?: number;
+  inherits?: string[];
+  methods?: unknown[];
+}
+
+interface AstCategory {
+  className: string;
+  categoryName: string;
+  file?: string;
+  line?: number;
+  protocols?: string[];
+  methods?: unknown[];
+}
+
+interface AstEdge {
+  from: string;
+  to: string;
+  type: string;
+}
+
+interface PatternInstance {
+  className?: string;
+  name?: string;
+  file?: string;
+}
+
+interface PatternStat {
+  count: number;
+  files?: string[];
+  instances?: PatternInstance[];
+}
+
+interface ProjectAstSummary {
+  classes?: AstClass[];
+  protocols?: AstProtocol[];
+  categories?: AstCategory[];
+  inheritanceGraph?: AstEdge[];
+  patternStats?: Record<string, PatternStat>;
+}
+
+interface DepGraphNode {
+  id?: string;
+  label?: string;
+  type?: string;
+}
+
+interface DepGraphData {
+  nodes?: (DepGraphNode | string)[];
+}
+
+interface CandidateWithRelations {
+  title?: string;
+  id?: string;
+  relations?: Record<string, unknown>;
+}
+
+interface CallEdge {
+  caller: string;
+  callee: string;
+  callType: string;
+  resolveMethod: string;
+  line: number;
+  file: string;
+  isAwait: boolean;
+  argCount?: number;
+}
+
+interface DataFlowEdge {
+  from?: string;
+  to?: string;
+  flowType?: string;
+  direction?: string;
+  [key: string]: unknown;
+}
+
+interface GraphPopulateResult {
+  entitiesUpserted: number;
+  edgesCreated: number;
+  durationMs: number;
+}
+
+interface CodeEntityData {
+  entityId: string;
+  entityType: string;
+  name: string;
+  filePath?: string | null;
+  line?: number | null;
+  superclass?: string | null;
+  protocols?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+interface MappedCodeEntity {
+  entityId: string;
+  entityType: string;
+  name: string;
+  filePath: string | null;
+  line: number | null;
+  superclass: string | null;
+  protocols: string[];
+  metadata: Record<string, unknown>;
+  projectRoot: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+interface MappedEdge {
+  fromId: string;
+  fromType: string;
+  toId: string;
+  toType: string;
+  relation: string;
+  weight: number;
+  metadata: Record<string, unknown>;
+}
+
+interface PreparedStatements {
+  upsert: ReturnType<CeDbLike['prepare']>;
+  getEntity: ReturnType<CeDbLike['prepare']>;
+  listByType: ReturnType<CeDbLike['prepare']>;
+  clearEntities: ReturnType<CeDbLike['prepare']>;
+  addEdge: ReturnType<CeDbLike['prepare']>;
+  getCallers: ReturnType<CeDbLike['prepare']>;
+  getCallees: ReturnType<CeDbLike['prepare']>;
+  getEdge: ReturnType<CeDbLike['prepare']>;
+}
+
+interface SearchOptions {
+  type?: string;
+  limit?: number;
+}
+
+interface ContextAgentOptions {
+  maxEntities?: number;
+  maxEdges?: number;
+}
+
 /**
  * @typedef {Object} CodeEntity
  * @property {string} entityId   唯一标识 (通常 = name)
@@ -58,18 +249,21 @@ const logger = Logger.getInstance();
  */
 
 export class CodeEntityGraph {
-  projectRoot: any;
-  db: any;
-  log: any;
-  stmts: any;
+  projectRoot: string;
+  db: CeDbLike;
+  log: ReturnType<typeof Logger.getInstance>;
+  stmts!: PreparedStatements;
   /**
    * @param {import('better-sqlite3').Database} db
    * @param {object} [options]
    * @param {string} [options.projectRoot]
    * @param {import('winston').Logger} [options.logger]
    */
-  constructor(db: any, options: any = {}) {
-    this.db = typeof db?.getDb === 'function' ? db.getDb() : db;
+  constructor(
+    db: CeDbLike,
+    options: { projectRoot?: string; logger?: ReturnType<typeof Logger.getInstance> } = {}
+  ) {
+    this.db = typeof db?.getDb === 'function' ? (db.getDb()! as unknown as CeDbLike) : db;
     this.projectRoot = options.projectRoot || '';
     this.log = options.logger || logger;
     this.#ensureTable();
@@ -88,7 +282,7 @@ export class CodeEntityGraph {
    * @param {object} astSummary - analyzeProject() 产出的 ProjectAstSummary
    * @returns {GraphPopulateResult}
    */
-  populateFromAst(astSummary: any) {
+  populateFromAst(astSummary: ProjectAstSummary | null): GraphPopulateResult {
     if (!astSummary) {
       return { entitiesUpserted: 0, edgesCreated: 0, durationMs: 0 };
     }
@@ -164,7 +358,7 @@ export class CodeEntityGraph {
       // ── 设计模式 (从 patternStats) ──
       for (const [patternType, stat] of Object.entries(astSummary.patternStats || {}) as [
         string,
-        any,
+        PatternStat,
       ][]) {
         const patternId = `pattern:${patternType}`;
         this.#upsertEntity({
@@ -211,7 +405,7 @@ export class CodeEntityGraph {
    * @param {object} depGraphData - spm.getDependencyGraph() 产出
    * @returns {GraphPopulateResult}
    */
-  populateFromSpm(depGraphData: any) {
+  populateFromSpm(depGraphData: DepGraphData | null): GraphPopulateResult {
     if (!depGraphData) {
       return { entitiesUpserted: 0, edgesCreated: 0, durationMs: 0 };
     }
@@ -220,12 +414,13 @@ export class CodeEntityGraph {
 
     const run = this.db.transaction(() => {
       for (const node of depGraphData.nodes || []) {
+        const nodeObj = typeof node === 'string' ? { id: node, label: node } : node;
         this.#upsertEntity({
-          entityId: node.id || node.label || node,
+          entityId: nodeObj.id || nodeObj.label || String(node),
           entityType: 'module',
-          name: node.label || node.id || String(node),
+          name: nodeObj.label || nodeObj.id || String(node),
           metadata: {
-            nodeType: node.type || 'module',
+            nodeType: nodeObj.type || 'module',
           },
         });
         entities++;
@@ -247,7 +442,7 @@ export class CodeEntityGraph {
    * @param {Array<{title: string, relations: object}>} candidates 扁平关系数组或 Relations 对象
    * @returns {GraphPopulateResult}
    */
-  populateFromCandidateRelations(candidates: any) {
+  populateFromCandidateRelations(candidates: CandidateWithRelations[] | null): GraphPopulateResult {
     if (!candidates?.length) {
       return { entitiesUpserted: 0, edgesCreated: 0, durationMs: 0 };
     }
@@ -262,11 +457,20 @@ export class CodeEntityGraph {
         }
 
         // 处理 Relations 对象或扁平数组
-        let flatRelations;
-        if (candidate.relations?.toFlatArray) {
-          flatRelations = candidate.relations.toFlatArray();
+        let flatRelations: { type: string; target: string; description?: string }[];
+        const rels = candidate.relations as Record<string, unknown>;
+        if (typeof (rels as Record<string, Function>)?.toFlatArray === 'function') {
+          flatRelations = (
+            rels as unknown as {
+              toFlatArray: () => { type: string; target: string; description?: string }[];
+            }
+          ).toFlatArray();
         } else if (Array.isArray(candidate.relations)) {
-          flatRelations = candidate.relations;
+          flatRelations = candidate.relations as {
+            type: string;
+            target: string;
+            description?: string;
+          }[];
         } else if (candidate.relations && typeof candidate.relations === 'object') {
           // 桶结构 → 扁平
           flatRelations = [];
@@ -312,7 +516,7 @@ export class CodeEntityGraph {
    * @param {string} [entityType]
    * @returns {CodeEntity|null}
    */
-  getEntity(entityId: any, entityType: any) {
+  getEntity(entityId: string, entityType?: string): MappedCodeEntity | null {
     let row;
     if (entityType) {
       row = this.stmts.getEntity.get(entityId, entityType, this.projectRoot);
@@ -321,7 +525,7 @@ export class CodeEntityGraph {
         .prepare(`SELECT * FROM code_entities WHERE entity_id = ? AND project_root = ? LIMIT 1`)
         .get(entityId, this.projectRoot);
     }
-    return row ? this.#mapEntity(row) : null;
+    return row ? this.#mapEntity(row as unknown as CodeEntityRow) : null;
   }
 
   /**
@@ -330,9 +534,9 @@ export class CodeEntityGraph {
    * @param {number} [limit=200]
    * @returns {CodeEntity[]}
    */
-  listEntities(entityType: any, limit = 200) {
+  listEntities(entityType: string, limit = 200): MappedCodeEntity[] {
     const rows = this.stmts.listByType.all(entityType, this.projectRoot, limit);
-    return rows.map((r: any) => this.#mapEntity(r));
+    return rows.map((r) => this.#mapEntity(r as unknown as CodeEntityRow));
   }
 
   /**
@@ -343,10 +547,10 @@ export class CodeEntityGraph {
    * @param {number} [options.limit=20]
    * @returns {CodeEntity[]}
    */
-  searchEntities(query: any, options: any = {}) {
+  searchEntities(query: string, options: SearchOptions = {}): MappedCodeEntity[] {
     const pattern = `%${query}%`;
     let sql = `SELECT * FROM code_entities WHERE project_root = ? AND name LIKE ?`;
-    const params = [this.projectRoot, pattern];
+    const params: (string | number)[] = [this.projectRoot, pattern];
     if (options.type) {
       sql += ` AND entity_type = ?`;
       params.push(options.type);
@@ -356,7 +560,7 @@ export class CodeEntityGraph {
     return this.db
       .prepare(sql)
       .all(...params)
-      .map((r: any) => this.#mapEntity(r));
+      .map((r) => this.#mapEntity(r as unknown as CodeEntityRow));
   }
 
   /**
@@ -366,7 +570,7 @@ export class CodeEntityGraph {
    * @param {'both'|'out'|'in'} [direction='both']
    * @returns {{ outgoing: EntityEdge[], incoming: EntityEdge[] }}
    */
-  getEntityEdges(entityId: any, entityType: any, direction = 'both') {
+  getEntityEdges(entityId: string, entityType: string, direction = 'both') {
     const outgoing =
       direction === 'both' || direction === 'out'
         ? this.db
@@ -390,7 +594,7 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=10]
    * @returns {string[]} 继承链 [class, parent, grandparent, ...]
    */
-  getInheritanceChain(className: any, maxDepth = 10) {
+  getInheritanceChain(className: string, maxDepth = 10): string[] {
     const chain = [className];
     let current = className;
     for (let i = 0; i < maxDepth; i++) {
@@ -403,8 +607,8 @@ export class CodeEntityGraph {
       if (!parent) {
         break;
       }
-      chain.push(parent.to_id);
-      current = parent.to_id;
+      chain.push(parent.to_id as string);
+      current = parent.to_id as string;
     }
     return chain;
   }
@@ -416,8 +620,8 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=3]
    * @returns {Array<{ id: string, type: string, depth: number, relation: string }>}
    */
-  getDescendants(entityId: any, entityType: any, maxDepth = 3) {
-    const results: { id: any; type: any; depth: any; relation: string }[] = [];
+  getDescendants(entityId: string, entityType: string, maxDepth = 3) {
+    const results: { id: string; type: string; depth: number; relation: string }[] = [];
     const visited = new Set();
     const queue = [{ id: entityId, type: entityType, depth: 0 }];
 
@@ -448,12 +652,16 @@ export class CodeEntityGraph {
           const childKey = `${child.from_type}:${child.from_id}`;
           if (!visited.has(childKey)) {
             results.push({
-              id: child.from_id,
-              type: child.from_type,
+              id: child.from_id as string,
+              type: child.from_type as string,
               depth: depth + 1,
               relation: rel,
             });
-            queue.push({ id: child.from_id, type: child.from_type, depth: depth + 1 });
+            queue.push({
+              id: child.from_id as string,
+              type: child.from_type as string,
+              depth: depth + 1,
+            });
           }
         }
       }
@@ -467,14 +675,14 @@ export class CodeEntityGraph {
    * @param {string} className
    * @returns {string[]}
    */
-  getConformances(className: any) {
+  getConformances(className: string): string[] {
     const rows = this.db
       .prepare(
         `SELECT to_id FROM knowledge_edges 
        WHERE from_id = ? AND from_type IN ('class', 'category') AND relation = 'conforms'`
       )
       .all(className);
-    return rows.map((r: any) => r.to_id);
+    return rows.map((r) => (r as unknown as KnowledgeEdgeRow).to_id);
   }
 
   /**
@@ -486,9 +694,19 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=5]
    * @returns {{ found: boolean, path: EntityEdge[], depth: number }}
    */
-  findPath(fromId: any, fromType: any, toId: any, toType: any, maxDepth = 5) {
+  findPath(fromId: string, fromType: string, toId: string, toType: string, maxDepth = 5) {
     const visited = new Set();
-    const queue = [{ id: fromId, type: fromType, path: [] as any[] }];
+    const queue = [
+      {
+        id: fromId,
+        type: fromType,
+        path: [] as {
+          from: { id: string; type: string };
+          to: { id: string; type: string };
+          relation: string;
+        }[],
+      },
+    ];
 
     while (queue.length > 0) {
       const { id, type, path } = queue.shift()!;
@@ -511,19 +729,27 @@ export class CodeEntityGraph {
       for (const n of neighbors) {
         const step = {
           from: { id, type },
-          to: { id: n.to_id, type: n.to_type },
-          relation: n.relation,
+          to: { id: n.to_id as string, type: n.to_type as string },
+          relation: n.relation as string,
         };
         const newPath = [...path, step];
 
         if (n.to_id === toId && n.to_type === toType) {
           return { found: true, path: newPath, depth: newPath.length };
         }
-        queue.push({ id: n.to_id, type: n.to_type, path: newPath });
+        queue.push({ id: n.to_id as string, type: n.to_type as string, path: newPath });
       }
     }
 
-    return { found: false, path: [] as any[], depth: -1 };
+    return {
+      found: false,
+      path: [] as {
+        from: { id: string; type: string };
+        to: { id: string; type: string };
+        relation: string;
+      }[],
+      depth: -1,
+    };
   }
 
   /**
@@ -533,8 +759,8 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=3]
    * @returns {Array<{ id: string, type: string, relation: string, depth: number }>}
    */
-  getImpactRadius(entityId: any, entityType: any, maxDepth = 3) {
-    const impacted: { id: any; type: any; relation: any; depth: any }[] = [];
+  getImpactRadius(entityId: string, entityType: string, maxDepth = 3) {
+    const impacted: { id: string; type: string; relation: string; depth: number }[] = [];
     const visited = new Set();
     const queue = [{ id: entityId, type: entityType, depth: 0 }];
 
@@ -562,12 +788,16 @@ export class CodeEntityGraph {
         const depKey = `${dep.from_type}:${dep.from_id}`;
         if (!visited.has(depKey)) {
           impacted.push({
-            id: dep.from_id,
-            type: dep.from_type,
-            relation: dep.relation,
+            id: dep.from_id as string,
+            type: dep.from_type as string,
+            relation: dep.relation as string,
             depth: depth + 1,
           });
-          queue.push({ id: dep.from_id, type: dep.from_type, depth: depth + 1 });
+          queue.push({
+            id: dep.from_id as string,
+            type: dep.from_type as string,
+            depth: depth + 1,
+          });
         }
       }
     }
@@ -602,11 +832,31 @@ export class CodeEntityGraph {
       .all();
 
     return {
-      entities: Object.fromEntries(entityStats.map((s: any) => [s.entity_type, s.count])),
-      edges: Object.fromEntries(edgeStats.map((s: any) => [s.relation, s.count])),
-      totalEntities: entityStats.reduce((sum: any, s: any) => sum + s.count, 0),
-      totalEdges: edgeStats.reduce((sum: any, s: any) => sum + s.count, 0),
-      hotNodes: hotNodes.map((n: any) => ({ id: n.to_id, type: n.to_type, inDegree: n.in_degree })),
+      entities: Object.fromEntries(
+        entityStats.map((s) => [
+          (s as unknown as Record<string, unknown>).entity_type,
+          (s as unknown as Record<string, unknown>).count,
+        ])
+      ),
+      edges: Object.fromEntries(
+        edgeStats.map((s) => [
+          (s as unknown as Record<string, unknown>).relation,
+          (s as unknown as Record<string, unknown>).count,
+        ])
+      ),
+      totalEntities: entityStats.reduce(
+        (sum: number, s) => sum + ((s as unknown as Record<string, number>).count || 0),
+        0
+      ),
+      totalEdges: edgeStats.reduce(
+        (sum: number, s) => sum + ((s as unknown as Record<string, number>).count || 0),
+        0
+      ),
+      hotNodes: hotNodes.map((n) => ({
+        id: (n as unknown as Record<string, unknown>).to_id,
+        type: (n as unknown as Record<string, unknown>).to_type,
+        inDegree: (n as unknown as Record<string, unknown>).in_degree,
+      })),
     };
   }
 
@@ -617,7 +867,7 @@ export class CodeEntityGraph {
    * @param {number} [options.maxEdges=50]
    * @returns {string}
    */
-  generateContextForAgent(options: any = {}) {
+  generateContextForAgent(options: ContextAgentOptions = {}): string {
     const maxEntities = options.maxEntities || 30;
     const _maxEdges = options.maxEdges || 50;
     const topo = this.getTopology();
@@ -695,9 +945,11 @@ export class CodeEntityGraph {
                LIMIT 3`
             )
             .all(row.to_id);
-          const callerNames = topCallers.map((c: any) => `\`${c.from_id}\``).join(', ');
+          const callerNames = topCallers
+            .map((c) => `\`${(c as unknown as Record<string, string>).from_id}\``)
+            .join(', ');
           lines.push(
-            `- \`${row.to_id}\` ← ${row.call_count} 次调用 (${callerNames}${topCallers.length < row.call_count ? '...' : ''})`
+            `- \`${row.to_id}\` ← ${row.call_count} 次调用 (${callerNames}${topCallers.length < (row.call_count as number) ? '...' : ''})`
           );
         }
         lines.push('');
@@ -708,12 +960,12 @@ export class CodeEntityGraph {
         .prepare(`SELECT COUNT(*) as cnt FROM knowledge_edges WHERE relation = 'data_flow'`)
         .get();
 
-      if (dataFlowCount?.cnt > 0) {
+      if (dataFlowCount && (dataFlowCount as Record<string, number>).cnt > 0) {
         lines.push(`### 数据流`);
-        lines.push(`- 数据流边: ${dataFlowCount.cnt} 条`);
+        lines.push(`- 数据流边: ${(dataFlowCount as Record<string, number>).cnt} 条`);
         lines.push('');
       }
-    } catch (_e: any) {
+    } catch (_e: unknown) {
       // 调用图数据可能尚未填充, 静默跳过
     }
 
@@ -731,7 +983,7 @@ export class CodeEntityGraph {
    * @param {Array<{ from: string, to: string, flowType: string, direction: string }>} dataFlowEdges
    * @returns {GraphPopulateResult}
    */
-  populateCallGraph(callEdges: any, dataFlowEdges: any) {
+  populateCallGraph(callEdges: CallEdge[], dataFlowEdges: DataFlowEdge[]): GraphPopulateResult {
     const t0 = Date.now();
     let edges = 0;
     let entities = 0;
@@ -809,14 +1061,14 @@ export class CodeEntityGraph {
 
       // ── 数据流边 ──
       for (const flow of dataFlowEdges) {
-        const fromId = this._extractEntityId(flow.from);
-        const toId = this._extractEntityId(flow.to);
+        const fromId = this._extractEntityId(flow.from || '');
+        const toId = this._extractEntityId(flow.to || '');
 
         this.#addEdge(fromId, 'method', toId, 'method', 'data_flow', {
           weight: 0.5,
           source: 'phase5-data-flow',
-          flowType: flow.flowType,
-          direction: flow.direction,
+          flowType: flow.flowType || '',
+          direction: flow.direction || '',
         });
         edges++;
       }
@@ -838,8 +1090,8 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=2]
    * @returns {Array<{ caller: string, depth: number, callType: string }>}
    */
-  getCallers(methodId: any, maxDepth = 2) {
-    const results: { caller: any; depth: any; callType: any }[] = [];
+  getCallers(methodId: string, maxDepth = 2) {
+    const results: { caller: string; depth: number; callType: string }[] = [];
     const visited = new Set();
     const queue = [{ id: methodId, depth: 0 }];
 
@@ -853,14 +1105,14 @@ export class CodeEntityGraph {
       const callers = this.stmts.getCallers.all(id);
 
       for (const row of callers) {
-        const meta = JSON.parse(row.metadata_json || '{}');
+        const meta = JSON.parse((row.metadata_json as string) || '{}');
         results.push({
-          caller: row.from_id,
+          caller: row.from_id as string,
           depth: depth + 1,
           callType: meta.callType || 'unknown',
         });
         if (depth + 1 < maxDepth) {
-          queue.push({ id: row.from_id, depth: depth + 1 });
+          queue.push({ id: row.from_id as string, depth: depth + 1 });
         }
       }
     }
@@ -875,8 +1127,8 @@ export class CodeEntityGraph {
    * @param {number} [maxDepth=2]
    * @returns {Array<{ callee: string, depth: number, callType: string }>}
    */
-  getCallees(methodId: any, maxDepth = 2) {
-    const results: { callee: any; depth: any; callType: any }[] = [];
+  getCallees(methodId: string, maxDepth = 2) {
+    const results: { callee: string; depth: number; callType: string }[] = [];
     const visited = new Set();
     const queue = [{ id: methodId, depth: 0 }];
 
@@ -890,14 +1142,14 @@ export class CodeEntityGraph {
       const callees = this.stmts.getCallees.all(id);
 
       for (const row of callees) {
-        const meta = JSON.parse(row.metadata_json || '{}');
+        const meta = JSON.parse((row.metadata_json as string) || '{}');
         results.push({
-          callee: row.to_id,
+          callee: row.to_id as string,
           depth: depth + 1,
           callType: meta.callType || 'unknown',
         });
         if (depth + 1 < maxDepth) {
-          queue.push({ id: row.to_id, depth: depth + 1 });
+          queue.push({ id: row.to_id as string, depth: depth + 1 });
         }
       }
     }
@@ -912,9 +1164,9 @@ export class CodeEntityGraph {
    * @param {string} methodId - "ClassName.methodName"
    * @returns {{ directCallers: number, transitiveCallers: number, affectedFiles: string[] }}
    */
-  getCallImpactRadius(methodId: any) {
+  getCallImpactRadius(methodId: string) {
     const callers = this.getCallers(methodId, 3);
-    const affectedFiles = new Set();
+    const affectedFiles = new Set<string>();
 
     for (const c of callers) {
       const entity = this.getEntity(c.caller, 'method');
@@ -939,7 +1191,7 @@ export class CodeEntityGraph {
    * @param {string} fqn
    * @returns {string}
    */
-  _extractEntityId(fqn: any) {
+  _extractEntityId(fqn: string): string {
     if (fqn.includes('::')) {
       return fqn.split('::')[1];
     }
@@ -969,7 +1221,7 @@ export class CodeEntityGraph {
    * @param {string[]} filePaths 变更文件的相对路径列表
    * @returns {{ deletedEdges: number, deletedEntities: number }}
    */
-  clearCallGraphForFiles(filePaths: any) {
+  clearCallGraphForFiles(filePaths: string[] | null) {
     if (!filePaths?.length) {
       return { deletedEdges: 0, deletedEntities: 0 };
     }
@@ -1088,7 +1340,7 @@ export class CodeEntityGraph {
   // Private — Helpers
   // ────────────────────────────────────────────
 
-  #upsertEntity(entity: any) {
+  #upsertEntity(entity: CodeEntityData) {
     const now = Math.floor(Date.now() / 1000);
     this.stmts.upsert.run(
       entity.entityId,
@@ -1105,7 +1357,14 @@ export class CodeEntityGraph {
     );
   }
 
-  #addEdge(fromId: any, fromType: any, toId: any, toType: any, relation: any, metadata: any = {}) {
+  #addEdge(
+    fromId: string,
+    fromType: string,
+    toId: string,
+    toType: string,
+    relation: string,
+    metadata: Record<string, unknown> = {}
+  ) {
     const now = Math.floor(Date.now() / 1000);
     try {
       this.stmts.addEdge.run(
@@ -1119,9 +1378,9 @@ export class CodeEntityGraph {
         now,
         now
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Ignore duplicate edge errors
-      if (!err.message.includes('UNIQUE constraint')) {
+      if (err instanceof Error && !err.message.includes('UNIQUE constraint')) {
         this.log.warn(`[CodeEntityGraph] addEdge failed: ${err.message}`);
       }
     }
@@ -1130,11 +1389,11 @@ export class CodeEntityGraph {
   /**
    * 从 AST 数据推断实体类型
    */
-  #inferEntityType(name: any, astSummary: any) {
+  #inferEntityType(name: string, astSummary: ProjectAstSummary): string {
     if (!name) {
       return 'class'; // guard against undefined
     }
-    if (astSummary.protocols?.some((p: any) => p.name === name)) {
+    if (astSummary.protocols?.some((p) => p.name === name)) {
       return 'protocol';
     }
     if (name.includes('(') && name.includes(')')) {
@@ -1146,7 +1405,7 @@ export class CodeEntityGraph {
   /**
    * 映射 Relations 桶名到图谱边类型
    */
-  #mapRelationType(type: any) {
+  #mapRelationType(type: string): string {
     const mapping = {
       inherits: 'inherits',
       implements: 'conforms',
@@ -1163,22 +1422,22 @@ export class CodeEntityGraph {
       enforces: 'enforces',
       references: 'references',
     };
-    return (mapping as Record<string, any>)[type] || 'related';
+    return (mapping as Record<string, string>)[type] || 'related';
   }
 
-  #mapEdge(row: any) {
+  #mapEdge(row: Record<string, unknown>): MappedEdge {
     return {
-      fromId: row.from_id,
-      fromType: row.from_type,
-      toId: row.to_id,
-      toType: row.to_type,
-      relation: row.relation,
-      weight: row.weight,
-      metadata: JSON.parse(row.metadata_json || '{}'),
+      fromId: row.from_id as string,
+      fromType: row.from_type as string,
+      toId: row.to_id as string,
+      toType: row.to_type as string,
+      relation: row.relation as string,
+      weight: row.weight as number,
+      metadata: JSON.parse((row.metadata_json as string) || '{}'),
     };
   }
 
-  #mapEntity(row: any) {
+  #mapEntity(row: CodeEntityRow): MappedCodeEntity {
     return {
       entityId: row.entity_id,
       entityType: row.entity_type,

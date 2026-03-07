@@ -1,3 +1,4 @@
+import type { Task } from '../../domain/task/Task.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 
 /**
@@ -10,12 +11,16 @@ import Logger from '../../infrastructure/logging/Logger.js';
  *   2. 关联的 Guard 规则 → 嵌入任务上下文
  */
 export class TaskKnowledgeBridge {
-  _search: any;
-  logger: any;
+  _search: {
+    search: (query: string, options: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  } | null;
+  logger: ReturnType<typeof Logger.getInstance>;
   /**
    * @param {import('../../service/search/SearchEngine.js').SearchEngine} searchEngine
    */
-  constructor(searchEngine: any) {
+  constructor(searchEngine: {
+    search: (query: string, options: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  }) {
     this._search = searchEngine;
     this.logger = Logger.getInstance();
   }
@@ -27,7 +32,7 @@ export class TaskKnowledgeBridge {
    * @param {import('../../domain/task/Task.js').Task[]} tasks
    * @returns {Promise<import('../../domain/task/Task.js').Task[]>}
    */
-  async enrichWithKnowledge(tasks: any) {
+  async enrichWithKnowledge(tasks: Task[]) {
     if (!tasks || tasks.length === 0) {
       return tasks;
     }
@@ -35,9 +40,9 @@ export class TaskKnowledgeBridge {
       return tasks;
     }
 
-    const results = await Promise.allSettled(tasks.map((task: any) => this._buildContext(task)));
+    const results = await Promise.allSettled(tasks.map((task: Task) => this._buildContext(task)));
 
-    return tasks.map((task: any, i: any) => {
+    return tasks.map((task: Task, i: number) => {
       if (results[i].status === 'fulfilled' && results[i].value) {
         task.knowledgeContext = results[i].value;
       }
@@ -49,31 +54,37 @@ export class TaskKnowledgeBridge {
    * 为单个任务构建知识上下文
    * @private
    */
-  async _buildContext(task: any) {
+  async _buildContext(task: Task) {
     const query = `${task.title} ${task.description}`.trim();
     if (!query) {
       return null;
     }
 
     try {
-      const searchResult = await this._search.search(query, {
+      const searchResult = await this._search!.search(query, {
         mode: 'auto',
         limit: 5,
       });
 
-      const allResults = searchResult?.items || searchResult?.results || [];
-      const knowledge = allResults.filter((r: any) => r.kind !== 'rule').slice(0, 3);
-      const guardRules = allResults.filter((r: any) => r.kind === 'rule').slice(0, 5);
+      const allResults = (searchResult?.items || searchResult?.results || []) as Array<
+        Record<string, unknown>
+      >;
+      const knowledge = allResults
+        .filter((r: Record<string, unknown>) => r.kind !== 'rule')
+        .slice(0, 3);
+      const guardRules = allResults
+        .filter((r: Record<string, unknown>) => r.kind === 'rule')
+        .slice(0, 5);
 
       return {
-        relatedKnowledge: knowledge.map((k: any) => ({
+        relatedKnowledge: knowledge.map((k: Record<string, unknown>) => ({
           id: k.id,
           title: k.title,
           kind: k.kind,
           trigger: k.trigger,
           actionHint: k.actionHint || k.doClause || '',
         })),
-        guardRules: guardRules.map((r: any) => ({
+        guardRules: guardRules.map((r: Record<string, unknown>) => ({
           id: r.id,
           title: r.title,
           trigger: r.trigger,
@@ -81,10 +92,10 @@ export class TaskKnowledgeBridge {
         })),
         searchQuery: query,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.debug('TaskKnowledgeBridge._buildContext error', {
         taskId: task.id,
-        error: err.message,
+        error: (err as Error).message,
       });
       return null;
     }

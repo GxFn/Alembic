@@ -8,6 +8,17 @@
  * SnippetSpec 结构 (IDE 无关中间表示):
  *   { identifier, title, completion, summary, code, language }
  */
+export interface SnippetSpec {
+  identifier: string;
+  title?: string;
+  completion?: string;
+  trigger?: string;
+  summary?: string;
+  code?: string | string[];
+  language?: string;
+  [key: string]: unknown;
+}
+
 export class SnippetCodec {
   /** @returns {string} codec 标识 ('xcode' | 'vscode') */
   get id(): string {
@@ -24,7 +35,7 @@ export class SnippetCodec {
    * @param {object} spec
    * @returns {string}
    */
-  generate(spec: any): string {
+  generate(spec: SnippetSpec): string {
     throw new Error('SnippetCodec.generate() is abstract');
   }
 
@@ -35,7 +46,7 @@ export class SnippetCodec {
    * @param {object[]} specs
    * @returns {string | Array<{ filename: string, content: string }>}
    */
-  generateBundle(specs: any[]): string | Array<{ filename: string; content: string }> {
+  generateBundle(specs: SnippetSpec[]): string | Array<{ filename: string; content: string }> {
     throw new Error('SnippetCodec.generateBundle() is abstract');
   }
 
@@ -44,7 +55,7 @@ export class SnippetCodec {
    * @param {string} [projectRoot]
    * @returns {string}
    */
-  getInstallDir(projectRoot?: any): string {
+  getInstallDir(projectRoot?: string): string {
     throw new Error('SnippetCodec.getInstallDir() is abstract');
   }
 
@@ -53,7 +64,7 @@ export class SnippetCodec {
    * @param {string} lang
    * @returns {string}
    */
-  mapLanguage(lang: any): string {
+  mapLanguage(lang: string): string {
     throw new Error('SnippetCodec.mapLanguage() is abstract');
   }
 

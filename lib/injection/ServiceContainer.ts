@@ -19,10 +19,10 @@ import * as KnowledgeModule from './modules/KnowledgeModule.js';
  * 管理所有应用层的仓储、服务和基础设施依赖的创建和注入
  */
 export class ServiceContainer {
-  logger: any;
-  _aiDependentSingletons: any;
-  services: any;
-  singletons: any;
+  logger: ReturnType<typeof Logger.getInstance>;
+  _aiDependentSingletons: string[] = [];
+  services: Record<string, () => unknown>;
+  singletons: Record<string, unknown>;
   constructor() {
     this.services = {};
     this.singletons = {};
@@ -39,7 +39,11 @@ export class ServiceContainer {
    * @param {{ aiDependent?: boolean }} [options] 选项
    *   - aiDependent: 标记为 AI Provider 依赖项，热重载时自动清除缓存
    */
-  singleton(name: any, factory: any, options: any = {}) {
+  singleton(
+    name: string,
+    factory: (container: ServiceContainer) => unknown,
+    options: { aiDependent?: boolean } = {}
+  ) {
     if (options.aiDependent) {
       this._aiDependentSingletons = this._aiDependentSingletons || [];
       if (!this._aiDependentSingletons.includes(name)) {
@@ -65,7 +69,7 @@ export class ServiceContainer {
    * 初始化所有服务和仓储
    * @param {object} bootstrapComponents - Bootstrap 初始化的组件（db, auditLogger, gateway 等）
    */
-  async initialize(bootstrapComponents: any = {}) {
+  async initialize(bootstrapComponents: Record<string, unknown> = {}) {
     try {
       // 如果提供了 bootstrap 组件，将它们注入到单例缓存中
       if (bootstrapComponents.db) {
@@ -103,11 +107,13 @@ export class ServiceContainer {
       // 自动探测 AI Provider（供 SearchEngine / Agent / IndexingPipeline 等常驻服务使用）
       if (!this.singletons.aiProvider && this.singletons._aiFactory) {
         try {
-          const { autoDetectProvider } = this.singletons._aiFactory;
+          const aiFactory = this.singletons._aiFactory as Record<string, unknown>;
+          const autoDetectProvider = aiFactory.autoDetectProvider;
           if (typeof autoDetectProvider === 'function') {
             this.singletons.aiProvider = autoDetectProvider();
+            const provider = this.singletons.aiProvider as Record<string, unknown> | null;
             this.logger.info('AI provider injected into container', {
-              provider: this.singletons.aiProvider?.constructor?.name || 'unknown',
+              provider: (provider?.constructor as { name?: string } | undefined)?.name || 'unknown',
             });
           }
         } catch {
@@ -117,16 +123,34 @@ export class ServiceContainer {
       }
 
       // 如果主 provider 不支持 embedding（如 Claude），尝试创建备用 embedding provider
-      if (this.singletons.aiProvider && !this.singletons.aiProvider.supportsEmbedding?.()) {
+      const currentProvider = this.singletons.aiProvider as Record<string, unknown> | null;
+      if (
+        (currentProvider &&
+          typeof (currentProvider as Record<string, (...args: unknown[]) => unknown>)
+            .supportsEmbedding !== 'function') ||
+        (currentProvider &&
+          !(
+            currentProvider as Record<string, (...args: unknown[]) => unknown>
+          ).supportsEmbedding?.())
+      ) {
         try {
-          const { getAvailableFallbacks, createProvider } = this.singletons._aiFactory;
-          const providerName = this.singletons.aiProvider.name?.replace('-', '') || '';
+          const aiFactory = (this.singletons._aiFactory || {}) as Record<string, unknown>;
+          const getAvailableFallbacks = aiFactory.getAvailableFallbacks;
+          const createProvider = aiFactory.createProvider as
+            | ((opts: Record<string, unknown>) => Record<string, unknown>)
+            | undefined;
+          const providerName = ((currentProvider?.name as string) || '').replace('-', '');
           const fbCandidates =
-            typeof getAvailableFallbacks === 'function' ? getAvailableFallbacks(providerName) : [];
+            typeof getAvailableFallbacks === 'function'
+              ? (getAvailableFallbacks as (name: string) => string[])(providerName)
+              : [];
           for (const fb of fbCandidates) {
             try {
-              const fbProvider = createProvider({ provider: fb });
-              if (fbProvider.supportsEmbedding?.()) {
+              const fbProvider = createProvider!({ provider: fb });
+              if (
+                typeof fbProvider.supportsEmbedding === 'function' &&
+                (fbProvider.supportsEmbedding as () => boolean)()
+              ) {
                 this.singletons._embedProvider = fbProvider;
                 this.logger.info('Embedding fallback provider created', { provider: fb });
                 break;
@@ -164,14 +188,16 @@ export class ServiceContainer {
       // v3.1: 初始化 Enhancement Pack 注册表（异步加载所有框架增强包）
       try {
         await initEnhancementRegistry();
-      } catch (e: any) {
-        this.logger.warn('Enhancement registry init failed (non-blocking)', { error: e.message });
+      } catch (e: unknown) {
+        this.logger.warn('Enhancement registry init failed (non-blocking)', {
+          error: (e as Error).message,
+        });
       }
 
       this.logger.info('Service container initialized successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Error initializing service container', {
-        error: error.message,
+        error: (error as Error).message,
       });
       throw error;
     }
@@ -188,22 +214,33 @@ export class ServiceContainer {
    *
    * @param {import('../external/ai/AiProvider.js').AiProvider} newProvider
    */
-  reloadAiProvider(newProvider: any) {
-    const old = this.singletons.aiProvider;
+  reloadAiProvider(newProvider: Record<string, unknown> | null) {
+    const old = this.singletons.aiProvider as Record<string, unknown> | null;
     this.singletons.aiProvider = newProvider;
 
     // 重新创建 embedding fallback provider
     this.singletons._embedProvider = null;
-    if (newProvider && !newProvider.supportsEmbedding?.()) {
+    if (
+      newProvider &&
+      typeof newProvider.supportsEmbedding === 'function' &&
+      !(newProvider.supportsEmbedding as () => boolean)()
+    ) {
       try {
-        const { getAvailableFallbacks, createProvider } = this.singletons._aiFactory || {};
+        const aiFactory = (this.singletons._aiFactory || {}) as Record<string, unknown>;
+        const getAvailableFallbacks = aiFactory.getAvailableFallbacks;
+        const createProvider = aiFactory.createProvider as
+          | ((opts: Record<string, unknown>) => Record<string, unknown>)
+          | undefined;
         if (typeof getAvailableFallbacks === 'function') {
-          const providerName = newProvider.name?.replace('-', '') || '';
-          const fbCandidates = getAvailableFallbacks(providerName);
+          const providerName = ((newProvider.name as string) || '').replace('-', '');
+          const fbCandidates = (getAvailableFallbacks as (name: string) => string[])(providerName);
           for (const fb of fbCandidates) {
             try {
-              const fbProvider = createProvider({ provider: fb });
-              if (fbProvider.supportsEmbedding?.()) {
+              const fbProvider = createProvider!({ provider: fb });
+              if (
+                typeof fbProvider.supportsEmbedding === 'function' &&
+                (fbProvider.supportsEmbedding as () => boolean)()
+              ) {
                 this.singletons._embedProvider = fbProvider;
                 this.logger.info('Embedding fallback provider re-created', { provider: fb });
                 break;
@@ -220,7 +257,7 @@ export class ServiceContainer {
 
     // 清除持有旧 aiProvider 引用的 singleton 缓存
     // 下次调用 container.get() 时会使用新 provider 重建
-    const cleared: any[] = [];
+    const cleared: string[] = [];
     for (const key of this._aiDependentSingletons || []) {
       if (this.singletons[key]) {
         this.singletons[key] = null;
@@ -229,8 +266,8 @@ export class ServiceContainer {
     }
 
     this.logger.info('AI provider hot-reloaded', {
-      old: old?.constructor?.name || 'none',
-      new: newProvider?.constructor?.name || 'none',
+      old: (old?.constructor as { name?: string } | undefined)?.name || 'none',
+      new: (newProvider?.constructor as { name?: string } | undefined)?.name || 'none',
       clearedSingletons: cleared,
     });
   }
@@ -249,7 +286,7 @@ export class ServiceContainer {
    * 设置默认 UI 语言偏好（影响 Agent 回复语言）
    * @param {'zh'|'en'|null} lang
    */
-  setLang(lang: any) {
+  setLang(lang: 'zh' | 'en' | null) {
     this.singletons._lang = lang || null;
   }
 
@@ -264,7 +301,7 @@ export class ServiceContainer {
    * @param {Object} [extras] 合并到上下文的额外字段
    * @returns {Object} 工具执行上下文
    */
-  buildToolContext(extras: any = {}) {
+  buildToolContext(extras: Record<string, unknown> = {}): Record<string, unknown> {
     return {
       container: this,
       aiProvider: this.singletons.aiProvider || null,
@@ -280,14 +317,15 @@ export class ServiceContainer {
   /**
    * 注册服务或工厂函数
    */
-  register(name: any, factory: any) {
+  register(name: string, factory: () => unknown) {
     this.services[name] = factory;
   }
 
   /**
    * 获取服务（通过工厂函数）
    */
-  get(name: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DI container: callers know the service type
+  get(name: string): any {
     if (!this.services[name]) {
       throw new Error(`Service '${name}' not found in container`);
     }
@@ -315,7 +353,7 @@ export class ServiceContainer {
    * @param {object} [options] 传递给 ProjectGraph.build() 的选项
    * @returns {Promise<import('../core/ast/ProjectGraph.js').default|null>}
    */
-  async buildProjectGraph(projectRoot: any, options: any = {}) {
+  async buildProjectGraph(projectRoot: string, options: Record<string, unknown> = {}) {
     if (this.singletons.projectGraph) {
       return this.singletons.projectGraph;
     }
@@ -332,8 +370,8 @@ export class ServiceContainer {
         const oldHashes = cached.fileHashes || {};
 
         // 计算差异：新增 / 变更 / 删除
-        const changedPaths: any[] = [];
-        const newHashes: Record<string, any> = {};
+        const changedPaths: string[] = [];
+        const newHashes: Record<string, string> = {};
         for (const fp of currentFiles) {
           const rel = pathRelative(projectRoot, fp);
           const h = cache.computeFileHash(fp);
@@ -385,8 +423,8 @@ export class ServiceContainer {
           `(${overview.buildTimeMs}ms) — 缓存已写入`
       );
       return graph;
-    } catch (err: any) {
-      this.logger.warn(`[ServiceContainer] ProjectGraph build failed: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.warn(`[ServiceContainer] ProjectGraph build failed: ${(err as Error).message}`);
       return null;
     }
   }
@@ -397,10 +435,12 @@ export class ServiceContainer {
    * @param {object} options
    * @returns {string[]}
    */
-  #collectSourceFilePaths(projectRoot: any, options: any = {}) {
+  #collectSourceFilePaths(projectRoot: string, options: Record<string, unknown> = {}) {
     const DEFAULTS_EXT = { '.m': true, '.h': true, '.swift': true };
-    const extSet = new Set(options.extensions || Object.keys(DEFAULTS_EXT));
-    const excludePatterns = options.excludePatterns || [
+    const extSet = new Set(
+      (options.extensions as string[] | undefined) || Object.keys(DEFAULTS_EXT)
+    );
+    const excludePatterns = (options.excludePatterns as string[] | undefined) || [
       'Pods/',
       'Carthage/',
       'node_modules/',
@@ -412,11 +452,11 @@ export class ServiceContainer {
       '__tests__/',
       'Tests/',
     ];
-    const maxFiles = options.maxFiles || 500;
-    const maxFileSizeBytes = options.maxFileSizeBytes || 500_000;
+    const maxFiles = (options.maxFiles as number | undefined) || 500;
+    const maxFileSizeBytes = (options.maxFileSizeBytes as number | undefined) || 500_000;
     const results: string[] = [];
 
-    function walk(dir: any) {
+    function walk(dir: string) {
       if (results.length >= maxFiles) {
         return;
       }
@@ -432,7 +472,7 @@ export class ServiceContainer {
         }
         const fullPath = pathJoin(dir, entry.name);
         const relativePath = pathRelative(projectRoot, fullPath);
-        if (excludePatterns.some((p: any) => relativePath.includes(p))) {
+        if (excludePatterns.some((p) => relativePath.includes(p))) {
           continue;
         }
         if (entry.isDirectory()) {
@@ -455,7 +495,7 @@ export class ServiceContainer {
   }
 }
 
-let containerInstance: any = null;
+let containerInstance: ServiceContainer | null = null;
 
 /**
  * 获取全局服务容器实例

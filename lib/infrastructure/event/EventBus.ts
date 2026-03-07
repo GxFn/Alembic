@@ -6,10 +6,10 @@
 import { EventEmitter } from 'node:events';
 
 export class EventBus extends EventEmitter {
-  #history: any[];
+  #history: Array<{ event: string | symbol; timestamp: string; argCount: number }>;
   #historyLimit;
 
-  constructor(options: any = {}) {
+  constructor(options: { maxListeners?: number; historyLimit?: number } = {}) {
     super();
     this.setMaxListeners(options.maxListeners || 20);
     this.#history = [];
@@ -19,7 +19,7 @@ export class EventBus extends EventEmitter {
   /**
    * 同步 emit + 记录历史
    */
-  emit(eventName: any, ...args: any[]) {
+  emit(eventName: string | symbol, ...args: unknown[]) {
     this.#recordEvent(eventName, args);
     return super.emit(eventName, ...args);
   }
@@ -29,7 +29,7 @@ export class EventBus extends EventEmitter {
    * @param {string} eventName
    * @param  {...any} args
    */
-  async emitAsync(eventName: any, ...args: any[]) {
+  async emitAsync(eventName: string | symbol, ...args: unknown[]) {
     this.#recordEvent(eventName, args);
     const listeners = this.listeners(eventName);
     for (const listener of listeners) {
@@ -56,9 +56,10 @@ export class EventBus extends EventEmitter {
    * 获取统计
    */
   getStats() {
-    const events: Record<string, any> = {};
+    const events: Record<string, number> = {};
     for (const entry of this.#history) {
-      events[entry.event] = (events[entry.event] || 0) + 1;
+      const key = String(entry.event);
+      events[key] = (events[key] || 0) + 1;
     }
     return {
       totalEvents: this.#history.length,
@@ -70,7 +71,7 @@ export class EventBus extends EventEmitter {
 
   // ─── 私有 ─────────────────────────────────────────────
 
-  #recordEvent(eventName: any, args: any) {
+  #recordEvent(eventName: string | symbol, args: unknown[]) {
     this.#history.push({
       event: eventName,
       timestamp: new Date().toISOString(),

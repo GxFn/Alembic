@@ -50,7 +50,7 @@ export const DEFAULT_CATEGORY = 'general';
  * 从文件路径和内容推断 category
  * 优先读取 frontmatter 的 category 字段，其次匹配路径规则
  */
-export function inferCategory(relPath: any, content: any) {
+export function inferCategory(relPath: string, content: string) {
   const frontMatch = (content || '').match(/^---[\s\S]*?category:\s*["']?([\w-]+)["']?/m);
   if (frontMatch) {
     return frontMatch[1];

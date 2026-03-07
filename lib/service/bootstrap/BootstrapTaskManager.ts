@@ -18,7 +18,36 @@
  *   bootstrap:all-completed — 全部任务完成
  */
 
+import type { EventBus } from '../../infrastructure/event/EventBus.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+
+interface TaskMeta {
+  type?: string;
+  dimId?: string;
+  label?: string;
+  skillWorthy?: boolean;
+  [key: string]: unknown;
+}
+
+interface TaskInfo {
+  id: string;
+  status: string;
+  meta: TaskMeta;
+  startedAt: number | null;
+  completedAt: number | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+}
+
+interface TaskDef {
+  id: string;
+  meta: TaskMeta;
+}
+
+interface BootstrapTaskManagerOpts {
+  eventBus?: EventBus | null;
+  getRealtimeService?: (() => { broadcastEvent(name: string, data: unknown): void } | null) | null;
+}
 
 /** 任务状态枚举 */
 export const TaskStatus = Object.freeze({
@@ -32,13 +61,13 @@ export const TaskStatus = Object.freeze({
  * 单个 Bootstrap 会话（一次冷启动的全部上下文）
  */
 class BootstrapSession {
-  completedAt: any;
-  id: any;
-  startedAt: any;
-  status: any;
-  summary: any;
-  tasks: any;
-  constructor(sessionId: any) {
+  completedAt: number | null;
+  id: string;
+  startedAt: number;
+  status: string;
+  summary: Record<string, unknown> | null;
+  tasks: Map<string, TaskInfo>;
+  constructor(sessionId: string) {
     this.id = sessionId;
     this.startedAt = Date.now();
     this.completedAt = null;
@@ -47,7 +76,7 @@ class BootstrapSession {
     this.summary = null; // 完成后的摘要
   }
 
-  addTask(taskId: any, meta: any) {
+  addTask(taskId: string, meta: TaskMeta) {
     this.tasks.set(taskId, {
       id: taskId,
       status: TaskStatus.SKELETON,
@@ -59,7 +88,7 @@ class BootstrapSession {
     });
   }
 
-  getTask(taskId: any) {
+  getTask(taskId: string) {
     return this.tasks.get(taskId);
   }
 
@@ -87,7 +116,7 @@ class BootstrapSession {
     let count = 0;
     for (const t of this.tasks.values()) {
       if (t.result?.toolCallCount) {
-        count += t.result.toolCallCount;
+        count += t.result.toolCallCount as number;
       }
     }
     return count;
@@ -133,12 +162,13 @@ export class BootstrapTaskManager {
   #currentSession: BootstrapSession | null = null;
 
   /** @type {import('../../infrastructure/event/EventBus.js').EventBus|null} */
-  #eventBus: any = null;
+  #eventBus: EventBus | null = null;
 
   /** @type {Function|null} 获取 RealtimeService 的 getter（延迟获取，避免循环依赖） */
-  #getRealtimeService: any = null;
+  #getRealtimeService: (() => { broadcastEvent(name: string, data: unknown): void } | null) | null =
+    null;
 
-  constructor({ eventBus, getRealtimeService }: any = {}) {
+  constructor({ eventBus, getRealtimeService }: BootstrapTaskManagerOpts = {}) {
     this.#eventBus = eventBus || null;
     this.#getRealtimeService = getRealtimeService || null;
   }
@@ -155,7 +185,7 @@ export class BootstrapTaskManager {
    * @param {Array<{id: string, meta: object}>} taskDefs 任务定义列表
    * @returns {BootstrapSession}
    */
-  startSession(taskDefs: any) {
+  startSession(taskDefs: TaskDef[]) {
     // ── 并发锁：如果上一个 session 还在运行，先中止 ──
     if (this.isRunning) {
       Logger.warn(
@@ -174,7 +204,7 @@ export class BootstrapTaskManager {
     Logger.info(`[Bootstrap] Session ${sessionId} started with ${taskDefs.length} tasks`);
     this.#emit('bootstrap:started', {
       sessionId,
-      tasks: taskDefs.map((t: any) => ({ id: t.id, ...t.meta })),
+      tasks: taskDefs.map((t: TaskDef) => ({ id: t.id, ...t.meta })),
       total: taskDefs.length,
       startedAt: this.#currentSession.startedAt,
     });
@@ -239,7 +269,7 @@ export class BootstrapTaskManager {
    * @param {string} sessionId
    * @returns {boolean}
    */
-  isSessionValid(sessionId: any) {
+  isSessionValid(sessionId: string) {
     // Session 在 running 或 completed 状态都有效 — completed 表示维度填充完成，
     // 但 Phase 5.5 Skills 生成仍需运行。只有被新 session 替代时才无效。
     return (
@@ -253,7 +283,7 @@ export class BootstrapTaskManager {
   /**
    * 标记单个任务开始填充
    */
-  markTaskFilling(taskId: any) {
+  markTaskFilling(taskId: string) {
     const session = this.#currentSession;
     if (!session) {
       return;
@@ -280,7 +310,7 @@ export class BootstrapTaskManager {
    * @param {string} taskId
    * @param {object} result 填充结果摘要 { created, items, ... }
    */
-  markTaskCompleted(taskId: any, result: any = {}) {
+  markTaskCompleted(taskId: string, result: Record<string, unknown> = {}) {
     const session = this.#currentSession;
     if (!session) {
       return;
@@ -318,7 +348,7 @@ export class BootstrapTaskManager {
   /**
    * 标记单个任务失败
    */
-  markTaskFailed(taskId: any, error: any) {
+  markTaskFailed(taskId: string, error: unknown) {
     const session = this.#currentSession;
     if (!session) {
       return;
@@ -330,7 +360,8 @@ export class BootstrapTaskManager {
 
     task.status = TaskStatus.FAILED;
     task.completedAt = Date.now();
-    task.error = typeof error === 'string' ? error : error?.message || 'Unknown error';
+    task.error =
+      typeof error === 'string' ? error : error instanceof Error ? error.message : 'Unknown error';
 
     Logger.warn(`[Bootstrap] Task "${taskId}" failed: ${task.error}`);
     this.#emit('bootstrap:task-failed', {
@@ -381,7 +412,7 @@ export class BootstrapTaskManager {
    * @param {string} eventName 事件名（如 'refine:started'）
    * @param {object} data      事件负载
    */
-  emitProgress(eventName: any, data: any) {
+  emitProgress(eventName: string, data: unknown) {
     this.#emit(eventName, data);
   }
 
@@ -425,13 +456,15 @@ export class BootstrapTaskManager {
   /**
    * 发射事件到 EventBus + 推送到前端 Socket.io
    */
-  #emit(eventName: any, data: any) {
+  #emit(eventName: string, data: unknown) {
     // EventBus（供后端监听者使用）
     if (this.#eventBus) {
       try {
         this.#eventBus.emit(eventName, data);
-      } catch (e: any) {
-        Logger.warn(`[Bootstrap] EventBus emit failed: ${e.message}`);
+      } catch (e: unknown) {
+        Logger.warn(
+          `[Bootstrap] EventBus emit failed: ${e instanceof Error ? e.message : String(e)}`
+        );
       }
     }
 
@@ -439,7 +472,9 @@ export class BootstrapTaskManager {
     if (this.#getRealtimeService) {
       try {
         const realtime = this.#getRealtimeService();
-        realtime.broadcastEvent(eventName, data);
+        if (realtime) {
+          realtime.broadcastEvent(eventName, data);
+        }
       } catch {
         // RealtimeService 可能未初始化（CLI 模式），静默忽略
       }

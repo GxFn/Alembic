@@ -20,8 +20,89 @@
 
 import Logger from '../../infrastructure/logging/Logger.js';
 import { AgentMessage } from './AgentMessage.js';
+import type { AgentRuntime } from './AgentRuntime.js';
 import { ConversationStore } from './ConversationStore.js';
 import { Intent, IntentClassifier } from './IntentClassifier.js';
+
+// ── Interfaces ──────────────────────────────────
+
+interface AgentFactory {
+  createLark(opts: RuntimeOverrides): AgentRuntime;
+  createRemoteExec(opts: RuntimeOverrides): AgentRuntime;
+}
+
+interface RuntimeOverrides {
+  lang?: string;
+  onProgress?: (event: ProgressEvent) => void;
+}
+
+interface ProgressEvent {
+  type: string;
+  tool?: string;
+  [key: string]: unknown;
+}
+
+interface LarkTransportConfig {
+  agentFactory: AgentFactory;
+  replyFn: (messageId: string, text: string) => Promise<void>;
+  sendFn: (text: string) => Promise<void | boolean>;
+  sendImageFn?: (caption: string) => Promise<{ success: boolean; message: string }>;
+  getStatusFn?: () => Promise<string>;
+  enqueueIdeFn?: (command: string, meta: Record<string, unknown>) => Promise<{ id: string }>;
+  isUserAllowed?: (userId: string) => boolean;
+  aiProvider?: import('../../external/ai/AiProvider.js').AiProvider;
+  projectRoot?: string;
+}
+
+/** Raw Lark im.message.receive_v1 event data */
+interface LarkRawEvent {
+  message?: LarkRawMessage;
+  event?: { message?: LarkRawMessage; sender?: LarkRawSender };
+  sender?: LarkRawSender;
+}
+
+interface LarkRawMessage {
+  message_id?: string;
+  chat_id?: string;
+  message_type?: string;
+  content?: string;
+}
+
+interface LarkRawSender {
+  sender_id?: { user_id?: string; open_id?: string };
+}
+
+interface ConversationEntry {
+  id: string;
+  title: string;
+  category?: string;
+  [key: string]: unknown;
+}
+
+interface HistoryMessage {
+  role: string;
+  content: string;
+}
+
+/** Classification result with action field (for SYSTEM intent) */
+interface SystemClassification {
+  intent: string;
+  confidence: number;
+  reasoning: string;
+  method: string;
+  action: string;
+}
+
+interface AgentResult {
+  reply?: string;
+  text?: string;
+  toolCalls?: unknown[];
+  tokenUsage?: { input: number; output: number };
+  iterations?: number;
+  durationMs?: number;
+  state?: Record<string, unknown>;
+  [key: string]: unknown;
+}
 
 /**
  * @typedef {Object} LarkTransportConfig
@@ -37,38 +118,38 @@ import { Intent, IntentClassifier } from './IntentClassifier.js';
  */
 
 export class LarkTransport {
-  #agentFactory;
-  #classifier;
-  #logger;
-  #replyFn;
-  #sendFn;
-  #sendImageFn;
-  #getStatusFn;
-  #enqueueIdeFn;
-  #isUserAllowed;
+  #agentFactory: AgentFactory;
+  #classifier: IntentClassifier;
+  #logger: ReturnType<typeof Logger.getInstance>;
+  #replyFn: LarkTransportConfig['replyFn'] | null;
+  #sendFn: LarkTransportConfig['sendFn'] | null;
+  #sendImageFn: LarkTransportConfig['sendImageFn'] | null;
+  #getStatusFn: LarkTransportConfig['getStatusFn'] | null;
+  #enqueueIdeFn: LarkTransportConfig['enqueueIdeFn'] | null;
+  #isUserAllowed: (userId: string) => boolean;
 
   /** @type {ConversationStore|null} 持久化对话存储 */
-  #conversationStore: any = null;
+  #conversationStore: ConversationStore | null = null;
   /** @type {Map<string, string>} chatId → conversationId 映射缓存 */
-  #chatConversationMap = new Map();
+  #chatConversationMap = new Map<string, string>();
 
   /** @type {Map<string, Array<{role: string, content: string}>>} chatId → 最近对话 (降级用) */
-  #conversationHistory = new Map();
+  #conversationHistory = new Map<string, HistoryMessage[]>();
   /** 对话历史最大轮数 */
   static MAX_HISTORY = 20;
 
   /** @type {Map<string, number>} messageId → timestamp, 消息去重 */
-  #recentMsgIds = new Map();
+  #recentMsgIds = new Map<string, number>();
   /** 去重 TTL (5 分钟) */
   static DEDUP_TTL = 5 * 60 * 1000;
 
   /**
    * @param {LarkTransportConfig} config
    */
-  constructor(config: any) {
+  constructor(config: LarkTransportConfig) {
     this.#agentFactory = config.agentFactory;
-    this.#replyFn = config.replyFn;
-    this.#sendFn = config.sendFn;
+    this.#replyFn = config.replyFn ?? null;
+    this.#sendFn = config.sendFn ?? null;
     this.#sendImageFn = config.sendImageFn || null;
     this.#getStatusFn = config.getStatusFn || null;
     this.#enqueueIdeFn = config.enqueueIdeFn || null;
@@ -80,16 +161,16 @@ export class LarkTransport {
       const projectRoot = config.projectRoot || process.cwd();
       this.#conversationStore = new ConversationStore(projectRoot);
       this.#logger.info('[LarkTransport] ConversationStore initialized');
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.#logger.warn(
-        `[LarkTransport] ConversationStore init failed, falling back to in-memory: ${err.message}`
+        `[LarkTransport] ConversationStore init failed, falling back to in-memory: ${(err as Error).message}`
       );
       this.#conversationStore = null;
     }
 
-    this.#classifier = new IntentClassifier({
-      aiProvider: config.aiProvider || null,
-    });
+    this.#classifier = new IntentClassifier(
+      config.aiProvider ? ({ aiProvider: config.aiProvider } as Record<string, unknown>) : {}
+    );
   }
 
   /**
@@ -100,11 +181,11 @@ export class LarkTransport {
    * @param {Object} data 飞书 im.message.receive_v1 事件数据
    * @returns {Promise<void>}
    */
-  async receive(data: any) {
-    const message = data?.message || data?.event?.message || {};
-    const sender = data?.sender || data?.event?.sender || {};
-    const messageId = message.message_id;
-    const chatId = message.chat_id;
+  async receive(data: LarkRawEvent) {
+    const message = data?.message || data?.event?.message || ({} as LarkRawMessage);
+    const sender = data?.sender || data?.event?.sender || ({} as LarkRawSender);
+    const messageId = message.message_id || '';
+    const chatId = message.chat_id || '';
     const msgType = message.message_type;
 
     // ── 消息去重 (defense-in-depth, remote.js 也有外层去重) ──
@@ -167,7 +248,7 @@ export class LarkTransport {
     // ── 路由处理 ──
     switch (classification.intent) {
       case Intent.SYSTEM:
-        await this.#handleSystem((classification as any).action, messageId, text);
+        await this.#handleSystem((classification as SystemClassification).action, messageId, text);
         break;
 
       case Intent.IDE_AGENT:
@@ -186,7 +267,7 @@ export class LarkTransport {
   /**
    * 系统操作 — 直接处理，不走 Agent
    */
-  async #handleSystem(action: any, messageId: any, _text: any) {
+  async #handleSystem(action: string, messageId: string, _text: string) {
     switch (action) {
       case 'status':
         if (this.#getStatusFn) {
@@ -267,7 +348,13 @@ export class LarkTransport {
    * `>` 前缀命令 → 使用 remote-exec preset 在服务端直接执行（含 SafetyPolicy 白名单）
    * 其他 IDE 编程任务 → 转发到 VSCode Copilot Agent Mode
    */
-  async #handleIdeAgent(text: any, messageId: any, chatId: any, senderId: any, senderName: any) {
+  async #handleIdeAgent(
+    text: string,
+    messageId: string,
+    chatId: string,
+    senderId: string,
+    senderName: string
+  ) {
     // ── `>` 前缀: 远程执行命令 ──
     if (text.startsWith('>')) {
       const command = text.slice(1).trim();
@@ -308,9 +395,9 @@ export class LarkTransport {
           '执行结果会回传到这里。',
         ].join('\n')
       );
-    } catch (err: any) {
-      this.#logger.error(`[LarkTransport] IDE enqueue failed: ${err.message}`);
-      await this.#reply(messageId, `❌ 转发失败: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.error(`[LarkTransport] IDE enqueue failed: ${(err as Error).message}`);
+      await this.#reply(messageId, `❌ 转发失败: ${(err as Error).message}`);
     }
   }
 
@@ -318,11 +405,11 @@ export class LarkTransport {
    * 远程命令执行 — 使用 remote-exec preset（含 SafetyPolicy 命令白名单）
    */
   async #handleRemoteExec(
-    command: any,
-    messageId: any,
-    chatId: any,
-    senderId: any,
-    senderName: any
+    command: string,
+    messageId: string,
+    chatId: string,
+    senderId: string,
+    senderName: string
   ) {
     await this.#reply(messageId, `⚡ 正在执行: \`${command.slice(0, 60)}\`...`);
 
@@ -345,14 +432,14 @@ export class LarkTransport {
       // 使用 remote-exec preset — 包含 SafetyPolicy 命令白名单 + fileScope
       const runtime = this.#agentFactory.createRemoteExec({
         lang: 'zh',
-        onProgress: (event: any) => {
+        onProgress: (event: ProgressEvent) => {
           if (event.type === 'tool_call') {
             this.#send(`🔧 执行: ${event.tool || 'unknown'}...`).catch(() => {});
           }
         },
       });
 
-      const result = await runtime.execute(agentMessage);
+      const result: AgentResult = await runtime.execute(agentMessage);
       const reply = result?.reply || result?.text || '命令执行完成，无输出。';
 
       this.#appendHistory(chatId, 'user', `> ${command}`);
@@ -364,16 +451,24 @@ export class LarkTransport {
       } else {
         await this.#send(reply);
       }
-    } catch (err: any) {
-      this.#logger.error(`[LarkTransport] Remote exec error: ${err.message}\n${err.stack}`);
-      await this.#reply(messageId, `❌ 执行失败: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.error(
+        `[LarkTransport] Remote exec error: ${(err as Error).message}\n${(err as Error).stack}`
+      );
+      await this.#reply(messageId, `❌ 执行失败: ${(err as Error).message}`);
     }
   }
 
   /**
    * Bot Agent 知识任务 — 服务端 AgentRuntime 直接处理
    */
-  async #handleBotAgent(text: any, messageId: any, chatId: any, senderId: any, senderName: any) {
+  async #handleBotAgent(
+    text: string,
+    messageId: string,
+    chatId: string,
+    senderId: string,
+    senderName: string
+  ) {
     // 进度提示
     await this.#reply(messageId, '🤔 正在思考...');
 
@@ -402,7 +497,7 @@ export class LarkTransport {
       // 创建 Lark Runtime 并执行 — 使用 lark preset（含 SafetyPolicy 鉴权）
       const runtime = this.#agentFactory.createLark({
         lang: 'zh',
-        onProgress: (event: any) => {
+        onProgress: (event: ProgressEvent) => {
           // 工具调用时发送进度
           if (event.type === 'tool_call') {
             this.#send(`🔧 调用工具: ${event.tool || 'unknown'}...`).catch(() => {});
@@ -410,7 +505,7 @@ export class LarkTransport {
         },
       });
 
-      const result = await runtime.execute(agentMessage);
+      const result: AgentResult = await runtime.execute(agentMessage);
 
       // 提取回复
       const reply = result?.reply || result?.text || '抱歉，没有生成有效回复。';
@@ -428,9 +523,11 @@ export class LarkTransport {
       } else {
         await this.#send(reply);
       }
-    } catch (err: any) {
-      this.#logger.error(`[LarkTransport] Bot Agent error: ${err.message}\n${err.stack}`);
-      await this.#reply(messageId, `❌ 处理失败: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.error(
+        `[LarkTransport] Bot Agent error: ${(err as Error).message}\n${(err as Error).stack}`
+      );
+      await this.#reply(messageId, `❌ 处理失败: ${(err as Error).message}`);
     }
   }
 
@@ -443,7 +540,7 @@ export class LarkTransport {
    * @param {string} chatId
    * @returns {string|null} conversationId (ConversationStore 不可用时返回 null)
    */
-  #resolveConversationId(chatId: any) {
+  #resolveConversationId(chatId: string) {
     if (!this.#conversationStore || !chatId) {
       return null;
     }
@@ -456,7 +553,7 @@ export class LarkTransport {
     // 从索引中查找已有的 lark 对话 (通过 title 匹配 chatId)
     try {
       const existing = this.#conversationStore.list({ category: 'lark', limit: 100 });
-      const match = existing.find((e: any) => e.title === chatId);
+      const match = existing.find((e: ConversationEntry) => e.title === chatId);
       if (match) {
         this.#chatConversationMap.set(chatId, match.id);
         return match.id;
@@ -470,9 +567,9 @@ export class LarkTransport {
       const convId = this.#conversationStore.create({ category: 'lark', title: chatId });
       this.#chatConversationMap.set(chatId, convId);
       return convId;
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.#logger.warn(
-        `[LarkTransport] Failed to create conversation for chatId ${chatId}: ${err.message}`
+        `[LarkTransport] Failed to create conversation for chatId ${chatId}: ${(err as Error).message}`
       );
       return null;
     }
@@ -481,15 +578,15 @@ export class LarkTransport {
   /**
    * 获取指定会话的历史
    */
-  #getHistory(chatId: any) {
+  #getHistory(chatId: string): HistoryMessage[] {
     // 优先使用 ConversationStore 持久化历史
     const convId = this.#resolveConversationId(chatId);
     if (convId && this.#conversationStore) {
       try {
         return this.#conversationStore.load(convId);
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.#logger.warn(
-          `[LarkTransport] ConversationStore load failed, falling back: ${err.message}`
+          `[LarkTransport] ConversationStore load failed, falling back: ${(err as Error).message}`
         );
       }
     }
@@ -500,21 +597,21 @@ export class LarkTransport {
   /**
    * 获取最近对话的可读文本 (给 IntentClassifier 提供上下文)
    */
-  #getRecentHistoryText(chatId: any) {
+  #getRecentHistoryText(chatId: string) {
     const history = this.#getHistory(chatId);
     if (history.length === 0) {
       return '';
     }
     return history
       .slice(-6)
-      .map((h: any) => `${h.role}: ${h.content.slice(0, 100)}`)
+      .map((h: HistoryMessage) => `${h.role}: ${h.content.slice(0, 100)}`)
       .join('\n');
   }
 
   /**
    * 追加对话记录 (双写: ConversationStore + 内存降级)
    */
-  #appendHistory(chatId: any, role: any, content: any) {
+  #appendHistory(chatId: string, role: string, content: string) {
     if (!chatId) {
       return;
     }
@@ -524,8 +621,10 @@ export class LarkTransport {
     if (convId && this.#conversationStore) {
       try {
         this.#conversationStore.append(convId, { role, content });
-      } catch (err: any) {
-        this.#logger.warn(`[LarkTransport] ConversationStore append failed: ${err.message}`);
+      } catch (err: unknown) {
+        this.#logger.warn(
+          `[LarkTransport] ConversationStore append failed: ${(err as Error).message}`
+        );
       }
     }
 
@@ -533,11 +632,11 @@ export class LarkTransport {
     if (!this.#conversationHistory.has(chatId)) {
       this.#conversationHistory.set(chatId, []);
     }
-    const history = this.#conversationHistory.get(chatId);
+    const history = this.#conversationHistory.get(chatId)!;
     history.push({ role, content });
     // 限制内存历史长度
-    if (history.length > LarkTransport.MAX_HISTORY * 2) {
-      history.splice(0, history.length - LarkTransport.MAX_HISTORY * 2);
+    if (history!.length > LarkTransport.MAX_HISTORY * 2) {
+      history!.splice(0, history!.length - LarkTransport.MAX_HISTORY * 2);
     }
   }
 
@@ -545,13 +644,13 @@ export class LarkTransport {
   //  飞书消息发送
   // ═══════════════════════════════════════════════════
 
-  async #reply(messageId: any, text: any) {
+  async #reply(messageId: string, text: string) {
     if (this.#replyFn) {
       await this.#replyFn(messageId, text);
     }
   }
 
-  async #send(text: any) {
+  async #send(text: string) {
     if (this.#sendFn) {
       await this.#sendFn(text);
     }

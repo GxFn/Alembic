@@ -42,15 +42,31 @@ const DEFAULT_TIERS = [
   ['event-and-data-flow', 'best-practice', 'agent-guidelines'],
 ];
 
+/** Dimension execution result */
+interface DimensionResult {
+  error?: string;
+  candidateCount?: number;
+  [key: string]: unknown;
+}
+
+/** Options for TierScheduler.execute() */
+interface TierExecuteOptions {
+  concurrency?: number;
+  onTierComplete?: (tierIndex: number, tierResults: Map<string, DimensionResult>) => void;
+  shouldAbort?: () => boolean;
+  activeDimIds?: string[];
+  tierHints?: Record<string, number>;
+}
+
 // ──────────────────────────────────────────────────────────────────
 // 简单信号量 (控制并发)
 // ──────────────────────────────────────────────────────────────────
 
 class Semaphore {
   #permits;
-  #queue: any[] = [];
+  #queue: Array<(value?: unknown) => void> = [];
 
-  constructor(permits: any) {
+  constructor(permits: number) {
     this.#permits = permits;
   }
 
@@ -66,7 +82,7 @@ class Semaphore {
 
   release() {
     if (this.#queue.length > 0) {
-      const resolve = this.#queue.shift();
+      const resolve = this.#queue.shift()!;
       resolve();
     } else {
       this.#permits++;
@@ -101,7 +117,10 @@ export class TierScheduler {
    * @param {Record<string, number>} [options.tierHints] - dimId → 1-based tier index（Enhancement Pack 维度声明的首选 Tier）
    * @returns {Promise<Map<string, any>>} - dimId → result
    */
-  async execute(executeDimension: any, options: any = {}) {
+  async execute(
+    executeDimension: (dimId: string) => Promise<DimensionResult>,
+    options: TierExecuteOptions = {}
+  ) {
     const { concurrency = 3, onTierComplete, shouldAbort, activeDimIds, tierHints } = options;
     const results = new Map();
 
@@ -111,7 +130,7 @@ export class TierScheduler {
     if (activeDimIds) {
       const activeSet = new Set(activeDimIds);
       const scheduled = new Set(this.#tiers.flat());
-      const unscheduled = activeDimIds.filter((id: any) => !scheduled.has(id));
+      const unscheduled = activeDimIds.filter((id: string) => !scheduled.has(id));
       effectiveTiers = this.#tiers.map((tier) => tier.filter((id) => activeSet.has(id)));
       if (unscheduled.length > 0) {
         // 按 tierHint 分配到对应 Tier，无 hint 的默认归入 Tier 1
@@ -163,12 +182,17 @@ export class TierScheduler {
   /**
    * 执行单个 Tier 内的所有维度 (并发控制)
    */
-  async #executeTier(dimensionIds: any, executeDimension: any, concurrency: any, shouldAbort: any) {
+  async #executeTier(
+    dimensionIds: string[],
+    executeDimension: (dimId: string) => Promise<DimensionResult>,
+    concurrency: number,
+    shouldAbort: (() => boolean) | undefined
+  ) {
     const semaphore = new Semaphore(concurrency);
     const results = new Map();
 
     await Promise.all(
-      dimensionIds.map(async (dimId: any) => {
+      dimensionIds.map(async (dimId: string) => {
         if (shouldAbort?.()) {
           return;
         }
@@ -180,9 +204,10 @@ export class TierScheduler {
           }
           const result = await executeDimension(dimId);
           results.set(dimId, result);
-        } catch (err: any) {
-          logger.error(`[TierScheduler] Dimension "${dimId}" failed: ${err.message}`);
-          results.set(dimId, { error: err.message, candidateCount: 0 });
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logger.error(`[TierScheduler] Dimension "${dimId}" failed: ${errMsg}`);
+          results.set(dimId, { error: errMsg, candidateCount: 0 });
         } finally {
           semaphore.release();
         }
@@ -197,7 +222,7 @@ export class TierScheduler {
    * @param {string} dimId
    * @returns {number} - 0-based tier index, -1 if not found
    */
-  getTierIndex(dimId: any) {
+  getTierIndex(dimId: string) {
     for (let i = 0; i < this.#tiers.length; i++) {
       if (this.#tiers[i].includes(dimId)) {
         return i;

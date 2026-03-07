@@ -12,6 +12,176 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LanguageService } from '../../../shared/LanguageService.js';
 
+// ─── 本文件内部接口 ─────────────────────────────────────────
+
+/** 项目文件缓存条目 */
+interface ProjectFile {
+  relativePath?: string;
+  path?: string;
+  name?: string;
+  content?: string;
+}
+
+/** 工具间共享状态（可挂载到 ctx 或 ctx._sharedState） */
+interface ToolSharedState {
+  _searchCache?: Map<string, SearchCacheEntry>;
+  _readCache?: Map<string, ReadCacheEntry>;
+  _searchCallCount?: number;
+  [key: string]: unknown;
+}
+
+/** 工具上下文 */
+export interface ToolContext extends ToolSharedState {
+  projectRoot?: string;
+  fileCache?: ProjectFile[] | null;
+  container?: { get(name: string): unknown } | null;
+  _sharedState?: ToolSharedState;
+  source?: string;
+}
+
+/** 搜索缓存条目 */
+export interface SearchCacheEntry {
+  matches: SearchMatch[];
+  total: number;
+  _cached?: boolean;
+}
+
+/** 搜索匹配项 */
+export interface SearchMatch {
+  file: string;
+  line: number;
+  code: string;
+  context: string;
+  score: number;
+}
+
+/** 读取缓存条目 */
+export interface ReadCacheEntry {
+  content?: string;
+  totalLines?: number;
+  language?: string;
+  error?: string;
+  _cached?: boolean;
+}
+
+/** 向量搜索结果项 */
+interface VectorSearchResult {
+  item: { id: string; content?: string; metadata?: Record<string, unknown> };
+  score: number;
+}
+
+/** 搜索引擎结果项 */
+interface SearchEngineItem {
+  id: string;
+  title?: string;
+  content?: string;
+  description?: string;
+  score?: number;
+  knowledgeType?: string;
+  kind?: string;
+  category?: string;
+  language?: string;
+}
+
+/** 语言摘要提取器 */
+interface SummaryExtractor {
+  imports?: RegExp;
+  declarations?: RegExp;
+  methods?: RegExp;
+  properties?: RegExp;
+}
+
+/** 文件摘要结果 */
+export interface FileSummaryResult {
+  filePath: string;
+  language: string;
+  lineCount: number;
+  imports: string[];
+  declarations: string[];
+  methods: string[];
+  properties: string[];
+  preview?: string;
+}
+
+/** 向量存储（精简接口，仅覆盖本文件使用的方法） */
+interface VectorStoreLike {
+  hybridSearch(
+    queryVector: number[],
+    queryText: string,
+    options: { topK: number; filter?: Record<string, string> }
+  ): Promise<VectorSearchResult[]>;
+}
+
+/** AI Provider（精简接口） */
+interface AIProviderLike {
+  generateEmbedding?(text: string): Promise<number[]>;
+}
+
+/** SearchEngine（精简接口） */
+interface SearchEngineLike {
+  search(
+    query: string,
+    options: { mode: string; limit: number; groupByKind?: boolean }
+  ): Promise<{ items: SearchEngineItem[]; mode?: string }>;
+}
+
+/** 文件过滤参数 */
+interface FileFilterParams {
+  fileFilter?: string;
+}
+
+/** search_project_code 参数 */
+export interface SearchCodeParams extends FileFilterParams {
+  pattern?: string;
+  patterns?: string[];
+  isRegex?: boolean;
+  contextLines?: number;
+  maxResults?: number;
+  query?: string;
+  search?: string;
+  keyword?: string;
+  search_query?: string;
+}
+
+/** read_project_file 参数 */
+export interface ReadFileParams extends FileFilterParams {
+  filePath?: string;
+  filePaths?: string[];
+  startLine?: number;
+  endLine?: number;
+  maxLines?: number;
+  path?: string;
+  file_path?: string;
+  filepath?: string;
+  file?: string;
+  filename?: string;
+}
+
+/** list_project_structure 参数 */
+export interface ListStructureParams {
+  directory?: string;
+  depth?: number;
+  includeStats?: boolean;
+}
+
+/** get_file_summary 参数 */
+export interface FileSummaryParams {
+  filePath?: string;
+  file_path?: string;
+  path?: string;
+  file?: string;
+}
+
+/** semantic_search_code 参数 */
+export interface SemanticSearchParams {
+  query?: string;
+  search?: string;
+  keyword?: string;
+  topK?: number;
+  category?: string;
+  language?: string;
+}
+
 // ─── 共享常量 ──────────────────────────────────────────────
 
 /** 三方库路径识别（与 bootstrap/shared/third-party-filter.js 对齐） */
@@ -26,7 +196,7 @@ const DECL_RE =
   /^\s*(@property\b|@interface\b|@protocol\b|@class\b|@synthesize\b|@dynamic\b|@end\b|NS_ASSUME_NONNULL|#import\b|#include\b|#define\b)/;
 const TYPE_DECL_RE = /^\s*\w[\w<>*\s]+[\s*]+_?\w+\s*;$/;
 
-function _scoreSearchLine(line: any) {
+function _scoreSearchLine(line: string) {
   const t = line.trim();
   if (DECL_RE.test(t)) {
     return -2;
@@ -53,18 +223,18 @@ function _scoreSearchLine(line: any) {
  * 收集项目文件列表 — 抽取为公用函数，供单次和批量搜索复用。
  * 优先使用内存缓存（bootstrap 场景），否则从磁盘递归读取。
  */
-async function _getProjectFiles(params: any, ctx: any) {
+async function _getProjectFiles(params: FileFilterParams, ctx: ToolContext) {
   const { fileFilter } = params;
   const projectRoot = ctx.projectRoot || process.cwd();
 
-  let extFilter: any = null;
+  let extFilter: RegExp | null = null;
   if (fileFilter) {
-    const exts = fileFilter.split(',').map((e: any) => e.trim().replace(/^\./, ''));
+    const exts = fileFilter.split(',').map((e: string) => e.trim().replace(/^\./, ''));
     extFilter = new RegExp(`\\.(${exts.join('|')})$`, 'i');
   }
 
   const fileCache = ctx.fileCache || null;
-  let files;
+  let files: ProjectFile[];
   let skippedThirdParty = 0;
 
   if (fileCache && Array.isArray(fileCache)) {
@@ -85,7 +255,7 @@ async function _getProjectFiles(params: any, ctx: any) {
   } else {
     files = [];
     const MAX_FILE_SIZE = 512 * 1024;
-    const walk = (dir: any, relBase = '') => {
+    const walk = (dir: string, relBase = '') => {
       try {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         for (const entry of entries) {
@@ -183,7 +353,7 @@ export const searchProjectCode = {
     },
     required: [],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: SearchCodeParams, ctx: ToolContext) => {
     // ── 去重缓存初始化 ──
     const state = ctx._sharedState || ctx;
     if (!state._searchCache) {
@@ -193,20 +363,21 @@ export const searchProjectCode = {
     // ── 批量模式：patterns 数组 ──
     if (Array.isArray(params.patterns) && params.patterns.length > 0) {
       const batchPatterns = params.patterns.slice(0, 10);
-      const batchResults: Record<string, any> = {};
+      const batchResults: Record<string, SearchCacheEntry> = {};
       let dedupCount = 0;
       for (const p of batchPatterns) {
         const cacheKey = `${p}|${params.isRegex || false}|${params.fileFilter || ''}`;
-        if (state._searchCache.has(cacheKey)) {
-          batchResults[p] = { ...state._searchCache.get(cacheKey), _cached: true };
+        const cached = state._searchCache.get(cacheKey);
+        if (cached) {
+          batchResults[p] = { ...cached, _cached: true };
           dedupCount++;
           continue;
         }
-        const sub = await searchProjectCode.handler(
+        const sub = (await searchProjectCode.handler(
           { ...params, pattern: p, patterns: undefined },
           ctx
-        );
-        const entry = { matches: sub.matches || [], total: sub.total || 0 };
+        )) as { matches?: SearchMatch[]; total?: number };
+        const entry: SearchCacheEntry = { matches: sub.matches ?? [], total: sub.total ?? 0 };
         state._searchCache.set(cacheKey, entry);
         batchResults[p] = entry;
       }
@@ -253,14 +424,14 @@ export const searchProjectCode = {
       searchRe = isRegex
         ? new RegExp(pattern, 'gi')
         : new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    } catch (err: any) {
-      return { error: `Invalid pattern: ${err.message}`, matches: [], total: 0 };
+    } catch (err: unknown) {
+      return { error: `Invalid pattern: ${(err as Error).message}`, matches: [], total: 0 };
     }
 
     const { files, skippedThirdParty } = await _getProjectFiles(params, ctx);
 
     // 搜索匹配
-    const matches: { file: any; line: number; code: any; context: string; score: number }[] = [];
+    const matches: SearchMatch[] = [];
     let total = 0;
 
     for (const f of files) {
@@ -285,13 +456,13 @@ export const searchProjectCode = {
         if (matches.length < maxResults) {
           const start = Math.max(0, i - contextLines);
           const end = Math.min(lines.length - 1, i + contextLines);
-          const contextArr: any[] = [];
+          const contextArr: string[] = [];
           for (let j = start; j <= end; j++) {
             contextArr.push(lines[j]);
           }
 
           matches.push({
-            file: f.relativePath || f.path || f.name,
+            file: f.relativePath || f.path || f.name || '',
             line: i + 1,
             code: lines[i],
             context: contextArr.join('\n'),
@@ -352,7 +523,7 @@ export const readProjectFile = {
     },
     required: [],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: ReadFileParams, ctx: ToolContext) => {
     // ── 去重缓存初始化 ──
     const state = ctx._sharedState || ctx;
     if (!state._readCache) {
@@ -362,7 +533,7 @@ export const readProjectFile = {
     // ── 批量模式：filePaths 数组 ──
     if (Array.isArray(params.filePaths) && params.filePaths.length > 0) {
       const batchPaths = params.filePaths.slice(0, 8);
-      const batchResults: Record<string, any> = {};
+      const batchResults: Record<string, ReadCacheEntry> = {};
       let dedupCount = 0;
       for (const fp of batchPaths) {
         const cacheKey = `${fp}|${params.startLine || 1}|${params.endLine || ''}|${params.maxLines || 100}`;
@@ -371,7 +542,7 @@ export const readProjectFile = {
           dedupCount++;
           continue;
         }
-        const sub = await readProjectFile.handler(
+        const sub = (await readProjectFile.handler(
           {
             ...params,
             filePath: fp,
@@ -379,8 +550,8 @@ export const readProjectFile = {
             maxLines: Math.min(params.maxLines || 100, 100),
           },
           ctx
-        );
-        const entry = sub.error
+        )) as ReadCacheEntry;
+        const entry: ReadCacheEntry = sub.error
           ? { error: sub.error }
           : { content: sub.content, totalLines: sub.totalLines, language: sub.language };
         state._readCache.set(cacheKey, entry);
@@ -427,7 +598,7 @@ export const readProjectFile = {
 
     // 优先从内存缓存读取（bootstrap 场景）
     const fileCache = ctx.fileCache || null;
-    let content: any = null;
+    let content: string | null = null;
 
     if (fileCache && Array.isArray(fileCache)) {
       const cached = fileCache.find(
@@ -436,7 +607,7 @@ export const readProjectFile = {
           (f.relativePath || f.path || '') === normalized
       );
       if (cached) {
-        content = cached.content;
+        content = cached.content ?? null;
       }
     }
 
@@ -448,8 +619,8 @@ export const readProjectFile = {
       }
       try {
         content = fs.readFileSync(fullPath, 'utf-8');
-      } catch (err: any) {
-        return { error: `File not found or unreadable: ${err.message}` };
+      } catch (err: unknown) {
+        return { error: `File not found or unreadable: ${(err as Error).message}` };
       }
     }
 
@@ -501,7 +672,7 @@ export const listProjectStructure = {
       },
     },
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: ListStructureParams, ctx: ToolContext) => {
     const directory = params.directory || '';
     const depth = Math.min(params.depth ?? 3, 5);
     const includeStats = params.includeStats !== false;
@@ -520,11 +691,11 @@ export const listProjectStructure = {
     const stats = {
       totalFiles: 0,
       totalDirs: 0,
-      byLanguage: {} as Record<string, any>,
+      byLanguage: {} as Record<string, number>,
       totalLines: 0,
     };
 
-    const walk = (dir: any, relBase: any, currentDepth: any, prefix: any) => {
+    const walk = (dir: string, relBase: string, currentDepth: number, prefix: string) => {
       if (currentDepth > depth) {
         return;
       }
@@ -615,7 +786,7 @@ export const listProjectStructure = {
 // ─── 2c. get_file_summary ──────────────────────────────────
 
 /** 语言相关的声明提取正则 */
-const SUMMARY_EXTRACTORS: any = {
+const SUMMARY_EXTRACTORS: Record<string, SummaryExtractor> = {
   objectivec: {
     imports: /^\s*(#import\s+.+|#include\s+.+|@import\s+\w+;)/gm,
     declarations:
@@ -692,7 +863,7 @@ export const getFileSummary = {
     },
     required: ['filePath'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: FileSummaryParams, ctx: ToolContext) => {
     const filePath = params.filePath || params.file_path || params.path || params.file;
     const projectRoot = ctx.projectRoot || process.cwd();
 
@@ -706,16 +877,16 @@ export const getFileSummary = {
     }
 
     const fileCache = ctx.fileCache || null;
-    let content: any = null;
+    let content: string | null = null;
 
     if (fileCache && Array.isArray(fileCache)) {
       const cached = fileCache.find(
-        (f) =>
+        (f: ProjectFile) =>
           (f.relativePath || f.path || '') === filePath ||
           (f.relativePath || f.path || '') === normalized
       );
       if (cached) {
-        content = cached.content;
+        content = cached.content ?? null;
       }
     }
 
@@ -726,8 +897,8 @@ export const getFileSummary = {
       }
       try {
         content = fs.readFileSync(fullPath, 'utf-8');
-      } catch (err: any) {
-        return { error: `File not found or unreadable: ${err.message}` };
+      } catch (err: unknown) {
+        return { error: `File not found or unreadable: ${(err as Error).message}` };
       }
     }
 
@@ -735,7 +906,7 @@ export const getFileSummary = {
     const language = LanguageService.langFromExt(ext);
     const extractor = SUMMARY_EXTRACTORS[language];
 
-    const result: any = {
+    const result: FileSummaryResult = {
       filePath,
       language,
       lineCount: content.split('\n').length,
@@ -750,8 +921,8 @@ export const getFileSummary = {
       return result;
     }
 
-    const extract = (regex: any) => {
-      const matches: any[] = [];
+    const extract = (regex: RegExp) => {
+      const matches: string[] = [];
       let m;
       regex.lastIndex = 0;
       while ((m = regex.exec(content)) !== null) {
@@ -795,7 +966,7 @@ export const semanticSearchCode = {
     },
     required: ['query'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: SemanticSearchParams, ctx: ToolContext) => {
     const query = params.query || params.search || params.keyword;
     const topK = Math.min(params.topK ?? 5, 20);
     const { category, language } = params;
@@ -804,17 +975,17 @@ export const semanticSearchCode = {
       return { error: '参数错误: 请提供 query (自然语言搜索查询)' };
     }
 
-    let searchEngine: any = null;
+    let searchEngine: SearchEngineLike | null = null;
     try {
-      searchEngine = ctx.container?.get('searchEngine');
+      searchEngine = (ctx.container?.get('searchEngine') as SearchEngineLike) ?? null;
     } catch {
       /* not available */
     }
 
     if (!searchEngine) {
-      let vectorStore: any = null;
+      let vectorStore: VectorStoreLike | null = null;
       try {
-        vectorStore = ctx.container?.get('vectorStore');
+        vectorStore = (ctx.container?.get('vectorStore') as VectorStoreLike) ?? null;
       } catch {
         /* not available */
       }
@@ -827,15 +998,15 @@ export const semanticSearchCode = {
         };
       }
 
-      let aiProvider: any = null;
+      let aiProvider: AIProviderLike | null = null;
       try {
-        aiProvider = ctx.container?.get('aiProvider');
+        aiProvider = (ctx.container?.get('aiProvider') as AIProviderLike) ?? null;
       } catch {
         /* not available */
       }
 
       if (!aiProvider || typeof aiProvider.generateEmbedding !== 'function') {
-        const filter: any = {};
+        const filter: Record<string, string> = {};
         if (category) {
           filter.category = category;
         }
@@ -848,7 +1019,7 @@ export const semanticSearchCode = {
           mode: 'keyword-fallback',
           query,
           message: 'AI Provider 不支持 embedding，已降级到关键词匹配',
-          results: results.map((r: any) => ({
+          results: results.map((r: VectorSearchResult) => ({
             id: r.item.id,
             content: (r.item.content || '').slice(0, 500),
             score: Math.round(r.score * 100) / 100,
@@ -859,7 +1030,7 @@ export const semanticSearchCode = {
 
       try {
         const embedding = await aiProvider.generateEmbedding(query);
-        const filter: any = {};
+        const filter: Record<string, string> = {};
         if (category) {
           filter.category = category;
         }
@@ -871,15 +1042,18 @@ export const semanticSearchCode = {
         return {
           mode: 'vector',
           query,
-          results: results.map((r: any) => ({
+          results: results.map((r: VectorSearchResult) => ({
             id: r.item.id,
             content: (r.item.content || '').slice(0, 500),
             score: Math.round(r.score * 100) / 100,
             metadata: r.item.metadata || {},
           })),
         };
-      } catch (err: any) {
-        return { error: `向量搜索失败: ${err.message}`, fallbackTool: 'search_project_code' };
+      } catch (err: unknown) {
+        return {
+          error: `向量搜索失败: ${(err as Error).message}`,
+          fallbackTool: 'search_project_code',
+        };
       }
     }
 
@@ -896,12 +1070,12 @@ export const semanticSearchCode = {
 
       if (category) {
         items = items.filter(
-          (i: any) => (i.category || '').toLowerCase() === category.toLowerCase()
+          (i: SearchEngineItem) => (i.category || '').toLowerCase() === category.toLowerCase()
         );
       }
       if (language) {
         items = items.filter(
-          (i: any) => (i.language || '').toLowerCase() === language.toLowerCase()
+          (i: SearchEngineItem) => (i.language || '').toLowerCase() === language.toLowerCase()
         );
       }
       items = items.slice(0, topK);
@@ -911,7 +1085,7 @@ export const semanticSearchCode = {
         query,
         degraded: actualMode !== 'semantic',
         totalResults: items.length,
-        results: items.map((item: any) => ({
+        results: items.map((item: SearchEngineItem) => ({
           id: item.id,
           title: item.title || '',
           content: (item.content || item.description || '').slice(0, 500),
@@ -921,8 +1095,8 @@ export const semanticSearchCode = {
           language: item.language || '',
         })),
       };
-    } catch (err: any) {
-      return { error: `搜索失败: ${err.message}`, fallbackTool: 'search_project_code' };
+    } catch (err: unknown) {
+      return { error: `搜索失败: ${(err as Error).message}`, fallbackTool: 'search_project_code' };
     }
   },
 };

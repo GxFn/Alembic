@@ -16,22 +16,41 @@
  */
 
 import path from 'node:path';
+import type { ServiceContainer } from '../../../injection/ServiceContainer.js';
 import { envelope } from '../envelope.js';
 import { BootstrapSessionManager } from './bootstrap/BootstrapSession.js';
 import { buildMissionBriefing } from './bootstrap/MissionBriefingBuilder.js';
 import { runAllPhases } from './bootstrap/shared/bootstrap-phases.js';
 import { buildLanguageExtension } from './LanguageExtensions.js';
 
-// ── 进程级 Session 管理器 ─────────────────────────────────────
+/** MCP handler context passed from McpServer */
+interface McpContext {
+  container: ServiceContainer;
+  logger: { info(msg: string, meta?: Record<string, unknown>): void };
+  startedAt?: number;
+  [key: string]: unknown;
+}
 
-let _sessionManager: any = null;
+/** Shape of the mission briefing returned by buildMissionBriefing */
+interface MissionBriefingResult {
+  meta?: {
+    warnings?: string[];
+    responseSizeKB?: number;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+// ── 进程级 Session 管理器 ─────────────────────────────────
+
+let _sessionManager: BootstrapSessionManager | null = null;
 
 /**
  * 获取或创建 BootstrapSessionManager
  * @param {object} container - ServiceContainer
  * @returns {BootstrapSessionManager}
  */
-function getSessionManager(container: any) {
+function getSessionManager(container: ServiceContainer): BootstrapSessionManager {
   // 优先使用容器注册的 (如果已注册)
   try {
     const mgr = container.get('bootstrapSessionManager');
@@ -68,7 +87,7 @@ function getSessionManager(container: any) {
  * @param {object} ctx - { container, logger, startedAt }
  * @returns {Promise<object>} - envelope({ success, data: MissionBriefing })
  */
-export async function bootstrapExternal(ctx: any) {
+export async function bootstrapExternal(ctx: McpContext) {
   const t0 = Date.now();
   const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
 
@@ -144,15 +163,15 @@ export async function bootstrapExternal(ctx: any) {
   const projectMeta = {
     name: path.basename(projectRoot),
     primaryLanguage: primaryLang,
-    secondaryLanguages: (langProfile as any).secondary || [],
-    isMultiLang: (langProfile as any).isMultiLang || false,
+    secondaryLanguages: (langProfile as { secondary?: string[] }).secondary || [],
+    isMultiLang: (langProfile as { isMultiLang?: boolean }).isMultiLang || false,
     fileCount: allFiles.length,
     projectType: phaseResults.discoverer.id,
     projectRoot,
   };
 
   // 构建 Mission Briefing
-  const briefing: any = buildMissionBriefing({
+  const briefing: MissionBriefingResult = buildMissionBriefing({
     projectMeta,
     astData: astProjectSummary,
     codeEntityResult,
@@ -191,7 +210,7 @@ export async function bootstrapExternal(ctx: any) {
  * @param {string} [sessionId]
  * @returns {import('./bootstrap/BootstrapSession.js').BootstrapSession|null}
  */
-export function getActiveSession(container: any, sessionId: any) {
+export function getActiveSession(container: ServiceContainer, sessionId?: string) {
   const mgr = getSessionManager(container);
   return mgr.getSession(sessionId);
 }

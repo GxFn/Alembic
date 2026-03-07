@@ -19,6 +19,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
 import { DELIVERY_RANK, KNOWLEDGE_CONFIDENCE } from '../../shared/constants.js';
 import { AgentInstructionsGenerator } from './AgentInstructionsGenerator.js';
 import { KnowledgeCompressor } from './KnowledgeCompressor.js';
@@ -28,16 +29,25 @@ import { BUDGET } from './TokenBudget.js';
 import { TopicClassifier } from './TopicClassifier.js';
 
 export class CursorDeliveryPipeline {
-  agentInstructions: any;
-  compressor: any;
-  database: any;
-  knowledgeService: any;
-  logger: any;
-  projectName: any;
-  projectRoot: any;
-  rulesGenerator: any;
-  skillsSyncer: any;
-  topicClassifier: any;
+  agentInstructions: AgentInstructionsGenerator;
+  compressor: KnowledgeCompressor;
+  database: Record<string, unknown> | null;
+  knowledgeService: {
+    list: (
+      filter: Record<string, unknown>,
+      pagination: { page: number; pageSize: number }
+    ) => Promise<unknown>;
+  };
+  logger: {
+    info?: (...args: unknown[]) => void;
+    warn?: (...args: unknown[]) => void;
+    error?: (...args: unknown[]) => void;
+  };
+  projectName: string;
+  projectRoot: string;
+  rulesGenerator: RulesGenerator;
+  skillsSyncer: SkillsSyncer;
+  topicClassifier: TopicClassifier;
   /**
    * @param {Object} options
    * @param {Object} options.knowledgeService - KnowledgeService 实例
@@ -45,7 +55,28 @@ export class CursorDeliveryPipeline {
    * @param {string} [options.projectName] 项目名称
    * @param {Object} [options.logger] 日志器
    */
-  constructor({ knowledgeService, projectRoot, projectName, logger, database }: any) {
+  constructor({
+    knowledgeService,
+    projectRoot,
+    projectName,
+    logger,
+    database,
+  }: {
+    knowledgeService: {
+      list: (
+        filter: Record<string, unknown>,
+        pagination: { page: number; pageSize: number }
+      ) => Promise<unknown>;
+    };
+    projectRoot: string;
+    projectName?: string;
+    logger?: {
+      info?: (...args: unknown[]) => void;
+      warn?: (...args: unknown[]) => void;
+      error?: (...args: unknown[]) => void;
+    };
+    database?: Record<string, unknown> | null;
+  }) {
     this.knowledgeService = knowledgeService;
     this.projectRoot = projectRoot;
     this.projectName = projectName || this._inferProjectName(projectRoot);
@@ -68,7 +99,15 @@ export class CursorDeliveryPipeline {
     const startTime = Date.now();
     const stats = {
       channelA: { rulesCount: 0, tokensUsed: 0 },
-      channelB: { topicCount: 0, patternsCount: 0, totalTokens: 0 },
+      channelB: {
+        topicCount: 0,
+        patternsCount: 0,
+        totalTokens: 0,
+        topics: {} as Record<
+          string,
+          { patternsCount: number; factsCount: number; tokensUsed: number }
+        >,
+      },
       channelC: { synced: 0, skipped: 0, errors: 0 },
       channelD: { documentsCount: 0, filesWritten: 0 },
       channelF: { filesWritten: 0, totalTokens: 0 },
@@ -95,7 +134,7 @@ export class CursorDeliveryPipeline {
       stats.channelA = channelA;
 
       // ── Channel B: Smart Rules (by topic) + Facts ──
-      const channelB: any = this._generateChannelB(patterns, facts);
+      const channelB = this._generateChannelB(patterns, facts);
       stats.channelB = channelB;
 
       // ── Channel B+: Call Graph Architecture Rules (Phase 5.2) ──
@@ -103,8 +142,8 @@ export class CursorDeliveryPipeline {
       if (archResult) {
         stats.channelB.topicCount++;
         stats.channelB.totalTokens += archResult.tokensUsed;
-        (stats.channelB as any).topics = (stats.channelB as any).topics || {};
-        (stats.channelB as any).topics['call-architecture'] = {
+        stats.channelB.topics = stats.channelB.topics || {};
+        stats.channelB.topics['call-architecture'] = {
           patternsCount: archResult.insightsCount,
           factsCount: 0,
           tokensUsed: archResult.tokensUsed,
@@ -139,8 +178,8 @@ export class CursorDeliveryPipeline {
       );
 
       return { channelA, channelB, channelC, channelD, channelF, stats };
-    } catch (error: any) {
-      this.logger.error?.(`[CursorDelivery] Error: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error?.(`[CursorDelivery] Error: ${(error as Error).message}`);
       throw error;
     }
   }
@@ -152,7 +191,7 @@ export class CursorDeliveryPipeline {
    * @private
    */
   async _loadEntries() {
-    const allEntries: any[] = [];
+    const allEntries: KnowledgeEntryProps[] = [];
 
     // 加载 active
     try {
@@ -162,8 +201,8 @@ export class CursorDeliveryPipeline {
       );
       const activeItems = this._extractItems(active);
       allEntries.push(...activeItems);
-    } catch (e: any) {
-      this.logger.warn?.(`[CursorDelivery] Failed to load active entries: ${e.message}`);
+    } catch (e: unknown) {
+      this.logger.warn?.(`[CursorDelivery] Failed to load active entries: ${(e as Error).message}`);
     }
 
     // 加载 pending（高置信度的也纳入）
@@ -174,13 +213,16 @@ export class CursorDeliveryPipeline {
       );
       const pendingItems = this._extractItems(pending);
       // 过滤高置信度 pending（quality.confidence >= PENDING_MIN 或无 quality 字段）
-      const highConfPending = pendingItems.filter((e: any) => {
-        const conf = e.quality?.confidence;
+      const highConfPending = pendingItems.filter((e: KnowledgeEntryProps) => {
+        const qual = e.quality as { confidence?: number } | undefined;
+        const conf = qual?.confidence;
         return conf === undefined || conf === null || conf >= KNOWLEDGE_CONFIDENCE.PENDING_MIN;
       });
       allEntries.push(...highConfPending);
-    } catch (e: any) {
-      this.logger.warn?.(`[CursorDelivery] Failed to load pending entries: ${e.message}`);
+    } catch (e: unknown) {
+      this.logger.warn?.(
+        `[CursorDelivery] Failed to load pending entries: ${(e as Error).message}`
+      );
     }
 
     return allEntries;
@@ -190,15 +232,16 @@ export class CursorDeliveryPipeline {
    * 从 KnowledgeService.list() 返回值提取条目数组
    * @private
    */
-  _extractItems(result: any) {
+  _extractItems(result: unknown): KnowledgeEntryProps[] {
     if (Array.isArray(result)) {
-      return result;
+      return result as KnowledgeEntryProps[];
     }
-    if (result?.items) {
-      return result.items;
+    const obj = result as Record<string, unknown> | null | undefined;
+    if (obj?.items) {
+      return obj.items as KnowledgeEntryProps[];
     }
-    if (result?.data) {
-      return result.data;
+    if (obj?.data) {
+      return obj.data as KnowledgeEntryProps[];
     }
     return [];
   }
@@ -208,11 +251,11 @@ export class CursorDeliveryPipeline {
    * dev-document 类型单独分流，不进入 Channel A/B 压缩
    * @private
    */
-  _classify(entries: any) {
-    const rules: any[] = [],
-      patterns: any[] = [],
-      facts: any[] = [],
-      documents: any[] = [];
+  _classify(entries: KnowledgeEntryProps[]) {
+    const rules: KnowledgeEntryProps[] = [],
+      patterns: KnowledgeEntryProps[] = [],
+      facts: KnowledgeEntryProps[] = [],
+      documents: KnowledgeEntryProps[] = [];
     for (const entry of entries) {
       if (entry.knowledgeType === 'dev-document') {
         documents.push(entry);
@@ -231,7 +274,7 @@ export class CursorDeliveryPipeline {
    * 排序 — 质量分 + 统计使用量
    * @private
    */
-  _rank(entries: any) {
+  _rank(entries: KnowledgeEntryProps[]) {
     return [...entries].sort((a, b) => {
       const scoreA = this._rankScore(a);
       const scoreB = this._rankScore(b);
@@ -243,15 +286,15 @@ export class CursorDeliveryPipeline {
    * 计算排名分
    * @private
    */
-  _rankScore(entry: any) {
+  _rankScore(entry: KnowledgeEntryProps) {
+    const qual = entry.quality as { confidence?: number; authorityScore?: number } | undefined;
+    const st = entry.stats as { useCount?: number } | undefined;
     let score = 0;
     score +=
-      (entry.quality?.confidence || KNOWLEDGE_CONFIDENCE.RANK_DEFAULT) *
-      DELIVERY_RANK.CONFIDENCE_WEIGHT;
-    score += (entry.quality?.authorityScore || 0) * DELIVERY_RANK.AUTHORITY_WEIGHT;
+      (qual?.confidence || KNOWLEDGE_CONFIDENCE.RANK_DEFAULT) * DELIVERY_RANK.CONFIDENCE_WEIGHT;
+    score += (qual?.authorityScore || 0) * DELIVERY_RANK.AUTHORITY_WEIGHT;
     score +=
-      Math.min(entry.stats?.useCount || 0, DELIVERY_RANK.USE_COUNT_MAX) *
-      DELIVERY_RANK.USE_COUNT_WEIGHT;
+      Math.min(st?.useCount || 0, DELIVERY_RANK.USE_COUNT_MAX) * DELIVERY_RANK.USE_COUNT_WEIGHT;
     if (entry.lifecycle === 'active') {
       score += DELIVERY_RANK.ACTIVE_BONUS;
     }
@@ -262,7 +305,7 @@ export class CursorDeliveryPipeline {
    * Channel A 生成
    * @private
    */
-  _generateChannelA(rules: any) {
+  _generateChannelA(rules: KnowledgeEntryProps[]) {
     const topRules = this._rank(rules).slice(0, BUDGET.CHANNEL_A_MAX_RULES);
     const ruleLines = this.compressor.compressToRuleLine(topRules);
 
@@ -284,8 +327,14 @@ export class CursorDeliveryPipeline {
    * @param {Array} [facts=[]] - kind='fact' 的知识条目
    * @private
    */
-  _generateChannelB(patterns: any, facts: any[] = []) {
-    const result = { topicCount: 0, patternsCount: 0, factsCount: 0, totalTokens: 0, topics: {} };
+  _generateChannelB(patterns: KnowledgeEntryProps[], facts: KnowledgeEntryProps[] = []) {
+    const result: {
+      topicCount: number;
+      patternsCount: number;
+      factsCount: number;
+      totalTokens: number;
+      topics: Record<string, { patternsCount: number; factsCount: number; tokensUsed: number }>;
+    } = { topicCount: 0, patternsCount: 0, factsCount: 0, totalTokens: 0, topics: {} };
 
     if (patterns.length === 0 && facts.length === 0) {
       this.logger.info?.('[CursorDelivery] Channel B: No patterns or facts to generate');
@@ -336,7 +385,12 @@ export class CursorDeliveryPipeline {
       result.patternsCount += compressed.length;
       result.factsCount += factLines.length;
       result.totalTokens += writeResult.tokensUsed;
-      (result.topics as Record<string, any>)[topic] = {
+      (
+        result.topics as Record<
+          string,
+          { patternsCount: number; factsCount: number; tokensUsed: number }
+        >
+      )[topic] = {
         patternsCount: compressed.length,
         factsCount: factLines.length,
         tokensUsed: writeResult.tokensUsed,
@@ -422,7 +476,7 @@ export class CursorDeliveryPipeline {
       }
 
       // 生成架构洞察
-      const lines: any[] = [];
+      const lines: string[] = [];
       lines.push('## Call Graph Architecture');
       lines.push('');
 
@@ -507,8 +561,10 @@ export class CursorDeliveryPipeline {
         tokensUsed: writeResult.tokensUsed,
         filePath: writeResult.filePath,
       };
-    } catch (err: any) {
-      this.logger.warn?.(`[CursorDelivery] Call graph architecture rules failed: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.warn?.(
+        `[CursorDelivery] Call graph architecture rules failed: ${(err as Error).message}`
+      );
       return null;
     }
   }
@@ -517,7 +573,7 @@ export class CursorDeliveryPipeline {
    * 从文件路径中提取层级目录 (第一或第二级有意义的目录)
    * @private
    */
-  _extractLayerDir(filePath: any) {
+  _extractLayerDir(filePath: string) {
     if (!filePath) {
       return null;
     }
@@ -549,13 +605,13 @@ export class CursorDeliveryPipeline {
         errors: syncResult.errors.length,
         details: syncResult,
       };
-    } catch (err: any) {
-      this.logger.error?.(`[CursorDelivery] Channel C error: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.error?.(`[CursorDelivery] Channel C error: ${(err as Error).message}`);
       return {
         synced: 0,
         skipped: 0,
         errors: 1,
-        details: { synced: [], skipped: [], errors: [err.message] },
+        details: { synced: [], skipped: [], errors: [(err as Error).message] },
       };
     }
   }
@@ -566,7 +622,7 @@ export class CursorDeliveryPipeline {
    * .cursor/skills/autosnippet-devdocs/references/ 目录
    * @private
    */
-  _generateChannelD(documents: any) {
+  _generateChannelD(documents: KnowledgeEntryProps[]) {
     const result = { documentsCount: 0, filesWritten: 0, filePaths: [] as string[] };
     if (!documents || documents.length === 0) {
       return result;
@@ -600,13 +656,14 @@ export class CursorDeliveryPipeline {
     for (const doc of documents) {
       const tags = (doc.tags || []).join(', ') || '-';
       const updated = doc.updatedAt
-        ? new Date(doc.updatedAt * 1000).toISOString().split('T')[0]
+        ? new Date((doc.updatedAt as number) * 1000).toISOString().split('T')[0]
         : '-';
-      const slug = this._slugify(doc.title || doc.id);
+      const slug = this._slugify(doc.title || doc.id || 'untitled');
       skillLines.push(`| [${doc.title}](references/${slug}.md) | ${tags} | ${updated} |`);
 
       // 写入单个文档 MD
-      const markdown = doc.content?.markdown || doc.description || '';
+      const contentObj = doc.content as { markdown?: string } | undefined;
+      const markdown = contentObj?.markdown || doc.description || '';
       const docContent = [
         `# ${doc.title || 'Untitled'}`,
         '',
@@ -614,7 +671,7 @@ export class CursorDeliveryPipeline {
         '',
         `**Tags:** ${tags}  `,
         `**Scope:** ${doc.scope || 'universal'}  `,
-        `**Created:** ${doc.createdAt ? new Date(doc.createdAt * 1000).toISOString().split('T')[0] : '-'}`,
+        `**Created:** ${doc.createdAt ? new Date((doc.createdAt as number) * 1000).toISOString().split('T')[0] : '-'}`,
         '',
         '---',
         '',
@@ -649,11 +706,11 @@ export class CursorDeliveryPipeline {
    * 生成 AGENTS.md / CLAUDE.md / .github/copilot-instructions.md
    * @private
    */
-  _generateChannelF(rules: any, patterns: any) {
+  _generateChannelF(rules: KnowledgeEntryProps[], patterns: KnowledgeEntryProps[]) {
     try {
       // 收集可用 Skills 名称
       const skillsDir = path.join(this.projectRoot, 'AutoSnippet', 'skills');
-      let skills: any[] = [];
+      let skills: string[] = [];
       if (fs.existsSync(skillsDir)) {
         skills = fs
           .readdirSync(skillsDir, { withFileTypes: true })
@@ -685,8 +742,10 @@ export class CursorDeliveryPipeline {
           copilot: result.copilot.filePath,
         },
       };
-    } catch (err: any) {
-      this.logger.warn?.(`[CursorDelivery] Channel F error (non-blocking): ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.warn?.(
+        `[CursorDelivery] Channel F error (non-blocking): ${(err as Error).message}`
+      );
       return { filesWritten: 0, totalTokens: 0, files: {} };
     }
   }
@@ -695,7 +754,7 @@ export class CursorDeliveryPipeline {
    * 文件名安全 slug 化
    * @private
    */
-  _slugify(text: any) {
+  _slugify(text: string) {
     return (
       text
         .toLowerCase()
@@ -711,7 +770,7 @@ export class CursorDeliveryPipeline {
    * @param {string} targetDirName 目标目录名，如 '.qoder' 或 '.trae'
    * @private
    */
-  _mirrorToIDE(targetDirName: any) {
+  _mirrorToIDE(targetDirName: string) {
     try {
       const cursorDir = path.join(this.projectRoot, '.cursor');
       const targetDir = path.join(this.projectRoot, targetDirName);
@@ -751,8 +810,10 @@ export class CursorDeliveryPipeline {
       }
 
       this.logger.info?.(`[CursorDelivery] Mirrored autosnippet-* to ${targetDirName}/`);
-    } catch (err: any) {
-      this.logger.warn?.(`[CursorDelivery] Mirror to ${targetDirName}/ failed: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.warn?.(
+        `[CursorDelivery] Mirror to ${targetDirName}/ failed: ${(err as Error).message}`
+      );
     }
   }
 
@@ -760,7 +821,7 @@ export class CursorDeliveryPipeline {
    * 递归复制目录
    * @private
    */
-  _copyDirRecursive(src: any, dest: any) {
+  _copyDirRecursive(src: string, dest: string) {
     fs.mkdirSync(dest, { recursive: true });
     for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
       const srcPath = path.join(src, entry.name);
@@ -777,7 +838,7 @@ export class CursorDeliveryPipeline {
    * 从项目路径推断项目名称
    * @private
    */
-  _inferProjectName(projectRoot: any) {
+  _inferProjectName(projectRoot: string) {
     return path.basename(projectRoot);
   }
 }

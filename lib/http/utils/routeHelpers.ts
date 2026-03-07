@@ -3,6 +3,7 @@
  * 提取自各路由文件中的重复实现
  */
 
+import type { Request } from 'express';
 import { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
 
 /**
@@ -10,7 +11,7 @@ import { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
  * @param {import('express').Request} req
  * @returns {{ userId: string, ip: string, userAgent: string }}
  */
-export function getContext(req: any) {
+export function getContext(req: Request) {
   return {
     userId: req.headers['x-user-id'] || 'anonymous',
     ip: req.ip,
@@ -26,8 +27,8 @@ export function getContext(req: any) {
  * @param {number} [max=1000]    最大值
  * @returns {number}
  */
-export function safeInt(value: any, defaultValue: any, min = 1, max = 1000) {
-  const parsed = parseInt(value, 10);
+export function safeInt(value: unknown, defaultValue: number, min = 1, max = 1000) {
+  const parsed = parseInt(String(value), 10);
   if (Number.isNaN(parsed)) {
     return defaultValue;
   }
@@ -41,11 +42,11 @@ export function safeInt(value: any, defaultValue: any, min = 1, max = 1000) {
  * @param {KnowledgeEntry|Object} entryOrJson  实体或 toJSON 输出
  * @returns {Object} 过滤后的 JSON
  */
-export function sanitizeForAPI(entryOrJson: any) {
+export function sanitizeForAPI(entryOrJson: KnowledgeEntry | Record<string, unknown>) {
   const json =
     typeof entryOrJson?.toJSON === 'function' ? entryOrJson.toJSON() : { ...entryOrJson };
   if (Array.isArray(json.tags)) {
-    json.tags = json.tags.filter((t: any) => !KnowledgeEntry.isSystemTag(t));
+    json.tags = json.tags.filter((t: string) => !KnowledgeEntry.isSystemTag(t));
   }
   return json;
 }
@@ -55,7 +56,10 @@ export function sanitizeForAPI(entryOrJson: any) {
  * @param {{ data: Array, pagination: Object }} result
  * @returns {{ data: Array, pagination: Object }}
  */
-export function sanitizePaginatedForAPI(result: any) {
+export function sanitizePaginatedForAPI(result: {
+  data?: Array<KnowledgeEntry | Record<string, unknown>>;
+  [key: string]: unknown;
+}) {
   if (!result?.data) {
     return result;
   }

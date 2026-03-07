@@ -10,7 +10,7 @@
  */
 
 import { readFileSync } from 'node:fs';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
@@ -37,11 +37,11 @@ const router = express.Router();
  */
 router.post(
   '/file',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { filePath, content, language } = req.body;
 
     if (!filePath) {
-      return res.status(400).json({
+      return void res.status(400).json({
         success: false,
         message: 'filePath is required',
       });
@@ -52,10 +52,10 @@ router.post(
     if (!code) {
       try {
         code = readFileSync(filePath, 'utf8');
-      } catch (err: any) {
-        return res.status(400).json({
+      } catch (err: unknown) {
+        return void res.status(400).json({
           success: false,
-          message: `Cannot read file: ${err.message}`,
+          message: `Cannot read file: ${(err as Error).message}`,
         });
       }
     }
@@ -66,7 +66,7 @@ router.post(
     );
 
     // 获取 Engine（含 EP 注入）
-    const engine = await _getEngine(container, GuardCheckEngine);
+    const engine = await _getEngine(container, GuardCheckEngine as any);
 
     // 检测语言
     const lang = language || detectLanguage(filePath);
@@ -75,7 +75,7 @@ router.post(
     const violations = engine.checkCode(code, lang, { filePath });
 
     // 格式化违规消息面向 Agent
-    const formattedViolations = violations.map((v: any) => ({
+    const formattedViolations = violations.map((v: Record<string, unknown>) => ({
       ...v,
       // 面向 Agent 的诊断消息格式
       diagnosticMessage: _buildDiagnosticMessage(v),
@@ -83,13 +83,13 @@ router.post(
 
     const summary = {
       total: violations.length,
-      errors: violations.filter((v: any) => v.severity === 'error').length,
-      warnings: violations.filter((v: any) => v.severity === 'warning').length,
-      infos: violations.filter((v: any) => v.severity === 'info').length,
+      errors: violations.filter((v: Record<string, unknown>) => v.severity === 'error').length,
+      warnings: violations.filter((v: Record<string, unknown>) => v.severity === 'warning').length,
+      infos: violations.filter((v: Record<string, unknown>) => v.severity === 'info').length,
     };
 
     // GuardFeedbackLoop: 检测修复 + confirmUsage
-    let fixedViolations: any[] = [];
+    let fixedViolations: unknown[] = [];
     try {
       const feedbackLoop = container.get('guardFeedbackLoop');
       fixedViolations = feedbackLoop.processFixDetection({ violations }, filePath);
@@ -132,11 +132,11 @@ router.post(
  */
 router.post(
   '/batch',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { files } = req.body;
 
     if (!Array.isArray(files) || files.length === 0) {
-      return res.status(400).json({
+      return void res.status(400).json({
         success: false,
         message: 'files array is required and must not be empty',
       });
@@ -144,7 +144,7 @@ router.post(
 
     // 限制单次批量不超过 50 个文件
     if (files.length > 50) {
-      return res.status(400).json({
+      return void res.status(400).json({
         success: false,
         message: 'Maximum 50 files per batch',
       });
@@ -155,9 +155,9 @@ router.post(
       '../../service/guard/GuardCheckEngine.js'
     );
 
-    const engine = await _getEngine(container, GuardCheckEngine);
+    const engine = await _getEngine(container, GuardCheckEngine as any);
 
-    const results: any[] = [];
+    const results: Record<string, unknown>[] = [];
     let totalErrors = 0;
     let totalWarnings = 0;
 
@@ -187,9 +187,10 @@ router.post(
 
       const summary = {
         total: violations.length,
-        errors: violations.filter((v: any) => v.severity === 'error').length,
-        warnings: violations.filter((v: any) => v.severity === 'warning').length,
-        infos: violations.filter((v: any) => v.severity === 'info').length,
+        errors: violations.filter((v: Record<string, unknown>) => v.severity === 'error').length,
+        warnings: violations.filter((v: Record<string, unknown>) => v.severity === 'warning')
+          .length,
+        infos: violations.filter((v: Record<string, unknown>) => v.severity === 'info').length,
       };
 
       totalErrors += summary.errors;
@@ -198,7 +199,7 @@ router.post(
       results.push({
         filePath: file.filePath,
         language: lang,
-        violations: violations.map((v: any) => ({
+        violations: violations.map((v: Record<string, unknown>) => ({
           ...v,
           diagnosticMessage: _buildDiagnosticMessage(v),
         })),
@@ -228,7 +229,17 @@ router.post(
  * @param {Function} GuardCheckEngine - GuardCheckEngine class
  * @returns {Promise<object>} engine
  */
-async function _getEngine(container: any, GuardCheckEngine: any) {
+async function _getEngine(
+  container: ReturnType<typeof getServiceContainer>,
+  GuardCheckEngine: {
+    new (db: unknown): unknown;
+    prototype: {
+      isEpInjected(): boolean;
+      injectExternalRules(rules: unknown[]): void;
+      markEpInjected(): void;
+    };
+  }
+) {
   let engine;
   try {
     engine = container.get('guardCheckEngine');
@@ -243,7 +254,8 @@ async function _getEngine(container: any, GuardCheckEngine: any) {
       const { getEnhancementRegistry } = await import('../../core/enhancement/index.js');
       const registry = getEnhancementRegistry();
       if (registry) {
-        const guardRules = registry.getGuardRules?.() || [];
+        const packs = registry.all();
+        const guardRules = packs.flatMap((pack) => pack.getGuardRules());
         engine.injectExternalRules(guardRules);
         engine.markEpInjected();
       }
@@ -265,7 +277,7 @@ async function _getEngine(container: any, GuardCheckEngine: any) {
  * @param {object} violation
  * @returns {string}
  */
-function _buildDiagnosticMessage(violation: any) {
+function _buildDiagnosticMessage(violation: Record<string, unknown>) {
   const { ruleId, message, fixSuggestion } = violation;
 
   let msg = `[AutoSnippet Guard] ${ruleId}: ${message}`;

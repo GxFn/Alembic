@@ -11,7 +11,24 @@
  * @module core/MessageAdapter
  */
 
+import type { ContextWindow } from '../context/ContextWindow.js';
 import { limitToolResult } from '../context/ContextWindow.js';
+
+/** 工具调用记录 */
+interface ToolCallRecord {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
+/** 聊天消息 */
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content: string | null;
+  toolCalls?: ToolCallRecord[];
+  toolCallId?: string;
+  name?: string;
+}
 
 // ─────────────────────────────────────────────
 //  Base class (接口定义 + JSDoc)
@@ -25,7 +42,7 @@ export class MessageAdapter {
    * 追加用户消息
    * @param {string} _text
    */
-  appendUserMessage(_text: any) {
+  appendUserMessage(_text: string) {
     throw new Error('not implemented');
   }
 
@@ -33,7 +50,7 @@ export class MessageAdapter {
    * 追加助手纯文本回复
    * @param {string} _text
    */
-  appendAssistantText(_text: any) {
+  appendAssistantText(_text: string) {
     throw new Error('not implemented');
   }
 
@@ -42,7 +59,7 @@ export class MessageAdapter {
    * @param {string|null} _text
    * @param {Array} _calls - functionCalls 数组
    */
-  appendAssistantWithToolCalls(_text: any, _calls: any) {
+  appendAssistantWithToolCalls(_text: string | null, _calls: ToolCallRecord[]) {
     throw new Error('not implemented');
   }
 
@@ -52,7 +69,7 @@ export class MessageAdapter {
    * @param {string} _name
    * @param {string} _content
    */
-  appendToolResult(_callId: any, _name: any, _content: any) {
+  appendToolResult(_callId: string, _name: string, _content: string) {
     throw new Error('not implemented');
   }
 
@@ -60,7 +77,7 @@ export class MessageAdapter {
    * 追加系统/用户 nudge 消息
    * @param {string} _text
    */
-  appendUserNudge(_text: any) {
+  appendUserNudge(_text: string) {
     throw new Error('not implemented');
   }
 
@@ -68,7 +85,7 @@ export class MessageAdapter {
    * 导出当前消息列表 (供 LLM 调用)
    * @returns {Array<{role: string, content: string}>}
    */
-  toMessages() {
+  toMessages(): unknown[] {
     throw new Error('not implemented');
   }
 
@@ -83,7 +100,7 @@ export class MessageAdapter {
    * 获取工具结果限额
    * @returns {{ maxChars: number, maxMatches: number }}
    */
-  getToolResultQuota() {
+  getToolResultQuota(): { maxChars: number; maxMatches: number } {
     throw new Error('not implemented');
   }
 
@@ -91,7 +108,7 @@ export class MessageAdapter {
    * 压缩检查 — 如果消息过多则自动压缩
    * @returns {{ level: number, removed: number }}
    */
-  compactIfNeeded() {
+  compactIfNeeded(): { level: number; removed: number } {
     throw new Error('not implemented');
   }
 
@@ -101,7 +118,7 @@ export class MessageAdapter {
    * @param {*} rawResult 工具原始返回值
    * @returns {string}
    */
-  formatToolResult(toolName: any, rawResult: any) {
+  formatToolResult(toolName: string, rawResult: unknown) {
     const quota = this.getToolResultQuota();
     return limitToolResult(toolName, rawResult, quota);
   }
@@ -124,7 +141,7 @@ export class ContextWindowAdapter extends MessageAdapter {
   /**
    * @param {import('../context/ContextWindow.js').ContextWindow} ctxWin
    */
-  constructor(ctxWin: any) {
+  constructor(ctxWin: ContextWindow) {
     super();
     this.#ctxWin = ctxWin;
   }
@@ -134,23 +151,23 @@ export class ContextWindowAdapter extends MessageAdapter {
     return this.#ctxWin;
   }
 
-  appendUserMessage(text: any) {
+  appendUserMessage(text: string) {
     this.#ctxWin.appendUserMessage(text);
   }
 
-  appendAssistantText(text: any) {
+  appendAssistantText(text: string) {
     this.#ctxWin.appendAssistantText(text);
   }
 
-  appendAssistantWithToolCalls(text: any, calls: any) {
+  appendAssistantWithToolCalls(text: string | null, calls: ToolCallRecord[]) {
     this.#ctxWin.appendAssistantWithToolCalls(text, calls);
   }
 
-  appendToolResult(callId: any, name: any, content: any) {
+  appendToolResult(callId: string, name: string, content: string) {
     this.#ctxWin.appendToolResult(callId, name, content);
   }
 
-  appendUserNudge(text: any) {
+  appendUserNudge(text: string) {
     this.#ctxWin.appendUserNudge(text);
   }
 
@@ -182,26 +199,26 @@ export class ContextWindowAdapter extends MessageAdapter {
  * compactIfNeeded 始终返回 no-op。
  */
 export class SimpleArrayAdapter extends MessageAdapter {
-  /** @type {Array<Object>} */
-  #messages: any[] = [];
+  /** @type {Array<ChatMessage>} */
+  #messages: ChatMessage[] = [];
 
-  appendUserMessage(text: any) {
+  appendUserMessage(text: string) {
     this.#messages.push({ role: 'user', content: text });
   }
 
-  appendAssistantText(text: any) {
+  appendAssistantText(text: string) {
     this.#messages.push({ role: 'assistant', content: text });
   }
 
-  appendAssistantWithToolCalls(text: any, calls: any) {
+  appendAssistantWithToolCalls(text: string | null, calls: ToolCallRecord[]) {
     this.#messages.push({ role: 'assistant', content: text, toolCalls: calls });
   }
 
-  appendToolResult(callId: any, name: any, content: any) {
+  appendToolResult(callId: string, name: string, content: string) {
     this.#messages.push({ role: 'tool', toolCallId: callId, name, content });
   }
 
-  appendUserNudge(text: any) {
+  appendUserNudge(text: string) {
     this.#messages.push({ role: 'user', content: text });
   }
 
@@ -235,7 +252,7 @@ export class SimpleArrayAdapter extends MessageAdapter {
  * @param {import('../context/ContextWindow.js').ContextWindow|null|undefined} contextWindow
  * @returns {MessageAdapter}
  */
-export function createMessageAdapter(contextWindow: any) {
+export function createMessageAdapter(contextWindow: ContextWindow | null | undefined) {
   if (contextWindow) {
     return new ContextWindowAdapter(contextWindow);
   }

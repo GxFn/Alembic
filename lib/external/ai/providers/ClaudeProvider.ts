@@ -8,19 +8,29 @@
  */
 
 import Logger from '../../../infrastructure/logging/Logger.js';
-import { AiProvider } from '../AiProvider.js';
+import {
+  AiProvider,
+  type AiProviderConfig,
+  type ApiResponse,
+  type ChatContext,
+  type ChatWithToolsOptions,
+  type ChatWithToolsResult,
+  type StructuredOutputOptions,
+  type ToolSchema,
+  type UnifiedMessage,
+} from '../AiProvider.js';
 
 const CLAUDE_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
 
 export class ClaudeProvider extends AiProvider {
-  constructor(config: any = {}) {
+  constructor(config: AiProviderConfig = {}) {
     super(config);
     this.name = 'claude';
     this.model = config.model || 'claude-sonnet-4-20250514';
     this.apiKey = config.apiKey || process.env.ASD_CLAUDE_API_KEY || '';
     this.maxRetries = 0; // Claude 不做重试
-    this.logger = Logger.getInstance();
+    this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
   }
 
   /**
@@ -30,16 +40,16 @@ export class ClaudeProvider extends AiProvider {
     return true;
   }
 
-  async chat(prompt: any, context: any = {}) {
+  async chat(prompt: string, context: ChatContext = {}) {
     const { history = [], temperature = 0.7, maxTokens = 4096 } = context;
-    const messages: { role: any; content: any } | { role: string; content: any }[] = [];
+    const messages: Array<{ role: string; content: string }> = [];
 
     for (const h of history) {
       messages.push({ role: h.role, content: h.content });
     }
     messages.push({ role: 'user', content: prompt });
 
-    const body: any = {
+    const body: Record<string, unknown> = {
       model: this.model,
       messages,
       max_tokens: maxTokens,
@@ -47,7 +57,7 @@ export class ClaudeProvider extends AiProvider {
     };
 
     const data = await this._post(`${CLAUDE_BASE}/messages`, body);
-    const textBlock = (data?.content || []).find((c: any) => c.type === 'text');
+    const textBlock = (data?.content || []).find((c: { type: string }) => c.type === 'text');
     return textBlock?.text || '';
   }
 
@@ -66,23 +76,30 @@ export class ClaudeProvider extends AiProvider {
    * @param {object} opts 统一参数
    * @returns {Promise<{text: string|null, functionCalls: Array<{id, name, args}>|null}>}
    */
-  async chatWithTools(prompt: any, opts: any = {}) {
+  async chatWithTools(
+    prompt: string,
+    opts: ChatWithToolsOptions = {}
+  ): Promise<ChatWithToolsResult> {
     const {
-      messages: unifiedMessages,
-      toolSchemas,
+      messages: rawMessages,
+      toolSchemas: rawToolSchemas,
       toolChoice = 'auto',
       systemPrompt,
       temperature = 0.7,
       maxTokens = 4096,
     } = opts;
+    const unifiedMessages = rawMessages as UnifiedMessage[] | undefined;
+    const toolSchemas = rawToolSchemas as ToolSchema[] | undefined;
 
     // 统一消息 → Anthropic Messages 格式
-    const srcMessages =
-      unifiedMessages?.length > 0 ? unifiedMessages : [{ role: 'user', content: prompt }];
+    const srcMessages: UnifiedMessage[] =
+      unifiedMessages && unifiedMessages.length > 0
+        ? unifiedMessages
+        : [{ role: 'user' as const, content: prompt }];
 
     const messages = this.#convertMessages(srcMessages);
 
-    const body: any = {
+    const body: Record<string, unknown> = {
       model: this.model,
       messages,
       max_tokens: maxTokens,
@@ -96,8 +113,8 @@ export class ClaudeProvider extends AiProvider {
 
     // 工具声明 + tool_choice
     // toolChoice='none' 时不传 tools（Anthropic 没有 'none' tool_choice）
-    if (toolChoice !== 'none' && toolSchemas?.length > 0) {
-      body.tools = toolSchemas.map((s: any) => ({
+    if (toolChoice !== 'none' && toolSchemas && toolSchemas.length > 0) {
+      body.tools = toolSchemas.map((s: ToolSchema) => ({
         name: s.name,
         description: s.description || '',
         input_schema: s.parameters || { type: 'object', properties: {} },
@@ -126,13 +143,13 @@ export class ClaudeProvider extends AiProvider {
    * Anthropic 要求消息交替 user/assistant。连续 tool results 合并为一个 user 消息。
    * 连续同角色消息（如 L2/L3 压缩后的摘要）自动合并以避免 400 错误。
    */
-  #convertMessages(messages: any) {
-    const result: any[] = [];
+  #convertMessages(messages: UnifiedMessage[]) {
+    const result: Array<{ role: string; content: unknown }> = [];
 
     /**
      * 推入 result，如果上一个 entry 同角色则合并 content
      */
-    const pushOrMerge = (entry: any) => {
+    const pushOrMerge = (entry: { role: string; content: unknown }) => {
       const last = result[result.length - 1];
       if (last && last.role === entry.role) {
         // Anthropic content 可以是 string 或 array
@@ -157,11 +174,11 @@ export class ClaudeProvider extends AiProvider {
         pushOrMerge({ role: 'user', content: msg.content || '' });
         i++;
       } else if (msg.role === 'assistant') {
-        const content: any[] = [];
+        const content: Array<Record<string, unknown>> = [];
         if (msg.content) {
           content.push({ type: 'text', text: msg.content });
         }
-        if (msg.toolCalls?.length > 0) {
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
           for (const tc of msg.toolCalls) {
             content.push({
               type: 'tool_use',
@@ -178,11 +195,11 @@ export class ClaudeProvider extends AiProvider {
         i++;
       } else if (msg.role === 'tool') {
         // 收集连续 tool results → 合并为一个 user 消息
-        const toolResults: { type: string; tool_use_id: any; content: any }[] = [];
+        const toolResults: { type: string; tool_use_id: string; content: string }[] = [];
         while (i < messages.length && messages[i].role === 'tool') {
           toolResults.push({
             type: 'tool_result',
-            tool_use_id: messages[i].toolCallId,
+            tool_use_id: messages[i].toolCallId || '',
             content: messages[i].content || '',
           });
           i++;
@@ -203,7 +220,7 @@ export class ClaudeProvider extends AiProvider {
    *   content[]: { type: 'text', text } | { type: 'tool_use', id, name, input }
    *   stop_reason: 'end_turn' | 'tool_use' | 'max_tokens'
    */
-  #parseToolResponse(data: any) {
+  #parseToolResponse(data: ApiResponse) {
     // 提取 token 用量 (Claude usage)
     const usage = data?.usage
       ? {
@@ -217,8 +234,8 @@ export class ClaudeProvider extends AiProvider {
       return { text: '', functionCalls: null, usage };
     }
 
-    const functionCalls: { id: any; name: any; args: any }[] = [];
-    const textParts: any[] = [];
+    const functionCalls: Array<{ id: string; name: string; args: Record<string, unknown> }> = [];
+    const textParts: string[] = [];
 
     for (const block of data.content) {
       if (block.type === 'tool_use') {
@@ -233,7 +250,7 @@ export class ClaudeProvider extends AiProvider {
     }
 
     if (functionCalls.length > 0) {
-      this.logger.debug(
+      this.logger?.debug(
         `[Claude] native function calls: ${functionCalls.map((fc) => fc.name).join(', ')}`
       );
       return {
@@ -250,7 +267,7 @@ export class ClaudeProvider extends AiProvider {
     };
   }
 
-  async summarize(code: any) {
+  async summarize(code: string) {
     const prompt = `请对以下代码生成结构化摘要，返回 JSON 格式 {title, description, language, patterns: [], keyAPIs: []}:\n\n${code}`;
     return (
       (await this.chatWithStructuredOutput(prompt, {
@@ -260,7 +277,7 @@ export class ClaudeProvider extends AiProvider {
     );
   }
 
-  async embed(_text: any) {
+  async embed(_text: string | string[]) {
     // Claude 不支持嵌入 API，返回空数组触发降级
     return [];
   }
@@ -269,11 +286,11 @@ export class ClaudeProvider extends AiProvider {
     return false;
   }
 
-  async _post(url: any, body: any) {
+  async _post(url: string, body: Record<string, unknown>): Promise<ApiResponse> {
     if (!this.apiKey) {
-      const err: any = new Error(
+      const err = new Error(
         'Claude API Key 未配置。请在 .env 中设置 ASD_CLAUDE_API_KEY，或运行 asd setup 完成配置。'
-      );
+      ) as Error & { code: string };
       err.code = 'API_KEY_MISSING';
       throw err;
     }
@@ -294,7 +311,7 @@ export class ClaudeProvider extends AiProvider {
       });
 
       if (!res.ok) {
-        const err: any = new Error(`Claude API error: ${res.status}`);
+        const err = new Error(`Claude API error: ${res.status}`) as Error & { status: number };
         err.status = res.status;
         throw err;
       }

@@ -8,13 +8,23 @@
  */
 
 import Logger from '../../../infrastructure/logging/Logger.js';
-import { AiProvider } from '../AiProvider.js';
+import {
+  AiProvider,
+  type AiProviderConfig,
+  type ApiResponse,
+  type ChatContext,
+  type ChatWithToolsOptions,
+  type ChatWithToolsResult,
+  type StructuredOutputOptions,
+  type ToolSchema,
+  type UnifiedMessage,
+} from '../AiProvider.js';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const EMBED_MODEL = 'models/gemini-embedding-001';
 
 export class GoogleGeminiProvider extends AiProvider {
-  constructor(config: any = {}) {
+  constructor(config: AiProviderConfig = {}) {
     super({
       ...config,
       maxConcurrency:
@@ -24,7 +34,7 @@ export class GoogleGeminiProvider extends AiProvider {
     this.name = 'google-gemini';
     this.model = config.model || 'gemini-3-flash-preview';
     this.apiKey = config.apiKey || process.env.ASD_GOOGLE_API_KEY || '';
-    this.logger = Logger.getInstance();
+    this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
   }
 
   /**
@@ -34,10 +44,10 @@ export class GoogleGeminiProvider extends AiProvider {
     return true;
   }
 
-  async chat(prompt: any, context: any = {}) {
+  async chat(prompt: string, context: ChatContext = {}) {
     return this._withRetry(async () => {
       const { history = [], temperature = 0.7, maxTokens = 8192, systemPrompt } = context;
-      const contents: { role: string; parts: { text: any }[] }[] = [];
+      const contents: { role: string; parts: { text: string }[] }[] = [];
 
       for (const h of history) {
         contents.push({
@@ -47,7 +57,7 @@ export class GoogleGeminiProvider extends AiProvider {
       }
       contents.push({ role: 'user', parts: [{ text: prompt }] });
 
-      const body: any = {
+      const body: Record<string, unknown> = {
         contents,
         generationConfig: {
           temperature,
@@ -81,24 +91,29 @@ export class GoogleGeminiProvider extends AiProvider {
    * @param {number} [opts.maxTokens=8192]
    * @returns {Promise<{text: string|null, functionCalls: Array<{id, name, args}>|null}>}
    */
-  async chatWithTools(prompt: any, opts: any = {}) {
+  async chatWithTools(
+    prompt: string,
+    opts: ChatWithToolsOptions = {}
+  ): Promise<ChatWithToolsResult> {
     return this._withRetry(async () => {
       const {
-        messages,
-        toolSchemas,
+        messages: rawMessages,
+        toolSchemas: rawToolSchemas,
         toolChoice = 'auto',
         systemPrompt,
         temperature = 0.7,
         maxTokens = 8192,
       } = opts;
+      const messages = rawMessages as UnifiedMessage[] | undefined;
+      const toolSchemas = rawToolSchemas as ToolSchema[] | undefined;
 
       // 统一消息 → Gemini contents
       const contents =
-        messages?.length > 0
+        messages && messages.length > 0
           ? this.#convertMessages(messages)
           : [{ role: 'user', parts: [{ text: prompt }] }];
 
-      const body: any = {
+      const body: Record<string, unknown> = {
         contents,
         generationConfig: {
           temperature,
@@ -107,10 +122,12 @@ export class GoogleGeminiProvider extends AiProvider {
       };
 
       // 工具声明: 标准 schema → Gemini functionDeclarations
-      if (toolSchemas?.length > 0) {
+      if (toolSchemas && toolSchemas.length > 0) {
         body.tools = [
           {
-            functionDeclarations: toolSchemas.map((s: any) => this.#toFunctionDeclaration(s)),
+            functionDeclarations: toolSchemas.map((s: ToolSchema) =>
+              this.#toFunctionDeclaration(s)
+            ),
           },
         ];
       }
@@ -145,14 +162,15 @@ export class GoogleGeminiProvider extends AiProvider {
    * Gemini 要求严格交替 user/model 角色。
    * 连续同角色消息（如 L2/L3 压缩后的摘要）自动合并 parts 以避免 400 错误。
    */
-  #convertMessages(messages: any) {
-    const contents: any[] = [];
-    let pendingToolResults: { functionResponse: { name: any; response: { result: any } } }[] = [];
+  #convertMessages(messages: UnifiedMessage[]) {
+    const contents: Array<{ role: string; parts: unknown[] }> = [];
+    let pendingToolResults: { functionResponse: { name: string; response: { result: string } } }[] =
+      [];
 
     /**
      * 推入 contents，如果上一个 entry 同角色则合并 parts
      */
-    const pushOrMerge = (entry: any) => {
+    const pushOrMerge = (entry: { role: string; parts: unknown[] }) => {
       const last = contents[contents.length - 1];
       if (last && last.role === entry.role) {
         last.parts.push(...entry.parts);
@@ -166,7 +184,7 @@ export class GoogleGeminiProvider extends AiProvider {
         // 收集连续 tool results → 将在下一个非 tool 消息前或末尾 flush
         pendingToolResults.push({
           functionResponse: {
-            name: msg.name,
+            name: msg.name || '',
             response: { result: msg.content || '' },
           },
         });
@@ -182,13 +200,15 @@ export class GoogleGeminiProvider extends AiProvider {
       if (msg.role === 'user') {
         pushOrMerge({ role: 'user', parts: [{ text: msg.content || '' }] });
       } else if (msg.role === 'assistant') {
-        const parts: { text: any } | any[] = [];
+        const parts: Array<Record<string, unknown>> = [];
         if (msg.content) {
           parts.push({ text: msg.content });
         }
-        if (msg.toolCalls?.length > 0) {
+        if (msg.toolCalls && msg.toolCalls.length > 0) {
           for (const tc of msg.toolCalls) {
-            const fcPart: any = { functionCall: { name: tc.name, args: tc.args || {} } };
+            const fcPart: Record<string, unknown> = {
+              functionCall: { name: tc.name, args: tc.args || {} },
+            };
             // Gemini 3+: 回填 thoughtSignature（首个 functionCall 必须携带）
             if (tc.thoughtSignature) {
               fcPart.thoughtSignature = tc.thoughtSignature;
@@ -213,7 +233,7 @@ export class GoogleGeminiProvider extends AiProvider {
   /**
    * toolChoice → Gemini mode
    */
-  #toGeminiMode(toolChoice: any) {
+  #toGeminiMode(toolChoice: string) {
     switch (toolChoice) {
       case 'required':
         return 'ANY';
@@ -227,7 +247,7 @@ export class GoogleGeminiProvider extends AiProvider {
   /**
    * 标准 tool schema → Gemini functionDeclaration
    */
-  #toFunctionDeclaration(schema: any) {
+  #toFunctionDeclaration(schema: ToolSchema) {
     return {
       name: schema.name,
       description: schema.description || '',
@@ -239,12 +259,12 @@ export class GoogleGeminiProvider extends AiProvider {
    * 清理 JSON Schema 使之兼容 Gemini API 的 OpenAPI 子集（递归）
    * Gemini API 不支持 default、examples 等 JSON Schema 扩展字段
    */
-  #sanitizeSchemaForGemini(schema: any) {
+  #sanitizeSchemaForGemini(schema: unknown): Record<string, unknown> {
     if (!schema || typeof schema !== 'object') {
       return { type: 'object', properties: {} };
     }
 
-    const cleaned = { ...schema };
+    const cleaned = { ...(schema as Record<string, unknown>) } as Record<string, unknown>;
     delete cleaned.default;
     delete cleaned.examples;
     if (!cleaned.type) {
@@ -253,7 +273,7 @@ export class GoogleGeminiProvider extends AiProvider {
 
     // 递归清理 properties
     if (cleaned.properties) {
-      const props: Record<string, any> = {};
+      const props: Record<string, unknown> = {};
       for (const [key, val] of Object.entries(cleaned.properties)) {
         props[key] = this.#sanitizeSchemaForGemini(val);
       }
@@ -277,7 +297,7 @@ export class GoogleGeminiProvider extends AiProvider {
    * 解析 Gemini API 响应 — 提取 functionCall 或 text
    * 返回统一格式（含生成的 id）
    */
-  #parseToolResponse(data: any) {
+  #parseToolResponse(data: ApiResponse) {
     const content = data?.candidates?.[0]?.content;
 
     // 提取 token 用量 (Gemini usageMetadata)
@@ -293,8 +313,13 @@ export class GoogleGeminiProvider extends AiProvider {
       return { text: '', functionCalls: null, usage };
     }
 
-    const functionCalls: { id: string; name: any; args: any; thoughtSignature: any }[] = [];
-    const textParts: any[] = [];
+    const functionCalls: {
+      id: string;
+      name: string;
+      args: Record<string, unknown>;
+      thoughtSignature: string | undefined;
+    }[] = [];
+    const textParts: string[] = [];
     let fcIndex = 0;
 
     for (const part of content.parts) {
@@ -312,7 +337,7 @@ export class GoogleGeminiProvider extends AiProvider {
     }
 
     if (functionCalls.length > 0) {
-      this.logger.debug(
+      this.logger?.debug(
         `[GeminiProvider] native function calls: ${functionCalls.map((fc) => fc.name).join(', ')}`
       );
       return {
@@ -329,7 +354,7 @@ export class GoogleGeminiProvider extends AiProvider {
     };
   }
 
-  async summarize(code: any) {
+  async summarize(code: string) {
     const prompt = `请对以下代码生成结构化摘要，返回 JSON 格式 {title, description, language, patterns: [], keyAPIs: []}:\n\n${code}`;
     return (
       (await this.chatWithStructuredOutput(prompt, {
@@ -345,13 +370,13 @@ export class GoogleGeminiProvider extends AiProvider {
    * 使用 responseMimeType: 'application/json' 强制 Gemini 返回合法 JSON。
    * 可选传入 responseSchema 做编译期校验（Gemini 1.5+ / Gemini 2+）。
    */
-  async chatWithStructuredOutput(prompt: any, opts: any = {}) {
+  async chatWithStructuredOutput(prompt: string, opts: StructuredOutputOptions = {}) {
     return this._withRetry(async () => {
       const { schema, temperature = 0.3, maxTokens = 32768, systemPrompt } = opts;
 
       const contents = [{ role: 'user', parts: [{ text: prompt }] }];
 
-      const generationConfig: any = {
+      const generationConfig: Record<string, unknown> = {
         temperature,
         maxOutputTokens: maxTokens,
         responseMimeType: 'application/json',
@@ -362,7 +387,7 @@ export class GoogleGeminiProvider extends AiProvider {
         generationConfig.responseSchema = this.#sanitizeSchemaForGemini(schema);
       }
 
-      const body: any = { contents, generationConfig };
+      const body: Record<string, unknown> = { contents, generationConfig };
 
       if (systemPrompt) {
         body.systemInstruction = { parts: [{ text: systemPrompt }] };
@@ -387,9 +412,9 @@ export class GoogleGeminiProvider extends AiProvider {
     });
   }
 
-  async embed(text: any) {
+  async embed(text: string | string[]) {
     const texts = Array.isArray(text) ? text : [text];
-    const results: any[] = [];
+    const results: number[][] = [];
 
     for (let i = 0; i < texts.length; i += 100) {
       const batch = texts.slice(i, i + 100);
@@ -401,19 +426,19 @@ export class GoogleGeminiProvider extends AiProvider {
       const url = `${GEMINI_BASE}/${EMBED_MODEL}:batchEmbedContents?key=${this.apiKey}`;
       const data = await this._post(url, { requests });
       if (data?.embeddings) {
-        results.push(...data.embeddings.map((e: any) => e.values));
+        results.push(...data.embeddings.map((e: { values: number[] }) => e.values));
       }
     }
 
     return Array.isArray(text) ? results : results[0] || [];
   }
 
-  async _post(url: any, body: any) {
+  async _post(url: string, body: Record<string, unknown>): Promise<ApiResponse> {
     if (!this.apiKey) {
       const err = new Error(
         'Google Gemini API Key 未配置。请在 .env 中设置 ASD_GOOGLE_API_KEY，或运行 asd setup 完成配置。'
       );
-      (err as any).code = 'API_KEY_MISSING';
+      (err as Error & { code: string }).code = 'API_KEY_MISSING';
       throw err;
     }
 

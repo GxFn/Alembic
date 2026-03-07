@@ -5,24 +5,168 @@
 
 import { LanguageService } from '../../shared/LanguageService.js';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/** Loose JSON record for external API responses (inherently untyped) */
+// biome-ignore lint: API responses are dynamic JSON
+export type ApiResponse = Record<string, any>;
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/** AI provider 构造配置 */
+export interface AiProviderConfig {
+  model?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  timeout?: number;
+  maxRetries?: number;
+  circuitThreshold?: number;
+  maxConcurrency?: number | string;
+  name?: string;
+  embedModel?: string;
+  responses?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** 对话历史条目 */
+export interface ChatHistoryEntry {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/** 对话上下文选项 */
+export interface ChatContext {
+  history?: ChatHistoryEntry[];
+  temperature?: number;
+  maxTokens?: number;
+  systemPrompt?: string;
+}
+
+/** 统一消息格式 */
+export interface UnifiedMessage {
+  role: 'user' | 'assistant' | 'tool';
+  content?: string | null;
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    args: Record<string, unknown>;
+    thoughtSignature?: string;
+  }>;
+  toolCallId?: string;
+  name?: string;
+}
+
+/** 工具 schema */
+export interface ToolSchema {
+  name: string;
+  description?: string;
+  parameters?: Record<string, unknown>;
+}
+
+/** chatWithTools 选项 */
+export interface ChatWithToolsOptions {
+  messages?: unknown[];
+  toolSchemas?: unknown[];
+  toolChoice?: string;
+  systemPrompt?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+/** 函数调用结果 */
+export interface FunctionCallResult {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  thoughtSignature?: string;
+}
+
+/** chatWithTools 返回值 */
+export interface ChatWithToolsResult {
+  text: string | null;
+  functionCalls: FunctionCallResult[] | null;
+  usage?: TokenUsage | null;
+}
+
+/** Token 用量 */
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+/** chatWithStructuredOutput 选项 */
+export interface StructuredOutputOptions {
+  schema?: Record<string, unknown>;
+  openChar?: string;
+  closeChar?: string;
+  temperature?: number;
+  maxTokens?: number;
+  systemPrompt?: string;
+}
+
+/** enrichCandidates 选项 */
+export interface EnrichOptions {
+  lang?: string;
+}
+
+/** enrichCandidates 候选条目 */
+export interface EnrichCandidate {
+  code?: string;
+  language?: string;
+  title?: string;
+  description?: string;
+  rationale?: string;
+  knowledgeType?: string;
+  complexity?: string;
+  scope?: string;
+  steps?: unknown[];
+  constraints?: { preconditions?: unknown[]; boundaries?: unknown[]; sideEffects?: unknown[] };
+  summary?: string;
+  category?: string;
+}
+
+/** 文件内容条目（用于语言检测） */
+export interface FileContentEntry {
+  name?: string;
+  [key: string]: unknown;
+}
+
+/** 语言 profile */
+export interface LanguageProfile {
+  primaryLanguage: string;
+  role: string;
+  patternExamples: string;
+  extractionExamples: string;
+  categories: string;
+}
+
+/** Logger 接口 — 兼容 winston.Logger 实例 */
+export interface AiLogger {
+  debug(message: string, ...args: unknown[]): void;
+  info(message: string, ...args: unknown[]): void;
+  warn(message: string, ...args: unknown[]): void;
+  error(message: string, ...args: unknown[]): void;
+  [key: string]: unknown;
+}
+
 export class AiProvider {
-  _activeRequests: any;
-  _circuitCooldownMs: any;
-  _circuitFailures: any;
-  _circuitOpenedAt: any;
-  _circuitState: any;
-  _circuitThreshold: any;
-  _maxConcurrency: any;
-  _rateLimitedUntil: any;
-  _requestQueue: any;
-  apiKey: any;
-  baseUrl: any;
-  logger: any;
-  maxRetries: any;
-  model: any;
-  name: any;
-  timeout: any;
-  constructor(config: any = {}) {
+  _activeRequests: number;
+  _circuitCooldownMs: number;
+  _circuitFailures: number;
+  _circuitOpenedAt: number;
+  _circuitState: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  _circuitThreshold: number;
+  _maxConcurrency: number;
+  _rateLimitedUntil: number;
+  _requestQueue: Array<(value?: unknown) => void>;
+  apiKey: string;
+  baseUrl: string;
+  logger: AiLogger | null = null;
+  maxRetries: number;
+  model: string;
+  name: string;
+  timeout: number;
+  _fallbackFrom?: string;
+  constructor(config: AiProviderConfig = {}) {
     this.model = config.model || '';
     this.apiKey = config.apiKey || '';
     this.baseUrl = config.baseUrl || '';
@@ -52,7 +196,7 @@ export class AiProvider {
       this._activeRequests += 1;
       return;
     }
-    await new Promise((resolve) => this._requestQueue.push(resolve));
+    await new Promise<void>((resolve) => this._requestQueue.push(() => resolve()));
     this._activeRequests += 1;
   }
 
@@ -71,7 +215,7 @@ export class AiProvider {
     }
   }
 
-  _setRateLimitWindow(waitMs: any) {
+  _setRateLimitWindow(waitMs: number) {
     const safeWait = Math.max(0, Number(waitMs) || 0);
     if (safeWait <= 0) {
       return;
@@ -92,7 +236,7 @@ export class AiProvider {
    * @param {object} context - {history: [], temperature, maxTokens}
    * @returns {Promise<string>}
    */
-  async chat(prompt: any, context: any = {}): Promise<string> {
+  async chat(prompt: string, context: ChatContext = {}): Promise<string> {
     throw new Error(`${this.name}.chat() not implemented`);
   }
 
@@ -101,7 +245,7 @@ export class AiProvider {
    * @param {string} code
    * @returns {Promise<object>}
    */
-  async summarize(code: any): Promise<any> {
+  async summarize(code: string): Promise<unknown> {
     throw new Error(`${this.name}.summarize() not implemented`);
   }
 
@@ -110,7 +254,7 @@ export class AiProvider {
    * @param {string|string[]} text
    * @returns {Promise<number[]|number[][]>}
    */
-  async embed(text: any): Promise<number[] | number[][]> {
+  async embed(text: string | string[]): Promise<number[] | number[][]> {
     throw new Error(`${this.name}.embed() not implemented`);
   }
 
@@ -165,15 +309,15 @@ export class AiProvider {
    * @returns {Promise<{text: string|null, functionCalls: Array<{id: string, name: string, args: object}>|null}>}
    */
   async chatWithTools(
-    prompt: any,
-    opts: any = {}
-  ): Promise<{ text: string | null; functionCalls: any[] | null }> {
+    prompt: string,
+    opts: ChatWithToolsOptions = {}
+  ): Promise<ChatWithToolsResult> {
     // 默认降级: 忽略 tools/toolChoice，走纯文本 chat()
-    const messages = opts.messages || [];
+    const messages = (opts.messages || []) as UnifiedMessage[];
     const history = messages
-      .filter((m: any) => m.role === 'user' || m.role === 'assistant')
-      .map((m: any) => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({
+        role: m.role as 'user' | 'assistant',
         content: m.content || '',
       }));
     const text = await this.chat(prompt, {
@@ -203,7 +347,10 @@ export class AiProvider {
    * @param {string} [opts.systemPrompt] 可选系统指令
    * @returns {Promise<any>} 解析后的 JSON 对象/数组，解析失败返回 null
    */
-  async chatWithStructuredOutput(prompt: any, opts: any = {}): Promise<any> {
+  async chatWithStructuredOutput(
+    prompt: string,
+    opts: StructuredOutputOptions = {}
+  ): Promise<unknown> {
     const response = await this.chat(prompt, {
       temperature: opts.temperature ?? 0.3,
       maxTokens: opts.maxTokens ?? 32768,
@@ -220,7 +367,7 @@ export class AiProvider {
   /**
    * 内部日志辅助（子类可通过 this.logger 覆盖）
    */
-  _log(level: any, message: any) {
+  _log(level: string, message: string) {
     try {
       if (this.logger && typeof this.logger[level] === 'function') {
         this.logger[level](message);
@@ -236,7 +383,7 @@ export class AiProvider {
    * @param {string} [lang] 语言代码，如 'zh', 'en'
    * @returns {string} 语言指令段落（为空则返回空字符串）
    */
-  _buildLangInstruction(lang: any) {
+  _buildLangInstruction(lang: string | undefined) {
     if (!lang || lang === 'en') {
       return '';
     }
@@ -272,8 +419,8 @@ export class AiProvider {
   /**
    * 根据文件扩展名检测语言特征，返回提示词适配参数
    */
-  _detectLanguageProfile(filesContent: any) {
-    const extCounts: Record<string, any> = {};
+  _detectLanguageProfile(filesContent: FileContentEntry[]): LanguageProfile {
+    const extCounts: Record<string, number> = {};
     for (const f of filesContent) {
       const ext = (f.name || '').split('.').pop()?.toLowerCase() || '';
       extCounts[ext] = (extCounts[ext] || 0) + 1;
@@ -437,7 +584,7 @@ export class AiProvider {
    * @param {Array<object>} candidates 候选对象数组，每项至少含 {code, language, title?}
    * @returns {Promise<Array<object>>} enriched 候选数组（仅含补全的字段）
    */
-  async enrichCandidates(candidates: any, options: any = {}) {
+  async enrichCandidates(candidates: EnrichCandidate[], options: EnrichOptions = {}) {
     const prompt = this._buildEnrichPrompt(candidates, options);
     const parsed = await this.chatWithStructuredOutput(prompt, {
       openChar: '[',
@@ -450,9 +597,9 @@ export class AiProvider {
   /**
    * 构建 enrichCandidates 提示词
    */
-  _buildEnrichPrompt(candidates: any, options: any = {}) {
+  _buildEnrichPrompt(candidates: EnrichCandidate[], options: EnrichOptions = {}) {
     const items = candidates
-      .map((c: any, i: any) => {
+      .map((c: EnrichCandidate, i: number) => {
         const existing: string[] = [];
         if (c.rationale) {
           existing.push(`rationale: ${c.rationale}`);
@@ -563,7 +710,7 @@ ${items}`;
    * 代理感知的 fetch — 自动检测代理并使用 undici ProxyAgent。
    * 子类的 _post() 应调用此方法替代全局 fetch()。
    */
-  async _fetch(url: any, options: any = {}) {
+  async _fetch(url: string, options: Record<string, unknown> = {}) {
     const proxyUrl = this._resolveProxyUrl();
 
     if (proxyUrl) {
@@ -584,7 +731,7 @@ ${items}`;
    * 从 LLM 响应提取 JSON (extractJSON kept below)
    * 支持截断修复：当 AI 输出被 token 限制截断时，尝试关闭未完成的 JSON 结构
    */
-  extractJSON(text: any, openChar = '{', closeChar = '}') {
+  extractJSON(text: string, openChar = '{', closeChar = '}') {
     if (!text) {
       return null;
     }
@@ -619,7 +766,7 @@ ${items}`;
    * 策略 1（主路径）: 字符级解析找到最后一个完整的顶层 {...} 对象
    * 策略 2（回退路径）: 正则 + 渐进 JSON.parse 尝试（应对代码段中未转义引号导致 inString 追踪失效）
    */
-  _repairTruncatedArray(text: any) {
+  _repairTruncatedArray(text: string) {
     // ── 策略 1：字符级深度追踪 ──
     const charResult = this._repairByCharTracking(text);
     if (charResult) {
@@ -638,7 +785,7 @@ ${items}`;
   /**
    * 字符级深度追踪修复（原逻辑，处理标准 JSON）
    */
-  _repairByCharTracking(text: any) {
+  _repairByCharTracking(text: string) {
     let depth = 0;
     let inString = false;
     let isEscaped = false;
@@ -683,9 +830,9 @@ ${items}`;
    * 正则回退修复 — 不依赖 inString 追踪
    * 寻找所有 "},\s*{" 或 "}\s*]" 边界，从后往前尝试 JSON.parse
    */
-  _repairByRegexFallback(text: any) {
+  _repairByRegexFallback(text: string) {
     // 收集所有 "}" 后跟 "," 或空白的位置（可能是对象边界）
-    const candidates: any[] = [];
+    const candidates: number[] = [];
     const re = /\}[\s,]*(?=\s*[[{]|$)/g;
     let m;
     while ((m = re.exec(text)) !== null) {
@@ -705,7 +852,7 @@ ${items}`;
   /**
    * 在指定位置截断并尝试闭合 JSON 数组
    */
-  _tryRepairAt(text: any, endPos: any) {
+  _tryRepairAt(text: string, endPos: number) {
     let repaired = text.slice(0, endPos + 1);
     // 去掉尾逗号
     repaired = repaired.replace(/,\s*$/, '');
@@ -738,14 +885,18 @@ ${items}`;
    *
    * 这避免了 AI 服务宕机时无意义的重试风暴。
    */
-  async _withRetry(fn: any, retries = this.maxRetries, baseDelay = 2000) {
+  async _withRetry<T>(
+    fn: () => Promise<T>,
+    retries = this.maxRetries,
+    baseDelay = 2000
+  ): Promise<T> {
     // ── 熔断器检查 ──
     if (this._circuitState === 'OPEN') {
       const elapsed = Date.now() - (this._circuitOpenedAt || 0);
       if (elapsed < (this._circuitCooldownMs || 30000)) {
-        const err: any = new Error(
+        const err = new Error(
           `AI 服务熔断中 (连续 ${this._circuitFailures} 次失败)，${Math.ceil(((this._circuitCooldownMs || 30000) - elapsed) / 1000)}s 后恢复`
-        );
+        ) as Error & { code: string };
         err.code = 'CIRCUIT_OPEN';
         throw err;
       }
@@ -766,32 +917,38 @@ ${items}`;
         this._circuitState = 'CLOSED';
         this._circuitCooldownMs = 30_000; // 重置冷却时间
         return result;
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const e = err as Error & {
+          status?: number;
+          code?: string;
+          retryAfterMs?: number;
+          cause?: { code?: string; message?: string };
+        };
         // ── 综合判断是否为可重试的网络/服务端错误 ──
-        const causeCode = err.cause?.code || '';
+        const causeCode = e.cause?.code || '';
         // 网络级错误：无 HTTP status，底层连接失败
         const isNetworkError =
-          !err.status &&
-          (err.message === 'fetch failed' ||
-            err.code === 'ECONNRESET' ||
+          !e.status &&
+          (e.message === 'fetch failed' ||
+            e.code === 'ECONNRESET' ||
             causeCode === 'ECONNRESET' ||
-            err.code === 'ECONNREFUSED' ||
+            e.code === 'ECONNREFUSED' ||
             causeCode === 'ECONNREFUSED' ||
-            err.code === 'ENOTFOUND' ||
+            e.code === 'ENOTFOUND' ||
             causeCode === 'ENOTFOUND' ||
-            err.code === 'ECONNABORTED' ||
+            e.code === 'ECONNABORTED' ||
             causeCode === 'ECONNABORTED' ||
-            err.code === 'ETIMEDOUT' ||
+            e.code === 'ETIMEDOUT' ||
             causeCode === 'ETIMEDOUT' ||
-            err.code === 'UND_ERR_CONNECT_TIMEOUT' ||
+            e.code === 'UND_ERR_CONNECT_TIMEOUT' ||
             causeCode === 'UND_ERR_CONNECT_TIMEOUT' ||
-            err.code === 'UND_ERR_SOCKET' ||
+            e.code === 'UND_ERR_SOCKET' ||
             causeCode === 'UND_ERR_SOCKET');
-        const isRetryable = err.status === 429 || err.status >= 500 || isNetworkError;
+        const isRetryable = e.status === 429 || (e.status ?? 0) >= 500 || isNetworkError;
 
         // 429：触发 provider 级冷却窗，抑制并发重试风暴
-        if (err.status === 429) {
-          const retryAfterMs = Number(err.retryAfterMs || 0);
+        if (e.status === 429) {
+          const retryAfterMs = Number(e.retryAfterMs || 0);
           const adaptiveCooldown = Math.max(
             retryAfterMs,
             Math.round(baseDelay * 2 ** attempt * 1.5 + Math.random() * 1000)
@@ -800,10 +957,10 @@ ${items}`;
         }
 
         // 首次失败记录详细诊断（含 cause）
-        if (attempt === 0 && (isNetworkError || err.cause)) {
+        if (attempt === 0 && (isNetworkError || e.cause)) {
           this._log?.(
             'warn',
-            `[_withRetry] ${err.message} — cause: ${err.cause?.message || causeCode || 'unknown'}`
+            `[_withRetry] ${e.message} — cause: ${e.cause?.message || causeCode || 'unknown'}`
           );
         }
 
@@ -811,7 +968,7 @@ ${items}`;
           // 只有服务端错误 / 网络错误才累计熔断计数
           // 客户端错误 (4xx 非 429) 不应触发熔断 — 那是请求本身的问题
           const isServerError =
-            isNetworkError || err.status === 429 || err.status >= 500 || !err.status;
+            isNetworkError || e.status === 429 || (e.status ?? 0) >= 500 || !e.status;
           if (isServerError) {
             this._circuitFailures = (this._circuitFailures || 0) + 1;
             if (this._circuitFailures >= (this._circuitThreshold || 5)) {
@@ -826,12 +983,12 @@ ${items}`;
               this._circuitCooldownMs = Math.min(cooldown * 2, 300_000);
             }
           }
-          throw err;
+          throw e;
         }
         const delay = baseDelay * 2 ** attempt + Math.random() * 1000;
         this._log?.(
           'info',
-          `[_withRetry] attempt ${attempt + 1} failed (${err.message}), retrying in ${Math.round(delay / 1000)}s…`
+          `[_withRetry] attempt ${attempt + 1} failed (${e.message}), retrying in ${Math.round(delay / 1000)}s…`
         );
         await new Promise((r) => setTimeout(r, delay));
       } finally {
@@ -840,6 +997,8 @@ ${items}`;
         }
       }
     }
+    // Should never reach here — last iteration either returns or throws
+    throw new Error('_withRetry: unexpected exhaustion');
   }
 }
 

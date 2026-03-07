@@ -11,7 +11,7 @@ import path from 'node:path';
  * @param {string} filePath
  * @returns {Promise<string|null>}
  */
-export async function findTargetRootDir(filePath: any) {
+export async function findTargetRootDir(filePath: string) {
   let current = path.dirname(path.resolve(filePath));
   for (let i = 0; i < 10; i++) {
     try {
@@ -36,7 +36,7 @@ export async function findTargetRootDir(filePath: any) {
 /**
  * 向上查找 Package.swift
  */
-export async function findPackageSwiftPath(filePath: any) {
+export async function findPackageSwiftPath(filePath: string) {
   let current = path.dirname(path.resolve(filePath));
   for (let i = 0; i < 15; i++) {
     const candidate = path.join(current, 'Package.swift');
@@ -55,7 +55,7 @@ export async function findPackageSwiftPath(filePath: any) {
 /**
  * 简易解析 Package.swift，提取 targets 数组和包名
  */
-export async function parsePackageSwift(packagePath: any) {
+export async function parsePackageSwift(packagePath: string) {
   try {
     const content = fs.readFileSync(packagePath, 'utf8');
     const nameMatch = content.match(/name:\s*"([^"]+)"/);
@@ -80,7 +80,11 @@ export async function parsePackageSwift(packagePath: any) {
  * @param {string|null} moduleName 模块名（可选，用于优先匹配模块子目录）
  * @returns {Promise<string|null>}
  */
-export async function findSubHeaderPath(rootDir: any, headerName: any, moduleName: any) {
+export async function findSubHeaderPath(
+  rootDir: string,
+  headerName: string,
+  moduleName: string | null
+) {
   if (!rootDir || !headerName) {
     return null;
   }
@@ -99,7 +103,7 @@ export async function findSubHeaderPath(rootDir: any, headerName: any, moduleNam
   return _findFile(rootDir, target);
 }
 
-function _findFile(dir: any, filename: any, maxDepth = 8, depth = 0): any {
+function _findFile(dir: string, filename: string, maxDepth = 8, depth = 0): string | null {
   if (depth > maxDepth || !fs.existsSync(dir)) {
     return null;
   }
@@ -113,7 +117,7 @@ function _findFile(dir: any, filename: any, maxDepth = 8, depth = 0): any {
         return full;
       }
       if (entry.isDirectory()) {
-        const found: any = _findFile(full, filename, maxDepth, depth + 1);
+        const found: string | null = _findFile(full, filename, maxDepth, depth + 1);
         if (found) {
           return found;
         }

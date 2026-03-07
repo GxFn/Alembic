@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Constitution from './core/constitution/Constitution.js';
 import ConstitutionValidator from './core/constitution/ConstitutionValidator.js';
-import Gateway from './core/gateway/Gateway.js';
+import Gateway, { type GatewayConfig } from './core/gateway/Gateway.js';
 import PermissionManager from './core/permission/PermissionManager.js';
 import AuditLogger from './infrastructure/audit/AuditLogger.js';
 import AuditStore from './infrastructure/audit/AuditStore.js';
@@ -19,10 +19,33 @@ const __dirname = path.dirname(__filename);
 /**
  * Bootstrap - 应用程序启动器
  */
+/** Bootstrap 初始化选项 */
+interface BootstrapOptions {
+  configPath?: string;
+  dbPath?: string;
+  logLevel?: string;
+  [key: string]: unknown;
+}
+
+/** Bootstrap 管理的组件集合 */
+interface BootstrapComponents {
+  config?: typeof ConfigLoader;
+  logger?: ReturnType<typeof Logger.getInstance>;
+  db?: InstanceType<typeof DatabaseConnection>;
+  constitution?: InstanceType<typeof Constitution>;
+  constitutionValidator?: InstanceType<typeof ConstitutionValidator>;
+  permissionManager?: InstanceType<typeof PermissionManager>;
+  auditStore?: InstanceType<typeof AuditStore>;
+  auditLogger?: InstanceType<typeof AuditLogger>;
+  gateway?: InstanceType<typeof Gateway>;
+  skillHooks?: InstanceType<typeof SkillHooks>;
+  [key: string]: unknown;
+}
+
 export class Bootstrap {
-  components: any;
-  options: any;
-  constructor(options: any = {}) {
+  components: BootstrapComponents;
+  options: BootstrapOptions;
+  constructor(options: BootstrapOptions = {}) {
     this.options = options;
     this.components = {};
   }
@@ -33,7 +56,7 @@ export class Bootstrap {
    * @param {string} projectRoot 用户项目的绝对路径
    * @param {string} [knowledgeBaseDir] 知识库目录名（如 'AutoSnippet'）
    */
-  static configurePathGuard(projectRoot: any, knowledgeBaseDir?: any) {
+  static configurePathGuard(projectRoot: string, knowledgeBaseDir?: string) {
     if (!pathGuard.configured && projectRoot) {
       const packageRoot = path.resolve(__dirname, '..');
       pathGuard.configure({ projectRoot, packageRoot, knowledgeBaseDir });
@@ -59,7 +82,7 @@ export class Bootstrap {
       // 2. 初始化日志系统
       await this.initializeLogger();
 
-      this.components.logger.info('AutoSnippet - Starting initialization...');
+      this.components.logger!.info('AutoSnippet - Starting initialization...');
 
       // 3. 连接数据库
       await this.initializeDatabase();
@@ -77,10 +100,10 @@ export class Bootstrap {
       // await this.registerRoutes();
 
       const duration = Date.now() - startTime;
-      this.components.logger.info(`AutoSnippet initialized successfully (${duration}ms)`);
+      this.components.logger!.info(`AutoSnippet initialized successfully (${duration}ms)`);
 
       return this.components;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to initialize AutoSnippet:', error);
       throw error;
     }
@@ -112,7 +135,7 @@ export class Bootstrap {
    * 加载配置
    */
   async loadConfig() {
-    const env = this.options.env || process.env.NODE_ENV || 'development';
+    const env = (this.options.env as string) || process.env.NODE_ENV || 'development';
     ConfigLoader.load(env);
     this.components.config = ConfigLoader;
   }
@@ -121,7 +144,9 @@ export class Bootstrap {
    * 初始化日志系统
    */
   async initializeLogger() {
-    const config = this.components.config.get('logging');
+    const config = this.components.config!.get('logging') as Parameters<
+      typeof Logger.getInstance
+    >[0];
     const logger = Logger.getInstance(config);
     this.components.logger = logger;
   }
@@ -130,12 +155,14 @@ export class Bootstrap {
    * 初始化数据库
    */
   async initializeDatabase() {
-    const dbConfig = this.components.config.get('database');
+    const dbConfig = this.components.config!.get('database') as ConstructorParameters<
+      typeof DatabaseConnection
+    >[0];
     const db = new DatabaseConnection(dbConfig);
     await db.connect();
     await db.runMigrations();
     this.components.db = db;
-    this.components.logger.info('Database connected and migrated');
+    this.components.logger!.info('Database connected and migrated');
   }
 
   /**
@@ -145,7 +172,7 @@ export class Bootstrap {
     const constitutionPath = path.join(__dirname, '../config/constitution.yaml');
     const constitution = new Constitution(constitutionPath);
     this.components.constitution = constitution;
-    this.components.logger.info('Constitution loaded', constitution.toJSON());
+    this.components.logger!.info('Constitution loaded', constitution.toJSON());
   }
 
   /**
@@ -155,35 +182,36 @@ export class Bootstrap {
     const { constitution, db, logger } = this.components;
 
     // Constitution Validator
-    const constitutionValidator = new ConstitutionValidator(constitution);
+    const constitutionValidator = new ConstitutionValidator(constitution!);
     this.components.constitutionValidator = constitutionValidator;
-    logger.info('ConstitutionValidator initialized');
+    logger!.info('ConstitutionValidator initialized');
 
     // Permission Manager
-    const permissionManager = new PermissionManager(constitution);
+    const permissionManager = new PermissionManager(constitution!);
     this.components.permissionManager = permissionManager;
-    logger.info('PermissionManager initialized');
+    logger!.info('PermissionManager initialized');
 
     // Audit System
-    const auditStore = new AuditStore(db);
+    const auditStore = new AuditStore(db!);
     const auditLogger = new AuditLogger(auditStore);
     this.components.auditStore = auditStore;
     this.components.auditLogger = auditLogger;
-    logger.info('Audit system initialized');
+    logger!.info('Audit system initialized');
 
     // Skill Hooks (扫描 skills/*/hooks.js + AutoSnippet/skills/*/hooks.js)
     const skillHooks = new SkillHooks();
     await skillHooks.load();
     this.components.skillHooks = skillHooks;
+    logger!.info('Skill hooks loaded');
   }
 
   /**
    * 初始化网关
    */
   async initializeGateway() {
-    const gatewayConfig = this.components.config.has('gateway')
-      ? this.components.config.get('gateway')
-      : {};
+    const gatewayConfig = this.components.config!.has('gateway')
+      ? (this.components.config!.get('gateway') as GatewayConfig)
+      : undefined;
     const gateway = new Gateway(gatewayConfig);
 
     // 注入依赖
@@ -195,7 +223,7 @@ export class Bootstrap {
     });
 
     this.components.gateway = gateway;
-    this.components.logger.info('Gateway initialized');
+    this.components.logger!.info('Gateway initialized');
   }
 
   /**
@@ -215,7 +243,7 @@ export class Bootstrap {
   /**
    * 获取组件
    */
-  getComponent(name: any) {
+  getComponent(name: string) {
     return this.components[name];
   }
 

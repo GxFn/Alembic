@@ -17,13 +17,159 @@ import Logger from '../../../../../infrastructure/logging/Logger.js';
 
 const logger = Logger.getInstance();
 
+// ─── Local Types ──────────────────────────────────────────
+
+interface FallbackDimension {
+  id: string;
+  label?: string;
+  [key: string]: unknown;
+}
+
+interface DepGraphEdge {
+  from?: string;
+  to?: string;
+  source?: string;
+  target?: string;
+}
+
+interface DepGraphData {
+  edges: DepGraphEdge[];
+  nodes?: unknown[];
+}
+
+interface GuardViolation {
+  ruleId: string;
+  message: string;
+  severity: string;
+  fixSuggestion?: string | null;
+  line?: number;
+}
+
+interface GuardAuditFile {
+  filePath: string;
+  violations: GuardViolation[];
+}
+
+interface GuardAuditData {
+  files: GuardAuditFile[];
+  summary?: { totalViolations?: number; totalErrors?: number };
+}
+
+interface AstMethodInfo {
+  name: string;
+  className?: string;
+  isAsync?: boolean;
+  complexity?: number;
+  file?: string;
+  line?: number;
+  lines?: number;
+  bodyLines?: number;
+  [key: string]: unknown;
+}
+
+interface AstFileSummary {
+  methods?: AstMethodInfo[];
+  exports?: unknown[];
+  [key: string]: unknown;
+}
+
+interface ProjectMetrics {
+  totalMethods?: number;
+  avgMethodsPerClass?: number;
+  maxNestingDepth?: number;
+  complexMethods?: AstMethodInfo[];
+  longMethods?: AstMethodInfo[];
+}
+
+interface AstCategory {
+  name?: string;
+  baseClass?: string;
+  className?: string;
+  categoryName?: string;
+  file?: string;
+  [key: string]: unknown;
+}
+
+interface AstProjectSummary {
+  classes?: Array<{ name: string; superclass?: string; file?: string; [key: string]: unknown }>;
+  protocols?: Array<{ name: string; [key: string]: unknown }>;
+  categories?: AstCategory[];
+  files?: AstFileSummary[];
+  projectMetrics?: ProjectMetrics;
+  fileCount?: number;
+}
+
+interface TaskManagerLike {
+  markTaskCompleted(dimId: string, opts: { type: string; reason: string }): void;
+}
+
+interface FileEntry {
+  targetName?: string;
+  name?: string;
+  path?: string;
+  [key: string]: unknown;
+}
+
+interface FillContext {
+  dimensions: FallbackDimension[];
+  depGraphData: DepGraphData | null;
+  guardAudit: GuardAuditData | null;
+  langStats: Record<string, number>;
+  primaryLang: string;
+  astProjectSummary: AstProjectSummary | null;
+  taskManager: TaskManagerLike | null;
+  sessionId: string | null;
+  allFiles?: FileEntry[];
+  targetFileMap?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface FallbackCandidate {
+  title: string;
+  content: { pattern: string; markdown: string; rationale: string };
+  language: string;
+  category: string;
+  knowledgeType: string;
+  source: string;
+  difficulty: string;
+  scope: string;
+  trigger: string;
+  doClause: string;
+  dontClause: string;
+  whenClause: string;
+  coreCode: string;
+  reasoning: { whyStandard: string; sources: string[]; confidence: number };
+}
+
+interface FallbackSkill {
+  dimId: string;
+  name: string;
+  description: string;
+  content: string;
+}
+
+interface CandidateParams {
+  title: string;
+  knowledgeType: string;
+  category: string;
+  language: string;
+  markdown: string;
+  rationale: string;
+  coreCode: string;
+  trigger: string;
+  doClause: string;
+  dontClause: string;
+  whenClause: string;
+  sources: string[];
+}
+
 /**
  * 主入口 — 当 AI 不可用时调用
  *
  * @param {object} fillContext 与 fillDimensionsV3 相同的上下文
  * @returns {Promise<{ candidates: object[], skills: object[], report: object }>}
  */
-export async function runNoAiFallback(fillContext: any) {
+export async function runNoAiFallback(fillContext: FillContext) {
   const {
     // ctx and projectRoot are part of fillContext API but unused in fallback path
     dimensions,
@@ -39,13 +185,13 @@ export async function runNoAiFallback(fillContext: any) {
   const t0 = Date.now();
   logger.info('[Bootstrap-fallback] Starting rule-based fallback (no AI)');
 
-  const candidates: any[] = [];
-  const skills: { dimId: any; name: string; description: string; content: string }[] = [];
+  const candidates: FallbackCandidate[] = [];
+  const skills: FallbackSkill[] = [];
   const report = {
     dimensionsProcessed: 0,
     candidatesCreated: 0,
     skillsCreated: 0,
-    errors: [] as any[],
+    errors: [] as Array<{ dim: string; error: string }>,
   };
 
   // ── 收集原始数据 ──
@@ -70,8 +216,11 @@ export async function runNoAiFallback(fillContext: any) {
       report.skillsCreated++;
     }
     _markDimDone(taskManager, sessionId, 'project-profile', 'fallback');
-  } catch (e: any) {
-    report.errors.push({ dim: 'project-profile', error: e.message });
+  } catch (e: unknown) {
+    report.errors.push({
+      dim: 'project-profile',
+      error: e instanceof Error ? e.message : String(e),
+    });
     _markDimDone(taskManager, sessionId, 'project-profile', 'error');
   }
 
@@ -91,8 +240,8 @@ export async function runNoAiFallback(fillContext: any) {
       report.skillsCreated++;
     }
     _markDimDone(taskManager, sessionId, 'architecture', 'fallback');
-  } catch (e: any) {
-    report.errors.push({ dim: 'architecture', error: e.message });
+  } catch (e: unknown) {
+    report.errors.push({ dim: 'architecture', error: e instanceof Error ? e.message : String(e) });
     _markDimDone(taskManager, sessionId, 'architecture', 'error');
   }
 
@@ -106,8 +255,8 @@ export async function runNoAiFallback(fillContext: any) {
       report.skillsCreated++;
     }
     _markDimDone(taskManager, sessionId, 'code-standard', 'fallback');
-  } catch (e: any) {
-    report.errors.push({ dim: 'code-standard', error: e.message });
+  } catch (e: unknown) {
+    report.errors.push({ dim: 'code-standard', error: e instanceof Error ? e.message : String(e) });
     _markDimDone(taskManager, sessionId, 'code-standard', 'error');
   }
 
@@ -121,8 +270,8 @@ export async function runNoAiFallback(fillContext: any) {
       report.skillsCreated++;
     }
     _markDimDone(taskManager, sessionId, 'best-practice', 'fallback');
-  } catch (e: any) {
-    report.errors.push({ dim: 'best-practice', error: e.message });
+  } catch (e: unknown) {
+    report.errors.push({ dim: 'best-practice', error: e instanceof Error ? e.message : String(e) });
     _markDimDone(taskManager, sessionId, 'best-practice', 'error');
   }
 
@@ -138,8 +287,11 @@ export async function runNoAiFallback(fillContext: any) {
       report.skillsCreated++;
     }
     _markDimDone(taskManager, sessionId, 'agent-guidelines', 'fallback');
-  } catch (e: any) {
-    report.errors.push({ dim: 'agent-guidelines', error: e.message });
+  } catch (e: unknown) {
+    report.errors.push({
+      dim: 'agent-guidelines',
+      error: e instanceof Error ? e.message : String(e),
+    });
     _markDimDone(taskManager, sessionId, 'agent-guidelines', 'error');
   }
 
@@ -177,7 +329,14 @@ function _buildProjectProfile({
   allTargets,
   allFiles,
   astProjectSummary,
-}: any) {
+}: {
+  langStats: Record<string, number>;
+  primaryLang: string;
+  depGraphData: DepGraphData | null;
+  allTargets: string[];
+  allFiles: FileEntry[];
+  astProjectSummary: AstProjectSummary | null;
+}): FallbackCandidate | null {
   const lines = ['## 项目技术画像', ''];
 
   // 语言统计
@@ -200,7 +359,7 @@ function _buildProjectProfile({
     lines.push(`### 模块结构`, '');
     lines.push(`项目包含 **${allTargets.length}** 个模块/Target：`, '');
     for (const t of allTargets.slice(0, 15)) {
-      const tName = typeof t === 'string' ? t : t.name;
+      const tName = t;
       const fileCount = Array.isArray(allFiles)
         ? allFiles.filter((f) => f.targetName === tName).length
         : 0;
@@ -213,7 +372,7 @@ function _buildProjectProfile({
   }
 
   // 依赖关系
-  if (depGraphData?.edges?.length > 0) {
+  if (depGraphData && depGraphData.edges.length > 0) {
     lines.push('### 依赖关系', '');
     lines.push(`共 ${depGraphData.edges.length} 条模块间依赖关系。`, '');
   }
@@ -228,17 +387,17 @@ function _buildProjectProfile({
     if (m.maxNestingDepth) {
       lines.push(`- 最大嵌套深度: ${m.maxNestingDepth}`);
     }
-    if (m.complexMethods?.length > 0) {
+    if (m.complexMethods && m.complexMethods.length > 0) {
       lines.push(`- 高复杂度方法: ${m.complexMethods.length}`);
     }
-    if (m.longMethods?.length > 0) {
+    if (m.longMethods && m.longMethods.length > 0) {
       lines.push(`- 过长方法 (>50 行): ${m.longMethods.length}`);
     }
     lines.push('');
   }
 
   // 生成 coreCode (P3): 技术栈摘要
-  const codeParts: any[] = [];
+  const codeParts: string[] = [];
   if (sortedLangs.length > 0) {
     codeParts.push('// 语言分布');
     for (const [lang, count] of sortedLangs.slice(0, 5)) {
@@ -254,7 +413,7 @@ function _buildProjectProfile({
     codeParts.push(
       `// Target: ${allTargets
         .slice(0, 8)
-        .map((t: any) => (typeof t === 'string' ? t : t.name))
+        .map((t: string) => t)
         .join(', ')}`
     );
   }
@@ -286,15 +445,21 @@ function _buildArchitecture({
   targetFileMap,
   primaryLang,
   astProjectSummary,
-}: any) {
-  if (!depGraphData?.edges?.length && allTargets.length < 2) {
+}: {
+  depGraphData: DepGraphData | null;
+  allTargets: string[];
+  targetFileMap: Record<string, unknown>;
+  primaryLang: string;
+  astProjectSummary: AstProjectSummary | null;
+}): FallbackCandidate | null {
+  if (!(depGraphData && depGraphData.edges.length) && allTargets.length < 2) {
     return null;
   }
 
   const lines = ['## 模块架构', ''];
 
   // 依赖图
-  if (depGraphData?.edges?.length > 0) {
+  if (depGraphData && depGraphData.edges.length > 0) {
     lines.push('### 模块依赖关系', '');
     lines.push('```');
     const seen = new Set();
@@ -339,7 +504,7 @@ function _buildArchitecture({
     }
 
     // 叶子模块（不被任何模块依赖）
-    const leafModules = allTargets.filter((t: any) => !inDeg[t] && outDeg[t]);
+    const leafModules = allTargets.filter((t: string) => !inDeg[t] && outDeg[t]);
     if (leafModules.length > 0) {
       lines.push('### 叶子模块（仅依赖他人）', '');
       for (const mod of leafModules.slice(0, 8)) {
@@ -354,7 +519,7 @@ function _buildArchitecture({
   if (categories.length > 0) {
     lines.push('### ObjC Category 扩展', '');
     // 按基类分组
-    const byBase: Record<string, any[]> = {};
+    const byBase: Record<string, AstCategory[]> = {};
     for (const cat of categories) {
       const base = cat.className || cat.baseClass || cat.name?.split('(')[0] || 'Unknown';
       if (!byBase[base]) {
@@ -385,8 +550,8 @@ function _buildArchitecture({
   }
 
   // 生成代码块 (P3)
-  const codeLines: any[] = [];
-  if (depGraphData?.edges?.length > 0) {
+  const codeLines: string[] = [];
+  if (depGraphData && depGraphData.edges.length > 0) {
     codeLines.push(`// 模块依赖关系 (共 ${depGraphData.edges.length} 条)`);
     const seen = new Set();
     for (const e of depGraphData.edges.slice(0, 15)) {
@@ -423,7 +588,15 @@ function _buildArchitecture({
   });
 }
 
-function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }: any) {
+function _buildCodeStandard({
+  astProjectSummary,
+  primaryLang,
+  allFiles,
+}: {
+  astProjectSummary: AstProjectSummary | null;
+  primaryLang: string;
+  allFiles: FileEntry[];
+}): FallbackCandidate | null {
   if (!astProjectSummary) {
     return null;
   }
@@ -431,7 +604,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }: any) {
   const lines = ['## 代码规范发现', ''];
 
   const classes = astProjectSummary.classes || [];
-  const methods: any[] = [];
+  const methods: AstMethodInfo[] = [];
   // 从 file 级聚合方法
   if (astProjectSummary.files) {
     for (const f of astProjectSummary.files) {
@@ -442,7 +615,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }: any) {
   }
 
   // 命名模式分析
-  let usedSuffixes: any[] = [];
+  let usedSuffixes: [string, number][] = [];
   if (classes.length > 0) {
     lines.push('### 类命名模式', '');
 
@@ -513,7 +686,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }: any) {
     if (metrics.avgMethodsPerClass) {
       lines.push(`- 平均方法数/类: ${metrics.avgMethodsPerClass.toFixed(1)}`);
     }
-    if (metrics.complexMethods?.length > 0) {
+    if (metrics.complexMethods && metrics.complexMethods.length > 0) {
       lines.push(`- 高圈复杂度方法: ${metrics.complexMethods.length} 个`);
       for (const m of metrics.complexMethods.slice(0, 5)) {
         const loc = m.file ? ` (来源: ${_basename(m.file)}${m.line ? `:${m.line}` : ''})` : '';
@@ -522,7 +695,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }: any) {
         );
       }
     }
-    if (metrics.longMethods?.length > 0) {
+    if (metrics.longMethods && metrics.longMethods.length > 0) {
       lines.push(`- 过长方法: ${metrics.longMethods.length} 个`);
       for (const m of metrics.longMethods.slice(0, 5)) {
         const bodyLen = m.lines || m.bodyLines || '?';
@@ -536,7 +709,7 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }: any) {
   }
 
   // 收集源文件引用 (P4)
-  const sourceFiles = new Set();
+  const sourceFiles = new Set<string>();
   if (metrics) {
     for (const m of (metrics.longMethods || []).concat(metrics.complexMethods || [])) {
       if (m.file) {
@@ -546,14 +719,14 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }: any) {
   }
 
   // 生成 coreCode (P3): 命名规范摘要
-  const codeLines: any[] = [];
+  const codeLines: string[] = [];
   if (usedSuffixes?.length > 0) {
     codeLines.push('// 命名约定示例');
     for (const [sfx, count] of usedSuffixes.slice(0, 6)) {
       codeLines.push(`// *${sfx} → ${count} 个类使用此后缀`);
     }
   }
-  if (metrics?.longMethods?.length > 0) {
+  if (metrics && metrics.longMethods && metrics.longMethods.length > 0) {
     codeLines.push('');
     codeLines.push('// 过长方法示例 (应重构)');
     for (const m of metrics.longMethods.slice(0, 3)) {
@@ -583,7 +756,13 @@ function _buildCodeStandard({ astProjectSummary, primaryLang, allFiles }: any) {
   });
 }
 
-function _buildBestPractice({ guardAudit, primaryLang }: any) {
+function _buildBestPractice({
+  guardAudit,
+  primaryLang,
+}: {
+  guardAudit: GuardAuditData | null;
+  primaryLang: string;
+}): FallbackCandidate | null {
   if (!guardAudit?.files?.length) {
     return null;
   }
@@ -649,7 +828,7 @@ function _buildBestPractice({ guardAudit, primaryLang }: any) {
   }
 
   // 收集违规文件路径 (P4)
-  const violationFiles = new Set();
+  const violationFiles = new Set<string>();
   for (const f of guardAudit.files) {
     if (f.violations?.length > 0 && f.filePath) {
       violationFiles.add(f.filePath);
@@ -679,7 +858,15 @@ function _buildBestPractice({ guardAudit, primaryLang }: any) {
   });
 }
 
-function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }: any) {
+function _buildAgentGuidelines({
+  guardAudit,
+  primaryLang,
+  astProjectSummary,
+}: {
+  guardAudit: GuardAuditData | null;
+  primaryLang: string;
+  astProjectSummary: AstProjectSummary | null;
+}): FallbackCandidate | null {
   const lines = ['## Agent 开发注意事项', ''];
   lines.push('> 以下规则基于项目静态分析自动生成，AI Agent 在本项目中编写代码时应遵守。', '');
 
@@ -725,17 +912,18 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }: a
   if (astProjectSummary?.projectMetrics) {
     const m = astProjectSummary.projectMetrics;
     lines.push('### 代码质量约束', '');
-    if (m.maxNestingDepth >= 5) {
+    if (m.maxNestingDepth != null && m.maxNestingDepth >= 5) {
       lines.push(`- 当前项目最大嵌套深度 ${m.maxNestingDepth} — 新代码应避免超过 4 层嵌套`);
     }
-    if (m.complexMethods?.length > 0) {
+    if (m.complexMethods && m.complexMethods.length > 0) {
       const avgComplexity =
-        m.complexMethods.reduce((s: any, c: any) => s + c.complexity, 0) / m.complexMethods.length;
+        m.complexMethods.reduce((s: number, c: AstMethodInfo) => s + (c.complexity ?? 0), 0) /
+        m.complexMethods.length;
       lines.push(
         `- 已有 ${m.complexMethods.length} 个高复杂度方法 (avg ${avgComplexity.toFixed(1)}) — 新方法圈复杂度应 <10`
       );
     }
-    if (m.longMethods?.length > 0) {
+    if (m.longMethods && m.longMethods.length > 0) {
       lines.push(`- 已有 ${m.longMethods.length} 个过长方法 — 新方法建议 <50 行`);
     }
     lines.push('');
@@ -748,12 +936,18 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }: a
 
   // 生成 coreCode (P3)
   const codeLines = ['// Agent 强制规则'];
-  if (astProjectSummary?.projectMetrics?.maxNestingDepth >= 5) {
+  if (
+    astProjectSummary?.projectMetrics &&
+    (astProjectSummary.projectMetrics.maxNestingDepth ?? 0) >= 5
+  ) {
     codeLines.push(
       `// 最大嵌套: ${astProjectSummary.projectMetrics.maxNestingDepth} → 新代码应 <4`
     );
   }
-  if (astProjectSummary?.projectMetrics?.longMethods?.length > 0) {
+  if (
+    astProjectSummary?.projectMetrics?.longMethods &&
+    astProjectSummary.projectMetrics.longMethods.length > 0
+  ) {
     codeLines.push(
       `// 过长方法: ${astProjectSummary.projectMetrics.longMethods.length} 个 → 新方法应 <50行`
     );
@@ -780,7 +974,7 @@ function _buildAgentGuidelines({ guardAudit, primaryLang, astProjectSummary }: a
 // ═══════════════════════════════════════════════════════════
 
 /** 从绝对/相对路径取文件名 */
-function _basename(fp: any) {
+function _basename(fp: string | undefined | null): string {
   if (!fp) {
     return '';
   }
@@ -801,7 +995,7 @@ function _makeCandidate({
   dontClause,
   whenClause,
   sources,
-}: any) {
+}: CandidateParams): FallbackCandidate {
   return {
     title,
     content: { pattern: coreCode || '', markdown, rationale },
@@ -824,7 +1018,7 @@ function _makeCandidate({
   };
 }
 
-function _wrapAsSkill(dimId: any, label: any, markdown: any) {
+function _wrapAsSkill(dimId: string, label: string, markdown: string): FallbackSkill {
   return {
     dimId,
     name: `project-${dimId}`,
@@ -839,7 +1033,12 @@ function _wrapAsSkill(dimId: any, label: any, markdown: any) {
   };
 }
 
-function _markDimDone(taskManager: any, sessionId: any, dimId: any, type: any) {
+function _markDimDone(
+  taskManager: TaskManagerLike | null,
+  sessionId: string | null,
+  dimId: string,
+  type: string
+) {
   try {
     if (taskManager && sessionId) {
       taskManager.markTaskCompleted(dimId, { type, reason: type });

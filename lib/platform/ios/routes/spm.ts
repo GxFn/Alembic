@@ -6,6 +6,7 @@
  * 新代码应直接使用 /api/v1/modules/* 端点。
  */
 
+import type { Request, Response } from 'express';
 import express from 'express';
 import { asyncHandler } from '../../../http/middleware/errorHandler.js';
 import { createStreamSession, getStreamSession } from '../../../http/utils/sse-sessions.js';
@@ -29,7 +30,7 @@ async function getModuleService() {
  */
 router.get(
   '/targets',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const moduleService = await getModuleService();
     const targets = await moduleService.listTargets();
 
@@ -45,23 +46,24 @@ router.get(
  */
 router.get(
   '/dep-graph',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const moduleService = await getModuleService();
-    const level = req.query.level || 'package';
+    const level = (req.query.level as string) || 'package';
     const graph = await moduleService.getDependencyGraph({ level });
 
     if (!graph || (!graph.nodes && !graph.packages)) {
-      return res.json({
+      res.json({
         success: true,
         data: { nodes: [], edges: [], projectRoot: null },
       });
+      return;
     }
 
     // 标准化为 { nodes, edges } 格式
-    let nodes: any[] = [];
+    let nodes: Record<string, unknown>[] = [];
     let edges:
       | { from: string; to: string; source: string }
-      | { from: string; to: any; source: string }[] = [];
+      | { from: string; to: string; source: string }[] = [];
 
     if (graph.nodes && graph.edges) {
       // 已经是标准格式
@@ -71,7 +73,11 @@ router.get(
       // 从 packages 构建图
       if (level === 'target') {
         for (const [pkgName, pkgInfo] of Object.entries(graph.packages)) {
-          const targetsInfo = (pkgInfo as any)?.targetsInfo || {};
+          const targetsInfo =
+            ((pkgInfo as Record<string, unknown>)?.targetsInfo as Record<
+              string,
+              { dependencies?: { name?: string; package?: string }[] }
+            >) || {};
           for (const [targetName, info] of Object.entries(targetsInfo)) {
             const id = `${pkgName}::${targetName}`;
             nodes.push({
@@ -80,7 +86,8 @@ router.get(
               type: 'target',
               packageName: pkgName,
             });
-            for (const d of (info as any)?.dependencies || []) {
+            for (const d of (info as { dependencies?: { name?: string; package?: string }[] })
+              ?.dependencies || []) {
               if (!d?.name) {
                 continue;
               }
@@ -98,7 +105,7 @@ router.get(
           targets: graph.packages[id]?.targets,
         }));
         for (const [from, tos] of Object.entries(graph.edges || {})) {
-          for (const to of (tos as any) || []) {
+          for (const to of (tos as string[]) || []) {
             edges.push({ from, to, source: 'base' });
           }
         }
@@ -123,7 +130,7 @@ router.get(
  */
 router.post(
   '/target-files',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { target, targetName } = req.body;
 
     if (!target && !targetName) {
@@ -135,12 +142,13 @@ router.post(
     let resolvedTarget = target;
     if (!resolvedTarget && targetName) {
       const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t: any) => t.name === targetName);
+      resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
       if (!resolvedTarget) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           error: { code: 'NOT_FOUND', message: `Target not found: ${targetName}` },
         });
+        return;
       }
     }
 
@@ -163,7 +171,7 @@ router.post(
  */
 router.post(
   '/scan',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { target, targetName, options = {} } = req.body;
 
     if (!target && !targetName) {
@@ -175,12 +183,13 @@ router.post(
     let resolvedTarget = target;
     if (!resolvedTarget && targetName) {
       const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t: any) => t.name === targetName);
+      resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
       if (!resolvedTarget) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           error: { code: 'NOT_FOUND', message: `Target not found: ${targetName}` },
         });
+        return;
       }
     }
 
@@ -212,7 +221,7 @@ router.post(
  */
 router.post(
   '/scan/stream',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { target, targetName, options = {} } = req.body;
 
     if (!target && !targetName) {
@@ -224,12 +233,13 @@ router.post(
     let resolvedTarget = target;
     if (!resolvedTarget && targetName) {
       const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t: any) => t.name === targetName);
+      resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
       if (!resolvedTarget) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           error: { code: 'NOT_FOUND', message: `Target not found: ${targetName}` },
         });
+        return;
       }
     }
 
@@ -249,7 +259,7 @@ router.post(
         });
         const result = await moduleService.scanTarget(resolvedTarget, {
           ...options,
-          onProgress(event: any) {
+          onProgress(event: Record<string, unknown>) {
             session.send(event);
           },
         });
@@ -264,9 +274,10 @@ router.post(
           fileCount: (result.scannedFiles || []).length,
         });
         session.end();
-      } catch (err: any) {
-        logger.error('Module stream scan failed via /spm/', { target: tName, error: err.message });
-        session.error(err.message, 'SCAN_ERROR');
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        logger.error('Module stream scan failed via /spm/', { target: tName, error: errMsg });
+        session.error(errMsg, 'SCAN_ERROR');
       }
     });
   })
@@ -297,7 +308,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
     res.socket.setTimeout(0);
   }
 
-  function writeEvent(event: any) {
+  function writeEvent(event: Record<string, unknown>) {
     if (res.writableEnded) {
       return;
     }
@@ -319,7 +330,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
   }
 
   // 2) 订阅实时事件
-  const unsubscribe = session.on((event: any) => {
+  const unsubscribe = session.on((event: Record<string, unknown>) => {
     writeEvent(event);
     if (event.type === 'stream:done' || event.type === 'stream:error') {
       unsubscribe();
@@ -350,7 +361,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
  */
 router.post(
   '/scan-project',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { options = {} } = req.body;
 
     const moduleService = await getModuleService();
@@ -378,7 +389,7 @@ router.post(
  */
 router.post(
   '/bootstrap',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
 
     const container = getServiceContainer();
@@ -416,21 +427,22 @@ router.post(
  */
 router.get(
   '/bootstrap/status',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
 
     // 从容器获取 BootstrapTaskManager（正式 DI 注册）
-    let taskManager: any = null;
+    let taskManager: { getSessionStatus(): Record<string, unknown> } | null = null;
     try {
       taskManager = container.get('bootstrapTaskManager');
     } catch {
       /* not registered */
     }
     if (!taskManager) {
-      return res.json({
+      res.json({
         success: true,
         data: { status: 'idle', message: 'No bootstrap task manager initialized' },
       });
+      return;
     }
 
     res.json({

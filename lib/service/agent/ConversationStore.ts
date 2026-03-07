@@ -25,6 +25,28 @@ import Logger from '../../infrastructure/logging/Logger.js';
 import pathGuard from '../../shared/PathGuard.js';
 import { estimateTokens as _estimateTokens } from '../../shared/token-utils.js';
 
+/** 对话索引中的条目 */
+interface ConversationEntry {
+  id: string;
+  category: 'user' | 'system' | 'lark';
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  hasSummary: boolean;
+}
+
+/** 单条对话消息 */
+interface ConversationMessage {
+  role: string;
+  content: string;
+}
+
+/** AI Provider 最小接口（用于 summarize） */
+interface AiProvider {
+  chat(prompt: string, opts?: { temperature?: number; maxTokens?: number }): Promise<string>;
+}
+
 const DEFAULT_TOKEN_BUDGET = 12000; // ~12K tokens 留给历史, 其余给系统提示词和当前消息
 const MAX_CONVERSATIONS = 100; // 索引最多保留 100 个对话
 const _SUMMARY_TARGET_TOKENS = 500; // 压缩后的摘要目标 token 数
@@ -37,7 +59,7 @@ export class ConversationStore {
   /**
    * @param {string} projectRoot 用户项目根目录
    */
-  constructor(projectRoot: any) {
+  constructor(projectRoot: string) {
     this.#dir = path.join(projectRoot, '.autosnippet', 'conversations');
     this.#indexPath = path.join(this.#dir, 'index.json');
     this.#logger = Logger.getInstance();
@@ -89,7 +111,7 @@ export class ConversationStore {
    * @param {string} conversationId
    * @param {{ role: string, content: string }} message
    */
-  append(conversationId: any, message: any) {
+  append(conversationId: string, message: ConversationMessage) {
     try {
       fs.mkdirSync(this.#dir, { recursive: true });
       const filePath = this.#conversationPath(conversationId);
@@ -102,7 +124,7 @@ export class ConversationStore {
 
       // 更新索引
       const index = this.#loadIndex();
-      const entry = index.find((e: any) => e.id === conversationId);
+      const entry = index.find((e: ConversationEntry) => e.id === conversationId);
       if (entry) {
         entry.updatedAt = new Date().toISOString();
         entry.messageCount = (entry.messageCount || 0) + 1;
@@ -112,8 +134,8 @@ export class ConversationStore {
         }
         this.#saveIndex(index);
       }
-    } catch (err: any) {
-      this.#logger.warn(`[ConversationStore] append failed: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[ConversationStore] append failed: ${(err as Error).message}`);
     }
   }
 
@@ -130,7 +152,7 @@ export class ConversationStore {
    * @param {number} [opts.tokenBudget] - token 预算
    * @returns {{ role: string, content: string }[]}
    */
-  load(conversationId: any, { tokenBudget = DEFAULT_TOKEN_BUDGET } = {}) {
+  load(conversationId: string, { tokenBudget = DEFAULT_TOKEN_BUDGET } = {}) {
     try {
       const filePath = this.#conversationPath(conversationId);
       if (!fs.existsSync(filePath)) {
@@ -148,12 +170,12 @@ export class ConversationStore {
         .map((line) => {
           try {
             const parsed = JSON.parse(line);
-            return { role: parsed.role, content: parsed.content };
+            return { role: parsed.role, content: parsed.content } as ConversationMessage;
           } catch {
             return null;
           }
         })
-        .filter(Boolean);
+        .filter((m): m is ConversationMessage => m !== null);
 
       return this.#fitWithinBudget(messages, tokenBudget);
     } catch {
@@ -168,11 +190,11 @@ export class ConversationStore {
    * @param {number} [opts.limit=20]
    * @returns {Array}
    */
-  list({ category, limit = 20 }: any = {}) {
+  list({ category, limit = 20 }: { category?: 'user' | 'system' | 'lark'; limit?: number } = {}) {
     const index = this.#loadIndex();
     let results = index;
     if (category) {
-      results = results.filter((e: any) => e.category === category);
+      results = results.filter((e: ConversationEntry) => e.category === category);
     }
     return results.slice(0, limit);
   }
@@ -181,10 +203,10 @@ export class ConversationStore {
    * 删除对话
    * @param {string} conversationId
    */
-  delete(conversationId: any) {
+  delete(conversationId: string) {
     this.#deleteConversationFile(conversationId);
     const index = this.#loadIndex();
-    const filtered = index.filter((e: any) => e.id !== conversationId);
+    const filtered = index.filter((e: ConversationEntry) => e.id !== conversationId);
     this.#saveIndex(filtered);
   }
 
@@ -197,7 +219,7 @@ export class ConversationStore {
    * @param {object} opts.aiProvider - AI Provider 实例
    * @returns {Promise<boolean>} 是否成功压缩
    */
-  async summarize(conversationId: any, { aiProvider }: any) {
+  async summarize(conversationId: string, { aiProvider }: { aiProvider: AiProvider }) {
     if (!aiProvider) {
       return false;
     }
@@ -261,7 +283,7 @@ export class ConversationStore {
 
       // 更新索引
       const index = this.#loadIndex();
-      const entry = index.find((e: any) => e.id === conversationId);
+      const entry = index.find((e: ConversationEntry) => e.id === conversationId);
       if (entry) {
         entry.hasSummary = true;
         entry.messageCount = newMessages.length;
@@ -272,8 +294,8 @@ export class ConversationStore {
         `[ConversationStore] summarized conversation ${conversationId}: ${messages.length} → ${newMessages.length} messages`
       );
       return true;
-    } catch (err: any) {
-      this.#logger.warn(`[ConversationStore] summarize failed: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[ConversationStore] summarize failed: ${(err as Error).message}`);
       return false;
     }
   }
@@ -285,12 +307,18 @@ export class ConversationStore {
    * @param {'user'|'system'} [opts.category] 只清理特定类别
    * @returns {{ deleted: number }}
    */
-  cleanup({ maxAgeDays = 30, category }: any = {}) {
+  cleanup({
+    maxAgeDays = 30,
+    category,
+  }: {
+    maxAgeDays?: number;
+    category?: 'user' | 'system' | 'lark';
+  } = {}) {
     const index = this.#loadIndex();
     const cutoff = Date.now() - maxAgeDays * 86400000;
     let deleted = 0;
 
-    const kept = index.filter((entry: any) => {
+    const kept = index.filter((entry: ConversationEntry) => {
       if (category && entry.category !== category) {
         return true;
       }
@@ -316,7 +344,7 @@ export class ConversationStore {
    * @param {string} text
    * @returns {number}
    */
-  estimateTokens(text: any) {
+  estimateTokens(text: string) {
     return _estimateTokens(text);
   }
 
@@ -328,14 +356,14 @@ export class ConversationStore {
    * 将消息列表裁剪到 token 预算内
    * 策略: 保留首条摘要(如有) + 最新消息，丢弃中间旧消息
    */
-  #fitWithinBudget(messages: any, tokenBudget: any) {
+  #fitWithinBudget(messages: ConversationMessage[], tokenBudget: number) {
     if (messages.length === 0) {
       return [];
     }
 
     // 计算总 token
     let totalTokens = 0;
-    const tokenCounts = messages.map((m: any) => {
+    const tokenCounts = messages.map((m: ConversationMessage) => {
       const tokens = this.estimateTokens(m.content);
       totalTokens += tokens;
       return tokens;
@@ -346,7 +374,7 @@ export class ConversationStore {
     }
 
     // 超预算 — 保留首条(摘要) + 从末尾往前取
-    const result: any[] = [];
+    const result: ConversationMessage[] = [];
     let used = 0;
 
     // 如果首条是 system 摘要，优先保留
@@ -356,7 +384,7 @@ export class ConversationStore {
     }
 
     // 从末尾往前填充
-    const tail: any[] = [];
+    const tail: ConversationMessage[] = [];
     for (let i = messages.length - 1; i >= (result.length > 0 ? 1 : 0); i--) {
       if (used + tokenCounts[i] > tokenBudget) {
         break;
@@ -381,11 +409,11 @@ export class ConversationStore {
     return result;
   }
 
-  #conversationPath(id: any) {
+  #conversationPath(id: string) {
     return path.join(this.#dir, `${id}.jsonl`);
   }
 
-  #deleteConversationFile(id: any) {
+  #deleteConversationFile(id: string) {
     try {
       const filePath = this.#conversationPath(id);
       if (fs.existsSync(filePath)) {
@@ -407,12 +435,12 @@ export class ConversationStore {
     return [];
   }
 
-  #saveIndex(index: any) {
+  #saveIndex(index: ConversationEntry[]) {
     try {
       fs.mkdirSync(this.#dir, { recursive: true });
       fs.writeFileSync(this.#indexPath, JSON.stringify(index, null, 2), 'utf-8');
-    } catch (err: any) {
-      this.#logger.warn(`[ConversationStore] index save failed: ${err.message}`);
+    } catch (err: unknown) {
+      this.#logger.warn(`[ConversationStore] index save failed: ${(err as Error).message}`);
     }
   }
 }

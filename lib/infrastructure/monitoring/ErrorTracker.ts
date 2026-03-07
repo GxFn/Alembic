@@ -7,14 +7,47 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '../logging/Logger.js';
 
+interface ErrorTrackerConfig {
+  logDirectory: string;
+  maxErrorsInMemory: number;
+  enableFileLogging: boolean;
+  enableConsoleLogging: boolean;
+  alertThreshold: number;
+}
+
+interface ErrorData {
+  message: string;
+  stack?: string;
+  type: string;
+  statusCode: number;
+  route?: string;
+  method?: string;
+  path?: string;
+  query?: Record<string, unknown>;
+  ip?: string;
+  userAgent?: string;
+  timestamp: string;
+  severity: string;
+}
+
 export class ErrorTracker {
-  criticalErrors: any;
-  recentErrors: any;
-  config: any;
-  errorCounts: any;
-  errors: any;
-  reportInterval: any;
-  constructor(options: any = {}) {
+  criticalErrors: ErrorData[];
+  recentErrors: ErrorData[];
+  config: ErrorTrackerConfig;
+  errorCounts: Map<string, number>;
+  errors: ErrorData[];
+  reportInterval: ReturnType<typeof setInterval>;
+  constructor(
+    options: Partial<
+      ErrorTrackerConfig & {
+        logDirectory: string;
+        maxErrorsInMemory: number;
+        enableFileLogging: boolean;
+        enableConsoleLogging: boolean;
+        alertThreshold: number;
+      }
+    > = {}
+  ) {
     this.config = {
       logDirectory: options.logDirectory || path.join(process.cwd(), 'logs', 'errors'),
       maxErrorsInMemory: options.maxErrorsInMemory || 500,
@@ -48,8 +81,8 @@ export class ErrorTracker {
       if (!fs.existsSync(this.config.logDirectory)) {
         fs.mkdirSync(this.config.logDirectory, { recursive: true });
       }
-    } catch (error: any) {
-      Logger.error('创建错误日志目录失败', { error: error.message });
+    } catch (error: unknown) {
+      Logger.error('创建错误日志目录失败', { error: (error as Error).message });
     }
   }
 
@@ -57,7 +90,18 @@ export class ErrorTracker {
    * Express 错误处理中间件
    */
   errorHandler() {
-    return (err: any, req: any, res: any, next: any) => {
+    return (
+      err: { message: string; stack?: string; name?: string; statusCode?: number; code?: string },
+      req: {
+        method: string;
+        path: string;
+        query: Record<string, unknown>;
+        ip: string;
+        get: (header: string) => string | undefined;
+      },
+      res: { status: (code: number) => { json: (body: unknown) => void }; statusCode: number },
+      _next: unknown
+    ) => {
       const errorData = {
         message: err.message,
         stack: err.stack,
@@ -70,7 +114,7 @@ export class ErrorTracker {
         ip: req.ip,
         userAgent: req.get('user-agent'),
         timestamp: new Date().toISOString(),
-        severity: err.statusCode >= 500 ? 'critical' : 'error',
+        severity: (err.statusCode || 500) >= 500 ? 'critical' : 'error',
       };
 
       this.trackError(errorData);
@@ -90,7 +134,7 @@ export class ErrorTracker {
   /**
    * 记录错误
    */
-  trackError(errorData: any) {
+  trackError(errorData: ErrorData) {
     // 添加到内存
     this.errors.push(errorData);
     if (this.errors.length > this.config.maxErrorsInMemory) {
@@ -141,7 +185,7 @@ export class ErrorTracker {
   /**
    * 写入文件
    */
-  _writeToFile(errorData: any) {
+  _writeToFile(errorData: ErrorData) {
     try {
       const date = new Date().toISOString().split('T')[0];
       const fileName = `errors-${date}.log`;
@@ -153,8 +197,8 @@ export class ErrorTracker {
       })}\n`;
 
       fs.appendFileSync(filePath, logEntry, 'utf8');
-    } catch (error: any) {
-      Logger.error('写入错误日志文件失败', { error: error.message });
+    } catch (error: unknown) {
+      Logger.error('写入错误日志文件失败', { error: (error as Error).message });
     }
   }
 
@@ -164,7 +208,7 @@ export class ErrorTracker {
   _checkAlertThreshold() {
     const oneMinuteAgo = Date.now() - 60000;
     const recentErrorCount = this.errors.filter(
-      (err: any) => new Date(err.timestamp).getTime() > oneMinuteAgo
+      (err) => new Date(err.timestamp).getTime() > oneMinuteAgo
     ).length;
 
     if (recentErrorCount >= this.config.alertThreshold) {
@@ -181,14 +225,14 @@ export class ErrorTracker {
     const oneHourAgo = now - 3600000;
 
     const recentErrorsCount = this.errors.filter(
-      (err: any) => new Date(err.timestamp).getTime() > oneHourAgo
+      (err) => new Date(err.timestamp).getTime() > oneHourAgo
     ).length;
 
     if (recentErrorsCount > 0) {
       Logger.info('📋 错误报告 (最近1小时)', {
         totalErrors: recentErrorsCount,
         criticalErrors: this.criticalErrors.filter(
-          (err: any) => new Date(err.timestamp).getTime() > oneHourAgo
+          (err) => new Date(err.timestamp).getTime() > oneHourAgo
         ).length,
         topErrorTypes: this._getTopErrorTypes(5),
       });
@@ -200,9 +244,9 @@ export class ErrorTracker {
    */
   _getTopErrorTypes(limit = 10) {
     return Array.from(this.errorCounts.entries())
-      .sort((a: any, b: any) => b[1] - a[1])
+      .sort((a, b) => b[1] - a[1])
       .slice(0, limit)
-      .map(([type, count]: any) => ({ type, count }));
+      .map(([type, count]) => ({ type, count }));
   }
 
   /**
@@ -214,11 +258,11 @@ export class ErrorTracker {
     const oneDayAgo = now - 86400000;
 
     const lastHourErrors = this.errors.filter(
-      (err: any) => new Date(err.timestamp).getTime() > oneHourAgo
+      (err) => new Date(err.timestamp).getTime() > oneHourAgo
     );
 
     const last24HoursErrors = this.errors.filter(
-      (err: any) => new Date(err.timestamp).getTime() > oneDayAgo
+      (err) => new Date(err.timestamp).getTime() > oneDayAgo
     );
 
     return {
@@ -230,7 +274,7 @@ export class ErrorTracker {
         uniqueErrorTypes: this.errorCounts.size,
       },
       topErrorTypes: this._getTopErrorTypes(10),
-      recentErrors: this.recentErrors.slice(0, 10).map((err: any) => ({
+      recentErrors: this.recentErrors.slice(0, 10).map((err) => ({
         type: err.type,
         message: err.message,
         route: err.route,
@@ -238,7 +282,7 @@ export class ErrorTracker {
         severity: err.severity,
         timestamp: err.timestamp,
       })),
-      criticalErrors: this.criticalErrors.slice(0, 10).map((err: any) => ({
+      criticalErrors: this.criticalErrors.slice(0, 10).map((err) => ({
         type: err.type,
         message: err.message,
         route: err.route,
@@ -254,7 +298,7 @@ export class ErrorTracker {
   _getErrorsByRoute() {
     const routeErrors = new Map();
 
-    this.errors.forEach((err: any) => {
+    this.errors.forEach((err) => {
       const route = err.route;
       routeErrors.set(route, (routeErrors.get(route) || 0) + 1);
     });
@@ -279,7 +323,16 @@ export class ErrorTracker {
   /**
    * 搜索错误
    */
-  searchErrors(options: any = {}) {
+  searchErrors(
+    options: {
+      type?: string;
+      route?: string;
+      severity?: string;
+      startDate?: string;
+      endDate?: string;
+      limit?: number;
+    } = {}
+  ) {
     let results = [...this.errors];
 
     if (options.type) {
@@ -287,7 +340,7 @@ export class ErrorTracker {
     }
 
     if (options.route) {
-      results = results.filter((err) => err.route.includes(options.route));
+      results = results.filter((err) => err.route?.includes(options.route!));
     }
 
     if (options.severity) {
@@ -319,12 +372,12 @@ export class ErrorTracker {
 }
 
 // 单例实例
-let errorTrackerInstance: any = null;
+let errorTrackerInstance: ErrorTracker | null = null;
 
 /**
  * 初始化错误追踪
  */
-export function initErrorTracker(options: any) {
+export function initErrorTracker(options: Partial<ErrorTrackerConfig> = {}) {
   if (errorTrackerInstance) {
     return errorTrackerInstance;
   }

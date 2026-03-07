@@ -57,23 +57,23 @@ const REPO_ROOT = resolve(__dirname, '..', '..');
 // ─────────────────────────────────────────────────────
 
 export class SetupService {
-  force: any;
-  projectName: any;
-  projectRoot: any;
-  _results: any;
-  candidatesDir: any;
-  coreDir: any;
-  dbPath: any;
-  recipesDir: any;
-  runtimeDir: any;
-  seed: any;
-  skillsDir: any;
+  force: boolean;
+  projectName: string;
+  projectRoot: string;
+  _results: Array<{ step: number; label: string; ok: boolean; error?: string }> | null = null;
+  candidatesDir: string;
+  coreDir: string;
+  dbPath: string;
+  recipesDir: string;
+  runtimeDir: string;
+  seed: boolean;
+  skillsDir: string;
   /**
    * @param {{ projectRoot: string, force?: boolean }} options
    */
-  constructor(options: any) {
+  constructor(options: { projectRoot: string; force?: boolean; seed?: boolean }) {
     this.projectRoot = resolve(options.projectRoot);
-    this.projectName = this.projectRoot.split('/').pop();
+    this.projectName = this.projectRoot.split('/').pop() || '';
     this.force = options.force || false;
     this.seed = options.seed || false;
 
@@ -102,7 +102,7 @@ export class SetupService {
 
   async run() {
     const steps = this.getSteps();
-    const results: any[] = [];
+    const results: Array<{ step: number; label: string; ok: boolean; error?: string }> = [];
     const total = steps.length;
 
     for (let i = 0; i < total; i++) {
@@ -113,9 +113,9 @@ export class SetupService {
         const r = await fn();
         const _detail = this._formatStepDetail(r);
         results.push({ step: i + 1, label, ok: true, ...(r || {}) });
-      } catch (err: any) {
-        console.error(`       ${err.message}`);
-        results.push({ step: i + 1, label, ok: false, error: err.message });
+      } catch (err: unknown) {
+        console.error(`       ${(err as Error).message}`);
+        results.push({ step: i + 1, label, ok: false, error: (err as Error).message });
       }
     }
 
@@ -124,13 +124,13 @@ export class SetupService {
   }
 
   /** @private 格式化步骤结果的简要信息 */
-  _formatStepDetail(r: any) {
+  _formatStepDetail(r: Record<string, unknown> | undefined) {
     if (!r) {
       return '';
     }
-    const parts: any | string[] = [];
+    const parts: string[] = [];
     if (r.configured) {
-      parts.push(r.configured.join(', '));
+      parts.push((r.configured as string[]).join(', '));
     }
     if (r.entries !== undefined) {
       parts.push(`${r.entries} entries`);
@@ -143,8 +143,8 @@ export class SetupService {
 
   printSummary() {
     const results = this._results || [];
-    const _ok = results.filter((r: any) => r.ok).length;
-    const _fail = results.filter((r: any) => !r.ok).length;
+    const _ok = results.filter((r) => r.ok).length;
+    const _fail = results.filter((r) => !r.ok).length;
   }
 
   /* ═══ Step 1: 运行时目录与配置 ═══════════════════════ */
@@ -476,10 +476,12 @@ export class SetupService {
    * @private 从 AutoSnippet/recipes/*.md + candidates/*.md 同步到 DB 缓存
    * 委托 KnowledgeSyncService 执行全字段同步（setup 场景跳过违规记录）
    */
-  async _syncRecipesToDB(db: any) {
+  async _syncRecipesToDB(db: unknown) {
     const { KnowledgeSyncService } = await import('./KnowledgeSyncService.js');
     const syncService = new KnowledgeSyncService(this.projectRoot);
-    const report = syncService.sync(db, { skipViolations: true });
+    const report = syncService.sync(db as Parameters<typeof syncService.sync>[0], {
+      skipViolations: true,
+    });
 
     if (report.synced > 0) {
     } else {
@@ -506,9 +508,9 @@ export class SetupService {
 
       const result = await initFn(this.projectRoot, 'all');
       return result;
-    } catch (e: any) {
-      console.warn(`   ⚠️  Snippet 初始化失败：${e.message}`);
-      return { error: e.message };
+    } catch (e: unknown) {
+      console.warn(`   ⚠️  Snippet 初始化失败：${(e as Error).message}`);
+      return { error: (e as Error).message };
     }
   }
 
@@ -545,15 +547,15 @@ export class SetupService {
   }
 
   /** @private 在指定目录执行 git 命令 */
-  _git(args: any, cwd: any) {
+  _git(args: string[], cwd: string) {
     try {
       return execSync(`git ${args.join(' ')}`, {
         cwd,
         stdio: 'pipe',
         encoding: 'utf8',
       }).trim();
-    } catch (e: any) {
-      if (args[0] === 'commit' && e.status === 1) {
+    } catch (e: unknown) {
+      if (args[0] === 'commit' && (e as { status?: number }).status === 1) {
         return '';
       }
       throw e;

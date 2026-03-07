@@ -10,6 +10,7 @@
 
 import { join } from 'node:path';
 import { PlaceholderConverter } from '../../../platform/ios/snippet/PlaceholderConverter.js';
+import type { SnippetSpec } from './SnippetCodec.js';
 import { SnippetCodec } from './SnippetCodec.js';
 
 /** AutoSnippet language → VSCode snippet scope */
@@ -43,7 +44,7 @@ export class VSCodeCodec extends SnippetCodec {
   /**
    * 单个 SnippetSpec → JSON 字符串
    */
-  generate(spec: any) {
+  generate(spec: SnippetSpec) {
     const entry = this.#specToEntry(spec);
     return JSON.stringify({ [spec.title || spec.identifier]: entry }, null, 2);
   }
@@ -52,8 +53,8 @@ export class VSCodeCodec extends SnippetCodec {
    * VSCode: 所有 snippets 合并为单个 JSON bundle 文件
    * @returns {string} JSON 字符串
    */
-  generateBundle(specs: any) {
-    const bundle: Record<string, any> = {};
+  generateBundle(specs: SnippetSpec[]) {
+    const bundle: Record<string, Record<string, unknown>> = {};
     for (const spec of specs) {
       const key = `Recipe: ${spec.title || spec.identifier}`;
       bundle[key] = this.#specToEntry(spec);
@@ -64,12 +65,12 @@ export class VSCodeCodec extends SnippetCodec {
   /**
    * VSCode snippets 安装目录 = 项目级 .vscode/
    */
-  getInstallDir(projectRoot: any) {
+  getInstallDir(projectRoot: string) {
     return join(projectRoot, '.vscode');
   }
 
-  mapLanguage(lang: any) {
-    return (VSCODE_LANGUAGE_MAP as Record<string, any>)[lang?.toLowerCase()] || '';
+  mapLanguage(lang: string) {
+    return (VSCODE_LANGUAGE_MAP as Record<string, string>)[lang?.toLowerCase()] || '';
   }
 
   getBundleFilename() {
@@ -79,20 +80,20 @@ export class VSCodeCodec extends SnippetCodec {
   /**
    * @private SnippetSpec → VSCode snippet entry
    */
-  #specToEntry(spec: any) {
+  #specToEntry(spec: SnippetSpec) {
     const code = Array.isArray(spec.code) ? spec.code.join('\n') : spec.code || '';
     // 自动将 Xcode 占位符转为 VSCode 格式
     const converted = PlaceholderConverter.xcodeToVSCode(code);
     const body = converted.split('\n');
 
-    const entry: any = {
+    const entry: Record<string, unknown> = {
       prefix: spec.completion || spec.trigger || spec.identifier,
       body,
       description: spec.summary || '',
     };
 
     // 添加语言 scope (空字符串 = 所有语言)
-    const scope = this.mapLanguage(spec.language);
+    const scope = this.mapLanguage(spec.language || '');
     if (scope) {
       entry.scope = scope;
     }

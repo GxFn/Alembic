@@ -10,7 +10,12 @@ import { LanguageService } from '../../../shared/LanguageService.js';
  * @param {string} relativePath
  * @param {string} content
  */
-export async function handleDraft(watcher: any, fullPath: any, relativePath: any, content: any) {
+export async function handleDraft(
+  watcher: import('../FileWatcher.js').FileWatcher,
+  fullPath: string,
+  relativePath: string,
+  content: string
+) {
   if (!content || content.trim().length < 20) {
     return;
   }
@@ -19,8 +24,8 @@ export async function handleDraft(watcher: any, fullPath: any, relativePath: any
     const { RecipeParser } = await import('../../recipe/RecipeParser.js');
     const parser = new RecipeParser();
 
-    const normalize = (arr: any) =>
-      arr.map((r: any) => ({
+    const normalize = (arr: Record<string, unknown>[]) =>
+      arr.map((r: Record<string, unknown>) => ({
         title: r.title,
         summary: r.summary || r.description || '',
         trigger: r.trigger,
@@ -71,7 +76,7 @@ export async function handleDraft(watcher: any, fullPath: any, relativePath: any
     } catch {
       /* AgentFactory 不可用 */
     }
-  } catch (e: any) {
-    console.warn('[Watcher] 草稿文件解析失败:', e.message);
+  } catch (e: unknown) {
+    console.warn('[Watcher] 草稿文件解析失败:', (e as Error).message);
   }
 }

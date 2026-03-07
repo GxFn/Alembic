@@ -14,6 +14,7 @@
  * @module AgentFactory
  */
 
+import type { AiProvider } from '../../external/ai/AiProvider.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { AgentMessage } from './AgentMessage.js';
 import { AgentRouter, PresetName } from './AgentRouter.js';
@@ -27,8 +28,94 @@ import {
   SCAN_TASK_CONFIGS,
 } from './domain/scan-prompts.js';
 import { MemoryCoordinator } from './memory/MemoryCoordinator.js';
-import { BudgetPolicy, PolicyEngine } from './policies.js';
+import { BudgetPolicy, type Policy, PolicyEngine } from './policies.js';
 import { getPreset } from './presets.js';
+import type { Strategy } from './strategies.js';
+import type { ToolRegistry } from './tools/ToolRegistry.js';
+
+// ── Local Type Definitions ──────────────────────
+
+/** Constructor options for AgentFactory */
+interface AgentFactoryOptions {
+  container: Record<string, unknown>;
+  toolRegistry: ToolRegistry;
+  aiProvider: AiProvider;
+  memoryCoordinator?: MemoryCoordinator | null;
+  projectBriefing?: string | null;
+  projectRoot?: string;
+}
+
+/** Runtime creation overrides (passed to createRuntime and quick methods) */
+interface RuntimeOverrides {
+  strategy?: Record<string, unknown>;
+  capabilities?: string[];
+  policies?: Array<Policy | ((overrides: RuntimeOverrides) => Policy)>;
+  persona?: Record<string, unknown>;
+  memory?: Record<string, unknown>;
+  onProgress?: ((event: Record<string, unknown>) => void) | null;
+  onToolCall?:
+    | ((name: string, args: Record<string, unknown>, result: unknown, iteration: number) => void)
+    | null;
+  lang?: string | null;
+  additionalTools?: string[];
+  strategyOpts?: Record<string, unknown>;
+  strategyContext?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** Options for buildSystemContext */
+interface SystemContextOptions {
+  budget?: Record<string, unknown>;
+  trackerStrategy?: string;
+  label?: string;
+  lang?: string;
+}
+
+/** Options for scanKnowledge */
+interface ScanKnowledgeOptions {
+  label?: string;
+  files?: Array<{ name: string; content: string; language?: string }>;
+  task?: 'extract' | 'summarize';
+  lang?: string;
+  comprehensive?: boolean;
+}
+
+/** Options for bootstrapKnowledge */
+interface BootstrapKnowledgeOptions {
+  maxFiles?: number;
+  skipGuard?: boolean;
+  contentMaxLines?: number;
+  loadSkills?: boolean;
+  skipAsyncFill?: boolean;
+}
+
+/** Scan task config entry */
+interface ScanTaskConfig {
+  producePrompt: string;
+  fallback: (label: string) => Record<string, unknown>;
+}
+
+/** Structural type for tool call entries in AgentResult */
+interface ToolCallRecord {
+  tool: string;
+  name?: string;
+  args: Record<string, unknown>;
+  result: unknown;
+  durationMs: number;
+}
+
+/** Recipe shape extracted from scan tool calls */
+interface ScanRecipe {
+  title?: string;
+  description?: string;
+  summary?: string;
+  usageGuide?: string;
+  category?: string;
+  headers?: string[];
+  tags?: string[];
+  trigger?: string;
+  [key: string]: unknown;
+}
 
 export class AgentFactory {
   #container;
@@ -36,7 +123,7 @@ export class AgentFactory {
   #aiProvider;
   #logger;
   /** @type {AgentRouter|null} */
-  #router: any = null;
+  #router: AgentRouter | null = null;
   /** @type {Object} 共享的 Capability 实例缓存 (如 MemoryCoordinator) */
   #sharedOpts;
 
@@ -56,7 +143,7 @@ export class AgentFactory {
     memoryCoordinator,
     projectBriefing,
     projectRoot,
-  }: any) {
+  }: AgentFactoryOptions) {
     this.#container = container;
     this.#toolRegistry = toolRegistry;
     this.#aiProvider = aiProvider;
@@ -81,7 +168,7 @@ export class AgentFactory {
 
     const router = new AgentRouter();
     router.setAiProvider(this.#aiProvider);
-    router.setExecutor((presetName: any, message: any, opts: any) => {
+    router.setExecutor((presetName: string, message: AgentMessage, opts: RuntimeOverrides) => {
       const runtime = this.createRuntime(presetName, opts);
       return runtime.execute(message, opts.strategyOpts || opts);
     });
@@ -102,17 +189,19 @@ export class AgentFactory {
    * @param {Object} [overrides] 覆盖 preset 配置
    * @returns {AgentRuntime}
    */
-  createRuntime(presetName: any, overrides: any = {}) {
+  createRuntime(presetName: string, overrides: RuntimeOverrides = {}) {
     const preset = getPreset(presetName, overrides);
 
     // 实例化 Capabilities
-    const capabilities = preset.capabilities.map((name: any) => {
+    const capabilities = (preset.capabilities as string[]).map((name: string) => {
       const opts = this.#getCapabilityOpts(name);
       return CapabilityRegistry.create(name, opts);
     });
 
     // 实例化 Policies — 支持工厂函数延迟实例化 (Preset 中 policy 可为 instance 或 factory)
-    const resolvedPolicies = (preset.policies || []).map((policyOrFactory: any) =>
+    const resolvedPolicies = (
+      (preset.policies || []) as Array<Policy | ((overrides: RuntimeOverrides) => Policy)>
+    ).map((policyOrFactory: Policy | ((overrides: RuntimeOverrides) => Policy)) =>
       typeof policyOrFactory === 'function' ? policyOrFactory(overrides) : policyOrFactory
     );
     const policyEngine = new PolicyEngine(resolvedPolicies);
@@ -123,10 +212,10 @@ export class AgentFactory {
       toolRegistry: this.#toolRegistry,
       container: this.#container,
       capabilities,
-      strategy: preset.strategyInstance,
+      strategy: preset.strategyInstance as Strategy,
       policies: policyEngine,
-      persona: preset.persona,
-      memory: preset.memory,
+      persona: preset.persona as Record<string, unknown> | undefined,
+      memory: preset.memory as Record<string, unknown> | undefined,
       onProgress: overrides.onProgress || null,
       onToolCall: overrides.onToolCall || null,
       lang: overrides.lang || null,
@@ -142,7 +231,7 @@ export class AgentFactory {
    * @param {{ isSystem?: boolean }} [opts]
    * @returns {ContextWindow}
    */
-  createContextWindow(opts: any = {}) {
+  createContextWindow(opts: { isSystem?: boolean } = {}) {
     const modelName = this.#aiProvider?.model || '';
     const tokenBudget = ContextWindow.resolveTokenBudget(modelName, opts);
     return new ContextWindow(tokenBudget);
@@ -177,7 +266,12 @@ export class AgentFactory {
    * @param {string} [opts.lang] 项目语言 (透传给 sharedState._projectLanguage)
    * @returns {{ contextWindow: ContextWindow, tracker: ExplorationTracker, trace: import('./memory/ActiveContext.js').ActiveContext, activeContext: import('./memory/ActiveContext.js').ActiveContext, memoryCoordinator: MemoryCoordinator, outputType: string, dimId: string, sharedState: Object, source: string, scopeId: string }}
    */
-  buildSystemContext({ budget, trackerStrategy = 'analyst', label = 'default', lang }: any = {}) {
+  buildSystemContext({
+    budget,
+    trackerStrategy = 'analyst',
+    label = 'default',
+    lang,
+  }: SystemContextOptions = {}) {
     // 创建轻量级 MemoryCoordinator (scan 场景无 PersistentMemory/SessionStore)
     const mc = new MemoryCoordinator({ mode: 'bootstrap' });
     const scopeId = `scan:${label}`;
@@ -229,7 +323,7 @@ export class AgentFactory {
    * 创建对话 Runtime (Dashboard / 飞书聊天)
    * @param {Object} [opts]
    */
-  createChat(opts: any = {}) {
+  createChat(opts: RuntimeOverrides = {}) {
     return this.createRuntime(PresetName.CHAT, opts);
   }
 
@@ -239,7 +333,7 @@ export class AgentFactory {
    * @param {Array} [opts.dimensions] 维度列表 (传给 FanOutStrategy 的 items)
    * @param {Object} [opts.projectInfo] 项目信息
    */
-  createInsight(opts: any = {}) {
+  createInsight(opts: RuntimeOverrides = {}) {
     return this.createRuntime(PresetName.INSIGHT, opts);
   }
 
@@ -247,7 +341,7 @@ export class AgentFactory {
    * 创建飞书对话 Runtime (知识管理，服务端处理)
    * @param {Object} [opts]
    */
-  createLark(opts: any = {}) {
+  createLark(opts: RuntimeOverrides = {}) {
     return this.createRuntime(PresetName.LARK, opts);
   }
 
@@ -255,7 +349,7 @@ export class AgentFactory {
    * 创建远程执行 Runtime (飞书终端 / 远程操作)
    * @param {Object} [opts]
    */
-  createRemoteExec(opts: any = {}) {
+  createRemoteExec(opts: RuntimeOverrides = {}) {
     return this.createRuntime(PresetName.REMOTE_EXEC, opts);
   }
 
@@ -279,8 +373,14 @@ export class AgentFactory {
    * @param {boolean} [opts.comprehensive]   深度扫描标志
    * @returns {Promise<Object>}              - task-specific JSON
    */
-  async scanKnowledge({ label, files, task = 'extract', lang, comprehensive }: any = {}) {
-    const taskConfig = (SCAN_TASK_CONFIGS as Record<string, any>)[task];
+  async scanKnowledge({
+    label,
+    files,
+    task = 'extract',
+    lang,
+    comprehensive,
+  }: ScanKnowledgeOptions = {}) {
+    const taskConfig = (SCAN_TASK_CONFIGS as Record<string, ScanTaskConfig>)[task];
     if (!taskConfig) {
       throw new Error(
         `Unknown scanKnowledge task: "${task}". Available: ${Object.keys(SCAN_TASK_CONFIGS).join(', ')}`
@@ -320,7 +420,7 @@ export class AgentFactory {
       lang,
     });
     if (files?.length) {
-      runtime.setFileCache(files);
+      runtime.setFileCache(files as unknown as Parameters<typeof runtime.setFileCache>[0]);
     }
 
     // ── 完整的系统级多轮基础设施 (含 MemoryCoordinator 管理 ActiveContext) ──
@@ -340,15 +440,15 @@ export class AgentFactory {
     // ── 提取结果 — extract 和 summarize 统一从 toolCalls 提取 ──
     const allToolCalls = result.toolCalls || [];
     const recipes = allToolCalls
-      .filter((tc: any) => (tc.tool || tc.name) === 'collect_scan_recipe')
-      .map((tc: any) => {
-        const res = tc.result;
+      .filter((tc: ToolCallRecord) => (tc.tool || tc.name) === 'collect_scan_recipe')
+      .map((tc: ToolCallRecord) => {
+        const res = tc.result as Record<string, unknown> | null;
         if (res && typeof res === 'object' && res.status === 'collected' && res.recipe) {
-          return res.recipe;
+          return res.recipe as ScanRecipe;
         }
         return null;
       })
-      .filter(Boolean);
+      .filter((r): r is ScanRecipe => Boolean(r));
 
     if (recipes.length > 0) {
       // summarize 向后兼容: 扁平化首个 recipe 为 { title, summary, usageGuide, ... }
@@ -370,8 +470,9 @@ export class AgentFactory {
     }
 
     // Fallback: 工具未被调用时，尝试从文本解析
-    const produceReply = result.phases?.produce?.reply || result.reply;
-    return this.#parseJsonResponse(produceReply, fallback(label));
+    const phases = result.phases as Record<string, Record<string, unknown>> | undefined;
+    const produceReply = (phases?.produce?.reply as string) || result.reply;
+    return this.#parseJsonResponse(produceReply, fallback(label as string));
   }
 
   /**
@@ -406,7 +507,8 @@ export class AgentFactory {
     );
     const result = await runtime.execute(message);
 
-    const synthesizeReply = result.phases?.synthesize?.reply || result.reply;
+    const phases = result.phases as Record<string, Record<string, unknown>> | undefined;
+    const synthesizeReply = (phases?.synthesize?.reply as string) || result.reply;
     return this.#parseJsonResponse(synthesizeReply, { analyzed: 0, relations: [] });
   }
 
@@ -419,7 +521,7 @@ export class AgentFactory {
    * @param {string} [usageGuide] 中文使用指南
    * @returns {Promise<{ summaryEn?: string, usageGuideEn?: string, error?: string }>}
    */
-  async translateToEnglish(summary: any, usageGuide: any) {
+  async translateToEnglish(summary: string, usageGuide?: string) {
     if (!summary && !usageGuide) {
       return { summaryEn: '', usageGuideEn: '' };
     }
@@ -464,12 +566,16 @@ export class AgentFactory {
    * @param {{ maxFiles?: number, skipGuard?: boolean, contentMaxLines?: number, loadSkills?: boolean, skipAsyncFill?: boolean }} [opts]
    * @returns {Promise<Object>}
    */
-  async bootstrapKnowledge(opts: any = {}) {
+  async bootstrapKnowledge(opts: BootstrapKnowledgeOptions = {}) {
     const { bootstrapKnowledge } = await import(
       '../../external/mcp/handlers/bootstrap-internal.js'
     );
     const result = await bootstrapKnowledge(
-      { container: this.#container, logger: this.#logger },
+      {
+        container: this
+          .#container as unknown as import('../../external/mcp/handlers/types.js').McpServiceContainer,
+        logger: this.#logger,
+      },
       {
         maxFiles: opts.maxFiles || 500,
         skipGuard: opts.skipGuard || false,
@@ -492,7 +598,7 @@ export class AgentFactory {
    * @param {Object} params 工具参数
    * @returns {Promise<*>} 工具原始返回值
    */
-  async invokeAgent(toolName: any, params: any) {
+  async invokeAgent(toolName: string, params: Record<string, unknown>) {
     return this.#toolRegistry.execute(toolName, params, this.#makeToolContext());
   }
 
@@ -504,7 +610,7 @@ export class AgentFactory {
    * @param {Object} fallback 解析失败时的默认值
    * @returns {Object}
    */
-  #parseJsonResponse(text: any, fallback: any) {
+  #parseJsonResponse(text: string | null | undefined, fallback: Record<string, unknown>) {
     if (!text) {
       return fallback;
     }
@@ -542,7 +648,7 @@ export class AgentFactory {
   /**
    * 获取 Capability 实例化时需要的依赖注入参数
    */
-  #getCapabilityOpts(capabilityName: any) {
+  #getCapabilityOpts(capabilityName: string) {
     switch (capabilityName) {
       case 'conversation':
         return {

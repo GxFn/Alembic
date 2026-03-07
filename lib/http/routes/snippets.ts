@@ -3,7 +3,7 @@
  * Snippet = Recipe 的附属产物，从 Recipe 实时生成，不存 DB
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { NotFoundError } from '../../shared/errors/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -16,20 +16,20 @@ const router = express.Router();
  */
 router.get(
   '/',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
     const snippetFactory = container.get('snippetFactory');
 
     const { language, category, keyword } = req.query;
-    const filters: any = {};
+    const filters: Record<string, string> = {};
     if (language) {
-      filters.language = language;
+      filters.language = String(language);
     }
     if (category) {
-      filters.category = category;
+      filters.category = String(category);
     }
     if (keyword) {
-      filters.keyword = keyword;
+      filters.keyword = String(keyword);
     }
 
     const snippets = await snippetFactory.listSnippets(filters);
@@ -50,13 +50,13 @@ router.get(
  */
 router.get(
   '/:id',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
     const snippetFactory = container.get('snippetFactory');
 
     const snippet = await snippetFactory.getSnippet(req.params.id);
     if (!snippet) {
-      throw new NotFoundError('Snippet (recipe)', req.params.id);
+      throw new NotFoundError('Snippet (recipe)', req.params.id as string);
     }
 
     res.json({ success: true, data: snippet });

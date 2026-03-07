@@ -11,7 +11,7 @@
  *   - provide/inject 依赖注入
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class VueEnhancement extends EnhancementPack {
   get id() {
@@ -140,7 +140,7 @@ class VueEnhancement extends EnhancementPack {
   /**
    * .vue SFC 预处理 → 提取 <script> / <script setup> 块
    */
-  preprocessFile(content: any, ext: any) {
+  preprocessFile(content: string, ext: string) {
     if (ext !== '.vue') {
       return null;
     }
@@ -161,8 +161,8 @@ class VueEnhancement extends EnhancementPack {
     return null;
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: any[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
 
     // ── Composable functions ──
     for (const m of astSummary.methods || []) {
@@ -223,7 +223,7 @@ class VueEnhancement extends EnhancementPack {
 
     // ── Vue ecosystem imports ──
     const vueImports = (astSummary.imports || []).filter(
-      (imp: any) =>
+      (imp: string) =>
         imp.includes('vue') ||
         imp.includes('pinia') ||
         imp.includes('vue-router') ||

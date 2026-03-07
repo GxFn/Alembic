@@ -18,6 +18,92 @@ import {
   detectLanguage,
 } from './GuardPatternUtils.js';
 
+/** Minimal DB interface for Guard engine */
+interface DatabaseLike {
+  prepare(sql: string): {
+    run(...params: unknown[]): unknown;
+    get(...params: unknown[]): Record<string, unknown>;
+    all(...params: unknown[]): Record<string, unknown>[];
+  };
+  exec?(sql: string): void;
+}
+
+interface BuiltInRule {
+  message: string;
+  severity: string;
+  pattern: string;
+  languages: string[];
+  dimension?: string;
+  category?: string;
+  fixSuggestion?: string;
+  excludePaths?: RegExp;
+  skipComments?: boolean;
+  skipTestBlocks?: boolean;
+}
+
+interface GuardRule {
+  id: string;
+  name: string;
+  message: string;
+  pattern?: string | RegExp;
+  languages: string[];
+  severity: string;
+  dimension?: string;
+  category?: string;
+  source?: string;
+  type?: string;
+  fixSuggestion?: string | null;
+  excludePaths?: RegExp | string;
+  skipComments?: boolean;
+  skipTestBlocks?: boolean;
+  astQuery?: { queryType: string; params?: Record<string, string> };
+}
+
+interface GuardViolation {
+  ruleId: string;
+  message: string;
+  severity: string;
+  line: number;
+  snippet: string;
+  dimension?: string;
+  fixSuggestion?: string;
+  suggestedFix?: string | null;
+  reasoning?: { whatViolated: string; whyItMatters: string; suggestedFix: string | null };
+}
+
+interface GuardConfig {
+  disabledRules?: string[];
+  codeLevelThresholds?: Record<string, number>;
+}
+
+interface GuardCheckEngineOptions {
+  cacheTTL?: number;
+  guardConfig?: GuardConfig;
+}
+
+interface ExternalRuleInput {
+  ruleId: string;
+  pattern?: RegExp | string;
+  severity?: string;
+  message?: string;
+  category?: string;
+  dimension?: string;
+  languages?: string[];
+  fixSuggestion?: string;
+}
+
+interface AuditFileResult {
+  filePath: string;
+  language: string;
+  violations: GuardViolation[];
+  summary: { total: number; errors: number; warnings: number };
+}
+
+interface AuditFilesInput {
+  path: string;
+  content: string;
+}
+
 /**
  * 内置默认规则集 — 多语言基础规则
  *
@@ -474,18 +560,22 @@ export { detectLanguage } from './GuardPatternUtils.js';
  * GuardCheckEngine - 核心检查引擎
  */
 export class GuardCheckEngine {
-  _astRulesCache: any;
-  _builtInRules: any;
-  _cacheTTL: any;
-  _cacheTime: any;
-  _customRulesCache: any;
-  _epInjected: any;
-  _externalRules: any;
-  _guardConfig: any;
-  db: any;
-  logger: any;
-  constructor(db: any, options: any = {}) {
-    this.db = typeof db?.getDb === 'function' ? db.getDb() : db;
+  _astRulesCache: GuardRule[] | null;
+  _builtInRules: Record<string, BuiltInRule>;
+  _cacheTTL: number;
+  _cacheTime: number;
+  _customRulesCache: GuardRule[] | null;
+  _epInjected: boolean;
+  _externalRules: Map<string, GuardRule>;
+  _guardConfig: GuardConfig;
+  db: DatabaseLike;
+  logger: ReturnType<typeof Logger.getInstance>;
+  constructor(
+    db: DatabaseLike | { getDb(): DatabaseLike } | null,
+    options: GuardCheckEngineOptions = {}
+  ) {
+    this.db =
+      db && 'getDb' in db && typeof db.getDb === 'function' ? db.getDb() : (db as DatabaseLike);
     this.logger = Logger.getInstance();
     this._builtInRules = BUILT_IN_RULES;
     this._customRulesCache = null;
@@ -508,7 +598,7 @@ export class GuardCheckEngine {
    * 与 BUILT_IN_RULES 合并检查，自动跳过 ruleId 重复的规则
    * @param {Array<{ruleId: string, pattern: RegExp|string, severity: string, message: string, category?: string, dimension?: string, languages?: string[], fixSuggestion?: string}>} rules
    */
-  injectExternalRules(rules: any) {
+  injectExternalRules(rules: ExternalRuleInput[]) {
     if (!Array.isArray(rules)) {
       return;
     }
@@ -523,11 +613,9 @@ export class GuardCheckEngine {
       // 跳过与 BUILT_IN_RULES 重复的模式（通过比较 pattern 源文本）
       const rulePatternStr =
         rule.pattern instanceof RegExp ? rule.pattern.source : String(rule.pattern || '');
-      const isDuplicate = (Object.entries(this._builtInRules) as [string, any][]).some(
-        ([, builtIn]) => {
-          return builtIn.pattern === rulePatternStr;
-        }
-      );
+      const isDuplicate = Object.entries(this._builtInRules).some(([, builtIn]) => {
+        return builtIn.pattern === rulePatternStr;
+      });
       if (isDuplicate) {
         this.logger.debug(`[GuardCheckEngine] Skipping duplicate external rule: ${rule.ruleId}`);
         continue;
@@ -564,15 +652,15 @@ export class GuardCheckEngine {
   /**
    * 获取所有启用的规则 (数据库 + 内置)
    */
-  getRules(language = null) {
-    let rules: any[] = [];
+  getRules(language: string | null = null) {
+    let rules: GuardRule[] = [];
 
     // 从数据库加载自定义规则
     // 优先从 knowledge_entries 表查询（V3），回退到 recipes 表（V2）
     try {
       const now = Date.now();
       if (!this._customRulesCache || now - this._cacheTime > this._cacheTTL) {
-        let rows: any[] = [];
+        let rows: Record<string, unknown>[] = [];
         try {
           rows = this.db
             .prepare(
@@ -586,35 +674,40 @@ export class GuardCheckEngine {
           /* table may not exist */
         }
 
-        const regexRules: any[] = [];
-        const astRules: any[] = [];
+        const regexRules: GuardRule[] = [];
+        const astRules: GuardRule[] = [];
 
         for (const r of rows) {
-          let guards: any[] = [];
+          let guards: Record<string, unknown>[] = [];
           try {
-            const constraints = JSON.parse(r.constraints || '{}');
+            const constraints = JSON.parse((r.constraints as string) || '{}');
             guards = constraints.guards || [];
           } catch {
             /* ignore */
           }
 
           for (const g of guards) {
-            const ruleType = g.type || 'regex';
+            const ruleType = (g.type as string) || 'regex';
+            const lang = r.language as string | undefined;
             const base = {
-              id: g.id || r.id,
-              name: g.name || r.title,
-              message: g.message || r.description || r.title,
-              languages: r.language ? [r.language, LanguageService.toGuardLangId(r.language)] : [],
-              severity: g.severity || 'warning',
-              dimension: r.scope || 'file',
+              id: (g.id || r.id) as string,
+              name: (g.name || r.title) as string,
+              message: (g.message || r.description || r.title) as string,
+              languages: lang ? [lang, LanguageService.toGuardLangId(lang)] : [],
+              severity: (g.severity || 'warning') as string,
+              dimension: (r.scope || 'file') as string,
               source: 'database',
-              fixSuggestion: g.fixSuggestion || null,
+              fixSuggestion: (g.fixSuggestion || null) as string | null,
             };
 
             if (ruleType === 'ast' && g.astQuery) {
-              astRules.push({ ...base, type: 'ast', astQuery: g.astQuery });
+              astRules.push({
+                ...base,
+                type: 'ast',
+                astQuery: g.astQuery as GuardRule['astQuery'],
+              });
             } else if (g.pattern) {
-              regexRules.push({ ...base, type: 'regex', pattern: g.pattern });
+              regexRules.push({ ...base, type: 'regex', pattern: g.pattern as string });
             }
           }
         }
@@ -630,7 +723,7 @@ export class GuardCheckEngine {
 
     // 合并内置规则（不覆盖同名数据库规则）
     const existingIds = new Set(rules.map((r) => r.id || r.name));
-    for (const [ruleId, rule] of Object.entries(this._builtInRules) as [string, any][]) {
+    for (const [ruleId, rule] of Object.entries(this._builtInRules)) {
       if (!existingIds.has(ruleId)) {
         rules.push({
           id: ruleId,
@@ -667,7 +760,7 @@ export class GuardCheckEngine {
           !r.languages?.length ||
           r.languages.includes(language) ||
           r.languages.includes(langNorm) ||
-          r.languages.some((l: any) => LanguageService.toGuardLangId(l) === langNorm)
+          r.languages.some((l: string) => LanguageService.toGuardLangId(l) === langNorm)
       );
     }
 
@@ -683,7 +776,7 @@ export class GuardCheckEngine {
       let astRules = this._astRulesCache;
       if (language) {
         astRules = astRules.filter(
-          (r: any) => !r.languages?.length || r.languages.includes(language)
+          (r: GuardRule) => !r.languages?.length || r.languages.includes(language)
         );
       }
       rules.push(...astRules);
@@ -699,9 +792,13 @@ export class GuardCheckEngine {
    * @param {object} options - {scope, filePath}
    * @returns {Array<{ruleId, message, severity, line, snippet, dimension?, fixSuggestion?}>}
    */
-  checkCode(code: any, language: any, options: any = {}) {
+  checkCode(
+    code: string,
+    language: string,
+    options: { scope?: string | null; filePath?: string } = {}
+  ) {
     const { scope = null, filePath = '' } = options;
-    const violations: any[] = [];
+    const violations: GuardViolation[] = [];
 
     // 获取匹配语言的规则
     let rules = this.getRules(language);
@@ -725,7 +822,7 @@ export class GuardCheckEngine {
         target: ['file', 'target'],
         file: ['file'],
       };
-      const allowedDimensions = (SCOPE_HIERARCHY as Record<string, any>)[scope] || [scope];
+      const allowedDimensions = (SCOPE_HIERARCHY as Record<string, string[]>)[scope] || [scope];
       rules = rules.filter((r) => !r.dimension || allowedDimensions.includes(r.dimension));
     }
 
@@ -813,7 +910,7 @@ export class GuardCheckEngine {
    * @param {string} language 语言标识
    * @returns {Array} violations
    */
-  _runAstRuleChecks(code: any, language: any) {
+  _runAstRuleChecks(code: string, language: string) {
     // AST 语言标准化 — 通过 LanguageService 判断是否为已知编程语言
     const astLang = LanguageService.isKnownLang(language)
       ? language
@@ -826,7 +923,7 @@ export class GuardCheckEngine {
 
     // 获取缓存中的 AST 规则
     const astRules = (this._astRulesCache || []).filter(
-      (r: any) => !r.languages?.length || r.languages.includes(language)
+      (r: GuardRule) => !r.languages?.length || r.languages.includes(language)
     );
     if (astRules.length === 0) {
       return [];
@@ -846,7 +943,7 @@ export class GuardCheckEngine {
       return [];
     }
 
-    const violations: any[] = [];
+    const violations: GuardViolation[] = [];
 
     for (const rule of astRules) {
       const { astQuery } = rule;
@@ -934,8 +1031,8 @@ export class GuardCheckEngine {
           default:
             this.logger.debug(`Unknown AST query type: ${astQuery.queryType}`);
         }
-      } catch (err: any) {
-        this.logger.debug(`AST rule ${rule.id} check failed: ${err.message}`);
+      } catch (err: unknown) {
+        this.logger.debug(`AST rule ${rule.id} check failed: ${(err as Error).message}`);
       }
     }
 
@@ -953,7 +1050,7 @@ export class GuardCheckEngine {
    * 将 Guard 命中计数回写到对应 Recipe 的 guard_hit_count
    * @param {Array<{ruleId: string}>} violations
    */
-  trackGuardHits(violations: any) {
+  trackGuardHits(violations: GuardViolation[]) {
     if (!violations?.length || !this.db) {
       return;
     }
@@ -982,13 +1079,13 @@ export class GuardCheckEngine {
 
       for (const [ruleId, count] of hitMap) {
         try {
-          updateStmt.run(count, now, ruleId);
+          updateStmt?.run(count, now, ruleId);
         } catch {
           /* 非 Recipe 规则（内置规则）忽略 */
         }
       }
-    } catch (err: any) {
-      this.logger.debug('trackGuardHits failed', { error: err.message });
+    } catch (err: unknown) {
+      this.logger.debug('trackGuardHits failed', { error: (err as Error).message });
     }
   }
 
@@ -998,7 +1095,7 @@ export class GuardCheckEngine {
    * @param {string} code 文件内容
    * @param {object} options - {scope}
    */
-  auditFile(filePath: any, code: any, options: any = {}) {
+  auditFile(filePath: string, code: string, options: { scope?: string } = {}): AuditFileResult {
     const language = detectLanguage(filePath);
     const violations = this.checkCode(code, language, { ...options, filePath });
     return {
@@ -1019,8 +1116,8 @@ export class GuardCheckEngine {
    * @param {object} options - {scope: 'file'|'target'|'project'}
    * @returns {{files, summary, crossFileViolations}}
    */
-  auditFiles(files: any, options: any = {}) {
-    const results: any[] = [];
+  auditFiles(files: AuditFilesInput[], options: { scope?: string } = {}) {
+    const results: AuditFileResult[] = [];
     let totalViolations = 0;
     let totalErrors = 0;
 

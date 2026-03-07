@@ -4,7 +4,7 @@
  * 替代 recipes.js + candidates.js （旧路由继续保留用于向后兼容）
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
@@ -29,7 +29,7 @@ const MAX_BATCH_SIZE = 100;
  */
 router.get(
   '/',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { lifecycle, kind, category, language, knowledgeType, scope, keyword, tag, source } =
       req.query;
     const page = safeInt(req.query.page, 1);
@@ -40,10 +40,10 @@ router.get(
 
     if (keyword) {
       const result = await knowledgeService.search(keyword, { page, pageSize });
-      return res.json({ success: true, data: sanitizePaginatedForAPI(result) });
+      return void res.json({ success: true, data: sanitizePaginatedForAPI(result) });
     }
 
-    const filters: any = {};
+    const filters: Record<string, unknown> = {};
     if (lifecycle) {
       filters.lifecycle = lifecycle;
     }
@@ -80,7 +80,7 @@ router.get(
  */
 router.get(
   '/stats',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
     const stats = await knowledgeService.getStats();
@@ -94,7 +94,7 @@ router.get(
  */
 router.get(
   '/:id',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -111,7 +111,7 @@ router.get(
  */
 router.post(
   '/',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const data = req.body;
 
     if (!data.title || !data.content) {
@@ -136,7 +136,7 @@ router.post(
  */
 router.patch(
   '/:id',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -153,7 +153,7 @@ router.patch(
  */
 router.delete(
   '/:id',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -172,7 +172,7 @@ router.delete(
  */
 router.patch(
   '/:id/publish',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -189,7 +189,7 @@ router.patch(
  */
 router.patch(
   '/:id/deprecate',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const { reason } = req.body;
 
@@ -212,7 +212,7 @@ router.patch(
  */
 router.patch(
   '/:id/reactivate',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
@@ -232,7 +232,7 @@ router.patch(
  */
 router.post(
   '/batch-publish',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { ids } = req.body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -278,7 +278,7 @@ router.post(
  */
 router.post(
   '/:id/usage',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const { type = 'adoption', feedback } = req.body;
     const context = getContext(req);
@@ -297,7 +297,7 @@ router.post(
  */
 router.patch(
   '/:id/quality',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const context = getContext(req);
 

@@ -1,12 +1,13 @@
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { AuditStore } from './AuditStore.js';
 
 /**
  * AuditLogger - 审计日志记录器
  */
 export class AuditLogger {
-  auditStore: any;
-  logger: any;
-  constructor(auditStore: any) {
+  auditStore: AuditStore;
+  logger: import('winston').Logger;
+  constructor(auditStore: AuditStore) {
     this.auditStore = auditStore;
     this.logger = Logger.getInstance();
   }
@@ -17,7 +18,20 @@ export class AuditLogger {
    *   Gateway 风格: { actor, action, resource, result, data, duration }
    *   Service 风格: { actor, action, resourceType, resourceId, details, timestamp }
    */
-  async log(entry: any) {
+  async log(entry: {
+    requestId?: string;
+    actor: string;
+    action: string;
+    resource?: string;
+    resourceType?: string;
+    resourceId?: string;
+    data?: Record<string, unknown>;
+    details?: unknown;
+    context?: Record<string, unknown>;
+    result?: string;
+    error?: string;
+    duration?: number;
+  }) {
     // 兼容 Service 层传入 resourceType + resourceId（而非 resource）
     const resource =
       entry.resource ||
@@ -48,10 +62,10 @@ export class AuditLogger {
         actor: entry.actor,
         action: entry.action,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // 审计失败不应阻断业务，仅记录错误
       this.logger.error('Failed to save audit log', {
-        error: error.message,
+        error: (error as Error).message,
         entry: auditEntry,
       });
     }
@@ -67,7 +81,7 @@ export class AuditLogger {
   /**
    * 格式化资源
    */
-  formatResource(resource: any) {
+  formatResource(resource: unknown) {
     if (typeof resource === 'string') {
       return resource;
     }
@@ -82,28 +96,35 @@ export class AuditLogger {
   /**
    * 查询审计日志
    */
-  async query(filters: any) {
+  async query(filters: {
+    actor?: string;
+    action?: string;
+    result?: string;
+    startDate?: number;
+    endDate?: number;
+    limit?: number;
+  }) {
     return await this.auditStore.query(filters);
   }
 
   /**
    * 获取特定请求的日志
    */
-  async getByRequestId(requestId: any) {
+  async getByRequestId(requestId: string) {
     return await this.auditStore.findByRequestId(requestId);
   }
 
   /**
    * 获取特定角色的日志
    */
-  async getByActor(actor: any, limit = 100) {
+  async getByActor(actor: string, limit = 100) {
     return await this.auditStore.findByActor(actor, limit);
   }
 
   /**
    * 获取特定操作的日志
    */
-  async getByAction(action: any, limit = 100) {
+  async getByAction(action: string, limit = 100) {
     return await this.auditStore.findByAction(action, limit);
   }
 
@@ -117,7 +138,7 @@ export class AuditLogger {
   /**
    * 统计审计数据
    */
-  async getStats(timeRange: any) {
+  async getStats(timeRange: string) {
     return await this.auditStore.getStats(timeRange);
   }
 }

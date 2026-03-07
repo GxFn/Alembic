@@ -21,8 +21,53 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import type { ToolHandlerContext } from './_shared.js';
 
 const execFileAsync = promisify(execFile);
+
+// ─── 类型定义 ────────────────────────────────────────
+
+/** execFile 异步执行失败时的错误对象 */
+interface ExecError extends Error {
+  killed?: boolean;
+  code?: number | string;
+  stdout?: string;
+  stderr?: string;
+}
+
+/** SafetyPolicy 安全策略接口 */
+interface SafetyPolicy {
+  checkCommand(command: string): { safe: boolean; reason?: string };
+  checkFilePath(filePath: string): { safe: boolean; reason?: string };
+}
+
+/** 系统交互工具的 handler 上下文 */
+export interface SystemToolContext extends ToolHandlerContext {
+  safetyPolicy?: SafetyPolicy;
+}
+
+export interface RunSafeCommandParams {
+  command: string;
+  cwd?: string;
+  timeout?: number;
+}
+
+export interface WriteProjectFileParams {
+  filePath: string;
+  content: string;
+  append?: boolean;
+}
+
+export interface GetEnvironmentInfoParams {
+  sections?: string[];
+}
+
+export interface EnvironmentInfo {
+  os?: Record<string, unknown>;
+  node?: Record<string, unknown>;
+  git?: Record<string, unknown>;
+  project?: Record<string, unknown>;
+}
 
 // ─── 常量 ────────────────────────────────────────────
 
@@ -86,7 +131,7 @@ const MAX_WRITE_SIZE = 512 * 1024;
 /**
  * 硬编码黑名单检查 — 工具层兜底, 无论是否有 SafetyPolicy 都生效
  */
-function _isHardBlacklisted(command: any) {
+function _isHardBlacklisted(command: string) {
   for (const pattern of HARDCODED_BLACKLIST) {
     if (pattern.test(command)) {
       return true;
@@ -98,7 +143,7 @@ function _isHardBlacklisted(command: any) {
 /**
  * 无 SafetyPolicy 时的白名单兜底
  */
-function _isFallbackSafe(command: any) {
+function _isFallbackSafe(command: string) {
   const trimmed = command.trim();
   return FALLBACK_SAFE_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
 }
@@ -106,7 +151,7 @@ function _isFallbackSafe(command: any) {
 /**
  * 截断过长输出
  */
-function _truncate(text: any, max = MAX_OUTPUT_LENGTH) {
+function _truncate(text: string, max = MAX_OUTPUT_LENGTH) {
   if (!text || text.length <= max) {
     return text;
   }
@@ -116,7 +161,7 @@ function _truncate(text: any, max = MAX_OUTPUT_LENGTH) {
 /**
  * 获取 projectRoot — 优先从 context 获取, 兜底用 cwd
  */
-function _getProjectRoot(ctx: any) {
+function _getProjectRoot(ctx: ToolHandlerContext) {
   return ctx.projectRoot || ctx.container?.get?.('projectRoot') || process.cwd();
 }
 
@@ -150,7 +195,7 @@ export const runSafeCommand = {
     },
     required: ['command'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: RunSafeCommandParams, ctx: SystemToolContext) => {
     const { command, cwd, timeout } = params;
     const projectRoot = _getProjectRoot(ctx);
 
@@ -219,22 +264,23 @@ export const runSafeCommand = {
         command,
         cwd: workDir,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const execErr = err as ExecError;
       // 超时
-      if (err.killed) {
+      if (execErr.killed) {
         return {
           error: `命令执行超时 (${effectiveTimeout}ms)`,
           command,
-          stdout: _truncate(err.stdout || ''),
-          stderr: _truncate(err.stderr || ''),
+          stdout: _truncate(execErr.stdout || ''),
+          stderr: _truncate(execErr.stderr || ''),
         };
       }
 
       // 非零退出
       return {
-        exitCode: err.code ?? 1,
-        stdout: _truncate(err.stdout || ''),
-        stderr: _truncate(err.stderr || err.message || ''),
+        exitCode: execErr.code ?? 1,
+        stdout: _truncate(execErr.stdout || ''),
+        stderr: _truncate(execErr.stderr || execErr.message || ''),
         command,
         cwd: workDir,
       };
@@ -271,7 +317,7 @@ export const writeProjectFile = {
     },
     required: ['filePath', 'content'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: WriteProjectFileParams, ctx: SystemToolContext) => {
     const { filePath, content, append } = params;
     const projectRoot = _getProjectRoot(ctx);
 
@@ -345,8 +391,8 @@ export const writeProjectFile = {
         size: stat.size,
         mode: append ? 'append' : 'overwrite',
       };
-    } catch (err: any) {
-      return { error: `写入文件失败: ${err.message}` };
+    } catch (err: unknown) {
+      return { error: `写入文件失败: ${(err as Error).message}` };
     }
   },
 };
@@ -375,11 +421,11 @@ export const getEnvironmentInfo = {
     },
     required: [],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: GetEnvironmentInfoParams, ctx: ToolHandlerContext) => {
     const sections = params.sections || ['all'];
     const all = sections.includes('all');
     const projectRoot = _getProjectRoot(ctx);
-    const info: any = {};
+    const info: EnvironmentInfo = {};
 
     // ── OS 信息 ──
     if (all || sections.includes('os')) {

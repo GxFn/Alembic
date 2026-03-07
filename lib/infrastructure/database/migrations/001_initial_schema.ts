@@ -16,7 +16,7 @@
  *   9. bootstrap_dim_files    — 维度-文件关联表
  *  10. code_entities          — 代码实体节点 (AST 解析)
  */
-export default function migrate(db: any) {
+export default function migrate(db: import('better-sqlite3').Database) {
   // ═══════════════════════════════════════════════════════════════
   // 1. knowledge_entries — 核心知识条目
   // ═══════════════════════════════════════════════════════════════

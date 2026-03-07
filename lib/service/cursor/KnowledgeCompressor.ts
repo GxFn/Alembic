@@ -12,9 +12,10 @@
  *   - Channel B: 增加 Why 行（content.rationale 首句）
  *   - Channel B: coreCode 骨架化（去注释 + 截断 ≤15 行）
  */
+import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
 
 /** 从 rationale 提取首句（≤120 字符），用于 Channel B 的 Why 行 */
-function _extractFirstSentence(rationale: any) {
+function _extractFirstSentence(rationale: string) {
   if (!rationale) {
     return '';
   }
@@ -27,16 +28,16 @@ function _extractFirstSentence(rationale: any) {
 }
 
 /** 骨架化 coreCode：去注释 + 截断 ≤ maxLines 行 */
-function _skeletonize(code: any, maxLines = 15) {
+function _skeletonize(code: string, maxLines = 15) {
   if (!code) {
     return '';
   }
   const lines = code
     .split('\n')
     // 去掉纯注释行（// 或 /* 或 * (JSDoc续行) 或 # 开头）
-    .filter((l: any) => !/^\s*(\/\/|\/\*|\*\s|#\s)/.test(l))
+    .filter((l: string) => !/^\s*(\/\/|\/\*|\*\s|#\s)/.test(l))
     // 去掉空行连续超过 1 行
-    .reduce((acc: any, line: any) => {
+    .reduce((acc: string[], line: string) => {
       if (line.trim() === '' && acc.length > 0 && acc[acc.length - 1].trim() === '') {
         return acc; // 跳过连续空行
       }
@@ -59,13 +60,13 @@ export class KnowledgeCompressor {
    * @param {Array<Object>} entries - KnowledgeEntry 数组 (kind='rule')
    * @returns {Array<string>}
    */
-  compressToRuleLine(entries: any) {
+  compressToRuleLine(entries: KnowledgeEntryProps[]) {
     return entries
-      .filter((e: any) => e.doClause) // 无 doClause → 跳过，不猜
-      .map((e: any) => {
+      .filter((e: KnowledgeEntryProps) => e.doClause) // 无 doClause → 跳过，不猜
+      .map((e: KnowledgeEntryProps) => {
         // 可选 language 前缀
         const langPrefix = e.language && e.scope !== 'universal' ? `[${e.language}] ` : '';
-        const doText = e.doClause.replace(/\.+$/, ''); // 去尾 .
+        const doText = e.doClause!.replace(/\.+$/, ''); // 去尾 .
         let line = `${langPrefix}${doText}`;
         if (e.dontClause) {
           // AI 可能返回 "Don't ..." / "Do not ..." / "Never ..." 开头，去掉冗余前缀后统一为 "Do NOT"
@@ -83,12 +84,12 @@ export class KnowledgeCompressor {
    * @param {Array<Object>} entries - KnowledgeEntry 数组 (kind='pattern')
    * @returns {Array<{ trigger: string, when: string, do: string, dont: string, why: string, template: string }>}
    */
-  compressToWhenDoDont(entries: any) {
+  compressToWhenDoDont(entries: KnowledgeEntryProps[]) {
     const seen = new Set();
     return entries
-      .filter((e: any) => e.trigger && e.whenClause && e.doClause) // 缺任一 → 跳过
-      .map((e: any) => {
-        let trigger = e.trigger.startsWith('@') ? e.trigger : `@${e.trigger}`;
+      .filter((e: KnowledgeEntryProps) => e.trigger && e.whenClause && e.doClause) // 缺任一 → 跳过
+      .map((e: KnowledgeEntryProps) => {
+        let trigger = e.trigger!.startsWith('@') ? e.trigger! : `@${e.trigger}`;
         // trigger 去重（AI 应保证唯一，但防御性检查）
         if (seen.has(trigger)) {
           let i = 2;
@@ -100,16 +101,17 @@ export class KnowledgeCompressor {
         seen.add(trigger);
 
         // 提取 rationale 首句作 Why 行
-        const rationale = e.content?.rationale || '';
+        const contentObj = e.content as { rationale?: string } | undefined;
+        const rationale = contentObj?.rationale || '';
         const why = _extractFirstSentence(rationale);
 
         return {
           trigger,
-          when: e.whenClause,
-          do: e.doClause,
+          when: e.whenClause || '',
+          do: e.doClause || '',
           dont: e.dontClause || '',
           why,
-          template: _skeletonize(e.coreCode),
+          template: _skeletonize(e.coreCode || ''),
         };
       });
   }
@@ -120,28 +122,47 @@ export class KnowledgeCompressor {
    * @param {string} [language=''] 代码围栏语言标识
    * @returns {string}
    */
-  formatWhenDoDont(compressed: any, language = '') {
+  formatWhenDoDont(
+    compressed: Array<{
+      trigger: string;
+      when: string;
+      do: string;
+      dont: string;
+      why: string;
+      template: string;
+    }>,
+    language = ''
+  ) {
     const lang = language || '';
     return compressed
-      .map((item: any) => {
-        const lines = [`### ${item.trigger}`];
-        lines.push(`- **When**: ${item.when}`);
-        lines.push(`- **Do**: ${item.do}`);
-        if (item.dont) {
-          const stripped = item.dont.replace(/^(Don't|Do not|Never)\s+/i, '');
-          lines.push(`- **Don't**: ${stripped}`);
+      .map(
+        (item: {
+          trigger: string;
+          when: string;
+          do: string;
+          dont: string;
+          why: string;
+          template: string;
+        }) => {
+          const lines = [`### ${item.trigger}`];
+          lines.push(`- **When**: ${item.when}`);
+          lines.push(`- **Do**: ${item.do}`);
+          if (item.dont) {
+            const stripped = item.dont.replace(/^(Don't|Do not|Never)\s+/i, '');
+            lines.push(`- **Don't**: ${stripped}`);
+          }
+          if (item.why) {
+            lines.push(`- **Why**: ${item.why}`);
+          }
+          if (item.template) {
+            lines.push('');
+            lines.push(`\`\`\`${lang}`);
+            lines.push(item.template);
+            lines.push('```');
+          }
+          return lines.join('\n');
         }
-        if (item.why) {
-          lines.push(`- **Why**: ${item.why}`);
-        }
-        if (item.template) {
-          lines.push('');
-          lines.push(`\`\`\`${lang}`);
-          lines.push(item.template);
-          lines.push('```');
-        }
-        return lines.join('\n');
-      })
+      )
       .join('\n\n');
   }
 
@@ -155,13 +176,14 @@ export class KnowledgeCompressor {
    * @param {Array<Object>} facts - KnowledgeEntry 数组 (kind='fact')
    * @returns {Array<{ title: string, summary: string }>}
    */
-  compressToFactLines(facts: any) {
+  compressToFactLines(facts: KnowledgeEntryProps[]) {
     return facts
-      .filter((e: any) => e.title)
-      .map((e: any) => {
-        const summary = e.description || e.content?.markdown || '';
+      .filter((e: KnowledgeEntryProps) => e.title)
+      .map((e: KnowledgeEntryProps) => {
+        const contentObj = e.content as { markdown?: string } | undefined;
+        const summary = e.description || contentObj?.markdown || '';
         const shortSummary = summary.length > 150 ? `${summary.slice(0, 147)}...` : summary;
-        return { title: e.title, summary: shortSummary };
+        return { title: e.title!, summary: shortSummary };
       });
   }
 
@@ -170,7 +192,7 @@ export class KnowledgeCompressor {
    * @param {Array<{ title: string, summary: string }>} factLines
    * @returns {string}
    */
-  formatFactLines(factLines: any) {
+  formatFactLines(factLines: Array<{ title: string; summary: string }>) {
     if (factLines.length === 0) {
       return '';
     }

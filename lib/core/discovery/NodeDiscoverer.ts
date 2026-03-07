@@ -428,7 +428,9 @@ export class NodeDiscoverer extends ProjectDiscoverer {
     }
 
     for (const t of this.#targets) {
-      const pkg = t.metadata?.packageJson;
+      const pkg = t.metadata?.packageJson as
+        | { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+        | undefined;
       if (!pkg) {
         continue;
       }

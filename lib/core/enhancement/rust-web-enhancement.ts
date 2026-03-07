@@ -9,7 +9,7 @@
  *   - Warp (filter 组合)
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class RustWebEnhancement extends EnhancementPack {
   get id() {
@@ -95,8 +95,8 @@ class RustWebEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: any[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
 
     // ── Handler functions (async fn with web extractor params) ──
     for (const m of astSummary.methods || []) {
@@ -197,7 +197,7 @@ class RustWebEnhancement extends EnhancementPack {
       // Derive-heavy DTOs used as Json<T>, Query<T>, Path<T>
       if (cls.derives && cls.derives.length >= 2) {
         const hasSerdeDerive = cls.derives.some(
-          (d: any) => d === 'Deserialize' || d === 'Serialize'
+          (d: string) => d === 'Deserialize' || d === 'Serialize'
         );
         if (hasSerdeDerive) {
           const nameLower = cls.name.toLowerCase();
@@ -243,7 +243,7 @@ class RustWebEnhancement extends EnhancementPack {
 
     // ── Web framework imports ──
     const webImports = (astSummary.imports || []).filter(
-      (imp: any) =>
+      (imp: string) =>
         imp.includes('actix_web') ||
         imp.includes('axum') ||
         imp.includes('rocket') ||

@@ -10,7 +10,7 @@ import * as PathFinder from './PathFinder.js';
 /**
  * 解析单行 import 语句
  */
-export function parseImportLine(headerStr: any) {
+export function parseImportLine(headerStr: string) {
   const s = String(headerStr || '').trim();
   const angle = s.match(/#import\s+<([^>]+)>/);
   if (angle) {
@@ -31,7 +31,7 @@ export function parseImportLine(headerStr: any) {
 /**
  * 解析单个 import 的相对路径
  */
-export async function resolveHeaderRelativePath(headerStr: any, targetRootDir: any) {
+export async function resolveHeaderRelativePath(headerStr: string, targetRootDir: string) {
   if (!targetRootDir) {
     return undefined;
   }
@@ -50,7 +50,10 @@ export async function resolveHeaderRelativePath(headerStr: any, targetRootDir: a
 /**
  * 从文件路径和 Package 信息推断模块名
  */
-export function determineModuleNameFromPath(filePath: any, packageInfo: any) {
+export function determineModuleNameFromPath(
+  filePath: string,
+  packageInfo: { path: string; targets?: string[]; name?: string }
+) {
   const relativePath = path.relative(packageInfo.path, filePath);
   const segments = relativePath.split(path.sep);
   for (let i = segments.length - 1; i >= 0; i--) {
@@ -67,7 +70,11 @@ export function determineModuleNameFromPath(filePath: any, packageInfo: any) {
  * @param {string} relativePath
  * @param {string} text
  */
-export async function resolveHeadersForText(projectRoot: any, relativePath: any, text: any) {
+export async function resolveHeadersForText(
+  projectRoot: string,
+  relativePath: string,
+  text: string
+) {
   const fullPath = path.resolve(projectRoot, (relativePath || '').trim());
   if (!relativePath || !fs.existsSync(fullPath)) {
     return { headers: [], headerPaths: [], moduleName: null };
@@ -79,7 +86,7 @@ export async function resolveHeadersForText(projectRoot: any, relativePath: any,
   const importRegex = /^(?:#import|import)\s+.*$/gm;
   let headers = (text.match(importRegex) || []).filter(Boolean);
   let headerPaths = targetRootDir
-    ? await Promise.all(headers.map((h: any) => resolveHeaderRelativePath(h, targetRootDir)))
+    ? await Promise.all(headers.map((h) => resolveHeaderRelativePath(h, targetRootDir)))
     : [];
 
   // 如果 .m/.mm 无 import，尝试推断同名 .h

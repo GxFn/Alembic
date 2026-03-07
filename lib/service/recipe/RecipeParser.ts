@@ -7,6 +7,33 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LanguageService } from '../../shared/LanguageService.js';
 
+interface CodeBlock {
+  language: string;
+  code: string;
+}
+
+export interface ParsedRecipe {
+  title: string;
+  summary: string;
+  description: string;
+  trigger: string;
+  category: string;
+  language: string;
+  code: string;
+  codeBlocks: CodeBlock[];
+  usageGuide: string;
+  headers: string[];
+  includeHeaders: boolean;
+  frontmatter: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface ExtractOpts {
+  projectRoot?: string;
+  language?: string;
+  relativePath?: string;
+}
+
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/;
 const _SNIPPET_HEADING_RE = /^##\s+(?:Snippet|Code|代码)/im;
 const USAGE_HEADING_RE = /^##\s+(?:Usage\s*Guide|用法|使用指南)/im;
@@ -17,7 +44,7 @@ export class RecipeParser {
    * 检查文本是否为完整 Recipe MD
    * 需包含: frontmatter + 代码块 + Usage Guide
    */
-  isCompleteRecipe(text: any) {
+  isCompleteRecipe(text: string) {
     if (!text) {
       return false;
     }
@@ -27,7 +54,7 @@ export class RecipeParser {
   /**
    * 检查是否为「仅介绍」Recipe（有 frontmatter 但无代码块）
    */
-  isIntroOnly(text: any) {
+  isIntroOnly(text: string) {
     if (!text) {
       return false;
     }
@@ -39,16 +66,16 @@ export class RecipeParser {
    * @param {string} text
    * @returns {object|null}
    */
-  parse(text: any) {
+  parse(text: string): ParsedRecipe | null {
     if (!text) {
       return null;
     }
 
-    const frontmatter: any = this.parseFrontmatter(text);
+    const frontmatter = this.parseFrontmatter(text) as Record<string, unknown>;
     const body = text.replace(FRONTMATTER_RE, '').trim();
 
     // 提取代码块
-    const codeBlocks: { language: any; code: any }[] = [];
+    const codeBlocks: CodeBlock[] = [];
     let match;
     const codeRe = /```(\w*)\n([\s\S]*?)```/g;
     while ((match = codeRe.exec(body)) !== null) {
@@ -58,7 +85,7 @@ export class RecipeParser {
     // 提取 Usage Guide
     const usageMatch = body.match(USAGE_HEADING_RE);
     let usageGuide = '';
-    if (usageMatch) {
+    if (usageMatch && usageMatch.index !== undefined) {
       const usageStart = usageMatch.index + usageMatch[0].length;
       const nextHeading = body.slice(usageStart).search(/^##\s+/m);
       usageGuide =
@@ -69,19 +96,19 @@ export class RecipeParser {
 
     // 提取标题
     const titleMatch = body.match(/^#\s+(.+)/m);
-    const title = frontmatter.title || (titleMatch ? titleMatch[1].trim() : '');
+    const title = (frontmatter.title as string) || (titleMatch ? titleMatch[1].trim() : '');
 
     // 提取 headers
     const headers = this.#extractHeaders(body);
 
     return {
       title,
-      summary: frontmatter.summary || frontmatter.description || '',
-      description: frontmatter.description || frontmatter.summary || '',
-      trigger: frontmatter.trigger || this.#generateTrigger(title),
-      category: frontmatter.category || 'general',
+      summary: (frontmatter.summary as string) || (frontmatter.description as string) || '',
+      description: (frontmatter.description as string) || (frontmatter.summary as string) || '',
+      trigger: (frontmatter.trigger as string) || this.#generateTrigger(title),
+      category: (frontmatter.category as string) || 'general',
       language:
-        frontmatter.language ||
+        (frontmatter.language as string) ||
         (codeBlocks[0]?.language !== 'text' ? codeBlocks[0]?.language : 'swift'),
       code: codeBlocks.map((b) => b.code).join('\n\n'),
       codeBlocks,
@@ -95,41 +122,41 @@ export class RecipeParser {
   /**
    * 从文本中解析多段 Recipe（按 `---` 分隔）
    */
-  parseAll(text: any) {
+  parseAll(text: string): ParsedRecipe[] {
     if (!text) {
       return [];
     }
-    const segments = text.split(/\n---\n/).filter((s: any) => s.trim().length > 0);
-    return segments.map((s: any) => this.parse(s)).filter(Boolean);
+    const segments = text.split(/\n---\n/).filter((s: string) => s.trim().length > 0);
+    return segments.map((s: string) => this.parse(s)).filter((r): r is ParsedRecipe => r !== null);
   }
 
   /**
    * 解析 frontmatter YAML
    */
-  parseFrontmatter(text: any) {
+  parseFrontmatter(text: string): Record<string, unknown> {
     const match = text.match(FRONTMATTER_RE);
     if (!match) {
       return {};
     }
 
-    const fm: Record<string, any> = {};
+    const fm: Record<string, unknown> = {};
     for (const line of match[1].split('\n')) {
       const colonIdx = line.indexOf(':');
       if (colonIdx > 0) {
         const key = line.slice(0, colonIdx).trim();
-        let value = line.slice(colonIdx + 1).trim();
-        if (value.startsWith('[') && value.endsWith(']')) {
+        let value: unknown = line.slice(colonIdx + 1).trim();
+        if (typeof value === 'string' && value.startsWith('[') && value.endsWith(']')) {
           value = value
             .slice(1, -1)
             .split(',')
-            .map((s: any) => s.trim().replace(/^['"]|['"]$/g, ''));
+            .map((s: string) => s.trim().replace(/^['"]|['"]$/g, ''));
         } else if (value === 'true') {
           value = true;
         } else if (value === 'false') {
           value = false;
-        } else if (/^\d+$/.test(value)) {
+        } else if (typeof value === 'string' && /^\d+$/.test(value)) {
           value = parseInt(value, 10);
-        } else {
+        } else if (typeof value === 'string') {
           value = value.replace(/^['"]|['"]$/g, '');
         }
         fm[key] = value;
@@ -141,9 +168,9 @@ export class RecipeParser {
   /**
    * 从内容提取 trigger
    */
-  getTrigger(text: any) {
-    const fm: any = this.parseFrontmatter(text);
-    return fm.trigger || '';
+  getTrigger(text: string) {
+    const fm = this.parseFrontmatter(text);
+    return (fm.trigger as string) || '';
   }
 
   /**
@@ -153,7 +180,7 @@ export class RecipeParser {
    * @param {string} [opts.projectRoot] 项目根目录
    * @returns {Promise<{ items: object[], isMarked: boolean }>}
    */
-  async extractFromPath(relativePath: any, opts: any = {}) {
+  async extractFromPath(relativePath: string, opts: ExtractOpts = {}) {
     const projectRoot = opts.projectRoot || process.cwd();
     const fullPath = path.isAbsolute(relativePath)
       ? relativePath
@@ -212,7 +239,7 @@ export class RecipeParser {
    * @param {string} [opts.relativePath]
    * @returns {Promise<object>}
    */
-  async parseFromText(text: any, opts: any = {}) {
+  async parseFromText(text: string, opts: ExtractOpts = {}) {
     if (!text || text.trim().length === 0) {
       throw new Error('文本内容为空');
     }
@@ -241,7 +268,7 @@ export class RecipeParser {
    * @param {string} [opts.language]
    * @returns {Promise<object>}
    */
-  async extractFromText(text: any, opts: any = {}) {
+  async extractFromText(text: string, opts: ExtractOpts = {}) {
     if (!text || text.trim().length === 0) {
       throw new Error('文本内容为空');
     }
@@ -257,7 +284,7 @@ export class RecipeParser {
     }
 
     // 提取代码块
-    const codeBlocks: { language: any; code: any }[] = [];
+    const codeBlocks: CodeBlock[] = [];
     const codeRe = /```(\w*)\n([\s\S]*?)```/g;
     let match;
     while ((match = codeRe.exec(text)) !== null) {
@@ -267,7 +294,7 @@ export class RecipeParser {
     const code = codeBlocks.length > 0 ? codeBlocks.map((b) => b.code).join('\n\n') : text.trim();
 
     // 简单标题推断
-    const titleLine = text.split('\n').find((l: any) => l.trim().startsWith('#'));
+    const titleLine = text.split('\n').find((l: string) => l.trim().startsWith('#'));
     const title = titleLine ? titleLine.replace(/^#+\s*/, '').trim() : 'Untitled Snippet';
 
     return {
@@ -286,8 +313,8 @@ export class RecipeParser {
     };
   }
 
-  #extractHeaders(body: any) {
-    const headers: any[] = [];
+  #extractHeaders(body: string) {
+    const headers: string[] = [];
     const re = /#import\s+[<"]([^>"]+)[>"]/g;
     let match;
     while ((match = re.exec(body)) !== null) {
@@ -296,7 +323,7 @@ export class RecipeParser {
     return headers;
   }
 
-  #generateTrigger(title: any) {
+  #generateTrigger(title: string) {
     if (!title) {
       return '';
     }

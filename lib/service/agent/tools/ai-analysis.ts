@@ -7,7 +7,7 @@
  * 注意: summarize_code / extract_recipes 已删除。
  * 代码摘要和 Recipe 提取由 Agent LLM 直接推理完成，不再需要专用工具。
  */
-
+import type { ToolHandlerContext } from './_shared.js';
 // ────────────────────────────────────────────────────────────
 // 9. enrich_candidate
 // ────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ export const enrichCandidate = {
     },
     required: ['candidateIds'],
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: Record<string, unknown>, ctx: ToolHandlerContext) => {
     if (!ctx.aiProvider) {
       return { error: 'AI provider not available' };
     }
@@ -34,7 +34,7 @@ export const enrichCandidate = {
     const { enrichCandidates: enrichFn } = await import(
       '../../../external/mcp/handlers/candidate.js'
     );
-    const result = await enrichFn(ctx, { candidateIds: params.candidateIds });
+    const result = await enrichFn(ctx, { candidateIds: params.candidateIds as string[] });
     return result?.data || result;
   },
 };
@@ -61,7 +61,7 @@ export const refineBootstrapCandidates = {
       dryRun: { type: 'boolean', description: '仅预览 AI 润色结果，不写入数据库' },
     },
   },
-  handler: async (params: any, ctx: any) => {
+  handler: async (params: Record<string, unknown>, ctx: ToolHandlerContext) => {
     if (!ctx.aiProvider) {
       return { error: 'AI provider not available' };
     }
@@ -70,9 +70,9 @@ export const refineBootstrapCandidates = {
       '../../../external/mcp/handlers/bootstrap-internal.js'
     );
     const result = await bootstrapRefine(ctx, {
-      candidateIds: params.candidateIds,
-      userPrompt: params.userPrompt,
-      dryRun: params.dryRun,
+      candidateIds: params.candidateIds as string[] | undefined,
+      userPrompt: params.userPrompt as string | undefined,
+      dryRun: params.dryRun as boolean | undefined,
     });
     return result?.data || result;
   },

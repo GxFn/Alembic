@@ -20,12 +20,19 @@ import Logger from '../../infrastructure/logging/Logger.js';
  *   - prime 支持会话恢复（幂等）
  */
 export class TaskGraphService {
-  auditLogger: any;
-  bridge: any;
-  idGen: any;
-  logger: any;
-  readyEngine: any;
-  repo: any;
+  auditLogger: {
+    log: (
+      taskId: string,
+      eventType: string,
+      oldValue: string | null,
+      newValue: string | null
+    ) => void;
+  } | null;
+  bridge: import('./TaskKnowledgeBridge.js').TaskKnowledgeBridge | null;
+  idGen: import('../../domain/task/TaskIdGenerator.js').TaskIdGenerator;
+  logger: ReturnType<typeof Logger.getInstance>;
+  readyEngine: import('./TaskReadyEngine.js').TaskReadyEngine;
+  repo: import('../../repository/task/TaskRepository.impl.js').TaskRepositoryImpl;
   /**
    * @param {import('../../repository/task/TaskRepository.impl.js').TaskRepositoryImpl} repository
    * @param {import('./TaskReadyEngine.js').TaskReadyEngine} readyEngine
@@ -34,11 +41,18 @@ export class TaskGraphService {
    * @param {import('../../domain/task/TaskIdGenerator.js').TaskIdGenerator} idGenerator
    */
   constructor(
-    repository: any,
-    readyEngine: any,
-    knowledgeBridge: any,
-    auditLogger: any,
-    idGenerator: any
+    repository: import('../../repository/task/TaskRepository.impl.js').TaskRepositoryImpl,
+    readyEngine: import('./TaskReadyEngine.js').TaskReadyEngine,
+    knowledgeBridge: import('./TaskKnowledgeBridge.js').TaskKnowledgeBridge | null,
+    auditLogger: {
+      log: (
+        taskId: string,
+        eventType: string,
+        oldValue: string | null,
+        newValue: string | null
+      ) => void;
+    } | null,
+    idGenerator: import('../../domain/task/TaskIdGenerator.js').TaskIdGenerator
   ) {
     this.repo = repository;
     this.readyEngine = readyEngine;
@@ -55,7 +69,15 @@ export class TaskGraphService {
    * @param {object} data - { title, description, design, acceptance, priority, taskType, parentId }
    * @returns {Promise<{ task: Task, isDuplicate: boolean }>}
    */
-  async create(data: any) {
+  async create(data: {
+    title?: string;
+    description?: string;
+    design?: string;
+    acceptance?: string;
+    priority?: number;
+    taskType?: string;
+    parentId?: string;
+  }) {
     const task = new Task(data);
     task.computeContentHash();
     task.validate();
@@ -76,16 +98,16 @@ export class TaskGraphService {
 
     // 事务：创建任务 + 子任务自动依赖
     const saved = this.repo.inTransaction(() => {
-      const created = this.repo.create(task);
+      const created = this.repo.create(task)!;
 
       if (data.parentId) {
-        this.repo.addDependency(created.id, data.parentId, DepType.PARENT_CHILD);
+        this.repo.addDependency(created.id!, data.parentId, DepType.PARENT_CHILD);
       }
 
       return created;
     });
 
-    this._logEvent(saved.id, 'created', null, saved.title);
+    this._logEvent(saved.id!, 'created', null, saved.title);
     return { task: saved, isDuplicate: false };
   }
 
@@ -97,7 +119,7 @@ export class TaskGraphService {
    * @param {Array<object>} subtasks - [{ title, description, priority, taskType, blockedByIndex }]
    * @returns {Promise<Task[]>}
    */
-  async decompose(epicId: any, subtasks: any) {
+  async decompose(epicId: string, subtasks: Array<Record<string, unknown>>) {
     const epic = this.repo.findById(epicId);
     if (!epic) {
       throw new Error(`Epic not found: ${epicId}`);
@@ -111,7 +133,7 @@ export class TaskGraphService {
     }
 
     const results = this.repo.inTransaction(() => {
-      const created: any[] = [];
+      const created: Task[] = [];
 
       for (let i = 0; i < subtasks.length; i++) {
         const sub = subtasks[i];
@@ -124,8 +146,8 @@ export class TaskGraphService {
         task.id = this.idGen.generateChild(epicId);
         task.parentId = epicId;
 
-        const saved = this.repo.create(task);
-        this.repo.addDependency(saved.id, epicId, DepType.PARENT_CHILD);
+        const saved = this.repo.create(task)!;
+        this.repo.addDependency(saved.id!, epicId, DepType.PARENT_CHILD);
         created.push(saved);
       }
 
@@ -143,14 +165,14 @@ export class TaskGraphService {
 
         for (const idx of indices) {
           if (typeof idx === 'number' && idx >= 0 && idx < created.length && idx !== i) {
-            this.repo.addDependency(created[i].id, created[idx].id, DepType.BLOCKS);
+            this.repo.addDependency(created[i].id!, created[idx].id!, DepType.BLOCKS);
           }
         }
       }
 
       // Epic 等待所有子任务完成
       for (const c of created) {
-        this.repo.addDependency(epicId, c.id, DepType.WAITS_FOR);
+        this.repo.addDependency(epicId, c.id!, DepType.WAITS_FOR);
       }
 
       return created;
@@ -168,7 +190,7 @@ export class TaskGraphService {
    * @param {string} [assignee='agent']
    * @returns {Promise<Task>}
    */
-  async claim(id: any, assignee = 'agent') {
+  async claim(id: string, assignee = 'agent') {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -194,7 +216,7 @@ export class TaskGraphService {
    * @param {string} [reason='Completed']
    * @returns {Promise<{ task: Task, newlyReady: string[] }>}
    */
-  async close(id: any, reason = 'Completed') {
+  async close(id: string, reason = 'Completed') {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -224,7 +246,7 @@ export class TaskGraphService {
    * @param {string} reason
    * @returns {Promise<Task>}
    */
-  async fail(id: any, reason: any) {
+  async fail(id: string, reason: string) {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -249,7 +271,7 @@ export class TaskGraphService {
    * @param {string} [reason='']
    * @returns {Promise<Task>}
    */
-  async defer(id: any, reason = '') {
+  async defer(id: string, reason = '') {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -273,7 +295,7 @@ export class TaskGraphService {
    * @param {string} note
    * @returns {Promise<Task>}
    */
-  async progress(id: any, note: any) {
+  async progress(id: string, note: string) {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -299,7 +321,7 @@ export class TaskGraphService {
    * @param {string} dependsOnId
    * @param {string} [depType='blocks']
    */
-  async addDependency(taskId: any, dependsOnId: any, depType = 'blocks') {
+  async addDependency(taskId: string, dependsOnId: string, depType = 'blocks') {
     if (taskId === dependsOnId) {
       throw new Error('Self-dependency is not allowed');
     }
@@ -326,7 +348,7 @@ export class TaskGraphService {
    * @param {object} [options] - { limit, withKnowledge }
    * @returns {Promise<Task[]>}
    */
-  async ready(options: any = {}) {
+  async ready(options: { limit?: number; withKnowledge?: boolean } = {}) {
     const tasks = this.readyEngine.getReadyWork(options);
 
     if (this.bridge && options.withKnowledge !== false) {
@@ -348,7 +370,7 @@ export class TaskGraphService {
    * @param {string} id
    * @returns {Promise<Task|null>}
    */
-  async show(id: any) {
+  async show(id: string) {
     return this.repo.findById(id);
   }
 
@@ -358,14 +380,14 @@ export class TaskGraphService {
    * @param {object} options - { limit }
    * @returns {Promise<Task[]>}
    */
-  async list(filters: any = {}, options = {}) {
+  async list(filters: Record<string, unknown> = {}, options = {}) {
     return this.repo.findAll(filters, options);
   }
 
   /**
    * 依赖树
    */
-  async depTree(taskId: any) {
+  async depTree(taskId: string) {
     return this.readyEngine.getDependencyTree(taskId);
   }
 
@@ -385,8 +407,10 @@ export class TaskGraphService {
    * @param {object} [options] - { withKnowledge }
    * @returns {Promise<{ inProgress: Task[], ready: Task[], stats: object }>}
    */
-  async prime(options: any = {}) {
-    const inProgress = this.repo.findAll({ status: 'in_progress' }, { limit: 10 });
+  async prime(options: { limit?: number; withKnowledge?: boolean } = {}) {
+    const inProgress = this.repo
+      .findAll({ status: 'in_progress' }, { limit: 10 })
+      .filter((t: Task | null): t is Task => t !== null);
     const readyTasks = await this.ready({
       limit: options.limit || 5,
       withKnowledge: options.withKnowledge !== false,
@@ -394,14 +418,16 @@ export class TaskGraphService {
     const statistics = await this.stats();
     // 按创建时间降序，确保超出 limit 时保留最新决策（C5）
     // 双重过滤 status+taskType，避免 pinned 语义过载（D1）
-    const pinnedDecisions = this.repo.findAll(
-      { status: 'pinned', taskType: 'decision' },
-      { limit: 50, orderBy: 'created_at DESC' }
-    );
+    const pinnedDecisions = this.repo
+      .findAll(
+        { status: 'pinned', taskType: 'decision' },
+        { limit: 50, orderBy: 'created_at DESC' }
+      )
+      .filter((t: Task | null): t is Task => t !== null);
 
-    const result: any = {
-      inProgress: inProgress.map((t: any) => t.toJSON()),
-      ready: readyTasks.map((t: any) => (t.toJSON ? t.toJSON() : t)),
+    const result: Record<string, unknown> = {
+      inProgress: inProgress.map((t: Task) => t.toJSON()),
+      ready: readyTasks.map((t: Task) => (t.toJSON ? t.toJSON() : t)),
       stats: statistics,
     };
 
@@ -409,8 +435,8 @@ export class TaskGraphService {
       // P2: Stale detection — 超过阈值的决策标记为 stale
       const staleThresholdSec = this._getDecisionStaleThreshold();
       const nowSec = Math.floor(Date.now() / 1000);
-      const activeDecisions: any[] = [];
-      const staleDecisions: any[] = [];
+      const activeDecisions: Task[] = [];
+      const staleDecisions: Task[] = [];
 
       for (const t of pinnedDecisions) {
         const isStale =
@@ -476,7 +502,19 @@ export class TaskGraphService {
    * @param {object} params - { title, description, rationale, tags, relatedTaskId }
    * @returns {Promise<{ task: Task, isDuplicate: boolean }>}
    */
-  async recordDecision({ title, description, rationale, tags, relatedTaskId }: any) {
+  async recordDecision({
+    title,
+    description,
+    rationale,
+    tags,
+    relatedTaskId,
+  }: {
+    title: string;
+    description: string;
+    rationale?: string;
+    tags?: string[];
+    relatedTaskId?: string;
+  }) {
     if (!title) {
       throw new Error('Decision title is required');
     }
@@ -517,18 +555,20 @@ export class TaskGraphService {
 
     // 单事务：创建 + 关联依赖
     const saved = this.repo.inTransaction(() => {
-      const created = this.repo.create(task);
+      const created = this.repo.create(task)!;
       if (relatedTaskId) {
         try {
-          this.repo.addDependency(created.id, relatedTaskId, 'related');
-        } catch (err: any) {
-          this.logger.debug('recordDecision: dependency add failed', { error: err.message });
+          this.repo.addDependency(created.id!, relatedTaskId, 'related');
+        } catch (err: unknown) {
+          this.logger.debug('recordDecision: dependency add failed', {
+            error: (err as Error).message,
+          });
         }
       }
       return created;
     });
 
-    this._logEvent(saved.id, 'decision_recorded', null, title);
+    this._logEvent(saved.id!, 'decision_recorded', null, title);
     return { task: saved, isDuplicate: false };
   }
 
@@ -537,7 +577,19 @@ export class TaskGraphService {
    * @param {object} params - { oldDecisionId, title, description, rationale, reason }
    * @returns {Promise<{ newDecision: Task, oldDecisionId: string }>}
    */
-  async reviseDecision({ oldDecisionId, title, description, rationale, reason }: any) {
+  async reviseDecision({
+    oldDecisionId,
+    title,
+    description,
+    rationale,
+    reason,
+  }: {
+    oldDecisionId: string;
+    title: string;
+    description: string;
+    rationale?: string;
+    reason?: string;
+  }) {
     // 事务前验证
     const oldDecision = this.repo.findById(oldDecisionId);
     if (!oldDecision) {
@@ -573,7 +625,7 @@ export class TaskGraphService {
 
     // 原子事务：创建新决策 + 关闭旧决策 + 建立 supersedes 链
     const newDecision = this.repo.inTransaction(() => {
-      const created = this.repo.create(newTask);
+      const created = this.repo.create(newTask)!;
 
       this.repo.update(oldDecisionId, {
         status: 'closed',
@@ -582,12 +634,12 @@ export class TaskGraphService {
         updatedAt: Math.floor(Date.now() / 1000),
       });
 
-      this.repo.addDependency(created.id, oldDecisionId, 'supersedes');
+      this.repo.addDependency(created.id!, oldDecisionId, 'supersedes');
       return created;
     });
 
     this._logEvent(oldDecisionId, 'superseded', 'pinned', `by ${newDecision.id}`);
-    this._logEvent(newDecision.id, 'supersedes', null, oldDecisionId);
+    this._logEvent(newDecision.id!, 'supersedes', null, oldDecisionId);
 
     return { newDecision, oldDecisionId };
   }
@@ -598,7 +650,7 @@ export class TaskGraphService {
    * @param {string} [reason='']
    * @returns {Promise<Task>}
    */
-  async unpinDecision(id: any, reason = '') {
+  async unpinDecision(id: string, reason = '') {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Decision not found: ${id}`);
@@ -649,9 +701,9 @@ export class TaskGraphService {
    * 查找因 closedTaskId 完成而新解除阻塞的任务
    * @private
    */
-  _checkNewlyUnblocked(closedTaskId: any) {
+  _checkNewlyUnblocked(closedTaskId: string) {
     const dependents = this.repo.getDependents(closedTaskId);
-    const newlyReady: any[] = [];
+    const newlyReady: string[] = [];
 
     for (const dep of dependents) {
       // 只关注阻塞型依赖
@@ -676,11 +728,11 @@ export class TaskGraphService {
   /**
    * @private
    */
-  _logEvent(taskId: any, eventType: any, oldValue: any, newValue: any) {
+  _logEvent(taskId: string, eventType: string, oldValue: string | null, newValue: string | null) {
     try {
-      this.repo.logEvent(taskId, eventType, oldValue, newValue);
-    } catch (err: any) {
-      this.logger.debug('TaskGraphService._logEvent error', { error: err.message });
+      this.repo.logEvent(taskId, eventType, oldValue as null, newValue as null);
+    } catch (err: unknown) {
+      this.logger.debug('TaskGraphService._logEvent error', { error: (err as Error).message });
     }
   }
 }

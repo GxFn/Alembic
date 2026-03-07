@@ -5,7 +5,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import { createProvider } from '../../external/ai/AiFactory.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
@@ -42,7 +42,7 @@ function getContainer() {
  */
 router.get(
   '/lang',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getContainer();
     res.json({ success: true, data: { lang: container.getLang() || 'zh' } });
   })
@@ -54,7 +54,7 @@ router.get(
  */
 router.post(
   '/lang',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { lang } = req.body;
     if (lang !== 'zh' && lang !== 'en') {
       throw new ValidationError('lang must be "zh" or "en"');
@@ -72,7 +72,7 @@ router.post(
  */
 router.get(
   '/providers',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     // API Key 环境变量映射（与 AiFactory.autoDetectProvider 保持一致）
     const KEY_ENVS = {
       google: 'ASD_GOOGLE_API_KEY',
@@ -105,9 +105,9 @@ router.get(
  */
 router.get(
   '/config',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
-    const p = container.singletons?.aiProvider;
+    const p = container.singletons?.aiProvider as { name?: string; model?: string } | undefined;
     res.json({
       success: true,
       data: {
@@ -124,7 +124,7 @@ router.get(
  */
 router.post(
   '/config',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { provider, model } = req.body;
 
     if (!provider || typeof provider !== 'string') {
@@ -138,20 +138,20 @@ router.post(
         provider: provider.toLowerCase(),
         model: model || undefined,
       });
-    } catch (error: any) {
-      throw new ValidationError(`Invalid provider: ${error.message}`);
+    } catch (error: unknown) {
+      throw new ValidationError(`Invalid provider: ${(error as Error).message}`);
     }
 
     // 同步到 DI 容器，使 SearchEngine / Agent / IndexingPipeline 等也使用新 provider
     try {
       const container = getServiceContainer();
-      container.reloadAiProvider(newProvider);
+      container.reloadAiProvider(newProvider as any);
       logger.info('AI provider synced to DI container', {
         provider: provider.toLowerCase(),
         model: newProvider.model,
       });
-    } catch (err: any) {
-      logger.debug('DI container 同步 AI provider 失败', { error: err.message });
+    } catch (err: unknown) {
+      logger.debug('DI container 同步 AI provider 失败', { error: (err as Error).message });
     }
 
     res.json({
@@ -171,7 +171,7 @@ router.post(
  */
 router.post(
   '/summarize',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { code, language } = req.body;
 
     if (!code) {
@@ -200,11 +200,11 @@ router.post(
  */
 router.post(
   '/translate',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { summary, usageGuide } = req.body;
 
     if (!summary && !usageGuide) {
-      return res.json({
+      return void res.json({
         success: true,
         data: { summaryEn: '', usageGuideEn: '' },
       });
@@ -218,7 +218,7 @@ router.post(
       if (result?.error) {
         // AI 不可用，降级返回原文
         logger.warn('AI translate tool returned error', { error: result.error });
-        return res.json({
+        return void res.json({
           success: true,
           data: { summaryEn: summary || '', usageGuideEn: usageGuide || '' },
           warning: result.error,
@@ -226,12 +226,14 @@ router.post(
       }
 
       res.json({ success: true, data: result });
-    } catch (err: any) {
-      logger.warn('AI translate failed, returning original text', { error: err.message });
+    } catch (err: unknown) {
+      logger.warn('AI translate failed, returning original text', {
+        error: (err as Error).message,
+      });
       res.json({
         success: true,
         data: { summaryEn: summary || '', usageGuideEn: usageGuide || '' },
-        warning: `Translation failed: ${err.message}`,
+        warning: `Translation failed: ${(err as Error).message}`,
       });
     }
   })
@@ -251,7 +253,7 @@ router.post(
  */
 router.post(
   '/chat',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { prompt, history = [], lang, conversationId } = req.body;
 
     if (!prompt) {
@@ -262,7 +264,7 @@ router.post(
     const factory = container.get('agentFactory');
 
     // ── 对话持久化: 从 ConversationStore 加载历史 ──
-    let convStore: any = null;
+    let convStore: ConversationStore | null = null;
     let effectiveHistory = history;
     let effectiveConvId = conversationId || null;
     try {
@@ -299,7 +301,7 @@ router.post(
 
     const runtime = factory.createChat({
       lang,
-      onProgress: (event: any) => {
+      onProgress: (event: Record<string, unknown>) => {
         // SSE 流式进度 (如果前端通过 SSE 建立了连接)
         try {
           const sessionId = req.body.sseSessionId;
@@ -339,7 +341,9 @@ router.post(
     try {
       const tokenStore = container.get('tokenUsageStore');
       if (tokenStore && result.tokenUsage) {
-        const aiProvider = container.singletons?.aiProvider;
+        const aiProvider = container.singletons?.aiProvider as
+          | { name?: string; model?: string }
+          | undefined;
         tokenStore.record({
           source: 'user',
           dimension: null,
@@ -383,7 +387,7 @@ router.post(
  */
 router.post(
   '/agent/tool',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { tool, params = {} } = req.body;
 
     if (!tool) {
@@ -417,7 +421,7 @@ const DAG_TASK_HANDLERS = {
 
 router.post(
   '/agent/task',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { task, params = {} } = req.body;
 
     if (!task) {
@@ -428,17 +432,19 @@ router.post(
     const factory = container.get('agentFactory');
 
     // 优先尝试 DAG 任务
-    const dagHandler = (DAG_TASK_HANDLERS as Record<string, any>)[task];
+    const dagHandler = (
+      DAG_TASK_HANDLERS as Record<string, (...args: unknown[]) => Promise<unknown>>
+    )[task];
     if (dagHandler) {
       const aiProvider = container.singletons?.aiProvider;
       const taskContext = {
-        invokeAgent: (name: any, p: any) => factory.invokeAgent(name, p),
+        invokeAgent: (name: string, p: Record<string, unknown>) => factory.invokeAgent(name, p),
         aiProvider,
         container,
         logger,
       };
       const result = await dagHandler(taskContext, params);
-      return res.json({ success: true, data: result });
+      return void res.json({ success: true, data: result });
     }
 
     // 回退到 Agent 工具执行
@@ -454,7 +460,7 @@ router.post(
  */
 router.get(
   '/agent/capabilities',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getContainer();
     const toolRegistry = container.get('toolRegistry');
     const tools = toolRegistry.getToolSchemas();
@@ -488,11 +494,11 @@ router.get(
  */
 router.post(
   '/format-usage-guide',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { text } = req.body;
 
     if (!text) {
-      return res.json({ success: true, data: { formatted: '' } });
+      return void res.json({ success: true, data: { formatted: '' } });
     }
 
     // 简单文本格式化处理
@@ -514,7 +520,9 @@ router.post(
 function _getProjectEnvPath() {
   const container = getServiceContainer();
   const projectRoot =
-    container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
+    (container.singletons?._projectRoot as string | undefined) ||
+    process.env.ASD_PROJECT_DIR ||
+    process.cwd();
   return join(projectRoot, '.env');
 }
 
@@ -534,13 +542,13 @@ const LLM_ENV_KEYS = [
  * 返回 { vars, hasEnvFile, llmReady }
  *   llmReady: provider + 至少一个对应 API Key 已配置
  */
-function parseLlmEnv(envPath: any) {
+function parseLlmEnv(envPath: string) {
   if (!existsSync(envPath)) {
     return { vars: {}, hasEnvFile: false, llmReady: false };
   }
 
   const raw = readFileSync(envPath, 'utf8');
-  const vars: any = {};
+  const vars: Record<string, string> = {};
 
   for (const line of raw.split('\n')) {
     const trimmed = line.trim();
@@ -584,7 +592,7 @@ function parseLlmEnv(envPath: any) {
  */
 router.get(
   '/env-config',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const envPath = _getProjectEnvPath();
     const result = parseLlmEnv(envPath);
     res.json({ success: true, data: result });
@@ -599,7 +607,7 @@ router.get(
  */
 router.post(
   '/env-config',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { provider, model, apiKey, proxy } = req.body;
     if (!provider || typeof provider !== 'string') {
       throw new ValidationError('provider is required');
@@ -609,7 +617,7 @@ router.post(
     let content = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
 
     // 构建 key-value 更新列表
-    const updates: any = {
+    const updates: Record<string, string> = {
       ASD_AI_PROVIDER: provider,
     };
     if (model) {
@@ -667,14 +675,14 @@ router.post(
         model: model || undefined,
       });
       const container = getServiceContainer();
-      container.reloadAiProvider(newProvider);
+      container.reloadAiProvider(newProvider as any);
       logger.info('AI provider hot-swapped after env update', {
         provider,
         model: newProvider.model,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.debug('Hot-swap AI provider failed (will take effect on restart)', {
-        error: err.message,
+        error: (err as Error).message,
       });
     }
 
@@ -709,7 +717,7 @@ router.post(
  */
 router.post(
   '/chat/stream',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { prompt, history = [], lang } = req.body;
     if (!prompt) {
       throw new ValidationError('prompt is required');
@@ -736,7 +744,7 @@ router.post(
     // 创建 Runtime — 挂载 onProgress 回调映射到 SSE 事件
     const runtime = factory.createChat({
       lang,
-      onProgress: (event: any) => {
+      onProgress: (event: Record<string, unknown>) => {
         // 将 AgentRuntime 内部事件映射到前端 SSE 协议
         switch (event.type) {
           case 'thinking':
@@ -769,7 +777,7 @@ router.post(
     // 后台执行 AgentRuntime
     runtime
       .execute(message)
-      .then((result: any) => {
+      .then((result: Record<string, unknown>) => {
         // 发送最终文本
         if (result.reply) {
           const textId = `text_${Date.now()}`;
@@ -787,9 +795,12 @@ router.post(
           events: session.buffer.length,
         });
       })
-      .catch((err: any) => {
-        logger.warn('SSE session error', { sessionId: session.sessionId, error: err.message });
-        (session as any).error(err.message);
+      .catch((err: unknown) => {
+        logger.warn('SSE session error', {
+          sessionId: session.sessionId,
+          error: (err as Error).message,
+        });
+        (session as any).error((err as Error).message);
       });
   })
 );
@@ -825,7 +836,7 @@ router.get('/chat/events/:sessionId', (req, res) => {
   }
 
   /** 写入一个 SSE data 行 */
-  function writeEvent(event: any) {
+  function writeEvent(event: Record<string, unknown>) {
     if (res.writableEnded) {
       return;
     }
@@ -849,7 +860,7 @@ router.get('/chat/events/:sessionId', (req, res) => {
   }
 
   // 3) 订阅实时事件
-  const unsubscribe = session.on((event: any) => {
+  const unsubscribe = session.on((event: Record<string, unknown>) => {
     writeEvent(event);
     if (event.type === 'stream:done' || event.type === 'stream:error') {
       unsubscribe();
@@ -880,13 +891,13 @@ router.get('/chat/events/:sessionId', (req, res) => {
  */
 router.get(
   '/token-usage',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
     let tokenStore;
     try {
       tokenStore = container.get('tokenUsageStore');
     } catch {
-      return res.json({
+      return void res.json({
         success: true,
         data: {
           daily: [],

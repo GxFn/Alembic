@@ -11,12 +11,14 @@ export class ContextCollector {
    * @param {object} rawContext 原始上下文
    * @returns {object} 规范化的上下文
    */
-  collect(rawContext: any = {}) {
+  collect(rawContext: Record<string, unknown> = {}) {
     return {
       ...rawContext,
       filePath: rawContext.filePath || null,
       content: rawContext.content || null,
-      language: rawContext.language || this.#detectLanguage(rawContext.filePath),
+      language:
+        rawContext.language ||
+        this.#detectLanguage(rawContext.filePath as string | null | undefined),
       projectRoot: rawContext.projectRoot || null,
       user: rawContext.user || 'default',
       timestamp: new Date().toISOString(),
@@ -27,7 +29,7 @@ export class ContextCollector {
     };
   }
 
-  #detectLanguage(filePath: any) {
+  #detectLanguage(filePath: string | null | undefined) {
     if (!filePath) {
       return null;
     }

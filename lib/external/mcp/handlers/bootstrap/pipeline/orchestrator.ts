@@ -26,6 +26,8 @@ import { PersistentMemory } from '../../../../../service/agent/memory/Persistent
 import { SessionStore } from '../../../../../service/agent/memory/SessionStore.js';
 import { PRESETS } from '../../../../../service/agent/presets.js';
 import { BootstrapEventEmitter } from '../../../../../shared/BootstrapEventEmitter.js';
+import type { IncrementalPlan, McpContext } from '../../types.js';
+import type { BaseDimension } from '../base-dimensions.js';
 import { getDimensionFocusKeywords } from '../shared/dimension-sop.js';
 import { generateSkill } from '../shared/skill-generator.js';
 import { clearCheckpoints, loadCheckpoints, saveDimensionCheckpoint } from './checkpoint.js';
@@ -41,6 +43,183 @@ import { TierScheduler } from './tier-scheduler.js';
 
 const logger = Logger.getInstance();
 
+// ── TypeScript Interfaces ────────────────────────────────────
+
+/** Extended DI container shape for orchestrator (supports buildProjectGraph etc.) */
+interface OrchestratorContainer {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DI container: callers know the service type
+  get(name: string): any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic DI container shape
+  [key: string]: any;
+}
+
+/** Orchestrator context (extended McpContext) */
+interface OrchestratorContext {
+  container: OrchestratorContainer;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic ctx shape from various callers
+  [key: string]: any;
+}
+
+/** ProjectGraph minimal shape */
+interface ProjectGraphLike {
+  getOverview(): { totalClasses: number; totalProtocols: number; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/** Fill context passed from bootstrapKnowledge to fillDimensionsV3 */
+interface FillContextV3 {
+  ctx: OrchestratorContext;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic shape from bootstrapKnowledge; properties vary per caller
+  [key: string]: any;
+}
+
+/** Bootstrap file entry */
+interface BootstrapFileEntry {
+  name: string;
+  path: string;
+  relativePath: string;
+  content: string;
+  targetName?: string;
+}
+
+/** Task manager minimal shape */
+interface TaskManagerLike {
+  isSessionValid(sessionId: string): boolean;
+  emitProgress?(event: string, data: Record<string, unknown>): void;
+  [key: string]: unknown;
+}
+
+/** Agent factory minimal shape */
+interface AgentFactoryLike {
+  createRuntime(preset: string, overrides?: Record<string, unknown>): AgentRuntimeLike;
+  createContextWindow(opts?: { isSystem?: boolean }): unknown;
+  [key: string]: unknown;
+}
+
+/** Agent runtime minimal shape */
+interface AgentRuntimeLike {
+  execute(message: unknown, opts?: Record<string, unknown>): Promise<AgentResultLike>;
+  setFileCache(files: unknown[] | null): void;
+  aiProvider: { name?: string; model?: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/** Agent execution result */
+interface AgentResultLike {
+  reply?: string;
+  toolCalls?: ToolCallRecord[];
+  tokenUsage?: { input: number; output: number };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- phase results have dynamic shapes from agent execution
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- phase results have dynamic shapes from agent execution
+  phases?: Record<string, { reply?: string; artifact?: Record<string, any>; [key: string]: any }>;
+  degraded?: boolean;
+  [key: string]: unknown;
+}
+
+/** Tool call record from runtime */
+interface ToolCallRecord {
+  tool?: string;
+  name?: string;
+  args?: Record<string, unknown>;
+  params?: Record<string, unknown>;
+  result?: unknown;
+  [key: string]: unknown;
+}
+
+/** Dimension execution statistics */
+interface DimensionStat {
+  candidateCount: number;
+  rejectedCount?: number;
+  analysisChars?: number;
+  referencedFiles?: number;
+  referencedFilesList?: string[];
+  durationMs: number;
+  toolCallCount?: number;
+  tokenUsage?: { input: number; output: number };
+  skipped?: boolean;
+  restoredFromCheckpoint?: boolean;
+  restoredFromIncremental?: boolean;
+  analysisText?: string;
+  error?: string;
+  [key: string]: unknown;
+}
+
+/** Candidate results accumulator */
+interface CandidateResults {
+  created: number;
+  failed: number;
+  errors: Array<{ dimId: string; error: string }>;
+}
+
+/** Dimension candidate data (analysis + producer) */
+interface DimensionCandidateData {
+  analysisReport: {
+    dimensionId?: string;
+    analysisText: string;
+    findings: unknown[];
+    referencedFiles: string[];
+    evidenceMap?: unknown;
+    negativeSignals?: unknown[];
+    metadata?: Record<string, unknown>;
+  };
+  producerResult: {
+    candidateCount: number;
+    rejectedCount?: number;
+    toolCalls: ToolCallRecord[];
+    reply?: string;
+    tokenUsage?: { input: number; output: number };
+  };
+}
+
+/** Skill generation results */
+interface SkillResults {
+  created: number;
+  failed: number;
+  skills: string[];
+  errors: Array<{ dimId: string; error: string }>;
+}
+
+/** Bootstrap report structure */
+interface BootstrapReport {
+  version: string;
+  timestamp: string;
+  project: { name: string; files: number; lang: string };
+  duration: { totalMs: number; totalSec: number };
+  dimensions: Record<string, Record<string, unknown>>;
+  totals: Record<string, unknown>;
+  checkpoints: { restored: string[] };
+  incremental: Record<string, unknown> | null;
+  semanticMemory: Record<string, unknown> | null;
+  codeEntityGraph?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** Consolidation result from EpisodicConsolidator */
+interface ConsolidationResult {
+  total: { added: number; updated: number; merged: number; skipped: number };
+  durationMs: number;
+  [key: string]: unknown;
+}
+
+/** Dimension finding entry */
+interface DimensionFinding {
+  finding?: string;
+  importance?: number;
+  [key: string]: unknown;
+}
+
+/** Wiki generation result */
+interface WikiResult {
+  success: boolean;
+  filesGenerated?: number;
+  aiComposed?: number;
+  syncedDocs?: number;
+  dedup?: { removed?: unknown[] };
+  duration?: number;
+  error?: string;
+  [key: string]: unknown;
+}
+
 // ──────────────────────────────────────────────────────────────────
 // fillDimensionsV3 — v3.0 管线入口
 // ──────────────────────────────────────────────────────────────────
@@ -50,7 +229,7 @@ const logger = Logger.getInstance();
  *
  * @param {object} fillContext 由 bootstrapKnowledge 构建的上下文
  */
-export async function fillDimensionsV3(fillContext: any) {
+export async function fillDimensionsV3(fillContext: FillContextV3) {
   const {
     ctx,
     dimensions,
@@ -76,7 +255,7 @@ export async function fillDimensionsV3(fillContext: any) {
   // ═══════════════════════════════════════════════════════════
   // Step 0: AI 可用性检查 (v7.2: 使用 AgentFactory)
   // ═══════════════════════════════════════════════════════════
-  let agentFactory: any = null;
+  let agentFactory: AgentFactoryLike | null = null;
   try {
     agentFactory = ctx.container.get('agentFactory');
     // 检查 AI Provider 是否可用
@@ -97,7 +276,10 @@ export async function fillDimensionsV3(fillContext: any) {
     // ── 规则化降级: 从 Phase 0-4 数据中提取基础知识 ──
     try {
       fillContext.allFiles = allFiles;
-      const fallbackResult = await runNoAiFallback(fillContext);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- FillContextV3 is structurally compatible with FillContext at runtime
+      const fallbackResult = await runNoAiFallback(
+        fillContext as unknown as Parameters<typeof runNoAiFallback>[0]
+      );
 
       // ── 持久化候选到数据库 (KnowledgeService.create) ──
       let persistedCount = 0;
@@ -127,18 +309,18 @@ export async function fillDimensionsV3(fillContext: any) {
                 { userId: 'bootstrap-fallback' }
               );
               persistedCount++;
-            } catch (entryErr: any) {
+            } catch (entryErr: unknown) {
               logger.warn(
-                `[Bootstrap-fallback] Candidate "${candidate.title}" persist failed: ${entryErr.message}`
+                `[Bootstrap-fallback] Candidate "${candidate.title}" persist failed: ${entryErr instanceof Error ? entryErr.message : String(entryErr)}`
               );
             }
           }
           logger.info(
             `[Bootstrap-fallback] ${persistedCount}/${fallbackResult.candidates.length} candidates persisted to DB`
           );
-        } catch (svcErr: any) {
+        } catch (svcErr: unknown) {
           logger.warn(
-            `[Bootstrap-fallback] KnowledgeService not available — candidates not persisted: ${svcErr.message}`
+            `[Bootstrap-fallback] KnowledgeService not available — candidates not persisted: ${svcErr instanceof Error ? svcErr.message : String(svcErr)}`
           );
         }
       }
@@ -162,12 +344,16 @@ export async function fillDimensionsV3(fillContext: any) {
                 skillsCreated++;
                 logger.info(`[Bootstrap-fallback] Skill "${sk.name}" created`);
               }
-            } catch (skErr: any) {
-              logger.warn(`[Bootstrap-fallback] Skill "${sk.name}" write failed: ${skErr.message}`);
+            } catch (skErr: unknown) {
+              logger.warn(
+                `[Bootstrap-fallback] Skill "${sk.name}" write failed: ${skErr instanceof Error ? skErr.message : String(skErr)}`
+              );
             }
           }
-        } catch (importErr: any) {
-          logger.warn(`[Bootstrap-fallback] Skill module import failed: ${importErr.message}`);
+        } catch (importErr: unknown) {
+          logger.warn(
+            `[Bootstrap-fallback] Skill module import failed: ${importErr instanceof Error ? importErr.message : String(importErr)}`
+          );
         }
       }
 
@@ -223,9 +409,9 @@ export async function fillDimensionsV3(fillContext: any) {
                 `F: ${deliveryResult.channelF?.filesWritten || 0}`
             );
           }
-        } catch (deliveryErr: any) {
+        } catch (deliveryErr: unknown) {
           logger.warn(
-            `[Bootstrap-fallback] CursorDelivery failed (non-blocking): ${deliveryErr.message}`
+            `[Bootstrap-fallback] CursorDelivery failed (non-blocking): ${deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr)}`
           );
         }
       }
@@ -234,8 +420,10 @@ export async function fillDimensionsV3(fillContext: any) {
         `[Bootstrap-fallback] Completed: ${persistedCount} candidates persisted, ` +
           `${skillsCreated} skills written, ${fallbackResult.report.errors.length} errors`
       );
-    } catch (fallbackErr: any) {
-      logger.error(`[Bootstrap-fallback] Fallback failed: ${fallbackErr.message}`);
+    } catch (fallbackErr: unknown) {
+      logger.error(
+        `[Bootstrap-fallback] Fallback failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`
+      );
       // 即使降级也失败，仍标记所有维度为 skipped
       for (const dim of dimensions) {
         emitter.emitDimensionComplete(dim.id, { type: 'skipped', reason: 'fallback-failed' });
@@ -247,7 +435,7 @@ export async function fillDimensionsV3(fillContext: any) {
   // ═══════════════════════════════════════════════════════════
   // Step 0.5: 构建 ProjectGraph
   // ═══════════════════════════════════════════════════════════
-  let projectGraph: any = null;
+  let projectGraph: ProjectGraphLike | null = null;
   try {
     projectGraph = await ctx.container.buildProjectGraph(projectRoot, {
       maxFiles: 500,
@@ -256,11 +444,13 @@ export async function fillDimensionsV3(fillContext: any) {
     if (projectGraph) {
       const overview = projectGraph.getOverview();
       logger.info(
-        `[Insight-v3] ProjectGraph: ${overview.totalClasses} classes, ${overview.totalProtocols} protocols (${overview.buildTimeMs}ms)`
+        `[Insight-v3] ProjectGraph: ${overview.totalClasses} classes, ${overview.totalProtocols} protocols (${(overview as Record<string, unknown>).buildTimeMs}ms)`
       );
     }
-  } catch (e: any) {
-    logger.warn(`[Insight-v3] ProjectGraph build failed: ${e.message}`);
+  } catch (e: unknown) {
+    logger.warn(
+      `[Insight-v3] ProjectGraph build failed: ${e instanceof Error ? e.message : String(e)}`
+    );
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -294,7 +484,7 @@ export async function fillDimensionsV3(fillContext: any) {
 
   // v4.0: SessionStore — 替代 EpisodicMemory + ToolResultCache
   // v5.0: 增量模式下从快照恢复已完成维度的记忆
-  let sessionStore: any;
+  let sessionStore: SessionStore;
   if (isIncremental && incrementalPlan.restoredEpisodic) {
     sessionStore = incrementalPlan.restoredEpisodic;
     const restoredDims = sessionStore.getCompletedDimensions();
@@ -306,7 +496,10 @@ export async function fillDimensionsV3(fillContext: any) {
     for (const dimId of restoredDims) {
       const report = sessionStore.getDimensionReport(dimId);
       if (report?.digest) {
-        dimContext.addDimensionDigest(dimId, report.digest);
+        dimContext.addDimensionDigest(
+          dimId,
+          report.digest as Parameters<typeof dimContext.addDimensionDigest>[1]
+        );
       }
     }
   } else {
@@ -320,7 +513,7 @@ export async function fillDimensionsV3(fillContext: any) {
 
   // v4.1: PersistentMemory — 项目级永久语义记忆 (Tier 3)
   // 加载历史 bootstrap 记忆 → 注入 Analyst promptBuilder
-  let semanticMemory: any = null;
+  let semanticMemory: PersistentMemory | null = null;
   try {
     const db = ctx.container.get('database');
     if (db) {
@@ -333,12 +526,15 @@ export async function fillDimensionsV3(fillContext: any) {
         );
       }
     }
-  } catch (smErr: any) {
-    logger.warn(`[Insight-v3] SemanticMemory init failed (non-blocking): ${smErr.message}`);
+  } catch (smErr: unknown) {
+    logger.warn(
+      `[Insight-v3] SemanticMemory init failed (non-blocking): ${smErr instanceof Error ? smErr.message : String(smErr)}`
+    );
   }
 
   // Phase E: CodeEntityGraph — 代码实体关系图谱 (供 Analyst prompt 注入)
-  let codeEntityGraphInst: any = null;
+  let codeEntityGraphInst: { getTopology(): { totalEntities: number; totalEdges: number } } | null =
+    null;
   try {
     const { CodeEntityGraph } = await import('../../../../../service/knowledge/CodeEntityGraph.js');
     const db = ctx.container.get('database');
@@ -351,8 +547,10 @@ export async function fillDimensionsV3(fillContext: any) {
         );
       }
     }
-  } catch (cegErr: any) {
-    logger.warn(`[Insight-v3] CodeEntityGraph init failed (non-blocking): ${cegErr.message}`);
+  } catch (cegErr: unknown) {
+    logger.warn(
+      `[Insight-v3] CodeEntityGraph init failed (non-blocking): ${cegErr instanceof Error ? cegErr.message : String(cegErr)}`
+    );
   }
 
   // v5.0: MemoryCoordinator — 统一记忆协调器 (会话级)
@@ -370,10 +568,10 @@ export async function fillDimensionsV3(fillContext: any) {
   const scheduler = new TierScheduler();
 
   // 包含所有维度（含 Enhancement Pack 动态追加的维度）
-  const activeDimIds = dimensions.map((d: any) => d.id);
+  const activeDimIds = dimensions.map((d: BaseDimension) => d.id);
 
   // v5.0: 增量模式 — 仅执行受影响维度, 跳过未变更维度
-  const incrementalSkippedDims: any[] = [];
+  const incrementalSkippedDims: string[] = [];
   if (isIncremental) {
     const affected = new Set(incrementalPlan.affectedDimensions);
     for (const dimId of activeDimIds) {
@@ -400,7 +598,7 @@ export async function fillDimensionsV3(fillContext: any) {
 
   // ── P3: 断点续传 — 加载有效 checkpoints ──
   const completedCheckpoints = await loadCheckpoints(projectRoot);
-  const skippedDims: any[] = [];
+  const skippedDims: string[] = [];
   for (const [dimId, checkpoint] of completedCheckpoints) {
     if (activeDimIds.includes(dimId)) {
       // 恢复 DimensionContext 中的 digest
@@ -418,18 +616,18 @@ export async function fillDimensionsV3(fillContext: any) {
     }
   }
 
-  const candidateResults = { created: 0, failed: 0, errors: [] as any[] };
-  const dimensionCandidates: Record<string, any> = {};
-  const dimensionStats: Record<string, any> = {}; // P4.2: 维度级统计
+  const candidateResults: CandidateResults = { created: 0, failed: 0, errors: [] };
+  const dimensionCandidates: Record<string, DimensionCandidateData> = {};
+  const dimensionStats: Record<string, DimensionStat> = {}; // P4.2: 维度级统计
 
   // ── 跨维度去重集合 (实例级持久化，等效旧 ChatAgent.#globalSubmittedTitles/Patterns) ──
-  const globalSubmittedTitles = new Set();
-  const globalSubmittedPatterns = new Set();
+  const globalSubmittedTitles = new Set<string>();
+  const globalSubmittedPatterns = new Set<string>();
 
   /**
    * 执行单个维度: Analyst → Gate → Producer
    */
-  async function executeDimension(dimId: any) {
+  async function executeDimension(dimId: string) {
     // v5.0: 增量模式 — 跳过未受影响的维度 (使用历史 EpisodicMemory)
     if (incrementalSkippedDims.includes(dimId)) {
       const report = sessionStore.getDimensionReport(dimId);
@@ -475,6 +673,7 @@ export async function fillDimensionsV3(fillContext: any) {
           analysisReport: {
             analysisText: cp.analysisText,
             referencedFiles: restoredFiles,
+            findings: [],
             metadata: {},
           },
           producerResult: { candidateCount: cp.candidateCount || 0, toolCalls: [] },
@@ -493,7 +692,7 @@ export async function fillDimensionsV3(fillContext: any) {
       return cpResult;
     }
 
-    const dim = dimensions.find((d: any) => d.id === dimId);
+    const dim = dimensions.find((d: BaseDimension) => d.id === dimId);
     if (!dim) {
       return { candidateCount: 0, error: 'dimension not found' };
     }
@@ -569,8 +768,10 @@ export async function fillDimensionsV3(fillContext: any) {
         // 候选维度: Analyze→QualityGate→Produce→RejectionGate
         const produceStage = {
           ...presetStages[2],
-          promptBuilder: (ctx: any) => {
-            (memoryCoordinator as any).allocateBudget('producer');
+          promptBuilder: (ctx: Record<string, unknown>) => {
+            (memoryCoordinator as { allocateBudget(role: string): void }).allocateBudget(
+              'producer'
+            );
             return presetStages[2].promptBuilder?.(ctx);
           },
         };
@@ -586,7 +787,7 @@ export async function fillDimensionsV3(fillContext: any) {
       }
 
       // ── 创建 Runtime (使用增强 PipelineStrategy) ──
-      const runtime = agentFactory.createRuntime('insight', {
+      const runtime = agentFactory!.createRuntime('insight', {
         lang: primaryLang || projectInfo.lang || null,
         strategy: {
           type: 'pipeline',
@@ -615,7 +816,7 @@ export async function fillDimensionsV3(fillContext: any) {
         activeContext: memoryCoordinator.getActiveContext(analystScopeId),
         outputType: dimConfig.outputType || 'analysis',
         // ── 引擎增强参数 (PipelineStrategy → reactLoop 透传) ──
-        contextWindow: agentFactory.createContextWindow({ isSystem: true }),
+        contextWindow: agentFactory!.createContextWindow({ isSystem: true }),
         // B1 fix: 分析阶段使用 analyst 策略 (SCAN→EXPLORE→VERIFY→SUMMARIZE)
         // 而非 bootstrap (EXPLORE→PRODUCE→SUMMARIZE)，避免 PRODUCE nudge 浪费轮次
         // B3 fix: 透传完整 ANALYST_BUDGET (searchBudget/maxSubmits/softSubmitLimit/idleRoundsToExit)
@@ -644,7 +845,7 @@ export async function fillDimensionsV3(fillContext: any) {
       const outerTimeoutMs = 600_000;
       const runResult = await Promise.race([
         runtime.execute(message, { strategyContext }),
-        new Promise((_, reject) =>
+        new Promise<never>((_, reject) =>
           setTimeout(
             () => reject(new Error(`Bootstrap runtime timeout for "${dimId}"`)),
             outerTimeoutMs
@@ -673,9 +874,9 @@ export async function fillDimensionsV3(fillContext: any) {
           ? artifact.referencedFiles
           : [
               ...new Set(
-                runtimeToolCalls.flatMap((tc: any) => {
+                runtimeToolCalls.flatMap((tc: ToolCallRecord) => {
                   const a = tc?.args || tc?.params || {};
-                  const files: any | string[] = [];
+                  const files: string[] = [];
                   if (typeof a.filePath === 'string' && a.filePath.trim()) {
                     files.push(a.filePath.trim());
                   }
@@ -706,11 +907,11 @@ export async function fillDimensionsV3(fillContext: any) {
       };
 
       // ── Producer 结果统计 ──
-      const submitCalls = runtimeToolCalls.filter((tc: any) => {
+      const submitCalls = runtimeToolCalls.filter((tc: ToolCallRecord) => {
         const tool = tc?.tool || tc?.name;
         return tool === 'submit_knowledge' || tool === 'submit_with_check';
       });
-      const successCount = submitCalls.filter((tc: any) => {
+      const successCount = submitCalls.filter((tc: ToolCallRecord) => {
         const res = tc?.result;
         if (!res) {
           return true;
@@ -718,7 +919,10 @@ export async function fillDimensionsV3(fillContext: any) {
         if (typeof res === 'string') {
           return !res.includes('rejected') && !res.includes('error');
         }
-        return res.status !== 'rejected' && res.status !== 'error';
+        return (
+          (res as Record<string, unknown>).status !== 'rejected' &&
+          (res as Record<string, unknown>).status !== 'error'
+        );
       }).length;
       const rejectedCount = submitCalls.length - successCount;
 
@@ -792,7 +996,7 @@ export async function fillDimensionsV3(fillContext: any) {
             '',
             '### 关键发现',
             '',
-            ...findings.slice(0, 10).map((f: any, i: any) => {
+            ...findings.slice(0, 10).map((f: DimensionFinding | string, i: number) => {
               const text = typeof f === 'string' ? f : f.finding;
               return `${i + 1}. ${text}`;
             }),
@@ -817,12 +1021,18 @@ export async function fillDimensionsV3(fillContext: any) {
       const digest = parseDimensionDigest(producerResult.reply) || {
         summary: `v3 分析: ${analysisReport.analysisText.substring(0, 200)}...`,
         candidateCount: producerResult.candidateCount,
-        keyFindings: [] as any[],
+        keyFindings: [] as string[],
         crossRefs: {},
-        gaps: [] as any[],
+        gaps: [] as string[],
       };
-      dimContext.addDimensionDigest(dimId, digest);
-      sessionStore.addDimensionDigest(dimId, digest);
+      dimContext.addDimensionDigest(
+        dimId,
+        digest as Parameters<typeof dimContext.addDimensionDigest>[1]
+      );
+      sessionStore.addDimensionDigest(
+        dimId,
+        digest as Parameters<typeof sessionStore.addDimensionDigest>[1]
+      );
 
       // 候选摘要记录到 DimensionContext + SessionStore
       for (const tc of producerResult.toolCalls || []) {
@@ -830,12 +1040,18 @@ export async function fillDimensionsV3(fillContext: any) {
         if (tool === 'submit_knowledge' || tool === 'submit_with_check') {
           const args = tc.params || tc.args || {};
           const candidateSummary = {
-            title: args.title || '',
-            subTopic: args.category || '',
-            summary: args.summary || '',
+            title: String(args.title || ''),
+            subTopic: String(args.category || ''),
+            summary: String(args.summary || ''),
           };
-          dimContext.addSubmittedCandidate(dimId, candidateSummary);
-          sessionStore.addSubmittedCandidate(dimId, candidateSummary);
+          dimContext.addSubmittedCandidate(
+            dimId,
+            candidateSummary as Parameters<typeof dimContext.addSubmittedCandidate>[1]
+          );
+          sessionStore.addSubmittedCandidate(
+            dimId,
+            candidateSummary as Parameters<typeof sessionStore.addSubmittedCandidate>[1]
+          );
         }
       }
 
@@ -868,7 +1084,14 @@ export async function fillDimensionsV3(fillContext: any) {
 
       // P3: 保存 checkpoint — 仅当有实质分析内容时（避免 degraded/空结果污染后续 run）
       if (analysisReport.analysisText.length >= 50) {
-        await saveDimensionCheckpoint(projectRoot, sessionId, dimId, dimResult, digest as any);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- digest shape compatible at runtime
+        await saveDimensionCheckpoint(
+          projectRoot,
+          sessionId,
+          dimId,
+          dimResult,
+          digest as unknown as Parameters<typeof saveDimensionCheckpoint>[4]
+        );
       } else {
         logger.warn(
           `[Insight-v3] ⚠ 跳过 checkpoint 保存: "${dimId}" analysisText 过短 (${analysisReport.analysisText.length} chars)`
@@ -876,11 +1099,12 @@ export async function fillDimensionsV3(fillContext: any) {
       }
 
       return dimResult;
-    } catch (err: any) {
-      logger.error(`[Insight-v3] Dimension "${dimId}" failed: ${err.message}`);
-      candidateResults.errors.push({ dimId, error: err.message });
-      emitter.emitDimensionComplete(dimId, { type: 'error', reason: err.message });
-      return { candidateCount: 0, error: err.message };
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(`[Insight-v3] Dimension "${dimId}" failed: ${errMsg}`);
+      candidateResults.errors.push({ dimId, error: errMsg });
+      emitter.emitDimensionComplete(dimId, { type: 'error', reason: errMsg });
+      return { candidateCount: 0, error: errMsg };
     }
   }
 
@@ -890,7 +1114,7 @@ export async function fillDimensionsV3(fillContext: any) {
   const t0 = Date.now();
 
   // tierHints: Enhancement Pack 维度通过 tierHint 字段声明首选 Tier
-  const tierHints: Record<string, any> = {};
+  const tierHints: Record<string, number> = {};
   for (const dim of dimensions) {
     if (typeof dim.tierHint === 'number') {
       tierHints[dim.id] = dim.tierHint;
@@ -902,8 +1126,9 @@ export async function fillDimensionsV3(fillContext: any) {
       concurrency,
       activeDimIds,
       tierHints,
-      shouldAbort: () => taskManager && !taskManager.isSessionValid(sessionId),
-      onTierComplete: (tierIndex: any, tierResults: any) => {
+      shouldAbort: () => !!(taskManager && !taskManager.isSessionValid(sessionId)),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- DimensionStat structurally compatible with scheduler's DimensionResult
+      onTierComplete: (tierIndex, tierResults) => {
         const tierStats = [...tierResults.values()];
         const totalCandidates = tierStats.reduce((s, r) => s + (r.candidateCount || 0), 0);
         logger.info(
@@ -912,15 +1137,25 @@ export async function fillDimensionsV3(fillContext: any) {
 
         // v4.0: Tier 级 Reflection — 综合本 Tier 所有维度的发现
         try {
-          const reflection = buildTierReflection(tierIndex, tierResults, sessionStore);
-          sessionStore.addTierReflection(tierIndex, reflection);
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- SessionStore structurally compatible
+          const reflection = buildTierReflection(
+            tierIndex,
+            tierResults as Parameters<typeof buildTierReflection>[1],
+            sessionStore as Parameters<typeof buildTierReflection>[2]
+          );
+          sessionStore.addTierReflection(
+            tierIndex,
+            reflection as Parameters<typeof sessionStore.addTierReflection>[1]
+          );
           logger.info(
             `[Insight-v3] Tier ${tierIndex + 1} reflection: ` +
               `${reflection.topFindings.length} top findings, ` +
               `${reflection.crossDimensionPatterns.length} patterns`
           );
-        } catch (refErr: any) {
-          logger.warn(`[Insight-v3] Tier ${tierIndex + 1} reflection failed: ${refErr.message}`);
+        } catch (refErr: unknown) {
+          logger.warn(
+            `[Insight-v3] Tier ${tierIndex + 1} reflection failed: ${refErr instanceof Error ? refErr.message : String(refErr)}`
+          );
         }
       },
     });
@@ -929,7 +1164,7 @@ export async function fillDimensionsV3(fillContext: any) {
       `[Insight-v3] All tiers complete: ${results.size} dimensions in ${Date.now() - t0}ms`
     );
     // v4.0: 记录 SessionStore 统计
-    const emStats = sessionStore.getStats();
+    const emStats = sessionStore.getStats() as Record<string, any>;
     logger.info(
       `[Insight-v3] Memory stats: ${emStats.completedDimensions} dims, ` +
         `${emStats.totalFindings} findings, ${emStats.referencedFiles} files, ` +
@@ -963,7 +1198,7 @@ export async function fillDimensionsV3(fillContext: any) {
   // v3: 直接使用 Analyst 的分析文本作为 Skill 内容
   // 使用 shared/skill-generator.js 统一质量门控和内容构建
   // ═══════════════════════════════════════════════════════════
-  const skillResults = { created: 0, failed: 0, skills: [] as any[], errors: [] as any[] };
+  const skillResults: SkillResults = { created: 0, failed: 0, skills: [], errors: [] };
 
   try {
     for (const dim of dimensions) {
@@ -984,10 +1219,11 @@ export async function fillDimensionsV3(fillContext: any) {
 
         // 从 SessionStore 获取结构化发现，供 Skill 生成使用
         const dimReport = sessionStore.getDimensionReport(dim.id);
-        const keyFindings = (dimReport?.findings || [])
-          .sort((a: any, b: any) => (b.importance || 5) - (a.importance || 5))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SessionStore Finding type varies
+        const keyFindings = ((dimReport?.findings || []) as Array<Record<string, any>>)
+          .sort((a, b) => (b.importance || 5) - (a.importance || 5))
           .slice(0, 10)
-          .map((f: any) => f.finding);
+          .map((f) => String(f.finding || ''));
 
         // 当 analysisText 过短（如 force-exit 时 AI 仅输出 JSON digest 被清洗后）
         // 从 distilled findings 合成补充文本，避免 Skill 质量门控拦截
@@ -1001,11 +1237,11 @@ export async function fillDimensionsV3(fillContext: any) {
             '',
             '## 关键发现',
             '',
-            ...keyFindings.map((f: any, i: any) => `${i + 1}. ${f}`),
+            ...keyFindings.map((f: string, i: number) => `${i + 1}. ${f}`),
           ];
-          if (distilled?.toolCallSummary?.length > 0) {
+          if ((distilled?.toolCallSummary?.length ?? 0) > 0) {
             synthesized.push('', '## 探索记录', '');
-            for (const s of distilled.toolCallSummary.slice(0, 10)) {
+            for (const s of distilled!.toolCallSummary!.slice(0, 10)) {
               synthesized.push(`- ${s}`);
             }
           }
@@ -1036,18 +1272,21 @@ export async function fillDimensionsV3(fillContext: any) {
           });
         } else {
           skillResults.failed++;
-          skillResults.errors.push({ dimId: dim.id, error: result.error });
+          skillResults.errors.push({ dimId: dim.id, error: result.error ?? 'unknown' });
           emitter.emitDimensionFailed(dim.id, new Error(result.error));
         }
-      } catch (err: any) {
-        logger.warn(`[Insight-v3] Skill generation failed for "${dim.id}": ${err.message}`);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        logger.warn(`[Insight-v3] Skill generation failed for "${dim.id}": ${errMsg}`);
         skillResults.failed++;
-        skillResults.errors.push({ dimId: dim.id, error: err.message });
-        emitter.emitDimensionFailed(dim.id, err);
+        skillResults.errors.push({ dimId: dim.id, error: errMsg });
+        emitter.emitDimensionFailed(dim.id, err instanceof Error ? err : new Error(errMsg));
       }
     }
-  } catch (e: any) {
-    logger.warn(`[Insight-v3] Skill generation module import failed: ${e.message}`);
+  } catch (e: unknown) {
+    logger.warn(
+      `[Insight-v3] Skill generation module import failed: ${e instanceof Error ? e.message : String(e)}`
+    );
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -1062,7 +1301,7 @@ export async function fillDimensionsV3(fillContext: any) {
     if (db) {
       const ceg = new CodeEntityGraph(db, { projectRoot, logger });
       // 收集所有维度产出的候选 (从 Producer toolCalls 中提取)
-      const allCandidates: any[] = [];
+      const allCandidates: Array<{ title: unknown; relations: unknown }> = [];
       for (const dimData of Object.values(dimensionCandidates)) {
         const toolCalls = dimData?.producerResult?.toolCalls || [];
         for (const tc of toolCalls) {
@@ -1079,15 +1318,17 @@ export async function fillDimensionsV3(fillContext: any) {
         }
       }
       if (allCandidates.length > 0) {
-        const relResult = ceg.populateFromCandidateRelations(allCandidates);
+        const relResult = ceg.populateFromCandidateRelations(
+          allCandidates as unknown as Parameters<typeof ceg.populateFromCandidateRelations>[0]
+        );
         logger.info(
           `[Insight-v3] Code Entity Graph relations: ${relResult.edgesCreated} edges from ${allCandidates.length} candidates (${relResult.durationMs}ms)`
         );
       }
     }
-  } catch (cegErr: any) {
+  } catch (cegErr: unknown) {
     logger.warn(
-      `[Insight-v3] Code Entity Graph relations failed (non-blocking): ${cegErr.message}`
+      `[Insight-v3] Code Entity Graph relations failed (non-blocking): ${cegErr instanceof Error ? cegErr.message : String(cegErr)}`
     );
   }
 
@@ -1097,7 +1338,7 @@ export async function fillDimensionsV3(fillContext: any) {
   // 将 EpisodicMemory 中的发现和洞察提炼为持久化的语义记忆，
   // 存入 SQLite semantic_memories 表，供二次冷启动和日常对话使用。
   // ═══════════════════════════════════════════════════════════
-  let consolidationResult: any = null;
+  let consolidationResult: ConsolidationResult | null = null;
   try {
     const db = ctx.container.get('database');
     if (db) {
@@ -1107,7 +1348,7 @@ export async function fillDimensionsV3(fillContext: any) {
       consolidationResult = consolidator.consolidate(sessionStore, {
         bootstrapSession: sessionId,
         clearPrevious: true, // 全量冷启动: 先清除旧的 bootstrap 记忆
-      } as any);
+      } as Record<string, unknown>);
 
       const smStats = semanticMemory.getStats();
       logger.info(
@@ -1120,9 +1361,9 @@ export async function fillDimensionsV3(fillContext: any) {
     } else {
       logger.warn('[Insight-v3] Database not available — skipping Semantic Memory consolidation');
     }
-  } catch (consolidateErr: any) {
+  } catch (consolidateErr: unknown) {
     logger.warn(
-      `[Insight-v3] Semantic Memory consolidation failed (non-blocking): ${consolidateErr.message}`
+      `[Insight-v3] Semantic Memory consolidation failed (non-blocking): ${consolidateErr instanceof Error ? consolidateErr.message : String(consolidateErr)}`
     );
   }
 
@@ -1170,7 +1411,7 @@ export async function fillDimensionsV3(fillContext: any) {
 
   // P4.2: 生成冷启动报告
   try {
-    const report: any = {
+    const report: BootstrapReport = {
       version: '2.7.0',
       timestamp: new Date().toISOString(),
       project: {
@@ -1260,8 +1501,10 @@ export async function fillDimensionsV3(fillContext: any) {
       JSON.stringify(report, null, 2)
     );
     logger.info(`[Insight-v3] 📊 Bootstrap report saved to .autosnippet/bootstrap-report.json`);
-  } catch (reportErr: any) {
-    logger.warn(`[Insight-v3] Bootstrap report generation failed: ${reportErr.message}`);
+  } catch (reportErr: unknown) {
+    logger.warn(
+      `[Insight-v3] Bootstrap report generation failed: ${reportErr instanceof Error ? reportErr.message : String(reportErr)}`
+    );
   }
 
   // P3: 成功完成后清理 checkpoints
@@ -1276,7 +1519,9 @@ export async function fillDimensionsV3(fillContext: any) {
         sessionId,
         allFiles,
         dimensionStats,
-        episodicMemory: sessionStore,
+        episodicMemory: sessionStore as unknown as Parameters<
+          typeof ib.saveSnapshot
+        >[0]['episodicMemory'],
         meta: {
           durationMs: totalTimeMs,
           candidateCount: candidateResults.created,
@@ -1286,8 +1531,10 @@ export async function fillDimensionsV3(fillContext: any) {
       });
       logger.info(`[Insight-v3] 📸 Snapshot saved: ${snapshotId}`);
     }
-  } catch (snapErr: any) {
-    logger.warn(`[Insight-v3] Snapshot save failed (non-blocking): ${snapErr.message}`);
+  } catch (snapErr: unknown) {
+    logger.warn(
+      `[Insight-v3] Snapshot save failed (non-blocking): ${snapErr instanceof Error ? snapErr.message : String(snapErr)}`
+    );
   }
 
   // 释放文件缓存
@@ -1310,8 +1557,10 @@ export async function fillDimensionsV3(fillContext: any) {
           `F: ${deliveryResult.channelF?.filesWritten || 0} agent files`
       );
     }
-  } catch (deliveryErr: any) {
-    logger.warn(`[Insight-v3] Cursor Delivery failed (non-blocking): ${deliveryErr.message}`);
+  } catch (deliveryErr: unknown) {
+    logger.warn(
+      `[Insight-v3] Cursor Delivery failed (non-blocking): ${deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr)}`
+    );
   }
 
   // ── Repo Wiki: 自动生成项目文档 Wiki ──
@@ -1323,8 +1572,10 @@ export async function fillDimensionsV3(fillContext: any) {
     const { WikiGenerator } = await import('../../../../../service/wiki/WikiGenerator.js');
 
     // 同步 wiki 路由的任务状态，让前端轮询 /wiki/status 能看到进度
-    let patchWikiTask: any = null;
-    let realtimeService: any = null;
+    let patchWikiTask: ((data: Record<string, unknown>) => void) | null = null;
+    let realtimeService: {
+      broadcastEvent?(event: string, data: Record<string, unknown>): void;
+    } | null = null;
     try {
       const wikiRoute = await import('../../../../../http/routes/wiki.js');
       patchWikiTask = wikiRoute.patchWikiTask;
@@ -1332,7 +1583,9 @@ export async function fillDimensionsV3(fillContext: any) {
       /* ok */
     }
     try {
-      realtimeService = wikiContainer.singletons?.realtimeService || null;
+      realtimeService = (wikiContainer.singletons?.realtimeService || null) as {
+        broadcastEvent?(event: string, data: Record<string, unknown>): void;
+      } | null;
     } catch {
       /* ok */
     }
@@ -1349,7 +1602,7 @@ export async function fillDimensionsV3(fillContext: any) {
       error: null,
     });
 
-    let moduleService: any = null,
+    let moduleService: unknown = null,
       knowledgeService = null,
       codeEntityGraph = null;
     try {
@@ -1375,13 +1628,13 @@ export async function fillDimensionsV3(fillContext: any) {
       projectGraph, // 来自 Step 0.5 构建的 ProjectGraph
       codeEntityGraph,
       aiProvider: wikiContainer.singletons?.aiProvider || null,
-      onProgress: (phase: any, progress: any, message: any) => {
+      onProgress: (phase: string, progress: number, message: string) => {
         // 同步到 wiki 路由的任务状态
         patchWikiTask?.({ phase, progress, message });
         // 通过 Socket.io 推送进度
         if (realtimeService) {
           try {
-            realtimeService.broadcastEvent('wiki:progress', {
+            realtimeService.broadcastEvent?.('wiki:progress', {
               phase,
               progress,
               message,
@@ -1393,13 +1646,13 @@ export async function fillDimensionsV3(fillContext: any) {
         }
       },
       options: { language: process.env.ASD_WIKI_LANG || 'zh' },
-    });
-    const wikiResult = await wiki.generate();
+    } as ConstructorParameters<typeof WikiGenerator>[0]);
+    const wikiResult = (await wiki.generate()) as Record<string, unknown>;
     if (wikiResult.success) {
       logger.info(
         `[Insight-v3] 📖 Wiki generated — ${wikiResult.filesGenerated} files, ` +
           `AI: ${wikiResult.aiComposed || 0}, Synced: ${wikiResult.syncedDocs || 0}, ` +
-          `Dedup removed: ${wikiResult.dedup?.removed?.length || 0}`
+          `Dedup removed: ${(wikiResult.dedup as Record<string, unknown>)?.removed ? ((wikiResult.dedup as Record<string, unknown>).removed as unknown[]).length : 0}`
       );
     }
 
@@ -1408,12 +1661,12 @@ export async function fillDimensionsV3(fillContext: any) {
       status: wikiResult.success ? 'done' : 'error',
       finishedAt: Date.now(),
       result: wikiResult,
-      error: wikiResult.success ? null : wikiResult.error || 'Unknown error',
+      error: wikiResult.success ? null : (wikiResult.error as string) || 'Unknown error',
       progress: 100,
     });
     if (realtimeService) {
       try {
-        realtimeService.broadcastEvent('wiki:completed', {
+        realtimeService.broadcastEvent?.('wiki:completed', {
           success: wikiResult.success,
           filesGenerated: wikiResult.filesGenerated,
           duration: wikiResult.duration,
@@ -1422,14 +1675,15 @@ export async function fillDimensionsV3(fillContext: any) {
         /* non-critical */
       }
     }
-  } catch (wikiErr: any) {
-    logger.warn(`[Insight-v3] Wiki generation failed (non-blocking): ${wikiErr.message}`);
+  } catch (wikiErr: unknown) {
+    const wikiErrMsg = wikiErr instanceof Error ? wikiErr.message : String(wikiErr);
+    logger.warn(`[Insight-v3] Wiki generation failed (non-blocking): ${wikiErrMsg}`);
     try {
       const wikiRoute = await import('../../../../../http/routes/wiki.js');
       wikiRoute.patchWikiTask?.({
         status: 'error',
         finishedAt: Date.now(),
-        error: wikiErr.message,
+        error: wikiErrMsg,
       });
     } catch {
       /* ok */
@@ -1442,7 +1696,13 @@ export async function fillDimensionsV3(fillContext: any) {
  * @param {string} projectRoot
  * @param {object} ctx - { container, logger }
  */
-async function clearSnapshotsImpl(projectRoot: any, ctx: any) {
+async function clearSnapshotsImpl(
+  projectRoot: string,
+  ctx: {
+    container: OrchestratorContainer;
+    logger: { info(...args: unknown[]): void; warn(...args: unknown[]): void };
+  }
+) {
   try {
     const db = ctx.container.get('database');
     if (db) {
@@ -1451,8 +1711,10 @@ async function clearSnapshotsImpl(projectRoot: any, ctx: any) {
       snap.clearProject(projectRoot);
       ctx.logger.info('[Bootstrap] Cleared incremental snapshots — forcing full rebuild');
     }
-  } catch (err: any) {
-    ctx.logger.warn(`[Bootstrap] clearSnapshots failed (non-blocking): ${err.message}`);
+  } catch (err: unknown) {
+    ctx.logger.warn(
+      `[Bootstrap] clearSnapshots failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 

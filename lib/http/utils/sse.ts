@@ -7,6 +7,8 @@
  * @module lib/http/utils/sse
  */
 
+import type { Request, Response } from 'express';
+
 /**
  * 创建 SSE 会话 — 统一设置 headers、心跳、安全写入
  *
@@ -15,7 +17,7 @@
  * @param {'chat'|'refine'} scene 场景标识
  * @returns {{ send, end, error, isDisconnected, sessionId }}
  */
-export function createSSESession(req: any, res: any, scene: any) {
+export function createSSESession(req: Request, res: Response, scene: string) {
   // ─── SSE Headers ───
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -41,7 +43,7 @@ export function createSSESession(req: any, res: any, scene: any) {
   const sessionId = Math.random().toString(36).slice(2, 10);
 
   /** 安全写入一段 SSE 数据 */
-  function _write(data: any) {
+  function _write(data: string) {
     if (disconnected || res.writableEnded) {
       return false;
     }
@@ -75,7 +77,7 @@ export function createSSESession(req: any, res: any, scene: any) {
      * 发送一个 SSE 事件
      * @param {object} event 必须包含 type 字段
      */
-    send(event: any) {
+    send(event: Record<string, unknown>) {
       if (disconnected || res.writableEnded) {
         return;
       }
@@ -92,7 +94,7 @@ export function createSSESession(req: any, res: any, scene: any) {
      * 正常结束流 — 发送 stream:done 并关闭连接
      * @param {object} [donePayload={}] - done 事件携带的额外数据
      */
-    end(donePayload: any = {}) {
+    end(donePayload: Record<string, unknown> = {}) {
       clearInterval(heartbeat);
       if (disconnected || res.writableEnded) {
         return;
@@ -107,7 +109,7 @@ export function createSSESession(req: any, res: any, scene: any) {
      * @param {string} message
      * @param {string} [code]
      */
-    error(message: any, code: any) {
+    error(message: string, code: string) {
       clearInterval(heartbeat);
       if (disconnected || res.writableEnded) {
         return;

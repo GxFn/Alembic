@@ -21,6 +21,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
 import { CANDIDATES_DIR, RECIPES_DIR } from '../../infrastructure/config/Defaults.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import pathGuard from '../../shared/PathGuard.js';
@@ -66,14 +67,14 @@ const SCALAR_FIELDS = [
  * ═══════════════════════════════════════════════════════════ */
 
 export class KnowledgeFileWriter {
-  candidatesDir: any;
-  logger: any;
-  projectRoot: any;
-  recipesDir: any;
+  candidatesDir: string;
+  logger: ReturnType<typeof Logger.getInstance>;
+  projectRoot: string;
+  recipesDir: string;
   /**
    * @param {string} projectRoot 项目根目录
    */
-  constructor(projectRoot: any) {
+  constructor(projectRoot: string) {
     this.projectRoot = projectRoot;
     this.recipesDir = path.join(projectRoot, RECIPES_DIR);
     this.candidatesDir = path.join(projectRoot, CANDIDATES_DIR);
@@ -87,26 +88,26 @@ export class KnowledgeFileWriter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {string}
    */
-  serialize(entry: any) {
-    const json = entry.toJSON();
+  serialize(entry: KnowledgeEntry): string {
+    const json = entry.toJSON() as Record<string, unknown>;
     const lines = ['---'];
 
     // ── 标量字段（人类可读）──
     for (const key of SCALAR_FIELDS) {
-      const val = json[key];
+      const val = json[key] as string | number | boolean | undefined;
       if (val != null && val !== '') {
         lines.push(`${key}: ${_yamlValue(key, val)}`);
       }
     }
 
     // ── 简单数组字段（行内 JSON）──
-    if (json.tags?.length) {
+    if ((json.tags as string[] | undefined)?.length) {
       lines.push(`tags: ${JSON.stringify(json.tags)}`);
     }
-    if (json.headers?.length) {
+    if ((json.headers as string[] | undefined)?.length) {
       lines.push(`headers: ${JSON.stringify(json.headers)}`);
     }
-    if (json.headerPaths?.length) {
+    if ((json.headerPaths as string[] | undefined)?.length) {
       lines.push(`headerPaths: ${JSON.stringify(json.headerPaths)}`);
     }
     if (json.includeHeaders) {
@@ -165,9 +166,9 @@ export class KnowledgeFileWriter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {string}
    */
-  _buildBody(entry: any) {
+  _buildBody(entry: KnowledgeEntry): string {
     const c = entry.content;
-    const lines: any[] = [];
+    const lines: string[] = [];
 
     if (c.markdown) {
       // Markdown 项目特写 / 完整文章 → 直接输出（去掉可能残留的 frontmatter）
@@ -257,7 +258,7 @@ export class KnowledgeFileWriter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {string|null} 写入的文件路径，失败返回 null
    */
-  persist(entry: any) {
+  persist(entry: KnowledgeEntry): string | null {
     try {
       if (!entry?.id || !entry?.title) {
         this.logger.warn('Cannot persist knowledge entry: missing id or title');
@@ -290,10 +291,10 @@ export class KnowledgeFileWriter {
       });
 
       return filePath;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('Failed to persist knowledge entry to file', {
         entryId: entry?.id,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
       });
       return null;
     }
@@ -304,7 +305,7 @@ export class KnowledgeFileWriter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {boolean}
    */
-  remove(entry: any) {
+  remove(entry: KnowledgeEntry): boolean {
     if (!entry?.id) {
       return false;
     }
@@ -351,7 +352,7 @@ export class KnowledgeFileWriter {
    * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
    * @returns {string|null} 新的文件路径
    */
-  moveOnLifecycleChange(entry: any) {
+  moveOnLifecycleChange(entry: KnowledgeEntry): string | null {
     const oldPath = entry.sourceFile ? path.join(this.projectRoot, entry.sourceFile) : null;
 
     const { dir: newDir, filename } = this._resolveFilePath(entry);
@@ -382,7 +383,7 @@ export class KnowledgeFileWriter {
    * 计算文件存储路径
    * @returns {{ dir: string, filename: string }}
    */
-  _resolveFilePath(entry: any) {
+  _resolveFilePath(entry: KnowledgeEntry): { dir: string; filename: string } {
     const baseDir = entry.isCandidate() ? this.candidatesDir : this.recipesDir;
     const category = (entry.category || 'general').toLowerCase();
     const dir = path.join(baseDir, category);
@@ -393,7 +394,7 @@ export class KnowledgeFileWriter {
   /**
    * 清理旧文件（category 变更或 lifecycle 切换场景）
    */
-  _cleanupOldFile(entry: any, newPath: any) {
+  _cleanupOldFile(entry: KnowledgeEntry, newPath: string) {
     if (!entry.sourceFile) {
       return;
     }
@@ -446,7 +447,7 @@ export class KnowledgeFileWriter {
    * 通过 id 扫描所有 .md 文件来删除
    * @returns {boolean}
    */
-  _removeByIdScan(id: any) {
+  _removeByIdScan(id: string): boolean {
     for (const baseDir of [this.candidatesDir, this.recipesDir]) {
       if (!fs.existsSync(baseDir)) {
         continue;
@@ -474,7 +475,7 @@ export class KnowledgeFileWriter {
  * @param {string} content
  * @returns {string} 16 字符 hex
  */
-export function computeKnowledgeHash(content: any) {
+export function computeKnowledgeHash(content: string): string {
   const cleaned = content.replace(/^_contentHash:.*\n?/m, '').trim();
   return createHash('sha256').update(cleaned, 'utf8').digest('hex').slice(0, 16);
 }
@@ -487,9 +488,9 @@ export function computeKnowledgeHash(content: any) {
  * @param {string} [relPath]  相对路径（用于溯源）
  * @returns {Object} wire format JSON
  */
-export function parseKnowledgeMarkdown(content: any, relPath: any) {
+export function parseKnowledgeMarkdown(content: string, relPath?: string): Record<string, unknown> {
   const fmMatch = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
-  const data: Record<string, any> = {};
+  const data: Record<string, unknown> = {};
 
   if (fmMatch) {
     const fmLines = fmMatch[1].split('\n');
@@ -611,21 +612,22 @@ export function parseKnowledgeMarkdown(content: any, relPath: any) {
     const body = bodyMatch[1].trim();
 
     // 如果 content 中没有 pattern，从 body 代码块提取
-    if (!data.content?.pattern) {
+    const contentObj = (data.content || {}) as Record<string, unknown>;
+    if (!contentObj.pattern) {
       const codeMatch = body.match(/```\w*\n([\s\S]*?)```/);
       if (codeMatch) {
         data.content = data.content || {};
-        data.content.pattern = codeMatch[1].trimEnd();
+        (data.content as Record<string, unknown>).pattern = codeMatch[1].trimEnd();
       }
     }
 
     // 如果 content 中没有 markdown 且 body 看起来是 Markdown 文章
-    if (!data.content?.markdown && !data.content?.pattern) {
+    if (!contentObj.markdown && !contentObj.pattern) {
       const isMarkdownArticle =
         body.includes('— 项目特写') || (body.startsWith('#') && body.length > 200);
       if (isMarkdownArticle) {
         data.content = data.content || {};
-        data.content.markdown = body;
+        (data.content as Record<string, unknown>).markdown = body;
       }
     }
   }
@@ -655,7 +657,7 @@ export function parseKnowledgeMarkdown(content: any, relPath: any) {
  * @param {string} id
  * @returns {string} 文件名（含 .md 后缀）
  */
-function _slugFilename(trigger: any, title: any, id: any) {
+function _slugFilename(trigger: string | undefined, title: string | undefined, id: string): string {
   // 优先用 trigger
   if (trigger) {
     const clean = trigger
@@ -688,7 +690,7 @@ function _slugFilename(trigger: any, title: any, id: any) {
 /**
  * 将 YAML 值安全序列化
  */
-function _yamlValue(key: any, val: any) {
+function _yamlValue(key: string, val: string | number | boolean): string {
   if (typeof val === 'number' || typeof val === 'boolean') {
     return String(val);
   }
@@ -704,7 +706,7 @@ function _yamlValue(key: any, val: any) {
  * 递归扫描目录，删除包含指定 id 的 .md 文件
  * @returns {boolean}
  */
-function _walkAndRemoveById(dir: any, id: any) {
+function _walkAndRemoveById(dir: string, id: string): boolean {
   if (!fs.existsSync(dir)) {
     return false;
   }

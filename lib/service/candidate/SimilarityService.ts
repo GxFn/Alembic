@@ -8,17 +8,38 @@ import { jaccardSimilarity, tokenizeForSimilarity } from '../../shared/similarit
  * 基于 Jaccard 相似度对候选与已有 Recipe 进行去重检测
  */
 
+interface SimilarityCandidate {
+  title: string;
+  summary?: string;
+  description?: string;
+  code: string;
+  [key: string]: unknown;
+}
+
+interface SimilarityRecipe {
+  file: string;
+  title: string;
+  summary: string;
+  description?: string;
+  code: string;
+}
+
+interface SimilarityOpts {
+  threshold?: number;
+  topK?: number;
+}
+
 /**
  * 计算候选与单个 Recipe 的综合相似度
  */
-function computeSimilarity(candidate: any, recipe: any) {
+function computeSimilarity(candidate: SimilarityCandidate, recipe: SimilarityRecipe) {
   const titleSim = jaccardSimilarity(
     tokenizeForSimilarity(candidate.title),
     tokenizeForSimilarity(recipe.title)
   );
   const summarySim = jaccardSimilarity(
-    tokenizeForSimilarity(candidate.summary || candidate.description),
-    tokenizeForSimilarity(recipe.summary || recipe.description)
+    tokenizeForSimilarity(candidate.summary || candidate.description || ''),
+    tokenizeForSimilarity(recipe.summary || recipe.description || '')
   );
   const codeSim = jaccardSimilarity(
     tokenizeForSimilarity(candidate.code, 3),
@@ -31,13 +52,13 @@ function computeSimilarity(candidate: any, recipe: any) {
 /**
  * 从磁盘读取所有 Recipe MD 文件并提取基本结构
  */
-function loadRecipesFromDisk(recipesDir: any) {
-  const recipes: { file: string; title: string; summary: string; code: string }[] = [];
+function loadRecipesFromDisk(recipesDir: string) {
+  const recipes: SimilarityRecipe[] = [];
   if (!fs.existsSync(recipesDir)) {
     return recipes;
   }
 
-  const walk = (dir: any) => {
+  const walk = (dir: string) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.name.startsWith('.')) {
         continue;
@@ -75,13 +96,17 @@ function loadRecipesFromDisk(recipesDir: any) {
  * @param {object} [opts] - { threshold: 0.7, topK: 5 }
  * @returns {Array<{file, title, similarity}>}
  */
-export function findSimilarRecipes(projectRoot: any, candidate: any, opts: any = {}) {
+export function findSimilarRecipes(
+  projectRoot: string,
+  candidate: SimilarityCandidate,
+  opts: SimilarityOpts = {}
+) {
   const threshold = opts.threshold ?? 0.7;
   const topK = opts.topK ?? 5;
   const recipesDir = getProjectRecipesPath(projectRoot);
   const recipes = loadRecipesFromDisk(recipesDir);
 
-  const results: { file: any; title: any; similarity: number }[] = [];
+  const results: { file: string; title: string; similarity: number }[] = [];
   for (const recipe of recipes) {
     const sim = computeSimilarity(candidate, recipe);
     if (sim >= threshold) {

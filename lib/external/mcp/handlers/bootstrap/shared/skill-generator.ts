@@ -12,8 +12,26 @@
  */
 
 import Logger from '../../../../../infrastructure/logging/Logger.js';
+import type { McpContext } from '../../types.js';
 
 const logger = Logger.getInstance();
+
+// ── 本地类型定义 ─────────────────────────────────────────────
+
+/** 维度定义（来自 dimension config） */
+interface SkillDimensionDef {
+  id: string;
+  label?: string;
+  skillWorthy?: boolean;
+  skillMeta?: { name?: string; description?: string };
+}
+
+/** validateSkillQuality 返回值 */
+interface SkillQualityResult {
+  pass: boolean;
+  reason: string | null;
+  deduplicatedText?: string;
+}
 
 // ── 常量 ────────────────────────────────────────────────────
 
@@ -36,7 +54,7 @@ const STRUCTURE_CHECK_THRESHOLD = 500;
  * 去除列表标记、编号、代码围栏、引用标记等结构性前缀，
  * 避免 category-scan 等维度中大量结构相似但内容不同的行被误判为重复。
  */
-function normalizeLine(line: any) {
+function normalizeLine(line: string): string {
   return line
     .trim()
     .replace(/^[-*•]\s+/, '') // strip list markers
@@ -51,7 +69,7 @@ function normalizeLine(line: any) {
 /**
  * 检测最长连续重复块长度 — AI 循环的核心特征
  */
-function maxConsecutiveDuplicates(lines: any) {
+function maxConsecutiveDuplicates(lines: string[]): number {
   let max = 0;
   let current = 0;
   for (let i = 1; i < lines.length; i++) {
@@ -70,7 +88,7 @@ function maxConsecutiveDuplicates(lines: any) {
 /**
  * 去除连续重复行 — 将连续 N 行相同内容压缩为 1 行
  */
-function deduplicateConsecutive(text: any) {
+function deduplicateConsecutive(text: string): string {
   const lines = text.split('\n');
   const result = [lines[0]];
   for (let i = 1; i < lines.length; i++) {
@@ -96,7 +114,7 @@ function deduplicateConsecutive(text: any) {
  * @param {string} analysisText - Analyst 或外部 Agent 的分析文本
  * @returns {{ pass: boolean, reason: string|null, deduplicatedText?: string }}
  */
-function validateSkillQuality(analysisText: any) {
+function validateSkillQuality(analysisText: string): SkillQualityResult {
   // 1. 文本过短
   if (!analysisText || analysisText.trim().length < MIN_ANALYSIS_LENGTH) {
     return {
@@ -106,8 +124,8 @@ function validateSkillQuality(analysisText: any) {
   }
 
   // 2. 重复检测 — 规范化后比较，避免结构性前缀导致误判
-  const textLines = analysisText.split('\n').filter((l: any) => l.trim().length > 0);
-  const normalizedLines = textLines.map(normalizeLine).filter((l: any) => l.length > 0);
+  const textLines = analysisText.split('\n').filter((l: string) => l.trim().length > 0);
+  const normalizedLines = textLines.map(normalizeLine).filter((l: string) => l.length > 0);
   const uniqueNormalized = new Set(normalizedLines);
   const uniqueRatio =
     normalizedLines.length > 0 ? uniqueNormalized.size / normalizedLines.length : 1;
@@ -146,7 +164,7 @@ function validateSkillQuality(analysisText: any) {
     /^[-*]\s*[❌⚠✅🔴🟡🟢•]/u.test(analysisText) ||
     /\*\*[^*]+\*\*/.test(analysisText) ||
     // 补充: 多段落（≥3 个非空段落）视为有基本结构
-    analysisText.split(/\n\s*\n/).filter((p: any) => p.trim().length > 0).length >= 3;
+    analysisText.split(/\n\s*\n/).filter((p: string) => p.trim().length > 0).length >= 3;
   if (!hasStructure && analysisText.length < STRUCTURE_CHECK_THRESHOLD) {
     return {
       pass: false,
@@ -179,13 +197,13 @@ function validateSkillQuality(analysisText: any) {
  * @returns {string} - Skill Markdown 内容
  */
 function buildSkillContent(
-  dim: any,
-  analysisText: any,
-  referencedFiles: any[] = [],
-  keyFindings: any[] = [],
+  dim: SkillDimensionDef,
+  analysisText: string,
+  referencedFiles: string[] = [],
+  keyFindings: string[] = [],
   source = 'bootstrap'
 ) {
-  const parts: any[] = [];
+  const parts: string[] = [];
 
   // Header
   parts.push(`# ${dim.label || dim.id}`);
@@ -237,20 +255,20 @@ function buildSkillContent(
  * @returns {Promise<{ success: boolean, skillName: string, error?: string }>}
  */
 export async function generateSkill(
-  ctx: any,
-  dim: any,
-  analysisText: any,
-  referencedFiles: any[] = [],
-  keyFindings: any[] = [],
+  ctx: McpContext,
+  dim: SkillDimensionDef,
+  analysisText: string,
+  referencedFiles: string[] = [],
+  keyFindings: string[] = [],
   source = 'bootstrap'
-) {
+): Promise<{ success: boolean; skillName: string; error?: string }> {
   const skillName = dim.skillMeta?.name || `project-${dim.id}`;
 
   // 1. 质量门控
   const validation = validateSkillQuality(analysisText);
   if (!validation.pass) {
     logger.warn(`[SkillGenerator] Skill "${dim.id}" skipped — ${validation.reason}`);
-    return { success: false, skillName, error: validation.reason };
+    return { success: false, skillName, error: validation.reason ?? undefined };
   }
 
   // 1.5. 如果触发了去重挽救，使用清理后的文本
@@ -280,8 +298,9 @@ export async function generateSkill(
 
     const errorMsg = parsed?.error?.message || 'createSkill returned failure';
     throw new Error(errorMsg);
-  } catch (e: any) {
-    logger.warn(`[SkillGenerator] Skill generation failed for "${dim.id}": ${e.message}`);
-    return { success: false, skillName, error: e.message };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logger.warn(`[SkillGenerator] Skill generation failed for "${dim.id}": ${msg}`);
+    return { success: false, skillName, error: msg };
   }
 }

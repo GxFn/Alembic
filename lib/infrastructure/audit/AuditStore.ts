@@ -2,15 +2,26 @@
  * AuditStore - 审计日志存储
  */
 export class AuditStore {
-  db: any;
-  constructor(db: any) {
+  db: import('better-sqlite3').Database;
+  constructor(db: { getDb: () => import('better-sqlite3').Database }) {
     this.db = db.getDb();
   }
 
   /**
    * 保存审计日志
    */
-  async save(entry: any) {
+  async save(entry: {
+    id: string;
+    timestamp: number;
+    actor: string;
+    actor_context: string;
+    action: string;
+    resource: string;
+    operation_data: string;
+    result: string;
+    error_message: string | null;
+    duration: number | null;
+  }) {
     const stmt = this.db.prepare(`
       INSERT INTO audit_logs (
         id,
@@ -43,9 +54,18 @@ export class AuditStore {
   /**
    * 查询审计日志
    */
-  query(filters: any = {}) {
+  query(
+    filters: {
+      actor?: string;
+      action?: string;
+      result?: string;
+      startDate?: number;
+      endDate?: number;
+      limit?: number;
+    } = {}
+  ) {
     let sql = 'SELECT * FROM audit_logs WHERE 1=1';
-    const params: any[] = [];
+    const params: (string | number)[] = [];
 
     if (filters.actor) {
       sql += ' AND actor = ?';
@@ -86,7 +106,7 @@ export class AuditStore {
   /**
    * 根据请求 ID 查询
    */
-  findByRequestId(requestId: any) {
+  findByRequestId(requestId: string) {
     const stmt = this.db.prepare('SELECT * FROM audit_logs WHERE id = ?');
     return stmt.get(requestId);
   }
@@ -94,7 +114,7 @@ export class AuditStore {
   /**
    * 根据角色查询
    */
-  findByActor(actor: any, limit = 100) {
+  findByActor(actor: string, limit = 100) {
     const stmt = this.db.prepare(`
       SELECT * FROM audit_logs
       WHERE actor = ?
@@ -107,7 +127,7 @@ export class AuditStore {
   /**
    * 根据操作查询
    */
-  findByAction(action: any, limit = 100) {
+  findByAction(action: string, limit = 100) {
     const stmt = this.db.prepare(`
       SELECT * FROM audit_logs
       WHERE action = ?
@@ -120,7 +140,7 @@ export class AuditStore {
   /**
    * 根据结果查询
    */
-  findByResult(result: any, limit = 100) {
+  findByResult(result: string, limit = 100) {
     const stmt = this.db.prepare(`
       SELECT * FROM audit_logs
       WHERE result = ?
@@ -141,20 +161,20 @@ export class AuditStore {
     // 总数统计
     const total = this.db
       .prepare('SELECT COUNT(*) as count FROM audit_logs WHERE timestamp >= ?')
-      .get(startTime);
+      .get(startTime) as { count: number };
 
     // 成功/失败统计
     const successCount = this.db
       .prepare(
         "SELECT COUNT(*) as count FROM audit_logs WHERE timestamp >= ? AND result = 'success'"
       )
-      .get(startTime);
+      .get(startTime) as { count: number };
 
     const failureCount = this.db
       .prepare(
         "SELECT COUNT(*) as count FROM audit_logs WHERE timestamp >= ? AND result = 'failure'"
       )
-      .get(startTime);
+      .get(startTime) as { count: number };
 
     // 按角色统计
     const byActor = this.db
@@ -185,7 +205,7 @@ export class AuditStore {
         FROM audit_logs
         WHERE timestamp >= ? AND duration IS NOT NULL
       `)
-      .get(startTime);
+      .get(startTime) as { avg_duration: number | null };
 
     return {
       timeRange,

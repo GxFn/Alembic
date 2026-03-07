@@ -10,7 +10,7 @@
  *   - SQLAlchemy / Tortoise ORM 集成模式
  */
 
-import { EnhancementPack } from './EnhancementPack.js';
+import { type AstSummary, type DetectedPattern, EnhancementPack } from './EnhancementPack.js';
 
 class FastAPIEnhancement extends EnhancementPack {
   get id() {
@@ -117,8 +117,8 @@ class FastAPIEnhancement extends EnhancementPack {
     ];
   }
 
-  detectPatterns(astSummary: any) {
-    const patterns: any[] = [];
+  detectPatterns(astSummary: AstSummary): DetectedPattern[] {
+    const patterns: DetectedPattern[] = [];
 
     // ── Pydantic models ──
     for (const cls of astSummary.classes || []) {
@@ -135,7 +135,7 @@ class FastAPIEnhancement extends EnhancementPack {
     // ── FastAPI route handlers ──
     for (const m of astSummary.methods || []) {
       if (
-        m.decorators?.some((d: any) =>
+        m.decorators?.some((d: string) =>
           /@(?:app|router)\.(?:get|post|put|delete|patch|options|head)/.test(d)
         )
       ) {
@@ -196,7 +196,7 @@ class FastAPIEnhancement extends EnhancementPack {
 
     // ── FastAPI ecosystem imports ──
     const fastapiImports = (astSummary.imports || []).filter(
-      (imp: any) =>
+      (imp: string) =>
         imp.includes('fastapi') ||
         imp.includes('pydantic') ||
         imp.includes('sqlalchemy') ||

@@ -16,10 +16,10 @@ import { REGEX } from '../DirectiveDetector.js';
  * @param {string} createOption 'c' | 'f' | undefined
  */
 export async function handleCreate(
-  watcher: any,
-  fullPath: any,
-  relativePath: any,
-  createOption: any
+  watcher: import('../FileWatcher.js').FileWatcher,
+  fullPath: string,
+  relativePath: string,
+  createOption: string | null
 ) {
   const XA = await import('../../../platform/ios/xcode/XcodeAutomation.js');
   const CM = await import('../../../infrastructure/external/ClipboardManager.js');
@@ -50,8 +50,8 @@ export async function handleCreate(
       saveEventFilter.markWrite(fullPath, newContent);
       writeFileSync(fullPath, newContent, 'utf8');
     }
-  } catch (err: any) {
-    console.error('[Watcher] Failed to remove as:create mark', err.message);
+  } catch (err: unknown) {
+    console.error('[Watcher] Failed to remove as:create mark', (err as Error).message);
   }
 
   // 3. 无 -c 选项：打开 Dashboard
@@ -70,8 +70,8 @@ export async function handleCreate(
   // 5. -c 模式：静默创建候选
   try {
     await silentCreateCandidate(watcher, textToExtract, relativePath);
-  } catch (e: any) {
-    console.warn('[Watcher] 静默创建候选失败，回退到打开浏览器:', e.message);
+  } catch (e: unknown) {
+    console.warn('[Watcher] 静默创建候选失败，回退到打开浏览器:', (e as Error).message);
     watcher._openDashboard(
       `/?action=create&path=${encodeURIComponent(relativePath)}&source=clipboard`
     );
@@ -81,12 +81,16 @@ export async function handleCreate(
 /**
  * 静默创建候选（从剪贴板文本解析 Recipe 并提交）
  */
-async function silentCreateCandidate(watcher: any, text: any, relativePath: any) {
+async function silentCreateCandidate(
+  watcher: import('../FileWatcher.js').FileWatcher,
+  text: string,
+  relativePath: string
+) {
   const { RecipeParser } = await import('../../recipe/RecipeParser.js');
   const parser = new RecipeParser();
 
-  const normalize = (arr: any) =>
-    arr.map((r: any) => ({
+  const normalize = (arr: Record<string, unknown>[]) =>
+    arr.map((r: Record<string, unknown>) => ({
       title: r.title,
       summary: r.summary || r.description || '',
       trigger: r.trigger,
@@ -99,7 +103,9 @@ async function silentCreateCandidate(watcher: any, text: any, relativePath: any)
 
   // 先尝试批量解析（仅对 Recipe Markdown 格式有效）
   const allRecipes = parser.parseAll(text);
-  const validRecipes = allRecipes.filter((r: any) => r.title?.trim());
+  const validRecipes = allRecipes.filter((r: Record<string, unknown>) =>
+    (r.title as string)?.trim()
+  );
   if (validRecipes.length > 0) {
     const items = normalize(validRecipes);
     await watcher._resolveHeadersIfNeeded(items[0], relativePath, text);
@@ -128,14 +134,16 @@ async function silentCreateCandidate(watcher: any, text: any, relativePath: any)
   // 先用 AI 生成标题和摘要，code 保持剪贴板原文
   const lang = relativePath ? LanguageService.inferLang(relativePath) || 'unknown' : 'unknown';
   const ext = LanguageService.extForLang(lang) || '.txt';
-  const fileName = relativePath ? relativePath.split('/').pop() : `clipboard${ext}`;
+  const fileName = relativePath
+    ? (relativePath.split('/').pop() ?? `clipboard${ext}`)
+    : `clipboard${ext}`;
 
   let title = fileName.replace(/\.\w+$/, '') || 'Clipboard Snippet';
   let summary = '';
   let usageGuide = '';
   let category = 'Utility';
-  let headers: any[] = [];
-  let tags: any[] = [];
+  let headers: string[] = [];
+  let tags: string[] = [];
   let trigger = '';
 
   // 尝试用 AI 生成摘要信息（但 code 始终保持原文）
@@ -182,7 +190,7 @@ async function silentCreateCandidate(watcher: any, text: any, relativePath: any)
 /**
  * 查找 // as:c 的行号 (1-based)
  */
-export function findCreateLineNumber(content: any) {
+export function findCreateLineNumber(content: string) {
   if (!content) {
     return -1;
   }
@@ -196,6 +204,6 @@ export function findCreateLineNumber(content: any) {
   return -1;
 }
 
-function _sleep(ms: any) {
+function _sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

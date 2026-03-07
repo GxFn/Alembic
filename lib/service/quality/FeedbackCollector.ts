@@ -8,12 +8,25 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from '
 import { dirname, join } from 'node:path';
 import pathGuard from '../../shared/PathGuard.js';
 
+interface FeedbackEvent {
+  type: string;
+  recipeId: string;
+  data: Record<string, unknown>;
+  timestamp: string;
+}
+
+interface FeedbackCollectorOptions {
+  knowledgeBaseDir?: string;
+  maxEvents?: number;
+  internalDir?: string;
+}
+
 export class FeedbackCollector {
   #feedbackPath;
-  #events; // [{ type, recipeId, data, timestamp }]
+  #events: FeedbackEvent[];
   #maxEvents;
 
-  constructor(projectRoot: any, options: any = {}) {
+  constructor(projectRoot: string, options: FeedbackCollectorOptions = {}) {
     const kbDir = options.knowledgeBaseDir || 'AutoSnippet';
     this.#feedbackPath = join(projectRoot, kbDir, 'feedback.json');
     pathGuard.assertProjectWriteSafe(this.#feedbackPath);
@@ -28,7 +41,7 @@ export class FeedbackCollector {
    * @param {string} recipeId
    * @param {object} data 任意附加数据 (rating, comment, etc.)
    */
-  record(type: any, recipeId: any, data: any = {}) {
+  record(type: string, recipeId: string, data: Record<string, unknown> = {}) {
     this.#events.push({
       type,
       recipeId,
@@ -48,19 +61,21 @@ export class FeedbackCollector {
    * @param {string} recipeId
    * @returns {{ views: number, clicks: number, copies: number, avgRating: number, feedbackCount: number }}
    */
-  getRecipeStats(recipeId: any) {
-    const events = this.#events.filter((e: any) => e.recipeId === recipeId);
+  getRecipeStats(recipeId: string) {
+    const events = this.#events.filter((e: FeedbackEvent) => e.recipeId === recipeId);
     const ratings = events
-      .filter((e: any) => e.type === 'rate' && e.data.rating)
-      .map((e: any) => e.data.rating);
+      .filter((e: FeedbackEvent) => e.type === 'rate' && (e.data as Record<string, unknown>).rating)
+      .map((e: FeedbackEvent) => (e.data as Record<string, unknown>).rating as number);
 
     return {
-      views: events.filter((e: any) => e.type === 'view').length,
-      clicks: events.filter((e: any) => e.type === 'click').length,
-      copies: events.filter((e: any) => e.type === 'copy' || e.type === 'insert').length,
+      views: events.filter((e: FeedbackEvent) => e.type === 'view').length,
+      clicks: events.filter((e: FeedbackEvent) => e.type === 'click').length,
+      copies: events.filter((e: FeedbackEvent) => e.type === 'copy' || e.type === 'insert').length,
       avgRating:
-        ratings.length > 0 ? ratings.reduce((a: any, b: any) => a + b, 0) / ratings.length : 0,
-      feedbackCount: events.filter((e: any) => e.type === 'feedback').length,
+        ratings.length > 0
+          ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length
+          : 0,
+      feedbackCount: events.filter((e: FeedbackEvent) => e.type === 'feedback').length,
       totalEvents: events.length,
     };
   }
@@ -69,14 +84,14 @@ export class FeedbackCollector {
    * 获取全局统计
    */
   getGlobalStats() {
-    const byType: Record<string, any> = {};
+    const byType: Record<string, number> = {};
     for (const e of this.#events) {
       byType[e.type] = (byType[e.type] || 0) + 1;
     }
     return {
       totalEvents: this.#events.length,
       byType,
-      uniqueRecipes: new Set(this.#events.map((e: any) => e.recipeId)).size,
+      uniqueRecipes: new Set(this.#events.map((e: FeedbackEvent) => e.recipeId)).size,
     };
   }
 
@@ -84,7 +99,7 @@ export class FeedbackCollector {
    * 获取热门 Recipes (by interaction count)
    */
   getTopRecipes(n = 10) {
-    const counts: Record<string, any> = {};
+    const counts: Record<string, number> = {};
     for (const e of this.#events) {
       counts[e.recipeId] = (counts[e.recipeId] || 0) + 1;
     }
@@ -128,7 +143,7 @@ export class FeedbackCollector {
     }
   }
 
-  #migrateOldPath(projectRoot: any, internalDir: any) {
+  #migrateOldPath(projectRoot: string, internalDir: string) {
     try {
       const oldPath = join(projectRoot, internalDir, 'feedback.json');
       if (existsSync(oldPath) && !existsSync(this.#feedbackPath)) {

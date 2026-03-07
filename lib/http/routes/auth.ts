@@ -10,7 +10,7 @@
  */
 
 import crypto from 'node:crypto';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = express.Router();
@@ -43,7 +43,7 @@ if (!process.env.ASD_AUTH_SECRET) {
 //  Token helpers
 // ═══════════════════════════════════════════════════════
 
-function createToken(username: any) {
+function createToken(username: string) {
   const payload = {
     sub: username,
     role: 'developer',
@@ -55,7 +55,7 @@ function createToken(username: any) {
   return `${payloadB64}.${sig}`;
 }
 
-function verifyToken(token: any) {
+function verifyToken(token: string | undefined) {
   if (!token || typeof token !== 'string') {
     return null;
   }
@@ -93,11 +93,11 @@ function verifyToken(token: any) {
  */
 router.post(
   '/login',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { username, password } = req.body || {};
 
     if (!username || !password) {
-      return res.status(400).json({
+      return void res.status(400).json({
         success: false,
         error: { code: 'VALIDATION_ERROR', message: '用户名和密码不能为空' },
       });
@@ -112,7 +112,7 @@ router.post(
       crypto.timingSafeEqual(Buffer.from(password), Buffer.from(AUTH_PASSWORD));
 
     if (!userOk || !passOk) {
-      return res.status(401).json({
+      return void res.status(401).json({
         success: false,
         error: { code: 'UNAUTHORIZED', message: '用户名或密码错误' },
       });
@@ -120,7 +120,7 @@ router.post(
 
     const token = createToken(username);
 
-    return res.json({
+    return void res.json({
       success: true,
       data: {
         token,
@@ -136,19 +136,19 @@ router.post(
  */
 router.get(
   '/me',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
     const payload = verifyToken(token);
 
     if (!payload) {
-      return res.status(401).json({
+      return void res.status(401).json({
         success: false,
         error: { code: 'UNAUTHORIZED', message: 'Token 无效或已过期' },
       });
     }
 
-    return res.json({
+    return void res.json({
       success: true,
       data: {
         user: { username: payload.sub, role: payload.role },

@@ -20,7 +20,11 @@ export class PluginManager {
    * @param {object} plugin 插件对象，需有 init()/destroy() 方法
    * @param {{ priority?: number, description?: string }} meta
    */
-  register(name: any, plugin: any, meta: any = {}) {
+  register(
+    name: string,
+    plugin: Record<string, unknown>,
+    meta: { priority?: number; description?: string } = {}
+  ) {
     this.#plugins.set(name, {
       plugin,
       enabled: true,
@@ -34,7 +38,7 @@ export class PluginManager {
   /**
    * 卸载插件
    */
-  unregister(name: any) {
+  unregister(name: string) {
     const entry = this.#plugins.get(name);
     if (entry?.plugin?.destroy) {
       try {
@@ -49,7 +53,7 @@ export class PluginManager {
   /**
    * 启用/禁用插件
    */
-  setEnabled(name: any, enabled: any) {
+  setEnabled(name: string, enabled: boolean) {
     const entry = this.#plugins.get(name);
     if (entry) {
       entry.enabled = enabled;
@@ -59,7 +63,7 @@ export class PluginManager {
   /**
    * 初始化所有已启用的插件（按 priority 降序）
    */
-  async initAll(context: any = {}) {
+  async initAll(context: Record<string, unknown> = {}) {
     const sorted = this.#getSorted();
     for (const { name, entry } of sorted) {
       if (!entry.enabled || !entry.plugin.init) {
@@ -68,8 +72,8 @@ export class PluginManager {
       try {
         await entry.plugin.init(context);
         this.#logger.debug(`[PluginManager] 初始化: ${name}`);
-      } catch (err: any) {
-        this.#logger.error(`[PluginManager] 初始化失败: ${name}`, err.message);
+      } catch (err: unknown) {
+        this.#logger.error(`[PluginManager] 初始化失败: ${name}`, (err as Error).message);
       }
     }
   }
@@ -106,7 +110,7 @@ export class PluginManager {
   /**
    * 获取插件实例
    */
-  getPlugin(name: any) {
+  getPlugin(name: string) {
     return this.#plugins.get(name)?.plugin || null;
   }
 
@@ -115,8 +119,8 @@ export class PluginManager {
    * @param {string} hookName
    * @param  {...any} args
    */
-  async callHook(hookName: any, ...args: any[]) {
-    const results: Array<{ name: string; result: any }> = [];
+  async callHook(hookName: string, ...args: unknown[]) {
+    const results: Array<{ name: string; result: unknown }> = [];
     for (const { name, entry } of this.#getSorted()) {
       if (!entry.enabled || !entry.plugin[hookName]) {
         continue;
@@ -124,8 +128,11 @@ export class PluginManager {
       try {
         const result = await entry.plugin[hookName](...args);
         results.push({ name, result });
-      } catch (err: any) {
-        this.#logger.warn(`[PluginManager] hook ${hookName} 失败 (${name}):`, err.message);
+      } catch (err: unknown) {
+        this.#logger.warn(
+          `[PluginManager] hook ${hookName} 失败 (${name}):`,
+          (err as Error).message
+        );
       }
     }
     return results;

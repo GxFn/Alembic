@@ -30,9 +30,17 @@ const DEEPSEEK_BASE = 'https://api.deepseek.com/v1';
  * @param {object} options - {provider, model, apiKey, baseUrl}
  * @returns {AiProvider}
  */
-export function createProvider(options: any = {}) {
-  const provider = options.provider || process.env.ASD_AI_PROVIDER || 'google';
-  const ProviderClass = (PROVIDER_MAP as Record<string, any>)[provider.toLowerCase()];
+export function createProvider(options: Record<string, unknown> = {}) {
+  const provider = (options.provider as string) || process.env.ASD_AI_PROVIDER || 'google';
+  const ProviderClass = (
+    PROVIDER_MAP as Record<
+      string,
+      | typeof GoogleGeminiProvider
+      | typeof OpenAiProvider
+      | typeof ClaudeProvider
+      | typeof MockProvider
+    >
+  )[provider.toLowerCase()];
 
   if (!ProviderClass) {
     throw new Error(
@@ -84,7 +92,7 @@ export function autoDetectProvider() {
       ollama: null, // Ollama 不需要 key
       mock: null,
     };
-    const requiredKeyEnv = (keyEnvMap as Record<string, any>)[explicit.toLowerCase()];
+    const requiredKeyEnv = (keyEnvMap as Record<string, string | null>)[explicit.toLowerCase()];
     if (requiredKeyEnv && !process.env[requiredKeyEnv]) {
       logger.warn(
         `[AiFactory] ASD_AI_PROVIDER=${explicit} 但 ${requiredKeyEnv} 未配置，尝试自动探测其他可用 provider…`
@@ -134,7 +142,7 @@ const PROVIDER_KEY_MAP = {
  * @param {string} currentProvider
  * @returns {string[]}
  */
-export function getAvailableFallbacks(currentProvider: any) {
+export function getAvailableFallbacks(currentProvider: string) {
   const fallbacks: string[] = [];
   for (const [name, envKey] of Object.entries(PROVIDER_KEY_MAP)) {
     if (name === currentProvider) {
@@ -151,8 +159,8 @@ export function getAvailableFallbacks(currentProvider: any) {
 /**
  * 判断是否为地理限制 / 不可恢复的 provider 级错误（应触发 fallback）
  */
-export function isGeoOrProviderError(err: any) {
-  const msg = (err.message || '').toLowerCase();
+export function isGeoOrProviderError(err: unknown) {
+  const msg = ((err as Error).message || '').toLowerCase();
   return (
     /user location is not supported|failed_precondition|unsupported.*(region|country|location)|geo|blocked/i.test(
       msg
@@ -181,12 +189,14 @@ export async function getProviderWithFallback() {
       await primary.probe();
     }
     return primary;
-  } catch (probeErr: any) {
+  } catch (probeErr: unknown) {
     if (!isGeoOrProviderError(probeErr)) {
       // 非地理限制，可能是临时网络问题，仍返回 primary
       return primary;
     }
-    logger.warn(`[AiFactory] Primary provider "${currentProvider}" failed: ${probeErr.message}`);
+    logger.warn(
+      `[AiFactory] Primary provider "${currentProvider}" failed: ${(probeErr as Error).message}`
+    );
   }
 
   // Primary 确认不可用，尝试 fallback
@@ -202,8 +212,8 @@ export async function getProviderWithFallback() {
       const fbProvider = createProvider({ provider: fbName });
       fbProvider._fallbackFrom = currentProvider;
       return fbProvider;
-    } catch (e: any) {
-      logger.warn(`[AiFactory] Fallback "${fbName}" creation failed: ${e.message}`);
+    } catch (e: unknown) {
+      logger.warn(`[AiFactory] Fallback "${fbName}" creation failed: ${(e as Error).message}`);
     }
   }
 

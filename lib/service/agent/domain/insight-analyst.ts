@@ -16,6 +16,57 @@
 import { getDimensionSOP } from '../../../external/mcp/handlers/bootstrap/shared/dimension-sop.js';
 
 // ──────────────────────────────────────────────────────────────────
+// 本地类型定义
+// ──────────────────────────────────────────────────────────────────
+
+/** 维度配置 (Analyst) */
+interface AnalystDimConfig {
+  id: string;
+  label: string;
+  guide?: string;
+  focusKeywords?: string[];
+  outputType?: string;
+  allowedKnowledgeTypes?: string[];
+}
+
+/** 项目信息 (Analyst) */
+interface AnalystProjectInfo {
+  name: string;
+  lang: string;
+  fileCount: number;
+}
+
+/** DimensionContext 最小接口 */
+interface DimensionContextLike {
+  buildContextForDimension(dimId: string): {
+    previousDimensions: Record<string, DimensionDigestLike>;
+  };
+}
+
+/** 维度摘要 */
+interface DimensionDigestLike {
+  summary?: string;
+  keyFindings: string[];
+  crossRefs?: Record<string, string>;
+}
+
+/** EpisodicMemory (SessionStore) 最小接口 */
+interface EpisodicMemoryLike {
+  buildContextForDimension(dimId: string, focusKeywords: string[]): string | null;
+  getRelevantReflections(dimId: string): string | null;
+}
+
+/** PersistentMemory 最小接口 */
+interface SemanticMemoryLike {
+  toPromptSection(opts: { source: string; query: string; limit: number }): string | null;
+}
+
+/** CodeEntityGraph 最小接口 */
+interface CodeEntityGraphLike {
+  generateContextForAgent(opts: { maxEntities: number; maxEdges: number }): string | null;
+}
+
+// ──────────────────────────────────────────────────────────────────
 // System Prompt — Analyst 专用 (~100 tokens)
 // ──────────────────────────────────────────────────────────────────
 
@@ -112,14 +163,14 @@ export const ANALYST_BUDGET = {
  * @returns {string}
  */
 export function buildAnalystPrompt(
-  dimConfig: any,
-  projectInfo: any,
-  dimensionContext: any,
-  episodicMemory: any,
-  semanticMemory: any,
-  codeEntityGraph: any
+  dimConfig: AnalystDimConfig,
+  projectInfo: AnalystProjectInfo,
+  dimensionContext: DimensionContextLike | null | undefined,
+  episodicMemory: EpisodicMemoryLike | null | undefined,
+  semanticMemory: SemanticMemoryLike | null | undefined,
+  codeEntityGraph: CodeEntityGraphLike | null | undefined
 ) {
-  const parts: any[] = [];
+  const parts: string[] = [];
 
   // §1 任务描述
   parts.push(
@@ -143,7 +194,7 @@ export function buildAnalystPrompt(
       }
     }
     // §3.1 常见错误 (关键质量防护)
-    if (sop.commonMistakes?.length > 0) {
+    if (sop.commonMistakes && sop.commonMistakes.length > 0) {
       parts.push('## ⚠️ 常见错误（务必避免）');
       for (const m of sop.commonMistakes) {
         parts.push(`- ${m}`);
@@ -152,10 +203,10 @@ export function buildAnalystPrompt(
   } else if (dimConfig.guide) {
     const items = dimConfig.guide
       .split(/[、，,/]/)
-      .map((s: any) => s.trim())
+      .map((s: string) => s.trim())
       .filter(Boolean);
     if (items.length > 1) {
-      parts.push(`重点关注:\n${items.map((f: any) => `- ${f}`).join('\n')}`);
+      parts.push(`重点关注:\n${items.map((f: string) => `- ${f}`).join('\n')}`);
     } else {
       parts.push(`重点关注: ${dimConfig.guide}`);
     }
@@ -201,7 +252,7 @@ ${depthHint}
     }
   } else if (dimensionContext) {
     const snapshot = dimensionContext.buildContextForDimension(dimConfig.id);
-    const prevDims = Object.entries(snapshot.previousDimensions) as [string, any][];
+    const prevDims = Object.entries(snapshot.previousDimensions) as [string, DimensionDigestLike][];
     if (prevDims.length > 0) {
       parts.push(`## 前序维度分析摘要（避免重复探索）`);
       for (const [dimId, digest] of prevDims) {

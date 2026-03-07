@@ -9,21 +9,22 @@
  *   3. 'anonymous' — 兜底
  */
 
+import type { NextFunction, Request, Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 
 /**
  * Express 中间件：将 Gateway 注入到 req 对象
  */
 export function gatewayMiddleware() {
-  return (req: any, res: any, next: any) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
     /**
      * Gateway 快捷执行方法
      * @param {string} action 操作标识 (如 'candidate:create')
      * @param {string} resource 资源类型 (如 'candidates')
      * @param {object} data 请求数据
-     * @returns {Promise<{success: boolean, data?: any, error?: object, requestId: string}>}
+     * @returns {Promise<{success: boolean, data?: unknown, error?: object, requestId: string}>}
      */
-    req.gw = async (action: any, resource: any, data: any = {}) => {
+    req.gw = async (action: string, resource: string, data: Record<string, unknown> = {}) => {
       const container = getServiceContainer();
       const gateway = container.get('gateway');
 

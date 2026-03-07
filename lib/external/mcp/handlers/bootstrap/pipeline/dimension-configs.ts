@@ -73,9 +73,14 @@ export const DIMENSION_CONFIGS_V3 = {
  * @param {string} dimId 维度 ID
  * @returns {object|null} 完整维度配置，或 null（未知维度）
  */
-export function getFullDimensionConfig(dimId: any) {
+export function getFullDimensionConfig(dimId: string) {
   const base = baseDimensions.find((d) => d.id === dimId);
-  const v3 = (DIMENSION_CONFIGS_V3 as Record<string, any>)[dimId];
+  const v3 = (
+    DIMENSION_CONFIGS_V3 as Record<
+      string,
+      { outputType?: string; allowedKnowledgeTypes?: string[] }
+    >
+  )[dimId];
   if (!base) {
     return null;
   }
@@ -106,6 +111,27 @@ export function getFullDimensionConfig(dimId: any) {
 // v4.0: Tier Reflection — 综合分析 (规则化, 不需要 AI)
 // ──────────────────────────────────────────────────────────────────
 
+/** A single finding from a dimension analysis */
+interface DimensionFinding {
+  dimId?: string;
+  importance?: number;
+  evidence?: string | unknown;
+  finding?: string;
+}
+
+/** Minimal session store interface for tier reflection */
+interface TierSessionStore {
+  getDimensionReport(dimId: string):
+    | {
+        findings?: DimensionFinding[];
+        digest?: {
+          gaps?: string[];
+          remainingTasks?: Array<{ signal?: string; reason?: string }>;
+        };
+      }
+    | undefined;
+}
+
 /**
  * 构建 Tier 级 Reflection — 在每个 Tier 完成后调用
  *
@@ -119,11 +145,15 @@ export function getFullDimensionConfig(dimId: any) {
  * @param {import('../../../../../service/agent/memory/SessionStore.js').SessionStore} sessionStore
  * @returns {object} TierReflection
  */
-export function buildTierReflection(tierIndex: any, tierResults: any, sessionStore: any) {
+export function buildTierReflection(
+  tierIndex: number,
+  tierResults: Map<string, unknown>,
+  sessionStore: TierSessionStore
+) {
   const completedDimensions = [...tierResults.keys()];
 
   // 收集本 Tier 所有维度的 findings
-  const allFindings: any[] = [];
+  const allFindings: DimensionFinding[] = [];
   for (const dimId of completedDimensions) {
     const report = sessionStore.getDimensionReport(dimId);
     if (report?.findings) {
@@ -139,8 +169,8 @@ export function buildTierReflection(tierIndex: any, tierResults: any, sessionSto
     .slice(0, 10);
 
   // 检测跨维度模式 (多个维度提到同一文件/关键词)
-  const fileMentions: any = {};
-  const keywordMentions: Record<string, any> = {};
+  const fileMentions: Record<string, number> = {};
+  const keywordMentions: Record<string, number> = {};
 
   for (const f of allFindings) {
     // 统计文件引用频率
@@ -152,7 +182,7 @@ export function buildTierReflection(tierIndex: any, tierResults: any, sessionSto
       }
     }
     // 统计关键词
-    const words = (f.finding || '').split(/[\s,，。.]+/).filter((w: any) => w.length > 3);
+    const words = (f.finding || '').split(/[\s,，。.]+/).filter((w: string) => w.length > 3);
     for (const w of words) {
       keywordMentions[w] = (keywordMentions[w] || 0) + 1;
     }

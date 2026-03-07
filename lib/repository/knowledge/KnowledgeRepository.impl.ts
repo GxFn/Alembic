@@ -1,7 +1,48 @@
+import type { Logger as WinstonLogger } from 'winston';
 import { inferKind, KnowledgeEntry } from '../../domain/knowledge/index.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { safeJsonParse, safeJsonStringify, unixNow } from '../../shared/utils/common.js';
 import { BaseRepository } from '../base/BaseRepository.js';
+
+/** Database connection wrapper interface */
+interface KnowledgeDatabaseWrapper {
+  getDb(): import('better-sqlite3').Database;
+}
+
+/** Filters accepted by findWithPagination */
+interface KnowledgeFilters {
+  _tagLike?: string;
+  _search?: string;
+  lifecycle?: string;
+  kind?: string;
+  language?: string;
+  category?: string;
+  [key: string]: unknown;
+}
+
+/** Pagination options for knowledge queries */
+interface KnowledgePaginationOptions {
+  page?: number;
+  pageSize?: number;
+  orderBy?: string;
+  order?: 'ASC' | 'DESC';
+}
+
+/** Stats row shape */
+interface KnowledgeStatsRow {
+  total: number;
+  pending: number;
+  active: number;
+  deprecated: number;
+  rules: number;
+  patterns: number;
+  facts: number;
+}
+
+/** Count row shape */
+interface KnowledgeCountRow {
+  count: number;
+}
 
 /**
  * KnowledgeRepositoryImpl — 统一知识实体仓储实现
@@ -10,7 +51,7 @@ import { BaseRepository } from '../base/BaseRepository.js';
  * 全链路 camelCase — DB 列名 = 实体属性名。
  */
 export class KnowledgeRepositoryImpl extends BaseRepository {
-  constructor(database: any) {
+  constructor(database: KnowledgeDatabaseWrapper) {
     super(database, 'knowledge_entries');
     this.logger = Logger.getInstance();
   }
@@ -22,7 +63,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @param {KnowledgeEntry} entry
    * @returns {Promise<KnowledgeEntry>}
    */
-  async create(entry: any) {
+  async create(entry: KnowledgeEntry) {
     if (!entry || !entry.isValid()) {
       throw new Error('Invalid knowledge entry: title + content required');
     }
@@ -34,10 +75,11 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
       const query = `INSERT INTO knowledge_entries (${keys.join(', ')}) VALUES (${placeholders})`;
       this.db.prepare(query).run(...Object.values(row));
       return this.findById(entry.id);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error('Error creating knowledge entry', {
         entryId: entry.id,
-        error: error.message,
+        error: message,
       });
       throw error;
     }
@@ -49,17 +91,16 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @param {Object|KnowledgeEntry} updates
    * @returns {Promise<KnowledgeEntry>}
    */
-  async update(id: any, updates: any) {
+  async update(id: string, updates: KnowledgeEntry | Record<string, unknown>) {
     try {
-      const existing: any = await this.findById(id);
+      const existing = (await this.findById(id)) as KnowledgeEntry | null;
       if (!existing) {
         throw new Error(`Knowledge entry not found: ${id}`);
       }
 
       if (updates instanceof KnowledgeEntry) {
-        const row = this._entityToRow(updates);
-        delete row.id;
-        delete row.createdAt;
+        const fullRow = this._entityToRow(updates);
+        const { id: _id, createdAt: _ca, ...row } = fullRow;
         row.updatedAt = unixNow();
 
         const setClauses = Object.keys(row)
@@ -77,9 +118,8 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
         ...updates,
         updatedAt: unixNow(),
       });
-      const row = this._entityToRow(merged);
-      delete row.id;
-      delete row.createdAt;
+      const fullRow2 = this._entityToRow(merged);
+      const { id: _id2, createdAt: _ca2, ...row } = fullRow2;
 
       const setClauses = Object.keys(row)
         .map((k) => `${k} = ?`)
@@ -88,10 +128,11 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
         .prepare(`UPDATE knowledge_entries SET ${setClauses} WHERE id = ?`)
         .run(...Object.values(row), id);
       return this.findById(id);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error('Error updating knowledge entry', {
         id,
-        error: error.message,
+        error: message,
       });
       throw error;
     }
@@ -102,12 +143,13 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @param {string} id
    * @returns {Promise<boolean>}
    */
-  async delete(id: any) {
+  async delete(id: string) {
     try {
       const result = this.db.prepare('DELETE FROM knowledge_entries WHERE id = ?').run(id);
       return result.changes > 0;
-    } catch (error: any) {
-      this.logger.error('Error deleting knowledge entry', { id, error: error.message });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error('Error deleting knowledge entry', { id, error: message });
       throw error;
     }
   }
@@ -118,12 +160,15 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * 分页查询
    * @override
    */
-  async findWithPagination(filters: any = {}, options = {}) {
-    const { page = 1, pageSize = 20, orderBy = 'createdAt', order = 'DESC' } = options as any;
+  async findWithPagination(
+    filters: KnowledgeFilters = {},
+    options: KnowledgePaginationOptions = {}
+  ) {
+    const { page = 1, pageSize = 20, orderBy = 'createdAt', order = 'DESC' } = options;
     const offset = (page - 1) * pageSize;
 
     const conditions: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     const { _tagLike, _search, lifecycle: lcFilter, ...normalFilters } = filters;
 
@@ -143,12 +188,12 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
 
     if (_tagLike) {
       conditions.push(`tags LIKE ?`);
-      const escaped = _tagLike.replace(/[%_\\]/g, (ch: any) => `\\${ch}`);
+      const escaped = _tagLike.replace(/[%_\\]/g, (ch: string) => `\\${ch}`);
       params.push(`%"${escaped}"%`);
     }
 
     if (_search) {
-      const escaped = _search.replace(/[%_\\]/g, (ch: any) => `\\${ch}`);
+      const escaped = _search.replace(/[%_\\]/g, (ch: string) => `\\${ch}`);
       const like = `%${escaped}%`;
       conditions.push(
         `(title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR trigger LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\' OR tags LIKE ? ESCAPE '\\')`
@@ -161,15 +206,17 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
     this._assertSafeColumn(orderBy);
     const orderClause = ` ORDER BY ${orderBy} ${order === 'ASC' ? 'ASC' : 'DESC'}`;
 
-    const total = this.db
-      .prepare(`SELECT COUNT(*) as count FROM knowledge_entries${where}`)
-      .get(...params).count;
+    const total = (
+      this.db
+        .prepare(`SELECT COUNT(*) as count FROM knowledge_entries${where}`)
+        .get(...params) as KnowledgeCountRow
+    ).count;
     const data = this.db
       .prepare(`SELECT * FROM knowledge_entries${where}${orderClause} LIMIT ? OFFSET ?`)
       .all(...params, pageSize, offset);
 
     return {
-      data: data.map((row: any) => this._rowToEntity(row)),
+      data: data.map((row: unknown) => this._rowToEntity(row as Record<string, unknown>)),
       pagination: { page, pageSize, total, pages: Math.ceil(total / pageSize) },
     };
   }
@@ -177,16 +224,19 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
   /**
    * 根据生命周期状态查询
    */
-  async findByLifecycle(lifecycle: any, pagination: any = {}) {
+  async findByLifecycle(lifecycle: string, pagination: KnowledgePaginationOptions = {}) {
     return this.findWithPagination({ lifecycle }, pagination);
   }
 
   /**
    * 根据 kind 查询
    */
-  async findByKind(kind: any, options: any = {}) {
+  async findByKind(
+    kind: string,
+    options: KnowledgePaginationOptions & { lifecycle?: string } = {}
+  ) {
     const { lifecycle, ...pagination } = options;
-    const filters: any = { kind };
+    const filters: KnowledgeFilters = { kind };
     if (lifecycle) {
       filters.lifecycle = lifecycle;
     }
@@ -205,9 +255,10 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
         WHERE kind = 'rule' AND lifecycle = 'active'
       `)
         .all();
-      return rows.map((row: any) => this._rowToEntity(row));
-    } catch (error: any) {
-      this.logger.error('Error finding active rules', { error: error.message });
+      return rows.map((row: unknown) => this._rowToEntity(row as Record<string, unknown>));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error('Error finding active rules', { error: message });
       throw error;
     }
   }
@@ -215,21 +266,21 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
   /**
    * 根据语言查询
    */
-  async findByLanguage(language: any, pagination: any = {}) {
+  async findByLanguage(language: string, pagination: KnowledgePaginationOptions = {}) {
     return this.findWithPagination({ language }, pagination);
   }
 
   /**
    * 根据分类查询
    */
-  async findByCategory(category: any, pagination: any = {}) {
+  async findByCategory(category: string, pagination: KnowledgePaginationOptions = {}) {
     return this.findWithPagination({ category }, pagination);
   }
 
   /**
    * 搜索
    */
-  async search(keyword: any, pagination: any = {}) {
+  async search(keyword: string, pagination: KnowledgePaginationOptions = {}) {
     return this.findWithPagination({ _search: keyword }, pagination);
   }
 
@@ -251,8 +302,9 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
         FROM knowledge_entries
       `)
         .get();
-    } catch (error: any) {
-      this.logger.error('Error getting knowledge stats', { error: error.message });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error('Error getting knowledge stats', { error: message });
       throw error;
     }
   }
@@ -264,7 +316,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @param {Object} row
    * @returns {KnowledgeEntry}
    */
-  _rowToEntity(row: any) {
+  _rowToEntity(row: Record<string, unknown>): KnowledgeEntry | null {
     if (!row) {
       return null;
     }
@@ -272,16 +324,16 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
     return new KnowledgeEntry({
       ...row,
       // JSON 列需要 parse
-      lifecycleHistory: safeJsonParse(row.lifecycleHistory, [] as any),
-      tags: safeJsonParse(row.tags, [] as any),
-      content: safeJsonParse(row.content, {} as any),
-      relations: safeJsonParse(row.relations, {} as any),
-      constraints: safeJsonParse(row.constraints, {} as any),
-      reasoning: safeJsonParse(row.reasoning, {} as any),
-      quality: safeJsonParse(row.quality, {} as any),
-      stats: safeJsonParse(row.stats, {} as any),
-      headers: safeJsonParse(row.headers, [] as any),
-      headerPaths: safeJsonParse(row.headerPaths, [] as any),
+      lifecycleHistory: safeJsonParse(row.lifecycleHistory),
+      tags: safeJsonParse(row.tags),
+      content: safeJsonParse(row.content),
+      relations: safeJsonParse(row.relations),
+      constraints: safeJsonParse(row.constraints),
+      reasoning: safeJsonParse(row.reasoning),
+      quality: safeJsonParse(row.quality),
+      stats: safeJsonParse(row.stats),
+      headers: safeJsonParse(row.headers),
+      headerPaths: safeJsonParse(row.headerPaths),
       agentNotes: safeJsonParse(row.agentNotes, null),
       // SQLite INTEGER → boolean
       autoApprovable: !!row.autoApprovable,
@@ -294,7 +346,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * @param {KnowledgeEntry} e
    * @returns {Object}
    */
-  _entityToRow(e: any) {
+  _entityToRow(e: KnowledgeEntry) {
     const now = unixNow();
     return {
       id: e.id,
@@ -347,8 +399,8 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
    * 覆写 BaseRepository 的 _mapRowToEntity
    * @override
    */
-  _mapRowToEntity(row: any) {
-    return this._rowToEntity(row);
+  _mapRowToEntity(row: unknown) {
+    return this._rowToEntity(row as Record<string, unknown>);
   }
 }
 

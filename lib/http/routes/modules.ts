@@ -5,7 +5,7 @@
  * 所有端点通过 container.get('moduleService') 获取 ModuleService 实例
  */
 
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
@@ -21,7 +21,7 @@ const logger = Logger.getInstance();
  */
 router.get(
   '/targets',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
 
@@ -45,7 +45,7 @@ router.get(
  */
 router.get(
   '/dep-graph',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
 
@@ -54,17 +54,15 @@ router.get(
     const graph = await moduleService.getDependencyGraph({ level });
 
     if (!graph || (!graph.nodes && !graph.packages)) {
-      return res.json({
+      return void res.json({
         success: true,
         data: { nodes: [], edges: [], projectRoot: null },
       });
     }
 
     // 标准化为 { nodes, edges } 格式
-    let nodes: any[] = [];
-    let edges:
-      | { from: string; to: string; source: string }
-      | { from: string; to: any; source: string }[] = [];
+    let nodes: Record<string, unknown>[] = [];
+    let edges: { from: string; to: string; source: string }[] = [];
 
     if (graph.nodes && graph.edges) {
       nodes = graph.nodes;
@@ -125,14 +123,14 @@ router.get(
  */
 router.get(
   '/browse-dirs',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
 
     await moduleService.load();
 
-    const basePath = req.query.path || '';
-    const maxDepth = Math.min(Number.parseInt(req.query.depth || '3', 10), 5);
+    const basePath = (req.query.path as string) || '';
+    const maxDepth = Math.min(Number.parseInt((req.query.depth as string) || '3', 10), 5);
 
     const dirs = await moduleService.browseDirectories(basePath, maxDepth);
 
@@ -154,7 +152,7 @@ router.get(
  */
 router.post(
   '/scan-folder',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { path: folderPath, options = {} } = req.body;
 
     if (!folderPath) {
@@ -181,7 +179,7 @@ router.post(
  */
 router.post(
   '/scan-folder/stream',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { path: folderPath, options = {} } = req.body;
 
     if (!folderPath) {
@@ -193,7 +191,8 @@ router.post(
 
     await moduleService.load();
 
-    const sessionId = createStreamSession('scan');
+    const streamSession = createStreamSession('scan');
+    const sessionId = streamSession.sessionId;
     const session = getStreamSession(sessionId);
 
     res.json({ sessionId });
@@ -203,7 +202,7 @@ router.post(
       try {
         const result = await moduleService.scanFolder(folderPath, {
           ...options,
-          onProgress: (evt: any) => {
+          onProgress: (evt: Record<string, unknown>) => {
             if (session) {
               session.push(evt);
             }
@@ -220,10 +219,10 @@ router.post(
           });
           session.push({ type: 'scan:done' });
         }
-      } catch (err: any) {
-        logger.error(`[modules] scan-folder/stream error: ${err.message}`);
+      } catch (err: unknown) {
+        logger.error(`[modules] scan-folder/stream error: ${(err as Error).message}`);
         if (session) {
-          session.push({ type: 'scan:error', message: err.message });
+          session.push({ type: 'scan:error', message: (err as Error).message });
           session.push({ type: 'scan:done' });
         }
       }
@@ -237,7 +236,7 @@ router.post(
  */
 router.post(
   '/target-files',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { target, targetName } = req.body;
 
     if (!target && !targetName) {
@@ -252,9 +251,9 @@ router.post(
     let resolvedTarget = target;
     if (!resolvedTarget && targetName) {
       const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t: any) => t.name === targetName);
+      resolvedTarget = targets.find((t: Record<string, unknown>) => t.name === targetName);
       if (!resolvedTarget) {
-        return res.status(404).json({
+        return void res.status(404).json({
           success: false,
           error: { code: 'NOT_FOUND', message: `Module not found: ${targetName}` },
         });
@@ -280,7 +279,7 @@ router.post(
  */
 router.post(
   '/scan',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { target, targetName, options = {} } = req.body;
 
     if (!target && !targetName) {
@@ -295,9 +294,9 @@ router.post(
     let resolvedTarget = target;
     if (!resolvedTarget && targetName) {
       const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t: any) => t.name === targetName);
+      resolvedTarget = targets.find((t: Record<string, unknown>) => t.name === targetName);
       if (!resolvedTarget) {
-        return res.status(404).json({
+        return void res.status(404).json({
           success: false,
           error: { code: 'NOT_FOUND', message: `Module not found: ${targetName}` },
         });
@@ -325,7 +324,7 @@ router.post(
  */
 router.post(
   '/scan/stream',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { target, targetName, options = {} } = req.body;
 
     if (!target && !targetName) {
@@ -340,9 +339,9 @@ router.post(
     let resolvedTarget = target;
     if (!resolvedTarget && targetName) {
       const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t: any) => t.name === targetName);
+      resolvedTarget = targets.find((t: Record<string, unknown>) => t.name === targetName);
       if (!resolvedTarget) {
-        return res.status(404).json({
+        return void res.status(404).json({
           success: false,
           error: { code: 'NOT_FOUND', message: `Module not found: ${targetName}` },
         });
@@ -365,7 +364,7 @@ router.post(
         });
         const result = await moduleService.scanTarget(resolvedTarget, {
           ...options,
-          onProgress(event: any) {
+          onProgress(event: Record<string, unknown>) {
             session.send(event);
           },
         });
@@ -381,9 +380,9 @@ router.post(
           fileCount: (result.scannedFiles || []).length,
         });
         session.end();
-      } catch (err: any) {
-        logger.error('Module stream scan failed', { target: tName, error: err.message });
-        session.error(err.message, 'SCAN_ERROR');
+      } catch (err: unknown) {
+        logger.error('Module stream scan failed', { target: tName, error: (err as Error).message });
+        session.error((err as Error).message, 'SCAN_ERROR');
       }
     });
   })
@@ -412,7 +411,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
     res.socket.setTimeout(0);
   }
 
-  function writeEvent(event: any) {
+  function writeEvent(event: Record<string, unknown>) {
     if (res.writableEnded) {
       return;
     }
@@ -434,7 +433,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
   }
 
   // 2) 订阅实时事件
-  const unsubscribe = session.on((event: any) => {
+  const unsubscribe = session.on((event: Record<string, unknown>) => {
     writeEvent(event);
     if (event.type === 'stream:done' || event.type === 'stream:error') {
       unsubscribe();
@@ -465,7 +464,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
  */
 router.post(
   '/scan-project',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { options = {} } = req.body;
 
     const container = getServiceContainer();
@@ -488,7 +487,7 @@ router.post(
  */
 router.post(
   '/update-map',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
 
@@ -510,7 +509,7 @@ router.post(
  */
 router.get(
   '/project-info',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
     const moduleService = container.get('moduleService');
 
@@ -530,7 +529,7 @@ router.get(
  */
 router.post(
   '/bootstrap',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
 
     const container = getServiceContainer();
@@ -561,17 +560,17 @@ router.post(
  */
 router.get(
   '/bootstrap/status',
-  asyncHandler(async (req: any, res: any) => {
+  asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
 
-    let taskManager: any = null;
+    let taskManager: { getSessionStatus(): Record<string, unknown> } | null = null;
     try {
       taskManager = container.get('bootstrapTaskManager');
     } catch {
       /* not registered */
     }
     if (!taskManager) {
-      return res.json({
+      return void res.json({
         success: true,
         data: { status: 'idle', message: 'No bootstrap task manager initialized' },
       });

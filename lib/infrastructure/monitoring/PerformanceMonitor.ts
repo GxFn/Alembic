@@ -5,10 +5,41 @@
 
 import Logger from '../logging/Logger.js';
 
+interface EndpointStats {
+  count: number;
+  errors: number;
+  totalDuration: number;
+  minDuration: number;
+  maxDuration: number;
+  avgDuration: number;
+}
+
+interface RequestData {
+  route: string;
+  method: string;
+  path: string;
+  statusCode: number;
+  duration: number;
+  userAgent?: string;
+  ip?: string;
+  timestamp: string;
+}
+
 export class PerformanceMonitor {
-  config: any;
-  metrics: any;
-  statsInterval: any;
+  config: { slowRequestThreshold: number; maxResponseTimeSamples: number; maxSlowRequests: number };
+  metrics: {
+    requests: { total: number; success: number; errors: number };
+    endpoints: Map<string, EndpointStats>;
+    responseTimes: number[];
+    slowRequests: RequestData[];
+    errorRate: number | string;
+    averageResponseTime: number;
+    startTime: number;
+    rpm?: number;
+    p95?: number;
+    p99?: number;
+  };
+  statsInterval: ReturnType<typeof setInterval>;
   constructor() {
     this.metrics = {
       requests: {
@@ -41,7 +72,16 @@ export class PerformanceMonitor {
    * Express 中间件
    */
   middleware() {
-    return (req: any, res: any, next: any) => {
+    return (
+      req: {
+        method: string;
+        path: string;
+        get: (header: string) => string | undefined;
+        ip?: string;
+      },
+      res: { on: (event: string, cb: () => void) => void; statusCode: number },
+      next: () => void
+    ) => {
       const startTime = Date.now();
       const route = `${req.method} ${req.path}`;
 
@@ -69,7 +109,7 @@ export class PerformanceMonitor {
   /**
    * 记录请求
    */
-  recordRequest(requestData: any) {
+  recordRequest(requestData: RequestData) {
     const { route, statusCode, duration } = requestData;
 
     // 总体统计
@@ -84,7 +124,7 @@ export class PerformanceMonitor {
     if (!this.metrics.endpoints.has(route)) {
       if (this.metrics.endpoints.size >= 500) {
         // 淘汰最少访问的端点
-        let minKey: any = null,
+        let minKey: string | null = null,
           minCount = Infinity;
         for (const [k, v] of this.metrics.endpoints) {
           if (v.count < minCount) {
@@ -106,7 +146,7 @@ export class PerformanceMonitor {
       });
     }
 
-    const endpointStats = this.metrics.endpoints.get(route);
+    const endpointStats = this.metrics.endpoints.get(route)!;
     endpointStats.count++;
     endpointStats.totalDuration += duration;
     endpointStats.minDuration = Math.min(endpointStats.minDuration, duration);
@@ -150,7 +190,7 @@ export class PerformanceMonitor {
 
     // 平均响应时间
     if (this.metrics.responseTimes.length > 0) {
-      const sum = this.metrics.responseTimes.reduce((acc: any, val: any) => acc + val, 0);
+      const sum = this.metrics.responseTimes.reduce((acc, val) => acc + val, 0);
       this.metrics.averageResponseTime = Math.round(sum / this.metrics.responseTimes.length);
     }
 
@@ -184,18 +224,18 @@ export class PerformanceMonitor {
     this.calculateStats(); // 实时计算
 
     const topEndpoints = Array.from(this.metrics.endpoints.entries())
-      .sort((a: any, b: any) => b[1].count - a[1].count)
+      .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 10)
-      .map(([route, stats]: any) => ({
+      .map(([route, stats]) => ({
         route,
         ...stats,
         avgDuration: Math.round(stats.avgDuration),
       }));
 
     const slowestEndpoints = Array.from(this.metrics.endpoints.entries())
-      .sort((a: any, b: any) => b[1].avgDuration - a[1].avgDuration)
+      .sort((a, b) => b[1].avgDuration - a[1].avgDuration)
       .slice(0, 10)
-      .map(([route, stats]: any) => ({
+      .map(([route, stats]) => ({
         route,
         avgDuration: Math.round(stats.avgDuration),
         count: stats.count,
@@ -215,7 +255,7 @@ export class PerformanceMonitor {
       },
       topEndpoints,
       slowestEndpoints,
-      recentSlowRequests: this.metrics.slowRequests.slice(-10).map((req: any) => ({
+      recentSlowRequests: this.metrics.slowRequests.slice(-10).map((req) => ({
         route: req.route,
         duration: `${req.duration}ms`,
         timestamp: req.timestamp,
@@ -256,7 +296,7 @@ export class PerformanceMonitor {
 }
 
 // 单例实例
-let performanceMonitorInstance: any = null;
+let performanceMonitorInstance: PerformanceMonitor | null = null;
 
 /**
  * 初始化性能监控

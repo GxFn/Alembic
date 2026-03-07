@@ -10,14 +10,14 @@ import { Task } from '../../domain/task/Task.js';
  *   created_at ASC → 同优先级先创建优先（防止 starvation）
  */
 export class TaskReadyEngine {
-  _blockedStmt: any;
-  _db: any;
-  _depTreeStmt: any;
-  _readyStmt: any;
+  _blockedStmt!: ReturnType<import('better-sqlite3').Database['prepare']>;
+  _db: import('better-sqlite3').Database;
+  _depTreeStmt!: ReturnType<import('better-sqlite3').Database['prepare']>;
+  _readyStmt!: ReturnType<import('better-sqlite3').Database['prepare']>;
   /**
    * @param {import('better-sqlite3').Database} db - raw SQLite handle
    */
-  constructor(db: any) {
+  constructor(db: import('better-sqlite3').Database) {
     this._db = db;
     this._prepareStatements();
   }
@@ -96,10 +96,10 @@ export class TaskReadyEngine {
    * @param {number} [options.limit=10]
    * @returns {Task[]}
    */
-  getReadyWork(options: any = {}) {
+  getReadyWork(options: { limit?: number } = {}) {
     const limit = Math.max(1, Math.min(options.limit || 10, 200));
-    const rows = this._readyStmt.all(limit);
-    return rows.map((r: any) => Task.fromRow(r));
+    const rows = this._readyStmt.all(limit) as Record<string, unknown>[];
+    return rows.map((r) => Task.fromRow(r)).filter((t): t is Task => t !== null);
   }
 
   /**
@@ -107,10 +107,10 @@ export class TaskReadyEngine {
    * @returns {Array<Object>} 带 blocked_by 字段的任务列表
    */
   getBlockedWork() {
-    const rows = this._blockedStmt.all();
-    return rows.map((r: any) => ({
+    const rows = (this._blockedStmt as unknown as { all: () => Record<string, unknown>[] }).all();
+    return rows.map((r) => ({
       ...Task.fromRow(r)?.toJSON(),
-      blockedBy: r.blocked_by ? r.blocked_by.split(',') : [],
+      blockedBy: (r.blocked_by as string) ? (r.blocked_by as string).split(',') : [],
     }));
   }
 
@@ -119,9 +119,9 @@ export class TaskReadyEngine {
    * @param {string} taskId
    * @returns {Array<Object>} 带 depth 的任务列表
    */
-  getDependencyTree(taskId: any) {
-    const rows = this._depTreeStmt.all(taskId);
-    return rows.map((r: any) => ({
+  getDependencyTree(taskId: string) {
+    const rows = this._depTreeStmt.all(taskId) as Record<string, unknown>[];
+    return rows.map((r) => ({
       ...Task.fromRow(r)?.toJSON(),
       depth: r.depth,
     }));

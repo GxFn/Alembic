@@ -4,6 +4,37 @@
  * 不同场景使用不同权重配置（向后兼容旧配置中的 'seasonality' 键）
  */
 
+interface SignalCandidate {
+  bm25Score?: number;
+  score?: number;
+  title?: string;
+  trigger?: string;
+  content?: string;
+  code?: string;
+  qualityScore?: number;
+  authorityScore?: number;
+  usageCount?: number;
+  updatedAt?: number | string;
+  lastModified?: number | string;
+  createdAt?: number | string;
+  difficulty?: string;
+  language?: string;
+  category?: string;
+  tags?: string[];
+  [key: string]: unknown;
+}
+
+interface SignalContext {
+  query?: string;
+  scenario?: string;
+  intent?: string;
+  language?: string;
+  category?: string;
+  userLevel?: string;
+  tags?: string[];
+  [key: string]: unknown;
+}
+
 // 场景权重配置
 const SCENARIO_WEIGHTS = {
   lint: {
@@ -52,7 +83,7 @@ const SCENARIO_WEIGHTS = {
  * 相关性信号 — BM25 + 标题匹配 + 内容匹配
  */
 export class RelevanceSignal {
-  compute(candidate: any, context: any) {
+  compute(candidate: SignalCandidate, context: SignalContext) {
     let score = candidate.bm25Score || candidate.score || 0;
     const query = (context.query || '').toLowerCase();
     if (!query) {
@@ -73,7 +104,7 @@ export class RelevanceSignal {
     }
     // 标题单词匹配
     const queryWords = query.split(/\s+/);
-    const titleHits = queryWords.filter((w: any) => title.includes(w)).length;
+    const titleHits = queryWords.filter((w: string) => title.includes(w)).length;
     score += (titleHits / queryWords.length) * 0.2;
     // 内容匹配
     if (content.includes(query)) {
@@ -88,7 +119,7 @@ export class RelevanceSignal {
  * 权威性信号 — 基于质量评分、使用次数、作者
  */
 export class AuthoritySignal {
-  compute(candidate: any) {
+  compute(candidate: SignalCandidate) {
     let score = 0;
     if (candidate.qualityScore) {
       score += (candidate.qualityScore / 100) * 0.5;
@@ -96,8 +127,8 @@ export class AuthoritySignal {
     if (candidate.authorityScore) {
       score += candidate.authorityScore * 0.3;
     }
-    if (candidate.usageCount > 0) {
-      score += Math.min(candidate.usageCount / 100, 1) * 0.2;
+    if ((candidate.usageCount ?? 0) > 0) {
+      score += Math.min((candidate.usageCount ?? 0) / 100, 1) * 0.2;
     }
     return Math.min(score || 0.5, 1.0);
   }
@@ -107,7 +138,7 @@ export class AuthoritySignal {
  * 时间衰减信号
  */
 export class RecencySignal {
-  compute(candidate: any) {
+  compute(candidate: SignalCandidate) {
     const updated = candidate.updatedAt || candidate.lastModified || candidate.createdAt;
     if (!updated) {
       return 0.5;
@@ -134,7 +165,7 @@ export class RecencySignal {
  * usageCount 1 → 0.10, 10 → 0.37, 100 → 0.67, 1000+ → 1.0
  */
 export class PopularitySignal {
-  compute(candidate: any) {
+  compute(candidate: SignalCandidate) {
     const usage = candidate.usageCount || 0;
     if (usage <= 0) {
       return 0;
@@ -148,7 +179,7 @@ export class PopularitySignal {
  * 难度信号 — 用于学习场景的难度匹配
  */
 export class DifficultySignal {
-  compute(candidate: any, context: any) {
+  compute(candidate: SignalCandidate, context: SignalContext) {
     const levels = { beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
     const candidateLevel =
       (levels as Record<string, number>)[candidate.difficulty || 'intermediate'] || 2;
@@ -164,7 +195,7 @@ export class DifficultySignal {
  * (原 SeasonalitySignal，重命名以准确反映实际语义)
  */
 export class ContextMatchSignal {
-  compute(candidate: any, context: any) {
+  compute(candidate: SignalCandidate, context: SignalContext) {
     let score = 0;
 
     // 语言匹配（最强上下文信号）
@@ -182,9 +213,9 @@ export class ContextMatchSignal {
     }
 
     // 标签重叠
-    if (context.tags?.length > 0 && candidate.tags?.length > 0) {
-      const ctxTags = new Set(context.tags.map((t: any) => t.toLowerCase()));
-      const hits = candidate.tags.filter((t: any) => ctxTags.has(t.toLowerCase())).length;
+    if ((context.tags?.length ?? 0) > 0 && (candidate.tags?.length ?? 0) > 0) {
+      const ctxTags = new Set(context.tags!.map((t: string) => t.toLowerCase()));
+      const hits = candidate.tags!.filter((t: string) => ctxTags.has(t.toLowerCase())).length;
       if (hits > 0) {
         score += 0.25 * Math.min(hits / ctxTags.size, 1);
       }
@@ -208,7 +239,7 @@ const LANGUAGE_FAMILIES = {
   python: ['cython'],
 };
 
-function _isRelatedLanguage(a: any, b: any) {
+function _isRelatedLanguage(a: string, b: string) {
   const related = (LANGUAGE_FAMILIES as Record<string, string[]>)[a?.toLowerCase()] || [];
   return related.includes(b?.toLowerCase());
 }
@@ -220,7 +251,7 @@ export class MultiSignalRanker {
   #signals;
   #scenarioWeights;
 
-  constructor(options: any = {}) {
+  constructor(options: { scenarioWeights?: Record<string, Record<string, number>> } = {}) {
     this.#signals = {
       relevance: new RelevanceSignal(),
       authority: new AuthoritySignal(),
@@ -231,9 +262,9 @@ export class MultiSignalRanker {
     };
     // 合并自定义权重，支持旧配置中的 "seasonality" 键向后兼容
     const customWeights = options.scenarioWeights || {};
-    const remapped: Record<string, any> = {};
+    const remapped: Record<string, Record<string, number>> = {};
     for (const [scenario, weights] of Object.entries(customWeights)) {
-      remapped[scenario] = { ...(weights as any) };
+      remapped[scenario] = { ...(weights as Record<string, number>) };
       if ('seasonality' in remapped[scenario] && !('contextMatch' in remapped[scenario])) {
         remapped[scenario].contextMatch = remapped[scenario].seasonality;
         delete remapped[scenario].seasonality;
@@ -248,21 +279,24 @@ export class MultiSignalRanker {
    * @param {object} context - { query, scenario, language, userLevel, ... }
    * @returns {Array} - sorted candidates with rankerScore
    */
-  rank(candidates: any, context: any = {}) {
+  rank(candidates: SignalCandidate[], context: SignalContext = {}) {
     if (!candidates || candidates.length === 0) {
       return [];
     }
 
     const scenario = context.scenario || context.intent || 'default';
     const weights =
-      (this.#scenarioWeights as Record<string, any>)[scenario] || this.#scenarioWeights.default;
+      (this.#scenarioWeights as Record<string, Record<string, number>>)[scenario] ||
+      this.#scenarioWeights.default;
 
-    const scored = candidates.map((candidate: any) => {
-      const signals: Record<string, any> = {};
+    const scored = candidates.map((candidate: SignalCandidate) => {
+      const signals: Record<string, number> = {};
       let totalScore = 0;
 
       for (const [name, signal] of Object.entries(this.#signals)) {
-        const value = (signal as any).compute(candidate, context);
+        const value = (
+          signal as { compute: (c: SignalCandidate, ctx: SignalContext) => number }
+        ).compute(candidate, context);
         signals[name] = value;
         // 向后兼容: 旧配置可能用 "seasonality" 而非 "contextMatch"
         const weight = weights[name] ?? (name === 'contextMatch' ? (weights.seasonality ?? 0) : 0);
@@ -276,6 +310,6 @@ export class MultiSignalRanker {
       };
     });
 
-    return scored.sort((a: any, b: any) => b.rankerScore - a.rankerScore);
+    return scored.sort((a, b) => b.rankerScore - a.rankerScore);
   }
 }

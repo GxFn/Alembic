@@ -30,8 +30,9 @@ interface TreeSitterNode {
     start?: { row: number; column: number },
     end?: { row: number; column: number }
   ): TreeSitterNode[];
+  namedChildCount: number;
   toString(): string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface ClassInfo {
@@ -39,11 +40,11 @@ interface ClassInfo {
   superClass?: string;
   protocols?: string[];
   methods?: MethodInfo[];
-  properties?: any[];
+  properties?: unknown[];
   file?: string;
   startLine?: number;
   endLine?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface MethodInfo {
@@ -56,15 +57,15 @@ interface MethodInfo {
   complexity?: number;
   startLine?: number;
   endLine?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface ProtocolInfo {
   name: string;
   methods?: MethodInfo[];
-  properties?: any[];
+  properties?: unknown[];
   file?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface CategoryInfo {
@@ -72,7 +73,7 @@ interface CategoryInfo {
   className?: string;
   methods?: MethodInfo[];
   file?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface FileSymbols {
@@ -80,8 +81,8 @@ interface FileSymbols {
   protocols: ProtocolInfo[];
   categories: CategoryInfo[];
   functions: MethodInfo[];
-  imports: any[];
-  [key: string]: any;
+  imports: unknown[];
+  [key: string]: unknown;
 }
 
 interface ProjectAstSummary {
@@ -95,7 +96,7 @@ interface ProjectAstSummary {
     maxNestingDepth: number;
     longMethods: MethodInfo[];
   };
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 type AstSummary = ProjectAstSummary;

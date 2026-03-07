@@ -29,17 +29,36 @@ export const SEARCH_TOOLS = new Set([
   'query_call_graph',
 ]);
 
+/** 信号检测所需的指标集合引用 */
+interface SignalMetrics {
+  uniqueFiles: Set<string>;
+  uniquePatterns: Set<string>;
+  uniqueQueries: Set<string>;
+}
+
+/** 搜索结果条目 */
+interface SearchResultMatch {
+  file?: string;
+  [key: string]: unknown;
+}
+
+/** 搜索工具返回结果 */
+interface SearchResult {
+  matches?: SearchResultMatch[];
+  batchResults?: Record<string, { matches?: SearchResultMatch[] }>;
+}
+
 export class SignalDetector {
   /**
    * @type {{ uniqueFiles: Set<string>, uniquePatterns: Set<string>, uniqueQueries: Set<string> }}
    * 共享引用 — 指向 ExplorationTracker 的 metrics 中的三个 Set
    */
-  #metrics;
+  #metrics: SignalMetrics;
 
   /**
    * @param {{ uniqueFiles: Set<string>, uniquePatterns: Set<string>, uniqueQueries: Set<string> }} metrics
    */
-  constructor(metrics: any) {
+  constructor(metrics: SignalMetrics) {
     this.#metrics = metrics;
   }
 
@@ -51,7 +70,7 @@ export class SignalDetector {
    * @param {*} result
    * @returns {boolean} 是否包含新信息
    */
-  detect(toolName: any, args: any, result: any) {
+  detect(toolName: string, args: Record<string, unknown>, result: unknown) {
     switch (toolName) {
       case 'search_project_code':
         return this.#detectSearchSignal(args, result);
@@ -86,10 +105,10 @@ export class SignalDetector {
 
   // ─── 内部检测方法 ──────────────────────────────
 
-  #detectSearchSignal(args: any, result: any) {
+  #detectSearchSignal(args: Record<string, unknown>, result: unknown) {
     let foundNew = false;
-    const pattern = args?.pattern || '';
-    const patterns = args?.patterns || [];
+    const pattern = (args?.pattern as string) || '';
+    const patterns = (args?.patterns as string[]) || [];
     // 单模式
     if (pattern && !this.#metrics.uniquePatterns.has(pattern)) {
       this.#metrics.uniquePatterns.add(pattern);
@@ -104,8 +123,9 @@ export class SignalDetector {
     }
     // 检查搜索结果是否有新文件
     if (result && typeof result === 'object') {
-      const matches = result.matches || [];
-      const batchResults = result.batchResults || {};
+      const r = result as SearchResult;
+      const matches = r.matches || [];
+      const batchResults: Record<string, { matches?: SearchResultMatch[] }> = r.batchResults || {};
       for (const m of matches) {
         if (m.file && !this.#metrics.uniqueFiles.has(m.file)) {
           this.#metrics.uniqueFiles.add(m.file);
@@ -113,7 +133,7 @@ export class SignalDetector {
         }
       }
       for (const sub of Object.values(batchResults)) {
-        for (const m of (sub as any).matches || []) {
+        for (const m of sub.matches || []) {
           if (m.file && !this.#metrics.uniqueFiles.has(m.file)) {
             this.#metrics.uniqueFiles.add(m.file);
             foundNew = true;
@@ -124,10 +144,10 @@ export class SignalDetector {
     return foundNew;
   }
 
-  #detectFileReadSignal(args: any) {
+  #detectFileReadSignal(args: Record<string, unknown>) {
     let foundNew = false;
-    const fp = args?.filePath || '';
-    const fps = args?.filePaths || [];
+    const fp = (args?.filePath as string) || '';
+    const fps = (args?.filePaths as string[]) || [];
     if (fp && !this.#metrics.uniqueFiles.has(fp)) {
       this.#metrics.uniqueFiles.add(fp);
       foundNew = true;
@@ -141,8 +161,8 @@ export class SignalDetector {
     return foundNew;
   }
 
-  #detectListSignal(args: any) {
-    const dir = args?.directory || '/';
+  #detectListSignal(args: Record<string, unknown>) {
+    const dir = (args?.directory as string) || '/';
     const qKey = `list:${dir}`;
     if (!this.#metrics.uniqueQueries.has(qKey)) {
       this.#metrics.uniqueQueries.add(qKey);
@@ -151,8 +171,9 @@ export class SignalDetector {
     return false;
   }
 
-  #detectQuerySignal(toolName: any, args: any) {
-    const queryTarget = args?.className || args?.protocolName || args?.name || '';
+  #detectQuerySignal(toolName: string, args: Record<string, unknown>) {
+    const queryTarget =
+      (args?.className as string) || (args?.protocolName as string) || (args?.name as string) || '';
     const qKey = `${toolName}:${queryTarget}`;
     if (!this.#metrics.uniqueQueries.has(qKey)) {
       this.#metrics.uniqueQueries.add(qKey);
@@ -161,7 +182,7 @@ export class SignalDetector {
     return false;
   }
 
-  #detectSingletonQuery(key: any) {
+  #detectSingletonQuery(key: string) {
     if (!this.#metrics.uniqueQueries.has(key)) {
       this.#metrics.uniqueQueries.add(key);
       return true;
@@ -169,7 +190,7 @@ export class SignalDetector {
     return false;
   }
 
-  #detectGenericSignal(toolName: any, args: any) {
+  #detectGenericSignal(toolName: string, args: Record<string, unknown>) {
     const qKey = `${toolName}:${JSON.stringify(args || {}).substring(0, 80)}`;
     if (!this.#metrics.uniqueQueries.has(qKey)) {
       this.#metrics.uniqueQueries.add(qKey);

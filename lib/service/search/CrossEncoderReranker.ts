@@ -18,6 +18,17 @@
 import { jaccardSimilarity } from '../../shared/similarity.js';
 import { tokenize } from './InvertedIndex.js';
 
+interface RerankCandidate {
+  title?: string;
+  trigger?: string;
+  description?: string;
+  summary?: string;
+  code?: string;
+  content?: string;
+  semanticScore?: number;
+  [key: string]: unknown;
+}
+
 const MAX_CANDIDATES = 40; // 超过此数量截断（控制 prompt 大小）
 const MAX_DOC_LEN = 300; // 每个文档最大字符数
 
@@ -30,7 +41,17 @@ export class CrossEncoderReranker {
    * @param {import('../../external/ai/AiProvider.js').AiProvider} opts.aiProvider
    * @param {object} [opts.logger]
    */
-  constructor(opts: any = {}) {
+  constructor(
+    opts: {
+      aiProvider?: {
+        chatWithStructuredOutput: (
+          prompt: string,
+          opts: Record<string, unknown>
+        ) => Promise<unknown>;
+      } | null;
+      logger?: { warn?: (...args: unknown[]) => void };
+    } = {}
+  ) {
     this.#aiProvider = opts.aiProvider || null;
     this.#logger = opts.logger || console;
   }
@@ -42,7 +63,7 @@ export class CrossEncoderReranker {
    * @param {Array<object>} candidates - Layer 1 输出的候选列表
    * @returns {Promise<Array<object>>} 附带 semanticScore 的候选列表（降序）
    */
-  async rerank(query: any, candidates: any) {
+  async rerank(query: string, candidates: RerankCandidate[]) {
     if (!candidates || candidates.length === 0) {
       return [];
     }
@@ -63,15 +84,17 @@ export class CrossEncoderReranker {
       const scored = await this.#batchScore(query, head);
       // tail 部分给一个递减的低分以保持稳定排序
       const minScore =
-        scored.length > 0 ? Math.min(...scored.map((s: any) => s.semanticScore)) * 0.5 : 0;
-      const tailScored = tail.map((c: any, i: any) => ({
+        scored.length > 0
+          ? Math.min(...scored.map((s: RerankCandidate) => s.semanticScore || 0)) * 0.5
+          : 0;
+      const tailScored = tail.map((c: RerankCandidate, i: number) => ({
         ...c,
         semanticScore: Math.max(minScore - (i + 1) * 0.001, 0),
       }));
       return [...scored, ...tailScored];
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.#logger.warn?.(
-        `[CrossEncoderReranker] AI scoring failed, falling back to Jaccard: ${err.message}`
+        `[CrossEncoderReranker] AI scoring failed, falling back to Jaccard: ${(err as Error).message}`
       );
       return this.#jaccardFallback(query, candidates);
     }
@@ -80,8 +103,8 @@ export class CrossEncoderReranker {
   /**
    * 批量 AI 评分 — 单次 chatWithStructuredOutput 调用
    */
-  async #batchScore(query: any, candidates: any) {
-    const pairs = candidates.map((c: any, i: any) => {
+  async #batchScore(query: string, candidates: RerankCandidate[]) {
+    const pairs = candidates.map((c: RerankCandidate, i: number) => {
       const doc = this.#extractDocText(c);
       return `[${i}] ${doc.substring(0, MAX_DOC_LEN)}`;
     });
@@ -109,7 +132,7 @@ Score guidelines:
 
 Return ONLY a JSON array, no markdown or explanation.`;
 
-    const result = await this.#aiProvider.chatWithStructuredOutput(prompt, {
+    const result = await this.#aiProvider!.chatWithStructuredOutput(prompt, {
       openChar: '[',
       closeChar: ']',
       temperature: 0.1,
@@ -132,17 +155,22 @@ Return ONLY a JSON array, no markdown or explanation.`;
 
     // 合并分数，未评分的给 0
     return candidates
-      .map((c: any, i: any) => ({
+      .map((c: RerankCandidate, i: number) => ({
         ...c,
         semanticScore: scoreMap.get(i) ?? 0,
       }))
-      .sort((a: any, b: any) => b.semanticScore - a.semanticScore);
+      .sort(
+        (
+          a: RerankCandidate & { semanticScore: number },
+          b: RerankCandidate & { semanticScore: number }
+        ) => b.semanticScore - a.semanticScore
+      );
   }
 
   /**
    * 从候选对象提取用于评分的文本表示
    */
-  #extractDocText(candidate: any) {
+  #extractDocText(candidate: RerankCandidate) {
     const parts = [
       candidate.title,
       candidate.trigger,
@@ -156,19 +184,19 @@ Return ONLY a JSON array, no markdown or explanation.`;
   /**
    * Jaccard 降级 — 当 AI 不可用时使用
    */
-  #jaccardFallback(query: any, candidates: any) {
+  #jaccardFallback(query: string, candidates: RerankCandidate[]) {
     const queryTokens = new Set(tokenize(query));
     if (queryTokens.size === 0) {
       return candidates;
     }
 
     return candidates
-      .map((candidate: any) => {
+      .map((candidate: RerankCandidate) => {
         const text = this.#extractDocText(candidate);
         const docTokens = new Set(tokenize(text));
         const score = jaccardSimilarity(queryTokens, docTokens);
         return { ...candidate, semanticScore: score };
       })
-      .sort((a: any, b: any) => b.semanticScore - a.semanticScore);
+      .sort((a, b) => b.semanticScore - a.semanticScore);
   }
 }

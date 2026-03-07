@@ -2,6 +2,7 @@
  * 错误处理中间件
  */
 
+import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Response } from 'express';
 import {
   ConflictError,
   NotFoundError,
@@ -9,8 +10,13 @@ import {
   ValidationError,
 } from '../../shared/errors/index.js';
 
-export function errorHandler(logger: any) {
-  return (error: any, req: any, res: any, next: any) => {
+/** Minimal logger interface (compatible with winston.Logger) */
+interface AppLogger {
+  error(message: string, meta?: Record<string, unknown>): void;
+}
+
+export function errorHandler(logger: AppLogger): ErrorRequestHandler {
+  return (error, req, res, _next) => {
     const status = error.statusCode || error.status || 500;
     const code = error.code || 'INTERNAL_ERROR';
     const message = error.message || 'Internal server error';
@@ -41,8 +47,10 @@ export function errorHandler(logger: any) {
 /**
  * 异步路由错误包装
  */
-export function asyncHandler(fn: any) {
-  return (req: any, res: any, next: any) => {
+export function asyncHandler(
+  fn: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
+): RequestHandler {
+  return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
@@ -50,7 +58,7 @@ export function asyncHandler(fn: any) {
 /**
  * 将领域错误转换为 HTTP 错误
  */
-export function mapDomainError(error: any) {
+export function mapDomainError(error: Error) {
   if (error instanceof ValidationError) {
     return {
       status: 400,

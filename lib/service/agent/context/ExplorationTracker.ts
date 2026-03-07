@@ -23,24 +23,46 @@
  */
 
 import Logger from '../../../infrastructure/logging/Logger.js';
+import type {
+  ExplorationBudget,
+  ExplorationPhase,
+  ExplorationStrategy,
+  ExplorationTrace,
+  FullExplorationMetrics,
+} from './exploration/ExplorationStrategies.js';
 import {
   createBootstrapStrategy,
   STRATEGY_ANALYST,
   STRATEGY_PRODUCER,
 } from './exploration/ExplorationStrategies.js';
 import { NudgeGenerator } from './exploration/NudgeGenerator.js';
+import type { ActiveTrace } from './exploration/PlanTracker.js';
 import { PlanTracker } from './exploration/PlanTracker.js';
 import { SEARCH_TOOLS, SignalDetector } from './exploration/SignalDetector.js';
+
+// ─── 本地类型 ──────────────────────────────────────────
+
+/** resolve() 选项 */
+interface ResolveOptions {
+  source?: unknown;
+  strategy?: unknown;
+  dimensionMeta?: { outputType?: string };
+}
+
+/** 预算输入（带默认值） */
+interface BudgetInput extends Partial<ExplorationBudget> {
+  submitToolName?: string;
+}
 
 // ─── ExplorationTracker 主类 ─────────────────────────────
 
 export class ExplorationTracker {
   /** @type {object} 策略配置 */
-  #strategy;
+  #strategy: ExplorationStrategy;
   /** @type {object} 预算配置 */
-  #budget;
+  #budget: ExplorationBudget;
   /** @type {string} 当前阶段 */
-  #phase;
+  #phase: string;
   /** @type {object} 日志器 */
   #logger;
 
@@ -53,7 +75,7 @@ export class ExplorationTracker {
   #planTracker;
 
   // ── 信号指标 ──
-  #metrics = {
+  #metrics: FullExplorationMetrics = {
     uniqueFiles: new Set(),
     uniquePatterns: new Set(),
     uniqueQueries: new Set(),
@@ -70,7 +92,7 @@ export class ExplorationTracker {
   /** @type {boolean} 是否刚完成阶段转换（用于 pending nudge） */
   #justTransitioned = false;
   /** @type {string|null} 转换前的旧阶段 */
-  #transitionFromPhase = null;
+  #transitionFromPhase: string | null = null;
 
   // ── Graceful exit 控制 ──
   /** @type {number|null} 进入 graceful exit 的轮次 */
@@ -85,7 +107,7 @@ export class ExplorationTracker {
    * @param {object} strategy 策略配置对象
    * @param {object} budget 预算配置 { maxIterations, searchBudget, ... }
    */
-  constructor(strategy: any, budget: any) {
+  constructor(strategy: ExplorationStrategy, budget: BudgetInput) {
     this.#strategy = strategy;
     this.#budget = {
       maxIterations: 24,
@@ -114,7 +136,7 @@ export class ExplorationTracker {
    * @param {object} budget 预算配置
    * @returns {ExplorationTracker|null} - User 模式返回 null
    */
-  static resolve(opts: any, budget: any) {
+  static resolve(opts: ResolveOptions, budget: BudgetInput) {
     const { source = 'user', strategy: strategyName, dimensionMeta } = opts;
     const isSystem = source === 'system';
 
@@ -199,7 +221,7 @@ export class ExplorationTracker {
    * @param {object} trace 推理链
    * @returns {{ type: string, text: string }|null}
    */
-  getNudge(trace: any) {
+  getNudge(trace: ExplorationTrace | null) {
     // 委托 NudgeGenerator
     const nudge = this.#nudgeGenerator.generate(this.#buildNudgeState(), trace);
     if (nudge) {
@@ -223,7 +245,10 @@ export class ExplorationTracker {
 
     // NudgeGenerator 不处理 planning — 委托 PlanTracker
     if (this.#strategy.enablePlanning) {
-      const planningNudge = this.#planTracker.checkPlanning(this.#buildNudgeState(), trace);
+      const planningNudge = this.#planTracker.checkPlanning(
+        this.#buildNudgeState(),
+        trace as ActiveTrace | null
+      );
       if (planningNudge) {
         this.#logger.info(
           `[ExplorationTracker] 📋 ${planningNudge.type} triggered at iteration ${this.#metrics.iteration}`
@@ -251,7 +276,11 @@ export class ExplorationTracker {
     if (this.isGracefulExit) {
       return 'none';
     }
-    return this.#strategy.getToolChoice(this.#phase, this.#metrics, this.#budget);
+    return this.#strategy.getToolChoice(
+      this.#phase as ExplorationPhase,
+      this.#metrics,
+      this.#budget
+    );
   }
 
   /**
@@ -262,7 +291,7 @@ export class ExplorationTracker {
    * @param {*} result
    * @returns {{ isNew: boolean }}
    */
-  recordToolCall(toolName: any, args: any, result: any) {
+  recordToolCall(toolName: string, args: Record<string, unknown>, result: unknown) {
     this.#metrics.totalToolCalls++;
     const isNew = this.#signalDetector.detect(toolName, args, result);
 
@@ -272,7 +301,8 @@ export class ExplorationTracker {
       toolName === 'submit_with_check' ||
       toolName === 'collect_scan_recipe'
     ) {
-      const status = typeof result === 'object' ? result?.status : 'ok';
+      const status =
+        typeof result === 'object' ? (result as Record<string, unknown>)?.status : 'ok';
       const isRejected = status === 'rejected';
       const isError = status === 'error';
       if (!isRejected && !isError) {
@@ -290,7 +320,12 @@ export class ExplorationTracker {
    * @param {object} roundStats
    * @returns {{ type: string, text: string }|null} 阶段转换 nudge
    */
-  endRound({ hasNewInfo = false, submitCount = 0, toolNames = [], skipped = false } = {}) {
+  endRound({
+    hasNewInfo = false,
+    submitCount = 0,
+    toolNames = [] as string[],
+    skipped = false,
+  } = {}) {
     this.#ticked = false;
 
     if (skipped) {
@@ -391,7 +426,7 @@ export class ExplorationTracker {
    * 记录被截断的工具调用数量
    * @param {number} count
    */
-  recordTruncatedCalls(count: any) {
+  recordTruncatedCalls(count: number) {
     if (count > 0) {
       this.#logger.warn(
         `[ExplorationTracker] ${count} tool calls truncated (MAX_TOOL_CALLS_PER_ITER)`
@@ -453,11 +488,11 @@ export class ExplorationTracker {
    * 更新计划进度 — 委托 PlanTracker
    * @param {object} trace
    */
-  updatePlanProgress(trace: any) {
+  updatePlanProgress(trace: ExplorationTrace | null) {
     if (!this.#strategy.enablePlanning) {
       return;
     }
-    this.#planTracker.updatePlanProgress(trace);
+    this.#planTracker.updatePlanProgress(trace as ActiveTrace | null);
   }
 
   /**
@@ -465,8 +500,8 @@ export class ExplorationTracker {
    * @param {object} trace
    * @returns {{ score: number, breakdown: object }}
    */
-  getQualityMetrics(trace: any) {
-    return this.#planTracker.getQualityMetrics(trace);
+  getQualityMetrics(trace: ExplorationTrace | null) {
+    return this.#planTracker.getQualityMetrics(trace as ActiveTrace | null);
   }
 
   // ─── 阶段路由内部方法 ──────────────────────────────────
@@ -521,7 +556,7 @@ export class ExplorationTracker {
     return false;
   }
 
-  #transitionTo(newPhase: any) {
+  #transitionTo(newPhase: string) {
     const oldPhase = this.#phase;
     this.#transitionFromPhase = oldPhase;
     this.#phase = newPhase;

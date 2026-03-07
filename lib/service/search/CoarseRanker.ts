@@ -3,10 +3,37 @@
  * 基于 E-E-A-T 标准的 5 维加权排序（BM25 + Semantic + Quality + Freshness + Popularity）
  */
 
+interface RankerCandidate {
+  bm25Score?: number;
+  score?: number;
+  semanticScore?: number;
+  title?: string;
+  code?: string;
+  content?: string;
+  description?: string;
+  summary?: string;
+  category?: string;
+  language?: string;
+  tags?: string[];
+  updatedAt?: number | string;
+  lastModified?: number | string;
+  createdAt?: number | string;
+  usageCount?: number;
+  [key: string]: unknown;
+}
+
 export class CoarseRanker {
   #weights;
 
-  constructor(options: any = {}) {
+  constructor(
+    options: {
+      bm25Weight?: number;
+      semanticWeight?: number;
+      qualityWeight?: number;
+      freshnessWeight?: number;
+      popularityWeight?: number;
+    } = {}
+  ) {
     this.#weights = {
       bm25: options.bm25Weight ?? 0.3,
       semantic: options.semanticWeight ?? 0.3,
@@ -21,13 +48,13 @@ export class CoarseRanker {
    * @param {Array} candidates 需有 bm25Score、semanticScore 等字段
    * @returns {Array} - sorted with coarseScore
    */
-  rank(candidates: any) {
+  rank(candidates: RankerCandidate[]) {
     if (!candidates || candidates.length === 0) {
       return [];
     }
 
     // 动态权重调整：semantic 不可用时将其权重按比例重分配给其他维度
-    const hasSemanticScores = candidates.some((c: any) => (c.semanticScore || 0) > 0);
+    const hasSemanticScores = candidates.some((c: RankerCandidate) => (c.semanticScore || 0) > 0);
     const effectiveWeights = { ...this.#weights };
     if (!hasSemanticScores && effectiveWeights.semantic > 0) {
       const semWeight = effectiveWeights.semantic;
@@ -35,8 +62,8 @@ export class CoarseRanker {
       if (otherTotal > 0) {
         for (const key of Object.keys(effectiveWeights)) {
           if (key !== 'semantic') {
-            (effectiveWeights as Record<string, any>)[key] +=
-              ((effectiveWeights as Record<string, any>)[key] / otherTotal) * semWeight;
+            (effectiveWeights as Record<string, number>)[key] +=
+              ((effectiveWeights as Record<string, number>)[key] / otherTotal) * semWeight;
           }
         }
       }
@@ -45,10 +72,13 @@ export class CoarseRanker {
 
     // BM25 分数 max-based 归一化（保留相对排序，避免 clamp 截断高分差异）
     const maxBm25 =
-      candidates.reduce((m: any, c: any) => Math.max(m, c.bm25Score || c.score || 0), 0) || 1;
+      candidates.reduce(
+        (m: number, c: RankerCandidate) => Math.max(m, c.bm25Score || c.score || 0),
+        0
+      ) || 1;
 
     return candidates
-      .map((c: any) => {
+      .map((c: RankerCandidate) => {
         const bm25 = Math.min((c.bm25Score || c.score || 0) / maxBm25, 1.0);
         const semantic = this.#normalize(c.semanticScore || 0);
         const quality = this.#computeQuality(c);
@@ -68,7 +98,7 @@ export class CoarseRanker {
           coarseSignals: { bm25, semantic, quality, freshness, popularity },
         };
       })
-      .sort((a: any, b: any) => b.coarseScore - a.coarseScore);
+      .sort((a, b) => b.coarseScore - a.coarseScore);
   }
 
   /**
@@ -77,7 +107,7 @@ export class CoarseRanker {
    * - 结构质量 30%: 有 category + language + tags
    * - 代码可读性 30%: 合理长度、有注释
    */
-  #computeQuality(candidate: any) {
+  #computeQuality(candidate: RankerCandidate) {
     let score = 0;
 
     // 内容完整性 (40%)
@@ -102,7 +132,7 @@ export class CoarseRanker {
     return Math.min(score, 1.0);
   }
 
-  #computeFreshness(candidate: any) {
+  #computeFreshness(candidate: RankerCandidate) {
     const updated = candidate.updatedAt || candidate.lastModified || candidate.createdAt;
     if (!updated) {
       return 0.5;
@@ -121,12 +151,12 @@ export class CoarseRanker {
     return Math.exp((-Math.LN2 * ageDays) / 180); // 半衰期 180 天
   }
 
-  #computePopularity(candidate: any) {
+  #computePopularity(candidate: RankerCandidate) {
     const usage = candidate.usageCount || 0;
     return usage > 0 ? Math.min(Math.log10(usage + 1) / 3, 1.0) : 0;
   }
 
-  #normalize(value: any) {
+  #normalize(value: number) {
     return Math.min(Math.max(value, 0), 1.0);
   }
 }

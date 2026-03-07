@@ -35,7 +35,10 @@ export class SpmHelper {
   /** @type {GraphCache} 磁盘缓存层 */
   #graphCache;
 
-  constructor(projectRoot: any, options: any = {}) {
+  constructor(
+    projectRoot: string,
+    options: { parser?: PackageSwiftParser; graph?: DependencyGraph; policy?: PolicyEngine } = {}
+  ) {
     this.#projectRoot = projectRoot;
     this.#parser = options.parser || new PackageSwiftParser(projectRoot);
     this.#graph = options.graph || new DependencyGraph();
@@ -66,7 +69,7 @@ export class SpmHelper {
       const rootParsed = this.#parser.parse(packagePath);
       const hasNoTargets = !rootParsed?.targets || rootParsed.targets.length === 0;
       const hasLocalDeps = (rootParsed?.dependencies || []).some(
-        (d: any) => d.type === 'local' || d.path
+        (d: { type?: string; path?: string }) => d.type === 'local' || d.path
       );
       if (hasNoTargets && hasLocalDeps) {
         // 聚合根模式：根 Package.swift 仅声明 local path 依赖，target 在子包里
@@ -86,7 +89,7 @@ export class SpmHelper {
       return null;
     }
 
-    const combinedHash = allPaths.map((p: any) => this.#graphCache.computeFileHash(p)).join(':');
+    const combinedHash = allPaths.map((p: string) => this.#graphCache.computeFileHash(p)).join(':');
 
     // ── 尝试命中缓存 ──
     const cached = this.#graphCache.load('spm-graph');
@@ -131,11 +134,11 @@ export class SpmHelper {
    * @param {string[]} allPaths Package.swift 路径数组
    * @returns {object|null}
    */
-  #loadMultiPackage(allPaths: any) {
+  #loadMultiPackage(allPaths: string[]) {
     this.#logger.info(`[SpmHelper] 发现 ${allPaths.length} 个 Package.swift，逐一解析...`);
-    const mergedTargets: any[] = [];
+    const mergedTargets: Record<string, unknown>[] = [];
     let lastName = 'multi-package';
-    const allParsed: { path: any; parsed: any }[] = [];
+    const allParsed: { path: string; parsed: ReturnType<PackageSwiftParser['parse']> }[] = [];
 
     this.#graph.clear();
     for (const pkgPath of allPaths) {
@@ -159,8 +162,10 @@ export class SpmHelper {
           }
           lastName = parsed.name;
         }
-      } catch (e: any) {
-        this.#logger.warn(`[SpmHelper] 解析失败: ${pkgPath} - ${e.message}`);
+      } catch (e: unknown) {
+        this.#logger.warn(
+          `[SpmHelper] 解析失败: ${pkgPath} - ${e instanceof Error ? e.message : String(e)}`
+        );
       }
     }
 
@@ -179,7 +184,7 @@ export class SpmHelper {
   /**
    * 将当前内存状态序列化到缓存
    */
-  #saveToCache(contentHash: any, parsedResult: any) {
+  #saveToCache(contentHash: string, parsedResult: Record<string, unknown>) {
     const graphJSON = this.#graph.toJSON();
     const targetPackageEntries = [...this.#targetPackageMap.entries()];
     const packageDepEntries = [...this.#packageDepGraph.entries()].map(([k, v]) => [k, [...v]]);
@@ -200,7 +205,12 @@ export class SpmHelper {
   /**
    * 从缓存数据恢复内存状态
    */
-  #restoreFromCache(data: any) {
+  #restoreFromCache(data: {
+    graphNodes?: string[];
+    graphEdges?: { from: string; to: string }[];
+    targetPackageMap?: [string, { packageName: string; packagePath: string }][];
+    packageDepGraph?: [string, string[]][];
+  }) {
     // 恢复 DependencyGraph
     this.#graph.clear();
     for (const node of data.graphNodes || []) {
@@ -229,7 +239,9 @@ export class SpmHelper {
    * 解析所有 Package.swift 中的 .package(path: "...") 声明，构建包级依赖图
    * @param {{ path: string, parsed: object }[]} allParsed
    */
-  #buildPackageDepGraph(allParsed: any) {
+  #buildPackageDepGraph(
+    allParsed: { path: string; parsed: ReturnType<PackageSwiftParser['parse']> }[]
+  ) {
     this.#packageDepGraph.clear();
 
     // 初始化所有包节点
@@ -248,9 +260,12 @@ export class SpmHelper {
     // 解析 .package(path: "...") 引用，建立包级边
     for (const { path: pkgPath, parsed } of allParsed) {
       const pkgDir = dirname(pkgPath);
-      const packageDeps = parsed.packageDependencies || parsed.dependencies || [];
+      const packageDeps =
+        ((parsed as Record<string, unknown>).packageDependencies as typeof parsed.dependencies) ??
+        parsed.dependencies ??
+        [];
       for (const dep of packageDeps) {
-        if (dep.path) {
+        if ('path' in dep && dep.path) {
           const depAbsDir = pathResolve(pkgDir, dep.path);
           const otherPkgPath = dirToPkgPath.get(depAbsDir);
           if (otherPkgPath) {
@@ -269,7 +284,7 @@ export class SpmHelper {
    * @param {string} toPkgPath 目标包的 Package.swift 路径
    * @returns {boolean}
    */
-  _canReachPackage(fromPkgPath: any, toPkgPath: any) {
+  _canReachPackage(fromPkgPath: string, toPkgPath: string) {
     if (fromPkgPath === toPkgPath) {
       return true;
     }
@@ -301,7 +316,7 @@ export class SpmHelper {
    * @param {string} targetName
    * @returns {{ packageName: string, packagePath: string } | null}
    */
-  getPackageForTarget(targetName: any) {
+  getPackageForTarget(targetName: string) {
     return this.#targetPackageMap.get(targetName) || null;
   }
 
@@ -328,7 +343,7 @@ export class SpmHelper {
    * @param {string} to 目标 target
    * @returns {{ exists: boolean, canAdd: boolean, reason?: string, crossPackage?: boolean }}
    */
-  ensureDependency(from: any, to: any) {
+  ensureDependency(from: string, to: string) {
     if (this.#graph.isReachable(from, to)) {
       return { exists: true, canAdd: true };
     }
@@ -372,7 +387,7 @@ export class SpmHelper {
    * @param {string} to 目标 target
    * @returns {{ ok: boolean, changed: boolean, file?: string, error?: string, crossPackage?: boolean }}
    */
-  addDependency(from: any, to: any) {
+  addDependency(from: string, to: string) {
     // 安全检查
     const check = this.#policy.canAddDependency(this.#graph, from, to);
     if (!check.allowed) {
@@ -461,9 +476,11 @@ export class SpmHelper {
         `[SpmHelper] 已自动补齐依赖: ${from} -> ${to}${isCrossPackage ? ' (跨包)' : ''} (${packagePath})`
       );
       return { ok: true, changed: true, file: packagePath, crossPackage: isCrossPackage };
-    } catch (err: any) {
-      this.#logger.error(`[SpmHelper] addDependency failed: ${err.message}`);
-      return { ok: false, changed: false, error: err.message };
+    } catch (err: unknown) {
+      this.#logger.error(
+        `[SpmHelper] addDependency failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return { ok: false, changed: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 
@@ -474,7 +491,11 @@ export class SpmHelper {
    * @param {{ packageName: string, packagePath: string }} toPkg 目标包信息
    * @returns {{ changed: boolean, content: string }}
    */
-  #ensurePackageDependency(content: any, fromPkgPath: any, toPkg: any) {
+  #ensurePackageDependency(
+    content: string,
+    fromPkgPath: string,
+    toPkg: { packageName: string; packagePath: string }
+  ) {
     const fromDir = dirname(fromPkgPath);
     const toDir = dirname(toPkg.packagePath);
     const relPath = relative(fromDir, toDir).split(sep).join('/');
@@ -523,7 +544,7 @@ export class SpmHelper {
    * @param {string} filePath 源文件绝对路径
    * @returns {string|null} target 名称，未匹配返回 null
    */
-  resolveCurrentTarget(filePath: any) {
+  resolveCurrentTarget(filePath: string) {
     try {
       const packagePath = this.#parser.findPackageSwift(dirname(filePath));
       if (!packagePath) {

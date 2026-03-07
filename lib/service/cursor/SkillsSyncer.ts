@@ -66,17 +66,31 @@ const SKILL_DESC_MAP = {
 };
 
 export class SkillsSyncer {
-  knowledgeService: any;
-  projectName: any;
-  projectRoot: any;
-  sourceDir: any;
-  targetDir: any;
+  knowledgeService: {
+    list: (
+      filter: Record<string, unknown>,
+      pagination: { page: number; pageSize: number }
+    ) => Promise<unknown>;
+  } | null;
+  projectName: string;
+  projectRoot: string;
+  sourceDir: string;
+  targetDir: string;
   /**
    * @param {string} projectRoot 用户项目根目录
    * @param {string} projectName 项目名称
    * @param {Object} [knowledgeService] 可选，用于生成 references/RECIPES.md
    */
-  constructor(projectRoot: any, projectName = 'Project', knowledgeService = null) {
+  constructor(
+    projectRoot: string,
+    projectName = 'Project',
+    knowledgeService: {
+      list: (
+        filter: Record<string, unknown>,
+        pagination: { page: number; pageSize: number }
+      ) => Promise<unknown>;
+    } | null = null
+  ) {
     this.projectRoot = projectRoot;
     this.projectName = projectName;
     this.knowledgeService = knowledgeService;
@@ -131,8 +145,8 @@ export class SkillsSyncer {
         await this._generateRecipes(targetSkillDir, dirName);
 
         result.synced.push(targetName);
-      } catch (err: any) {
-        result.errors.push(`${dirName}: ${err.message}`);
+      } catch (err: unknown) {
+        result.errors.push(`${dirName}: ${(err as Error).message}`);
       }
     }
 
@@ -143,7 +157,7 @@ export class SkillsSyncer {
    * 转换 SKILL.md 格式 — 从 AutoSnippet 格式到 Cursor Agent Skills 标准
    * @private
    */
-  _convertSkillMd(source: any, targetName: any, sourceDirName: any) {
+  _convertSkillMd(source: string, targetName: string, sourceDirName: string) {
     // 提取原始内容（去掉 frontmatter）
     const bodyMatch = source.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
     const body = bodyMatch ? bodyMatch[1].trim() : source.trim();
@@ -187,12 +201,12 @@ export class SkillsSyncer {
    * 生成 references/RECIPES.md
    * @private
    */
-  async _generateRecipes(targetSkillDir: any, sourceDirName: any) {
+  async _generateRecipes(targetSkillDir: string, sourceDirName: string) {
     const refsDir = path.join(targetSkillDir, 'references');
     fs.mkdirSync(refsDir, { recursive: true });
 
     // 如果有 knowledgeService，查询该维度的 recipes
-    let recipes: any[] = [];
+    let recipes: Record<string, unknown>[] = [];
     if (this.knowledgeService) {
       try {
         const dimension = sourceDirName.replace(/^project-/, '');
@@ -200,9 +214,13 @@ export class SkillsSyncer {
           { lifecycle: 'active', category: dimension },
           { page: 1, pageSize: 50 }
         );
-        recipes = result?.items || result?.data || [];
-        if (Array.isArray(result)) {
-          recipes = result;
+        const resultObj = result as Record<string, unknown> | unknown[] | null | undefined;
+        if (Array.isArray(resultObj)) {
+          recipes = resultObj as Record<string, unknown>[];
+        } else if (resultObj && typeof resultObj === 'object') {
+          recipes = ((resultObj as Record<string, unknown>).items ||
+            (resultObj as Record<string, unknown>).data ||
+            []) as Record<string, unknown>[];
         }
       } catch {
         // 忽略查询错误
@@ -217,11 +235,13 @@ export class SkillsSyncer {
       lines.push('| Title | Trigger | Kind | Lang | Summary |');
       lines.push('|---|---|---|---|---|');
       for (const entry of recipes.slice(0, 20)) {
-        const title = (entry.title || '').replace(/\|/g, '/');
-        const trigger = entry.trigger || '-';
-        const kind = entry.kind || '-';
-        const lang = entry.language || '-';
-        const summary = (entry.summaryCn || entry.description || '')
+        const title = ((entry.title as string) || '').replace(/\|/g, '/');
+        const trigger = (entry.trigger as string) || '-';
+        const kind = (entry.kind as string) || '-';
+        const lang = (entry.language as string) || '-';
+        const summary = (
+          ((entry.summaryCn as string) || (entry.description as string) || '') as string
+        )
           .replace(/\|/g, '/')
           .slice(0, 80);
         lines.push(`| ${title} | ${trigger} | ${kind} | ${lang} | ${summary} |`);
@@ -240,7 +260,7 @@ export class SkillsSyncer {
    * 生成使用场景列表
    * @private
    */
-  _generateUseCases(sourceDirName: any) {
+  _generateUseCases(sourceDirName: string) {
     const casesMap = {
       'project-architecture': [
         '- Creating new modules, services, or managers',
@@ -318,8 +338,8 @@ export class SkillsSyncer {
   /**
    * @private
    */
-  _capitalizeWords(str: any) {
-    return str.replace(/\b\w/g, (c: any) => c.toUpperCase());
+  _capitalizeWords(str: string) {
+    return str.replace(/\b\w/g, (c: string) => c.toUpperCase());
   }
 }
 
