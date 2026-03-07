@@ -58,7 +58,7 @@
     "build:check": "tsc --noEmit",
     "postbuild": "node scripts/postbuild.mjs",
     "postinstall": "node scripts/postinstall-safe.js",
-    "prepublishOnly": "npm run build && npm run build:dashboard && node scripts/build-native-ui.js",
+    "prepublishOnly": "npm run build && npm run build:dashboard && node dist/scripts/build-native-ui.js",
     "build:native-ui": "swiftc resources/native-ui/main.swift resources/native-ui/combined-window.swift -o resources/native-ui/native-ui -framework AppKit",
     "build:screenshot": "swiftc -O -framework ScreenCaptureKit -framework AppKit resources/native-ui/screenshot.swift -o resources/native-ui/screenshot",
     "install:cursor-skill": "node dist/scripts/install-cursor-skill.js",

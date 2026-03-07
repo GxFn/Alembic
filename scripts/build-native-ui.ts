@@ -37,7 +37,7 @@ try {
   // 验证构建结果
   if (fs.existsSync(out)) {
   }
-} catch (_err: any) {
+} catch (_err: unknown) {
   // 如果在发布流程中构建失败，应该报错
   if (isPublishing) {
     console.error('❌ Native UI 构建失败（发布流程中）');
