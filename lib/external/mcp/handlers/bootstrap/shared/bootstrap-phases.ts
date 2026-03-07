@@ -570,7 +570,7 @@ export async function runPhase1_7_CallGraph(
         any
       >;
 
-      const partialTag = (result.stats as any).partial ? ' [partial]' : '';
+      const partialTag = result.stats.partial ? ' [partial]' : '';
       const incrTag = isIncremental ? ' [incremental]' : '';
       logger.info(
         `[Bootstrap] Call Graph${incrTag}${partialTag}: ${result.callEdges.length} call edges, ` +

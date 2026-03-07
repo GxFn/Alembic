@@ -329,7 +329,7 @@ export class SetupService {
     }
 
     // 匹配 seed-*.md 文件
-    let files;
+    let files: string[];
     try {
       files = readdirSync(seedDir).filter((f) => f.startsWith('seed-') && f.endsWith('.md'));
     } catch {

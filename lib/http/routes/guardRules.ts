@@ -54,7 +54,7 @@ router.get(
     const guardService = container.get('guardService');
 
     // 获取数据库中的 boundary-constraint 规则
-    let result;
+    let result: { data?: Record<string, unknown>[]; pagination?: Record<string, unknown> };
     if (keyword) {
       result = await guardService.searchRules(keyword, { page, pageSize });
     } else {
@@ -79,7 +79,7 @@ router.get(
     const mappedDbRules = dbItems.map(mapRecipeToGuardRule);
 
     // 合并内置规则（GuardCheckEngine 内置 9 条 iOS 规则）
-    let guardCheckEngine;
+    let guardCheckEngine: { getBuiltInRules(): Record<string, unknown> } | undefined;
     try {
       guardCheckEngine = container.get('guardCheckEngine');
     } catch {

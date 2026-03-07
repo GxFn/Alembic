@@ -219,7 +219,7 @@ export class ExternalSubmissionTracker {
     ];
 
     for (const pattern of negativePatterns) {
-      let match;
+      let match: RegExpExecArray | null;
       while ((match = pattern.exec(analysisText)) !== null) {
         this.#addNegativeSignal(match[0].trim(), 'analysisText', dimId);
       }

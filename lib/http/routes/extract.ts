@@ -119,7 +119,7 @@ router.post(
     const _projectRoot = bodyRoot || container.singletons?._projectRoot || process.cwd();
 
     // 1. 先尝试解析为 Recipe Markdown 格式
-    let result;
+    let result: unknown;
     try {
       result = await recipeParser.parseFromText(text, {
         language,

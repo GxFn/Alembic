@@ -427,7 +427,7 @@ export function inferModulesFromHeaders(headers: string[]) {
   const modules = new Set<string>();
   for (const h of headers) {
     const t = h.trim();
-    let m;
+    let m: RegExpMatchArray | null;
     m = t.match(/^#import\s+<([^/> ]+)/);
     if (m) {
       modules.add(m[1]);

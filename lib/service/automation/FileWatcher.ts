@@ -216,7 +216,7 @@ export class FileWatcher {
       return;
     }
 
-    let data;
+    let data: string;
     try {
       data = readFileSync(fullPath, 'utf8');
     } catch (err: unknown) {

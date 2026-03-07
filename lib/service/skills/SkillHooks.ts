@@ -119,7 +119,7 @@ export class SkillHooks {
   // ─── Internal ──────────────────────────────────────────
 
   async #loadFromDir(dir: string, loaded: Map<string, Record<string, HookHandler>>) {
-    let dirs;
+    let dirs: string[];
     try {
       dirs = fs
         .readdirSync(dir, { withFileTypes: true })

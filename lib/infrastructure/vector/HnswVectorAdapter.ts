@@ -225,7 +225,7 @@ export class HnswVectorAdapter extends VectorStore {
       const items = JSON.parse(raw);
       const itemList = Array.isArray(items)
         ? items
-        : Object.entries(items).map(([id, item]) => ({ ...(item as any), id }));
+        : Object.entries(items).map(([id, item]) => ({ ...(item as Record<string, unknown>), id }));
 
       for (const item of itemList) {
         if (!item?.id) {
@@ -423,7 +423,7 @@ export class HnswVectorAdapter extends VectorStore {
     // HNSW 搜索 (多召回一些, 后续过滤可能减少)
     const rawK = filter ? topK * 3 : topK;
 
-    let knnResults;
+    let knnResults: { id: string | undefined; nodeIdx: number; dist: number }[];
     if (this.#quantizer?.trained && this.#index.size > this.#config.quantizeThreshold) {
       // 2-pass: SQ8 粗排 → Float32 精排
       const quantizedQuery = this.#quantizer.encode(queryVector);

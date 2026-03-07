@@ -144,7 +144,7 @@ export class ExplorationTracker {
       return null;
     }
 
-    let resolvedStrategy;
+    let resolvedStrategy: ExplorationStrategy;
 
     if (strategyName === 'analyst') {
       resolvedStrategy = STRATEGY_ANALYST;

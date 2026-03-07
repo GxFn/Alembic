@@ -81,7 +81,7 @@ export function runCrossFileChecks(
       const lines = content.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {
         categoryRegex.lastIndex = 0;
-        let m;
+        let m: RegExpExecArray | null;
         while ((m = categoryRegex.exec(lines[i])) !== null) {
           const key = `${m[1]}(${m[2]})`;
           if (!categoryMap.has(key)) {
@@ -144,7 +144,7 @@ export function runCrossFileChecks(
       const lines = content.split(/\r?\n/);
       for (const line of lines) {
         importRegex.lastIndex = 0;
-        let m;
+        let m: RegExpExecArray | null;
         while ((m = importRegex.exec(line)) !== null) {
           const importPath = m[1] || m[2];
           if (importPath.startsWith('.')) {

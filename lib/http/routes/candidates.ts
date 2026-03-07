@@ -598,7 +598,7 @@ router.post(
         }
 
         // 使用 chatWithStructuredOutput 获取可靠的 JSON 结果（非流式），120 秒超时
-        let parsed;
+        let parsed: Record<string, unknown> | unknown;
         try {
           parsed = await Promise.race([
             aiProvider.chatWithStructuredOutput(prompt, { temperature: 0.3 }),
@@ -618,7 +618,7 @@ router.post(
             message: '生成修改对比...',
           });
 
-          const { after } = buildUpdateFromRefineResult(before, parsed);
+          const { after } = buildUpdateFromRefineResult(before, parsed as Record<string, unknown>);
           session.end({ candidateId, before, after, preview: parsed });
         } else {
           // 结构化输出失败，回退到 chat() 重试

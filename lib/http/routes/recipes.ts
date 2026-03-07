@@ -72,7 +72,7 @@ router.post(
 
     // 检查 ToolRegistry 是否可用
     const container = getServiceContainer();
-    let agentFactory;
+    let agentFactory: import('../../service/agent/AgentFactory.js').AgentFactory;
     try {
       agentFactory = container.get('agentFactory');
     } catch {

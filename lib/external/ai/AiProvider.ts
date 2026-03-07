@@ -834,7 +834,7 @@ ${items}`;
     // 收集所有 "}" 后跟 "," 或空白的位置（可能是对象边界）
     const candidates: number[] = [];
     const re = /\}[\s,]*(?=\s*[[{]|$)/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = re.exec(text)) !== null) {
       candidates.push(m.index); // "}" 的位置
     }

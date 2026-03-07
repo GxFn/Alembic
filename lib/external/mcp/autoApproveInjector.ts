@@ -96,7 +96,7 @@ export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogge
     return false;
   }
 
-  let config;
+  let config: Record<string, any>;
   try {
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   } catch {

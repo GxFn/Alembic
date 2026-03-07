@@ -43,7 +43,7 @@ async function collectSourceFiles(dir: string) {
   ]);
 
   async function walk(currentDir: string) {
-    let entries;
+    let entries: import('node:fs').Dirent[];
     try {
       entries = await readdir(currentDir, { withFileTypes: true });
     } catch {
@@ -101,7 +101,7 @@ export async function handleGuard(
 
     /* ── 多文件审计 (target / project) ── */
     if (scope === 'project' || scope === 'target') {
-      let scanRoot;
+      let scanRoot: string | undefined;
       if (scope === 'project') {
         scanRoot = watcher?.projectRoot;
       } else {

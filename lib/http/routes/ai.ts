@@ -132,7 +132,7 @@ router.post(
     }
 
     // 创建新的 provider 实例验证配置有效
-    let newProvider;
+    let newProvider: ReturnType<typeof createProvider>;
     try {
       newProvider = createProvider({
         provider: provider.toLowerCase(),
@@ -145,7 +145,7 @@ router.post(
     // 同步到 DI 容器，使 SearchEngine / Agent / IndexingPipeline 等也使用新 provider
     try {
       const container = getServiceContainer();
-      container.reloadAiProvider(newProvider as any);
+      container.reloadAiProvider(newProvider as unknown as Record<string, unknown>);
       logger.info('AI provider synced to DI container', {
         provider: provider.toLowerCase(),
         model: newProvider.model,
@@ -293,10 +293,10 @@ router.post(
     const _contextWindow = factory.createContextWindow({ isSystem: false });
 
     // ── 创建 Runtime 并注入 onProgress ──
-    const message = (AgentMessage as any).fromHttp(req);
+    const message = AgentMessage.fromHttp(req);
     // 加载持久化历史到 message
     if (effectiveHistory.length > 0) {
-      (message as any).history = effectiveHistory;
+      message.session.history = effectiveHistory;
     }
 
     const runtime = factory.createChat({
@@ -675,7 +675,7 @@ router.post(
         model: model || undefined,
       });
       const container = getServiceContainer();
-      container.reloadAiProvider(newProvider as any);
+      container.reloadAiProvider(newProvider as unknown as Record<string, unknown>);
       logger.info('AI provider hot-swapped after env update', {
         provider,
         model: newProvider.model,
@@ -800,7 +800,7 @@ router.post(
           sessionId: session.sessionId,
           error: (err as Error).message,
         });
-        (session as any).error((err as Error).message);
+        session.error((err as Error).message, 'RUNTIME_ERROR');
       });
   })
 );
@@ -893,7 +893,7 @@ router.get(
   '/token-usage',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const container = getServiceContainer();
-    let tokenStore;
+    let tokenStore: { getLast7DaysReport(): unknown };
     try {
       tokenStore = container.get('tokenUsageStore');
     } catch {

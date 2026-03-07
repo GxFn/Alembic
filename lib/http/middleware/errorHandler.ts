@@ -82,7 +82,6 @@ export function mapDomainError(error: Error) {
       status: 404,
       code: 'NOT_FOUND_ERROR',
       message: error.message,
-      details: (error as any).details,
     };
   }
 
@@ -91,7 +90,6 @@ export function mapDomainError(error: Error) {
       status: 403,
       code: 'PERMISSION_DENIED_ERROR',
       message: error.message,
-      details: (error as any).details,
     };
   }
 

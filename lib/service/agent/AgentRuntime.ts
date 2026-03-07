@@ -311,7 +311,7 @@ export class AgentRuntime {
     const budget = this.policies.getBudget();
     const timeoutMs = budget?.timeoutMs || 300_000;
 
-    let timeoutId;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(
         () => reject(new Error(`Agent timeout after ${timeoutMs}ms`)),
@@ -652,7 +652,7 @@ export class AgentRuntime {
     // 动态 toolChoice
     const forceSummaryAt = Math.max(2, Math.ceil(maxIterations * 0.8));
     const forceSummary = !tracker && ctx.iteration >= forceSummaryAt;
-    let toolChoice;
+    let toolChoice: string | Record<string, unknown>;
     if (ctx.toolChoiceOverride && ctx.iteration === 1) {
       // 首轮 toolChoice 覆盖: 强制 LLM 生成 tool call (LLM 自行决定调哪个、传什么)
       toolChoice = ctx.toolChoiceOverride;

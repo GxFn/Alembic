@@ -517,7 +517,7 @@ export class CodeEntityGraph {
    * @returns {CodeEntity|null}
    */
   getEntity(entityId: string, entityType?: string): MappedCodeEntity | null {
-    let row;
+    let row: unknown;
     if (entityType) {
       row = this.stmts.getEntity.get(entityId, entityType, this.projectRoot);
     } else {

@@ -315,7 +315,7 @@ async function _prime(svc: TaskGraphSvc) {
     };
   }
 
-  let message;
+  let message: string;
   if (decisionCount > 0) {
     const stalePart = staleCount > 0 ? ` ${staleCount} stale.` : '';
     message = `⚠️ ${decisionCount} ACTIVE DECISION(S): [${decisionTitles}].${stalePart} ${statsLine}.`;

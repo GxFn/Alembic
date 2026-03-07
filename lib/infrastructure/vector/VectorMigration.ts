@@ -57,7 +57,10 @@ export class VectorMigration {
         const items = JSON.parse(raw);
         const itemList = Array.isArray(items)
           ? items
-          : Object.entries(items).map(([id, item]) => ({ ...(item as any), id }));
+          : Object.entries(items).map(([id, item]) => ({
+              ...(item as Record<string, unknown>),
+              id,
+            }));
 
         if (itemList.length > 0) {
           // 过滤有效条目并批量插入

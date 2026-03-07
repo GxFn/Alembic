@@ -111,7 +111,7 @@ export class SnippetFactory {
       dbFilters.category = filters.category;
     }
 
-    let result;
+    let result: { data?: RecipeLike[]; items?: RecipeLike[] };
     if (filters.keyword) {
       result = await this._recipeRepo.search(filters.keyword, pagination);
     } else {

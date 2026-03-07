@@ -842,7 +842,7 @@ export class GuardCheckEngine {
         continue;
       }
 
-      let re;
+      let re: RegExp;
       try {
         re = compilePattern(rule.pattern);
       } catch {
@@ -930,7 +930,7 @@ export class GuardCheckEngine {
     }
 
     // 延迟加载 AstAnalyzer
-    let AstAnalyzer;
+    let AstAnalyzer: typeof AstAnalyzerModule | undefined;
     try {
       // 使用 dynamic import 会是 async，这里用 require 风格同步加载
       // AstAnalyzer 作为 ESM 模块，在 constructor 时已被引入
@@ -1063,7 +1063,7 @@ export class GuardCheckEngine {
         hitMap.set(v.ruleId, count + 1);
       }
 
-      let updateStmt;
+      let updateStmt: { run(...params: unknown[]): unknown } | undefined;
       try {
         updateStmt = this.db.prepare(
           `UPDATE knowledge_entries

@@ -78,10 +78,10 @@ export function runCodeLevelChecks(
         categories[key].push({ line: i + 1, snippet: lines[i].trim().slice(0, 120) });
       }
       for (const [key, occs] of Object.entries(categories)) {
-        if ((occs as any).length <= 1) {
+        if (occs.length <= 1) {
           continue;
         }
-        for (let j = 1; j < (occs as any).length; j++) {
+        for (let j = 1; j < occs.length; j++) {
           violations.push({
             ruleId: 'objc-duplicate-category',
             message: `同文件内 Category 重名：${key}，首次在第 ${occs[0].line} 行`,

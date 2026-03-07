@@ -64,7 +64,7 @@ export async function collectSourceFiles(
       return;
     }
 
-    let entries;
+    let entries: import('node:fs').Dirent[];
     try {
       entries = await readdir(currentDir, { withFileTypes: true });
     } catch {

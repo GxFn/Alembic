@@ -198,7 +198,7 @@ router.get(
         return null;
       }
 
-      let entries;
+      let entries: import('node:fs').Dirent[];
       try {
         entries = fs.default.readdirSync(dirPath, { withFileTypes: true });
       } catch {

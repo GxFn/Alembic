@@ -382,7 +382,7 @@ export async function graphQuery(ctx: McpContext, args: GraphArgs) {
   }
   const nodeType = args.nodeType || 'recipe';
   const direction = args.direction || 'both';
-  let data;
+  let data: any;
   try {
     if (args.relation) {
       data = graphService.getRelated(args.nodeId!, nodeType, args.relation);
@@ -414,7 +414,7 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
     });
   }
   const nodeType = args.nodeType || 'recipe';
-  let impacted;
+  let impacted: any;
   try {
     impacted = graphService.getImpactAnalysis(args.nodeId!, nodeType, args.maxDepth ?? 3);
   } catch (err: unknown) {
@@ -588,7 +588,7 @@ export async function graphPath(ctx: McpContext, args: GraphArgs) {
   const fromType = args.fromType || 'recipe';
   const toType = args.toType || 'recipe';
   const maxDepth = Math.min(Math.max(args.maxDepth ?? 5, 1), 10);
-  let result;
+  let result: any;
   try {
     result = graphService.findPath(args.fromId, fromType, args.toId, toType, maxDepth);
   } catch (err: unknown) {
@@ -718,7 +718,7 @@ export async function graphStats(ctx: McpContext) {
       meta: { tool: 'autosnippet_graph' },
     });
   }
-  let stats;
+  let stats: any;
   try {
     stats = graphService.getStats();
   } catch (err: unknown) {

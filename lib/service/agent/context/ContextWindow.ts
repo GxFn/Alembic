@@ -167,7 +167,7 @@ export class ContextWindow {
     }
 
     // 2. 按分级策略计算 token 预算
-    let budget;
+    let budget: number;
     if (contextSize >= 200_000) {
       budget = isSystem ? 32_000 : 24_000;
     } else if (contextSize >= 64_000) {

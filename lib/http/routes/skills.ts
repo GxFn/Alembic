@@ -25,7 +25,7 @@ router.get(
   '/',
   asyncHandler(async (_req: Request, res: Response): Promise<void> => {
     const raw = listSkills();
-    let parsed;
+    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
     try {
       parsed = JSON.parse(raw);
     } catch {
@@ -83,7 +83,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const ctx = { container: req.app.locals?.container || null };
     const raw = await suggestSkills(ctx);
-    let parsed;
+    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
     try {
       parsed = JSON.parse(raw);
     } catch {
@@ -116,7 +116,7 @@ router.get(
       skillName: name as string,
       section: section as string | undefined,
     });
-    let parsed;
+    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
     try {
       parsed = JSON.parse(raw);
     } catch {
@@ -156,7 +156,7 @@ router.post(
       overwrite,
       createdBy: createdBy || 'manual',
     });
-    let parsed;
+    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
     try {
       parsed = JSON.parse(raw);
     } catch {
@@ -197,7 +197,7 @@ router.put(
     }
 
     const raw = updateSkill(null, { name: name as string, description, content });
-    let parsed;
+    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
     try {
       parsed = JSON.parse(raw);
     } catch {
@@ -231,7 +231,7 @@ router.delete(
     const { name } = req.params;
 
     const raw = deleteSkill(null, { name: name as string });
-    let parsed;
+    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
     try {
       parsed = JSON.parse(raw);
     } catch {

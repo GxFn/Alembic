@@ -212,11 +212,11 @@ export class PipelineStrategy extends Strategy {
     const gate = stage.gate;
     const sourceName = (stage.source || this.#prevStageName(stage)) as string;
     const source = phaseResults[sourceName];
-    let gateResult;
+    let gateResult: { action: string; pass: boolean; reason?: string; artifact?: unknown };
 
     // v3: 自定义评估器 (Bootstrap 用)
     if (typeof gate.evaluator === 'function') {
-      gateResult = gate.evaluator(source, phaseResults, strategyContext);
+      gateResult = gate.evaluator(source, phaseResults, strategyContext) as typeof gateResult;
       if (!gateResult.action) {
         gateResult.action = gateResult.pass ? 'pass' : 'retry';
       }
@@ -400,7 +400,7 @@ export class PipelineStrategy extends Strategy {
     strategyContext: Record<string, unknown>,
     ctx: PipelineContext
   ) {
-    let prompt;
+    let prompt: string;
     if (phaseResults._retryContext && stage.retryPromptBuilder) {
       const retryCtx = phaseResults._retryContext as { reason?: string; artifact?: unknown };
       prompt = stage.retryPromptBuilder(retryCtx, message.content, phaseResults);

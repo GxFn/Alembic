@@ -13,7 +13,7 @@ import { CapabilityProbe } from '../core/capability/CapabilityProbe.js';
 import { registerGatewayActions } from '../core/gateway/GatewayActionRegistry.js';
 import { initCacheAdapter } from '../infrastructure/cache/UnifiedCacheAdapter.js';
 import Logger from '../infrastructure/logging/Logger.js';
-import { initErrorTracker } from '../infrastructure/monitoring/ErrorTracker.js';
+import { type ErrorTracker, initErrorTracker } from '../infrastructure/monitoring/ErrorTracker.js';
 import { initPerformanceMonitor } from '../infrastructure/monitoring/PerformanceMonitor.js';
 import { initRealtimeService } from '../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../injection/ServiceContainer.js';
@@ -63,7 +63,7 @@ export class HttpServer {
   cacheAdapter: unknown;
   capabilityProbe: CapabilityProbe | null;
   config: HttpServerConfig;
-  errorTracker: { errorHandler(): express.ErrorRequestHandler; shutdown(): void } | null;
+  errorTracker: ErrorTracker | null;
   logger: AppLogger;
   performanceMonitor: { middleware(): express.RequestHandler; shutdown(): void } | null;
   realtimeService: Record<string, unknown> | null;
@@ -132,7 +132,7 @@ export class HttpServer {
         this.logger.info('Performance monitor initialized');
 
         // 初始化错误追踪
-        this.errorTracker = (initErrorTracker as any)();
+        this.errorTracker = initErrorTracker();
         this.logger.info('Error tracker initialized');
       }
     } catch (error: unknown) {
@@ -360,7 +360,7 @@ export class HttpServer {
   setupErrorHandling() {
     // 使用错误追踪器的错误处理中间件（如果启用）
     if (this.errorTracker) {
-      this.app.use(this.errorTracker.errorHandler());
+      this.app.use(this.errorTracker.errorHandler() as express.ErrorRequestHandler);
     } else {
       // 全局错误处理中间件（备用）
       this.app.use(errorHandler(this.logger));

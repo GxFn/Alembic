@@ -184,7 +184,13 @@ router.post(
 
     // 后台执行生成
     try {
-      const result = (await generator.generate()) as any;
+      const result = (await generator.generate()) as {
+        success: boolean;
+        error?: string;
+        filesGenerated?: number;
+        duration?: number;
+        [key: string]: unknown;
+      };
       wikiTask.status = result.success ? 'done' : 'error';
       wikiTask.finishedAt = Date.now();
       wikiTask.result = result;

@@ -901,7 +901,7 @@ export class SearchEngine {
       // 尝试通过 vectorStore 做向量搜索（优先混合搜索: 向量70% + 关键词30%）
       if (this.vectorStore) {
         try {
-          let vectorResults;
+          let vectorResults: VectorHit[];
           if (typeof this.vectorStore.hybridSearch === 'function') {
             const hybrid = await this.vectorStore.hybridSearch(queryEmbedding, query, {
               topK: limit * 2,

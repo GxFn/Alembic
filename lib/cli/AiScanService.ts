@@ -169,7 +169,7 @@ export class AiScanService {
 
     try {
       // 使用 ModuleService（多语言统一入口）
-      let service;
+      let service: import('../service/module/ModuleService.js').ModuleService;
       try {
         const { ModuleService } = await import('../service/module/ModuleService.js');
         service = new ModuleService(this.projectRoot);
@@ -265,7 +265,7 @@ export class AiScanService {
       '.rb',
     ]);
 
-    let entries;
+    let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
     } catch {

@@ -27,7 +27,7 @@ export class UpgradeService {
       force: false,
     });
 
-    let filter;
+    let filter: string[] | undefined;
     if (skillsOnly) {
       filter = ['skills'];
     } else if (mcpOnly) {

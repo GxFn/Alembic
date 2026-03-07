@@ -156,7 +156,7 @@ export class RecipeExtractor {
   #extractCodeBlocks(body: string) {
     const blocks: CodeBlock[] = [];
     const regex = /```(\w*)\n([\s\S]*?)```/g;
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = regex.exec(body)) !== null) {
       blocks.push({
         language: match[1] || 'text',

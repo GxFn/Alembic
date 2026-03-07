@@ -53,7 +53,7 @@ export function walkDir(dir: string, callback: (filePath: string) => void, maxFi
     if (count >= maxFiles) {
       return;
     }
-    let entries;
+    let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(d, { withFileTypes: true });
     } catch {

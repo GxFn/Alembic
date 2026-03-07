@@ -64,7 +64,7 @@ export class SpmHelper {
     // 判断是否需要多包模式：
     // 1. 根目录没有 Package.swift → findAllPackageSwifts
     // 2. 根目录有 Package.swift 但 targets 为空且有 local path dependencies → 聚合根 + 子包
-    let allPaths;
+    let allPaths: string[];
     if (packagePath) {
       const rootParsed = this.#parser.parse(packagePath);
       const hasNoTargets = !rootParsed?.targets || rootParsed.targets.length === 0;
@@ -103,7 +103,7 @@ export class SpmHelper {
 
     // ── 缓存未命中，走完整解析 ──
     const startTime = Date.now();
-    let parsedResult;
+    let parsedResult: Record<string, unknown>;
 
     if (packagePath && allPaths.length === 1) {
       // 单包模式（根有 target）
@@ -409,7 +409,7 @@ export class SpmHelper {
       const content = readFileSync(packagePath, 'utf8');
 
       // ── 1. 构建依赖 token ──
-      let depToken;
+      let depToken: string;
       if (isCrossPackage) {
         // 跨包: .product(name: "TargetName", package: "PackageName")
         depToken = `.product(name: "${to}", package: "${toPkg.packageName}")`;
@@ -430,7 +430,7 @@ export class SpmHelper {
       }
 
       const targetBlock = targetMatch[1];
-      let patched;
+      let patched: string;
 
       const depsRe = /dependencies\s*:\s*\[([^\]]*)\]/s;
       const depsMatch = targetBlock.match(depsRe);

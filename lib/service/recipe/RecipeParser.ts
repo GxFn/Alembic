@@ -76,7 +76,7 @@ export class RecipeParser {
 
     // 提取代码块
     const codeBlocks: CodeBlock[] = [];
-    let match;
+    let match: RegExpExecArray | null;
     const codeRe = /```(\w*)\n([\s\S]*?)```/g;
     while ((match = codeRe.exec(body)) !== null) {
       codeBlocks.push({ language: match[1] || 'text', code: match[2].trim() });
@@ -286,7 +286,7 @@ export class RecipeParser {
     // 提取代码块
     const codeBlocks: CodeBlock[] = [];
     const codeRe = /```(\w*)\n([\s\S]*?)```/g;
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = codeRe.exec(text)) !== null) {
       codeBlocks.push({ language: match[1] || language, code: match[2].trim() });
     }
@@ -316,7 +316,7 @@ export class RecipeParser {
   #extractHeaders(body: string) {
     const headers: string[] = [];
     const re = /#import\s+[<"]([^>"]+)[>"]/g;
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = re.exec(body)) !== null) {
       headers.push(match[1]);
     }

@@ -732,7 +732,7 @@ function _collectDartScopes(root: any) {
         child.type === 'function_signature'
       ) {
         // 提取方法/函数名
-        let name;
+        let name: string | undefined;
         if (child.type === 'method_signature' || child.type === 'function_signature') {
           // method_signature 可能包含嵌套 function_signature
           const funcSig =
@@ -868,7 +868,7 @@ function _extractDartCallSitesFromBody(bodyNode: any, className: any, methodName
         const receiverText = startNode.text;
         const receiver = receiverText;
         let receiverType: any = null;
-        let callType;
+        let callType: string;
 
         if (startNode.type === 'this' || receiver === 'this' || receiver === 'self') {
           receiverType = className;
@@ -988,7 +988,7 @@ function _processDartCall(
 
   const receiver = receiverText;
   let receiverType: any = null;
-  let callType;
+  let callType: string;
 
   if (receiver === 'this' || receiver === 'super') {
     receiverType = className;

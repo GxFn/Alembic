@@ -66,7 +66,7 @@ router.post(
     );
 
     // 获取 Engine（含 EP 注入）
-    const engine = await _getEngine(container, GuardCheckEngine as any);
+    const engine = await _getEngine(container, GuardCheckEngine);
 
     // 检测语言
     const lang = language || detectLanguage(filePath);
@@ -155,7 +155,7 @@ router.post(
       '../../service/guard/GuardCheckEngine.js'
     );
 
-    const engine = await _getEngine(container, GuardCheckEngine as any);
+    const engine = await _getEngine(container, GuardCheckEngine);
 
     const results: Record<string, unknown>[] = [];
     let totalErrors = 0;
@@ -231,21 +231,20 @@ router.post(
  */
 async function _getEngine(
   container: ReturnType<typeof getServiceContainer>,
-  GuardCheckEngine: {
-    new (db: unknown): unknown;
-    prototype: {
-      isEpInjected(): boolean;
-      injectExternalRules(rules: unknown[]): void;
-      markEpInjected(): void;
-    };
-  }
+  GuardCheckEngineCtor: new (
+    ...args: ConstructorParameters<
+      typeof import('../../service/guard/GuardCheckEngine.js').GuardCheckEngine
+    >
+  ) => InstanceType<typeof import('../../service/guard/GuardCheckEngine.js').GuardCheckEngine>
 ) {
-  let engine;
+  let engine: InstanceType<
+    typeof import('../../service/guard/GuardCheckEngine.js').GuardCheckEngine
+  >;
   try {
     engine = container.get('guardCheckEngine');
   } catch {
     const database = container.get('database');
-    engine = new GuardCheckEngine(database);
+    engine = new GuardCheckEngineCtor(database);
   }
 
   // 注入 Enhancement Pack Guard 规则

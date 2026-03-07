@@ -419,7 +419,7 @@ export const searchProjectCode = {
     }
 
     // 构建搜索正则
-    let searchRe;
+    let searchRe: RegExp;
     try {
       searchRe = isRegex
         ? new RegExp(pattern, 'gi')
@@ -699,7 +699,7 @@ export const listProjectStructure = {
       if (currentDepth > depth) {
         return;
       }
-      let entries;
+      let entries: fs.Dirent[];
       try {
         entries = fs.readdirSync(dir, { withFileTypes: true });
       } catch {
@@ -923,7 +923,7 @@ export const getFileSummary = {
 
     const extract = (regex: RegExp) => {
       const matches: string[] = [];
-      let m;
+      let m: RegExpExecArray | null;
       regex.lastIndex = 0;
       while ((m = regex.exec(content)) !== null) {
         matches.push(m[0].trim());

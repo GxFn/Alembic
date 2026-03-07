@@ -165,7 +165,7 @@ export class PackageSwiftParser {
     const targets: { name: string; type: string; path: string | null; dependencies: string[] }[] =
       [];
     const re = /\.(?:target|testTarget|executableTarget)\s*\(/g;
-    let match;
+    let match: RegExpExecArray | null;
 
     while ((match = re.exec(content)) !== null) {
       const type = match[0].includes('testTarget')
@@ -199,7 +199,7 @@ export class PackageSwiftParser {
         const deps: string[] = [];
         if (depsMatch) {
           const depRe = /\.(?:product|target)\s*\(\s*name\s*:\s*"([^"]+)"/g;
-          let dm;
+          let dm: RegExpExecArray | null;
           while ((dm = depRe.exec(depsMatch[1])) !== null) {
             deps.push(dm[1]);
           }
@@ -225,7 +225,7 @@ export class PackageSwiftParser {
 
     // 1. URL 依赖: .package(url: "...", ...)
     const urlRe = /\.package\s*\(\s*url\s*:\s*"([^"]+)"[^)]*\)/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = urlRe.exec(content)) !== null) {
       const block = m[0];
       const fromMatch = block.match(/from\s*:\s*"([^"]+)"/);
@@ -252,7 +252,7 @@ export class PackageSwiftParser {
   #extractProducts(content: string) {
     const products: { name: string; type: string }[] = [];
     const re = /\.(library|executable)\s*\(\s*name\s*:\s*"([^"]+)"/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = re.exec(content)) !== null) {
       products.push({ name: m[2], type: m[1] });
     }
@@ -262,7 +262,7 @@ export class PackageSwiftParser {
   #extractPlatforms(content: string) {
     const platforms: { name: string; version: string }[] = [];
     const re = /\.(iOS|macOS|tvOS|watchOS|visionOS)\s*\(\s*\.v(\d+(?:_\d+)?)\s*\)/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = re.exec(content)) !== null) {
       platforms.push({ name: m[1], version: m[2].replace(/_/g, '.') });
     }

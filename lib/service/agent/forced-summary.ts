@@ -104,7 +104,7 @@ export async function produceForcedSummary({
     (tc: ToolCallRecord) => tc.tool === 'submit_knowledge' || tc.tool === 'submit_with_check'
   ).length;
 
-  let finalReply;
+  let finalReply: string | undefined;
 
   // 如果熔断器已打开，跳过 AI 调用直接合成摘要
   const isCircuitOpen = aiProvider._circuitState === 'OPEN';
@@ -130,8 +130,8 @@ export async function produceForcedSummary({
       throw new Error('circuit open — skip to synthetic summary');
     }
 
-    let summaryPrompt;
-    let systemPrompt;
+    let summaryPrompt: string;
+    let systemPrompt: string;
 
     if (isSystem) {
       // system 源: dimensionDigest JSON

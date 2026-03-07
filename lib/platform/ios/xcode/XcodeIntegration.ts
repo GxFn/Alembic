@@ -214,7 +214,7 @@ export async function insertHeaders(
   // ── Step 3: Xcode 自动化准备 ──
   const xcodeReady = XA.isXcodeRunning();
   // 从当前文件内容计算 import 插入基准行（1-based）
-  let content;
+  let content: string;
   try {
     content = readFileSync(fullPath, 'utf8');
   } catch {
@@ -383,7 +383,7 @@ export async function insertCodeToXcode(
       }
     }
     // ── Step 1: 找到触发行号 ──
-    let content;
+    let content: string;
     try {
       content = readFileSync(fullPath, 'utf8');
     } catch {

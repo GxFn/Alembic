@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs';
+import { type Dirent, readdirSync, statSync } from 'node:fs';
 import { extname as pathExtname, join as pathJoin, relative as pathRelative } from 'node:path';
 // ─── v3.0: AST ProjectGraph ──────────────────────────
 import ProjectGraph from '../core/ast/ProjectGraph.js';
@@ -460,7 +460,7 @@ export class ServiceContainer {
       if (results.length >= maxFiles) {
         return;
       }
-      let entries;
+      let entries: Dirent[];
       try {
         entries = readdirSync(dir, { withFileTypes: true });
       } catch {

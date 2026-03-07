@@ -878,10 +878,10 @@ function _extractRustCallSitesFromBody(bodyNode: any, className: any, methodName
         return;
       }
 
-      let callee,
-        receiver = null,
-        receiverType = null,
-        callType;
+      let callee: string,
+        receiver: string | null = null,
+        receiverType: string | null = null,
+        callType: string;
 
       if (func.type === 'scoped_identifier' || func.type === 'scoped_type_identifier') {
         // Struct::method() or crate::mod::func()

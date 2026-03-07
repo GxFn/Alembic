@@ -1083,7 +1083,7 @@ export class ModuleService {
       if (allFiles.length >= maxFiles) {
         return;
       }
-      let entries;
+      let entries: import('node:fs').Dirent[];
       try {
         entries = readdirSync(dir, { withFileTypes: true });
       } catch {

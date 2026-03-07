@@ -100,7 +100,7 @@ interface EnvelopeResult {
 export async function taskHandler(ctx: McpContext, args: TaskArgs) {
   const taskService = ctx.container.get('taskGraphService') as TaskGraphServiceLike;
 
-  let result;
+  let result: EnvelopeResult;
   switch (args.operation) {
     // ── Session ──
     case 'prime':
@@ -481,7 +481,7 @@ async function _prime(svc: TaskGraphServiceLike, args: TaskArgs) {
     ].join('\n'),
   };
 
-  let message;
+  let message: string;
   if (decisionCount > 0) {
     const stalePart = staleCount > 0 ? ` ${staleCount} stale.` : '';
     message = `⚠️ ${decisionCount} ACTIVE DECISION(S): [${decisionTitles}].${stalePart} ${statsLine}.`;

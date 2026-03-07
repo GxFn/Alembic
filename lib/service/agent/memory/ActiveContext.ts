@@ -933,7 +933,7 @@ export class ActiveContext {
     const strategy = (TOOL_COMPRESS_STRATEGIES as Record<string, (result: unknown) => string>)[
       observation.toolName
     ];
-    let summary;
+    let summary: string;
     try {
       summary = strategy ? strategy(observation.result) : defaultCompress(observation.result);
     } catch {

@@ -474,11 +474,10 @@ export class GoogleGeminiProvider extends AiProvider {
         } catch {
           /* ignore */
         }
-        const err = new Error(`Gemini API error: ${res.status}${detail ? ` — ${detail}` : ''}`);
-        (err as any).status = res.status;
-        if (retryAfterMs > 0) {
-          (err as any).retryAfterMs = retryAfterMs;
-        }
+        const err = Object.assign(
+          new Error(`Gemini API error: ${res.status}${detail ? ` — ${detail}` : ''}`),
+          { status: res.status, ...(retryAfterMs > 0 ? { retryAfterMs } : {}) }
+        );
         throw err;
       }
       return await res.json();

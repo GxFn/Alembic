@@ -63,7 +63,7 @@ export async function parsePackageSwift(packagePath: string) {
 
     const targets: string[] = [];
     const targetRe = /\.(?:target|testTarget|executableTarget)\s*\(\s*name:\s*"([^"]+)"/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = targetRe.exec(content)) !== null) {
       targets.push(m[1]);
     }

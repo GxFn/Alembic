@@ -348,7 +348,7 @@ export class EpisodicConsolidator {
       for (const pattern of FACT_PATTERNS) {
         // 重置 lastIndex (全局正则)
         pattern.lastIndex = 0;
-        let match;
+        let match: RegExpExecArray | null;
         let matchCount = 0;
         while ((match = pattern.exec(text)) !== null && matchCount < 5) {
           const fullMatch = match[0].trim();
@@ -376,7 +376,7 @@ export class EpisodicConsolidator {
       // 提取洞察
       for (const pattern of INSIGHT_PATTERNS) {
         pattern.lastIndex = 0;
-        let match;
+        let match: RegExpExecArray | null;
         let matchCount = 0;
         while ((match = pattern.exec(text)) !== null && matchCount < 3) {
           const fullMatch = match[0].trim();

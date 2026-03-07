@@ -289,7 +289,7 @@ const SIZE_THRESHOLDS = {
 function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
   // ── analysisGuide: SOP 化 — 优先使用维度专属 SOP，否则回退通用指引 ──
   const sop = getDimensionSOP(dim.id);
-  let analysisGuide;
+  let analysisGuide: Record<string, any>;
 
   if (sop) {
     // SOP 结构化模式: steps + timeEstimate + commonMistakes
@@ -716,8 +716,8 @@ function compressAstForBriefing(astProjectSummary: AstProjectSummary | null, fil
   const categories = astProjectSummary.categories || [];
 
   // 确定压缩级别
-  let topN;
-  let compressionLevel;
+  let topN: number;
+  let compressionLevel: string;
   if (fileCount < SIZE_THRESHOLDS.S) {
     topN = classes.length; // 完整返回
     compressionLevel = 'none';

@@ -289,7 +289,7 @@ function _extractCodeFromMarkdown(md: string) {
   }
   const fencedRe = /```[\w]*\n([\s\S]*?)```/g;
   const blocks: string[] = [];
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = fencedRe.exec(md)) !== null) {
     const block = match[1].trim();
     if (block) {

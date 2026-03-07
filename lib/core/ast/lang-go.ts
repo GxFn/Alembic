@@ -659,10 +659,10 @@ function _extractGoCallSitesFromBody(bodyNode: any, className: any, methodName: 
         return;
       }
 
-      let callee,
+      let callee: string,
         receiver: string | null = null,
         receiverType: string | null = null,
-        callType;
+        callType: string;
 
       if (func.type === 'selector_expression') {
         // pkg.Func() or obj.Method()

@@ -438,10 +438,10 @@ function _extractSwiftCallSitesFromBody(bodyNode: any, className: any, methodNam
         return;
       }
 
-      let callee,
+      let callee: string,
         receiver: string | null = null,
         receiverType: string | null = null,
-        callType;
+        callType: string;
       let isAwait = false;
 
       // Check if parent is await

@@ -431,7 +431,7 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
   }
 
   // 7. 构造消息
-  let message;
+  let message: string;
   if (passed) {
     message = `✅ Guard review passed (round ${round}). ${filePaths.length} file(s) checked, 0 violations.`;
   } else {

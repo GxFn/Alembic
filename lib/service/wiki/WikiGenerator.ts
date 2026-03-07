@@ -437,7 +437,7 @@ export class WikiGenerator {
     for (const f of info.sourceFiles) {
       const parts = f.split('/');
       const sourcesIdx = parts.indexOf('Sources');
-      let mod;
+      let mod: string | null | undefined;
       if (sourcesIdx >= 0 && sourcesIdx + 1 < parts.length) {
         // SPM 标准结构: Sources/{ModuleName}/...
         mod = parts[sourcesIdx + 1];
@@ -642,7 +642,13 @@ export class WikiGenerator {
     }
 
     // ── 3. 快速上手 (需要构建配置或入口点) ──
-    const hasEntryPoints = ((astInfo.overview as any)?.entryPoints?.length || 0) > 0;
+    const hasEntryPoints = (
+      (astInfo.overview as Record<string, unknown> | undefined)?.entryPoints as
+        | unknown[]
+        | undefined
+    )?.length
+      ? true
+      : false;
     const hasBuildSystem =
       projectInfo.buildSystems.length > 0 ||
       projectInfo.hasPackageSwift ||
@@ -660,7 +666,7 @@ export class WikiGenerator {
     }
 
     // ── 4. 模块深度文档 (仅对实质性模块生成) ──
-    const discoverers = (moduleInfo.projectInfo?.discoverers ?? []) as any[];
+    const discoverers = (moduleInfo.projectInfo?.discoverers ?? []) as Array<{ id?: string }>;
     const genericOnlyDiscovery = discoverers.length === 1 && discoverers[0]?.id === 'generic';
     const monolithSingleTarget =
       moduleInfo.targets.length === 1 &&
@@ -674,8 +680,13 @@ export class WikiGenerator {
       // 使用 moduleService 发现的 targets
       for (const target of moduleInfo.targets) {
         const moduleFiles = getModuleSourceFiles(target, projectInfo);
-        const classCount = ((astInfo.classNamesByModule as any)?.[target.name] || []).length;
-        const protoCount = ((astInfo.protocolNamesByModule as any)?.[target.name] || []).length;
+        const classCount = (
+          (astInfo.classNamesByModule as Record<string, string[]> | undefined)?.[target.name] || []
+        ).length;
+        const protoCount = (
+          (astInfo.protocolNamesByModule as Record<string, string[]> | undefined)?.[target.name] ||
+          []
+        ).length;
         const depCount = (target.dependencies || target.info?.dependencies || []).length;
 
         // 丰富度评分: 文件数 + 类数×2 + 协议数×2 + 依赖数
@@ -705,8 +716,12 @@ export class WikiGenerator {
         if (modFiles.length < 2) {
           continue;
         }
-        const classCount = ((astInfo.classNamesByModule as any)?.[modName] || []).length;
-        const protoCount = ((astInfo.protocolNamesByModule as any)?.[modName] || []).length;
+        const classCount = (
+          (astInfo.classNamesByModule as Record<string, string[]> | undefined)?.[modName] || []
+        ).length;
+        const protoCount = (
+          (astInfo.protocolNamesByModule as Record<string, string[]> | undefined)?.[modName] || []
+        ).length;
         const richness = modFiles.length + classCount * 2 + protoCount * 2;
         if (richness < 3) {
           continue;
@@ -731,8 +746,9 @@ export class WikiGenerator {
     if (knowledgeInfo.recipes.length > 0) {
       const groups: Record<string, Record<string, unknown>[]> = {};
       for (const r of knowledgeInfo.recipes) {
-        const json = (r as any).toJSON ? (r as any).toJSON() : r;
-        const cat = json.category || 'Other';
+        const recipeObj = r as Record<string, unknown> & { toJSON?: () => Record<string, unknown> };
+        const json = recipeObj.toJSON ? recipeObj.toJSON() : recipeObj;
+        const cat = (json.category as string) || 'Other';
         if (!groups[cat]) {
           groups[cat] = [];
         }

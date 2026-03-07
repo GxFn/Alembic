@@ -763,7 +763,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
         ...presetStages[0],
       };
 
-      let stages;
+      let stages: Record<string, any>[];
       if (needsCandidates) {
         // 候选维度: Analyze→QualityGate→Produce→RejectionGate
         const produceStage = {

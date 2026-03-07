@@ -241,12 +241,13 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
     options: { language },
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- projectInfo shape varies between bootstrap/full scan
+  // projectInfo shape varies between bootstrap/full scan — use Parameters to match _discoverTopics signature
+  type DiscoverParams = Parameters<WikiGenerator['_discoverTopics']>;
   const rawTopics = generator._discoverTopics(
-    projectInfo as any,
-    astInfo as any,
-    moduleInfo as any,
-    knowledgeInfo as any
+    projectInfo as DiscoverParams[0],
+    astInfo as DiscoverParams[1],
+    moduleInfo as DiscoverParams[2],
+    knowledgeInfo as DiscoverParams[3]
   );
 
   // ── 为每个主题构建 dataBundle ──
@@ -395,7 +396,7 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
   // ── 3. 写入 meta.json ──
   // 计算 sourceHash — 与 WikiGenerator._computeSourceHash() 保持一致
   // 使得 getStatus()._detectChanges() 对比时能正确判定"无变更"
-  let sourceHash;
+  let sourceHash: string | undefined;
   try {
     const generator = new WikiGenerator({
       projectRoot,

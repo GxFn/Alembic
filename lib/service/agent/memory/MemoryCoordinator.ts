@@ -464,7 +464,7 @@ export class MemoryCoordinator {
       // ── 层 2: [MEMORY] 标签提取 (所有源) ──
       if (reply) {
         const regex = new RegExp(MEMORY_TAG_REGEX.source, MEMORY_TAG_REGEX.flags);
-        let match;
+        let match: RegExpExecArray | null;
         while ((match = regex.exec(reply)) !== null) {
           const type = match[1];
           const content = match[2].trim();

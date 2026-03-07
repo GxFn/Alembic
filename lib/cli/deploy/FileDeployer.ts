@@ -239,7 +239,7 @@ export class FileDeployer {
 
   /** create-only — 仅在不存在时创建 */
   _strategyCreateOnly(entry: ManifestEntry) {
-    let dest;
+    let dest: string | null | undefined;
     if (entry.resolveDest) {
       dest = this._resolvers[entry.resolveDest]?.call(this);
       if (!dest) {

@@ -780,7 +780,7 @@ function collectSourceFiles(dir: any, extensions: any, opts: any) {
       return;
     }
 
-    let entries;
+    let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(currentDir, { withFileTypes: true });
     } catch {

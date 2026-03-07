@@ -424,7 +424,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
   const accumulatedEvidence = session.submissionTracker.getAccumulatedEvidence(dimensionId);
 
   // v2: 质量反馈构建
-  let qualityFeedback;
+  let qualityFeedback: Record<string, any> | undefined;
   if (qualityReport) {
     qualityFeedback = {
       totalScore: qualityReport.totalScore,
@@ -447,7 +447,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
   const nextActions = isComplete ? BOOTSTRAP_COMPLETE_ACTIONS : undefined;
 
   // v2: 为下游维度构建结构化提示 (基于累积证据)
-  let evidenceHints;
+  let evidenceHints: Record<string, any> | undefined;
   if (
     !isComplete &&
     (accumulatedEvidence.completedDimSummaries.length > 0 ||

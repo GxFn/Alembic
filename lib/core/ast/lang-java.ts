@@ -553,10 +553,10 @@ function _extractJavaCallSitesFromBody(bodyNode: any, className: any, methodName
       const args = node.namedChildren.find((c: any) => c.type === 'argument_list');
       const argCount = args ? args.namedChildCount : 0;
 
-      let callee,
+      let callee: string,
         receiver: string | null = null,
         receiverType: string | null = null,
-        callType;
+        callType: string;
 
       if (identifiers.length >= 2) {
         // obj.method() — first identifier is receiver, last is method name

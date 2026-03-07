@@ -8,7 +8,7 @@
  * 检测: 项目根或子目录存在 Package.swift
  */
 
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, type Stats, statSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 import { ProjectDiscoverer } from '../../../core/discovery/ProjectDiscoverer.js';
 import { LanguageService } from '../../../shared/LanguageService.js';
@@ -309,7 +309,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
       if (files.length >= MAX_FILES) {
         return;
       }
-      let entries;
+      let entries: string[];
       try {
         entries = readdirSync(d);
       } catch {
@@ -324,7 +324,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
         }
         const full = join(d, entry);
         const relPath = rel ? `${rel}/${entry}` : entry;
-        let st;
+        let st: Stats;
         try {
           st = statSync(full);
         } catch {

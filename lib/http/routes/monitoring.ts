@@ -164,7 +164,7 @@ router.get('/cache', (req, res) => {
  */
 router.post('/cache/clear', async (req, res) => {
   // 角色检查：仅 admin 可操作
-  const role = (req as any).resolvedRole || 'visitor';
+  const role = req.resolvedRole || 'visitor';
   if (role !== 'developer') {
     res.status(403).json({
       success: false,
@@ -298,7 +298,7 @@ router.post('/reset', (req, res) => {
   }
 
   // 角色检查：仅 admin 可操作
-  const role = (req as any).resolvedRole || 'visitor';
+  const role = req.resolvedRole || 'visitor';
   if (role !== 'developer') {
     res.status(403).json({
       success: false,

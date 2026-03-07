@@ -501,7 +501,7 @@ export class CursorDeliveryPipeline {
 
         for (let i = 0; i < layers.length && i < 10; i++) {
           const l = layers[i];
-          let layerLabel;
+          let layerLabel: string;
           if (i < total * 0.33) {
             layerLabel = '🔽 low-level (service/repository)';
           } else if (i < total * 0.66) {

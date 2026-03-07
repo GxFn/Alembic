@@ -12,6 +12,20 @@
 import type { NextFunction, Request, Response } from 'express';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 
+/** Error subclass with Gateway-specific properties */
+class GatewayError extends Error {
+  statusCode: number;
+  code: string;
+  requestId: string;
+  constructor(message: string, statusCode: number, code: string, requestId: string) {
+    super(message);
+    this.name = 'GatewayError';
+    this.statusCode = statusCode;
+    this.code = code;
+    this.requestId = requestId;
+  }
+}
+
 /**
  * Express 中间件：将 Gateway 注入到 req 对象
  */
@@ -45,11 +59,12 @@ export function gatewayMiddleware() {
       });
 
       if (!result.success) {
-        const err = new Error(result.error.message);
-        (err as any).statusCode = result.error.statusCode || 500;
-        (err as any).code = result.error.code;
-        (err as any).requestId = result.requestId;
-        throw err;
+        throw new GatewayError(
+          result.error.message,
+          result.error.statusCode || 500,
+          result.error.code,
+          result.requestId
+        );
       }
 
       return result;

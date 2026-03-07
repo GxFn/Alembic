@@ -71,7 +71,11 @@ router.get(
       // SPM 格式兼容：从 packages 构建图
       if (level === 'target') {
         for (const [pkgName, pkgInfo] of Object.entries(graph.packages)) {
-          const targetsInfo = (pkgInfo as any)?.targetsInfo || {};
+          const pkgRecord = pkgInfo as Record<string, unknown>;
+          const targetsInfo = (pkgRecord?.targetsInfo || {}) as Record<
+            string,
+            Record<string, unknown>
+          >;
           for (const [targetName, info] of Object.entries(targetsInfo)) {
             const id = `${pkgName}::${targetName}`;
             nodes.push({
@@ -80,7 +84,8 @@ router.get(
               type: 'target',
               packageName: pkgName,
             });
-            for (const d of (info as any)?.dependencies || []) {
+            const deps = (info?.dependencies || []) as Array<{ name?: string; package?: string }>;
+            for (const d of deps) {
               if (!d?.name) {
                 continue;
               }
@@ -98,7 +103,7 @@ router.get(
           targets: graph.packages[id]?.targets,
         }));
         for (const [from, tos] of Object.entries(graph.edges || {})) {
-          for (const to of (tos as any) || []) {
+          for (const to of (tos as string[]) || []) {
             edges.push({ from, to, source: 'base' });
           }
         }

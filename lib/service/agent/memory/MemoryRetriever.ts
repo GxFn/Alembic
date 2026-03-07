@@ -182,7 +182,7 @@ export class MemoryRetriever {
       limit = Math.min(limit, maxByBudget);
     }
 
-    let memories;
+    let memories: DeserializedMemory[];
 
     if (query) {
       memories = this.retrieve(query, { limit, source });

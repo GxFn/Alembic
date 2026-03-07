@@ -287,7 +287,7 @@ export class KnowledgeGraphService {
    * @param {string} [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部
    */
   getAllEdges(limit = 500, nodeType?: string) {
-    let sql, params;
+    let sql: string, params: (string | number)[];
     if (nodeType) {
       sql = `SELECT * FROM knowledge_edges WHERE from_type = ? AND to_type = ? ORDER BY updated_at DESC LIMIT ?`;
       params = [nodeType, nodeType, limit];

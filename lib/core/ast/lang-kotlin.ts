@@ -706,10 +706,10 @@ function _extractKtCallSitesFromBody(bodyNode: any, className: any, methodName: 
         return;
       }
 
-      let callee,
+      let callee: string,
         receiver: string | null = null,
         receiverType: string | null = null,
-        callType;
+        callType: string;
 
       if (func.type === 'navigation_expression') {
         // obj.method() or Pkg.func()

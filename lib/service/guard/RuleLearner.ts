@@ -118,7 +118,7 @@ export class RuleLearner {
 
       const metrics = this.getMetrics(ruleId);
       if (metrics.falsePositiveRate >= PROBLEMATIC_THRESHOLD.falsePositiveRate) {
-        let recommendation;
+        let recommendation: string;
         if (metrics.falsePositiveRate > 0.7) {
           recommendation = 'disable';
         } else if (metrics.precision < 0.5) {

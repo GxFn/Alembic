@@ -362,7 +362,9 @@ router.post(
     const { code, targetName, candidateId, candidate } = req.body;
     const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
 
-    let candidateObj;
+    let candidateObj:
+      | { title: string; summary: string; code: string; usageGuide: string }
+      | undefined;
 
     if (candidateId && targetName) {
       // 从知识库加载候选
