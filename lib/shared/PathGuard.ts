@@ -28,6 +28,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { isAutoSnippetDevRepo } from './isOwnDevRepo.js';
 
 export class PathGuardError extends Error {
   projectRoot: string;
@@ -85,6 +86,9 @@ class PathGuard {
   /** @type {boolean} 是否已配置 */
   #configured = false;
 
+  /** @type {boolean} projectRoot 是否是 AutoSnippet 自身的开发仓库 */
+  #isDevRepo = false;
+
   /**
    * 配置 PathGuard（每个进程执行一次）
    * @param {object} opts
@@ -111,6 +115,7 @@ class PathGuard {
     this.#projectRoot = path.resolve(projectRoot);
     this.#packageRoot = packageRoot ? path.resolve(packageRoot) : null;
     this.#knowledgeBaseDir = knowledgeBaseDir || null; // 延迟解析
+    this.#isDevRepo = isAutoSnippetDevRepo(this.#projectRoot);
 
     // 默认白名单：全局缓存 + 平台 Snippets 目录
     const HOME = process.env.HOME || process.env.USERPROFILE || '';
@@ -216,6 +221,42 @@ class PathGuard {
     const relative = path.relative(this.#projectRoot!, resolved);
     const firstSegment = relative.split(path.sep)[0];
 
+    // ── 开发仓库保护 ──────────────────────────────────
+    // 如果 projectRoot 是 AutoSnippet 自身源码仓库，
+    // 禁止写入 .autosnippet/ 和知识库目录（AutoSnippet/），
+    // 防止在开发仓库内产生运行时数据
+    if (this.#isDevRepo) {
+      if (firstSegment === '.autosnippet') {
+        throw new PathGuardError(
+          resolved,
+          this.#projectRoot!,
+          'Dev repo 保护: 禁止在 AutoSnippet 源码仓库内创建 .autosnippet/ 运行时数据'
+        );
+      }
+      const kbDir = this.#resolveKnowledgeBaseDir();
+      if (kbDir && firstSegment === kbDir) {
+        throw new PathGuardError(
+          resolved,
+          this.#projectRoot!,
+          `Dev repo 保护: 禁止在 AutoSnippet 源码仓库内创建 ${kbDir}/ 知识库数据`
+        );
+      }
+      // 开发仓库内允许写入 .cursor/.vscode/.github 等 IDE 配置
+      for (const prefix of PROJECT_WRITE_SCOPE_PREFIXES) {
+        if (prefix !== '.autosnippet' && firstSegment === prefix) {
+          return;
+        }
+      }
+      if (PROJECT_ROOT_WRITABLE_FILES.includes(relative)) {
+        return;
+      }
+      throw new PathGuardError(
+        resolved,
+        this.#projectRoot!,
+        `Dev repo 保护: "${relative}" 不在允许范围内`
+      );
+    }
+
     // 检查是否在允许的前缀中
     for (const prefix of PROJECT_WRITE_SCOPE_PREFIXES) {
       if (firstSegment === prefix) {
@@ -295,6 +336,7 @@ class PathGuard {
     this.#allowList.clear();
     this.#knowledgeBaseDir = null;
     this.#configured = false;
+    this.#isDevRepo = false;
   }
 
   /**

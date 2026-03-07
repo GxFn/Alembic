@@ -17,6 +17,7 @@
 
 import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
+import pathGuard from '../../shared/PathGuard.js';
 import { AsyncPersistence, WAL_OP } from './AsyncPersistence.js';
 import { BinaryPersistence } from './BinaryPersistence.js';
 import { HnswIndex } from './HnswIndex.js';
@@ -106,6 +107,9 @@ export class HnswVectorAdapter extends VectorStore {
    * 自动检测 JSON 旧索引并迁移
    */
   async init() {
+    // 路径安全检查 — 阻止在开发仓库内创建向量索引目录
+    pathGuard.assertProjectWriteSafe(this.#indexDir);
+
     // 确保目录存在
     if (!existsSync(this.#indexDir)) {
       mkdirSync(this.#indexDir, { recursive: true });
@@ -164,6 +168,9 @@ export class HnswVectorAdapter extends VectorStore {
    * 注意: 同步路径无法执行 async 迁移, 但会尝试同步加载 JSON
    */
   initSync() {
+    // 路径安全检查 — 阻止在开发仓库内创建向量索引目录
+    pathGuard.assertProjectWriteSafe(this.#indexDir);
+
     if (!existsSync(this.#indexDir)) {
       mkdirSync(this.#indexDir, { recursive: true });
     }

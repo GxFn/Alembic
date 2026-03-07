@@ -1,10 +1,12 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 /** Re-exported type alias so declaration emit can name it */
 export type SqliteDatabase = InstanceType<typeof Database>;
 
+import { isAutoSnippetDevRepo } from '../../shared/isOwnDevRepo.js';
 import pathGuard from '../../shared/PathGuard.js';
 import { type DrizzleDB, initDrizzle } from './drizzle/index.js';
 
@@ -36,18 +38,33 @@ export class DatabaseConnection {
     // 使用 projectRoot（PathGuard 已配置）优先解析相对路径，
     // 而非 path.resolve()（依赖 cwd，MCP 场景下 cwd 可能是用户主目录）
     const projectRoot = pathGuard.projectRoot;
-    const resolvedDbPath =
+    let resolvedDbPath =
       projectRoot && !path.isAbsolute(dbPath)
         ? path.resolve(projectRoot, dbPath)
         : path.resolve(dbPath);
 
-    // 路径安全检查 — 防止 DB 文件创建到项目允许范围外
-    pathGuard.assertProjectWriteSafe(resolvedDbPath);
+    // ── 开发仓库保护 ──────────────────────────────────────────
+    // 检测 DB 即将落地到 AutoSnippet 源码仓库内 → 重定向到临时目录
+    // 同时检查 projectRoot（MCP 模式）和 resolvedDbPath 的父目录（测试/CLI 模式）
+    const effectiveRoot = projectRoot || path.resolve('.');
+    if (isAutoSnippetDevRepo(effectiveRoot)) {
+      const devDbDir = path.join(os.tmpdir(), 'autosnippet-dev');
+      if (!fs.existsSync(devDbDir)) {
+        fs.mkdirSync(devDbDir, { recursive: true });
+      }
+      resolvedDbPath = path.join(devDbDir, 'autosnippet.db');
+      process.stderr.write(
+        `[AutoSnippet] Dev repo detected — DB redirected to ${resolvedDbPath}\n`
+      );
+    } else {
+      // 路径安全检查 — 防止 DB 文件创建到项目允许范围外
+      pathGuard.assertProjectWriteSafe(resolvedDbPath);
 
-    // 确保数据目录存在
-    const dbDir = path.dirname(resolvedDbPath);
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
+      // 确保数据目录存在
+      const dbDir = path.dirname(resolvedDbPath);
+      if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+      }
     }
 
     this.db = new Database(resolvedDbPath, {
@@ -69,7 +86,7 @@ export class DatabaseConnection {
   }
 
   /**
-   * 运行所有 migration（支持 .sql 和 .js）
+   * 运行所有 migration（支持 .sql、.js、.ts）
    */
   async runMigrations() {
     if (!this.db) {
@@ -79,7 +96,7 @@ export class DatabaseConnection {
     const migrationsDir = path.join(__dirname, 'migrations');
     const migrationFiles = fs
       .readdirSync(migrationsDir)
-      .filter((file) => file.endsWith('.sql') || file.endsWith('.js'))
+      .filter((file) => /\.(sql|js|ts)$/.test(file) && !file.endsWith('.d.ts'))
       .sort();
 
     // 确保 schema_migrations 表存在
@@ -91,7 +108,7 @@ export class DatabaseConnection {
     `);
 
     for (const file of migrationFiles) {
-      const version = file.replace(/\.(sql|js)$/, '');
+      const version = file.replace(/\.(sql|js|ts)$/, '');
 
       // 检查是否已应用
       const applied = db
@@ -101,7 +118,7 @@ export class DatabaseConnection {
       if (!applied) {
         process.stderr.write(`Applying migration: ${version}\n`);
 
-        if (file.endsWith('.js')) {
+        if (file.endsWith('.js') || file.endsWith('.ts')) {
           // JS migration: export default function(db) { ... }
           const mod = await import(path.join(migrationsDir, file));
           const migrate = mod.default || mod;

@@ -45,6 +45,7 @@
 import { execSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { isAutoSnippetDevRepo } from '../shared/isOwnDevRepo.js';
 import { PACKAGE_ROOT } from '../shared/package-root.js';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
@@ -73,6 +74,15 @@ export class SetupService {
     this.projectName = this.projectRoot.split('/').pop() || '';
     this.force = options.force || false;
     this.seed = options.seed || false;
+
+    // ── 开发仓库保护 ──────────────────────────────────
+    if (isAutoSnippetDevRepo(this.projectRoot)) {
+      throw new Error(
+        '[SetupService] 检测到当前目录是 AutoSnippet 源码开发仓库，' +
+          '拒绝执行 setup 以避免创建 .autosnippet/ 和 AutoSnippet/ 运行时数据。' +
+          '\n提示: 请在用户项目目录中运行 asd setup。'
+      );
+    }
 
     // 运行时目录（gitignored）
     this.runtimeDir = join(this.projectRoot, '.autosnippet');

@@ -72,6 +72,13 @@ export class Bootstrap {
       // 0. 加载 .env 环境变量（仅在未加载过时执行）
       await this.loadDotEnv();
 
+      // 0.5 确保 PathGuard 已配置（如果调用方未提前配置）
+      // MCP 服务器会在 initialize() 之前配置，但 CLI/测试可能跳过
+      if (!pathGuard.configured) {
+        const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+        Bootstrap.configurePathGuard(projectRoot);
+      }
+
       // 1. 加载配置
       await this.loadConfig();
 
