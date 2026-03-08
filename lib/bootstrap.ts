@@ -122,7 +122,8 @@ export class Bootstrap {
       for (const envPath of candidates) {
         if (existsSync(envPath)) {
           const dotenv = await import('dotenv');
-          dotenv.config({ path: envPath, override: false });
+          // quiet: true — 禁止 dotenv v17 的 stdout banner，避免污染 MCP stdio 传输
+          dotenv.config({ path: envPath, override: false, quiet: true });
           break;
         }
       }

@@ -237,12 +237,49 @@ export class LarkTransport {
 
     this.#logger.info(`[LarkTransport] Received: "${text.slice(0, 80)}" from ${senderName}`);
 
-    // ── 意图分类 ──
+    // ═══════════════════════════════════════════════════
+    //  前缀快捷路由（优先级高于 IntentClassifier）
+    //    $command  → 终端命令，服务端 AgentRuntime 执行
+    //    >command  → 强制 IDE 编程，跳过分类直接转发 Copilot
+    //    自然语言   → IntentClassifier 三层分类
+    // ═══════════════════════════════════════════════════
+
+    if (text.startsWith('$')) {
+      const cmd = text.slice(1).trim();
+      if (!cmd) {
+        await this.#reply(messageId, '❌ 请在 `$` 后输入要执行的终端命令。\n例: `$git status`');
+        return;
+      }
+      this.#logger.info(`[LarkTransport] Prefix $: remote-exec — "${cmd.slice(0, 60)}"`);
+      await this.#handleRemoteExec(cmd, messageId, chatId, senderId, senderName);
+      return;
+    }
+
+    if (text.startsWith('>')) {
+      const cmd = text.slice(1).trim();
+      if (!cmd) {
+        await this.#reply(
+          messageId,
+          '❌ 请在 `>` 后输入编程指令。\n例: `>在页面上新建一个绿色按钮`'
+        );
+        return;
+      }
+      this.#logger.info(`[LarkTransport] Prefix >: force IDE — "${cmd.slice(0, 60)}"`);
+      await this.#handleIdeAgent(cmd, messageId, chatId, senderId, senderName);
+      return;
+    }
+
+    // ── 无前缀：走 IntentClassifier 自然语言分类 ──
     const recentHistory = this.#getRecentHistoryText(chatId);
     const classification = await this.#classifier.classify(text, { recentHistory });
 
+    // 使用 LLM/规则提取的核心指令，去除 meta 包装
+    const effectiveCommand =
+      ((classification as Record<string, unknown>).extractedCommand as string) || text;
+
     this.#logger.info(
-      `[LarkTransport] Intent: ${classification.intent} (${classification.confidence.toFixed(2)}) — ${classification.reasoning}`
+      `[LarkTransport] Intent: ${classification.intent} (${classification.confidence.toFixed(2)}) — ${classification.reasoning}` +
+        (effectiveCommand !== text ? ` | extracted: "${effectiveCommand.slice(0, 60)}"` : '')
     );
 
     // ── 路由处理 ──
@@ -252,10 +289,10 @@ export class LarkTransport {
         break;
 
       case Intent.IDE_AGENT:
-        await this.#handleIdeAgent(text, messageId, chatId, senderId, senderName);
+        await this.#handleIdeAgent(effectiveCommand, messageId, chatId, senderId, senderName);
         break;
       default:
-        await this.#handleBotAgent(text, messageId, chatId, senderId, senderName);
+        await this.#handleBotAgent(effectiveCommand, messageId, chatId, senderId, senderName);
         break;
     }
   }
@@ -343,10 +380,11 @@ export class LarkTransport {
   }
 
   /**
-   * IDE 编程任务 — 转发到 VSCode Copilot 或服务端远程执行
+   * IDE 编程任务 — 转发到 VSCode Copilot Agent Mode
    *
-   * `>` 前缀命令 → 使用 remote-exec preset 在服务端直接执行（含 SafetyPolicy 白名单）
-   * 其他 IDE 编程任务 → 转发到 VSCode Copilot Agent Mode
+   * 调用来源:
+   *   - `>` 前缀快捷路由（已去除前缀）
+   *   - IntentClassifier 分类为 ide_agent
    */
   async #handleIdeAgent(
     text: string,
@@ -355,18 +393,6 @@ export class LarkTransport {
     senderId: string,
     senderName: string
   ) {
-    // ── `>` 前缀: 远程执行命令 ──
-    if (text.startsWith('>')) {
-      const command = text.slice(1).trim();
-      if (!command) {
-        await this.#reply(messageId, '❌ 请在 `>` 后输入要执行的命令。');
-        return;
-      }
-      await this.#handleRemoteExec(command, messageId, chatId, senderId, senderName);
-      return;
-    }
-
-    // ── 其他 IDE 编程任务: 转发到 VSCode ──
     if (!this.#enqueueIdeFn) {
       await this.#reply(messageId, '❌ IDE 桥接未配置，无法转发编程任务。');
       return;

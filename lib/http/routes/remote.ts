@@ -26,6 +26,7 @@ import {
   type StatusCounts,
 } from '../../repository/remote/RemoteCommandRepository.js';
 import { LarkTransport } from '../../service/agent/LarkTransport.js';
+import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {
   RemoteHistoryQuery,
   RemoteNotifyBody,
@@ -393,7 +394,7 @@ function getLarkTransport() {
         meta: Record<string, unknown>
       ) => Promise<{ id: string }>,
       isUserAllowed,
-      projectRoot: container.get('projectRoot') || process.cwd(),
+      projectRoot: resolveProjectRoot(container),
     });
 
     logger.info('[Remote/Lark] LarkTransport initialized');
@@ -491,8 +492,7 @@ async function enqueueIdeCommand(command: string, meta: Record<string, string> =
 }
 
 function _getProjectRoot() {
-  const container = getServiceContainer();
-  return container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
+  return resolveProjectRoot(getServiceContainer());
 }
 
 // ═══════════════════════════════════════════════════════
@@ -519,7 +519,7 @@ async function handleLarkMessage(data: LarkMessageEvent) {
   if (transport) {
     await transport.receive(data);
   } else {
-    // Transport 未就绪 → 降级为旧队列模式
+    // Transport 未就绪 → 降级模式
     logger.warn('[Remote/Lark] Transport not ready, falling back to queue mode');
     const sender: { sender_id?: Record<string, string> } =
       data?.sender || data?.event?.sender || {};
@@ -535,6 +535,20 @@ async function handleLarkMessage(data: LarkMessageEvent) {
     }
 
     if (text) {
+      // ── 降级模式下仍需识别系统指令，避免"状态"等命令被盲目转发 IDE ──
+      const FALLBACK_SYSTEM_RE =
+        /^(状态|status|截图|screenshot|帮助|help|ping|队列|queue|取消|cancel|清[理空])$/i;
+      const FALLBACK_SYSTEM_CONTAINS_RE =
+        /状态|status|截图|screenshot|screen|截屏|帮助|help|诊断|链路|连接.*状态|服务.*状态/i;
+
+      if (FALLBACK_SYSTEM_RE.test(text) || FALLBACK_SYSTEM_CONTAINS_RE.test(text)) {
+        // 系统指令 — 在降级模式下直接回复状态
+        logger.info(`[Remote/Lark] Fallback: system command detected — "${text}"`);
+        const statusText = await getStatusText();
+        await replyLark(messageId, statusText || '📊 系统状态查询中 (Agent 模式未就绪)');
+        return;
+      }
+
       const senderId = sender.sender_id?.user_id || sender.sender_id?.open_id || '';
       const senderName = sender.sender_id?.user_id || 'lark_user';
       await enqueueIdeCommand(text, { chatId, messageId, senderId, senderName });
@@ -574,6 +588,7 @@ router.get('/lark/status', async (_req: Request, res: Response): Promise<void> =
       activeChatId: _activeChatId ? `${_activeChatId.slice(0, 12)}...` : '',
       notificationReady: isLarkNotificationReady(),
       queue: queueInfo,
+      projectRoot: _getProjectRoot(),
     },
   });
 });

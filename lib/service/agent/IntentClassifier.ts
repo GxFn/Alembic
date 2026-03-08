@@ -49,9 +49,19 @@ export const Intent = Object.freeze({
  * @property {number} confidence - 0-1 置信度
  * @property {string} reasoning 分类理由 (用于日志/调试)
  * @property {string} method - 'rule' | 'llm' 分类方法
+ * @property {string} [extractedCommand] - 提取的核心指令 (去除 meta 包装)
  */
 
 // ─── 规则匹配表 ─────────────────────────────────
+
+// ── 自然语言 meta 包装模式 ──
+// 用户说"在编辑器内输入X"、"让 Copilot 帮我X"，实际指令是 X
+const META_WRAPPER_PATTERNS = [
+  /^(?:在|去|到)\s*(?:编辑器|IDE|VSCode|VS Code|Copilot|代码编辑器)\s*(?:内|里|中|上)?\s*(?:输入|写|执行|处理|帮我)?\s*/i,
+  /^(?:让|请|麻烦)\s*(?:编辑器|IDE|VSCode|VS Code|Copilot|Agent)\s*(?:帮我|帮忙|来)?\s*/i,
+  /^(?:请|麻烦)?\s*(?:在|去|到)\s*(?:IDE|编辑器|VSCode)\s*(?:里|中|内)?\s*(?:帮我)?\s*/i,
+  /^(?:帮我|请)?\s*(?:在|用)\s*(?:编辑器|IDE|Copilot)\s*(?:里|中)?\s*/i,
+];
 
 /**
  * 系统操作规则 — 硬编码匹配，优先级最高
@@ -115,8 +125,7 @@ const BOT_STRONG_SIGNALS = [
 
 const CLASSIFY_SCHEMA = {
   name: 'classify_lark_intent',
-  description:
-    'Classify a Lark message to determine whether it should be handled by the Bot Agent (knowledge management on server) or forwarded to IDE Agent (coding in VSCode)',
+  description: 'Classify a Lark message and extract the core command to forward',
   parameters: {
     type: 'object',
     properties: {
@@ -134,8 +143,13 @@ const CLASSIFY_SCHEMA = {
         type: 'string',
         description: 'Brief reasoning in Chinese',
       },
+      extractedCommand: {
+        type: 'string',
+        description:
+          'The core task/command extracted from the user message, removing meta-instructions like "在编辑器内输入", "让 Copilot 帮我", "请在 IDE 里" etc. If the message is already a direct command, return it as-is. For bot_agent, this is the core question/request.',
+      },
     },
-    required: ['intent', 'confidence'],
+    required: ['intent', 'confidence', 'extractedCommand'],
   },
 };
 
@@ -159,7 +173,16 @@ const CLASSIFY_SYSTEM_PROMPT = `你是一个意图分类器。用户通过飞书
 关键判断原则:
 1. 如果任务涉及"修改源代码"→ ide_agent
 2. 如果任务涉及"理解/搜索/管理知识"→ bot_agent
-3. 模糊时倾向 bot_agent (成本更低，用户可重新触发)`;
+3. 模糊时倾向 bot_agent (成本更低，用户可重新触发)
+
+**extractedCommand 提取规则:**
+用户消息可能包含 meta 指令包装，你需要提取出核心任务：
+- "在编辑器内输入新增按钮" → extractedCommand: "新增按钮"
+- "让 Copilot 帮我重构 auth 模块" → extractedCommand: "重构 auth 模块"
+- "请在 IDE 里把登录页改成暗色主题" → extractedCommand: "把登录页改成暗色主题"
+- "帮我搜索一下认证相关知识" → extractedCommand: "搜索认证相关知识"
+- "修复 src/app.ts 的类型错误" → extractedCommand: "修复 src/app.ts 的类型错误" (已是直接指令，原样返回)
+去掉"在编辑器/IDE/Copilot 里"、"帮我输入"、"请执行"等 meta 包装，保留核心意图。`;
 
 // ─── IntentClassifier 实现 ──────────────────────
 
@@ -167,6 +190,25 @@ export class IntentClassifier {
   /** @type {import('../../external/ai/AiProvider.js').AiProvider|null} */
   #aiProvider: AiProvider | null;
   #logger;
+
+  /**
+   * 从用户消息中提取核心指令，去除 meta 包装
+   *
+   * "在编辑器内输入新增按钮" → "新增按钮"
+   * "让 Copilot 帮我重构 auth" → "重构 auth"
+   * "修复 bug" → "修复 bug" (无包装，原样返回)
+   */
+  static extractCommand(text: string): string {
+    let result = text;
+    for (const pattern of META_WRAPPER_PATTERNS) {
+      const match = result.match(pattern);
+      if (match && match[0].length < result.length) {
+        result = result.slice(match[0].length).trim();
+        break; // 只匹配第一个 meta 包装
+      }
+    }
+    return result || text; // 防止提取为空
+  }
 
   /**
    * @param {Object} opts
@@ -191,13 +233,30 @@ export class IntentClassifier {
 
     const trimmed = text.trim();
 
+    // ── Layer 0: 提取 meta 包装中的核心指令 ──
+    // "在编辑器内输入新增按钮" → extracted="新增按钮", 原始保留用于后续分类
+    const extracted = IntentClassifier.extractCommand(trimmed);
+
     // ── Layer 1: 系统操作 (硬编码，零延迟) ──
-    const sysMatch = this.#matchSystem(trimmed);
+    // 对原始文本和提取后文本都检查
+    const sysMatch =
+      this.#matchSystem(trimmed) || (extracted !== trimmed ? this.#matchSystem(extracted) : null);
     if (sysMatch) {
       return sysMatch;
     }
 
     // ── Layer 2: 强信号关键词匹配 ──
+    // 如果有 meta 包装（"在编辑器里输入X"），直接判定为 ide_agent
+    if (extracted !== trimmed) {
+      return {
+        intent: Intent.IDE_AGENT,
+        confidence: 0.95,
+        reasoning: `Meta 包装检测: 原始="${trimmed.slice(0, 40)}" → 核心="${extracted.slice(0, 40)}"`,
+        method: 'rule',
+        extractedCommand: extracted,
+      };
+    }
+
     const ruleMatch = this.#matchRules(trimmed);
     if (ruleMatch && ruleMatch.confidence >= 0.8) {
       this.#logger.info(
@@ -333,6 +392,7 @@ export class IntentClassifier {
           confidence: (call.confidence as number) ?? 0.8,
           reasoning: (call.reasoning as string) || 'LLM 分类',
           method: 'llm',
+          extractedCommand: (call.extractedCommand as string) || undefined,
         };
       }
     } catch (err: unknown) {

@@ -16,11 +16,29 @@
  *   ✓ 通知面板 — 收到指令时气泡提示 + "查看"按钮
  */
 
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type { ApiClient } from './apiClient';
 
 function toErrorMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * 获取当前 VSCode 窗口的工作区根路径（首个 workspaceFolder）
+ */
+function getWorkspaceRoot(): string | undefined {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+/**
+ * 判断本地工作区路径是否与服务端的 projectRoot 匹配
+ * 使用 path.resolve 规范化后比较，避免末尾斜杠等差异
+ */
+function isWorkspaceMatch(serverRoot: string): boolean {
+  const local = getWorkspaceRoot();
+  if (!local) return false;
+  return path.resolve(local) === path.resolve(serverRoot);
 }
 
 // ─── 常量 ─────────────────────────────────────────
@@ -81,7 +99,7 @@ export class RemoteCommandPoller implements vscode.Disposable {
       90
     );
     this.statusItem.command = 'autosnippet.toggleRemotePoller';
-    this.updateStatusBar(false);
+    // 初始不显示 — 等待确认当前工作区匹配服务端项目后再展示
   }
 
   /** 统一日志 — 写入 OutputChannel，不污染 devtools console */
@@ -126,6 +144,19 @@ export class RemoteCommandPoller implements vscode.Disposable {
       try {
         const status = await this.apiClient.getRemoteLarkStatus();
         if (status?.connected) {
+          // 校验：服务端的 projectRoot 必须与当前工作区匹配
+          // 避免多个 IDE 窗口时，非目标项目抢夺远程指令
+          if (status.projectRoot && !isWorkspaceMatch(status.projectRoot)) {
+            this.log(
+              `Skipped auto-start: workspace mismatch (server=${status.projectRoot}, local=${getWorkspaceRoot()})`,
+              'warn'
+            );
+            // 非目标项目 — 隐藏状态栏，停止继续探测
+            this.statusItem.hide();
+            if (this.autoStartTimer) clearInterval(this.autoStartTimer);
+            this.autoStartTimer = undefined;
+            return;
+          }
           this.log('Lark connected detected, auto-starting...');
           this.start();
           if (this.autoStartTimer) clearInterval(this.autoStartTimer);
@@ -141,6 +172,34 @@ export class RemoteCommandPoller implements vscode.Disposable {
 
   start(): void {
     if (this.timer || this.disposed) return;
+    // 异步校验工作区匹配后再真正启动
+    this.verifyAndStart();
+  }
+
+  /**
+   * 校验当前工作区与服务端 projectRoot 是否匹配，匹配后才启动轮询。
+   * 手动触发 start 时也会校验，防止误操作。
+   */
+  private async verifyAndStart(): Promise<void> {
+    try {
+      const status = await this.apiClient.getRemoteLarkStatus();
+      if (status?.projectRoot && !isWorkspaceMatch(status.projectRoot)) {
+        const serverProject = path.basename(status.projectRoot);
+        const localProject = getWorkspaceRoot() ? path.basename(getWorkspaceRoot()!) : 'unknown';
+        this.log(
+          `Blocked: workspace mismatch (server=${status.projectRoot}, local=${getWorkspaceRoot()})`,
+          'warn'
+        );
+        // 非目标项目 — 隐藏状态栏
+        this.statusItem.hide();
+        vscode.window.showWarningMessage(
+          `🛰 远程编程目标是 ${serverProject}，当前窗口是 ${localProject}，已跳过。请在正确的 IDE 窗口中启动。`
+        );
+        return;
+      }
+    } catch {
+      // 服务端不可达 — 继续启动，后续 poll 会自然失败
+    }
     this.timer = setInterval(() => this.poll(), POLL_INTERVAL_IDLE);
     this.updateStatusBar(true);
     vscode.window.showInformationMessage('🛰 远程指令轮询已启动');
@@ -455,12 +514,11 @@ export class RemoteCommandPoller implements vscode.Disposable {
       this.statusItem.text = `$(radio-tower) Remote: ON${suffix}`;
       this.statusItem.tooltip = `远程指令轮询中\n已处理: ${this.commandCount} 条\n点击切换`;
       this.statusItem.backgroundColor = undefined;
+      this.statusItem.show();
     } else {
-      this.statusItem.text = '$(radio-tower) Remote: OFF';
-      this.statusItem.tooltip = '远程指令已关闭 — 点击启动';
-      this.statusItem.backgroundColor = undefined;
+      // 非活跃时隐藏状态栏 — 非目标项目完全无感知
+      this.statusItem.hide();
     }
-    this.statusItem.show();
   }
 }
 

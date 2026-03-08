@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import express, { type Request, type Response } from 'express';
 import { createProvider } from '../../external/ai/AiFactory.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { AgentMessage, Channel } from '../../service/agent/AgentMessage.js';
 import { ConversationStore } from '../../service/agent/ConversationStore.js';
@@ -21,6 +22,7 @@ import {
 } from '../../service/agent/domain/ChatAgentTasks.js';
 import { PRESETS } from '../../service/agent/presets.js';
 import { ValidationError } from '../../shared/errors/index.js';
+import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {
   AiChatBody,
   AiConfigBody,
@@ -254,7 +256,7 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
   let effectiveHistory = history;
   let effectiveConvId = conversationId || null;
   try {
-    const projectRoot = container.get('projectRoot') || process.cwd();
+    const projectRoot = resolveProjectRoot(container);
     convStore = new ConversationStore(projectRoot);
     if (effectiveConvId) {
       effectiveHistory = convStore.load(effectiveConvId);
@@ -313,16 +315,6 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
     }
   }
 
-  // ── MemoryCoordinator: 提取记忆 ──
-  try {
-    const memoryCoordinator = container.get('memoryCoordinator');
-    if (memoryCoordinator) {
-      memoryCoordinator.extractFromConversation?.(prompt, result.reply, 'user');
-    }
-  } catch {
-    /* 静默降级 */
-  }
-
   // ── Token 用量持久化 ──
   try {
     const tokenStore = container.get('tokenUsageStore');
@@ -343,7 +335,7 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
       });
       // 通知前端 token 用量变化
       try {
-        const realtime = container.get('realtimeService');
+        const realtime = getRealtimeService();
         realtime?.broadcastTokenUsageUpdated?.();
       } catch {
         /* optional */

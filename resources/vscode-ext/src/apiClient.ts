@@ -413,9 +413,9 @@ export class ApiClient {
   /**
    * 查询飞书连接状态（用于自动探测）
    */
-  async getRemoteLarkStatus(): Promise<{ connected: boolean; queue?: Record<string, number> } | null> {
+  async getRemoteLarkStatus(): Promise<{ connected: boolean; queue?: Record<string, number>; projectRoot?: string } | null> {
     try {
-      const resp = await this._get<ApiResponse<{ connected: boolean; queue?: Record<string, number> }>>('/remote/lark/status');
+      const resp = await this._get<ApiResponse<{ connected: boolean; queue?: Record<string, number>; projectRoot?: string }>>('/remote/lark/status');
       return resp?.success && resp.data ? resp.data : null;
     } catch {
       return null;
