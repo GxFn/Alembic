@@ -141,6 +141,12 @@ export class ExternalSubmissionTracker {
 
     const submissions = this.#dimensionSubmissions.get(dimId)!;
     if (submissions.length >= MAX_SUBMISSIONS_PER_DIM) {
+      // 超过追踪上限，记录警告信息而非静默丢弃
+      this.#addNegativeSignal(
+        `Dimension "${dimId}" exceeded ${MAX_SUBMISSIONS_PER_DIM} submissions tracking limit — quality scoring may be lower than actual`,
+        'tracker-overflow',
+        dimId
+      );
       return;
     }
 

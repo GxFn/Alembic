@@ -45,17 +45,6 @@ export function errorHandler(logger: AppLogger): ErrorRequestHandler {
 }
 
 /**
- * 异步路由错误包装
- */
-export function asyncHandler(
-  fn: (req: Request, res: Response, next: NextFunction) => void | Promise<void>
-): RequestHandler {
-  return (req, res, next) => {
-    Promise.resolve(fn(req, res, next)).catch(next);
-  };
-}
-
-/**
  * 将领域错误转换为 HTTP 错误
  */
 export function mapDomainError(error: Error) {

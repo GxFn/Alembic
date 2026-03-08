@@ -309,6 +309,15 @@ export async function runPhase1_FileCollection(
     }
   }
 
+  // 文件截断警告：当达到 maxFiles 上限时，通知调用方分析可能不完整
+  const truncated = seenPaths.size > allFiles.length || allFiles.length >= maxFiles;
+  if (truncated) {
+    logger.warn(
+      `[Bootstrap] File collection truncated at ${maxFiles} files (total discovered: ${seenPaths.size}). ` +
+        `Analysis may be incomplete — consider increasing maxFiles or narrowing target scope.`
+    );
+  }
+
   // 语言统计
   const langStats: Record<string, number> = {};
   for (const f of allFiles) {
@@ -321,6 +330,7 @@ export async function runPhase1_FileCollection(
     allTargets: allTargets as unknown as TargetItem[],
     discoverer: discoverer as unknown as DiscovererLike,
     langStats,
+    truncated,
   };
 }
 
@@ -908,7 +918,13 @@ export async function runAllPhases(
   // ── Phase 1: 文件收集 ──
   const p1Start = Date.now();
   const phase1 = await runPhase1_FileCollection(projectRoot, ctx.logger, options);
-  const { allFiles, allTargets, discoverer, langStats } = phase1;
+  const { allFiles, allTargets, discoverer, langStats, truncated } = phase1;
+
+  if (truncated) {
+    warnings.push(
+      `File collection truncated at ${options.maxFiles || 500} files. Analysis may be incomplete.`
+    );
+  }
 
   if (report) {
     report.phases.fileCollection = {

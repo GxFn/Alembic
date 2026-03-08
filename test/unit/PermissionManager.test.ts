@@ -1,11 +1,9 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import Constitution from '../../lib/core/constitution/Constitution.js';
 import PermissionManager from '../../lib/core/permission/PermissionManager.js';
 import { PermissionDenied } from '../../lib/shared/errors/BaseError.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = import.meta.dirname;
 
 describe('PermissionManager', () => {
   let constitution;

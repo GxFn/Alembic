@@ -7,6 +7,7 @@
  * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { AgentFactory } from '../../service/agent/AgentFactory.js';
 import { ALL_TOOLS } from '../../service/agent/tools/index.js';
 import { ToolRegistry } from '../../service/agent/tools/ToolRegistry.js';
@@ -27,7 +28,7 @@ export function register(c: ServiceContainer) {
         container: ct,
         toolRegistry: ct.get('toolRegistry'),
         aiProvider: ct.singletons.aiProvider || null,
-        projectRoot: (ct.singletons._projectRoot as string | undefined) || process.cwd(),
+        projectRoot: resolveProjectRoot(ct),
       } as unknown as ConstructorParameters<typeof AgentFactory>[0]),
     { aiDependent: true }
   );

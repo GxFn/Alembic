@@ -47,9 +47,9 @@ export class ViolationsStore {
   /**
    * @param {import('better-sqlite3').Database} db - SQLite 数据库实例
    */
-  constructor(db: DatabaseLike) {
+  constructor(db: DatabaseLike, drizzle?: DrizzleDB) {
     this.#db = db;
-    this.#drizzle = getDrizzle();
+    this.#drizzle = drizzle ?? getDrizzle();
   }
 
   // ─── 写入 ─────────────────────────────────────────────

@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import type { Logger as WinstonLogger } from 'winston';
 import { inferKind, KnowledgeEntry } from '../../domain/knowledge/index.js';
-import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
+import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
+import { getDrizzle } from '../../infrastructure/database/drizzle/index.js';
 import { knowledgeEntries } from '../../infrastructure/database/drizzle/schema.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { safeJsonParse, safeJsonStringify, unixNow } from '../../shared/utils/common.js';
@@ -60,10 +61,10 @@ interface KnowledgeCountRow {
 export class KnowledgeRepositoryImpl extends BaseRepository {
   #drizzle: DrizzleDB;
 
-  constructor(database: KnowledgeDatabaseWrapper) {
+  constructor(database: KnowledgeDatabaseWrapper, drizzle?: DrizzleDB) {
     super(database, 'knowledge_entries');
     this.logger = Logger.getInstance();
-    this.#drizzle = getDrizzle();
+    this.#drizzle = drizzle ?? getDrizzle();
   }
 
   /* ═══ CRUD ═══════════════════════════════════════════ */

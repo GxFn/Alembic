@@ -190,11 +190,21 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
             // 通过 updatable 字段标记 recipe 的维度关联
             const entry = await knowledgeService.get(recipeId);
             if (entry) {
-              const existingTags = Array.isArray(entry.tags)
-                ? entry.tags
-                : typeof entry.tags === 'string'
-                  ? JSON.parse(entry.tags)
-                  : [];
+              let existingTags: string[] = [];
+              if (Array.isArray(entry.tags)) {
+                existingTags = entry.tags;
+              } else if (typeof entry.tags === 'string') {
+                try {
+                  const parsed = JSON.parse(entry.tags);
+                  existingTags = Array.isArray(parsed) ? parsed : [];
+                } catch {
+                  // tags 不是有效 JSON，尝试按逗号分割
+                  existingTags = entry.tags
+                    .split(',')
+                    .map((t: string) => t.trim())
+                    .filter(Boolean);
+                }
+              }
               const newTags = [
                 ...new Set([
                   ...existingTags,
@@ -422,7 +432,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
   const accumulatedEvidence = session.submissionTracker.getAccumulatedEvidence(dimensionId);
 
   // v2: 质量反馈构建
-  let qualityFeedback: Record<string, any> | undefined;
+  let qualityFeedback: Record<string, unknown> | undefined;
   if (qualityReport) {
     qualityFeedback = {
       totalScore: qualityReport.totalScore,
@@ -445,7 +455,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
   const nextActions = isComplete ? BOOTSTRAP_COMPLETE_ACTIONS : undefined;
 
   // v2: 为下游维度构建结构化提示 (基于累积证据)
-  let evidenceHints: Record<string, any> | undefined;
+  let evidenceHints: Record<string, unknown> | undefined;
   if (
     !isComplete &&
     (accumulatedEvidence.completedDimSummaries.length > 0 ||

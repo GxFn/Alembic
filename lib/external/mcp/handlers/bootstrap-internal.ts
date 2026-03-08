@@ -48,6 +48,7 @@
  */
 
 import { getInternalAgentRequiredFields } from '#shared/FieldSpec.js';
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import { fillDimensionsV3 } from './bootstrap/pipeline/orchestrator.js';
 import { bootstrapRefine } from './bootstrap/refine.js';
@@ -149,7 +150,7 @@ interface BootstrapSessionShape {
  */
 export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: BootstrapKnowledgeArgs) {
   const t0 = Date.now();
-  const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+  const projectRoot = resolveProjectRoot(ctx.container);
 
   // v5.0: 增量 Bootstrap 开关 (默认启用, 自动检测是否可增量)
   const enableIncremental = args.incremental !== false;

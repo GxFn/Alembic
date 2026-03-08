@@ -18,6 +18,7 @@ import path from 'node:path';
 import Logger from '#infra/logging/Logger.js';
 import { WikiGenerator } from '#service/wiki/WikiGenerator.js';
 import { dedup } from '#service/wiki/WikiUtils.js';
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import { getActiveSession } from './bootstrap-external.js';
 import type { McpContext, McpServiceContainer } from './types.js';
@@ -118,9 +119,7 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
   const t0 = Date.now();
   const language = args.language || 'zh';
   const container = ctx.container;
-  const projectRoot = String(
-    container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd()
-  );
+  const projectRoot = resolveProjectRoot(container);
 
   // ── 优先复用 bootstrap 已有的分析缓存 ──
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- getActiveSession accepts ServiceContainer, container is McpServiceContainer
@@ -338,9 +337,7 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
   }
 
   const container = ctx.container;
-  const projectRoot = String(
-    container.singletons?._projectRoot || process.env.ASD_PROJECT_DIR || process.cwd()
-  );
+  const projectRoot = resolveProjectRoot(container);
   const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
 
   // ── 1. 验证文件存在性 ──

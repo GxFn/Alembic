@@ -7,7 +7,6 @@
 
 import { and, eq } from 'drizzle-orm';
 import { getServiceContainer } from '#inject/ServiceContainer.js';
-import { getDrizzle } from '../../../infrastructure/database/drizzle/index.js';
 import { knowledgeEntries } from '../../../infrastructure/database/drizzle/schema.js';
 
 /**
@@ -39,7 +38,10 @@ export async function handleAlink(alinkLine: string) {
         const rawDb = typeof db.getDb === 'function' ? db.getDb() : db;
         try {
           // ★ Drizzle 类型安全 — 精确匹配 trigger
-          const drizzle = getDrizzle();
+          const drizzle = typeof db.getDrizzle === 'function' ? db.getDrizzle() : null;
+          if (!drizzle) {
+            throw new Error('Drizzle not available');
+          }
           const row = drizzle
             .select({ id: knowledgeEntries.id })
             .from(knowledgeEntries)

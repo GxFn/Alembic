@@ -225,7 +225,7 @@ Three-tier permission architecture:
 
 ## Key Design Decisions
 
-1. **ESM Only** — The entire project uses ES Modules, Node.js ≥ 20
+1. **ESM Only** — The entire project uses ES Modules, Node.js ≥ 22
 2. **SQLite as Cache** — Markdown files are the Source of Truth; SQLite is a read cache; `asd sync` can rebuild it
 3. **No Build Step** — Pure JavaScript, no TypeScript compilation needed (except Dashboard)
 4. **DI without Framework** — Lightweight self-implemented DI container, no external DI framework dependency

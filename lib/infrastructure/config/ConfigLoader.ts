@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { AppConfigSchema } from '../../shared/schemas/config.js';
 
 /**
@@ -16,7 +15,7 @@ export class ConfigLoader {
    * ConfigLoader 是最早加载的模块之一，不能依赖 package-root.ts，因此内联实现。
    */
   static _findPackageRoot(): string {
-    let dir = path.dirname(fileURLToPath(import.meta.url));
+    let dir = import.meta.dirname;
     for (let i = 0; i < 10; i++) {
       const candidate = path.join(dir, 'package.json');
       if (fs.existsSync(candidate)) {

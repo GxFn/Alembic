@@ -27,6 +27,8 @@ export function initDrizzle(betterSqlite3Db: Database): DrizzleDB {
 
 /**
  * 获取已初始化的 Drizzle 实例
+ * @deprecated 优先使用 DatabaseConnection.getDrizzle() 或通过 DI 注入。
+ *             全局单例将在未来版本移除。
  * @throws 若未调用 initDrizzle() 则抛错
  */
 export function getDrizzle(): DrizzleDB {

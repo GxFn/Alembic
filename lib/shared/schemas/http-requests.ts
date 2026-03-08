@@ -183,13 +183,6 @@ export const SimilarityBody = z.object({
     .optional(),
 });
 
-export const XcodeSimulateBody = z.object({
-  keyword: z.string().min(1, 'keyword is required'),
-  currentFile: z.string().optional(),
-  language: z.string().optional(),
-  limit: z.number().int().min(1).max(100).default(10),
-});
-
 // ═══ Candidates ══════════════════════════════════
 
 export const EnrichBody = z.object({

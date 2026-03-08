@@ -11,6 +11,7 @@
  * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { TaskIdGenerator } from '../../domain/task/TaskIdGenerator.js';
 import { XcodeCodec } from '../../platform/ios/snippet/XcodeCodec.js';
 import { SpmHelper } from '../../platform/ios/spm/SpmHelper.js';
@@ -41,19 +42,17 @@ export function register(c: ServiceContainer) {
   c.register('recipeExtractor', () => c.singletons._recipeExtractor || null);
 
   c.singleton('feedbackCollector', (ct: ServiceContainer) => {
-    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
+    const projectRoot = resolveProjectRoot(ct);
     return new FeedbackCollector(projectRoot as ConstructorParameters<typeof FeedbackCollector>[0]);
   });
 
-  c.singleton(
-    'tokenUsageStore',
-    (ct: ServiceContainer) =>
-      new TokenUsageStore(
-        (ct.get('database') as { getDb: () => unknown }).getDb() as ConstructorParameters<
-          typeof TokenUsageStore
-        >[0]
-      )
-  );
+  c.singleton('tokenUsageStore', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb: () => unknown; getDrizzle: () => unknown };
+    return new TokenUsageStore(
+      db.getDb() as ConstructorParameters<typeof TokenUsageStore>[0],
+      db.getDrizzle() as ConstructorParameters<typeof TokenUsageStore>[1]
+    );
+  });
 
   // ═══ Snippet ═══
 
@@ -79,14 +78,14 @@ export function register(c: ServiceContainer) {
   // ═══ Platform + Automation ═══
 
   c.singleton('spmService', (ct: ServiceContainer) => {
-    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
+    const projectRoot = resolveProjectRoot(ct);
     return new SpmHelper(projectRoot);
   });
 
   c.singleton('automationOrchestrator', () => new AutomationOrchestrator());
 
   c.singleton('moduleService', (ct: ServiceContainer) => {
-    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
+    const projectRoot = resolveProjectRoot(ct);
     return new ModuleService(
       projectRoot as ConstructorParameters<typeof ModuleService>[0],
       {
@@ -105,7 +104,7 @@ export function register(c: ServiceContainer) {
     (ct: ServiceContainer) =>
       new CursorDeliveryPipeline({
         knowledgeService: ct.get('knowledgeService'),
-        projectRoot: (ct.singletons._projectRoot as string | undefined) || process.cwd(),
+        projectRoot: resolveProjectRoot(ct),
         database: ct.get('database'),
         logger: ct.logger,
       } as ConstructorParameters<typeof CursorDeliveryPipeline>[0])
@@ -113,15 +112,13 @@ export function register(c: ServiceContainer) {
 
   // ═══ TaskGraph ═══
 
-  c.singleton(
-    'taskIdGenerator',
-    (ct: ServiceContainer) =>
-      new TaskIdGenerator(
-        (ct.get('database') as { getDb: () => unknown }).getDb() as ConstructorParameters<
-          typeof TaskIdGenerator
-        >[0]
-      )
-  );
+  c.singleton('taskIdGenerator', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb: () => unknown; getDrizzle: () => unknown };
+    return new TaskIdGenerator(
+      db.getDb() as ConstructorParameters<typeof TaskIdGenerator>[0],
+      db.getDrizzle() as ConstructorParameters<typeof TaskIdGenerator>[1]
+    );
+  });
   c.singleton(
     'taskReadyEngine',
     (ct: ServiceContainer) =>

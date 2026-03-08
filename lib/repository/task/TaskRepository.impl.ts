@@ -2,7 +2,8 @@ import type { Database, Statement } from 'better-sqlite3';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { Logger as WinstonLogger } from 'winston';
 import { Task } from '../../domain/task/Task.js';
-import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
+import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
+import { getDrizzle } from '../../infrastructure/database/drizzle/index.js';
 import {
   taskDependencies,
   taskEvents,
@@ -89,10 +90,10 @@ export class TaskRepositoryImpl {
   /**
    * @param {import('../../infrastructure/database/DatabaseConnection.js').default} database
    */
-  constructor(database: DatabaseWrapper) {
+  constructor(database: DatabaseWrapper, drizzle?: DrizzleDB) {
     this.db = database.getDb();
     this.logger = Logger.getInstance();
-    this.#drizzle = getDrizzle();
+    this.#drizzle = drizzle ?? getDrizzle();
     this._prepareStatements();
   }
 

@@ -123,14 +123,18 @@ export const loadSkill = {
       try {
         fs.readdirSync(SKILLS_DIR, { withFileTypes: true })
           .filter((d) => d.isDirectory())
-          .forEach((d) => available.add(d.name));
+          .forEach((d) => {
+            available.add(d.name);
+          });
       } catch {
         /* skip: SKILLS_DIR may not exist */
       }
       try {
         fs.readdirSync(PROJECT_SKILLS_DIR, { withFileTypes: true })
           .filter((d) => d.isDirectory())
-          .forEach((d) => available.add(d.name));
+          .forEach((d) => {
+            available.add(d.name);
+          });
       } catch {
         /* skip: project skills dir may not exist */
       }

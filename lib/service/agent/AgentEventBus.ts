@@ -188,19 +188,20 @@ export class AgentEventBus extends EventEmitter {
     const correlationId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const timeout = opts.timeout || 30_000;
 
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.#pendingReplies.delete(correlationId);
-        reject(new Error(`AgentEventBus request timeout: ${requestType} (${timeout}ms)`));
-      }, timeout);
+    const { promise, resolve, reject } = Promise.withResolvers();
+    const timer = setTimeout(() => {
+      this.#pendingReplies.delete(correlationId);
+      reject(new Error(`AgentEventBus request timeout: ${requestType} (${timeout}ms)`));
+    }, timeout);
 
-      this.#pendingReplies.set(correlationId, { resolve, reject, timer });
+    this.#pendingReplies.set(correlationId, { resolve, reject, timer });
 
-      this.publish(requestType, payload, {
-        source: opts.source,
-        correlationId,
-      });
+    this.publish(requestType, payload, {
+      source: opts.source,
+      correlationId,
     });
+
+    return promise;
   }
 
   /**

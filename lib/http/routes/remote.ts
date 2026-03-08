@@ -32,7 +32,6 @@ import {
   RemoteResultBody,
   RemoteSendBody,
 } from '../../shared/schemas/http-requests.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 
 /** Lark WS client shape */
@@ -154,6 +153,32 @@ let _larkClient: LarkApiClient | null = null;
 let _wsConnected = false;
 let _wsStarting = false;
 
+/**
+ * Lark SDK 日志适配器 — 将 SDK 内部的 console 输出路由到项目统一 Logger
+ * 替代 SDK 默认的 console.log 直出，日志格式与项目其他模块保持一致。
+ * 前缀: [Remote/Lark/SDK]
+ */
+const larkSdkLogger = {
+  error(...args: unknown[]) {
+    logger.error(`[Remote/Lark/SDK] ${args.map(String).join(' ')}`);
+  },
+  warn(...args: unknown[]) {
+    logger.warn(`[Remote/Lark/SDK] ${args.map(String).join(' ')}`);
+  },
+  info(...args: unknown[]) {
+    logger.info(`[Remote/Lark/SDK] ${args.map(String).join(' ')}`);
+  },
+  debug(...args: unknown[]) {
+    logger.debug(`[Remote/Lark/SDK] ${args.map(String).join(' ')}`);
+  },
+  trace(...args: unknown[]) {
+    logger.debug(`[Remote/Lark/SDK] [trace] ${args.map(String).join(' ')}`);
+  },
+  log(...args: unknown[]) {
+    logger.info(`[Remote/Lark/SDK] ${args.map(String).join(' ')}`);
+  },
+};
+
 async function startLarkWS({ silent = false } = {}) {
   // 如果已连接且对象存在 → 直接返回
   if (_wsClient && _wsConnected) {
@@ -204,6 +229,7 @@ async function startLarkWS({ silent = false } = {}) {
       appSecret: config.appSecret,
       loggerLevel: lark.LoggerLevel?.info ?? 2,
       autoReconnect: true,
+      logger: larkSdkLogger,
     });
 
     await _wsClient.start({ eventDispatcher });
@@ -262,14 +288,17 @@ function stopLarkWS() {
 
 const { appId: _autoId, appSecret: _autoSecret } = getLarkConfig();
 if (_autoId && _autoSecret) {
-  // 延迟 3 秒启动，等 express/DB 初始化完成
-  setTimeout(async () => {
-    logger.info('[Remote/Lark] Auto-starting WebSocket connection...');
-    const result = await startLarkWS();
-    if (!result.success) {
-      logger.warn(`[Remote/Lark] Auto-start failed: ${result.message}`);
-    }
-  }, 3000);
+  // 延迟启动：setImmediate 确保路由注册、DB init 全部完成后，再等 8s 启动飞书连接
+  // 不阻塞主服务启动流程
+  setImmediate(() =>
+    setTimeout(async () => {
+      logger.info('[Remote/Lark] Auto-starting WebSocket connection...');
+      const result = await startLarkWS();
+      if (!result.success) {
+        logger.warn(`[Remote/Lark] Auto-start failed: ${result.message}`);
+      }
+    }, 8000)
+  );
 }
 
 // ─── 连接健康检查 & 自动重连 ────────────────────────
@@ -518,121 +547,102 @@ async function handleLarkMessage(data: LarkMessageEvent) {
 //  飞书连接管理端点
 // ═══════════════════════════════════════════════════════
 
-router.post(
-  '/lark/start',
-  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-    res.json(await startLarkWS());
-  })
-);
+router.post('/lark/start', async (_req: Request, res: Response): Promise<void> => {
+  res.json(await startLarkWS());
+});
 
-router.post(
-  '/lark/stop',
-  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-    res.json(stopLarkWS());
-  })
-);
+router.post('/lark/stop', async (_req: Request, res: Response): Promise<void> => {
+  res.json(stopLarkWS());
+});
 
-router.get(
-  '/lark/status',
-  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-    const config = getLarkConfig();
-    let queueInfo: StatusCounts | Record<string, number> = {};
-    try {
-      const repo = getRepo();
-      queueInfo = repo.getStatusCounts();
-    } catch {
-      /* DB 未就绪 */
-    }
+router.get('/lark/status', async (_req: Request, res: Response): Promise<void> => {
+  const config = getLarkConfig();
+  let queueInfo: StatusCounts | Record<string, number> = {};
+  try {
+    const repo = getRepo();
+    queueInfo = repo.getStatusCounts();
+  } catch {
+    /* DB 未就绪 */
+  }
 
-    res.json({
-      success: true,
-      data: {
-        connected: _wsConnected,
-        hasCredentials: !!(config.appId && config.appSecret),
-        appId: config.appId ? `${config.appId.slice(0, 8)}...` : '',
-        activeChatId: _activeChatId ? `${_activeChatId.slice(0, 12)}...` : '',
-        notificationReady: isLarkNotificationReady(),
-        queue: queueInfo,
-      },
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: {
+      connected: _wsConnected,
+      hasCredentials: !!(config.appId && config.appSecret),
+      appId: config.appId ? `${config.appId.slice(0, 8)}...` : '',
+      activeChatId: _activeChatId ? `${_activeChatId.slice(0, 12)}...` : '',
+      notificationReady: isLarkNotificationReady(),
+      queue: queueInfo,
+    },
+  });
+});
 
 // ═══════════════════════════════════════════════════════
 //  飞书 Webhook 回调（备用）
 // ═══════════════════════════════════════════════════════
 
-router.post(
-  '/lark/event',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const body = req.body;
-    if (body.type === 'url_verification') {
-      return void res.json({ challenge: body.challenge });
-    }
-    const header = body.header || {};
-    const event = body.event || {};
-    const larkConfig = getLarkConfig();
-    if (larkConfig.verificationToken && header.token !== larkConfig.verificationToken) {
-      return void res.status(403).json({ success: false, message: 'Invalid token' });
-    }
-    if (header.event_type === 'im.message.receive_v1') {
-      await handleLarkMessage(event);
-    }
-    res.json({ success: true });
-  })
-);
+router.post('/lark/event', async (req: Request, res: Response): Promise<void> => {
+  const body = req.body;
+  if (body.type === 'url_verification') {
+    return void res.json({ challenge: body.challenge });
+  }
+  const header = body.header || {};
+  const event = body.event || {};
+  const larkConfig = getLarkConfig();
+  if (larkConfig.verificationToken && header.token !== larkConfig.verificationToken) {
+    return void res.status(403).json({ success: false, message: 'Invalid token' });
+  }
+  if (header.event_type === 'im.message.receive_v1') {
+    await handleLarkMessage(event);
+  }
+  res.json({ success: true });
+});
 
 // ═══════════════════════════════════════════════════════
 //  VSCode 扩展 API
 // ═══════════════════════════════════════════════════════
 
-router.get(
-  '/pending',
-  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-    _lastPollAt = Date.now();
-    const repo = getRepo();
-    const row = repo.findFirstPending();
-    res.json({
-      success: true,
-      data: row
-        ? {
-            id: row.id,
-            command: row.command,
-            source: row.source,
-            userName: row.userName,
-            messageId: row.messageId,
-            createdAt: row.createdAt,
-          }
-        : null,
-    });
-  })
-);
+router.get('/pending', async (_req: Request, res: Response): Promise<void> => {
+  _lastPollAt = Date.now();
+  const repo = getRepo();
+  const row = repo.findFirstPending();
+  res.json({
+    success: true,
+    data: row
+      ? {
+          id: row.id,
+          command: row.command,
+          source: row.source,
+          userName: row.userName,
+          messageId: row.messageId,
+          createdAt: row.createdAt,
+        }
+      : null,
+  });
+});
 
-router.post(
-  '/claim/:id',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const id = req.params.id as string;
-    const repo = getRepo();
-    const claimed = repo.claim(id);
-    if (!claimed) {
-      return void res.json({ success: false, message: 'Not found or already claimed' });
-    }
-    // 通知飞书用户：IDE 已开始执行
-    const row = repo.findById(id);
-    if (row?.messageId) {
-      replyLark(
-        row.messageId,
-        `🚀 IDE 已开始执行...\n\n> ${(row.command || '').slice(0, 60)}`
-      ).catch(() => {});
-    }
-    res.json({ success: true });
-  })
-);
+router.post('/claim/:id', async (req: Request, res: Response): Promise<void> => {
+  const id = req.params.id as string;
+  const repo = getRepo();
+  const claimed = repo.claim(id);
+  if (!claimed) {
+    return void res.json({ success: false, message: 'Not found or already claimed' });
+  }
+  // 通知飞书用户：IDE 已开始执行
+  const row = repo.findById(id);
+  if (row?.messageId) {
+    replyLark(row.messageId, `🚀 IDE 已开始执行...\n\n> ${(row.command || '').slice(0, 60)}`).catch(
+      () => {}
+    );
+  }
+  res.json({ success: true });
+});
 
 router.post(
   '/result/:id',
   validate(RemoteResultBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const id = req.params.id as string;
     const { result, status } = req.body;
     const repo = getRepo();
@@ -655,18 +665,18 @@ router.post(
       }
     }
     res.json({ success: true });
-  })
+  }
 );
 
 router.get(
   '/history',
   validateQuery(RemoteHistoryQuery),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const repo = getRepo();
     const limit = (req.query as unknown as { limit: number }).limit;
     const rows = repo.getHistory(limit);
     res.json({ success: true, data: rows });
-  })
+  }
 );
 
 // ═══════════════════════════════════════════════════════
@@ -719,42 +729,39 @@ router.get('/wait', (req, res) => {
 });
 
 // POST /flush — IDE 重连时清理所有积压的 pending 指令
-router.post(
-  '/flush',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const repo = getRepo();
-    const pending = repo.flushPending();
+router.post('/flush', async (req: Request, res: Response): Promise<void> => {
+  const repo = getRepo();
+  const pending = repo.flushPending();
 
-    if (pending.length === 0) {
-      return void res.json({ success: true, flushed: 0, commands: [] });
-    }
+  if (pending.length === 0) {
+    return void res.json({ success: true, flushed: 0, commands: [] });
+  }
 
-    const now = Math.floor(Date.now() / 1000);
-    const summaries = pending.map((r) => ({
-      id: r.id,
-      command: r.command?.slice(0, 60) || '',
-      age: now - r.createdAt,
-    }));
+  const now = Math.floor(Date.now() / 1000);
+  const summaries = pending.map((r) => ({
+    id: r.id,
+    command: r.command?.slice(0, 60) || '',
+    age: now - r.createdAt,
+  }));
 
-    logger.info(`[Remote] Flushed ${pending.length} stale pending commands on IDE reconnect`);
+  logger.info(`[Remote] Flushed ${pending.length} stale pending commands on IDE reconnect`);
 
-    // 飞书通知
-    const lines = summaries.map(
-      (s: { command: string; age: number }, i: number) =>
-        `  ${i + 1}. ${s.command}${s.command.length >= 60 ? '…' : ''} (${s.age}s ago)`
-    );
-    sendLarkNotification(
-      `🗑 IDE 重连，已清理 ${pending.length} 条积压指令：\n${lines.join('\n')}`
-    ).catch(() => {});
+  // 飞书通知
+  const lines = summaries.map(
+    (s: { command: string; age: number }, i: number) =>
+      `  ${i + 1}. ${s.command}${s.command.length >= 60 ? '…' : ''} (${s.age}s ago)`
+  );
+  sendLarkNotification(
+    `🗑 IDE 重连，已清理 ${pending.length} 条积压指令：\n${lines.join('\n')}`
+  ).catch(() => {});
 
-    res.json({ success: true, flushed: pending.length, commands: summaries });
-  })
-);
+  res.json({ success: true, flushed: pending.length, commands: summaries });
+});
 
 router.post(
   '/send',
   validate(RemoteSendBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { command } = req.body;
     const repo = getRepo();
     const id = genId();
@@ -765,29 +772,26 @@ router.post(
       command,
     });
     res.json({ success: true, data: { id, command } });
-  })
+  }
 );
 
 // POST /api/v1/remote/notify — 通用通知（扩展/外部模块主动推送飞书）
 router.post(
   '/notify',
   validate(RemoteNotifyBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { text } = req.body;
     const sent = await sendLarkNotification(text);
     res.json({ success: sent, message: sent ? 'Sent' : 'Lark not connected or no active chat' });
-  })
+  }
 );
 
 // POST /api/v1/remote/screenshot — 截取 IDE 窗口并发送到飞书
-router.post(
-  '/screenshot',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { caption } = req.body || {};
-    const result = await sendLarkScreenshot(caption || '');
-    res.json(result);
-  })
-);
+router.post('/screenshot', async (req: Request, res: Response): Promise<void> => {
+  const { caption } = req.body || {};
+  const result = await sendLarkScreenshot(caption || '');
+  res.json(result);
+});
 
 // ═══════════════════════════════════════════════════════
 //  飞书回复辅助
@@ -813,10 +817,14 @@ async function getTenantToken() {
         body: JSON.stringify({ app_id: config.appId, app_secret: config.appSecret }),
       }
     );
-    const data = await resp.json();
+    const data = (await resp.json()) as Record<string, unknown> & {
+      code: number;
+      tenant_access_token?: string;
+      expire?: number;
+    };
     if (data.code === 0 && data.tenant_access_token) {
       _tenantToken = data.tenant_access_token;
-      _tenantTokenExpiry = Date.now() + (data.expire - 300) * 1000;
+      _tenantTokenExpiry = Date.now() + ((data.expire ?? 7200) - 300) * 1000;
       return _tenantToken;
     }
     return '';
@@ -933,7 +941,11 @@ async function _uploadImageToLark(filePath: string) {
       headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
-    const data = await resp.json();
+    const data = (await resp.json()) as Record<string, unknown> & {
+      code: number;
+      data?: { image_key?: string };
+      msg?: string;
+    };
     if (data.code === 0 && data.data?.image_key) {
       return { imageKey: data.data.image_key, error: null };
     }
@@ -991,7 +1003,7 @@ async function _sendLarkImageMsg(imageKey: string) {
         }),
       }
     );
-    const data = await resp.json();
+    const data = (await resp.json()) as Record<string, unknown> & { code: number };
     return data.code === 0;
   } catch {
     return false;
@@ -1136,7 +1148,7 @@ export async function sendLarkNotification(text: string) {
         }),
       }
     );
-    const data = await resp.json();
+    const data = (await resp.json()) as Record<string, unknown> & { code: number };
     return data.code === 0;
   } catch {
     return false;

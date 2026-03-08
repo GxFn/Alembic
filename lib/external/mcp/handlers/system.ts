@@ -5,6 +5,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { PACKAGE_ROOT } from '../../../shared/package-root.js';
 import { envelope } from '../envelope.js';
 import { TIER_ORDER, TOOL_GATEWAY_MAP, TOOLS } from '../tools.js';
@@ -134,7 +135,7 @@ export async function health(ctx: McpContext) {
       status,
       version: _pkgVersion,
       uptime: Math.floor((Date.now() - (ctx.startedAt ?? Date.now())) / 1000),
-      projectRoot: process.env.ASD_PROJECT_DIR || process.cwd(),
+      projectRoot: resolveProjectRoot(ctx.container),
       ai: aiInfo,
       checks,
       services: ctx.container.getServiceNames?.() ?? [],

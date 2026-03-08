@@ -144,6 +144,16 @@ export interface ModuleTarget {
 /** @deprecated 使用 ModuleTarget — 向后兼容别名 */
 export type SPMTarget = ModuleTarget;
 
+/** 扫描返回的文件条目 */
+export interface ScannedFile {
+  /** 文件名 */
+  name: string;
+  /** 相对路径 */
+  path: string;
+  /** 所属 target（全项目扫描时存在） */
+  targetName?: string;
+}
+
 /** 项目目录条目（供目录浏览器使用） */
 export interface ProjectDirectory {
   /** 目录名 */

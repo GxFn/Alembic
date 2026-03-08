@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
+import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
+import { getDrizzle } from '../../infrastructure/database/drizzle/index.js';
 import { tasks } from '../../infrastructure/database/drizzle/schema.js';
 
 /**
@@ -28,10 +29,10 @@ export class TaskIdGenerator {
   /**
    * @param {import('better-sqlite3').Database} db - raw SQLite handle
    */
-  constructor(db: DbHandle) {
+  constructor(db: DbHandle, drizzle?: DrizzleDB) {
     this._db = db;
     this._prefix = 'asd';
-    this.#drizzle = getDrizzle();
+    this.#drizzle = drizzle ?? getDrizzle();
   }
 
   /**

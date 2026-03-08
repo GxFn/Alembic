@@ -4,11 +4,7 @@
  * 在 macOS 上构建 native-ui 辅助程序（可选）
  */
 
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = import.meta.dirname;
 
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';

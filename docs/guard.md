@@ -275,7 +275,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - run: npm install -g autosnippet
       - run: asd guard:ci --report markdown --output guard-report.md
       - uses: actions/upload-artifact@v4

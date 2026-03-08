@@ -4,8 +4,9 @@
  * 强制退出后的摘要生成独立模块，
  * 供 AgentRuntime.reactLoop() 在循环退出后调用。
  *
- * 支持两种模式:
- *   - system: 输出 dimensionDigest JSON (供 Bootstrap 管线消费)
+ * 支持三种模式 (根据 source + tracker.pipelineType 判断):
+ *   - system + analyst: 输出 Markdown 分析报告 (供 Quality Gate 评估)
+ *   - system + bootstrap: 输出 dimensionDigest JSON (供维度编排消费)
  *   - user: 输出人类可读的 Markdown 结构化总结 (前端 AI Chat 展示)
  *
  * @module forced-summary
@@ -62,7 +63,7 @@ interface ForcedSummaryOpts {
   aiProvider: AiProvider;
   source?: string;
   toolCalls?: ToolCallRecord[];
-  tracker?: { iteration?: number };
+  tracker?: { iteration?: number; pipelineType?: string };
   contextWindow?: unknown;
   prompt: string;
   tokenUsage?: TokenUsage;
@@ -94,10 +95,13 @@ export async function produceForcedSummary({
 }: ForcedSummaryOpts) {
   const isSystem = source === 'system';
   const iterations = tracker?.iteration || 0;
+  const pipelineType = tracker?.pipelineType || (isSystem ? 'bootstrap' : 'user');
+  // Analyst 管线虽然 source='system'，但期望 Markdown 分析报告而非 dimensionDigest JSON
+  const isAnalyst = pipelineType === 'analyst';
   const resultTokenUsage = { input: 0, output: 0 };
 
   logger.info(
-    `[ForcedSummary] ⚠ producing forced summary (${iterations} iters, ${toolCalls.length} calls, source=${source})`
+    `[ForcedSummary] ⚠ producing forced summary (${iterations} iters, ${toolCalls.length} calls, source=${source}, pipeline=${pipelineType})`
   );
 
   const candidateCount = toolCalls.filter(
@@ -109,8 +113,9 @@ export async function produceForcedSummary({
   // 如果熔断器已打开，跳过 AI 调用直接合成摘要
   const isCircuitOpen = aiProvider._circuitState === 'OPEN';
   if (isCircuitOpen) {
+    const outputType = isAnalyst ? 'analysis' : isSystem ? 'digest' : 'summary';
     logger.warn(
-      `[ForcedSummary] circuit breaker is OPEN — skipping AI summary, using synthetic ${isSystem ? 'digest' : 'summary'}`
+      `[ForcedSummary] circuit breaker is OPEN — skipping AI summary, using synthetic ${outputType}`
     );
   }
 
@@ -133,8 +138,25 @@ export async function produceForcedSummary({
     let summaryPrompt: string;
     let systemPrompt: string;
 
-    if (isSystem) {
-      // system 源: dimensionDigest JSON
+    if (isSystem && isAnalyst) {
+      // Analyst 管线 (source=system): Markdown 分析报告 — 与 NudgeGenerator.buildTransitionNudge 对齐
+      const toolContextSummary = buildToolContextForUserSummary(toolCalls);
+      summaryPrompt = `你刚才通过 ${toolCalls.length} 次工具调用分析了项目代码。以下是你调用过的工具和获取到的关键信息：
+
+${toolContextSummary}
+
+请基于以上收集到的信息，用**清晰易读的 Markdown** 格式撰写代码分析报告。
+
+要求：
+- 使用二级/三级标题组织内容（## 和 ###）
+- 包含具体的代码文件路径、类名、模式名称等细节
+- 每个关键发现都要给出证据（文件路径 + 代码片段或行为描述）
+- 至少涵盖 3 个核心发现
+- 如有未覆盖的方面，在末尾用「## 待探索」章节列出`;
+      systemPrompt =
+        '你是项目代码分析专家。请用纯 Markdown 格式输出结构清晰的分析报告，包含具体文件路径和代码模式。不要输出 JSON 格式。';
+    } else if (isSystem) {
+      // Bootstrap 管线 (source=system): dimensionDigest JSON
       summaryPrompt = `你已完成 ${iterations} 轮工具调用（共 ${toolCalls.length} 次），提交了 ${candidateCount} 个候选。
 ${submitSummary ? `已提交候选:\n${submitSummary}\n` : ''}
 **必须**输出 dimensionDigest JSON（用 \`\`\`json 包裹）：
@@ -188,14 +210,63 @@ ${toolContextSummary}
       resultTokenUsage.input += result.usage.inputTokens || 0;
       resultTokenUsage.output += result.usage.outputTokens || 0;
     }
-    // system 源: dimensionDigest JSON 是预期输出，不能被 cleanFinalAnswer 剥掉
-    finalReply = isSystem
-      ? (summaryResult.text || '').trim()
-      : cleanFinalAnswer(summaryResult.text || '');
+    // system 源 (非 analyst): dimensionDigest JSON 是预期输出，不能被 cleanFinalAnswer 剥掉
+    // analyst 源: Markdown 分析报告，需要 cleanFinalAnswer 清理
+    finalReply =
+      isSystem && !isAnalyst
+        ? (summaryResult.text || '').trim()
+        : cleanFinalAnswer(summaryResult.text || '');
   } catch (err: unknown) {
     logger.warn(`[ForcedSummary] AI call failed: ${(err as Error).message}`);
 
-    if (isSystem) {
+    if (isSystem && isAnalyst) {
+      // Analyst 管线兜底: 从工具调用记录合成 Markdown 分析报告
+      const toolNames = [...new Set(toolCalls.map((tc: ToolCallRecord) => tc.tool))];
+      const filesRead = toolCalls
+        .filter((tc: ToolCallRecord) => tc.tool === 'read_project_file')
+        .flatMap((tc: ToolCallRecord) => {
+          const p: ToolCallArgs = tc.args || tc.params || {};
+          if (p.filePaths) {
+            return p.filePaths;
+          }
+          if (p.filePath) {
+            return [p.filePath];
+          }
+          return [];
+        })
+        .slice(0, 15);
+      const searches = toolCalls
+        .filter(
+          (tc: ToolCallRecord) =>
+            tc.tool === 'search_project_code' || tc.tool === 'semantic_search_code'
+        )
+        .map((tc: ToolCallRecord) => {
+          const p: ToolCallArgs = tc.args || tc.params || {};
+          return p.patterns?.[0] || p.query || p.pattern;
+        })
+        .filter((v): v is string => Boolean(v))
+        .slice(0, 8);
+      const classesExplored = toolCalls
+        .filter(
+          (tc: ToolCallRecord) => tc.tool === 'get_class_info' || tc.tool === 'get_class_hierarchy'
+        )
+        .map((tc: ToolCallRecord) => (tc.args || tc.params || {}).className)
+        .filter((v): v is string => Boolean(v))
+        .slice(0, 10);
+
+      finalReply = `## 代码分析报告\n\n通过 **${toolCalls.length} 次工具调用**（${iterations} 轮迭代）探索了项目代码。\n\n`;
+      if (filesRead.length > 0) {
+        finalReply += `### 分析的源文件\n${filesRead.map((f: string) => `- \`${f}\``).join('\n')}\n\n`;
+      }
+      if (classesExplored.length > 0) {
+        finalReply += `### 探索的类/模块\n${classesExplored.map((c: string) => `- \`${c}\``).join('\n')}\n\n`;
+      }
+      if (searches.length > 0) {
+        finalReply += `### 搜索的代码模式\n${searches.map((s: string) => `- \`${s}\``).join('\n')}\n\n`;
+      }
+      finalReply += `### 使用的工具\n${toolNames.map((t) => `- ${t}`).join('\n')}\n\n`;
+      finalReply += '> ⚠️ AI 服务异常，未能生成完整分析。以上为工具调用记录摘要。';
+    } else if (isSystem) {
       // system 源兜底: 合成 dimensionDigest JSON
       const titles = toolCalls
         .filter(

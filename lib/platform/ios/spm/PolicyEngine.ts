@@ -46,7 +46,9 @@ export class PolicyEngine {
     // 2. 检查反向依赖 (低层依赖高层)
     if (config.layerOrder && config.layerOrder.length > 0) {
       const layerIndex = new Map<string, number>();
-      config.layerOrder.forEach((layer: string, idx: number) => layerIndex.set(layer, idx));
+      config.layerOrder.forEach((layer: string, idx: number) => {
+        layerIndex.set(layer, idx);
+      });
 
       for (const node of graph.getNodes()) {
         const nodeLayer = this.#findLayer(node, layerIndex);

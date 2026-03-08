@@ -1,5 +1,6 @@
 import { type Dirent, readdirSync, statSync } from 'node:fs';
 import { extname as pathExtname, join as pathJoin, relative as pathRelative } from 'node:path';
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 // ─── v3.0: AST ProjectGraph ──────────────────────────
 import ProjectGraph from '../core/ast/ProjectGraph.js';
 // ─── v3.1: Multi-Language Discovery + Enhancement ────────
@@ -71,6 +72,17 @@ export class ServiceContainer {
    */
   async initialize(bootstrapComponents: Record<string, unknown> = {}) {
     try {
+      // ── 多项目防护：禁止同一进程内切换项目 ──
+      const newRoot = bootstrapComponents.projectRoot as string | undefined;
+      const existingRoot = this.singletons._projectRoot as string | undefined;
+      if (newRoot && existingRoot && newRoot !== existingRoot) {
+        throw new Error(
+          `[ServiceContainer] 不允许在同一进程中切换项目。` +
+            `当前绑定: ${existingRoot}, 请求: ${newRoot}。` +
+            `请为每个项目启动独立进程。`
+        );
+      }
+
       // 如果提供了 bootstrap 组件，将它们注入到单例缓存中
       if (bootstrapComponents.db) {
         this.singletons.database = bootstrapComponents.db;
@@ -304,7 +316,7 @@ export class ServiceContainer {
     return {
       container: this,
       aiProvider: this.singletons.aiProvider || null,
-      projectRoot: this.singletons._projectRoot || process.cwd(),
+      projectRoot: resolveProjectRoot(this),
       logger: this.logger,
       source: extras.source || 'system',
       lang: extras.lang || this.singletons._lang || null,
@@ -317,6 +329,9 @@ export class ServiceContainer {
    * 注册服务或工厂函数
    */
   register(name: string, factory: () => unknown) {
+    if (this.services[name] && process.env.NODE_ENV !== 'production') {
+      this.logger.warn(`[ServiceContainer] 服务 "${name}" 被重复注册，前一个工厂将被覆盖`);
+    }
     this.services[name] = factory;
   }
 

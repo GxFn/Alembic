@@ -6,11 +6,7 @@
  * asd install:full --parser  - 上述 + Swift 解析器
  */
 
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = import.meta.dirname;
 
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';

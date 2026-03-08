@@ -18,9 +18,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = import.meta.dirname;
 const GITHUB_DIR = path.resolve(__dirname, '..', '..', '..');
 
 // ── 模拟 Bootstrap 核心流程（不调用完整 handler，避免 DB / AI 依赖）───

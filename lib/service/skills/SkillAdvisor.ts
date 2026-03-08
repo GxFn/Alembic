@@ -368,7 +368,9 @@ export class SkillAdvisor {
     try {
       fs.readdirSync(dir, { withFileTypes: true })
         .filter((d) => d.isDirectory())
-        .forEach((d) => names.add(d.name));
+        .forEach((d) => {
+          names.add(d.name);
+        });
     } catch {
       /* no project skills */
     }

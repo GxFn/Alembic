@@ -17,6 +17,7 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 
 export type ProbeResult = 'admin' | 'contributor' | 'visitor';
@@ -142,9 +143,10 @@ export class CapabilityProbe {
    */
   _detectSubRepo(): string | null {
     // 常见路径：cwd/AutoSnippet 或 .autosnippet/AutoSnippet
+    const effectiveRoot = resolveProjectRoot();
     const candidates = [
-      path.resolve(process.cwd(), 'AutoSnippet'),
-      path.resolve(process.cwd(), '.autosnippet', 'AutoSnippet'),
+      path.resolve(effectiveRoot, 'AutoSnippet'),
+      path.resolve(effectiveRoot, '.autosnippet', 'AutoSnippet'),
     ];
 
     for (const p of candidates) {

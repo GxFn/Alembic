@@ -225,7 +225,7 @@ IDE AI 请求 → MCP Server → Gateway (权限校验)
 
 ## 关键设计决策
 
-1. **ESM Only** — 全项目使用 ES Modules，Node.js ≥ 20
+1. **ESM Only** — 全项目使用 ES Modules，Node.js ≥ 22
 2. **SQLite as Cache** — Markdown 文件是 Source of Truth，SQLite 是读缓存，`asd sync` 可重建
 3. **无编译步骤** — 纯 JavaScript，不需要 TypeScript 编译（Dashboard 除外）
 4. **DI without Framework** — 自实现轻量 DI 容器，无外部 DI 框架依赖

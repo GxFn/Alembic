@@ -13,7 +13,6 @@ import {
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
 
@@ -27,149 +26,145 @@ const logger = Logger.getInstance();
  * 对若干候选条目进行 AI 语义字段补全
  * Body: { candidateIds: string[] }
  */
-router.post(
-  '/enrich',
-  validate(EnrichBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { candidateIds } = req.body;
+router.post('/enrich', validate(EnrichBody), async (req: Request, res: Response): Promise<void> => {
+  const { candidateIds } = req.body;
 
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const aiProvider = container.get('aiProvider');
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const aiProvider = container.get('aiProvider');
 
-    // 收集候选条目
-    const candidates: Record<string, unknown>[] = [];
-    for (const id of candidateIds) {
+  // 收集候选条目
+  const candidates: Record<string, unknown>[] = [];
+  for (const id of candidateIds) {
+    try {
+      const entry = await knowledgeService.get(id);
+      if (entry) {
+        const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
+        candidates.push({
+          id: json.id,
+          title: json.title,
+          language: json.language,
+          category: json.category,
+          description: json.description,
+          code: json.content?.pattern || '',
+          rationale: json.content?.rationale,
+          knowledgeType: json.knowledgeType,
+          complexity: json.complexity,
+          scope: json.scope,
+          steps: json.content?.steps,
+          constraints: json.constraints,
+        });
+      }
+    } catch (err: unknown) {
+      logger.warn(`enrich: failed to load candidate ${id}`, { error: (err as Error).message });
+    }
+  }
+
+  if (candidates.length === 0) {
+    return void res.json({ success: true, data: { enriched: 0, total: 0, results: [] } });
+  }
+
+  let enrichedCount = 0;
+  const results: Record<string, unknown>[] = [];
+
+  if (aiProvider) {
+    let enriched: Record<string, unknown>[] = [];
+    try {
+      // 获取用户语言偏好
+      let lang = 'en';
       try {
-        const entry = await knowledgeService.get(id);
-        if (entry) {
+        lang = (container.getLang?.() as string | undefined) || 'en';
+      } catch {
+        /* lang not available */
+      }
+      enriched = await aiProvider.enrichCandidates(candidates, { lang });
+    } catch (err: unknown) {
+      logger.warn('AI enrichCandidates failed', { error: (err as Error).message });
+    }
+
+    for (const item of enriched) {
+      // 安全的 index 映射：AI 未返回 index 时根据数组位置推断
+      const idx = typeof item.index === 'number' ? item.index : enriched.indexOf(item);
+      const cand = candidates[idx];
+      if (!cand) {
+        continue;
+      }
+
+      try {
+        const updateData: Record<string, unknown> = {};
+        let changed = false;
+
+        // content 嵌套字段（rationale / steps）共用一次 DB 读取
+        const needsContentMerge =
+          (item.rationale && !cand.rationale) ||
+          (item.steps && (!cand.steps || (cand.steps as unknown[]).length === 0));
+        let contentBase: Record<string, unknown> | null = null;
+        if (needsContentMerge) {
+          const entry = await knowledgeService.get(cand.id);
           const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
-          candidates.push({
-            id: json.id,
-            title: json.title,
-            language: json.language,
-            category: json.category,
-            description: json.description,
-            code: json.content?.pattern || '',
-            rationale: json.content?.rationale,
-            knowledgeType: json.knowledgeType,
-            complexity: json.complexity,
-            scope: json.scope,
-            steps: json.content?.steps,
-            constraints: json.constraints,
-          });
+          contentBase = { ...(json.content || {}) };
         }
+
+        if (item.rationale && !cand.rationale) {
+          contentBase!.rationale = item.rationale;
+          changed = true;
+        }
+        if (item.steps && (!cand.steps || (cand.steps as unknown[]).length === 0)) {
+          contentBase!.steps = item.steps;
+          changed = true;
+        }
+        if (contentBase && changed) {
+          updateData.content = contentBase;
+        }
+
+        if (item.knowledgeType && !cand.knowledgeType) {
+          updateData.knowledgeType = item.knowledgeType;
+          changed = true;
+        }
+        if (item.complexity && !cand.complexity) {
+          updateData.complexity = item.complexity;
+          changed = true;
+        }
+        if (item.scope && !cand.scope) {
+          updateData.scope = item.scope;
+          changed = true;
+        }
+        if (
+          item.constraints &&
+          !(cand.constraints as Record<string, unknown[]> | undefined)?.preconditions?.length
+        ) {
+          updateData.constraints = item.constraints;
+          changed = true;
+        }
+
+        if (changed) {
+          await knowledgeService.update(cand.id, updateData, { userId: 'dashboard-enrich' });
+          enrichedCount++;
+        }
+        results.push({
+          id: cand.id,
+          enriched: changed,
+          filledFields: Object.keys(item).filter((k) => k !== 'index'),
+        });
       } catch (err: unknown) {
-        logger.warn(`enrich: failed to load candidate ${id}`, { error: (err as Error).message });
+        logger.warn(`enrich: failed to update candidate ${cand.id}`, {
+          error: (err as Error).message,
+        });
+        results.push({
+          id: cand.id,
+          enriched: false,
+          filledFields: [],
+          error: (err as Error).message,
+        });
       }
     }
+  }
 
-    if (candidates.length === 0) {
-      return void res.json({ success: true, data: { enriched: 0, total: 0, results: [] } });
-    }
-
-    let enrichedCount = 0;
-    const results: Record<string, unknown>[] = [];
-
-    if (aiProvider) {
-      let enriched: Record<string, unknown>[] = [];
-      try {
-        // 获取用户语言偏好
-        let lang = 'en';
-        try {
-          lang = (container.getLang?.() as string | undefined) || 'en';
-        } catch {
-          /* lang not available */
-        }
-        enriched = await aiProvider.enrichCandidates(candidates, { lang });
-      } catch (err: unknown) {
-        logger.warn('AI enrichCandidates failed', { error: (err as Error).message });
-      }
-
-      for (const item of enriched) {
-        // 安全的 index 映射：AI 未返回 index 时根据数组位置推断
-        const idx = typeof item.index === 'number' ? item.index : enriched.indexOf(item);
-        const cand = candidates[idx];
-        if (!cand) {
-          continue;
-        }
-
-        try {
-          const updateData: Record<string, unknown> = {};
-          let changed = false;
-
-          // content 嵌套字段（rationale / steps）共用一次 DB 读取
-          const needsContentMerge =
-            (item.rationale && !cand.rationale) ||
-            (item.steps && (!cand.steps || (cand.steps as unknown[]).length === 0));
-          let contentBase: Record<string, unknown> | null = null;
-          if (needsContentMerge) {
-            const entry = await knowledgeService.get(cand.id);
-            const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
-            contentBase = { ...(json.content || {}) };
-          }
-
-          if (item.rationale && !cand.rationale) {
-            contentBase!.rationale = item.rationale;
-            changed = true;
-          }
-          if (item.steps && (!cand.steps || (cand.steps as unknown[]).length === 0)) {
-            contentBase!.steps = item.steps;
-            changed = true;
-          }
-          if (contentBase && changed) {
-            updateData.content = contentBase;
-          }
-
-          if (item.knowledgeType && !cand.knowledgeType) {
-            updateData.knowledgeType = item.knowledgeType;
-            changed = true;
-          }
-          if (item.complexity && !cand.complexity) {
-            updateData.complexity = item.complexity;
-            changed = true;
-          }
-          if (item.scope && !cand.scope) {
-            updateData.scope = item.scope;
-            changed = true;
-          }
-          if (
-            item.constraints &&
-            !(cand.constraints as Record<string, unknown[]> | undefined)?.preconditions?.length
-          ) {
-            updateData.constraints = item.constraints;
-            changed = true;
-          }
-
-          if (changed) {
-            await knowledgeService.update(cand.id, updateData, { userId: 'dashboard-enrich' });
-            enrichedCount++;
-          }
-          results.push({
-            id: cand.id,
-            enriched: changed,
-            filledFields: Object.keys(item).filter((k) => k !== 'index'),
-          });
-        } catch (err: unknown) {
-          logger.warn(`enrich: failed to update candidate ${cand.id}`, {
-            error: (err as Error).message,
-          });
-          results.push({
-            id: cand.id,
-            enriched: false,
-            filledFields: [],
-            error: (err as Error).message,
-          });
-        }
-      }
-    }
-
-    res.json({
-      success: true,
-      data: { enriched: enrichedCount, total: candidates.length, results },
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: { enriched: enrichedCount, total: candidates.length, results },
+  });
+});
 
 /* ═══ Bootstrap 内容润色 ═════════════════════════════════ */
 
@@ -181,7 +176,7 @@ router.post(
 router.post(
   '/bootstrap-refine',
   validate(BootstrapRefineBody),
-  asyncHandler(async (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const { candidateIds, userPrompt, dryRun } = req.body;
 
     const container = getServiceContainer();
@@ -195,7 +190,7 @@ router.post(
     const data = result?.data ?? { refined: 0, total: 0, errors: [], results: [] };
 
     res.json({ success: true, data });
-  })
+  }
 );
 
 /* ═══ 对话式润色 — 工具函数 ═══════════════════════════════ */
@@ -464,44 +459,40 @@ function buildUpdateFromRefineResult(
  * 直接用用户提示词调用 AI 润色，返回 before/after 对比
  * Body: { candidateId: string, userPrompt: string }
  */
-router.post(
-  '/refine-preview',
-  validate(RefinePreviewBody),
-  asyncHandler(async (req: Request, res: Response) => {
-    const { candidateId, userPrompt } = req.body;
+router.post('/refine-preview', validate(RefinePreviewBody), async (req: Request, res: Response) => {
+  const { candidateId, userPrompt } = req.body;
 
-    const container = getServiceContainer();
-    const knowledgeService = container.get('knowledgeService');
-    const aiProvider = container.get('aiProvider');
-    if (!aiProvider) {
-      throw new ValidationError('AI provider not configured');
-    }
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const aiProvider = container.get('aiProvider');
+  if (!aiProvider) {
+    throw new ValidationError('AI provider not configured');
+  }
 
-    const entry = await knowledgeService.get(candidateId);
-    if (!entry) {
-      throw new ValidationError('Candidate not found');
-    }
-    const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
-    const before = extractBeforeFields(json);
+  const entry = await knowledgeService.get(candidateId);
+  if (!entry) {
+    throw new ValidationError('Candidate not found');
+  }
+  const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
+  const before = extractBeforeFields(json);
 
-    const prompt = buildRefinePrompt(before, userPrompt.trim());
-    const parsed = await aiProvider.chatWithStructuredOutput(prompt, { temperature: 0.3 });
+  const prompt = buildRefinePrompt(before, userPrompt.trim());
+  const parsed = await aiProvider.chatWithStructuredOutput(prompt, { temperature: 0.3 });
 
-    if (!parsed) {
-      return void res.json({
-        success: true,
-        data: { candidateId, before, after: before, preview: {} },
-      });
-    }
-
-    const { after } = buildUpdateFromRefineResult(before, parsed);
-
-    res.json({
+  if (!parsed) {
+    return void res.json({
       success: true,
-      data: { candidateId, before, after, preview: parsed },
+      data: { candidateId, before, after: before, preview: {} },
     });
-  })
-);
+  }
+
+  const { after } = buildUpdateFromRefineResult(before, parsed);
+
+  res.json({
+    success: true,
+    data: { candidateId, before, after, preview: parsed },
+  });
+});
 
 /* ═══ 对话式润色 — 流式预览 (SSE) ═══════════════════════ */
 
@@ -520,7 +511,7 @@ router.post(
 router.post(
   '/refine-preview-stream',
   validate(RefinePreviewBody),
-  asyncHandler(async (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     const { candidateId, userPrompt } = req.body;
 
     const container = getServiceContainer();
@@ -648,7 +639,7 @@ router.post(
         session.error((err as Error).message, 'REFINE_ERROR');
       }
     });
-  })
+  }
 );
 
 /**
@@ -734,7 +725,7 @@ router.get('/refine-preview/events/:sessionId', (req, res) => {
 router.post(
   '/refine-apply',
   validate(RefineApplyBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { candidateId, userPrompt, preview } = req.body;
 
     const container = getServiceContainer();
@@ -813,7 +804,7 @@ router.post(
       success: true,
       data: { refined: changed ? 1 : 0, total: 1, candidate: updatedJson },
     });
-  })
+  }
 );
 
 export default router;

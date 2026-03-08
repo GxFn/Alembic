@@ -10,6 +10,7 @@
  * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { getEnhancementRegistry } from '../../core/enhancement/index.js';
 import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter.js';
@@ -65,10 +66,7 @@ export function register(c: ServiceContainer) {
   );
 
   c.singleton('codeEntityGraph', (ct: ServiceContainer) => {
-    const projectRoot =
-      (ct.singletons._projectRoot as string | undefined) ||
-      process.env.ASD_PROJECT_DIR ||
-      process.cwd();
+    const projectRoot = resolveProjectRoot(ct);
     return new CodeEntityGraph(
       ct.get('database') as ConstructorParameters<typeof CodeEntityGraph>[0],
       { projectRoot }
@@ -114,7 +112,7 @@ export function register(c: ServiceContainer) {
   );
 
   c.singleton('vectorStore', (ct: ServiceContainer) => {
-    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
+    const projectRoot = resolveProjectRoot(ct);
     const config =
       ((ct.singletons._config as Record<string, unknown> | undefined)?.vector as
         | Record<string, unknown>

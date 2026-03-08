@@ -12,12 +12,9 @@
  * 运行方式：在项目根目录执行 npm run install:cursor-skill，或 asd install:cursor-skill，或 node scripts/install-cursor-skill.js
  */
 
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { SKILLS_DIR as _skillsSrc, PACKAGE_ROOT } from '../lib/shared/package-root.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = import.meta.dirname;
 
 import { createRequire } from 'node:module';
 
@@ -144,7 +141,7 @@ function extractFrontmatterFields(content: any) {
   }
   const block = m[1];
   const extract = (key: any) => {
-    const re = new RegExp(`^${key}:\s*["']?(.+?)["']?\s*$`, 'm');
+    const re = new RegExp(`^${key}:s*["']?(.+?)["']?s*$`, 'm');
     const match = block.match(re);
     return match ? match[1].trim() : null;
   };

@@ -6,7 +6,7 @@ Developer guide for AutoSnippet. Covers environment setup, project structure, co
 
 ## Requirements
 
-- **Node.js** ≥ 20
+- **Node.js** ≥ 22
 - **macOS** recommended (Xcode automation features require it; everything else is cross-platform)
 - **Git**
 

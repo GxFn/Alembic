@@ -327,11 +327,11 @@ export class UnifiedValidator {
    * @param {string} title
    * @param {string} [pattern] 代码模式
    */
-  recordSubmission(title: string, pattern: string) {
-    if (title) {
+  recordSubmission(title: string | null | undefined, pattern: string | null | undefined) {
+    if (title && typeof title === 'string') {
       this.#titles.add(title.toLowerCase().trim());
     }
-    if (pattern && pattern.length >= 30) {
+    if (pattern && typeof pattern === 'string' && pattern.length >= 30) {
       const fp = codeFingerprint(pattern);
       if (fp.length >= 20) {
         this.#codeFingerprints.add(fp);

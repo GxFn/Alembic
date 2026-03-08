@@ -8,7 +8,6 @@
 
 import type { Request, Response } from 'express';
 import express from 'express';
-import { asyncHandler } from '#http/middleware/errorHandler.js';
 import { createStreamSession, getStreamSession } from '#http/utils/sse-sessions.js';
 import Logger from '#infra/logging/Logger.js';
 import { getServiceContainer } from '#inject/ServiceContainer.js';
@@ -28,180 +27,168 @@ async function getModuleService() {
 /**
  * GET /api/v1/spm/targets
  */
-router.get(
-  '/targets',
-  asyncHandler(async (req: Request, res: Response) => {
-    const moduleService = await getModuleService();
-    const targets = await moduleService.listTargets();
+router.get('/targets', async (req: Request, res: Response) => {
+  const moduleService = await getModuleService();
+  const targets = await moduleService.listTargets();
 
-    res.json({
-      success: true,
-      data: { targets, total: targets.length },
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: { targets, total: targets.length },
+  });
+});
 
 /**
  * GET /api/v1/spm/dep-graph
  */
-router.get(
-  '/dep-graph',
-  asyncHandler(async (req: Request, res: Response) => {
-    const moduleService = await getModuleService();
-    const level = (req.query.level as string) || 'package';
-    const graph = await moduleService.getDependencyGraph({ level });
+router.get('/dep-graph', async (req: Request, res: Response) => {
+  const moduleService = await getModuleService();
+  const level = (req.query.level as string) || 'package';
+  const graph = await moduleService.getDependencyGraph({ level });
 
-    if (!graph || (!graph.nodes && !graph.packages)) {
-      res.json({
-        success: true,
-        data: { nodes: [], edges: [], projectRoot: null },
-      });
-      return;
-    }
+  if (!graph || (!graph.nodes && !graph.packages)) {
+    res.json({
+      success: true,
+      data: { nodes: [], edges: [], projectRoot: null },
+    });
+    return;
+  }
 
-    // 标准化为 { nodes, edges } 格式
-    let nodes: Record<string, unknown>[] = [];
-    let edges:
-      | { from: string; to: string; source: string }
-      | { from: string; to: string; source: string }[] = [];
+  // 标准化为 { nodes, edges } 格式
+  let nodes: Record<string, unknown>[] = [];
+  let edges:
+    | { from: string; to: string; source: string }
+    | { from: string; to: string; source: string }[] = [];
 
-    if (graph.nodes && graph.edges) {
-      // 已经是标准格式
-      nodes = graph.nodes;
-      edges = graph.edges;
-    } else if (graph.packages) {
-      // 从 packages 构建图
-      if (level === 'target') {
-        for (const [pkgName, pkgInfo] of Object.entries(graph.packages)) {
-          const targetsInfo =
-            ((pkgInfo as Record<string, unknown>)?.targetsInfo as Record<
-              string,
-              { dependencies?: { name?: string; package?: string }[] }
-            >) || {};
-          for (const [targetName, info] of Object.entries(targetsInfo)) {
-            const id = `${pkgName}::${targetName}`;
-            nodes.push({
-              id,
-              label: targetName,
-              type: 'target',
-              packageName: pkgName,
-            });
-            for (const d of (info as { dependencies?: { name?: string; package?: string }[] })
-              ?.dependencies || []) {
-              if (!d?.name) {
-                continue;
-              }
-              const depPkg = d?.package || pkgName;
-              edges.push({ from: id, to: `${depPkg}::${d.name}`, source: 'base' });
+  if (graph.nodes && graph.edges) {
+    // 已经是标准格式
+    nodes = graph.nodes;
+    edges = graph.edges;
+  } else if (graph.packages) {
+    // 从 packages 构建图
+    if (level === 'target') {
+      for (const [pkgName, pkgInfo] of Object.entries(graph.packages)) {
+        const targetsInfo =
+          ((pkgInfo as Record<string, unknown>)?.targetsInfo as Record<
+            string,
+            { dependencies?: { name?: string; package?: string }[] }
+          >) || {};
+        for (const [targetName, info] of Object.entries(targetsInfo)) {
+          const id = `${pkgName}::${targetName}`;
+          nodes.push({
+            id,
+            label: targetName,
+            type: 'target',
+            packageName: pkgName,
+          });
+          for (const d of (info as { dependencies?: { name?: string; package?: string }[] })
+            ?.dependencies || []) {
+            if (!d?.name) {
+              continue;
             }
-          }
-        }
-      } else {
-        nodes = Object.keys(graph.packages).map((id) => ({
-          id,
-          label: id,
-          type: 'package',
-          packageDir: graph.packages[id]?.packageDir,
-          targets: graph.packages[id]?.targets,
-        }));
-        for (const [from, tos] of Object.entries(graph.edges || {})) {
-          for (const to of (tos as string[]) || []) {
-            edges.push({ from, to, source: 'base' });
+            const depPkg = d?.package || pkgName;
+            edges.push({ from: id, to: `${depPkg}::${d.name}`, source: 'base' });
           }
         }
       }
+    } else {
+      nodes = Object.keys(graph.packages).map((id) => ({
+        id,
+        label: id,
+        type: 'package',
+        packageDir: graph.packages[id]?.packageDir,
+        targets: graph.packages[id]?.targets,
+      }));
+      for (const [from, tos] of Object.entries(graph.edges || {})) {
+        for (const to of (tos as string[]) || []) {
+          edges.push({ from, to, source: 'base' });
+        }
+      }
     }
+  }
 
-    res.json({
-      success: true,
-      data: {
-        nodes,
-        edges,
-        projectRoot: graph.projectRoot || null,
-        generatedAt: graph.generatedAt || null,
-      },
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: {
+      nodes,
+      edges,
+      projectRoot: graph.projectRoot || null,
+      generatedAt: graph.generatedAt || null,
+    },
+  });
+});
 
 /**
  * POST /api/v1/spm/target-files
  * 获取 Target 的文件列表
  */
-router.post(
-  '/target-files',
-  asyncHandler(async (req: Request, res: Response) => {
-    const { target, targetName } = req.body;
+router.post('/target-files', async (req: Request, res: Response) => {
+  const { target, targetName } = req.body;
 
-    if (!target && !targetName) {
-      throw new ValidationError('target object or targetName is required');
+  if (!target && !targetName) {
+    throw new ValidationError('target object or targetName is required');
+  }
+
+  const moduleService = await getModuleService();
+
+  let resolvedTarget = target;
+  if (!resolvedTarget && targetName) {
+    const targets = await moduleService.listTargets();
+    resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
+    if (!resolvedTarget) {
+      res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: `Target not found: ${targetName}` },
+      });
+      return;
     }
+  }
 
-    const moduleService = await getModuleService();
+  const files = await moduleService.getTargetFiles(resolvedTarget);
 
-    let resolvedTarget = target;
-    if (!resolvedTarget && targetName) {
-      const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
-      if (!resolvedTarget) {
-        res.status(404).json({
-          success: false,
-          error: { code: 'NOT_FOUND', message: `Target not found: ${targetName}` },
-        });
-        return;
-      }
-    }
-
-    const files = await moduleService.getTargetFiles(resolvedTarget);
-
-    res.json({
-      success: true,
-      data: {
-        target: resolvedTarget.name || targetName,
-        files,
-        total: files.length,
-      },
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: {
+      target: resolvedTarget.name || targetName,
+      files,
+      total: files.length,
+    },
+  });
+});
 
 /**
  * POST /api/v1/spm/scan
  * AI 扫描 Target，发现候选项
  */
-router.post(
-  '/scan',
-  asyncHandler(async (req: Request, res: Response) => {
-    const { target, targetName, options = {} } = req.body;
+router.post('/scan', async (req: Request, res: Response) => {
+  const { target, targetName, options = {} } = req.body;
 
-    if (!target && !targetName) {
-      throw new ValidationError('target object or targetName is required');
+  if (!target && !targetName) {
+    throw new ValidationError('target object or targetName is required');
+  }
+
+  const moduleService = await getModuleService();
+
+  let resolvedTarget = target;
+  if (!resolvedTarget && targetName) {
+    const targets = await moduleService.listTargets();
+    resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
+    if (!resolvedTarget) {
+      res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: `Target not found: ${targetName}` },
+      });
+      return;
     }
+  }
 
-    const moduleService = await getModuleService();
+  logger.info('Module scan started via /spm/', { target: resolvedTarget.name });
+  const result = await moduleService.scanTarget(resolvedTarget, options);
 
-    let resolvedTarget = target;
-    if (!resolvedTarget && targetName) {
-      const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
-      if (!resolvedTarget) {
-        res.status(404).json({
-          success: false,
-          error: { code: 'NOT_FOUND', message: `Target not found: ${targetName}` },
-        });
-        return;
-      }
-    }
-
-    logger.info('Module scan started via /spm/', { target: resolvedTarget.name });
-    const result = await moduleService.scanTarget(resolvedTarget, options);
-
-    res.json({
-      success: true,
-      data: result,
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: result,
+  });
+});
 
 // ── 流式 Target 扫描（SSE Session + EventSource 架构） ─────────
 
@@ -219,69 +206,66 @@ router.post(
  *   scan:error          — 发生错误
  *   stream:done         — 会话结束标记
  */
-router.post(
-  '/scan/stream',
-  asyncHandler(async (req: Request, res: Response) => {
-    const { target, targetName, options = {} } = req.body;
+router.post('/scan/stream', async (req: Request, res: Response) => {
+  const { target, targetName, options = {} } = req.body;
 
-    if (!target && !targetName) {
-      throw new ValidationError('target object or targetName is required');
+  if (!target && !targetName) {
+    throw new ValidationError('target object or targetName is required');
+  }
+
+  const moduleService = await getModuleService();
+
+  let resolvedTarget = target;
+  if (!resolvedTarget && targetName) {
+    const targets = await moduleService.listTargets();
+    resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
+    if (!resolvedTarget) {
+      res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: `Target not found: ${targetName}` },
+      });
+      return;
     }
+  }
 
-    const moduleService = await getModuleService();
+  // 创建 SSE session
+  const session = createStreamSession('scan');
+  const tName = resolvedTarget.name || targetName;
 
-    let resolvedTarget = target;
-    if (!resolvedTarget && targetName) {
-      const targets = await moduleService.listTargets();
-      resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
-      if (!resolvedTarget) {
-        res.status(404).json({
-          success: false,
-          error: { code: 'NOT_FOUND', message: `Target not found: ${targetName}` },
-        });
-        return;
-      }
+  // 立即返回 sessionId
+  res.json({ sessionId: session.sessionId });
+
+  // 异步执行扫描，通过 session 推送进度事件
+  setImmediate(async () => {
+    try {
+      logger.info('Module stream scan started via /spm/', {
+        target: tName,
+        sessionId: session.sessionId,
+      });
+      const result = await moduleService.scanTarget(resolvedTarget, {
+        ...options,
+        onProgress(event: Record<string, unknown>) {
+          session.send(event);
+        },
+      });
+
+      // 发送最终结果
+      session.send({
+        type: 'scan:result',
+        recipes: result.recipes || [],
+        scannedFiles: result.scannedFiles || [],
+        message: result.message || '',
+        recipeCount: (result.recipes || []).length,
+        fileCount: (result.scannedFiles || []).length,
+      });
+      session.end();
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error('Module stream scan failed via /spm/', { target: tName, error: errMsg });
+      session.error(errMsg, 'SCAN_ERROR');
     }
-
-    // 创建 SSE session
-    const session = createStreamSession('scan');
-    const tName = resolvedTarget.name || targetName;
-
-    // 立即返回 sessionId
-    res.json({ sessionId: session.sessionId });
-
-    // 异步执行扫描，通过 session 推送进度事件
-    setImmediate(async () => {
-      try {
-        logger.info('Module stream scan started via /spm/', {
-          target: tName,
-          sessionId: session.sessionId,
-        });
-        const result = await moduleService.scanTarget(resolvedTarget, {
-          ...options,
-          onProgress(event: Record<string, unknown>) {
-            session.send(event);
-          },
-        });
-
-        // 发送最终结果
-        session.send({
-          type: 'scan:result',
-          recipes: result.recipes || [],
-          scannedFiles: result.scannedFiles || [],
-          message: result.message || '',
-          recipeCount: (result.recipes || []).length,
-          fileCount: (result.scannedFiles || []).length,
-        });
-        session.end();
-      } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        logger.error('Module stream scan failed via /spm/', { target: tName, error: errMsg });
-        session.error(errMsg, 'SCAN_ERROR');
-      }
-    });
-  })
-);
+  });
+});
 
 /**
  * GET /api/v1/spm/scan/events/:sessionId
@@ -359,22 +343,19 @@ router.get('/scan/events/:sessionId', (req, res) => {
  * POST /api/v1/spm/scan-project
  * 全项目扫描：AI 提取候选 + Guard 审计
  */
-router.post(
-  '/scan-project',
-  asyncHandler(async (req: Request, res: Response) => {
-    const { options = {} } = req.body;
+router.post('/scan-project', async (req: Request, res: Response) => {
+  const { options = {} } = req.body;
 
-    const moduleService = await getModuleService();
+  const moduleService = await getModuleService();
 
-    logger.info('Full project scan started via /spm/');
-    const result = await moduleService.scanProject(options);
+  logger.info('Full project scan started via /spm/');
+  const result = await moduleService.scanProject(options);
 
-    res.json({
-      success: true,
-      data: result,
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: result,
+  });
+});
 
 /**
  * POST /api/v1/spm/bootstrap
@@ -387,37 +368,34 @@ router.post(
  *
  * 前端立即获得骨架 + 任务清单，每个维度完成后通过 Socket.io 推送更新。
  */
-router.post(
-  '/bootstrap',
-  asyncHandler(async (req: Request, res: Response) => {
-    const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
+router.post('/bootstrap', async (req: Request, res: Response) => {
+  const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
 
-    const container = getServiceContainer();
-    const agentFactory = container.get('agentFactory');
+  const container = getServiceContainer();
+  const agentFactory = container.get('agentFactory');
 
-    logger.info('Bootstrap cold start initiated (v5: async fill mode)');
+  logger.info('Bootstrap cold start initiated (v5: async fill mode)');
 
-    // ── 同步阶段: 快速执行 Phase 1-4 → 返回骨架 ──
-    const bootstrapResult = await agentFactory.bootstrapKnowledge({
-      maxFiles: maxFiles || 500,
-      skipGuard: skipGuard || false,
-      contentMaxLines: contentMaxLines || 120,
-      loadSkills: true,
-    });
+  // ── 同步阶段: 快速执行 Phase 1-4 → 返回骨架 ──
+  const bootstrapResult = await agentFactory.bootstrapKnowledge({
+    maxFiles: maxFiles || 500,
+    skipGuard: skipGuard || false,
+    contentMaxLines: contentMaxLines || 120,
+    loadSkills: true,
+  });
 
-    // 立即返回骨架结果给前端
-    res.json({
-      success: true,
-      data: {
-        ...bootstrapResult,
-        asyncFill: true, // 告知前端：内容正在异步填充中
-      },
-    });
+  // 立即返回骨架结果给前端
+  res.json({
+    success: true,
+    data: {
+      ...bootstrapResult,
+      asyncFill: true, // 告知前端：内容正在异步填充中
+    },
+  });
 
-    // 注意：Phase 5/5.5 异步填充已在 bootstrapKnowledge() 内部通过 setImmediate 启动
-    // 进度通过 BootstrapTaskManager → Socket.io 推送到前端
-  })
-);
+  // 注意：Phase 5/5.5 异步填充已在 bootstrapKnowledge() 内部通过 setImmediate 启动
+  // 进度通过 BootstrapTaskManager → Socket.io 推送到前端
+});
 
 /**
  * GET /api/v1/spm/bootstrap/status
@@ -425,31 +403,28 @@ router.post(
  *
  * 返回当前 session 的任务状态列表，供前端轮询（Socket.io 不可用时的 fallback）
  */
-router.get(
-  '/bootstrap/status',
-  asyncHandler(async (req: Request, res: Response) => {
-    const container = getServiceContainer();
+router.get('/bootstrap/status', async (req: Request, res: Response) => {
+  const container = getServiceContainer();
 
-    // 从容器获取 BootstrapTaskManager（正式 DI 注册）
-    let taskManager: { getSessionStatus(): Record<string, unknown> } | null = null;
-    try {
-      taskManager = container.get('bootstrapTaskManager');
-    } catch {
-      /* not registered */
-    }
-    if (!taskManager) {
-      res.json({
-        success: true,
-        data: { status: 'idle', message: 'No bootstrap task manager initialized' },
-      });
-      return;
-    }
-
+  // 从容器获取 BootstrapTaskManager（正式 DI 注册）
+  let taskManager: { getSessionStatus(): Record<string, unknown> } | null = null;
+  try {
+    taskManager = container.get('bootstrapTaskManager');
+  } catch {
+    /* not registered */
+  }
+  if (!taskManager) {
     res.json({
       success: true,
-      data: taskManager.getSessionStatus(),
+      data: { status: 'idle', message: 'No bootstrap task manager initialized' },
     });
-  })
-);
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: taskManager.getSessionStatus(),
+  });
+});
 
 export default router;

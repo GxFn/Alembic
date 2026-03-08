@@ -356,11 +356,11 @@ function detectGoPatterns(root: any, lang: any, methods: any, properties: any, c
   // Interface satisfaction: struct 的方法集合覆盖某 interface
   // (简化版: 不做完整检查, 只记录 struct-has-methods 的关系)
   for (const [structName, methodList] of Object.entries(structMethodMap)) {
-    if ((methodList as any).length >= 3) {
+    if ((methodList as string[]).length >= 3) {
       patterns.push({
         type: 'struct-methods',
         className: structName,
-        methodCount: (methodList as any).length,
+        methodCount: (methodList as string[]).length,
         confidence: 0.7,
       });
     }

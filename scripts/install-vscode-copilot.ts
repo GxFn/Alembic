@@ -22,12 +22,9 @@
  *   --quiet            安静模式（无输出）
  */
 
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { TEMPLATES_DIR } from '../lib/shared/package-root.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = import.meta.dirname;
 
 import fs from 'node:fs';
 import { createRequire } from 'node:module';

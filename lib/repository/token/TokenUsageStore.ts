@@ -10,7 +10,8 @@
  *   在 drizzle query builder 中不够直观，保持原有高效预编译语句）
  */
 
-import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
+import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
+import { getDrizzle } from '../../infrastructure/database/drizzle/index.js';
 import { tokenUsage } from '../../infrastructure/database/drizzle/schema.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 
@@ -76,9 +77,9 @@ export class TokenUsageStore {
   /**
    * @param {import('better-sqlite3').Database} db — raw better-sqlite3 instance
    */
-  constructor(db: import('better-sqlite3').Database) {
+  constructor(db: import('better-sqlite3').Database, drizzle?: DrizzleDB) {
     this.#db = db;
-    this.#drizzle = getDrizzle();
+    this.#drizzle = drizzle ?? getDrizzle();
     this.#logger = Logger.getInstance();
 
     // 聚合查询保留预编译语句（使用 SQLite 特有函数，drizzle query builder 不方便表达）

@@ -14,7 +14,6 @@ import {
 } from '#shared/schemas/http-requests.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
 
@@ -25,137 +24,128 @@ const logger = Logger.getInstance();
  * GET /api/v1/modules/targets
  * 获取所有模块 Target 列表（多语言合并）
  */
-router.get(
-  '/targets',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getServiceContainer();
-    const moduleService = container.get('moduleService');
+router.get('/targets', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
+  const moduleService = container.get('moduleService');
 
-    await moduleService.load();
-    const targets = await moduleService.listTargets();
+  await moduleService.load();
+  const targets = await moduleService.listTargets();
 
-    res.json({
-      success: true,
-      data: {
-        targets,
-        total: targets.length,
-        projectInfo: moduleService.getProjectInfo(),
-      },
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: {
+      targets,
+      total: targets.length,
+      projectInfo: moduleService.getProjectInfo(),
+    },
+  });
+});
 
 /**
  * GET /api/v1/modules/dep-graph
  * 获取模块依赖关系图
  */
-router.get(
-  '/dep-graph',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getServiceContainer();
-    const moduleService = container.get('moduleService');
+router.get('/dep-graph', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
+  const moduleService = container.get('moduleService');
 
-    await moduleService.load();
-    const level = req.query.level || 'package'; // 'package' | 'target' | 'module'
-    const graph = await moduleService.getDependencyGraph({ level });
+  await moduleService.load();
+  const level = req.query.level || 'package'; // 'package' | 'target' | 'module'
+  const graph = await moduleService.getDependencyGraph({ level });
 
-    if (!graph || (!graph.nodes && !graph.packages)) {
-      return void res.json({
-        success: true,
-        data: { nodes: [], edges: [], projectRoot: null },
-      });
-    }
+  if (!graph || (!graph.nodes && !graph.packages)) {
+    return void res.json({
+      success: true,
+      data: { nodes: [], edges: [], projectRoot: null },
+    });
+  }
 
-    // 标准化为 { nodes, edges } 格式
-    let nodes: Record<string, unknown>[] = [];
-    let edges: { from: string; to: string; source: string }[] = [];
+  // 标准化为 { nodes, edges } 格式
+  let nodes: Record<string, unknown>[] = [];
+  let edges: { from: string; to: string; source: string }[] = [];
 
-    if (graph.nodes && graph.edges) {
-      nodes = graph.nodes;
-      edges = graph.edges;
-    } else if (graph.packages) {
-      // SPM 格式兼容：从 packages 构建图
-      if (level === 'target') {
-        for (const [pkgName, pkgInfo] of Object.entries(graph.packages)) {
-          const pkgRecord = pkgInfo as Record<string, unknown>;
-          const targetsInfo = (pkgRecord?.targetsInfo || {}) as Record<
-            string,
-            Record<string, unknown>
-          >;
-          for (const [targetName, info] of Object.entries(targetsInfo)) {
-            const id = `${pkgName}::${targetName}`;
-            nodes.push({
-              id,
-              label: targetName,
-              type: 'target',
-              packageName: pkgName,
-            });
-            const deps = (info?.dependencies || []) as Array<{ name?: string; package?: string }>;
-            for (const d of deps) {
-              if (!d?.name) {
-                continue;
-              }
-              const depPkg = d?.package || pkgName;
-              edges.push({ from: id, to: `${depPkg}::${d.name}`, source: 'base' });
+  if (graph.nodes && graph.edges) {
+    nodes = graph.nodes;
+    edges = graph.edges;
+  } else if (graph.packages) {
+    // SPM 格式兼容：从 packages 构建图
+    if (level === 'target') {
+      for (const [pkgName, pkgInfo] of Object.entries(graph.packages)) {
+        const pkgRecord = pkgInfo as Record<string, unknown>;
+        const targetsInfo = (pkgRecord?.targetsInfo || {}) as Record<
+          string,
+          Record<string, unknown>
+        >;
+        for (const [targetName, info] of Object.entries(targetsInfo)) {
+          const id = `${pkgName}::${targetName}`;
+          nodes.push({
+            id,
+            label: targetName,
+            type: 'target',
+            packageName: pkgName,
+          });
+          const deps = (info?.dependencies || []) as Array<{ name?: string; package?: string }>;
+          for (const d of deps) {
+            if (!d?.name) {
+              continue;
             }
-          }
-        }
-      } else {
-        nodes = Object.keys(graph.packages).map((id) => ({
-          id,
-          label: id,
-          type: 'package',
-          packageDir: graph.packages[id]?.packageDir,
-          targets: graph.packages[id]?.targets,
-        }));
-        for (const [from, tos] of Object.entries(graph.edges || {})) {
-          for (const to of (tos as string[]) || []) {
-            edges.push({ from, to, source: 'base' });
+            const depPkg = d?.package || pkgName;
+            edges.push({ from: id, to: `${depPkg}::${d.name}`, source: 'base' });
           }
         }
       }
+    } else {
+      nodes = Object.keys(graph.packages).map((id) => ({
+        id,
+        label: id,
+        type: 'package',
+        packageDir: graph.packages[id]?.packageDir,
+        targets: graph.packages[id]?.targets,
+      }));
+      for (const [from, tos] of Object.entries(graph.edges || {})) {
+        for (const to of (tos as string[]) || []) {
+          edges.push({ from, to, source: 'base' });
+        }
+      }
     }
+  }
 
-    res.json({
-      success: true,
-      data: {
-        nodes,
-        edges,
-        projectRoot: graph.projectRoot || null,
-        generatedAt: graph.generatedAt || null,
-      },
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: {
+      nodes,
+      edges,
+      projectRoot: graph.projectRoot || null,
+      generatedAt: graph.generatedAt || null,
+    },
+  });
+});
 
 /**
  * GET /api/v1/modules/browse-dirs
  * 浏览项目目录结构 — 供前端选择要扫描的文件夹
  */
-router.get(
-  '/browse-dirs',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getServiceContainer();
-    const moduleService = container.get('moduleService');
+router.get('/browse-dirs', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
+  const moduleService = container.get('moduleService');
 
-    await moduleService.load();
+  await moduleService.load();
 
-    const basePath = (req.query.path as string) || '';
-    const maxDepth = Math.min(Number.parseInt((req.query.depth as string) || '3', 10), 5);
+  const basePath = (req.query.path as string) || '';
+  const maxDepth = Math.min(Number.parseInt((req.query.depth as string) || '3', 10), 5);
 
-    const dirs = await moduleService.browseDirectories(basePath, maxDepth);
+  const dirs = await moduleService.browseDirectories(basePath, maxDepth);
 
-    res.json({
-      success: true,
-      data: {
-        directories: dirs,
-        total: dirs.length,
-        basePath: basePath || '.',
-        projectRoot: moduleService.getProjectInfo().projectRoot,
-      },
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: {
+      directories: dirs,
+      total: dirs.length,
+      basePath: basePath || '.',
+      projectRoot: moduleService.getProjectInfo().projectRoot,
+    },
+  });
+});
 
 /**
  * POST /api/v1/modules/scan-folder
@@ -164,7 +154,7 @@ router.get(
 router.post(
   '/scan-folder',
   validate(ScanFolderBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { path: folderPath, options = {} } = req.body;
 
     const container = getServiceContainer();
@@ -178,7 +168,7 @@ router.post(
       success: true,
       data: result,
     });
-  })
+  }
 );
 
 /**
@@ -188,7 +178,7 @@ router.post(
 router.post(
   '/scan-folder/stream',
   validate(ScanFolderBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { path: folderPath, options = {} } = req.body;
 
     const container = getServiceContainer();
@@ -232,7 +222,7 @@ router.post(
         }
       }
     });
-  })
+  }
 );
 
 /**
@@ -242,7 +232,7 @@ router.post(
 router.post(
   '/target-files',
   validate(ScanTargetBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { target, targetName } = req.body;
 
     const container = getServiceContainer();
@@ -272,7 +262,7 @@ router.post(
         total: files.length,
       },
     });
-  })
+  }
 );
 
 /**
@@ -282,7 +272,7 @@ router.post(
 router.post(
   '/scan',
   validate(ScanTargetBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { target, targetName, options = {} } = req.body;
 
     const container = getServiceContainer();
@@ -312,7 +302,7 @@ router.post(
       success: true,
       data: result,
     });
-  })
+  }
 );
 
 // ── 流式 Target 扫描（SSE Session + EventSource 架构） ─────────
@@ -324,7 +314,7 @@ router.post(
 router.post(
   '/scan/stream',
   validate(ScanTargetBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { target, targetName, options = {} } = req.body;
 
     const container = getServiceContainer();
@@ -381,7 +371,7 @@ router.post(
         session.error((err as Error).message, 'SCAN_ERROR');
       }
     });
-  })
+  }
 );
 
 /**
@@ -461,7 +451,7 @@ router.get('/scan/events/:sessionId', (req, res) => {
 router.post(
   '/scan-project',
   validate(ScanProjectBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { options = {} } = req.body;
 
     const container = getServiceContainer();
@@ -475,50 +465,44 @@ router.post(
       success: true,
       data: result,
     });
-  })
+  }
 );
 
 /**
  * POST /api/v1/modules/update-map
  * 刷新模块映射（替代 spm-map）
  */
-router.post(
-  '/update-map',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getServiceContainer();
-    const moduleService = container.get('moduleService');
+router.post('/update-map', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
+  const moduleService = container.get('moduleService');
 
-    const result = await moduleService.updateModuleMap({
-      aggressive: true,
-    });
+  const result = await moduleService.updateModuleMap({
+    aggressive: true,
+  });
 
-    logger.info('Module map updated via dashboard', { result });
-    res.json({
-      success: true,
-      data: result,
-    });
-  })
-);
+  logger.info('Module map updated via dashboard', { result });
+  res.json({
+    success: true,
+    data: result,
+  });
+});
 
 /**
  * GET /api/v1/modules/project-info
  * 项目信息（检测到的语言、框架等）
  */
-router.get(
-  '/project-info',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getServiceContainer();
-    const moduleService = container.get('moduleService');
+router.get('/project-info', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
+  const moduleService = container.get('moduleService');
 
-    await moduleService.load();
-    const info = moduleService.getProjectInfo();
+  await moduleService.load();
+  const info = moduleService.getProjectInfo();
 
-    res.json({
-      success: true,
-      data: info,
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: info,
+  });
+});
 
 /**
  * POST /api/v1/modules/bootstrap
@@ -527,7 +511,7 @@ router.get(
 router.post(
   '/bootstrap',
   validate(ModuleBootstrapBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
 
     const container = getServiceContainer();
@@ -549,36 +533,33 @@ router.post(
         asyncFill: true,
       },
     });
-  })
+  }
 );
 
 /**
  * GET /api/v1/modules/bootstrap/status
  * 查询 bootstrap 异步填充进度
  */
-router.get(
-  '/bootstrap/status',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getServiceContainer();
+router.get('/bootstrap/status', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
 
-    let taskManager: { getSessionStatus(): Record<string, unknown> } | null = null;
-    try {
-      taskManager = container.get('bootstrapTaskManager');
-    } catch {
-      /* not registered */
-    }
-    if (!taskManager) {
-      return void res.json({
-        success: true,
-        data: { status: 'idle', message: 'No bootstrap task manager initialized' },
-      });
-    }
-
-    res.json({
+  let taskManager: { getSessionStatus(): Record<string, unknown> } | null = null;
+  try {
+    taskManager = container.get('bootstrapTaskManager');
+  } catch {
+    /* not registered */
+  }
+  if (!taskManager) {
+    return void res.json({
       success: true,
-      data: taskManager.getSessionStatus(),
+      data: { status: 'idle', message: 'No bootstrap task manager initialized' },
     });
-  })
-);
+  }
+
+  res.json({
+    success: true,
+    data: taskManager.getSessionStatus(),
+  });
+});
 
 export default router;

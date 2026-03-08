@@ -6,12 +6,9 @@
  * 使用：node scripts/release.js [patch|minor|major]
  */
 
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { DASHBOARD_DIR, PACKAGE_ROOT, RESOURCES_DIR } from '../lib/shared/package-root.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = import.meta.dirname;
 
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';

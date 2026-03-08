@@ -227,7 +227,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node bin/mcp-server.js
 
 | 问题 | 解决方案 |
 |------|---------|
-| MCP 服务器启动失败 | 检查 Node.js ≥ 20，运行 `asd status` |
+| MCP 服务器启动失败 | 检查 Node.js ≥ 22，运行 `asd status` |
 | 找不到 mcp-server.js | 运行 `npm install -g autosnippet` 重新安装 |
 | 权限错误 | 检查 `.env` 中的 API Key 配置 |
 | IDE 未检测到工具 | 重启 IDE，检查 MCP 配置文件路径 |

@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 /** Re-exported type alias so declaration emit can name it */
 export type SqliteDatabase = InstanceType<typeof Database>;
@@ -10,8 +9,7 @@ import { isAutoSnippetDevRepo } from '../../shared/isOwnDevRepo.js';
 import pathGuard from '../../shared/PathGuard.js';
 import { type DrizzleDB, initDrizzle } from './drizzle/index.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = import.meta.dirname;
 
 /**
  * DatabaseConnection - 数据库连接管理器
@@ -78,6 +76,8 @@ export class DatabaseConnection {
     // 启用 WAL 模式（Write-Ahead Logging）
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
+    // 多进程并发写入保护：等待最多 3 秒获取写锁，而非立即 SQLITE_BUSY
+    this.db.pragma('busy_timeout = 3000');
 
     // 初始化 Drizzle ORM 包装（与 raw db 共存，操作同一连接）
     this.drizzle = initDrizzle(this.db);

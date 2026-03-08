@@ -14,7 +14,8 @@
 
 import type { Database } from 'better-sqlite3';
 import { and, desc, eq, isNotNull, lt, sql } from 'drizzle-orm';
-import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
+import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
+import { getDrizzle } from '../../infrastructure/database/drizzle/index.js';
 import { remoteCommands, remoteState } from '../../infrastructure/database/drizzle/schema.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 
@@ -68,9 +69,9 @@ export class RemoteCommandRepository {
   #runningTimeoutStmt;
   #countByStatusStmt;
 
-  constructor(db: Database) {
+  constructor(db: Database, drizzle?: DrizzleDB) {
     this.#db = db;
-    this.#drizzle = getDrizzle();
+    this.#drizzle = drizzle ?? getDrizzle();
     this.#logger = Logger.getInstance();
 
     // 确保 remote_state 表存在（原 remote.ts 内联 CREATE）

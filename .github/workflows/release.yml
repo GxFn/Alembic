@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
@@ -37,6 +37,12 @@ jobs:
 
       - name: Run unit tests
         run: npm run test:unit
+
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          ASD_DISABLE_WRITE_GUARD: '1'
+          ASD_DISABLE_RATE_LIMIT: '1'
 
       - name: Set version from tag
         run: |

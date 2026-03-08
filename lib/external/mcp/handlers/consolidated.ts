@@ -191,7 +191,7 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
 
   switch (op) {
     case 'list':
-      return skillHandlers.listSkills();
+      return skillHandlers.listSkills(ctx);
     case 'load':
       return skillHandlers.loadSkill(ctx, args);
     case 'create':

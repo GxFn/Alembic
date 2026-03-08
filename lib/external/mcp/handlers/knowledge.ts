@@ -3,15 +3,20 @@
  * submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle
  */
 
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { UnifiedValidator } from '#shared/UnifiedValidator.js';
 import { envelope } from '../envelope.js';
 import type { McpContext, McpServiceContainer } from './types.js';
 
 // ─── 限流 ──────────────────────────────────────────────────
 
-async function _checkRateLimit(toolName: string, clientId: string | undefined) {
+async function _checkRateLimit(
+  toolName: string,
+  clientId: string | undefined,
+  container?: Parameters<typeof resolveProjectRoot>[0]
+) {
   const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
-  const projectRoot = process.cwd();
+  const projectRoot = resolveProjectRoot(container);
   const limitCheck = checkRecipeSave(projectRoot, clientId || process.env.USER || 'mcp-client');
   if (!limitCheck.allowed) {
     return envelope({
@@ -96,10 +101,19 @@ export async function submitKnowledge(
   args: Record<string, unknown> & { client_id?: string }
 ) {
   // 限流
-  const blocked = await _checkRateLimit('autosnippet_submit_knowledge', args.client_id);
+  const blocked = await _checkRateLimit(
+    'autosnippet_submit_knowledge',
+    args.client_id,
+    ctx.container
+  );
   if (blocked) {
     return blocked;
   }
+
+  // Recipe-Ready 前置校验 — 使用 UnifiedValidator (统一门控)
+  // 注意: 必须在 service.create() 之前校验，防止不合格数据入库
+  const validator = new UnifiedValidator();
+  const validation = validator.validate(args, { skipUniqueness: true });
 
   const service = ctx.container.get('knowledgeService');
 
@@ -107,10 +121,6 @@ export async function submitKnowledge(
   const enrichedData = _enrichToV3(args, ctx.container);
 
   const entry = await service.create(enrichedData, { userId: 'mcp' });
-
-  // Recipe-Ready 诊断 — 使用 UnifiedValidator (统一门控)
-  const validator = new UnifiedValidator();
-  const validation = validator.validate(args, { skipUniqueness: true });
 
   const data: Record<string, unknown> = {
     id: entry.id,
@@ -166,7 +176,11 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
   }
 
   // 限流
-  const blocked = await _checkRateLimit('autosnippet_submit_knowledge_batch', args.client_id);
+  const blocked = await _checkRateLimit(
+    'autosnippet_submit_knowledge_batch',
+    args.client_id,
+    ctx.container
+  );
   if (blocked) {
     return blocked;
   }
@@ -189,8 +203,12 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
         const titles = new Set(result.items.map((it) => it.title));
         items = items.filter((it) => titles.has(it.title!));
       }
-    } catch {
-      // CandidateAggregator 加载失败时降级：不去重
+    } catch (err: unknown) {
+      // CandidateAggregator 加载失败时降级：不去重，但记录日志
+      const { default: Logger } = await import('#infra/logging/Logger.js');
+      Logger.getInstance().warn(
+        `[submitKnowledgeBatch] CandidateAggregator 加载失败，跳过去重: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -387,7 +405,7 @@ export async function saveDocument(
   }
 
   // 限流
-  const blocked = await _checkRateLimit('autosnippet_save_document', args.client_id);
+  const blocked = await _checkRateLimit('autosnippet_save_document', args.client_id, ctx.container);
   if (blocked) {
     return blocked;
   }

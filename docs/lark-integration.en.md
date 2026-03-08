@@ -14,7 +14,7 @@ Lark Notification  ←  Write Result  ←  VSCode Extension Polls  ←  Inject C
 
 ## Prerequisites
 
-- Node.js ≥ 20
+- Node.js ≥ 22
 - VS Code + GitHub Copilot (Agent Mode)
 - AutoSnippet installed (`npm install -g autosnippet`, then `asd setup` in your project)
 - Feishu Open Platform account

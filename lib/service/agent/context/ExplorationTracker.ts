@@ -207,8 +207,11 @@ export class ExplorationTracker {
     if (this.#isTerminalPhase() && this.#pipelineType === 'scan') {
       return true;
     }
-    // 终结阶段 + 已给了 2 轮 grace → 退出
-    if (this.#isTerminalPhase() && this.#metrics.phaseRounds >= 2) {
+    // 终结阶段 + 已给了 3 轮 grace → 退出
+    // 注意: phaseRounds 在 tick() 中递增 (进入终结阶段后从 1 开始计数)
+    // 3 轮 grace 允许: round 1 (首次尝试) + round 2 (空响应重试) + 安全余量
+    // 与 AgentRuntime#callLLM 的空响应 grace 机制对齐 (grace < 2 → 在 round 1 重试)
+    if (this.#isTerminalPhase() && this.#metrics.phaseRounds >= 3) {
       return true;
     }
     // 硬上限兜底

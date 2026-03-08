@@ -129,8 +129,9 @@ function _walkJavaClassBody(body: any, ctx: any, className: any) {
       }
       case 'class_declaration': {
         // 内部类
-        const inner = _parseJavaClass(child);
-        (inner as any).outerClass = className;
+        const inner: ReturnType<typeof _parseJavaClass> & { outerClass?: string } =
+          _parseJavaClass(child);
+        inner.outerClass = className;
         ctx.classes.push(inner);
         const innerBody = child.namedChildren.find((c: any) => c.type === 'class_body');
         if (innerBody) {

@@ -14,7 +14,7 @@
 
 ## 前置条件
 
-- Node.js ≥ 20
+- Node.js ≥ 22
 - VS Code + GitHub Copilot（Agent Mode）
 - AutoSnippet 已安装（`npm install -g autosnippet`，然后在项目里 `asd setup`）
 - 飞书开放平台账号

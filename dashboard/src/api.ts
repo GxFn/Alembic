@@ -14,6 +14,7 @@ import type {
   ProjectData,
   SPMTarget,
   ExtractedRecipe,
+  ScannedFile,
   KnowledgeEntry,
   KnowledgeContent,
   KnowledgeQuality,
@@ -516,11 +517,11 @@ export const api = {
     return { files: data.files || [], count: data.total || data.files?.length || 0 };
   },
 
-  async scanTarget(target: SPMTarget, signal?: AbortSignal) {
+  async scanTarget(target: SPMTarget, signal?: AbortSignal): Promise<{ recipes: ExtractedRecipe[]; scannedFiles: ScannedFile[]; message: string; noAi: boolean }> {
     const res = await http.post('/modules/scan', { target }, { signal, timeout: 600000 });
     const data = res.data?.data || {};
     const recipes = data.recipes || data.result || [];
-    return { recipes, scannedFiles: data.scannedFiles || [], message: data.message || '', noAi: !!data.noAi };
+    return { recipes, scannedFiles: (data.scannedFiles || []) as ScannedFile[], message: data.message || '', noAi: !!data.noAi };
   },
 
   /**
@@ -531,7 +532,7 @@ export const api = {
     target: SPMTarget,
     onEvent: (event: Record<string, unknown>) => void,
     signal?: AbortSignal,
-  ): Promise<{ recipes: ExtractedRecipe[]; scannedFiles: string[]; message: string; noAi?: boolean }> {
+  ): Promise<{ recipes: ExtractedRecipe[]; scannedFiles: ScannedFile[]; message: string; noAi?: boolean }> {
     // Step 1: POST 创建流式扫描会话
     let sessionId: string;
     const startRes = await fetch('/api/v1/modules/scan/stream', {
@@ -550,7 +551,7 @@ export const api = {
       const esUrl = `/api/v1/modules/scan/events/${sessionId}`;
       const es = new EventSource(esUrl);
       let resolved = false;
-      let finalResult = { recipes: [] as ExtractedRecipe[], scannedFiles: [] as string[], message: '', noAi: false };
+      let finalResult = { recipes: [] as ExtractedRecipe[], scannedFiles: [] as ScannedFile[], message: '', noAi: false };
 
       function cleanup() { es.close(); }
 
@@ -562,7 +563,7 @@ export const api = {
           if (evt.type === 'scan:result') {
             finalResult = {
               recipes: evt.recipes || [],
-              scannedFiles: evt.scannedFiles || [],
+              scannedFiles: (evt.scannedFiles || []) as ScannedFile[],
               message: evt.message || '',
               noAi: !!evt.noAi,
             };
@@ -610,14 +611,20 @@ export const api = {
   },
 
   /** 全项目扫描：AI 提取 + Guard 审计 */
-  async scanProject(signal?: AbortSignal) {
+  async scanProject(signal?: AbortSignal): Promise<{
+    targets: string[];
+    recipes: ExtractedRecipe[];
+    guardAudit: import('./types').GuardAuditResult | null;
+    scannedFiles: ScannedFile[];
+    partial: boolean;
+  }> {
     const res = await http.post('/modules/scan-project', {}, { signal, timeout: 600000 });
     const data = res.data?.data || {};
     return {
       targets: data.targets || [],
       recipes: data.recipes || [],
       guardAudit: data.guardAudit || null,
-      scannedFiles: data.scannedFiles || [],
+      scannedFiles: (data.scannedFiles || []) as ScannedFile[],
       partial: data.partial || false,
     };
   },
@@ -641,7 +648,7 @@ export const api = {
     folderPath: string,
     onEvent: (event: Record<string, unknown>) => void,
     signal?: AbortSignal,
-  ): Promise<{ recipes: ExtractedRecipe[]; scannedFiles: string[]; message: string; noAi?: boolean }> {
+  ): Promise<{ recipes: ExtractedRecipe[]; scannedFiles: ScannedFile[]; message: string; noAi?: boolean }> {
     // Step 1: POST 创建流式扫描会话
     const startRes = await fetch('/api/v1/modules/scan-folder/stream', {
       method: 'POST',
@@ -659,7 +666,7 @@ export const api = {
       const esUrl = `/api/v1/modules/scan/events/${sessionId}`;
       const es = new EventSource(esUrl);
       let resolved = false;
-      let finalResult = { recipes: [] as ExtractedRecipe[], scannedFiles: [] as string[], message: '', noAi: false };
+      let finalResult = { recipes: [] as ExtractedRecipe[], scannedFiles: [] as ScannedFile[], message: '', noAi: false };
 
       function cleanup() { es.close(); }
 
@@ -671,7 +678,7 @@ export const api = {
           if (evt.type === 'scan:result') {
             finalResult = {
               recipes: evt.recipes || [],
-              scannedFiles: evt.scannedFiles || [],
+              scannedFiles: (evt.scannedFiles || []) as ScannedFile[],
               message: evt.message || '',
               noAi: !!evt.noAi,
             };
@@ -1372,13 +1379,6 @@ export const api = {
       mode: data.mode,
       ranked: data.ranked,
     };
-  },
-
-  async xcodeSimulateSearch(data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const res = await http
-      .post('/search/xcode-simulate', data)
-      .catch(() => ({ data: { data: {} } }));
-    return res.data?.data || {};
   },
 
   // ── Guard ───────────────────────────────────────────

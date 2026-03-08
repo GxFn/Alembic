@@ -655,7 +655,7 @@ async function _sendLarkViaApi(text: string): Promise<boolean> {
       process.stderr.write(`[MCP/Task] Lark notify HTTP ${resp.status}\n`);
       return false;
     }
-    const body = await resp.json();
+    const body = (await resp.json()) as Record<string, unknown>;
     return body.success === true;
   } catch (err: unknown) {
     process.stderr.write(
@@ -683,7 +683,7 @@ async function _sendScreenshotViaApi(caption = '') {
       process.stderr.write(`[MCP/Task] Screenshot HTTP ${resp.status}\n`);
       return false;
     }
-    const body = await resp.json();
+    const body = (await resp.json()) as Record<string, unknown>;
     return body.success === true;
   } catch (err: unknown) {
     process.stderr.write(

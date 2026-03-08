@@ -2,15 +2,16 @@
  * AuditStore - 审计日志存储
  */
 import { desc, eq, sql } from 'drizzle-orm';
-import { type DrizzleDB, getDrizzle } from '../database/drizzle/index.js';
+import type { DrizzleDB } from '../database/drizzle/index.js';
+import { getDrizzle } from '../database/drizzle/index.js';
 import { auditLogs } from '../database/drizzle/schema.js';
 
 export class AuditStore {
   db: import('better-sqlite3').Database;
   #drizzle: DrizzleDB;
-  constructor(db: { getDb: () => import('better-sqlite3').Database }) {
+  constructor(db: { getDb: () => import('better-sqlite3').Database }, drizzle?: DrizzleDB) {
     this.db = db.getDb();
-    this.#drizzle = getDrizzle();
+    this.#drizzle = drizzle ?? getDrizzle();
   }
 
   /**

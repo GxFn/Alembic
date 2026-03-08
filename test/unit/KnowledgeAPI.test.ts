@@ -501,10 +501,6 @@ vi.mock('../../lib/injection/ServiceContainer.js', () => ({
   })),
 }));
 
-vi.mock('../../lib/http/middleware/errorHandler.js', () => ({
-  asyncHandler: (fn) => fn,
-}));
-
 vi.mock('../../lib/infrastructure/logging/Logger.js', () => ({
   default: {
     getInstance: () => ({ info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }),

@@ -17,6 +17,7 @@
 
 import path from 'node:path';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import { BootstrapSessionManager } from './bootstrap/BootstrapSession.js';
 import { buildMissionBriefing } from './bootstrap/MissionBriefingBuilder.js';
@@ -89,7 +90,7 @@ function getSessionManager(container: ServiceContainer): BootstrapSessionManager
  */
 export async function bootstrapExternal(ctx: McpContext) {
   const t0 = Date.now();
-  const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+  const projectRoot = resolveProjectRoot(ctx.container);
 
   // ═══════════════════════════════════════════════════════════
   // Phase 1-4: 共享数据收集管线
@@ -206,11 +207,29 @@ export async function bootstrapExternal(ctx: McpContext) {
 
 /**
  * 获取当前 active session（供其他 handler 使用）
+ *
+ * 当指定了 sessionId 时，如果 active session 已过期但 id 匹配，
+ * 仍然返回该 session（支持新 bootstrap 创建后旧 session 的 dimension_complete 继续工作）。
+ *
  * @param {object} container
  * @param {string} [sessionId]
  * @returns {import('./bootstrap/BootstrapSession.js').BootstrapSession|null}
  */
 export function getActiveSession(container: ServiceContainer, sessionId?: string) {
   const mgr = getSessionManager(container);
-  return mgr.getSession(sessionId);
+  const session = mgr.getSession(sessionId);
+  if (session) {
+    return session;
+  }
+
+  // 当指定了 sessionId 但 active session 已过期/被替换时，
+  // 尝试用 getAnySession() 恢复 — 防止正在进行的维度完成调用因新 bootstrap 而失败
+  if (sessionId) {
+    const anySession = mgr.getAnySession();
+    if (anySession && anySession.id === sessionId) {
+      return anySession;
+    }
+  }
+
+  return null;
 }

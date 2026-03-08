@@ -9,7 +9,9 @@
 
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import type { McpContext } from './types.js';
 
@@ -210,19 +212,24 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
   await _injectEnhancementGuardRules(engine, ctx);
 
   // 解析项目根路径（用于相对路径转绝对路径）
-  const projectRoot = (ctx.container?.singletons?._projectRoot ||
-    process.env.ASD_PROJECT_DIR ||
-    process.cwd()) as string;
+  const projectRoot = resolveProjectRoot(ctx.container);
 
   // 补充缺失的 content（从磁盘读取）
   // 相对路径自动转绝对路径，避免 MCP 进程 cwd 不在项目目录时读不到文件
-  const filesToAudit = args.files.map((f: { path: string; content?: string }) => {
-    const absPath = path.isAbsolute(f.path) ? f.path : path.resolve(projectRoot, f.path);
-    return {
-      path: absPath,
-      content: f.content || (fs.existsSync(absPath) ? fs.readFileSync(absPath, 'utf8') : ''),
-    };
-  });
+  const filesToAudit = await Promise.all(
+    args.files.map(async (f: { path: string; content?: string }) => {
+      const absPath = path.isAbsolute(f.path) ? f.path : path.resolve(projectRoot, f.path);
+      let content = f.content;
+      if (!content) {
+        try {
+          content = await readFile(absPath, 'utf8');
+        } catch {
+          content = '';
+        }
+      }
+      return { path: absPath, content };
+    })
+  );
 
   const result = engine.auditFiles(filesToAudit, { scope });
 
@@ -286,7 +293,7 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
 export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
   const { GuardCheckEngine, detectLanguage } = await import('#service/guard/GuardCheckEngine.js');
 
-  const projectRoot = _getProjectRoot(ctx);
+  const projectRoot = resolveProjectRoot(ctx.container);
 
   // 轮次追踪（基于 projectRoot，不绑定 task）
   const round = (_reviewRounds.get(projectRoot) || 0) + 1;
@@ -353,7 +360,7 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
 
   for (const fp of filePaths) {
     try {
-      const code = fs.readFileSync(fp, 'utf8');
+      const code = await readFile(fp, 'utf8');
       const lang = detectLanguage(fp);
       const violations = engine.checkCode(code, lang, { filePath: fp });
 
@@ -525,14 +532,6 @@ function _loadRuleRecipes(ctx: McpContext): Map<string, RecipeEntry> {
 
 // ═══ Git Diff 检测 ═══════════════════════════════════════
 
-function _getProjectRoot(ctx: McpContext): string {
-  const root = ctx.container?.singletons?._projectRoot;
-  if (root) {
-    return root as string;
-  }
-  return process.env.ASD_PROJECT_DIR || process.cwd();
-}
-
 const SOURCE_EXTS = new Set([
   '.m',
   '.mm',
@@ -557,7 +556,7 @@ const SOURCE_EXTS = new Set([
 ]);
 
 function _detectChangedFiles(projectRoot: string): string[] {
-  const root = projectRoot || process.env.ASD_PROJECT_DIR || process.cwd();
+  const root = projectRoot;
   try {
     const diffOutput = execSync(
       'git diff --name-only HEAD 2>/dev/null; git diff --staged --name-only 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null',
@@ -586,7 +585,7 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
   const includeContent = args.includeContent || false;
   const contentMaxLines = args.contentMaxLines || 100;
 
-  const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+  const projectRoot = resolveProjectRoot(ctx.container);
 
   // 优先使用 ModuleService（多语言统一入口），回退到 SpmHelper
   let service: ModuleServiceLike;
@@ -628,7 +627,7 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
         };
         if (includeContent) {
           try {
-            const raw = fs.readFileSync(fp, 'utf8');
+            const raw = await readFile(fp, 'utf8');
             const lines = raw.split('\n');
             entry.content = lines.slice(0, contentMaxLines).join('\n');
             entry.totalLines = lines.length;
@@ -660,10 +659,19 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
     // 注入 Enhancement Pack Guard 规则
     await _injectEnhancementGuardRules(engine, ctx);
 
-    const filesToAudit = allFiles.map((f) => {
-      const content = f.content || (fs.existsSync(f.path) ? fs.readFileSync(f.path, 'utf8') : '');
-      return { path: f.path, content };
-    });
+    const filesToAudit = await Promise.all(
+      allFiles.map(async (f) => {
+        let content = f.content;
+        if (!content) {
+          try {
+            content = await readFile(f.path, 'utf8');
+          } catch {
+            content = '';
+          }
+        }
+        return { path: f.path, content };
+      })
+    );
     guardAudit = engine.auditFiles(filesToAudit, { scope: 'project' });
 
     // 写入 ViolationsStore

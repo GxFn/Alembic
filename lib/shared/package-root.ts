@@ -12,10 +12,8 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = import.meta.dirname;
 
 /**
  * 沿目录树向上查找包含 package.json（且 name === 'autosnippet'）的目录。

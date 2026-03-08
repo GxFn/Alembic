@@ -12,7 +12,6 @@
 import crypto from 'node:crypto';
 import express, { type Request, type Response } from 'express';
 import { AuthLoginBody } from '../../shared/schemas/http-requests.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
@@ -93,65 +92,58 @@ function verifyToken(token: string | undefined) {
  * POST /auth/login
  * Body: { username, password }
  */
-router.post(
-  '/login',
-  validate(AuthLoginBody),
-  asyncHandler(async (req: Request, res: Response) => {
-    const { username, password } = req.body;
+router.post('/login', validate(AuthLoginBody), async (req: Request, res: Response) => {
+  const { username, password } = req.body;
 
-    // 恒时比较防止时序攻击
-    const userOk =
-      username.length === AUTH_USERNAME.length &&
-      crypto.timingSafeEqual(Buffer.from(username), Buffer.from(AUTH_USERNAME));
-    const passOk =
-      password.length === AUTH_PASSWORD.length &&
-      crypto.timingSafeEqual(Buffer.from(password), Buffer.from(AUTH_PASSWORD));
+  // 恒时比较防止时序攻击
+  const userOk =
+    username.length === AUTH_USERNAME.length &&
+    crypto.timingSafeEqual(Buffer.from(username), Buffer.from(AUTH_USERNAME));
+  const passOk =
+    password.length === AUTH_PASSWORD.length &&
+    crypto.timingSafeEqual(Buffer.from(password), Buffer.from(AUTH_PASSWORD));
 
-    if (!userOk || !passOk) {
-      return void res.status(401).json({
-        success: false,
-        error: { code: 'UNAUTHORIZED', message: '用户名或密码错误' },
-      });
-    }
-
-    const token = createToken(username);
-
-    return void res.json({
-      success: true,
-      data: {
-        token,
-        user: { username, role: 'developer' },
-      },
+  if (!userOk || !passOk) {
+    return void res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: '用户名或密码错误' },
     });
-  })
-);
+  }
+
+  const token = createToken(username);
+
+  return void res.json({
+    success: true,
+    data: {
+      token,
+      user: { username, role: 'developer' },
+    },
+  });
+});
 
 /**
  * GET /auth/me
  * Header: Authorization: Bearer <token>
  */
-router.get(
-  '/me',
-  asyncHandler(async (req: Request, res: Response) => {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    const payload = verifyToken(token);
+router.get('/me', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const payload = verifyToken(token);
 
-    if (!payload) {
-      return void res.status(401).json({
-        success: false,
-        error: { code: 'UNAUTHORIZED', message: 'Token 无效或已过期' },
-      });
-    }
-
-    return void res.json({
-      success: true,
-      data: {
-        user: { username: payload.sub, role: payload.role },
-      },
+  if (!payload) {
+    return void res.status(401).json({
+      success: false,
+      error: { code: 'UNAUTHORIZED', message: 'Token 无效或已过期' },
     });
-  })
-);
+  }
+
+  return void res.json({
+    success: true,
+    data: {
+      user: { username: payload.sub, role: payload.role },
+    },
+  });
+});
 
 export { verifyToken };
 export default router;

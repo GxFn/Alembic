@@ -391,9 +391,9 @@ export default class ProjectGraph {
     const fileSymbols = {
       path: relativePath,
       lang: summary.lang,
-      classes: [] as any[],
-      protocols: [] as any[],
-      categories: [] as any[],
+      classes: [] as string[],
+      protocols: [] as string[],
+      categories: [] as string[],
       imports: summary.imports || [],
     };
 
@@ -406,8 +406,17 @@ export default class ProjectGraph {
         endLine: cls.endLine,
         superClass: cls.superclass || null,
         protocols: cls.protocols || [],
-        properties: [] as any[],
-        methods: [] as any[],
+        properties: [] as { name: string; type: string; attributes?: string[]; line?: number }[],
+        methods: [] as {
+          name: string;
+          selector: string;
+          line?: number;
+          isClassMethod?: boolean;
+          returnType?: string;
+          paramCount?: number;
+          bodyLines?: number;
+          complexity?: number;
+        }[],
         imports: summary.imports || [],
       };
 
@@ -471,9 +480,23 @@ export default class ProjectGraph {
         filePath: relativePath,
         line: proto.line,
         inherits: proto.inherits || [],
-        requiredMethods: [] as any[],
-        optionalMethods: [] as any[],
-        conformers: [] as any[], // 稍后在 buildReverseIndices 中填充
+        requiredMethods: [] as {
+          name: string;
+          selector: string;
+          line?: number;
+          isClassMethod?: boolean;
+          returnType?: string;
+          paramCount?: number;
+        }[],
+        optionalMethods: [] as {
+          name: string;
+          selector: string;
+          line?: number;
+          isClassMethod?: boolean;
+          returnType?: string;
+          paramCount?: number;
+        }[],
+        conformers: [] as string[], // 稍后在 buildReverseIndices 中填充
       };
 
       for (const m of proto.methods || []) {
@@ -511,7 +534,7 @@ export default class ProjectGraph {
           returnType: m.returnType || 'void',
           paramCount: m.paramCount || 0,
         })),
-        properties: [] as any[],
+        properties: [] as { name: string; type: string; attributes?: string[]; line?: number }[],
         protocols: cat.protocols || [],
       };
 
@@ -650,7 +673,7 @@ export default class ProjectGraph {
 
     // 恢复 conformance (Set)
     for (const [cls, protos] of Object.entries(data.conformance || {})) {
-      graph.#conformance.set(cls, new Set(protos as any));
+      graph.#conformance.set(cls, new Set(protos as string[]));
     }
 
     // 恢复 files

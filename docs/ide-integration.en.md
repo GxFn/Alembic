@@ -227,7 +227,7 @@ Common issues:
 
 | Problem | Solution |
 |---------|----------|
-| MCP server fails to start | Verify Node.js ≥ 20, run `asd status` |
+| MCP server fails to start | Verify Node.js ≥ 22, run `asd status` |
 | Cannot find mcp-server.js | Run `npm install -g autosnippet` to reinstall |
 | Permission error | Check API Key configuration in `.env` |
 | IDE not detecting tools | Restart IDE, verify MCP config file path |

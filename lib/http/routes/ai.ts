@@ -33,7 +33,6 @@ import {
   AiToolBody,
   AiTranslateBody,
 } from '../../shared/schemas/http-requests.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 import { createStreamSession, getStreamSession } from '../utils/sse-sessions.js';
 
@@ -53,81 +52,68 @@ function getContainer() {
  * GET /api/v1/ai/lang
  * 获取当前默认 UI 语言（由系统环境变量初始化，前端可覆盖）
  */
-router.get(
-  '/lang',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getContainer();
-    res.json({ success: true, data: { lang: container.getLang() || 'zh' } });
-  })
-);
+router.get('/lang', async (req: Request, res: Response): Promise<void> => {
+  const container = getContainer();
+  res.json({ success: true, data: { lang: container.getLang() || 'zh' } });
+});
 
 /**
  * POST /api/v1/ai/lang
  * 更新默认 UI 语言（前端切语言时同步到服务端）
  */
-router.post(
-  '/lang',
-  validate(AiLangBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { lang } = req.body;
-    const container = getContainer();
-    container.setLang(lang);
-    logger.info(`UI language preference updated to "${lang}"`);
-    res.json({ success: true, data: { lang } });
-  })
-);
+router.post('/lang', validate(AiLangBody), async (req: Request, res: Response): Promise<void> => {
+  const { lang } = req.body;
+  const container = getContainer();
+  container.setLang(lang);
+  logger.info(`UI language preference updated to "${lang}"`);
+  res.json({ success: true, data: { lang } });
+});
 
 /**
  * GET /api/v1/ai/providers
  * 获取可用的 AI 提供商列表
  */
-router.get(
-  '/providers',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    // API Key 环境变量映射（与 AiFactory.autoDetectProvider 保持一致）
-    const KEY_ENVS = {
-      google: 'ASD_GOOGLE_API_KEY',
-      openai: 'ASD_OPENAI_API_KEY',
-      deepseek: 'ASD_DEEPSEEK_API_KEY',
-      claude: 'ASD_CLAUDE_API_KEY',
-    };
+router.get('/providers', async (req: Request, res: Response): Promise<void> => {
+  // API Key 环境变量映射（与 AiFactory.autoDetectProvider 保持一致）
+  const KEY_ENVS = {
+    google: 'ASD_GOOGLE_API_KEY',
+    openai: 'ASD_OPENAI_API_KEY',
+    deepseek: 'ASD_DEEPSEEK_API_KEY',
+    claude: 'ASD_CLAUDE_API_KEY',
+  };
 
-    const providers = [
-      { id: 'google', label: 'Google Gemini', defaultModel: 'gemini-3-flash-preview' },
-      { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-4o' },
-      { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-chat' },
-      { id: 'claude', label: 'Claude', defaultModel: 'claude-3-5-sonnet-20240620' },
-      { id: 'ollama', label: 'Ollama', defaultModel: 'llama3' },
-      { id: 'mock', label: 'Mock (测试)', defaultModel: 'mock-l3' },
-    ].map((p) => ({
-      ...p,
-      hasKey: (KEY_ENVS as Record<string, string>)[p.id]
-        ? !!process.env[(KEY_ENVS as Record<string, string>)[p.id]]
-        : true, // ollama / mock 不需要 key，始终可用
-    }));
+  const providers = [
+    { id: 'google', label: 'Google Gemini', defaultModel: 'gemini-3-flash-preview' },
+    { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-4o' },
+    { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-chat' },
+    { id: 'claude', label: 'Claude', defaultModel: 'claude-3-5-sonnet-20240620' },
+    { id: 'ollama', label: 'Ollama', defaultModel: 'llama3' },
+    { id: 'mock', label: 'Mock (测试)', defaultModel: 'mock-l3' },
+  ].map((p) => ({
+    ...p,
+    hasKey: (KEY_ENVS as Record<string, string>)[p.id]
+      ? !!process.env[(KEY_ENVS as Record<string, string>)[p.id]]
+      : true, // ollama / mock 不需要 key，始终可用
+  }));
 
-    res.json({ success: true, data: providers });
-  })
-);
+  res.json({ success: true, data: providers });
+});
 
 /**
  * GET /api/v1/ai/config
  * 获取当前 AI 配置
  */
-router.get(
-  '/config',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getServiceContainer();
-    const p = container.singletons?.aiProvider as { name?: string; model?: string } | undefined;
-    res.json({
-      success: true,
-      data: {
-        provider: p?.name || '',
-        model: p?.model || '',
-      },
-    });
-  })
-);
+router.get('/config', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
+  const p = container.singletons?.aiProvider as { name?: string; model?: string } | undefined;
+  res.json({
+    success: true,
+    data: {
+      provider: p?.name || '',
+      model: p?.model || '',
+    },
+  });
+});
 
 /**
  * POST /api/v1/ai/config
@@ -136,7 +122,7 @@ router.get(
 router.post(
   '/config',
   validate(AiConfigBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { provider, model } = req.body;
 
     // 创建新的 provider 实例验证配置有效
@@ -170,7 +156,7 @@ router.post(
         name: newProvider.name,
       },
     });
-  })
+  }
 );
 
 /**
@@ -180,7 +166,7 @@ router.post(
 router.post(
   '/summarize',
   validate(AiSummarizeBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { code, language } = req.body;
 
     const container = getContainer();
@@ -196,7 +182,7 @@ router.post(
     }
 
     res.json({ success: true, data: result });
-  })
+  }
 );
 
 /**
@@ -206,7 +192,7 @@ router.post(
 router.post(
   '/translate',
   validate(AiTranslateBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { summary, usageGuide } = req.body;
 
     if (!summary && !usageGuide) {
@@ -242,7 +228,7 @@ router.post(
         warning: `Translation failed: ${(err as Error).message}`,
       });
     }
-  })
+  }
 );
 
 /**
@@ -257,131 +243,127 @@ router.post(
  *   - SSE 流式最终回答 (text:start/delta/end)
  *   - MemoryCoordinator 记忆提取
  */
-router.post(
-  '/chat',
-  validate(AiChatBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { prompt, history, lang, conversationId } = req.body;
+router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): Promise<void> => {
+  const { prompt, history, lang, conversationId } = req.body;
 
-    const container = getContainer();
-    const factory = container.get('agentFactory');
+  const container = getContainer();
+  const factory = container.get('agentFactory');
 
-    // ── 对话持久化: 从 ConversationStore 加载历史 ──
-    let convStore: ConversationStore | null = null;
-    let effectiveHistory = history;
-    let effectiveConvId = conversationId || null;
-    try {
-      const projectRoot = container.get('projectRoot') || process.cwd();
-      convStore = new ConversationStore(projectRoot);
-      if (effectiveConvId) {
-        effectiveHistory = convStore.load(effectiveConvId);
-        convStore.append(effectiveConvId, { role: 'user', content: prompt });
-      } else {
-        effectiveConvId = convStore.create({ category: 'user', title: prompt.slice(0, 50) });
-        convStore.append(effectiveConvId, { role: 'user', content: prompt });
-      }
-    } catch {
-      /* ConversationStore 不可用时静默降级 */
+  // ── 对话持久化: 从 ConversationStore 加载历史 ──
+  let convStore: ConversationStore | null = null;
+  let effectiveHistory = history;
+  let effectiveConvId = conversationId || null;
+  try {
+    const projectRoot = container.get('projectRoot') || process.cwd();
+    convStore = new ConversationStore(projectRoot);
+    if (effectiveConvId) {
+      effectiveHistory = convStore.load(effectiveConvId);
+      convStore.append(effectiveConvId, { role: 'user', content: prompt });
+    } else {
+      effectiveConvId = convStore.create({ category: 'user', title: prompt.slice(0, 50) });
+      convStore.append(effectiveConvId, { role: 'user', content: prompt });
     }
+  } catch {
+    /* ConversationStore 不可用时静默降级 */
+  }
 
-    // ── 项目概况刷新 ──
-    let _projectBriefing = '';
-    try {
-      _projectBriefing = await buildProjectBriefing({ container });
-    } catch {
-      /* 静默降级 */
-    }
+  // ── 项目概况刷新 ──
+  let _projectBriefing = '';
+  try {
+    _projectBriefing = await buildProjectBriefing({ container });
+  } catch {
+    /* 静默降级 */
+  }
 
-    // ── 创建 ContextWindow ──
-    const _contextWindow = factory.createContextWindow({ isSystem: false });
+  // ── 创建 ContextWindow ──
+  const _contextWindow = factory.createContextWindow({ isSystem: false });
 
-    // ── 创建 Runtime 并注入 onProgress ──
-    const message = AgentMessage.fromHttp(req);
-    // 加载持久化历史到 message
-    if (effectiveHistory.length > 0) {
-      message.session.history = effectiveHistory;
-    }
+  // ── 创建 Runtime 并注入 onProgress ──
+  const message = AgentMessage.fromHttp(req);
+  // 加载持久化历史到 message
+  if (effectiveHistory.length > 0) {
+    message.session.history = effectiveHistory;
+  }
 
-    const runtime = factory.createChat({
-      lang,
-      onProgress: (event: Record<string, unknown>) => {
-        // SSE 流式进度 (如果前端通过 SSE 建立了连接)
-        try {
-          const sessionId = req.body.sseSessionId;
-          if (sessionId) {
-            const session = getStreamSession(sessionId);
-            if (session) {
-              session.send(event);
-            }
-          }
-        } catch {
-          /* SSE 不可用时静默 */
-        }
-      },
-    });
-    const result = await runtime.execute(message);
-
-    // ── 持久化 assistant 回复 ──
-    if (convStore && effectiveConvId && result.reply) {
+  const runtime = factory.createChat({
+    lang,
+    onProgress: (event: Record<string, unknown>) => {
+      // SSE 流式进度 (如果前端通过 SSE 建立了连接)
       try {
-        convStore.append(effectiveConvId, { role: 'assistant', content: result.reply });
+        const sessionId = req.body.sseSessionId;
+        if (sessionId) {
+          const session = getStreamSession(sessionId);
+          if (session) {
+            session.send(event);
+          }
+        }
       } catch {
-        /* 静默降级 */
+        /* SSE 不可用时静默 */
       }
-    }
+    },
+  });
+  const result = await runtime.execute(message);
 
-    // ── MemoryCoordinator: 提取记忆 ──
+  // ── 持久化 assistant 回复 ──
+  if (convStore && effectiveConvId && result.reply) {
     try {
-      const memoryCoordinator = container.get('memoryCoordinator');
-      if (memoryCoordinator) {
-        memoryCoordinator.extractFromConversation?.(prompt, result.reply, 'user');
-      }
+      convStore.append(effectiveConvId, { role: 'assistant', content: result.reply });
     } catch {
       /* 静默降级 */
     }
+  }
 
-    // ── Token 用量持久化 ──
-    try {
-      const tokenStore = container.get('tokenUsageStore');
-      if (tokenStore && result.tokenUsage) {
-        const aiProvider = container.singletons?.aiProvider as
-          | { name?: string; model?: string }
-          | undefined;
-        tokenStore.record({
-          source: 'user',
-          dimension: null,
-          provider: aiProvider?.name || null,
-          model: aiProvider?.model || null,
-          inputTokens: result.tokenUsage.input || 0,
-          outputTokens: result.tokenUsage.output || 0,
-          durationMs: result.durationMs || 0,
-          toolCalls: result.toolCalls?.length || 0,
-          sessionId: effectiveConvId,
-        });
-        // 通知前端 token 用量变化
-        try {
-          const realtime = container.get('realtimeService');
-          realtime?.broadcastTokenUsageUpdated?.();
-        } catch {
-          /* optional */
-        }
-      }
-    } catch {
-      /* token logging should never break execution */
+  // ── MemoryCoordinator: 提取记忆 ──
+  try {
+    const memoryCoordinator = container.get('memoryCoordinator');
+    if (memoryCoordinator) {
+      memoryCoordinator.extractFromConversation?.(prompt, result.reply, 'user');
     }
+  } catch {
+    /* 静默降级 */
+  }
 
-    res.json({
-      success: true,
-      data: {
-        reply: result.reply,
-        toolCalls: result.toolCalls,
-        iterations: result.iterations || null,
-        conversationId: effectiveConvId,
-        tokenUsage: result.tokenUsage || null,
-      },
-    });
-  })
-);
+  // ── Token 用量持久化 ──
+  try {
+    const tokenStore = container.get('tokenUsageStore');
+    if (tokenStore && result.tokenUsage) {
+      const aiProvider = container.singletons?.aiProvider as
+        | { name?: string; model?: string }
+        | undefined;
+      tokenStore.record({
+        source: 'user',
+        dimension: null,
+        provider: aiProvider?.name || null,
+        model: aiProvider?.model || null,
+        inputTokens: result.tokenUsage.input || 0,
+        outputTokens: result.tokenUsage.output || 0,
+        durationMs: result.durationMs || 0,
+        toolCalls: result.toolCalls?.length || 0,
+        sessionId: effectiveConvId,
+      });
+      // 通知前端 token 用量变化
+      try {
+        const realtime = container.get('realtimeService');
+        realtime?.broadcastTokenUsageUpdated?.();
+      } catch {
+        /* optional */
+      }
+    }
+  } catch {
+    /* token logging should never break execution */
+  }
+
+  res.json({
+    success: true,
+    data: {
+      reply: result.reply,
+      toolCalls: result.toolCalls,
+      iterations: result.iterations || null,
+      conversationId: effectiveConvId,
+      tokenUsage: result.tokenUsage || null,
+    },
+  });
+});
 
 /**
  * POST /api/v1/ai/agent/tool
@@ -391,7 +373,7 @@ router.post(
 router.post(
   '/agent/tool',
   validate(AiToolBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { tool, params } = req.body;
 
     const container = getContainer();
@@ -399,7 +381,7 @@ router.post(
     const result = await factory.invokeAgent(tool, params);
 
     res.json({ success: true, data: result });
-  })
+  }
 );
 
 /**
@@ -422,7 +404,7 @@ const DAG_TASK_HANDLERS = {
 router.post(
   '/agent/task',
   validate(AiTaskBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { task, params } = req.body;
 
     const container = getContainer();
@@ -448,41 +430,38 @@ router.post(
     const result = await factory.invokeAgent(task, params);
 
     res.json({ success: true, data: result });
-  })
+  }
 );
 
 /**
  * GET /api/v1/ai/agent/capabilities
  * 获取 Agent 能力清单（工具列表 + 任务列表）
  */
-router.get(
-  '/agent/capabilities',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getContainer();
-    const toolRegistry = container.get('toolRegistry');
-    const tools = toolRegistry.getToolSchemas();
-    const presets = Object.entries(PRESETS).map(([name, p]) => ({
-      name,
-      description: p.description,
-      capabilities: p.capabilities,
-      strategy: p.strategy?.type || 'single',
-    }));
-    res.json({
-      success: true,
-      data: {
-        tools,
-        presets,
-        tasks: [
-          { name: 'check_and_submit', description: '提交候选前自动查重 + 质量预评' },
-          { name: 'discover_all_relations', description: '批量发现 Recipe 之间的知识图谱关系' },
-          { name: 'full_enrich', description: '批量 AI 语义补全候选字段' },
-          { name: 'quality_audit', description: '批量质量审计全部 Recipe，标记低分项' },
-          { name: 'guard_full_scan', description: '用全部 Guard 规则扫描指定代码，生成完整报告' },
-        ],
-      },
-    });
-  })
-);
+router.get('/agent/capabilities', async (req: Request, res: Response): Promise<void> => {
+  const container = getContainer();
+  const toolRegistry = container.get('toolRegistry');
+  const tools = toolRegistry.getToolSchemas();
+  const presets = Object.entries(PRESETS).map(([name, p]) => ({
+    name,
+    description: p.description,
+    capabilities: p.capabilities,
+    strategy: p.strategy?.type || 'single',
+  }));
+  res.json({
+    success: true,
+    data: {
+      tools,
+      presets,
+      tasks: [
+        { name: 'check_and_submit', description: '提交候选前自动查重 + 质量预评' },
+        { name: 'discover_all_relations', description: '批量发现 Recipe 之间的知识图谱关系' },
+        { name: 'full_enrich', description: '批量 AI 语义补全候选字段' },
+        { name: 'quality_audit', description: '批量质量审计全部 Recipe，标记低分项' },
+        { name: 'guard_full_scan', description: '用全部 Guard 规则扫描指定代码，生成完整报告' },
+      ],
+    },
+  });
+});
 
 /**
  * POST /api/v1/ai/format-usage-guide
@@ -492,7 +471,7 @@ router.get(
 router.post(
   '/format-usage-guide',
   validate(AiFormatUsageGuideBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { text } = req.body;
 
     if (!text) {
@@ -507,7 +486,7 @@ router.post(
     formatted = formatted.replace(/```(\w+)?\n/g, '\n```$1\n');
 
     res.json({ success: true, data: { formatted } });
-  })
+  }
 );
 
 // ═══════════════════════════════════════════════════════
@@ -588,14 +567,11 @@ function parseLlmEnv(envPath: string) {
  * GET /api/v1/ai/env-config
  * 读取用户项目 .env 中的 LLM 配置
  */
-router.get(
-  '/env-config',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const envPath = _getProjectEnvPath();
-    const result = parseLlmEnv(envPath);
-    res.json({ success: true, data: result });
-  })
-);
+router.get('/env-config', async (req: Request, res: Response): Promise<void> => {
+  const envPath = _getProjectEnvPath();
+  const result = parseLlmEnv(envPath);
+  res.json({ success: true, data: result });
+});
 
 /**
  * POST /api/v1/ai/env-config
@@ -606,7 +582,7 @@ router.get(
 router.post(
   '/env-config',
   validate(AiEnvConfigBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { provider, model, apiKey, proxy } = req.body;
 
     const envPath = _getProjectEnvPath();
@@ -684,7 +660,7 @@ router.post(
 
     const result = parseLlmEnv(envPath);
     res.json({ success: true, data: result });
-  })
+  }
 );
 
 // ═══════════════════════════════════════════════════════
@@ -714,7 +690,7 @@ router.post(
 router.post(
   '/chat/stream',
   validate(AiStreamBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { prompt, history, lang } = req.body;
 
     const container = getContainer();
@@ -796,7 +772,7 @@ router.post(
         });
         session.error((err as Error).message, 'RUNTIME_ERROR');
       });
-  })
+  }
 );
 
 /**
@@ -883,32 +859,29 @@ router.get('/chat/events/:sessionId', (req, res) => {
  * GET /api/v1/ai/token-usage
  * 近 7 日 Token 消耗报告（按日 + 按来源 + 总计）
  */
-router.get(
-  '/token-usage',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getServiceContainer();
-    let tokenStore: { getLast7DaysReport(): unknown };
-    try {
-      tokenStore = container.get('tokenUsageStore');
-    } catch {
-      return void res.json({
-        success: true,
-        data: {
-          daily: [],
-          bySource: [],
-          summary: {
-            input_tokens: 0,
-            output_tokens: 0,
-            total_tokens: 0,
-            call_count: 0,
-            avg_per_call: 0,
-          },
+router.get('/token-usage', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
+  let tokenStore: { getLast7DaysReport(): unknown };
+  try {
+    tokenStore = container.get('tokenUsageStore');
+  } catch {
+    return void res.json({
+      success: true,
+      data: {
+        daily: [],
+        bySource: [],
+        summary: {
+          input_tokens: 0,
+          output_tokens: 0,
+          total_tokens: 0,
+          call_count: 0,
+          avg_per_call: 0,
         },
-      });
-    }
-    const report = tokenStore.getLast7DaysReport();
-    res.json({ success: true, data: report });
-  })
-);
+      },
+    });
+  }
+  const report = tokenStore.getLast7DaysReport();
+  res.json({ success: true, data: report });
+});
 
 export default router;

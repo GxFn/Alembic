@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { notify } from './utils/notification';
-import { Recipe, ProjectData, SPMTarget, ExtractedRecipe, ScanResultItem, GuardAuditResult, KnowledgeEntry } from './types';
+import { Recipe, ProjectData, SPMTarget, ExtractedRecipe, ScanResultItem, GuardAuditResult, KnowledgeEntry, ScannedFile } from './types';
 import { TabType, validTabs } from './constants';
 import { isShellTarget, isSilentTarget, isPendingTarget, getWritePermissionErrorMsg, getSaveErrorMsg } from './utils';
 import { getErrorMessage, isAbortError, isTimeoutError, isAiError, isAxiosCancel } from './utils/error';
@@ -151,7 +151,7 @@ const App: React.FC = () => {
   const [selectedTargetName, setSelectedTargetName] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<{ current: number, total: number, status: string }>({ current: 0, total: 0, status: '' });
-  const [scanFileList, setScanFileList] = useState<{ name: string; path: string }[]>([]);
+  const [scanFileList, setScanFileList] = useState<ScannedFile[]>([]);
   const [scanResults, setScanResults] = useState<ScanResultItem[]>([]);
   const [guardAudit, setGuardAudit] = useState<GuardAuditResult | null>(null);
 
@@ -537,7 +537,9 @@ const App: React.FC = () => {
       scanMode: 'target' as const,
     }));
     setScanResults(enrichedResults);
-    if (scannedFiles.length > 0) setScanFileList(scannedFiles.map((f: string) => ({ name: f.split('/').pop() || f, path: f })));
+    if (scannedFiles.length > 0) {
+      setScanFileList(scannedFiles);
+    }
 
     fetchData();
     if (recipes.length > 0) {

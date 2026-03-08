@@ -469,7 +469,9 @@ export class GoogleGeminiProvider extends AiProvider {
 
         let detail = '';
         try {
-          const j = await res.json();
+          const j = (await res.json()) as Record<string, unknown> & {
+            error?: { message?: string };
+          };
           detail = j?.error?.message || JSON.stringify(j).slice(0, 300);
         } catch {
           /* ignore */
@@ -480,7 +482,7 @@ export class GoogleGeminiProvider extends AiProvider {
         );
         throw err;
       }
-      return await res.json();
+      return (await res.json()) as ApiResponse;
     } finally {
       clearTimeout(timer);
     }

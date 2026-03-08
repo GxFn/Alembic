@@ -15,21 +15,15 @@ import path from 'node:path';
 import { getProjectSkillsPath } from '#infra/config/Paths.js';
 import pathGuard from '#shared/PathGuard.js';
 import { SKILLS_DIR } from '#shared/package-root.js';
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { McpContext } from './types.js';
-
-/**
- * 获取用户项目根目录（运行时动态解析）
- */
-function _getProjectRoot() {
-  return process.env.ASD_PROJECT_DIR || process.cwd();
-}
 
 /**
  * 获取项目级 Skills 目录（运行时动态解析）
  * 路径: {projectRoot}/AutoSnippet/skills/ — 跟随项目走
  */
-function _getProjectSkillsDir() {
-  return getProjectSkillsPath(_getProjectRoot());
+function _getProjectSkillsDir(ctx?: McpContext) {
+  return getProjectSkillsPath(resolveProjectRoot(ctx?.container));
 }
 
 /**
@@ -96,7 +90,7 @@ const SKILL_USE_CASES: Record<string, string> = {
  *
  * @returns {string} JSON envelope
  */
-export function listSkills() {
+export function listSkills(ctx?: McpContext | null) {
   try {
     const skillMap = new Map();
 
@@ -119,7 +113,7 @@ export function listSkills() {
 
     // 项目级 Skills（覆盖同名内置）
     try {
-      const projectSkillsDir = _getProjectSkillsDir();
+      const projectSkillsDir = _getProjectSkillsDir(ctx ?? undefined);
       const projectDirs = fs
         .readdirSync(projectSkillsDir, { withFileTypes: true })
         .filter((d) => d.isDirectory())
@@ -186,7 +180,7 @@ export function listSkills() {
  * @param {object} args  { skillName: string, section?: string }
  * @returns {string} JSON envelope
  */
-export function loadSkill(_ctx: McpContext | null, args: { skillName?: string; section?: string }) {
+export function loadSkill(ctx: McpContext | null, args: { skillName?: string; section?: string }) {
   const { skillName, section } = args || {};
 
   if (!skillName) {
@@ -197,7 +191,7 @@ export function loadSkill(_ctx: McpContext | null, args: { skillName?: string; s
   }
 
   // 项目级 Skills 优先
-  const projectSkillsDir = _getProjectSkillsDir();
+  const projectSkillsDir = _getProjectSkillsDir(ctx ?? undefined);
   const projectSkillPath = path.join(projectSkillsDir, skillName, 'SKILL.md');
   const builtinSkillPath = path.join(SKILLS_DIR, skillName, 'SKILL.md');
   const skillPath = fs.existsSync(projectSkillPath) ? projectSkillPath : builtinSkillPath;
@@ -240,14 +234,18 @@ export function loadSkill(_ctx: McpContext | null, args: { skillName?: string; s
     try {
       fs.readdirSync(SKILLS_DIR, { withFileTypes: true })
         .filter((d) => d.isDirectory())
-        .forEach((d) => available.add(d.name));
+        .forEach((d) => {
+          available.add(d.name);
+        });
     } catch {
       /* skip: SKILLS_DIR may not exist */
     }
     try {
-      fs.readdirSync(_getProjectSkillsDir(), { withFileTypes: true })
+      fs.readdirSync(_getProjectSkillsDir(ctx ?? undefined), { withFileTypes: true })
         .filter((d) => d.isDirectory())
-        .forEach((d) => available.add(d.name));
+        .forEach((d) => {
+          available.add(d.name);
+        });
     } catch {
       /* skip: project skills dir may not exist */
     }
@@ -284,7 +282,7 @@ interface CreateSkillArgs {
   title?: string;
 }
 
-export function createSkill(_ctx: McpContext | null, args: CreateSkillArgs) {
+export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
   const {
     name,
     description,
@@ -326,7 +324,7 @@ export function createSkill(_ctx: McpContext | null, args: CreateSkillArgs) {
   }
 
   // 检查同名项目级 Skill
-  const projectSkillsDir = _getProjectSkillsDir();
+  const projectSkillsDir = _getProjectSkillsDir(ctx ?? undefined);
   const skillDir = path.join(projectSkillsDir, name);
   const skillPath = path.join(skillDir, 'SKILL.md');
   if (fs.existsSync(skillPath) && !overwrite) {
@@ -378,7 +376,7 @@ export function createSkill(_ctx: McpContext | null, args: CreateSkillArgs) {
   }
 
   // ── regenerate 编辑器索引 ──
-  const indexResult = _regenerateEditorIndex();
+  const indexResult = _regenerateEditorIndex(ctx ?? undefined);
 
   // ── 清理 SignalCollector 已创建的 pendingSuggestions ──
   try {
@@ -410,11 +408,11 @@ export function createSkill(_ctx: McpContext | null, args: CreateSkillArgs) {
  *
  * @returns {{ success: boolean, path?: string, skillCount?: number, error?: string }}
  */
-function _regenerateEditorIndex() {
+function _regenerateEditorIndex(ctx?: McpContext) {
   try {
     // 扫描项目级 Skills
     const projectSkills: { name: string; summary: string }[] = [];
-    const projectSkillsDir = _getProjectSkillsDir();
+    const projectSkillsDir = _getProjectSkillsDir(ctx);
     try {
       const dirs = fs
         .readdirSync(projectSkillsDir, { withFileTypes: true })
@@ -428,7 +426,7 @@ function _regenerateEditorIndex() {
       /* no project skills dir */
     }
 
-    const projectRoot = _getProjectRoot();
+    const projectRoot = resolveProjectRoot(ctx?.container);
     const rulesDir = path.join(projectRoot, '.cursor', 'rules');
 
     if (projectSkills.length === 0) {
@@ -483,7 +481,7 @@ function _regenerateEditorIndex() {
  * @param {object} args  { name: string }
  * @returns {string} JSON envelope
  */
-export function deleteSkill(_ctx: McpContext | null, args: { name?: string }) {
+export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
   const { name } = args || {};
 
   if (!name) {
@@ -506,7 +504,7 @@ export function deleteSkill(_ctx: McpContext | null, args: { name?: string }) {
   }
 
   // 检查项目级 Skill 是否存在
-  const projectSkillsDir = _getProjectSkillsDir();
+  const projectSkillsDir = _getProjectSkillsDir(ctx ?? undefined);
   const skillDir = path.join(projectSkillsDir, name);
   if (!fs.existsSync(skillDir)) {
     return JSON.stringify({
@@ -542,7 +540,7 @@ export function deleteSkill(_ctx: McpContext | null, args: { name?: string }) {
   }
 
   // ── regenerate 编辑器索引 ──
-  const indexResult = _regenerateEditorIndex();
+  const indexResult = _regenerateEditorIndex(ctx ?? undefined);
 
   return JSON.stringify({
     success: true,
@@ -573,7 +571,7 @@ interface UpdateSkillArgs {
   content?: string;
 }
 
-export function updateSkill(_ctx: McpContext | null, args: UpdateSkillArgs) {
+export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
   const { name, description, content } = args || {};
 
   if (!name) {
@@ -606,7 +604,7 @@ export function updateSkill(_ctx: McpContext | null, args: UpdateSkillArgs) {
   }
 
   // 检查项目级 Skill 是否存在
-  const projectSkillsDir = _getProjectSkillsDir();
+  const projectSkillsDir = _getProjectSkillsDir(ctx ?? undefined);
   const skillPath = path.join(projectSkillsDir, name, 'SKILL.md');
   if (!fs.existsSync(skillPath)) {
     return JSON.stringify({
@@ -672,7 +670,7 @@ export function updateSkill(_ctx: McpContext | null, args: UpdateSkillArgs) {
   }
 
   // ── regenerate 编辑器索引 ──
-  const indexResult = _regenerateEditorIndex();
+  const indexResult = _regenerateEditorIndex(ctx ?? undefined);
 
   return JSON.stringify({
     success: true,
@@ -706,7 +704,7 @@ export async function suggestSkills(ctx: McpContext) {
     const { SkillAdvisor } = await import('#service/skills/SkillAdvisor.js');
     const dbConn = ctx?.container?.get?.('database') || null;
     const database = dbConn?.getDb?.() || dbConn || null;
-    const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+    const projectRoot = resolveProjectRoot(ctx?.container);
     const advisor = new SkillAdvisor(projectRoot, { database });
     const result = advisor.suggest();
 

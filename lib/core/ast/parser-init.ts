@@ -34,7 +34,6 @@ export async function initParser() {
 
   try {
     // web-tree-sitter ESM: 导出 { Parser, Language, ... } 命名空间
-    // @ts-ignore
     const mod = await import('web-tree-sitter');
     _namespace = mod.default || mod;
     // v0.25 导出 { Parser, Language, ... }，需要提取 Parser 类

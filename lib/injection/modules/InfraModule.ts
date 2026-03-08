@@ -10,6 +10,7 @@
  * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { KnowledgeSyncService } from '../../cli/KnowledgeSyncService.js';
 import Gateway from '../../core/gateway/Gateway.js';
 import AuditLogger from '../../infrastructure/audit/AuditLogger.js';
@@ -38,11 +39,11 @@ export function register(c: ServiceContainer) {
 
   c.register('logger', () => Logger.getInstance());
 
-  c.singleton(
-    'auditStore',
-    (ct: ServiceContainer) =>
-      new AuditStore(ct.get('database') as ConstructorParameters<typeof AuditStore>[0])
-  );
+  c.singleton('auditStore', (ct: ServiceContainer) => {
+    const db = ct.get('database') as ConstructorParameters<typeof AuditStore>[0];
+    const drizzle = (db as unknown as { getDrizzle(): unknown }).getDrizzle();
+    return new AuditStore(db, drizzle as ConstructorParameters<typeof AuditStore>[1]);
+  });
   c.singleton(
     'auditLogger',
     (ct: ServiceContainer) =>
@@ -68,29 +69,31 @@ export function register(c: ServiceContainer) {
 
   // ═══ Repositories ═══
 
-  c.singleton(
-    'knowledgeRepository',
-    (ct: ServiceContainer) =>
-      new KnowledgeRepositoryImpl(
-        ct.get('database') as ConstructorParameters<typeof KnowledgeRepositoryImpl>[0]
-      )
-  );
+  c.singleton('knowledgeRepository', (ct: ServiceContainer) => {
+    const db = ct.get('database') as ConstructorParameters<typeof KnowledgeRepositoryImpl>[0];
+    const drizzle = (db as unknown as { getDrizzle(): unknown }).getDrizzle();
+    return new KnowledgeRepositoryImpl(
+      db,
+      drizzle as ConstructorParameters<typeof KnowledgeRepositoryImpl>[1]
+    );
+  });
 
   c.singleton('knowledgeFileWriter', (ct: ServiceContainer) => {
-    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
+    const projectRoot = resolveProjectRoot(ct);
     return new KnowledgeFileWriter(projectRoot);
   });
 
   c.singleton('knowledgeSyncService', (ct: ServiceContainer) => {
-    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
+    const projectRoot = resolveProjectRoot(ct);
     return new KnowledgeSyncService(projectRoot);
   });
 
-  c.singleton(
-    'taskRepository',
-    (ct: ServiceContainer) =>
-      new TaskRepositoryImpl(
-        ct.get('database') as ConstructorParameters<typeof TaskRepositoryImpl>[0]
-      )
-  );
+  c.singleton('taskRepository', (ct: ServiceContainer) => {
+    const db = ct.get('database') as ConstructorParameters<typeof TaskRepositoryImpl>[0];
+    const drizzle = (db as unknown as { getDrizzle(): unknown }).getDrizzle();
+    return new TaskRepositoryImpl(
+      db,
+      drizzle as ConstructorParameters<typeof TaskRepositoryImpl>[1]
+    );
+  });
 }

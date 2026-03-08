@@ -325,7 +325,7 @@ export class OpenAiProvider extends AiProvider {
         err.status = res.status;
         throw err;
       }
-      return await res.json();
+      return (await res.json()) as ApiResponse;
     } finally {
       clearTimeout(timer);
     }

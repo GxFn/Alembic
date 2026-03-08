@@ -343,7 +343,7 @@ export class HttpServer {
     });
 
     // 404 处理（使用 app.all 确保 layer.route 存在，mountDashboard 依赖此属性定位并重排路由栈）
-    this.app.all('*', (req: Request, res: Response) => {
+    this.app.all('{*path}', (req: Request, res: Response) => {
       res.status(404).json({
         success: false,
         error: {
@@ -371,95 +371,95 @@ export class HttpServer {
    * 启动服务器
    */
   async start() {
-    return new Promise((resolve, reject) => {
-      try {
-        this.server = this.app.listen(this.config.port, this.config.host, () => {
-          this.logger.info('HTTP Server started', {
-            host: this.config.host,
-            port: this.config.port,
-            url: `http://${this.config.host}:${this.config.port}`,
-            timestamp: new Date().toISOString(),
-          });
-
-          // 初始化 WebSocket 服务（使用 HTTP 服务器实例）
-          try {
-            this.realtimeService = initRealtimeService(this.server!) as unknown as Record<
-              string,
-              unknown
-            >;
-            this.logger.info('Realtime service initialized');
-          } catch (error: unknown) {
-            this.logger.warn('Failed to initialize realtime service', {
-              error: (error as Error).message,
-            });
-          }
-
-          resolve(this.server);
+    const { promise, resolve, reject } = Promise.withResolvers();
+    try {
+      this.server = this.app.listen(this.config.port, this.config.host, () => {
+        this.logger.info('HTTP Server started', {
+          host: this.config.host,
+          port: this.config.port,
+          url: `http://${this.config.host}:${this.config.port}`,
+          timestamp: new Date().toISOString(),
         });
 
-        this.server.on('error', (error: NodeJS.ErrnoException) => {
-          this.logger.error('HTTP Server error', {
-            error: error.message,
-            code: error.code,
-            timestamp: new Date().toISOString(),
+        // 初始化 WebSocket 服务（使用 HTTP 服务器实例）
+        try {
+          this.realtimeService = initRealtimeService(this.server!) as unknown as Record<
+            string,
+            unknown
+          >;
+          this.logger.info('Realtime service initialized');
+        } catch (error: unknown) {
+          this.logger.warn('Failed to initialize realtime service', {
+            error: (error as Error).message,
           });
-          reject(error);
-        });
-      } catch (error: unknown) {
-        this.logger.error('Failed to start HTTP Server', {
-          error: (error as Error).message,
+        }
+
+        resolve(this.server);
+      });
+
+      this.server.on('error', (error: NodeJS.ErrnoException) => {
+        this.logger.error('HTTP Server error', {
+          error: error.message,
+          code: error.code,
           timestamp: new Date().toISOString(),
         });
         reject(error);
-      }
-    });
+      });
+    } catch (error: unknown) {
+      this.logger.error('Failed to start HTTP Server', {
+        error: (error as Error).message,
+        timestamp: new Date().toISOString(),
+      });
+      reject(error);
+    }
+    return promise;
   }
 
   /**
    * 停止服务器
    */
   async stop() {
-    return new Promise((resolve, reject) => {
-      if (!this.server) {
-        return resolve(undefined);
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    if (!this.server) {
+      return resolve(undefined);
+    }
+
+    // 停止性能监控
+    if (this.performanceMonitor) {
+      this.performanceMonitor.shutdown();
+    }
+
+    // 停止错误追踪
+    if (this.errorTracker) {
+      this.errorTracker.shutdown();
+    }
+
+    // 关闭 WebSocket 连接
+    if (this.realtimeService && typeof this.realtimeService.shutdown === 'function') {
+      try {
+        this.realtimeService.shutdown();
+      } catch (err: unknown) {
+        this.logger.warn('Error shutting down realtime service', {
+          error: (err as Error).message,
+        });
       }
+    }
 
-      // 停止性能监控
-      if (this.performanceMonitor) {
-        this.performanceMonitor.shutdown();
-      }
-
-      // 停止错误追踪
-      if (this.errorTracker) {
-        this.errorTracker.shutdown();
-      }
-
-      // 关闭 WebSocket 连接
-      if (this.realtimeService && typeof this.realtimeService.shutdown === 'function') {
-        try {
-          this.realtimeService.shutdown();
-        } catch (err: unknown) {
-          this.logger.warn('Error shutting down realtime service', {
-            error: (err as Error).message,
-          });
-        }
-      }
-
-      this.server.close((error) => {
-        if (error) {
-          this.logger.error('Error stopping HTTP Server', {
-            error: error.message,
-            timestamp: new Date().toISOString(),
-          });
-          return reject(error);
-        }
-
-        this.logger.info('HTTP Server stopped', {
+    this.server.close((error) => {
+      if (error) {
+        this.logger.error('Error stopping HTTP Server', {
+          error: error.message,
           timestamp: new Date().toISOString(),
         });
-        resolve(undefined);
+        return reject(error);
+      }
+
+      this.logger.info('HTTP Server stopped', {
+        timestamp: new Date().toISOString(),
       });
+      resolve(undefined);
     });
+    return promise;
   }
 
   /**
@@ -494,7 +494,7 @@ export class HttpServer {
     this.app.use(express.static(distDir));
 
     // SPA fallback: 非 API / 非 socket.io 请求返回 index.html
-    this.app.get('*', (req: Request, res: Response, next: NextFunction) => {
+    this.app.get('{*path}', (req: Request, res: Response, next: NextFunction) => {
       if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
         return next();
       }

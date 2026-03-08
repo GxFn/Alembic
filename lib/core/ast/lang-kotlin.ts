@@ -132,8 +132,9 @@ function _walkKtClassBody(body: any, ctx: any, className: any) {
         break;
       }
       case 'class_declaration': {
-        const inner = _parseKtClass(child);
-        (inner as any).outerClass = className;
+        const inner: ReturnType<typeof _parseKtClass> & { outerClass?: string } =
+          _parseKtClass(child);
+        inner.outerClass = className;
         ctx.classes.push(inner);
         // Phase 5.3: Extract primary constructor params for inner classes too
         _extractKtConstructorProperties(child, ctx, inner.name);

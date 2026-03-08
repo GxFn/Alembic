@@ -13,10 +13,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = import.meta.dirname;
 const _PROJECT_ROOT = path.resolve(__dirname, '../..');
 
 // ═══════════════════════════════════════════════════════
@@ -234,7 +232,8 @@ export function createExpiredToken(payload = {}, secret = DEFAULT_TOKEN_SECRET) 
 //  Port Allocation
 // ═══════════════════════════════════════════════════════
 
-let _portBase = 3050 + (parseInt(process.env.VITEST_POOL_ID || process.env.JEST_WORKER_ID, 10) || 0) * 100;
+let _portBase =
+  3050 + (parseInt(process.env.VITEST_POOL_ID || process.env.JEST_WORKER_ID, 10) || 0) * 100;
 
 /**
  * 获取下一个可用测试端口（避免与其他测试文件冲突）

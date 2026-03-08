@@ -12,7 +12,6 @@
 import express, { type Request, type Response } from 'express';
 import { TaskDispatchBody } from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 
 /** Task record shape from TaskGraphService */
@@ -69,38 +68,34 @@ const router = express.Router();
  * 响应:
  *   { success: boolean, data?: unknown, message?: string }
  */
-router.post(
-  '/',
-  validate(TaskDispatchBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const container = getServiceContainer();
-    const taskService = container.get('taskGraphService') as TaskGraphSvc;
+router.post('/', validate(TaskDispatchBody), async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
+  const taskService = container.get('taskGraphService') as TaskGraphSvc;
 
-    if (!taskService) {
-      return void res.status(503).json({
-        success: false,
-        message: 'TaskGraphService not available',
-      });
+  if (!taskService) {
+    return void res.status(503).json({
+      success: false,
+      message: 'TaskGraphService not available',
+    });
+  }
+
+  const { operation, ...params } = req.body;
+
+  try {
+    const result = await _dispatch(taskService, operation, params);
+    if (result.success === false) {
+      return void res.status(400).json(result);
     }
 
-    const { operation, ...params } = req.body;
-
-    try {
-      const result = await _dispatch(taskService, operation, params);
-      if (result.success === false) {
-        return void res.status(400).json(result);
-      }
-
-      return void res.json(result);
-    } catch (err: unknown) {
-      return void res.status(400).json({
-        success: false,
-        message: (err as Error).message,
-        operation,
-      });
-    }
-  })
-);
+    return void res.json(result);
+  } catch (err: unknown) {
+    return void res.status(400).json({
+      success: false,
+      message: (err as Error).message,
+      operation,
+    });
+  }
+});
 
 /**
  * 操作路由 — 与 MCP handler/task.js 保持一致

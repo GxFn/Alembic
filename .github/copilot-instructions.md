@@ -21,7 +21,7 @@
 - **正式脚本**：保存到 `scripts/` 或 `bin/`（跟随 git）
 
 ### 技术栈与编码约定
-- **语言**：TypeScript (ES2022, NodeNext)，Node.js ≥ 20
+- **语言**：TypeScript (ES2024, NodeNext)，Node.js ≥ 22
 - **模块系统**：ESM (`"type": "module"`)，import 路径必须带 `.js` 后缀（如 `import foo from './foo.js'`）
 - **路径别名**：使用 `#shared/*`、`#infra/*`、`#service/*`、`#domain/*`、`#inject/*`、`#core/*`、`#external/*`、`#platform/*`、`#repo/*`、`#types/*`、`#http/*`（定义在 package.json imports 字段）
 - **Lint / Format**：Biome 2.0（不使用 Prettier/ESLint），`npm run lint` 检查，`npm run lint:fix` 修复

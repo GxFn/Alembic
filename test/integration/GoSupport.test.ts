@@ -16,9 +16,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = import.meta.dirname;
 const GITHUB_DIR = path.resolve(__dirname, '..', '..', '..');
 const GIN_ROOT = path.join(GITHUB_DIR, 'gin');
 const GIN_EXISTS = fs.existsSync(GIN_ROOT);
@@ -72,21 +71,33 @@ async function collectGoFiles(maxFiles = 500) {
       const fileList = await discoverer.getTargetFiles(t);
       for (const f of fileList) {
         const fp = typeof f === 'string' ? f : f.path;
-        if (seenPaths.has(fp)) continue;
+        if (seenPaths.has(fp)) {
+          continue;
+        }
         seenPaths.add(fp);
         try {
           const content = fs.readFileSync(fp, 'utf8');
           files.push({
             name: typeof f === 'string' ? path.basename(f) : f.name || path.basename(fp),
             relativePath:
-              typeof f === 'object' && f.relativePath ? f.relativePath : path.relative(GIN_ROOT, fp),
+              typeof f === 'object' && f.relativePath
+                ? f.relativePath
+                : path.relative(GIN_ROOT, fp),
             content,
           });
-        } catch { /* skip unreadable */ }
-        if (files.length >= maxFiles) break;
+        } catch {
+          /* skip unreadable */
+        }
+        if (files.length >= maxFiles) {
+          break;
+        }
       }
-    } catch { /* skip target */ }
-    if (files.length >= maxFiles) break;
+    } catch {
+      /* skip target */
+    }
+    if (files.length >= maxFiles) {
+      break;
+    }
   }
   return files;
 }
@@ -99,7 +110,9 @@ describe('L0: GoDiscoverer (gin)', () => {
   let targets;
 
   beforeAll(async () => {
-    if (!GIN_EXISTS) return;
+    if (!GIN_EXISTS) {
+      return;
+    }
     resetDiscovererRegistry();
     const registry = getDiscovererRegistry();
     discoverer = await registry.detect(GIN_ROOT);
@@ -108,24 +121,32 @@ describe('L0: GoDiscoverer (gin)', () => {
   });
 
   it('should use GoDiscoverer', () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     expect(discoverer.id).toBe('go');
   });
 
   it('should have >= 1 targets', () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     expect(targets.length).toBeGreaterThanOrEqual(1);
   });
 
   it('should collect Go source files (>= 30)', async () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     const files = await collectGoFiles();
     const goFiles = files.filter((f) => f.name.endsWith('.go'));
     expect(goFiles.length).toBeGreaterThanOrEqual(30);
   });
 
   it('should detect gin framework in targets', () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     // GoDiscoverer should detect gin as framework from go.mod
     const frameworks = targets
       .map((t) => (typeof t === 'object' ? t.framework : null))
@@ -136,7 +157,9 @@ describe('L0: GoDiscoverer (gin)', () => {
   });
 
   it('should return dependency graph without error', async () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     const depGraph = await discoverer.getDependencyGraph();
     expect(depGraph).toBeDefined();
     // Go modules should produce dependency edges
@@ -154,71 +177,94 @@ describe('L1: Go AST Analysis (gin)', () => {
   let summary;
 
   beforeAll(async () => {
-    if (!GIN_EXISTS) return;
+    if (!GIN_EXISTS) {
+      return;
+    }
     files = await collectGoFiles();
     summary = analyzeProject(files, 'go');
   }, 60000);
 
   it('should produce AST summary', () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     expect(summary).toBeDefined();
     expect(summary).not.toBeNull();
   });
 
   it('should extract structs (classes) >= 5', () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     expect(summary.classes.length).toBeGreaterThanOrEqual(5);
   });
 
   it('should extract interfaces (protocols) >= 2', () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     expect(summary.protocols.length).toBeGreaterThanOrEqual(2);
   });
 
   it('should extract func declarations (methods) >= 20', () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     // methods are in fileSummaries, not top-level summary
     const totalMethods = summary.fileSummaries.reduce(
-      (sum, fs) => sum + (fs.methods?.length || 0), 0
+      (sum, fs) => sum + (fs.methods?.length || 0),
+      0
     );
     expect(totalMethods).toBeGreaterThanOrEqual(20);
   });
 
   it('should find Engine struct (gin core)', () => {
-    if (!skipIfNoGin()) return;
-    const engineStruct = summary.classes.find((c) =>
-      c.name === 'Engine' || c.name?.includes('Engine')
+    if (!skipIfNoGin()) {
+      return;
+    }
+    const engineStruct = summary.classes.find(
+      (c) => c.name === 'Engine' || c.name?.includes('Engine')
     );
     expect(engineStruct).toBeDefined();
   });
 
   it('should find Context struct (gin core)', () => {
-    if (!skipIfNoGin()) return;
-    const ctxStruct = summary.classes.find((c) =>
-      c.name === 'Context' || c.name?.includes('Context')
+    if (!skipIfNoGin()) {
+      return;
+    }
+    const ctxStruct = summary.classes.find(
+      (c) => c.name === 'Context' || c.name?.includes('Context')
     );
     expect(ctxStruct).toBeDefined();
   });
 
   it('should find RouterGroup struct', () => {
-    if (!skipIfNoGin()) return;
-    const rgStruct = summary.classes.find((c) =>
-      c.name === 'RouterGroup' || c.name?.includes('RouterGroup')
+    if (!skipIfNoGin()) {
+      return;
+    }
+    const rgStruct = summary.classes.find(
+      (c) => c.name === 'RouterGroup' || c.name?.includes('RouterGroup')
     );
     expect(rgStruct).toBeDefined();
   });
 
   it('should have valid patternStats', () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     expect(summary.patternStats).toBeDefined();
     expect(typeof summary.patternStats).toBe('object');
   });
 
   it('should analyze individual file without throwing', () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
     // Read gin.go directly
     const ginGo = path.join(GIN_ROOT, 'gin.go');
-    if (!fs.existsSync(ginGo)) return;
+    if (!fs.existsSync(ginGo)) {
+      return;
+    }
     const content = fs.readFileSync(ginGo, 'utf8');
     const result = analyzeFile(content, 'go');
     expect(result).not.toBeNull();
@@ -310,14 +356,16 @@ describe('L2: LanguageService & DimensionCopy (Go)', () => {
   });
 
   it('DimensionCopy.applyMulti for Go — injects Go-specific guidance', () => {
-    const dims = [
-      { id: 'code-standard', label: '代码规范', guide: 'default guide' },
-    ];
+    const dims = [{ id: 'code-standard', label: '代码规范', guide: 'default guide' }];
     DimensionCopy.applyMulti(dims, 'go', []);
     // Should have Go-specific keywords in guide
     const guide = dims[0].guide.toLowerCase();
-    const hasGoContent = guide.includes('go') || guide.includes('goroutine') ||
-      guide.includes('error') || guide.includes('gofmt') || guide.includes('interface') ||
+    const hasGoContent =
+      guide.includes('go') ||
+      guide.includes('goroutine') ||
+      guide.includes('error') ||
+      guide.includes('gofmt') ||
+      guide.includes('interface') ||
       guide !== 'default guide';
     expect(hasGoContent).toBe(true);
   });
@@ -418,10 +466,12 @@ describe('L5: Go Infrastructure Support', () => {
 
     // Verify Go extraction works through handler invocation
     // Create a temp Go file
-    const tmpDir = path.join(__dirname, '..', '_tmp_go_test_' + Date.now());
+    const tmpDir = path.join(__dirname, '..', `_tmp_go_test_${Date.now()}`);
     fs.mkdirSync(tmpDir, { recursive: true });
     const goFile = path.join(tmpDir, 'main.go');
-    fs.writeFileSync(goFile, `package main
+    fs.writeFileSync(
+      goFile,
+      `package main
 
 import "fmt"
 import "net/http"
@@ -446,7 +496,8 @@ func main() {
 	srv := NewServer(8080)
 	srv.Start()
 }
-`);
+`
+    );
 
     try {
       if (getFileSummary) {
@@ -541,7 +592,9 @@ describe('L8: RecipeExtractor Go heuristic', () => {
   });
 
   it('should detect Go from content with package + func keywords', () => {
-    if (!RecipeExtractor) return;
+    if (!RecipeExtractor) {
+      return;
+    }
 
     const extractor = new RecipeExtractor();
     const goCode = `package handlers
@@ -570,7 +623,9 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 // ══════════════════════════════════════════════════════════════════
 describe('Full-Stack Go Integration (gin)', () => {
   it('should complete discovery → langStats → AST → Enhancement pipeline', async () => {
-    if (!skipIfNoGin()) return;
+    if (!skipIfNoGin()) {
+      return;
+    }
 
     // Step 1: Discovery
     resetDiscovererRegistry();

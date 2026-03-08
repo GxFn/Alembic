@@ -13,7 +13,6 @@ import {
   suggestSkills,
   updateSkill,
 } from '../../external/mcp/handlers/skill.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
@@ -22,163 +21,147 @@ const router = express.Router();
  * GET /api/v1/skills
  * 列出所有可用 Skills（内置 + 项目级）
  */
-router.get(
-  '/',
-  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-    const raw = listSkills();
-    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return void res.status(500).json({
-        success: false,
-        error: { code: 'PARSE_ERROR', message: 'Invalid response from listSkills' },
-      });
-    }
+router.get('/', async (_req: Request, res: Response): Promise<void> => {
+  const raw = listSkills();
+  let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return void res.status(500).json({
+      success: false,
+      error: { code: 'PARSE_ERROR', message: 'Invalid response from listSkills' },
+    });
+  }
 
-    if (!parsed.success) {
-      return void res.status(500).json(parsed);
-    }
+  if (!parsed.success) {
+    return void res.status(500).json(parsed);
+  }
 
-    res.json({ success: true, data: parsed.data });
-  })
-);
+  res.json({ success: true, data: parsed.data });
+});
 
 /**
  * GET /api/v1/skills/signal-status
  * 获取 SignalCollector 后台服务状态
  */
-router.get(
-  '/signal-status',
-  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-    const { _signalCollector } = global as unknown as Record<
-      string,
-      Record<string, (...args: unknown[]) => unknown>
-    >;
-    if (!_signalCollector) {
-      return void res.json({
-        success: true,
-        data: { running: false, mode: 'off', snapshot: null },
-      });
-    }
-    res.json({
+router.get('/signal-status', async (_req: Request, res: Response): Promise<void> => {
+  const { _signalCollector } = global as unknown as Record<
+    string,
+    Record<string, (...args: unknown[]) => unknown>
+  >;
+  if (!_signalCollector) {
+    return void res.json({
       success: true,
-      data: {
-        running: true,
-        mode: _signalCollector.getMode(),
-        snapshot: _signalCollector.getSnapshot(),
-        // 返回 AI 的待处理建议，前端可直接展示
-        suggestions:
-          (_signalCollector.getSnapshot() as Record<string, unknown>).pendingSuggestions || [],
-      },
+      data: { running: false, mode: 'off', snapshot: null },
     });
-  })
-);
+  }
+  res.json({
+    success: true,
+    data: {
+      running: true,
+      mode: _signalCollector.getMode(),
+      snapshot: _signalCollector.getSnapshot(),
+      // 返回 AI 的待处理建议，前端可直接展示
+      suggestions:
+        (_signalCollector.getSnapshot() as Record<string, unknown>).pendingSuggestions || [],
+    },
+  });
+});
 
 /**
  * GET /api/v1/skills/suggest
  * 基于使用模式分析，推荐创建 Skill
  */
-router.get(
-  '/suggest',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const ctx = { container: req.app.locals?.container || null };
-    const raw = await suggestSkills(ctx);
-    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return void res.status(500).json({
-        success: false,
-        error: { code: 'PARSE_ERROR', message: 'Invalid response from suggestSkills' },
-      });
-    }
+router.get('/suggest', async (req: Request, res: Response): Promise<void> => {
+  const ctx = { container: req.app.locals?.container || null };
+  const raw = await suggestSkills(ctx);
+  let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return void res.status(500).json({
+      success: false,
+      error: { code: 'PARSE_ERROR', message: 'Invalid response from suggestSkills' },
+    });
+  }
 
-    if (!parsed.success) {
-      return void res.status(500).json(parsed);
-    }
+  if (!parsed.success) {
+    return void res.status(500).json(parsed);
+  }
 
-    res.json({ success: true, data: parsed.data });
-  })
-);
+  res.json({ success: true, data: parsed.data });
+});
 
 /**
  * GET /api/v1/skills/:name
  * 加载指定 Skill 的完整文档
  * Query: ?section=xxx 可只返回指定章节
  */
-router.get(
-  '/:name',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { name } = req.params;
-    const { section } = req.query;
+router.get('/:name', async (req: Request, res: Response): Promise<void> => {
+  const { name } = req.params;
+  const { section } = req.query;
 
-    const raw = loadSkill(null, {
-      skillName: name as string,
-      section: section as string | undefined,
+  const raw = loadSkill(null, {
+    skillName: name as string,
+    section: section as string | undefined,
+  });
+  let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return void res.status(500).json({
+      success: false,
+      error: { code: 'PARSE_ERROR', message: 'Invalid response from loadSkill' },
     });
-    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return void res.status(500).json({
-        success: false,
-        error: { code: 'PARSE_ERROR', message: 'Invalid response from loadSkill' },
-      });
-    }
+  }
 
-    if (!parsed.success) {
-      const status = parsed.error?.code === 'SKILL_NOT_FOUND' ? 404 : 400;
-      return void res.status(status).json(parsed);
-    }
+  if (!parsed.success) {
+    const status = parsed.error?.code === 'SKILL_NOT_FOUND' ? 404 : 400;
+    return void res.status(status).json(parsed);
+  }
 
-    res.json({ success: true, data: parsed.data });
-  })
-);
+  res.json({ success: true, data: parsed.data });
+});
 
 /**
  * POST /api/v1/skills
  * 创建项目级 Skill
  * Body: { name, description, content, overwrite? }
  */
-router.post(
-  '/',
-  validate(CreateSkillBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { name, description, content, overwrite, createdBy } = req.body;
+router.post('/', validate(CreateSkillBody), async (req: Request, res: Response): Promise<void> => {
+  const { name, description, content, overwrite, createdBy } = req.body;
 
-    const raw = createSkill(null, {
-      name,
-      description,
-      content,
-      overwrite,
-      createdBy: createdBy || 'manual',
+  const raw = createSkill(null, {
+    name,
+    description,
+    content,
+    overwrite,
+    createdBy: createdBy || 'manual',
+  });
+  let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return void res.status(500).json({
+      success: false,
+      error: { code: 'PARSE_ERROR', message: 'Invalid response from createSkill' },
     });
-    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return void res.status(500).json({
-        success: false,
-        error: { code: 'PARSE_ERROR', message: 'Invalid response from createSkill' },
-      });
-    }
+  }
 
-    if (!parsed.success) {
-      const status =
-        parsed.error?.code === 'BUILTIN_CONFLICT'
+  if (!parsed.success) {
+    const status =
+      parsed.error?.code === 'BUILTIN_CONFLICT'
+        ? 409
+        : parsed.error?.code === 'ALREADY_EXISTS'
           ? 409
-          : parsed.error?.code === 'ALREADY_EXISTS'
-            ? 409
-            : parsed.error?.code === 'INVALID_NAME'
-              ? 400
-              : 500;
-      return void res.status(status).json(parsed);
-    }
+          : parsed.error?.code === 'INVALID_NAME'
+            ? 400
+            : 500;
+    return void res.status(status).json(parsed);
+  }
 
-    res.status(201).json({ success: true, data: parsed.data });
-  })
-);
+  res.status(201).json({ success: true, data: parsed.data });
+});
 
 /**
  * PUT /api/v1/skills/:name
@@ -187,7 +170,7 @@ router.post(
 router.put(
   '/:name',
   validate(UpdateSkillBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { name } = req.params;
     const { description, content } = req.body;
 
@@ -213,41 +196,38 @@ router.put(
     }
 
     res.json({ success: true, data: parsed.data });
-  })
+  }
 );
 
 /**
  * DELETE /api/v1/skills/:name
  * 删除项目级 Skill
  */
-router.delete(
-  '/:name',
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { name } = req.params;
+router.delete('/:name', async (req: Request, res: Response): Promise<void> => {
+  const { name } = req.params;
 
-    const raw = deleteSkill(null, { name: name as string });
-    let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return void res.status(500).json({
-        success: false,
-        error: { code: 'PARSE_ERROR', message: 'Invalid response from deleteSkill' },
-      });
-    }
+  const raw = deleteSkill(null, { name: name as string });
+  let parsed: { success: boolean; data?: unknown; error?: { code?: string; message?: string } };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return void res.status(500).json({
+      success: false,
+      error: { code: 'PARSE_ERROR', message: 'Invalid response from deleteSkill' },
+    });
+  }
 
-    if (!parsed.success) {
-      const status =
-        parsed.error?.code === 'SKILL_NOT_FOUND'
-          ? 404
-          : parsed.error?.code === 'BUILTIN_PROTECTED'
-            ? 403
-            : 500;
-      return void res.status(status).json(parsed);
-    }
+  if (!parsed.success) {
+    const status =
+      parsed.error?.code === 'SKILL_NOT_FOUND'
+        ? 404
+        : parsed.error?.code === 'BUILTIN_PROTECTED'
+          ? 403
+          : 500;
+    return void res.status(status).json(parsed);
+  }
 
-    res.json({ success: true, data: parsed.data });
-  })
-);
+  res.json({ success: true, data: parsed.data });
+});
 
 export default router;

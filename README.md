@@ -196,7 +196,7 @@ Infrastructure      SQLite · VectorStore · EventBus · AuditLog · DI Containe
 
 ## Requirements
 
-- Node.js ≥ 20
+- Node.js ≥ 22
 - macOS recommended (Xcode features need it; everything else is cross-platform)
 - better-sqlite3 (bundled)
 

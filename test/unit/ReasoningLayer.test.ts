@@ -9,8 +9,12 @@ vi.mock('../../lib/infrastructure/logging/Logger.js', () => ({
   default: { getInstance: () => mockLogger },
 }));
 
-const { ActiveContext: ReasoningTrace } = await import('../../lib/service/agent/memory/ActiveContext.js');
-const { ExplorationTracker } = await import('../../lib/service/agent/context/ExplorationTracker.js');
+const { ActiveContext: ReasoningTrace } = await import(
+  '../../lib/service/agent/memory/ActiveContext.js'
+);
+const { ExplorationTracker } = await import(
+  '../../lib/service/agent/context/ExplorationTracker.js'
+);
 
 // ─── ReasoningTrace ─────────────────────────────────────
 describe('ReasoningTrace', () => {
@@ -417,12 +421,7 @@ describe('ReasoningTrace — 迁入方法', () => {
     });
 
     test('未知工具保守假设', () => {
-      const meta = ReasoningTrace.buildObservationMeta(
-        'custom_tool',
-        {},
-        'result',
-        true
-      );
+      const meta = ReasoningTrace.buildObservationMeta('custom_tool', {}, 'result', true);
       expect(meta.resultType).toBe('other');
       expect(meta.gotNewInfo).toBe(true);
     });
@@ -443,10 +442,7 @@ describe('ExplorationTracker', () => {
   /** 快速创建 bootstrap tracker */
   function createTracker(strategyName = 'bootstrap', budgetOverrides = {}) {
     const budget = { ...DEFAULT_BUDGET, ...budgetOverrides };
-    return ExplorationTracker.resolve(
-      { source: 'system', strategy: strategyName },
-      budget
-    );
+    return ExplorationTracker.resolve({ source: 'system', strategy: strategyName }, budget);
   }
 
   beforeEach(() => {
@@ -457,10 +453,7 @@ describe('ExplorationTracker', () => {
   // ─── 静态工厂 resolve() ─────────────────────────────
   describe('resolve()', () => {
     test('source=user 返回 null', () => {
-      const tracker = ExplorationTracker.resolve(
-        { source: 'user' },
-        DEFAULT_BUDGET
-      );
+      const tracker = ExplorationTracker.resolve({ source: 'user' }, DEFAULT_BUDGET);
       expect(tracker).toBeNull();
     });
 
@@ -568,22 +561,14 @@ describe('ExplorationTracker', () => {
       const tracker = createTracker();
       tracker.tick();
       expect(tracker.totalSubmits).toBe(0);
-      tracker.recordToolCall(
-        'submit_knowledge',
-        { title: '测试' },
-        { status: 'accepted' }
-      );
+      tracker.recordToolCall('submit_knowledge', { title: '测试' }, { status: 'accepted' });
       expect(tracker.totalSubmits).toBe(1);
     });
 
     test('submit_knowledge rejected → 不增加 submitCount', () => {
       const tracker = createTracker();
       tracker.tick();
-      tracker.recordToolCall(
-        'submit_knowledge',
-        { title: '测试' },
-        { status: 'rejected' }
-      );
+      tracker.recordToolCall('submit_knowledge', { title: '测试' }, { status: 'rejected' });
       expect(tracker.totalSubmits).toBe(0);
     });
   });
@@ -601,14 +586,16 @@ describe('ExplorationTracker', () => {
       // 迭代到 maxIterations+2 = 5
       for (let i = 0; i < 5; i++) {
         tracker.tick();
-        if (tracker.shouldExit()) return; // 允许提前退出
+        if (tracker.shouldExit()) {
+          return; // 允许提前退出
+        }
         tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
       }
       tracker.tick();
       expect(tracker.shouldExit()).toBe(true);
     });
 
-    test('终结阶段 + 2 轮 grace → 退出', () => {
+    test('终结阶段 + 3 轮 grace → 退出', () => {
       const tracker = createTracker('producer');
       // 推进到 SUMMARIZE: 提交足够多次
       tracker.tick();
@@ -619,12 +606,15 @@ describe('ExplorationTracker', () => {
       // 此时应该转到 SUMMARIZE
       expect(tracker.phase).toBe('SUMMARIZE');
 
-      // Grace 轮次
+      // Grace 轮次 (3 轮: 首次尝试 + 空响应重试 + 安全余量)
       tracker.tick();
       expect(tracker.shouldExit()).toBe(false); // phaseRounds=1
       tracker.endRound();
       tracker.tick();
-      expect(tracker.shouldExit()).toBe(true);  // phaseRounds=2
+      expect(tracker.shouldExit()).toBe(false); // phaseRounds=2 (重试机会)
+      tracker.endRound();
+      tracker.tick();
+      expect(tracker.shouldExit()).toBe(true); // phaseRounds=3
     });
   });
 
@@ -690,9 +680,18 @@ describe('ExplorationTracker', () => {
       for (let i = 1; i <= 4; i++) {
         tracker.tick();
         trace.startRound(i);
-        tracker.recordToolCall('search_project_code', { pattern: `p${i}` }, { matches: [{ file: `f${i}.js` }] });
+        tracker.recordToolCall(
+          'search_project_code',
+          { pattern: `p${i}` },
+          { matches: [{ file: `f${i}.js` }] }
+        );
         trace.addAction('search_project_code', { pattern: `p${i}` });
-        trace.addObservation('search_project_code', { gotNewInfo: true, resultType: 'search', keyFacts: [], resultSize: 100 });
+        trace.addObservation('search_project_code', {
+          gotNewInfo: true,
+          resultType: 'search',
+          keyFacts: [],
+          resultSize: 100,
+        });
         trace.endRound();
         tracker.endRound({ hasNewInfo: true, submitCount: 0, toolNames: ['search_project_code'] });
       }
@@ -715,7 +714,12 @@ describe('ExplorationTracker', () => {
         tracker.tick();
         trace.startRound(i);
         trace.addAction('search_project_code', { pattern: `p${i}` });
-        trace.addObservation('search_project_code', { gotNewInfo: false, resultType: 'search', keyFacts: [], resultSize: 100 });
+        trace.addObservation('search_project_code', {
+          gotNewInfo: false,
+          resultType: 'search',
+          keyFacts: [],
+          resultSize: 100,
+        });
         trace.endRound();
         tracker.endRound({ hasNewInfo: false, submitCount: 0, toolNames: ['search_project_code'] });
       }
@@ -944,10 +948,7 @@ describe('ExplorationTracker', () => {
       const tracker = createTracker('bootstrap');
       const trace = new ReasoningTrace();
 
-      trace.setPlan(
-        '1. 获取项目概览和目录结构，识别核心模块\n2. 搜索核心类的实现和分析模式',
-        1
-      );
+      trace.setPlan('1. 获取项目概览和目录结构，识别核心模块\n2. 搜索核心类的实现和分析模式', 1);
 
       // 第 1 轮：匹配
       trace.startRound(1);
@@ -1052,10 +1053,7 @@ describe('ExplorationTracker', () => {
       const tracker = createTracker('bootstrap');
       const trace = new ReasoningTrace();
 
-      trace.setPlan(
-        '1. 获取项目概览和目录结构，识别核心模块\n2. 搜索网络请求模式和接口设计',
-        1
-      );
+      trace.setPlan('1. 获取项目概览和目录结构，识别核心模块\n2. 搜索网络请求模式和接口设计', 1);
 
       // 执行 1 轮匹配 plan
       tracker.tick();

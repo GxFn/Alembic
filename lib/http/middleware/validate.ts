@@ -3,8 +3,8 @@
  *
  * 用法：
  *   import { validate, validateQuery } from '../middleware/validate.js';
- *   router.post('/batch-enable', validate(BatchEnableBody), asyncHandler(...));
- *   router.get('/search', validateQuery(SearchQuery), asyncHandler(...));
+ *   router.post('/batch-enable', validate(BatchEnableBody), async (req, res) => { ... });
+ *   router.get('/search', validateQuery(SearchQuery), async (req, res) => { ... });
  *
  * 校验通过后：
  *   - req.body / req.query 被替换为 Zod parse 后的数据（已应用 defaults + coercion）

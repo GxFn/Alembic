@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Box, Zap, Edit3, Cpu, Loader2, Layers, Shield, AlertTriangle, RefreshCw, Trash2, FolderOpen, ChevronRight } from 'lucide-react';
-import { SPMTarget, ScanResultItem, Recipe, GuardAuditResult, ProjectDirectory } from '../../types';
+import { SPMTarget, ScanResultItem, Recipe, GuardAuditResult, ProjectDirectory, ScannedFile } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
 import { ICON_SIZES } from '../../constants/icons';
@@ -16,7 +16,7 @@ interface ModuleExplorerViewProps {
   selectedTargetName: string | null;
   isScanning: boolean;
   scanProgress: { current: number; total: number; status: string };
-  scanFileList: { name: string; path: string }[];
+  scanFileList: ScannedFile[];
   scanResults: ScanResultItem[];
   guardAudit?: GuardAuditResult | null;
   handleScanTarget: (target: SPMTarget) => void;

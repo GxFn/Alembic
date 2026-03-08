@@ -140,13 +140,6 @@ export class FileWatcher {
       ignored: IGNORED,
       ignoreInitial: true,
       persistent: true,
-      awaitWriteFinish: {
-        stabilityThreshold: FILE_WATCHER.STABILITY_THRESHOLD_MS,
-        pollInterval: FILE_WATCHER.POLL_INTERVAL_MS,
-      },
-      usePolling: process.env.ASD_WATCH_POLLING === 'true',
-      interval: FILE_WATCHER.POLL_INTERVAL_MS,
-      binaryInterval: FILE_WATCHER.BINARY_INTERVAL_MS,
     });
 
     const handleEvent = (relativePath: string) => {
@@ -166,7 +159,10 @@ export class FileWatcher {
 
     this._watcher.on('change', handleEvent);
     this._watcher.on('add', handleEvent);
-    this._watcher.on('error', (err: Error) => console.error('文件监听错误:', err.message));
+    this._watcher.on('error', (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('文件监听错误:', msg);
+    });
     this._watcher.on('ready', () => {
       if (!this.quiet) {
       }

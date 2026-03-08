@@ -4,6 +4,27 @@
 
 ---
 
+## [3.2.12] - 2026-03-08
+
+### 修复
+
+- **模块扫描 `f.split is not a function` 崩溃**：后端 `scannedFiles` 返回 `{ name, path }` 对象数组，但 Dashboard 模块扫描路径错误地当作 `string[]` 调用 `.split('/')`，导致扫描完成后 UI 报错
+- **模块扫描管线 0 提交问题**：`produceForcedSummary` 对 analyst pipeline 始终输出 JSON digest 格式，但 Analyst 质量门控期望 Markdown 分析报告，导致校验失败 → 重试 → 放弃。新增 `pipelineType` 感知分支
+- **SUMMARIZE 阶段 grace 竞态**：`shouldExit()` 在 `phaseRounds >= 2` 时终止循环，AI 实际只有 1 次 LLM 尝试机会，改为 `>= 3` 确保至少 2 次尝试
+- **飞书 SDK 日志统一**：恢复 `larkSdkLogger` 适配器，将 Lark SDK 内部 `error/warn/info/debug/trace` 全部路由到项目 Logger（`[Remote/Lark/SDK]` 前缀），替代 SDK 默认 `console` 直出
+- **飞书连接延迟启动优化**：自动启动从 `setTimeout(3000)` 改为 `setImmediate(() => setTimeout(8000))`，确保 HTTP listen、DB init、路由注册完成后再启动
+
+### 改进
+
+- **前后端类型统一**：新增 `ScannedFile` 接口，`api.ts` 4 个扫描 API 返回类型从 `string[]` 修正为 `ScannedFile[]`，`scanProject` 的 `guardAudit` 精确为 `GuardAuditResult | null`，消除所有兼容 hack
+- **依赖全面升级**：Node.js ≥ 22, Express 5.1.0, Vite 7.3.1, React 19.2.4, Tailwind 4.2.1, TypeScript 5.9.3, Vitest 4.x, Biome 2.4.6
+- **ES2024 特性启用**：`import.meta.dirname` 替换 23 处 `fileURLToPath` hack；`Promise.withResolvers()` 替换 3 处手动 Promise 构造
+- **Express 5 迁移**：移除 111 个 `asyncHandler` 包装器（18 个路由文件）；通配符路由 `/file/*` → `/file/{*path}`
+- **tsconfig `"lib": ["ES2024"]`**：修复 19 处 `Response.json()` 返回 `unknown` 的类型错误
+- **版本要求全面同步**：11 个文档 + CI + 模板同步 Node ≥ 22, VSCode ≥ 1.95
+
+---
+
 ## [3.2.11] - 2026-03-08
 
 ### 改进

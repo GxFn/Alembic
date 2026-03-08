@@ -15,6 +15,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { SKILLS_DIR } from '../../shared/package-root.js';
@@ -23,8 +24,8 @@ import { SKILLS_DIR } from '../../shared/package-root.js';
  * 获取项目级 Skills 目录（运行时动态解析）
  * 路径: {projectRoot}/AutoSnippet/skills/
  */
-function _getProjectSkillsDir() {
-  const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+function _getProjectSkillsDir(container?: { singletons?: { _projectRoot?: unknown } }) {
+  const projectRoot = resolveProjectRoot(container);
   return getProjectSkillsPath(projectRoot);
 }
 
@@ -45,14 +46,14 @@ export class SkillHooks {
    * 扫描 skills 目录，加载所有 hooks.js
    * 项目级 hooks 覆盖同名内置 hooks
    */
-  async load() {
+  async load(container?: { singletons?: { _projectRoot?: unknown } }) {
     const loaded = new Map(); // skillName → hooks module
 
     // 1. 内置 skills
     await this.#loadFromDir(SKILLS_DIR, loaded);
 
     // 2. 项目级 skills（覆盖同名）
-    await this.#loadFromDir(_getProjectSkillsDir(), loaded);
+    await this.#loadFromDir(_getProjectSkillsDir(container), loaded);
 
     // 3. 注册所有钩子
     for (const [skillName, mod] of loaded) {

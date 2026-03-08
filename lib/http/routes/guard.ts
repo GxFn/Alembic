@@ -13,7 +13,6 @@ import { readFileSync } from 'node:fs';
 import express, { type Request, type Response } from 'express';
 import { GuardBatchBody, GuardFileBody } from '#shared/schemas/http-requests.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
 import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
@@ -40,7 +39,7 @@ const router = express.Router();
 router.post(
   '/file',
   validate(GuardFileBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { filePath, content, language } = req.body;
 
     // 获取文件内容
@@ -115,7 +114,7 @@ router.post(
         fixedViolations,
       },
     });
-  })
+  }
 );
 
 /**
@@ -129,7 +128,7 @@ router.post(
 router.post(
   '/batch',
   validate(GuardBatchBody),
-  asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     const { files } = req.body;
 
     const container = getServiceContainer();
@@ -200,7 +199,7 @@ router.post(
         },
       },
     });
-  })
+  }
 );
 
 // ═══ 内部工具 ═══════════════════════════════════════

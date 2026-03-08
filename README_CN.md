@@ -196,7 +196,7 @@ Agent 层         AgentRouter → Preset → AgentRuntime（ReAct 循环）
 
 ## 系统要求
 
-- Node.js ≥ 20
+- Node.js ≥ 22
 - macOS 推荐（Xcode 功能需要；其他功能跨平台可用）
 - better-sqlite3（已内置）
 

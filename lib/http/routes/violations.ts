@@ -6,7 +6,6 @@
 import express, { type Request, type Response } from 'express';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = express.Router();
 const _logger = Logger.getInstance();
@@ -15,79 +14,70 @@ const _logger = Logger.getInstance();
  * GET /api/v1/violations
  * 获取 Guard 违规记录列表
  */
-router.get(
-  '/',
-  asyncHandler(async (req: Request, res: Response) => {
-    const container = getServiceContainer();
-    const violationsStore = container.get('violationsStore');
+router.get('/', async (req: Request, res: Response) => {
+  const container = getServiceContainer();
+  const violationsStore = container.get('violationsStore');
 
-    const { severity, ruleId, file } = req.query;
-    const page = parseInt(req.query.page as string, 10) || 1;
-    const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 200);
+  const { severity, ruleId, file } = req.query;
+  const page = parseInt(req.query.page as string, 10) || 1;
+  const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 200);
 
-    const filters: Record<string, string> = {};
-    if (severity) {
-      filters.severity = String(severity);
-    }
-    if (ruleId) {
-      filters.ruleId = String(ruleId);
-    }
-    if (file) {
-      filters.file = String(file);
-    }
+  const filters: Record<string, string> = {};
+  if (severity) {
+    filters.severity = String(severity);
+  }
+  if (ruleId) {
+    filters.ruleId = String(ruleId);
+  }
+  if (file) {
+    filters.file = String(file);
+  }
 
-    const result = await violationsStore.list(filters, { page, limit });
+  const result = await violationsStore.list(filters, { page, limit });
 
-    res.json({
-      success: true,
-      data: result,
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: result,
+  });
+});
 
 /**
  * GET /api/v1/violations/stats
  * 获取违规统计摘要
  */
-router.get(
-  '/stats',
-  asyncHandler(async (req: Request, res: Response) => {
-    const container = getServiceContainer();
-    const violationsStore = container.get('violationsStore');
+router.get('/stats', async (req: Request, res: Response) => {
+  const container = getServiceContainer();
+  const violationsStore = container.get('violationsStore');
 
-    const stats = await violationsStore.getStats();
+  const stats = await violationsStore.getStats();
 
-    res.json({
-      success: true,
-      data: stats,
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: stats,
+  });
+});
 
 /**
  * POST /api/v1/violations/clear
  * 清除违规记录
  */
-router.post(
-  '/clear',
-  asyncHandler(async (req: Request, res: Response) => {
-    const container = getServiceContainer();
-    const violationsStore = container.get('violationsStore');
+router.post('/clear', async (req: Request, res: Response) => {
+  const container = getServiceContainer();
+  const violationsStore = container.get('violationsStore');
 
-    const { ruleId, file, all } = req.body;
+  const { ruleId, file, all } = req.body;
 
-    let cleared = 0;
-    if (all) {
-      cleared = await violationsStore.clearAll();
-    } else {
-      cleared = await violationsStore.clear({ ruleId, file });
-    }
+  let cleared = 0;
+  if (all) {
+    cleared = await violationsStore.clearAll();
+  } else {
+    cleared = await violationsStore.clear({ ruleId, file });
+  }
 
-    res.json({
-      success: true,
-      data: { cleared },
-    });
-  })
-);
+  res.json({
+    success: true,
+    data: { cleared },
+  });
+});
 
 export default router;

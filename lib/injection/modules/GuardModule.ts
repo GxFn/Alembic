@@ -9,6 +9,7 @@
  * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { ComplianceReporter } from '../../service/guard/ComplianceReporter.js';
 import { ExclusionManager } from '../../service/guard/ExclusionManager.js';
 import { GuardCheckEngine } from '../../service/guard/GuardCheckEngine.js';
@@ -45,24 +46,22 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('exclusionManager', (ct: ServiceContainer) => {
-    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
+    const projectRoot = resolveProjectRoot(ct);
     return new ExclusionManager(projectRoot);
   });
 
   c.singleton('ruleLearner', (ct: ServiceContainer) => {
-    const projectRoot = (ct.singletons._projectRoot as string | undefined) || process.cwd();
+    const projectRoot = resolveProjectRoot(ct);
     return new RuleLearner(projectRoot);
   });
 
-  c.singleton(
-    'violationsStore',
-    (ct: ServiceContainer) =>
-      new ViolationsStore(
-        (ct.get('database') as { getDb: () => unknown }).getDb() as ConstructorParameters<
-          typeof ViolationsStore
-        >[0]
-      )
-  );
+  c.singleton('violationsStore', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb: () => unknown; getDrizzle: () => unknown };
+    return new ViolationsStore(
+      db.getDb() as ConstructorParameters<typeof ViolationsStore>[0],
+      db.getDrizzle() as ConstructorParameters<typeof ViolationsStore>[1]
+    );
+  });
 
   c.singleton('complianceReporter', (ct: ServiceContainer) => {
     const config = (ct.singletons._config as Record<string, unknown> | undefined) || {};

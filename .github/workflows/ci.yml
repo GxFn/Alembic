@@ -18,11 +18,14 @@ jobs:
   build:
     name: Build & Lint
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['22']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node-version }}
           cache: 'npm'
       - run: npm ci
       - run: npm run build
@@ -38,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       - run: npm ci
       - run: npm run build
@@ -75,24 +78,15 @@ jobs:
         run: |
           curl -sf $API_BASE/health/ready | jq -e '.ready == true'
 
-      - name: Candidates batch-create
+      - name: Root endpoint
         run: |
-          curl -sf -X POST -H 'Content-Type: application/json' \
-            -d '{
-              "items": [
-                { "code": "func retry() async throws -> Data { }", "language": "swift", "category": "networking", "source": "ci" },
-                { "code": "[webView loadRequest:req];", "language": "objectivec", "category": "ui", "source": "ci" }
-              ]
-            }' \
-            $API_BASE/candidates/batch-create | jq .
+          ROOT=$(curl -sf $API_BASE/../..)
+          echo "$ROOT" | jq .
+          echo "$ROOT" | jq -e '.name == "AutoSnippet API"'
 
-      - name: List candidates
+      - name: Knowledge listing
         run: |
-          curl -sf $API_BASE/candidates?limit=5 | jq '.success'
-
-      - name: List recipes
-        run: |
-          curl -sf $API_BASE/recipes?limit=5 | jq '.success'
+          curl -sf $API_BASE/knowledge | jq -e '.success == true'
 
       - name: Upload server log
         if: failure()
@@ -109,7 +103,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       - run: npm ci
       - run: npm run build
@@ -123,7 +117,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       - run: npm ci
       - run: npm run build

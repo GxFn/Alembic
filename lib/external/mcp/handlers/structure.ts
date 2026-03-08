@@ -4,9 +4,11 @@
  */
 
 import fs from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import * as Paths from '#infra/config/Paths.js';
 import { LanguageService } from '#shared/LanguageService.js';
+import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import type { McpContext } from './types.js';
 
@@ -83,8 +85,10 @@ interface GraphArgs {
 // 同一 projectRoot 在模块生命期内只初始化一次
 let _discovererCache: DiscovererCache | null = null; // { projectRoot, discoverer, targets }
 
-async function _getLoadedDiscoverer() {
-  const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+async function _getLoadedDiscoverer(ctx?: {
+  container?: { singletons?: { _projectRoot?: unknown } };
+}) {
+  const projectRoot = resolveProjectRoot(ctx?.container);
   if (_discovererCache && _discovererCache.projectRoot === projectRoot) {
     return _discovererCache;
   }
@@ -164,7 +168,7 @@ function _inferTargetRole(targetName: string): string {
 // ═══════════════════════════════════════════════════════════
 
 export async function getTargets(ctx: McpContext, args: StructureArgs = {}) {
-  const { discoverer, targets } = await _getLoadedDiscoverer();
+  const { discoverer, targets } = await _getLoadedDiscoverer(ctx);
   const includeSummary = args.includeSummary !== false; // 默认 true
 
   if (!includeSummary) {
@@ -226,7 +230,7 @@ export async function getTargetFiles(ctx: McpContext, args: StructureArgs) {
   if (!args.targetName) {
     throw new Error('targetName is required');
   }
-  const { discoverer, targets } = await _getLoadedDiscoverer();
+  const { discoverer, targets } = await _getLoadedDiscoverer(ctx);
   const target = _findTarget(targets, args.targetName);
 
   // 使用 Discoverer.getTargetFiles — 统一接口定位源文件
@@ -268,7 +272,7 @@ export async function getTargetFiles(ctx: McpContext, args: StructureArgs) {
     };
     if (includeContent) {
       try {
-        const raw = fs.readFileSync(f.path, 'utf8');
+        const raw = await readFile(f.path, 'utf8');
         const lines = raw.split('\n');
         entry.content = lines.slice(0, contentMaxLines).join('\n');
         entry.totalLines = lines.length;
@@ -309,7 +313,7 @@ export async function getTargetMetadata(ctx: McpContext, args: StructureArgs) {
   if (!args.targetName) {
     throw new Error('targetName is required');
   }
-  const { targets } = await _getLoadedDiscoverer();
+  const { targets } = await _getLoadedDiscoverer(ctx);
   const target = _findTarget(targets, args.targetName);
   const projectRoot = _discovererCache!.projectRoot;
 
@@ -334,7 +338,8 @@ export async function getTargetMetadata(ctx: McpContext, args: StructureArgs) {
     const knowledgeDir = Paths.getProjectKnowledgePath(projectRoot);
     const mapPath = path.join(knowledgeDir, 'AutoSnippet.spmmap.json');
     if (fs.existsSync(mapPath)) {
-      const graph = JSON.parse(fs.readFileSync(mapPath, 'utf8'))?.graph || null;
+      const raw = await readFile(mapPath, 'utf8');
+      const graph = JSON.parse(raw)?.graph || null;
       if (target.packageName && graph?.packages?.[target.packageName]) {
         const pkg = graph.packages[target.packageName];
         meta.packageDir = pkg.packageDir;
