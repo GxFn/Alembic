@@ -7,6 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import pathGuard from '../../shared/PathGuard.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 
 interface FeedbackEvent {
   type: string;
@@ -27,7 +28,7 @@ export class FeedbackCollector {
   #maxEvents;
 
   constructor(projectRoot: string, options: FeedbackCollectorOptions = {}) {
-    const kbDir = options.knowledgeBaseDir || 'AutoSnippet';
+    const kbDir = options.knowledgeBaseDir || DEFAULT_KNOWLEDGE_BASE_DIR;
     this.#feedbackPath = join(projectRoot, kbDir, 'feedback.json');
     pathGuard.assertProjectWriteSafe(this.#feedbackPath);
     this.#maxEvents = options.maxEvents || 1000;

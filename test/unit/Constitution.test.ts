@@ -23,12 +23,14 @@ describe('Constitution', () => {
       expect(rules[0].id).toBe('destructive_confirm');
     });
 
-    test('should have 3 roles', () => {
+    test('should have 5 roles', () => {
       const roles = constitution.getAllRoles();
-      expect(roles).toHaveLength(3);
+      expect(roles).toHaveLength(5);
       const roleIds = roles.map((r) => r.id);
       expect(roleIds).toContain('external_agent');
       expect(roleIds).toContain('developer');
+      expect(roleIds).toContain('contributor');
+      expect(roleIds).toContain('visitor');
     });
   });
 
@@ -94,7 +96,7 @@ describe('Constitution', () => {
       expect(json).toHaveProperty('rules');
       expect(json).toHaveProperty('roles');
       expect(json.rules).toHaveLength(4);
-      expect(json.roles).toHaveLength(3);
+      expect(json.roles).toHaveLength(5);
     });
   });
 

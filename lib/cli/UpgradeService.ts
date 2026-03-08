@@ -11,6 +11,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../shared/ProjectMarkers.js';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
 export class UpgradeService {
@@ -54,12 +55,12 @@ export class UpgradeService {
 
   _migrateSkillsPath() {
     const oldSkillsDir = join(this.projectRoot, '.autosnippet', 'skills');
-    const newSkillsDir = join(this.projectRoot, 'AutoSnippet', 'skills');
+    const newSkillsDir = join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'skills');
 
     if (!existsSync(oldSkillsDir)) {
       return;
     }
-    if (!existsSync(join(this.projectRoot, 'AutoSnippet'))) {
+    if (!existsSync(join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR))) {
       return;
     }
 

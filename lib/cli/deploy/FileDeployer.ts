@@ -29,6 +29,7 @@ import {
 import { dirname, join, resolve } from 'node:path';
 import { injectAutoApprove } from '../../external/mcp/autoApproveInjector.js';
 import { checkWriteSafety, safeCopyFile } from '../../service/cursor/FileProtection.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 import { PACKAGE_ROOT, TEMPLATES_DIR } from '../../shared/package-root.js';
 import {
   buildMcpServerEntry,
@@ -320,15 +321,14 @@ export class FileDeployer {
     }
 
     // 3. 确保 AutoSnippet/ 不被忽略
+    const kbDir = DEFAULT_KNOWLEDGE_BASE_DIR;
     const lines = content.split('\n');
     const hasIgnoreAS = lines.some((l) => {
       const t = l.trim();
-      return (
-        (t === 'AutoSnippet/' || t === 'AutoSnippet') && !t.startsWith('#') && !t.startsWith('!')
-      );
+      return (t === `${kbDir}/` || t === kbDir) && !t.startsWith('#') && !t.startsWith('!');
     });
-    if (hasIgnoreAS && !lines.some((l) => l.trim() === '!AutoSnippet/')) {
-      content += `\n# AutoSnippet 知识库必须入库（取消上方忽略）\n!AutoSnippet/\n`;
+    if (hasIgnoreAS && !lines.some((l) => l.trim() === `!${kbDir}/`)) {
+      content += `\n# ${kbDir} 知识库必须入库（取消上方忽略）\n!${kbDir}/\n`;
       changed = true;
     }
 
@@ -494,7 +494,7 @@ export class FileDeployer {
 
     /** 确保 AutoSnippet/skills/ 目录存在 */
     ensureSkillsDir() {
-      const autoDir = join(this.projectRoot, 'AutoSnippet');
+      const autoDir = join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR);
       if (!existsSync(autoDir)) {
         return false;
       }

@@ -9,6 +9,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 
 /**
  * 技能名称映射：AutoSnippet/skills/ → .cursor/skills/
@@ -94,7 +95,7 @@ export class SkillsSyncer {
     this.projectRoot = projectRoot;
     this.projectName = projectName;
     this.knowledgeService = knowledgeService;
-    this.sourceDir = path.join(projectRoot, 'AutoSnippet', 'skills');
+    this.sourceDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'skills');
     this.targetDir = path.join(projectRoot, '.cursor', 'skills');
   }
 

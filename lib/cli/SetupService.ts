@@ -4,7 +4,7 @@
  * 一键初始化 AutoSnippet V2 工作空间，5 步完成：
  *
  *   Step 1  .autosnippet/ 运行时目录 + config.json + .gitignore
- *   Step 2  AutoSnippet/ 子仓库（核心数据 + 权限能力 + skills/）
+ *   Step 2  AutoSnippet/ 知识库目录结构 + AutoSnippet/recipes/（有 --repo 则 clone，无则为普通目录）
  *   Step 3  IDE 集成（VSCode MCP + Cursor MCP + copilot-instructions + cursor-rules
  *           + skills-template + cursor-workflow + claude-hooks + guard-ci + pre-commit-hook）
  *   Step 4  SQLite 数据库 + V1 数据迁移
@@ -14,15 +14,17 @@
  *
  * 数据架构（核心数据在子仓库，受 git 权限保护）
  * ─────────────────────────────────────────────
- *   AutoSnippet/  (Git 子仓库 = 唯一真实来源 Source of Truth)
+ *   AutoSnippet/  (知识库根目录)
  *     ├─ constitution.yaml    权限宪法：角色 + 权限矩阵 + 治理规则 + 能力探测
  *     ├─ boxspec.json         项目规格定义
- *     ├─ recipes/*.md         统一知识实体（代码规范/模式/架构/调用链/数据流/...）
- *     ├─ skills/             Project Skills（冷启动自动生成 + 手动创建）
+ *     ├─ recipes/             Git 子仓库 = 唯一真实来源 Source of Truth
+ *     │   └─ *.md             统一知识实体（代码规范/模式/架构/调用链/数据流/...）
+ *     ├─ candidates/          候选知识（待审批）
+ *     ├─ skills/              Project Skills（冷启动自动生成 + 手动创建）
  *     └─ README.md
  *
  *   .autosnippet/  (运行时缓存，gitignored)
- *     ├─ config.json          项目配置
+ *     ├─ config.json          项目配置（含 core.subRepoDir 子仓库路径）
  *     ├─ autosnippet.db       SQLite 运行时缓存（从子仓库同步 + candidates/snippets/audit）
  *     ├─ context/             向量索引缓存
  *     └─ logs/                运行日志
@@ -43,9 +45,24 @@
  */
 
 import { execSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import { isAutoSnippetDevRepo } from '../shared/isOwnDevRepo.js';
+import {
+  DEFAULT_KNOWLEDGE_BASE_DIR,
+  DEFAULT_SUB_REPO_DIR,
+  isGitRepo,
+} from '../shared/ProjectMarkers.js';
 import { PACKAGE_ROOT } from '../shared/package-root.js';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
@@ -66,14 +83,30 @@ export class SetupService {
   runtimeDir: string;
   seed: boolean;
   skillsDir: string;
+  /** 子仓库相对路径（相对于 projectRoot），如 'AutoSnippet/recipes' */
+  subRepoDir: string;
+  /** 子仓库绝对路径 */
+  subRepoPath: string;
+  /** 子仓库远程仓库 URL（为空则 recipes/ 作为普通目录随主仓库提交） */
+  subRepoUrl: string | undefined;
   /**
-   * @param {{ projectRoot: string, force?: boolean }} options
+   * @param {{ projectRoot: string, force?: boolean, seed?: boolean, subRepoDir?: string, subRepoUrl?: string }} options
    */
-  constructor(options: { projectRoot: string; force?: boolean; seed?: boolean }) {
+  constructor(options: {
+    projectRoot: string;
+    force?: boolean;
+    seed?: boolean;
+    /** 自定义子仓库相对路径（默认 'AutoSnippet/recipes'） */
+    subRepoDir?: string;
+    /** 子仓库远程仓库 URL（提供则 clone，不提供则 recipes/ 为普通目录） */
+    subRepoUrl?: string;
+  }) {
     this.projectRoot = resolve(options.projectRoot);
     this.projectName = this.projectRoot.split('/').pop() || '';
     this.force = options.force || false;
     this.seed = options.seed || false;
+    this.subRepoDir = options.subRepoDir || DEFAULT_SUB_REPO_DIR;
+    this.subRepoUrl = options.subRepoUrl;
 
     // ── 开发仓库保护 ──────────────────────────────────
     if (isAutoSnippetDevRepo(this.projectRoot)) {
@@ -88,11 +121,14 @@ export class SetupService {
     this.runtimeDir = join(this.projectRoot, '.autosnippet');
     this.dbPath = join(this.runtimeDir, 'autosnippet.db');
 
-    // 核心数据目录（子仓库）
-    this.coreDir = join(this.projectRoot, 'AutoSnippet');
+    // 知识库根目录
+    this.coreDir = join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR);
     this.recipesDir = join(this.coreDir, 'recipes');
     this.candidatesDir = join(this.coreDir, 'candidates');
     this.skillsDir = join(this.coreDir, 'skills');
+
+    // 子仓库绝对路径
+    this.subRepoPath = join(this.projectRoot, this.subRepoDir);
   }
 
   /* ═══ 公共入口 ═══════════════════════════════════════ */
@@ -100,7 +136,7 @@ export class SetupService {
   getSteps() {
     return [
       { label: '创建运行时目录与配置', fn: () => this.stepRuntime() },
-      { label: '初始化核心数据子仓库', fn: () => this.stepCoreRepo() },
+      { label: '初始化知识库与 recipes 子仓库', fn: () => this.stepCoreRepo() },
       { label: '配置 IDE 集成', fn: () => this.stepIDE() },
       { label: '初始化数据库', fn: () => this.stepDatabase() },
       { label: '平台相关初始化', fn: () => this.stepPlatform() },
@@ -163,13 +199,15 @@ export class SetupService {
     const configPath = join(this.runtimeDir, 'config.json');
     if (existsSync(configPath) && !this.force) {
     } else {
-      const config = {
+      const config: Record<string, unknown> = {
         version: 2,
         projectName: this.projectName,
         database: this.dbPath,
         core: {
-          dir: 'AutoSnippet',
-          constitution: 'AutoSnippet/constitution.yaml',
+          dir: DEFAULT_KNOWLEDGE_BASE_DIR,
+          constitution: `${DEFAULT_KNOWLEDGE_BASE_DIR}/constitution.yaml`,
+          subRepoDir: this.subRepoDir,
+          ...(this.subRepoUrl ? { subRepoUrl: this.subRepoUrl } : {}),
         },
         ai: { provider: process.env.ASD_AI_PROVIDER || 'auto' },
         guard: { enabled: true },
@@ -188,22 +226,35 @@ export class SetupService {
     return { created: 'runtime' };
   }
 
-  /* ═══ Step 2: 核心数据子仓库 ═════════════════════════ */
+  /* ═══ Step 2: 知识库目录 + recipes 子仓库 ═════════════ */
 
   stepCoreRepo() {
-    const coreGit = join(this.coreDir, '.git');
-    const alreadyRepo = existsSync(coreGit);
+    const alreadyRepo = isGitRepo(this.subRepoPath);
 
     // 创建目录结构
     for (const d of [this.coreDir, this.recipesDir, this.candidatesDir, this.skillsDir]) {
       mkdirSync(d, { recursive: true });
     }
 
-    // 初始化 git（如果还不是 git 仓库）
-    if (!alreadyRepo) {
-      this._git(['init'], this.coreDir);
-    } else {
+    // ── 子仓库处理：有 URL → clone 模式；无 URL → 普通目录 ──
+    if (this.subRepoUrl) {
+      if (alreadyRepo) {
+        // 幂等：已是 git 仓库，确保 remote 一致
+        this._ensureRemote(this.subRepoUrl);
+      } else if (this._hasFiles(this.subRepoPath)) {
+        // 有文件但不是 git 仓库 → 备份 + clone + 合并
+        this._cloneWithMerge(this.subRepoUrl);
+      } else {
+        // 空目录 → 直接 clone（先移除空目录，git clone 需要目标不存在）
+        try {
+          rmdirSync(this.subRepoPath);
+        } catch {
+          /* 目录可能不存在或不为空，忽略 */
+        }
+        this._git(['clone', this.subRepoUrl, this.subRepoPath], this.projectRoot);
+      }
     }
+    // else: 无 URL → recipes/ 是普通目录，随主仓库提交，不执行 git init
 
     // constitution.yaml — 权限宪法
     this._writeConstitution();
@@ -222,19 +273,33 @@ export class SetupService {
     // README.md
     this._writeCoreReadme();
 
-    // .gitignore（子仓库自身）
-    const giPath = join(this.coreDir, '.gitignore');
-    if (!existsSync(giPath)) {
-      writeFileSync(giPath, '.DS_Store\n*.swp\n');
+    // .gitignore（子仓库自身，仅在有 URL 即子仓库模式时写入）
+    if (this.subRepoUrl) {
+      const giPath = join(this.subRepoPath, '.gitignore');
+      if (!existsSync(giPath)) {
+        writeFileSync(giPath, '.DS_Store\n*.swp\n');
+      }
     }
 
-    // 初始提交
-    if (!alreadyRepo) {
-      this._git(['add', '.'], this.coreDir);
-      this._git(['commit', '-m', 'Init AutoSnippet knowledge base'], this.coreDir);
+    // clone 后可能写入了模板文件，提交它们（仅新 clone 时）
+    if (this.subRepoUrl && !alreadyRepo && isGitRepo(this.subRepoPath)) {
+      try {
+        const status = this._git(['status', '--porcelain'], this.subRepoPath);
+        if (status.trim().length > 0) {
+          this._git(['add', '.'], this.subRepoPath);
+          this._git(['commit', '-m', 'Add AutoSnippet template files'], this.subRepoPath);
+        }
+      } catch {
+        /* clone 的空仓库首次 commit 可能无变更，忽略 */
+      }
     }
 
-    return { coreInit: true, alreadyRepo };
+    return {
+      coreInit: true,
+      alreadyRepo,
+      subRepoPath: this.subRepoDir,
+      hasUrl: Boolean(this.subRepoUrl),
+    };
   }
 
   /** @private 写入 constitution.yaml（优先从模板复制） */
@@ -257,7 +322,7 @@ export class SetupService {
           '',
           'capabilities:',
           '  git_write:',
-          '    description: "子仓库 git push 权限"',
+          '    description: "recipes 子仓库 git push 权限"',
           '    probe: "git push --dry-run"',
           '    no_subrepo: "allow"',
           '    no_remote: "allow"',
@@ -278,6 +343,12 @@ export class SetupService {
           '    name: "Developer"',
           '    permissions: ["*"]',
           '    requires_capability: ["git_write"]',
+          '  - id: "contributor"',
+          '    name: "Contributor"',
+          '    permissions: ["read:recipes", "read:candidates", "read:guard_rules", "read:audit_logs:self"]',
+          '  - id: "visitor"',
+          '    name: "Visitor"',
+          '    permissions: ["read:recipes", "read:guard_rules"]',
           '  - id: "external_agent"',
           '    name: "External Agent"',
           '    permissions: ["read:recipes", "read:guard_rules", "create:candidates", "submit:knowledge"]',
@@ -305,8 +376,9 @@ export class SetupService {
           schemaVersion: 2,
           kind: 'root',
           root: true,
-          knowledgeBase: { dir: 'AutoSnippet' },
-          module: { rootDir: 'AutoSnippet' },
+          knowledgeBase: { dir: DEFAULT_KNOWLEDGE_BASE_DIR },
+          subRepo: { dir: this.subRepoDir },
+          module: { rootDir: DEFAULT_KNOWLEDGE_BASE_DIR },
         },
         null,
         2
@@ -368,7 +440,7 @@ export class SetupService {
       [
         `# ${this.projectName} — AutoSnippet Knowledge Base`,
         '',
-        '此目录是项目的 **核心知识库**，通过 Git 子仓库管理，同时承载数据存储与权限控制。',
+        '此目录是项目的 **核心知识库**，`recipes/` 目录存放核心知识数据。',
         '',
         '## 目录结构',
         '',
@@ -376,11 +448,15 @@ export class SetupService {
         'AutoSnippet/',
         '├── constitution.yaml   权限宪法（角色 + 权限 + 治理规则 + 能力探测）',
         '├── boxspec.json        项目规格',
-        '├── recipes/            统一知识实体（Markdown + YAML front-matter）',
+        ...(this.subRepoUrl
+          ? [
+              '├── recipes/            ★ 独立 Git 子仓库 — 统一知识实体（Source of Truth）',
+              '│   ├── .git/           独立 git 仓库',
+            ]
+          : ['├── recipes/            ★ 知识目录 — 统一知识实体（Source of Truth）']),
         '│   ├── _template.md    格式参考',
-        '│   ├── naming-rules.md 代码规范示例',
-        '│   ├── mvvm-arch.md    架构模式示例',
         '│   └── ...             代码模式/调用链/数据流/约束/风格/...',
+        '├── candidates/         候选知识（待审批）',
         '├── skills/             Project Skills（冷启动自动生成 + 手动创建）',
         '│   └── <name>/SKILL.md AI Agent 知识增强文档',
         '└── README.md',
@@ -411,27 +487,38 @@ export class SetupService {
         '',
         '| 层级 | 机制 | 职责 |',
         '|------|------|------|',
-        '| ① 能力层 | `git push --dry-run` | 探测子仓库物理写权限 |',
+        '| ① 能力层 | `git push --dry-run` | 探测 recipes 子仓库物理写权限 |',
         '| ② 角色层 | `constitution.yaml` roles | 角色权限矩阵 (action:resource) |',
         '| ③ 治理层 | `constitution.yaml` priorities | 业务规则引擎 |',
         '',
         'git 权限只是"能力信号"，**最终裁决权在 Constitution YAML**。',
         '',
-        '## 团队使用',
-        '',
-        '```bash',
-        '# 方式 1: 添加远程仓库',
-        'cd AutoSnippet',
-        'git remote add origin <your-repo-url>',
-        '',
-        '# 方式 2: 使用 git submodule（推荐）',
-        'cd ..',
-        'rm -rf AutoSnippet',
-        'git submodule add <your-repo-url> AutoSnippet',
-        '```',
+        ...(this.subRepoUrl
+          ? [
+              '## 团队协作',
+              '',
+              '团队成员克隆主仓库后，需额外获取 recipes 子仓库：',
+              '',
+              '```bash',
+              '# 方式 A：git submodule（推荐，自动关联）',
+              `git submodule add ${this.subRepoUrl} ${this.subRepoDir}`,
+              '',
+              '# 方式 B：独立 clone',
+              `git clone ${this.subRepoUrl} ${this.subRepoDir}`,
+              '```',
+            ]
+          : [
+              '## Recipes 知识库',
+              '',
+              '`recipes/` 目录随主仓库提交。如需独立管理（团队权限控制），运行：',
+              '',
+              '```bash',
+              'asd remote <your-recipes-repo-url>',
+              '```',
+            ]),
         '',
         '> 运行时缓存（DB 索引、Candidates、Snippets、审计日志）在 `.autosnippet/autosnippet.db`。',
-        '> **核心数据的唯一真实来源是此目录中的文件**，DB 仅做缓存。修改 Recipe/Guard 规则必须通过 git。',
+        '> **核心数据的唯一真实来源是 `recipes/` 目录中的文件**，DB 仅做缓存。',
         '',
       ].join('\n')
     );
@@ -574,6 +661,73 @@ export class SetupService {
         return '';
       }
       throw e;
+    }
+  }
+
+  /** @private 检查目录中是否有文件（排除 . 和 ..） */
+  _hasFiles(dirPath: string): boolean {
+    try {
+      const entries = readdirSync(dirPath);
+      return entries.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /** @private 确保子仓库的 remote origin 与给定 URL 一致 */
+  _ensureRemote(url: string) {
+    try {
+      const currentUrl = this._git(['remote', 'get-url', 'origin'], this.subRepoPath);
+      if (currentUrl !== url) {
+        this._git(['remote', 'set-url', 'origin', url], this.subRepoPath);
+      }
+    } catch {
+      // 没有 origin remote → 添加
+      this._git(['remote', 'add', 'origin', url], this.subRepoPath);
+    }
+  }
+
+  /**
+   * @private 备份已有文件 → clone → 合并回来（不覆盖远端文件）
+   * 适用于 recipes/ 有模板文件但还不是 git 仓库的场景
+   */
+  _cloneWithMerge(url: string) {
+    const backupDir = `${this.subRepoPath}-backup-${Date.now()}`;
+
+    // 1. 备份
+    renameSync(this.subRepoPath, backupDir);
+
+    // 2. clone
+    try {
+      this._git(['clone', url, this.subRepoPath], this.projectRoot);
+    } catch (err: unknown) {
+      // clone 失败 → 恢复备份
+      try {
+        renameSync(backupDir, this.subRepoPath);
+      } catch {
+        /* 尽力恢复 */
+      }
+      throw err;
+    }
+
+    // 3. 合并备份文件到 clone 结果（不覆盖已有文件）
+    try {
+      const files = readdirSync(backupDir);
+      for (const file of files) {
+        const dest = join(this.subRepoPath, file);
+        if (!existsSync(dest)) {
+          cpSync(join(backupDir, file), dest, { recursive: true });
+        }
+      }
+    } catch {
+      /* 合并阶段出错不影响 clone 结果 */
+    }
+
+    // 4. 清理备份
+    try {
+      rmSync(backupDir, { recursive: true, force: true });
+    } catch {
+      /* 清理失败不影响主流程 */
     }
   }
 }

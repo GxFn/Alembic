@@ -61,6 +61,25 @@ roles:
     constraints:
       - "candidate must include reasoning"
       - "cannot bypass Guard check"
+  - id: "contributor"
+    name: "Contributor"
+    description: "有子仓库但无 push 权限的团队成员（只读）"
+    permissions:
+      - "read:recipes"
+      - "read:candidates"
+      - "read:guard_rules"
+      - "read:audit_logs:self"
+    constraints:
+      - "不能创建/修改 Recipe（无子仓库写权限）"
+      - "不能修改 Guard 规则"
+  - id: "visitor"
+    name: "Visitor"
+    description: "严格模式下的最小权限访客"
+    permissions:
+      - "read:recipes"
+      - "read:guard_rules"
+    constraints:
+      - "仅可读取，不能执行任何写操作"
   - id: "developer"
     name: "Developer"
     description: "project owner, full access"

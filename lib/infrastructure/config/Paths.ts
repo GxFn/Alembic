@@ -1,6 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import pathGuard from '../../shared/PathGuard.js';
+import {
+  DEFAULT_KNOWLEDGE_BASE_DIR,
+  detectKnowledgeBaseDir,
+  SPEC_FILENAME as MARKER_SPEC,
+} from '../../shared/ProjectMarkers.js';
 
 /**
  * Paths — 项目路径解析工具
@@ -12,7 +17,7 @@ import pathGuard from '../../shared/PathGuard.js';
  *  - 全局非项目目录（Xcode snippets、cache）在获取时自动创建
  */
 
-export const SPEC_FILENAME = 'AutoSnippet.boxspec.json';
+export const SPEC_FILENAME = MARKER_SPEC;
 
 const USER_HOME = process.env.HOME || process.env.USERPROFILE || '';
 
@@ -68,24 +73,12 @@ export function getCachePath() {
 
 /**
  * 获取包含 AutoSnippet.boxspec.json 的子目录名称
- * 遍历 projectRoot 一级子目录，找到含 spec 文件的目录
+ * 委托 ProjectMarkers.detectKnowledgeBaseDir() 统一探测逻辑
  * @param {string} projectRoot
  * @returns {string} 知识库目录名（默认 'AutoSnippet'）
  */
 export function getKnowledgeBaseDirName(projectRoot: string) {
-  try {
-    const entries = fs.readdirSync(projectRoot, { withFileTypes: true });
-    for (const e of entries) {
-      if (e.isDirectory() && !e.name.startsWith('.')) {
-        if (fs.existsSync(path.join(projectRoot, e.name, SPEC_FILENAME))) {
-          return e.name;
-        }
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  return 'AutoSnippet';
+  return detectKnowledgeBaseDir(projectRoot);
 }
 
 /**

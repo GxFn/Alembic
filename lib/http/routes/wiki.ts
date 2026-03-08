@@ -25,6 +25,7 @@ import {
   type WikiModuleService,
   type WikiProjectGraph,
 } from '../../service/wiki/WikiGenerator.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
@@ -302,7 +303,7 @@ router.get('/status', async (req: Request, res: Response): Promise<void> => {
 
 router.get('/files', async (req: Request, res: Response): Promise<void> => {
   const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
-  const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
+  const wikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
 
   if (!fs.existsSync(wikiDir)) {
     return void res.json({
@@ -341,7 +342,7 @@ router.get('/files', async (req: Request, res: Response): Promise<void> => {
 
 router.get('/file/{*path}', async (req: Request, res: Response): Promise<void> => {
   const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
-  const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
+  const wikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
   const rawPath = req.params.path;
   const requestedPath = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath ?? '');
 

@@ -4,6 +4,12 @@
  * 通过 `git push --dry-run` 探测当前用户对子仓库的物理写权限。
  * 探测结果被缓存（默认 24h）以避免重复执行。
  *
+ * 子仓库默认指向 `AutoSnippet/recipes/`（可通过 config 或 options 自定义）。
+ * 探测路径解析优先级：
+ *   1. 构造函数 options.subRepoPath（显式指定）
+ *   2. `.autosnippet/config.json` 中 `core.subRepoDir`
+ *   3. 默认 `AutoSnippet/recipes`
+ *
  * 三种探测结果：
  *   'admin'       — 无子仓库（个人项目）/ 有 push 权限 → developer
  *   'contributor'  — 有子仓库但无 push 权限 → developer（本地用户 = 项目 Owner）
@@ -17,6 +23,7 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { readSubRepoUrlFromConfig, resolveSubRepoPath } from '#shared/ProjectMarkers.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 
@@ -90,15 +97,25 @@ export class CapabilityProbe {
 
   /**
    * 将探测结果映射为 Constitution 角色 ID
+   *
+   * 映射规则：
+   *   'admin'       → 'developer'    有 push 权限 / 无子仓库（个人项目）→ 完整权限
+   *   'contributor'  → 'contributor'   有子仓库但无 push 权限 → 只读，禁止提交 Recipe
+   *   'visitor'      → 'visitor'       noRemote=deny 严格模式 → 最小权限
+   *
    * @param {ProbeResult} probeResult
    * @returns {string}
    */
   toRole(probeResult: ProbeResult): string {
-    // 本地运行 AutoSnippet 的用户 = 项目 Owner = developer
-    // 探针级别的 admin/contributor/visitor 仅做信息记录，角色统一为 developer
     switch (probeResult) {
-      default:
+      case 'admin':
         return 'developer';
+      case 'contributor':
+        return 'contributor';
+      case 'visitor':
+        return 'visitor';
+      default:
+        return 'contributor';
     }
   }
 
@@ -139,24 +156,16 @@ export class CapabilityProbe {
 
   /**
    * 自动检测子仓库路径
+   * 优先级：config.json > 默认 AutoSnippet/recipes
    * @returns {string | null}
    */
   _detectSubRepo(): string | null {
-    // 常见路径：cwd/AutoSnippet 或 .autosnippet/AutoSnippet
     const effectiveRoot = resolveProjectRoot();
-    const candidates = [
-      path.resolve(effectiveRoot, 'AutoSnippet'),
-      path.resolve(effectiveRoot, '.autosnippet', 'AutoSnippet'),
-    ];
+    const resolved = resolveSubRepoPath(effectiveRoot);
 
-    for (const p of candidates) {
-      if (fs.existsSync(path.join(p, '.git')) || fs.existsSync(path.join(p, '..', '.gitmodules'))) {
-        return p;
-      }
-      // 即使不是独立 git 目录，但文件夹存在也返回（可能是 subtree 形式）
-      if (fs.existsSync(p)) {
-        return p;
-      }
+    // 检查目标路径是否存在
+    if (fs.existsSync(resolved)) {
+      return resolved;
     }
 
     return null;
@@ -222,6 +231,17 @@ export class CapabilityProbe {
    * @returns {boolean}
    */
   _hasRemote(repoPath: string): boolean {
+    // 快速路径：config 有 subRepoUrl 即认为有 remote
+    try {
+      const effectiveRoot = resolveProjectRoot();
+      const url = readSubRepoUrlFromConfig(effectiveRoot);
+      if (url) {
+        return true;
+      }
+    } catch {
+      /* 读取失败走原有逻辑 */
+    }
+
     try {
       const output = execSync('git remote', {
         cwd: repoPath,

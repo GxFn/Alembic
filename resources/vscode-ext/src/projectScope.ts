@@ -1,20 +1,26 @@
 /**
  * ProjectScope — 判断文件是否属于 AutoSnippet 项目
  *
- * 检测逻辑：
+ * 检测逻辑（与核心库 ProjectMarkers.ts 保持一致）：
  *   扫描所有 workspaceFolders，检查根目录下是否存在
  *   `AutoSnippet/` 或 `.autosnippet/` 目录。
  *   只有属于这些目录的文件才会触发扩展功能。
  *
  * 非 AutoSnippet 项目零开销：不扫描指令、不触发 CodeLens、不显示状态栏。
+ *
+ * ⚠️  探测标记目录必须与核心库 `lib/shared/ProjectMarkers.ts` 中的
+ *     `PROJECT_MARKER_DIRS` 保持同步。
  */
 
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-/** 标记目录名 — 任一存在即视为 AutoSnippet 项目 */
-const MARKER_DIRS = ['AutoSnippet', '.autosnippet'];
+/**
+ * 项目标记目录（任一存在即视为 AutoSnippet 项目）
+ * ⚠️  与核心库 PROJECT_MARKER_DIRS 保持同步
+ */
+const PROJECT_MARKER_DIRS = ['AutoSnippet', '.autosnippet'] as const;
 
 /** 缓存：workspaceFolder fsPath → boolean */
 const _cache = new Map<string, boolean>();
@@ -26,7 +32,7 @@ function isAutoSnippetProject(folderPath: string): boolean {
   const cached = _cache.get(folderPath);
   if (cached !== undefined) return cached;
 
-  const result = MARKER_DIRS.some((dir) =>
+  const result = PROJECT_MARKER_DIRS.some((dir) =>
     fs.existsSync(path.join(folderPath, dir))
   );
   _cache.set(folderPath, result);

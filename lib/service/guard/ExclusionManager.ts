@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from '
 import { dirname, join } from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 import pathGuard from '../../shared/PathGuard.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 
 interface PathExclusion {
   pattern: string;
@@ -56,7 +57,7 @@ export class ExclusionManager {
     projectRoot: string,
     options: { knowledgeBaseDir?: string; internalDir?: string } = {}
   ) {
-    const kbDir = options.knowledgeBaseDir || 'AutoSnippet';
+    const kbDir = options.knowledgeBaseDir || DEFAULT_KNOWLEDGE_BASE_DIR;
     this.#exclusionsPath = join(projectRoot, kbDir, 'guard-exclusions.json');
     pathGuard.assertProjectWriteSafe(this.#exclusionsPath);
     // 迁移旧路径

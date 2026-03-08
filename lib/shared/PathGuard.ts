@@ -29,6 +29,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isAutoSnippetDevRepo } from './isOwnDevRepo.js';
+import {
+  DEFAULT_KNOWLEDGE_BASE_DIR,
+  detectKnowledgeBaseDir,
+  SPEC_FILENAME,
+} from './ProjectMarkers.js';
 
 export class PathGuardError extends Error {
   projectRoot: string;
@@ -348,30 +353,22 @@ class PathGuard {
 
   /**
    * 解析知识库目录名
-   * 优先使用 configure 阶段传入的值，否则尝试运行时探测
+   * 优先使用 configure 阶段传入的值，否则委托 ProjectMarkers 统一探测
    */
   #resolveKnowledgeBaseDir() {
     if (this.#knowledgeBaseDir) {
       return this.#knowledgeBaseDir;
     }
 
-    // 运行时探测: 查找包含 AutoSnippet.boxspec.json 的子目录
-    try {
-      const entries = fs.readdirSync(this.#projectRoot!, { withFileTypes: true });
-      for (const e of entries) {
-        if (e.isDirectory() && !e.name.startsWith('.')) {
-          if (fs.existsSync(path.join(this.#projectRoot!, e.name, 'AutoSnippet.boxspec.json'))) {
-            this.#knowledgeBaseDir = e.name;
-            return e.name;
-          }
-        }
-      }
-    } catch {
-      /* ignore */
+    // 运行时探测: 委托 ProjectMarkers 统一逻辑
+    if (this.#projectRoot) {
+      const detected = detectKnowledgeBaseDir(this.#projectRoot);
+      this.#knowledgeBaseDir = detected;
+      return detected;
     }
 
     // 默认
-    return 'AutoSnippet';
+    return DEFAULT_KNOWLEDGE_BASE_DIR;
   }
 }
 

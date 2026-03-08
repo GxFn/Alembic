@@ -28,7 +28,9 @@ describe('Integration: CapabilityProbe', () => {
   const repos = [];
 
   afterAll(() => {
-    repos.forEach((r) => r.cleanup());
+    for (const r of repos) {
+      r.cleanup();
+    }
   });
 
   test('无子仓库路径 → admin（个人项目模式）', () => {
@@ -68,7 +70,7 @@ describe('Integration: CapabilityProbe', () => {
     });
 
     expect(probe.probe()).toBe('visitor');
-    expect(probe.probeRole()).toBe('developer');
+    expect(probe.probeRole()).toBe('visitor');
   });
 
   test('有 git repo + 有 remote (不可 push 的假地址) → contributor', () => {
@@ -305,7 +307,9 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
   const repos = [];
 
   afterAll(() => {
-    repos.forEach((r) => r.cleanup());
+    for (const r of repos) {
+      r.cleanup();
+    }
   });
 
   test('真实 git repo (无 remote) 通过 middleware → developer', () => {
@@ -328,7 +332,7 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     expect(req.resolvedRole).toBe('developer');
   });
 
-  test('真实 git repo (无 remote, deny) 通过 middleware → developer', () => {
+  test('真实 git repo (无 remote, deny) 通过 middleware → visitor', () => {
     const { repoPath, cleanup } = createTempGitRepo({ withRemote: false });
     repos.push({ repoPath, cleanup });
 
@@ -345,6 +349,6 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     });
 
     expect(nextCalled).toBe(true);
-    expect(req.resolvedRole).toBe('developer');
+    expect(req.resolvedRole).toBe('visitor');
   });
 });

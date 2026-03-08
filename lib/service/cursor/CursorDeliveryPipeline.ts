@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
 import { DELIVERY_RANK, KNOWLEDGE_CONFIDENCE } from '../../shared/constants.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 import { AgentInstructionsGenerator } from './AgentInstructionsGenerator.js';
 import { KnowledgeCompressor } from './KnowledgeCompressor.js';
 import { RulesGenerator } from './RulesGenerator.js';
@@ -709,7 +710,7 @@ export class CursorDeliveryPipeline {
   _generateChannelF(rules: KnowledgeEntryProps[], patterns: KnowledgeEntryProps[]) {
     try {
       // 收集可用 Skills 名称
-      const skillsDir = path.join(this.projectRoot, 'AutoSnippet', 'skills');
+      const skillsDir = path.join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'skills');
       let skills: string[] = [];
       if (fs.existsSync(skillsDir)) {
         skills = fs

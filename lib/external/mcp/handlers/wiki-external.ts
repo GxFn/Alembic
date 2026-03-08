@@ -18,6 +18,7 @@ import path from 'node:path';
 import Logger from '#infra/logging/Logger.js';
 import { WikiGenerator } from '#service/wiki/WikiGenerator.js';
 import { dedup } from '#service/wiki/WikiUtils.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '#shared/ProjectMarkers.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import { getActiveSession } from './bootstrap-external.js';
@@ -278,7 +279,7 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
   });
 
   // ── 确保 Wiki 目录存在 ──
-  const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
+  const wikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
   _ensureDir(wikiDir);
   if (topics.some((t) => t.path.startsWith('modules/'))) {
     _ensureDir(path.join(wikiDir, 'modules'));
@@ -293,7 +294,7 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
   return envelope({
     success: true,
     data: {
-      wikiDir: path.join('AutoSnippet', 'wiki'),
+      wikiDir: path.join(DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki'),
       absoluteWikiDir: wikiDir,
       topicCount: topics.length,
       topics,
@@ -338,7 +339,7 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
 
   const container = ctx.container;
   const projectRoot = resolveProjectRoot(container);
-  const wikiDir = path.join(projectRoot, 'AutoSnippet', 'wiki');
+  const wikiDir = path.join(projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'wiki');
 
   // ── 1. 验证文件存在性 ──
   const missingFiles: string[] = [];

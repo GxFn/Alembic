@@ -35,6 +35,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { LanguageService } from '../../shared/LanguageService.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 import {
   buildAiSystemPrompt,
   buildArticlePrompt,
@@ -178,7 +179,7 @@ export const WikiPhase = Object.freeze({
 // ─── 默认配置 ────────────────────────────────────────────────
 
 const DEFAULTS = {
-  wikiDir: 'AutoSnippet/wiki',
+  wikiDir: `${DEFAULT_KNOWLEDGE_BASE_DIR}/wiki`,
   language: 'zh', // 'zh' | 'en'
   maxFiles: 500,
   includeRecipes: true,

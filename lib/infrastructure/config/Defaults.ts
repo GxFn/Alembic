@@ -3,14 +3,22 @@
  * 统一管理路径名、存储适配器、索引策略、分类规则等默认值
  */
 
+import {
+  SPEC_FILENAME as _SPEC_FILENAME,
+  DEFAULT_KNOWLEDGE_BASE_DIR,
+  DEFAULT_SUB_REPO_DIR,
+} from '../../shared/ProjectMarkers.js';
+
 // ─── 路径 ────────────────────────────────────────────────────
-export const SPEC_FILENAME = 'AutoSnippet.boxspec.json';
-export const KNOWLEDGE_BASE_DIR = 'AutoSnippet';
-export const RECIPES_DIR = 'AutoSnippet/recipes';
-export const CANDIDATES_DIR = 'AutoSnippet/candidates';
-export const RECIPES_INDEX = 'AutoSnippet/recipes/index.json';
+export const SPEC_FILENAME = _SPEC_FILENAME;
+export const KNOWLEDGE_BASE_DIR = DEFAULT_KNOWLEDGE_BASE_DIR;
+export const RECIPES_DIR = `${DEFAULT_KNOWLEDGE_BASE_DIR}/recipes`;
+export const CANDIDATES_DIR = `${DEFAULT_KNOWLEDGE_BASE_DIR}/candidates`;
+export const RECIPES_INDEX = `${DEFAULT_KNOWLEDGE_BASE_DIR}/recipes/index.json`;
 export const SPMMAP_FILENAME = 'AutoSnippet.spmmap.json';
-export const SPMMAP_PATH = `AutoSnippet/${SPMMAP_FILENAME}`;
+export const SPMMAP_PATH = `${DEFAULT_KNOWLEDGE_BASE_DIR}/${SPMMAP_FILENAME}`;
+/** 默认子仓库相对路径（相对于 projectRoot） */
+export const SUB_REPO_DIR = DEFAULT_SUB_REPO_DIR;
 
 // ─── Context 存储 ────────────────────────────────────────────
 export const DEFAULT_STORAGE_ADAPTER = 'json';
@@ -72,6 +80,7 @@ export default {
   RECIPES_INDEX,
   SPMMAP_FILENAME,
   SPMMAP_PATH,
+  SUB_REPO_DIR,
   DEFAULT_STORAGE_ADAPTER,
   STORAGE_ADAPTERS,
   SOURCE_TYPES,

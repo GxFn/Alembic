@@ -22,6 +22,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CapabilityProbe } from '#core/capability/CapabilityProbe.js';
 import Logger from '#infra/logging/Logger.js';
 import { applyPendingAutoApprove, markAutoApproveNeeded } from './autoApproveInjector.js';
 import { envelope } from './envelope.js';
@@ -103,6 +104,7 @@ export class McpServer {
   container: McpServiceContainer | null;
   logger: ReturnType<typeof Logger.getInstance>;
   _autoApproveMarked: boolean;
+  _capabilityProbe: CapabilityProbe | null;
   _decisionCache: DecisionCache;
   _lastTaskOperation: string;
   _session: McpSession;
@@ -116,6 +118,7 @@ export class McpServer {
     this.server = null;
     this._startedAt = Date.now();
     this._autoApproveMarked = false;
+    this._capabilityProbe = null;
     this._lastTaskOperation = '';
 
     // ── P0: Decision 注入缓存 ──
@@ -460,9 +463,35 @@ export class McpServer {
   }
 
   /**
+   * 获取（或懒创建）CapabilityProbe 实例，用于探测子仓库写权限
+   * 配置来自 constitution capabilities.git_write
+   */
+  _getCapabilityProbe(): CapabilityProbe {
+    if (!this._capabilityProbe) {
+      try {
+        const constitution = this.container?.get('constitution');
+        const caps = constitution?.config?.capabilities?.git_write || {};
+        this._capabilityProbe = new CapabilityProbe({
+          cacheTTL: caps.cache_ttl || 86400,
+          noRemote: caps.no_remote || 'allow',
+        });
+      } catch {
+        this._capabilityProbe = new CapabilityProbe();
+      }
+    }
+    return this._capabilityProbe;
+  }
+
+  /**
    * Gateway 权限 gating — 写操作验证权限/宪法/审计
    * 只读工具直接跳过（不在 TOOL_GATEWAY_MAP 中）
    * 支持动态 resolver（operation-based 工具按参数解析 action/resource）
+   *
+   * actor 解析：使用 CapabilityProbe 探测本地用户的子仓库权限
+   *   - admin  → 'developer'    全权限
+   *   - contributor → 'contributor' 只读，写操作被拒绝
+   *   - visitor → 'visitor'      最小权限
+   * 探测失败时降级为 'external_agent'（向后兼容）
    */
   async _gatewayGate(toolName: string, args: Record<string, unknown>) {
     let mapping = (TOOL_GATEWAY_MAP as Record<string, GatewayMappingEntry | undefined>)[toolName] as
@@ -487,8 +516,17 @@ export class McpServer {
         return; // Gateway 未初始化，降级放行
       }
 
+      // 用 CapabilityProbe 确定本地用户角色
+      let actor = 'external_agent';
+      try {
+        const probe = this._getCapabilityProbe();
+        actor = probe.probeRole();
+      } catch {
+        // 探测失败降级为 external_agent
+      }
+
       const result = await gateway.checkOnly({
-        actor: 'external_agent',
+        actor,
         action: mapping.action,
         resource: mapping.resource,
         data: args || {},
@@ -497,11 +535,14 @@ export class McpServer {
       if (!result.success) {
         const code = result.error?.code || 'PERMISSION_DENIED';
         const msg = result.error?.message || 'Gateway permission check failed';
-        this.logger.warn(`MCP Gateway gating denied: ${toolName}`, { code, msg });
+        this.logger.warn(`MCP Gateway gating denied: ${toolName}`, { code, msg, actor });
         throw new Error(`[${code}] ${msg}`);
       }
 
-      this.logger.debug(`MCP Gateway gating passed: ${toolName}`, { requestId: result.requestId });
+      this.logger.debug(`MCP Gateway gating passed: ${toolName}`, {
+        requestId: result.requestId,
+        actor,
+      });
     } catch (err: unknown) {
       // 区分 Gateway 自身错误 vs 权限拒绝
       const errMsg = err instanceof Error ? err.message : String(err);

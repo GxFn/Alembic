@@ -42,6 +42,7 @@ const SCAN_EXCLUDE_DIRS = new Set([
   '.tox',
   '.mypy_cache',
   '.pytest_cache',
+  // DEFAULT_KNOWLEDGE_BASE_DIR — 知识库目录排除（与 ProjectMarkers.ts 同步）
   'AutoSnippet',
 ]);
 

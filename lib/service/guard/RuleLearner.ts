@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { RULE_LEARNER } from '../../shared/constants.js';
 import pathGuard from '../../shared/PathGuard.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 
 interface RuleStat {
   triggers: number;
@@ -37,7 +38,7 @@ export class RuleLearner {
     projectRoot: string,
     options: { knowledgeBaseDir?: string; internalDir?: string } = {}
   ) {
-    const kbDir = options.knowledgeBaseDir || 'AutoSnippet';
+    const kbDir = options.knowledgeBaseDir || DEFAULT_KNOWLEDGE_BASE_DIR;
     this.#learnerPath = join(projectRoot, kbDir, 'guard-learner.json');
     pathGuard.assertProjectWriteSafe(this.#learnerPath);
     this.#migrateOldPath(projectRoot, options.internalDir || '.autosnippet');

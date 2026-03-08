@@ -4,7 +4,8 @@
  * AutoSnippet V2 CLI
  *
  * Usage:
- *   asd setup           - 初始化项目
+ *   asd setup           - 初始化项目（--repo 指定子仓库远程地址）
+ *   asd remote <url>    - 将 recipes 目录转为独立子仓库并关联远程仓库
  *   asd coldstart       - 冷启动知识库（9 维度分析 + AI 填充）
  *   asd ais [Target]    - AI 扫描 Target → 直接发布 Recipes
  *   asd search <query>  - 搜索知识库
@@ -18,7 +19,14 @@
  *   asd status          - 环境状态
  */
 
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { Command } from 'commander';
 import { cli } from '../lib/cli/CliLogger.js';
@@ -58,17 +66,114 @@ program
   .option('-d, --dir <path>', '项目目录', '.')
   .option('--force', '强制覆盖已有配置')
   .option('--seed', '预置示例 Recipe（冷启动推荐）')
+  .option('--repo <url>', 'recipes 子仓库的远程 Git 仓库地址（提供则 clone，不提供则为普通目录）')
   .action(async (opts) => {
     const { SetupService } = await import('../lib/cli/SetupService.js');
     const service = new SetupService({
       projectRoot: resolve(opts.dir),
       force: opts.force,
       seed: opts.seed,
+      subRepoUrl: opts.repo,
     });
 
     await service.run();
     service.printSummary();
   });
+
+// ─────────────────────────────────────────────────────
+// remote 命令 — 将 recipes 目录转为独立子仓库并关联远程仓库
+// ─────────────────────────────────────────────────────
+program
+  .command('remote <url>')
+  .description('将 recipes 目录转为独立子仓库并关联远程 Git 仓库')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .action(async (url: string, opts: { dir: string }) => {
+    const projectRoot = resolve(opts.dir);
+
+    const { execSync: exec } = await import('node:child_process');
+    const { resolveSubRepoPath, isGitRepo } = await import('../lib/shared/ProjectMarkers.js');
+
+    const subRepoPath = resolveSubRepoPath(projectRoot);
+
+    // 1. 校验目录存在
+    if (!existsSync(subRepoPath)) {
+      cli.error('recipes/ 目录不存在，请先运行 asd setup');
+      process.exit(1);
+    }
+
+    // 2. URL 格式验证
+    if (!/^(https?:\/\/.+|git@.+:.+)$/.test(url)) {
+      cli.error('无效的 Git 仓库地址（支持 HTTPS 和 SSH 格式）');
+      process.exit(1);
+    }
+
+    const gitExec = (args: string) => {
+      return exec(`git ${args}`, { cwd: subRepoPath, stdio: 'pipe', encoding: 'utf8' }).trim();
+    };
+
+    // 3. 已经是 git 仓库 → 只更新 remote
+    if (isGitRepo(subRepoPath)) {
+      try {
+        gitExec(`remote get-url origin`);
+        // origin 已存在 → set-url
+        gitExec(`remote set-url origin ${url}`);
+      } catch {
+        // origin 不存在 → add
+        gitExec(`remote add origin ${url}`);
+      }
+
+      // 更新 config.json
+      _updateConfigUrl(projectRoot, url);
+
+      cli.log('✓ 已更新 remote origin');
+      cli.log(`  ${url}`);
+      return;
+    }
+
+    // 4. 普通目录 → 初始化为 git 仓库（保留已有文件）
+    cli.log('正在将 recipes/ 转为独立子仓库...');
+    gitExec('init');
+    gitExec(`remote add origin ${url}`);
+    gitExec('add .');
+    try {
+      gitExec('commit -m "Init AutoSnippet recipes"');
+    } catch {
+      /* 空目录时 commit 可能失败，无影响 */
+    }
+
+    // 5. 更新 config.json
+    _updateConfigUrl(projectRoot, url);
+
+    cli.log('✓ recipes/ 已转为独立子仓库');
+    cli.log(`  remote origin → ${url}`);
+    cli.log('');
+    cli.log('后续步骤：');
+    cli.log('  1. git push -u origin main');
+    cli.log('  2. 在主仓库中选择一种方式管理 recipes/:');
+    cli.log(`     • git submodule add ${url} AutoSnippet/recipes`);
+    cli.log('     • 或将 AutoSnippet/recipes/ 加入 .gitignore');
+  });
+
+/**
+ * 更新 .autosnippet/config.json 中的 core.subRepoUrl 字段
+ */
+function _updateConfigUrl(projectRoot: string, url: string) {
+  const configPath = join(projectRoot, '.autosnippet', 'config.json');
+  if (!existsSync(configPath)) {
+    return;
+  }
+  try {
+    const raw = readFileSync(configPath, 'utf-8');
+    const config = JSON.parse(raw);
+    if (!config.core) {
+      config.core = {};
+    }
+    config.core.subRepoUrl = url;
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+  } catch {
+    /* config 解析失败不阻塞主流程 */
+  }
+}
 
 // ─────────────────────────────────────────────────────
 // coldstart 命令 (Knowledge Bootstrap)

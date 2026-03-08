@@ -14,6 +14,8 @@
  *   category  — 分组标签（用于 stepIDE 结果汇报）
  */
 
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
+
 /**
  * 部署策略：
  *   'overwrite'         — AutoSnippet 完全拥有，始终覆盖
@@ -158,11 +160,11 @@ export const MANIFEST = [
   {
     id: 'constitution',
     src: 'constitution.yaml',
-    dest: 'AutoSnippet/constitution.yaml',
+    dest: `${DEFAULT_KNOWLEDGE_BASE_DIR}/constitution.yaml`,
     strategy: 'backup-overwrite',
     on: 'upgrade',
     category: 'constitution',
-    requireDir: 'AutoSnippet',
+    requireDir: DEFAULT_KNOWLEDGE_BASE_DIR,
   },
 
   // ═══ Gitignore ════════════════════════════════════════

@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { LanguageService } from '../../shared/LanguageService.js';
+import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 
 const logger = Logger.getInstance();
 
@@ -44,7 +45,7 @@ export function walkDir(dir: string, callback: (filePath: string) => void, maxFi
     '.git',
     '__tests__',
     'Tests',
-    'AutoSnippet',
+    DEFAULT_KNOWLEDGE_BASE_DIR,
     '.cursor',
   ]);
   let count = 0;
