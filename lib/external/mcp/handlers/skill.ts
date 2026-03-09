@@ -215,6 +215,18 @@ export function loadSkill(ctx: McpContext | null, args: { skillName?: string; se
     // 提取 createdBy/createdAt
     const meta = _parseSkillMeta(skillName, source === 'project' ? projectSkillsDir : SKILLS_DIR);
 
+    // ── SkillHooks: onSkillLoad (fire-and-forget) ──
+    try {
+      const skillHooks = ctx?.container?.get?.('skillHooks');
+      if (skillHooks?.has?.('onSkillLoad')) {
+        skillHooks.run('onSkillLoad', { skillName, source }).catch(() => {
+          /* fire-and-forget */
+        });
+      }
+    } catch {
+      /* skillHooks not available */
+    }
+
     return JSON.stringify({
       success: true,
       data: {
@@ -390,6 +402,20 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
     /* silent */
   }
 
+  // ── SkillHooks: onSkillCreated (fire-and-forget) ──
+  try {
+    const skillHooks = ctx?.container?.get?.('skillHooks');
+    if (skillHooks?.has?.('onSkillCreated')) {
+      skillHooks
+        .run('onSkillCreated', { name, description, createdBy, path: skillPath })
+        .catch(() => {
+          /* fire-and-forget */
+        });
+    }
+  } catch {
+    /* skillHooks not available */
+  }
+
   return JSON.stringify({
     success: true,
     data: {
@@ -541,6 +567,18 @@ export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
 
   // ── regenerate 编辑器索引 ──
   const indexResult = _regenerateEditorIndex(ctx ?? undefined);
+
+  // ── SkillHooks: onSkillExpired (fire-and-forget) ──
+  try {
+    const skillHooks = ctx?.container?.get?.('skillHooks');
+    if (skillHooks?.has?.('onSkillExpired')) {
+      skillHooks.run('onSkillExpired', { name, reason: 'deleted' }).catch(() => {
+        /* fire-and-forget */
+      });
+    }
+  } catch {
+    /* skillHooks not available */
+  }
 
   return JSON.stringify({
     success: true,
@@ -701,6 +739,43 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
  */
 export async function suggestSkills(ctx: McpContext) {
   try {
+    // ── 优先使用 RecommendationPipeline (统一推荐管线) ──
+    const pipeline = ctx?.container?.get?.('recommendationPipeline');
+    if (pipeline && typeof pipeline.recommend === 'function') {
+      const database = ctx?.container?.get?.('database');
+      const projectRoot = resolveProjectRoot(ctx?.container);
+      const existingSkills = _listExistingProjectSkillNames(ctx);
+      const recommendations = await pipeline.recommend({
+        projectRoot,
+        database: database?.getDb?.() || database || null,
+        container: ctx?.container,
+        existingSkills,
+      });
+
+      // 记录展示指标
+      try {
+        const metrics = ctx?.container?.get?.('recommendationMetrics');
+        if (metrics && typeof metrics.trackDisplayed === 'function') {
+          metrics.trackDisplayed(recommendations);
+        }
+      } catch {
+        /* metrics tracking is best-effort */
+      }
+
+      return JSON.stringify({
+        success: true,
+        data: {
+          suggestions: recommendations,
+          existingProjectSkills: [...existingSkills],
+          hint:
+            recommendations.length > 0
+              ? `发现 ${recommendations.length} 个 Skill 创建建议（powered by RecommendationPipeline）。`
+              : '当前项目使用模式暂无明确的 Skill 创建建议。',
+        },
+      });
+    }
+
+    // ── Fallback: 直接使用 SkillAdvisor ──
     const { SkillAdvisor } = await import('#service/skills/SkillAdvisor.js');
     const dbConn = ctx?.container?.get?.('database') || null;
     const database = dbConn?.getDb?.() || dbConn || null;
@@ -718,6 +793,24 @@ export async function suggestSkills(ctx: McpContext) {
       error: { code: 'SUGGEST_ERROR', message: err instanceof Error ? err.message : String(err) },
     });
   }
+}
+
+/**
+ * 获取已有的项目级 Skill 名称集合
+ */
+function _listExistingProjectSkillNames(ctx?: McpContext | null): Set<string> {
+  const names = new Set<string>();
+  try {
+    const dir = _getProjectSkillsDir(ctx ?? undefined);
+    for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (d.isDirectory()) {
+        names.add(d.name);
+      }
+    }
+  } catch {
+    /* no project skills */
+  }
+  return names;
 }
 
 /**
@@ -749,4 +842,93 @@ function _getRelatedSkills(skillName: string) {
     'autosnippet-intent': [],
   };
   return (relations as Record<string, string[]>)[skillName] || [];
+}
+
+// ═══════════════════════════════════════════════════════
+//  推荐反馈
+// ═══════════════════════════════════════════════════════
+
+/**
+ * 记录推荐反馈
+ *
+ * operation: 'feedback'
+ * @param args.recommendationId  推荐 ID
+ * @param args.action           'adopted' | 'dismissed' | 'expired' | 'viewed' | 'modified'
+ * @param args.reason           可选 — 忽略原因
+ * @param args.source           可选 — 推荐来源
+ * @param args.category         可选 — 推荐类别
+ */
+export async function recordFeedback(
+  ctx: McpContext,
+  args: {
+    recommendationId?: string;
+    action?: string;
+    reason?: string;
+    source?: string;
+    category?: string;
+  }
+) {
+  try {
+    const validActions = ['adopted', 'dismissed', 'expired', 'viewed', 'modified'];
+    if (!args.recommendationId || !args.action) {
+      return JSON.stringify({
+        success: false,
+        error: { code: 'MISSING_PARAMS', message: 'recommendationId and action are required' },
+      });
+    }
+    if (!validActions.includes(args.action)) {
+      return JSON.stringify({
+        success: false,
+        error: {
+          code: 'INVALID_ACTION',
+          message: `action must be one of: ${validActions.join(', ')}`,
+        },
+      });
+    }
+
+    // 获取 FeedbackStore
+    const feedbackStore = ctx?.container?.get?.('feedbackStore');
+    if (!feedbackStore || typeof feedbackStore.record !== 'function') {
+      return JSON.stringify({
+        success: false,
+        error: { code: 'STORE_UNAVAILABLE', message: 'FeedbackStore not initialized' },
+      });
+    }
+
+    await feedbackStore.record({
+      recommendationId: args.recommendationId,
+      action: args.action,
+      timestamp: new Date().toISOString(),
+      source: args.source,
+      category: args.category,
+      reason: args.reason,
+    });
+
+    // 触发 SkillHooks: onRecommendFeedback
+    try {
+      const skillHooks = ctx?.container?.get?.('skillHooks');
+      if (skillHooks?.has?.('onRecommendFeedback')) {
+        await skillHooks.run('onRecommendFeedback', {
+          recommendationId: args.recommendationId,
+          action: args.action,
+          reason: args.reason,
+        });
+      }
+    } catch {
+      /* hook error is non-blocking */
+    }
+
+    return JSON.stringify({
+      success: true,
+      data: { recorded: true, recommendationId: args.recommendationId, action: args.action },
+    });
+  } catch (err: unknown) {
+    return JSON.stringify({
+      success: false,
+      error: {
+        code: 'FEEDBACK_ERROR',
+        message: err instanceof Error ? err.message : String(err),
+      },
+    });
+  }
 }

@@ -814,6 +814,16 @@ program
         });
         signalCollector.start();
         (globalThis as any)._signalCollector = signalCollector;
+
+        // 将 SignalCollector 绑定到 AIRecallStrategy (延迟注入)
+        try {
+          const aiStrategy = (container.singletons as Record<string, any>)._aiRecallStrategy;
+          if (aiStrategy && typeof aiStrategy.setSignalCollector === 'function') {
+            aiStrategy.setSignalCollector(signalCollector);
+          }
+        } catch {
+          /* recommendation pipeline not yet initialized */
+        }
       } catch (scErr: any) {
         cli.warn(`⚠️  SignalCollector failed to start: ${scErr.message}`);
         cli.debug(scErr.stack);

@@ -13,6 +13,7 @@ import {
   suggestSkills,
   updateSkill,
 } from '../../external/mcp/handlers/skill.js';
+import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { validate } from '../middleware/validate.js';
 
 const router = express.Router();
@@ -228,6 +229,92 @@ router.delete('/:name', async (req: Request, res: Response): Promise<void> => {
   }
 
   res.json({ success: true, data: parsed.data });
+});
+
+// ── POST /api/v1/skills/feedback — 记录推荐反馈 ──
+
+router.post('/feedback', async (req, res) => {
+  const { recommendationId, action, reason, source, category } = req.body || {};
+
+  if (!recommendationId || !action) {
+    return void res.status(400).json({
+      success: false,
+      error: { code: 'MISSING_PARAMS', message: 'recommendationId and action are required' },
+    });
+  }
+
+  const validActions = ['adopted', 'dismissed', 'expired', 'viewed', 'modified'];
+  if (!validActions.includes(action)) {
+    return void res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_ACTION',
+        message: `action must be one of: ${validActions.join(', ')}`,
+      },
+    });
+  }
+
+  try {
+    const container = getServiceContainer();
+    const feedbackStore = container?.get?.('feedbackStore') as {
+      record: (f: Record<string, unknown>) => Promise<void>;
+    } | null;
+    if (!feedbackStore || typeof feedbackStore.record !== 'function') {
+      return void res.status(503).json({
+        success: false,
+        error: { code: 'STORE_UNAVAILABLE', message: 'FeedbackStore not initialized' },
+      });
+    }
+
+    await feedbackStore.record({
+      recommendationId,
+      action,
+      timestamp: new Date().toISOString(),
+      source,
+      category,
+      reason,
+    });
+
+    res.json({ success: true, data: { recorded: true, recommendationId, action } });
+  } catch (err: unknown) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'FEEDBACK_ERROR', message: err instanceof Error ? err.message : String(err) },
+    });
+  }
+});
+
+// ── GET /api/v1/skills/metrics — 推荐效果指标 ──
+
+router.get('/metrics', (req, res) => {
+  try {
+    const container = getServiceContainer();
+    const metrics = container?.get?.('recommendationMetrics') as {
+      getGlobalSnapshot: (since?: Date) => Record<string, unknown>;
+      getSessionMetrics: () => Record<string, unknown>;
+    } | null;
+    if (!metrics || typeof metrics.getGlobalSnapshot !== 'function') {
+      return void res.status(503).json({
+        success: false,
+        error: { code: 'METRICS_UNAVAILABLE', message: 'RecommendationMetrics not initialized' },
+      });
+    }
+
+    const sinceParam = req.query.since as string | undefined;
+    const since = sinceParam ? new Date(sinceParam) : undefined;
+    const snapshot = metrics.getGlobalSnapshot(since);
+    const session = metrics.getSessionMetrics();
+
+    res.json({
+      success: true,
+      data: { global: snapshot, session },
+    });
+  } catch (err: unknown) {
+    res.status(500).json({
+      success: false,
+      error: { code: 'METRICS_ERROR', message: err instanceof Error ? err.message : String(err) },
+    });
+  }
 });
 
 export default router;

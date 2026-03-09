@@ -180,7 +180,7 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
   const op = args.operation;
   if (!op) {
     throw new Error(
-      'Missing required parameter: operation. Expected: list, load, create, update, delete, suggest'
+      'Missing required parameter: operation. Expected: list, load, create, update, delete, suggest, feedback'
     );
   }
 
@@ -202,9 +202,11 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
       return skillHandlers.deleteSkill(ctx, args);
     case 'suggest':
       return skillHandlers.suggestSkills(ctx);
+    case 'feedback':
+      return skillHandlers.recordFeedback(ctx, args as Record<string, unknown>);
     default:
       throw new Error(
-        `Unknown skill operation: ${op}. Expected: list, load, create, update, delete, suggest`
+        `Unknown skill operation: ${op}. Expected: list, load, create, update, delete, suggest, feedback`
       );
   }
 }

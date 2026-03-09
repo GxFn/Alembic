@@ -43,6 +43,7 @@ import path from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
 import pathGuard from '../../shared/PathGuard.js';
 import { EventAggregator } from './EventAggregator.js';
+import { SkillAdvisor } from './SkillAdvisor.js';
 
 interface SignalCollectorOpts {
   projectRoot: string;
@@ -178,8 +179,9 @@ export class SignalCollector {
     }
     const aiProvider = this.#container?.get('aiProvider');
     if (!aiProvider || aiProvider.name === 'mock') {
-      this.#logger.info('[SignalCollector] no AI provider available, skipping start');
-      return;
+      this.#logger.info(
+        '[SignalCollector] no AI provider available, starting in rule-fallback mode'
+      );
     }
     if (this.#timer) {
       this.#logger.warn('[SignalCollector] already running, ignoring start()');
@@ -275,6 +277,13 @@ export class SignalCollector {
         actions: this.#collectRecentActions(),
         codeChanges: this.#collectCodeChangeSignals(),
       };
+
+      // ── 离线 Fallback: 当 AI 不可用时，降级到 SkillAdvisor 规则引擎 ──
+      const aiProvider = this.#container?.get('aiProvider');
+      if (!this.#agentFactory || !aiProvider || aiProvider.name === 'mock') {
+        this.#logger.info('[SignalCollector] AI unavailable, falling back to rule-based analysis');
+        return this.#ruleFallback();
+      }
 
       // 2. 构造分析 prompt
       const prompt = this.#buildAnalysisPrompt(signals);
@@ -393,6 +402,87 @@ export class SignalCollector {
       return;
     }
     this.#timer = setTimeout(() => this.#tick(), delayMs);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  离线 Fallback — 无 AI 时降级到规则引擎
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * 当 AI Provider 不可用时，使用 SkillAdvisor 规则引擎生成推荐
+   *
+   * 零延迟、零 token 消耗 — 确保推荐系统始终有输出
+   */
+  #ruleFallback(): {
+    suggestions: Record<string, unknown>[];
+    stats: Record<string, unknown> | null;
+  } {
+    try {
+      const advisor = new SkillAdvisor(this.#projectRoot, { database: this.#db });
+      const result = advisor.suggest();
+
+      const newSuggestions = result.suggestions.filter(
+        (s: { name: string }) => !this.#snapshot.pushedNames.includes(s.name)
+      );
+
+      // 更新快照
+      this.#snapshot.lastRun = new Date().toISOString();
+      this.#snapshot.totalRuns = (this.#snapshot.totalRuns || 0) + 1;
+      this.#snapshot.lastAiSummary = '[offline] Rule-based analysis (AI unavailable)';
+      this.#snapshot.lastResult = {
+        totalSuggestions: result.suggestions.length,
+        newSuggestions: newSuggestions.length,
+        aiToolCalls: 0,
+        fallback: true,
+      };
+
+      if (newSuggestions.length > 0) {
+        this.#snapshot.pendingSuggestions = newSuggestions.map((s) => ({
+          name: s.name,
+          description: s.description,
+          rationale: s.rationale,
+          body: '',
+          source: `rule-fallback:${s.source}`,
+          priority: s.priority,
+        }));
+
+        for (const s of newSuggestions) {
+          if (!this.#snapshot.pushedNames.includes(s.name)) {
+            this.#snapshot.pushedNames.push(s.name);
+          }
+        }
+
+        if (this.#onSuggestions) {
+          try {
+            this.#onSuggestions(newSuggestions as unknown as Record<string, unknown>[]);
+          } catch (err: unknown) {
+            this.#logger.warn(
+              `[SignalCollector] onSuggestions callback error (fallback): ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
+
+        this.#logger.info(
+          `[SignalCollector] rule fallback done — ${newSuggestions.length} new suggestions`
+        );
+      }
+
+      this.#saveSnapshot();
+      // 离线模式使用较长间隔（减少无意义的重复分析）
+      this.#scheduleNext(Math.min(this.#intervalMs * 2, MAX_INTERVAL_MS));
+      return {
+        suggestions: newSuggestions as unknown as Record<string, unknown>[],
+        stats: this.#snapshot.lastResult,
+      };
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[SignalCollector] rule fallback error: ${err instanceof Error ? err.message : String(err)}`
+      );
+      this.#scheduleNext(Math.min(this.#intervalMs * 2, MAX_INTERVAL_MS));
+      return { suggestions: [], stats: null };
+    } finally {
+      this.#running = false;
+    }
   }
 
   // ═══════════════════════════════════════════════════════
