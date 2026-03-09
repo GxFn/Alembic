@@ -1,6 +1,6 @@
 {
   "name": "autosnippet",
-  "version": "3.2.15",
+  "version": "3.2.16",
   "description": "Extract code patterns into a knowledge base for AI coding assistants",
   "type": "module",
   "main": "dist/lib/bootstrap.js",
@@ -19,6 +19,10 @@
     "#service/*": {
       "asd-dev": "./lib/service/*",
       "default": "./dist/lib/service/*"
+    },
+    "#agent/*": {
+      "asd-dev": "./lib/agent/*",
+      "default": "./dist/lib/agent/*"
     },
     "#domain/*": {
       "asd-dev": "./lib/domain/*",
