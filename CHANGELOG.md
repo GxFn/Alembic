@@ -4,6 +4,18 @@
 
 ---
 
+## [3.2.17] - 2026-03-10
+
+### 改进
+
+- **架构重构**：提取 `agent/` 为顶层模块（从 `service/agent/`）；提取 `external/lark/`；提取 `service/delivery/`（从 `service/cursor/`）
+- **平台层整理**：`ClipboardManager`、`NativeUi`、`OpenBrowser` 迁移到 `platform/`；iOS 路径工具迁移到 `platform/ios/`
+- **领域实体新增**：`FieldSpec`、`UnifiedValidator`、`StyleGuide`、`RecipeReadinessChecker` 迁移到 `domain/knowledge/`
+- **npm 包体积优化**：移除 `declarationMap` 和 `sourceMap`，包文件数 1890 → 858（-55%），包大小 5.3 → 4.6 MB（-13%）
+- **类型安全改进**：361 个文件的类型清理，净减 3552 行代码
+
+---
+
 ## [3.2.16] - 2026-03-09
 
 ### 新增
