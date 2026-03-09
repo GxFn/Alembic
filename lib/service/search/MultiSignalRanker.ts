@@ -35,47 +35,52 @@ interface SignalContext {
   [key: string]: unknown;
 }
 
-// 场景权重配置
+// 场景权重配置 (含 vectorScore 第 7 信号)
 const SCENARIO_WEIGHTS = {
   lint: {
-    relevance: 0.4,
-    authority: 0.25,
+    relevance: 0.35,
+    authority: 0.2,
     recency: 0.15,
     popularity: 0.1,
     difficulty: 0.05,
     contextMatch: 0.05,
+    vector: 0.1,
   },
   generate: {
-    relevance: 0.3,
-    authority: 0.2,
+    relevance: 0.25,
+    authority: 0.15,
     recency: 0.1,
-    popularity: 0.2,
+    popularity: 0.15,
     difficulty: 0.1,
     contextMatch: 0.1,
+    vector: 0.15,
   },
   search: {
-    relevance: 0.3,
-    authority: 0.2,
-    recency: 0.15,
-    popularity: 0.15,
-    difficulty: 0.1,
-    contextMatch: 0.1,
-  },
-  learning: {
     relevance: 0.2,
     authority: 0.15,
+    recency: 0.1,
+    popularity: 0.1,
+    difficulty: 0.05,
+    contextMatch: 0.1,
+    vector: 0.3,
+  },
+  learning: {
+    relevance: 0.15,
+    authority: 0.1,
     recency: 0.05,
     popularity: 0.1,
-    difficulty: 0.3,
+    difficulty: 0.25,
     contextMatch: 0.2,
+    vector: 0.15,
   },
   default: {
-    relevance: 0.3,
-    authority: 0.2,
-    recency: 0.15,
-    popularity: 0.15,
+    relevance: 0.25,
+    authority: 0.15,
+    recency: 0.1,
+    popularity: 0.1,
     difficulty: 0.1,
     contextMatch: 0.1,
+    vector: 0.2,
   },
 };
 
@@ -245,6 +250,20 @@ function _isRelatedLanguage(a: string, b: string) {
 }
 
 /**
+ * 向量相似度信号 — 利用 RetrievalFunnel Layer 0 附加的 vectorScore
+ * 当向量服务不可用时, vectorScore 为 0, 信号返回 0（权重自然归零）
+ */
+export class VectorSignal {
+  compute(candidate: SignalCandidate, _context: SignalContext) {
+    const vectorScore = (candidate as { vectorScore?: number }).vectorScore;
+    if (typeof vectorScore === 'number' && vectorScore > 0) {
+      return Math.min(vectorScore, 1.0);
+    }
+    return 0;
+  }
+}
+
+/**
  * MultiSignalRanker — 多信号排序引擎
  */
 export class MultiSignalRanker {
@@ -259,6 +278,7 @@ export class MultiSignalRanker {
       popularity: new PopularitySignal(),
       difficulty: new DifficultySignal(),
       contextMatch: new ContextMatchSignal(),
+      vector: new VectorSignal(),
     };
     // 合并自定义权重，支持旧配置中的 "seasonality" 键向后兼容
     const customWeights = options.scenarioWeights || {};

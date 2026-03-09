@@ -9,7 +9,9 @@ import type { ServiceContainer } from '../tools/_shared.js';
 interface NativeToolPromptOptions {
   currentSource: string;
   projectBriefingCache: string;
-  memoryCoordinator?: { buildStaticMemoryPrompt(opts: { mode: string }): string } | null;
+  memoryCoordinator?: {
+    buildStaticMemoryPrompt(opts: { mode: string }): Promise<string> | string;
+  } | null;
   budget?: { maxIterations?: number; [key: string]: unknown };
   soulPath?: string;
 }
@@ -30,7 +32,7 @@ interface ProjectBriefingOptions {
  * @param {string} options.soulPath - SOUL.md 文件路径
  * @returns {string}
  */
-export function buildNativeToolSystemPrompt({
+export async function buildNativeToolSystemPrompt({
   currentSource,
   projectBriefingCache,
   memoryCoordinator,
@@ -51,7 +53,7 @@ export function buildNativeToolSystemPrompt({
     // v5.0: 通过 coordinator 构建静态记忆 section
     let memorySection = '';
     if (memoryCoordinator) {
-      memorySection = memoryCoordinator.buildStaticMemoryPrompt({ mode: 'user' });
+      memorySection = await memoryCoordinator.buildStaticMemoryPrompt({ mode: 'user' });
     }
 
     return `${soulSection}

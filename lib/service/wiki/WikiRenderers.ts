@@ -4,11 +4,30 @@
  * 从 WikiGenerator.js 中提取的 Markdown 渲染器和 AI Prompt 构建函数。
  * 所有函数均为无状态纯函数（不依赖 class 实例）。
  *
+ * 类型定义已提取到 WikiTypes.ts，供多文件共享使用。
+ *
  * @module WikiRenderers
  */
 
 import path from 'node:path';
 import { LanguageService } from '../../shared/LanguageService.js';
+import type {
+  WikiAstInfo,
+  WikiBuildSystem,
+  WikiCodeEntityGraph,
+  WikiData,
+  WikiDependency,
+  WikiFolderProfile,
+  WikiKnowledgeInfo,
+  WikiModuleData,
+  WikiModuleInfo,
+  WikiPatternData,
+  WikiProjectInfo,
+  WikiRecipe,
+  WikiRecipeJson,
+  WikiTarget,
+  WikiTopic,
+} from './WikiTypes.js';
 import {
   getInheritanceRoots,
   getLangTerms,
@@ -18,146 +37,8 @@ import {
   slug,
 } from './WikiUtils.js';
 
-// Re-export BUILD_SYSTEM_MARKERS for renderGettingStarted internals
-// NOTE: BUILD_SYSTEM_MARKERS is accessed via LanguageService directly where needed
-
-// ═══ Wiki 渲染器内部类型定义 ═══════════════════════════════
-
-interface WikiBuildSystem {
-  buildTool: string;
-  eco: string;
-  file?: string;
-}
-
-interface WikiDependency {
-  name: string;
-  [key: string]: unknown;
-}
-
-interface WikiTarget {
-  name: string;
-  type?: string;
-  path?: string;
-  packageName?: string;
-  dependencies?: (string | WikiDependency)[];
-  info?: {
-    path?: string;
-    dependencies?: (string | WikiDependency)[];
-  };
-}
-
-interface WikiProjectInfo {
-  name: string;
-  primaryLanguage?: string;
-  sourceFiles: string[];
-  languages?: Record<string, number>;
-  buildSystems?: WikiBuildSystem[];
-  hasPackageSwift?: boolean;
-  hasPodfile?: boolean;
-  hasXcodeproj?: boolean;
-  sourceFilesByModule?: Record<string, string[]>;
-  root?: string;
-}
-
-interface WikiAstOverview {
-  totalClasses?: number;
-  totalProtocols?: number;
-  totalMethods?: number;
-  topLevelModules?: string[];
-  classesPerModule?: Record<string, number>;
-  entryPoints?: string[];
-}
-
-interface WikiAstInfo {
-  overview?: WikiAstOverview;
-  classNamesByModule?: Record<string, string[]>;
-  protocolNamesByModule?: Record<string, string[]>;
-  classes: string[];
-  protocols: string[];
-}
-
-interface WikiModuleInfo {
-  targets: WikiTarget[];
-  depGraph?: {
-    edges?: Array<{ from?: string; to?: string }>;
-  };
-}
-
-interface WikiRecipeJson {
-  title?: string;
-  description?: string;
-  category?: string;
-  moduleName?: string;
-  tags?: string[];
-  doClause?: string;
-  dontClause?: string;
-  language?: string;
-  content?: { pattern?: string };
-  reasoning?: { whyStandard?: string };
-}
-
-type WikiRecipe = WikiRecipeJson & { toJSON?: () => WikiRecipeJson };
-
-interface WikiKnowledgeInfo {
-  recipes: WikiRecipe[];
-}
-
-interface WikiCodeEntityGraph {
-  queryEntities?: (filter: Record<string, unknown>) => Array<{ entityId: string; name: string }>;
-  queryEdges?: (
-    filter: Record<string, unknown>
-  ) => Array<{ toId?: string; to_id?: string; fromId?: string }>;
-}
-
-interface WikiFolderProfile {
-  name: string;
-  relPath: string;
-  fileCount: number;
-  totalSize: number;
-  depth: number;
-  langBreakdown: Record<string, number>;
-  keyFiles: string[];
-  fileNames: string[];
-  readme: string | null;
-  purpose: { zh?: string; en?: string } | null;
-  imports: string[];
-  entryPoints: string[];
-  namingPatterns: string[];
-  headerComments: string[];
-}
-
-interface WikiTopic {
-  type: string;
-  id?: string;
-  title?: string;
-  path?: string;
-  priority?: number;
-  _allTopics?: WikiTopic[];
-  _moduleData?: Record<string, unknown>;
-  _patternData?: Record<string, unknown>;
-  _folderProfiles?: Record<string, unknown>[];
-  _folderProfile?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-/** Narrowed shape of _moduleData for access inside renderers */
-interface WikiModuleData {
-  target: WikiTarget;
-  moduleFiles: string[];
-}
-
-/** Narrowed shape of _patternData for access inside renderers */
-interface WikiPatternData {
-  category: string;
-  recipes: WikiRecipeJson[];
-}
-
-export interface WikiData {
-  projectInfo: WikiProjectInfo;
-  astInfo: WikiAstInfo;
-  moduleInfo: WikiModuleInfo;
-  knowledgeInfo: WikiKnowledgeInfo;
-}
+// Re-export types for backward compatibility
+export type { WikiData } from './WikiTypes.js';
 
 // ═══ AI Prompt 构建 ════════════════════════════════════════
 

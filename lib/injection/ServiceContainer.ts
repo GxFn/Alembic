@@ -9,12 +9,14 @@ import { GraphCache } from '../infrastructure/cache/GraphCache.js';
 // ─── P3: Infrastructure ──────────────────────────────
 import Logger from '../infrastructure/logging/Logger.js';
 import * as AgentModule from './modules/AgentModule.js';
+import * as AiModule from './modules/AiModule.js';
 import * as AppModule from './modules/AppModule.js';
 import * as GuardModule from './modules/GuardModule.js';
 // ─── DI Modules ──────────────────────────────────────
 import * as InfraModule from './modules/InfraModule.js';
 import * as KnowledgeModule from './modules/KnowledgeModule.js';
-
+import * as VectorModule from './modules/VectorModule.js';
+import type { ServiceMap } from './ServiceMap.js';
 /**
  * DependencyInjection 容器
  * 管理所有应用层的仓储、服务和基础设施依赖的创建和注入
@@ -109,72 +111,8 @@ export class ServiceContainer {
         this.singletons.skillHooks = bootstrapComponents.skillHooks;
       }
 
-      // AiFactory 模块引用（用于 SpmHelper AI 扫描）
-      try {
-        this.singletons._aiFactory = await import('../external/ai/AiFactory.js');
-      } catch {
-        this.singletons._aiFactory = null;
-      }
-
-      // 自动探测 AI Provider（供 SearchEngine / Agent / IndexingPipeline 等常驻服务使用）
-      if (!this.singletons.aiProvider && this.singletons._aiFactory) {
-        try {
-          const aiFactory = this.singletons._aiFactory as {
-            autoDetectProvider?: () => Record<string, unknown>;
-          };
-          if (typeof aiFactory.autoDetectProvider === 'function') {
-            this.singletons.aiProvider = aiFactory.autoDetectProvider();
-            const provider = this.singletons.aiProvider as Record<string, unknown> | null;
-            this.logger.info('AI provider injected into container', {
-              provider: (provider?.constructor as { name?: string } | undefined)?.name || 'unknown',
-            });
-          }
-        } catch {
-          // AI 不可用不阻塞启动
-          this.singletons.aiProvider = null;
-        }
-      }
-
-      // 如果主 provider 不支持 embedding（如 Claude），尝试创建备用 embedding provider
-      const currentProvider = this.singletons.aiProvider as Record<string, unknown> | null;
-      if (
-        (currentProvider &&
-          typeof (currentProvider as Record<string, (...args: unknown[]) => unknown>)
-            .supportsEmbedding !== 'function') ||
-        (currentProvider &&
-          !(
-            currentProvider as Record<string, (...args: unknown[]) => unknown>
-          ).supportsEmbedding?.())
-      ) {
-        try {
-          const aiFactory = (this.singletons._aiFactory || {}) as {
-            getAvailableFallbacks?: (name: string) => string[];
-            createProvider?: (opts: Record<string, unknown>) => Record<string, unknown>;
-          };
-          const providerName = ((currentProvider?.name as string) || '').replace('-', '');
-          const fbCandidates =
-            typeof aiFactory.getAvailableFallbacks === 'function'
-              ? aiFactory.getAvailableFallbacks(providerName)
-              : [];
-          for (const fb of fbCandidates) {
-            try {
-              const fbProvider = aiFactory.createProvider!({ provider: fb });
-              if (
-                typeof fbProvider.supportsEmbedding === 'function' &&
-                (fbProvider.supportsEmbedding as () => boolean)()
-              ) {
-                this.singletons._embedProvider = fbProvider;
-                this.logger.info('Embedding fallback provider created', { provider: fb });
-                break;
-              }
-            } catch {
-              /* skip */
-            }
-          }
-        } catch {
-          /* no embed fallback available */
-        }
-      }
+      // ═══ AI Provider 初始化（委托 AiModule）═══
+      await AiModule.initialize(this);
 
       // RecipeExtractor 实例（用于工具增强）
       AppModule.initRecipeExtractor(this);
@@ -194,8 +132,10 @@ export class ServiceContainer {
       // 注册模块 (顺序重要: AppModule 先注册 qualityScorer 等基础服务)
       AppModule.register(this);
       KnowledgeModule.register(this);
+      VectorModule.register(this);
       GuardModule.register(this);
       AgentModule.register(this);
+      AiModule.register(this);
 
       // v3.1: 初始化 Enhancement Pack 注册表（异步加载所有框架增强包）
       try {
@@ -205,6 +145,9 @@ export class ServiceContainer {
           error: (e as Error).message,
         });
       }
+
+      // v3.3: 初始化 VectorService（绑定 EventBus 事件监听）
+      await VectorModule.initializeVectorService(this);
 
       this.logger.info('Service container initialized successfully');
     } catch (error: unknown) {
@@ -230,40 +173,14 @@ export class ServiceContainer {
     const old = this.singletons.aiProvider as Record<string, unknown> | null;
     this.singletons.aiProvider = newProvider;
 
-    // 重新创建 embedding fallback provider
+    // 重新创建 embedding fallback provider（委托 AiModule）
     this.singletons._embedProvider = null;
     if (
       newProvider &&
       typeof newProvider.supportsEmbedding === 'function' &&
       !(newProvider.supportsEmbedding as () => boolean)()
     ) {
-      try {
-        const aiFactory = (this.singletons._aiFactory || {}) as {
-          getAvailableFallbacks?: (name: string) => string[];
-          createProvider?: (opts: Record<string, unknown>) => Record<string, unknown>;
-        };
-        if (typeof aiFactory.getAvailableFallbacks === 'function') {
-          const providerName = ((newProvider.name as string) || '').replace('-', '');
-          const fbCandidates = aiFactory.getAvailableFallbacks(providerName);
-          for (const fb of fbCandidates) {
-            try {
-              const fbProvider = aiFactory.createProvider!({ provider: fb });
-              if (
-                typeof fbProvider.supportsEmbedding === 'function' &&
-                (fbProvider.supportsEmbedding as () => boolean)()
-              ) {
-                this.singletons._embedProvider = fbProvider;
-                this.logger.info('Embedding fallback provider re-created', { provider: fb });
-                break;
-              }
-            } catch {
-              /* skip */
-            }
-          }
-        }
-      } catch {
-        /* no embed fallback available */
-      }
+      AiModule.initEmbeddingFallback(this);
     }
 
     // 清除持有旧 aiProvider 引用的 singleton 缓存
@@ -336,10 +253,19 @@ export class ServiceContainer {
   }
 
   /**
-   * 获取服务（通过工厂函数）
+   * 获取服务（类型安全版本）
+   *
+   * 当传入 ServiceMap 中已知的 key 时，自动推导返回类型：
+   * ```ts
+   * const search = container.get('searchEngine'); // SearchEngine
+   * const guard = container.get('guardService');   // GuardService
+   * ```
+   *
+   * 对于非 ServiceMap 中的 key，返回 unknown（向后兼容）。
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DI container: callers know the service type
-  get(name: string): any {
+  get<K extends keyof ServiceMap>(name: K): ServiceMap[K];
+  get(name: string): unknown;
+  get(name: string): unknown {
     if (!this.services[name]) {
       throw new Error(`Service '${name}' not found in container`);
     }

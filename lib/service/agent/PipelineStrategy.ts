@@ -73,7 +73,7 @@ interface PipelineStage {
   name: string;
   gate?: GateConfig;
   capabilities?: CapabilityRef[];
-  promptBuilder?: (ctx: Record<string, unknown>) => string;
+  promptBuilder?: (ctx: Record<string, unknown>) => Promise<string> | string;
   retryPromptBuilder?: (
     retryCtx: { reason?: string; artifact?: unknown },
     content: string,
@@ -318,7 +318,13 @@ export class PipelineStrategy extends Strategy {
     });
 
     // 构建阶段 prompt
-    const stagePrompt = this.#buildStagePrompt(stage, message, phaseResults, strategyContext, ctx);
+    const stagePrompt = await this.#buildStagePrompt(
+      stage,
+      message,
+      phaseResults,
+      strategyContext,
+      ctx
+    );
 
     // Budget (retry 时使用 retryBudget)
     const isRetry = !!phaseResults[`_was_retry_${stage.name}`];
@@ -396,7 +402,7 @@ export class PipelineStrategy extends Strategy {
   /**
    * 构建阶段 prompt (优先级: retryPromptBuilder > promptBuilder > promptTransform > 原始)
    */
-  #buildStagePrompt(
+  async #buildStagePrompt(
     stage: PipelineStage,
     message: AgentMessage,
     phaseResults: Record<string, unknown>,
@@ -409,7 +415,7 @@ export class PipelineStrategy extends Strategy {
       prompt = stage.retryPromptBuilder(retryCtx, message.content, phaseResults);
       delete phaseResults._retryContext;
     } else if (stage.promptBuilder) {
-      prompt = stage.promptBuilder({
+      prompt = await stage.promptBuilder({
         message: message.content,
         phaseResults,
         gateArtifact: ctx.gateArtifact,

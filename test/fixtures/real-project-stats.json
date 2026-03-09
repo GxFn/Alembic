@@ -67,9 +67,7 @@
     "primaryLang": "swift",
     "profile": {
       "primary": "swift",
-      "secondary": [
-        "objectivec"
-      ],
+      "secondary": ["objectivec"],
       "isMultiLang": true
     },
     "depEdges": 0,
@@ -143,9 +141,7 @@
     "primaryLang": "swift",
     "profile": {
       "primary": "swift",
-      "secondary": [
-        "objectivec"
-      ],
+      "secondary": ["objectivec"],
       "isMultiLang": true
     },
     "depEdges": 0,

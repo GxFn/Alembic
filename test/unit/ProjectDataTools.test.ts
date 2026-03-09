@@ -1,7 +1,8 @@
-import { vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { vi } from 'vitest';
+
 /* ────────────────────────────────────────────
  *  动态导入 tools.js 获取 ALL_TOOLS 数组
  * ──────────────────────────────────────────── */
@@ -355,7 +356,8 @@ describe('submit_with_check consistency', () => {
       headers: [],
       usageGuide: '### Usage\nCall example()',
       content: {
-        markdown: '## Example\n\n架构模式示例。本模式展示了如何通过路由器实现模块间解耦导航，确保各业务模块不直接依赖彼此。\n\n```swift\n// 来源: Router.swift:10\nclass Router {\n  static let shared = Router()\n  private var routes: [String: () -> UIViewController] = [:]\n\n  func register(_ path: String, factory: @escaping () -> UIViewController) {\n    routes[path] = factory\n  }\n\n  func navigate(to path: String) {\n    guard let vc = routes[path]?() else { return }\n    topViewController?.navigationController?.pushViewController(vc, animated: true)\n  }\n}\n```\n\n应始终通过路由器导航，禁止直接 push ViewController。路由器负责统一管理页面跳转逻辑。',
+        markdown:
+          '## Example\n\n架构模式示例。本模式展示了如何通过路由器实现模块间解耦导航，确保各业务模块不直接依赖彼此。\n\n```swift\n// 来源: Router.swift:10\nclass Router {\n  static let shared = Router()\n  private var routes: [String: () -> UIViewController] = [:]\n\n  func register(_ path: String, factory: @escaping () -> UIViewController) {\n    routes[path] = factory\n  }\n\n  func navigate(to path: String) {\n    guard let vc = routes[path]?() else { return }\n    topViewController?.navigationController?.pushViewController(vc, animated: true)\n  }\n}\n```\n\n应始终通过路由器导航，禁止直接 push ViewController。路由器负责统一管理页面跳转逻辑。',
         pattern: 'func example() {}',
         rationale: 'standard architecture',
       },
@@ -403,7 +405,8 @@ describe('submit_with_check consistency', () => {
       headers: [],
       usageGuide: '### Usage\nCall test()',
       content: {
-        markdown: '## Test\n\n测试来源推断。本模式展示了如何在提交知识时自动推断数据来源，确保元数据完整性。\n\n```swift\n// 来源: Test.swift:5\nfunc validate(input: String) -> Bool {\n  guard !input.isEmpty else { return false }\n  let pattern = "^[a-zA-Z0-9]+$"\n  return input.range(of: pattern, options: .regularExpression) != nil\n}\n\nfunc testValidation() {\n  assert(validate(input: "abc123") == true)\n  assert(validate(input: "") == false)\n}\n```\n\n应始终进行验证，确保输入数据符合预期格式。验证失败时需提供明确的错误提示。',
+        markdown:
+          '## Test\n\n测试来源推断。本模式展示了如何在提交知识时自动推断数据来源，确保元数据完整性。\n\n```swift\n// 来源: Test.swift:5\nfunc validate(input: String) -> Bool {\n  guard !input.isEmpty else { return false }\n  let pattern = "^[a-zA-Z0-9]+$"\n  return input.range(of: pattern, options: .regularExpression) != nil\n}\n\nfunc testValidation() {\n  assert(validate(input: "abc123") == true)\n  assert(validate(input: "") == false)\n}\n```\n\n应始终进行验证，确保输入数据符合预期格式。验证失败时需提供明确的错误提示。',
         pattern: 'func test() {}',
         rationale: 'test rationale',
       },
@@ -446,7 +449,8 @@ describe('submit_with_check consistency', () => {
       headers: [],
       usageGuide: '### Usage\nUse Router.navigate()',
       content: {
-        markdown: '## Router\n\n路由器模式。本模式定义了统一的页面导航方案，通过中心化的路由注册与跳转机制解耦模块间依赖。\n\n```swift\n// 来源: Router.swift:1\nclass Router {\n  static let shared = Router()\n  private var handlers: [String: () -> UIViewController] = [:]\n\n  func register(_ route: String, handler: @escaping () -> UIViewController) {\n    handlers[route] = handler\n  }\n\n  func navigate(to route: String) {\n    guard let vc = handlers[route]?() else { return }\n    UIApplication.topVC?.navigationController?.pushViewController(vc, animated: true)\n  }\n}\n```\n\n应始终通过路由器导航，禁止直接 push ViewController。路由器负责统一管理跳转逻辑。',
+        markdown:
+          '## Router\n\n路由器模式。本模式定义了统一的页面导航方案，通过中心化的路由注册与跳转机制解耦模块间依赖。\n\n```swift\n// 来源: Router.swift:1\nclass Router {\n  static let shared = Router()\n  private var handlers: [String: () -> UIViewController] = [:]\n\n  func register(_ route: String, handler: @escaping () -> UIViewController) {\n    handlers[route] = handler\n  }\n\n  func navigate(to route: String) {\n    guard let vc = handlers[route]?() else { return }\n    UIApplication.topVC?.navigationController?.pushViewController(vc, animated: true)\n  }\n}\n```\n\n应始终通过路由器导航，禁止直接 push ViewController。路由器负责统一管理跳转逻辑。',
         pattern: 'class Router {}',
         rationale: 'router pattern',
       },

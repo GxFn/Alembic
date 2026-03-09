@@ -39,6 +39,9 @@ interface TaskArgs {
   parentId?: string | null;
   limit?: number;
   withKnowledge?: boolean;
+  userQuery?: string;
+  activeFile?: string;
+  language?: string;
   status?: string;
   subtasks?: unknown[];
   dependsOn?: string;
@@ -52,8 +55,18 @@ interface TaskArgs {
 
 interface TaskGraphServiceLike {
   create(opts: Record<string, unknown>): Promise<{ task: TaskLike; isDuplicate: boolean }>;
-  ready(opts: { limit: number; withKnowledge: boolean }): Promise<TaskLike[]>;
-  claim(id: string): Promise<TaskLike>;
+  ready(opts: {
+    limit: number;
+    withKnowledge: boolean;
+    userQuery?: string;
+    activeFile?: string;
+    language?: string;
+  }): Promise<TaskLike[]>;
+  claim(
+    id: string,
+    assignee?: string,
+    knowledgeOptions?: { userQuery?: string; activeFile?: string; language?: string }
+  ): Promise<TaskLike>;
   close(id: string, reason: string): Promise<{ task: TaskLike; newlyReady: unknown[] }>;
   fail(id: string, reason: string): Promise<TaskLike>;
   defer(id: string, reason: string): Promise<TaskLike>;
@@ -65,7 +78,13 @@ interface TaskGraphServiceLike {
   addDependency(id: string, dependsOn: string, depType: string): Promise<void>;
   depTree(id: string): Promise<unknown[]>;
   stats(): Promise<Record<string, unknown>>;
-  prime(opts: { limit: number; withKnowledge: boolean }): Promise<PrimeResult>;
+  prime(opts: {
+    limit: number;
+    withKnowledge: boolean;
+    userQuery?: string;
+    activeFile?: string;
+    language?: string;
+  }): Promise<PrimeResult>;
   recordDecision(opts: Record<string, unknown>): Promise<{ task: TaskLike; isDuplicate: boolean }>;
   reviseDecision(
     opts: Record<string, unknown>
@@ -204,6 +223,9 @@ async function _ready(svc: TaskGraphServiceLike, args: TaskArgs) {
   const tasks = await svc.ready({
     limit: args.limit || 10,
     withKnowledge: args.withKnowledge !== false,
+    userQuery: args.userQuery,
+    activeFile: args.activeFile,
+    language: args.language,
   });
   return envelope({
     success: true,
@@ -223,7 +245,11 @@ async function _claim(svc: TaskGraphServiceLike, args: TaskArgs) {
       meta: { tool: 'autosnippet_task' },
     });
   }
-  const task = await svc.claim(args.id);
+  const knowledgeOptions =
+    args.userQuery || args.activeFile || args.language
+      ? { userQuery: args.userQuery, activeFile: args.activeFile, language: args.language }
+      : undefined;
+  const task = await svc.claim(args.id, 'agent', knowledgeOptions);
   return envelope({
     success: true,
     data: task.toJSON(),
@@ -450,6 +476,9 @@ async function _prime(svc: TaskGraphServiceLike, args: TaskArgs) {
   const result = await svc.prime({
     limit: args.limit || 10,
     withKnowledge: args.withKnowledge !== false,
+    userQuery: args.userQuery,
+    activeFile: args.activeFile,
+    language: args.language,
   });
 
   const decisionCount = (result.decisions || []).length;

@@ -289,7 +289,7 @@ program
             const taskManager = container.get('bootstrapTaskManager');
             const sessionStatus = taskManager.getSessionStatus();
 
-            if (!sessionStatus || !sessionStatus.tasks) {
+            if (!sessionStatus || !('tasks' in sessionStatus)) {
               break;
             }
 
@@ -312,12 +312,14 @@ program
 
               // 输出各维度结果
               if (!opts.json) {
-                const succeeded = sessionStatus.tasks.filter(
+                const succeeded = ('tasks' in sessionStatus ? sessionStatus.tasks : []).filter(
                   (t: any) => t.status === 'done'
                 ).length;
-                const failed = sessionStatus.tasks.filter((t: any) => t.status === 'error').length;
+                const failed = ('tasks' in sessionStatus ? sessionStatus.tasks : []).filter(
+                  (t: any) => t.status === 'error'
+                ).length;
                 cli.log(`\n  Results: ${succeeded} succeeded, ${failed} failed`);
-                for (const t of sessionStatus.tasks) {
+                for (const t of 'tasks' in sessionStatus ? sessionStatus.tasks : []) {
                   const icon = t.status === 'done' ? '✅' : '❌';
                   cli.log(`    ${icon} ${t.meta?.label || t.id}`);
                 }
@@ -657,7 +659,7 @@ program
         );
         const filesWithIssues = result.files.filter((f: any) => f.summary.total > 0);
         for (const file of filesWithIssues.slice(0, 10)) {
-          cli.log(`  📄 ${file.filePath || file.path}`);
+          cli.log(`  📄 ${file.filePath}`);
           for (const v of file.violations.slice(0, 5)) {
             const icon = v.severity === 'error' ? '❌' : '⚠️';
             cli.log(`    ${icon} [${v.ruleId}] ${v.message}`);
@@ -796,7 +798,7 @@ program
 
         const signalCollector = new SignalCollector({
           projectRoot,
-          database: db,
+          database: db as any,
           agentFactory,
           container,
           mode: process.env.ASD_SIGNAL_MODE || 'auto',
@@ -1012,6 +1014,118 @@ program
   });
 
 // ─────────────────────────────────────────────────────
+// embed 命令 — 构建/重建语义向量索引
+// ─────────────────────────────────────────────────────
+program
+  .command('embed')
+  .description('构建/重建语义向量索引')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .option('--force', '忽略增量检测，全量重建')
+  .option('--clear', '清空现有索引后重建')
+  .option('--dry-run', '只报告不执行')
+  .option('--json', 'JSON 输出')
+  .option('--validate', '只验证索引健康状态')
+  .action(async (opts) => {
+    const projectRoot = resolve(opts.dir);
+    const { bootstrap, container } = await initContainer({ projectRoot });
+
+    try {
+      // 优先使用 VectorService，降级到 IndexingPipeline
+      const hasVectorService = !!container.services.vectorService;
+
+      if (opts.validate) {
+        if (hasVectorService) {
+          const vs = container.get('vectorService');
+          const validation = await vs.validate();
+          const stats = await vs.getStats();
+          if (opts.json) {
+            cli.json({ validation, stats });
+          } else {
+            cli.log('\n  Vector Index Health Check');
+            cli.log(`  ${'─'.repeat(40)}`);
+            cli.log(`  Status:    ${validation.healthy ? '✅ Healthy' : '⚠️  Issues found'}`);
+            cli.log(`  Entries:   ${stats.count ?? 0}`);
+            cli.log(`  Dimension: ${stats.dimension ?? 0}`);
+            cli.log(`  Quantized: ${stats.quantized ?? false}`);
+            cli.log(
+              `  Embed:     ${stats.embedProviderAvailable ? 'Available' : 'Not configured'}`
+            );
+            if (validation.issues.length > 0) {
+              cli.log(`\n  Issues:`);
+              for (const issue of validation.issues) {
+                cli.log(`    • ${issue}`);
+              }
+            }
+            cli.blank();
+          }
+        } else {
+          cli.log('VectorService not available. Configure an AI API key first.');
+        }
+        return;
+      }
+
+      if (hasVectorService) {
+        const vs = container.get('vectorService');
+
+        if (opts.clear) {
+          await vs.clear();
+          cli.log('  🗑️  Existing vector index cleared.');
+        }
+
+        const start = Date.now();
+        cli.log('  Building semantic index...');
+
+        const result = await vs.fullBuild({
+          force: opts.force ?? false,
+          dryRun: opts.dryRun ?? false,
+        });
+
+        const duration = ((Date.now() - start) / 1000).toFixed(1);
+
+        if (opts.json) {
+          cli.json(result);
+        } else {
+          cli.log('\n  Embedding Report');
+          cli.log(`  ${'─'.repeat(40)}`);
+          cli.log(`  Scanned:   ${result.scanned ?? 0} files`);
+          cli.log(`  Chunked:   ${result.chunked ?? 0} chunks`);
+          cli.log(`  Enriched:  ${result.enriched ?? 0} (contextual)`);
+          cli.log(`  Embedded:  ${result.embedded ?? 0}`);
+          cli.log(`  Upserted:  ${result.upserted ?? 0}`);
+          cli.log(`  Skipped:   ${result.skipped ?? 0} (unchanged)`);
+          cli.log(`  Errors:    ${result.errors ?? 0}`);
+          cli.log(`  Duration:  ${duration}s`);
+          cli.blank();
+        }
+      } else {
+        // 降级: 直接使用 IndexingPipeline
+        const pipeline = container.get('indexingPipeline');
+        const result = await pipeline.run({
+          force: opts.force ?? false,
+          dryRun: opts.dryRun ?? false,
+          clear: opts.clear ?? false,
+        });
+
+        if (opts.json) {
+          cli.json(result);
+        } else {
+          cli.log('\n  Embedding Report (pipeline mode)');
+          cli.log(`  ${'─'.repeat(40)}`);
+          cli.log(`  Scanned:  ${result.scanned} files`);
+          cli.log(`  Chunked:  ${result.chunked} chunks`);
+          cli.log(`  Embedded: ${result.embedded}`);
+          cli.log(`  Upserted: ${result.upserted}`);
+          cli.log(`  Skipped:  ${result.skipped} (unchanged)`);
+          cli.log(`  Errors:   ${result.errors}`);
+          cli.blank();
+        }
+      }
+    } finally {
+      await bootstrap.shutdown?.();
+    }
+  });
+
+// ─────────────────────────────────────────────────────
 // upgrade 命令
 // ─────────────────────────────────────────────────────
 program
@@ -1049,12 +1163,12 @@ program
       const result = await pipeline.deliver();
       cli.log('\n  Cursor Rules Delivery');
       cli.log(`  ${'─'.repeat(40)}`);
-      cli.log(`  Channel A: ${result.channelA?.count ?? '?'} always-on rules`);
+      cli.log(`  Channel A: ${result.channelA?.rulesCount ?? '?'} always-on rules`);
       cli.log(
-        `  Channel B: ${result.channelB?.count ?? Object.keys(result.channelB?.topics || {}).length} topic rules`
+        `  Channel B: ${result.channelB?.topicCount ?? Object.keys(result.channelB?.topics || {}).length} topic rules`
       );
       cli.log(
-        `  Channel C: ${result.channelC?.count ?? '?'} skills (${result.channelC?.errors ?? 0} errors)`
+        `  Channel C: ${result.channelC?.synced ?? '?'} skills (${result.channelC?.errors ?? 0} errors)`
       );
       if (result.channelC.errors > 0) {
         cli.log(`  ⚠️  ${result.channelC.errors} skill(s) failed to deliver`);
@@ -1103,9 +1217,15 @@ taskCmd
         cli.log(`\n  ID               Status        Priority  Title`);
         cli.log(`  ${'─'.repeat(70)}`);
         for (const t of tasks) {
+          if (!t) {
+            continue;
+          }
           const j = t.toJSON ? t.toJSON() : t;
-          const id = (j.id || '').padEnd(16);
-          const status = (j.status || '').padEnd(13);
+          if (!j) {
+            continue;
+          }
+          const id = String(j.id || '').padEnd(16);
+          const status = String(j.status || '').padEnd(13);
           const pri = String(j.priority ?? '-').padEnd(9);
           cli.log(`  ${id} ${status} ${pri} ${j.title}`);
         }
@@ -1134,17 +1254,20 @@ taskCmd
         cli.log('No ready tasks.');
       } else {
         for (const t of tasks) {
-          const j = t.toJSON ? t.toJSON() : t;
-          cli.log(`\n  ▸ ${j.id} — ${j.title} (P${j.priority ?? '?'})`);
-          if (t.knowledgeContext?.relatedKnowledge?.length) {
-            cli.log(
-              `    Knowledge: ${t.knowledgeContext.relatedKnowledge.map((k: any) => k.title).join(', ')}`
-            );
+          if (!t) {
+            continue;
           }
-          if (t.knowledgeContext?.guardRules?.length) {
-            cli.log(
-              `    Guard: ${t.knowledgeContext.guardRules.map((r: any) => r.title).join(', ')}`
-            );
+          const j = t.toJSON ? t.toJSON() : t;
+          if (!j) {
+            continue;
+          }
+          cli.log(`\n  ▸ ${j.id} — ${j.title} (P${j.priority ?? '?'})`);
+          const kCtx = t.knowledgeContext as any;
+          if (kCtx?.relatedKnowledge?.length) {
+            cli.log(`    Knowledge: ${kCtx.relatedKnowledge.map((k: any) => k.title).join(', ')}`);
+          }
+          if (kCtx?.guardRules?.length) {
+            cli.log(`    Guard: ${kCtx.guardRules.map((r: any) => r.title).join(', ')}`);
           }
         }
         cli.blank();
@@ -1164,20 +1287,22 @@ taskCmd
     try {
       const svc = container.get('taskGraphService');
       const result = await svc.prime({ withKnowledge: true });
+      const inProgress = result.inProgress as Array<{ id: string; title: string }>;
+      const ready = result.ready as Array<{ id: string; title: string }>;
       cli.log(`\n  TaskGraph Prime`);
       cli.log(`  ${'─'.repeat(40)}`);
-      cli.log(`  In Progress: ${result.inProgress.length}`);
-      cli.log(`  Ready:       ${result.ready.length}`);
+      cli.log(`  In Progress: ${inProgress.length}`);
+      cli.log(`  Ready:       ${ready.length}`);
       cli.log(`  Stats:       ${JSON.stringify(result.stats)}`);
-      if (result.inProgress.length > 0) {
+      if (inProgress.length > 0) {
         cli.log(`\n  ▸ In Progress:`);
-        for (const t of result.inProgress) {
+        for (const t of inProgress) {
           cli.log(`    ${t.id} — ${t.title}`);
         }
       }
-      if (result.ready.length > 0) {
+      if (ready.length > 0) {
         cli.log(`\n  ▸ Ready:`);
-        for (const t of result.ready) {
+        for (const t of ready) {
           cli.log(`    ${t.id} — ${t.title}`);
         }
       }
@@ -1330,7 +1455,7 @@ program
     }
 
     try {
-      const report: any = syncService.sync(db, {
+      const report: any = syncService.sync(db as any, {
         dryRun: opts.dryRun,
         force: opts.force,
       });

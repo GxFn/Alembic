@@ -18,6 +18,14 @@ import { BatchEmbedder } from './BatchEmbedder.js';
 import { chunk } from './Chunker.js';
 import type { VectorStore } from './VectorStore.js';
 
+/** ContextualEnricher 接口 (可选, 由 service 层注入) */
+interface ContextualEnricherLike {
+  enrichChunks(
+    document: { title: string; content: string; kind: string; sourcePath?: string },
+    chunks: Array<{ content: string; metadata: Record<string, unknown> }>
+  ): Promise<Array<{ content: string; metadata: Record<string, unknown> }>>;
+}
+
 const SCANNABLE_EXTENSIONS = new Set([
   '.md',
   '.markdown',
@@ -44,6 +52,7 @@ export class IndexingPipeline {
   #scanDirs; // 要扫描的目录
   #projectRoot;
   #chunkingOptions; // Chunker v2 透传选项
+  #contextualEnricher: ContextualEnricherLike | null; // 上下文增强器 (可选)
 
   constructor(
     options: {
@@ -53,6 +62,7 @@ export class IndexingPipeline {
       projectRoot?: string;
       batchSize?: number;
       maxConcurrency?: number;
+      contextualEnricher?: ContextualEnricherLike | null;
       chunking?: {
         strategy?: string;
         maxChunkTokens?: number;
@@ -71,6 +81,8 @@ export class IndexingPipeline {
       overlapTokens: options.chunking?.overlapTokens ?? 50,
       useAST: options.chunking?.useAST ?? true,
     };
+
+    this.#contextualEnricher = options.contextualEnricher || null;
 
     // 自动创建 BatchEmbedder (如果有 aiProvider)
     if (this.#aiProvider) {
@@ -96,6 +108,10 @@ export class IndexingPipeline {
     }
   }
 
+  setContextualEnricher(enricher: ContextualEnricherLike | null) {
+    this.#contextualEnricher = enricher;
+  }
+
   /**
    * 运行完整索引管线
    * @param {object} options - { force: boolean, dryRun: boolean, onProgress: function }
@@ -105,14 +121,29 @@ export class IndexingPipeline {
     options: {
       force?: boolean;
       dryRun?: boolean;
+      clear?: boolean;
       onProgress?: (info: { phase: string; [key: string]: unknown }) => void;
     } = {}
   ) {
-    const { force = false, dryRun = false, onProgress } = options;
-    const stats = { scanned: 0, chunked: 0, embedded: 0, upserted: 0, skipped: 0, errors: 0 };
+    const { force = false, dryRun = false, clear = false, onProgress } = options;
+    const stats = {
+      scanned: 0,
+      chunked: 0,
+      enriched: 0,
+      embedded: 0,
+      upserted: 0,
+      skipped: 0,
+      errors: 0,
+    };
 
     if (!this.#vectorStore) {
       throw new Error('VectorStore not set');
+    }
+
+    // 0. clear — 清空现有索引后重建
+    if (clear && !dryRun) {
+      await this.#vectorStore.clear();
+      onProgress?.({ phase: 'clear', detail: 'Existing index cleared' });
     }
 
     // 1. 扫描文件
@@ -174,6 +205,58 @@ export class IndexingPipeline {
       } catch (_error: unknown) {
         stats.errors++;
       }
+    }
+
+    // 2.5. Contextual Enrichment (可选, 在 embed 之前)
+    if (this.#contextualEnricher && allChunks.length > 0) {
+      onProgress?.({ phase: 'enrich', detail: 'Running contextual enrichment...' });
+      // 按 sourcePath 分组，每个文档的 chunks 一起 enrich
+      const chunksBySource = new Map<
+        string,
+        Array<{ index: number; chunk: (typeof allChunks)[0] }>
+      >();
+      for (let i = 0; i < allChunks.length; i++) {
+        const sourcePath = (allChunks[i].metadata.sourcePath as string) || 'unknown';
+        if (!chunksBySource.has(sourcePath)) {
+          chunksBySource.set(sourcePath, []);
+        }
+        chunksBySource.get(sourcePath)!.push({ index: i, chunk: allChunks[i] });
+      }
+
+      for (const [sourcePath, group] of chunksBySource) {
+        try {
+          // 读取原始文档内容作为上下文
+          const firstChunk = group[0].chunk;
+          const docTitle = (firstChunk.metadata.sourcePath as string) || sourcePath;
+          const docKind = (firstChunk.metadata.type as string) || 'recipe';
+          // 拼接所有 chunk 作为文档摘要（enricher 内部会截断）
+          const docContent = group.map((g) => g.chunk.content).join('\n\n');
+
+          const enrichedChunks = await this.#contextualEnricher!.enrichChunks(
+            { title: docTitle, content: docContent, kind: docKind, sourcePath },
+            group.map((g) => ({
+              content: g.chunk.content,
+              metadata: g.chunk.metadata,
+            }))
+          );
+
+          // 回写 enriched 内容
+          for (let j = 0; j < enrichedChunks.length; j++) {
+            const originalIndex = group[j].index;
+            allChunks[originalIndex] = {
+              ...allChunks[originalIndex],
+              content: enrichedChunks[j].content,
+              metadata: { ...allChunks[originalIndex].metadata, ...enrichedChunks[j].metadata },
+            };
+            if (enrichedChunks[j].metadata.contextEnriched) {
+              stats.enriched++;
+            }
+          }
+        } catch {
+          // enrichment 失败不阻塞，使用原始 chunks
+        }
+      }
+      onProgress?.({ phase: 'enrich', detail: `Enriched ${stats.enriched} chunks` });
     }
 
     // 3. 批量 embed (使用 BatchEmbedder)

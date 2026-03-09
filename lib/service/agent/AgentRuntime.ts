@@ -32,6 +32,20 @@ import { randomUUID } from 'node:crypto';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { AgentEventBus, AgentEvents } from './AgentEventBus.js';
 import type { AgentMessage } from './AgentMessage.js';
+import {
+  type AgentResult,
+  type AiError,
+  type FileCacheEntry,
+  type FunctionCall,
+  type LLMResult,
+  MAX_TOOL_CALLS_PER_ITER,
+  type ProgressEvent,
+  type ReactLoopOpts,
+  type RuntimeConfig,
+  type ToolCallEntry,
+  type ToolCallHook,
+  type ToolMetadata,
+} from './AgentRuntimeTypes.js';
 import { AgentState } from './AgentState.js';
 import { Capability, CapabilityRegistry } from './capabilities.js';
 import { cleanFinalAnswer } from './core/ChatAgentPrompts.js';
@@ -43,119 +57,21 @@ import { createToolPipeline } from './core/ToolExecutionPipeline.js';
 import { produceForcedSummary } from './forced-summary.js';
 import { PolicyEngine } from './policies.js';
 
-// ── Interfaces ──────────────────────────────────
-
-/** Tool call entry recorded during execution */
-interface ToolCallEntry {
-  tool: string;
-  name?: string;
-  args: Record<string, unknown>;
-  result: unknown;
-  durationMs: number;
-}
-
-/** LLM function call descriptor */
-interface FunctionCall {
-  id: string;
-  name: string;
-  args: Record<string, unknown>;
-}
-
-/** chatWithTools result from the AI provider */
-interface LLMResult {
-  type?: string;
-  text?: string | null;
-  functionCalls?: FunctionCall[] | null;
-  usage?: { inputTokens?: number; outputTokens?: number };
-}
-
-/** AI error with optional circuit breaker code */
-interface AiError extends Error {
-  code?: string;
-}
-
-/** Progress event emitted to listeners */
-interface ProgressEvent {
-  type: string;
-  agentId: string;
-  preset: string;
-  timestamp: number;
-  [key: string]: unknown;
-}
-
-/** Tool execution pipeline metadata */
-interface ToolMetadata {
-  cacheHit: boolean;
-  blocked: boolean;
-  isNew: boolean;
-  durationMs: number;
-  dedupMessage?: string;
-  isSubmit?: boolean;
-}
-
-/** File cache entry */
-interface FileCacheEntry {
-  relativePath: string;
-  content?: string;
-  name?: string;
-}
-
-interface RuntimeConfig {
-  id?: string;
-  presetName?: string;
-  aiProvider: import('../../external/ai/AiProvider.js').AiProvider;
-  toolRegistry: import('./tools/ToolRegistry.js').ToolRegistry;
-  container?: Record<string, unknown> | null;
-  capabilities?: Capability[];
-  strategy: import('./strategies.js').Strategy;
-  policies?: PolicyEngine;
-  persona?: Record<string, unknown>;
-  memory?: Record<string, unknown>;
-  onProgress?: ((event: ProgressEvent) => void) | null;
-  onToolCall?: ToolCallHook | null;
-  lang?: string | null;
-  projectRoot?: string;
-  additionalTools?: string[];
-}
-
-type ToolCallHook = (
-  name: string,
-  args: Record<string, unknown>,
-  result: unknown,
-  iteration: number
-) => void;
-
-interface AgentResult {
-  reply: string;
-  toolCalls: ToolCallEntry[];
-  tokenUsage: { input: number; output: number };
-  iterations: number;
-  durationMs: number;
-  phases?: Record<string, unknown>;
-  state: Record<string, unknown>;
-  qualityWarning?: string;
-  [key: string]: unknown;
-}
-
-interface ReactLoopOpts {
-  history?: Array<{ role: string; content: string }>;
-  context?: Record<string, unknown>;
-  capabilityOverride?: string[];
-  budgetOverride?: Record<string, unknown>;
-  systemPromptOverride?: string;
-  onToolCall?: ToolCallHook | null;
-  contextWindow?: import('./context/ContextWindow.js').ContextWindow;
-  tracker?: Record<string, unknown>;
-  trace?: Record<string, unknown>;
-  memoryCoordinator?: Record<string, unknown>;
-  sharedState?: Record<string, unknown>;
-  source?: string;
-  toolChoiceOverride?: string | null;
-  [key: string]: unknown;
-}
-
-/** 单次迭代允许的最大工具调用数 */
-const MAX_TOOL_CALLS_PER_ITER = 8;
+// ── Re-exports for backward compatibility ──
+export type {
+  AgentResult,
+  AiError,
+  FileCacheEntry,
+  FunctionCall,
+  LLMResult,
+  ProgressEvent,
+  ReactLoopOpts,
+  RuntimeConfig,
+  ToolCallEntry,
+  ToolCallHook,
+  ToolMetadata,
+} from './AgentRuntimeTypes.js';
+export { MAX_TOOL_CALLS_PER_ITER } from './AgentRuntimeTypes.js';
 
 /**
  * @typedef {Object} RuntimeConfig

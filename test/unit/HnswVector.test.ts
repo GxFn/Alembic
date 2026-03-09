@@ -9,8 +9,8 @@ let HnswVectorAdapter;
 let VectorMigration;
 let BatchEmbedder;
 let HybridRetriever;
-let JsonVectorAdapter;
-let chunk, estimateTokens, DEFAULT_MAX_CHUNK_TOKENS;
+let _JsonVectorAdapter;
+let chunk, _estimateTokens, _DEFAULT_MAX_CHUNK_TOKENS;
 let isASTChunkerAvailable;
 let IndexingPipeline;
 let AsyncPersistence, WAL_OP, crc32;
@@ -41,12 +41,12 @@ beforeAll(async () => {
   HybridRetriever = hrMod.HybridRetriever;
 
   const jvMod = await import('../../lib/infrastructure/vector/JsonVectorAdapter.js');
-  JsonVectorAdapter = jvMod.JsonVectorAdapter;
+  _JsonVectorAdapter = jvMod.JsonVectorAdapter;
 
   const chunkMod = await import('../../lib/infrastructure/vector/Chunker.js');
   chunk = chunkMod.chunk;
-  estimateTokens = chunkMod.estimateTokens;
-  DEFAULT_MAX_CHUNK_TOKENS = chunkMod.DEFAULT_MAX_CHUNK_TOKENS;
+  _estimateTokens = chunkMod.estimateTokens;
+  _DEFAULT_MAX_CHUNK_TOKENS = chunkMod.DEFAULT_MAX_CHUNK_TOKENS;
 
   const astChunkerMod = await import('../../lib/infrastructure/vector/ASTChunker.js');
   isASTChunkerAvailable = astChunkerMod.isASTChunkerAvailable;
@@ -69,7 +69,9 @@ function randomVector(dim) {
     norm += v[i] * v[i];
   }
   norm = Math.sqrt(norm);
-  for (let i = 0; i < dim; i++) v[i] /= norm;
+  for (let i = 0; i < dim; i++) {
+    v[i] /= norm;
+  }
   return v;
 }
 
@@ -598,9 +600,24 @@ describe('HnswVectorAdapter', () => {
     store.initSync();
 
     await store.batchUpsert([
-      { id: 'a', content: 'test', vector: [1, 0, 0], metadata: { type: 'recipe', language: 'swift' } },
-      { id: 'b', content: 'test', vector: [0.9, 0.1, 0], metadata: { type: 'code', language: 'python' } },
-      { id: 'c', content: 'test', vector: [0.8, 0.2, 0], metadata: { type: 'recipe', language: 'python' } },
+      {
+        id: 'a',
+        content: 'test',
+        vector: [1, 0, 0],
+        metadata: { type: 'recipe', language: 'swift' },
+      },
+      {
+        id: 'b',
+        content: 'test',
+        vector: [0.9, 0.1, 0],
+        metadata: { type: 'code', language: 'python' },
+      },
+      {
+        id: 'c',
+        content: 'test',
+        vector: [0.8, 0.2, 0],
+        metadata: { type: 'recipe', language: 'python' },
+      },
     ]);
 
     const results = await store.searchVector([1, 0, 0], { topK: 10, filter: { type: 'recipe' } });
@@ -715,10 +732,10 @@ describe('BatchEmbedder', () => {
   });
 
   it('should fallback to serial on batch failure', async () => {
-    let callCount = 0;
+    let _callCount = 0;
     const mockProvider = {
       embed: async (input) => {
-        callCount++;
+        _callCount++;
         if (Array.isArray(input) && input.length > 1) {
           throw new Error('batch not supported');
         }
@@ -746,7 +763,7 @@ describe('HybridRetriever', () => {
     const denseResults = [
       { id: 'a', item: { id: 'a' }, score: 0.95 },
       { id: 'b', item: { id: 'b' }, score: 0.85 },
-      { id: 'c', item: { id: 'c' }, score: 0.70 },
+      { id: 'c', item: { id: 'c' }, score: 0.7 },
     ];
     const sparseResults = [
       { id: 'b', score: 10.5 },
@@ -790,7 +807,10 @@ describe('HybridRetriever', () => {
     const retriever = new HybridRetriever({ rrfK: 60 });
     const fused = retriever.fuse({
       denseResults: [],
-      sparseResults: [{ id: 'a', score: 5 }, { id: 'b', score: 3 }],
+      sparseResults: [
+        { id: 'a', score: 5 },
+        { id: 'b', score: 3 },
+      ],
       topK: 5,
       alpha: 0.3,
     });
@@ -866,7 +886,9 @@ describe('HNSW Recall Quality', () => {
       // 计算 recall
       let hits = 0;
       for (const id of trueTopK) {
-        if (hnswTopK.has(id)) hits++;
+        if (hnswTopK.has(id)) {
+          hits++;
+        }
       }
       totalRecall += hits / k;
     }
@@ -888,7 +910,11 @@ describe('Chunker v2', () => {
   });
 
   it('auto: markdown with headings → section strategy', () => {
-    const md = '# Title\nIntro paragraph.\n## Section 1\n' + 'Content A. '.repeat(200) + '\n## Section 2\n' + 'Content B. '.repeat(200);
+    const md =
+      '# Title\nIntro paragraph.\n## Section 1\n' +
+      'Content A. '.repeat(200) +
+      '\n## Section 2\n' +
+      'Content B. '.repeat(200);
     const result = chunk(md, {}, { maxChunkTokens: 100 });
     expect(result.length).toBeGreaterThan(1);
     // sections should have sectionTitle metadata
@@ -930,7 +956,11 @@ describe('Chunker v2', () => {
 
   it('explicit ast strategy: falls back to fixed when language unsupported', () => {
     const code = 'x = 1\n'.repeat(500);
-    const result = chunk(code, { language: 'unknown_lang' }, { strategy: 'ast', maxChunkTokens: 50 });
+    const result = chunk(
+      code,
+      { language: 'unknown_lang' },
+      { strategy: 'ast', maxChunkTokens: 50 }
+    );
     // Should fallback to fixed since 'unknown_lang' is not in ASTChunker
     expect(result.length).toBeGreaterThan(1);
     for (const c of result) {
@@ -1119,7 +1149,9 @@ describe('IndexingPipeline v2', () => {
       listIds: async () => [],
       getById: async () => null,
       batchUpsert: async (items) => {
-        for (const item of items) store.set(item.id, item);
+        for (const item of items) {
+          store.set(item.id, item);
+        }
       },
       remove: async (id) => store.delete(id),
     };
@@ -1153,7 +1185,9 @@ describe('IndexingPipeline v2', () => {
       listIds: async () => [],
       getById: async () => null,
       batchUpsert: async (items) => {
-        for (const item of items) store.set(item.id, item);
+        for (const item of items) {
+          store.set(item.id, item);
+        }
       },
       remove: async (id) => store.delete(id),
     };
@@ -1179,7 +1213,9 @@ describe('IndexingPipeline v2', () => {
       listIds: async () => [...store.keys()],
       getById: async (id) => store.get(id) || null,
       batchUpsert: async (items) => {
-        for (const item of items) store.set(item.id, item);
+        for (const item of items) {
+          store.set(item.id, item);
+        }
       },
       remove: async (id) => store.delete(id),
     };
@@ -1298,11 +1334,13 @@ describe('SQ8 2-pass search', () => {
 
     // Before: no qvectors
     for (const node of index.nodes) {
-      if (node) expect(node.qvector).toBeNull();
+      if (node) {
+        expect(node.qvector).toBeNull();
+      }
     }
 
     const q = new ScalarQuantizer(DIM);
-    q.train(index.nodes.filter(n => n).map(n => n.vector));
+    q.train(index.nodes.filter((n) => n).map((n) => n.vector));
     index.setQuantizedVectors(q);
 
     // After: all active nodes should have qvectors
@@ -1359,7 +1397,12 @@ describe('SQ8 2-pass search', () => {
     for (let i = 0; i < 20; i++) {
       const v = randomVector(DIM);
       vectors.push(v);
-      await store.upsert({ id: `d${i}`, content: `content ${i}`, vector: Array.from(v), metadata: {} });
+      await store.upsert({
+        id: `d${i}`,
+        content: `content ${i}`,
+        vector: Array.from(v),
+        metadata: {},
+      });
     }
     await store.flush();
     store.destroy();
@@ -1391,7 +1434,12 @@ describe('RRF hybridSearch', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hnsw-rrf-'));
-    store = new HnswVectorAdapter(tmpDir, { M: 4, efConstruct: 32, efSearch: 32, walEnabled: false });
+    store = new HnswVectorAdapter(tmpDir, {
+      M: 4,
+      efConstruct: 32,
+      efSearch: 32,
+      walEnabled: false,
+    });
     store.initSync();
   });
 
@@ -1404,7 +1452,12 @@ describe('RRF hybridSearch', () => {
     await store.batchUpsert([
       { id: 'a', content: 'machine learning deep neural network', vector: [1, 0, 0], metadata: {} },
       { id: 'b', content: 'web development frontend javascript', vector: [0, 1, 0], metadata: {} },
-      { id: 'c', content: 'machine learning regression model', vector: [0.9, 0.1, 0], metadata: {} },
+      {
+        id: 'c',
+        content: 'machine learning regression model',
+        vector: [0.9, 0.1, 0],
+        metadata: {},
+      },
     ]);
 
     const results = await store.hybridSearch([1, 0, 0], 'machine learning', { topK: 3 });
@@ -1456,9 +1509,7 @@ describe('RRF hybridSearch', () => {
   });
 
   it('RRF score has vectorScore and keywordScore fields for compat', async () => {
-    await store.batchUpsert([
-      { id: 'a', content: 'singleton', vector: [1, 0, 0], metadata: {} },
-    ]);
+    await store.batchUpsert([{ id: 'a', content: 'singleton', vector: [1, 0, 0], metadata: {} }]);
 
     const results = await store.hybridSearch([1, 0, 0], 'singleton', { topK: 1 });
     expect(results[0]).toHaveProperty('score');
@@ -1512,7 +1563,7 @@ describe('AsyncPersistence', () => {
 
     // Read WAL and verify format (NDJSON + CRC)
     const content = fs.readFileSync(walPath, 'utf-8');
-    const lines = content.split('\n').filter(l => l.length > 0);
+    const lines = content.split('\n').filter((l) => l.length > 0);
     expect(lines.length).toBe(2);
 
     // Each line: JSON\tCRC\n
@@ -1605,7 +1656,9 @@ describe('AsyncPersistence', () => {
 
     const wal = new AsyncPersistence({
       indexPath,
-      onPersist: async () => { persistCalled++; },
+      onPersist: async () => {
+        persistCalled++;
+      },
       onReplay: () => {},
       flushIntervalMs: 60000,
       flushBatchSize: 1000,
@@ -1659,7 +1712,9 @@ describe('HnswVectorAdapter WAL integration', () => {
 
   it('should create WAL file when walEnabled=true', async () => {
     const store = new HnswVectorAdapter(tmpDir, {
-      M: 4, efConstruct: 32, efSearch: 32,
+      M: 4,
+      efConstruct: 32,
+      efSearch: 32,
       walEnabled: true,
       flushIntervalMs: 60000, // don't auto-flush
       flushBatchSize: 10000,
@@ -1677,7 +1732,8 @@ describe('HnswVectorAdapter WAL integration', () => {
 
   it('should NOT create WAL file when walEnabled=false', async () => {
     const store = new HnswVectorAdapter(tmpDir, {
-      M: 4, walEnabled: false,
+      M: 4,
+      walEnabled: false,
     });
     store.initSync();
 
@@ -1692,7 +1748,9 @@ describe('HnswVectorAdapter WAL integration', () => {
   it('should recover WAL on restart after crash', async () => {
     // Step 1: Insert data, WAL written but NOT flushed to .asvec
     const store1 = new HnswVectorAdapter(tmpDir, {
-      M: 4, efConstruct: 32, efSearch: 32,
+      M: 4,
+      efConstruct: 32,
+      efSearch: 32,
       walEnabled: true,
       flushIntervalMs: 60000,
       flushBatchSize: 10000,
@@ -1717,7 +1775,9 @@ describe('HnswVectorAdapter WAL integration', () => {
 
     // Step 2: New instance should recover from .asvec + replay WAL
     const store2 = new HnswVectorAdapter(tmpDir, {
-      M: 4, efConstruct: 32, efSearch: 32,
+      M: 4,
+      efConstruct: 32,
+      efSearch: 32,
       walEnabled: true,
     });
     await store2.init();
@@ -1735,7 +1795,9 @@ describe('HnswVectorAdapter WAL integration', () => {
 
   it('should handle WAL with remove operations', async () => {
     const store1 = new HnswVectorAdapter(tmpDir, {
-      M: 4, efConstruct: 32, efSearch: 32,
+      M: 4,
+      efConstruct: 32,
+      efSearch: 32,
       walEnabled: true,
       flushIntervalMs: 60000,
       flushBatchSize: 10000,
@@ -1751,7 +1813,9 @@ describe('HnswVectorAdapter WAL integration', () => {
 
     // Recover
     const store2 = new HnswVectorAdapter(tmpDir, {
-      M: 4, efConstruct: 32, efSearch: 32,
+      M: 4,
+      efConstruct: 32,
+      efSearch: 32,
       walEnabled: true,
     });
     await store2.init();

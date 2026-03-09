@@ -58,7 +58,11 @@ interface EpisodicMemoryLike {
 
 /** PersistentMemory 最小接口 */
 interface SemanticMemoryLike {
-  toPromptSection(opts: { source: string; query: string; limit: number }): string | null;
+  toPromptSection(opts: {
+    source: string;
+    query: string;
+    limit: number;
+  }): Promise<string | null> | string | null;
 }
 
 /** CodeEntityGraph 最小接口 */
@@ -160,9 +164,9 @@ export const ANALYST_BUDGET = {
  * @param {object} [episodicMemory] - SessionStore 实例 (v4.0 增强上下文)
  * @param {object} [semanticMemory] - PersistentMemory 实例 (v4.1 历史记忆)
  * @param {object} [codeEntityGraph] - CodeEntityGraph 实例 (Phase E 代码实体图谱)
- * @returns {string}
+ * @returns {Promise<string>}
  */
-export function buildAnalystPrompt(
+export async function buildAnalystPrompt(
   dimConfig: AnalystDimConfig,
   projectInfo: AnalystProjectInfo,
   dimensionContext: DimensionContextLike | null | undefined,
@@ -271,7 +275,7 @@ ${depthHint}
   if (semanticMemory) {
     try {
       const query = `${dimConfig.label} ${dimConfig.guide || ''} ${projectInfo.lang}`;
-      const section = semanticMemory.toPromptSection({
+      const section = await semanticMemory.toPromptSection({
         source: 'bootstrap',
         query,
         limit: 10,

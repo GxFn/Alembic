@@ -57,6 +57,8 @@ export interface MemoryRow {
   source_evidence: string | null;
   bootstrap_session: string | null;
   tags: string;
+  /** 向量嵌入 (Float32Array BLOB) */
+  embedding: Buffer | null;
   /** findSimilar 附加字段 */
   similarity?: number;
   related_memories_raw?: string;
@@ -80,6 +82,8 @@ export interface DeserializedMemory {
   sourceEvidence: string | null;
   bootstrapSession: string | null;
   tags: string[];
+  /** 向量嵌入 (Float32Array) */
+  embedding: number[] | null;
 }
 
 /** 添加记忆时的输入 */
@@ -94,6 +98,8 @@ export interface MemoryInput {
   sourceEvidence?: string | null;
   bootstrapSession?: string | null;
   tags?: string[];
+  /** 向量嵌入 */
+  embedding?: number[] | null;
 }
 
 /** 更新记忆时的字段 */
@@ -104,6 +110,8 @@ export interface MemoryUpdates {
   relatedEntities?: string[];
   relatedMemories?: string[];
   tags?: string[];
+  /** 向量嵌入 */
+  embedding?: number[] | null;
 }
 
 /** 预编译语句集合 */
@@ -188,6 +196,7 @@ export class MemoryStore {
       source_evidence: memory.sourceEvidence || null,
       bootstrap_session: memory.bootstrapSession || null,
       tags: JSON.stringify(memory.tags || []),
+      embedding: memory.embedding ? MemoryStore.serializeEmbedding(memory.embedding) : null,
     });
 
     return { id, action: 'ADD' };
@@ -551,6 +560,7 @@ export class MemoryStore {
       sourceEvidence: row.source_evidence,
       bootstrapSession: row.bootstrap_session,
       tags: MemoryStore.safeParseJSON(row.tags, []),
+      embedding: row.embedding ? MemoryStore.deserializeEmbedding(row.embedding) : null,
     };
   }
 
@@ -560,6 +570,73 @@ export class MemoryStore {
     } catch {
       return fallback;
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 向量嵌入存储
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * 更新单条记忆的向量嵌入
+   * @param id 记忆 ID
+   * @param embedding 向量数组
+   */
+  updateEmbedding(id: string, embedding: number[]): boolean {
+    const blob = MemoryStore.serializeEmbedding(embedding);
+    const result = this.#db
+      .prepare('UPDATE semantic_memories SET embedding = ? WHERE id = ?')
+      .run(blob, id);
+    return result.changes > 0;
+  }
+
+  /**
+   * 批量更新向量嵌入
+   * @param entries Array of { id, embedding }
+   */
+  batchUpdateEmbeddings(entries: Array<{ id: string; embedding: number[] }>): number {
+    let updated = 0;
+    const stmt = this.#db.prepare('UPDATE semantic_memories SET embedding = ? WHERE id = ?');
+    const runBatch = this.#db.transaction(() => {
+      for (const entry of entries) {
+        const blob = MemoryStore.serializeEmbedding(entry.embedding);
+        const result = stmt.run(blob, entry.id);
+        updated += result.changes;
+      }
+    });
+    runBatch();
+    return updated;
+  }
+
+  /**
+   * 获取缺少向量嵌入的记忆 ID 和内容
+   * @param limit 最大返回数
+   */
+  getWithoutEmbedding(limit = 50): Array<{ id: string; content: string }> {
+    return this.#db
+      .prepare(
+        'SELECT id, content FROM semantic_memories WHERE embedding IS NULL ORDER BY updated_at DESC LIMIT ?'
+      )
+      .all(limit) as Array<{ id: string; content: string }>;
+  }
+
+  /**
+   * 将 number[] 序列化为 Buffer (Float32Array → BLOB)
+   */
+  static serializeEmbedding(embedding: number[]): Buffer {
+    const float32 = new Float32Array(embedding);
+    return Buffer.from(float32.buffer, float32.byteOffset, float32.byteLength);
+  }
+
+  /**
+   * 将 Buffer (BLOB) 反序列化为 number[]
+   */
+  static deserializeEmbedding(blob: Buffer): number[] {
+    const float32 = new Float32Array(
+      blob.buffer,
+      blob.byteOffset,
+      blob.byteLength / Float32Array.BYTES_PER_ELEMENT
+    );
+    return Array.from(float32);
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -589,9 +666,17 @@ export class MemoryStore {
           source_dimension  TEXT,
           source_evidence   TEXT,
           bootstrap_session TEXT,
-          tags              TEXT DEFAULT '[]'
+          tags              TEXT DEFAULT '[]',
+          embedding         BLOB
         )
       `);
+    } else {
+      // 迁移: 为已有表添加 embedding 列
+      try {
+        this.#db.prepare('SELECT embedding FROM semantic_memories LIMIT 1').get();
+      } catch {
+        this.#db.exec('ALTER TABLE semantic_memories ADD COLUMN embedding BLOB');
+      }
     }
   }
 
@@ -602,12 +687,12 @@ export class MemoryStore {
           (id, type, content, source, importance, access_count,
            last_accessed_at, created_at, updated_at, expires_at,
            related_entities, related_memories,
-           source_dimension, source_evidence, bootstrap_session, tags)
+           source_dimension, source_evidence, bootstrap_session, tags, embedding)
         VALUES
           (@id, @type, @content, @source, @importance, @access_count,
            @last_accessed_at, @created_at, @updated_at, @expires_at,
            @related_entities, @related_memories,
-           @source_dimension, @source_evidence, @bootstrap_session, @tags)
+           @source_dimension, @source_evidence, @bootstrap_session, @tags, @embedding)
       `),
 
       getById: this.#db.prepare('SELECT * FROM semantic_memories WHERE id = ?'),

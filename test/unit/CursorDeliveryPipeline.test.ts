@@ -1,7 +1,7 @@
-import { vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { vi } from 'vitest';
 import { CursorDeliveryPipeline } from '../../lib/service/cursor/CursorDeliveryPipeline.js';
 import { KnowledgeCompressor } from '../../lib/service/cursor/KnowledgeCompressor.js';
 import { RulesGenerator } from '../../lib/service/cursor/RulesGenerator.js';
@@ -128,7 +128,7 @@ describe('KnowledgeCompressor', () => {
     test('adds language prefix for non-universal scope', () => {
       const entries = [makeEntry({ language: 'objc', scope: 'project-specific' })];
       const lines = compressor.compressToRuleLine(entries);
-      expect(lines[0]).toMatch(/^\- \[objc\] /);
+      expect(lines[0]).toMatch(/^- \[objc\] /);
     });
 
     test('omits language prefix when scope is universal', () => {

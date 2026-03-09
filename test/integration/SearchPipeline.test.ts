@@ -7,8 +7,8 @@
  * 注意: 使用独立 DB 避免与其他集成测试的数据竞争。
  */
 
-import { vi } from 'vitest';
 import Database from 'better-sqlite3';
+import { vi } from 'vitest';
 import { BM25Scorer, SearchEngine, tokenize } from '../../lib/service/search/SearchEngine.js';
 
 /** 在内存 DB 中创建 knowledge_entries 表 */

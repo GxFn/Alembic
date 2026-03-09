@@ -136,8 +136,8 @@ export class PersistentMemory {
   // 综合检索 — 委托 MemoryRetriever
   // ═══════════════════════════════════════════════════════════
 
-  /** 三维打分综合检索 */
-  retrieve(query: string, opts?: RetrieveOptions): ScoredMemory[] {
+  /** 三维打分综合检索 (含向量相关性) */
+  async retrieve(query: string, opts?: RetrieveOptions): Promise<ScoredMemory[]> {
     return this.#retriever.retrieve(query, opts);
   }
 
@@ -151,7 +151,7 @@ export class PersistentMemory {
   // ═══════════════════════════════════════════════════════════
 
   /** 预算感知 Prompt section */
-  toPromptSection(opts?: PromptSectionOptions): string {
+  async toPromptSection(opts?: PromptSectionOptions): Promise<string> {
     return this.#retriever.toPromptSection(opts);
   }
 
@@ -208,15 +208,36 @@ export class PersistentMemory {
   // 向量嵌入接口 — 委托 MemoryRetriever
   // ═══════════════════════════════════════════════════════════
 
+  /** 设置向量嵌入函数 */
   setEmbeddingFunction(fn: EmbeddingFn | null) {
     this.#retriever.setEmbeddingFunction(fn);
   }
 
+  /** 获取当前嵌入函数 */
   getEmbeddingFunction() {
     return this.#retriever.getEmbeddingFunction();
   }
 
-  computeEmbeddingRelevance(query: string, content: string): number | null {
+  /**
+   * 为所有缺少 embedding 的记忆批量生成向量嵌入
+   * @param batchSize 每批数量
+   * @returns 成功嵌入的记忆数
+   */
+  async embedAllMemories(batchSize = 20): Promise<number> {
+    const count = await this.#retriever.embedAllMemories(batchSize);
+    if (count > 0) {
+      this.#log(`Embedded ${count} memories`);
+    }
+    return count;
+  }
+
+  /**
+   * 计算语义相关性 (异步，使用向量余弦相似度)
+   * @param query 查询文本
+   * @param content 记忆内容
+   * @returns 相似度分数 或 null
+   */
+  async computeEmbeddingRelevance(query: string, content: string): Promise<number | null> {
     return this.#retriever.computeEmbeddingRelevance(query, content);
   }
 

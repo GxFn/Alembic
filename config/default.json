@@ -64,7 +64,12 @@
       "enabled": true,
       "rrfK": 60,
       "alpha": 0.5
-    }
+    },
+    "contextualEnrich": false,
+    "contextualModel": "claude-sonnet-4-20250514",
+    "autoSyncOnCrud": true,
+    "syncDebounceMs": 2000,
+    "dimensionGuard": true
   },
   "qualityGate": {
     "maxErrors": 0,

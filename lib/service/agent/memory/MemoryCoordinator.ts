@@ -22,7 +22,7 @@ import type { SessionStore } from './SessionStore.js';
 
 /** PersistentMemory 接口 (声明式) */
 interface PersistentMemoryLike {
-  toPromptSection(opts: { source?: string }): string;
+  toPromptSection(opts: { source?: string }): Promise<string> | string;
   append(entry: { type: string; content: string; source: string; importance: number }): void;
 }
 
@@ -268,7 +268,7 @@ export class MemoryCoordinator {
    * @param {string[]} [options.focusKeywords] 聚焦关键词
    * @returns {string}
    */
-  buildStaticMemoryPrompt(options: StaticMemoryOptions = {}): string {
+  async buildStaticMemoryPrompt(options: StaticMemoryOptions = {}): Promise<string> {
     const parts: string[] = [];
     let surplus = 0;
 
@@ -276,7 +276,7 @@ export class MemoryCoordinator {
       // ── 1. PersistentMemory / Memory ──
       const pmBudget = this.#budgetAllocation.persistentMemory || 0;
       if (pmBudget > 0) {
-        const pmSection = this.#buildPersistentMemorySection(options);
+        const pmSection = await this.#buildPersistentMemorySection(options);
         if (pmSection) {
           const used = this.#estimateTokens(pmSection);
           surplus += Math.max(0, pmBudget - used);
@@ -353,8 +353,8 @@ export class MemoryCoordinator {
    * @param {object} [options]
    * @returns {string}
    */
-  buildMemoryPrompt(options: StaticMemoryOptions = {}): string {
-    const staticPart = this.buildStaticMemoryPrompt(options);
+  async buildMemoryPrompt(options: StaticMemoryOptions = {}): Promise<string> {
+    const staticPart = await this.buildStaticMemoryPrompt(options);
     const dynamicPart = this.buildDynamicMemoryPrompt(options);
     return [staticPart, dynamicPart].filter(Boolean).join('\n');
   }
@@ -730,9 +730,9 @@ export class MemoryCoordinator {
   /**
    * 构建 PersistentMemory section
    */
-  #buildPersistentMemorySection(options: StaticMemoryOptions = {}): string {
+  async #buildPersistentMemorySection(options: StaticMemoryOptions = {}): Promise<string> {
     if (this.#persistentMemory?.toPromptSection) {
-      return this.#persistentMemory.toPromptSection({ source: 'user' }) || '';
+      return (await this.#persistentMemory.toPromptSection({ source: 'user' })) || '';
     }
     return '';
   }

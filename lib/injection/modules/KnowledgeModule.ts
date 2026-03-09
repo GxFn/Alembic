@@ -53,6 +53,7 @@ export function register(c: ServiceContainer) {
           skillHooks: ct.get('skillHooks'),
           confidenceRouter: ct.get('confidenceRouter'),
           qualityScorer: ct.get('qualityScorer'),
+          eventBus: ct.services.eventBus ? ct.get('eventBus') : null,
         } as ConstructorParameters<typeof KnowledgeService>[4]
       )
   );
@@ -80,11 +81,13 @@ export function register(c: ServiceContainer) {
     (ct: ServiceContainer) => {
       const aiProvider = ct.singletons.aiProvider || null;
       const embedProvider = ct.singletons._embedProvider || aiProvider;
+      const vectorService = ct.services.vectorService ? ct.get('vectorService') : null;
       return new SearchEngine(
         ct.get('database') as ConstructorParameters<typeof SearchEngine>[0],
         {
           aiProvider: embedProvider,
           vectorStore: ct.get('vectorStore'),
+          vectorService,
           hybridRetriever: ct.get('hybridRetriever'),
           crossEncoderReranker: new CrossEncoderReranker({
             aiProvider: embedProvider,
@@ -103,8 +106,10 @@ export function register(c: ServiceContainer) {
     (ct: ServiceContainer) => {
       const aiProvider = ct.singletons.aiProvider || null;
       const embedProvider = ct.singletons._embedProvider || aiProvider;
+      // vectorService 由 VectorModule 注册，此时可能尚未就绪，延迟获取
+      const vectorService = ct.services.vectorService ? ct.get('vectorService') : null;
       return new RetrievalFunnel({
-        vectorStore: ct.get('vectorStore'),
+        vectorService,
         aiProvider: embedProvider,
       } as ConstructorParameters<typeof RetrievalFunnel>[0]);
     },

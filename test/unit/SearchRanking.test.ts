@@ -13,8 +13,8 @@
  */
 
 import { CoarseRanker } from '../../lib/service/search/CoarseRanker.js';
-import { contextBoost } from '../../lib/service/search/contextBoost.js';
 import { CrossEncoderReranker } from '../../lib/service/search/CrossEncoderReranker.js';
+import { contextBoost } from '../../lib/service/search/contextBoost.js';
 import { buildInvertedIndex, lookup, lookupAll } from '../../lib/service/search/InvertedIndex.js';
 import {
   AuthoritySignal,
@@ -291,10 +291,7 @@ describe('ContextMatchSignal', () => {
   });
 
   test('tag overlap → additional score', () => {
-    const s = signal.compute(
-      { tags: ['react', 'hooks'] },
-      { tags: ['react', 'hooks', 'state'] }
-    );
+    const s = signal.compute({ tags: ['react', 'hooks'] }, { tags: ['react', 'hooks', 'state'] });
     expect(s).toBeGreaterThan(0.1);
   });
 });
@@ -312,10 +309,10 @@ describe('MultiSignalRanker', () => {
   });
 
   test('adds rankerScore and signals to each candidate', () => {
-    const result = ranker.rank(
-      [{ id: 'a', bm25Score: 0.5, title: 'test' }],
-      { query: 'test', scenario: 'search' }
-    );
+    const result = ranker.rank([{ id: 'a', bm25Score: 0.5, title: 'test' }], {
+      query: 'test',
+      scenario: 'search',
+    });
     expect(result[0]).toHaveProperty('rankerScore');
     expect(result[0]).toHaveProperty('signals');
     expect(result[0].signals).toHaveProperty('relevance');
@@ -350,10 +347,11 @@ describe('MultiSignalRanker', () => {
         },
       },
     });
-    const result = custom.rank(
-      [{ id: 'a', bm25Score: 0.5, language: 'javascript' }],
-      { query: 'test', scenario: 'custom', language: 'javascript' }
-    );
+    const result = custom.rank([{ id: 'a', bm25Score: 0.5, language: 'javascript' }], {
+      query: 'test',
+      scenario: 'custom',
+      language: 'javascript',
+    });
     expect(result[0].signals).toHaveProperty('contextMatch');
     expect(result[0].rankerScore).toBeGreaterThan(0);
   });
@@ -687,9 +685,7 @@ describe('RetrievalFunnel', () => {
     for (const r of result) {
       // Should have at least coarseScore or rankerScore from pipeline
       const hasScore =
-        r.coarseScore !== undefined ||
-        r.rankerScore !== undefined ||
-        r.semanticScore !== undefined;
+        r.coarseScore !== undefined || r.rankerScore !== undefined || r.semanticScore !== undefined;
       expect(hasScore).toBe(true);
     }
   });

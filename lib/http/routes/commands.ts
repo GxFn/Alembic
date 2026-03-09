@@ -90,19 +90,46 @@ router.post('/spm-map', async (req: Request, res: Response) => {
  */
 router.post('/embed', async (req: Request, res: Response) => {
   const container = getServiceContainer();
-  const indexingPipeline = container.get('indexingPipeline');
 
-  const result = await indexingPipeline.run({
-    clear: req.body?.clear !== false,
-  });
+  // 优先使用 VectorService (新架构), 降级到 indexingPipeline (旧架构)
+  const vectorService = container.services.vectorService ? container.get('vectorService') : null;
+
+  let result: Record<string, unknown>;
+
+  if (vectorService) {
+    const clearFirst = req.body?.clear !== false;
+    if (clearFirst) {
+      await vectorService.clear();
+    }
+    const buildResult = await vectorService.fullBuild({
+      force: req.body?.force ?? false,
+    });
+    result = {
+      scanned: buildResult.scanned,
+      chunked: buildResult.chunked,
+      embedded: buildResult.embedded,
+      upserted: buildResult.upserted,
+      skipped: buildResult.skipped,
+      errors: buildResult.errors,
+    };
+  } else {
+    const indexingPipeline = container.get('indexingPipeline');
+    result = await indexingPipeline.run({
+      clear: req.body?.clear !== false,
+      force: req.body?.force ?? false,
+    });
+  }
 
   logger.info('Semantic index rebuilt via dashboard', { result });
   res.json({
     success: true,
     data: {
-      indexed: result.indexed || 0,
+      scanned: result.scanned || 0,
+      chunked: result.chunked || 0,
+      embedded: result.embedded || 0,
+      upserted: result.upserted || 0,
       skipped: result.skipped || 0,
-      removed: result.removed || 0,
+      errors: result.errors || 0,
     },
   });
 });
@@ -136,7 +163,7 @@ router.get('/status', async (req: Request, res: Response) => {
 
   try {
     const indexingPipeline = container.get('indexingPipeline');
-    status.index.ready = indexingPipeline.isReady?.() ?? false;
+    status.index.ready = true; // IndexingPipeline is available
   } catch {
     /* ignore */
   }

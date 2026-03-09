@@ -68,7 +68,9 @@ describe('PathGuard', () => {
     });
 
     test('should allow Xcode snippets directory', () => {
-      if (process.platform !== 'darwin') return; // Xcode allowlist is macOS-only
+      if (process.platform !== 'darwin') {
+        return; // Xcode allowlist is macOS-only
+      }
       const HOME = process.env.HOME || process.env.USERPROFILE;
       if (HOME) {
         const xcodePath = path.join(

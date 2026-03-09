@@ -515,7 +515,21 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
   try {
     const db = ctx.container.get('database');
     if (db) {
-      semanticMemory = new PersistentMemory(db, { logger });
+      // Phase 4: 将 EmbedProvider 作为 embeddingFn 注入 PersistentMemory
+      let embeddingFn: ((text: string) => Promise<number[]>) | undefined;
+      try {
+        const ep = ctx.container.singletons?._embedProvider ?? ctx.container.singletons?.aiProvider;
+        if (ep && typeof (ep as Record<string, unknown>).embed === 'function') {
+          const provider = ep as { embed(t: string | string[]): Promise<number[] | number[][]> };
+          embeddingFn = async (text: string) => {
+            const result = await provider.embed(text);
+            return result as number[];
+          };
+        }
+      } catch {
+        // EmbedProvider 不可用时 fallback 到无向量模式
+      }
+      semanticMemory = new PersistentMemory(db, { logger, embeddingFn });
       const smStats = semanticMemory.getStats();
       if (smStats.total > 0) {
         logger.info(

@@ -140,6 +140,7 @@ export class SetupService {
       { label: '配置 IDE 集成', fn: () => this.stepIDE() },
       { label: '初始化数据库', fn: () => this.stepDatabase() },
       { label: '平台相关初始化', fn: () => this.stepPlatform() },
+      { label: '初始化向量索引', fn: () => this.stepVectorIndex() },
     ];
   }
 
@@ -728,6 +729,67 @@ export class SetupService {
       rmSync(backupDir, { recursive: true, force: true });
     } catch {
       /* 清理失败不影响主流程 */
+    }
+  }
+
+  /* ═══ Step 6: 向量索引初始化 ═══════════════════════════ */
+
+  /**
+   * 尝试初始化向量索引: 检查 embedding provider 可用性，
+   * 若可用则自动构建初始索引；否则提示用户手动运行 asd embed。
+   *
+   * 此步骤为 best-effort: 失败不阻塞 setup 流程。
+   */
+  async stepVectorIndex() {
+    try {
+      const { getServiceContainer } = await import('../injection/ServiceContainer.js');
+      const container = getServiceContainer();
+
+      // 检查 VectorService 是否已注册
+      if (!container.services.vectorService) {
+        return {
+          status: 'skipped',
+          reason: 'vectorService 未注册（AI Provider 未配置或容器未完全初始化）',
+          hint: '运行 `asd embed` 构建语义向量索引',
+        };
+      }
+
+      const vectorService = container.get('vectorService');
+
+      const stats = await vectorService.getStats();
+
+      // 如果 embedding provider 不可用，提示用户
+      if (!stats.embedProviderAvailable) {
+        return {
+          status: 'skipped',
+          reason: '未配置 AI API Key',
+          hint: '配置 API Key 后运行 `asd embed` 启用语义搜索',
+        };
+      }
+
+      // 如果索引已有数据，跳过
+      if (stats.count > 0 && !this.force) {
+        return {
+          status: 'skipped',
+          reason: `向量索引已存在 (${stats.count} entries)`,
+        };
+      }
+
+      // 构建初始索引
+      const result = await vectorService.fullBuild({ force: this.force });
+      return {
+        status: 'done',
+        indexed: result.upserted ?? 0,
+        skipped: result.skipped ?? 0,
+        errors: result.errors ?? 0,
+      };
+    } catch (err: unknown) {
+      // 向量初始化失败不阻塞 setup 流程
+      return {
+        status: 'warning',
+        error: err instanceof Error ? err.message : String(err),
+        hint: '运行 `asd embed` 手动构建向量索引',
+      };
     }
   }
 }

@@ -3,9 +3,9 @@
  * 构建和查询 token → docIndex 映射
  */
 
-// 使用 SearchEngine 的统一分词器（含完整 CJK 单字/bigram 支持）
+// 使用独立分词器模块（含完整 CJK 单字/bigram 支持）
 // 确保倒排索引与 BM25 搜索使用一致的分词策略，避免中文查询召回率差异
-import { tokenize } from './SearchEngine.js';
+import { tokenize } from './tokenizer.js';
 export { tokenize };
 
 /**

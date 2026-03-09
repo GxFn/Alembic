@@ -11,6 +11,7 @@
  * @module MemoryRetriever
  */
 
+import { cosineSimilarity } from '#shared/similarity.js';
 import type { DeserializedMemory, MemoryRow } from './MemoryStore.js';
 import { MemoryStore } from './MemoryStore.js';
 
@@ -62,20 +63,20 @@ export interface AppendEntry {
   ttl?: number | null;
 }
 
-/** 嵌入函数签名 */
-export type EmbeddingFn = (query: string, content: string) => number;
+/** 嵌入函数签名 — 异步向量嵌入 (返回 float[] 向量) */
+export type EmbeddingFn = (text: string) => Promise<number[]>;
 
 export class MemoryRetriever {
   /** @type {MemoryStore} */
   #store: MemoryStore;
 
-  /** @type {EmbeddingFn|null} 向量嵌入函数 (ADR-3 预留) */
+  /** @type {EmbeddingFn|null} 向量嵌入函数 */
   #embeddingFn: EmbeddingFn | null;
 
   /**
    * @param {MemoryStore} store
    * @param {object} [opts]
-   * @param {Function} [opts.embeddingFn] 向量嵌入函数
+   * @param {EmbeddingFn} [opts.embeddingFn] 向量嵌入函数 (异步)
    */
   constructor(store: MemoryStore, opts: { embeddingFn?: EmbeddingFn } = {}) {
     this.#store = store;
@@ -97,9 +98,12 @@ export class MemoryRetriever {
    * @param {number} [opts.limit=10]
    * @param {string} [opts.source]
    * @param {string} [opts.type]
-   * @returns {Array<object>} 按 score 降序排列
+   * @returns {Promise<Array<object>>} 按 score 降序排列
    */
-  retrieve(query: string, { limit = 10, source, type }: RetrieveOptions = {}): ScoredMemory[] {
+  async retrieve(
+    query: string,
+    { limit = 10, source, type }: RetrieveOptions = {}
+  ): Promise<ScoredMemory[]> {
     const all = this.#store.getAllActive({ source, type });
     if (all.length === 0) {
       return [];
@@ -108,6 +112,16 @@ export class MemoryRetriever {
     const now = Date.now();
     const lowerQuery = (query || '').toLowerCase();
     const queryTokens = MemoryRetriever.#tokenizeWords(lowerQuery);
+
+    // 向量检索: 嵌入 query，然后与存储的 embedding 做余弦相似度
+    let queryVec: number[] | null = null;
+    if (this.#embeddingFn) {
+      try {
+        queryVec = await this.#embeddingFn(query);
+      } catch {
+        // embedding 不可用时 graceful degrade 到纯词汇
+      }
+    }
 
     const scored = all.map((m) => {
       // Recency: 指数衰减 (半衰期 7 天)
@@ -120,14 +134,31 @@ export class MemoryRetriever {
       // Importance: 归一化到 0-1
       const importance = (m.importance || 5) / 10;
 
-      // Relevance: token overlap + 子串匹配
-      const relevance = MemoryRetriever.#computeRelevance(lowerQuery, queryTokens, m.content);
+      // Relevance: 词汇相关性 (lexical)
+      const lexicalRelevance = MemoryRetriever.#computeRelevance(
+        lowerQuery,
+        queryTokens,
+        m.content
+      );
+
+      // 向量相关性: 对有 embedding 的记忆计算余弦相似度
+      const deserialized = MemoryStore.deserialize(m);
+      let vectorRelevance = 0;
+      if (queryVec && deserialized.embedding) {
+        vectorRelevance = Math.max(0, cosineSimilarity(queryVec, deserialized.embedding));
+      }
+
+      // 混合相关性: 有向量时 0.6 * vector + 0.4 * lexical，否则纯 lexical
+      const relevance =
+        queryVec && deserialized.embedding
+          ? 0.6 * vectorRelevance + 0.4 * lexicalRelevance
+          : lexicalRelevance;
 
       const score =
         WEIGHT_RECENCY * recency + WEIGHT_IMPORTANCE * importance + WEIGHT_RELEVANCE * relevance;
 
       return {
-        ...MemoryStore.deserialize(m),
+        ...deserialized,
         _score: score,
         _recency: recency,
         _relevance: relevance,
@@ -169,9 +200,14 @@ export class MemoryRetriever {
    * @param {string} [opts.query]
    * @param {number} [opts.limit=15]
    * @param {number} [opts.tokenBudget]
-   * @returns {string} Markdown 格式
+   * @returns {Promise<string>} Markdown 格式
    */
-  toPromptSection({ source, query, limit = 15, tokenBudget }: PromptSectionOptions = {}): string {
+  async toPromptSection({
+    source,
+    query,
+    limit = 15,
+    tokenBudget,
+  }: PromptSectionOptions = {}): Promise<string> {
     if (tokenBudget && tokenBudget > 0) {
       const EST_TOKENS_PER_MEMORY = 30;
       const HEADER_TOKENS = 15;
@@ -185,7 +221,7 @@ export class MemoryRetriever {
     let memories: DeserializedMemory[];
 
     if (query) {
-      memories = this.retrieve(query, { limit, source });
+      memories = await this.retrieve(query, { limit, source });
     } else {
       memories = this.#store
         .getAllActive({ source })
@@ -266,7 +302,7 @@ export class MemoryRetriever {
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 向量嵌入接口 (ADR-3 预留)
+  // 向量嵌入接口
   // ═══════════════════════════════════════════════════════════
 
   /** 设置向量嵌入函数 */
@@ -280,17 +316,53 @@ export class MemoryRetriever {
   }
 
   /**
-   * 使用嵌入函数计算语义相关性
-   * @param {string} query
-   * @param {string} content
-   * @returns {number|null}
+   * 为所有缺少 embedding 的记忆批量生成向量嵌入
+   * @param batchSize 每批数量 (默认 20)
+   * @returns 成功嵌入的记忆数
    */
-  computeEmbeddingRelevance(query: string, content: string): number | null {
+  async embedAllMemories(batchSize = 20): Promise<number> {
+    if (!this.#embeddingFn) {
+      return 0;
+    }
+
+    const missing = this.#store.getWithoutEmbedding(batchSize);
+    if (missing.length === 0) {
+      return 0;
+    }
+
+    const entries: Array<{ id: string; embedding: number[] }> = [];
+    for (const item of missing) {
+      try {
+        const vec = await this.#embeddingFn(item.content);
+        entries.push({ id: item.id, embedding: vec });
+      } catch {
+        // 单条失败不阻塞
+      }
+    }
+
+    if (entries.length === 0) {
+      return 0;
+    }
+
+    return this.#store.batchUpdateEmbeddings(entries);
+  }
+
+  /**
+   * 使用嵌入函数计算语义相关性 (余弦相似度)
+   * @param query 查询文本
+   * @param content 记忆内容
+   * @returns 相似度分数 或 null
+   */
+  async computeEmbeddingRelevance(query: string, content: string): Promise<number | null> {
     if (!this.#embeddingFn) {
       return null;
     }
     try {
-      return this.#embeddingFn(query, content);
+      const [queryVec, contentVec] = await Promise.all([
+        this.#embeddingFn(query),
+        this.#embeddingFn(content),
+      ]);
+      return cosineSimilarity(queryVec, contentVec);
     } catch {
       return null;
     }

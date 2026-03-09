@@ -1,0 +1,150 @@
+/**
+ * ServiceMap — DI 容器类型安全映射
+ *
+ * 将服务名（字符串 key）映射到具体类型，实现编译期类型检查。
+ * 使用方式：`container.get('searchEngine')` → 自动推导为 `SearchEngine`
+ *
+ * @module ServiceMap
+ */
+
+// ── CLI Types ──
+import type { KnowledgeSyncService } from '../cli/KnowledgeSyncService.js';
+// ── Core AST / Discovery / Enhancement ──
+import type ProjectGraph from '../core/ast/ProjectGraph.js';
+// ── Core Types ──
+import type Constitution from '../core/constitution/Constitution.js';
+import type Gateway from '../core/gateway/Gateway.js';
+// ── Domain Types ──
+import type { TaskIdGenerator } from '../domain/task/TaskIdGenerator.js';
+// ── External Types ──
+import type { AiProvider } from '../external/ai/AiProvider.js';
+// ── InfraModule Types ──
+import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
+import type AuditStore from '../infrastructure/audit/AuditStore.js';
+import type DatabaseConnection from '../infrastructure/database/DatabaseConnection.js';
+import type { EventBus } from '../infrastructure/event/EventBus.js';
+import type Logger from '../infrastructure/logging/Logger.js';
+import type { IndexingPipeline } from '../infrastructure/vector/IndexingPipeline.js';
+import type { VectorStore } from '../infrastructure/vector/VectorStore.js';
+// ── Platform Types ──
+import type { SpmHelper } from '../platform/ios/spm/SpmHelper.js';
+// ── Repository Types ──
+import type { KnowledgeRepositoryImpl } from '../repository/knowledge/KnowledgeRepository.impl.js';
+import type { TaskRepositoryImpl } from '../repository/task/TaskRepository.impl.js';
+import type { TokenUsageStore } from '../repository/token/TokenUsageStore.js';
+// ── Service Types ──
+import type { AgentFactory } from '../service/agent/AgentFactory.js';
+import type { ToolRegistry } from '../service/agent/tools/ToolRegistry.js';
+import type { AutomationOrchestrator } from '../service/automation/AutomationOrchestrator.js';
+import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
+// ── Context Types ──
+import type { RecipeExtractor } from '../service/context/RecipeExtractor.js';
+import type { CursorDeliveryPipeline } from '../service/cursor/CursorDeliveryPipeline.js';
+import type { ComplianceReporter } from '../service/guard/ComplianceReporter.js';
+import type { ExclusionManager } from '../service/guard/ExclusionManager.js';
+import type { GuardCheckEngine } from '../service/guard/GuardCheckEngine.js';
+import type { GuardFeedbackLoop } from '../service/guard/GuardFeedbackLoop.js';
+import type GuardService from '../service/guard/GuardService.js';
+import type { RuleLearner } from '../service/guard/RuleLearner.js';
+import type { ViolationsStore } from '../service/guard/ViolationsStore.js';
+import type { CodeEntityGraph } from '../service/knowledge/CodeEntityGraph.js';
+import type { ConfidenceRouter } from '../service/knowledge/ConfidenceRouter.js';
+import type { KnowledgeFileWriter } from '../service/knowledge/KnowledgeFileWriter.js';
+import type { KnowledgeGraphService } from '../service/knowledge/KnowledgeGraphService.js';
+import type { KnowledgeService } from '../service/knowledge/KnowledgeService.js';
+import type { ModuleService } from '../service/module/ModuleService.js';
+import type { FeedbackCollector } from '../service/quality/FeedbackCollector.js';
+import type { QualityScorer } from '../service/quality/QualityScorer.js';
+import type { RecipeCandidateValidator } from '../service/recipe/RecipeCandidateValidator.js';
+import type { RecipeParser } from '../service/recipe/RecipeParser.js';
+import type { HybridRetriever } from '../service/search/HybridRetriever.js';
+import type { RetrievalFunnel } from '../service/search/RetrievalFunnel.js';
+import type SearchEngine from '../service/search/SearchEngine.js';
+import type { SkillHooks } from '../service/skills/SkillHooks.js';
+import type { SnippetFactory } from '../service/snippet/SnippetFactory.js';
+import type { SnippetInstaller } from '../service/snippet/SnippetInstaller.js';
+import type { TaskGraphService } from '../service/task/TaskGraphService.js';
+import type { TaskKnowledgeBridge } from '../service/task/TaskKnowledgeBridge.js';
+import type { TaskReadyEngine } from '../service/task/TaskReadyEngine.js';
+// ── Vector Service Types ──
+import type { ContextualEnricher } from '../service/vector/ContextualEnricher.js';
+import type { VectorService } from '../service/vector/VectorService.js';
+import type DimensionCopy from '../shared/DimensionCopyRegistry.js';
+// ── Shared Types ──
+import type { LanguageService } from '../shared/LanguageService.js';
+
+/**
+ * 类型安全的服务映射表
+ *
+ * 将 DI 容器的字符串 key 映射到具体的服务类型。
+ * `container.get<K extends keyof ServiceMap>(name: K): ServiceMap[K]`
+ */
+export interface ServiceMap {
+  // ═══ InfraModule ═══
+  database: DatabaseConnection;
+  logger: ReturnType<typeof Logger.getInstance>;
+  auditStore: AuditStore;
+  auditLogger: AuditLogger;
+  gateway: Gateway;
+  eventBus: EventBus;
+  bootstrapTaskManager: BootstrapTaskManager;
+  knowledgeRepository: KnowledgeRepositoryImpl;
+  knowledgeFileWriter: KnowledgeFileWriter;
+  knowledgeSyncService: KnowledgeSyncService;
+  taskRepository: TaskRepositoryImpl;
+
+  // ═══ AppModule ═══
+  qualityScorer: QualityScorer;
+  recipeParser: RecipeParser;
+  recipeCandidateValidator: RecipeCandidateValidator;
+  recipeExtractor: RecipeExtractor | null;
+  feedbackCollector: FeedbackCollector;
+  tokenUsageStore: TokenUsageStore;
+  snippetFactory: SnippetFactory;
+  snippetInstaller: SnippetInstaller;
+  vscodeSnippetInstaller: SnippetInstaller;
+  spmService: SpmHelper;
+  automationOrchestrator: AutomationOrchestrator;
+  moduleService: ModuleService;
+  cursorDeliveryPipeline: CursorDeliveryPipeline;
+  taskIdGenerator: TaskIdGenerator;
+  taskReadyEngine: TaskReadyEngine;
+  taskKnowledgeBridge: TaskKnowledgeBridge;
+  taskGraphService: TaskGraphService;
+
+  // ═══ KnowledgeModule ═══
+  confidenceRouter: ConfidenceRouter;
+  knowledgeService: KnowledgeService;
+  knowledgeGraphService: KnowledgeGraphService;
+  codeEntityGraph: CodeEntityGraph;
+  searchEngine: SearchEngine;
+  retrievalFunnel: RetrievalFunnel;
+  vectorStore: VectorStore;
+  indexingPipeline: IndexingPipeline;
+  hybridRetriever: HybridRetriever;
+  discovererRegistry: unknown; // dynamic registry, type varies
+  enhancementRegistry: unknown; // dynamic registry, type varies
+  languageService: typeof LanguageService;
+  dimensionCopy: typeof DimensionCopy;
+  constitution: Constitution | null;
+  aiProvider: AiProvider | null;
+  projectGraph: ProjectGraph | null;
+
+  // ═══ VectorModule ═══
+  vectorService: VectorService;
+  contextualEnricher: ContextualEnricher | null;
+
+  // ═══ GuardModule ═══
+  guardService: GuardService;
+  guardCheckEngine: GuardCheckEngine;
+  exclusionManager: ExclusionManager;
+  ruleLearner: RuleLearner;
+  violationsStore: ViolationsStore;
+  complianceReporter: ComplianceReporter;
+  guardFeedbackLoop: GuardFeedbackLoop;
+
+  // ═══ AgentModule ═══
+  toolRegistry: ToolRegistry;
+  agentFactory: AgentFactory;
+  skillHooks: SkillHooks;
+}

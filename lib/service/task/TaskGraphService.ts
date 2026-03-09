@@ -1,6 +1,7 @@
 import { Task } from '../../domain/task/Task.js';
 import { affectsReadyWork, DepType, isValidDepType } from '../../domain/task/TaskDependency.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { KnowledgeEnrichOptions } from './TaskKnowledgeBridge.js';
 
 /**
  * TaskGraphService — 任务图核心服务
@@ -186,11 +187,16 @@ export class TaskGraphService {
 
   /**
    * 认领任务
+   *
+   * P5: claim-time 知识刷新 — 编码开始时注入最新知识上下文，
+   * 减少 Agent 额外 MCP 调用。
+   *
    * @param {string} id
    * @param {string} [assignee='agent']
+   * @param {KnowledgeEnrichOptions} [knowledgeOptions] - 上下文信号
    * @returns {Promise<Task>}
    */
-  async claim(id: string, assignee = 'agent') {
+  async claim(id: string, assignee = 'agent', knowledgeOptions?: KnowledgeEnrichOptions) {
     const task = this.repo.findById(id);
     if (!task) {
       throw new Error(`Task not found: ${id}`);
@@ -204,7 +210,27 @@ export class TaskGraphService {
       updatedAt: Math.floor(Date.now() / 1000),
     });
 
+    if (!saved) {
+      throw new Error(`Failed to update task: ${id}`);
+    }
+
     this._logEvent(id, 'status_changed', oldStatus, 'in_progress');
+
+    // P5: claim-time 知识刷新 — 异步注入，失败不阻塞 claim 本身
+    if (this.bridge) {
+      try {
+        const [enriched] = await this.bridge.enrichWithKnowledge([saved], knowledgeOptions);
+        if (enriched?.knowledgeContext) {
+          saved.knowledgeContext = enriched.knowledgeContext;
+        }
+      } catch (err: unknown) {
+        this.logger.debug('claim: knowledge enrichment failed (non-blocking)', {
+          taskId: id,
+          error: (err as Error).message,
+        });
+      }
+    }
+
     return saved;
   }
 
@@ -345,14 +371,19 @@ export class TaskGraphService {
 
   /**
    * 获取就绪任务 + 知识上下文
-   * @param {object} [options] - { limit, withKnowledge }
+   * @param {object} [options] - { limit, withKnowledge, userQuery, activeFile, language }
    * @returns {Promise<Task[]>}
    */
-  async ready(options: { limit?: number; withKnowledge?: boolean } = {}) {
+  async ready(options: { limit?: number; withKnowledge?: boolean } & KnowledgeEnrichOptions = {}) {
     const tasks = this.readyEngine.getReadyWork(options);
 
     if (this.bridge && options.withKnowledge !== false) {
-      return this.bridge.enrichWithKnowledge(tasks);
+      const enrichOpts: KnowledgeEnrichOptions = {
+        userQuery: options.userQuery,
+        activeFile: options.activeFile,
+        language: options.language,
+      };
+      return this.bridge.enrichWithKnowledge(tasks, enrichOpts);
     }
 
     return tasks;
@@ -399,21 +430,27 @@ export class TaskGraphService {
   }
 
   /**
-   * Prime — 会话恢复（幂等）
+   * Prime — 会话恢复（幂等） + 用户输入感知知识注入
    *
    * 返回当前进行中的任务 + 就绪任务 + 统计信息。
    * Agent 在新会话开始或上下文压缩后调用。
    *
-   * @param {object} [options] - { withKnowledge }
+   * P1: 新增 userQuery / activeFile / language 参数，
+   *     知识注入从「基于历史任务」升级为「基于历史任务 + 当前用户意图」。
+   *
+   * @param {object} [options] - { withKnowledge, userQuery, activeFile, language }
    * @returns {Promise<{ inProgress: Task[], ready: Task[], stats: object }>}
    */
-  async prime(options: { limit?: number; withKnowledge?: boolean } = {}) {
+  async prime(options: { limit?: number; withKnowledge?: boolean } & KnowledgeEnrichOptions = {}) {
     const inProgress = this.repo
       .findAll({ status: 'in_progress' }, { limit: 10 })
       .filter((t: Task | null): t is Task => t !== null);
     const readyTasks = await this.ready({
       limit: options.limit || 5,
       withKnowledge: options.withKnowledge !== false,
+      userQuery: options.userQuery,
+      activeFile: options.activeFile,
+      language: options.language,
     });
     const statistics = await this.stats();
     // 按创建时间降序，确保超出 limit 时保留最新决策（C5）
@@ -430,6 +467,22 @@ export class TaskGraphService {
       ready: readyTasks.map((t: Task) => (t.toJSON ? t.toJSON() : t)),
       stats: statistics,
     };
+
+    // P1: 用户输入感知 — 没有 ready tasks 时，直接基于 userQuery 搜索知识
+    if (options.userQuery && readyTasks.length === 0 && this.bridge) {
+      try {
+        const queryKnowledge = await this.bridge.searchForQuery(options.userQuery, {
+          language: options.language,
+        });
+        if (queryKnowledge) {
+          result.queryKnowledge = queryKnowledge;
+        }
+      } catch (err: unknown) {
+        this.logger.debug('prime: queryKnowledge search failed (non-blocking)', {
+          error: (err as Error).message,
+        });
+      }
+    }
 
     if (pinnedDecisions.length > 0) {
       // P2: Stale detection — 超过阈值的决策标记为 stale

@@ -26,11 +26,16 @@ interface QualityScorerLike {
   };
 }
 
+interface EventBusLike {
+  emit(event: string | symbol, ...args: unknown[]): boolean;
+}
+
 interface KnowledgeServiceOptions {
   fileWriter?: KnowledgeFileWriter | null;
   skillHooks?: SkillHooksLike | null;
   confidenceRouter?: ConfidenceRouter | null;
   qualityScorer?: QualityScorerLike | null;
+  eventBus?: EventBusLike | null;
 }
 
 interface ServiceContext {
@@ -65,6 +70,7 @@ interface PaginationOptions {
  */
 export class KnowledgeService {
   _confidenceRouter: ConfidenceRouter | null;
+  _eventBus: EventBusLike | null;
   _fileWriter: KnowledgeFileWriter | null;
   _knowledgeGraphService: KnowledgeGraphService | null;
   _qualityScorer: QualityScorerLike | null;
@@ -99,6 +105,7 @@ export class KnowledgeService {
     this._skillHooks = options.skillHooks || null;
     this._confidenceRouter = options.confidenceRouter || null;
     this._qualityScorer = options.qualityScorer || null;
+    this._eventBus = options.eventBus || null;
     this.logger = Logger.getInstance();
   }
 
@@ -191,6 +198,15 @@ export class KnowledgeService {
               error: err instanceof Error ? err.message : String(err),
             })
           );
+      }
+
+      // ── EventBus: 通知 VectorService 同步向量索引 ──
+      if (this._eventBus) {
+        this._eventBus.emit('knowledge:changed', {
+          action: 'create',
+          entryId: saved.id,
+          entry: { id: saved.id, title: saved.title, content: saved.content, kind: saved.kind },
+        });
       }
 
       return saved;
@@ -341,6 +357,20 @@ export class KnowledgeService {
         fields: Object.keys(dbUpdates),
       });
 
+      // ── EventBus: 通知 VectorService 同步向量索引 ──
+      if (this._eventBus) {
+        this._eventBus.emit('knowledge:changed', {
+          action: 'update',
+          entryId: id,
+          entry: {
+            id: updated.id,
+            title: updated.title,
+            content: updated.content,
+            kind: updated.kind,
+          },
+        });
+      }
+
       return updated;
     } catch (error: unknown) {
       this.logger.error('Error updating knowledge entry', {
@@ -378,6 +408,11 @@ export class KnowledgeService {
         deletedBy: context.userId,
         title: entry.title,
       });
+
+      // ── EventBus: 通知 VectorService 移除向量索引 ──
+      if (this._eventBus) {
+        this._eventBus.emit('knowledge:deleted', { entryId: id });
+      }
 
       return { success: true, id };
     } catch (error: unknown) {

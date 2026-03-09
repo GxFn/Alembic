@@ -37,7 +37,7 @@ interface PrimeResult {
 interface TaskGraphSvc {
   create(p: Record<string, unknown>): Promise<{ task: TaskRecord; isDuplicate: boolean }>;
   ready(p: Record<string, unknown>): Promise<TaskRecord[]>;
-  claim(id: unknown, assignee: unknown): Promise<TaskRecord>;
+  claim(id: unknown, assignee?: unknown, knowledgeOptions?: unknown): Promise<TaskRecord>;
   close(id: unknown, reason: unknown): Promise<{ task: TaskRecord; newlyReady: TaskRecord[] }>;
   fail(id: unknown, reason: unknown): Promise<TaskRecord>;
   defer(id: unknown, reason: unknown): Promise<TaskRecord>;
@@ -70,7 +70,7 @@ const router = express.Router();
  */
 router.post('/', validate(TaskDispatchBody), async (req: Request, res: Response): Promise<void> => {
   const container = getServiceContainer();
-  const taskService = container.get('taskGraphService') as TaskGraphSvc;
+  const taskService = container.get('taskGraphService') as unknown as TaskGraphSvc;
 
   if (!taskService) {
     return void res.status(503).json({

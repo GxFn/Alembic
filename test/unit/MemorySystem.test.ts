@@ -130,8 +130,7 @@ describe('MemoryCoordinator', () => {
 
       // 应该写入 persistentMemory 或 memory
       const totalWrites =
-        (mockMemory.append.mock.calls.length || 0) +
-        (mockPSM.append.mock.calls.length || 0);
+        (mockMemory.append.mock.calls.length || 0) + (mockPSM.append.mock.calls.length || 0);
       expect(totalWrites).toBeGreaterThan(0);
     });
 
@@ -148,8 +147,7 @@ describe('MemoryCoordinator', () => {
       mc.extractFromConversation('我们不使用 singleton 模式', '', 'system');
 
       const totalWrites =
-        (mockMemory.append.mock.calls.length || 0) +
-        (mockPSM.append.mock.calls.length || 0);
+        (mockMemory.append.mock.calls.length || 0) + (mockPSM.append.mock.calls.length || 0);
       expect(totalWrites).toBe(0);
     });
   });
@@ -215,9 +213,9 @@ describe('MemoryCoordinator', () => {
   // ── buildStaticMemoryPrompt ──────────────────────────
 
   describe('buildStaticMemoryPrompt / buildDynamicMemoryPrompt', () => {
-    test('buildStaticMemoryPrompt 返回字符串', () => {
+    test('buildStaticMemoryPrompt 返回字符串', async () => {
       const mc = new MemoryCoordinator({ mode: 'user' });
-      const result = mc.buildStaticMemoryPrompt();
+      const result = await mc.buildStaticMemoryPrompt();
       expect(typeof result).toBe('string');
     });
 
@@ -254,12 +252,7 @@ describe('ActiveContext', () => {
       const ctx = new ActiveContext();
       ctx.startRound(1);
 
-      ctx.recordToolCall(
-        'search_project_code',
-        { query: 'main' },
-        'Found 5 matches in src/',
-        true
-      );
+      ctx.recordToolCall('search_project_code', { query: 'main' }, 'Found 5 matches in src/', true);
 
       ctx.endRound();
 
@@ -849,7 +842,9 @@ describe('PersistentMemory', () => {
 
   // 使用 in-memory SQLite 测试核心功能
   const createInMemoryPM = () => {
-    if (!Database) return null;
+    if (!Database) {
+      return null;
+    }
     const db = new Database(':memory:');
     return new PersistentMemory(db, { logger: mockLogger });
   };
@@ -857,7 +852,9 @@ describe('PersistentMemory', () => {
   describe('PersistentMemory 核心 API', () => {
     test('add + get — 基本 CRUD', () => {
       const pm = createInMemoryPM();
-      if (!pm) return; // skip if no sqlite
+      if (!pm) {
+        return; // skip if no sqlite
+      }
 
       const { id } = pm.add({
         type: 'fact',
@@ -874,39 +871,47 @@ describe('PersistentMemory', () => {
 
     test('append — Memory.js 兼容', () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       pm.append({ type: 'preference', content: 'We prefer functional style' });
       expect(pm.size({})).toBe(1);
     });
 
-    test('toPromptSection — 生成 prompt', () => {
+    test('toPromptSection — 生成 prompt', async () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       pm.add({ type: 'fact', content: 'Main language is JavaScript', importance: 8 });
       pm.add({ type: 'preference', content: 'Use ES modules', importance: 6 });
 
-      const section = pm.toPromptSection({});
+      const section = await pm.toPromptSection({});
       expect(typeof section).toBe('string');
       expect(section).toContain('JavaScript');
     });
 
-    test('retrieve — 3D 检索', () => {
+    test('retrieve — 3D 检索', async () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       pm.add({ type: 'fact', content: 'Uses React for frontend', importance: 7 });
       pm.add({ type: 'fact', content: 'Backend is Node.js Express', importance: 6 });
       pm.add({ type: 'preference', content: 'Prefer hooks over class components', importance: 8 });
 
-      const results = pm.retrieve('React hooks', { limit: 5 });
+      const results = await pm.retrieve('React hooks', { limit: 5 });
       expect(results.length).toBeGreaterThan(0);
     });
 
     test('consolidate — 智能固化', () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       const result = pm.consolidate([
         { type: 'fact', content: 'Project uses MVC pattern', importance: 6 },
@@ -919,7 +924,9 @@ describe('PersistentMemory', () => {
 
     test('compact — 维护 (F16)', () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       // 添加一些记忆
       pm.add({ type: 'fact', content: 'Test memory for compact', importance: 5 });
@@ -930,7 +937,9 @@ describe('PersistentMemory', () => {
 
     test('clearBootstrapMemories — F15', () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       pm.add({ type: 'fact', content: 'Bootstrap memory 1', source: 'bootstrap', importance: 5 });
       pm.add({ type: 'fact', content: 'User memory 1', source: 'user', importance: 7 });
@@ -942,7 +951,9 @@ describe('PersistentMemory', () => {
 
     test('getStats — 统计', () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       pm.add({ type: 'fact', content: 'Stat test 1', importance: 5 });
       pm.add({ type: 'insight', content: 'Stat test 2', importance: 6 });
@@ -959,7 +970,9 @@ describe('PersistentMemory', () => {
   describe('冲突解决 (Mem0 风格)', () => {
     test('矛盾记忆 → 自动替换', () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       // 先添加一条现有记忆
       pm.add({ type: 'preference', content: '我们使用 singleton 模式', importance: 6 });
@@ -981,7 +994,9 @@ describe('PersistentMemory', () => {
 
     test('非矛盾记忆 → 正常 ADD/MERGE', () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       pm.add({ type: 'fact', content: 'Project uses React', importance: 6 });
 
@@ -996,7 +1011,9 @@ describe('PersistentMemory', () => {
 
     test('同向否定 → 不视为矛盾', () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       pm.add({ type: 'preference', content: '不要使用全局变量', importance: 6 });
 
@@ -1010,9 +1027,11 @@ describe('PersistentMemory', () => {
   });
 
   describe('Budget-aware toPromptSection', () => {
-    test('tokenBudget 限制输出条数', () => {
+    test('tokenBudget 限制输出条数', async () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       // 添加大量记忆
       for (let i = 0; i < 20; i++) {
@@ -1023,8 +1042,8 @@ describe('PersistentMemory', () => {
         });
       }
 
-      const fullSection = pm.toPromptSection({ limit: 20 });
-      const limitedSection = pm.toPromptSection({ tokenBudget: 150 });
+      const fullSection = await pm.toPromptSection({ limit: 20 });
+      const limitedSection = await pm.toPromptSection({ tokenBudget: 150 });
 
       // 有预算时应更短
       expect(limitedSection.length).toBeLessThan(fullSection.length);
@@ -1034,28 +1053,81 @@ describe('PersistentMemory', () => {
   describe('向量嵌入接口', () => {
     test('setEmbeddingFunction + getEmbeddingFunction', () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       expect(pm.getEmbeddingFunction()).toBeNull();
 
-      const mockEmbedding = (q, c) => 0.8;
+      const mockEmbedding = async (text: string) => [0.1, 0.2, 0.3];
       pm.setEmbeddingFunction(mockEmbedding);
       expect(pm.getEmbeddingFunction()).toBe(mockEmbedding);
     });
 
-    test('computeEmbeddingRelevance — 未设置时返回 null', () => {
+    test('computeEmbeddingRelevance — 未设置时返回 null', async () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
-      expect(pm.computeEmbeddingRelevance('query', 'content')).toBeNull();
+      expect(await pm.computeEmbeddingRelevance('query', 'content')).toBeNull();
     });
 
-    test('computeEmbeddingRelevance — 已设置时返回分数', () => {
+    test('computeEmbeddingRelevance — 已设置时返回话弦相似度', async () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
-      pm.setEmbeddingFunction((q, c) => 0.75);
-      expect(pm.computeEmbeddingRelevance('test', 'data')).toBe(0.75);
+      // mock: 不同文本返回不同向量
+      pm.setEmbeddingFunction(async (text: string) => {
+        if (text === 'test') {
+          return [1, 0, 0];
+        }
+        return [0.9, 0.1, 0];
+      });
+      const score = await pm.computeEmbeddingRelevance('test', 'data');
+      expect(score).toBeGreaterThan(0.8);
+      expect(score).toBeLessThanOrEqual(1.0);
+    });
+
+    test('embedAllMemories — 批量嵌入缺失记忆', async () => {
+      const pm = createInMemoryPM();
+      if (!pm) {
+        return;
+      }
+
+      pm.add({ type: 'fact', content: 'Memory without embedding', importance: 5 });
+      pm.add({ type: 'fact', content: 'Another memory', importance: 6 });
+
+      pm.setEmbeddingFunction(async (text: string) => [0.1, 0.2, 0.3]);
+      const count = await pm.embedAllMemories();
+      expect(count).toBe(2);
+    });
+
+    test('retrieve — 有向量时融合向量相关性', async () => {
+      const pm = createInMemoryPM();
+      if (!pm) {
+        return;
+      }
+
+      pm.add({ type: 'fact', content: 'TypeScript strict mode', importance: 7 });
+      pm.add({ type: 'fact', content: 'Python data science', importance: 7 });
+
+      // 为所有记忆生成嵌入
+      pm.setEmbeddingFunction(async (text: string) => {
+        // 简化的向量：TypeScript 相关的内容指向相同方向
+        if (text.toLowerCase().includes('typescript') || text.toLowerCase().includes('strict')) {
+          return [1, 0, 0];
+        }
+        return [0, 1, 0];
+      });
+      await pm.embedAllMemories();
+
+      const results = await pm.retrieve('TypeScript', { limit: 2 });
+      expect(results.length).toBe(2);
+      // TypeScript 记忆应排在前面 (向量相关性更高)
+      expect(results[0].content).toContain('TypeScript');
     });
   });
 
@@ -1063,7 +1135,9 @@ describe('PersistentMemory', () => {
     // migrateFromLegacy 需要文件系统操作，这里测试边界情况
     test('不存在的路径 → 返回 { migrated: 0 }', async () => {
       const pm = createInMemoryPM();
-      if (!pm) return;
+      if (!pm) {
+        return;
+      }
 
       const result = await pm.migrateFromLegacy('/nonexistent/project');
       expect(result.migrated).toBe(0);

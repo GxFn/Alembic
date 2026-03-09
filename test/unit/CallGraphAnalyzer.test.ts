@@ -5,13 +5,13 @@
  * CallEdgeResolver, DataFlowInferrer, CallGraphAnalyzer, CallSiteExtractor
  */
 
-import { ImportRecord } from '../../lib/core/analysis/ImportRecord.js';
-import { SymbolTableBuilder } from '../../lib/core/analysis/SymbolTableBuilder.js';
-import { ImportPathResolver } from '../../lib/core/analysis/ImportPathResolver.js';
 import { CallEdgeResolver } from '../../lib/core/analysis/CallEdgeResolver.js';
-import { DataFlowInferrer } from '../../lib/core/analysis/DataFlowInferrer.js';
 import { CallGraphAnalyzer } from '../../lib/core/analysis/CallGraphAnalyzer.js';
 import { extractCallSitesTS } from '../../lib/core/analysis/CallSiteExtractor.js';
+import { DataFlowInferrer } from '../../lib/core/analysis/DataFlowInferrer.js';
+import { ImportPathResolver } from '../../lib/core/analysis/ImportPathResolver.js';
+import { ImportRecord } from '../../lib/core/analysis/ImportRecord.js';
+import { SymbolTableBuilder } from '../../lib/core/analysis/SymbolTableBuilder.js';
 
 // ─── ImportRecord ─────────────────────────────────────────
 
@@ -29,7 +29,7 @@ describe('ImportRecord', () => {
     const rec = new ImportRecord('./utils/helpers');
     expect(rec.toString()).toBe('./utils/helpers');
     expect(`${rec}`).toBe('./utils/helpers');
-    expect('' + rec).toBe('./utils/helpers');
+    expect(`${rec}`).toBe('./utils/helpers');
   });
 
   test('string compatibility — startsWith / endsWith', () => {
@@ -133,9 +133,7 @@ describe('SymbolTableBuilder', () => {
         file: 'src/repository/UserRepo.ts',
         classes: [{ name: 'UserRepo', kind: 'class', line: 3 }],
         protocols: [],
-        methods: [
-          { name: 'findById', className: 'UserRepo', line: 8, kind: 'definition' },
-        ],
+        methods: [{ name: 'findById', className: 'UserRepo', line: 8, kind: 'definition' }],
         imports: [],
         exports: [{ text: 'export class UserRepo', line: 3 }],
       },
@@ -143,9 +141,7 @@ describe('SymbolTableBuilder', () => {
         file: 'src/utils/helpers.ts',
         classes: [],
         protocols: [{ name: 'Serializable', line: 1 }],
-        methods: [
-          { name: 'formatDate', className: null, line: 5, kind: 'definition' },
-        ],
+        methods: [{ name: 'formatDate', className: null, line: 5, kind: 'definition' }],
         imports: [],
         exports: [{ text: 'export function formatDate', line: 5 }],
       },
@@ -300,9 +296,7 @@ describe('CallEdgeResolver', () => {
           file: 'src/utils/helpers.ts',
           classes: [],
           protocols: [],
-          methods: [
-            { name: 'formatDate', className: null, line: 1, kind: 'definition' },
-          ],
+          methods: [{ name: 'formatDate', className: null, line: 1, kind: 'definition' }],
           imports: [],
           exports: [{ text: 'export function formatDate' }],
         },
@@ -464,9 +458,7 @@ describe('CallEdgeResolver', () => {
           file: 'src/service/UserService.ts',
           classes: [{ name: 'UserService', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'getUser', className: 'UserService', line: 10, kind: 'definition' },
-          ],
+          methods: [{ name: 'getUser', className: 'UserService', line: 10, kind: 'definition' }],
           imports: [
             // symbols contain LOCAL names (alias baked-in): 'Repo' (not 'UserRepo')
             new ImportRecord('../repository/UserRepo', {
@@ -783,25 +775,18 @@ describe('CallEdgeResolver — CHA', () => {
           file: 'src/repo/UserRepo.ts',
           classes: [{ name: 'UserRepo', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'findById', className: 'UserRepo', line: 5, kind: 'definition' },
-          ],
+          methods: [{ name: 'findById', className: 'UserRepo', line: 5, kind: 'definition' }],
           imports: [],
           exports: [],
         },
       ],
     });
 
-    const inheritanceGraph = [
-      { from: 'UserRepo', to: 'BaseRepo', type: 'inherits' },
-    ];
+    const inheritanceGraph = [{ from: 'UserRepo', to: 'BaseRepo', type: 'inherits' }];
 
     const resolver = new CallEdgeResolver(
       table,
-      new ImportPathResolver('/project', [
-        'src/base/BaseRepo.ts',
-        'src/repo/UserRepo.ts',
-      ]),
+      new ImportPathResolver('/project', ['src/base/BaseRepo.ts', 'src/repo/UserRepo.ts']),
       inheritanceGraph
     );
 
@@ -835,9 +820,7 @@ describe('CallEdgeResolver — CHA', () => {
           file: 'src/base/Entity.ts',
           classes: [{ name: 'Entity', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'getId', className: 'Entity', line: 3, kind: 'definition' },
-          ],
+          methods: [{ name: 'getId', className: 'Entity', line: 3, kind: 'definition' }],
           imports: [],
           exports: [],
         },
@@ -853,9 +836,7 @@ describe('CallEdgeResolver — CHA', () => {
           file: 'src/repo/UserRepo.ts',
           classes: [{ name: 'UserRepo', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'findUser', className: 'UserRepo', line: 5, kind: 'definition' },
-          ],
+          methods: [{ name: 'findUser', className: 'UserRepo', line: 5, kind: 'definition' }],
           imports: [],
           exports: [],
         },
@@ -907,9 +888,7 @@ describe('CallEdgeResolver — CHA', () => {
           file: 'src/base/Base.ts',
           classes: [{ name: 'Base', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'init', className: 'Base', line: 3, kind: 'definition' },
-          ],
+          methods: [{ name: 'init', className: 'Base', line: 3, kind: 'definition' }],
           imports: [],
           exports: [],
         },
@@ -917,9 +896,7 @@ describe('CallEdgeResolver — CHA', () => {
           file: 'src/Child.ts',
           classes: [{ name: 'Child', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'run', className: 'Child', line: 5, kind: 'definition' },
-          ],
+          methods: [{ name: 'run', className: 'Child', line: 5, kind: 'definition' }],
           imports: [],
           exports: [],
         },
@@ -960,9 +937,7 @@ describe('CallEdgeResolver — CHA', () => {
           file: 'a.ts',
           classes: [{ name: 'A', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'foo', className: 'A', line: 3, kind: 'definition' },
-          ],
+          methods: [{ name: 'foo', className: 'A', line: 3, kind: 'definition' }],
           imports: [],
           exports: [],
         },
@@ -970,10 +945,7 @@ describe('CallEdgeResolver — CHA', () => {
     });
 
     // No inheritanceGraph parameter — should not throw
-    const resolver = new CallEdgeResolver(
-      table,
-      new ImportPathResolver('/project', ['a.ts'])
-    );
+    const resolver = new CallEdgeResolver(table, new ImportPathResolver('/project', ['a.ts']));
 
     const edges = resolver.resolveFile(
       [
@@ -1003,17 +975,13 @@ describe('CallGraphAnalyzer — CHA integration', () => {
   test('analyzer passes inheritanceGraph to CallEdgeResolver', async () => {
     const analyzer = new CallGraphAnalyzer('/project');
     const result = await analyzer.analyze({
-      inheritanceGraph: [
-        { from: 'ChildService', to: 'BaseService', type: 'inherits' },
-      ],
+      inheritanceGraph: [{ from: 'ChildService', to: 'BaseService', type: 'inherits' }],
       fileSummaries: [
         {
           file: 'src/base/BaseService.ts',
           classes: [{ name: 'BaseService', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'log', className: 'BaseService', line: 3, kind: 'definition' },
-          ],
+          methods: [{ name: 'log', className: 'BaseService', line: 3, kind: 'definition' }],
           imports: [],
           exports: [],
           callSites: [],
@@ -1022,9 +990,7 @@ describe('CallGraphAnalyzer — CHA integration', () => {
           file: 'src/service/ChildService.ts',
           classes: [{ name: 'ChildService', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'run', className: 'ChildService', line: 5, kind: 'definition' },
-          ],
+          methods: [{ name: 'run', className: 'ChildService', line: 5, kind: 'definition' }],
           imports: [],
           exports: [],
           callSites: [
@@ -1062,7 +1028,9 @@ describe('CallSiteExtractor — JSX components', () => {
       namedChildren: [
         { type: 'identifier', text: 'UserProfile', namedChildCount: 0, namedChildren: [] },
       ],
-      namedChild(i) { return this.namedChildren[i]; },
+      namedChild(i) {
+        return this.namedChildren[i];
+      },
       startPosition: { row: 9 },
       isMissing: false,
     };
@@ -1071,7 +1039,9 @@ describe('CallSiteExtractor — JSX components', () => {
       type: 'statement_block',
       namedChildCount: 1,
       namedChildren: [fakeJsxElement],
-      namedChild(i) { return this.namedChildren[i]; },
+      namedChild(i) {
+        return this.namedChildren[i];
+      },
       isMissing: false,
     };
 
@@ -1087,12 +1057,16 @@ describe('CallSiteExtractor — JSX components', () => {
             { type: 'identifier', text: 'render', namedChildCount: 0, namedChildren: [] },
             fakeBody,
           ],
-          namedChild(i) { return this.namedChildren[i]; },
+          namedChild(i) {
+            return this.namedChildren[i];
+          },
           startPosition: { row: 0 },
           isMissing: false,
         },
       ],
-      namedChild(i) { return this.namedChildren[i]; },
+      namedChild(i) {
+        return this.namedChildren[i];
+      },
       isMissing: false,
     };
 
@@ -1110,10 +1084,10 @@ describe('CallSiteExtractor — JSX components', () => {
     const fakeJsxElement = {
       type: 'jsx_self_closing_element',
       namedChildCount: 1,
-      namedChildren: [
-        { type: 'identifier', text: 'div', namedChildCount: 0, namedChildren: [] },
-      ],
-      namedChild(i) { return this.namedChildren[i]; },
+      namedChildren: [{ type: 'identifier', text: 'div', namedChildCount: 0, namedChildren: [] }],
+      namedChild(i) {
+        return this.namedChildren[i];
+      },
       startPosition: { row: 9 },
       isMissing: false,
     };
@@ -1122,7 +1096,9 @@ describe('CallSiteExtractor — JSX components', () => {
       type: 'statement_block',
       namedChildCount: 1,
       namedChildren: [fakeJsxElement],
-      namedChild(i) { return this.namedChildren[i]; },
+      namedChild(i) {
+        return this.namedChildren[i];
+      },
       isMissing: false,
     };
 
@@ -1137,12 +1113,16 @@ describe('CallSiteExtractor — JSX components', () => {
             { type: 'identifier', text: 'render', namedChildCount: 0, namedChildren: [] },
             fakeBody,
           ],
-          namedChild(i) { return this.namedChildren[i]; },
+          namedChild(i) {
+            return this.namedChildren[i];
+          },
           startPosition: { row: 0 },
           isMissing: false,
         },
       ],
-      namedChild(i) { return this.namedChildren[i]; },
+      namedChild(i) {
+        return this.namedChildren[i];
+      },
       isMissing: false,
     };
 
@@ -1164,7 +1144,11 @@ describe('ImportRecord — CJS require()', () => {
   });
 
   test('ImportRecord supports namespace kind from require', () => {
-    const rec = new ImportRecord('express', { symbols: ['*'], kind: 'namespace', alias: 'express' });
+    const rec = new ImportRecord('express', {
+      symbols: ['*'],
+      kind: 'namespace',
+      alias: 'express',
+    });
     expect(rec.kind).toBe('namespace');
     expect(rec.alias).toBe('express');
     expect(rec.hasSymbol('*')).toBe(true);
@@ -1191,7 +1175,9 @@ describe('Go extractCallSites', () => {
       text: extra.text || '',
       namedChildCount: namedChildren.length,
       namedChildren,
-      namedChild(i) { return namedChildren[i]; },
+      namedChild(i) {
+        return namedChildren[i];
+      },
       startPosition: extra.startPosition || { row: 0, column: 0 },
       endPosition: extra.endPosition || { row: 0, column: 0 },
       isMissing: false,
@@ -1321,7 +1307,9 @@ describe('Java extractCallSites', () => {
       text: extra.text || '',
       namedChildCount: namedChildren.length,
       namedChildren,
-      namedChild(i) { return namedChildren[i]; },
+      namedChild(i) {
+        return namedChildren[i];
+      },
       startPosition: extra.startPosition || { row: 0, column: 0 },
       endPosition: extra.endPosition || { row: 0, column: 0 },
       isMissing: false,
@@ -1417,7 +1405,9 @@ describe('Kotlin extractCallSites', () => {
       text: extra.text || '',
       namedChildCount: namedChildren.length,
       namedChildren,
-      namedChild(i) { return namedChildren[i]; },
+      namedChild(i) {
+        return namedChildren[i];
+      },
       startPosition: extra.startPosition || { row: 0, column: 0 },
       endPosition: extra.endPosition || { row: 0, column: 0 },
       isMissing: false,
@@ -1570,7 +1560,9 @@ describe('Rust extractCallSites', () => {
       text: extra.text || '',
       namedChildCount: namedChildren.length,
       namedChildren,
-      namedChild(i) { return namedChildren[i]; },
+      namedChild(i) {
+        return namedChildren[i];
+      },
       startPosition: extra.startPosition || { row: 0, column: 0 },
       endPosition: extra.endPosition || { row: 0, column: 0 },
       isMissing: false,
@@ -1592,10 +1584,7 @@ describe('Rust extractCallSites', () => {
       startPosition: { row: 4 },
     });
     const body = mkNode('block', [callExpr]);
-    const funcItem = mkNode('function_item', [
-      mkNode('identifier', [], { text: 'init' }),
-      body,
-    ]);
+    const funcItem = mkNode('function_item', [mkNode('identifier', [], { text: 'init' }), body]);
     const declList = mkNode('declaration_list', [funcItem]);
     const typeId = mkNode('type_identifier', [], { text: 'UserService' });
     const implItem = mkNode('impl_item', [typeId, declList], {
@@ -1624,10 +1613,7 @@ describe('Rust extractCallSites', () => {
       startPosition: { row: 3 },
     });
     const body = mkNode('block', [methodCallExpr]);
-    const funcItem = mkNode('function_item', [
-      mkNode('identifier', [], { text: 'process' }),
-      body,
-    ]);
+    const funcItem = mkNode('function_item', [mkNode('identifier', [], { text: 'process' }), body]);
     const root = mkNode('source_file', [funcItem]);
     const ctx = { callSites: [] };
 
@@ -1647,10 +1633,7 @@ describe('Rust extractCallSites', () => {
       startPosition: { row: 1 },
     });
     const body = mkNode('block', [callExpr]);
-    const funcItem = mkNode('function_item', [
-      mkNode('identifier', [], { text: 'main' }),
-      body,
-    ]);
+    const funcItem = mkNode('function_item', [mkNode('identifier', [], { text: 'main' }), body]);
     const root = mkNode('source_file', [funcItem]);
     const ctx = { callSites: [] };
 
@@ -1710,7 +1693,9 @@ describe('Swift extractCallSites', () => {
       text: extra.text || '',
       namedChildCount: namedChildren.length,
       namedChildren,
-      namedChild(i) { return namedChildren[i]; },
+      namedChild(i) {
+        return namedChildren[i];
+      },
       startPosition: extra.startPosition || { row: 0, column: 0 },
       endPosition: extra.endPosition || { row: 0, column: 0 },
       isMissing: false,
@@ -1820,7 +1805,9 @@ describe('Dart extractCallSites', () => {
       text: extra.text || '',
       namedChildCount: namedChildren.length,
       namedChildren,
-      namedChild(i) { return namedChildren[i]; },
+      namedChild(i) {
+        return namedChildren[i];
+      },
       startPosition: extra.startPosition || { row: 0, column: 0 },
       endPosition: extra.endPosition || { row: 0, column: 0 },
       isMissing: false,
@@ -1915,22 +1902,30 @@ describe('Dart extractCallSites', () => {
   test('this.method() extracts method call with receiver=this (sibling pattern)', () => {
     // AST: class_body → [method_signature → [function_signature → [identifier "doWork"]], function_body → [block → [expression_statement → [this, selector(".increment"), selector("()")]]]]
     const thisNode = mkNode('this', [], { text: 'this' });
-    const methodSel = mkNode('selector', [
-      mkNode('unconditional_assignable_selector', [
-        mkNode('identifier', [], { text: 'increment' }),
-      ], { text: '.increment' }),
-    ], { text: '.increment' });
-    const argsSel = mkNode('selector', [
-      mkNode('argument_part', [
-        mkNode('arguments', [], { text: '()' }),
-      ], { text: '()' }),
-    ], { text: '()' });
-    const exprStmt = mkNode('expression_statement', [thisNode, methodSel, argsSel], { text: 'this.increment();' });
+    const methodSel = mkNode(
+      'selector',
+      [
+        mkNode(
+          'unconditional_assignable_selector',
+          [mkNode('identifier', [], { text: 'increment' })],
+          { text: '.increment' }
+        ),
+      ],
+      { text: '.increment' }
+    );
+    const argsSel = mkNode(
+      'selector',
+      [mkNode('argument_part', [mkNode('arguments', [], { text: '()' })], { text: '()' })],
+      { text: '()' }
+    );
+    const exprStmt = mkNode('expression_statement', [thisNode, methodSel, argsSel], {
+      text: 'this.increment();',
+    });
     const block = mkNode('block', [exprStmt]);
     const body = mkNode('function_body', [block]);
-    const funcSig = mkNode('function_signature', [
-      mkNode('identifier', [], { text: 'doWork' }),
-    ], { text: 'void doWork()' });
+    const funcSig = mkNode('function_signature', [mkNode('identifier', [], { text: 'doWork' })], {
+      text: 'void doWork()',
+    });
     const methodSig = mkNode('method_signature', [funcSig], { text: 'void doWork()' });
     const classBody = mkNode('class_body', [methodSig, body]);
     const classDef = mkNode('class_definition', [
@@ -1955,20 +1950,24 @@ describe('Dart extractCallSites', () => {
 
   test('super.method() extracts super call (sibling pattern)', () => {
     const superNode = mkNode('super', [], { text: 'super' });
-    const methodSel = mkNode('unconditional_assignable_selector', [
-      mkNode('identifier', [], { text: 'dispose' }),
-    ], { text: '.dispose' });
-    const argsSel = mkNode('selector', [
-      mkNode('argument_part', [
-        mkNode('arguments', [], { text: '()' }),
-      ], { text: '()' }),
-    ], { text: '()' });
-    const exprStmt = mkNode('expression_statement', [superNode, methodSel, argsSel], { text: 'super.dispose();' });
+    const methodSel = mkNode(
+      'unconditional_assignable_selector',
+      [mkNode('identifier', [], { text: 'dispose' })],
+      { text: '.dispose' }
+    );
+    const argsSel = mkNode(
+      'selector',
+      [mkNode('argument_part', [mkNode('arguments', [], { text: '()' })], { text: '()' })],
+      { text: '()' }
+    );
+    const exprStmt = mkNode('expression_statement', [superNode, methodSel, argsSel], {
+      text: 'super.dispose();',
+    });
     const block = mkNode('block', [exprStmt]);
     const body = mkNode('function_body', [block]);
-    const funcSig = mkNode('function_signature', [
-      mkNode('identifier', [], { text: 'dispose' }),
-    ], { text: 'void dispose()' });
+    const funcSig = mkNode('function_signature', [mkNode('identifier', [], { text: 'dispose' })], {
+      text: 'void dispose()',
+    });
     const methodSig = mkNode('method_signature', [funcSig]);
     const classBody = mkNode('class_body', [methodSig, body]);
     const classDef = mkNode('class_definition', [
@@ -1992,16 +1991,22 @@ describe('Dart extractCallSites', () => {
 
   test('StaticClass.method() extracts static call (sibling pattern)', () => {
     const identNode = mkNode('identifier', [], { text: 'MyHelper' });
-    const methodSel = mkNode('selector', [
-      mkNode('unconditional_assignable_selector', [
-        mkNode('identifier', [], { text: 'staticMethod' }),
-      ], { text: '.staticMethod' }),
-    ], { text: '.staticMethod' });
-    const argsSel = mkNode('selector', [
-      mkNode('argument_part', [
-        mkNode('arguments', [], { text: '()' }),
-      ], { text: '()' }),
-    ], { text: '()' });
+    const methodSel = mkNode(
+      'selector',
+      [
+        mkNode(
+          'unconditional_assignable_selector',
+          [mkNode('identifier', [], { text: 'staticMethod' })],
+          { text: '.staticMethod' }
+        ),
+      ],
+      { text: '.staticMethod' }
+    );
+    const argsSel = mkNode(
+      'selector',
+      [mkNode('argument_part', [mkNode('arguments', [], { text: '()' })], { text: '()' })],
+      { text: '()' }
+    );
     const exprStmt = mkNode('expression_statement', [identNode, methodSel, argsSel]);
     const block = mkNode('block', [exprStmt]);
     const body = mkNode('function_body', [block]);
@@ -2025,11 +2030,15 @@ describe('Dart extractCallSites', () => {
 
   test('direct func(args) extracts call via identifier + selector("(...)") pattern', () => {
     const identNode = mkNode('identifier', [], { text: 'runApp' });
-    const argsSel = mkNode('selector', [
-      mkNode('argument_part', [
-        mkNode('arguments', [], { text: '(MyApp())' }),
-      ], { text: '(MyApp())' }),
-    ], { text: '(MyApp())' });
+    const argsSel = mkNode(
+      'selector',
+      [
+        mkNode('argument_part', [mkNode('arguments', [], { text: '(MyApp())' })], {
+          text: '(MyApp())',
+        }),
+      ],
+      { text: '(MyApp())' }
+    );
     const exprStmt = mkNode('expression_statement', [identNode, argsSel]);
     const block = mkNode('block', [exprStmt]);
     const body = mkNode('function_body', [block]);
@@ -2042,22 +2051,26 @@ describe('Dart extractCallSites', () => {
 
     extractCallSitesDart(root, ctx, 'dart');
 
-    expect(ctx.callSites.some(cs => cs.callee === 'runApp' && cs.callType === 'function')).toBe(true);
+    expect(ctx.callSites.some((cs) => cs.callee === 'runApp' && cs.callType === 'function')).toBe(
+      true
+    );
   });
 
   test('setState (DART_NOISE) is skipped without infinite recursion', () => {
     const identNode = mkNode('identifier', [], { text: 'setState' });
-    const argsSel = mkNode('selector', [
-      mkNode('argument_part', [
-        mkNode('arguments', [], { text: '(() { counter++; })' }),
-      ], { text: '(() { counter++; })' }),
-    ], { text: '(() { counter++; })' });
+    const argsSel = mkNode(
+      'selector',
+      [
+        mkNode('argument_part', [mkNode('arguments', [], { text: '(() { counter++; })' })], {
+          text: '(() { counter++; })',
+        }),
+      ],
+      { text: '(() { counter++; })' }
+    );
     const exprStmt = mkNode('expression_statement', [identNode, argsSel]);
     const block = mkNode('block', [exprStmt]);
     const body = mkNode('function_body', [block]);
-    const funcSig = mkNode('function_signature', [
-      mkNode('identifier', [], { text: 'increment' }),
-    ]);
+    const funcSig = mkNode('function_signature', [mkNode('identifier', [], { text: 'increment' })]);
     const methodSig = mkNode('method_signature', [funcSig]);
     const classBody = mkNode('class_body', [methodSig, body]);
     const classDef = mkNode('class_definition', [
@@ -2070,30 +2083,42 @@ describe('Dart extractCallSites', () => {
     // Should NOT throw (was causing infinite recursion before fix)
     expect(() => extractCallSitesDart(root, ctx, 'dart')).not.toThrow();
     // setState should be filtered out
-    expect(ctx.callSites.filter(cs => cs.callee === 'setState')).toHaveLength(0);
+    expect(ctx.callSites.filter((cs) => cs.callee === 'setState')).toHaveLength(0);
   });
 
   test('scope collection works with sibling method_signature + function_body', () => {
     // Two methods with sibling body pattern - both should extract callSites
     const call1Ident = mkNode('identifier', [], { text: 'serviceA' });
-    const call1MethodSel = mkNode('selector', [
-      mkNode('unconditional_assignable_selector', [
-        mkNode('identifier', [], { text: 'fetch' }),
-      ], { text: '.fetch' }),
-    ], { text: '.fetch' });
-    const call1ArgsSel = mkNode('selector', [
-      mkNode('argument_part', [mkNode('arguments', [], { text: '()' })], { text: '()' }),
-    ], { text: '()' });
+    const call1MethodSel = mkNode(
+      'selector',
+      [
+        mkNode('unconditional_assignable_selector', [mkNode('identifier', [], { text: 'fetch' })], {
+          text: '.fetch',
+        }),
+      ],
+      { text: '.fetch' }
+    );
+    const call1ArgsSel = mkNode(
+      'selector',
+      [mkNode('argument_part', [mkNode('arguments', [], { text: '()' })], { text: '()' })],
+      { text: '()' }
+    );
 
     const call2Ident = mkNode('identifier', [], { text: 'serviceB' });
-    const call2MethodSel = mkNode('selector', [
-      mkNode('unconditional_assignable_selector', [
-        mkNode('identifier', [], { text: 'save' }),
-      ], { text: '.save' }),
-    ], { text: '.save' });
-    const call2ArgsSel = mkNode('selector', [
-      mkNode('argument_part', [mkNode('arguments', [], { text: '()' })], { text: '()' }),
-    ], { text: '()' });
+    const call2MethodSel = mkNode(
+      'selector',
+      [
+        mkNode('unconditional_assignable_selector', [mkNode('identifier', [], { text: 'save' })], {
+          text: '.save',
+        }),
+      ],
+      { text: '.save' }
+    );
+    const call2ArgsSel = mkNode(
+      'selector',
+      [mkNode('argument_part', [mkNode('arguments', [], { text: '()' })], { text: '()' })],
+      { text: '()' }
+    );
 
     const body1 = mkNode('function_body', [
       mkNode('block', [mkNode('expression_statement', [call1Ident, call1MethodSel, call1ArgsSel])]),
@@ -2102,8 +2127,12 @@ describe('Dart extractCallSites', () => {
       mkNode('block', [mkNode('expression_statement', [call2Ident, call2MethodSel, call2ArgsSel])]),
     ]);
 
-    const sig1 = mkNode('method_signature', [mkNode('function_signature', [mkNode('identifier', [], { text: 'doA' })])]);
-    const sig2 = mkNode('method_signature', [mkNode('function_signature', [mkNode('identifier', [], { text: 'doB' })])]);
+    const sig1 = mkNode('method_signature', [
+      mkNode('function_signature', [mkNode('identifier', [], { text: 'doA' })]),
+    ]);
+    const sig2 = mkNode('method_signature', [
+      mkNode('function_signature', [mkNode('identifier', [], { text: 'doB' })]),
+    ]);
 
     const classBody = mkNode('class_body', [sig1, body1, sig2, body2]);
     const classDef = mkNode('class_definition', [
@@ -2116,8 +2145,16 @@ describe('Dart extractCallSites', () => {
     extractCallSitesDart(root, ctx, 'dart');
 
     expect(ctx.callSites).toHaveLength(2);
-    expect(ctx.callSites[0]).toMatchObject({ callee: 'fetch', callerMethod: 'doA', callerClass: 'Controller' });
-    expect(ctx.callSites[1]).toMatchObject({ callee: 'save', callerMethod: 'doB', callerClass: 'Controller' });
+    expect(ctx.callSites[0]).toMatchObject({
+      callee: 'fetch',
+      callerMethod: 'doA',
+      callerClass: 'Controller',
+    });
+    expect(ctx.callSites[1]).toMatchObject({
+      callee: 'save',
+      callerMethod: 'doB',
+      callerClass: 'Controller',
+    });
   });
 });
 
@@ -2130,32 +2167,22 @@ describe('ImportPathResolver — tsconfig paths alias', () => {
       'src/services/auth.ts',
     ]);
     // Manually add alias configuration (simulating loaded tsconfig)
-    resolver.pathAliases = [
-      { prefix: '@', targets: ['src'] },
-    ];
+    resolver.pathAliases = [{ prefix: '@', targets: ['src'] }];
 
     expect(resolver.resolve('@/utils/helpers', 'src/index.ts')).toBe('src/utils/helpers.ts');
     expect(resolver.resolve('@/services/auth', 'src/index.ts')).toBe('src/services/auth.ts');
   });
 
   test('resolves ~/ alias to src/', () => {
-    const resolver = new ImportPathResolver('/project', [
-      'src/components/Button.tsx',
-    ]);
-    resolver.pathAliases = [
-      { prefix: '~', targets: ['src'] },
-    ];
+    const resolver = new ImportPathResolver('/project', ['src/components/Button.tsx']);
+    resolver.pathAliases = [{ prefix: '~', targets: ['src'] }];
 
     expect(resolver.resolve('~/components/Button', 'app.tsx')).toBe('src/components/Button.tsx');
   });
 
   test('returns null for non-matching alias', () => {
-    const resolver = new ImportPathResolver('/project', [
-      'src/utils/helpers.ts',
-    ]);
-    resolver.pathAliases = [
-      { prefix: '@', targets: ['src'] },
-    ];
+    const resolver = new ImportPathResolver('/project', ['src/utils/helpers.ts']);
+    resolver.pathAliases = [{ prefix: '@', targets: ['src'] }];
 
     // 'lodash' is external, not matching any alias
     expect(resolver.resolve('lodash', 'src/index.ts')).toBeNull();
@@ -2166,9 +2193,7 @@ describe('ImportPathResolver — tsconfig paths alias', () => {
       'src/utils/helpers.ts',
       'src/services/auth.ts',
     ]);
-    resolver.pathAliases = [
-      { prefix: '@', targets: ['src'] },
-    ];
+    resolver.pathAliases = [{ prefix: '@', targets: ['src'] }];
 
     // Relative path should resolve normally
     expect(resolver.resolve('./utils/helpers', 'src/index.ts')).toBe('src/utils/helpers.ts');
@@ -2185,9 +2210,7 @@ describe('CallEdgeResolver — DI field inference', () => {
           file: 'src/controller/UserController.ts',
           classes: [{ name: 'UserController', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'getUser', className: 'UserController', line: 5 },
-          ],
+          methods: [{ name: 'getUser', className: 'UserController', line: 5 }],
           imports: ['./UserRepo'],
           exports: [],
           callSites: [],
@@ -2196,9 +2219,7 @@ describe('CallEdgeResolver — DI field inference', () => {
           file: 'src/repo/UserRepo.ts',
           classes: [{ name: 'UserRepo', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'findById', className: 'UserRepo', line: 10 },
-          ],
+          methods: [{ name: 'findById', className: 'UserRepo', line: 10 }],
           imports: [],
           exports: [{ name: 'UserRepo' }],
           callSites: [],
@@ -2208,8 +2229,11 @@ describe('CallEdgeResolver — DI field inference', () => {
 
     const resolver = new CallEdgeResolver(
       symbolTable,
-      new ImportPathResolver('/project', ['src/controller/UserController.ts', 'src/repo/UserRepo.ts']),
-      [],
+      new ImportPathResolver('/project', [
+        'src/controller/UserController.ts',
+        'src/repo/UserRepo.ts',
+      ]),
+      []
     );
 
     const callSite = {
@@ -2273,17 +2297,19 @@ describe('CallGraphAnalyzer — partial result on timeout', () => {
       methods: [{ name: `method${i}`, className: `Class${i}`, line: 5 }],
       imports: [],
       exports: [],
-      callSites: [{
-        callee: `method${(i + 1) % 50}`,
-        callerMethod: `method${i}`,
-        callerClass: `Class${i}`,
-        callType: 'function',
-        receiver: null,
-        receiverType: null,
-        argCount: 0,
-        line: 8,
-        isAwait: false,
-      }],
+      callSites: [
+        {
+          callee: `method${(i + 1) % 50}`,
+          callerMethod: `method${i}`,
+          callerClass: `Class${i}`,
+          callType: 'function',
+          receiver: null,
+          receiverType: null,
+          argCount: 0,
+          line: 8,
+          isAwait: false,
+        },
+      ],
     }));
 
     // With a very short timeout, it should return partial results
@@ -2305,30 +2331,37 @@ describe('CallGraphAnalyzer — partial result on timeout', () => {
   test('returns complete result within generous timeout', async () => {
     const analyzer = new CallGraphAnalyzer('/project');
 
-    const result = await analyzer.analyze({
-      fileSummaries: [{
-        file: 'src/main.ts',
-        classes: [{ name: 'App', kind: 'class', line: 1 }],
-        protocols: [],
-        methods: [
-          { name: 'start', className: 'App', line: 5 },
-          { name: 'stop', className: 'App', line: 15 },
+    const result = await analyzer.analyze(
+      {
+        fileSummaries: [
+          {
+            file: 'src/main.ts',
+            classes: [{ name: 'App', kind: 'class', line: 1 }],
+            protocols: [],
+            methods: [
+              { name: 'start', className: 'App', line: 5 },
+              { name: 'stop', className: 'App', line: 15 },
+            ],
+            imports: [],
+            exports: [],
+            callSites: [
+              {
+                callee: 'stop',
+                callerMethod: 'start',
+                callerClass: 'App',
+                callType: 'method',
+                receiver: 'this',
+                receiverType: 'App',
+                argCount: 0,
+                line: 8,
+                isAwait: false,
+              },
+            ],
+          },
         ],
-        imports: [],
-        exports: [],
-        callSites: [{
-          callee: 'stop',
-          callerMethod: 'start',
-          callerClass: 'App',
-          callType: 'method',
-          receiver: 'this',
-          receiverType: 'App',
-          argCount: 0,
-          line: 8,
-          isAwait: false,
-        }],
-      }],
-    }, { timeout: 10000 });
+      },
+      { timeout: 10000 }
+    );
 
     expect(result.stats.partial).toBeUndefined();
     expect(result.callEdges.length).toBe(1);
@@ -2341,8 +2374,20 @@ describe('CallGraphAnalyzer — incremental analysis', () => {
   test('analyzeIncremental returns empty for no changes', async () => {
     const analyzer = new CallGraphAnalyzer('/project');
     const result = await analyzer.analyzeIncremental(
-      { fileSummaries: [{ file: 'a.ts', classes: [], protocols: [], methods: [], imports: [], exports: [], callSites: [] }] },
-      [],
+      {
+        fileSummaries: [
+          {
+            file: 'a.ts',
+            classes: [],
+            protocols: [],
+            methods: [],
+            imports: [],
+            exports: [],
+            callSites: [],
+          },
+        ],
+      },
+      []
     );
     expect(result.callEdges).toEqual([]);
   });
@@ -2356,9 +2401,7 @@ describe('CallGraphAnalyzer — incremental analysis', () => {
           file: 'src/service.ts',
           classes: [{ name: 'Service', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'execute', className: 'Service', line: 5 },
-          ],
+          methods: [{ name: 'execute', className: 'Service', line: 5 }],
           imports: [],
           exports: [{ name: 'Service' }],
           callSites: [],
@@ -2367,43 +2410,43 @@ describe('CallGraphAnalyzer — incremental analysis', () => {
           file: 'src/controller.ts',
           classes: [{ name: 'Controller', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'handle', className: 'Controller', line: 5 },
-          ],
+          methods: [{ name: 'handle', className: 'Controller', line: 5 }],
           imports: ['./service'],
           exports: [],
-          callSites: [{
-            callee: 'execute',
-            callerMethod: 'handle',
-            callerClass: 'Controller',
-            callType: 'function',
-            receiver: 'Service',
-            receiverType: null,
-            argCount: 0,
-            line: 8,
-            isAwait: false,
-          }],
+          callSites: [
+            {
+              callee: 'execute',
+              callerMethod: 'handle',
+              callerClass: 'Controller',
+              callType: 'function',
+              receiver: 'Service',
+              receiverType: null,
+              argCount: 0,
+              line: 8,
+              isAwait: false,
+            },
+          ],
         },
         {
           file: 'src/unrelated.ts',
           classes: [{ name: 'Util', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'helper', className: 'Util', line: 5 },
-          ],
+          methods: [{ name: 'helper', className: 'Util', line: 5 }],
           imports: [],
           exports: [],
-          callSites: [{
-            callee: 'helper',
-            callerMethod: 'helper',
-            callerClass: 'Util',
-            callType: 'method',
-            receiver: 'this',
-            receiverType: 'Util',
-            argCount: 0,
-            line: 8,
-            isAwait: false,
-          }],
+          callSites: [
+            {
+              callee: 'helper',
+              callerMethod: 'helper',
+              callerClass: 'Util',
+              callType: 'method',
+              receiver: 'this',
+              receiverType: 'Util',
+              argCount: 0,
+              line: 8,
+              isAwait: false,
+            },
+          ],
         },
       ],
     };
@@ -2457,9 +2500,27 @@ describe('SymbolTableBuilder — RTA instantiatedClasses', () => {
           imports: [],
           exports: [],
           callSites: [
-            { callType: 'constructor', receiverType: 'UserService', callee: 'UserService', callerMethod: 'bootstrap', line: 62 },
-            { callType: 'constructor', receiverType: 'OrderService', callee: 'OrderService', callerMethod: 'bootstrap', line: 63 },
-            { callType: 'method', receiverType: null, callee: 'doStuff', callerMethod: 'bootstrap', line: 64 },
+            {
+              callType: 'constructor',
+              receiverType: 'UserService',
+              callee: 'UserService',
+              callerMethod: 'bootstrap',
+              line: 62,
+            },
+            {
+              callType: 'constructor',
+              receiverType: 'OrderService',
+              callee: 'OrderService',
+              callerMethod: 'bootstrap',
+              line: 63,
+            },
+            {
+              callType: 'method',
+              receiverType: null,
+              callee: 'doStuff',
+              callerMethod: 'bootstrap',
+              line: 64,
+            },
           ],
         },
       ],
@@ -2483,7 +2544,13 @@ describe('SymbolTableBuilder — RTA instantiatedClasses', () => {
           imports: [],
           exports: [],
           callSites: [
-            { callType: 'constructor', receiverType: 'UserList', callee: 'UserList', callerMethod: 'render', line: 10 },
+            {
+              callType: 'constructor',
+              receiverType: 'UserList',
+              callee: 'UserList',
+              callerMethod: 'render',
+              line: 10,
+            },
           ],
         },
       ],
@@ -2506,7 +2573,12 @@ describe('SymbolTableBuilder — DI propertyTypes', () => {
           exports: [],
           callSites: [],
           properties: [
-            { name: 'userService', className: 'UserController', typeAnnotation: 'UserService', line: 3 },
+            {
+              name: 'userService',
+              className: 'UserController',
+              typeAnnotation: 'UserService',
+              line: 3,
+            },
             { name: 'logger', className: 'UserController', typeAnnotation: 'Logger', line: 4 },
             { name: 'count', className: 'UserController', typeAnnotation: null, line: 5 },
           ],
@@ -2554,7 +2626,13 @@ describe('CallEdgeResolver — RTA filtering', () => {
           imports: [],
           exports: [],
           callSites: [
-            { callType: 'constructor', receiverType: 'UserService', callee: 'UserService', callerMethod: 'main', line: 100 },
+            {
+              callType: 'constructor',
+              receiverType: 'UserService',
+              callee: 'UserService',
+              callerMethod: 'main',
+              line: 100,
+            },
           ],
         },
         {
@@ -2586,25 +2664,27 @@ describe('CallEdgeResolver — RTA filtering', () => {
         'src/services/OrderService.ts',
         'src/app.ts',
       ]),
-      [],
+      []
     );
 
     // process() exists in both UserService and OrderService
     // Without RTA: unresolvable (2 candidates)
     // With RTA: only UserService is instantiated → resolves
     const edges = resolver.resolveFile(
-      [{
-        callee: 'process',
-        callerMethod: 'main',
-        callerClass: null,
-        callType: 'function',
-        receiver: null,
-        receiverType: null,
-        argCount: 0,
-        line: 10,
-        isAwait: false,
-      }],
-      'src/app.ts',
+      [
+        {
+          callee: 'process',
+          callerMethod: 'main',
+          callerClass: null,
+          callType: 'function',
+          receiver: null,
+          receiverType: null,
+          argCount: 0,
+          line: 10,
+          isAwait: false,
+        },
+      ],
+      'src/app.ts'
     );
 
     expect(edges).toHaveLength(1);
@@ -2622,7 +2702,15 @@ describe('CallEdgeResolver — RTA filtering', () => {
           methods: [{ name: 'run', className: 'A', line: 5 }],
           imports: [],
           exports: [],
-          callSites: [{ callType: 'constructor', receiverType: 'A', callee: 'A', callerMethod: 'x', line: 10 }],
+          callSites: [
+            {
+              callType: 'constructor',
+              receiverType: 'A',
+              callee: 'A',
+              callerMethod: 'x',
+              line: 10,
+            },
+          ],
         },
         {
           file: 'src/b.ts',
@@ -2631,7 +2719,15 @@ describe('CallEdgeResolver — RTA filtering', () => {
           methods: [{ name: 'run', className: 'B', line: 5 }],
           imports: [],
           exports: [],
-          callSites: [{ callType: 'constructor', receiverType: 'B', callee: 'B', callerMethod: 'x', line: 10 }],
+          callSites: [
+            {
+              callType: 'constructor',
+              receiverType: 'B',
+              callee: 'B',
+              callerMethod: 'x',
+              line: 10,
+            },
+          ],
         },
         {
           file: 'src/main.ts',
@@ -2648,23 +2744,25 @@ describe('CallEdgeResolver — RTA filtering', () => {
     const resolver = new CallEdgeResolver(
       table,
       new ImportPathResolver('/project', ['src/a.ts', 'src/b.ts', 'src/main.ts']),
-      [],
+      []
     );
 
     // Both A and B are instantiated → RTA can't narrow
     const edges = resolver.resolveFile(
-      [{
-        callee: 'run',
-        callerMethod: 'main',
-        callerClass: null,
-        callType: 'function',
-        receiver: null,
-        receiverType: null,
-        argCount: 0,
-        line: 5,
-        isAwait: false,
-      }],
-      'src/main.ts',
+      [
+        {
+          callee: 'run',
+          callerMethod: 'main',
+          callerClass: null,
+          callType: 'function',
+          receiver: null,
+          receiverType: null,
+          argCount: 0,
+          line: 5,
+          isAwait: false,
+        },
+      ],
+      'src/main.ts'
     );
 
     expect(edges).toHaveLength(0); // Still unresolvable
@@ -2679,9 +2777,7 @@ describe('CallEdgeResolver — DI type annotation resolution', () => {
           file: 'src/controller/UserController.ts',
           classes: [{ name: 'UserController', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'getUser', className: 'UserController', line: 5 },
-          ],
+          methods: [{ name: 'getUser', className: 'UserController', line: 5 }],
           imports: ['./UserRepo'],
           exports: [],
           callSites: [],
@@ -2693,9 +2789,7 @@ describe('CallEdgeResolver — DI type annotation resolution', () => {
           file: 'src/repo/UserRepo.ts',
           classes: [{ name: 'UserRepo', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'findById', className: 'UserRepo', line: 10 },
-          ],
+          methods: [{ name: 'findById', className: 'UserRepo', line: 10 }],
           imports: [],
           exports: [{ name: 'UserRepo' }],
           callSites: [],
@@ -2709,22 +2803,24 @@ describe('CallEdgeResolver — DI type annotation resolution', () => {
         'src/controller/UserController.ts',
         'src/repo/UserRepo.ts',
       ]),
-      [],
+      []
     );
 
     const edges = resolver.resolveFile(
-      [{
-        callee: 'findById',
-        callerMethod: 'getUser',
-        callerClass: 'UserController',
-        callType: 'method',
-        receiver: 'this.userRepo',
-        receiverType: null,
-        argCount: 1,
-        line: 8,
-        isAwait: false,
-      }],
-      'src/controller/UserController.ts',
+      [
+        {
+          callee: 'findById',
+          callerMethod: 'getUser',
+          callerClass: 'UserController',
+          callType: 'method',
+          receiver: 'this.userRepo',
+          receiverType: null,
+          argCount: 1,
+          line: 8,
+          isAwait: false,
+        },
+      ],
+      'src/controller/UserController.ts'
     );
 
     expect(edges).toHaveLength(1);
@@ -2767,22 +2863,24 @@ describe('CallEdgeResolver — DI type annotation resolution', () => {
     const resolver = new CallEdgeResolver(
       table,
       new ImportPathResolver('/project', ['src/service.ts', 'src/repo.ts']),
-      [],
+      []
     );
 
     const edges = resolver.resolveFile(
-      [{
-        callee: 'save',
-        callerMethod: 'execute',
-        callerClass: 'Service',
-        callType: 'method',
-        receiver: 'this.repo',
-        receiverType: null,
-        argCount: 1,
-        line: 8,
-        isAwait: false,
-      }],
-      'src/service.ts',
+      [
+        {
+          callee: 'save',
+          callerMethod: 'execute',
+          callerClass: 'Service',
+          callType: 'method',
+          receiver: 'this.repo',
+          receiverType: null,
+          argCount: 1,
+          line: 8,
+          isAwait: false,
+        },
+      ],
+      'src/service.ts'
     );
 
     expect(edges).toHaveLength(1);
@@ -2818,22 +2916,24 @@ describe('CallEdgeResolver — DI type annotation resolution', () => {
     const resolver = new CallEdgeResolver(
       table,
       new ImportPathResolver('/project', ['src/controller.ts', 'src/auth-service.ts']),
-      [],
+      []
     );
 
     const edges = resolver.resolveFile(
-      [{
-        callee: 'verify',
-        callerMethod: 'handle',
-        callerClass: 'Controller',
-        callType: 'method',
-        receiver: 'this.authService',
-        receiverType: null,
-        argCount: 0,
-        line: 8,
-        isAwait: false,
-      }],
-      'src/controller.ts',
+      [
+        {
+          callee: 'verify',
+          callerMethod: 'handle',
+          callerClass: 'Controller',
+          callType: 'method',
+          receiver: 'this.authService',
+          receiverType: null,
+          argCount: 0,
+          line: 8,
+          isAwait: false,
+        },
+      ],
+      'src/controller.ts'
     );
 
     expect(edges).toHaveLength(1);
@@ -2852,9 +2952,7 @@ describe('CallGraphAnalyzer — Phase 5.3 RTA+DI integration', () => {
           file: 'src/service/UserService.ts',
           classes: [{ name: 'UserService', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'getUser', className: 'UserService', line: 5 },
-          ],
+          methods: [{ name: 'getUser', className: 'UserService', line: 5 }],
           imports: [],
           exports: [{ name: 'UserService' }],
           callSites: [
@@ -2878,9 +2976,7 @@ describe('CallGraphAnalyzer — Phase 5.3 RTA+DI integration', () => {
           file: 'src/repo/UserRepo.ts',
           classes: [{ name: 'UserRepo', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'findById', className: 'UserRepo', line: 10 },
-          ],
+          methods: [{ name: 'findById', className: 'UserRepo', line: 10 }],
           imports: [],
           exports: [{ name: 'UserRepo' }],
           callSites: [],
@@ -2937,7 +3033,9 @@ describe('Kotlin walker — constructor property extraction', () => {
       text: extra.text || '',
       namedChildCount: namedChildren.length,
       namedChildren,
-      namedChild(i) { return namedChildren[i]; },
+      namedChild(i) {
+        return namedChildren[i];
+      },
       startPosition: extra.startPosition || { row: 0, column: 0 },
       endPosition: extra.endPosition || { row: 5, column: 0 },
       isMissing: false,
@@ -2947,21 +3045,30 @@ describe('Kotlin walker — constructor property extraction', () => {
 
   test('extracts primary constructor val/var params as properties with type', () => {
     // class UserService(private val repo: UserRepo, var logger: Logger)
-    const param1 = mkNode('class_parameter', [
-      mkNode('simple_identifier', [], { text: 'repo' }),
-      mkNode('user_type', [], { text: 'UserRepo' }),
-    ], { text: 'private val repo: UserRepo' });
+    const param1 = mkNode(
+      'class_parameter',
+      [
+        mkNode('simple_identifier', [], { text: 'repo' }),
+        mkNode('user_type', [], { text: 'UserRepo' }),
+      ],
+      { text: 'private val repo: UserRepo' }
+    );
 
-    const param2 = mkNode('class_parameter', [
-      mkNode('simple_identifier', [], { text: 'logger' }),
-      mkNode('user_type', [], { text: 'Logger' }),
-    ], { text: 'var logger: Logger' });
+    const param2 = mkNode(
+      'class_parameter',
+      [
+        mkNode('simple_identifier', [], { text: 'logger' }),
+        mkNode('user_type', [], { text: 'Logger' }),
+      ],
+      { text: 'var logger: Logger' }
+    );
 
     // Non-property param (no val/var)
-    const param3 = mkNode('class_parameter', [
-      mkNode('simple_identifier', [], { text: 'temp' }),
-      mkNode('user_type', [], { text: 'Int' }),
-    ], { text: 'temp: Int' });
+    const param3 = mkNode(
+      'class_parameter',
+      [mkNode('simple_identifier', [], { text: 'temp' }), mkNode('user_type', [], { text: 'Int' })],
+      { text: 'temp: Int' }
+    );
 
     const primaryCtor = mkNode('primary_constructor', [param1, param2, param3]);
     const classBody = mkNode('class_body', []);
@@ -2998,12 +3105,16 @@ describe('Kotlin walker — constructor property extraction', () => {
   });
 
   test('extracts constructor param with nullable type', () => {
-    const param = mkNode('class_parameter', [
-      mkNode('simple_identifier', [], { text: 'cache' }),
-      mkNode('nullable_type', [
-        mkNode('user_type', [], { text: 'CacheService' }),
-      ], { text: 'CacheService?' }),
-    ], { text: 'val cache: CacheService?' });
+    const param = mkNode(
+      'class_parameter',
+      [
+        mkNode('simple_identifier', [], { text: 'cache' }),
+        mkNode('nullable_type', [mkNode('user_type', [], { text: 'CacheService' })], {
+          text: 'CacheService?',
+        }),
+      ],
+      { text: 'val cache: CacheService?' }
+    );
 
     const primaryCtor = mkNode('primary_constructor', [param]);
     const classBody = mkNode('class_body', []);
@@ -3051,11 +3162,7 @@ describe('CallEdgeResolver — _inferFieldType performance (classNames Set)', ()
       ],
     });
 
-    const resolver = new CallEdgeResolver(
-      table,
-      new ImportPathResolver('/p', ['a.ts']),
-      [],
-    );
+    const resolver = new CallEdgeResolver(table, new ImportPathResolver('/p', ['a.ts']), []);
 
     // Verify classNames set was built
     expect(resolver.classNames).toBeInstanceOf(Set);
@@ -3122,9 +3229,7 @@ describe('CallEdgeResolver — RTA with top-level functions', () => {
           file: 'src/a.ts',
           classes: [{ name: 'Processor', kind: 'class', line: 1 }],
           protocols: [],
-          methods: [
-            { name: 'handle', className: 'Processor', line: 5 },
-          ],
+          methods: [{ name: 'handle', className: 'Processor', line: 5 }],
           imports: [],
           exports: [],
           callSites: [],
@@ -3149,7 +3254,13 @@ describe('CallEdgeResolver — RTA with top-level functions', () => {
           imports: [],
           exports: [],
           callSites: [
-            { callType: 'constructor', receiverType: 'SomeOther', callee: 'SomeOther', callerMethod: 'x', line: 1 },
+            {
+              callType: 'constructor',
+              receiverType: 'SomeOther',
+              callee: 'SomeOther',
+              callerMethod: 'x',
+              line: 1,
+            },
           ],
         },
       ],
@@ -3158,24 +3269,26 @@ describe('CallEdgeResolver — RTA with top-level functions', () => {
     const resolver = new CallEdgeResolver(
       table,
       new ImportPathResolver('/project', ['src/a.ts', 'src/b.ts', 'src/main.ts']),
-      [],
+      []
     );
 
     // 'handle' exists in Processor.handle and top-level handle
     // RTA: Processor not instantiated → filtered out; top-level function preserved → 1 candidate
     const edges = resolver.resolveFile(
-      [{
-        callee: 'handle',
-        callerMethod: 'main',
-        callerClass: null,
-        callType: 'function',
-        receiver: null,
-        receiverType: null,
-        argCount: 0,
-        line: 5,
-        isAwait: false,
-      }],
-      'src/main.ts',
+      [
+        {
+          callee: 'handle',
+          callerMethod: 'main',
+          callerClass: null,
+          callType: 'function',
+          receiver: null,
+          receiverType: null,
+          argCount: 0,
+          line: 5,
+          isAwait: false,
+        },
+      ],
+      'src/main.ts'
     );
 
     expect(edges).toHaveLength(1);
@@ -3204,37 +3317,60 @@ describe('CallEdgeResolver — super call resolution', () => {
           file: 'src/base.ts',
           classes: [{ name: 'BaseController', line: 1 }],
           methods: [{ name: 'render', className: 'BaseController', kind: 'definition', line: 5 }],
-          properties: [], protocols: [], categories: [], imports: [], exports: [], callSites: [],
+          properties: [],
+          protocols: [],
+          categories: [],
+          imports: [],
+          exports: [],
+          callSites: [],
         },
         {
           file: 'src/home.ts',
           classes: [{ name: 'HomeController', line: 1 }],
           methods: [{ name: 'render', className: 'HomeController', kind: 'definition', line: 5 }],
-          properties: [], protocols: [], categories: [], imports: [], exports: [],
+          properties: [],
+          protocols: [],
+          categories: [],
+          imports: [],
+          exports: [],
           callSites: [
-            { callType: 'super', receiver: 'super', receiverType: 'HomeController',
-              callee: 'render', callerMethod: 'render', callerClass: 'HomeController', line: 6, isAwait: false },
+            {
+              callType: 'super',
+              receiver: 'super',
+              receiverType: 'HomeController',
+              callee: 'render',
+              callerMethod: 'render',
+              callerClass: 'HomeController',
+              line: 6,
+              isAwait: false,
+            },
           ],
         },
       ],
     });
 
-    const inheritanceGraph = [
-      { from: 'HomeController', to: 'BaseController', type: 'inherits' },
-    ];
+    const inheritanceGraph = [{ from: 'HomeController', to: 'BaseController', type: 'inherits' }];
 
     const resolver = new CallEdgeResolver(
       table,
       new ImportPathResolver('/project', ['src/base.ts', 'src/home.ts']),
-      inheritanceGraph,
+      inheritanceGraph
     );
 
     const edges = resolver.resolveFile(
-      [{
-        callType: 'super', receiver: 'super', receiverType: 'HomeController',
-        callee: 'render', callerMethod: 'render', callerClass: 'HomeController', line: 6, isAwait: false,
-      }],
-      'src/home.ts',
+      [
+        {
+          callType: 'super',
+          receiver: 'super',
+          receiverType: 'HomeController',
+          callee: 'render',
+          callerMethod: 'render',
+          callerClass: 'HomeController',
+          line: 6,
+          isAwait: false,
+        },
+      ],
+      'src/home.ts'
     );
 
     // Should resolve to BaseController.render (CHA), NOT HomeController.render (self-edge)
@@ -3247,27 +3383,41 @@ describe('CallEdgeResolver — super call resolution', () => {
 
   test('super.xxx() without inheritance graph produces no edge (not self-edge)', () => {
     const table = SymbolTableBuilder.build({
-      fileSummaries: [{
-        file: 'src/child.ts',
-        classes: [{ name: 'Child', line: 1 }],
-        methods: [{ name: 'init', className: 'Child', kind: 'definition', line: 5 }],
-        properties: [], protocols: [], categories: [], imports: [], exports: [],
-        callSites: [],
-      }],
+      fileSummaries: [
+        {
+          file: 'src/child.ts',
+          classes: [{ name: 'Child', line: 1 }],
+          methods: [{ name: 'init', className: 'Child', kind: 'definition', line: 5 }],
+          properties: [],
+          protocols: [],
+          categories: [],
+          imports: [],
+          exports: [],
+          callSites: [],
+        },
+      ],
     });
 
     const resolver = new CallEdgeResolver(
       table,
       new ImportPathResolver('/project', ['src/child.ts']),
-      [], // no inheritance graph
+      [] // no inheritance graph
     );
 
     const edges = resolver.resolveFile(
-      [{
-        callType: 'super', receiver: 'super', receiverType: 'Child',
-        callee: 'init', callerMethod: 'init', callerClass: 'Child', line: 6, isAwait: false,
-      }],
-      'src/child.ts',
+      [
+        {
+          callType: 'super',
+          receiver: 'super',
+          receiverType: 'Child',
+          callee: 'init',
+          callerMethod: 'init',
+          callerClass: 'Child',
+          line: 6,
+          isAwait: false,
+        },
+      ],
+      'src/child.ts'
     );
 
     // Should produce NO edge (not a self-edge to Child.init)
@@ -3288,31 +3438,58 @@ describe('CallEdgeResolver — duplicate edge deduplication', () => {
 
   test('same caller→callee at same line deduplicates to 1 edge', () => {
     const table = SymbolTableBuilder.build({
-      fileSummaries: [{
-        file: 'src/a.ts',
-        classes: [],
-        methods: [
-          { name: 'doWork', kind: 'definition', line: 1 },
-          { name: 'helper', kind: 'definition', line: 10 },
-        ],
-        properties: [], protocols: [], categories: [], imports: [], exports: [],
-        callSites: [],
-      }],
+      fileSummaries: [
+        {
+          file: 'src/a.ts',
+          classes: [],
+          methods: [
+            { name: 'doWork', kind: 'definition', line: 1 },
+            { name: 'helper', kind: 'definition', line: 10 },
+          ],
+          properties: [],
+          protocols: [],
+          categories: [],
+          imports: [],
+          exports: [],
+          callSites: [],
+        },
+      ],
     });
 
     const resolver = new CallEdgeResolver(
       table,
       new ImportPathResolver('/project', ['src/a.ts']),
-      [],
+      []
     );
 
     // Two identical callSites (same callee, same line) — simulating AST double extraction
-    const edges = resolver.resolveFile([
-      { callee: 'helper', callerMethod: 'doWork', callerClass: null, callType: 'function',
-        receiver: null, receiverType: null, argCount: 0, line: 5, isAwait: false },
-      { callee: 'helper', callerMethod: 'doWork', callerClass: null, callType: 'function',
-        receiver: null, receiverType: null, argCount: 0, line: 5, isAwait: false },
-    ], 'src/a.ts');
+    const edges = resolver.resolveFile(
+      [
+        {
+          callee: 'helper',
+          callerMethod: 'doWork',
+          callerClass: null,
+          callType: 'function',
+          receiver: null,
+          receiverType: null,
+          argCount: 0,
+          line: 5,
+          isAwait: false,
+        },
+        {
+          callee: 'helper',
+          callerMethod: 'doWork',
+          callerClass: null,
+          callType: 'function',
+          receiver: null,
+          receiverType: null,
+          argCount: 0,
+          line: 5,
+          isAwait: false,
+        },
+      ],
+      'src/a.ts'
+    );
 
     // Should deduplicate: only 1 edge
     expect(edges).toHaveLength(1);
@@ -3423,4 +3600,3 @@ class Service {
     expect(thisCall.callType).toBe('method');
   });
 });
-

@@ -312,6 +312,12 @@ export const TaskInput = z.object({
   limit: z.number().int().min(1).max(200).default(10),
   status: z.enum(['open', 'in_progress', 'deferred', 'closed', 'pinned']).optional(),
   withKnowledge: z.boolean().default(true),
+  userQuery: z
+    .string()
+    .optional()
+    .describe('User current input / prompt text for knowledge-aware search'),
+  activeFile: z.string().optional().describe('Currently active file path in IDE'),
+  language: z.string().optional().describe('Current programming language'),
   subtasks: z
     .array(
       z.object({

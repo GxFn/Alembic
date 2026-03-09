@@ -284,9 +284,18 @@ export class HnswVectorAdapter extends VectorStore {
 
     const vector = item.vector || [];
 
-    // 自动检测维度
-    if (vector.length > 0 && this.#dimension === 0) {
-      this.#dimension = vector.length;
+    // 自动检测维度 + 维度一致性守卫
+    if (vector.length > 0) {
+      if (this.#dimension === 0) {
+        this.#dimension = vector.length;
+      } else if (vector.length !== this.#dimension) {
+        throw new Error(
+          `Vector dimension mismatch: store has ${this.#dimension}d, ` +
+            `new vector is ${vector.length}d. ` +
+            `This usually means the embedding model was changed. ` +
+            `Run 'asd embed --clear --force' to rebuild with the new model.`
+        );
+      }
     }
 
     // 存储 metadata 和 content
@@ -340,8 +349,18 @@ export class HnswVectorAdapter extends VectorStore {
       }
 
       const vector = item.vector || [];
-      if (vector.length > 0 && this.#dimension === 0) {
-        this.#dimension = vector.length;
+      // 维度一致性守卫
+      if (vector.length > 0) {
+        if (this.#dimension === 0) {
+          this.#dimension = vector.length;
+        } else if (vector.length !== this.#dimension) {
+          throw new Error(
+            `Vector dimension mismatch: store has ${this.#dimension}d, ` +
+              `new vector is ${vector.length}d. ` +
+              `This usually means the embedding model was changed. ` +
+              `Run 'asd embed --clear --force' to rebuild with the new model.`
+          );
+        }
       }
 
       this.#metadata.set(item.id, {
@@ -471,6 +490,9 @@ export class HnswVectorAdapter extends VectorStore {
    * 混合搜索: HNSW 向量 + 关键词, 使用 RRF (Reciprocal Rank Fusion) 融合
    *
    * score = α × 1/(k+rank_dense) + (1-α) × 1/(k+rank_sparse)
+   *
+   * @deprecated 优先使用 VectorService.hybridSearch() → HybridRetriever.fuse()
+   * 此方法保留作为 VectorStore 层的本地混合搜索能力
    */
   async hybridSearch(
     queryVector: number[] | Float32Array | null,

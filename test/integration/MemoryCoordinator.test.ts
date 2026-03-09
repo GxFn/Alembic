@@ -49,35 +49,35 @@ describe('Integration: MemoryCoordinator', () => {
   });
 
   describe('Static memory prompt', () => {
-    test('should return string from buildStaticMemoryPrompt', () => {
+    test('should return string from buildStaticMemoryPrompt', async () => {
       const mc = new MemoryCoordinator();
-      const prompt = mc.buildStaticMemoryPrompt({ mode: 'analyst' });
+      const prompt = await mc.buildStaticMemoryPrompt({ mode: 'analyst' });
       expect(typeof prompt).toBe('string');
     });
 
-    test('should work without any sub-systems', () => {
+    test('should work without any sub-systems', async () => {
       const mc = new MemoryCoordinator({
         persistentMemory: null,
         sessionStore: null,
         conversationLog: null,
       });
-      const prompt = mc.buildStaticMemoryPrompt({ mode: 'user' });
+      const prompt = await mc.buildStaticMemoryPrompt({ mode: 'user' });
       expect(typeof prompt).toBe('string');
     });
 
-    test('should include persistent memory when available', () => {
+    test('should include persistent memory when available', async () => {
       const mockPersistent = {
         toPromptSection: ({ source }: { source: string }) => `[Memory from ${source}]`,
         append: () => {},
       };
       const mc = new MemoryCoordinator({ persistentMemory: mockPersistent });
-      const prompt = mc.buildStaticMemoryPrompt({ mode: 'user' });
+      const prompt = await mc.buildStaticMemoryPrompt({ mode: 'user' });
       expect(typeof prompt).toBe('string');
     });
   });
 
   describe('Graceful degradation', () => {
-    test('should handle all null subsystems without errors', () => {
+    test('should handle all null subsystems without errors', async () => {
       const mc = new MemoryCoordinator({
         persistentMemory: null,
         sessionStore: null,
@@ -85,7 +85,7 @@ describe('Integration: MemoryCoordinator', () => {
         mode: 'bootstrap',
       });
 
-      expect(() => mc.buildStaticMemoryPrompt({ mode: 'analyst' })).not.toThrow();
+      await expect(mc.buildStaticMemoryPrompt({ mode: 'analyst' })).resolves.toBeDefined();
       expect(() => mc.allocateBudget('producer')).not.toThrow();
     });
 
