@@ -4,6 +4,27 @@
 
 ---
 
+## [3.2.15] - 2026-03-09
+
+### 改进
+
+- **搜索服务整合**：合并 MCP 搜索处理器 4→1（302→170 行）；移除 SearchEngine 中的 ghost 分支（ranking mode、min-max fusion）；新增统一投影函数 `SlimSearchResult`、`slimSearchResult`、`groupByKind`
+- **废弃代码清理**：删除 `RetrievalFunnel.ts`（163 行）和 `InvertedIndex.ts`（102 行），清理所有 DI 注册和导入引用
+- **Agent 查询迁移**：`agent/tools/query.ts` 从 RetrievalFunnel 迁移到 SearchEngine
+- **HTTP 搜索路由简化**：消除 `http/routes/search.ts` 中重复的 KnowledgeService 调用
+
+### 修复
+
+- **CI 构建失败**：修复 102 个 TypeScript 类型错误，使 `tsc` 编译零错误通过
+  - Express 查询参数类型（`ParsedQs` → `String()`）
+  - `DatabaseConnection` → `DatabaseLike` 桥接转换
+  - `PaginatedResult` 的 `data`/`pagination` 访问模式
+  - `null` vs `undefined` 不匹配
+  - `ModuleService` graph 类型断言
+  - 各种 `{}` → 正确类型转换
+
+---
+
 ## [3.2.12] - 2026-03-08
 
 ### 修复
