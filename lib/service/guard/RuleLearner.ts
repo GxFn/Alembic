@@ -47,7 +47,6 @@ export class RuleLearner {
 
   /**
    * 记录规则触发
-   * @param {string} ruleId
    * @param {{ filePath?: string, message?: string }} context
    */
   recordTrigger(ruleId: string, _context: Record<string, unknown> = {}) {
@@ -61,11 +60,7 @@ export class RuleLearner {
     this.#save();
   }
 
-  /**
-   * 记录用户反馈
-   * @param {string} ruleId
-   * @param {'correct'|'falsePositive'|'falseNegative'} feedbackType
-   */
+  /** 记录用户反馈 */
   recordFeedback(ruleId: string, feedbackType: 'correct' | 'falsePositive' | 'falseNegative') {
     const stat = this.#ensureStat(ruleId);
     if (feedbackType === 'correct') {
@@ -81,8 +76,7 @@ export class RuleLearner {
 
   /**
    * 获取规则精准度指标
-   * @param {string} ruleId
-   * @returns {{ precision: number, recall: number, f1: number, triggers: number, falsePositiveRate: number }}
+   * @returns }
    */
   getMetrics(ruleId: string) {
     const stat = this.#data.ruleStats[ruleId];
@@ -104,7 +98,7 @@ export class RuleLearner {
 
   /**
    * 识别问题规则（高误报）
-   * @returns {Array<{ ruleId: string, metrics: object, recommendation: string }>}
+   * @returns >}
    */
   getProblematicRules() {
     const results: {
@@ -133,9 +127,7 @@ export class RuleLearner {
     return results.sort((a, b) => b.metrics.falsePositiveRate - a.metrics.falsePositiveRate);
   }
 
-  /**
-   * 获取所有规则统计
-   */
+  /** 获取所有规则统计 */
   getAllStats() {
     const result: Record<string, RuleStat & { metrics: ReturnType<RuleLearner['getMetrics']> }> =
       {};
@@ -148,9 +140,7 @@ export class RuleLearner {
     return result;
   }
 
-  /**
-   * 重置指定规则或全部统计
-   */
+  /** 重置指定规则或全部统计 */
   resetStats(ruleId: string | null = null) {
     if (ruleId) {
       delete this.#data.ruleStats[ruleId];
@@ -164,7 +154,7 @@ export class RuleLearner {
    * 基于历史数据提出规则优化建议
    * 策略 1: 高误报规则 → 建议调整
    * 策略 2: 高触发且高精度 → 建议创建项目特化版本
-   * @returns {Array<{ type: string, ruleId: string, message: string, confidence: number, evidence: object }>}
+   * @returns >}
    */
   suggestRules() {
     const suggestions: {
@@ -240,8 +230,7 @@ export class RuleLearner {
   /**
    * 追踪规则创建后的效果
    * 对比首次触发后的表现，判断规则是否有效
-   * @param {string} ruleId
-   * @returns {{ status: string, triggers: number, precision: number, recommendation: string, daysSinceFirstTrigger?: number }}
+   * @returns }
    */
   trackRuleEffectiveness(ruleId: string) {
     const stat = this.#data.ruleStats[ruleId];

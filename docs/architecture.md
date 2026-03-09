@@ -29,10 +29,16 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 └──────┬──┘ └────┬────┘ └───┬───┘ └──────────────┘
        │         │          │
 ┌──────▼─────────▼──────────▼─────────────────────────────┐
+│                   Agent Layer                            │
+│  AgentRuntime (ReAct) · Memory · Context · Tools (54)   │
+│  IntentClassifier · Router · Presets · Strategies        │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────┐
 │                   Service Layer                          │
-│  AgentRuntime · Knowledge · Guard · Search · Bootstrap     │
+│  Knowledge · Guard · Search · Bootstrap                  │
 │  Cursor · Quality · Recipe · Skills · Wiki · Automation │
-│  Snippet · Module                                        │
+│  Snippet · Module · Task · Vector · Candidate            │
 └──────────────────────┬──────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
@@ -52,6 +58,7 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 │                 External Layer                            │
 │  AI: OpenAI / Gemini / Claude / DeepSeek / Ollama       │
 │  MCP: 16 agent + 4 admin 工具                            │
+│  Lark: LarkTransport 飞书消息传输层                       │
 │  Native: Xcode / Clipboard / Browser                     │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -90,18 +97,33 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 - 支持 AI Provider 热重载（`reloadAiProvider()`），自动清除依赖链上的缓存单例
 - 注册分三阶段：`_registerInfrastructure()` → `_registerRepositories()` → `_registerServices()`
 
-### 4. Service Layer（服务层）
+### 4. Agent Layer（Agent 智能层）
 
-项目最厚的一层，包含 15 个子域服务：
+独立的 Agent 架构层（`lib/agent/`，路径别名 `#agent/*`），包含 40+ 个文件，5 个子模块：
+
+| 子模块 | 核心类 | 职责 |
+|--------|--------|------|
+| **根级** | `AgentRuntime` | ReAct 推理循环引擎，统一 ONE Runtime 多配置架构 |
+| **根级** | `AgentFactory` | Agent 工厂，根据 Preset 创建不同配置的 Runtime |
+| **根级** | `AgentRouter` | Intent → Preset 路由分发 |
+| **根级** | `IntentClassifier` | 意图分类（关键词 + LLM 混合） |
+| **core/** | `ToolExecutionPipeline` | ReAct 循环核心：Prompt 构建 + 工具执行管线 |
+| **memory/** | `MemoryCoordinator` | 多层记忆系统：Session / Active / Persistent / Episodic |
+| **context/** | `ContextWindow` / `ExplorationTracker` | Token 窗口管理 + 探索策略 |
+| **domain/** | `EpisodicConsolidator` / `InsightProducer` | Agent 领域逻辑：洞察分析、证据收集、扫描任务 |
+| **tools/** | `ToolRegistry` + 14 文件 | 54 个内置工具（知识、AST、Guard、搜索、系统等） |
+
+### 5. Service Layer（服务层）
+
+业务服务层，包含 15 个子域服务：
 
 | 子域 | 核心类 | 职责 |
 |------|--------|------|
-| **chat** | `AgentRuntime` | ReAct 推理循环 + DAG 任务管线，54 个内置工具 |
 | **knowledge** | `KnowledgeService` | 知识条目 CRUD、图谱、实体图、置信度路由 |
 | **guard** | `GuardService` / `GuardCheckEngine` | 50+ 内置规则引擎（正则 + AST 语义） |
 | **search** | `SearchEngine` / `RetrievalFunnel` | 4 层检索漏斗（keyword → semantic → fusion → rerank） |
 | **bootstrap** | `BootstrapTaskManager` | 冷启动异步任务编排，14 个分析维度 |
-| **cursor** | `CursorDeliveryPipeline` | 4 通道交付（Rules + Skills + Token 预算 + 主题分类） |
+| **delivery** | `CursorDeliveryPipeline` | 4 通道交付（Rules + Skills + Token 预算 + 主题分类） |
 | **automation** | `AutomationOrchestrator` | 文件监听、指令检测（`as:s` / `as:c` / `as:a`）、处理管线 |
 | **quality** | `QualityScorer` | 知识条目质量评分 + 反馈收集 |
 | **recipe** | `RecipeParser` | Recipe Markdown 解析与候选校验 |
@@ -110,9 +132,8 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 | **wiki** | `WikiGenerator` | 项目 Wiki 自动生成 |
 | **module** | `ModuleService` | 多语言模块结构扫描 |
 | **candidate** | `SimilarityService` | 候选去重，相似度检测 |
-| **context** | `RecipeExtractor` | Recipe 内容提取与上下文收集 |
 
-### 5. Core + Domain Layer（核心 + 领域层）
+### 6. Core + Domain Layer（核心 + 领域层）
 
 #### Gateway（网关）
 
@@ -145,7 +166,7 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 - `Lifecycle` — 知识条目生命周期状态机：`draft → pending → approved → active → deprecated`
 - `Snippet` — 代码片段实体
 
-### 6. Infrastructure Layer（基础设施层）
+### 7. Infrastructure Layer（基础设施层）
 
 | 模块 | 职责 |
 |------|------|
@@ -160,7 +181,7 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 | `ErrorTracker` / `PerformanceMonitor` | 错误追踪 + 性能监控 |
 | `PathGuard` | 路径安全守卫，防止文件写逃逸 |
 
-### 7. External Layer（外部集成层）
+### 8. External Layer（外部集成层）
 
 #### AI Provider
 

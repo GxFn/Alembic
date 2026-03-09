@@ -47,25 +47,20 @@ export async function initParser() {
   }
 }
 
-/**
- * 获取 Parser 构造函数
- * @returns {typeof import('web-tree-sitter') | null}
- */
+/** 获取 Parser 构造函数 */
 export function getParserClass() {
   return Parser;
 }
 
-/**
- * 检查 parser 是否已初始化
- */
+/** 检查 parser 是否已初始化 */
 export function isParserReady() {
   return _initialized && Parser !== null;
 }
 
 /**
  * 从 resources/grammars/ 加载指定语言的 .wasm 文件
- * @param {string} wasmFileName 如 'tree-sitter-javascript.wasm'
- * @returns {Promise<object|null>} Language 对象，失败返回 null
+ * @param wasmFileName 如 'tree-sitter-javascript.wasm'
+ * @returns Language 对象，失败返回 null
  */
 export async function loadLanguageWasm(wasmFileName: any) {
   if (!_initialized || !_namespace) {

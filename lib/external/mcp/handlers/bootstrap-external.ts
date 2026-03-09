@@ -48,8 +48,7 @@ let _sessionManager: BootstrapSessionManager | null = null;
 
 /**
  * 获取或创建 BootstrapSessionManager
- * @param {object} container - ServiceContainer
- * @returns {BootstrapSessionManager}
+ * @param container ServiceContainer
  */
 function getSessionManager(container: ServiceContainer): BootstrapSessionManager {
   // 优先使用容器注册的 (如果已注册)
@@ -85,8 +84,8 @@ function getSessionManager(container: ServiceContainer): BootstrapSessionManager
  * 无参数调用，返回 Mission Briefing。
  * Phase 1-4 复用现有 bootstrap.js 逻辑，Phase 5 不启动。
  *
- * @param {object} ctx - { container, logger, startedAt }
- * @returns {Promise<object>} - envelope({ success, data: MissionBriefing })
+ * @param ctx { container, logger, startedAt }
+ * @returns envelope({ success, data: MissionBriefing })
  */
 export async function bootstrapExternal(ctx: McpContext) {
   const t0 = Date.now();
@@ -210,10 +209,6 @@ export async function bootstrapExternal(ctx: McpContext) {
  *
  * 当指定了 sessionId 时，如果 active session 已过期但 id 匹配，
  * 仍然返回该 session（支持新 bootstrap 创建后旧 session 的 dimension_complete 继续工作）。
- *
- * @param {object} container
- * @param {string} [sessionId]
- * @returns {import('./bootstrap/BootstrapSession.js').BootstrapSession|null}
  */
 export function getActiveSession(container: ServiceContainer, sessionId?: string) {
   const mgr = getSessionManager(container);

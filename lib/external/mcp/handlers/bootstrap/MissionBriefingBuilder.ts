@@ -14,8 +14,8 @@
  * @module bootstrap/MissionBriefingBuilder
  */
 
-import { getCursorDeliverySpec } from '#shared/FieldSpec.js';
-import { PROJECT_SNAPSHOT_STYLE_GUIDE } from '#shared/StyleGuide.js';
+import { getCursorDeliverySpec } from '#domain/knowledge/FieldSpec.js';
+import { PROJECT_SNAPSHOT_STYLE_GUIDE } from '#domain/knowledge/StyleGuide.js';
 import { TierScheduler } from './pipeline/tier-scheduler.js';
 import { getDimensionSOP, PRE_SUBMIT_CHECKLIST, sopToCompactText } from './shared/dimension-sop.js';
 import { EXAMPLE_TEMPLATES, SUBMISSION_SCHEMA } from './shared/dimension-text.js';
@@ -282,9 +282,9 @@ const SIZE_THRESHOLDS = {
  *
  * 取自 bootstrap-analyst.buildAnalystPrompt() + DIMENSION_CONFIGS_V3 + StyleGuide
  *
- * @param {object} dim - base-dimensions.js 中的维度定义
- * @param {number} tier 维度所在 tier 编号 (1/2/3)
- * @returns {object} - Mission Briefing 维度任务对象
+ * @param dim base-dimensions.js 中的维度定义
+ * @param tier 维度所在 tier 编号 (1/2/3)
+ * @returns Mission Briefing 维度任务对象
  */
 function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
   // ── analysisGuide: SOP 化 — 优先使用维度专属 SOP，否则回退通用指引 ──
@@ -394,12 +394,11 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
  * 设计对标: 内部 Agent 的 buildProducerPromptV2 提供结构化 findings 和 code evidence，
  * 外部 Agent 的 evidenceStarters 从 Phase 1-4 数据中提供类似的结构化起点。
  *
- * @param {object} dim 维度定义
- * @param {object} opts
- * @param {object} [opts.astData] - analyzeProject() 结果
- * @param {object} [opts.guardAudit] - GuardCheckEngine.auditFiles() 结果
- * @param {object} [opts.depGraphData] 依赖图
- * @returns {object|undefined} - evidenceStarters 对象，为空则返回 undefined
+ * @param dim 维度定义
+ * @param [opts.astData] analyzeProject() 结果
+ * @param [opts.guardAudit] GuardCheckEngine.auditFiles() 结果
+ * @param [opts.depGraphData] 依赖图
+ * @returns evidenceStarters 对象，为空则返回 undefined
  */
 function buildEvidenceStarters(
   dim: DimensionDef,
@@ -702,9 +701,9 @@ function buildEvidenceStarters(
 /**
  * 压缩 AST 数据以控制 Mission Briefing 体积
  *
- * @param {object|null} astProjectSummary - analyzeProject() 返回值
- * @param {number} fileCount 项目文件数
- * @returns {object} 压缩后的 AST 数据
+ * @param astProjectSummary analyzeProject() 返回值
+ * @param fileCount 项目文件数
+ * @returns 压缩后的 AST 数据
  */
 function compressAstForBriefing(astProjectSummary: AstProjectSummary | null, fileCount: number) {
   if (!astProjectSummary) {
@@ -834,9 +833,7 @@ function compressAstForBriefing(astProjectSummary: AstProjectSummary | null, fil
   };
 }
 
-/**
- * 压缩 Code Entity Graph
- */
+/** 压缩 Code Entity Graph */
 function summarizeEntityGraph(codeEntityResult: CodeEntityResult | null) {
   if (!codeEntityResult) {
     return null;
@@ -849,8 +846,7 @@ function summarizeEntityGraph(codeEntityResult: CodeEntityResult | null) {
 
 /**
  * 压缩 Call Graph 结果
- * @param {object|null} callGraphResult - CodeEntityGraph.populateCallGraph() 返回值
- * @returns {object|null}
+ * @param callGraphResult CodeEntityGraph.populateCallGraph() 返回值
  */
 function summarizeCallGraph(callGraphResult: CallGraphResult | null) {
   if (!callGraphResult) {
@@ -863,9 +859,7 @@ function summarizeCallGraph(callGraphResult: CallGraphResult | null) {
   };
 }
 
-/**
- * 压缩 Guard 审计结果
- */
+/** 压缩 Guard 审计结果 */
 function summarizeGuardFindings(guardAudit: GuardAuditForBriefing | null) {
   if (!guardAudit) {
     return null;
@@ -919,8 +913,8 @@ function summarizeGuardFindings(guardAudit: GuardAuditForBriefing | null) {
 
 /**
  * 根据激活的维度构建执行计划
- * @param {Array} activeDimensions 激活的维度定义
- * @returns {object} - executionPlan 对象
+ * @param activeDimensions 激活的维度定义
+ * @returns executionPlan 对象
  */
 function buildExecutionPlan(activeDimensions: DimensionDef[]) {
   const scheduler = new TierScheduler();
@@ -973,17 +967,16 @@ function buildExecutionPlan(activeDimensions: DimensionDef[]) {
 /**
  * 构建 Mission Briefing
  *
- * @param {object} opts
- * @param {object} opts.projectMeta     项目元数据
- * @param {object} opts.astData         - analyzeProject() 原始结果
- * @param {object} opts.codeEntityResult - CodeEntityGraph.populateFromAst() 结果
- * @param {object} opts.depGraphData    - discoverer.getDependencyGraph() 结果
- * @param {object} opts.guardAudit      - GuardCheckEngine.auditFiles() 结果
- * @param {Array}  opts.targets         - allTargets 列表
- * @param {Array}  opts.activeDimensions - resolveActiveDimensions() 结果
- * @param {object[]} opts.skills        已加载的 bootstrap skills
- * @param {object} opts.session         - BootstrapSession 实例
- * @returns {object} - Mission Briefing 响应数据
+ * @param opts.projectMeta 项目元数据
+ * @param opts.astData analyzeProject() 原始结果
+ * @param opts.codeEntityResult CodeEntityGraph.populateFromAst() 结果
+ * @param opts.depGraphData discoverer.getDependencyGraph() 结果
+ * @param opts.guardAudit GuardCheckEngine.auditFiles() 结果
+ * @param opts.targets allTargets 列表
+ * @param opts.activeDimensions resolveActiveDimensions() 结果
+ * @param opts.skills 已加载的 bootstrap skills
+ * @param opts.session BootstrapSession 实例
+ * @returns Mission Briefing 响应数据
  */
 export function buildMissionBriefing({
   projectMeta,

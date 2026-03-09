@@ -6,8 +6,7 @@
 export class TriggerResolver {
   /**
    * 规范化触发器
-   * @param {object|string} trigger
-   * @returns {{ type: string, name?: string, params?: object, raw: unknown }}
+   * @returns }
    */
   resolve(trigger: string | Record<string, unknown>) {
     if (typeof trigger === 'string') {

@@ -70,8 +70,8 @@ export const DIMENSION_CONFIGS_V3 = {
 /**
  * 获取完整维度配置（合并 baseDimensions + V3 专属配置 + SOP）
  *
- * @param {string} dimId 维度 ID
- * @returns {object|null} 完整维度配置，或 null（未知维度）
+ * @param dimId 维度 ID
+ * @returns 完整维度配置，或 null（未知维度）
  */
 export function getFullDimensionConfig(dimId: string) {
   const base = baseDimensions.find((d) => d.id === dimId);
@@ -140,10 +140,9 @@ interface TierSessionStore {
  * - 检测跨维度重复模式
  * - 为下一 Tier 生成建议
  *
- * @param {number} tierIndex - Tier 索引 (0-based)
- * @param {Map<string, object>} tierResults 本 Tier 的维度结果
- * @param {import('#service/agent/memory/SessionStore.js').SessionStore} sessionStore
- * @returns {object} TierReflection
+ * @param tierIndex Tier 索引 (0-based)
+ * @param tierResults 本 Tier 的维度结果
+ * @returns TierReflection
  */
 export function buildTierReflection(
   tierIndex: number,

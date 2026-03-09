@@ -1,6 +1,4 @@
-/**
- * Bootstrap 类型声明
- */
+/** Bootstrap 类型声明 */
 
 interface DimensionDigest {
   dimId: string;

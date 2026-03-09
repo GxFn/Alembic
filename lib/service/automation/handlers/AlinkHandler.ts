@@ -9,9 +9,6 @@ import { and, eq } from 'drizzle-orm';
 import { getServiceContainer } from '#inject/ServiceContainer.js';
 import { knowledgeEntries } from '../../../infrastructure/database/drizzle/schema.js';
 
-/**
- * @param {string} alinkLine
- */
 export async function handleAlink(alinkLine: string) {
   const { TRIGGER_SYMBOL } = await import('../../../infrastructure/config/TriggerSymbol.js');
   let completionKey: string | null = null;

@@ -22,11 +22,8 @@ const CHECKPOINT_TTL_MS = 3600_000; // 1小时内有效
 
 /**
  * 保存维度级 checkpoint
- * @param {string} projectRoot
- * @param {string} sessionId
- * @param {string} dimId
- * @param {object} result 维度执行结果
- * @param {object} [digest] - DimensionDigest
+ * @param result 维度执行结果
+ * @param [digest] DimensionDigest
  */
 export async function saveDimensionCheckpoint(
   projectRoot: string,
@@ -51,8 +48,7 @@ export async function saveDimensionCheckpoint(
 
 /**
  * 加载有效的 checkpoints
- * @param {string} projectRoot
- * @returns {Promise<Map<string, object>>} dimId → checkpoint data
+ * @returns dimId → checkpoint data
  */
 export async function loadCheckpoints(projectRoot: string) {
   const checkpoints = new Map();
@@ -80,10 +76,7 @@ export async function loadCheckpoints(projectRoot: string) {
   return checkpoints;
 }
 
-/**
- * 清理 checkpoint 目录
- * @param {string} projectRoot
- */
+/** 清理 checkpoint 目录 */
 export async function clearCheckpoints(projectRoot: string) {
   try {
     const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');

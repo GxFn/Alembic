@@ -69,7 +69,7 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
 
   // 检查 ToolRegistry 是否可用
   const container = getServiceContainer();
-  let agentFactory: import('../../service/agent/AgentFactory.js').AgentFactory;
+  let agentFactory: import('../../agent/AgentFactory.js').AgentFactory;
   try {
     agentFactory = container.get('agentFactory');
   } catch {
@@ -148,9 +148,7 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
 
 /* ═══ GET /api/v1/recipes/discover-relations/status ═════ */
 
-/**
- * 查询关系发现任务状态
- */
+/** 查询关系发现任务状态 */
 router.get('/discover-relations/status', async (req: Request, res: Response) => {
   const data = { ...discoverTask };
 

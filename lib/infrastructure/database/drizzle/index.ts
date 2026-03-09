@@ -40,9 +40,7 @@ export function getDrizzle(): DrizzleDB {
   return _drizzle;
 }
 
-/**
- * 重置 Drizzle 实例（测试用）
- */
+/** 重置 Drizzle 实例（测试用） */
 export function resetDrizzle(): void {
   _drizzle = null;
 }

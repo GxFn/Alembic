@@ -71,9 +71,9 @@ export class OpenAiProvider extends AiProvider {
    * 接受统一消息格式，内部转换为 OpenAI Chat Completions 消息格式。
    * 兼容 DeepSeek / Ollama 等 OpenAI-Compatible API。
    *
-   * @param {string} prompt - fallback prompt
-   * @param {object} opts 统一参数
-   * @returns {Promise<{text: string|null, functionCalls: Array<{id, name, args}>|null}>}
+   * @param prompt fallback prompt
+   * @param opts 统一参数
+   * @returns >|null}>}
    */
   async chatWithTools(
     prompt: string,

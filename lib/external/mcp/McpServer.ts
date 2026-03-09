@@ -292,8 +292,7 @@ export class McpServer {
    *   - 其他工具: 注入 _activeDecisions 摘要
    *   - 首次未调 prime 的工具: 注入更强提醒
    *
-   * @param {string} toolName
-   * @param {object} result - handler 返回的 envelope 对象
+   * @param result handler 返回的 envelope 对象
    */
   async _injectDecisions(toolName: string, result: unknown) {
     // ── P3: Session 统计 ──
@@ -337,7 +336,7 @@ export class McpServer {
   /**
    * 获取 decisions 摘要（带缓存 + 防并发）
    * @private
-   * @returns {Promise<Array<{id: string, title: string}>>}
+   * @returns >>}
    */
   async _getDecisionsSummary() {
     const cache = this._decisionCache;

@@ -20,7 +20,7 @@ export interface SnippetSpec {
 }
 
 export class SnippetCodec {
-  /** @returns {string} codec 标识 ('xcode' | 'vscode') */
+  /** @returns codec 标识 ('xcode' | 'vscode') */
   get id(): string {
     throw new Error('SnippetCodec.id is abstract');
   }
@@ -30,11 +30,7 @@ export class SnippetCodec {
     throw new Error('SnippetCodec.fileExtension is abstract');
   }
 
-  /**
-   * 单个 SnippetSpec → IDE 格式字符串
-   * @param {object} spec
-   * @returns {string}
-   */
+  /** 单个 SnippetSpec → IDE 格式字符串 */
   generate(spec: SnippetSpec): string {
     throw new Error('SnippetCodec.generate() is abstract');
   }
@@ -43,35 +39,23 @@ export class SnippetCodec {
    * 批量 specs → IDE 格式输出
    *   Xcode:  返回 Array<{ filename, content }>（每个 snippet 一个文件）
    *   VSCode: 返回 string（单个 JSON bundle 文件内容）
-   * @param {object[]} specs
-   * @returns {string | Array<{ filename: string, content: string }>}
+   * @returns >}
    */
   generateBundle(specs: SnippetSpec[]): string | Array<{ filename: string; content: string }> {
     throw new Error('SnippetCodec.generateBundle() is abstract');
   }
 
-  /**
-   * 目标 snippet 安装目录路径
-   * @param {string} [projectRoot]
-   * @returns {string}
-   */
+  /** 目标 snippet 安装目录路径 */
   getInstallDir(projectRoot?: string): string {
     throw new Error('SnippetCodec.getInstallDir() is abstract');
   }
 
-  /**
-   * AutoSnippet 语言标识 → IDE 语言标识映射
-   * @param {string} lang
-   * @returns {string}
-   */
+  /** AutoSnippet 语言标识 → IDE 语言标识映射 */
   mapLanguage(lang: string): string {
     throw new Error('SnippetCodec.mapLanguage() is abstract');
   }
 
-  /**
-   * 获取 bundle 文件名 (VSCode = 'autosnippet.code-snippets', Xcode = per-file)
-   * @returns {string|null}
-   */
+  /** 获取 bundle 文件名 (VSCode = 'autosnippet.code-snippets', Xcode = per-file) */
   getBundleFilename(): string | null {
     return null;
   }

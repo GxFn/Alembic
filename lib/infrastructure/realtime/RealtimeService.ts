@@ -8,9 +8,6 @@ import Logger from '../logging/Logger.js';
 
 export class RealtimeService {
   io: SocketIOServer;
-  /**
-   * @param {import('http').Server} httpServer
-   */
   constructor(httpServer: import('http').Server) {
     this.io = new SocketIOServer(httpServer, {
       cors: {
@@ -25,9 +22,7 @@ export class RealtimeService {
     this.setupEventHandlers();
   }
 
-  /**
-   * 设置事件处理器
-   */
+  /** 设置事件处理器 */
   setupEventHandlers() {
     this.io.on(
       'connection',
@@ -67,9 +62,7 @@ export class RealtimeService {
     );
   }
 
-  /**
-   * 广播候选人创建事件
-   */
+  /** 广播候选人创建事件 */
   broadcastCandidateCreated(candidate: unknown) {
     this.io.to('notifications').emit('candidate-created', {
       type: 'candidate_created',
@@ -78,9 +71,7 @@ export class RealtimeService {
     });
   }
 
-  /**
-   * 广播候选人状态变化事件
-   */
+  /** 广播候选人状态变化事件 */
   broadcastCandidateStatusChanged(candidateId: string, newStatus: string, oldStatus: string) {
     this.io.to('notifications').emit('candidate-status-changed', {
       type: 'candidate_status_changed',
@@ -91,9 +82,7 @@ export class RealtimeService {
     });
   }
 
-  /**
-   * 广播 Token 用量变化事件（Sidebar 指标刷新用）
-   */
+  /** 广播 Token 用量变化事件（Sidebar 指标刷新用） */
   broadcastTokenUsageUpdated() {
     this.io.to('notifications').emit('token-usage-updated', {
       type: 'token_usage_updated',
@@ -101,9 +90,7 @@ export class RealtimeService {
     });
   }
 
-  /**
-   * 广播食谱创建事件
-   */
+  /** 广播食谱创建事件 */
   broadcastRecipeCreated(recipe: unknown) {
     this.io.to('notifications').emit('recipe-created', {
       type: 'recipe_created',
@@ -112,9 +99,7 @@ export class RealtimeService {
     });
   }
 
-  /**
-   * 广播食谱发布事件
-   */
+  /** 广播食谱发布事件 */
   broadcastRecipePublished(recipeId: string, recipe: unknown) {
     this.io.to('notifications').emit('recipe-published', {
       type: 'recipe_published',
@@ -124,9 +109,7 @@ export class RealtimeService {
     });
   }
 
-  /**
-   * 广播规则创建事件
-   */
+  /** 广播规则创建事件 */
   broadcastRuleCreated(rule: unknown) {
     this.io.to('notifications').emit('rule-created', {
       type: 'rule_created',
@@ -135,9 +118,7 @@ export class RealtimeService {
     });
   }
 
-  /**
-   * 广播规则状态变化事件
-   */
+  /** 广播规则状态变化事件 */
   broadcastRuleStatusChanged(ruleId: string, enabled: boolean) {
     this.io.to('notifications').emit('rule-status-changed', {
       type: 'rule_status_changed',
@@ -147,24 +128,18 @@ export class RealtimeService {
     });
   }
 
-  /**
-   * 广播通用事件
-   */
+  /** 广播通用事件 */
   broadcastEvent(eventName: string, data: unknown) {
     // 直接透传 data（不包装 type/timestamp），保持与前端 hook 期望的数据结构一致
     this.io.to('notifications').emit(eventName, data);
   }
 
-  /**
-   * 获取 Socket.io 实例
-   */
+  /** 获取 Socket.io 实例 */
   getIO() {
     return this.io;
   }
 
-  /**
-   * 获取连接的客户端数量
-   */
+  /** 获取连接的客户端数量 */
   getConnectedClients() {
     return this.io.engine.clientsCount;
   }

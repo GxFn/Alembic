@@ -37,12 +37,7 @@ async function getVerifyToken() {
   return _verifyToken;
 }
 
-/**
- * 创建双路径角色解析中间件
- *
- * @param {object} options
- * @param {import('../../core/capability/CapabilityProbe.js').CapabilityProbe} [options.capabilityProbe]
- */
+/** 创建双路径角色解析中间件 */
 export function roleResolverMiddleware(options: { capabilityProbe?: CapabilityProbe } = {}) {
   const { capabilityProbe } = options;
 

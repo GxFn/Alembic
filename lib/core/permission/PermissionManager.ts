@@ -25,9 +25,7 @@ export class PermissionManager {
     this.logger = Logger.getInstance();
   }
 
-  /**
-   * 检查权限（3-tuple: actor, action, resource）
-   */
+  /** 检查权限（3-tuple: actor, action, resource） */
   check(actor: string, action: string, resource: string | undefined): PermissionCheckResult {
     // 获取角色定义
     const role = this.constitution.getRole(actor);
@@ -171,9 +169,7 @@ export class PermissionManager {
     return action.replace('_', ':');
   }
 
-  /**
-   * 检查特殊权限
-   */
+  /** 检查特殊权限 */
   checkSpecialPermissions(
     actor: string,
     action: string,
@@ -219,9 +215,7 @@ export class PermissionManager {
     return 'unknown';
   }
 
-  /**
-   * 强制权限检查（失败时抛异常）
-   */
+  /** 强制权限检查（失败时抛异常） */
   enforce(actor: string, action: string, resource: string | undefined): boolean {
     const result = this.check(actor, action, resource);
 
@@ -241,9 +235,7 @@ export class PermissionManager {
     return true;
   }
 
-  /**
-   * 批量检查权限
-   */
+  /** 批量检查权限 */
   checkMultiple(
     checks: PermissionCheck[]
   ): Array<PermissionCheck & { result: PermissionCheckResult }> {
@@ -255,17 +247,13 @@ export class PermissionManager {
     }));
   }
 
-  /**
-   * 获取角色的所有权限
-   */
+  /** 获取角色的所有权限 */
   getRolePermissions(actor: string): string[] {
     const role = this.constitution.getRole(actor);
     return role ? role.permissions : [];
   }
 
-  /**
-   * 获取角色的约束条件
-   */
+  /** 获取角色的约束条件 */
   getRoleConstraints(actor: string): string[] {
     const role = this.constitution.getRole(actor);
     return role ? role.constraints : [];

@@ -1,6 +1,4 @@
-/**
- * SyncCoordinator — CRUD→向量同步 单元测试
- */
+/** SyncCoordinator — CRUD→向量同步 单元测试 */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

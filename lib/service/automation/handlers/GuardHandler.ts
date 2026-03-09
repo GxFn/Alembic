@@ -19,9 +19,7 @@ const SCOPE_KEYWORDS = new Set(['file', 'target', 'project', 'all']);
 /** 支持审计的源文件扩展名 — 委托给 LanguageService */
 const SOURCE_EXTS = LanguageService.sourceExts;
 
-/**
- * 递归收集目录下所有源文件路径
- */
+/** 递归收集目录下所有源文件路径 */
 async function collectSourceFiles(dir: string) {
   const { readdir } = await import('node:fs/promises');
   const files: string[] = [];
@@ -69,10 +67,10 @@ async function collectSourceFiles(dir: string) {
 }
 
 /**
- * @param {import('../FileWatcher.js').default} watcher  FileWatcher 实例
- * @param {string} fullPath  当前文件绝对路径
- * @param {string} code      当前文件内容
- * @param {string} guardLine 触发行原文
+ * @param watcher FileWatcher 实例
+ * @param fullPath 当前文件绝对路径
+ * @param code 当前文件内容
+ * @param guardLine 触发行原文
  */
 export async function handleGuard(
   watcher: import('../FileWatcher.js').FileWatcher,
@@ -206,9 +204,7 @@ export async function handleGuard(
   }
 }
 
-/**
- * 检查单个文件并打印结果
- */
+/** 检查单个文件并打印结果 */
 function _auditSingleFile(
   watcher: import('../FileWatcher.js').FileWatcher,
   engine: {

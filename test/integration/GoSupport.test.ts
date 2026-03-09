@@ -37,7 +37,7 @@ beforeAll(async () => {
   const lsMod = await import('../../lib/shared/LanguageService.js');
   LanguageService = lsMod.LanguageService;
 
-  const dcMod = await import('../../lib/shared/DimensionCopyRegistry.js');
+  const dcMod = await import('../../lib/service/bootstrap/DimensionCopyRegistry.js');
   DimensionCopy = dcMod.DimensionCopy;
 
   await import('../../lib/core/ast/index.js');
@@ -458,7 +458,7 @@ describe('L3: Go Enhancement Pack (go-web)', () => {
 describe('L5: Go Infrastructure Support', () => {
   it('SUMMARY_EXTRACTORS should have go entry', async () => {
     // Import the module and access the handler
-    const toolsMod = await import('../../lib/service/agent/tools/index.js');
+    const toolsMod = await import('../../lib/agent/tools/index.js');
     const allTools = toolsMod.ALL_TOOLS || toolsMod.default;
     const getFileSummary = Array.isArray(allTools)
       ? allTools.find((t) => t.name === 'get_file_summary')
@@ -587,7 +587,7 @@ describe('L8: RecipeExtractor Go heuristic', () => {
   let RecipeExtractor;
 
   beforeAll(async () => {
-    const mod = await import('../../lib/service/context/RecipeExtractor.js');
+    const mod = await import('../../lib/service/knowledge/RecipeExtractor.js');
     RecipeExtractor = mod.RecipeExtractor || mod.default;
   });
 

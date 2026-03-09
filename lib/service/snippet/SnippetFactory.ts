@@ -44,48 +44,36 @@ interface ListFilters {
 
 export class SnippetFactory {
   _recipeRepo: KnowledgeRepository | null;
-  /** @type {Map<string, import('./codecs/SnippetCodec.js').SnippetCodec>} */
   #codecs = new Map<string, SnippetCodec>();
 
-  /**
-   * @param {object} [knowledgeRepository] - KnowledgeRepositoryImpl（可选）
-   */
+  /** @param [knowledgeRepository] KnowledgeRepositoryImpl（可选） */
   constructor(knowledgeRepository?: KnowledgeRepository | null) {
     this._recipeRepo = knowledgeRepository || null;
   }
 
   // ─────────────── Codec 注册 ───────────────
 
-  /**
-   * 注册一个 IDE codec
-   * @param {import('./codecs/SnippetCodec.js').SnippetCodec} codec
-   */
+  /** 注册一个 IDE codec */
   registerCodec(codec: SnippetCodec) {
     this.#codecs.set(codec.id, codec);
   }
 
   /**
    * 获取已注册的 codec
-   * @param {string} target - 'xcode' | 'vscode'
-   * @returns {import('./codecs/SnippetCodec.js').SnippetCodec|undefined}
+   * @param target 'xcode' | 'vscode'
    */
   getCodec(target: string) {
     return this.#codecs.get(target);
   }
 
-  /**
-   * 获取所有已注册 codec 的 ID 列表
-   * @returns {string[]}
-   */
+  /** 获取所有已注册 codec 的 ID 列表 */
   getRegisteredTargets() {
     return [...this.#codecs.keys()];
   }
 
   // ─────────────── 依赖注入 ───────────────
 
-  /**
-   * 运行时注入 knowledgeRepository（用于延迟绑定场景）
-   */
+  /** 运行时注入 knowledgeRepository（用于延迟绑定场景） */
   setKnowledgeRepository(repo: KnowledgeRepository) {
     this._recipeRepo = repo;
   }
@@ -94,9 +82,7 @@ export class SnippetFactory {
 
   /**
    * 从 Recipe 列表实时生成 Snippet 列表
-   * @param {object} [filters] - { language, category, keyword }
-   * @param {object} [pagination]
-   * @returns {Promise<Array>}
+   * @param [filters] { language, category, keyword }
    */
   async listSnippets(filters: ListFilters = {}, pagination = { page: 1, pageSize: 50 }) {
     if (!this._recipeRepo) {
@@ -122,9 +108,7 @@ export class SnippetFactory {
     return recipes.map((r: RecipeLike) => this.fromRecipe(r));
   }
 
-  /**
-   * 从单个 Recipe ID 实时生成 Snippet
-   */
+  /** 从单个 Recipe ID 实时生成 Snippet */
   async getSnippet(recipeId: string) {
     if (!this._recipeRepo) {
       return null;
@@ -140,9 +124,8 @@ export class SnippetFactory {
 
   /**
    * 使用指定 codec 从 spec 生成 IDE 格式内容
-   * @param {object} spec - SnippetSpec
-   * @param {string} [target='xcode'] - codec ID
-   * @returns {string}
+   * @param spec SnippetSpec
+   * @param [target='xcode'] codec ID
    */
   generate(spec: SnippetSpec, target = 'xcode') {
     const codec = this.#resolveCodec(target);
@@ -151,9 +134,7 @@ export class SnippetFactory {
 
   /**
    * 批量生成 (委托 codec)
-   * @param {Array} recipes
-   * @param {string} [target='xcode']
-   * @returns {Array<{ filename: string, content: string, spec: object }> | { filename: string, content: string, specs: object[] }}
+   * @returns > | { filename: string, content: string, specs: object[] }}
    */
   generateBatch(recipes: RecipeLike[], target = 'xcode') {
     const codec = this.#resolveCodec(target);
@@ -181,8 +162,8 @@ export class SnippetFactory {
 
   /**
    * 从 Recipe/Candidate 生成 IDE 无关的 snippet spec
-   * @param {object} recipe - { id, title, trigger, code, description, language }
-   * @returns {object} - SnippetSpec
+   * @param recipe { id, title, trigger, code, description, language }
+   * @returns SnippetSpec
    */
   fromRecipe(recipe: RecipeLike): SnippetSpec {
     return {
@@ -197,10 +178,6 @@ export class SnippetFactory {
 
   // ─────────────── Private ───────────────
 
-  /**
-   * @param {string} target
-   * @returns {import('./codecs/SnippetCodec.js').SnippetCodec}
-   */
   #resolveCodec(target: string) {
     const codec = this.#codecs.get(target);
     if (!codec) {

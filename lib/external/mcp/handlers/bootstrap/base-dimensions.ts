@@ -243,10 +243,10 @@ export interface BaseDimension {
 
 /**
  * 根据项目主语言和检测到的框架过滤条件维度
- * @param {Array} allDimensions  所有维度定义（含 conditions 字段）
- * @param {string} primaryLang   主语言
- * @param {string[]} detectedFrameworks 检测到的框架
- * @returns {Array} 适用的维度列表
+ * @param allDimensions 所有维度定义（含 conditions 字段）
+ * @param primaryLang 主语言
+ * @param detectedFrameworks 检测到的框架
+ * @returns 适用的维度列表
  */
 export function resolveActiveDimensions(
   allDimensions: BaseDimension[],

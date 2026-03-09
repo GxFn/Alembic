@@ -8,9 +8,7 @@
 import { stripTriggerPrefix, TRIGGER_SYMBOL } from '../../infrastructure/config/TriggerSymbol.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 
-/**
- * 指令标记常量
- */
+/** 指令标记常量 */
 export const MARKS = {
   HEADER_INCLUDE: '// autosnippet:include ',
   HEADER_IMPORT: '// autosnippet:import ',
@@ -26,9 +24,7 @@ export const MARKS = {
   ALINK: 'alink',
 };
 
-/**
- * 正则表达式
- */
+/** 正则表达式 */
 export const REGEX = {
   CREATE_LINE: /^\/\/\s*as:(?:create|c)(?:\s+(-[cf]))?\s*$/,
   CREATE_REMOVE: /^@?\s*\/\/\s*as:(?:create|c)(?:\s+-[cf])?\s*\r?\n?/gm,
@@ -40,11 +36,7 @@ export const REGEX = {
   SEARCH_MARK: /\/\/\s*(?:autosnippet|as):(?:search|s)(\s|$)/,
 };
 
-/**
- * 推断文件语言 —— 委托给 LanguageService
- * @param {string} filename
- * @returns {string}
- */
+/** 推断文件语言 —— 委托给 LanguageService */
 function _inferLanguage(filename: string) {
   return LanguageService.inferLang(filename);
 }
@@ -52,8 +44,8 @@ function _inferLanguage(filename: string) {
 /**
  * 检测文件内容中的所有触发指令
  *
- * @param {string} data 文件内容
- * @param {string} filename 文件名
+ * @param data 文件内容
+ * @param filename 文件名
  * @returns {{ importArray: string[], headerLine: string|null, alinkLine: string|null,
  *             createLine: string|null, createOption: string|null,
  *             guardLine: string|null, searchLine: string|null, isSwift: boolean, language: string }}

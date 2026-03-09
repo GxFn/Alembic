@@ -3,8 +3,8 @@
  * submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle
  */
 
+import { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
-import { UnifiedValidator } from '#shared/UnifiedValidator.js';
 import { envelope } from '../envelope.js';
 import type { McpContext, McpServiceContainer } from './types.js';
 
@@ -150,9 +150,7 @@ export async function submitKnowledge(
   });
 }
 
-/**
- * 批量知识提交 (autosnippet_submit_knowledge_batch)
- */
+/** 批量知识提交 (autosnippet_submit_knowledge_batch) */
 interface KnowledgeItemInput {
   title?: string;
   content?: { pattern?: string; [key: string]: unknown };

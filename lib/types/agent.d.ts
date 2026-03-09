@@ -1,6 +1,4 @@
-/**
- * Agent / Task / Plan 类型声明
- */
+/** Agent / Task / Plan 类型声明 */
 
 interface Plan {
   steps: PlanStep[];

@@ -28,20 +28,12 @@ const ALL_DEP_TYPES = Object.values(DepType);
 /** 影响就绪计算的依赖类型集合 */
 const BLOCKING_TYPES = new Set([DepType.BLOCKS, DepType.WAITS_FOR]);
 
-/**
- * 判断依赖类型是否影响就绪计算
- * @param {string} depType
- * @returns {boolean}
- */
+/** 判断依赖类型是否影响就绪计算 */
 export function affectsReadyWork(depType: string): boolean {
   return (BLOCKING_TYPES as Set<string>).has(depType);
 }
 
-/**
- * 判断依赖类型是否合法
- * @param {string} depType
- * @returns {boolean}
- */
+/** 判断依赖类型是否合法 */
 export function isValidDepType(depType: string): boolean {
   return (ALL_DEP_TYPES as readonly string[]).includes(depType);
 }

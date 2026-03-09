@@ -35,11 +35,7 @@ export class Content {
     this.verification = props.verification ?? null;
   }
 
-  /**
-   * 从任意输入构造 Content
-   * @param {Content|Object|null} input
-   * @returns {Content}
-   */
+  /** 从任意输入构造 Content */
   static from(input: unknown): Content {
     if (input instanceof Content) {
       return input;
@@ -57,17 +53,12 @@ export class Content {
     return new Content(input as ContentProps);
   }
 
-  /**
-   * 是否包含有效内容
-   * @returns {boolean}
-   */
+  /** 是否包含有效内容 */
   hasContent() {
     return !!(this.pattern || this.markdown || this.rationale || this.steps.length > 0);
   }
 
-  /**
-   * 转换为 wire format JSON
-   */
+  /** 转换为 wire format JSON */
   toJSON() {
     return {
       pattern: this.pattern,
@@ -79,11 +70,7 @@ export class Content {
     };
   }
 
-  /**
-   * 从 wire format 创建
-   * @param {Object} data
-   * @returns {Content}
-   */
+  /** 从 wire format 创建 */
   static fromJSON(data: unknown): Content {
     return new Content(data as ContentProps);
   }

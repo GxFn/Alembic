@@ -20,23 +20,9 @@ export interface DataFlowEdge {
   [key: string]: unknown;
 }
 
-/**
- * @typedef {object} DataFlowEdge
- * @property {string} from 源 FQN
- * @property {string} to 目标 FQN
- * @property {'argument'|'return-value'} flowType
- * @property {'forward'|'backward'} direction
- */
-
 export class DataFlowInferrer {
-  /**
-   * 从已解析的调用边推断数据流边
-   *
-   * @param {import('./CallEdgeResolver.js').ResolvedEdge[]} resolvedEdges
-   * @returns {DataFlowEdge[]}
-   */
+  /** 从已解析的调用边推断数据流边 */
   static infer(resolvedEdges: ResolvedEdge[]) {
-    /** @type {DataFlowEdge[]} */
     const dataFlowEdges: DataFlowEdge[] = [];
 
     for (const edge of resolvedEdges) {

@@ -83,9 +83,6 @@ type DataFlowEdge = import('./DataFlowInferrer.js').DataFlowEdge;
 
 export class CallGraphAnalyzer {
   projectRoot: string;
-  /**
-   * @param {string} projectRoot
-   */
   constructor(projectRoot: string) {
     this.projectRoot = projectRoot;
   }
@@ -93,9 +90,7 @@ export class CallGraphAnalyzer {
   /**
    * 执行完整的调用图分析
    *
-   * @param {object} astProjectSummary - analyzeProject() 的输出 (需包含 callSites)
-   * @param {AnalyzeOptions} [options]
-   * @returns {Promise<CallGraphResult>}
+   * @param astProjectSummary analyzeProject() 的输出 (需包含 callSites)
    */
   async analyze(
     astProjectSummary: AstProjectSummary,
@@ -119,10 +114,8 @@ export class CallGraphAnalyzer {
   /**
    * 增量分析 — 仅重新分析变更文件及其依赖方
    *
-   * @param {object} astProjectSummary - analyzeProject() 的全量输出
-   * @param {string[]} changedFiles 变更文件的相对路径列表
-   * @param {AnalyzeOptions} [options]
-   * @returns {Promise<CallGraphResult>}
+   * @param astProjectSummary analyzeProject() 的全量输出
+   * @param changedFiles 变更文件的相对路径列表
    */
   async analyzeIncremental(
     astProjectSummary: AstProjectSummary,
@@ -259,9 +252,7 @@ export class CallGraphAnalyzer {
    * 渐进式超时 (§13 Issue #15):
    *   每处理完一个文件检查 deadline，超时时返回已有的 partial result
    *
-   * @param {object} astProjectSummary
-   * @param {number} maxCallSitesPerFile
-   * @param {number} deadline - Date.now() + timeout
+   * @param deadline Date.now() + timeout
    */
   async _doAnalyze(
     astProjectSummary: AstProjectSummary,
@@ -378,9 +369,7 @@ export class CallGraphAnalyzer {
     return { callEdges: allCallEdges, dataFlowEdges, stats };
   }
 
-  /**
-   * @private 空结果
-   */
+  /** @private 空结果 */
   _emptyResult(durationMs: number): CallGraphResult {
     return {
       callEdges: [],
@@ -400,11 +389,7 @@ export class CallGraphAnalyzer {
 
 // ── 分级降级辅助 ──────────────────────────────────────────
 
-/**
- * 根据文件数量确定分析层级
- * @param {number} fileCount
- * @returns {'full-cha'|'full'|'sampled'|'import-only'}
- */
+/** 根据文件数量确定分析层级 */
 function _computeTier(fileCount: number): 'full-cha' | 'full' | 'sampled' | 'import-only' {
   if (fileCount < 100) {
     return 'full-cha';
@@ -418,12 +403,7 @@ function _computeTier(fileCount: number): 'full-cha' | 'full' | 'sampled' | 'imp
   return 'import-only';
 }
 
-/**
- * 抽样核心文件 — 优先选取 src/、lib/、app/、core/ 等核心目录
- * @param {object[]} fileSummaries
- * @param {number} limit
- * @returns {object[]}
- */
+/** 抽样核心文件 — 优先选取 src/、lib/、app/、core/ 等核心目录 */
 function _sampleCoreFiles(fileSummaries: FileSummary[], limit: number): FileSummary[] {
   const CORE_DIRS = /\/(src|lib|app|core|pkg|internal|domain|service|controller|handler|api)\//i;
   const scored = fileSummaries.map((f: FileSummary) => ({

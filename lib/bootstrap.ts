@@ -13,9 +13,7 @@ import { SkillHooks } from './service/skills/SkillHooks.js';
 import pathGuard from './shared/PathGuard.js';
 import { CONFIG_DIR, PACKAGE_ROOT } from './shared/package-root.js';
 
-/**
- * Bootstrap - 应用程序启动器
- */
+/** Bootstrap - 应用程序启动器 */
 /** Bootstrap 初始化选项 */
 interface BootstrapOptions {
   configPath?: string;
@@ -50,8 +48,8 @@ export class Bootstrap {
   /**
    * 配置 PathGuard 路径安全守卫
    * 必须在任何文件写操作前调用
-   * @param {string} projectRoot 用户项目的绝对路径
-   * @param {string} [knowledgeBaseDir] 知识库目录名（如 'AutoSnippet'）
+   * @param projectRoot 用户项目的绝对路径
+   * @param [knowledgeBaseDir] 知识库目录名（如 'AutoSnippet'）
    */
   static configurePathGuard(projectRoot: string, knowledgeBaseDir?: string) {
     if (!pathGuard.configured && projectRoot) {
@@ -62,9 +60,7 @@ export class Bootstrap {
     }
   }
 
-  /**
-   * 初始化应用程序
-   */
+  /** 初始化应用程序 */
   async initialize() {
     const startTime = Date.now();
 
@@ -112,9 +108,7 @@ export class Bootstrap {
     }
   }
 
-  /**
-   * 加载 .env 文件（dotenv），不覆盖已有环境变量
-   */
+  /** 加载 .env 文件（dotenv），不覆盖已有环境变量 */
   async loadDotEnv() {
     try {
       // 沿目录树向上查找 .env：cwd → AutoSnippet 包根 → 用户项目根
@@ -132,18 +126,14 @@ export class Bootstrap {
     }
   }
 
-  /**
-   * 加载配置
-   */
+  /** 加载配置 */
   async loadConfig() {
     const env = (this.options.env as string) || process.env.NODE_ENV || 'development';
     ConfigLoader.load(env);
     this.components.config = ConfigLoader;
   }
 
-  /**
-   * 初始化日志系统
-   */
+  /** 初始化日志系统 */
   async initializeLogger() {
     const config = this.components.config!.get('logging') as Parameters<
       typeof Logger.getInstance
@@ -152,9 +142,7 @@ export class Bootstrap {
     this.components.logger = logger;
   }
 
-  /**
-   * 初始化数据库
-   */
+  /** 初始化数据库 */
   async initializeDatabase() {
     const dbConfig = this.components.config!.get('database') as ConstructorParameters<
       typeof DatabaseConnection
@@ -166,9 +154,7 @@ export class Bootstrap {
     this.components.logger!.info('Database connected and migrated');
   }
 
-  /**
-   * 加载宪法
-   */
+  /** 加载宪法 */
   async loadConstitution() {
     const constitutionPath = path.join(CONFIG_DIR, 'constitution.yaml');
     const constitution = new Constitution(constitutionPath);
@@ -176,9 +162,7 @@ export class Bootstrap {
     this.components.logger!.info('Constitution loaded', constitution.toJSON());
   }
 
-  /**
-   * 初始化核心组件
-   */
+  /** 初始化核心组件 */
   async initializeCoreComponents() {
     const { constitution, db, logger } = this.components;
 
@@ -206,9 +190,7 @@ export class Bootstrap {
     logger!.info('Skill hooks loaded');
   }
 
-  /**
-   * 初始化网关
-   */
+  /** 初始化网关 */
   async initializeGateway() {
     const gatewayConfig = this.components.config!.has('gateway')
       ? (this.components.config!.get('gateway') as GatewayConfig)
@@ -227,9 +209,7 @@ export class Bootstrap {
     this.components.logger!.info('Gateway initialized');
   }
 
-  /**
-   * 关闭应用程序
-   */
+  /** 关闭应用程序 */
   async shutdown() {
     this.components.logger?.info('AutoSnippet - Shutting down...');
 
@@ -248,16 +228,12 @@ export class Bootstrap {
     this.components.logger?.info('AutoSnippet - Shutdown complete');
   }
 
-  /**
-   * 获取组件
-   */
+  /** 获取组件 */
   getComponent(name: string) {
     return this.components[name];
   }
 
-  /**
-   * 获取所有组件
-   */
+  /** 获取所有组件 */
   getAllComponents() {
     return this.components;
   }

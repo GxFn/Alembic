@@ -29,9 +29,6 @@ export class KnowledgeSyncService {
   logger: ReturnType<typeof Logger.getInstance>;
   projectRoot: string;
   recipesDir: string;
-  /**
-   * @param {string} projectRoot
-   */
   constructor(projectRoot: string) {
     this.projectRoot = projectRoot;
     this.recipesDir = path.join(projectRoot, RECIPES_DIR);
@@ -44,12 +41,11 @@ export class KnowledgeSyncService {
    *
    * 同时扫描 candidates/ 和 recipes/ 两个目录。
    *
-   * @param {import('better-sqlite3').Database} db  better-sqlite3 原始句柄
-   * @param {Object}  [opts={}]
-   * @param {boolean} [opts.dryRun=false]        只报告不写入
-   * @param {boolean} [opts.force=false]         忽略 hash，强制覆盖
-   * @param {boolean} [opts.skipViolations=false] 跳过违规记录（setup 场景）
-   * @returns {{ synced: number, created: number, updated: number, violations: string[], orphaned: string[], skipped: number }}
+   * @param db better-sqlite3 原始句柄
+   * @param [opts.dryRun=false] 只报告不写入
+   * @param [opts.force=false] 忽略 hash，强制覆盖
+   * @param [opts.skipViolations=false] 跳过违规记录（setup 场景）
+   * @returns }
    */
   sync(
     db: {
@@ -162,9 +158,9 @@ export class KnowledgeSyncService {
 
   /**
    * 递归收集指定目录下所有 .md 文件（跳过 _ 前缀模板）
-   * @param {string} dir    绝对目录路径
-   * @param {string} prefix 相对路径前缀 (e.g. 'AutoSnippet/candidates')
-   * @returns {{ absPath: string, relPath: string }[]}
+   * @param dir 绝对目录路径
+   * @param prefix 相对路径前缀 (e.g. 'AutoSnippet/candidates')
+   * @returns []}
    */
   _collectMdFiles(dir: string, prefix: string) {
     if (!fs.existsSync(dir)) {
@@ -251,9 +247,7 @@ export class KnowledgeSyncService {
     };
   }
 
-  /**
-   * 准备 upsert 语句（INSERT ... ON CONFLICT DO UPDATE 全字段）
-   */
+  /** 准备 upsert 语句（INSERT ... ON CONFLICT DO UPDATE 全字段） */
   _prepareUpsert(db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } }) {
     const cols = [
       'id',
@@ -316,9 +310,7 @@ export class KnowledgeSyncService {
     return db.prepare(sql);
   }
 
-  /**
-   * 检查 entry 是否已存在于 DB
-   */
+  /** 检查 entry 是否已存在于 DB */
   _entryExists(
     db: { prepare: (sql: string) => { get: (...args: unknown[]) => unknown } },
     id: string
@@ -372,7 +364,7 @@ export class KnowledgeSyncService {
 
   /**
    * 检测 DB 中存在但 .md 已删除的 Entry → 标记 deprecated
-   * @returns {string[]} 孤儿 entry id 列表
+   * @returns 孤儿 entry id 列表
    */
   _detectOrphans(
     db: {

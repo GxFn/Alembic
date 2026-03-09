@@ -1,17 +1,8 @@
-/**
- * HeaderHandler — 处理 // as:include / // as:import 指令
- */
+/** HeaderHandler — 处理 // as:include / // as:import 指令 */
 
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
-/**
- * @param {import('../FileWatcher.js').FileWatcher} watcher
- * @param {string} fullPath
- * @param {string} headerLine
- * @param {string[]} importArray
- * @param {boolean} isSwift
- */
 export async function handleHeader(
   watcher: import('../FileWatcher.js').FileWatcher,
   fullPath: string,
@@ -20,7 +11,7 @@ export async function handleHeader(
   isSwift: boolean
 ) {
   try {
-    const HeaderResolver = await import('../../../infrastructure/paths/HeaderResolver.js');
+    const HeaderResolver = await import('../../../platform/ios/xcode/HeaderResolver.js');
     const parsed = HeaderResolver.parseImportLine(headerLine);
 
     if (!parsed) {

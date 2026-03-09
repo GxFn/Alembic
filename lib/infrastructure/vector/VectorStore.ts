@@ -6,10 +6,7 @@
 import { ioLimit } from '#shared/concurrency.js';
 
 export class VectorStore {
-  /**
-   * 初始化存储
-   * @returns {Promise<void>}
-   */
+  /** 初始化存储 */
   async init(): Promise<void> {
     throw new Error('Not implemented: init()');
   }
@@ -27,10 +24,7 @@ export class VectorStore {
     throw new Error('Not implemented: upsert()');
   }
 
-  /**
-   * 批量 upsert
-   * @param {Array} items
-   */
+  /** 批量 upsert */
   async batchUpsert(
     items: Array<{
       id: string;
@@ -43,28 +37,20 @@ export class VectorStore {
     await Promise.all(items.map((item) => ioLimit(() => this.upsert(item))));
   }
 
-  /**
-   * 删除文档
-   * @param {string} id
-   */
+  /** 删除文档 */
   async remove(id: string): Promise<void> {
     throw new Error('Not implemented: remove()');
   }
 
-  /**
-   * 按 ID 获取
-   * @param {string} id
-   * @returns {Promise<object|null>}
-   */
+  /** 按 ID 获取 */
   async getById(id: string): Promise<Record<string, unknown> | null> {
     throw new Error('Not implemented: getById()');
   }
 
   /**
    * 向量相似度搜索
-   * @param {number[]} queryVector
-   * @param {object} options - { topK, filter, minScore }
-   * @returns {Promise<Array<{ item: object, score: number }>>}
+   * @param options { topK, filter, minScore }
+   * @returns >>}
    */
   async searchVector(
     queryVector: number[],
@@ -75,31 +61,25 @@ export class VectorStore {
 
   /**
    * 按过滤条件搜索
-   * @param {object} filter - { type, category, language, tags, ... }
-   * @returns {Promise<Array>}
+   * @param filter { type, category, language, tags, ... }
    */
   async searchByFilter(filter: Record<string, unknown>): Promise<Record<string, unknown>[]> {
     throw new Error('Not implemented: searchByFilter()');
   }
 
-  /**
-   * 列出所有 ID
-   * @returns {Promise<string[]>}
-   */
+  /** 列出所有 ID */
   async listIds(): Promise<string[]> {
     throw new Error('Not implemented: listIds()');
   }
 
-  /**
-   * 清空存储
-   */
+  /** 清空存储 */
   async clear(): Promise<void> {
     throw new Error('Not implemented: clear()');
   }
 
   /**
    * 获取统计信息
-   * @returns {Promise<{ count: number, indexSize: number }>}
+   * @returns >}
    */
   async getStats(): Promise<{ count: number; indexSize: number }> {
     throw new Error('Not implemented: getStats()');

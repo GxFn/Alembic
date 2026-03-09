@@ -49,11 +49,7 @@ export class Relations {
     }
   }
 
-  /**
-   * 从任意输入构造 Relations
-   * @param {Relations|Array|Object|null} input
-   * @returns {Relations}
-   */
+  /** 从任意输入构造 Relations */
   static from(input: unknown): Relations {
     if (input instanceof Relations) {
       return input;
@@ -89,7 +85,7 @@ export class Relations {
 
   /**
    * 扁平视图（仅 Dashboard 渲染用）
-   * @returns {Array<{type:string, target:string, description:string}>}
+   * @returns >}
    */
   toFlatArray(): Array<{ type: string; target: string; description: string }> {
     const result: Array<{ type: string; target: string; description: string }> = [];
@@ -103,27 +99,21 @@ export class Relations {
 
   /**
    * 获取指定桶
-   * @param {string} type
-   * @returns {Array<{target:string, description:string}>}
+   * @returns >}
    */
   getByType(type: string): RelationEntry[] {
     return this._b[type] || [];
   }
 
-  /**
-   * 是否为空
-   * @returns {boolean}
-   */
+  /** 是否为空 */
   isEmpty(): boolean {
     return Object.values(this._b).every((l) => l.length === 0);
   }
 
   /**
    * 添加关系
-   * @param {string} type 桶名
-   * @param {string} target 目标
-   * @param {string} description
-   * @returns {Relations}
+   * @param type 桶名
+   * @param target 目标
    */
   add(type: string, target: string, description = ''): Relations {
     if (!this._b[type]) {
@@ -137,9 +127,8 @@ export class Relations {
 
   /**
    * 移除关系
-   * @param {string} type 桶名
-   * @param {string} target 目标
-   * @returns {Relations}
+   * @param type 桶名
+   * @param target 目标
    */
   remove(type: string, target: string): Relations {
     if (this._b[type]) {
@@ -148,18 +137,12 @@ export class Relations {
     return this;
   }
 
-  /**
-   * 转换为 wire format JSON (分桶)
-   */
+  /** 转换为 wire format JSON (分桶) */
   toJSON() {
     return { ...this._b };
   }
 
-  /**
-   * 从 wire format 创建
-   * @param {Object|Array} data
-   * @returns {Relations}
-   */
+  /** 从 wire format 创建 */
   static fromJSON(data: unknown): Relations {
     return Relations.from(data);
   }

@@ -4,14 +4,12 @@
  * 负责注册:
  *   - agentFactory, toolRegistry, skillHooks
  *   - feedbackStore, recommendationPipeline, recommendationMetrics
- *
- * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
-import { AgentFactory } from '../../service/agent/AgentFactory.js';
-import { ALL_TOOLS } from '../../service/agent/tools/index.js';
-import { ToolRegistry } from '../../service/agent/tools/ToolRegistry.js';
+import { AgentFactory } from '../../agent/AgentFactory.js';
+import { ALL_TOOLS } from '../../agent/tools/index.js';
+import { ToolRegistry } from '../../agent/tools/ToolRegistry.js';
 import { AIRecallStrategy } from '../../service/skills/AIRecallStrategy.js';
 import { FeedbackStore } from '../../service/skills/FeedbackStore.js';
 import { RecommendationMetrics } from '../../service/skills/RecommendationMetrics.js';

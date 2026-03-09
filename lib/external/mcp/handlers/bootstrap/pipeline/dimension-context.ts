@@ -67,17 +67,7 @@ export class DimensionContext {
   completedDimensions: Map<string, DimensionDigest>;
   projectContext: ProjectContext;
   submittedCandidates: CandidateSummary[];
-  /**
-   * @param {object} projectContext 项目基础信息 (全程不变)
-   * @param {string} projectContext.projectName
-   * @param {string} projectContext.primaryLang
-   * @param {number} projectContext.fileCount
-   * @param {number} projectContext.targetCount
-   * @param {string[]} projectContext.modules
-   * @param {object} [projectContext.depGraph]
-   * @param {object} [projectContext.astMetrics]
-   * @param {object} [projectContext.guardSummary]
-   */
+  /** @param projectContext 项目基础信息 (全程不变) */
   constructor(projectContext: ProjectContext) {
     /** @type {object} 项目基础信息 */
     this.projectContext = projectContext;
@@ -92,8 +82,8 @@ export class DimensionContext {
   /**
    * 维度完成后存储其摘要
    *
-   * @param {string} dimId 维度 ID
-   * @param {DimensionDigest} digest 维度分析摘要
+   * @param dimId 维度 ID
+   * @param digest 维度分析摘要
    */
   addDimensionDigest(dimId: string, digest: DimensionDigest) {
     this.completedDimensions.set(dimId, {
@@ -106,8 +96,7 @@ export class DimensionContext {
   /**
    * 记录已提交的候选
    *
-   * @param {string} dimId
-   * @param {object} candidateInfo - { title, subTopic, summary }
+   * @param candidateInfo { title, subTopic, summary }
    */
   addSubmittedCandidate(
     dimId: string,
@@ -124,8 +113,7 @@ export class DimensionContext {
   /**
    * 构建给 Agent 的上下文快照
    *
-   * @param {string} currentDimId 当前维度 ID
-   * @returns {DimensionContextSnapshot}
+   * @param currentDimId 当前维度 ID
    */
   buildContextForDimension(currentDimId: string) {
     const previousDimensions: Record<string, Partial<DimensionDigest>> = {};
@@ -152,12 +140,7 @@ export class DimensionContext {
     };
   }
 
-  /**
-   * 重算某维度时，获取该维度已有候选
-   *
-   * @param {string} dimId
-   * @returns {Array<CandidateSummary>}
-   */
+  /** 重算某维度时，获取该维度已有候选 */
   getExistingCandidatesForDimension(dimId: string) {
     return this.submittedCandidates.filter((c) => c.dimId === dimId);
   }
@@ -165,8 +148,6 @@ export class DimensionContext {
   /**
    * 获取所有维度摘要的紧凑文本表示
    * 用于 Agent prompt 中注入
-   *
-   * @returns {string}
    */
   getDigestsSummaryText() {
     if (this.completedDimensions.size === 0) {
@@ -199,10 +180,7 @@ export class DimensionContext {
     return lines.join('\n');
   }
 
-  /**
-   * 将完整上下文序列化为 JSON (用于断点恢复)
-   * @returns {object}
-   */
+  /** 将完整上下文序列化为 JSON (用于断点恢复) */
   toJSON() {
     return {
       projectContext: this.projectContext,
@@ -211,11 +189,7 @@ export class DimensionContext {
     };
   }
 
-  /**
-   * 从 JSON 恢复上下文 (断点恢复)
-   * @param {object} json
-   * @returns {DimensionContext}
-   */
+  /** 从 JSON 恢复上下文 (断点恢复) */
   static fromJSON(json: DimensionContextJSON) {
     const ctx = new DimensionContext(json.projectContext);
     for (const [id, digest] of Object.entries(json.completedDimensions || {})) {
@@ -232,8 +206,7 @@ export class DimensionContext {
  * Agent 被要求在回复末尾包含 JSON 格式的 dimensionDigest。
  * 此函数从自由格式文本中提取该 JSON 块。
  *
- * @param {string} reply - Agent 的完整回复文本
- * @returns {DimensionDigest|null}
+ * @param reply Agent 的完整回复文本
  */
 export function parseDimensionDigest(reply: string | null | undefined): DimensionDigest | null {
   if (!reply || typeof reply !== 'string') {

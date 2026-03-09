@@ -36,9 +36,7 @@ export class DependencyGraph {
     );
   }
 
-  /**
-   * 添加节点
-   */
+  /** 添加节点 */
   addNode(name: string) {
     this.#nodes.add(name);
     if (!this.#adjacency.has(name)) {
@@ -49,9 +47,7 @@ export class DependencyGraph {
     }
   }
 
-  /**
-   * 添加边: from 依赖 to
-   */
+  /** 添加边: from 依赖 to */
   addEdge(from: string, to: string) {
     this.addNode(from);
     this.addNode(to);
@@ -59,9 +55,7 @@ export class DependencyGraph {
     this.#reverseAdj.get(to)!.add(from);
   }
 
-  /**
-   * BFS 可达性检查
-   */
+  /** BFS 可达性检查 */
   isReachable(from: string, to: string) {
     if (from === to) {
       return true;
@@ -86,7 +80,7 @@ export class DependencyGraph {
 
   /**
    * 检测循环依赖
-   * @returns {string[][]} 循环路径列表
+   * @returns 循环路径列表
    */
   detectCycles() {
     const cycles: string[][] = [];
@@ -124,7 +118,7 @@ export class DependencyGraph {
 
   /**
    * 拓扑排序 (Kahn's algorithm)
-   * @returns {string[]} 若有环则返回部分结果
+   * @returns 若有环则返回部分结果
    */
   topologicalSort() {
     const inDegree = new Map<string, number>();
@@ -161,7 +155,7 @@ export class DependencyGraph {
 
   /**
    * 层级计算: L0 = 无依赖的节点, L1 = 只依赖 L0, etc.
-   * @returns {Map<string, number>} node → level
+   * @returns node → level
    */
   computeLevels() {
     const levels = new Map();
@@ -184,23 +178,17 @@ export class DependencyGraph {
     return levels;
   }
 
-  /**
-   * 获取节点的直接依赖
-   */
+  /** 获取节点的直接依赖 */
   getDependencies(node: string) {
     return [...(this.#adjacency.get(node) || [])];
   }
 
-  /**
-   * 获取节点的直接依赖者 (谁依赖了这个节点)
-   */
+  /** 获取节点的直接依赖者 (谁依赖了这个节点) */
   getDependents(node: string) {
     return [...(this.#reverseAdj.get(node) || [])];
   }
 
-  /**
-   * 获取所有节点
-   */
+  /** 获取所有节点 */
   getNodes() {
     return [...this.#nodes];
   }
@@ -219,9 +207,7 @@ export class DependencyGraph {
     this.#nodes.clear();
   }
 
-  /**
-   * 导出为 JSON (可视化用)
-   */
+  /** 导出为 JSON (可视化用) */
   toJSON() {
     const edges: { from: string; to: string }[] = [];
     for (const [from, deps] of this.#adjacency) {

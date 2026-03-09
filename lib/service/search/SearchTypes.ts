@@ -254,9 +254,7 @@ export function slimSearchResult(item: SearchResultItem): SlimSearchResult {
   };
 }
 
-/**
- * items → byKind 分组（统一实现）
- */
+/** items → byKind 分组（统一实现） */
 export function groupByKind<T extends { kind?: string }>(
   items: T[]
 ): { rule: T[]; pattern: T[]; fact: T[] } {

@@ -14,11 +14,7 @@ import { LanguageService } from '../../shared/LanguageService.js';
 /** @type {Map<string, RegExp>} 已编译的正则缓存 (pattern string → RegExp) */
 const _regexCache = new Map();
 
-/**
- * 编译正则模式（支持 RegExp 对象和 string，带缓存）
- * @param {RegExp|string} pattern
- * @returns {RegExp}
- */
+/** 编译正则模式（支持 RegExp 对象和 string，带缓存） */
 export function compilePattern(pattern: RegExp | string) {
   if (pattern instanceof RegExp) {
     return pattern;
@@ -32,9 +28,7 @@ export function compilePattern(pattern: RegExp | string) {
   return cached;
 }
 
-/**
- * 清除正则缓存
- */
+/** 清除正则缓存 */
 export function clearPatternCache() {
   _regexCache.clear();
 }
@@ -42,9 +36,7 @@ export function clearPatternCache() {
 /**
  * 构建内联测试块掩码
  * 目前支持 Rust #[cfg(test)] mod xxx { ... } 块
- * @param {string[]} lines
- * @param {string} language
- * @returns {boolean[]} 每行是否在测试块内
+ * @returns 每行是否在测试块内
  */
 export function buildTestBlockMask(lines: string[], language: string) {
   const mask = new Array(lines.length).fill(false);
@@ -121,9 +113,7 @@ export function buildTestBlockMask(lines: string[], language: string) {
  *   /* ... * / 块注释  (C/Java/JS/TS/Go/Rust/Swift/Kotlin)
  *   \"\"\" ... \"\"\"  (Python doc-string — 简化: 整行以 \"\"\" 开头的行)
  *
- * @param {string[]} lines
- * @param {string} language
- * @returns {boolean[]} 每行是否为注释行
+ * @returns 每行是否为注释行
  */
 export function buildCommentMask(lines: string[], language: string) {
   const mask = new Array(lines.length).fill(false);
@@ -174,9 +164,7 @@ export function buildCommentMask(lines: string[], language: string) {
   return mask;
 }
 
-/**
- * 从文件扩展名推断语言
- */
+/** 从文件扩展名推断语言 */
 export function detectLanguage(filePath: string) {
   if (!filePath) {
     return 'unknown';

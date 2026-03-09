@@ -1,6 +1,4 @@
-/**
- * Tree-sitter AST 类型声明
- */
+/** Tree-sitter AST 类型声明 */
 
 /** Tree-sitter syntax tree node (from tree-sitter package) */
 interface TreeSitterNode {

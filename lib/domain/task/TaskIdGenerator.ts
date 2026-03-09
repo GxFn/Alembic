@@ -26,9 +26,7 @@ export class TaskIdGenerator {
   _db: DbHandle;
   _prefix: string;
   #drizzle: DrizzleDB;
-  /**
-   * @param {import('better-sqlite3').Database} db - raw SQLite handle
-   */
+  /** @param db raw SQLite handle */
   constructor(db: DbHandle, drizzle?: DrizzleDB) {
     this._db = db;
     this._prefix = 'asd';
@@ -37,7 +35,7 @@ export class TaskIdGenerator {
 
   /**
    * 生成新的短 Hash ID
-   * @returns {string} 如 'asd-a1b2'
+   * @returns 如 'asd-a1b2'
    */
   generate(): string {
     const taskCount = this._getTaskCount();

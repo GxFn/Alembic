@@ -201,8 +201,7 @@ export class KnowledgeEntry {
 
   /**
    * 发布 (pending → active)
-   * @param {string} publisher
-   * @returns {{ success: boolean, error?: string }}
+   * @returns }
    */
   publish(publisher: string): { success: boolean; error?: string } {
     if (!this.isValid()) {
@@ -218,8 +217,7 @@ export class KnowledgeEntry {
 
   /**
    * 弃用 (pending|active → deprecated)
-   * @param {string} reason
-   * @returns {{ success: boolean, error?: string }}
+   * @returns }
    */
   deprecate(reason: string): { success: boolean; error?: string } {
     const result = this._transition(Lifecycle.DEPRECATED);
@@ -231,7 +229,7 @@ export class KnowledgeEntry {
 
   /**
    * 重新激活 (deprecated → pending)
-   * @returns {{ success: boolean, error?: string }}
+   * @returns }
    */
   reactivate() {
     const result = this._transition(Lifecycle.PENDING);
@@ -243,44 +241,29 @@ export class KnowledgeEntry {
 
   /* ═══ 谓词 ═══════════════════════════════════════════ */
 
-  /**
-   * 是否处于候选阶段
-   * @returns {boolean}
-   */
+  /** 是否处于候选阶段 */
   isCandidate() {
     return isLifecycleCandidate(this.lifecycle);
   }
 
-  /**
-   * 是否可被 Guard/Search/Export 消费
-   * @returns {boolean}
-   */
+  /** 是否可被 Guard/Search/Export 消费 */
   isActive() {
     return this.lifecycle === Lifecycle.ACTIVE;
   }
 
-  /**
-   * 是否为 Guard 规则类型
-   * @returns {boolean}
-   */
+  /** 是否为 Guard 规则类型 */
   isRule() {
     return this.kind === 'rule';
   }
 
-  /**
-   * 内容是否有效
-   * @returns {boolean}
-   */
+  /** 内容是否有效 */
   isValid() {
     return !!(this.title?.trim() && this.content.hasContent());
   }
 
   /* ═══ Guard 消费 ═══════════════════════════════════ */
 
-  /**
-   * 返回此 Entry 中可被 GuardCheckEngine 消费的规则列表
-   * @returns {Array<Object>}
-   */
+  /** 返回此 Entry 中可被 GuardCheckEngine 消费的规则列表 */
   getGuardRules() {
     if (!this.isActive() || !this.isRule()) {
       return [];
@@ -378,11 +361,7 @@ export class KnowledgeEntry {
     };
   }
 
-  /**
-   * JSON → Domain (camelCase 直入)
-   * @param {Object} data
-   * @returns {KnowledgeEntry}
-   */
+  /** JSON → Domain (camelCase 直入) */
   static fromJSON(data: unknown): KnowledgeEntry {
     if (!data) {
       return new KnowledgeEntry();
@@ -392,10 +371,7 @@ export class KnowledgeEntry {
 
   /* ═══ 私有 ═══════════════════════════════════════════ */
 
-  /**
-   * @param {string} to
-   * @returns {{ success: boolean, error?: string }}
-   */
+  /** @returns } */
   _transition(to: string): { success: boolean; error?: string } {
     if (!isValidTransition(this.lifecycle, to)) {
       return {
@@ -413,7 +389,6 @@ export class KnowledgeEntry {
     return { success: true };
   }
 
-  /** @returns {number} */
   _now() {
     return Math.floor(Date.now() / 1000);
   }

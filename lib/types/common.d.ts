@@ -1,6 +1,4 @@
-/**
- * 通用 / 辅助类型声明
- */
+/** 通用 / 辅助类型声明 */
 
 interface WikiResult {
   totalPages: number;

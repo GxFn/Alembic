@@ -124,25 +124,20 @@ export class EnhancementPack {
    *   - skillWorthy {boolean}  — 是否生成 Skill
    *   - dualOutput {boolean}   — 是否同时产出 Skill + Candidate
    *   - skillMeta {object}     — Skill 元数据（name, description）
-   *
-   * @returns {Array<object>}
    */
   getExtraDimensions(): ExtraDimension[] {
     return [];
   }
 
-  /**
-   * 额外的 Guard 规则
-   * @returns {Array<object>}
-   */
+  /** 额外的 Guard 规则 */
   getGuardRules(): GuardRule[] {
     return [];
   }
 
   /**
    * 额外的设计模式检测
-   * @param {object} astSummary - analyzeFile/analyzeProject 的返回值
-   * @returns {Array<{ type: string, className?: string, line?: number, confidence: number }>}
+   * @param astSummary analyzeFile/analyzeProject 的返回值
+   * @returns >}
    */
   detectPatterns(astSummary: AstSummary): DetectedPattern[] {
     return [];
@@ -150,18 +145,15 @@ export class EnhancementPack {
 
   /**
    * SFC 预处理器 — 将非标准文件转换为可解析的脚本内容
-   * @param {string} content 原始文件内容
-   * @param {string} ext 文件扩展名 (含 .)
-   * @returns {{ content: string, lang: string } | null}
+   * @param content 原始文件内容
+   * @param ext 文件扩展名 (含 .)
+   * @returns | null}
    */
   preprocessFile(content: string, ext: string): { content: string; lang: string } | null {
     return null;
   }
 
-  /**
-   * Reference Skill 路径（Bootstrap 时自动加载，相对于 skills/ 目录）
-   * @returns {string|null}
-   */
+  /** Reference Skill 路径（Bootstrap 时自动加载，相对于 skills/ 目录） */
   getReferenceSkillPath(): string | null {
     return null;
   }

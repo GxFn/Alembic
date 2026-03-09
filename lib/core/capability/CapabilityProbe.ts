@@ -49,10 +49,9 @@ export class CapabilityProbe {
   logger;
   noRemote: 'allow' | 'deny';
   /**
-   * @param {object} options
-   * @param {string} [options.subRepoPath]  子仓库根路径（默认 cwd/AutoSnippet）
-   * @param {number} [options.cacheTTL]     缓存 TTL（秒），默认 86400
-   * @param {string} [options.noRemote]     无 remote 策略: 'allow' | 'deny'
+   * @param [options.subRepoPath] 子仓库根路径（默认 cwd/AutoSnippet）
+   * @param [options.cacheTTL] 缓存 TTL（秒），默认 86400
+   * @param [options.noRemote] 无 remote 策略: 'allow' | 'deny'
    */
   constructor(options: CapabilityProbeOptions = {}) {
     this.logger = Logger.getInstance();
@@ -60,7 +59,6 @@ export class CapabilityProbe {
     this.cacheTTL = (options.cacheTTL ?? 86400) * 1000; // 转为 ms
     this.noRemote = options.noRemote || 'allow';
 
-    /** @type {ProbeCache | null} */
     this._cache = null;
   }
 
@@ -68,10 +66,7 @@ export class CapabilityProbe {
   //  Public API
   // ═══════════════════════════════════════════════════
 
-  /**
-   * 执行探测，返回角色级别
-   * @returns {ProbeResult}
-   */
+  /** 执行探测，返回角色级别 */
   probe(): ProbeResult {
     // 命中缓存
     if (this._cache && Date.now() < this._cache.expiresAt) {
@@ -102,9 +97,6 @@ export class CapabilityProbe {
    *   'admin'       → 'developer'    有 push 权限 / 无子仓库（个人项目）→ 完整权限
    *   'contributor'  → 'contributor'   有子仓库但无 push 权限 → 只读，禁止提交 Recipe
    *   'visitor'      → 'visitor'       noRemote=deny 严格模式 → 最小权限
-   *
-   * @param {ProbeResult} probeResult
-   * @returns {string}
    */
   toRole(probeResult: ProbeResult): string {
     switch (probeResult) {
@@ -121,15 +113,13 @@ export class CapabilityProbe {
 
   /**
    * 一步到位：探测并返回角色
-   * @returns {string} Constitution role ID
+   * @returns Constitution role ID
    */
   probeRole(): string {
     return this.toRole(this.probe());
   }
 
-  /**
-   * 获取当前缓存状态（for dashboard display）
-   */
+  /** 获取当前缓存状态（for dashboard display） */
   getCacheStatus() {
     if (!this._cache) {
       return { cached: false };
@@ -143,9 +133,7 @@ export class CapabilityProbe {
     };
   }
 
-  /**
-   * 清除缓存（强制下次重新探测）
-   */
+  /** 清除缓存（强制下次重新探测） */
   invalidate() {
     this._cache = null;
   }
@@ -157,7 +145,6 @@ export class CapabilityProbe {
   /**
    * 自动检测子仓库路径
    * 优先级：config.json > 默认 AutoSnippet/recipes
-   * @returns {string | null}
    */
   _detectSubRepo(): string | null {
     const effectiveRoot = resolveProjectRoot();
@@ -171,10 +158,7 @@ export class CapabilityProbe {
     return null;
   }
 
-  /**
-   * 执行实际探测
-   * @returns {ProbeResult}
-   */
+  /** 执行实际探测 */
   _runProbe(): ProbeResult {
     // Case 1: 子仓库路径不存在 → 个人项目模式，全权限
     if (!this.subRepoPath || !fs.existsSync(this.subRepoPath)) {
@@ -209,10 +193,6 @@ export class CapabilityProbe {
     }
   }
 
-  /**
-   * @param {string} repoPath
-   * @returns {boolean}
-   */
   _isGitRepo(repoPath: string): boolean {
     try {
       execSync('git rev-parse --git-dir', {
@@ -226,10 +206,6 @@ export class CapabilityProbe {
     }
   }
 
-  /**
-   * @param {string} repoPath
-   * @returns {boolean}
-   */
   _hasRemote(repoPath: string): boolean {
     // 快速路径：config 有 subRepoUrl 即认为有 remote
     try {
@@ -255,11 +231,7 @@ export class CapabilityProbe {
     }
   }
 
-  /**
-   * git push --dry-run 探测
-   * @param {string} repoPath
-   * @returns {ProbeResult}
-   */
+  /** git push --dry-run 探测 */
   _probePush(repoPath: string): ProbeResult {
     try {
       execSync('git push --dry-run 2>&1', {

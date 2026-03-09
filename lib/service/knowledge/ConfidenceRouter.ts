@@ -48,10 +48,7 @@ export class ConfidenceRouter {
   _config: Required<typeof DEFAULT_CONFIG>;
   _qualityScorer: QualityScorer | null;
   logger: ReturnType<typeof Logger.getInstance>;
-  /**
-   * @param {Object} [config] 路由配置
-   * @param {import('../quality/QualityScorer.js').QualityScorer} [qualityScorer]
-   */
+  /** @param [config] 路由配置 */
   constructor(config: ConfidenceRouterConfig = {}, qualityScorer: QualityScorer | null = null) {
     this._config = { ...DEFAULT_CONFIG, ...config };
     this._qualityScorer = qualityScorer;
@@ -60,8 +57,7 @@ export class ConfidenceRouter {
 
   /**
    * 路由决策
-   * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
-   * @returns {Promise<{ action: 'auto_approve'|'pending'|'reject', reason: string, confidence?: number }>}
+   * @returns >}
    */
   async route(entry: KnowledgeEntry): Promise<RouteResult> {
     const confidence = entry.reasoning?.confidence ?? 0;
@@ -166,9 +162,7 @@ export class ConfidenceRouter {
     };
   }
 
-  /**
-   * 估算内容长度
-   */
+  /** 估算内容长度 */
   _estimateContentLength(entry: KnowledgeEntry): number {
     const content = entry.content;
     if (!content) {

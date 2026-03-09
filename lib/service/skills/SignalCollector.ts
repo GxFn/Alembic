@@ -124,14 +124,13 @@ export class SignalCollector {
   #aggregator;
 
   /**
-   * @param {object} opts
-   * @param {string} opts.projectRoot  用户项目根目录
-   * @param {object} [opts.database]   - better-sqlite3 实例
-   * @param {object} [opts.agentFactory] - AgentFactory 实例
-   * @param {object} [opts.container]  - ServiceContainer 实例
-   * @param {string} [opts.mode]       - 'off' | 'suggest' | 'auto'
-   * @param {number} [opts.intervalMs] 初始收集间隔（毫秒），后续由 AI 动态调整
-   * @param {function} [opts.onSuggestions] 新建议回调 (suggestions[]) => void
+   * @param opts.projectRoot 用户项目根目录
+   * @param [opts.database] better-sqlite3 实例
+   * @param [opts.agentFactory] AgentFactory 实例
+   * @param [opts.container] ServiceContainer 实例
+   * @param [opts.mode] 'off' | 'suggest' | 'auto'
+   * @param [opts.intervalMs] 初始收集间隔（毫秒），后续由 AI 动态调整
+   * @param [opts.onSuggestions] 新建议回调 (suggestions[]) => void
    */
   constructor({
     projectRoot,
@@ -211,8 +210,8 @@ export class SignalCollector {
    * 外部事件推送入口（由 FileWatcher / Guard / CLI 等调用）
    *
    * 事件会经过 EventAggregator 聚合后触发提前分析。
-   * @param {string} key 事件类型（如 'file_change', 'guard_violation', 'candidate_submit'）
-   * @param {object} event 事件数据
+   * @param key 事件类型（如 'file_change', 'guard_violation', 'candidate_submit'）
+   * @param event 事件数据
    */
   pushEvent(key: string, event: Record<string, unknown>) {
     if (this.#mode === 'off') {
@@ -291,7 +290,7 @@ export class SignalCollector {
       // 3. 调用 Agent 系统进行 AI 分析
       this.#logger.debug('[SignalCollector] invoking Agent for analysis...');
       const agent = this.#agentFactory!.createChat({ lang: 'en' });
-      const { AgentMessage } = await import('../agent/AgentMessage.js');
+      const { AgentMessage } = await import('#agent/AgentMessage.js');
       const message = AgentMessage.internal(prompt, { source: 'signal_collector' });
       const result = await agent.execute(message);
       const reply = result?.reply ?? result?.text ?? '';
@@ -680,8 +679,8 @@ ${JSON.stringify(signals.codeChanges, null, 2)}
    *   1. AiProvider.extractJSON (支持 markdown 清理、截断修复、trailing comma 等)
    *   2. 最后一行 JSON 回退 (兼容 prompt 要求的 "最后一行输出 JSON" 格式)
    *
-   * @param {string} reply - AgentRuntime.execute() 的回复文本
-   * @returns {{ suggestions: Array, nextIntervalMinutes: number|null, summary: string }}
+   * @param reply AgentRuntime.execute() 的回复文本
+   * @returns }
    */
   #parseStructuredReply(reply: string) {
     const defaultResult = { suggestions: [], nextIntervalMinutes: null, summary: '' };

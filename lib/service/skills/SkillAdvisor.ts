@@ -47,9 +47,8 @@ export class SkillAdvisor {
   #db;
 
   /**
-   * @param {string} projectRoot 用户项目根目录
-   * @param {object} [opts]
-   * @param {object} [opts.database] - better-sqlite3 实例（可选）
+   * @param projectRoot 用户项目根目录
+   * @param [opts.database] better-sqlite3 实例（可选）
    */
   constructor(projectRoot: string, { database }: SkillAdvisorOpts = {}) {
     this.#projectRoot = projectRoot;
@@ -359,9 +358,7 @@ export class SkillAdvisor {
   //  辅助方法
   // ═══════════════════════════════════════════════════════
 
-  /**
-   * 列出已有的项目级 Skill 名称集合（避免重复推荐）
-   */
+  /** 列出已有的项目级 Skill 名称集合（避免重复推荐） */
   #listExistingProjectSkills() {
     const names = new Set();
     const dir = getProjectSkillsPath(this.#projectRoot);
@@ -378,9 +375,7 @@ export class SkillAdvisor {
   }
 }
 
-/**
- * 字符串转 kebab-case（简化版）
- */
+/** 字符串转 kebab-case（简化版） */
 function _kebab(str: string) {
   return (str || 'unknown')
     .replace(/[^a-zA-Z0-9\s-]/g, '')

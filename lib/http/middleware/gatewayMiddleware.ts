@@ -26,17 +26,15 @@ class GatewayError extends Error {
   }
 }
 
-/**
- * Express 中间件：将 Gateway 注入到 req 对象
- */
+/** Express 中间件：将 Gateway 注入到 req 对象 */
 export function gatewayMiddleware() {
   return (req: Request, _res: Response, next: NextFunction) => {
     /**
      * Gateway 快捷执行方法
-     * @param {string} action 操作标识 (如 'candidate:create')
-     * @param {string} resource 资源类型 (如 'candidates')
-     * @param {object} data 请求数据
-     * @returns {Promise<{success: boolean, data?: unknown, error?: object, requestId: string}>}
+     * @param action 操作标识 (如 'candidate:create')
+     * @param resource 资源类型 (如 'candidates')
+     * @param data 请求数据
+     * @returns >}
      */
     req.gw = async (action: string, resource: string, data: Record<string, unknown> = {}) => {
       const container = getServiceContainer();

@@ -1,6 +1,4 @@
-/**
- * 错误处理中间件
- */
+/** 错误处理中间件 */
 
 import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Response } from 'express';
 import {
@@ -44,9 +42,7 @@ export function errorHandler(logger: AppLogger): ErrorRequestHandler {
   };
 }
 
-/**
- * 将领域错误转换为 HTTP 错误
- */
+/** 将领域错误转换为 HTTP 错误 */
 export function mapDomainError(error: Error) {
   if (error instanceof ValidationError) {
     return {

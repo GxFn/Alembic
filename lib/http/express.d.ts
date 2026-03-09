@@ -1,6 +1,4 @@
-/**
- * Express Request augmentation — custom properties injected by middleware
- */
+/** Express Request augmentation — custom properties injected by middleware */
 import 'express-serve-static-core';
 
 declare module 'express-serve-static-core' {

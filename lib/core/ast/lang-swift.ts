@@ -329,10 +329,6 @@ function _maxNesting(node: any, depth: any) {
 /**
  * 从 Swift AST root 提取所有调用点
  * 遍历 function_declaration 中的 function_body → call_expression
- *
- * @param {TreeSitterNode} root
- * @param {object} ctx
- * @param {string} _lang
  */
 function extractCallSitesSwift(root: any, ctx: any, _lang: any) {
   const scopes = _collectSwiftScopes(root);
@@ -341,9 +337,7 @@ function extractCallSitesSwift(root: any, ctx: any, _lang: any) {
   }
 }
 
-/**
- * 递归收集 Swift 中所有函数体作用域
- */
+/** 递归收集 Swift 中所有函数体作用域 */
 function _collectSwiftScopes(root: any) {
   const scopes: any[] = [];
 
@@ -399,9 +393,7 @@ function _collectSwiftScopes(root: any) {
   return scopes;
 }
 
-/**
- * 从 Swift function body 中递归提取调用点
- */
+/** 从 Swift function body 中递归提取调用点 */
 function _extractSwiftCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;

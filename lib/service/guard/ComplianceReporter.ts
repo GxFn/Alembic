@@ -77,9 +77,7 @@ interface ExclusionManagerLike {
   isRuleExcluded?(ruleId: string, filePath: string): boolean;
 }
 
-/**
- * Quality Gate 评分算法
- */
+/** Quality Gate 评分算法 */
 function computeScore(summary: ViolationSummary, ruleHealth: RuleHealthEntry[] = []) {
   let score = 100;
 
@@ -105,9 +103,7 @@ function computeScore(summary: ViolationSummary, ruleHealth: RuleHealthEntry[] =
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-/**
- * 判定 Quality Gate 状态
- */
+/** 判定 Quality Gate 状态 */
 function evaluateGate(summary: ViolationSummary, score: number, thresholds: QualityGateThresholds) {
   const {
     maxErrors = QUALITY_GATE.MAX_ERRORS,
@@ -134,13 +130,7 @@ export class ComplianceReporter {
   qualityGateConfig: Required<QualityGateThresholds>;
   ruleLearner: RuleLearnerLike | null;
   violationsStore: ViolationsStoreLike | null;
-  /**
-   * @param {import('./GuardCheckEngine.js').GuardCheckEngine} guardCheckEngine
-   * @param {import('./ViolationsStore.js').ViolationsStore} violationsStore
-   * @param {import('./RuleLearner.js').RuleLearner} ruleLearner
-   * @param {import('./ExclusionManager.js').ExclusionManager} exclusionManager
-   * @param {object} qualityGateConfig - { maxErrors, maxWarnings, minScore }
-   */
+  /** @param qualityGateConfig { maxErrors, maxWarnings, minScore } */
   constructor(
     guardCheckEngine: GuardCheckEngineLike,
     violationsStore: ViolationsStoreLike | null,
@@ -163,11 +153,9 @@ export class ComplianceReporter {
 
   /**
    * 生成全项目合规报告
-   * @param {string} projectRoot 项目根目录
-   * @param {object} options
-   * @param {object} [options.qualityGate] 覆盖默认的 Quality Gate 阈值
-   * @param {number} [options.maxFiles] 最大扫描文件数
-   * @returns {Promise<ComplianceReport>}
+   * @param projectRoot 项目根目录
+   * @param [options.qualityGate] 覆盖默认的 Quality Gate 阈值
+   * @param [options.maxFiles] 最大扫描文件数
    */
   async generate(
     projectRoot: string,
@@ -334,8 +322,8 @@ export class ComplianceReporter {
 
   /**
    * 终端格式化输出报告
-   * @param {object} report - generate() 产出的报告
-   * @param {object} options - { format: 'text' | 'markdown' | 'json' }
+   * @param report generate() 产出的报告
+   * @param options { format: 'text' | 'markdown' | 'json' }
    */
   printReport(report: Record<string, unknown>, options: { format?: string } = {}) {
     const { format = 'text' } = options;

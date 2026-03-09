@@ -30,35 +30,13 @@ interface ProjectSummaryInput {
   [key: string]: unknown;
 }
 
-/**
- * @typedef {object} SymbolDeclaration
- * @property {string} fqn - Fully Qualified Name e.g. "src/service/UserService.ts::UserService.getUser"
- * @property {string} name 短名 e.g. "getUser"
- * @property {string|null} className 所属类
- * @property {string} file 声明文件 (相对路径)
- * @property {number} line 行号
- * @property {'class'|'function'|'method'|'variable'|'interface'|'type'} kind
- * @property {boolean} isExported 是否导出
- */
-
-/**
- * @typedef {object} SymbolTable
- * @property {Map<string, SymbolDeclaration>} declarations 符号 FQN → 声明
- * @property {Map<string, string[]>} fileExports 文件 → 导出符号名列表
- * @property {Map<string, ImportRecord[]>} fileImports 文件 → ImportRecord 列表
- * @property {Set<string>} instantiatedClasses - Phase 5.3 RTA: 程序中实际实例化的类名集合
- * @property {Map<string, Map<string, string>>} propertyTypes - Phase 5.3 DI: className → (fieldName → typeName)
- */
-
 export class SymbolTableBuilder {
   /**
    * 从 analyzeProject 结果构建全局符号表
    *
-   * @param {object} projectSummary - analyzeProject() 返回的 ProjectAstSummary
-   * @returns {SymbolTable}
+   * @param projectSummary analyzeProject() 返回的 ProjectAstSummary
    */
   static build(projectSummary: ProjectSummaryInput) {
-    /** @type {SymbolTable} */
     const table = {
       declarations: new Map(),
       fileExports: new Map(),
@@ -173,9 +151,6 @@ export class SymbolTableBuilder {
  *   - string[]
  *   - { line, text }[] (TypeScript walker 的格式)
  *   - { name, ... }[]
- *
- * @param {Array} exports
- * @returns {string[]}
  */
 function _extractExportNames(exports: Array<string | { name?: string; text?: string }>) {
   const names: string[] = [];
@@ -222,12 +197,7 @@ function _extractExportNames(exports: Array<string | { name?: string; text?: str
   return names;
 }
 
-/**
- * 检查符号是否被导出
- * @param {string} name
- * @param {string[]} exportNames
- * @returns {boolean}
- */
+/** 检查符号是否被导出 */
 function _isExported(name: string, exportNames: string[]) {
   return exportNames.includes(name) || exportNames.includes('default');
 }

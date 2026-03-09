@@ -29,10 +29,16 @@ AutoSnippet uses a Layered Domain-Driven Design (DDD) architecture. Its core pur
 └──────┬──┘ └────┬────┘ └───┬───┘ └──────────────┘
        │         │          │
 ┌──────▼─────────▼──────────▼─────────────────────────────┐
+│                   Agent Layer                            │
+│  AgentRuntime (ReAct) · Memory · Context · Tools (54)   │
+│  IntentClassifier · Router · Presets · Strategies        │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────┐
 │                   Service Layer                          │
-│  ChatAgent · Knowledge · Guard · Search · Bootstrap     │
+│  Knowledge · Guard · Search · Bootstrap                  │
 │  Cursor · Quality · Recipe · Skills · Wiki · Automation │
-│  Snippet · Module                                        │
+│  Snippet · Module · Task · Vector · Candidate            │
 └──────────────────────┬──────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
@@ -52,6 +58,7 @@ AutoSnippet uses a Layered Domain-Driven Design (DDD) architecture. Its core pur
 │                 External Layer                            │
 │  AI: OpenAI / Gemini / Claude / DeepSeek / Ollama       │
 │  MCP: 16 agent + 4 admin tools                           │
+│  Lark: LarkTransport for Lark/Feishu messaging           │
 │  Native: Xcode / Clipboard / Browser                     │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -90,18 +97,33 @@ All entry points share the same initialization flow: `Bootstrap.initialize()` �
 - Supports AI Provider hot-reload (`reloadAiProvider()`), automatically clears cached singletons in the dependency chain
 - Registration in three phases: `_registerInfrastructure()` → `_registerRepositories()` → `_registerServices()`
 
-### 4. Service Layer
+### 4. Agent Layer
 
-The thickest layer of the project, containing 15 sub-domain services:
+The independent Agent architecture layer (`lib/agent/`, path alias `#agent/*`) contains 40+ files across 5 sub-modules:
+
+| Sub-module | Core Class | Responsibility |
+|------------|-----------|----------------|
+| **root** | `AgentRuntime` | ReAct reasoning loop engine, ONE Runtime multi-config architecture |
+| **root** | `AgentFactory` | Agent factory, creates different Runtime configs per Preset |
+| **root** | `AgentRouter` | Intent → Preset routing dispatch |
+| **root** | `IntentClassifier` | Intent classification (keyword + LLM hybrid) |
+| **core/** | `ToolExecutionPipeline` | ReAct loop core: Prompt building + tool execution pipeline |
+| **memory/** | `MemoryCoordinator` | Multi-layer memory: Session / Active / Persistent / Episodic |
+| **context/** | `ContextWindow` / `ExplorationTracker` | Token window management + exploration strategies |
+| **domain/** | `EpisodicConsolidator` / `InsightProducer` | Agent domain logic: insight analysis, evidence collection, scan tasks |
+| **tools/** | `ToolRegistry` + 14 files | 54 built-in tools (knowledge, AST, Guard, search, system, etc.) |
+
+### 5. Service Layer
+
+Business service layer containing 15 sub-domain services:
 
 | Sub-domain | Core Class | Responsibility |
 |------------|-----------|----------------|
-| **chat** | `ChatAgent` (2291 lines) | ReAct reasoning loop + DAG task pipeline, 54 built-in tools |
 | **knowledge** | `KnowledgeService` | Knowledge entry CRUD, graph, entity graph, confidence routing |
 | **guard** | `GuardService` / `GuardCheckEngine` | 50+ built-in rule engine (regex + AST semantic) |
 | **search** | `SearchEngine` / `RetrievalFunnel` | 4-stage retrieval funnel (keyword → semantic → fusion → rerank) |
 | **bootstrap** | `BootstrapTaskManager` | Coldstart async task orchestration, 14 analysis dimensions |
-| **cursor** | `CursorDeliveryPipeline` | 4-channel delivery (Rules + Skills + Token Budget + Topic Classification) |
+| **delivery** | `CursorDeliveryPipeline` | 4-channel delivery (Rules + Skills + Token Budget + Topic Classification) |
 | **automation** | `AutomationOrchestrator` | File watching, directive detection (`as:s` / `as:c` / `as:a`), processing pipeline |
 | **quality** | `QualityScorer` | Knowledge entry quality scoring + feedback collection |
 | **recipe** | `RecipeParser` | Recipe Markdown parsing and candidate validation |
@@ -110,9 +132,9 @@ The thickest layer of the project, containing 15 sub-domain services:
 | **wiki** | `WikiGenerator` | Auto-generated project Wiki |
 | **module** | `ModuleService` | Multi-language module structure scanning |
 | **candidate** | `SimilarityService` | Candidate deduplication, similarity detection |
-| **context** | `RecipeExtractor` | Recipe content extraction and context collection |
 
-### 5. Core + Domain Layer
+
+### 6. Core + Domain Layer
 
 #### Gateway
 
@@ -145,7 +167,7 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 - `Lifecycle` — Knowledge entry state machine: `draft → pending → approved → active → deprecated`
 - `Snippet` — Code snippet entity
 
-### 6. Infrastructure Layer
+### 7. Infrastructure Layer
 
 | Module | Responsibility |
 |--------|---------------|
@@ -160,7 +182,7 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 | `ErrorTracker` / `PerformanceMonitor` | Error tracking + performance monitoring |
 | `PathGuard` | Path security guard, prevents file write escapes |
 
-### 7. External Layer
+### 8. External Layer
 
 #### AI Provider
 

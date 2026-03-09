@@ -57,9 +57,7 @@ export const TaskStatus = Object.freeze({
   FAILED: 'failed', // 填充失败
 });
 
-/**
- * 单个 Bootstrap 会话（一次冷启动的全部上下文）
- */
+/** 单个 Bootstrap 会话（一次冷启动的全部上下文） */
 class BootstrapSession {
   completedAt: number | null;
   id: string;
@@ -158,10 +156,8 @@ class BootstrapSession {
 }
 
 export class BootstrapTaskManager {
-  /** @type {BootstrapSession|null} */
   #currentSession: BootstrapSession | null = null;
 
-  /** @type {import('../../infrastructure/event/EventBus.js').EventBus|null} */
   #eventBus: EventBus | null = null;
 
   /** @type {Function|null} 获取 RealtimeService 的 getter（延迟获取，避免循环依赖） */
@@ -183,7 +179,6 @@ export class BootstrapTaskManager {
    * 如果上一个会话仍在运行，自动 abort 后再创建新会话（防止重复触发产出重复 Candidate）。
    *
    * @param {Array<{id: string, meta: object}>} taskDefs 任务定义列表
-   * @returns {BootstrapSession}
    */
   startSession(taskDefs: TaskDef[]) {
     // ── 并发锁：如果上一个 session 还在运行，先中止 ──
@@ -218,7 +213,7 @@ export class BootstrapTaskManager {
    * 将所有未完成的任务标记为 failed，并将 session 标记为 aborted。
    * 异步填充函数通过 `isSessionValid(sessionId)` 检测到 session 已变更后自动退出。
    *
-   * @param {string} [reason='Aborted by user']
+   * @param [reason='Aborted by user']
    */
   abortSession(reason = 'Aborted by user') {
     const session = this.#currentSession;
@@ -265,9 +260,6 @@ export class BootstrapTaskManager {
    *
    * 用于异步填充函数在每次循环迭代前检测：如果 session 已被新请求覆盖，
    * 则当前异步填充应立即停止，避免产出重复内容。
-   *
-   * @param {string} sessionId
-   * @returns {boolean}
    */
   isSessionValid(sessionId: string) {
     // Session 在 running 或 completed 状态都有效 — completed 表示维度填充完成，
@@ -280,9 +272,7 @@ export class BootstrapTaskManager {
     );
   }
 
-  /**
-   * 标记单个任务开始填充
-   */
+  /** 标记单个任务开始填充 */
   markTaskFilling(taskId: string) {
     const session = this.#currentSession;
     if (!session) {
@@ -307,8 +297,7 @@ export class BootstrapTaskManager {
 
   /**
    * 标记单个任务完成
-   * @param {string} taskId
-   * @param {object} result 填充结果摘要 { created, items, ... }
+   * @param result 填充结果摘要 { created, items, ... }
    */
   markTaskCompleted(taskId: string, result: Record<string, unknown> = {}) {
     const session = this.#currentSession;
@@ -345,9 +334,7 @@ export class BootstrapTaskManager {
     }
   }
 
-  /**
-   * 标记单个任务失败
-   */
+  /** 标记单个任务失败 */
   markTaskFailed(taskId: string, error: unknown) {
     const session = this.#currentSession;
     if (!session) {
@@ -382,9 +369,7 @@ export class BootstrapTaskManager {
   //  查询接口
   // ═══════════════════════════════════════════════════════════
 
-  /**
-   * 获取当前 session 状态（供 HTTP 轮询）
-   */
+  /** 获取当前 session 状态（供 HTTP 轮询） */
   getSessionStatus() {
     if (!this.#currentSession) {
       return { status: 'idle', message: 'No active bootstrap session' };
@@ -392,9 +377,7 @@ export class BootstrapTaskManager {
     return this.#currentSession.toJSON();
   }
 
-  /**
-   * 是否有正在进行的 bootstrap
-   */
+  /** 是否有正在进行的 bootstrap */
   get isRunning() {
     return this.#currentSession?.status === 'running';
   }
@@ -409,8 +392,8 @@ export class BootstrapTaskManager {
    * 用途：不走 bootstrap session 模型的长操作（如 AI 润色）也能复用
    * 同一套 EventBus + RealtimeService 双通道推送。
    *
-   * @param {string} eventName 事件名（如 'refine:started'）
-   * @param {object} data      事件负载
+   * @param eventName 事件名（如 'refine:started'）
+   * @param data 事件负载
    */
   emitProgress(eventName: string, data: unknown) {
     this.#emit(eventName, data);
@@ -453,9 +436,7 @@ export class BootstrapTaskManager {
     });
   }
 
-  /**
-   * 发射事件到 EventBus + 推送到前端 Socket.io
-   */
+  /** 发射事件到 EventBus + 推送到前端 Socket.io */
   #emit(eventName: string, data: unknown) {
     // EventBus（供后端监听者使用）
     if (this.#eventBus) {

@@ -68,9 +68,7 @@ export class PerformanceMonitor {
     }
   }
 
-  /**
-   * Express 中间件
-   */
+  /** Express 中间件 */
   middleware() {
     return (
       req: {
@@ -106,9 +104,7 @@ export class PerformanceMonitor {
     };
   }
 
-  /**
-   * 记录请求
-   */
+  /** 记录请求 */
   recordRequest(requestData: RequestData) {
     const { route, statusCode, duration } = requestData;
 
@@ -179,9 +175,7 @@ export class PerformanceMonitor {
     }
   }
 
-  /**
-   * 计算统计数据
-   */
+  /** 计算统计数据 */
   calculateStats() {
     const { total, errors } = this.metrics.requests;
 
@@ -217,9 +211,7 @@ export class PerformanceMonitor {
     });
   }
 
-  /**
-   * 获取统计信息
-   */
+  /** 获取统计信息 */
   getStats() {
     this.calculateStats(); // 实时计算
 
@@ -264,9 +256,7 @@ export class PerformanceMonitor {
     };
   }
 
-  /**
-   * 重置统计
-   */
+  /** 重置统计 */
   reset() {
     this.metrics = {
       requests: {
@@ -284,9 +274,7 @@ export class PerformanceMonitor {
     Logger.info('性能监控统计已重置');
   }
 
-  /**
-   * 停止监控
-   */
+  /** 停止监控 */
   shutdown() {
     if (this.statsInterval) {
       clearInterval(this.statsInterval);
@@ -298,9 +286,7 @@ export class PerformanceMonitor {
 // 单例实例
 let performanceMonitorInstance: PerformanceMonitor | null = null;
 
-/**
- * 初始化性能监控
- */
+/** 初始化性能监控 */
 export function initPerformanceMonitor() {
   if (performanceMonitorInstance) {
     return performanceMonitorInstance;
@@ -311,9 +297,7 @@ export function initPerformanceMonitor() {
   return performanceMonitorInstance;
 }
 
-/**
- * 获取性能监控实例
- */
+/** 获取性能监控实例 */
 export function getPerformanceMonitor() {
   if (!performanceMonitorInstance) {
     throw new Error('性能监控未初始化，请先调用 initPerformanceMonitor()');

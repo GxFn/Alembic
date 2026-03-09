@@ -232,28 +232,18 @@ export class AiProvider {
 
   /**
    * 对话 - 发送 prompt + context，返回文本响应
-   * @param {string} prompt
-   * @param {object} context - {history: [], temperature, maxTokens}
-   * @returns {Promise<string>}
+   * @param context {history: [], temperature, maxTokens}
    */
   async chat(prompt: string, context: ChatContext = {}): Promise<string> {
     throw new Error(`${this.name}.chat() not implemented`);
   }
 
-  /**
-   * 摘要 - 对代码/文档生成结构化摘要
-   * @param {string} code
-   * @returns {Promise<object>}
-   */
+  /** 摘要 - 对代码/文档生成结构化摘要 */
   async summarize(code: string): Promise<unknown> {
     throw new Error(`${this.name}.summarize() not implemented`);
   }
 
-  /**
-   * 向量嵌入 - 返回浮点数组
-   * @param {string|string[]} text
-   * @returns {Promise<number[]|number[][]>}
-   */
+  /** 向量嵌入 - 返回浮点数组 */
   async embed(text: string | string[]): Promise<number[] | number[][]> {
     throw new Error(`${this.name}.embed() not implemented`);
   }
@@ -261,17 +251,13 @@ export class AiProvider {
   /**
    * 探测 provider 是否可用（轻量级 API 调用验证连接性）
    * 子类可覆盖实现更具体的探测逻辑
-   * @returns {Promise<boolean>}
    */
   async probe() {
     const result = await this.chat('ping', { maxTokens: 16, temperature: 0 });
     return !!result;
   }
 
-  /**
-   * 检查是否支持 embedding
-   * @returns {boolean}
-   */
+  /** 检查是否支持 embedding */
   supportsEmbedding(): boolean {
     return true;
   }
@@ -279,7 +265,6 @@ export class AiProvider {
   /**
    * 是否支持原生结构化函数调用（非文本解析）
    * 子类（如 GoogleGeminiProvider）覆盖返回 true
-   * @returns {boolean}
    */
   get supportsNativeToolCalling(): boolean {
     return false;
@@ -298,15 +283,12 @@ export class AiProvider {
    *   - { role: 'assistant', content: 'text or null', toolCalls: [{id, name, args}] }
    *   - { role: 'tool', toolCallId: 'id', name: 'tool_name', content: 'result string' }
    *
-   * @param {string} prompt 用户消息（仅在 messages 为空时使用）
-   * @param {object} opts
-   * @param {Array} opts.messages 统一格式消息历史
-   * @param {Array} opts.toolSchemas - [{name, description, parameters}]
-   * @param {string} opts.toolChoice - 'auto' | 'required' | 'none'
-   * @param {string} [opts.systemPrompt] 系统指令
-   * @param {number} [opts.temperature=0.7]
-   * @param {number} [opts.maxTokens=8192]
-   * @returns {Promise<{text: string|null, functionCalls: Array<{id: string, name: string, args: object}>|null}>}
+   * @param prompt 用户消息（仅在 messages 为空时使用）
+   * @param opts.messages 统一格式消息历史
+   * @param opts.toolSchemas [{name, description, parameters}]
+   * @param opts.toolChoice 'auto' | 'required' | 'none'
+   * @param [opts.systemPrompt] 系统指令
+   * @returns >|null}>}
    */
   async chatWithTools(
     prompt: string,
@@ -337,15 +319,12 @@ export class AiProvider {
    *   - OpenAI: response_format: { type: 'json_object' }
    *   - Claude: 无原生支持，使用默认实现 (chat + extractJSON)
    *
-   * @param {string} prompt 完整提示词（应包含返回 JSON 的指令）
-   * @param {object} [opts]
-   * @param {object} [opts.schema] - JSON Schema（Gemini/OpenAI 的 structured output 用）
-   * @param {string} [opts.openChar='{'] - extractJSON 边界起始符（fallback 用）
-   * @param {string} [opts.closeChar='}'] - extractJSON 边界终止符
-   * @param {number} [opts.temperature=0.3]
-   * @param {number} [opts.maxTokens=32768]
-   * @param {string} [opts.systemPrompt] 可选系统指令
-   * @returns {Promise<any>} 解析后的 JSON 对象/数组，解析失败返回 null
+   * @param prompt 完整提示词（应包含返回 JSON 的指令）
+   * @param [opts.schema] JSON Schema（Gemini/OpenAI 的 structured output 用）
+   * @param [opts.openChar='{'] extractJSON 边界起始符（fallback 用）
+   * @param [opts.closeChar='}'] extractJSON 边界终止符
+   * @param [opts.systemPrompt] 可选系统指令
+   * @returns 解析后的 JSON 对象/数组，解析失败返回 null
    */
   async chatWithStructuredOutput(
     prompt: string,
@@ -364,9 +343,7 @@ export class AiProvider {
     return this.extractJSON(response, openChar, closeChar);
   }
 
-  /**
-   * 内部日志辅助（子类可通过 this.logger 覆盖）
-   */
+  /** 内部日志辅助（子类可通过 this.logger 覆盖） */
   _log(level: string, message: string) {
     try {
       if (this.logger && typeof this.logger[level] === 'function') {
@@ -380,8 +357,8 @@ export class AiProvider {
 
   /**
    * 根据用户语言偏好生成输出语言指令
-   * @param {string} [lang] 语言代码，如 'zh', 'en'
-   * @returns {string} 语言指令段落（为空则返回空字符串）
+   * @param [lang] 语言代码，如 'zh', 'en'
+   * @returns 语言指令段落（为空则返回空字符串）
    */
   _buildLangInstruction(lang: string | undefined) {
     if (!lang || lang === 'en') {
@@ -416,9 +393,7 @@ export class AiProvider {
     return `\n# Output Language\nThe user's preferred language is "${lang}". Write all human-readable text fields (title, description, doClause, dontClause, whenClause, topicHint, content.markdown, content.rationale, reasoning.whyStandard, aiInsight, constraints text) in "${lang}". Keep code fields (trigger, content.pattern, coreCode, headers, tags) in their original language.\n`;
   }
 
-  /**
-   * 根据文件扩展名检测语言特征，返回提示词适配参数
-   */
+  /** 根据文件扩展名检测语言特征，返回提示词适配参数 */
   _detectLanguageProfile(filesContent: FileContentEntry[]): LanguageProfile {
     const extCounts: Record<string, number> = {};
     for (const f of filesContent) {
@@ -581,8 +556,8 @@ export class AiProvider {
 
   /**
    * AI 语义字段补全 — 分析候选代码，填补缺失的语义字段
-   * @param {Array<object>} candidates 候选对象数组，每项至少含 {code, language, title?}
-   * @returns {Promise<Array<object>>} enriched 候选数组（仅含补全的字段）
+   * @param candidates 候选对象数组，每项至少含 {code, language, title?}
+   * @returns enriched 候选数组（仅含补全的字段）
    */
   async enrichCandidates(candidates: EnrichCandidate[], options: EnrichOptions = {}) {
     const prompt = this._buildEnrichPrompt(candidates, options);
@@ -594,9 +569,7 @@ export class AiProvider {
     return Array.isArray(parsed) ? parsed : [];
   }
 
-  /**
-   * 构建 enrichCandidates 提示词
-   */
+  /** 构建 enrichCandidates 提示词 */
   _buildEnrichPrompt(candidates: EnrichCandidate[], options: EnrichOptions = {}) {
     const items = candidates
       .map((c: EnrichCandidate, i: number) => {
@@ -782,9 +755,7 @@ ${items}`;
     return null;
   }
 
-  /**
-   * 字符级深度追踪修复（原逻辑，处理标准 JSON）
-   */
+  /** 字符级深度追踪修复（原逻辑，处理标准 JSON） */
   _repairByCharTracking(text: string) {
     let depth = 0;
     let inString = false;
@@ -849,9 +820,7 @@ ${items}`;
     return null;
   }
 
-  /**
-   * 在指定位置截断并尝试闭合 JSON 数组
-   */
+  /** 在指定位置截断并尝试闭合 JSON 数组 */
   _tryRepairAt(text: string, endPos: number) {
     let repaired = text.slice(0, endPos + 1);
     // 去掉尾逗号

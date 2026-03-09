@@ -18,15 +18,16 @@
  * @module bootstrap/shared/dimension-text
  */
 
-import { getRequiredFieldNames, getRequiredFieldsDescription } from '#shared/FieldSpec.js';
+import {
+  getRequiredFieldNames,
+  getRequiredFieldsDescription,
+} from '#domain/knowledge/FieldSpec.js';
 
 // ═══════════════════════════════════════════════════════════
 // 提交 Schema 定义
 // ═══════════════════════════════════════════════════════════
 
-/**
- * 知识提交的完整 Schema — 定义必填字段、内容结构、枚举值和质量门控
- */
+/** 知识提交的完整 Schema — 定义必填字段、内容结构、枚举值和质量门控 */
 export const SUBMISSION_SCHEMA = {
   tool: 'autosnippet_submit_knowledge',
   batchTool: 'autosnippet_submit_knowledge_batch',
@@ -187,8 +188,7 @@ export const REQUIRED_FIELDS_DESCRIPTION = getRequiredFieldsDescription();
 /**
  * 内部 Agent 完成后的 nextSteps 提示
  *
- * @param {Array} dimensions 激活的维度列表
- * @returns {string[]}
+ * @param dimensions 激活的维度列表
  */
 export function buildInternalNextSteps(
   dimensions: ReadonlyArray<{ id: string; skillWorthy?: boolean }>
@@ -215,9 +215,7 @@ export function buildInternalNextSteps(
   ];
 }
 
-/**
- * Bootstrap 全部维度完成后的 nextActions（供外部 Agent 使用）
- */
+/** Bootstrap 全部维度完成后的 nextActions（供外部 Agent 使用） */
 export const BOOTSTRAP_COMPLETE_ACTIONS = [
   {
     action: 'cursor_delivery',

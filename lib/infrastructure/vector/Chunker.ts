@@ -38,10 +38,9 @@ const CODE_LANGUAGES = new Set([
 
 /**
  * 将内容分块
- * @param {string} content
- * @param {object} metadata - { type, sourcePath, language, ... }
- * @param {object} options - { strategy, maxChunkTokens, overlapTokens, useAST }
- * @returns {Array<{ content: string, metadata: object }>}
+ * @param metadata { type, sourcePath, language, ... }
+ * @param options { strategy, maxChunkTokens, overlapTokens, useAST }
+ * @returns >}
  */
 export function chunk(
   content: string,
@@ -107,9 +106,7 @@ export function chunk(
   }
 }
 
-/**
- * 按 Markdown 标题分段
- */
+/** 按 Markdown 标题分段 */
 function chunkBySection(
   content: string,
   metadata: Record<string, unknown>,
@@ -190,9 +187,7 @@ function chunkBySection(
   return results;
 }
 
-/**
- * 固定大小分块（带重叠）
- */
+/** 固定大小分块（带重叠） */
 function chunkFixed(
   content: string,
   metadata: Record<string, unknown>,

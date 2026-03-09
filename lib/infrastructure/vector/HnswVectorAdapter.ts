@@ -25,13 +25,11 @@ import { ScalarQuantizer } from './ScalarQuantizer.js';
 import { VectorStore } from './VectorStore.js';
 
 export class HnswVectorAdapter extends VectorStore {
-  /** @type {HnswIndex} */
   #index;
   /** @type {Map<string, object>} id → metadata */
   #metadata;
   /** @type {Map<string, string>} id → content */
   #contents;
-  /** @type {ScalarQuantizer|null} */
   #quantizer: ScalarQuantizer | null;
   /** @type {number} 向量维度 (首次 upsert 自动检测) */
   #dimension = 0;
@@ -52,17 +50,8 @@ export class HnswVectorAdapter extends VectorStore {
   #indexPath; // .asvec 文件路径
 
   /**
-   * @param {string} projectRoot
-   * @param {object} [options]
-   * @param {number} [options.M=16]
-   * @param {number} [options.efConstruct=200]
-   * @param {number} [options.efSearch=100]
-   * @param {string} [options.quantize='auto'] - 'auto' | 'sq8' | 'none'
-   * @param {number} [options.quantizeThreshold=3000]
-   * @param {string} [options.indexDir]
-   * @param {number} [options.flushIntervalMs=2000]
-   * @param {number} [options.flushBatchSize=100]
-   * @param {boolean} [options.walEnabled=true] - 启用 WAL 持久化
+   * @param [options.quantize='auto'] 'auto' | 'sq8' | 'none'
+   * @param [options.walEnabled=true] 启用 WAL 持久化
    */
   constructor(
     projectRoot: string,
@@ -218,9 +207,7 @@ export class HnswVectorAdapter extends VectorStore {
     this.#initWal();
   }
 
-  /**
-   * 同步从 JSON 索引迁移 (用于 initSync 路径)
-   */
+  /** 同步从 JSON 索引迁移 (用于 initSync 路径) */
   #syncMigrateFromJson() {
     const jsonPath = join(this.#indexDir, 'vector_index.json');
     if (!existsSync(jsonPath)) {
@@ -561,10 +548,7 @@ export class HnswVectorAdapter extends VectorStore {
 
   /**
    * 关键词搜索 (BM25 简化版: token 匹配 + IDF 近似)
-   * @param {string} queryText
-   * @param {number} limit
-   * @param {object|null} filter
-   * @returns {Array<{ id: string, score: number }>}
+   * @returns >}
    */
   #keywordSearch(queryText: string, limit: number, filter: Record<string, unknown> | null) {
     if (!queryText) {
@@ -597,9 +581,7 @@ export class HnswVectorAdapter extends VectorStore {
     return results.sort((a, b) => b.score - a.score).slice(0, limit);
   }
 
-  /**
-   * query() — SearchEngine 使用的向量搜索别名
-   */
+  /** query() — SearchEngine 使用的向量搜索别名 */
   async query(queryVector: number[] | Float32Array, topK = 10) {
     const results = await this.searchVector(queryVector, { topK });
     return results.map((r) => ({
@@ -661,9 +643,7 @@ export class HnswVectorAdapter extends VectorStore {
 
   // ── 持久化 ──
 
-  /**
-   * 初始化 WAL (Write-Ahead Log)
-   */
+  /** 初始化 WAL (Write-Ahead Log) */
   #initWal() {
     if (!this.#config.walEnabled) {
       return;
@@ -680,7 +660,7 @@ export class HnswVectorAdapter extends VectorStore {
 
   /**
    * 重放 WAL 操作 (启动时恢复崩溃前未刷盘的操作)
-   * @param {object} op - WAL 操作
+   * @param op WAL 操作
    */
   #replayOp(op: Record<string, unknown>) {
     switch (op.t) {
@@ -719,9 +699,7 @@ export class HnswVectorAdapter extends VectorStore {
     }
   }
 
-  /**
-   * 手动触发持久化 (测试/关闭时使用)
-   */
+  /** 手动触发持久化 (测试/关闭时使用) */
   async flush() {
     if (this.#wal) {
       await this.#wal.flush();
@@ -787,9 +765,7 @@ export class HnswVectorAdapter extends VectorStore {
 
   // ── 量化器 ──
 
-  /**
-   * 检查是否需要训练量化器, 训练后批量设置量化向量到 HNSW 节点
-   */
+  /** 检查是否需要训练量化器, 训练后批量设置量化向量到 HNSW 节点 */
   #maybeTrainQuantizer() {
     if (this.#config.quantize === 'none') {
       return;
@@ -856,9 +832,7 @@ export class HnswVectorAdapter extends VectorStore {
     return true;
   }
 
-  /**
-   * 销毁: 清理定时器
-   */
+  /** 销毁: 清理定时器 */
   destroy() {
     // 清理 WAL
     if (this.#wal) {

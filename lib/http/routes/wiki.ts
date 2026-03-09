@@ -43,7 +43,6 @@ let wikiTask: Record<string, any> = {
   error: null,
 };
 
-/** @type {WikiGenerator|null} */
 let currentGenerator: WikiGenerator | null = null;
 
 function resetWikiTask() {
@@ -60,25 +59,17 @@ function resetWikiTask() {
   currentGenerator = null;
 }
 
-/**
- * 外部读取 wikiTask 状态（供 bootstrap orchestrator 等外部流程同步使用）
- * @returns {typeof wikiTask}
- */
+/** 外部读取 wikiTask 状态（供 bootstrap orchestrator 等外部流程同步使用） */
 export function getWikiTask() {
   return wikiTask;
 }
 
-/**
- * 外部设置 wikiTask 状态（供 bootstrap orchestrator 等外部流程同步使用）
- * @param {Partial<typeof wikiTask>} patch
- */
+/** 外部设置 wikiTask 状态（供 bootstrap orchestrator 等外部流程同步使用） */
 export function patchWikiTask(patch: Record<string, unknown>) {
   Object.assign(wikiTask, patch);
 }
 
-/**
- * 创建 WikiGenerator 实例
- */
+/** 创建 WikiGenerator 实例 */
 function createGenerator(container: ReturnType<typeof getServiceContainer>) {
   const projectRoot =
     (container.singletons?._projectRoot as string | undefined) ||

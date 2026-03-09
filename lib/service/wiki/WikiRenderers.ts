@@ -47,11 +47,7 @@ export type { WikiData } from './WikiTypes.js';
  *
  * 关键区别: 不是润色骨架，而是提供丰富数据让 AI 写完整文章
  *
- * @param {object} topic
- * @param {object} data - { projectInfo, astInfo, moduleInfo, knowledgeInfo }
- * @param {boolean} isZh
- * @param {object|null} codeEntityGraph
- * @returns {string}
+ * @param data { projectInfo, astInfo, moduleInfo, knowledgeInfo }
  */
 export function buildArticlePrompt(
   topic: WikiTopic,
@@ -522,11 +518,7 @@ export function buildArticlePrompt(
  * 构建非 AI 降级的丰富模板内容
  * 即使没有 AI，也要产出有意义的内容 (不是只有列表罗列)
  *
- * @param {object} topic
- * @param {object} data - { projectInfo, astInfo, moduleInfo, knowledgeInfo }
- * @param {boolean} isZh
- * @param {object|null} codeEntityGraph
- * @returns {string}
+ * @param data { projectInfo, astInfo, moduleInfo, knowledgeInfo }
  */
 export function buildFallbackArticle(
   topic: WikiTopic,
@@ -583,9 +575,7 @@ export function buildFallbackArticle(
 
 // ═══ Markdown 渲染器 ═══════════════════════════════════════
 
-/**
- * 渲染项目概述页 (index.md)
- */
+/** 渲染项目概述页 (index.md) */
 export function renderIndex(
   project: WikiProjectInfo,
   ast: WikiAstInfo,
@@ -776,15 +766,7 @@ export function renderIndex(
   return lines.join('\n');
 }
 
-/**
- * 渲染架构总览文档 (architecture.md)
- *
- * @param {object} project
- * @param {object} ast
- * @param {object} modules
- * @param {boolean} isZh
- * @param {object|null} codeEntityGraph
- */
+/** 渲染架构总览文档 (architecture.md) */
 export function renderArchitecture(
   project: WikiProjectInfo,
   ast: WikiAstInfo,
@@ -923,9 +905,7 @@ export function renderArchitecture(
   return lines.join('\n');
 }
 
-/**
- * 渲染模块详情文档 (modules/{name}.md)
- */
+/** 渲染模块详情文档 (modules/{name}.md) */
 export function renderModule(
   target: WikiTarget,
   ast: WikiAstInfo,
@@ -1116,9 +1096,7 @@ export function renderModule(
   return lines.join('\n');
 }
 
-/**
- * 渲染代码模式文档 (patterns.md)
- */
+/** 渲染代码模式文档 (patterns.md) */
 export function renderPatterns(knowledge: WikiKnowledgeInfo, isZh: boolean) {
   const lines = [
     `# ${isZh ? '代码模式与最佳实践' : 'Code Patterns & Best Practices'}`,
@@ -1195,9 +1173,7 @@ export function renderPatterns(knowledge: WikiKnowledgeInfo, isZh: boolean) {
 
 // ═══ V3 新增渲染器 ════════════════════════════════════════
 
-/**
- * 快速上手指南 (非 AI 降级模板)
- */
+/** 快速上手指南 (非 AI 降级模板) */
 export function renderGettingStarted(
   project: WikiProjectInfo,
   modules: WikiModuleInfo,
@@ -1510,9 +1486,7 @@ function _pushBuildSteps(
   lines.push('');
 }
 
-/**
- * 按分类拆分的代码模式文档
- */
+/** 按分类拆分的代码模式文档 */
 export function renderPatternCategory(
   patternData: { category: string; recipes: WikiRecipeJson[] },
   isZh: boolean
@@ -1565,9 +1539,7 @@ export function renderPatternCategory(
   return lines.join('\n');
 }
 
-/**
- * 协议参考文档
- */
+/** 协议参考文档 */
 export function renderProtocolReference(
   ast: WikiAstInfo,
   isZh: boolean,
@@ -1631,14 +1603,7 @@ export function renderProtocolReference(
 
 // ═══ Folder Profile 渲染器 (AST 不可用时的降级策略) ═══════
 
-/**
- * 渲染文件夹结构总览 (folder-structure.md)
- *
- * @param {import('./WikiUtils.js').FolderProfile[]} profiles
- * @param {object} projectInfo
- * @param {boolean} isZh
- * @returns {string}
- */
+/** 渲染文件夹结构总览 (folder-structure.md) */
 export function renderFolderOverview(
   profiles: WikiFolderProfile[],
   projectInfo: WikiProjectInfo,
@@ -1775,14 +1740,7 @@ export function renderFolderOverview(
   return lines.join('\n');
 }
 
-/**
- * 渲染单个文件夹的深度画像文档 (folders/{name}.md)
- *
- * @param {import('./WikiUtils.js').FolderProfile} fp
- * @param {object} projectInfo
- * @param {boolean} isZh
- * @returns {string}
- */
+/** 渲染单个文件夹的深度画像文档 (folders/{name}.md) */
 export function renderFolderProfile(
   fp: WikiFolderProfile,
   projectInfo: WikiProjectInfo,
@@ -1962,9 +1920,7 @@ export function renderFolderProfile(
 
 // ═══ V3 AI 系统 Prompt ═══════════════════════════════════
 
-/**
- * 构建 AI 系统 Prompt (V3 — 撰写完整文章，非润色骨架)
- */
+/** 构建 AI 系统 Prompt (V3 — 撰写完整文章，非润色骨架) */
 export function buildAiSystemPrompt(isZh: boolean) {
   if (isZh) {
     return [

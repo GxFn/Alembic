@@ -762,10 +762,6 @@ function _maxNesting(node: any, depth: any) {
 /**
  * 从 Rust AST root 提取所有调用点
  * 遍历 function_item / impl method 中的 block → call_expression / method_call_expression
- *
- * @param {TreeSitterNode} root
- * @param {object} ctx
- * @param {string} _lang
  */
 function extractCallSitesRust(root: any, ctx: any, _lang: any) {
   const scopes = _collectRustScopes(root);
@@ -774,9 +770,7 @@ function extractCallSitesRust(root: any, ctx: any, _lang: any) {
   }
 }
 
-/**
- * 递归收集 Rust 中所有函数/方法体作用域
- */
+/** 递归收集 Rust 中所有函数/方法体作用域 */
 function _collectRustScopes(root: any) {
   const scopes: { body: any; className: any; methodName: any }[] = [];
 
@@ -822,9 +816,7 @@ function _collectRustScopes(root: any) {
   return scopes;
 }
 
-/**
- * 从 Rust block 中递归提取调用点
- */
+/** 从 Rust block 中递归提取调用点 */
 function _extractRustCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;

@@ -87,9 +87,7 @@ export class HttpServer {
     this.capabilityProbe = null;
   }
 
-  /**
-   * 初始化服务器
-   */
+  /** 初始化服务器 */
   async initialize() {
     // 初始化监控和缓存服务
     await this.initializeServices();
@@ -115,9 +113,7 @@ export class HttpServer {
     });
   }
 
-  /**
-   * 初始化服务（监控、缓存等）
-   */
+  /** 初始化服务（监控、缓存等） */
   async initializeServices() {
     try {
       // 初始化缓存适配器（纯内存模式）
@@ -144,9 +140,7 @@ export class HttpServer {
     }
   }
 
-  /**
-   * 设置中间件
-   */
+  /** 设置中间件 */
   setupMiddleware() {
     // 性能监控中间件（优先级最高）
     if (this.performanceMonitor) {
@@ -227,9 +221,7 @@ export class HttpServer {
     });
   }
 
-  /**
-   * 注册 Gateway Actions
-   */
+  /** 注册 Gateway Actions */
   registerGatewayActions() {
     try {
       const container = getServiceContainer();
@@ -243,9 +235,7 @@ export class HttpServer {
     }
   }
 
-  /**
-   * 设置路由
-   */
+  /** 设置路由 */
   setupRoutes() {
     // API 版本前缀
     const apiPrefix = '/api/v1';
@@ -354,9 +344,7 @@ export class HttpServer {
     });
   }
 
-  /**
-   * 设置错误处理
-   */
+  /** 设置错误处理 */
   setupErrorHandling() {
     // 使用错误追踪器的错误处理中间件（如果启用）
     if (this.errorTracker) {
@@ -367,9 +355,7 @@ export class HttpServer {
     }
   }
 
-  /**
-   * 启动服务器
-   */
+  /** 启动服务器 */
   async start() {
     const { promise, resolve, reject } = Promise.withResolvers();
     try {
@@ -415,9 +401,7 @@ export class HttpServer {
     return promise;
   }
 
-  /**
-   * 停止服务器
-   */
+  /** 停止服务器 */
   async stop() {
     const { promise, resolve, reject } = Promise.withResolvers<void>();
     if (!this.server) {
@@ -462,9 +446,7 @@ export class HttpServer {
     return promise;
   }
 
-  /**
-   * 获取 Express 应用实例
-   */
+  /** 获取 Express 应用实例 */
   getApp() {
     return this.app;
   }
@@ -472,7 +454,7 @@ export class HttpServer {
   /**
    * 挂载 Dashboard 静态资源（生产模式：直接托管预构建产物）
    * 必须在 initialize() + start() 之后调用
-   * @param {string} distDir - dashboard/dist 目录的绝对路径
+   * @param distDir dashboard/dist 目录的绝对路径
    */
   mountDashboard(distDir: string) {
     // 从路由栈中移除最后的 404 catch-all 和根路径 handler
@@ -509,9 +491,7 @@ export class HttpServer {
     this.logger.info('Dashboard mounted (production mode)', { distDir });
   }
 
-  /**
-   * 获取服务器实例
-   */
+  /** 获取服务器实例 */
   getServer() {
     return this.server;
   }

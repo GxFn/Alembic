@@ -9,7 +9,7 @@ import { vi } from 'vitest';
 let searchProjectCode, readProjectFile, submitWithCheck, getFileSummary;
 
 beforeAll(async () => {
-  const mod = await import('../../lib/service/agent/tools/index.js');
+  const mod = await import('../../lib/agent/tools/index.js');
   const tools = mod.ALL_TOOLS;
   searchProjectCode = tools.find((t) => t.name === 'search_project_code');
   readProjectFile = tools.find((t) => t.name === 'read_project_file');

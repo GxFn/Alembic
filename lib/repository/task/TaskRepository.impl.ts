@@ -87,9 +87,6 @@ export class TaskRepositoryImpl {
   #drizzle: DrizzleDB;
   db: Database;
   logger: WinstonLogger;
-  /**
-   * @param {import('../../infrastructure/database/DatabaseConnection.js').default} database
-   */
   constructor(database: DatabaseWrapper, drizzle?: DrizzleDB) {
     this.db = database.getDb();
     this.logger = Logger.getInstance();
@@ -211,9 +208,8 @@ export class TaskRepositoryImpl {
 
   /**
    * 列表查询
-   * @param {object} filters - { status, taskType, assignee, parentId }
-   * @param {object} options - { limit, offset, orderBy }
-   * @returns {Task[]}
+   * @param filters { status, taskType, assignee, parentId }
+   * @param options { limit, offset, orderBy }
    */
   findAll(filters: TaskFilters = {}, options: TaskFindOptions = {}) {
     const conditions: string[] = [];
@@ -328,12 +324,7 @@ export class TaskRepositoryImpl {
     return rows.map((r: unknown) => Task.fromRow(r as Record<string, unknown>));
   }
 
-  /**
-   * 环检测：检查 fromId → toId 是否已有可达路径
-   * @param {string} fromId
-   * @param {string} toId
-   * @returns {boolean}
-   */
+  /** 环检测：检查 fromId → toId 是否已有可达路径 */
   hasReachablePath(fromId: string, toId: string) {
     const row = this._reachableStmt.get(fromId, toId);
     return !!row;
@@ -341,11 +332,7 @@ export class TaskRepositoryImpl {
 
   // ═══ 事务支持 ═══════════════════════════════════════
 
-  /**
-   * 在事务中执行操作
-   * @param {Function} fn
-   * @returns {*}
-   */
+  /** 在事务中执行操作 */
   inTransaction<T>(fn: () => T): T {
     const txn = this.db.transaction(fn);
     return txn();
@@ -410,11 +397,7 @@ export class TaskRepositoryImpl {
 
   // ═══ 私有方法 ═══════════════════════════════════════
 
-  /**
-   * 实体 → DB 行 (camelCase → snake_case)
-   * @param {Task} task
-   * @returns {object}
-   */
+  /** 实体 → DB 行 (camelCase → snake_case) */
   _entityToRow(task: Task) {
     return {
       id: task.id!,
@@ -455,11 +438,7 @@ const ALLOWED_ORDER_FIELDS = new Set([
 ]);
 const ALLOWED_DIRECTIONS = new Set(['ASC', 'DESC']);
 
-/**
- * orderBy 白名单校验，防止 SQL 注入
- * @param {string} [orderBy]
- * @returns {string}
- */
+/** orderBy 白名单校验，防止 SQL 注入 */
 function _sanitizeOrderBy(orderBy?: string): string {
   if (!orderBy) {
     return 'priority ASC, created_at ASC';

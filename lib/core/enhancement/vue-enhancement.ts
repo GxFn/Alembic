@@ -137,9 +137,7 @@ class VueEnhancement extends EnhancementPack {
     ];
   }
 
-  /**
-   * .vue SFC 预处理 → 提取 <script> / <script setup> 块
-   */
+  /** .vue SFC 预处理 → 提取 <script> / <script setup> 块 */
   preprocessFile(content: string, ext: string) {
     if (ext !== '.vue') {
       return null;

@@ -10,13 +10,12 @@
  * 按语言分发到各自的检查逻辑
  * 支持 disabledRules 禁用特定检查、codeLevelThresholds 调整阈值
  *
- * @param {string} code 源代码
- * @param {string} language 语言标识
- * @param {string[]} lines 按行拆分的源代码
- * @param {object} options
- * @param {string[]} [options.disabledRules] 禁用的规则 ID 列表
- * @param {Record<string, number>} [options.codeLevelThresholds] 可配置阈值
- * @returns {Array<{ruleId, message, severity, line, snippet, dimension?, fixSuggestion?}>}
+ * @param code 源代码
+ * @param language 语言标识
+ * @param lines 按行拆分的源代码
+ * @param [options.disabledRules] 禁用的规则 ID 列表
+ * @param [options.codeLevelThresholds] 可配置阈值
+ * @returns >}
  */
 interface CodeLevelViolation {
   ruleId: string;

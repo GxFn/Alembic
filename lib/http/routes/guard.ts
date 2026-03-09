@@ -206,9 +206,9 @@ router.post(
 
 /**
  * 获取或创建 GuardCheckEngine，并注入 Enhancement Pack 规则
- * @param {object} container - ServiceContainer
- * @param {Function} GuardCheckEngine - GuardCheckEngine class
- * @returns {Promise<object>} engine
+ * @param container ServiceContainer
+ * @param GuardCheckEngine GuardCheckEngine class
+ * @returns engine
  */
 async function _getEngine(
   container: ReturnType<typeof getServiceContainer>,
@@ -257,9 +257,6 @@ async function _getEngine(
  * 双重受众设计：
  *   - 人类看到: 波浪线 + 违规描述
  *   - Agent 看到: ruleId + 明确的 MCP 搜索指令
- *
- * @param {object} violation
- * @returns {string}
  */
 function _buildDiagnosticMessage(violation: Record<string, unknown>) {
   const { ruleId, message, fixSuggestion } = violation;

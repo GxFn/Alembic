@@ -13,11 +13,9 @@
 import { tokenize } from './tokenizer.js';
 
 /**
- * @param {Array} items  - 已排序的候选列表（需有 rankerScore / coarseScore / score）
- * @param {object} context
+ * @param items 已排序的候选列表（需有 rankerScore / coarseScore / score）
  * @param {Array<{content?: string, rawInput?: string}>} [context.sessionHistory]
- * @param {string} [context.language]
- * @returns {Array} - 含 contextScore / contextBoost 字段的排序列表
+ * @returns 含 contextScore / contextBoost 字段的排序列表
  */
 export interface SearchItem {
   title?: string;

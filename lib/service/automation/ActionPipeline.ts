@@ -16,8 +16,8 @@ export class ActionPipeline {
 
   /**
    * 注册动作处理器
-   * @param {string} type 触发类型
-   * @param {function} handler - async (trigger, context) => result
+   * @param type 触发类型
+   * @param handler async (trigger, context) => result
    */
   register(
     type: string,
@@ -32,8 +32,7 @@ export class ActionPipeline {
   /**
    * 执行管线
    * @param {{ type: string, name?: string, params?: object }} trigger
-   * @param {object} context
-   * @returns {Promise<{ success: boolean, result?: unknown, error?: string }>}
+   * @returns >}
    */
   async execute(
     trigger: { type: string; name?: string; params?: Record<string, unknown> },
@@ -53,9 +52,7 @@ export class ActionPipeline {
     return this.#runHandler(handler, trigger, context);
   }
 
-  /**
-   * 获取已注册的动作类型
-   */
+  /** 获取已注册的动作类型 */
   getRegisteredTypes() {
     return [...this.#actions.keys()];
   }

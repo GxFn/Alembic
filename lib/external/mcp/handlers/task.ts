@@ -113,8 +113,8 @@ interface EnvelopeResult {
 
 /**
  * 统一入口
- * @param {object} ctx - { container }
- * @param {object} args - { operation, ...params }
+ * @param ctx { container }
+ * @param args { operation, ...params }
  */
 export async function taskHandler(ctx: McpContext, args: TaskArgs) {
   const taskService = ctx.container.get('taskGraphService') as TaskGraphServiceLike;
@@ -666,11 +666,7 @@ async function _listDecisions(svc: TaskGraphServiceLike) {
 
 const PRIORITY_LABELS = ['P0 紧急', 'P1 高', 'P2 中', 'P3 低', 'P4 微'];
 
-/**
- * 通过 API Server 的 /api/v1/remote/notify 发送飞书通知
- * @param {string} text
- * @returns {Promise<boolean>}
- */
+/** 通过 API Server 的 /api/v1/remote/notify 发送飞书通知 */
 async function _sendLarkViaApi(text: string): Promise<boolean> {
   try {
     const port = process.env.PORT || 3000;
@@ -696,8 +692,7 @@ async function _sendLarkViaApi(text: string): Promise<boolean> {
 
 /**
  * 通过 API Server 截取 IDE 窗口截图并发送到飞书
- * @param {string} [caption] 可选文字说明
- * @returns {Promise<boolean>}
+ * @param [caption] 可选文字说明
  */
 async function _sendScreenshotViaApi(caption = '') {
   try {

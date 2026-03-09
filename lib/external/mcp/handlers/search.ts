@@ -34,18 +34,14 @@ function getSearchEngine(ctx: McpContext) {
   }
 }
 
-/**
- * 降级创建 SearchEngine（仅在 container 无法提供时）
- */
+/** 降级创建 SearchEngine（仅在 container 无法提供时） */
 async function getFallbackEngine(ctx: McpContext) {
   const { SearchEngine } = await import('#service/search/SearchEngine.js');
   const db = ctx.container.get('database');
   return new SearchEngine(db);
 }
 
-/**
- * 根据 kind 参数过滤 items
- */
+/** 根据 kind 参数过滤 items */
 function filterByKind(items: SearchResultItem[], kind: string) {
   if (!kind || kind === 'all') {
     return items;
@@ -208,9 +204,7 @@ function _toolName(mode: string): string {
 // ─── Re-export slim projection for backward compatibility ────
 // (部分内部模块可能直接 import 了这些)
 
-/**
- * @deprecated Use `slimSearchResult` from `SearchTypes.ts` instead
- */
+/** @deprecated Use `slimSearchResult` from `SearchTypes.ts` instead */
 export function _slimSearchItem(item: SearchResultItem): SlimSearchResult {
   return slimSearchResult(item as Parameters<typeof slimSearchResult>[0]);
 }

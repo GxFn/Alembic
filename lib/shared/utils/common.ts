@@ -10,9 +10,8 @@
  * 安全解析 JSON 字符串，失败时返回 fallback
  * 消除各 Repository / handler 中重复的 try-catch JSON.parse
  *
- * @param {string|object|null|undefined} value 值（可能是 JSON 字符串、对象或空值）
- * @param {*} [fallback=null] 解析失败时的回退值
- * @returns {*}
+ * @param value 值（可能是 JSON 字符串、对象或空值）
+ * @param [fallback=null] 解析失败时的回退值
  */
 export function safeJsonParse(value: unknown, fallback = null) {
   if (value == null || value === 'null' || value === '') {
@@ -32,9 +31,8 @@ export function safeJsonParse(value: unknown, fallback = null) {
  * 安全序列化到 JSON，处理 toJSON() 方法和空值
  * 消除 _entityToRow 中重复的 JSON.stringify 逻辑
  *
- * @param {*} value 需要序列化的值
- * @param {*} [fallback='{}'] 值为空时的回退
- * @returns {string}
+ * @param value 需要序列化的值
+ * @param [fallback='{}'] 值为空时的回退
  */
 export function safeJsonStringify(value: unknown, fallback = '{}') {
   if (value == null) {
@@ -51,8 +49,6 @@ export function safeJsonStringify(value: unknown, fallback = '{}') {
 /**
  * 返回当前 Unix 时间戳（秒）
  * 消除各处 Math.floor(Date.now() / 1000) 的重复
- *
- * @returns {number}
  */
 export function unixNow() {
   return Math.floor(Date.now() / 1000);
@@ -60,12 +56,7 @@ export function unixNow() {
 
 // ─── 安全默认值 ──────────────────────────────────────────
 
-/**
- * 返回非空字符串值或 fallback
- * @param {*} value
- * @param {string} fallback
- * @returns {string}
- */
+/** 返回非空字符串值或 fallback */
 export function strOr(value: unknown, fallback = '') {
   if (typeof value === 'string' && value.trim()) {
     return value;

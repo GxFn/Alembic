@@ -70,10 +70,10 @@ export function parseHeaderString(header: string) {
  *   2. 从项目根目录递归查找（最多深度 6 层，优先 Sources/ 下）
  *   3. 找到后计算相对于当前文件目录的路径
  *
- * @param {string} headerName 头文件名 (如 "Foo.h")
- * @param {string} currentFilePath 当前正在编辑的文件绝对路径
- * @param {string} [projectRoot] 项目根目录
- * @returns {string|null} 相对路径 (如 "Foo.h" 或 "../SubDir/Foo.h")，null 表示未找到
+ * @param headerName 头文件名 (如 "Foo.h")
+ * @param currentFilePath 当前正在编辑的文件绝对路径
+ * @param [projectRoot] 项目根目录
+ * @returns 相对路径 (如 "Foo.h" 或 "../SubDir/Foo.h")，null 表示未找到
  */
 export function findHeaderRelativePath(
   headerName: string,
@@ -133,9 +133,7 @@ export function findHeaderRelativePath(
   }
 }
 
-/**
- * 递归查找文件（限最大深度）
- */
+/** 递归查找文件（限最大深度） */
 export function findFileRecursive(dir: string, fileName: string, maxDepth: number): string | null {
   if (maxDepth <= 0) {
     return null;
@@ -180,14 +178,14 @@ export function findFileRecursive(dir: string, fileName: string, maxDepth: numbe
  *   ObjC 跨 target:  `#import <Module/Header.h>` (angle-bracket format)
  *   @import 格式保持原样
  *
- * @param {string} rawHeader  原始 header 字符串
- * @param {object} ctx        { currentTarget, headerModuleName, isSwift, fullPath, projectRoot }
+ * @param rawHeader 原始 header 字符串
+ * @param ctx { currentTarget, headerModuleName, isSwift, fullPath, projectRoot }
  *   - currentTarget:    当前文件所属的 target 名
  *   - headerModuleName: header 所属的 module/target 名（来自 recipe.moduleName 或推断）
  *   - isSwift:          目标文件是否是 Swift
  *   - fullPath:         当前编辑文件的绝对路径（用于计算同 target 相对路径）
  *   - projectRoot:      项目根目录（用于搜索头文件物理位置）
- * @returns {string} 格式化后的完整 import 行
+ * @returns 格式化后的完整 import 行
  */
 export function resolveHeaderFormat(
   rawHeader: string,
@@ -265,9 +263,7 @@ export function resolveHeaderFormat(
 // 三级 import 去重
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * 从文件中收集已有的 import 语句
- */
+/** 从文件中收集已有的 import 语句 */
 export function collectImportsFromFile(filePath: string, isSwift: boolean) {
   try {
     if (!existsSync(filePath)) {
@@ -294,9 +290,7 @@ export function collectImportsFromFile(filePath: string, isSwift: boolean) {
   }
 }
 
-/**
- * 收集 .m 文件对应 .h 文件中的 imports（ObjC 接口/实现配对去重）
- */
+/** 收集 .m 文件对应 .h 文件中的 imports（ObjC 接口/实现配对去重） */
 export function collectImportsFromHeaderFile(sourcePath: string, importArray: string[]) {
   const dotIndex = sourcePath.lastIndexOf('.');
   if (dotIndex <= 0) {
@@ -327,9 +321,8 @@ export function collectImportsFromHeaderFile(sourcePath: string, importArray: st
  *   hasModule        模块级匹配（同模块不同头文件，或 @import）
  *   hasSimilarHeader 文件名 case-insensitive 匹配
  *
- * @param {string[]} importArray 已有的 import 行
- * @param {string}   headerLine 待插入的 import 行
- * @param {boolean}  isSwift
+ * @param importArray 已有的 import 行
+ * @param headerLine 待插入的 import 行
  */
 export function checkImportStatus(importArray: string[], headerLine: string, isSwift: boolean) {
   const trimmed = headerLine.trim();

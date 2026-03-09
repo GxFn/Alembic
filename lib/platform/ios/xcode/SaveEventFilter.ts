@@ -60,7 +60,7 @@ class SaveEventFilter {
    * 标记 AutoSnippet 即将写入某个文件
    * 在 fs.writeFile / writeFileSync 之前调用本方法
    *
-   * @param {string} filePath 绝对路径
+   * @param filePath 绝对路径
    */
   markSelfWrite(filePath: string) {
     this._selfWrites.set(filePath, Date.now());
@@ -69,9 +69,9 @@ class SaveEventFilter {
   /**
    * 判断是否应该处理该文件的变更事件
    *
-   * @param {string} filePath 绝对路径
-   * @param {string} content  文件当前的完整内容
-   * @returns {{ process: boolean, reason: string }}
+   * @param filePath 绝对路径
+   * @param content 文件当前的完整内容
+   * @returns }
    */
   shouldProcess(filePath: string, content: string) {
     if (!isFilterEnabled()) {
@@ -111,8 +111,8 @@ class SaveEventFilter {
    * 处理完成后更新内容哈希
    * 在文件指令处理完毕后调用
    *
-   * @param {string} filePath 绝对路径
-   * @param {string} content 处理后的文件内容
+   * @param filePath 绝对路径
+   * @param content 处理后的文件内容
    */
   updateHash(filePath: string, content: string) {
     this._contentHashes.set(filePath, this._hash(content));
@@ -122,17 +122,15 @@ class SaveEventFilter {
    * 在 handler 写文件之前同时标记 self-write + 更新哈希
    * 方便一步完成
    *
-   * @param {string} filePath 绝对路径
-   * @param {string} newContent 即将写入的新内容
+   * @param filePath 绝对路径
+   * @param newContent 即将写入的新内容
    */
   markWrite(filePath: string, newContent: string) {
     this.markSelfWrite(filePath);
     this._contentHashes.set(filePath, this._hash(newContent));
   }
 
-  /**
-   * 清除某文件的所有状态（通常不需要调用）
-   */
+  /** 清除某文件的所有状态（通常不需要调用） */
   clear(filePath: string) {
     this._selfWrites.delete(filePath);
     this._contentHashes.delete(filePath);

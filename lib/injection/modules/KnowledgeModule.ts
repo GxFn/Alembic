@@ -6,8 +6,6 @@
  *   - searchEngine, vectorStore, indexingPipeline
  *   - discovererRegistry, enhancementRegistry, languageService, dimensionCopy
  *   - constitution, aiProvider, projectGraph
- *
- * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
@@ -16,6 +14,7 @@ import { getEnhancementRegistry } from '../../core/enhancement/index.js';
 import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter.js';
 import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
+import { DimensionCopy } from '../../service/bootstrap/DimensionCopyRegistry.js';
 import { CodeEntityGraph } from '../../service/knowledge/CodeEntityGraph.js';
 import { ConfidenceRouter } from '../../service/knowledge/ConfidenceRouter.js';
 import { KnowledgeGraphService } from '../../service/knowledge/KnowledgeGraphService.js';
@@ -23,7 +22,6 @@ import { KnowledgeService } from '../../service/knowledge/KnowledgeService.js';
 import { CrossEncoderReranker } from '../../service/search/CrossEncoderReranker.js';
 import { HybridRetriever } from '../../service/search/HybridRetriever.js';
 import { SearchEngine } from '../../service/search/SearchEngine.js';
-import { DimensionCopy } from '../../shared/DimensionCopyRegistry.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
 

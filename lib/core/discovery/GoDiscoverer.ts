@@ -160,9 +160,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
 
   // ── 内部实现 ──
 
-  /**
-   * 解析 go.mod 提取 module path
-   */
+  /** 解析 go.mod 提取 module path */
   #parseGoMod(projectRoot: string) {
     const goModPath = join(projectRoot, 'go.mod');
     if (!existsSync(goModPath)) {
@@ -177,9 +175,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 发现 Go 标准约定目录: pkg/, internal/, api/
-   */
+  /** 发现 Go 标准约定目录: pkg/, internal/, api/ */
   #discoverConventionDirs(projectRoot: string) {
     const dirs: DiscoveredTarget[] = [];
     const conventionNames = [
@@ -220,9 +216,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     return dirs;
   }
 
-  /**
-   * 发现 cmd/ 下的子命令—每个含 main.go 的子目录为一个 binary Target
-   */
+  /** 发现 cmd/ 下的子命令—每个含 main.go 的子目录为一个 binary Target */
   #discoverCmdTargets(projectRoot: string) {
     const cmdDir = join(projectRoot, 'cmd');
     if (!existsSync(cmdDir)) {
@@ -273,9 +267,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     return targets;
   }
 
-  /**
-   * 检测 Go Web 框架
-   */
+  /** 检测 Go Web 框架 */
   #detectFramework(projectRoot: string) {
     const goModPath = join(projectRoot, 'go.mod');
     if (!existsSync(goModPath)) {
@@ -313,9 +305,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     return null;
   }
 
-  /**
-   * 发现内部子包——目录中包含 .go 文件即为一个 Go package
-   */
+  /** 发现内部子包——目录中包含 .go 文件即为一个 Go package */
   #discoverInternalPackages(projectRoot: string) {
     const nodeSet = new Set(this.#depGraph.nodes.map((n) => (typeof n === 'string' ? n : n.id)));
 
@@ -354,9 +344,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     walk(projectRoot, '', 0);
   }
 
-  /**
-   * 解析 go.mod 依赖到 depGraph（同时将直接依赖添加为 node）
-   */
+  /** 解析 go.mod 依赖到 depGraph（同时将直接依赖添加为 node） */
   #parseDependencies(projectRoot: string) {
     const goModPath = join(projectRoot, 'go.mod');
     if (!existsSync(goModPath)) {
@@ -420,9 +408,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 解析内部 Go import 语句，构建子包间依赖关系
-   */
+  /** 解析内部 Go import 语句，构建子包间依赖关系 */
   #parseInternalImports(projectRoot: string) {
     if (!this.#modulePath) {
       return;
@@ -481,9 +467,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 从 import 行中匹配内部包引用
-   */
+  /** 从 import 行中匹配内部包引用 */
   #matchInternalImport(
     line: string,
     fromPkgId: string,
@@ -531,9 +515,7 @@ export class GoDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 递归收集 .go 文件
-   */
+  /** 递归收集 .go 文件 */
   #collectGoFiles(dir: string, rootDir: string, files: DiscoveredFile[], depth = 0) {
     if (depth > 15) {
       return;

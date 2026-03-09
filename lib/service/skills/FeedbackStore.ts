@@ -49,9 +49,7 @@ export class FeedbackStore {
 
   // ─── 公共 API ──────────────────────────────────────────
 
-  /**
-   * 记录一条反馈
-   */
+  /** 记录一条反馈 */
   async record(feedback: RecommendationFeedback): Promise<void> {
     this.#ensureLoaded();
 
@@ -101,9 +99,7 @@ export class FeedbackStore {
     return adopted / total;
   }
 
-  /**
-   * 获取用户偏好向量 (基于历史反馈推导)
-   */
+  /** 获取用户偏好向量 (基于历史反馈推导) */
   getUserPreference(): UserPreference {
     this.#ensureLoaded();
 
@@ -171,9 +167,7 @@ export class FeedbackStore {
     };
   }
 
-  /**
-   * 特定类别的推荐是否被用户频繁忽略
-   */
+  /** 特定类别的推荐是否被用户频繁忽略 */
   isFrequentlyDismissed(category: string): boolean {
     this.#ensureLoaded();
     const entries = this.#entries.filter((e) => e.category === category);
@@ -186,9 +180,7 @@ export class FeedbackStore {
     return dismissed / total >= DISMISS_THRESHOLD;
   }
 
-  /**
-   * 获取推荐效果指标快照
-   */
+  /** 获取推荐效果指标快照 */
   getMetricsSnapshot(since?: Date): RecommendationMetricsSnapshot {
     this.#ensureLoaded();
     const sinceTs = since?.toISOString() ?? '1970-01-01T00:00:00.000Z';
@@ -241,17 +233,13 @@ export class FeedbackStore {
     };
   }
 
-  /**
-   * 获取指定推荐 ID 的反馈历史
-   */
+  /** 获取指定推荐 ID 的反馈历史 */
   getFeedbackFor(recommendationId: string): RecommendationFeedback[] {
     this.#ensureLoaded();
     return this.#entries.filter((e) => e.recommendationId === recommendationId);
   }
 
-  /**
-   * 全部反馈条数
-   */
+  /** 全部反馈条数 */
   get size(): number {
     this.#ensureLoaded();
     return this.#entries.length;
@@ -259,9 +247,7 @@ export class FeedbackStore {
 
   // ─── 内部方法 ──────────────────────────────────────────
 
-  /**
-   * 惰性加载: 首次访问时从 JSONL 文件读取历史
-   */
+  /** 惰性加载: 首次访问时从 JSONL 文件读取历史 */
   #ensureLoaded(): void {
     if (this.#loaded) {
       return;

@@ -5,8 +5,6 @@
  *   - guardService, guardCheckEngine
  *   - exclusionManager, ruleLearner, violationsStore
  *   - complianceReporter, guardFeedbackLoop
- *
- * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';

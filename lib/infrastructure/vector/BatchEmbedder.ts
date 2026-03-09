@@ -21,12 +21,7 @@ export class BatchEmbedder {
   #batchSize;
   #maxConcurrency;
 
-  /**
-   * @param {object} aiProvider - AI Provider (需实现 embed(text|string[]) 方法)
-   * @param {object} [options]
-   * @param {number} [options.batchSize=32]
-   * @param {number} [options.maxConcurrency=2]
-   */
+  /** @param aiProvider AI Provider (需实现 embed(text|string[]) 方法) */
   constructor(
     aiProvider: { embed: (text: string | string[]) => Promise<number[] | number[][]> },
     options: { batchSize?: number; maxConcurrency?: number } = {}
@@ -40,8 +35,8 @@ export class BatchEmbedder {
    * 批量 embed 文本
    *
    * @param {Array<{ id: string, content: string }>} items
-   * @param {function} [onProgress] - (embedded, total) => void
-   * @returns {Promise<Map<string, number[]>>} id → vector
+   * @param [onProgress] (embedded, total) => void
+   * @returns id → vector
    */
   async embedAll(
     items: Array<{ id: string; content: string }>,
@@ -75,7 +70,6 @@ export class BatchEmbedder {
   /**
    * embed 单个批次
    * @param {Array<{ id: string, content: string }>} items
-   * @returns {Promise<Map<string, number[]>>}
    */
   async #embedBatch(items: Array<{ id: string; content: string }>) {
     const result = new Map();
@@ -130,12 +124,7 @@ export class BatchEmbedder {
     return result;
   }
 
-  /**
-   * 将数组分成固定大小的批次
-   * @param {Array} arr
-   * @param {number} size
-   * @returns {Array<Array>}
-   */
+  /** 将数组分成固定大小的批次 */
   #chunkArray<T>(arr: T[], size: number): T[][] {
     const chunks: T[][] = [];
     for (let i = 0; i < arr.length; i += size) {

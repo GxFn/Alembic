@@ -19,13 +19,13 @@
 import crypto from 'node:crypto';
 import { readFileSync, unlinkSync } from 'node:fs';
 import express, { type Request, type Response } from 'express';
+import { LarkTransport } from '../../external/lark/LarkTransport.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import {
   RemoteCommandRepository,
   type StatusCounts,
 } from '../../repository/remote/RemoteCommandRepository.js';
-import { LarkTransport } from '../../service/agent/LarkTransport.js';
 import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {
   RemoteHistoryQuery,
@@ -362,7 +362,6 @@ setInterval(() => {
 //  LarkTransport — 自然语言意图路由
 // ═══════════════════════════════════════════════════════
 
-/** @type {LarkTransport|null} */
 let _larkTransport: LarkTransport | null = null;
 
 /**
@@ -407,9 +406,7 @@ function getLarkTransport() {
   }
 }
 
-/**
- * 生成系统状态文本 (给 LarkTransport 系统操作使用)
- */
+/** 生成系统状态文本 (给 LarkTransport 系统操作使用) */
 async function getStatusText() {
   const lines = ['📊 状态面板', ''];
   const now = Math.floor(Date.now() / 1000);
@@ -464,9 +461,9 @@ async function getStatusText() {
 /**
  * 写入 IDE 编程指令队列 (供 LarkTransport 的 ide_agent 路由使用)
  *
- * @param {string} command 自然语言编程指令
- * @param {Object} meta - { chatId, messageId, senderId, senderName }
- * @returns {Promise<{id: string}>}
+ * @param command 自然语言编程指令
+ * @param meta { chatId, messageId, senderId, senderName }
+ * @returns >}
  */
 async function enqueueIdeCommand(command: string, meta: Record<string, string> = {}) {
   const repo = getRepo();
@@ -890,9 +887,8 @@ async function replyLark(messageId: string, text: string): Promise<void> {
 
 /**
  * 截取 IDE 窗口截图（通过 ScreenCaptureKit 原生 API，息屏时可用）
- * @param {object} [opts]
- * @param {string} [opts.windowTitle] 窗口标题关键词（默认 "Code"）
- * @returns {Promise<{path: string|null, error: string|null}>}
+ * @param [opts.windowTitle] 窗口标题关键词（默认 "Code"）
+ * @returns >}
  */
 async function captureIDEScreenshot(opts: { windowTitle?: string } = {}) {
   try {
@@ -938,8 +934,8 @@ async function captureIDEScreenshot(opts: { windowTitle?: string } = {}) {
 
 /**
  * 上传图片到飞书 Image API
- * @param {string} filePath 本地图片路径
- * @returns {Promise<{imageKey: string|null, error: string|null}>}
+ * @param filePath 本地图片路径
+ * @returns >}
  */
 async function _uploadImageToLark(filePath: string) {
   const token = await getTenantToken();
@@ -975,11 +971,7 @@ async function _uploadImageToLark(filePath: string) {
   }
 }
 
-/**
- * 向飞书发送图片消息
- * @param {string} imageKey
- * @returns {Promise<boolean>}
- */
+/** 向飞书发送图片消息 */
 async function _sendLarkImageMsg(imageKey: string) {
   if (!_activeChatId || !_wsConnected) {
     return false;
@@ -1029,8 +1021,8 @@ async function _sendLarkImageMsg(imageKey: string) {
 
 /**
  * 截取 IDE 窗口 → 上传飞书 → 发送图片消息（完整流水线）
- * @param {string} [caption] 可选文字说明（会先发一条文本）
- * @returns {Promise<{success: boolean, message: string}>}
+ * @param [caption] 可选文字说明（会先发一条文本）
+ * @returns >}
  */
 export async function sendLarkScreenshot(caption = '') {
   if (!_activeChatId || !_wsConnected) {
@@ -1122,8 +1114,8 @@ function _restoreActiveChatId() {
  * 向飞书活跃会话发送主动通知（非回复）
  * 用于任务进度、Guard 结果等非指令触发的通知
  *
- * @param {string} text 纯文本通知内容
- * @returns {Promise<boolean>} 发送是否成功
+ * @param text 纯文本通知内容
+ * @returns 发送是否成功
  */
 export async function sendLarkNotification(text: string) {
   if (!_activeChatId || !_wsConnected) {
@@ -1172,9 +1164,7 @@ export async function sendLarkNotification(text: string) {
   }
 }
 
-/**
- * 查询飞书通知是否可用
- */
+/** 查询飞书通知是否可用 */
 export function isLarkNotificationReady() {
   return !!(_activeChatId && _wsConnected);
 }

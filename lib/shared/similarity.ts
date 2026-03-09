@@ -16,9 +16,9 @@
  * 将文本小写化、去标点后，生成 word + character n-gram 集合。
  * 同时支持 CJK（单字 + bigram）和英文（整词 + bigram）。
  *
- * @param {string} text 原始文本
- * @param {number} [n=2] - n-gram 长度
- * @returns {Set<string>} token 集合
+ * @param text 原始文本
+ * @param [n=2] n-gram 长度
+ * @returns token 集合
  */
 export function tokenizeForSimilarity(text: string, n = 2) {
   if (!text) {
@@ -44,9 +44,9 @@ export function tokenizeForSimilarity(text: string, n = 2) {
 /**
  * Jaccard 相似度 — |A ∩ B| / |A ∪ B|
  *
- * @param {Set<string>} a - token 集合 A
- * @param {Set<string>} b - token 集合 B
- * @returns {number} 0.0 - 1.0
+ * @param a token 集合 A
+ * @param b token 集合 B
+ * @returns 0.0 - 1.0
  */
 export function jaccardSimilarity(a: Set<string>, b: Set<string>) {
   if ((!a || a.size === 0) && (!b || b.size === 0)) {
@@ -70,9 +70,9 @@ export function jaccardSimilarity(a: Set<string>, b: Set<string>) {
 /**
  * 余弦相似度 — 向量点积 / (||a|| * ||b||)
  *
- * @param {number[]} a 向量 A
- * @param {number[]} b 向量 B
- * @returns {number} 0.0 - 1.0（输入均为正值时）
+ * @param a 向量 A
+ * @param b 向量 B
+ * @returns 0.0 - 1.0（输入均为正值时）
  */
 export function cosineSimilarity(a: number[], b: number[]) {
   if (!a || !b || a.length !== b.length || a.length === 0) {
@@ -93,12 +93,11 @@ export function cosineSimilarity(a: number[], b: number[]) {
 /**
  * 高层文本相似度 — Jaccard + 可选子串包含加分
  *
- * @param {string} textA 文本 A
- * @param {string} textB 文本 B
- * @param {object} [opts]
- * @param {number} [opts.n=2] - n-gram 长度
- * @param {boolean} [opts.substringBonus=false] 是否启用子串包含加分 (+0.3)
- * @returns {number} 0.0 - 1.0
+ * @param textA 文本 A
+ * @param textB 文本 B
+ * @param [opts.n=2] n-gram 长度
+ * @param [opts.substringBonus=false] 是否启用子串包含加分 (+0.3)
+ * @returns 0.0 - 1.0
  */
 export function textSimilarity(
   textA: string,

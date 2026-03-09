@@ -32,9 +32,8 @@ interface DimensionLike {
 /**
  * 加载 Bootstrap 相关 Skills（仅 coldstart Skill）
  *
- * @param {string} _primaryLanguage 主语言（保留参数签名兼容）
- * @param {object} logger
- * @returns {{ coldstartSkill: string|null, loaded: string[] }}
+ * @param _primaryLanguage 主语言（保留参数签名兼容）
+ * @returns }
  */
 export function loadBootstrapSkills(_primaryLanguage: string, logger?: SkillLogger) {
   const result: { coldstartSkill: string | null; loaded: string[] } = {
@@ -65,8 +64,8 @@ export function loadBootstrapSkills(_primaryLanguage: string, logger?: SkillLogg
  * 从 coldstart SKILL.md 中的 "Per-Dimension Industry Reference Templates" 提取
  * rationale/whyStandard 作为维度增强指引。
  *
- * @param {object} skillContext 由 loadBootstrapSkills 返回
- * @returns {{ guides: Record<string, string>, sectionMap: Record<string, Array<{title: string, content: string, keywords: string[]}>> }}
+ * @param skillContext 由 loadBootstrapSkills 返回
+ * @returns >> }}
  */
 export function extractSkillDimensionGuides(skillContext: {
   coldstartSkill: string | null;
@@ -106,10 +105,10 @@ export function extractSkillDimensionGuides(skillContext: {
 /**
  * 增强 9 维度定义 — 将 Skill 提供的参考指引注入 dimensions[].guide
  *
- * @param {Array} dimensions 原始维度数组
- * @param {Record<string, string>} skillGuides - guides 部分
- * @param {Record<string, Array>} skillSections - sectionMap 部分（per-candidate 匹配用）
- * @returns {Array} 增强后的维度数组（原数组不变，返回新数组）
+ * @param dimensions 原始维度数组
+ * @param skillGuides guides 部分
+ * @param skillSections sectionMap 部分（per-candidate 匹配用）
+ * @returns 增强后的维度数组（原数组不变，返回新数组）
  */
 export function enhanceDimensions(
   dimensions: DimensionLike[],

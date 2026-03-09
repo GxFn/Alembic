@@ -15,8 +15,8 @@
 /**
  * 估算文本的 token 数量
  *
- * @param {string} text 待估算的文本
- * @returns {number} 估算 token 数（向上取整）
+ * @param text 待估算的文本
+ * @returns 估算 token 数（向上取整）
  */
 export function estimateTokens(text: string) {
   if (!text) {
@@ -38,9 +38,6 @@ export function estimateTokens(text: string) {
  * 快速估算 — 纯 ASCII 场景下的快速路径（不区分 CJK，统一按 3.5 chars/token）
  *
  * 适用于已知只含英文 / 混合语言但无需精确的场景（如 ContextWindow 内部压缩阈值）。
- *
- * @param {string} text
- * @returns {number}
  */
 export function estimateTokensFast(text: string) {
   if (!text) {

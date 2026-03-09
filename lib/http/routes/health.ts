@@ -1,6 +1,4 @@
-/**
- * 健康检查端点
- */
+/** 健康检查端点 */
 
 import express from 'express';
 

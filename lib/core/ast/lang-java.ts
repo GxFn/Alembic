@@ -467,9 +467,7 @@ function extractCallSitesJava(root: any, ctx: any, _lang: any) {
   }
 }
 
-/**
- * 递归收集 Java 中所有方法体作用域
- */
+/** 递归收集 Java 中所有方法体作用域 */
 function _collectJavaScopes(root: any) {
   const scopes: { body: any; className: any; methodName: any }[] = [];
 
@@ -510,9 +508,7 @@ function _collectJavaScopes(root: any) {
   return scopes;
 }
 
-/**
- * 从 Java method body 中递归提取调用点
- */
+/** 从 Java method body 中递归提取调用点 */
 function _extractJavaCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;

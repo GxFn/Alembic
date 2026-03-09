@@ -1,0 +1,41 @@
+/**
+ * TokenBudget — Token 预算控制
+ *
+ * token 估算统一使用 shared/token-utils（CJK 感知），
+ * 用于确保 .mdc 文件不超出 Cursor 上下文预算。
+ */
+
+import { estimateTokens } from '../../shared/token-utils.js';
+export { estimateTokens };
+
+/** 默认预算配置 */
+export const BUDGET = {
+  CHANNEL_A_MAX: 800, // Always-On Rules 最大 token (8→15条扩容)
+  CHANNEL_B_MAX_PER_FILE: 750, // Smart Rules 每个主题文件最大 token
+  CHANNEL_B_MAX_PATTERNS: 5, // Smart Rules 每个主题最多模式数
+  CHANNEL_A_MAX_RULES: 15, // Always-On Rules 最多规则数 (8→15扩容)
+};
+
+/**
+ * 按 token 预算截断内容行
+ * @param lines 内容行
+ * @param budget token 上限
+ * @returns }
+ */
+export function truncateToTokenBudget(lines: string[], budget: number) {
+  const kept: string[] = [];
+  let tokensUsed = 0;
+  let dropped = 0;
+
+  for (const line of lines) {
+    const lineTokens = estimateTokens(line);
+    if (tokensUsed + lineTokens <= budget) {
+      kept.push(line);
+      tokensUsed += lineTokens;
+    } else {
+      dropped++;
+    }
+  }
+
+  return { kept, dropped, tokensUsed };
+}

@@ -84,9 +84,7 @@ const SCENARIO_WEIGHTS = {
   },
 };
 
-/**
- * 相关性信号 — BM25 + 标题匹配 + 内容匹配
- */
+/** 相关性信号 — BM25 + 标题匹配 + 内容匹配 */
 export class RelevanceSignal {
   compute(candidate: SignalCandidate, context: SignalContext) {
     let score = candidate.bm25Score || candidate.score || 0;
@@ -120,9 +118,7 @@ export class RelevanceSignal {
   }
 }
 
-/**
- * 权威性信号 — 基于质量评分、使用次数、作者
- */
+/** 权威性信号 — 基于质量评分、使用次数、作者 */
 export class AuthoritySignal {
   compute(candidate: SignalCandidate) {
     let score = 0;
@@ -139,9 +135,7 @@ export class AuthoritySignal {
   }
 }
 
-/**
- * 时间衰减信号
- */
+/** 时间衰减信号 */
 export class RecencySignal {
   compute(candidate: SignalCandidate) {
     const updated = candidate.updatedAt || candidate.lastModified || candidate.createdAt;
@@ -180,9 +174,7 @@ export class PopularitySignal {
   }
 }
 
-/**
- * 难度信号 — 用于学习场景的难度匹配
- */
+/** 难度信号 — 用于学习场景的难度匹配 */
 export class DifficultySignal {
   compute(candidate: SignalCandidate, context: SignalContext) {
     const levels = { beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
@@ -263,9 +255,7 @@ export class VectorSignal {
   }
 }
 
-/**
- * MultiSignalRanker — 多信号排序引擎
- */
+/** MultiSignalRanker — 多信号排序引擎 */
 export class MultiSignalRanker {
   #signals;
   #scenarioWeights;
@@ -295,9 +285,8 @@ export class MultiSignalRanker {
 
   /**
    * 对候选列表进行多信号加权排序
-   * @param {Array} candidates
-   * @param {object} context - { query, scenario, language, userLevel, ... }
-   * @returns {Array} - sorted candidates with rankerScore
+   * @param context { query, scenario, language, userLevel, ... }
+   * @returns sorted candidates with rankerScore
    */
   rank(candidates: SignalCandidate[], context: SignalContext = {}) {
     if (!candidates || candidates.length === 0) {

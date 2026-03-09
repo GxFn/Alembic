@@ -242,8 +242,8 @@ export class SnippetInitializer {
 
   /**
    * 初始化 snippet 到指定目标
-   * @param {string} target — 'xcode' | 'vscode' | 'all'
-   * @returns {{ xcode?: object, vscode?: object }}
+   * @param target — 'xcode' | 'vscode' | 'all'
+   * @returns }
    */
   async initialize(target = 'all') {
     const result: any = {};

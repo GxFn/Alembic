@@ -114,8 +114,8 @@ export class IndexingPipeline {
 
   /**
    * 运行完整索引管线
-   * @param {object} options - { force: boolean, dryRun: boolean, onProgress: function }
-   * @returns {Promise<{ scanned, chunked, embedded, upserted, skipped, errors }>}
+   * @param options { force: boolean, dryRun: boolean, onProgress: function }
+   * @returns >}
    */
   async run(
     options: {
@@ -307,7 +307,7 @@ export class IndexingPipeline {
 
   /**
    * 扫描项目中的可索引文件
-   * @returns {Array<{ absolutePath, relativePath, type }>}
+   * @returns >}
    */
   scan() {
     const files: { absolutePath: string; relativePath: string; type: string }[] = [];
@@ -333,9 +333,7 @@ export class IndexingPipeline {
     return files;
   }
 
-  /**
-   * 计算内容 hash
-   */
+  /** 计算内容 hash */
   hashContent(content: string) {
     return createHash('sha256').update(content).digest('hex').slice(0, 16);
   }

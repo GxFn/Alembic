@@ -150,20 +150,13 @@ const FULL_REBUILD_THRESHOLD = 0.5;
 // ──────────────────────────────────────────────────────────────
 
 export class BootstrapSnapshot {
-  /** @type {import('better-sqlite3').Database} */
   #db: SqliteDb;
 
-  /** @type {object|null} */
   #logger: LoggerLike | null;
 
-  /** @type {object} */
   #stmts!: PreparedStatements;
 
-  /**
-   * @param {import('better-sqlite3').Database} db - better-sqlite3 实例
-   * @param {object} [opts]
-   * @param {object} [opts.logger]
-   */
+  /** @param db better-sqlite3 实例 */
   constructor(db: unknown, { logger }: { logger?: LoggerLike | null } = {}) {
     if (!db) {
       throw new Error('BootstrapSnapshot requires a database instance');
@@ -183,18 +176,17 @@ export class BootstrapSnapshot {
   /**
    * 保存一次 bootstrap 完成后的快照
    *
-   * @param {object} params
-   * @param {string} params.sessionId     - Bootstrap 会话 ID
-   * @param {string} params.projectRoot   项目根目录
+   * @param params.sessionId Bootstrap 会话 ID
+   * @param params.projectRoot 项目根目录
    * @param {Array<{path: string, relativePath: string}>} params.allFiles 扫描到的文件列表
-   * @param {object} params.dimensionStats - { dimId: { referencedFiles: string[] } }
-   * @param {object} [params.episodicData] - EpisodicMemory.toJSON()
-   * @param {object} [params.meta]         - { durationMs, candidateCount, primaryLang }
-   * @param {boolean} [params.isIncremental] 是否增量 bootstrap
-   * @param {string} [params.parentId]     增量时的父快照 ID
-   * @param {string[]} [params.changedFiles] 增量时的变更文件
-   * @param {string[]} [params.affectedDims] 增量时受影响的维度
-   * @returns {string} 快照 ID
+   * @param params.dimensionStats { dimId: { referencedFiles: string[] } }
+   * @param [params.episodicData] EpisodicMemory.toJSON()
+   * @param [params.meta] { durationMs, candidateCount, primaryLang }
+   * @param [params.isIncremental] 是否增量 bootstrap
+   * @param [params.parentId] 增量时的父快照 ID
+   * @param [params.changedFiles] 增量时的变更文件
+   * @param [params.affectedDims] 增量时受影响的维度
+   * @returns 快照 ID
    */
   save(params: SaveParams): string {
     const {
@@ -293,10 +285,7 @@ export class BootstrapSnapshot {
 
   // ─── 快照加载 ─────────────────────────────────────────
 
-  /**
-   * 清除项目的所有快照 — 用于手动重新冷启动时强制全量
-   * @param {string} projectRoot
-   */
+  /** 清除项目的所有快照 — 用于手动重新冷启动时强制全量 */
   clearProject(projectRoot: string) {
     try {
       const rows = this.#stmts.listByProject.all(projectRoot, 9999) as { id: string }[];
@@ -313,8 +302,7 @@ export class BootstrapSnapshot {
   /**
    * 加载最新的快照
    *
-   * @param {string} projectRoot
-   * @returns {object|null} 快照数据
+   * @returns 快照数据
    */
   getLatest(projectRoot: string): SnapshotData | null {
     const row = this.#stmts.getLatest.get(projectRoot);
@@ -324,11 +312,7 @@ export class BootstrapSnapshot {
     return this.#deserialize(row);
   }
 
-  /**
-   * 根据 ID 加载快照
-   * @param {string} id
-   * @returns {object|null}
-   */
+  /** 根据 ID 加载快照 */
   getById(id: string): SnapshotData | null {
     const row = this.#stmts.getById.get(id);
     if (!row) {
@@ -337,12 +321,7 @@ export class BootstrapSnapshot {
     return this.#deserialize(row);
   }
 
-  /**
-   * 获取项目的所有快照 (按时间降序)
-   * @param {string} projectRoot
-   * @param {number} [limit=10]
-   * @returns {Array<object>}
-   */
+  /** 获取项目的所有快照 (按时间降序) */
   list(projectRoot: string, limit = 10): SnapshotData[] {
     return this.#stmts.listByProject
       .all(projectRoot, limit)
@@ -354,10 +333,9 @@ export class BootstrapSnapshot {
   /**
    * 计算当前文件与快照的 diff
    *
-   * @param {object} snapshot - getLatest() 返回的快照
+   * @param snapshot getLatest() 返回的快照
    * @param {Array<{path: string, relativePath: string, content: string}>} currentFiles 当前文件列表
-   * @param {string} projectRoot
-   * @returns {{ added: string[], modified: string[], deleted: string[], unchanged: string[], changeRatio: number }}
+   * @returns }
    */
   computeDiff(
     snapshot: SnapshotData,
@@ -408,10 +386,10 @@ export class BootstrapSnapshot {
    * 2. 新增文件按文件类型推断可能相关的维度
    * 3. 如果变更比例超过阈值 → 建议全量
    *
-   * @param {object} snapshot 上次快照
+   * @param snapshot 上次快照
    * @param {{ added: string[], modified: string[], deleted: string[] }} diff
-   * @param {string[]} allDimIds 所有可用维度 ID
-   * @returns {{ mode: 'incremental'|'full', dimensions: string[], skippedDimensions: string[], reason: string }}
+   * @param allDimIds 所有可用维度 ID
+   * @returns }
    */
   inferAffectedDimensions(
     snapshot: SnapshotData,
@@ -488,11 +466,7 @@ export class BootstrapSnapshot {
 
   // ─── 维度-文件映射查询 ──────────────────────────────
 
-  /**
-   * 获取某个快照中每个维度引用的文件集合
-   * @param {string} snapshotId
-   * @returns {Object<string, Set<string>>}
-   */
+  /** 获取某个快照中每个维度引用的文件集合 */
   #getDimFileMap(snapshotId: string): Record<string, Set<string>> {
     const rows = this.#stmts.getDimFiles.all(snapshotId) as { dim_id: string; file_path: string }[];
     const map: Record<string, Set<string>> = {};
@@ -505,11 +479,7 @@ export class BootstrapSnapshot {
     return map;
   }
 
-  /**
-   * 根据文件扩展名推断可能相关的维度
-   * @param {string} filePath
-   * @returns {string[]}
-   */
+  /** 根据文件扩展名推断可能相关的维度 */
   #inferDimsByFileType(filePath: string): string[] {
     const ext = filePath.split('.').pop()?.toLowerCase() || '';
     const name = filePath.split('/').pop()?.toLowerCase() || '';

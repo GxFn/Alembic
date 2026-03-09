@@ -36,12 +36,7 @@ export class GuardFeedbackLoop {
   guardCheckEngine: GuardCheckEngineLike | null;
   logger: ReturnType<typeof Logger.getInstance>;
   violationsStore: ViolationsStoreLike | null;
-  /**
-   * @param {import('./ViolationsStore.js').ViolationsStore} violationsStore
-   * @param {import('../quality/FeedbackCollector.js').FeedbackCollector} feedbackCollector
-   * @param {object} [options]
-   * @param {import('./GuardCheckEngine.js').GuardCheckEngine} [options.guardCheckEngine] 用于查找规则
-   */
+  /** @param [options.guardCheckEngine] 用于查找规则 */
   constructor(
     violationsStore: ViolationsStoreLike | null,
     feedbackCollector: FeedbackCollectorLike | null,
@@ -56,8 +51,8 @@ export class GuardFeedbackLoop {
   /**
    * 对比当前和历史 violations，检测已修复的违规
    * @param {{ violations: Array<{ruleId: string}> }} currentResult 本次检查结果
-   * @param {string} filePath 文件路径
-   * @returns {Array<{ ruleId: string, filePath: string, fixRecipeId: string }>} 已修复且有 Recipe 关联的列表
+   * @param filePath 文件路径
+   * @returns >} 已修复且有 Recipe 关联的列表
    */
   detectFixedViolations(currentResult: CheckResult, filePath: string) {
     if (!this.violationsStore) {
@@ -125,7 +120,6 @@ export class GuardFeedbackLoop {
    * 一站式处理：检测修复 + 自动确认
    * 供 MCP handler、GuardHandler、HTTP guard/file 端点集成调用
    * @param {{ violations: Array }} currentResult
-   * @param {string} filePath
    */
   processFixDetection(currentResult: CheckResult, filePath: string) {
     const fixed = this.detectFixedViolations(currentResult, filePath);
@@ -140,7 +134,7 @@ export class GuardFeedbackLoop {
 
   /**
    * 获取闭环统计数据
-   * @returns {{ totalFixDetected: number, totalConfirmed: number }}
+   * @returns }
    */
   getStats() {
     return {

@@ -49,9 +49,7 @@ export class ConstitutionValidator {
     };
   }
 
-  /**
-   * 验证操作，返回违规列表
-   */
+  /** 验证操作，返回违规列表 */
   async validate(request: ValidationRequest): Promise<ValidationResult> {
     const violations: Violation[] = [];
     const rules = this.constitution.getRules?.() || this.constitution.rules || [];
@@ -86,9 +84,7 @@ export class ConstitutionValidator {
     return { compliant: violations.length === 0, violations };
   }
 
-  /**
-   * 强制验证（违规时抛异常）
-   */
+  /** 强制验证（违规时抛异常） */
   async enforce(request: ValidationRequest): Promise<ValidationResult> {
     const result = await this.validate(request);
     if (!result.compliant) {

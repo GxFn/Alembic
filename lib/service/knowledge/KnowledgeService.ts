@@ -79,17 +79,6 @@ export class KnowledgeService {
   gateway: unknown;
   logger: ReturnType<typeof Logger.getInstance>;
   repository: KnowledgeRepository;
-  /**
-   * @param {import('../../domain/knowledge/KnowledgeRepository.js').KnowledgeRepository} repository
-   * @param {object} auditLogger
-   * @param {object} gateway
-   * @param {object} knowledgeGraphService
-   * @param {object} [options]
-   * @param {import('./KnowledgeFileWriter.js').KnowledgeFileWriter} [options.fileWriter]
-   * @param {import('../skills/SkillHooks.js').SkillHooks} [options.skillHooks]
-   * @param {import('./ConfidenceRouter.js').ConfidenceRouter} [options.confidenceRouter]
-   * @param {import('../quality/QualityScorer.js').QualityScorer} [options.qualityScorer]
-   */
   constructor(
     repository: KnowledgeRepository,
     auditLogger: AuditLoggerLike,
@@ -118,9 +107,8 @@ export class KnowledgeService {
    * 所有新条目初始状态为 pending（待审核）。
    * ConfidenceRouter 仅标记 auto_approvable 标志，不改变 lifecycle。
    *
-   * @param {Object} data - wire format 数据
-   * @param {Object} context - { userId }
-   * @returns {Promise<KnowledgeEntry>}
+   * @param data wire format 数据
+   * @param context { userId }
    */
   async create(data: KnowledgeEntryProps, context: ServiceContext) {
     try {
@@ -219,11 +207,7 @@ export class KnowledgeService {
     }
   }
 
-  /**
-   * 获取单个知识条目
-   * @param {string} id
-   * @returns {Promise<KnowledgeEntry>}
-   */
+  /** 获取单个知识条目 */
   async get(id: string) {
     const entry = await this.repository.findById(id);
     if (!entry) {
@@ -234,10 +218,8 @@ export class KnowledgeService {
 
   /**
    * 更新知识条目（仅允许白名单字段）
-   * @param {string} id
-   * @param {Object} data 部分字段（camelCase）
-   * @param {Object} context - { userId }
-   * @returns {Promise<KnowledgeEntry>}
+   * @param data 部分字段（camelCase）
+   * @param context { userId }
    */
   async update(id: string, data: Partial<KnowledgeEntryProps>, context: ServiceContext) {
     try {
@@ -383,9 +365,8 @@ export class KnowledgeService {
 
   /**
    * 删除知识条目
-   * @param {string} id
-   * @param {Object} context - { userId }
-   * @returns {Promise<{ success: boolean, id: string }>}
+   * @param context { userId }
+   * @returns >}
    */
   async delete(id: string, context: ServiceContext) {
     try {
@@ -426,9 +407,7 @@ export class KnowledgeService {
 
   /* ═══ 生命周期操作 ══════════════════════════════════════ */
 
-  /**
-   * 发布 (pending → active) — 仅开发者可执行
-   */
+  /** 发布 (pending → active) — 仅开发者可执行 */
   async publish(id: string, context: ServiceContext) {
     const result = await this._lifecycleTransition(id, 'publish', context, {
       entityArgs: [context.userId],
@@ -460,9 +439,7 @@ export class KnowledgeService {
       });
   }
 
-  /**
-   * 弃用 (pending|active → deprecated)
-   */
+  /** 弃用 (pending|active → deprecated) */
   async deprecate(id: string, reason: string, context: ServiceContext) {
     if (!reason || reason.trim().length === 0) {
       throw new ValidationError('Deprecation reason is required');
@@ -472,9 +449,7 @@ export class KnowledgeService {
     });
   }
 
-  /**
-   * 重新激活 (deprecated → pending)
-   */
+  /** 重新激活 (deprecated → pending) */
   async reactivate(id: string, context: ServiceContext) {
     return this._lifecycleTransition(id, 'reactivate', context);
   }
@@ -515,8 +490,8 @@ export class KnowledgeService {
 
   /**
    * 查询列表
-   * @param {Object} filters - { lifecycle, kind, language, category, knowledgeType, source, tag }
-   * @param {Object} pagination - { page, pageSize }
+   * @param filters { lifecycle, kind, language, category, knowledgeType, source, tag }
+   * @param pagination { page, pageSize }
    */
   async list(filters: ListFilters = {}, pagination: PaginationOptions = {}) {
     try {
@@ -559,9 +534,7 @@ export class KnowledgeService {
     }
   }
 
-  /**
-   * 按 Kind 查询
-   */
+  /** 按 Kind 查询 */
   async listByKind(kind: string, pagination: PaginationOptions = {}) {
     try {
       const { page = 1, pageSize = 20 } = pagination;
@@ -575,9 +548,7 @@ export class KnowledgeService {
     }
   }
 
-  /**
-   * 搜索
-   */
+  /** 搜索 */
   async search(keyword: string, pagination: PaginationOptions = {}) {
     try {
       const { page = 1, pageSize = 20 } = pagination;
@@ -591,9 +562,7 @@ export class KnowledgeService {
     }
   }
 
-  /**
-   * 获取统计信息
-   */
+  /** 获取统计信息 */
   async getStats() {
     try {
       return this.repository.getStats();
@@ -609,9 +578,7 @@ export class KnowledgeService {
 
   /**
    * 增加使用计数
-   * @param {string} id
-   * @param {'adoption'|'application'|'guard_hit'|'view'|'success'} type
-   * @param {Object} [options] - { actor, feedback }
+   * @param [options] { actor, feedback }
    */
   async incrementUsage(
     id: string,
@@ -648,8 +615,7 @@ export class KnowledgeService {
 
   /**
    * 更新质量评分
-   * @param {string} id
-   * @param {Object} [context] - { userId }
+   * @param [context] { userId }
    */
   async updateQuality(id: string, context: Partial<ServiceContext> = {}) {
     try {
@@ -700,9 +666,7 @@ export class KnowledgeService {
 
   /* ═══ 私有方法 ══════════════════════════════════════════ */
 
-  /**
-   * 统一生命周期转换编排
-   */
+  /** 统一生命周期转换编排 */
   async _lifecycleTransition(
     id: string,
     method: string,
@@ -794,9 +758,7 @@ export class KnowledgeService {
     }
   }
 
-  /**
-   * 查找或抛出 NotFoundError
-   */
+  /** 查找或抛出 NotFoundError */
   async _findOrThrow(id: string): Promise<KnowledgeEntry> {
     const entry = await this.repository.findById(id);
     if (!entry) {
@@ -805,9 +767,7 @@ export class KnowledgeService {
     return entry;
   }
 
-  /**
-   * 验证创建输入
-   */
+  /** 验证创建输入 */
   _validateCreateInput(data: KnowledgeEntryProps) {
     if (!data.title || !data.title.trim()) {
       throw new ValidationError('Title is required');
@@ -856,8 +816,8 @@ export class KnowledgeService {
 
   /**
    * 自动发现同 category/moduleName/tags 的已有条目并建立 'related' 边
-   * @param {string} id 新创建的条目 ID
-   * @param {KnowledgeEntry} entry 条目实体
+   * @param id 新创建的条目 ID
+   * @param entry 条目实体
    */
   async _autoDiscoverRelations(id: string, entry: KnowledgeEntry) {
     const gs = this._knowledgeGraphService;
@@ -934,9 +894,7 @@ export class KnowledgeService {
     }
   }
 
-  /**
-   * 将 relations 同步到 knowledge_edges 表
-   */
+  /** 将 relations 同步到 knowledge_edges 表 */
   _syncRelationsToGraph(id: string, relations: unknown) {
     const gs = this._knowledgeGraphService;
     if (!gs) {
@@ -982,9 +940,7 @@ export class KnowledgeService {
     }
   }
 
-  /**
-   * 删除所有关联边
-   */
+  /** 删除所有关联边 */
   _removeAllEdges(id: string) {
     const gs = this._knowledgeGraphService;
     if (!gs) {
@@ -1003,9 +959,7 @@ export class KnowledgeService {
 
   /* ═══ 文件落盘 ═════════════════════════════════ */
 
-  /**
-   * 落盘到 .md 文件 + 回写 sourceFile
-   */
+  /** 落盘到 .md 文件 + 回写 sourceFile */
   _persistToFile(entry: KnowledgeEntry) {
     if (!this._fileWriter) {
       return;
@@ -1029,9 +983,7 @@ export class KnowledgeService {
     }
   }
 
-  /**
-   * 删除 .md 文件
-   */
+  /** 删除 .md 文件 */
   _removeFile(entry: KnowledgeEntry) {
     if (!this._fileWriter) {
       return;

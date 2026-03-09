@@ -16,9 +16,7 @@ export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * 在 import 行末尾附加来源标记注释
- */
+/** 在 import 行末尾附加来源标记注释 */
 export function withAutoSnippetNote(importLine: string) {
   if (!importLine) {
     return importLine;
@@ -74,8 +72,8 @@ interface DepReviewContext {
 /**
  * 公共依赖审查弹窗逻辑（insertHeaders 和 _preflightDeps 共享）
  *
- * @param {object} ctx - { spmService, currentTarget, mod, ensureResult, NU, depWarnings, label }
- * @returns {{ blocked: boolean }}
+ * @param ctx { spmService, currentTarget, mod, ensureResult, NU, depWarnings, label }
+ * @returns }
  */
 export function handleDepReview(ctx: DepReviewContext) {
   const { spmService, currentTarget, mod, ensureResult, NU, depWarnings, label = '' } = ctx;
@@ -128,11 +126,10 @@ export function handleDepReview(ctx: DepReviewContext) {
  *
  * 流程：保存剪贴板 → 写入 import 内容 → osascript 跳转+粘贴 → 恢复剪贴板
  *
- * @param {string} importLine  完整的 import 文本
- * @param {number} insertLine  1-based 行号
- * @param {object} XA          XcodeAutomation 模块
- * @param {object} CM          ClipboardManager 模块
- * @returns {boolean}
+ * @param importLine 完整的 import 文本
+ * @param insertLine 1-based 行号
+ * @param XA XcodeAutomation 模块
+ * @param CM ClipboardManager 模块
  */
 export function writeImportLineXcode(
   importLine: string,
@@ -200,9 +197,7 @@ export function writeImportLineFile(filePath: string, importLine: string, isSwif
 // 粘贴行号偏移计算
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * 查找文件中最后一个 import 行的行号（1-based，0 表示无 import）
- */
+/** 查找文件中最后一个 import 行的行号（1-based，0 表示无 import） */
 export function getLastImportLine(filePath: string) {
   try {
     if (!existsSync(filePath)) {

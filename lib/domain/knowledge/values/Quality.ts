@@ -30,11 +30,7 @@ export class Quality {
     this.grade = props.grade || Quality.calcGrade(this.overall);
   }
 
-  /**
-   * 从任意输入构造 Quality
-   * @param {Quality|Object|null} input
-   * @returns {Quality}
-   */
+  /** 从任意输入构造 Quality */
   static from(input: unknown): Quality {
     if (input instanceof Quality) {
       return input;
@@ -49,10 +45,7 @@ export class Quality {
     return new Quality((input || {}) as QualityProps);
   }
 
-  /**
-   * 从 3 维度计算综合分
-   * @returns {Quality}
-   */
+  /** 从 3 维度计算综合分 */
   recalculate() {
     this.overall =
       Math.round(((this.completeness + this.adaptation + this.documentation) / 3) * 100) / 100;
@@ -62,8 +55,7 @@ export class Quality {
 
   /**
    * 根据分数计算等级
-   * @param {number} score 0-1
-   * @returns {string}
+   * @param score 0-1
    */
   static calcGrade(score: number): string {
     if (score >= 0.9) {
@@ -81,9 +73,7 @@ export class Quality {
     return 'F';
   }
 
-  /**
-   * 转换为 wire format JSON
-   */
+  /** 转换为 wire format JSON */
   toJSON() {
     return {
       completeness: this.completeness,
@@ -94,11 +84,7 @@ export class Quality {
     };
   }
 
-  /**
-   * 从 wire format 创建
-   * @param {Object} data
-   * @returns {Quality}
-   */
+  /** 从 wire format 创建 */
   static fromJSON(data: unknown): Quality {
     return Quality.from(data);
   }

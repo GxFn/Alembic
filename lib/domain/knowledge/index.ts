@@ -1,6 +1,4 @@
-/**
- * KnowledgeEntry 领域层统一导出
- */
+/** KnowledgeEntry 领域层统一导出 */
 
 // 实体
 export { KnowledgeEntry } from './KnowledgeEntry.js';

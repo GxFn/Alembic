@@ -20,9 +20,7 @@ import { getContext, safeInt } from '../utils/routeHelpers.js';
 
 const router = express.Router();
 
-/**
- * 将 Recipe 实体 → Guard 规则扁平格式（Dashboard GuardView 期望）
- */
+/** 将 Recipe 实体 → Guard 规则扁平格式（Dashboard GuardView 期望） */
 function mapRecipeToGuardRule(r: Record<string, unknown>) {
   const constraints = r.constraints as Record<string, unknown[]> | undefined;
   const guards = constraints?.guards || [];

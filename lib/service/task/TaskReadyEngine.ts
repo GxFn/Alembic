@@ -14,9 +14,7 @@ export class TaskReadyEngine {
   _db: import('better-sqlite3').Database;
   _depTreeStmt!: ReturnType<import('better-sqlite3').Database['prepare']>;
   _readyStmt!: ReturnType<import('better-sqlite3').Database['prepare']>;
-  /**
-   * @param {import('better-sqlite3').Database} db - raw SQLite handle
-   */
+  /** @param db raw SQLite handle */
   constructor(db: import('better-sqlite3').Database) {
     this._db = db;
     this._prepareStatements();
@@ -91,10 +89,6 @@ export class TaskReadyEngine {
    * 获取就绪任务（核心方法）
    *
    * 就绪 = status='open' 且无未完成的阻塞型依赖（传递性检测）
-   *
-   * @param {object} [options]
-   * @param {number} [options.limit=10]
-   * @returns {Task[]}
    */
   getReadyWork(options: { limit?: number } = {}) {
     const limit = Math.max(1, Math.min(options.limit || 10, 200));
@@ -104,7 +98,7 @@ export class TaskReadyEngine {
 
   /**
    * 获取被阻塞的任务列表
-   * @returns {Array<Object>} 带 blocked_by 字段的任务列表
+   * @returns 带 blocked_by 字段的任务列表
    */
   getBlockedWork() {
     const rows = (this._blockedStmt as unknown as { all: () => Record<string, unknown>[] }).all();
@@ -116,8 +110,7 @@ export class TaskReadyEngine {
 
   /**
    * 获取依赖树
-   * @param {string} taskId
-   * @returns {Array<Object>} 带 depth 的任务列表
+   * @returns 带 depth 的任务列表
    */
   getDependencyTree(taskId: string) {
     const rows = this._depTreeStmt.all(taskId) as Record<string, unknown>[];

@@ -1,6 +1,4 @@
-/**
- * 值对象统一导出
- */
+/** 值对象统一导出 */
 
 export { Constraints } from './Constraints.js';
 export { Content } from './Content.js';

@@ -82,9 +82,7 @@ function _getProjectSkillsDir(container?: { singletons?: { _projectRoot?: unknow
   return getProjectSkillsPath(projectRoot);
 }
 
-/**
- * 带超时的 Promise 包装
- */
+/** 带超时的 Promise 包装 */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   if (ms <= 0) {
     return promise;
@@ -150,9 +148,7 @@ export class SkillHooks {
     }
   }
 
-  /**
-   * 手动注册 handler (用于代码级注册，非 hooks.js)
-   */
+  /** 手动注册 handler (用于代码级注册，非 hooks.js) */
   tap(
     hookName: string,
     handler: (...args: unknown[]) => Promise<unknown> | unknown,
@@ -208,42 +204,32 @@ export class SkillHooks {
     }
   }
 
-  /**
-   * 检查是否有任何钩子注册
-   */
+  /** 检查是否有任何钩子注册 */
   has(hookName: string): boolean {
     const handlers = this.hooks.get(hookName);
     return handlers !== undefined && handlers.length > 0;
   }
 
-  /**
-   * 获取指定 hook 的 handler 数量
-   */
+  /** 获取指定 hook 的 handler 数量 */
   count(hookName: string): number {
     return this.hooks.get(hookName)?.length ?? 0;
   }
 
-  /**
-   * 获取已注册的所有 hook 名称
-   */
+  /** 获取已注册的所有 hook 名称 */
   getRegisteredHooks(): string[] {
     return [...this.hooks.entries()]
       .filter(([, handlers]) => handlers.length > 0)
       .map(([name]) => name);
   }
 
-  /**
-   * 获取 Hook Registry 信息 (用于 Dashboard / 调试)
-   */
+  /** 获取 Hook Registry 信息 (用于 Dashboard / 调试) */
   static getHookRegistry(): ReadonlyArray<HookDefinition> {
     return HOOK_REGISTRY;
   }
 
   // ─── 执行模式实现 ─────────────────────────────────────
 
-  /**
-   * Bail 模式: 串行执行，首个返回 truthy/{block:true} 的 handler 终止链
-   */
+  /** Bail 模式: 串行执行，首个返回 truthy/{block:true} 的 handler 终止链 */
   async #runBail(
     hookName: string,
     handlers: RegisteredHandler[],
@@ -273,9 +259,7 @@ export class SkillHooks {
     return result;
   }
 
-  /**
-   * Waterfall 模式: 串行传值，前一个返回值替换 args[0]
-   */
+  /** Waterfall 模式: 串行传值，前一个返回值替换 args[0] */
   async #runWaterfall(
     hookName: string,
     handlers: RegisteredHandler[],
@@ -302,9 +286,7 @@ export class SkillHooks {
     return current;
   }
 
-  /**
-   * Parallel 模式: 所有 handler 并行执行 (fire-and-forget)
-   */
+  /** Parallel 模式: 所有 handler 并行执行 (fire-and-forget) */
   async #runParallel(
     hookName: string,
     handlers: RegisteredHandler[],
@@ -330,9 +312,7 @@ export class SkillHooks {
     return undefined;
   }
 
-  /**
-   * Series 模式: 按优先级顺序串行执行，忽略返回值
-   */
+  /** Series 模式: 按优先级顺序串行执行，忽略返回值 */
   async #runSeries(
     hookName: string,
     handlers: RegisteredHandler[],

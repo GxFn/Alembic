@@ -126,9 +126,7 @@ export function resolveSubRepoPath(projectRoot: string, explicitPath?: string): 
   return path.resolve(projectRoot, relDir);
 }
 
-/**
- * 检测路径是否为 git 仓库（含 submodule）
- */
+/** 检测路径是否为 git 仓库（含 submodule） */
 export function isGitRepo(dirPath: string): boolean {
   // 独立 git 仓库
   if (fs.existsSync(path.join(dirPath, '.git'))) {

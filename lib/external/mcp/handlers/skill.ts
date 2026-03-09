@@ -65,9 +65,7 @@ function _parseSkillMeta(skillName: string, baseDir = SKILLS_DIR) {
   }
 }
 
-/**
- * Skill 适用场景映射 — 帮助 Agent 判断何时该加载哪个 Skill
- */
+/** Skill 适用场景映射 — 帮助 Agent 判断何时该加载哪个 Skill */
 const SKILL_USE_CASES: Record<string, string> = {
   'autosnippet-intent': '不确定该用哪个能力时，先加载此 Skill 做意图路由',
   'autosnippet-coldstart': '冷启动/初始化知识库时的完整 9 维度分析指南',
@@ -88,7 +86,7 @@ const SKILL_USE_CASES: Record<string, string> = {
 /**
  * 列出所有可用 Skills 及其摘要描述
  *
- * @returns {string} JSON envelope
+ * @returns JSON envelope
  */
 export function listSkills(ctx?: McpContext | null) {
   try {
@@ -176,9 +174,9 @@ export function listSkills(ctx?: McpContext | null) {
 /**
  * 加载指定 Skill 的完整文档内容
  *
- * @param {object} _ctx  MCP context（未使用，保持签名一致）
- * @param {object} args  { skillName: string, section?: string }
- * @returns {string} JSON envelope
+ * @param _ctx MCP context（未使用，保持签名一致）
+ * @param args { skillName: string, section?: string }
+ * @returns JSON envelope
  */
 export function loadSkill(ctx: McpContext | null, args: { skillName?: string; section?: string }) {
   const { skillName, section } = args || {};
@@ -281,9 +279,9 @@ export function loadSkill(ctx: McpContext | null, args: { skillName?: string; se
  * 创建项目级 Skill — 写入 {projectRoot}/AutoSnippet/skills/<name>/SKILL.md
  * 创建后自动 regenerate 编辑器索引（.cursor/rules/autosnippet-skills.mdc）
  *
- * @param {object} _ctx  MCP context
- * @param {object} args  { name, description, content, overwrite? }
- * @returns {string} JSON envelope
+ * @param _ctx MCP context
+ * @param args { name, description, content, overwrite? }
+ * @returns JSON envelope
  */
 interface CreateSkillArgs {
   name?: string;
@@ -432,7 +430,7 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
  * Regenerate .cursor/rules/autosnippet-skills.mdc 索引文件
  * 扫描所有项目级 Skills，生成摘要索引供 External Agent 被动发现
  *
- * @returns {{ success: boolean, path?: string, skillCount?: number, error?: string }}
+ * @returns }
  */
 function _regenerateEditorIndex(ctx?: McpContext) {
   try {
@@ -503,9 +501,9 @@ function _regenerateEditorIndex(ctx?: McpContext) {
  * 删除项目级 Skill — 移除 {projectRoot}/AutoSnippet/skills/<name>/ 整个目录
  * 内置 Skill 不可删除。删除后自动 regenerate 编辑器索引。
  *
- * @param {object} _ctx  MCP context
- * @param {object} args  { name: string }
- * @returns {string} JSON envelope
+ * @param _ctx MCP context
+ * @param args { name: string }
+ * @returns JSON envelope
  */
 export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
   const { name } = args || {};
@@ -599,9 +597,9 @@ export function deleteSkill(ctx: McpContext | null, args: { name?: string }) {
  * 更新项目级 Skill — 修改 description 和/或 content
  * 内置 Skill 不可更新。更新后自动 regenerate 编辑器索引。
  *
- * @param {object} _ctx  MCP context
- * @param {object} args  { name, description?, content? }
- * @returns {string} JSON envelope
+ * @param _ctx MCP context
+ * @param args { name, description?, content? }
+ * @returns JSON envelope
  */
 interface UpdateSkillArgs {
   name?: string;
@@ -734,8 +732,8 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
  * 分析维度：Guard 违规模式、Memory 偏好积累、Recipe 分布缺口、候选积压
  * Agent 可根据推荐结果自行决定是否调用 createSkill 创建
  *
- * @param {object} ctx  MCP context（含 container）
- * @returns {Promise<string>} JSON envelope
+ * @param ctx MCP context（含 container）
+ * @returns JSON envelope
  */
 export async function suggestSkills(ctx: McpContext) {
   try {
@@ -795,9 +793,7 @@ export async function suggestSkills(ctx: McpContext) {
   }
 }
 
-/**
- * 获取已有的项目级 Skill 名称集合
- */
+/** 获取已有的项目级 Skill 名称集合 */
 function _listExistingProjectSkillNames(ctx?: McpContext | null): Set<string> {
   const names = new Set<string>();
   try {
@@ -813,9 +809,7 @@ function _listExistingProjectSkillNames(ctx?: McpContext | null): Set<string> {
   return names;
 }
 
-/**
- * 推荐相关 Skills（基于静态映射）
- */
+/** 推荐相关 Skills（基于静态映射） */
 function _getRelatedSkills(skillName: string) {
   const relations = {
     'autosnippet-coldstart': [

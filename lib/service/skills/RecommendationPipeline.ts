@@ -30,9 +30,7 @@ const RECALL_TIMEOUT_MS = 15_000;
 /** 默认返回推荐数量 */
 const DEFAULT_TOP_K = 5;
 
-/**
- * 生成唯一推荐 ID (不依赖外部库)
- */
+/** 生成唯一推荐 ID (不依赖外部库) */
 function generateRecommendationId(): string {
   // crypto.randomUUID() — Node.js >=19 可用
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -61,17 +59,13 @@ export class RecommendationPipeline {
 
   // ─── 策略管理 ──────────────────────────────────────────
 
-  /**
-   * 注册召回策略
-   */
+  /** 注册召回策略 */
   addStrategy(strategy: RecallStrategy): void {
     this.#strategies.push(strategy);
     this.#logger.debug(`RecommendationPipeline: strategy "${strategy.name}" registered`);
   }
 
-  /**
-   * 获取已注册策略列表
-   */
+  /** 获取已注册策略列表 */
   getStrategies(): ReadonlyArray<RecallStrategy> {
     return this.#strategies;
   }

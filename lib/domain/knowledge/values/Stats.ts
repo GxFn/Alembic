@@ -36,11 +36,7 @@ export class Stats {
     this.authority = props.authority ?? 0;
   }
 
-  /**
-   * 从任意输入构造 Stats
-   * @param {Stats|Object|null} input
-   * @returns {Stats}
-   */
+  /** 从任意输入构造 Stats */
   static from(input: unknown): Stats {
     if (input instanceof Stats) {
       return input;
@@ -55,20 +51,13 @@ export class Stats {
     return new Stats((input || {}) as StatsProps);
   }
 
-  /**
-   * 增加计数
-   * @param {'views'|'adoptions'|'applications'|'guardHits'|'searchHits'} counter
-   * @param {number} delta
-   * @returns {Stats}
-   */
+  /** 增加计数 */
   increment(counter: StatsCounter, delta = 1): Stats {
     this[counter] += delta;
     return this;
   }
 
-  /**
-   * 转换为 JSON
-   */
+  /** 转换为 JSON */
   toJSON() {
     return {
       views: this.views,
@@ -80,11 +69,7 @@ export class Stats {
     };
   }
 
-  /**
-   * 从 wire format 创建
-   * @param {Object} data
-   * @returns {Stats}
-   */
+  /** 从 wire format 创建 */
   static fromJSON(data: unknown): Stats {
     return Stats.from(data);
   }

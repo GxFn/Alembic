@@ -45,8 +45,8 @@ export class CoarseRanker {
 
   /**
    * 粗排
-   * @param {Array} candidates 需有 bm25Score、semanticScore 等字段
-   * @returns {Array} - sorted with coarseScore
+   * @param candidates 需有 bm25Score、semanticScore 等字段
+   * @returns sorted with coarseScore
    */
   rank(candidates: RankerCandidate[]) {
     if (!candidates || candidates.length === 0) {

@@ -76,9 +76,6 @@ export class TaskKnowledgeBridge {
   /** 任务级知识缓存 (taskId → CacheEntry) */
   private _cache = new Map<string, CacheEntry>();
 
-  /**
-   * @param {import('../../service/search/SearchEngine.js').SearchEngine} searchEngine
-   */
   constructor(searchEngine: {
     search: (query: string, options: Record<string, unknown>) => Promise<Record<string, unknown>>;
   }) {

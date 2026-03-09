@@ -49,9 +49,7 @@ export function isAutoSnippetDevRepo(dir: string): boolean {
   return result;
 }
 
-/**
- * 重置缓存（仅用于测试）
- */
+/** 重置缓存（仅用于测试） */
 export function _resetDevRepoCache() {
   _cache.clear();
 }

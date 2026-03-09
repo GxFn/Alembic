@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
-/**
- * 在 macOS 上构建 native-ui 辅助程序（可选）
- */
+/** 在 macOS 上构建 native-ui 辅助程序（可选） */
 
 const __dirname = import.meta.dirname;
 

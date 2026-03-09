@@ -104,9 +104,7 @@ const CJK_STOPWORDS = new Set([
   '应',
 ]);
 
-/**
- * 英文停用词表 — 过滤常见虚词
- */
+/** 英文停用词表 — 过滤常见虚词 */
 const EN_STOPWORDS = new Set([
   'the',
   'is',

@@ -1,9 +1,7 @@
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { AuditStore } from './AuditStore.js';
 
-/**
- * AuditLogger - 审计日志记录器
- */
+/** AuditLogger - 审计日志记录器 */
 export class AuditLogger {
   auditStore: AuditStore;
   logger: import('winston').Logger;
@@ -71,16 +69,12 @@ export class AuditLogger {
     }
   }
 
-  /**
-   * 生成 ID
-   */
+  /** 生成 ID */
   generateId() {
     return `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  /**
-   * 格式化资源
-   */
+  /** 格式化资源 */
   formatResource(resource: unknown) {
     if (typeof resource === 'string') {
       return resource;
@@ -93,9 +87,7 @@ export class AuditLogger {
     return String(resource);
   }
 
-  /**
-   * 查询审计日志
-   */
+  /** 查询审计日志 */
   async query(filters: {
     actor?: string;
     action?: string;
@@ -107,37 +99,27 @@ export class AuditLogger {
     return await this.auditStore.query(filters);
   }
 
-  /**
-   * 获取特定请求的日志
-   */
+  /** 获取特定请求的日志 */
   async getByRequestId(requestId: string) {
     return await this.auditStore.findByRequestId(requestId);
   }
 
-  /**
-   * 获取特定角色的日志
-   */
+  /** 获取特定角色的日志 */
   async getByActor(actor: string, limit = 100) {
     return await this.auditStore.findByActor(actor, limit);
   }
 
-  /**
-   * 获取特定操作的日志
-   */
+  /** 获取特定操作的日志 */
   async getByAction(action: string, limit = 100) {
     return await this.auditStore.findByAction(action, limit);
   }
 
-  /**
-   * 获取失败的操作日志
-   */
+  /** 获取失败的操作日志 */
   async getFailures(limit = 100) {
     return await this.auditStore.findByResult('failure', limit);
   }
 
-  /**
-   * 统计审计数据
-   */
+  /** 统计审计数据 */
   async getStats(timeRange: string) {
     return await this.auditStore.getStats(timeRange);
   }

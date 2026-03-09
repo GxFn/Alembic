@@ -9,7 +9,7 @@
  * autosnippet_bootstrap 已迁移到 bootstrap-external.js（外部 Agent 路径）。
  */
 
-import { getRequiredFieldsDescription } from '#shared/FieldSpec.js';
+import { getRequiredFieldsDescription } from '#domain/knowledge/FieldSpec.js';
 import * as browseHandlers from './browse.js';
 import * as candidateHandlers from './candidate.js';
 import * as guardHandlers from './guard.js';
@@ -112,9 +112,7 @@ export async function consolidatedStructure(ctx: McpContext, args: ConsolidatedS
 
 // ─── autosnippet_call_context (Phase 5) ─────────────────────
 
-/**
- * 调用链上下文查询：直接转发到 structure.callContext
- */
+/** 调用链上下文查询：直接转发到 structure.callContext */
 export async function consolidatedCallContext(ctx: McpContext, args: ConsolidatedStructureArgs) {
   return structureHandlers.callContext(ctx, args);
 }
@@ -224,7 +222,7 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
  */
 export async function enhancedSubmitKnowledge(ctx: McpContext, args: SubmitKnowledgeArgs) {
   const { submitKnowledge } = await import('./knowledge.js');
-  const { UnifiedValidator } = await import('#shared/UnifiedValidator.js');
+  const { UnifiedValidator } = await import('#domain/knowledge/UnifiedValidator.js');
   const { envelope } = await import('../envelope.js');
 
   const skipDuplicateCheck = args.skipDuplicateCheck === true;
@@ -322,9 +320,7 @@ function _trackSubmission(ctx: McpContext, args: SubmitKnowledgeArgs, recipeId: 
   }
 }
 
-/**
- * 记录拒绝到活跃 BootstrapSession 的 submissionTracker
- */
+/** 记录拒绝到活跃 BootstrapSession 的 submissionTracker */
 function _trackRejection(ctx: McpContext, args: SubmitKnowledgeArgs) {
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager');

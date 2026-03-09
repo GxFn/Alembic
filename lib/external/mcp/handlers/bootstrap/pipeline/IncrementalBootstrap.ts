@@ -15,7 +15,7 @@
  * @module pipeline/IncrementalBootstrap
  */
 
-import { SessionStore } from '#service/agent/memory/SessionStore.js';
+import { SessionStore } from '#agent/memory/SessionStore.js';
 import type { BootstrapFile, LoggerLike, SaveSnapshotParams } from '../../types.js';
 import { BootstrapSnapshot } from './BootstrapSnapshot.js';
 
@@ -24,21 +24,12 @@ import { BootstrapSnapshot } from './BootstrapSnapshot.js';
 // ──────────────────────────────────────────────────────────────
 
 export class IncrementalBootstrap {
-  /** @type {BootstrapSnapshot} */
   #snapshot;
 
-  /** @type {object|null} */
   #logger;
 
-  /** @type {string} */
   #projectRoot;
 
-  /**
-   * @param {import('better-sqlite3').Database} db
-   * @param {string} projectRoot
-   * @param {object} [opts]
-   * @param {object} [opts.logger]
-   */
   constructor(db: unknown, projectRoot: string, { logger }: { logger?: LoggerLike | null } = {}) {
     this.#snapshot = new BootstrapSnapshot(db, { logger });
     this.#logger = logger || null;
@@ -49,18 +40,7 @@ export class IncrementalBootstrap {
    * 评估增量可行性 — 在 bootstrap 流程最开始调用
    *
    * @param {Array<{path: string, relativePath: string, content: string}>} currentFiles 当前扫描到的文件
-   * @param {string[]} allDimIds 所有可用维度 ID
-   * @returns {IncrementalPlan}
-   *
-   * @typedef {object} IncrementalPlan
-   * @property {boolean} canIncremental 是否支持增量
-   * @property {'incremental'|'full'} mode
-   * @property {string[]} affectedDimensions 需要重新分析的维度
-   * @property {string[]} skippedDimensions 可跳过的维度 (使用历史结果)
-   * @property {object|null} previousSnapshot 上次快照
-   * @property {object|null} diff - { added, modified, deleted, unchanged, changeRatio }
-   * @property {string} reason 人类可读的决策原因
-   * @property {object|null} restoredEpisodic 从快照恢复的 EpisodicMemory (仅增量时)
+   * @param allDimIds 所有可用维度 ID
    */
   evaluate(currentFiles: BootstrapFile[], allDimIds: string[]) {
     try {
@@ -159,14 +139,9 @@ export class IncrementalBootstrap {
   /**
    * 保存快照 — 在 bootstrap 完成后调用
    *
-   * @param {object} params
-   * @param {string} params.sessionId
-   * @param {Array} params.allFiles
-   * @param {object} params.dimensionStats
-   * @param {SessionStore} [params.episodicMemory]
-   * @param {object} [params.meta] - { durationMs, candidateCount, primaryLang }
-   * @param {IncrementalPlan} [params.plan] - evaluate() 返回的计划 (增量时)
-   * @returns {string} 快照 ID
+   * @param [params.meta] { durationMs, candidateCount, primaryLang }
+   * @param [params.plan] evaluate() 返回的计划 (增量时)
+   * @returns 快照 ID
    */
   saveSnapshot(params: SaveSnapshotParams) {
     const { sessionId, allFiles, dimensionStats, episodicMemory, meta = {}, plan = null } = params;
@@ -201,10 +176,7 @@ export class IncrementalBootstrap {
     });
   }
 
-  /**
-   * 获取快照管理器 (用于直接查询)
-   * @returns {BootstrapSnapshot}
-   */
+  /** 获取快照管理器 (用于直接查询) */
   getSnapshotManager() {
     return this.#snapshot;
   }

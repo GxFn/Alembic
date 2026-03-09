@@ -224,21 +224,11 @@ interface ProjectAnalysisResult {
 // 插件注册表
 // ──────────────────────────────────────────────────────────────────
 
-/**
- * @typedef {object} LangPlugin
- * @property {Function} getGrammar  - () => tree-sitter Language Module (lazy load)
- * @property {Function} walk        - (rootNode, ctx) => void  (AST 遍历)
- * @property {Function} [detectPatterns] - (root, lang, methods, properties, classes) => Pattern[]
- * @property {string[]} [extensions] 关联的文件扩展名
- */
-
-/** @type {Map<string, LangPlugin>} */
 const _langPlugins: Map<string, LangPlugin> = new Map();
 
 /**
  * 注册语言 AST 插件
- * @param {string} langId 语言标识 (e.g. 'objectivec', 'swift', 'typescript')
- * @param {LangPlugin} plugin
+ * @param langId 语言标识 (e.g. 'objectivec', 'swift', 'typescript')
  */
 export function registerLanguage(langId: string, plugin: LangPlugin) {
   _langPlugins.set(langId, plugin);
@@ -252,11 +242,9 @@ export function registerLanguage(langId: string, plugin: LangPlugin) {
 
 /**
  * 分析单个源文件，返回结构化 AST 摘要
- * @param {string} source  源代码文本
- * @param {string} lang    语言标识 'objectivec' | 'swift' | 'typescript' | 'javascript' | 'python' | 'java' | 'kotlin' | 'go' | 'dart' | 'rust' | 'tsx'
- * @param {object} [options]
- * @param {boolean} [options.extractCallSites=true] 是否提取调用点 (Phase 5)
- * @returns {AstSummary | null}
+ * @param source 源代码文本
+ * @param lang 语言标识 'objectivec' | 'swift' | 'typescript' | 'javascript' | 'python' | 'java' | 'kotlin' | 'go' | 'dart' | 'rust' | 'tsx'
+ * @param [options.extractCallSites=true] 是否提取调用点 (Phase 5)
  */
 function analyzeFile(
   source: string,
@@ -335,9 +323,7 @@ function analyzeFile(
 /**
  * 批量分析多文件，返回项目级汇总
  * @param {{ name: string, relativePath: string, content: string }[]} files
- * @param {string} lang
- * @param {{ preprocessFile?: (content: string, ext: string) => { content: string, lang: string } | null }} [options]
- * @returns {ProjectAstSummary}
+ * @param | null }} [options]
  */
 function analyzeProject(
   files: FileInput[],
@@ -426,11 +412,7 @@ function analyzeProject(
   };
 }
 
-/**
- * 为 Agent 生成结构化上下文摘要（Markdown）
- * @param {ProjectAstSummary} projectSummary
- * @returns {string}
- */
+/** 为 Agent 生成结构化上下文摘要（Markdown） */
 function generateContextForAgent(projectSummary: ProjectAnalysisResult): string {
   const lines = ['## 项目代码结构分析（AST）', ''];
 
@@ -520,16 +502,12 @@ function generateContextForAgent(projectSummary: ProjectAnalysisResult): string 
   return lines.join('\n');
 }
 
-/**
- * 检查 Tree-sitter 是否可用（至少有一个语言插件注册）
- */
+/** 检查 Tree-sitter 是否可用（至少有一个语言插件注册） */
 function isAvailable() {
   return isParserReady() && _langPlugins.size > 0;
 }
 
-/**
- * 获取支持的语言列表
- */
+/** 获取支持的语言列表 */
 function supportedLanguages() {
   return [..._langPlugins.keys()];
 }
@@ -570,9 +548,9 @@ function _getParser(lang: string): TreeSitterParser | null {
 
 /**
  * 解析源代码为 AST 树 (供 ASTChunker 等外部模块使用)
- * @param {string} source 源代码
- * @param {string} lang 语言 ID (如 'javascript', 'typescript', 'python' 等)
- * @returns {{ rootNode: object, tree: object } | null} tree-sitter 的 rootNode, 或 null (不支持/解析失败)
+ * @param source 源代码
+ * @param lang 语言 ID (如 'javascript', 'typescript', 'python' 等)
+ * @returns | null} tree-sitter 的 rootNode, 或 null (不支持/解析失败)
  */
 function parseToTree(source: string, lang: string) {
   const parser = _getParser(lang);
@@ -897,10 +875,10 @@ function _findIdentifier(node: TreeSitterNode): string | null {
 
 /**
  * 在 AST 中搜索特定调用表达式
- * @param {string} source  源代码
- * @param {string} lang    'objectivec' | 'swift'
- * @param {string} targetCallee  目标调用，如 'URLSession.shared', 'dispatch_sync'
- * @returns {Array<{ line: number, snippet: string, enclosingClass: string|null }>}
+ * @param source 源代码
+ * @param lang 'objectivec' | 'swift'
+ * @param targetCallee 目标调用，如 'URLSession.shared', 'dispatch_sync'
+ * @returns >}
  */
 function findCallExpressions(source: string, lang: string, targetCallee: string) {
   const parser = _getParser(lang);
@@ -972,13 +950,13 @@ function findCallExpressions(source: string, lang: string, targetCallee: string)
 
 /**
  * 搜索特定模式在特定上下文中的出现
- * @param {string} source  源代码
- * @param {string} lang    'objectivec' | 'swift'
- * @param {string} pattern  要查找的文本模式（普通字符串匹配）
+ * @param source 源代码
+ * @param lang 'objectivec' | 'swift'
+ * @param pattern 要查找的文本模式（普通字符串匹配）
  * @param {{ forbiddenContext?: string, requiredContext?: string }} contextFilter
  *   forbiddenContext: 如果在此上下文中出现则报告 (如 'dealloc')
  *   requiredContext: 如果不在此上下文中出现则报告
- * @returns {Array<{ line: number, snippet: string, context: string|null }>}
+ * @returns >}
  */
 function findPatternInContext(
   source: string,
@@ -1076,11 +1054,11 @@ function findPatternInContext(
 
 /**
  * 检查类是否遵循指定协议
- * @param {string} source  源代码
- * @param {string} lang    'objectivec' | 'swift'
- * @param {string} className  类名
- * @param {string} protocolName  协议名
- * @returns {{ conforms: boolean, classFound: boolean, classDeclLine: number|null }}
+ * @param source 源代码
+ * @param lang 'objectivec' | 'swift'
+ * @param className 类名
+ * @param protocolName 协议名
+ * @returns }
  */
 function checkProtocolConformance(
   source: string,

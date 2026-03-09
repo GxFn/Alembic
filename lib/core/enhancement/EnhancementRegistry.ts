@@ -8,24 +8,15 @@
 import type { EnhancementPack } from './EnhancementPack.js';
 
 export class EnhancementRegistry {
-  /** @type {import('./EnhancementPack.js').EnhancementPack[]} */
   #packs: EnhancementPack[] = [];
 
-  /**
-   * 注册增强包
-   * @param {import('./EnhancementPack.js').EnhancementPack} pack
-   */
+  /** 注册增强包 */
   register(pack: EnhancementPack) {
     this.#packs.push(pack);
     return this;
   }
 
-  /**
-   * 根据语言和框架筛选适用的增强包
-   * @param {string} primaryLang
-   * @param {string[]} detectedFrameworks
-   * @returns {import('./EnhancementPack.js').EnhancementPack[]}
-   */
+  /** 根据语言和框架筛选适用的增强包 */
   resolve(primaryLang: string, detectedFrameworks: string[] = []) {
     return this.#packs.filter((pack) => {
       const cond = pack.conditions;
@@ -39,10 +30,7 @@ export class EnhancementRegistry {
     });
   }
 
-  /**
-   * 获取所有已注册的增强包
-   * @returns {import('./EnhancementPack.js').EnhancementPack[]}
-   */
+  /** 获取所有已注册的增强包 */
   all() {
     return [...this.#packs];
   }

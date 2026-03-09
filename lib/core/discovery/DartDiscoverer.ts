@@ -194,9 +194,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
 
   // ── 内部实现 ──
 
-  /**
-   * 解析 pubspec.yaml（简易 YAML 解析，不引入三方依赖）
-   */
+  /** 解析 pubspec.yaml（简易 YAML 解析，不引入三方依赖） */
   #parsePubspec(projectRoot: string) {
     const pubspecPath = join(projectRoot, 'pubspec.yaml');
     if (!existsSync(pubspecPath)) {
@@ -255,9 +253,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     return result;
   }
 
-  /**
-   * 检测 Flutter/Dart 框架
-   */
+  /** 检测 Flutter/Dart 框架 */
   #detectFramework(pubspec: Record<string, any> | null) {
     if (!pubspec) {
       return null;
@@ -303,9 +299,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     return null;
   }
 
-  /**
-   * 发现 Melos 多包工作区中的子包
-   */
+  /** 发现 Melos 多包工作区中的子包 */
   #discoverMelosPackages(projectRoot: string) {
     const melosPath = join(projectRoot, 'melos.yaml');
     if (!existsSync(melosPath)) {
@@ -368,9 +362,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 解析 pubspec.yaml 依赖到 depGraph
-   */
+  /** 解析 pubspec.yaml 依赖到 depGraph */
   #parseDependencies(pubspec: Record<string, any> | null) {
     if (!pubspec) {
       return;
@@ -418,9 +410,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 解析内部 Dart import 语句，构建包内模块依赖关系
-   */
+  /** 解析内部 Dart import 语句，构建包内模块依赖关系 */
   #parseInternalImports(projectRoot: string) {
     const libDir = join(projectRoot, 'lib');
     if (!existsSync(libDir)) {
@@ -495,9 +485,7 @@ export class DartDiscoverer extends ProjectDiscoverer {
     scanDir(libDir);
   }
 
-  /**
-   * 递归收集 .dart 文件
-   */
+  /** 递归收集 .dart 文件 */
   #collectDartFiles(dir: string, rootDir: string, files: DiscoveredFile[], depth = 0) {
     if (depth > 15) {
       return;

@@ -28,7 +28,7 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { injectAutoApprove } from '../../external/mcp/autoApproveInjector.js';
-import { checkWriteSafety, safeCopyFile } from '../../service/cursor/FileProtection.js';
+import { checkWriteSafety, safeCopyFile } from '../../service/delivery/FileProtection.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 import { PACKAGE_ROOT, TEMPLATES_DIR } from '../../shared/package-root.js';
 import {
@@ -62,9 +62,7 @@ export class FileDeployer {
   force: boolean;
   projectName: string;
   projectRoot: string;
-  /**
-   * @param {{ projectRoot: string, force?: boolean }} options
-   */
+  /** @param {{ projectRoot: string, force?: boolean }} options */
   constructor({ projectRoot, force = false }: { projectRoot: string; force?: boolean }) {
     this.projectRoot = resolve(projectRoot);
     this.projectName = this.projectRoot.split('/').pop() || '';
@@ -75,9 +73,8 @@ export class FileDeployer {
 
   /**
    * 部署所有适用的文件
-   * @param {'setup'|'upgrade'} mode
    * @param {{ filter?: string[] }} options 可选过滤部署的 category
-   * @returns {{ deployed: string[], skipped: string[], errors: Array<{id: string, error: string}> }}
+   * @returns > }}
    */
   deployAll(mode: 'setup' | 'upgrade', { filter }: { filter?: string[] } = {}) {
     const applicable = (MANIFEST as ManifestEntry[]).filter((entry) => {
@@ -110,11 +107,7 @@ export class FileDeployer {
     return { deployed, skipped, errors };
   }
 
-  /**
-   * 按 category 部署
-   * @param {string} category
-   * @param {'setup'|'upgrade'} mode
-   */
+  /** 按 category 部署 */
   deployCategory(category: string, mode: 'setup' | 'upgrade') {
     return this.deployAll(mode, { filter: [category] });
   }
@@ -122,9 +115,8 @@ export class FileDeployer {
   /* ═══ 单文件部署路由 ═════════════════════════════════ */
 
   /**
-   * @param {object} entry - Manifest 条目
-   * @param {'setup'|'upgrade'} mode
-   * @returns {boolean} 是否实际写入了文件
+   * @param entry Manifest 条目
+   * @returns 是否实际写入了文件
    */
   _deployOne(entry: ManifestEntry, mode: 'setup' | 'upgrade') {
     switch (entry.strategy) {

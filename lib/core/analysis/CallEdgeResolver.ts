@@ -77,8 +77,6 @@ export class CallEdgeResolver {
   propertyTypes: Map<string, Map<string, string>>;
   symbolTable: SymbolTable;
   /**
-   * @param {import('./SymbolTableBuilder.js').SymbolTable} symbolTable
-   * @param {import('./ImportPathResolver.js').ImportPathResolver} importResolver
    * @param {Array<{from: string, to: string, type: string}>} [inheritanceGraph=[]] 继承图边
    */
   constructor(
@@ -96,14 +94,12 @@ export class CallEdgeResolver {
     this.propertyTypes = symbolTable.propertyTypes || new Map();
 
     // 构建反向索引: symbolName → [fqn1, fqn2, ...]
-    /** @type {Map<string, string[]>} */
     this.nameIndex = new Map();
     // 构建文件级索引: file → [{ name, qualifiedName, fqn }] (Issue #14 性能优化)
     /** @type {Map<string, Array<{name: string, qualifiedName: string, fqn: string}>>} */
     this.fileIndex = new Map();
 
     // Phase 5.3: 类名集合索引 (用于 _inferFieldType 优化，避免全表扫描)
-    /** @type {Set<string>} */
     this.classNames = new Set();
 
     for (const [fqn, decl] of symbolTable.declarations) {
@@ -134,9 +130,8 @@ export class CallEdgeResolver {
   /**
    * 解析一个文件中的所有调用点为边
    *
-   * @param {import('./CallSiteExtractor.js').CallSite[]} callSites 来自某个文件的所有调用点
-   * @param {string} callerFile 调用者文件路径 (相对)
-   * @returns {ResolvedEdge[]}
+   * @param callSites 来自某个文件的所有调用点
+   * @param callerFile 调用者文件路径 (相对)
    */
   resolveFile(callSites: CallSite[], callerFile: string): ResolvedEdge[] {
     const edges: ResolvedEdge[] = [];
@@ -162,9 +157,7 @@ export class CallEdgeResolver {
     return edges;
   }
 
-  /**
-   * @private 构建局部 import 映射
-   */
+  /** @private 构建局部 import 映射 */
   _buildImportMap(
     fileImports: Array<{ path?: string; symbols?: string[]; alias?: string; toString(): string }>,
     callerFile: string
@@ -200,9 +193,7 @@ export class CallEdgeResolver {
     return importedSymbols;
   }
 
-  /**
-   * @private 解析单个调用点
-   */
+  /** @private 解析单个调用点 */
   _resolveCallSite(
     cs: CallSite,
     callerFile: string,
@@ -379,9 +370,9 @@ export class CallEdgeResolver {
    * 使用 BFS 遍历 inheritanceGraph，从 className 向上搜索直到找到
    * 定义了 methodName 的祖先类。只跟踪 'inherits' 类型的边。
    *
-   * @param {string} methodName 被调用的方法名
-   * @param {string} className 起始类名
-   * @returns {string|null} 找到的 FQN 或 null
+   * @param methodName 被调用的方法名
+   * @param className 起始类名
+   * @returns 找到的 FQN 或 null
    */
   _resolveByCHA(methodName: string, className: string): string | null {
     if (!this.inheritanceGraph || this.inheritanceGraph.length === 0) {
@@ -431,9 +422,6 @@ export class CallEdgeResolver {
    *   - _userRepo → UserRepo (Java/Kotlin private field)
    *
    * 只在符号表中存在匹配类时返回
-   *
-   * @param {string} fieldName
-   * @returns {string|null}
    */
   _inferFieldType(fieldName: string): string | null {
     // 去除前导下划线
@@ -451,9 +439,8 @@ export class CallEdgeResolver {
 
   /**
    * @private 在指定文件中查找声明 (使用 fileIndex 优化，避免全表扫描)
-   * @param {string} name 符号名 (可以是 "ClassName.methodName" 或 "functionName")
-   * @param {string} file
-   * @returns {string[]} 匹配的 FQN 列表
+   * @param name 符号名 (可以是 "ClassName.methodName" 或 "functionName")
+   * @returns 匹配的 FQN 列表
    */
   _findInFile(name: string, file: string): string[] {
     const fileDecls = this.fileIndex.get(file);
@@ -465,9 +452,7 @@ export class CallEdgeResolver {
       .map((d: FileDecl) => d.fqn);
   }
 
-  /**
-   * @private 构建 ResolvedEdge
-   */
+  /** @private 构建 ResolvedEdge */
   _makeEdge(
     callerFqn: string,
     calleeFqn: string,

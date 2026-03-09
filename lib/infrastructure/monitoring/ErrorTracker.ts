@@ -73,9 +73,7 @@ export class ErrorTracker {
     }
   }
 
-  /**
-   * 确保日志目录存在
-   */
+  /** 确保日志目录存在 */
   _ensureLogDirectory() {
     try {
       if (!fs.existsSync(this.config.logDirectory)) {
@@ -86,9 +84,7 @@ export class ErrorTracker {
     }
   }
 
-  /**
-   * Express 错误处理中间件
-   */
+  /** Express 错误处理中间件 */
   errorHandler() {
     return (
       err: { message: string; stack?: string; name?: string; statusCode?: number; code?: string },
@@ -131,9 +127,7 @@ export class ErrorTracker {
     };
   }
 
-  /**
-   * 记录错误
-   */
+  /** 记录错误 */
   trackError(errorData: ErrorData) {
     // 添加到内存
     this.errors.push(errorData);
@@ -182,9 +176,7 @@ export class ErrorTracker {
     this._checkAlertThreshold();
   }
 
-  /**
-   * 写入文件
-   */
+  /** 写入文件 */
   _writeToFile(errorData: ErrorData) {
     try {
       const date = new Date().toISOString().split('T')[0];
@@ -202,9 +194,7 @@ export class ErrorTracker {
     }
   }
 
-  /**
-   * 检查告警阈值
-   */
+  /** 检查告警阈值 */
   _checkAlertThreshold() {
     const oneMinuteAgo = Date.now() - 60000;
     const recentErrorCount = this.errors.filter(
@@ -217,9 +207,7 @@ export class ErrorTracker {
     }
   }
 
-  /**
-   * 生成错误报告
-   */
+  /** 生成错误报告 */
   _generateReport() {
     const now = Date.now();
     const oneHourAgo = now - 3600000;
@@ -239,9 +227,7 @@ export class ErrorTracker {
     }
   }
 
-  /**
-   * 获取最常见错误类型
-   */
+  /** 获取最常见错误类型 */
   _getTopErrorTypes(limit = 10) {
     return Array.from(this.errorCounts.entries())
       .sort((a, b) => b[1] - a[1])
@@ -249,9 +235,7 @@ export class ErrorTracker {
       .map(([type, count]) => ({ type, count }));
   }
 
-  /**
-   * 获取错误统计
-   */
+  /** 获取错误统计 */
   getStats() {
     const now = Date.now();
     const oneHourAgo = now - 3600000;
@@ -292,9 +276,7 @@ export class ErrorTracker {
     };
   }
 
-  /**
-   * 按路由统计错误
-   */
+  /** 按路由统计错误 */
   _getErrorsByRoute() {
     const routeErrors = new Map();
 
@@ -309,9 +291,7 @@ export class ErrorTracker {
       .map(([route, count]) => ({ route, count }));
   }
 
-  /**
-   * 清除错误记录
-   */
+  /** 清除错误记录 */
   clearErrors() {
     this.errors = [];
     this.recentErrors = [];
@@ -320,9 +300,7 @@ export class ErrorTracker {
     Logger.info('错误追踪记录已清除');
   }
 
-  /**
-   * 搜索错误
-   */
+  /** 搜索错误 */
   searchErrors(
     options: {
       type?: string;
@@ -360,9 +338,7 @@ export class ErrorTracker {
     return results.slice(0, options.limit || 100);
   }
 
-  /**
-   * 停止错误追踪
-   */
+  /** 停止错误追踪 */
   shutdown() {
     if (this.reportInterval) {
       clearInterval(this.reportInterval);
@@ -374,9 +350,7 @@ export class ErrorTracker {
 // 单例实例
 let errorTrackerInstance: ErrorTracker | null = null;
 
-/**
- * 初始化错误追踪
- */
+/** 初始化错误追踪 */
 export function initErrorTracker(options: Partial<ErrorTrackerConfig> = {}) {
   if (errorTrackerInstance) {
     return errorTrackerInstance;
@@ -387,9 +361,7 @@ export function initErrorTracker(options: Partial<ErrorTrackerConfig> = {}) {
   return errorTrackerInstance;
 }
 
-/**
- * 获取错误追踪实例
- */
+/** 获取错误追踪实例 */
 export function getErrorTracker() {
   if (!errorTrackerInstance) {
     throw new Error('错误追踪未初始化，请先调用 initErrorTracker()');

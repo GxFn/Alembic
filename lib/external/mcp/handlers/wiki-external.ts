@@ -113,8 +113,8 @@ function tryGet(container: McpServiceContainer, name: string): unknown {
  * 复用 WikiGenerator 的数据收集和主题发现逻辑（Phase 1-5），
  * 但不撰写文章，只返回规划清单和每个主题的数据包。
  *
- * @param {object} ctx  - { container, logger, startedAt }
- * @param {object} args - { language?: 'zh'|'en', sessionId?: string }
+ * @param ctx { container, logger, startedAt }
+ * @param args { language?: 'zh'|'en', sessionId?: string }
  */
 export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
   const t0 = Date.now();
@@ -321,8 +321,8 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
  *   3. 写入 meta.json
  *   4. 同步 Cursor 端文档（可选）
  *
- * @param {object} ctx  - { container, logger, startedAt }
- * @param {object} args - { articlesWritten: string[] }
+ * @param ctx { container, logger, startedAt }
+ * @param args { articlesWritten: string[] }
  */
 export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
   const t0 = Date.now();
@@ -491,9 +491,7 @@ function _ensureDir(dir: string) {
   }
 }
 
-/**
- * 为主题生成写作指南
- */
+/** 为主题生成写作指南 */
 function _buildWritingGuide(topic: WikiTopicDef, isZh: boolean): string {
   const guides = {
     overview: isZh
@@ -533,9 +531,7 @@ function _buildWritingGuide(topic: WikiTopicDef, isZh: boolean): string {
   );
 }
 
-/**
- * 为主题构建数据包
- */
+/** 为主题构建数据包 */
 function _buildTopicDataBundle(
   topic: WikiTopicDef,
   structuredData: StructuredData
@@ -689,9 +685,7 @@ function _buildTopicDataBundle(
   return bundle;
 }
 
-/**
- * 构建写作指导手册
- */
+/** 构建写作指导手册 */
 function _buildWritingGuidelines(isZh: boolean) {
   return {
     language: isZh ? 'zh' : 'en',

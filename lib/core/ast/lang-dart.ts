@@ -678,10 +678,6 @@ function _maxNesting(node: any, depth: any) {
 /**
  * 从 Dart AST root 提取所有调用点
  * 遍历 function_definition / method 中的 body → 各种 invocation 节点
- *
- * @param {TreeSitterNode} root
- * @param {object} ctx
- * @param {string} _lang
  */
 function extractCallSitesDart(root: any, ctx: any, _lang: any) {
   const scopes = _collectDartScopes(root);
@@ -690,9 +686,7 @@ function extractCallSitesDart(root: any, ctx: any, _lang: any) {
   }
 }
 
-/**
- * 递归收集 Dart 中所有函数/方法体作用域
- */
+/** 递归收集 Dart 中所有函数/方法体作用域 */
 function _collectDartScopes(root: any) {
   const scopes: any[] = [];
 
@@ -962,9 +956,7 @@ function _extractDartCallSitesFromBody(bodyNode: any, className: any, methodName
   scanChildren(bodyNode, false);
 }
 
-/**
- * 处理 Dart 函数/方法调用节点
- */
+/** 处理 Dart 函数/方法调用节点 */
 function _processDartCall(
   node: any,
   className: any,

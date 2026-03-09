@@ -349,9 +349,8 @@ function _parseKtProperty(node: any, className: any) {
  * AST: class_declaration → primary_constructor → class_parameter[]
  * Each class_parameter may contain: modifiers, val/var keyword, simple_identifier, user_type
  *
- * @param {object} classNode - class_declaration AST node
- * @param {object} ctx - walker context
- * @param {string} className
+ * @param classNode class_declaration AST node
+ * @param ctx walker context
  */
 function _extractKtConstructorProperties(classNode: any, ctx: any, className: any) {
   const primaryCtor = classNode.namedChildren.find((c: any) => c.type === 'primary_constructor');
@@ -587,9 +586,7 @@ function _maxNesting(node: any, depth: any) {
 
 // ── Kotlin Call Site 提取 (Phase 5) ──────────────────────────
 
-/**
- * 从 Kotlin AST root 提取所有调用点
- */
+/** 从 Kotlin AST root 提取所有调用点 */
 function extractCallSitesKotlin(root: any, ctx: any, _lang: any) {
   const scopes = _collectKtScopes(root);
   for (const scope of scopes) {
@@ -597,9 +594,7 @@ function extractCallSitesKotlin(root: any, ctx: any, _lang: any) {
   }
 }
 
-/**
- * 递归收集 Kotlin 中所有函数体作用域
- */
+/** 递归收集 Kotlin 中所有函数体作用域 */
 function _collectKtScopes(root: any) {
   const scopes: any[] = [];
 
@@ -660,9 +655,7 @@ function _collectKtScopes(root: any) {
   return scopes;
 }
 
-/**
- * 从 Kotlin function body 中递归提取调用点
- */
+/** 从 Kotlin function body 中递归提取调用点 */
 function _extractKtCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;

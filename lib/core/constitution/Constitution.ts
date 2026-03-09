@@ -34,9 +34,7 @@ export interface ConstitutionPriority {
   [key: string]: unknown;
 }
 
-/**
- * Constitution - 宪法加载与管理
- */
+/** Constitution - 宪法加载与管理 */
 export class Constitution {
   priorities: ConstitutionPriority[];
   roles: Map<string, ConstitutionRole>;
@@ -51,9 +49,7 @@ export class Constitution {
     this.roles = new Map(this.config.roles?.map((r: ConstitutionRole) => [r.id, r]) || []);
   }
 
-  /**
-   * 加载宪法配置
-   */
+  /** 加载宪法配置 */
   loadConfig(): ConstitutionConfig {
     if (!fs.existsSync(this.configPath)) {
       throw new Error(`Constitution file not found: ${this.configPath}`);
@@ -74,82 +70,60 @@ export class Constitution {
     return raw;
   }
 
-  /**
-   * 获取所有优先级
-   */
+  /** 获取所有优先级 */
   getPriorities() {
     return this.priorities;
   }
 
-  /**
-   * 获取所有数据守护规则
-   */
+  /** 获取所有数据守护规则 */
   getRules() {
     return this.rules;
   }
 
-  /**
-   * 获取能力定义
-   */
+  /** 获取能力定义 */
   getCapabilities() {
     return this.config.capabilities || {};
   }
 
-  /**
-   * 获取角色需要的能力列表
-   */
+  /** 获取角色需要的能力列表 */
   getRoleRequiredCapabilities(roleId: string) {
     const role = this.getRole(roleId);
     return role ? role.requires_capability || [] : [];
   }
 
-  /**
-   * 获取特定优先级
-   */
+  /** 获取特定优先级 */
   getPriority(id: number) {
     return this.priorities.find((p: ConstitutionPriority) => p.id === id);
   }
 
-  /**
-   * 获取角色定义
-   */
+  /** 获取角色定义 */
   getRole(roleId: string) {
     return this.roles.get(roleId);
   }
 
-  /**
-   * 获取角色权限
-   */
+  /** 获取角色权限 */
   getRolePermissions(roleId: string) {
     const role = this.getRole(roleId);
     return role ? role.permissions : [];
   }
 
-  /**
-   * 获取角色约束
-   */
+  /** 获取角色约束 */
   getRoleConstraints(roleId: string) {
     const role = this.getRole(roleId);
     return role ? role.constraints : [];
   }
 
-  /**
-   * 获取所有角色
-   */
+  /** 获取所有角色 */
   getAllRoles() {
     return Array.from(this.roles.values());
   }
 
-  /**
-   * 验证角色是否存在
-   */
+  /** 验证角色是否存在 */
   hasRole(roleId: string) {
     return this.roles.has(roleId);
   }
 
-  /**
-   * 重新加载宪法（热更新）
-   */
+  /** 重新加载宪法（热更新） */
   reload() {
     this.config = this.loadConfig();
     this.priorities = this.config.priorities || [];
@@ -157,9 +131,7 @@ export class Constitution {
     this.roles = new Map(this.config.roles?.map((r: ConstitutionRole) => [r.id, r]) || []);
   }
 
-  /**
-   * 导出宪法摘要
-   */
+  /** 导出宪法摘要 */
   toJSON() {
     return {
       version: this.config.version,

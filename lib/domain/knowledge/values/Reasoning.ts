@@ -1,6 +1,4 @@
-/**
- * Reasoning — 推理值对象
- */
+/** Reasoning — 推理值对象 */
 interface ReasoningProps {
   whyStandard?: string;
   sources?: string[];
@@ -28,11 +26,7 @@ export class Reasoning {
     this.alternatives = props.alternatives || [];
   }
 
-  /**
-   * 从任意输入构造 Reasoning
-   * @param {Reasoning|Object|null} input
-   * @returns {Reasoning}
-   */
+  /** 从任意输入构造 Reasoning */
   static from(input: unknown): Reasoning {
     if (input instanceof Reasoning) {
       return input;
@@ -50,10 +44,7 @@ export class Reasoning {
     return new Reasoning(input as ReasoningProps);
   }
 
-  /**
-   * 验证推理信息的完整性
-   * @returns {boolean}
-   */
+  /** 验证推理信息的完整性 */
   isValid() {
     return !!(
       this.whyStandard?.trim() &&
@@ -65,9 +56,7 @@ export class Reasoning {
     );
   }
 
-  /**
-   * 转换为 JSON
-   */
+  /** 转换为 JSON */
   toJSON() {
     return {
       whyStandard: this.whyStandard,
@@ -78,11 +67,7 @@ export class Reasoning {
     };
   }
 
-  /**
-   * 从 wire format 创建
-   * @param {Object} data
-   * @returns {Reasoning}
-   */
+  /** 从 wire format 创建 */
   static fromJSON(data: unknown): Reasoning {
     return new Reasoning(data as ReasoningProps);
   }

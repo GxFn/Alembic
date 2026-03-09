@@ -20,8 +20,7 @@ export class PackageSwiftParser {
 
   /**
    * 向上递归查找 Package.swift
-   * @param {string} startPath
-   * @returns {string|null} 路径
+   * @returns 路径
    */
   findPackageSwift(startPath = this.#projectRoot) {
     const cacheKey = `find:${startPath}`;
@@ -47,8 +46,8 @@ export class PackageSwiftParser {
 
   /**
    * 向下递归扫描所有 Package.swift（支持多 Package 项目）
-   * @param {string} rootDir 扫描起点（默认 projectRoot）
-   * @returns {string[]} Package.swift 路径数组
+   * @param rootDir 扫描起点（默认 projectRoot）
+   * @returns Package.swift 路径数组
    */
   findAllPackageSwifts(rootDir = this.#projectRoot) {
     const cacheKey = `findAll:${rootDir}`;
@@ -95,8 +94,7 @@ export class PackageSwiftParser {
 
   /**
    * 解析 Package.swift
-   * @param {string} packagePath
-   * @returns {{ path, name, version, targets, dependencies, products, platforms }}
+   * @returns }
    */
   parse(packagePath: string) {
     if (!packagePath || !existsSync(packagePath)) {
@@ -120,9 +118,7 @@ export class PackageSwiftParser {
     return result;
   }
 
-  /**
-   * 获取包摘要
-   */
+  /** 获取包摘要 */
   getSummary(packagePath: string) {
     try {
       const parsed = this.parse(packagePath);
@@ -138,9 +134,7 @@ export class PackageSwiftParser {
     }
   }
 
-  /**
-   * 提取 target blocks（公开方法，供外部使用）
-   */
+  /** 提取 target blocks（公开方法，供外部使用） */
   extractTargets(content: string) {
     return this.#extractTargets(content);
   }

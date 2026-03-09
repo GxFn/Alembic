@@ -82,11 +82,8 @@ export class GuardService {
   knowledgeRepository: KnowledgeRepositoryLike;
   logger: ReturnType<typeof Logger.getInstance>;
   /**
-   * @param {import('../../domain/knowledge/KnowledgeRepository.js').KnowledgeRepository} knowledgeRepository
-   * @param {object} auditLogger
-   * @param {object} gateway
-   * @param {object} [deps] 可选依赖注入
-   * @param {import('./GuardCheckEngine.js').GuardCheckEngine} [deps.guardCheckEngine] 核心引擎实例
+   * @param [deps] 可选依赖注入
+   * @param [deps.guardCheckEngine] 核心引擎实例
    */
   constructor(
     knowledgeRepository: KnowledgeRepositoryLike,
@@ -98,13 +95,10 @@ export class GuardService {
     this.auditLogger = auditLogger;
     this.gateway = gateway;
     this.logger = Logger.getInstance();
-    /** @type {import('./GuardCheckEngine.js').GuardCheckEngine|null} */
     this._engine = deps.guardCheckEngine || null;
   }
 
-  /**
-   * 创建新规则 → 创建一个 kind=rule, knowledgeType=boundary-constraint 的 KnowledgeEntry
-   */
+  /** 创建新规则 → 创建一个 kind=rule, knowledgeType=boundary-constraint 的 KnowledgeEntry */
   async createRule(data: CreateRuleData, context: ActionContext) {
     try {
       this._validateCreateInput(data);
@@ -160,9 +154,7 @@ export class GuardService {
     }
   }
 
-  /**
-   * 启用规则（将 lifecycle 设为 active）
-   */
+  /** 启用规则（将 lifecycle 设为 active） */
   async enableRule(ruleId: string, context: ActionContext) {
     try {
       const entry = await this.knowledgeRepository.findById(ruleId);
@@ -193,9 +185,7 @@ export class GuardService {
     }
   }
 
-  /**
-   * 禁用规则（将 lifecycle 设为 deprecated）
-   */
+  /** 禁用规则（将 lifecycle 设为 deprecated） */
   async disableRule(ruleId: string, reason: string, context: ActionContext) {
     try {
       const entry = await this.knowledgeRepository.findById(ruleId);
@@ -333,9 +323,7 @@ export class GuardService {
     return matches;
   }
 
-  /**
-   * 查询规则列表 (kind='rule' + knowledgeType='boundary-constraint')
-   */
+  /** 查询规则列表 (kind='rule' + knowledgeType='boundary-constraint') */
   async listRules(
     filters: Record<string, unknown> = {},
     pagination: { page?: number; pageSize?: number } = {}
@@ -352,9 +340,7 @@ export class GuardService {
     }
   }
 
-  /**
-   * 搜索规则
-   */
+  /** 搜索规则 */
   async searchRules(keyword: string, pagination: { page?: number; pageSize?: number } = {}) {
     try {
       const { page = 1, pageSize = 20 } = pagination;
@@ -370,9 +356,7 @@ export class GuardService {
     }
   }
 
-  /**
-   * 获取规则统计
-   */
+  /** 获取规则统计 */
   async getRuleStats() {
     try {
       return this.knowledgeRepository.getStats();

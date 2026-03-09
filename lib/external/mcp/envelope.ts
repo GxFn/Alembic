@@ -4,13 +4,8 @@
  */
 
 /**
- * @param {object} opts
- * @param {boolean} opts.success
- * @param {*}       [opts.data]
- * @param {string}  [opts.message]
- * @param {object}  [opts.meta]        - { tool, version, responseTimeMs, source }
- * @param {string}  [opts.errorCode]
- * @returns {object} 标准化响应对象
+ * @param [opts.meta] { tool, version, responseTimeMs, source }
+ * @returns 标准化响应对象
  */
 export interface EnvelopeMeta {
   responseTimeMs?: number;

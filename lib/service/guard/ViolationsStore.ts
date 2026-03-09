@@ -44,9 +44,7 @@ export class ViolationsStore {
   #db: DatabaseLike;
   #drizzle: DrizzleDB;
 
-  /**
-   * @param {import('better-sqlite3').Database} db - SQLite 数据库实例
-   */
+  /** @param db SQLite 数据库实例 */
   constructor(db: DatabaseLike, drizzle?: DrizzleDB) {
     this.#db = db;
     this.#drizzle = drizzle ?? getDrizzle();
@@ -130,9 +128,7 @@ export class ViolationsStore {
     return rows.reverse().map((r) => this.#rowToRun(r));
   }
 
-  /**
-   * 获取统计汇总
-   */
+  /** 获取统计汇总 */
   getStats() {
     const row = this.#db
       .prepare(`
@@ -156,7 +152,7 @@ export class ViolationsStore {
   /**
    * 按规则 ID 聚合统计
    * 利用 SQLite json_each 展开 violations_json 数组
-   * @returns {Array<{ruleId: string, severity: string, count: number}>}
+   * @returns >}
    */
   getStatsByRule() {
     try {
@@ -179,7 +175,7 @@ export class ViolationsStore {
 
   /**
    * 获取趋势数据 — 对比最近两次运行
-   * @returns {{ errorsChange: number, warningsChange: number, latestErrors: number, latestWarnings: number, previousErrors: number, previousWarnings: number }}
+   * @returns }
    */
   getTrend() {
     const recent = this.getRecentRuns(2);
@@ -223,9 +219,7 @@ export class ViolationsStore {
     this.#drizzle.delete(guardViolations).run();
   }
 
-  /**
-   * 清除指定规则或文件的记录
-   */
+  /** 清除指定规则或文件的记录 */
   async clearAll() {
     this.clearRuns();
   }
@@ -238,9 +232,7 @@ export class ViolationsStore {
     }
   }
 
-  /**
-   * 兼容 v2 violations.js 路由的 list()
-   */
+  /** 兼容 v2 violations.js 路由的 list() */
   async list(filters: { file?: string } = {}, { page = 1, limit = 20 } = {}) {
     const offset = (page - 1) * limit;
     let sql = 'SELECT * FROM guard_violations';
@@ -270,9 +262,7 @@ export class ViolationsStore {
 
   // ─── 内部 ─────────────────────────────────────────────
 
-  /**
-   * 行转运行记录（兼容 raw SQL snake_case 和 Drizzle camelCase）
-   */
+  /** 行转运行记录（兼容 raw SQL snake_case 和 Drizzle camelCase） */
   #rowToRun(row: Record<string, unknown>): RunOutput {
     const violationsRaw = (row.violationsJson ?? row.violations_json) as string | undefined;
     return {

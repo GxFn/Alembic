@@ -6,21 +6,21 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import express, { type Request, type Response } from 'express';
-import { createProvider } from '../../external/ai/AiFactory.js';
-import Logger from '../../infrastructure/logging/Logger.js';
-import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
-import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import { AgentMessage, Channel } from '../../service/agent/AgentMessage.js';
-import { ConversationStore } from '../../service/agent/ConversationStore.js';
-import { buildProjectBriefing } from '../../service/agent/core/ChatAgentPrompts.js';
+import { AgentMessage, Channel } from '../../agent/AgentMessage.js';
+import { ConversationStore } from '../../agent/ConversationStore.js';
+import { buildProjectBriefing } from '../../agent/core/ChatAgentPrompts.js';
 import {
   taskCheckAndSubmit,
   taskDiscoverAllRelations,
   taskFullEnrich,
   taskGuardFullScan,
   taskQualityAudit,
-} from '../../service/agent/domain/ChatAgentTasks.js';
-import { PRESETS } from '../../service/agent/presets.js';
+} from '../../agent/domain/ChatAgentTasks.js';
+import { PRESETS } from '../../agent/presets.js';
+import { createProvider } from '../../external/ai/AiFactory.js';
+import Logger from '../../infrastructure/logging/Logger.js';
+import { getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
+import { getServiceContainer } from '../../injection/ServiceContainer.js';
 import { ValidationError } from '../../shared/errors/index.js';
 import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {

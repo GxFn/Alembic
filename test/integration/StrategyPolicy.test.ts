@@ -16,8 +16,8 @@ import {
   PolicyEngine,
   QualityGatePolicy,
   SafetyPolicy,
-} from '../../lib/service/agent/policies.js';
-import { PipelineStrategy, SingleStrategy, Strategy } from '../../lib/service/agent/strategies.js';
+} from '../../lib/agent/policies.js';
+import { PipelineStrategy, SingleStrategy, Strategy } from '../../lib/agent/strategies.js';
 
 describe('Integration: Agent Strategies', () => {
   describe('SingleStrategy', () => {

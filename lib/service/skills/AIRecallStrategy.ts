@@ -58,9 +58,7 @@ export class AIRecallStrategy implements RecallStrategy {
     return mode === 'suggest' || mode === 'auto';
   }
 
-  /**
-   * 更新 SignalCollector 引用 (用于延迟注入)
-   */
+  /** 更新 SignalCollector 引用 (用于延迟注入) */
   setSignalCollector(sc: SignalCollectorLike) {
     this.#signalCollector = sc;
   }

@@ -95,9 +95,7 @@ export class RemoteCommandRepository {
   //  写入操作
   // ═══════════════════════════════════════════════════
 
-  /**
-   * 写入新的远程指令到队列
-   */
+  /** 写入新的远程指令到队列 */
   enqueue(input: CreateCommandInput): void {
     this.#drizzle
       .insert(remoteCommands)
@@ -128,9 +126,7 @@ export class RemoteCommandRepository {
     return result.changes > 0;
   }
 
-  /**
-   * 提交指令执行结果（running → completed/failed/...）
-   */
+  /** 提交指令执行结果（running → completed/failed/...） */
   complete(id: string, resultText: string, status = 'completed'): void {
     this.#drizzle
       .update(remoteCommands)
@@ -184,9 +180,7 @@ export class RemoteCommandRepository {
   //  查询操作
   // ═══════════════════════════════════════════════════
 
-  /**
-   * 获取最早的一条 pending 指令
-   */
+  /** 获取最早的一条 pending 指令 */
   findFirstPending(): RemoteCommandRow | null {
     const rows = this.#drizzle
       .select()
@@ -198,9 +192,7 @@ export class RemoteCommandRepository {
     return (rows[0] as RemoteCommandRow) ?? null;
   }
 
-  /**
-   * 根据 ID 获取指令
-   */
+  /** 根据 ID 获取指令 */
   findById(id: string): RemoteCommandRow | null {
     const rows = this.#drizzle
       .select()
@@ -211,9 +203,7 @@ export class RemoteCommandRepository {
     return (rows[0] as RemoteCommandRow) ?? null;
   }
 
-  /**
-   * 获取历史记录（按创建时间降序）
-   */
+  /** 获取历史记录（按创建时间降序） */
   getHistory(limit = 20): RemoteCommandRow[] {
     return this.#drizzle
       .select()
@@ -223,9 +213,7 @@ export class RemoteCommandRepository {
       .all() as RemoteCommandRow[];
   }
 
-  /**
-   * 获取各状态的指令计数（用于 /lark/status 诊断面板）
-   */
+  /** 获取各状态的指令计数（用于 /lark/status 诊断面板） */
   getStatusCounts(): StatusCounts {
     const counts: StatusCounts = { pending: 0, running: 0, completed: 0, timeout: 0 };
     for (const s of ['pending', 'running', 'completed', 'timeout'] as const) {
@@ -235,9 +223,7 @@ export class RemoteCommandRepository {
     return counts;
   }
 
-  /**
-   * 查找最近一次 claim 记录（用于 IDE 心跳检测）
-   */
+  /** 查找最近一次 claim 记录（用于 IDE 心跳检测） */
   findRecentClaim(): { claimedAt: number } | null {
     const rows = this.#drizzle
       .select({ claimedAt: remoteCommands.claimedAt })
@@ -250,9 +236,7 @@ export class RemoteCommandRepository {
     return row?.claimedAt != null ? { claimedAt: row.claimedAt } : null;
   }
 
-  /**
-   * 查找最近有 chatId 的指令（用于恢复活跃会话）
-   */
+  /** 查找最近有 chatId 的指令（用于恢复活跃会话） */
   findRecentChatId(): string | null {
     const rows = this.#drizzle
       .select({ chatId: remoteCommands.chatId })
@@ -285,9 +269,7 @@ export class RemoteCommandRepository {
   //  remote_state 键值存储
   // ═══════════════════════════════════════════════════
 
-  /**
-   * 持久化键值对到 remote_state
-   */
+  /** 持久化键值对到 remote_state */
   setState(key: string, value: string): void {
     this.#drizzle
       .insert(remoteState)
@@ -299,9 +281,7 @@ export class RemoteCommandRepository {
       .run();
   }
 
-  /**
-   * 从 remote_state 读取值
-   */
+  /** 从 remote_state 读取值 */
   getState(key: string): string | null {
     const rows = this.#drizzle
       .select({ value: remoteState.value })

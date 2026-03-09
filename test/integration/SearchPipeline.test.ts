@@ -158,9 +158,7 @@ describe('Integration: Search Pipeline', () => {
   describe('SearchEngine 端到端搜索', () => {
     let engine;
 
-    /**
-     * 向 knowledge_entries 表插入测试条目
-     */
+    /** 向 knowledge_entries 表插入测试条目 */
     function seedEntry(overrides = {}) {
       const id = overrides.id || `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const defaults = {

@@ -39,9 +39,9 @@ export class PathGuardError extends Error {
   projectRoot: string;
   targetPath: string;
   /**
-   * @param {string} targetPath 被拦截的目标路径
-   * @param {string} projectRoot 当前项目根目录
-   * @param {string} [reason] 拦截原因
+   * @param targetPath 被拦截的目标路径
+   * @param projectRoot 当前项目根目录
+   * @param [reason] 拦截原因
    */
   constructor(targetPath: string, projectRoot: string, reason?: string) {
     const msg = reason
@@ -69,9 +69,7 @@ const PROJECT_WRITE_SCOPE_PREFIXES = [
   '.github', // Copilot instructions
 ];
 
-/**
- * 项目根目录下允许直接写入的文件（非目录前缀匹配）
- */
+/** 项目根目录下允许直接写入的文件（非目录前缀匹配） */
 const PROJECT_ROOT_WRITABLE_FILES = ['.gitignore', '.env'];
 
 class PathGuard {
@@ -96,11 +94,10 @@ class PathGuard {
 
   /**
    * 配置 PathGuard（每个进程执行一次）
-   * @param {object} opts
-   * @param {string} opts.projectRoot 用户项目根目录（绝对路径）
-   * @param {string} [opts.packageRoot] - AutoSnippet 包自身根目录
-   * @param {string} [opts.knowledgeBaseDir='AutoSnippet'] 知识库目录名
-   * @param {string[]} [opts.extraAllowPaths] 额外允许的路径前缀
+   * @param opts.projectRoot 用户项目根目录（绝对路径）
+   * @param [opts.packageRoot] AutoSnippet 包自身根目录
+   * @param [opts.knowledgeBaseDir='AutoSnippet'] 知识库目录名
+   * @param [opts.extraAllowPaths] 额外允许的路径前缀
    */
   configure({
     projectRoot,
@@ -154,7 +151,7 @@ class PathGuard {
 
   /**
    * 设置知识库目录名（可在 configure 之后延迟设置）
-   * @param {string} dirName 如 'AutoSnippet'、'Knowledge' 等
+   * @param dirName 如 'AutoSnippet'、'Knowledge' 等
    */
   setKnowledgeBaseDir(dirName: string) {
     if (dirName && typeof dirName === 'string') {
@@ -165,7 +162,7 @@ class PathGuard {
   /**
    * Layer 1: 断言路径在允许的边界范围内
    * 用于修改已有文件的场景（如 XcodeIntegration 插入 header、SpmHelper 修改 Package.swift）
-   * @param {string} targetPath 要写入的绝对路径
+   * @param targetPath 要写入的绝对路径
    * @throws {PathGuardError}
    */
   assertSafe(targetPath: string) {
@@ -204,7 +201,7 @@ class PathGuard {
    * Layer 2: 断言路径在项目内允许的写入作用域中
    * 用于创建新目录/新文件的场景（如 mkdirSync、writeFileSync 创建新文件）
    * 比 assertSafe() 更严格：即使在 projectRoot 内，也只允许写入特定前缀
-   * @param {string} targetPath 要创建的绝对路径
+   * @param targetPath 要创建的绝对路径
    * @throws {PathGuardError}
    */
   assertProjectWriteSafe(targetPath: string) {
@@ -288,11 +285,7 @@ class PathGuard {
     );
   }
 
-  /**
-   * 安全检查（不抛错，返回 boolean）
-   * @param {string} targetPath
-   * @returns {boolean}
-   */
+  /** 安全检查（不抛错，返回 boolean） */
   isSafe(targetPath: string) {
     try {
       this.assertSafe(targetPath);
@@ -302,11 +295,7 @@ class PathGuard {
     }
   }
 
-  /**
-   * 项目内写入范围检查（不抛错，返回 boolean）
-   * @param {string} targetPath
-   * @returns {boolean}
-   */
+  /** 项目内写入范围检查（不抛错，返回 boolean） */
   isProjectWriteSafe(targetPath: string) {
     try {
       this.assertProjectWriteSafe(targetPath);
@@ -319,8 +308,7 @@ class PathGuard {
   /**
    * 将相对路径安全地解析到 projectRoot 下
    * 替代 path.resolve(relativePath)（后者基于 cwd，不安全）
-   * @param {string} relativePath
-   * @returns {string} 绝对路径
+   * @returns 绝对路径
    */
   resolveProjectPath(relativePath: string) {
     if (!this.#configured || !this.#projectRoot) {
@@ -332,9 +320,7 @@ class PathGuard {
     return resolved;
   }
 
-  /**
-   * 重置状态（仅用于测试）
-   */
+  /** 重置状态（仅用于测试） */
   _reset() {
     this.#projectRoot = null;
     this.#packageRoot = null;
@@ -344,9 +330,7 @@ class PathGuard {
     this.#isDevRepo = false;
   }
 
-  /**
-   * resolved 是否在 base 目录下
-   */
+  /** resolved 是否在 base 目录下 */
   #isUnder(resolved: string, base: string) {
     return resolved === base || resolved.startsWith(base + path.sep);
   }

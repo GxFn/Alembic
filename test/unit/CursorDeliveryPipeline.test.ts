@@ -2,16 +2,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { vi } from 'vitest';
-import { CursorDeliveryPipeline } from '../../lib/service/cursor/CursorDeliveryPipeline.js';
-import { KnowledgeCompressor } from '../../lib/service/cursor/KnowledgeCompressor.js';
-import { RulesGenerator } from '../../lib/service/cursor/RulesGenerator.js';
-import { SkillsSyncer } from '../../lib/service/cursor/SkillsSyncer.js';
+import { CursorDeliveryPipeline } from '../../lib/service/delivery/CursorDeliveryPipeline.js';
+import { KnowledgeCompressor } from '../../lib/service/delivery/KnowledgeCompressor.js';
+import { RulesGenerator } from '../../lib/service/delivery/RulesGenerator.js';
+import { SkillsSyncer } from '../../lib/service/delivery/SkillsSyncer.js';
 import {
   BUDGET,
   estimateTokens,
   truncateToTokenBudget,
-} from '../../lib/service/cursor/TokenBudget.js';
-import { TopicClassifier } from '../../lib/service/cursor/TopicClassifier.js';
+} from '../../lib/service/delivery/TokenBudget.js';
+import { TopicClassifier } from '../../lib/service/delivery/TopicClassifier.js';
 
 /* ════════════════════════════════════════════
  *  TokenBudget

@@ -14,11 +14,7 @@
  *     $0                  → (移除，Xcode 无终止光标)
  */
 export class PlaceholderConverter {
-  /**
-   * Xcode → VSCode 占位符转换
-   * @param {string} code
-   * @returns {string}
-   */
+  /** Xcode → VSCode 占位符转换 */
   static xcodeToVSCode(code: string): string {
     if (!code) {
       return '';
@@ -35,11 +31,7 @@ export class PlaceholderConverter {
     });
   }
 
-  /**
-   * VSCode → Xcode 占位符转换
-   * @param {string} code
-   * @returns {string}
-   */
+  /** VSCode → Xcode 占位符转换 */
   static vscodeToXcode(code: string): string {
     if (!code) {
       return '';

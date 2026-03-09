@@ -44,12 +44,11 @@ const SKIP_DIRS = new Set([
 
 /**
  * 递归收集目录下所有源文件路径
- * @param {string} dir 根目录
- * @param {object} options
- * @param {Set<string>} [options.extensions] 允许的扩展名（默认 SOURCE_EXTS）
- * @param {Set<string>} [options.skipDirs] 跳过的目录名（默认 SKIP_DIRS）
- * @param {number} [options.maxFiles] 最大文件数量（默认无限制）
- * @returns {Promise<string[]>} 文件路径列表
+ * @param dir 根目录
+ * @param [options.extensions] 允许的扩展名（默认 SOURCE_EXTS）
+ * @param [options.skipDirs] 跳过的目录名（默认 SKIP_DIRS）
+ * @param [options.maxFiles] 最大文件数量（默认无限制）
+ * @returns 文件路径列表
  */
 export async function collectSourceFiles(
   dir: string,
@@ -96,9 +95,9 @@ export async function collectSourceFiles(
 
 /**
  * 收集源文件并读取内容
- * @param {string} dir 根目录
- * @param {object} options - collectSourceFiles 选项
- * @returns {Promise<Array<{path: string, content: string}>>}
+ * @param dir 根目录
+ * @param options collectSourceFiles 选项
+ * @returns >>}
  */
 export async function collectSourceFilesWithContent(
   dir: string,

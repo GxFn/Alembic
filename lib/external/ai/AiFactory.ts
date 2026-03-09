@@ -27,8 +27,7 @@ const DEEPSEEK_BASE = 'https://api.deepseek.com/v1';
 
 /**
  * 创建 AI Provider 实例
- * @param {object} options - {provider, model, apiKey, baseUrl}
- * @returns {AiProvider}
+ * @param options {provider, model, apiKey, baseUrl}
  */
 export function createProvider(options: Record<string, unknown> = {}) {
   const provider = (options.provider as string) || process.env.ASD_AI_PROVIDER || 'google';
@@ -137,11 +136,7 @@ const PROVIDER_KEY_MAP = {
   claude: 'ASD_CLAUDE_API_KEY',
 };
 
-/**
- * 获取可用的 fallback provider 列表（排除当前 provider）
- * @param {string} currentProvider
- * @returns {string[]}
- */
+/** 获取可用的 fallback provider 列表（排除当前 provider） */
 export function getAvailableFallbacks(currentProvider: string) {
   const fallbacks: string[] = [];
   for (const [name, envKey] of Object.entries(PROVIDER_KEY_MAP)) {
@@ -156,9 +151,7 @@ export function getAvailableFallbacks(currentProvider: string) {
   return fallbacks;
 }
 
-/**
- * 判断是否为地理限制 / 不可恢复的 provider 级错误（应触发 fallback）
- */
+/** 判断是否为地理限制 / 不可恢复的 provider 级错误（应触发 fallback） */
 export function isGeoOrProviderError(err: unknown) {
   const msg = ((err as Error).message || '').toLowerCase();
   return (
@@ -172,7 +165,6 @@ export function isGeoOrProviderError(err: unknown) {
 /**
  * 获取 AI Provider，带自动 fallback：
  * 当主 provider 调用失败（地理限制等）时自动切换到备选 provider
- * @returns {Promise<AiProvider>}
  */
 export async function getProviderWithFallback() {
   const logger = Logger.getInstance();
@@ -220,9 +212,7 @@ export async function getProviderWithFallback() {
   return primary;
 }
 
-/**
- * 获取当前 AI 配置信息（同步，用于 UI 展示）
- */
+/** 获取当前 AI 配置信息（同步，用于 UI 展示） */
 export function getAiConfigInfo() {
   const provider = process.env.ASD_AI_PROVIDER || 'auto';
   const model = process.env.ASD_AI_MODEL || '';

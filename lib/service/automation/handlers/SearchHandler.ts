@@ -1,15 +1,7 @@
-/**
- * SearchHandler — 处理 // as:s 指令
- */
+/** SearchHandler — 处理 // as:s 指令 */
 
 import Logger from '#infra/logging/Logger.js';
 
-/**
- * @param {import('../FileWatcher.js').FileWatcher} watcher
- * @param {string} fullPath
- * @param {string} relativePath
- * @param {string} searchLine
- */
 export async function handleSearch(
   watcher: import('../FileWatcher.js').FileWatcher,
   fullPath: string,
@@ -75,7 +67,7 @@ export async function handleSearch(
   }
 
   // NativeUI 交互选择
-  const NU = await import('../../../infrastructure/external/NativeUi.js');
+  const NU = await import('../../../platform/NativeUi.js');
   const selectedIndex = NU.showCombinedWindow(items, query);
 
   if (selectedIndex < 0 || selectedIndex >= items.length) {
@@ -87,7 +79,7 @@ export async function handleSearch(
   // 如果 selected 没有 moduleName，尝试从当前文件路径推断
   if (!selected.moduleName && selected.headers && selected.headers.length > 0) {
     try {
-      const HeaderResolver = await import('../../../infrastructure/paths/HeaderResolver.js');
+      const HeaderResolver = await import('../../../platform/ios/xcode/HeaderResolver.js');
       const resolved = await HeaderResolver.resolveHeadersForText(
         watcher.projectRoot,
         relativePath,
@@ -106,9 +98,7 @@ export async function handleSearch(
   await insertCodeToXcode(watcher, fullPath, selected, searchLine);
 }
 
-/**
- * 将搜索结果标准化为 NativeUI 可展示格式
- */
+/** 将搜索结果标准化为 NativeUI 可展示格式 */
 export function normalizeSearchResults(results: unknown) {
   if (!results) {
     return [];
@@ -277,8 +267,8 @@ function _separateImportsFromCode(code: string) {
  * 支持 ```lang\n...\n``` 格式，提取多个代码块并用空行分隔。
  * 如果没有找到代码块，返回空字符串。
  *
- * @param {string} md - Markdown 文本
- * @returns {string} 提取出的纯代码，或空字符串
+ * @param md Markdown 文本
+ * @returns 提取出的纯代码，或空字符串
  */
 function _extractCodeFromMarkdown(md: string) {
   if (!md) {
@@ -301,8 +291,8 @@ function _extractCodeFromMarkdown(md: string) {
  *
  * 用于在无法提取代码时，从 markdown 生成 explanation 文本。
  *
- * @param {string} md - Markdown 文本
- * @returns {string} 纯文本
+ * @param md Markdown 文本
+ * @returns 纯文本
  */
 function _stripMarkdownFormatting(md: string) {
   if (!md) {

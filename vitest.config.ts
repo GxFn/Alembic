@@ -1,6 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  resolve: {
+    conditions: ['asd-dev'],
+  },
   test: {
     include: ['test/**/*.test.ts'],
     globals: true,

@@ -23,7 +23,7 @@
 ### 技术栈与编码约定
 - **语言**：TypeScript (ES2024, NodeNext)，Node.js ≥ 22
 - **模块系统**：ESM (`"type": "module"`)，import 路径必须带 `.js` 后缀（如 `import foo from './foo.js'`）
-- **路径别名**：使用 `#shared/*`、`#infra/*`、`#service/*`、`#domain/*`、`#inject/*`、`#core/*`、`#external/*`、`#platform/*`、`#repo/*`、`#types/*`、`#http/*`（定义在 package.json imports 字段）
+- **路径别名**：使用 `#shared/*`、`#infra/*`、`#service/*`、`#agent/*`、`#domain/*`、`#inject/*`、`#core/*`、`#external/*`、`#platform/*`、`#repo/*`、`#types/*`、`#http/*`（定义在 package.json imports 字段）
 - **Lint / Format**：Biome 2.0（不使用 Prettier/ESLint），`npm run lint` 检查，`npm run lint:fix` 修复
 - **测试框架**：Vitest 4.x，测试文件在 `test/unit/` 和 `test/integration/`
 - **构建**：`npm run build`（tsc），Dashboard: `npm run build:dashboard`（Vite）
@@ -48,16 +48,17 @@
 ```
 lib/
 ├── core/         # 核心业务逻辑（Constitution、Gateway、Permission）
-├── domain/       # 领域实体（KnowledgeEntry、Lifecycle、GuardRule）
-├── service/      # 服务层（Knowledge、Guard、Agent、Context）
+├── domain/       # 领域实体（KnowledgeEntry、Lifecycle、FieldSpec、UnifiedValidator、StyleGuide）
+├── agent/        # Agent 智能层（AgentRuntime、Memory、Context、Tools）
+├── service/      # 服务层（Knowledge、Guard、Search、Skills、Task、Bootstrap、Delivery）
 ├── repository/   # 数据访问层（KnowledgeRepository）
 ├── infrastructure/ # 基础设施（Database、Config、Vector、Logging）
 ├── injection/    # 依赖注入容器（ServiceContainer、Modules）
-├── external/     # 外部接口（MCP Server、HTTP API）
-├── platform/     # 平台适配（Xcode、Swift、Language Discoverers）
+├── external/     # 外部接口（MCP Server、Lark Transport）
+├── platform/     # 平台适配（Xcode、Swift、Language Discoverers、NativeUi）
 ├── cli/          # CLI 命令实现
 ├── http/         # HTTP Server / 路由
-├── shared/       # 共享工具（PathGuard、package-root、shutdown）
+├── shared/       # 共享工具（PathGuard、package-root、LanguageService、shutdown）
 └── types/        # 类型定义
 ```
 

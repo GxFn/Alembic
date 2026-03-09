@@ -20,16 +20,10 @@ export class SpmHelper {
   #logger;
   #projectRoot;
 
-  /**
-   * target → { packageName, packagePath } 映射（V1 spmmap 等价）
-   * @type {Map<string, {packageName: string, packagePath: string}>}
-   */
+  /** target → { packageName, packagePath } 映射（V1 spmmap 等价） */
   #targetPackageMap;
 
-  /**
-   * 包级依赖图：packagePath → Set<packagePath>（用于跨包循环检测）
-   * @type {Map<string, Set<string>>}
-   */
+  /** 包级依赖图：packagePath → Set<packagePath>（用于跨包循环检测） */
   #packageDepGraph;
 
   /** @type {GraphCache} 磁盘缓存层 */
@@ -131,8 +125,7 @@ export class SpmHelper {
 
   /**
    * 多包加载（从 load() 拆出）
-   * @param {string[]} allPaths Package.swift 路径数组
-   * @returns {object|null}
+   * @param allPaths Package.swift 路径数组
    */
   #loadMultiPackage(allPaths: string[]) {
     this.#logger.info(`[SpmHelper] 发现 ${allPaths.length} 个 Package.swift，逐一解析...`);
@@ -181,9 +174,7 @@ export class SpmHelper {
     };
   }
 
-  /**
-   * 将当前内存状态序列化到缓存
-   */
+  /** 将当前内存状态序列化到缓存 */
   #saveToCache(contentHash: string, parsedResult: Record<string, unknown>) {
     const graphJSON = this.#graph.toJSON();
     const targetPackageEntries = [...this.#targetPackageMap.entries()];
@@ -202,9 +193,7 @@ export class SpmHelper {
     );
   }
 
-  /**
-   * 从缓存数据恢复内存状态
-   */
+  /** 从缓存数据恢复内存状态 */
   #restoreFromCache(data: {
     graphNodes?: string[];
     graphEdges?: { from: string; to: string }[];
@@ -280,9 +269,8 @@ export class SpmHelper {
 
   /**
    * BFS 检查包级可达性（V1 _canReachPackage 等价）
-   * @param {string} fromPkgPath 起始包的 Package.swift 路径
-   * @param {string} toPkgPath 目标包的 Package.swift 路径
-   * @returns {boolean}
+   * @param fromPkgPath 起始包的 Package.swift 路径
+   * @param toPkgPath 目标包的 Package.swift 路径
    */
   _canReachPackage(fromPkgPath: string, toPkgPath: string) {
     if (fromPkgPath === toPkgPath) {
@@ -313,8 +301,7 @@ export class SpmHelper {
 
   /**
    * 获取 target 所属包信息（V1 spmmap 等价）
-   * @param {string} targetName
-   * @returns {{ packageName: string, packagePath: string } | null}
+   * @returns | null}
    */
   getPackageForTarget(targetName: string) {
     return this.#targetPackageMap.get(targetName) || null;
@@ -326,7 +313,6 @@ export class SpmHelper {
    * - off:     不检查、不提示
    * - suggest: 仅提示（直接插入、提示操作插入按钮，无自动修复）
    * - fix:     完整4按钮（直接插入、提示操作插入、自动修复依赖、取消操作）
-   * @returns {'off'|'suggest'|'fix'}
    */
   getFixMode() {
     const env = (process.env.ASD_FIX_SPM_DEPS_MODE || '').toLowerCase().trim();
@@ -339,9 +325,9 @@ export class SpmHelper {
   /**
    * 确保依赖存在: 如果不存在则评估是否可以添加
    * 支持跨包循环检测：如果 from 和 to 在不同包内，额外检查包级依赖图
-   * @param {string} from 源 target
-   * @param {string} to 目标 target
-   * @returns {{ exists: boolean, canAdd: boolean, reason?: string, crossPackage?: boolean }}
+   * @param from 源 target
+   * @param to 目标 target
+   * @returns }
    */
   ensureDependency(from: string, to: string) {
     if (this.#graph.isReachable(from, to)) {
@@ -383,9 +369,9 @@ export class SpmHelper {
    * 同包 target → 添加 "TargetName" 到 dependencies
    * 跨包 target → 添加 .product(name: "X", package: "Y") + 确保 .package(path: "...") 声明
    *
-   * @param {string} from 源 target
-   * @param {string} to 目标 target
-   * @returns {{ ok: boolean, changed: boolean, file?: string, error?: string, crossPackage?: boolean }}
+   * @param from 源 target
+   * @param to 目标 target
+   * @returns }
    */
   addDependency(from: string, to: string) {
     // 安全检查
@@ -486,10 +472,10 @@ export class SpmHelper {
 
   /**
    * 确保 Package.swift 中有对目标包的 .package(path: "...") 声明
-   * @param {string} content - Package.swift 内容
-   * @param {string} fromPkgPath 当前包的 Package.swift 路径
+   * @param content Package.swift 内容
+   * @param fromPkgPath 当前包的 Package.swift 路径
    * @param {{ packageName: string, packagePath: string }} toPkg 目标包信息
-   * @returns {{ changed: boolean, content: string }}
+   * @returns }
    */
   #ensurePackageDependency(
     content: string,
@@ -541,8 +527,8 @@ export class SpmHelper {
    *
    * 从文件到 Package.swift 所在目录的相对路径中，反向匹配已知 target 名。
    * 如果文件不在任何 SPM target 的源码目录中（如 Xcode 主 App target），返回 null。
-   * @param {string} filePath 源文件绝对路径
-   * @returns {string|null} target 名称，未匹配返回 null
+   * @param filePath 源文件绝对路径
+   * @returns target 名称，未匹配返回 null
    */
   resolveCurrentTarget(filePath: string) {
     try {

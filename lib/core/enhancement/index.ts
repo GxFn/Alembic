@@ -16,7 +16,6 @@ let _instance: EnhancementRegistry | null = null;
  * 获取全局 EnhancementRegistry 单例
  * 注意: 首次访问前必须调用 initEnhancementRegistry() 完成异步加载
  * 如果未初始化, 返回空 Registry（不会抛错, 但 resolve() 结果为空）
- * @returns {EnhancementRegistry}
  */
 export function getEnhancementRegistry() {
   if (_instance) {

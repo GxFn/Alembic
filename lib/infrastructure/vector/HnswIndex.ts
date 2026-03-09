@@ -15,10 +15,7 @@
 
 // ── 堆结构 ──
 
-/** @typedef {{ nodeIdx: number, dist: number }} HeapItem */
-
 class MinHeap {
-  /** @type {HeapItem[]} */
   #data: { nodeIdx: number; dist: number }[] = [];
 
   get size() {
@@ -86,7 +83,6 @@ class MinHeap {
 }
 
 class MaxHeap {
-  /** @type {HeapItem[]} */
   #data: { nodeIdx: number; dist: number }[] = [];
 
   get size() {
@@ -182,13 +178,7 @@ export class HnswIndex {
   // ── 可选的自定义距离函数 (用于量化空间) ──
   #distanceFn: ((a: Float32Array | number[], b: Float32Array | number[]) => number) | null = null;
 
-  /**
-   * @param {object} options
-   * @param {number} [options.M=16]
-   * @param {number} [options.efConstruct=200]
-   * @param {number} [options.efSearch=100]
-   * @param {function} [options.distanceFn] - 自定义距离函数 (a, b) => number
-   */
+  /** @param [options.distanceFn] 自定义距离函数 (a, b) => number */
   constructor(
     options: {
       M?: number;
@@ -207,19 +197,12 @@ export class HnswIndex {
     }
   }
 
-  /**
-   * 获取节点数量
-   */
+  /** 获取节点数量 */
   get size() {
     return this.nodes.length;
   }
 
-  /**
-   * 余弦距离 = 1 - cosineSimilarity (越小越相似)
-   * @param {Float32Array|number[]} a
-   * @param {Float32Array|number[]} b
-   * @returns {number}
-   */
+  /** 余弦距离 = 1 - cosineSimilarity (越小越相似) */
   distance(a: Float32Array | number[], b: Float32Array | number[]) {
     if (this.#distanceFn) {
       return this.#distanceFn(a, b);
@@ -230,29 +213,20 @@ export class HnswIndex {
   /**
    * 随机选取节点层级 (几何分布)
    * 使用 1 - Math.random() 避免 log(0) = -Infinity
-   * @returns {number}
    */
   #randomLevel() {
     // 1 - Math.random() ∈ (0, 1], 永远不会为 0
     return Math.floor(-Math.log(1 - Math.random()) * this.mL);
   }
 
-  /**
-   * 确保 graphs 数组至少有 level+1 层
-   * @param {number} level
-   */
+  /** 确保 graphs 数组至少有 level+1 层 */
   #ensureLevel(level: number) {
     while (this.graphs.length <= level) {
       this.graphs.push(new Map());
     }
   }
 
-  /**
-   * 获取节点在某层的邻居集合 (如不存在则创建)
-   * @param {number} level
-   * @param {number} nodeIdx
-   * @returns {Set<number>}
-   */
+  /** 获取节点在某层的邻居集合 (如不存在则创建) */
   #getNeighbors(level: number, nodeIdx: number): Set<number> {
     const graph = this.graphs[level];
     if (!graph) {
@@ -268,10 +242,8 @@ export class HnswIndex {
 
   /**
    * 插入一个向量到索引
-   * @param {string} id - 文档 ID
-   * @param {Float32Array|number[]} vector
-   * @param {object} [options]
-   * @param {Uint8Array} [options.qvector] - 预量化向量 (SQ8), 用于 2-pass 搜索加速
+   * @param id 文档 ID
+   * @param [options.qvector] 预量化向量 (SQ8), 用于 2-pass 搜索加速
    */
   addPoint(
     id: string,
@@ -341,7 +313,6 @@ export class HnswIndex {
   /**
    * 移除一个向量 (软删除: 断开所有连接但保留 slot)
    * 完整的 compaction 可在持久化时做
-   * @param {string} id
    */
   removePoint(id: string) {
     const nodeIdx = this.idToIndex.get(id);
@@ -384,9 +355,7 @@ export class HnswIndex {
     }
   }
 
-  /**
-   * 查找新的入口点 (删除后)
-   */
+  /** 查找新的入口点 (删除后) */
   #findNewEntryPoint() {
     this.entryPoint = -1;
     this.maxLevel = -1;
@@ -399,10 +368,7 @@ export class HnswIndex {
     }
   }
 
-  /**
-   * 为所有现有节点批量设置量化向量
-   * @param {import('./ScalarQuantizer.js').ScalarQuantizer} quantizer
-   */
+  /** 为所有现有节点批量设置量化向量 */
   setQuantizedVectors(quantizer: { encode: (vector: Float32Array | number[]) => Uint8Array }) {
     for (const node of this.nodes) {
       if (node && node.vector.length > 0) {
@@ -419,12 +385,8 @@ export class HnswIndex {
    * - Phase 1-2: 使用 SQ8 量化距离图遍历 (快速粗排)
    * - Phase 3: 对候选用 Float32 精确余弦距离重排 (精排)
    *
-   * @param {Float32Array|number[]} queryVector
-   * @param {number} k
-   * @param {object} [options]
-   * @param {Uint8Array} [options.quantizedQuery] - SQ8 编码后的查询向量
-   * @param {import('./ScalarQuantizer.js').ScalarQuantizer} [options.quantizer]
-   * @returns {Array<{ id: string, nodeIdx: number, dist: number }>}
+   * @param [options.quantizedQuery] SQ8 编码后的查询向量
+   * @returns >}
    */
   searchKnn(
     queryVector: Float32Array | number[],
@@ -485,12 +447,9 @@ export class HnswIndex {
 
   /**
    * 贪心搜索 — 在单一层级中找到离 query 最近的节点
-   * @param {Float32Array|number[]} query
-   * @param {number} entryNodeIdx
-   * @param {number} level
-   * @param {import('./ScalarQuantizer.js').ScalarQuantizer|null} quantizer - SQ8 量化器 (可选)
-   * @param {Uint8Array|null} quantizedQuery - SQ8 编码后的查询向量 (可选)
-   * @returns {number} 最近节点的 index
+   * @param quantizer SQ8 量化器 (可选)
+   * @param quantizedQuery SQ8 编码后的查询向量 (可选)
+   * @returns 最近节点的 index
    */
   #greedySearch(
     query: Float32Array | number[],
@@ -529,13 +488,8 @@ export class HnswIndex {
 
   /**
    * searchLayer — HNSW 核心的宽度优先搜索
-   * @param {Float32Array|number[]} query
-   * @param {number} entryNodeIdx
-   * @param {number} ef - 搜索宽度
-   * @param {number} level
-   * @param {import('./ScalarQuantizer.js').ScalarQuantizer|null} quantizer
-   * @param {Uint8Array|null} quantizedQuery
-   * @returns {Array<{ nodeIdx: number, dist: number }>} 按距离升序排列
+   * @param ef 搜索宽度
+   * @returns >} 按距离升序排列
    */
   #searchLayer(
     query: Float32Array | number[],
@@ -601,11 +555,7 @@ export class HnswIndex {
 
   /**
    * 距离计算: 优先使用 SQ8 量化距离, 降级到 Float32 精确距离
-   * @param {Float32Array|number[]} query
-   * @param {object} node - { vector, qvector? }
-   * @param {import('./ScalarQuantizer.js').ScalarQuantizer|null} quantizer
-   * @param {Uint8Array|null} quantizedQuery
-   * @returns {number}
+   * @param node { vector, qvector? }
    */
   #dist(
     query: Float32Array | number[],
@@ -622,8 +572,7 @@ export class HnswIndex {
   /**
    * 简单邻居选择 — 取距离最近的 maxNeighbors 个
    * @param {Array<{ nodeIdx: number, dist: number }>} candidates
-   * @param {number} maxNeighbors
-   * @returns {Array<{ nodeIdx: number, dist: number }>}
+   * @returns >}
    */
   #selectNeighborsSimple(candidates: { nodeIdx: number; dist: number }[], maxNeighbors: number) {
     return candidates.sort((a, b) => a.dist - b.dist).slice(0, maxNeighbors);
@@ -632,9 +581,6 @@ export class HnswIndex {
   /**
    * 裁剪节点的连接数到 maxNeighbors
    * 保留距离最近的邻居, 移除最远的
-   * @param {number} nodeIdx
-   * @param {number} level
-   * @param {number} maxNeighbors
    */
   #pruneConnections(nodeIdx: number, level: number, maxNeighbors: number) {
     const node = this.nodes[nodeIdx];
@@ -675,7 +621,7 @@ export class HnswIndex {
 
   /**
    * 导出索引状态 (用于持久化)
-   * @returns {{ nodes, graphs, entryPoint, maxLevel, M, M0, efConstruct, efSearch }}
+   * @returns }
    */
   serialize() {
     // 将 graphs Map<Set> 转为可序列化格式
@@ -704,8 +650,7 @@ export class HnswIndex {
 
   /**
    * 从序列化数据恢复索引
-   * @param {object} data - serialize() 的返回值
-   * @returns {HnswIndex}
+   * @param data serialize() 的返回值
    */
   static deserialize(data: {
     M: number;
@@ -759,9 +704,7 @@ export class HnswIndex {
     }
   }
 
-  /**
-   * 获取索引统计信息
-   */
+  /** 获取索引统计信息 */
   getStats() {
     const activeNodes = this.nodes.filter((n) => n !== null).length;
     let totalEdges = 0;
@@ -781,12 +724,7 @@ export class HnswIndex {
   }
 }
 
-/**
- * 余弦距离 = 1 - cosineSimilarity
- * @param {Float32Array|number[]} a
- * @param {Float32Array|number[]} b
- * @returns {number}
- */
+/** 余弦距离 = 1 - cosineSimilarity */
 export function cosineDistance(a: Float32Array | number[], b: Float32Array | number[]) {
   if (!a || !b || a.length === 0 || b.length === 0) {
     return 1;

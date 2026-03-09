@@ -26,10 +26,8 @@ export class HybridRetriever {
   #defaultAlpha;
 
   /**
-   * @param {object} options
-   * @param {import('../../infrastructure/vector/VectorStore.js').VectorStore} options.vectorStore
-   * @param {number} [options.rrfK=60] - RRF 常数 (k), 值越大越平滑
-   * @param {number} [options.alpha=0.5] - Dense 权重 (1-alpha = Sparse 权重)
+   * @param [options.rrfK=60] RRF 常数 (k), 值越大越平滑
+   * @param [options.alpha=0.5] Dense 权重 (1-alpha = Sparse 权重)
    */
   constructor(
     options: {
@@ -54,12 +52,10 @@ export class HybridRetriever {
    * Dense: vectorStore 向量搜索 (HNSW or brute-force)
    * Sparse: BM25 关键词搜索 (由外部传入结果)
    *
-   * @param {object} params
    * @param {Array<{ id: string, score: number, [key: string]: unknown }>} params.denseResults - 向量搜索结果
    * @param {Array<{ id: string, score: number, [key: string]: unknown }>} params.sparseResults - 关键词搜索结果
-   * @param {number} [params.topK=10]
-   * @param {number} [params.alpha=0.5] - Dense 权重
-   * @returns {Array<{ id: string, score: number, rrfScore: number, denseRank: number, sparseRank: number, data: object }>}
+   * @param [params.alpha=0.5] Dense 权重
+   * @returns >}
    */
   fuse({
     denseResults = [] as RetrievalResult[],
@@ -125,14 +121,9 @@ export class HybridRetriever {
   /**
    * 完整搜索: 同时执行 Dense + Sparse 并融合
    *
-   * @param {string} query - 查询文本
-   * @param {number[]} queryVector - 查询向量
-   * @param {object} [options]
-   * @param {number} [options.topK=10]
-   * @param {number} [options.alpha=0.5]
-   * @param {object} [options.filter]
-   * @param {function} [options.sparseSearchFn] - 外部 sparse 搜索函数 (query, limit) => results[]
-   * @returns {Promise<Array>}
+   * @param query 查询文本
+   * @param queryVector 查询向量
+   * @param [options.sparseSearchFn] 外部 sparse 搜索函数 (query, limit) => results[]
    */
   async search(
     query: string,

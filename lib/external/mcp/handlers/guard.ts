@@ -287,8 +287,8 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
  *   4. 防无限循环：reviewRound 计数 + MAX_REVIEW_ROUNDS 限制
  *   5. 不绑定 task ID — 代码检查独立于任务系统
  *
- * @param {object} ctx - MCP context with container
- * @param {object} args - { files?: string[] }
+ * @param ctx MCP context with container
+ * @param args { files?: string[] }
  */
 export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
   const { GuardCheckEngine, detectLanguage } = await import('#service/guard/GuardCheckEngine.js');
@@ -750,9 +750,8 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
 /**
  * 获取 DI 容器中的 GuardCheckEngine 单例，回退到新建实例
  * 优先复用 DI 单例以保持 externalRules / cache 的跨调用一致性
- * @param {object} ctx - MCP context with container
- * @param {Function} GuardCheckEngine 引擎构造函数（用于回退）
- * @returns {import('#service/guard/GuardCheckEngine.js').GuardCheckEngine}
+ * @param ctx MCP context with container
+ * @param GuardCheckEngine 引擎构造函数（用于回退）
  */
 function _getOrCreateEngine(ctx: McpContext, GuardCheckEngineCtor: unknown): GuardEngineLike {
   try {

@@ -22,9 +22,7 @@ export interface McpInputSchema {
 
 type JsonSchemaObj = Record<string, unknown>;
 
-/**
- * 递归清理 JSON Schema 对象
- */
+/** 递归清理 JSON Schema 对象 */
 function cleanJsonSchema(obj: JsonSchemaObj): JsonSchemaObj {
   const cleaned = { ...obj };
 

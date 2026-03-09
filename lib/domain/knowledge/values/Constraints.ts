@@ -37,11 +37,7 @@ export class Constraints {
     this.sideEffects = props.sideEffects ?? [];
   }
 
-  /**
-   * 从任意输入构造 Constraints
-   * @param {Constraints|Object|null} input
-   * @returns {Constraints}
-   */
+  /** 从任意输入构造 Constraints */
   static from(input: unknown): Constraints {
     if (input instanceof Constraints) {
       return input;
@@ -59,11 +55,7 @@ export class Constraints {
     return new Constraints(input as ConstraintsProps);
   }
 
-  /**
-   * 标准化 Guard 对象
-   * @param {Object} g
-   * @returns {Guard}
-   */
+  /** 标准化 Guard 对象 */
   static _normalizeGuard(g: Record<string, unknown>): Guard {
     return {
       id: (g.id as string) || null,
@@ -76,44 +68,28 @@ export class Constraints {
     };
   }
 
-  /**
-   * 获取 regex 类型的 Guard 规则
-   * @returns {Array<Guard>}
-   */
+  /** 获取 regex 类型的 Guard 规则 */
   getRegexGuards(): Guard[] {
     return this.guards.filter((g) => g.type === 'regex' && g.pattern);
   }
 
-  /**
-   * 获取 ast 类型的 Guard 规则
-   * @returns {Array<Guard>}
-   */
+  /** 获取 ast 类型的 Guard 规则 */
   getAstGuards(): Guard[] {
     return this.guards.filter((g) => g.type === 'ast' && g.ast_query);
   }
 
-  /**
-   * 添加 Guard 规则
-   * @param {Object} guard
-   * @returns {Constraints}
-   */
+  /** 添加 Guard 规则 */
   addGuard(guard: Record<string, unknown>): Constraints {
     this.guards.push(Constraints._normalizeGuard(guard));
     return this;
   }
 
-  /**
-   * 是否有 Guard 规则
-   * @returns {boolean}
-   */
+  /** 是否有 Guard 规则 */
   hasGuards() {
     return this.guards.length > 0;
   }
 
-  /**
-   * 是否为空
-   * @returns {boolean}
-   */
+  /** 是否为空 */
   isEmpty() {
     return (
       this.guards.length === 0 &&
@@ -123,9 +99,7 @@ export class Constraints {
     );
   }
 
-  /**
-   * 转换为 wire format JSON
-   */
+  /** 转换为 wire format JSON */
   toJSON() {
     return {
       guards: this.guards,
@@ -135,11 +109,7 @@ export class Constraints {
     };
   }
 
-  /**
-   * 从 wire format 创建
-   * @param {Object} data
-   * @returns {Constraints}
-   */
+  /** 从 wire format 创建 */
   static fromJSON(data: unknown): Constraints {
     return Constraints.from(data);
   }

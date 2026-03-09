@@ -202,16 +202,8 @@ export class WikiGenerator {
   options: WikiOptions;
   projectGraph: WikiProjectGraph | null;
   /**
-   * @param {object} deps
-   * @param {string} deps.projectRoot
-   * @param {import('../../service/module/ModuleService.js').ModuleService} [deps.moduleService]
-   * @param {import('../../platform/ios/spm/SpmHelper.js').SpmHelper} [deps.spmService] 向后兼容
-   * @param {import('../../service/knowledge/KnowledgeService.js').KnowledgeService} [deps.knowledgeService]
-   * @param {import('../../core/ast/ProjectGraph.js').default} [deps.projectGraph]
-   * @param {import('../../service/knowledge/CodeEntityGraph.js').CodeEntityGraph} [deps.codeEntityGraph]
-   * @param {import('../../external/ai/AiProvider.js').AiProvider} [deps.aiProvider]
-   * @param {Function} [deps.onProgress] - (phase, progress, message) => void
-   * @param {object} [deps.options]
+   * @param [deps.spmService] 向后兼容
+   * @param [deps.onProgress] (phase, progress, message) => void
    */
   constructor(deps: WikiDeps) {
     this.projectRoot = deps.projectRoot;
@@ -231,10 +223,7 @@ export class WikiGenerator {
 
   // ═══ 公有 API ══════════════════════════════════════════════
 
-  /**
-   * 全量生成 Wiki
-   * @returns {Promise<WikiResult>}
-   */
+  /** 全量生成 Wiki */
   async generate() {
     const startTime = Date.now();
     this._aborted = false;
@@ -328,10 +317,7 @@ export class WikiGenerator {
     }
   }
 
-  /**
-   * 增量更新 — 仅重新生成变更的部分
-   * @returns {Promise<WikiResult>}
-   */
+  /** 增量更新 — 仅重新生成变更的部分 */
   async update() {
     const meta = this._readMeta();
     if (!meta) {
@@ -349,16 +335,12 @@ export class WikiGenerator {
     return this.generate();
   }
 
-  /**
-   * 中止当前生成
-   */
+  /** 中止当前生成 */
   abort() {
     this._aborted = true;
   }
 
-  /**
-   * 获取当前 Wiki 状态
-   */
+  /** 获取当前 Wiki 状态 */
   getStatus() {
     const meta = this._readMeta();
     if (!meta) {
@@ -375,9 +357,7 @@ export class WikiGenerator {
 
   // ═══ 阶段实现 ══════════════════════════════════════════════
 
-  /**
-   * 扫描项目基本信息
-   */
+  /** 扫描项目基本信息 */
   async _scanProject() {
     const info: ProjectScanInfo = {
       name: path.basename(this.projectRoot),
@@ -473,9 +453,7 @@ export class WikiGenerator {
     return info;
   }
 
-  /**
-   * AST 分析 — 利用已有 ProjectGraph 或重新构建
-   */
+  /** AST 分析 — 利用已有 ProjectGraph 或重新构建 */
   async _analyzeAST() {
     if (this.projectGraph) {
       const overview = this.projectGraph.getOverview();
@@ -565,9 +543,7 @@ export class WikiGenerator {
     }
   }
 
-  /**
-   * 整合已有知识库 Recipes
-   */
+  /** 整合已有知识库 Recipes */
   async _integrateKnowledge() {
     if (!this.knowledgeService || !this.options.includeRecipes) {
       return { recipes: [], stats: null };
@@ -599,7 +575,7 @@ export class WikiGenerator {
    *   - 跳过数据不足的主题（避免空文档）
    *   - 不同的项目产出不同数量/类型的文章
    *
-   * @returns {Array<{id: string, path: string, title: string, type: string, priority: number}>}
+   * @returns >}
    */
   _discoverTopics(
     projectInfo: ProjectScanInfo,
@@ -909,9 +885,9 @@ export class WikiGenerator {
    *   2. AI 不可用时使用丰富的模板内容
    *   3. 质量关卡: 最终内容不足 MIN_ARTICLE_CHARS 则跳过
    *
-   * @param {Array} topics - _discoverTopics() 的输出
-   * @param {object} structuredData - { projectInfo, astInfo, moduleInfo, knowledgeInfo }
-   * @returns {Promise<Array<{path: string, hash: string, size: number}>>}
+   * @param topics _discoverTopics() 的输出
+   * @param structuredData { projectInfo, astInfo, moduleInfo, knowledgeInfo }
+   * @returns >>}
    */
   async _composeArticles(topics: WikiTopic[], structuredData: WikiData) {
     const files: WikiFileResult[] = [];
@@ -1041,7 +1017,7 @@ export class WikiGenerator {
    * 同步源:
    *   1. .cursor/skills/autosnippet-devdocs/references/ (*.md)  → wiki/documents/
    *
-   * @returns {Array<{path: string, hash: string, size: number, source: string}>}
+   * @returns >}
    */
   _syncCursorDocs() {
     const synced: WikiFileResult[] = [];
@@ -1079,9 +1055,7 @@ export class WikiGenerator {
     return synced;
   }
 
-  /**
-   * 为同步目录生成索引页
-   */
+  /** 为同步目录生成索引页 */
   _generateSyncIndex(synced: WikiFileResult[], isZh: boolean) {
     const docFiles = synced.filter((f: WikiFileResult) => f.path.startsWith('documents/'));
 

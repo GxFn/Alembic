@@ -51,11 +51,7 @@ export function getSnippetsPath() {
   return ensureDir(path.join(USER_HOME, '.autosnippet', 'snippets'));
 }
 
-/**
- * VSCode 项目级 Snippets 目录 = projectRoot/.vscode/
- * @param {string} projectRoot
- * @returns {string}
- */
+/** VSCode 项目级 Snippets 目录 = projectRoot/.vscode/ */
 export function getVSCodeSnippetsPath(projectRoot: string) {
   return ensureDir(path.join(projectRoot, '.vscode'));
 }
@@ -74,8 +70,7 @@ export function getCachePath() {
 /**
  * 获取包含 AutoSnippet.boxspec.json 的子目录名称
  * 委托 ProjectMarkers.detectKnowledgeBaseDir() 统一探测逻辑
- * @param {string} projectRoot
- * @returns {string} 知识库目录名（默认 'AutoSnippet'）
+ * @returns 知识库目录名（默认 'AutoSnippet'）
  */
 export function getKnowledgeBaseDirName(projectRoot: string) {
   return detectKnowledgeBaseDir(projectRoot);
@@ -89,9 +84,7 @@ export function getProjectKnowledgePath(projectRoot: string) {
   return path.join(projectRoot, getKnowledgeBaseDirName(projectRoot));
 }
 
-/**
- * Spec 文件路径 = knowledgePath/AutoSnippet.boxspec.json
- */
+/** Spec 文件路径 = knowledgePath/AutoSnippet.boxspec.json */
 export function getProjectSpecPath(projectRoot: string) {
   return path.join(getProjectKnowledgePath(projectRoot), SPEC_FILENAME);
 }
@@ -132,8 +125,7 @@ export function getProjectSkillsPath(projectRoot: string) {
 /**
  * Recipes 目录
  * 优先使用 rootSpec.recipes.dir / rootSpec.skills.dir（兼容旧配置）
- * @param {string} projectRoot
- * @param {object} [rootSpec] 项目 spec 对象（可选）
+ * @param [rootSpec] 项目 spec 对象（可选）
  */
 export function getProjectRecipesPath(
   projectRoot: string,

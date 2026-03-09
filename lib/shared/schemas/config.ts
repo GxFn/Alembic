@@ -162,9 +162,7 @@ const ConstitutionRoleSchema = z.object({
   requires_capability: z.array(z.string()).optional(),
 });
 
-/**
- * Constitution schema — 对应 config/constitution.yaml
- */
+/** Constitution schema — 对应 config/constitution.yaml */
 export const ConstitutionSchema = z
   .object({
     version: z.string().optional(),

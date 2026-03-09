@@ -69,7 +69,6 @@ export class ExclusionManager {
 
   /**
    * 添加路径排除 (glob 或精确路径)
-   * @param {string} pattern
    * @param {{ reason?: string }} meta
    */
   addPathExclusion(pattern: string, meta: ExclusionMeta = {}) {
@@ -88,16 +87,12 @@ export class ExclusionManager {
     this.#save();
   }
 
-  /**
-   * 检查文件路径是否被排除
-   */
+  /** 检查文件路径是否被排除 */
   isPathExcluded(filePath: string) {
     return this.#data.pathExclusions.some((e) => this.#matchGlob(filePath, e.pattern));
   }
 
-  /**
-   * 移除路径排除
-   */
+  /** 移除路径排除 */
   removePathExclusion(pattern: string) {
     this.#data.pathExclusions = this.#data.pathExclusions.filter((e) => e.pattern !== pattern);
     this.#save();
@@ -105,11 +100,7 @@ export class ExclusionManager {
 
   // ─── Rule 排除 (per-file) ───────────────────────────
 
-  /**
-   * 为特定文件排除某条规则
-   * @param {string} ruleId
-   * @param {string} filePath
-   */
+  /** 为特定文件排除某条规则 */
   addRuleExclusion(ruleId: string, filePath: string, meta: ExclusionMeta = {}) {
     if (!this.#data.ruleExclusions[ruleId]) {
       this.#data.ruleExclusions[ruleId] = [];
@@ -122,9 +113,7 @@ export class ExclusionManager {
     this.#save();
   }
 
-  /**
-   * 检查规则在特定文件是否被排除
-   */
+  /** 检查规则在特定文件是否被排除 */
   isRuleExcluded(ruleId: string, filePath: string) {
     if (this.isRuleGloballyDisabled(ruleId)) {
       return true;
@@ -136,9 +125,7 @@ export class ExclusionManager {
     return list.some((e) => e.filePath === filePath || this.#matchGlob(filePath, e.filePath));
   }
 
-  /**
-   * 移除文件级规则排除
-   */
+  /** 移除文件级规则排除 */
   removeRuleExclusion(ruleId: string, filePath: string) {
     const list = this.#data.ruleExclusions[ruleId];
     if (!list) {
@@ -153,9 +140,7 @@ export class ExclusionManager {
 
   // ─── Global Rule 排除 ────────────────────────────────
 
-  /**
-   * 全局禁用某条规则
-   */
+  /** 全局禁用某条规则 */
   addGlobalRuleExclusion(ruleId: string, meta: ExclusionMeta = {}) {
     if (this.#data.globalRuleExclusions.find((e) => e.ruleId === ruleId)) {
       return;
@@ -168,16 +153,12 @@ export class ExclusionManager {
     this.#save();
   }
 
-  /**
-   * 检查规则是否被全局禁用
-   */
+  /** 检查规则是否被全局禁用 */
   isRuleGloballyDisabled(ruleId: string) {
     return this.#data.globalRuleExclusions.some((e) => e.ruleId === ruleId);
   }
 
-  /**
-   * 移除全局规则排除
-   */
+  /** 移除全局规则排除 */
   removeGlobalRuleExclusion(ruleId: string) {
     this.#data.globalRuleExclusions = this.#data.globalRuleExclusions.filter(
       (e) => e.ruleId !== ruleId
@@ -189,8 +170,8 @@ export class ExclusionManager {
 
   /**
    * 应用排除策略到审计结果
-   * @param {object[]} violations - [{ruleId, filePath, ...}]
-   * @returns {object[]} 过滤后的违反列表
+   * @param violations [{ruleId, filePath, ...}]
+   * @returns 过滤后的违反列表
    */
   applyExclusions(violations: ViolationInput[]) {
     return violations.filter((v) => {
@@ -207,9 +188,7 @@ export class ExclusionManager {
     });
   }
 
-  /**
-   * 导入排除配置
-   */
+  /** 导入排除配置 */
   importExclusions(config: ExclusionConfig) {
     if (config.pathExclusions) {
       for (const e of config.pathExclusions) {
@@ -230,9 +209,7 @@ export class ExclusionManager {
     }
   }
 
-  /**
-   * 导出当前排除配置
-   */
+  /** 导出当前排除配置 */
   exportExclusions() {
     return { ...this.#data };
   }
@@ -298,9 +275,7 @@ export class ExclusionManager {
     }
   }
 
-  /**
-   * 自动迁移旧路径 .autosnippet/guard-exclusions.json → AutoSnippet/guard-exclusions.json
-   */
+  /** 自动迁移旧路径 .autosnippet/guard-exclusions.json → AutoSnippet/guard-exclusions.json */
   #migrateOldPath(projectRoot: string, internalDir: string) {
     try {
       const oldPath = join(projectRoot, internalDir, 'guard-exclusions.json');

@@ -7,9 +7,8 @@
 
 /**
  * 解析相对 import 路径为归一化路径（去掉扩展名）
- * @param {string} fromDir 当前文件目录
- * @param {string} importPath 相对路径如 './foo' 或 '../bar/baz'
- * @returns {string|null}
+ * @param fromDir 当前文件目录
+ * @param importPath 相对路径如 './foo' 或 '../bar/baz'
  */
 export function resolveImportPath(fromDir: string, importPath: string) {
   try {
@@ -36,11 +35,7 @@ export function resolveImportPath(fromDir: string, importPath: string) {
   }
 }
 
-/**
- * 归一化文件路径（去扩展名，用于 import 比较）
- * @param {string} filePath
- * @returns {string}
- */
+/** 归一化文件路径（去扩展名，用于 import 比较） */
 export function normalizeFilePath(filePath: string) {
   return filePath.replace(/\.(js|ts|jsx|tsx|mjs|mts)$/, '').replace(/\/index$/, '');
 }
@@ -48,9 +43,8 @@ export function normalizeFilePath(filePath: string) {
 /**
  * 跨文件检查 — 需要多文件上下文才能发现的问题
  * @param {Array<{path: string, content: string}>} files
- * @param {object} options
- * @param {string[]} [options.disabledRules] 禁用的规则 ID 列表
- * @returns {Array<{ruleId, message, severity, locations}>}
+ * @param [options.disabledRules] 禁用的规则 ID 列表
+ * @returns >}
  */
 export interface CrossFileViolation {
   ruleId: string;

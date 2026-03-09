@@ -111,16 +111,9 @@ const compactConsoleFormat = winston.format.printf(({ level, message, timestamp,
  * 避免污染 stdout JSON-RPC 通道。
  */
 
-/** @typedef {import('winston').Logger} WinstonLogger */
-
 export class Logger {
-  /** @type {WinstonLogger | null} */
   static instance: import('winston').Logger | null = null;
 
-  /**
-   * @param {Object} [config]
-   * @returns {WinstonLogger}
-   */
   static getInstance(
     config: { level?: string; console?: boolean; file?: { enabled?: boolean; path?: string } } = {}
   ) {

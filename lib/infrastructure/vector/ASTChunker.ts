@@ -118,7 +118,7 @@ const LANG_ID_MAP = {
 
 /**
  * 初始化 AST 解析器 (幂等, 延迟加载)
- * @returns {Promise<boolean>} 是否成功初始化
+ * @returns 是否成功初始化
  */
 async function ensureParser() {
   if (_astReady) {
@@ -141,8 +141,7 @@ async function ensureParser() {
 
 /**
  * 检查 ASTChunker 是否支持指定语言
- * @param {string} language - LanguageService.inferLang() 返回的语言 ID
- * @returns {boolean}
+ * @param language LanguageService.inferLang() 返回的语言 ID
  */
 export function isASTChunkerAvailable(language: string) {
   if (!_astReady || !_supportedLanguages) {
@@ -163,12 +162,10 @@ export function isASTChunkerAvailable(language: string) {
  * 4. 超大节点递归拆分 (按子节点边界)
  * 5. 非声明代码 (import, 注释等) 合并为一个 chunk
  *
- * @param {string} content 源代码
- * @param {string} language 语言标识 (来自 LanguageService.inferLang)
- * @param {object} metadata 基础 metadata
- * @param {object} [options]
- * @param {number} [options.maxChunkTokens=512]
- * @returns {Array<{ content: string, metadata: object }>}
+ * @param content 源代码
+ * @param language 语言标识 (来自 LanguageService.inferLang)
+ * @param metadata 基础 metadata
+ * @returns >}
  */
 export function chunkByAST(
   content: string,
@@ -279,11 +276,9 @@ export function chunkByAST(
  *
  * 策略: 按子节点边界分组, 直到每组 ≤ maxChunkTokens
  *
- * @param {object} node tree-sitter AST node
- * @param {string} source 完整源代码
- * @param {object} metadata
- * @param {number} maxChunkTokens
- * @returns {Array<{ content: string, metadata: object }>}
+ * @param node tree-sitter AST node
+ * @param source 完整源代码
+ * @returns >}
  */
 function splitLargeNode(
   node: ASTNode,
@@ -383,9 +378,7 @@ function splitLargeNode(
   return chunks;
 }
 
-/**
- * 按行切割 (最后手段, 当 AST 无法进一步拆分时)
- */
+/** 按行切割 (最后手段, 当 AST 无法进一步拆分时) */
 function splitByLines(
   text: string,
   metadata: Record<string, unknown>,
@@ -435,8 +428,7 @@ function splitByLines(
 
 /**
  * 从 AST 节点提取名称
- * @param {object} node tree-sitter node
- * @returns {string|undefined}
+ * @param node tree-sitter node
  */
 function extractNodeName(node: ASTNode): string | undefined {
   // 常见模式: 节点有 name 子节点

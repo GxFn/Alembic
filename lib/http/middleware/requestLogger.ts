@@ -33,9 +33,7 @@ const SILENT_PATHS = [
   '/socket.io',
 ];
 
-/**
- * 从 originalUrl 中提取 pathname（去除 query string）
- */
+/** 从 originalUrl 中提取 pathname（去除 query string） */
 function extractPath(originalUrl: string) {
   const idx = originalUrl.indexOf('?');
   return idx === -1 ? originalUrl : originalUrl.slice(0, idx);

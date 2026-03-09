@@ -34,13 +34,6 @@ export class TaskGraphService {
   logger: ReturnType<typeof Logger.getInstance>;
   readyEngine: import('./TaskReadyEngine.js').TaskReadyEngine;
   repo: import('../../repository/task/TaskRepository.impl.js').TaskRepositoryImpl;
-  /**
-   * @param {import('../../repository/task/TaskRepository.impl.js').TaskRepositoryImpl} repository
-   * @param {import('./TaskReadyEngine.js').TaskReadyEngine} readyEngine
-   * @param {import('./TaskKnowledgeBridge.js').TaskKnowledgeBridge} [knowledgeBridge]
-   * @param {object} [auditLogger]
-   * @param {import('../../domain/task/TaskIdGenerator.js').TaskIdGenerator} idGenerator
-   */
   constructor(
     repository: import('../../repository/task/TaskRepository.impl.js').TaskRepositoryImpl,
     readyEngine: import('./TaskReadyEngine.js').TaskReadyEngine,
@@ -67,8 +60,8 @@ export class TaskGraphService {
 
   /**
    * 创建任务
-   * @param {object} data - { title, description, design, acceptance, priority, taskType, parentId }
-   * @returns {Promise<{ task: Task, isDuplicate: boolean }>}
+   * @param data { title, description, design, acceptance, priority, taskType, parentId }
+   * @returns >}
    */
   async create(data: {
     title?: string;
@@ -116,9 +109,7 @@ export class TaskGraphService {
    * 批量拆解 Epic
    * 一次性创建多个子任务 + 依赖关系，减少 Agent 的 MCP 调用次数
    *
-   * @param {string} epicId
-   * @param {Array<object>} subtasks - [{ title, description, priority, taskType, blockedByIndex }]
-   * @returns {Promise<Task[]>}
+   * @param subtasks [{ title, description, priority, taskType, blockedByIndex }]
    */
   async decompose(epicId: string, subtasks: Array<Record<string, unknown>>) {
     const epic = this.repo.findById(epicId);
@@ -191,10 +182,7 @@ export class TaskGraphService {
    * P5: claim-time 知识刷新 — 编码开始时注入最新知识上下文，
    * 减少 Agent 额外 MCP 调用。
    *
-   * @param {string} id
-   * @param {string} [assignee='agent']
-   * @param {KnowledgeEnrichOptions} [knowledgeOptions] - 上下文信号
-   * @returns {Promise<Task>}
+   * @param [knowledgeOptions] 上下文信号
    */
   async claim(id: string, assignee = 'agent', knowledgeOptions?: KnowledgeEnrichOptions) {
     const task = this.repo.findById(id);
@@ -238,9 +226,7 @@ export class TaskGraphService {
    * 关闭任务
    * 返回因此解除阻塞的新就绪任务列表
    *
-   * @param {string} id
-   * @param {string} [reason='Completed']
-   * @returns {Promise<{ task: Task, newlyReady: string[] }>}
+   * @returns >}
    */
   async close(id: string, reason = 'Completed') {
     const task = this.repo.findById(id);
@@ -267,10 +253,6 @@ export class TaskGraphService {
   /**
    * 标记任务失败
    * 释放认领、递增失败计数、回退到 open
-   *
-   * @param {string} id
-   * @param {string} reason
-   * @returns {Promise<Task>}
    */
   async fail(id: string, reason: string) {
     const task = this.repo.findById(id);
@@ -291,12 +273,7 @@ export class TaskGraphService {
     return saved;
   }
 
-  /**
-   * 推迟任务
-   * @param {string} id
-   * @param {string} [reason='']
-   * @returns {Promise<Task>}
-   */
+  /** 推迟任务 */
   async defer(id: string, reason = '') {
     const task = this.repo.findById(id);
     if (!task) {
@@ -315,12 +292,7 @@ export class TaskGraphService {
     return saved;
   }
 
-  /**
-   * 上报进度（长任务的中间状态更新）
-   * @param {string} id
-   * @param {string} note
-   * @returns {Promise<Task>}
-   */
+  /** 上报进度（长任务的中间状态更新） */
   async progress(id: string, note: string) {
     const task = this.repo.findById(id);
     if (!task) {
@@ -341,12 +313,7 @@ export class TaskGraphService {
 
   // ═══ 依赖管理 ═══════════════════════════════════════
 
-  /**
-   * 添加依赖
-   * @param {string} taskId
-   * @param {string} dependsOnId
-   * @param {string} [depType='blocks']
-   */
+  /** 添加依赖 */
   async addDependency(taskId: string, dependsOnId: string, depType = 'blocks') {
     if (taskId === dependsOnId) {
       throw new Error('Self-dependency is not allowed');
@@ -371,8 +338,7 @@ export class TaskGraphService {
 
   /**
    * 获取就绪任务 + 知识上下文
-   * @param {object} [options] - { limit, withKnowledge, userQuery, activeFile, language }
-   * @returns {Promise<Task[]>}
+   * @param [options] { limit, withKnowledge, userQuery, activeFile, language }
    */
   async ready(options: { limit?: number; withKnowledge?: boolean } & KnowledgeEnrichOptions = {}) {
     const tasks = this.readyEngine.getReadyWork(options);
@@ -389,42 +355,31 @@ export class TaskGraphService {
     return tasks;
   }
 
-  /**
-   * 获取被阻塞的任务
-   */
+  /** 获取被阻塞的任务 */
   async blocked() {
     return this.readyEngine.getBlockedWork();
   }
 
-  /**
-   * 获取单个任务详情
-   * @param {string} id
-   * @returns {Promise<Task|null>}
-   */
+  /** 获取单个任务详情 */
   async show(id: string) {
     return this.repo.findById(id);
   }
 
   /**
    * 列表查询
-   * @param {object} filters - { status, taskType, assignee, parentId }
-   * @param {object} options - { limit }
-   * @returns {Promise<Task[]>}
+   * @param filters { status, taskType, assignee, parentId }
+   * @param options { limit }
    */
   async list(filters: Record<string, unknown> = {}, options = {}) {
     return this.repo.findAll(filters, options);
   }
 
-  /**
-   * 依赖树
-   */
+  /** 依赖树 */
   async depTree(taskId: string) {
     return this.readyEngine.getDependencyTree(taskId);
   }
 
-  /**
-   * 统计信息
-   */
+  /** 统计信息 */
   async stats() {
     return this.repo.getStatistics();
   }
@@ -438,8 +393,8 @@ export class TaskGraphService {
    * P1: 新增 userQuery / activeFile / language 参数，
    *     知识注入从「基于历史任务」升级为「基于历史任务 + 当前用户意图」。
    *
-   * @param {object} [options] - { withKnowledge, userQuery, activeFile, language }
-   * @returns {Promise<{ inProgress: Task[], ready: Task[], stats: object }>}
+   * @param [options] { withKnowledge, userQuery, activeFile, language }
+   * @returns >}
    */
   async prime(options: { limit?: number; withKnowledge?: boolean } & KnowledgeEnrichOptions = {}) {
     const inProgress = this.repo
@@ -552,8 +507,8 @@ export class TaskGraphService {
 
   /**
    * 记录决策 — 直接以 pinned 状态创建，避免 open→pinned 的幽灵窗口（C1）
-   * @param {object} params - { title, description, rationale, tags, relatedTaskId }
-   * @returns {Promise<{ task: Task, isDuplicate: boolean }>}
+   * @param params { title, description, rationale, tags, relatedTaskId }
+   * @returns >}
    */
   async recordDecision({
     title,
@@ -627,8 +582,8 @@ export class TaskGraphService {
 
   /**
    * 修订决策 — 原子事务：创建新决策 + 关闭旧决策 + 建立 supersedes 链（C2+C7）
-   * @param {object} params - { oldDecisionId, title, description, rationale, reason }
-   * @returns {Promise<{ newDecision: Task, oldDecisionId: string }>}
+   * @param params { oldDecisionId, title, description, rationale, reason }
+   * @returns >}
    */
   async reviseDecision({
     oldDecisionId,
@@ -697,12 +652,7 @@ export class TaskGraphService {
     return { newDecision, oldDecisionId };
   }
 
-  /**
-   * 取消固定决策
-   * @param {string} id
-   * @param {string} [reason='']
-   * @returns {Promise<Task>}
-   */
+  /** 取消固定决策 */
   async unpinDecision(id: string, reason = '') {
     const task = this.repo.findById(id);
     if (!task) {
@@ -778,9 +728,7 @@ export class TaskGraphService {
     return newlyReady;
   }
 
-  /**
-   * @private
-   */
+  /** @private */
   _logEvent(taskId: string, eventType: string, oldValue: string | null, newValue: string | null) {
     try {
       this.repo.logEvent(taskId, eventType, oldValue as null, newValue as null);

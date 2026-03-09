@@ -6,9 +6,7 @@
 
 import Logger from '../logging/Logger.js';
 
-/**
- * 本地缓存实现（无 Redis 依赖）
- */
+/** 本地缓存实现（无 Redis 依赖） */
 export class CacheService {
   cache: Map<string, { value: unknown; expiresAt: number }>;
   cleanupInterval: ReturnType<typeof setInterval> | null;
@@ -26,11 +24,7 @@ export class CacheService {
     }
   }
 
-  /**
-   * 获取缓存
-   * @param {string} key
-   * @returns {any|null}
-   */
+  /** 获取缓存 */
   get(key: string) {
     const entry = this.cache.get(key);
 
@@ -49,34 +43,24 @@ export class CacheService {
 
   /**
    * 设置缓存
-   * @param {string} key
-   * @param {any} value
-   * @param {number} ttlSeconds 默认 300 秒
+   * @param ttlSeconds 默认 300 秒
    */
   set(key: string, value: unknown, ttlSeconds = 300) {
     const expiresAt = Date.now() + ttlSeconds * 1000;
     this.cache.set(key, { value, expiresAt });
   }
 
-  /**
-   * 删除缓存
-   * @param {string} key
-   * @returns {boolean}
-   */
+  /** 删除缓存 */
   delete(key: string) {
     return this.cache.delete(key);
   }
 
-  /**
-   * 清空所有缓存
-   */
+  /** 清空所有缓存 */
   clear() {
     this.cache.clear();
   }
 
-  /**
-   * 清理过期缓存
-   */
+  /** 清理过期缓存 */
   cleanupExpired() {
     const now = Date.now();
     for (const [key, entry] of this.cache.entries()) {
@@ -87,9 +71,7 @@ export class CacheService {
     Logger.debug(`[Cache] Cleanup completed. Remaining entries: ${this.cache.size}`);
   }
 
-  /**
-   * 获取缓存统计信息
-   */
+  /** 获取缓存统计信息 */
   getStats() {
     return {
       size: this.cache.size,
@@ -97,9 +79,7 @@ export class CacheService {
     };
   }
 
-  /**
-   * 关闭缓存服务
-   */
+  /** 关闭缓存服务 */
   shutdown() {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
@@ -109,9 +89,7 @@ export class CacheService {
   }
 }
 
-/**
- * 缓存键生成器
- */
+/** 缓存键生成器 */
 export class CacheKeyBuilder {
   static candidate(id: string) {
     return `candidate:${id}`;

@@ -783,8 +783,8 @@ export const PRE_SUBMIT_CHECKLIST = {
 
 /**
  * 获取维度的 SOP 配置
- * @param {string} dimId 维度 ID
- * @returns {object|null} - SOP 配置，未定义时返回 null
+ * @param dimId 维度 ID
+ * @returns SOP 配置，未定义时返回 null
  */
 export function getDimensionSOP(dimId: string) {
   return (
@@ -814,9 +814,9 @@ export function getDimensionSOP(dimId: string) {
  * 优先使用 SOP 中显式定义的 focusKeywords；
  * 若无，则从 baseDimension.guide 按中文顿号/逗号/斜杠拆分。
  *
- * @param {string} dimId 维度 ID
- * @param {string} [guideText] - fallback: baseDimension.guide 文本
- * @returns {string[]} 关键词列表（短语级，用于 includes() 匹配）
+ * @param dimId 维度 ID
+ * @param [guideText] fallback: baseDimension.guide 文本
+ * @returns 关键词列表（短语级，用于 includes() 匹配）
  */
 export function getDimensionFocusKeywords(dimId: string, guideText = '') {
   const sop = (DIMENSION_SOP as Record<string, { focusKeywords?: string[] }>)[dimId];
@@ -835,8 +835,8 @@ export function getDimensionFocusKeywords(dimId: string, guideText = '') {
 
 /**
  * 将 SOP 步骤序列化为紧凑文本（用于体积紧张时的降级）
- * @param {object} sop - SOP 配置
- * @returns {string} 紧凑的文本表示
+ * @param sop SOP 配置
+ * @returns 紧凑的文本表示
  */
 export function sopToCompactText(
   sop:

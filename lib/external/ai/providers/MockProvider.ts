@@ -60,16 +60,12 @@ export class MockProvider extends AiProvider {
     return makeVector();
   }
 
-  /**
-   * 获取调用日志（测试断言用）
-   */
+  /** 获取调用日志（测试断言用） */
   getCalls() {
     return this.callLog;
   }
 
-  /**
-   * 重置调用记录
-   */
+  /** 重置调用记录 */
   reset() {
     this.callLog = [];
   }

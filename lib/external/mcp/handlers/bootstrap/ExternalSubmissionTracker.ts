@@ -130,9 +130,9 @@ export class ExternalSubmissionTracker {
   /**
    * 记录一次成功的 submit_knowledge 提交
    *
-   * @param {string} dimId 当前活跃维度 (由调用方根据 session 进度推断)
-   * @param {object} submissionArgs - submit_knowledge 的原始参数
-   * @param {string} recipeId 提交成功后返回的 recipe ID
+   * @param dimId 当前活跃维度 (由调用方根据 session 进度推断)
+   * @param submissionArgs submit_knowledge 的原始参数
+   * @param recipeId 提交成功后返回的 recipe ID
    */
   recordSubmission(dimId: string, submissionArgs: SubmissionArgs, recipeId: string) {
     if (!this.#dimensionSubmissions.has(dimId)) {
@@ -183,9 +183,8 @@ export class ExternalSubmissionTracker {
   /**
    * 记录被拒绝的提交 (RecipeReadiness 或 dedup 拒绝)
    *
-   * @param {string} dimId
-   * @param {string} title 被拒绝候选的标题
-   * @param {string} reason 拒绝原因
+   * @param title 被拒绝候选的标题
+   * @param reason 拒绝原因
    */
   recordRejection(dimId: string, title: string, reason: string) {
     if (!this.#rejections.has(dimId)) {
@@ -206,9 +205,6 @@ export class ExternalSubmissionTracker {
    * - "未找到..." / "不存在..." / "没有发现..."
    * - "Not found" / "No evidence of" / "does not use"
    * - "项目未使用..." / "没有使用..."
-   *
-   * @param {string} analysisText
-   * @param {string} dimId
    */
   extractNegativeSignals(analysisText: string, dimId: string) {
     if (!analysisText) {
@@ -232,12 +228,7 @@ export class ExternalSubmissionTracker {
     }
   }
 
-  /**
-   * 添加负空间信号 (去重)
-   * @param {string} pattern
-   * @param {string} source
-   * @param {string} [dimId]
-   */
+  /** 添加负空间信号 (去重) */
   #addNegativeSignal(pattern: string, source: string, dimId?: string) {
     if (this.#negativeSignals.length >= MAX_NEGATIVE_SIGNALS) {
       return;
@@ -270,10 +261,8 @@ export class ExternalSubmissionTracker {
    *   内部 breadthScore  → 外部 diversityScore
    *   内部 coherenceScore → 外部 coherenceScore
    *
-   * @param {string} dimId
-   * @param {string} [analysisText] - dimension_complete 提供的分析文本
-   * @param {string[]} [referencedFiles] 引用文件列表
-   * @returns {DimensionQualityReport}
+   * @param [analysisText] dimension_complete 提供的分析文本
+   * @param [referencedFiles] 引用文件列表
    */
   buildQualityReport(
     dimId: string,
@@ -367,8 +356,8 @@ export class ExternalSubmissionTracker {
   /**
    * 获取跨维度累积证据摘要 — 供下一维度参考
    *
-   * @param {string} currentDimId 当前维度 (将排除在结果之外)
-   * @returns {object} - { completedDimSummaries, sharedFiles, negativeSignals, usedTriggers }
+   * @param currentDimId 当前维度 (将排除在结果之外)
+   * @returns { completedDimSummaries, sharedFiles, negativeSignals, usedTriggers }
    */
   getAccumulatedEvidence(currentDimId: string): AccumulatedEvidence {
     const completedDimSummaries: CompletedDimSummary[] = [];
@@ -407,35 +396,22 @@ export class ExternalSubmissionTracker {
 
   // ─── 查询 API ─────────────────────────────────────────
 
-  /**
-   * 获取指定维度的提交列表
-   * @param {string} dimId
-   * @returns {SubmissionRecord[]}
-   */
+  /** 获取指定维度的提交列表 */
   getSubmissions(dimId: string): SubmissionRecord[] {
     return this.#dimensionSubmissions.get(dimId) || [];
   }
 
-  /**
-   * 获取所有负空间信号
-   * @returns {NegativeSignal[]}
-   */
+  /** 获取所有负空间信号 */
   getNegativeSignals() {
     return [...this.#negativeSignals];
   }
 
-  /**
-   * 获取全局文件证据地图
-   * @returns {Map<string, Set<string>>}
-   */
+  /** 获取全局文件证据地图 */
   getFileEvidenceMap() {
     return new Map(this.#fileEvidenceMap);
   }
 
-  /**
-   * 获取追踪统计
-   * @returns {object}
-   */
+  /** 获取追踪统计 */
   getStats() {
     let totalSubmissions = 0;
     let totalRejections = 0;

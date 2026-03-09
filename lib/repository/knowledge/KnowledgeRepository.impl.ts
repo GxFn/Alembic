@@ -216,16 +216,12 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
     };
   }
 
-  /**
-   * 根据生命周期状态查询
-   */
+  /** 根据生命周期状态查询 */
   async findByLifecycle(lifecycle: string, pagination: KnowledgePaginationOptions = {}) {
     return this.findWithPagination({ lifecycle }, pagination);
   }
 
-  /**
-   * 根据 kind 查询
-   */
+  /** 根据 kind 查询 */
   async findByKind(
     kind: string,
     options: KnowledgePaginationOptions & { lifecycle?: string } = {}
@@ -257,30 +253,22 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
     }
   }
 
-  /**
-   * 根据语言查询
-   */
+  /** 根据语言查询 */
   async findByLanguage(language: string, pagination: KnowledgePaginationOptions = {}) {
     return this.findWithPagination({ language }, pagination);
   }
 
-  /**
-   * 根据分类查询
-   */
+  /** 根据分类查询 */
   async findByCategory(category: string, pagination: KnowledgePaginationOptions = {}) {
     return this.findWithPagination({ category }, pagination);
   }
 
-  /**
-   * 搜索
-   */
+  /** 搜索 */
   async search(keyword: string, pagination: KnowledgePaginationOptions = {}) {
     return this.findWithPagination({ _search: keyword }, pagination);
   }
 
-  /**
-   * 获取统计信息
-   */
+  /** 获取统计信息 */
   async getStats() {
     try {
       return this.db
@@ -305,11 +293,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
 
   /* ═══ 行 ↔ 实体 映射 ═══════════════════════════════ */
 
-  /**
-   * DB Row → KnowledgeEntry (camelCase 列名 = 属性名，直传)
-   * @param {Object} row
-   * @returns {KnowledgeEntry}
-   */
+  /** DB Row → KnowledgeEntry (camelCase 列名 = 属性名，直传) */
   _rowToEntity(row: Record<string, unknown>): KnowledgeEntry | null {
     if (!row) {
       return null;
@@ -335,11 +319,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
     });
   }
 
-  /**
-   * KnowledgeEntry → DB Row (camelCase 列名 = 属性名，直传)
-   * @param {KnowledgeEntry} e
-   * @returns {Object}
-   */
+  /** KnowledgeEntry → DB Row (camelCase 列名 = 属性名，直传) */
   _entityToRow(e: KnowledgeEntry) {
     const now = unixNow();
     return {

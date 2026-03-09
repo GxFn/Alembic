@@ -42,7 +42,7 @@ let _binaryReady = false;
 
 /**
  * 确保 Swift 截图工具已编译
- * @returns {{ready: boolean, error?: string}}
+ * @returns }
  */
 function ensureBinary() {
   if (_binaryReady && existsSync(BINARY_PATH)) {
@@ -89,8 +89,8 @@ function ensureBinary() {
 
 /**
  * 执行截图工具
- * @param {string[]} args - CLI 参数
- * @returns {{success: boolean, data?: object, error?: string}}
+ * @param args CLI 参数
+ * @returns }
  */
 function exec(args: string[] = []) {
   const check = ensureBinary();
@@ -128,12 +128,11 @@ function exec(args: string[] = []) {
 /**
  * 截取屏幕或窗口画面（核心功能 — 息屏可用）
  *
- * @param {object} opts
- * @param {string} [opts.windowTitle] 窗口标题关键词（模糊匹配），默认截整屏
- * @param {string} [opts.format] - 'jpeg' | 'png'
- * @param {number} [opts.scale] 缩放因子 (0.25-2.0)
- * @param {string} [opts.outputPath] 输出路径，默认临时目录
- * @returns {Promise<{success: boolean, path?: string, width?: number, height?: number, error?: string}>}
+ * @param [opts.windowTitle] 窗口标题关键词（模糊匹配），默认截整屏
+ * @param [opts.format] 'jpeg' | 'png'
+ * @param [opts.scale] 缩放因子 (0.25-2.0)
+ * @param [opts.outputPath] 输出路径，默认临时目录
+ * @returns >}
  */
 export async function screenshot(opts: ScreenshotOptions = {}) {
   const args: string[] = [];
@@ -173,7 +172,7 @@ export async function screenshot(opts: ScreenshotOptions = {}) {
 
 /**
  * 列出所有可截取的窗口
- * @returns {Promise<{success: boolean, windows?: Array, error?: string}>}
+ * @returns >}
  */
 export async function listWindows() {
   const result = exec(['--list-windows']);
@@ -187,7 +186,7 @@ export async function listWindows() {
 
 /**
  * 检查截图服务是否可用
- * @returns {{available: boolean, error?: string}}
+ * @returns }
  */
 export function isScreenCaptureAvailable() {
   const check = ensureBinary();

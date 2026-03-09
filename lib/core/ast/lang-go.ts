@@ -509,8 +509,7 @@ function _maxNesting(node: any, depth: any) {
  *   import . "pkg/path"              → named (dot import, 类似全部导入)
  *   import _ "pkg/path"              → side-effect
  *
- * @param {TreeSitterNode} spec - import_spec 节点
- * @returns {ImportRecord|null}
+ * @param spec import_spec 节点
  */
 function _parseGoImportSpec(spec: any) {
   const strLit = spec.namedChildren.find((c: any) => c.type === 'interpreted_string_literal');
@@ -559,10 +558,6 @@ function _parseGoImportSpec(spec: any) {
 /**
  * 从 Go AST root 提取所有调用点
  * 遍历 function_declaration / method_declaration 中的 block → call_expression
- *
- * @param {TreeSitterNode} root
- * @param {object} ctx
- * @param {string} _lang
  */
 function extractCallSitesGo(root: any, ctx: any, _lang: any) {
   const scopes = _collectGoScopes(root);
@@ -571,9 +566,7 @@ function extractCallSitesGo(root: any, ctx: any, _lang: any) {
   }
 }
 
-/**
- * 收集 Go 中所有函数/方法作用域
- */
+/** 收集 Go 中所有函数/方法作用域 */
 function _collectGoScopes(root: any) {
   const scopes: { body: any; className: null; methodName: any }[] = [];
   for (let i = 0; i < root.namedChildCount; i++) {
@@ -616,9 +609,7 @@ function _collectGoScopes(root: any) {
   return scopes;
 }
 
-/**
- * 从 Go block 中递归提取调用点
- */
+/** 从 Go block 中递归提取调用点 */
 function _extractGoCallSitesFromBody(bodyNode: any, className: any, methodName: any, ctx: any) {
   if (!bodyNode) {
     return;

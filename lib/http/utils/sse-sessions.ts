@@ -15,7 +15,6 @@
 
 import { EventEmitter } from 'node:events';
 
-/** @type {Map<string, StreamSession>} */
 const _sessions = new Map();
 
 /** Session 自动清理 TTL (5 分钟) */
@@ -27,8 +26,7 @@ const COMPLETED_KEEP = 60 * 1000;
 /**
  * 创建一个 stream session
  *
- * @param {'chat'|'refine'} scene 场景标识
- * @returns {StreamSession}
+ * @param scene 场景标识
  */
 export function createStreamSession(scene: string) {
   const sessionId = `ss_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -46,7 +44,7 @@ export function createStreamSession(scene: string) {
 
     /**
      * 缓冲 + 广播一个事件
-     * @param {object} event 必须包含 type 字段
+     * @param event 必须包含 type 字段
      */
     send(event: Record<string, unknown>) {
       const payload = { ...event, ts: event.ts || Date.now() };
@@ -54,10 +52,7 @@ export function createStreamSession(scene: string) {
       emitter.emit('event', payload);
     },
 
-    /**
-     * 标记会话完成，发送 stream:done
-     * @param {object} [donePayload={}]
-     */
+    /** 标记会话完成，发送 stream:done */
     end(donePayload: Record<string, unknown> = {}) {
       if (session.completed) {
         return;
@@ -73,11 +68,7 @@ export function createStreamSession(scene: string) {
       }
     },
 
-    /**
-     * 标记会话错误，发送 stream:error
-     * @param {string} message
-     * @param {string} [code]
-     */
+    /** 标记会话错误，发送 stream:error */
     error(message: string, code: string) {
       if (session.completed) {
         return;
@@ -94,8 +85,7 @@ export function createStreamSession(scene: string) {
 
     /**
      * 订阅实时事件
-     * @param {(event: object) => void} handler
-     * @returns {() => void} unsubscribe 函数
+     * @returns unsubscribe 函数
      */
     on(handler: (event: Record<string, unknown>) => void) {
       emitter.on('event', handler);
@@ -114,11 +104,7 @@ export function createStreamSession(scene: string) {
   return session;
 }
 
-/**
- * 获取已有的 session
- * @param {string} sessionId
- * @returns {StreamSession|undefined}
- */
+/** 获取已有的 session */
 export function getStreamSession(sessionId: string) {
   return _sessions.get(sessionId);
 }

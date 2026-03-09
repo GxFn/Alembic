@@ -47,7 +47,7 @@
  *   bootstrap/projectSkills.js ← Phase 5.5 Project Skill 生成（内部 Agent 专用）
  */
 
-import { getInternalAgentRequiredFields } from '#shared/FieldSpec.js';
+import { getInternalAgentRequiredFields } from '#domain/knowledge/FieldSpec.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import { fillDimensionsV3 } from './bootstrap/pipeline/orchestrator.js';
@@ -141,12 +141,11 @@ interface BootstrapSessionShape {
  *
  * ⚠️ 本函数是内部 Agent 路径。外部 Agent 使用 bootstrap-external.js 的 Mission Briefing + dimension_complete 流程。
  *
- * @param {object} ctx  { container, logger }
- * @param {object} args
- * @param {number} [args.maxFiles=500] 最大扫描文件数
- * @param {boolean} [args.skipGuard=false] 是否跳过 Guard 审计
- * @param {number} [args.contentMaxLines=120] 每文件读取最大行数
- * @param {boolean} [args.incremental=true] 是否启用增量 Bootstrap (自动检测变更, 仅重跑受影响维度)
+ * @param ctx { container, logger }
+ * @param [args.maxFiles=500] 最大扫描文件数
+ * @param [args.skipGuard=false] 是否跳过 Guard 审计
+ * @param [args.contentMaxLines=120] 每文件读取最大行数
+ * @param [args.incremental=true] 是否启用增量 Bootstrap (自动检测变更, 仅重跑受影响维度)
  */
 export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: BootstrapKnowledgeArgs) {
   const t0 = Date.now();

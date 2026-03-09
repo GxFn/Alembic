@@ -24,7 +24,7 @@ import {
   isAvailable as astIsAvailable,
   generateContextForAgent,
 } from '#core/AstAnalyzer.js';
-import { DimensionCopy } from '#shared/DimensionCopyRegistry.js';
+import { DimensionCopy } from '#service/bootstrap/DimensionCopyRegistry.js';
 import { LanguageService } from '#shared/LanguageService.js';
 import pathGuard from '#shared/PathGuard.js';
 import { detectPrimaryLanguage } from '../../LanguageExtensions.js';
@@ -185,38 +185,6 @@ export interface PhaseReport {
 
 // ── 类型定义 ────────────────────────────────────────────────
 
-/**
- * @typedef {object} PhaseOptions
- * @property {number}  [maxFiles=500]         最大扫描文件数
- * @property {number}  [contentMaxLines=120]  每文件读取最大行数
- * @property {boolean} [skipGuard=false]      是否跳过 Guard 审计
- * @property {object}  [sourceTag='bootstrap'] 依赖图 edge 的 source 标签后缀
- * @property {boolean} [generateAstContext=false] 是否生成 astContext 文本（内部 Agent 专用）
- */
-
-/**
- * @typedef {object} PhaseResults
- * @property {Array}   allFiles             扫描到的所有文件 { name, path, relativePath, content, targetName }
- * @property {object}  langStats            语言统计 { ext: count }
- * @property {string}  primaryLang          主语言
- * @property {object}  discoverer           - Discoverer 实例
- * @property {Array}   allTargets           所有 Targets
- * @property {object|null} astProjectSummary - AST 分析结果
- * @property {string}  astContext           - AST 上下文文本（仅 generateAstContext=true 时非空）
- * @property {object|null} codeEntityResult  - Entity Graph 结果
- * @property {object|null} depGraphData      依赖图数据
- * @property {object|null} guardAudit        - Guard 审计结果
- * @property {object|null} guardEngine       - Guard 引擎实例（供 Enhancement Pack 注入后二次审计）
- * @property {Array}   activeDimensions      最终激活的维度列表（含 Enhancement Pack 追加、语言画像）
- * @property {Array}   enhancementPackInfo   匹配的 Enhancement Pack 信息
- * @property {Array}   enhancementPatterns   - Enhancement Pack 检测到的 AST 模式
- * @property {object}  langProfile           语言画像
- * @property {Array}   targetsSummary        - Targets 摘要
- * @property {string[]} warnings             非致命警告
- * @property {object}  report                - Phase 级报告（供内部 Agent 使用）
- * @property {string[]} detectedFrameworks   检测到的框架
- */
-
 // ── R13: AutoSnippet 生成物黑名单 ─────────────────────────
 
 const ASD_GENERATED_BASENAMES = new Set(['AGENTS.md', 'CLAUDE.md', 'copilot-instructions.md']);
@@ -225,11 +193,7 @@ const ASD_GENERATED_PATH_SEGMENTS = [
   `${path.sep}.github${path.sep}copilot-instructions.md`,
 ];
 
-/**
- * 判断文件是否为 AutoSnippet 生成物（用于排除自引用循环知识）
- * @param {string} filePath
- * @returns {boolean}
- */
+/** 判断文件是否为 AutoSnippet 生成物（用于排除自引用循环知识） */
 export function isAutoSnippetGenerated(filePath: string) {
   const base = path.basename(filePath);
   if (ASD_GENERATED_BASENAMES.has(base)) {
@@ -251,10 +215,8 @@ export function isAutoSnippetGenerated(filePath: string) {
 /**
  * Phase 1: 通过 DiscovererRegistry 检测项目类型并收集源文件
  *
- * @param {string} projectRoot 项目根目录
- * @param {object} logger
- * @param {PhaseOptions} options
- * @returns {Promise<{ allFiles: Array, allTargets: Array, discoverer: object, langStats: object }>}
+ * @param projectRoot 项目根目录
+ * @returns >}
  */
 export async function runPhase1_FileCollection(
   projectRoot: string,
@@ -341,12 +303,10 @@ export async function runPhase1_FileCollection(
  *   - 1.5a: 按需安装缺失的语法包
  *   - 1.5b: 执行 AST 分析 + SFC 预处理
  *
- * @param {Array} allFiles - Phase 1 收集的文件
- * @param {object} langStats 语言统计
- * @param {object} logger
- * @param {object} [options]
- * @param {boolean} [options.generateAstContext=false] 是否生成 astContext 文本
- * @returns {Promise<{ astProjectSummary: object|null, astContext: string, warnings: string[] }>}
+ * @param allFiles Phase 1 收集的文件
+ * @param langStats 语言统计
+ * @param [options.generateAstContext=false] 是否生成 astContext 文本
+ * @returns >}
  */
 export async function runPhase1_5_AstAnalysis(
   allFiles: BootstrapFileEntry[],
@@ -453,11 +413,9 @@ export async function runPhase1_5_AstAnalysis(
 /**
  * Phase 1.6: 从 AST 结果构建代码实体关系图谱
  *
- * @param {object|null} astProjectSummary - AST 分析结果
- * @param {string} projectRoot
- * @param {object} container - ServiceContainer
- * @param {object} logger
- * @returns {Promise<{ codeEntityResult: object|null, warnings: string[] }>}
+ * @param astProjectSummary AST 分析结果
+ * @param container ServiceContainer
+ * @returns >}
  */
 export async function runPhase1_6_EntityGraph(
   astProjectSummary: AstProjectSummaryLike | null,
@@ -502,13 +460,11 @@ export async function runPhase1_6_EntityGraph(
  *
  * 从 AST 的 callSites 构建全局调用图并写入 CodeEntityGraph。
  *
- * @param {object|null} astProjectSummary - AST 分析结果 (含 fileSummaries[].callSites)
- * @param {string} projectRoot
- * @param {object} container - ServiceContainer
- * @param {object} logger
- * @param {object} [incrementalOpts] 增量分析选项
- * @param {string[]} [incrementalOpts.changedFiles] 变更文件的相对路径
- * @returns {Promise<{ callGraphResult: object|null, warnings: string[] }>}
+ * @param astProjectSummary AST 分析结果 (含 fileSummaries[].callSites)
+ * @param container ServiceContainer
+ * @param [incrementalOpts] 增量分析选项
+ * @param [incrementalOpts.changedFiles] 变更文件的相对路径
+ * @returns >}
  */
 export async function runPhase1_7_CallGraph(
   astProjectSummary: AstProjectSummaryLike | null,
@@ -603,11 +559,10 @@ export async function runPhase1_7_CallGraph(
 /**
  * Phase 2: 获取依赖图并写入 knowledge_edges
  *
- * @param {object} discoverer - DiscovererRegistry 检测到的 discoverer
- * @param {object} container - ServiceContainer
- * @param {object} logger
- * @param {string} [sourceTag='bootstrap'] - edge 的 source 标签后缀
- * @returns {Promise<{ depGraphData: object|null, depEdgesWritten: number, warnings: string[] }>}
+ * @param discoverer DiscovererRegistry 检测到的 discoverer
+ * @param container ServiceContainer
+ * @param [sourceTag='bootstrap'] edge 的 source 标签后缀
+ * @returns >}
  */
 export async function runPhase2_DependencyGraph(
   discoverer: DiscovererLike,
@@ -650,10 +605,7 @@ export async function runPhase2_DependencyGraph(
 /**
  * Phase 2.1: 将依赖图的 module 节点写入 Code Entity Graph
  *
- * @param {object|null} depGraphData 依赖图数据
- * @param {string} projectRoot
- * @param {object} container
- * @param {object} logger
+ * @param depGraphData 依赖图数据
  */
 export async function runPhase2_1_ModuleEntities(
   depGraphData: DepGraphData | null,
@@ -685,13 +637,9 @@ export async function runPhase2_1_ModuleEntities(
 /**
  * Phase 3: Guard 规则审计
  *
- * @param {Array} allFiles - Phase 1 收集的文件
- * @param {object} container
- * @param {object} logger
- * @param {object} [options]
- * @param {boolean} [options.skipGuard=false]
- * @param {string}  [options.summaryPrefix='Bootstrap scan'] - ViolationsStore 摘要前缀
- * @returns {Promise<{ guardAudit: object|null, guardEngine: object|null, warnings: string[] }>}
+ * @param allFiles Phase 1 收集的文件
+ * @param [options.summaryPrefix='Bootstrap scan'] - ViolationsStore 摘要前缀
+ * @returns >}
  */
 export async function runPhase3_GuardAudit(
   allFiles: BootstrapFileEntry[],
@@ -746,14 +694,9 @@ export async function runPhase3_GuardAudit(
 /**
  * Phase 4: 维度条件化过滤 + Enhancement Pack 动态追加 + 语言画像 + Skill 增强
  *
- * @param {object} params
- * @param {string} params.primaryLang
- * @param {object} params.langStats
- * @param {Array}  params.allTargets
- * @param {object|null} params.astProjectSummary - AST 结果（供 Enhancement Pack 模式检测）
- * @param {object|null} params.guardEngine - Guard 引擎（供 Enhancement Pack 规则注入）
- * @param {Array}  params.allFiles 文件列表（供 Guard 二次审计）
- * @param {object} params.logger
+ * @param params.astProjectSummary AST 结果（供 Enhancement Pack 模式检测）
+ * @param params.guardEngine Guard 引擎（供 Enhancement Pack 规则注入）
+ * @param params.allFiles 文件列表（供 Guard 二次审计）
  * @returns {Promise<{
  *   activeDimensions: Array,
  *   enhancementPackInfo: Array,
@@ -871,18 +814,13 @@ export async function runPhase4_DimensionResolve(params: Phase4Params) {
  *
  * 内部 Agent 和外部 Agent 均可调用此函数获取统一的分析结果。
  *
- * @param {string} projectRoot 项目根目录
- * @param {object} ctx - { container, logger }
- * @param {object} [options]
- * @param {boolean} [options.incremental=false]       启用增量评估 (Phase 1 后执行)
- * @param {boolean} [options.generateReport=false]    生成 Phase 级详细报告
- * @param {boolean} [options.clearOldData=false]      先清除旧 checkpoints/snapshots
- * @param {boolean} [options.generateAstContext=false] 生成 astContext 文本
- * @param {number}  [options.maxFiles=500]
- * @param {boolean} [options.skipGuard=false]
- * @param {string}  [options.sourceTag='bootstrap']
- * @param {string}  [options.summaryPrefix='Bootstrap scan']
- * @returns {Promise<PhaseResults>}
+ * @param projectRoot 项目根目录
+ * @param ctx { container, logger }
+ * @param [options.incremental=false] 启用增量评估 (Phase 1 后执行)
+ * @param [options.generateReport=false] 生成 Phase 级详细报告
+ * @param [options.clearOldData=false] 先清除旧 checkpoints/snapshots
+ * @param [options.generateAstContext=false] 生成 astContext 文本
+ * @param [options.summaryPrefix='Bootstrap scan']
  */
 export async function runAllPhases(
   projectRoot: string,

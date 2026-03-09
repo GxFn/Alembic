@@ -10,10 +10,7 @@ import { REGEX } from '../DirectiveDetector.js';
 
 /**
  * 处理 // as:c 指令
- * @param {import('../FileWatcher.js').FileWatcher} watcher
- * @param {string} fullPath
- * @param {string} relativePath
- * @param {string} createOption 'c' | 'f' | undefined
+ * @param createOption 'c' | 'f' | undefined
  */
 export async function handleCreate(
   watcher: import('../FileWatcher.js').FileWatcher,
@@ -22,7 +19,7 @@ export async function handleCreate(
   createOption: string | null
 ) {
   const XA = await import('../../../platform/ios/xcode/XcodeAutomation.js');
-  const CM = await import('../../../infrastructure/external/ClipboardManager.js');
+  const CM = await import('../../../platform/ClipboardManager.js');
 
   // 1. 读剪贴板（仅 -c 模式）
   let textToExtract = '';
@@ -78,9 +75,7 @@ export async function handleCreate(
   }
 }
 
-/**
- * 静默创建候选（从剪贴板文本解析 Recipe 并提交）
- */
+/** 静默创建候选（从剪贴板文本解析 Recipe 并提交） */
 async function silentCreateCandidate(
   watcher: import('../FileWatcher.js').FileWatcher,
   text: string,
@@ -187,9 +182,7 @@ async function silentCreateCandidate(
   watcher._notify(`已创建候选「${title}」，请在 Candidates 页审核`);
 }
 
-/**
- * 查找 // as:c 的行号 (1-based)
- */
+/** 查找 // as:c 的行号 (1-based) */
 export function findCreateLineNumber(content: string) {
   if (!content) {
     return -1;

@@ -10,8 +10,8 @@
  *   - 中间件拦截（blocked / cacheHit）
  */
 
-import { ToolExecutionPipeline } from '../../lib/service/agent/core/ToolExecutionPipeline.js';
-import { ToolRegistry } from '../../lib/service/agent/tools/ToolRegistry.js';
+import { ToolExecutionPipeline } from '../../lib/agent/core/ToolExecutionPipeline.js';
+import { ToolRegistry } from '../../lib/agent/tools/ToolRegistry.js';
 
 describe('Integration: ToolRegistry', () => {
   let registry: ToolRegistry;

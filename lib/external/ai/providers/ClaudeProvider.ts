@@ -33,9 +33,7 @@ export class ClaudeProvider extends AiProvider {
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
   }
 
-  /**
-   * 是否支持原生结构化函数调用
-   */
+  /** 是否支持原生结构化函数调用 */
   get supportsNativeToolCalling() {
     return true;
   }
@@ -72,9 +70,9 @@ export class ClaudeProvider extends AiProvider {
    *   - 工具结果通过 user 消息中的 tool_result blocks 传递
    *   - tool_choice: {type: 'auto'|'any'|'tool'}（无 'none'，不传 tools 即可）
    *
-   * @param {string} prompt - fallback prompt
-   * @param {object} opts 统一参数
-   * @returns {Promise<{text: string|null, functionCalls: Array<{id, name, args}>|null}>}
+   * @param prompt fallback prompt
+   * @param opts 统一参数
+   * @returns >|null}>}
    */
   async chatWithTools(
     prompt: string,
@@ -146,9 +144,7 @@ export class ClaudeProvider extends AiProvider {
   #convertMessages(messages: UnifiedMessage[]) {
     const result: Array<{ role: string; content: unknown }> = [];
 
-    /**
-     * 推入 result，如果上一个 entry 同角色则合并 content
-     */
+    /** 推入 result，如果上一个 entry 同角色则合并 content */
     const pushOrMerge = (entry: { role: string; content: unknown }) => {
       const last = result[result.length - 1];
       if (last && last.role === entry.role) {

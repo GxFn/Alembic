@@ -43,10 +43,8 @@ export class SnippetInstaller {
   #snippetsDirOverride: string | null;
 
   /**
-   * @param {object} options
-   * @param {import('./codecs/SnippetCodec.js').SnippetCodec} options.codec - IDE codec
-   * @param {import('./SnippetFactory.js').SnippetFactory} [options.snippetFactory]
-   * @param {string} [options.snippetsDir] 覆盖 codec 默认目录
+   * @param options.codec IDE codec
+   * @param [options.snippetsDir] 覆盖 codec 默认目录
    */
   constructor(options: InstallerOptions = {}) {
     this.#codec = options.codec || null;
@@ -76,9 +74,9 @@ export class SnippetInstaller {
 
   /**
    * 安装单个 snippet spec
-   * @param {object} spec - SnippetSpec
-   * @param {string} [projectRoot] - VSCode 需要 projectRoot 确定 .vscode/ 路径
-   * @returns {{ success: boolean, path: string, message: string }}
+   * @param spec SnippetSpec
+   * @param [projectRoot] VSCode 需要 projectRoot 确定 .vscode/ 路径
+   * @returns }
    */
   install(spec: SnippetSpec, projectRoot?: string) {
     this.#assertCodec();
@@ -107,9 +105,7 @@ export class SnippetInstaller {
 
   /**
    * 从 Recipe 批量安装
-   * @param {Array} recipes
-   * @param {string} [projectRoot]
-   * @returns {{ success: boolean, count: number, successCount: number, errorCount: number, details: Array }}
+   * @returns }
    */
   installFromRecipes(recipes: RecipeLike[], projectRoot?: string) {
     this.#assertCodec();
@@ -150,8 +146,7 @@ export class SnippetInstaller {
 
   /**
    * 列出已安装的 AutoSnippet 管理的 snippet
-   * @param {string} [projectRoot]
-   * @returns {Array<{ filename: string, path: string }>}
+   * @returns >}
    */
   listInstalled(projectRoot?: string) {
     const dir = this.#resolveDir(projectRoot);
@@ -191,9 +186,7 @@ export class SnippetInstaller {
 
   /**
    * 卸载指定 snippet
-   * @param {string} identifier
-   * @param {string} [projectRoot]
-   * @returns {{ success: boolean, message: string }}
+   * @returns }
    */
   uninstall(identifier: string, projectRoot?: string) {
     const dir = this.#resolveDir(projectRoot);
@@ -217,8 +210,7 @@ export class SnippetInstaller {
 
   /**
    * 清除所有 AutoSnippet 管理的 snippet
-   * @param {string} [projectRoot]
-   * @returns {{ success: boolean, removed: number }}
+   * @returns }
    */
   cleanAll(projectRoot?: string) {
     const dir = this.#resolveDir(projectRoot);
@@ -275,9 +267,7 @@ export class SnippetInstaller {
     }
   }
 
-  /**
-   * VSCode bundle: 将单个 spec 追加/更新到 bundle JSON
-   */
+  /** VSCode bundle: 将单个 spec 追加/更新到 bundle JSON */
   #installToBundle(spec: SnippetSpec, dir: string, bundleFilename: string) {
     const bundlePath = join(dir, bundleFilename);
     let bundle: Record<string, Record<string, unknown>> = {};
@@ -298,9 +288,7 @@ export class SnippetInstaller {
     return { success: true, path: bundlePath, message: `Installed: ${key}` };
   }
 
-  /**
-   * VSCode bundle: 一次性写入完整 bundle
-   */
+  /** VSCode bundle: 一次性写入完整 bundle */
   #installBundleFromSpecs(
     specs: SnippetSpec[],
     dir: string,
@@ -333,9 +321,7 @@ export class SnippetInstaller {
     }
   }
 
-  /**
-   * VSCode bundle: 从 JSON 中移除一个 snippet
-   */
+  /** VSCode bundle: 从 JSON 中移除一个 snippet */
   #removeFromBundle(identifier: string, dir: string, bundleFilename: string) {
     const bundlePath = join(dir, bundleFilename);
     if (!existsSync(bundlePath)) {

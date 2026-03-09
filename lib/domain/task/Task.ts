@@ -263,9 +263,7 @@ export class Task {
     return true;
   }
 
-  /**
-   * 是否有效（快捷校验）
-   */
+  /** 是否有效（快捷校验） */
   isValid() {
     try {
       this.validate();
@@ -308,9 +306,7 @@ export class Task {
     return new Task(data as TaskProps);
   }
 
-  /**
-   * 从数据库行构造 Task（snake_case → camelCase）
-   */
+  /** 从数据库行构造 Task（snake_case → camelCase） */
   static fromRow(row: TaskRow | null): Task | null {
     if (!row) {
       return null;

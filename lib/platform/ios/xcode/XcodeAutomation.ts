@@ -18,8 +18,8 @@ const OSASCRIPT_TIMEOUT = 5000;
 
 /**
  * 将行号限制为有效正整数（最小值 1）
- * @param {number} n 原始行号
- * @returns {number} 安全的 1-based 行号
+ * @param n 原始行号
+ * @returns 安全的 1-based 行号
  */
 function _safeLine(n: number) {
   return Number.isFinite(n) && n > 0 ? n : 1;
@@ -27,8 +27,7 @@ function _safeLine(n: number) {
 
 /**
  * 执行 osascript 并返回是否成功
- * @param {string[]} args  osascript 参数数组（每对 `-e`, `script`）
- * @returns {boolean}
+ * @param args osascript 参数数组（每对 `-e`, `script`）
  */
 function _run(args: string[]) {
   try {
@@ -43,9 +42,7 @@ function _run(args: string[]) {
 // 状态查询
 // ─────────────────────────────────────────────
 
-/**
- * 检查 Xcode 是否正在运行（不会启动 Xcode）
- */
+/** 检查 Xcode 是否正在运行（不会启动 Xcode） */
 export function isXcodeRunning() {
   if (process.platform !== 'darwin') {
     return false;
@@ -62,9 +59,7 @@ export function isXcodeRunning() {
   }
 }
 
-/**
- * 检查 Xcode 是否为当前前台应用
- */
+/** 检查 Xcode 是否为当前前台应用 */
 export function isXcodeFrontmost() {
   if (!isXcodeRunning()) {
     return false;
@@ -89,8 +84,8 @@ export function isXcodeFrontmost() {
  *
  * 按键序列：Cmd+L → 输入行号 → Return
  *
- * @param {number} lineNumber 1-based 行号
- * @returns {boolean} 是否成功
+ * @param lineNumber 1-based 行号
+ * @returns 是否成功
  */
 export function jumpToLineInXcode(lineNumber: number) {
   if (!isXcodeRunning()) {
@@ -124,8 +119,8 @@ export function jumpToLineInXcode(lineNumber: number) {
  *
  * 按键序列：Cmd+L 跳转 → Cmd+← 行首 → Cmd+Shift+→ 选到行尾 → Cmd+X 剪切
  *
- * @param {number} lineNumber 1-based 行号
- * @returns {boolean} 是否成功
+ * @param lineNumber 1-based 行号
+ * @returns 是否成功
  */
 export function cutLineInXcode(lineNumber: number) {
   if (!isXcodeRunning()) {
@@ -171,8 +166,8 @@ export function cutLineInXcode(lineNumber: number) {
  *
  * 按键序列：Cmd+L 跳转 → Cmd+← 行首 → Cmd+Shift+→ 选到行尾 → Delete
  *
- * @param {number} lineNumber 1-based 行号
- * @returns {boolean} 是否成功
+ * @param lineNumber 1-based 行号
+ * @returns 是否成功
  */
 export function deleteLineContentInXcode(lineNumber: number) {
   if (!isXcodeRunning()) {
@@ -223,7 +218,7 @@ export function deleteLineContentInXcode(lineNumber: number) {
  * 执行粘贴（Cmd+V）
  *
  * 调用前须确保剪贴板已写入目标内容。
- * @returns {boolean} 是否成功
+ * @returns 是否成功
  */
 export function pasteInXcode() {
   if (!isXcodeRunning()) {
@@ -249,7 +244,7 @@ export function pasteInXcode() {
  * 假设光标已在目标行（通常由 jumpToLineInXcode 定位后调用）。
  * 按键序列：Cmd+← 行首 → Cmd+Shift+→ 选到行尾 → Cmd+V 粘贴替换
  *
- * @returns {boolean} 是否成功
+ * @returns 是否成功
  */
 export function selectAndPasteInXcode() {
   if (!isXcodeRunning()) {
@@ -283,8 +278,8 @@ export function selectAndPasteInXcode() {
  * 用于在 import 区域插入新行。
  * 按键序列：Cmd+L → 输入行号 → Return → Cmd+← 行首 → Cmd+V 粘贴
  *
- * @param {number} lineNumber 1-based 行号
- * @returns {boolean} 是否成功
+ * @param lineNumber 1-based 行号
+ * @returns 是否成功
  */
 export function insertAtLineStartInXcode(lineNumber: number) {
   if (!isXcodeRunning()) {
@@ -329,7 +324,7 @@ export function insertAtLineStartInXcode(lineNumber: number) {
 
 /**
  * 保存 Xcode 当前活动文档（Cmd+S）
- * @returns {boolean} 是否成功
+ * @returns 是否成功
  */
 export function saveActiveDocumentInXcode() {
   if (!isXcodeRunning()) {

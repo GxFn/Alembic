@@ -1,20 +1,14 @@
 import { vi } from 'vitest';
 
-/**
- * ActiveContext (原 ReasoningTrace) + ExplorationTracker 单元测试
- */
+/** ActiveContext (原 ReasoningTrace) + ExplorationTracker 单元测试 */
 // ── mock Logger ──────────────────────────────────────────
 const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
 vi.mock('../../lib/infrastructure/logging/Logger.js', () => ({
   default: { getInstance: () => mockLogger },
 }));
 
-const { ActiveContext: ReasoningTrace } = await import(
-  '../../lib/service/agent/memory/ActiveContext.js'
-);
-const { ExplorationTracker } = await import(
-  '../../lib/service/agent/context/ExplorationTracker.js'
-);
+const { ActiveContext: ReasoningTrace } = await import('../../lib/agent/memory/ActiveContext.js');
+const { ExplorationTracker } = await import('../../lib/agent/context/ExplorationTracker.js');
 
 // ─── ReasoningTrace ─────────────────────────────────────
 describe('ReasoningTrace', () => {

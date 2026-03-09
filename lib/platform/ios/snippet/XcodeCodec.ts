@@ -56,9 +56,7 @@ export class XcodeCodec extends SnippetCodec {
     return '.codesnippet';
   }
 
-  /**
-   * SnippetSpec → plist XML 字符串
-   */
+  /** SnippetSpec → plist XML 字符串 */
   generate(spec: SnippetSpec): string {
     if (!spec?.identifier || !spec?.code) {
       throw new Error('Snippet spec must have identifier and code');
@@ -78,9 +76,7 @@ export class XcodeCodec extends SnippetCodec {
     return xml;
   }
 
-  /**
-   * Xcode: 每个 snippet 一个文件 → 返回 Array<{ filename, content }>
-   */
+  /** Xcode: 每个 snippet 一个文件 → 返回 Array<{ filename, content }> */
   generateBundle(specs: SnippetSpec[]): Array<{ filename: string; content: string }> {
     return specs.map((spec: SnippetSpec) => ({
       filename: `${spec.identifier}${this.fileExtension}`,
@@ -88,9 +84,7 @@ export class XcodeCodec extends SnippetCodec {
     }));
   }
 
-  /**
-   * Xcode snippets 全局目录 (macOS only)
-   */
+  /** Xcode snippets 全局目录 (macOS only) */
   getInstallDir(_projectRoot: string | undefined) {
     return join(homedir(), 'Library/Developer/Xcode/UserData/CodeSnippets');
   }

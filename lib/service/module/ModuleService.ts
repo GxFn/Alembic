@@ -73,10 +73,8 @@ const SOURCE_CODE_EXTS = new Set([
 ]);
 
 export class ModuleService {
-  /** @type {string} */
   #projectRoot;
 
-  /** @type {import('../../core/discovery/DiscovererRegistry.js').DiscovererRegistry} */
   #registry;
 
   /** @type {Array<{ discoverer: import('../../core/discovery/ProjectDiscoverer.js').ProjectDiscoverer, confidence: number }>} */
@@ -85,10 +83,8 @@ export class ModuleService {
     confidence: number;
   }> = [];
 
-  /** @type {boolean} */
   #loaded = false;
 
-  /** @type {import('winston').Logger} */
   #logger;
 
   // AI pipeline deps
@@ -99,16 +95,6 @@ export class ModuleService {
   #guardCheckEngine;
   #violationsStore;
 
-  /**
-   * @param {string} projectRoot
-   * @param {object} [options]
-   * @param {object} [options.agentFactory]
-   * @param {object} [options.container]
-   * @param {object} [options.qualityScorer]
-   * @param {object} [options.recipeExtractor]
-   * @param {object} [options.guardCheckEngine]
-   * @param {object} [options.violationsStore]
-   */
   constructor(
     projectRoot: string,
     options: {
@@ -135,9 +121,7 @@ export class ModuleService {
   //  Lifecycle
   // ═══════════════════════════════════════════════════════
 
-  /**
-   * 自动检测项目类型并加载所有匹配的 Discoverer
-   */
+  /** 自动检测项目类型并加载所有匹配的 Discoverer */
   async load() {
     if (this.#loaded) {
       return;
@@ -167,18 +151,14 @@ export class ModuleService {
     this.#loaded = true;
   }
 
-  /**
-   * 清除缓存，重新检测
-   */
+  /** 清除缓存，重新检测 */
   async reload() {
     this.#loaded = false;
     this.#activeDiscoverers = [];
     await this.load();
   }
 
-  /**
-   * 确保已加载
-   */
+  /** 确保已加载 */
   async #ensureLoaded() {
     if (!this.#loaded) {
       await this.load();
@@ -189,10 +169,7 @@ export class ModuleService {
   //  Query — 委托到 Discoverer
   // ═══════════════════════════════════════════════════════
 
-  /**
-   * 列出所有模块/Target（合并所有 Discoverer 的结果）
-   * @returns {Promise<import('../../core/discovery/ProjectDiscoverer.js').DiscoveredTarget[]>}
-   */
+  /** 列出所有模块/Target（合并所有 Discoverer 的结果） */
   async listTargets() {
     await this.#ensureLoaded();
 
@@ -271,11 +248,7 @@ export class ModuleService {
     };
   }
 
-  /**
-   * 获取 Target 的文件列表
-   * @param {import('../../core/discovery/ProjectDiscoverer.js').DiscoveredTarget|string} target
-   * @returns {Promise<import('../../core/discovery/ProjectDiscoverer.js').DiscoveredFile[]>}
-   */
+  /** 获取 Target 的文件列表 */
   async getTargetFiles(target: string | Record<string, unknown>) {
     await this.#ensureLoaded();
 
@@ -323,7 +296,7 @@ export class ModuleService {
   /**
    * 获取依赖关系图
    * @param {{ level?: 'package'|'target' }} [options]
-   * @returns {Promise<{ nodes: Record<string, unknown>[], edges: { from: string; to: string; type: string; source: string }[] }>}
+   * @returns [] }>}
    */
   async getDependencyGraph(options: { level?: 'package' | 'target' } = {}) {
     await this.#ensureLoaded();
@@ -379,9 +352,7 @@ export class ModuleService {
     };
   }
 
-  /**
-   * 项目信息摘要
-   */
+  /** 项目信息摘要 */
   getProjectInfo() {
     const discoverers = this.#activeDiscoverers.map((e) => ({
       id: e.discoverer.id,
@@ -486,8 +457,8 @@ export class ModuleService {
 
     // 3.5 Header 路径解析 + moduleName 注入
     try {
-      const PathFinder = await import('../../infrastructure/paths/PathFinder.js');
-      const HeaderResolver = await import('../../infrastructure/paths/HeaderResolver.js');
+      const PathFinder = await import('../../platform/ios/spm/PathFinder.js');
+      const HeaderResolver = await import('../../platform/ios/xcode/HeaderResolver.js');
       const targetRootDir = await PathFinder.findTargetRootDir(files[0]!.path);
       for (const recipe of recipes) {
         const headerList = (recipe.headers || []) as string[];
@@ -528,9 +499,7 @@ export class ModuleService {
     return result;
   }
 
-  /**
-   * 全项目扫描 — 遍历所有 Target，AI 提取候选 + Guard 审计
-   */
+  /** 全项目扫描 — 遍历所有 Target，AI 提取候选 + Guard 审计 */
   async scanProject(
     options: {
       maxFiles?: number;
@@ -706,9 +675,7 @@ export class ModuleService {
     };
   }
 
-  /**
-   * 刷新模块映射（替代 updateDependencyMap）
-   */
+  /** 刷新模块映射（替代 updateDependencyMap） */
   async updateModuleMap(options: Record<string, unknown> = {}) {
     // 重新加载 discoverer
     await this.reload();
@@ -730,9 +697,9 @@ export class ModuleService {
 
   /**
    * 浏览项目目录结构 — 供前端目录选择器使用
-   * @param {string} [basePath=''] 相对于项目根目录的起始路径
-   * @param {number} [maxDepth=2] 最大递归深度
-   * @returns {Promise<Array<{ name: string, path: string, depth: number, language: string, sourceFileCount: number, hasSourceFiles: boolean }>>}
+   * @param [basePath=''] 相对于项目根目录的起始路径
+   * @param [maxDepth=2] 最大递归深度
+   * @returns >>}
    */
   async browseDirectories(basePath = '', maxDepth = 2) {
     const root = basePath ? _pathJoin(this.#projectRoot, basePath) : this.#projectRoot;
@@ -756,9 +723,9 @@ export class ModuleService {
   /**
    * 扫描任意文件夹 — 创建虚拟 Target 并走标准 AI 管线
    * 用于 Discoverer 未覆盖的目录（自定义目录名、新语言等）
-   * @param {string} folderPath 相对/绝对路径
-   * @param {object} [options] - scanTarget options (onProgress 等)
-   * @returns {Promise<{ recipes: Record<string, unknown>[], scannedFiles: Record<string, unknown>[], message?: string }>}
+   * @param folderPath 相对/绝对路径
+   * @param [options] scanTarget options (onProgress 等)
+   * @returns >}
    */
   async scanFolder(
     folderPath: string,
@@ -805,9 +772,7 @@ export class ModuleService {
   //  Private Helpers
   // ═══════════════════════════════════════════════════════
 
-  /**
-   * Discoverer ID → 语言映射
-   */
+  /** Discoverer ID → 语言映射 */
   #discovererToLanguage(id: string) {
     const map: Record<string, string> = {
       spm: 'swift',
@@ -863,9 +828,7 @@ export class ModuleService {
     }
   }
 
-  /**
-   * 质量评分 enrichment
-   */
+  /** 质量评分 enrichment */
   #enrichRecipes(recipes: Record<string, unknown>[]) {
     for (const recipe of recipes) {
       if (!recipe.quality && this.#qualityScorer) {
@@ -888,9 +851,7 @@ export class ModuleService {
     }
   }
 
-  /**
-   * 目录遍历 — 浏览子目录结构
-   */
+  /** 目录遍历 — 浏览子目录结构 */
   #walkDirsForBrowse(
     dir: string,
     dirs: {
@@ -945,9 +906,7 @@ export class ModuleService {
     }
   }
 
-  /**
-   * 递归统计目录下源码文件数（限深度 + 上限 999 防止超大目录卡顿）
-   */
+  /** 递归统计目录下源码文件数（限深度 + 上限 999 防止超大目录卡顿） */
   #countSourceFilesDeep(dir: string, maxDepth: number, depth = 0) {
     if (depth >= maxDepth) {
       return 0;
@@ -971,18 +930,14 @@ export class ModuleService {
     return count;
   }
 
-  /**
-   * 从目录收集源码文件列表
-   */
+  /** 从目录收集源码文件列表 */
   #collectFolderFiles(dirPath: string, maxDepth = 15) {
     const files: { name: string; path: string; relativePath: string; language: string }[] = [];
     this.#walkCollectSourceFiles(dirPath, dirPath, files, 0, maxDepth);
     return files;
   }
 
-  /**
-   * 递归收集源码文件
-   */
+  /** 递归收集源码文件 */
   #walkCollectSourceFiles(
     dir: string,
     rootDir: string,
@@ -1023,9 +978,7 @@ export class ModuleService {
     }
   }
 
-  /**
-   * 检测目录主要编程语言
-   */
+  /** 检测目录主要编程语言 */
   #detectFolderLanguage(dirPath: string) {
     const langCount: Record<string, number> = {};
     try {
@@ -1058,9 +1011,7 @@ export class ModuleService {
     return maxLang;
   }
 
-  /**
-   * 目录遍历兜底（收集源码文件）
-   */
+  /** 目录遍历兜底（收集源码文件） */
   #walkProjectForFiles(
     allFiles: Record<string, unknown>[],
     seenPaths: Set<string>,

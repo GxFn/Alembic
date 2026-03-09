@@ -6,8 +6,6 @@
  *   - gateway, eventBus, bootstrapTaskManager
  *   - knowledgeRepository, knowledgeFileWriter, knowledgeSyncService
  *   - taskRepository
- *
- * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';

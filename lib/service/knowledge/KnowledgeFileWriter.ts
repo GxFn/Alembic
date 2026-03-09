@@ -71,9 +71,7 @@ export class KnowledgeFileWriter {
   logger: ReturnType<typeof Logger.getInstance>;
   projectRoot: string;
   recipesDir: string;
-  /**
-   * @param {string} projectRoot 项目根目录
-   */
+  /** @param projectRoot 项目根目录 */
   constructor(projectRoot: string) {
     this.projectRoot = projectRoot;
     this.recipesDir = path.join(projectRoot, RECIPES_DIR);
@@ -83,11 +81,7 @@ export class KnowledgeFileWriter {
 
   /* ═══ 序列化 ═══════════════════════════════════════════ */
 
-  /**
-   * 将 KnowledgeEntry 序列化为完整 .md（YAML frontmatter + body）
-   * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
-   * @returns {string}
-   */
+  /** 将 KnowledgeEntry 序列化为完整 .md（YAML frontmatter + body） */
   serialize(entry: KnowledgeEntry): string {
     const json = entry.toJSON() as Record<string, unknown>;
     const lines = ['---'];
@@ -161,11 +155,7 @@ export class KnowledgeFileWriter {
     return md.replace(hashPlaceholder, hash);
   }
 
-  /**
-   * 构建 Markdown body
-   * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
-   * @returns {string}
-   */
+  /** 构建 Markdown body */
   _buildBody(entry: KnowledgeEntry): string {
     const c = entry.content;
     const lines: string[] = [];
@@ -255,8 +245,7 @@ export class KnowledgeFileWriter {
    * - isCandidate() → AutoSnippet/candidates/{category}/
    * - isActive()/deprecated → AutoSnippet/recipes/{category}/
    *
-   * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
-   * @returns {string|null} 写入的文件路径，失败返回 null
+   * @returns 写入的文件路径，失败返回 null
    */
   persist(entry: KnowledgeEntry): string | null {
     try {
@@ -300,11 +289,7 @@ export class KnowledgeFileWriter {
     }
   }
 
-  /**
-   * 删除 KnowledgeEntry 对应的 .md 文件
-   * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
-   * @returns {boolean}
-   */
+  /** 删除 KnowledgeEntry 对应的 .md 文件 */
   remove(entry: KnowledgeEntry): boolean {
     if (!entry?.id) {
       return false;
@@ -349,8 +334,7 @@ export class KnowledgeFileWriter {
    * 当 lifecycle 切换时，移动 .md 文件到正确目录
    * candidates/ ↔ recipes/
    *
-   * @param {import('../../domain/knowledge/KnowledgeEntry.js').KnowledgeEntry} entry
-   * @returns {string|null} 新的文件路径
+   * @returns 新的文件路径
    */
   moveOnLifecycleChange(entry: KnowledgeEntry): string | null {
     const oldPath = entry.sourceFile ? path.join(this.projectRoot, entry.sourceFile) : null;
@@ -381,7 +365,7 @@ export class KnowledgeFileWriter {
 
   /**
    * 计算文件存储路径
-   * @returns {{ dir: string, filename: string }}
+   * @returns }
    */
   _resolveFilePath(entry: KnowledgeEntry): { dir: string; filename: string } {
     const baseDir = entry.isCandidate() ? this.candidatesDir : this.recipesDir;
@@ -391,9 +375,7 @@ export class KnowledgeFileWriter {
     return { dir, filename };
   }
 
-  /**
-   * 清理旧文件（category 变更或 lifecycle 切换场景）
-   */
+  /** 清理旧文件（category 变更或 lifecycle 切换场景） */
   _cleanupOldFile(entry: KnowledgeEntry, newPath: string) {
     if (!entry.sourceFile) {
       return;
@@ -443,10 +425,7 @@ export class KnowledgeFileWriter {
     });
   }
 
-  /**
-   * 通过 id 扫描所有 .md 文件来删除
-   * @returns {boolean}
-   */
+  /** 通过 id 扫描所有 .md 文件来删除 */
   _removeByIdScan(id: string): boolean {
     for (const baseDir of [this.candidatesDir, this.recipesDir]) {
       if (!fs.existsSync(baseDir)) {
@@ -472,8 +451,7 @@ export class KnowledgeFileWriter {
 
 /**
  * 计算 .md 内容的 SHA-256 hash（去除 _content_hash 行后）
- * @param {string} content
- * @returns {string} 16 字符 hex
+ * @returns 16 字符 hex
  */
 export function computeKnowledgeHash(content: string): string {
   const cleaned = content.replace(/^_contentHash:.*\n?/m, '').trim();
@@ -484,9 +462,9 @@ export function computeKnowledgeHash(content: string): string {
  * 从 .md 内容解析为 wire format JSON
  * 返回值可直接 KnowledgeEntry.fromJSON(data) 构造实体
  *
- * @param {string} content  .md 文件全文
- * @param {string} [relPath]  相对路径（用于溯源）
- * @returns {Object} wire format JSON
+ * @param content .md 文件全文
+ * @param [relPath] 相对路径（用于溯源）
+ * @returns wire format JSON
  */
 export function parseKnowledgeMarkdown(content: string, relPath?: string): Record<string, unknown> {
   const fmMatch = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
@@ -652,10 +630,7 @@ export function parseKnowledgeMarkdown(content: string, relPath?: string): Recor
 
 /**
  * 生成文件名 slug
- * @param {string} trigger
- * @param {string} title
- * @param {string} id
- * @returns {string} 文件名（含 .md 后缀）
+ * @returns 文件名（含 .md 后缀）
  */
 function _slugFilename(trigger: string | undefined, title: string | undefined, id: string): string {
   // 优先用 trigger
@@ -687,9 +662,7 @@ function _slugFilename(trigger: string | undefined, title: string | undefined, i
   return `${(id || 'unknown').slice(0, 8)}.md`;
 }
 
-/**
- * 将 YAML 值安全序列化
- */
+/** 将 YAML 值安全序列化 */
 function _yamlValue(key: string, val: string | number | boolean): string {
   if (typeof val === 'number' || typeof val === 'boolean') {
     return String(val);
@@ -702,10 +675,7 @@ function _yamlValue(key: string, val: string | number | boolean): string {
   return str;
 }
 
-/**
- * 递归扫描目录，删除包含指定 id 的 .md 文件
- * @returns {boolean}
- */
+/** 递归扫描目录，删除包含指定 id 的 .md 文件 */
 function _walkAndRemoveById(dir: string, id: string): boolean {
   if (!fs.existsSync(dir)) {
     return false;

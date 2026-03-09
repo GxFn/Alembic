@@ -16,9 +16,8 @@ export class VectorMigration {
   /**
    * 检测并执行自动迁移
    *
-   * @param {string} indexDir - 索引目录路径
-   * @param {import('./HnswVectorAdapter.js').HnswVectorAdapter} adapter - HNSW 适配器实例
-   * @returns {Promise<'new'|'migrated'|'binary'>}
+   * @param indexDir 索引目录路径
+   * @param adapter HNSW 适配器实例
    */
   static async migrate(
     indexDir: string,
@@ -94,11 +93,7 @@ export class VectorMigration {
     return 'new';
   }
 
-  /**
-   * 检查是否需要迁移
-   * @param {string} indexDir
-   * @returns {boolean}
-   */
+  /** 检查是否需要迁移 */
   static needsMigration(indexDir: string) {
     const jsonPath = join(indexDir, 'vector_index.json');
     const hnswPath = join(indexDir, 'vector_index.asvec');

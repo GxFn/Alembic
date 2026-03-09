@@ -154,9 +154,7 @@ program
     cli.log('     • 或将 AutoSnippet/recipes/ 加入 .gitignore');
   });
 
-/**
- * 更新 .autosnippet/config.json 中的 core.subRepoUrl 字段
- */
+/** 更新 .autosnippet/config.json 中的 core.subRepoUrl 字段 */
 function _updateConfigUrl(projectRoot: string, url: string) {
   const configPath = join(projectRoot, '.autosnippet', 'config.json');
   if (!existsSync(configPath)) {
@@ -1509,9 +1507,8 @@ async function initBootstrap() {
 /**
  * Bootstrap → ServiceContainer 统一初始化
  * 所有需要服务层的 CLI 命令共用此入口，保证依赖注入一致性
- * @param {object}  [opts]
- * @param {string}  [opts.projectRoot]  项目根目录（默认 cwd）
- * @returns {Promise<{ bootstrap, container }>}
+ * @param [opts.projectRoot] 项目根目录（默认 cwd）
+ * @returns >}
  */
 async function initContainer(opts: any = {}) {
   const projectRoot = opts.projectRoot || process.cwd();

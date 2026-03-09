@@ -7,8 +7,6 @@
  *   - spmService, automationOrchestrator, moduleService
  *   - cursorDeliveryPipeline
  *   - taskIdGenerator, taskReadyEngine, taskKnowledgeBridge, taskGraphService
- *
- * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
@@ -17,8 +15,8 @@ import { XcodeCodec } from '../../platform/ios/snippet/XcodeCodec.js';
 import { SpmHelper } from '../../platform/ios/spm/SpmHelper.js';
 import { TokenUsageStore } from '../../repository/token/TokenUsageStore.js';
 import { AutomationOrchestrator } from '../../service/automation/AutomationOrchestrator.js';
-import { RecipeExtractor } from '../../service/context/RecipeExtractor.js';
-import { CursorDeliveryPipeline } from '../../service/cursor/CursorDeliveryPipeline.js';
+import { CursorDeliveryPipeline } from '../../service/delivery/CursorDeliveryPipeline.js';
+import { RecipeExtractor } from '../../service/knowledge/RecipeExtractor.js';
 import { ModuleService } from '../../service/module/ModuleService.js';
 import { FeedbackCollector } from '../../service/quality/FeedbackCollector.js';
 import { QualityScorer } from '../../service/quality/QualityScorer.js';
@@ -148,10 +146,7 @@ export function register(c: ServiceContainer) {
   );
 }
 
-/**
- * 初始化 RecipeExtractor 实例 (在 initialize 期间调用)
- * @param {import('../ServiceContainer.js').ServiceContainer} c
- */
+/** 初始化 RecipeExtractor 实例 (在 initialize 期间调用) */
 export function initRecipeExtractor(c: ServiceContainer) {
   c.singletons._recipeExtractor = new RecipeExtractor();
 }

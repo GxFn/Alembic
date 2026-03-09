@@ -7,6 +7,9 @@
  * @module ServiceMap
  */
 
+// ── Service Types ──
+import type { AgentFactory } from '../agent/AgentFactory.js';
+import type { ToolRegistry } from '../agent/tools/ToolRegistry.js';
 // ── CLI Types ──
 import type { KnowledgeSyncService } from '../cli/KnowledgeSyncService.js';
 // ── Core AST / Discovery / Enhancement ──
@@ -32,14 +35,10 @@ import type { SpmHelper } from '../platform/ios/spm/SpmHelper.js';
 import type { KnowledgeRepositoryImpl } from '../repository/knowledge/KnowledgeRepository.impl.js';
 import type { TaskRepositoryImpl } from '../repository/task/TaskRepository.impl.js';
 import type { TokenUsageStore } from '../repository/token/TokenUsageStore.js';
-// ── Service Types ──
-import type { AgentFactory } from '../service/agent/AgentFactory.js';
-import type { ToolRegistry } from '../service/agent/tools/ToolRegistry.js';
 import type { AutomationOrchestrator } from '../service/automation/AutomationOrchestrator.js';
 import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
-// ── Context Types ──
-import type { RecipeExtractor } from '../service/context/RecipeExtractor.js';
-import type { CursorDeliveryPipeline } from '../service/cursor/CursorDeliveryPipeline.js';
+import type DimensionCopy from '../service/bootstrap/DimensionCopyRegistry.js';
+import type { CursorDeliveryPipeline } from '../service/delivery/CursorDeliveryPipeline.js';
 import type { ComplianceReporter } from '../service/guard/ComplianceReporter.js';
 import type { ExclusionManager } from '../service/guard/ExclusionManager.js';
 import type { GuardCheckEngine } from '../service/guard/GuardCheckEngine.js';
@@ -52,6 +51,8 @@ import type { ConfidenceRouter } from '../service/knowledge/ConfidenceRouter.js'
 import type { KnowledgeFileWriter } from '../service/knowledge/KnowledgeFileWriter.js';
 import type { KnowledgeGraphService } from '../service/knowledge/KnowledgeGraphService.js';
 import type { KnowledgeService } from '../service/knowledge/KnowledgeService.js';
+// ── Context Types ──
+import type { RecipeExtractor } from '../service/knowledge/RecipeExtractor.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
 import type { FeedbackCollector } from '../service/quality/FeedbackCollector.js';
 import type { QualityScorer } from '../service/quality/QualityScorer.js';
@@ -68,7 +69,6 @@ import type { TaskReadyEngine } from '../service/task/TaskReadyEngine.js';
 // ── Vector Service Types ──
 import type { ContextualEnricher } from '../service/vector/ContextualEnricher.js';
 import type { VectorService } from '../service/vector/VectorService.js';
-import type DimensionCopy from '../shared/DimensionCopyRegistry.js';
 // ── Shared Types ──
 import type { LanguageService } from '../shared/LanguageService.js';
 

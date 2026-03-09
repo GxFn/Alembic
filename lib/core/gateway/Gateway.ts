@@ -92,9 +92,7 @@ export class Gateway extends EventEmitter {
     this.eventBus = null; // 可选：外部注入 EventBus 实例
   }
 
-  /**
-   * 设置依赖
-   */
+  /** 设置依赖 */
   setDependencies({
     constitution,
     constitutionValidator,
@@ -107,9 +105,7 @@ export class Gateway extends EventEmitter {
     this.auditLogger = auditLogger ?? null;
   }
 
-  /**
-   * 注册路由处理器
-   */
+  /** 注册路由处理器 */
   register(action: string, handler: (ctx: GatewayContext) => Promise<unknown>) {
     if (this.routes.has(action)) {
       throw new Error(`Action '${action}' is already registered`);
@@ -118,16 +114,12 @@ export class Gateway extends EventEmitter {
     this.logger.debug(`Route registered: ${action}`);
   }
 
-  /**
-   * 获取已注册的 action 列表
-   */
+  /** 获取已注册的 action 列表 */
   getRegisteredActions() {
     return [...this.routes.keys()];
   }
 
-  /**
-   * 执行操作（主入口）
-   */
+  /** 执行操作（主入口） */
   async execute(request: GatewayRequest): Promise<GatewayResult> {
     const requestId = uuidv4();
     const startTime = Date.now();
@@ -250,9 +242,7 @@ export class Gateway extends EventEmitter {
 
   // ─── Pipeline Steps ────────────────────────────────────
 
-  /**
-   * validate — 验证请求格式
-   */
+  /** validate — 验证请求格式 */
   validateRequest(request: GatewayRequest) {
     if (!request.actor) {
       throw new InternalError('Missing required field: actor');
@@ -262,9 +252,7 @@ export class Gateway extends EventEmitter {
     }
   }
 
-  /**
-   * guard — 权限检查 + 宪法验证
-   */
+  /** guard — 权限检查 + 宪法验证 */
   async guard(context: GatewayContext) {
     // 权限检查
     if (this.permissionManager) {
@@ -282,9 +270,7 @@ export class Gateway extends EventEmitter {
     }
   }
 
-  /**
-   * route — 路由到处理器
-   */
+  /** route — 路由到处理器 */
   async routeToHandler(context: GatewayContext) {
     const handler = this.routes.get(context.action);
 
@@ -295,9 +281,7 @@ export class Gateway extends EventEmitter {
     return await handler(context);
   }
 
-  /**
-   * audit — 记录成功
-   */
+  /** audit — 记录成功 */
   async auditSuccess(context: GatewayContext, result: unknown) {
     if (!this.auditLogger) {
       return;
@@ -321,9 +305,7 @@ export class Gateway extends EventEmitter {
     }
   }
 
-  /**
-   * audit — 记录失败
-   */
+  /** audit — 记录失败 */
   async auditFailure(
     context: GatewayContext,
     error: { message: string; code?: string; statusCode?: number }
@@ -351,9 +333,7 @@ export class Gateway extends EventEmitter {
     }
   }
 
-  /**
-   * 获取所有注册的路由
-   */
+  /** 获取所有注册的路由 */
   getRoutes() {
     return Array.from(this.routes.keys());
   }

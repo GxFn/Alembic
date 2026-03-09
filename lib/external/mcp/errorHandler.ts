@@ -36,11 +36,7 @@ type McpHandlerFn = (
   args: Record<string, unknown>
 ) => Promise<unknown>;
 
-/**
- * 从已知错误类型推断 errorCode
- * @param {Error} err
- * @returns {string}
- */
+/** 从已知错误类型推断 errorCode */
 function inferErrorCode(err: unknown): string {
   if (err instanceof ValidationError) {
     return 'VALIDATION_ERROR';
@@ -71,10 +67,10 @@ function inferErrorCode(err: unknown): string {
  * 则在 handler 执行前自动校验并 parse（应用 defaults + coercion），
  * 校验失败返回结构化 VALIDATION_ERROR，不会到达 handler。
  *
- * @param {string} toolName 工具名（用于 meta.tool + schema 查找）
- * @param {Function} handlerFn 原始 handler: (ctx, args) => Promise<unknown>
- * @param {ZodType} [schema] 可选的显式 schema 覆盖（优先于 TOOL_SCHEMAS 自动查找）
- * @returns {Function} 包装后的 handler，保证 *不会* throw
+ * @param toolName 工具名（用于 meta.tool + schema 查找）
+ * @param handlerFn 原始 handler: (ctx, args) => Promise<unknown>
+ * @param [schema] 可选的显式 schema 覆盖（优先于 TOOL_SCHEMAS 自动查找）
+ * @returns 包装后的 handler，保证 *不会* throw
  */
 export function wrapHandler(toolName: string, handlerFn: McpHandlerFn, schema?: z.ZodType) {
   // 确定使用的 schema：显式传入 > TOOL_SCHEMAS 自动查找

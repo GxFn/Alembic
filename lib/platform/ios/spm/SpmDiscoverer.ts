@@ -15,7 +15,6 @@ import { LanguageService } from '#shared/LanguageService.js';
 import { PackageSwiftParser } from './PackageSwiftParser.js';
 
 export class SpmDiscoverer extends ProjectDiscoverer {
-  /** @type {PackageSwiftParser|null} */
   #parser: PackageSwiftParser | null = null;
   #projectRoot: string | null = null;
   /** @type {Array<{ pkgPath: string, parsed: ReturnType<PackageSwiftParser['parse']> }>} */
@@ -287,8 +286,8 @@ export class SpmDiscoverer extends ProjectDiscoverer {
 
   /**
    * 遍历源码目录，返回源文件列表
-   * @param {string} dir 源码根目录
-   * @returns {{ name: string, path: string, relativePath: string }[]}
+   * @param dir 源码根目录
+   * @returns []}
    */
   #walkSourceFiles(dir: string) {
     const CODE_EXTS = new Set(['.swift', '.m', '.h', '.c', '.cpp', '.mm']);

@@ -37,9 +37,7 @@ export class GoogleGeminiProvider extends AiProvider {
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
   }
 
-  /**
-   * 是否支持原生结构化函数调用
-   */
+  /** 是否支持原生结构化函数调用 */
   get supportsNativeToolCalling() {
     return true;
   }
@@ -81,15 +79,11 @@ export class GoogleGeminiProvider extends AiProvider {
    *
    * 接受统一消息格式，内部转换为 Gemini 原生 contents 格式。
    *
-   * @param {string} prompt 未使用 messages 时的 fallback prompt
-   * @param {object} opts
-   * @param {Array}  opts.messages 统一格式消息
-   * @param {Array}  opts.toolSchemas - [{name, description, parameters}]
-   * @param {string} opts.toolChoice - 'auto' | 'required' | 'none'
-   * @param {string} [opts.systemPrompt]
-   * @param {number} [opts.temperature=0.7]
-   * @param {number} [opts.maxTokens=8192]
-   * @returns {Promise<{text: string|null, functionCalls: Array<{id, name, args}>|null}>}
+   * @param prompt 未使用 messages 时的 fallback prompt
+   * @param opts.messages 统一格式消息
+   * @param opts.toolSchemas [{name, description, parameters}]
+   * @param opts.toolChoice 'auto' | 'required' | 'none'
+   * @returns >|null}>}
    */
   async chatWithTools(
     prompt: string,
@@ -167,9 +161,7 @@ export class GoogleGeminiProvider extends AiProvider {
     let pendingToolResults: { functionResponse: { name: string; response: { result: string } } }[] =
       [];
 
-    /**
-     * 推入 contents，如果上一个 entry 同角色则合并 parts
-     */
+    /** 推入 contents，如果上一个 entry 同角色则合并 parts */
     const pushOrMerge = (entry: { role: string; parts: unknown[] }) => {
       const last = contents[contents.length - 1];
       if (last && last.role === entry.role) {
@@ -230,9 +222,7 @@ export class GoogleGeminiProvider extends AiProvider {
     return contents;
   }
 
-  /**
-   * toolChoice → Gemini mode
-   */
+  /** toolChoice → Gemini mode */
   #toGeminiMode(toolChoice: string) {
     switch (toolChoice) {
       case 'required':
@@ -244,9 +234,7 @@ export class GoogleGeminiProvider extends AiProvider {
     }
   }
 
-  /**
-   * 标准 tool schema → Gemini functionDeclaration
-   */
+  /** 标准 tool schema → Gemini functionDeclaration */
   #toFunctionDeclaration(schema: ToolSchema) {
     return {
       name: schema.name,

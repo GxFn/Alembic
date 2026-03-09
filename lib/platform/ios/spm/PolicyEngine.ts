@@ -25,9 +25,8 @@ interface PolicyViolation {
 export class PolicyEngine {
   /**
    * 全面策略检查
-   * @param {import('./DependencyGraph.js').DependencyGraph} graph
    * @param {{ layerOrder?: string[] }} config - layerOrder 定义分层顺序，低层不应依赖高层
-   * @returns {{ passed: boolean, violations: object[] }}
+   * @returns }
    */
   check(graph: DependencyGraph, config: PolicyConfig = {}) {
     const violations: PolicyViolation[] = [];
@@ -85,10 +84,7 @@ export class PolicyEngine {
 
   /**
    * 单独检查能否添加新依赖
-   * @param {import('./DependencyGraph.js').DependencyGraph} graph
-   * @param {string} from
-   * @param {string} to
-   * @returns {{ allowed: boolean, reason?: string }}
+   * @returns }
    */
   canAddDependency(graph: DependencyGraph, from: string, to: string) {
     // 检查是否会导致循环

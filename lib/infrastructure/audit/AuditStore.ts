@@ -1,6 +1,4 @@
-/**
- * AuditStore - 审计日志存储
- */
+/** AuditStore - 审计日志存储 */
 import { desc, eq, sql } from 'drizzle-orm';
 import type { DrizzleDB } from '../database/drizzle/index.js';
 import { getDrizzle } from '../database/drizzle/index.js';
@@ -47,9 +45,7 @@ export class AuditStore {
       .run();
   }
 
-  /**
-   * 查询审计日志
-   */
+  /** 查询审计日志 */
   query(
     filters: {
       actor?: string;
@@ -149,9 +145,7 @@ export class AuditStore {
       .all();
   }
 
-  /**
-   * 获取统计数据
-   */
+  /** 获取统计数据 */
   getStats(timeRange = '24h') {
     // 计算时间范围
     const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 168 : 720; // 30d
@@ -222,9 +216,8 @@ export class AuditStore {
   /**
    * 清理过期审计日志
    * ★ Drizzle 类型安全 DELETE
-   * @param {object} [opts]
-   * @param {number} [opts.maxAgeDays=90] 保留天数，超过此天数的记录将被删除
-   * @returns {{ deleted: number }}
+   * @param [opts.maxAgeDays=90] 保留天数，超过此天数的记录将被删除
+   * @returns }
    */
   cleanup({ maxAgeDays = 90 } = {}) {
     try {

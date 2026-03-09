@@ -5,7 +5,7 @@
  * 核心变更：用 content 对象替代旧版 code 字符串。
  */
 
-import { getRequiredFieldNames } from '../../shared/FieldSpec.js';
+import { getRequiredFieldNames } from '#domain/knowledge/FieldSpec.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 
 interface CandidateContent {
@@ -60,8 +60,7 @@ const VALID_KINDS = new Set(['rule', 'pattern', 'fact']);
 export class RecipeCandidateValidator {
   /**
    * 验证单个候选（V3 结构）
-   * @param {object} candidate
-   * @returns {{ valid: boolean, errors: string[], warnings: string[] }}
+   * @returns }
    */
   validate(candidate: RecipeCandidate) {
     const errors: string[] = [];
@@ -178,8 +177,7 @@ export class RecipeCandidateValidator {
 
   /**
    * 批量验证
-   * @param {object[]} candidates
-   * @returns {{ valid: object[], invalid: object[], summary: { total: number, validCount: number, invalidCount: number } }}
+   * @returns }}
    */
   validateBatch(candidates: RecipeCandidate[]) {
     const valid: {
@@ -215,23 +213,17 @@ export class RecipeCandidateValidator {
     };
   }
 
-  /**
-   * 获取有效类别列表
-   */
+  /** 获取有效类别列表 */
   getValidCategories() {
     return [...VALID_CATEGORIES];
   }
 
-  /**
-   * 获取有效 kind 列表
-   */
+  /** 获取有效 kind 列表 */
   getValidKinds() {
     return [...VALID_KINDS];
   }
 
-  /**
-   * 获取所有必填字段名列表
-   */
+  /** 获取所有必填字段名列表 */
   getRequiredFields() {
     return [
       ...REQUIRED_FIELDS,

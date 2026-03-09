@@ -70,13 +70,10 @@ const DEFAULTS = {
 // ──────────────────────────────────────────────────────────────────
 
 export default class ProjectGraph {
-  /** @type {Map<string, ClassInfo>} */
   #classes = new Map();
 
-  /** @type {Map<string, ProtocolInfo>} */
   #protocols = new Map();
 
-  /** @type {Map<string, CategoryInfo[]>} */
   #categories = new Map();
 
   /** @type {Map<string, string>} 子类 → 父类 */
@@ -104,14 +101,9 @@ export default class ProjectGraph {
 
   /**
    * 扫描项目并构建 ProjectGraph
-   * @param {string} projectRoot 项目根目录
-   * @param {object} [options]
-   * @param {number} [options.maxFiles=500]
-   * @param {string[]} [options.excludePatterns]
-   * @param {string[]} [options.extensions] 例如 ['.m', '.h', '.swift']
-   * @param {Function} [options.onProgress] (parsed, total) => void
-   * @param {number} [options.timeoutMs=30000]
-   * @returns {Promise<ProjectGraph>}
+   * @param projectRoot 项目根目录
+   * @param [options.extensions] 例如 ['.m', '.h', '.swift']
+   * @param [options.onProgress] (parsed, total) => void
    */
   static async build(projectRoot: any, options: any = {}) {
     if (!isAvailable()) {
@@ -168,28 +160,19 @@ export default class ProjectGraph {
 
   // ── 查询 API ──────────────────────────────────────────────────
 
-  /**
-   * 获取类的完整信息
-   * @param {string} className
-   * @returns {ClassInfo|null}
-   */
+  /** 获取类的完整信息 */
   getClassInfo(className: any) {
     return this.#classes.get(className) || null;
   }
 
-  /**
-   * 获取协议定义 + 所有遵循者
-   * @param {string} protocolName
-   * @returns {ProtocolInfo|null}
-   */
+  /** 获取协议定义 + 所有遵循者 */
   getProtocolInfo(protocolName: any) {
     return this.#protocols.get(protocolName) || null;
   }
 
   /**
    * 获取继承链 (向上到根类)
-   * @param {string} className
-   * @returns {string[]} [className, parent, grandparent, ...]
+   * @returns [className, parent, grandparent, ...]
    */
   getInheritanceChain(className: any) {
     const chain: any[] = [];
@@ -203,11 +186,7 @@ export default class ProjectGraph {
     return chain;
   }
 
-  /**
-   * 获取直接子类
-   * @param {string} className
-   * @returns {string[]}
-   */
+  /** 获取直接子类 */
   getSubclasses(className: any) {
     const subs: any[] = [];
     for (const [child, parent] of this.#inheritance) {
@@ -218,11 +197,7 @@ export default class ProjectGraph {
     return subs;
   }
 
-  /**
-   * 递归获取所有后代类
-   * @param {string} className
-   * @returns {string[]}
-   */
+  /** 递归获取所有后代类 */
   getAllDescendants(className: any) {
     const result: any[] = [];
     const queue = [className];
@@ -240,20 +215,14 @@ export default class ProjectGraph {
     return result;
   }
 
-  /**
-   * 获取类的所有 Category 扩展
-   * @param {string} className
-   * @returns {CategoryInfo[]}
-   */
+  /** 获取类的所有 Category 扩展 */
   getCategoryExtensions(className: any) {
     return this.#categories.get(className) || [];
   }
 
   /**
    * 查找覆写了指定方法的所有后代类
-   * @param {string} className
-   * @param {string} methodName 方法名或 selector
-   * @returns {OverrideInfo[]}
+   * @param methodName 方法名或 selector
    */
   getMethodOverrides(className: any, methodName: any) {
     const descendants = this.getAllDescendants(className);
@@ -274,38 +243,25 @@ export default class ProjectGraph {
     return overrides;
   }
 
-  /**
-   * 获取类的所有方法
-   * @param {string} className
-   * @returns {MethodInfo[]}
-   */
+  /** 获取类的所有方法 */
   getClassMethods(className: any) {
     return this.#methodsByClass.get(className) || [];
   }
 
-  /**
-   * 获取文件的符号摘要
-   * @param {string} relativePath
-   * @returns {FileSymbols|null}
-   */
+  /** 获取文件的符号摘要 */
   getFileSymbols(relativePath: any) {
     return this.#files.get(relativePath) || null;
   }
 
   /**
    * 获取所有已解析的文件路径
-   * @returns {string[]} 相对路径列表
+   * @returns 相对路径列表
    */
   getAllFilePaths() {
     return [...this.#files.keys()];
   }
 
-  /**
-   * 搜索类名 (模糊匹配)
-   * @param {string} query
-   * @param {number} [limit=20]
-   * @returns {string[]}
-   */
+  /** 搜索类名 (模糊匹配) */
   searchClasses(query: any, limit = 20) {
     const lower = query.toLowerCase();
     const results: any[] = [];
@@ -320,10 +276,7 @@ export default class ProjectGraph {
     return results;
   }
 
-  /**
-   * 获取项目概览统计
-   * @returns {ProjectOverview}
-   */
+  /** 获取项目概览统计 */
   getOverview() {
     if (this.#overview) {
       return this.#overview;
@@ -366,27 +319,19 @@ export default class ProjectGraph {
     return this.#overview;
   }
 
-  /**
-   * 获取所有类名
-   * @returns {string[]}
-   */
+  /** 获取所有类名 */
   getAllClassNames() {
     return [...this.#classes.keys()];
   }
 
-  /**
-   * 获取所有协议名
-   * @returns {string[]}
-   */
+  /** 获取所有协议名 */
   getAllProtocolNames() {
     return [...this.#protocols.keys()];
   }
 
   // ── 内部索引构建 ──────────────────────────────────────────────
 
-  /**
-   * 索引单个文件的解析结果
-   */
+  /** 索引单个文件的解析结果 */
   #indexFileSummary(relativePath: any, summary: any) {
     const fileSymbols = {
       path: relativePath,
@@ -581,9 +526,7 @@ export default class ProjectGraph {
     this.#files.set(relativePath, fileSymbols);
   }
 
-  /**
-   * 构建反向索引 — 协议遵循者列表
-   */
+  /** 构建反向索引 — 协议遵循者列表 */
   #buildReverseIndices() {
     // 填充 protocol.conformers
     for (const [className, protos] of this.#conformance) {
@@ -614,10 +557,7 @@ export default class ProjectGraph {
 
   // ── 序列化 / 反序列化 ──────────────────────────────────────
 
-  /**
-   * 序列化为可 JSON.stringify 的纯对象
-   * @returns {object}
-   */
+  /** 序列化为可 JSON.stringify 的纯对象 */
   toJSON() {
     const mapToObj = (map: any) => Object.fromEntries(map);
     const mapOfSetsToObj = (map: any) => {
@@ -643,8 +583,7 @@ export default class ProjectGraph {
 
   /**
    * 从缓存数据恢复 ProjectGraph 实例
-   * @param {object} data toJSON() 输出的对象
-   * @returns {ProjectGraph}
+   * @param data toJSON() 输出的对象
    */
   static fromJSON(data: any) {
     const graph = new ProjectGraph();
@@ -691,10 +630,9 @@ export default class ProjectGraph {
 
   /**
    * 增量更新：仅重新解析变更文件，合并到现有图中
-   * @param {string[]} changedPaths 变更文件的绝对路径
-   * @param {string[]} deletedPaths 删除文件的相对路径
-   * @param {object} [options]
-   * @returns {Promise<{ added: number, updated: number, deleted: number }>}
+   * @param changedPaths 变更文件的绝对路径
+   * @param deletedPaths 删除文件的相对路径
+   * @returns >}
    */
   async incrementalUpdate(changedPaths: any, deletedPaths: any[] = [], options: any = {}) {
     const { analyzeFile, isAvailable } = await import('../AstAnalyzer.js');
@@ -787,13 +725,7 @@ export default class ProjectGraph {
 // 工具函数 — 文件收集
 // ──────────────────────────────────────────────────────────────────
 
-/**
- * 递归收集匹配扩展名的源文件
- * @param {string} dir
- * @param {string[]} extensions
- * @param {object} opts
- * @returns {string[]}
- */
+/** 递归收集匹配扩展名的源文件 */
 function collectSourceFiles(dir: any, extensions: any, opts: any) {
   const results: string[] = [];
   const extSet = new Set(extensions);

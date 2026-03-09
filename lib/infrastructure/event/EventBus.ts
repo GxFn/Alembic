@@ -16,19 +16,13 @@ export class EventBus extends EventEmitter {
     this.#historyLimit = options.historyLimit || 100;
   }
 
-  /**
-   * 同步 emit + 记录历史
-   */
+  /** 同步 emit + 记录历史 */
   emit(eventName: string | symbol, ...args: unknown[]) {
     this.#recordEvent(eventName, args);
     return super.emit(eventName, ...args);
   }
 
-  /**
-   * 异步 emit — 串行等待所有 listener 完成
-   * @param {string} eventName
-   * @param  {...any} args
-   */
+  /** 异步 emit — 串行等待所有 listener 完成 */
   async emitAsync(eventName: string | symbol, ...args: unknown[]) {
     this.#recordEvent(eventName, args);
     const listeners = this.listeners(eventName);
@@ -37,24 +31,17 @@ export class EventBus extends EventEmitter {
     }
   }
 
-  /**
-   * 获取事件历史
-   * @param {number} limit
-   */
+  /** 获取事件历史 */
   getHistory(limit = 10) {
     return this.#history.slice(-limit);
   }
 
-  /**
-   * 清空历史
-   */
+  /** 清空历史 */
   clearHistory() {
     this.#history = [];
   }
 
-  /**
-   * 获取统计
-   */
+  /** 获取统计 */
   getStats() {
     const events: Record<string, number> = {};
     for (const entry of this.#history) {

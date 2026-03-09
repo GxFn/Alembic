@@ -74,16 +74,12 @@ export class BaseRepository {
     }
   }
 
-  /**
-   * 创建实体
-   */
+  /** 创建实体 */
   async create(entity: unknown): Promise<unknown> {
     throw new Error('create() must be implemented in subclass');
   }
 
-  /**
-   * 根据 ID 获取实体
-   */
+  /** 根据 ID 获取实体 */
   async findById(id: string) {
     try {
       const stmt = this.db.prepare(`
@@ -106,9 +102,7 @@ export class BaseRepository {
     }
   }
 
-  /**
-   * 获取所有实体
-   */
+  /** 获取所有实体 */
   async findAll(filters: Record<string, unknown> = {}) {
     try {
       let query = `SELECT * FROM ${this.tableName}`;
@@ -139,9 +133,7 @@ export class BaseRepository {
     }
   }
 
-  /**
-   * 分页查询
-   */
+  /** 分页查询 */
   async findWithPagination(
     filters: Record<string, unknown> = {},
     { page = 1, pageSize = 20 } = {}
@@ -195,9 +187,7 @@ export class BaseRepository {
     }
   }
 
-  /**
-   * 更新实体
-   */
+  /** 更新实体 */
   async update(id: string, updates: Record<string, unknown>) {
     try {
       const updateKeys = Object.keys(updates);
@@ -227,9 +217,7 @@ export class BaseRepository {
     }
   }
 
-  /**
-   * 删除实体
-   */
+  /** 删除实体 */
   async delete(id: string) {
     try {
       const stmt = this.db.prepare(`
@@ -247,9 +235,7 @@ export class BaseRepository {
     }
   }
 
-  /**
-   * 计数
-   */
+  /** 计数 */
   async count(filters: Record<string, unknown> = {}) {
     try {
       let query = `SELECT COUNT(*) as count FROM ${this.tableName}`;
@@ -276,16 +262,12 @@ export class BaseRepository {
     }
   }
 
-  /**
-   * 映射行数据到实体（由子类实现）
-   */
+  /** 映射行数据到实体（由子类实现） */
   _mapRowToEntity(row: unknown): unknown {
     throw new Error('_mapRowToEntity() must be implemented in subclass');
   }
 
-  /**
-   * 映射实体到行数据（由子类实现）
-   */
+  /** 映射实体到行数据（由子类实现） */
   _mapEntityToRow(entity: unknown): unknown {
     throw new Error('_mapEntityToRow() must be implemented in subclass');
   }

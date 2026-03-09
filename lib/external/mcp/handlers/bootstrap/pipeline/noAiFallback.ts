@@ -166,8 +166,8 @@ interface CandidateParams {
 /**
  * 主入口 — 当 AI 不可用时调用
  *
- * @param {object} fillContext 与 fillDimensionsV3 相同的上下文
- * @returns {Promise<{ candidates: object[], skills: object[], report: object }>}
+ * @param fillContext 与 fillDimensionsV3 相同的上下文
+ * @returns >}
  */
 export async function runNoAiFallback(fillContext: FillContext) {
   const {

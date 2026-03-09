@@ -60,9 +60,7 @@ function _markerPath(projectRoot: string) {
  * 在 bootstrap handler 中调用。只写一个轻量标记文件到 .autosnippet/，
  * 不触碰 .cursor/mcp.json，避免 Cursor 检测配置变更重启 MCP Server。
  *
- * @param {string} projectRoot 项目根目录
- * @param {object} [logger]
- * @returns {boolean}
+ * @param projectRoot 项目根目录
  */
 export function markAutoApproveNeeded(projectRoot: string, logger?: AutoApproveLogger) {
   const marker = _markerPath(projectRoot);
@@ -84,9 +82,9 @@ export function markAutoApproveNeeded(projectRoot: string, logger?: AutoApproveL
 /**
  * 向 .cursor/mcp.json 中 autosnippet 服务器注入 autoApprove 工具列表
  *
- * @param {string} projectRoot 项目根目录
- * @param {object} [logger]    日志实例（可选）
- * @returns {boolean} 是否成功写入（false = 文件不存在或无 autosnippet 配置）
+ * @param projectRoot 项目根目录
+ * @param [logger] 日志实例（可选）
+ * @returns 是否成功写入（false = 文件不存在或无 autosnippet 配置）
  */
 export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogger) {
   const configPath = path.join(projectRoot, '.cursor', 'mcp.json');
@@ -141,9 +139,6 @@ export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogge
  *
  * 注入发生在 MCP 连接建立之前，写入 mcp.json 不影响当前启动。
  * Cursor 下次读取 mcp.json 时（重启或新窗口）即生效。
- *
- * @param {string} projectRoot
- * @param {object} [logger]
  */
 export function applyPendingAutoApprove(projectRoot: string, logger?: AutoApproveLogger) {
   const marker = _markerPath(projectRoot);

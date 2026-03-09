@@ -46,53 +46,39 @@ export interface DependencyGraph {
 }
 
 export class ProjectDiscoverer {
-  /**
-   * 检测此 Discoverer 是否适用于给定项目
-   */
+  /** 检测此 Discoverer 是否适用于给定项目 */
   async detect(
     projectRoot: string
   ): Promise<{ match: boolean; confidence: number; reason: string }> {
     throw new Error('Not implemented');
   }
 
-  /**
-   * 加载项目结构（解析配置文件、构建依赖图）
-   */
+  /** 加载项目结构（解析配置文件、构建依赖图） */
   async load(projectRoot: string): Promise<void> {
     throw new Error('Not implemented');
   }
 
-  /**
-   * 列出所有 Target/模块
-   */
+  /** 列出所有 Target/模块 */
   async listTargets(): Promise<DiscoveredTarget[]> {
     throw new Error('Not implemented');
   }
 
-  /**
-   * 获取指定 Target 下的源码文件列表
-   */
+  /** 获取指定 Target 下的源码文件列表 */
   async getTargetFiles(target: DiscoveredTarget): Promise<DiscoveredFile[]> {
     throw new Error('Not implemented');
   }
 
-  /**
-   * 获取模块间依赖关系图
-   */
+  /** 获取模块间依赖关系图 */
   async getDependencyGraph(): Promise<DependencyGraph> {
     throw new Error('Not implemented');
   }
 
-  /**
-   * Discoverer 标识
-   */
+  /** Discoverer 标识 */
   get id(): string {
     throw new Error('Not implemented');
   }
 
-  /**
-   * 人类可读名称
-   */
+  /** 人类可读名称 */
   get displayName(): string {
     throw new Error('Not implemented');
   }

@@ -247,9 +247,7 @@ export const GITIGNORE_RULES = [
   { pattern: '*.sw[a-p]' },
 ];
 
-/**
- * .gitignore 迁移规则 — 升级时清理旧格式
- */
+/** .gitignore 迁移规则 — 升级时清理旧格式 */
 export const GITIGNORE_MIGRATIONS = [
   // v2.4.0: ".autosnippet/" → ".autosnippet/*"
   { find: /^\.autosnippet\/$/m, replace: '.autosnippet/*' },
@@ -257,11 +255,7 @@ export const GITIGNORE_MIGRATIONS = [
   { find: /^!?\.autosnippet\/skills\/.*\n?/gm, replace: '' },
 ];
 
-/**
- * MCP Server 配置生成器
- * @param {string} projectRoot
- * @param {'cursor'|'vscode'} ide
- */
+/** MCP Server 配置生成器 */
 export function buildMcpServerEntry(projectRoot: string, ide: 'cursor' | 'vscode') {
   const base = {
     command: 'asd-mcp',

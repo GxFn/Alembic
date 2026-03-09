@@ -60,9 +60,7 @@ export class SyncCoordinator {
     this.#maxBatchSize = config.maxBatchSize ?? 20;
   }
 
-  /**
-   * 绑定 EventBus，开始监听知识变更事件
-   */
+  /** 绑定 EventBus，开始监听知识变更事件 */
   bindEventBus(eventBus: EventBus): void {
     this.#eventBus = eventBus;
 
@@ -86,9 +84,7 @@ export class SyncCoordinator {
     this.#logger.info('[SyncCoordinator] Bound to EventBus');
   }
 
-  /**
-   * 手动触发立即刷入（用于测试或 shutdown 前确保数据落盘）
-   */
+  /** 手动触发立即刷入（用于测试或 shutdown 前确保数据落盘） */
   async flush(): Promise<void> {
     if (this.#debounceTimer) {
       clearTimeout(this.#debounceTimer);
@@ -177,9 +173,7 @@ export class SyncCoordinator {
     return result;
   }
 
-  /**
-   * 销毁: 清理定时器和事件监听
-   */
+  /** 销毁: 清理定时器和事件监听 */
   destroy(): void {
     if (this.#debounceTimer) {
       clearTimeout(this.#debounceTimer);

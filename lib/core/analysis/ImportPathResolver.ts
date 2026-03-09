@@ -22,8 +22,8 @@ export class ImportPathResolver {
   pathAliases: Array<{ prefix: string; targets: string[] }>;
   projectRoot: string;
   /**
-   * @param {string} projectRoot 项目根目录
-   * @param {string[]} allFiles 项目内所有文件的相对路径
+   * @param projectRoot 项目根目录
+   * @param allFiles 项目内所有文件的相对路径
    */
   constructor(projectRoot: string, allFiles: string[]) {
     this.projectRoot = projectRoot;
@@ -66,7 +66,6 @@ export class ImportPathResolver {
 
   /**
    * 从 tsconfig.json 加载 paths alias 配置
-   * @param {string} projectRoot
    * @private
    */
   _loadTsconfigPaths(projectRoot: string) {
@@ -116,9 +115,9 @@ export class ImportPathResolver {
   /**
    * 解析 import 路径到项目文件
    *
-   * @param {string} importPath 如 "./UserRepo" 或 "../shared/utils"
-   * @param {string} importerFile 当前文件路径 (相对路径)
-   * @returns {string|null} 解析后的文件路径 (相对) 或 null (外部依赖)
+   * @param importPath 如 "./UserRepo" 或 "../shared/utils"
+   * @param importerFile 当前文件路径 (相对路径)
+   * @returns 解析后的文件路径 (相对) 或 null (外部依赖)
    */
   resolve(importPath: string | { toString(): string }, importerFile: string) {
     const pathStr = String(importPath);
@@ -159,8 +158,6 @@ export class ImportPathResolver {
 
   /**
    * 尝试通过 tsconfig paths alias 解析
-   * @param {string} importPath
-   * @returns {string|null}
    * @private
    */
   _resolveAlias(importPath: string): string | null {
@@ -178,11 +175,7 @@ export class ImportPathResolver {
     return null;
   }
 
-  /**
-   * 判断是否为外部依赖
-   * @param {string} importPath
-   * @returns {boolean}
-   */
+  /** 判断是否为外部依赖 */
   _isExternal(importPath: string): boolean {
     // 相对路径不是外部
     if (importPath.startsWith('.') || importPath.startsWith('/')) {

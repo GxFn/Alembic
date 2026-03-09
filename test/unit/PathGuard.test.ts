@@ -1,6 +1,4 @@
-/**
- * PathGuard — 路径安全守卫单元测试（双层防护）
- */
+/** PathGuard — 路径安全守卫单元测试（双层防护） */
 
 import path from 'node:path';
 import pathGuard, { PathGuardError } from '../../lib/shared/PathGuard.js';

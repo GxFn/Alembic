@@ -93,13 +93,11 @@ export class FileWatcher {
   quiet: boolean;
   specPath: string;
   /**
-   * @param {string} specPath  boxspec.json 绝对路径
-   * @param {string} projectRoot 项目根目录
-   * @param {object} [opts]
-   * @param {boolean} [opts.quiet=false]
-   * @param {string[]} [opts.exts] 可选扩展名列表
-   * @param {string} [opts.pathPrefix] 可选路径前缀过滤
-   * @param {Function} [opts.onEvent] 可选事件回调
+   * @param specPath boxspec.json 绝对路径
+   * @param projectRoot 项目根目录
+   * @param [opts.exts] 可选扩展名列表
+   * @param [opts.pathPrefix] 可选路径前缀过滤
+   * @param [opts.onEvent] 可选事件回调
    */
   constructor(
     specPath: string,
@@ -123,9 +121,7 @@ export class FileWatcher {
     this._timeoutHead = undefined;
   }
 
-  /**
-   * 启动文件监听
-   */
+  /** 启动文件监听 */
   start() {
     const watchRoot = this.projectRoot;
     const filePattern = this.exts
@@ -173,9 +169,7 @@ export class FileWatcher {
     return this._watcher;
   }
 
-  /**
-   * 停止监听，释放所有资源
-   */
+  /** 停止监听，释放所有资源 */
   async stop() {
     if (this._watcher) {
       // 移除所有事件监听器，避免泄漏
@@ -291,9 +285,7 @@ export class FileWatcher {
 
   /* ────────── 工具方法（供 handlers 通过 watcher 引用调用） ────────── */
 
-  /**
-   * 追加候选项（通过 ServiceContainer 或 HTTP API）
-   */
+  /** 追加候选项（通过 ServiceContainer 或 HTTP API） */
   async _appendCandidates(items: Record<string, unknown>[], source: string) {
     // 过滤空 title / 空 code 的无效条目
     const validItems = items.filter((item: Record<string, unknown>) => {
@@ -375,13 +367,11 @@ export class FileWatcher {
     throw serviceError || new Error('候选提交失败：ServiceContainer 和 HTTP 均不可用');
   }
 
-  /**
-   * 为候选解析头文件
-   */
+  /** 为候选解析头文件 */
   async _resolveHeadersIfNeeded(item: Record<string, unknown>, relativePath: string, text: string) {
     if (relativePath && (!item.headers || !(item.headers as string[]).length)) {
       try {
-        const HeaderResolver = await import('../../infrastructure/paths/HeaderResolver.js');
+        const HeaderResolver = await import('../../platform/ios/xcode/HeaderResolver.js');
         const resolved = await HeaderResolver.resolveHeadersForText(
           this.projectRoot,
           relativePath,
@@ -398,29 +388,21 @@ export class FileWatcher {
     }
   }
 
-  /**
-   * 打开 Dashboard 页面
-   */
+  /** 打开 Dashboard 页面 */
   _openDashboard(path: string) {
     const base = process.env.ASD_DASHBOARD_URL || 'http://localhost:3000';
     const url = `${base}${path}`;
-    import('../../infrastructure/external/OpenBrowser.js')
+    import('../../platform/OpenBrowser.js')
       .then(({ openBrowserReuseTab }) => openBrowserReuseTab(url, base))
       .catch(() => {});
   }
 
-  /**
-   * macOS 通知
-   */
+  /** macOS 通知 */
   _notify(msg: string) {
-    import('../../infrastructure/external/NativeUi.js')
-      .then((NU) => NU.notify(msg))
-      .catch(() => {});
+    import('../../platform/NativeUi.js').then((NU) => NU.notify(msg)).catch(() => {});
   }
 
-  /**
-   * 防抖
-   */
+  /** 防抖 */
   _debounce(key: string, fn: () => void) {
     if (this._debounceTimers.has(key)) {
       clearTimeout(this._debounceTimers.get(key));

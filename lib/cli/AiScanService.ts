@@ -24,9 +24,8 @@ export class AiScanService {
   logger: ReturnType<typeof Logger.getInstance>;
   projectRoot: string;
   /**
-   * @param {object} opts
-   * @param {object} opts.container   ServiceContainer 实例
-   * @param {string} opts.projectRoot 项目根目录
+   * @param opts.container ServiceContainer 实例
+   * @param opts.projectRoot 项目根目录
    */
   constructor({
     container,
@@ -46,9 +45,9 @@ export class AiScanService {
 
   /**
    * 扫描指定 Target（或全部 Target）的源文件并提取 Recipe，创建后直接发布
-   * @param {string|null} targetName  Target 名称；null 时扫描全部
-   * @param {object}      opts        { maxFiles, dryRun, concurrency }
-   * @returns {Promise<{ published: number, files: number, errors: string[] }>}
+   * @param targetName Target 名称；null 时扫描全部
+   * @param opts { maxFiles, dryRun, concurrency }
+   * @returns >}
    */
   async scan(targetName: string | null, opts: { maxFiles?: number; dryRun?: boolean } = {}) {
     const { maxFiles = 200, dryRun = false } = opts;
@@ -161,9 +160,7 @@ export class AiScanService {
     return report;
   }
 
-  /**
-   * 收集 Target 源文件
-   */
+  /** 收集 Target 源文件 */
   async _collectFiles(targetName: string | null, maxFiles: number) {
     const files: { name: string; path: string; relativePath: string; targetName: string }[] = [];
 
@@ -237,9 +234,7 @@ export class AiScanService {
     return files;
   }
 
-  /**
-   * 递归扫描目录（fallback）
-   */
+  /** 递归扫描目录（fallback） */
   _walkDir(
     dir: string,
     files: Array<{ name: string; path: string; relativePath: string; targetName: string }>,
@@ -301,9 +296,7 @@ export class AiScanService {
     }
   }
 
-  /**
-   * 从文件名推断语言
-   */
+  /** 从文件名推断语言 */
   _inferLanguage(filename: string) {
     return LanguageService.inferLang(filename);
   }

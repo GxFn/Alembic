@@ -8,9 +8,7 @@
 //  Hook 系统类型
 // ═══════════════════════════════════════════════════════
 
-/**
- * Hook 执行模式 — 受 Webpack Tapable 启发，简化为 4 种核心语义
- */
+/** Hook 执行模式 — 受 Webpack Tapable 启发，简化为 4 种核心语义 */
 export type HookMode =
   /** 串行执行，所有 handler 按优先级顺序执行，忽略返回值 */
   | 'series'
@@ -21,18 +19,14 @@ export type HookMode =
   /** 串行短路，首个返回 truthy 值（含 {block:true}）的 handler 终止链 */
   | 'bail';
 
-/**
- * Hook 定义
- */
+/** Hook 定义 */
 export interface HookDefinition {
   name: string;
   mode: HookMode;
   description: string;
 }
 
-/**
- * Handler 注册选项
- */
+/** Handler 注册选项 */
 export interface HookHandlerOptions {
   /** handler 名称 (用于日志和调试) */
   name: string;
@@ -42,9 +36,7 @@ export interface HookHandlerOptions {
   timeout?: number;
 }
 
-/**
- * 已注册的 Handler 内部表示
- */
+/** 已注册的 Handler 内部表示 */
 export interface RegisteredHandler {
   fn: (...args: unknown[]) => Promise<unknown> | unknown;
   name: string;
@@ -56,9 +48,7 @@ export interface RegisteredHandler {
 //  信号系统类型
 // ═══════════════════════════════════════════════════════
 
-/**
- * 标准化信号对象
- */
+/** 标准化信号对象 */
 export interface Signal {
   id: string;
   provider: string;
@@ -71,18 +61,14 @@ export interface Signal {
   dedupeKey?: string;
 }
 
-/**
- * 信号收集上下文
- */
+/** 信号收集上下文 */
 export interface SignalContext {
   projectRoot: string;
   database?: unknown;
   container?: unknown;
 }
 
-/**
- * 统一信号提供者接口
- */
+/** 统一信号提供者接口 */
 export interface SignalProvider {
   /** 提供者唯一名称 */
   readonly name: string;
@@ -107,9 +93,7 @@ export interface SignalProvider {
 //  推荐系统类型
 // ═══════════════════════════════════════════════════════
 
-/**
- * 推荐候选
- */
+/** 推荐候选 */
 export interface RecommendationCandidate {
   /** 推荐的 Skill 名称 */
   name: string;
@@ -127,9 +111,7 @@ export interface RecommendationCandidate {
   body?: string;
 }
 
-/**
- * 带分数的推荐结果
- */
+/** 带分数的推荐结果 */
 export interface ScoredRecommendation extends RecommendationCandidate {
   /** 综合得分 0-1 */
   score: number;
@@ -141,9 +123,7 @@ export interface ScoredRecommendation extends RecommendationCandidate {
   generatedAt: string;
 }
 
-/**
- * 推荐管线上下文
- */
+/** 推荐管线上下文 */
 export interface RecommendationContext {
   projectRoot: string;
   database?: unknown;
@@ -157,17 +137,13 @@ export interface RecommendationContext {
   aiAvailable?: boolean;
 }
 
-/**
- * 召回策略接口
- */
+/** 召回策略接口 */
 export interface RecallStrategy {
   readonly name: string;
   /** 召回方法类型 */
   readonly type: 'rule' | 'ai' | 'vector' | 'popularity';
 
-  /**
-   * 召回候选列表
-   */
+  /** 召回候选列表 */
   recall(context: RecommendationContext): Promise<RecommendationCandidate[]>;
 
   /** 策略是否可用 (例如 AI 策略需要 aiProvider) */
@@ -178,9 +154,7 @@ export interface RecallStrategy {
 //  反馈系统类型
 // ═══════════════════════════════════════════════════════
 
-/**
- * 推荐反馈动作
- */
+/** 推荐反馈动作 */
 export type FeedbackAction =
   /** 用户采纳推荐并创建了 Skill */
   | 'adopted'
@@ -193,9 +167,7 @@ export type FeedbackAction =
   /** 用户采纳但修改了内容 */
   | 'modified';
 
-/**
- * 推荐反馈记录
- */
+/** 推荐反馈记录 */
 export interface RecommendationFeedback {
   recommendationId: string;
   action: FeedbackAction;
@@ -208,9 +180,7 @@ export interface RecommendationFeedback {
   reason?: string;
 }
 
-/**
- * 用户偏好 (从反馈历史中推导)
- */
+/** 用户偏好 (从反馈历史中推导) */
 export interface UserPreference {
   preferredCategories: string[];
   avoidedCategories: string[];
@@ -223,9 +193,7 @@ export interface UserPreference {
 //  度量系统类型
 // ═══════════════════════════════════════════════════════
 
-/**
- * 推荐效果指标
- */
+/** 推荐效果指标 */
 export interface RecommendationMetricsSnapshot {
   /** 总推荐数 */
   totalRecommendations: number;

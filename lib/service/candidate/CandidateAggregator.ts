@@ -25,9 +25,7 @@ interface AggregateOpts {
 /**
  * 对候选条目列表进行去重聚合
  *
- * @param {CandidateItem[]} items
- * @param {AggregateOpts} [opts]
- * @returns {{ items: CandidateItem[], duplicates: Array<{item: CandidateItem, duplicateOf: string}> }}
+ * @returns > }}
  */
 export function aggregateCandidates(items: CandidateItem[], opts: AggregateOpts = {}) {
   if (!Array.isArray(items) || items.length === 0) {

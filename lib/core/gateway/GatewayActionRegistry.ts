@@ -12,11 +12,7 @@ import type { Gateway, GatewayContext } from './Gateway.js';
 
 const logger = Logger.getInstance();
 
-/**
- * 注册所有 Gateway actions
- * @param {import('./Gateway.js').Gateway} gateway
- * @param {import('../../injection/ServiceContainer.js').ServiceContainer} container
- */
+/** 注册所有 Gateway actions */
 export function registerGatewayActions(gateway: Gateway, container: { get(name: string): any }) {
   // ========== Knowledge Actions (V3: replaces Candidate + Recipe) ==========
 

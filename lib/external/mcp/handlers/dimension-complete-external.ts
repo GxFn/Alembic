@@ -16,7 +16,7 @@
  */
 
 import Logger from '#infra/logging/Logger.js';
-import { BootstrapEventEmitter } from '#shared/BootstrapEventEmitter.js';
+import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import { envelope } from '../envelope.js';
 import { saveDimensionCheckpoint } from './bootstrap/pipeline/checkpoint.js';
 import { BOOTSTRAP_COMPLETE_ACTIONS } from './bootstrap/shared/dimension-text.js';
@@ -31,17 +31,16 @@ const logger = Logger.getInstance();
 /**
  * dimensionComplete — 维度分析完成通知
  *
- * @param {object} ctx  - { container, logger, startedAt }
- * @param {object} args 工具参数
- * @param {string} [args.sessionId]          - bootstrap 返回的 session.id
- * @param {string} args.dimensionId          维度 ID
- * @param {string[]} args.submittedRecipeIds 本维度提交的 recipe ID 列表
- * @param {string} args.analysisText         分析报告全文（Markdown）
- * @param {string[]} [args.referencedFiles]  引用的文件路径列表
- * @param {string[]} [args.keyFindings]      关键发现摘要 (3-5 条)
- * @param {number} [args.candidateCount]     本维度提交的候选数量
- * @param {object} [args.crossDimensionHints] 对其他维度的建议
- * @returns {Promise<object>}
+ * @param ctx { container, logger, startedAt }
+ * @param args 工具参数
+ * @param [args.sessionId] bootstrap 返回的 session.id
+ * @param args.dimensionId 维度 ID
+ * @param args.submittedRecipeIds 本维度提交的 recipe ID 列表
+ * @param args.analysisText 分析报告全文（Markdown）
+ * @param [args.referencedFiles] 引用的文件路径列表
+ * @param [args.keyFindings] 关键发现摘要 (3-5 条)
+ * @param [args.candidateCount] 本维度提交的候选数量
+ * @param [args.crossDimensionHints] 对其他维度的建议
  */
 interface DimensionCompleteArgs {
   sessionId?: string;
@@ -391,12 +390,10 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
     // R6: 全量 Semantic Memory 固化 (fire-and-forget)
     setImmediate(async () => {
       try {
-        const { EpisodicConsolidator } = await import(
-          '#service/agent/domain/EpisodicConsolidator.js'
-        );
+        const { EpisodicConsolidator } = await import('#agent/domain/EpisodicConsolidator.js');
         const db = ctx.container.get?.('database') ?? ctx.container.get?.('db');
         if (db && session.sessionStore) {
-          const { PersistentMemory } = await import('#service/agent/memory/PersistentMemory.js');
+          const { PersistentMemory } = await import('#agent/memory/PersistentMemory.js');
           const semanticMemory = new PersistentMemory(db, { logger });
           const consolidator = new EpisodicConsolidator(semanticMemory, { logger });
           const result = await consolidator.consolidate(session.sessionStore, {

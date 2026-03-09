@@ -9,24 +9,18 @@
 import type { ProjectDiscoverer } from './ProjectDiscoverer.js';
 
 export class DiscovererRegistry {
-  /** @type {import('./ProjectDiscoverer.js').ProjectDiscoverer[]} */
   #discoverers: ProjectDiscoverer[] = [];
 
   /**
    * 注册一个 Discoverer 实现
-   * @param {import('./ProjectDiscoverer.js').ProjectDiscoverer} discoverer
-   * @returns {DiscovererRegistry} this 支持链式调用
+   * @returns this 支持链式调用
    */
   register(discoverer: ProjectDiscoverer) {
     this.#discoverers.push(discoverer);
     return this;
   }
 
-  /**
-   * 自动检测项目类型，返回最佳 Discoverer
-   * @param {string} projectRoot
-   * @returns {Promise<import('./ProjectDiscoverer.js').ProjectDiscoverer>}
-   */
+  /** 自动检测项目类型，返回最佳 Discoverer */
   async detect(projectRoot: string) {
     const results = await Promise.all(
       this.#discoverers.map(async (d) => ({
@@ -56,8 +50,7 @@ export class DiscovererRegistry {
 
   /**
    * 检测所有匹配的 Discoverer（用于混合项目）
-   * @param {string} projectRoot
-   * @returns {Promise<Array<{ discoverer: import('./ProjectDiscoverer.js').ProjectDiscoverer, confidence: number }>>}
+   * @returns >>}
    */
   async detectAll(projectRoot: string) {
     const results = await Promise.all(
@@ -75,10 +68,7 @@ export class DiscovererRegistry {
       .map((r) => ({ discoverer: r.discoverer, confidence: r.result.confidence }));
   }
 
-  /**
-   * 获取所有已注册的 Discoverer
-   * @returns {import('./ProjectDiscoverer.js').ProjectDiscoverer[]}
-   */
+  /** 获取所有已注册的 Discoverer */
   getAll() {
     return [...this.#discoverers];
   }

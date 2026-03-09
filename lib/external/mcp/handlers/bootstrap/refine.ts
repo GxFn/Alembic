@@ -14,8 +14,8 @@ import { envelope } from '../../envelope.js';
 import type { KnowledgeEntryJSON, McpContext } from '../types.js';
 
 /**
- * @param {object} ctx  MCP context { container, logger }
- * @param {object} args { candidateIds?: string[], userPrompt?: string, dryRun?: boolean }
+ * @param ctx MCP context { container, logger }
+ * @param args { candidateIds?: string[], userPrompt?: string, dryRun?: boolean }
  */
 interface BootstrapRefineArgs {
   candidateIds?: string[];

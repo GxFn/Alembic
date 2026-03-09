@@ -16,7 +16,7 @@
  */
 
 import crypto from 'node:crypto';
-import { SessionStore } from '#service/agent/memory/SessionStore.js';
+import { SessionStore } from '#agent/memory/SessionStore.js';
 import type { DimensionQualityReport } from './ExternalSubmissionTracker.js';
 import { ExternalSubmissionTracker } from './ExternalSubmissionTracker.js';
 
@@ -78,10 +78,9 @@ export class BootstrapSession {
   sessionStore: SessionStore;
   submissionTracker: ExternalSubmissionTracker;
   /**
-   * @param {object} opts
-   * @param {string} opts.projectRoot 项目根目录
-   * @param {Array}  opts.dimensions  激活的维度定义列表
-   * @param {object} [opts.projectContext] 传给 EpisodicMemory 的项目元数据
+   * @param opts.projectRoot 项目根目录
+   * @param opts.dimensions 激活的维度定义列表
+   * @param [opts.projectContext] 传给 EpisodicMemory 的项目元数据
    */
   constructor({ projectRoot, dimensions, projectContext = {} }: BootstrapSessionOpts) {
     this.id = `bs-${crypto.randomUUID()}`;
@@ -126,11 +125,7 @@ export class BootstrapSession {
     };
   }
 
-  /**
-   * 检查某个维度是否已完成
-   * @param {string} dimId
-   * @returns {boolean}
-   */
+  /** 检查某个维度是否已完成 */
   isDimensionComplete(dimId: string): boolean {
     return this.completedDimensions.has(dimId);
   }
@@ -139,9 +134,8 @@ export class BootstrapSession {
 
   /**
    * 标记维度完成
-   * @param {string} dimId
-   * @param {object} report - { analysisText, findings, referencedFiles, recipeIds, candidateCount }
-   * @returns {{ updated: boolean, qualityReport: object|null }} - updated=true 表示覆盖了已有记录
+   * @param report { analysisText, findings, referencedFiles, recipeIds, candidateCount }
+   * @returns } - updated=true 表示覆盖了已有记录
    */
   markDimensionComplete(
     dimId: string,
@@ -178,8 +172,8 @@ export class BootstrapSession {
 
   /**
    * 存储跨维度 hints
-   * @param {string} fromDimId 来源维度
-   * @param {Record<string, string>} hints - { targetDimId: hintText }
+   * @param fromDimId 来源维度
+   * @param hints { targetDimId: hintText }
    */
   storeHints(
     fromDimId: string,
@@ -206,7 +200,7 @@ export class BootstrapSession {
 
   /**
    * 收集与剩余维度相关的 accumulated hints
-   * @returns {Record<string, Array<{ fromDim: string, hint: string }>>}
+   * @returns >>}
    */
   getAccumulatedHints() {
     const progress = this.getProgress();
@@ -226,16 +220,13 @@ export class BootstrapSession {
 
   /**
    * 缓存 Phase 1-4 分析结果
-   * @param {object} cache - { files, astData, entityGraph, depGraph, guardFindings, skills, ... }
+   * @param cache { files, astData, entityGraph, depGraph, guardFindings, skills, ... }
    */
   setPhaseCache(cache: Record<string, unknown> | null) {
     this.phaseCache = cache;
   }
 
-  /**
-   * 获取 Phase 缓存（wiki_plan 复用）
-   * @returns {object|null}
-   */
+  /** 获取 Phase 缓存（wiki_plan 复用） */
   getPhaseCache() {
     return this.phaseCache;
   }
@@ -265,14 +256,12 @@ export class BootstrapSession {
 export class BootstrapSessionManager {
   _activeSession: BootstrapSession | null;
   constructor() {
-    /** @type {BootstrapSession|null} */
     this._activeSession = null;
   }
 
   /**
    * 创建新的 bootstrap session
-   * @param {object} opts 传给 BootstrapSession 构造函数的参数
-   * @returns {BootstrapSession}
+   * @param opts 传给 BootstrapSession 构造函数的参数
    */
   createSession(opts: BootstrapSessionOpts): BootstrapSession {
     // 如果有旧的未过期 session，先标记过期
@@ -285,8 +274,7 @@ export class BootstrapSessionManager {
 
   /**
    * 获取 active session
-   * @param {string} [sessionId] 可选，用于验证 session ID
-   * @returns {BootstrapSession|null}
+   * @param [sessionId] 可选，用于验证 session ID
    */
   getSession(sessionId?: string): BootstrapSession | null {
     if (!this._activeSession) {
@@ -301,17 +289,12 @@ export class BootstrapSessionManager {
     return this._activeSession;
   }
 
-  /**
-   * 获取 active session，无论是否过期（用于恢复场景）
-   * @returns {BootstrapSession|null}
-   */
+  /** 获取 active session，无论是否过期（用于恢复场景） */
   getAnySession() {
     return this._activeSession;
   }
 
-  /**
-   * 清除 active session
-   */
+  /** 清除 active session */
   clearSession() {
     this._activeSession = null;
   }

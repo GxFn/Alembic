@@ -37,8 +37,8 @@ export class QualityScorer {
 
   /**
    * 计算综合质量分
-   * @param {object} recipe - Recipe 对象 (title, trigger, code, language, category, summary, usageGuide, headers, tags, views, clicks, rating)
-   * @returns {{ score: number, dimensions: object, grade: string }}
+   * @param recipe Recipe 对象 (title, trigger, code, language, category, summary, usageGuide, headers, tags, views, clicks, rating)
+   * @returns }
    */
   score(recipe: RecipeInput) {
     const dimensions = {
@@ -64,25 +64,19 @@ export class QualityScorer {
     };
   }
 
-  /**
-   * 批量评分
-   */
+  /** 批量评分 */
   scoreBatch(recipes: RecipeInput[]) {
     return recipes.map((r: RecipeInput) => ({ recipe: r, ...this.score(r) }));
   }
 
-  /**
-   * 获取维度权重
-   */
+  /** 获取维度权重 */
   getWeights() {
     return { ...this.#weights };
   }
 
   // ─── 维度评分 ─────────────────────────────────────────
 
-  /**
-   * 完整性: title(0.25) + trigger(0.25) + code(0.3) + usageGuide(0.2)
-   */
+  /** 完整性: title(0.25) + trigger(0.25) + code(0.3) + usageGuide(0.2) */
   #scoreCompleteness(r: RecipeInput) {
     let s = 0;
     if (r.title?.trim()) {
@@ -100,9 +94,7 @@ export class QualityScorer {
     return s;
   }
 
-  /**
-   * 格式: trigger 格式(0.5) + language 合法性(0.5)
-   */
+  /** 格式: trigger 格式(0.5) + language 合法性(0.5) */
   #scoreFormat(r: RecipeInput) {
     let s = 0;
     if (r.trigger) {
@@ -134,9 +126,7 @@ export class QualityScorer {
     return s;
   }
 
-  /**
-   * 代码质量: 长度适中(0.3) + 无 TODO(0.2) + 有注释(0.3) + 有错误处理(0.2)
-   */
+  /** 代码质量: 长度适中(0.3) + 无 TODO(0.2) + 有注释(0.3) + 有错误处理(0.2) */
   #scoreCodeQuality(r: RecipeInput) {
     if (!r.code) {
       return 0;
@@ -169,9 +159,7 @@ export class QualityScorer {
     return s;
   }
 
-  /**
-   * 元数据: category(0.35) + tags/headers(0.35) + summary(0.3)
-   */
+  /** 元数据: category(0.35) + tags/headers(0.35) + summary(0.3) */
   #scoreMetadata(r: RecipeInput) {
     let s = 0;
     if (r.category?.trim()) {
@@ -186,9 +174,7 @@ export class QualityScorer {
     return s;
   }
 
-  /**
-   * 互动: views(0.3) + clicks(0.3) + rating(0.4)
-   */
+  /** 互动: views(0.3) + clicks(0.3) + rating(0.4) */
   #scoreEngagement(r: RecipeInput) {
     let s = 0;
     if (r.views && r.views > 0) {
@@ -203,9 +189,7 @@ export class QualityScorer {
     return s;
   }
 
-  /**
-   * 分数转等级
-   */
+  /** 分数转等级 */
   #toGrade(score: number) {
     if (score >= QUALITY_GRADES.A) {
       return 'A';

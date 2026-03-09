@@ -32,12 +32,11 @@ export class ImportRecord {
   path: string;
   symbols: string[];
   /**
-   * @param {string} path 导入路径原始字符串
-   * @param {object} [meta]
-   * @param {string[]} [meta.symbols] 导入的符号名 e.g. ['UserRepo', 'findById'] 或 ['*']
-   * @param {string|null} [meta.alias] 导入别名 e.g. import { UserRepo as Repo }
-   * @param {'named'|'default'|'namespace'|'side-effect'} [meta.kind] 导入方式
-   * @param {boolean} [meta.isTypeOnly] 是否为类型导入 (TypeScript)
+   * @param path 导入路径原始字符串
+   * @param [meta.symbols] 导入的符号名 e.g. ['UserRepo', 'findById'] 或 ['*']
+   * @param [meta.alias] 导入别名 e.g. import { UserRepo as Repo }
+   * @param [meta.kind] 导入方式
+   * @param [meta.isTypeOnly] 是否为类型导入 (TypeScript)
    */
   constructor(path: string, meta: ImportRecordMeta = {}) {
     this.path = String(path);
@@ -104,11 +103,7 @@ export class ImportRecord {
     return this.symbols.length > 0;
   }
 
-  /**
-   * 检查是否导入了指定符号名
-   * @param {string} symbolName
-   * @returns {boolean}
-   */
+  /** 检查是否导入了指定符号名 */
   hasSymbol(symbolName: string): boolean {
     return this.symbols.includes(symbolName) || this.symbols.includes('*');
   }

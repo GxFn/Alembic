@@ -23,7 +23,7 @@ const _PROJECT_ROOT = path.resolve(__dirname, '../..');
 
 /**
  * 创建测试用 Bootstrap 实例（内存 SQLite、静默日志）
- * @returns {Promise<{ bootstrap: Bootstrap, components: object }>}
+ * @returns >}
  */
 export async function createTestBootstrap() {
   // 动态 import 避免顶层加载问题
@@ -40,12 +40,11 @@ export async function createTestBootstrap() {
 /**
  * 在临时目录创建一个 git 仓库
  *
- * @param {object} options
- * @param {boolean} [options.withRemote=false]   — 是否添加 remote
- * @param {string}  [options.remoteName='origin'] — remote 名称
- * @param {string}  [options.remoteUrl]           — remote URL（默认不可 push 的假地址）
- * @param {boolean} [options.initialCommit=true]  — 是否创建初始提交
- * @returns {{ repoPath: string, cleanup: () => void }}
+ * @param [options.withRemote=false] — 是否添加 remote
+ * @param [options.remoteName='origin'] — remote 名称
+ * @param [options.remoteUrl] — remote URL（默认不可 push 的假地址）
+ * @param [options.initialCommit=true] — 是否创建初始提交
+ * @returns }
  */
 export function createTempGitRepo(options = {}) {
   const {
@@ -93,10 +92,7 @@ function uid() {
   return `test-${Date.now()}-${++_counter}`;
 }
 
-/**
- * 生成完整的 Candidate 数据
- * @param {object} overrides
- */
+/** 生成完整的 Candidate 数据 */
 export function mockCandidate(overrides = {}) {
   return {
     id: uid(),
@@ -121,10 +117,7 @@ export function mockCandidate(overrides = {}) {
   };
 }
 
-/**
- * 生成完整的 Recipe 数据
- * @param {object} overrides
- */
+/** 生成完整的 Recipe 数据 */
 export function mockRecipe(overrides = {}) {
   return {
     id: uid(),
@@ -148,10 +141,7 @@ export function mockRecipe(overrides = {}) {
   };
 }
 
-/**
- * 生成完整的 GuardRule 数据
- * @param {object} overrides
- */
+/** 生成完整的 GuardRule 数据 */
 export function mockGuardRule(overrides = {}) {
   return {
     id: uid(),
@@ -170,10 +160,7 @@ export function mockGuardRule(overrides = {}) {
   };
 }
 
-/**
- * 生成带 reasoning 的完整 Gateway 请求数据
- * @param {object} overrides
- */
+/** 生成带 reasoning 的完整 Gateway 请求数据 */
 export function mockGatewayRequest(overrides = {}) {
   return {
     actor: 'developer',
@@ -203,9 +190,9 @@ const DEFAULT_TOKEN_SECRET = 'test-secret-key-for-integration-tests';
 /**
  * 签发测试用 HMAC-SHA256 token
  *
- * @param {object} payload  — { sub, role, ... }
- * @param {string} [secret] — 签名密钥（默认使用固定测试密钥）
- * @returns {string} base64url payload + "." + base64url signature
+ * @param payload — { sub, role, ... }
+ * @param [secret] — 签名密钥（默认使用固定测试密钥）
+ * @returns base64url payload + "." + base64url signature
  */
 export function createTestToken(payload = {}, secret = DEFAULT_TOKEN_SECRET) {
   const fullPayload = {
@@ -221,9 +208,7 @@ export function createTestToken(payload = {}, secret = DEFAULT_TOKEN_SECRET) {
   return `${payloadB64}.${sig}`;
 }
 
-/**
- * 创建过期的 token（用于测试 token 过期逻辑）
- */
+/** 创建过期的 token（用于测试 token 过期逻辑） */
 export function createExpiredToken(payload = {}, secret = DEFAULT_TOKEN_SECRET) {
   return createTestToken({ exp: Date.now() - 1000, ...payload }, secret);
 }
@@ -235,10 +220,7 @@ export function createExpiredToken(payload = {}, secret = DEFAULT_TOKEN_SECRET) 
 let _portBase =
   3050 + (parseInt(process.env.VITEST_POOL_ID || process.env.JEST_WORKER_ID, 10) || 0) * 100;
 
-/**
- * 获取下一个可用测试端口（避免与其他测试文件冲突）
- * @returns {number}
- */
+/** 获取下一个可用测试端口（避免与其他测试文件冲突） */
 export function getTestPort() {
   return _portBase++;
 }
@@ -249,16 +231,12 @@ export function getTestPort() {
 
 const _cleanups = [];
 
-/**
- * 注册清理回调（测试 afterAll 中调用 runCleanups）
- */
+/** 注册清理回调（测试 afterAll 中调用 runCleanups） */
 export function onCleanup(fn) {
   _cleanups.push(fn);
 }
 
-/**
- * 执行所有注册的清理回调
- */
+/** 执行所有注册的清理回调 */
 export async function runCleanups() {
   while (_cleanups.length) {
     const fn = _cleanups.pop();

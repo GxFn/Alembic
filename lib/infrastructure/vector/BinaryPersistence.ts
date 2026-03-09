@@ -64,12 +64,11 @@ export class BinaryPersistence {
   /**
    * 保存 HNSW 索引到二进制文件 (同步)
    *
-   * @param {string} filePath - 文件路径 (.asvec)
-   * @param {object} data
-   * @param {import('./HnswIndex.js').HnswIndex} data.index - HNSW 索引
-   * @param {import('./ScalarQuantizer.js').ScalarQuantizer|null} data.quantizer - 量化器
-   * @param {Map<string, object>} data.metadata - 文档 metadata
-   * @param {Map<string, string>} data.contents - 文档 content
+   * @param filePath 文件路径 (.asvec)
+   * @param data.index HNSW 索引
+   * @param data.quantizer 量化器
+   * @param data.metadata 文档 metadata
+   * @param data.contents 文档 content
    */
   static save(
     filePath: string,
@@ -88,11 +87,7 @@ export class BinaryPersistence {
     writeFileSync(filePath, buffer);
   }
 
-  /**
-   * 异步保存
-   * @param {string} filePath
-   * @param {object} data
-   */
+  /** 异步保存 */
   static async saveAsync(
     filePath: string,
     data: {
@@ -112,19 +107,14 @@ export class BinaryPersistence {
 
   /**
    * 加载二进制索引 (同步)
-   * @param {string} filePath
-   * @returns {{ index: object, quantizer: ScalarQuantizer|null, metadata: Map, contents: Map }}
+   * @returns }
    */
   static load(filePath: string) {
     const fileBuffer = readFileSync(filePath);
     return BinaryPersistence.decode(fileBuffer);
   }
 
-  /**
-   * 编码为 Buffer
-   * @param {object} data
-   * @returns {Buffer}
-   */
+  /** 编码为 Buffer */
   static encode(data: {
     index: { serialize: () => HnswSerializedData };
     quantizer: ScalarQuantizer | null;
@@ -303,8 +293,7 @@ export class BinaryPersistence {
 
   /**
    * 从 Buffer 解码
-   * @param {Buffer} buf
-   * @returns {{ indexData: object, quantizerData: object|null, metadata: Map, contents: Map, dimension: number }}
+   * @returns }
    */
   static decode(buf: Buffer) {
     let offset = 0;
@@ -446,11 +435,7 @@ export class BinaryPersistence {
     };
   }
 
-  /**
-   * 检查文件是否为有效的 ASVEC 文件
-   * @param {string} filePath
-   * @returns {boolean}
-   */
+  /** 检查文件是否为有效的 ASVEC 文件 */
   static isValid(filePath: string) {
     try {
       if (!existsSync(filePath)) {

@@ -7,9 +7,7 @@ const _buckets = new Map();
 let _lastPrune = Date.now();
 const PRUNE_INTERVAL = 300_000; // 5 分钟清理一次过期 bucket
 
-/**
- * 清理过期的 bucket 条目，防止内存泄漏
- */
+/** 清理过期的 bucket 条目，防止内存泄漏 */
 function _pruneIfNeeded(windowMs: number) {
   const now = Date.now();
   if (now - _lastPrune < PRUNE_INTERVAL) {
@@ -26,10 +24,10 @@ function _pruneIfNeeded(windowMs: number) {
 
 /**
  * 检查是否允许提交
- * @param {string} projectRoot 项目根路径作为命名空间
- * @param {string} clientId 客户端标识
- * @param {object} [opts] - { windowMs: 60000, maxRequests: 10 }
- * @returns {{ allowed: boolean, retryAfter?: number }}
+ * @param projectRoot 项目根路径作为命名空间
+ * @param clientId 客户端标识
+ * @param [opts] { windowMs: 60000, maxRequests: 10 }
+ * @returns }
  */
 export function checkRecipeSave(
   projectRoot: string,
@@ -63,9 +61,7 @@ export function checkRecipeSave(
   return { allowed: true };
 }
 
-/**
- * 重置限流器（测试用）
- */
+/** 重置限流器（测试用） */
 export function resetRateLimiter() {
   _buckets.clear();
 }

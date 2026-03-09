@@ -31,9 +31,7 @@ function _buildActionHint(json: KnowledgeEntryJSON) {
   return `${whenText ? `${whenText} → ` : ''}${doText}`.replace(/ → $/, '');
 }
 
-/**
- * 只保留非空关系桶，压缩 Relations 输出体积。
- */
+/** 只保留非空关系桶，压缩 Relations 输出体积。 */
 function _compactRelations(relations: Record<string, unknown[]> | undefined) {
   if (!relations) {
     return undefined;

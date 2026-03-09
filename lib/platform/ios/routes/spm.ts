@@ -24,9 +24,7 @@ async function getModuleService() {
   return moduleService;
 }
 
-/**
- * GET /api/v1/spm/targets
- */
+/** GET /api/v1/spm/targets */
 router.get('/targets', async (req: Request, res: Response) => {
   const moduleService = await getModuleService();
   const targets = await moduleService.listTargets();
@@ -37,9 +35,7 @@ router.get('/targets', async (req: Request, res: Response) => {
   });
 });
 
-/**
- * GET /api/v1/spm/dep-graph
- */
+/** GET /api/v1/spm/dep-graph */
 router.get('/dep-graph', async (req: Request, res: Response) => {
   const moduleService = await getModuleService();
   const level = String(req.query.level || 'package') as 'target' | 'package';

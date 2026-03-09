@@ -51,9 +51,7 @@ export class RecipeParser {
     return FRONTMATTER_RE.test(text) && FENCED_CODE_RE.test(text) && USAGE_HEADING_RE.test(text);
   }
 
-  /**
-   * 检查是否为「仅介绍」Recipe（有 frontmatter 但无代码块）
-   */
+  /** 检查是否为「仅介绍」Recipe（有 frontmatter 但无代码块） */
   isIntroOnly(text: string) {
     if (!text) {
       return false;
@@ -61,11 +59,7 @@ export class RecipeParser {
     return FRONTMATTER_RE.test(text) && !FENCED_CODE_RE.test(text);
   }
 
-  /**
-   * 解析完整 Recipe MD 为结构化对象
-   * @param {string} text
-   * @returns {object|null}
-   */
+  /** 解析完整 Recipe MD 为结构化对象 */
   parse(text: string): ParsedRecipe | null {
     if (!text) {
       return null;
@@ -119,9 +113,7 @@ export class RecipeParser {
     };
   }
 
-  /**
-   * 从文本中解析多段 Recipe（按 `---` 分隔）
-   */
+  /** 从文本中解析多段 Recipe（按 `---` 分隔） */
   parseAll(text: string): ParsedRecipe[] {
     if (!text) {
       return [];
@@ -130,9 +122,7 @@ export class RecipeParser {
     return segments.map((s: string) => this.parse(s)).filter((r): r is ParsedRecipe => r !== null);
   }
 
-  /**
-   * 解析 frontmatter YAML
-   */
+  /** 解析 frontmatter YAML */
   parseFrontmatter(text: string): Record<string, unknown> {
     const match = text.match(FRONTMATTER_RE);
     if (!match) {
@@ -165,9 +155,7 @@ export class RecipeParser {
     return fm;
   }
 
-  /**
-   * 从内容提取 trigger
-   */
+  /** 从内容提取 trigger */
   getTrigger(text: string) {
     const fm = this.parseFrontmatter(text);
     return (fm.trigger as string) || '';
@@ -175,10 +163,9 @@ export class RecipeParser {
 
   /**
    * 从文件路径读取并提取 Recipe 候选
-   * @param {string} relativePath 相对路径
-   * @param {object} opts
-   * @param {string} [opts.projectRoot] 项目根目录
-   * @returns {Promise<{ items: object[], isMarked: boolean }>}
+   * @param relativePath 相对路径
+   * @param [opts.projectRoot] 项目根目录
+   * @returns >}
    */
   async extractFromPath(relativePath: string, opts: ExtractOpts = {}) {
     const projectRoot = opts.projectRoot || process.cwd();
@@ -231,14 +218,7 @@ export class RecipeParser {
     };
   }
 
-  /**
-   * 从文本解析 Recipe（优先完整 Markdown 格式）
-   * @param {string} text
-   * @param {object} opts
-   * @param {string} [opts.language]
-   * @param {string} [opts.relativePath]
-   * @returns {Promise<object>}
-   */
+  /** 从文本解析 Recipe（优先完整 Markdown 格式） */
   async parseFromText(text: string, opts: ExtractOpts = {}) {
     if (!text || text.trim().length === 0) {
       throw new Error('文本内容为空');
@@ -261,13 +241,7 @@ export class RecipeParser {
     throw new Error('文本不是有效的 Recipe Markdown 格式');
   }
 
-  /**
-   * 从文本提取代码片段（兜底方法，不要求 Markdown 格式）
-   * @param {string} text
-   * @param {object} opts
-   * @param {string} [opts.language]
-   * @returns {Promise<object>}
-   */
+  /** 从文本提取代码片段（兜底方法，不要求 Markdown 格式） */
   async extractFromText(text: string, opts: ExtractOpts = {}) {
     if (!text || text.trim().length === 0) {
       throw new Error('文本内容为空');

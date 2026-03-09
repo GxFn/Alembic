@@ -56,9 +56,7 @@ export class KnowledgeGraphService {
     this.logger = Logger.getInstance();
   }
 
-  /**
-   * 添加关系边
-   */
+  /** 添加关系边 */
   addEdge(
     fromId: string,
     fromType: string,
@@ -94,9 +92,7 @@ export class KnowledgeGraphService {
     }
   }
 
-  /**
-   * 删除关系边
-   */
+  /** 删除关系边 */
   removeEdge(fromId: string, fromType: string, toId: string, toType: string, relation: string) {
     this.db
       .prepare(`
@@ -105,9 +101,7 @@ export class KnowledgeGraphService {
       .run(fromId, fromType, toId, toType, relation);
   }
 
-  /**
-   * 查询某个节点的所有关系
-   */
+  /** 查询某个节点的所有关系 */
   getEdges(nodeId: string, nodeType: string, direction = 'both') {
     const outgoing =
       direction === 'both' || direction === 'out'
@@ -129,9 +123,7 @@ export class KnowledgeGraphService {
     };
   }
 
-  /**
-   * 查询指定关系类型的连接
-   */
+  /** 查询指定关系类型的连接 */
   getRelated(nodeId: string, nodeType: string, relation: string) {
     const rows = this.db
       .prepare(`
@@ -144,9 +136,7 @@ export class KnowledgeGraphService {
     return rows.map((row) => this._mapEdge(row));
   }
 
-  /**
-   * 查找两个节点之间的路径 (BFS, 最大深度 5)
-   */
+  /** 查找两个节点之间的路径 (BFS, 最大深度 5) */
   findPath(fromId: string, fromType: string, toId: string, toType: string, maxDepth = 5) {
     const visited = new Set();
     const queue = [
@@ -209,9 +199,7 @@ export class KnowledgeGraphService {
     };
   }
 
-  /**
-   * 获取节点的影响范围（下游依赖分析）
-   */
+  /** 获取节点的影响范围（下游依赖分析） */
   getImpactAnalysis(nodeId: string, nodeType: string, maxDepth = 3) {
     const impacted = new Map();
     const queue = [{ id: nodeId, type: nodeType, depth: 0 }];
@@ -246,12 +234,8 @@ export class KnowledgeGraphService {
     return Array.from(impacted.values());
   }
 
-  /**
-   * 获取图谱整体统计
-   */
-  /**
-   * @param {string} [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部
-   */
+  /** 获取图谱整体统计 */
+  /** @param [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部 */
   getStats(nodeType?: string) {
     const typeFilter = nodeType
       ? ` WHERE from_type = '${nodeType}' AND to_type = '${nodeType}'`
@@ -283,8 +267,8 @@ export class KnowledgeGraphService {
 
   /**
    * 获取全量边（供 Dashboard 图谱可视化）
-   * @param {number} [limit=500] 最大返回条数
-   * @param {string} [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部
+   * @param [limit=500] 最大返回条数
+   * @param [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部
    */
   getAllEdges(limit = 500, nodeType?: string) {
     let sql: string, params: (string | number)[];

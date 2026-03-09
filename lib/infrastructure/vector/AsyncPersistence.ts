@@ -43,8 +43,7 @@ const CRC32_TABLE = (() => {
 
 /**
  * 计算字符串的 CRC32 校验值
- * @param {string} str
- * @returns {string} 8 位十六进制字符串
+ * @returns 8 位十六进制字符串
  */
 function crc32(str: string) {
   const bytes = Buffer.from(str, 'utf-8');
@@ -62,9 +61,7 @@ export class AsyncPersistence {
   #walPath;
   /** @type {Array<object>} 待刷盘操作队列 */
   #pendingOps: Record<string, unknown>[] = [];
-  /** @type {ReturnType<typeof setTimeout>|null} */
   #flushTimer: ReturnType<typeof setTimeout> | null = null;
-  /** @type {boolean} */
   #flushing = false;
   /** @type {number} flush 间隔 (ms) */
   #flushIntervalMs;
@@ -78,13 +75,10 @@ export class AsyncPersistence {
   #enabled;
 
   /**
-   * @param {object} options
-   * @param {string} options.indexPath - 主索引文件路径 (.asvec)
-   * @param {function} options.onPersist - persist 回调: async () => void (写完整 .asvec)
-   * @param {function} options.onReplay - replay 回调: (op) => void (重放单条操作)
-   * @param {boolean}  [options.enabled=true] - 是否启用 WAL
-   * @param {number}   [options.flushIntervalMs=2000]
-   * @param {number}   [options.flushBatchSize=100]
+   * @param options.indexPath 主索引文件路径 (.asvec)
+   * @param options.onPersist persist 回调: async () => void (写完整 .asvec)
+   * @param options.onReplay replay 回调: (op) => void (重放单条操作)
+   * @param [options.enabled=true] 是否启用 WAL
    */
   constructor(options: {
     indexPath: string;
@@ -128,12 +122,12 @@ export class AsyncPersistence {
    * 追加操作到 WAL
    * 操作同时写入磁盘 WAL 文件 (append) 和内存队列
    *
-   * @param {object} op - WAL 操作
-   * @param {number} op.t - 操作类型: 1=upsert, 2=remove, 3=clear
-   * @param {string} [op.id] - 文档 ID
-   * @param {string} [op.c] - 内容 (upsert)
-   * @param {number[]} [op.v] - 向量 (upsert)
-   * @param {object} [op.m] - metadata (upsert)
+   * @param op WAL 操作
+   * @param op.t 操作类型: 1=upsert, 2=remove, 3=clear
+   * @param [op.id] 文档 ID
+   * @param [op.c] 内容 (upsert)
+   * @param [op.v] 向量 (upsert)
+   * @param [op.m] metadata (upsert)
    */
   appendWal(op: Record<string, unknown>) {
     if (!this.#enabled) {
@@ -160,9 +154,7 @@ export class AsyncPersistence {
     }
   }
 
-  /**
-   * 调度 flush (debounced)
-   */
+  /** 调度 flush (debounced) */
   #scheduleFlush() {
     if (this.#flushing) {
       return;
@@ -187,9 +179,7 @@ export class AsyncPersistence {
     }
   }
 
-  /**
-   * 执行 flush: 写入完整 .asvec + 清理 WAL
-   */
+  /** 执行 flush: 写入完整 .asvec + 清理 WAL */
   async #doFlush() {
     if (this.#flushing) {
       return;
@@ -216,9 +206,7 @@ export class AsyncPersistence {
     }
   }
 
-  /**
-   * 手动触发 flush (用于关闭/测试)
-   */
+  /** 手动触发 flush (用于关闭/测试) */
   async flush() {
     // 取消待执行的定时器
     if (this.#flushTimer) {
@@ -232,7 +220,7 @@ export class AsyncPersistence {
    * 启动时恢复: 读取 WAL 文件, replay 有效条目
    * WAL 条目带 CRC32 校验, 损坏条目跳过
    *
-   * @returns {{ replayed: number, skipped: number }}
+   * @returns }
    */
   recover() {
     if (!this.#enabled) {
@@ -287,9 +275,7 @@ export class AsyncPersistence {
     return { replayed, skipped };
   }
 
-  /**
-   * 清理 WAL 文件
-   */
+  /** 清理 WAL 文件 */
   #clearWal() {
     try {
       if (existsSync(this.#walPath)) {
@@ -300,9 +286,7 @@ export class AsyncPersistence {
     }
   }
 
-  /**
-   * 销毁: 清理定时器
-   */
+  /** 销毁: 清理定时器 */
   destroy() {
     if (this.#flushTimer) {
       clearTimeout(this.#flushTimer);

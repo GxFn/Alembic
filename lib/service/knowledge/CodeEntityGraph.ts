@@ -218,47 +218,11 @@ interface ContextAgentOptions {
   maxEdges?: number;
 }
 
-/**
- * @typedef {Object} CodeEntity
- * @property {string} entityId   唯一标识 (通常 = name)
- * @property {string} entityType - 'class'|'protocol'|'category'|'module'|'pattern'
- * @property {string} name       显示名
- * @property {string} [filePath] 源文件路径
- * @property {number} [line]     起始行号
- * @property {string} [superclass] 父类
- * @property {string[]} [protocols] 遵循的协议列表
- * @property {object} [metadata] 额外信息
- */
-
-/**
- * @typedef {Object} EntityEdge
- * @property {string} fromId
- * @property {string} fromType
- * @property {string} toId
- * @property {string} toType
- * @property {string} relation
- * @property {number} [weight]
- * @property {object} [metadata]
- */
-
-/**
- * @typedef {Object} GraphPopulateResult
- * @property {number} entitiesUpserted  插入/更新的实体数
- * @property {number} edgesCreated      创建的边数
- * @property {number} durationMs        耗时
- */
-
 export class CodeEntityGraph {
   projectRoot: string;
   db: CeDbLike;
   log: ReturnType<typeof Logger.getInstance>;
   stmts!: PreparedStatements;
-  /**
-   * @param {import('better-sqlite3').Database} db
-   * @param {object} [options]
-   * @param {string} [options.projectRoot]
-   * @param {import('winston').Logger} [options.logger]
-   */
   constructor(
     db: CeDbLike,
     options: { projectRoot?: string; logger?: ReturnType<typeof Logger.getInstance> } = {}
@@ -279,8 +243,7 @@ export class CodeEntityGraph {
    *
    * 写入: class/protocol/category 实体 + inherits/conforms/extends 边
    *
-   * @param {object} astSummary - analyzeProject() 产出的 ProjectAstSummary
-   * @returns {GraphPopulateResult}
+   * @param astSummary analyzeProject() 产出的 ProjectAstSummary
    */
   populateFromAst(astSummary: ProjectAstSummary | null): GraphPopulateResult {
     if (!astSummary) {
@@ -402,8 +365,7 @@ export class CodeEntityGraph {
    * 当前 bootstrap.js 已将 SPM 边写入 knowledge_edges，
    * 此方法补充 module 实体节点。
    *
-   * @param {object} depGraphData - spm.getDependencyGraph() 产出
-   * @returns {GraphPopulateResult}
+   * @param depGraphData spm.getDependencyGraph() 产出
    */
   populateFromSpm(depGraphData: DepGraphData | null): GraphPopulateResult {
     if (!depGraphData) {
@@ -440,7 +402,6 @@ export class CodeEntityGraph {
    * 从候选的 Relations 字段提取边写入图谱 (Phase 5/6)
    *
    * @param {Array<{title: string, relations: object}>} candidates 扁平关系数组或 Relations 对象
-   * @returns {GraphPopulateResult}
    */
   populateFromCandidateRelations(candidates: CandidateWithRelations[] | null): GraphPopulateResult {
     if (!candidates?.length) {
@@ -510,12 +471,7 @@ export class CodeEntityGraph {
   // Public API — 图谱查询
   // ────────────────────────────────────────────
 
-  /**
-   * 获取单个实体信息
-   * @param {string} entityId
-   * @param {string} [entityType]
-   * @returns {CodeEntity|null}
-   */
+  /** 获取单个实体信息 */
   getEntity(entityId: string, entityType?: string): MappedCodeEntity | null {
     let row: unknown;
     if (entityType) {
@@ -530,9 +486,7 @@ export class CodeEntityGraph {
 
   /**
    * 按类型列出所有实体
-   * @param {string} entityType - 'class'|'protocol'|'category'|'module'|'pattern'
-   * @param {number} [limit=200]
-   * @returns {CodeEntity[]}
+   * @param entityType 'class'|'protocol'|'category'|'module'|'pattern'
    */
   listEntities(entityType: string, limit = 200): MappedCodeEntity[] {
     const rows = this.stmts.listByType.all(entityType, this.projectRoot, limit);
@@ -541,11 +495,7 @@ export class CodeEntityGraph {
 
   /**
    * 搜索实体 (名称模糊匹配)
-   * @param {string} query
-   * @param {object} [options]
-   * @param {string} [options.type] 过滤类型
-   * @param {number} [options.limit=20]
-   * @returns {CodeEntity[]}
+   * @param [options.type] 过滤类型
    */
   searchEntities(query: string, options: SearchOptions = {}): MappedCodeEntity[] {
     const pattern = `%${query}%`;
@@ -565,10 +515,7 @@ export class CodeEntityGraph {
 
   /**
    * 获取实体的所有关系边
-   * @param {string} entityId
-   * @param {string} entityType
-   * @param {'both'|'out'|'in'} [direction='both']
-   * @returns {{ outgoing: EntityEdge[], incoming: EntityEdge[] }}
+   * @returns }
    */
   getEntityEdges(entityId: string, entityType: string, direction = 'both') {
     const outgoing =
@@ -590,9 +537,7 @@ export class CodeEntityGraph {
 
   /**
    * 获取继承链 (向上遍历 inherits 边)
-   * @param {string} className
-   * @param {number} [maxDepth=10]
-   * @returns {string[]} 继承链 [class, parent, grandparent, ...]
+   * @returns 继承链 [class, parent, grandparent, ...]
    */
   getInheritanceChain(className: string, maxDepth = 10): string[] {
     const chain = [className];
@@ -615,10 +560,8 @@ export class CodeEntityGraph {
 
   /**
    * 获取所有子类/实现者 (向下遍历)
-   * @param {string} entityId
-   * @param {string} entityType - 'class'|'protocol'
-   * @param {number} [maxDepth=3]
-   * @returns {Array<{ id: string, type: string, depth: number, relation: string }>}
+   * @param entityType 'class'|'protocol'
+   * @returns >}
    */
   getDescendants(entityId: string, entityType: string, maxDepth = 3) {
     const results: { id: string; type: string; depth: number; relation: string }[] = [];
@@ -670,11 +613,7 @@ export class CodeEntityGraph {
     return results;
   }
 
-  /**
-   * 获取协议遵循关系 (className → 遵循的协议列表)
-   * @param {string} className
-   * @returns {string[]}
-   */
+  /** 获取协议遵循关系 (className → 遵循的协议列表) */
   getConformances(className: string): string[] {
     const rows = this.db
       .prepare(
@@ -687,12 +626,7 @@ export class CodeEntityGraph {
 
   /**
    * 查找两个实体间的路径 (BFS)
-   * @param {string} fromId
-   * @param {string} fromType
-   * @param {string} toId
-   * @param {string} toType
-   * @param {number} [maxDepth=5]
-   * @returns {{ found: boolean, path: EntityEdge[], depth: number }}
+   * @returns }
    */
   findPath(fromId: string, fromType: string, toId: string, toType: string, maxDepth = 5) {
     const visited = new Set();
@@ -754,10 +688,7 @@ export class CodeEntityGraph {
 
   /**
    * 影响分析: 修改某实体后，哪些实体可能受影响
-   * @param {string} entityId
-   * @param {string} entityType
-   * @param {number} [maxDepth=3]
-   * @returns {Array<{ id: string, type: string, relation: string, depth: number }>}
+   * @returns >}
    */
   getImpactRadius(entityId: string, entityType: string, maxDepth = 3) {
     const impacted: { id: string; type: string; relation: string; depth: number }[] = [];
@@ -805,10 +736,7 @@ export class CodeEntityGraph {
     return impacted;
   }
 
-  /**
-   * 项目拓扑概览 — 统计信息 + 关键度排名
-   * @returns {object}
-   */
+  /** 项目拓扑概览 — 统计信息 + 关键度排名 */
   getTopology() {
     const entityStats = this.db
       .prepare(
@@ -860,13 +788,7 @@ export class CodeEntityGraph {
     };
   }
 
-  /**
-   * 生成 Agent 可用的图谱上下文 (Markdown)
-   * @param {object} [options]
-   * @param {number} [options.maxEntities=30]
-   * @param {number} [options.maxEdges=50]
-   * @returns {string}
-   */
+  /** 生成 Agent 可用的图谱上下文 (Markdown) */
   generateContextForAgent(options: ContextAgentOptions = {}): string {
     const maxEntities = options.maxEntities || 30;
     const _maxEdges = options.maxEdges || 50;
@@ -981,7 +903,6 @@ export class CodeEntityGraph {
    *
    * @param {Array<{ caller: string, callee: string, callType: string, resolveMethod: string, line: number, file: string, isAwait: boolean }>} callEdges
    * @param {Array<{ from: string, to: string, flowType: string, direction: string }>} dataFlowEdges
-   * @returns {GraphPopulateResult}
    */
   populateCallGraph(callEdges: CallEdge[], dataFlowEdges: DataFlowEdge[]): GraphPopulateResult {
     const t0 = Date.now();
@@ -1086,9 +1007,8 @@ export class CodeEntityGraph {
   /**
    * 获取调用者 — 谁调用了这个方法？
    *
-   * @param {string} methodId - "ClassName.methodName" 或 FQN
-   * @param {number} [maxDepth=2]
-   * @returns {Array<{ caller: string, depth: number, callType: string }>}
+   * @param methodId "ClassName.methodName" 或 FQN
+   * @returns >}
    */
   getCallers(methodId: string, maxDepth = 2) {
     const results: { caller: string; depth: number; callType: string }[] = [];
@@ -1123,9 +1043,8 @@ export class CodeEntityGraph {
   /**
    * 获取被调用者 — 这个方法调用了谁？
    *
-   * @param {string} methodId - "ClassName.methodName" 或 FQN
-   * @param {number} [maxDepth=2]
-   * @returns {Array<{ callee: string, depth: number, callType: string }>}
+   * @param methodId "ClassName.methodName" 或 FQN
+   * @returns >}
    */
   getCallees(methodId: string, maxDepth = 2) {
     const results: { callee: string; depth: number; callType: string }[] = [];
@@ -1161,8 +1080,8 @@ export class CodeEntityGraph {
    * 获取方法的 Impact Radius (基于调用图)
    * — 修改此方法可能影响哪些上游方法？
    *
-   * @param {string} methodId - "ClassName.methodName"
-   * @returns {{ directCallers: number, transitiveCallers: number, affectedFiles: string[] }}
+   * @param methodId "ClassName.methodName"
+   * @returns }
    */
   getCallImpactRadius(methodId: string) {
     const callers = this.getCallers(methodId, 3);
@@ -1187,9 +1106,6 @@ export class CodeEntityGraph {
    *
    * "src/service/UserService.ts::UserService.getUser" → "UserService.getUser"
    * "src/utils/helpers.ts::formatDate" → "formatDate"
-   *
-   * @param {string} fqn
-   * @returns {string}
    */
   _extractEntityId(fqn: string): string {
     if (fqn.includes('::')) {
@@ -1198,9 +1114,7 @@ export class CodeEntityGraph {
     return fqn;
   }
 
-  /**
-   * 清除项目的所有代码实体 (重新 populate 前调用)
-   */
+  /** 清除项目的所有代码实体 (重新 populate 前调用) */
   clearProject() {
     const run = this.db.transaction(() => {
       this.stmts.clearEntities.run(this.projectRoot);
@@ -1218,8 +1132,8 @@ export class CodeEntityGraph {
   /**
    * 增量清除 — 仅删除指定文件的 call graph 边和 method 实体
    *
-   * @param {string[]} filePaths 变更文件的相对路径列表
-   * @returns {{ deletedEdges: number, deletedEntities: number }}
+   * @param filePaths 变更文件的相对路径列表
+   * @returns }
    */
   clearCallGraphForFiles(filePaths: string[] | null) {
     if (!filePaths?.length) {
@@ -1386,9 +1300,7 @@ export class CodeEntityGraph {
     }
   }
 
-  /**
-   * 从 AST 数据推断实体类型
-   */
+  /** 从 AST 数据推断实体类型 */
   #inferEntityType(name: string, astSummary: ProjectAstSummary): string {
     if (!name) {
       return 'class'; // guard against undefined
@@ -1402,9 +1314,7 @@ export class CodeEntityGraph {
     return 'class';
   }
 
-  /**
-   * 映射 Relations 桶名到图谱边类型
-   */
+  /** 映射 Relations 桶名到图谱边类型 */
   #mapRelationType(type: string): string {
     const mapping = {
       inherits: 'inherits',

@@ -1,6 +1,4 @@
-/**
- * BaseError - 所有错误的基类
- */
+/** BaseError - 所有错误的基类 */
 export class BaseError extends Error {
   code: string;
   statusCode: number;
@@ -22,18 +20,14 @@ export class BaseError extends Error {
   }
 }
 
-/**
- * PermissionDenied - 权限拒绝错误
- */
+/** PermissionDenied - 权限拒绝错误 */
 export class PermissionDenied extends BaseError {
   constructor(message: string) {
     super(message, 'PERMISSION_DENIED', 403);
   }
 }
 
-/**
- * ConstitutionViolation - 宪法违反错误
- */
+/** ConstitutionViolation - 宪法违反错误 */
 export class ConstitutionViolation extends BaseError {
   violations: Array<{ rule: string }>;
   constructor(violations: Array<{ rule: string }>) {
@@ -43,9 +37,7 @@ export class ConstitutionViolation extends BaseError {
   }
 }
 
-/**
- * ValidationError - 验证错误
- */
+/** ValidationError - 验证错误 */
 export class ValidationError extends BaseError {
   details: Record<string, unknown>;
   constructor(message: string, details: Record<string, unknown> = {}) {
@@ -54,9 +46,7 @@ export class ValidationError extends BaseError {
   }
 }
 
-/**
- * NotFoundError - 资源未找到错误
- */
+/** NotFoundError - 资源未找到错误 */
 export class NotFoundError extends BaseError {
   resource: string | undefined;
   resourceId: string | undefined;
@@ -78,9 +68,7 @@ export class NotFoundError extends BaseError {
   }
 }
 
-/**
- * ConflictError - 资源冲突错误
- */
+/** ConflictError - 资源冲突错误 */
 export class ConflictError extends BaseError {
   details: Record<string, unknown>;
   constructor(message: string, details: Record<string, unknown>) {
@@ -89,9 +77,7 @@ export class ConflictError extends BaseError {
   }
 }
 
-/**
- * InternalError - 内部错误
- */
+/** InternalError - 内部错误 */
 export class InternalError extends BaseError {
   constructor(message: string) {
     super(message, 'INTERNAL_ERROR', 500);

@@ -144,11 +144,9 @@ const _SYSTEM_FRAMEWORKS = new Set([
  *   3. Xcode osascript 自动插入，失败则文件写入回退
  *   4. 附加 AutoSnippet 注释后缀
  *
- * @param {import('../../../service/automation/FileWatcher.js').FileWatcher} watcher
- * @param {string}   fullPath  目标文件绝对路径
- * @param {string[]} headers   待插入的 import 行数组
- * @param {object}   [opts]
- * @returns {Promise<{inserted: string[], skipped: string[], cancelled: boolean}>}
+ * @param fullPath 目标文件绝对路径
+ * @param headers 待插入的 import 行数组
+ * @returns >}
  */
 export async function insertHeaders(
   watcher: FileWatcherLike | null,
@@ -157,10 +155,8 @@ export async function insertHeaders(
   opts: InsertHeadersOpts = {}
 ) {
   const XA = await import('./XcodeAutomation.js');
-  const CM = await import('../../../infrastructure/external/ClipboardManager.js');
-  const NU = (await import(
-    '../../../infrastructure/external/NativeUi.js'
-  )) as unknown as NativeUiLike;
+  const CM = await import('../../ClipboardManager.js');
+  const NU = (await import('../../NativeUi.js')) as unknown as NativeUiLike;
 
   const result = { inserted: [] as string[], skipped: [] as string[], cancelled: false };
   /** @type {Map<string, string>} 模块名 → 提示注释（'提示操作插入'按钮选择时记录） */
@@ -345,8 +341,6 @@ export async function insertHeaders(
  *   6. 计算偏移后的粘贴行号（computePasteLineNumber）
  *   7. Jump 到粘贴行 → 选中行内容 → Cmd+V 粘贴替换
  *   8. 任一步失败 → 降级到纯文件写入
- *
- * @param {import('../../../service/automation/FileWatcher.js').FileWatcher} watcher
  */
 export async function insertCodeToXcode(
   watcher: FileWatcherLike | null,
@@ -355,10 +349,8 @@ export async function insertCodeToXcode(
   triggerLine: string
 ) {
   const XA = await import('./XcodeAutomation.js');
-  const CM = await import('../../../infrastructure/external/ClipboardManager.js');
-  const NU = (await import(
-    '../../../infrastructure/external/NativeUi.js'
-  )) as unknown as NativeUiLike;
+  const CM = await import('../../ClipboardManager.js');
+  const NU = (await import('../../NativeUi.js')) as unknown as NativeUiLike;
 
   const code = selected.code || '';
   if (!code) {
@@ -708,9 +700,7 @@ function _generateInsertMarker(filePath: string, selected: SelectedSnippet) {
 // §15 工具函数
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * 查找触发行的行号（1-based，-1 表示未找到）
- */
+/** 查找触发行的行号（1-based，-1 表示未找到） */
 export function findTriggerLineNumber(content: string, triggerLine: string) {
   if (!content || !triggerLine) {
     return -1;
@@ -725,9 +715,7 @@ export function findTriggerLineNumber(content: string, triggerLine: string) {
   return -1;
 }
 
-/**
- * 查找 import 语句的插入位置（0-based 行索引，在最后一个 import 之后）
- */
+/** 查找 import 语句的插入位置（0-based 行索引，在最后一个 import 之后） */
 export function findImportInsertLine(content: string, isSwift: boolean) {
   const lines = content.split('\n');
   let lastImportLine = -1;

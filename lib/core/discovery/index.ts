@@ -13,13 +13,9 @@ import { NodeDiscoverer } from './NodeDiscoverer.js';
 import { PythonDiscoverer } from './PythonDiscoverer.js';
 import { RustDiscoverer } from './RustDiscoverer.js';
 
-/** @type {DiscovererRegistry|null} */
 let _registry: DiscovererRegistry | null = null;
 
-/**
- * 获取全局 DiscovererRegistry 单例
- * @returns {DiscovererRegistry}
- */
+/** 获取全局 DiscovererRegistry 单例 */
 export function getDiscovererRegistry() {
   if (!_registry) {
     _registry = new DiscovererRegistry();
@@ -36,9 +32,7 @@ export function getDiscovererRegistry() {
   return _registry;
 }
 
-/**
- * 重置 Registry（仅用于测试）
- */
+/** 重置 Registry（仅用于测试） */
 export function resetDiscovererRegistry() {
   _registry = null;
 }

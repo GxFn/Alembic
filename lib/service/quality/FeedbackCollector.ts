@@ -38,9 +38,7 @@ export class FeedbackCollector {
 
   /**
    * 记录一个交互事件
-   * @param {'view'|'click'|'rate'|'dismiss'|'copy'|'insert'|'feedback'} type
-   * @param {string} recipeId
-   * @param {object} data 任意附加数据 (rating, comment, etc.)
+   * @param data 任意附加数据 (rating, comment, etc.)
    */
   record(type: string, recipeId: string, data: Record<string, unknown> = {}) {
     this.#events.push({
@@ -59,8 +57,7 @@ export class FeedbackCollector {
 
   /**
    * 获取指定 Recipe 的事件统计
-   * @param {string} recipeId
-   * @returns {{ views: number, clicks: number, copies: number, avgRating: number, feedbackCount: number }}
+   * @returns }
    */
   getRecipeStats(recipeId: string) {
     const events = this.#events.filter((e: FeedbackEvent) => e.recipeId === recipeId);
@@ -81,9 +78,7 @@ export class FeedbackCollector {
     };
   }
 
-  /**
-   * 获取全局统计
-   */
+  /** 获取全局统计 */
   getGlobalStats() {
     const byType: Record<string, number> = {};
     for (const e of this.#events) {
@@ -96,9 +91,7 @@ export class FeedbackCollector {
     };
   }
 
-  /**
-   * 获取热门 Recipes (by interaction count)
-   */
+  /** 获取热门 Recipes (by interaction count) */
   getTopRecipes(n = 10) {
     const counts: Record<string, number> = {};
     for (const e of this.#events) {
@@ -110,9 +103,7 @@ export class FeedbackCollector {
       .map(([recipeId, count]) => ({ recipeId, count }));
   }
 
-  /**
-   * 清空记录
-   */
+  /** 清空记录 */
   clear() {
     this.#events = [];
     this.#save();

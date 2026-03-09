@@ -10,7 +10,7 @@
  *   - AgentEvents 常量完整性
  */
 
-import { AgentEventBus, AgentEvents } from '../../lib/service/agent/AgentEventBus.js';
+import { AgentEventBus, AgentEvents } from '../../lib/agent/AgentEventBus.js';
 
 describe('Integration: AgentEventBus', () => {
   afterEach(() => {

@@ -131,9 +131,7 @@ function collectMdFiles(dir: any, baseDir: any, list: any[] = []) {
   return list;
 }
 
-/**
- * 从 Markdown 的 YAML frontmatter 中提取指定字段（轻量实现，不依赖 YAML 库）
- */
+/** 从 Markdown 的 YAML frontmatter 中提取指定字段（轻量实现，不依赖 YAML 库） */
 function extractFrontmatterFields(content: any) {
   const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!m) {

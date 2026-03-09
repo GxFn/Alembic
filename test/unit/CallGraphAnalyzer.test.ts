@@ -1165,9 +1165,7 @@ describe('Go extractCallSites', () => {
     extractCallSitesGo = mod.plugin.extractCallSites;
   });
 
-  /**
-   * Helper to build a minimal Go-like fake AST node
-   */
+  /** Helper to build a minimal Go-like fake AST node */
   function mkNode(type, children, extra = {}) {
     const namedChildren = children || [];
     return {

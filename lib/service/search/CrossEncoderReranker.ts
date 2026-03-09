@@ -36,11 +36,6 @@ export class CrossEncoderReranker {
   #aiProvider;
   #logger;
 
-  /**
-   * @param {object} opts
-   * @param {import('../../external/ai/AiProvider.js').AiProvider} opts.aiProvider
-   * @param {object} [opts.logger]
-   */
   constructor(
     opts: {
       aiProvider?: {
@@ -59,9 +54,9 @@ export class CrossEncoderReranker {
   /**
    * 对候选列表进行语义重排
    *
-   * @param {string} query 用户查询
-   * @param {Array<object>} candidates - Layer 1 输出的候选列表
-   * @returns {Promise<Array<object>>} 附带 semanticScore 的候选列表（降序）
+   * @param query 用户查询
+   * @param candidates Layer 1 输出的候选列表
+   * @returns 附带 semanticScore 的候选列表（降序）
    */
   async rerank(query: string, candidates: RerankCandidate[]) {
     if (!candidates || candidates.length === 0) {
@@ -100,9 +95,7 @@ export class CrossEncoderReranker {
     }
   }
 
-  /**
-   * 批量 AI 评分 — 单次 chatWithStructuredOutput 调用
-   */
+  /** 批量 AI 评分 — 单次 chatWithStructuredOutput 调用 */
   async #batchScore(query: string, candidates: RerankCandidate[]) {
     const pairs = candidates.map((c: RerankCandidate, i: number) => {
       const doc = this.#extractDocText(c);
@@ -167,9 +160,7 @@ Return ONLY a JSON array, no markdown or explanation.`;
       );
   }
 
-  /**
-   * 从候选对象提取用于评分的文本表示
-   */
+  /** 从候选对象提取用于评分的文本表示 */
   #extractDocText(candidate: RerankCandidate) {
     const parts = [
       candidate.title,
@@ -181,9 +172,7 @@ Return ONLY a JSON array, no markdown or explanation.`;
     return parts.join(' | ');
   }
 
-  /**
-   * Jaccard 降级 — 当 AI 不可用时使用
-   */
+  /** Jaccard 降级 — 当 AI 不可用时使用 */
   #jaccardFallback(query: string, candidates: RerankCandidate[]) {
     const queryTokens = new Set(tokenize(query));
     if (queryTokens.size === 0) {

@@ -39,10 +39,9 @@ export class EventAggregator {
   #logger;
 
   /**
-   * @param {object} [opts]
-   * @param {number} [opts.windowMs=5000]    聚合时间窗口（毫秒）
-   * @param {number} [opts.maxBatch=50]      单次 batch 最大事件数
-   * @param {number} [opts.dedupeMs=60000]   相同事件去重窗口（毫秒）
+   * @param [opts.windowMs=5000] 聚合时间窗口（毫秒）
+   * @param [opts.maxBatch=50] 单次 batch 最大事件数
+   * @param [opts.dedupeMs=60000] 相同事件去重窗口（毫秒）
    */
   constructor({
     windowMs = DEFAULT_WINDOW_MS,
@@ -57,10 +56,9 @@ export class EventAggregator {
 
   /**
    * 推送一个事件到聚合器
-   * @param {string} key 聚合键（如 'file_change', 'guard_violation'）
-   * @param {object} event 事件数据
-   * @param {object} [opts]
-   * @param {string} [opts.dedupeId] 去重标识（默认为 JSON hash）
+   * @param key 聚合键（如 'file_change', 'guard_violation'）
+   * @param event 事件数据
+   * @param [opts.dedupeId] 去重标识（默认为 JSON hash）
    */
   push(key: string, event: Record<string, unknown>, { dedupeId }: { dedupeId?: string } = {}) {
     // 去重检查
@@ -92,11 +90,7 @@ export class EventAggregator {
     bucket.timer = setTimeout(() => this.#flush(key), this.#windowMs);
   }
 
-  /**
-   * 注册 batch 事件监听器
-   * @param {'batch'} eventName
-   * @param {(key: string, events: Record<string, unknown>[]) => void} fn
-   */
+  /** 注册 batch 事件监听器 */
   on(eventName: string, fn: (key: string, events: Record<string, unknown>[]) => void) {
     if (!this.#listeners.has(eventName)) {
       this.#listeners.set(eventName, []);
@@ -104,18 +98,14 @@ export class EventAggregator {
     this.#listeners.get(eventName)!.push(fn);
   }
 
-  /**
-   * 立即刷新所有待处理 bucket
-   */
+  /** 立即刷新所有待处理 bucket */
   flushAll() {
     for (const key of this.#buckets.keys()) {
       this.#flush(key);
     }
   }
 
-  /**
-   * 停止所有计时器
-   */
+  /** 停止所有计时器 */
   destroy() {
     for (const [, bucket] of this.#buckets) {
       if (bucket.timer) {
@@ -127,9 +117,7 @@ export class EventAggregator {
     this.#listeners.clear();
   }
 
-  /**
-   * 获取待处理事件数
-   */
+  /** 获取待处理事件数 */
   get pendingCount() {
     let count = 0;
     for (const [, bucket] of this.#buckets) {

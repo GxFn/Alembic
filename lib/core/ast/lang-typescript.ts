@@ -328,8 +328,7 @@ function _parseTSProperty(node: any, className: any) {
  * Handles: type_identifier, generic_type, nested_type_identifier, union_type
  * Strips generics: UserRepo<T> → UserRepo
  *
- * @param {object} parentNode - AST node that may contain a type_annotation child
- * @returns {string|null}
+ * @param parentNode AST node that may contain a type_annotation child
  */
 function _extractTypeAnnotation(parentNode: any) {
   const typeAnnotNode = parentNode.namedChildren.find((c: any) => c.type === 'type_annotation');
@@ -359,9 +358,8 @@ function _extractTypeAnnotation(parentNode: any) {
  * TypeScript shorthand: constructor(private userRepo: UserRepo)
  * creates a class property `userRepo` with type `UserRepo`
  *
- * @param {object} constructorNode - method_definition node with name "constructor"
- * @param {string} className
- * @returns {Array} - property objects
+ * @param constructorNode method_definition node with name "constructor"
+ * @returns property objects
  */
 function _extractTSConstructorProperties(constructorNode: any, className: any) {
   const properties: any[] = [];
@@ -475,8 +473,8 @@ function _parseTSVariableDecl(node: any, ctx: any, parentClassName: any) {
 /**
  * 从 import_statement 节点解析导入子句的结构化信息
  *
- * @param {TreeSitterNode} importNode - import_statement 节点
- * @returns {{ symbols: string[], kind: string, alias: string|null, isTypeOnly: boolean }}
+ * @param importNode import_statement 节点
+ * @returns }
  */
 function _parseImportClause(importNode: any) {
   const symbols: string[] = [];
@@ -531,9 +529,8 @@ function _parseImportClause(importNode: any) {
 /**
  * 解析 CJS require() 调用: const x = require('path') / const { a, b } = require('path')
  *
- * @param {TreeSitterNode} callNode - call_expression 节点
- * @param {TreeSitterNode} declaratorNode - variable_declarator 节点 (包含 lhs 绑定)
- * @returns {ImportRecord|null}
+ * @param callNode call_expression 节点
+ * @param declaratorNode variable_declarator 节点 (包含 lhs 绑定)
  */
 function _parseCJSRequire(callNode: any, declaratorNode: any) {
   // 检查 callee 是否为 'require'
@@ -603,9 +600,8 @@ function _parseCJSRequire(callNode: any, declaratorNode: any) {
 /**
  * 解析动态 import() 表达式: const mod = await import('./module')
  *
- * @param {TreeSitterNode} callNode - call_expression 节点
- * @param {TreeSitterNode} declaratorNode - variable_declarator 节点
- * @returns {ImportRecord|null}
+ * @param callNode call_expression 节点
+ * @param declaratorNode variable_declarator 节点
  */
 function _parseDynamicImport(callNode: any, declaratorNode: any) {
   // 动态 import() 在 tree-sitter 中解析为 call_expression, callee 是 'import'

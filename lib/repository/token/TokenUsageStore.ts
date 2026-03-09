@@ -74,9 +74,7 @@ export class TokenUsageStore {
   /** @type {{ data: object, expireAt: number } | null} */
   #reportCache: { data: ReportData; expireAt: number } | null = null;
 
-  /**
-   * @param {import('better-sqlite3').Database} db — raw better-sqlite3 instance
-   */
+  /** @param db — raw better-sqlite3 instance */
   constructor(db: import('better-sqlite3').Database, drizzle?: DrizzleDB) {
     this.#db = db;
     this.#drizzle = drizzle ?? getDrizzle();
@@ -171,7 +169,7 @@ export class TokenUsageStore {
 
   /**
    * 近 7 日按日聚合统计
-   * @returns {Array<{ date: string, input_tokens: number, output_tokens: number, total_tokens: number, call_count: number }>}
+   * @returns >}
    */
   getLast7DaysDaily(): DailyRow[] {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -180,7 +178,7 @@ export class TokenUsageStore {
 
   /**
    * 近 7 日按来源 (source) 聚合统计
-   * @returns {Array<{ source: string, input_tokens: number, output_tokens: number, total_tokens: number, call_count: number }>}
+   * @returns >}
    */
   getLast7DaysBySource(): BySourceRow[] {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -189,7 +187,7 @@ export class TokenUsageStore {
 
   /**
    * 近 7 日总计
-   * @returns {{ input_tokens: number, output_tokens: number, total_tokens: number, call_count: number, avg_per_call: number }}
+   * @returns }
    */
   getLast7DaysSummary(): SummaryRow & { avg_per_call: number } {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;

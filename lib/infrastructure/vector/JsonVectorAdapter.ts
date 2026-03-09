@@ -89,9 +89,7 @@ export class JsonVectorAdapter extends VectorStore {
     return this.#data.get(id) || null;
   }
 
-  /**
-   * 向量相似度搜索（余弦相似度）
-   */
+  /** 向量相似度搜索（余弦相似度） */
   async searchVector(
     queryVector: number[],
     options: { topK?: number; filter?: Record<string, unknown> | null; minScore?: number } = {}
@@ -123,9 +121,7 @@ export class JsonVectorAdapter extends VectorStore {
     return scored;
   }
 
-  /**
-   * 混合搜索：向量 70% + 关键词 30%
-   */
+  /** 混合搜索：向量 70% + 关键词 30% */
   async hybridSearch(
     queryVector: number[],
     queryText: string,

@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 let ALL_TOOLS;
 
 beforeAll(async () => {
-  const toolsMod = await import('../../lib/service/agent/tools/index.js');
+  const toolsMod = await import('../../lib/agent/tools/index.js');
   ALL_TOOLS = toolsMod.ALL_TOOLS || toolsMod.default;
 });
 

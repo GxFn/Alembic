@@ -1,6 +1,4 @@
-/**
- * ContextualEnricher — 上下文增强管线 单元测试
- */
+/** ContextualEnricher — 上下文增强管线 单元测试 */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

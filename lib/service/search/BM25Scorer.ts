@@ -10,9 +10,7 @@
 import type { BM25Document, BM25SearchResult } from './SearchTypes.js';
 import { BM25_B, BM25_K1, tokenize } from './tokenizer.js';
 
-/**
- * BM25 评分器
- */
+/** BM25 评分器 */
 export class BM25Scorer {
   _idIndex: Map<string, number>;
   _totalLength: number;
@@ -29,9 +27,7 @@ export class BM25Scorer {
     this._idIndex = new Map(); // id → array index (O(1) 查找)
   }
 
-  /**
-   * 添加文档到索引
-   */
+  /** 添加文档到索引 */
   addDocument(id: string, text: string, meta: Record<string, unknown> = {}) {
     // 如果 id 已存在，先移除旧版本（确保幂等）
     if (this._idIndex.has(id)) {
@@ -57,7 +53,7 @@ export class BM25Scorer {
   /**
    * 移除文档（增量删除）
    * 采用标记删除 + 懒清理策略：将文档标记为 null，当空洞率 > 30% 时自动压缩
-   * @returns {boolean} 是否成功移除
+   * @returns 是否成功移除
    */
   removeDocument(id: string) {
     const idx = this._idIndex.get(id);
@@ -95,24 +91,18 @@ export class BM25Scorer {
     return true;
   }
 
-  /**
-   * 更新文档（增量: remove + add）
-   */
+  /** 更新文档（增量: remove + add） */
   updateDocument(id: string, text: string, meta: Record<string, unknown> = {}) {
     this.removeDocument(id);
     this.addDocument(id, text, meta);
   }
 
-  /**
-   * 检查文档是否存在
-   */
+  /** 检查文档是否存在 */
   hasDocument(id: string) {
     return this._idIndex.has(id);
   }
 
-  /**
-   * 压缩 documents 数组，清除 tombstone 空洞
-   */
+  /** 压缩 documents 数组，清除 tombstone 空洞 */
   _compact() {
     const alive = this.documents.filter((d): d is BM25Document => d !== null);
     this.documents = alive;
@@ -122,9 +112,7 @@ export class BM25Scorer {
     }
   }
 
-  /**
-   * 查询文档，返回按 BM25 分数排序的结果
-   */
+  /** 查询文档，返回按 BM25 分数排序的结果 */
   search(query: string, limit = 20) {
     const queryTokens = tokenize(query);
     if (queryTokens.length === 0) {
@@ -162,9 +150,7 @@ export class BM25Scorer {
     return scores.slice(0, limit);
   }
 
-  /**
-   * 清空索引
-   */
+  /** 清空索引 */
   clear() {
     this.documents = [];
     this.docFreq = {};

@@ -27,9 +27,7 @@ export class DatabaseConnection {
     this.drizzle = null;
   }
 
-  /**
-   * 连接数据库
-   */
+  /** 连接数据库 */
   async connect(): Promise<SqliteDatabase> {
     const dbPath = this.config.path;
 
@@ -85,9 +83,7 @@ export class DatabaseConnection {
     return this.db;
   }
 
-  /**
-   * 运行所有 migration（支持 .sql、.js、.ts）
-   */
+  /** 运行所有 migration（支持 .sql、.js、.ts） */
   async runMigrations() {
     if (!this.db) {
       throw new Error('Database not connected. Call connect() first.');
@@ -145,9 +141,7 @@ export class DatabaseConnection {
     }
   }
 
-  /**
-   * 关闭数据库连接
-   */
+  /** 关闭数据库连接 */
   close() {
     if (this.db) {
       this.db.close();
@@ -156,9 +150,7 @@ export class DatabaseConnection {
     }
   }
 
-  /**
-   * 获取数据库实例
-   */
+  /** 获取数据库实例 */
   getDb(): SqliteDatabase {
     if (!this.db) {
       throw new Error('Database not connected. Call connect() first.');
@@ -166,9 +158,7 @@ export class DatabaseConnection {
     return this.db;
   }
 
-  /**
-   * 获取 Drizzle ORM 实例
-   */
+  /** 获取 Drizzle ORM 实例 */
   getDrizzle(): DrizzleDB {
     if (!this.drizzle) {
       throw new Error('Drizzle not initialized. Call connect() first.');

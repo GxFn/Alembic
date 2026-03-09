@@ -25,11 +25,7 @@ const VALID_TRANSITIONS = {
   [Lifecycle.DEPRECATED]: [Lifecycle.PENDING],
 };
 
-/**
- * 规范化生命周期值
- * @param {string} lifecycle
- * @returns {string}
- */
+/** 规范化生命周期值 */
 export function normalizeLifecycle(lifecycle: string): string {
   if (Object.values(Lifecycle).includes(lifecycle)) {
     return lifecycle;
@@ -37,12 +33,7 @@ export function normalizeLifecycle(lifecycle: string): string {
   return Lifecycle.PENDING;
 }
 
-/**
- * 检查状态转移是否合法
- * @param {string} from
- * @param {string} to
- * @returns {boolean}
- */
+/** 检查状态转移是否合法 */
 export function isValidTransition(from: string, to: string): boolean {
   const normalFrom = normalizeLifecycle(from);
   const normalTo = normalizeLifecycle(to);
@@ -50,20 +41,12 @@ export function isValidTransition(from: string, to: string): boolean {
   return Array.isArray(allowed) && allowed.includes(normalTo);
 }
 
-/**
- * 是否为合法的生命周期值
- * @param {string} lifecycle
- * @returns {boolean}
- */
+/** 是否为合法的生命周期值 */
 export function isValidLifecycle(lifecycle: string): boolean {
   return Object.values(Lifecycle).includes(lifecycle);
 }
 
-/**
- * 是否处于候选阶段（待审核）
- * @param {string} lifecycle
- * @returns {boolean}
- */
+/** 是否处于候选阶段（待审核） */
 export function isCandidate(lifecycle: string): boolean {
   const normalized = normalizeLifecycle(lifecycle);
   return normalized === Lifecycle.PENDING;
@@ -89,11 +72,7 @@ const KIND_MAP = {
   'dev-document': 'fact',
 };
 
-/**
- * 从 knowledgeType 推导 kind
- * @param {string} knowledgeType
- * @returns {'rule'|'pattern'|'fact'}
- */
+/** 从 knowledgeType 推导 kind */
 export function inferKind(knowledgeType: string): 'rule' | 'pattern' | 'fact' {
   return ((KIND_MAP as Record<string, string>)[knowledgeType] || 'pattern') as
     | 'rule'

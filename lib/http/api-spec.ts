@@ -1,6 +1,4 @@
-/**
- * API 文档 - OpenAPI 3.0 规范
- */
+/** API 文档 - OpenAPI 3.0 规范 */
 
 export const apiSpec = {
   openapi: '3.0.0',

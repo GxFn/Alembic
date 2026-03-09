@@ -64,12 +64,9 @@ interface TierExecuteOptions {
 // ──────────────────────────────────────────────────────────────────
 
 export class TierScheduler {
-  /** @type {string[][]} */
   #tiers;
 
-  /**
-   * @param {string[][]} [tiers] 自定义分层 (默认使用 DEFAULT_TIERS)
-   */
+  /** @param [tiers] 自定义分层 (默认使用 DEFAULT_TIERS) */
   constructor(tiers = DEFAULT_TIERS) {
     this.#tiers = tiers;
   }
@@ -77,14 +74,13 @@ export class TierScheduler {
   /**
    * 分层执行维度
    *
-   * @param {Function} executeDimension - async (dimId) => DimensionResult
-   * @param {object} [options]
-   * @param {number} [options.concurrency=3] - Tier 内最大并行数
-   * @param {Function} [options.onTierComplete] - (tierIndex, tierResults) => void
-   * @param {Function} [options.shouldAbort] - () => boolean 外部中止信号
-   * @param {string[]} [options.activeDimIds] 实际要执行的维度 ID 列表（过滤不在列表中的维度）
-   * @param {Record<string, number>} [options.tierHints] - dimId → 1-based tier index（Enhancement Pack 维度声明的首选 Tier）
-   * @returns {Promise<Map<string, any>>} - dimId → result
+   * @param executeDimension async (dimId) => DimensionResult
+   * @param [options.concurrency=3] Tier 内最大并行数
+   * @param [options.onTierComplete] (tierIndex, tierResults) => void
+   * @param [options.shouldAbort] () => boolean 外部中止信号
+   * @param [options.activeDimIds] 实际要执行的维度 ID 列表（过滤不在列表中的维度）
+   * @param [options.tierHints] dimId → 1-based tier index（Enhancement Pack 维度声明的首选 Tier）
+   * @returns dimId → result
    */
   async execute(
     executeDimension: (dimId: string) => Promise<DimensionResult>,
@@ -148,9 +144,7 @@ export class TierScheduler {
     return results;
   }
 
-  /**
-   * 执行单个 Tier 内的所有维度 (p-limit 并发控制)
-   */
+  /** 执行单个 Tier 内的所有维度 (p-limit 并发控制) */
   async #executeTier(
     dimensionIds: string[],
     executeDimension: (dimId: string) => Promise<DimensionResult>,
@@ -183,8 +177,7 @@ export class TierScheduler {
 
   /**
    * 获取维度所在的 Tier 索引
-   * @param {string} dimId
-   * @returns {number} - 0-based tier index, -1 if not found
+   * @returns 0-based tier index, -1 if not found
    */
   getTierIndex(dimId: string) {
     for (let i = 0; i < this.#tiers.length; i++) {
@@ -195,10 +188,7 @@ export class TierScheduler {
     return -1;
   }
 
-  /**
-   * 获取分层定义
-   * @returns {string[][]}
-   */
+  /** 获取分层定义 */
   getTiers() {
     return this.#tiers;
   }

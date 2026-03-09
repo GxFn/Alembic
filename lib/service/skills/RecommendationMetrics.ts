@@ -45,9 +45,7 @@ export class RecommendationMetrics {
 
   // ─── 事件记录 ──────────────────────────────────────────
 
-  /**
-   * 记录推荐已展示 (dashboard/MCP 返回推荐列表时调用)
-   */
+  /** 记录推荐已展示 (dashboard/MCP 返回推荐列表时调用) */
   trackDisplayed(recommendations: ScoredRecommendation[]): void {
     this.#session.displayed += recommendations.length;
 
@@ -69,9 +67,7 @@ export class RecommendationMetrics {
     }
   }
 
-  /**
-   * 记录推荐被采纳
-   */
+  /** 记录推荐被采纳 */
   async trackAdopted(recommendationId: string, source?: string, category?: string): Promise<void> {
     this.#session.adopted++;
     await this.#feedbackStore.record({
@@ -83,9 +79,7 @@ export class RecommendationMetrics {
     });
   }
 
-  /**
-   * 记录推荐被忽略
-   */
+  /** 记录推荐被忽略 */
   async trackDismissed(
     recommendationId: string,
     reason?: string,
@@ -103,9 +97,7 @@ export class RecommendationMetrics {
     });
   }
 
-  /**
-   * 记录推荐过期
-   */
+  /** 记录推荐过期 */
   async trackExpired(recommendationId: string, source?: string): Promise<void> {
     this.#session.expired++;
     await this.#feedbackStore.record({
@@ -118,9 +110,7 @@ export class RecommendationMetrics {
 
   // ─── 查询 ──────────────────────────────────────────────
 
-  /**
-   * 获取当前会话的指标
-   */
+  /** 获取当前会话的指标 */
   getSessionMetrics(): MetricsCounters & { adoptionRate: number; ctr: number } {
     const s = this.#session;
     const decisionTotal = s.adopted + s.dismissed;
@@ -131,16 +121,12 @@ export class RecommendationMetrics {
     };
   }
 
-  /**
-   * 获取全局指标快照 (含持久化历史)
-   */
+  /** 获取全局指标快照 (含持久化历史) */
   getGlobalSnapshot(since?: Date): RecommendationMetricsSnapshot {
     return this.#feedbackStore.getMetricsSnapshot(since);
   }
 
-  /**
-   * 获取指定来源的采纳率
-   */
+  /** 获取指定来源的采纳率 */
   getAdoptionRateBySource(source: string): number {
     return this.#feedbackStore.getAdoptionRate(source);
   }

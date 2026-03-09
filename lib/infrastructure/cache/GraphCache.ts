@@ -18,9 +18,7 @@ export class GraphCache {
   #cacheDir;
   #logger;
 
-  /**
-   * @param {string} projectRoot 项目根目录
-   */
+  /** @param projectRoot 项目根目录 */
   constructor(projectRoot: string) {
     this.#cacheDir = join(projectRoot, '.autosnippet', 'cache');
     this.#logger = Logger.getInstance();
@@ -28,9 +26,9 @@ export class GraphCache {
 
   /**
    * 保存缓存
-   * @param {string} key 缓存键名（生成 {key}.json）
-   * @param {object} data 要缓存的数据
-   * @param {object} meta 元信息（含 hash、timestamp 等）
+   * @param key 缓存键名（生成 {key}.json）
+   * @param data 要缓存的数据
+   * @param meta 元信息（含 hash、timestamp 等）
    */
   save(key: string, data: unknown, meta: Record<string, unknown> = {}) {
     try {
@@ -53,8 +51,8 @@ export class GraphCache {
 
   /**
    * 加载缓存
-   * @param {string} key 缓存键名
-   * @returns {{ data: object, [key: string]: unknown } | null}
+   * @param key 缓存键名
+   * @returns | null}
    */
   load(key: string) {
     try {
@@ -72,9 +70,8 @@ export class GraphCache {
 
   /**
    * 检查缓存是否有效（hash 匹配）
-   * @param {string} key 缓存键
-   * @param {string} currentHash 当前内容的 hash
-   * @returns {boolean}
+   * @param key 缓存键
+   * @param currentHash 当前内容的 hash
    */
   isValid(key: string, currentHash: string) {
     const cached = this.load(key);
@@ -84,10 +81,7 @@ export class GraphCache {
     return cached.contentHash === currentHash;
   }
 
-  /**
-   * 删除缓存
-   * @param {string} key
-   */
+  /** 删除缓存 */
   invalidate(key: string) {
     try {
       const filePath = join(this.#cacheDir, `${key}.json`);
@@ -102,8 +96,8 @@ export class GraphCache {
 
   /**
    * 计算文件内容 hash
-   * @param {string} filePath 文件绝对路径
-   * @returns {string} sha256 hex (前 16 字符)
+   * @param filePath 文件绝对路径
+   * @returns sha256 hex (前 16 字符)
    */
   computeFileHash(filePath: string) {
     try {
@@ -116,8 +110,7 @@ export class GraphCache {
 
   /**
    * 计算字符串内容 hash
-   * @param {string} content
-   * @returns {string} sha256 hex (前 16 字符)
+   * @returns sha256 hex (前 16 字符)
    */
   computeContentHash(content: string) {
     return createHash('sha256').update(content).digest('hex').substring(0, 16);
@@ -125,9 +118,9 @@ export class GraphCache {
 
   /**
    * 批量计算文件 hash 映射
-   * @param {string[]} filePaths 文件绝对路径数组
-   * @param {string} projectRoot 项目根目录
-   * @returns {Object<string, string>} { relativePath: hash }
+   * @param filePaths 文件绝对路径数组
+   * @param projectRoot 项目根目录
+   * @returns { relativePath: hash }
    */
   computeFileHashes(filePaths: string[], projectRoot: string) {
     const hashes: Record<string, string> = {};
@@ -138,9 +131,7 @@ export class GraphCache {
     return hashes;
   }
 
-  /**
-   * 获取缓存目录路径
-   */
+  /** 获取缓存目录路径 */
   getCacheDir() {
     return this.#cacheDir;
   }

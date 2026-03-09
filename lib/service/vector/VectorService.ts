@@ -101,9 +101,7 @@ export class VectorService {
 
   // ═══ Lifecycle ═══
 
-  /**
-   * 初始化: 绑定 EventBus 事件监听
-   */
+  /** 初始化: 绑定 EventBus 事件监听 */
   async initialize(): Promise<void> {
     if (this.#initialized) {
       return;
@@ -210,9 +208,7 @@ export class VectorService {
     };
   }
 
-  /**
-   * 清空向量索引
-   */
+  /** 清空向量索引 */
   async clear(): Promise<void> {
     await this.#vectorStore.clear();
     this.#logger.info('[VectorService] Vector index cleared');
@@ -368,9 +364,7 @@ export class VectorService {
     }
   }
 
-  /**
-   * 通过 ID 查找相似向量
-   */
+  /** 通过 ID 查找相似向量 */
   async similarById(
     id: string,
     topK = 10
@@ -442,9 +436,7 @@ export class VectorService {
     }
   }
 
-  /**
-   * 从向量索引移除一个条目
-   */
+  /** 从向量索引移除一个条目 */
   async removeEntry(entryId: string): Promise<void> {
     try {
       await this.#vectorStore.remove(`entry_${entryId}`);
@@ -456,9 +448,7 @@ export class VectorService {
     }
   }
 
-  /**
-   * 批量同步知识条目
-   */
+  /** 批量同步知识条目 */
   async batchSync(
     entries: Array<{ id: string; title: string; content: unknown; kind?: string }>
   ): Promise<SyncResult> {
@@ -513,9 +503,7 @@ export class VectorService {
 
   // ═══ 维护 ═══
 
-  /**
-   * 获取向量索引统计信息
-   */
+  /** 获取向量索引统计信息 */
   async getStats(): Promise<VectorStats> {
     const raw = await this.#vectorStore.getStats();
     const stats = raw as Record<string, unknown>;
@@ -565,9 +553,7 @@ export class VectorService {
 
   // ═══ 生命周期 ═══
 
-  /**
-   * 销毁: 清理 SyncCoordinator 的定时器和事件监听
-   */
+  /** 销毁: 清理 SyncCoordinator 的定时器和事件监听 */
   destroy(): void {
     if (this.#syncCoordinator) {
       this.#syncCoordinator.destroy();
@@ -578,9 +564,7 @@ export class VectorService {
 
   // ═══ Private ═══
 
-  /**
-   * 从知识条目中提取可嵌入的文本
-   */
+  /** 从知识条目中提取可嵌入的文本 */
   #extractText(entry: { title: string; content: unknown; kind?: string }): string {
     const parts: string[] = [];
 

@@ -93,10 +93,10 @@ vi.mock('#http/middleware/RateLimiter.js', () => ({
 }));
 
 // Mock RecipeReadinessChecker
-vi.mock('../../lib/shared/RecipeReadinessChecker.js', () => ({
+vi.mock('../../lib/domain/knowledge/RecipeReadinessChecker.js', () => ({
   checkRecipeReadiness: vi.fn(() => ({ ready: true, missing: [], suggestions: [] })),
 }));
-vi.mock('#shared/RecipeReadinessChecker.js', () => ({
+vi.mock('#domain/knowledge/RecipeReadinessChecker.js', () => ({
   checkRecipeReadiness: vi.fn(() => ({ ready: true, missing: [], suggestions: [] })),
 }));
 
@@ -105,7 +105,7 @@ const { submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle } = await impo
 );
 // 从 #imports 别名导入 mock — 与 handler 内部的 dynamic import 一致
 const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
-const { checkRecipeReadiness } = await import('#shared/RecipeReadinessChecker.js');
+const { checkRecipeReadiness } = await import('#domain/knowledge/RecipeReadinessChecker.js');
 
 describe('MCP Knowledge Handlers', () => {
   let svc;

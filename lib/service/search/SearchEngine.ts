@@ -103,9 +103,7 @@ export class SearchEngine {
     this._fusionSemanticWeight = options.fusionSemanticWeight ?? 0.4;
   }
 
-  /**
-   * 构建搜索索引 - 从数据库加载所有可搜索实体
-   */
+  /** 构建搜索索引 - 从数据库加载所有可搜索实体 */
   buildIndex() {
     this.scorer.clear();
     this._cache.clear();
@@ -148,9 +146,7 @@ export class SearchEngine {
     }
   }
 
-  /**
-   * 确保索引已构建（幂等），supply 给需要准确 stats 的调用方
-   */
+  /** 确保索引已构建（幂等），supply 给需要准确 stats 的调用方 */
   ensureIndex() {
     if (!this._indexed) {
       this.buildIndex();
@@ -159,8 +155,8 @@ export class SearchEngine {
 
   /**
    * 统一搜索入口
-   * @param {string} query 搜索关键词
-   * @param {object} options - {type, limit, mode, useAI}
+   * @param query 搜索关键词
+   * @param options {type, limit, mode, useAI}
    */
   async search(query: string, options: SearchOptions = {}) {
     const { type = 'all', limit = 20, mode = 'keyword', context } = options;
@@ -519,7 +515,7 @@ export class SearchEngine {
   /**
    * 语义搜索 - 需要 AI Provider 的 embed 功能
    * 降级到 BM25 如果 AI 不可用
-   * @returns {Promise<{ items: Array, actualMode: string }>}
+   * @returns >}
    */
   async _semanticSearch(query: string, type: string, limit: number) {
     // 优先使用 VectorService (统一向量服务层)
@@ -879,9 +875,7 @@ export class SearchEngine {
     };
   }
 
-  /**
-   * 获取索引统计（如果尚未构建索引，自动触发构建）
-   */
+  /** 获取索引统计（如果尚未构建索引，自动触发构建） */
   getStats() {
     return {
       indexed: this._indexed,

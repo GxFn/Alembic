@@ -97,9 +97,7 @@ router.post('/', validate(TaskDispatchBody), async (req: Request, res: Response)
   }
 });
 
-/**
- * 操作路由 — 与 MCP handler/task.js 保持一致
- */
+/** 操作路由 — 与 MCP handler/task.js 保持一致 */
 async function _dispatch(svc: TaskGraphSvc, operation: string, params: Record<string, unknown>) {
   switch (operation) {
     case 'create':

@@ -556,9 +556,7 @@ const BUILT_IN_RULES = {
 // 向后兼容: 从 GuardPatternUtils 重新导出 detectLanguage
 export { detectLanguage } from './GuardPatternUtils.js';
 
-/**
- * GuardCheckEngine - 核心检查引擎
- */
+/** GuardCheckEngine - 核心检查引擎 */
 export class GuardCheckEngine {
   _astRulesCache: GuardRule[] | null;
   _builtInRules: Record<string, BuiltInRule>;
@@ -586,10 +584,7 @@ export class GuardCheckEngine {
     this._externalRules = new Map();
     /** @type {boolean} EP 规则是否已注入（幂等标记，避免每次请求重复注入） */
     this._epInjected = false;
-    /**
-     * Guard 配置 — 允许禁用特定规则或调整 Code-Level 检查阈值
-     * @type {{ disabledRules?: string[], codeLevelThresholds?: Record<string, number> }}
-     */
+    /** Guard 配置 — 允许禁用特定规则或调整 Code-Level 检查阈值 */
     this._guardConfig = options.guardConfig || {};
   }
 
@@ -639,9 +634,7 @@ export class GuardCheckEngine {
     );
   }
 
-  /**
-   * EP 注入幂等标记 — 调用者可用此判断是否已完成注入，避免重复加载 EnhancementRegistry
-   */
+  /** EP 注入幂等标记 — 调用者可用此判断是否已完成注入，避免重复加载 EnhancementRegistry */
   isEpInjected() {
     return this._epInjected;
   }
@@ -649,9 +642,7 @@ export class GuardCheckEngine {
     this._epInjected = true;
   }
 
-  /**
-   * 获取所有启用的规则 (数据库 + 内置)
-   */
+  /** 获取所有启用的规则 (数据库 + 内置) */
   getRules(language: string | null = null) {
     let rules: GuardRule[] = [];
 
@@ -787,10 +778,10 @@ export class GuardCheckEngine {
 
   /**
    * 对代码运行静态检查
-   * @param {string} code 源代码
-   * @param {string} language - 'objc'|'swift'|'javascript' 等
-   * @param {object} options - {scope, filePath}
-   * @returns {Array<{ruleId, message, severity, line, snippet, dimension?, fixSuggestion?}>}
+   * @param code 源代码
+   * @param language 'objc'|'swift'|'javascript' 等
+   * @param options {scope, filePath}
+   * @returns >}
    */
   checkCode(
     code: string,
@@ -906,9 +897,9 @@ export class GuardCheckEngine {
    * AST 语义规则检查
    * 支持 3 种查询类型: mustCallThrough, mustNotUseInContext, mustConformToProtocol
    * 仅在 Tree-sitter 可用且语言为 ObjC/Swift 时执行
-   * @param {string} code 源代码
-   * @param {string} language 语言标识
-   * @returns {Array} violations
+   * @param code 源代码
+   * @param language 语言标识
+   * @returns violations
    */
   _runAstRuleChecks(code: string, language: string) {
     // AST 语言标准化 — 通过 LanguageService 判断是否为已知编程语言
@@ -1039,9 +1030,7 @@ export class GuardCheckEngine {
     return violations;
   }
 
-  /**
-   * 获取 AstAnalyzer 模块（静态 import，带可用性检测）
-   */
+  /** 获取 AstAnalyzer 模块（静态 import，带可用性检测） */
   _getAstAnalyzer() {
     return AstAnalyzerModule;
   }
@@ -1091,9 +1080,9 @@ export class GuardCheckEngine {
 
   /**
    * 文件审计 - 读取文件并检查
-   * @param {string} filePath 绝对路径
-   * @param {string} code 文件内容
-   * @param {object} options - {scope}
+   * @param filePath 绝对路径
+   * @param code 文件内容
+   * @param options {scope}
    */
   auditFile(filePath: string, code: string, options: { scope?: string } = {}): AuditFileResult {
     const language = detectLanguage(filePath);
@@ -1113,8 +1102,8 @@ export class GuardCheckEngine {
   /**
    * 批量文件审计
    * @param {Array<{path: string, content: string}>} files
-   * @param {object} options - {scope: 'file'|'target'|'project'}
-   * @returns {{files, summary, crossFileViolations}}
+   * @param options {scope: 'file'|'target'|'project'}
+   * @returns }
    */
   auditFiles(files: AuditFilesInput[], options: { scope?: string } = {}) {
     const results: AuditFileResult[] = [];
@@ -1147,25 +1136,19 @@ export class GuardCheckEngine {
     };
   }
 
-  /**
-   * 清除规则缓存
-   */
+  /** 清除规则缓存 */
   clearCache() {
     this._customRulesCache = null;
     this._cacheTime = 0;
     clearPatternCache();
   }
 
-  /**
-   * 获取内置规则列表
-   */
+  /** 获取内置规则列表 */
   getBuiltInRules() {
     return { ...this._builtInRules };
   }
 
-  /**
-   * 获取已注入的外部规则数量
-   */
+  /** 获取已注入的外部规则数量 */
   getExternalRuleCount() {
     return this._externalRules.size;
   }

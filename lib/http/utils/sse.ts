@@ -12,10 +12,8 @@ import type { Request, Response } from 'express';
 /**
  * 创建 SSE 会话 — 统一设置 headers、心跳、安全写入
  *
- * @param {import('express').Request} req
- * @param {import('express').Response} res
- * @param {'chat'|'refine'} scene 场景标识
- * @returns {{ send, end, error, isDisconnected, sessionId }}
+ * @param scene 场景标识
+ * @returns }
  */
 export function createSSESession(req: Request, res: Response, scene: string) {
   // ─── SSE Headers ───
@@ -75,7 +73,7 @@ export function createSSESession(req: Request, res: Response, scene: string) {
   return {
     /**
      * 发送一个 SSE 事件
-     * @param {object} event 必须包含 type 字段
+     * @param event 必须包含 type 字段
      */
     send(event: Record<string, unknown>) {
       if (disconnected || res.writableEnded) {
@@ -92,7 +90,7 @@ export function createSSESession(req: Request, res: Response, scene: string) {
 
     /**
      * 正常结束流 — 发送 stream:done 并关闭连接
-     * @param {object} [donePayload={}] - done 事件携带的额外数据
+     * @param [donePayload={}] done 事件携带的额外数据
      */
     end(donePayload: Record<string, unknown> = {}) {
       clearInterval(heartbeat);
@@ -104,11 +102,7 @@ export function createSSESession(req: Request, res: Response, scene: string) {
       res.end();
     },
 
-    /**
-     * 发送错误并结束流
-     * @param {string} message
-     * @param {string} [code]
-     */
+    /** 发送错误并结束流 */
     error(message: string, code: string) {
       clearInterval(heartbeat);
       if (disconnected || res.writableEnded) {

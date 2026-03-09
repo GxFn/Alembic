@@ -76,7 +76,7 @@ export class Snippet {
 
   /**
    * 是否已安装到指定 IDE (不传则检查任意)
-   * @param {string} [target] - 'xcode' | 'vscode'
+   * @param [target] 'xcode' | 'vscode'
    */
   isInstalled(target?: string): boolean {
     if (target) {
@@ -85,17 +85,12 @@ export class Snippet {
     return Object.values(this.targets).some((t: { installed?: boolean }) => t?.installed);
   }
 
-  /**
-   * 获取指定 IDE 的安装路径
-   * @param {string} target
-   */
+  /** 获取指定 IDE 的安装路径 */
   getInstalledPath(target: string): string | null {
     return this.targets[target]?.path || null;
   }
 
-  /**
-   * 验证 Snippet 完整性
-   */
+  /** 验证 Snippet 完整性 */
   isValid() {
     return (
       this.identifier &&
@@ -107,9 +102,7 @@ export class Snippet {
     );
   }
 
-  /**
-   * 转换为 JSON（前端 / API 返回格式）
-   */
+  /** 转换为 JSON（前端 / API 返回格式） */
   toJSON() {
     return {
       id: this.id,
@@ -132,9 +125,7 @@ export class Snippet {
     };
   }
 
-  /**
-   * 从 JSON 创建 Snippet
-   */
+  /** 从 JSON 创建 Snippet */
   static fromJSON(data: SnippetProps): Snippet {
     return new Snippet(data);
   }

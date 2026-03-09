@@ -117,16 +117,12 @@ export class ContextualEnricher {
     return enriched;
   }
 
-  /**
-   * 清除缓存
-   */
+  /** 清除缓存 */
   clearCache(): void {
     this.#cache.clear();
   }
 
-  /**
-   * 当前缓存大小
-   */
+  /** 当前缓存大小 */
   get cacheSize(): number {
     return this.#cache.size;
   }

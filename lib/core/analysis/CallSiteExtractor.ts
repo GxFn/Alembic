@@ -16,19 +16,6 @@
  *   - Go / Java / Kotlin (P1 — via lang plugin extractCallSites)
  */
 
-/**
- * @typedef {object} CallSite
- * @property {string} callee 被调用者名称 (尽可能 qualified)
- * @property {string} callerMethod 调用者所在函数
- * @property {string|null} callerClass 调用者所在类
- * @property {'function'|'method'|'constructor'|'super'|'static'} callType
- * @property {string|null} receiver 接收者对象
- * @property {string|null} receiverType 接收者推断类型
- * @property {number} argCount 参数数量
- * @property {number} line 行号
- * @property {boolean} isAwait 是否 await
- */
-
 interface WalkerContext {
   callSites: CallSiteInfo[];
   [key: string]: unknown;
@@ -53,9 +40,9 @@ export interface CallSiteInfo {
  * 使用 post-walk 策略，遍历已由 walker 收集的 methods/classes 来定位方法体，
  * 然后从方法体中递归提取 call_expression / new_expression。
  *
- * @param {TreeSitterNode} root - AST root 节点
- * @param {object} ctx - walker context (含 classes, methods, callSites, references 等)
- * @param {string} lang 语言标识
+ * @param root AST root 节点
+ * @param ctx walker context (含 classes, methods, callSites, references 等)
+ * @param lang 语言标识
  */
 export function extractCallSitesTS(root: TreeSitterNode, ctx: WalkerContext, lang: string) {
   // 收集所有 function/method body 节点与其上下文
@@ -71,8 +58,7 @@ export function extractCallSitesTS(root: TreeSitterNode, ctx: WalkerContext, lan
  * 遍历 AST 找到 function_declaration / method_definition / arrow_function 等，
  * 以及它们对应的 statement_block 和上下文信息。
  *
- * @param {TreeSitterNode} root
- * @returns {Array<{ body: TreeSitterNode, className: string|null, methodName: string }>}
+ * @returns >}
  */
 function _collectTSScopes(root: TreeSitterNode) {
   const scopes: { body: TreeSitterNode; className: string | null; methodName: string }[] = [];
@@ -180,10 +166,10 @@ type CallType = CallSiteInfo['callType'];
 /**
  * 从方法体中递归提取调用点
  *
- * @param {TreeSitterNode} bodyNode - statement_block 节点
- * @param {string|null} className 所在类名
- * @param {string} methodName 所在方法名
- * @param {object} ctx - walker context
+ * @param bodyNode statement_block 节点
+ * @param className 所在类名
+ * @param methodName 所在方法名
+ * @param ctx walker context
  */
 function _extractCallSitesFromBody(
   bodyNode: TreeSitterNode | null,
@@ -326,11 +312,10 @@ function _extractCallSitesFromBody(
 /**
  * 解析 TS/JS 的 call_expression 节点
  *
- * @param {TreeSitterNode} node - call_expression 节点
- * @param {string|null} className 所在类名
- * @param {string} methodName 所在方法名
- * @param {boolean} isAwaited 是否被 await
- * @returns {CallSite|null}
+ * @param node call_expression 节点
+ * @param className 所在类名
+ * @param methodName 所在方法名
+ * @param isAwaited 是否被 await
  */
 function _parseTSCallExpression(
   node: TreeSitterNode,
@@ -408,9 +393,9 @@ function _parseTSCallExpression(
 /**
  * 从 Python AST root 中提取所有调用点
  *
- * @param {TreeSitterNode} root - AST root 节点
- * @param {object} ctx - walker context
- * @param {string} lang 语言标识
+ * @param root AST root 节点
+ * @param ctx walker context
+ * @param lang 语言标识
  */
 export function extractCallSitesPython(root: TreeSitterNode, ctx: WalkerContext, lang: string) {
   const scopes = _collectPyScopes(root);
@@ -423,8 +408,7 @@ export function extractCallSitesPython(root: TreeSitterNode, ctx: WalkerContext,
 /**
  * 收集 Python 中所有函数/方法作用域
  *
- * @param {TreeSitterNode} root
- * @returns {Array<{ body: TreeSitterNode, className: string|null, methodName: string }>}
+ * @returns >}
  */
 function _collectPyScopes(root: TreeSitterNode) {
   const scopes: { body: TreeSitterNode; className: string | null; methodName: string }[] = [];
@@ -499,10 +483,7 @@ function _collectPyScopes(root: TreeSitterNode) {
 /**
  * 从 Python 方法体中递归提取调用点
  *
- * @param {TreeSitterNode} bodyNode - block 节点
- * @param {string|null} className
- * @param {string} methodName
- * @param {object} ctx
+ * @param bodyNode block 节点
  */
 function _extractPyCallSitesFromBody(
   bodyNode: TreeSitterNode | null,
@@ -563,11 +544,7 @@ function _extractPyCallSitesFromBody(
 /**
  * 解析 Python 的 call 节点
  *
- * @param {TreeSitterNode} node - call 节点
- * @param {string|null} className
- * @param {string} methodName
- * @param {boolean} isAwaited
- * @returns {CallSite|null}
+ * @param node call 节点
  */
 function _parsePyCallExpression(
   node: TreeSitterNode,
@@ -650,7 +627,6 @@ function _parsePyCallExpression(
 
 // ── 通用提取器注册 ─────────────────────────────────────────
 
-/** @type {Map<string, (root, ctx, lang) => void>} */
 const _extractors = new Map([
   ['typescript', extractCallSitesTS],
   ['tsx', extractCallSitesTS],
@@ -658,11 +634,7 @@ const _extractors = new Map([
   ['python', extractCallSitesPython],
 ]);
 
-/**
- * 获取特定语言的 CallSite 提取器
- * @param {string} lang
- * @returns {((root: TreeSitterNode, ctx: object, lang: string) => void)|null}
- */
+/** 获取特定语言的 CallSite 提取器 */
 export function getCallSiteExtractor(lang: string) {
   return _extractors.get(lang) || null;
 }
@@ -670,10 +642,6 @@ export function getCallSiteExtractor(lang: string) {
 /**
  * 默认的 CallSite 提取器 — 用于无专门提取器的语言
  * 使用通用的 call_expression 匹配策略
- *
- * @param {TreeSitterNode} root
- * @param {object} ctx
- * @param {string} lang
  */
 export function defaultExtractCallSites(root: TreeSitterNode, ctx: WalkerContext, lang: string) {
   // 对于未适配的语言，暂不提取（降级为空）
@@ -682,9 +650,7 @@ export function defaultExtractCallSites(root: TreeSitterNode, ctx: WalkerContext
 
 // ── 工具函数 ───────────────────────────────────────────────
 
-/**
- * 计算参数数量 (TS/JS)
- */
+/** 计算参数数量 (TS/JS) */
 function _countArgs(node: TreeSitterNode): number {
   const args = node.namedChildren.find((c: TreeSitterNode) => c.type === 'arguments');
   if (!args) {
@@ -693,9 +659,7 @@ function _countArgs(node: TreeSitterNode): number {
   return args.namedChildCount;
 }
 
-/**
- * 计算参数数量 (Python)
- */
+/** 计算参数数量 (Python) */
 function _countPyArgs(node: TreeSitterNode): number {
   const args = node.namedChildren.find((c: TreeSitterNode) => c.type === 'argument_list');
   if (!args) {
@@ -704,13 +668,7 @@ function _countPyArgs(node: TreeSitterNode): number {
   return args.namedChildCount;
 }
 
-/**
- * 判断是否为噪声调用（内置/console/日志等，不产生有意义的调用边）
- *
- * @param {string} callee
- * @param {string|null} receiver
- * @returns {boolean}
- */
+/** 判断是否为噪声调用（内置/console/日志等，不产生有意义的调用边） */
 function _isNoiseCall(callee: string, receiver: string | null): boolean {
   // 常见内置调用噪声
   const NOISE_RECEIVERS = new Set([

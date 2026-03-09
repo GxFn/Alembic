@@ -16,16 +16,16 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { AgentMessage } from '#agent/AgentMessage.js';
+import { ExplorationTracker } from '#agent/context/ExplorationTracker.js';
+import { EpisodicConsolidator } from '#agent/domain/EpisodicConsolidator.js';
+import { ANALYST_BUDGET } from '#agent/domain/insight-analyst.js';
+import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
+import { PersistentMemory } from '#agent/memory/PersistentMemory.js';
+import { SessionStore } from '#agent/memory/SessionStore.js';
+import { PRESETS } from '#agent/presets.js';
 import Logger from '#infra/logging/Logger.js';
-import { AgentMessage } from '#service/agent/AgentMessage.js';
-import { ExplorationTracker } from '#service/agent/context/ExplorationTracker.js';
-import { EpisodicConsolidator } from '#service/agent/domain/EpisodicConsolidator.js';
-import { ANALYST_BUDGET } from '#service/agent/domain/insight-analyst.js';
-import { MemoryCoordinator } from '#service/agent/memory/MemoryCoordinator.js';
-import { PersistentMemory } from '#service/agent/memory/PersistentMemory.js';
-import { SessionStore } from '#service/agent/memory/SessionStore.js';
-import { PRESETS } from '#service/agent/presets.js';
-import { BootstrapEventEmitter } from '#shared/BootstrapEventEmitter.js';
+import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import type { IncrementalPlan, McpContext } from '../../types.js';
 import type { BaseDimension } from '../base-dimensions.js';
 import { getDimensionFocusKeywords } from '../shared/dimension-sop.js';
@@ -227,7 +227,7 @@ interface WikiResult {
 /**
  * fillDimensionsV3 — v3.0 AI-First 维度填充管线
  *
- * @param {object} fillContext 由 bootstrapKnowledge 构建的上下文
+ * @param fillContext 由 bootstrapKnowledge 构建的上下文
  */
 export async function fillDimensionsV3(fillContext: FillContextV3) {
   const {
@@ -636,9 +636,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
   const globalSubmittedTitles = new Set<string>();
   const globalSubmittedPatterns = new Set<string>();
 
-  /**
-   * 执行单个维度: Analyst → Gate → Producer
-   */
+  /** 执行单个维度: Analyst → Gate → Producer */
   async function executeDimension(dimId: string) {
     // v5.0: 增量模式 — 跳过未受影响的维度 (使用历史 EpisodicMemory)
     if (incrementalSkippedDims.includes(dimId)) {
@@ -1700,8 +1698,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
 
 /**
  * 清除增量 Bootstrap 快照 — 供 bootstrapKnowledge 在手动冷启动时调用
- * @param {string} projectRoot
- * @param {object} ctx - { container, logger }
+ * @param ctx { container, logger }
  */
 async function clearSnapshotsImpl(
   projectRoot: string,

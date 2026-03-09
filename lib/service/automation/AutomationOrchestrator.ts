@@ -31,9 +31,9 @@ export class AutomationOrchestrator {
 
   /**
    * 执行自动化流程
-   * @param {string|object} trigger 原始触发
-   * @param {object} context 原始上下文
-   * @returns {Promise<{ success: boolean, result?: unknown, error?: string, resolvedTrigger: object }>}
+   * @param trigger 原始触发
+   * @param context 原始上下文
+   * @returns >}
    */
   async run(trigger: string | Record<string, unknown>, context: Record<string, unknown> = {}) {
     const resolvedTrigger = this.#triggerResolver.resolve(trigger);
@@ -59,9 +59,7 @@ export class AutomationOrchestrator {
     return { ...pipelineResult, resolvedTrigger };
   }
 
-  /**
-   * 注册动作处理器
-   */
+  /** 注册动作处理器 */
   registerAction(
     type: string,
     handler: (
@@ -72,16 +70,12 @@ export class AutomationOrchestrator {
     this.#pipeline.register(type, handler);
   }
 
-  /**
-   * 获取执行历史
-   */
+  /** 获取执行历史 */
   getHistory() {
     return [...this.#history];
   }
 
-  /**
-   * 获取管线
-   */
+  /** 获取管线 */
   getPipeline() {
     return this.#pipeline;
   }

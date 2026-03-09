@@ -27,10 +27,7 @@ export function detectPrimaryLanguage(langStats: Record<string, number>) {
 // 语言扩展注册表 — 按 lang ID 索引
 // ═══════════════════════════════════════════════════════════
 
-/**
- * JS/TS 共享扩展生成器（根据具体 lang 微调差异点）
- * @param {'javascript'|'typescript'} lang
- */
+/** JS/TS 共享扩展生成器（根据具体 lang 微调差异点） */
 function _buildJsTsEntry(lang: 'javascript' | 'typescript') {
   const isTs = lang === 'typescript';
   return {
@@ -103,7 +100,6 @@ function _buildJsTsEntry(lang: 'javascript' | 'typescript') {
   };
 }
 
-/** @type {Readonly<Record<string, object>>} */
 const LANG_REGISTRY = Object.freeze({
   // ── Swift ──────────────────────────────────────────────────
 
@@ -946,8 +942,8 @@ const LANG_REGISTRY = Object.freeze({
  * 根据主语言构建语言扩展字段
  * 包含：语言特有的分析关注点、典型模式、反模式、Guard 规则、Agent 注意事项
  *
- * @param {string} lang 规范化语言 ID (如 'swift', 'typescript')
- * @returns {{ language: string, customFields: object, extraDimensions: object[], typicalPatterns: string[], commonAntiPatterns: object[], suggestedGuardRules: object[], agentCautions: string[] }}
+ * @param lang 规范化语言 ID (如 'swift', 'typescript')
+ * @returns }
  */
 export function buildLanguageExtension(lang: string | null) {
   const base = {

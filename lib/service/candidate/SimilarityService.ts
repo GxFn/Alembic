@@ -29,9 +29,7 @@ interface SimilarityOpts {
   topK?: number;
 }
 
-/**
- * 计算候选与单个 Recipe 的综合相似度
- */
+/** 计算候选与单个 Recipe 的综合相似度 */
 function computeSimilarity(candidate: SimilarityCandidate, recipe: SimilarityRecipe) {
   const titleSim = jaccardSimilarity(
     tokenizeForSimilarity(candidate.title),
@@ -49,9 +47,7 @@ function computeSimilarity(candidate: SimilarityCandidate, recipe: SimilarityRec
   return titleSim * 0.3 + summarySim * 0.3 + codeSim * 0.4;
 }
 
-/**
- * 从磁盘读取所有 Recipe MD 文件并提取基本结构
- */
+/** 从磁盘读取所有 Recipe MD 文件并提取基本结构 */
 function loadRecipesFromDisk(recipesDir: string) {
   const recipes: SimilarityRecipe[] = [];
   if (!fs.existsSync(recipesDir)) {
@@ -91,10 +87,10 @@ function loadRecipesFromDisk(recipesDir: string) {
 
 /**
  * 在项目知识库中查找与候选相似的 Recipe
- * @param {string} projectRoot 项目根目录
- * @param {object} candidate - { title, summary, usageGuide, code }
- * @param {object} [opts] - { threshold: 0.7, topK: 5 }
- * @returns {Array<{file, title, similarity}>}
+ * @param projectRoot 项目根目录
+ * @param candidate { title, summary, usageGuide, code }
+ * @param [opts] { threshold: 0.7, topK: 5 }
+ * @returns >}
  */
 export function findSimilarRecipes(
   projectRoot: string,

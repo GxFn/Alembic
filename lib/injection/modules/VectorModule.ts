@@ -7,8 +7,6 @@
  *
  * 依赖 KnowledgeModule 先注册: vectorStore, indexingPipeline, hybridRetriever
  * 依赖 InfraModule 先注册: eventBus, database
- *
- * @param {import('../ServiceContainer.js').ServiceContainer} c
  */
 
 import { ContextualEnricher } from '../../service/vector/ContextualEnricher.js';

@@ -21,7 +21,6 @@ import { join } from 'node:path';
 // 1) 文件扩展名 → 规范化语言 ID
 // ═══════════════════════════════════════════════════════════
 
-/** @type {Readonly<Record<string, string>>} */
 const EXT_TO_LANG: Record<string, string> = Object.freeze({
   // Apple
   '.swift': 'swift',
@@ -78,7 +77,6 @@ const EXT_TO_LANG: Record<string, string> = Object.freeze({
 //    用于 langStats（bootstrap 按 extname('.').replace('.','') 做 key）
 // ═══════════════════════════════════════════════════════════
 
-/** @type {Readonly<Record<string, string>>} */
 const BARE_EXT_TO_LANG: Record<string, string> = Object.freeze({
   swift: 'swift',
   m: 'objectivec',
@@ -112,7 +110,6 @@ const BARE_EXT_TO_LANG: Record<string, string> = Object.freeze({
 // 3) 语言 ID → 人类可读显示名
 // ═══════════════════════════════════════════════════════════
 
-/** @type {Readonly<Record<string, string>>} */
 const LANG_DISPLAY_NAMES: Record<string, string> = Object.freeze({
   swift: 'Swift',
   objectivec: 'Objective-C',
@@ -141,7 +138,6 @@ const LANG_DISPLAY_NAMES: Record<string, string> = Object.freeze({
 // 4) 已知可分析的编程语言集合
 // ═══════════════════════════════════════════════════════════
 
-/** @type {ReadonlySet<string>} */
 const KNOWN_PROGRAMMING_LANGS = Object.freeze(
   new Set([
     'swift',
@@ -165,7 +161,6 @@ const KNOWN_PROGRAMMING_LANGS = Object.freeze(
 // 5) 源代码扩展名（Guard / 文件收集时使用）
 // ═══════════════════════════════════════════════════════════
 
-/** @type {ReadonlySet<string>} */
 const SOURCE_CODE_EXTS = Object.freeze(
   new Set([
     '.m',
@@ -201,7 +196,6 @@ const SOURCE_CODE_EXTS = Object.freeze(
 // 5.5) 语言别名映射 — 将常见缩写/变体归一化为规范 ID
 // ═══════════════════════════════════════════════════════════
 
-/** @type {Readonly<Record<string, string>>} */
 const LANG_ALIASES: Record<string, string> = Object.freeze({
   // Objective-C variants
   objc: 'objectivec',
@@ -236,7 +230,6 @@ const LANG_ALIASES: Record<string, string> = Object.freeze({
 // 6) 生态系统/Discoverer ID → 对应编程语言 ID 数组
 // ═══════════════════════════════════════════════════════════
 
-/** @type {Readonly<Record<string, readonly string[]>>} */
 const ECO_TO_LANGS: Record<string, readonly string[]> = Object.freeze({
   spm: Object.freeze(['swift', 'objectivec']),
   node: Object.freeze(['javascript', 'typescript']),
@@ -254,10 +247,6 @@ const ECO_TO_LANGS: Record<string, readonly string[]> = Object.freeze({
 // 7) 构建系统标志文件 → 生态系统映射（项目级语言检测的核心数据）
 // ═══════════════════════════════════════════════════════════
 
-/**
- * @typedef {{ file: string, eco: string, buildTool: string }} BuildSystemMarker
- * @type {ReadonlyArray<BuildSystemMarker>}
- */
 const BUILD_SYSTEM_MARKERS = Object.freeze([
   // Apple / iOS
   { file: 'Package.swift', eco: 'spm', buildTool: 'SPM' },
@@ -323,8 +312,7 @@ export class LanguageService {
 
   /**
    * 从文件名（或路径）推断规范化语言 ID
-   * @param {string} filename
-   * @returns {string} 语言 ID，如 'swift', 'typescript', 'python', 'unknown'
+   * @returns 语言 ID，如 'swift', 'typescript', 'python', 'unknown'
    */
   static inferLang(filename: string) {
     if (!filename || typeof filename !== 'string') {
@@ -340,8 +328,7 @@ export class LanguageService {
 
   /**
    * 从文件扩展名（带 dot）推断语言
-   * @param {string} ext 如 '.ts', '.py'
-   * @returns {string}
+   * @param ext 如 '.ts', '.py'
    */
   static langFromExt(ext: string) {
     if (!ext || typeof ext !== 'string') {
@@ -362,8 +349,8 @@ export class LanguageService {
    *   normalize('swift')    → 'swift' (已是规范 ID)
    *   normalize('unknown')  → 'unknown'
    *
-   * @param {string} langId 语言 ID（可能是别名）
-   * @returns {string} 规范化语言 ID
+   * @param langId 语言 ID（可能是别名）
+   * @returns 规范化语言 ID
    */
   static normalize(langId: string) {
     if (!langId || typeof langId !== 'string') {
@@ -381,9 +368,6 @@ export class LanguageService {
    *
    * Guard 内置规则使用 'objc' 而非 'objectivec'。
    * 其他语言 ID 不变。
-   *
-   * @param {string} langId
-   * @returns {string}
    */
   static toGuardLangId(langId: string) {
     const id = (langId || '').toLowerCase().replace(/[_-]/g, '');
@@ -392,19 +376,14 @@ export class LanguageService {
 
   // ─── 显示名 ────────────────────────────────────
 
-  /**
-   * 语言 ID → 人类可读名称
-   * @param {string} langId
-   * @returns {string}
-   */
+  /** 语言 ID → 人类可读名称 */
   static displayName(langId: string) {
     return LANG_DISPLAY_NAMES[langId] || langId;
   }
 
   /**
    * 文件扩展名（带 dot）→ 人类可读语言名
-   * @param {string} ext 如 '.swift', '.ts'
-   * @returns {string}
+   * @param ext 如 '.swift', '.ts'
    */
   static displayNameFromExt(ext: string) {
     const lang = EXT_TO_LANG[ext.toLowerCase()];
@@ -415,8 +394,8 @@ export class LanguageService {
 
   /**
    * 从文件扩展名统计推断主语言
-   * @param {Record<string, number>} langStats - key = 裸扩展名 (如 'ts', 'm', 'py')，value = 文件数
-   * @returns {string} 主语言 ID
+   * @param langStats key = 裸扩展名 (如 'ts', 'm', 'py')，value = 文件数
+   * @returns 主语言 ID
    */
   static detectPrimary(langStats: Record<string, number>) {
     if (!langStats || typeof langStats !== 'object') {
@@ -441,8 +420,7 @@ export class LanguageService {
 
   /**
    * 从文件扩展名统计返回所有检测到的编程语言（按文件数降序）
-   * @param {Record<string, number>} langStats
-   * @returns {Array<{ lang: string, count: number }>}
+   * @returns >}
    */
   static detectAll(langStats: Record<string, number>) {
     if (!langStats || typeof langStats !== 'object') {
@@ -467,10 +445,9 @@ export class LanguageService {
    *   - detectProfile 给出完整画像，适用于维度文案、AI prompt 等需要
    *     感知多语言的场景
    *
-   * @param {Record<string, number>} langStats - key=裸扩展名, value=文件数
-   * @param {object} [opts]
-   * @param {number} [opts.secondaryThreshold=0.1] 次要语言文件占比阈值（≥此比例才算次要语言）
-   * @returns {{ primary: string, secondary: string[], all: Array<{lang:string, count:number, ratio:number}>, totalFiles: number, isMultiLang: boolean }}
+   * @param langStats key=裸扩展名, value=文件数
+   * @param [opts.secondaryThreshold=0.1] 次要语言文件占比阈值（≥此比例才算次要语言）
+   * @returns >, totalFiles: number, isMultiLang: boolean }}
    */
   static detectProfile(
     langStats: Record<string, number>,
@@ -501,60 +478,43 @@ export class LanguageService {
 
   // ─── 查询方法 ─────────────────────────────────
 
-  /**
-   * 该语言 ID 是否是已知编程语言
-   * @param {string} langId
-   * @returns {boolean}
-   */
+  /** 该语言 ID 是否是已知编程语言 */
   static isKnownLang(langId: string) {
     return KNOWN_PROGRAMMING_LANGS.has(langId);
   }
 
   /**
    * 该扩展名是否为源代码文件
-   * @param {string} ext 带 dot，如 '.ts'
-   * @returns {boolean}
+   * @param ext 带 dot，如 '.ts'
    */
   static isSourceExt(ext: string) {
     return SOURCE_CODE_EXTS.has(ext.toLowerCase());
   }
 
-  /**
-   * 获取所有源代码扩展名（不可变）
-   * @returns {ReadonlySet<string>}
-   */
+  /** 获取所有源代码扩展名（不可变） */
   static get sourceExts() {
     return SOURCE_CODE_EXTS;
   }
 
-  /**
-   * 获取所有已知编程语言 ID（不可变）
-   * @returns {ReadonlySet<string>}
-   */
+  /** 获取所有已知编程语言 ID（不可变） */
   static get knownLangs() {
     return KNOWN_PROGRAMMING_LANGS;
   }
 
-  /**
-   * 获取完整的 ext→lang 映射（不可变）
-   * @returns {Readonly<Record<string, string>>}
-   */
+  /** 获取完整的 ext→lang 映射（不可变） */
   static get extToLangMap() {
     return EXT_TO_LANG;
   }
 
-  /**
-   * 获取完整的 bareExt→lang 映射（不可变）
-   * @returns {Readonly<Record<string, string>>}
-   */
+  /** 获取完整的 bareExt→lang 映射（不可变） */
   static get bareExtToLangMap() {
     return BARE_EXT_TO_LANG;
   }
 
   /**
    * 根据语言 ID 返回主扩展名（带 dot）
-   * @param {string} langId 如 'go', 'swift', 'python'
-   * @returns {string|null} 如 '.go', '.swift', '.py'；未知返回 null
+   * @param langId 如 'go', 'swift', 'python'
+   * @returns 如 '.go', '.swift', '.py'；未知返回 null
    */
   static extForLang(langId: string) {
     if (!langId) {
@@ -571,42 +531,29 @@ export class LanguageService {
 
   // ─── 生态系统 / 项目级语言检测 ────────────────
 
-  /**
-   * 获取语言别名映射表（不可变）
-   * @returns {Readonly<Record<string, string>>}
-   */
+  /** 获取语言别名映射表（不可变） */
   static get langAliases() {
     return LANG_ALIASES;
   }
 
-  /**
-   * 获取 ECO_TO_LANGS 映射（不可变）
-   * @returns {Readonly<Record<string, readonly string[]>>}
-   */
+  /** 获取 ECO_TO_LANGS 映射（不可变） */
   static get ecoToLangs() {
     return ECO_TO_LANGS;
   }
 
-  /**
-   * 获取 BUILD_SYSTEM_MARKERS（不可变）
-   * @returns {ReadonlyArray<BuildSystemMarker>}
-   */
+  /** 获取 BUILD_SYSTEM_MARKERS（不可变） */
   static get buildSystemMarkers() {
     return BUILD_SYSTEM_MARKERS;
   }
 
-  /**
-   * 获取 SCAN_SKIP_DIRS（不可变）
-   * @returns {ReadonlySet<string>}
-   */
+  /** 获取 SCAN_SKIP_DIRS（不可变） */
   static get scanSkipDirs() {
     return SCAN_SKIP_DIRS;
   }
 
   /**
    * 根据生态系统/Discoverer ID 获取对应的语言 ID 数组
-   * @param {string} ecoId 如 'spm', 'node', 'rust', 'dart'
-   * @returns {readonly string[]}
+   * @param ecoId 如 'spm', 'node', 'rust', 'dart'
    */
   static langsForEco(ecoId: string) {
     return ECO_TO_LANGS[ecoId] || [];
@@ -615,8 +562,8 @@ export class LanguageService {
   /**
    * 检测构建系统标志文件 — 纯数据匹配，不访问文件系统
    *
-   * @param {string[]} entryNames 目录内文件/目录名列表
-   * @returns {Array<{ eco: string, buildTool: string }>}
+   * @param entryNames 目录内文件/目录名列表
+   * @returns >}
    */
   static matchBuildMarkers(entryNames: string[]) {
     if (!Array.isArray(entryNames) || entryNames.length === 0) {
@@ -649,11 +596,10 @@ export class LanguageService {
    *   1. 若传入 discovererIds（来自 ModuleService），直接映射为语言
    *   2. 否则扫描项目目录的构建系统标记文件（支持 monorepo 多层扫描）
    *
-   * @param {string} projectRoot 项目根目录绝对路径
-   * @param {object} [opts]
-   * @param {string[]} [opts.discovererIds] - ModuleService 检测到的生态 ID
-   * @param {number}   [opts.maxDepth=2]    最大扫描深度：0=仅根目录，1=+子目录，2=+孙目录
-   * @returns {string[]} 规范化语言 ID 数组（如 ['rust', 'dart']）
+   * @param projectRoot 项目根目录绝对路径
+   * @param [opts.discovererIds] ModuleService 检测到的生态 ID
+   * @param [opts.maxDepth=2] 最大扫描深度：0=仅根目录，1=+子目录，2=+孙目录
+   * @returns 规范化语言 ID 数组（如 ['rust', 'dart']）
    */
   static detectProjectLanguages(
     projectRoot: string,

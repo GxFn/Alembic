@@ -19,9 +19,7 @@ import { RESOURCES_DIR } from '../../shared/package-root.js';
 /** .wasm 文件存放目录 */
 const GRAMMARS_DIR = path.resolve(RESOURCES_DIR, 'grammars');
 
-/**
- * 语言 ID → .wasm 文件名映射
- */
+/** 语言 ID → .wasm 文件名映射 */
 const LANG_TO_WASM = {
   objectivec: 'tree-sitter-objc.wasm',
   swift: 'tree-sitter-swift.wasm',
@@ -36,9 +34,7 @@ const LANG_TO_WASM = {
   rust: 'tree-sitter-rust.wasm',
 };
 
-/**
- * 检查 .wasm 文件是否存在
- */
+/** 检查 .wasm 文件是否存在 */
 function isWasmAvailable(wasmFileName: any) {
   return fs.existsSync(path.join(GRAMMARS_DIR, wasmFileName));
 }
@@ -49,10 +45,9 @@ function isWasmAvailable(wasmFileName: any) {
  * 保持旧接口签名以兼容 bootstrap 等调用方。
  * WASM 模式下不会执行 npm install —— 文件随包分发。
  *
- * @param {string[]} detectedLanguages 检测到的语言列表
- * @param {object} [options]
- * @param {object} [options.logger] - Logger 实例（可选）
- * @returns {Promise<{installed: string[], skipped: string[], failed: string[], alreadyAvailable: string[]}>}
+ * @param detectedLanguages 检测到的语言列表
+ * @param [options.logger] Logger 实例（可选）
+ * @returns >}
  */
 export async function ensureGrammars(detectedLanguages: any, options: any = {}) {
   const { logger } = options;
@@ -110,8 +105,8 @@ export async function reloadPlugins() {
 /**
  * 从文件扩展名统计推断需要的语言列表
  *
- * @param {Record<string, number>} langStats - { swift: 120, m: 80, ts: 200 }
- * @returns {string[]} 需要的语言 ID 列表
+ * @param langStats { swift: 120, m: 80, ts: 200 }
+ * @returns 需要的语言 ID 列表
  */
 export function inferLanguagesFromStats(langStats: any) {
   const bareMap = LanguageService.bareExtToLangMap;

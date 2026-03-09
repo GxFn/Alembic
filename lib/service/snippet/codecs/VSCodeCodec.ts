@@ -41,9 +41,7 @@ export class VSCodeCodec extends SnippetCodec {
     return '.code-snippets';
   }
 
-  /**
-   * 单个 SnippetSpec → JSON 字符串
-   */
+  /** 单个 SnippetSpec → JSON 字符串 */
   generate(spec: SnippetSpec) {
     const entry = this.#specToEntry(spec);
     return JSON.stringify({ [spec.title || spec.identifier]: entry }, null, 2);
@@ -51,7 +49,7 @@ export class VSCodeCodec extends SnippetCodec {
 
   /**
    * VSCode: 所有 snippets 合并为单个 JSON bundle 文件
-   * @returns {string} JSON 字符串
+   * @returns JSON 字符串
    */
   generateBundle(specs: SnippetSpec[]) {
     const bundle: Record<string, Record<string, unknown>> = {};
@@ -62,9 +60,7 @@ export class VSCodeCodec extends SnippetCodec {
     return `${JSON.stringify(bundle, null, 2)}\n`;
   }
 
-  /**
-   * VSCode snippets 安装目录 = 项目级 .vscode/
-   */
+  /** VSCode snippets 安装目录 = 项目级 .vscode/ */
   getInstallDir(projectRoot: string) {
     return join(projectRoot, '.vscode');
   }
@@ -77,9 +73,7 @@ export class VSCodeCodec extends SnippetCodec {
     return BUNDLE_FILENAME;
   }
 
-  /**
-   * @private SnippetSpec → VSCode snippet entry
-   */
+  /** @private SnippetSpec → VSCode snippet entry */
   #specToEntry(spec: SnippetSpec) {
     const code = Array.isArray(spec.code) ? spec.code.join('\n') : spec.code || '';
     // 自动将 Xcode 占位符转为 VSCode 格式

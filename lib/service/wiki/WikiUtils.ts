@@ -16,23 +16,17 @@ const logger = Logger.getInstance();
 
 // ─── 工具函数 ────────────────────────────────────────────────
 
-/**
- * 文本 slug 化
- */
+/** 文本 slug 化 */
 export function slug(name: string) {
   return name.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
 }
 
-/**
- * Mermaid 安全 ID
- */
+/** Mermaid 安全 ID */
 export function mermaidId(name: string) {
   return name.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
-/**
- * 遍历目录（排除 build/Pods/DerivedData 等）
- */
+/** 遍历目录（排除 build/Pods/DerivedData 等） */
 export function walkDir(dir: string, callback: (filePath: string) => void, maxFiles = 500) {
   const excludeNames = new Set([
     'Pods',
@@ -292,8 +286,7 @@ export function inferModulePurpose(
 
 /**
  * 从 CodeEntityGraph 提取继承根节点
- * @param {object|null} codeEntityGraph
- * @returns {Array<{name: string, children: string[]}>}
+ * @returns >}
  */
 export function getInheritanceRoots(
   codeEntityGraph: {
@@ -334,10 +327,7 @@ export function getInheritanceRoots(
  * Layer 1: Title slug 碰撞 — 同名文件不同目录 → hash 相同则删除副本
  * Layer 2: Content hash    — 跨文件内容完全相同 → 仅保留第一个
  *
- * @param {Array} files
- * @param {string} wikiDir
- * @param {(phase: string, progress: number, message: string) => void} emit
- * @returns {{ removed: string[], kept: number }}
+ * @returns }
  */
 export function dedup(
   files: { path: string; hash: string }[],
@@ -431,8 +421,8 @@ export function dedup(
  *
  * 不同语言对"类"和"接口"有不同称谓，Wiki 文档应使用合适的措辞。
  *
- * @param {string} langId - LanguageService langId，如 'swift', 'python', 'go'
- * @returns {{ typeLabel: {zh: string, en: string}, interfaceLabel: {zh: string, en: string}, moduleMetric: {zh: string, en: string} }}
+ * @param langId LanguageService langId，如 'swift', 'python', 'go'
+ * @returns , interfaceLabel: {zh: string, en: string}, moduleMetric: {zh: string, en: string} }}
  */
 export function getLangTerms(langId: string) {
   const TERMS = {
@@ -514,7 +504,6 @@ export function getLangTerms(langId: string) {
  * 已知的构建系统标志文件 → 生态类型映射
  *
  * @deprecated 请使用 LanguageService.buildSystemMarkers。此处保留为只读引用以保持向后兼容。
- * @type {ReadonlyArray<{file: string, eco: string, buildTool: string}>}
  */
 export const BUILD_SYSTEM_MARKERS = LanguageService.buildSystemMarkers;
 
@@ -525,9 +514,9 @@ export const BUILD_SYSTEM_MARKERS = LanguageService.buildSystemMarkers;
  *   1. 先检查根目录的一级文件
  *   2. 如果根目录未找到，检查一级子目录（支持 monorepo 如 AppFlowy/frontend/...）
  *
- * @param {string[]} rootEntryNames 项目根目录一级文件/目录名列表
- * @param {string} [projectRoot] 可选的项目根路径，用于二级检测
- * @returns {Array<{eco: string, buildTool: string}>} 匹配到的构建系统
+ * @param rootEntryNames 项目根目录一级文件/目录名列表
+ * @param [projectRoot] 可选的项目根路径，用于二级检测
+ * @returns >} 匹配到的构建系统
  */
 export function detectBuildSystems(rootEntryNames: string[], projectRoot?: string) {
   // 委托给 LanguageService 做一级匹配
@@ -567,24 +556,6 @@ export function detectBuildSystems(rootEntryNames: string[], projectRoot?: strin
 }
 
 // ─── Folder Profile 分析 (AST 不可用时的降级策略) ─────────
-
-/**
- * @typedef {object} FolderProfile
- * @property {string}  name           文件夹名
- * @property {string}  relPath        相对于项目根的路径
- * @property {number}  fileCount      源文件数 (递归)
- * @property {number}  totalSize      总字节数
- * @property {number}  depth          距项目根的深度
- * @property {Record<string, number>} langBreakdown - {语言 → 文件数}
- * @property {string[]} keyFiles      重要文件 (入口、配置、大文件)
- * @property {string[]} fileNames     所有源文件 basename (排序)
- * @property {string|null} readme     文件夹内 README 内容摘要
- * @property {string|null} purpose    从命名推断的功能描述
- * @property {string[]} imports       通过 import/require regex 提取的外部依赖目标 (其他文件夹)
- * @property {string[]} entryPoints   检测到的入口文件 (index.*, main.*, __init__.py, mod.rs)
- * @property {string[]} namingPatterns 检测到的命名约定
- * @property {string[]} headerComments 从关键文件提取的首段注释
- */
 
 /** 入口文件名模式 */
 const ENTRY_POINT_NAMES = new Set([
@@ -639,12 +610,10 @@ const IMPORT_PATTERNS = [
  * 适用场景: AST 无法提取 target（类/函数/协议）的语言，
  * 通过文件夹结构、文件命名、轻量 import 分析来产出有意义的 wiki 内容。
  *
- * @param {object} projectInfo - WikiGenerator._scanProject() 的输出
- * @param {object} [options]
- * @param {number} [options.minFiles=3]      文件夹最少文件数阈值
- * @param {number} [options.maxFolders=20]   最多分析的文件夹数
- * @param {number} [options.sampleLines=40]  每个文件采样行数 (用于 import 提取)
- * @returns {FolderProfile[]}
+ * @param projectInfo WikiGenerator._scanProject() 的输出
+ * @param [options.minFiles=3] 文件夹最少文件数阈值
+ * @param [options.maxFolders=20] 最多分析的文件夹数
+ * @param [options.sampleLines=40] 每个文件采样行数 (用于 import 提取)
  */
 export function profileFolders(
   projectInfo: { root: string; sourceFiles?: string[]; [key: string]: unknown },
@@ -878,8 +847,7 @@ function _buildFolderProfile(
 /**
  * 从文件名列表检测命名约定
  * @private
- * @param {string[]} fileNames - basename 列表
- * @returns {string[]}
+ * @param fileNames basename 列表
  */
 function _detectNamingPatterns(fileNames: string[]) {
   const patterns: string[] = [];

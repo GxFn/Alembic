@@ -447,9 +447,7 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
   });
 }
 
-/**
- * 降级：从 knowledge_entries.relations 提取关系（不依赖 knowledge_edges 表）
- */
+/** 降级：从 knowledge_entries.relations 提取关系（不依赖 knowledge_edges 表） */
 async function _fallbackRelationsFromRecipe(
   ctx: McpContext,
   nodeId: string,
@@ -536,9 +534,7 @@ async function _fallbackRelationsFromRecipe(
   }
 }
 
-/**
- * 降级：从 knowledge_entries.relations 反查受影响的条目
- */
+/** 降级：从 knowledge_entries.relations 反查受影响的条目 */
 async function _fallbackImpactFromRecipe(ctx: McpContext, nodeId: string) {
   try {
     const knowledgeRepo = ctx.container.get('knowledgeRepository');
@@ -611,9 +607,7 @@ export async function graphPath(ctx: McpContext, args: GraphArgs) {
   return envelope({ success: true, data: result, meta: { tool: 'autosnippet_graph' } });
 }
 
-/**
- * 降级路径查找：只能发现 1-hop 直接关系
- */
+/** 降级路径查找：只能发现 1-hop 直接关系 */
 async function _fallbackPathFromRecipe(ctx: McpContext, fromId: string, toId: string) {
   try {
     const knowledgeService = ctx.container.get('knowledgeService');

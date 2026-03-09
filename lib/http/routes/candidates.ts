@@ -218,9 +218,8 @@ function extractBeforeFields(json: Record<string, unknown>) {
 
 /**
  * 构造直接润色提示词 —— 以用户 prompt 为主指令
- * @param {object} before - extractBeforeFields 的输出
- * @param {string} userPrompt 用户输入的润色指令
- * @returns {string}
+ * @param before extractBeforeFields 的输出
+ * @param userPrompt 用户输入的润色指令
  */
 function buildRefinePrompt(before: Record<string, unknown>, userPrompt: string) {
   return `你是一位知识库条目润色助手。你必须**严格按照用户指令**修改知识条目。
@@ -303,9 +302,7 @@ ${userPrompt}
 每个 key 都必须存在，key 名称必须与上述完全一致。`;
 }
 
-/**
- * 将 AI 返回的润色结果合并到 before 上生成 after，并构造 knowledgeService.update() 所需的 updateData
- */
+/** 将 AI 返回的润色结果合并到 before 上生成 after，并构造 knowledgeService.update() 所需的 updateData */
 function buildUpdateFromRefineResult(
   before: Record<string, unknown>,
   parsed: Record<string, unknown>

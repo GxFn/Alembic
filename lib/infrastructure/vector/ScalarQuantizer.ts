@@ -22,9 +22,7 @@ export class ScalarQuantizer {
   #ranges;
   #trained = false;
 
-  /**
-   * @param {number} dimension 向量维度
-   */
+  /** @param dimension 向量维度 */
   constructor(dimension: number) {
     this.#dimension = dimension;
     this.#mins = new Float32Array(dimension);
@@ -42,7 +40,7 @@ export class ScalarQuantizer {
 
   /**
    * 训练量化器 — 从一批向量中统计 per-dimension min/max
-   * @param {Array<Float32Array|number[]>} vectors 训练集 (建议 ≥ 100 条)
+   * @param vectors 训练集 (建议 ≥ 100 条)
    */
   train(vectors: Array<Float32Array | number[]>) {
     if (!vectors || vectors.length === 0) {
@@ -78,11 +76,7 @@ export class ScalarQuantizer {
     this.#trained = true;
   }
 
-  /**
-   * 量化单个向量
-   * @param {Float32Array|number[]} vector
-   * @returns {Uint8Array}
-   */
+  /** 量化单个向量 */
   encode(vector: Float32Array | number[]) {
     if (!this.#trained) {
       throw new Error('ScalarQuantizer not trained. Call train() first.');
@@ -103,20 +97,12 @@ export class ScalarQuantizer {
     return result;
   }
 
-  /**
-   * 批量量化
-   * @param {Array<Float32Array|number[]>} vectors
-   * @returns {Uint8Array[]}
-   */
+  /** 批量量化 */
   encodeBatch(vectors: Array<Float32Array | number[]>) {
     return vectors.map((v) => this.encode(v));
   }
 
-  /**
-   * 反量化 (用于精排 re-rank)
-   * @param {Uint8Array} quantized
-   * @returns {Float32Array}
-   */
+  /** 反量化 (用于精排 re-rank) */
   decode(quantized: Uint8Array) {
     if (!this.#trained) {
       throw new Error('ScalarQuantizer not trained.');
@@ -138,9 +124,7 @@ export class ScalarQuantizer {
    * 量化空间内的距离计算 (避免反量化, 整数运算)
    * 使用 L2 on quantized space 近似余弦距离
    *
-   * @param {Uint8Array} a
-   * @param {Uint8Array} b
-   * @returns {number} 距离值 (越小越相似)
+   * @returns 距离值 (越小越相似)
    */
   distance(a: Uint8Array, b: Uint8Array) {
     const dim = this.#dimension;
@@ -157,11 +141,7 @@ export class ScalarQuantizer {
    * 混合距离: 量化粗排 + 原始精排
    * 用于搜索时: 先用 SQ8 快速过滤, 再用 Float32 精确计算
    *
-   * @param {Uint8Array} quantizedA
-   * @param {Float32Array|number[]} originalA
-   * @param {Uint8Array} quantizedB
-   * @param {Float32Array|number[]} originalB
-   * @returns {{ coarse: number, fine: number }}
+   * @returns }
    */
   hybridDistance(
     quantizedA: Uint8Array,
@@ -175,12 +155,7 @@ export class ScalarQuantizer {
     };
   }
 
-  /**
-   * 余弦距离 (Float32 精确计算)
-   * @param {Float32Array|number[]} a
-   * @param {Float32Array|number[]} b
-   * @returns {number}
-   */
+  /** 余弦距离 (Float32 精确计算) */
   static #cosineDistanceFloat(a: Float32Array | number[], b: Float32Array | number[]) {
     if (!a || !b || a.length === 0) {
       return 1;
@@ -200,7 +175,7 @@ export class ScalarQuantizer {
 
   /**
    * 序列化量化器参数
-   * @returns {{ dimension: number, mins: number[], maxs: number[] }}
+   * @returns }
    */
   serialize() {
     return {
@@ -213,7 +188,6 @@ export class ScalarQuantizer {
   /**
    * 从序列化数据恢复量化器
    * @param {{ dimension: number, mins: number[], maxs: number[] }} data
-   * @returns {ScalarQuantizer}
    */
   static deserialize(data: { dimension: number; mins: number[]; maxs: number[] }) {
     const q = new ScalarQuantizer(data.dimension);

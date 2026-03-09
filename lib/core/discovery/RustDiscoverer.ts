@@ -166,9 +166,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
 
   // ── 内部实现 ──
 
-  /**
-   * 简易解析 Cargo.toml（无 TOML 解析器，使用正则）
-   */
+  /** 简易解析 Cargo.toml（无 TOML 解析器，使用正则） */
   #parseCargoToml(projectRoot: string) {
     const cargoPath = join(projectRoot, 'Cargo.toml');
     if (!existsSync(cargoPath)) {
@@ -196,9 +194,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 发现 Cargo workspace 成员
-   */
+  /** 发现 Cargo workspace 成员 */
   #discoverWorkspaceMembers(projectRoot: string) {
     const cargoPath = join(projectRoot, 'Cargo.toml');
     if (!existsSync(cargoPath)) {
@@ -280,9 +276,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 发现 examples/ 目录
-   */
+  /** 发现 examples/ 目录 */
   #discoverExamples(projectRoot: string, framework: string | null) {
     const examplesDir = join(projectRoot, 'examples');
     if (!existsSync(examplesDir)) {
@@ -321,9 +315,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 发现 benches/ 目录
-   */
+  /** 发现 benches/ 目录 */
   #discoverBenches(projectRoot: string) {
     const benchDir = join(projectRoot, 'benches');
     if (!existsSync(benchDir)) {
@@ -345,9 +337,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 检测 Rust Web/网络框架
-   */
+  /** 检测 Rust Web/网络框架 */
   #detectFramework(projectRoot: string) {
     const cargoPath = join(projectRoot, 'Cargo.toml');
     if (!existsSync(cargoPath)) {
@@ -397,9 +387,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
     return null;
   }
 
-  /**
-   * 解析 Cargo.toml 的 [dependencies] 到 depGraph
-   */
+  /** 解析 Cargo.toml 的 [dependencies] 到 depGraph */
   #parseDependencies(projectRoot: string) {
     const cargoPath = join(projectRoot, 'Cargo.toml');
     if (!existsSync(cargoPath)) {
@@ -459,9 +447,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
     }
   }
 
-  /**
-   * 发现内部模块（src/ 子目录）
-   */
+  /** 发现内部模块（src/ 子目录） */
   #discoverInternalModules(projectRoot: string) {
     const srcDir = join(projectRoot, 'src');
     if (!existsSync(srcDir)) {
@@ -504,9 +490,7 @@ export class RustDiscoverer extends ProjectDiscoverer {
     walk(srcDir, '', 0);
   }
 
-  /**
-   * 递归收集 .rs 文件
-   */
+  /** 递归收集 .rs 文件 */
   #collectRsFiles(dir: string, rootDir: string, files: DiscoveredFile[], depth = 0) {
     if (depth > 15) {
       return;

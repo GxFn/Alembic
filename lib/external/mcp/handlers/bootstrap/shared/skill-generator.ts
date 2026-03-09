@@ -66,9 +66,7 @@ function normalizeLine(line: string): string {
     .trim();
 }
 
-/**
- * 检测最长连续重复块长度 — AI 循环的核心特征
- */
+/** 检测最长连续重复块长度 — AI 循环的核心特征 */
 function maxConsecutiveDuplicates(lines: string[]): number {
   let max = 0;
   let current = 0;
@@ -85,9 +83,7 @@ function maxConsecutiveDuplicates(lines: string[]): number {
   return max;
 }
 
-/**
- * 去除连续重复行 — 将连续 N 行相同内容压缩为 1 行
- */
+/** 去除连续重复行 — 将连续 N 行相同内容压缩为 1 行 */
 function deduplicateConsecutive(text: string): string {
   const lines = text.split('\n');
   const result = [lines[0]];
@@ -111,8 +107,8 @@ function deduplicateConsecutive(text: string): string {
  *
  * 挽救机制: 当检测到重复时，先去除连续重复行，如果去重后文本 ≥ 100 字符则放行。
  *
- * @param {string} analysisText - Analyst 或外部 Agent 的分析文本
- * @returns {{ pass: boolean, reason: string|null, deduplicatedText?: string }}
+ * @param analysisText Analyst 或外部 Agent 的分析文本
+ * @returns }
  */
 function validateSkillQuality(analysisText: string): SkillQualityResult {
   // 1. 文本过短
@@ -189,12 +185,12 @@ function validateSkillQuality(analysisText: string): SkillQualityResult {
  *   ## Referenced Files (如果有)
  *   - `file1`
  *
- * @param {object} dim 维度定义 { id, label }
- * @param {string} analysisText 分析报告全文
- * @param {string[]} [referencedFiles=[]] 引用的文件路径列表
- * @param {string[]} [keyFindings=[]] 关键发现摘要
- * @param {string} [source='bootstrap'] 来源标签 (bootstrap-v3 / external-agent-bootstrap)
- * @returns {string} - Skill Markdown 内容
+ * @param dim 维度定义 { id, label }
+ * @param analysisText 分析报告全文
+ * @param [referencedFiles=[]] 引用的文件路径列表
+ * @param [keyFindings=[]] 关键发现摘要
+ * @param [source='bootstrap'] 来源标签 (bootstrap-v3 / external-agent-bootstrap)
+ * @returns Skill Markdown 内容
  */
 function buildSkillContent(
   dim: SkillDimensionDef,
@@ -246,13 +242,13 @@ function buildSkillContent(
  *
  * 执行流程: 质量门控 → 内容构建 → createSkill 调用
  *
- * @param {object} ctx - { container, logger }
- * @param {object} dim 维度定义 { id, label, skillWorthy, skillMeta }
- * @param {string} analysisText 分析报告全文
- * @param {string[]} [referencedFiles=[]] 引用的文件
- * @param {string[]} [keyFindings=[]] 关键发现
- * @param {string} [source='bootstrap'] 来源标签
- * @returns {Promise<{ success: boolean, skillName: string, error?: string }>}
+ * @param ctx { container, logger }
+ * @param dim 维度定义 { id, label, skillWorthy, skillMeta }
+ * @param analysisText 分析报告全文
+ * @param [referencedFiles=[]] 引用的文件
+ * @param [keyFindings=[]] 关键发现
+ * @param [source='bootstrap'] 来源标签
+ * @returns >}
  */
 export async function generateSkill(
   ctx: McpContext,

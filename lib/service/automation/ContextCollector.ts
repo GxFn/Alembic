@@ -8,8 +8,8 @@ import { LanguageService } from '../../shared/LanguageService.js';
 export class ContextCollector {
   /**
    * 收集上下文
-   * @param {object} rawContext 原始上下文
-   * @returns {object} 规范化的上下文
+   * @param rawContext 原始上下文
+   * @returns 规范化的上下文
    */
   collect(rawContext: Record<string, unknown> = {}) {
     return {
