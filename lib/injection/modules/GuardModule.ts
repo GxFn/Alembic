@@ -28,7 +28,7 @@ export function register(c: ServiceContainer) {
       /* not yet available */
     }
     return new GuardService(
-      ct.get('knowledgeRepository') as ConstructorParameters<typeof GuardService>[0],
+      ct.get('knowledgeRepository') as unknown as ConstructorParameters<typeof GuardService>[0],
       ct.get('auditLogger') as ConstructorParameters<typeof GuardService>[1],
       ct.get('gateway') as ConstructorParameters<typeof GuardService>[2],
       {

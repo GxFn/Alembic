@@ -58,7 +58,7 @@ export function register(c: ServiceContainer) {
 
   c.singleton('snippetFactory', (ct: ServiceContainer) => {
     const factory = new SnippetFactory(
-      ct.get('knowledgeRepository') as ConstructorParameters<typeof SnippetFactory>[0]
+      ct.get('knowledgeRepository') as unknown as ConstructorParameters<typeof SnippetFactory>[0]
     );
     factory.registerCodec(new XcodeCodec());
     factory.registerCodec(new VSCodeCodec());
@@ -107,7 +107,7 @@ export function register(c: ServiceContainer) {
         projectRoot: resolveProjectRoot(ct),
         database: ct.get('database'),
         logger: ct.logger,
-      } as ConstructorParameters<typeof CursorDeliveryPipeline>[0])
+      } as unknown as ConstructorParameters<typeof CursorDeliveryPipeline>[0])
   );
 
   // ═══ TaskGraph ═══
@@ -132,7 +132,7 @@ export function register(c: ServiceContainer) {
     'taskKnowledgeBridge',
     (ct: ServiceContainer) =>
       new TaskKnowledgeBridge(
-        ct.get('searchEngine') as ConstructorParameters<typeof TaskKnowledgeBridge>[0]
+        ct.get('searchEngine') as unknown as ConstructorParameters<typeof TaskKnowledgeBridge>[0]
       )
   );
   c.singleton(
@@ -142,7 +142,7 @@ export function register(c: ServiceContainer) {
         ct.get('taskRepository') as ConstructorParameters<typeof TaskGraphService>[0],
         ct.get('taskReadyEngine') as ConstructorParameters<typeof TaskGraphService>[1],
         ct.get('taskKnowledgeBridge') as ConstructorParameters<typeof TaskGraphService>[2],
-        ct.get('auditLogger') as ConstructorParameters<typeof TaskGraphService>[3],
+        ct.get('auditLogger') as unknown as ConstructorParameters<typeof TaskGraphService>[3],
         ct.get('taskIdGenerator') as ConstructorParameters<typeof TaskGraphService>[4]
       )
   );

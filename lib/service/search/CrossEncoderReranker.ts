@@ -16,7 +16,7 @@
  */
 
 import { jaccardSimilarity } from '../../shared/similarity.js';
-import { tokenize } from './InvertedIndex.js';
+import { tokenize } from './tokenizer.js';
 
 interface RerankCandidate {
   title?: string;

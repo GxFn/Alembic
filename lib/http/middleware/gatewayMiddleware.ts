@@ -43,7 +43,7 @@ export function gatewayMiddleware() {
       const gateway = container.get('gateway');
 
       // 优先使用 roleResolver 解析的角色，其次 header，最后兜底
-      const actor = req.resolvedRole || req.headers['x-user-id'] || 'anonymous';
+      const actor = req.resolvedRole || String(req.headers['x-user-id'] || '') || 'anonymous';
 
       const result = await gateway.execute({
         actor,
@@ -55,14 +55,14 @@ export function gatewayMiddleware() {
           _userAgent: req.headers['user-agent'] || '',
           _resolvedUser: req.resolvedUser || undefined,
         },
-        session: req.headers['x-session-id'],
+        session: req.headers['x-session-id'] as string | undefined,
       });
 
       if (!result.success) {
         throw new GatewayError(
-          result.error.message,
-          result.error.statusCode || 500,
-          result.error.code,
+          result.error?.message || 'Gateway error',
+          result.error?.statusCode || 500,
+          result.error?.code || '',
           result.requestId
         );
       }

@@ -42,8 +42,11 @@ router.get('/targets', async (req: Request, res: Response) => {
  */
 router.get('/dep-graph', async (req: Request, res: Response) => {
   const moduleService = await getModuleService();
-  const level = (req.query.level as string) || 'package';
-  const graph = await moduleService.getDependencyGraph({ level });
+  const level = String(req.query.level || 'package') as 'target' | 'package';
+  const _graphBase = await moduleService.getDependencyGraph({ level });
+  const graph = _graphBase as typeof _graphBase & {
+    packages?: Record<string, Record<string, unknown>>;
+  };
 
   if (!graph || (!graph.nodes && !graph.packages)) {
     res.json({
@@ -91,15 +94,16 @@ router.get('/dep-graph', async (req: Request, res: Response) => {
         }
       }
     } else {
-      nodes = Object.keys(graph.packages).map((id) => ({
+      const pkgs = graph.packages!;
+      nodes = Object.keys(pkgs).map((id) => ({
         id,
         label: id,
         type: 'package',
-        packageDir: graph.packages[id]?.packageDir,
-        targets: graph.packages[id]?.targets,
+        packageDir: pkgs[id]?.packageDir,
+        targets: pkgs[id]?.targets,
       }));
       for (const [from, tos] of Object.entries(graph.edges || {})) {
-        for (const to of (tos as string[]) || []) {
+        for (const to of (tos as unknown as string[]) || []) {
           edges.push({ from, to, source: 'base' });
         }
       }
@@ -133,7 +137,7 @@ router.post('/target-files', async (req: Request, res: Response) => {
   let resolvedTarget = target;
   if (!resolvedTarget && targetName) {
     const targets = await moduleService.listTargets();
-    resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
+    resolvedTarget = targets.find((t) => (t as Record<string, unknown>).name === targetName);
     if (!resolvedTarget) {
       res.status(404).json({
         success: false,
@@ -171,7 +175,7 @@ router.post('/scan', async (req: Request, res: Response) => {
   let resolvedTarget = target;
   if (!resolvedTarget && targetName) {
     const targets = await moduleService.listTargets();
-    resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
+    resolvedTarget = targets.find((t) => (t as Record<string, unknown>).name === targetName);
     if (!resolvedTarget) {
       res.status(404).json({
         success: false,
@@ -218,7 +222,7 @@ router.post('/scan/stream', async (req: Request, res: Response) => {
   let resolvedTarget = target;
   if (!resolvedTarget && targetName) {
     const targets = await moduleService.listTargets();
-    resolvedTarget = targets.find((t: { name: string }) => t.name === targetName);
+    resolvedTarget = targets.find((t) => (t as Record<string, unknown>).name === targetName);
     if (!resolvedTarget) {
       res.status(404).json({
         success: false,
@@ -255,8 +259,8 @@ router.post('/scan/stream', async (req: Request, res: Response) => {
         recipes: result.recipes || [],
         scannedFiles: result.scannedFiles || [],
         message: result.message || '',
-        recipeCount: (result.recipes || []).length,
-        fileCount: (result.scannedFiles || []).length,
+        recipeCount: ((result.recipes || []) as unknown[]).length,
+        fileCount: ((result.scannedFiles || []) as unknown[]).length,
       });
       session.end();
     } catch (err: unknown) {

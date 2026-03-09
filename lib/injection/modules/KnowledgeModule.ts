@@ -3,7 +3,7 @@
  *
  * 负责注册:
  *   - knowledgeService, knowledgeGraphService, codeEntityGraph, confidenceRouter
- *   - searchEngine, retrievalFunnel, vectorStore, indexingPipeline
+ *   - searchEngine, vectorStore, indexingPipeline
  *   - discovererRegistry, enhancementRegistry, languageService, dimensionCopy
  *   - constitution, aiProvider, projectGraph
  *
@@ -22,7 +22,6 @@ import { KnowledgeGraphService } from '../../service/knowledge/KnowledgeGraphSer
 import { KnowledgeService } from '../../service/knowledge/KnowledgeService.js';
 import { CrossEncoderReranker } from '../../service/search/CrossEncoderReranker.js';
 import { HybridRetriever } from '../../service/search/HybridRetriever.js';
-import { RetrievalFunnel } from '../../service/search/RetrievalFunnel.js';
 import { SearchEngine } from '../../service/search/SearchEngine.js';
 import { DimensionCopy } from '../../shared/DimensionCopyRegistry.js';
 import { LanguageService } from '../../shared/LanguageService.js';
@@ -62,14 +61,14 @@ export function register(c: ServiceContainer) {
     'knowledgeGraphService',
     (ct: ServiceContainer) =>
       new KnowledgeGraphService(
-        ct.get('database') as ConstructorParameters<typeof KnowledgeGraphService>[0]
+        ct.get('database') as unknown as ConstructorParameters<typeof KnowledgeGraphService>[0]
       )
   );
 
   c.singleton('codeEntityGraph', (ct: ServiceContainer) => {
     const projectRoot = resolveProjectRoot(ct);
     return new CodeEntityGraph(
-      ct.get('database') as ConstructorParameters<typeof CodeEntityGraph>[0],
+      ct.get('database') as unknown as ConstructorParameters<typeof CodeEntityGraph>[0],
       { projectRoot }
     );
   });
@@ -83,7 +82,7 @@ export function register(c: ServiceContainer) {
       const embedProvider = ct.singletons._embedProvider || aiProvider;
       const vectorService = ct.services.vectorService ? ct.get('vectorService') : null;
       return new SearchEngine(
-        ct.get('database') as ConstructorParameters<typeof SearchEngine>[0],
+        ct.get('database') as unknown as ConstructorParameters<typeof SearchEngine>[0],
         {
           aiProvider: embedProvider,
           vectorStore: ct.get('vectorStore'),
@@ -97,21 +96,6 @@ export function register(c: ServiceContainer) {
           >,
         } as unknown as ConstructorParameters<typeof SearchEngine>[1]
       );
-    },
-    { aiDependent: true }
-  );
-
-  c.singleton(
-    'retrievalFunnel',
-    (ct: ServiceContainer) => {
-      const aiProvider = ct.singletons.aiProvider || null;
-      const embedProvider = ct.singletons._embedProvider || aiProvider;
-      // vectorService 由 VectorModule 注册，此时可能尚未就绪，延迟获取
-      const vectorService = ct.services.vectorService ? ct.get('vectorService') : null;
-      return new RetrievalFunnel({
-        vectorService,
-        aiProvider: embedProvider,
-      } as ConstructorParameters<typeof RetrievalFunnel>[0]);
     },
     { aiDependent: true }
   );

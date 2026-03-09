@@ -375,7 +375,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
             moduleService,
             knowledgeService,
             options: { mode: 'bootstrap' },
-          });
+          } as unknown as ConstructorParameters<typeof WikiGenerator>[0]);
           const wikiResult = await wikiGen.generate();
           logger.info(
             `[DimensionComplete] Auto Wiki generation: ${(wikiResult as { totalPages?: number })?.totalPages || 0} pages`

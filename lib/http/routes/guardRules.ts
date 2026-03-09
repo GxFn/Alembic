@@ -60,7 +60,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   // 获取数据库中的 boundary-constraint 规则
   let result: { data?: Record<string, unknown>[]; pagination?: Record<string, unknown> };
   if (keyword) {
-    result = await guardService.searchRules(keyword, { page, pageSize });
+    result = (await guardService.searchRules(String(keyword), { page, pageSize })) as typeof result;
   } else {
     const filters: Record<string, unknown> = {};
     if (severity) {
@@ -75,7 +75,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     if (sourceRecipe) {
       filters.sourceRecipe = sourceRecipe;
     }
-    result = await guardService.listRules(filters, { page, pageSize });
+    result = (await guardService.listRules(filters, { page, pageSize })) as typeof result;
   }
 
   // 将 Recipe 实体映射为 Guard 规则扁平格式
@@ -160,7 +160,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const container = getServiceContainer();
   const recipeRepo = container.get('knowledgeRepository');
-  const rule = await recipeRepo.findById(id);
+  const rule = await recipeRepo.findById(String(id));
 
   if (!rule) {
     throw new NotFoundError('Guard rule not found', 'recipe', id as string);
@@ -274,7 +274,7 @@ router.patch('/:id/enable', async (req: Request, res: Response) => {
   const guardService = container.get('guardService');
   const context = getContext(req);
 
-  const rule = await guardService.enableRule(id, context);
+  const rule = await guardService.enableRule(String(id), context);
   res.json({ success: true, data: rule });
 });
 
@@ -290,7 +290,7 @@ router.patch('/:id/disable', async (req: Request, res: Response) => {
   const guardService = container.get('guardService');
   const context = getContext(req);
 
-  const rule = await guardService.disableRule(id, reason || '', context);
+  const rule = await guardService.disableRule(String(id), reason || '', context);
   res.json({ success: true, data: rule });
 });
 
@@ -304,7 +304,9 @@ router.post('/check', validate(CheckCodeBody), async (req: Request, res: Respons
   const container = getServiceContainer();
   const guardService = container.get('guardService');
 
-  const result = await guardService.checkCode(code, { language, ruleIds });
+  const result = await guardService.checkCode(code, { language, ruleIds } as unknown as Parameters<
+    typeof guardService.checkCode
+  >[1]);
   res.json({ success: true, data: result });
 });
 
@@ -322,7 +324,9 @@ router.post(
     const guardService = container.get('guardService');
     const context = getContext(req);
 
-    const importedRules = await guardService.importRulesFromRecipe(recipeId, rules, context);
+    const importedRules = (await (
+      guardService as unknown as Record<string, Function>
+    ).importRulesFromRecipe(recipeId, rules, context)) as unknown[];
     res.status(201).json({
       success: true,
       data: { importedRules, count: importedRules.length },
@@ -343,7 +347,7 @@ router.post(
 router.get('/compliance', async (req: Request, res: Response) => {
   const container = getServiceContainer();
   const reporter = container.get('complianceReporter');
-  const projectRoot = req.query.path || process.env.ASD_PROJECT_DIR || process.cwd();
+  const projectRoot = String(req.query.path || process.env.ASD_PROJECT_DIR || process.cwd());
 
   const report = await reporter.generate(projectRoot, {
     qualityGate: {

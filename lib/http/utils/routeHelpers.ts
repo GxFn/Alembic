@@ -13,8 +13,8 @@ import { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
  */
 export function getContext(req: Request) {
   return {
-    userId: req.headers['x-user-id'] || 'anonymous',
-    ip: req.ip,
+    userId: String(req.headers['x-user-id'] || 'anonymous'),
+    ip: req.ip || '',
     userAgent: req.headers['user-agent'] || '',
   };
 }

@@ -225,7 +225,11 @@ async function _getEngine(
     engine = container.get('guardCheckEngine');
   } catch {
     const database = container.get('database');
-    engine = new GuardCheckEngineCtor(database);
+    engine = new GuardCheckEngineCtor(
+      database as unknown as ConstructorParameters<
+        typeof import('../../service/guard/GuardCheckEngine.js').GuardCheckEngine
+      >[0]
+    );
   }
 
   // 注入 Enhancement Pack Guard 规则

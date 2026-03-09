@@ -145,17 +145,17 @@ export async function handleGuard(
         watcher._notify?.(`${scopeLabel}审计通过 ✅ ${fileEntries.length} 个文件，无违规`);
       } else {
         watcher._notify?.(
-          `${scopeLabel}审计: ${summary.totalViolations} 个问题 (${summary.errors ?? 0} 错误, ${summary.warnings ?? 0} 警告)`
+          `${scopeLabel}审计: ${summary.totalViolations} 个问题 (${(summary as Record<string, unknown>).errors ?? 0} 错误, ${(summary as Record<string, unknown>).warnings ?? 0} 警告)`
         );
-        const filesWithIssues = report.files.filter(
+        const filesWithIssues = (report.files as unknown as Record<string, unknown>[]).filter(
           (f: Record<string, unknown>) => (f.summary as Record<string, number>).total > 0
         );
         for (const file of filesWithIssues.slice(0, 10)) {
-          const _rel = file.filePath.replace(`${scanRoot}/`, '');
-          const errors = file.violations.filter(
+          const _rel = String(file.filePath).replace(`${scanRoot}/`, '');
+          const errors = (file.violations as Record<string, unknown>[]).filter(
             (v: Record<string, unknown>) => v.severity === 'error'
           );
-          const warnings = file.violations.filter(
+          const warnings = (file.violations as Record<string, unknown>[]).filter(
             (v: Record<string, unknown>) => v.severity === 'warning'
           );
           for (const _v of errors.slice(0, 5)) {
@@ -224,7 +224,10 @@ function _auditSingleFile(
   scope = 'file'
 ) {
   const language = detectLanguage(fullPath);
-  const violations = engine.checkCode(code, language, { scope });
+  const violations = engine.checkCode(code, language, { scope }) as unknown as {
+    ruleId: string;
+    fixSuggestion?: string;
+  }[];
 
   if (violations.length === 0) {
     watcher._notify?.('审计通过 ✅ 无违规');

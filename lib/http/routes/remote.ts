@@ -85,7 +85,9 @@ let _repo: RemoteCommandRepository | null = null;
 function getRepo(): RemoteCommandRepository {
   if (!_repo) {
     const db = getDb();
-    _repo = new RemoteCommandRepository(db);
+    _repo = new RemoteCommandRepository(
+      db as unknown as ConstructorParameters<typeof RemoteCommandRepository>[0]
+    );
   }
   return _repo;
 }
@@ -384,7 +386,7 @@ function getLarkTransport() {
 
     _larkTransport = new LarkTransport({
       agentFactory,
-      aiProvider,
+      aiProvider: aiProvider ?? undefined,
       replyFn: replyLark,
       sendFn: sendLarkNotification,
       sendImageFn: sendLarkScreenshot,
@@ -395,7 +397,7 @@ function getLarkTransport() {
       ) => Promise<{ id: string }>,
       isUserAllowed,
       projectRoot: resolveProjectRoot(container),
-    });
+    } as unknown as ConstructorParameters<typeof LarkTransport>[0]);
 
     logger.info('[Remote/Lark] LarkTransport initialized');
     return _larkTransport;

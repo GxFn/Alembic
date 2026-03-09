@@ -69,9 +69,9 @@ router.post('/clear', async (req: Request, res: Response) => {
 
   let cleared = 0;
   if (all) {
-    cleared = await violationsStore.clearAll();
+    cleared = (await violationsStore.clearAll()) as unknown as number;
   } else {
-    cleared = await violationsStore.clear({ ruleId, file });
+    cleared = (await violationsStore.clear({ ruleId, file })) as unknown as number;
   }
 
   res.json({

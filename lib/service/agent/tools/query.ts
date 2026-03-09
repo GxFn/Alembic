@@ -41,19 +41,6 @@ interface SearchResultEntry {
   [key: string]: unknown;
 }
 
-/** Knowledge entry from repository */
-interface KnowledgeEntryLike {
-  id: string;
-  title: string;
-  content?: string;
-  code?: string;
-  description?: string;
-  language?: string;
-  category?: string;
-  trigger?: string;
-  [key: string]: unknown;
-}
-
 // ────────────────────────────────────────────────────────────
 // 3. search_recipes
 // ────────────────────────────────────────────────────────────
@@ -78,13 +65,26 @@ export const searchRecipes = {
     },
   },
   handler: async (params: SearchRecipesParams, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
     const { keyword, category, language, knowledgeType, limit = 10 } = params;
 
     if (keyword) {
-      return knowledgeService.search(keyword, { page: 1, pageSize: limit });
+      // 使用 SearchEngine（BM25 + SQL LIKE 降级），消除与 KnowledgeService.search 的双路径
+      try {
+        const searchEngine = ctx.container.get('searchEngine');
+        const result = await searchEngine.search(keyword, {
+          mode: 'keyword',
+          limit,
+        });
+        const items = result?.items || [];
+        return { items, total: items.length };
+      } catch {
+        // SearchEngine 不可用，降级到 KnowledgeService
+        const knowledgeService = ctx.container.get('knowledgeService');
+        return knowledgeService.search(keyword, { page: 1, pageSize: limit });
+      }
     }
 
+    const knowledgeService = ctx.container.get('knowledgeService');
     const filters: Record<string, string> = { lifecycle: 'active' };
     if (category) {
       filters.category = category;
@@ -117,13 +117,26 @@ export const searchCandidates = {
     },
   },
   handler: async (params: SearchCandidatesParams, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
     const { keyword, status, language, category, limit = 10 } = params;
 
     if (keyword) {
-      return knowledgeService.search(keyword, { page: 1, pageSize: limit });
+      // 使用 SearchEngine（BM25 + SQL LIKE 降级），消除与 KnowledgeService.search 的双路径
+      try {
+        const searchEngine = ctx.container.get('searchEngine');
+        const result = await searchEngine.search(keyword, {
+          mode: 'keyword',
+          limit,
+        });
+        const items = result?.items || [];
+        return { items, total: items.length };
+      } catch {
+        // SearchEngine 不可用，降级到 KnowledgeService
+        const knowledgeService = ctx.container.get('knowledgeService');
+        return knowledgeService.search(keyword, { page: 1, pageSize: limit });
+      }
     }
 
+    const knowledgeService = ctx.container.get('knowledgeService');
     // V3: status 映射为 lifecycle
     const filters: Record<string, string> = {};
     if (status) {
@@ -209,12 +222,17 @@ export const searchKnowledge = {
   handler: async (params: SearchKnowledgeParams, ctx: ToolHandlerContext) => {
     const { query, topK = 5 } = params;
 
-    // 优先使用 SearchEngine（有 BM25 + 向量搜索）
+    // 优先使用 SearchEngine（有 BM25 + 向量搜索 + Ranking Pipeline）
     try {
       const searchEngine = ctx.container.get('searchEngine');
-      const results = await searchEngine.search(query, { limit: topK });
-      if (results && results.length > 0) {
-        const enriched = results.slice(0, topK).map((r: SearchResultEntry, i: number) => ({
+      const results = await searchEngine.search(query, {
+        limit: topK,
+        mode: 'auto',
+        rank: true,
+      });
+      const items = results?.items || (Array.isArray(results) ? results : []);
+      if (items.length > 0) {
+        const enriched = items.slice(0, topK).map((r: SearchResultEntry, i: number) => ({
           ...r,
           reasoning: {
             whyRelevant:
@@ -236,32 +254,6 @@ export const searchKnowledge = {
       }
     } catch {
       /* SearchEngine not available */
-    }
-
-    // 降级: RetrievalFunnel + 全量候选
-    try {
-      const funnel = ctx.container.get('retrievalFunnel');
-      const knowledgeRepo = ctx.container.get('knowledgeRepository');
-      const allResult = await knowledgeRepo.findWithPagination({}, { page: 1, pageSize: 500 });
-      const allRecipes = allResult?.items || [];
-
-      // 规范化为 funnel 输入格式
-      const candidates = allRecipes.map((r: KnowledgeEntryLike) => ({
-        id: r.id,
-        title: r.title,
-        content: r.content || r.code || '',
-        description: r.description || '',
-        language: r.language,
-        category: r.category,
-        trigger: r.trigger || '',
-      }));
-
-      if (candidates.length > 0) {
-        const results = await funnel.execute(query, candidates, {});
-        return { source: 'retrievalFunnel', results: results.slice(0, topK) };
-      }
-    } catch {
-      /* RetrievalFunnel not available */
     }
 
     return {

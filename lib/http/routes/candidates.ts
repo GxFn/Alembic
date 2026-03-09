@@ -100,7 +100,7 @@ router.post('/enrich', validate(EnrichBody), async (req: Request, res: Response)
           (item.steps && (!cand.steps || (cand.steps as unknown[]).length === 0));
         let contentBase: Record<string, unknown> | null = null;
         if (needsContentMerge) {
-          const entry = await knowledgeService.get(cand.id);
+          const entry = await knowledgeService.get(cand.id as string);
           const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
           contentBase = { ...(json.content || {}) };
         }
@@ -138,7 +138,9 @@ router.post('/enrich', validate(EnrichBody), async (req: Request, res: Response)
         }
 
         if (changed) {
-          await knowledgeService.update(cand.id, updateData, { userId: 'dashboard-enrich' });
+          await knowledgeService.update(cand.id as string, updateData, {
+            userId: 'dashboard-enrich',
+          });
           enrichedCount++;
         }
         results.push({
@@ -474,7 +476,7 @@ router.post('/refine-preview', validate(RefinePreviewBody), async (req: Request,
     throw new ValidationError('Candidate not found');
   }
   const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
-  const before = extractBeforeFields(json);
+  const before = extractBeforeFields(json as Record<string, unknown>);
 
   const prompt = buildRefinePrompt(before, userPrompt.trim());
   const parsed = await aiProvider.chatWithStructuredOutput(prompt, { temperature: 0.3 });
@@ -486,7 +488,7 @@ router.post('/refine-preview', validate(RefinePreviewBody), async (req: Request,
     });
   }
 
-  const { after } = buildUpdateFromRefineResult(before, parsed);
+  const { after } = buildUpdateFromRefineResult(before, parsed as Record<string, unknown>);
 
   res.json({
     success: true,
@@ -526,7 +528,7 @@ router.post(
       throw new ValidationError('Candidate not found');
     }
     const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
-    const before = extractBeforeFields(json);
+    const before = extractBeforeFields(json as Record<string, unknown>);
 
     // ─── Session + EventSource 架构 ───
     const session = createStreamSession('refine');
@@ -736,7 +738,7 @@ router.post(
       throw new ValidationError('Candidate not found');
     }
     const json = typeof entry.toJSON === 'function' ? entry.toJSON() : entry;
-    const before = extractBeforeFields(json);
+    const before = extractBeforeFields(json as Record<string, unknown>);
 
     // 优先使用前端传回的 preview（与预览阶段完全一致），否则重新调 AI
     let parsed = preview || null;
@@ -769,7 +771,7 @@ router.post(
       delete finalUpdate._markdownChanged;
       delete finalUpdate._rationaleChanged;
 
-      const contentPatch = { ...(json.content || {}) };
+      const contentPatch: Record<string, unknown> = { ...(json.content || {}) };
       let contentChanged = false;
       if (updateData._patternChanged != null) {
         contentPatch.pattern = updateData._patternChanged;

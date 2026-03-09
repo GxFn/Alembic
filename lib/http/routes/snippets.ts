@@ -48,9 +48,9 @@ router.get('/:id', async (req: Request, res: Response) => {
   const container = getServiceContainer();
   const snippetFactory = container.get('snippetFactory');
 
-  const snippet = await snippetFactory.getSnippet(req.params.id);
+  const snippet = await snippetFactory.getSnippet(String(req.params.id));
   if (!snippet) {
-    throw new NotFoundError('Snippet (recipe)', req.params.id as string);
+    throw new NotFoundError('Snippet (recipe)', String(req.params.id));
   }
 
   res.json({ success: true, data: snippet });

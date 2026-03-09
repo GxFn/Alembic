@@ -1,23 +1,23 @@
 /**
  * MCP Handlers — 搜索类
- * 4 个搜索函数（search / contextSearch / keywordSearch / semanticSearch）
- * 已通过 consolidated.js 整合为统一 MCP 工具 autosnippet_search，
- * 由 mode 参数（auto / keyword / bm25 / semantic / context）路由到对应处理函数。
+ *
+ * v2: 合并原 4 个搜索函数（search / contextSearch / keywordSearch / semanticSearch）
+ * 为统一 search() 入口，通过 mode 参数路由。
+ * consolidated.ts 的 mode 路由直接指向本函数。
  *
  * 设计原则：
  * 1. 通过 container.get('searchEngine') 获取 singleton 实例（含 vectorStore + aiProvider）
  * 2. 统一 responseTime、byKind 分组、kind 过滤
- * 3. 投影原则：只交付 Agent 可操作的信号，去除内部排序信号
+ * 3. 投影使用 SearchTypes.slimSearchResult()（消除 3 处重复投影）
  */
 
+import {
+  groupByKind,
+  type SlimSearchResult,
+  slimSearchResult,
+} from '#service/search/SearchTypes.js';
 import { envelope } from '../envelope.js';
-import type {
-  ByKindGroup,
-  McpContext,
-  SearchArgs,
-  SearchResultItem,
-  SlimSearchItem,
-} from './types.js';
+import type { McpContext, SearchArgs, SearchResultItem } from './types.js';
 
 // ─── 工具函数 ────────────────────────────────────────────────
 
@@ -55,248 +55,162 @@ function filterByKind(items: SearchResultItem[], kind: string) {
   );
 }
 
+// ─── 统一搜索入口 ────────────────────────────────────────────
+
 /**
- * 搜索结果投影 — 去除内部排序信号，只保留 Agent 可操作字段。
+ * 统一搜索入口 — 支持 auto / keyword / bm25 / semantic / context 五种模式
  *
- * 移除: type(=recipe, 冗余), status(已 filter), updatedAt, createdAt, difficulty,
- *       tags, usageCount, authorityScore, qualityScore, headers, moduleName, content(巨大)
- * 新增: actionHint (whenClause → doClause 一句话摘要)
- */
-function _slimSearchItem(item: SearchResultItem): SlimSearchItem {
-  const doText = item.doClause || '';
-  const whenText = item.whenClause || '';
-  const actionHint =
-    doText || whenText
-      ? `${whenText ? `${whenText} → ` : ''}${doText}`.replace(/ → $/, '')
-      : undefined;
-  return {
-    id: item.id,
-    title: item.title,
-    trigger: item.trigger || '',
-    kind: item.kind || 'pattern',
-    language: item.language || '',
-    score: item.score,
-    description: (item.description || '').slice(0, 120),
-    actionHint,
-  };
-}
-
-/**
- * items → slim byKind 分组
- */
-function _slimGroupByKind(items: SlimSearchItem[]): ByKindGroup {
-  const byKind: ByKindGroup = { rule: [], pattern: [], fact: [] };
-  for (const it of items) {
-    const kind = it.kind || 'pattern';
-    const bucket = (byKind as unknown as Record<string, SlimSearchItem[]>)[kind] || byKind.pattern;
-    bucket.push(it);
-  }
-  return byKind;
-}
-
-// ─── 1. autosnippet_search — 统合搜索入口 ─────────────────────
-
-/**
- * 智能统合搜索 —— 支持 auto/keyword/bm25/semantic 四种模式
+ * 合并了原 search / contextSearch / keywordSearch / semanticSearch 4 个函数。
+ * mode 路由:
+ *   - auto (默认): BM25 + semantic 融合 + Ranking Pipeline
+ *   - keyword: SQL LIKE 精确匹配，适合已知函数名/类名
+ *   - bm25: BM25 (TF-IDF) 排序搜索
+ *   - semantic: 向量语义搜索（不可用时降级 BM25）
+ *   - context: BM25 + Ranking Pipeline + 会话上下文加成
  *
- * mode=auto（默认）时，同时执行 BM25 + semantic，融合去重取分数最高者。
- * 支持 kind 过滤（rule/pattern/fact）和 byKind 自动分组。
+ * 所有模式共享: kind 过滤 → slimSearchResult 投影 → byKind 分组
  */
 export async function search(ctx: McpContext, args: SearchArgs) {
   const t0 = Date.now();
   const engine = getSearchEngine(ctx) || (await getFallbackEngine(ctx));
   const query = args.query;
-  const limit = args.limit || 10;
-  const kind = args.kind || args.type || 'all';
   const mode = args.mode || 'auto';
+  const kind = args.kind || args.type || 'all';
 
-  // 统一调用 SearchEngine（auto 模式内置 BM25+semantic 融合去重 + Ranking Pipeline）
+  // ── Mode-specific 参数适配 ──
+
+  // context 模式: 默认 limit=5, 传递 sessionHistory
+  const isContext = mode === 'context';
+  const limit = args.limit ?? (isContext ? 5 : 10);
+
+  // keyword 模式不排序（默认），其他模式排序
+  const rank = mode !== 'keyword';
+
+  // context 模式额外传递会话上下文
+  const context = isContext
+    ? {
+        intent: 'search',
+        language: args.language,
+        sessionHistory: args.sessionHistory || [],
+      }
+    : undefined;
+
+  // kind 过滤时过采样 2x 以保证过滤后仍有足够结果
+  const recallLimit = kind !== 'all' ? limit * 2 : limit;
+
+  // semantic 模式也过采样 2x（向量搜索可能有噪声）
+  const engineLimit = mode === 'semantic' ? recallLimit * 2 : recallLimit;
+
+  // ── 统一调用 SearchEngine ──
   const result = await engine.search(query, {
-    mode,
-    limit: kind !== 'all' ? limit * 2 : limit,
-    rank: true,
+    mode: isContext ? 'bm25' : mode,
+    limit: engineLimit,
+    rank,
     groupByKind: true,
+    context,
   });
+
   let items = result?.items || [];
   const actualMode = result?.mode || mode;
 
-  // kind 过滤
+  // ── Kind 过滤 + 截断 ──
   items = filterByKind(items, kind);
   items = items.slice(0, limit);
 
-  // Agent 投影：去除内部排序信号
-  const slimItems = items.map(_slimSearchItem);
-  const byKind = _slimGroupByKind(slimItems);
+  // ── 统一投影: slimSearchResult() ──
+  const slimItems = items.map(slimSearchResult);
+  const byKindGroups = groupByKind(slimItems);
   const elapsed = Date.now() - t0;
 
-  return envelope({
-    success: true,
-    data: {
-      query,
-      mode: actualMode,
-      kind: kind === 'all' ? undefined : kind,
-      totalResults: slimItems.length,
-      items: slimItems,
-      byKind,
-      kindCounts: {
-        rule: byKind.rule.length,
-        pattern: byKind.pattern.length,
-        fact: byKind.fact.length,
-      },
-    },
-    meta: { tool: 'autosnippet_search', responseTimeMs: elapsed },
-  });
-}
+  // ── 构造工具名称 ──
+  const toolName = _toolName(mode);
 
-// ─── 2. autosnippet_context_search — 智能上下文搜索 ────────────
+  // ── semantic 降级提示 ──
+  const degraded = mode === 'semantic' && actualMode !== 'semantic';
 
-/**
- * 智能上下文搜索 —— SearchEngine 内置 Ranking Pipeline
- *
- * 设计原则：MCP 调用方是外部 AI Agent，意图识别由 Agent 自行完成。
- * 本工具聚焦数据检索：BM25 召回 + CoarseRanker + MultiSignalRanker + 上下文加成
- *
- * 特色：byKind 分组、个性化推荐、会话连续性
- */
-export async function contextSearch(ctx: McpContext, args: SearchArgs) {
-  const t0 = Date.now();
-  const engine = getSearchEngine(ctx) || (await getFallbackEngine(ctx));
-  const limit = args.limit ?? 5;
-
-  const result = await engine.search(args.query, {
-    mode: 'bm25',
-    limit,
-    rank: true,
-    groupByKind: true,
-    context: {
-      intent: 'search',
-      language: args.language,
-      sessionHistory: args.sessionHistory || [],
-    },
-  });
-
-  const items = (result?.items || []).slice(0, limit);
-  const slimItems = items.map(_slimSearchItem);
-  const byKind = _slimGroupByKind(slimItems);
-  const elapsed = Date.now() - t0;
+  // ── 统一响应格式 ──
   const source = result?.ranked ? 'search-engine+ranking' : 'search-engine';
 
   return envelope({
     success: true,
     data: {
-      items: slimItems,
-      byKind,
-      metadata: {
-        responseTimeMs: elapsed,
-        totalResults: slimItems.length,
-        kindCounts: {
-          rule: byKind.rule.length,
-          pattern: byKind.pattern.length,
-          fact: byKind.fact.length,
-        },
-      },
-    },
-    meta: { tool: 'autosnippet_context_search', source, responseTimeMs: elapsed },
-  });
-}
-
-// ─── 3. autosnippet_keyword_search — SQL LIKE 精确匹配 ─────────
-
-/**
- * 纯关键词精确匹配 —— SQL LIKE 查询，适合已知函数名/类名/变量名。
- * 与 search/semantic_search 的 BM25/向量搜索互补：
- * - keyword_search 对精确字符串（ObjC 方法名、类名前缀）最快最准
- * - search 对模糊查询更好（BM25 词频权重）
- * - semantic_search 对自然语言意图最好（向量相似度）
- */
-export async function keywordSearch(ctx: McpContext, args: SearchArgs) {
-  const t0 = Date.now();
-  const engine = getSearchEngine(ctx) || (await getFallbackEngine(ctx));
-  const query = args.query;
-  const limit = args.limit || 10;
-  const kind = args.kind || 'all';
-
-  const result = await engine.search(query, {
-    mode: 'keyword',
-    limit,
-    groupByKind: true,
-  });
-
-  let items = result?.items || [];
-  items = filterByKind(items, kind).slice(0, limit);
-  const slimItems = items.map(_slimSearchItem);
-  const byKind = _slimGroupByKind(slimItems);
-  const elapsed = Date.now() - t0;
-
-  return envelope({
-    success: true,
-    data: {
-      query,
-      mode: 'keyword',
-      kind: kind === 'all' ? undefined : kind,
-      totalResults: slimItems.length,
-      items: slimItems,
-      byKind,
-      kindCounts: {
-        rule: byKind.rule.length,
-        pattern: byKind.pattern.length,
-        fact: byKind.fact.length,
-      },
-    },
-    meta: { tool: 'autosnippet_keyword_search', responseTimeMs: elapsed },
-  });
-}
-
-// ─── 4. autosnippet_semantic_search — 向量语义搜索 ──────────────
-
-/**
- * 向量语义搜索 —— 基于 embedding 的相似度检索。
- * 通过 container singleton 的 SearchEngine（含 vectorStore + aiProvider）执行真正的向量搜索。
- * 如果向量引擎不可用会自动降级到 BM25，并在 actualMode 标注。
- *
- * kind 过滤 + byKind 分组一致性。
- */
-export async function semanticSearch(ctx: McpContext, args: SearchArgs) {
-  const t0 = Date.now();
-  const engine = getSearchEngine(ctx) || (await getFallbackEngine(ctx));
-  const query = args.query;
-  const limit = args.limit || 10;
-  const kind = args.kind || 'all';
-
-  const result = await engine.search(query, {
-    mode: 'semantic',
-    limit: limit * 2,
-    rank: true,
-    groupByKind: true,
-  });
-
-  let items = result?.items || [];
-  const actualMode = result?.mode || 'semantic';
-  items = filterByKind(items, kind).slice(0, limit);
-  const slimItems = items.map(_slimSearchItem);
-  const byKind = _slimGroupByKind(slimItems);
-  const elapsed = Date.now() - t0;
-
-  // 提示 AI Agent 当前实际模式
-  const degraded = actualMode !== 'semantic';
-
-  return envelope({
-    success: true,
-    data: {
       query,
       mode: actualMode,
       kind: kind === 'all' ? undefined : kind,
-      degraded,
-      degradedReason: degraded ? 'vectorStore/aiProvider 不可用，已降级到 BM25' : undefined,
       totalResults: slimItems.length,
       items: slimItems,
-      byKind,
+      byKind: byKindGroups,
       kindCounts: {
-        rule: byKind.rule.length,
-        pattern: byKind.pattern.length,
-        fact: byKind.fact.length,
+        rule: byKindGroups.rule.length,
+        pattern: byKindGroups.pattern.length,
+        fact: byKindGroups.fact.length,
       },
+      // semantic 模式专属: 降级提示
+      ...(mode === 'semantic'
+        ? {
+            degraded,
+            degradedReason: degraded ? 'vectorStore/aiProvider 不可用，已降级到 BM25' : undefined,
+          }
+        : {}),
+      // context 模式专属: metadata 包装（保持向后兼容）
+      ...(isContext
+        ? {
+            metadata: {
+              responseTimeMs: elapsed,
+              totalResults: slimItems.length,
+              kindCounts: {
+                rule: byKindGroups.rule.length,
+                pattern: byKindGroups.pattern.length,
+                fact: byKindGroups.fact.length,
+              },
+            },
+          }
+        : {}),
     },
-    meta: { tool: 'autosnippet_semantic_search', responseTimeMs: elapsed },
+    meta: { tool: toolName, source, responseTimeMs: elapsed },
   });
+}
+
+// ─── Backward-compatible aliases ────────────────────────────
+// consolidated.ts 按 mode 路由时直接调用这些别名
+
+/** contextSearch — mode='context' 的别名 */
+export function contextSearch(ctx: McpContext, args: SearchArgs) {
+  return search(ctx, { ...args, mode: 'context' });
+}
+
+/** keywordSearch — mode='keyword' 的别名 */
+export function keywordSearch(ctx: McpContext, args: SearchArgs) {
+  return search(ctx, { ...args, mode: 'keyword' });
+}
+
+/** semanticSearch — mode='semantic' 的别名 */
+export function semanticSearch(ctx: McpContext, args: SearchArgs) {
+  return search(ctx, { ...args, mode: 'semantic' });
+}
+
+// ─── 内部辅助 ────────────────────────────────────────────────
+
+/** 根据 mode 返回对应的 MCP 工具名称 */
+function _toolName(mode: string): string {
+  switch (mode) {
+    case 'context':
+      return 'autosnippet_context_search';
+    case 'keyword':
+      return 'autosnippet_keyword_search';
+    case 'semantic':
+      return 'autosnippet_semantic_search';
+    default:
+      return 'autosnippet_search';
+  }
+}
+
+// ─── Re-export slim projection for backward compatibility ────
+// (部分内部模块可能直接 import 了这些)
+
+/**
+ * @deprecated Use `slimSearchResult` from `SearchTypes.ts` instead
+ */
+export function _slimSearchItem(item: SearchResultItem): SlimSearchResult {
+  return slimSearchResult(item as Parameters<typeof slimSearchResult>[0]);
 }

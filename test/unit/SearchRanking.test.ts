@@ -6,16 +6,13 @@
  *  - MultiSignalRanker      (6信号、场景权重、向后兼容)
  *  - Individual Signals      (RelevanceSignal, PopularitySignal, ContextMatchSignal, etc.)
  *  - CrossEncoderReranker   (Jaccard fallback — 无 AI)
- *  - InvertedIndex          (OR / AND / CJK)
  *  - contextBoost           (共享上下文加成)
  *  - BM25Scorer             (增量 remove/update/compact)
- *  - RetrievalFunnel        (端到端 4 层漏斗)
  */
 
 import { CoarseRanker } from '../../lib/service/search/CoarseRanker.js';
 import { CrossEncoderReranker } from '../../lib/service/search/CrossEncoderReranker.js';
 import { contextBoost } from '../../lib/service/search/contextBoost.js';
-import { buildInvertedIndex, lookup, lookupAll } from '../../lib/service/search/InvertedIndex.js';
 import {
   AuthoritySignal,
   ContextMatchSignal,
@@ -25,7 +22,6 @@ import {
   RecencySignal,
   RelevanceSignal,
 } from '../../lib/service/search/MultiSignalRanker.js';
-import { RetrievalFunnel } from '../../lib/service/search/RetrievalFunnel.js';
 import { BM25Scorer } from '../../lib/service/search/SearchEngine.js';
 
 /* ════════════════════════════════════════════════════════════════════
@@ -412,51 +408,6 @@ describe('CrossEncoderReranker', () => {
 });
 
 /* ════════════════════════════════════════════════════════════════════
- *  InvertedIndex
- * ════════════════════════════════════════════════════════════════════ */
-
-describe('InvertedIndex', () => {
-  const docs = [
-    { id: '1', title: 'React Hooks', content: 'useState useEffect' },
-    { id: '2', title: 'Vue Composition', content: 'ref reactive watch' },
-    { id: '3', title: 'React Router', content: 'useNavigate useParams' },
-  ];
-
-  test('buildInvertedIndex creates index', () => {
-    const index = buildInvertedIndex(docs);
-    expect(index).toBeDefined();
-    expect(index.size).toBeGreaterThan(0);
-  });
-
-  test('lookup (OR semantics) returns matching doc indices', () => {
-    const index = buildInvertedIndex(docs);
-    const results = lookup(index, 'react');
-    // docs 0 and 2 contain 'react'
-    expect(results).toContain(0);
-    expect(results).toContain(2);
-    expect(results).not.toContain(1);
-  });
-
-  test('lookupAll (AND semantics) requires all tokens', () => {
-    const index = buildInvertedIndex(docs);
-    const results = lookupAll(index, 'react hooks');
-    // Only doc 0 has both 'react' and 'hooks'
-    expect(results).toContain(0);
-    expect(results).not.toContain(2); // has react but not hooks
-  });
-
-  test('returns empty for non-matching query', () => {
-    const index = buildInvertedIndex(docs);
-    expect(lookup(index, 'python flask')).toEqual([]);
-  });
-
-  test('handles empty documents', () => {
-    const index = buildInvertedIndex([]);
-    expect(lookup(index, 'test')).toEqual([]);
-  });
-});
-
-/* ════════════════════════════════════════════════════════════════════
  *  contextBoost (shared)
  * ════════════════════════════════════════════════════════════════════ */
 
@@ -602,98 +553,5 @@ describe('BM25Scorer incremental', () => {
     expect(scorer.totalDocs).toBe(0);
     expect(scorer.hasDocument('d1')).toBe(false);
     expect(scorer.documents).toHaveLength(0);
-  });
-});
-
-/* ════════════════════════════════════════════════════════════════════
- *  RetrievalFunnel — end-to-end (no AI provider → Jaccard fallback)
- * ════════════════════════════════════════════════════════════════════ */
-
-describe('RetrievalFunnel', () => {
-  const funnel = new RetrievalFunnel({
-    aiProvider: null,
-    logger: { warn: () => {}, info: () => {}, debug: () => {} },
-  });
-
-  const candidates = [
-    {
-      id: 'r1',
-      title: 'React Hooks Pattern',
-      content: 'useState useEffect custom hooks guide',
-      description: 'A comprehensive guide to React hooks',
-      language: 'javascript',
-      category: 'patterns',
-      trigger: 'useHooks',
-      tags: ['react', 'hooks'],
-      usageCount: 50,
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'r2',
-      title: 'Vue Composition API',
-      content: 'ref reactive computed watch',
-      description: 'Vue 3 composition guide',
-      language: 'javascript',
-      category: 'patterns',
-      trigger: 'vueCompose',
-      tags: ['vue'],
-      usageCount: 30,
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: 'r3',
-      title: 'Python Flask REST',
-      content: 'flask app route decorator',
-      description: 'Flask REST API tutorial',
-      language: 'python',
-      category: 'tutorial',
-      trigger: 'flaskRest',
-      tags: ['python', 'flask'],
-      usageCount: 10,
-      updatedAt: new Date().toISOString(),
-    },
-  ];
-
-  test('returns empty for empty input', async () => {
-    expect(await funnel.execute('test', [])).toEqual([]);
-    expect(await funnel.execute('test', null)).toEqual([]);
-  });
-
-  test('returns candidates as-is when query is empty', async () => {
-    const result = await funnel.execute('', candidates);
-    expect(result).toEqual(candidates);
-  });
-
-  test('ranks react-related query higher for react candidate', async () => {
-    const result = await funnel.execute('react hooks', candidates, {});
-    // r1 (React Hooks Pattern) should be ranked higher
-    const topIds = result.slice(0, 2).map((r) => r.id);
-    expect(topIds).toContain('r1');
-  });
-
-  test('applies context boost with session history', async () => {
-    const context = {
-      sessionHistory: [{ content: 'I want to learn React hooks and useState' }],
-      language: 'javascript',
-    };
-    const result = await funnel.execute('hooks', candidates, context);
-    expect(result[0]).toHaveProperty('contextScore');
-  });
-
-  test('all results have ranking scores', async () => {
-    const result = await funnel.execute('api', candidates, {});
-    for (const r of result) {
-      // Should have at least coarseScore or rankerScore from pipeline
-      const hasScore =
-        r.coarseScore !== undefined || r.rankerScore !== undefined || r.semanticScore !== undefined;
-      expect(hasScore).toBe(true);
-    }
-  });
-
-  test('keyword filter falls back to full candidates when no matches', async () => {
-    // Query with terms not in any candidate
-    const result = await funnel.execute('zzzznonexistent', candidates, {});
-    // Should still return results (fallback to all candidates)
-    expect(result.length).toBe(candidates.length);
   });
 });

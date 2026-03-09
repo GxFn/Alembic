@@ -250,7 +250,7 @@ function _isRelatedLanguage(a: string, b: string) {
 }
 
 /**
- * 向量相似度信号 — 利用 RetrievalFunnel Layer 0 附加的 vectorScore
+ * 向量相似度信号 — 利用 VectorService 附加的 vectorScore
  * 当向量服务不可用时, vectorScore 为 0, 信号返回 0（权重自然归零）
  */
 export class VectorSignal {

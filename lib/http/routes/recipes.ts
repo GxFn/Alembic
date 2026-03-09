@@ -82,10 +82,10 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
   // 快速检查：至少需要 2 条活跃 Recipe
   try {
     const knowledgeService = container.get('knowledgeService');
-    const { items = [], data = [] } = await knowledgeService.list(
+    const { items = [], data = [] } = (await knowledgeService.list(
       { lifecycle: 'active' },
       { page: 1, pageSize: 5 }
-    );
+    )) as unknown as Record<string, unknown[]>;
     const count = items.length || data.length;
     if (count < 2) {
       return void res.json({

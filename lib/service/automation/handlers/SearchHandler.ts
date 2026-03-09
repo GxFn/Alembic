@@ -22,7 +22,7 @@ export async function handleSearch(
     return;
   }
 
-  let results: unknown[] = [];
+  let searchResult: { items?: unknown[] } | unknown[] | null = null;
   try {
     const { ServiceContainer } = await import('../../../injection/ServiceContainer.js');
     const container = ServiceContainer.getInstance();
@@ -34,25 +34,22 @@ export async function handleSearch(
     // auto (BM25+semantic 融合 + Ranking Pipeline) → keyword (SQL LIKE) 降级链
     // Xcode/IDE 场景: 传递 generate intent，让排序器使用代码生成权重
     try {
-      results = await searchEngine.search(query, {
+      searchResult = await searchEngine.search(query, {
         limit: 10,
         mode: 'auto',
         rank: true,
         context: { intent: 'generate' },
       });
-      // auto 零结果 → keyword (SQL LIKE) 兆底
-      if (
-        !results ||
-        (Array.isArray(results)
-          ? results
-          : ((results as Record<string, unknown>).items as unknown[]) || []
-        ).length === 0
-      ) {
-        results = await searchEngine.search(query, { limit: 10, mode: 'keyword' });
+      // auto 零结果 → keyword (SQL LIKE) 兜底
+      const resultItems = Array.isArray(searchResult)
+        ? searchResult
+        : ((searchResult as Record<string, unknown>)?.items as unknown[]) || [];
+      if (resultItems.length === 0) {
+        searchResult = await searchEngine.search(query, { limit: 10, mode: 'keyword' });
       }
     } catch {
       try {
-        results = await searchEngine.search(query, { limit: 10, mode: 'keyword' });
+        searchResult = await searchEngine.search(query, { limit: 10, mode: 'keyword' });
       } catch {
         /* 全部失败 */
       }
@@ -63,7 +60,7 @@ export async function handleSearch(
     return;
   }
 
-  const items = normalizeSearchResults(results);
+  const items = normalizeSearchResults(searchResult);
 
   // Xcode 代码插入场景: 有实际代码的结果优先展示
   items.sort((a: Record<string, unknown>, b: Record<string, unknown>) => {

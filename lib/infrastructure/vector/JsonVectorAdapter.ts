@@ -171,7 +171,7 @@ export class JsonVectorAdapter extends VectorStore {
   }
 
   /**
-   * query() — SearchEngine / RetrievalFunnel 使用的向量搜索别名
+   * query() — SearchEngine 使用的向量搜索别名
    * 接口: query(vector, topK) → Array<{ id, similarity, metadata }>
    */
   async query(queryVector: number[], topK = 10) {

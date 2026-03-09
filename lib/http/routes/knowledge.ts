@@ -40,7 +40,11 @@ function requirePermission(action: string, resource: string) {
       const container = getServiceContainer();
       const permissionManager = container.get('permissionManager');
       if (permissionManager) {
-        const result = permissionManager.check(role, action, resource);
+        const result = (
+          permissionManager as unknown as {
+            check: (r: string, a: string, res: string) => { allowed: boolean; reason?: string };
+          }
+        ).check(role, action, resource);
         if (!result.allowed) {
           _logger.warn('Knowledge route permission denied', {
             role,
@@ -81,8 +85,13 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   const knowledgeService = container.get('knowledgeService');
 
   if (keyword) {
-    const result = await knowledgeService.search(keyword, { page, pageSize });
-    return void res.json({ success: true, data: sanitizePaginatedForAPI(result) });
+    const result = await knowledgeService.search(String(keyword), { page, pageSize });
+    return void res.json({
+      success: true,
+      data: sanitizePaginatedForAPI(
+        result as unknown as Parameters<typeof sanitizePaginatedForAPI>[0]
+      ),
+    });
   }
 
   const filters: Record<string, unknown> = {};
@@ -112,7 +121,12 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 
   const result = await knowledgeService.list(filters, { page, pageSize });
-  res.json({ success: true, data: sanitizePaginatedForAPI(result) });
+  res.json({
+    success: true,
+    data: sanitizePaginatedForAPI(
+      result as unknown as Parameters<typeof sanitizePaginatedForAPI>[0]
+    ),
+  });
 });
 
 /**
@@ -131,7 +145,7 @@ router.get('/stats', async (req: Request, res: Response) => {
  * 获取知识条目详情
  */
 router.get('/:id', async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = String(req.params.id);
   const container = getServiceContainer();
   const knowledgeService = container.get('knowledgeService');
   const entry = await knowledgeService.get(id);
@@ -172,7 +186,7 @@ router.patch(
   requirePermission('knowledge', 'update'),
   validate(UpdateKnowledgeBody),
   async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
     const context = getContext(req);
@@ -190,7 +204,7 @@ router.delete(
   '/:id',
   requirePermission('knowledge', 'delete'),
   async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
     const context = getContext(req);
@@ -210,7 +224,7 @@ router.patch(
   '/:id/publish',
   requirePermission('knowledge', 'publish'),
   async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
     const context = getContext(req);
@@ -229,7 +243,7 @@ router.patch(
   requirePermission('knowledge', 'deprecate'),
   validate(DeprecateKnowledgeBody),
   async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { reason } = req.body;
 
     const container = getServiceContainer();
@@ -249,7 +263,7 @@ router.patch(
   '/:id/reactivate',
   requirePermission('knowledge', 'update'),
   async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
     const context = getContext(req);
@@ -308,7 +322,7 @@ router.post(
  * 记录使用（adoption / application / guard_hit / view / success）
  */
 router.post('/:id/usage', validate(KnowledgeUsageBody), async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = String(req.params.id);
   const { type, feedback } = req.body;
   const context = getContext(req);
 
@@ -324,7 +338,7 @@ router.post('/:id/usage', validate(KnowledgeUsageBody), async (req: Request, res
  * 重新计算质量评分
  */
 router.patch('/:id/quality', async (req: Request, res: Response) => {
-  const { id } = req.params;
+  const id = String(req.params.id);
   const context = getContext(req);
 
   const container = getServiceContainer();

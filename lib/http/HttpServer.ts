@@ -200,10 +200,10 @@ export class HttpServer {
     // 角色解析中间件（双路径：token / 探针）
     try {
       const constitution = getServiceContainer().get('constitution');
-      const caps = constitution?.config?.capabilities?.git_write || {};
+      const caps = (constitution?.config?.capabilities?.git_write || {}) as Record<string, unknown>;
       this.capabilityProbe = new CapabilityProbe({
-        cacheTTL: caps.cache_ttl || 86400,
-        noRemote: caps.no_remote || 'allow',
+        cacheTTL: (caps.cache_ttl as number) || 86400,
+        noRemote: ((caps.no_remote as string) || 'allow') as 'allow' | 'deny',
       });
     } catch {
       this.capabilityProbe = new CapabilityProbe();

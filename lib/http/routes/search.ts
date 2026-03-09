@@ -63,17 +63,34 @@ router.get('/', validateQuery(SearchQuery), async (req: Request, res: Response):
     logger.warn('SearchEngine 搜索失败，降级到传统搜索', { mode, error: (err as Error).message });
   }
 
-  const results: Record<string, { items?: unknown[]; total?: number }> = {};
+  const results: Record<string, { data?: unknown[]; pagination?: Record<string, unknown> }> = {};
   const pagination = { page, pageSize: limit };
 
-  // 搜索知识条目（V3 统一模型）
-  if (type === 'all' || type === 'recipe' || type === 'solution') {
+  // SearchEngine 不可用时的降级路径（Dashboard 冷启动场景）
+  // recipes + candidates 共用 knowledgeService.search()，避免重复查询
+  if (type === 'all' || type === 'recipe' || type === 'solution' || type === 'candidate') {
     try {
       const knowledgeService = container.get('knowledgeService');
-      results.recipes = await knowledgeService.search(q, pagination);
+      const searchResult = await knowledgeService.search(q, pagination);
+      if (type === 'all') {
+        results.recipes = searchResult;
+        results.candidates = searchResult; // 同源数据，避免二次查询
+      } else if (type === 'candidate') {
+        results.candidates = searchResult;
+      } else {
+        results.recipes = searchResult;
+      }
     } catch (err: unknown) {
       logger.warn('Knowledge 搜索失败', { query: q, error: (err as Error).message });
-      results.recipes = { items: [], total: 0 };
+      if (type === 'all' || type === 'recipe' || type === 'solution') {
+        results.recipes = { data: [], pagination: { page, pageSize: limit, total: 0, pages: 0 } };
+      }
+      if (type === 'all' || type === 'candidate') {
+        results.candidates = {
+          data: [],
+          pagination: { page, pageSize: limit, total: 0, pages: 0 },
+        };
+      }
     }
   }
 
@@ -84,23 +101,13 @@ router.get('/', validateQuery(SearchQuery), async (req: Request, res: Response):
       results.rules = await guardService.searchRules(q, pagination);
     } catch (err: unknown) {
       logger.warn('Guard Rule 搜索失败', { query: q, error: (err as Error).message });
-      results.rules = { items: [], total: 0 };
-    }
-  }
-
-  // 搜索候选知识条目 (V3: lifecycle=draft/pending)
-  if (type === 'all' || type === 'candidate') {
-    try {
-      const knowledgeService = container.get('knowledgeService');
-      results.candidates = await knowledgeService.search(q, pagination);
-    } catch (err: unknown) {
-      logger.warn('Candidate 搜索失败', { query: q, error: (err as Error).message });
-      results.candidates = { items: [], total: 0 };
+      results.rules = { data: [], pagination: { page, pageSize: limit, total: 0, pages: 0 } };
     }
   }
 
   const totalResults = Object.values(results).reduce(
-    (sum, r) => sum + (r.total || r.items?.length || 0),
+    (sum, r) =>
+      sum + ((r.pagination as Record<string, number> | undefined)?.total || r.data?.length || 0),
     0
   );
 
@@ -181,7 +188,7 @@ router.get('/graph/all', async (req: Request, res: Response): Promise<void> => {
   }
 
   // 只返回 recipe 类型的关系边；module 依赖已由 /spm/dep-graph 提供
-  const nodeType = req.query.nodeType || 'recipe';
+  const nodeType = String(req.query.nodeType || 'recipe');
   const edges = graphService.getAllEdges(limit, nodeType === 'all' ? undefined : nodeType);
 
   // 收集节点 ID + 类型 → 按类型查标签
@@ -208,9 +215,12 @@ router.get('/graph/all', async (req: Request, res: Response): Promise<void> => {
 
       if ((primaryType === 'recipe' || primaryType === 'knowledge') && knowledgeRepo) {
         try {
-          const r = await knowledgeRepo.findById(id);
+          const r = (await knowledgeRepo.findById(id)) as {
+            title?: string;
+            category?: string;
+          } | null;
           if (r) {
-            nodeLabels[id] = r.title || r.name || id;
+            nodeLabels[id] = r.title || id;
             nodeCategories[id] = r.category || '';
             continue;
           }
@@ -240,7 +250,7 @@ router.get('/graph/stats', async (req: Request, res: Response): Promise<void> =>
     });
   }
 
-  const nodeType = req.query.nodeType || 'recipe';
+  const nodeType = String(req.query.nodeType || 'recipe');
   const stats = graphService.getStats(nodeType === 'all' ? undefined : nodeType);
   res.json({ success: true, data: stats });
 });
@@ -300,12 +310,12 @@ router.post(
       });
     }
 
-    // 降级: KnowledgeService SQL LIKE
+    // 降级: SearchEngine 完全不可用时，KnowledgeService SQL LIKE (Dashboard 冷启动)
     if (results.length === 0) {
       try {
         const knowledgeService = container.get('knowledgeService');
         const list = await knowledgeService.search(keyword, { page: 1, pageSize });
-        const items = list.data || list.items || [];
+        const items = list.data || [];
         results = items.map((r: KnowledgeItem) => ({
           name: `${r.title || r.id}.md`,
           content: r.content?.pattern || r.content?.markdown || '',

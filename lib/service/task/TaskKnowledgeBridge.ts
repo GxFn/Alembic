@@ -1,3 +1,4 @@
+import { type SlimSearchResult, slimSearchResult } from '#service/search/SearchTypes.js';
 import { ioLimit } from '#shared/concurrency.js';
 import type { Task } from '../../domain/task/Task.js';
 import Logger from '../../infrastructure/logging/Logger.js';
@@ -14,18 +15,8 @@ export interface KnowledgeEnrichOptions {
   language?: string;
 }
 
-/** 投影后的知识条目（返回给 Agent） */
-interface SlimKnowledgeItem {
-  id: unknown;
-  title: unknown;
-  kind: unknown;
-  trigger: unknown;
-  actionHint: string;
-  description: string;
-  score: number;
-  language: string;
-  knowledgeType: string;
-}
+/** 投影后的知识条目（返回给 Agent）— 使用统一投影类型 */
+type SlimKnowledgeItem = SlimSearchResult;
 
 /** 单条缓存记录 */
 interface CacheEntry {
@@ -386,21 +377,11 @@ export class TaskKnowledgeBridge {
   }
 
   /**
-   * P4: 增强投影 — 比旧版多返回 description / score / language / knowledgeType
+   * P4: 增强投影 — 使用统一 slimSearchResult() 投影函数
    * @private
    */
   _projectItem(item: Record<string, unknown>): SlimKnowledgeItem {
-    return {
-      id: item.id,
-      title: item.title,
-      kind: item.kind,
-      trigger: item.trigger,
-      actionHint: (item.actionHint as string) || (item.doClause as string) || '',
-      description: ((item.description as string) || '').slice(0, 120),
-      score: Math.round(((item.score as number) || 0) * 1000) / 1000,
-      language: (item.language as string) || '',
-      knowledgeType: (item.knowledgeType as string) || '',
-    };
+    return slimSearchResult(item as Parameters<typeof slimSearchResult>[0]);
   }
 
   /**

@@ -322,17 +322,17 @@ export class FileWatcher {
         await knowledgeService.create(
           {
             content: {
-              pattern: item.code || '',
+              pattern: String(item.code || ''),
             },
-            language: item.language || 'objc',
-            category: item.category || 'Utility',
+            language: String(item.language || 'objc'),
+            category: String(item.category || 'Utility'),
             source: source || 'watch',
-            title: item.title,
-            description: item.summary || item.description || '',
-            moduleName: item.moduleName || 'watch-create',
-            trigger: item.trigger || '',
-            headers: item.headers || [],
-            tags: item.tags || [],
+            title: String(item.title || ''),
+            description: String(item.summary || item.description || ''),
+            moduleName: String(item.moduleName || 'watch-create'),
+            trigger: String(item.trigger || ''),
+            headers: (item.headers || []) as unknown as string[],
+            tags: (item.tags || []) as unknown as string[],
           },
           context
         );

@@ -27,7 +27,11 @@ router.post('/install', async (req: Request, res: Response) => {
     { lifecycle: 'active' },
     { page: 1, pageSize: 9999 }
   );
-  const recipes = (result?.data || result?.items || [])
+  const recipes = (
+    (result?.data ??
+      (result as unknown as Record<string, unknown>)?.items ??
+      []) as unknown as Record<string, unknown>[]
+  )
     .map((r: Record<string, unknown>) => ({
       id: r.id,
       title: r.title,
@@ -36,7 +40,7 @@ router.post('/install', async (req: Request, res: Response) => {
       description: r.description || r.summaryCn || '',
       language: r.language || 'unknown',
     }))
-    .filter((r: Record<string, unknown>) => (r.code as string).trim().length > 0);
+    .filter((r: Record<string, unknown>) => String(r.code).trim().length > 0);
 
   const installResults: Record<string, unknown> = {};
 
@@ -44,7 +48,9 @@ router.post('/install', async (req: Request, res: Response) => {
   if ((target === 'all' || target === 'xcode') && process.platform === 'darwin') {
     try {
       const xcodeInstaller = container.get('snippetInstaller');
-      installResults.xcode = xcodeInstaller.installFromRecipes(recipes);
+      installResults.xcode = xcodeInstaller.installFromRecipes(
+        recipes as unknown as Parameters<typeof xcodeInstaller.installFromRecipes>[0]
+      );
     } catch (e: unknown) {
       installResults.xcode = { success: false, error: (e as Error).message };
     }
@@ -54,7 +60,9 @@ router.post('/install', async (req: Request, res: Response) => {
   if (target === 'all' || target === 'vscode') {
     try {
       const vscodeInstaller = container.get('vscodeSnippetInstaller');
-      installResults.vscode = vscodeInstaller.installFromRecipes(recipes);
+      installResults.vscode = vscodeInstaller.installFromRecipes(
+        recipes as unknown as Parameters<typeof vscodeInstaller.installFromRecipes>[0]
+      );
     } catch (e: unknown) {
       installResults.vscode = { success: false, error: (e as Error).message };
     }

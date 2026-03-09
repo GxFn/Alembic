@@ -56,7 +56,7 @@ function getSessionManager(container: ServiceContainer): BootstrapSessionManager
   try {
     const mgr = container.get('bootstrapSessionManager');
     if (mgr) {
-      return mgr;
+      return mgr as unknown as BootstrapSessionManager;
     }
   } catch {
     /* not registered yet */

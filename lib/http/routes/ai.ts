@@ -324,9 +324,9 @@ router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): 
         | undefined;
       tokenStore.record({
         source: 'user',
-        dimension: null,
-        provider: aiProvider?.name || null,
-        model: aiProvider?.model || null,
+        dimension: undefined,
+        provider: aiProvider?.name ?? undefined,
+        model: aiProvider?.model ?? undefined,
         inputTokens: result.tokenUsage.input || 0,
         outputTokens: result.tokenUsage.output || 0,
         durationMs: result.durationMs || 0,

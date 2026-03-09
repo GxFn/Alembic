@@ -1,7 +1,7 @@
 /**
  * contextBoost — 会话上下文感知排序加成
  *
- * 从 SearchEngine._contextBoost 和 RetrievalFunnel.#contextAwareRerank 统一提取。
+ * 从 SearchEngine._contextBoost 统一提取。
  *
  * 规则:
  *   - 会话历史关键词重叠 → +20% (最多 5 个词满分)
@@ -10,7 +10,7 @@
  * @module contextBoost
  */
 
-import { tokenize } from './InvertedIndex.js';
+import { tokenize } from './tokenizer.js';
 
 /**
  * @param {Array} items  - 已排序的候选列表（需有 rankerScore / coarseScore / score）

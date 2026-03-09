@@ -633,7 +633,7 @@ export class FileDeployer {
         ? container.get('cursorDeliveryPipeline')
         : null;
       if (pipeline) {
-        await (pipeline as { deliver: () => Promise<void> }).deliver();
+        await (pipeline as unknown as { deliver: () => Promise<void> }).deliver();
       }
     } catch {
       // ServiceContainer 未初始化 — 正常（upgrade 可能在无 DB 环境执行）

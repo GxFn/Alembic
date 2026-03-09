@@ -63,7 +63,11 @@ export async function handleAlink(alinkLine: string) {
         // 若精确匹配失败，尝试模糊搜索（保留 raw SQL — LIKE + ESCAPE）
         if (!recipeId) {
           try {
-            const rawDb2 = typeof db.getDb === 'function' ? db.getDb() : db;
+            const rawDb2 = (typeof db.getDb === 'function' ? db.getDb() : db) as unknown as {
+              prepare: (sql: string) => {
+                get: (...args: string[]) => Record<string, unknown> | undefined;
+              };
+            };
             const escaped = completionKey.replace(/[%_\\]/g, (ch: string) => `\\${ch}`);
             const row = rawDb2
               .prepare(

@@ -50,8 +50,11 @@ router.get('/dep-graph', async (req: Request, res: Response): Promise<void> => {
   const moduleService = container.get('moduleService');
 
   await moduleService.load();
-  const level = req.query.level || 'package'; // 'package' | 'target' | 'module'
-  const graph = await moduleService.getDependencyGraph({ level });
+  const level = String(req.query.level || 'package') as 'target' | 'package';
+  const _graphBase = await moduleService.getDependencyGraph({ level });
+  const graph = _graphBase as typeof _graphBase & {
+    packages?: Record<string, Record<string, unknown>>;
+  };
 
   if (!graph || (!graph.nodes && !graph.packages)) {
     return void res.json({
@@ -95,15 +98,16 @@ router.get('/dep-graph', async (req: Request, res: Response): Promise<void> => {
         }
       }
     } else {
-      nodes = Object.keys(graph.packages).map((id) => ({
+      const pkgs = graph.packages;
+      nodes = Object.keys(pkgs).map((id) => ({
         id,
         label: id,
         type: 'package',
-        packageDir: graph.packages[id]?.packageDir,
-        targets: graph.packages[id]?.targets,
+        packageDir: pkgs[id]?.packageDir,
+        targets: pkgs[id]?.targets,
       }));
       for (const [from, tos] of Object.entries(graph.edges || {})) {
-        for (const to of (tos as string[]) || []) {
+        for (const to of (tos as unknown as string[]) || []) {
           edges.push({ from, to, source: 'base' });
         }
       }
@@ -362,8 +366,8 @@ router.post(
           scannedFiles: result.scannedFiles || [],
           message: result.message || '',
           noAi: !!result.noAi,
-          recipeCount: (result.recipes || []).length,
-          fileCount: (result.scannedFiles || []).length,
+          recipeCount: ((result.recipes || []) as unknown[]).length,
+          fileCount: ((result.scannedFiles || []) as unknown[]).length,
         });
         session.end();
       } catch (err: unknown) {

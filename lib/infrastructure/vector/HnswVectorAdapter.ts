@@ -598,7 +598,7 @@ export class HnswVectorAdapter extends VectorStore {
   }
 
   /**
-   * query() — SearchEngine / RetrievalFunnel 使用的向量搜索别名
+   * query() — SearchEngine 使用的向量搜索别名
    */
   async query(queryVector: number[] | Float32Array, topK = 10) {
     const results = await this.searchVector(queryVector, { topK });

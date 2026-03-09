@@ -58,7 +58,6 @@ import type { QualityScorer } from '../service/quality/QualityScorer.js';
 import type { RecipeCandidateValidator } from '../service/recipe/RecipeCandidateValidator.js';
 import type { RecipeParser } from '../service/recipe/RecipeParser.js';
 import type { HybridRetriever } from '../service/search/HybridRetriever.js';
-import type { RetrievalFunnel } from '../service/search/RetrievalFunnel.js';
 import type SearchEngine from '../service/search/SearchEngine.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
 import type { SnippetFactory } from '../service/snippet/SnippetFactory.js';
@@ -118,7 +117,6 @@ export interface ServiceMap {
   knowledgeGraphService: KnowledgeGraphService;
   codeEntityGraph: CodeEntityGraph;
   searchEngine: SearchEngine;
-  retrievalFunnel: RetrievalFunnel;
   vectorStore: VectorStore;
   indexingPipeline: IndexingPipeline;
   hybridRetriever: HybridRetriever;

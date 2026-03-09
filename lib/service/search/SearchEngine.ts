@@ -16,7 +16,6 @@ import type {
   BM25SearchResult,
   DbRow,
   RankingContext,
-  RrfHit,
   SearchAiProvider,
   SearchCrossEncoder,
   SearchDb,
@@ -29,7 +28,6 @@ import type {
   SearchVectorStore,
   VectorHit,
 } from './SearchTypes.js';
-import { tokenize } from './tokenizer.js';
 
 // ── Re-exports for backward compatibility ──
 export { BM25Scorer } from './BM25Scorer.js';
@@ -49,8 +47,10 @@ export type {
   SearchResultItem,
   SearchVectorService,
   SearchVectorStore,
+  SlimSearchResult,
   VectorHit,
 } from './SearchTypes.js';
+export { groupByKind, slimSearchResult } from './SearchTypes.js';
 export { tokenize } from './tokenizer.js';
 
 /**
@@ -246,48 +246,13 @@ export class SearchEngine {
           }
         }
 
-        // 降级: 同时做 BM25 + semantic，min-max 归一化后加权融合
-        const [bm25Items, semResult] = await Promise.all([
-          Promise.resolve(getBm25()),
-          this._semanticSearch(query, type, recallLimit).catch(() => ({
-            items: [],
-            actualMode: 'bm25',
-          })),
-        ]);
-        const semItems = (semResult.items || []) as SearchResultItem[];
-        const semActuallyUsed = semResult.actualMode === 'semantic';
-        const merged = new Map();
-        for (const it of bm25Items!) {
-          merged.set(it.id, { ...it, _bm25: it.score || 0, _sem: 0 });
-        }
-        for (const it of semItems) {
-          const existing = merged.get(it.id);
-          if (existing) {
-            existing._sem = it.score || 0;
-          } else {
-            merged.set(it.id, { ...it, _bm25: 0, _sem: it.score || 0 });
-          }
-        }
-        // Min-max 归一化 + 加权融合（分数归一到 [0,1]，避免 BM25/semantic 尺度差异）
-        const allMerged = [...merged.values()];
-        const maxBm25 = allMerged.reduce((m, it) => Math.max(m, it._bm25), 0) || 1;
-        const maxSem = allMerged.reduce((m, it) => Math.max(m, it._sem), 0) || 1;
-        for (const it of allMerged) {
-          const bNorm = it._bm25 / maxBm25;
-          const sNorm = it._sem / maxSem;
-          it.score = semActuallyUsed
-            ? this._fusionBm25Weight * bNorm + this._fusionSemanticWeight * sNorm
-            : bNorm;
-        }
-        results = allMerged.sort((a, b) => b.score - a.score);
-        for (const it of results) {
-          delete it._bm25;
-          delete it._sem;
-        }
-        actualMode = semActuallyUsed ? 'auto(bm25+semantic)' : 'auto(bm25-only)';
+        // 降级: VectorService 不可用或 RRF 零结果 → 纯 BM25
+        // 旧版在此做 BM25+semantic min-max 融合，但当 VectorService 不可用时
+        // semantic 通常也会失败，最终退化为纯 BM25。简化为直接走 BM25。
+        results = getBm25();
+        actualMode = 'auto(bm25-only)';
         break;
       }
-      case 'ranking':
       case 'bm25':
         results = this._bm25Search(query, type, recallLimit);
         break;
@@ -534,7 +499,7 @@ export class SearchEngine {
         language: meta.language || '',
         category: meta.category || '',
         score: Math.round(r.score * 1000) / 1000,
-        // 排序信号字段（供 RetrievalFunnel / CoarseRanker / MultiSignalRanker 使用）
+        // 排序信号字段（供 CoarseRanker / MultiSignalRanker 使用）
         updatedAt: meta.updatedAt || null,
         createdAt: meta.createdAt || null,
         difficulty: meta.difficulty || 'intermediate',
