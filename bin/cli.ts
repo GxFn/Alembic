@@ -47,7 +47,11 @@ process.on('uncaughtException', (error) => {
 
 process.on('unhandledRejection', (reason) => {
   const msg = reason instanceof Error ? reason.message : String(reason);
+  const stack = reason instanceof Error ? reason.stack : undefined;
   process.stderr.write(`[asd] Unhandled Rejection: ${msg}\n`);
+  if (stack) {
+    process.stderr.write(`${stack}\n`);
+  }
   process.exit(1);
 });
 
@@ -919,6 +923,55 @@ program
         }
       } else if (process.env.ASD_DEBUG === '1') {
       }
+
+      if (opts.apiOnly) {
+        return;
+      }
+
+      // 2. 启动 Dashboard UI
+      const dashboardDir = DASHBOARD_DIR;
+      const distDir = join(dashboardDir, 'dist');
+      const hasPrebuilt = existsSync(join(distDir, 'index.html'));
+      const hasSrc = existsSync(join(dashboardDir, 'src'));
+
+      if (hasPrebuilt && !hasSrc) {
+        // ── 生产模式：npm 安装的包，在 API 服务器上直接托管预构建产物 ──
+        // 同端口同 origin → /api 路由自然可达，无跨域问题
+        httpServer.mountDashboard(distDir);
+
+        if (opts.browser) {
+          const open = (await import('open')).default;
+          open(`http://127.0.0.1:${port}/`);
+        }
+      } else {
+        // ── 开发模式：有源码，启动 Vite Dev Server ──
+        if (!existsSync(join(dashboardDir, 'node_modules'))) {
+          const install = spawn('npm', ['install'], { cwd: dashboardDir, stdio: 'inherit' });
+          await new Promise((resolve, reject) => {
+            install.on('close', (code) =>
+              code === 0 ? resolve(undefined) : reject(new Error(`npm install exited with ${code}`))
+            );
+          });
+        }
+        const viteArgs = ['--host'];
+        if (opts.browser) {
+          viteArgs.push('--open');
+        }
+        const vite = spawn('npx', ['vite', ...viteArgs], {
+          cwd: dashboardDir,
+          stdio: 'inherit',
+          env: { ...process.env, VITE_API_URL: `http://127.0.0.1:${port}` },
+        });
+
+        vite.on('error', (err) => {
+          cli.error(`❌ Vite failed to start: ${err.message}`);
+        });
+
+        process.on('SIGINT', () => {
+          vite.kill();
+          process.exit(0);
+        });
+      }
     } catch (err: any) {
       cli.error(`❌ API server failed to start: ${err.message}`);
       if (err.code === 'EADDRINUSE') {
@@ -927,55 +980,6 @@ program
         );
       }
       process.exit(1);
-    }
-
-    if (opts.apiOnly) {
-      return;
-    }
-
-    // 2. 启动 Dashboard UI
-    const dashboardDir = DASHBOARD_DIR;
-    const distDir = join(dashboardDir, 'dist');
-    const hasPrebuilt = existsSync(join(distDir, 'index.html'));
-    const hasSrc = existsSync(join(dashboardDir, 'src'));
-
-    if (hasPrebuilt && !hasSrc) {
-      // ── 生产模式：npm 安装的包，在 API 服务器上直接托管预构建产物 ──
-      // 同端口同 origin → /api 路由自然可达，无跨域问题
-      httpServer.mountDashboard(distDir);
-
-      if (opts.browser) {
-        const open = (await import('open')).default;
-        open(`http://127.0.0.1:${port}/`);
-      }
-    } else {
-      // ── 开发模式：有源码，启动 Vite Dev Server ──
-      if (!existsSync(join(dashboardDir, 'node_modules'))) {
-        const install = spawn('npm', ['install'], { cwd: dashboardDir, stdio: 'inherit' });
-        await new Promise((resolve, reject) => {
-          install.on('close', (code) =>
-            code === 0 ? resolve(undefined) : reject(new Error(`npm install exited with ${code}`))
-          );
-        });
-      }
-      const viteArgs = ['--host'];
-      if (opts.browser) {
-        viteArgs.push('--open');
-      }
-      const vite = spawn('npx', ['vite', ...viteArgs], {
-        cwd: dashboardDir,
-        stdio: 'inherit',
-        env: { ...process.env, VITE_API_URL: `http://127.0.0.1:${port}` },
-      });
-
-      vite.on('error', (err) => {
-        cli.error(`❌ Vite failed to start: ${err.message}`);
-      });
-
-      process.on('SIGINT', () => {
-        vite.kill();
-        process.exit(0);
-      });
     }
   });
 

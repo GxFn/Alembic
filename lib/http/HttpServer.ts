@@ -458,8 +458,29 @@ export class HttpServer {
    */
   mountDashboard(distDir: string) {
     // 从路由栈中移除最后的 404 catch-all 和根路径 handler
-    const layers: RouterLayer[] = (this.app as unknown as { _router: { stack: RouterLayer[] } })
-      ._router.stack;
+    // Express 5 使用 app.router（Express 4 为 app._router）
+    const router =
+      (
+        this.app as unknown as {
+          router?: { stack: RouterLayer[] };
+          _router?: { stack: RouterLayer[] };
+        }
+      ).router ?? (this.app as unknown as { _router?: { stack: RouterLayer[] } })._router;
+    if (!router) {
+      this.logger.warn(
+        'mountDashboard: Express router not available, mounting without route reordering'
+      );
+      this.app.use(express.static(distDir));
+      this.app.get('{*path}', (req: Request, res: Response, next: NextFunction) => {
+        if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+          return next();
+        }
+        res.sendFile(join(distDir, 'index.html'));
+      });
+      this.logger.info('Dashboard mounted (production mode, fallback)', { distDir });
+      return;
+    }
+    const layers: RouterLayer[] = router.stack;
     // 倒序弹出最后 2 层（404 + root handler）
     const removedLayers: RouterLayer[] = [];
     for (let i = layers.length - 1; i >= 0; i--) {
