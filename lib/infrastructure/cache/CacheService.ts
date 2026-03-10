@@ -11,7 +11,7 @@ export class CacheService {
   cache: Map<string, { value: unknown; expiresAt: number }>;
   cleanupInterval: ReturnType<typeof setInterval> | null;
   constructor() {
-    /** @type {Map<string, { value: unknown, expiresAt: number }>} */
+    /** >} */
     this.cache = new Map();
     this.cleanupInterval = null;
 

@@ -25,7 +25,7 @@ export const DIMENSION_DISPLAY_GROUP = {
 
 /**
  * 基于维度元数据 (dimensionMeta) 检查提交是否合法
- * @param {{ id: string, outputType: 'candidate'|'skill'|'dual', allowedKnowledgeTypes: string[] }} dimensionMeta
+ * @param dimensionMeta
  * @param params submit_knowledge 的参数
  * @returns | null} 不合法返回 rejected，合法返回 null
  */

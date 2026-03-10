@@ -25,12 +25,12 @@ const DEFAULT_MAX_BATCH = 50; // 单次 batch 最大事件数
 const DEFAULT_DEDUPE_MS = 60_000; // 60 秒去重窗口
 
 export class EventAggregator {
-  /** @type {Map<string, { events: Record<string, unknown>[], timer: ReturnType<typeof setTimeout> | null }>} */
+  /** >} */
   #buckets = new Map<
     string,
     { events: Record<string, unknown>[]; timer: ReturnType<typeof setTimeout> | null }
   >();
-  /** @type {Map<string, number>} 已处理事件的 hash → 最后处理时间 */
+  /** 已处理事件的 hash → 最后处理时间 */
   #dedupeMap = new Map<string, number>();
   #listeners = new Map<string, Array<(key: string, events: Record<string, unknown>[]) => void>>();
   #windowMs;

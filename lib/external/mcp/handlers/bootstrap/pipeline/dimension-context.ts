@@ -69,13 +69,13 @@ export class DimensionContext {
   submittedCandidates: CandidateSummary[];
   /** @param projectContext 项目基础信息 (全程不变) */
   constructor(projectContext: ProjectContext) {
-    /** @type {object} 项目基础信息 */
+    /** 项目基础信息 */
     this.projectContext = projectContext;
 
-    /** @type {Map<string, DimensionDigest>} 已完成维度的摘要 */
+    /** 已完成维度的摘要 */
     this.completedDimensions = new Map();
 
-    /** @type {Array<CandidateSummary>} 已提交候选的摘要 */
+    /** 已提交候选的摘要 */
     this.submittedCandidates = [];
   }
 

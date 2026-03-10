@@ -74,22 +74,22 @@ const PROJECT_ROOT_WRITABLE_FILES = ['.gitignore', '.env'];
 
 class PathGuard {
   targetPath: string | undefined;
-  /** @type {string|null} 项目根目录（绝对路径） */
+  /** 项目根目录（绝对路径） */
   #projectRoot: string | null = null;
 
-  /** @type {string|null} AutoSnippet 包自身根目录 */
+  /** AutoSnippet 包自身根目录 */
   #packageRoot: string | null = null;
 
-  /** @type {Set<string>} 额外允许的绝对路径前缀 */
+  /** 额外允许的绝对路径前缀 */
   #allowList = new Set<string>();
 
-  /** @type {string|null} 知识库目录名（如 'AutoSnippet'） */
+  /** 知识库目录名（如 'AutoSnippet'） */
   #knowledgeBaseDir: string | null = null;
 
-  /** @type {boolean} 是否已配置 */
+  /** 是否已配置 */
   #configured = false;
 
-  /** @type {boolean} projectRoot 是否是 AutoSnippet 自身的开发仓库 */
+  /** projectRoot 是否是 AutoSnippet 自身的开发仓库 */
   #isDevRepo = false;
 
   /**

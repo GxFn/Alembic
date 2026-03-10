@@ -51,7 +51,7 @@ export function sanitizeForAPI(entryOrJson: KnowledgeEntry | Record<string, unkn
 
 /**
  * 将分页结果中的 data 数组批量过滤系统标签
- * @param {{ data: Array, pagination: Object }} result
+ * @param result
  * @returns }
  */
 export function sanitizePaginatedForAPI(result: {

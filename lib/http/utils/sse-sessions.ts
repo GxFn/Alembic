@@ -36,7 +36,7 @@ export function createStreamSession(scene: string) {
   const session = {
     sessionId,
     scene,
-    /** @type {Array<object>} 事件缓冲区（供 EventSource 连接后回放） */
+    /** 事件缓冲区（供 EventSource 连接后回放） */
     buffer: [] as Record<string, unknown>[],
     /** 会话是否已结束 */
     completed: false,

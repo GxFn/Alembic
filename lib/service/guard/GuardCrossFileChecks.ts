@@ -42,7 +42,7 @@ export function normalizeFilePath(filePath: string) {
 
 /**
  * 跨文件检查 — 需要多文件上下文才能发现的问题
- * @param {Array<{path: string, content: string}>} files
+ * @param files
  * @param [options.disabledRules] 禁用的规则 ID 列表
  * @returns >}
  */

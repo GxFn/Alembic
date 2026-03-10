@@ -21,7 +21,7 @@ export class DependencyGraph {
 
   /**
    * 从 PackageSwiftParser 的解析结果构建图
-   * @param {{ targets: { name: string, dependencies: string[] }[] }} parsed
+   * @param parsed
    */
   buildFromParsed(parsed: { targets: { name: string; dependencies: string[] }[] }) {
     this.clear();

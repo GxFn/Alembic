@@ -1421,7 +1421,7 @@ program
     }
   });
 
-/** @private 递归复制目录（mirror 命令用） */
+/** 递归复制目录（mirror 命令用） */
 function _copyDirRecursive(src: any, dest: any) {
   mkdirSync(dest, { recursive: true });
   for (const entry of readdirSync(src, { withFileTypes: true })) {

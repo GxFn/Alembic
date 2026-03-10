@@ -118,7 +118,7 @@ const _pipelineLogger = Logger.getInstance();
 export class PipelineStrategy extends Strategy {
   #stages: PipelineStage[];
 
-  /** @type {number} 最大重试次数 (Gate 失败时全局兜底) */
+  /** 最大重试次数 (Gate 失败时全局兜底) */
   #maxRetries;
 
   constructor({

@@ -187,7 +187,7 @@ export class KnowledgeCompressor {
 
   /**
    * 将 Fact 压缩结果格式化为 Markdown 字符串
-   * @param {Array<{ title: string, summary: string }>} factLines
+   * @param factLines
    */
   formatFactLines(factLines: Array<{ title: string; summary: string }>) {
     if (factLines.length === 0) {

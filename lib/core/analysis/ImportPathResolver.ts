@@ -27,9 +27,9 @@ export class ImportPathResolver {
    */
   constructor(projectRoot: string, allFiles: string[]) {
     this.projectRoot = projectRoot;
-    /** @type {Map<string, string>} normalizedPath → actualFilePath */
+    /** normalizedPath → actualFilePath */
     this.fileIndex = new Map();
-    /** @type {Array<{prefix: string, targets: string[]}>} tsconfig paths 映射 */
+    /** >} tsconfig paths 映射 */
     this.pathAliases = [];
 
     // 构建文件索引
@@ -66,7 +66,6 @@ export class ImportPathResolver {
 
   /**
    * 从 tsconfig.json 加载 paths alias 配置
-   * @private
    */
   _loadTsconfigPaths(projectRoot: string) {
     const candidates = ['tsconfig.json', 'tsconfig.app.json', 'jsconfig.json'];
@@ -158,7 +157,6 @@ export class ImportPathResolver {
 
   /**
    * 尝试通过 tsconfig paths alias 解析
-   * @private
    */
   _resolveAlias(importPath: string): string | null {
     for (const { prefix, targets } of this.pathAliases) {

@@ -74,7 +74,7 @@ export function isNativeUiAvailable() {
 /**
  * 用组合窗口展示搜索结果（列表 + 预览）
  *
- * @param {Array<{title: string, code: string, explanation?: string, groupSize?: number}>} items
+ * @param items
  * @param keyword 搜索关键词
  * @returns 选中的索引（0-based），-1 表示取消
  */

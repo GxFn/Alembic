@@ -140,19 +140,19 @@ type ToolResult = string | ToolResultObject | null | undefined;
 // ── 主类 ──────────────────────────────────────────────────────────
 
 export class EvidenceCollector {
-  /** @type {Map<string, EvidenceEntry>} 文件 → 证据条目 */
+  /** 文件 → 证据条目 */
   #evidenceMap = new Map<string, EvidenceEntry>();
 
-  /** @type {ExplorationEntry[]} 探索日志 */
+  /** 探索日志 */
   #explorationLog: ExplorationEntry[] = [];
 
-  /** @type {NegativeSignal[]} 负空间信号 */
+  /** 负空间信号 */
   #negativeSignals: NegativeSignal[] = [];
 
-  /** @type {number} 代码片段总字符预算 */
+  /** 代码片段总字符预算 */
   #snippetBudget;
 
-  /** @type {number} 当前已使用的片段字符数 */
+  /** 当前已使用的片段字符数 */
   #snippetCharsUsed = 0;
 
   /** @param [options.snippetBudget=32000] 代码片段总字符预算 */

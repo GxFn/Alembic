@@ -858,7 +858,7 @@ export class ActiveContext {
 
   /**
    * 工具结果压缩 — 使用特化策略 (从 WorkingMemory 迁入)
-   * @param {{toolName: string, result: unknown, round: number}} observation
+   * @param observation
    * @returns }
    */
   #compressObservation(observation: Observation): CompressedObservation {

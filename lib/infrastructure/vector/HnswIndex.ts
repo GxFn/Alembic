@@ -161,18 +161,18 @@ export class HnswIndex {
   mL; // 层级采样因子 = 1 / ln(M)
 
   // ── 存储 ──
-  /** @type {Array<{ id: string, vector: Float32Array|number[], level: number }>} */
+  /** >} */
   nodes: Array<{
     id: string;
     vector: Float32Array | number[];
     level: number;
     qvector?: Uint8Array | null;
   } | null> = [];
-  /** @type {Array<Map<number, Set<number>>>} graphs — per-level adjacency: graphs[level].get(nodeIdx) → Set<neighborIdx> */
+  /** graphs — per-level adjacency: graphs[level].get(nodeIdx) → Set<neighborIdx> */
   graphs: Map<number, Set<number>>[] = [];
   entryPoint = -1; // 入口节点索引
   maxLevel = -1; // 当前最大层级
-  /** @type {Map<string, number>} id → nodeIdx */
+  /** id → nodeIdx */
   idToIndex = new Map();
 
   // ── 可选的自定义距离函数 (用于量化空间) ──
@@ -571,7 +571,7 @@ export class HnswIndex {
 
   /**
    * 简单邻居选择 — 取距离最近的 maxNeighbors 个
-   * @param {Array<{ nodeIdx: number, dist: number }>} candidates
+   * @param candidates
    * @returns >}
    */
   #selectNeighborsSimple(candidates: { nodeIdx: number; dist: number }[], maxNeighbors: number) {
@@ -696,7 +696,7 @@ export class HnswIndex {
 
   /**
    * 批量插入 (比逐个 addPoint 更高效的初始构建)
-   * @param {Array<{ id: string, vector: Float32Array|number[] }>} items
+   * @param items
    */
   addPoints(items: Array<{ id: string; vector: Float32Array | number[] }>) {
     for (const item of items) {

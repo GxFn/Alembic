@@ -27,13 +27,13 @@ export class Constraints {
   preconditions: string[];
   sideEffects: string[];
   constructor(props: ConstraintsProps = {}) {
-    /** @type {Array<Guard>} Guard 规则列表 */
+    /** Guard 规则列表 */
     this.guards = (props.guards || []).map(Constraints._normalizeGuard);
-    /** @type {string[]} 边界约束 */
+    /** 边界约束 */
     this.boundaries = props.boundaries || [];
-    /** @type {string[]} 前置条件 */
+    /** 前置条件 */
     this.preconditions = props.preconditions || [];
-    /** @type {string[]} 副作用 */
+    /** 副作用 */
     this.sideEffects = props.sideEffects ?? [];
   }
 

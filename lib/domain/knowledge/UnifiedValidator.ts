@@ -61,10 +61,10 @@ function detectMode(candidate: Record<string, unknown>) {
 // ── UnifiedValidator ────────────────────────────────────────
 
 export class UnifiedValidator {
-  /** @type {Set<string>} 已提交标题 (小写) */
+  /** 已提交标题 (小写) */
   #titles;
 
-  /** @type {Set<string>} 已提交代码指纹 */
+  /** 已提交代码指纹 */
   #codeFingerprints;
 
   /**

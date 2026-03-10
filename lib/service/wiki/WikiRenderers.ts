@@ -1378,7 +1378,6 @@ const BUILD_SYSTEM_FILES = Object.fromEntries(
 
 /**
  * 按生态系统输出构建步骤
- * @private
  */
 function _pushBuildSteps(
   lines: string[],

@@ -105,7 +105,7 @@ export class ConversationStore {
 
   /**
    * 追加消息到对话
-   * @param {{ role: string, content: string }} message
+   * @param message
    */
   append(conversationId: string, message: ConversationMessage) {
     try {

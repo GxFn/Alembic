@@ -160,7 +160,7 @@ export class BootstrapTaskManager {
 
   #eventBus: EventBus | null = null;
 
-  /** @type {Function|null} 获取 RealtimeService 的 getter（延迟获取，避免循环依赖） */
+  /** 获取 RealtimeService 的 getter（延迟获取，避免循环依赖） */
   #getRealtimeService: (() => { broadcastEvent(name: string, data: unknown): void } | null) | null =
     null;
 
@@ -178,7 +178,7 @@ export class BootstrapTaskManager {
    *
    * 如果上一个会话仍在运行，自动 abort 后再创建新会话（防止重复触发产出重复 Candidate）。
    *
-   * @param {Array<{id: string, meta: object}>} taskDefs 任务定义列表
+   * @param taskDefs 任务定义列表
    */
   startSession(taskDefs: TaskDef[]) {
     // ── 并发锁：如果上一个 session 还在运行，先中止 ──

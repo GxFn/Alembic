@@ -241,7 +241,7 @@ export class CallGraphAnalyzer {
   }
 
   /**
-   * @private 实际分析逻辑
+   * 实际分析逻辑
    *
    * 分级降级策略 (§5.2):
    *   - <100 文件  → 完整分析 (含 CHA)
@@ -254,7 +254,7 @@ export class CallGraphAnalyzer {
    *
    * @param deadline Date.now() + timeout
    */
-  async _doAnalyze(
+  private async _doAnalyze(
     astProjectSummary: AstProjectSummary,
     maxCallSitesPerFile: number,
     deadline: number
@@ -369,8 +369,8 @@ export class CallGraphAnalyzer {
     return { callEdges: allCallEdges, dataFlowEdges, stats };
   }
 
-  /** @private 空结果 */
-  _emptyResult(durationMs: number): CallGraphResult {
+  /** 空结果 */
+  private _emptyResult(durationMs: number): CallGraphResult {
     return {
       callEdges: [],
       dataFlowEdges: [],

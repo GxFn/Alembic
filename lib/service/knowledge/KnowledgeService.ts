@@ -421,7 +421,6 @@ export class KnowledgeService {
 
   /**
    * 触发 Cursor Delivery Pipeline（非阻塞、容错）
-   * @private
    */
   _triggerCursorDeliveryAsync() {
     import('../../injection/ServiceContainer.js')

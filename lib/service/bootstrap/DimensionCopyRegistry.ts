@@ -373,7 +373,7 @@ export class DimensionCopy {
   /**
    * 批量为维度数组注入语言差异化文案（单语言版本）
    * 会直接修改维度对象的 label 和 guide 字段
-   * @param {Array<{ id: string, label: string, guide: string }>} dimensions
+   * @param dimensions
    * @param lang 主语言
    * @returns >} 原数组引用
    */
@@ -396,7 +396,7 @@ export class DimensionCopy {
    *   - guide 以主语言为主体，追加次要语言的差异化要点
    *   - 如果主语言和次要语言属于同一语言族，跳过（避免重复）
    *
-   * @param {Array<{ id: string, label: string, guide: string }>} dimensions
+   * @param dimensions
    * @param primary 主语言 ID
    * @param secondary 次要语言 ID 列表
    * @returns >} 原数组引用

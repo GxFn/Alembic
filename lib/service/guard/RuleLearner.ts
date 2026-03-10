@@ -47,7 +47,7 @@ export class RuleLearner {
 
   /**
    * 记录规则触发
-   * @param {{ filePath?: string, message?: string }} context
+   * @param context
    */
   recordTrigger(ruleId: string, _context: Record<string, unknown> = {}) {
     const stat = this.#ensureStat(ruleId);

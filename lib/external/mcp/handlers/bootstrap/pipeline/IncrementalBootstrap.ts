@@ -39,7 +39,7 @@ export class IncrementalBootstrap {
   /**
    * 评估增量可行性 — 在 bootstrap 流程最开始调用
    *
-   * @param {Array<{path: string, relativePath: string, content: string}>} currentFiles 当前扫描到的文件
+   * @param currentFiles 当前扫描到的文件
    * @param allDimIds 所有可用维度 ID
    */
   evaluate(currentFiles: BootstrapFile[], allDimIds: string[]) {

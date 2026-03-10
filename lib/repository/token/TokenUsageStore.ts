@@ -71,7 +71,7 @@ export class TokenUsageStore {
   #dailyStmt;
   #bySourceStmt;
   #summaryStmt;
-  /** @type {{ data: object, expireAt: number } | null} */
+  /** | null} */
   #reportCache: { data: ReportData; expireAt: number } | null = null;
 
   /** @param db — raw better-sqlite3 instance */

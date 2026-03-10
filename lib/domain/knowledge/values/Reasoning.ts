@@ -14,15 +14,15 @@ export class Reasoning {
   sources: string[];
   whyStandard: string;
   constructor(props: ReasoningProps = {}) {
-    /** @type {string} 为什么遵循标准 */
+    /** 为什么遵循标准 */
     this.whyStandard = props.whyStandard ?? '';
-    /** @type {string[]} 来源列表 */
+    /** 来源列表 */
     this.sources = props.sources || [];
-    /** @type {number} 置信度 0-1 */
+    /** 置信度 0-1 */
     this.confidence = props.confidence ?? 0.7;
-    /** @type {Object.<string, number>} 质量信号 */
+    /** 质量信号 */
     this.qualitySignals = props.qualitySignals ?? {};
-    /** @type {string[]} 备选方案 */
+    /** 备选方案 */
     this.alternatives = props.alternatives || [];
   }
 

@@ -120,7 +120,7 @@ export class SignalCollector {
   #snapshotPath;
   #snapshot: SignalSnapshot;
   #onSuggestions: ((suggestions: Record<string, unknown>[]) => void) | null;
-  /** @type {EventAggregator} 信号聚类引擎 */
+  /** 信号聚类引擎 */
   #aggregator;
 
   /**

@@ -26,22 +26,22 @@ import { VectorStore } from './VectorStore.js';
 
 export class HnswVectorAdapter extends VectorStore {
   #index;
-  /** @type {Map<string, object>} id → metadata */
+  /** id → metadata */
   #metadata;
-  /** @type {Map<string, string>} id → content */
+  /** id → content */
   #contents;
   #quantizer: ScalarQuantizer | null;
-  /** @type {number} 向量维度 (首次 upsert 自动检测) */
+  /** 向量维度 (首次 upsert 自动检测) */
   #dimension = 0;
-  /** @type {boolean} 数据是否已修改 */
+  /** 数据是否已修改 */
   #dirty = false;
-  /** @type {ReturnType<typeof setTimeout>|null} flush 定时器 */
+  /** flush 定时器 */
   #flushTimer: ReturnType<typeof setTimeout> | null = null;
-  /** @type {number} 待刷盘操作计数 */
+  /** 待刷盘操作计数 */
   #pendingOps = 0;
-  /** @type {boolean} 是否正在刷盘 */
+  /** 是否正在刷盘 */
   #flushing = false;
-  /** @type {AsyncPersistence|null} WAL 持久化管理 */
+  /** WAL 持久化管理 */
   #wal: AsyncPersistence | null = null;
 
   // ── 配置 ──

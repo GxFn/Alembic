@@ -85,14 +85,14 @@ export class TaskIdGenerator {
     return `${parentId}.${nextSeq}`;
   }
 
-  /** @private ★ Drizzle 类型安全 COUNT */
-  _getTaskCount(): number {
+  /** ★ Drizzle 类型安全 COUNT */
+  private _getTaskCount(): number {
     const row = this.#drizzle.select({ cnt: sql<number>`COUNT(*)` }).from(tasks).get();
     return row?.cnt || 0;
   }
 
-  /** @private ★ Drizzle 类型安全 EXISTS */
-  _exists(id: string): boolean {
+  /** ★ Drizzle 类型安全 EXISTS */
+  private _exists(id: string): boolean {
     const row = this.#drizzle
       .select({ x: sql<number>`1` })
       .from(tasks)

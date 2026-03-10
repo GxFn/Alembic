@@ -55,23 +55,23 @@ function crc32(str: string) {
 }
 
 export class AsyncPersistence {
-  /** @type {string} 主索引文件路径 (.asvec) */
+  /** 主索引文件路径 (.asvec) */
   #indexPath;
-  /** @type {string} WAL 文件路径 (.wal) */
+  /** WAL 文件路径 (.wal) */
   #walPath;
-  /** @type {Array<object>} 待刷盘操作队列 */
+  /** 待刷盘操作队列 */
   #pendingOps: Record<string, unknown>[] = [];
   #flushTimer: ReturnType<typeof setTimeout> | null = null;
   #flushing = false;
-  /** @type {number} flush 间隔 (ms) */
+  /** flush 间隔 (ms) */
   #flushIntervalMs;
-  /** @type {number} 触发立即 flush 的操作数 */
+  /** 触发立即 flush 的操作数 */
   #flushBatchSize;
-  /** @type {function} 外部提供的 persist 回调: () => Promise<void> */
+  /** 外部提供的 persist 回调: () => Promise<void> */
   #onPersist;
-  /** @type {function} 外部提供的 replay 回调: (op) => void */
+  /** 外部提供的 replay 回调: (op) => void */
   #onReplay;
-  /** @type {boolean} WAL 是否启用 */
+  /** WAL 是否启用 */
   #enabled;
 
   /**

@@ -159,7 +159,7 @@ export async function insertHeaders(
   const NU = (await import('../../NativeUi.js')) as unknown as NativeUiLike;
 
   const result = { inserted: [] as string[], skipped: [] as string[], cancelled: false };
-  /** @type {Map<string, string>} 模块名 → 提示注释（'提示操作插入'按钮选择时记录） */
+  /** 模块名 → 提示注释（'提示操作插入'按钮选择时记录） */
   const depWarnings = opts.depWarnings instanceof Map ? new Map(opts.depWarnings) : new Map();
   if (!headers || headers.length === 0) {
     return result;

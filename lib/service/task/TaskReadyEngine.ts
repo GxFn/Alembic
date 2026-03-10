@@ -20,8 +20,7 @@ export class TaskReadyEngine {
     this._prepareStatements();
   }
 
-  /** @private */
-  _prepareStatements() {
+  private _prepareStatements() {
     // ── 核心: 递归 CTE 计算传递性阻塞 ──
     this._readyStmt = this._db.prepare(`
       WITH RECURSIVE blocked_tasks(id, depth) AS (

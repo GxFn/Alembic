@@ -118,17 +118,15 @@ export class TopicClassifier {
 
   /**
    * 分类单个 entry 到主题 — 直读 AI 预计算的 topicHint
-   * @private
    */
-  _classifyEntry(entry: KnowledgeEntryProps) {
+  private _classifyEntry(entry: KnowledgeEntryProps) {
     return entry.topicHint || null; // AI 没给 → null → 归入 general
   }
 
   /**
    * 从 entry 提取关键词
-   * @private
    */
-  _extractKeywords(entry: KnowledgeEntryProps) {
+  private _extractKeywords(entry: KnowledgeEntryProps) {
     const text = `${entry.title || ''} ${entry.description || ''}`;
     // 提取英文关键词（3+ 字母）
     const words = text.match(/[a-zA-Z]{3,}/g) || [];
@@ -136,8 +134,7 @@ export class TopicClassifier {
     return [...new Set(filtered)].slice(0, 5);
   }
 
-  /** @private */
-  _topicLabel(topic: string) {
+  private _topicLabel(topic: string) {
     const labels = {
       networking: 'Networking',
       ui: 'UI',

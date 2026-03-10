@@ -25,7 +25,7 @@ interface PolicyViolation {
 export class PolicyEngine {
   /**
    * 全面策略检查
-   * @param {{ layerOrder?: string[] }} config - layerOrder 定义分层顺序，低层不应依赖高层
+   * @param config - layerOrder 定义分层顺序，低层不应依赖高层
    * @returns }
    */
   check(graph: DependencyGraph, config: PolicyConfig = {}) {

@@ -124,21 +124,21 @@ export const Channel = Object.freeze({
 });
 
 export class AgentMessage {
-  /** @type {string} 消息唯一 ID */
+  /** 消息唯一 ID */
   id;
-  /** @type {string} 用户输入内容 */
+  /** 用户输入内容 */
   content;
-  /** @type {string} 通信渠道 */
+  /** 通信渠道 */
   channel;
-  /** @type {Session} 会话信息 */
+  /** 会话信息 */
   session;
-  /** @type {Sender} 发送者 */
+  /** 发送者 */
   sender;
-  /** @type {Record<string, any>} 渠道特定元数据 */
+  /** 渠道特定元数据 */
   metadata;
-  /** @type {Function|null} 回复函数 (text: string) => Promise<void> */
+  /** 回复函数 (text: string) => Promise<void> */
   replyFn;
-  /** @type {number} 时间戳 */
+  /** 时间戳 */
   timestamp;
 
   /**

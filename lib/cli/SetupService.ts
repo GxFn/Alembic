@@ -90,7 +90,7 @@ export class SetupService {
   /** 子仓库远程仓库 URL（为空则 recipes/ 作为普通目录随主仓库提交） */
   subRepoUrl: string | undefined;
   /**
-   * @param {{ projectRoot: string, force?: boolean, seed?: boolean, subRepoDir?: string, subRepoUrl?: string }} options
+   * @param options
    */
   constructor(options: {
     projectRoot: string;
@@ -167,8 +167,8 @@ export class SetupService {
     return results;
   }
 
-  /** @private 格式化步骤结果的简要信息 */
-  _formatStepDetail(r: Record<string, unknown> | undefined) {
+  /** 格式化步骤结果的简要信息 */
+  private _formatStepDetail(r: Record<string, unknown> | undefined) {
     if (!r) {
       return '';
     }
@@ -303,8 +303,8 @@ export class SetupService {
     };
   }
 
-  /** @private 写入 constitution.yaml（优先从模板复制） */
-  _writeConstitution() {
+  /** 写入 constitution.yaml（优先从模板复制） */
+  private _writeConstitution() {
     const dest = join(this.coreDir, 'constitution.yaml');
     if (existsSync(dest) && !this.force) {
       return;
@@ -362,8 +362,8 @@ export class SetupService {
     }
   }
 
-  /** @private 写入 boxspec.json */
-  _writeBoxspec() {
+  /** 写入 boxspec.json */
+  private _writeBoxspec() {
     const dest = join(this.coreDir, 'boxspec.json');
     if (existsSync(dest) && !this.force) {
       return;
@@ -387,8 +387,8 @@ export class SetupService {
     );
   }
 
-  /** @private 复制 _template.md 到 recipes/ */
-  _copyRecipeTemplate() {
+  /** 复制 _template.md 到 recipes/ */
+  private _copyRecipeTemplate() {
     const src = join(REPO_ROOT, 'templates', 'recipes-setup', '_template.md');
     if (!existsSync(src)) {
       return;
@@ -401,8 +401,8 @@ export class SetupService {
     copyFileSync(src, dest);
   }
 
-  /** @private 复制示例 Recipe（冷启动推荐） */
-  _copySeedRecipes() {
+  /** 复制示例 Recipe（冷启动推荐） */
+  private _copySeedRecipes() {
     const seedDir = join(REPO_ROOT, 'templates', 'recipes-setup');
     if (!existsSync(seedDir)) {
       return;
@@ -429,8 +429,8 @@ export class SetupService {
     }
   }
 
-  /** @private 写入核心目录 README */
-  _writeCoreReadme() {
+  /** 写入核心目录 README */
+  private _writeCoreReadme() {
     const dest = join(this.coreDir, 'README.md');
     if (existsSync(dest) && !this.force) {
       return;
@@ -568,10 +568,10 @@ export class SetupService {
   }
 
   /**
-   * @private 从 AutoSnippet/recipes/*.md + candidates/*.md 同步到 DB 缓存
+   * 从 AutoSnippet/recipes/*.md + candidates/*.md 同步到 DB 缓存
    * 委托 KnowledgeSyncService 执行全字段同步（setup 场景跳过违规记录）
    */
-  async _syncRecipesToDB(db: unknown) {
+  private async _syncRecipesToDB(db: unknown) {
     const { KnowledgeSyncService } = await import('./KnowledgeSyncService.js');
     const syncService = new KnowledgeSyncService(this.projectRoot);
     const report = syncService.sync(db as Parameters<typeof syncService.sync>[0], {
@@ -620,10 +620,10 @@ export class SetupService {
   /* ═══ Helpers ════════════════════════════════════════ */
 
   /**
-   * @private 在项目根目录创建 .env 文件（从 .env.example 复制）
+   * 在项目根目录创建 .env 文件（从 .env.example 复制）
    * 如果 .env 已存在则跳过并提示用户手动配置。
    */
-  _ensureEnvFile() {
+  private _ensureEnvFile() {
     const envPath = join(this.projectRoot, '.env');
     if (existsSync(envPath)) {
       return;
@@ -649,8 +649,8 @@ export class SetupService {
     }
   }
 
-  /** @private 在指定目录执行 git 命令 */
-  _git(args: string[], cwd: string) {
+  /** 在指定目录执行 git 命令 */
+  private _git(args: string[], cwd: string) {
     try {
       return execSync(`git ${args.join(' ')}`, {
         cwd,
@@ -665,8 +665,8 @@ export class SetupService {
     }
   }
 
-  /** @private 检查目录中是否有文件（排除 . 和 ..） */
-  _hasFiles(dirPath: string): boolean {
+  /** 检查目录中是否有文件（排除 . 和 ..） */
+  private _hasFiles(dirPath: string): boolean {
     try {
       const entries = readdirSync(dirPath);
       return entries.length > 0;
@@ -675,8 +675,8 @@ export class SetupService {
     }
   }
 
-  /** @private 确保子仓库的 remote origin 与给定 URL 一致 */
-  _ensureRemote(url: string) {
+  /** 确保子仓库的 remote origin 与给定 URL 一致 */
+  private _ensureRemote(url: string) {
     try {
       const currentUrl = this._git(['remote', 'get-url', 'origin'], this.subRepoPath);
       if (currentUrl !== url) {
@@ -689,10 +689,10 @@ export class SetupService {
   }
 
   /**
-   * @private 备份已有文件 → clone → 合并回来（不覆盖远端文件）
+   * 备份已有文件 → clone → 合并回来（不覆盖远端文件）
    * 适用于 recipes/ 有模板文件但还不是 git 仓库的场景
    */
-  _cloneWithMerge(url: string) {
+  private _cloneWithMerge(url: string) {
     const backupDir = `${this.subRepoPath}-backup-${Date.now()}`;
 
     // 1. 备份

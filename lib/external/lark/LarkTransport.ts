@@ -115,17 +115,17 @@ export class LarkTransport {
   #enqueueIdeFn: LarkTransportConfig['enqueueIdeFn'] | null;
   #isUserAllowed: (userId: string) => boolean;
 
-  /** @type {ConversationStore|null} 持久化对话存储 */
+  /** 持久化对话存储 */
   #conversationStore: ConversationStore | null = null;
-  /** @type {Map<string, string>} chatId → conversationId 映射缓存 */
+  /** chatId → conversationId 映射缓存 */
   #chatConversationMap = new Map<string, string>();
 
-  /** @type {Map<string, Array<{role: string, content: string}>>} chatId → 最近对话 (降级用) */
+  /** >>} chatId → 最近对话 (降级用) */
   #conversationHistory = new Map<string, HistoryMessage[]>();
   /** 对话历史最大轮数 */
   static MAX_HISTORY = 20;
 
-  /** @type {Map<string, number>} messageId → timestamp, 消息去重 */
+  /** messageId → timestamp, 消息去重 */
   #recentMsgIds = new Map<string, number>();
   /** 去重 TTL (5 分钟) */
   static DEDUP_TTL = 5 * 60 * 1000;

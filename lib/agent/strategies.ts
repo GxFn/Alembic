@@ -170,11 +170,11 @@ export class SingleStrategy extends Strategy {
  * })
  */
 export class FanOutStrategy extends Strategy {
-  /** @type {Strategy} 每个子任务的执行策略 */
+  /** 每个子任务的执行策略 */
   #itemStrategy!: Strategy;
-  /** @type {Record<string, { concurrency: number }>} 分层并发配置 */
+  /** >} 分层并发配置 */
   #tiers!: Record<string, { concurrency: number }>;
-  /** @type {(results: ItemResult[]) => StrategyResult} 结果合并函数 */
+  /** 结果合并函数 */
   #merge!: (results: ItemResult[]) => StrategyResult;
 
   /**
@@ -194,7 +194,7 @@ export class FanOutStrategy extends Strategy {
   }
 
   /**
-   * @param {Array<{id: string, label: string, tier?: number, prompt?: string, guide?: string}>} opts.items 子任务列表
+   * @param opts.items 子任务列表
    */
   async execute(runtime: StrategyRuntime, message: AgentMessage, opts: FanOutExecuteOpts = {}) {
     const { items = [] } = opts;

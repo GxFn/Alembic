@@ -270,9 +270,8 @@ export class GuardService {
 
   /**
    * 仅 DB 规则的简化检查（降级路径）
-   * @private
    */
-  async _checkCodeDbOnly(code: string, options: { language?: string | null } = {}) {
+  private async _checkCodeDbOnly(code: string, options: { language?: string | null } = {}) {
     const { language = null } = options;
 
     // V3: 使用 findActiveRules() 查询 kind='rule' + lifecycle='active'

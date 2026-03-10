@@ -123,7 +123,7 @@ export class AgentFactory {
   #aiProvider;
   #logger;
   #router: AgentRouter | null = null;
-  /** @type {Object} 共享的 Capability 实例缓存 (如 MemoryCoordinator) */
+  /** 共享的 Capability 实例缓存 (如 MemoryCoordinator) */
   #sharedOpts;
 
   /**
@@ -220,7 +220,7 @@ export class AgentFactory {
 
   /**
    * 创建 ContextWindow (根据当前 AI Provider 自动解析 token 预算)
-   * @param {{ isSystem?: boolean }} [opts]
+   * @param [opts]
    */
   createContextWindow(opts: { isSystem?: boolean } = {}) {
     const modelName = this.#aiProvider?.model || '';
@@ -346,7 +346,7 @@ export class AgentFactory {
    * 关系发现请使用单独的 discoverRelations() 方法。
    *
    * @param opts.label 上下文标签（target 名 / 文件名）
-   * @param {Array<{name, content, language?}>} opts.files 源文件
+   * @param opts.files 源文件
    * @param [opts.task='extract'] 任务类型
    * @param [opts.lang] 语言提示
    * @param [opts.comprehensive] 深度扫描标志
@@ -541,7 +541,7 @@ export class AgentFactory {
    * bootstrap_knowledge 是纯启发式工具：SPM Target 扫描 → 依赖图谱 → Guard 审计 →
    * Candidate 创建，全程无 AI 推理。直接调用 handler 即可，无需创建 Agent。
    *
-   * @param {{ maxFiles?: number, skipGuard?: boolean, contentMaxLines?: number, loadSkills?: boolean, skipAsyncFill?: boolean }} [opts]
+   * @param [opts]
    */
   async bootstrapKnowledge(opts: BootstrapKnowledgeOptions = {}) {
     const { bootstrapKnowledge } = await import('#external/mcp/handlers/bootstrap-internal.js');

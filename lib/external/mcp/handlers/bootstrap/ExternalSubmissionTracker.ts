@@ -110,19 +110,19 @@ export interface AccumulatedEvidence {
 // ── 主类 ────────────────────────────────────────────────────
 
 export class ExternalSubmissionTracker {
-  /** @type {Map<string, SubmissionRecord[]>} dimId → 提交记录列表 */
+  /** dimId → 提交记录列表 */
   #dimensionSubmissions = new Map<string, SubmissionRecord[]>();
 
-  /** @type {Map<string, Set<string>>} filePath → 引用此文件的 dimId 集合 */
+  /** filePath → 引用此文件的 dimId 集合 */
   #fileEvidenceMap = new Map<string, Set<string>>();
 
-  /** @type {NegativeSignal[]} 负空间信号 */
+  /** 负空间信号 */
   #negativeSignals: NegativeSignal[] = [];
 
-  /** @type {Map<string, string[]>} dimId → 被拒绝的提交标题列表 */
+  /** dimId → 被拒绝的提交标题列表 */
   #rejections = new Map<string, string[]>();
 
-  /** @type {Set<string>} 已使用的唯一 trigger 集合 (跨维度) */
+  /** 已使用的唯一 trigger 集合 (跨维度) */
   #usedTriggers = new Set<string>();
 
   // ─── 提交记录 ─────────────────────────────────────────

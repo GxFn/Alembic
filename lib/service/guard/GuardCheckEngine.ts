@@ -580,9 +580,9 @@ export class GuardCheckEngine {
     this._astRulesCache = null;
     this._cacheTime = 0;
     this._cacheTTL = options.cacheTTL || 60_000; // 1min
-    /** @type {Map<string, object>} Enhancement Pack 注入的外部规则 */
+    /** Enhancement Pack 注入的外部规则 */
     this._externalRules = new Map();
-    /** @type {boolean} EP 规则是否已注入（幂等标记，避免每次请求重复注入） */
+    /** EP 规则是否已注入（幂等标记，避免每次请求重复注入） */
     this._epInjected = false;
     /** Guard 配置 — 允许禁用特定规则或调整 Code-Level 检查阈值 */
     this._guardConfig = options.guardConfig || {};
@@ -591,7 +591,7 @@ export class GuardCheckEngine {
   /**
    * 注入 Enhancement Pack 外部规则（支持 RegExp 和 string pattern）
    * 与 BUILT_IN_RULES 合并检查，自动跳过 ruleId 重复的规则
-   * @param {Array<{ruleId: string, pattern: RegExp|string, severity: string, message: string, category?: string, dimension?: string, languages?: string[], fixSuggestion?: string}>} rules
+   * @param rules
    */
   injectExternalRules(rules: ExternalRuleInput[]) {
     if (!Array.isArray(rules)) {
@@ -1037,7 +1037,7 @@ export class GuardCheckEngine {
 
   /**
    * 将 Guard 命中计数回写到对应 Recipe 的 guard_hit_count
-   * @param {Array<{ruleId: string}>} violations
+   * @param violations
    */
   trackGuardHits(violations: GuardViolation[]) {
     if (!violations?.length || !this.db) {
@@ -1101,7 +1101,7 @@ export class GuardCheckEngine {
 
   /**
    * 批量文件审计
-   * @param {Array<{path: string, content: string}>} files
+   * @param files
    * @param options {scope: 'file'|'target'|'project'}
    * @returns }
    */

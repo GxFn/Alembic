@@ -94,8 +94,8 @@ export class TaskRepositoryImpl {
     this._prepareStatements();
   }
 
-  /** @private 预编译复杂查询（仅保留 drizzle 无法表达的递归 CTE） */
-  _prepareStatements() {
+  /** 预编译复杂查询（仅保留 drizzle 无法表达的递归 CTE） */
+  private _prepareStatements() {
     // ── 环检测 (递归 CTE) — drizzle 不支持递归 CTE ──
     this._reachableStmt = this.db.prepare(`
       WITH RECURSIVE reachable(id, depth) AS (

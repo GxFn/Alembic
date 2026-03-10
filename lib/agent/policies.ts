@@ -64,7 +64,7 @@ export interface QualityGatePolicyOptions {
 
 /** Policy 基类 — 所有约束的抽象接口 */
 export class Policy {
-  /** @type {string} 策略名称 */
+  /** 策略名称 */
   get name(): string {
     throw new Error('Subclass must implement name');
   }

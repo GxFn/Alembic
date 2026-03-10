@@ -76,25 +76,25 @@ export default class ProjectGraph {
 
   #categories = new Map();
 
-  /** @type {Map<string, string>} 子类 → 父类 */
+  /** 子类 → 父类 */
   #inheritance = new Map();
 
-  /** @type {Map<string, Set<string>>} 类 → 遵循的协议集合 */
+  /** 类 → 遵循的协议集合 */
   #conformance = new Map();
 
-  /** @type {Map<string, FileSymbols>} 文件路径 → 文件级符号 */
+  /** 文件路径 → 文件级符号 */
   #files = new Map();
 
-  /** @type {Map<string, MethodInfo[]>} className → 方法列表 (含 impl 中的方法) */
+  /** className → 方法列表 (含 impl 中的方法) */
   #methodsByClass = new Map();
 
-  /** @type {ProjectOverview} 项目统计缓存 */
+  /** 项目统计缓存 */
   #overview: any = null;
 
-  /** @type {string} 项目根目录 */
+  /** 项目根目录 */
   #projectRoot: any;
 
-  /** @type {number} 构建耗时 ms */
+  /** 构建耗时 ms */
   #buildTimeMs = 0;
 
   // ── 静态工厂 ──────────────────────────────────────────────────

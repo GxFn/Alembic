@@ -730,7 +730,7 @@ export class SearchEngine {
    *     - 已删除    → scorer.removeDocument()
    *  3. 清空缓存以确保搜索结果刷新
    *
-   * @param {{ force?: boolean }} [opts] - force=true 强制全量重建
+   * @param [opts] - force=true 强制全量重建
    */
   refreshIndex(opts: { force?: boolean } = {}) {
     if (opts.force || !this._indexed || !this._lastIndexTime) {
@@ -791,7 +791,6 @@ export class SearchEngine {
    * 使用 BM25F 思想：高价值字段（title, trigger）重复出现以提升 TF 权重
    * — title ×3, trigger ×2, description ×1.5（通过重复 token 实现）
    * 这确保标题匹配的文档获得显著更高的 BM25 分数
-   * @private
    */
   _buildDocText(r: DbRow) {
     let contentText = '';
@@ -832,7 +831,6 @@ export class SearchEngine {
 
   /**
    * 从 DB 行构建文档 meta
-   * @private
    */
   _buildDocMeta(r: DbRow) {
     let parsedTags: string[] = [];

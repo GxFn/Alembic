@@ -31,7 +31,7 @@ export class ActionPipeline {
 
   /**
    * 执行管线
-   * @param {{ type: string, name?: string, params?: object }} trigger
+   * @param trigger
    * @returns >}
    */
   async execute(

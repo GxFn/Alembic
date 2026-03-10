@@ -39,7 +39,7 @@ export class ServiceContainer {
    *
    * @param name 服务名称
    * @param factory 工厂函数（首次 get 时执行）
-   * @param {{ aiDependent?: boolean }} [options] 选项
+   * @param [options] 选项
    *   - aiDependent: 标记为 AI Provider 依赖项，热重载时自动清除缓存
    */
   singleton(

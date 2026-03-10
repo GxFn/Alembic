@@ -59,13 +59,13 @@ interface BudgetInput extends Partial<ExplorationBudget> {
 // ─── ExplorationTracker 主类 ─────────────────────────────
 
 export class ExplorationTracker {
-  /** @type {object} 策略配置 */
+  /** 策略配置 */
   #strategy: ExplorationStrategy;
-  /** @type {object} 预算配置 */
+  /** 预算配置 */
   #budget: ExplorationBudget;
-  /** @type {string} 当前阶段 */
+  /** 当前阶段 */
   #phase: string;
-  /** @type {object} 日志器 */
+  /** 日志器 */
   #logger;
 
   // ── 子模块 ──
@@ -88,18 +88,18 @@ export class ExplorationTracker {
   };
 
   // ── 阶段控制 ──
-  /** @type {boolean} 是否刚完成阶段转换（用于 pending nudge） */
+  /** 是否刚完成阶段转换（用于 pending nudge） */
   #justTransitioned = false;
-  /** @type {string|null} 转换前的旧阶段 */
+  /** 转换前的旧阶段 */
   #transitionFromPhase: string | null = null;
 
   // ── Graceful exit 控制 ──
-  /** @type {number|null} 进入 graceful exit 的轮次 */
+  /** 进入 graceful exit 的轮次 */
   #gracefulExitRound: number | null = null;
 
-  /** @type {boolean} tick 是否已调用（用于 rollback） */
+  /** tick 是否已调用（用于 rollback） */
   #ticked = false;
-  /** @type {string} 提交工具名（用于 nudge 文本生成） */
+  /** 提交工具名（用于 nudge 文本生成） */
   #submitToolName = 'submit_knowledge';
   /** 管线类型标识 — 统一场景判别（替代 submitToolName / strategy.name 字符串比较） */
   #pipelineType: PipelineType;

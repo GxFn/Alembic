@@ -679,7 +679,6 @@ export class TaskGraphService {
    * P2: 获取决策过期阈值（秒）
    * 默认 30 天 = 2592000 秒。可通过容器内 'config' 服务配置。
    * 返回 0 表示禁用过期检测。
-   * @private
    */
   _getDecisionStaleThreshold() {
     try {
@@ -702,7 +701,6 @@ export class TaskGraphService {
 
   /**
    * 查找因 closedTaskId 完成而新解除阻塞的任务
-   * @private
    */
   _checkNewlyUnblocked(closedTaskId: string) {
     const dependents = this.repo.getDependents(closedTaskId);
@@ -728,7 +726,6 @@ export class TaskGraphService {
     return newlyReady;
   }
 
-  /** @private */
   _logEvent(taskId: string, eventType: string, oldValue: string | null, newValue: string | null) {
     try {
       this.repo.logEvent(taskId, eventType, oldValue as null, newValue as null);

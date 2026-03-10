@@ -160,18 +160,18 @@ interface ToolArgs {
 export class SessionStore {
   // ── 子系统 1: DimensionReports (from EpisodicMemory) ──
   #dimensionReports = new Map<string, DimensionReport>();
-  /** @type {Map<string, Finding[]>} filePath → Evidence[] */
+  /** filePath → Evidence[] */
   #evidenceStore = new Map<string, Finding[]>();
   #crossReferences: CrossReference[] = [];
   #tierReflections: TierReflection[] = [];
-  /** @type {Map<string, CandidateSummary[]>} dimId → candidates */
+  /** dimId → candidates */
   #submittedCandidates = new Map<string, CandidateSummary[]>();
   #projectContext: Record<string, unknown>;
 
   // ── 子系统 2: ReadOnlyCache (from ToolResultCache) ──
   #searchCache = new Map<string, SearchCacheEntry>();
   #fileCache = new Map<string, FileCacheEntry>();
-  /** @type {{hits: number, misses: number, evictions: number}} */
+  /** } */
   #cacheStats = { hits: 0, misses: 0, evictions: 0 };
   #ttlMs;
   #cleanupTimer: ReturnType<typeof setInterval> | null = null;

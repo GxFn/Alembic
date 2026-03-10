@@ -34,7 +34,7 @@ export class BatchEmbedder {
   /**
    * 批量 embed 文本
    *
-   * @param {Array<{ id: string, content: string }>} items
+   * @param items
    * @param [onProgress] (embedded, total) => void
    * @returns id → vector
    */
@@ -69,7 +69,7 @@ export class BatchEmbedder {
 
   /**
    * embed 单个批次
-   * @param {Array<{ id: string, content: string }>} items
+   * @param items
    */
   async #embedBatch(items: Array<{ id: string; content: string }>) {
     const result = new Map();

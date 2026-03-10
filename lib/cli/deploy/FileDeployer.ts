@@ -73,7 +73,7 @@ export class FileDeployer {
 
   /**
    * 部署所有适用的文件
-   * @param {{ filter?: string[] }} options 可选过滤部署的 category
+   * @param options 可选过滤部署的 category
    * @returns > }}
    */
   deployAll(mode: 'setup' | 'upgrade', { filter }: { filter?: string[] } = {}) {

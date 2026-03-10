@@ -22,17 +22,17 @@ export class Stats {
   searchHits: number;
   views: number;
   constructor(props: StatsProps = {}) {
-    /** @type {number} 浏览次数 */
+    /** 浏览次数 */
     this.views = props.views ?? 0;
-    /** @type {number} 采用次数 */
+    /** 采用次数 */
     this.adoptions = props.adoptions ?? 0;
-    /** @type {number} 应用次数 */
+    /** 应用次数 */
     this.applications = props.applications ?? 0;
-    /** @type {number} Guard 命中次数 */
+    /** Guard 命中次数 */
     this.guardHits = props.guardHits ?? 0;
-    /** @type {number} 搜索命中次数 */
+    /** 搜索命中次数 */
     this.searchHits = props.searchHits ?? 0;
-    /** @type {number} 权威分 0-5 */
+    /** 权威分 0-5 */
     this.authority = props.authority ?? 0;
   }
 

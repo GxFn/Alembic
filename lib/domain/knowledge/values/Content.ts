@@ -21,17 +21,17 @@ export class Content {
   steps: Array<{ title?: string; description?: string; code?: string }>;
   verification: { method?: string; expected_result?: string; test_code?: string } | null;
   constructor(props: ContentProps = {}) {
-    /** @type {string} 代码片段 */
+    /** 代码片段 */
     this.pattern = props.pattern ?? '';
-    /** @type {string} Markdown 全文（与 pattern 二选一） */
+    /** Markdown 全文（与 pattern 二选一） */
     this.markdown = props.markdown ?? '';
-    /** @type {string} 设计原理 */
+    /** 设计原理 */
     this.rationale = props.rationale ?? '';
-    /** @type {Array<{title?:string, description?:string, code?:string}>} 实施步骤 */
+    /** >} 实施步骤 */
     this.steps = props.steps ?? [];
-    /** @type {Array<{file:string, before:string, after:string, explanation:string}>} 代码变更 */
+    /** >} 代码变更 */
     this.codeChanges = props.codeChanges ?? [];
-    /** @type {?{method?:string, expected_result?:string, test_code?:string}} 验证方式 */
+    /** } 验证方式 */
     this.verification = props.verification ?? null;
   }
 

@@ -48,11 +48,11 @@ export const AgentEvents = Object.freeze({
 export class AgentEventBus extends EventEmitter {
   static #instance: AgentEventBus | null = null;
   #logger;
-  /** @type {Map<string, Function[]>} topic → handlers */
+  /** topic → handlers */
   #subscriptions = new Map();
-  /** @type {Map<string, {resolve: Function, reject: Function, timer: NodeJS.Timeout}>} */
+  /** >} */
   #pendingReplies = new Map();
-  /** @type {number} 事件计数 */
+  /** 事件计数 */
   #eventCount = 0;
 
   constructor() {

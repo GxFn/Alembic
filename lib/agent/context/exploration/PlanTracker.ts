@@ -72,9 +72,9 @@ const DEFAULT_DEVIATION_THRESHOLD = 0.6;
 const MIN_REPLAN_GAP = 3;
 
 export class PlanTracker {
-  /** @type {boolean} 等待 AI 输出 replan */
+  /** 等待 AI 输出 replan */
   #pendingReplan = false;
-  /** @type {object} 计划进度 */
+  /** 计划进度 */
   #planProgress: PlanProgress = {
     coveredSteps: 0,
     totalSteps: 0,

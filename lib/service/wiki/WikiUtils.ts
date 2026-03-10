@@ -625,7 +625,7 @@ export function profileFolders(
   const sourceFiles = projectInfo.sourceFiles || [];
 
   // ── 1. 按文件夹分组源文件 ──
-  /** @type {Map<string, string[]>} relDir → [relFilePath, ...] */
+  /** relDir → [relFilePath, ...] */
   const folderFiles = new Map();
   for (const relFile of sourceFiles) {
     const dir = path.dirname(relFile);
@@ -636,7 +636,7 @@ export function profileFolders(
   }
 
   // ── 2. 聚合: 将子文件夹的文件计入父文件夹 (递归) ──
-  /** @type {Map<string, string[]>} relDir → 所有递归子文件 */
+  /** relDir → 所有递归子文件 */
   const folderRecursive = new Map();
   for (const [dir, files] of folderFiles) {
     // 把文件计入 dir 本身及所有祖先
@@ -699,7 +699,6 @@ export function profileFolders(
 
 /**
  * 修剪冗余文件夹: 如果子目录文件数与父目录接近 (>80%), 仅保留父目录
- * @private
  */
 function _pruneRedundantFolders(
   candidates: { dir: string; files: string[]; depth: number }[],
@@ -744,7 +743,6 @@ function _pruneRedundantFolders(
 
 /**
  * 为单个文件夹构建 FolderProfile
- * @private
  */
 function _buildFolderProfile(
   relDir: string,
@@ -846,7 +844,6 @@ function _buildFolderProfile(
 
 /**
  * 从文件名列表检测命名约定
- * @private
  * @param fileNames basename 列表
  */
 function _detectNamingPatterns(fileNames: string[]) {
@@ -902,7 +899,6 @@ function _detectNamingPatterns(fileNames: string[]) {
 
 /**
  * 从文件顶部提取 import/require 语句，推断文件夹级依赖
- * @private
  */
 function _extractImports(
   keyFiles: string[],
@@ -1015,7 +1011,6 @@ function _extractImports(
 
 /**
  * 提取文件头部注释 (第一个注释块)
- * @private
  */
 function _extractHeaderComment(fullPath: string) {
   try {

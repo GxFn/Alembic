@@ -143,7 +143,6 @@ export class AgentInstructionsGenerator {
 
   /**
    * 从知识条目构建共享内容段
-   * @private
    */
   _buildSections({
     rules,
@@ -199,7 +198,6 @@ export class AgentInstructionsGenerator {
 
   // ─── AGENTS.md ─────────────────────────────────────
 
-  /** @private */
   _writeAgentsMd(sections: {
     ruleLines: string[];
     patternRows: string[];
@@ -264,7 +262,6 @@ export class AgentInstructionsGenerator {
 
   // ─── CLAUDE.md ─────────────────────────────────────
 
-  /** @private */
   _writeClaudeMd(sections: {
     ruleLines: string[];
     patternRows: string[];
@@ -350,7 +347,6 @@ export class AgentInstructionsGenerator {
   /**
    * 动态生成 copilot-instructions.md
    * 替代原有的静态模板复制
-   * @private
    */
   _writeCopilotInstructions(sections: {
     ruleLines: string[];
@@ -418,7 +414,6 @@ export class AgentInstructionsGenerator {
 
   /**
    * 核心约束（所有 Agent 共享）
-   * @private
    */
   _renderConstraints() {
     return [
@@ -458,7 +453,6 @@ export class AgentInstructionsGenerator {
 
   /**
    * 推荐工作流（AGENTS.md 用）
-   * @private
    */
   _renderWorkflow() {
     return [

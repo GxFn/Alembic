@@ -82,15 +82,15 @@ interface ToolResultQuota {
  */
 
 export class ContextWindow {
-  /** @type {Array<ContextMessage>} 统一格式消息 */
+  /** 统一格式消息 */
   #messages: ContextMessage[] = [];
-  /** @type {number} token 预算（默认 24000，约对应 Gemini 的安全阈值） */
+  /** token 预算（默认 24000，约对应 Gemini 的安全阈值） */
   #tokenBudget;
-  /** @type {Array<string>} 被压缩掉的轮次摘要（用于 digest 生成） */
+  /** 被压缩掉的轮次摘要（用于 digest 生成） */
   #compactionLog: string[] = [];
-  /** @type {Set<string>} 被压缩前提取的已提交候选标题 */
+  /** 被压缩前提取的已提交候选标题 */
   #compactedSubmits = new Set();
-  /** @type {Object} 日志器 */
+  /** 日志器 */
   #logger;
 
   /**
@@ -143,7 +143,7 @@ export class ContextWindow {
    *   - 微窗口 (<16k):  预算 = 窗口 × 0.7（留 30% 给 prompt/tool schema）
    *
    * @param modelName 模型名称，如 'gemini-3-flash-preview', 'gpt-4o-mini'
-   * @param {{ isSystem?: boolean }} [opts] - isSystem 为 true 时给予更高预算
+   * @param [opts] - isSystem 为 true 时给予更高预算
    * @returns 建议的 token 预算
    */
   static resolveTokenBudget(modelName: string, opts: { isSystem?: boolean } = {}) {
@@ -531,7 +531,7 @@ export class ContextWindow {
  *
  * @param toolName 工具名
  * @param result 工具原始返回
- * @param {{ maxChars: number, maxMatches: number }} quota 动态配额
+ * @param quota 动态配额
  * @returns 压缩后的结果字符串
  */
 export function limitToolResult(toolName: string, result: unknown, quota: ToolResultQuota) {

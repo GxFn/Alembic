@@ -11,7 +11,7 @@
 
 import { LanguageService } from '../../shared/LanguageService.js';
 
-/** @type {Map<string, RegExp>} 已编译的正则缓存 (pattern string → RegExp) */
+/** 已编译的正则缓存 (pattern string → RegExp) */
 const _regexCache = new Map();
 
 /** 编译正则模式（支持 RegExp 对象和 string，带缓存） */

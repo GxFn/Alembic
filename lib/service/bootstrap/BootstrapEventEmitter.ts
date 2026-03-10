@@ -8,10 +8,10 @@
  */
 
 export class BootstrapEventEmitter {
-  /** @type {object|null} EventBus 实例 */
+  /** EventBus 实例 */
   #eventBus: Record<string, (...args: unknown[]) => void> | null;
 
-  /** @type {object|null} BootstrapTaskManager 实例 */
+  /** BootstrapTaskManager 实例 */
   #taskManager: Record<string, (...args: unknown[]) => void> | null;
 
   /** @param container DI Container */

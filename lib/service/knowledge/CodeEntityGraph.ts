@@ -401,7 +401,7 @@ export class CodeEntityGraph {
   /**
    * 从候选的 Relations 字段提取边写入图谱 (Phase 5/6)
    *
-   * @param {Array<{title: string, relations: object}>} candidates 扁平关系数组或 Relations 对象
+   * @param candidates 扁平关系数组或 Relations 对象
    */
   populateFromCandidateRelations(candidates: CandidateWithRelations[] | null): GraphPopulateResult {
     if (!candidates?.length) {
@@ -901,8 +901,8 @@ export class CodeEntityGraph {
   /**
    * 从解析后的调用边填充图谱 (Phase 5)
    *
-   * @param {Array<{ caller: string, callee: string, callType: string, resolveMethod: string, line: number, file: string, isAwait: boolean }>} callEdges
-   * @param {Array<{ from: string, to: string, flowType: string, direction: string }>} dataFlowEdges
+   * @param callEdges
+   * @param dataFlowEdges
    */
   populateCallGraph(callEdges: CallEdge[], dataFlowEdges: DataFlowEdge[]): GraphPopulateResult {
     const t0 = Date.now();

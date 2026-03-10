@@ -52,8 +52,8 @@ export class HybridRetriever {
    * Dense: vectorStore 向量搜索 (HNSW or brute-force)
    * Sparse: BM25 关键词搜索 (由外部传入结果)
    *
-   * @param {Array<{ id: string, score: number, [key: string]: unknown }>} params.denseResults - 向量搜索结果
-   * @param {Array<{ id: string, score: number, [key: string]: unknown }>} params.sparseResults - 关键词搜索结果
+   * @param params.denseResults - 向量搜索结果
+   * @param params.sparseResults - 关键词搜索结果
    * @param [params.alpha=0.5] Dense 权重
    * @returns >}
    */

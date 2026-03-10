@@ -178,7 +178,7 @@ export class BootstrapSnapshot {
    *
    * @param params.sessionId Bootstrap 会话 ID
    * @param params.projectRoot 项目根目录
-   * @param {Array<{path: string, relativePath: string}>} params.allFiles 扫描到的文件列表
+   * @param params.allFiles 扫描到的文件列表
    * @param params.dimensionStats { dimId: { referencedFiles: string[] } }
    * @param [params.episodicData] EpisodicMemory.toJSON()
    * @param [params.meta] { durationMs, candidateCount, primaryLang }
@@ -334,7 +334,7 @@ export class BootstrapSnapshot {
    * 计算当前文件与快照的 diff
    *
    * @param snapshot getLatest() 返回的快照
-   * @param {Array<{path: string, relativePath: string, content: string}>} currentFiles 当前文件列表
+   * @param currentFiles 当前文件列表
    * @returns }
    */
   computeDiff(
@@ -387,7 +387,7 @@ export class BootstrapSnapshot {
    * 3. 如果变更比例超过阈值 → 建议全量
    *
    * @param snapshot 上次快照
-   * @param {{ added: string[], modified: string[], deleted: string[] }} diff
+   * @param diff
    * @param allDimIds 所有可用维度 ID
    * @returns }
    */

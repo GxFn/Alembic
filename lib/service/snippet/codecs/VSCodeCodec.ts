@@ -73,7 +73,7 @@ export class VSCodeCodec extends SnippetCodec {
     return BUNDLE_FILENAME;
   }
 
-  /** @private SnippetSpec → VSCode snippet entry */
+  /** SnippetSpec → VSCode snippet entry */
   #specToEntry(spec: SnippetSpec) {
     const code = Array.isArray(spec.code) ? spec.code.join('\n') : spec.code || '';
     // 自动将 Xcode 占位符转为 VSCode 格式

@@ -26,7 +26,7 @@ export class SpmHelper {
   /** 包级依赖图：packagePath → Set<packagePath>（用于跨包循环检测） */
   #packageDepGraph;
 
-  /** @type {GraphCache} 磁盘缓存层 */
+  /** 磁盘缓存层 */
   #graphCache;
 
   constructor(
@@ -226,7 +226,7 @@ export class SpmHelper {
 
   /**
    * 解析所有 Package.swift 中的 .package(path: "...") 声明，构建包级依赖图
-   * @param {{ path: string, parsed: object }[]} allParsed
+   * @param allParsed
    */
   #buildPackageDepGraph(
     allParsed: { path: string; parsed: ReturnType<PackageSwiftParser['parse']> }[]
@@ -474,7 +474,7 @@ export class SpmHelper {
    * 确保 Package.swift 中有对目标包的 .package(path: "...") 声明
    * @param content Package.swift 内容
    * @param fromPkgPath 当前包的 Package.swift 路径
-   * @param {{ packageName: string, packagePath: string }} toPkg 目标包信息
+   * @param toPkg 目标包信息
    * @returns }
    */
   #ensurePackageDependency(

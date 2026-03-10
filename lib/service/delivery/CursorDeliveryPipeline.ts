@@ -188,7 +188,6 @@ export class CursorDeliveryPipeline {
 
   /**
    * 加载知识条目（active + high-confidence pending）
-   * @private
    */
   async _loadEntries() {
     const allEntries: KnowledgeEntryProps[] = [];
@@ -230,7 +229,6 @@ export class CursorDeliveryPipeline {
 
   /**
    * 从 KnowledgeService.list() 返回值提取条目数组
-   * @private
    */
   _extractItems(result: unknown): KnowledgeEntryProps[] {
     if (Array.isArray(result)) {
@@ -249,7 +247,6 @@ export class CursorDeliveryPipeline {
   /**
    * 按 kind 分类知识条目
    * dev-document 类型单独分流，不进入 Channel A/B 压缩
-   * @private
    */
   _classify(entries: KnowledgeEntryProps[]) {
     const rules: KnowledgeEntryProps[] = [],
@@ -272,7 +269,6 @@ export class CursorDeliveryPipeline {
 
   /**
    * 排序 — 质量分 + 统计使用量
-   * @private
    */
   _rank(entries: KnowledgeEntryProps[]) {
     return [...entries].sort((a, b) => {
@@ -284,7 +280,6 @@ export class CursorDeliveryPipeline {
 
   /**
    * 计算排名分
-   * @private
    */
   _rankScore(entry: KnowledgeEntryProps) {
     const qual = entry.quality as { confidence?: number; authorityScore?: number } | undefined;
@@ -303,7 +298,6 @@ export class CursorDeliveryPipeline {
 
   /**
    * Channel A 生成
-   * @private
    */
   _generateChannelA(rules: KnowledgeEntryProps[]) {
     const topRules = this._rank(rules).slice(0, BUDGET.CHANNEL_A_MAX_RULES);
@@ -325,7 +319,6 @@ export class CursorDeliveryPipeline {
    * Channel B 生成（patterns + facts）
    * @param patterns kind='pattern' 的知识条目
    * @param [facts=[]] kind='fact' 的知识条目
-   * @private
    */
   _generateChannelB(patterns: KnowledgeEntryProps[], facts: KnowledgeEntryProps[] = []) {
     const result: {
@@ -407,7 +400,6 @@ export class CursorDeliveryPipeline {
   /**
    * Channel B+ — Call Graph Architecture Rules (Phase 5.2)
    * 从调用图拓扑分析架构分层，生成 architecture smart rule
-   * @private
    * @returns |null}
    */
   _generateCallGraphArchitectureRules() {
@@ -571,7 +563,6 @@ export class CursorDeliveryPipeline {
 
   /**
    * 从文件路径中提取层级目录 (第一或第二级有意义的目录)
-   * @private
    */
   _extractLayerDir(filePath: string) {
     if (!filePath) {
@@ -590,7 +581,6 @@ export class CursorDeliveryPipeline {
 
   /**
    * Channel C 生成
-   * @private
    */
   async _generateChannelC() {
     try {
@@ -620,7 +610,6 @@ export class CursorDeliveryPipeline {
    * Channel D — Dev Documents 生成
    * 将 knowledgeType='dev-document' 的条目以原始 MD 写入
    * .cursor/skills/autosnippet-devdocs/references/ 目录
-   * @private
    */
   _generateChannelD(documents: KnowledgeEntryProps[]) {
     const result = { documentsCount: 0, filesWritten: 0, filePaths: [] as string[] };
@@ -704,7 +693,6 @@ export class CursorDeliveryPipeline {
   /**
    * Channel F — Agent Instructions 生成
    * 生成 AGENTS.md / CLAUDE.md / .github/copilot-instructions.md
-   * @private
    */
   _generateChannelF(rules: KnowledgeEntryProps[], patterns: KnowledgeEntryProps[]) {
     try {
@@ -752,7 +740,6 @@ export class CursorDeliveryPipeline {
 
   /**
    * 文件名安全 slug 化
-   * @private
    */
   _slugify(text: string) {
     return (
@@ -768,7 +755,6 @@ export class CursorDeliveryPipeline {
    * 镜像 .cursor/ 交付物料到目标 IDE 目录（Qoder / Trae 等兼容 IDE）
    * 只复制 autosnippet- 前缀的文件/目录，不触碰用户自定义内容
    * @param targetDirName 目标目录名，如 '.qoder' 或 '.trae'
-   * @private
    */
   _mirrorToIDE(targetDirName: string) {
     try {
@@ -819,7 +805,6 @@ export class CursorDeliveryPipeline {
 
   /**
    * 递归复制目录
-   * @private
    */
   _copyDirRecursive(src: string, dest: string) {
     fs.mkdirSync(dest, { recursive: true });
@@ -836,7 +821,6 @@ export class CursorDeliveryPipeline {
 
   /**
    * 从项目路径推断项目名称
-   * @private
    */
   _inferProjectName(projectRoot: string) {
     return path.basename(projectRoot);

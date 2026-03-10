@@ -13,7 +13,7 @@ export class VectorStore {
 
   /**
    * 插入或更新文档
-   * @param {{ id: string, content: string, vector: number[], metadata: object }} item
+   * @param item
    */
   async upsert(item: {
     id: string;

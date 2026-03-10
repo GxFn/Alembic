@@ -77,7 +77,7 @@ export class ModuleService {
 
   #registry;
 
-  /** @type {Array<{ discoverer: import('../../core/discovery/ProjectDiscoverer.js').ProjectDiscoverer, confidence: number }>} */
+  /** >} */
   #activeDiscoverers: Array<{
     discoverer: import('../../core/discovery/ProjectDiscoverer.js').ProjectDiscoverer;
     confidence: number;
@@ -295,7 +295,7 @@ export class ModuleService {
 
   /**
    * 获取依赖关系图
-   * @param {{ level?: 'package'|'target' }} [options]
+   * @param [options]
    * @returns [] }>}
    */
   async getDependencyGraph(options: { level?: 'package' | 'target' } = {}) {

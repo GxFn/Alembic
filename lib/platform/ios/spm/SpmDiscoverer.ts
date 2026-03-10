@@ -17,7 +17,7 @@ import { PackageSwiftParser } from './PackageSwiftParser.js';
 export class SpmDiscoverer extends ProjectDiscoverer {
   #parser: PackageSwiftParser | null = null;
   #projectRoot: string | null = null;
-  /** @type {Array<{ pkgPath: string, parsed: ReturnType<PackageSwiftParser['parse']> }>} */
+  /** >} */
   #parsedPackages: { pkgPath: string; parsed: ReturnType<PackageSwiftParser['parse']> }[] = [];
 
   get id() {

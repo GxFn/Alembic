@@ -50,7 +50,7 @@ export class GuardFeedbackLoop {
 
   /**
    * 对比当前和历史 violations，检测已修复的违规
-   * @param {{ violations: Array<{ruleId: string}> }} currentResult 本次检查结果
+   * @param currentResult 本次检查结果
    * @param filePath 文件路径
    * @returns >} 已修复且有 Recipe 关联的列表
    */
@@ -92,7 +92,7 @@ export class GuardFeedbackLoop {
 
   /**
    * 对已修复的违规自动确认使用
-   * @param {Array<{ ruleId: string, filePath: string, fixRecipeId: string }>} fixedList
+   * @param fixedList
    */
   autoConfirmUsage(fixedList: FixedViolation[]) {
     if (!this.feedbackCollector || !fixedList?.length) {
@@ -119,7 +119,7 @@ export class GuardFeedbackLoop {
   /**
    * 一站式处理：检测修复 + 自动确认
    * 供 MCP handler、GuardHandler、HTTP guard/file 端点集成调用
-   * @param {{ violations: Array }} currentResult
+   * @param currentResult
    */
   processFixDetection(currentResult: CheckResult, filePath: string) {
     const fixed = this.detectFixedViolations(currentResult, filePath);

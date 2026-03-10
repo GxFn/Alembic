@@ -335,10 +335,9 @@ export class McpServer {
 
   /**
    * 获取 decisions 摘要（带缓存 + 防并发）
-   * @private
    * @returns >>}
    */
-  async _getDecisionsSummary() {
+  private async _getDecisionsSummary() {
     const cache = this._decisionCache;
     const now = Date.now();
 
@@ -368,7 +367,6 @@ export class McpServer {
 
   /**
    * 从 DB 查询 decisions 摘要（仅 id + title）
-   * @private
    */
   async _fetchDecisionsSummary() {
     const cache = this._decisionCache;
@@ -398,7 +396,6 @@ export class McpServer {
 
   /**
    * 从 ready 响应结果中刷新缓存（避免额外 DB 查询）
-   * @private
    */
   _refreshCacheFromReady(readyResult: unknown) {
     try {
@@ -419,7 +416,6 @@ export class McpServer {
 
   /**
    * 解析工具名到 handler 函数（V3 整合版）
-   * @private
    */
   _resolveHandler(name: string): ToolHandlerFn | null {
     const HANDLER_MAP: Record<string, ToolHandlerFn> = {

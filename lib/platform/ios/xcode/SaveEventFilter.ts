@@ -43,10 +43,10 @@ class SaveEventFilter {
   _contentHashes: Map<string, string>;
   _selfWrites: Map<string, number>;
   constructor() {
-    /** @type {Map<string, number>} filePath → 最后一次 self-write 的时间戳 */
+    /** filePath → 最后一次 self-write 的时间戳 */
     this._selfWrites = new Map();
 
-    /** @type {Map<string, string>} filePath → 上次处理时的内容 MD5 哈希 */
+    /** filePath → 上次处理时的内容 MD5 哈希 */
     this._contentHashes = new Map();
 
     // 定期清理过期条目，防止内存泄漏

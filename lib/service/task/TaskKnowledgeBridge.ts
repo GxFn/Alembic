@@ -165,9 +165,8 @@ export class TaskKnowledgeBridge {
 
   /**
    * 为单个任务构建知识上下文（v2 — multi-query + 上下文 + 缓存）
-   * @private
    */
-  async _buildContext(task: Task, options?: KnowledgeEnrichOptions) {
+  private async _buildContext(task: Task, options?: KnowledgeEnrichOptions) {
     const taskQuery = `${task.title} ${task.description}`.trim();
     if (!taskQuery && !options?.userQuery) {
       return null;
@@ -236,9 +235,8 @@ export class TaskKnowledgeBridge {
    *   Q2 (语义): 用户输入 — 包含更丰富的自然语义
    *   Q3 (关键词): 从描述/用户输入提取技术术语
    *
-   * @private
    */
-  _buildSearchQueries(task: Task, userQuery?: string): string[] {
+  private _buildSearchQueries(task: Task, userQuery?: string): string[] {
     const queries: string[] = [];
 
     // Q1: 任务标题（最精练）
@@ -277,9 +275,8 @@ export class TaskKnowledgeBridge {
 
   /**
    * P2: 从文本中提取技术术语（类名、文件名、API 名等）
-   * @private
    */
-  _extractTechTerms(text: string): string[] {
+  private _extractTechTerms(text: string): string[] {
     if (!text) {
       return [];
     }
@@ -304,9 +301,8 @@ export class TaskKnowledgeBridge {
    * P2 + P3: Multi-Query 搜索 + 合并去重
    *
    * 对每个 query 执行搜索（并行），合并结果并按 score 去重保留最高分。
-   * @private
    */
-  async _multiQuerySearch(
+  private async _multiQuerySearch(
     queries: string[],
     options: { language?: string }
   ): Promise<Array<Record<string, unknown>>> {
@@ -344,9 +340,8 @@ export class TaskKnowledgeBridge {
 
   /**
    * 执行单次搜索（含 P3 上下文透传）
-   * @private
    */
-  async _singleSearch(
+  private async _singleSearch(
     query: string,
     options: { language?: string }
   ): Promise<Array<Record<string, unknown>>> {
@@ -366,26 +361,23 @@ export class TaskKnowledgeBridge {
 
   /**
    * P4: 相关性阈值判断
-   * @private
    */
-  _aboveThreshold(item: Record<string, unknown>): boolean {
+  private _aboveThreshold(item: Record<string, unknown>): boolean {
     const score = (item.score as number) || 0;
     return score >= RELEVANCE_THRESHOLD;
   }
 
   /**
    * P4: 增强投影 — 使用统一 slimSearchResult() 投影函数
-   * @private
    */
-  _projectItem(item: Record<string, unknown>): SlimKnowledgeItem {
+  private _projectItem(item: Record<string, unknown>): SlimKnowledgeItem {
     return slimSearchResult(item as Parameters<typeof slimSearchResult>[0]);
   }
 
   /**
    * P6: 缓存键 — 基于 taskQuery + userQuery 的内容指纹
-   * @private
    */
-  _contentKey(taskQuery: string, userQuery?: string): string {
+  private _contentKey(taskQuery: string, userQuery?: string): string {
     return `${taskQuery}||${userQuery || ''}`;
   }
 

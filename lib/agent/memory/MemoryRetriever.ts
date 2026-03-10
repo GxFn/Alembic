@@ -69,7 +69,7 @@ export type EmbeddingFn = (text: string) => Promise<number[]>;
 export class MemoryRetriever {
   #store: MemoryStore;
 
-  /** @type {EmbeddingFn|null} 向量嵌入函数 */
+  /** 向量嵌入函数 */
   #embeddingFn: EmbeddingFn | null;
 
   /** @param [opts.embeddingFn] 向量嵌入函数 (异步) */

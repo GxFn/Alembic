@@ -322,7 +322,7 @@ function analyzeFile(
 
 /**
  * 批量分析多文件，返回项目级汇总
- * @param {{ name: string, relativePath: string, content: string }[]} files
+ * @param files
  * @param | null }} [options]
  */
 function analyzeProject(
@@ -953,7 +953,7 @@ function findCallExpressions(source: string, lang: string, targetCallee: string)
  * @param source 源代码
  * @param lang 'objectivec' | 'swift'
  * @param pattern 要查找的文本模式（普通字符串匹配）
- * @param {{ forbiddenContext?: string, requiredContext?: string }} contextFilter
+ * @param contextFilter
  *   forbiddenContext: 如果在此上下文中出现则报告 (如 'dealloc')
  *   requiredContext: 如果不在此上下文中出现则报告
  * @returns >}

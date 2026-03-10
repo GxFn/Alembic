@@ -18,15 +18,15 @@ export class Quality {
   grade: string;
   overall: number;
   constructor(props: QualityProps = {}) {
-    /** @type {number} 内容完整度 (0-1) */
+    /** 内容完整度 (0-1) */
     this.completeness = props.completeness ?? 0;
-    /** @type {number} 项目适配度 (0-1) */
+    /** 项目适配度 (0-1) */
     this.adaptation = props.adaptation ?? 0;
-    /** @type {number} 文档清晰度 (0-1) */
+    /** 文档清晰度 (0-1) */
     this.documentation = props.documentation ?? 0;
-    /** @type {number} 综合分 (0-1) */
+    /** 综合分 (0-1) */
     this.overall = props.overall ?? 0;
-    /** @type {string} 等级 A-F */
+    /** 等级 A-F */
     this.grade = props.grade || Quality.calcGrade(this.overall);
   }
 

@@ -36,7 +36,7 @@ export class BaseRepository {
   db: Database;
   logger: WinstonLogger;
   tableName: string;
-  /** @type {Set<string>|null} lazily-populated column whitelist */
+  /** lazily-populated column whitelist */
   #columnWhitelist: Set<string> | null = null;
 
   constructor(database: DatabaseWrapper, tableName: string) {

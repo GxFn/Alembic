@@ -33,7 +33,7 @@ type RelationBuckets = Record<string, Array<string | Partial<RelationEntry>>>;
 export class Relations {
   _b: Record<string, RelationEntry[]>;
   constructor(buckets: RelationBuckets = {}) {
-    /** @type {Object.<string, Array<{target:string, description:string}>>} */
+    /** >>} */
     this._b = {};
     for (const k of RELATION_BUCKETS) {
       const vals = buckets[k] || [];

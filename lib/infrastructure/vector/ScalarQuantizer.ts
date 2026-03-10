@@ -14,11 +14,11 @@
 
 export class ScalarQuantizer {
   #dimension;
-  /** @type {Float32Array} 每维最小值 */
+  /** 每维最小值 */
   #mins;
-  /** @type {Float32Array} 每维最大值 */
+  /** 每维最大值 */
   #maxs;
-  /** @type {Float32Array} 每维范围 (max - min), 预计算避免重复减法 */
+  /** 每维范围 (max - min), 预计算避免重复减法 */
   #ranges;
   #trained = false;
 
@@ -187,7 +187,7 @@ export class ScalarQuantizer {
 
   /**
    * 从序列化数据恢复量化器
-   * @param {{ dimension: number, mins: number[], maxs: number[] }} data
+   * @param data
    */
   static deserialize(data: { dimension: number; mins: number[]; maxs: number[] }) {
     const q = new ScalarQuantizer(data.dimension);

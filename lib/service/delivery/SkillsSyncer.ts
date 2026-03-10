@@ -154,7 +154,6 @@ export class SkillsSyncer {
 
   /**
    * 转换 SKILL.md 格式 — 从 AutoSnippet 格式到 Cursor Agent Skills 标准
-   * @private
    */
   _convertSkillMd(source: string, targetName: string, sourceDirName: string) {
     // 提取原始内容（去掉 frontmatter）
@@ -198,7 +197,6 @@ export class SkillsSyncer {
 
   /**
    * 生成 references/RECIPES.md
-   * @private
    */
   async _generateRecipes(targetSkillDir: string, sourceDirName: string) {
     const refsDir = path.join(targetSkillDir, 'references');
@@ -257,7 +255,6 @@ export class SkillsSyncer {
 
   /**
    * 生成使用场景列表
-   * @private
    */
   _generateUseCases(sourceDirName: string) {
     const casesMap = {
@@ -334,7 +331,6 @@ export class SkillsSyncer {
     );
   }
 
-  /** @private */
   _capitalizeWords(str: string) {
     return str.replace(/\b\w/g, (c: string) => c.toUpperCase());
   }

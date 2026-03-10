@@ -70,76 +70,76 @@ interface LoopContextConfig {
 export class LoopContext {
   // ─── 注入依赖 ───
 
-  /** @type {import('./MessageAdapter.js').MessageAdapter} 统一消息适配器 */
+  /** 统一消息适配器 */
   messages: MessageAdapter;
 
-  /** @type {Object|null} ExplorationTracker 实例 */
+  /** ExplorationTracker 实例 */
   tracker: ExplorationTracker | null;
 
-  /** @type {Object|null} ActiveContext 实例 */
+  /** ActiveContext 实例 */
   trace: ActiveContext | null;
 
-  /** @type {Object|null} MemoryCoordinator 实例 */
+  /** MemoryCoordinator 实例 */
   memoryCoordinator: MemoryCoordinator | null;
 
-  /** @type {Object|null} 共享状态 */
+  /** 共享状态 */
   sharedState: SharedState | null;
 
   // ─── 循环状态 ───
 
-  /** @type {number} 当前迭代次数 */
+  /** 当前迭代次数 */
   iteration = 0;
 
-  /** @type {string} 最终回复文本 */
+  /** 最终回复文本 */
   lastReply = '';
 
-  /** @type {Array} 本轮工具调用记录 */
+  /** 本轮工具调用记录 */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tool call entries have varying shapes (ToolCallEntry, ToolCallRecord, etc.) across callers; no common structural type satisfies all consumers
   toolCalls: any[] = [];
 
-  /** @type {{input: number, output: number}} 本轮 token 用量 */
+  /** } 本轮 token 用量 */
   tokenUsage = { input: 0, output: 0 };
 
-  /** @type {number} 循环开始时间戳 */
+  /** 循环开始时间戳 */
   loopStartTime = 0;
 
   // ─── 错误恢复 ───
 
-  /** @type {number} 连续 AI 错误计数 (2-strike 策略) */
+  /** 连续 AI 错误计数 (2-strike 策略) */
   consecutiveAiErrors = 0;
 
-  /** @type {number} 连续空响应计数 */
+  /** 连续空响应计数 */
   consecutiveEmptyResponses = 0;
 
   // ─── 配置 (只读) ───
 
-  /** @type {string} 来源 'user' | 'system' */
+  /** 来源 'user' | 'system' */
   source: string;
 
-  /** @type {Object} 预算配置 */
+  /** 预算配置 */
   budget: BudgetConfig;
 
   capabilities: Capability[];
 
-  /** @type {string} 基础系统提示词 */
+  /** 基础系统提示词 */
   baseSystemPrompt: string;
 
-  /** @type {Array} 工具 schemas */
+  /** 工具 schemas */
   toolSchemas: Array<Record<string, unknown>>;
 
-  /** @type {string} 原始用户提示 */
+  /** 原始用户提示 */
   prompt: string;
 
-  /** @type {Function|null} 工具调用钩子 */
+  /** 工具调用钩子 */
   onToolCall: ToolCallHook | null;
 
-  /** @type {Object} 额外上下文 */
+  /** 额外上下文 */
   context: Record<string, unknown>;
 
-  /** @type {import('../context/ContextWindow.js').ContextWindow|null} 原始 ContextWindow 引用 */
+  /** 原始 ContextWindow 引用 */
   contextWindow: ContextWindow | null;
 
-  /** @type {string|null} 首轮 toolChoice 覆盖 ('required'/'auto'/'none') */
+  /** 首轮 toolChoice 覆盖 ('required'/'auto'/'none') */
   toolChoiceOverride: string | null;
 
   constructor(config: LoopContextConfig) {

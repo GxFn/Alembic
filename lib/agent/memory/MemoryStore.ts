@@ -140,10 +140,10 @@ const FORGET_DAYS = 90;
 export class MemoryStore {
   #db: SqliteDatabase;
 
-  /** @type {object} 预编译 SQL Statements */
+  /** 预编译 SQL Statements */
   #stmts: PreparedStatements = null!;
 
-  /** @type {Map<string, SqliteStatement>} 动态 update SQL 缓存 */
+  /** 动态 update SQL 缓存 */
   #updateStmtCache = new Map<string, SqliteStatement>();
 
   /** @param db better-sqlite3 实例 (raw) */

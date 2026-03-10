@@ -50,16 +50,16 @@ interface BudgetOptions {
 }
 
 export class SystemPromptBuilder {
-  /** @type {Persona|null} persona 配置 */
+  /** persona 配置 */
   #persona: Persona | null;
 
-  /** @type {FileCacheEntry[]|null} 文件缓存 */
+  /** 文件缓存 */
   #fileCache: FileCacheEntry[] | null;
 
-  /** @type {string|null} 语言偏好 */
+  /** 语言偏好 */
   #lang: string | null;
 
-  /** @type {MemoryConfig|null} 记忆配置 */
+  /** 记忆配置 */
   #memoryConfig: MemoryConfig | null;
 
   constructor({ persona, fileCache, lang, memoryConfig }: SystemPromptBuilderOptions = {}) {

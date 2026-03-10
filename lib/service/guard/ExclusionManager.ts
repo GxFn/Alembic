@@ -69,7 +69,7 @@ export class ExclusionManager {
 
   /**
    * 添加路径排除 (glob 或精确路径)
-   * @param {{ reason?: string }} meta
+   * @param meta
    */
   addPathExclusion(pattern: string, meta: ExclusionMeta = {}) {
     if (!pattern) {

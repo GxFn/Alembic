@@ -77,7 +77,7 @@ export class CallEdgeResolver {
   propertyTypes: Map<string, Map<string, string>>;
   symbolTable: SymbolTable;
   /**
-   * @param {Array<{from: string, to: string, type: string}>} [inheritanceGraph=[]] 继承图边
+   * @param [inheritanceGraph=[]] 继承图边
    */
   constructor(
     symbolTable: SymbolTable,
@@ -96,7 +96,7 @@ export class CallEdgeResolver {
     // 构建反向索引: symbolName → [fqn1, fqn2, ...]
     this.nameIndex = new Map();
     // 构建文件级索引: file → [{ name, qualifiedName, fqn }] (Issue #14 性能优化)
-    /** @type {Map<string, Array<{name: string, qualifiedName: string, fqn: string}>>} */
+    /** >>} */
     this.fileIndex = new Map();
 
     // Phase 5.3: 类名集合索引 (用于 _inferFieldType 优化，避免全表扫描)
@@ -157,12 +157,12 @@ export class CallEdgeResolver {
     return edges;
   }
 
-  /** @private 构建局部 import 映射 */
+  /** 构建局部 import 映射 */
   _buildImportMap(
     fileImports: Array<{ path?: string; symbols?: string[]; alias?: string; toString(): string }>,
     callerFile: string
   ): Map<string, { file: string; namespace: boolean }> {
-    /** @type {Map<string, { file: string, namespace: boolean }>} */
+    /** >} */
     const importedSymbols = new Map();
 
     for (const imp of fileImports) {
@@ -193,7 +193,7 @@ export class CallEdgeResolver {
     return importedSymbols;
   }
 
-  /** @private 解析单个调用点 */
+  /** 解析单个调用点 */
   _resolveCallSite(
     cs: CallSite,
     callerFile: string,
@@ -365,7 +365,7 @@ export class CallEdgeResolver {
   }
 
   /**
-   * @private CHA (Class Hierarchy Analysis): 沿继承链向上搜索方法
+   * CHA (Class Hierarchy Analysis): 沿继承链向上搜索方法
    *
    * 使用 BFS 遍历 inheritanceGraph，从 className 向上搜索直到找到
    * 定义了 methodName 的祖先类。只跟踪 'inherits' 类型的边。
@@ -413,7 +413,7 @@ export class CallEdgeResolver {
   }
 
   /**
-   * @private 从字段名推断类型（DI/IoC 命名约定推断）
+   * 从字段名推断类型（DI/IoC 命名约定推断）
    *
    * 常见模式:
    *   - userRepo → UserRepo
@@ -438,7 +438,7 @@ export class CallEdgeResolver {
   }
 
   /**
-   * @private 在指定文件中查找声明 (使用 fileIndex 优化，避免全表扫描)
+   * 在指定文件中查找声明 (使用 fileIndex 优化，避免全表扫描)
    * @param name 符号名 (可以是 "ClassName.methodName" 或 "functionName")
    * @returns 匹配的 FQN 列表
    */
@@ -452,7 +452,7 @@ export class CallEdgeResolver {
       .map((d: FileDecl) => d.fqn);
   }
 
-  /** @private 构建 ResolvedEdge */
+  /** 构建 ResolvedEdge */
   _makeEdge(
     callerFqn: string,
     calleeFqn: string,

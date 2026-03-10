@@ -91,9 +91,9 @@ export class AgentRuntime {
   lang;
   logger;
   #projectRoot;
-  /** @type {Array|null} 文件缓存 (bootstrap 场景注入) */
+  /** 文件缓存 (bootstrap 场景注入) */
   #fileCache: FileCacheEntry[] | null = null;
-  /** @type {string[]} 额外工具白名单 (调用方按需注入，不经 Capability) */
+  /** 额外工具白名单 (调用方按需注入，不经 Capability) */
   #additionalTools: string[] = [];
   #toolPipeline;
   #promptBuilder;

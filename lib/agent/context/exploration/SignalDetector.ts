@@ -53,7 +53,7 @@ export class SignalDetector {
   #metrics: SignalMetrics;
 
   /**
-   * @param {{ uniqueFiles: Set<string>, uniquePatterns: Set<string>, uniqueQueries: Set<string> }} metrics
+   * @param metrics
    */
   constructor(metrics: SignalMetrics) {
     this.#metrics = metrics;

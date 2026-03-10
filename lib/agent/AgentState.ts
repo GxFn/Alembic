@@ -80,14 +80,14 @@ const DEFAULT_TRANSITIONS = [
 ];
 
 export class AgentState extends EventEmitter {
-  /** @type {string} 当前阶段 */
+  /** 当前阶段 */
   #phase: string;
-  /** @type {Object} 用户自定义状态数据 */
+  /** 用户自定义状态数据 */
   #data: Record<string, unknown>;
   #transitions: Transition[];
-  /** @type {Array<{phase: string, data: Object, timestamp: number}>} */
+  /** >} */
   #history: HistoryEntry[];
-  /** @type {boolean} 是否保留历史 */
+  /** 是否保留历史 */
   #keepHistory: boolean;
 
   /**
