@@ -40,21 +40,13 @@ asd setup     # 初始化工作空间 + 数据库 + MCP 配置（自动检测 Cu
 asd ui        # 启动后台服务（MCP Server + Dashboard），IDE 和 MCP 工具依赖此服务运行
 ```
 
-> **Trae / Qoder 用户：** `asd setup` 完成后，运行以下命令将 Cursor 的配置镜像到 Trae / Qoder 目录：
-> ```bash
-> asd mirror          # 将 .cursor/ 配置同步到 .qoder/ 和 .trae/
-> ```
-> Trae / Qoder 读取 `.trae/` / `.qoder/` 下的 rules 和 skills，与 Cursor 保持一致。
+> **Trae / Qoder 用户：** `asd setup` 后运行 `asd mirror`，将 `.cursor/` 配置同步到 `.trae/` / `.qoder/`。
 
 ## 在 IDE 中使用
 
 `asd setup` 配置好了一切。打开 IDE 的 **Agent Mode**（Cursor Composer / VS Code Copilot Chat / Trae），跟 Agent 对话就行。
 
-> **首次使用 — 需要在 IDE 中手动开启 MCP：**
-> - **Cursor**：默认已启用 MCP。如果工具没出现，进入 *Settings → MCP*，确认 `autosnippet` 服务已开启。
-> - **VS Code Copilot**：打开 `.vscode/mcp.json` → 点击编辑器标题栏的 **Start** 按钮，或在命令面板执行 `MCP: List Servers`。
-> - **Trae**：进入 *设置 → AI → MCP 服务器*，确认 `autosnippet` 已在列表中并处于启用状态。
-> - **Qoder**：进入 *偏好设置 → MCP*，确认 `autosnippet` 出现并已开启。
+> **首次使用：** 需在 IDE 的 MCP 设置中手动开启 `autosnippet` 服务。
 
 > **提示：** IDE Agent 使用的模型越强，效果越好。推荐在 Cursor / Copilot 中选择 Claude Opus 4 / Sonnet 4、GPT-5 或 Gemini 3 Pro，产出更准确的模式和更少的误报。
 
