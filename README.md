@@ -40,10 +40,11 @@ asd setup     # workspace + DB + MCP configs (auto-detects Cursor / VS Code / Tr
 asd ui        # start the background service (MCP Server + Dashboard) — IDE and MCP tools require this
 ```
 
-> **Trae / Qoder users (China mirror):** If `npm install -g autosnippet` is slow, use the Taobao mirror:
+> **Trae / Qoder users:** After `asd setup`, run the following command to mirror Cursor's config to Trae / Qoder:
 > ```bash
-> npm install -g autosnippet --registry=https://registry.npmmirror.com
+> asd mirror          # sync .cursor/ config to .qoder/ and .trae/
 > ```
+> Trae / Qoder reads rules and skills from `.trae/` / `.qoder/`, keeping them in sync with Cursor.
 
 ## Using in Your IDE
 

@@ -40,10 +40,11 @@ asd setup     # 初始化工作空间 + 数据库 + MCP 配置（自动检测 Cu
 asd ui        # 启动后台服务（MCP Server + Dashboard），IDE 和 MCP 工具依赖此服务运行
 ```
 
-> **Trae / Qoder 用户（国内镜像）：** 如果 `npm install -g autosnippet` 速度慢，使用淘宝镜像：
+> **Trae / Qoder 用户：** `asd setup` 完成后，运行以下命令将 Cursor 的配置镜像到 Trae / Qoder 目录：
 > ```bash
-> npm install -g autosnippet --registry=https://registry.npmmirror.com
+> asd mirror          # 将 .cursor/ 配置同步到 .qoder/ 和 .trae/
 > ```
+> Trae / Qoder 读取 `.trae/` / `.qoder/` 下的 rules 和 skills，与 Cursor 保持一致。
 
 ## 在 IDE 中使用
 
