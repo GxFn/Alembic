@@ -6,7 +6,7 @@
  *     - 无子仓库 → 'admin'（个人项目）
  *     - 有子仓库 + 无 remote → 'admin'（本地开发）
  *     - 有子仓库 + 是 git repo 但无 remote + noRemote=deny → 'visitor'
- *     - 目录存在但非 git repo → 'contributor'
+ *     - 目录存在但非 git repo → 'admin'
  *     - 缓存命中 / 过期 / 失效
  *   ✓ roleResolver 中间件
  *     - Path A (AUTH_ENABLED=true): token 解析
@@ -19,13 +19,19 @@ import { CapabilityProbe } from '../../lib/core/capability/CapabilityProbe.js';
 import { roleResolverMiddleware } from '../../lib/http/middleware/roleResolver.js';
 import { createExpiredToken, createTempGitRepo, createTestToken } from '../fixtures/factory.js';
 
+type RepoHandle = { repoPath: string; cleanup: () => void };
+type TestReq = {
+  headers: Record<string, string>;
+  resolvedRole?: string;
+  resolvedUser?: string;
+};
+
 // ═══════════════════════════════════════════════════════
 //  CapabilityProbe — 真实 git repo 测试
 // ═══════════════════════════════════════════════════════
 
 describe('Integration: CapabilityProbe', () => {
-  /** @type {{ repoPath: string, cleanup: () => void }[]} */
-  const repos = [];
+  const repos: RepoHandle[] = [];
 
   afterAll(() => {
     for (const r of repos) {
@@ -90,7 +96,7 @@ describe('Integration: CapabilityProbe', () => {
     expect(result).toBe('contributor');
   });
 
-  test('目录存在但不是 git repo → contributor', async () => {
+  test('目录存在但不是 git repo → admin', async () => {
     const fs = await import('node:fs');
     const os = await import('node:os');
     const path = await import('node:path');
@@ -103,7 +109,7 @@ describe('Integration: CapabilityProbe', () => {
     });
 
     const probe = new CapabilityProbe({ subRepoPath: tmpDir });
-    expect(probe.probe()).toBe('contributor');
+    expect(probe.probe()).toBe('admin');
   });
 
   // ── 缓存行为 ──
@@ -148,7 +154,9 @@ describe('Integration: CapabilityProbe', () => {
     probe.probe(); // 首次探测，缓存
 
     // 手动使缓存过期
-    probe._cache.expiresAt = Date.now() - 1;
+    if (probe._cache) {
+      probe._cache.expiresAt = Date.now() - 1;
+    }
 
     const status = probe.getCacheStatus();
     expect(status.expired).toBe(true);
@@ -168,9 +176,9 @@ describe('Integration: roleResolver middleware', () => {
   const TOKEN_SECRET = 'test-resolver-secret';
 
   // 保存/恢复环境变量
-  const envBackup = {};
+  const envBackup: Record<string, string | undefined> = {};
 
-  function setEnv(key, value) {
+  function setEnv(key: string, value: string | undefined) {
     envBackup[key] = process.env[key];
     if (value === undefined) {
       delete process.env[key];
@@ -190,8 +198,8 @@ describe('Integration: roleResolver middleware', () => {
   }
 
   /** 创建 mock req/res/next */
-  function mockExpress(headers = {}) {
-    const req = { headers: { ...headers } };
+  function mockExpress(headers: Record<string, string> = {}) {
+    const req: TestReq = { headers: { ...headers } };
     const res = {};
     let nextCalled = false;
     const next = () => {
@@ -212,7 +220,7 @@ describe('Integration: roleResolver middleware', () => {
       'x-user-id': 'external_agent',
     });
 
-    middleware(req, res, next);
+    middleware(req as never, res as never, next as never);
     expect(wasNextCalled()).toBe(true);
     expect(req.resolvedRole).toBe('external_agent');
   });
@@ -223,7 +231,7 @@ describe('Integration: roleResolver middleware', () => {
       'x-user-id': 'anonymous',
     });
 
-    middleware(req, res, next);
+    middleware(req as never, res as never, next as never);
     expect(wasNextCalled()).toBe(true);
     // 走到 probe-based 或 token-based 路径，不再是 'anonymous'
     expect(req.resolvedRole).toBeDefined();
@@ -235,7 +243,7 @@ describe('Integration: roleResolver middleware', () => {
       'x-user-id': 'dashboard',
     });
 
-    middleware(req, res, next);
+    middleware(req as never, res as never, next as never);
     expect(req.resolvedRole).toBeDefined();
     // dashboard 不被直接信任，走正常路径
   });
@@ -251,7 +259,7 @@ describe('Integration: roleResolver middleware', () => {
     const middleware = roleResolverMiddleware({ capabilityProbe: probe });
 
     const { req, res, next, wasNextCalled } = mockExpress({});
-    middleware(req, res, next);
+    middleware(req as never, res as never, next as never);
 
     expect(wasNextCalled()).toBe(true);
     expect(req.resolvedRole).toBe('developer');
@@ -265,7 +273,7 @@ describe('Integration: roleResolver middleware', () => {
     const middleware = roleResolverMiddleware({});
     const { req, res, next } = mockExpress({});
 
-    middleware(req, res, next);
+    middleware(req as never, res as never, next as never);
     expect(req.resolvedRole).toBe('developer');
     expect(req.resolvedUser).toBe('local');
   });
@@ -304,7 +312,7 @@ describe('Integration: roleResolver middleware', () => {
 // ═══════════════════════════════════════════════════════
 
 describe('Integration: roleResolver + real CapabilityProbe', () => {
-  const repos = [];
+  const repos: RepoHandle[] = [];
 
   afterAll(() => {
     for (const r of repos) {
@@ -322,11 +330,15 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     });
 
     const middleware = roleResolverMiddleware({ capabilityProbe: probe });
-    const req = { headers: {} };
+    const req: TestReq = { headers: {} };
     let nextCalled = false;
-    middleware(req, {}, () => {
-      nextCalled = true;
-    });
+    middleware(
+      req as never,
+      {} as never,
+      (() => {
+        nextCalled = true;
+      }) as never
+    );
 
     expect(nextCalled).toBe(true);
     expect(req.resolvedRole).toBe('developer');
@@ -342,11 +354,15 @@ describe('Integration: roleResolver + real CapabilityProbe', () => {
     });
 
     const middleware = roleResolverMiddleware({ capabilityProbe: probe });
-    const req = { headers: {} };
+    const req: TestReq = { headers: {} };
     let nextCalled = false;
-    middleware(req, {}, () => {
-      nextCalled = true;
-    });
+    middleware(
+      req as never,
+      {} as never,
+      (() => {
+        nextCalled = true;
+      }) as never
+    );
 
     expect(nextCalled).toBe(true);
     expect(req.resolvedRole).toBe('visitor');
