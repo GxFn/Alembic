@@ -169,9 +169,11 @@ export class CapabilityProbe {
     // Case 2: 检查是否是 git 仓库
     const isGitRepo = this._isGitRepo(this.subRepoPath);
     if (!isGitRepo) {
-      // 有目录但不是 git 仓库 → contributor（可本地编辑但不能 push）
-      this.logger.debug('CapabilityProbe: directory exists but not a git repo');
-      return 'contributor';
+      // 有目录但不是 git 仓库 → 本地个人项目（asd setup 创建），给全权限
+      this.logger.debug(
+        'CapabilityProbe: directory exists but not a git repo — local project, granting admin'
+      );
+      return 'admin';
     }
 
     // Case 3: 检查是否有 remote
@@ -194,16 +196,9 @@ export class CapabilityProbe {
   }
 
   _isGitRepo(repoPath: string): boolean {
-    try {
-      execSync('git rev-parse --git-dir', {
-        cwd: repoPath,
-        stdio: 'pipe',
-        timeout: 5000,
-      });
-      return true;
-    } catch {
-      return false;
-    }
+    // 检查是否是独立的 git 仓库（有自己的 .git 目录/文件），
+    // 而非仅仅位于父项目 git 仓库内
+    return fs.existsSync(`${repoPath}/.git`);
   }
 
   _hasRemote(repoPath: string): boolean {

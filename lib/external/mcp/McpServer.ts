@@ -19,7 +19,7 @@
  * 整合路由 → handlers/consolidated.js
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer as SdkMcpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { CapabilityProbe } from '#core/capability/CapabilityProbe.js';
@@ -110,12 +110,12 @@ export class McpServer {
   _session: McpSession;
   _startedAt: number;
   bootstrap: BootstrapLike | null;
-  server: Server | null;
+  sdkServer: SdkMcpServer | null;
   constructor(options: McpServerOptions = {}) {
     this.logger = Logger.getInstance();
     this.container = options.container || null;
     this.bootstrap = options.bootstrap || null;
-    this.server = null;
+    this.sdkServer = null;
     this._startedAt = Date.now();
     this._autoApproveMarked = false;
     this._capabilityProbe = null;
@@ -190,7 +190,7 @@ export class McpServer {
       }
     }
 
-    this.server = new Server(
+    this.sdkServer = new SdkMcpServer(
       { name: 'autosnippet-v3', version: '3.0.0' },
       { capabilities: { tools: {} } }
     );
@@ -205,7 +205,7 @@ export class McpServer {
    */
   _registerHandlers() {
     // ── ListTools: 按 tier 过滤 ──
-    this.server!.setRequestHandler(ListToolsRequestSchema, async () => {
+    this.sdkServer!.server.setRequestHandler(ListToolsRequestSchema, async () => {
       const tierName = process.env.ASD_MCP_TIER || 'agent';
       const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;
       const visible = TOOLS.filter(
@@ -215,7 +215,7 @@ export class McpServer {
     });
 
     // ── CallTool: 路由到 handler ──
-    this.server!.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.sdkServer!.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
       const t0 = Date.now();
       try {
@@ -566,7 +566,7 @@ export class McpServer {
     }
 
     const transport = new StdioServerTransport();
-    await this.server!.connect(transport);
+    await this.sdkServer!.connect(transport);
 
     const tierName = process.env.ASD_MCP_TIER || 'agent';
     const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;
@@ -579,8 +579,8 @@ export class McpServer {
   }
 
   async shutdown() {
-    if (this.server) {
-      await this.server.close();
+    if (this.sdkServer) {
+      await this.sdkServer.close();
     }
     if (this.bootstrap) {
       await this.bootstrap.shutdown();

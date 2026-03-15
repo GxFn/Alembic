@@ -71,18 +71,11 @@ Skills directory structure:
 
 ```
 skills/
-├── autosnippet-intent/       # Intent routing (entry point)
-├── autosnippet-analysis/     # Code analysis
-├── autosnippet-guard/        # Guard rules
-├── autosnippet-recipes/      # Recipe management
-├── autosnippet-coldstart/    # Cold start
-├── autosnippet-create/       # Knowledge creation
-├── autosnippet-structure/    # Structure exploration
-├── autosnippet-candidates/   # Candidate management
-├── autosnippet-lifecycle/    # Lifecycle management
-├── autosnippet-concepts/     # Concept collection
+├── autosnippet-create/       # Knowledge creation & submission
+├── autosnippet-guard/        # Guard rule auditing
+├── autosnippet-recipes/      # Recipe context retrieval
+├── autosnippet-structure/    # Structure exploration & knowledge graph
 ├── autosnippet-devdocs/      # Developer documentation
-├── autosnippet-reference-*   # Language reference (9 language families)
 └── [project-level skills]    # Project-level custom Skills
 ```
 

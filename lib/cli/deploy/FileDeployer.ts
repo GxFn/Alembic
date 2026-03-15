@@ -35,6 +35,8 @@ import {
   buildMcpServerEntry,
   GITIGNORE_MIGRATIONS,
   GITIGNORE_RULES,
+  GITIGNORE_SECTION_BEGIN,
+  GITIGNORE_SECTION_END,
   MANIFEST,
 } from './FileManifest.js';
 
@@ -286,13 +288,20 @@ export class FileDeployer {
     return true;
   }
 
-  /** merge-gitignore — 增量追加规则 + 迁移旧格式 */
+  /**
+   * merge-gitignore — section-based 管理
+   *
+   * 设计：用 BEGIN/END 标记包裹 AutoSnippet 规则块，整块替换。
+   * - 首次：追加 section 到文件末尾
+   * - 升级：替换已有 section（规则变更自动生效）
+   * - 迁移：清理旧版逐行追加的散落规则
+   */
   _strategyMergeGitignore(_entry: ManifestEntry) {
     const giPath = join(this.projectRoot, '.gitignore');
     let content = existsSync(giPath) ? readFileSync(giPath, 'utf8') : '';
     let changed = false;
 
-    // 1. 迁移旧格式
+    // 1. 迁移旧格式（regex-based cleanup）
     for (const migration of GITIGNORE_MIGRATIONS) {
       if (migration.find.test(content)) {
         content = content.replace(migration.find, migration.replace);
@@ -300,27 +309,76 @@ export class FileDeployer {
       }
     }
 
-    // 2. 追加缺失规则
-    for (const rule of GITIGNORE_RULES) {
-      const pattern = rule.pattern;
-      // 对 negation 规则 (!xxx) 检查原模式
-      const _checkStr = rule.negation ? pattern : pattern.replace(/[[\]*?]/g, '\\$&');
-      if (!content.includes(pattern)) {
-        const prefix = rule.comment ? `\n# ${rule.comment}\n` : '';
-        content += `${prefix}${pattern}\n`;
+    // 2. 迁移：清理旧版散落的 AutoSnippet 规则（无 section marker 时代的残留）
+    const oldPatterns = GITIGNORE_RULES.map((r) => r.pattern);
+    const oldComments = GITIGNORE_RULES.filter((r) => r.comment).map((r) => `# ${r.comment}`);
+    // 也清除旧版注入的通用规则
+    const legacyTokens = [
+      '.DS_Store',
+      'nohup.out',
+      '*.sw[a-p]',
+      '# macOS 元数据',
+      '# AutoSnippet 运行时缓存（不入库）',
+      '# AutoSnippet 环境变量（含 API Key，不入库）',
+      '# AutoSnippet 运行日志',
+    ];
+    const allOldTokens = new Set([...oldPatterns, ...oldComments, ...legacyTokens]);
+
+    // 只有在 section markers 不存在时才清理散落规则（避免误删 section 内容后重复清理）
+    if (!content.includes(GITIGNORE_SECTION_BEGIN)) {
+      const lines = content.split('\n');
+      const cleaned = lines.filter((line) => !allOldTokens.has(line.trim()));
+      const cleanedContent = cleaned
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trimEnd();
+      if (cleanedContent !== content.trimEnd()) {
+        content = cleanedContent.endsWith('\n') ? cleanedContent : `${cleanedContent}\n`;
         changed = true;
       }
     }
 
-    // 3. 确保 AutoSnippet/ 不被忽略
+    // 3. 构建 AutoSnippet section block
+    const sectionLines = [GITIGNORE_SECTION_BEGIN];
+    for (const rule of GITIGNORE_RULES) {
+      if (rule.comment) {
+        sectionLines.push(`# ${rule.comment}`);
+      }
+      sectionLines.push(rule.pattern);
+    }
+
+    // 确保 AutoSnippet/ 知识库不被忽略
     const kbDir = DEFAULT_KNOWLEDGE_BASE_DIR;
-    const lines = content.split('\n');
-    const hasIgnoreAS = lines.some((l) => {
+    const contentLines = content.split('\n');
+    const hasIgnoreAS = contentLines.some((l) => {
       const t = l.trim();
       return (t === `${kbDir}/` || t === kbDir) && !t.startsWith('#') && !t.startsWith('!');
     });
-    if (hasIgnoreAS && !lines.some((l) => l.trim() === `!${kbDir}/`)) {
-      content += `\n# ${kbDir} 知识库必须入库（取消上方忽略）\n!${kbDir}/\n`;
+    if (hasIgnoreAS) {
+      sectionLines.push(`# 知识库必须入库`);
+      sectionLines.push(`!${kbDir}/`);
+    }
+
+    sectionLines.push(GITIGNORE_SECTION_END);
+    const sectionBlock = sectionLines.join('\n');
+
+    // 4. 插入或替换 section
+    const beginIdx = content.indexOf(GITIGNORE_SECTION_BEGIN);
+    const endIdx = content.indexOf(GITIGNORE_SECTION_END);
+
+    if (beginIdx !== -1 && endIdx !== -1) {
+      // 替换已有 section
+      const before = content.substring(0, beginIdx);
+      const after = content.substring(endIdx + GITIGNORE_SECTION_END.length);
+      const newContent = `${before}${sectionBlock}${after}`;
+      if (newContent !== content) {
+        content = newContent;
+        changed = true;
+      }
+    } else {
+      // 首次追加
+      const separator = content.endsWith('\n') || content.length === 0 ? '\n' : '\n\n';
+      content += `${separator}${sectionBlock}\n`;
       changed = true;
     }
 
@@ -415,7 +473,79 @@ export class FileDeployer {
   /* ═══ 自定义生成器 ═══════════════════════════════════ */
 
   _generators: Record<string, (this: FileDeployer) => boolean | void> = {
-    /** AGENTS.md 静态骨架 */
+    /** .cursor/rules/autosnippet-conventions.mdc — 读 conventions.md + YAML frontmatter */
+    generateConventionsMdc() {
+      const tpl = join(TEMPLATES_DIR, 'instructions/conventions.md');
+      if (!existsSync(tpl)) {
+        return false;
+      }
+
+      const body = readFileSync(tpl, 'utf8').trimEnd();
+      const content = [
+        '---',
+        'description: AutoSnippet conventions — behavioral rules for task tracking, knowledge guardrails, and MCP usage',
+        'alwaysApply: true',
+        '---',
+        '',
+        '# AutoSnippet Conventions',
+        '',
+        body,
+        '',
+      ].join('\n');
+
+      const dest = join(this.projectRoot, '.cursor/rules/autosnippet-conventions.mdc');
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, content);
+      return true;
+    },
+
+    /** .github/copilot-instructions.md — 读 conventions.md + HTML markers */
+    generateCopilotInstructions() {
+      const tpl = join(TEMPLATES_DIR, 'instructions/conventions.md');
+      if (!existsSync(tpl)) {
+        return false;
+      }
+
+      const body = readFileSync(tpl, 'utf8').trimEnd();
+      const content = [
+        '<!-- autosnippet:begin -->',
+        '',
+        '# AutoSnippet Conventions',
+        '',
+        body,
+        '',
+        '<!-- autosnippet:end -->',
+        '',
+      ].join('\n');
+
+      const dest = join(this.projectRoot, '.github/copilot-instructions.md');
+      const destDir = dirname(dest);
+      mkdirSync(destDir, { recursive: true });
+
+      // 如果文件已存在且包含 begin/end markers，仅替换标记间内容
+      if (existsSync(dest)) {
+        const existing = readFileSync(dest, 'utf8');
+        const BEGIN = '<!-- autosnippet:begin -->';
+        const END = '<!-- autosnippet:end -->';
+        if (existing.includes(BEGIN) && existing.includes(END)) {
+          const snippet = content.trimEnd();
+          const updated = existing.replace(new RegExp(`${BEGIN}[\\s\\S]*?${END}`), snippet);
+          writeFileSync(dest, updated);
+          return true;
+        }
+        // 用户文件无 markers 且无 AutoSnippet 签名 → 追加
+        const { canWrite } = checkWriteSafety(dest);
+        if (!canWrite) {
+          writeFileSync(dest, `${existing}\n\n${content}`);
+          return true;
+        }
+      }
+
+      writeFileSync(dest, content);
+      return true;
+    },
+
+    /** AGENTS.md 静态骨架 — 读 agent-static.md 模板 */
     generateAgentsMd() {
       const claudePath = join(this.projectRoot, 'CLAUDE.md');
       if (existsSync(claudePath)) {
@@ -432,35 +562,12 @@ export class FileDeployer {
         return false;
       }
 
-      const content = [
-        `# ${this.projectName} — Agent Instructions`,
-        '',
-        '> Auto-generated by AutoSnippet.',
-        '',
-        '## AutoSnippet Integration',
-        '',
-        'This project uses **AutoSnippet** for knowledge management and decision tracking.',
-        '',
-        '### MCP Tools',
-        '',
-        '- `autosnippet_search` — Search knowledge',
-        '- `autosnippet_knowledge` — Browse/get recipes',
-        '- `autosnippet_submit_knowledge` — Submit candidate',
-        '- `autosnippet_guard` — Code compliance check',
-        '- `autosnippet_health` — Service health & KB stats',
-        '- `autosnippet_task` — Unified task & decision management (prime/create/claim/close/record_decision/revise_decision/unpin_decision/list_decisions)',
-        '',
-        '### VS Code Agent Mode',
-        '',
-        'Type `#asd` before your message in Agent Mode to activate project memory.',
-        '',
-        '### Constraints',
-        '',
-        '1. Do NOT modify knowledge base files directly.',
-        '2. Create or update knowledge only through MCP tools.',
-        '',
-      ].join('\n');
+      const tpl = join(TEMPLATES_DIR, 'instructions/agent-static.md');
+      if (!existsSync(tpl)) {
+        return false;
+      }
 
+      const content = readFileSync(tpl, 'utf8').replace(/\{\{projectName\}\}/g, this.projectName);
       writeFileSync(agentsPath, content);
       return true;
     },

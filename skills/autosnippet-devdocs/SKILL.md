@@ -80,11 +80,10 @@ Documents are stored as `knowledgeType: 'dev-document'` in the knowledge DB. The
 - For ADRs, use the structure: Context → Decision → Consequences
 - For debug reports: Symptom → Investigation → Root Cause → Fix
 
-## Relation to other skills
+## Related Skills
 
 | Skill | When to use |
 |-------|-------------|
 | `autosnippet-create` | Saving **code patterns/recipes** (needs trigger, doClause, etc.) |
 | `autosnippet-devdocs` (this) | Saving **prose documents** (only needs title + markdown) |
 | `autosnippet-recipes` | Looking up existing knowledge |
-| `autosnippet-concepts` | Understanding AutoSnippet concepts |

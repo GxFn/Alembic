@@ -184,18 +184,28 @@ function createCopilotInstructions() {
     return true;
   }
 
-  // 从模板文件读取内容
-  const templatePath = path.join(TEMPLATES_DIR, 'copilot-instructions.md');
+  // 从 conventions 模板生成（读模板 + 包装 HTML markers）
+  const templatePath = path.join(TEMPLATES_DIR, 'instructions/conventions.md');
   if (!fs.existsSync(templatePath)) {
     error(`✗ 模板文件不存在: ${templatePath}`);
     return false;
   }
 
-  const instructions = fs.readFileSync(templatePath, 'utf8');
+  const body = fs.readFileSync(templatePath, 'utf8').trimEnd();
+  const content = [
+    '<!-- autosnippet:begin -->',
+    '',
+    '# AutoSnippet Conventions',
+    '',
+    body,
+    '',
+    '<!-- autosnippet:end -->',
+    '',
+  ].join('\n');
 
   try {
     fs.mkdirSync(path.dirname(instructionsPath), { recursive: true });
-    fs.writeFileSync(instructionsPath, instructions, 'utf8');
+    fs.writeFileSync(instructionsPath, content, 'utf8');
     log(`✅ 项目指令生成完成: ${instructionsPath}`, 'green');
     return true;
   } catch (e: any) {

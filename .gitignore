@@ -1,91 +1,71 @@
+# ============================================================
+# AutoSnippet — .gitignore
+# ============================================================
+
+# ─── Dependencies ────────────────────────────────────
 node_modules/
-SPMTest/
-# docs/ 可提交到 GitHub，不忽略
+resources/vscode-ext/node_modules/
+
+# ─── Build outputs ───────────────────────────────────
+dist/
+dashboard/dist/
+resources/vscode-ext/out/
+resources/vscode-ext/*.vsix
+
+# ─── Native build products ───────────────────────────
+# Swift/ObjC binaries & intermediate build artifacts
+resources/native-ui/native-ui
+resources/native-ui/screenshot
+# Prevent test-project native source leakage into repo
 *.boxspec
 *.h
 *.m
 *.pch
 *.swift
-# Swift 解析器源码不忽略
-!tools/parse-package/Sources/**/*.swift
-!tools/parse-package/Package.swift
-# native-ui 源码不忽略（resources 下）
+# Tracked native sources (exceptions)
 !resources/native-ui/main.swift
 !resources/native-ui/combined-window.swift
 !resources/native-ui/screenshot.swift
-# Swift 构建产物
-tools/parse-package/.build/
-resources/native-ui/native-ui
-resources/native-ui/screenshot
 
-# macOS 系统文件
-.DS_Store
-*/.DS_Store
-
-# 运行时垃圾文件
-nohup.out
-prettier-output.log
-.git-commit-msg.tmp
-
-# 本地测试 / 密钥（勿提交）
-test/temp/
-test-key.js
-*-key.js
+# ─── Environment & secrets ───────────────────────────
 .env
 .env.local
 .env.*.local
 .env.backup
-recipes/async-patterns/
 
-# 集成测试报告（本地生成，不提交）
+# ─── AutoSnippet runtime (dev repo protection) ──────
+# isOwnDevRepo() already prevents creation; belt-and-suspenders
+AutoSnippet/
+.autosnippet/
+
+# ─── Testing ─────────────────────────────────────────
+test/temp/
 test/integration/reports/
-
-# 临时测试文件（仅根目录下的测试脚本）
 /test-*.js
 /diagnose-*.js
 
-# 日志文件
+# ─── Logs ────────────────────────────────────────────
 logs/
 *.log
-/tmp/
-nohup.out
 
-# Copilot 文档和任务记录（不跟随 git）
+# ─── Development scratch (not committed) ─────────────
+scratch/
 docs/copilot/
 docs/.obsidian/
 
-# 临时开发脚本（不跟随 git）
-scratch/
-
-# 性能测试结果（本地生成，不提交）
-benchmarks/
-
-# 本地缓存与测试覆盖率
-.cache/
-tests/coverage/
-
-# AutoSnippet 目录（AutoSnippet 工具项目不需要提交）
-AutoSnippet/
-
-# 其他 .autosnippet 缓存目录
-.autosnippet/
-
-# 测试数据库（运行时生成）
-data/
-
-# 构建产物
-dist/
-dashboard/dist/
-
-# VSCode Extension 构建产物
-resources/vscode-ext/out/
-resources/vscode-ext/*.vsix
-resources/vscode-ext/node_modules/
-
-# 编辑器 / IDE 本地配置
+# ─── Editor / IDE local config ───────────────────────
 .vscode/
 .cursor/
 .editorconfig
 
-# Prettier 输出
+# ─── OS artifacts ────────────────────────────────────
+.DS_Store
+Thumbs.db
+nohup.out
+*.sw[a-p]
+
+# ─── Misc temp ───────────────────────────────────────
+/tmp/
+.cache/
+.git-commit-msg.tmp
 prettier-output.log

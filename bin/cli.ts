@@ -338,7 +338,9 @@ program
           waitSpinner.warn('AI 填充超时（10 分钟），可通过 asd ui 查看进度');
         }
       } else if (!opts.json) {
-        cli.log('  💡 AI 填充已在后台运行。用 --wait 等待完成，或用 asd ui 查看进度。');
+        cli.log('');
+        cli.log('  📋 下一步：打开 IDE Agent Mode，告诉它「帮我冷启动」');
+        cli.log('     IDE 会自动调用 MCP 工具完成 AI 分析、提取知识模式、提交候选。');
       }
 
       await bootstrap.shutdown();
@@ -756,7 +758,6 @@ program
   .command('ui')
   .description('启动 Dashboard UI（API 服务 + 前端开发服务器）')
   .option('-p, --port <port>', 'API 服务端口', '3000')
-  .option('-b, --browser', '自动打开浏览器')
   .option('--no-open', '禁止自动打开浏览器（CI/CD 环境适用）')
   .option('-d, --dir <directory>', '指定 AutoSnippet 项目目录（默认：当前目录）')
   .option('--api-only', '仅启动 API 服务（不启动前端）')
@@ -788,6 +789,33 @@ program
       httpServer = new HttpServer({ port, host });
       await httpServer.initialize();
       await httpServer.start();
+
+      // ── MCP 配置检测 ──
+      const cursorMcpPath = join(projectRoot, '.cursor', 'mcp.json');
+      const vscodeMcpPath = join(projectRoot, '.vscode', 'mcp.json');
+      const hasMcpConfig = (() => {
+        try {
+          const c = JSON.parse(readFileSync(cursorMcpPath, 'utf8'));
+          if ('autosnippet' in (c.mcpServers || {})) {
+            return true;
+          }
+        } catch {
+          /* */
+        }
+        try {
+          const v = JSON.parse(readFileSync(vscodeMcpPath, 'utf8'));
+          if ('autosnippet' in (v.servers || {})) {
+            return true;
+          }
+        } catch {
+          /* */
+        }
+        return false;
+      })();
+
+      if (hasMcpConfig) {
+        console.log('💡 请确认 IDE 中 AutoSnippet MCP 开关已打开，否则 Agent 无法调用工具');
+      }
 
       // 启动 SignalCollector 后台 AI 分析服务
       try {
@@ -939,9 +967,12 @@ program
         // 同端口同 origin → /api 路由自然可达，无跨域问题
         httpServer.mountDashboard(distDir);
 
-        if (opts.browser) {
+        const dashUrl = `http://127.0.0.1:${port}/`;
+        console.log(`\n  🚀 Dashboard: ${dashUrl}\n`);
+
+        if (opts.open !== false) {
           const open = (await import('open')).default;
-          open(`http://127.0.0.1:${port}/`);
+          open(dashUrl);
         }
       } else {
         // ── 开发模式：有源码，启动 Vite Dev Server ──
@@ -954,7 +985,7 @@ program
           });
         }
         const viteArgs = ['--host'];
-        if (opts.browser) {
+        if (opts.open !== false) {
           viteArgs.push('--open');
         }
         const vite = spawn('npx', ['vite', ...viteArgs], {
@@ -996,9 +1027,13 @@ program
     // AI 配置
     const { getAiConfigInfo } = await import('../lib/external/ai/AiFactory.js');
     const aiInfo = getAiConfigInfo();
-    cli.log(`  AI Provider:  ${aiInfo.provider || 'not configured'}`);
-    if (aiInfo.model) {
-      cli.log(`  AI Model:     ${aiInfo.model}`);
+    if (aiInfo.provider && aiInfo.provider !== 'none') {
+      cli.log(`  AI Provider:  ${aiInfo.provider}`);
+      if (aiInfo.model) {
+        cli.log(`  AI Model:     ${aiInfo.model}`);
+      }
+    } else {
+      cli.log('  AI Provider:  通过 IDE Agent（无需配置）');
     }
 
     // 检查数据库
@@ -1030,7 +1065,7 @@ program
 // ─────────────────────────────────────────────────────
 program
   .command('embed')
-  .description('构建/重建语义向量索引')
+  .description('构建/重建语义向量索引（可选 — 增强搜索质量，非必需）')
   .option('-d, --dir <path>', '项目目录', '.')
   .option('--force', '忽略增量检测，全量重建')
   .option('--clear', '清空现有索引后重建')

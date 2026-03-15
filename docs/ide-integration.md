@@ -71,18 +71,11 @@ Skills 目录结构：
 
 ```
 skills/
-├── autosnippet-intent/       # 意图理解（路由入口）
-├── autosnippet-analysis/     # 代码分析
-├── autosnippet-guard/        # Guard 规则
-├── autosnippet-recipes/      # Recipe 管理
-├── autosnippet-coldstart/    # 冷启动
-├── autosnippet-create/       # 知识创建
-├── autosnippet-structure/    # 结构探查
-├── autosnippet-candidates/   # 候选管理
-├── autosnippet-lifecycle/    # 生命周期
-├── autosnippet-concepts/     # 概念采集
-├── autosnippet-devdocs/      # 开发文档
-├── autosnippet-reference-*   # 各语言参考（9 个语言族）
+├── autosnippet-create/       # 知识创建与提交
+├── autosnippet-guard/        # Guard 规则审计
+├── autosnippet-recipes/      # Recipe 上下文检索
+├── autosnippet-structure/    # 结构探查与知识图谱
+├── autosnippet-devdocs/      # 开发文档保存
 └── [project-level skills]    # 项目级自定义 Skill
 ```
 

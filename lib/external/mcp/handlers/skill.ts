@@ -67,16 +67,11 @@ function _parseSkillMeta(skillName: string, baseDir = SKILLS_DIR) {
 
 /** Skill 适用场景映射 — 帮助 Agent 判断何时该加载哪个 Skill */
 const SKILL_USE_CASES: Record<string, string> = {
-  'autosnippet-intent': '不确定该用哪个能力时，先加载此 Skill 做意图路由',
-  'autosnippet-coldstart': '冷启动/初始化知识库时的完整 9 维度分析指南',
-  'autosnippet-analysis': '深度项目分析 — 扫描 + 语义补齐 + 缺口填充',
-  'autosnippet-candidates': '生成/提交高质量候选（V2 全字段结构化）',
-  'autosnippet-create': '将代码提交到知识库（Dashboard 入口）',
+  'autosnippet-create': '将代码模式/规则/事实提交到知识库',
   'autosnippet-guard': '代码规范审计（Guard 规则检查）',
   'autosnippet-recipes': '查询/使用项目标准（Recipe 上下文检索）',
-  'autosnippet-structure': '了解项目结构（SPM Target / 依赖图谱 / 知识图谱）',
-  'autosnippet-concepts': '学习 AutoSnippet 核心概念（知识库/Recipe/Snippet/向量库）',
-  'autosnippet-lifecycle': '了解 Recipe 生命周期与 Agent 权限边界',
+  'autosnippet-structure': '了解项目结构（Target / 依赖图谱 / 知识图谱）',
+  'autosnippet-devdocs': '保存开发文档（架构决策、调试报告、设计文档）',
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -152,7 +147,7 @@ export function listSkills(ctx?: McpContext | null) {
       data: {
         skills,
         total: skills.length,
-        hint: '根据当前任务选择合适的 Skill 加载（load_skill）。不确定时先加载 autosnippet-intent 做意图路由。',
+        hint: '根据当前任务选择合适的 Skill 加载（load_skill）。',
         _meta: { signalSuggestions: suggestionCount },
       },
     });
@@ -812,28 +807,11 @@ function _listExistingProjectSkillNames(ctx?: McpContext | null): Set<string> {
 /** 推荐相关 Skills（基于静态映射） */
 function _getRelatedSkills(skillName: string) {
   const relations = {
-    'autosnippet-coldstart': [
-      'autosnippet-analysis',
-      'autosnippet-candidates',
-      'autosnippet-structure',
-    ],
-    'autosnippet-analysis': [
-      'autosnippet-candidates',
-      'autosnippet-coldstart',
-      'autosnippet-structure',
-    ],
-    'autosnippet-candidates': [
-      'autosnippet-analysis',
-      'autosnippet-create',
-      'autosnippet-lifecycle',
-    ],
-    'autosnippet-create': ['autosnippet-candidates', 'autosnippet-lifecycle'],
-    'autosnippet-guard': ['autosnippet-recipes', 'autosnippet-analysis'],
-    'autosnippet-recipes': ['autosnippet-guard', 'autosnippet-structure', 'autosnippet-concepts'],
-    'autosnippet-structure': ['autosnippet-analysis', 'autosnippet-coldstart'],
-    'autosnippet-concepts': ['autosnippet-recipes', 'autosnippet-lifecycle'],
-    'autosnippet-lifecycle': ['autosnippet-candidates', 'autosnippet-concepts'],
-    'autosnippet-intent': [],
+    'autosnippet-create': ['autosnippet-recipes'],
+    'autosnippet-guard': ['autosnippet-recipes'],
+    'autosnippet-recipes': ['autosnippet-guard', 'autosnippet-structure', 'autosnippet-create'],
+    'autosnippet-structure': ['autosnippet-recipes', 'autosnippet-create'],
+    'autosnippet-devdocs': ['autosnippet-recipes', 'autosnippet-create'],
   };
   return (relations as Record<string, string[]>)[skillName] || [];
 }

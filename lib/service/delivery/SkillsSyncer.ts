@@ -1,15 +1,18 @@
 /**
  * SkillsSyncer — AutoSnippet Skills to .cursor/skills/ 同步器
  *
- * Channel C: 将 AutoSnippet/skills/ 下的项目级 SKILL.md 同步到
- * .cursor/skills/autosnippet-{name}/ 目录，适配 Cursor Agent Skills 标准格式。
+ * Channel C: 将内置 Skills 和项目级 Skills 统一同步到
+ * .cursor/skills/ 目录，适配 Cursor Agent Skills 标准格式。
  *
- * 同时为每个 Skill 生成 references/RECIPES.md（相关 Recipe 摘要）。
+ * - 内置 Skills：从 AutoSnippet 包 skills/ 目录直接复制（autosnippet-create 等）
+ * - 项目级 Skills：从 AutoSnippet/skills/ 转换格式后写入（project-* → autosnippet-*）
+ * - 同时为项目级 Skill 生成 references/RECIPES.md（相关 Recipe 摘要）
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
+import { SKILLS_DIR as BUILTIN_SKILLS_DIR } from '../../shared/package-root.js';
 
 /**
  * 技能名称映射：AutoSnippet/skills/ → .cursor/skills/
@@ -102,11 +105,54 @@ export class SkillsSyncer {
    * @returns >}
    */
   async sync() {
-    const result = { synced: [] as string[], skipped: [] as string[], errors: [] as string[] };
+    const result = {
+      synced: [] as string[],
+      skipped: [] as string[],
+      errors: [] as string[],
+      builtinSynced: [] as string[],
+    };
 
+    // ── Phase 1: 同步内置 Skills ──
+    this._syncBuiltinSkills(result);
+
+    // ── Phase 2: 同步项目级 Skills ──
+    await this._syncProjectSkills(result);
+
+    return result;
+  }
+
+  /**
+   * 同步内置 Skills：从 AutoSnippet 包 skills/ 目录直接复制到 .cursor/skills/
+   */
+  _syncBuiltinSkills(result: { builtinSynced: string[]; errors: string[] }) {
+    if (!fs.existsSync(BUILTIN_SKILLS_DIR)) {
+      return;
+    }
+
+    const builtinDirs = fs
+      .readdirSync(BUILTIN_SKILLS_DIR, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+
+    for (const name of builtinDirs) {
+      try {
+        const src = path.join(BUILTIN_SKILLS_DIR, name);
+        const dest = path.join(this.targetDir, name);
+        fs.cpSync(src, dest, { recursive: true, force: true });
+        result.builtinSynced.push(name);
+      } catch (err: unknown) {
+        result.errors.push(`builtin/${name}: ${(err as Error).message}`);
+      }
+    }
+  }
+
+  /**
+   * 同步项目级 Skills：从 AutoSnippet/skills/ 转换格式后写入 .cursor/skills/
+   */
+  async _syncProjectSkills(result: { synced: string[]; skipped: string[]; errors: string[] }) {
     // 检查源目录是否存在
     if (!fs.existsSync(this.sourceDir)) {
-      return result;
+      return;
     }
 
     // 扫描源目录
@@ -148,8 +194,6 @@ export class SkillsSyncer {
         result.errors.push(`${dirName}: ${(err as Error).message}`);
       }
     }
-
-    return result;
   }
 
   /**

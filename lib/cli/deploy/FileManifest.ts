@@ -51,9 +51,9 @@ export const MANIFEST = [
   // ═══ Cursor Rules（AutoSnippet 完全拥有） ═══════════
   {
     id: 'cursor-conventions',
-    src: 'cursor-rules/autosnippet-conventions.mdc',
+    strategy: 'generate',
+    generate: 'generateConventionsMdc',
     dest: '.cursor/rules/autosnippet-conventions.mdc',
-    strategy: 'overwrite',
     on: 'both',
     category: 'cursor-rules',
   },
@@ -61,14 +61,6 @@ export const MANIFEST = [
     id: 'cursor-skills-template',
     src: 'cursor-rules/autosnippet-skills.mdc',
     dest: '.cursor/rules/autosnippet-skills.mdc',
-    strategy: 'overwrite',
-    on: 'both',
-    category: 'cursor-rules',
-  },
-  {
-    id: 'cursor-workflow',
-    src: 'cursor-rules/autosnippet-workflow.mdc',
-    dest: '.cursor/rules/autosnippet-workflow.mdc',
     strategy: 'overwrite',
     on: 'both',
     category: 'cursor-rules',
@@ -115,15 +107,14 @@ export const MANIFEST = [
     cleanup: ['.claude/hooks.yaml'], // 清理旧格式文件
   },
 
-  // ═══ Agent Instructions（签名保护）════════════════════
+  // ═══ Agent Instructions（全部从模板生成）═══════════════
   {
     id: 'copilot-instructions',
-    src: 'copilot-instructions.md',
+    strategy: 'generate',
+    generate: 'generateCopilotInstructions',
     dest: '.github/copilot-instructions.md',
-    strategy: 'signature-safe',
     on: 'both',
     category: 'copilot-instructions',
-    fallback: 'inject-marker', // 签名保护失败时，用标记注入
   },
   {
     id: 'agents-md',
@@ -226,25 +217,28 @@ export const MANIFEST = [
  * .gitignore 规则清单 — Setup 和 Upgrade 共用
  * 每条规则：{ pattern, comment, negation? }
  */
+/**
+ * Section markers for the AutoSnippet block inside .gitignore.
+ * merge-gitignore uses these to insert/replace the entire block atomically.
+ */
+export const GITIGNORE_SECTION_BEGIN = '# >>> AutoSnippet (managed block — do not edit) >>>';
+export const GITIGNORE_SECTION_END = '# <<< AutoSnippet <<<';
+
+/**
+ * AutoSnippet-specific .gitignore rules.
+ * Only patterns that are AutoSnippet runtime/build artifacts belong here.
+ * Generic OS/editor patterns (.DS_Store, *.swp, nohup.out) are NOT our business.
+ */
 export const GITIGNORE_RULES = [
-  // 核心运行时
-  { pattern: '.autosnippet/*', comment: 'AutoSnippet 运行时缓存（不入库）' },
+  // Runtime cache
+  { pattern: '.autosnippet/*', comment: '运行时缓存（不入库）' },
   { pattern: '!.autosnippet/config.json', negation: true },
 
-  // 环境变量
-  { pattern: '.env', comment: 'AutoSnippet 环境变量（含 API Key，不入库）' },
+  // Environment (contains API keys created by `asd setup`)
+  { pattern: '.env', comment: '环境变量（含 API Key）' },
 
-  // 日志
-  { pattern: 'logs/', comment: 'AutoSnippet 运行日志' },
-
-  // AI 草稿
-  { pattern: '.autosnippet-drafts/', comment: 'AutoSnippet AI 草稿（临时）' },
-  { pattern: '_draft_*.md', comment: 'AutoSnippet AI 草稿文件（项目根目录临时文件）' },
-
-  // 系统 / 编辑器临时文件
-  { pattern: '.DS_Store', comment: 'macOS 元数据' },
-  { pattern: 'nohup.out' },
-  { pattern: '*.sw[a-p]' },
+  // Logs
+  { pattern: 'logs/', comment: '运行日志' },
 ];
 
 /** .gitignore 迁移规则 — 升级时清理旧格式 */

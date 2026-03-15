@@ -1,18 +1,20 @@
 /**
  * MCP 工具定义 — V3 整合版 (18 agent + 4 admin = 22 工具)
  *
- * 从 39 → 22 工具（参数路由合并同类工具 + 外部 Agent 冷启动新架构 + TaskGraph 统一入口）。
- * TaskGraph: autosnippet_task (统一入口，含 prime/decision/task CRUD)
- * 每个工具声明增加 tier 字段（agent / admin）。
+ * 每个工具声明包含 name、tier（agent/admin）、description 和 inputSchema。
+ * description 是 Agent 选择工具的关键 — 使用 bullet list 列出所有 operation 及其用途。
+ * inputSchema 由 Zod Schema 自动生成（zodToMcpSchema），参数的 .describe() 会转为 JSON Schema description。
  *
- * inputSchema 由 Zod Schema 自动生成（zodToMcpSchema），消除手写 JSON Schema 双重维护。
- * Zod Schema → 运行时校验（wrapHandler）+ JSON Schema 声明（ListTools）。
+ * Agent 工具 (18):
+ *   1-7:   查询工具 (health/search/knowledge/structure/graph/call_context/guard)
+ *   8-10:  写入工具 (submit_knowledge/submit_knowledge_batch/save_document)
+ *   11:    Skill 管理 (skill)
+ *   12-15: 冷启动 (bootstrap/dimension_complete/wiki_plan/wiki_finalize)
+ *   16:    自发现 (capabilities)
+ *   17:    任务管理 (task)
  *
- * 外部 Agent 冷启动新工具 (v3.1):
- *   - autosnippet_bootstrap:          参数化 → 无参数化 Mission Briefing
- *   - autosnippet_dimension_complete:  维度分析完成通知
- *   - autosnippet_wiki_plan:           Wiki 主题规划
- *   - autosnippet_wiki_finalize:       Wiki 元数据 + 去重
+ * Admin 工具 (4):
+ *   18-21: enrich_candidates/knowledge_lifecycle/validate_candidate/check_duplicate
  */
 
 import {
@@ -109,166 +111,194 @@ export const TOOLS = [
   {
     name: 'autosnippet_health',
     tier: 'agent',
-    description: '检查服务健康状态与知识库统计。total=0 时表示需要冷启动。',
+    description:
+      '检查服务状态与知识库统计。返回 total（知识总数）和各 kind/lifecycle 分布。total=0 时需要冷启动（调用 autosnippet_bootstrap）。',
     inputSchema: zodToMcpSchema(HealthInput),
   },
 
-  // 2. 统合搜索（4 → 1）
+  // 2. 统合搜索
   {
     name: 'autosnippet_search',
     tier: 'agent',
-    description: '统合搜索入口。支持 4 种模式（mode 参数），返回 byKind 分组结果。',
+    description:
+      '搜索知识库。5 种模式：\n' +
+      '• auto（默认）— 自动选最优策略\n' +
+      '• keyword — 精确关键词匹配，适合 trigger/title 查找\n' +
+      '• bm25 — 全文检索，适合自然语言描述\n' +
+      '• semantic — 向量语义搜索，适合模糊概念匹配\n' +
+      '• context — 综合搜索 + 上下文关联，适合编码辅助\n' +
+      '返回按 kind（rule/pattern/fact）分组的结果。',
     inputSchema: zodToMcpSchema(SearchInput),
   },
 
-  // 3. 知识浏览（7 → 1）
+  // 3. 知识浏览
   {
     name: 'autosnippet_knowledge',
     tier: 'agent',
     description:
-      '知识浏览与使用确认。list=列表过滤 | get=单条详情 | insights=质量洞察 | confirm_usage=记录采纳。',
+      '知识条目管理。\n' +
+      '• list — 按 kind/category/status 过滤列表\n' +
+      '• get — 获取单条完整内容（需 id）\n' +
+      '• insights — 条目质量分析与改进建议（需 id）\n' +
+      '• confirm_usage — 记录知识被实际采纳（需 id）',
     inputSchema: zodToMcpSchema(KnowledgeInput),
   },
 
-  // 4. 项目结构（3 → 1）
+  // 4. 项目结构
   {
     name: 'autosnippet_structure',
     tier: 'agent',
-    description: '项目结构探查。targets=目标列表 | files=文件列表 | metadata=元数据与依赖。',
+    description:
+      '探查项目结构。\n' +
+      '• targets — 构建目标列表（模块/Target/Package）\n' +
+      '• files — 指定 Target 的文件列表\n' +
+      '• metadata — 项目元数据（语言、依赖、配置）',
     inputSchema: zodToMcpSchema(StructureInput),
   },
 
-  // 5. 知识图谱（4 → 1）
+  // 5. 知识图谱
   {
     name: 'autosnippet_graph',
     tier: 'agent',
     description:
-      '知识图谱查询。query=节点关系 | impact=影响分析 | path=路径查找 | stats=全局统计。',
+      '知识关系图谱查询。\n' +
+      '• query — 查询节点的关联关系\n' +
+      '• impact — 修改某知识的影响范围分析\n' +
+      '• path — 两个知识节点间的关联路径\n' +
+      '• stats — 图谱全局统计（节点/边/密度）',
     inputSchema: zodToMcpSchema(GraphInput),
   },
 
-  // 6. 调用链上下文 (Phase 5)
+  // 6. 调用链上下文
   {
     name: 'autosnippet_call_context',
     tier: 'agent',
     description:
-      '查询方法的调用链上下文。\n' +
-      '• callers: 谁调用了这个方法？（调用者链）\n' +
-      '• callees: 这个方法调用了谁？（依赖链）\n' +
-      '• impact: 修改此方法的影响半径分析\n' +
-      '• both: 同时获取调用者和被调用者',
+      '查询函数/方法的调用链。\n' +
+      '• callers — 谁调用了它（上游调用链）\n' +
+      '• callees — 它调用了谁（下游依赖链）\n' +
+      '• impact — 修改它的影响半径（上+下游+受影响文件数）\n' +
+      '• both — 同时获取 callers + callees',
     inputSchema: zodToMcpSchema(CallContextInput),
   },
 
-  // 7. Guard 检查（统一入口）
+  // 7. Guard 代码检查
   {
     name: 'autosnippet_guard',
     tier: 'agent',
     description:
-      '代码规范检查 & 质量门禁。\n' +
-      '• 无参数 → 自动从 git diff 检测增量文件并检查（编码后推荐用法）\n' +
-      '• files: ["path/to/file.m", ...] → 检查指定文件\n' +
-      '• code: "..." → 单文件内联检查\n' +
-      '每个 violation 内联 recipe 修复指南（doClause + coreCode），直接按指示修复后再次调用。',
+      '代码规范检查。\n' +
+      '• 无参数 → 自动检查 git diff 增量文件（编码后首选用法）\n' +
+      '• files → 检查指定文件列表\n' +
+      '• code → 内联检查代码片段\n' +
+      '每个 violation 附带修复指南（doClause + coreCode），按指示修复后可再次检查。',
     inputSchema: zodToMcpSchema(GuardInput),
   },
 
-  // 7. 提交知识（严格前置校验 + 去重检测）
+  // 8. 提交单条知识
   {
     name: 'autosnippet_submit_knowledge',
     tier: 'agent',
     description:
-      '提交单条知识到知识库（V3 统一实体）。严格前置校验，缺少必要字段将被直接拒绝（不入库）。\n' +
-      '所有必填字段必须在单次调用中一次性提供，不要分步提交。\n' +
-      '⚠️ content 必须是对象: { "pattern": "代码片段", "markdown": "## 标题\\n正文...", "rationale": "设计原理" }（pattern/markdown 至少一个 + rationale 必填）\n' +
-      '⚠️ reasoning 必须是对象: { "whyStandard": "原因", "sources": ["file.ts"], "confidence": 0.85 }\n' +
-      '必填: title, language, content, kind, doClause, dontClause, whenClause, coreCode, category, trigger, description, headers, usageGuide, knowledgeType, reasoning',
+      '提交单条知识。所有字段须一次性提供。提交后进入 pending 状态，用户在 Dashboard 审核。\n' +
+      '校验未通过的条目仍会入库，返回 recipeReadyHints 提示缺失字段。\n' +
+      'content 和 reasoning 必须是对象（非字符串）。详见各参数 description。',
     inputSchema: zodToMcpSchema(SubmitKnowledgeInput),
   },
 
-  // 8. 批量知识提交
+  // 9. 批量知识提交
   {
     name: 'autosnippet_submit_knowledge_batch',
     tier: 'agent',
     description:
-      '批量提交知识条目（V3 统一实体）。每条字段要求同 submit_knowledge。支持去重。\n' +
-      '⚠️ items 数组中每条的 content 和 reasoning 都必须是 JSON 对象（不是字符串）。\n' +
-      'content 格式: { "pattern": "代码...", "markdown": "正文...", "rationale": "原理..." }\n' +
-      'reasoning 格式: { "whyStandard": "原因", "sources": ["file.ts"], "confidence": 0.85 }',
+      '批量提交知识条目。每条字段要求同 submit_knowledge，支持自动去重。\n' +
+      '校验更严格：不通过的条目会被拒绝（不入库），返回 rejectedSummary。\n' +
+      '适用于冷启动维度分析、模块批量扫描等场景。',
     inputSchema: zodToMcpSchema(SubmitKnowledgeBatchInput),
   },
 
-  // 9. 保存开发文档
+  // 10. 保存开发文档
   {
     name: 'autosnippet_save_document',
     tier: 'agent',
     description:
-      '保存开发文档（设计文档、排查报告、ADR 等）。仅需 title + markdown，自动以 dev-document 存储。',
+      '保存开发文档（设计文档、排查报告、ADR 等）到知识库。仅需 title + markdown，无需完整 V3 字段。',
     inputSchema: zodToMcpSchema(SaveDocumentInput),
   },
 
-  // 10. Skill 管理（6 → 1）
+  // 11. Skill 管理
   {
     name: 'autosnippet_skill',
     tier: 'agent',
     description:
-      'Skill 管理。list=列表 | load=加载 | create=创建 | update=更新 | delete=删除 | suggest=AI推荐。',
+      'Skill 管理。\n' +
+      '• list — 列出所有可用 Skill（内置 + 项目级）\n' +
+      '• load — 加载 Skill 完整内容，获取详细指引（需 name）\n' +
+      '• create — 创建项目级 Skill（需 name + description + content）\n' +
+      '• update — 更新项目级 Skill 内容\n' +
+      '• delete — 删除项目级 Skill（内置不可删）\n' +
+      '• suggest — 基于项目分析推荐应创建的 Skill',
     inputSchema: zodToMcpSchema(SkillInput),
   },
 
-  // 11. 冷启动 Mission Briefing（无参数，返回项目分析 + 执行计划）
+  // 12. 冷启动
   {
     name: 'autosnippet_bootstrap',
     tier: 'agent',
     description:
-      '冷启动 Mission Briefing — 自动分析项目结构、AST、依赖图和 Guard 审计，返回完整的执行计划和维度任务清单。无需任何参数，直接调用即可。不依赖数据库，DB 不可用时也能正常工作。\n' +
-      '💡 建议先加载 Skill 获取详细冷启动指引: autosnippet_skill({ operation: "load", name: "autosnippet-coldstart" })\n' +
-      '返回的 submissionSchema.example 包含完整的提交 JSON 示例，请严格按其格式提交知识。',
+      '冷启动 — 无需参数，自动分析项目（AST、依赖图、Guard 审计），返回 Mission Briefing：\n' +
+      '• 项目元数据与语言统计\n' +
+      '• 维度任务清单（8 维度 × 3 Tier）\n' +
+      '• 执行计划与提交示例\n' +
+      '收到 Briefing 后按 executionPlan 完成所有维度分析。',
     inputSchema: zodToMcpSchema(BootstrapInput),
   },
 
-  // 11b. 维度完成通知
+  // 13. 维度完成通知
   {
     name: 'autosnippet_dimension_complete',
     tier: 'agent',
     description:
-      '维度分析完成通知 — Agent 完成一个维度的分析后调用。负责 Recipe 关联、Skill 生成、Checkpoint 保存、进度推送、跨维度 Hints 分发。',
+      '维度分析完成通知。负责：Recipe 关联、Skill 生成（从已提交候选自动合成）、Checkpoint 保存、跨维度 Hints 分发。\n' +
+      'analysisText 可简写，系统会自动从已提交的候选知识中合成详细内容用于 Skill 生成。',
     inputSchema: zodToMcpSchema(DimensionCompleteInput),
   },
 
-  // 11c. Wiki 主题规划
+  // 14. Wiki 规划
   {
     name: 'autosnippet_wiki_plan',
     tier: 'agent',
     description:
-      '规划 Wiki 文档生成 — 扫描项目结构、分析 AST 和依赖、整合知识库，返回发现的文档主题及每个主题的数据包。Agent 根据规划自行撰写文章后写入 wiki 目录。',
+      '规划 Wiki 文档生成 — 整合项目结构与知识库，返回文档主题列表及每个主题的数据包。Agent 根据规划自行撰写文章。',
     inputSchema: zodToMcpSchema(WikiPlanInput),
   },
 
-  // 11d. Wiki 完成（meta.json + 去重）
+  // 15. Wiki 完成
   {
     name: 'autosnippet_wiki_finalize',
     tier: 'agent',
-    description:
-      '完成 Wiki 生成 — 写入 meta.json、执行去重检查、验证文件完整性。在所有 Wiki 文章写入完成后调用。',
+    description: '完成 Wiki 生成 — 写入 meta.json、去重检查、验证完整性。所有文章写入后调用。',
     inputSchema: zodToMcpSchema(WikiFinalizeInput),
   },
 
-  // 12. 能力声明（Agent 自发现）
+  // 16. 能力自发现
   {
     name: 'autosnippet_capabilities',
     tier: 'agent',
-    description: '列出所有可用 MCP 工具的概览，供 Agent 自发现服务能力。',
+    description: '列出所有可用 MCP 工具及其用途概览。适合 Agent 初次接触时了解服务能力。',
     inputSchema: zodToMcpSchema(CapabilitiesInput),
   },
 
-  // 13. autosnippet_task — 统一任务管理（含 prime/decision/CRUD）
+  // 17. 任务与决策管理
   {
     name: 'autosnippet_task',
     tier: 'agent',
     description:
-      'Unified task & decision management. Includes session context (prime), task CRUD, and decision persistence.\n' +
-      'Call prime FIRST at every conversation start to load decisions + tasks + knowledge context.',
+      '任务与决策管理。每次对话开始时先调用 prime 加载上下文。\n' +
+      '会话: prime（加载决策+任务+知识上下文）| ready（就绪确认）\n' +
+      '任务: create | claim | close | fail | defer | progress | show | list | stats | blocked\n' +
+      '分解: decompose（拆子任务）| dep_add（添加依赖）| dep_tree（依赖树）\n' +
+      '决策: record_decision | revise_decision | unpin_decision | list_decisions',
     inputSchema: zodToMcpSchema(TaskInput),
   },
 
@@ -276,36 +306,37 @@ export const TOOLS = [
   //  Tier: admin — 管理员/CI 工具 (额外 +4)
   // ══════════════════════════════════════════════════════
 
-  // 13. 候选字段诊断
+  // 18. 候选字段诊断
   {
     name: 'autosnippet_enrich_candidates',
     tier: 'admin',
-    description: '候选字段完整性诊断（不使用 AI）。返回 missingFields 列表，Agent 自行补全。',
+    description:
+      '诊断候选条目的字段完整性（无 AI）。返回每条候选的 missingFields 列表，Agent 据此补全后重新提交。',
     inputSchema: zodToMcpSchema(EnrichCandidatesInput),
   },
 
-  // 14. 知识条目生命周期
+  // 19. 知识生命周期
   {
     name: 'autosnippet_knowledge_lifecycle',
     tier: 'admin',
     description:
-      '知识条目生命周期操作：submit/approve/reject/publish/deprecate/reactivate/fast_track。',
+      '知识条目生命周期操作。approve/fast_track → 发布知识；reject → 拒绝；deprecate → 废弃；reactivate → 恢复。',
     inputSchema: zodToMcpSchema(KnowledgeLifecycleInput),
   },
 
-  // 15. 独立候选校验（调试）
+  // 20. 候选预校验（调试）
   {
     name: 'autosnippet_validate_candidate',
     tier: 'admin',
-    description: '对候选做结构化预校验（5层），调试用（Agent 层的 submit_knowledge 已内置校验）。',
+    description: '独立候选校验（5 层结构化检查）。调试用，submit_knowledge 已内置校验。',
     inputSchema: zodToMcpSchema(ValidateCandidateInput),
   },
 
-  // 16. 独立去重检测（调试）
+  // 21. 去重检测（调试）
   {
     name: 'autosnippet_check_duplicate',
     tier: 'admin',
-    description: '相似度检测（调试用，Agent 层的 submit_knowledge 已内置去重）。',
+    description: '独立相似度检测。调试用，submit_knowledge 已内置去重。',
     inputSchema: zodToMcpSchema(CheckDuplicateInput),
   },
 ];

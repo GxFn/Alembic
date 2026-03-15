@@ -187,8 +187,21 @@ export class SetupService {
 
   printSummary() {
     const results = this._results || [];
-    const _ok = results.filter((r) => r.ok).length;
-    const _fail = results.filter((r) => !r.ok).length;
+    const ok = results.filter((r) => r.ok).length;
+    const fail = results.filter((r) => !r.ok).length;
+
+    console.log('');
+    if (fail === 0) {
+      console.log(`  ✅ Setup 完成（${ok} 步骤全部成功）`);
+    } else {
+      console.log(`  ⚠️  Setup 完成（${ok} 成功，${fail} 失败）`);
+    }
+    console.log('');
+    console.log('  下一步：');
+    console.log('    1. 运行 asd ui 启动后台服务');
+    console.log('    2. 打开 IDE Agent Mode，告诉它「帮我冷启动」');
+    console.log('    3. 所有分析和知识提取都通过 IDE 完成，无需额外配置');
+    console.log('');
   }
 
   /* ═══ Step 1: 运行时目录与配置 ═══════════════════════ */

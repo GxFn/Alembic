@@ -237,14 +237,77 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
 
   // ═══════════════════════════════════════════════════════════
   // 2. Skill 生成 (skillWorthy 维度) — 使用共享 skill-generator
+  //    如果 analysisText 太短，自动从已提交的候选知识中合成结构化内容
   // ═══════════════════════════════════════════════════════════
 
   let skillCreated = false;
   if (dim.skillWorthy) {
+    let effectiveAnalysis = analysisText;
+
+    // 当 analysisText 不足以通过质量门控时，从候选知识中合成
+    if (analysisText.length < 500 && submittedRecipeIds.length > 0) {
+      try {
+        const knowledgeService = ctx.container.get('knowledgeService');
+        if (knowledgeService) {
+          const parts: string[] = [`## ${dim.label || dimensionId} — 分析报告\n`];
+
+          if (analysisText.trim().length > 0) {
+            parts.push(analysisText.trim(), '');
+          }
+
+          for (const recipeId of submittedRecipeIds) {
+            const entry = await knowledgeService.get(recipeId);
+            if (!entry) {
+              continue;
+            }
+            parts.push(`### ${entry.title || 'Untitled'}`);
+            if (entry.description) {
+              parts.push(entry.description);
+            }
+            if (entry.whenClause || entry.doClause || entry.dontClause) {
+              parts.push('');
+              if (entry.whenClause) {
+                parts.push(`- **When**: ${entry.whenClause}`);
+              }
+              if (entry.doClause) {
+                parts.push(`- **Do**: ${entry.doClause}`);
+              }
+              if (entry.dontClause) {
+                parts.push(`- **Don't**: ${entry.dontClause}`);
+              }
+            }
+            if (entry.coreCode) {
+              parts.push('', '```', entry.coreCode.substring(0, 500), '```');
+            }
+            parts.push('');
+          }
+
+          if (keyFindings.length > 0) {
+            parts.push('## Key Findings', '');
+            for (const f of keyFindings) {
+              parts.push(`- ${f}`);
+            }
+          }
+
+          const synthesized = parts.join('\n');
+          if (synthesized.length > effectiveAnalysis.length) {
+            effectiveAnalysis = synthesized;
+            logger.info(
+              `[DimensionComplete] Synthesized analysisText for "${dimensionId}" from ${submittedRecipeIds.length} candidates (${analysisText.length} → ${synthesized.length} chars)`
+            );
+          }
+        }
+      } catch (e: unknown) {
+        logger.debug(
+          `[DimensionComplete] Failed to synthesize analysisText: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+    }
+
     const skillResult = await generateSkill(
       ctx,
       dim,
-      analysisText,
+      effectiveAnalysis,
       referencedFiles,
       keyFindings,
       'external-agent-bootstrap'

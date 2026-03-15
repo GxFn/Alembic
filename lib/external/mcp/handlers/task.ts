@@ -11,7 +11,7 @@
 import { envelope } from '../envelope.js';
 import type { McpContext } from './types.js';
 
-// guard is independent — no guardState dependency in task lifecycle
+// Guard auto-review: task close 自动触发 diff 合规检查（发现违规 → Agent 自修复）
 
 // ─── Local Types ──────────────────────────────────────────
 
@@ -270,13 +270,33 @@ async function _close(ctx: McpContext, svc: TaskGraphServiceLike, args: TaskArgs
   }
 
   const { task, newlyReady } = await svc.close(args.id, args.reason || 'Completed');
+
+  const lines = [`✅ Closed: ${args.id} — ${task.title}`];
+  if (args.reason && args.reason !== 'Completed') {
+    lines.push(`Reason: ${args.reason}`);
+  }
+  if (newlyReady.length > 0) {
+    lines.push(`→ ${newlyReady.length} task(s) newly ready`);
+  }
+
+  lines.push('');
+  lines.push(
+    '⚠️ REQUIRED: You MUST call autosnippet_guard (no args) NOW to review changed files for compliance violations. Do NOT proceed to the next task until guard review passes.'
+  );
+
   return envelope({
     success: true,
     data: {
       closed: task.toJSON(),
       newlyReady,
+      nextAction: {
+        tool: 'autosnippet_guard',
+        args: {},
+        required: true,
+        reason: 'Post-close compliance review — check diff for violations before moving on.',
+      },
     },
-    message: `Closed ${args.id}. ${newlyReady.length} task(s) newly ready.`,
+    message: lines.join('\n'),
     meta: { tool: 'autosnippet_task' },
   });
 }

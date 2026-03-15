@@ -1,45 +1,29 @@
 ---
-description: AutoSnippet Project Skills — 项目级知识增强文档索引与使用指引
+description: AutoSnippet Project Skills — knowledge enhancement documents for AI Agent
 alwaysApply: true
 ---
 
 # AutoSnippet Project Skills
 
-Project Skills 是针对当前项目自动生成或手动创建的 AI Agent 知识增强文档。
-它们存放在 `AutoSnippet/skills/` 目录下，跟随项目 Git 管理。
+Project Skills are AI knowledge documents in `AutoSnippet/skills/`, tracked in Git.
 
-## 如何发现与加载
+## Discovery & Loading
 
-1. **列出所有 Skills**：调用 `autosnippet_list_skills` 查看当前可用的 Skills（含内置 + 项目级）
-2. **加载完整内容**：调用 `autosnippet_load_skill(skillName)` 获取具体 Skill 的完整文档
-3. **按需加载**：不确定该用哪个 Skill 时，先加载 `autosnippet-intent` 做意图路由
-4. **创建 Skill**：调用 `autosnippet_create_skill(name, description, content)` 创建项目级 Skill
-5. **Skill 推荐**：调用 `autosnippet_suggest_skills` 获取基于使用模式的 Skill 创建建议
+- **List**: `autosnippet_skill({ operation: "list" })` — all available Skills (builtin + project)
+- **Load**: `autosnippet_skill({ operation: "load", name: "<skill>" })` — full Skill content
+- **Create**: `autosnippet_skill({ operation: "create", name, description, content })` — new project Skill
 
-## Bootstrap 自动生成的 Project Skills
+## Built-in Skills (5)
 
-冷启动（`autosnippet_bootstrap_knowledge`）Phase 5.5 会自动为 4 个宏观维度生成 Project Skills：
+| Skill | Purpose |
+|-------|---------|
+| `autosnippet-create` | Submit knowledge candidates (V3 fields, validation) |
+| `autosnippet-recipes` | Project standard context (Recipe search, retrieval) |
+| `autosnippet-guard` | Code compliance checking against Recipes |
+| `autosnippet-structure` | Project structure discovery & knowledge graph |
+| `autosnippet-devdocs` | Save development documents (ADRs, debug reports) |
 
-| Skill | 维度 | 说明 |
-|-------|------|------|
-| `project-code-standard` | 代码规范 | 命名约定、文件组织规范 |
-| `project-architecture` | 架构模式 | 分层架构、模块边界、依赖图 |
-| `project-profile` | 项目特征 | 技术栈、模块结构、代码指标 |
-| `project-agent-guidelines` | Agent 约束 | 强制规则、TODO/FIXME、WARNING |
+## Priority
 
-生成后的 Skill 文件位于 `AutoSnippet/skills/<name>/SKILL.md`，自动跟随 Git。
-调用 `autosnippet_load_skill` 可加载完整内容。
-
-## 推荐工作流
-
-冷启动完整流程：
-1. `autosnippet_bootstrap_knowledge` — 9 维度分析 + 自动生成 Project Skills
-2. `autosnippet_enrich_candidates` — 补全缺失语义字段
-3. `autosnippet_bootstrap_refine` — AI 润色 summary/insight/relations
-4. 逐 Target 深入分析 → `autosnippet_submit_candidates`
-
-## 使用优先级
-
-- **Project Skills > 内置 Skills**：同名时项目级覆盖内置
-- **Skill > Recipe**：宏观架构/规范知识优先查 Skill，微观代码模式查 Recipe
-- **Skills 是只读参考**：不要直接修改 SKILL.md，应通过 `autosnippet_create_skill` 工具创建或更新
+- **Project Skills > Built-in Skills** — same name → project overrides builtin
+- **Skills = read-only reference** — load via MCP tool, do not edit SKILL.md directly

@@ -326,8 +326,10 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
         },
         {
           phase: '4. 提交',
-          action: '按项目特写格式提交 3-5 个知识候选',
+          action:
+            '按项目特写格式提交知识候选（**最少 3 条，目标 5 条**，将不同关注点拆为独立候选）',
           qualityChecklist: [
+            '候选数量 ≥3（1-2 条是不合格的，不同关注点必须拆分为独立候选）',
             '每个 content ≥200 字符',
             '每个候选引用 ≥3 个文件路径',
             'coreCode 提供可复制的完整代码骨架',
@@ -345,7 +347,8 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
   // ── submissionSpec: 嵌入 Quality Checklist ──
   const submissionSpec = {
     knowledgeTypes: dim.knowledgeTypes || [],
-    targetCandidateCount: '3-5',
+    targetCandidateCount:
+      '每维度最少 3 条，目标 5 条（1-2 条不合格）。将不同关注点（如命名规范 vs 文件组织 vs 注释风格）拆分为独立候选，不要合并到一条中。',
     contentStyle: PROJECT_SNAPSHOT_STYLE_GUIDE.split('\n')
       .filter((l) => !l.startsWith('#') || l.startsWith('##'))
       .filter((l) => l.trim())
@@ -958,7 +961,7 @@ function buildExecutionPlan(activeDimensions: DimensionDef[]) {
     tiers: plan,
     totalDimensions: activeDimensions.length,
     workflow:
-      '对每个维度: (1) 用你的原生能力阅读代码分析 → (2) 调用 autosnippet_submit_knowledge_batch 批量提交 3-5 条候选 → (3) 调用 autosnippet_dimension_complete 完成维度（必须传 referencedFiles=[分析过的文件路径] 和 keyFindings=[3-5条关键发现]）',
+      '对每个维度: (1) 用你的原生能力阅读代码分析 → (2) 调用 autosnippet_submit_knowledge_batch 批量提交候选（**每维度最少 3 条，目标 5 条**，将不同关注点拆分为独立候选，1-2 条视为不合格） → (3) 调用 autosnippet_dimension_complete 完成维度（必须传 referencedFiles=[分析过的文件路径] 和 keyFindings=[3-5条关键发现]）',
   };
 }
 

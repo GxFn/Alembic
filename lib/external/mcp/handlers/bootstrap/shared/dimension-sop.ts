@@ -56,7 +56,8 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '按项目特写格式提交 3-5 个知识候选，每个候选聚焦一种具体代码规范',
+        action:
+          '按项目特写格式提交知识候选（**最少 3 条，目标 5 条**），每个候选聚焦一种具体代码规范（如命名约定、注释风格、文件组织分别独立提交）',
         qualityChecklist: [
           '每个 content ≥200 字符',
           '每个候选引用 ≥3 个文件路径',
@@ -111,8 +112,10 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '每种设计模式单独提交一个候选，包含标准实现代码和使用约束',
+        action:
+          '每种设计模式单独提交候选（**整体最少 3 条，目标 5 条**），包含标准实现代码和使用约束',
         qualityChecklist: [
+          '候选数量 ≥3（将不同模式拆分为独立候选，如 Singleton 一条、Factory 一条、Delegate 一条）',
           '每个候选只聚焦一种设计模式',
           'content 包含 ✅ 正确写法 和 ❌ 禁止写法',
           'coreCode 是可复制的模式骨架代码',
@@ -149,8 +152,9 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '分别提交分层架构、模块通信、依赖管理等知识候选',
+        action: '分别提交分层架构、模块通信、依赖管理等知识候选（**最少 3 条，目标 5 条**）',
         qualityChecklist: [
+          '候选数量 ≥3（分层结构、通信方式、依赖管理应分别提交）',
           'content 包含架构层次图或文字描述',
           '引用具体目录路径和核心文件',
           'doClause 表达架构约束规则',
@@ -199,8 +203,9 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '每种最佳实践独立提交，包含正反面代码示例',
+        action: '每种最佳实践独立提交（**整体最少 3 条，目标 5 条**），包含正反面代码示例',
         qualityChecklist: [
+          '候选数量 ≥3（错误处理、并发安全、日志规范等应分别提交）',
           '每个候选聚焦一种实践（如"错误处理"或"并发安全"）',
           'content 包含 ✅ 推荐写法 和 ❌ 反模式',
           '提供具体的统计数据（如"项目中 80% 的错误处理使用 Result 类型"）',
@@ -252,8 +257,9 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '事件传播和数据流分别提交候选',
+        action: '事件传播和数据流分别提交候选（**最少 3 条，目标 5 条**，将不同机制拆为独立候选）',
         qualityChecklist: [
+          '候选数量 ≥3（Delegate、Notification、Callback 等每种机制独立提交）',
           '每个候选聚焦一种事件/数据流模式',
           'content 描述具体的事件传播链路（从触发到响应）',
           'whenClause 描述何时使用此事件/数据模式',
@@ -304,8 +310,10 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '分模块提交项目特征候选（技术栈、依赖、入口点、基础设施等）',
+        action:
+          '分模块提交项目特征候选（**最少 3 条，目标 5 条**：技术栈、依赖、入口点、基础设施等分别提交）',
         qualityChecklist: [
+          '候选数量 ≥3（技术栈、三方依赖、启动流程等应独立成条）',
           'content 包含具体的技术栈版本和依赖列表',
           '引用配置文件和入口文件路径',
           '每个候选只关注一个方面（如"三方依赖"或"启动流程"）',
@@ -353,8 +361,10 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '每条开发约束单独提交，确保 doClause 表达清晰的强制规则',
+        action:
+          '每条开发约束单独提交（**最少 3 条，目标 5 条**），确保 doClause 表达清晰的强制规则',
         qualityChecklist: [
+          '候选数量 ≥3（命名约束、线程约束、废弃 API  等应分别提交）',
           '每个候选是一条明确的项目开发规则',
           'doClause 以动词开头，表达强制性要求',
           'dontClause 明确禁止的做法',
@@ -410,8 +420,9 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '宏定义、常量、Hook 分别提交候选，确保包含完整实现代码',
+        action: '宏定义、常量、Hook 分别提交候选（**最少 3 条，目标 5 条**），确保包含完整实现代码',
         qualityChecklist: [
+          '候选数量 ≥3（宏定义、常量定义、Method Swizzling 等应分别提交）',
           'coreCode 包含完整的宏/常量/Hook 实现',
           'content 包含使用频率和场景说明',
           'Hook 候选必须说明原方法和替换方法的对应关系',
@@ -463,8 +474,10 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '按基类分组提交候选（NSString Category 一条、UIView Category 一条等）',
+        action:
+          '按基类分组提交候选（**最少 3 条，目标 5 条**：NSString Category 一条、UIView Category 一条等）',
         qualityChecklist: [
+          '候选数量 ≥3（不同基类的 Category 独立提交）',
           'content 包含完整的方法签名列表',
           'coreCode 包含最常用方法的实现代码',
           'doClause 强制要求使用已有 Category 方法',
@@ -510,8 +523,9 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '分别提交 barrel export 结构、导出约定、依赖约束等候选',
+        action: '分别提交 barrel export 结构、导出约定、依赖约束等候选（**最少 3 条，目标 5 条**）',
         qualityChecklist: [
+          '候选数量 ≥3（barrel export、命名导出约定、依赖方向约束等独立提交）',
           'content 包含具体的 import/export 代码示例',
           '引用 index.ts 和核心模块文件路径',
           'doClause 表达导出约定规则',
@@ -560,8 +574,9 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '组件约定、状态管理、路由模式分别提交候选',
+        action: '组件约定、状态管理、路由模式分别提交候选（**最少 3 条，目标 5 条**）',
         qualityChecklist: [
+          '候选数量 ≥3（组件结构、状态管理、路由配置等独立提交）',
           'content 包含组件/状态/路由的代码示例',
           '引用具体框架版本和配置文件',
           'coreCode 是可复制的标准写法模板',
@@ -608,8 +623,9 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '包结构、导入约定、类型标注分别提交候选',
+        action: '包结构、导入约定、类型标注分别提交候选（**最少 3 条，目标 5 条**）',
         qualityChecklist: [
+          '候选数量 ≥3（包结构、导入风格、类型标注约定独立提交）',
           'content 包含具体的 import/type hint 代码示例',
           '引用 __init__.py 和核心模块路径',
           'coreCode 展示标准的导入和类型标注写法',
@@ -658,8 +674,9 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: 'DI、ORM、API、自定义注解分别提交候选',
+        action: 'DI、ORM、API、自定义注解分别提交候选（**最少 3 条，目标 5 条**）',
         qualityChecklist: [
+          '候选数量 ≥3（DI 注解、ORM 注解、API 注解等独立提交）',
           'content 包含注解的完整使用示例',
           '引用具体的类文件和配置',
           'coreCode 展示标准的注解使用骨架',
@@ -698,8 +715,9 @@ export const DIMENSION_SOP = {
       },
       {
         phase: '4. 提交',
-        action: '模块结构、接口约定、初始化模式分别提交候选',
+        action: '模块结构、接口约定、初始化模式分别提交候选（**最少 3 条，目标 5 条**）',
         qualityChecklist: [
+          '候选数量 ≥3（模块结构、接口约定、初始化模式独立提交）',
           'content 包含模块依赖关系和接口设计',
           '引用 go.mod 和核心包路径',
           'coreCode 展示标准的接口定义和使用',

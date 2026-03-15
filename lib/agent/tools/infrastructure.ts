@@ -97,14 +97,14 @@ export const queryAuditLog = {
 export const loadSkill = {
   name: 'load_skill',
   description:
-    '加载指定的 Agent Skill 文档，获取领域操作指南和最佳实践参考。可用于冷启动指南 (autosnippet-coldstart)、候选管理 (autosnippet-candidates)、规范审计 (autosnippet-guard) 等。',
+    '加载指定的 Agent Skill 文档，获取领域操作指南和最佳实践参考。如知识提交 (autosnippet-create)、规范审计 (autosnippet-guard)、项目标准 (autosnippet-recipes) 等。',
   parameters: {
     type: 'object',
     properties: {
       skillName: {
         type: 'string',
         description:
-          'Skill 目录名（如 autosnippet-coldstart, autosnippet-candidates, autosnippet-guard 等）',
+          'Skill 目录名（如 autosnippet-create, autosnippet-guard, autosnippet-recipes 等）',
       },
     },
     required: ['skillName'],

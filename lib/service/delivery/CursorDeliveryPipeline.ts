@@ -133,6 +133,13 @@ export class CursorDeliveryPipeline {
       const channelA = this._generateChannelA(rules);
       stats.channelA = channelA;
 
+      // ── Baseline: 零知识库时注入基础引导 ──
+      if (entries.length === 0 && channelA.rulesCount === 0) {
+        const baseline = this.rulesGenerator.writeBaselineRules();
+        stats.channelA = { rulesCount: 0, tokensUsed: baseline.tokensUsed };
+        this.logger.info?.('[CursorDelivery] Baseline rules written (zero knowledge entries)');
+      }
+
       // ── Channel B: Smart Rules (by topic) + Facts ──
       const channelB = this._generateChannelB(patterns, facts);
       stats.channelB = channelB;
@@ -586,11 +593,14 @@ export class CursorDeliveryPipeline {
     try {
       const syncResult = await this.skillsSyncer.sync();
       this.logger.info?.(
-        `[CursorDelivery] Channel C: ${syncResult.synced.length} synced, ` +
+        `[CursorDelivery] Channel C: ${syncResult.builtinSynced.length} builtin + ` +
+          `${syncResult.synced.length} project synced, ` +
           `${syncResult.skipped.length} skipped, ${syncResult.errors.length} errors`
       );
       return {
-        synced: syncResult.synced.length,
+        synced: syncResult.builtinSynced.length + syncResult.synced.length,
+        builtinSynced: syncResult.builtinSynced.length,
+        projectSynced: syncResult.synced.length,
         skipped: syncResult.skipped.length,
         errors: syncResult.errors.length,
         details: syncResult,
@@ -599,9 +609,11 @@ export class CursorDeliveryPipeline {
       this.logger.error?.(`[CursorDelivery] Channel C error: ${(err as Error).message}`);
       return {
         synced: 0,
+        builtinSynced: 0,
+        projectSynced: 0,
         skipped: 0,
         errors: 1,
-        details: { synced: [], skipped: [], errors: [(err as Error).message] },
+        details: { synced: [], skipped: [], builtinSynced: [], errors: [(err as Error).message] },
       };
     }
   }

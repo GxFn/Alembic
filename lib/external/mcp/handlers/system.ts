@@ -125,7 +125,7 @@ export async function health(ctx: McpContext) {
       '知识库为空，建议执行冷启动：(1) 调用 autosnippet_bootstrap 获取 Mission Briefing → (2) 按维度分析代码并提交知识 → (3) 调用 autosnippet_dimension_complete 完成每个维度。'
     );
     actionHints.push(
-      '💡 冷启动前建议先加载 Skill 获取详细指引：autosnippet_skill({ operation: "load", name: "autosnippet-coldstart" })'
+      '💡 冷启动指引：调用 autosnippet_bootstrap 获取 Mission Briefing → 按维度分析代码 → 调用 autosnippet_dimension_complete 完成每个维度'
     );
   }
 
@@ -264,7 +264,7 @@ export function capabilities() {
         {
           name: '冷启动（外部 Agent）',
           steps: [
-            '⚠️ 先加载 Skill 获取详细指引: autosnippet_skill({ operation: "load", name: "autosnippet-coldstart" })',
+            '⚠️ 调用 autosnippet_bootstrap 获取 Mission Briefing（无参数直接调用）',
             'bootstrap（获取 Mission Briefing，无参数直接调用）',
             '按 Briefing 中的 submissionSchema.example 格式提交知识（注意: content 和 reasoning 都是 JSON 对象）',
             'Agent 分析代码 + submit_knowledge / submit_knowledge_batch × N',

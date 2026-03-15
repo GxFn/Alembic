@@ -517,8 +517,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               </button>
             )}
             <p className="mt-3 text-[11px] text-[var(--fg-muted)]">
-              或 <code className="text-blue-600 bg-blue-50 px-1 rounded">asd ais --all</code> {t('candidates.fullScanBtn')}
-              <code className="text-blue-600 bg-blue-50 px-1 rounded ml-1">asd candidate</code> {t('candidates.clipboardCreate')}
+              或在 IDE Agent Mode 中说「帮我冷启动」
             </p>
           </div>
         )}

@@ -158,6 +158,53 @@ export class RulesGenerator {
     return `${lines.join('\n')}\n`;
   }
 
+  /**
+   * Baseline Rules — 零知识库时写入基础引导文件
+   * 告知 Agent 可用的 MCP 工具和推荐工作流
+   */
+  writeBaselineRules() {
+    this._ensureDir();
+
+    const content = this._renderBaseline();
+    const filePath = path.join(this.rulesDir, 'autosnippet-project-rules.mdc');
+    fs.writeFileSync(filePath, content, 'utf8');
+
+    return {
+      filePath,
+      tokensUsed: estimateTokens(content),
+      rulesCount: 0,
+    };
+  }
+
+  _renderBaseline() {
+    const lines = [
+      '---',
+      `description: "${this.projectName} — AutoSnippet baseline guidance. Available MCP tools and recommended workflows."`,
+      'alwaysApply: true',
+      '---',
+      '',
+      `# ${this.projectName} — AutoSnippet Baseline`,
+      '',
+      'This project has AutoSnippet enabled but no knowledge entries yet.',
+      'Use the following MCP tools to build and query the knowledge base:',
+      '',
+      '## Available MCP Tools',
+      '',
+      '- `autosnippet_bootstrap` — Cold-start: analyze the project and generate initial knowledge entries',
+      '- `autosnippet_search({ query })` — Search knowledge base (BM25 + semantic)',
+      '- `autosnippet_create_recipe` — Create a new coding recipe from current context',
+      '- `autosnippet_guard` — Run compliance review on current changes',
+      '- `autosnippet_task_start` / `autosnippet_task_close` — Track coding tasks with automatic knowledge capture',
+      '',
+      '## Recommended First Steps',
+      '',
+      '1. Run `autosnippet_bootstrap` to analyze the codebase and generate initial recipes',
+      '2. Use `autosnippet_search` to query knowledge while coding',
+      '3. Run `autosnippet_guard` before committing to check compliance',
+    ];
+    return `${lines.join('\n')}\n`;
+  }
+
   _ensureDir() {
     if (!fs.existsSync(this.rulesDir)) {
       fs.mkdirSync(this.rulesDir, { recursive: true });
