@@ -40,9 +40,20 @@ asd setup     # workspace + DB + MCP configs (auto-detects Cursor / VS Code / Tr
 asd ui        # start the background service (MCP Server + Dashboard) — IDE and MCP tools require this
 ```
 
+> **Trae / Qoder users (China mirror):** If `npm install -g autosnippet` is slow, use the Taobao mirror:
+> ```bash
+> npm install -g autosnippet --registry=https://registry.npmmirror.com
+> ```
+
 ## Using in Your IDE
 
 `asd setup` takes care of everything. Open your IDE's **Agent Mode** (Cursor Composer / VS Code Copilot Chat / Trae) and start talking.
+
+> **First-time setup — enable MCP in your IDE:**
+> - **Cursor**: MCP is enabled by default. If tools aren't showing, go to *Settings → MCP* and enable the `autosnippet` server.
+> - **VS Code Copilot**: Open `.vscode/mcp.json` → click **Start** in the editor title bar, or run `MCP: List Servers` from the Command Palette.
+> - **Trae**: Open *Settings → AI → MCP Servers*, confirm `autosnippet` is listed and enabled.
+> - **Qoder**: Open *Preferences → MCP*, confirm `autosnippet` appears and is toggled on.
 
 > **Tip:** The stronger your IDE Agent model, the better the results. Choose Claude Opus 4 / Sonnet 4, GPT-5, or Gemini 3 Pro in Cursor / Copilot for more accurate patterns and fewer false positives.
 
