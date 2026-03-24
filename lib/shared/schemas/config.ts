@@ -40,7 +40,7 @@ const MonitoringConfig = z.object({
 
 const FileLogConfig = z.object({
   enabled: z.boolean().default(true),
-  path: z.string().default('./logs'),
+  path: z.string().default('./.autosnippet/logs'),
 });
 
 const LoggingConfig = z.object({

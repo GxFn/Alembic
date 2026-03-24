@@ -118,7 +118,7 @@ export class Logger {
     config: { level?: string; console?: boolean; file?: { enabled?: boolean; path?: string } } = {}
   ) {
     if (!this.instance) {
-      const logsDir = config.file?.path || './logs';
+      const logsDir = config.file?.path || './.autosnippet/logs';
 
       // 确保日志目录存在
       if (!fs.existsSync(logsDir)) {

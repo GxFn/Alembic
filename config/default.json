@@ -26,7 +26,7 @@
     "console": true,
     "file": {
       "enabled": true,
-      "path": "./logs"
+      "path": "./.autosnippet/logs"
     }
   },
   "constitution": {

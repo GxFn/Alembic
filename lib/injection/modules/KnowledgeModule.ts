@@ -19,7 +19,6 @@ import { CodeEntityGraph } from '../../service/knowledge/CodeEntityGraph.js';
 import { ConfidenceRouter } from '../../service/knowledge/ConfidenceRouter.js';
 import { KnowledgeGraphService } from '../../service/knowledge/KnowledgeGraphService.js';
 import { KnowledgeService } from '../../service/knowledge/KnowledgeService.js';
-import { CrossEncoderReranker } from '../../service/search/CrossEncoderReranker.js';
 import { HybridRetriever } from '../../service/search/HybridRetriever.js';
 import { SearchEngine } from '../../service/search/SearchEngine.js';
 import { LanguageService } from '../../shared/LanguageService.js';
@@ -86,12 +85,10 @@ export function register(c: ServiceContainer) {
           vectorStore: ct.get('vectorStore'),
           vectorService,
           hybridRetriever: ct.get('hybridRetriever'),
-          crossEncoderReranker: new CrossEncoderReranker({
-            aiProvider: embedProvider,
-            logger: ct.singletons.logger || console,
-          } as ConstructorParameters<typeof CrossEncoderReranker>[0]) as InstanceType<
-            typeof CrossEncoderReranker
-          >,
+          // CrossEncoderReranker disabled — BM25+vector dual-recall + CoarseRanker + MultiSignalRanker
+          // is sufficient for knowledge-base scale (hundreds~thousands of entries).
+          // Re-enable when document scale grows to 10k+ or external noisy sources are integrated.
+          crossEncoderReranker: null,
         } as unknown as ConstructorParameters<typeof SearchEngine>[1]
       );
     },

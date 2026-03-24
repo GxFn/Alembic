@@ -237,17 +237,11 @@ export const GITIGNORE_RULES = [
   // Environment (contains API keys created by `asd setup`)
   { pattern: '.env', comment: '环境变量（含 API Key）' },
 
-  // Logs
-  { pattern: 'logs/', comment: '运行日志' },
+  // Logs（已收纳到 .autosnippet/ 下，由 .autosnippet/* 统一覆盖）
 ];
 
 /** .gitignore 迁移规则 — 升级时清理旧格式 */
-export const GITIGNORE_MIGRATIONS = [
-  // v2.4.0: ".autosnippet/" → ".autosnippet/*"
-  { find: /^\.autosnippet\/$/m, replace: '.autosnippet/*' },
-  // Skills 已迁移到 AutoSnippet/skills/，清理旧 negation
-  { find: /^!?\.autosnippet\/skills\/.*\n?/gm, replace: '' },
-];
+export const GITIGNORE_MIGRATIONS: { find: RegExp; replace: string }[] = [];
 
 /** MCP Server 配置生成器 */
 export function buildMcpServerEntry(projectRoot: string, ide: 'cursor' | 'vscode') {

@@ -27,8 +27,10 @@ export async function health(ctx: McpContext) {
 
   // 2) Database 连通性 + 知识库统计
   try {
-    const db = ctx.container.get('database');
-    if (db) {
+    const dbConn = ctx.container.get('database');
+    if (dbConn) {
+      // DatabaseConnection 包装器 → 解包获取原始 better-sqlite3 实例
+      const db = typeof dbConn.getDb === 'function' ? dbConn.getDb() : dbConn;
       db.prepare('SELECT 1').get();
       checks.database = true;
       // 知识库统计（轻量聚合查询）

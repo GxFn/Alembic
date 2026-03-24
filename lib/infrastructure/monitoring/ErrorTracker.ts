@@ -49,7 +49,8 @@ export class ErrorTracker {
     > = {}
   ) {
     this.config = {
-      logDirectory: options.logDirectory || path.join(process.cwd(), 'logs', 'errors'),
+      logDirectory:
+        options.logDirectory || path.join(process.cwd(), '.autosnippet', 'logs', 'errors'),
       maxErrorsInMemory: options.maxErrorsInMemory || 500,
       enableFileLogging: options.enableFileLogging !== false,
       enableConsoleLogging: options.enableConsoleLogging !== false,
