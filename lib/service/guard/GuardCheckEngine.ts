@@ -37,6 +37,7 @@ interface BuiltInRule {
   category?: string;
   fixSuggestion?: string;
   excludePaths?: RegExp;
+  excludeLinePatterns?: string[];
   skipComments?: boolean;
   skipTestBlocks?: boolean;
 }
@@ -54,6 +55,7 @@ interface GuardRule {
   type?: string;
   fixSuggestion?: string | null;
   excludePaths?: RegExp | string;
+  excludeLinePatterns?: string[];
   skipComments?: boolean;
   skipTestBlocks?: boolean;
   astQuery?: { queryType: string; params?: Record<string, string> };
@@ -71,9 +73,15 @@ interface GuardViolation {
   reasoning?: { whatViolated: string; whyItMatters: string; suggestedFix: string | null };
 }
 
+/** 每条规则的覆盖配置（支持数字阈值或富对象） */
+interface RuleOverride {
+  severity?: string;
+  exclude?: string[];
+}
+
 interface GuardConfig {
   disabledRules?: string[];
-  codeLevelThresholds?: Record<string, number>;
+  codeLevelThresholds?: Record<string, number | RuleOverride>;
 }
 
 interface GuardCheckEngineOptions {
@@ -171,6 +179,13 @@ const BUILT_IN_RULES = {
     dimension: 'file',
     category: 'safety',
     fixSuggestion: '使用 as? 配合 guard let / if let 进行安全转换',
+    // UIKit 框架契约保证安全的 as! 场景
+    excludeLinePatterns: [
+      'dequeueReusableCell.*as\\s*!',
+      'dequeueReusableSupplementaryView.*as\\s*!',
+      'dequeueReusableHeaderFooterView.*as\\s*!',
+      'layerClass.*layer\\s+as\\s*!',
+    ],
   },
   'swift-force-try': {
     message: 'try! 在异常时崩溃，建议 do-catch 或 try?',
@@ -844,6 +859,10 @@ export class GuardCheckEngine {
       const shouldSkipComments = !!rule.skipComments;
       const shouldSkipTestBlocks = !!rule.skipTestBlocks;
 
+      // 合并内置 + 配置级排除行模式
+      const ruleId = rule.id || rule.name;
+      const excludeLineRegexes = this._getExcludeLineRegexes(ruleId, rule.excludeLinePatterns);
+
       for (let i = 0; i < lines.length; i++) {
         // skipComments: 跳过注释行（doc comments / 行注释 / 块注释内）
         if (shouldSkipComments && commentLines[i]) {
@@ -855,6 +874,10 @@ export class GuardCheckEngine {
         }
 
         if (re.test(lines[i])) {
+          // excludeLinePatterns: 跳过匹配排除模式的行（UIKit 框架契约安全等场景）
+          if (excludeLineRegexes.length > 0 && excludeLineRegexes.some((ep) => ep.test(lines[i]))) {
+            continue;
+          }
           violations.push({
             ruleId: rule.id || rule.name,
             message: rule.message,
@@ -868,11 +891,17 @@ export class GuardCheckEngine {
       }
     }
 
-    // Code-level 检查（不依赖正则）
+    // Code-level 检查（不依赖正则）— 仅传递数字类型阈值
+    const numericThresholds: Record<string, number> = {};
+    for (const [k, v] of Object.entries(this._guardConfig.codeLevelThresholds || {})) {
+      if (typeof v === 'number') {
+        numericThresholds[k] = v;
+      }
+    }
     violations.push(
       ...runCodeLevelChecks(code, language, lines, {
         disabledRules: this._guardConfig.disabledRules,
-        codeLevelThresholds: this._guardConfig.codeLevelThresholds,
+        codeLevelThresholds: numericThresholds,
       })
     );
 
@@ -1033,6 +1062,28 @@ export class GuardCheckEngine {
   /** 获取 AstAnalyzer 模块（静态 import，带可用性检测） */
   _getAstAnalyzer() {
     return AstAnalyzerModule;
+  }
+
+  /**
+   * 合并内置 + 配置级行排除模式，编译为 RegExp 数组
+   * 配置来自 guardConfig.codeLevelThresholds[ruleId].exclude
+   */
+  _getExcludeLineRegexes(ruleId: string, builtIn?: string[]): RegExp[] {
+    const patterns: string[] = [...(builtIn || [])];
+    // 合并项目配置中的 exclude
+    const override = this._guardConfig.codeLevelThresholds?.[ruleId];
+    if (override && typeof override === 'object' && Array.isArray(override.exclude)) {
+      patterns.push(...override.exclude);
+    }
+    const regexes: RegExp[] = [];
+    for (const p of patterns) {
+      try {
+        regexes.push(new RegExp(p));
+      } catch {
+        this.logger.debug(`Invalid excludeLinePattern in rule ${ruleId}: ${p}`);
+      }
+    }
+    return regexes;
   }
 
   /**

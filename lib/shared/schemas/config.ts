@@ -98,9 +98,17 @@ const QualityGateConfig = z.object({
   minScore: z.number().int().min(0).max(100).default(70),
 });
 
+const RuleOverrideConfig = z.union([
+  z.number().int().min(0),
+  z.object({
+    severity: z.string().optional(),
+    exclude: z.array(z.string()).optional(),
+  }),
+]);
+
 const GuardConfig = z.object({
   disabledRules: z.array(z.string()).default([]),
-  codeLevelThresholds: z.record(z.string(), z.number().int().min(0)).default({}),
+  codeLevelThresholds: z.record(z.string(), RuleOverrideConfig).default({}),
 });
 
 const TaskDecisionConfig = z.object({

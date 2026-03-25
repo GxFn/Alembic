@@ -7,6 +7,8 @@
  *   - complianceReporter, guardFeedbackLoop
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { ComplianceReporter } from '../../service/guard/ComplianceReporter.js';
 import { ExclusionManager } from '../../service/guard/ExclusionManager.js';
@@ -37,9 +39,38 @@ export function register(c: ServiceContainer) {
 
   c.singleton('guardCheckEngine', (ct: ServiceContainer) => {
     const config = (ct.singletons._config as Record<string, unknown> | undefined) || {};
+    // 基础配置（AutoSnippet 自身 config/default.json）
+    const baseGuard = (config.guard as Record<string, unknown>) || {};
+    // 项目级覆盖（.autosnippet/config.json 的 guard 段）
+    let projectGuard: Record<string, unknown> = {};
+    try {
+      const projectRoot = resolveProjectRoot(ct);
+      const projConfigPath = path.join(projectRoot, '.autosnippet', 'config.json');
+      if (fs.existsSync(projConfigPath)) {
+        const raw = JSON.parse(fs.readFileSync(projConfigPath, 'utf-8'));
+        if (raw.guard && typeof raw.guard === 'object') {
+          projectGuard = raw.guard as Record<string, unknown>;
+        }
+      }
+    } catch {
+      /* 项目配置读取失败不阻塞 */
+    }
+    // 合并：项目级覆盖基础配置
+    const merged = { ...baseGuard, ...projectGuard };
+    if (baseGuard.codeLevelThresholds || projectGuard.codeLevelThresholds) {
+      merged.codeLevelThresholds = {
+        ...((baseGuard.codeLevelThresholds as Record<string, unknown>) || {}),
+        ...((projectGuard.codeLevelThresholds as Record<string, unknown>) || {}),
+      };
+    }
+    if (baseGuard.disabledRules || projectGuard.disabledRules) {
+      const base = Array.isArray(baseGuard.disabledRules) ? baseGuard.disabledRules : [];
+      const proj = Array.isArray(projectGuard.disabledRules) ? projectGuard.disabledRules : [];
+      merged.disabledRules = [...new Set([...base, ...proj])];
+    }
     return new GuardCheckEngine(
       ct.get('database') as ConstructorParameters<typeof GuardCheckEngine>[0],
-      { guardConfig: (config.guard as Record<string, unknown>) || {} }
+      { guardConfig: merged }
     );
   });
 
