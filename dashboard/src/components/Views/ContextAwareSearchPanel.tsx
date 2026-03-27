@@ -341,7 +341,7 @@ const ContextAwareSearchPanel: React.FC<ContextAwareSearchPanelProps> = ({
           className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded transition-colors text-sm font-medium flex items-center gap-2"
         >
           <ChevronRight size={ICON_SIZES.md} />
-          {t('search.useSnippet')}
+          {t('search.useRecipe')}
         </button>
         )}
       </div>

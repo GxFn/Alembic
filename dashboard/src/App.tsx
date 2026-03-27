@@ -359,15 +359,6 @@ const App: React.FC = () => {
   }
   };
 
-  const handleSyncSnippets = async () => {
-  try {
-    await api.syncSnippets('all');
-    notify(t('app.sync.success'), { title: t('app.sync.successTitle') });
-  } catch (err) {
-    notify(t('app.sync.failedHint'), { title: t('app.sync.failed'), type: 'error' });
-  }
-  };
-
   const handleRefreshProject = async () => {
   try {
     await api.refreshProject();
@@ -551,7 +542,7 @@ const App: React.FC = () => {
         type: isNoAi ? 'info' : 'error',
       });
     } else {
-      notify(t('app.scan.noSnippets'), { title: t('app.scan.scanComplete'), type: 'info' });
+      notify(t('app.scan.noResults'), { title: t('app.scan.scanComplete'), type: 'info' });
     }
     } else {
     notify(t('app.scan.scanFailedHint'), { title: t('app.scan.scanFailed'), type: 'error' });
@@ -719,7 +710,7 @@ const App: React.FC = () => {
   try {
     // V3: 统一数据模型直接取值
     const codeRaw = (extracted.content?.pattern || '').trim();
-    const snippetAble = (() => {
+    const isCodeContent = (() => {
       if (!codeRaw) return false;
       const lines = codeRaw.split('\n').filter((l: string) => l.trim());
       const mdLines = lines.filter((l: string) => /^\s*(#{1,6}\s|[-*>]\s|\d+\.\s)/.test(l));
@@ -727,7 +718,7 @@ const App: React.FC = () => {
     })();
 
     const triggers = (extracted.trigger || '').split(/[,，\s]+/).map(t => t.trim()).filter(Boolean);
-    if (snippetAble && triggers.length === 0) {
+    if (isCodeContent && triggers.length === 0) {
     notify(t('app.recipe.triggerRequired'), { type: 'error' });
     setIsSavingRecipe(false);
     return;
@@ -782,7 +773,7 @@ const App: React.FC = () => {
       }
     }
 
-    notify(snippetAble ? t('app.recipe.savedAsRecipe') : t('app.recipe.savedToKb'));
+    notify(isCodeContent ? t('app.recipe.savedAsRecipe') : t('app.recipe.savedToKb'));
     setScanResults(prev => prev.filter(item => item.title !== extracted.title));
     // 若来自候选池，保存后从候选池移除
     const candTarget = extracted.candidateTargetName;
@@ -985,7 +976,6 @@ const App: React.FC = () => {
     <main className="flex-1 flex flex-col overflow-hidden relative">
     <Header 
       setShowCreateModal={setShowCreateModal} 
-      handleSyncSnippets={handleSyncSnippets} 
       aiConfig={data?.aiConfig}
       llmReady={llmReady}
       onOpenLlmConfig={() => setShowLlmConfig(true)}
@@ -1052,14 +1042,14 @@ const App: React.FC = () => {
         onRefresh={fetchData}
         onAuditCandidate={(cand, targetName) => {
         const candCode = (cand.content?.pattern || '').trim();
-        const isSnippetAble = !!candCode && (() => {
+        const isCodeContent = !!candCode && (() => {
           const lines = candCode.split('\n').filter(l => l.trim());
           const mdLines = lines.filter(l => /^\s*(#{1,6}\s|[-*>]\s|\d+\.\s)/.test(l));
           return mdLines.length <= lines.length * 0.3;
         })();
         setScanResults([{ 
           ...cand, 
-          mode: isSnippetAble ? 'full' : 'preview',
+          mode: isCodeContent ? 'full' : 'preview',
           lang: 'cn',
           includeHeaders: true,
           difficulty: cand.difficulty || cand.complexity || 'intermediate',
@@ -1072,14 +1062,14 @@ const App: React.FC = () => {
         onAuditAllInTarget={(items, targetName) => {
         setScanResults(items.map(cand => {
           const candCode = (cand.content?.pattern || '').trim();
-          const isSnippetAble = !!candCode && (() => {
+          const isCodeContent = !!candCode && (() => {
             const lines = candCode.split('\n').filter(l => l.trim());
             const mdLines = lines.filter(l => /^\s*(#{1,6}\s|[-*>]\s|\d+\.\s)/.test(l));
             return mdLines.length <= lines.length * 0.3;
           })();
           return {
           ...cand,
-          mode: (isSnippetAble ? 'full' : 'preview') as 'full' | 'preview',
+          mode: (isCodeContent ? 'full' : 'preview') as 'full' | 'preview',
           lang: 'cn' as const,
           includeHeaders: true,
           difficulty: cand.difficulty || cand.complexity || 'intermediate',
@@ -1187,7 +1177,6 @@ const App: React.FC = () => {
     onOpenChange={setCommandPaletteOpen}
     navigateToTab={navigateToTab}
     setShowCreateModal={setShowCreateModal}
-    handleSyncSnippets={handleSyncSnippets}
     searchQuery={searchQuery}
     setSearchQuery={setSearchQuery}
     onOpenLlmConfig={() => setShowLlmConfig(true)}

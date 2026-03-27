@@ -2,19 +2,15 @@
  * AppModule — 应用层杂项服务注册
  *
  * 负责注册:
- *   - recipeParser, recipeCandidateValidator, snippetFactory, snippetInstaller
+ *   - recipeParser, recipeCandidateValidator
  *   - qualityScorer, feedbackCollector, tokenUsageStore, recipeExtractor
- *   - spmService, automationOrchestrator, moduleService
- *   - cursorDeliveryPipeline
+ *   - moduleService, cursorDeliveryPipeline
  *   - taskIdGenerator, taskReadyEngine, taskKnowledgeBridge, taskGraphService
  */
 
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { TaskIdGenerator } from '../../domain/task/TaskIdGenerator.js';
-import { XcodeCodec } from '../../platform/ios/snippet/XcodeCodec.js';
-import { SpmHelper } from '../../platform/ios/spm/SpmHelper.js';
 import { TokenUsageStore } from '../../repository/token/TokenUsageStore.js';
-import { AutomationOrchestrator } from '../../service/automation/AutomationOrchestrator.js';
 import { CursorDeliveryPipeline } from '../../service/delivery/CursorDeliveryPipeline.js';
 import { RecipeExtractor } from '../../service/knowledge/RecipeExtractor.js';
 import { ModuleService } from '../../service/module/ModuleService.js';
@@ -22,9 +18,6 @@ import { FeedbackCollector } from '../../service/quality/FeedbackCollector.js';
 import { QualityScorer } from '../../service/quality/QualityScorer.js';
 import { RecipeCandidateValidator } from '../../service/recipe/RecipeCandidateValidator.js';
 import { RecipeParser } from '../../service/recipe/RecipeParser.js';
-import { VSCodeCodec } from '../../service/snippet/codecs/VSCodeCodec.js';
-import { SnippetFactory } from '../../service/snippet/SnippetFactory.js';
-import { SnippetInstaller } from '../../service/snippet/SnippetInstaller.js';
 import { TaskGraphService } from '../../service/task/TaskGraphService.js';
 import { TaskKnowledgeBridge } from '../../service/task/TaskKnowledgeBridge.js';
 import { TaskReadyEngine } from '../../service/task/TaskReadyEngine.js';
@@ -52,35 +45,7 @@ export function register(c: ServiceContainer) {
     );
   });
 
-  // ═══ Snippet ═══
-
-  c.singleton('snippetFactory', (ct: ServiceContainer) => {
-    const factory = new SnippetFactory(
-      ct.get('knowledgeRepository') as unknown as ConstructorParameters<typeof SnippetFactory>[0]
-    );
-    factory.registerCodec(new XcodeCodec());
-    factory.registerCodec(new VSCodeCodec());
-    return factory;
-  });
-
-  c.singleton('snippetInstaller', (ct: ServiceContainer) => {
-    const factory = ct.get('snippetFactory') as SnippetFactory;
-    return new SnippetInstaller({ codec: factory.getCodec('xcode'), snippetFactory: factory });
-  });
-
-  c.singleton('vscodeSnippetInstaller', (ct: ServiceContainer) => {
-    const factory = ct.get('snippetFactory') as SnippetFactory;
-    return new SnippetInstaller({ codec: factory.getCodec('vscode'), snippetFactory: factory });
-  });
-
-  // ═══ Platform + Automation ═══
-
-  c.singleton('spmService', (ct: ServiceContainer) => {
-    const projectRoot = resolveProjectRoot(ct);
-    return new SpmHelper(projectRoot);
-  });
-
-  c.singleton('automationOrchestrator', () => new AutomationOrchestrator());
+  // ═══ Module ═══
 
   c.singleton('moduleService', (ct: ServiceContainer) => {
     const projectRoot = resolveProjectRoot(ct);

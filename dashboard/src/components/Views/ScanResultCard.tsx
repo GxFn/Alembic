@@ -98,10 +98,9 @@ const TOPIC_OPTIONS = [
 ];
 
 /**
- * 判断该条目是否可以提取为 Xcode Snippet。
- * 仅当 content.pattern 看起来是实际代码（而非 Markdown/纯文本）时才能生成 Snippet。
+ * 判断该条目内容是否为代码（而非纯 Markdown/文本）。
  */
-const canExtractSnippet = (res: ScanResultItem): boolean => {
+const isCodeContent = (res: ScanResultItem): boolean => {
   const codeText = (res.content?.pattern || '').trim();
   if (!codeText) return false;
   const lines = codeText.split('\n').filter(l => l.trim());
@@ -137,7 +136,7 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
   const article = res.content?.markdown || '';
   const description = res.description || '';
   const tags = res.tags || [];
-  const snippetAble = canExtractSnippet(res);
+  const hasCode = isCodeContent(res);
 
   /** 安全更新 content 子字段 */
   const updateContent = (field: 'pattern' | 'markdown', value: string) => {
@@ -200,13 +199,13 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
               onClick={() => handleSaveExtracted(res)}
               disabled={isSavingRecipe}
               className={`text-xs px-4 py-2 rounded-lg font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap ${
-                snippetAble && res.mode === 'full'
+                hasCode && res.mode === 'full'
                   ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500/20 dark:text-blue-300 dark:hover:bg-blue-500/30 dark:border dark:border-blue-500/30'
                   : 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500/20 dark:text-amber-300 dark:hover:bg-amber-500/30 dark:border dark:border-amber-500/30'
               }`}
             >
               {isSavingRecipe ? <Loader2 size={ICON_SIZES.md} className="animate-spin" /> : <CheckCircle size={ICON_SIZES.md} />}
-              {isSavingRecipe ? t('scanResult.saving') : snippetAble ? t('scanResult.saveAsRecipe') : t('scanResult.saveAsKnowledge')}
+              {isSavingRecipe ? t('scanResult.saving') : hasCode ? t('scanResult.saveAsRecipe') : t('scanResult.saveAsKnowledge')}
             </button>
           </div>
         </div>
@@ -276,7 +275,7 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
           )}
           {/* ── Mode / Difficulty / Authority ── */}
           <div className="w-px h-6 bg-slate-200 self-end mb-0.5" />
-          {snippetAble && (
+          {hasCode && (
             <div className="flex flex-col">
               <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-0.5 mb-1">{t('scanResult.mode')}</label>
               <div className="flex bg-white dark:bg-[#252a36] p-0.5 rounded-md border border-slate-200 dark:border-slate-600">
@@ -284,7 +283,7 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
                   onClick={() => handleUpdateScanResult(i, { mode: 'full' })}
                   className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${res.mode === 'full' ? 'bg-blue-100 shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-500'}`}
                 >
-                  Snippet+Recipe
+                  Full
                 </button>
                 <button
                   onClick={() => handleUpdateScanResult(i, { mode: 'preview' })}
@@ -372,7 +371,7 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
         </div>
 
         {/* ── Imports / Dependencies ── */}
-        {snippetAble && headers.length > 0 && (
+        {hasCode && headers.length > 0 && (
           <div className="mt-2 space-y-2">
             <div className="flex items-center gap-2">
               <label className="text-[10px] font-bold text-slate-400 uppercase">{t('scanResult.headers')}</label>
@@ -383,7 +382,7 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
                 {isExpanded ? t('scanResult.collapseHeaders') : t('scanResult.editHeaders')} ({headers.length})
               </button>
               <div className="flex items-center gap-1.5">
-                <span className="text-[9px] text-slate-400">Snippet:</span>
+                <span className="text-[9px] text-slate-400">Include:</span>
                 <button
                   onClick={() => handleUpdateScanResult(i, { includeHeaders: !(res.includeHeaders !== false) })}
                   className={`w-7 h-4 rounded-full relative transition-colors ${res.includeHeaders !== false ? 'bg-blue-600' : 'bg-slate-300'}`}

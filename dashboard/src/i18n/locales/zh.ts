@@ -84,7 +84,6 @@ export const zh = {
     openAiChat: '打开 AI 对话',
     aiChat: 'AI 对话',
     newRecipe: '新建 Recipe',
-    syncSnippets: '同步 Snippets',
     langSwitch: '中 / EN',
   },
 
@@ -132,7 +131,6 @@ export const zh = {
     sortAlpha: '字母',
     sortQuality: '质量',
     filterAll: '全部类型',
-    filterSnippet: '仅 Snippet',
     filterKnowledge: '仅 Knowledge',
     searchPlaceholder: '搜索 Recipes...',
     totalCount: '共 {count} 条',
@@ -150,7 +148,6 @@ export const zh = {
     qualityGood: 'Good',
     qualityBasic: '基础',
     knowledgeType: '类型',
-    typeSnippet: 'Snippet',
     typeKnowledge: 'Knowledge',
     sourceLabel: '来源',
     sourceBootstrap: 'bootstrap',
@@ -972,12 +969,12 @@ export const zh = {
     footerGithubReadme: 'GitHub README',
     mcpWriteNote: '写操作工具（submit_knowledge、guard、bootstrap 等）通过 Gateway 权限 / 宪法 / 审计三重保护。',
     editorDirectivesNote: '需先运行 asd watch 或 asd ui；支持快捷写法 asc / ass / asa',
-    createDirective: '创建 Recipe/Snippet',
+    createDirective: '创建 Recipe',
     searchDirective: '搜索并插入',
     auditDirective: '代码审查',
     includeDirective: '自动注入头文件/模块',
     // Role capability cells
-    developerCap: 'Dashboard 审核候选、保存 Recipe；Snippet 补全、<code class="bg-slate-100 px-1 rounded">// as:search</code>；运行 <code class="bg-slate-100 px-1 rounded">asd ui</code>',
+    developerCap: 'Dashboard 审核候选、保存 Recipe；<code class="bg-slate-100 px-1 rounded">// as:search</code> 检索知识；运行 <code class="bg-slate-100 px-1 rounded">asd ui</code>',
     cursorAgentCap: '11 个 Skills 理解规范；22 个 MCP 工具按需检索、提交候选；写操作经 Gateway 审核；TaskGraph DAG 任务编排 + tokenBudget 感知消费',
     chatAgentCap: '统一 AgentRuntime 驱动；飞书 Lark Preset 编程对话；Skills 智能推荐 + 自动注入；<code class="bg-slate-100 px-1 rounded">asd coldstart</code> 冷启动 + <code class="bg-slate-100 px-1 rounded">asd ais</code> 扫描',
     // Component card bullets
@@ -1039,13 +1036,13 @@ export const zh = {
     createDirBullet1: '无选项：打开 Dashboard',
     createDirBullet2: '<code>-c</code>：从剪贴板静默创建',
     createDirBullet3: '<code>-f</code>：扫描当前文件',
-    searchDirBullet1: '从知识库检索 Recipe/Snippet',
+    searchDirBullet1: '从知识库检索 Recipe',
     searchDirBullet2: '选择后插入代码，替换该行',
     searchDirBullet3: '记录一次人工使用',
     auditDirBullet1: '无后缀：审查当前文件',
     auditDirBullet2: '<code>target</code>：审查当前 Target',
     auditDirBullet3: '<code>project</code>：审查整个项目',
-    includeDirBullet1: 'Snippet 中包含此标记',
+    includeDirBullet1: '代码中包含此标记',
     includeDirBullet2: '补全后自动注入 import',
     // Skill descriptions
     skillIntent: '意图路由',
@@ -1306,7 +1303,7 @@ export const zh = {
     similarity: '相似度',
     quality: '质量',
     noContent: '无内容',
-    useSnippet: '使用此片段',
+    useRecipe: '使用此知识',
     importedFrameworks: '导入的框架：',
     relatedApis: '相关 APIs：',
   },
@@ -1576,12 +1573,7 @@ export const zh = {
       title: '页面出现异常',
       refreshBtn: '刷新页面',
     },
-    sync: {
-      success: 'Recipes 已同步到 IDE Snippets',
-      successTitle: 'Snippet 同步成功',
-      failed: '同步失败',
-      failedHint: '请检查 IDE 配置并重试',
-    },
+
     projectRefresh: {
       success: 'Target 列表与文件树已更新',
       successTitle: '项目结构已刷新',
@@ -1627,7 +1619,7 @@ export const zh = {
       targetSuccessTitle: 'Target 扫描完成',
       aiNotConfigured: 'AI 未配置',
       noResults: 'AI 扫描未返回结果',
-      noSnippets: '该 Target 中未找到可复用的代码片段',
+      noCode: '该 Target 中未找到可复用的代码片段',
       scanComplete: '扫描完成',
       scanFailedHint: '请确认 Target 包含有效的源代码文件',
       scanFailed: '扫描失败',
@@ -1895,7 +1887,7 @@ export const zh = {
 
   /* ═══════════════════════════════ scanResultCard ══════════════════════ */
   scanResultCard: {
-    includeMarkOn: '开启：snippet 内写入 // as:include 标记',
+    includeMarkOn: '开启：写入 // as:include 标记',
     includeMarkOff: '关闭：不写入导入标记',
     formatHeaders: '统一导入格式',
     cleanUnused: '移除代码中未引用的头文件',

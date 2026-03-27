@@ -131,7 +131,6 @@ describe('E2E: Full Pipeline', () => {
       'guardService',
       'guardCheckEngine',
       'toolRegistry',
-      'automationOrchestrator',
     ];
 
     for (const name of coreServices) {

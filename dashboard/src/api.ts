@@ -492,7 +492,7 @@ export const api = {
     const projectName = projectInfoRes.data?.data?.projectName || '';
 
     return {
-      rootSpec: { list: [] },
+      rootSpec: {},
       recipes,
       candidates,
       projectRoot,
@@ -766,11 +766,6 @@ export const api = {
   },
 
   // ── Commands ────────────────────────────────────────
-
-  async syncSnippets(target: 'xcode' | 'vscode' | 'all' = 'all'): Promise<Record<string, unknown>> {
-    const res = await http.post('/commands/install', { target });
-    return res.data;
-  },
 
   async refreshProject(): Promise<void> {
     try {

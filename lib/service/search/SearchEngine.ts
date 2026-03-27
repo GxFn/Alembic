@@ -506,7 +506,7 @@ export class SearchEngine {
       };
     });
 
-    // 为每个结果补充 content（NativeUI 预览需要）— 批量 IN 查询替代 N+1
+    // 为每个结果补充 content（预览需要）— 批量 IN 查询替代 N+1
     this._supplementDetails(items);
 
     return items;

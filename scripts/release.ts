@@ -222,16 +222,7 @@ class ReleaseChecker {
   // 检查其他构建产物
   checkBuildArtifacts() {
     header('其他构建产物检查');
-
-    const nativeUI = path.join(RESOURCES_DIR, 'native-ui/native-ui');
-
-    if (!fs.existsSync(nativeUI)) {
-      this.warnings.push('Native UI 未构建 (执行 npm run build:native-ui)');
-      warning('Native UI: 未构建');
-    } else {
-      const stat = fs.statSync(nativeUI);
-      success(`Native UI: 已构建 (${new Date(stat.mtime).toLocaleString()})`);
-    }
+    success('No platform-specific binaries to check');
   }
 
   // 运行测试

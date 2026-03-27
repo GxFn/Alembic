@@ -1,6 +1,6 @@
 /**
  * Commands API 路由
- * 执行 Install (同步 Snippet 到 IDE)、SPM Map 刷新、Embed (重建索引) 等命令
+ * 执行 Module Map 刷新、Embed (重建索引) 等命令
  */
 
 import express, { type Request, type Response } from 'express';
@@ -11,69 +11,6 @@ import { validate, validateQuery } from '../middleware/validate.js';
 
 const router = express.Router();
 const logger = Logger.getInstance();
-
-/**
- * POST /api/v1/commands/install
- * 从 Recipe 生成并同步 Snippet 到 IDE
- * Body: { target?: 'xcode' | 'vscode' | 'all' }
- */
-router.post('/install', async (req: Request, res: Response) => {
-  const container = getServiceContainer();
-  const knowledgeRepository = container.get('knowledgeRepository');
-  const target = req.body?.target || 'all';
-
-  // 获取所有活跃 Recipe（V3: lifecycle='active' 即 Recipe）
-  const result = await knowledgeRepository.findWithPagination(
-    { lifecycle: 'active' },
-    { page: 1, pageSize: 9999 }
-  );
-  const recipes = (
-    (result?.data ??
-      (result as unknown as Record<string, unknown>)?.items ??
-      []) as unknown as Record<string, unknown>[]
-  )
-    .map((r: Record<string, unknown>) => ({
-      id: r.id,
-      title: r.title,
-      trigger: r.trigger,
-      code: (r.content as Record<string, unknown>)?.pattern || '',
-      description: r.description || r.summaryCn || '',
-      language: r.language || 'unknown',
-    }))
-    .filter((r: Record<string, unknown>) => String(r.code).trim().length > 0);
-
-  const installResults: Record<string, unknown> = {};
-
-  // Xcode
-  if ((target === 'all' || target === 'xcode') && process.platform === 'darwin') {
-    try {
-      const xcodeInstaller = container.get('snippetInstaller');
-      installResults.xcode = xcodeInstaller.installFromRecipes(
-        recipes as unknown as Parameters<typeof xcodeInstaller.installFromRecipes>[0]
-      );
-    } catch (e: unknown) {
-      installResults.xcode = { success: false, error: (e as Error).message };
-    }
-  }
-
-  // VSCode
-  if (target === 'all' || target === 'vscode') {
-    try {
-      const vscodeInstaller = container.get('vscodeSnippetInstaller');
-      installResults.vscode = vscodeInstaller.installFromRecipes(
-        recipes as unknown as Parameters<typeof vscodeInstaller.installFromRecipes>[0]
-      );
-    } catch (e: unknown) {
-      installResults.vscode = { success: false, error: (e as Error).message };
-    }
-  }
-
-  logger.info('Snippets installed via dashboard', { target, results: installResults });
-  res.json({
-    success: true,
-    data: installResults,
-  });
-});
 
 /**
  * POST /api/v1/commands/spm-map
@@ -150,24 +87,9 @@ router.get('/status', async (req: Request, res: Response) => {
   const container = getServiceContainer();
 
   const status = {
-    snippets: { xcode: { synced: false }, vscode: { synced: false } },
     index: { ready: false },
     spmMap: { available: false },
   };
-
-  try {
-    const snippetInstaller = container.get('snippetInstaller');
-    status.snippets.xcode.synced = (await snippetInstaller.listInstalled?.())?.length > 0;
-  } catch {
-    /* ignore */
-  }
-
-  try {
-    const vscodeInstaller = container.get('vscodeSnippetInstaller');
-    status.snippets.vscode.synced = (await vscodeInstaller.listInstalled?.())?.length > 0;
-  } catch {
-    /* ignore */
-  }
 
   try {
     const indexingPipeline = container.get('indexingPipeline');

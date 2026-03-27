@@ -455,20 +455,9 @@ export class ModuleService {
       recipes = [];
     }
 
-    // 3.5 Header 路径解析 + moduleName 注入
-    try {
-      const PathFinder = await import('../../platform/ios/spm/PathFinder.js');
-      const HeaderResolver = await import('../../platform/ios/xcode/HeaderResolver.js');
-      const targetRootDir = await PathFinder.findTargetRootDir(files[0]!.path);
-      for (const recipe of recipes) {
-        const headerList = (recipe.headers || []) as string[];
-        recipe.headerPaths = await Promise.all(
-          headerList.map((h: string) => HeaderResolver.resolveHeaderRelativePath(h, targetRootDir!))
-        );
-        recipe.moduleName = targetName;
-      }
-    } catch (err: unknown) {
-      this.#logger.warn(`[ModuleService] Header resolution failed: ${(err as Error).message}`);
+    // 3.5 moduleName 注入
+    for (const recipe of recipes) {
+      recipe.moduleName = targetName;
     }
 
     // 4. 工具增强

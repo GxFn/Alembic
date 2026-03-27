@@ -1,21 +1,3 @@
-export interface Snippet {
-  identifier: string;
-  title: string;
-  completionKey: string;
-  summary: string;
-  category?: string;
-  language: string;
-  content: string[];
-  body?: string[];
-  headers?: string[];
-  /** 每条 header 相对于 target 根目录的路径，用于 // as:include <M/H.h> [path] */
-  headerPaths?: string[];
-  /** target/模块名，用于角括号格式 // as:include <TargetName/Header.h> */
-  moduleName?: string;
-  includeHeaders?: boolean;
-  link?: string;
-}
-
 export interface RecipeStats {
   authority: number;
   guardUsageCount: number;
@@ -91,7 +73,6 @@ export interface Recipe {
 
 export interface ProjectData {
   rootSpec: {
-  list: Snippet[];
   recipes?: {
     dir: string;
   };

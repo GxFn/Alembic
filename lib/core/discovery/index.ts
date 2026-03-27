@@ -3,7 +3,6 @@
  * @description ProjectDiscoverer 系统入口 - 初始化 Registry 并注册所有 Discoverer
  */
 
-import { SpmDiscoverer } from '../../platform/ios/spm/SpmDiscoverer.js';
 import { DartDiscoverer } from './DartDiscoverer.js';
 import { DiscovererRegistry } from './DiscovererRegistry.js';
 import { GenericDiscoverer } from './GenericDiscoverer.js';
@@ -12,6 +11,7 @@ import { JvmDiscoverer } from './JvmDiscoverer.js';
 import { NodeDiscoverer } from './NodeDiscoverer.js';
 import { PythonDiscoverer } from './PythonDiscoverer.js';
 import { RustDiscoverer } from './RustDiscoverer.js';
+import { SpmDiscoverer } from './SpmDiscoverer.js';
 
 let _registry: DiscovererRegistry | null = null;
 
@@ -37,7 +37,6 @@ export function resetDiscovererRegistry() {
   _registry = null;
 }
 
-export { SpmDiscoverer } from '../../platform/ios/spm/SpmDiscoverer.js';
 export { DartDiscoverer } from './DartDiscoverer.js';
 export { DiscovererRegistry } from './DiscovererRegistry.js';
 export { GenericDiscoverer } from './GenericDiscoverer.js';
@@ -48,3 +47,4 @@ export { NodeDiscoverer } from './NodeDiscoverer.js';
 export { ProjectDiscoverer } from './ProjectDiscoverer.js';
 export { PythonDiscoverer } from './PythonDiscoverer.js';
 export { RustDiscoverer } from './RustDiscoverer.js';
+export { SpmDiscoverer } from './SpmDiscoverer.js';

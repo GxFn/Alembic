@@ -29,13 +29,10 @@ import type { EventBus } from '../infrastructure/event/EventBus.js';
 import type Logger from '../infrastructure/logging/Logger.js';
 import type { IndexingPipeline } from '../infrastructure/vector/IndexingPipeline.js';
 import type { VectorStore } from '../infrastructure/vector/VectorStore.js';
-// ── Platform Types ──
-import type { SpmHelper } from '../platform/ios/spm/SpmHelper.js';
 // ── Repository Types ──
 import type { KnowledgeRepositoryImpl } from '../repository/knowledge/KnowledgeRepository.impl.js';
 import type { TaskRepositoryImpl } from '../repository/task/TaskRepository.impl.js';
 import type { TokenUsageStore } from '../repository/token/TokenUsageStore.js';
-import type { AutomationOrchestrator } from '../service/automation/AutomationOrchestrator.js';
 import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
 import type DimensionCopy from '../service/bootstrap/DimensionCopyRegistry.js';
 import type { CursorDeliveryPipeline } from '../service/delivery/CursorDeliveryPipeline.js';
@@ -61,8 +58,6 @@ import type { RecipeParser } from '../service/recipe/RecipeParser.js';
 import type { HybridRetriever } from '../service/search/HybridRetriever.js';
 import type SearchEngine from '../service/search/SearchEngine.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
-import type { SnippetFactory } from '../service/snippet/SnippetFactory.js';
-import type { SnippetInstaller } from '../service/snippet/SnippetInstaller.js';
 import type { TaskGraphService } from '../service/task/TaskGraphService.js';
 import type { TaskKnowledgeBridge } from '../service/task/TaskKnowledgeBridge.js';
 import type { TaskReadyEngine } from '../service/task/TaskReadyEngine.js';
@@ -99,11 +94,6 @@ export interface ServiceMap {
   recipeExtractor: RecipeExtractor | null;
   feedbackCollector: FeedbackCollector;
   tokenUsageStore: TokenUsageStore;
-  snippetFactory: SnippetFactory;
-  snippetInstaller: SnippetInstaller;
-  vscodeSnippetInstaller: SnippetInstaller;
-  spmService: SpmHelper;
-  automationOrchestrator: AutomationOrchestrator;
   moduleService: ModuleService;
   cursorDeliveryPipeline: CursorDeliveryPipeline;
   taskIdGenerator: TaskIdGenerator;

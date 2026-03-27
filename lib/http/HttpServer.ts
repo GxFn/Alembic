@@ -17,7 +17,6 @@ import { type ErrorTracker, initErrorTracker } from '../infrastructure/monitorin
 import { initPerformanceMonitor } from '../infrastructure/monitoring/PerformanceMonitor.js';
 import { initRealtimeService } from '../infrastructure/realtime/RealtimeService.js';
 import { getServiceContainer } from '../injection/ServiceContainer.js';
-import spmRouter from '../platform/ios/routes/spm.js';
 import apiSpec from './api-spec.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { gatewayMiddleware } from './middleware/gatewayMiddleware.js';
@@ -38,7 +37,6 @@ import recipesRouter from './routes/recipes.js';
 import remoteRouter from './routes/remote.js';
 import searchRouter from './routes/search.js';
 import skillsRouter from './routes/skills.js';
-import snippetRouter from './routes/snippets.js';
 import taskRouter from './routes/task.js';
 import violationsRouter from './routes/violations.js';
 import wikiRouter from './routes/wiki.js';
@@ -283,9 +281,6 @@ export class HttpServer {
     // 搜索路由
     this.app.use(`${apiPrefix}/search`, searchRouter);
 
-    // Snippet 路由
-    this.app.use(`${apiPrefix}/snippets`, snippetRouter);
-
     // AI 路由
     this.app.use(`${apiPrefix}/ai`, aiRouter);
 
@@ -300,9 +295,6 @@ export class HttpServer {
 
     // Candidates 路由（AI 补齐/润色）
     this.app.use(`${apiPrefix}/candidates`, candidatesRouter);
-
-    // SPM 路由（向后兼容保留）
-    this.app.use(`${apiPrefix}/spm`, spmRouter);
 
     // Modules 路由（v3.2 统一多语言模块扫描）
     this.app.use(`${apiPrefix}/modules`, modulesRouter);

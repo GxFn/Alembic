@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, RefreshCw, Settings, FileText, Bookmark, FolderOpen, Clock, Library, GitBranch, Share2, Shield, BookOpen, MessageSquare, HelpCircle, BrainCircuit } from 'lucide-react';
+import { Plus, Settings, FileText, Bookmark, FolderOpen, Clock, Library, GitBranch, Share2, Shield, BookOpen, MessageSquare, HelpCircle, BrainCircuit } from 'lucide-react';
 import { Dialog, DialogContent } from '../ui/Dialog';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator, CommandShortcut } from '../ui/Command';
 import { TabType } from '../../constants';
@@ -40,7 +40,6 @@ interface CommandPaletteProps {
   onOpenChange: (open: boolean) => void;
   navigateToTab: (tab: TabType) => void;
   setShowCreateModal: (show: boolean) => void;
-  handleSyncSnippets: () => void;
   onSemanticSearch?: (query: string) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
@@ -52,7 +51,6 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
   open, onOpenChange,
   navigateToTab,
   setShowCreateModal,
-  handleSyncSnippets,
   onSemanticSearch,
   searchQuery, setSearchQuery,
   onOpenLlmConfig,
@@ -164,14 +162,6 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({
                 <Plus className="mr-2 h-4 w-4 text-[var(--fg-subtle)]" />
                 <span>{t('header.newRecipe')}</span>
                 <CommandShortcut>⌘N</CommandShortcut>
-              </CommandItem>
-              <CommandItem
-                value="sync snippets"
-                onSelect={() => runAndClose(handleSyncSnippets)}
-              >
-                <RefreshCw className="mr-2 h-4 w-4 text-[var(--fg-subtle)]" />
-                <span>{t('header.syncSnippets')}</span>
-                <CommandShortcut>⌘S</CommandShortcut>
               </CommandItem>
               {onSemanticSearch && (
                 <CommandItem

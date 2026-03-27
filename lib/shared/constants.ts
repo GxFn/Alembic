@@ -97,17 +97,6 @@ export const SEARCH = Object.freeze({
   MAX_RESULTS: 100,
 });
 
-// ─── 文件监听器 ──────────────────────────────────────────
-
-/** FileWatcher 配置 */
-export const FILE_WATCHER = Object.freeze({
-  DEBOUNCE_DELAY_MS: 300,
-  STABILITY_THRESHOLD_MS: 500,
-  POLL_INTERVAL_MS: 100,
-  BINARY_INTERVAL_MS: 300,
-  MAX_FILE_SIZE_BYTES: 1024 * 1024,
-});
-
 // ─── AI Provider ─────────────────────────────────────────
 
 /** AiProvider 熔断配置 */
@@ -153,7 +142,6 @@ export default {
   COMPLIANCE_SCORING,
   KNOWLEDGE_CONFIDENCE,
   SEARCH,
-  FILE_WATCHER,
   AI_CIRCUIT_BREAKER,
   CACHE,
   MONITORING,

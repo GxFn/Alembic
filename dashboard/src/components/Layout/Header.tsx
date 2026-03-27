@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, RefreshCw, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap } from 'lucide-react';
+import { Plus, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap } from 'lucide-react';
 import api from '../../api';
 import { getSocket } from '../../lib/socket';
 import { useGlobalChat } from '../Shared/GlobalChatDrawer';
@@ -51,7 +51,6 @@ const TAB_LABELS: Record<TabType, string> = {
 
 interface HeaderProps {
   setShowCreateModal: (show: boolean) => void;
-  handleSyncSnippets: () => void;
   aiConfig?: { provider: string; model: string };
   llmReady?: boolean;
   onOpenLlmConfig?: () => void;
@@ -68,7 +67,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({
-  setShowCreateModal, handleSyncSnippets,
+  setShowCreateModal,
   aiConfig, llmReady = true, onOpenLlmConfig,
   onBeforeAiSwitch, onAiConfigChange,
   activeTab,
@@ -241,19 +240,6 @@ const Header: React.FC<HeaderProps> = ({
             <TooltipContent>{t('header.newRecipe')}</TooltipContent>
           </Tooltip>
 
-          {/* 同步 */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={handleSyncSnippets}
-              >
-                <RefreshCw size={16} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('header.syncSnippets')}</TooltipContent>
-          </Tooltip>
           {/* AI Chat Toggle（贴最右） */}
           <Tooltip>
             <TooltipTrigger asChild>

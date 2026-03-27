@@ -2,23 +2,45 @@
  * @module SpmDiscoverer
  * @description SPM 项目发现器，适配 ProjectDiscoverer 接口
  *
- * 直接使用 PackageSwiftParser 解析 Package.swift，提供模块列表和文件遍历。
- * SpmHelper 仅用于 Xcode 工作流的依赖检查/修复，不在此链路加载。
+ * 内置 Package.swift 正则解析，提供模块列表和文件遍历。
  *
  * 检测: 项目根或子目录存在 Package.swift
  */
 
-import { existsSync, readdirSync, type Stats, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, type Stats, statSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
-import { ProjectDiscoverer } from '#core/discovery/ProjectDiscoverer.js';
 import { LanguageService } from '#shared/LanguageService.js';
-import { PackageSwiftParser } from './PackageSwiftParser.js';
+import { ProjectDiscoverer } from './ProjectDiscoverer.js';
+
+/** Package.swift 解析结果 */
+interface ParsedPackage {
+  path: string;
+  name: string;
+  version: string;
+  targets: { name: string; type: string; path: string | null; dependencies: string[] }[];
+  dependencies: (
+    | { url: string; version: string | null; type: string }
+    | { path: string; type: string }
+  )[];
+  products: { name: string; type: string }[];
+  platforms: { name: string; version: string }[];
+}
+
+const SKIP_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'Build',
+  '.build',
+  '.swiftpm',
+  'Pods',
+  'DerivedData',
+  'Carthage',
+  '.cursor',
+]);
 
 export class SpmDiscoverer extends ProjectDiscoverer {
-  #parser: PackageSwiftParser | null = null;
   #projectRoot: string | null = null;
-  /** >} */
-  #parsedPackages: { pkgPath: string; parsed: ReturnType<PackageSwiftParser['parse']> }[] = [];
+  #parsedPackages: { pkgPath: string; parsed: ParsedPackage }[] = [];
 
   get id() {
     return 'spm';
@@ -28,13 +50,11 @@ export class SpmDiscoverer extends ProjectDiscoverer {
   }
 
   async detect(projectRoot: string) {
-    // 检查项目根是否有 Package.swift
     const hasRoot = existsSync(join(projectRoot, 'Package.swift'));
     if (hasRoot) {
       return { match: true, confidence: 0.95, reason: 'Package.swift found at project root' };
     }
 
-    // 检查子目录是否有 Package.swift（多包项目）
     try {
       const entries = readdirSync(projectRoot, { withFileTypes: true });
       for (const entry of entries) {
@@ -57,13 +77,12 @@ export class SpmDiscoverer extends ProjectDiscoverer {
 
   async load(projectRoot: string) {
     this.#projectRoot = projectRoot;
-    this.#parser = new PackageSwiftParser(projectRoot);
     this.#parsedPackages = [];
 
-    const allPaths = this.#parser.findAllPackageSwifts(projectRoot);
+    const allPaths = this.#findAllPackageSwifts(projectRoot);
     for (const pkgPath of allPaths) {
       try {
-        const parsed = this.#parser.parse(pkgPath);
+        const parsed = this.#parsePackageSwift(pkgPath);
         if (parsed) {
           this.#parsedPackages.push({ pkgPath, parsed });
         }
@@ -74,10 +93,6 @@ export class SpmDiscoverer extends ProjectDiscoverer {
   }
 
   async listTargets() {
-    if (!this.#parser) {
-      return [];
-    }
-
     const targets: {
       name: string;
       path: string;
@@ -106,19 +121,13 @@ export class SpmDiscoverer extends ProjectDiscoverer {
   }
 
   async getTargetFiles(target: string | { name: string }) {
-    if (!this.#parser) {
-      return [];
-    }
-
     const targetName = typeof target === 'string' ? target : target.name;
 
-    // 找到 target 所在的包目录和自定义 path
     let sourcesDir: string | null = null;
     for (const { pkgPath, parsed } of this.#parsedPackages) {
       const matchTarget = parsed.targets?.find((t: { name: string }) => t.name === targetName);
       if (matchTarget) {
         const pkgDir = dirname(pkgPath);
-        // 优先使用 target 声明的自定义 path
         const candidates: string[] = [];
         if (matchTarget.path) {
           candidates.push(join(pkgDir, matchTarget.path));
@@ -138,7 +147,6 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     }
 
     if (!sourcesDir) {
-      // Fallback: projectRoot/Sources/targetName
       const fallback = join(this.#projectRoot!, 'Sources', targetName);
       if (existsSync(fallback)) {
         sourcesDir = fallback;
@@ -156,7 +164,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
   }
 
   async getDependencyGraph() {
-    if (!this.#projectRoot || !this.#parser) {
+    if (!this.#projectRoot) {
       return { nodes: [], edges: [] };
     }
 
@@ -178,8 +186,7 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     const pkgNameSet = new Set();
     const targetToPkg = new Map();
 
-    // ── 第一遍：收集所有 package + target 节点 ──
-    const allParsed: (ReturnType<PackageSwiftParser['parse']> & { _dir: string })[] = [];
+    const allParsed: (ParsedPackage & { _dir: string })[] = [];
     const umbrellaNames = new Set();
     for (const { pkgPath, parsed } of this.#parsedPackages) {
       if (pkgNameSet.has(parsed.name)) {
@@ -188,7 +195,6 @@ export class SpmDiscoverer extends ProjectDiscoverer {
       pkgNameSet.add(parsed.name);
       allParsed.push({ ...parsed, _dir: dirname(pkgPath) });
 
-      // 跳过 umbrella 包（无 targets + 无 products）——它只是组织子包的入口
       const hasTargets = parsed.targets && parsed.targets.length > 0;
       const hasProducts = parsed.products && parsed.products.length > 0;
       if (!hasTargets && !hasProducts) {
@@ -196,7 +202,6 @@ export class SpmDiscoverer extends ProjectDiscoverer {
         continue;
       }
 
-      // package 节点
       nodes.push({
         id: parsed.name,
         label: parsed.name,
@@ -205,7 +210,6 @@ export class SpmDiscoverer extends ProjectDiscoverer {
         targetCount: parsed.targets.length,
       });
 
-      // target 节点
       for (const t of parsed.targets) {
         nodes.push({
           id: t.name,
@@ -217,7 +221,6 @@ export class SpmDiscoverer extends ProjectDiscoverer {
         targetToPkg.set(t.name, parsed.name);
       }
 
-      // product name → package（product 名可能和 target 名不同）
       for (const prod of parsed.products || []) {
         if (!targetToPkg.has(prod.name)) {
           targetToPkg.set(prod.name, parsed.name);
@@ -225,21 +228,17 @@ export class SpmDiscoverer extends ProjectDiscoverer {
       }
     }
 
-    // ── 第二遍：构建 edges ──
     for (const parsed of allParsed) {
-      // 跳过 umbrella 包的边
       if (umbrellaNames.has(parsed.name)) {
         continue;
       }
 
-      // 包级 local path 依赖
       for (const dep of parsed.dependencies || []) {
         if (dep.type === 'local' && 'path' in dep && dep.path) {
           const depPkgSwift = join(parsed._dir, dep.path, 'Package.swift');
           if (existsSync(depPkgSwift)) {
             try {
-              const depParsed = this.#parser.parse(depPkgSwift);
-              // 跳过指向 umbrella 包的边
+              const depParsed = this.#parsePackageSwift(depPkgSwift);
               if (!umbrellaNames.has(depParsed.name)) {
                 edges.push({ from: parsed.name, to: depParsed.name, type: 'depends_on' });
               }
@@ -260,13 +259,10 @@ export class SpmDiscoverer extends ProjectDiscoverer {
         }
       }
 
-      // target 级依赖
       for (const t of parsed.targets || []) {
-        // target → parent package (contains)
         edges.push({ from: parsed.name, to: t.name, type: 'contains' });
 
         for (const depName of t.dependencies || []) {
-          // target → target 依赖（跳过指向 umbrella 包的）
           if (!umbrellaNames.has(depName)) {
             edges.push({ from: t.name, to: depName, type: 'depends_on' });
           }
@@ -277,18 +273,171 @@ export class SpmDiscoverer extends ProjectDiscoverer {
     return { nodes, edges };
   }
 
-  /** @deprecated SpmHelper 不再由 SpmDiscoverer 持有，仅 XcodeIntegration 通过 container 使用 */
-  getSpmService() {
-    return null;
-  }
-
   // ─────────────── Private Helpers ───────────────
 
-  /**
-   * 遍历源码目录，返回源文件列表
-   * @param dir 源码根目录
-   * @returns []}
-   */
+  /** 向下递归扫描所有 Package.swift（支持多 Package 项目） */
+  #findAllPackageSwifts(rootDir: string): string[] {
+    const results: string[] = [];
+
+    const scan = (dir: string, depth = 0) => {
+      if (depth > 5) {
+        return;
+      }
+      try {
+        const entries = readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            if (SKIP_DIRS.has(entry.name)) {
+              continue;
+            }
+            scan(join(dir, entry.name), depth + 1);
+          } else if (entry.name === 'Package.swift') {
+            results.push(join(dir, entry.name));
+          }
+        }
+      } catch {
+        // 权限错误等，跳过
+      }
+    };
+
+    scan(rootDir);
+    return results;
+  }
+
+  /** 简易解析 Package.swift（无 Swift 编译器，使用正则） */
+  #parsePackageSwift(packagePath: string): ParsedPackage {
+    if (!packagePath || !existsSync(packagePath)) {
+      throw new Error(`Package.swift not found: ${packagePath}`);
+    }
+
+    const content = readFileSync(packagePath, 'utf-8');
+    return {
+      path: packagePath,
+      name: this.#extractName(content),
+      version: this.#extractVersion(content),
+      targets: this.#extractTargets(content),
+      dependencies: this.#extractDependencies(content),
+      products: this.#extractProducts(content),
+      platforms: this.#extractPlatforms(content),
+    };
+  }
+
+  #extractName(content: string) {
+    const m = content.match(/name\s*:\s*"([^"]+)"/);
+    return m ? m[1] : 'unknown';
+  }
+
+  #extractVersion(content: string) {
+    const m = content.match(/version\s*:\s*"([^"]+)"/);
+    return m ? m[1] : '0.0.0';
+  }
+
+  #extractTargets(content: string) {
+    const targets: { name: string; type: string; path: string | null; dependencies: string[] }[] =
+      [];
+    const re = /\.(?:target|testTarget|executableTarget)\s*\(/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = re.exec(content)) !== null) {
+      const type = match[0].includes('testTarget')
+        ? 'testTarget'
+        : match[0].includes('executableTarget')
+          ? 'executableTarget'
+          : 'target';
+
+      const startPos = match.index + match[0].length;
+      let depth = 1;
+      let endPos = startPos;
+
+      while (depth > 0 && endPos < content.length) {
+        if (content[endPos] === '(') {
+          depth++;
+        } else if (content[endPos] === ')') {
+          depth--;
+        }
+        endPos++;
+      }
+
+      if (depth === 0) {
+        const block = content.substring(startPos, endPos - 1);
+        const nameMatch = block.match(/name\s*:\s*"([^"]+)"/);
+        if (!nameMatch) {
+          continue;
+        }
+
+        const pathMatch = block.match(/path\s*:\s*"([^"]+)"/);
+        const depsMatch = block.match(/dependencies\s*:\s*\[([^\]]*)\]/s);
+        const deps: string[] = [];
+        if (depsMatch) {
+          const depRe = /\.(?:product|target)\s*\(\s*name\s*:\s*"([^"]+)"/g;
+          let dm: RegExpExecArray | null;
+          while ((dm = depRe.exec(depsMatch[1])) !== null) {
+            deps.push(dm[1]);
+          }
+        }
+
+        targets.push({
+          name: nameMatch[1],
+          type,
+          path: pathMatch ? pathMatch[1] : null,
+          dependencies: deps,
+        });
+      }
+    }
+
+    return targets;
+  }
+
+  #extractDependencies(content: string) {
+    const deps: (
+      | { url: string; version: string | null; type: string }
+      | { path: string; type: string }
+    )[] = [];
+
+    const urlRe = /\.package\s*\(\s*url\s*:\s*"([^"]+)"[^)]*\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = urlRe.exec(content)) !== null) {
+      const block = m[0];
+      const fromMatch = block.match(/from\s*:\s*"([^"]+)"/);
+      const exactMatch = block.match(/exact\s*:\s*"([^"]+)"/);
+      deps.push({
+        url: m[1],
+        version: fromMatch ? fromMatch[1] : exactMatch ? exactMatch[1] : null,
+        type: 'package',
+      });
+    }
+
+    const pathRe = /\.package\s*\(\s*path\s*:\s*"([^"]+)"\s*\)/g;
+    while ((m = pathRe.exec(content)) !== null) {
+      deps.push({
+        path: m[1],
+        type: 'local',
+      });
+    }
+
+    return deps;
+  }
+
+  #extractProducts(content: string) {
+    const products: { name: string; type: string }[] = [];
+    const re = /\.(library|executable)\s*\(\s*name\s*:\s*"([^"]+)"/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      products.push({ name: m[2], type: m[1] });
+    }
+    return products;
+  }
+
+  #extractPlatforms(content: string) {
+    const platforms: { name: string; version: string }[] = [];
+    const re = /\.(iOS|macOS|tvOS|watchOS|visionOS)\s*\(\s*\.v(\d+(?:_\d+)?)\s*\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      platforms.push({ name: m[1], version: m[2].replace(/_/g, '.') });
+    }
+    return platforms;
+  }
+
   #walkSourceFiles(dir: string) {
     const CODE_EXTS = new Set(['.swift', '.m', '.h', '.c', '.cpp', '.mm']);
     const SKIP_DIRS = new Set([

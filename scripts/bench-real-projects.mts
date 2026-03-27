@@ -43,7 +43,7 @@ const { getDiscovererRegistry, resetDiscovererRegistry } = await import(
   '../lib/core/discovery/index.js'
 );
 const { LanguageService } = await import('../lib/shared/LanguageService.js');
-const { DimensionCopy } = await import('../lib/shared/DimensionCopyRegistry.js');
+const { DimensionCopy } = await import('../lib/service/bootstrap/DimensionCopyRegistry.js');
 
 // AST
 await import('../lib/core/ast/index.js');

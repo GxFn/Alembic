@@ -888,18 +888,14 @@ async function replyLark(messageId: string, text: string): Promise<void> {
 /**
  * 截取 IDE 窗口截图（通过 ScreenCaptureKit 原生 API，息屏时可用）
  * @param [opts.windowTitle] 窗口标题关键词（默认 "Code"）
- * @returns >}
  */
 async function captureIDEScreenshot(opts: { windowTitle?: string } = {}) {
   try {
     const { screenshot } = await import('../../platform/ScreenCaptureService.js');
 
-    // 统一使用窗口截取（desktopIndependentWindow，亮屏/息屏均可用）
-    // 优先截取 IDE 窗口
     const windowTitle = opts.windowTitle || 'Code';
     let result = await screenshot({ windowTitle, format: 'png' });
 
-    // IDE 窗口未找到 → 尝试常见 IDE 名称
     if (!result.success) {
       for (const alt of ['Visual Studio', 'Cursor', 'Xcode', 'IntelliJ', 'WebStorm']) {
         if (alt.toLowerCase() === windowTitle.toLowerCase()) {
@@ -912,7 +908,6 @@ async function captureIDEScreenshot(opts: { windowTitle?: string } = {}) {
       }
     }
 
-    // 仍未找到 → 不指定窗口名，Swift 工具会自动选最大窗口
     if (!result.success) {
       logger.info(`[Remote/Screenshot] IDE window not found, capturing largest available window`);
       result = await screenshot({ format: 'png' });

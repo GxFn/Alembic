@@ -35,12 +35,3 @@ export function getSaveErrorMsg(err: unknown): string | null {
   if (res.status === 429 && res.data?.code === 'RECIPE_SAVE_RATE_LIMIT') return RATE_LIMIT_MSG;
   return null;
 }
-
-/** 将 spec 中存储的 XML 转义还原为原始代码，供前端编辑显示，避免保存时重复转义 */
-export function unescapeSnippetLine(str: string) {
-  if (typeof str !== 'string') return str;
-  return str
-  .replace(/&gt;/g, '>')
-  .replace(/&lt;/g, '<')
-  .replace(/&amp;/g, '&');
-}

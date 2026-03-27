@@ -144,13 +144,6 @@ describe('Integration: ServiceContainer', () => {
       expect(typeof tr.has).toBe('function');
     });
 
-    // ─── App Module 服务 ────────────────────────
-
-    test('should resolve automationOrchestrator', () => {
-      const ao = container.get('automationOrchestrator');
-      expect(ao).toBeDefined();
-    });
-
     // ─── 服务一致性 ────────────────────────────
 
     test('should return same instance for repeated get calls', () => {

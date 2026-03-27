@@ -599,35 +599,10 @@ export class SetupService {
     }
   }
 
-  /* ═══ Step 5: Snippet 初始化 (Xcode + VSCode) ═══════ */
+  /* ═══ Step 5: Snippet 初始化 (已移除 — AI-first 迁移) ═════ */
 
   async stepPlatform() {
-    const initScript = join(REPO_ROOT, 'scripts', 'init-snippets.js');
-    if (!existsSync(initScript)) {
-      return { skipped: true };
-    }
-
-    try {
-      const mod = await import(initScript);
-      // 优先使用模块级导出的 initialize 函数（无 this 依赖）
-      // 若 mod.default 是对象则在其上调用 initialize 保留 this
-      if (typeof mod.initialize === 'function') {
-        const result = await mod.initialize(this.projectRoot, 'all');
-        return result;
-      }
-      if (mod.default && typeof mod.default.initialize === 'function') {
-        const result = await mod.default.initialize(this.projectRoot, 'all');
-        return result;
-      }
-      if (typeof mod.default === 'function') {
-        const result = await mod.default(this.projectRoot, 'all');
-        return result;
-      }
-      return { skipped: true };
-    } catch (e: unknown) {
-      console.warn(`   ⚠️  Snippet 初始化失败：${(e as Error).message}`);
-      return { error: (e as Error).message };
-    }
+    return { skipped: true };
   }
 
   /* ═══ Helpers ════════════════════════════════════════ */

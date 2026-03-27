@@ -587,14 +587,17 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
 
   const projectRoot = resolveProjectRoot(ctx.container);
 
-  // 优先使用 ModuleService（多语言统一入口），回退到 SpmHelper
+  // 使用 ModuleService（多语言统一入口）
   let service: ModuleServiceLike;
   try {
     const { ModuleService } = await import('#service/module/ModuleService.js');
     service = new ModuleService(projectRoot) as unknown as ModuleServiceLike;
   } catch {
-    const { SpmHelper } = await import('#platform/ios/spm/SpmHelper.js');
-    service = new SpmHelper(projectRoot) as unknown as ModuleServiceLike;
+    return envelope({
+      success: false,
+      data: { targets: [], files: [], guardAudit: null, message: 'ModuleService not available' },
+      meta: { tool: 'autosnippet_bootstrap' },
+    });
   }
   await service.load();
   const allTargets = await service.listTargets();

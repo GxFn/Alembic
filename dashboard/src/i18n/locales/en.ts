@@ -87,7 +87,6 @@ export const en: DeepString<typeof zh> = {
     openAiChat: 'Open AI Chat',
     aiChat: 'AI Chat',
     newRecipe: 'New Recipe',
-    syncSnippets: 'Sync Snippets',
     langSwitch: 'EN / 中',
   },
 
@@ -135,7 +134,6 @@ export const en: DeepString<typeof zh> = {
     sortAlpha: 'A-Z',
     sortQuality: 'Quality',
     filterAll: 'All types',
-    filterSnippet: 'Snippets only',
     filterKnowledge: 'Knowledge only',
     searchPlaceholder: 'Search Recipes...',
     totalCount: '{count} total',
@@ -153,7 +151,6 @@ export const en: DeepString<typeof zh> = {
     qualityGood: 'Good',
     qualityBasic: 'Basic',
     knowledgeType: 'Type',
-    typeSnippet: 'Snippet',
     typeKnowledge: 'Knowledge',
     sourceLabel: 'Source',
     sourceBootstrap: 'bootstrap',
@@ -975,12 +972,12 @@ export const en: DeepString<typeof zh> = {
     footerGithubReadme: 'GitHub README',
     mcpWriteNote: 'Write tools (submit_knowledge, guard, bootstrap, etc.) are protected by Gateway permissions / constitution / audit triple protection.',
     editorDirectivesNote: 'Requires asd watch or asd ui running; supports shortcuts asc / ass / asa',
-    createDirective: 'Create Recipe/Snippet',
+    createDirective: 'Create Recipe',
     searchDirective: 'Search & Insert',
     auditDirective: 'Code Audit',
     includeDirective: 'Auto-inject headers/modules',
     // Role capability cells
-    developerCap: 'Dashboard review candidates, save Recipes; Snippet completion, <code class="bg-slate-100 px-1 rounded">// as:search</code>; run <code class="bg-slate-100 px-1 rounded">asd ui</code>',
+    developerCap: 'Dashboard review candidates, save Recipes; <code class="bg-slate-100 px-1 rounded">// as:search</code> knowledge retrieval; run <code class="bg-slate-100 px-1 rounded">asd ui</code>',
     cursorAgentCap: '11 Skills understand conventions; 22 MCP tools for on-demand retrieval & candidate submission; writes go through Gateway review; TaskGraph DAG orchestration + tokenBudget-aware consumption',
     chatAgentCap: 'Unified AgentRuntime; Lark Preset programming chat; Skills smart recommendation + auto-injection; <code class="bg-slate-100 px-1 rounded">asd coldstart</code> cold start + <code class="bg-slate-100 px-1 rounded">asd ais</code> scan',
     // Component card bullets
@@ -1042,13 +1039,13 @@ export const en: DeepString<typeof zh> = {
     createDirBullet1: 'No options: open Dashboard',
     createDirBullet2: '<code>-c</code>: silently create from clipboard',
     createDirBullet3: '<code>-f</code>: scan current file',
-    searchDirBullet1: 'Retrieve Recipe/Snippet from knowledge base',
+    searchDirBullet1: 'Retrieve Recipe from knowledge base',
     searchDirBullet2: 'Insert code after selection, replacing the line',
     searchDirBullet3: 'Records one manual usage',
     auditDirBullet1: 'No suffix: audit current file',
     auditDirBullet2: '<code>target</code>: audit current Target',
     auditDirBullet3: '<code>project</code>: audit entire project',
-    includeDirBullet1: 'Snippet contains this marker',
+    includeDirBullet1: 'Code contains this marker',
     includeDirBullet2: 'Auto-inject import after completion',
     // Skill descriptions
     skillIntent: 'Intent Routing',
@@ -1309,7 +1306,7 @@ export const en: DeepString<typeof zh> = {
     similarity: 'Similarity',
     quality: 'Quality',
     noContent: 'No content',
-    useSnippet: 'Use This Snippet',
+    useRecipe: 'Use This Recipe',
     importedFrameworks: 'Imported Frameworks:',
     relatedApis: 'Related APIs:',
   },
@@ -1579,12 +1576,7 @@ export const en: DeepString<typeof zh> = {
       title: 'Something went wrong',
       refreshBtn: 'Refresh Page',
     },
-    sync: {
-      success: 'Recipes synced to IDE Snippets',
-      successTitle: 'Snippet Sync Success',
-      failed: 'Sync failed',
-      failedHint: 'Check IDE configuration and try again',
-    },
+
     projectRefresh: {
       success: 'Target list and file tree updated',
       successTitle: 'Project Structure Refreshed',
@@ -1630,7 +1622,7 @@ export const en: DeepString<typeof zh> = {
       targetSuccessTitle: 'Target Scan Complete',
       aiNotConfigured: 'AI Not Configured',
       noResults: 'AI scan returned no results',
-      noSnippets: 'No reusable code snippets found in this Target',
+      noCode: 'No reusable code found in this Target',
       scanComplete: 'Scan Complete',
       scanFailedHint: 'Confirm the Target contains valid source files',
       scanFailed: 'Scan Failed',
@@ -1898,7 +1890,7 @@ export const en: DeepString<typeof zh> = {
 
   /* ═══════════════════════════════ scanResultCard ══════════════════════ */
   scanResultCard: {
-    includeMarkOn: 'On: write // as:include marker in snippet',
+    includeMarkOn: 'On: write // as:include marker in code',
     includeMarkOff: 'Off: do not write import markers',
     formatHeaders: 'Normalize import format',
     cleanUnused: 'Remove unreferenced headers from code',

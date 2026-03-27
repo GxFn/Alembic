@@ -11,7 +11,6 @@
  *   asd search <query>  - 搜索知识库
  *   asd guard <file>    - Guard 检查
  *   asd guard:ci [path] - CI/CD Guard 合规检查
- *   asd watch           - 文件监控
  *   asd server          - 启动 API 服务
  *   asd ui              - 启动 Dashboard UI
  *   asd upgrade         - 升级 IDE 集成
@@ -685,58 +684,6 @@ program
   });
 
 // ─────────────────────────────────────────────────────
-// watch 命令
-// ─────────────────────────────────────────────────────
-program
-  .command('watch')
-
-  .option('-d, --dir <path>', '监控目录', '.')
-  .option('-e, --ext <exts>', '文件扩展名（逗号分隔，留空则自动检测）')
-  .option('--guard', '自动运行 Guard 检查', true)
-  .action(async (opts) => {
-    try {
-      const dir = resolve(opts.dir);
-
-      let bootstrap;
-      try {
-        const result = await initContainer({ projectRoot: dir });
-        bootstrap = result.bootstrap;
-      } catch {
-        // ServiceContainer 初始化失败不阻塞 watch（HTTP fallback 仍可用）
-        bootstrap = await initBootstrap();
-      }
-
-      const Paths = await import('../lib/infrastructure/config/Paths.js');
-      const specPath = Paths.getProjectSpecPath(dir);
-
-      // IDE + 扩展名自动检测
-      let exts: any = null;
-      if (opts.ext) {
-        exts = opts.ext.split(',').map((e: any) => e.trim());
-      }
-      // 不指定 --ext 时，FileWatcher 内部根据 IDE 检测结果使用默认模式
-
-      const { FileWatcher } = await import('../lib/service/automation/FileWatcher.js');
-      const watcher = new FileWatcher(specPath, dir, {
-        quiet: false,
-        exts,
-      });
-      watcher.start();
-
-      // 优雅退出
-      process.on('SIGINT', async () => {
-        await watcher.stop();
-        await bootstrap.shutdown();
-        process.exit(0);
-      });
-    } catch (err: any) {
-      cli.error(`Error: ${err.message}`);
-      cli.debug(err.stack);
-      process.exit(1);
-    }
-  });
-
-// ─────────────────────────────────────────────────────
 // server 命令
 // ─────────────────────────────────────────────────────
 program
@@ -857,99 +804,6 @@ program
       } catch (scErr: any) {
         cli.warn(`⚠️  SignalCollector failed to start: ${scErr.message}`);
         cli.debug(scErr.stack);
-      }
-
-      // 3. 启动文件监听器（仅 iOS/macOS 项目 — Xcode 工作流）
-      //    VSCode 用户通过 AutoSnippet 扩展原生处理 as:s/as:c/as:a 指令
-      const isAppleProject = (() => {
-        try {
-          const entries = readdirSync(projectRoot, { withFileTypes: true });
-
-          // ── Level 1: 项目配置文件（确定性高）──
-          const hasAppleConfig = entries.some(
-            (e) =>
-              e.name === 'Package.swift' || // SPM
-              e.name === 'Podfile' || // CocoaPods
-              e.name === 'Cartfile' || // Carthage
-              e.name === 'project.yml' || // XcodeGen
-              e.name.endsWith('.xcodeproj') || // Xcode project
-              e.name.endsWith('.xcworkspace') // Xcode workspace
-          );
-          if (hasAppleConfig) {
-            return true;
-          }
-
-          // ── Level 2: 目录结构特征 ──
-          const hasAppleDir = entries.some(
-            (e) =>
-              e.isDirectory() &&
-              (e.name === 'Tuist' || // Tuist 项目
-                e.name === 'Pods' || // CocoaPods 产物
-                e.name === 'Carthage' || // Carthage 产物
-                e.name === 'DerivedData') // Xcode 构建产物
-          );
-          if (hasAppleDir) {
-            return true;
-          }
-
-          // ── Level 3: 向下扫一层（处理 monorepo 或 Sources/ 下有 .swift 的情况）──
-          const APPLE_EXTS = new Set(['.swift', '.m', '.mm', '.h']);
-          const SCAN_DIRS = ['Sources', 'Source', 'src', 'App', 'Classes', 'ios', 'iOS'];
-          for (const e of entries) {
-            // 根目录直接有 .swift/.m 文件
-            if (!e.isDirectory() && APPLE_EXTS.has(e.name.slice(e.name.lastIndexOf('.')))) {
-              return true;
-            }
-            // 常见源码目录下有 Apple 文件
-            if (e.isDirectory() && SCAN_DIRS.includes(e.name)) {
-              try {
-                const subEntries = readdirSync(join(projectRoot, e.name));
-                if (subEntries.some((f) => APPLE_EXTS.has(f.slice(f.lastIndexOf('.'))))) {
-                  return true;
-                }
-              } catch {
-                /* 读取失败忽略 */
-              }
-            }
-          }
-
-          return false;
-        } catch {
-          return false;
-        }
-      })();
-
-      if (isAppleProject) {
-        try {
-          const Paths = await import('../lib/infrastructure/config/Paths.js');
-          const specPath = Paths.getProjectSpecPath(projectRoot);
-          const isDebugMode = process.env.ASD_DEBUG === '1';
-
-          // 设置 Dashboard URL 供 watcher 跳转浏览器使用
-          // 生产模式用 API 同端口，开发模式用 vite dev 5173
-          const dashDirCheck = DASHBOARD_DIR;
-          const isProductionDashboard =
-            existsSync(join(dashDirCheck, 'dist', 'index.html')) &&
-            !existsSync(join(dashDirCheck, 'src'));
-          if (!opts.apiOnly) {
-            process.env.ASD_DASHBOARD_URL = isProductionDashboard
-              ? `http://127.0.0.1:${port}`
-              : `http://localhost:5173`;
-          } else {
-            process.env.ASD_DASHBOARD_URL =
-              process.env.ASD_DASHBOARD_URL || `http://${host}:${port}`;
-          }
-
-          const { FileWatcher } = await import('../lib/service/automation/FileWatcher.js');
-          const watcher = new FileWatcher(specPath, projectRoot, { quiet: !isDebugMode });
-          watcher.start();
-          if (isDebugMode) {
-          }
-        } catch (watchErr: any) {
-          cli.warn(`⚠️  File watcher failed to start: ${watchErr.message}`);
-          cli.debug(watchErr.stack);
-        }
-      } else if (process.env.ASD_DEBUG === '1') {
       }
 
       if (opts.apiOnly) {
