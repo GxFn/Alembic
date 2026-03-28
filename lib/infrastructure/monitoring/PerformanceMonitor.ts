@@ -62,7 +62,7 @@ export class PerformanceMonitor {
     };
 
     // 定期计算统计数据（unref 避免阻止进程退出）
-    this.statsInterval = setInterval(() => this.calculateStats(), 30000);
+    this.statsInterval = setInterval(() => this.calculateStats(true), 30000);
     if (this.statsInterval.unref) {
       this.statsInterval.unref();
     }
@@ -175,8 +175,8 @@ export class PerformanceMonitor {
     }
   }
 
-  /** 计算统计数据 */
-  calculateStats() {
+  /** 计算统计数据。silent=true 时不输出日志（定时器调用） */
+  calculateStats(silent = false) {
     const { total, errors } = this.metrics.requests;
 
     // 错误率
@@ -202,13 +202,15 @@ export class PerformanceMonitor {
       this.metrics.p99 = sorted[p99Index] || 0;
     }
 
-    Logger.info('📊 性能统计已更新', {
-      requests: total,
-      errors,
-      errorRate: `${this.metrics.errorRate}%`,
-      avgResponseTime: `${this.metrics.averageResponseTime}ms`,
-      rpm: this.metrics.rpm,
-    });
+    if (!silent) {
+      Logger.debug('📊 性能统计已更新', {
+        requests: total,
+        errors,
+        errorRate: `${this.metrics.errorRate}%`,
+        avgResponseTime: `${this.metrics.averageResponseTime}ms`,
+        rpm: this.metrics.rpm,
+      });
+    }
   }
 
   /** 获取统计信息 */

@@ -1681,6 +1681,87 @@ Skill 文档格式要求：
   async setLang(lang: 'zh' | 'en'): Promise<void> {
     await http.post('/ai/lang', { lang });
   },
+
+  // ── Panorama ──────────────────
+
+  /** 获取项目全景概览 */
+  async getPanoramaOverview(): Promise<{
+    projectRoot: string;
+    moduleCount: number;
+    layerCount: number;
+    totalFiles: number;
+    totalRecipes: number;
+    overallCoverage: number;
+    layers: { name: string; moduleCount: number; fileCount?: number }[];
+    cycleCount: number;
+    gapCount: number;
+    computedAt: string;
+    stale: boolean;
+  }> {
+    const res = await http.get('/panorama');
+    return res.data?.data;
+  },
+
+  /** 获取全景健康度 */
+  async getPanoramaHealth(): Promise<{
+    overallCoverage: number;
+    avgCoupling: number;
+    cycleCount: number;
+    gapCount: number;
+    highPriorityGaps: number;
+    moduleCount: number;
+    healthScore: number;
+  }> {
+    const res = await http.get('/panorama/health');
+    return res.data?.data;
+  },
+
+  /** 获取知识空白区 */
+  async getPanoramaGaps(): Promise<{
+    module: string;
+    type: string;
+    description?: string;
+    priority: string;
+  }[]> {
+    const res = await http.get('/panorama/gaps');
+    return res.data?.data ?? [];
+  },
+
+  // ── Audit Log ─────────────────
+
+  /** 查询审计日志 */
+  async getAuditLogs(filters?: {
+    actor?: string;
+    action?: string;
+    result?: string;
+    startDate?: number;
+    endDate?: number;
+    limit?: number;
+  }): Promise<{ logs: any[]; total: number }> {
+    const res = await http.get('/audit', { params: filters });
+    return res.data?.data ?? { logs: [], total: 0 };
+  },
+
+  // ── Guard Report ──────────────
+
+  /** 获取合规性报告 */
+  async getGuardReport(options?: {
+    minScore?: number;
+    maxErrors?: number;
+    maxFiles?: number;
+  }): Promise<any> {
+    const res = await http.get('/guard/report', { params: options });
+    return res.data?.data;
+  },
+
+  /** 获取六态生命周期统计 + 各过渡态条目 */
+  async getKnowledgeLifecycle(): Promise<{
+    counts: Record<string, number>;
+    entries: Record<string, unknown[]>;
+  }> {
+    const res = await http.get('/knowledge/lifecycle');
+    return res.data?.data;
+  },
 };
 
 export default api;

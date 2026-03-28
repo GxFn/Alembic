@@ -12,7 +12,7 @@ const AGENT_TAGS = [
   'CircuitBreaker',
   'EventAggregator',
 ];
-const MUTED_PREFIXES = ['HTTP Request', 'Tool registered:', '📊 性能统计已更新'];
+const MUTED_PREFIXES = ['Tool registered:'];
 
 // ANSI 颜色常量 — 保证深色终端可读性
 const C = {
@@ -38,6 +38,20 @@ const LEVEL_COLORS = {
 };
 
 /**
+ * 静音过滤器（winston format）
+ * 通过 transform 返回 false 彻底丢弃匹配消息，避免空行。
+ * 注意：printf 返回 '' 并不会被 winston 跳过，Console transport 仍会写 '\n'。
+ */
+const muteFilter = winston.format((info) => {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape sequence stripping
+  const rawLevel = (info.level as string).replace(/\u001b\[\d+m/g, '');
+  if (rawLevel === 'info' && MUTED_PREFIXES.some((p) => (info.message as string).startsWith(p))) {
+    return false;
+  }
+  return info;
+});
+
+/**
  * 精简 Console 格式
  * - Agent 相关日志: 高亮 cyan/magenta，显示完整信息
  * - warn/error: 醒目颜色完整显示
@@ -54,11 +68,6 @@ const compactConsoleFormat = winston.format.printf(({ level, message, timestamp,
   // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape sequence stripping
   const rawLevel = level.replace(/\u001b\[\d+m/g, ''); // 去 ANSI
   const lc = (LEVEL_COLORS as Record<string, string>)[rawLevel] || C.gray;
-
-  // 静音高频噪音日志
-  if (rawLevel === 'info' && MUTED_PREFIXES.some((p) => (message as string).startsWith(p))) {
-    return ''; // 返回空字符串会被 winston 跳过
-  }
 
   // 判断是否为 Agent 相关日志
   const isAgentLog = AGENT_TAGS.some(
@@ -134,7 +143,11 @@ export class Logger {
         transports.push(
           new winston.transports.Console({
             stderrLevels: ['error', 'warn', 'info', 'debug'],
-            format: winston.format.combine(winston.format.timestamp(), compactConsoleFormat),
+            format: winston.format.combine(
+              winston.format.timestamp(),
+              muteFilter(),
+              compactConsoleFormat
+            ),
           })
         );
       }
