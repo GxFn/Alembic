@@ -223,6 +223,11 @@ export class ToolRegistry {
     return this.#tools.has(name);
   }
 
+  /** 移除一个已注册的工具（Forge TTL 回收用） */
+  unregister(name: string): boolean {
+    return this.#tools.delete(name);
+  }
+
   /** 获取所有工具名 */
   getToolNames() {
     return [...this.#tools.keys()];

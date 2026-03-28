@@ -2,6 +2,9 @@
  * Stats — 统计值对象
  *
  * 记录知识条目的使用统计：浏览、采用、应用、Guard 命中、搜索命中、权威分。
+ *
+ * Phase 0 扩展：新增时间戳、滑窗统计、版本号、FP 率字段。
+ * 新字段均有默认值，与旧 JSON 100% 向后兼容。
  */
 type StatsCounter = 'views' | 'adoptions' | 'applications' | 'guardHits' | 'searchHits';
 
@@ -12,6 +15,18 @@ interface StatsProps {
   guardHits?: number;
   searchHits?: number;
   authority?: number;
+  // Phase 0: 时间戳
+  lastHitAt?: number | null;
+  lastSearchedAt?: number | null;
+  lastGuardHitAt?: number | null;
+  // Phase 0: 滑窗统计
+  hitsLast30d?: number;
+  hitsLast90d?: number;
+  searchHitsLast30d?: number;
+  // Phase 0: 版本
+  version?: number;
+  // Phase 0: 精度 (仅 kind=rule)
+  ruleFalsePositiveRate?: number | null;
 }
 
 export class Stats {
@@ -21,6 +36,23 @@ export class Stats {
   guardHits: number;
   searchHits: number;
   views: number;
+
+  // Phase 0: 时间戳 —— "最后一次被使用是什么时候"
+  lastHitAt: number | null;
+  lastSearchedAt: number | null;
+  lastGuardHitAt: number | null;
+
+  // Phase 0: 滑窗统计 —— "最近趋势如何"
+  hitsLast30d: number;
+  hitsLast90d: number;
+  searchHitsLast30d: number;
+
+  // Phase 0: 版本 —— "这条知识更新了几次"
+  version: number;
+
+  // Phase 0: 精度 (仅 kind=rule)
+  ruleFalsePositiveRate: number | null;
+
   constructor(props: StatsProps = {}) {
     /** 浏览次数 */
     this.views = props.views ?? 0;
@@ -34,6 +66,16 @@ export class Stats {
     this.searchHits = props.searchHits ?? 0;
     /** 权威分 0-5 */
     this.authority = props.authority ?? 0;
+
+    // Phase 0 扩展字段（旧 JSON 无这些字段时取默认值）
+    this.lastHitAt = props.lastHitAt ?? null;
+    this.lastSearchedAt = props.lastSearchedAt ?? null;
+    this.lastGuardHitAt = props.lastGuardHitAt ?? null;
+    this.hitsLast30d = props.hitsLast30d ?? 0;
+    this.hitsLast90d = props.hitsLast90d ?? 0;
+    this.searchHitsLast30d = props.searchHitsLast30d ?? 0;
+    this.version = props.version ?? 1;
+    this.ruleFalsePositiveRate = props.ruleFalsePositiveRate ?? null;
   }
 
   /** 从任意输入构造 Stats */
@@ -57,6 +99,19 @@ export class Stats {
     return this;
   }
 
+  /** 记录一次命中，同时更新时间戳 */
+  recordHit(counter: StatsCounter, timestamp = Date.now()): Stats {
+    this[counter] += 1;
+    this.lastHitAt = timestamp;
+    if (counter === 'searchHits') {
+      this.lastSearchedAt = timestamp;
+    }
+    if (counter === 'guardHits') {
+      this.lastGuardHitAt = timestamp;
+    }
+    return this;
+  }
+
   /** 转换为 JSON */
   toJSON() {
     return {
@@ -66,6 +121,14 @@ export class Stats {
       guardHits: this.guardHits,
       searchHits: this.searchHits,
       authority: this.authority,
+      lastHitAt: this.lastHitAt,
+      lastSearchedAt: this.lastSearchedAt,
+      lastGuardHitAt: this.lastGuardHitAt,
+      hitsLast30d: this.hitsLast30d,
+      hitsLast90d: this.hitsLast90d,
+      searchHitsLast30d: this.searchHitsLast30d,
+      version: this.version,
+      ruleFalsePositiveRate: this.ruleFalsePositiveRate,
     };
   }
 

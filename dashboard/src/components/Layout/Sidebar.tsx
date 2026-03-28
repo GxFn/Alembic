@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, LogOut, User, Moon, Sun, Library, FileText, BookOpen, Languages } from 'lucide-react';
+import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, LogOut, User, Moon, Sun, Library, FileText, BookOpen, Languages, Layers } from 'lucide-react';
 import { TabType } from '../../constants';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
@@ -83,15 +83,16 @@ const Sidebar: React.FC<SidebarProps> = ({
     { tab: 'depgraph', icon: GitBranch, label: t('sidebar.depGraph') },
     { tab: 'knowledgegraph', icon: Share2, label: t('sidebar.knowledgeGraph') },
     { tab: 'guard', icon: Shield, label: t('sidebar.guard') },
+    { tab: 'panorama', icon: Layers, label: t('sidebar.panorama') },
     { tab: 'skills', icon: BookOpen, label: t('sidebar.skills'), badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined },
     { tab: 'wiki', icon: FileText, label: t('sidebar.repoWiki') },
     { tab: 'ai', icon: MessageSquare, label: t('sidebar.aiAssistant') },
     { tab: 'help', icon: HelpCircle, label: t('sidebar.help') },
   ];
 
-  /* 分组：主导航 (前9项) 与辅助导航 (AI + Help) */
-  const mainNav = navItems.slice(0, 9);
-  const auxNav = navItems.slice(9);
+  /* 分组：主导航 (前10项) 与辅助导航 (AI + Help) */
+  const mainNav = navItems.slice(0, 10);
+  const auxNav = navItems.slice(10);
 
   return (
     <TooltipProvider>

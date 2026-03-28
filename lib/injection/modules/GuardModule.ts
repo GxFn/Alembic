@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { ComplianceReporter } from '../../service/guard/ComplianceReporter.js';
 import { ExclusionManager } from '../../service/guard/ExclusionManager.js';
 import { GuardCheckEngine } from '../../service/guard/GuardCheckEngine.js';
@@ -70,7 +71,10 @@ export function register(c: ServiceContainer) {
     }
     return new GuardCheckEngine(
       ct.get('database') as ConstructorParameters<typeof GuardCheckEngine>[0],
-      { guardConfig: merged }
+      {
+        guardConfig: merged,
+        signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
+      }
     );
   });
 
@@ -81,7 +85,9 @@ export function register(c: ServiceContainer) {
 
   c.singleton('ruleLearner', (ct: ServiceContainer) => {
     const projectRoot = resolveProjectRoot(ct);
-    return new RuleLearner(projectRoot);
+    return new RuleLearner(projectRoot, {
+      signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
+    });
   });
 
   c.singleton('violationsStore', (ct: ServiceContainer) => {
@@ -111,6 +117,7 @@ export function register(c: ServiceContainer) {
         ct.get('feedbackCollector') as ConstructorParameters<typeof GuardFeedbackLoop>[1],
         {
           guardCheckEngine: ct.get('guardCheckEngine'),
+          signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
         } as ConstructorParameters<typeof GuardFeedbackLoop>[2]
       )
   );

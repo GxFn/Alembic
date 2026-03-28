@@ -7,6 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { RULE_LEARNER } from '../../shared/constants.js';
 import pathGuard from '../../shared/PathGuard.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
@@ -33,16 +34,18 @@ const PROBLEMATIC_THRESHOLD = {
 export class RuleLearner {
   #learnerPath;
   #data: LearnerData;
+  #signalBus: SignalBus | null;
 
   constructor(
     projectRoot: string,
-    options: { knowledgeBaseDir?: string; internalDir?: string } = {}
+    options: { knowledgeBaseDir?: string; internalDir?: string; signalBus?: SignalBus } = {}
   ) {
     const kbDir = options.knowledgeBaseDir || DEFAULT_KNOWLEDGE_BASE_DIR;
     this.#learnerPath = join(projectRoot, kbDir, 'guard-learner.json');
     pathGuard.assertProjectWriteSafe(this.#learnerPath);
     this.#migrateOldPath(projectRoot, options.internalDir || '.autosnippet');
     this.#data = this.#load();
+    this.#signalBus = options.signalBus || null;
   }
 
   /**
@@ -72,6 +75,15 @@ export class RuleLearner {
     }
     stat.lastFeedback = new Date().toISOString();
     this.#save();
+
+    // ── Signal: quality feedback ──
+    if (this.#signalBus) {
+      const metrics = this.getMetrics(ruleId);
+      this.#signalBus.send('quality', 'RuleLearner', 1 - metrics.falsePositiveRate, {
+        target: ruleId,
+        metadata: { feedbackType, precision: metrics.precision },
+      });
+    }
   }
 
   /**
@@ -279,6 +291,38 @@ export class RuleLearner {
       recommendation: 'keep',
       daysSinceFirstTrigger: Math.round(daysSinceFirstTrigger),
     };
+  }
+
+  /**
+   * RuleLearner→Recipe 桥接: 检查是否有高误报规则需要触发衰退
+   * 当 FP > 40% && triggers >= minTriggers 时，发射衰退信号到 SignalBus
+   * @returns 需要衰退检查的规则列表
+   */
+  checkPrecisionDrop(): { ruleId: string; falsePositiveRate: number; recommendation: string }[] {
+    const problematic = this.getProblematicRules();
+    const results: { ruleId: string; falsePositiveRate: number; recommendation: string }[] = [];
+
+    for (const p of problematic) {
+      results.push({
+        ruleId: p.ruleId,
+        falsePositiveRate: p.metrics.falsePositiveRate,
+        recommendation: p.recommendation,
+      });
+
+      // 发射衰退信号
+      if (this.#signalBus) {
+        this.#signalBus.send('quality', 'RuleLearner.precisionDrop', p.metrics.falsePositiveRate, {
+          target: p.ruleId,
+          metadata: {
+            recommendation: p.recommendation,
+            precision: p.metrics.precision,
+            triggers: p.metrics.triggers,
+          },
+        });
+      }
+    }
+
+    return results;
   }
 
   // ─── 私有 ─────────────────────────────────────────────

@@ -542,6 +542,8 @@ program
   .option('--fail-on-error', '有 error 级违规时 exit 1', true)
   .option('--fail-on-warning', '超过 warning 阈值时 exit 2')
   .option('--max-warnings <n>', 'warning 阈值', '20')
+  .option('--max-uncertain <n>', 'uncertain 条目阈值 (超出时 exit 2)', '50')
+  .option('--min-coverage <n>', '最低覆盖率 (0-100，低于时 exit 3)', '0')
   .option('--report <format>', '报告格式: json | text | markdown', 'text')
   .option('--output <file>', '报告输出文件')
   .option('--min-score <n>', 'Quality Gate 最低分', '70')
@@ -583,9 +585,18 @@ program
 
       await bootstrap.shutdown();
 
-      // Exit code
+      // Exit code: 0=PASS, 1=FAIL(violations), 2=WARN(uncertain/warnings), 3=FAIL(coverage)
+      const maxUncertain = parseInt(opts.maxUncertain, 10);
+      const minCoverage = parseInt(opts.minCoverage, 10);
+
       if (report.qualityGate.status === 'FAIL') {
         process.exit(report.summary.errors > 0 ? 1 : 2);
+      }
+      if (minCoverage > 0 && (report.coverageScore ?? 100) < minCoverage) {
+        process.exit(3);
+      }
+      if (maxUncertain > 0 && (report.uncertainSummary?.total ?? 0) > maxUncertain) {
+        process.exit(2);
       }
       process.exit(0);
     } catch (err: any) {
@@ -676,6 +687,93 @@ program
 
       await bootstrap.shutdown();
       process.exit(summary.totalErrors > 0 ? 1 : 0);
+    } catch (err: any) {
+      cli.error(`Error: ${err.message}`);
+      cli.debug(err.stack);
+      process.exit(1);
+    }
+  });
+
+// ─────────────────────────────────────────────────────
+// panorama 命令
+// ─────────────────────────────────────────────────────
+program
+  .command('panorama [path]')
+  .description('项目全景分析：架构层级、覆盖率、知识空白')
+  .option('--json', '以 JSON 格式输出')
+  .option('--gaps', '仅显示知识空白区')
+  .option('--health', '仅显示健康度评分')
+  .action(async (scanPath, opts) => {
+    try {
+      const projectRoot = resolve(scanPath || '.');
+      const { bootstrap, container } = await initContainer({ projectRoot });
+      const panoramaService = container.get('panoramaService');
+
+      if (opts.gaps) {
+        const gaps = panoramaService.getGaps();
+        if (opts.json) {
+          cli.log(JSON.stringify(gaps, null, 2));
+        } else {
+          cli.log(`\n🔍 Knowledge Gaps: ${gaps.length} found\n`);
+          for (const g of gaps.slice(0, 20)) {
+            const priority = g.priority === 'high' ? '🔴' : g.priority === 'medium' ? '🟡' : '🔵';
+            cli.log(
+              `  ${priority} [${g.module}] ${g.files} files, ${g.recipes} recipes — ${g.suggestedFocus.join(', ')}`
+            );
+          }
+          if (gaps.length > 20) {
+            cli.log(`\n  ... and ${gaps.length - 20} more gaps`);
+          }
+        }
+        await bootstrap.shutdown();
+        return;
+      }
+
+      if (opts.health) {
+        const health = panoramaService.getHealth();
+        if (opts.json) {
+          cli.log(JSON.stringify(health, null, 2));
+        } else {
+          const icon = health.healthScore >= 80 ? '✅' : health.healthScore >= 50 ? '⚠️' : '❌';
+          cli.log(`\n${icon} Panorama Health: ${health.healthScore}/100\n`);
+          cli.log(`  Coverage:     ${health.overallCoverage}%`);
+          cli.log(`  Avg Coupling: ${health.avgCoupling}`);
+          cli.log(`  Modules:      ${health.moduleCount}`);
+          cli.log(`  Cycles:       ${health.cycleCount}`);
+          cli.log(`  Gaps:         ${health.gapCount} (${health.highPriorityGaps} high-priority)`);
+        }
+        await bootstrap.shutdown();
+        return;
+      }
+
+      // 默认: 全景概览
+      const overview = panoramaService.getOverview();
+      if (opts.json) {
+        cli.log(JSON.stringify(overview, null, 2));
+      } else {
+        cli.log(`\n📐 Panorama Overview\n`);
+        cli.log(`  Project:  ${overview.projectRoot}`);
+        cli.log(`  Modules:  ${overview.moduleCount}`);
+        cli.log(`  Layers:   ${overview.layerCount}`);
+        cli.log(`  Files:    ${overview.totalFiles}`);
+        cli.log(`  Recipes:  ${overview.totalRecipes}`);
+        cli.log(`  Coverage: ${overview.overallCoverage}%`);
+        cli.log(`  Cycles:   ${overview.cycleCount}`);
+        cli.log(`  Gaps:     ${overview.gapCount}`);
+
+        if (overview.layers && overview.layers.length > 0) {
+          cli.log(`\n  Layers:`);
+          for (const layer of overview.layers) {
+            const totalFiles = layer.modules.reduce(
+              (sum: number, m: { fileCount: number }) => sum + m.fileCount,
+              0
+            );
+            cli.log(`    ${layer.name}: ${layer.modules.length} modules, ${totalFiles} files`);
+          }
+        }
+      }
+
+      await bootstrap.shutdown();
     } catch (err: any) {
       cli.error(`Error: ${err.message}`);
       cli.debug(err.stack);
@@ -874,7 +972,8 @@ program
 program
   .command('status')
   .description('检查环境状态')
-  .action(async () => {
+  .option('--json', 'JSON 格式输出')
+  .action(async (opts) => {
     cli.log('\n  AutoSnippet Environment Status');
     cli.log(`  ${'─'.repeat(40)}`);
 
@@ -911,6 +1010,49 @@ program
         cli.log(`    ❌ ${dep} (missing)`);
       }
     }
+
+    // 如果数据库存在，加载知识库统计
+    if (dbExists) {
+      try {
+        const projectRoot = resolve('.');
+        const { bootstrap, container } = await initContainer({ projectRoot });
+        const knowledgeService = container.get('knowledgeService');
+        const stats = (await knowledgeService.getStats()) as Record<string, number> | null;
+        if (stats) {
+          cli.log('  Knowledge:');
+          cli.log(
+            `    Total: ${stats.total ?? 0}  Active: ${stats.active ?? 0}  Staging: ${stats.staging ?? 0}  Evolving: ${stats.evolving ?? 0}  Decaying: ${stats.decaying ?? 0}  Pending: ${stats.pending ?? 0}  Deprecated: ${stats.deprecated ?? 0}`
+          );
+          cli.log(
+            `    Rules: ${stats.rules ?? 0}  Patterns: ${stats.patterns ?? 0}  Facts: ${stats.facts ?? 0}`
+          );
+        }
+
+        // Signal Bus 统计
+        const signalBus = container.get('signalBus');
+        if (signalBus) {
+          const bus = signalBus as { emitCount?: number; listenerCount?: number };
+          cli.log('  Signals:');
+          cli.log(`    Emitted: ${bus.emitCount ?? 0}  Listeners: ${bus.listenerCount ?? 0}`);
+        }
+
+        await bootstrap.shutdown();
+      } catch {
+        // 降级: 无法加载容器时只展示基础状态
+      }
+    }
+
+    if (opts.json) {
+      // 简化 JSON 输出模式
+      const result: Record<string, unknown> = {
+        aiProvider: aiInfo.provider ?? 'ide-agent',
+        aiModel: aiInfo.model ?? null,
+        database: dbExists,
+        workspace: existsSync(asdDir),
+      };
+      cli.json(result);
+    }
+
     cli.blank();
   });
 

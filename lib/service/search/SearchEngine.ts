@@ -67,6 +67,7 @@ export class SearchEngine {
   _indexed: boolean;
   _lastIndexTime: string | null = null;
   _multiSignalRanker: MultiSignalRanker;
+  _signalBus: import('../../infrastructure/signal/SignalBus.js').SignalBus | null;
   aiProvider: SearchAiProvider | null;
   db: SearchDb;
   hybridRetriever: SearchHybridRetriever | null;
@@ -101,6 +102,7 @@ export class SearchEngine {
     // auto 模式 BM25+semantic 融合权重（可配置）
     this._fusionBm25Weight = options.fusionBm25Weight ?? 0.6;
     this._fusionSemanticWeight = options.fusionSemanticWeight ?? 0.4;
+    this._signalBus = options.signalBus || null;
   }
 
   /** 构建搜索索引 - 从数据库加载所有可搜索实体 */
@@ -289,6 +291,14 @@ export class SearchEngine {
     if (cacheKey) {
       this._setCache(cacheKey, response);
     }
+
+    // ── Signal emission ──
+    if (this._signalBus && response.total > 0) {
+      this._signalBus.send('search', 'SearchEngine', Math.min(response.total / limit, 1), {
+        metadata: { query, mode: actualMode, total: response.total },
+      });
+    }
+
     return response;
   }
 

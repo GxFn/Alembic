@@ -23,16 +23,19 @@ import { gatewayMiddleware } from './middleware/gatewayMiddleware.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { roleResolverMiddleware } from './middleware/roleResolver.js';
 import aiRouter from './routes/ai.js';
+import auditRouter from './routes/audit.js';
 import authRouter from './routes/auth.js';
 import candidatesRouter from './routes/candidates.js';
 import commandsRouter from './routes/commands.js';
 import extractRouter from './routes/extract.js';
 import guardRouter from './routes/guard.js';
+import guardReportRouter from './routes/guardReport.js';
 import guardRuleRouter from './routes/guardRules.js';
 import healthRouter from './routes/health.js';
 import knowledgeRouter from './routes/knowledge.js';
 import modulesRouter from './routes/modules.js';
 import monitoringRouter from './routes/monitoring.js';
+import panoramaRouter from './routes/panorama.js';
 import recipesRouter from './routes/recipes.js';
 import remoteRouter from './routes/remote.js';
 import searchRouter from './routes/search.js';
@@ -272,6 +275,9 @@ export class HttpServer {
     // Guard 实时检查路由（Extension DiagnosticCollection 调用）
     this.app.use(`${apiPrefix}/guard`, guardRouter);
 
+    // Guard 合规报告路由
+    this.app.use(`${apiPrefix}/guard/report`, guardReportRouter);
+
     // 守护规则路由
     this.app.use(`${apiPrefix}/rules`, guardRuleRouter);
 
@@ -313,6 +319,12 @@ export class HttpServer {
 
     // Remote 路由（飞书 Bot → IDE 远程指令桥接）
     this.app.use(`${apiPrefix}/remote`, remoteRouter);
+
+    // Panorama 全景路由（项目结构 + 覆盖率 + 健康度）
+    this.app.use(`${apiPrefix}/panorama`, panoramaRouter);
+
+    // 审计日志路由
+    this.app.use(`${apiPrefix}/audit`, auditRouter);
 
     // 根路径 — 返回 API 元信息（避免外部探测产生无意义 404）
     this.app.all('/', (_req: Request, res: Response) => {
@@ -366,6 +378,24 @@ export class HttpServer {
             unknown
           >;
           this.logger.info('Realtime service initialized');
+
+          // 桥接 EventBus → RealtimeService：将生命周期转换事件推送到 Dashboard
+          try {
+            const container = getServiceContainer();
+            const eventBus = container.services.eventBus ? container.get('eventBus') : null;
+            if (eventBus && this.realtimeService) {
+              const rs = this.realtimeService as {
+                broadcastEvent?: (name: string, data: unknown) => void;
+              };
+              if (typeof rs.broadcastEvent === 'function') {
+                eventBus.on('lifecycle:transition', (data: unknown) => {
+                  rs.broadcastEvent!('lifecycle:transition', data);
+                });
+              }
+            }
+          } catch {
+            // EventBus 不可用时静默跳过
+          }
         } catch (error: unknown) {
           this.logger.warn('Failed to initialize realtime service', {
             error: (error as Error).message,

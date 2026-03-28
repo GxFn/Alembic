@@ -9,12 +9,19 @@ interface ConfidenceRouterConfig {
   requireReasoning?: boolean;
   trustedSources?: string[];
   trustedAutoApproveThreshold?: number;
+  highConfidenceThreshold?: number;
+  standardGracePeriod?: number;
+  highConfidenceGracePeriod?: number;
 }
 
 interface RouteResult {
   action: 'auto_approve' | 'pending' | 'reject';
   reason: string;
   confidence?: number;
+  /** 目标生命周期状态（六态状态机） */
+  targetState?: 'staging' | 'pending' | 'deprecated';
+  /** Grace Period（毫秒）— staging → active 自动转换等待时间 */
+  gracePeriod?: number;
 }
 
 /**
@@ -42,6 +49,12 @@ const DEFAULT_CONFIG = {
   trustedSources: ['bootstrap', 'cursor-scan'],
   /** 可信来源的自动通过阈值 */
   trustedAutoApproveThreshold: 0.7,
+  /** 极高置信度阈值 (≥0.90 → 24h Grace) */
+  highConfidenceThreshold: 0.9,
+  /** 标准 Grace Period（72h）— staging → active */
+  standardGracePeriod: 72 * 60 * 60 * 1000,
+  /** 高置信度 Grace Period（24h） */
+  highConfidenceGracePeriod: 24 * 60 * 60 * 1000,
 };
 
 export class ConfidenceRouter {
@@ -79,6 +92,7 @@ export class ConfidenceRouter {
         action: 'reject',
         reason: `Confidence too low: ${confidence.toFixed(2)} < ${this._config.rejectThreshold}`,
         confidence,
+        targetState: 'deprecated',
       };
     }
 
@@ -144,13 +158,22 @@ export class ConfidenceRouter {
           action: 'pending',
           reason: `Confidence OK (${confidence.toFixed(2)}) but quality low (${qualityScore.toFixed(2)})`,
           confidence,
+          targetState: 'pending',
         };
       }
+
+      // 分级 Grace Period: ≥0.90 → 24h, 0.85-0.89 → 72h
+      const gracePeriod =
+        confidence >= this._config.highConfidenceThreshold
+          ? this._config.highConfidenceGracePeriod
+          : this._config.standardGracePeriod;
 
       return {
         action: 'auto_approve',
         reason: `Confidence ${confidence.toFixed(2)} >= threshold ${threshold} (source: ${source})`,
         confidence,
+        targetState: 'staging',
+        gracePeriod,
       };
     }
 

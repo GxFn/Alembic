@@ -27,6 +27,7 @@ import type AuditStore from '../infrastructure/audit/AuditStore.js';
 import type DatabaseConnection from '../infrastructure/database/DatabaseConnection.js';
 import type { EventBus } from '../infrastructure/event/EventBus.js';
 import type Logger from '../infrastructure/logging/Logger.js';
+import type { SignalBus } from '../infrastructure/signal/SignalBus.js';
 import type { IndexingPipeline } from '../infrastructure/vector/IndexingPipeline.js';
 import type { VectorStore } from '../infrastructure/vector/VectorStore.js';
 // ── Repository Types ──
@@ -51,12 +52,18 @@ import type { KnowledgeService } from '../service/knowledge/KnowledgeService.js'
 // ── Context Types ──
 import type { RecipeExtractor } from '../service/knowledge/RecipeExtractor.js';
 import type { ModuleService } from '../service/module/ModuleService.js';
+import type { CouplingAnalyzer } from '../service/panorama/CouplingAnalyzer.js';
+import type { LayerInferrer } from '../service/panorama/LayerInferrer.js';
+import type { PanoramaAggregator } from '../service/panorama/PanoramaAggregator.js';
+import type { PanoramaService } from '../service/panorama/PanoramaService.js';
+import type { RoleRefiner } from '../service/panorama/RoleRefiner.js';
 import type { FeedbackCollector } from '../service/quality/FeedbackCollector.js';
 import type { QualityScorer } from '../service/quality/QualityScorer.js';
 import type { RecipeCandidateValidator } from '../service/recipe/RecipeCandidateValidator.js';
 import type { RecipeParser } from '../service/recipe/RecipeParser.js';
 import type { HybridRetriever } from '../service/search/HybridRetriever.js';
 import type SearchEngine from '../service/search/SearchEngine.js';
+import type { HitRecorder } from '../service/signal/HitRecorder.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
 import type { TaskGraphService } from '../service/task/TaskGraphService.js';
 import type { TaskKnowledgeBridge } from '../service/task/TaskKnowledgeBridge.js';
@@ -135,4 +142,15 @@ export interface ServiceMap {
   toolRegistry: ToolRegistry;
   agentFactory: AgentFactory;
   skillHooks: SkillHooks;
+
+  // ═══ SignalModule ═══
+  signalBus: SignalBus;
+  hitRecorder: HitRecorder;
+
+  // ═══ PanoramaModule ═══
+  roleRefiner: RoleRefiner;
+  couplingAnalyzer: CouplingAnalyzer;
+  layerInferrer: LayerInferrer;
+  panoramaAggregator: PanoramaAggregator;
+  panoramaService: PanoramaService;
 }

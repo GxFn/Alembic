@@ -187,6 +187,8 @@ export interface RrfHit {
 }
 
 /** Cross-encoder reranker abstraction */
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+
 export interface SearchCrossEncoder {
   rerank(query: string, candidates: SearchResultItem[]): Promise<SearchResultItem[]>;
 }
@@ -198,6 +200,7 @@ export interface SearchEngineOptions {
   vectorService?: SearchVectorService | null;
   hybridRetriever?: SearchHybridRetriever | null;
   crossEncoderReranker?: SearchCrossEncoder | null;
+  signalBus?: SignalBus | null;
   cacheMaxAge?: number;
   fusionBm25Weight?: number;
   fusionSemanticWeight?: number;

@@ -51,6 +51,7 @@ export const zh = {
     depGraph: '依赖关系',
     knowledgeGraph: '知识图谱',
     guard: '代码审计',
+    panorama: '全景分析',
     skills: 'Skills',
     repoWiki: 'Wiki',
     aiAssistant: 'AI 助手',
@@ -556,6 +557,26 @@ export const zh = {
       status: '状态',
       actions: '操作',
     },
+  },
+
+  /* ═══════════════════════════════ panorama ═════════════════════════════ */
+  panorama: {
+    title: '项目全景',
+    overview: '概览',
+    health: '健康度',
+    gaps: '知识空白',
+    modules: '模块',
+    layers: '层级',
+    files: '文件',
+    recipes: '知识条目',
+    coverage: '覆盖率',
+    cycles: '循环依赖',
+    healthScore: '健康评分',
+    avgCoupling: '平均耦合度',
+    highPriorityGaps: '高优先级',
+    noGaps: '未发现知识空白',
+    loading: '加载全景数据...',
+    stale: '数据可能已过期',
   },
 
   /* ═══════════════════════════════ skills ═══════════════════════════════ */

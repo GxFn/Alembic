@@ -25,6 +25,7 @@ import CandidatesView from './components/Views/CandidatesView';
 import ModuleExplorerView from './components/Views/ModuleExplorerView';
 import DepGraphView from './components/Views/DepGraphView';
 import GuardView from './components/Views/GuardView';
+import PanoramaView from './components/Views/PanoramaView';
 import { GlobalChatProvider, GlobalChatPanel, useGlobalChat } from './components/Shared/GlobalChatDrawer';
 import AiChatView from './components/Views/AiChatView';
 import KnowledgeGraphView from './components/Views/KnowledgeGraphView';
@@ -36,6 +37,7 @@ import RecipeEditor from './components/Modals/RecipeEditor';
 import CreateModal from './components/Modals/CreateModal';
 import SearchModal from './components/Modals/SearchModal';
 import LlmConfigModal from './components/Modals/LlmConfigModal';
+import SignalMonitor from './components/Panels/SignalMonitor';
 
 /* ── ErrorBoundary — 防止白屏 ────────────── */
 class ErrorBoundary extends React.Component<
@@ -171,6 +173,9 @@ const App: React.FC = () => {
 
   // SignalCollector 后台推荐计数
   const [signalSuggestionCount, setSignalSuggestionCount] = useState(0);
+
+  // SignalMonitor side panel
+  const [showSignalMonitor, setShowSignalMonitor] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const trickleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1014,6 +1019,8 @@ const App: React.FC = () => {
       />
       ) : activeTab === 'guard' ? (
       <GuardView onRefresh={fetchData} />
+      ) : activeTab === 'panorama' ? (
+      <PanoramaView />
       ) : activeTab === 'skills' ? (
       <SkillsView onRefresh={fetchData} signalSuggestionCount={signalSuggestionCount} onSuggestionCountChange={setSignalSuggestionCount} />
       ) : activeTab === 'candidates' ? (
@@ -1165,6 +1172,8 @@ const App: React.FC = () => {
         }}
       />
     )}
+
+    <SignalMonitor open={showSignalMonitor} onClose={() => setShowSignalMonitor(false)} />
 
   </main>
 

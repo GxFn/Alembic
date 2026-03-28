@@ -43,6 +43,7 @@ const TAB_LABELS: Record<TabType, string> = {
   depgraph: 'sidebar.depGraph',
   knowledgegraph: 'sidebar.knowledgeGraph',
   guard: 'sidebar.guard',
+  panorama: 'sidebar.panorama',
   skills: 'sidebar.skills',
   wiki: 'sidebar.repoWiki',
   ai: 'sidebar.aiAssistant',

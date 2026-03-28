@@ -45,8 +45,35 @@ interface GuardCheckEngineLike {
     files: { path: string; content: string }[],
     options: { scope: string }
   ): {
-    files: { filePath: string; violations: ViolationItem[]; summary: ViolationSummary }[];
+    files: {
+      filePath: string;
+      violations: ViolationItem[];
+      uncertainResults?: {
+        ruleId: string;
+        message: string;
+        layer: string;
+        reason: string;
+        detail: string;
+      }[];
+      summary: ViolationSummary & { uncertain?: number };
+    }[];
     crossFileViolations: ViolationItem[];
+    capabilityReport?: {
+      checkCoverage: number;
+      uncertainResults: {
+        ruleId: string;
+        message: string;
+        layer: string;
+        reason: string;
+        detail: string;
+      }[];
+      boundaries: {
+        type: string;
+        description: string;
+        affectedRules: string[];
+        suggestedAction: string;
+      }[];
+    };
   };
 }
 
@@ -285,8 +312,31 @@ export class ComplianceReporter {
     }
 
     // 9. 评分 + Gate
-    const score = computeScore(summary, ruleHealth);
-    const gateStatus = evaluateGate(summary, score, thresholds);
+    const complianceScore = computeScore(summary, ruleHealth);
+
+    // 9b. 三维度评分: coverage + confidence（来自 capabilityReport）
+    const capabilityReport = auditResult.capabilityReport;
+    const coverageScore = capabilityReport?.checkCoverage ?? 100;
+    const totalChecks = summary.totalViolations + (capabilityReport?.uncertainResults.length ?? 0);
+    const uncertainCount = capabilityReport?.uncertainResults.length ?? 0;
+    const confidenceScore =
+      totalChecks > 0
+        ? Math.round((1 - uncertainCount / Math.max(1, totalChecks + filteredFiles.length)) * 100)
+        : 100;
+
+    const uncertainSummary = {
+      total: uncertainCount,
+      byLayer: {} as Record<string, number>,
+      byReason: {} as Record<string, number>,
+    };
+    if (capabilityReport) {
+      for (const u of capabilityReport.uncertainResults) {
+        uncertainSummary.byLayer[u.layer] = (uncertainSummary.byLayer[u.layer] || 0) + 1;
+        uncertainSummary.byReason[u.reason] = (uncertainSummary.byReason[u.reason] || 0) + 1;
+      }
+    }
+
+    const gateStatus = evaluateGate(summary, complianceScore, thresholds);
 
     // 10. 写入 ViolationsStore（记录本次运行）
     try {
@@ -297,7 +347,7 @@ export class ComplianceReporter {
         this.violationsStore.appendRun({
           filePath: projectRoot,
           violations: allViolations,
-          summary: `Compliance scan: score=${score} ${gateStatus} | ${summary.errors}E ${summary.warnings}W`,
+          summary: `Compliance scan: score=${complianceScore} ${gateStatus} | ${summary.errors}E ${summary.warnings}W | cov=${coverageScore} conf=${confidenceScore}`,
         });
       }
     } catch {
@@ -309,9 +359,14 @@ export class ComplianceReporter {
       projectRoot,
       qualityGate: {
         status: gateStatus,
-        score,
+        score: complianceScore,
         thresholds,
       },
+      complianceScore,
+      coverageScore,
+      confidenceScore,
+      uncertainSummary,
+      boundaries: capabilityReport?.boundaries ?? [],
       summary,
       topViolations,
       fileHotspots,

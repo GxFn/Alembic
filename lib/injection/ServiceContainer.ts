@@ -15,6 +15,8 @@ import * as GuardModule from './modules/GuardModule.js';
 // ─── DI Modules ──────────────────────────────────────
 import * as InfraModule from './modules/InfraModule.js';
 import * as KnowledgeModule from './modules/KnowledgeModule.js';
+import { PanoramaModule } from './modules/PanoramaModule.js';
+import * as SignalModule from './modules/SignalModule.js';
 import * as VectorModule from './modules/VectorModule.js';
 import type { ServiceMap } from './ServiceMap.js';
 /**
@@ -128,12 +130,16 @@ export class ServiceContainer {
       this.singletons._lang = null;
 
       // 注册模块 (顺序重要: AppModule 先注册 qualityScorer 等基础服务)
+      // SignalModule 优先注册并预热，确保后续模块可访问 signalBus
+      SignalModule.register(this);
+      this.get('signalBus'); // eager: 确保 singletons.signalBus 在后续工厂可用
       AppModule.register(this);
       KnowledgeModule.register(this);
       VectorModule.register(this);
       GuardModule.register(this);
       AgentModule.register(this);
       AiModule.register(this);
+      PanoramaModule.register(this);
 
       // v3.1: 初始化 Enhancement Pack 注册表（异步加载所有框架增强包）
       try {

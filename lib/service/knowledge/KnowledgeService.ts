@@ -747,6 +747,17 @@ export class KnowledgeService {
         actor: context.userId,
       });
 
+      // EventBus: 通知生命周期状态转换（Dashboard 实时更新 + SignalBus）
+      if (this._eventBus) {
+        this._eventBus.emit('lifecycle:transition', {
+          entryId: id,
+          from: prevLifecycle,
+          to: entry.lifecycle,
+          method,
+          actor: context.userId,
+        });
+      }
+
       return updated;
     } catch (error: unknown) {
       this.logger.error(`Error in lifecycle ${method}`, {

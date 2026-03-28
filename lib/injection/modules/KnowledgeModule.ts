@@ -89,6 +89,7 @@ export function register(c: ServiceContainer) {
           // is sufficient for knowledge-base scale (hundreds~thousands of entries).
           // Re-enable when document scale grows to 10k+ or external noisy sources are integrated.
           crossEncoderReranker: null,
+          signalBus: ct.singletons.signalBus || null,
         } as unknown as ConstructorParameters<typeof SearchEngine>[1]
       );
     },

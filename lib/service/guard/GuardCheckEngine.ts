@@ -7,6 +7,7 @@
 
 import * as AstAnalyzerModule from '../../core/AstAnalyzer.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 import { runCodeLevelChecks } from './GuardCodeChecks.js';
 import { runCrossFileChecks } from './GuardCrossFileChecks.js';
@@ -17,6 +18,8 @@ import {
   compilePattern,
   detectLanguage,
 } from './GuardPatternUtils.js';
+import type { GuardCapabilityReport, UncertainResult } from './UncertaintyCollector.js';
+import { UncertaintyCollector } from './UncertaintyCollector.js';
 
 /** Minimal DB interface for Guard engine */
 interface DatabaseLike {
@@ -87,6 +90,7 @@ interface GuardConfig {
 interface GuardCheckEngineOptions {
   cacheTTL?: number;
   guardConfig?: GuardConfig;
+  signalBus?: SignalBus;
 }
 
 interface ExternalRuleInput {
@@ -104,7 +108,8 @@ interface AuditFileResult {
   filePath: string;
   language: string;
   violations: GuardViolation[];
-  summary: { total: number; errors: number; warnings: number };
+  uncertainResults: UncertainResult[];
+  summary: { total: number; errors: number; warnings: number; uncertain: number };
 }
 
 interface AuditFilesInput {
@@ -581,6 +586,8 @@ export class GuardCheckEngine {
   _epInjected: boolean;
   _externalRules: Map<string, GuardRule>;
   _guardConfig: GuardConfig;
+  _signalBus: SignalBus | null;
+  _uncertaintyCollector: UncertaintyCollector;
   db: DatabaseLike;
   logger: ReturnType<typeof Logger.getInstance>;
   constructor(
@@ -601,6 +608,8 @@ export class GuardCheckEngine {
     this._epInjected = false;
     /** Guard 配置 — 允许禁用特定规则或调整 Code-Level 检查阈值 */
     this._guardConfig = options.guardConfig || {};
+    this._signalBus = options.signalBus || null;
+    this._uncertaintyCollector = new UncertaintyCollector();
   }
 
   /**
@@ -853,6 +862,19 @@ export class GuardCheckEngine {
         re = compilePattern(rule.pattern);
       } catch {
         this.logger.debug(`Invalid regex in rule ${rule.id}: ${rule.pattern}`);
+        this._uncertaintyCollector.recordSkip(
+          'regex',
+          'invalid_regex',
+          `Rule ${rule.id}: pattern "${rule.pattern}" failed to compile`,
+          { ruleId: rule.id || rule.name }
+        );
+        this._uncertaintyCollector.addUncertain(
+          rule.id || rule.name,
+          rule.message,
+          'regex',
+          'invalid_regex',
+          `Pattern compilation failed: ${rule.pattern}`
+        );
         continue;
       }
 
@@ -956,10 +978,40 @@ export class GuardCheckEngine {
       // AstAnalyzer 作为 ESM 模块，在 constructor 时已被引入
       AstAnalyzer = this._getAstAnalyzer();
       if (!AstAnalyzer || !AstAnalyzer.isAvailable()) {
+        // AST 不可用 — 记录 uncertain
+        for (const rule of astRules) {
+          this._uncertaintyCollector.recordSkip(
+            'ast',
+            'ast_unavailable',
+            `AST check skipped: tree-sitter not available for lang "${language}"`,
+            { ruleId: rule.id }
+          );
+          this._uncertaintyCollector.addUncertain(
+            rule.id,
+            rule.message,
+            'ast',
+            'ast_unavailable',
+            `Tree-sitter not available for language "${language}"`
+          );
+        }
+        this._uncertaintyCollector.recordLayerStats('ast', astRules.length, 0);
         return [];
       }
     } catch {
       this.logger.debug('AstAnalyzer not available, skipping AST rules');
+      for (const rule of astRules) {
+        this._uncertaintyCollector.recordSkip('ast', 'ast_unavailable', `AST module load failed`, {
+          ruleId: rule.id,
+        });
+        this._uncertaintyCollector.addUncertain(
+          rule.id,
+          rule.message,
+          'ast',
+          'ast_unavailable',
+          'AstAnalyzer module failed to load'
+        );
+      }
+      this._uncertaintyCollector.recordLayerStats('ast', astRules.length, 0);
       return [];
     }
 
@@ -1056,6 +1108,9 @@ export class GuardCheckEngine {
       }
     }
 
+    // AST 层统计
+    this._uncertaintyCollector.recordLayerStats('ast', astRules.length, astRules.length);
+
     return violations;
   }
 
@@ -1137,15 +1192,20 @@ export class GuardCheckEngine {
    */
   auditFile(filePath: string, code: string, options: { scope?: string } = {}): AuditFileResult {
     const language = detectLanguage(filePath);
+    // 每次文件审计前重置 collector（单文件粒度）
+    this._uncertaintyCollector.reset();
     const violations = this.checkCode(code, language, { ...options, filePath });
+    const report = this._uncertaintyCollector.buildReport();
     return {
       filePath,
       language,
       violations,
+      uncertainResults: report.uncertainResults,
       summary: {
         total: violations.length,
         errors: violations.filter((v) => v.severity === 'error').length,
         warnings: violations.filter((v) => v.severity === 'warning').length,
+        uncertain: report.uncertainResults.length,
       },
     };
   }
@@ -1175,16 +1235,36 @@ export class GuardCheckEngine {
     totalViolations += crossFileViolations.length;
     totalErrors += crossFileViolations.filter((v) => v.severity === 'error').length;
 
-    return {
-      files: results,
-      crossFileViolations,
-      summary: {
-        filesChecked: results.length,
-        totalViolations,
-        totalErrors,
-        filesWithViolations: results.filter((r) => r.summary.total > 0).length,
-      },
+    const summary = {
+      filesChecked: results.length,
+      totalViolations,
+      totalErrors,
+      totalUncertain: results.reduce((s, r) => s + r.summary.uncertain, 0),
+      filesWithViolations: results.filter((r) => r.summary.total > 0).length,
     };
+
+    // ── Signal emission ──
+    if (this._signalBus && totalViolations > 0) {
+      this._signalBus.send('guard', 'GuardCheckEngine', totalErrors > 0 ? 1 : 0.5, {
+        metadata: { ...summary },
+      });
+    }
+
+    // ── 聚合 capability report ──
+    const aggregateCollector = new UncertaintyCollector();
+    for (const r of results) {
+      for (const u of r.uncertainResults) {
+        aggregateCollector.addUncertain(u.ruleId, u.message, u.layer, u.reason, u.detail);
+      }
+    }
+    const capabilityReport = aggregateCollector.buildReport();
+
+    return { files: results, crossFileViolations, summary, capabilityReport };
+  }
+
+  /** 获取 uncertainty collector（供外部读取单文件 uncertain 状态） */
+  getUncertaintyCollector(): UncertaintyCollector {
+    return this._uncertaintyCollector;
   }
 
   /** 清除规则缓存 */

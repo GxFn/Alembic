@@ -9,6 +9,8 @@
 
 import Logger from '../../infrastructure/logging/Logger.js';
 
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+
 interface ViolationsStoreLike {
   getRunsByFile(filePath: string): { violations: { ruleId: string; fixSuggestion?: string }[] }[];
 }
@@ -36,15 +38,17 @@ export class GuardFeedbackLoop {
   guardCheckEngine: GuardCheckEngineLike | null;
   logger: ReturnType<typeof Logger.getInstance>;
   violationsStore: ViolationsStoreLike | null;
+  _signalBus: SignalBus | null;
   /** @param [options.guardCheckEngine] 用于查找规则 */
   constructor(
     violationsStore: ViolationsStoreLike | null,
     feedbackCollector: FeedbackCollectorLike | null,
-    options: { guardCheckEngine?: GuardCheckEngineLike } = {}
+    options: { guardCheckEngine?: GuardCheckEngineLike; signalBus?: SignalBus } = {}
   ) {
     this.violationsStore = violationsStore;
     this.feedbackCollector = feedbackCollector;
     this.guardCheckEngine = options.guardCheckEngine || null;
+    this._signalBus = options.signalBus || null;
     this.logger = Logger.getInstance();
   }
 
@@ -110,6 +114,14 @@ export class GuardFeedbackLoop {
         this.logger.info(
           `[GuardFeedbackLoop] Auto-confirmed usage: recipe=${fixRecipeId} from fixing rule=${ruleId}`
         );
+
+        // ── Signal: usage confirmation ──
+        if (this._signalBus) {
+          this._signalBus.send('usage', 'GuardFeedbackLoop', 1, {
+            target: fixRecipeId,
+            metadata: { ruleId, filePath, source: 'guard_fix_detection' },
+          });
+        }
       } catch (err: unknown) {
         this.logger.debug(`[GuardFeedbackLoop] autoConfirmUsage error: ${(err as Error).message}`);
       }

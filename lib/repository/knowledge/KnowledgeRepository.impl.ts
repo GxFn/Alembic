@@ -276,7 +276,10 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
         SELECT
           COUNT(*) as total,
           SUM(CASE WHEN lifecycle = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN lifecycle = 'staging' THEN 1 ELSE 0 END) as staging,
           SUM(CASE WHEN lifecycle = 'active' THEN 1 ELSE 0 END) as active,
+          SUM(CASE WHEN lifecycle = 'evolving' THEN 1 ELSE 0 END) as evolving,
+          SUM(CASE WHEN lifecycle = 'decaying' THEN 1 ELSE 0 END) as decaying,
           SUM(CASE WHEN lifecycle = 'deprecated' THEN 1 ELSE 0 END) as deprecated,
           SUM(CASE WHEN kind = 'rule' THEN 1 ELSE 0 END) as rules,
           SUM(CASE WHEN kind = 'pattern' THEN 1 ELSE 0 END) as patterns,

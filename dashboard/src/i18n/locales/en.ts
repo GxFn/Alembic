@@ -54,6 +54,7 @@ export const en: DeepString<typeof zh> = {
     depGraph: 'Dependency Graph',
     knowledgeGraph: 'Knowledge Graph',
     guard: 'Guard',
+    panorama: 'Panorama',
     skills: 'Skills',
     repoWiki: 'Repo Wiki',
     aiAssistant: 'AI Assistant',
@@ -559,6 +560,26 @@ export const en: DeepString<typeof zh> = {
       status: 'Status',
       actions: 'Actions',
     },
+  },
+
+  /* ═══════════════════════════════ panorama ═════════════════════════════ */
+  panorama: {
+    title: 'Project Panorama',
+    overview: 'Overview',
+    health: 'Health',
+    gaps: 'Knowledge Gaps',
+    modules: 'Modules',
+    layers: 'Layers',
+    files: 'Files',
+    recipes: 'Recipes',
+    coverage: 'Coverage',
+    cycles: 'Cycles',
+    healthScore: 'Health Score',
+    avgCoupling: 'Avg Coupling',
+    highPriorityGaps: 'High Priority',
+    noGaps: 'No knowledge gaps found',
+    loading: 'Loading panorama...',
+    stale: 'Data may be stale',
   },
 
   /* ═══════════════════════════════ skills ═══════════════════════════════ */

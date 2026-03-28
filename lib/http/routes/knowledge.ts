@@ -141,6 +141,41 @@ router.get('/stats', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/v1/knowledge/lifecycle
+ * 获取六态生命周期统计 + 各状态条目列表
+ */
+router.get('/lifecycle', async (req: Request, res: Response) => {
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const stats = await knowledgeService.getStats();
+
+  const states = ['pending', 'staging', 'active', 'evolving', 'decaying', 'deprecated'] as const;
+  const lifecycle: Record<string, unknown> = {
+    counts: {} as Record<string, number>,
+    entries: {} as Record<string, unknown[]>,
+  };
+
+  const counts = lifecycle.counts as Record<string, number>;
+  for (const state of states) {
+    counts[state] = (stats as Record<string, number>)?.[state] ?? 0;
+  }
+
+  // 仅对过渡态（staging / evolving / decaying）返回条目详情
+  const transitionalStates = ['staging', 'evolving', 'decaying'] as const;
+  const entries = lifecycle.entries as Record<string, unknown[]>;
+  for (const state of transitionalStates) {
+    if (counts[state] > 0) {
+      const result = await knowledgeService.list({ lifecycle: state }, { page: 1, pageSize: 20 });
+      entries[state] = (result as { items?: unknown[] }).items ?? [];
+    } else {
+      entries[state] = [];
+    }
+  }
+
+  res.json({ success: true, data: lifecycle });
+});
+
+/**
  * GET /api/v1/knowledge/:id
  * 获取知识条目详情
  */
@@ -214,7 +249,7 @@ router.delete(
   }
 );
 
-/* ═══ 生命周期操作（3 状态: pending / active / deprecated）═══ */
+/* ═══ 生命周期操作（6 态: pending / staging / active / evolving / decaying / deprecated）═══ */
 
 /**
  * PATCH /api/v1/knowledge/:id/publish
