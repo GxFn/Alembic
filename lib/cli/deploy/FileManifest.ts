@@ -95,18 +95,6 @@ export const MANIFEST = [
     category: 'cursor-commands',
   },
 
-  // ═══ Claude Code ══════════════════════════════════════
-  {
-    id: 'claude-code',
-    src: 'claude-code/',
-    dest: '.claude/',
-    strategy: 'overwrite-dir',
-    on: 'both',
-    category: 'claude-hooks',
-    chmod: true,
-    cleanup: ['.claude/hooks.yaml'], // 清理旧格式文件
-  },
-
   // ═══ Agent Instructions（全部从模板生成）═══════════════
   {
     id: 'copilot-instructions',
