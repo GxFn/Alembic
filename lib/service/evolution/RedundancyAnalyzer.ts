@@ -99,6 +99,12 @@ export class RedundancyAnalyzer {
       }
     }
 
+    if (this.#signalBus && results.length > 0) {
+      this.#signalBus.send('lifecycle', 'RedundancyAnalyzer', 1, {
+        metadata: { redundantPairCount: results.length },
+      });
+    }
+
     this.#logger.debug(`RedundancyAnalyzer: found ${results.length} redundant pairs`);
     return results;
   }

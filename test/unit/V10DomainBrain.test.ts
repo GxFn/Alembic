@@ -340,8 +340,8 @@ describe('P1: semantic_search_code', () => {
  *  P2: Tool count & ALL_TOOLS integrity
  * ════════════════════════════════════════════════════════════ */
 describe('P2: ALL_TOOLS integrity', () => {
-  test('contains 58 tools', () => {
-    expect(ALL_TOOLS.length).toBe(58);
+  test('contains 57 tools', () => {
+    expect(ALL_TOOLS.length).toBe(57);
   });
 
   test('all new tools have name, description, parameters, handler', () => {

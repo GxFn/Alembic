@@ -1,7 +1,7 @@
 /**
  * KnowledgeMetabolism 单元测试
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ContradictionResult } from '../../lib/service/evolution/ContradictionDetector.js';
 import type { DecayScoreResult } from '../../lib/service/evolution/DecayDetector.js';
 import { KnowledgeMetabolism } from '../../lib/service/evolution/KnowledgeMetabolism.js';
@@ -180,7 +180,7 @@ describe('KnowledgeMetabolism', () => {
     expect(ttl).toBe(7 * DAY_MS);
   });
 
-  it('emits signal when proposals are generated', () => {
+  it('writes governance report when proposals are generated', () => {
     const contradiction: ContradictionResult = {
       recipeA: 'r1',
       recipeB: 'r2',
@@ -189,33 +189,43 @@ describe('KnowledgeMetabolism', () => {
       evidence: ['test'],
     };
 
-    const signals: unknown[] = [];
-    const signalBus = { send: (...args: unknown[]) => signals.push(args) };
+    const writeMock = vi.fn().mockResolvedValue({
+      id: 'rpt-test',
+      category: 'governance',
+      type: 'metabolism_cycle',
+      producer: 'KnowledgeMetabolism',
+      data: {},
+      timestamp: Date.now(),
+    });
+    const reportStore = { write: writeMock };
 
     const metabolism = new KnowledgeMetabolism({
       contradictionDetector: mockContradictionDetector([contradiction]),
       redundancyAnalyzer: mockRedundancyAnalyzer(),
       decayDetector: mockDecayDetector(),
-      signalBus: signalBus as never,
+      reportStore: reportStore as never,
     });
 
     metabolism.runFullCycle();
-    expect(signals.length).toBe(1);
+    expect(writeMock).toHaveBeenCalledTimes(1);
+    const entry = writeMock.mock.calls[0][0] as { type: string; category: string };
+    expect(entry.category).toBe('governance');
+    expect(entry.type).toBe('metabolism_cycle');
   });
 
-  it('does NOT emit signal when no proposals', () => {
-    const signals: unknown[] = [];
-    const signalBus = { send: (...args: unknown[]) => signals.push(args) };
+  it('does NOT write governance report when no proposals', () => {
+    const writeMock = vi.fn();
+    const reportStore = { write: writeMock };
 
     const metabolism = new KnowledgeMetabolism({
       contradictionDetector: mockContradictionDetector(),
       redundancyAnalyzer: mockRedundancyAnalyzer(),
       decayDetector: mockDecayDetector(),
-      signalBus: signalBus as never,
+      reportStore: reportStore as never,
     });
 
     metabolism.runFullCycle();
-    expect(signals.length).toBe(0);
+    expect(writeMock).not.toHaveBeenCalled();
   });
 
   it('convenience methods delegate to detectors', () => {

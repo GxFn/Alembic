@@ -390,11 +390,13 @@ describe('Panorama Integration', () => {
   it('should compute health score in valid range', () => {
     const service = createService();
     const health = service.getHealth();
+    const overview = service.getOverview();
 
     expect(health.healthScore).toBeGreaterThanOrEqual(0);
     expect(health.healthScore).toBeLessThanOrEqual(100);
     expect(health.moduleCount).toBe(4);
-    expect(health.overallCoverage).toBeDefined();
+    expect(health.healthRadar.overallScore).toBeDefined();
+    expect(overview.overallCoverage).toBeDefined();
   });
 
   it('should return call flow summary', () => {

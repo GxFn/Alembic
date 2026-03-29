@@ -192,7 +192,10 @@ describe('Knowledge Governance Integration', () => {
       const db = makeMockDb({ contradictionRecipes, redundancyRecipes, decayRecipes });
 
       const signals: unknown[] = [];
-      const signalBus = { send: (...args: unknown[]) => signals.push(args) } as never;
+      const signalBus = {
+        send: (...args: unknown[]) => signals.push(args),
+        subscribe: () => () => {},
+      } as never;
 
       const contradictionDetector = new ContradictionDetector(db, { signalBus });
       const redundancyAnalyzer = new RedundancyAnalyzer(db, { signalBus });
