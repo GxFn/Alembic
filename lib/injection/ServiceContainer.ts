@@ -153,6 +153,9 @@ export class ServiceContainer {
       // v3.3: 初始化 VectorService（绑定 EventBus 事件监听）
       await VectorModule.initializeVectorService(this);
 
+      // v3.4: 初始化 Knowledge 服务（绑定 EventBus → SearchEngine.refreshIndex + sourceRefs）
+      KnowledgeModule.initializeKnowledgeServices(this);
+
       this.logger.info('Service container initialized successfully');
     } catch (error: unknown) {
       this.logger.error('Error initializing service container', {

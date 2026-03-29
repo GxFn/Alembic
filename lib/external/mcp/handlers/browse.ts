@@ -90,11 +90,12 @@ function _projectForAgent(json: KnowledgeEntryJSON) {
       }
     : undefined;
 
-  // reasoning 精简：仅保留 whyStandard + confidence
+  // reasoning 精简：保留 whyStandard + confidence + sources（可信度证据链）
   const reasoning = json.reasoning
     ? {
         ...(json.reasoning.whyStandard ? { whyStandard: json.reasoning.whyStandard } : {}),
         ...(json.reasoning.confidence != null ? { confidence: json.reasoning.confidence } : {}),
+        ...((json.reasoning.sources?.length ?? 0) > 0 ? { sources: json.reasoning.sources } : {}),
       }
     : undefined;
 

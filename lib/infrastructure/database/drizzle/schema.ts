@@ -423,3 +423,19 @@ export const evolutionProposals = sqliteTable(
     index('idx_ep_source').on(table.source),
   ]
 );
+
+// ═══════════════════════════════════════════════════════════════
+// 17. recipe_source_refs — Recipe 来源引用桥接表 (可信度证据链)
+// ═══════════════════════════════════════════════════════════════
+
+export const recipeSourceRefs = sqliteTable(
+  'recipe_source_refs',
+  {
+    recipeId: text('recipe_id').notNull(),
+    sourcePath: text('source_path').notNull(),
+    status: text('status').notNull().default('active'),
+    newPath: text('new_path'),
+    verifiedAt: integer('verified_at').notNull(),
+  },
+  (table) => [index('idx_rsr_path').on(table.sourcePath), index('idx_rsr_status').on(table.status)]
+);

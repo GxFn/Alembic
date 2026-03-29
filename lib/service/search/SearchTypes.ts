@@ -23,6 +23,24 @@ export interface BM25SearchResult {
   meta: Record<string, unknown>;
 }
 
+/**
+ * Scorer 通用接口 — BM25Scorer 与 FieldWeightedScorer 共同实现
+ *
+ * SearchEngine 通过此接口与具体评分器解耦，可在运行时切换。
+ */
+export interface Scorer {
+  totalDocs: number;
+  avgLength: number;
+  docFreq: Record<string, number>;
+  documents: ({ id: string } | null)[];
+  addDocument(id: string, text: string, meta: Record<string, unknown>): void;
+  removeDocument(id: string): boolean;
+  updateDocument(id: string, text: string, meta: Record<string, unknown>): void;
+  hasDocument(id: string): boolean;
+  search(query: string, limit?: number): BM25SearchResult[];
+  clear(): void;
+}
+
 /** Meta structure produced by _buildDocMeta */
 export interface BM25DocMeta {
   type: string;
@@ -60,7 +78,6 @@ export interface SearchResultItem {
   headers?: string;
   moduleName?: string;
   knowledgeType?: string;
-  bm25Score?: number;
   qualityScore?: number;
   usageCount?: number;
   authorityScore?: number;
@@ -202,7 +219,7 @@ export interface SearchEngineOptions {
   crossEncoderReranker?: SearchCrossEncoder | null;
   signalBus?: SignalBus | null;
   cacheMaxAge?: number;
-  fusionBm25Weight?: number;
+  fusionRecallWeight?: number;
   fusionSemanticWeight?: number;
   [key: string]: unknown;
 }
@@ -224,13 +241,15 @@ export interface SlimSearchResult {
   actionHint?: string;
   /** 知识类型 (code-standard/code-pattern/...) — Bridge 场景需要 */
   knowledgeType?: string;
+  /** 已验证的项目来源文件路径（可信度证据链） */
+  sourceRefs?: string[];
 }
 
 /**
  * 统一投影函数 — 将 SearchResultItem 投影为 SlimSearchResult。
  *
  * 合并了 mcp/search.ts#_slimSearchItem() 和 TaskKnowledgeBridge#_projectItem() 的逻辑：
- * - 去除内部信号 (bm25Score, coarseScore, rankerScore, contextScore, content, code...)
+ * - 去除内部信号 (recallScore, coarseScore, rankerScore, contextScore, content, code...)
  * - description 截断 120 字符
  * - 生成 actionHint (whenClause → doClause)
  *
@@ -244,6 +263,11 @@ export function slimSearchResult(item: SearchResultItem): SlimSearchResult {
     doText || whenText
       ? `${whenText ? `${whenText} → ` : ''}${doText}`.replace(/ → $/, '')
       : undefined;
+  const rawRefs = (item as SearchResultItem & { sourceRefs?: unknown }).sourceRefs;
+  const sourceRefs =
+    Array.isArray(rawRefs) && rawRefs.length > 0
+      ? rawRefs.filter((s: unknown) => typeof s === 'string' && (s as string).length > 0)
+      : undefined;
   return {
     id: item.id,
     title: (item.title as string) || '',
@@ -254,6 +278,7 @@ export function slimSearchResult(item: SearchResultItem): SlimSearchResult {
     description: ((item.description as string) || '').slice(0, 120),
     actionHint,
     knowledgeType: (item.knowledgeType as string) || undefined,
+    sourceRefs,
   };
 }
 

@@ -7,11 +7,11 @@
  * @module BM25Scorer
  */
 
-import type { BM25Document, BM25SearchResult } from './SearchTypes.js';
+import type { BM25Document, BM25SearchResult, Scorer } from './SearchTypes.js';
 import { BM25_B, BM25_K1, tokenize } from './tokenizer.js';
 
 /** BM25 评分器 */
-export class BM25Scorer {
+export class BM25Scorer implements Scorer {
   _idIndex: Map<string, number>;
   _totalLength: number;
   avgLength: number;

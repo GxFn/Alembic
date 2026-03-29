@@ -5,7 +5,7 @@
  */
 
 interface SignalCandidate {
-  bm25Score?: number;
+  recallScore?: number;
   score?: number;
   title?: string;
   trigger?: string;
@@ -87,7 +87,7 @@ const SCENARIO_WEIGHTS = {
 /** 相关性信号 — BM25 + 标题匹配 + 内容匹配 */
 export class RelevanceSignal {
   compute(candidate: SignalCandidate, context: SignalContext) {
-    let score = candidate.bm25Score || candidate.score || 0;
+    let score = candidate.recallScore || candidate.score || 0;
     const query = (context.query || '').toLowerCase();
     if (!query) {
       return Math.min(score, 1.0);

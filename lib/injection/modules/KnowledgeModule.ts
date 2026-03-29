@@ -270,3 +270,102 @@ export function register(c: ServiceContainer) {
     );
   });
 }
+
+/**
+ * 初始化知识服务（在容器初始化后调用）
+ * 绑定 EventBus → SearchEngine.refreshIndex() + recipe_source_refs 填充
+ */
+export function initializeKnowledgeServices(c: ServiceContainer): void {
+  if (!c.services.eventBus || !c.services.searchEngine) {
+    return;
+  }
+
+  try {
+    const { EventBus } = await_import_EventBus();
+    const eventBus = c.get('eventBus') as InstanceType<typeof EventBus>;
+    const searchEngine = c.get('searchEngine') as {
+      refreshIndex: (opts?: { force?: boolean }) => void;
+    };
+
+    // Bug 修复: BM25 索引与 Vector 索引一致性 — 将 knowledge:changed 事件绑定到 refreshIndex
+    eventBus.on('knowledge:changed', () => {
+      try {
+        searchEngine.refreshIndex();
+      } catch {
+        /* refreshIndex failure is non-fatal */
+      }
+    });
+
+    // recipe_source_refs 填充：MCP 内提交新知识后同步更新桥接表
+    eventBus.on('knowledge:changed', (data: unknown) => {
+      try {
+        const d = data as { action?: string; entryId?: string };
+        if (d.action === 'create' && d.entryId) {
+          _populateSourceRefsForEntry(c, d.entryId);
+        }
+      } catch {
+        /* sourceRef population failure is non-fatal */
+      }
+    });
+  } catch {
+    /* EventBus/SearchEngine not available — skip binding */
+  }
+}
+
+/** EventBus 延迟引用（避免循环依赖） */
+function await_import_EventBus() {
+  // EventBus 类型已经通过 container 解析，此处只用于 TS 类型
+  return {
+    EventBus: Object as unknown as typeof import('../../infrastructure/event/EventBus.js').EventBus,
+  };
+}
+
+/**
+ * 从 knowledge_entries.reasoning 中提取 sources 并填充 recipe_source_refs 桥接表
+ */
+function _populateSourceRefsForEntry(c: ServiceContainer, entryId: string): void {
+  const db = c.get('database') as {
+    getDb(): {
+      prepare: (sql: string) => {
+        get: (...args: unknown[]) => Record<string, unknown> | undefined;
+        run: (...args: unknown[]) => void;
+      };
+    };
+  };
+  const rawDb = db.getDb();
+
+  const row = rawDb.prepare(`SELECT reasoning FROM knowledge_entries WHERE id = ?`).get(entryId) as
+    | { reasoning?: string }
+    | undefined;
+  if (!row?.reasoning) {
+    return;
+  }
+
+  let sources: string[] = [];
+  try {
+    const reasoning = JSON.parse(row.reasoning);
+    sources = Array.isArray(reasoning.sources)
+      ? reasoning.sources.filter((s: unknown) => typeof s === 'string' && (s as string).length > 0)
+      : [];
+  } catch {
+    return;
+  }
+
+  if (sources.length === 0) {
+    return;
+  }
+
+  const now = Date.now();
+  const upsert = rawDb.prepare(
+    `INSERT OR REPLACE INTO recipe_source_refs (recipe_id, source_path, status, verified_at)
+     VALUES (?, ?, 'active', ?)`
+  );
+
+  for (const sourcePath of sources) {
+    try {
+      upsert.run(entryId, sourcePath, now);
+    } catch {
+      /* table may not exist yet */
+    }
+  }
+}

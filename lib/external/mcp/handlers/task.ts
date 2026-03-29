@@ -179,7 +179,8 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
     lines.push(`📋 Found ${relatedCount} recipe(s), ${ruleCount} guard rule(s).`);
     for (const r of searchResult!.relatedKnowledge) {
       const hint = r.actionHint ? ` — ${r.actionHint}` : '';
-      lines.push(`  • ${r.trigger || r.title}${hint}`);
+      const refs = r.sourceRefs?.length ? `\n    📍 ${r.sourceRefs.join(', ')}` : '';
+      lines.push(`  • ${r.trigger || r.title}${hint}${refs}`);
     }
     for (const r of searchResult!.guardRules) {
       lines.push(`  • [rule] ${r.trigger || r.title}`);

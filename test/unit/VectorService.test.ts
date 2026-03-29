@@ -313,7 +313,9 @@ describe('VectorService', () => {
       embedProvider.embed.mockRejectedValue(new Error('API error'));
       const svc = createService();
       const results = await svc.hybridSearch('query');
-      expect(results).toHaveLength(0);
+      // Degrades to sparse-only: hybridRetriever still called with null queryVector
+      expect(hybridRetriever.search).toHaveBeenCalled();
+      expect(results).toHaveLength(1);
     });
   });
 

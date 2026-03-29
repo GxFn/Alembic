@@ -836,6 +836,18 @@ program
       await httpServer.initialize();
       await httpServer.start();
 
+      // ── UiStartupTasks: 后台异步刷新（不阻塞 UI） ──
+      import('../lib/service/bootstrap/UiStartupTasks.js')
+        .then(({ runUiStartupTasks }) => runUiStartupTasks({ projectRoot, container }))
+        .then((report) => {
+          if (report.errors.length > 0) {
+            cli.warn(`⚠️  UiStartupTasks completed with ${report.errors.length} error(s)`);
+          }
+        })
+        .catch((err: any) => {
+          cli.debug(`UiStartupTasks failed: ${err.message}`);
+        });
+
       // ── MCP 配置检测 ──
       const cursorMcpPath = join(projectRoot, '.cursor', 'mcp.json');
       const vscodeMcpPath = join(projectRoot, '.vscode', 'mcp.json');
@@ -1505,7 +1517,7 @@ program
     }
 
     try {
-      const report: any = syncService.sync(db as any, {
+      const report: any = await syncService.syncAll(db as any, {
         dryRun: opts.dryRun,
         force: opts.force,
       });
@@ -1516,6 +1528,25 @@ program
       cli.log(`  Updated:   ${report.updated ?? 0}`);
       cli.log(`  Unchanged: ${report.unchanged ?? 0}`);
       cli.log(`  Deleted:   ${report.deleted ?? 0}`);
+
+      if (report.reconcileReport) {
+        cli.log(`\n  📍 Source Refs`);
+        cli.log(`  ${'─'.repeat(40)}`);
+        cli.log(`  Inserted:  ${report.reconcileReport.inserted ?? 0}`);
+        cli.log(`  Active:    ${report.reconcileReport.active ?? 0}`);
+        cli.log(`  Stale:     ${report.reconcileReport.stale ?? 0}`);
+        cli.log(`  Skipped:   ${report.reconcileReport.skipped ?? 0}`);
+      }
+
+      if (
+        report.repairReport &&
+        (report.repairReport.renamed > 0 || report.repairReport.stillStale > 0)
+      ) {
+        cli.log(`\n  🔧 Rename Repairs`);
+        cli.log(`  ${'─'.repeat(40)}`);
+        cli.log(`  Renamed:    ${report.repairReport.renamed ?? 0}`);
+        cli.log(`  Still Stale: ${report.repairReport.stillStale ?? 0}`);
+      }
 
       if (report.violations.length > 0) {
         cli.log(`\n  ⚠️  Violations (${report.violations.length}):`);

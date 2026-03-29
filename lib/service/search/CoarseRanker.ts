@@ -1,10 +1,11 @@
 /**
  * CoarseRanker — 粗排器
- * 基于 E-E-A-T 标准的 5 维加权排序（BM25 + Semantic + Quality + Freshness + Popularity）
+ * 多维加权排序（Recall + Semantic + Freshness + Popularity）
+ * Quality 维度保留但默认权重 0 — 待场景化区分后按需启用
  */
 
 interface RankerCandidate {
-  bm25Score?: number;
+  recallScore?: number;
   score?: number;
   semanticScore?: number;
   title?: string;
@@ -27,7 +28,7 @@ export class CoarseRanker {
 
   constructor(
     options: {
-      bm25Weight?: number;
+      recallWeight?: number;
       semanticWeight?: number;
       qualityWeight?: number;
       freshnessWeight?: number;
@@ -35,17 +36,17 @@ export class CoarseRanker {
     } = {}
   ) {
     this.#weights = {
-      bm25: options.bm25Weight ?? 0.3,
+      recall: options.recallWeight ?? 0.45,
       semantic: options.semanticWeight ?? 0.3,
-      quality: options.qualityWeight ?? 0.2,
-      freshness: options.freshnessWeight ?? 0.1,
+      quality: options.qualityWeight ?? 0,
+      freshness: options.freshnessWeight ?? 0.15,
       popularity: options.popularityWeight ?? 0.1,
     };
   }
 
   /**
    * 粗排
-   * @param candidates 需有 bm25Score、semanticScore 等字段
+   * @param candidates 需有 recallScore、semanticScore 等字段
    * @returns sorted with coarseScore
    */
   rank(candidates: RankerCandidate[]) {
@@ -70,23 +71,23 @@ export class CoarseRanker {
       effectiveWeights.semantic = 0;
     }
 
-    // BM25 分数 max-based 归一化（保留相对排序，避免 clamp 截断高分差异）
-    const maxBm25 =
+    // 召回分数 max-based 归一化（保留相对排序，避免 clamp 截断高分差异）
+    const maxRecall =
       candidates.reduce(
-        (m: number, c: RankerCandidate) => Math.max(m, c.bm25Score || c.score || 0),
+        (m: number, c: RankerCandidate) => Math.max(m, c.recallScore || c.score || 0),
         0
       ) || 1;
 
     return candidates
       .map((c: RankerCandidate) => {
-        const bm25 = Math.min((c.bm25Score || c.score || 0) / maxBm25, 1.0);
+        const recall = Math.min((c.recallScore || c.score || 0) / maxRecall, 1.0);
         const semantic = this.#normalize(c.semanticScore || 0);
         const quality = this.#computeQuality(c);
         const freshness = this.#computeFreshness(c);
         const popularity = this.#computePopularity(c);
 
         const coarseScore =
-          bm25 * effectiveWeights.bm25 +
+          recall * effectiveWeights.recall +
           semantic * effectiveWeights.semantic +
           quality * effectiveWeights.quality +
           freshness * effectiveWeights.freshness +
@@ -95,7 +96,7 @@ export class CoarseRanker {
         return {
           ...c,
           coarseScore,
-          coarseSignals: { bm25, semantic, quality, freshness, popularity },
+          coarseSignals: { recall, semantic, quality, freshness, popularity },
         };
       })
       .sort((a, b) => b.coarseScore - a.coarseScore);

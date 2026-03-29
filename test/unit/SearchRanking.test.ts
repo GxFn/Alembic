@@ -40,7 +40,7 @@ describe('CoarseRanker', () => {
       category: 'patterns',
       language: 'javascript',
       tags: ['tag'],
-      bm25Score: 1,
+      recallScore: 1,
       semanticScore: 0.5,
       usageCount: 10,
       updatedAt: new Date().toISOString(),
@@ -53,11 +53,11 @@ describe('CoarseRanker', () => {
   });
 
   test('adds coarseScore and coarseSignals to each candidate', () => {
-    const result = ranker.rank(makeCandidates([{ bm25Score: 5 }, { bm25Score: 3 }]));
+    const result = ranker.rank(makeCandidates([{ recallScore: 5 }, { recallScore: 3 }]));
     expect(result).toHaveLength(2);
     for (const r of result) {
       expect(r).toHaveProperty('coarseScore');
-      expect(r.coarseSignals).toHaveProperty('bm25');
+      expect(r.coarseSignals).toHaveProperty('recall');
       expect(r.coarseSignals).toHaveProperty('semantic');
       expect(r.coarseSignals).toHaveProperty('quality');
       expect(r.coarseSignals).toHaveProperty('freshness');
@@ -66,15 +66,15 @@ describe('CoarseRanker', () => {
   });
 
   test('sorts by coarseScore descending', () => {
-    const result = ranker.rank(makeCandidates([{ bm25Score: 10 }, { bm25Score: 1 }]));
-    expect(result[0].bm25Score).toBe(10);
+    const result = ranker.rank(makeCandidates([{ recallScore: 10 }, { recallScore: 1 }]));
+    expect(result[0].recallScore).toBe(10);
     expect(result[0].coarseScore).toBeGreaterThanOrEqual(result[1].coarseScore);
   });
 
   test('dynamic weight redistribution when semantic scores are all zero', () => {
     const candidates = makeCandidates([
-      { bm25Score: 5, semanticScore: 0 },
-      { bm25Score: 3, semanticScore: 0 },
+      { recallScore: 5, semanticScore: 0 },
+      { recallScore: 3, semanticScore: 0 },
     ]);
     const result = ranker.rank(candidates);
     // semanticScore 全 0 → semantic 维度被 redistribute
@@ -92,7 +92,7 @@ describe('CoarseRanker', () => {
         category: 'cat',
         language: 'js',
         tags: ['a'],
-        bm25Score: 1,
+        recallScore: 1,
         semanticScore: 0,
       },
     ]);
@@ -104,7 +104,7 @@ describe('CoarseRanker', () => {
         category: '',
         language: '',
         tags: [],
-        bm25Score: 1,
+        recallScore: 1,
         semanticScore: 0,
       },
     ]);
@@ -119,8 +119,8 @@ describe('CoarseRanker', () => {
     const now = new Date().toISOString();
     const old = new Date(Date.now() - 365 * 86400000).toISOString();
     const candidates = makeCandidates([
-      { bm25Score: 1, semanticScore: 0, updatedAt: now },
-      { bm25Score: 1, semanticScore: 0, updatedAt: old },
+      { recallScore: 1, semanticScore: 0, updatedAt: now },
+      { recallScore: 1, semanticScore: 0, updatedAt: old },
     ]);
     const result = ranker.rank(candidates);
     const newer = result.find((r) => r.updatedAt === now);
@@ -130,8 +130,8 @@ describe('CoarseRanker', () => {
 
   test('popularity: higher usageCount → higher signal', () => {
     const candidates = makeCandidates([
-      { bm25Score: 1, semanticScore: 0, usageCount: 1000 },
-      { bm25Score: 1, semanticScore: 0, usageCount: 1 },
+      { recallScore: 1, semanticScore: 0, usageCount: 1000 },
+      { recallScore: 1, semanticScore: 0, usageCount: 1 },
     ]);
     const result = ranker.rank(candidates);
     const popular = result.find((r) => r.usageCount === 1000);
@@ -141,7 +141,7 @@ describe('CoarseRanker', () => {
 
   test('respects custom weights from constructor', () => {
     const bm25Heavy = new CoarseRanker({
-      bm25Weight: 1.0,
+      recallWeight: 1.0,
       semanticWeight: 0,
       qualityWeight: 0,
       freshnessWeight: 0,
@@ -149,11 +149,11 @@ describe('CoarseRanker', () => {
     });
     const result = bm25Heavy.rank(
       makeCandidates([
-        { bm25Score: 10, semanticScore: 0.9 },
-        { bm25Score: 1, semanticScore: 0.9 },
+        { recallScore: 10, semanticScore: 0.9 },
+        { recallScore: 1, semanticScore: 0.9 },
       ])
     );
-    expect(result[0].bm25Score).toBe(10);
+    expect(result[0].recallScore).toBe(10);
   });
 });
 
@@ -166,7 +166,7 @@ describe('RelevanceSignal', () => {
 
   test('returns capped score for exact title match', () => {
     const s = signal.compute(
-      { title: 'react hooks', trigger: '', bm25Score: 0.3, content: '' },
+      { title: 'react hooks', trigger: '', recallScore: 0.3, content: '' },
       { query: 'react hooks' }
     );
     expect(s).toBeGreaterThan(0.5);
@@ -175,18 +175,18 @@ describe('RelevanceSignal', () => {
 
   test('trigger match gives strongest boost', () => {
     const withTrigger = signal.compute(
-      { title: 'something', trigger: 'useState', bm25Score: 0.1, content: '' },
+      { title: 'something', trigger: 'useState', recallScore: 0.1, content: '' },
       { query: 'useState' }
     );
     const withoutTrigger = signal.compute(
-      { title: 'something', trigger: '', bm25Score: 0.1, content: '' },
+      { title: 'something', trigger: '', recallScore: 0.1, content: '' },
       { query: 'useState' }
     );
     expect(withTrigger).toBeGreaterThan(withoutTrigger);
   });
 
   test('returns score even without query', () => {
-    const s = signal.compute({ bm25Score: 0.5 }, {});
+    const s = signal.compute({ recallScore: 0.5 }, {});
     expect(s).toBeGreaterThanOrEqual(0);
   });
 });
@@ -305,7 +305,7 @@ describe('MultiSignalRanker', () => {
   });
 
   test('adds rankerScore and signals to each candidate', () => {
-    const result = ranker.rank([{ id: 'a', bm25Score: 0.5, title: 'test' }], {
+    const result = ranker.rank([{ id: 'a', recallScore: 0.5, title: 'test' }], {
       query: 'test',
       scenario: 'search',
     });
@@ -318,7 +318,7 @@ describe('MultiSignalRanker', () => {
   test('different scenarios produce different scores', () => {
     const candidate = {
       id: 'a',
-      bm25Score: 0.5,
+      recallScore: 0.5,
       title: 'react',
       difficulty: 'beginner',
       usageCount: 100,
@@ -343,7 +343,7 @@ describe('MultiSignalRanker', () => {
         },
       },
     });
-    const result = custom.rank([{ id: 'a', bm25Score: 0.5, language: 'javascript' }], {
+    const result = custom.rank([{ id: 'a', recallScore: 0.5, language: 'javascript' }], {
       query: 'test',
       scenario: 'custom',
       language: 'javascript',
@@ -355,8 +355,8 @@ describe('MultiSignalRanker', () => {
   test('sorts by rankerScore descending', () => {
     const result = ranker.rank(
       [
-        { id: 'low', bm25Score: 0.1, title: 'unrelated' },
-        { id: 'high', bm25Score: 0.9, title: 'exact match query' },
+        { id: 'low', recallScore: 0.1, title: 'unrelated' },
+        { id: 'high', recallScore: 0.9, title: 'exact match query' },
       ],
       { query: 'exact match query' }
     );

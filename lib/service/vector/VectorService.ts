@@ -88,6 +88,12 @@ export class VectorService {
   #logger = Logger.getInstance();
   #initialized = false;
 
+  // ── Embed circuit breaker ──
+  #embedConsecutiveFailures = 0;
+  #embedCircuitOpenUntil = 0;
+  static readonly #EMBED_CIRCUIT_THRESHOLD = 3;
+  static readonly #EMBED_CIRCUIT_COOLDOWN_MS = 60_000;
+
   constructor(config: VectorServiceConfig) {
     this.#vectorStore = config.vectorStore;
     this.#indexingPipeline = config.indexingPipeline;
@@ -310,6 +316,9 @@ export class VectorService {
   /**
    * 混合搜索 (Dense + Sparse RRF 融合)
    * 通过 HybridRetriever 执行向量 + BM25 关键词并行检索
+   *
+   * Embed 失败时优雅降级: 跳过 Dense 路, 仅用 Sparse 结果进行 RRF 融合,
+   * 避免因网络问题导致整个搜索返回空结果。
    */
   async hybridSearch(
     query: string,
@@ -339,12 +348,35 @@ export class VectorService {
 
     const { topK = 10, alpha = 0.5, sparseSearchFn = null } = opts;
 
-    try {
-      const embedResult = await this.#embedProvider.embed(query);
-      const queryVector = Array.isArray(embedResult[0])
-        ? (embedResult[0] as number[])
-        : (embedResult as number[]);
+    // Embed query — circuit breaker skips embed after repeated failures
+    let queryVector: number[] | null = null;
+    const circuitOpen = Date.now() < this.#embedCircuitOpenUntil;
+    if (circuitOpen) {
+      this.#logger.debug('[VectorService] embed circuit open, skipping embed');
+    } else {
+      try {
+        const embedResult = await this.#embedProvider.embed(query);
+        queryVector = Array.isArray(embedResult[0])
+          ? (embedResult[0] as number[])
+          : (embedResult as number[]);
+        this.#embedConsecutiveFailures = 0;
+      } catch (err: unknown) {
+        this.#embedConsecutiveFailures++;
+        if (this.#embedConsecutiveFailures >= VectorService.#EMBED_CIRCUIT_THRESHOLD) {
+          this.#embedCircuitOpenUntil = Date.now() + VectorService.#EMBED_CIRCUIT_COOLDOWN_MS;
+          this.#logger.warn('[VectorService] embed circuit OPEN — skipping embed for 60s', {
+            consecutiveFailures: this.#embedConsecutiveFailures,
+          });
+        } else {
+          this.#logger.warn('[VectorService] embed failed, degrading to sparse-only', {
+            error: err instanceof Error ? err.message : String(err),
+            failCount: this.#embedConsecutiveFailures,
+          });
+        }
+      }
+    }
 
+    try {
       const fused = await this.#hybridRetriever.search(query, queryVector, {
         topK,
         alpha,

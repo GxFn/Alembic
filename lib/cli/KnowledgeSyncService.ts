@@ -23,6 +23,24 @@ import {
   computeKnowledgeHash,
   parseKnowledgeMarkdown,
 } from '../service/knowledge/KnowledgeFileWriter.js';
+import type {
+  ApplyReport,
+  ReconcileReport,
+  RepairReport,
+} from '../service/knowledge/SourceRefReconciler.js';
+import { SourceRefReconciler } from '../service/knowledge/SourceRefReconciler.js';
+
+export interface SyncAllReport {
+  synced: number;
+  created: number;
+  updated: number;
+  violations: string[];
+  orphaned: string[];
+  skipped: number;
+  reconcileReport?: ReconcileReport;
+  repairReport?: RepairReport;
+  applyReport?: ApplyReport;
+}
 
 export class KnowledgeSyncService {
   candidatesDir: string;
@@ -34,6 +52,48 @@ export class KnowledgeSyncService {
     this.recipesDir = path.join(projectRoot, RECIPES_DIR);
     this.candidatesDir = path.join(projectRoot, CANDIDATES_DIR);
     this.logger = Logger.getInstance();
+  }
+
+  /**
+   * 完整同步入口 — sync + reconcile + repair
+   *
+   * asd sync CLI 和 asd ui 启动都调用此方法。
+   *
+   * @param db better-sqlite3 原始句柄
+   * @param opts 同步选项
+   * @returns 包含 sync + reconcile + repair 报告的综合结果
+   */
+  async syncAll(
+    db: Parameters<KnowledgeSyncService['sync']>[0],
+    opts: { dryRun?: boolean; force?: boolean; skipViolations?: boolean } = {}
+  ): Promise<SyncAllReport> {
+    // 1. .md → DB 同步
+    const syncReport = this.sync(db, opts);
+
+    const report: SyncAllReport = { ...syncReport };
+
+    // 2. 填充/验证 recipe_source_refs 桥接表
+    try {
+      const reconciler = new SourceRefReconciler(
+        this.projectRoot,
+        db as unknown as ConstructorParameters<typeof SourceRefReconciler>[1]
+      );
+      report.reconcileReport = reconciler.reconcile({ force: opts.force });
+
+      // 3. git rename 修复
+      report.repairReport = await reconciler.repairRenames();
+
+      // 4. 写回修复
+      if (report.repairReport.renamed > 0) {
+        report.applyReport = reconciler.applyRepairs();
+      }
+    } catch (err: unknown) {
+      this.logger.warn('KnowledgeSyncService: sourceRef reconcile failed (non-blocking)', {
+        error: (err as Error).message,
+      });
+    }
+
+    return report;
   }
 
   /**
@@ -121,7 +181,7 @@ export class KnowledgeSyncService {
         if (!dryRun) {
           const existed = this._entryExists(db, parsed.id as string);
           const row = this._buildDbRow(parsed, relPath, content);
-          upsertStmt!.run(...Object.values(row));
+          upsertStmt?.run(...Object.values(row));
 
           if (existed) {
             report.updated++;

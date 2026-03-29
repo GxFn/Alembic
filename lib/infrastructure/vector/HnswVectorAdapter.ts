@@ -148,8 +148,13 @@ export class HnswVectorAdapter extends VectorStore {
       await this.#persist();
     }
 
-    // 初始化 WAL (即使是空索引也创建, 以便后续操作写 WAL)
+    // 初始化 WAL + replay 未刷盘操作 (即使是空索引也创建, 以便后续操作写 WAL)
     this.#initWal();
+    const { replayed } = this.#wal?.recover() || { replayed: 0 };
+    if (replayed > 0) {
+      this.#dirty = true;
+      await this.#persist();
+    }
   }
 
   /**
@@ -203,8 +208,19 @@ export class HnswVectorAdapter extends VectorStore {
     // 同步迁移: 读取 JSON 索引并加载到内存
     this.#syncMigrateFromJson();
 
-    // 初始化 WAL
+    // 初始化 WAL + replay 未刷盘操作
     this.#initWal();
+    const { replayed } = this.#wal?.recover() || { replayed: 0 };
+    if (replayed > 0) {
+      this.#dirty = true;
+      BinaryPersistence.save(this.#indexPath, {
+        index: this.#index,
+        quantizer: this.#quantizer,
+        metadata: this.#metadata,
+        contents: this.#contents,
+      });
+      this.#dirty = false;
+    }
   }
 
   /** 同步从 JSON 索引迁移 (用于 initSync 路径) */

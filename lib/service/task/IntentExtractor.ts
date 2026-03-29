@@ -7,6 +7,8 @@
  * @module service/task/IntentExtractor
  */
 
+import { tokenize } from '#service/search/tokenizer.js';
+
 // ── Types ───────────────────────────────────────────
 
 export type SearchScenario = 'lint' | 'generate' | 'search' | 'learning';
@@ -14,6 +16,8 @@ export type SearchScenario = 'lint' | 'generate' | 'search' | 'learning';
 export interface ExtractedIntent {
   /** Multi-query set: Q1 raw + Q2 tech terms + Q3 file context */
   queries: string[];
+  /** Cross-language synonym queries (run in keyword mode to bypass semantic normalization) */
+  keywordQueries: string[];
   /** Inferred language from activeFile or args */
   language: string | null;
   /** Inferred module path from activeFile */
@@ -58,6 +62,80 @@ const LANG_MAP: Record<string, string> = {
   kt: 'kotlin',
 };
 
+// ── Cross-Language Synonym Groups ───────────────────
+// Each group contains EN morphological variants + CN equivalents.
+// Used to expand queries so English terms match Chinese recipe fields (and vice versa).
+
+const SYNONYM_GROUPS: string[][] = [
+  // Design patterns & DI
+  ['inject', 'injection', '注入'],
+  ['construct', 'constructor', '构造器', '构造函数'],
+  ['depend', 'dependency', 'dependencies', '依赖'],
+  ['protocol', '协议'],
+  ['interface', '接口'],
+  ['pattern', '模式'],
+  ['factory', '工厂'],
+  ['singleton', '单例'],
+  ['delegate', '代理', '委托'],
+  ['observe', 'observer', '观察者'],
+  ['subscribe', 'subscription', '订阅'],
+  ['repository', 'repo', '仓库'],
+  // Architecture
+  ['module', '模块'],
+  ['architect', 'architecture', '架构'],
+  ['route', 'router', 'routing', '路由'],
+  ['middleware', '中间件'],
+  ['component', '组件'],
+  ['lifecycle', '生命周期'],
+  ['layer', '分层', '层'],
+  // Language features
+  ['generic', 'generics', '泛型'],
+  ['closure', '闭包'],
+  ['callback', '回调'],
+  ['extend', 'extension', '扩展'],
+  ['inherit', 'inheritance', '继承'],
+  ['abstract', 'abstraction', '抽象'],
+  ['encapsulate', 'encapsulation', '封装'],
+  ['polymorph', 'polymorphism', '多态'],
+  ['implement', 'implementation', '实现'],
+  // Concurrency
+  ['async', 'asynchronous', '异步'],
+  ['sync', 'synchronous', '同步'],
+  ['thread', 'threading', '线程'],
+  ['concur', 'concurrency', '并发'],
+  // Common concepts
+  ['network', '网络'],
+  ['cache', 'caching', '缓存'],
+  ['persist', 'persistence', '持久化'],
+  ['serialize', 'serialization', '序列化'],
+  ['validate', 'validation', '校验', '验证'],
+  ['authenticate', 'authentication', '认证'],
+  ['authorize', 'authorization', '授权'],
+  ['config', 'configuration', '配置'],
+  ['navigate', 'navigation', '导航'],
+  ['animate', 'animation', '动画'],
+  ['layout', '布局'],
+  ['render', 'rendering', '渲染'],
+  ['responsive', '响应式'],
+  ['state', '状态'],
+  ['toast', '提示'],
+  ['error', '错误'],
+  ['handle', 'handler', '处理'],
+  ['service', '服务'],
+  ['test', 'testing', '测试'],
+];
+
+/** Lookup: lowercased term → synonym expansions (excluding the term itself) */
+const SYNONYM_LOOKUP = new Map<string, string[]>();
+for (const group of SYNONYM_GROUPS) {
+  for (const term of group) {
+    SYNONYM_LOOKUP.set(
+      term.toLowerCase(),
+      group.filter((t) => t !== term)
+    );
+  }
+}
+
 // ── Public API ──────────────────────────────────────
 
 /**
@@ -71,12 +149,14 @@ export function extract(
   termOpts?: TechTermOptions
 ): ExtractedIntent {
   const queries = buildQueries(userQuery, activeFile, termOpts);
+  const keywordQueries = buildKeywordQueries(userQuery);
   const inferredLang = language || (activeFile ? inferLanguage(activeFile) : null);
   const module = activeFile ? inferFileContext(activeFile) : null;
   const scenario = classifyScenario(userQuery);
 
   return {
     queries,
+    keywordQueries,
     language: inferredLang,
     module,
     scenario,
@@ -87,13 +167,17 @@ export function extract(
 /**
  * Build multi-query set from user query + active file.
  * Q1: raw query, Q2: extracted tech terms, Q3: file context.
+ * Q1 is enriched with cross-language synonyms to bridge EN↔CJK matching.
  */
 export function buildQueries(
   userQuery: string,
   activeFile?: string,
   termOpts?: TechTermOptions
 ): string[] {
-  const queries: string[] = [userQuery];
+  // Enrich raw query with cross-language synonyms
+  const synonyms = expandWithSynonyms(userQuery);
+  const enrichedQuery = synonyms ? `${userQuery} ${synonyms}` : userQuery;
+  const queries: string[] = [enrichedQuery];
 
   const terms = extractTechTerms(userQuery, termOpts);
   if (terms.length > 0) {
@@ -108,6 +192,15 @@ export function buildQueries(
   }
 
   return queries;
+}
+
+/**
+ * Build keyword-mode queries for cross-language synonym matching.
+ * Uses keyword mode to preserve raw FWS scores without CoarseRanker semantic normalization.
+ */
+export function buildKeywordQueries(userQuery: string): string[] {
+  const expanded = expandWithSynonyms(userQuery);
+  return expanded ? [expanded] : [];
 }
 
 /**
@@ -188,6 +281,41 @@ export function classifyScenario(userQuery: string): SearchScenario {
 }
 
 // ── Internal Helpers ────────────────────────────────
+
+/**
+ * Expand query tokens with cross-language synonyms.
+ * Tokenizes query, looks up each token in the synonym table,
+ * returns a query string of synonym expansions for cross-language matching.
+ *
+ * Strategy: return only cross-script synonyms (EN→CJK or CJK→EN).
+ * This keeps the expansion focused — the original script tokens are already in Q1.
+ */
+function expandWithSynonyms(query: string): string | null {
+  const tokens = tokenize(query);
+  const crossScriptTerms = new Set<string>();
+
+  // Detect query script: does it contain CJK?
+  const hasCJK = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(query);
+
+  for (const token of tokens) {
+    const synonyms = SYNONYM_LOOKUP.get(token.toLowerCase());
+    if (!synonyms) {
+      continue;
+    }
+    for (const syn of synonyms) {
+      const synIsCJK = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(syn);
+      // Cross-script: EN query → add CJK synonyms; CJK query → add EN synonyms
+      if (hasCJK !== synIsCJK) {
+        crossScriptTerms.add(syn);
+      }
+    }
+  }
+
+  if (crossScriptTerms.size === 0) {
+    return null;
+  }
+  return [...crossScriptTerms].slice(0, 12).join(' ');
+}
 
 function buildPrefixPattern(prefixes: string[]): RegExp | null {
   if (prefixes.length === 0) {

@@ -6,16 +6,17 @@
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
-import { BM25Scorer } from './BM25Scorer.js';
 import { CoarseRanker } from './CoarseRanker.js';
 import type { SearchItem } from './contextBoost.js';
 import { contextBoost } from './contextBoost.js';
+import { FieldWeightedScorer } from './FieldWeightedScorer.js';
 import { MultiSignalRanker } from './MultiSignalRanker.js';
 import type {
   BM25DocMeta,
   BM25SearchResult,
   DbRow,
   RankingContext,
+  Scorer,
   SearchAiProvider,
   SearchCrossEncoder,
   SearchDb,
@@ -31,12 +32,14 @@ import type {
 
 // ── Re-exports for backward compatibility ──
 export { BM25Scorer } from './BM25Scorer.js';
+export { FieldWeightedScorer } from './FieldWeightedScorer.js';
 export type {
   BM25DocMeta,
   BM25SearchResult,
   DbRow,
   RankingContext,
   RrfHit,
+  Scorer,
   SearchAiProvider,
   SearchCrossEncoder,
   SearchDb,
@@ -55,14 +58,14 @@ export { tokenize } from './tokenizer.js';
 
 /**
  * SearchEngine - 完整搜索服务
- * 整合 BM25 + 关键词 + 可选 AI 增强
+ * 整合召回评分 + 关键词 + 可选 AI 增强
  */
 export class SearchEngine {
   _cache: Map<string, { data: SearchResponse; time: number }>;
   _cacheMaxAge: number;
   _coarseRanker: CoarseRanker;
   _crossEncoder: SearchCrossEncoder | null;
-  _fusionBm25Weight: number;
+  _fusionRecallWeight: number;
   _fusionSemanticWeight: number;
   _indexed: boolean;
   _lastIndexTime: string | null = null;
@@ -72,7 +75,7 @@ export class SearchEngine {
   db: SearchDb;
   hybridRetriever: SearchHybridRetriever | null;
   logger: ReturnType<typeof Logger.getInstance>;
-  scorer: BM25Scorer;
+  scorer: Scorer;
   vectorService: SearchVectorService | null;
   vectorStore: SearchVectorStore | null;
   constructor(db: SearchDb & { getDb?: () => SearchDb }, options: SearchEngineOptions = {}) {
@@ -82,10 +85,10 @@ export class SearchEngine {
     this.vectorStore = options.vectorStore || null;
     this.vectorService = options.vectorService || null;
     this.hybridRetriever = options.hybridRetriever || null;
-    this.scorer = new BM25Scorer();
+    this.scorer = new FieldWeightedScorer();
     this._coarseRanker = new CoarseRanker(
       options as {
-        bm25Weight?: number;
+        recallWeight?: number;
         semanticWeight?: number;
         qualityWeight?: number;
         freshnessWeight?: number;
@@ -99,8 +102,8 @@ export class SearchEngine {
     this._indexed = false;
     this._cache = new Map();
     this._cacheMaxAge = options.cacheMaxAge || 300_000; // 5min
-    // auto 模式 BM25+semantic 融合权重（可配置）
-    this._fusionBm25Weight = options.fusionBm25Weight ?? 0.6;
+    // auto 模式 召回+semantic 融合权重（可配置）
+    this._fusionRecallWeight = options.fusionRecallWeight ?? 0.6;
     this._fusionSemanticWeight = options.fusionSemanticWeight ?? 0.4;
     this._signalBus = options.signalBus || null;
   }
@@ -284,7 +287,8 @@ export class SearchEngine {
       response.byKind = { rule: [], pattern: [], fact: [] };
       for (const r of results) {
         const kind = r.kind || 'pattern';
-        (response.byKind![kind] || response.byKind!.pattern).push(r);
+        const bucket = response.byKind[kind] ?? response.byKind.pattern;
+        bucket.push(r);
       }
     }
 
@@ -336,8 +340,8 @@ export class SearchEngine {
     }
     return ranked.map((r: SearchResultItem) => ({
       ...r,
-      recallScore: r.bm25Score || 0,
-      score: r.contextScore || r.rankerScore || r.coarseScore || r.bm25Score || 0,
+      recallScore: r.recallScore || 0,
+      score: r.contextScore || r.rankerScore || r.coarseScore || r.recallScore || 0,
     }));
   }
 
@@ -367,7 +371,7 @@ export class SearchEngine {
       return {
         ...item,
         code: codeText || item.code || '',
-        bm25Score: item.score || 0,
+        recallScore: item.score || 0,
         qualityScore: item.qualityScore || (item.status === 'active' ? 70 : 40),
         usageCount: item.usageCount || 0,
         authorityScore: item.authorityScore || 0,
@@ -728,6 +732,50 @@ export class SearchEngine {
     } catch {
       /* DB may not be available */
     }
+
+    // ── 从 recipe_source_refs 桥接表批量读取已验证的 sourceRefs ──
+    try {
+      const ids = items.map((it: SearchResultItem) => it.id);
+      if (ids.length === 0) {
+        return;
+      }
+      const placeholders = ids.map(() => '?').join(',');
+      const refsRows = this.db
+        .prepare(
+          `SELECT recipe_id, source_path, status, new_path
+           FROM recipe_source_refs
+           WHERE recipe_id IN (${placeholders}) AND status != 'stale'`
+        )
+        .all(...ids) as unknown as Array<{
+        recipe_id: string;
+        source_path: string;
+        status: string;
+        new_path: string | null;
+      }>;
+
+      this.logger.debug('recipe_source_refs query', {
+        idCount: ids.length,
+        rowCount: refsRows.length,
+      });
+
+      const refsMap = new Map<string, string[]>();
+      for (const row of refsRows) {
+        const refPath = row.status === 'renamed' && row.new_path ? row.new_path : row.source_path;
+        if (!refsMap.has(row.recipe_id)) {
+          refsMap.set(row.recipe_id, []);
+        }
+        refsMap.get(row.recipe_id)?.push(refPath);
+      }
+
+      for (const item of items) {
+        const refs = refsMap.get(item.id);
+        if (refs && refs.length > 0) {
+          (item as SearchResultItem & { sourceRefs?: string[] }).sourceRefs = refs;
+        }
+      }
+    } catch {
+      /* recipe_source_refs table may not exist */
+    }
   }
 
   /**
@@ -864,10 +912,22 @@ export class SearchEngine {
     } catch {
       /* ignore */
     }
+    // 提取 description 和 contentText 供 FieldWeightedScorer 字段级评分使用
+    let contentText = '';
+    try {
+      const content = JSON.parse(r.content || '{}');
+      contentText = [content.pattern, content.rationale, content.markdown]
+        .filter(Boolean)
+        .join(' ');
+    } catch {
+      /* ignore */
+    }
     return {
       type: 'knowledge',
       title: r.title,
       trigger: r.trigger || '',
+      description: r.description || '',
+      contentText,
       status: r.lifecycle,
       knowledgeType: r.knowledgeType,
       kind: r.kind || 'pattern',

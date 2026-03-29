@@ -50,7 +50,7 @@ interface SearchEngineLike {
 
 // ── Constants ───────────────────────────────────────
 
-const RELEVANCE_THRESHOLD = 0.44;
+const RELEVANCE_THRESHOLD = 0.01;
 
 // ── PrimeSearchPipeline ─────────────────────────────
 
@@ -77,8 +77,12 @@ export class PrimeSearchPipeline {
       sessionHistory: this.#buildSessionHistory(),
     };
 
-    // Multi-query parallel search
-    const allResults = await this.#multiQuerySearch(intent.queries, context);
+    // Multi-query parallel search (auto mode + keyword mode for cross-language)
+    const allResults = await this.#multiQuerySearch(
+      intent.queries,
+      intent.keywordQueries ?? [],
+      context
+    );
 
     // Threshold filter
     const filtered = allResults.filter((r) => (r.score ?? 0) >= RELEVANCE_THRESHOLD);
@@ -118,40 +122,61 @@ export class PrimeSearchPipeline {
   // ── Private ───────────────────────────────────────
 
   /**
-   * Multi-query parallel search + de-dup by ID (keep highest score).
+   * Multi-query parallel search with Reciprocal Rank Fusion (RRF).
+   * Auto-mode queries use CoarseRanker; keyword queries use raw FWS scores.
+   * Results are fused by rank position, not absolute scores — robust across heterogeneous scorers.
    */
   async #multiQuerySearch(
-    queries: string[],
+    autoQueries: string[],
+    keywordQueries: string[],
     context: { language?: string; intent?: string; sessionHistory?: Array<{ content: string }> }
   ): Promise<SlimSearchResult[]> {
-    const promises = queries.map((q) =>
+    // Auto-mode searches (full CoarseRanker pipeline)
+    const autoPromises = autoQueries.map((q) =>
       this.#search
-        .search(q, {
-          mode: 'auto',
-          limit: 8,
-          rank: true,
-          context,
-        })
+        .search(q, { mode: 'auto', limit: 8, rank: true, context })
         .catch(() => ({ items: [] }))
     );
 
-    const responses = await Promise.all(promises);
+    // Keyword-mode searches (raw FWS scores — for cross-language synonym matching)
+    const kwPromises = keywordQueries.map((q) =>
+      this.#search
+        .search(q, { mode: 'keyword', limit: 8, rank: false })
+        .catch(() => ({ items: [] }))
+    );
 
-    // Merge by ID, keep highest score
-    const bestById = new Map<string, SlimSearchResult>();
-    for (const resp of responses) {
-      const items = resp.items || [];
-      for (const raw of items) {
-        const item = slimSearchResult(raw as SearchResultItem);
-        const existing = bestById.get(item.id);
-        if (!existing || item.score > existing.score) {
-          bestById.set(item.id, item);
+    const [autoResponses, kwResponses] = await Promise.all([
+      Promise.all(autoPromises),
+      Promise.all(kwPromises),
+    ]);
+
+    const allResponses = [...autoResponses, ...kwResponses];
+
+    // Reciprocal Rank Fusion: RRF(d) = Σ 1/(k + rank)
+    const RRF_K = 60;
+    const rrfScores = new Map<string, number>();
+    const itemById = new Map<string, SlimSearchResult>();
+
+    for (const resp of allResponses) {
+      const items = (resp.items || []) as SearchResultItem[];
+      for (let rank = 0; rank < items.length; rank++) {
+        const item = slimSearchResult(items[rank]!);
+        rrfScores.set(item.id, (rrfScores.get(item.id) ?? 0) + 1 / (RRF_K + rank));
+        // Keep the richest metadata version
+        if (!itemById.has(item.id)) {
+          itemById.set(item.id, item);
         }
       }
     }
 
-    // Sort by score descending
-    return [...bestById.values()].sort((a, b) => b.score - a.score);
+    // Assign fused scores and sort
+    const results: SlimSearchResult[] = [];
+    for (const [id, rrfScore] of rrfScores) {
+      const item = itemById.get(id)!;
+      item.score = rrfScore;
+      results.push(item);
+    }
+    return results.sort((a, b) => b.score - a.score);
   }
 
   /**

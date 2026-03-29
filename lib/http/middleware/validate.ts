@@ -65,8 +65,8 @@ export function validateQuery<T extends z.ZodType>(schema: T) {
       });
       return;
     }
-    // 替换为 parsed + defaulted + coerced 数据
-    (req as unknown as Record<string, unknown>).query = result.data;
+    // Express 5: req.query is a read-only getter, use defineProperty to override
+    Object.defineProperty(req, 'query', { value: result.data, writable: true, configurable: true });
     next();
   };
 }
@@ -91,7 +91,11 @@ export function validateParams<T extends z.ZodType>(schema: T) {
       });
       return;
     }
-    (req as unknown as Record<string, unknown>).params = result.data;
+    Object.defineProperty(req, 'params', {
+      value: result.data,
+      writable: true,
+      configurable: true,
+    });
     next();
   };
 }
