@@ -58,6 +58,9 @@ function createMockDb(
         if (sql.includes('knowledge_edges') && sql.includes("relation = 'depends_on'")) {
           return [];
         }
+        if (sql.includes('knowledge_entries') && sql.includes('lifecycle')) {
+          return [];
+        }
         if (sql.includes('GROUP BY')) {
           return [];
         }
@@ -200,6 +203,10 @@ describe('PanoramaService', () => {
     expect(detail).not.toBeNull();
     expect(detail!.module.name).toBe('TestMod');
     expect(detail!.layerName).toBeDefined();
+    expect(Array.isArray(detail!.fileGroups)).toBe(true);
+    expect(Array.isArray(detail!.recipes)).toBe(true);
+    expect(typeof detail!.summary).toBe('string');
+    expect(typeof detail!.uncoveredFileCount).toBe('number');
   });
 
   it('should enrich module files when modules exist but have no is_part_of edges', () => {

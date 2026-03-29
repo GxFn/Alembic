@@ -145,8 +145,8 @@ export class RedundancyAnalyzer {
       const rows = this.#db
         .prepare(
           `SELECT id, title,
-                do_clause AS doClause,
-                dont_clause AS dontClause,
+                doClause,
+                dontClause,
                 json_extract(content, '$.pattern') AS guardPattern,
                 json_extract(content, '$.coreCode') AS coreCode
          FROM knowledge_entries

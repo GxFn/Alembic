@@ -1,97 +1,94 @@
 ---
 name: autosnippet-create
-description: Submit knowledge to AutoSnippet. Covers single/batch MCP submission, V3 field requirements, quality validation, and lifecycle. Use when user says "提交知识/加入知识库/create recipe" or agent needs to persist code patterns, rules, or facts.
+description: Submit knowledge to AutoSnippet. Covers single/batch MCP submission, V3 field requirements, quality validation, and lifecycle. Use when user says "submit knowledge / add to KB / create recipe" or agent needs to persist code patterns, rules, or facts.
 ---
 
-# AutoSnippet Create — 知识提交
+# AutoSnippet Create — Knowledge Submission
 
-> 前置：MCP 工具返回统一 JSON Envelope `{ success, errorCode?, message?, data?, meta }`。操作前调用 `autosnippet_health` 确认服务可用。
+> Prerequisite: MCP tools return a unified JSON Envelope `{ success, errorCode?, message?, data?, meta }`. Call `autosnippet_health` before operations to confirm service availability.
 
-本 Skill 指导 Agent 将代码模式、规则、事实提交到 AutoSnippet 知识库。提交后的条目进入 **Candidates**（pending 状态），用户在 Dashboard 审核后发布。
+This Skill guides the Agent to submit code patterns, rules, and facts to the AutoSnippet knowledge base. Submitted entries enter **Candidates** (pending status); users review and publish them via the Dashboard.
 
-关联 Skill：**autosnippet-recipes**（检索已有知识）。
+Related Skill: **autosnippet-recipes** (search existing knowledge).
 
 ---
 
-## 提交路径
+## Submission Paths
 
-| 路径 | 工具 | 适用场景 |
+| Path | Tool | Use Case |
 |------|------|----------|
-| **单条提交** | `autosnippet_submit_knowledge` | Agent 精心构造一条完整知识 |
-| **批量提交** | `autosnippet_submit_knowledge_batch` | 冷启动维度分析、批量扫描 |
-| **Dashboard** | 浏览器 `http://localhost:3000` | 用户手动粘贴/扫描文件 |
+| **Single** | `autosnippet_submit_knowledge` | Agent carefully constructs one complete entry |
+| **Batch** | `autosnippet_submit_knowledge` (items array) | Cold-start dimension analysis, batch scans |
+| **Dashboard** | Browser `http://localhost:3000` | User manual paste/file scan |
 
-**Agent 首选 MCP 提交**，无需浏览器。
+**Agent prefers MCP submission** — no browser needed.
 
 ---
 
-## 单条提交 — autosnippet_submit_knowledge
+## Single Submission — autosnippet_submit_knowledge
 
-一次提交一条完整的 V3 知识条目。即使部分字段校验未通过也会入库，返回中附带 `recipeReadyHints` 提示缺失字段。
+Submit one complete V3 knowledge entry at a time. Even if some fields fail validation, the entry is still stored; the response includes `recipeReadyHints` indicating missing fields.
 
-### V3 必填字段（16 个）
+### V3 Required Fields (16)
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `title` | string | 知识标题，简洁明确 |
-| `description` | string | 一句话描述用途 |
-| `trigger` | string | 触发关键词，如 `@NetworkMonitor` |
-| `language` | string | 编程语言，如 `typescript`、`swift` |
-| `kind` | enum | `rule`（规范）/ `pattern`（模式）/ `fact`（事实） |
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | string | Knowledge title, concise and clear |
+| `description` | string | One-line purpose description |
+| `trigger` | string | Trigger keyword, e.g. `@NetworkMonitor` |
+| `language` | string | Programming language, e.g. `typescript`, `swift` |
+| `kind` | enum | `rule` (constraint) / `pattern` (reusable) / `fact` (project fact) |
 | `category` | string | `View`/`Service`/`Tool`/`Model`/`Network`/`Storage`/`UI`/`Utility` |
-| `knowledgeType` | string | 知识类型标识 |
-| `doClause` | string | ✅ 应该做什么（Channel A+B 硬依赖） |
-| `dontClause` | string | ❌ 不应该做什么 |
-| `whenClause` | string | 何时适用（Channel B 硬依赖） |
-| `coreCode` | string | 核心代码片段 |
-| `headers` | string[] | 完整 import 语句列表 |
-| `usageGuide` | string | 使用指南（Markdown，见下方格式要求） |
-| `content` | object | `{ markdown: string, rationale: string }` 至少提供 markdown |
+| `knowledgeType` | string | Knowledge type identifier |
+| `doClause` | string | ✅ What to do (Channel A+B hard dependency) |
+| `dontClause` | string | ❌ What not to do |
+| `whenClause` | string | When to apply (Channel B hard dependency) |
+| `coreCode` | string | Core code snippet |
+| `headers` | string[] | Complete import statement list |
+| `usageGuide` | string | Usage guide (Markdown, see format below) |
+| `content` | object | `{ markdown: string, rationale: string }` — at minimum provide markdown |
 | `reasoning` | object | `{ whyStandard: string, sources: string[], confidence: number }` |
 
-### 可选字段
+### Optional Fields
 
-`topicHint`、`complexity`（beginner/intermediate/advanced）、`scope`（universal/project-specific/target-specific）、`tags`（string[]）、`constraints`、`relations`、`skipDuplicateCheck`（默认 false）
+`topicHint`, `complexity` (beginner/intermediate/advanced), `scope` (universal/project-specific/target-specific), `tags` (string[]), `constraints`, `relations`, `skipDuplicateCheck` (default false)
 
-### usageGuide 格式要求
+### usageGuide Format Requirements
 
-**必须**使用 Markdown 分节，禁止写成一行长文本。
+**Must** use Markdown sections. Never write as a single long line.
 
 ```markdown
-### 何时用
-- 场景 A
-- 场景 B
+### When to Use
+- Scenario A
+- Scenario B
 
-### 何时不用
-- 排除场景
+### When Not to Use
+- Exclusion scenario
 
-### 使用步骤
-1. 第一步
-2. 第二步
+### Steps
+1. First step
+2. Second step
 
-### 关键点
-- 注意事项 A
-- 注意事项 B
+### Key Points
+- Note A
+- Note B
 ```
 
-可选章节：依赖与前置条件、错误处理、性能与资源、安全与合规、常见误用、替代方案、相关知识。
+Optional sections: Dependencies & Prerequisites, Error Handling, Performance & Resources, Security & Compliance, Common Misuse, Alternatives, Related Knowledge.
 
 ---
 
-## 批量提交 — autosnippet_submit_knowledge_batch
+## Batch Submission — autosnippet_submit_knowledge (items array)
 
-一次提交多条知识。每条单独校验，不通过的拒绝但不阻塞其他。
+Submit multiple entries at once. Each is validated independently; failures are rejected without blocking others.
 
-### 参数
+### Parameters
 
-| 字段 | 必填 | 类型 | 说明 |
-|------|------|------|------|
-| `target_name` | ✅ | string | 批量来源标识（如 `network-module-scan`） |
-| `items` | ✅ | object[] | 知识条目数组，每条结构同单条提交的字段 |
-| `source` | | string | 来源标记，默认 `cursor-scan` |
-| `deduplicate` | | boolean | 基于 title 去重，默认 `true` |
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `items` | ✅ | object[] | Array of knowledge entries, each following the same field structure as single submission |
 
-### 返回值
+### Response
 
 ```json
 {
@@ -104,75 +101,87 @@ description: Submit knowledge to AutoSnippet. Covers single/batch MCP submission
 }
 ```
 
-**批量提交校验更严格**：单条提交校验不通过仍入库（附 hints），**批量提交校验不通过直接拒绝**。
+**Batch validation is stricter**: single submission stores entries even with validation warnings (with hints), **batch submission rejects entries that fail validation**.
 
 ---
 
-## 提交工作流
+## Submission Workflow
 
-### 标准流程（Agent 通过 MCP）
+### Standard Flow (Agent via MCP)
 
 ```
-1. 分析代码 → 构造 V3 字段
-2. autosnippet_submit_knowledge / _batch → 入库为 pending
-3. 检查返回值：
-   - 成功 → 告知用户"已提交，请在 Dashboard Candidates 审核"
-   - 有 rejectedItems → 根据 rejectedSummary.commonMissingFields 补全后重试
-4. [可选] autosnippet_enrich_candidates → 诊断候选字段完整性
+1. Analyze code → construct V3 fields
+2. autosnippet_submit_knowledge → stored as pending
+3. Check response:
+   - Success → inform user "Submitted. Review in Dashboard Candidates."
+   - Has rejectedItems → fill in missing fields per rejectedSummary.commonMissingFields, retry
+4. [Optional] autosnippet_enrich_candidates → diagnose candidate field completeness
 ```
 
-### 一条知识一个场景
+### One Entry Per Scenario
 
-拆分原则：不同使用场景、不同 API 入口、不同配置方式→各自一条知识。禁止将多个模式合并为一条。
+Splitting principle: different use cases, different API endpoints, different configurations → separate entries each. Never merge multiple patterns into one.
+
+### Batch Anti-Redundancy Rules (⚠️ MANDATORY)
+
+**Items in the array must NOT be cross-redundant**:
+- No highly overlapping doClause / coreCode / trigger entries within the same batch
+- If two entries share 80%+ content, **merge into one** or split into **primary + extends supplementary** entries
+- Primary entry contains complete core content; supplementary entry contains only the differences, referencing the primary trigger in `_relations.extends`
+- The system only detects fusion between "candidates vs existing DB entries" — **it does NOT check intra-batch redundancy** — Agent must self-enforce
+
+**Example**: Two routing knowledge entries (registration flow + dispatch supplement) should be structured as:
+1. Primary: Complete route registration pattern (register + open + doc sync)
+2. Supplementary: Only deepLink/Modal/Tab stack differences, `_relations.extends → primary trigger`
 
 ---
 
-## 提交后管理
+## Post-Submission Management
 
-| 需求 | 工具 |
+| Need | Tool |
 |------|------|
-| 查看候选状态 | `autosnippet_knowledge(operation=list)` |
-| 诊断缺失字段 | `autosnippet_enrich_candidates` |
-| 审核/发布 | `autosnippet_knowledge_lifecycle(operation=approve/publish/fast_track)` |
-| 搜索已有知识避免重复 | `autosnippet_search(mode=context, query=...)` |
+| Check candidate status | `autosnippet_knowledge(operation=list)` |
+| Diagnose missing fields | `autosnippet_enrich_candidates` |
+| Review/publish | `autosnippet_knowledge_lifecycle(operation=approve/publish/fast_track)` |
+| Search existing knowledge to avoid duplicates | `autosnippet_search(mode=context, query=...)` |
 
 ---
 
-## kind 路由与管线影响
+## Kind Routing & Pipeline Impact
 
-| kind | 用途 | 管线产出 |
-|------|------|----------|
-| `rule` | 编码规范、约束 | → Channel A（.mdc 规则文件） |
-| `pattern` | 代码模式、用法 | → Channel B（.mdc 模式文件 + Snippet） |
-| `fact` | 项目事实、架构决策 | → 搜索/Guard 上下文，不直接产出文件 |
+| kind | Purpose | Pipeline Output |
+|------|---------|-----------------|
+| `rule` | Coding conventions, constraints | → Channel A (.mdc rule files) |
+| `pattern` | Code patterns, usage | → Channel B (.mdc pattern files + Snippet) |
+| `fact` | Project facts, architecture decisions | → Search/Guard context, no direct file output |
 
-`doClause` 是 Channel A+B 的**硬依赖**——缺少此字段则完全无法生成 .mdc 文件。
+`doClause` is a **hard dependency** for Channel A+B — missing this field means .mdc files cannot be generated at all.
 
 ---
 
-## 示例：提交一条知识
+## Example: Submit One Entry
 
 ```json
 {
-  "title": "Network Monitor — 网络状态监听",
-  "description": "使用 NWPathMonitor 监听网络连通性变化",
+  "title": "Network Monitor — Connectivity Listener",
+  "description": "Monitor network connectivity changes using NWPathMonitor",
   "trigger": "@NetworkMonitor",
   "language": "swift",
   "kind": "pattern",
   "category": "Network",
   "knowledgeType": "api-usage",
-  "doClause": "使用 NWPathMonitor 监听网络状态变化，在主队列回调更新 UI",
-  "dontClause": "不要用 Reachability 旧库，不要在后台线程直接更新 UI",
-  "whenClause": "需要实时感知网络连通性变化时",
+  "doClause": "Use NWPathMonitor to observe network status changes; dispatch UI updates to the main queue",
+  "dontClause": "Do not use the deprecated Reachability library; do not update UI directly on background threads",
+  "whenClause": "When the app needs real-time network connectivity awareness",
   "coreCode": "let monitor = NWPathMonitor()\nmonitor.pathUpdateHandler = { path in\n  DispatchQueue.main.async {\n    self.isConnected = path.status == .satisfied\n  }\n}\nmonitor.start(queue: DispatchQueue.global())",
   "headers": ["import Network"],
-  "usageGuide": "### 何时用\n- App 需要实时网络状态\n- 启动时初始化一次\n\n### 关键点\n- 单例模式访问 sharedMonitor\n- start() 开始监听，cancel() 停止\n- 回调在 global queue，更新 UI 需切主线程",
+  "usageGuide": "### When to Use\n- App needs real-time network status\n- Initialize once at launch\n\n### Key Points\n- Access via singleton sharedMonitor\n- start() begins monitoring, cancel() stops\n- Callback runs on global queue; switch to main thread for UI updates",
   "content": {
-    "markdown": "NWPathMonitor 是 iOS 12+ 推荐的网络状态监听方案，替代废弃的 Reachability。",
-    "rationale": "Apple 官方推荐，线程安全，支持蜂窝/WiFi/有线判断。"
+    "markdown": "NWPathMonitor is the recommended network status monitoring API for iOS 12+, replacing deprecated Reachability.",
+    "rationale": "Apple-recommended, thread-safe, supports cellular/WiFi/wired detection."
   },
   "reasoning": {
-    "whyStandard": "Apple Developer Documentation 推荐方案，替代 SCNetworkReachability",
+    "whyStandard": "Apple Developer Documentation recommended approach, replacing SCNetworkReachability",
     "sources": ["Apple Developer Documentation - NWPathMonitor"],
     "confidence": 0.95
   }

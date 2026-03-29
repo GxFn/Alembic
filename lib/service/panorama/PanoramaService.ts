@@ -65,6 +65,14 @@ export interface PanoramaModuleDetail {
   module: PanoramaModule;
   layerName: string;
   neighbors: Array<{ name: string; direction: 'in' | 'out'; weight: number }>;
+  /** File groups by subdirectory within the module */
+  fileGroups: Array<{ group: string; files: string[]; count: number }>;
+  /** Recipes matched to this module (by category/trigger/file path) */
+  recipes: Array<{ id: string; title: string; trigger: string; kind: string }>;
+  /** Files not covered by any matched recipe */
+  uncoveredFileCount: number;
+  /** Auto-generated structural summary for the agent */
+  summary: string;
 }
 
 export interface PanoramaHealth {
@@ -174,7 +182,7 @@ export class PanoramaService {
   }
 
   /**
-   * 获取单模块详情
+   * 获取单模块详情 (enriched with file groups, recipes, and summary)
    */
   getModule(moduleName: string): PanoramaModuleDetail | null {
     const result = this.#getOrCompute();
@@ -183,11 +191,20 @@ export class PanoramaService {
       return null;
     }
 
-    // 找到该模块所在层级
-    const layerName =
-      result.layers.levels.find((l) => l.modules.includes(moduleName))?.name ?? 'Unknown';
+    // Layer name: derive from module's own refinedRole (more accurate than level vote)
+    const layerName = PanoramaService.#roleToLayer(mod.refinedRole || mod.inferredRole);
 
-    // 从 DB 查邻居边
+    // File groups: group by immediate subdirectory within the module
+    const fileGroups = PanoramaService.#groupFilesBySubdir(mod.files);
+
+    // Matched recipes from DB
+    const recipes = this.#findModuleRecipes(moduleName, mod);
+
+    // Uncovered file count estimate
+    const coveredFileCount = Math.min(recipes.length * 2, mod.fileCount); // rough heuristic
+    const uncoveredFileCount = Math.max(0, mod.fileCount - coveredFileCount);
+
+    // Neighbors from DB edges
     const neighbors: Array<{ name: string; direction: 'in' | 'out'; weight: number }> = [];
 
     const outNeighbors = this.#db
@@ -220,7 +237,189 @@ export class PanoramaService {
       });
     }
 
-    return { module: mod, layerName, neighbors };
+    // Generate summary
+    const summary = PanoramaService.#generateModuleSummary(
+      mod,
+      layerName,
+      fileGroups,
+      recipes,
+      neighbors
+    );
+
+    return { module: mod, layerName, neighbors, fileGroups, recipes, uncoveredFileCount, summary };
+  }
+
+  /* ─── Module detail helpers ─────────────────────── */
+
+  /** Role → layer name mapping (consistent with PanoramaAggregator) */
+  static #roleToLayer(role: string): string {
+    const map: Record<string, string> = {
+      core: 'Foundation',
+      foundation: 'Foundation',
+      model: 'Model',
+      service: 'Service',
+      networking: 'Infrastructure',
+      storage: 'Infrastructure',
+      ui: 'UI',
+      feature: 'Feature',
+      config: 'Configuration',
+      test: 'Test',
+      app: 'Application',
+    };
+    return map[role] ?? 'Feature';
+  }
+
+  /** Group file paths by their immediate subdirectory within the module */
+  static #groupFilesBySubdir(
+    files: string[]
+  ): Array<{ group: string; files: string[]; count: number }> {
+    if (files.length === 0) {
+      return [];
+    }
+
+    // Find common prefix to determine module root
+    const prefix = PanoramaService.#commonPathPrefix(files);
+
+    const groups = new Map<string, string[]>();
+    for (const f of files) {
+      const relative = f.slice(prefix.length);
+      const firstSlash = relative.indexOf('/');
+      const group = firstSlash > 0 ? relative.slice(0, firstSlash) : '(root)';
+      if (!groups.has(group)) {
+        groups.set(group, []);
+      }
+      groups.get(group)!.push(f);
+    }
+
+    return [...groups.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([group, groupFiles]) => ({ group, files: groupFiles, count: groupFiles.length }));
+  }
+
+  static #commonPathPrefix(paths: string[]): string {
+    if (paths.length === 0) {
+      return '';
+    }
+    let prefix = paths[0];
+    for (const p of paths) {
+      while (!p.startsWith(prefix)) {
+        const lastSlash = prefix.lastIndexOf('/');
+        if (lastSlash < 0) {
+          return '';
+        }
+        prefix = prefix.slice(0, lastSlash + 1);
+      }
+    }
+    return prefix;
+  }
+
+  /** Find recipes related to this module by category, trigger, or title match */
+  #findModuleRecipes(
+    moduleName: string,
+    mod: PanoramaModule
+  ): Array<{ id: string; title: string; trigger: string; kind: string }> {
+    try {
+      // Map refined role to typical recipe categories
+      const roleCategories: Record<string, string[]> = {
+        networking: ['Network', 'API', 'Http'],
+        storage: ['Storage', 'Database', 'Cache'],
+        ui: ['UI', 'View', 'Component'],
+        service: ['Service', 'Manager'],
+        model: ['Model', 'Entity'],
+        core: ['Core', 'Foundation', 'Utility'],
+        foundation: ['Core', 'Foundation', 'Utility'],
+        feature: ['Feature'],
+      };
+
+      const categories = roleCategories[mod.refinedRole] ?? [];
+
+      // Build a LIKE query that matches module name or related categories
+      const conditions: string[] = [];
+      const params: string[] = [];
+
+      // Match by module name in title or trigger
+      conditions.push('(title LIKE ? OR trigger LIKE ?)');
+      params.push(`%${moduleName}%`, `%${moduleName}%`);
+
+      // Match by category
+      for (const cat of categories) {
+        conditions.push('category = ?');
+        params.push(cat);
+      }
+
+      const whereClause = conditions.join(' OR ');
+
+      const rows = this.#db
+        .prepare(
+          `SELECT id, title, trigger, kind FROM knowledge_entries
+           WHERE lifecycle IN ('active', 'staging', 'pending')
+             AND (${whereClause})
+           ORDER BY lifecycle ASC
+           LIMIT 20`
+        )
+        .all(...params) as Array<Record<string, unknown>>;
+
+      return rows.map((r) => ({
+        id: String(r.id ?? ''),
+        title: String(r.title ?? ''),
+        trigger: String(r.trigger ?? ''),
+        kind: String(r.kind ?? ''),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Generate a structural summary for the agent */
+  static #generateModuleSummary(
+    mod: PanoramaModule,
+    layerName: string,
+    fileGroups: Array<{ group: string; count: number }>,
+    recipes: Array<{ title: string }>,
+    neighbors: Array<{ name: string; direction: 'in' | 'out' }>
+  ): string {
+    const lines: string[] = [];
+
+    // Identity
+    lines.push(
+      `${mod.name} is a ${layerName} layer module (role: ${mod.refinedRole}, confidence: ${(mod.roleConfidence * 100).toFixed(0)}%).`
+    );
+
+    // Structure
+    const groupDesc = fileGroups.map((g) => `${g.group}(${g.count})`).join(', ');
+    lines.push(`Contains ${mod.fileCount} files in ${fileGroups.length} groups: ${groupDesc}.`);
+
+    // Dependencies
+    const dependsOn = neighbors.filter((n) => n.direction === 'out').map((n) => n.name);
+    const usedBy = neighbors.filter((n) => n.direction === 'in').map((n) => n.name);
+    if (dependsOn.length > 0) {
+      lines.push(`Depends on: ${dependsOn.join(', ')}.`);
+    }
+    if (usedBy.length > 0) {
+      lines.push(`Used by: ${usedBy.join(', ')}.`);
+    }
+    if (dependsOn.length === 0 && usedBy.length === 0) {
+      lines.push('No dependency edges recorded (consider running a full bootstrap scan).');
+    }
+
+    // Knowledge coverage
+    lines.push(
+      `Knowledge coverage: ${recipes.length} recipes matched, ${(mod.coverageRatio * 100).toFixed(0)}% estimated coverage.`
+    );
+    if (recipes.length > 0) {
+      const recipeList = recipes
+        .slice(0, 5)
+        .map((r) => r.title)
+        .join('; ');
+      lines.push(`Key recipes: ${recipeList}.`);
+    }
+    if (mod.coverageRatio < 0.5) {
+      lines.push(
+        'Coverage is below 50% — consider submitting knowledge for uncovered file groups.'
+      );
+    }
+
+    return lines.join(' ');
   }
 
   /**

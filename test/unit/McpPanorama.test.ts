@@ -61,6 +61,11 @@ function makeMockPanoramaService() {
           },
           layerName: 'Foundation',
           neighbors: [{ name: 'UIKit', direction: 'in' as const, weight: 3 }],
+          fileGroups: [{ group: '(root)', files: ['a.ts', 'b.ts'], count: 2 }],
+          recipes: [{ id: 'r1', title: 'Core Pattern', trigger: '@core', kind: 'pattern' }],
+          uncoveredFileCount: 0,
+          summary:
+            'Core is a Foundation layer module (role: core, confidence: 95%). Contains 2 files in 1 groups: (root)(2). Used by: UIKit. Knowledge coverage: 1 recipes matched, 50% estimated coverage.',
         };
       }
       return null;
@@ -148,7 +153,7 @@ describe('autosnippet_panorama', () => {
   });
 
   describe('module', () => {
-    it('returns module detail with neighbors', async () => {
+    it('returns module detail with neighbors and enriched data', async () => {
       const result = (await panoramaHandler(makeCtx(true), {
         operation: 'module',
         module: 'Core',
@@ -158,6 +163,10 @@ describe('autosnippet_panorama', () => {
       expect((data.module as Record<string, unknown>).name).toBe('Core');
       expect(data.layerName).toBe('Foundation');
       expect(Array.isArray(data.neighbors)).toBe(true);
+      expect(Array.isArray(data.fileGroups)).toBe(true);
+      expect(Array.isArray(data.recipes)).toBe(true);
+      expect(typeof data.summary).toBe('string');
+      expect(typeof data.uncoveredFileCount).toBe('number');
     });
 
     it('fails when module param is missing', async () => {
@@ -215,7 +224,7 @@ describe('autosnippet_panorama', () => {
         unknown
       >;
       expect(result.success).toBe(false);
-      expect(result.message).toContain('全景服务');
+      expect(result.message).toContain('not initialized');
     });
 
     it('throws on unknown operation', async () => {

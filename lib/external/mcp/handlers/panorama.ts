@@ -1,17 +1,17 @@
 /**
  * MCP Handler — autosnippet_panorama
  *
- * 项目全景查询工具，提供 8 个 operation：
- *   overview — 项目骨架 + 层级 + 模块角色
- *   module   — 单模块详情 + 邻居关系
- *   gaps     — 知识空白区 (有代码无 Recipe)
- *   health   — 全景健康度 (覆盖率 + 耦合度 + 循环)
- *   governance_cycle       — 新陈代谢完整周期 (矛盾+冗余+衰退)
- *   decay_report           — 衰退评估报告
- *   staging_check          — staging 条目检查 + 自动发布
- *   enhancement_suggestions — 基于使用数据的增强建议
+ * Project panorama query tool with 8 operations:
+ *   overview — project skeleton + layers + module roles
+ *   module   — single module detail + neighbors + recipes + file groups
+ *   gaps     — knowledge gaps (code without Recipes)
+ *   health   — panorama health (coverage + coupling + cycles)
+ *   governance_cycle       — full metabolism cycle (contradiction + redundancy + decay)
+ *   decay_report           — decay assessment report
+ *   staging_check          — staging entry check + auto-publish
+ *   enhancement_suggestions — usage-data-based enhancement suggestions
  *
- * 全部为只读操作（governance_cycle 和 staging_check 除外，会执行状态转换）。
+ * All read-only except governance_cycle and staging_check (which perform state transitions).
  */
 
 import { envelope } from '../envelope.js';
@@ -23,7 +23,7 @@ interface PanoramaArgs {
 }
 
 /**
- * autosnippet_panorama — 统合全景查询
+ * autosnippet_panorama — unified panorama query
  */
 export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
   const op = args.operation || 'overview';
@@ -41,12 +41,12 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
   if (!panoramaService) {
     return envelope({
       success: false,
-      message: '全景服务未初始化',
+      message: 'Panorama service not initialized',
       meta: { tool: 'autosnippet_panorama' },
     });
   }
 
-  // 自动确保数据就绪（无数据时触发内置扫描）
+  // Auto-ensure data is ready (triggers built-in scan when no data exists)
   await panoramaService.ensureData();
 
   switch (op) {
@@ -64,7 +64,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
       if (!moduleName) {
         return envelope({
           success: false,
-          message: 'operation=module 需要提供 module 参数（模块名称）',
+          message: 'operation=module requires the "module" parameter (module name)',
           meta: { tool: 'autosnippet_panorama' },
         });
       }
@@ -72,7 +72,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
       if (!detail) {
         return envelope({
           success: false,
-          message: `未找到模块: ${moduleName}`,
+          message: `Module not found: ${moduleName}`,
           meta: { tool: 'autosnippet_panorama' },
         });
       }
@@ -102,7 +102,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
     }
 
     default:
-      // ── Governance operations (不依赖 panoramaService) ──
+      // ── Governance operations (independent of panoramaService) ──
       return handleGovernanceOps(ctx, op);
   }
 }
@@ -119,7 +119,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
       if (!metabolism) {
         return envelope({
           success: false,
-          message: '治理服务未初始化（knowledgeMetabolism 未注册）',
+          message: 'Governance service not initialized (knowledgeMetabolism not registered)',
           meta: { tool: 'autosnippet_panorama' },
         });
       }
@@ -140,7 +140,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
       if (!decayDetector) {
         return envelope({
           success: false,
-          message: '衰退检测器未初始化（decayDetector 未注册）',
+          message: 'Decay detector not initialized (decayDetector not registered)',
           meta: { tool: 'autosnippet_panorama' },
         });
       }
@@ -161,7 +161,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
       if (!stagingManager) {
         return envelope({
           success: false,
-          message: 'staging 管理器未初始化（stagingManager 未注册）',
+          message: 'Staging manager not initialized (stagingManager not registered)',
           meta: { tool: 'autosnippet_panorama' },
         });
       }
@@ -183,7 +183,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
       if (!suggester) {
         return envelope({
           success: false,
-          message: '增强建议器未初始化（enhancementSuggester 未注册）',
+          message: 'Enhancement suggester not initialized (enhancementSuggester not registered)',
           meta: { tool: 'autosnippet_panorama' },
         });
       }

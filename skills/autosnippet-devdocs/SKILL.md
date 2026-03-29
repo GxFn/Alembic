@@ -1,92 +1,87 @@
 ---
 name: autosnippet-devdocs
-description: Teaches the agent how to save development documents (architecture decisions, debug reports, design docs, research notes) to the AutoSnippet knowledge base using autosnippet_submit_knowledge with knowledgeType 'dev-document'. Use when the agent finishes analysis, debugging, design, or research and wants to persist the findings.
+description: Generate and publish project Wiki documentation using autosnippet_wiki MCP tool (plan → write → finalize). Use when user says "generate wiki/docs", "write documentation", or agent needs to produce structured project documentation from the knowledge base.
 ---
 
-# AutoSnippet — Save Development Documents
+# AutoSnippet — Wiki Documentation Generation
 
-This skill tells the agent how to **save development documents** (architecture decisions, debug reports, design docs, research notes) to the AutoSnippet knowledge base, so they can be retrieved by future sessions.
+This skill guides the agent through generating structured **Wiki documentation** from the AutoSnippet knowledge base using the `autosnippet_wiki` MCP tool.
 
 ## When to use this skill
 
-- After finishing a **debug/troubleshooting session** — save the root cause analysis
-- After making an **architecture or design decision** — save the ADR (Architecture Decision Record)
-- After completing a **research or investigation** — save findings and conclusions
-- After a **performance analysis** — save the benchmark results and optimization notes
-- When the user says "保存这个分析" / "记录一下" / "save this to KB"
+- User asks to **generate project documentation** or **wiki**
+- After a **cold-start bootstrap** completes — produce docs from newly captured knowledge
+- When the user says "generate docs" / "write wiki" / "create documentation"
+- After significant **knowledge base changes** — refresh documentation
 
-## MCP Tool
+## MCP Tools
 
-| Tool | Description |
-|------|-------------|
-| `autosnippet_submit_knowledge` | Unified knowledge submission. For documents, set item `knowledgeType: 'dev-document'` — only needs `title` + `markdown`. Auto-published, no review needed. |
-| `autosnippet_search` | Search saved documents by keyword or semantic query. |
+| Tool | Operation | Description |
+|------|-----------|-------------|
+| `autosnippet_wiki` | `plan` | Plan topics + data packages (returns topic list + per-topic data for writing) |
+| `autosnippet_wiki` | `finalize` | Complete generation (write meta.json, dedup check, validate completeness) |
+| `autosnippet_search` | — | Search knowledge for additional context during writing |
+| `autosnippet_knowledge` | `get` | Retrieve full Recipe content for reference |
 
-## How to save a document
+## Workflow
 
-Call `autosnippet_submit_knowledge` with an `items` array containing one document entry:
+### Step 1: Plan topics
 
 ```json
 {
-  "items": [{
-    "title": "BiliDemo 冷启动性能分析",
-    "markdown": "## 问题背景\n\n冷启动耗时 8s...\n\n## 根因分析\n\n...\n\n## 解决方案\n\n...",
-    "knowledgeType": "dev-document",
-    "description": "冷启动耗时 8s 的根因分析和优化方案",
-    "tags": ["debug-report", "performance"],
-    "scope": "project-specific"
-  }]
+  "operation": "plan",
+  "language": "en"
 }
 ```
 
-### Required fields
+Returns:
+- **topics[]** — Recommended documentation topics based on knowledge base content
+- **dataPackages** — Per-topic data bundles (related Recipes, code patterns, architecture info)
+- **sessionId** — Session identifier for the finalize step
 
-| Field | Description |
-|-------|-------------|
-| `title` | Document title (Chinese or English) |
-| `markdown` | Full Markdown content |
+### Step 2: Write articles
 
-### Optional fields
+For each topic in the plan:
+1. Read the **dataPackage** for that topic
+2. Write a well-structured Markdown article to the wiki directory (`AutoSnippet/wiki/`)
+3. Use Recipe content as source of truth — cite Recipe titles
+4. Follow the structure: Overview → Details → Code Examples → Related Topics
 
-| Field | Default | Description |
-|-------|---------|-------------|
-| `description` | `""` | One-line summary |
-| `tags` | `[]` | Labels for filtering: `adr`, `debug-report`, `design-doc`, `research`, `performance`, `refactoring` |
-| `scope` | `project-specific` | `universal` or `project-specific` |
+### Step 3: Finalize
 
-## Recommended tags
+```json
+{
+  "operation": "finalize",
+  "sessionId": "<from plan>",
+  "articlesWritten": ["AutoSnippet/wiki/topic-1.md", "AutoSnippet/wiki/topic-2.md"]
+}
+```
 
-| Tag | Use case |
-|-----|----------|
-| `adr` | Architecture Decision Record |
-| `debug-report` | Bug investigation / root cause analysis |
-| `design-doc` | Module/feature design document |
-| `research` | Technology research or investigation |
-| `performance` | Benchmark results, profiling analysis |
-| `refactoring` | Refactoring plan or post-mortem |
-| `migration` | Migration guide or plan |
-| `meeting-notes` | Technical meeting summary |
+This triggers:
+- **meta.json** generation — topic index with cross-references
+- **Dedup check** — detect overlapping articles
+- **Completeness validation** — ensure all planned topics are covered
 
-## How documents are delivered to Cursor
-
-Documents are stored as `knowledgeType: 'dev-document'` in the knowledge DB. They follow a dedicated delivery path:
-
-1. **NOT compressed** into Cursor Rules (Channel A/B skip dev-documents)
-2. **Full text** written to `.cursor/skills/autosnippet-devdocs/references/*.md` (Channel D)
-3. **Searchable** via `autosnippet_search("your query")` — full-text search hits documents
-
-## Document format tips
+## Writing guidelines
 
 - Use **clear headings** (`##`, `###`) — helps search and scanning
-- Include a **summary section** at the top
+- Include a **summary section** at the top of each article
 - Reference **file paths** and **class names** concretely — improves search relevance
-- For ADRs, use the structure: Context → Decision → Consequences
-- For debug reports: Symptom → Investigation → Root Cause → Fix
+- Cite **Recipe triggers** (e.g., `@bilidili-feature-url-routing`) as knowledge sources
+- For architecture docs: Context → Design → Implementation → Trade-offs
+- For pattern docs: When to Use → How to Use → Code Example → Anti-patterns
+
+## Language parameter
+
+| Value | Effect |
+|-------|--------|
+| `"en"` | English documentation (default) |
+| `"zh"` | Chinese documentation |
 
 ## Related Skills
 
 | Skill | When to use |
 |-------|-------------|
-| `autosnippet-create` | Saving **code patterns/recipes** (needs trigger, doClause, etc.) |
-| `autosnippet-devdocs` (this) | Saving **prose documents** (only needs title + markdown) |
-| `autosnippet-recipes` | Looking up existing knowledge |
+| `autosnippet-create` | Submitting **code patterns/recipes** to KB (not documents) |
+| `autosnippet-devdocs` (this) | Generating **Wiki documentation** from KB |
+| `autosnippet-recipes` | Looking up existing knowledge for reference |

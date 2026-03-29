@@ -78,6 +78,10 @@ const mockModuleDetail = {
   module: { name: 'Utils', fileCount: 10 },
   layerName: 'Foundation',
   neighbors: [],
+  fileGroups: [{ group: '(root)', files: [], count: 10 }],
+  recipes: [],
+  uncoveredFileCount: 10,
+  summary: 'Utils is a Foundation layer module.',
 };
 
 const mockReport = {

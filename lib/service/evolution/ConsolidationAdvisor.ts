@@ -419,10 +419,10 @@ export class ConsolidationAdvisor {
         rows = this.#db
           .prepare(
             `SELECT id, title,
-                    do_clause AS doClause,
-                    dont_clause AS dontClause,
+                    doClause,
+                    dontClause,
                     json_extract(content, '$.coreCode') AS coreCode,
-                    category, trigger, when_clause AS whenClause,
+                    category, trigger, whenClause,
                     json_extract(content, '$.pattern') AS guardPattern
              FROM knowledge_entries
              WHERE lifecycle IN ('active', 'staging', 'evolving', 'pending')
@@ -437,10 +437,10 @@ export class ConsolidationAdvisor {
           const extra = this.#db
             .prepare(
               `SELECT id, title,
-                      do_clause AS doClause,
-                      dont_clause AS dontClause,
+                      doClause,
+                      dontClause,
                       json_extract(content, '$.coreCode') AS coreCode,
-                      category, trigger, when_clause AS whenClause,
+                      category, trigger, whenClause,
                       json_extract(content, '$.pattern') AS guardPattern
                FROM knowledge_entries
                WHERE lifecycle IN ('active', 'staging', 'evolving', 'pending')
@@ -461,10 +461,10 @@ export class ConsolidationAdvisor {
         rows = this.#db
           .prepare(
             `SELECT id, title,
-                    do_clause AS doClause,
-                    dont_clause AS dontClause,
+                    doClause,
+                    dontClause,
                     json_extract(content, '$.coreCode') AS coreCode,
-                    category, trigger, when_clause AS whenClause,
+                    category, trigger, whenClause,
                     json_extract(content, '$.pattern') AS guardPattern
              FROM knowledge_entries
              WHERE lifecycle IN ('active', 'staging', 'evolving', 'pending')

@@ -212,8 +212,8 @@ export class ContradictionDetector {
         .prepare(
           `SELECT id, title, lifecycle, description,
                 json_extract(content, '$.markdown') AS content_markdown,
-                do_clause AS doClause,
-                dont_clause AS dontClause,
+                doClause,
+                dontClause,
                 json_extract(content, '$.pattern') AS guardPattern
          FROM knowledge_entries
          WHERE lifecycle IN ('active', 'staging', 'evolving')`

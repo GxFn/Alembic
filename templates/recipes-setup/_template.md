@@ -1,42 +1,42 @@
 ---
-# 必填字段
+# Required Fields
 title: Your Recipe Title Here (English, ≤50 chars, verb-based)
 trigger: @my_trigger
 category: Network  # MUST be one of: View, Service, Tool, Model, Network, Storage, UI, Utility
 language: swift  # swift, objectivec, go, python, java, kotlin, javascript, typescript, dart, rust
-summary_cn: 中文概述，≤100 字，描述该 Recipe 的用途
+summary_cn: Chinese summary, ≤100 chars
 summary_en: English summary, ≤100 words
-headers: ["import Foundation"]  # 完整 import 语句数组
+headers: ["import Foundation"]  # Complete import statement array
 knowledgeType: code-pattern  # code-pattern, architecture, best-practice, code-standard, code-style, code-relation, data-flow, event-and-data-flow, module-dependency, boundary-constraint, solution, anti-pattern
 
-# V3 Cursor Delivery 必填字段
-kind: pattern  # rule = 强制约束 | pattern = 可复用模式 | fact = 项目事实
-doClause: "Use dependency injection via constructor"  # 英文祈使句，以动词开头，≤60 tokens
-dontClause: "Don't instantiate services with new directly"  # 英文反向约束
-whenClause: "When creating a new service class"  # 英文触发场景
+# V3 Cursor Delivery Required Fields
+kind: pattern  # rule = mandatory constraint | pattern = reusable pattern | fact = project fact
+doClause: "Use dependency injection via constructor"  # English imperative, verb-first, ≤60 tokens
+dontClause: "Don't instantiate services with new directly"  # English negative constraint
+whenClause: "When creating a new service class"  # English trigger scenario
 coreCode: |
   class MyService {
     constructor(private db: Database) {}
   }
 usageGuide: |
-  ### 何时使用
-  创建新 Service 类时
-  ### 规范
-  统一使用构造器注入
+  ### When to Use
+  When creating a new Service class
+  ### Convention
+  Always use constructor injection
 
-# 可选字段（推荐）
-keywords: ["关键词1", "关键词2", "关键词3"]
+# Optional Fields (recommended)
+keywords: ["keyword1", "keyword2", "keyword3"]
 tags: [tag1, tag2]
 whenToUse: |
-  - 适用场景 1
-  - 适用场景 2
-  - 适用场景 3
+  - Applicable scenario 1
+  - Applicable scenario 2
+  - Applicable scenario 3
 whenNotToUse: |
-  - 不应使用的场景 1
-  - 不应使用的场景 2
+  - Scenario to avoid 1
+  - Scenario to avoid 2
 difficulty: beginner  # beginner, intermediate, advanced
 authority: 1  # 1~5
-relatedRecipes: ["@相关Recipe的trigger"]
+relatedRecipes: ["@related_recipe_trigger"]
 version: "1.0.0"
 updatedAt: 1706515200
 author: team_name
@@ -46,38 +46,38 @@ deprecated: false
 ## Snippet / Code Reference
 
 ```
-// 在此粘贴或编写代码片段（建议可运行、含必要错误处理与注释）
+// Paste or write code snippet here (ideally runnable, with error handling and comments)
 ```
 
 ## AI Context / Usage Guide
 
-### 什么时候用
+### When to Use
 
-- 适用场景说明
-- 典型业务或技术情境
-- 典型使用者角色
+- Applicable scenario description
+- Typical business or technical context
+- Typical user role
 
-### 何时不用
+### When Not to Use
 
-- 排除场景、易误用情况
-- 何时应用替代方案
+- Exclusion scenarios, easy-to-misuse cases
+- When to apply alternatives
 
-### 使用步骤
+### Steps
 
-1. 第一步：准备或前置条件
-2. 第二步：主体逻辑
-3. 第三步：结果处理或后续
+1. Step 1: Preparation or prerequisites
+2. Step 2: Core logic
+3. Step 3: Result handling or follow-up
 
-### 关键点
+### Key Points
 
-- 易错点、容易忽略的细节
-- 线程/内存/生命周期约束
-- 性能特征或限制
+- Error-prone areas, easily overlooked details
+- Thread/memory/lifecycle constraints
+- Performance characteristics or limitations
 
-### 依赖与前置条件
+### Dependencies & Prerequisites
 
-- 需导入的模块/框架
-- 最低系统/API 版本
+- Required modules/frameworks to import
+- Minimum system/API version
 - 权限、配置或环境要求
 
 ### 错误处理
