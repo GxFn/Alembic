@@ -290,33 +290,14 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
       expect(result.title).toBe('Fix bug');
     });
 
-    test('should apply default depType', () => {
-      const result = TaskInput.parse({ operation: 'dep_add' });
-      expect(result.depType).toBe('blocks');
+    test('should accept close with id and reason', () => {
+      const result = TaskInput.parse({ operation: 'close', id: 'asd-123', reason: 'done' });
+      expect(result.operation).toBe('close');
+      expect(result.id).toBe('asd-123');
     });
 
     test('should accept all valid operations', () => {
-      const ops = [
-        'prime',
-        'ready',
-        'create',
-        'claim',
-        'close',
-        'fail',
-        'defer',
-        'progress',
-        'show',
-        'list',
-        'stats',
-        'blocked',
-        'decompose',
-        'dep_add',
-        'dep_tree',
-        'record_decision',
-        'revise_decision',
-        'unpin_decision',
-        'list_decisions',
-      ];
+      const ops = ['prime', 'create', 'close', 'fail', 'record_decision'];
       for (const op of ops) {
         expect(TaskInput.parse({ operation: op }).operation).toBe(op);
       }
@@ -346,19 +327,13 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
         'autosnippet_call_context',
         'autosnippet_guard',
         'autosnippet_submit_knowledge',
-        'autosnippet_submit_knowledge_batch',
-        'autosnippet_save_document',
         'autosnippet_skill',
         'autosnippet_bootstrap',
         'autosnippet_dimension_complete',
-        'autosnippet_wiki_plan',
-        'autosnippet_wiki_finalize',
-        'autosnippet_capabilities',
+        'autosnippet_wiki',
         'autosnippet_task',
         'autosnippet_enrich_candidates',
         'autosnippet_knowledge_lifecycle',
-        'autosnippet_validate_candidate',
-        'autosnippet_check_duplicate',
       ];
       for (const tool of expectedTools) {
         expect(TOOL_SCHEMAS[tool]).toBeDefined();
@@ -366,8 +341,8 @@ describe('Integration: Zod Schemas — mcp-tools.ts', () => {
       }
     });
 
-    test('should have at least 21 entries', () => {
-      expect(Object.keys(TOOL_SCHEMAS).length).toBeGreaterThanOrEqual(21);
+    test('should have at least 15 entries', () => {
+      expect(Object.keys(TOOL_SCHEMAS).length).toBeGreaterThanOrEqual(15);
     });
   });
 });

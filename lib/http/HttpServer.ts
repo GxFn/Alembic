@@ -39,6 +39,7 @@ import panoramaRouter from './routes/panorama.js';
 import recipesRouter from './routes/recipes.js';
 import remoteRouter from './routes/remote.js';
 import searchRouter from './routes/search.js';
+import signalsRouter from './routes/signals.js';
 import skillsRouter from './routes/skills.js';
 import taskRouter from './routes/task.js';
 import violationsRouter from './routes/violations.js';
@@ -323,6 +324,9 @@ export class HttpServer {
     // Panorama 全景路由（项目结构 + 覆盖率 + 健康度）
     this.app.use(`${apiPrefix}/panorama`, panoramaRouter);
 
+    // 信号留痕 & 报告路由
+    this.app.use(`${apiPrefix}/signals`, signalsRouter);
+
     // 审计日志路由
     this.app.use(`${apiPrefix}/audit`, auditRouter);
 
@@ -379,22 +383,49 @@ export class HttpServer {
           >;
           this.logger.info('Realtime service initialized');
 
-          // 桥接 EventBus → RealtimeService：将生命周期转换事件推送到 Dashboard
+          // 桥接 EventBus / SignalBus → RealtimeService
           try {
             const container = getServiceContainer();
+            const rs = this.realtimeService as {
+              broadcastEvent?: (name: string, data: unknown) => void;
+            };
+            if (typeof rs?.broadcastEvent !== 'function') {
+              throw new Error('broadcastEvent not available');
+            }
+
+            // EventBus → lifecycle:transition
             const eventBus = container.services.eventBus ? container.get('eventBus') : null;
-            if (eventBus && this.realtimeService) {
-              const rs = this.realtimeService as {
-                broadcastEvent?: (name: string, data: unknown) => void;
-              };
-              if (typeof rs.broadcastEvent === 'function') {
-                eventBus.on('lifecycle:transition', (data: unknown) => {
-                  rs.broadcastEvent!('lifecycle:transition', data);
-                });
-              }
+            if (eventBus) {
+              eventBus.on('lifecycle:transition', (data: unknown) => {
+                rs.broadcastEvent!('lifecycle:transition', data);
+              });
+            }
+
+            // SignalBridge 已将信号转发到 EventBus，HttpServer 只听 EventBus
+            if (eventBus) {
+              eventBus.on('signal:event', (signal: unknown) => {
+                rs.broadcastEvent!('signal:event', signal);
+              });
+              eventBus.on('guard:updated', (signal: unknown) => {
+                rs.broadcastEvent!('guard:updated', signal);
+              });
+            }
+
+            // 确保 SignalBridge 已初始化（触发 lazy singleton）
+            try {
+              container.get('signalBridge');
+            } catch {
+              // SignalBridge 未注册时静默跳过
+            }
+
+            // EventBus → audit:entry
+            if (eventBus) {
+              eventBus.on('audit:entry', (data: unknown) => {
+                rs.broadcastEvent!('audit:entry', data);
+              });
             }
           } catch {
-            // EventBus 不可用时静默跳过
+            // EventBus/SignalBus 不可用时静默跳过
           }
         } catch (error: unknown) {
           this.logger.warn('Failed to initialize realtime service', {

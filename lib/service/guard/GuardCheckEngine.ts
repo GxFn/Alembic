@@ -189,7 +189,7 @@ const BUILT_IN_RULES = {
       'dequeueReusableCell.*as\\s*!',
       'dequeueReusableSupplementaryView.*as\\s*!',
       'dequeueReusableHeaderFooterView.*as\\s*!',
-      'layerClass.*layer\\s+as\\s*!',
+      '\\blayer\\s+as\\s*!',
     ],
   },
   'swift-force-try': {
@@ -587,6 +587,9 @@ export class GuardCheckEngine {
   _externalRules: Map<string, GuardRule>;
   _guardConfig: GuardConfig;
   _signalBus: SignalBus | null;
+  /** 上次 guard 信号指纹，用于去重（相同结果不重复发射） */
+  _lastGuardSignalKey: string;
+  _lastBlindSpotSignalKey: string;
   _uncertaintyCollector: UncertaintyCollector;
   db: DatabaseLike;
   logger: ReturnType<typeof Logger.getInstance>;
@@ -609,6 +612,8 @@ export class GuardCheckEngine {
     /** Guard 配置 — 允许禁用特定规则或调整 Code-Level 检查阈值 */
     this._guardConfig = options.guardConfig || {};
     this._signalBus = options.signalBus || null;
+    this._lastGuardSignalKey = '';
+    this._lastBlindSpotSignalKey = '';
     this._uncertaintyCollector = new UncertaintyCollector();
   }
 
@@ -679,10 +684,10 @@ export class GuardCheckEngine {
         try {
           rows = this.db
             .prepare(
-              `SELECT id, title, description, language, scope, constraints
+              `SELECT id, title, description, language, scope, constraints, lifecycle
              FROM knowledge_entries
              WHERE (kind = 'rule' OR knowledgeType = 'boundary-constraint')
-               AND lifecycle = 'active'`
+               AND lifecycle IN ('active', 'staging', 'evolving', 'decaying')`
             )
             .all();
         } catch {
@@ -704,12 +709,14 @@ export class GuardCheckEngine {
           for (const g of guards) {
             const ruleType = (g.type as string) || 'regex';
             const lang = r.language as string | undefined;
+            const isDecaying = (r as Record<string, unknown>).lifecycle === 'decaying';
+            const rawSeverity = (g.severity || 'warning') as string;
             const base = {
               id: (g.id || r.id) as string,
               name: (g.name || r.title) as string,
               message: (g.message || r.description || r.title) as string,
               languages: lang ? [lang, LanguageService.toGuardLangId(lang)] : [],
-              severity: (g.severity || 'warning') as string,
+              severity: isDecaying && rawSeverity === 'error' ? 'warning' : rawSeverity,
               dimension: (r.scope || 'file') as string,
               source: 'database',
               fixSuggestion: (g.fixSuggestion || null) as string | null,
@@ -755,6 +762,7 @@ export class GuardCheckEngine {
           ...(rule.excludePaths ? { excludePaths: rule.excludePaths } : {}),
           ...(rule.skipComments ? { skipComments: true } : {}),
           ...(rule.skipTestBlocks ? { skipTestBlocks: true } : {}),
+          ...(rule.excludeLinePatterns ? { excludeLinePatterns: rule.excludeLinePatterns } : {}),
         });
       }
     }
@@ -927,8 +935,11 @@ export class GuardCheckEngine {
       })
     );
 
-    // AST 语义规则检查
+    // AST 语义规则检查（Layer 1: 3 查询函数）
     violations.push(...this._runAstRuleChecks(code, language));
+
+    // AST Layer 2: analyzeFile() 深层检查（复杂度、类膨胀、深嵌套）
+    violations.push(...this._runAstLayer2Checks(code, language, filePath));
 
     // 跟踪 Guard 命中次数（回写 Recipe 统计）
     this.trackGuardHits(violations);
@@ -1114,6 +1125,426 @@ export class GuardCheckEngine {
     return violations;
   }
 
+  /**
+   * AST Layer 2: analyzeFile() 深层检查
+   *
+   * 利用 AstAnalyzer.analyzeFile() 的完整输出产出 violations:
+   *
+   * --- 方法度量 ---
+   *   - ast_class_bloat: 类方法数过多 (>20)
+   *   - ast_method_complexity: 高圈复杂度 (>15)
+   *   - ast_method_too_long: 方法行数过长 (>80)
+   *   - ast_deep_nesting: 方法嵌套过深 (>5)
+   *
+   * --- 继承图检查 ---
+   *   - ast_deep_inheritance: 继承链过深 (>4)
+   *   - ast_wide_protocol_conformance: 单类遵守协议过多 (>5)
+   *   - ast_missing_super: 子类未调用 super 的关键方法
+   *
+   * --- 属性规范 ---
+   *   - ast_assign_object_property: ObjC assign 修饰对象类型属性
+   *   - ast_missing_nonatomic: ObjC 属性缺少 nonatomic
+   *   - ast_mutable_public_collection: 公开可变集合属性
+   *
+   * --- 设计模式/反模式检测 ---
+   *   - ast_god_class: 方法+属性过多的上帝类 (>30 methods + >15 properties)
+   *   - ast_singleton_abuse: 过多单例模式
+   *   - ast_missing_weakify: block 内 self 捕获但未使用 weakify
+   */
+  _runAstLayer2Checks(code: string, language: string, filePath: string): GuardViolation[] {
+    const disabled = this._guardConfig.disabledRules || [];
+    const allLayer2Rules = [
+      'ast_class_bloat',
+      'ast_method_complexity',
+      'ast_method_too_long',
+      'ast_deep_nesting',
+      'ast_deep_inheritance',
+      'ast_wide_protocol_conformance',
+      'ast_missing_super',
+      'ast_assign_object_property',
+      'ast_missing_nonatomic',
+      'ast_mutable_public_collection',
+      'ast_god_class',
+      'ast_singleton_abuse',
+      'ast_missing_weakify',
+    ];
+    const allDisabled = allLayer2Rules.every((id) => disabled.includes(id));
+    if (allDisabled) {
+      return [];
+    }
+
+    // 语言标准化
+    const astLang = LanguageService.isKnownLang(language)
+      ? language
+      : language === 'objc'
+        ? 'objectivec'
+        : language;
+    if (!LanguageService.isKnownLang(astLang)) {
+      return [];
+    }
+
+    let AstAnalyzer: typeof AstAnalyzerModule | undefined;
+    try {
+      AstAnalyzer = this._getAstAnalyzer();
+      if (!AstAnalyzer || !AstAnalyzer.isAvailable()) {
+        this._uncertaintyCollector.recordSkip(
+          'ast',
+          'ast_unavailable',
+          `AST Layer 2 skipped: tree-sitter not available for "${language}"`
+        );
+        return [];
+      }
+    } catch {
+      return [];
+    }
+
+    let fileSummary: ReturnType<typeof AstAnalyzer.analyzeFile>;
+    try {
+      fileSummary = AstAnalyzer.analyzeFile(code, astLang, { extractCallSites: false });
+    } catch (err: unknown) {
+      this.logger.debug(`AST Layer 2 analyzeFile failed: ${(err as Error).message}`);
+      return [];
+    }
+    if (!fileSummary) {
+      return [];
+    }
+
+    const violations: GuardViolation[] = [];
+
+    // — 阈值配置（可通过 codeLevelThresholds 覆盖） —
+    const thresholds = this._guardConfig.codeLevelThresholds || {};
+    const classBloatLimit = (
+      typeof thresholds['ast_class_bloat'] === 'number' ? thresholds['ast_class_bloat'] : 20
+    ) as number;
+    const complexityLimit = (
+      typeof thresholds['ast_method_complexity'] === 'number'
+        ? thresholds['ast_method_complexity']
+        : 15
+    ) as number;
+    const methodLengthLimit = (
+      typeof thresholds['ast_method_too_long'] === 'number' ? thresholds['ast_method_too_long'] : 80
+    ) as number;
+    const nestingLimit = (
+      typeof thresholds['ast_deep_nesting'] === 'number' ? thresholds['ast_deep_nesting'] : 5
+    ) as number;
+    const inheritanceDepthLimit = (
+      typeof thresholds['ast_deep_inheritance'] === 'number'
+        ? thresholds['ast_deep_inheritance']
+        : 4
+    ) as number;
+    const protocolConformanceLimit = (
+      typeof thresholds['ast_wide_protocol_conformance'] === 'number'
+        ? thresholds['ast_wide_protocol_conformance']
+        : 5
+    ) as number;
+    const godClassMethodLimit = (
+      typeof thresholds['ast_god_class_methods'] === 'number'
+        ? thresholds['ast_god_class_methods']
+        : 30
+    ) as number;
+    const godClassPropertyLimit = (
+      typeof thresholds['ast_god_class_properties'] === 'number'
+        ? thresholds['ast_god_class_properties']
+        : 15
+    ) as number;
+
+    // ══════════════════════════════════════════════════════════
+    //  Section A: 方法度量（原有 4 条规则）
+    // ══════════════════════════════════════════════════════════
+
+    // 1. Class bloat — 类方法数过多
+    if (!disabled.includes('ast_class_bloat')) {
+      const methodCountByClass: Record<string, { count: number; line: number }> = {};
+      for (const m of fileSummary.methods) {
+        if (m.className && m.kind === 'definition') {
+          if (!methodCountByClass[m.className]) {
+            const cls = fileSummary.classes.find((c) => c.name === m.className);
+            methodCountByClass[m.className] = { count: 0, line: cls?.line || 1 };
+          }
+          methodCountByClass[m.className].count++;
+        }
+      }
+      for (const [className, { count, line }] of Object.entries(methodCountByClass)) {
+        if (count > classBloatLimit) {
+          violations.push({
+            ruleId: 'ast_class_bloat',
+            message: `类 ${className} 有 ${count} 个方法，超过阈值 ${classBloatLimit}，建议拆分职责`,
+            severity: 'warning',
+            line,
+            snippet: `class ${className} — ${count} methods`,
+            dimension: 'file',
+            fixSuggestion: '将职责拆分到多个类或使用 Extension/Category 分组',
+          });
+        }
+      }
+    }
+
+    // 2. Method complexity — 高圈复杂度
+    if (!disabled.includes('ast_method_complexity')) {
+      for (const m of fileSummary.methods) {
+        if (m.complexity && m.complexity > complexityLimit) {
+          violations.push({
+            ruleId: 'ast_method_complexity',
+            message: `方法 ${m.className ? `${m.className}.` : ''}${m.name} 圈复杂度 ${m.complexity}，超过阈值 ${complexityLimit}`,
+            severity: 'warning',
+            line: m.line || 1,
+            snippet: `${m.name} — complexity: ${m.complexity}`,
+            dimension: 'file',
+            fixSuggestion: '提取子方法、使用 early return 或策略模式降低复杂度',
+          });
+        }
+      }
+    }
+
+    // 3. Method too long — 方法行数过长
+    if (!disabled.includes('ast_method_too_long')) {
+      for (const m of fileSummary.methods) {
+        if (m.bodyLines && m.bodyLines > methodLengthLimit) {
+          violations.push({
+            ruleId: 'ast_method_too_long',
+            message: `方法 ${m.className ? `${m.className}.` : ''}${m.name} 有 ${m.bodyLines} 行，超过阈值 ${methodLengthLimit}`,
+            severity: 'warning',
+            line: m.line || 1,
+            snippet: `${m.name} — ${m.bodyLines} lines`,
+            dimension: 'file',
+            fixSuggestion: '将长方法拆分为多个更小的、职责单一的方法',
+          });
+        }
+      }
+    }
+
+    // 4. Deep nesting — 方法嵌套过深
+    if (!disabled.includes('ast_deep_nesting')) {
+      for (const m of fileSummary.methods) {
+        if (m.nestingDepth && m.nestingDepth > nestingLimit) {
+          violations.push({
+            ruleId: 'ast_deep_nesting',
+            message: `方法 ${m.className ? `${m.className}.` : ''}${m.name} 嵌套深度 ${m.nestingDepth}，超过阈值 ${nestingLimit}`,
+            severity: 'warning',
+            line: m.line || 1,
+            snippet: `${m.name} — nesting depth: ${m.nestingDepth}`,
+            dimension: 'file',
+            fixSuggestion: '使用 guard/early return 减少嵌套，或提取内层逻辑为独立方法',
+          });
+        }
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  Section B: 继承图检查（inheritanceGraph + classes.protocols）
+    // ══════════════════════════════════════════════════════════
+
+    // 5. Deep inheritance — 继承链过深
+    if (!disabled.includes('ast_deep_inheritance') && fileSummary.inheritanceGraph?.length > 0) {
+      // 构建父类映射: child → parent
+      const parentMap: Record<string, string> = {};
+      for (const edge of fileSummary.inheritanceGraph) {
+        if (edge.type === 'extends' || edge.type === 'inherits') {
+          parentMap[edge.from] = edge.to;
+        }
+      }
+      // 计算每个类的继承深度
+      for (const cls of fileSummary.classes) {
+        let depth = 0;
+        let current = cls.name;
+        const visited = new Set<string>();
+        while (parentMap[current] && !visited.has(current)) {
+          visited.add(current);
+          current = parentMap[current];
+          depth++;
+        }
+        if (depth > inheritanceDepthLimit) {
+          violations.push({
+            ruleId: 'ast_deep_inheritance',
+            message: `类 ${cls.name} 继承链深度 ${depth}，超过阈值 ${inheritanceDepthLimit}，过深继承增加理解和维护成本`,
+            severity: 'warning',
+            line: cls.line || 1,
+            snippet: `class ${cls.name} — inheritance depth: ${depth}`,
+            dimension: 'file',
+            fixSuggestion: '优先使用组合（Composition）替代继承，或使用协议/接口解耦',
+          });
+        }
+      }
+    }
+
+    // 6. Wide protocol conformance — 单类遵守协议过多
+    if (!disabled.includes('ast_wide_protocol_conformance')) {
+      for (const cls of fileSummary.classes) {
+        const protocolCount = cls.protocols?.length || 0;
+        if (protocolCount > protocolConformanceLimit) {
+          violations.push({
+            ruleId: 'ast_wide_protocol_conformance',
+            message: `类 ${cls.name} 遵守 ${protocolCount} 个协议，超过阈值 ${protocolConformanceLimit}，职责可能过重`,
+            severity: 'warning',
+            line: cls.line || 1,
+            snippet: `class ${cls.name} — ${protocolCount} protocols: ${cls.protocols!.slice(0, 5).join(', ')}${protocolCount > 5 ? '...' : ''}`,
+            dimension: 'file',
+            fixSuggestion: '将协议实现拆分到 Extension/Category 中，或拆分类职责',
+          });
+        }
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  Section C: 属性规范（properties + attributes）
+    // ══════════════════════════════════════════════════════════
+
+    const isObjcLike = ['objc', 'objectivec', 'objective-c'].includes(language.toLowerCase());
+
+    if (isObjcLike && fileSummary.properties?.length > 0) {
+      for (const prop of fileSummary.properties) {
+        const attrs = prop.attributes || [];
+        const attrsLower = attrs.map((a) => a.toLowerCase());
+
+        // 7. assign 修饰对象类型属性
+        if (!disabled.includes('ast_assign_object_property')) {
+          if (attrsLower.includes('assign') && !attrsLower.includes('readonly')) {
+            // assign 用于对象类型（通过属性名启发：delegate, block, handler 等常为对象）
+            const likelyObject =
+              /delegate|block|handler|callback|completion|dataSource|view|controller|manager|service/i.test(
+                prop.name
+              );
+            if (likelyObject) {
+              violations.push({
+                ruleId: 'ast_assign_object_property',
+                message: `属性 ${prop.className ? `${prop.className}.` : ''}${prop.name} 使用 assign 修饰，疑似对象类型，应改为 weak`,
+                severity: 'warning',
+                line: prop.line || 1,
+                snippet: `@property (assign) ... ${prop.name}`,
+                dimension: 'file',
+                fixSuggestion: '对象类型属性使用 weak（delegate）或 strong/copy，避免悬垂指针',
+              });
+            }
+          }
+        }
+
+        // 8. 缺少 nonatomic
+        if (!disabled.includes('ast_missing_nonatomic')) {
+          if (
+            !attrsLower.includes('nonatomic') &&
+            !attrsLower.includes('atomic') &&
+            attrs.length > 0
+          ) {
+            violations.push({
+              ruleId: 'ast_missing_nonatomic',
+              message: `属性 ${prop.className ? `${prop.className}.` : ''}${prop.name} 缺少 nonatomic，iOS 中应默认使用 nonatomic 提升性能`,
+              severity: 'info',
+              line: prop.line || 1,
+              snippet: `@property (${attrs.join(', ')}) ... ${prop.name}`,
+              dimension: 'file',
+              fixSuggestion: '添加 nonatomic 修饰符：@property (nonatomic, ...) ...',
+            });
+          }
+        }
+
+        // 9. 公开可变集合属性
+        if (!disabled.includes('ast_mutable_public_collection')) {
+          const isMutable =
+            /NSMutableArray|NSMutableDictionary|NSMutableSet|NSMutableString|NSMutableData|NSMutableOrderedSet/i.test(
+              `${attrs.join(' ')} ${prop.name}`
+            );
+          if (isMutable && !attrsLower.includes('readonly')) {
+            violations.push({
+              ruleId: 'ast_mutable_public_collection',
+              message: `属性 ${prop.className ? `${prop.className}.` : ''}${prop.name} 暴露可变集合，外部可直接修改内部状态`,
+              severity: 'warning',
+              line: prop.line || 1,
+              snippet: `@property ... NSMutable* ${prop.name}`,
+              dimension: 'file',
+              fixSuggestion:
+                '对外使用 readonly + 不可变类型（NSArray/NSDictionary），内部用 readwrite + 可变类型',
+            });
+          }
+        }
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  Section D: 设计模式 / 反模式检测（patterns + aggregated metrics）
+    // ══════════════════════════════════════════════════════════
+
+    // 10. God class — 方法+属性过多的上帝类
+    if (!disabled.includes('ast_god_class')) {
+      // 按类聚合方法数和属性数
+      const classStats: Record<string, { methods: number; properties: number; line: number }> = {};
+      for (const m of fileSummary.methods) {
+        if (m.className && m.kind === 'definition') {
+          if (!classStats[m.className]) {
+            const cls = fileSummary.classes.find((c) => c.name === m.className);
+            classStats[m.className] = { methods: 0, properties: 0, line: cls?.line || 1 };
+          }
+          classStats[m.className].methods++;
+        }
+      }
+      for (const p of fileSummary.properties) {
+        if (p.className) {
+          if (!classStats[p.className]) {
+            const cls = fileSummary.classes.find((c) => c.name === p.className);
+            classStats[p.className] = { methods: 0, properties: 0, line: cls?.line || 1 };
+          }
+          classStats[p.className].properties++;
+        }
+      }
+      for (const [className, stats] of Object.entries(classStats)) {
+        if (stats.methods > godClassMethodLimit && stats.properties > godClassPropertyLimit) {
+          violations.push({
+            ruleId: 'ast_god_class',
+            message: `类 ${className} 有 ${stats.methods} 个方法和 ${stats.properties} 个属性，疑似上帝类（God Class），职责过重`,
+            severity: 'warning',
+            line: stats.line,
+            snippet: `class ${className} — ${stats.methods} methods, ${stats.properties} properties`,
+            dimension: 'file',
+            fixSuggestion: '遵循单一职责原则（SRP），将类拆分为多个更小的、职责明确的类',
+          });
+        }
+      }
+    }
+
+    // 11. Singleton abuse — 过多单例模式（文件级别）
+    if (!disabled.includes('ast_singleton_abuse') && fileSummary.patterns?.length > 0) {
+      const singletonPatterns = fileSummary.patterns.filter((p) => p.type === 'singleton');
+      if (singletonPatterns.length > 2) {
+        violations.push({
+          ruleId: 'ast_singleton_abuse',
+          message: `文件中检测到 ${singletonPatterns.length} 个单例模式，过多单例增加耦合和测试难度`,
+          severity: 'info',
+          line: singletonPatterns[0]?.line || 1,
+          snippet: `${singletonPatterns.length} singletons: ${singletonPatterns
+            .map((p) => p.className || p.methodName || 'unknown')
+            .slice(0, 3)
+            .join(', ')}`,
+          dimension: 'file',
+          fixSuggestion: '考虑使用依赖注入（DI）替代单例，提升可测试性和解耦',
+        });
+      }
+    }
+
+    // 12. Missing weakify — block 内 self 捕获但未使用 weakify 模式
+    if (
+      !disabled.includes('ast_missing_weakify') &&
+      isObjcLike &&
+      fileSummary.patterns?.length > 0
+    ) {
+      const selfCaptures = fileSummary.patterns.filter(
+        (p) => p.type === 'block_self_capture' && !p.isWeakRef
+      );
+      for (const cap of selfCaptures) {
+        violations.push({
+          ruleId: 'ast_missing_weakify',
+          message: `${cap.className ? `${cap.className}.` : ''}${cap.methodName || 'block'} 中 block 捕获 self 但未使用 @weakify/@strongify`,
+          severity: 'warning',
+          line: cap.line || 1,
+          snippet: `block captures self without weakify in ${cap.methodName || 'anonymous block'}`,
+          dimension: 'file',
+          fixSuggestion:
+            '使用 @weakify(self) / @strongify(self) 或 __weak typeof(self) weakSelf = self',
+        });
+      }
+    }
+
+    return violations;
+  }
+
   /** 获取 AstAnalyzer 模块（静态 import，带可用性检测） */
   _getAstAnalyzer() {
     return AstAnalyzerModule;
@@ -1243,11 +1674,15 @@ export class GuardCheckEngine {
       filesWithViolations: results.filter((r) => r.summary.total > 0).length,
     };
 
-    // ── Signal emission ──
+    // ── Signal emission (去重：相同检查结果不重复发射) ──
     if (this._signalBus && totalViolations > 0) {
-      this._signalBus.send('guard', 'GuardCheckEngine', totalErrors > 0 ? 1 : 0.5, {
-        metadata: { ...summary },
-      });
+      const signalKey = `${summary.filesChecked}:${summary.totalViolations}:${summary.totalErrors}:${summary.totalUncertain}:${summary.filesWithViolations}`;
+      if (signalKey !== this._lastGuardSignalKey) {
+        this._lastGuardSignalKey = signalKey;
+        this._signalBus.send('guard', 'GuardCheckEngine', totalErrors > 0 ? 1 : 0.5, {
+          metadata: { ...summary },
+        });
+      }
     }
 
     // ── 聚合 capability report ──
@@ -1258,6 +1693,44 @@ export class GuardCheckEngine {
       }
     }
     const capabilityReport = aggregateCollector.buildReport();
+
+    // ── guard_blind_spot: uncertain 超阈值时发射 CapabilityRequest 信号（去重） ──
+    if (this._signalBus && capabilityReport.uncertainResults.length > 0) {
+      const uncertainTotal = capabilityReport.uncertainResults.length;
+      const blindSpotThreshold = 5; // 触发阈值
+      if (uncertainTotal >= blindSpotThreshold) {
+        const blindSpotKey = `${uncertainTotal}:${capabilityReport.checkCoverage}`;
+        if (blindSpotKey !== this._lastBlindSpotSignalKey) {
+          this._lastBlindSpotSignalKey = blindSpotKey;
+          // 按 layer 聚合盲区
+          const byLayer: Record<string, number> = {};
+          for (const u of capabilityReport.uncertainResults) {
+            byLayer[u.layer] = (byLayer[u.layer] || 0) + 1;
+          }
+          this._signalBus.send(
+            'guard_blind_spot',
+            'GuardCheckEngine',
+            uncertainTotal >= 20 ? 1 : 0.5,
+            {
+              metadata: {
+                type: 'CapabilityRequest',
+                uncertainTotal,
+                checkCoverage: capabilityReport.checkCoverage,
+                byLayer,
+                boundaries: capabilityReport.boundaries.map((b) => ({
+                  type: b.type,
+                  description: b.description,
+                  affectedRules: b.affectedRules,
+                  suggestedAction: b.suggestedAction,
+                })),
+                suggestedAction:
+                  'Extend Guard capability: add AST support for uncovered languages or implement missing cross-file checks',
+              },
+            }
+          );
+        }
+      }
+    }
 
     return { files: results, crossFileViolations, summary, capabilityReport };
   }

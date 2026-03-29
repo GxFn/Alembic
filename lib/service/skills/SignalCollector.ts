@@ -50,6 +50,7 @@ interface SignalCollectorOpts {
   database?: DatabaseLike | null;
   agentFactory?: AgentFactoryLike | null;
   container?: ContainerLike | null;
+  signalBus?: import('../../infrastructure/signal/SignalBus.js').SignalBus | null;
   mode?: string;
   intervalMs?: number;
   onSuggestions?: ((suggestions: Record<string, unknown>[]) => void) | null;
@@ -122,12 +123,15 @@ export class SignalCollector {
   #onSuggestions: ((suggestions: Record<string, unknown>[]) => void) | null;
   /** 信号聚类引擎 */
   #aggregator;
+  /** 各维度最新信号快照（由 SignalBus 实时更新） */
+  #dimensionSignals: Record<string, unknown> = {};
 
   /**
    * @param opts.projectRoot 用户项目根目录
    * @param [opts.database] better-sqlite3 实例
    * @param [opts.agentFactory] AgentFactory 实例
    * @param [opts.container] ServiceContainer 实例
+   * @param [opts.signalBus] SignalBus 实例（实时信号订阅）
    * @param [opts.mode] 'off' | 'suggest' | 'auto'
    * @param [opts.intervalMs] 初始收集间隔（毫秒），后续由 AI 动态调整
    * @param [opts.onSuggestions] 新建议回调 (suggestions[]) => void
@@ -137,6 +141,7 @@ export class SignalCollector {
     database = null,
     agentFactory = null,
     container = null,
+    signalBus = null,
     mode = 'auto',
     intervalMs = DEFAULT_INTERVAL_MS,
     onSuggestions = null as ((suggestions: Record<string, unknown>[]) => void) | null,
@@ -165,6 +170,13 @@ export class SignalCollector {
         this.#timer = setTimeout(() => this.#tick(), 3000); // 3 秒后执行，留出更多聚合时间
       }
     });
+
+    // Phase 2: 订阅 SignalBus 全量信号，维护维度快照
+    if (signalBus) {
+      signalBus.subscribe('*', (signal) => {
+        this.#updateDimension(signal);
+      });
+    }
   }
 
   // ═══════════════════════════════════════════════════════
@@ -226,6 +238,28 @@ export class SignalCollector {
 
   getSnapshot() {
     return { ...this.#snapshot };
+  }
+
+  /** 由 SignalBus 实时更新的维度信号快照 */
+  #updateDimension(signal: import('../../infrastructure/signal/SignalBus.js').Signal): void {
+    switch (signal.type) {
+      case 'guard':
+      case 'guard_blind_spot':
+        this.#dimensionSignals.compliance = signal;
+        break;
+      case 'usage':
+        this.#dimensionSignals.adoption = signal;
+        break;
+      case 'quality':
+        this.#dimensionSignals.quality = signal;
+        break;
+      case 'decay':
+        this.#dimensionSignals.decay = signal;
+        break;
+      case 'lifecycle':
+        this.#dimensionSignals.evolution = signal;
+        break;
+    }
   }
   getMode() {
     return this.#mode;

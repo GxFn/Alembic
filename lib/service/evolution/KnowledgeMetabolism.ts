@@ -13,6 +13,7 @@
 
 import Logger from '../../infrastructure/logging/Logger.js';
 
+import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import type { ContradictionDetector, ContradictionResult } from './ContradictionDetector.js';
 import type { DecayDetector, DecayScoreResult } from './DecayDetector.js';
@@ -73,18 +74,44 @@ export class KnowledgeMetabolism {
   #redundancyAnalyzer: RedundancyAnalyzer;
   #decayDetector: DecayDetector;
   #signalBus: SignalBus | null;
+  #reportStore: ReportStore | null;
   #logger = Logger.getInstance();
+  #pendingTriggers: unknown[] = [];
+  #debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: {
     contradictionDetector: ContradictionDetector;
     redundancyAnalyzer: RedundancyAnalyzer;
     decayDetector: DecayDetector;
     signalBus?: SignalBus;
+    reportStore?: ReportStore;
   }) {
     this.#contradictionDetector = options.contradictionDetector;
     this.#redundancyAnalyzer = options.redundancyAnalyzer;
     this.#decayDetector = options.decayDetector;
     this.#signalBus = options.signalBus ?? null;
+    this.#reportStore = options.reportStore ?? null;
+
+    // Phase 2: 订阅告警型信号，触发代谢周期
+    if (this.#signalBus) {
+      this.#signalBus.subscribe('decay|quality|anomaly', (signal) => {
+        this.#pendingTriggers.push(signal);
+        this.#scheduleMetabolism();
+      });
+    }
+  }
+
+  #scheduleMetabolism(): void {
+    if (this.#debounceTimer) {
+      return;
+    }
+    this.#debounceTimer = setTimeout(() => {
+      this.#debounceTimer = null;
+      if (this.#pendingTriggers.length > 0) {
+        this.runFullCycle();
+        this.#pendingTriggers = [];
+      }
+    }, 30_000);
   }
 
   /**
@@ -109,17 +136,20 @@ export class KnowledgeMetabolism {
       ...this.#proposalsFromDecay(decayResults),
     ];
 
-    // 5. 发射总线信号
-    if (this.#signalBus && proposals.length > 0) {
-      this.#signalBus.send('lifecycle', 'KnowledgeMetabolism', proposals.length / 100, {
-        target: null,
-        metadata: {
+    // 5. 写入治理报告（降级：不再发射 Signal，改为 Report）
+    if (this.#reportStore && proposals.length > 0) {
+      void this.#reportStore.write({
+        category: 'governance',
+        type: 'metabolism_cycle',
+        producer: 'KnowledgeMetabolism',
+        data: {
           proposalCount: proposals.length,
           contradictionCount: contradictions.length,
           redundancyCount: redundancies.length,
           decayingCount: decayResults.filter((d) => d.level !== 'healthy' && d.level !== 'watch')
             .length,
         },
+        timestamp: Date.now(),
       });
     }
 

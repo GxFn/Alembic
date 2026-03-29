@@ -53,7 +53,6 @@ import {
   qualityScore,
   recordUsage,
   rejectCandidate,
-  saveDocument,
   submitCandidate,
   updateRecipe,
   validateCandidate,
@@ -108,7 +107,6 @@ export {
   addGraphEdge,
   // 生命周期操作类
   submitCandidate,
-  saveDocument,
   approveCandidate,
   rejectCandidate,
   publishRecipe,
@@ -181,7 +179,6 @@ export const ALL_TOOLS = [
   queryViolations,
   // 生命周期操作类 (7)
   submitCandidate,
-  saveDocument,
   approveCandidate,
   rejectCandidate,
   publishRecipe,

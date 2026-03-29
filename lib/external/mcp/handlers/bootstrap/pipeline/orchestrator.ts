@@ -221,6 +221,63 @@ interface WikiResult {
 }
 
 // ──────────────────────────────────────────────────────────────────
+// Panorama Context for strategyContext injection (M1 §5.2)
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * 从 fillContext.panoramaResult 提取维度级全景上下文
+ * 注入 strategyContext.panorama，使 Agent 获得模块角色/层级/耦合/空白区信息
+ */
+function buildPanoramaContext(
+  fillContext: FillContextV3,
+  _dimConfig: Record<string, unknown>
+): Record<string, unknown> | null {
+  const panoramaResult = fillContext.panoramaResult as Record<string, unknown> | null | undefined;
+  if (!panoramaResult) {
+    return null;
+  }
+  try {
+    const modules = panoramaResult.modules as Map<string, Record<string, unknown>> | undefined;
+    const layers = panoramaResult.layers as
+      | { levels?: Array<{ level: number; name: string; modules: string[] }> }
+      | undefined;
+    const gaps = (panoramaResult.gaps as Array<{ module: string; suggestedFocus: string[] }>) ?? [];
+
+    // 构建紧凑上下文
+    const layerNames = (layers?.levels ?? []).map((l) => `L${l.level}:${l.name}`).join(' → ');
+    const knownGaps = gaps.slice(0, 5).flatMap((g) => g.suggestedFocus ?? []);
+
+    // 找到与当前维度最相关的模块（如果 dimConfig 有 target 信息）
+    let moduleRole: string | null = null;
+    let moduleLayer: number | null = null;
+    let moduleCoupling: { fanIn: number; fanOut: number } | null = null;
+
+    if (modules instanceof Map && modules.size > 0) {
+      // 使用第一个模块作为代表（维度覆盖多模块时）
+      const firstMod = modules.values().next().value;
+      if (firstMod) {
+        moduleRole = (firstMod.refinedRole as string) ?? (firstMod.inferredRole as string) ?? null;
+        moduleLayer = (firstMod.layer as number) ?? null;
+        moduleCoupling = {
+          fanIn: (firstMod.fanIn as number) ?? 0,
+          fanOut: (firstMod.fanOut as number) ?? 0,
+        };
+      }
+    }
+
+    return {
+      moduleRole,
+      moduleLayer,
+      moduleCoupling,
+      knownGaps: [...new Set(knownGaps)],
+      layerContext: layerNames || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
 // fillDimensionsV3 — v3.0 管线入口
 // ──────────────────────────────────────────────────────────────────
 
@@ -825,6 +882,8 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
         dimId,
         activeContext: memoryCoordinator.getActiveContext(analystScopeId),
         outputType: dimConfig.outputType || 'analysis',
+        // §M1: Panorama 全景上下文 (Phase 1.8 数据注入)
+        panorama: buildPanoramaContext(fillContext, dimConfig),
         // ── 引擎增强参数 (PipelineStrategy → reactLoop 透传) ──
         contextWindow: agentFactory!.createContextWindow({ isSystem: true }),
         // B1 fix: 分析阶段使用 analyst 策略 (SCAN→EXPLORE→VERIFY→SUMMARIZE)

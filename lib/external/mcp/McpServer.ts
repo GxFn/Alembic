@@ -4,11 +4,11 @@
  * Model Context Protocol (stdio transport)
  * 提供给 IDE AI Agent (Cursor/VSCode Copilot) 的工具集
  *
- * V3.1 整合：39 → 22 工具（18 agent + 4 admin）
+ * V3.3 整合：39 → 16 工具（14 agent + 2 admin）
  * 通过 ASD_MCP_TIER 环境变量控制可见工具集（agent/admin）
  *
  * 冷启动双路径:
- *   - 外部 Agent 路径: bootstrap (Mission Briefing) → dimension_complete × N → wiki_plan → wiki_finalize
+ *   - 外部 Agent 路径: bootstrap (Mission Briefing) → dimension_complete × N → wiki(plan) → wiki(finalize)
  *   - 内部 Agent 路径: bootstrap.js bootstrapKnowledge() → orchestrator.js AI pipeline (Phase 5)
  *
  * Gateway 权限 gating: 写操作经过 Gateway 权限/宪法/审计检查（支持动态 resolver）
@@ -27,33 +27,20 @@ import Logger from '#infra/logging/Logger.js';
 import { applyPendingAutoApprove, markAutoApproveNeeded } from './autoApproveInjector.js';
 import { envelope } from './envelope.js';
 import { wrapHandler } from './errorHandler.js';
-import type { McpContext, McpServiceContainer } from './handlers/types.js';
+import type { IntentState, McpContext, McpServiceContainer } from './handlers/types.js';
+import { createIdleIntent } from './handlers/types.js';
 import { TIER_ORDER, TOOL_GATEWAY_MAP, TOOLS } from './tools.js';
 
 // ─── TypeScript Interfaces ──────────────────────────────────
 
-/** Decision entry (id + title pair) */
-interface DecisionEntry {
-  id: string;
-  title: string;
-}
-
-/** Decision cache structure */
-interface DecisionCache {
-  decisions: DecisionEntry[];
-  fetchedAt: number;
-  ttl: number;
-  _pending: Promise<DecisionEntry[]> | null;
-}
-
-/** MCP session tracking */
+/** MCP session tracking (with intent lifecycle) */
 interface McpSession {
   id: string;
   startedAt: number;
-  readyCalled: boolean;
   toolCallCount: number;
   toolsUsed: Set<string>;
   lastActivityAt: number;
+  intent: IntentState;
 }
 
 /** McpServer constructor options */
@@ -95,8 +82,9 @@ import * as systemHandlers from './handlers/system.js';
 
 import { bootstrapExternal } from './handlers/bootstrap-external.js';
 import { dimensionComplete } from './handlers/dimension-complete-external.js';
+import { panoramaHandler } from './handlers/panorama.js';
 import { taskHandler } from './handlers/task.js';
-import { wikiFinalize, wikiPlan } from './handlers/wiki-external.js';
+import { wikiRouter } from './handlers/wiki-external.js';
 
 // ─── McpServer 类 ─────────────────────────────────────────────
 
@@ -105,7 +93,6 @@ export class McpServer {
   logger: ReturnType<typeof Logger.getInstance>;
   _autoApproveMarked: boolean;
   _capabilityProbe: CapabilityProbe | null;
-  _decisionCache: DecisionCache;
   _lastTaskOperation: string;
   _session: McpSession;
   _startedAt: number;
@@ -121,22 +108,14 @@ export class McpServer {
     this._capabilityProbe = null;
     this._lastTaskOperation = '';
 
-    // ── P0: Decision 注入缓存 ──
-    this._decisionCache = {
-      decisions: [], // [{ id, title }]
-      fetchedAt: 0, // timestamp ms
-      ttl: 60_000, // 60s TTL
-      _pending: null, // 防并发重复查询的 pending promise
-    };
-
-    // ── P3: Session 管理 ──
+    // ── Session 管理 (with intent lifecycle) ──
     this._session = {
       id: `ses-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       startedAt: Date.now(),
-      readyCalled: false,
       toolCallCount: 0,
       toolsUsed: new Set(),
       lastActivityAt: Date.now(),
+      intent: createIdleIntent(),
     };
   }
 
@@ -263,8 +242,11 @@ export class McpServer {
 
     const result = await wrapped(ctx, args);
 
-    // ── P0+P3: Decision 注入 + Session 追踪 ──
-    await this._injectDecisions(name, result);
+    // ── Session 追踪 + 行为采集 ──
+    this._trackSession(name, result);
+
+    // ── [DEFERRED] Decision 注入（待 JSONL 数据验证后启用） ──
+    // await this._injectDecisions(name, result);
 
     // ── 首次成功 tool call → 标记 autoApprove（one-shot） ──
     // 用户已手动授权了至少一个工具，标记后下次 MCP 启动注入 autoApprove
@@ -281,137 +263,188 @@ export class McpServer {
     return result;
   }
 
-  // ─── P0: Decision 自动注入 ────────────────────────────
+  // ─── Session tracking + behavior collection ─────────────
 
   /**
-   * 在工具返回结果中注入 decisions 摘要 + 更新 session 统计
+   * Post-tool-call hook: update session stats + intent behavior tracking.
+   * Always called (non-blocking, synchronous).
    *
-   * 策略：
-   *   - prime: 刷新缓存，不额外注入（response 本身含 decisions）
-   *   - decision 写操作 (record/revise/unpin): invalidate 缓存（下次查询拉最新）
-   *   - 其他工具: 注入 _activeDecisions 摘要
-   *   - 首次未调 prime 的工具: 注入更强提醒
-   *
-   * @param result handler 返回的 envelope 对象
+   * - Session stats: toolCallCount, toolsUsed, lastActivityAt
+   * - Intent tracking (when active): toolCalls, searchQueries, mentionedFiles, drift detection
    */
-  async _injectDecisions(toolName: string, result: unknown) {
-    // ── P3: Session 统计 ──
+  _trackSession(toolName: string, result: unknown): void {
+    // ── Session stats (always) ──
     this._session.toolCallCount++;
     this._session.toolsUsed.add(toolName);
     this._session.lastActivityAt = Date.now();
 
-    // 1) autosnippet_task: prime 刷新缓存，decision 写操作 invalidate 缓存
+    // Task handler manages IntentState internally — skip behavior tracking
     if (toolName === 'autosnippet_task') {
-      const op = this._lastTaskOperation;
-      if (op === 'prime') {
-        this._session.readyCalled = true;
-        this._refreshCacheFromReady(result);
-      } else if (['record_decision', 'revise_decision', 'unpin_decision'].includes(op)) {
-        this._decisionCache.fetchedAt = 0;
-        this._decisionCache._pending = null;
+      return;
+    }
+
+    // ── Intent behavior tracking (active intent only) ──
+    const intent = this._session.intent;
+    if (intent.phase !== 'active') {
+      return;
+    }
+
+    // Track tool call
+    intent.toolCalls.push({
+      tool: toolName,
+      timestamp: Date.now(),
+      args_summary: toolName,
+    });
+
+    // Auto-collect search queries
+    if (toolName === 'autosnippet_search') {
+      const query = this._extractSearchQuery(result);
+      if (query) {
+        intent.searchQueries.push(query);
       }
+    }
+
+    // Auto-collect mentioned files
+    const files = this._extractMentionedFiles(toolName, result);
+    for (const f of files) {
+      if (!intent.mentionedFiles.includes(f)) {
+        intent.mentionedFiles.push(f);
+        const mod = this._inferModule(f);
+        if (mod) {
+          intent.mentionedModules.add(mod);
+        }
+      }
+    }
+
+    // Drift detection
+    this._detectDrift(toolName, intent);
+  }
+
+  // ─── [DEFERRED] Decision injection ───────────────────────
+
+  /**
+   * Inject active decisions + intent context into tool results.
+   * Currently deferred — enable by uncommenting the call in _handleToolCall.
+   */
+  async _injectDecisions(toolName: string, result: unknown) {
+    if (toolName === 'autosnippet_task') {
       return result;
     }
 
-    // 4) 对非 task 操作工具：注入 decisions 摘要
-    const decisions = await this._getDecisionsSummary();
-    if (decisions.length > 0 && typeof result === 'object' && result !== null) {
-      const resultObj = result as Record<string, unknown>;
-      resultObj._activeDecisions = decisions;
+    const intent = this._session.intent;
+    if (intent.phase !== 'active') {
+      return result;
+    }
 
-      // P3: 如果 ready 从未被调用，注入更强提醒
-      if (!this._session.readyCalled) {
-        resultObj._decisionReminder =
-          '⚠️ You have NOT called autosnippet_task({ operation: "prime" }) yet this session. ' +
-          'These decisions may affect your work. Call autosnippet_task({ operation: "prime" }) for full context.';
-      } else {
-        resultObj._decisionReminder =
-          'Respect these team decisions. Call autosnippet_task({ operation: "list_decisions" }) for full details.';
-      }
+    if (intent.decisions.length > 0 && typeof result === 'object' && result !== null) {
+      const resultObj = result as Record<string, unknown>;
+      resultObj._activeDecisions = intent.decisions.map((d) => ({
+        id: d.id,
+        title: d.title,
+      }));
+      resultObj._intentContext =
+        `Active intent: "${intent.primeQuery || '(no query)'}"` +
+        (intent.taskId ? ` | Task: ${intent.taskId}` : '') +
+        ` | ${intent.toolCalls.length} tool calls | ${intent.decisions.length} decision(s)`;
     }
 
     return result;
   }
 
-  /**
-   * 获取 decisions 摘要（带缓存 + 防并发）
-   * @returns >>}
-   */
-  private async _getDecisionsSummary() {
-    const cache = this._decisionCache;
-    const now = Date.now();
+  // ─── Drift detection helpers ───────────────────
 
-    // 缓存有效（包括缓存了"空 decisions"的情况），直接返回
-    if (cache.fetchedAt > 0 && now - cache.fetchedAt < cache.ttl) {
-      return cache.decisions;
-    }
-
-    // 防并发：如果有正在进行的查询，等它完成
-    if (cache._pending) {
-      try {
-        return await cache._pending;
-      } catch {
-        return cache.decisions; // 降级返回旧缓存
+  private _detectDrift(toolName: string, intent: IntentState): void {
+    for (const mod of intent.mentionedModules) {
+      if (intent.primeModule && mod !== intent.primeModule) {
+        const alreadyDrifted = intent.driftEvents.some(
+          (d) => d.type === 'new_module' && d.detail.includes(mod)
+        );
+        if (!alreadyDrifted) {
+          intent.driftEvents.push({
+            timestamp: Date.now(),
+            trigger: toolName,
+            type: 'new_module',
+            detail: `New module: ${mod} (prime: ${intent.primeModule})`,
+            primeOverlap: this._computeOverlap(mod, intent.primeQuery),
+          });
+        }
       }
     }
-
-    // 发起新查询
-    cache._pending = this._fetchDecisionsSummary();
-    try {
-      const result = await cache._pending;
-      return result;
-    } finally {
-      cache._pending = null;
+    if (toolName === 'autosnippet_search' && intent.searchQueries.length > 0) {
+      const latestQuery = intent.searchQueries[intent.searchQueries.length - 1]!;
+      const overlap = this._computeKeywordOverlap(latestQuery, intent.primeQuery);
+      if (overlap < 0.3) {
+        intent.driftEvents.push({
+          timestamp: Date.now(),
+          trigger: toolName,
+          type: 'search_shift',
+          detail: `Search drift: "${latestQuery.slice(0, 40)}" (overlap: ${Math.round(overlap * 100)}%)`,
+          primeOverlap: overlap,
+        });
+      }
     }
   }
 
-  /**
-   * 从 DB 查询 decisions 摘要（仅 id + title）
-   */
-  async _fetchDecisionsSummary() {
-    const cache = this._decisionCache;
-    try {
-      const taskService = this.container?.get('taskGraphService');
-      if (!taskService) {
-        return cache.decisions;
-      }
-
-      // 使用 service 公共 API（不直接访问 repo）
-      const pinned = await taskService.list(
-        { status: 'pinned', taskType: 'decision' },
-        { limit: 50 }
-      );
-      cache.decisions = pinned.map((d: { id: string; title: string; [key: string]: unknown }) => ({
-        id: d.id,
-        title: d.title,
-      }));
-      cache.fetchedAt = Date.now();
-    } catch (err: unknown) {
-      // 查询失败不阻塞，保留旧缓存
-      const errMsg = err instanceof Error ? err.message : String(err);
-      this.logger.debug('_fetchDecisionsSummary error', { error: errMsg });
+  private _computeKeywordOverlap(a: string, b: string): number {
+    if (!a || !b) {
+      return 0;
     }
-    return cache.decisions;
+    const tokensA = new Set(
+      a
+        .toLowerCase()
+        .split(/[\s,./\\|]+/)
+        .filter((t) => t.length > 1)
+    );
+    const tokensB = new Set(
+      b
+        .toLowerCase()
+        .split(/[\s,./\\|]+/)
+        .filter((t) => t.length > 1)
+    );
+    if (tokensA.size === 0 || tokensB.size === 0) {
+      return 0;
+    }
+    let shared = 0;
+    for (const t of tokensA) {
+      if (tokensB.has(t)) {
+        shared++;
+      }
+    }
+    return shared / Math.max(tokensA.size, tokensB.size);
   }
 
-  /**
-   * 从 ready 响应结果中刷新缓存（避免额外 DB 查询）
-   */
-  _refreshCacheFromReady(readyResult: unknown) {
-    try {
-      // readyResult 是 envelope({ data: { decisions: [...] } })
-      const data = (readyResult as Record<string, unknown> | null)?.data as
-        | Record<string, unknown>
-        | undefined;
-      const decisions = (data?.decisions || []) as DecisionEntry[];
-      this._decisionCache.decisions = decisions.map((d) => ({
-        id: d.id,
-        title: d.title,
-      }));
-      this._decisionCache.fetchedAt = Date.now();
-    } catch {
-      /* ignore */
+  private _computeOverlap(term: string, query: string): number {
+    if (!term || !query) {
+      return 0;
     }
+    return query.toLowerCase().includes(term.toLowerCase()) ? 1 : 0;
+  }
+
+  private _extractSearchQuery(result: unknown): string | null {
+    if (typeof result === 'object' && result !== null) {
+      const obj = result as Record<string, unknown>;
+      if (typeof obj.query === 'string') {
+        return obj.query;
+      }
+    }
+    return null;
+  }
+
+  private _extractMentionedFiles(_toolName: string, result: unknown): string[] {
+    if (typeof result === 'object' && result !== null) {
+      const obj = result as Record<string, unknown>;
+      const files = obj.files || obj.mentionedFiles;
+      if (Array.isArray(files)) {
+        return files.filter((f) => typeof f === 'string');
+      }
+    }
+    return [];
+  }
+
+  private _inferModule(filePath: string): string | null {
+    const parts = filePath.replace(/\\/g, '/').split('/');
+    const meaningful = parts.slice(1, -1).filter((p) => !['src', 'lib', 'Sources'].includes(p));
+    return meaningful.slice(0, 2).join('/') || null;
   }
 
   /**
@@ -419,9 +452,8 @@ export class McpServer {
    */
   _resolveHandler(name: string): ToolHandlerFn | null {
     const HANDLER_MAP: Record<string, ToolHandlerFn> = {
-      // ── Agent 层 (18) ──
+      // ── Agent 层 ──
       autosnippet_health: (ctx) => systemHandlers.health(ctx),
-      autosnippet_capabilities: () => systemHandlers.capabilities(),
       autosnippet_search: (ctx, args) =>
         consolidated.consolidatedSearch(
           ctx,
@@ -433,26 +465,18 @@ export class McpServer {
       autosnippet_graph: (ctx, args) => consolidated.consolidatedGraph(ctx, args),
       autosnippet_guard: (ctx, args) => consolidated.consolidatedGuard(ctx, args),
       autosnippet_submit_knowledge: (ctx, args) => consolidated.enhancedSubmitKnowledge(ctx, args),
-      autosnippet_submit_knowledge_batch: (ctx, args) =>
-        knowledgeHandlers.submitKnowledgeBatch(
-          ctx,
-          args as Parameters<typeof knowledgeHandlers.submitKnowledgeBatch>[1]
-        ),
-      autosnippet_save_document: (ctx, args) => knowledgeHandlers.saveDocument(ctx, args),
       autosnippet_skill: (ctx, args) => consolidated.consolidatedSkill(ctx, args),
       autosnippet_task: (ctx, args) => taskHandler(ctx, args),
+      autosnippet_panorama: (ctx, args) => panoramaHandler(ctx, args),
       // ── External Agent Bootstrap (v3.1) ──
       autosnippet_bootstrap: (ctx, _args) =>
         bootstrapExternal(ctx as Parameters<typeof bootstrapExternal>[0]),
       autosnippet_dimension_complete: (ctx, args) => dimensionComplete(ctx, args),
-      autosnippet_wiki_plan: (ctx, args) => wikiPlan(ctx, args),
-      autosnippet_wiki_finalize: (ctx, args) => wikiFinalize(ctx, args),
+      autosnippet_wiki: (ctx, args) => wikiRouter(ctx, args),
       // ── Admin 层 (+4) ──
       autosnippet_enrich_candidates: (ctx, args) => candidateHandlers.enrichCandidates(ctx, args),
       autosnippet_knowledge_lifecycle: (ctx, args) =>
         knowledgeHandlers.knowledgeLifecycle(ctx, args),
-      autosnippet_validate_candidate: (ctx, args) => candidateHandlers.validateCandidate(ctx, args),
-      autosnippet_check_duplicate: (ctx, args) => candidateHandlers.checkDuplicate(ctx, args),
     };
     return HANDLER_MAP[name] ?? null;
   }

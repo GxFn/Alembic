@@ -11,15 +11,16 @@ import type { CyclicDependency, Edge, LayerHierarchy, LayerViolation } from './P
 
 /* ═══ Constants ═══════════════════════════════════════════ */
 
-/** 层级命名启发式 */
+/** 层级命名启发式 — 按优先级排列，匹配模块名（边界安全） */
 const LAYER_NAME_HINTS: Array<{ pattern: RegExp; name: string; bias: number }> = [
-  { pattern: /foundation|core|base|shared|common|kit/i, name: 'Foundation', bias: -2 },
-  { pattern: /model|entity|dto/i, name: 'Model', bias: -1 },
+  { pattern: /^(foundation|core|base|shared|common)$/i, name: 'Foundation', bias: -2 },
+  { pattern: /foundation/i, name: 'Foundation', bias: -2 },
+  { pattern: /^(model|entity|dto)$/i, name: 'Model', bias: -1 },
   { pattern: /service|repository|manager|provider|store/i, name: 'Service', bias: 0 },
   { pattern: /network|api|http/i, name: 'Networking', bias: 0 },
-  { pattern: /ui|view|screen|component|widget/i, name: 'UI', bias: 1 },
+  { pattern: /(?:^ui$|^ui[A-Z]|view|screen|component|widget)/i, name: 'UI', bias: 1 },
   { pattern: /router|coordinator|navigation/i, name: 'Routing', bias: 1 },
-  { pattern: /app|main|launch|entry/i, name: 'Application', bias: 2 },
+  { pattern: /^(app|main|launch|entry)$/i, name: 'Application', bias: 2 },
   { pattern: /test|spec|mock/i, name: 'Test', bias: 3 },
 ];
 
@@ -167,11 +168,28 @@ export class LayerInferrer {
   /* ─── Layer Naming ──────────────────────────────── */
 
   #inferLayerName(modules: string[], level: number, totalLevels: number): string {
-    // 用模块名匹配启发式规则
-    for (const hint of LAYER_NAME_HINTS) {
-      if (modules.some((m) => hint.pattern.test(m))) {
-        return hint.name;
+    // 投票: 每个匹配的 hint 累加权重，取最高分的名称
+    const votes = new Map<string, number>();
+    for (const mod of modules) {
+      for (const hint of LAYER_NAME_HINTS) {
+        if (hint.pattern.test(mod)) {
+          votes.set(hint.name, (votes.get(hint.name) ?? 0) + 1);
+          break; // 每个模块只投一票（匹配第一个 hint）
+        }
       }
+    }
+
+    if (votes.size > 0) {
+      // 选最高票
+      let best = '';
+      let bestCount = 0;
+      for (const [name, count] of votes) {
+        if (count > bestCount) {
+          best = name;
+          bestCount = count;
+        }
+      }
+      return best;
     }
 
     // 基于层级位置推断

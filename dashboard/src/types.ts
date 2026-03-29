@@ -220,7 +220,7 @@ export interface GuardAuditSummary {
  *  V3 Knowledge Entry — 统一知识实体
  * ═══════════════════════════════════════════ */
 
-export type KnowledgeLifecycle = 'pending' | 'active' | 'deprecated';
+export type KnowledgeLifecycle = 'pending' | 'staging' | 'active' | 'evolving' | 'decaying' | 'deprecated';
 export type KnowledgeKind = 'rule' | 'pattern' | 'fact';
 
 export interface KnowledgeContent {

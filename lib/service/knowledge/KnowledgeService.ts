@@ -135,18 +135,25 @@ export class KnowledgeService {
         }
       }
 
-      // ── ConfidenceRouter — 标记 auto_approvable ──
+      // ── ConfidenceRouter — staging 路由 ──
       if (this._confidenceRouter) {
         const route = await this._confidenceRouter.route(entry);
         if (route.action === 'auto_approve') {
           entry.autoApprovable = true;
+          // 六态状态机：高置信度条目进入 staging
+          if (route.targetState === 'staging' && route.gracePeriod) {
+            entry.lifecycle = Lifecycle.STAGING;
+            entry.stagingDeadline = Date.now() + route.gracePeriod;
+          }
+        } else if (route.action === 'reject' && route.targetState === 'deprecated') {
+          entry.lifecycle = Lifecycle.DEPRECATED;
         }
-        // reject / pending 都保持 pending 状态，等待人工审核
+        // pending 保持不变
       }
 
-      // 注意: Bootstrap 候选保持 pending 状态，由 Dashboard 审核后发布。
+      // 注意: staging 条目由 StagingManager.checkAndPromote() 在到期后自动转为 active。
       // autoApprovable 标记保留，供前端显示「推荐批准」徽章。
-      // CursorDelivery 已支持高置信度 pending 条目的交付。
+      // CursorDelivery 已支持高置信度 staging/pending 条目的交付。
 
       const saved = await this.repository.create(entry);
 

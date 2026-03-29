@@ -4,10 +4,7 @@
  * 替代 CandidateGuardrail + RecipeReadinessChecker 的分裂验证，
  * 提供单一入口的三层验证 (字段完整性 + 内容质量 + 去重)。
  *
- * 分级模式:
- *   strict   — 默认：完整 REQUIRED 字段检查（标准知识条目）
- *   document — knowledgeType='dev-document' 时自动切换：跳过 Cursor 交付字段
- *   fallback — source 含 'fallback' 时：REQUIRED 降级为 WARNING
+ * 统一严格模式：完整 REQUIRED 字段检查，无宽松降级。
  *
  * @module shared/UnifiedValidator
  */
@@ -21,18 +18,6 @@ import {
   WHITELISTED_CATEGORIES,
 } from './FieldSpec.js';
 
-// ── Cursor 交付字段集合（document 模式跳过这些） ────────────
-
-const CURSOR_DELIVERY_FIELDS = new Set([
-  'trigger',
-  'kind',
-  'doClause',
-  'dontClause',
-  'whenClause',
-  'coreCode',
-  'topicHint',
-]);
-
 // ── 代码指纹工具函数 ───────────────────────────────────────
 
 /** 生成代码模式指纹 — 去除空白/注释后取前 200 字符的小写形式 */
@@ -43,19 +28,6 @@ function codeFingerprint(code: string) {
     .replace(/[\s]+/g, '') // 移除所有空白
     .toLowerCase()
     .slice(0, 200);
-}
-
-// ── 模式自动检测 ────────────────────────────────────────────
-
-/** 自动检测适合的验证模式 */
-function detectMode(candidate: Record<string, unknown>) {
-  if (candidate.knowledgeType === 'dev-document') {
-    return 'document';
-  }
-  if (typeof candidate.source === 'string' && candidate.source.includes('fallback')) {
-    return 'fallback';
-  }
-  return 'strict';
 }
 
 // ── UnifiedValidator ────────────────────────────────────────
@@ -88,7 +60,6 @@ export class UnifiedValidator {
   validate(
     candidate: Record<string, unknown>,
     options: {
-      mode?: 'strict' | 'document' | 'fallback';
       systemInjectedFields?: string[];
       skipUniqueness?: boolean;
     } = {}
@@ -96,16 +67,13 @@ export class UnifiedValidator {
     const errors: string[] = [];
     const warnings: string[] = [];
 
-    const mode = options.mode || detectMode(candidate);
     const systemInjected = new Set(options.systemInjectedFields || []);
 
     // ── Layer 1: 字段完整性 (基于 V3_FIELD_SPEC) ──
-    this.#checkFields(candidate, mode, systemInjected, errors, warnings);
+    this.#checkFields(candidate, systemInjected, errors, warnings);
 
     // ── Layer 2: 内容质量 (来自 CandidateGuardrail.validateQuality) ──
-    if (mode !== 'fallback') {
-      this.#checkContentQuality(candidate, mode, errors, warnings);
-    }
+    this.#checkContentQuality(candidate, errors, warnings);
 
     // ── Layer 3: 唯一性 (来自 CandidateGuardrail.validateUniqueness) ──
     if (!options.skipUniqueness) {
@@ -123,18 +91,12 @@ export class UnifiedValidator {
 
   #checkFields(
     candidate: Record<string, unknown>,
-    mode: string,
     systemInjected: Set<string>,
     errors: string[],
     warnings: string[]
   ) {
     for (const field of V3_FIELD_SPEC) {
       const { name, level, rule } = field;
-
-      // document 模式：跳过 Cursor 交付字段
-      if (mode === 'document' && CURSOR_DELIVERY_FIELDS.has(name.split('.')[0])) {
-        continue;
-      }
 
       // 系统注入字段：跳过
       if (systemInjected.has(name)) {
@@ -149,12 +111,7 @@ export class UnifiedValidator {
       }
 
       if (level === FieldLevel.REQUIRED) {
-        if (mode === 'fallback') {
-          // fallback 模式：REQUIRED 降级为 warning
-          warnings.push(`${name}: ${rule}`);
-        } else {
-          errors.push(`缺少必填字段: ${name} — ${rule}`);
-        }
+        errors.push(`缺少必填字段: ${name} — ${rule}`);
       } else if (level === FieldLevel.EXPECTED) {
         warnings.push(`建议填写: ${name} — ${rule}`);
       }
@@ -209,12 +166,7 @@ export class UnifiedValidator {
 
   // ── Layer 2: 内容质量启发式 ──────────────────────────────
 
-  #checkContentQuality(
-    candidate: Record<string, unknown>,
-    mode: string,
-    errors: string[],
-    warnings: string[]
-  ) {
+  #checkContentQuality(candidate: Record<string, unknown>, errors: string[], warnings: string[]) {
     const markdown =
       ((candidate.content as Record<string, unknown> | undefined)?.markdown as string) || '';
 
@@ -246,7 +198,7 @@ export class UnifiedValidator {
     }
 
     // coreCode 语法完整性
-    if (mode !== 'document') {
+    {
       const coreCode = ((candidate.coreCode as string) || '').trim();
       if (coreCode) {
         const firstChar = coreCode[0];

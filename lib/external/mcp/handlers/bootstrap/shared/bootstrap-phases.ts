@@ -9,6 +9,7 @@
  *   Phase 1   → 文件收集（DiscovererRegistry → 多语言项目类型检测）
  *   Phase 1.5 → AST 代码结构分析（tree-sitter + SFC 预处理）
  *   Phase 1.6 → Code Entity Graph（代码实体关系图谱）
+ *   Phase 1.8 → Panorama 全景汇总（RoleRefiner + CouplingAnalyzer + LayerInferrer）
  *   Phase 2   → 依赖关系 → knowledge_edges
  *   Phase 2.1 → Module 实体写入 Entity Graph
  *   Phase 3   → Guard 规则审计
@@ -896,6 +897,7 @@ export async function runAllPhases(
       warnings,
       report: report || {},
       incrementalPlan: null,
+      panoramaResult: null,
       detectedFrameworks: [],
       isEmpty: true,
     };
@@ -969,6 +971,36 @@ export async function runAllPhases(
   warnings.push(...phase1_7.warnings);
   if (report) {
     report.phases.callGraph = { result: phase1_7.callGraphResult, ms: Date.now() - p17Start };
+  }
+
+  // ── Phase 1.8: Panorama 全景汇总 ──
+  let panoramaResult: Record<string, unknown> | null = null;
+  try {
+    const panoramaService = ctx.container?.resolve?.('panoramaService');
+    if (
+      panoramaService &&
+      typeof (panoramaService as { invalidate?: () => void }).invalidate === 'function'
+    ) {
+      const p18Start = Date.now();
+      (panoramaService as { invalidate: () => void }).invalidate();
+      const result = (panoramaService as { getResult: () => Record<string, unknown> }).getResult();
+      panoramaResult = result;
+      ctx.logger.info(`[Bootstrap] Phase 1.8: Panorama computed in ${Date.now() - p18Start}ms`);
+      if (report) {
+        const overview = (
+          panoramaService as { getOverview: () => Record<string, unknown> }
+        ).getOverview();
+        report.phases.panorama = {
+          moduleCount: (overview as { moduleCount?: number }).moduleCount ?? 0,
+          layerCount: (overview as { layerCount?: number }).layerCount ?? 0,
+          ms: Date.now() - p18Start,
+        };
+      }
+    }
+  } catch (err: unknown) {
+    warnings.push(
+      `Phase 1.8 panorama failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 
   // ── Phase 2: 依赖图 ──
@@ -1068,6 +1100,7 @@ export async function runAllPhases(
     warnings,
     report, // NEW: Phase 级报告 (null if generateReport=false)
     incrementalPlan, // NEW: 增量评估结果 (null if incremental=false)
+    panoramaResult, // Phase 1.8: 全景汇总 (null if panoramaService unavailable)
     isEmpty: false,
   };
 }

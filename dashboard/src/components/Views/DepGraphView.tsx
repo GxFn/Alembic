@@ -246,64 +246,6 @@ const DepGraphView: React.FC = () => {
 
   return (
   <div className="flex-1 flex flex-col overflow-hidden">
-    {/* ── 页面头部 ── */}
-    <div className="mb-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
-    <div className="flex items-center gap-3 min-w-0">
-      <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-      <Layers className="text-blue-600" size={20} />
-      </div>
-      <div className="min-w-0">
-      <h2 className="text-lg xl:text-xl font-bold text-[var(--fg-primary)]">{t('depGraph.title')}</h2>
-      <p className="text-xs text-[var(--fg-muted)] mt-0.5 truncate">
-        {t('depGraph.visualization')}
-        {data.projectRoot && (
-        <span className="ml-1">· {data.projectRoot}</span>
-        )}
-      </p>
-      </div>
-    </div>
-    <div className="flex items-center gap-2 flex-wrap">
-      {hasTypes && (
-      <div className="flex items-center border border-[var(--border-default)] rounded-lg overflow-hidden text-xs">
-        {(['all', 'internal', 'external'] as const).map((f) => (
-        <button
-          key={f}
-          type="button"
-          onClick={() => setNodeFilter(f)}
-          className={`px-3 py-1.5 font-medium transition-colors ${nodeFilter === f ? 'bg-blue-600 text-white' : 'bg-[var(--bg-surface)] text-[var(--fg-secondary)] hover:bg-[var(--bg-subtle)]'}`}
-        >
-          {f === 'all' ? t('depGraph.filterAll') : f === 'internal' ? t('depGraph.filterInternal') : t('depGraph.filterExternal')}
-        </button>
-        ))}
-      </div>
-      )}
-      <button
-      type="button"
-      onClick={() => {
-        fetchGraph();
-      }}
-      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-[var(--fg-secondary)] bg-[var(--bg-subtle)] border border-[var(--border-default)] hover:bg-[var(--bg-subtle)]"
-      >
-      <RefreshCw size={14} /> {t('depGraph.refresh')}
-      </button>
-      <div className="flex items-center gap-2 xl:gap-3 text-xs flex-wrap">
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-default)]">
-        <Layers size={14} className="text-[var(--fg-muted)]" />
-        <span className="text-[var(--fg-secondary)]">{t('depGraph.packages')} <strong className="text-[var(--fg-primary)]">{nodes.length}</strong></span>
-      </div>
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
-        <span className="text-emerald-500">{t('depGraph.dependencies')}</span>
-        <strong className="text-emerald-700">{edges.length}</strong>
-      </div>
-      {data.generatedAt && (
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100">
-        <span className="text-blue-500">{new Date(data.generatedAt).toLocaleString('zh-CN')}</span>
-        </div>
-      )}
-      </div>
-    </div>
-    </div>
-
     {/* ── 内容区域 ── */}
     <div className="flex-1 overflow-y-auto pr-1 pb-6 space-y-6">
 

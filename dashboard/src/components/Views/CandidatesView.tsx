@@ -870,7 +870,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                             >
                               <Edit3 size={12} /> {t('candidates.approveAndSave')}
                             </button>
-                            {cand.lifecycle === 'pending' && (
+                            {(cand.lifecycle === 'pending' || cand.lifecycle === 'staging') && (
                               <button
                                 onClick={async () => {
                                   try {
@@ -1083,7 +1083,11 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     if (cand.complexity) b.push({ label: cand.complexity === 'advanced' ? t('candidates.confidenceHigh') : cand.complexity === 'intermediate' ? t('candidates.confidenceMedium') : t('candidates.confidenceLow'), className: cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100' });
                     if (cand.trigger) b.push({ label: cand.trigger, className: 'font-mono font-bold bg-amber-50 text-amber-700 border-amber-200' });
                     if (cand.source && cand.source !== 'unknown') b.push({ label: srcInfo.labelKey.startsWith('candidates.') ? t(srcInfo.labelKey) : srcInfo.labelKey, className: srcInfo.color });
-                    if (cand.lifecycle && cand.lifecycle !== 'pending') b.push({ label: cand.lifecycle, className: 'bg-blue-50 text-blue-600 border-blue-200' });
+                    if (cand.lifecycle === 'staging') {
+                      b.push({ label: 'staging', className: 'bg-blue-50 text-blue-600 border-blue-200' });
+                    } else if (cand.lifecycle && cand.lifecycle !== 'pending') {
+                      b.push({ label: cand.lifecycle, className: 'bg-gray-50 text-gray-600 border-gray-200' });
+                    }
                     return b;
                   })()}
                   metadata={(() => {
@@ -1238,7 +1242,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  {cand.lifecycle === 'pending' && (
+                  {(cand.lifecycle === 'pending' || cand.lifecycle === 'staging') && (
                     <button
                       onClick={async () => {
                         try {

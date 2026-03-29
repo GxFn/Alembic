@@ -157,13 +157,17 @@ export class ComplianceReporter {
   qualityGateConfig: Required<QualityGateThresholds>;
   ruleLearner: RuleLearnerLike | null;
   violationsStore: ViolationsStoreLike | null;
+  /** 实时规则精度追踪（由 SignalBus 更新） */
+  #rulePrecision: Map<string, number> = new Map();
+  #recentViolationCount = 0;
   /** @param qualityGateConfig { maxErrors, maxWarnings, minScore } */
   constructor(
     guardCheckEngine: GuardCheckEngineLike,
     violationsStore: ViolationsStoreLike | null,
     ruleLearner: RuleLearnerLike | null,
     exclusionManager: ExclusionManagerLike | null,
-    qualityGateConfig: QualityGateThresholds = {}
+    qualityGateConfig: QualityGateThresholds = {},
+    signalBus?: import('../../infrastructure/signal/SignalBus.js').SignalBus | null
   ) {
     this.engine = guardCheckEngine;
     this.violationsStore = violationsStore;
@@ -176,6 +180,18 @@ export class ComplianceReporter {
       ...qualityGateConfig,
     };
     this.logger = Logger.getInstance();
+
+    // Phase 2: 订阅 guard|quality 信号维护实时精度
+    if (signalBus) {
+      signalBus.subscribe('guard|quality', (signal) => {
+        if (signal.type === 'quality' && signal.source === 'RuleLearner' && signal.target) {
+          this.#rulePrecision.set(signal.target, signal.value);
+        }
+        if (signal.type === 'guard') {
+          this.#recentViolationCount++;
+        }
+      });
+    }
   }
 
   /**

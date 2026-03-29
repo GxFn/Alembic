@@ -480,6 +480,8 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
     projectRoot,
     // v5.0: 增量 Bootstrap 计划
     incrementalPlan,
+    // M1: Phase 1.8 全景数据 → strategyContext.panorama
+    panoramaResult: phaseResults.panoramaResult,
   };
 
   // 使用 setImmediate 避免阻塞 HTTP 响应

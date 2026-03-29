@@ -17,20 +17,146 @@ export interface McpServiceContainer {
   singletons?: Record<string, unknown>;
 }
 
+// ─── Intent Lifecycle ────────────────────────────────────
+
+/** A single decision recorded during an intent lifecycle */
+export interface DecisionRecord {
+  id: string;
+  title: string;
+  description: string;
+  rationale?: string;
+  tags?: string[];
+  recordedAt: number;
+}
+
+/** A single tool call record within an intent */
+export interface ToolCallRecord {
+  tool: string;
+  timestamp: number;
+  args_summary: string;
+}
+
+/** A drift event detected during an intent */
+export interface DriftEvent {
+  timestamp: number;
+  trigger: string;
+  type: 'new_module' | 'new_class' | 'search_shift' | 'file_shift';
+  detail: string;
+  primeOverlap: number;
+}
+
+/** Intent lifecycle state machine — tracks user intent from prime to close/fail */
+export interface IntentState {
+  // ─── Lifecycle ───
+  phase: 'idle' | 'active' | 'ended';
+
+  // ─── Prime baseline (set when phase = active) ───
+  primeQuery: string;
+  primeActiveFile?: string;
+  primeRecipeIds: string[];
+  primeAt: number;
+
+  // ─── Prime baseline (enriched by IntentExtractor) ───
+  primeLanguage: string | null;
+  primeModule: string | null;
+  primeScenario: string;
+
+  // ─── Search metadata (set by PrimeSearchPipeline) ───
+  searchMeta?: {
+    queries: string[];
+    resultCount: number;
+    filteredCount: number;
+  };
+
+  // ─── Anchor (set after create) ───
+  taskId?: string;
+  taskTitle?: string;
+
+  // ─── Context accumulation (appended on each tool call) ───
+  toolCalls: ToolCallRecord[];
+  searchQueries: string[];
+  mentionedFiles: string[];
+  mentionedModules: Set<string>;
+  decisions: DecisionRecord[];
+
+  // ─── Drift tracking ───
+  driftEvents: DriftEvent[];
+}
+
+/** Create a fresh idle IntentState */
+export function createIdleIntent(): IntentState {
+  return {
+    phase: 'idle',
+    primeQuery: '',
+    primeRecipeIds: [],
+    primeAt: 0,
+    primeLanguage: null,
+    primeModule: null,
+    primeScenario: 'search',
+    toolCalls: [],
+    searchQueries: [],
+    mentionedFiles: [],
+    mentionedModules: new Set(),
+    decisions: [],
+    driftEvents: [],
+  };
+}
+
+// ─── JSONL Signal Record ─────────────────────────────────
+
+/** A complete intent chain record, written to JSONL on close/fail */
+export interface IntentChainRecord {
+  sessionId: string;
+  taskId?: string;
+  outcome: 'completed' | 'failed' | 'abandoned';
+
+  primeQuery: string;
+  primeActiveFile?: string;
+  primeRecipeIds: string[];
+  primeAt: number;
+  primeLanguage: string | null;
+  primeModule: string | null;
+  primeScenario: string;
+
+  searchMeta?: {
+    queries: string[];
+    resultCount: number;
+    filteredCount: number;
+  };
+
+  toolCalls: ToolCallRecord[];
+  searchQueries: string[];
+  mentionedFiles: string[];
+  decisions: DecisionRecord[];
+
+  driftEvents: DriftEvent[];
+  driftScore: number;
+
+  closeReason?: string;
+  failReason?: string;
+  guardViolations?: number;
+  startedAt: number;
+  endedAt: number;
+  duration: number;
+}
+
 // ─── MCP Handler Context ─────────────────────────────────
+
+/** MCP session tracking */
+export interface McpSession {
+  id: string;
+  startedAt: number;
+  toolCallCount: number;
+  toolsUsed: Set<string>;
+  lastActivityAt: number;
+  intent: IntentState;
+}
 
 /** MCP handler context passed from McpServer / router layer */
 export interface McpContext {
   container: McpServiceContainer;
   startedAt?: number;
-  session?: {
-    id: string;
-    readyCalled: boolean;
-    toolCallCount: number;
-    toolsUsed: Set<string>;
-    startedAt: number;
-    [key: string]: unknown;
-  };
+  session?: McpSession;
   [key: string]: unknown;
 }
 
@@ -238,6 +364,7 @@ export interface ConsolidatedGraphArgs {
 }
 
 export interface ConsolidatedGuardArgs {
+  operation?: 'check' | 'review' | 'reverse_audit' | 'coverage_matrix' | 'compliance_report';
   code?: string;
   files?: Array<string | { path?: string; [key: string]: unknown }>;
   [key: string]: unknown;
@@ -257,6 +384,7 @@ export interface SubmitKnowledgeArgs {
   dimensionId?: string;
   knowledgeType?: string;
   skipDuplicateCheck?: boolean;
+  skipConsolidation?: boolean;
   [key: string]: unknown;
 }
 

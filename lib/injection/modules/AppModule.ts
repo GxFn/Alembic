@@ -5,11 +5,10 @@
  *   - recipeParser, recipeCandidateValidator
  *   - qualityScorer, feedbackCollector, tokenUsageStore, recipeExtractor
  *   - moduleService, cursorDeliveryPipeline
- *   - taskIdGenerator, taskReadyEngine, taskKnowledgeBridge, taskGraphService
+ *   - primeSearchPipeline (for prime multi-query search — no DB dependency)
  */
 
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
-import { TaskIdGenerator } from '../../domain/task/TaskIdGenerator.js';
 import { TokenUsageStore } from '../../repository/token/TokenUsageStore.js';
 import { CursorDeliveryPipeline } from '../../service/delivery/CursorDeliveryPipeline.js';
 import { RecipeExtractor } from '../../service/knowledge/RecipeExtractor.js';
@@ -18,9 +17,7 @@ import { FeedbackCollector } from '../../service/quality/FeedbackCollector.js';
 import { QualityScorer } from '../../service/quality/QualityScorer.js';
 import { RecipeCandidateValidator } from '../../service/recipe/RecipeCandidateValidator.js';
 import { RecipeParser } from '../../service/recipe/RecipeParser.js';
-import { TaskGraphService } from '../../service/task/TaskGraphService.js';
-import { TaskKnowledgeBridge } from '../../service/task/TaskKnowledgeBridge.js';
-import { TaskReadyEngine } from '../../service/task/TaskReadyEngine.js';
+import { PrimeSearchPipeline } from '../../service/task/PrimeSearchPipeline.js';
 
 import type { ServiceContainer } from '../ServiceContainer.js';
 
@@ -73,40 +70,13 @@ export function register(c: ServiceContainer) {
       } as unknown as ConstructorParameters<typeof CursorDeliveryPipeline>[0])
   );
 
-  // ═══ TaskGraph ═══
+  // ═══ PrimeSearchPipeline (for prime multi-query search) ═══
 
-  c.singleton('taskIdGenerator', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb: () => unknown; getDrizzle: () => unknown };
-    return new TaskIdGenerator(
-      db.getDb() as ConstructorParameters<typeof TaskIdGenerator>[0],
-      db.getDrizzle() as ConstructorParameters<typeof TaskIdGenerator>[1]
-    );
-  });
   c.singleton(
-    'taskReadyEngine',
+    'primeSearchPipeline',
     (ct: ServiceContainer) =>
-      new TaskReadyEngine(
-        (ct.get('database') as { getDb: () => unknown }).getDb() as ConstructorParameters<
-          typeof TaskReadyEngine
-        >[0]
-      )
-  );
-  c.singleton(
-    'taskKnowledgeBridge',
-    (ct: ServiceContainer) =>
-      new TaskKnowledgeBridge(
-        ct.get('searchEngine') as unknown as ConstructorParameters<typeof TaskKnowledgeBridge>[0]
-      )
-  );
-  c.singleton(
-    'taskGraphService',
-    (ct: ServiceContainer) =>
-      new TaskGraphService(
-        ct.get('taskRepository') as ConstructorParameters<typeof TaskGraphService>[0],
-        ct.get('taskReadyEngine') as ConstructorParameters<typeof TaskGraphService>[1],
-        ct.get('taskKnowledgeBridge') as ConstructorParameters<typeof TaskGraphService>[2],
-        ct.get('auditLogger') as unknown as ConstructorParameters<typeof TaskGraphService>[3],
-        ct.get('taskIdGenerator') as ConstructorParameters<typeof TaskGraphService>[4]
+      new PrimeSearchPipeline(
+        ct.get('searchEngine') as unknown as ConstructorParameters<typeof PrimeSearchPipeline>[0]
       )
   );
 }

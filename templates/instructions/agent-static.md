@@ -7,7 +7,7 @@ Access the knowledge base through MCP tools.
 
 ## MCP Tools
 
-- `autosnippet_task` — Task & decision management (prime/create/claim/close/record_decision)
+- `autosnippet_task` — Task & decision management (prime/create/close/fail/record_decision)
 - `autosnippet_search` — Search knowledge (mode: auto/context/keyword/semantic)
 - `autosnippet_knowledge` — Knowledge CRUD (operation: list/get/insights)
 - `autosnippet_submit_knowledge` — Submit knowledge candidate
@@ -15,6 +15,7 @@ Access the knowledge base through MCP tools.
 - `autosnippet_skill` — Skill management (list/load)
 - `autosnippet_structure` — Project structure discovery
 - `autosnippet_bootstrap` — Project cold-start & scan
+- `autosnippet_panorama` — Project panorama (operation: overview/module/gaps/health)
 - `autosnippet_health` — Service health & KB stats
 
 ## Constraints

@@ -48,16 +48,15 @@ const MCP_TOOLS_SUMMARY = [
     name: 'autosnippet_submit_knowledge',
     desc: 'Submit a knowledge candidate (strict validation)',
   },
-  {
-    name: 'autosnippet_submit_knowledge_batch',
-    desc: 'Batch submit candidates (with dedup + throttle)',
-  },
   { name: 'autosnippet_guard', desc: 'Code compliance check (single file or batch audit)' },
   { name: 'autosnippet_structure', desc: 'Project structure discovery (targets/files/metadata)' },
   { name: 'autosnippet_graph', desc: 'Knowledge graph query (query/impact/path/stats)' },
   { name: 'autosnippet_skill', desc: 'Skill management (list/load/create/update/delete)' },
-  { name: 'autosnippet_save_document', desc: 'Save development document (auto-publish)' },
   { name: 'autosnippet_bootstrap', desc: 'Project cold-start & scan' },
+  {
+    name: 'autosnippet_panorama',
+    desc: 'Project panorama (operation: overview/module/gaps/health)',
+  },
   { name: 'autosnippet_health', desc: 'Service health & KB statistics' },
   { name: 'autosnippet_capabilities', desc: 'List all available MCP tools (self-discovery)' },
 ];

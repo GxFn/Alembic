@@ -319,6 +319,8 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
       // SQLite INTEGER → boolean
       autoApprovable: !!row.autoApprovable,
       includeHeaders: !!row.includeHeaders,
+      // Staging support
+      stagingDeadline: (row.staging_deadline as number) || null,
     });
   }
 
@@ -369,6 +371,7 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
       updatedAt: e.updatedAt || now,
       publishedAt: e.publishedAt || null,
       publishedBy: e.publishedBy || null,
+      staging_deadline: e.stagingDeadline || null,
     };
   }
 

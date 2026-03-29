@@ -8,9 +8,9 @@ AutoSnippet 通过 [Model Context Protocol (MCP)](https://modelcontextprotocol.i
 
 MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder / Claude Code）自动启动并连接。
 
-**共 20 个工具：**
-- **Agent Tier (16)** — IDE AI 可直接调用
-- **Admin Tier (4)** — 管理员/CI 工具
+**共 16 个工具：**
+- **Agent Tier (14)** — IDE AI 可直接调用
+- **Admin Tier (2)** — 管理员/CI 工具
 
 所有工具经过 Gateway 管线校验（validate → guard → route → audit）。
 
@@ -149,9 +149,22 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 
 ### 7. autosnippet_submit_knowledge
 
-提交单条知识。会经过严格的前置校验和去重检测。
+统一知识提交（单条/批量/文档）。使用 `items` 数组格式传入 1~N 条。
 
 **参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `items` | object[] | ✅ | 知识条目数组。每条字段详见下方 |
+| `target_name` | string | — | 批量来源标识，如 `network-module-scan` |
+| `source` | string | — | 来源标记，默认 `mcp` |
+| `deduplicate` | boolean | — | 批量时基于 title 自动去重，默认 `true` |
+| `skipConsolidation` | boolean | — | 跳过融合分析（确认独立新建时设为 `true`） |
+| `skipDuplicateCheck` | boolean | — | 跳过去重检测 |
+| `client_id` | string | — | 客户端 ID |
+| `dimensionId` | string | — | 冷启动关联维度 ID |
+
+**items 元素字段（完整知识条目）：**
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
@@ -159,51 +172,23 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 | `language` | string | ✅ | 编程语言 |
 | `content` | object | ✅ | `{ markdown, pattern?, rationale }` 内容对象 |
 | `kind` | string | ✅ | 类型：`rule` / `pattern` / `fact` |
-| `category` | string | ✅ | 分类 |
-| `knowledgeType` | string | ✅ | 知识类型（如 `code-pattern`, `code-standard` 等） |
-| `description` | string | ✅ | 中文简述 ≤80 字 |
 | `doClause` | string | ✅ | 英文祈使句正向规则 |
-| `dontClause` | string | ✅ | 英文反向约束（描述禁止的做法） |
+| `dontClause` | string | ✅ | 英文反向约束 |
 | `whenClause` | string | ✅ | 英文触发场景描述 |
+| `coreCode` | string | ✅ | 3-8 行纯代码骨架 |
+| `category` | string | ✅ | 分类 |
 | `trigger` | string | ✅ | `@kebab-case` 唯一标识符 |
-| `coreCode` | string | ✅ | 3-8 行纯代码骨架，语法完整可复制 |
-| `headers` | array | ✅ | import 语句数组，无 import 时传 `[]` |
-| `usageGuide` | string | ✅ | `###` 章节格式使用指南 |
-| `reasoning` | object | ✅ | `{ whyStandard, sources, confidence }` 推理过程 |
-| `topicHint` | string | — | 主题提示：`networking` / `ui` / `data` / `architecture` / `conventions` |
-| `scope` | string | — | 作用域：`universal` / `project-specific` / `team-convention` |
-| `complexity` | string | — | 复杂度：`basic` / `intermediate` / `advanced` |
-| `sourceFile` | string | — | 来源文件相对路径 |
+| `description` | string | ✅ | 中文简述 ≤80 字 |
+| `headers` | array | ✅ | import 语句数组 |
+| `usageGuide` | string | ✅ | 使用指南 |
+| `knowledgeType` | string | ✅ | 知识类型 |
+| `reasoning` | object | ✅ | `{ whyStandard, sources, confidence }` 推理 |
+
+**文档保存模式（items 元素设 `knowledgeType: 'dev-document'`，仅需 `title` + `markdown`）。**
 
 ---
 
-### 8. autosnippet_submit_knowledge_batch
-
-批量提交知识条目。
-
-**参数：**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `target_name` | string | ✅ | 目标/模块名称 |
-| `items` | object[] | ✅ | 知识条目数组（每个元素结构同 `autosnippet_submit_knowledge`） |
-
----
-
-### 9. autosnippet_save_document
-
-保存开发文档到知识库。
-
-**参数：**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `title` | string | ✅ | 文档标题 |
-| `markdown` | string | ✅ | Markdown 内容 |
-
----
-
-### 10. autosnippet_skill
+### 8. autosnippet_skill
 
 Skill 管理。创建、加载、更新、删除项目 Skills。
 
@@ -217,38 +202,13 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ---
 
-### 11. autosnippet_bootstrap
+### 9. autosnippet_bootstrap
 
-冷启动和扫描操作。
-
-**参数：**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `operation` | string | ✅ | 操作：`knowledge` / `refine` / `scan` |
-| `target` | string | — | 扫描目标路径（`scan` 时） |
-| `dimensions` | string[] | — | 指定维度（`knowledge` 时） |
-| `maxFiles` | number | — | 最大文件数 |
-
-**operation 说明：**
-
-| 操作 | 作用 |
-|------|------|
-| `knowledge` | 全量冷启动（多维度分析 + AI 填充） |
-| `refine` | 润色现有候选条目（AI 增强描述和元数据） |
-| `scan` | 扫描指定目标（等同于 `asd ais`） |
+冷启动 — 无需参数，自动分析项目（AST、依赖图、Guard 审计），返回 Mission Briefing。
 
 ---
 
-### 12. autosnippet_capabilities
-
-列出所有可用 MCP 工具概览。帮助 AI 了解自己能做什么。
-
-**参数：** 无
-
----
-
-### 13. autosnippet_dimension_complete
+### 10. autosnippet_dimension_complete
 
 维度分析完成通知 — Agent 完成一个冷启动维度的分析后调用。负责 Recipe 关联、Skill 生成、Checkpoint 保存、进度推送。
 
@@ -265,63 +225,53 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ---
 
-### 14. autosnippet_wiki_plan
+### 11. autosnippet_wiki
 
-规划 Wiki 文档生成 — 扫描项目结构、分析 AST 和依赖、整合知识库，返回发现的文档主题及数据包。
+Wiki 文档生成。
 
 **参数：**
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
+| `operation` | string | ✅ | `plan`（规划主题 + 数据包）/ `finalize`（写入 meta.json + 验证） |
 | `language` | string | — | Wiki 文档语言：`zh`（默认）/ `en` |
-| `sessionId` | string | — | bootstrap session ID（可选） |
+| `sessionId` | string | — | bootstrap session ID |
+| `articlesWritten` | string[] | — | finalize 时：已写入的文件路径列表 |
 
 ---
 
-### 15. autosnippet_wiki_finalize
+### 12. autosnippet_panorama
 
-完成 Wiki 生成 — 写入 meta.json、执行去重检查、验证文件完整性。在所有 Wiki 文章写入完成后调用。
+项目全景查询。
 
 **参数：**
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `articlesWritten` | string[] | ✅ | 已写入的 Wiki 文件路径列表（相对于 `AutoSnippet/wiki/`） |
+| `operation` | string | — | `overview`（默认）/ `module` / `gaps` / `health` / `governance_cycle` / `decay_report` / `staging_check` / `enhancement_suggestions` |
+| `module` | string | — | 模块名（`module` 操作时必填） |
 
 ---
 
-### 16. autosnippet_task
+### 13. autosnippet_task
 
-任务图管理 — 创建/查询/认领/关闭任务，管理依赖关系。用于 Agent 自主拆解和执行复杂多步骤工作。
+任务与决策管理（5 operations）。每次对话开始时先调用 `prime` 加载知识上下文。
 
 **参数：**
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `operation` | string | ✅ | 操作类型：`create` / `ready` / `claim` / `close` / `fail` / `defer` / `progress` / `show` / `list` / `blocked` / `decompose` / `dep_add` / `dep_tree` / `prime` / `stats` |
-| `title` | string | — | 任务标题（create） |
-| `description` | string | — | 任务描述（create/progress） |
-| `id` | string | — | 任务 ID（claim/close/fail/defer/show/progress） |
-| `priority` | number | — | 优先级 0-4，0=最高（create） |
-| `taskType` | string | — | 任务类型：`epic` / `task` / `bug` / `chore`（create） |
-| `parentId` | string | — | 父任务 ID（create 子任务） |
-| `reason` | string | — | 原因（close/fail/defer） |
-| `dependsOn` | string | — | 依赖的任务 ID（dep_add） |
-| `subtasks` | array | — | 子任务列表（decompose） |
-
-**常用操作：**
-- `prime` — 恢复会话上下文（返回进行中 + 就绪任务）
-- `ready` — 获取下一批可执行任务（含知识上下文）
-- `create` — 创建任务
-- `claim` — 认领并开始任务
-- `close` — 完成任务
-- `stats` — 任务统计
+| `operation` | string | ✅ | 操作：`prime` / `create` / `close` / `fail` / `record_decision` |
+| `id` | string | — | 任务 ID（close/fail） |
+| `title` | string | — | 任务标题（create）/ 决策标题（record_decision） |
+| `description` | string | — | 任务描述（create） |
+| `reason` | string | — | 原因（close/fail） |
 
 ---
 
 ## Admin Tier 工具
 
-### 17. autosnippet_enrich_candidates
+### 14. autosnippet_enrich_candidates
 
 候选字段完整性诊断（纯逻辑检查，不调用 AI）。
 
@@ -333,7 +283,7 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ---
 
-### 18. autosnippet_knowledge_lifecycle
+### 15. autosnippet_knowledge_lifecycle
 
 知识条目生命周期操作。
 
@@ -354,46 +304,6 @@ draft → pending → approved → active → deprecated
 ```
 
 ---
-
-### 19. autosnippet_validate_candidate
-
-独立候选结构化预校验（5 层检查）。
-
-**参数：**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `candidate` | object | ✅ | 候选条目对象 |
-
-**校验层次：**
-1. 必填字段完整性
-2. 字段格式合规
-3. 内容质量评估
-4. 语义重复检测
-5. 知识类型合规
-
----
-
-### 20. autosnippet_check_duplicate
-
-相似度检测，检查候选是否与现有知识重复。
-
-**参数：**
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `candidate` | object | ✅ | 候选条目对象 |
-
-**返回：**
-```json
-{
-  "isDuplicate": false,
-  "similarEntries": [
-    { "id": "...", "title": "...", "similarity": 0.82 }
-  ],
-  "threshold": 0.85
-}
-```
 
 ---
 

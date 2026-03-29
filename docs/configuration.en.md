@@ -100,7 +100,7 @@ Framework-level defaults, typically no modification needed.
     "format": "json",
     "file": {
       "enabled": true,
-      "path": "./logs"
+      "path": "./.autosnippet/logs"
     }
   },
   "constitution": {

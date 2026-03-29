@@ -8,6 +8,7 @@
  */
 
 import type { CouplingAnalyzer } from './CouplingAnalyzer.js';
+import { DimensionAnalyzer } from './DimensionAnalyzer.js';
 import type { LayerInferrer } from './LayerInferrer.js';
 import type {
   CallFlowSummary,
@@ -26,6 +27,7 @@ export interface PanoramaAggregatorOptions {
   layerInferrer: LayerInferrer;
   db: CeDbLike;
   projectRoot: string;
+  dimensionAnalyzer?: DimensionAnalyzer;
 }
 
 /* ═══ PanoramaAggregator Class ════════════════════════════ */
@@ -36,6 +38,7 @@ export class PanoramaAggregator {
   readonly #layerInferrer: LayerInferrer;
   readonly #db: CeDbLike;
   readonly #projectRoot: string;
+  readonly #dimensionAnalyzer: DimensionAnalyzer;
 
   constructor(opts: PanoramaAggregatorOptions) {
     this.#roleRefiner = opts.roleRefiner;
@@ -43,6 +46,7 @@ export class PanoramaAggregator {
     this.#layerInferrer = opts.layerInferrer;
     this.#db = opts.db;
     this.#projectRoot = opts.projectRoot;
+    this.#dimensionAnalyzer = opts.dimensionAnalyzer ?? new DimensionAnalyzer(opts.db);
   }
 
   /**
@@ -73,15 +77,23 @@ export class PanoramaAggregator {
       }
     }
 
-    // 6. 知识覆盖率
-    const recipeCounts = this.#getRecipeCounts(moduleCandidates);
+    // 6. 项目级 recipe 总数（recipe scope 通常为 universal，不做模块强关联）
+    const projectRecipeCount = this.#getProjectRecipeCount();
 
-    // 7. 汇总 PanoramaModule
+    // 7. 计算总文件数
+    let totalFiles = 0;
+    for (const mc of moduleCandidates) {
+      totalFiles += mc.files.length;
+    }
+
+    // 8. 汇总 PanoramaModule
+    // 模块 recipeCount 按文件数等比分配项目级 recipe（反映覆盖贡献度）
     const panoramaModules = new Map<string, PanoramaModule>();
     for (const mc of moduleCandidates) {
       const refined = refinedRoles.get(mc.name);
       const metrics = coupling.metrics.get(mc.name);
-      const recipeCount = recipeCounts.get(mc.name) ?? 0;
+      const recipeCount =
+        totalFiles > 0 ? Math.round((projectRecipeCount * mc.files.length) / totalFiles) : 0;
 
       panoramaModules.set(mc.name, {
         name: mc.name,
@@ -98,10 +110,17 @@ export class PanoramaAggregator {
       });
     }
 
-    // 8. 知识空白区检测
-    const gaps = this.#detectGaps(panoramaModules);
+    // 8.5 基于模块角色重命名层级（比模块名 pattern 更准确）
+    this.#renameLayersByRole(layers, panoramaModules);
 
-    // 9. 调用流概要
+    // 9. 多维度知识健康分析 (替代旧的基于模块文件数的覆盖率模型)
+    const moduleRoles = moduleCandidates.map((m) => {
+      const pm = panoramaModules.get(m.name);
+      return pm?.refinedRole ?? m.inferredRole;
+    });
+    const { radar, gaps } = this.#dimensionAnalyzer.analyze(moduleRoles);
+
+    // 10. 调用流概要
     const callFlowSummary = this.#computeCallFlowSummary();
 
     return {
@@ -109,115 +128,102 @@ export class PanoramaAggregator {
       layers,
       cycles: coupling.cycles,
       gaps,
+      healthRadar: radar,
       callFlowSummary,
+      projectRecipeCount,
       computedAt: Date.now(),
     };
   }
 
-  /* ─── Recipe Coverage ───────────────────────────── */
+  /* ─── Project Recipe Count ──────────────────────── */
 
-  #getRecipeCounts(modules: ModuleCandidate[]): Map<string, number> {
-    const counts = new Map<string, number>();
-
-    for (const mc of modules) {
-      if (mc.files.length === 0) {
-        counts.set(mc.name, 0);
-        continue;
-      }
-
-      // 查该模块文件关联的 recipe 数
-      // Recipe 通过 knowledge_entries 中 scope/language 字段关联，
-      // 但更直接的方式是查 bootstrap_dim_files + knowledge_entries
-      const placeholders = mc.files.map(() => '?').join(',');
+  #getProjectRecipeCount(): number {
+    try {
       const row = this.#db
         .prepare(
-          `SELECT COUNT(DISTINCT ke.id) as cnt
-           FROM knowledge_entries ke
-           WHERE ke.lifecycle IN ('active', 'pending')
-           AND (ke.scope LIKE ? OR EXISTS (
-             SELECT 1 FROM bootstrap_dim_files bdf
-             WHERE bdf.file_path IN (${placeholders})
-             AND bdf.dim_id = ke.id
-           ))`
+          `SELECT COUNT(*) as cnt FROM knowledge_entries WHERE lifecycle IN ('active', 'pending')`
         )
-        .get(`%${mc.name}%`, ...mc.files) as Record<string, unknown> | undefined;
-
-      counts.set(mc.name, Number(row?.cnt ?? 0));
+        .get() as Record<string, unknown> | undefined;
+      return Number(row?.cnt ?? 0);
+    } catch {
+      return 0;
     }
-
-    return counts;
   }
 
-  /* ─── Knowledge Gaps ────────────────────────────── */
+  /* ─── Layer Naming (role-based) ─────────────────── */
 
-  #detectGaps(modules: Map<string, PanoramaModule>): KnowledgeGap[] {
-    const gaps: KnowledgeGap[] = [];
+  /** 角色 → 层级名映射 */
+  static readonly #ROLE_TO_LAYER: Record<string, string> = {
+    core: 'Foundation',
+    foundation: 'Foundation',
+    model: 'Model',
+    service: 'Service',
+    networking: 'Infrastructure',
+    storage: 'Infrastructure',
+    ui: 'UI',
+    feature: 'Feature',
+    config: 'Configuration',
+    test: 'Test',
+    app: 'Application',
+  };
 
-    for (const [, mod] of modules) {
-      if (mod.fileCount === 0) {
-        continue;
+  /**
+   * 基于模块 refinedRole 投票重命名层级
+   * 比模块名 pattern 匹配更准确（避免 BDUIKit 被误匹配为 Foundation 等问题）
+   */
+  #renameLayersByRole(
+    layers: { levels: Array<{ level: number; name: string; modules: string[] }> },
+    panoramaModules: Map<string, PanoramaModule>
+  ): void {
+    const usedNames = new Set<string>();
+    const maxLevel = Math.max(...layers.levels.map((l) => l.level), 0);
+
+    for (const level of layers.levels) {
+      // 只统计有文件的模块（排除 0 文件的第三方依赖干扰）
+      const roleVotes = new Map<string, number>();
+      for (const modName of level.modules) {
+        const mod = panoramaModules.get(modName);
+        if (mod && mod.fileCount > 0) {
+          const role = mod.refinedRole || mod.inferredRole;
+          roleVotes.set(role, (roleVotes.get(role) ?? 0) + 1);
+        }
       }
 
-      // 高优: 模块文件多但 recipe 少
-      if (mod.fileCount >= 5 && mod.recipeCount === 0) {
-        gaps.push({
-          module: mod.name,
-          files: mod.fileCount,
-          recipes: 0,
-          priority: 'high',
-          suggestedFocus: this.#inferFocusAreas(mod),
-        });
-      } else if (mod.coverageRatio < 0.2 && mod.fileCount >= 3) {
-        gaps.push({
-          module: mod.name,
-          files: mod.fileCount,
-          recipes: mod.recipeCount,
-          priority: 'medium',
-          suggestedFocus: this.#inferFocusAreas(mod),
-        });
-      } else if (mod.coverageRatio < 0.5 && mod.fanIn > 5) {
-        // 高被依赖但覆盖不足
-        gaps.push({
-          module: mod.name,
-          files: mod.fileCount,
-          recipes: mod.recipeCount,
-          priority: 'medium',
-          suggestedFocus: ['api-contract', 'error-handling'],
-        });
+      let layerName: string;
+
+      if (roleVotes.size === 0) {
+        // 全部是 0 文件模块 → 用位置推断
+        layerName =
+          level.level === 0 ? 'Foundation' : level.level === maxLevel ? 'Application' : 'Feature';
+      } else {
+        // 选最高票角色
+        let bestRole = '';
+        let bestCount = 0;
+        for (const [role, count] of roleVotes) {
+          if (count > bestCount) {
+            bestRole = role;
+            bestCount = count;
+          }
+        }
+
+        layerName = PanoramaAggregator.#ROLE_TO_LAYER[bestRole] ?? 'Feature';
+
+        // 位置修正：最底层优先 Foundation，最顶层优先 Application
+        if (level.level === 0 && roleVotes.has('core')) {
+          layerName = 'Foundation';
+        } else if (level.level === maxLevel && layers.levels.length > 1) {
+          layerName = 'Application';
+        }
       }
-    }
 
-    return gaps.sort((a, b) => {
-      const priorityOrder = { high: 0, medium: 1, low: 2 };
-      return priorityOrder[a.priority] - priorityOrder[b.priority];
-    });
-  }
+      // 去重：已使用的名称追加 level 号
+      if (usedNames.has(layerName)) {
+        layerName = `${layerName} ${level.level}`;
+      }
+      usedNames.add(layerName);
 
-  #inferFocusAreas(mod: PanoramaModule): string[] {
-    const areas: string[] = [];
-    const role = mod.refinedRole;
-
-    if (role === 'core' || role === 'service') {
-      areas.push('error-handling', 'api-contract');
+      level.name = layerName;
     }
-    if (role === 'ui') {
-      areas.push('thread-safety', 'lifecycle');
-    }
-    if (role === 'networking') {
-      areas.push('error-handling', 'retry-strategy');
-    }
-    if (role === 'storage') {
-      areas.push('thread-safety', 'migration');
-    }
-    if (role === 'model') {
-      areas.push('validation', 'serialization');
-    }
-
-    if (areas.length === 0) {
-      areas.push('coding-standards');
-    }
-
-    return areas;
   }
 
   /* ─── Call Flow Summary ─────────────────────────── */

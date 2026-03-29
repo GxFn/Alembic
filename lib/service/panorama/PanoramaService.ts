@@ -7,15 +7,23 @@
  *   gaps     — 知识空白区 (有代码无 Recipe)
  *   health   — 全景健康度 (覆盖率 + 耦合度 + 衰退)
  *
+ * 模块发现委托给 ModuleDiscoverer（SRP）。
  * 内存缓存 + 24h 过期策略。
  *
  * @module PanoramaService
  */
 
-import { inferTargetRole } from '../../external/mcp/handlers/TargetClassifier.js';
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import { ModuleDiscoverer } from './ModuleDiscoverer.js';
 import type { PanoramaAggregator } from './PanoramaAggregator.js';
-import type { CeDbLike, KnowledgeGap, PanoramaModule, PanoramaResult } from './PanoramaTypes.js';
-import type { ModuleCandidate, ModuleRole } from './RoleRefiner.js';
+import type { PanoramaScanner } from './PanoramaScanner.js';
+import type {
+  CeDbLike,
+  HealthRadar,
+  KnowledgeGap,
+  PanoramaModule,
+  PanoramaResult,
+} from './PanoramaTypes.js';
 
 /* ═══ Types ═══════════════════════════════════════════════ */
 
@@ -23,6 +31,9 @@ export interface PanoramaServiceOptions {
   aggregator: PanoramaAggregator;
   db: CeDbLike;
   projectRoot: string;
+  scanner?: PanoramaScanner;
+  moduleDiscoverer?: ModuleDiscoverer;
+  signalBus?: SignalBus;
 }
 
 export interface PanoramaOverview {
@@ -44,6 +55,8 @@ export interface PanoramaOverview {
   }>;
   cycleCount: number;
   gapCount: number;
+  /** 多维度知识健康雷达 */
+  healthRadar: HealthRadar;
   computedAt: number;
   stale: boolean;
 }
@@ -55,13 +68,15 @@ export interface PanoramaModuleDetail {
 }
 
 export interface PanoramaHealth {
-  overallCoverage: number;
+  /** 多维度知识健康雷达 */
+  healthRadar: HealthRadar;
   avgCoupling: number;
   cycleCount: number;
   gapCount: number;
   highPriorityGaps: number;
   moduleCount: number;
-  healthScore: number; // 0-100
+  /** 综合健康分 0-100 (维度覆盖 60 + 无循环 20 + 无高优空白 10 + 耦合适中 10) */
+  healthScore: number;
 }
 
 /* ═══ Constants ═══════════════════════════════════════════ */
@@ -74,12 +89,28 @@ export class PanoramaService {
   readonly #aggregator: PanoramaAggregator;
   readonly #db: CeDbLike;
   readonly #projectRoot: string;
+  readonly #scanner: PanoramaScanner | null;
+  readonly #moduleDiscoverer: ModuleDiscoverer;
+  readonly #signalBus: SignalBus | null;
   #cache: PanoramaResult | null = null;
+  #scanPromise: Promise<void> | null = null;
+  #lastOverview: PanoramaOverview | null = null;
 
   constructor(opts: PanoramaServiceOptions) {
     this.#aggregator = opts.aggregator;
     this.#db = opts.db;
     this.#projectRoot = opts.projectRoot;
+    this.#scanner = opts.scanner ?? null;
+    this.#moduleDiscoverer =
+      opts.moduleDiscoverer ?? new ModuleDiscoverer(opts.db, opts.projectRoot);
+    this.#signalBus = opts.signalBus ?? null;
+
+    // Phase 2: 订阅信号标记缓存失效
+    if (this.#signalBus) {
+      this.#signalBus.subscribe('guard|lifecycle|usage', () => {
+        this.#cache = null;
+      });
+    }
   }
 
   /* ─── Public API ────────────────────────────────── */
@@ -92,13 +123,14 @@ export class PanoramaService {
     const isStale = Date.now() - result.computedAt > STALE_THRESHOLD_MS;
 
     let totalFiles = 0;
-    let totalRecipes = 0;
     for (const [, mod] of result.modules) {
       totalFiles += mod.fileCount;
-      totalRecipes += mod.recipeCount;
     }
+    // 使用项目级 recipe 总数，而非 per-module 之和
+    // 因为大多数 recipe scope 为 universal，无法匹配到具体模块
+    const totalRecipes = result.projectRecipeCount;
 
-    return {
+    const overview: PanoramaOverview = {
       projectRoot: this.#projectRoot,
       moduleCount: result.modules.size,
       layerCount: result.layers.levels.length,
@@ -120,9 +152,25 @@ export class PanoramaService {
       })),
       cycleCount: result.cycles.length,
       gapCount: result.gaps.length,
+      healthRadar: result.healthRadar,
       computedAt: result.computedAt,
       stale: isStale,
     };
+
+    // Phase 3: 发射 panorama 信号 — 覆盖率/健康度变化检测
+    if (this.#signalBus && this.#lastOverview) {
+      if (Math.abs(overview.overallCoverage - this.#lastOverview.overallCoverage) >= 0.05) {
+        this.#signalBus.send('panorama', 'PanoramaService.coverage', overview.overallCoverage, {
+          metadata: {
+            oldCoverage: this.#lastOverview.overallCoverage,
+            newCoverage: overview.overallCoverage,
+          },
+        });
+      }
+    }
+    this.#lastOverview = overview;
+
+    return overview;
   }
 
   /**
@@ -139,18 +187,9 @@ export class PanoramaService {
     const layerName =
       result.layers.levels.find((l) => l.modules.includes(moduleName))?.name ?? 'Unknown';
 
-    // 找邻居 (通过 CouplingAnalyzer 边)
+    // 从 DB 查邻居边
     const neighbors: Array<{ name: string; direction: 'in' | 'out'; weight: number }> = [];
-    for (const [, otherMod] of result.modules) {
-      if (otherMod.name === moduleName) {
-        continue;
-      }
-      if (otherMod.fanOut > 0) {
-        // 简化：使用耦合数据近似
-      }
-    }
 
-    // 使用 DB 直接查
     const outNeighbors = this.#db
       .prepare(
         `SELECT DISTINCT to_id, weight FROM knowledge_edges
@@ -198,30 +237,28 @@ export class PanoramaService {
   getHealth(): PanoramaHealth {
     const result = this.#getOrCompute();
 
-    let totalCoverage = 0;
     let totalCoupling = 0;
     let count = 0;
 
     for (const [, mod] of result.modules) {
-      totalCoverage += mod.coverageRatio;
       totalCoupling += mod.fanIn + mod.fanOut;
       count++;
     }
 
-    const avgCoverage = count > 0 ? totalCoverage / count : 0;
     const avgCoupling = count > 0 ? totalCoupling / count : 0;
     const highPriorityGaps = result.gaps.filter((g) => g.priority === 'high').length;
+    const radar = result.healthRadar;
 
-    // 健康分: 100 分制
-    // 覆盖率 50 分 + 无循环 20 分 + 无高优空白 20 分 + 耦合度适中 10 分
-    let healthScore = Math.min(avgCoverage, 1) * 50;
+    // 健康分: 100 分制 (基于维度覆盖率 + 结构健康)
+    // 维度覆盖 60 分 + 无循环 20 分 + 无高优空白 10 分 + 耦合度适中 10 分
+    let healthScore = radar.overallScore * 0.6;
     healthScore += result.cycles.length === 0 ? 20 : Math.max(0, 20 - result.cycles.length * 5);
-    healthScore += highPriorityGaps === 0 ? 20 : Math.max(0, 20 - highPriorityGaps * 4);
+    healthScore += highPriorityGaps === 0 ? 10 : Math.max(0, 10 - highPriorityGaps * 2);
     healthScore += avgCoupling < 10 ? 10 : Math.max(0, 10 - (avgCoupling - 10));
     healthScore = Math.round(Math.max(0, Math.min(100, healthScore)));
 
     return {
-      overallCoverage: avgCoverage,
+      healthRadar: radar,
       avgCoupling,
       cycleCount: result.cycles.length,
       gapCount: result.gaps.length,
@@ -239,10 +276,38 @@ export class PanoramaService {
   }
 
   /**
+   * 确保全景数据已就绪（无数据时自动扫描）
+   * MCP handler / HTTP route 应在返回数据前调用此方法
+   */
+  async ensureData(): Promise<void> {
+    if (!this.#scanner) {
+      return;
+    }
+    if (!this.#scanPromise) {
+      this.#scanPromise = this.#scanner.ensureData().then(() => {
+        this.#cache = null; // 扫描后清除缓存以触发重新计算
+      });
+    }
+    await this.#scanPromise;
+  }
+
+  /**
    * 强制刷新缓存
    */
   invalidate(): void {
     this.#cache = null;
+    this.#scanPromise = null;
+  }
+
+  /**
+   * 强制重新扫描（invalidate + 重置 scanner）
+   */
+  async rescan(): Promise<void> {
+    this.invalidate();
+    if (this.#scanner) {
+      this.#scanner.reset();
+      await this.ensureData();
+    }
   }
 
   /* ─── Cache + Compute ───────────────────────────── */
@@ -252,100 +317,8 @@ export class PanoramaService {
       return this.#cache;
     }
 
-    const candidates = this.#discoverModules();
+    const candidates = this.#moduleDiscoverer.discover();
     this.#cache = this.#aggregator.compute(candidates);
     return this.#cache;
-  }
-
-  /**
-   * 从 code_entities 和 bootstrap_dim_files 发现模块
-   */
-  #discoverModules(): ModuleCandidate[] {
-    // 方式 1: 从 code_entities 中查 entity_type = 'module'
-    const moduleEntities = this.#db
-      .prepare(
-        `SELECT DISTINCT entity_id, name FROM code_entities
-         WHERE entity_type = 'module' AND project_root = ?`
-      )
-      .all(this.#projectRoot) as Array<Record<string, unknown>>;
-
-    const moduleFiles = new Map<string, Set<string>>();
-
-    // 收集模块的文件
-    for (const me of moduleEntities) {
-      const moduleName = me.entity_id as string;
-      moduleFiles.set(moduleName, new Set());
-
-      // 查 is_part_of 边 (entity → module)
-      const parts = this.#db
-        .prepare(
-          `SELECT ke.from_id FROM knowledge_edges ke
-           WHERE ke.to_id = ? AND ke.to_type = 'module' AND ke.relation = 'is_part_of'`
-        )
-        .all(moduleName) as Array<Record<string, unknown>>;
-
-      for (const part of parts) {
-        // 查实体文件
-        const entity = this.#db
-          .prepare(
-            `SELECT file_path FROM code_entities
-             WHERE entity_id = ? AND project_root = ? LIMIT 1`
-          )
-          .get(part.from_id as string, this.#projectRoot) as Record<string, unknown> | undefined;
-
-        if (entity?.file_path) {
-          moduleFiles.get(moduleName)!.add(entity.file_path as string);
-        }
-      }
-    }
-
-    // 方式 2: 如果模块数为 0，尝试从目录结构推断
-    if (moduleFiles.size === 0) {
-      return this.#discoverModulesFromFiles();
-    }
-
-    return [...moduleFiles.entries()].map(([name, files]) => ({
-      name,
-      inferredRole: inferTargetRole(name) as ModuleRole,
-      files: [...files],
-    }));
-  }
-
-  /**
-   * 目录结构推断: 按顶层目录分组文件
-   */
-  #discoverModulesFromFiles(): ModuleCandidate[] {
-    const allFiles = this.#db
-      .prepare(`SELECT DISTINCT file_path FROM code_entities WHERE project_root = ?`)
-      .all(this.#projectRoot) as Array<Record<string, unknown>>;
-
-    const groups = new Map<string, string[]>();
-
-    for (const row of allFiles) {
-      const filePath = row.file_path as string;
-      if (!filePath) {
-        continue;
-      }
-
-      // 取相对于 projectRoot 的第一级目录作为模块名
-      const relative = filePath.startsWith(this.#projectRoot)
-        ? filePath.slice(this.#projectRoot.length).replace(/^\//, '')
-        : filePath;
-      const firstDir = relative.split('/')[0];
-      if (!firstDir) {
-        continue;
-      }
-
-      if (!groups.has(firstDir)) {
-        groups.set(firstDir, []);
-      }
-      groups.get(firstDir)!.push(filePath);
-    }
-
-    return [...groups.entries()].map(([name, files]) => ({
-      name,
-      inferredRole: inferTargetRole(name) as ModuleRole,
-      files,
-    }));
   }
 }

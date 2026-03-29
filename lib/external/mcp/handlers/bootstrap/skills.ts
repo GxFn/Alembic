@@ -11,7 +11,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { SKILLS_DIR } from '../../../../shared/package-root.js';
+import { SKILLS_DIR } from '#shared/package-root.js';
 
 const COLDSTART_SKILL_NAME = 'autosnippet-coldstart';
 

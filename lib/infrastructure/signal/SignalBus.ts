@@ -17,6 +17,7 @@
 /** 信号类型枚举 */
 export type SignalType =
   | 'guard'
+  | 'guard_blind_spot'
   | 'search'
   | 'usage'
   | 'lifecycle'
@@ -24,7 +25,9 @@ export type SignalType =
   | 'quality'
   | 'panorama'
   | 'decay'
-  | 'forge';
+  | 'forge'
+  | 'intent'
+  | 'anomaly';
 
 /** 信号结构 */
 export interface Signal {

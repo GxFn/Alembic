@@ -194,21 +194,27 @@ export class CursorDeliveryPipeline {
   // ─── 内部方法 ───────────────────────────────────────
 
   /**
-   * 加载知识条目（active + high-confidence pending）
+   * 加载知识条目（active + staging + high-confidence pending）
+   *
+   * M2 六态状态机: staging/active/evolving 均为 CONSUMABLE 状态
    */
   async _loadEntries() {
     const allEntries: KnowledgeEntryProps[] = [];
 
-    // 加载 active
-    try {
-      const active = await this.knowledgeService.list(
-        { lifecycle: 'active' },
-        { page: 1, pageSize: 200 }
-      );
-      const activeItems = this._extractItems(active);
-      allEntries.push(...activeItems);
-    } catch (e: unknown) {
-      this.logger.warn?.(`[CursorDelivery] Failed to load active entries: ${(e as Error).message}`);
+    // 加载 active + staging + evolving（CONSUMABLE 状态）
+    for (const state of ['active', 'staging', 'evolving'] as const) {
+      try {
+        const result = await this.knowledgeService.list(
+          { lifecycle: state },
+          { page: 1, pageSize: 200 }
+        );
+        const items = this._extractItems(result);
+        allEntries.push(...items);
+      } catch (e: unknown) {
+        this.logger.warn?.(
+          `[CursorDelivery] Failed to load ${state} entries: ${(e as Error).message}`
+        );
+      }
     }
 
     // 加载 pending（高置信度的也纳入）
@@ -218,7 +224,6 @@ export class CursorDeliveryPipeline {
         { page: 1, pageSize: 200 }
       );
       const pendingItems = this._extractItems(pending);
-      // 过滤高置信度 pending（quality.confidence >= PENDING_MIN 或无 quality 字段）
       const highConfPending = pendingItems.filter((e: KnowledgeEntryProps) => {
         const qual = e.quality as { confidence?: number } | undefined;
         const conf = qual?.confidence;

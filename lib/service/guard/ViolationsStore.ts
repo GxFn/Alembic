@@ -54,9 +54,36 @@ export class ViolationsStore {
 
   /**
    * 追加一次 Guard 运行记录
+   * ★ 去重：同一文件、同一违规集合不重复入库，仅更新时间戳
    * ★ Drizzle 类型安全 INSERT + raw SQL 截断
    */
   appendRun(run: RunInput) {
+    const filePath = run.filePath || '';
+    const violations = run.violations || [];
+    const violationsJson = JSON.stringify(violations);
+
+    // ── 去重：查最近一条同文件记录，比较违规指纹 ──
+    const fingerprint = this.#violationFingerprint(violations);
+    if (filePath) {
+      const lastRow = this.#db
+        .prepare(
+          `SELECT id, violations_json FROM guard_violations WHERE file_path = ? ORDER BY created_at DESC LIMIT 1`
+        )
+        .get(filePath) as { id: string; violations_json: string } | undefined;
+      if (lastRow) {
+        const lastFingerprint = this.#violationFingerprint(
+          JSON.parse(lastRow.violations_json || '[]')
+        );
+        if (fingerprint === lastFingerprint) {
+          // 违规未变化：仅刷新时间戳，不新增行
+          this.#db
+            .prepare(`UPDATE guard_violations SET triggered_at = ?, created_at = ? WHERE id = ?`)
+            .run(new Date().toISOString(), Math.floor(Date.now() / 1000), lastRow.id);
+          return lastRow.id;
+        }
+      }
+    }
+
     const id = `run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const now = Math.floor(Date.now() / 1000);
 
@@ -64,11 +91,11 @@ export class ViolationsStore {
       .insert(guardViolations)
       .values({
         id,
-        filePath: run.filePath || '',
+        filePath,
         triggeredAt: new Date().toISOString(),
-        violationCount: (run.violations || []).length,
+        violationCount: violations.length,
         summary: run.summary || '',
-        violationsJson: JSON.stringify(run.violations || []),
+        violationsJson,
         createdAt: now,
       })
       .run();
@@ -83,6 +110,16 @@ export class ViolationsStore {
       .run(MAX_RUNS);
 
     return id;
+  }
+
+  /**
+   * 违规指纹：按 ruleId+severity+line 排序后拼接，用于去重比较
+   */
+  #violationFingerprint(violations: ViolationRecord[]): string {
+    return violations
+      .map((v) => `${v.ruleId || ''}|${v.severity || ''}|${v.line ?? ''}`)
+      .sort()
+      .join('\n');
   }
 
   // ─── 查询 ─────────────────────────────────────────────

@@ -15,6 +15,13 @@ import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter
 import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
 import { DimensionCopy } from '../../service/bootstrap/DimensionCopyRegistry.js';
+import { ConsolidationAdvisor } from '../../service/evolution/ConsolidationAdvisor.js';
+import { ContradictionDetector } from '../../service/evolution/ContradictionDetector.js';
+import { DecayDetector } from '../../service/evolution/DecayDetector.js';
+import { EnhancementSuggester } from '../../service/evolution/EnhancementSuggester.js';
+import { KnowledgeMetabolism } from '../../service/evolution/KnowledgeMetabolism.js';
+import { RedundancyAnalyzer } from '../../service/evolution/RedundancyAnalyzer.js';
+import { StagingManager } from '../../service/evolution/StagingManager.js';
 import { CodeEntityGraph } from '../../service/knowledge/CodeEntityGraph.js';
 import { ConfidenceRouter } from '../../service/knowledge/ConfidenceRouter.js';
 import { KnowledgeGraphService } from '../../service/knowledge/KnowledgeGraphService.js';
@@ -182,4 +189,84 @@ export function register(c: ServiceContainer) {
   c.register('constitution', () => c.singletons.constitution || null);
   c.register('aiProvider', () => c.singletons.aiProvider || null);
   c.register('projectGraph', () => c.singletons.projectGraph || null);
+
+  // ═══ Governance / Evolution ═══
+
+  c.singleton('stagingManager', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new StagingManager(db.getDb() as ConstructorParameters<typeof StagingManager>[0], {
+      signalBus:
+        (ct.singletons.signalBus as
+          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | undefined) || undefined,
+    });
+  });
+
+  c.singleton('decayDetector', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new DecayDetector(db.getDb() as ConstructorParameters<typeof DecayDetector>[0], {
+      signalBus:
+        (ct.singletons.signalBus as
+          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | undefined) || undefined,
+    });
+  });
+
+  c.singleton('contradictionDetector', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new ContradictionDetector(
+      db.getDb() as ConstructorParameters<typeof ContradictionDetector>[0],
+      {
+        signalBus:
+          (ct.singletons.signalBus as
+            | import('../../infrastructure/signal/SignalBus.js').SignalBus
+            | undefined) || undefined,
+      }
+    );
+  });
+
+  c.singleton('redundancyAnalyzer', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new RedundancyAnalyzer(
+      db.getDb() as ConstructorParameters<typeof RedundancyAnalyzer>[0],
+      {
+        signalBus:
+          (ct.singletons.signalBus as
+            | import('../../infrastructure/signal/SignalBus.js').SignalBus
+            | undefined) || undefined,
+      }
+    );
+  });
+
+  c.singleton('enhancementSuggester', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new EnhancementSuggester(
+      db.getDb() as ConstructorParameters<typeof EnhancementSuggester>[0],
+      {
+        signalBus:
+          (ct.singletons.signalBus as
+            | import('../../infrastructure/signal/SignalBus.js').SignalBus
+            | undefined) || undefined,
+      }
+    );
+  });
+
+  c.singleton('knowledgeMetabolism', (ct: ServiceContainer) => {
+    return new KnowledgeMetabolism({
+      contradictionDetector: ct.get('contradictionDetector') as ContradictionDetector,
+      redundancyAnalyzer: ct.get('redundancyAnalyzer') as RedundancyAnalyzer,
+      decayDetector: ct.get('decayDetector') as DecayDetector,
+      signalBus:
+        (ct.singletons.signalBus as
+          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | undefined) || undefined,
+    });
+  });
+
+  c.singleton('consolidationAdvisor', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new ConsolidationAdvisor(
+      db.getDb() as ConstructorParameters<typeof ConsolidationAdvisor>[0]
+    );
+  });
 }

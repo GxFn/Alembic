@@ -463,12 +463,13 @@ export const api = {
     // All knowledge entries from V3 backend
     const allEntries: KnowledgeEntry[] = knowledgeRes.data?.data?.data || knowledgeRes.data?.data?.items || [];
 
-    // Recipes = active lifecycle entries (auto-approved / manually approved)
-    const activeEntries = allEntries.filter((e) => e.lifecycle === 'active');
+    // Recipes = active + evolving lifecycle entries
+    const activeEntries = allEntries.filter((e) => e.lifecycle === 'active' || e.lifecycle === 'evolving');
     const recipes = activeEntries.map(toRecipe);
 
-    // Candidates 视图仅展示待审核状态，过滤掉已发布/已弃用的条目
-    const rawEntries = allEntries.filter((e) => e.lifecycle === 'pending');
+    // Candidates = pending + staging（两者都需要人工审核）
+    const CANDIDATE_STATES = new Set(['pending', 'staging']);
+    const rawEntries = allEntries.filter((e) => CANDIDATE_STATES.has(e.lifecycle));
     const candidates: ProjectData['candidates'] = {};
     for (const entry of rawEntries) {
       const target = entry.category || entry.language || '_pending';
@@ -1396,7 +1397,7 @@ export const api = {
   },
 
   async clearViolations(): Promise<void> {
-    await http.post('/violations/clear');
+    await http.post('/violations/clear', { all: true });
   },
 
   async saveGuardRule(ruleData: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -1692,10 +1693,31 @@ Skill 文档格式要求：
     totalFiles: number;
     totalRecipes: number;
     overallCoverage: number;
-    layers: { name: string; moduleCount: number; fileCount?: number }[];
+    layers: {
+      level: number;
+      name: string;
+      modules: { name: string; role: string; fileCount: number; recipeCount: number }[];
+    }[];
     cycleCount: number;
     gapCount: number;
-    computedAt: string;
+    healthRadar: {
+      dimensions: {
+        id: string;
+        name: string;
+        description: string;
+        recipeCount: number;
+        score: number;
+        status: string;
+        level: string;
+        topRecipes: string[];
+      }[];
+      overallScore: number;
+      totalRecipes: number;
+      coveredDimensions: number;
+      totalDimensions: number;
+      dimensionCoverage: number;
+    };
+    computedAt: number;
     stale: boolean;
   }> {
     const res = await http.get('/panorama');
@@ -1704,7 +1726,23 @@ Skill 文档格式要求：
 
   /** 获取全景健康度 */
   async getPanoramaHealth(): Promise<{
-    overallCoverage: number;
+    healthRadar: {
+      dimensions: {
+        id: string;
+        name: string;
+        description: string;
+        recipeCount: number;
+        score: number;
+        status: string;
+        level: string;
+        topRecipes: string[];
+      }[];
+      overallScore: number;
+      totalRecipes: number;
+      coveredDimensions: number;
+      totalDimensions: number;
+      dimensionCoverage: number;
+    };
     avgCoupling: number;
     cycleCount: number;
     gapCount: number;
@@ -1718,10 +1756,13 @@ Skill 文档格式要求：
 
   /** 获取知识空白区 */
   async getPanoramaGaps(): Promise<{
-    module: string;
-    type: string;
-    description?: string;
+    dimension: string;
+    dimensionName: string;
+    recipeCount: number;
+    status: string;
     priority: string;
+    suggestedTopics: string[];
+    affectedRoles: string[];
   }[]> {
     const res = await http.get('/panorama/gaps');
     return res.data?.data ?? [];
@@ -1736,8 +1777,19 @@ Skill 文档格式要求：
     result?: string;
     startDate?: number;
     endDate?: number;
+    offset?: number;
     limit?: number;
-  }): Promise<{ logs: any[]; total: number }> {
+  }): Promise<{
+    logs: {
+      timestamp: string;
+      actor: string;
+      action: string;
+      result: string;
+      target: string;
+      details?: string;
+    }[];
+    total: number;
+  }> {
     const res = await http.get('/audit', { params: filters });
     return res.data?.data ?? { logs: [], total: 0 };
   },
@@ -1754,6 +1806,18 @@ Skill 文档格式要求：
     return res.data?.data;
   },
 
+  /** 获取模块知识覆盖率热力图 */
+  async getPanoramaCoverage(): Promise<{
+    modules: { name: string; layer: string; fileCount: number; recipeCount: number; coverage: number }[];
+    gapsByDimension: Record<string, number>;
+    overallCoverage: number;
+    totalFiles: number;
+    totalRecipes: number;
+  }> {
+    const res = await http.get('/panorama/coverage');
+    return res.data?.data;
+  },
+
   /** 获取六态生命周期统计 + 各过渡态条目 */
   async getKnowledgeLifecycle(): Promise<{
     counts: Record<string, number>;
@@ -1762,6 +1826,86 @@ Skill 文档格式要求：
     const res = await http.get('/knowledge/lifecycle');
     return res.data?.data;
   },
+
+  // ═══════════════════════════════════════════════════════
+  //  Signal & Report API
+  // ═══════════════════════════════════════════════════════
+
+  /** 查询信号留痕 */
+  async getSignalTrace(opts?: {
+    type?: string[];
+    source?: string;
+    target?: string;
+    from?: number;
+    to?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ signals: SignalEntry[]; total: number }> {
+    const params: Record<string, string> = {};
+    if (opts?.type?.length) { params.type = opts.type.join(','); }
+    if (opts?.source) { params.source = opts.source; }
+    if (opts?.target) { params.target = opts.target; }
+    if (opts?.from) { params.from = String(opts.from); }
+    if (opts?.to) { params.to = String(opts.to); }
+    if (opts?.limit) { params.limit = String(opts.limit); }
+    if (opts?.offset) { params.offset = String(opts.offset); }
+    const res = await http.get('/signals/trace', { params });
+    return res.data?.data;
+  },
+
+  /** 信号统计 */
+  async getSignalStats(opts?: {
+    from?: number;
+    to?: number;
+  }): Promise<{ total: number; byType: Record<string, number>; bySource: Record<string, number> }> {
+    const params: Record<string, string> = {};
+    if (opts?.from) { params.from = String(opts.from); }
+    if (opts?.to) { params.to = String(opts.to); }
+    const res = await http.get('/signals/stats', { params });
+    return res.data?.data;
+  },
+
+  /** 查询管道报告 */
+  async getReports(opts?: {
+    category?: string[];
+    type?: string;
+    from?: number;
+    to?: number;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ reports: ReportEntry[]; total: number }> {
+    const params: Record<string, string> = {};
+    if (opts?.category?.length) { params.category = opts.category.join(','); }
+    if (opts?.type) { params.type = opts.type; }
+    if (opts?.from) { params.from = String(opts.from); }
+    if (opts?.to) { params.to = String(opts.to); }
+    if (opts?.limit) { params.limit = String(opts.limit); }
+    if (opts?.offset) { params.offset = String(opts.offset); }
+    const res = await http.get('/signals/reports', { params });
+    return res.data?.data;
+  },
+
 };
+
+/** 信号留痕条目 */
+export interface SignalEntry {
+  type: string;
+  source: string;
+  value: number;
+  target?: string;
+  metadata?: Record<string, unknown>;
+  timestamp: number;
+}
+
+/** 管道报告条目 */
+export interface ReportEntry {
+  id: string;
+  category: string;
+  type: string;
+  producer: string;
+  data: Record<string, unknown>;
+  timestamp: number;
+  duration_ms?: number;
+}
 
 export default api;

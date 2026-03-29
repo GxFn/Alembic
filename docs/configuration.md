@@ -100,7 +100,7 @@ ASD_PROJECT_ROOT=/path/to/your-project
     "format": "json",
     "file": {
       "enabled": true,
-      "path": "./logs"
+      "path": "./.autosnippet/logs"
     }
   },
   "constitution": {

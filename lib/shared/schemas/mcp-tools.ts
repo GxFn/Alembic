@@ -15,7 +15,6 @@ import {
   ContentSchema,
   IdField,
   KindEnum,
-  KnowledgeTypeEnum,
   LanguageField,
   ReasoningSchema,
   ScopeEnum,
@@ -138,18 +137,29 @@ export type CallContextInput = z.infer<typeof CallContextInput>;
 // ══════════════════════════════════════════════════════
 
 export const GuardInput = z.object({
+  operation: z
+    .enum(['check', 'review', 'reverse_audit', 'coverage_matrix', 'compliance_report'])
+    .optional()
+    .describe(
+      'Guard 操作类型。reverse_audit: Recipe→Code 反向验证；coverage_matrix: 模块覆盖率矩阵；compliance_report: 3D 合规报告（含 uncertain）。省略则按 code/files 自动路由。'
+    ),
   files: z.array(z.string()).optional(),
   code: z.string().optional(),
   language: z.string().optional(),
   filePath: z.string().optional(),
+  maxFiles: z.number().optional().describe('reverse_audit/coverage_matrix 时扫描的最大文件数'),
 });
 export type GuardInput = z.infer<typeof GuardInput>;
 
 // ══════════════════════════════════════════════════════
-//  7b. autosnippet_submit_knowledge
+//  7b. autosnippet_submit_knowledge (unified pipeline)
 // ══════════════════════════════════════════════════════
 
-export const SubmitKnowledgeInput = z.object({
+/**
+ * 单条知识条目字段定义（items 数组内部元素的严格 Schema）
+ * 用于文档/类型推导，实际 items 使用 z.record() 宽容接收后在 handler 层校验。
+ */
+export const SubmitKnowledgeItemSchema = z.object({
   // ── 必填字段 ──
   title: TitleField.describe('知识标题，简洁明确'),
   language: LanguageField.describe('编程语言，如 typescript/swift/python'),
@@ -194,45 +204,27 @@ export const SubmitKnowledgeInput = z.object({
   moduleName: z.string().optional(),
   includeHeaders: z.boolean().optional(),
   source: z.string().optional(),
-  client_id: z.string().optional(),
-  skipDuplicateCheck: z.boolean().default(false),
-  dimensionId: z.string().optional(),
 });
-export type SubmitKnowledgeInput = z.infer<typeof SubmitKnowledgeInput>;
 
-// ══════════════════════════════════════════════════════
-//  8. autosnippet_submit_knowledge_batch
-// ══════════════════════════════════════════════════════
-
-export const SubmitKnowledgeBatchInput = z.object({
-  target_name: z
-    .string()
-    .min(1, 'target_name is required')
-    .describe('批量来源标识，如 network-module-scan'),
+export const SubmitKnowledgeInput = z.object({
   items: z
     .array(z.record(z.string(), z.unknown()))
-    .min(1, 'items array must not be empty')
-    .describe('知识条目数组，每条字段同 submit_knowledge。content/reasoning 必须是对象'),
-  source: z.string().default('cursor-scan'),
-  deduplicate: z.boolean().default(true).describe('基于 title 自动去重，默认开启'),
+    .min(1)
+    .describe(
+      '知识条目数组（1~N 条）。单条与批量统一处理，所有条目严格校验 + 融合分析。' +
+        '每条字段: title, language, content(对象), kind, doClause, dontClause, whenClause, coreCode, category, trigger, description, headers, usageGuide, knowledgeType, reasoning(对象)。'
+    ),
+  target_name: z.string().optional().describe('来源标识，如 network-module-scan'),
+  source: z.string().optional().describe('来源标记，默认 mcp'),
+  skipConsolidation: z
+    .boolean()
+    .default(false)
+    .describe('跳过融合分析（当确认需要独立新建时设为 true）'),
+  skipDuplicateCheck: z.boolean().default(false),
   client_id: z.string().optional(),
-  dimensionId: z.string().optional().describe('冷启动时关联维度 ID'),
+  dimensionId: z.string().optional().describe('冷启动关联维度 ID'),
 });
-export type SubmitKnowledgeBatchInput = z.infer<typeof SubmitKnowledgeBatchInput>;
-
-// ══════════════════════════════════════════════════════
-//  9. autosnippet_save_document
-// ══════════════════════════════════════════════════════
-
-export const SaveDocumentInput = z.object({
-  title: TitleField,
-  markdown: z.string().min(1, 'markdown content is required'),
-  description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  scope: z.enum(['universal', 'project-specific']).default('project-specific'),
-  source: z.string().optional(),
-});
-export type SaveDocumentInput = z.infer<typeof SaveDocumentInput>;
+export type SubmitKnowledgeInput = z.infer<typeof SubmitKnowledgeInput>;
 
 // ══════════════════════════════════════════════════════
 //  10. autosnippet_skill
@@ -283,23 +275,20 @@ export const DimensionCompleteInput = z.object({
 export type DimensionCompleteInput = z.infer<typeof DimensionCompleteInput>;
 
 // ══════════════════════════════════════════════════════
-//  11c. autosnippet_wiki_plan
+//  11c. autosnippet_wiki (merged: plan + finalize)
 // ══════════════════════════════════════════════════════
 
-export const WikiPlanInput = z.object({
-  language: z.enum(['zh', 'en']).default('zh'),
+export const WikiInput = z.object({
+  operation: z
+    .enum(['plan', 'finalize'])
+    .describe('plan — 规划主题 + 数据包; finalize — 写入 meta.json + 验证'),
+  // plan 参数
+  language: z.enum(['zh', 'en']).optional().describe('Wiki 语言，默认 zh'),
   sessionId: z.string().optional(),
+  // finalize 参数
+  articlesWritten: z.array(z.string()).optional(),
 });
-export type WikiPlanInput = z.infer<typeof WikiPlanInput>;
-
-// ══════════════════════════════════════════════════════
-//  11d. autosnippet_wiki_finalize
-// ══════════════════════════════════════════════════════
-
-export const WikiFinalizeInput = z.object({
-  articlesWritten: z.array(z.string()).min(1, 'articlesWritten must not be empty'),
-});
-export type WikiFinalizeInput = z.infer<typeof WikiFinalizeInput>;
+export type WikiInput = z.infer<typeof WikiInput>;
 
 // ══════════════════════════════════════════════════════
 //  12. autosnippet_capabilities — 无参数
@@ -309,79 +298,27 @@ export const CapabilitiesInput = z.object({});
 export type CapabilitiesInput = z.infer<typeof CapabilitiesInput>;
 
 // ══════════════════════════════════════════════════════
-//  13. autosnippet_task
+//  13. autosnippet_task (5 operations)
 // ══════════════════════════════════════════════════════
 
 export const TaskInput = z.object({
   operation: z
-    .enum([
-      'prime',
-      'ready',
-      'create',
-      'claim',
-      'close',
-      'fail',
-      'defer',
-      'progress',
-      'show',
-      'list',
-      'stats',
-      'blocked',
-      'decompose',
-      'dep_add',
-      'dep_tree',
-      'record_decision',
-      'revise_decision',
-      'unpin_decision',
-      'list_decisions',
-    ])
+    .enum(['prime', 'create', 'close', 'fail', 'record_decision'])
     .describe(
-      '会话: prime(首选) | ready。任务: create/claim/close/fail/defer/progress/show/list/stats/blocked。分解: decompose/dep_add/dep_tree。决策: record_decision/revise_decision/unpin_decision/list_decisions'
+      'prime=加载知识上下文 | create=创建任务锚点 | close=完成+Guard | fail=放弃 | record_decision=记录用户偏好'
     ),
-  title: z.string().optional(),
-  description: z.string().optional(),
-  design: z.string().optional(),
-  acceptance: z.string().optional(),
-  priority: z.number().int().min(0).max(4).optional(),
-  taskType: z.enum(['epic', 'task', 'bug', 'chore']).optional(),
-  parentId: z.string().optional(),
-  id: z.string().optional(),
-  reason: z.string().optional(),
-  rationale: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  relatedTaskId: z.string().optional(),
-  dependsOn: z.string().optional(),
-  depType: z
-    .enum([
-      'blocks',
-      'parent-child',
-      'waits-for',
-      'discovered-from',
-      'related',
-      'knowledge-ref',
-      'supersedes',
-    ])
-    .default('blocks'),
-  limit: z.number().int().min(1).max(200).default(10),
-  status: z.enum(['open', 'in_progress', 'deferred', 'closed', 'pinned']).optional(),
-  withKnowledge: z.boolean().default(true),
+  title: z.string().optional().describe('Task or decision title (create / record_decision)'),
+  description: z.string().optional().describe('Decision description (record_decision)'),
+  id: z.string().optional().describe('Task ID (close / fail)'),
+  reason: z.string().optional().describe('Close reason or fail reason'),
+  rationale: z.string().optional().describe('Decision rationale (record_decision)'),
+  tags: z.array(z.string()).optional().describe('Decision tags (record_decision)'),
   userQuery: z
     .string()
     .optional()
     .describe('User current input / prompt text for knowledge-aware search'),
   activeFile: z.string().optional().describe('Currently active file path in IDE'),
   language: z.string().optional().describe('Current programming language'),
-  subtasks: z
-    .array(
-      z.object({
-        title: z.string().min(1),
-        description: z.string().optional(),
-        priority: z.number().int().min(0).max(4).optional(),
-        taskType: z.string().optional(),
-        blockedByIndex: z.number().int().min(0).optional(),
-      })
-    )
-    .optional(),
 });
 export type TaskInput = z.infer<typeof TaskInput>;
 
@@ -419,25 +356,26 @@ export const KnowledgeLifecycleInput = z.object({
 });
 export type KnowledgeLifecycleInput = z.infer<typeof KnowledgeLifecycleInput>;
 
-// 16. autosnippet_validate_candidate
-export const ValidateCandidateInput = z.object({
-  candidate: z.record(z.string(), z.unknown()),
-  strict: z.boolean().default(false),
+// 18. autosnippet_panorama
+export const PanoramaInput = z.object({
+  operation: z
+    .enum([
+      'overview',
+      'module',
+      'gaps',
+      'health',
+      'governance_cycle',
+      'decay_report',
+      'staging_check',
+      'enhancement_suggestions',
+    ])
+    .default('overview')
+    .describe(
+      'overview=项目骨架+层级+模块角色 | module=单模块详情+邻居关系 | gaps=知识空白区 | health=全景健康度 | governance_cycle=新陈代谢完整周期 | decay_report=衰退报告 | staging_check=staging检查+自动发布 | enhancement_suggestions=增强建议'
+    ),
+  module: z.string().optional().describe('模块名称（operation=module 时必填）'),
 });
-export type ValidateCandidateInput = z.infer<typeof ValidateCandidateInput>;
-
-// 17. autosnippet_check_duplicate
-export const CheckDuplicateInput = z.object({
-  candidate: z.object({
-    title: z.string().optional(),
-    summary: z.string().optional(),
-    usageGuide: z.string().optional(),
-    code: z.string().optional(),
-  }),
-  threshold: z.number().min(0).max(1).default(0.7),
-  topK: z.number().int().min(1).max(50).default(5),
-});
-export type CheckDuplicateInput = z.infer<typeof CheckDuplicateInput>;
+export type PanoramaInput = z.infer<typeof PanoramaInput>;
 
 // ══════════════════════════════════════════════════════
 //  工具名 → Schema 映射表（用于 wrapHandler 自动注入校验）
@@ -452,17 +390,12 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   autosnippet_call_context: CallContextInput,
   autosnippet_guard: GuardInput,
   autosnippet_submit_knowledge: SubmitKnowledgeInput,
-  autosnippet_submit_knowledge_batch: SubmitKnowledgeBatchInput,
-  autosnippet_save_document: SaveDocumentInput,
   autosnippet_skill: SkillInput,
   autosnippet_bootstrap: BootstrapInput,
   autosnippet_dimension_complete: DimensionCompleteInput,
-  autosnippet_wiki_plan: WikiPlanInput,
-  autosnippet_wiki_finalize: WikiFinalizeInput,
-  autosnippet_capabilities: CapabilitiesInput,
+  autosnippet_wiki: WikiInput,
   autosnippet_task: TaskInput,
   autosnippet_enrich_candidates: EnrichCandidatesInput,
   autosnippet_knowledge_lifecycle: KnowledgeLifecycleInput,
-  autosnippet_validate_candidate: ValidateCandidateInput,
-  autosnippet_check_duplicate: CheckDuplicateInput,
+  autosnippet_panorama: PanoramaInput,
 };

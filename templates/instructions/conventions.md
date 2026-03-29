@@ -5,19 +5,17 @@ Users speak naturally; you translate to task operations. Never tell users to cal
 ## Task Rules (MANDATORY)
 
 1. **Prime EVERY message** — `autosnippet_task({ operation: "prime" })` FIRST.
-2. **Create task for non-trivial work** — ≥2 files OR ≥10 lines → `create` → `claim` → code → `close`.
+2. **Create task for non-trivial work** — ≥2 files OR ≥10 lines → `create` → code → `close`.
 3. **Decision persistence** — User agrees/disagrees → `record_decision` immediately.
-4. **Session end** — Close or defer ALL tasks. Zero in_progress on exit.
+4. **Session end** — Close or fail ALL tasks. Zero in_progress on exit.
 5. **You are the operator** — Never tell users to call autosnippet_task.
 6. **Skip task for**: Quick questions, single-file trivial fixes (<10 lines), code explanation.
 
 | User Says | You Run |
 |---|---|
-| "fix bug" / "implement" | `create` → `claim` → code → `close` |
+| "fix bug" / "implement" | `create` → code → `close` |
 | "continue" | resume in-progress → `close` |
-| "pause" / "abandon" | `defer` / `fail` |
-| "break down" | `decompose(id, subtasks)` |
-| "what's next" | `ready()` → present |
+| "pause" / "abandon" | `fail(id, reason)` |
 | "agreed" | `record_decision(...)` |
 
 ## Knowledge Rules
@@ -34,6 +32,7 @@ Users speak naturally; you translate to task operations. Never tell users to cal
 - `autosnippet_submit_knowledge` — Submit knowledge candidate
 - `autosnippet_guard` — Code compliance check
 - `autosnippet_skill` — Load project skills (list/load)
+- `autosnippet_panorama` — Project panorama (overview/module/gaps/health)
 - `autosnippet_health` — Service health & KB stats
 
 ## Context Pressure

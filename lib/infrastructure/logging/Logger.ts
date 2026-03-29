@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import winston from 'winston';
 
+import pathGuard from '../../shared/PathGuard.js';
+
 // Agent 系统相关标签 — 终端高亮显示
 const AGENT_TAGS = [
   'AgentRuntime',
@@ -127,7 +129,13 @@ export class Logger {
     config: { level?: string; console?: boolean; file?: { enabled?: boolean; path?: string } } = {}
   ) {
     if (!this.instance) {
-      const logsDir = config.file?.path || './.autosnippet/logs';
+      const rawLogsDir = config.file?.path || './.autosnippet/logs';
+      // 与 DatabaseConnection 一致：相对路径按 PathGuard.projectRoot 解析，避免 MCP cwd 非项目目录时写到错误位置
+      const projectRoot = pathGuard.projectRoot;
+      const logsDir =
+        projectRoot && !path.isAbsolute(rawLogsDir)
+          ? path.resolve(projectRoot, rawLogsDir)
+          : path.resolve(rawLogsDir);
 
       // 确保日志目录存在
       if (!fs.existsSync(logsDir)) {
@@ -168,6 +176,21 @@ export class Logger {
             format: winston.format.json(),
           })
         );
+
+        // audit 独立通道 — 不受 LOG_LEVEL 影响，业务关键事件永不丢失
+        transports.push(
+          new winston.transports.File({
+            filename: path.join(logsDir, 'audit.log'),
+            level: 'info',
+            format: winston.format.combine(
+              winston.format((info) => {
+                return info.audit === true ? info : false;
+              })(),
+              winston.format.timestamp(),
+              winston.format.json()
+            ),
+          })
+        );
       }
 
       this.instance = winston.createLogger({
@@ -194,6 +217,11 @@ export class Logger {
 
   static error(message: string, meta: Record<string, unknown> = {}) {
     this.getInstance().error(message, meta);
+  }
+
+  /** 审计日志 — 写入独立 audit.log，不受 LOG_LEVEL 控制 */
+  static audit(event: string, meta: Record<string, unknown> = {}) {
+    this.getInstance().info(event, { ...meta, audit: true });
   }
 }
 

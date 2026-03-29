@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, FolderOpen, Clock, GitBranch, Share2, Shield, MessageSquare, HelpCircle, LogOut, User, Moon, Sun, Library, FileText, BookOpen, Languages, Layers } from 'lucide-react';
+import { Bookmark, FolderOpen, Clock, Shield, MessageSquare, HelpCircle, LogOut, User, Moon, Sun, Library, FileText, BookOpen, Languages, Layers, Radio } from 'lucide-react';
 import { TabType } from '../../constants';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
@@ -80,19 +80,18 @@ const Sidebar: React.FC<SidebarProps> = ({
     { tab: 'spm', icon: FolderOpen, label: t('sidebar.moduleExplorer') },
     { tab: 'candidates', icon: Clock, label: t('sidebar.candidates', { count: candidateCount }) },
     { tab: 'knowledge', icon: Library, label: t('sidebar.batchManage') },
-    { tab: 'depgraph', icon: GitBranch, label: t('sidebar.depGraph') },
-    { tab: 'knowledgegraph', icon: Share2, label: t('sidebar.knowledgeGraph') },
     { tab: 'guard', icon: Shield, label: t('sidebar.guard') },
     { tab: 'panorama', icon: Layers, label: t('sidebar.panorama') },
     { tab: 'skills', icon: BookOpen, label: t('sidebar.skills'), badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined },
     { tab: 'wiki', icon: FileText, label: t('sidebar.repoWiki') },
+    { tab: 'signals', icon: Radio, label: 'Signals' },
     { tab: 'ai', icon: MessageSquare, label: t('sidebar.aiAssistant') },
     { tab: 'help', icon: HelpCircle, label: t('sidebar.help') },
   ];
 
-  /* 分组：主导航 (前10项) 与辅助导航 (AI + Help) */
-  const mainNav = navItems.slice(0, 10);
-  const auxNav = navItems.slice(10);
+  /* 分组：主导航与辅助导航 (AI + Help) */
+  const mainNav = navItems.slice(0, navItems.length - 2);
+  const auxNav = navItems.slice(navItems.length - 2);
 
   return (
     <TooltipProvider>

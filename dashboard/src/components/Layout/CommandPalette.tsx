@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Plus, Settings, FileText, Bookmark, FolderOpen, Clock, Library, GitBranch, Share2, Shield, Layers, BookOpen, MessageSquare, HelpCircle, BrainCircuit } from 'lucide-react';
+import { Plus, Settings, FileText, Bookmark, FolderOpen, Clock, Library, Shield, Layers, BookOpen, MessageSquare, HelpCircle, BrainCircuit, Radio } from 'lucide-react';
 import { Dialog, DialogContent } from '../ui/Dialog';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator, CommandShortcut } from '../ui/Command';
 import { TabType } from '../../constants';
@@ -12,12 +12,11 @@ const TAB_ICON_MAP: Record<TabType, React.ElementType> = {
   spm: FolderOpen,
   candidates: Clock,
   knowledge: Library,
-  depgraph: GitBranch,
-  knowledgegraph: Share2,
   guard: Shield,
   panorama: Layers,
   skills: BookOpen,
   wiki: FileText,
+  signals: Radio,
   ai: MessageSquare,
   help: HelpCircle,
 };
@@ -27,12 +26,11 @@ const TAB_LABEL_MAP: Record<TabType, string> = {
   spm: 'sidebar.moduleExplorer',
   candidates: 'sidebar.candidates',
   knowledge: 'sidebar.batchManage',
-  depgraph: 'sidebar.depGraph',
-  knowledgegraph: 'sidebar.knowledgeGraph',
   guard: 'sidebar.guard',
   panorama: 'sidebar.panorama',
   skills: 'sidebar.skills',
   wiki: 'sidebar.repoWiki',
+  signals: 'sidebar.signals',
   ai: 'sidebar.aiAssistant',
   help: 'sidebar.help',
 };

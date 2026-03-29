@@ -12,10 +12,12 @@ import path from 'node:path';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { ComplianceReporter } from '../../service/guard/ComplianceReporter.js';
+import { CoverageAnalyzer } from '../../service/guard/CoverageAnalyzer.js';
 import { ExclusionManager } from '../../service/guard/ExclusionManager.js';
 import { GuardCheckEngine } from '../../service/guard/GuardCheckEngine.js';
 import { GuardFeedbackLoop } from '../../service/guard/GuardFeedbackLoop.js';
 import { GuardService } from '../../service/guard/GuardService.js';
+import { ReverseGuard } from '../../service/guard/ReverseGuard.js';
 import { RuleLearner } from '../../service/guard/RuleLearner.js';
 import { ViolationsStore } from '../../service/guard/ViolationsStore.js';
 import type { ServiceContainer } from '../ServiceContainer.js';
@@ -121,4 +123,25 @@ export function register(c: ServiceContainer) {
         } as ConstructorParameters<typeof GuardFeedbackLoop>[2]
       )
   );
+
+  c.singleton('reverseGuard', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new ReverseGuard(db.getDb() as ConstructorParameters<typeof ReverseGuard>[0], {
+      signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
+    });
+  });
+
+  c.singleton('coverageAnalyzer', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    let ruleLearner: ConstructorParameters<typeof CoverageAnalyzer>[1] | undefined;
+    try {
+      ruleLearner = { ruleLearner: ct.get('ruleLearner') as never };
+    } catch {
+      /* ruleLearner not yet available */
+    }
+    return new CoverageAnalyzer(
+      db.getDb() as ConstructorParameters<typeof CoverageAnalyzer>[0],
+      ruleLearner
+    );
+  });
 }

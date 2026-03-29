@@ -10,8 +10,8 @@
  */
 
 import { getRequiredFieldsDescription } from '#domain/knowledge/FieldSpec.js';
+import { envelope } from '../envelope.js';
 import * as browseHandlers from './browse.js';
-import * as candidateHandlers from './candidate.js';
 import * as guardHandlers from './guard.js';
 import * as searchHandlers from './search.js';
 import * as skillHandlers from './skill.js';
@@ -23,9 +23,7 @@ import type {
   ConsolidatedSearchArgs,
   ConsolidatedSkillArgs,
   ConsolidatedStructureArgs,
-  DuplicateCheckResult,
   McpContext,
-  SubmitKnowledgeArgs,
 } from './types.js';
 
 // ─── autosnippet_search (整合 4 → 1) ────────────────────────
@@ -149,11 +147,24 @@ export async function consolidatedGraph(ctx: McpContext, args: ConsolidatedGraph
 
 /**
  * Guard 检查：按参数自动路由
+ *   operation: 'reverse_audit'      → guardReverseAudit()     (Recipe→Code 反向验证)
+ *   operation: 'coverage_matrix'    → guardCoverageMatrix()    (模块覆盖率矩阵)
+ *   operation: 'compliance_report'  → guardComplianceReport()  (3D 合规报告)
  *   无参数       → guardReview()    (自动 git diff 检测 + inline recipe)
  *   有 files     → guardReview()    (指定文件 + inline recipe) — files 为 string[] 或 {path}[]
  *   有 code      → guardCheck()     (单文件内联检查)
  */
 export async function consolidatedGuard(ctx: McpContext, args: ConsolidatedGuardArgs) {
+  // operation 显式路由
+  if (args.operation === 'reverse_audit') {
+    return guardHandlers.guardReverseAudit(ctx, args);
+  }
+  if (args.operation === 'coverage_matrix') {
+    return guardHandlers.guardCoverageMatrix(ctx, args);
+  }
+  if (args.operation === 'compliance_report') {
+    return guardHandlers.guardComplianceReport(ctx, args);
+  }
   // 有 code → 单文件检查（旧模式）
   if (args.code) {
     return guardHandlers.guardCheck(ctx, args);
@@ -209,135 +220,329 @@ export async function consolidatedSkill(ctx: McpContext, args: ConsolidatedSkill
   }
 }
 
-// ─── autosnippet_submit_knowledge (增强：严格前置校验 + dedup + 提交追踪) ──
+// ─── autosnippet_submit_knowledge (unified pipeline) ──────────────────────
 
 /**
- * 增强版提交：严格前置校验，缺少必要字段直接拒绝（不入库）。
- * 通过校验后执行提交 + 去重检测，结果附在响应中。
- * v2: 成功提交后记录到 BootstrapSession.submissionTracker (如果有活跃 session)。
+ * 统一提交管线：单条与批量走同一代码路径。
+ *
+ * 流程:
+ *   1. 解析 items[] → 限流
+ *   2. 严格校验所有条目（UnifiedValidator）→ valid[] + rejected[]
+ *   3. 融合分析（ConsolidationAdvisor.analyzeBatch）→ submittable[] + blocked[]
+ *   4. 提交 submittable → enrich + service.create()
+ *   5. 返回统一结果
  *
  * 设计原则：
  *   - 不降级：缺字段不自动补全，要求 Agent 一次性生成完整数据
- *   - 不重复提交：拒绝时不创建任何记录，Agent 需补齐后重新调用
+ *   - 不碎片化：优先增强已有 Recipe，而非总新建
+ *   - 不重复提交：拒绝时不创建任何记录
+ *   - 单条/批量完全一致的校验与融合逻辑
  */
-export async function enhancedSubmitKnowledge(ctx: McpContext, args: SubmitKnowledgeArgs) {
+export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<string, unknown>) {
   const { submitKnowledge } = await import('./knowledge.js');
   const { UnifiedValidator } = await import('#domain/knowledge/UnifiedValidator.js');
-  const { envelope } = await import('../envelope.js');
 
-  const skipDuplicateCheck = args.skipDuplicateCheck === true;
-
-  // ── 严格前置校验：UnifiedValidator 不通过则直接拒绝 ──
-  const validator = new UnifiedValidator();
-  const validResult = validator.validate(args, {
-    skipUniqueness: true, // 去重由下方 dedup 单独处理
-  });
-  if (!validResult.pass) {
-    // v2: 记录拒绝到 BootstrapSession tracker
-    _trackRejection(ctx, args);
-
+  const items = args.items as Record<string, unknown>[] | undefined;
+  if (!items || !Array.isArray(items) || items.length === 0) {
     return envelope({
       success: false,
-      message: `提交被拒绝：${validResult.errors.join('; ')}。请在单次调用中补齐所有字段后重新提交，不要分步提交或先提交再补全。`,
+      errorCode: 'INVALID_INPUT',
+      message: 'items 数组是必需的且不能为空。请传入 items: [{ title, language, ... }]',
+      meta: { tool: 'autosnippet_submit_knowledge' },
+    });
+  }
+
+  const skipConsolidation = (args.skipConsolidation as boolean) === true;
+  const source = (args.source as string) || 'mcp';
+  const dimensionId = args.dimensionId as string | undefined;
+  const clientId = args.client_id as string | undefined;
+
+  // ── Step 1: 限流 ──
+  const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
+  const { resolveProjectRoot } = await import('#shared/resolveProjectRoot.js');
+  const projectRoot = resolveProjectRoot(ctx.container);
+  const limitCheck = checkRecipeSave(projectRoot, clientId || process.env.USER || 'mcp-client');
+  if (!limitCheck.allowed) {
+    return envelope({
+      success: false,
+      message: `提交过于频繁，请 ${limitCheck.retryAfter}s 后再试。`,
+      errorCode: 'RATE_LIMIT',
+      meta: { tool: 'autosnippet_submit_knowledge' },
+    });
+  }
+
+  // ── Step 2: 严格校验所有条目 ──
+  const validator = new UnifiedValidator();
+  const validItems: { index: number; item: Record<string, unknown> }[] = [];
+  const rejectedItems: { index: number; title: string; errors: string[]; warnings: string[] }[] =
+    [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    // 合并批次级选项到条目
+    if (!item.source) {
+      item.source = source;
+    }
+    if (dimensionId && !item.dimensionId) {
+      item.dimensionId = dimensionId;
+    }
+
+    const validation = validator.validate(item, { skipUniqueness: false });
+    if (validation.pass) {
+      validItems.push({ index: i, item });
+      // 记录标题/指纹供后续去重检测
+      validator.recordSubmission(
+        item.title as string,
+        (item.content as Record<string, unknown>)?.pattern as string
+      );
+    } else {
+      rejectedItems.push({
+        index: i,
+        title: (item.title as string) || '(untitled)',
+        errors: validation.errors,
+        warnings: validation.warnings,
+      });
+      // 记录拒绝到 BootstrapSession tracker
+      _trackRejection(ctx, item, dimensionId);
+      // 仍然记录标题/指纹防止后续条目重复
+      validator.recordSubmission(
+        item.title as string,
+        (item.content as Record<string, unknown>)?.pattern as string
+      );
+    }
+  }
+
+  // 全部被拒绝
+  if (validItems.length === 0) {
+    const allMissing = [...new Set(rejectedItems.flatMap((it) => it.errors))];
+    return envelope({
+      success: false,
       errorCode: 'INCOMPLETE_SUBMISSION',
+      message: `全部 ${items.length} 条知识条目被拒绝。请在单次调用中补齐所有字段后重新提交。`,
       data: {
-        errors: validResult.errors,
-        warnings: validResult.warnings,
+        rejectedItems,
         requiredFields: getRequiredFieldsDescription(),
+        commonErrors: allMissing,
       },
       meta: { tool: 'autosnippet_submit_knowledge' },
     });
   }
 
-  // ── 校验通过，执行提交 ──
-  const result = await submitKnowledge(ctx, args);
+  // ── Step 3: 融合分析（统一对所有有效条目运行） ──
+  const submittableItems: { index: number; item: Record<string, unknown> }[] = [];
+  const blockedItems: { index: number; title: string; consolidation: unknown }[] = [];
 
-  // 如果提交本身失败，直接返回
-  if (result && !result.success) {
-    return result;
-  }
+  if (skipConsolidation) {
+    submittableItems.push(...validItems);
+  } else {
+    const advisor = ctx.container.get('consolidationAdvisor');
+    if (!advisor || typeof advisor.analyzeBatch !== 'function') {
+      // DI 未注册时降级放行
+      submittableItems.push(...validItems);
+    } else {
+      try {
+        const candidates = validItems.map((v) => ({
+          title: (v.item.title as string) || '',
+          description: (v.item.description as string) || '',
+          doClause: v.item.doClause as string | undefined,
+          dontClause: v.item.dontClause as string | undefined,
+          coreCode: v.item.coreCode as string | undefined,
+          category: v.item.category as string | undefined,
+          trigger: v.item.trigger as string | undefined,
+          whenClause: v.item.whenClause as string | undefined,
+          kind: v.item.kind as string | undefined,
+          content: v.item.content as
+            | { pattern?: string; markdown?: string; [key: string]: unknown }
+            | undefined,
+        }));
 
-  // ── 附加去重检测结果（非阻塞） ──
-  let duplicateCheck: DuplicateCheckResult | null = null;
-  if (!skipDuplicateCheck) {
-    try {
-      const dedupCandidate = {
-        title: args.title,
-        summary: args.description || '',
-        code: args.content?.pattern || '',
-      };
-      const dedupResult = await candidateHandlers.checkDuplicate(ctx, {
-        candidate: dedupCandidate,
-        threshold: 0.7,
-        topK: 3,
-      });
-      if (dedupResult?.data) {
-        duplicateCheck = {
-          hasSimilar: dedupResult.data.similar?.length > 0,
-          closest: dedupResult.data.similar?.[0] || null,
-        };
+        const batchAdvice = advisor.analyzeBatch(candidates);
+
+        for (const { index: adviceIdx, advice } of batchAdvice.items) {
+          const validEntry = validItems[adviceIdx];
+          if (advice.action === 'create') {
+            submittableItems.push(validEntry);
+          } else {
+            blockedItems.push({
+              index: validEntry.index,
+              title: (validEntry.item.title as string) || '(untitled)',
+              consolidation: advice,
+            });
+          }
+        }
+
+        // 将批次内重叠信息附加到 blockedItems
+        if (batchAdvice.internalOverlaps.length > 0) {
+          for (const overlap of batchAdvice.internalOverlaps) {
+            const entryB = validItems[overlap.indexB];
+            // 如果 B 已经被放行，降级为 blocked（批次内碎片化警告）
+            const alreadyBlocked = blockedItems.some((b) => b.index === entryB.index);
+            if (!alreadyBlocked) {
+              const entryA = validItems[overlap.indexA];
+              blockedItems.push({
+                index: entryB.index,
+                title: (entryB.item.title as string) || '(untitled)',
+                consolidation: {
+                  action: 'merge',
+                  reason: `与同批次候选「${(entryA.item.title as string) || ''}」高度重叠（${(overlap.similarity * 100).toFixed(0)}%），建议合并后再提交。`,
+                  internalOverlap: true,
+                  overlapWith: {
+                    index: entryA.index,
+                    title: entryA.item.title,
+                    similarity: overlap.similarity,
+                  },
+                },
+              });
+              // 从 submittable 中移除
+              const subIdx = submittableItems.findIndex((s) => s.index === entryB.index);
+              if (subIdx >= 0) {
+                submittableItems.splice(subIdx, 1);
+              }
+            }
+          }
+        }
+      } catch {
+        // 分析失败时静默降级放行
+        submittableItems.push(
+          ...validItems.filter((v) => !submittableItems.some((s) => s.index === v.index))
+        );
       }
-    } catch {
-      duplicateCheck = { hasSimilar: false, note: 'dedup skipped due to error' };
     }
   }
 
-  // 将去重结果附到响应中
-  if (result?.data) {
-    (result.data as Record<string, unknown>).duplicateCheck = duplicateCheck;
+  // ── Step 4: 提交所有通过的条目 ──
+  let successCount = 0;
+  const successIds: string[] = [];
+  const submitErrors: { index: number; title: string; error: string }[] = [];
+
+  for (const { index, item } of submittableItems) {
+    try {
+      const result = await submitKnowledge(ctx, {
+        ...item,
+        source: (item.source as string) || source,
+        client_id: clientId,
+      });
+
+      if (result?.success && (result.data as Record<string, unknown>)?.id) {
+        successCount++;
+        const recipeId = (result.data as Record<string, unknown>).id as string;
+        successIds.push(recipeId);
+        _trackSubmission(ctx, item, dimensionId, recipeId);
+      } else {
+        submitErrors.push({
+          index,
+          title: (item.title as string) || '(untitled)',
+          error: result?.message || 'unknown error',
+        });
+      }
+    } catch (err: unknown) {
+      submitErrors.push({
+        index,
+        title: (item.title as string) || '(untitled)',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
-  // v2: 记录成功提交到 BootstrapSession tracker
-  if ((result?.data as Record<string, unknown>)?.id) {
-    _trackSubmission(ctx, args, (result.data as Record<string, unknown>).id as string);
+  // ── Step 5: 构建统一响应 ──
+  const data: Record<string, unknown> = {
+    count: successCount,
+    total: items.length,
+  };
+
+  if (successIds.length > 0) {
+    data.ids = successIds;
+  }
+  if (submitErrors.length > 0) {
+    data.errors = submitErrors;
+  }
+  if (rejectedItems.length > 0) {
+    const allMissing = [...new Set(rejectedItems.flatMap((it) => it.errors))];
+    data.rejectedItems = rejectedItems;
+    data.rejectedSummary = {
+      rejectedCount: rejectedItems.length,
+      commonErrors: allMissing,
+      message: `${rejectedItems.length}/${items.length} 条知识条目因校验未通过被拒绝。`,
+    };
+  }
+  if (blockedItems.length > 0) {
+    data.blockedItems = blockedItems;
+    data.blockedSummary = {
+      blockedCount: blockedItems.length,
+      message: `${blockedItems.length} 条因融合分析被阻塞（与已有 Recipe 重叠或实质性不足）。设 skipConsolidation: true 可跳过。`,
+    };
   }
 
-  return result;
+  const allOk = successCount === items.length;
+  return envelope({
+    success: successCount > 0,
+    data,
+    message: allOk
+      ? `已提交 ${successCount} 条知识条目。`
+      : `已提交 ${successCount}/${items.length} 条知识条目。`,
+    meta: { tool: 'autosnippet_submit_knowledge' },
+  });
 }
 
-// ── v2: BootstrapSession 提交追踪辅助函数 ──────────────────
+// ── BootstrapSession 提交追踪辅助函数 ───────────────────────
 
-/**
- * 记录成功提交到活跃 BootstrapSession 的 submissionTracker
- * 静默失败 — tracker 不可用时不影响提交本身
- */
-function _trackSubmission(ctx: McpContext, args: SubmitKnowledgeArgs, recipeId: string) {
+interface SessionTrackerLike {
+  submissionTracker?: {
+    recordRejection(dimId: string, title: string, reason: string): void;
+    recordSubmission(dimId: string, item: unknown, recipeId: string): void;
+  };
+  getProgress(): { remainingDimIds: string[] };
+}
+
+function _getSession(ctx: McpContext): { session: SessionTrackerLike; dimId: string } | null {
   try {
     const sessionManager = ctx.container.get('bootstrapSessionManager');
-    const session = sessionManager?.getSession?.();
+    const session: SessionTrackerLike | null = sessionManager?.getSession?.();
     if (!session?.submissionTracker) {
-      return;
+      return null;
     }
-
-    // 推断当前维度: 优先使用 Agent 显式传递的 dimensionId，其次推断 remainingDimIds[0]
     const progress = session.getProgress();
-    const currentDimId =
-      args.dimensionId || progress.remainingDimIds[0] || args.knowledgeType || 'unknown';
-
-    session.submissionTracker.recordSubmission(currentDimId, args, recipeId);
+    return { session, dimId: progress.remainingDimIds[0] || 'unknown' };
   } catch {
-    // tracker 不可用时静默降级
+    return null;
   }
 }
 
-/** 记录拒绝到活跃 BootstrapSession 的 submissionTracker */
-function _trackRejection(ctx: McpContext, args: SubmitKnowledgeArgs) {
+function _trackSubmission(
+  ctx: McpContext,
+  item: Record<string, unknown>,
+  dimensionId: string | undefined,
+  recipeId: string
+) {
+  const s = _getSession(ctx);
+  if (!s) {
+    return;
+  }
   try {
-    const sessionManager = ctx.container.get('bootstrapSessionManager');
-    const session = sessionManager?.getSession?.();
-    if (!session?.submissionTracker) {
-      return;
-    }
+    const dimId = dimensionId || (item.dimensionId as string) || s.dimId;
+    s.session.submissionTracker?.recordSubmission(dimId, item, recipeId);
+  } catch {
+    /* best effort */
+  }
+}
 
-    const progress = session.getProgress();
-    const currentDimId = args?.dimensionId || progress.remainingDimIds[0] || 'unknown';
-
-    session.submissionTracker.recordRejection(
-      currentDimId,
-      args?.title || '(untitled)',
+function _trackRejection(
+  ctx: McpContext,
+  item: Record<string, unknown>,
+  dimensionId: string | undefined
+) {
+  const s = _getSession(ctx);
+  if (!s) {
+    return;
+  }
+  try {
+    const dimId = dimensionId || (item.dimensionId as string) || s.dimId;
+    s.session.submissionTracker?.recordRejection(
+      dimId,
+      (item.title as string) || '(untitled)',
       'validation failed'
     );
   } catch {
-    // 静默降级
+    /* best effort */
   }
 }

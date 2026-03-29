@@ -8,9 +8,9 @@ AutoSnippet provides knowledge base access to AI assistants in IDEs via [Model C
 
 The MCP server runs over the stdio protocol. IDEs (Cursor / VS Code / Trae / Qoder / Claude Code) automatically launch and connect to it.
 
-**20 tools total:**
-- **Agent Tier (16)** — Directly callable by IDE AI
-- **Admin Tier (4)** — Admin/CI tools
+**16 tools total:**
+- **Agent Tier (14)** — Directly callable by IDE AI
+- **Admin Tier (2)** — Admin/CI tools
 
 All tools pass through the Gateway pipeline (validate → guard → route → audit).
 
@@ -149,9 +149,22 @@ Code compliance check. Check code snippets or file lists against Guard rules.
 
 ### 7. autosnippet_submit_knowledge
 
-Submit a single knowledge entry. Subject to strict pre-validation and deduplication.
+Unified knowledge submission (single/batch/document). Pass 1~N entries via `items` array.
 
 **Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | object[] | ✅ | Knowledge entry array. See fields below |
+| `target_name` | string | — | Batch source identifier, e.g. `network-module-scan` |
+| `source` | string | — | Source tag, default `mcp` |
+| `deduplicate` | boolean | — | Auto-dedup by title in batch mode, default `true` |
+| `skipConsolidation` | boolean | — | Skip consolidation analysis (set `true` when confirmed new) |
+| `skipDuplicateCheck` | boolean | — | Skip duplicate detection |
+| `client_id` | string | — | Client ID |
+| `dimensionId` | string | — | Coldstart dimension ID |
+
+**items element fields (full knowledge entry):**
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -159,51 +172,23 @@ Submit a single knowledge entry. Subject to strict pre-validation and deduplicat
 | `language` | string | ✅ | Programming language |
 | `content` | object | ✅ | `{ markdown, pattern?, rationale }` content object |
 | `kind` | string | ✅ | Type: `rule` / `pattern` / `fact` |
-| `category` | string | ✅ | Category |
-| `knowledgeType` | string | ✅ | Knowledge type (e.g., `code-pattern`, `code-standard`) |
-| `description` | string | ✅ | Chinese summary ≤80 chars |
 | `doClause` | string | ✅ | English imperative positive rule |
 | `dontClause` | string | ✅ | English negative constraint (what NOT to do) |
 | `whenClause` | string | ✅ | English trigger scenario description |
-| `trigger` | string | ✅ | `@kebab-case` unique identifier |
 | `coreCode` | string | ✅ | 3-8 line code skeleton, syntactically complete |
-| `headers` | array | ✅ | Import statement array, pass `[]` when none |
-| `usageGuide` | string | ✅ | `###` section-format usage guide |
+| `category` | string | ✅ | Category |
+| `trigger` | string | ✅ | `@kebab-case` unique identifier |
+| `description` | string | ✅ | Summary ≤80 chars |
+| `headers` | array | ✅ | Import statement array |
+| `usageGuide` | string | ✅ | Usage guide |
+| `knowledgeType` | string | ✅ | Knowledge type |
 | `reasoning` | object | ✅ | `{ whyStandard, sources, confidence }` reasoning |
-| `topicHint` | string | — | Topic hint: `networking` / `ui` / `data` / `architecture` / `conventions` |
-| `scope` | string | — | Scope: `universal` / `project-specific` / `team-convention` |
-| `complexity` | string | — | Complexity: `basic` / `intermediate` / `advanced` |
-| `sourceFile` | string | — | Source file relative path |
+
+**Document save mode (set item `knowledgeType: 'dev-document'`, only `title` + `markdown` required).**
 
 ---
 
-### 8. autosnippet_submit_knowledge_batch
-
-Batch submit knowledge entries.
-
-**Parameters:**
-
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `target_name` | string | ✅ | Target/module name |
-| `items` | object[] | ✅ | Array of knowledge entries (same structure as `autosnippet_submit_knowledge`) |
-
----
-
-### 9. autosnippet_save_document
-
-Save a development document to the knowledge base.
-
-**Parameters:**
-
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `title` | string | ✅ | Document title |
-| `markdown` | string | ✅ | Markdown content |
-
----
-
-### 10. autosnippet_skill
+### 8. autosnippet_skill
 
 Skill management. Create, load, update, and delete project Skills.
 
@@ -217,38 +202,13 @@ Skill management. Create, load, update, and delete project Skills.
 
 ---
 
-### 11. autosnippet_bootstrap
+### 9. autosnippet_bootstrap
 
-Coldstart and scan operations.
-
-**Parameters:**
-
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `operation` | string | ✅ | Operation: `knowledge` / `refine` / `scan` |
-| `target` | string | — | Scan target path (for `scan`) |
-| `dimensions` | string[] | — | Specify dimensions (for `knowledge`) |
-| `maxFiles` | number | — | Maximum files |
-
-**Operations:**
-
-| Operation | Action |
-|-----------|--------|
-| `knowledge` | Full coldstart (multi-dimension analysis + AI population) |
-| `refine` | Refine existing candidates (AI-enhanced descriptions and metadata) |
-| `scan` | Scan a specific target (equivalent to `asd ais`) |
+Coldstart — No parameters required. Automatically analyzes the project (AST, dependency graph, Guard audit) and returns a Mission Briefing.
 
 ---
 
-### 12. autosnippet_capabilities
-
-List all available MCP tool overview. Helps AI understand what it can do.
-
-**Parameters:** None
-
----
-
-### 13. autosnippet_dimension_complete
+### 10. autosnippet_dimension_complete
 
 Dimension analysis completion notification — Called after the Agent finishes analyzing a coldstart dimension. Handles Recipe association, Skill generation, checkpoint saving, and progress push.
 
@@ -265,63 +225,53 @@ Dimension analysis completion notification — Called after the Agent finishes a
 
 ---
 
-### 14. autosnippet_wiki_plan
+### 11. autosnippet_wiki
 
-Plan Wiki document generation — Scans project structure, analyzes AST and dependencies, integrates knowledge base, returns discovered topics and data packages.
+Wiki document generation.
 
 **Parameters:**
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
+| `operation` | string | ✅ | `plan` (plan topics + data packages) / `finalize` (write meta.json + validate) |
 | `language` | string | — | Wiki document language: `zh` (default) / `en` |
-| `sessionId` | string | — | bootstrap session ID (optional) |
+| `sessionId` | string | — | bootstrap session ID |
+| `articlesWritten` | string[] | — | For `finalize`: written file paths list |
 
 ---
 
-### 15. autosnippet_wiki_finalize
+### 12. autosnippet_panorama
 
-Finalize Wiki generation — Writes meta.json, runs dedup checks, validates file integrity. Call after all Wiki articles are written.
+Project panorama queries.
 
 **Parameters:**
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| `articlesWritten` | string[] | ✅ | Written Wiki file paths (relative to `AutoSnippet/wiki/`) |
+| `operation` | string | — | `overview` (default) / `module` / `gaps` / `health` / `governance_cycle` / `decay_report` / `staging_check` / `enhancement_suggestions` |
+| `module` | string | — | Module name (required for `module` operation) |
 
 ---
 
-### 16. autosnippet_task
+### 13. autosnippet_task
 
-Task graph management — Create/query/claim/close tasks, manage dependencies. Used by Agents for autonomous decomposition and execution of complex multi-step work.
+Task and decision management (5 operations). Call `prime` at the start of every conversation to load knowledge context.
 
 **Parameters:**
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| `operation` | string | ✅ | Operation: `create` / `ready` / `claim` / `close` / `fail` / `defer` / `progress` / `show` / `list` / `blocked` / `decompose` / `dep_add` / `dep_tree` / `prime` / `stats` |
-| `title` | string | — | Task title (create) |
-| `description` | string | — | Task description (create/progress) |
-| `id` | string | — | Task ID (claim/close/fail/defer/show/progress) |
-| `priority` | number | — | Priority 0-4, 0=highest (create) |
-| `taskType` | string | — | Task type: `epic` / `task` / `bug` / `chore` (create) |
-| `parentId` | string | — | Parent task ID (create subtask) |
-| `reason` | string | — | Reason (close/fail/defer) |
-| `dependsOn` | string | — | Dependent task ID (dep_add) |
-| `subtasks` | array | — | Subtask list (decompose) |
-
-**Common operations:**
-- `prime` — Restore session context (returns in-progress + ready tasks)
-- `ready` — Get next batch of executable tasks (with knowledge context)
-- `create` — Create a task
-- `claim` — Claim and start a task
-- `close` — Complete a task
-- `stats` — Task statistics
+| `operation` | string | ✅ | Operation: `prime` / `create` / `close` / `fail` / `record_decision` |
+| `id` | string | — | Task ID (close/fail) |
+| `title` | string | — | Task title (create) / Decision title (record_decision) |
+| `description` | string | — | Task description (create) |
+| `reason` | string | — | Reason (close/fail) |
 
 ---
 
 ## Admin Tier Tools
 
-### 17. autosnippet_enrich_candidates
+### 14. autosnippet_enrich_candidates
 
 Candidate field completeness diagnosis (pure logic check, no AI).
 
@@ -333,7 +283,7 @@ Candidate field completeness diagnosis (pure logic check, no AI).
 
 ---
 
-### 18. autosnippet_knowledge_lifecycle
+### 15. autosnippet_knowledge_lifecycle
 
 Knowledge entry lifecycle operations.
 
@@ -354,46 +304,6 @@ draft → pending → approved → active → deprecated
 ```
 
 ---
-
-### 19. autosnippet_validate_candidate
-
-Standalone candidate structured pre-validation (5 layers).
-
-**Parameters:**
-
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `candidate` | object | ✅ | Candidate entry object |
-
-**Validation layers:**
-1. Required field completeness
-2. Field format compliance
-3. Content quality assessment
-4. Semantic duplicate detection
-5. Knowledge type compliance
-
----
-
-### 20. autosnippet_check_duplicate
-
-Similarity detection, checking if a candidate duplicates existing knowledge.
-
-**Parameters:**
-
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `candidate` | object | ✅ | Candidate entry object |
-
-**Response:**
-```json
-{
-  "isDuplicate": false,
-  "similarEntries": [
-    { "id": "...", "title": "...", "similarity": 0.82 }
-  ],
-  "threshold": 0.85
-}
-```
 
 ---
 

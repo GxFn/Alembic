@@ -23,6 +23,7 @@
  */
 
 import Logger from '#infra/logging/Logger.js';
+import type { SignalBus } from '#infra/signal/SignalBus.js';
 import type {
   ExplorationBudget,
   ExplorationPhase,
@@ -54,6 +55,7 @@ interface ResolveOptions {
 interface BudgetInput extends Partial<ExplorationBudget> {
   submitToolName?: string;
   pipelineType?: PipelineType;
+  signalBus?: SignalBus | null;
 }
 
 // ─── ExplorationTracker 主类 ─────────────────────────────
@@ -67,6 +69,8 @@ export class ExplorationTracker {
   #phase: string;
   /** 日志器 */
   #logger;
+  /** 信号总线（可选） */
+  #signalBus: SignalBus | null;
 
   // ── 子模块 ──
   #signalDetector;
@@ -125,6 +129,7 @@ export class ExplorationTracker {
       budget.pipelineType || (strategy.name === 'analyst' ? 'analyst' : 'bootstrap');
     this.#phase = strategy.phases[0];
     this.#logger = Logger.getInstance();
+    this.#signalBus = budget.signalBus ?? null;
 
     // 初始化子模块
     this.#signalDetector = new SignalDetector(this.#metrics);
@@ -195,17 +200,17 @@ export class ExplorationTracker {
   shouldExit() {
     // Scan 管线: SUMMARIZE 无消费方，直接退出
     if (this.#isTerminalPhase() && this.#pipelineType === 'scan') {
+      this.#emitExitSignal('scan_terminal');
       return true;
     }
     // 终结阶段 + 已给了 3 轮 grace → 退出
-    // 注意: phaseRounds 在 tick() 中递增 (进入终结阶段后从 1 开始计数)
-    // 3 轮 grace 允许: round 1 (首次尝试) + round 2 (空响应重试) + 安全余量
-    // 与 AgentRuntime#callLLM 的空响应 grace 机制对齐 (grace < 2 → 在 round 1 重试)
     if (this.#isTerminalPhase() && this.#metrics.phaseRounds >= 3) {
+      this.#emitExitSignal('grace_exhausted');
       return true;
     }
     // 硬上限兜底
     if (this.#metrics.iteration >= this.#budget.maxIterations + 2) {
+      this.#emitExitSignal('hard_limit');
       return true;
     }
     // 达到 maxIterations 但未在终结阶段 → 强制转入终结阶段
@@ -219,6 +224,14 @@ export class ExplorationTracker {
       return false;
     }
     return false;
+  }
+
+  #emitExitSignal(reason: string): void {
+    if (this.#signalBus) {
+      this.#signalBus.send('exploration', 'ExplorationTracker.exit', 0, {
+        metadata: { totalIterations: this.#metrics.iteration, reason },
+      });
+    }
   }
 
   /**
@@ -561,6 +574,15 @@ export class ExplorationTracker {
     this.#logger.info(
       `[ExplorationTracker] ${oldPhase} → ${newPhase} (iter=${this.#metrics.iteration}, submits=${this.#metrics.submitCount})`
     );
+
+    // Phase 3: 发射阶段转换信号
+    if (this.#signalBus) {
+      const terminalPhase = this.#getTerminalPhase();
+      const value = newPhase === terminalPhase ? 1.0 : 0.5;
+      this.#signalBus.send('exploration', 'ExplorationTracker.phase', value, {
+        metadata: { from: oldPhase, to: newPhase, iteration: this.#metrics.iteration },
+      });
+    }
   }
 
   #isTerminalPhase() {

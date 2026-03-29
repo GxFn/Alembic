@@ -24,12 +24,27 @@ const mockOverview = {
   ],
   cycleCount: 1,
   gapCount: 2,
+  healthRadar: {
+    dimensions: [],
+    overallScore: 20,
+    totalRecipes: 20,
+    coveredDimensions: 2,
+    totalDimensions: 11,
+    dimensionCoverage: 0.18,
+  },
   computedAt: Date.now(),
   stale: false,
 };
 
 const mockHealth = {
-  overallCoverage: 0.2,
+  healthRadar: {
+    dimensions: [],
+    overallScore: 20,
+    totalRecipes: 20,
+    coveredDimensions: 2,
+    totalDimensions: 11,
+    dimensionCoverage: 0.18,
+  },
   avgCoupling: 3.5,
   cycleCount: 1,
   gapCount: 2,
@@ -39,8 +54,24 @@ const mockHealth = {
 };
 
 const mockGaps = [
-  { module: 'Network', files: 15, recipes: 0, priority: 'high', suggestedFocus: ['API client'] },
-  { module: 'Storage', files: 8, recipes: 2, priority: 'medium', suggestedFocus: ['cache'] },
+  {
+    dimension: 'error-handling',
+    dimensionName: '错误处理',
+    recipeCount: 0,
+    status: 'missing',
+    priority: 'high',
+    suggestedTopics: ['exception-pattern'],
+    affectedRoles: ['service'],
+  },
+  {
+    dimension: 'concurrency',
+    dimensionName: '并发与线程',
+    recipeCount: 1,
+    status: 'weak',
+    priority: 'medium',
+    suggestedTopics: ['thread-safety'],
+    affectedRoles: [],
+  },
 ];
 
 const mockModuleDetail = {

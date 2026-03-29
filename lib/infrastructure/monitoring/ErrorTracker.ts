@@ -5,6 +5,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+
+import pathGuard from '../../shared/PathGuard.js';
 import Logger from '../logging/Logger.js';
 
 interface ErrorTrackerConfig {
@@ -50,7 +52,8 @@ export class ErrorTracker {
   ) {
     this.config = {
       logDirectory:
-        options.logDirectory || path.join(process.cwd(), '.autosnippet', 'logs', 'errors'),
+        options.logDirectory ||
+        path.join(pathGuard.projectRoot ?? process.cwd(), '.autosnippet', 'logs', 'errors'),
       maxErrorsInMemory: options.maxErrorsInMemory || 500,
       enableFileLogging: options.enableFileLogging !== false,
       enableConsoleLogging: options.enableConsoleLogging !== false,

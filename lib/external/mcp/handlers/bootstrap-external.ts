@@ -184,6 +184,7 @@ export async function bootstrapExternal(ctx: McpContext) {
     languageExtension: buildLanguageExtension(primaryLang), // §7.1
     incrementalPlan,
     languageStats: langStats,
+    panoramaResult: phaseResults.panoramaResult, // §M1: Phase 1.8 全景数据
   });
 
   // 附加 warnings

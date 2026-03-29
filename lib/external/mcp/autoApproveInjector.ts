@@ -39,8 +39,6 @@ const AUTO_APPROVE_TOOLS = [
   'autosnippet_graph',
   'autosnippet_guard',
   'autosnippet_submit_knowledge',
-  'autosnippet_submit_knowledge_batch',
-  'autosnippet_save_document',
   'autosnippet_skill',
   'autosnippet_task',
   'autosnippet_bootstrap',

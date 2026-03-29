@@ -295,7 +295,6 @@ export const submitWithCheck = {
           existingFingerprints: ctx._submittedPatterns || new Set(),
         });
       const validResult = validator.validate(params, {
-        mode: 'strict',
         systemInjectedFields: getSystemInjectedFields(),
       });
       if (!validResult.pass) {

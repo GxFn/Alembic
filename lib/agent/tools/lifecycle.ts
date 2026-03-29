@@ -1,8 +1,7 @@
 /**
- * lifecycle.js — 生命周期操作类工具 (11)
+ * lifecycle.js — 生命周期操作类工具 (10)
  *
  * 16.  submit_knowledge     提交候选项
- * 16b. save_document        保存开发文档
  * 17.  approve_candidate    批准候选
  * 18.  reject_candidate     驳回候选
  * 19.  publish_recipe       发布 Recipe
@@ -44,14 +43,6 @@ export interface SubmitKnowledgeParams {
   sourceFile?: string;
   _category?: string;
   [key: string]: unknown;
-}
-
-export interface SaveDocumentParams {
-  title: string;
-  markdown: string;
-  description?: string;
-  tags?: string[];
-  scope?: string;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -154,7 +145,6 @@ export const submitCandidate = {
           existingFingerprints: ctx._submittedPatterns || new Set(),
         });
       const validResult = validator.validate(params, {
-        mode: 'strict',
         systemInjectedFields: getSystemInjectedFields(),
       });
       if (!validResult.pass) {
@@ -244,83 +234,7 @@ export const submitCandidate = {
 
 // ────────────────────────────────────────────────────────────
 // 16b. save_document — 保存开发文档到知识库
-// ────────────────────────────────────────────────────────────
-export const saveDocument = {
-  name: 'save_document',
-  description:
-    '保存开发文档到知识库（架构设计、排查报告、决策记录、调研笔记等）。仅需 title + markdown，无需 Cursor Delivery 字段。文档自动发布，可通过 autosnippet_search 检索。',
-  parameters: {
-    type: 'object',
-    properties: {
-      title: { type: 'string', description: '文档标题' },
-      markdown: { type: 'string', description: '文档 Markdown 全文' },
-      description: { type: 'string', description: '一句话摘要（可选）' },
-      tags: {
-        type: 'array',
-        items: { type: 'string' },
-        description: '标签: adr, debug-report, design-doc, research, performance 等',
-      },
-      scope: {
-        type: 'string',
-        enum: ['universal', 'project-specific'],
-        description: '适用范围（默认 project-specific）',
-      },
-    },
-    required: ['title', 'markdown'],
-  },
-  handler: async (params: SaveDocumentParams, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
-
-    const data = {
-      title: params.title.trim(),
-      description: params.description || '',
-      knowledgeType: 'dev-document',
-      kind: 'fact',
-      source: 'agent',
-      scope: params.scope || 'project-specific',
-      tags: params.tags || [],
-      content: {
-        markdown: params.markdown,
-        pattern: '',
-      },
-      trigger: '',
-      doClause: '',
-      dontClause: '',
-      whenClause: '',
-      topicHint: '',
-      coreCode: '',
-      reasoning: {
-        whyStandard: 'Agent development document',
-        sources: ['agent'],
-        confidence: 0.8,
-      },
-    };
-
-    // ── UnifiedValidator 校验（自动检测 document 模式）──
-    const validator = new UnifiedValidator();
-    const vr = validator.validate(data, { skipUniqueness: true });
-    if (!vr.pass) {
-      return { error: true, message: `文档校验失败: ${vr.errors.join('; ')}` };
-    }
-
-    const saved = await knowledgeService.create(data, { userId: 'agent' });
-
-    // 自动发布（文档不需要人工审核）
-    try {
-      await knowledgeService.publish(saved.id, { userId: 'agent' });
-    } catch {
-      /* best effort */
-    }
-
-    return {
-      id: saved.id,
-      title: saved.title,
-      lifecycle: 'active',
-      knowledgeType: 'dev-document',
-      message: `文档「${saved.title}」已保存到知识库`,
-    };
-  },
-};
+// ── (已删除: save_document — 已合并到 submit_knowledge 统一管线) ──
 
 // ────────────────────────────────────────────────────────────
 // 17. approve_candidate

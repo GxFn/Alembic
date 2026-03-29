@@ -2,14 +2,16 @@
  * AgentModule — Agent 架构服务注册
  *
  * 负责注册:
- *   - agentFactory, toolRegistry, skillHooks
+ *   - agentFactory, toolRegistry, toolForge, skillHooks
  *   - feedbackStore, recommendationPipeline, recommendationMetrics
  */
 
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { AgentFactory } from '../../agent/AgentFactory.js';
+import { ToolForge } from '../../agent/forge/ToolForge.js';
 import { ALL_TOOLS } from '../../agent/tools/index.js';
 import { ToolRegistry } from '../../agent/tools/ToolRegistry.js';
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { AIRecallStrategy } from '../../service/skills/AIRecallStrategy.js';
 import { FeedbackStore } from '../../service/skills/FeedbackStore.js';
 import { RecommendationMetrics } from '../../service/skills/RecommendationMetrics.js';
@@ -23,6 +25,12 @@ export function register(c: ServiceContainer) {
     const registry = new ToolRegistry();
     registry.registerAll(ALL_TOOLS);
     return registry;
+  });
+
+  c.singleton('toolForge', (ct: ServiceContainer) => {
+    const registry = ct.get('toolRegistry');
+    const signalBus = ct.singletons.signalBus as SignalBus | undefined;
+    return new ToolForge(registry, { signalBus });
   });
 
   c.singleton(

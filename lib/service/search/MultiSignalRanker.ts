@@ -259,8 +259,15 @@ export class VectorSignal {
 export class MultiSignalRanker {
   #signals;
   #scenarioWeights;
+  #realtimeWeights: Map<string, number> = new Map();
+  #recentlyUsed: Set<string> = new Set();
 
-  constructor(options: { scenarioWeights?: Record<string, Record<string, number>> } = {}) {
+  constructor(
+    options: {
+      scenarioWeights?: Record<string, Record<string, number>>;
+      signalBus?: import('../../infrastructure/signal/SignalBus.js').SignalBus;
+    } = {}
+  ) {
     this.#signals = {
       relevance: new RelevanceSignal(),
       authority: new AuthoritySignal(),
@@ -281,6 +288,22 @@ export class MultiSignalRanker {
       }
     }
     this.#scenarioWeights = { ...SCENARIO_WEIGHTS, ...remapped };
+
+    // Phase 2: 订阅实时信号更新权重
+    if (options.signalBus) {
+      options.signalBus.subscribe('quality|usage', (signal) => {
+        this.#onSignal(signal);
+      });
+    }
+  }
+
+  #onSignal(signal: import('../../infrastructure/signal/SignalBus.js').Signal): void {
+    if (signal.type === 'quality' && signal.target) {
+      this.#realtimeWeights.set(signal.target, signal.value);
+    }
+    if (signal.type === 'usage' && signal.target) {
+      this.#recentlyUsed.add(signal.target);
+    }
   }
 
   /**

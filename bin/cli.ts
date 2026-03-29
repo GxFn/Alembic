@@ -16,6 +16,7 @@
  *   asd upgrade         - 升级 IDE 集成
  *   asd mirror          - 镜像 .cursor/ → .qoder/ .trae/
  *   asd status          - 环境状态
+ *   asd health          - 综合健康报告
  */
 
 import {
@@ -718,7 +719,7 @@ program
           for (const g of gaps.slice(0, 20)) {
             const priority = g.priority === 'high' ? '🔴' : g.priority === 'medium' ? '🟡' : '🔵';
             cli.log(
-              `  ${priority} [${g.module}] ${g.files} files, ${g.recipes} recipes — ${g.suggestedFocus.join(', ')}`
+              `  ${priority} [${g.dimensionName}] ${g.recipeCount} recipes (${g.status}) — ${g.suggestedTopics.join(', ')}`
             );
           }
           if (gaps.length > 20) {
@@ -736,7 +737,7 @@ program
         } else {
           const icon = health.healthScore >= 80 ? '✅' : health.healthScore >= 50 ? '⚠️' : '❌';
           cli.log(`\n${icon} Panorama Health: ${health.healthScore}/100\n`);
-          cli.log(`  Coverage:     ${health.overallCoverage}%`);
+          cli.log(`  Dimension Coverage: ${health.healthRadar.dimensionCoverage}%`);
           cli.log(`  Avg Coupling: ${health.avgCoupling}`);
           cli.log(`  Modules:      ${health.moduleCount}`);
           cli.log(`  Cycles:       ${health.cycleCount}`);
@@ -1057,6 +1058,141 @@ program
   });
 
 // ─────────────────────────────────────────────────────
+// health 命令
+// ─────────────────────────────────────────────────────
+program
+  .command('health')
+  .description('综合健康报告：系统状态、知识生命周期、Guard 合规、信号统计')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .option('--json', '以 JSON 格式输出')
+  .action(async (opts) => {
+    const projectRoot = resolve(opts.dir);
+
+    const { getAiConfigInfo } = await import('../lib/external/ai/AiFactory.js');
+    const aiInfo = getAiConfigInfo();
+    const aiOk = !!(aiInfo.provider && aiInfo.provider !== 'none');
+
+    const dbPath = join(projectRoot, '.autosnippet', 'autosnippet.db');
+    const dbExists = existsSync(dbPath);
+
+    let dbSizeMB = 0;
+    let dbEntries = 0;
+    let guardRuleCount = 0;
+    let knowledgeStats: Record<string, number> = {};
+    let complianceScore = 0;
+    let coverageScore = 0;
+    let confidencePct = 0;
+    let signalEmitted = 0;
+    let signalListeners = 0;
+
+    if (dbExists) {
+      try {
+        const { statSync } = await import('node:fs');
+        const stat = statSync(dbPath);
+        dbSizeMB = +(stat.size / (1024 * 1024)).toFixed(1);
+      } catch {
+        /* stat 失败不阻塞 */
+      }
+
+      try {
+        const { bootstrap, container } = await initContainer({ projectRoot });
+
+        try {
+          const knowledgeService = container.get('knowledgeService');
+          const stats = (await knowledgeService.getStats()) as Record<string, number> | null;
+          if (stats) {
+            knowledgeStats = stats;
+            dbEntries = stats.total ?? 0;
+          }
+        } catch {
+          /* knowledge service 不可用 */
+        }
+
+        try {
+          const engine = container.get('guardCheckEngine');
+          const rules = engine.getRules();
+          guardRuleCount = rules.length;
+        } catch {
+          /* guard engine 不可用 */
+        }
+
+        try {
+          const reporter = container.get('complianceReporter');
+          const report = await reporter.generate(projectRoot, {
+            qualityGate: { maxErrors: 0, maxWarnings: 100, minScore: 0 },
+            maxFiles: 200,
+          });
+          complianceScore = report.complianceScore ?? 0;
+          coverageScore = report.coverageScore ?? 0;
+          confidencePct = report.confidenceScore ?? 0;
+        } catch {
+          /* compliance reporter 不可用 */
+        }
+
+        try {
+          const signalBus = container.get('signalBus') as {
+            emitCount?: number;
+            listenerCount?: number;
+          };
+          signalEmitted = signalBus.emitCount ?? 0;
+          signalListeners = signalBus.listenerCount ?? 0;
+        } catch {
+          /* signal bus 不可用 */
+        }
+
+        await bootstrap.shutdown();
+      } catch {
+        /* container init 失败，降级展示基础信息 */
+      }
+    }
+
+    const healthData = {
+      system: {
+        ai: aiOk,
+        db: dbExists,
+        dbSizeMB,
+        dbEntries,
+        guardRules: guardRuleCount,
+      },
+      knowledge: {
+        active: knowledgeStats.active ?? 0,
+        staging: knowledgeStats.staging ?? 0,
+        evolving: knowledgeStats.evolving ?? 0,
+        decaying: knowledgeStats.decaying ?? 0,
+      },
+      guard: {
+        compliance: complianceScore,
+        coverage: coverageScore,
+        confidence: confidencePct,
+      },
+      signals: {
+        emitted: signalEmitted,
+        listeners: signalListeners,
+      },
+    };
+
+    if (opts.json) {
+      cli.json(healthData);
+    } else {
+      const dbStatus = dbExists ? `✅(${dbSizeMB}MB, ${dbEntries} entries)` : '❌';
+      const aiIcon = aiOk ? '✅' : '❌';
+
+      cli.log('');
+      cli.log('AutoSnippet Health Report');
+      cli.log('═════════════════════════');
+      cli.log(`🔧 System:  AI:${aiIcon}  DB:${dbStatus}  Guard:${guardRuleCount} rules`);
+      cli.log(
+        `📊 Knowledge: Active:${healthData.knowledge.active} Staging:${healthData.knowledge.staging} Evolving:${healthData.knowledge.evolving} Decaying:${healthData.knowledge.decaying}`
+      );
+      cli.log(
+        `🛡️ Guard: Compliance:${complianceScore} Coverage:${coverageScore} Confidence:${confidencePct}%`
+      );
+      cli.log(`📡 Signals: emitted:${signalEmitted} listeners:${signalListeners}`);
+      cli.blank();
+    }
+  });
+
+// ─────────────────────────────────────────────────────
 // embed 命令 — 构建/重建语义向量索引
 // ─────────────────────────────────────────────────────
 program
@@ -1232,148 +1368,19 @@ program
   });
 
 // ─────────────────────────────────────────────────────
-// task 命令 — TaskGraph CLI 管理
+// task 命令 — Task 系统已迁移到 MCP (零 DB，纯内存 + JSONL)
+// CLI task 子命令已废弃，通过 MCP autosnippet_task 操作
 // ─────────────────────────────────────────────────────
 const taskCmd = program
   .command('task')
-  .description('TaskGraph 任务管理（列表 / 就绪 / 上下文恢复 / 统计）');
+  .description('Task 管理（已迁移到 MCP — 通过 autosnippet_task 操作）');
 
 taskCmd
   .command('list')
-  .description('列出任务')
-  .option('-d, --dir <path>', '项目目录', '.')
-  .option('-s, --status <status>', '按状态过滤（open/in_progress/closed/deferred）')
-  .option('-l, --limit <n>', '最大条数', '20')
-  .action(async (opts) => {
-    const projectRoot = resolve(opts.dir);
-    const { bootstrap, container } = await initContainer({ projectRoot });
-    try {
-      const svc = container.get('taskGraphService');
-      const filters: any = {};
-      if (opts.status) {
-        filters.status = opts.status;
-      }
-      const tasks = await svc.list(filters, { limit: parseInt(opts.limit, 10) });
-      if (tasks.length === 0) {
-        cli.log('No tasks found.');
-      } else {
-        cli.log(`\n  ID               Status        Priority  Title`);
-        cli.log(`  ${'─'.repeat(70)}`);
-        for (const t of tasks) {
-          if (!t) {
-            continue;
-          }
-          const j = t.toJSON ? t.toJSON() : t;
-          if (!j) {
-            continue;
-          }
-          const id = String(j.id || '').padEnd(16);
-          const status = String(j.status || '').padEnd(13);
-          const pri = String(j.priority ?? '-').padEnd(9);
-          cli.log(`  ${id} ${status} ${pri} ${j.title}`);
-        }
-        cli.log(`\n  Total: ${tasks.length}\n`);
-      }
-    } finally {
-      await bootstrap.shutdown?.();
-    }
-  });
-
-taskCmd
-  .command('ready')
-  .description('显示就绪任务（带知识上下文）')
-  .option('-d, --dir <path>', '项目目录', '.')
-  .option('-l, --limit <n>', '最大条数', '5')
-  .action(async (opts) => {
-    const projectRoot = resolve(opts.dir);
-    const { bootstrap, container } = await initContainer({ projectRoot });
-    try {
-      const svc = container.get('taskGraphService');
-      const tasks = await svc.ready({
-        limit: parseInt(opts.limit, 10),
-        withKnowledge: true,
-      });
-      if (tasks.length === 0) {
-        cli.log('No ready tasks.');
-      } else {
-        for (const t of tasks) {
-          if (!t) {
-            continue;
-          }
-          const j = t.toJSON ? t.toJSON() : t;
-          if (!j) {
-            continue;
-          }
-          cli.log(`\n  ▸ ${j.id} — ${j.title} (P${j.priority ?? '?'})`);
-          const kCtx = t.knowledgeContext as any;
-          if (kCtx?.relatedKnowledge?.length) {
-            cli.log(`    Knowledge: ${kCtx.relatedKnowledge.map((k: any) => k.title).join(', ')}`);
-          }
-          if (kCtx?.guardRules?.length) {
-            cli.log(`    Guard: ${kCtx.guardRules.map((r: any) => r.title).join(', ')}`);
-          }
-        }
-        cli.blank();
-      }
-    } finally {
-      await bootstrap.shutdown?.();
-    }
-  });
-
-taskCmd
-  .command('prime')
-  .description('恢复 TaskGraph 会话上下文（等同 MCP prime 操作）')
-  .option('-d, --dir <path>', '项目目录', '.')
-  .action(async (opts) => {
-    const projectRoot = resolve(opts.dir);
-    const { bootstrap, container } = await initContainer({ projectRoot });
-    try {
-      const svc = container.get('taskGraphService');
-      const result = await svc.prime({ withKnowledge: true });
-      const inProgress = result.inProgress as Array<{ id: string; title: string }>;
-      const ready = result.ready as Array<{ id: string; title: string }>;
-      cli.log(`\n  TaskGraph Prime`);
-      cli.log(`  ${'─'.repeat(40)}`);
-      cli.log(`  In Progress: ${inProgress.length}`);
-      cli.log(`  Ready:       ${ready.length}`);
-      cli.log(`  Stats:       ${JSON.stringify(result.stats)}`);
-      if (inProgress.length > 0) {
-        cli.log(`\n  ▸ In Progress:`);
-        for (const t of inProgress) {
-          cli.log(`    ${t.id} — ${t.title}`);
-        }
-      }
-      if (ready.length > 0) {
-        cli.log(`\n  ▸ Ready:`);
-        for (const t of ready) {
-          cli.log(`    ${t.id} — ${t.title}`);
-        }
-      }
-      cli.blank();
-    } finally {
-      await bootstrap.shutdown?.();
-    }
-  });
-
-taskCmd
-  .command('stats')
-  .description('TaskGraph 统计信息')
-  .option('-d, --dir <path>', '项目目录', '.')
-  .action(async (opts) => {
-    const projectRoot = resolve(opts.dir);
-    const { bootstrap, container } = await initContainer({ projectRoot });
-    try {
-      const svc = container.get('taskGraphService');
-      const stats = await svc.stats();
-      cli.log(`\n  TaskGraph Statistics`);
-      cli.log(`  ${'─'.repeat(30)}`);
-      for (const [key, val] of Object.entries(stats)) {
-        cli.log(`  ${key.padEnd(15)} ${val}`);
-      }
-      cli.blank();
-    } finally {
-      await bootstrap.shutdown?.();
-    }
+  .description('[已废弃] Task 系统不再使用数据库。通过 MCP prime 操作获取上下文。')
+  .action(() => {
+    cli.log('\n  ⚠️ Task 系统已迁移到 MCP（零 DB，纯内存 + JSONL）。');
+    cli.log('  使用 autosnippet_task({ operation: "prime" }) 加载上下文。\n');
   });
 
 // ─────────────────────────────────────────────────────

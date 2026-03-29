@@ -11,6 +11,7 @@
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 import { ContradictionDetector } from './ContradictionDetector.js';
 
@@ -53,11 +54,16 @@ const REDUNDANCY_THRESHOLD = 0.65;
 export class RedundancyAnalyzer {
   #db: DatabaseLike;
   #signalBus: SignalBus | null;
+  #reportStore: ReportStore | null;
   #logger = Logger.getInstance();
 
-  constructor(db: DatabaseLike, options: { signalBus?: SignalBus } = {}) {
+  constructor(
+    db: DatabaseLike,
+    options: { signalBus?: SignalBus; reportStore?: ReportStore } = {}
+  ) {
     this.#db = db;
     this.#signalBus = options.signalBus ?? null;
+    this.#reportStore = options.reportStore ?? null;
   }
 
   /**
@@ -76,11 +82,19 @@ export class RedundancyAnalyzer {
       }
     }
 
-    if (this.#signalBus && results.length > 0) {
+    if (this.#reportStore && results.length > 0) {
       for (const r of results) {
-        this.#signalBus.send('lifecycle', 'RedundancyAnalyzer', r.similarity, {
-          target: r.recipeA,
-          metadata: { redundantWith: r.recipeB, dimensions: r.dimensions },
+        void this.#reportStore.write({
+          category: 'analysis',
+          type: 'redundancy_report',
+          producer: 'RedundancyAnalyzer',
+          data: {
+            recipeA: r.recipeA,
+            redundantWith: r.recipeB,
+            dimensions: r.dimensions,
+            similarity: r.similarity,
+          },
+          timestamp: Date.now(),
         });
       }
     }

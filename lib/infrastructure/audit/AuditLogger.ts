@@ -1,13 +1,20 @@
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { AuditStore } from './AuditStore.js';
 
+/** Minimal EventBus shape for optional audit event emission */
+interface AuditEventBus {
+  emit(event: string, data: unknown): void;
+}
+
 /** AuditLogger - 审计日志记录器 */
 export class AuditLogger {
   auditStore: AuditStore;
   logger: import('winston').Logger;
-  constructor(auditStore: AuditStore) {
+  #eventBus: AuditEventBus | null;
+  constructor(auditStore: AuditStore, eventBus?: AuditEventBus | null) {
     this.auditStore = auditStore;
     this.logger = Logger.getInstance();
+    this.#eventBus = eventBus ?? null;
   }
 
   /**
@@ -60,6 +67,17 @@ export class AuditLogger {
         actor: entry.actor,
         action: entry.action,
       });
+      // 实时推送审计事件到 Dashboard（M7 §6 audit:entry Socket.io）
+      if (this.#eventBus) {
+        this.#eventBus.emit('audit:entry', {
+          id: auditEntry.id,
+          timestamp: auditEntry.timestamp,
+          actor: auditEntry.actor,
+          action: auditEntry.action,
+          resource: auditEntry.resource,
+          result: auditEntry.result,
+        });
+      }
     } catch (error: unknown) {
       // 审计失败不应阻断业务，仅记录错误
       this.logger.error('Failed to save audit log', {

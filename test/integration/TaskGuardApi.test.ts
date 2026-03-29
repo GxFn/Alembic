@@ -1,12 +1,10 @@
 /**
- * 集成测试：TaskGraph HTTP API + Guard HTTP API
+ * 集成测试：Task HTTP API + Guard HTTP API
  *
  * 覆盖范围：
- *   ✓ POST /api/v1/task — 任务生命周期（create → claim → progress → close）
- *   ✓ POST /api/v1/task — prime / ready / stats / list / blocked
- *   ✓ POST /api/v1/task — decompose / dep_add / dep_tree
+ *   ✓ POST /api/v1/task — Intent Lifecycle handler (create)
  *   ✓ POST /api/v1/guard/file — Guard 文件检查
- *   ✓ 错误处理（缺参、无效操作）
+ *   ✓ 错误处理
  */
 
 import Bootstrap from '../../lib/bootstrap.js';
@@ -57,117 +55,13 @@ describe('Integration: TaskGraph + Guard HTTP API', () => {
     }
   });
 
-  // ── TaskGraph 任务生命周期 ──────────────────────────
+  // ── Task HTTP API (v3.3 — Intent Lifecycle) ──────
 
-  describe('POST /task — lifecycle', () => {
-    let taskId;
-
-    it('should create a task', async () => {
-      const res = await post('/task', {
-        operation: 'create',
-        title: 'Test task for integration',
-        description: 'Created by integration test',
-        priority: 1,
-        taskType: 'task',
-      });
+  describe('POST /task', () => {
+    it('should create a task via intent lifecycle handler', async () => {
+      const res = await post('/task', { operation: 'create', title: 'test' });
       expect(res.success).toBe(true);
-      expect(res.data.id).toMatch(/^asd-/);
-      expect(res.data.title).toBe('Test task for integration');
-      expect(res.data.status).toBe('open');
-      taskId = res.data.id;
-    });
-
-    it('should claim a task', async () => {
-      const res = await post('/task', {
-        operation: 'claim',
-        id: taskId,
-      });
-      expect(res.success).toBe(true);
-      expect(res.data.status).toBe('in_progress');
-    });
-
-    it('should update progress', async () => {
-      const res = await post('/task', {
-        operation: 'progress',
-        id: taskId,
-        description: 'Making progress on test task',
-      });
-      expect(res.success).toBe(true);
-    });
-
-    it('should close a task', async () => {
-      const res = await post('/task', {
-        operation: 'close',
-        id: taskId,
-      });
-      expect(res.success).toBe(true);
-      expect(res.data.status).toBe('closed');
-      expect(res).toHaveProperty('newlyReady');
-    });
-  });
-
-  // ── TaskGraph 查询操作 ──────────────────────────
-
-  describe('POST /task — queries', () => {
-    it('should return prime data', async () => {
-      const res = await post('/task', { operation: 'prime' });
-      expect(res.success).toBe(true);
-      expect(res.data).toHaveProperty('inProgress');
-      expect(res.data).toHaveProperty('ready');
-      expect(res.data).toHaveProperty('stats');
-    });
-
-    it('should return ready tasks', async () => {
-      const res = await post('/task', { operation: 'ready', limit: 3 });
-      expect(res.success).toBe(true);
-      expect(Array.isArray(res.data)).toBe(true);
-    });
-
-    it('should return stats', async () => {
-      const res = await post('/task', { operation: 'stats' });
-      expect(res.success).toBe(true);
-      expect(res.data).toBeDefined();
-    });
-
-    it('should return list', async () => {
-      const res = await post('/task', { operation: 'list', limit: 10 });
-      expect(res.success).toBe(true);
-      expect(Array.isArray(res.data)).toBe(true);
-    });
-
-    it('should return blocked tasks', async () => {
-      const res = await post('/task', { operation: 'blocked' });
-      expect(res.success).toBe(true);
-      expect(Array.isArray(res.data)).toBe(true);
-    });
-  });
-
-  // ── TaskGraph 错误处理 ──────────────────────────
-
-  describe('POST /task — error handling', () => {
-    it('should reject missing operation', async () => {
-      const res = await post('/task', {});
-      expect(res.success).toBe(false);
-      // validate middleware returns { error: { code: 'VALIDATION_ERROR', details } }
-      expect(res.error?.code).toBe('VALIDATION_ERROR');
-    });
-
-    it('should reject unknown operation', async () => {
-      const res = await post('/task', { operation: 'nonexistent' });
-      expect(res.success).toBe(false);
-      expect(res.message).toMatch(/unknown/i);
-    });
-
-    it('should reject claim without id', async () => {
-      const res = await post('/task', { operation: 'claim' });
-      expect(res.success).toBe(false);
-      expect(res.message).toMatch(/id.*required/i);
-    });
-
-    it('should reject create without title', async () => {
-      const res = await post('/task', { operation: 'create' });
-      expect(res.success).toBe(false);
-      expect(res.message).toMatch(/title.*required/i);
+      expect(res.data).toHaveProperty('id');
     });
   });
 

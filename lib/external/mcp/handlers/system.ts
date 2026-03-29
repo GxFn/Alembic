@@ -1,14 +1,13 @@
 /**
  * MCP Handlers — 系统类
- * health, capabilities
+ * health
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { PACKAGE_ROOT } from '#shared/package-root.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
-import { PACKAGE_ROOT } from '../../../shared/package-root.js';
 import { envelope } from '../envelope.js';
-import { TIER_ORDER, TOOL_GATEWAY_MAP, TOOLS } from '../tools.js';
 import type { KnowledgeBaseStats, McpContext } from './types.js';
 
 export async function health(ctx: McpContext) {
@@ -147,7 +146,7 @@ export async function health(ctx: McpContext) {
         ? {
             session: {
               id: ctx.session.id,
-              readyCalled: ctx.session.readyCalled,
+              intentPhase: ctx.session.intent?.phase ?? 'idle',
               toolCallCount: ctx.session.toolCallCount,
               toolsUsed: Array.from(ctx.session.toolsUsed),
               durationMs: Date.now() - ctx.session.startedAt,
@@ -162,121 +161,3 @@ export async function health(ctx: McpContext) {
 }
 
 let _pkgVersion: string | null = null;
-
-export function capabilities() {
-  // V3 工具分类映射
-  const CATEGORY_MAP = {
-    autosnippet_health: 'system',
-    autosnippet_capabilities: 'system',
-    autosnippet_search: 'search',
-    autosnippet_knowledge: 'browse',
-    autosnippet_structure: 'structure',
-    autosnippet_graph: 'graph',
-    autosnippet_guard: 'guard',
-    autosnippet_submit_knowledge: 'submit',
-    autosnippet_submit_knowledge_batch: 'submit',
-    autosnippet_save_document: 'submit',
-    autosnippet_skill: 'skill',
-    autosnippet_bootstrap: 'bootstrap',
-    autosnippet_dimension_complete: 'bootstrap',
-    autosnippet_wiki_plan: 'wiki',
-    autosnippet_wiki_finalize: 'wiki',
-    autosnippet_enrich_candidates: 'admin',
-    autosnippet_knowledge_lifecycle: 'admin',
-    autosnippet_validate_candidate: 'admin',
-    autosnippet_check_duplicate: 'admin',
-  };
-
-  // 根据当前 tier 决定可见工具
-  const tierName = process.env.ASD_MCP_TIER || 'agent';
-  const maxTier = (TIER_ORDER as Record<string, number>)[tierName] ?? TIER_ORDER.agent;
-  const visibleTools = TOOLS.filter(
-    (t) => ((TIER_ORDER as Record<string, number>)[t.tier || 'agent'] ?? 0) <= maxTier
-  );
-
-  const tools = visibleTools.map((t) => {
-    const props = t.inputSchema.properties || {};
-    const requiredSet = new Set(t.inputSchema.required || []);
-    const params = Object.entries(props).map(
-      ([key, schema]: [string, Record<string, unknown>]) => ({
-        name: key,
-        type: schema.type || 'any',
-        required: requiredSet.has(key),
-        ...(schema.default !== undefined ? { default: schema.default } : {}),
-        ...(schema.enum ? { enum: schema.enum } : {}),
-        ...(schema.description ? { description: schema.description } : {}),
-      })
-    );
-    const gatewayInfo = (TOOL_GATEWAY_MAP as Record<string, unknown>)[t.name];
-    return {
-      name: t.name,
-      tier: t.tier || 'agent',
-      description: t.description,
-      category: (CATEGORY_MAP as Record<string, string>)[t.name] || 'other',
-      gatewayGated: !!gatewayInfo,
-      params,
-    };
-  });
-
-  // 按分类分组
-  const byCategory: Record<string, string[]> = {};
-  for (const t of tools) {
-    (byCategory[t.category] || (byCategory[t.category] = [])).push(t.name);
-  }
-
-  return envelope({
-    success: true,
-    data: {
-      count: tools.length,
-      tier: tierName,
-      categoryGuide: {
-        system: '系统状态与能力发现',
-        search: '统合搜索 — auto(BM25+semantic 融合) / keyword / semantic / context(漏斗+会话)',
-        browse: '知识浏览 — list/get/insights/confirm_usage（operation 路由）',
-        graph: '知识图谱 — query/impact/path/stats（operation 路由）',
-        structure: '项目结构 — targets/files/metadata（operation 路由）',
-        submit: '知识提交（写操作，Gateway gated）',
-        guard: '代码 Guard 检查 — code(单文件)/files(批量)（自动路由）',
-        skill: 'Skill 管理 — list/load/create/update/delete/suggest',
-        bootstrap: '冷启动 Mission Briefing — 无参数调用，返回项目分析 + 执行计划',
-        admin: '管理员工具（诊断/生命周期/校验/去重）',
-      },
-      byCategory,
-      tools,
-      workflows: [
-        {
-          name: '知识查询',
-          steps: [
-            'search（推荐首选，auto mode 融合）',
-            'knowledge op=get',
-            'knowledge op=confirm_usage',
-          ],
-          tips: '精确匹配用 mode=keyword，需意图+会话上下文用 mode=context',
-        },
-        { name: '单条知识提交', steps: ['submit_knowledge（内置校验+去重）'] },
-        {
-          name: '批量 Target 扫描',
-          steps: [
-            'structure op=targets',
-            'structure op=files',
-            '(Agent 分析)',
-            'submit_knowledge_batch',
-          ],
-        },
-        {
-          name: '冷启动（外部 Agent）',
-          steps: [
-            '⚠️ 调用 autosnippet_bootstrap 获取 Mission Briefing（无参数直接调用）',
-            'bootstrap（获取 Mission Briefing，无参数直接调用）',
-            '按 Briefing 中的 submissionSchema.example 格式提交知识（注意: content 和 reasoning 都是 JSON 对象）',
-            'Agent 分析代码 + submit_knowledge / submit_knowledge_batch × N',
-            'dimension_complete × N',
-            'wiki_plan → Agent 写文章 → wiki_finalize（可选）',
-          ],
-        },
-        { name: '代码审计', steps: ['guard (code/files)', 'knowledge op=list kind=rule'] },
-      ],
-    },
-    meta: { tool: 'autosnippet_capabilities' },
-  });
-}

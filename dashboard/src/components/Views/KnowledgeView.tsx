@@ -3,7 +3,8 @@ import {
   BookOpen, Shield, Lightbulb, Search,
   Loader2, Zap, Archive, RotateCcw, Trash2, X, Clock, CheckCircle2,
   RefreshCw,
-  Globe, Layers, Link2
+  Globe, Layers, Link2,
+  ArrowUpCircle, Sparkles, TrendingDown, ArrowRight, ArrowDown,
 } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { useI18n } from '../../i18n';
@@ -27,10 +28,17 @@ import Select from '../ui/Select';
 
 /* ═══ 配置 ══════════════════════════════════════════════ */
 
-const LIFECYCLE_CONFIG: Record<string, { labelKey: string; color: string; bg: string; border: string; icon: React.ElementType }> = {
-  pending:       { labelKey: 'lifecycle.pending',     color: 'text-amber-700',  bg: 'bg-amber-50',   border: 'border-amber-200',  icon: Clock },
-  active:        { labelKey: 'lifecycle.active',      color: 'text-green-700',  bg: 'bg-green-50',   border: 'border-green-200',  icon: CheckCircle2 },
-  deprecated:    { labelKey: 'lifecycle.deprecated',  color: 'text-orange-600', bg: 'bg-orange-50',  border: 'border-orange-200', icon: Archive },
+const LIFECYCLE_CONFIG: Record<string, {
+  labelKey: string; color: string; bg: string; border: string;
+  hoverBorder: string; badgeBg: string; badgeColor: string;
+  icon: React.ElementType;
+}> = {
+  pending:    { labelKey: 'lifecycle.pending',    color: 'text-gray-600 dark:text-gray-400',   bg: 'bg-gray-500/8 dark:bg-gray-500/15',   border: 'border-gray-300 dark:border-gray-600',   hoverBorder: 'hover:border-gray-400 dark:hover:border-gray-500', badgeBg: 'bg-gray-500/15 dark:bg-gray-500/25', badgeColor: 'text-gray-600 dark:text-gray-300', icon: Clock },
+  staging:    { labelKey: 'lifecycle.staging',    color: 'text-blue-600 dark:text-blue-400',   bg: 'bg-blue-500/8 dark:bg-blue-500/15',   border: 'border-blue-300 dark:border-blue-600',   hoverBorder: 'hover:border-blue-400 dark:hover:border-blue-500', badgeBg: 'bg-blue-500/15 dark:bg-blue-500/25', badgeColor: 'text-blue-600 dark:text-blue-300', icon: ArrowUpCircle },
+  active:     { labelKey: 'lifecycle.active',     color: 'text-green-600 dark:text-green-400', bg: 'bg-green-500/8 dark:bg-green-500/15', border: 'border-green-300 dark:border-green-600', hoverBorder: 'hover:border-green-400 dark:hover:border-green-500', badgeBg: 'bg-green-500/15 dark:bg-green-500/25', badgeColor: 'text-green-600 dark:text-green-300', icon: CheckCircle2 },
+  evolving:   { labelKey: 'lifecycle.evolving',   color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-500/8 dark:bg-purple-500/15', border: 'border-purple-300 dark:border-purple-600', hoverBorder: 'hover:border-purple-400 dark:hover:border-purple-500', badgeBg: 'bg-purple-500/15 dark:bg-purple-500/25', badgeColor: 'text-purple-600 dark:text-purple-300', icon: Sparkles },
+  decaying:   { labelKey: 'lifecycle.decaying',   color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-500/8 dark:bg-orange-500/15', border: 'border-orange-300 dark:border-orange-600', hoverBorder: 'hover:border-orange-400 dark:hover:border-orange-500', badgeBg: 'bg-orange-500/15 dark:bg-orange-500/25', badgeColor: 'text-orange-600 dark:text-orange-300', icon: TrendingDown },
+  deprecated: { labelKey: 'lifecycle.deprecated', color: 'text-red-600 dark:text-red-400',    bg: 'bg-red-500/8 dark:bg-red-500/15',    border: 'border-red-300 dark:border-red-600',    hoverBorder: 'hover:border-red-400 dark:hover:border-red-500', badgeBg: 'bg-red-500/15 dark:bg-red-500/25', badgeColor: 'text-red-600 dark:text-red-300', icon: Archive },
 };
 
 const KIND_CONFIG: Record<string, { labelKey: string; color: string; bg: string; border: string; icon: React.ElementType }> = {
@@ -39,14 +47,26 @@ const KIND_CONFIG: Record<string, { labelKey: string; color: string; bg: string;
   fact:    { labelKey: 'kind.fact',    color: 'text-cyan-700',   bg: 'bg-cyan-50',   border: 'border-cyan-200',   icon: BookOpen },
 };
 
-/** 生命周期操作按钮配置（3 状态） */
+/** 生命周期操作按钮配置（6 状态） */
 const LIFECYCLE_ACTIONS: Record<string, Array<{ action: string; labelKey: string; color: string; bg: string; icon: React.ElementType; needsReason?: boolean }>> = {
   pending:       [
+    { action: 'stage',      labelKey: 'knowledge.actionStage',      color: 'text-blue-700',   bg: 'bg-blue-50 hover:bg-blue-100',   icon: ArrowUpCircle },
+    { action: 'deprecate',  labelKey: 'knowledge.actionDeprecate',  color: 'text-red-700',    bg: 'bg-red-50 hover:bg-red-100',     icon: Archive, needsReason: true },
+  ],
+  staging:       [
     { action: 'publish',    labelKey: 'knowledge.actionPublish',    color: 'text-green-700',  bg: 'bg-green-50 hover:bg-green-100', icon: CheckCircle2 },
-    { action: 'deprecate',  labelKey: 'knowledge.actionDeprecate',  color: 'text-orange-700', bg: 'bg-orange-50 hover:bg-orange-100', icon: Archive, needsReason: true },
+    { action: 'deprecate',  labelKey: 'knowledge.actionDeprecate',  color: 'text-red-700',    bg: 'bg-red-50 hover:bg-red-100',     icon: Archive, needsReason: true },
   ],
   active:        [
-    { action: 'deprecate',  labelKey: 'knowledge.actionDeprecate',  color: 'text-orange-700', bg: 'bg-orange-50 hover:bg-orange-100', icon: Archive, needsReason: true },
+    { action: 'evolve',     labelKey: 'knowledge.actionEvolve',     color: 'text-purple-700', bg: 'bg-purple-50 hover:bg-purple-100', icon: Sparkles },
+    { action: 'decay',      labelKey: 'knowledge.actionDecay',      color: 'text-orange-700', bg: 'bg-orange-50 hover:bg-orange-100', icon: TrendingDown, needsReason: true },
+  ],
+  evolving:      [
+    { action: 'publish',    labelKey: 'knowledge.actionPublish',    color: 'text-green-700',  bg: 'bg-green-50 hover:bg-green-100', icon: CheckCircle2 },
+  ],
+  decaying:      [
+    { action: 'reactivate', labelKey: 'knowledge.actionReactivate', color: 'text-green-700',  bg: 'bg-green-50 hover:bg-green-100', icon: RotateCcw },
+    { action: 'deprecate',  labelKey: 'knowledge.actionDeprecate',  color: 'text-red-700',    bg: 'bg-red-50 hover:bg-red-100',     icon: Archive, needsReason: true },
   ],
   deprecated:    [
     { action: 'reactivate', labelKey: 'knowledge.actionReactivate', color: 'text-green-700',  bg: 'bg-green-50 hover:bg-green-100', icon: RotateCcw },
@@ -114,13 +134,23 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
   // ── i18n 映射（覆盖模块级常量中的中文标签） ──
   const lifecycleLabel = (key: string) => {
     const map: Record<string, string> = {
-      pending: t('knowledge.lifecyclePending'), active: t('knowledge.lifecycleActive'), deprecated: t('knowledge.lifecycleDeprecated'),
+      pending: t('knowledge.lifecyclePending'),
+      staging: t('knowledge.lifecycleStaging'),
+      active: t('knowledge.lifecycleActive'),
+      evolving: t('knowledge.lifecycleEvolving'),
+      decaying: t('knowledge.lifecycleDecaying'),
+      deprecated: t('knowledge.lifecycleDeprecated'),
     };
     return map[key] || key;
   };
   const actionLabel = (action: string) => {
     const map: Record<string, string> = {
-      publish: t('knowledge.actionPublish'), deprecate: t('knowledge.actionDeprecate'), reactivate: t('knowledge.actionReactivate'),
+      publish: t('knowledge.actionPublish'),
+      stage: t('knowledge.actionStage'),
+      deprecate: t('knowledge.actionDeprecate'),
+      reactivate: t('knowledge.actionReactivate'),
+      evolve: t('knowledge.actionEvolve'),
+      decay: t('knowledge.actionDecay'),
     };
     return map[action] || action;
   };
@@ -128,6 +158,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
   // ── 状态 ──
   const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
   const [stats, setStats] = useState<KnowledgeStatsResponse | null>(null);
+  const [lifecycleCounts, setLifecycleCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
@@ -185,8 +216,18 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
     } catch { /* silent */ }
   }, []);
 
+  const fetchLifecycle = useCallback(async () => {
+    try {
+      const data = await api.getKnowledgeLifecycle();
+      if (isMountedRef.current) {
+        setLifecycleCounts(data.counts || {});
+      }
+    } catch { /* silent */ }
+  }, []);
+
   useEffect(() => { fetchEntries(); }, [fetchEntries]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => { fetchLifecycle(); }, [fetchLifecycle]);
 
   // 搜索防抖
   useEffect(() => {
@@ -203,8 +244,9 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
   const refresh = useCallback(() => {
     fetchEntries();
     fetchStats();
+    fetchLifecycle();
     onRefresh?.();
-  }, [fetchEntries, fetchStats, onRefresh]);
+  }, [fetchEntries, fetchStats, fetchLifecycle, onRefresh]);
 
   // ID → 标题 查找表 (将关联关系中的 UUID 解析为可读标题)
   const titleLookup = useMemo(() => {
@@ -316,30 +358,59 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
 
   return (
     <div className="space-y-4 pb-6">
-      {/* ── 统计卡片 ── */}
-      {stats && (
-        <div className="grid grid-cols-3 gap-3">
-          {Object.entries(LIFECYCLE_CONFIG).map(([key, cfg]) => {
-            const count = (stats as Record<string, number>)[key] || 0;
-            const Icon = cfg.icon;
-            return (
-              <button
-                key={key}
-                onClick={() => { setFilterLifecycle(filterLifecycle === key ? '' : key as KnowledgeLifecycle); }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-left ${
-                  filterLifecycle === key ? `${cfg.bg} ${cfg.border} ${cfg.color} ring-1 ring-current` : 'bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--fg-secondary)] hover:bg-[var(--bg-subtle)]'
-                }`}
-              >
-                <Icon size={14} />
-                <div>
-                  <div className="text-xs font-medium">{lifecycleLabel(key)}</div>
-                  <div className="text-lg font-bold">{count}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* ── 生命周期状态流 ── */}
+      {(() => {
+        const counts = lifecycleCounts;
+        const hasData = Object.values(counts).some(v => v > 0);
+        if (!hasData && !stats) { return null; }
+
+        const mergedCounts = (key: string) =>
+          counts[key] ?? (stats as Record<string, number> | null)?.[key] ?? 0;
+
+        const StateChip: React.FC<{ stateKey: string; onClick: () => void }> = ({ stateKey, onClick }) => {
+          const cfg = LIFECYCLE_CONFIG[stateKey];
+          if (!cfg) { return null; }
+          const Icon = cfg.icon;
+          const count = mergedCounts(stateKey);
+          const selected = filterLifecycle === stateKey;
+          return (
+            <button
+              onClick={onClick}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap ${
+                selected
+                  ? `${cfg.bg} ${cfg.border} ${cfg.color} shadow-sm`
+                  : `border-transparent ${cfg.hoverBorder} text-[var(--fg-secondary)]`
+              }`}
+            >
+              <Icon size={14} className={selected ? '' : 'opacity-60'} />
+              <span>{lifecycleLabel(stateKey)}</span>
+              <span className={`ml-0.5 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded text-[11px] font-bold ${cfg.badgeBg} ${cfg.badgeColor}`}>
+                {count}
+              </span>
+            </button>
+          );
+        };
+
+        const Dot = () => <span className="text-[var(--fg-muted)] text-xs opacity-40 select-none">→</span>;
+        const toggle = (key: string) =>
+          setFilterLifecycle(filterLifecycle === key ? '' : key as KnowledgeLifecycle);
+
+        return (
+          <div className="flex items-center gap-x-1.5 gap-y-2 flex-wrap text-[var(--fg-secondary)]">
+            <StateChip stateKey="pending" onClick={() => toggle('pending')} />
+            <Dot />
+            <StateChip stateKey="staging" onClick={() => toggle('staging')} />
+            <Dot />
+            <StateChip stateKey="active" onClick={() => toggle('active')} />
+            <Dot />
+            <StateChip stateKey="evolving" onClick={() => toggle('evolving')} />
+            <span className="mx-1.5 h-4 border-l border-[var(--border-default)]" />
+            <StateChip stateKey="decaying" onClick={() => toggle('decaying')} />
+            <Dot />
+            <StateChip stateKey="deprecated" onClick={() => toggle('deprecated')} />
+          </div>
+        );
+      })()}
 
       {/* ── 工具栏 ── */}
       <div className="flex flex-wrap items-center gap-3">

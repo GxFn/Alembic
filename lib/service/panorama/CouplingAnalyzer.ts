@@ -110,14 +110,21 @@ export class CouplingAnalyzer {
     for (const relation of relations) {
       const weight = EDGE_WEIGHTS[relation] ?? 0.5;
 
-      // 查询所有该类型的边
+      // 查询该类型的边（仅限当前项目：至少 from 侧实体属于本项目）
       const rows = this.#db
         .prepare(
           `SELECT ke.from_id, ke.from_type, ke.to_id, ke.to_type
            FROM knowledge_edges ke
-           WHERE ke.relation = ?`
+           WHERE ke.relation = ?
+           AND (
+             ke.from_type = 'module'
+             OR EXISTS (
+               SELECT 1 FROM code_entities ce
+               WHERE ce.entity_id = ke.from_id AND ce.project_root = ?
+             )
+           )`
         )
-        .all(relation) as Array<Record<string, unknown>>;
+        .all(relation, this.#projectRoot) as Array<Record<string, unknown>>;
 
       for (const row of rows) {
         const fromId = row.from_id as string;

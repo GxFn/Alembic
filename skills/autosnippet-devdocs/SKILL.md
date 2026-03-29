@@ -1,6 +1,6 @@
 ---
 name: autosnippet-devdocs
-description: Teaches the agent how to save development documents (architecture decisions, debug reports, design docs, research notes) to the AutoSnippet knowledge base using autosnippet_save_document. Use when the agent finishes analysis, debugging, design, or research and wants to persist the findings.
+description: Teaches the agent how to save development documents (architecture decisions, debug reports, design docs, research notes) to the AutoSnippet knowledge base using autosnippet_submit_knowledge with knowledgeType 'dev-document'. Use when the agent finishes analysis, debugging, design, or research and wants to persist the findings.
 ---
 
 # AutoSnippet — Save Development Documents
@@ -19,20 +19,23 @@ This skill tells the agent how to **save development documents** (architecture d
 
 | Tool | Description |
 |------|-------------|
-| `autosnippet_save_document` | Save a development document to KB. Only needs `title` + `markdown`. Auto-published, no review needed. |
+| `autosnippet_submit_knowledge` | Unified knowledge submission. For documents, set item `knowledgeType: 'dev-document'` — only needs `title` + `markdown`. Auto-published, no review needed. |
 | `autosnippet_search` | Search saved documents by keyword or semantic query. |
 
 ## How to save a document
 
-Call `autosnippet_save_document` with:
+Call `autosnippet_submit_knowledge` with an `items` array containing one document entry:
 
 ```json
 {
-  "title": "BiliDemo 冷启动性能分析",
-  "markdown": "## 问题背景\n\n冷启动耗时 8s...\n\n## 根因分析\n\n...\n\n## 解决方案\n\n...",
-  "description": "冷启动耗时 8s 的根因分析和优化方案",
-  "tags": ["debug-report", "performance"],
-  "scope": "project-specific"
+  "items": [{
+    "title": "BiliDemo 冷启动性能分析",
+    "markdown": "## 问题背景\n\n冷启动耗时 8s...\n\n## 根因分析\n\n...\n\n## 解决方案\n\n...",
+    "knowledgeType": "dev-document",
+    "description": "冷启动耗时 8s 的根因分析和优化方案",
+    "tags": ["debug-report", "performance"],
+    "scope": "project-specific"
+  }]
 }
 ```
 

@@ -25,13 +25,17 @@ function createMockDb(
     prepare: (sql: string) => ({
       run: () => ({ changes: 0 }),
       get: (...params: unknown[]) => {
-        if (sql.includes('COUNT(DISTINCT ke.id)')) {
-          return { cnt: opts.recipeCount ?? 0 };
-        }
         if (sql.includes('file_path') && sql.includes('code_entities') && sql.includes('LIMIT 1')) {
           const entityId = params[0] as string;
           const entity = (opts.entityFiles ?? []).find((e) => e.entity_id === entityId);
           return entity ? { file_path: entity.file_path } : undefined;
+        }
+        if (
+          sql.includes('COUNT(*)') &&
+          sql.includes('knowledge_entries') &&
+          sql.includes('lifecycle')
+        ) {
+          return { cnt: opts.recipeCount ?? 0 };
         }
         if (sql.includes('COUNT(*)')) {
           return { cnt: 0 };
@@ -103,7 +107,7 @@ describe('PanoramaService', () => {
     expect(overview.stale).toBe(false);
   });
 
-  it('should fall back to directory-based discovery when no module entities', () => {
+  it('should return empty panorama when no module entities (scanner responsibility)', () => {
     const db = createMockDb({
       modules: [],
       allFiles: [
@@ -116,7 +120,7 @@ describe('PanoramaService', () => {
 
     const overview = service.getOverview();
 
-    expect(overview.moduleCount).toBe(2); // Services, UI
+    expect(overview.moduleCount).toBe(0); // No module entities → empty (scanner handles fallback)
   });
 
   it('should return null for non-existent module', () => {
@@ -196,5 +200,34 @@ describe('PanoramaService', () => {
     expect(detail).not.toBeNull();
     expect(detail!.module.name).toBe('TestMod');
     expect(detail!.layerName).toBeDefined();
+  });
+
+  it('should enrich module files when modules exist but have no is_part_of edges', () => {
+    const db = createMockDb({
+      modules: [
+        { entity_id: 'BDFoundation', name: 'BDFoundation' },
+        { entity_id: 'BDUIKit', name: 'BDUIKit' },
+      ],
+      parts: [],
+      allFiles: [
+        { file_path: '/test/Sources/BDFoundation/a.swift' },
+        { file_path: '/test/Sources/BDFoundation/b.swift' },
+        { file_path: '/test/Sources/BDUIKit/c.swift' },
+      ],
+    });
+    const service = makeService(db);
+
+    const overview = service.getOverview();
+
+    expect(overview.moduleCount).toBe(2);
+    expect(overview.totalFiles).toBe(3);
+
+    const foundationLayer = overview.layers
+      .flatMap((l) => l.modules)
+      .find((m) => m.name === 'BDFoundation');
+    expect(foundationLayer?.fileCount).toBe(2);
+
+    const uikitLayer = overview.layers.flatMap((l) => l.modules).find((m) => m.name === 'BDUIKit');
+    expect(uikitLayer?.fileCount).toBe(1);
   });
 });

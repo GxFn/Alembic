@@ -5,9 +5,9 @@
  *   - database, logger, auditStore, auditLogger
  *   - gateway, eventBus, bootstrapTaskManager
  *   - knowledgeRepository, knowledgeFileWriter, knowledgeSyncService
- *   - taskRepository
  */
 
+import path from 'node:path';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { KnowledgeSyncService } from '../../cli/KnowledgeSyncService.js';
 import Gateway from '../../core/gateway/Gateway.js';
@@ -16,8 +16,8 @@ import AuditStore from '../../infrastructure/audit/AuditStore.js';
 import { EventBus } from '../../infrastructure/event/EventBus.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getRealtimeService as _getRealtimeService } from '../../infrastructure/realtime/RealtimeService.js';
+import { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
-import { TaskRepositoryImpl } from '../../repository/task/TaskRepository.impl.js';
 import { BootstrapTaskManager } from '../../service/bootstrap/BootstrapTaskManager.js';
 import { KnowledgeFileWriter } from '../../service/knowledge/KnowledgeFileWriter.js';
 
@@ -45,7 +45,12 @@ export function register(c: ServiceContainer) {
   c.singleton(
     'auditLogger',
     (ct: ServiceContainer) =>
-      new AuditLogger(ct.get('auditStore') as ConstructorParameters<typeof AuditLogger>[0])
+      new AuditLogger(
+        ct.get('auditStore') as ConstructorParameters<typeof AuditLogger>[0],
+        ct.services.eventBus
+          ? (ct.get('eventBus') as ConstructorParameters<typeof AuditLogger>[1])
+          : null
+      )
   );
   c.singleton('gateway', () => new Gateway());
   c.singleton('eventBus', () => new EventBus({ maxListeners: 30 }));
@@ -86,12 +91,10 @@ export function register(c: ServiceContainer) {
     return new KnowledgeSyncService(projectRoot);
   });
 
-  c.singleton('taskRepository', (ct: ServiceContainer) => {
-    const db = ct.get('database') as ConstructorParameters<typeof TaskRepositoryImpl>[0];
-    const drizzle = (db as unknown as { getDrizzle(): unknown }).getDrizzle();
-    return new TaskRepositoryImpl(
-      db,
-      drizzle as ConstructorParameters<typeof TaskRepositoryImpl>[1]
-    );
+  // ═══ ReportStore ═══
+
+  c.singleton('reportStore', (ct: ServiceContainer) => {
+    const projectRoot = resolveProjectRoot(ct);
+    return new ReportStore(path.join(projectRoot, '.autosnippet', 'logs', 'reports'));
   });
 }

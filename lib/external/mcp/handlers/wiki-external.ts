@@ -104,11 +104,28 @@ function tryGet(container: McpServiceContainer, name: string): unknown {
 }
 
 // ════════════════════════════════════════════════════════════
+//  wikiRouter — 统一入口 (autosnippet_wiki)
+// ════════════════════════════════════════════════════════════
+
+/**
+ * 统一 Wiki 路由入口 (autosnippet_wiki)
+ *
+ * @param args.operation 'plan' | 'finalize'
+ */
+export async function wikiRouter(ctx: McpContext, args: Record<string, unknown>) {
+  const op = args.operation as string;
+  if (op === 'finalize') {
+    return wikiFinalize(ctx, args as unknown as WikiFinalizeArgs);
+  }
+  return wikiPlan(ctx, args as unknown as WikiPlanArgs);
+}
+
+// ════════════════════════════════════════════════════════════
 //  wikiPlan — 规划 Wiki 主题 + 数据包
 // ════════════════════════════════════════════════════════════
 
 /**
- * 规划 Wiki 文档生成 (autosnippet_wiki_plan)
+ * 规划 Wiki 文档生成 (autosnippet_wiki operation=plan)
  *
  * 复用 WikiGenerator 的数据收集和主题发现逻辑（Phase 1-5），
  * 但不撰写文章，只返回规划清单和每个主题的数据包。

@@ -403,32 +403,17 @@ const { TOOLS, TOOL_GATEWAY_MAP } = await import('../../lib/external/mcp/tools.j
 describe('MCP Tool Definitions (V3)', () => {
   const _v3Tools = TOOLS.filter((t) => t.name.includes('knowledge'));
 
-  test('应包含 submit_knowledge 工具', () => {
+  test('应包含 submit_knowledge 工具（unified items 格式）', () => {
     const tool = TOOLS.find((t) => t.name === 'autosnippet_submit_knowledge');
     expect(tool).toBeDefined();
-    expect(tool.inputSchema.required).toEqual([
-      'title',
-      'language',
-      'content',
-      'kind',
-      'doClause',
-      'dontClause',
-      'whenClause',
-      'coreCode',
-      'category',
-      'trigger',
-      'description',
-      'headers',
-      'usageGuide',
-      'knowledgeType',
-      'reasoning',
-    ]);
+    expect(tool.inputSchema.required).toEqual(['items']);
   });
 
-  test('应包含 submit_knowledge_batch 工具', () => {
-    const tool = TOOLS.find((t) => t.name === 'autosnippet_submit_knowledge_batch');
-    expect(tool).toBeDefined();
-    expect(tool.inputSchema.required).toEqual(['target_name', 'items']);
+  test('submit_knowledge_batch 和 save_document 应已合并删除', () => {
+    const batch = TOOLS.find((t) => t.name === 'autosnippet_submit_knowledge_batch');
+    expect(batch).toBeUndefined();
+    const saveDoc = TOOLS.find((t) => t.name === 'autosnippet_save_document');
+    expect(saveDoc).toBeUndefined();
   });
 
   test('应包含 knowledge_lifecycle 工具', () => {
@@ -442,25 +427,20 @@ describe('MCP Tool Definitions (V3)', () => {
       action: 'knowledge:create',
       resource: 'knowledge',
     });
-    expect(TOOL_GATEWAY_MAP.autosnippet_submit_knowledge_batch).toEqual({
-      action: 'knowledge:create',
-      resource: 'knowledge',
-    });
     expect(TOOL_GATEWAY_MAP.autosnippet_knowledge_lifecycle).toEqual({
       action: 'knowledge:update',
       resource: 'knowledge',
     });
   });
 
-  test('TOOLS 数组应包含 21 个工具', () => {
-    expect(TOOLS.length).toBe(21);
+  test('TOOLS 数组应包含 16 个工具', () => {
+    expect(TOOLS.length).toBe(16);
   });
 
-  test('submit_knowledge content 字段应有 pattern 和 markdown 属性', () => {
+  test('submit_knowledge items 字段应为数组类型', () => {
     const tool = TOOLS.find((t) => t.name === 'autosnippet_submit_knowledge');
-    const contentProps = tool.inputSchema.properties.content.properties;
-    expect(contentProps.pattern).toBeDefined();
-    expect(contentProps.markdown).toBeDefined();
+    const itemsProp = tool.inputSchema.properties.items;
+    expect(itemsProp.type).toBe('array');
   });
 
   test('knowledge_lifecycle 的 action enum 应包含全部操作', () => {

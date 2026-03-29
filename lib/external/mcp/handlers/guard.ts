@@ -31,13 +31,27 @@ interface GuardAuditFileResult {
   filePath: string;
   language: string;
   violations: GuardViolation[];
-  summary: { total: number; errors: number; warnings: number };
+  uncertainResults?: unknown[];
+  summary: { total: number; errors: number; warnings: number; uncertain?: number };
 }
 
 interface GuardAuditResult {
   summary: { total: number; errors: number; warnings: number; [key: string]: unknown };
   files: GuardAuditFileResult[];
   crossFileViolations?: unknown[];
+  capabilityReport?: {
+    executedChecks: Record<string, { total: number; executed: number; skipped: number }>;
+    skippedChecks: unknown[];
+    boundaries: unknown[];
+    uncertainResults: Array<{
+      ruleId: string;
+      message: string;
+      layer: string;
+      reason: string;
+      detail: string;
+    }>;
+    checkCoverage: number;
+  };
 }
 
 interface GuardViolationEnriched {
@@ -72,6 +86,17 @@ interface RecipeEntry {
 
 interface GuardEngineLike {
   checkCode(code: string, language: string, opts?: Record<string, unknown>): GuardViolation[];
+  auditFile(
+    filePath: string,
+    code: string,
+    options?: Record<string, unknown>
+  ): {
+    filePath: string;
+    language: string;
+    violations: GuardViolation[];
+    uncertainResults: unknown[];
+    summary: { total: number; errors: number; warnings: number; uncertain: number };
+  };
   auditFiles(
     files: Array<{ path: string; content: string }>,
     opts: Record<string, unknown>
@@ -270,6 +295,18 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
       ...(result.crossFileViolations?.length
         ? { crossFileViolations: result.crossFileViolations }
         : {}),
+      // uncertain 消费链路 — 结构化上抛给 Agent
+      ...(result.capabilityReport
+        ? {
+            capabilityReport: result.capabilityReport,
+            uncertainSummary: {
+              total: result.capabilityReport.uncertainResults.length,
+              byLayer: _groupBy(result.capabilityReport.uncertainResults, 'layer'),
+              byReason: _groupBy(result.capabilityReport.uncertainResults, 'reason'),
+            },
+            boundaries: result.capabilityReport.boundaries,
+          }
+        : {}),
     },
     meta: { tool: 'autosnippet_guard' },
   });
@@ -291,7 +328,7 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
  * @param args { files?: string[] }
  */
 export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
-  const { GuardCheckEngine, detectLanguage } = await import('#service/guard/GuardCheckEngine.js');
+  const { GuardCheckEngine } = await import('#service/guard/GuardCheckEngine.js');
 
   const projectRoot = resolveProjectRoot(ctx.container);
 
@@ -352,17 +389,23 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
   const engine = _getOrCreateEngine(ctx, GuardCheckEngine);
   await _injectEnhancementGuardRules(engine, ctx);
 
-  // 4. 逐文件检查
+  // 4. 逐文件检查（使用 auditFile 以捕获 uncertain）
   const results: ReviewFileResult[] = [];
   let totalViolations = 0;
   let totalErrors = 0;
   let totalWarnings = 0;
+  const allUncertainResults: unknown[] = [];
 
   for (const fp of filePaths) {
     try {
       const code = await readFile(fp, 'utf8');
-      const lang = detectLanguage(fp);
-      const violations = engine.checkCode(code, lang, { filePath: fp });
+      const auditResult = engine.auditFile(fp, code);
+      const violations = auditResult.violations;
+
+      // 收集 uncertain
+      if (auditResult.uncertainResults?.length) {
+        allUncertainResults.push(...auditResult.uncertainResults);
+      }
 
       const fileSummary = {
         total: violations.length,
@@ -396,7 +439,12 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
         return base;
       });
 
-      results.push({ filePath: fp, language: lang, violations: enriched, summary: fileSummary });
+      results.push({
+        filePath: fp,
+        language: auditResult.language,
+        violations: enriched,
+        summary: fileSummary,
+      });
     } catch (err: unknown) {
       results.push({
         filePath: fp,
@@ -471,6 +519,17 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
         warnings: totalWarnings,
         filesChecked: filePaths.length,
       },
+      // uncertain 消费链路 — 结构化上抛给 Agent
+      ...(allUncertainResults.length > 0
+        ? {
+            uncertainSummary: {
+              total: allUncertainResults.length,
+              byLayer: _groupBy(allUncertainResults as Array<{ layer: string }>, 'layer'),
+              byReason: _groupBy(allUncertainResults as Array<{ reason: string }>, 'reason'),
+            },
+            uncertainResults: allUncertainResults,
+          }
+        : {}),
     },
     message,
     meta: { tool: 'autosnippet_guard', mode: 'review' },
@@ -750,6 +809,19 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
 
 // ─── 内部辅助 ─────────────────────────────────────────────
 
+/** 按字段值分组计数 */
+function _groupBy<T extends Record<string, unknown>>(
+  arr: T[],
+  key: string
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of arr) {
+    const k = String(item[key] ?? 'unknown');
+    counts[k] = (counts[k] || 0) + 1;
+  }
+  return counts;
+}
+
 /**
  * 获取 DI 容器中的 GuardCheckEngine 单例，回退到新建实例
  * 优先复用 DI 单例以保持 externalRules / cache 的跨调用一致性
@@ -806,4 +878,240 @@ async function _injectEnhancementGuardRules(
   } catch {
     /* Enhancement registry not available — non-critical */
   }
+}
+
+// ═══ ReverseGuard — Recipe→Code 反向验证 ═══════════════════
+
+interface ReverseAuditArgs {
+  maxFiles?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * 对所有 active rule Recipe 执行反向验证：
+ *   - 检查 coreCode 引用的符号是否还存在
+ *   - 检查 guard pattern 匹配率是否骤降
+ */
+export async function guardReverseAudit(ctx: McpContext, args: ReverseAuditArgs) {
+  const { ReverseGuard } = await import('#service/guard/ReverseGuard.js');
+  const { collectSourceFilesWithContent } = await import('#service/guard/SourceFileCollector.js');
+
+  const projectRoot = resolveProjectRoot(ctx.container);
+
+  // 尝试从 DI 获取，回退到新建
+  let reverseGuard: InstanceType<typeof ReverseGuard>;
+  try {
+    reverseGuard = ctx.container.get('reverseGuard') as InstanceType<typeof ReverseGuard>;
+  } catch {
+    const db = ctx.container.get('database') as { getDb(): unknown };
+    reverseGuard = new ReverseGuard(db.getDb() as ConstructorParameters<typeof ReverseGuard>[0]);
+  }
+
+  const maxFiles = args.maxFiles || 200;
+  const projectFiles = await collectSourceFilesWithContent(projectRoot, { maxFiles });
+  const results = reverseGuard.auditAllRules(projectFiles);
+  const drifts = reverseGuard.getDriftResults(results);
+
+  return envelope({
+    success: true,
+    data: {
+      totalRecipes: results.length,
+      healthy: results.filter((r) => r.recommendation === 'healthy').length,
+      investigate: results.filter((r) => r.recommendation === 'investigate').length,
+      decay: results.filter((r) => r.recommendation === 'decay').length,
+      drifts: drifts.map((d) => ({
+        recipeId: d.recipeId,
+        title: d.title,
+        recommendation: d.recommendation,
+        signals: d.signals,
+      })),
+      allResults: results.map((r) => ({
+        recipeId: r.recipeId,
+        title: r.title,
+        recommendation: r.recommendation,
+        signalCount: r.signals.length,
+      })),
+    },
+    meta: { tool: 'autosnippet_guard', operation: 'reverse_audit' },
+  });
+}
+
+// ═══ CoverageAnalyzer — 模块覆盖率矩阵 ═══════════════════
+
+interface CoverageMatrixArgs {
+  [key: string]: unknown;
+}
+
+/**
+ * 计算模块级 Guard 规则覆盖率矩阵
+ */
+export async function guardCoverageMatrix(ctx: McpContext, _args: CoverageMatrixArgs) {
+  const { CoverageAnalyzer } = await import('#service/guard/CoverageAnalyzer.js');
+
+  const projectRoot = resolveProjectRoot(ctx.container);
+
+  // 尝试从 DI 获取，回退到新建
+  let analyzer: InstanceType<typeof CoverageAnalyzer>;
+  try {
+    analyzer = ctx.container.get('coverageAnalyzer') as InstanceType<typeof CoverageAnalyzer>;
+  } catch {
+    const db = ctx.container.get('database') as { getDb(): unknown };
+    analyzer = new CoverageAnalyzer(
+      db.getDb() as ConstructorParameters<typeof CoverageAnalyzer>[0]
+    );
+  }
+
+  // 构建 moduleFiles 映射 — 从 Panorama 或目录结构推断
+  const moduleFiles = await _buildModuleFiles(ctx, projectRoot);
+
+  const matrix = analyzer.analyze(moduleFiles);
+
+  return envelope({
+    success: true,
+    data: {
+      overallCoverage: matrix.overallCoverage,
+      zeroModules: matrix.zeroModules,
+      lowModules: matrix.lowModules,
+      modules: matrix.modules,
+    },
+    meta: { tool: 'autosnippet_guard', operation: 'coverage_matrix' },
+  });
+}
+
+// ═══ ComplianceReporter — 3D 合规报告 ═══════════════════════
+
+interface ComplianceReportArgs {
+  [key: string]: unknown;
+}
+
+/**
+ * 生成 3D 合规报告（compliance + coverage + confidence）
+ * 包含完整 uncertain 消费数据
+ */
+export async function guardComplianceReport(ctx: McpContext, _args: ComplianceReportArgs) {
+  const { ComplianceReporter } = await import('#service/guard/ComplianceReporter.js');
+  const projectRoot = resolveProjectRoot(ctx.container);
+
+  // 尝试从 DI 获取，回退到新建
+  let reporter: InstanceType<typeof ComplianceReporter>;
+  try {
+    reporter = ctx.container.get('complianceReporter') as InstanceType<typeof ComplianceReporter>;
+  } catch {
+    const { GuardCheckEngine } = await import('#service/guard/GuardCheckEngine.js');
+    const engine = _getOrCreateEngine(ctx, GuardCheckEngine);
+    await _injectEnhancementGuardRules(engine, ctx);
+    // ComplianceReporter(engine, violationsStore, ruleLearner, exclusionManager, config)
+    let violationsStore = null;
+    let ruleLearner = null;
+    let exclusionManager = null;
+    try {
+      violationsStore = ctx.container.get('violationsStore');
+    } catch {
+      /* optional */
+    }
+    try {
+      ruleLearner = ctx.container.get('ruleLearner');
+    } catch {
+      /* optional */
+    }
+    try {
+      exclusionManager = ctx.container.get('exclusionManager');
+    } catch {
+      /* optional */
+    }
+    reporter = new ComplianceReporter(
+      engine as never,
+      violationsStore,
+      ruleLearner,
+      exclusionManager
+    );
+  }
+
+  const report = await reporter.generate(projectRoot);
+
+  return envelope({
+    success: true,
+    data: {
+      scores: {
+        compliance: report.complianceScore,
+        coverage: report.coverageScore,
+        confidence: report.confidenceScore,
+      },
+      qualityGate: report.qualityGate,
+      summary: report.summary,
+      uncertainSummary: report.uncertainSummary || null,
+      boundaries: report.boundaries || [],
+      topViolations: (report.topViolations || []).slice(0, 10),
+      trend: report.trend || null,
+    },
+    meta: { tool: 'autosnippet_guard', operation: 'compliance_report' },
+  });
+}
+
+/** 从 Panorama 或目录结构构建模块→文件映射 */
+async function _buildModuleFiles(
+  ctx: McpContext,
+  projectRoot: string
+): Promise<Map<string, string[]>> {
+  const moduleFiles = new Map<string, string[]>();
+
+  try {
+    const panorama = ctx.container.get('panoramaService') as {
+      getOverview(): Promise<{ modules: { name: string; files: string[] }[] }>;
+    };
+    const overview = await panorama.getOverview();
+    if (overview?.modules) {
+      for (const mod of overview.modules) {
+        if (mod.files?.length > 0) {
+          moduleFiles.set(mod.name, mod.files);
+        }
+      }
+    }
+  } catch {
+    /* PanoramaService not available */
+  }
+
+  if (moduleFiles.size === 0) {
+    const { readdirSync, existsSync } = await import('node:fs');
+    const srcDirs = ['Sources', 'BiliDili/Modules', 'src', 'lib'];
+    for (const dir of srcDirs) {
+      const fullDir = path.join(projectRoot, dir);
+      if (existsSync(fullDir)) {
+        for (const entry of readdirSync(fullDir, { withFileTypes: true })) {
+          if (entry.isDirectory() && !entry.name.startsWith('.')) {
+            const files = _walkSourceFiles(path.join(fullDir, entry.name));
+            if (files.length > 0) {
+              moduleFiles.set(entry.name, files);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return moduleFiles;
+}
+
+function _walkSourceFiles(dir: string): string[] {
+  const files: string[] = [];
+  try {
+    const { readdirSync } = require('node:fs') as typeof import('node:fs');
+    const walk = (d: string) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const fp = path.join(d, e.name);
+        if (e.isDirectory() && !e.name.startsWith('.')) {
+          walk(fp);
+        } else if (
+          e.isFile() &&
+          /\.(m|h|swift|mm|ts|js|py|java|kt|dart|rs|go|cs|rb)$/.test(e.name)
+        ) {
+          files.push(fp);
+        }
+      }
+    };
+    walk(dir);
+  } catch {
+    /* directory read error */
+  }
+  return files;
 }

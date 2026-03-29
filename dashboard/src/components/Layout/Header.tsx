@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap } from 'lucide-react';
+import { Plus, Cpu, ChevronDown, ChevronRight, MessageSquare, Settings, Search, Zap, Radio } from 'lucide-react';
 import api from '../../api';
 import { getSocket } from '../../lib/socket';
 import { useGlobalChat } from '../Shared/GlobalChatDrawer';
@@ -40,12 +40,11 @@ const TAB_LABELS: Record<TabType, string> = {
   spm: 'sidebar.moduleExplorer',
   candidates: 'sidebar.candidates',
   knowledge: 'sidebar.batchManage',
-  depgraph: 'sidebar.depGraph',
-  knowledgegraph: 'sidebar.knowledgeGraph',
   guard: 'sidebar.guard',
   panorama: 'sidebar.panorama',
   skills: 'sidebar.skills',
   wiki: 'sidebar.repoWiki',
+  signals: 'sidebar.signals',
   ai: 'sidebar.aiAssistant',
   help: 'sidebar.help',
 };
@@ -65,6 +64,9 @@ interface HeaderProps {
   projectName?: string;
   /** 候选总数（用于面包屑插值） */
   candidateCount?: number;
+  /** Signal Monitor 开关 */
+  showSignalMonitor?: boolean;
+  onToggleSignalMonitor?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -75,6 +77,8 @@ const Header: React.FC<HeaderProps> = ({
   onOpenCommandPalette,
   projectName,
   candidateCount = 0,
+  showSignalMonitor = false,
+  onToggleSignalMonitor,
 }) => {
   const { toggle: toggleChat, isOpen: chatOpen } = useGlobalChat();
   const { t } = useI18n();
@@ -240,6 +244,22 @@ const Header: React.FC<HeaderProps> = ({
             </TooltipTrigger>
             <TooltipContent>{t('header.newRecipe')}</TooltipContent>
           </Tooltip>
+
+          {/* Signal Monitor Toggle */}
+          {onToggleSignalMonitor && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showSignalMonitor ? "accent" : "ghost"}
+                  size="icon-sm"
+                  onClick={onToggleSignalMonitor}
+                >
+                  <Radio size={16} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{showSignalMonitor ? t('signals.closeMonitor') : t('signals.openMonitor')}</TooltipContent>
+            </Tooltip>
+          )}
 
           {/* AI Chat Toggle（贴最右） */}
           <Tooltip>

@@ -74,7 +74,7 @@ function request(method: any, urlStr: any) {
       env,
     },
     next: [
-      '在 MCP 客户端调用 autosnippet_health / autosnippet_capabilities 进行能力自检',
+      '在 MCP 客户端调用 autosnippet_health 进行能力自检',
       '如需鉴权，请在 MCP 服务器环境设置 ASD_MCP_TOKEN',
       '提交候选时传入 clientId 以启用限流（避免短时间批量提交）',
     ],

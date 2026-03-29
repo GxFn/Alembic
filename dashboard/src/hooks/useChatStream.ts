@@ -68,9 +68,6 @@ function toolContext(t: TFn, tool: string, args: Record<string, any> | undefined
     case 'get_class_hierarchy': {
       return args.rootClass || '';
     }
-    case 'check_duplicate': {
-      return args.title || '';
-    }
     default:
       return '';
   }

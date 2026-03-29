@@ -65,7 +65,7 @@ router.post('/clear', async (req: Request, res: Response) => {
   const container = getServiceContainer();
   const violationsStore = container.get('violationsStore');
 
-  const { ruleId, file, all } = req.body;
+  const { ruleId, file, all } = req.body || {};
 
   let cleared = 0;
   if (all) {

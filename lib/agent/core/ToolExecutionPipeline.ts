@@ -169,7 +169,9 @@ export class ToolExecutionPipeline {
  * 从 LoopContext.toolSchemas 中提取允许的工具名列表，
  * 拒绝不在列表中的调用（返回 error 提示）。
  *
- * before: 如果工具不在白名单中则短路返回 error
+ * Forge 集成：不在白名单的工具如果已由 ToolForge 锻造（存在于 ToolRegistry），则放行。
+ *
+ * before: 如果工具不在白名单中且非锻造工具则短路返回 error
  */
 export const allowlistGate = {
   name: 'allowlistGate',
@@ -182,6 +184,14 @@ export const allowlistGate = {
 
     const allowedNames = new Set(schemas.map((s: ToolSchema) => s.name || s.function?.name));
     if (!allowedNames.has(call.name)) {
+      // Forge fallback: 不在白名单但已注册到 ToolRegistry（如锻造的临时工具）则放行
+      if (ctx.runtime.toolRegistry?.has(call.name)) {
+        ctx.runtime.logger.info(
+          `[ToolPipeline] Tool "${call.name}" not in allowlist but exists in registry (forged?) — allowed`
+        );
+        return undefined;
+      }
+
       ctx.runtime.logger.warn(
         `[ToolPipeline] ⛔ Tool "${call.name}" not in allowlist — blocked (hallucinated call)`
       );

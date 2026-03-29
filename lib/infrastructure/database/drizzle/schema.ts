@@ -10,6 +10,7 @@
  *        bootstrap_dim_files, code_entities
  *   002: tasks, task_dependencies, task_events
  *   003: remote_commands
+ *   004: evolution_proposals (+ knowledge_entries.staging_deadline)
  *   内联: remote_state
  *   内部: schema_migrations
  */
@@ -94,6 +95,9 @@ export const knowledgeEntries = sqliteTable(
 
     // Content hash
     contentHash: text('contentHash'),
+
+    // M2: Staging support (migration 004)
+    stagingDeadline: integer('staging_deadline'),
   },
   (table) => [
     index('idx_ke3_lifecycle').on(table.lifecycle),
@@ -355,98 +359,7 @@ export const codeEntities = sqliteTable(
 );
 
 // ═══════════════════════════════════════════════════════════════
-// 11. tasks — 任务表 (migration 002)
-// ═══════════════════════════════════════════════════════════════
-
-export const tasks = sqliteTable(
-  'tasks',
-  {
-    id: text('id').primaryKey(),
-    parentId: text('parent_id'),
-    childSeq: integer('child_seq').default(0),
-
-    title: text('title').notNull(),
-    description: text('description').default(''),
-    design: text('design').default(''),
-    acceptance: text('acceptance').default(''),
-    notes: text('notes').default(''),
-
-    status: text('status').notNull().default('open'),
-    priority: integer('priority').notNull().default(2),
-    taskType: text('task_type').notNull().default('task'),
-    closeReason: text('close_reason').default(''),
-    contentHash: text('content_hash').default(''),
-    failCount: integer('fail_count').default(0),
-    lastFailReason: text('last_fail_reason').default(''),
-
-    assignee: text('assignee').default(''),
-    createdBy: text('created_by').default('agent'),
-
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-    closedAt: integer('closed_at'),
-
-    metadata: text('metadata').default('{}'),
-  },
-  (table) => [
-    index('idx_tasks_status').on(table.status),
-    index('idx_tasks_priority').on(table.priority),
-    index('idx_tasks_parent').on(table.parentId),
-    index('idx_tasks_type').on(table.taskType),
-    index('idx_tasks_assignee').on(table.assignee),
-    index('idx_tasks_created').on(table.createdAt),
-    index('idx_tasks_hash').on(table.contentHash),
-  ]
-);
-
-// ═══════════════════════════════════════════════════════════════
-// 12. task_dependencies — 任务依赖表 (migration 002)
-// ═══════════════════════════════════════════════════════════════
-
-export const taskDependencies = sqliteTable(
-  'task_dependencies',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    taskId: text('task_id').notNull(),
-    dependsOnId: text('depends_on_id').notNull(),
-    depType: text('dep_type').notNull().default('blocks'),
-    metadata: text('metadata').default('{}'),
-    createdAt: integer('created_at').notNull(),
-    createdBy: text('created_by').default('agent'),
-  },
-  (table) => [
-    uniqueIndex('task_dependencies_unique').on(table.taskId, table.dependsOnId, table.depType),
-    index('idx_td_task').on(table.taskId),
-    index('idx_td_depends_on').on(table.dependsOnId),
-    index('idx_td_type').on(table.depType),
-  ]
-);
-
-// ═══════════════════════════════════════════════════════════════
-// 13. task_events — 任务事件审计表 (migration 002)
-// ═══════════════════════════════════════════════════════════════
-
-export const taskEvents = sqliteTable(
-  'task_events',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    taskId: text('task_id').notNull(),
-    eventType: text('event_type').notNull(),
-    actor: text('actor').default('agent'),
-    oldValue: text('old_value'),
-    newValue: text('new_value'),
-    comment: text('comment'),
-    createdAt: integer('created_at').notNull(),
-  },
-  (table) => [
-    index('idx_te_task').on(table.taskId),
-    index('idx_te_type').on(table.eventType),
-    index('idx_te_created').on(table.createdAt),
-  ]
-);
-
-// ═══════════════════════════════════════════════════════════════
-// 14. remote_commands — 远程指令队列 (migration 003)
+// 11. remote_commands — 远程指令队列 (migration 003)
 // ═══════════════════════════════════════════════════════════════
 
 export const remoteCommands = sqliteTable(
@@ -480,3 +393,33 @@ export const remoteState = sqliteTable('remote_state', {
   value: text('value'),
   updatedAt: integer('updated_at'),
 });
+
+// ═══════════════════════════════════════════════════════════════
+// 16. evolution_proposals — 知识进化提案 (M2 Recipe 治理)
+// ═══════════════════════════════════════════════════════════════
+
+export const evolutionProposals = sqliteTable(
+  'evolution_proposals',
+  {
+    id: text('id').primaryKey(),
+    type: text('type').notNull(),
+    targetRecipeId: text('target_recipe_id').notNull(),
+    relatedRecipeIds: text('related_recipe_ids').default('[]'),
+    confidence: real('confidence').notNull().default(0),
+    source: text('source').notNull(),
+    description: text('description').default(''),
+    evidence: text('evidence').default('[]'),
+    status: text('status').notNull().default('pending'),
+    proposedAt: integer('proposed_at').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+    resolvedAt: integer('resolved_at'),
+    resolvedBy: text('resolved_by'),
+    resolution: text('resolution'),
+  },
+  (table) => [
+    index('idx_ep_status').on(table.status),
+    index('idx_ep_target').on(table.targetRecipeId),
+    index('idx_ep_expires').on(table.expiresAt),
+    index('idx_ep_source').on(table.source),
+  ]
+);

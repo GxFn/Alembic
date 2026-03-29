@@ -242,6 +242,18 @@ interface MissionBriefing {
   submissionSchema: Record<string, unknown>;
   languageStats: Record<string, number> | null;
   executionPlan: { tiers: unknown[]; totalDimensions: number; workflow: string };
+  panorama: {
+    layers: Array<{ level: number; name: string; modules: string[] }>;
+    couplingHotspots: Array<{ module: string; fanIn: number; fanOut: number }>;
+    cyclicDependencies: Array<{ cycle: string[]; severity: string }>;
+    knowledgeGaps: Array<{
+      dimension: string;
+      dimensionName: string;
+      recipeCount: number;
+      status: string;
+      priority: string;
+    }>;
+  } | null;
   session: Record<string, unknown>;
   meta?: { responseSizeKB: number; compressionLevel: string; warnings?: string[] };
   [key: string]: unknown;
@@ -261,6 +273,7 @@ interface MissionBriefingParams {
   languageExtension?: unknown;
   incrementalPlan?: IncrementalPlan | null;
   languageStats?: Record<string, number> | null;
+  panoramaResult?: Record<string, unknown> | null;
 }
 
 // ── 常量 ────────────────────────────────────────────────────
@@ -965,6 +978,63 @@ function buildExecutionPlan(activeDimensions: DimensionDef[]) {
   };
 }
 
+// ── Panorama 摘要构建 ──────────────────────────────────────
+
+/**
+ * 从 PanoramaResult 提取 layers / couplingHotspots / cycles / gaps
+ * 用于注入 MissionBriefing，使外部 Agent 获得项目全景视野
+ */
+function summarizePanorama(
+  panoramaResult: Record<string, unknown> | null
+): MissionBriefing['panorama'] {
+  if (!panoramaResult) {
+    return null;
+  }
+  try {
+    // PanoramaResult.layers: LayerHierarchy { levels: LayerLevel[] }
+    const layerHierarchy = panoramaResult.layers as
+      | { levels?: Array<{ level: number; name: string; modules: string[] }> }
+      | undefined;
+    const layers = layerHierarchy?.levels ?? [];
+
+    // PanoramaResult.modules: Map<string, PanoramaModule>
+    const modules = panoramaResult.modules as
+      | Map<string, { name: string; fanIn: number; fanOut: number }>
+      | undefined;
+    const couplingHotspots: Array<{ module: string; fanIn: number; fanOut: number }> = [];
+    if (modules instanceof Map) {
+      for (const [, mod] of modules) {
+        if (mod.fanIn >= 10 || mod.fanOut >= 10) {
+          couplingHotspots.push({ module: mod.name, fanIn: mod.fanIn, fanOut: mod.fanOut });
+        }
+      }
+      couplingHotspots.sort((a, b) => b.fanIn + b.fanOut - (a.fanIn + a.fanOut));
+    }
+
+    // PanoramaResult.cycles: CyclicDependency[]
+    const cycles = (panoramaResult.cycles as Array<{ cycle: string[]; severity: string }>) ?? [];
+
+    // PanoramaResult.gaps: KnowledgeGap[] (dimension-based)
+    const gaps =
+      (panoramaResult.gaps as Array<{
+        dimension: string;
+        dimensionName: string;
+        recipeCount: number;
+        status: string;
+        priority: string;
+      }>) ?? [];
+
+    return {
+      layers: layers.slice(0, 10),
+      couplingHotspots: couplingHotspots.slice(0, 10),
+      cyclicDependencies: cycles.slice(0, 10),
+      knowledgeGaps: gaps.slice(0, 20),
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ── Mission Briefing 主构建函数 ──────────────────────────────
 
 /**
@@ -994,6 +1064,7 @@ export function buildMissionBriefing({
   languageExtension, // §7.1: 语言扩展（反模式、Guard 规则、Agent 注意事项）
   incrementalPlan, // §7.3: 增量 Bootstrap 评估结果
   languageStats, // §7.4: 完整语言分布统计
+  panoramaResult, // §M1: Phase 1.8 全景数据
 }: MissionBriefingParams) {
   const scheduler = new TierScheduler();
 
@@ -1073,6 +1144,8 @@ export function buildMissionBriefing({
     languageStats: languageStats || null,
 
     executionPlan: buildExecutionPlan(activeDimensions),
+
+    panorama: summarizePanorama(panoramaResult ?? null),
 
     session: session.toJSON(),
   };

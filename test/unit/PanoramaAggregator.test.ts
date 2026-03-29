@@ -13,7 +13,9 @@ import { RoleRefiner } from '../../lib/service/panorama/RoleRefiner.js';
 function createMockDb(
   opts: {
     moduleEdges?: Array<Record<string, unknown>>;
-    recipeCount?: number;
+    projectRecipeCount?: number;
+    /** DimensionAnalyzer 查询返回的 recipe 元数据 */
+    recipeRows?: Array<Record<string, unknown>>;
     topCalled?: Array<Record<string, unknown>>;
   } = {}
 ) {
@@ -23,8 +25,12 @@ function createMockDb(
     prepare: (sql: string) => ({
       run: () => ({ changes: 0 }),
       get: (..._params: unknown[]) => {
-        if (sql.includes('COUNT(DISTINCT ke.id)')) {
-          return { cnt: opts.recipeCount ?? 0 };
+        if (
+          sql.includes('COUNT(*)') &&
+          sql.includes('knowledge_entries') &&
+          sql.includes('lifecycle')
+        ) {
+          return { cnt: opts.projectRecipeCount ?? 0 };
         }
         if (sql.includes('COUNT(*)') && sql.includes('from_id = ce.entity_id')) {
           return { cnt: 0 };
@@ -38,6 +44,14 @@ function createMockDb(
         return undefined;
       },
       all: (...params: unknown[]) => {
+        // DimensionAnalyzer: SELECT title, category, topicHint, kind FROM knowledge_entries
+        if (
+          sql.includes('title') &&
+          sql.includes('topicHint') &&
+          sql.includes('knowledge_entries')
+        ) {
+          return opts.recipeRows ?? [];
+        }
         if (sql.includes('knowledge_edges') && sql.includes('relation = ?')) {
           const relation = params[0] as string;
           return (opts.moduleEdges ?? []).filter((e) => e.relation === relation);
@@ -96,11 +110,13 @@ describe('PanoramaAggregator', () => {
     expect(result.modules.has('App')).toBe(true);
     expect(result.modules.has('Core')).toBe(true);
     expect(result.layers.levels.length).toBeGreaterThanOrEqual(1);
+    expect(result.healthRadar).toBeDefined();
+    expect(result.healthRadar.dimensions.length).toBe(11);
     expect(result.computedAt).toBeGreaterThan(0);
   });
 
-  it('should detect knowledge gaps for modules with no recipes', () => {
-    const db = createMockDb({ recipeCount: 0 });
+  it('should detect dimension-based gaps when no recipes exist', () => {
+    const db = createMockDb({ projectRecipeCount: 0, recipeRows: [] });
     const aggregator = makeAggregator(db);
 
     const candidates: ModuleCandidate[] = [
@@ -109,9 +125,79 @@ describe('PanoramaAggregator', () => {
 
     const result = aggregator.compute(candidates);
 
-    expect(result.gaps.length).toBeGreaterThanOrEqual(1);
-    expect(result.gaps[0].module).toBe('BigModule');
-    expect(result.gaps[0].priority).toBe('high');
+    // 所有 11 个维度都应为 gap (missing)
+    expect(result.gaps.length).toBe(11);
+    expect(result.gaps[0].status).toBe('missing');
+    expect(result.gaps[0].dimension).toBeDefined();
+    expect(result.gaps[0].dimensionName).toBeDefined();
+    // service 角色关联 error-handling, concurrency, security → 高优
+    const highGaps = result.gaps.filter((g) => g.priority === 'high');
+    expect(highGaps.length).toBeGreaterThanOrEqual(1);
+    // healthRadar 维度覆盖为 0
+    expect(result.healthRadar.coveredDimensions).toBe(0);
+    expect(result.healthRadar.overallScore).toBe(0);
+  });
+
+  it('should score dimensions based on recipe topicHint', () => {
+    const db = createMockDb({
+      projectRecipeCount: 8,
+      recipeRows: [
+        {
+          title: 'SPM 模块化',
+          category: 'architecture',
+          topicHint: 'architecture',
+          kind: 'pattern',
+        },
+        { title: '依赖注入', category: 'architecture', topicHint: 'architecture', kind: 'pattern' },
+        { title: '分层策略', category: 'architecture', topicHint: 'architecture', kind: 'pattern' },
+        { title: 'URL 路由', category: 'architecture', topicHint: 'architecture', kind: 'pattern' },
+        { title: '入口架构', category: 'architecture', topicHint: 'architecture', kind: 'pattern' },
+        { title: '命名规范', category: 'code-standard', topicHint: 'conventions', kind: 'rule' },
+        { title: 'MARK 分段', category: 'code-standard', topicHint: 'conventions', kind: 'rule' },
+        {
+          title: '错误恢复',
+          category: 'best-practice',
+          topicHint: 'error-handling',
+          kind: 'pattern',
+        },
+      ],
+    });
+    const aggregator = makeAggregator(db);
+
+    const candidates: ModuleCandidate[] = [
+      { name: 'TestMod', inferredRole: 'service', files: ['/a', '/b', '/c'] },
+    ];
+
+    const result = aggregator.compute(candidates);
+    const radar = result.healthRadar;
+
+    // architecture: 5 recipes → strong (score=100)
+    const arch = radar.dimensions.find((d) => d.id === 'architecture')!;
+    expect(arch.recipeCount).toBe(5);
+    expect(arch.score).toBe(100);
+    expect(arch.status).toBe('strong');
+    expect(arch.level).toBe('adopt');
+
+    // coding-standards: 2 recipes → adequate (score=40)
+    const cs = radar.dimensions.find((d) => d.id === 'coding-standards')!;
+    expect(cs.recipeCount).toBe(2);
+    expect(cs.score).toBe(40);
+    expect(cs.status).toBe('adequate');
+
+    // error-handling: 1 recipe → weak (score=20)
+    const eh = radar.dimensions.find((d) => d.id === 'error-handling')!;
+    expect(eh.recipeCount).toBe(1);
+    expect(eh.score).toBe(20);
+    expect(eh.status).toBe('weak');
+
+    // concurrency: 0 → missing
+    const cc = radar.dimensions.find((d) => d.id === 'concurrency')!;
+    expect(cc.recipeCount).toBe(0);
+    expect(cc.status).toBe('missing');
+
+    // 维度覆盖: 3 / 11
+    expect(radar.coveredDimensions).toBe(3);
+    expect(radar.totalDimensions).toBe(11);
   });
 
   it('should compute call flow summary', () => {
@@ -133,13 +219,14 @@ describe('PanoramaAggregator', () => {
     const result = aggregator.compute([]);
 
     expect(result.modules.size).toBe(0);
-    expect(result.gaps).toHaveLength(0);
     expect(result.cycles).toHaveLength(0);
+    // 即使 0 个模块，维度雷达仍会生成
+    expect(result.healthRadar.dimensions.length).toBe(11);
   });
 
   it('should populate PanoramaModule fields correctly', () => {
     const db = createMockDb({
-      recipeCount: 3,
+      projectRecipeCount: 3,
       moduleEdges: [],
     });
     const aggregator = makeAggregator(db);

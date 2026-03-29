@@ -20,6 +20,7 @@
 
 import type { EventBus } from '../../infrastructure/event/EventBus.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
 
 interface TaskMeta {
   type?: string;
@@ -46,6 +47,7 @@ interface TaskDef {
 
 interface BootstrapTaskManagerOpts {
   eventBus?: EventBus | null;
+  signalBus?: SignalBus | null;
   getRealtimeService?: (() => { broadcastEvent(name: string, data: unknown): void } | null) | null;
 }
 
@@ -160,12 +162,15 @@ export class BootstrapTaskManager {
 
   #eventBus: EventBus | null = null;
 
+  #signalBus: SignalBus | null = null;
+
   /** 获取 RealtimeService 的 getter（延迟获取，避免循环依赖） */
   #getRealtimeService: (() => { broadcastEvent(name: string, data: unknown): void } | null) | null =
     null;
 
-  constructor({ eventBus, getRealtimeService }: BootstrapTaskManagerOpts = {}) {
+  constructor({ eventBus, signalBus, getRealtimeService }: BootstrapTaskManagerOpts = {}) {
     this.#eventBus = eventBus || null;
+    this.#signalBus = signalBus || null;
     this.#getRealtimeService = getRealtimeService || null;
   }
 
@@ -252,6 +257,15 @@ export class BootstrapTaskManager {
         result: t.result,
         error: t.error,
       })),
+    });
+    this.#signalBus?.send('lifecycle', 'Bootstrap', 0.3, {
+      metadata: {
+        action: 'bootstrap_aborted',
+        sessionId: session.id,
+        reason,
+        completed: session.completedTasks,
+        failed: session.failedTasks,
+      },
     });
   }
 
@@ -433,6 +447,14 @@ export class BootstrapTaskManager {
         result: t.result,
         error: t.error,
       })),
+    });
+    this.#signalBus?.send('lifecycle', 'Bootstrap', 1, {
+      metadata: {
+        action: 'bootstrap_completed',
+        sessionId: session.id,
+        completed: session.completedTasks,
+        failed: session.failedTasks,
+      },
     });
   }
 

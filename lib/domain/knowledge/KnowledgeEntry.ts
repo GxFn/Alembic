@@ -25,6 +25,7 @@ export interface KnowledgeEntryProps {
   lifecycle?: string;
   lifecycleHistory?: Array<{ from: string; to: string; at: number }>;
   autoApprovable?: boolean;
+  stagingDeadline?: number | null;
   language?: string;
   category?: string;
   knowledgeType?: string;
@@ -76,6 +77,7 @@ export class KnowledgeEntry {
   lifecycle: string;
   lifecycleHistory: Array<{ from: string; to: string; at: number }>;
   autoApprovable: boolean;
+  stagingDeadline: number | null;
 
   // Language & Classification
   language: string;
@@ -141,6 +143,7 @@ export class KnowledgeEntry {
     this.lifecycle = normalizeLifecycle(props.lifecycle || Lifecycle.PENDING);
     this.lifecycleHistory = props.lifecycleHistory || [];
     this.autoApprovable = props.autoApprovable ?? false;
+    this.stagingDeadline = props.stagingDeadline ?? null;
 
     // ── 语言与分类 ──
     this.language = props.language || '';

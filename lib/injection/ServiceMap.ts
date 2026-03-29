@@ -18,7 +18,6 @@ import type ProjectGraph from '../core/ast/ProjectGraph.js';
 import type Constitution from '../core/constitution/Constitution.js';
 import type Gateway from '../core/gateway/Gateway.js';
 // ── Domain Types ──
-import type { TaskIdGenerator } from '../domain/task/TaskIdGenerator.js';
 // ── External Types ──
 import type { AiProvider } from '../external/ai/AiProvider.js';
 // ── InfraModule Types ──
@@ -32,7 +31,6 @@ import type { IndexingPipeline } from '../infrastructure/vector/IndexingPipeline
 import type { VectorStore } from '../infrastructure/vector/VectorStore.js';
 // ── Repository Types ──
 import type { KnowledgeRepositoryImpl } from '../repository/knowledge/KnowledgeRepository.impl.js';
-import type { TaskRepositoryImpl } from '../repository/task/TaskRepository.impl.js';
 import type { TokenUsageStore } from '../repository/token/TokenUsageStore.js';
 import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
 import type DimensionCopy from '../service/bootstrap/DimensionCopyRegistry.js';
@@ -65,9 +63,7 @@ import type { HybridRetriever } from '../service/search/HybridRetriever.js';
 import type SearchEngine from '../service/search/SearchEngine.js';
 import type { HitRecorder } from '../service/signal/HitRecorder.js';
 import type { SkillHooks } from '../service/skills/SkillHooks.js';
-import type { TaskGraphService } from '../service/task/TaskGraphService.js';
-import type { TaskKnowledgeBridge } from '../service/task/TaskKnowledgeBridge.js';
-import type { TaskReadyEngine } from '../service/task/TaskReadyEngine.js';
+import type { PrimeSearchPipeline } from '../service/task/PrimeSearchPipeline.js';
 // ── Vector Service Types ──
 import type { ContextualEnricher } from '../service/vector/ContextualEnricher.js';
 import type { VectorService } from '../service/vector/VectorService.js';
@@ -92,7 +88,6 @@ export interface ServiceMap {
   knowledgeRepository: KnowledgeRepositoryImpl;
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;
-  taskRepository: TaskRepositoryImpl;
 
   // ═══ AppModule ═══
   qualityScorer: QualityScorer;
@@ -103,10 +98,7 @@ export interface ServiceMap {
   tokenUsageStore: TokenUsageStore;
   moduleService: ModuleService;
   cursorDeliveryPipeline: CursorDeliveryPipeline;
-  taskIdGenerator: TaskIdGenerator;
-  taskReadyEngine: TaskReadyEngine;
-  taskKnowledgeBridge: TaskKnowledgeBridge;
-  taskGraphService: TaskGraphService;
+  primeSearchPipeline: PrimeSearchPipeline;
 
   // ═══ KnowledgeModule ═══
   confidenceRouter: ConfidenceRouter;

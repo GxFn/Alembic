@@ -298,7 +298,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       </div>
 
       {/* ── Filter tabs ── */}
-      <div className="flex items-center gap-1 mb-4 p-1 bg-[var(--bg-subtle)] rounded-lg w-fit">
+      <div className="flex items-center gap-1.5 mb-4">
         {([
           { key: 'all' as const, label: t('common.all'), count: skills.length },
           { key: 'project' as const, label: t('skills.filterProject'), count: projectCount, icon: FolderOpen },
@@ -307,16 +307,16 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
               filter === f.key
-                ? 'bg-[var(--bg-surface)] text-violet-700 shadow-sm'
-                : 'text-[var(--fg-secondary)] hover:text-[var(--fg-primary)]'
+                ? 'bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent-emphasis)]'
+                : 'text-[var(--fg-muted)] hover:bg-[var(--bg-subtle)] border border-transparent'
             }`}
           >
             {f.icon && <f.icon size={12} />}
             {f.label}
             <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] ${
-              filter === f.key ? 'bg-violet-100 text-violet-600' : 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)]'
+              filter === f.key ? 'bg-[var(--accent-subtle)] text-[var(--accent)]' : 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)]'
             }`}>{f.count}</span>
           </button>
         ))}

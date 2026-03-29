@@ -23,16 +23,15 @@ import RecipesView from './components/Views/RecipesView';
 import HelpView from './components/Views/HelpView';
 import CandidatesView from './components/Views/CandidatesView';
 import ModuleExplorerView from './components/Views/ModuleExplorerView';
-import DepGraphView from './components/Views/DepGraphView';
 import GuardView from './components/Views/GuardView';
 import PanoramaView from './components/Views/PanoramaView';
 import { GlobalChatProvider, GlobalChatPanel, useGlobalChat } from './components/Shared/GlobalChatDrawer';
 import AiChatView from './components/Views/AiChatView';
-import KnowledgeGraphView from './components/Views/KnowledgeGraphView';
 import KnowledgeView from './components/Views/KnowledgeView';
 import SkillsView from './components/Views/SkillsView';
 import BootstrapProgressView from './components/Views/BootstrapProgressView';
 import WikiView from './components/Views/WikiView';
+import SignalReportView from './components/Views/SignalReportView';
 import RecipeEditor from './components/Modals/RecipeEditor';
 import CreateModal from './components/Modals/CreateModal';
 import SearchModal from './components/Modals/SearchModal';
@@ -990,6 +989,8 @@ const App: React.FC = () => {
       onOpenCommandPalette={() => setCommandPaletteOpen(true)}
       projectName={data?.projectName}
       candidateCount={candidateCount}
+      showSignalMonitor={showSignalMonitor}
+      onToggleSignalMonitor={() => setShowSignalMonitor(v => !v)}
     />
 
     <div className={`flex-1 ${activeTab === 'wiki' ? 'overflow-hidden' : 'overflow-y-auto p-4 xl:p-6 2xl:p-8'}`}>
@@ -1092,10 +1093,6 @@ const App: React.FC = () => {
       </>
       ) : activeTab === 'knowledge' ? (
       <KnowledgeView onRefresh={handleRefreshProject} idTitleMap={data?.idTitleMap} />
-      ) : activeTab === 'depgraph' ? (
-      <DepGraphView />
-      ) : activeTab === 'knowledgegraph' ? (
-      <KnowledgeGraphView />
       ) : activeTab === 'spm' ? (
       <ModuleExplorerView 
         targets={mergedTargets}
@@ -1122,6 +1119,8 @@ const App: React.FC = () => {
       />
       ) : activeTab === 'wiki' ? (
       <WikiView />
+      ) : activeTab === 'signals' ? (
+      <SignalReportView />
       ) : activeTab === 'help' ? (
       <HelpView />
       ) : (
