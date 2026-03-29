@@ -85,6 +85,11 @@ const _taskRules = {
  * Unified entry point
  */
 export async function taskHandler(ctx: McpContext, args: TaskArgs) {
+  // Normalize taskId → id (schema accepts both for convenience)
+  if (!args.id && typeof args.taskId === 'string') {
+    args.id = args.taskId;
+  }
+
   let result: EnvelopeResult;
 
   switch (args.operation) {
@@ -139,9 +144,20 @@ async function _prime(ctx: McpContext, args: TaskArgs) {
   if (pipeline && extracted.queries[0]?.trim()) {
     try {
       searchResult = await pipeline.search(extracted);
-    } catch {
-      // search failure is non-fatal
+      if (!searchResult) {
+        process.stderr.write('[MCP/Task] prime: pipeline.search returned null (all filtered)\n');
+      }
+    } catch (err: unknown) {
+      process.stderr.write(
+        `[MCP/Task] prime search error: ${err instanceof Error ? err.stack || err.message : String(err)}\n`
+      );
     }
+  } else if (!pipeline) {
+    process.stderr.write('[MCP/Task] prime: pipeline is null, skipping search\n');
+  } else {
+    process.stderr.write(
+      `[MCP/Task] prime: queries empty, skipping search. queries=${JSON.stringify(extracted.queries)}\n`
+    );
   }
 
   // ─── Lifecycle: initialize IntentState ───
@@ -237,15 +253,17 @@ async function _create(ctx: McpContext, args: TaskArgs) {
 // ═══ close ══════════════════════════════════════════════
 
 async function _close(ctx: McpContext, args: TaskArgs) {
-  if (!args.id) {
+  const intent = ctx.session?.intent;
+  // Resolve id: explicit arg > session intent > fail
+  const id = args.id || (intent?.taskId ?? '');
+  if (!id) {
     return envelope({
       success: false,
-      message: 'id is required',
+      message: 'id is required (pass id or ensure a task was created in this session)',
       meta: { tool: 'autosnippet_task' },
     });
   }
 
-  const intent = ctx.session?.intent;
   const reason = args.reason || 'Completed';
 
   // Persist intent chain via SignalBus
@@ -258,7 +276,7 @@ async function _close(ctx: McpContext, args: TaskArgs) {
     ctx.session.intent = createIdleIntent();
   }
 
-  const lines = [`✅ Closed: ${args.id} — ${reason}`];
+  const lines = [`✅ Closed: ${id} — ${reason}`];
   lines.push('');
   lines.push(
     '⚠️ REQUIRED: You MUST call autosnippet_guard (no args) NOW to review changed files for compliance violations.'
@@ -267,7 +285,7 @@ async function _close(ctx: McpContext, args: TaskArgs) {
   return envelope({
     success: true,
     data: {
-      closed: { id: args.id, reason, closedAt: Date.now() },
+      closed: { id, reason, closedAt: Date.now() },
       nextAction: {
         tool: 'autosnippet_guard',
         args: {},
@@ -283,15 +301,17 @@ async function _close(ctx: McpContext, args: TaskArgs) {
 // ═══ fail ═══════════════════════════════════════════════
 
 async function _fail(ctx: McpContext, args: TaskArgs) {
-  if (!args.id) {
+  const intent = ctx.session?.intent;
+  // Resolve id: explicit arg > session intent > fail
+  const id = args.id || (intent?.taskId ?? '');
+  if (!id) {
     return envelope({
       success: false,
-      message: 'id is required',
+      message: 'id is required (pass id or ensure a task was created in this session)',
       meta: { tool: 'autosnippet_task' },
     });
   }
 
-  const intent = ctx.session?.intent;
   const reason = args.reason || 'Agent execution failed';
 
   // Persist intent chain via SignalBus
@@ -307,9 +327,9 @@ async function _fail(ctx: McpContext, args: TaskArgs) {
   return envelope({
     success: true,
     data: {
-      failed: { id: args.id, reason, failedAt: Date.now() },
+      failed: { id, reason, failedAt: Date.now() },
     },
-    message: `❌ Failed: ${args.id} — ${reason}`,
+    message: `❌ Failed: ${id} — ${reason}`,
     meta: { tool: 'autosnippet_task' },
   });
 }
@@ -423,8 +443,15 @@ interface PipelineLike {
 
 function _getPipeline(container: McpServiceContainer): PipelineLike | null {
   try {
-    return container.get('primeSearchPipeline') as PipelineLike | null;
-  } catch {
+    const p = container.get('primeSearchPipeline') as PipelineLike | null;
+    if (!p) {
+      process.stderr.write('[MCP/Task] _getPipeline: container returned null/undefined\n');
+    }
+    return p;
+  } catch (err: unknown) {
+    process.stderr.write(
+      `[MCP/Task] _getPipeline failed: ${err instanceof Error ? err.message : String(err)}\n`
+    );
     return null;
   }
 }

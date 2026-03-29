@@ -309,7 +309,11 @@ export const TaskInput = z.object({
     ),
   title: z.string().optional().describe('Task or decision title (create / record_decision)'),
   description: z.string().optional().describe('Decision description (record_decision)'),
-  id: z.string().optional().describe('Task ID (close / fail)'),
+  id: z
+    .string()
+    .optional()
+    .describe('Task ID (close / fail). Optional if a task was created in the current session.'),
+  taskId: z.string().optional().describe('Alias for id (accepted for convenience)'),
   reason: z.string().optional().describe('Close reason or fail reason'),
   rationale: z.string().optional().describe('Decision rationale (record_decision)'),
   tags: z.array(z.string()).optional().describe('Decision tags (record_decision)'),

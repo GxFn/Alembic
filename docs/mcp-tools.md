@@ -257,6 +257,11 @@ Wiki 文档生成。
 
 任务与决策管理（5 operations）。每次对话开始时先调用 `prime` 加载知识上下文。
 
+`prime` 操作内部流程：
+1. **IntentExtractor** 提取意图：交叉语言同义词展开、技术术语提取、文件上下文推断、场景分类
+2. **PrimeSearchPipeline** 多路并行搜索 + RRF 融合 + 三层质量过滤（绝对阈值 + 相对阈值 + 梯度截断）
+3. 返回 Recipe + Guard 规则 + sourceRefs（项目文件路径证据）
+
 **参数：**
 
 | 参数 | 类型 | 必填 | 说明 |

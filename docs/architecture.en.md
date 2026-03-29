@@ -121,7 +121,8 @@ Business service layer containing 15 sub-domain services:
 |------------|-----------|----------------|
 | **knowledge** | `KnowledgeService` | Knowledge entry CRUD, graph, entity graph, confidence routing |
 | **guard** | `GuardService` / `GuardCheckEngine` | 50+ built-in rule engine (regex + AST semantic) |
-| **search** | `SearchEngine` / `RetrievalFunnel` | 4-stage retrieval funnel (keyword → semantic → fusion → rerank) |
+| **search** | `SearchEngine` / `MultiSignalRanker` | BM25 + vector hybrid retrieval, 7-signal weighted ranking |
+| **task** | `IntentExtractor` / `PrimeSearchPipeline` | Intent-aware multi-query search: Q1 synonym enrichment + Q2 tech terms + Q3 file context + Q4 focused query, 3-layer quality filter (absolute threshold + relative-to-best + score gap detection) |
 | **bootstrap** | `BootstrapTaskManager` | Coldstart async task orchestration, 14 analysis dimensions |
 | **delivery** | `CursorDeliveryPipeline` | 4-channel delivery (Rules + Skills + Token Budget + Topic Classification) |
 | **automation** | `AutomationOrchestrator` | File watching, directive detection (`as:s` / `as:c` / `as:a`), processing pipeline |
@@ -218,9 +219,10 @@ Source Code → AST Parsing → Discovery (project type) → Enhancement (framew
 
 ```
 IDE AI Request → MCP Server → Gateway (permission check)
-             → SearchEngine (4-stage retrieval funnel)
+             → IntentExtractor (intent extraction: synonym expansion + tech terms + scenario classification)
+             → PrimeSearchPipeline (multi-query parallel search + RRF fusion + 3-layer quality filter)
              → KnowledgeCompressor (token budget)
-             → Return Recipes + Guard Rules
+             → Return Recipes + Guard Rules + sourceRefs
 ```
 
 ### Guard Check Flow

@@ -103,6 +103,13 @@ const SYNONYM_GROUPS: string[][] = [
   ['sync', 'synchronous', '同步'],
   ['thread', 'threading', '线程'],
   ['concur', 'concurrency', '并发'],
+  // Memory management
+  ['memory', '内存'],
+  ['leak', 'leakage', '泄漏'],
+  ['weak', '弱引用'],
+  ['retain', '持有', '保留'],
+  ['release', '释放'],
+  ['reference', '引用'],
   // Common concepts
   ['network', '网络'],
   ['cache', 'caching', '缓存'],
@@ -166,8 +173,10 @@ export function extract(
 
 /**
  * Build multi-query set from user query + active file.
- * Q1: raw query, Q2: extracted tech terms, Q3: file context.
+ * Q1: raw query, Q2: extracted tech terms, Q3: file context, Q4: synonym focus.
  * Q1 is enriched with cross-language synonyms to bridge EN↔CJK matching.
+ * Q4 (long queries only): synonym expansion as a separate focused query
+ * to prevent BM25 dilution in verbose natural language inputs.
  */
 export function buildQueries(
   userQuery: string,
@@ -182,6 +191,15 @@ export function buildQueries(
   const terms = extractTechTerms(userQuery, termOpts);
   if (terms.length > 0) {
     queries.push(terms.join(' '));
+  }
+
+  // Q4: For long queries (> 50 chars), add cross-language synonyms as a
+  // separate focused query. In long sentences, synonym terms appended to Q1
+  // get diluted by common words ("ViewController", "ViewModel"), causing
+  // BM25 to miss the user's actual intent. A short focused query matches
+  // domain-specific terms (e.g. "singleton 单例 inject 注入") directly.
+  if (synonyms && userQuery.length > 50) {
+    queries.push(synonyms);
   }
 
   if (activeFile) {
@@ -268,7 +286,11 @@ export function inferLanguage(filePath: string): string | null {
 export function classifyScenario(userQuery: string): SearchScenario {
   const q = userQuery.toLowerCase();
 
-  if (/帮我[加写做实现创建]|implement|add|create|新[增加建]/.test(q)) {
+  if (
+    /帮我[加写做实现创建]|implement|add|create|新[增加建]|添加|修改|删除|实现|开发|编写|创建|初始化/.test(
+      q
+    )
+  ) {
     return 'generate';
   }
   if (/检查|review|lint|合规|违规|guard|规[则范]/.test(q)) {
@@ -287,25 +309,27 @@ export function classifyScenario(userQuery: string): SearchScenario {
  * Tokenizes query, looks up each token in the synonym table,
  * returns a query string of synonym expansions for cross-language matching.
  *
- * Strategy: return only cross-script synonyms (EN→CJK or CJK→EN).
- * This keeps the expansion focused — the original script tokens are already in Q1.
+ * Strategy: per-token cross-script expansion. Each token's script is checked
+ * individually, and only synonyms in the OPPOSITE script are added.
+ * This correctly handles mixed EN/CJK queries (e.g. "在 module 里用 singleton")
+ * where both EN→CJK and CJK→EN expansions are needed.
  */
 function expandWithSynonyms(query: string): string | null {
   const tokens = tokenize(query);
   const crossScriptTerms = new Set<string>();
-
-  // Detect query script: does it contain CJK?
-  const hasCJK = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(query);
+  const CJK_RE = /[\u4e00-\u9fff\u3400-\u4dbf]/;
 
   for (const token of tokens) {
     const synonyms = SYNONYM_LOOKUP.get(token.toLowerCase());
     if (!synonyms) {
       continue;
     }
+    // Determine THIS token's script, not the whole query's
+    const tokenIsCJK = CJK_RE.test(token);
     for (const syn of synonyms) {
-      const synIsCJK = /[\u4e00-\u9fff\u3400-\u4dbf]/.test(syn);
-      // Cross-script: EN query → add CJK synonyms; CJK query → add EN synonyms
-      if (hasCJK !== synIsCJK) {
+      const synIsCJK = CJK_RE.test(syn);
+      // Cross-script: EN token → add CJK synonyms; CJK token → add EN synonyms
+      if (tokenIsCJK !== synIsCJK) {
         crossScriptTerms.add(syn);
       }
     }
@@ -314,7 +338,7 @@ function expandWithSynonyms(query: string): string | null {
   if (crossScriptTerms.size === 0) {
     return null;
   }
-  return [...crossScriptTerms].slice(0, 12).join(' ');
+  return [...crossScriptTerms].slice(0, 16).join(' ');
 }
 
 function buildPrefixPattern(prefixes: string[]): RegExp | null {

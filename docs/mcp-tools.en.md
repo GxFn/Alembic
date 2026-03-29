@@ -257,6 +257,11 @@ Project panorama queries.
 
 Task and decision management (5 operations). Call `prime` at the start of every conversation to load knowledge context.
 
+`prime` internal flow:
+1. **IntentExtractor** extracts intent: cross-language synonym expansion, tech term extraction, file context inference, scenario classification
+2. **PrimeSearchPipeline** multi-query parallel search + RRF fusion + 3-layer quality filter (absolute threshold + relative-to-best + score gap detection)
+3. Returns Recipes + Guard rules + sourceRefs (project file path evidence)
+
 **Parameters:**
 
 | Param | Type | Required | Description |

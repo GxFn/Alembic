@@ -93,13 +93,17 @@ Want to know the blast radius before refactoring a function? Static call graph a
 
 Keyword search only finds literal matches. With an LLM API Key, search upgrades to vector + BM25 hybrid retrieval — asking "how to manage memory" finds Recipes about garbage collection, semantically similar results rank first.
 
+### Intent-Aware Search (Prime)
+
+At the start of every conversation, the Agent auto-triggers prime to intelligently inject knowledge based on the user query and current file. IntentExtractor extracts tech terms, infers language and module, performs cross-language (EN↔CJK) synonym expansion; PrimeSearchPipeline executes multi-query parallel search (raw query + term query + file context + focused synonyms), returning precise results after 3-layer quality filtering. Supports long natural-language sentences, short exact matches, and mixed-language queries.
+
+### Recipe Source Evidence (sourceRefs)
+
+Recipes carry the project file paths analyzed during creation as evidence. The 📍 sourceRefs in search results point to real project files — the Agent can trust and reference them without self-verification. Path validity is monitored automatically, with git rename auto-repair.
+
 ### Knowledge Graph
 
 Recipes have relationships. Query impact paths, dependency depth, and related Recipes for any module — once you've accumulated enough knowledge, it helps you see the structure behind it.
-
-### TaskGraph Orchestration
-
-Break a large task into steps, declare dependencies between them, and each step auto-injects relevant Recipes as context. Team decisions (rationale, confidence) persist alongside tasks — they don't vanish with the conversation.
 
 ### Self-Cycling Signal Mechanism
 

@@ -4,6 +4,30 @@
 
 ---
 
+## [3.3.4] - 2026-03-30
+
+### 改进
+
+- **Prime 搜索质量优化**：3 轮实战压力测试（BiliDili 40 条 Recipe），9 处修复，61 个集成测试验证
+  - PrimeSearchPipeline：RRF 分数放大、绕过 CoarseRanker 保留原始 BM25 分数、`GAP_DROP_RATIO` 0.4→0.25、`RELATIVE_SCORE_RATIO` 0.25→0.15、`MIN_SCORE_THRESHOLD` 0.1→0.3
+  - IntentExtractor：per-token 脚本检测修复混合语言同义词展开、新增 6 组内存管理同义词、Q4 聚焦同义词查询解决长句 BM25 稀释、场景分类正则扩展
+
+## [3.3.3] - 2026-03-29
+
+### 新增
+
+- **Recipe 可信任性**：sourceRefs 证据链——Recipe 携带项目真实文件路径，搜索结果展示 📍 路径，Agent 无需自行验证即可信任
+  - 新增 `recipe_source_refs` 桥接表（active/renamed/stale 三态）
+  - `SourceRefReconciler` 路径健康检查 + git rename 自动修复
+  - `asd ui` 启动时统一刷新：syncAll → reconcile → staging promote → vector reconcile → refreshIndex
+- **Task 系统重设计**：从单查询桥接到意图感知知识交付管线
+  - 新建 `IntentExtractor`（纯函数，50+ 同义词组，4 路查询构建）
+  - 新建 `PrimeSearchPipeline`（多路并行搜索 + RRF 融合 + 三层质量过滤）
+  - task handler 接入 SignalBus intent 信号，JSONL 订阅持久化
+  - 删除 `TaskKnowledgeBridge`、`SignalLogger`、3 张孤儿 DB 表
+
+---
+
 ## [3.2.17] - 2026-03-10
 
 ### 改进

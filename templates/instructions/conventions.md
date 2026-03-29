@@ -13,10 +13,12 @@ Users speak naturally; you translate to task operations. Never tell users to cal
 
 | User Says | You Run |
 |---|---|
-| "fix bug" / "implement" | `create` → code → `close` |
-| "continue" | resume in-progress → `close` |
+| "fix bug" / "implement" | `create` → code → `close` → `autosnippet_guard()` |
+| "continue" | resume in-progress → `close` → `autosnippet_guard()` |
 | "pause" / "abandon" | `fail(id, reason)` |
 | "agreed" | `record_decision(...)` |
+
+7. **After close** — MUST call `autosnippet_guard()` (no args) for compliance review before moving on. Never skip.
 
 ## Knowledge Rules
 

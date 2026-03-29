@@ -121,7 +121,8 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 |------|--------|------|
 | **knowledge** | `KnowledgeService` | 知识条目 CRUD、图谱、实体图、置信度路由 |
 | **guard** | `GuardService` / `GuardCheckEngine` | 50+ 内置规则引擎（正则 + AST 语义） |
-| **search** | `SearchEngine` / `RetrievalFunnel` | 4 层检索漏斗（keyword → semantic → fusion → rerank） |
+| **search** | `SearchEngine` / `MultiSignalRanker` | BM25 + 向量混合检索，7 信号加权排序 |
+| **task** | `IntentExtractor` / `PrimeSearchPipeline` | 意图感知多路搜索：Q1 同义词增强 + Q2 技术术语 + Q3 文件上下文 + Q4 聚焦查询，三层质量过滤（绝对阈值 + 相对阈值 + 梯度截断） |
 | **bootstrap** | `BootstrapTaskManager` | 冷启动异步任务编排，14 个分析维度 |
 | **delivery** | `CursorDeliveryPipeline` | 4 通道交付（Rules + Skills + Token 预算 + 主题分类） |
 | **automation** | `AutomationOrchestrator` | 文件监听、指令检测（`as:s` / `as:c` / `as:a`）、处理管线 |
@@ -217,9 +218,10 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 
 ```
 IDE AI 请求 → MCP Server → Gateway (权限校验)
-           → SearchEngine (4 层检索漏斗)
+           → IntentExtractor (意图提取: 同义词展开 + 技术术语 + 场景分类)
+           → PrimeSearchPipeline (多路并行搜索 + RRF 融合 + 三层质量过滤)
            → KnowledgeCompressor (Token 预算)
-           → 返回 Recipes + Guard 规则
+           → 返回 Recipes + Guard 规则 + sourceRefs
 ```
 
 ### Guard 检查流程
