@@ -15,6 +15,7 @@ import { PrimeSearchPipeline } from '../../lib/service/task/PrimeSearchPipeline.
 const __dirname = import.meta.dirname;
 const BILIDILI_ROOT = path.resolve(__dirname, '../../../BiliDili');
 const RECIPES_DIR = path.join(BILIDILI_ROOT, 'AutoSnippet/recipes');
+const HAS_BILIDILI = fs.existsSync(RECIPES_DIR);
 
 function createInMemoryDb() {
   const db = new Database(':memory:');
@@ -138,7 +139,7 @@ function insertEntry(
   ).run(...vals);
 }
 
-describe('Diagnostic: Raw Search Scores', () => {
+describe.skipIf(!HAS_BILIDILI)('Diagnostic: Raw Search Scores', () => {
   let db: ReturnType<typeof createInMemoryDb>;
   let engine: SearchEngine;
   let pipeline: PrimeSearchPipeline;

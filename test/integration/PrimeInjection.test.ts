@@ -29,6 +29,7 @@ import { PrimeSearchPipeline } from '../../lib/service/task/PrimeSearchPipeline.
 const __dirname = import.meta.dirname;
 const BILIDILI_ROOT = path.resolve(__dirname, '../../../BiliDili');
 const RECIPES_DIR = path.join(BILIDILI_ROOT, 'AutoSnippet/recipes');
+const HAS_BILIDILI = fs.existsSync(RECIPES_DIR);
 
 // ── DB Setup ────────────────────────────────────────
 
@@ -160,7 +161,7 @@ function insertEntry(
 
 // ── Test Suite ──────────────────────────────────────
 
-describe('Integration: Prime Injection with BiliDili Recipes', () => {
+describe.skipIf(!HAS_BILIDILI)('Integration: Prime Injection with BiliDili Recipes', () => {
   let db: ReturnType<typeof createInMemoryDb>;
   let engine: SearchEngine;
   let pipeline: PrimeSearchPipeline;
