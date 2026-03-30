@@ -88,7 +88,12 @@ export function register(c: ServiceContainer) {
 
   c.singleton('knowledgeSyncService', (ct: ServiceContainer) => {
     const projectRoot = resolveProjectRoot(ct);
-    return new KnowledgeSyncService(projectRoot);
+    const sourceRefReconciler = ct.singletons.sourceRefReconciler as
+      | import('../../service/knowledge/SourceRefReconciler.js').SourceRefReconciler
+      | undefined;
+    return new KnowledgeSyncService(projectRoot, {
+      sourceRefReconciler: sourceRefReconciler || undefined,
+    });
   });
 
   // ═══ ReportStore ═══

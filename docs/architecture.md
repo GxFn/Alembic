@@ -112,6 +112,7 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 | **context/** | `ContextWindow` / `ExplorationTracker` | Token 窗口管理 + 探索策略 |
 | **domain/** | `EpisodicConsolidator` / `InsightProducer` | Agent 领域逻辑：洞察分析、证据收集、扫描任务 |
 | **tools/** | `ToolRegistry` + 14 文件 | 54 个内置工具（知识、AST、Guard、搜索、系统等） |
+| **forge/** | `ToolForge` / `SandboxRunner` / `DynamicComposer` | 动态工具锻造：复用/组合/生成三模式，沙箱验证 + TTL 临时注册 |
 
 ### 5. Service Layer（服务层）
 
@@ -120,7 +121,7 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 | 子域 | 核心类 | 职责 |
 |------|--------|------|
 | **knowledge** | `KnowledgeService` | 知识条目 CRUD、图谱、实体图、置信度路由 |
-| **guard** | `GuardService` / `GuardCheckEngine` | 50+ 内置规则引擎（正则 + AST 语义） |
+| **guard** | `GuardService` / `GuardCheckEngine` | 50+ 内置规则引擎（正则 + AST 语义），三态输出（pass / violation / uncertain），三维报告（合规度 + 覆盖率 + 置信度） |
 | **search** | `SearchEngine` / `MultiSignalRanker` | BM25 + 向量混合检索，7 信号加权排序 |
 | **task** | `IntentExtractor` / `PrimeSearchPipeline` | 意图感知多路搜索：Q1 同义词增强 + Q2 技术术语 + Q3 文件上下文 + Q4 聚焦查询，三层质量过滤（绝对阈值 + 相对阈值 + 梯度截断） |
 | **bootstrap** | `BootstrapTaskManager` | 冷启动异步任务编排，14 个分析维度 |
@@ -133,6 +134,8 @@ AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将
 | **wiki** | `WikiGenerator` | 项目 Wiki 自动生成 |
 | **module** | `ModuleService` | 多语言模块结构扫描 |
 | **candidate** | `SimilarityService` | 候选去重，相似度检测 |
+| **evolution** | `KnowledgeMetabolism` / `DecayDetector` / `ContradictionDetector` / `RedundancyAnalyzer` | 知识治理：矛盾检测、冗余分析、衰退评分、进化提案 |
+| **signal** | `HitRecorder` | 批量使用信号采集 + 30s buffer flush |
 
 ### 6. Core + Domain Layer（核心 + 领域层）
 
@@ -164,7 +167,7 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 #### 领域实体
 
 - `KnowledgeEntry` — V3 统一知识条目，含 Content、Constraints、Quality、Reasoning、Relations、Stats 值对象
-- `Lifecycle` — 知识条目生命周期状态机：`draft → pending → approved → active → deprecated`
+- `Lifecycle` — 知识条目六态生命周期状态机：`pending → staging → active → evolving/decaying → deprecated`。staging（暂存期自动发布）、evolving（进化提案附着）、decaying（衰退观察期）为由系统驱动的中间状态
 - `Snippet` — 代码片段实体
 
 ### 7. Infrastructure Layer（基础设施层）
@@ -175,6 +178,7 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 | `VectorStore` / `JsonVectorAdapter` | 向量存储（本地 JSON 或 Milvus） |
 | `IndexingPipeline` / `Chunker` | 向量索引管线 + 文本分块 |
 | `CacheService` / `GraphCache` | 内存缓存 + AST 图谱缓存 |
+| `SignalBus` | 统一信号总线（typed pub-sub），9 种信号类型，精确/通配符订阅 |
 | `EventBus` | 进程内事件总线 |
 | `RealtimeService` | Socket.IO 实时推送（冷启动进度等） |
 | `AuditStore` / `AuditLogger` | 操作审计日志持久化 |
@@ -229,7 +233,9 @@ IDE AI 请求 → MCP Server → Gateway (权限校验)
 ```
 源文件 → SourceFileCollector → GuardCheckEngine
       → 正则规则 (50+) + AST 语义规则 + 跨文件规则
-      → ComplianceReporter → 报告 (JSON/Text/Markdown)
+      → 三态输出: pass / violation / uncertain
+      → ComplianceReporter → 三维报告 (合规度 + 覆盖率 + 置信度)
+      → ReverseGuard → Recipe↔Code 反向验证 (API 符号存活检测)
 ```
 
 ---

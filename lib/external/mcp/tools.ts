@@ -194,8 +194,9 @@ export const TOOLS = [
       'Submit knowledge entries (single/batch unified pipeline). Pass 1~N items via the items array.\n' +
       '• All entries undergo strict validation; all V3 fields must be provided at once\n' +
       '• Unified consolidation analysis: detects overlap with existing Recipes and batch candidates\n' +
-      '• Handle CONSOLIDATION_MERGE / CONSOLIDATION_REORGANIZE / CONSOLIDATION_INSUFFICIENT responses\n' +
+      '• Overlap detected → evolution proposal created automatically (merge/enhance/reorganize); system auto-executes after observation window\n' +
       '• Set skipConsolidation: true to skip consolidation check. content and reasoning must be objects.\n' +
+      '• Set supersedes: "old-recipe-id" to declare the new Recipe replaces an existing one (creates a supersede proposal with observation window).\n' +
       '⚠️ Batch rule: items in the array must NOT be cross-redundant — no highly overlapping doClause/coreCode/trigger within the same batch. ' +
       'If two entries share 80%+ content, merge into one or split into primary + extends supplementary entries.',
     inputSchema: zodToMcpSchema(SubmitKnowledgeInput),

@@ -15,17 +15,23 @@ function createMockDb(
     }[];
     codeEntities?: string[];
     guardHits?: Record<string, number>;
+    staleSourceRefs?: Record<string, string[]>;
   } = {}
 ) {
-  const { recipes = [], codeEntities = [], guardHits = {} } = options;
+  const { recipes = [], codeEntities = [], guardHits = {}, staleSourceRefs = {} } = options;
   const entitySet = new Set(codeEntities);
 
   return {
     prepare(sql: string) {
       return {
-        all(..._params: unknown[]) {
+        all(...params: unknown[]) {
           if (sql.includes('knowledge_entries') && sql.includes('lifecycle')) {
             return recipes;
+          }
+          if (sql.includes('recipe_source_refs') && sql.includes('stale')) {
+            const recipeId = params[0] as string;
+            const paths = staleSourceRefs[recipeId] ?? [];
+            return paths.map((p) => ({ source_path: p }));
           }
           return [];
         },
@@ -177,7 +183,7 @@ describe('ReverseGuard', () => {
   it('should emit signal to SignalBus on drift', () => {
     const signalBus = { send: vi.fn() };
     const db = createMockDb({ codeEntities: [] });
-    const guard = new ReverseGuard(db, { signalBus: signalBus as any });
+    const guard = new ReverseGuard(db, { signalBus: signalBus as never });
 
     guard.checkRecipe(
       {
@@ -213,6 +219,53 @@ describe('ReverseGuard', () => {
 
     expect(results).toHaveLength(2);
     expect(results.every((r) => r.recommendation === 'healthy')).toBe(true);
+  });
+
+  it('should detect source_ref_stale when sourceRefs are stale', () => {
+    const db = createMockDb({
+      codeEntities: ['BDNetworkManager'],
+      staleSourceRefs: {
+        r1: ['Sources/Old/Removed.swift', 'Sources/Old/Gone.swift', 'Sources/Old/Missing.swift'],
+      },
+    });
+    const guard = new ReverseGuard(db);
+
+    const result = guard.checkRecipe(
+      {
+        id: 'r1',
+        title: 'Stale Refs Rule',
+        core_code: 'BDNetworkManager.shared()',
+        guard_pattern: null,
+        stats: null,
+      },
+      []
+    );
+
+    expect(result.signals.some((s) => s.type === 'source_ref_stale')).toBe(true);
+    const staleSignal = result.signals.find((s) => s.type === 'source_ref_stale');
+    expect(staleSignal?.severity).toBe('high'); // ≥3 stale refs
+    expect(staleSignal?.detail).toContain('3 source file(s)');
+  });
+
+  it('should not detect source_ref_stale when no stale refs', () => {
+    const db = createMockDb({
+      staleSourceRefs: {}, // empty — no stale refs
+    });
+    const guard = new ReverseGuard(db);
+
+    const result = guard.checkRecipe(
+      {
+        id: 'r1',
+        title: 'Clean Rule',
+        core_code: null,
+        guard_pattern: null,
+        stats: null,
+      },
+      []
+    );
+
+    expect(result.signals.some((s) => s.type === 'source_ref_stale')).toBe(false);
+    expect(result.recommendation).toBe('healthy');
   });
 
   it('should filter drift results', () => {

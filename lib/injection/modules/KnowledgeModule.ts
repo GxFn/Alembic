@@ -14,18 +14,21 @@ import { getEnhancementRegistry } from '../../core/enhancement/index.js';
 import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter.js';
 import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
+import { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
 import { DimensionCopy } from '../../service/bootstrap/DimensionCopyRegistry.js';
 import { ConsolidationAdvisor } from '../../service/evolution/ConsolidationAdvisor.js';
 import { ContradictionDetector } from '../../service/evolution/ContradictionDetector.js';
 import { DecayDetector } from '../../service/evolution/DecayDetector.js';
 import { EnhancementSuggester } from '../../service/evolution/EnhancementSuggester.js';
 import { KnowledgeMetabolism } from '../../service/evolution/KnowledgeMetabolism.js';
+import { ProposalExecutor } from '../../service/evolution/ProposalExecutor.js';
 import { RedundancyAnalyzer } from '../../service/evolution/RedundancyAnalyzer.js';
 import { StagingManager } from '../../service/evolution/StagingManager.js';
 import { CodeEntityGraph } from '../../service/knowledge/CodeEntityGraph.js';
 import { ConfidenceRouter } from '../../service/knowledge/ConfidenceRouter.js';
 import { KnowledgeGraphService } from '../../service/knowledge/KnowledgeGraphService.js';
 import { KnowledgeService } from '../../service/knowledge/KnowledgeService.js';
+import { SourceRefReconciler } from '../../service/knowledge/SourceRefReconciler.js';
 import { HybridRetriever } from '../../service/search/HybridRetriever.js';
 import { SearchEngine } from '../../service/search/SearchEngine.js';
 import { LanguageService } from '../../shared/LanguageService.js';
@@ -192,6 +195,21 @@ export function register(c: ServiceContainer) {
 
   // ═══ Governance / Evolution ═══
 
+  c.singleton('sourceRefReconciler', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    const projectRoot = resolveProjectRoot();
+    return new SourceRefReconciler(
+      projectRoot,
+      db.getDb() as ConstructorParameters<typeof SourceRefReconciler>[1],
+      {
+        signalBus:
+          (ct.singletons.signalBus as
+            | import('../../infrastructure/signal/SignalBus.js').SignalBus
+            | undefined) || undefined,
+      }
+    );
+  });
+
   c.singleton('stagingManager', (ct: ServiceContainer) => {
     const db = ct.get('database') as { getDb(): unknown };
     return new StagingManager(db.getDb() as ConstructorParameters<typeof StagingManager>[0], {
@@ -260,7 +278,31 @@ export function register(c: ServiceContainer) {
         (ct.singletons.signalBus as
           | import('../../infrastructure/signal/SignalBus.js').SignalBus
           | undefined) || undefined,
+      proposalRepository: ct.services.proposalRepository
+        ? (ct.get('proposalRepository') as ProposalRepository)
+        : undefined,
     });
+  });
+
+  c.singleton('proposalRepository', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new ProposalRepository(
+      db.getDb() as ConstructorParameters<typeof ProposalRepository>[0]
+    );
+  });
+
+  c.singleton('proposalExecutor', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new ProposalExecutor(
+      db.getDb() as ConstructorParameters<typeof ProposalExecutor>[0],
+      ct.get('proposalRepository') as ProposalRepository,
+      {
+        signalBus:
+          (ct.singletons.signalBus as
+            | import('../../infrastructure/signal/SignalBus.js').SignalBus
+            | undefined) || undefined,
+      }
+    );
   });
 
   c.singleton('consolidationAdvisor', (ct: ServiceContainer) => {

@@ -56,7 +56,7 @@ describe('KnowledgeMetabolism', () => {
 
     const report = metabolism.runFullCycle();
     expect(report.proposals).toHaveLength(1);
-    expect(report.proposals[0].type).toBe('merge');
+    expect(report.proposals[0].type).toBe('contradiction');
     expect(report.proposals[0].source).toBe('contradiction');
     expect(report.proposals[0].targetRecipeId).toBe('r1');
     expect(report.proposals[0].relatedRecipeIds).toEqual(['r2']);
@@ -79,7 +79,7 @@ describe('KnowledgeMetabolism', () => {
 
     const report = metabolism.runFullCycle();
     expect(report.proposals).toHaveLength(1);
-    expect(report.proposals[0].type).toBe('review');
+    expect(report.proposals[0].type).toBe('correction');
   });
 
   it('generates merge proposal from redundancy', () => {
@@ -282,7 +282,11 @@ describe('KnowledgeMetabolism', () => {
 
     const report = metabolism.runFullCycle();
     expect(report.proposals).toHaveLength(3);
-    expect(report.proposals.map((p) => p.type).sort()).toEqual(['deprecate', 'merge', 'merge']);
+    expect(report.proposals.map((p) => p.type).sort()).toEqual([
+      'contradiction',
+      'deprecate',
+      'merge',
+    ]);
     expect(report.summary.contradictionCount).toBe(1);
     expect(report.summary.redundancyCount).toBe(1);
     expect(report.summary.decayingCount).toBe(1);

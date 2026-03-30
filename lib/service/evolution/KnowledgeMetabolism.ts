@@ -15,13 +15,18 @@ import Logger from '../../infrastructure/logging/Logger.js';
 
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type {
+  ProposalRepository,
+  ProposalSource,
+  ProposalType as RepoProposalType,
+} from '../../repository/evolution/ProposalRepository.js';
 import type { ContradictionDetector, ContradictionResult } from './ContradictionDetector.js';
 import type { DecayDetector, DecayScoreResult } from './DecayDetector.js';
 import type { RedundancyAnalyzer, RedundancyResult } from './RedundancyAnalyzer.js';
 
 /* ────────────────────── Types ────────────────────── */
 
-export type ProposalType = 'merge' | 'enhance' | 'refine_guard' | 'split' | 'deprecate' | 'review';
+export type ProposalType = 'merge' | 'enhance' | 'deprecate' | 'contradiction' | 'correction';
 
 export interface EvolutionProposal {
   /** 进化提案类型 */
@@ -40,7 +45,7 @@ export interface EvolutionProposal {
   evidence: string[];
   /** 创建时间 */
   proposedAt: number;
-  /** 过期时间 (proposedAt + 7d) */
+  /** 过期时间 */
   expiresAt: number;
 }
 
@@ -75,6 +80,7 @@ export class KnowledgeMetabolism {
   #decayDetector: DecayDetector;
   #signalBus: SignalBus | null;
   #reportStore: ReportStore | null;
+  #proposalRepo: ProposalRepository | null;
   #logger = Logger.getInstance();
   #pendingTriggers: unknown[] = [];
   #debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -85,12 +91,14 @@ export class KnowledgeMetabolism {
     decayDetector: DecayDetector;
     signalBus?: SignalBus;
     reportStore?: ReportStore;
+    proposalRepository?: ProposalRepository;
   }) {
     this.#contradictionDetector = options.contradictionDetector;
     this.#redundancyAnalyzer = options.redundancyAnalyzer;
     this.#decayDetector = options.decayDetector;
     this.#signalBus = options.signalBus ?? null;
     this.#reportStore = options.reportStore ?? null;
+    this.#proposalRepo = options.proposalRepository ?? null;
 
     // Phase 2: 订阅告警型信号，触发代谢周期
     if (this.#signalBus) {
@@ -136,7 +144,32 @@ export class KnowledgeMetabolism {
       ...this.#proposalsFromDecay(decayResults),
     ];
 
-    // 5. 写入治理报告（降级：不再发射 Signal，改为 Report）
+    // 5. 持久化提案到 evolution_proposals 表
+    let persistedCount = 0;
+    if (this.#proposalRepo && proposals.length > 0) {
+      for (const p of proposals) {
+        const sourceMap: Record<string, ProposalSource> = {
+          contradiction: 'metabolism',
+          redundancy: 'metabolism',
+          decay: 'decay-scan',
+          enhancement: 'metabolism',
+        };
+        const record = this.#proposalRepo.create({
+          type: p.type as RepoProposalType,
+          targetRecipeId: p.targetRecipeId,
+          relatedRecipeIds: p.relatedRecipeIds,
+          confidence: p.confidence,
+          source: sourceMap[p.source] ?? 'metabolism',
+          description: p.description,
+          evidence: p.evidence.map((e) => ({ detail: e })),
+        });
+        if (record) {
+          persistedCount++;
+        }
+      }
+    }
+
+    // 6. 写入治理报告（降级：同时写 ReportStore）
     if (this.#reportStore && proposals.length > 0) {
       void this.#reportStore.write({
         category: 'governance',
@@ -144,6 +177,7 @@ export class KnowledgeMetabolism {
         producer: 'KnowledgeMetabolism',
         data: {
           proposalCount: proposals.length,
+          persistedCount,
           contradictionCount: contradictions.length,
           redundancyCount: redundancies.length,
           decayingCount: decayResults.filter((d) => d.level !== 'healthy' && d.level !== 'watch')
@@ -201,7 +235,7 @@ export class KnowledgeMetabolism {
   #proposalsFromContradictions(results: ContradictionResult[]): EvolutionProposal[] {
     const now = Date.now();
     return results.map((r) => ({
-      type: r.type === 'hard' ? ('merge' as const) : ('review' as const),
+      type: r.type === 'hard' ? ('contradiction' as const) : ('correction' as const),
       targetRecipeId: r.recipeA,
       relatedRecipeIds: [r.recipeB],
       confidence: r.confidence,

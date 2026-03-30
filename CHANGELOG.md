@@ -12,6 +12,15 @@
   - PrimeSearchPipeline：RRF 分数放大、绕过 CoarseRanker 保留原始 BM25 分数、`GAP_DROP_RATIO` 0.4→0.25、`RELATIVE_SCORE_RATIO` 0.25→0.15、`MIN_SCORE_THRESHOLD` 0.1→0.3
   - IntentExtractor：per-token 脚本检测修复混合语言同义词展开、新增 6 组内存管理同义词、Q4 聚焦同义词查询解决长句 BM25 稀释、场景分类正则扩展
 
+### 新增
+
+- **统一进化架构 Phase 0-4**：五个阶段完整实施，从"知识工具"进化为"知识有机体"
+  - **Phase 0 — Signal Bus**：统一信号总线（9 种信号类型）+ HitRecorder 批量采集（30s buffer） + Stats 扩展（时间戳×3 + 滑窗×3 + version + FP率）
+  - **Phase 1 — Panorama**：项目全景——AST 角色精化、Tarjan SCC 耦合分析、Kahn 拓扑分层、知识覆盖率热力图、能力缺口报告；MCP 工具 `autosnippet_panorama` 4 操作
+  - **Phase 2 — Guard 免疫系统**：三态输出（pass/violation/uncertain）、三维报告（合规度+覆盖率+置信度）、ReverseGuard 反向验证、CoverageAnalyzer 覆盖矩阵
+  - **Phase 3 — 知识治理**：六态生命周期（staging/evolving/decaying 三个系统驱动中间态）、ContradictionDetector 矛盾检测、RedundancyAnalyzer 冗余分析、DecayDetector + DecayScorer 衰退评估、KnowledgeMetabolism 治理总线
+  - **Phase 4 — Tool Forge**：动态工具锻造——复用/组合/生成三模式、SandboxRunner 沙箱验证、TemporaryToolRegistry TTL 临时注册、DynamicComposer 运行时组合；ToolExecutionPipeline allowlistGate Forge fallback 集成
+
 ## [3.3.3] - 2026-03-29
 
 ### 新增

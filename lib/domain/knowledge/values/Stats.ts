@@ -99,8 +99,8 @@ export class Stats {
     return this;
   }
 
-  /** 记录一次命中，同时更新时间戳 */
-  recordHit(counter: StatsCounter, timestamp = Date.now()): Stats {
+  /** 记录一次命中，同时更新时间戳（Unix 秒） */
+  recordHit(counter: StatsCounter, timestamp = Math.floor(Date.now() / 1000)): Stats {
     this[counter] += 1;
     this.lastHitAt = timestamp;
     if (counter === 'searchHits') {

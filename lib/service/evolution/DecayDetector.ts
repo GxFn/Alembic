@@ -1,10 +1,11 @@
 /**
  * DecayDetector — 知识衰退检测 + 评分
  *
- * 5 种衰退检测策略（任一满足即触发 decaying 转换）：
+ * 6 种衰退检测策略（任一满足即触发 decaying 转换）：
  *   1. daysSinceLastHit > 90 — 90 天无使用
  *   2. ruleFalsePositiveRate > 0.4 && triggers > 10 — 规则已不准
  *   3. ReverseGuard: coreCode 引用的 API 符号已删除
+ *   3b. SourceRefReconciler: 来源文件路径失效（recipe_source_refs.status = stale）
  *   4. 同域新 Recipe 发布且 deprecated_by 关系指向它
  *   5. ContradictionDetector: 与更新的 Recipe 硬矛盾
  *
@@ -41,6 +42,7 @@ export type DecayStrategy =
   | 'no_recent_usage'
   | 'high_false_positive'
   | 'symbol_drift'
+  | 'source_ref_stale'
   | 'superseded'
   | 'contradiction';
 
@@ -67,7 +69,18 @@ interface RecipeForDecay {
   stats: string | null;
   quality_grade: string | null;
   quality_score: number | null;
-  created_at: string | null;
+  created_at: number | null;
+}
+
+/* ────────────────────── Helpers ────────────────────── */
+
+/**
+ * Normalize a timestamp to **milliseconds**.
+ * If the value looks like Unix seconds (< 1e12 ≈ year 2001 in ms), multiply by 1000.
+ * Otherwise assume it's already in ms and return as-is.
+ */
+function toMs(ts: number): number {
+  return ts < 1e12 ? ts * 1000 : ts;
 }
 
 /* ────────────────────── Constants ────────────────────── */
@@ -149,7 +162,7 @@ export class DecayDetector {
     // 策略 1: 90 天无使用
     const lastHitAt = stats.lastHitAt ?? null;
     if (lastHitAt) {
-      const daysSince = (now - lastHitAt) / DAY_MS;
+      const daysSince = (now - toMs(lastHitAt as number)) / DAY_MS;
       if (daysSince > DECAY_THRESHOLDS.NO_USAGE_DAYS) {
         signals.push({
           recipeId: recipe.id,
@@ -158,8 +171,8 @@ export class DecayDetector {
         });
       }
     } else {
-      // 无 lastHitAt，检查创建时间
-      const createdAt = recipe.created_at ? new Date(recipe.created_at).getTime() : now;
+      // 无 lastHitAt，检查创建时间（DB 可能存为秒或毫秒）
+      const createdAt = toMs(recipe.created_at ?? now);
       const daysSinceCreation = (now - createdAt) / DAY_MS;
       if (daysSinceCreation > DECAY_THRESHOLDS.NO_USAGE_DAYS) {
         signals.push({
@@ -193,6 +206,16 @@ export class DecayDetector {
       });
     }
 
+    // 策略 3b: 来源引用失效（由 SourceRefReconciler 填充 recipe_source_refs）
+    const staleRefCount = this.#getStaleSourceRefCount(recipe.id);
+    if (staleRefCount > 0) {
+      signals.push({
+        recipeId: recipe.id,
+        strategy: 'source_ref_stale',
+        detail: `${staleRefCount} source reference(s) no longer exist on disk`,
+      });
+    }
+
     // 策略 4: 被取代（有 deprecated_by 关系指向更新版本）
     if (this.#isSuperseded(recipe.id)) {
       signals.push({
@@ -202,8 +225,9 @@ export class DecayDetector {
       });
     }
 
-    // 计算 decayScore
-    const dimensions = this.#computeScoreDimensions(stats, recipe);
+    // 计算 decayScore（staleRatio 影响 quality 维度）
+    const staleRatio = this.#getSourceRefStaleRatio(recipe.id);
+    const dimensions = this.#computeScoreDimensions(stats, recipe, { staleRatio });
     const decayScore = Math.round(
       dimensions.freshness * SCORE_WEIGHTS.freshness * 100 +
         dimensions.usage * SCORE_WEIGHTS.usage * 100 +
@@ -232,20 +256,23 @@ export class DecayDetector {
     try {
       const rows = this.#db
         .prepare(
-          `SELECT id, title, lifecycle, stats, quality_grade, quality_score, created_at
+          `SELECT id, title, lifecycle, stats, quality, createdAt
          FROM knowledge_entries
          WHERE lifecycle = 'active'`
         )
         .all();
-      return rows.map((r) => ({
-        id: r.id as string,
-        title: r.title as string,
-        lifecycle: r.lifecycle as string,
-        stats: (r.stats as string) ?? null,
-        quality_grade: (r.quality_grade as string) ?? null,
-        quality_score: r.quality_score !== undefined ? Number(r.quality_score) : null,
-        created_at: (r.created_at as string) ?? null,
-      }));
+      return rows.map((r) => {
+        const qualityObj = DecayDetector.#parseQuality(r.quality as string | null);
+        return {
+          id: r.id as string,
+          title: r.title as string,
+          lifecycle: r.lifecycle as string,
+          stats: (r.stats as string) ?? null,
+          quality_grade: qualityObj.grade,
+          quality_score: qualityObj.score,
+          created_at: r.createdAt !== undefined ? Number(r.createdAt) : null,
+        };
+      });
     } catch {
       return [];
     }
@@ -262,23 +289,42 @@ export class DecayDetector {
     }
   }
 
+  static #parseQuality(qualityJson: string | null): { grade: string | null; score: number | null } {
+    if (!qualityJson) {
+      return { grade: null, score: null };
+    }
+    try {
+      const obj = JSON.parse(qualityJson) as Record<string, unknown>;
+      return {
+        grade: typeof obj.grade === 'string' ? obj.grade : null,
+        score: typeof obj.overall === 'number' ? obj.overall : null,
+      };
+    } catch {
+      return { grade: null, score: null };
+    }
+  }
+
   #computeScoreDimensions(
     stats: Record<string, number | null>,
-    recipe: RecipeForDecay
+    recipe: RecipeForDecay,
+    context: { staleRatio?: number } = {}
   ): { freshness: number; usage: number; quality: number; authority: number } {
     const now = Date.now();
 
     // freshness: days since last hit → 0-1 (0 = 365+ days, 1 = today)
     const lastHit = (stats.lastHitAt as number) ?? 0;
-    const daysSinceHit = lastHit > 0 ? (now - lastHit) / DAY_MS : 365;
+    const daysSinceHit = lastHit > 0 ? (now - toMs(lastHit)) / DAY_MS : 365;
     const freshness = Math.max(0, 1 - daysSinceHit / 365);
 
     // usage: hitsLast90d 归一化 (0 = 0 hits, 1 = 50+ hits)
     const hitsLast90d = (stats.hitsLast90d as number) ?? 0;
     const usage = Math.min(1, hitsLast90d / 50);
 
-    // quality: qualityScore 直接使用
-    const quality = recipe.quality_score ?? 0.5;
+    // quality: qualityScore × sourceRef 健康度
+    // staleRatio 对 quality 打折，最多压低 30%（全部 stale → ×0.7）
+    const baseQuality = recipe.quality_score ?? 0.5;
+    const staleRatio = context.staleRatio ?? 0;
+    const quality = baseQuality * (1 - staleRatio * 0.3);
 
     // authority: from stats.authority 归一化 (0-100 → 0-1)
     const authorityRaw = (stats.authority as number) ?? 50;
@@ -301,6 +347,42 @@ export class DecayDetector {
       return !!row;
     } catch {
       return false;
+    }
+  }
+
+  #getStaleSourceRefCount(recipeId: string): number {
+    try {
+      const row = this.#db
+        .prepare(
+          `SELECT COUNT(*) AS cnt FROM recipe_source_refs
+         WHERE recipe_id = ? AND status = 'stale'`
+        )
+        .get(recipeId) as { cnt: number } | undefined;
+      return row?.cnt ?? 0;
+    } catch {
+      // recipe_source_refs 表可能不存在
+      return 0;
+    }
+  }
+
+  /** stale / total 比率（0-1），无 ref 时返回 0（无惩罚） */
+  #getSourceRefStaleRatio(recipeId: string): number {
+    try {
+      const row = this.#db
+        .prepare(
+          `SELECT
+             SUM(CASE WHEN status = 'stale' THEN 1 ELSE 0 END) AS stale,
+             COUNT(*) AS total
+           FROM recipe_source_refs
+           WHERE recipe_id = ?`
+        )
+        .get(recipeId) as { stale: number; total: number } | undefined;
+      if (!row || row.total === 0) {
+        return 0;
+      }
+      return row.stale / row.total;
+    } catch {
+      return 0;
     }
   }
 

@@ -6,7 +6,7 @@
 
 [![npm version](https://img.shields.io/npm/v/autosnippet.svg?style=flat-square)](https://www.npmjs.com/package/autosnippet)
 [![License](https://img.shields.io/npm/l/autosnippet.svg?style=flat-square)](https://github.com/GxFn/AutoSnippet/blob/main/LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen?style=flat-square)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen?style=flat-square)](https://nodejs.org)
 
 [English](README.md)
 
@@ -14,7 +14,7 @@
 
 ---
 
-- [为什么需要它](#为什么需要它) · [开始使用](#开始使用) · [在 IDE 中使用](#在-ide-中使用) · [更多能力](#更多能力) · [Dashboard](#dashboard) · [IDE 支持](#ide-支持) · [架构](docs/architecture.md)
+- [为什么需要它](#为什么需要它) · [开始使用](#开始使用) · [在 IDE 中使用](#在-ide-中使用) · [进化架构](#进化架构) · [工程能力](#工程能力) · [IDE 支持](#ide-支持) · [文档](#文档)
 
 ## 为什么需要它
 
@@ -71,74 +71,123 @@ Agent 写完代码后，Guard 合规引擎会自动检查 diff——发现违规
 
 候选在 Dashboard（`asd ui`）中审核并批准 → 变成 **Recipe** → AI 生成代码时自动参照 → 你发现新的好写法 → 继续沉淀 → AI 越来越像团队的人。这些知识是本地 Markdown 文件，跟 git 走，不会随对话消失，也不占上下文窗口——知识库再大也不会拖慢 AI。
 
-## 更多能力
+---
 
-### Guard 合规引擎
+## 进化架构
 
-除了 Agent 自动检查，Guard 也可以接入你的工程流程：
+AutoSnippet 不是静态知识工具，而是一个**知识有机体**。Recipe 是它的细胞——IDE Agent 是外部驱动力，每一次交互都会触发有机体内不同器官的协同响应。
 
-```bash
-asd guard src/            # 检查目录
-asd guard:staged          # pre-commit 只查暂存文件
-asd guard:ci --threshold 90  # CI 质量门禁
+```
+                IDE Agent (Cursor / Copilot / Trae)
+                   │
+                   │ 沉淀 · 编写 · 搜索 · 偏移 · 完成 · 边界
+                   │
+  ═════════════════▼══════════════════════════════════════
+  ║              AutoSnippet 知识有机体                    ║
+  ║                                                       ║
+  ║  ┌─ Panorama (骨骼) ────────── 项目结构全貌 ──────┐   ║
+  ║  │                                                │   ║
+  ║  │    Signal (神经)  ◄────►  Governance (消化)     │   ║
+  ║  │        ↕                        ↕              │   ║
+  ║  │              ┌──────────┐                      │   ║
+  ║  │              │  Recipe  │                      │   ║
+  ║  │              │ 知识生命体│                      │   ║
+  ║  │              └──────────┘                      │   ║
+  ║  │        ↕                        ↕              │   ║
+  ║  │    Guard (免疫)    ◄────►  Tool Forge (造物)    │   ║
+  ║  │                                                │   ║
+  ║  └────────────────────────────────────────────────┘   ║
+  ║                                                       ║
+  ═════════════════════════════════════════════════════════
 ```
 
-内置多语言合规规则（正则 + AST），检查命名、废弃 API、线程安全等，每条违规附带修复示例。
+### Agent 行为 × 有机体响应
 
-### 调用图
+IDE Agent 的每个行为，都会触发有机体内不同器官的协同响应：
 
-重构前想知道改一个函数会影响哪些地方？8 种语言的静态调用图分析，通过 MCP 工具 `call_graph` 和 `call_context` 查询任意函数的调用者、被调用者和影响范围。
+| Agent 行为 | 有机体响应 | 参与器官 |
+|-----------|---------|---------|
+| **沉淀知识** — 提取模式并提交 | 消化系统内部消化：置信度路由 → staging 观察 → 进化或衰退，开发者保留全程干预权 | 消化 → 神经 |
+| **编写代码** — 开始写代码 | 神经系统分析意图，自动注入相关 Recipe，附带 sourceRefs 源码证据提升可信度 | 神经 → Recipe |
+| **搜索知识** — 主动搜索 | 基于当前意图 + 文件上下文精准检索，多路融合排序，按场景动态调整权重 | 神经 → Recipe |
+| **偏移意图** — 改变方向 | 神经系统记录偏移信号，感知问题，免疫系统反向检查 Recipe 是否仍然有效 | 神经 → 免疫 |
+| **完成任务** — 写完代码 | 免疫系统触发 Guard Review，挂载相关 Recipe 给 Agent 修复违规 | 免疫 → Recipe |
+| **能力边界** — 遇到无法处理的问题 | 造物系统调用 LLM 自建临时工具，vm 沙箱隔离执行，到期自动回收 | 造物 |
 
-### 语义搜索
+### 五大器官
 
-关键词搜索只能找字面匹配。配置 LLM API Key 后，搜索升级为向量 + BM25 混合检索——问"如何管理内存"能找到垃圾回收相关的 Recipe，语义相近的结果排在前面。
+**骨骼 — Panorama**
 
-### 意图感知搜索（Prime）
+有机体的结构感知。AST + 调用图推断模块角色与分层（四信号融合，13 种角色类型），Tarjan SCC 计算耦合度，Kahn 拓扑排序推断分层，DimensionAnalyzer 生成 11 维健康雷达，输出覆盖率热力图和能力缺口报告。所有器官共享这份项目全貌。
 
-Agent 每次对话开始时自动触发 prime，根据用户查询和当前文件智能注入知识。IntentExtractor 提取技术术语、推断语言和模块、进行中英文交叉同义词展开；PrimeSearchPipeline 执行多路并行搜索（原始查询 + 术语查询 + 文件上下文 + 聚焦同义词），经过三层质量过滤后返回精准结果。支持长句自然语言、短句精确匹配、混合语言查询。
+**消化 — Governance**
 
-### Recipe 源码证据（sourceRefs）
+新知识进入有机体后的代谢引擎。ContradictionDetector 检测矛盾，RedundancyAnalyzer 分析冗余，DecayDetector 评估衰退（6 策略 + 4 维评分），ConfidenceRouter 数值路由（≥ 0.85 自动发布，< 0.2 拒绝）。ProposalExecutor 到期自动执行进化提案（7 种类型，差异化观察窗口）。六态生命周期：`pending → staging → active → evolving/decaying → deprecated`。
 
-Recipe 携带创建时分析的项目文件路径作为证据。搜索结果中的 📍 sourceRefs 指向项目中的真实文件，Agent 无需自行验证即可信任并引用。后台自动监控路径有效性，git rename 自动修复。
+**神经 — Signal + Intent**
 
-### 知识图谱
+感知 Agent 的所有行为。IntentExtractor 提取术语、推断语言和模块、中英文同义词展开，识别 4 种场景。SignalBus 统一 12 种信号类型（guard / search / usage / lifecycle / quality / exploration / panorama / decay / forge / intent / anomaly / guard_blind_spot），HitRecorder 批量采集使用事件。当 Agent 偏移意图时，神经系统记录漂移信号，协调免疫系统反向检查。
 
-Recipe 之间有关联关系。查询某个模块的影响路径、依赖深度、关联 Recipe，在积累了一定量的知识后，帮你看清知识之间的结构。
+**免疫 — Guard**
 
-### 自循环信号机制
+双向免疫系统。正向：四层检测（正则 → 代码级多行 → tree-sitter AST → 跨文件），内置 8 语言规则，三态输出（pass / violation / uncertain）。反向：ReverseGuard 验证 Recipe 引用的 API 符号是否仍存在（5 种漂移类型）。Agent 完成任务时自动触发 Review，将违规连同相关 Recipe 一起交给 Agent 修复。RuleLearner 追踪 P/R/F1 自动调优。
 
-后台持续收集你的编码习惯信号（Guard 违规、对话主题、Recipe 使用率、候选积压、操作日志、git diff），AI 从中挖掘规律并推荐 Skill。不喜欢？随手删掉，没有任何负担。但如果某条推荐恰好说中了你们团队的习惯——这就是白捡的便宜。你的采纳或忽略会反馈回算法，推荐会越来越准。
+**造物 — Tool Forge**
 
-### 飞书远程编程
+能力边界处的创造力。三种模式渐进——复用（0ms）→ 组合（10ms，原子工具拼装）→ 生成（~5s，LLM 写代码 → vm 沙箱验证：5s 超时 + 18 条安全规则）。临时工具 30min TTL，到期自动回收。LLM 只在锻造时参与，执行过程完全确定性。
 
-手机上在飞书发一句话，意图识别自动分流到本地 IDE，由 Copilot Agent Mode 执行，结果回传飞书。重构、截屏、查规范——身边可以没有电脑，只要电脑没有进入睡眠就行。
+### 设计哲学
 
-### Recipe 远程仓库
+1. **AI 编译期 + 工程运行期** — LLM 产出确定性执行物，运行期纯工程逻辑
+2. **确定性标记 + 概率性消解** — 每层做确定的事，不确定结构化上抛给 AI
+3. **正交组合 > 特化子类** — Capability × Strategy × Policy 替代 N 个子类
+4. **信号驱动 > 时间驱动** — 信号饱和触发，而非定时扫描
+5. **纵深防御** — Constitution → Gateway → Permission → SafetyPolicy → PathGuard → ConfidenceRouter
 
-`asd remote <url>` 将知识库目录转为独立 git 子仓库。多项目共享同一套 Recipe，独立控制读写权限，统一管理和版本追踪。
+> 器官实现细节、工程数据、防御链详解见 [技术参考](docs/technical-reference.md)
 
-> 语义搜索、信号推荐、飞书远程等 AI 驱动功能需要 LLM API Key。在 Dashboard 的 LLM 配置中设置，或在 `.env` 中填写——支持 Google / OpenAI / Claude / DeepSeek / Ollama，多个自动 fallback。
+---
 
-## Dashboard
+## 工程能力
 
-`asd ui` 启动 Dashboard，在一个界面管理所有功能：
+上面是有机体本身。下面是它对外提供的工程集成能力。
 
-<div align="center">
-<img src="docs/images/dashboard-help.png" alt="Dashboard 使用说明" width="800" />
-</div>
+### Guard CLI
 
-## IDE 支持
+```bash
+asd guard src/             # 检查目录
+asd guard:staged           # pre-commit 只查暂存文件
+asd guard:ci --min-score 90   # CI 质量门禁
+```
 
-| IDE | 集成方式 | 接入说明 |
-|-----|---------|----------|
-| **VS Code** | 扩展 + MCP | Agent Mode 中 `#asd` 引用工具；搜索、指令、CodeLens、Guard |
-| **Cursor** | MCP + Rules | `.cursor/mcp.json` + `.cursor/rules/` |
-| **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP 工具；支持 hooks |
-| **Trae / Qoder** | MCP | `asd setup` 自动生成 |
-| **Xcode** | 文件监听 | `asd watch` + 文件指令 + Snippet 同步 |
-| **飞书 (Lark)** | Bot + WebSocket | 手机发消息 → IDE 通过 Copilot Agent Mode 执行 |
+### 多语言 AST
 
-所有配置由 `asd setup` 自动生成。更新后运行 `asd upgrade` 刷新。
+11 种语言 tree-sitter：Go · Python · Java · Kotlin · Swift · JS · TS · Rust · ObjC · Dart · C#。5 阶段 CallGraph，增量分析，8 种项目类型自动检测。
+
+### 6 通道 IDE 交付
+
+知识变更自动交付到 IDE 可消费的格式：
+
+| 通道 | 路径 | 内容 |
+|------|------|------|
+| **A** | `.cursor/rules/autosnippet-project-rules.mdc` | alwaysApply 一行式规则 |
+| **B** | `.cursor/rules/autosnippet-patterns-{topic}.mdc` | When/Do/Don't 主题规则 |
+| **C · D** | `.cursor/skills/` | Project Skills + 开发文档 |
+| **F** | `AGENTS.md` / `CLAUDE.md` / `.github/copilot-instructions.md` | Agent 指令 |
+| **Mirror** | `.qoder/` / `.trae/` | IDE 镜像 |
+
+### 更多
+
+- **Bootstrap 冷启动** — 6 阶段 · 10 维分析，一次性建立知识库
+- **知识图谱** — 14 种关联关系，查询影响路径和依赖深度
+- **语义搜索** — HNSW 向量索引 + 加权字段匹配混合检索，RRF 融合 + 7 路信号排序
+- **sourceRefs** — Recipe 携带源码证据，Agent 无需自行验证
+- **飞书远程** — 手机发消息，意图识别分流到 Bot 或 IDE
+- **远程仓库** — Recipe 目录转 git 子仓库，多项目共享
+
+> AI 驱动功能需 LLM API Key。支持 Google / OpenAI / Claude / DeepSeek / Ollama，自动 fallback。
+
+---
 
 ## 项目结构
 
@@ -149,23 +198,64 @@ your-project/
 ├── AutoSnippet/           # 知识数据（git 跟踪）
 │   ├── recipes/           # 已审核的模式（Markdown）
 │   ├── candidates/        # 待审核
-│   └── skills/            # 项目特定的 Agent 指令
+│   ├── skills/            # 项目特定的 Agent 指令
+│   └── wiki/              # 项目 Wiki
 ├── .autosnippet/          # 运行时缓存（gitignored）
-│   ├── autosnippet.db     # SQLite
-│   └── context/           # 向量索引
-├── .cursor/mcp.json       # Cursor MCP 配置
-└── .vscode/mcp.json       # VS Code MCP 配置
+│   ├── autosnippet.db     # SQLite（WAL 模式）
+│   └── context/           # 向量索引（HNSW）
+├── .cursor/
+│   ├── mcp.json           # Cursor MCP 配置
+│   ├── rules/             # Channel A + B 规则
+│   └── skills/            # Channel C + D Skills
+├── .vscode/mcp.json       # VS Code MCP 配置
+├── .github/copilot-instructions.md
+├── AGENTS.md
+└── CLAUDE.md
 ```
 
-Recipe 是 Markdown 文件。SQLite 只是读缓存。数据库坏了 `asd sync` 一下就行。
+Recipe 是 Markdown 文件，SQLite 只是读缓存。数据库坏了 `asd sync` 一下就行。
 
-## 配置详情
+---
 
-更多 LLM 配置选项参见 [Configuration Guide](docs/configuration.md)。
+## IDE 支持
 
-## 架构
+| IDE | 集成方式 | 接入说明 |
+|-----|---------|----------|
+| **VS Code** | 扩展 + MCP | Agent Mode 中 `#asd` 引用工具；搜索、指令、CodeLens、Guard 诊断波浪线、灯泡修复 |
+| **Cursor** | MCP + Rules | `.cursor/mcp.json` + `.cursor/rules/` + `.cursor/skills/` |
+| **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP 工具；支持 hooks |
+| **Trae / Qoder** | MCP | `asd setup` 自动生成，`asd mirror` 同步配置 |
+| **Xcode** | 文件监听 | `asd watch` + 文件指令 + Snippet 同步 |
+| **飞书 (Lark)** | Bot + WebSocket | 手机发消息 → 意图识别 → Bot Agent 或 IDE Agent Mode 执行 |
 
-详见 [架构文档](docs/architecture.md)。
+### VS Code 扩展
+
+- **Comment Directives**：`// as:s <query>` 搜索插入、`// as:c` 从选区创建候选、`// as:a` 审计当前文件
+- **CodeLens**：指令上方可点击操作
+- **Guard 诊断**：违规显示为波浪线 + 灯泡快速修复
+- **Status Bar**：实时 API Server 连接状态
+
+所有配置由 `asd setup` 自动生成。更新后运行 `asd upgrade` 刷新。
+
+---
+
+## 文档
+
+| 文档 | 内容 |
+|------|------|
+| [技术参考](docs/technical-reference.md) | 六大子系统实现细节、工程数据、防御链详解 |
+| [Dashboard](docs/dashboard.md) | Dashboard 功能视图与技术栈 |
+| [CLI 命令参考](docs/cli-reference.md) | 20 个命令的完整用法 |
+| [MCP 工具参考](docs/mcp-tools.md) | 16 个 MCP 工具的参数与用法 |
+| [架构设计](docs/architecture.md) | 整体架构与模块设计 |
+| [配置指南](docs/configuration.md) | LLM 与高级配置选项 |
+| [Guard 指南](docs/guard.md) | Guard 规则与自定义 |
+| [IDE 集成](docs/ide-integration.md) | 各 IDE 详细接入说明 |
+| [飞书集成](docs/lark-integration.md) | 飞书 Bot 配置与使用 |
+| [Agent 架构](docs/agent-architecture.md) | Agent Runtime 与 MCP 协议 |
+| [开发指南](docs/development.md) | 贡献与开发环境搭建 |
+
+---
 
 ## 系统要求
 

@@ -36,6 +36,7 @@ roles:
       - "candidate:update"
       - "knowledge:create"
       - "knowledge:update"
+      - "knowledge:evolve"
       - "submit:knowledge"
       - "read:audit_logs:self"
       - "knowledge:bootstrap"
@@ -46,6 +47,7 @@ roles:
       - "delete:skills"
     constraints:
       - "can submit knowledge entries (all go to pending)"
+      - "can create evolution proposals (merge/enhance/deprecate — system auto-executes)"
       - "cannot publish/deprecate knowledge — only developer can do that"
       - "can reactivate deprecated entries back to pending"
       - "cannot modify Guard rules"

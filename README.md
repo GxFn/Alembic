@@ -2,181 +2,272 @@
 
 # AutoSnippet
 
-Extract code patterns from your codebase into a knowledge base, and serve them to AI coding assistants in your IDE — so generated code actually follows your team's conventions.
+Extract patterns from your codebase into a knowledge base that AI coding assistants can query in your IDE — so generated code actually follows your team's conventions.
 
 [![npm version](https://img.shields.io/npm/v/autosnippet.svg?style=flat-square)](https://www.npmjs.com/package/autosnippet)
 [![License](https://img.shields.io/npm/l/autosnippet.svg?style=flat-square)](https://github.com/GxFn/AutoSnippet/blob/main/LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen?style=flat-square)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen?style=flat-square)](https://nodejs.org)
 
-[中文文档](README_CN.md)
+[中文](README_CN.md)
 
 </div>
 
 ---
 
-- [Why](#why) · [Get Started](#get-started) · [Using in Your IDE](#using-in-your-ide) · [More Capabilities](#more-capabilities) · [Dashboard](#dashboard) · [IDE Support](#ide-support) · [Architecture](docs/architecture.en.md)
+- [Why](#why) · [Getting Started](#getting-started) · [Using in IDE](#using-in-ide) · [Evolution Architecture](#evolution-architecture) · [Engineering Capabilities](#engineering-capabilities) · [IDE Support](#ide-support) · [Docs](#docs)
 
 ## Why
 
-Copilot and Cursor don't know how your team writes code. They'll generate something that works, but it won't look like yours — wrong naming, wrong patterns, wrong abstractions. You end up rewriting the AI's output or explaining the same conventions in every PR review.
+Copilot and Cursor don't know how your team writes code. What they generate works, but doesn't look like yours — wrong naming, wrong patterns, wrong abstractions. You end up rewriting AI output or explaining the same conventions in every Code Review.
 
-AutoSnippet builds a **persistent local memory** for your project. It scans your codebase, extracts the patterns that matter (with your approval), and makes them available to any AI tool via [MCP](https://modelcontextprotocol.io/). This knowledge lives locally, doesn't consume your LLM context window, and is injected on demand when AI needs it — the more knowledge accumulates, the more your AI writes code that actually follows your conventions.
+AutoSnippet builds a layer of **localized project memory**. It scans your codebase, extracts valuable patterns (with your approval), and makes them searchable by all AI tools via [MCP](https://modelcontextprotocol.io/). Knowledge persists locally, never consuming the LLM context window — it's injected on-demand when the AI needs it. The more knowledge accumulates, the more the generated code matches your conventions.
 
 ```
 Your code  →  AI extracts patterns  →  You review  →  Knowledge base
-                                                            ↓
-                                              Cursor / Copilot / VS Code / Xcode
-                                                            ↓
-                                                  AI follows your patterns
+                                                        ↓
+                                        Cursor / Copilot / VS Code / Xcode
+                                                        ↓
+                                              AI generates your way
 ```
 
-## Get Started
+## Getting Started
 
 ```bash
 npm install -g autosnippet
 
 cd your-project
-asd setup     # workspace + DB + MCP configs (auto-detects Cursor / VS Code / Trae / Qoder)
-asd ui        # start the background service (MCP Server + Dashboard) — IDE and MCP tools require this
+asd setup     # Initialize workspace + database + MCP config (auto-detects Cursor / VS Code / Trae / Qoder)
+asd ui        # Start background service (MCP Server + Dashboard) — IDE and MCP tools depend on this
 ```
 
 > **Trae / Qoder users:** After `asd setup`, run `asd mirror` to sync `.cursor/` config to `.trae/` / `.qoder/`.
 
-## Using in Your IDE
+## Using in IDE
 
-`asd setup` takes care of everything. Open your IDE's **Agent Mode** (Cursor Composer / VS Code Copilot Chat / Trae) and start talking.
+`asd setup` configures everything. Open your IDE's **Agent Mode** (Cursor Composer / VS Code Copilot Chat / Trae) and start chatting.
 
-> **First time:** Enable the `autosnippet` server in your IDE's MCP settings.
+> **First time:** Manually enable the `autosnippet` service in your IDE's MCP settings.
 
-> **Tip:** The stronger your IDE Agent model, the better the results. Choose Claude Opus 4 / Sonnet 4, GPT-5, or Gemini 3 Pro in Cursor / Copilot for more accurate patterns and fewer false positives.
+> **Tip:** Stronger models work better. We recommend Claude Opus 4 / Sonnet 4, GPT-5, or Gemini 3 Pro in Cursor / Copilot for more accurate patterns and fewer false positives.
 
-### Cold Start: Build the project knowledge base
+### Cold Start: Build Your Knowledge Base
 
-> 💬 *"Run a cold start, build the project knowledge base"*
+> 💬 *"Cold start — build the project knowledge base"*
 
-The agent scans the entire project and extracts your team's coding patterns, architecture conventions, and call idioms, generating a project Wiki along the way. You only need to do this once, then it's daily use from here.
+The Agent scans your entire project, extracting coding patterns, architecture conventions, and call habits, while generating a project Wiki. Cold start runs once; after that, it's daily use.
 
-### Daily: just say what you need
+### Daily Use: Just Ask
 
 | You say | You get |
 |---------|---------|
-| ① *"How do we write API endpoints in this project?"* | Code that matches your project's style, not generic examples |
-| ② *"Write a user registration endpoint"* | Generated code automatically follows the API conventions you just looked up |
-| ③ *"Check if this file follows the project conventions"* | Pre-commit convention check — fewer round-trips in Code Review |
-| ④ *"Save this error handling as a project convention"* | One save, and everyone's AI writes it this way from now on |
+| ① *"How do we write API endpoints in this project?"* | Code following your project's actual style, not generic examples |
+| ② *"Write a user registration endpoint"* | Generated code automatically follows the API conventions just retrieved |
+| ③ *"Check if this file follows our conventions"* | Pre-commit convention check — fewer back-and-forths in Code Review |
+| ④ *"Save this error handling pattern as a project convention"* | One-time capture — every team member's AI learns this pattern |
 
-After the Agent writes code, the Guard compliance engine automatically checks the diff — violations are self-repaired without you lifting a finger.
+After the Agent finishes writing code, the Guard compliance engine auto-checks the diff — violations trigger self-repair, no manual intervention needed.
 
-### It gets better over time
+### Gets Better Over Time
 
-Review candidates in Dashboard (`asd ui`) → approve as **Recipe** → AI follows your conventions → you spot a good new pattern → save it → AI gets even better at writing code your team's way. Recipes are local Markdown files, tracked by git, never lost between conversations. AI queries them on demand without filling the context window — your knowledge base can grow without slowing AI down.
+Review and approve candidates in Dashboard (`asd ui`) → they become **Recipes** → AI references them when generating code → you spot new good patterns → keep capturing → AI increasingly writes like a team member. Knowledge is local Markdown files, travels with git, never disappears with conversations, and doesn't consume context window — no matter how large the knowledge base grows, it won't slow down AI.
 
-## More Capabilities
+---
 
-### Guard Compliance Engine
+## Evolution Architecture
 
-Beyond the Agent's automatic checks, Guard also plugs into your engineering workflow:
+AutoSnippet isn't a static knowledge tool — it's a **knowledge organism**. Recipes are its cells — the IDE Agent is the external driving force, and each interaction triggers coordinated responses from different organs inside the organism.
 
-```bash
-asd guard src/            # Check a directory
-asd guard:staged          # Pre-commit: only staged files
-asd guard:ci --threshold 90  # CI quality gate
+```
+                IDE Agent (Cursor / Copilot / Trae)
+                   │
+                   │ Capture · Write · Search · Shift · Complete · Boundary
+                   │
+  ═════════════════▼══════════════════════════════════════
+  ║              AutoSnippet Knowledge Organism             ║
+  ║                                                        ║
+  ║  ┌─ Panorama (Skeleton) ──── Project Structure ───┐   ║
+  ║  │                                                │   ║
+  ║  │    Signal (Nerves)  ◄────►  Governance (Digest) │   ║
+  ║  │        ↕                         ↕             │   ║
+  ║  │              ┌──────────┐                      │   ║
+  ║  │              │  Recipe  │                      │   ║
+  ║  │              │  Living  │                      │   ║
+  ║  │              │Knowledge │                      │   ║
+  ║  │              └──────────┘                      │   ║
+  ║  │        ↕                         ↕             │   ║
+  ║  │    Guard (Immunity) ◄────►  Tool Forge (Create) │   ║
+  ║  │                                                │   ║
+  ║  └────────────────────────────────────────────────┘   ║
+  ║                                                        ║
+  ══════════════════════════════════════════════════════════
 ```
 
-Built-in multi-language compliance rules (regex + AST) checking naming, deprecated APIs, thread safety, and more — each violation comes with a fix example.
+### Agent Actions × Organism Responses
 
-### Call Graph
+Each IDE Agent action triggers coordinated responses from different organs:
 
-Want to know the blast radius before refactoring a function? Static call graph analysis across 8 languages — query any function's callers, callees, and impact radius via MCP tools `call_graph` and `call_context`.
+| Agent Action | Organism Response | Organs Involved |
+|-------------|------------------|-----------------|
+| **Capture knowledge** — extract and submit patterns | Digestive system metabolizes internally: confidence routing → staging observation → evolves or decays. Developer retains full intervention rights | Digest → Nerves |
+| **Write code** — start coding | Nervous system analyzes intent, auto-injects relevant Recipes with sourceRefs source evidence for higher trust | Nerves → Recipe |
+| **Search knowledge** — active search | Precise retrieval based on current intent + file context, multi-path fusion ranking, dynamic weight adjustment per scenario | Nerves → Recipe |
+| **Shift intent** — change direction | Nervous system records drift signals, senses problems; immune system reverse-checks whether Recipes are still valid | Nerves → Immunity |
+| **Complete task** — finish writing code | Immune system triggers Guard Review, attaches relevant Recipes for Agent to fix violations | Immunity → Recipe |
+| **Capability boundary** — hit an unsolvable problem | Creation system calls LLM to forge temporary tools, vm-sandboxed execution, auto-reclaimed on expiry | Create |
 
-### Semantic Search
+### Five Organs
 
-Keyword search only finds literal matches. With an LLM API Key, search upgrades to vector + BM25 hybrid retrieval — asking "how to manage memory" finds Recipes about garbage collection, semantically similar results rank first.
+**Skeleton — Panorama**
 
-### Intent-Aware Search (Prime)
+The organism's structural awareness. AST + call graphs infer module roles & layers (four-signal fusion, 13 role types), Tarjan SCC computes coupling, Kahn topological sort infers layering, DimensionAnalyzer generates 11-dimension health radar, outputting coverage heatmaps and gap reports. All organs share this project overview.
 
-At the start of every conversation, the Agent auto-triggers prime to intelligently inject knowledge based on the user query and current file. IntentExtractor extracts tech terms, infers language and module, performs cross-language (EN↔CJK) synonym expansion; PrimeSearchPipeline executes multi-query parallel search (raw query + term query + file context + focused synonyms), returning precise results after 3-layer quality filtering. Supports long natural-language sentences, short exact matches, and mixed-language queries.
+**Digest — Governance**
 
-### Recipe Source Evidence (sourceRefs)
+The metabolic engine for new knowledge entering the organism. ContradictionDetector finds conflicts, RedundancyAnalyzer flags duplication, DecayDetector scores decay (6 strategies + 4-dimension scoring), ConfidenceRouter numerically routes (≥ 0.85 auto-publishes, < 0.2 rejects). ProposalExecutor auto-executes evolution proposals on expiry (7 types, differentiated observation windows). Six-state lifecycle: `pending → staging → active → evolving/decaying → deprecated`.
 
-Recipes carry the project file paths analyzed during creation as evidence. The 📍 sourceRefs in search results point to real project files — the Agent can trust and reference them without self-verification. Path validity is monitored automatically, with git rename auto-repair.
+**Nerves — Signal + Intent**
 
-### Knowledge Graph
+Senses all Agent behavior. IntentExtractor extracts terms, infers language and module, cross-language synonym expansion, identifies 4 scenarios. SignalBus unifies 12 signal types (guard / search / usage / lifecycle / quality / exploration / panorama / decay / forge / intent / anomaly / guard_blind_spot), HitRecorder batches usage events. When the Agent shifts intent, nerves record drift signals and coordinate the immune system for reverse checking.
 
-Recipes have relationships. Query impact paths, dependency depth, and related Recipes for any module — once you've accumulated enough knowledge, it helps you see the structure behind it.
+**Immunity — Guard**
 
-### Self-Cycling Signal Mechanism
+Bidirectional immune system. Forward: four-layer detection (regex → code-level multi-line → tree-sitter AST → cross-file), built-in 8-language rules, three-state output (pass / violation / uncertain). Backward: ReverseGuard verifies Recipe-referenced API symbols still exist (5 drift types). Auto-triggers Review when Agent completes a task, handing violations along with relevant Recipes to the Agent for fixing. RuleLearner tracks P/R/F1 for auto-tuning.
 
-AutoSnippet quietly collects your coding habit signals in the background (Guard violations, conversation topics, Recipe usage, candidate backlog, operation logs, git diff), and AI mines patterns to recommend Skills. Don't like one? Delete it — zero commitment. But if a recommendation happens to nail a team habit you never wrote down — that's a freebie. Your adopt/dismiss actions feed back into the algorithm, making recommendations more precise over time.
+**Create — Tool Forge**
 
-### Lark Remote Programming
+Creativity at capability boundaries. Three progressive modes — Reuse (0ms) → Compose (10ms, atomic tool assembly) → Generate (~5s, LLM writes code → vm sandbox validation: 5s timeout + 18 security rules). Temporary tools have 30min TTL, auto-reclaimed on expiry. LLM participates only during forging; execution is fully deterministic.
 
-Send a message on Lark (Feishu) from your phone — intent recognition auto-routes it to your local IDE, Copilot Agent Mode executes, results sent back to Lark. Refactor, screenshot, look up conventions — you don't need to be near your computer, as long as it's not asleep.
+### Design Philosophy
 
-### Recipe Remote Repository
+1. **AI Compile-Time + Engineering Runtime** — LLM produces deterministic artifacts; runtime is pure engineering logic
+2. **Deterministic Marking + Probabilistic Resolution** — Each layer does its deterministic part; uncertainty escalates to AI
+3. **Orthogonal Composition > Specialized Subclasses** — Capability × Strategy × Policy replaces N subclasses
+4. **Signal-Driven > Time-Driven** — Trigger on signal saturation, not scheduled scans
+5. **Defense in Depth** — Constitution → Gateway → Permission → SafetyPolicy → PathGuard → ConfidenceRouter
 
-`asd remote <url>` converts your knowledge base directory into an independent git sub-repository. Share Recipes across projects with separate access control, unified management, and version tracking.
+> Organ implementation details, engineering metrics, and defense chain breakdown in [Technical Reference](docs/technical-reference.en.md)
 
-> Semantic search, signal recommendations, Lark remote, and other AI-driven features require an LLM API Key. Set it up in the Dashboard's LLM Config panel, or add it to your `.env` — supports Google / OpenAI / Claude / DeepSeek / Ollama, with auto-fallback.
+---
 
-## Dashboard
+## Engineering Capabilities
 
-Run `asd ui` to manage everything in one place:
+The above is the organism itself. Below are the engineering integration capabilities it exposes.
 
-<div align="center">
-<img src="docs/images/dashboard-help-en.png" alt="Dashboard Help" width="800" />
-</div>
+### Guard CLI
 
-## IDE Support
+```bash
+asd guard src/             # Check directory
+asd guard:staged           # pre-commit: staged files only
+asd guard:ci --min-score 90   # CI quality gate
+```
 
-| IDE | Integration | How it connects |
-|-----|-------------|----------------|
-| **VS Code** | Extension + MCP | `#asd` in Agent Mode; search, directives, CodeLens, Guard |
-| **Cursor** | MCP + Rules | `.cursor/mcp.json` + `.cursor/rules/` |
-| **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP tools; supports hooks |
-| **Trae / Qoder** | MCP | Auto-generated by `asd setup` |
-| **Xcode** | File watcher | `asd watch` + file directives + snippet sync |
-| **Lark (Feishu)** | Bot + WebSocket | Send commands from phone → IDE executes via Copilot Agent Mode |
+### Multi-Language AST
 
-All configs generated by `asd setup`. Run `asd upgrade` to refresh after updates.
+11-language tree-sitter: Go · Python · Java · Kotlin · Swift · JS · TS · Rust · ObjC · Dart · C#. 5-stage CallGraph, incremental analysis, 8 project types auto-detected.
+
+### 6-Channel IDE Delivery
+
+Knowledge changes auto-deliver to IDE-consumable formats:
+
+| Channel | Path | Content |
+|---------|------|---------|
+| **A** | `.cursor/rules/autosnippet-project-rules.mdc` | alwaysApply one-liner rules |
+| **B** | `.cursor/rules/autosnippet-patterns-{topic}.mdc` | When/Do/Don't themed rules |
+| **C · D** | `.cursor/skills/` | Project Skills + development docs |
+| **F** | `AGENTS.md` / `CLAUDE.md` / `.github/copilot-instructions.md` | Agent instructions |
+| **Mirror** | `.qoder/` / `.trae/` | IDE mirrors |
+
+### More
+
+- **Bootstrap Cold Start** — 6-phase · 10-dimension analysis, one-time knowledge base build
+- **Knowledge Graph** — 14 relationship types, query impact paths and dependency depth
+- **Semantic Search** — HNSW vector index + field-weighted scoring hybrid, RRF fusion + 7-signal ranking
+- **sourceRefs** — Recipes carry source evidence, Agent trusts without self-verification
+- **Lark Remote** — Message from phone, intent routes to Bot or IDE
+- **Remote Repository** — Recipe directory as git sub-repo, shared across projects
+
+> AI-driven features require an LLM API Key. Supports Google / OpenAI / Claude / DeepSeek / Ollama with automatic fallback.
+
+---
 
 ## Project Structure
 
-After `asd setup`, your project gets:
+After `asd setup`, your project gains these:
 
 ```
 your-project/
 ├── AutoSnippet/           # Knowledge data (git-tracked)
-│   ├── recipes/           # Approved patterns (Markdown)
+│   ├── recipes/           # Reviewed patterns (Markdown)
 │   ├── candidates/        # Pending review
-│   └── skills/            # Project-specific agent instructions
+│   ├── skills/            # Project-specific Agent instructions
+│   └── wiki/              # Project Wiki
 ├── .autosnippet/          # Runtime cache (gitignored)
-│   ├── autosnippet.db     # SQLite
-│   └── context/           # Vector index
-├── .cursor/mcp.json       # Cursor MCP config
-└── .vscode/mcp.json       # VS Code MCP config
+│   ├── autosnippet.db     # SQLite (WAL mode)
+│   └── context/           # Vector index (HNSW)
+├── .cursor/
+│   ├── mcp.json           # Cursor MCP config
+│   ├── rules/             # Channel A + B rules
+│   └── skills/            # Channel C + D Skills
+├── .vscode/mcp.json       # VS Code MCP config
+├── .github/copilot-instructions.md
+├── AGENTS.md
+└── CLAUDE.md
 ```
 
-Recipes are Markdown files. SQLite is a read cache. If the DB breaks, `asd sync` rebuilds it.
+Recipes are Markdown files. SQLite is just a read cache. If the database breaks, `asd sync` rebuilds it.
 
-## Configuration Details
+---
 
-See [Configuration Guide](docs/configuration.en.md) for more LLM configuration options.
+## IDE Support
 
-## Architecture
+| IDE | Integration | Details |
+|-----|------------|---------|
+| **VS Code** | Extension + MCP | `#asd` tool references in Agent Mode; search, directives, CodeLens, Guard diagnostic squiggles, light-bulb fixes |
+| **Cursor** | MCP + Rules | `.cursor/mcp.json` + `.cursor/rules/` + `.cursor/skills/` |
+| **Claude Code** | MCP + CLAUDE.md | `CLAUDE.md` + MCP tools; supports hooks |
+| **Trae / Qoder** | MCP | `asd setup` auto-generates, `asd mirror` syncs config |
+| **Xcode** | File watching | `asd watch` + file directives + Snippet sync |
+| **Lark** | Bot + WebSocket | Message from phone → intent recognition → Bot Agent or IDE Agent Mode execution |
 
-See [Architecture Documentation](docs/architecture.en.md) for the full system design.
+### VS Code Extension
+
+- **Comment Directives**: `// as:s <query>` search & insert, `// as:c` create candidate from selection, `// as:a` audit current file
+- **CodeLens**: Clickable actions above directives
+- **Guard Diagnostics**: Violations shown as squiggles + light-bulb quick fixes
+- **Status Bar**: Live API Server connection status
+
+All configuration auto-generated by `asd setup`. Run `asd upgrade` after updates.
+
+---
+
+## Docs
+
+| Document | Content |
+|----------|---------|
+| [Technical Reference](docs/technical-reference.en.md) | Six subsystem implementation details, engineering metrics, defense chain |
+| [Dashboard](docs/dashboard.en.md) | Dashboard views and tech stack |
+| [CLI Reference](docs/cli-reference.en.md) | Full usage for all 20 commands |
+| [MCP Tools Reference](docs/mcp-tools.en.md) | 16 MCP tools with parameters and usage |
+| [Architecture](docs/architecture.en.md) | Overall architecture and module design |
+| [Configuration](docs/configuration.en.md) | LLM and advanced configuration options |
+| [Guard Guide](docs/guard.en.md) | Guard rules and customization |
+| [IDE Integration](docs/ide-integration.en.md) | Detailed IDE setup guides |
+| [Lark Integration](docs/lark-integration.en.md) | Lark Bot setup and usage |
+| [Agent Architecture](docs/agent-architecture.en.md) | Agent Runtime and MCP protocol |
+| [Development](docs/development.en.md) | Contributing and dev environment setup |
+
+---
 
 ## Requirements
 
 - Node.js ≥ 22
-- macOS recommended (Xcode features need it; everything else is cross-platform)
+- macOS recommended (Xcode features require it; other features are cross-platform)
 - better-sqlite3 (bundled)
 
 ## Contributing
 
-1. `npm test` before submitting
-2. Follow existing patterns (ESM, domain-driven structure)
+1. Run `npm test` before submitting
+2. Follow existing code patterns (ESM, domain-driven structure)
 
 ## License
 

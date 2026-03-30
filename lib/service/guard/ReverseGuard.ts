@@ -25,7 +25,12 @@ interface DatabaseLike {
   };
 }
 
-export type DriftType = 'symbol_missing' | 'match_rate_drop' | 'api_deprecated' | 'zero_match';
+export type DriftType =
+  | 'symbol_missing'
+  | 'match_rate_drop'
+  | 'api_deprecated'
+  | 'zero_match'
+  | 'source_ref_stale';
 export type DriftSeverity = 'high' | 'medium' | 'low';
 
 export interface PatternDriftSignal {
@@ -114,10 +119,13 @@ export class ReverseGuard {
       signals.push(...this.#checkPatternMatchRate(recipe.id, recipe.guard_pattern, projectFiles));
     }
 
-    // 3. 综合判定
+    // 3. 检查 sourceRef 路径是否失效（与 SourceRefReconciler 数据交叉验证）
+    signals.push(...this.#checkSourceRefStaleness(recipe.id));
+
+    // 4. 综合判定
     const recommendation = this.#computeRecommendation(signals);
 
-    // 4. 发射信号
+    // 5. 发射信号
     if (this.#signalBus && signals.length > 0) {
       const severity = recommendation === 'decay' ? 1 : recommendation === 'investigate' ? 0.5 : 0;
       this.#signalBus.send('quality', 'ReverseGuard', severity, {
@@ -278,6 +286,38 @@ export class ReverseGuard {
     }
 
     return signals;
+  }
+
+  /**
+   * 检查 recipe_source_refs 中是否有 stale 条目（与 SourceRefReconciler 数据交叉验证）
+   */
+  #checkSourceRefStaleness(recipeId: string): PatternDriftSignal[] {
+    try {
+      const rows = this.#db
+        .prepare(
+          `SELECT source_path FROM recipe_source_refs WHERE recipe_id = ? AND status = 'stale'`
+        )
+        .all(recipeId) as { source_path: string }[];
+
+      if (rows.length === 0) {
+        return [];
+      }
+
+      return [
+        {
+          type: 'source_ref_stale',
+          detail: `${rows.length} source file(s) no longer exist: ${rows
+            .slice(0, 3)
+            .map((r) => r.source_path)
+            .join(', ')}${rows.length > 3 ? ` (+${rows.length - 3} more)` : ''}`,
+          severity: rows.length >= 3 ? 'high' : 'medium',
+          evidence: {},
+        },
+      ];
+    } catch {
+      // recipe_source_refs 表可能不存在
+      return [];
+    }
   }
 
   #extractSymbols(coreCode: string): Set<string> {

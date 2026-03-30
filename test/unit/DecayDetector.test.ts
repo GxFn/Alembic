@@ -11,17 +11,32 @@ function makeMockDb(
     recipes?: Record<string, unknown>[];
     auditRow?: Record<string, unknown> | undefined;
     edgeRow?: Record<string, unknown> | undefined;
+    staleRefCount?: Record<string, number>;
+    totalRefCount?: Record<string, number>;
   } = {}
 ) {
   return {
     prepare: (sql: string) => ({
       all: () => options.recipes ?? [],
-      get: (..._params: unknown[]) => {
+      get: (...params: unknown[]) => {
         if (sql.includes('audit_logs')) {
           return options.auditRow;
         }
         if (sql.includes('knowledge_edges')) {
           return options.edgeRow;
+        }
+        if (sql.includes('recipe_source_refs') && sql.includes('SUM(CASE')) {
+          // #getSourceRefStaleRatio query
+          const recipeId = params[0] as string;
+          const stale = options.staleRefCount?.[recipeId] ?? 0;
+          const total = options.totalRefCount?.[recipeId] ?? stale;
+          return { stale, total };
+        }
+        if (sql.includes('recipe_source_refs') && sql.includes('stale')) {
+          // #getStaleSourceRefCount query
+          const recipeId = params[0] as string;
+          const cnt = options.staleRefCount?.[recipeId] ?? 0;
+          return { cnt };
         }
         return undefined;
       },
@@ -37,7 +52,7 @@ function makeRecipe(overrides: Record<string, unknown> = {}) {
     stats: null as string | null,
     quality_grade: null as string | null,
     quality_score: null as number | null,
-    created_at: null as string | null,
+    created_at: null as number | null,
     ...overrides,
   };
 }
@@ -75,7 +90,7 @@ describe('DecayDetector', () => {
   });
 
   it('should detect no_recent_usage for never-used old recipes', () => {
-    const created = new Date(Date.now() - 120 * DAY_MS).toISOString();
+    const created = Date.now() - 120 * DAY_MS;
     const recipe = makeRecipe({ stats: null, quality_score: 0.5, created_at: created });
     const detector = new DecayDetector(makeMockDb());
 
@@ -190,6 +205,89 @@ describe('DecayDetector', () => {
     }
     // Score should at least be below 'healthy'
     expect(result.decayScore).toBeLessThan(80);
+  });
+
+  it('should detect source_ref_stale from recipe_source_refs', () => {
+    const stats = JSON.stringify({
+      lastHitAt: Date.now() - 10 * DAY_MS,
+      hitsLast90d: 10,
+      authority: 50,
+    });
+    const recipe = makeRecipe({ stats, quality_score: 0.5 });
+    const detector = new DecayDetector(makeMockDb({ staleRefCount: { r1: 2 } }));
+
+    const result = detector.evaluate(recipe);
+    expect(result.signals.some((s) => s.strategy === 'source_ref_stale')).toBe(true);
+    expect(result.signals.find((s) => s.strategy === 'source_ref_stale')?.detail).toContain(
+      '2 source reference(s)'
+    );
+  });
+
+  it('should NOT flag source_ref_stale when no stale refs', () => {
+    const stats = JSON.stringify({
+      lastHitAt: Date.now() - 10 * DAY_MS,
+      hitsLast90d: 10,
+      authority: 50,
+    });
+    const recipe = makeRecipe({ stats, quality_score: 0.5 });
+    const detector = new DecayDetector(makeMockDb({ staleRefCount: { r1: 0 } }));
+
+    const result = detector.evaluate(recipe);
+    expect(result.signals.some((s) => s.strategy === 'source_ref_stale')).toBe(false);
+  });
+
+  it('should penalize quality dimension based on staleRatio', () => {
+    const stats = JSON.stringify({
+      lastHitAt: Date.now() - 2 * DAY_MS,
+      hitsLast90d: 30,
+      authority: 80,
+    });
+    // All refs stale: staleRatio = 3/3 = 1.0 → quality × 0.7
+    const recipe = makeRecipe({ stats, quality_score: 0.9 });
+    const detector = new DecayDetector(
+      makeMockDb({ staleRefCount: { r1: 3 }, totalRefCount: { r1: 3 } })
+    );
+
+    const result = detector.evaluate(recipe);
+    // quality = 0.9 × 0.7 = 0.63, weighted = 0.63 × 0.2 × 100 = 12.6
+    // vs no-stale: quality = 0.9, weighted = 0.9 × 0.2 × 100 = 18
+    // diff ≈ 5.4 points
+    expect(result.dimensions.quality).toBeCloseTo(0.63, 1);
+  });
+
+  it('should recover quality when stale ratio drops to zero (self-repair)', () => {
+    const stats = JSON.stringify({
+      lastHitAt: Date.now() - 2 * DAY_MS,
+      hitsLast90d: 30,
+      authority: 80,
+    });
+    const recipe = makeRecipe({ stats, quality_score: 0.9 });
+
+    // After repair: 0 stale, 3 total → staleRatio = 0
+    const detector = new DecayDetector(
+      makeMockDb({ staleRefCount: { r1: 0 }, totalRefCount: { r1: 3 } })
+    );
+
+    const result = detector.evaluate(recipe);
+    // quality should be unpenalized
+    expect(result.dimensions.quality).toBeCloseTo(0.9, 1);
+  });
+
+  it('should apply partial penalty for partial staleness', () => {
+    const stats = JSON.stringify({
+      lastHitAt: Date.now() - 2 * DAY_MS,
+      hitsLast90d: 30,
+      authority: 80,
+    });
+    // 1 of 2 stale: staleRatio = 0.5 → quality × 0.85
+    const recipe = makeRecipe({ stats, quality_score: 0.8 });
+    const detector = new DecayDetector(
+      makeMockDb({ staleRefCount: { r1: 1 }, totalRefCount: { r1: 2 } })
+    );
+
+    const result = detector.evaluate(recipe);
+    // quality = 0.8 × (1 - 0.5 × 0.3) = 0.8 × 0.85 = 0.68
+    expect(result.dimensions.quality).toBeCloseTo(0.68, 1);
   });
 
   it('scanAll emits decay signals for non-healthy recipes', () => {

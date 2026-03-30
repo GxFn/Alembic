@@ -112,6 +112,7 @@ The independent Agent architecture layer (`lib/agent/`, path alias `#agent/*`) c
 | **context/** | `ContextWindow` / `ExplorationTracker` | Token window management + exploration strategies |
 | **domain/** | `EpisodicConsolidator` / `InsightProducer` | Agent domain logic: insight analysis, evidence collection, scan tasks |
 | **tools/** | `ToolRegistry` + 14 files | 54 built-in tools (knowledge, AST, Guard, search, system, etc.) |
+| **forge/** | `ToolForge` / `SandboxRunner` / `DynamicComposer` | Dynamic tool forging: reuse/compose/generate three modes, sandbox validation + TTL temporary registration |
 
 ### 5. Service Layer
 
@@ -120,7 +121,7 @@ Business service layer containing 15 sub-domain services:
 | Sub-domain | Core Class | Responsibility |
 |------------|-----------|----------------|
 | **knowledge** | `KnowledgeService` | Knowledge entry CRUD, graph, entity graph, confidence routing |
-| **guard** | `GuardService` / `GuardCheckEngine` | 50+ built-in rule engine (regex + AST semantic) |
+| **guard** | `GuardService` / `GuardCheckEngine` | 50+ built-in rule engine (regex + AST semantic), 3-state output (pass / violation / uncertain), 3-dimensional report (compliance + coverage + confidence) |
 | **search** | `SearchEngine` / `MultiSignalRanker` | BM25 + vector hybrid retrieval, 7-signal weighted ranking |
 | **task** | `IntentExtractor` / `PrimeSearchPipeline` | Intent-aware multi-query search: Q1 synonym enrichment + Q2 tech terms + Q3 file context + Q4 focused query, 3-layer quality filter (absolute threshold + relative-to-best + score gap detection) |
 | **bootstrap** | `BootstrapTaskManager` | Coldstart async task orchestration, 14 analysis dimensions |
@@ -133,6 +134,8 @@ Business service layer containing 15 sub-domain services:
 | **wiki** | `WikiGenerator` | Auto-generated project Wiki |
 | **module** | `ModuleService` | Multi-language module structure scanning |
 | **candidate** | `SimilarityService` | Candidate deduplication, similarity detection |
+| **evolution** | `KnowledgeMetabolism` / `DecayDetector` / `ContradictionDetector` / `RedundancyAnalyzer` | Knowledge governance: contradiction detection, redundancy analysis, decay scoring, evolution proposals |
+| **signal** | `HitRecorder` | Batch usage signal collection + 30s buffer flush |
 
 
 ### 6. Core + Domain Layer
@@ -165,7 +168,7 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 #### Domain Entities
 
 - `KnowledgeEntry` — V3 unified knowledge entry with value objects: Content, Constraints, Quality, Reasoning, Relations, Stats
-- `Lifecycle` — Knowledge entry state machine: `draft → pending → approved → active → deprecated`
+- `Lifecycle` — Knowledge entry six-state lifecycle: `pending → staging → active → evolving/decaying → deprecated`. staging (auto-publish grace period), evolving (evolution proposal attached), decaying (decay observation period) are system-driven intermediate states
 - `Snippet` — Code snippet entity
 
 ### 7. Infrastructure Layer
@@ -176,6 +179,7 @@ React, Vue, Next.js, Node Server, Django, FastAPI, Spring, Android, Go Web, Go g
 | `VectorStore` / `JsonVectorAdapter` | Vector storage (local JSON or Milvus) |
 | `IndexingPipeline` / `Chunker` | Vector indexing pipeline + text chunking |
 | `CacheService` / `GraphCache` | In-memory cache + AST graph cache |
+| `SignalBus` | Unified signal bus (typed pub-sub), 9 signal types, exact/wildcard subscription |
 | `EventBus` | In-process event bus |
 | `RealtimeService` | Socket.IO real-time push (coldstart progress, etc.) |
 | `AuditStore` / `AuditLogger` | Operation audit log persistence |
@@ -230,7 +234,9 @@ IDE AI Request → MCP Server → Gateway (permission check)
 ```
 Source File → SourceFileCollector → GuardCheckEngine
            → Regex Rules (50+) + AST Semantic Rules + Cross-file Rules
-           → ComplianceReporter → Report (JSON/Text/Markdown)
+           → 3-state output: pass / violation / uncertain
+           → ComplianceReporter → 3-dimensional report (compliance + coverage + confidence)
+           → ReverseGuard → Recipe↔Code reverse validation (API symbol liveness check)
 ```
 
 ---

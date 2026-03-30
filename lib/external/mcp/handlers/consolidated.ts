@@ -256,6 +256,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
   const source = (args.source as string) || 'mcp';
   const dimensionId = args.dimensionId as string | undefined;
   const clientId = args.client_id as string | undefined;
+  const supersedes = args.supersedes as string | undefined;
 
   // ── Step 1: 限流 ──
   const { checkRecipeSave } = await import('#http/middleware/RateLimiter.js');
@@ -331,6 +332,14 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
   // ── Step 3: 融合分析（统一对所有有效条目运行） ──
   const submittableItems: { index: number; item: Record<string, unknown> }[] = [];
   const blockedItems: { index: number; title: string; consolidation: unknown }[] = [];
+  const createdProposals: {
+    proposalId: string;
+    type: string;
+    targetRecipe: { id: string; title: string };
+    status: string;
+    expiresAt: number;
+    message: string;
+  }[] = [];
 
   if (skipConsolidation) {
     submittableItems.push(...validItems);
@@ -358,10 +367,38 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
 
         const batchAdvice = advisor.analyzeBatch(candidates);
 
+        // 尝试获取 ProposalRepository 以创建 Proposal（降级容忍）
+        let proposalRepo:
+          | import('../../../repository/evolution/ProposalRepository.js').ProposalRepository
+          | null = null;
+        try {
+          proposalRepo = ctx.container.get('proposalRepository') ?? null;
+        } catch {
+          /* ProposalRepository 未注册，降级为旧的 blocked 模式 */
+        }
+
         for (const { index: adviceIdx, advice } of batchAdvice.items) {
           const validEntry = validItems[adviceIdx];
           if (advice.action === 'create') {
             submittableItems.push(validEntry);
+          } else if (
+            proposalRepo &&
+            (advice.action === 'merge' ||
+              advice.action === 'reorganize' ||
+              advice.action === 'insufficient')
+          ) {
+            // 创建 Proposal 而非简单 block — 系统后续自动处理
+            const proposal = _createProposalFromAdvice(proposalRepo, advice, validEntry.item);
+            if (proposal) {
+              createdProposals.push(proposal);
+            } else {
+              // Proposal 创建失败（可能去重）→ 仍作为 blocked 返回
+              blockedItems.push({
+                index: validEntry.index,
+                title: (validEntry.item.title as string) || '(untitled)',
+                consolidation: advice,
+              });
+            }
           } else {
             blockedItems.push({
               index: validEntry.index,
@@ -444,6 +481,67 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     }
   }
 
+  // ── Step 4b: Supersede 提案创建 ──
+  // 当 Agent 声明 supersedes 旧 Recipe 时，创建 supersede Proposal
+  if (supersedes && successIds.length > 0) {
+    let proposalRepo:
+      | import('../../../repository/evolution/ProposalRepository.js').ProposalRepository
+      | null = null;
+    try {
+      proposalRepo = ctx.container.get('proposalRepository') ?? null;
+    } catch {
+      /* ProposalRepository 未注册，跳过 */
+    }
+    if (proposalRepo) {
+      // 验证旧 Recipe 存在
+      const oldRecipeExists = (() => {
+        try {
+          const db = ctx.container.get('database') as { getDb(): unknown } | undefined;
+          if (!db) {
+            return false;
+          }
+          const rawDb = db.getDb() as {
+            prepare(sql: string): { get(...p: unknown[]): unknown };
+          };
+          const row = rawDb
+            .prepare('SELECT id FROM knowledge_entries WHERE id = ?')
+            .get(supersedes);
+          return row !== undefined;
+        } catch {
+          return false;
+        }
+      })();
+
+      if (oldRecipeExists) {
+        const proposal = proposalRepo.create({
+          type: 'supersede',
+          targetRecipeId: supersedes,
+          relatedRecipeIds: successIds,
+          confidence: 0.8,
+          source: 'ide-agent',
+          description: `Agent 声明新 Recipe [${successIds.join(', ')}] 替代旧 Recipe [${supersedes}]。观察窗口内将对比新旧表现。`,
+          evidence: [
+            {
+              snapshotAt: Date.now(),
+              newRecipeIds: successIds,
+              declaredBy: 'agent',
+            },
+          ],
+        });
+        if (proposal) {
+          createdProposals.push({
+            proposalId: proposal.id,
+            type: 'supersede',
+            targetRecipe: { id: supersedes, title: supersedes },
+            status: proposal.status,
+            expiresAt: proposal.expiresAt,
+            message: `已创建替代提案：新 Recipe 将在观察窗口到期后自动替代旧 Recipe [${supersedes}]。`,
+          });
+        }
+      }
+    }
+  }
+
   // ── Step 5: 构建统一响应 ──
   const data: Record<string, unknown> = {
     count: successCount,
@@ -470,6 +568,13 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     data.blockedSummary = {
       blockedCount: blockedItems.length,
       message: `${blockedItems.length} 条因融合分析被阻塞（与已有 Recipe 重叠或实质性不足）。设 skipConsolidation: true 可跳过。`,
+    };
+  }
+  if (createdProposals.length > 0) {
+    data.proposals = createdProposals;
+    data.proposalSummary = {
+      proposalCount: createdProposals.length,
+      message: `${createdProposals.length} 条已创建进化提案，系统将在观察窗口到期后自动执行。无需额外操作。`,
     };
   }
 
@@ -545,4 +650,115 @@ function _trackRejection(
   } catch {
     /* best effort */
   }
+}
+
+// ── Proposal 创建辅助函数 ───────────────────────────
+
+/**
+ * 将 ConsolidationAdvisor 分析结果转为 evolution_proposals 记录。
+ *
+ * merge → Proposal(type: merge, target: 已有 Recipe)
+ * reorganize → Proposal(type: reorganize, 高风险 → pending 等开发者确认)
+ * insufficient → Proposal(type: enhance, target: 最相似 Recipe)
+ */
+function _createProposalFromAdvice(
+  repo: import('../../../repository/evolution/ProposalRepository.js').ProposalRepository,
+  advice: {
+    action: string;
+    confidence: number;
+    reason: string;
+    targetRecipe?: { id: string; title: string; similarity: number };
+    reorganizeTargets?: { id: string; title: string; similarity: number }[];
+    coveredBy?: { id: string; title: string; similarity: number }[];
+    mergeDirection?: { addedDimensions: string[]; summary: string };
+  },
+  candidateItem: Record<string, unknown>
+): {
+  proposalId: string;
+  type: string;
+  targetRecipe: { id: string; title: string };
+  status: string;
+  expiresAt: number;
+  message: string;
+} | null {
+  const evidence = [
+    {
+      snapshotAt: Date.now(),
+      candidateTitle: candidateItem.title,
+      candidateCategory: candidateItem.category,
+      analysisReason: advice.reason,
+      mergeDirection: advice.mergeDirection,
+    },
+  ];
+
+  if (advice.action === 'merge' && advice.targetRecipe) {
+    const proposal = repo.create({
+      type: 'merge',
+      targetRecipeId: advice.targetRecipe.id,
+      confidence: advice.confidence,
+      source: 'ide-agent',
+      description: advice.reason,
+      evidence,
+    });
+    if (!proposal) {
+      return null;
+    }
+    return {
+      proposalId: proposal.id,
+      type: 'merge',
+      targetRecipe: { id: advice.targetRecipe.id, title: advice.targetRecipe.title },
+      status: proposal.status,
+      expiresAt: proposal.expiresAt,
+      message: `已为「${advice.targetRecipe.title}」创建融合提案，${proposal.status === 'observing' ? '观察窗口 72h 后自动执行' : '等待开发者确认'}。`,
+    };
+  }
+
+  if (advice.action === 'reorganize' && advice.reorganizeTargets?.length) {
+    const target = advice.reorganizeTargets[0];
+    const proposal = repo.create({
+      type: 'reorganize',
+      targetRecipeId: target.id,
+      relatedRecipeIds: advice.reorganizeTargets.slice(1).map((t) => t.id),
+      confidence: advice.confidence,
+      source: 'ide-agent',
+      description: advice.reason,
+      evidence,
+    });
+    if (!proposal) {
+      return null;
+    }
+    return {
+      proposalId: proposal.id,
+      type: 'reorganize',
+      targetRecipe: { id: target.id, title: target.title },
+      status: proposal.status,
+      expiresAt: proposal.expiresAt,
+      message: `已为 ${advice.reorganizeTargets.length} 条 Recipe 创建重组提案，需开发者在 Dashboard 确认。`,
+    };
+  }
+
+  if (advice.action === 'insufficient' && advice.coveredBy?.length) {
+    const target = advice.coveredBy[0];
+    const proposal = repo.create({
+      type: 'enhance',
+      targetRecipeId: target.id,
+      confidence: advice.confidence,
+      source: 'ide-agent',
+      description: advice.reason,
+      evidence,
+    });
+    if (!proposal) {
+      return null;
+    }
+    return {
+      proposalId: proposal.id,
+      type: 'enhance',
+      targetRecipe: { id: target.id, title: target.title },
+      status: proposal.status,
+      expiresAt: proposal.expiresAt,
+      message: `候选独立价值不足，已创建增强提案建议补充到「${target.title}」。`,
+    };
+  }
+
+  return null;
 }

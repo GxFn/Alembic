@@ -223,6 +223,12 @@ export const SubmitKnowledgeInput = z.object({
   skipDuplicateCheck: z.boolean().default(false),
   client_id: z.string().optional(),
   dimensionId: z.string().optional().describe('冷启动关联维度 ID'),
+  supersedes: z
+    .string()
+    .optional()
+    .describe(
+      '声明新 Recipe 替代旧 Recipe 的 ID。提交后系统将创建 supersede 提案，观察窗口内对比新旧表现后自动执行。'
+    ),
 });
 export type SubmitKnowledgeInput = z.infer<typeof SubmitKnowledgeInput>;
 

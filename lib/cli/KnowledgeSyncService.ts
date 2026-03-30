@@ -47,11 +47,14 @@ export class KnowledgeSyncService {
   logger: ReturnType<typeof Logger.getInstance>;
   projectRoot: string;
   recipesDir: string;
-  constructor(projectRoot: string) {
+  #sourceRefReconciler: SourceRefReconciler | null;
+
+  constructor(projectRoot: string, options?: { sourceRefReconciler?: SourceRefReconciler }) {
     this.projectRoot = projectRoot;
     this.recipesDir = path.join(projectRoot, RECIPES_DIR);
     this.candidatesDir = path.join(projectRoot, CANDIDATES_DIR);
     this.logger = Logger.getInstance();
+    this.#sourceRefReconciler = options?.sourceRefReconciler ?? null;
   }
 
   /**
@@ -74,10 +77,12 @@ export class KnowledgeSyncService {
 
     // 2. 填充/验证 recipe_source_refs 桥接表
     try {
-      const reconciler = new SourceRefReconciler(
-        this.projectRoot,
-        db as unknown as ConstructorParameters<typeof SourceRefReconciler>[1]
-      );
+      const reconciler =
+        this.#sourceRefReconciler ??
+        new SourceRefReconciler(
+          this.projectRoot,
+          db as unknown as ConstructorParameters<typeof SourceRefReconciler>[1]
+        );
       report.reconcileReport = reconciler.reconcile({ force: opts.force });
 
       // 3. git rename 修复

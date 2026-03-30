@@ -134,7 +134,7 @@ Knowledge graph queries. Analyze relationships between entries.
 
 ### 6. autosnippet_guard
 
-Code compliance check. Check code snippets or file lists against Guard rules.
+Code compliance check. Check code snippets or file lists against Guard rules. Outputs 3-state results (pass / violation / uncertain) with a 3-dimensional report (compliance + coverage + confidence). ReverseGuard reverse-validates that API symbols referenced in Recipes still exist in code.
 
 **Parameters:**
 
@@ -251,6 +251,19 @@ Project panorama queries.
 | `operation` | string | — | `overview` (default) / `module` / `gaps` / `health` / `governance_cycle` / `decay_report` / `staging_check` / `enhancement_suggestions` |
 | `module` | string | — | Module name (required for `module` operation) |
 
+**Operations:**
+
+| Operation | Description |
+|-----------|-------------|
+| `overview` | Global panorama: layered architecture, module roles, coupling |
+| `module` | Single module details: role, layer, coupling, knowledge coverage |
+| `gaps` | Knowledge gaps + capability gap report |
+| `health` | Project health score |
+| `governance_cycle` | Knowledge governance cycle: contradiction/redundancy/decay results |
+| `decay_report` | Decay report: decayScore details + recommendations |
+| `staging_check` | Staging grace period status check |
+| `enhancement_suggestions` | Evolution suggestions: merge/enhance/split proposals |
+
 ---
 
 ### 13. autosnippet_task
@@ -300,13 +313,15 @@ Knowledge entry lifecycle operations.
 | `action` | string | ✅ | Action: `submit` / `approve` / `reject` / `publish` / `deprecate` / `reactivate` / `to_draft` / `fast_track` |
 | `reason` | string | — | Reason for the action |
 
-**Lifecycle state diagram:**
+**Six-state lifecycle diagram:**
 
 ```
-draft → pending → approved → active → deprecated
-  ↑        ↓          ↓                    ↓
-  └── rejected   ← to_draft ←─────── reactivate
+pending → staging (72h Grace) → active → evolving (7d Grace) → active
+  ↑                                 │
+  └── reactivate ── deprecated ── decaying (30d + 3x confirm)
 ```
+
+staging, evolving, and decaying are system-driven intermediate states. Agents can only push into intermediate states; system rules complete final transitions.
 
 ---
 

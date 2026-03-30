@@ -223,9 +223,15 @@ describe('Knowledge Governance Integration', () => {
         expect(p.proposedAt).toBeGreaterThan(0);
         expect(p.expiresAt).toBeGreaterThan(p.proposedAt);
         expect(p.targetRecipeId).toBeTruthy();
-        expect(['merge', 'enhance', 'refine_guard', 'split', 'deprecate', 'review']).toContain(
-          p.type
-        );
+        expect([
+          'merge',
+          'enhance',
+          'supersede',
+          'deprecate',
+          'contradiction',
+          'correction',
+          'reorganize',
+        ]).toContain(p.type);
       }
 
       // SignalBus should have received signals

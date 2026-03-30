@@ -61,6 +61,9 @@ export function runCrossFileChecks(
   const disabledSet = new Set(options.disabledRules || []);
   const isDisabled = (ruleId: string) => disabledSet.has(ruleId);
 
+  // 过滤掉 content 为空的条目，防止下游 split 崩溃
+  files = files.filter((f) => typeof f.content === 'string');
+
   // ── ObjC Category 跨文件重名检查 ──
   if (!isDisabled('objc-cross-file-duplicate-category')) {
     const categoryMap = new Map();

@@ -16,6 +16,8 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import Logger from '../../infrastructure/logging/Logger.js';
 
+import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+
 const execFileAsync = promisify(execFile);
 
 /* ────────────────────── Types ────────────────────── */
@@ -63,12 +65,18 @@ const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 export class SourceRefReconciler {
   #projectRoot: string;
   #db: DatabaseLike;
+  #signalBus: SignalBus | null;
   #logger = Logger.getInstance();
   #ttlMs: number;
 
-  constructor(projectRoot: string, db: DatabaseLike, options?: { ttlMs?: number }) {
+  constructor(
+    projectRoot: string,
+    db: DatabaseLike,
+    options?: { ttlMs?: number; signalBus?: SignalBus }
+  ) {
     this.#projectRoot = projectRoot;
     this.#db = db;
+    this.#signalBus = options?.signalBus ?? null;
     this.#ttlMs = options?.ttlMs ?? DEFAULT_TTL_MS;
   }
 
@@ -185,7 +193,47 @@ export class SourceRefReconciler {
       recipesProcessed: report.recipesProcessed,
     });
 
+    // 通过 SignalBus 发射信号 — 让 Governance 子系统感知 sourceRef 健康状况
+    if (this.#signalBus && report.stale > 0) {
+      this.#emitStaleSignals();
+    }
+
     return report;
+  }
+
+  /**
+   * 为每个有 stale sourceRef 的 Recipe 发射 quality 信号。
+   * KnowledgeMetabolism 订阅 quality → 触发完整治理周期。
+   */
+  #emitStaleSignals(): void {
+    if (!this.#signalBus) {
+      return;
+    }
+    try {
+      const staleRecipes = this.#db
+        .prepare(
+          `SELECT recipe_id, COUNT(*) AS stale_count,
+                  (SELECT COUNT(*) FROM recipe_source_refs r2 WHERE r2.recipe_id = r.recipe_id) AS total_count
+           FROM recipe_source_refs r
+           WHERE status = 'stale'
+           GROUP BY recipe_id`
+        )
+        .all() as { recipe_id: string; stale_count: number; total_count: number }[];
+
+      for (const row of staleRecipes) {
+        const staleRatio = row.stale_count / row.total_count;
+        this.#signalBus.send('quality', 'SourceRefReconciler', staleRatio, {
+          target: row.recipe_id,
+          metadata: {
+            reason: 'source_ref_stale',
+            staleCount: row.stale_count,
+            totalRefs: row.total_count,
+          },
+        });
+      }
+    } catch {
+      // 信号发射失败不影响主流程
+    }
   }
 
   /**
@@ -231,6 +279,17 @@ export class SourceRefReconciler {
         renamed: report.renamed,
         stillStale: report.stillStale,
       });
+
+      // 修复成功 → 发射正向 quality 信号（value≈0 表示健康方向）
+      if (this.#signalBus) {
+        this.#signalBus.send('quality', 'SourceRefReconciler', 0.1, {
+          metadata: {
+            reason: 'source_ref_repaired',
+            renamed: report.renamed,
+            stillStale: report.stillStale,
+          },
+        });
+      }
     }
 
     return report;

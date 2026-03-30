@@ -14,6 +14,7 @@
 
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import { unixNow } from '../../shared/utils/common.js';
 
 /* ────────────────────── Types ────────────────────── */
 
@@ -91,7 +92,7 @@ export class StagingManager {
       .prepare(
         `UPDATE knowledge_entries SET lifecycle = 'staging', stats = ?, updatedAt = ? WHERE id = ?`
       )
-      .run(JSON.stringify(stats), now, entryId);
+      .run(JSON.stringify(stats), unixNow(), entryId);
 
     // 发射信号
     if (this.#signalBus) {
@@ -196,7 +197,7 @@ export class StagingManager {
       .prepare(
         `UPDATE knowledge_entries SET lifecycle = 'pending', stats = ?, updatedAt = ? WHERE id = ?`
       )
-      .run(JSON.stringify(stats), now, entryId);
+      .run(JSON.stringify(stats), unixNow(), entryId);
 
     if (this.#signalBus) {
       this.#signalBus.send('lifecycle', 'StagingManager.rollback', 0.8, {
@@ -246,11 +247,12 @@ export class StagingManager {
     delete stats.stagingEnteredAt;
     stats.autoPublishedAt = now;
 
+    const nowS = unixNow();
     this.#db
       .prepare(
         `UPDATE knowledge_entries SET lifecycle = 'active', publishedAt = ?, stats = ?, updatedAt = ? WHERE id = ?`
       )
-      .run(now, JSON.stringify(stats), now, entry.id);
+      .run(nowS, JSON.stringify(stats), nowS, entry.id);
 
     if (this.#signalBus) {
       this.#signalBus.send('lifecycle', 'StagingManager.promote', 1.0, {

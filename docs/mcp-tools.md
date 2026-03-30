@@ -134,7 +134,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 
 ### 6. autosnippet_guard
 
-代码规范检查。检查代码片段或文件列表是否符合 Guard 规则。
+代码规范检查。检查代码片段或文件列表是否符合 Guard 规则。输出三态结果（pass / violation / uncertain），三维报告（合规度 + 覆盖率 + 置信度）。ReverseGuard 反向验证 Recipe 引用的 API 符号是否仍存在于代码中。
 
 **参数：**
 
@@ -251,6 +251,19 @@ Wiki 文档生成。
 | `operation` | string | — | `overview`（默认）/ `module` / `gaps` / `health` / `governance_cycle` / `decay_report` / `staging_check` / `enhancement_suggestions` |
 | `module` | string | — | 模块名（`module` 操作时必填） |
 
+**操作说明：**
+
+| 操作 | 说明 |
+|------|------|
+| `overview` | 全局全景：分层架构、模块角色、耦合度 |
+| `module` | 单模块详情：角色、层级、耦合度、知识覆盖率 |
+| `gaps` | 知识空白 + 能力缺口报告 |
+| `health` | 项目健康度评分 |
+| `governance_cycle` | 知识治理周期：矛盾/冗余/衰退检测结果 |
+| `decay_report` | 衰退报告：decayScore 详情 + 建议 |
+| `staging_check` | staging 暂存期状态检查 |
+| `enhancement_suggestions` | 进化建议：合并/增强/拆分提案 |
+
 ---
 
 ### 13. autosnippet_task
@@ -300,13 +313,15 @@ Wiki 文档生成。
 | `action` | string | ✅ | 操作：`submit` / `approve` / `reject` / `publish` / `deprecate` / `reactivate` / `to_draft` / `fast_track` |
 | `reason` | string | — | 操作原因 |
 
-**生命周期状态图：**
+**六态生命周期状态图：**
 
 ```
-draft → pending → approved → active → deprecated
-  ↑        ↓          ↓                    ↓
-  └── rejected   ← to_draft ←─────── reactivate
+pending → staging (72h Grace) → active → evolving (7d Grace) → active
+  ↑                                 │
+  └── reactivate ── deprecated ── decaying (30d + 3x 确认)
 ```
+
+staging、evolving、decaying 为系统驱动的中间态，Agent 只能推入中间态，系统规则完成最终转换。
 
 ---
 
