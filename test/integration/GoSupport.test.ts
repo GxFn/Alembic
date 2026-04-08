@@ -37,7 +37,7 @@ beforeAll(async () => {
   const lsMod = await import('../../lib/shared/LanguageService.js');
   LanguageService = lsMod.LanguageService;
 
-  const dcMod = await import('../../lib/service/bootstrap/DimensionCopyRegistry.js');
+  const dcMod = await import('../../lib/domain/dimension/DimensionCopy.js');
   DimensionCopy = dcMod.DimensionCopy;
 
   await import('../../lib/core/ast/index.js');
@@ -356,7 +356,7 @@ describe('L2: LanguageService & DimensionCopy (Go)', () => {
   });
 
   it('DimensionCopy.applyMulti for Go — injects Go-specific guidance', () => {
-    const dims = [{ id: 'code-standard', label: '代码规范', guide: 'default guide' }];
+    const dims = [{ id: 'coding-standards', label: '代码规范', guide: 'default guide' }];
     DimensionCopy.applyMulti(dims, 'go', []);
     // Should have Go-specific keywords in guide
     const guide = dims[0].guide.toLowerCase();
