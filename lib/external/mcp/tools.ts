@@ -48,6 +48,30 @@ const _RescanSchema =
     reason: z.string().optional(),
   });
 
+// EvolveInput — same defensive fallback for Vitest module transform edge case
+const _EvolveSchema =
+  EvolveInput ??
+  z.object({
+    decisions: z
+      .array(
+        z.object({
+          recipeId: z.string(),
+          action: z.enum(['propose_evolution', 'confirm_deprecation', 'skip']),
+          evidence: z
+            .object({
+              codeSnippet: z.string(),
+              filePath: z.string(),
+              type: z.enum(['enhance', 'correction']),
+              suggestedChanges: z.string(),
+            })
+            .optional(),
+          reason: z.string().optional(),
+          skipReason: z.enum(['still_valid', 'insufficient_info']).optional(),
+        })
+      )
+      .min(1),
+  });
+
 // ─── Tier Definitions ────────────────────────────────────────
 export const TIER_ORDER = { agent: 0, admin: 1 };
 
@@ -271,7 +295,7 @@ export const TOOLS = [
       '\u2022 propose_evolution \u2014 code changed, suggest Recipe update (enters observation window)\n' +
       '\u2022 confirm_deprecation \u2014 pattern disappeared, deprecate Recipe immediately\n' +
       '\u2022 skip \u2014 still_valid (refreshes lastVerifiedAt) or insufficient_info',
-    inputSchema: zodToMcpSchema(EvolveInput),
+    inputSchema: zodToMcpSchema(_EvolveSchema),
   },
 
   // 12. Dimension Complete Notification

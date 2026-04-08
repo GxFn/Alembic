@@ -111,7 +111,7 @@ describe('PanoramaAggregator', () => {
     expect(result.modules.has('Core')).toBe(true);
     expect(result.layers.levels.length).toBeGreaterThanOrEqual(1);
     expect(result.healthRadar).toBeDefined();
-    expect(result.healthRadar.dimensions.length).toBe(11);
+    expect(result.healthRadar.dimensions.length).toBe(25);
     expect(result.computedAt).toBeGreaterThan(0);
   });
 
@@ -125,8 +125,8 @@ describe('PanoramaAggregator', () => {
 
     const result = aggregator.compute(candidates);
 
-    // 所有 11 个维度都应为 gap (missing)
-    expect(result.gaps.length).toBe(11);
+    // 所有 25 个维度都应为 gap (missing)
+    expect(result.gaps.length).toBe(25);
     expect(result.gaps[0].status).toBe('missing');
     expect(result.gaps[0].dimension).toBeDefined();
     expect(result.gaps[0].dimensionName).toBeDefined();
@@ -184,20 +184,20 @@ describe('PanoramaAggregator', () => {
     expect(cs.score).toBe(40);
     expect(cs.status).toBe('adequate');
 
-    // error-handling: 1 recipe → weak (score=20)
-    const eh = radar.dimensions.find((d) => d.id === 'error-handling')!;
+    // error-resilience: 1 recipe → weak (score=20)
+    const eh = radar.dimensions.find((d) => d.id === 'error-resilience')!;
     expect(eh.recipeCount).toBe(1);
     expect(eh.score).toBe(20);
     expect(eh.status).toBe('weak');
 
-    // concurrency: 0 → missing
-    const cc = radar.dimensions.find((d) => d.id === 'concurrency')!;
+    // concurrency-async: 0 → missing
+    const cc = radar.dimensions.find((d) => d.id === 'concurrency-async')!;
     expect(cc.recipeCount).toBe(0);
     expect(cc.status).toBe('missing');
 
-    // 维度覆盖: 3 / 11
+    // 维度覆盖: 3 / 25
     expect(radar.coveredDimensions).toBe(3);
-    expect(radar.totalDimensions).toBe(11);
+    expect(radar.totalDimensions).toBe(25);
   });
 
   it('should compute call flow summary', () => {
@@ -221,7 +221,7 @@ describe('PanoramaAggregator', () => {
     expect(result.modules.size).toBe(0);
     expect(result.cycles).toHaveLength(0);
     // 即使 0 个模块，维度雷达仍会生成
-    expect(result.healthRadar.dimensions.length).toBe(11);
+    expect(result.healthRadar.dimensions.length).toBe(25);
   });
 
   it('should populate PanoramaModule fields correctly', () => {

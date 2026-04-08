@@ -342,8 +342,7 @@ export const submitWithCheck = {
           supersedes: params.supersedes,
           existingTitles: ctx._submittedTitles,
           existingFingerprints: ctx._submittedPatterns,
-          systemInjectedFields:
-            dimMeta && ctx.source === 'system' ? getSystemInjectedFields() : undefined,
+          systemInjectedFields: getSystemInjectedFields(),
           userId: 'agent',
         },
       });
