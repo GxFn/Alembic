@@ -91,9 +91,7 @@ export class IncrementalBootstrap {
       let restoredEpisodic: SessionStore | null = null;
       if (previousSnapshot.episodicData) {
         try {
-          restoredEpisodic = SessionStore.fromJSON(
-            previousSnapshot.episodicData as Record<string, unknown>
-          );
+          restoredEpisodic = SessionStore.fromJSON(previousSnapshot.episodicData);
           this.#log(
             `Restored SessionStore: ${restoredEpisodic.getCompletedDimensions().length} dimensions`
           );

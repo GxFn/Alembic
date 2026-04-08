@@ -46,7 +46,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ searchQ, insertPath, onClose 
     isMountedRef.current = true;
     abortControllerRef.current = new AbortController();
     
-    api.search(searchQ || '', { mode: 'bm25', type: 'recipe', signal: abortControllerRef.current.signal })
+    api.search(searchQ || '', { mode: 'auto', type: 'recipe', signal: abortControllerRef.current.signal })
       .then(data => {
         if (isMountedRef.current) {
           setResults((data.items || []).map((r: any) => ({

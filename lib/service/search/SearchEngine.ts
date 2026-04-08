@@ -1,7 +1,7 @@
 /**
  * SearchEngine - 统一搜索引擎
  *
- * 三级搜索策略: keyword → BM25 ranking → semantic(可选)
+ * 三级搜索策略: keyword → FieldWeighted ranking → semantic(可选)
  * 从 V1 SearchServiceV2 迁移，适配 V2 架构
  */
 
@@ -12,11 +12,11 @@ import { contextBoost } from './contextBoost.js';
 import { FieldWeightedScorer } from './FieldWeightedScorer.js';
 import { MultiSignalRanker } from './MultiSignalRanker.js';
 import type {
-  BM25DocMeta,
-  BM25SearchResult,
   DbRow,
+  DocMeta,
   RankingContext,
   Scorer,
+  ScorerResult,
   SearchAiProvider,
   SearchCrossEncoder,
   SearchDb,
@@ -35,11 +35,12 @@ export { BM25Scorer } from './BM25Scorer.js';
 export { FieldWeightedScorer } from './FieldWeightedScorer.js';
 export type {
   BM25DocMeta,
-  BM25SearchResult,
   DbRow,
+  DocMeta,
   RankingContext,
   RrfHit,
   Scorer,
+  ScorerResult,
   SearchAiProvider,
   SearchCrossEncoder,
   SearchDb,
@@ -193,23 +194,23 @@ export class SearchEngine {
 
     switch (mode) {
       case 'auto': {
-        // 缓存 BM25 结果, 避免 RRF 降级时重复计算
-        let cachedBm25Items: SearchResultItem[] | null = null;
-        const getBm25 = () => {
-          if (!cachedBm25Items) {
-            cachedBm25Items = this._bm25Search(query, type, recallLimit);
+        // 缓存 FieldWeighted 结果, 避免 RRF 降级时重复计算
+        let cachedScorerItems: SearchResultItem[] | null = null;
+        const getScorerResults = () => {
+          if (!cachedScorerItems) {
+            cachedScorerItems = this._scorerSearch(query, type, recallLimit);
           }
-          return cachedBm25Items;
+          return cachedScorerItems;
         };
 
         // 优先使用 VectorService 的 hybridSearch (统一 RRF 融合)
         if (this.vectorService) {
           try {
-            const bm25Items = getBm25();
+            const sparseItems = getScorerResults();
             const rrfResults = await this.vectorService.hybridSearch(query, {
               topK: recallLimit,
               alpha: this._fusionSemanticWeight,
-              sparseSearchFn: () => bm25Items!,
+              sparseSearchFn: () => sparseItems!,
             });
             if (rrfResults.length > 0) {
               results = rrfResults.map((r) => {
@@ -247,15 +248,16 @@ export class SearchEngine {
           }
         }
 
-        // 降级: VectorService 不可用或 RRF 零结果 → 纯 BM25
+        // 降级: VectorService 不可用或 RRF 零结果 → 纯 FieldWeighted
         // 旧版在此做 BM25+semantic min-max 融合，但当 VectorService 不可用时
-        // semantic 通常也会失败，最终退化为纯 BM25。简化为直接走 BM25。
-        results = getBm25();
-        actualMode = 'auto(bm25-only)';
+        // semantic 通常也会失败，最终退化为纯 FieldWeighted。简化为直接走 scorer。
+        results = getScorerResults();
+        actualMode = 'auto(weighted-only)';
         break;
       }
+      case 'weighted':
       case 'bm25':
-        results = this._bm25Search(query, type, recallLimit);
+        results = this._scorerSearch(query, type, recallLimit);
         break;
       case 'semantic': {
         const semResult = await this._semanticSearch(query, type, recallLimit);
@@ -384,7 +386,7 @@ export class SearchEngine {
   /**
    * 关键词搜索 - 直接 SQL LIKE
    * 返回包含 kind 字段的完整结果，使用 ESCAPE 防止通配符注入
-   * 当 SQL LIKE 无结果时，降级到 BM25 搜索以提升自然语言查询的召回率
+   * 当 SQL LIKE 无结果时，降级到 FieldWeighted 搜索以提升自然语言查询的召回率
    */
   _keywordSearch(query: string, type: string, limit: number) {
     const results: SearchResultItem[] = [];
@@ -439,31 +441,31 @@ export class SearchEngine {
       }
     }
 
-    // 补充排序信号字段（whenClause/doClause/tags 等），与 BM25/semantic 路径一致
+    // 补充排序信号字段（whenClause/doClause/tags 等），与 scorer/semantic 路径一致
     this._supplementDetails(results);
 
-    // 当 SQL LIKE 无结果时，降级到 BM25 搜索
+    // 当 SQL LIKE 无结果时，降级到 FieldWeighted 搜索
     // 这让自然语言查询（如 "如何处理网络错误"）在 keyword 模式下也能返回结果
     if (results.length === 0) {
       this.ensureIndex();
-      const bm25Results = this._bm25Search(query, type, limit);
-      return bm25Results;
+      const scorerResults = this._scorerSearch(query, type, limit);
+      return scorerResults;
     }
 
     return results.slice(0, limit);
   }
 
   /**
-   * BM25 排序搜索
+   * 加权字段搜索（FieldWeightedScorer）
    * 增加 Title/Trigger 精确匹配 bonus — 当 query 出现在标题/触发词中时
-   * 给予额外 BM25 分数加成，确保精确匹配的条目排名靠前
+   * 给予额外分数加成，确保精确匹配的条目排名靠前
    */
-  _bm25Search(query: string, type: string, limit: number) {
+  _scorerSearch(query: string, type: string, limit: number) {
     let results = this.scorer.search(query, limit * 2);
 
     if (type !== 'all') {
       // All types now map to 'recipe' since everything is unified
-      results = results.filter((r: BM25SearchResult) => {
+      results = results.filter((r: ScorerResult) => {
         if (type === 'rule') {
           return (r.meta as Record<string, unknown>).knowledgeType === 'boundary-constraint';
         }
@@ -472,12 +474,12 @@ export class SearchEngine {
     }
 
     // ── Title/Trigger exact-match bonus ──
-    // 当 query 精确出现在标题或触发词中时，增加 BM25 分数
+    // 当 query 精确出现在标题或触发词中时，增加分数
     // 这解决了 "BaseRequest" 被 "BD前缀类名命名规范" 排在 "BDBaseRequest 继承请求模式" 前面的问题
     const lowerQuery = query.toLowerCase();
     const maxScore = results.length > 0 ? results[0].score : 1;
     for (const r of results) {
-      const meta = r.meta as BM25DocMeta;
+      const meta = r.meta as DocMeta;
       const title = (meta.title || '').toLowerCase();
       const trigger = (meta.trigger || '').toLowerCase();
       let bonus = 0;
@@ -497,8 +499,8 @@ export class SearchEngine {
     // 重新排序
     results.sort((a, b) => b.score - a.score);
 
-    const items: SearchResultItem[] = results.slice(0, limit).map((r: BM25SearchResult) => {
-      const meta = r.meta as BM25DocMeta;
+    const items: SearchResultItem[] = results.slice(0, limit).map((r: ScorerResult) => {
+      const meta = r.meta as DocMeta;
       return {
         id: r.id,
         title: meta.title,
@@ -528,7 +530,7 @@ export class SearchEngine {
 
   /**
    * 语义搜索 - 需要 AI Provider 的 embed 功能
-   * 降级到 BM25 如果 AI 不可用
+   * 不可用时降级到 FieldWeighted 搜索
    * @returns >}
    */
   async _semanticSearch(query: string, type: string, limit: number) {
@@ -570,14 +572,14 @@ export class SearchEngine {
 
     // Legacy fallback: 直接使用 aiProvider embed + vectorStore
     if (!this.aiProvider) {
-      this.logger.debug('AI provider not available, falling back to BM25');
-      return { items: this._bm25Search(query, type, limit), actualMode: 'bm25' };
+      this.logger.debug('AI provider not available, falling back to FieldWeighted search');
+      return { items: this._scorerSearch(query, type, limit), actualMode: 'weighted' };
     }
 
     try {
       const queryEmbedding = await this.aiProvider.embed(query);
       if (!queryEmbedding || queryEmbedding.length === 0) {
-        return { items: this._bm25Search(query, type, limit), actualMode: 'bm25' };
+        return { items: this._scorerSearch(query, type, limit), actualMode: 'weighted' };
       }
 
       if (this.vectorStore) {
@@ -622,25 +624,25 @@ export class SearchEngine {
             return { items: results, actualMode: 'semantic' };
           }
         } catch (vecErr: unknown) {
-          this.logger.warn('Vector store query failed, falling back to BM25', {
+          this.logger.warn('Vector store query failed, falling back to FieldWeighted', {
             error: (vecErr as Error).message,
           });
         }
       }
 
-      this.logger.debug('Vector search fallback to BM25');
-      return { items: this._bm25Search(query, type, limit), actualMode: 'bm25' };
+      this.logger.debug('Vector search fallback to FieldWeighted');
+      return { items: this._scorerSearch(query, type, limit), actualMode: 'weighted' };
     } catch (err: unknown) {
-      this.logger.warn('Semantic search failed, falling back to BM25', {
+      this.logger.warn('Semantic search failed, falling back to FieldWeighted', {
         error: (err as Error).message,
       });
-      return { items: this._bm25Search(query, type, limit), actualMode: 'bm25' };
+      return { items: this._scorerSearch(query, type, limit), actualMode: 'weighted' };
     }
   }
 
   /**
    * 补充详细字段（content / description / trigger / delivery 字段）— 批量 IN 查询
-   * 用于向量搜索结果与 BM25 结果的一致性
+   * 用于向量搜索结果与 FieldWeighted 结果的一致性
    */
   _supplementDetails(items: SearchResultItem[]) {
     if (!items || items.length === 0) {
@@ -846,9 +848,10 @@ export class SearchEngine {
   /**
    * 从 DB 行构建索引文本
    *
-   * 使用 BM25F 思想：高价值字段（title, trigger）重复出现以提升 TF 权重
+   * 高价值字段（title, trigger）通过重复出现提升 TF 权重
    * — title ×3, trigger ×2, description ×1.5（通过重复 token 实现）
-   * 这确保标题匹配的文档获得显著更高的 BM25 分数
+   * 这确保标题匹配的文档获得显著更高的分数
+   * 注：此逻辑主要服务于 BM25Scorer，FieldWeightedScorer 内部已有字段权重机制
    */
   _buildDocText(r: DbRow) {
     let contentText = '';
@@ -866,7 +869,7 @@ export class SearchEngine {
     } catch {
       /* ignore */
     }
-    // BM25F field boosting via token repetition:
+    // Field boosting via token repetition:
     // title ×2, trigger ×2, description ×1, others ×1
     // 使用较温和的 boost 避免长文档 avgLength 膨胀导致 content 匹配被过度稀释
     const title = r.title || '';

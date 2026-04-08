@@ -37,6 +37,8 @@ export interface ExplorationMetrics {
   phaseRounds: number;
   roundsSinceSubmit: number;
   roundsSinceNewInfo: number;
+  /** 连续无任何工具调用的轮次数（用于 grace exit 判定） */
+  consecutiveIdleRounds: number;
 }
 
 /** 探索预算配置 */
@@ -133,7 +135,7 @@ export function createBootstrapStrategy(isSkillOnly = false) {
               onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
                 m.submitCount >= b.maxSubmits ||
                 (m.submitCount > 0 && m.roundsSinceSubmit >= b.idleRoundsToExit) ||
-                (m.phaseRounds >= b.searchBudgetGrace && m.submitCount === 0),
+                (m.consecutiveIdleRounds >= b.searchBudgetGrace && m.submitCount === 0),
               onTextResponse: (m: ExplorationMetrics, b: ExplorationBudget) =>
                 m.submitCount >= b.softSubmitLimit,
             },
@@ -208,7 +210,7 @@ export const STRATEGY_PRODUCER = {
       onMetrics: (m: ExplorationMetrics, b: ExplorationBudget) =>
         m.submitCount >= b.maxSubmits ||
         (m.submitCount > 0 && m.roundsSinceSubmit >= b.idleRoundsToExit) ||
-        (m.phaseRounds >= b.searchBudgetGrace && m.submitCount === 0),
+        (m.consecutiveIdleRounds >= b.searchBudgetGrace && m.submitCount === 0),
       onTextResponse: (m: ExplorationMetrics, b: ExplorationBudget) =>
         m.submitCount >= b.softSubmitLimit,
     },

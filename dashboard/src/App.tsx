@@ -622,6 +622,55 @@ const App: React.FC = () => {
   }
   };
 
+  /** 增量扫描：保留已有 Recipe，重新分析并补齐缺失知识（内部 AI 自动补齐） */
+  const handleRescan = async () => {
+  if (isScanning) return;
+  if (abortControllerRef.current) abortControllerRef.current.abort();
+  const controller = new AbortController();
+  abortControllerRef.current = controller;
+
+  navigateToTab('candidates');
+  setIsScanning(true);
+  setScanProgress({ current: 0, total: 100, status: t('app.rescan.analyzing') });
+  bootstrap.resetSession();
+
+  try {
+    const result = await api.rescan({ reason: 'dashboard-rescan' }, controller.signal);
+    setScanProgress({ current: 100, total: 100, status: t('app.rescan.done') });
+
+    // 如果有异步填充会话，初始化 socket 监听进度
+    if (result.bootstrapSession) {
+      bootstrap.initFromApiResponse(result.bootstrapSession);
+    }
+
+    fetchData();
+
+    const audit = result.relevanceAudit || {};
+    const gaps = result.gapAnalysis || {};
+    notify(
+      t('app.rescan.success', {
+        preserved: result.rescan?.preservedRecipes || 0,
+        healthy: audit.healthy || 0,
+        decayed: (audit.decay || 0) + (audit.severe || 0) + (audit.dead || 0),
+      }) + (gaps.gapDimensions > 0
+        ? ` ${t('app.rescan.filling', { count: gaps.gapDimensions })}`
+        : '')
+    );
+  } catch (err: unknown) {
+    if (isAxiosCancel(err)) return;
+    const msg = isTimeoutError(err)
+      ? t('app.rescan.timeout')
+      : getErrorMessage(err);
+    notify(msg, { type: 'error' });
+  } finally {
+    if (abortControllerRef.current === controller) {
+    setIsScanning(false);
+    setScanProgress({ current: 0, total: 0, status: '' });
+    abortControllerRef.current = null;
+    }
+  }
+  };
+
   /** 全项目扫描：AI 提取候选 + Guard 审计（SPM 页面专用） */
   const handleScanProject = async () => {
   if (isScanning) return;
@@ -1045,6 +1094,7 @@ const App: React.FC = () => {
         handleDeleteCandidate={handleDeleteCandidate} 
         onEditRecipe={openRecipeEdit}
         onColdStart={handleColdStart}
+        onRescan={handleRescan}
         isScanning={isScanning}
         isBootstrapping={bootstrap.session?.status === 'running'}
         onRefresh={fetchData}

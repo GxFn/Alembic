@@ -14,137 +14,36 @@
  * @module bootstrap/MissionBriefingBuilder
  */
 
+import {
+  getDimensionSOP,
+  PRE_SUBMIT_CHECKLIST,
+  sopToCompactText,
+} from '#domain/dimension/DimensionSop.js';
 import { getCursorDeliverySpec } from '#domain/knowledge/FieldSpec.js';
 import { PROJECT_SNAPSHOT_STYLE_GUIDE } from '#domain/knowledge/StyleGuide.js';
+import type {
+  AstCategoryInfo,
+  AstClassInfo,
+  AstFileSummary,
+  AstProtocolInfo,
+  AstSummary,
+  CallGraphResult,
+  CodeEntityGraphResult,
+  DependencyGraph,
+  DependencyNode,
+  DimensionDef,
+  GuardAudit,
+  GuardAuditFileEntry,
+  GuardViolation,
+  IncrementalPlan,
+  LocalPackageModule,
+  PanoramaResult,
+  ProjectMetrics,
+} from '#types/project-snapshot.js';
 import { TierScheduler } from './pipeline/tier-scheduler.js';
-import { getDimensionSOP, PRE_SUBMIT_CHECKLIST, sopToCompactText } from './shared/dimension-sop.js';
 import { EXAMPLE_TEMPLATES, SUBMISSION_SCHEMA } from './shared/dimension-text.js';
 
 // ── 本地类型定义 ────────────────────────────────────────────
-
-/** 维度定义 (来自 base-dimensions.js) */
-interface DimensionDef {
-  id: string;
-  label?: string;
-  guide?: string;
-  knowledgeTypes?: string[];
-  skillWorthy?: boolean;
-  skillMeta?: { name: string; description: string };
-  dualOutput?: boolean;
-  tierHint?: number;
-}
-
-/** AST 类信息 */
-interface AstClassInfo {
-  name: string;
-  superclass?: string;
-  methodCount?: number;
-  methods?: unknown[];
-  protocols?: string[];
-  conformedProtocols?: string[];
-  file?: string;
-  relativePath?: string;
-}
-
-/** AST 协议信息 */
-interface AstProtocolInfo {
-  name: string;
-  file?: string;
-  relativePath?: string;
-  methodCount?: number;
-  methods?: unknown[];
-  conformers?: string[];
-}
-
-/** AST Category 信息 */
-interface AstCategoryInfo {
-  baseClass?: string;
-  extendedClass?: string;
-  name: string;
-  file?: string;
-  relativePath?: string;
-  methods?: (string | { name: string })[];
-}
-
-/** AST 方法信息 */
-interface AstMethodInfo {
-  name: string;
-  className?: string;
-  isAsync?: boolean;
-}
-
-/** AST 文件摘要 */
-interface AstFileSummary {
-  exports?: unknown[];
-  methods?: AstMethodInfo[];
-}
-
-/** 项目度量 */
-interface ProjectMetrics {
-  totalMethods?: number;
-  complexMethods?: unknown[];
-  longMethods?: unknown[];
-  avgMethodsPerClass?: number;
-  maxNestingDepth?: number;
-}
-
-/** AST 项目摘要 */
-interface AstProjectSummary {
-  classes?: AstClassInfo[];
-  protocols?: AstProtocolInfo[];
-  categories?: AstCategoryInfo[];
-  fileSummaries?: AstFileSummary[];
-  patternStats?: Record<string, unknown>;
-  projectMetrics?: ProjectMetrics;
-  fileCount?: number;
-}
-
-/** Guard 违规条目 */
-interface GuardViolationEntry {
-  ruleId: string;
-  message?: string;
-  line?: number;
-  locations?: { filePath: string; line?: number }[];
-}
-
-/** Guard 审计文件条目 */
-interface GuardAuditFileEntry {
-  filePath: string;
-  violations?: GuardViolationEntry[];
-}
-
-/** Guard 审计结果 (用于 Briefing) */
-interface GuardAuditForBriefing {
-  files?: GuardAuditFileEntry[];
-  summary?: { totalErrors?: number; totalViolations?: number };
-  crossFileViolations?: GuardViolationEntry[];
-}
-
-/** 依赖图节点 */
-interface DepGraphNode {
-  id?: string;
-  label?: string;
-  fileCount?: number;
-}
-
-/** 依赖图数据 */
-interface DepGraphData {
-  nodes?: (string | DepGraphNode)[];
-  edges?: unknown[];
-}
-
-/** Code Entity 结果 */
-interface CodeEntityResult {
-  entitiesUpserted?: number;
-  edgesCreated?: number;
-}
-
-/** Call Graph 结果 */
-interface CallGraphResult {
-  entitiesUpserted?: number;
-  edgesCreated?: number;
-  durationMs?: number;
-}
 
 /** Guard rule 聚合条目 */
 interface RuleMapEntry {
@@ -168,9 +67,11 @@ interface DimensionTask {
 
 /** Evidence starters 选项 */
 interface EvidenceStarterOpts {
-  astData?: AstProjectSummary | null;
-  guardAudit?: GuardAuditForBriefing | null;
-  depGraphData?: DepGraphData | null;
+  astData?: AstSummary | null;
+  guardAudit?: GuardAudit | null;
+  depGraphData?: DependencyGraph | null;
+  callGraphResult?: CallGraphResult | null;
+  panoramaResult?: Record<string, unknown> | null;
 }
 
 /** Target 信息 */
@@ -179,11 +80,6 @@ interface TargetInfo {
   type?: string;
   inferredRole?: string;
   fileCount?: number;
-}
-
-/** 增量计划 */
-interface IncrementalPlan {
-  dimensions?: { id: string; status?: string }[];
 }
 
 type PatternValue = number | string | boolean | Record<string, number | string | boolean>;
@@ -254,6 +150,17 @@ interface MissionBriefing {
       priority: string;
     }>;
   } | null;
+  mustCoverModules: {
+    totalLocalPackages: number;
+    modules: {
+      name: string;
+      packageName: string;
+      fileCount: number;
+      inferredRole?: string;
+      keyFiles: string[];
+    }[];
+    instruction: string;
+  } | null;
   session: Record<string, unknown>;
   meta?: { responseSizeKB: number; compressionLevel: string; warnings?: string[] };
   [key: string]: unknown;
@@ -262,11 +169,11 @@ interface MissionBriefing {
 /** buildMissionBriefing 参数 */
 interface MissionBriefingParams {
   projectMeta: Record<string, unknown>;
-  astData?: AstProjectSummary | null;
-  codeEntityResult?: CodeEntityResult | null;
+  astData?: AstSummary | null;
+  codeEntityResult?: CodeEntityGraphResult | null;
   callGraphResult?: CallGraphResult | null;
-  depGraphData?: DepGraphData | null;
-  guardAudit?: GuardAuditForBriefing | null;
+  depGraphData?: DependencyGraph | null;
+  guardAudit?: GuardAudit | null;
   targets?: (string | TargetInfo)[];
   activeDimensions: DimensionDef[];
   session: { toJSON(): Record<string, unknown> };
@@ -274,6 +181,7 @@ interface MissionBriefingParams {
   incrementalPlan?: IncrementalPlan | null;
   languageStats?: Record<string, number> | null;
   panoramaResult?: Record<string, unknown> | null;
+  localPackageModules?: LocalPackageModule[];
 }
 
 // ── 常量 ────────────────────────────────────────────────────
@@ -302,13 +210,19 @@ const SIZE_THRESHOLDS = {
 function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
   // ── analysisGuide: SOP 化 — 优先使用维度专属 SOP，否则回退通用指引 ──
   const sop = getDimensionSOP(dim.id);
-  let analysisGuide: Record<string, any>;
+  let analysisGuide: {
+    goal: string;
+    focus: string;
+    steps: Array<Record<string, unknown>>;
+    timeEstimate: string;
+    commonMistakes: string[];
+  };
 
   if (sop) {
     // SOP 结构化模式: steps + timeEstimate + commonMistakes
     analysisGuide = {
       goal: `分析项目的${dim.label}`,
-      focus: dim.guide,
+      focus: dim.guide || '',
       steps: sop.steps,
       timeEstimate: sop.timeEstimate || '1-5 min',
       commonMistakes: sop.commonMistakes || [],
@@ -318,7 +232,7 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
     // 保持 analysisGuide 为对象格式，确保 SOP 覆盖率
     analysisGuide = {
       goal: `分析项目的${dim.label}`,
-      focus: dim.guide,
+      focus: dim.guide || '',
       steps: [
         {
           phase: '1. 全局扫描',
@@ -352,7 +266,9 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
       timeEstimate: '1-5 min',
       commonMistakes: [
         '不要只扫描 1 个文件就提交 — 至少读 5+ 个文件验证模式一致性',
-        'content 中必须有 (来源: FileName.ext:行号) 标注具体出处',
+        'content 中必须有 (来源: Full/Path/FileName.ext:行号) 标注具体出处，必须是从项目根开始的完整相对路径',
+        '【跨维度去重】每条候选必须属于当前维度的独有视角 — 禁止将同一知识点换个角度重复提交到多个维度来充数，宁可少提交也不要重复',
+        '【本地子包覆盖】如果项目有本地子包/模块（如 Packages/ 下的包），必须同时分析其内部实现，不得只看主项目对其的调用',
       ],
     };
   }
@@ -368,7 +284,12 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
       .slice(0, 12)
       .join('\n'),
     contentQuality:
-      'content.markdown 必须 ≥200 字符，包含: (1) ## 标题 (2) 正文说明 (3) 至少一个 ```代码块``` (4) 来源标注「(来源: FileName.ext:行号)」。短于 200 字符的提交会被拒绝。\n【禁止】标题和正文中不得出现 "Agent" 字样 — 所有候选必须以项目规范/开发规范的视角撰写，描述的是项目规则而非 AI Agent 指南。',
+      'content.markdown 必须 ≥200 字符，包含: (1) ## 标题 (2) 正文说明 (3) 至少一个 ```代码块``` (4) 来源标注「(来源: Full/Relative/Path/FileName.ext:行号)」。\n【最高优先级 — 源码位置】每个候选必须包含完整相对路径（从项目根目录开始）+ 行号。禁止只写文件名（如 NetworkClient.swift:42），必须写完整路径（如 Packages/AOXNetworkKit/Sources/AOXNetworkKit/Client/NetworkClient.swift:42）。reasoning.sources 中也必须是完整相对路径。\n【模块归属】每个候选必须标注所属模块（如「所属模块: AOXNetworkKit」）。\n短于 200 字符的提交会被拒绝。\n【禁止】标题和正文中不得出现 "Agent" 字样 — 所有候选必须以项目规范/开发规范的视角撰写，描述的是项目规则而非 AI Agent 指南。',
+    crossDimensionDedup:
+      '【跨维度去重 — 系统强制拒绝】每条候选必须属于且仅属于当前维度的视角。禁止将同一知识点换个角度/换个说法重复提交到多个维度。' +
+      '例如: BaseViewController 的继承规则只应出现在 code-pattern（设计模式）中，不应同时出现在 architecture（分层架构）和 code-standard（命名规范）中。' +
+      '如果某个发现与多个维度相关，只在最核心的维度提交，其他维度用不同的独立知识点填充。' +
+      '宁可少提交也不要重复充数 — 与前序维度标题相同的候选会被系统自动拒绝（硬去重）。',
     cursorFields: getCursorDeliverySpec(),
     dimensionCompleteGuide:
       '调用 dimension_complete 时必须传递: referencedFiles=[本维度分析过的全部文件路径], keyFindings=[3-5条关键发现摘要], analysisText=详细分析报告(≥500字符,含##标题+列表+代码块)',
@@ -376,10 +297,11 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
   };
 
   // ── skillMeta ──
+  const sm = dim.skillMeta as { name?: string; description?: string } | null | undefined;
   const skillMeta = dim.skillWorthy
     ? {
-        name: dim.skillMeta?.name || `project-${dim.id}`,
-        description: dim.skillMeta?.description || `${dim.label} skill (auto-generated)`,
+        name: sm?.name || `project-${dim.id}`,
+        description: sm?.description || `${dim.label} skill (auto-generated)`,
         format: 'Markdown 正文，需包含 # 标题、列表、代码块等结构化内容，≥100 字符',
       }
     : undefined;
@@ -416,9 +338,9 @@ function enrichDimensionTask(dim: DimensionDef, tier: number): DimensionTask {
  * @param [opts.depGraphData] 依赖图
  * @returns evidenceStarters 对象，为空则返回 undefined
  */
-function buildEvidenceStarters(
+export function buildEvidenceStarters(
   dim: DimensionDef,
-  { astData, guardAudit, depGraphData }: EvidenceStarterOpts
+  { astData, guardAudit, depGraphData, callGraphResult, panoramaResult }: EvidenceStarterOpts
 ) {
   const starters: Record<string, { hint: string; data: unknown }> = {};
   const dimId = dim.id;
@@ -494,7 +416,7 @@ function buildEvidenceStarters(
     ) {
       if (Object.keys(patterns).length > 0) {
         // 压缩 patterns: 只保留顶层 key → 计数/类型摘要
-        const compactPatterns: Record<string, any> = {};
+        const compactPatterns: Record<string, string | number | boolean> = {};
         for (const [key, val] of Object.entries(patterns)) {
           if (typeof val === 'number' || typeof val === 'string' || typeof val === 'boolean') {
             compactPatterns[key] = val;
@@ -556,7 +478,7 @@ function buildEvidenceStarters(
       );
       const asyncCount = fileSummaries.reduce(
         (s: number, f: AstFileSummary) =>
-          s + (f.methods || []).filter((m: AstMethodInfo) => m.isAsync).length,
+          s + (f.methods || []).filter((m: { isAsync?: boolean }) => m.isAsync).length,
         0
       );
       const complexMethods = astData.projectMetrics?.complexMethods || [];
@@ -595,7 +517,7 @@ function buildEvidenceStarters(
         if (dimId.split('-').some((word: string) => word.length > 3 && ruleText.includes(word))) {
           dimRelatedViolations.push({
             file: fileResult.filePath,
-            rule: v.ruleId,
+            rule: v.ruleId || '',
             message: (v.message || '').substring(0, 100),
           });
         }
@@ -605,6 +527,27 @@ function buildEvidenceStarters(
       starters.guardViolations = {
         hint: `Guard 审计发现 ${dimRelatedViolations.length} 条与本维度相关的违规 — 可作为分析切入点`,
         data: dimRelatedViolations.slice(0, 5),
+      };
+    }
+
+    // §2.5: 跨文件违规单独高亮 — architecture / best-practice 维度重点关注
+    const crossFileViolations = guardAudit.crossFileViolations || [];
+    if (
+      crossFileViolations.length > 0 &&
+      (dimId === 'architecture' ||
+        dimId === 'best-practice' ||
+        dimId === 'code-standard' ||
+        dimKeywords.includes('架构') ||
+        dimKeywords.includes('层级') ||
+        dimKeywords.includes('依赖方向'))
+    ) {
+      starters.crossFileViolations = {
+        hint: `Guard 检测到 ${crossFileViolations.length} 条跨文件违规（如层级穿透、循环引用） — 这是架构分析的关键信号`,
+        data: crossFileViolations.slice(0, 5).map((v: GuardViolation) => ({
+          rule: v.ruleId,
+          message: (v.message || '').substring(0, 120),
+          files: v.locations?.slice(0, 2).map((l) => l.filePath) || [],
+        })),
       };
     }
   }
@@ -631,7 +574,7 @@ function buildEvidenceStarters(
           totalEdges: edgeCount,
           topModules: (depGraphData.nodes || [])
             .slice(0, 5)
-            .map((n: string | DepGraphNode) => (typeof n === 'string' ? n : n.label || n.id)),
+            .map((n: string | DependencyNode) => (typeof n === 'string' ? n : n.label || n.id)),
         },
       };
     }
@@ -709,7 +652,138 @@ function buildEvidenceStarters(
     }
   }
 
-  return Object.keys(starters).length > 0 ? starters : undefined;
+  // §6: 调用图证据 — 为 best-practice / event-and-data-flow / code-pattern 提供热点方法
+  if (callGraphResult) {
+    const callEdges = (callGraphResult as Record<string, unknown>).edgesCreated as
+      | number
+      | undefined;
+    const methodEntities = (callGraphResult as Record<string, unknown>).entitiesUpserted as
+      | number
+      | undefined;
+    if (
+      callEdges &&
+      callEdges > 0 &&
+      (dimId === 'best-practice' ||
+        dimId === 'event-and-data-flow' ||
+        dimId === 'code-pattern' ||
+        dimKeywords.includes('并发') ||
+        dimKeywords.includes('concurrency') ||
+        dimKeywords.includes('事件') ||
+        dimKeywords.includes('flow'))
+    ) {
+      starters.callGraphSummary = {
+        hint: `调用图包含 ${methodEntities || 0} 个方法实体、${callEdges} 条调用边 — 关注高扇入/扇出方法和异步调用链`,
+        data: {
+          methodEntities: methodEntities || 0,
+          callEdges,
+          durationMs: (callGraphResult as Record<string, unknown>).durationMs || 0,
+          analysisHint:
+            dimId === 'best-practice'
+              ? '关注扇入最高的方法（核心抽象）和扇出最高的方法（协调者），以及 async/await 调用链'
+              : dimId === 'event-and-data-flow'
+                ? '关注数据流边和事件传播路径，特别是跨模块的观察者和回调链'
+                : '关注方法调用模式中的设计模式（如 Template Method、Chain of Responsibility）',
+        },
+      };
+    }
+  }
+
+  // §7: Panorama 热点模块 — 为 architecture / project-profile 提供耦合分析起点
+  if (panoramaResult) {
+    const panoramaModules = panoramaResult.modules as
+      | Map<string, { name: string; fanIn: number; fanOut: number }>
+      | undefined;
+    const panoramaCycles =
+      (panoramaResult.cycles as Array<{ cycle: string[]; severity: string }>) ?? [];
+
+    if (
+      panoramaModules instanceof Map &&
+      (dimId === 'architecture' ||
+        dimId === 'project-profile' ||
+        dimId === 'best-practice' ||
+        dimKeywords.includes('架构') ||
+        dimKeywords.includes('模块') ||
+        dimKeywords.includes('耦合'))
+    ) {
+      // 提取高耦合模块（fanIn+fanOut 排序）
+      const hotspots: { module: string; fanIn: number; fanOut: number }[] = [];
+      for (const [, mod] of panoramaModules) {
+        if (mod.fanIn >= 5 || mod.fanOut >= 5) {
+          hotspots.push({ module: mod.name, fanIn: mod.fanIn, fanOut: mod.fanOut });
+        }
+      }
+      hotspots.sort((a, b) => b.fanIn + b.fanOut - (a.fanIn + a.fanOut));
+      if (hotspots.length > 0) {
+        starters.couplingHotspots = {
+          hint: `全景分析发现 ${hotspots.length} 个高耦合模块 — 优先分析其架构边界和依赖方向`,
+          data: hotspots
+            .slice(0, 8)
+            .map((h) => `${h.module} (fanIn=${h.fanIn}, fanOut=${h.fanOut})`),
+        };
+      }
+    }
+
+    // 循环依赖 → architecture / best-practice
+    if (
+      panoramaCycles.length > 0 &&
+      (dimId === 'architecture' ||
+        dimId === 'best-practice' ||
+        dimKeywords.includes('架构') ||
+        dimKeywords.includes('依赖'))
+    ) {
+      starters.cyclicDependencies = {
+        hint: `全景分析检测到 ${panoramaCycles.length} 组循环依赖 — 需要在分析中识别并记录`,
+        data: panoramaCycles.slice(0, 5).map((c) => ({
+          cycle: c.cycle.join(' → '),
+          severity: c.severity,
+        })),
+      };
+    }
+  }
+
+  if (Object.keys(starters).length === 0) {
+    return undefined;
+  }
+
+  // §8: 信号强度评估 — 根据数据显著性为每个 starter 附加 strength (0-100)
+  const withStrength: Record<string, { hint: string; data: unknown; strength: number }> = {};
+  for (const [key, value] of Object.entries(starters)) {
+    let strength = 50; // 默认中等
+    const dataArr = Array.isArray(value.data) ? value.data : null;
+    const dataCount = dataArr ? dataArr.length : 0;
+
+    // 统计类 starters — 数据量越大信号越强
+    if (key === 'namingPrefixSuffix' || key === 'patternStats' || key === 'inheritanceChains') {
+      strength = Math.min(90, 40 + dataCount * 10);
+    } else if (key === 'guardViolations') {
+      // Guard 违规 — 越多越值得关注
+      const violations = (value.data as { totalViolations?: number })?.totalViolations || dataCount;
+      strength = Math.min(95, 50 + violations * 5);
+    } else if (key === 'crossFileViolations') {
+      // 跨文件违规 — 高优先级信号（涉及架构边界）
+      strength = Math.min(95, 75 + dataCount * 8);
+    } else if (key === 'callGraphSummary') {
+      const edges = (value.data as { callEdges?: number })?.callEdges ?? 0;
+      strength = edges > 50 ? 85 : edges > 10 ? 70 : 55;
+    } else if (key === 'couplingHotspots') {
+      strength = Math.min(90, 60 + dataCount * 8);
+    } else if (key === 'cyclicDependencies') {
+      strength = Math.min(95, 70 + dataCount * 10); // 循环依赖是高优先级信号
+    } else if (key === 'delegatePatterns' || key === 'observerPatterns') {
+      strength = Math.min(85, 45 + dataCount * 8);
+    } else if (key === 'depGraph') {
+      strength = 60;
+    }
+
+    withStrength[key] = { ...value, strength };
+  }
+
+  // 按 strength 降序排列（通过 entries+sort 重构对象键顺序）
+  const sorted = Object.fromEntries(
+    Object.entries(withStrength).sort(([, a], [, b]) => b.strength - a.strength)
+  );
+
+  return sorted;
 }
 
 // ── AST 压缩 ────────────────────────────────────────────────
@@ -721,7 +795,7 @@ function buildEvidenceStarters(
  * @param fileCount 项目文件数
  * @returns 压缩后的 AST 数据
  */
-function compressAstForBriefing(astProjectSummary: AstProjectSummary | null, fileCount: number) {
+function compressAstForBriefing(astProjectSummary: AstSummary | null, fileCount: number) {
   if (!astProjectSummary) {
     return { available: false, classes: [], protocols: [], categories: [], patterns: {} };
   }
@@ -796,7 +870,7 @@ function compressAstForBriefing(astProjectSummary: AstProjectSummary | null, fil
 
   const compressedCategories = categories.slice(0, topN).map((cat: AstCategoryInfo) => ({
     baseClass: cat.baseClass || cat.extendedClass,
-    name: cat.name,
+    name: cat.name || '',
     file: cat.file || cat.relativePath || null,
     methods: (cat.methods || [])
       .map((m: string | { name: string }) => (typeof m === 'string' ? m : m.name))
@@ -850,7 +924,7 @@ function compressAstForBriefing(astProjectSummary: AstProjectSummary | null, fil
 }
 
 /** 压缩 Code Entity Graph */
-function summarizeEntityGraph(codeEntityResult: CodeEntityResult | null) {
+function summarizeEntityGraph(codeEntityResult: CodeEntityGraphResult | null) {
   if (!codeEntityResult) {
     return null;
   }
@@ -876,7 +950,7 @@ function summarizeCallGraph(callGraphResult: CallGraphResult | null) {
 }
 
 /** 压缩 Guard 审计结果 */
-function summarizeGuardFindings(guardAudit: GuardAuditForBriefing | null) {
+function summarizeGuardFindings(guardAudit: GuardAudit | null) {
   if (!guardAudit) {
     return null;
   }
@@ -885,13 +959,14 @@ function summarizeGuardFindings(guardAudit: GuardAuditForBriefing | null) {
   const ruleMap: Record<string, RuleMapEntry> = {};
 
   // helper: 将单个 violation 累加到 ruleMap
-  const addViolation = (v: GuardViolationEntry, examplePrefix: string) => {
-    if (!ruleMap[v.ruleId]) {
-      ruleMap[v.ruleId] = { ruleId: v.ruleId, count: 0, example: null };
+  const addViolation = (v: GuardViolation, examplePrefix: string) => {
+    const ruleId = v.ruleId || 'unknown';
+    if (!ruleMap[ruleId]) {
+      ruleMap[ruleId] = { ruleId, count: 0, example: null };
     }
-    ruleMap[v.ruleId].count++;
-    if (!ruleMap[v.ruleId].example) {
-      ruleMap[v.ruleId].example = `${examplePrefix} — ${v.message}`;
+    ruleMap[ruleId].count++;
+    if (!ruleMap[ruleId].example) {
+      ruleMap[ruleId].example = `${examplePrefix} — ${v.message}`;
     }
   };
 
@@ -917,11 +992,20 @@ function summarizeGuardFindings(guardAudit: GuardAuditForBriefing | null) {
   const totalErrors = guardAudit.summary?.totalErrors || 0;
   const totalViolations = guardAudit.summary?.totalViolations || 0;
 
+  // §V2: 单独高亮跨文件违规 — 这类违规通常涉及架构层级或模块边界问题
+  const crossFileIssues = (guardAudit.crossFileViolations || []).map((v: GuardViolation) => ({
+    ruleId: v.ruleId,
+    message: v.message,
+    locations: v.locations?.slice(0, 3),
+    severity: (v as unknown as Record<string, unknown>).severity || 'warning',
+  }));
+
   return {
     totalViolations,
     errors: totalErrors,
     warnings: totalViolations - totalErrors,
     topViolations,
+    ...(crossFileIssues.length > 0 ? { crossFileIssues } : {}),
   };
 }
 
@@ -984,6 +1068,42 @@ function buildExecutionPlan(activeDimensions: DimensionDef[]) {
  * 从 PanoramaResult 提取 layers / couplingHotspots / cycles / gaps
  * 用于注入 MissionBriefing，使外部 Agent 获得项目全景视野
  */
+// ── 本地子包/模块 — mustCoverModules ────────────────────────
+
+/**
+ * 构建 mustCoverModules 段落 — 标记来自本地子包的基础设施模块
+ *
+ * 语言无关：只依赖 Discoverer 返回的 target metadata 中的 isLocalPackage 标记。
+ * 无论 SPM (Swift)、monorepo (TS)、Gradle subproject (Java/Kotlin)，
+ * 只要某 target 来自非主 projectRoot 的子目录，就被视为本地子包。
+ *
+ * @param localPackageModules Phase 1 收集的子包信息
+ * @returns mustCoverModules 段落
+ */
+function buildMustCoverModules(
+  localPackageModules?: LocalPackageModule[]
+): MissionBriefing['mustCoverModules'] {
+  if (!localPackageModules || localPackageModules.length === 0) {
+    return null;
+  }
+  return {
+    totalLocalPackages: localPackageModules.length,
+    modules: localPackageModules.map((m) => ({
+      name: m.name,
+      packageName: m.packageName,
+      fileCount: m.fileCount,
+      inferredRole: m.inferredRole,
+      keyFiles: m.keyFiles || [],
+    })),
+    instruction:
+      '【强制覆盖】以下本地子包/模块是项目的基础设施层，包含核心抽象和共享服务。' +
+      '每个维度分析时必须同时覆盖主项目代码和这些子包代码。' +
+      '提交的知识候选中必须包含子包源码的完整相对路径和行号（如 Packages/AOXNetworkKit/Sources/.../NetworkClient.swift:42），' +
+      '不得仅引用主项目中对子包的调用，而忽略子包内部的实现细节。' +
+      '对于 architecture、code-pattern、best-practice 维度，至少要有 1 条候选直接引用子包的核心实现文件。',
+  };
+}
+
 function summarizePanorama(
   panoramaResult: Record<string, unknown> | null
 ): MissionBriefing['panorama'] {
@@ -1065,6 +1185,7 @@ export function buildMissionBriefing({
   incrementalPlan, // §7.3: 增量 Bootstrap 评估结果
   languageStats, // §7.4: 完整语言分布统计
   panoramaResult, // §M1: Phase 1.8 全景数据
+  localPackageModules, // 本地子包模块信息
 }: MissionBriefingParams) {
   const scheduler = new TierScheduler();
 
@@ -1085,7 +1206,13 @@ export function buildMissionBriefing({
     }
 
     // v2: 从 Phase 1-4 数据中提取维度相关的证据启发
-    const evidenceStarters = buildEvidenceStarters(dim, { astData, guardAudit, depGraphData });
+    const evidenceStarters = buildEvidenceStarters(dim, {
+      astData,
+      guardAudit,
+      depGraphData,
+      callGraphResult,
+      panoramaResult,
+    });
     if (evidenceStarters) {
       task.evidenceStarters = evidenceStarters;
     }
@@ -1112,7 +1239,7 @@ export function buildMissionBriefing({
 
     dependencyGraph: depGraphData
       ? {
-          nodes: (depGraphData.nodes || []).map((n: string | DepGraphNode) => ({
+          nodes: (depGraphData.nodes || []).map((n: string | DependencyNode) => ({
             id: typeof n === 'string' ? n : n.id || '',
             label: typeof n === 'string' ? n : n.label || '',
             fileCount: typeof n === 'string' ? undefined : n.fileCount,
@@ -1146,6 +1273,9 @@ export function buildMissionBriefing({
     executionPlan: buildExecutionPlan(activeDimensions),
 
     panorama: summarizePanorama(panoramaResult ?? null),
+
+    // 本地子包/模块 — 必须覆盖的基础设施模块
+    mustCoverModules: buildMustCoverModules(localPackageModules),
 
     session: session.toJSON(),
   };

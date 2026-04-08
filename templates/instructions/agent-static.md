@@ -15,6 +15,7 @@ Access the knowledge base through MCP tools.
 - `autosnippet_skill` — Skill management (list/load)
 - `autosnippet_structure` — Project structure discovery
 - `autosnippet_bootstrap` — Project cold-start & scan
+- `autosnippet_rescan` — Incremental rescan: preserves Recipes, cleans caches, re-analyzes project, runs relevance audit
 - `autosnippet_panorama` — Project panorama (operation: overview/module/gaps/health)
 - `autosnippet_health` — Service health & KB stats
 

@@ -36,7 +36,7 @@ export const V3_FIELD_SPEC = [
     name: 'title',
     level: FieldLevel.REQUIRED,
     type: 'string',
-    rule: '中文 ≤20 字，引用项目真实类名',
+    rule: '中文 ≤20 字，引用项目真实类名（不以项目名开头）',
     pipeline: 'identity + dedup + search + QualityScorer(completeness 0.25)',
   },
   {
@@ -239,24 +239,37 @@ export const STANDARD_CATEGORIES = [
   'Utility',
 ];
 
-/** category 白名单 — Bootstrap 维度展示分组 + 特殊流程中的合法 category */
+/** category 白名单 — 统一维度 ID + 特殊流程中的合法 category */
 export const WHITELISTED_CATEGORIES = [
-  // Bootstrap 维度展示分组 (DIMENSION_DISPLAY_GROUP 输出值)
+  // ── Layer 1: 通用维度 ──
   'architecture',
-  'best-practice',
-  'event-and-data-flow',
-  'objc-deep-scan',
+  'coding-standards',
+  'design-patterns',
+  'error-resilience',
+  'concurrency-async',
+  'data-event-flow',
+  'networking-api',
+  'ui-interaction',
+  'testing-quality',
+  'security-auth',
+  'performance-optimization',
+  'observability-logging',
   'agent-guidelines',
-  // 维度原始 ID (当 DIMENSION_DISPLAY_GROUP 无映射时作为 fallback)
-  'code-pattern',
-  'code-standard',
-  'project-profile',
-  'category-scan',
-  'module-export-scan',
-  'framework-convention-scan',
-  'python-package-scan',
-  'jvm-annotation-scan',
-  // 特殊来源
+  // ── Layer 2: 语言维度 ──
+  'swift-objc-idiom',
+  'ts-js-module',
+  'python-structure',
+  'jvm-annotation',
+  'go-module',
+  'rust-ownership',
+  'csharp-dotnet',
+  // ── Layer 3: 框架维度 ──
+  'react-patterns',
+  'vue-patterns',
+  'spring-patterns',
+  'swiftui-patterns',
+  'django-fastapi',
+  // ── 特殊来源 ──
   'bootstrap',
   'knowledge',
   'general',

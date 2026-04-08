@@ -18,7 +18,12 @@ import {
   getSystemInjectedFields,
 } from '#domain/knowledge/FieldSpec.js';
 import { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';
-import { checkDimensionType, DIMENSION_DISPLAY_GROUP, type ToolHandlerContext } from './_shared.js';
+import {
+  checkDimensionType,
+  DIMENSION_DISPLAY_GROUP,
+  stripProjectNamePrefix,
+  type ToolHandlerContext,
+} from './_shared.js';
 
 // ─── Tool handler param types ──────────────────────────────
 
@@ -42,6 +47,8 @@ export interface SubmitKnowledgeParams {
   usageGuide?: string;
   sourceFile?: string;
   _category?: string;
+  /** 被替代的旧 Recipe ID（进化架构入口） */
+  supersedes?: string;
   [key: string]: unknown;
 }
 
@@ -107,12 +114,21 @@ export const submitCandidate = {
       },
       usageGuide: { type: 'string', description: '使用指南 Markdown（### 章节格式）' },
       sourceFile: { type: 'string', description: '来源文件相对路径' },
+      supersedes: {
+        type: 'string',
+        description: '被替代的旧 Recipe ID。传入后将创建 supersede 提案，72h 观察窗口后自动替代。',
+      },
     },
     // FieldSpec 驱动: 内部 Agent 路径排除系统注入字段
     required: getInternalAgentRequiredFields(),
   },
   handler: async (params: SubmitKnowledgeParams, ctx: ToolHandlerContext) => {
     const knowledgeService = ctx.container.get('knowledgeService');
+
+    // ── 标题正规化：剥离冗余的项目名前缀 ──
+    if (params.title) {
+      params.title = stripProjectNamePrefix(params.title, ctx.projectRoot);
+    }
 
     // ── Bootstrap 维度类型校验 ──
     const dimMeta = ctx._dimensionMeta;
@@ -133,9 +149,8 @@ export const submitCandidate = {
         params.tags.push('bootstrap');
       }
 
-      // Bootstrap 模式: 将 category 覆盖为展示分组 ID
-      params._category =
-        (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id;
+      // Bootstrap 模式: 将 category 设为维度 ID（前端按此分组显示）
+      params._category = dimMeta.id;
 
       // ── UnifiedValidator 统一质量验证（替代 CandidateGuardrail） ──
       const validator =
@@ -166,9 +181,7 @@ export const submitCandidate = {
     // ── 系统自动设置 ──
     const systemFields = {
       language: ctx._projectLanguage || '',
-      category: dimMeta
-        ? (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id
-        : 'general',
+      category: dimMeta ? dimMeta.id : 'general',
       knowledgeType: dimMeta?.allowedKnowledgeTypes?.[0] || 'code-pattern',
       source: ctx.source === 'system' ? 'bootstrap' : 'agent',
     };
@@ -226,6 +239,21 @@ export const submitCandidate = {
       await knowledgeService.updateQuality(saved.id, { userId: 'agent' });
     } catch {
       /* best effort — 不阻塞创建流程 */
+    }
+
+    // ── Supersede 提案：统一进化架构入口 ──
+    if (params.supersedes && saved?.id) {
+      const { createSupersedeProposal } = await import(
+        '#service/evolution/createSupersedeProposal.js'
+      );
+      const proposal = createSupersedeProposal(ctx.container, {
+        oldRecipeId: params.supersedes,
+        newRecipeIds: [saved.id],
+        source: 'ide-agent',
+      });
+      if (proposal) {
+        return { ...saved, _supersedeProposal: proposal };
+      }
     }
 
     return saved;

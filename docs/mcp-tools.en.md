@@ -46,7 +46,7 @@ Unified knowledge base search. Supports multiple search modes with automatic str
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | `query` | string | ✅ | Search query |
-| `mode` | string | — | Search mode: `auto` / `keyword` / `bm25` / `semantic` / `context` (default `auto`) |
+| `mode` | string | — | Search mode: `auto` / `keyword` / `weighted` / `semantic` / `context` (default `auto`) |
 | `type` | string | — | Type filter: `all` / `recipe` / `solution` / `rule` |
 | `limit` | number | — | Max results (default 10) |
 | `language` | string | — | Language filter |
@@ -57,7 +57,7 @@ Unified knowledge base search. Supports multiple search modes with automatic str
 |------|----------|----------|
 | `auto` | Auto-select | Default recommended |
 | `keyword` | Exact keyword matching | Known exact terms |
-| `bm25` | BM25 (TF-IDF) scoring | General queries |
+| `weighted` | Field-weighted scoring | General queries |
 | `semantic` | Vector semantic similarity | Conceptual/fuzzy queries |
 | `context` | 4-stage funnel (keyword→semantic→fusion→rerank) | Highest quality retrieval |
 
@@ -208,6 +208,19 @@ Coldstart — No parameters required. Automatically analyzes the project (AST, d
 
 ---
 
+### 9b. autosnippet_rescan
+
+Incremental rescan — Preserves approved Recipes, cleans derived caches, re-runs Phase 1-4 analysis, and executes RecipeRelevanceAuditor 5-dimension evidence audit. Returns Mission Briefing with evidenceHints (existing Recipes + decayed Recipes).
+
+**Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dimensions` | string[] | — | Dimension filter list, empty = all active dimensions |
+| `reason` | string | — | Rescan justification (logged to report) |
+
+---
+
 ### 10. autosnippet_dimension_complete
 
 Dimension analysis completion notification — Called after the Agent finishes analyzing a coldstart dimension. Handles Recipe association, Skill generation, checkpoint saving, and progress push.
@@ -339,6 +352,7 @@ Mapping between MCP tools and Gateway Actions:
 | `autosnippet_guard` | `read:guard_rules` | All roles |
 | `autosnippet_skill` (create) | `create:skills` | `external_agent` / `developer` |
 | `autosnippet_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `autosnippet_rescan` | `knowledge:bootstrap` | `external_agent` / `developer` |
 | `autosnippet_task` | `task:create` / `task:update` (routed by operation) | `external_agent` / `developer` |
 | `autosnippet_knowledge_lifecycle` | Dynamic by action | `developer` |
 

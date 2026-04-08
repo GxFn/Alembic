@@ -75,6 +75,10 @@ interface GuardCheckEngineLike {
       }[];
     };
   };
+  /** Enhancement Pack 注入（可选，引擎不一定暴露） */
+  isEpInjected?(): boolean;
+  injectExternalRules?(rules: unknown[]): void;
+  markEpInjected?(): void;
 }
 
 interface ViolationItem {
@@ -195,6 +199,54 @@ export class ComplianceReporter {
   }
 
   /**
+   * 确保 Enhancement Pack 规则已注入到 engine
+   * 与 MCP guard handler 的 _injectEnhancementGuardRules 逻辑一致
+   */
+  async #ensureEnhancementPackRules(): Promise<void> {
+    if (!this.engine.isEpInjected || this.engine.isEpInjected()) {
+      return;
+    }
+    try {
+      const { initEnhancementRegistry } = await import('#core/enhancement/index.js');
+      const enhReg = await initEnhancementRegistry();
+      const allPacks = enhReg.all();
+      const allGuardRules: unknown[] = [];
+      for (const pack of allPacks) {
+        try {
+          const rules = pack.getGuardRules();
+          if (rules.length > 0) {
+            allGuardRules.push(...rules);
+          }
+        } catch {
+          /* graceful degradation per pack */
+        }
+      }
+      if (allGuardRules.length > 0 && this.engine.injectExternalRules) {
+        this.engine.injectExternalRules(allGuardRules);
+        this.logger.info(
+          `[ComplianceReporter] Injected ${allGuardRules.length} Enhancement Pack rules`
+        );
+      }
+      this.engine.markEpInjected?.();
+    } catch {
+      /* Enhancement registry not available — non-critical */
+    }
+  }
+
+  /**
+   * 确保 AST 语言插件已加载（Tree-sitter WASM）
+   * 未加载时 _runAstLayer2Checks 会静默跳过，导致 AST 类违规无法检测
+   */
+  async #ensureAstPlugins(): Promise<void> {
+    try {
+      const { loadPlugins } = await import('../../core/ast/index.js');
+      await loadPlugins();
+    } catch {
+      /* AST not available — graceful degradation */
+    }
+  }
+
+  /**
    * 生成全项目合规报告
    * @param projectRoot 项目根目录
    * @param [options.qualityGate] 覆盖默认的 Quality Gate 阈值
@@ -206,6 +258,11 @@ export class ComplianceReporter {
   ) {
     const thresholds = { ...this.qualityGateConfig, ...(options.qualityGate || {}) };
     const maxFiles = options.maxFiles || 500;
+
+    // 0. 确保 Enhancement Pack 规则已注入（与 MCP guard handler 保持一致）
+    await this.#ensureEnhancementPackRules();
+    // 0b. 确保 AST 语言插件已加载（Tree-sitter WASM）
+    await this.#ensureAstPlugins();
 
     // 1. 收集源文件
     const files = await collectSourceFilesWithContent(projectRoot, { maxFiles });

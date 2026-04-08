@@ -2,13 +2,13 @@
  * SearchTypes — SearchEngine 共享类型定义
  *
  * 从 SearchEngine.ts 提取的所有接口和类型，
- * 供 SearchEngine、BM25Scorer 及测试文件独立消费。
+ * 供 SearchEngine、FieldWeightedScorer、BM25Scorer 及测试文件独立消费。
  *
  * @module SearchTypes
  */
 
-/** Internal BM25 document representation */
-export interface BM25Document {
+/** Internal scorer document representation */
+export interface ScorerDocument {
   id: string;
   tokens: string[];
   tokenFreq: Record<string, number>;
@@ -16,15 +16,21 @@ export interface BM25Document {
   meta: Record<string, unknown>;
 }
 
-/** BM25 search result */
-export interface BM25SearchResult {
+/** Scorer search result */
+export interface ScorerResult {
   id: string;
   score: number;
   meta: Record<string, unknown>;
 }
 
+// ── Legacy aliases (backward compat) ──
+/** @deprecated Use ScorerDocument */
+export type BM25Document = ScorerDocument;
+/** @deprecated Use ScorerResult */
+export type BM25SearchResult = ScorerResult;
+
 /**
- * Scorer 通用接口 — BM25Scorer 与 FieldWeightedScorer 共同实现
+ * Scorer 通用接口 — FieldWeightedScorer（默认）与 BM25Scorer 共同实现
  *
  * SearchEngine 通过此接口与具体评分器解耦，可在运行时切换。
  */
@@ -37,12 +43,12 @@ export interface Scorer {
   removeDocument(id: string): boolean;
   updateDocument(id: string, text: string, meta: Record<string, unknown>): void;
   hasDocument(id: string): boolean;
-  search(query: string, limit?: number): BM25SearchResult[];
+  search(query: string, limit?: number): ScorerResult[];
   clear(): void;
 }
 
 /** Meta structure produced by _buildDocMeta */
-export interface BM25DocMeta {
+export interface DocMeta {
   type: string;
   title: string;
   trigger: string;
@@ -60,6 +66,9 @@ export interface BM25DocMeta {
   qualityScore: number;
   [key: string]: unknown;
 }
+
+/** @deprecated Use DocMeta */
+export type BM25DocMeta = DocMeta;
 
 /** Unified search result item flowing through the ranking pipeline */
 export interface SearchResultItem {

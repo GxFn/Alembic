@@ -5,7 +5,7 @@
  *   - 完整 Bootstrap 初始化 + ServiceContainer 绑定
  *   - Knowledge 写入 → Search 检索 → 结果校验
  *   - Guard 规则创建 → 文件检查 → 违规报告
- *   - SearchEngine BM25 索引全生命周期
+ *   - SearchEngine FieldWeighted 索引全生命周期
  *   - AI Provider 热重载（模拟）
  *
  * 与 integration/ 的区别:
@@ -75,7 +75,7 @@ describe('E2E: Full Pipeline', () => {
       // 构建搜索索引
       await searchEngine.buildIndex();
 
-      // BM25 搜索 — 验证搜索功能正常运行（结果可能为 0 取决于 lifecycle 过滤）
+      // FieldWeighted 搜索 — 验证搜索功能正常运行（结果可能为 0 取决于 lifecycle 过滤）
       const result = searchEngine.search('useState React hook', { limit: 10 });
       const response = result instanceof Promise ? await result : result;
 

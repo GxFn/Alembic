@@ -70,6 +70,12 @@ export const DeprecateKnowledgeBody = z.object({
 
 export const BatchPublishBody = BatchIds;
 
+export const BatchDeleteBody = BatchIds;
+
+export const BatchDeprecateBody = BatchIds.extend({
+  reason: z.string().optional(),
+});
+
 export const KnowledgeUsageBody = z.object({
   type: z.enum(['adoption', 'view', 'feedback']).default('adoption'),
   feedback: z.unknown().optional(),
@@ -280,6 +286,11 @@ export const ModuleBootstrapBody = z.object({
   maxFiles: z.number().int().min(1).max(10000).default(500),
   skipGuard: z.boolean().default(false),
   contentMaxLines: z.number().int().min(1).max(10000).default(120),
+});
+
+export const ModuleRescanBody = z.object({
+  reason: z.string().optional(),
+  dimensions: z.array(z.string()).optional(),
 });
 
 // ═══ Graph Search ════════════════════════════════

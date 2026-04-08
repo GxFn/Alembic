@@ -21,49 +21,42 @@ import { SKILLS_DIR as BUILTIN_SKILLS_DIR } from '../../shared/package-root.js';
  */
 const SKILL_NAME_MAP = {
   'project-architecture': 'autosnippet-architecture',
-  'project-code-standard': 'autosnippet-code-standard',
-  'project-profile': 'autosnippet-profile',
+  'project-coding-standards': 'autosnippet-coding-standards',
   'project-agent-guidelines': 'autosnippet-guidelines',
-  'project-event-and-data-flow': 'autosnippet-data-flow',
-  'project-code-pattern': 'autosnippet-code-pattern',
-  'project-objc-deep-scan': 'autosnippet-objc-deep-scan',
-  'project-category-scan': 'autosnippet-category-scan',
-  'project-best-practice': 'autosnippet-best-practice',
-  // 新语言维度
-  'project-module-exports': 'autosnippet-module-exports',
-  'project-framework-conventions': 'autosnippet-framework-conventions',
+  'project-data-event-flow': 'autosnippet-data-flow',
+  'project-design-patterns': 'autosnippet-design-patterns',
+  'project-error-resilience': 'autosnippet-error-resilience',
+  'project-swift-objc-idiom': 'autosnippet-swift-objc-idiom',
+  // 语言维度
+  'project-ts-js-module': 'autosnippet-ts-js-module',
+  'project-react-patterns': 'autosnippet-react-patterns',
   'project-python-structure': 'autosnippet-python-structure',
-  'project-jvm-annotations': 'autosnippet-jvm-annotations',
+  'project-jvm-annotation': 'autosnippet-jvm-annotation',
 };
 
 /** 用途描述模板（英文，Cursor 优先） */
 const SKILL_DESC_MAP = {
   'autosnippet-architecture':
     'Architecture patterns, module boundaries, and dependency rules for {project}. Use when creating new modules, reviewing architecture, or understanding dependencies.',
-  'autosnippet-code-standard':
+  'autosnippet-coding-standards':
     'Coding standards and style conventions for {project}. Use when writing new code, reviewing formatting, or enforcing naming conventions.',
-  'autosnippet-profile':
-    'Project overview and profile for {project}. Use when needing background on the project, its tech stack, or structure.',
   'autosnippet-guidelines':
     'Agent interaction guidelines for {project}. Use when understanding how to work with this specific project.',
   'autosnippet-data-flow':
     'Event and data flow patterns for {project}. Use when working with events, state management, or data pipelines.',
-  'autosnippet-code-pattern':
+  'autosnippet-design-patterns':
     'Common code patterns and idioms for {project}. Use when implementing features following project conventions.',
-  'autosnippet-objc-deep-scan':
-    'Objective-C deep scan results for {project}. Use when working with Objective-C code, method swizzling, or runtime features.',
-  'autosnippet-category-scan':
-    'Category and extension analysis for {project}. Use when working with categories or finding existing utility methods.',
-  'autosnippet-best-practice':
-    'Best practices and proven patterns for {project}. Use when making design decisions or code review.',
-  // 新语言维度
-  'autosnippet-module-exports':
+  'autosnippet-error-resilience':
+    'Error handling, resilience patterns and defensive coding for {project}. Use when making design decisions or code review.',
+  'autosnippet-swift-objc-idiom':
+    'Swift/ObjC idioms, categories, method swizzling and interop for {project}. Use when working with Swift or Objective-C code.',
+  'autosnippet-ts-js-module':
     'Module export structure, barrel exports, and public API surface for {project}. Use when working with imports/exports or module boundaries.',
-  'autosnippet-framework-conventions':
-    'Framework-specific conventions (component structure, routing, state management) for {project}. Use when following framework patterns.',
+  'autosnippet-react-patterns':
+    'React component patterns, state management conventions and routing for {project}. Use when following framework patterns.',
   'autosnippet-python-structure':
     'Python package structure, __init__.py exports, import patterns and type hint coverage for {project}. Use when working with Python modules.',
-  'autosnippet-jvm-annotations':
+  'autosnippet-jvm-annotation':
     'Annotation patterns (DI, ORM, API, custom) and meta-programming for {project}. Use when working with Spring, Jakarta, or framework annotations.',
 };
 

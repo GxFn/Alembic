@@ -1,67 +1,41 @@
 /**
  * dimension-configs.js — v3.0 维度配置 + Tier Reflection
  *
+ * **v2: 从统一维度注册表 (DimensionRegistry) 派生**
+ *
  * 从 orchestrator.js 拆分，包含:
- * - DIMENSION_CONFIGS_V3: 仅保留内部 Agent 专属配置 (outputType + allowedKnowledgeTypes)
+ * - DIMENSION_CONFIGS_V3: 维度的 outputType + allowedKnowledgeTypes
+ *   现在从 DimensionRegistry 自动生成，无需手动维护
  * - getFullDimensionConfig(): 合并 baseDimensions + V3 专属配置
  * - buildTierReflection: Tier 级反思聚合 (规则化, 不需要 AI)
- *
- * label / guide → 从 baseDimensions 获取（唯一权威来源）
- * SOP / commonMistakes → 从 dimension-sop.js 获取
  *
  * @module pipeline/dimension-configs
  */
 
+import { getDimensionFocusKeywords, getDimensionSOP } from '#domain/dimension/DimensionSop.js';
+import { DIMENSION_REGISTRY, getDimension } from '#domain/dimension/index.js';
 import { baseDimensions } from '../base-dimensions.js';
-import { getDimensionFocusKeywords, getDimensionSOP } from '../shared/dimension-sop.js';
 
 // ──────────────────────────────────────────────────────────────────
-// v3.0 维度配置 — 仅保留内部 Agent 专属字段
-// label / guide / focusAreas 已移至 baseDimensions（唯一权威来源）
+// v3.0 维度配置 — 从统一注册表自动生成
 // ──────────────────────────────────────────────────────────────────
 
-export const DIMENSION_CONFIGS_V3 = {
-  'project-profile': { outputType: 'dual', allowedKnowledgeTypes: ['architecture'] },
-  'objc-deep-scan': {
-    outputType: 'dual',
-    allowedKnowledgeTypes: ['code-standard', 'code-pattern'],
-  },
-  'category-scan': { outputType: 'dual', allowedKnowledgeTypes: ['code-standard', 'code-pattern'] },
-  'code-standard': { outputType: 'dual', allowedKnowledgeTypes: ['code-standard', 'code-style'] },
-  architecture: {
-    outputType: 'dual',
-    allowedKnowledgeTypes: ['architecture', 'module-dependency', 'boundary-constraint'],
-  },
-  'code-pattern': {
-    outputType: 'candidate',
-    allowedKnowledgeTypes: ['code-pattern', 'code-relation', 'inheritance'],
-  },
-  'event-and-data-flow': {
-    outputType: 'candidate',
-    allowedKnowledgeTypes: ['call-chain', 'data-flow', 'event-and-data-flow'],
-  },
-  'best-practice': { outputType: 'candidate', allowedKnowledgeTypes: ['best-practice'] },
-  'agent-guidelines': {
-    outputType: 'skill',
-    allowedKnowledgeTypes: ['boundary-constraint', 'code-standard'],
-  },
-  'module-export-scan': {
-    outputType: 'dual',
-    allowedKnowledgeTypes: ['code-standard', 'architecture'],
-  },
-  'framework-convention-scan': {
-    outputType: 'dual',
-    allowedKnowledgeTypes: ['code-standard', 'architecture'],
-  },
-  'python-package-scan': {
-    outputType: 'dual',
-    allowedKnowledgeTypes: ['code-standard', 'architecture'],
-  },
-  'jvm-annotation-scan': {
-    outputType: 'dual',
-    allowedKnowledgeTypes: ['code-pattern', 'architecture'],
-  },
-};
+/**
+ * 从统一注册表生成 V3 配置映射
+ * 所有维度统一为 candidate-only outputType
+ */
+export const DIMENSION_CONFIGS_V3: Record<
+  string,
+  { outputType: string; allowedKnowledgeTypes: string[] }
+> = Object.fromEntries(
+  DIMENSION_REGISTRY.map((dim) => [
+    dim.id,
+    {
+      outputType: 'candidate',
+      allowedKnowledgeTypes: [...dim.allowedKnowledgeTypes],
+    },
+  ])
+);
 
 // ──────────────────────────────────────────────────────────────────
 // 完整维度配置获取（合并 baseDimensions + V3 专属 + SOP）
@@ -74,13 +48,19 @@ export const DIMENSION_CONFIGS_V3 = {
  * @returns 完整维度配置，或 null（未知维度）
  */
 export function getFullDimensionConfig(dimId: string) {
-  const base = baseDimensions.find((d) => d.id === dimId);
-  const v3 = (
-    DIMENSION_CONFIGS_V3 as Record<
-      string,
-      { outputType?: string; allowedKnowledgeTypes?: string[] }
-    >
-  )[dimId];
+  // 优先从统一注册表获取
+  const unified = getDimension(dimId);
+  // 回退到旧 baseDimensions（兼容 Enhancement Pack 动态维度）
+  const base = unified
+    ? {
+        id: unified.id,
+        label: unified.label,
+        guide: unified.extractionGuide,
+        knowledgeTypes: [...unified.allowedKnowledgeTypes],
+      }
+    : baseDimensions.find((d) => d.id === dimId);
+  const v3 = DIMENSION_CONFIGS_V3[dimId];
+
   if (!base) {
     return null;
   }
@@ -91,12 +71,10 @@ export function getFullDimensionConfig(dimId: string) {
     id: dimId,
     label: base.label,
     guide: base.guide,
-    outputType:
-      v3?.outputType || (base.dualOutput ? 'dual' : base.skillWorthy ? 'skill' : 'candidate'),
+    outputType: v3?.outputType || 'candidate',
     allowedKnowledgeTypes: v3?.allowedKnowledgeTypes || base.knowledgeTypes || [],
-    skillWorthy: base.skillWorthy || false,
-    dualOutput: base.dualOutput || false,
-    skillMeta: base.skillMeta,
+    skillWorthy: false,
+    dualOutput: false,
     knowledgeTypes: base.knowledgeTypes || [],
     // SOP 结构化分析步骤
     sopSteps: sop?.steps || null,

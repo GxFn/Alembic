@@ -19,26 +19,35 @@ import type { BootstrapSession, BootstrapTask, ReviewState } from '../../hooks/u
  *  Icon & Color mapping
  * ═══════════════════════════════════════════════════════ */
 
-/** 与 orchestrator.js DIMENSION_EXECUTION_ORDER 保持一致 */
+/** 维度执行顺序 — 按 Tier 层级排列（统一维度注册表） */
 const DIMENSION_EXECUTION_ORDER = [
-  'objc-deep-scan', 'category-scan',
-  'project-profile',
-  'code-standard',
-  'architecture',
-  'code-pattern',
-  'event-and-data-flow',
-  'best-practice',
-  'agent-guidelines',
+  // Tier 1: 基础数据
+  'architecture', 'swift-objc-idiom', 'ts-js-module', 'python-structure',
+  'jvm-annotation', 'go-module', 'rust-ownership', 'csharp-dotnet',
+  'react-patterns', 'vue-patterns', 'spring-patterns', 'swiftui-patterns', 'django-fastapi',
+  // Tier 2: 规范+模式
+  'coding-standards', 'design-patterns', 'ui-interaction',
+  // Tier 3: 横切关注点+总结
+  'error-resilience', 'concurrency-async', 'data-event-flow',
+  'networking-api', 'testing-quality', 'security-auth',
+  'performance-optimization', 'observability-logging', 'agent-guidelines',
 ];
 
 const DIM_ICON_MAP: Record<string, React.ReactNode> = {
-  'code-standard':      <BookOpen className="w-5 h-5" />,
-  'code-pattern':       <Code2 className="w-5 h-5" />,
-  'architecture':       <Layers className="w-5 h-5" />,
-  'best-practice':      <Sparkles className="w-5 h-5" />,
-  'event-and-data-flow': <Zap className="w-5 h-5" />,
-  'project-profile':    <Settings className="w-5 h-5" />,
-  'agent-guidelines':   <Bot className="w-5 h-5" />,
+  // 新统一维度
+  'architecture':              <Layers className="w-5 h-5" />,
+  'coding-standards':          <BookOpen className="w-5 h-5" />,
+  'design-patterns':           <Code2 className="w-5 h-5" />,
+  'error-resilience':          <Sparkles className="w-5 h-5" />,
+  'concurrency-async':         <Zap className="w-5 h-5" />,
+  'data-event-flow':           <Zap className="w-5 h-5" />,
+  'networking-api':            <Settings className="w-5 h-5" />,
+  'ui-interaction':            <Layers className="w-5 h-5" />,
+  'testing-quality':           <Code2 className="w-5 h-5" />,
+  'security-auth':             <Settings className="w-5 h-5" />,
+  'performance-optimization':  <Sparkles className="w-5 h-5" />,
+  'observability-logging':     <BookOpen className="w-5 h-5" />,
+  'agent-guidelines':          <Bot className="w-5 h-5" />,
 };
 
 function getDimIcon(dimId: string) {

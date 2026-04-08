@@ -122,6 +122,13 @@ export async function submitKnowledge(
 
   const entry = await service.create(enrichedData, { userId: 'mcp' });
 
+  // ── QualityScorer 自动评分（R9: create 后置执行）──
+  try {
+    await service.updateQuality(entry.id, { userId: 'mcp' });
+  } catch {
+    /* best effort — 不阻塞创建流程 */
+  }
+
   const data: Record<string, unknown> = {
     id: entry.id,
     lifecycle: entry.lifecycle,
@@ -222,14 +229,12 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
   }[] = [];
   const successIds: string[] = []; // 成功入库的 recipe ID 列表，供 dimension_complete 使用
 
-  // UnifiedValidator — 统一前置校验
-  const validator = new UnifiedValidator();
-
   // v2: 获取 BootstrapSession tracker（静默降级）
   interface BatchSessionLike {
     submissionTracker?: {
       recordRejection(dimId: string, title: string, reason: string): void;
       recordSubmission(dimId: string, item: unknown, recipeId: string): void;
+      getAllSubmittedTitles?: (excludeDimId?: string) => Set<string>;
     };
     getProgress(): { remainingDimIds: string[] };
   }
@@ -247,6 +252,18 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
   } catch {
     /* best effort */
   }
+
+  // UnifiedValidator — 统一前置校验
+  // v3: 注入前序维度已提交的标题，实现跨维度硬去重
+  let existingTitles: Set<string> | undefined;
+  try {
+    if (session?.submissionTracker?.getAllSubmittedTitles) {
+      existingTitles = session.submissionTracker.getAllSubmittedTitles();
+    }
+  } catch {
+    /* best effort */
+  }
+  const validator = new UnifiedValidator(existingTitles ? { existingTitles } : {});
 
   for (let i = 0; i < items.length; i++) {
     // ── 严格前置校验：缺少必要字段的条目直接拒绝，不入库 ──
@@ -278,6 +295,12 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
     try {
       const itemData = _enrichToV3({ ...items[i], source }, ctx.container);
       const entry = await service.create(itemData, { userId: 'mcp' });
+      // ── QualityScorer 自动评分（R9: create 后置执行）──
+      try {
+        await service.updateQuality(entry.id, { userId: 'mcp' });
+      } catch {
+        /* best effort — 不阻塞批量提交 */
+      }
       count++;
       successIds.push(entry.id);
       // 记录标题/指纹供后续去重检测

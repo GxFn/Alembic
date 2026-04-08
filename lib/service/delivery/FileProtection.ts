@@ -13,6 +13,7 @@
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
 
 /**
  * AutoSnippet 文件签名模式（case-insensitive）
@@ -122,4 +123,77 @@ export function safeCopyFile(
     `[FileProtection] Skipped "${destPath}" — ${reason} (file exists and is not AutoSnippet-generated)`
   );
   return { written: false, reason, filePath: destPath };
+}
+
+// ─── Section Merge ──────────────────────────────────
+
+const SECTION_BEGIN = '<!-- autosnippet:begin -->';
+const SECTION_END = '<!-- autosnippet:end -->';
+const SECTION_PATTERN = /<!-- autosnippet:begin -->[\s\S]*?<!-- autosnippet:end -->/;
+
+export type MergeStrategy = 'create' | 'replace-section' | 'rewrite-legacy' | 'append-section';
+
+/**
+ * 智能合并 AutoSnippet 管理区段到目标文件
+ *
+ * 四种场景：
+ *   1. 文件不存在          → 创建完整文件（header + markers）
+ *   2. 文件有 begin/end 标记 → 仅替换标记区段（增量更新）
+ *   3. 文件有旧版 AutoSnippet 签名但无标记 → 全量重写并加标记（旧版迁移）
+ *   4. 文件无签名无标记（用户文件）→ 追加标记区段到末尾（共存）
+ */
+export function mergeSection(
+  filePath: string,
+  section: string,
+  options: {
+    header?: string;
+    logger?: { info?: (...args: unknown[]) => void };
+  } = {}
+): { written: boolean; strategy: MergeStrategy; filePath: string } {
+  const { header = '', logger } = options;
+  const fileName = path.basename(filePath);
+
+  // 确保 section 包含 begin/end 标记
+  const wrappedSection = section.includes(SECTION_BEGIN)
+    ? section
+    : `${SECTION_BEGIN}\n\n${section}\n${SECTION_END}`;
+
+  // Case 1: 文件不存在 → 创建完整文件
+  if (!fs.existsSync(filePath)) {
+    const content = header ? `${header}\n${wrappedSection}\n` : `${wrappedSection}\n`;
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, content, 'utf8');
+    logger?.info?.(`[FileProtection] Created "${fileName}" (new file)`);
+    return { written: true, strategy: 'create', filePath };
+  }
+
+  const existing = fs.readFileSync(filePath, 'utf8');
+
+  // Case 2: 文件已有 begin/end 标记 → 仅替换标记区段
+  if (SECTION_PATTERN.test(existing)) {
+    const updated = existing.replace(SECTION_PATTERN, wrappedSection);
+    if (updated === existing) {
+      logger?.info?.(`[FileProtection] "${fileName}" — section unchanged, skipped write`);
+      return { written: false, strategy: 'replace-section', filePath };
+    }
+    fs.writeFileSync(filePath, updated, 'utf8');
+    logger?.info?.(`[FileProtection] Updated "${fileName}" (replaced marker section)`);
+    return { written: true, strategy: 'replace-section', filePath };
+  }
+
+  // Case 3: 文件有 AutoSnippet 签名但无标记 → 旧版格式，重写并加标记
+  if (SIGNATURE_PATTERN.test(existing.slice(0, 1024))) {
+    const content = header ? `${header}\n${wrappedSection}\n` : `${wrappedSection}\n`;
+    fs.writeFileSync(filePath, content, 'utf8');
+    logger?.info?.(`[FileProtection] Rewrote "${fileName}" (legacy → marker format)`);
+    return { written: true, strategy: 'rewrite-legacy', filePath };
+  }
+
+  // Case 4: 用户自有文件 → 追加标记区段到末尾
+  const separator = existing.endsWith('\n') ? '\n' : '\n\n';
+  fs.writeFileSync(filePath, `${existing}${separator}${wrappedSection}\n`, 'utf8');
+  logger?.info?.(
+    `[FileProtection] Appended AutoSnippet section to "${fileName}" (user-owned file preserved)`
+  );
+  return { written: true, strategy: 'append-section', filePath };
 }

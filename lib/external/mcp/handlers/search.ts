@@ -54,15 +54,16 @@ function filterByKind(items: SearchResultItem[], kind: string) {
 // ─── 统一搜索入口 ────────────────────────────────────────────
 
 /**
- * 统一搜索入口 — 支持 auto / keyword / bm25 / semantic / context 五种模式
+ * 统一搜索入口 — 支持 auto / keyword / weighted / semantic / context 五种模式
  *
  * 合并了原 search / contextSearch / keywordSearch / semanticSearch 4 个函数。
  * mode 路由:
- *   - auto (默认): BM25 + semantic 融合 + Ranking Pipeline
+ *   - auto (默认): FieldWeighted + semantic 融合 + Ranking Pipeline
  *   - keyword: SQL LIKE 精确匹配，适合已知函数名/类名
- *   - bm25: BM25 (TF-IDF) 排序搜索
- *   - semantic: 向量语义搜索（不可用时降级 BM25）
- *   - context: BM25 + Ranking Pipeline + 会话上下文加成
+ *   - weighted: 加权字段评分搜索（原 bm25 模式，已替换为 FieldWeightedScorer）
+ *   - bm25: weighted 的向后兼容别名
+ *   - semantic: 向量语义搜索（不可用时降级 weighted）
+ *   - context: weighted + Ranking Pipeline + 会话上下文加成
  *
  * 所有模式共享: kind 过滤 → slimSearchResult 投影 → byKind 分组
  */

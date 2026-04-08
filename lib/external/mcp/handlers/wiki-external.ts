@@ -151,12 +151,12 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- McpServiceContainer is compatible at runtime
   const session = getActiveSession(container as never, args.sessionId);
-  const cachedData = session?.phaseCache;
+  const cachedData = session?.snapshotCache;
 
   if (cachedData?.astProjectSummary) {
     // Bootstrap phase cache → WikiGenerator-compatible format 转换
-    const allFiles = (cachedData.allFiles || []) as CachedFileEntry[];
-    const ast = cachedData.astProjectSummary as CachedAstSummary;
+    const allFiles = cachedData.allFiles;
+    const ast = cachedData.astProjectSummary;
 
     // projectInfo: 从 bootstrap 文件列表和语言统计构建
     const filesByModule: Record<string, string[]> = {};
@@ -172,7 +172,7 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
       root: projectRoot,
       sourceFiles: allFiles.map((f) => f.relativePath),
       languages: cachedData.langStats || {},
-      primaryLanguage: (cachedData.primaryLang as string) || 'unknown',
+      primaryLanguage: cachedData.primaryLang || 'unknown',
       sourceFilesByModule: filesByModule,
       buildSystems: [],
     };
@@ -204,7 +204,7 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
 
     // moduleInfo: 从依赖图和 targets 构建
     moduleInfo = {
-      targets: ((cachedData.targetsSummary as Record<string, unknown>[]) || []).map((t) => ({
+      targets: (cachedData.targetsSummary || []).map((t) => ({
         name: t.name,
         type: t.type,
         fileCount: t.fileCount,

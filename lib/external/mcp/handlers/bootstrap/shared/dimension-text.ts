@@ -48,7 +48,7 @@ export const SUBMISSION_SCHEMA = {
     'content.markdown ≥ 200 字符',
     '至少包含 1 个代码块 (```)',
     '包含来源标注 (来源: FileName:行号)',
-    '标题使用项目真实类名',
+    '标题使用项目真实类名（不以项目名开头）',
     'trigger 必须唯一（同批次内不重复）',
   ],
 };

@@ -23,7 +23,7 @@ interface SkillDimensionDef {
   id: string;
   label?: string;
   skillWorthy?: boolean;
-  skillMeta?: { name?: string; description?: string };
+  skillMeta?: { name?: string; description?: string } | null;
 }
 
 /** validateSkillQuality 返回值 */

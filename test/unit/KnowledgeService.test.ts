@@ -51,6 +51,14 @@ function mockRepository() {
     findById: vi.fn(async (id) => {
       return _store.get(id) || null;
     }),
+    findByTitle: vi.fn(async (title) => {
+      for (const entry of _store.values()) {
+        if (entry.title?.toLowerCase() === title?.toLowerCase()) {
+          return entry;
+        }
+      }
+      return null;
+    }),
     findWithPagination: vi.fn(async (filters, opts) => ({
       data: [..._store.values()],
       pagination: { page: opts?.page || 1, pageSize: opts?.pageSize || 20, total: _store.size },
@@ -732,5 +740,67 @@ describe('ConfidenceRouter', () => {
     expect(router._config.minContentLength).toBe(100);
     // 未覆盖的字段保持默认
     expect(router._config.rejectThreshold).toBe(0.2);
+  });
+
+  /* ── 分级 Grace Period ── */
+
+  test('高置信度 auto_approve 返回 gracePeriod', async () => {
+    const router = new ConfidenceRouter();
+    const entry = makeEntry({
+      content: { pattern: 'some pattern code here that is long enough', rationale: 'good reason' },
+      reasoning: { whyStandard: 'because', confidence: 0.92, sources: ['doc'] },
+    });
+    const result = await router.route(entry);
+    expect(result.action).toBe('auto_approve');
+    expect(result.targetState).toBe('staging');
+    expect(result.gracePeriod).toBeDefined();
+  });
+
+  test('confidence >= 0.90 使用 24h grace', async () => {
+    const router = new ConfidenceRouter();
+    const entry = makeEntry({
+      content: { pattern: 'some pattern code here that is long enough', rationale: 'good reason' },
+      reasoning: { whyStandard: 'because', confidence: 0.95, sources: ['doc'] },
+    });
+    const result = await router.route(entry);
+    expect(result.targetState).toBe('staging');
+    expect(result.gracePeriod).toBe(24 * 60 * 60 * 1000);
+  });
+
+  test('confidence 0.85-0.89 非可信来源使用 72h grace', async () => {
+    const router = new ConfidenceRouter();
+    const entry = makeEntry({
+      source: 'manual',
+      content: { pattern: 'some pattern code here that is long enough', rationale: 'good reason' },
+      reasoning: { whyStandard: 'because', confidence: 0.87, sources: ['doc'] },
+    });
+    const result = await router.route(entry);
+    expect(result.targetState).toBe('staging');
+    expect(result.gracePeriod).toBe(72 * 60 * 60 * 1000);
+  });
+
+  test('reject 时 targetState = deprecated', async () => {
+    const router = new ConfidenceRouter();
+    const entry = makeEntry({
+      content: { pattern: 'some pattern code here that is long enough', rationale: 'good reason' },
+      reasoning: { whyStandard: 'because', confidence: 0.1, sources: ['doc'] },
+    });
+    const result = await router.route(entry);
+    expect(result.action).toBe('reject');
+    expect(result.targetState).toBe('deprecated');
+  });
+
+  test('自定义 grace period 配置', async () => {
+    const router = new ConfidenceRouter({
+      standardGracePeriod: 48 * 60 * 60 * 1000,
+      highConfidenceGracePeriod: 12 * 60 * 60 * 1000,
+    });
+    const entry = makeEntry({
+      source: 'manual',
+      content: { pattern: 'some pattern code here that is long enough', rationale: 'good reason' },
+      reasoning: { whyStandard: 'because', confidence: 0.87, sources: ['doc'] },
+    });
+    const result = await router.route(entry);
+    expect(result.gracePeriod).toBe(48 * 60 * 60 * 1000);
   });
 });

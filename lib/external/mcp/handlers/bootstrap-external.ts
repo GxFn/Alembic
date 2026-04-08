@@ -17,63 +17,26 @@
 
 import path from 'node:path';
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
+import { CleanupService } from '#service/cleanup/CleanupService.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import type { MissionBriefingResult, ProjectSnapshot } from '#types/project-snapshot.js';
+import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
+import { toSessionCache } from '#types/snapshot-views.js';
 import { envelope } from '../envelope.js';
-import { BootstrapSessionManager } from './bootstrap/BootstrapSession.js';
 import { buildMissionBriefing } from './bootstrap/MissionBriefingBuilder.js';
 import { runAllPhases } from './bootstrap/shared/bootstrap-phases.js';
+import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';
 import { buildLanguageExtension } from './LanguageExtensions.js';
 
 /** MCP handler context passed from McpServer */
 interface McpContext {
   container: ServiceContainer;
-  logger: { info(msg: string, meta?: Record<string, unknown>): void };
+  logger: {
+    info(msg: string, meta?: Record<string, unknown>): void;
+    warn(msg: string, meta?: Record<string, unknown>): void;
+  };
   startedAt?: number;
   [key: string]: unknown;
-}
-
-/** Shape of the mission briefing returned by buildMissionBriefing */
-interface MissionBriefingResult {
-  meta?: {
-    warnings?: string[];
-    responseSizeKB?: number;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
-// ── 进程级 Session 管理器 ─────────────────────────────────
-
-let _sessionManager: BootstrapSessionManager | null = null;
-
-/**
- * 获取或创建 BootstrapSessionManager
- * @param container ServiceContainer
- */
-function getSessionManager(container: ServiceContainer): BootstrapSessionManager {
-  // 优先使用容器注册的 (如果已注册)
-  try {
-    const mgr = container.get('bootstrapSessionManager');
-    if (mgr) {
-      return mgr as unknown as BootstrapSessionManager;
-    }
-  } catch {
-    /* not registered yet */
-  }
-
-  // 降级为模块级单例
-  if (!_sessionManager) {
-    _sessionManager = new BootstrapSessionManager();
-  }
-
-  // 注册到容器，让 submitKnowledgeBatch / consolidated 等 handler 也能访问
-  try {
-    container.register('bootstrapSessionManager', () => _sessionManager);
-  } catch {
-    /* already registered or container doesn't support register */
-  }
-
-  return _sessionManager;
 }
 
 // ── 主入口 ─────────────────────────────────────────────────────
@@ -92,7 +55,19 @@ export async function bootstrapExternal(ctx: McpContext) {
   const projectRoot = resolveProjectRoot(ctx.container);
 
   // ═══════════════════════════════════════════════════════════
-  // Phase 1-4: 共享数据收集管线
+  // Step 1: 全量清理 (CleanupService.fullReset)
+  // ═══════════════════════════════════════════════════════════
+
+  const db = ctx.container.get('database');
+  const cleanupService = new CleanupService({
+    projectRoot,
+    db,
+    logger: ctx.logger,
+  });
+  const cleanupResult = await cleanupService.fullReset();
+
+  // ═══════════════════════════════════════════════════════════
+  // Phase 1-4: 共享数据收集管线（永远全量，无增量检测）
   // ═══════════════════════════════════════════════════════════
 
   const phaseResults = await runAllPhases(projectRoot, ctx, {
@@ -102,7 +77,7 @@ export async function bootstrapExternal(ctx: McpContext) {
     summaryPrefix: 'Bootstrap-external scan',
     clearOldData: true,
     generateReport: true,
-    incremental: true,
+    incremental: false,
   });
 
   // 空项目 fast-path
@@ -125,16 +100,24 @@ export async function bootstrapExternal(ctx: McpContext) {
     guardAudit,
     activeDimensions: dimensions,
     targetsSummary,
+    localPackageModules,
     langProfile,
-    incrementalPlan,
   } = phaseResults;
+
+  // ── Build immutable ProjectSnapshot ──
+  const snapshot: ProjectSnapshot = buildProjectSnapshot({
+    projectRoot,
+    sourceTag: 'bootstrap-external',
+    ...phaseResults,
+    report: phaseResults.report,
+  });
 
   // ═══════════════════════════════════════════════════════════
   // Phase 4: 构建 Mission Briefing
   // ═══════════════════════════════════════════════════════════
 
   // 创建 BootstrapSession
-  const sessionManager = getSessionManager(ctx.container);
+  const sessionManager = getOrCreateSessionManager(ctx.container);
   const session = sessionManager.createSession({
     projectRoot,
     dimensions,
@@ -147,17 +130,7 @@ export async function bootstrapExternal(ctx: McpContext) {
   });
 
   // 缓存 Phase 结果供 wiki_plan 复用
-  session.setPhaseCache({
-    allFiles,
-    astProjectSummary,
-    codeEntityResult,
-    callGraphResult,
-    depGraphData,
-    guardAudit,
-    langStats,
-    primaryLang,
-    targetsSummary,
-  });
+  session.setSnapshotCache(toSessionCache(snapshot));
 
   // 构建 projectMeta
   const projectMeta = {
@@ -166,7 +139,7 @@ export async function bootstrapExternal(ctx: McpContext) {
     secondaryLanguages: (langProfile as { secondary?: string[] }).secondary || [],
     isMultiLang: (langProfile as { isMultiLang?: boolean }).isMultiLang || false,
     fileCount: allFiles.length,
-    projectType: phaseResults.discoverer.id,
+    projectType: snapshot.discoverer.id,
     projectRoot,
   };
 
@@ -182,9 +155,9 @@ export async function bootstrapExternal(ctx: McpContext) {
     activeDimensions: dimensions,
     session,
     languageExtension: buildLanguageExtension(primaryLang), // §7.1
-    incrementalPlan,
     languageStats: langStats,
-    panoramaResult: phaseResults.panoramaResult, // §M1: Phase 1.8 全景数据
+    panoramaResult: snapshot.panorama, // §M1: Phase 1.8 全景数据
+    localPackageModules, // 本地子包模块信息
   });
 
   // 附加 warnings
@@ -200,7 +173,15 @@ export async function bootstrapExternal(ctx: McpContext) {
 
   return envelope({
     success: true,
-    data: briefing,
+    data: {
+      cleanup: {
+        deletedRecipes: cleanupResult.deletedFiles,
+        clearedTables: cleanupResult.clearedTables.length,
+        dbCleared: true,
+        errors: cleanupResult.errors,
+      },
+      ...briefing,
+    },
     message:
       `⚠️ Bootstrap 仅完成第一步（项目扫描），你必须继续完成全部 ${dimensions.length} 个维度的分析。` +
       `请立即按 executionPlan.tiers 的顺序，对每个维度执行：` +
@@ -219,7 +200,7 @@ export async function bootstrapExternal(ctx: McpContext) {
  * 仍然返回该 session（支持新 bootstrap 创建后旧 session 的 dimension_complete 继续工作）。
  */
 export function getActiveSession(container: ServiceContainer, sessionId?: string) {
-  const mgr = getSessionManager(container);
+  const mgr = getOrCreateSessionManager(container);
   const session = mgr.getSession(sessionId);
   if (session) {
     return session;

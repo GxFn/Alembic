@@ -7,6 +7,7 @@
  * @module ServiceMap
  */
 
+import type DimensionCopy from '#domain/dimension/DimensionCopy.js';
 // ── Service Types ──
 import type { AgentFactory } from '../agent/AgentFactory.js';
 import type { ToolRegistry } from '../agent/tools/ToolRegistry.js';
@@ -23,6 +24,7 @@ import type { AiProvider } from '../external/ai/AiProvider.js';
 // ── InfraModule Types ──
 import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
 import type AuditStore from '../infrastructure/audit/AuditStore.js';
+import type { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import type DatabaseConnection from '../infrastructure/database/DatabaseConnection.js';
 import type { EventBus } from '../infrastructure/event/EventBus.js';
 import type Logger from '../infrastructure/logging/Logger.js';
@@ -33,7 +35,6 @@ import type { VectorStore } from '../infrastructure/vector/VectorStore.js';
 import type { KnowledgeRepositoryImpl } from '../repository/knowledge/KnowledgeRepository.impl.js';
 import type { TokenUsageStore } from '../repository/token/TokenUsageStore.js';
 import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
-import type DimensionCopy from '../service/bootstrap/DimensionCopyRegistry.js';
 import type { CursorDeliveryPipeline } from '../service/delivery/CursorDeliveryPipeline.js';
 import type { ComplianceReporter } from '../service/guard/ComplianceReporter.js';
 import type { ExclusionManager } from '../service/guard/ExclusionManager.js';
@@ -145,4 +146,14 @@ export interface ServiceMap {
   layerInferrer: LayerInferrer;
   panoramaAggregator: PanoramaAggregator;
   panoramaService: PanoramaService;
+
+  // ═══ Cross-Process Cache ═══
+  cacheCoordinator: CacheCoordinator;
+
+  // ═══ Singleton-injected values (bypassing get() factories) ═══
+  _projectRoot: string;
+  _config: Record<string, unknown>;
+  _lang: string | null;
+  _fileCache: unknown[] | null;
+  _embedProvider: unknown;
 }

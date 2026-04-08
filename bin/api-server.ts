@@ -5,6 +5,8 @@
  * 用于开发和测试 REST API
  */
 
+process.env.ASD_API_SERVER = '1';
+
 import Bootstrap from '../lib/bootstrap.js';
 import HttpServer from '../lib/http/HttpServer.js';
 import Logger from '../lib/infrastructure/logging/Logger.js';

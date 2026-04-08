@@ -273,7 +273,18 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
   }
 
   // ── Step 2: 严格校验所有条目 ──
-  const validator = new UnifiedValidator();
+  // v3: 注入前序维度已提交的标题，实现跨维度硬去重
+  let existingTitles: Set<string> | undefined;
+  try {
+    const sessionManager = ctx.container.get('bootstrapSessionManager');
+    const bsSession = sessionManager?.getSession?.();
+    if (bsSession?.submissionTracker?.getAllSubmittedTitles) {
+      existingTitles = bsSession.submissionTracker.getAllSubmittedTitles();
+    }
+  } catch {
+    /* best effort */
+  }
+  const validator = new UnifiedValidator(existingTitles ? { existingTitles } : {});
   const validItems: { index: number; item: Record<string, unknown> }[] = [];
   const rejectedItems: { index: number; title: string; errors: string[]; warnings: string[] }[] =
     [];
@@ -481,64 +492,26 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
     }
   }
 
-  // ── Step 4b: Supersede 提案创建 ──
+  // ── Step 4b: Supersede 提案创建（统一进化架构入口） ──
   // 当 Agent 声明 supersedes 旧 Recipe 时，创建 supersede Proposal
   if (supersedes && successIds.length > 0) {
-    let proposalRepo:
-      | import('../../../repository/evolution/ProposalRepository.js').ProposalRepository
-      | null = null;
-    try {
-      proposalRepo = ctx.container.get('proposalRepository') ?? null;
-    } catch {
-      /* ProposalRepository 未注册，跳过 */
-    }
-    if (proposalRepo) {
-      // 验证旧 Recipe 存在
-      const oldRecipeExists = (() => {
-        try {
-          const db = ctx.container.get('database') as { getDb(): unknown } | undefined;
-          if (!db) {
-            return false;
-          }
-          const rawDb = db.getDb() as {
-            prepare(sql: string): { get(...p: unknown[]): unknown };
-          };
-          const row = rawDb
-            .prepare('SELECT id FROM knowledge_entries WHERE id = ?')
-            .get(supersedes);
-          return row !== undefined;
-        } catch {
-          return false;
-        }
-      })();
-
-      if (oldRecipeExists) {
-        const proposal = proposalRepo.create({
-          type: 'supersede',
-          targetRecipeId: supersedes,
-          relatedRecipeIds: successIds,
-          confidence: 0.8,
-          source: 'ide-agent',
-          description: `Agent 声明新 Recipe [${successIds.join(', ')}] 替代旧 Recipe [${supersedes}]。观察窗口内将对比新旧表现。`,
-          evidence: [
-            {
-              snapshotAt: Date.now(),
-              newRecipeIds: successIds,
-              declaredBy: 'agent',
-            },
-          ],
-        });
-        if (proposal) {
-          createdProposals.push({
-            proposalId: proposal.id,
-            type: 'supersede',
-            targetRecipe: { id: supersedes, title: supersedes },
-            status: proposal.status,
-            expiresAt: proposal.expiresAt,
-            message: `已创建替代提案：新 Recipe 将在观察窗口到期后自动替代旧 Recipe [${supersedes}]。`,
-          });
-        }
-      }
+    const { createSupersedeProposal } = await import(
+      '#service/evolution/createSupersedeProposal.js'
+    );
+    const proposal = createSupersedeProposal(ctx.container, {
+      oldRecipeId: supersedes,
+      newRecipeIds: successIds,
+      source: 'ide-agent',
+    });
+    if (proposal) {
+      createdProposals.push({
+        proposalId: proposal.proposalId,
+        type: 'supersede',
+        targetRecipe: { id: supersedes, title: supersedes },
+        status: proposal.status,
+        expiresAt: proposal.expiresAt,
+        message: proposal.message,
+      });
     }
   }
 

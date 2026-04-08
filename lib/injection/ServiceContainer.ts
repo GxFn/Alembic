@@ -5,6 +5,7 @@ import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import ProjectGraph from '../core/ast/ProjectGraph.js';
 // ─── v3.1: Multi-Language Discovery + Enhancement ────────
 import { initEnhancementRegistry } from '../core/enhancement/index.js';
+import { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import { GraphCache } from '../infrastructure/cache/GraphCache.js';
 // ─── P3: Infrastructure ──────────────────────────────
 import Logger from '../infrastructure/logging/Logger.js';
@@ -156,6 +157,9 @@ export class ServiceContainer {
       // v3.4: 初始化 Knowledge 服务（绑定 EventBus → SearchEngine.refreshIndex + sourceRefs）
       KnowledgeModule.initializeKnowledgeServices(this);
 
+      // v3.5: 跨进程缓存协调器（利用 SQLite PRAGMA data_version 检测其他进程写入）
+      this.#initCacheCoordinator();
+
       this.logger.info('Service container initialized successfully');
     } catch (error: unknown) {
       this.logger.error('Error initializing service container', {
@@ -203,6 +207,69 @@ export class ServiceContainer {
       new: (newProvider?.constructor as { name?: string } | undefined)?.name || 'none',
       clearedSingletons: cleared,
     });
+  }
+
+  // ─── 跨进程缓存协调 ─────
+
+  /**
+   * 初始化 CacheCoordinator：当其他进程写入 DB 后，自动清除本进程的内存缓存。
+   *
+   * 订阅的服务：
+   *   - panoramaService: invalidate() — 模块图 + 全景分析
+   *   - guardCheckEngine: clearCache() — 规则缓存
+   *   - searchEngine: buildIndex() — 搜索索引
+   *
+   * 仅在长驻进程（HTTP server / MCP server）中自动启动轮询。
+   * CLI 场景无需启动（进程生命周期短，缓存不会过时）。
+   */
+  #initCacheCoordinator(): void {
+    try {
+      const db = this.singletons.database as
+        | {
+            getDb?: () => import('../infrastructure/database/DatabaseConnection.js').SqliteDatabase;
+          }
+        | undefined;
+      const rawDb = db?.getDb ? db.getDb() : null;
+      if (!rawDb) {
+        return;
+      }
+
+      const coordinator = new CacheCoordinator(rawDb);
+      this.singletons.cacheCoordinator = coordinator;
+      this.register('cacheCoordinator', () => coordinator);
+
+      // 懒订阅：仅在对应服务已初始化时绑定
+      coordinator.subscribe('panoramaService', () => {
+        const svc = this.singletons.panoramaService as { invalidate?: () => void } | undefined;
+        svc?.invalidate?.();
+      });
+
+      coordinator.subscribe('guardCheckEngine', () => {
+        const svc = this.singletons.guardCheckEngine as { clearCache?: () => void } | undefined;
+        svc?.clearCache?.();
+      });
+
+      coordinator.subscribe('searchEngine', () => {
+        const svc = this.singletons.searchEngine as { buildIndex?: () => void } | undefined;
+        svc?.buildIndex?.();
+      });
+
+      // 长驻进程自动启动轮询（CLI 不启动）
+      const isMcp = process.env.ASD_MCP_MODE === '1';
+      const isApiServer = process.env.ASD_API_SERVER === '1';
+      if (isMcp || isApiServer) {
+        coordinator.start();
+      }
+
+      this.logger.info('CacheCoordinator initialized', {
+        subscribers: coordinator.subscriberCount,
+        polling: isMcp || isApiServer,
+      });
+    } catch (err: unknown) {
+      this.logger.warn('CacheCoordinator init failed (non-blocking)', {
+        error: (err as Error).message,
+      });
+    }
   }
 
   // ─── 容器级语言偏好 ─────

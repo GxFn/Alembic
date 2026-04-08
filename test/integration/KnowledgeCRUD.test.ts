@@ -70,7 +70,10 @@ describe('Integration: KnowledgeService CRUD + Lifecycle', () => {
     });
 
     it('创建后可通过 get 获取', async () => {
-      const created = await service.create(makeWireData({ trigger: 'get-test' }), ctx);
+      const created = await service.create(
+        makeWireData({ title: 'URLSession get-test', trigger: 'get-test' }),
+        ctx
+      );
       const fetched = await service.get(created.id);
       expect(fetched.id).toBe(created.id);
       expect(fetched.title).toBe(created.title);
@@ -87,12 +90,15 @@ describe('Integration: KnowledgeService CRUD + Lifecycle', () => {
     });
 
     it('source 默认为 manual', async () => {
-      const entry = await service.create(makeWireData(), ctx);
+      const entry = await service.create(makeWireData({ title: 'URLSession source-default' }), ctx);
       expect(entry.source).toBe('manual');
     });
 
     it('自定义 source 被保留', async () => {
-      const entry = await service.create(makeWireData({ source: 'ai-scan' }), ctx);
+      const entry = await service.create(
+        makeWireData({ title: 'URLSession ai-scan', source: 'ai-scan' }),
+        ctx
+      );
       expect(entry.source).toBe('ai-scan');
     });
   });
@@ -177,7 +183,10 @@ describe('Integration: KnowledgeService CRUD + Lifecycle', () => {
     let entryId;
 
     beforeAll(async () => {
-      const entry = await service.create(makeWireData({ trigger: 'update-test' }), ctx);
+      const entry = await service.create(
+        makeWireData({ title: 'URLSession update-test', trigger: 'update-test' }),
+        ctx
+      );
       entryId = entry.id;
     });
 
@@ -234,7 +243,10 @@ describe('Integration: KnowledgeService CRUD + Lifecycle', () => {
     let entryId;
 
     beforeAll(async () => {
-      const entry = await service.create(makeWireData({ trigger: 'lifecycle-test' }), ctx);
+      const entry = await service.create(
+        makeWireData({ title: 'URLSession lifecycle-test', trigger: 'lifecycle-test' }),
+        ctx
+      );
       entryId = entry.id;
     });
 
@@ -259,7 +271,10 @@ describe('Integration: KnowledgeService CRUD + Lifecycle', () => {
 
     it('deprecate 无 reason 应抛出 ValidationError', async () => {
       // 先创建一个新的 active 条目
-      const newEntry = await service.create(makeWireData({ trigger: 'no-reason' }), ctx);
+      const newEntry = await service.create(
+        makeWireData({ title: 'URLSession no-reason', trigger: 'no-reason' }),
+        ctx
+      );
       await service.publish(newEntry.id, ctx);
       await expect(service.deprecate(newEntry.id, '', ctx)).rejects.toThrow(/reason/i);
     });
@@ -274,14 +289,20 @@ describe('Integration: KnowledgeService CRUD + Lifecycle', () => {
 
   describe('delete', () => {
     it('应成功删除条目', async () => {
-      const entry = await service.create(makeWireData({ trigger: 'delete-test' }), ctx);
+      const entry = await service.create(
+        makeWireData({ title: 'URLSession delete-test', trigger: 'delete-test' }),
+        ctx
+      );
       const result = await service.delete(entry.id, ctx);
       expect(result.success).toBe(true);
       expect(result.id).toBe(entry.id);
     });
 
     it('删除后 get 应抛出 NotFoundError', async () => {
-      const entry = await service.create(makeWireData({ trigger: 'delete-then-get' }), ctx);
+      const entry = await service.create(
+        makeWireData({ title: 'URLSession delete-then-get', trigger: 'delete-then-get' }),
+        ctx
+      );
       await service.delete(entry.id, ctx);
       await expect(service.get(entry.id)).rejects.toThrow();
     });
@@ -295,7 +316,10 @@ describe('Integration: KnowledgeService CRUD + Lifecycle', () => {
 
   describe('incrementUsage', () => {
     it('应增加 adoption 使用计数', async () => {
-      const entry = await service.create(makeWireData({ trigger: 'usage-test' }), ctx);
+      const entry = await service.create(
+        makeWireData({ title: 'URLSession usage-test', trigger: 'usage-test' }),
+        ctx
+      );
       const updated = await service.incrementUsage(entry.id, 'adoption');
       expect(updated).toBeDefined();
     });
@@ -309,14 +333,20 @@ describe('Integration: KnowledgeService CRUD + Lifecycle', () => {
 
   describe('向后兼容', () => {
     it('approve = publish', async () => {
-      const entry = await service.create(makeWireData({ trigger: 'approve-alias' }), ctx);
+      const entry = await service.create(
+        makeWireData({ title: 'URLSession approve-alias', trigger: 'approve-alias' }),
+        ctx
+      );
       const result = await service.approve(entry.id, ctx);
       // approve 现在等同于 publish
       expect(result.lifecycle).toBe(Lifecycle.ACTIVE);
     });
 
     it('reject = deprecate', async () => {
-      const entry = await service.create(makeWireData({ trigger: 'reject-alias' }), ctx);
+      const entry = await service.create(
+        makeWireData({ title: 'URLSession reject-alias', trigger: 'reject-alias' }),
+        ctx
+      );
       await service.publish(entry.id, ctx);
       const result = await service.reject(entry.id, '不符合标准', ctx);
       expect(result.lifecycle).toBe(Lifecycle.DEPRECATED);

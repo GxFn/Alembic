@@ -24,7 +24,7 @@ Users speak naturally; you translate to task operations. Never tell users to cal
 
 - **Do NOT modify** `AutoSnippet/recipes/` or `.autosnippet/` directly.
 - **Prefer Recipe** as project standard; source code is supplementary.
-- **Search**: `autosnippet_search({ query: "..." })` — auto mode (BM25 + semantic).
+- **Search**: `autosnippet_search({ query: "..." })` — auto mode (FieldWeighted + semantic).
 
 ## Essential MCP Tools
 
@@ -34,6 +34,7 @@ Users speak naturally; you translate to task operations. Never tell users to cal
 - `autosnippet_submit_knowledge` — Submit knowledge candidate
 - `autosnippet_guard` — Code compliance check
 - `autosnippet_skill` — Load project skills (list/load)
+- `autosnippet_rescan` — Incremental rescan: preserves Recipes, cleans caches, re-analyzes & audits
 - `autosnippet_panorama` — Project panorama (overview/module/gaps/health)
 - `autosnippet_health` — Service health & KB stats
 

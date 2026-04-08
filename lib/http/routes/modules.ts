@@ -8,6 +8,7 @@
 import express, { type Request, type Response } from 'express';
 import {
   ModuleBootstrapBody,
+  ModuleRescanBody,
   ScanFolderBody,
   ScanProjectBody,
   ScanTargetBody,
@@ -565,5 +566,30 @@ router.get('/bootstrap/status', async (req: Request, res: Response): Promise<voi
     data: taskManager.getSessionStatus(),
   });
 });
+
+/**
+ * POST /api/v1/modules/rescan
+ * 增量扫描：保留已有 Recipe，重新分析项目，补齐缺失知识
+ * 使用内部 Agent pipeline 自动完成知识补齐
+ */
+router.post(
+  '/rescan',
+  validate(ModuleRescanBody),
+  async (req: Request, res: Response): Promise<void> => {
+    const { reason, dimensions } = req.body || {};
+
+    const container = getServiceContainer();
+
+    logger.info('Rescan (internal) initiated from Dashboard', { reason, dimensions });
+
+    const agentFactory = container.get('agentFactory');
+    const result = await agentFactory.rescanKnowledge({ reason, dimensions });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  }
+);
 
 export default router;

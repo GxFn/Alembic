@@ -26,7 +26,17 @@ import {
   ANALYST_SYSTEM_PROMPT,
   buildAnalystPrompt,
 } from './domain/insight-analyst.js';
-import { buildRetryPrompt, insightGateEvaluator } from './domain/insight-gate.js';
+import {
+  buildEvolverPrompt,
+  EVOLVER_BUDGET,
+  EVOLVER_SYSTEM_PROMPT,
+  type EvolutionContext,
+} from './domain/insight-evolver.js';
+import {
+  buildRetryPrompt,
+  evolutionGateEvaluator,
+  insightGateEvaluator,
+} from './domain/insight-gate.js';
 import {
   buildProducerPromptV2,
   PRODUCER_BUDGET,
@@ -154,7 +164,10 @@ export const PRESETS = Object.freeze({
               ctx.dimContext as Parameters<typeof buildAnalystPrompt>[2],
               ctx.sessionStore as Parameters<typeof buildAnalystPrompt>[3],
               ctx.semanticMemory as Parameters<typeof buildAnalystPrompt>[4],
-              ctx.codeEntityGraph as Parameters<typeof buildAnalystPrompt>[5]
+              ctx.codeEntityGraph as Parameters<typeof buildAnalystPrompt>[5],
+              ctx.rescanContext as Parameters<typeof buildAnalystPrompt>[6],
+              ctx.panorama as Parameters<typeof buildAnalystPrompt>[7],
+              ctx.evidenceStarters as Parameters<typeof buildAnalystPrompt>[8]
             ),
           retryPromptBuilder: (
             retryCtx: { reason?: string },
@@ -189,7 +202,9 @@ export const PRESETS = Object.freeze({
             buildProducerPromptV2(
               ctx.gateArtifact as Parameters<typeof buildProducerPromptV2>[0], // 来自 quality_gate 的 AnalysisArtifact
               ctx.dimConfig as Parameters<typeof buildProducerPromptV2>[1],
-              ctx.projectInfo as Parameters<typeof buildProducerPromptV2>[2]
+              ctx.projectInfo as Parameters<typeof buildProducerPromptV2>[2],
+              ctx.rescanContext as Parameters<typeof buildProducerPromptV2>[3],
+              ctx.panorama as Parameters<typeof buildProducerPromptV2>[4]
             ),
           // 拒绝率过高时: 缩减预算 + 特定修复 prompt (对齐旧 ProducerAgent 的 rejection retry)
           retryBudget: { maxIterations: 5, temperature: 0.3, timeoutMs: 120_000 },
@@ -221,7 +236,7 @@ export const PRESETS = Object.freeze({
 2. content.markdown 字段 ≥ 200 字符，含代码块 (\`\`\`)
 3. content.rationale 必填 — 设计原理说明（为什么这样设计）
 4. 包含来源标注 (来源: FileName.m:行号)
-5. 标题使用项目真实类名
+5. 标题使用项目真实类名，不以项目名开头
 6. 必填: trigger (@kebab-case)、kind (rule/pattern/fact)、doClause (英文祈使句)`;
           },
           skipOnDegrade: true,
@@ -259,6 +274,57 @@ export const PRESETS = Object.freeze({
     },
     memory: {
       enabled: false, // 无状态 worker
+    },
+  },
+
+  // ─── evolution: 衰退 Recipe 进化决策 ─────────
+
+  evolution: {
+    name: '进化',
+    description: '审查衰退 Recipe，决定进化（supersede）、废弃或跳过。Evolve→EvolutionGate。',
+    capabilities: ['evolution_analysis'],
+    strategy: {
+      type: 'pipeline',
+      maxRetries: 1,
+      stages: [
+        // ── Phase 1: Evolver ──
+        {
+          name: 'evolve',
+          capabilities: ['evolution_analysis'],
+          budget: {
+            ...EVOLVER_BUDGET,
+            temperature: 0.3,
+            timeoutMs: 180_000,
+          },
+          systemPrompt: EVOLVER_SYSTEM_PROMPT,
+          promptBuilder: (ctx: Record<string, unknown>) =>
+            buildEvolverPrompt(null, null, ctx as unknown as EvolutionContext),
+        },
+        // ── Phase 2: Evolution Gate ──
+        {
+          name: 'evolution_gate',
+          gate: {
+            evaluator: evolutionGateEvaluator,
+            maxRetries: 1,
+          },
+        },
+      ],
+    },
+    policies: [
+      (config?: PolicyFactoryConfig) =>
+        new BudgetPolicy({
+          maxIterations: config?.maxIterations ?? 16,
+          maxTokens: config?.maxTokens ?? 4096,
+          temperature: config?.temperature ?? 0.3,
+          timeoutMs: config?.timeoutMs ?? 180_000,
+        }),
+    ],
+    persona: {
+      role: 'analyst',
+      description: '知识进化专家',
+    },
+    memory: {
+      enabled: false,
     },
   },
 

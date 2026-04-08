@@ -122,7 +122,7 @@ Business service layer containing 15 sub-domain services:
 |------------|-----------|----------------|
 | **knowledge** | `KnowledgeService` | Knowledge entry CRUD, graph, entity graph, confidence routing |
 | **guard** | `GuardService` / `GuardCheckEngine` | 50+ built-in rule engine (regex + AST semantic), 3-state output (pass / violation / uncertain), 3-dimensional report (compliance + coverage + confidence) |
-| **search** | `SearchEngine` / `MultiSignalRanker` | BM25 + vector hybrid retrieval, 7-signal weighted ranking |
+| **search** | `SearchEngine` / `MultiSignalRanker` | FieldWeighted + vector hybrid retrieval, 7-signal weighted ranking |
 | **task** | `IntentExtractor` / `PrimeSearchPipeline` | Intent-aware multi-query search: Q1 synonym enrichment + Q2 tech terms + Q3 file context + Q4 focused query, 3-layer quality filter (absolute threshold + relative-to-best + score gap detection) |
 | **bootstrap** | `BootstrapTaskManager` | Coldstart async task orchestration, 14 analysis dimensions |
 | **delivery** | `CursorDeliveryPipeline` | 4-channel delivery (Rules + Skills + Token Budget + Topic Classification) |

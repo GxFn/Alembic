@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FileSearch, Box, Trash2, Edit3, Layers, GitCompare, Copy, Brain, Sparkles, Clock, Code2, CheckCircle2, BarChart3, ArrowUpDown, Rocket, Wand2, Loader2, Globe } from 'lucide-react';
+import { FileSearch, Box, Trash2, Edit3, Layers, GitCompare, Copy, Brain, Sparkles, Clock, Code2, CheckCircle2, BarChart3, ArrowUpDown, Rocket, Wand2, Loader2, Globe, RefreshCw } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { ProjectData, KnowledgeEntry, SimilarRecipe, Recipe } from '../../types';
 import api from '../../api';
@@ -26,16 +26,33 @@ const SILENT_LABEL_KEYS: Record<string, string> = { _watch: 'silentLabels.watch'
 
 /** dimension key → i18n locale key mapping */
 const DIM_I18N_KEYS: Record<string, string> = {
+  // 新统一维度
   'architecture': 'bootstrap.dimLabels.architecture',
-  'best-practice': 'bootstrap.dimLabels.bestPractice',
-  'event-and-data-flow': 'bootstrap.dimLabels.eventAndDataFlow',
-  'objc-deep-scan': 'bootstrap.dimLabels.objcDeepScan',
+  'coding-standards': 'bootstrap.dimLabels.codingStandards',
+  'design-patterns': 'bootstrap.dimLabels.designPatterns',
+  'error-resilience': 'bootstrap.dimLabels.errorResilience',
+  'concurrency-async': 'bootstrap.dimLabels.concurrencyAsync',
+  'data-event-flow': 'bootstrap.dimLabels.dataEventFlow',
+  'networking-api': 'bootstrap.dimLabels.networkingApi',
+  'ui-interaction': 'bootstrap.dimLabels.uiInteraction',
+  'testing-quality': 'bootstrap.dimLabels.testingQuality',
+  'security-auth': 'bootstrap.dimLabels.securityAuth',
+  'performance-optimization': 'bootstrap.dimLabels.performanceOptimization',
+  'observability-logging': 'bootstrap.dimLabels.observabilityLogging',
   'agent-guidelines': 'bootstrap.dimLabels.agentGuidelines',
+  'swift-objc-idiom': 'bootstrap.dimLabels.swiftObjcIdiom',
+  'ts-js-module': 'bootstrap.dimLabels.tsJsModule',
+  'python-structure': 'bootstrap.dimLabels.pythonStructure',
+  'jvm-annotation': 'bootstrap.dimLabels.jvmAnnotation',
+  'go-module': 'bootstrap.dimLabels.goModule',
+  'rust-ownership': 'bootstrap.dimLabels.rustOwnership',
+  'csharp-dotnet': 'bootstrap.dimLabels.csharpDotnet',
+  'react-patterns': 'bootstrap.dimLabels.reactPatterns',
+  'vue-patterns': 'bootstrap.dimLabels.vuePatterns',
+  'spring-patterns': 'bootstrap.dimLabels.springPatterns',
+  'swiftui-patterns': 'bootstrap.dimLabels.swiftuiPatterns',
+  'django-fastapi': 'bootstrap.dimLabels.djangoFastapi',
   'bootstrap': 'bootstrap.dimLabels.bootstrap',
-  'code-standard': 'bootstrap.dimLabels.codeStandard',
-  'code-pattern': 'bootstrap.dimLabels.codePattern',
-  'project-profile': 'bootstrap.dimLabels.projectProfile',
-  'category-scan': 'bootstrap.dimLabels.categoryScan',
 };
 
 interface CandidatesViewProps {
@@ -49,6 +66,7 @@ interface CandidatesViewProps {
   onAuditAllInTarget: (items: KnowledgeEntry[], targetName: string) => void;
   onEditRecipe?: (recipe: Recipe) => void;
   onColdStart?: () => void;
+  onRescan?: () => void;
   isScanning?: boolean;
   /** bootstrap 任务是否正在进行（隐藏冷启动按钮和空状态） */
   isBootstrapping?: boolean;
@@ -156,7 +174,7 @@ const ConfidenceRing: React.FC<{ value: number | null | undefined; size?: number
 const CandidatesView: React.FC<CandidatesViewProps> = ({
   data, isShellTarget, isSilentTarget = () => false, isPendingTarget = () => false,
   handleDeleteCandidate, handleDeleteAllInTarget,
-  onAuditCandidate, onAuditAllInTarget, onEditRecipe, onColdStart, isScanning, isBootstrapping, onRefresh,
+  onAuditCandidate, onAuditAllInTarget, onEditRecipe, onColdStart, onRescan, isScanning, isBootstrapping, onRefresh,
 }) => {
   const { t } = useI18n();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -174,8 +192,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
   /** 异步刷新后的候选覆盖——不触发整页刷新即可更新抽屉 */
   const [candidateOverrides, setCandidateOverrides] = useState<Record<string, KnowledgeEntry>>({});
   const [filters, setFilters] = useState({
-    sort: 'default' as 'default' | 'score-desc' | 'score-asc' | 'confidence-desc' | 'date-desc',
-    onlySimilar: false,
+    sort: 'score-desc' as 'score-desc' | 'score-asc' | 'confidence-desc' | 'default',
   });
   const [compareModal, setCompareModal] = useState<{
     candidate: KnowledgeEntry;
@@ -231,6 +248,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
   const candidateEntries = data?.candidates ? Object.entries(data.candidates) : [];
   const sortedEntries = sortTargetNames(candidateEntries, isShellTarget, isSilentTarget, isPendingTarget);
   const targetNames = sortedEntries.map(([name]) => name);
+  const hasRecipes = !!(data?.recipes && data.recipes.length > 0);
+  const hasCandidates = candidateEntries.length > 0;
+  /** 是否已执行过冷启动（有 recipes 或有 candidates 均表示已 bootstrap） */
+  const hasBootstrapped = hasRecipes || hasCandidates;
   const effectiveTarget = selectedTarget && targetNames.includes(selectedTarget) ? selectedTarget : (targetNames[0] ?? null);
 
   useEffect(() => {
@@ -382,23 +403,45 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* 冷启动按钮 — bootstrap 进行中时隐藏 */}
-          {onColdStart && !isBootstrapping && (
-            <button
-              onClick={onColdStart}
-              disabled={isScanning}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
-                isScanning
-                  ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
-                  : 'text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-sm hover:shadow'
-              }`}
-              title={t('candidates.coldStartTitle')}
-            >
-              {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
-              {isScanning ? t('common.loading') : t('candidates.sourceBootstrap')}
-            </button>
+          {/* ── 扫描操作 ── */}
+          {!isBootstrapping && (
+            <>
+              {hasBootstrapped ? (
+                /* 已 bootstrap：有候选时在 header 显示增量扫描，无候选时增量扫描在空状态区 */
+                onRescan && hasCandidates && (
+                  <button
+                    onClick={onRescan}
+                    disabled={isScanning}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                      isScanning
+                        ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
+                        : 'text-white bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 shadow-sm hover:shadow'
+                    }`}
+                    title={t('candidates.rescanTitle')}
+                  >
+                    {isScanning ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    {isScanning ? t('common.loading') : t('candidates.rescanBtn')}
+                  </button>
+                )
+              ) : onColdStart && (
+                /* 无 Recipes：显示冷启动 */
+                <button
+                  onClick={onColdStart}
+                  disabled={isScanning}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                    isScanning
+                      ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
+                      : 'text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-sm hover:shadow'
+                  }`}
+                  title={t('candidates.coldStartTitle')}
+                >
+                  {isScanning ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
+                  {isScanning ? t('common.loading') : t('candidates.sourceBootstrap')}
+                </button>
+              )}
+            </>
           )}
-          {/* ① 结构补齐：填充缺失的语义元数据 */}
+          {/* ── AI 补齐 ── */}
           {stats && stats.total > 0 && (
             <button
               onClick={handleEnrichAll}
@@ -414,7 +457,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               {enrichingAll ? t('common.loading') : t('candidates.aiEnrich')}
             </button>
           )}
-          {/* ② 内容润色：改善描述质量 + 推断关联 */}
+          {/* ── AI 润色 ── */}
           {stats && stats.total > 0 && (
             <button
               onClick={handleRefineBootstrap}
@@ -430,8 +473,9 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               {refining || isRefining ? t('common.loading') : t('candidates.aiRefine')}
             </button>
           )}
+          {/* ── 统计指标 ── */}
           {stats && (
-            <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-2 text-xs">
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-default)]">
                 <BarChart3 size={14} className="text-[var(--fg-muted)]" />
                 <span className="text-[var(--fg-secondary)]">{t('candidates.totalCount', { count: stats.total })}</span>
@@ -444,6 +488,22 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                 <strong className="text-emerald-700">{Math.round(stats.avgConfidence * 100)}%</strong>
               </div>
             </div>
+          )}
+          {/* ── 清理重建（最右侧） ── */}
+          {!isBootstrapping && onColdStart && hasBootstrapped && (
+            <button
+              onClick={onColdStart}
+              disabled={isScanning}
+              className={`ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] transition-all ${
+                isScanning
+                  ? 'text-[var(--fg-muted)] cursor-not-allowed'
+                  : 'text-[var(--fg-muted)] hover:text-red-600 hover:bg-red-50'
+              }`}
+              title={t('candidates.cleanRebuildTitle')}
+            >
+              {isScanning ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+              {t('candidates.cleanRebuildBtn')}
+            </button>
           )}
         </div>
       </div>
@@ -460,7 +520,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
       {/* ── Target 切换标签栏 ── */}
       {candidateEntries.length > 0 && (
         <div className="shrink-0 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-xl px-3 py-2 mb-4 shadow-sm">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {targetNames.map((targetName) => {
               const isSilent = isSilentTarget(targetName);
               const silentLabel = SILENT_LABEL_KEYS[targetName] ? t(SILENT_LABEL_KEYS[targetName]) : undefined;
@@ -502,23 +562,49 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-[var(--fg-muted)]">
               {t('candidates.emptyHint')}
             </p>
-            {onColdStart && (
-              <button
-                onClick={onColdStart}
-                disabled={isScanning}
-                className={`mt-4 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                  isScanning
-                    ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
-                    : 'text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-md hover:shadow-lg'
-                }`}
-              >
-                {isScanning ? <Loader2 size={16} className="animate-spin" /> : <Rocket size={16} />}
-                {isScanning ? t('common.loading') : t('candidates.sourceBootstrap')}
-              </button>
+            {hasBootstrapped ? (
+              /* 已 bootstrap → 主按钮为增量扫描 */
+              <>
+                {onRescan && (
+                  <button
+                    onClick={onRescan}
+                    disabled={isScanning}
+                    className={`mt-4 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                      isScanning
+                        ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
+                        : 'text-white bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 shadow-md hover:shadow-lg'
+                    }`}
+                  >
+                    {isScanning ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    {isScanning ? t('common.loading') : t('candidates.rescanBtn')}
+                  </button>
+                )}
+                <p className="mt-3 text-[11px] text-[var(--fg-muted)]">
+                  {t('candidates.rescanHint')}
+                </p>
+              </>
+            ) : (
+              /* 未 bootstrap → 主按钮为冷启动 */
+              <>
+                {onColdStart && (
+                  <button
+                    onClick={onColdStart}
+                    disabled={isScanning}
+                    className={`mt-4 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                      isScanning
+                        ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
+                        : 'text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-md hover:shadow-lg'
+                    }`}
+                  >
+                    {isScanning ? <Loader2 size={16} className="animate-spin" /> : <Rocket size={16} />}
+                    {isScanning ? t('common.loading') : t('candidates.sourceBootstrap')}
+                  </button>
+                )}
+                <p className="mt-3 text-[11px] text-[var(--fg-muted)]">
+                  {t('candidates.emptyHintIde')}
+                </p>
+              </>
             )}
-            <p className="mt-3 text-[11px] text-[var(--fg-muted)]">
-              或在 IDE Agent Mode 中说「帮我冷启动」
-            </p>
           </div>
         )}
 
@@ -547,23 +633,11 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             const pageSize = pageState.pageSize;
 
             const filteredItems = group.items
-              .filter((cand) => {
-                if (filters.onlySimilar) {
-                  const simList = similarityMap[cand.id];
-                  if (!Array.isArray(simList) || simList.length === 0) return false;
-                }
-                return true;
-              })
               .sort((a, b) => {
                 if (filters.sort === 'default') return 0;
                 if (filters.sort === 'score-desc') return (b.quality?.overall ?? 0) - (a.quality?.overall ?? 0);
                 if (filters.sort === 'score-asc') return (a.quality?.overall ?? 0) - (b.quality?.overall ?? 0);
                 if (filters.sort === 'confidence-desc') return (b.reasoning?.confidence ?? 0) - (a.reasoning?.confidence ?? 0);
-                if (filters.sort === 'date-desc') {
-                  const ta = typeof a.createdAt === 'number' ? a.createdAt : 0;
-                  const tb = typeof b.createdAt === 'number' ? b.createdAt : 0;
-                  return tb - ta;
-                }
                 return 0;
               });
 
@@ -607,33 +681,15 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         value={filters.sort}
                         onChange={v => setFilters(prev => ({ ...prev, sort: v as typeof prev.sort }))}
                         options={[
-                          { value: 'default', label: t('candidates.sortNewest') },
                           { value: 'score-desc', label: `${t('candidates.sortConfidence')} ↓` },
                           { value: 'score-asc', label: `${t('candidates.sortConfidence')} ↑` },
                           { value: 'confidence-desc', label: `${t('candidates.confidence')} ↓` },
-                          { value: 'date-desc', label: t('candidates.sortOldest') },
+                          { value: 'default', label: t('candidates.sortDefault') },
                         ]}
                         size="xs"
                         className="border-none bg-transparent"
                       />
                     </div>
-                    <label className="text-[11px] font-medium text-[var(--fg-secondary)] flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-default)] cursor-pointer hover:bg-[var(--bg-subtle)] transition-colors select-none">
-                      <input
-                        type="checkbox"
-                        checked={filters.onlySimilar}
-                        onChange={e => setFilters(prev => ({ ...prev, onlySimilar: e.target.checked }))}
-                        className="rounded text-blue-600 w-3 h-3"
-                      />
-                      {t('candidates.similarOnly')}
-                    </label>
-                    {(filters.sort !== 'default' || filters.onlySimilar) && (
-                      <button
-                        onClick={() => setFilters({ sort: 'default', onlySimilar: false })}
-                        className="text-[11px] font-medium text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] px-2 py-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] hover:bg-[var(--bg-subtle)] transition-colors"
-                      >
-                        {t('candidates.resetFilters')}
-                      </button>
-                    )}
                   </div>
 
                   <div className="h-5 w-px bg-[var(--border-default)]" />

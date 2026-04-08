@@ -17,18 +17,12 @@
 
 import crypto from 'node:crypto';
 import { SessionStore } from '#agent/memory/SessionStore.js';
+import type { DimensionDef } from '#types/project-snapshot.js';
+import type { SessionCacheShape } from '#types/snapshot-views.js';
 import type { DimensionQualityReport } from './ExternalSubmissionTracker.js';
 import { ExternalSubmissionTracker } from './ExternalSubmissionTracker.js';
 
 // ── 本地类型定义 ─────────────────────────────────────────────
-
-/** 维度定义 */
-export interface DimensionDef {
-  id: string;
-  label?: string;
-  skillWorthy?: boolean;
-  skillMeta?: { name?: string; description?: string };
-}
 
 /** Bootstrap 会话构造参数 */
 interface BootstrapSessionOpts {
@@ -74,7 +68,7 @@ export class BootstrapSession {
   completedDimensions: Map<string, DimensionCompletion>;
   crossDimensionHints: Record<string, CrossDimensionHint[]>;
   dimensions: DimensionDef[];
-  phaseCache: Record<string, unknown> | null;
+  snapshotCache: SessionCacheShape | null;
   sessionStore: SessionStore;
   submissionTracker: ExternalSubmissionTracker;
   /**
@@ -93,7 +87,7 @@ export class BootstrapSession {
     this.submissionTracker = new ExternalSubmissionTracker();
 
     /** Phase 1-4 分析结果缓存，供 wiki_plan 复用 */
-    this.phaseCache = null;
+    this.snapshotCache = null;
 
     /** 跨维度 hints 收集 */
     this.crossDimensionHints = {}; // targetDimId → [{ fromDim, hint }]
@@ -216,19 +210,19 @@ export class BootstrapSession {
     return accumulated;
   }
 
-  // ── Phase 缓存 ────────────────────────────────────────────
+  // ── Snapshot 缓存 ──────────────────────────────────────────
 
   /**
-   * 缓存 Phase 1-4 分析结果
-   * @param cache { files, astData, entityGraph, depGraph, guardFindings, skills, ... }
+   * 缓存 Phase 1-4 分析结果（ProjectSnapshot 的 session cache 形式）
+   * @param cache toSessionCache(snapshot) 的返回值
    */
-  setPhaseCache(cache: Record<string, unknown> | null) {
-    this.phaseCache = cache;
+  setSnapshotCache(cache: SessionCacheShape | null) {
+    this.snapshotCache = cache;
   }
 
-  /** 获取 Phase 缓存（wiki_plan 复用） */
-  getPhaseCache() {
-    return this.phaseCache;
+  /** 获取 Snapshot 缓存（wiki_plan / dimension-complete 复用） */
+  getSnapshotCache() {
+    return this.snapshotCache;
   }
 
   // ── 序列化 ────────────────────────────────────────────────

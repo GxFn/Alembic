@@ -751,6 +751,21 @@ export const api = {
     return res.data?.data || { status: 'idle' };
   },
 
+  /** 增量扫描：保留已有 Recipe，重新分析项目，内部 AI 补齐缺失知识 */
+  async rescan(opts?: { reason?: string; dimensions?: string[] }, signal?: AbortSignal) {
+    const res = await http.post('/modules/rescan', opts || {}, { signal, timeout: 300000 });
+    const data = res.data?.data || {};
+    return {
+      rescan: data.rescan || {},
+      relevanceAudit: data.relevanceAudit || {},
+      gapAnalysis: data.gapAnalysis || {},
+      bootstrapSession: data.bootstrapSession || null,
+      asyncFill: data.asyncFill || false,
+      status: data.status || 'complete',
+      message: res.data?.message || '',
+    };
+  },
+
   async getDepGraph(level: string) {
     const res = await http.get(`/modules/dep-graph?level=${level}`);
     return res.data?.data || {};
@@ -1311,24 +1326,24 @@ export const api = {
   // ── Search (统一入口) ─────────────────────────────────
 
   /**
-   * 统一搜索 — 合并 keyword/bm25/semantic/auto/context-aware 全场景
+   * 统一搜索 — 合并 keyword/weighted/semantic/auto/context-aware 全场景
    *
-   * - 无 context → GET /search (keyword/bm25/semantic/auto)
-   * - 有 context → POST /search/context-aware (BM25 + Ranking + ContextBoost)
+   * - 无 context → GET /search (keyword/weighted/semantic/auto)
+   * - 有 context → POST /search/context-aware (FieldWeighted + Ranking + ContextBoost)
    *
    * 返回的 items 中 content 已从 JSON 字符串解析为对象。
    */
   async search(
     query: string,
     options: {
-      mode?: 'keyword' | 'bm25' | 'semantic' | 'auto';
+      mode?: 'keyword' | 'weighted' | 'bm25' | 'semantic' | 'auto';
       type?: string;
       limit?: number;
       signal?: AbortSignal;
       context?: { language?: string; sessionHistory?: unknown[]; [key: string]: unknown };
     } = {},
   ): Promise<{ items: SearchResultItem[]; total: number; mode?: string; ranked?: boolean }> {
-    const { mode = 'bm25', type, limit = 20, signal, context } = options;
+    const { mode = 'auto', type, limit = 20, signal, context } = options;
 
     // 解析 content JSON 字符串为对象
     const parseContent = (raw: unknown): KnowledgeContent => {
@@ -1357,7 +1372,7 @@ export const api = {
           matchType: r.matchType,
         };
       });
-      return { items, total: data.total || items.length, mode: 'bm25', ranked: true };
+      return { items, total: data.total || items.length, mode: 'weighted', ranked: true };
     }
 
     // ── 无 context: GET /search ──
@@ -1606,6 +1621,18 @@ Skill 文档格式要求：
     return res.data?.data || { published: [], failed: [], successCount: 0, failureCount: 0 };
   },
 
+  /** 批量删除 */
+  async knowledgeBatchDelete(ids: string[]): Promise<{ deletedCount: number; failureCount: number; failed: Array<{ id: string; error: string }> }> {
+    const res = await http.post('/knowledge/batch-delete', { ids });
+    return res.data?.data || { deletedCount: 0, failureCount: 0, failed: [] };
+  },
+
+  /** 批量废弃 */
+  async knowledgeBatchDeprecate(ids: string[], reason?: string): Promise<{ deprecated: KnowledgeEntry[]; failed: Array<{ id: string; error: string }>; successCount: number; failureCount: number }> {
+    const res = await http.post('/knowledge/batch-deprecate', { ids, reason });
+    return res.data?.data || { deprecated: [], failed: [], successCount: 0, failureCount: 0 };
+  },
+
   /** 记录使用 */
   async knowledgeRecordUsage(id: string, type: string = 'adoption', feedback?: string): Promise<void> {
     await http.post(`/knowledge/${id}/usage`, { type, feedback });
@@ -1686,7 +1713,7 @@ Skill 文档格式要求：
   // ── Panorama ──────────────────
 
   /** 获取项目全景概览 */
-  async getPanoramaOverview(): Promise<{
+  async getPanoramaOverview(refresh = false): Promise<{
     projectRoot: string;
     moduleCount: number;
     layerCount: number;
@@ -1720,12 +1747,12 @@ Skill 文档格式要求：
     computedAt: number;
     stale: boolean;
   }> {
-    const res = await http.get('/panorama');
+    const res = await http.get('/panorama', refresh ? { params: { refresh: 'true' } } : undefined);
     return res.data?.data;
   },
 
   /** 获取全景健康度 */
-  async getPanoramaHealth(): Promise<{
+  async getPanoramaHealth(refresh = false): Promise<{
     healthRadar: {
       dimensions: {
         id: string;
@@ -1750,12 +1777,12 @@ Skill 文档格式要求：
     moduleCount: number;
     healthScore: number;
   }> {
-    const res = await http.get('/panorama/health');
+    const res = await http.get('/panorama/health', refresh ? { params: { refresh: 'true' } } : undefined);
     return res.data?.data;
   },
 
   /** 获取知识空白区 */
-  async getPanoramaGaps(): Promise<{
+  async getPanoramaGaps(refresh = false): Promise<{
     dimension: string;
     dimensionName: string;
     recipeCount: number;
@@ -1764,7 +1791,7 @@ Skill 文档格式要求：
     suggestedTopics: string[];
     affectedRoles: string[];
   }[]> {
-    const res = await http.get('/panorama/gaps');
+    const res = await http.get('/panorama/gaps', refresh ? { params: { refresh: 'true' } } : undefined);
     return res.data?.data ?? [];
   },
 

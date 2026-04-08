@@ -7,7 +7,7 @@
  *  - Individual Signals      (RelevanceSignal, PopularitySignal, ContextMatchSignal, etc.)
  *  - CrossEncoderReranker   (Jaccard fallback — 无 AI)
  *  - contextBoost           (共享上下文加成)
- *  - BM25Scorer             (增量 remove/update/compact)
+ *  - BM25Scorer             (增量 remove/update/compact, legacy 评分器)
  */
 
 import { CoarseRanker } from '../../lib/service/search/CoarseRanker.js';
@@ -140,14 +140,14 @@ describe('CoarseRanker', () => {
   });
 
   test('respects custom weights from constructor', () => {
-    const bm25Heavy = new CoarseRanker({
+    const recallHeavy = new CoarseRanker({
       recallWeight: 1.0,
       semanticWeight: 0,
       qualityWeight: 0,
       freshnessWeight: 0,
       popularityWeight: 0,
     });
-    const result = bm25Heavy.rank(
+    const result = recallHeavy.rank(
       makeCandidates([
         { recallScore: 10, semanticScore: 0.9 },
         { recallScore: 1, semanticScore: 0.9 },
@@ -463,7 +463,7 @@ describe('contextBoost', () => {
 });
 
 /* ════════════════════════════════════════════════════════════════════
- *  BM25Scorer — incremental operations
+ *  BM25Scorer — incremental operations (legacy scorer)
  * ════════════════════════════════════════════════════════════════════ */
 
 describe('BM25Scorer incremental', () => {

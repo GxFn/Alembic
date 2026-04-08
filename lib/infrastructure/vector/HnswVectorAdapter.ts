@@ -563,7 +563,7 @@ export class HnswVectorAdapter extends VectorStore {
   }
 
   /**
-   * 关键词搜索 (BM25 简化版: token 匹配 + IDF 近似)
+   * 关键词搜索 (token 匹配 + IDF 近似)
    * @returns >}
    */
   #keywordSearch(queryText: string, limit: number, filter: Record<string, unknown> | null) {

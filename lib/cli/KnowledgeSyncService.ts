@@ -462,7 +462,7 @@ export class KnowledgeSyncService {
                    rejectionReason = ?, 
                    updatedAt = ?
                WHERE id = ?`
-            ).run('source file deleted (orphan)', now, row.id);
+            ).run('源文件已删除（孤儿条目）', now, row.id);
           }
         }
       }

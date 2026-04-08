@@ -23,6 +23,7 @@
  */
 
 import Logger from '#infra/logging/Logger.js';
+import type { DistilledContext } from './memory-flush-contract.js';
 
 // ═══════════════════════════════════════════════════════════
 // §1: 工具压缩策略 (从 WorkingMemory 迁入)
@@ -581,7 +582,7 @@ export class ActiveContext {
    * 蒸馏 ActiveContext 为结构化报告
    * 在 Agent execute 结束时调用，结果写入 SessionStore
    */
-  distill() {
+  distill(): DistilledContext {
     return {
       keyFindings: this.#scratchpad.map((f) => ({
         finding: f.finding,

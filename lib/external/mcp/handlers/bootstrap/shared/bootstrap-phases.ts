@@ -20,14 +20,16 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { ProjectAnalysisResult } from '#core/AstAnalyzer.js';
 import {
   analyzeProject,
   isAvailable as astIsAvailable,
   generateContextForAgent,
 } from '#core/AstAnalyzer.js';
-import { DimensionCopy } from '#service/bootstrap/DimensionCopyRegistry.js';
+import { DimensionCopy } from '#domain/dimension/DimensionCopy.js';
 import { LanguageService } from '#shared/LanguageService.js';
 import pathGuard from '#shared/PathGuard.js';
+import type { GuardAudit } from '#types/project-snapshot.js';
 import { detectPrimaryLanguage } from '../../LanguageExtensions.js';
 import { inferTargetRole } from '../../TargetClassifier.js';
 import { type BaseDimension, baseDimensions, resolveActiveDimensions } from '../base-dimensions.js';
@@ -77,10 +79,8 @@ interface DepGraphData {
   [key: string]: unknown;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- opaque shapes from external modules; callers expect the real exported types
-type AstProjectSummaryLike = Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- opaque shape from GuardCheckEngine
-type GuardAuditLike = Record<string, any>;
+type AstProjectSummaryLike = ProjectAnalysisResult;
+type GuardAuditLike = GuardAudit;
 
 /** Minimal guard engine shape */
 interface GuardEngineLike {
@@ -425,8 +425,11 @@ export async function runPhase1_6_EntityGraph(
   logger: PhaseLogger
 ) {
   const warnings: string[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- opaque result from CodeEntityGraph.populateFromAst
-  let codeEntityResult: Record<string, any> | null = null;
+  let codeEntityResult: {
+    entitiesUpserted: number;
+    edgesCreated: number;
+    durationMs: number;
+  } | null = null;
 
   if (astProjectSummary) {
     try {
@@ -435,7 +438,7 @@ export async function runPhase1_6_EntityGraph(
       if (db) {
         const ceg = new CodeEntityGraph(db, { projectRoot });
         ceg.clearProject();
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- AstProjectSummaryLike is structurally compatible at runtime
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- ProjectAnalysisResult structurally compatible at runtime
         codeEntityResult = ceg.populateFromAst(
           astProjectSummary as Parameters<typeof ceg.populateFromAst>[0]
         );
@@ -475,8 +478,11 @@ export async function runPhase1_7_CallGraph(
   incrementalOpts: IncrementalCallGraphOpts | null = null
 ) {
   const warnings: string[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- opaque result from CodeEntityGraph.populateCallGraph
-  let callGraphResult: Record<string, any> | null = null;
+  let callGraphResult: {
+    entitiesUpserted: number;
+    edgesCreated: number;
+    durationMs: number;
+  } | null = null;
 
   if (!astProjectSummary?.fileSummaries?.length) {
     return { callGraphResult, warnings };
@@ -484,7 +490,7 @@ export async function runPhase1_7_CallGraph(
 
   // 检查是否有 callSites 数据 (Phase 5 提取)
   const hasCallSites = astProjectSummary.fileSummaries.some(
-    (f: { callSites?: unknown[]; [key: string]: unknown }) => f.callSites && f.callSites.length > 0
+    (f) => f.callSites && f.callSites.length > 0
   );
   if (!hasCallSites) {
     logger.info('[Bootstrap] Call Graph skipped: no call sites extracted');
@@ -501,9 +507,9 @@ export async function runPhase1_7_CallGraph(
 
     // Phase 5 分析 (带超时保护 + 渐进式 partial result)
     const result = isIncremental
-      ? // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- AstProjectSummaryLike structurally compatible
+      ? // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- ProjectAnalysisResult structurally compatible with AstProjectSummary
         await analyzer.analyzeIncremental(
-          astProjectSummary as Parameters<typeof analyzer.analyzeIncremental>[0],
+          astProjectSummary as unknown as Parameters<typeof analyzer.analyzeIncremental>[0],
           changedFiles!,
           {
             timeout: 15_000,
@@ -511,12 +517,15 @@ export async function runPhase1_7_CallGraph(
             minConfidence: 0.5,
           }
         )
-      : // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- AstProjectSummaryLike structurally compatible
-        await analyzer.analyze(astProjectSummary as Parameters<typeof analyzer.analyze>[0], {
-          timeout: 15_000,
-          maxCallSitesPerFile: 500,
-          minConfidence: 0.5,
-        });
+      : // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- ProjectAnalysisResult structurally compatible with AstProjectSummary
+        await analyzer.analyze(
+          astProjectSummary as unknown as Parameters<typeof analyzer.analyze>[0],
+          {
+            timeout: 15_000,
+            maxCallSitesPerFile: 500,
+            minConfidence: 0.5,
+          }
+        );
 
     // 写入 CodeEntityGraph
     const db = container.get('database');
@@ -528,10 +537,7 @@ export async function runPhase1_7_CallGraph(
         ceg.clearCallGraphForFiles(changedFiles ?? null);
       }
 
-      callGraphResult = ceg.populateCallGraph(result.callEdges, result.dataFlowEdges) as Record<
-        string,
-        any
-      >;
+      callGraphResult = ceg.populateCallGraph(result.callEdges, result.dataFlowEdges);
 
       const partialTag = result.stats.partial ? ' [partial]' : '';
       const incrTag = isIncremental ? ' [incremental]' : '';
@@ -672,10 +678,13 @@ export async function runPhase3_GuardAudit(
       const prefix = options.summaryPrefix || 'Bootstrap scan';
       for (const fileResult of guardAudit.files || []) {
         if (fileResult.violations.length > 0) {
+          const fileSummary = (fileResult as unknown as Record<string, unknown>).summary as
+            | { errors: number; warnings: number }
+            | undefined;
           violationsStore.appendRun({
             filePath: fileResult.filePath,
             violations: fileResult.violations,
-            summary: `${prefix}: ${fileResult.summary.errors}E ${fileResult.summary.warnings}W`,
+            summary: `${prefix}: ${fileSummary?.errors ?? 0}E ${fileSummary?.warnings ?? 0}W`,
           });
         }
       }
@@ -784,7 +793,7 @@ export async function runPhase4_DimensionResolve(params: Phase4Params) {
       }));
       guardAudit = guardEngine.auditFiles(guardFiles, { scope: 'project' });
       logger.info(
-        `[Bootstrap] Guard re-audit with ${guardEngine.getExternalRuleCount()} Enhancement Pack rules → ${guardAudit!.summary.totalViolations} total violations`
+        `[Bootstrap] Guard re-audit with ${guardEngine.getExternalRuleCount()} Enhancement Pack rules → ${guardAudit!.summary?.totalViolations ?? 0} total violations`
       );
     } catch (e: unknown) {
       logger.warn(
@@ -880,6 +889,7 @@ export async function runAllPhases(
       primaryLang: null,
       discoverer,
       allTargets,
+      truncated,
       astProjectSummary: null,
       astContext: '',
       codeEntityResult: null,
@@ -894,6 +904,7 @@ export async function runAllPhases(
       enhancementGuardRules: [],
       langProfile: {},
       targetsSummary: [],
+      localPackageModules: [],
       warnings,
       report: report || {},
       incrementalPlan: null,
@@ -904,8 +915,16 @@ export async function runAllPhases(
   }
 
   // ── Incremental evaluation (Phase 1 后执行，需要 allFiles) ──
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- IncrementalBootstrap.evaluate returns opaque plan object
-  let incrementalPlan: Record<string, any> | null = null;
+  let incrementalPlan: {
+    mode: string;
+    canIncremental: boolean;
+    affectedDimensions: string[];
+    skippedDimensions: string[];
+    reason: string;
+    diff?: unknown;
+    previousSnapshot?: unknown;
+    restoredEpisodic?: unknown;
+  } | null = null;
   if (options.incremental) {
     try {
       const { IncrementalBootstrap } = await import('../pipeline/IncrementalBootstrap.js');
@@ -1062,14 +1081,34 @@ export async function runAllPhases(
   // Targets 摘要
   const targetsSummary = (allTargets as TargetItem[]).map((t: TargetItem) => {
     const name = typeof t === 'string' ? t : t.name;
+    const pkgName = typeof t === 'object' ? t.packageName : undefined;
+    const targetPath = typeof t === 'object' ? (t as Record<string, unknown>).path : undefined;
     return {
       name,
       type: (typeof t === 'object' ? t.type : undefined) || 'target',
-      packageName: (typeof t === 'object' ? t.packageName : undefined) || undefined,
+      packageName: pkgName || undefined,
       inferredRole: inferTargetRole(name),
       fileCount: allFiles.filter((f) => f.targetName === name).length,
+      // 标记来自子包的 target（如 Packages/AOXNetworkKit）—— 语言无关
+      isLocalPackage:
+        typeof targetPath === 'string' && targetPath !== projectRoot ? true : undefined,
     };
   });
+
+  // 本地子包汇总 — 供 MissionBriefing 构建 mustCoverModules
+  const localPackageModules = targetsSummary
+    .filter((t) => t.isLocalPackage && t.fileCount > 0)
+    .map((t) => ({
+      name: t.name,
+      packageName: t.packageName || t.name,
+      fileCount: t.fileCount,
+      inferredRole: t.inferredRole,
+      // 提取该模块的关键文件路径（前 8 个，用于 evidenceStarters）
+      keyFiles: allFiles
+        .filter((f) => f.targetName === t.name)
+        .slice(0, 8)
+        .map((f) => f.relativePath),
+    }));
 
   // 完成报告
   if (report) {
@@ -1082,6 +1121,7 @@ export async function runAllPhases(
     primaryLang,
     discoverer,
     allTargets,
+    truncated,
     astProjectSummary: phase1_5.astProjectSummary,
     astContext: phase1_5.astContext,
     codeEntityResult: phase1_6.codeEntityResult,
@@ -1097,6 +1137,7 @@ export async function runAllPhases(
     langProfile: phase4.langProfile,
     detectedFrameworks: phase4.detectedFrameworks,
     targetsSummary,
+    localPackageModules, // 本地子包汇总（语言无关）
     warnings,
     report, // NEW: Phase 级报告 (null if generateReport=false)
     incrementalPlan, // NEW: 增量评估结果 (null if incremental=false)

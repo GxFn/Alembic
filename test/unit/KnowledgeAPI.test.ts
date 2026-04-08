@@ -433,8 +433,8 @@ describe('MCP Tool Definitions (V3)', () => {
     });
   });
 
-  test('TOOLS 数组应包含 16 个工具', () => {
-    expect(TOOLS.length).toBe(16);
+  test('TOOLS 数组应包含 17 个工具', () => {
+    expect(TOOLS.length).toBe(17);
   });
 
   test('submit_knowledge items 字段应为数组类型', () => {

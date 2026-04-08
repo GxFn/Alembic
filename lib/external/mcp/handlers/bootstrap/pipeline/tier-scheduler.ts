@@ -17,31 +17,21 @@
  * @module TierScheduler
  */
 
+import { buildTierPlan } from '#domain/dimension/index.js';
 import Logger from '#infra/logging/Logger.js';
 import { createLimit } from '#shared/concurrency.js';
 
 const logger = Logger.getInstance();
 
 // ──────────────────────────────────────────────────────────────────
-// 分层定义
+// 分层定义 — 从统一注册表动态生成
 // ──────────────────────────────────────────────────────────────────
 
-const DEFAULT_TIERS = [
-  // Tier 1: 基础数据（通用 + 语言条件维度并行执行）
-  [
-    'project-profile',
-    'objc-deep-scan',
-    'category-scan',
-    'module-export-scan',
-    'framework-convention-scan',
-    'python-package-scan',
-    'jvm-annotation-scan',
-  ],
-  // Tier 2: 规范+架构+模式
-  ['code-standard', 'architecture', 'code-pattern'],
-  // Tier 3: 流转+实践+总结
-  ['event-and-data-flow', 'best-practice', 'agent-guidelines'],
-];
+/**
+ * 默认分层来自 DimensionRegistry.buildTierPlan()，
+ * 该函数根据每个维度的 tierHint 自动分配。
+ */
+const DEFAULT_TIERS = buildTierPlan();
 
 /** Dimension execution result */
 interface DimensionResult {

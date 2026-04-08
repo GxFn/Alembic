@@ -27,6 +27,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '#infra/logging/Logger.js';
 import { CACHE } from '#shared/constants.js';
+import type { SessionStoreSerialized } from './session-store-schema.js';
+import { validateSessionStoreShape } from './session-store-schema.js';
 
 // ── 类型定义 ──
 
@@ -84,7 +86,10 @@ export interface TierReflection {
 export interface WorkingMemoryDistilled {
   keyFindings?: Finding[];
   toolCallSummary?: Array<string | { tool: string; summary: string }>;
-  [key: string]: unknown;
+  stats?: Record<string, number>;
+  plan?: Record<string, unknown> | null;
+  totalObservations?: number;
+  compressedCount?: number;
 }
 
 /** 维度摘要 */
@@ -763,7 +768,7 @@ export class SessionStore {
   // §10: 序列化
   // ═══════════════════════════════════════════════════════
 
-  toJSON() {
+  toJSON(): SessionStoreSerialized {
     return {
       dimensionReports: Object.fromEntries(this.#dimensionReports),
       crossReferences: this.#crossReferences,
@@ -774,28 +779,17 @@ export class SessionStore {
   }
 
   static fromJSON(json: Record<string, unknown>) {
+    const validated = validateSessionStoreShape(json);
     const store = new SessionStore({
-      projectContext: (json.projectContext as Record<string, unknown>) || {},
+      projectContext: validated.projectContext,
     });
-    if (json.dimensionReports) {
-      for (const [k, v] of Object.entries(
-        json.dimensionReports as Record<string, DimensionReport>
-      )) {
-        store.#dimensionReports.set(k, v);
-      }
+    for (const [k, v] of Object.entries(validated.dimensionReports)) {
+      store.#dimensionReports.set(k, v);
     }
-    if (json.crossReferences) {
-      store.#crossReferences = json.crossReferences as CrossReference[];
-    }
-    if (json.tierReflections) {
-      store.#tierReflections = json.tierReflections as TierReflection[];
-    }
-    if (json.submittedCandidates) {
-      for (const [k, v] of Object.entries(
-        json.submittedCandidates as Record<string, CandidateSummary[]>
-      )) {
-        store.#submittedCandidates.set(k, v);
-      }
+    store.#crossReferences = validated.crossReferences;
+    store.#tierReflections = validated.tierReflections;
+    for (const [k, v] of Object.entries(validated.submittedCandidates)) {
+      store.#submittedCandidates.set(k, v);
     }
     return store;
   }

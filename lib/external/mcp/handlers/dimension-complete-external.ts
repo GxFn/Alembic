@@ -396,8 +396,12 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
   }
 
   // ═══════════════════════════════════════════════════════════
-  // 6.5 Bootstrap 完成后，自动触发 Delivery / Wiki / SemanticMemory (R4/R5/R6)
+  // 6.5 Bootstrap 完成后，自动触发 Delivery / Panorama / Wiki / SemanticMemory (R4/R4.5/R5/R6)
   // ═══════════════════════════════════════════════════════════
+
+  let deliveryVerification:
+    | import('#service/bootstrap/DeliveryVerifier.js').DeliveryVerification
+    | null = null;
 
   if (isComplete) {
     // R4: 自动触发 Cursor Delivery
@@ -418,6 +422,55 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
     } catch (e: unknown) {
       logger.warn(
         `[DimensionComplete] Auto CursorDelivery failed (non-blocking): ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+
+    // R4+: DeliveryVerifier — 交付完整性检查
+    try {
+      const { DeliveryVerifier } = await import('#service/bootstrap/DeliveryVerifier.js');
+      const { resolveProjectRoot } = await import('#shared/resolveProjectRoot.js');
+      const projectRoot = resolveProjectRoot(ctx.container);
+      const verifier = new DeliveryVerifier(projectRoot);
+      const verification = verifier.verify();
+      if (!verification.allPassed) {
+        logger.warn('[DimensionComplete] Delivery verification incomplete', {
+          failures: verification.failures,
+        });
+      } else {
+        logger.info('[DimensionComplete] Delivery verification passed — all channels OK');
+      }
+      // 附加到响应中的 completionExtras
+      deliveryVerification = verification;
+    } catch (e: unknown) {
+      logger.warn(
+        `[DimensionComplete] DeliveryVerifier failed (non-blocking): ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+
+    // R4.5: Panorama 数据刷新（冷启动完成后知识库已填充，需重新计算全景）
+    try {
+      const { getServiceContainer: getPanoramaContainer } = await import(
+        '#inject/ServiceContainer.js'
+      );
+      const panoramaContainer = getPanoramaContainer();
+      const panoramaService = panoramaContainer.services.panoramaService
+        ? panoramaContainer.get('panoramaService')
+        : null;
+      if (
+        panoramaService &&
+        typeof (panoramaService as { rescan?: () => Promise<void> }).rescan === 'function'
+      ) {
+        await (panoramaService as { rescan: () => Promise<void> }).rescan();
+        const overview = (
+          panoramaService as { getOverview: () => { moduleCount: number; gapCount: number } }
+        ).getOverview();
+        logger.info(
+          `[DimensionComplete] Panorama refreshed — ${overview.moduleCount} modules, ${overview.gapCount} gaps`
+        );
+      }
+    } catch (e: unknown) {
+      logger.warn(
+        `[DimensionComplete] Panorama refresh failed (non-blocking): ${e instanceof Error ? e.message : String(e)}`
       );
     }
 
@@ -514,6 +567,33 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
   // Wiki 生成提示（冷启动完成时）
   const nextActions = isComplete ? BOOTSTRAP_COMPLETE_ACTIONS : undefined;
 
+  // §9: 子包覆盖校验 — 检查 referencedFiles 是否覆盖了关键本地子包
+  let subpackageCoverageWarning: string | undefined;
+  try {
+    const snapshotCache = session.getSnapshotCache?.();
+    const localPkgs = snapshotCache?.localPackageModules;
+    if (localPkgs && localPkgs.length > 0 && referencedFiles.length > 0) {
+      const uncoveredPkgs: string[] = [];
+      for (const pkg of localPkgs) {
+        const pkgPrefix = pkg.packageName.replace(/\/$/, '');
+        const covered = referencedFiles.some((f) => f.includes(pkgPrefix) || f.includes(pkg.name));
+        if (!covered) {
+          uncoveredPkgs.push(pkg.name);
+        }
+      }
+      if (uncoveredPkgs.length > 0) {
+        subpackageCoverageWarning =
+          `本维度未覆盖以下本地子包: ${uncoveredPkgs.join(', ')}。` +
+          `建议在分析中纳入这些模块的源码，以确保知识库完整性。`;
+        logger.info(
+          `[DimensionComplete] Subpackage coverage gap for "${dimensionId}": ${uncoveredPkgs.join(', ')}`
+        );
+      }
+    }
+  } catch {
+    /* best effort */
+  }
+
   // v2: 为下游维度构建结构化提示 (基于累积证据)
   let evidenceHints: Record<string, unknown> | undefined;
   if (
@@ -585,6 +665,10 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
       qualityFeedback,
       // v2: 跨维度证据 (供后续维度利用)
       evidenceHints,
+      // v3: 子包覆盖校验警告
+      subpackageCoverageWarning,
+      // v3.1: 交付完整性验证 (仅 bootstrap 完成时)
+      deliveryVerification: isComplete ? deliveryVerification : undefined,
       nextActions,
     },
     meta: {

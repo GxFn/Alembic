@@ -47,15 +47,36 @@
  *   bootstrap/projectSkills.js ← Phase 5.5 Project Skill 生成（内部 Agent 专用）
  */
 
+import path from 'node:path';
 import { getInternalAgentRequiredFields } from '#domain/knowledge/FieldSpec.js';
+import { CleanupService } from '#service/cleanup/CleanupService.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import type {
+  BootstrapSessionShape,
+  DimensionDef,
+  GuardAuditFileEntry,
+  LanguageProfile,
+  PhaseReport,
+  ProjectSnapshot,
+} from '#types/project-snapshot.js';
+import { buildProjectSnapshot } from '#types/project-snapshot-builder.js';
+import { toSessionCache } from '#types/snapshot-views.js';
 import { envelope } from '../envelope.js';
 import { fillDimensionsV3 } from './bootstrap/pipeline/orchestrator.js';
 import { bootstrapRefine } from './bootstrap/refine.js';
+import {
+  buildTaskDefs,
+  dispatchPipelineFill,
+  startTaskManagerSession,
+} from './bootstrap/shared/async-fill-helpers.js';
 import { runAllPhases } from './bootstrap/shared/bootstrap-phases.js';
 import { buildInternalNextSteps } from './bootstrap/shared/dimension-text.js';
-import { buildLanguageExtension, inferLang } from './LanguageExtensions.js';
-import { inferFilePriority, inferTargetRole } from './TargetClassifier.js';
+import type { TargetFile } from './bootstrap/shared/handler-types.js';
+import { summarizePanorama } from './bootstrap/shared/panorama-utils.js';
+import { getOrCreateSessionManager } from './bootstrap/shared/session-helpers.js';
+import { buildTargetFileMap } from './bootstrap/shared/target-file-map.js';
+import { buildLanguageExtension } from './LanguageExtensions.js';
+import { inferTargetRole } from './TargetClassifier.js';
 import type { McpContext } from './types.js';
 
 export { bootstrapRefine };
@@ -80,56 +101,6 @@ interface BootstrapKnowledgeArgs {
   skipAsyncFill?: boolean;
   loadSkills?: boolean;
   [key: string]: unknown;
-}
-
-interface TargetFile {
-  name: string;
-  relativePath: string;
-  language: string;
-  totalLines: number;
-  priority: string;
-  content: string;
-  truncated: boolean;
-}
-
-interface GuardViolation {
-  ruleId?: string;
-  severity?: string;
-  message?: string;
-  line?: number;
-}
-
-interface GuardAuditFile {
-  filePath: string;
-  violations: GuardViolation[];
-}
-
-interface DimensionDef {
-  id: string;
-  label?: string;
-  skillWorthy?: boolean;
-  skillMeta?: Record<string, unknown> | null;
-  [key: string]: unknown;
-}
-
-interface PhaseReportShape {
-  phases?: {
-    entityGraph?: { entityCount?: number; edgeCount?: number; ms?: number };
-    callGraph?: {
-      result?: { entitiesUpserted?: number; edgesCreated?: number };
-      ms?: number;
-    };
-  };
-}
-
-interface LangProfileShape {
-  secondary?: string[];
-  isMultiLang?: boolean;
-}
-
-interface BootstrapSessionShape {
-  id: string;
-  toJSON(): Record<string, unknown>;
 }
 
 /**
@@ -159,6 +130,24 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   const skipAsyncFill = args.skipAsyncFill || false;
 
   // ═══════════════════════════════════════════════════════════
+  // Step 0: 全量清理 (与 bootstrap-external 对齐)
+  // 冷启动需要干净的初始状态：清除 DB + 文件系统缓存
+  // ═══════════════════════════════════════════════════════════
+  const db = ctx.container.get('database');
+  const cleanupService = new CleanupService({
+    projectRoot,
+    db,
+    logger: ctx.logger,
+  });
+  const cleanupResult = await cleanupService.fullReset();
+
+  ctx.logger.info('[Bootstrap-Internal] fullReset complete', {
+    tables: cleanupResult.clearedTables.length,
+    files: cleanupResult.deletedFiles,
+    errors: cleanupResult.errors.length,
+  });
+
+  // ═══════════════════════════════════════════════════════════
   // Phase 1-4: 共享管线（文件收集→AST→依赖→Guard→维度解析）
   // ═══════════════════════════════════════════════════════════
   const phaseResults = await runAllPhases(projectRoot, ctx, {
@@ -179,29 +168,42 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
     });
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // 构建 ProjectSnapshot — 统一数据来源
+  // ═══════════════════════════════════════════════════════════
+  const snapshot: ProjectSnapshot = buildProjectSnapshot({
+    projectRoot,
+    sourceTag: 'bootstrap',
+    ...phaseResults,
+    report: phaseResults.report,
+  });
+
+  // 从 snapshot 派生局部别名（兼容既有 responseData 构建逻辑）
   const {
     allFiles,
     allTargets,
     discoverer,
-    langStats,
-    primaryLang,
-    astProjectSummary,
+    ast: astProjectSummary,
     astContext,
-    depGraphData,
+    dependencyGraph: depGraphData,
     depEdgesWritten,
     guardAudit,
-    guardEngine: _guardEngine,
     activeDimensions,
     enhancementPackInfo,
     enhancementPatterns,
     enhancementGuardRules,
-    langProfile,
+    language,
     targetsSummary,
     incrementalPlan,
-    detectedFrameworks: _detectedFrameworks,
-    warnings: _phaseWarnings,
-    report: phaseReport,
-  } = phaseResults;
+    codeEntityGraph: codeEntityResult,
+    callGraph: callGraphResult,
+    localPackageModules,
+    warnings: phaseWarnings,
+    phaseReport,
+  } = snapshot;
+  const langStats = language.stats;
+  const primaryLang = language.primaryLang;
+  const langProfile = language;
 
   // 构建兼容的 report 对象（保持原有 API 格式）
   const report = {
@@ -237,17 +239,20 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
         categories: astProjectSummary?.categories?.length || 0,
         patterns: Object.keys(astProjectSummary?.patternStats || {}),
       },
-      codeEntityGraph: (phaseReport as PhaseReportShape)?.phases?.entityGraph || {
+      codeEntityGraph: (phaseReport as PhaseReport)?.phases?.entityGraph || {
         entityCount: 0,
         edgeCount: 0,
         ms: 0,
       },
-      callGraph: (phaseReport as PhaseReportShape)?.phases?.callGraph
+      callGraph: (phaseReport as PhaseReport)?.phases?.callGraph
         ? {
             entities:
-              (phaseReport as PhaseReportShape).phases!.callGraph!.result?.entitiesUpserted || 0,
-            edges: (phaseReport as PhaseReportShape).phases!.callGraph!.result?.edgesCreated || 0,
-            ms: (phaseReport as PhaseReportShape).phases!.callGraph!.ms || 0,
+              ((phaseReport as PhaseReport).phases!.callGraph!.result as Record<string, unknown>)
+                ?.entitiesUpserted || 0,
+            edges:
+              ((phaseReport as PhaseReport).phases!.callGraph!.result as Record<string, unknown>)
+                ?.edgesCreated || 0,
+            ms: (phaseReport as PhaseReport).phases!.callGraph!.ms || 0,
           }
         : { entities: 0, edges: 0, ms: 0 },
       dependencyGraph: { edgesWritten: depEdgesWritten || 0 },
@@ -259,7 +264,7 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
       },
       guardAudit: {
         totalViolations: guardAudit?.summary?.totalViolations || 0,
-        filesWithViolations: ((guardAudit?.files || []) as GuardAuditFile[]).filter(
+        filesWithViolations: ((guardAudit?.files || []) as GuardAuditFileEntry[]).filter(
           (f) => f.violations.length > 0
         ).length,
         skipped: skipGuard,
@@ -276,37 +281,27 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   // ═══════════════════════════════════════════════════════════
   // Phase 4.5: 构建响应 — filesByTarget + analysisFramework
   // ═══════════════════════════════════════════════════════════
-  const targetFileMap: Record<string, TargetFile[]> = {};
-  for (const f of allFiles) {
-    if (!targetFileMap[f.targetName]) {
-      targetFileMap[f.targetName] = [];
-    }
-    const lines = f.content.split('\n');
-    targetFileMap[f.targetName].push({
-      name: f.name,
-      relativePath: f.relativePath,
-      language: inferLang(f.name),
-      totalLines: lines.length,
-      priority: inferFilePriority(f.name),
-      // content 仅保留在内存中供 Phase 5 异步 pipeline 使用
-      // MCP 响应不包含文件内容（避免 1MB+ 响应导致 Cursor 无法处理）
-      content: lines.slice(0, contentMaxLines).join('\n'),
-      truncated: lines.length > contentMaxLines,
-    });
-  }
-  // 每个 target 内按 priority 排序
-  for (const tName of Object.keys(targetFileMap)) {
-    const prio = { high: 0, medium: 1, low: 2 };
-    targetFileMap[tName].sort(
-      (a, b) =>
-        ((prio as Record<string, number>)[a.priority] || 1) -
-        ((prio as Record<string, number>)[b.priority] || 1)
-    );
-  }
+  const targetFileMap = buildTargetFileMap(
+    allFiles as unknown as Array<{
+      name: string;
+      relativePath: string;
+      targetName: string;
+      content: string;
+    }>,
+    contentMaxLines,
+    true
+  );
 
   const dimensions = activeDimensions as DimensionDef[];
 
   const responseData: Record<string, unknown> = {
+    // Step 0 清理信息（与 bootstrap-external 对齐）
+    cleanup: {
+      deletedRecipes: cleanupResult.deletedFiles,
+      clearedTables: cleanupResult.clearedTables.length,
+      dbCleared: true,
+      errors: cleanupResult.errors,
+    },
     report,
     targets:
       targetsSummary ||
@@ -351,8 +346,8 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
       : null,
     languageStats: langStats,
     primaryLanguage: primaryLang,
-    secondaryLanguages: (langProfile as LangProfileShape).secondary,
-    isMultiLang: (langProfile as LangProfileShape).isMultiLang,
+    secondaryLanguages: (langProfile as LanguageProfile).secondary,
+    isMultiLang: (langProfile as LanguageProfile).isMultiLang,
     languageExtension: buildLanguageExtension(primaryLang),
     guardSummary: guardAudit
       ? {
@@ -362,16 +357,18 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
         }
       : null,
     guardViolationFiles: guardAudit
-      ? ((guardAudit.files || []) as GuardAuditFile[])
+      ? ((guardAudit.files || []) as GuardAuditFileEntry[])
           .filter((f) => f.violations.length > 0)
           .map((f) => ({
             filePath: f.filePath,
-            violations: f.violations.map((v) => ({
-              ruleId: v.ruleId,
-              severity: v.severity,
-              message: v.message,
-              line: v.line,
-            })),
+            violations: f.violations.map(
+              (v: { ruleId?: string; severity?: string; message?: string; line?: number }) => ({
+                ruleId: v.ruleId,
+                severity: v.severity,
+                message: v.message,
+                line: v.line,
+              })
+            ),
           }))
       : [],
 
@@ -390,9 +387,9 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
     astContext: astContext || null,
     astSummary: astProjectSummary
       ? {
-          classes: astProjectSummary.classes.length,
-          protocols: astProjectSummary.protocols.length,
-          categories: astProjectSummary.categories.length,
+          classes: astProjectSummary.classes?.length || 0,
+          protocols: astProjectSummary.protocols?.length || 0,
+          categories: astProjectSummary.categories?.length || 0,
           patterns: Object.keys(astProjectSummary.patternStats || {}),
           metrics: astProjectSummary.projectMetrics
             ? {
@@ -416,9 +413,62 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
           }
         : null,
 
+    // 代码实体图谱摘要（与 bootstrap-external 对齐）
+    codeEntityGraph: codeEntityResult
+      ? {
+          totalEntities: (codeEntityResult as { entityCount?: number }).entityCount || 0,
+          totalEdges: (codeEntityResult as { edgeCount?: number }).edgeCount || 0,
+        }
+      : null,
+
+    // 调用图谱摘要（与 bootstrap-external 对齐）
+    callGraph: callGraphResult
+      ? {
+          entitiesUpserted:
+            (callGraphResult as { entitiesUpserted?: number }).entitiesUpserted || 0,
+          edgesCreated: (callGraphResult as { edgesCreated?: number }).edgesCreated || 0,
+        }
+      : null,
+
+    // 全景分析摘要（与 bootstrap-external 对齐）
+    panorama: snapshot.panorama ? summarizePanorama(snapshot.panorama) : null,
+
+    // 本地子包模块（与 bootstrap-external mustCoverModules 对齐）
+    localPackageModules: localPackageModules.length > 0 ? localPackageModules : null,
+
+    // Phase 1-4 警告（与 bootstrap-external 对齐）
+    warnings: phaseWarnings.length > 0 ? phaseWarnings : undefined,
+
     // 引导 Agent 下一步操作（共享文本层）
     nextSteps: buildInternalNextSteps(dimensions),
   };
+
+  // ═══════════════════════════════════════════════════════════
+  // Phase 4.6: BootstrapSessionManager — 缓存 Phase 结果供 wiki_plan 复用
+  // （与 bootstrap-external 对齐）
+  // ═══════════════════════════════════════════════════════════
+  try {
+    const sessionManager = getOrCreateSessionManager(ctx.container);
+    const bsSession = sessionManager.createSession({
+      projectRoot,
+      dimensions: dimensions.map((d) => ({
+        ...d,
+        skillMeta: d.skillMeta ?? undefined,
+      })),
+      projectContext: {
+        projectName: path.basename(projectRoot),
+        primaryLang,
+        fileCount: allFiles.length,
+        modules: depGraphData?.nodes?.length || 0,
+      },
+    });
+    bsSession.setSnapshotCache(toSessionCache(snapshot));
+    responseData.sessionId = bsSession.id;
+  } catch (e: unknown) {
+    ctx.logger.warn(
+      `[Bootstrap-Internal] BootstrapSessionManager setup failed (non-blocking): ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
 
   // ═══════════════════════════════════════════════════════════
   // Phase 5: 创建异步任务 — 骨架先返回，内容后填充
@@ -430,27 +480,15 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   // ═══════════════════════════════════════════════════════════
 
   // 构建任务定义列表
-  const taskDefs = dimensions.map((dim) => ({
-    id: dim.id,
-    meta: {
-      type: dim.skillWorthy ? 'skill' : 'candidate',
-      dimId: dim.id,
-      label: dim.label,
-      skillWorthy: !!dim.skillWorthy,
-      skillMeta: dim.skillMeta || null,
-    },
-  }));
+  const taskDefs = buildTaskDefs(dimensions);
 
   // 启动 BootstrapTaskManager 会话（通过正式 DI 获取单例）
-  let bootstrapSession: BootstrapSessionShape | null = null;
-  try {
-    const taskManager = ctx.container.get('bootstrapTaskManager');
-    bootstrapSession = taskManager.startSession(taskDefs);
-  } catch (e: unknown) {
-    ctx.logger.warn(
-      `[Bootstrap] BootstrapTaskManager init failed (graceful degradation): ${e instanceof Error ? e.message : String(e)}`
-    );
-  }
+  const bootstrapSession = startTaskManagerSession(
+    ctx.container,
+    taskDefs,
+    ctx.logger,
+    'Bootstrap'
+  );
 
   // 立即构建骨架响应
   responseData.bootstrapSession = bootstrapSession ? bootstrapSession.toJSON() : null;
@@ -459,40 +497,20 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   responseData.message = `Bootstrap 骨架已创建: ${allFiles.length} files, ${allTargets.length} targets, ${taskDefs.length} 个维度任务已排队，正在后台逐一填充...`;
 
   // ── 异步后台填充（fire-and-forget）──
-  const fillContext = {
-    ctx,
-    dimensions,
-    allFiles,
-    targetFileMap,
-    depGraphData,
-    guardAudit,
-    langStats,
-    primaryLang,
-    astProjectSummary,
-    taskManager: (() => {
-      try {
-        return ctx.container.get('bootstrapTaskManager');
-      } catch {
-        return null;
-      }
-    })(),
-    sessionId: bootstrapSession?.id || null,
-    projectRoot,
-    // v5.0: 增量 Bootstrap 计划
-    incrementalPlan,
-    // M1: Phase 1.8 全景数据 → strategyContext.panorama
-    panoramaResult: phaseResults.panoramaResult,
-  };
-
-  // 使用 setImmediate 避免阻塞 HTTP 响应
   // skipAsyncFill: CLI 非 --wait 模式跳过异步填充，避免进程退出后 DB 断连
   if (!skipAsyncFill) {
-    setImmediate(() => {
-      ctx.logger.info(`[Bootstrap] Dispatching v3 AI-First pipeline`);
-      fillDimensionsV3(fillContext).catch((e) => {
-        ctx.logger.error(`[Bootstrap] Async fill (v3) failed: ${e.message}`);
-      });
-    });
+    dispatchPipelineFill(
+      {
+        snapshot,
+        ctx: ctx as BootstrapMcpContext & { logger: BootstrapLogger },
+        bootstrapSession,
+        targetFileMap,
+        projectRoot,
+      },
+      dimensions,
+      fillDimensionsV3,
+      'Bootstrap'
+    );
   } else {
     ctx.logger.info(`[Bootstrap] Async fill skipped (skipAsyncFill=true)`);
   }

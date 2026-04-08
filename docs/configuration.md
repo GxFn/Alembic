@@ -48,7 +48,7 @@ ASD_OLLAMA_HOST=http://127.0.0.1:11434
 如果主 Provider 不支持 embedding（如 Claude），系统自动创建 fallback embedding provider：
 - 优先使用 Google Gemini embedding
 - 其次 OpenAI embedding
-- 最后 fallback 到本地 BM25（无向量语义搜索）
+- 最后 fallback 到本地 FieldWeighted 搜索（无向量语义搜索）
 
 ### 服务器
 

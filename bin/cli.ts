@@ -7,6 +7,7 @@
  *   asd setup           - 初始化项目（--repo 指定子仓库远程地址）
  *   asd remote <url>    - 将 recipes 目录转为独立子仓库并关联远程仓库
  *   asd coldstart       - 冷启动知识库（9 维度分析 + AI 填充）
+ *   asd rescan          - 增量知识更新（保留 Recipe，重新扫描）
  *   asd ais [Target]    - AI 扫描 Target → 直接发布 Recipes
  *   asd search <query>  - 搜索知识库
  *   asd guard <file>    - Guard 检查
@@ -358,6 +359,159 @@ program
   });
 
 // ─────────────────────────────────────────────────────
+// rescan 命令 (增量知识更新)
+// TODO: 当前 CLI rescan 仅执行 Phase 1-4 + 证据审计，尚未接入内部 Agent AI pipeline（Phase 5）。
+//       后续需要：1) 创建 rescan-internal.ts 或在 bootstrap-internal.ts 增加 rescan 模式
+//                 2) AgentFactory 增加 rescanKnowledge() 方法
+//                 3) CLI rescan 改为调用 agentFactory.rescanKnowledge()
+//       优先级：低（当前先完善 IDE Agent 外部路径）
+// ─────────────────────────────────────────────────────
+program
+  .command('rescan')
+  .description('增量知识更新：保留已审核 Recipe，清理衍生缓存，重新扫描项目')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .option('-m, --max-files <n>', '最大扫描文件数', '500')
+  .option('--dims <ids...>', '仅扫描指定维度（逗号分隔或多次指定）')
+  .option('--reason <text>', '重扫原因（记录到日志）')
+  .option('--json', '以 JSON 格式输出')
+  .action(async (opts) => {
+    const projectRoot = resolve(opts.dir);
+
+    try {
+      const { container } = await initContainer({ projectRoot });
+      const db = container.get('database');
+      const logger = container.get('logger');
+
+      const ora = (await import('ora')).default;
+      const spinner = ora('Rescan: 快照 Recipe → 清理缓存 → Phase 1-4 分析...').start();
+
+      // 1. CleanupService — 快照 + 清理
+      const { CleanupService } = await import('../lib/service/cleanup/CleanupService.js');
+      const cleanupService = new CleanupService({ projectRoot, db, logger });
+      const recipeSnapshot = await cleanupService.snapshotRecipes();
+      const cleanResult = await cleanupService.rescanClean();
+
+      spinner.text = `已保留 ${recipeSnapshot.count} 个 Recipe，Phase 1-4 分析中...`;
+
+      // 2. Phase 1-4 全量分析
+      const { runAllPhases } = await import(
+        '../lib/external/mcp/handlers/bootstrap/shared/bootstrap-phases.js'
+      );
+      const ctx = { container, logger, startedAt: Date.now() };
+      const phaseResults = await runAllPhases(projectRoot, ctx, {
+        maxFiles: parseInt(opts.maxFiles, 10),
+        contentMaxLines: 120,
+        sourceTag: 'cli-rescan',
+        summaryPrefix: 'Rescan',
+        clearOldData: false,
+        generateReport: true,
+        incremental: false,
+      });
+
+      spinner.text = 'Recipe 证据审计...';
+
+      // 3. RecipeRelevanceAuditor — 证据验证
+      const { RecipeRelevanceAuditor } = await import(
+        '../lib/service/evolution/RecipeRelevanceAuditor.js'
+      );
+      const auditor = new RecipeRelevanceAuditor({ db, logger });
+
+      const codeEntities: Array<{ name: string; kind?: string; file?: string }> = [];
+      const astSummary = phaseResults.astProjectSummary;
+      if (astSummary) {
+        for (const cls of astSummary.classes || []) {
+          codeEntities.push({
+            name: cls.name,
+            kind: 'class',
+            file: (cls.relativePath || cls.file) as string | undefined,
+          });
+        }
+        for (const proto of astSummary.protocols || []) {
+          codeEntities.push({
+            name: proto.name,
+            kind: 'protocol',
+            file: (proto.relativePath || proto.file) as string | undefined,
+          });
+        }
+      }
+
+      const depEdges: Array<{ from: string; to: string }> = [];
+      const depData = phaseResults.depGraphData;
+      if (depData?.edges) {
+        for (const edge of depData.edges as Array<{ from?: string; to?: string }>) {
+          if (edge.from && edge.to) {
+            depEdges.push({ from: edge.from, to: edge.to });
+          }
+        }
+      }
+
+      const auditSummary = await auditor.audit(recipeSnapshot.entries, {
+        fileList: phaseResults.allFiles.map(
+          (f: { relativePath?: string; name: string }) => f.relativePath || f.name
+        ),
+        codeEntities,
+        dependencyGraph: depEdges,
+      });
+
+      spinner.stop();
+
+      if (opts.json) {
+        cli.json({
+          rescan: {
+            preservedRecipes: recipeSnapshot.count,
+            cleanedTables: cleanResult.clearedTables.length,
+            cleanedFiles: cleanResult.deletedFiles,
+            reason: opts.reason || null,
+          },
+          relevanceAudit: {
+            totalAudited: auditSummary.totalAudited,
+            healthy: auditSummary.healthy,
+            watch: auditSummary.watch,
+            decay: auditSummary.decay,
+            severe: auditSummary.severe,
+            dead: auditSummary.dead,
+            proposalsCreated: auditSummary.proposalsCreated,
+            immediateDeprecated: auditSummary.immediateDeprecated,
+          },
+          filesScanned: phaseResults.allFiles.length,
+          dimensions: phaseResults.activeDimensions?.length || 0,
+        });
+      } else {
+        cli.log('\n📊 Rescan Report');
+        cli.log(`${'─'.repeat(50)}`);
+        cli.log(`  保留 Recipe: ${recipeSnapshot.count}`);
+        cli.log(`  清理表: ${cleanResult.clearedTables.length}`);
+        cli.log(`  扫描文件: ${phaseResults.allFiles.length}`);
+        cli.log(`  维度: ${phaseResults.activeDimensions?.length || 0}`);
+        cli.log('\n  证据审计:');
+        cli.log(`    健康: ${auditSummary.healthy}  观察: ${auditSummary.watch}`);
+        cli.log(
+          `    衰退: ${auditSummary.decay}  严重: ${auditSummary.severe}  死亡: ${auditSummary.dead}`
+        );
+        if (auditSummary.proposalsCreated > 0) {
+          cli.log(`    创建进化提案: ${auditSummary.proposalsCreated}`);
+        }
+        if (auditSummary.immediateDeprecated > 0) {
+          cli.log(`    即时淘汰: ${auditSummary.immediateDeprecated}`);
+        }
+        if (opts.reason) {
+          cli.log(`\n  原因: ${opts.reason}`);
+        }
+        cli.log('\n✅ Rescan 完成。请通过 MCP Agent 执行维度分析以补充新知识。');
+      }
+
+      process.exit(0);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      cli.error(`\n❌ ${msg}`);
+      if (err instanceof Error && err.stack) {
+        cli.debug(err.stack);
+      }
+      process.exit(1);
+    }
+  });
+
+// ─────────────────────────────────────────────────────
 // ais 命令 (AI Scan)
 // ─────────────────────────────────────────────────────
 program
@@ -429,7 +583,7 @@ program
   .command('search <query>')
   .description('搜索知识库')
   .option('-t, --type <type>', '搜索类型: all, recipe, solution, rule', 'all')
-  .option('-m, --mode <mode>', '搜索模式: keyword, bm25, semantic, auto', 'bm25')
+  .option('-m, --mode <mode>', '搜索模式: keyword, weighted, semantic, auto', 'auto')
   .option('-l, --limit <n>', '结果数量', '10')
   .option('-r, --rank', '启用排序管线 (CoarseRanker + MultiSignalRanker)')
   .option('-o, --output <format>', '输出格式: text, json', 'text')
@@ -809,6 +963,9 @@ program
   .option('--api-only', '仅启动 API 服务（不启动前端）')
   .action(async (opts) => {
     const { spawn } = await import('node:child_process');
+
+    // 标记为长驻 API 服务进程（CacheCoordinator 用于判断是否启动轮询）
+    process.env.ASD_API_SERVER = '1';
 
     // 项目根目录：-d 选项 > 环境变量 ASD_CWD > 当前目录
     const projectRoot = opts.dir || process.env.ASD_CWD || process.cwd();

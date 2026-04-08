@@ -18,7 +18,7 @@ const router = express.Router();
  * GET /api/v1/panorama
  * 返回项目全景概览（层级、模块、覆盖率）
  */
-router.get('/', async (_req: Request, res: Response): Promise<void> => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const container = getServiceContainer();
     const panoramaService = container.get('panoramaService');
@@ -29,6 +29,10 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
         error: { code: 'SERVICE_UNAVAILABLE', message: 'PanoramaService not available' },
       });
       return;
+    }
+
+    if (req.query.refresh === 'true' && typeof panoramaService.invalidate === 'function') {
+      panoramaService.invalidate();
     }
 
     if (typeof panoramaService.ensureData === 'function') {
@@ -50,7 +54,7 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
  * GET /api/v1/panorama/health
  * 返回全景健康度评分
  */
-router.get('/health', async (_req: Request, res: Response): Promise<void> => {
+router.get('/health', async (req: Request, res: Response): Promise<void> => {
   try {
     const container = getServiceContainer();
     const panoramaService = container.get('panoramaService');
@@ -61,6 +65,10 @@ router.get('/health', async (_req: Request, res: Response): Promise<void> => {
         error: { code: 'SERVICE_UNAVAILABLE', message: 'PanoramaService not available' },
       });
       return;
+    }
+
+    if (req.query.refresh === 'true' && typeof panoramaService.invalidate === 'function') {
+      panoramaService.invalidate();
     }
 
     if (typeof panoramaService.ensureData === 'function') {
@@ -82,7 +90,7 @@ router.get('/health', async (_req: Request, res: Response): Promise<void> => {
  * GET /api/v1/panorama/gaps
  * 返回知识空白区列表
  */
-router.get('/gaps', async (_req: Request, res: Response): Promise<void> => {
+router.get('/gaps', async (req: Request, res: Response): Promise<void> => {
   try {
     const container = getServiceContainer();
     const panoramaService = container.get('panoramaService');
@@ -93,6 +101,10 @@ router.get('/gaps', async (_req: Request, res: Response): Promise<void> => {
         error: { code: 'SERVICE_UNAVAILABLE', message: 'PanoramaService not available' },
       });
       return;
+    }
+
+    if (req.query.refresh === 'true' && typeof panoramaService.invalidate === 'function') {
+      panoramaService.invalidate();
     }
 
     if (typeof panoramaService.ensureData === 'function') {
@@ -114,7 +126,7 @@ router.get('/gaps', async (_req: Request, res: Response): Promise<void> => {
  * GET /api/v1/panorama/coverage
  * 返回各模块知识覆盖率热力图数据
  */
-router.get('/coverage', async (_req: Request, res: Response): Promise<void> => {
+router.get('/coverage', async (req: Request, res: Response): Promise<void> => {
   try {
     const container = getServiceContainer();
     const panoramaService = container.get('panoramaService');
@@ -125,6 +137,10 @@ router.get('/coverage', async (_req: Request, res: Response): Promise<void> => {
         error: { code: 'SERVICE_UNAVAILABLE', message: 'PanoramaService not available' },
       });
       return;
+    }
+
+    if (req.query.refresh === 'true' && typeof panoramaService.invalidate === 'function') {
+      panoramaService.invalidate();
     }
 
     if (typeof panoramaService.ensureData === 'function') {

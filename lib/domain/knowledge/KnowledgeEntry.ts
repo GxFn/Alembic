@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import type { KnowledgeEntryWire } from '#types/knowledge-wire.js';
 import {
   inferKind,
   isCandidate as isLifecycleCandidate,
@@ -203,8 +204,7 @@ export class KnowledgeEntry {
   /* ═══ 生命周期操作 ═══════════════════════════════════ */
 
   /**
-   * 发布 (pending → active)
-   * @returns }
+   * 发布 (pending|staging|evolving → active)
    */
   publish(publisher: string): { success: boolean; error?: string } {
     if (!this.isValid()) {
@@ -219,8 +219,35 @@ export class KnowledgeEntry {
   }
 
   /**
-   * 弃用 (pending|active → deprecated)
-   * @returns }
+   * 进入暂存期 (pending → staging)
+   */
+  stage(): { success: boolean; error?: string } {
+    return this._transition(Lifecycle.STAGING);
+  }
+
+  /**
+   * 进入进化态 (active → evolving)
+   */
+  evolve(): { success: boolean; error?: string } {
+    return this._transition(Lifecycle.EVOLVING);
+  }
+
+  /**
+   * 进入衰退观察 (active|evolving → decaying)
+   */
+  decay(): { success: boolean; error?: string } {
+    return this._transition(Lifecycle.DECAYING);
+  }
+
+  /**
+   * 恢复为已发布 (decaying|evolving → active)，不更新 publishedAt
+   */
+  restore(): { success: boolean; error?: string } {
+    return this._transition(Lifecycle.ACTIVE);
+  }
+
+  /**
+   * 弃用 (pending|active|decaying → deprecated)
    */
   deprecate(reason: string): { success: boolean; error?: string } {
     const result = this._transition(Lifecycle.DEPRECATED);
@@ -231,8 +258,7 @@ export class KnowledgeEntry {
   }
 
   /**
-   * 重新激活 (deprecated → pending)
-   * @returns }
+   * 重新激活 (deprecated|staging → pending)
    */
   reactivate() {
     const result = this._transition(Lifecycle.PENDING);
@@ -315,7 +341,7 @@ export class KnowledgeEntry {
    * Domain → JSON (camelCase 直出，全链路统一)
    * 注意: tags 保留原始值（含系统标签），对外 API 使用 sanitizeForAPI() 过滤
    */
-  toJSON() {
+  toJSON(): KnowledgeEntryWire {
     return {
       id: this.id,
       title: this.title,

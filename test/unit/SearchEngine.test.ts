@@ -289,7 +289,7 @@ describe('SearchEngine', () => {
     const engine = new SearchEngine(db); // no aiProvider
 
     const result = await engine.search('swift', { mode: 'semantic' });
-    expect(result.mode).toBe('bm25'); // falls back
+    expect(result.mode).toBe('weighted'); // falls back to FieldWeighted
   });
 
   test('refreshIndex should rebuild index', () => {

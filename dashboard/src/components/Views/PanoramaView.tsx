@@ -112,14 +112,14 @@ const PanoramaView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (refresh = false) => {
     setLoading(true);
     setError(null);
 
     const results = await Promise.allSettled([
-      api.getPanoramaOverview(),
-      api.getPanoramaHealth(),
-      api.getPanoramaGaps(),
+      api.getPanoramaOverview(refresh),
+      api.getPanoramaHealth(refresh),
+      api.getPanoramaGaps(refresh),
     ]);
 
     const [ovResult, hpResult, gpResult] = results;
@@ -155,7 +155,7 @@ const PanoramaView: React.FC = () => {
   if (!isSubViewTab && error && !overview && !health) {
     return (
       <div className="space-y-6">
-        <PanoramaHeader t={t} stale={false} onRefresh={fetchData} />
+        <PanoramaHeader t={t} stale={false} onRefresh={() => fetchData(true)} />
         <TabSwitcher tab={tab} setTab={setTab} t={t} />
         <div className="flex items-center justify-center h-48 text-red-500">
           <AlertTriangle className="w-5 h-5 mr-2" />
@@ -167,7 +167,7 @@ const PanoramaView: React.FC = () => {
 
   return (
     <div className="space-y-5 h-full flex flex-col">
-      <PanoramaHeader t={t} stale={overview?.stale} onRefresh={fetchData} />
+      <PanoramaHeader t={t} stale={overview?.stale} onRefresh={() => fetchData(true)} />
       <TabSwitcher tab={tab} setTab={setTab} t={t} />
 
       <div className="flex-1 min-h-0 overflow-y-auto">

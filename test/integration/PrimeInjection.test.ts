@@ -3,7 +3,7 @@
  *
  * 使用 BiliDili 项目的真实 recipes 验证 prime 流水线的注入质量：
  *   1. 从 BiliDili/AutoSnippet/recipes/ 加载全部 .md → 内存 DB
- *   2. 构建 SearchEngine + BM25 索引
+ *   2. 构建 SearchEngine + FieldWeighted 索引
  *   3. 构造代表性用户输入 → IntentExtractor → PrimeSearchPipeline
  *   4. 验证搜索结果的相关性、completeness、排序正确性
  *
@@ -820,8 +820,8 @@ describe.skipIf(!HAS_BILIDILI)('Integration: Prime Injection with BiliDili Recip
         resultContains(allItems, '通信');
       const hasModuleArch = resultContains(allItems, 'module') || resultContains(allItems, '模块');
       // 多话题长句：至少命中 singleton/DI/跨模块/模块架构 其中之一
-      // （BM25 top-5 可能因 ViewController 精确匹配而优先返回 VC 模板;
-      //   Singleton 在第 6 位被 slice(0,5) 截断属于 known BM25 limit）
+      // （FieldWeighted top-5 可能因 ViewController 精确匹配而优先返回 VC 模板;
+      //   Singleton 在第 6 位被 slice(0,5) 截断属于 known ranking limit）
       expect(hasSingleton || hasDI || hasCrossModule || hasModuleArch).toBe(true);
 
       console.log('\n[场景19] 长句：单例 vs DI');
@@ -1164,7 +1164,7 @@ describe.skipIf(!HAS_BILIDILI)('Integration: Prime Injection with BiliDili Recip
       const { result } = await runPrime('证明黎曼猜想与素数分布的渐进关系');
       if (result !== null) {
         const maxScore = Math.max(...result.relatedKnowledge.map((r) => r.score));
-        // 中文 BM25 会部分匹配常见字，但分数应极低
+        // 中文 FieldWeighted 会部分匹配常见字，但分数应极低
         expect(maxScore).toBeLessThan(3);
       }
     });
@@ -1196,7 +1196,7 @@ describe.skipIf(!HAS_BILIDILI)('Integration: Prime Injection with BiliDili Recip
       );
       expect(result).not.toBeNull();
       const all = [...result!.relatedKnowledge, ...result!.guardRules];
-      // 长句中 "MVVM" "Input Output" 作为 CJK-mixed BM25 token 可能被稀释;
+      // 长句中 "MVVM" "Input Output" 作为 CJK-mixed token 可能被稀释;
       // 加上 activeFile=ViewController 后可通过 file context 命中 VC/VM 相关知识
       expect(
         resultContains(all, 'mvvm') ||

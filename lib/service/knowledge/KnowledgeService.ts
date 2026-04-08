@@ -114,6 +114,17 @@ export class KnowledgeService {
     try {
       this._validateCreateInput(data);
 
+      // ── 标题去重：防止跨维度/跨调用创建同名条目 ──
+      if (data.title) {
+        const existing = await this.repository.findByTitle(data.title);
+        if (existing) {
+          throw new ConflictError(
+            `Knowledge entry with title "${data.title}" already exists (id: ${existing.id})`,
+            { existingId: existing.id, title: data.title }
+          );
+        }
+      }
+
       const entry = KnowledgeEntry.fromJSON({
         ...data,
         lifecycle: Lifecycle.PENDING,
@@ -385,6 +396,9 @@ export class KnowledgeService {
       // 清除 knowledge_edges
       this._removeAllEdges(id);
 
+      // 清除 evolution_proposals（无 ON DELETE CASCADE，需手动删除）
+      this._removeRelatedProposals(id);
+
       await this.repository.delete(id);
 
       await this._audit('delete_knowledge', id, context.userId, {
@@ -455,9 +469,29 @@ export class KnowledgeService {
     });
   }
 
-  /** 重新激活 (deprecated → pending) */
+  /** 重新激活 (deprecated|staging → pending) */
   async reactivate(id: string, context: ServiceContext) {
     return this._lifecycleTransition(id, 'reactivate', context);
+  }
+
+  /** 进入暂存期 (pending → staging) */
+  async stage(id: string, context: ServiceContext) {
+    return this._lifecycleTransition(id, 'stage', context);
+  }
+
+  /** 进入进化态 (active → evolving) */
+  async evolve(id: string, context: ServiceContext) {
+    return this._lifecycleTransition(id, 'evolve', context);
+  }
+
+  /** 进入衰退观察 (active|evolving → decaying) */
+  async decay(id: string, context: ServiceContext) {
+    return this._lifecycleTransition(id, 'decay', context);
+  }
+
+  /** 恢复为已发布 (decaying|evolving → active) */
+  async restore(id: string, context: ServiceContext) {
+    return this._lifecycleTransition(id, 'restore', context);
   }
 
   // ── 向后兼容别名 ──
@@ -713,9 +747,8 @@ export class KnowledgeService {
       if (entry.reviewedAt) {
         dbUpdates.reviewedAt = entry.reviewedAt;
       }
-      if (entry.rejectionReason !== null) {
-        dbUpdates.rejectionReason = entry.rejectionReason;
-      }
+      // 驳回原因（含清除：reactivate 后 rejectionReason = null 需写入 DB）
+      dbUpdates.rejectionReason = entry.rejectionReason;
 
       // 发布字段
       if (entry.publishedAt) {
@@ -968,6 +1001,23 @@ export class KnowledgeService {
       gs.db.prepare(`DELETE FROM knowledge_edges WHERE from_id = ? OR to_id = ?`).run(id, id);
     } catch (err: unknown) {
       this.logger.warn('Failed to remove edges', {
+        id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /** 删除关联的 evolution_proposals（target_recipe_id 无 CASCADE） */
+  _removeRelatedProposals(id: string) {
+    const gs = this._knowledgeGraphService;
+    if (!gs) {
+      return;
+    }
+
+    try {
+      gs.db.prepare(`DELETE FROM evolution_proposals WHERE target_recipe_id = ?`).run(id);
+    } catch (err: unknown) {
+      this.logger.warn('Failed to remove related proposals', {
         id,
         error: err instanceof Error ? err.message : String(err),
       });

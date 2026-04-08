@@ -144,7 +144,7 @@ asd search <query> [options]
 | 选项 | 默认值 | 说明 |
 |------|--------|------|
 | `-t, --type <type>` | `all` | 搜索类型：`all` / `recipe` / `solution` / `rule` |
-| `-m, --mode <mode>` | `keyword` | 搜索模式：`keyword` / `bm25` / `semantic` |
+| `-m, --mode <mode>` | `auto` | 搜索模式：`keyword` / `weighted` / `semantic` |
 | `-l, --limit <n>` | `10` | 返回结果数量 |
 
 **搜索模式说明：**
@@ -152,7 +152,7 @@ asd search <query> [options]
 | 模式 | 原理 | 适用场景 |
 |------|------|---------|
 | `keyword` | 精确关键词匹配 | 已知确切术语 |
-| `bm25` | TF-IDF 算法评分 | 常规文本搜索 |
+| `weighted` | 加权字段评分 | 常规文本搜索 |
 | `semantic` | 向量语义相似度 | 模糊/概念性查询 |
 
 ---

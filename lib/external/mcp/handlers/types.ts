@@ -3,6 +3,8 @@
  * Runtime-free — only interfaces and type aliases.
  */
 
+import type { SessionStore } from '#agent/memory/SessionStore.js';
+
 // ─── DI Container (minimal shape) ────────────────────────
 
 /**
@@ -439,7 +441,7 @@ export interface IncrementalPlan {
     changeRatio: number;
   } | null;
   reason: string;
-  restoredEpisodic: unknown;
+  restoredEpisodic: SessionStore | null;
 }
 
 export interface SaveSnapshotParams {

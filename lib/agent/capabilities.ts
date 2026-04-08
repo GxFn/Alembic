@@ -274,7 +274,7 @@ export class KnowledgeProduction extends Capability {
 你是知识管理专家，将代码分析转化为结构化知识候选。
 
 每个候选必须有:
-1. 清晰的标题 (使用项目真实类名/模块名)
+1. 清晰的标题 (使用项目真实类名/模块名，不以项目名开头)
 2. 项目特写风格的正文 (content.markdown)
 3. 相关文件路径
 4. 正确的 kind (rule / pattern / fact)
@@ -282,15 +282,14 @@ export class KnowledgeProduction extends Capability {
 
 工作流:
 1. 识别分析中的知识点
-2. read_project_file 获取代码片段 (如需)
+2. read_project_file 批量获取代码片段 (如需)
 3. submit_knowledge 或 submit_with_check 提交
 4. 提交优先于完美 — 文件读取失败时用已有信息直接提交`;
   }
 
   get tools() {
-    // 与旧版 PRODUCER_TOOLS 保持一致: 仅 3 个核心工具
+    // 与 PRODUCER_TOOLS 保持一致: 提交 + 文件读取
     // guard_check_code / validate_candidate 不需要：提交时 UnifiedValidator 已自动校验
-    // 额外工具会分散 LLM 注意力，浪费 produce 轮次在验证而非提交上
     return [
       'submit_knowledge',
       'submit_with_check',
@@ -391,7 +390,7 @@ export class ScanProduction extends Capability {
 你是知识管理专家，将代码分析转化为结构化知识候选。
 
 每个候选必须有:
-1. 清晰的标题 (使用项目真实类名/模块名)
+1. 清晰的标题 (使用项目真实类名/模块名，不以项目名开头)
 2. 项目特写风格的正文 (content.markdown ≥200字)
 3. 设计原理说明 (content.rationale)
 4. 相关文件路径 (reasoning.sources)
@@ -413,6 +412,33 @@ export class ScanProduction extends Capability {
   }
 }
 
+// ─── Evolution Analysis ─────────────────────────
+
+/**
+ * Evolution Analysis — 衰退 Recipe 进化决策能力
+ *
+ * 用于: evolution preset 的 evolve 阶段
+ */
+export class EvolutionAnalysis extends Capability {
+  get name() {
+    return 'evolution_analysis';
+  }
+
+  get promptFragment() {
+    return '你是知识进化专家，负责审查衰退 Recipe 并决定进化或废弃。';
+  }
+
+  get tools() {
+    return [
+      'read_project_file',
+      'search_project_code',
+      'submit_knowledge',
+      'confirm_deprecation',
+      'skip_evolution',
+    ];
+  }
+}
+
 // ─── Capability 注册表 ─────────────────────────
 
 /**
@@ -428,6 +454,7 @@ export const CapabilityRegistry = {
     ['knowledge_production', KnowledgeProduction],
     ['scan_production', ScanProduction],
     ['system_interaction', SystemInteraction],
+    ['evolution_analysis', EvolutionAnalysis],
   ]),
 
   /** 按名称创建 Capability 实例 */
@@ -456,5 +483,6 @@ export default {
   CodeAnalysis,
   KnowledgeProduction,
   SystemInteraction,
+  EvolutionAnalysis,
   CapabilityRegistry,
 };

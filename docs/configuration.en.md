@@ -48,7 +48,7 @@ When multiple API Keys are present, `AiFactory` auto-detects in this order:
 If the primary Provider doesn't support embedding (e.g., Claude), the system auto-creates a fallback embedding provider:
 - Prefers Google Gemini embedding
 - Then OpenAI embedding
-- Falls back to local BM25 (no vector semantic search)
+- Falls back to local FieldWeighted search (no vector semantic search)
 
 ### Server
 

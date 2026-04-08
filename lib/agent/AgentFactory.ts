@@ -89,6 +89,13 @@ interface BootstrapKnowledgeOptions {
   skipAsyncFill?: boolean;
 }
 
+/** Options for rescanKnowledge */
+interface RescanKnowledgeOptions {
+  reason?: string;
+  dimensions?: string[];
+  skipAsyncFill?: boolean;
+}
+
 /** Scan task config entry */
 interface ScanTaskConfig {
   producePrompt: string;
@@ -556,6 +563,32 @@ export class AgentFactory {
         skipGuard: opts.skipGuard || false,
         contentMaxLines: opts.contentMaxLines || 120,
         loadSkills: opts.loadSkills ?? true,
+        skipAsyncFill: opts.skipAsyncFill || false,
+      }
+    );
+    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+    return parsed?.data || parsed;
+  }
+
+  /**
+   * 内部 Agent 增量扫描
+   *
+   * 保留已审核 Recipe → 清理缓存 → Phase 1-4 分析 → 证据验证 →
+   * gap 维度异步 AI 填充（fillDimensionsV3）。
+   *
+   * @param [opts]
+   */
+  async rescanKnowledge(opts: RescanKnowledgeOptions = {}) {
+    const { rescanInternal } = await import('#external/mcp/handlers/rescan-internal.js');
+    const result = await rescanInternal(
+      {
+        container: this
+          .#container as unknown as import('#external/mcp/handlers/types.js').McpServiceContainer,
+        logger: this.#logger,
+      },
+      {
+        reason: opts.reason || 'agent-rescan',
+        dimensions: opts.dimensions,
         skipAsyncFill: opts.skipAsyncFill || false,
       }
     );

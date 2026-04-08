@@ -27,7 +27,6 @@ interface ProjectContext {
   depGraph?: Record<string, unknown>;
   astMetrics?: Record<string, unknown>;
   guardSummary?: Record<string, unknown>;
-  [key: string]: unknown;
 }
 
 /** Summary of a completed dimension's analysis */

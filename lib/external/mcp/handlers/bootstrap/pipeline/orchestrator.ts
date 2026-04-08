@@ -24,11 +24,13 @@ import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { PersistentMemory } from '#agent/memory/PersistentMemory.js';
 import { SessionStore } from '#agent/memory/SessionStore.js';
 import { PRESETS } from '#agent/presets.js';
+import { getDimensionFocusKeywords } from '#domain/dimension/DimensionSop.js';
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
+import type { DimensionDef } from '#types/project-snapshot.js';
+import type { PipelineFillView } from '#types/snapshot-views.js';
 import type { IncrementalPlan, McpContext } from '../../types.js';
-import type { BaseDimension } from '../base-dimensions.js';
-import { getDimensionFocusKeywords } from '../shared/dimension-sop.js';
+import { buildEvidenceStarters } from '../MissionBriefingBuilder.js';
 import { generateSkill } from '../shared/skill-generator.js';
 import { clearCheckpoints, loadCheckpoints, saveDimensionCheckpoint } from './checkpoint.js';
 import {
@@ -38,39 +40,66 @@ import {
 } from './dimension-configs.js';
 import { DimensionContext, parseDimensionDigest } from './dimension-context.js';
 import { IncrementalBootstrap } from './IncrementalBootstrap.js';
-import { runNoAiFallback } from './noAiFallback.js';
 import { TierScheduler } from './tier-scheduler.js';
 
 const logger = Logger.getInstance();
 
 // ── TypeScript Interfaces ────────────────────────────────────
 
-/** Extended DI container shape for orchestrator (supports buildProjectGraph etc.) */
+/** Singleton properties accessed by orchestrator */
+interface OrchestratorSingletons {
+  aiProvider?: {
+    name?: string;
+    model?: string;
+    supportsEmbedding?: () => boolean;
+    [key: string]: unknown;
+  } | null;
+  _embedProvider?: { embed?: (text: string) => Promise<number[]>; [key: string]: unknown } | null;
+  _fileCache?: BootstrapFileEntry[] | null;
+  _projectRoot?: string;
+  _config?: Record<string, unknown>;
+  _lang?: string | null;
+  [key: string]: unknown;
+}
+
+/** Services orchestrator accesses via container.get() */
+interface OrchestratorServiceKeys {
+  agentFactory: AgentFactoryLike;
+  bootstrapTaskManager: TaskManagerLike;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DB type varies (SqliteDatabase|DbWrapper|CeDbLike) across consumers
+  database: any;
+}
+
+/** Extended DI container shape for orchestrator */
 interface OrchestratorContainer {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- DI container: callers know the service type
+  get<K extends keyof OrchestratorServiceKeys>(name: K): OrchestratorServiceKeys[K];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- fallback for services not in OrchestratorServiceKeys
   get(name: string): any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic DI container shape
-  [key: string]: any;
+  singletons: OrchestratorSingletons;
+  buildProjectGraph?(
+    projectRoot: string,
+    options?: Record<string, unknown>
+  ): Promise<ProjectGraphLike | null>;
+  [key: string]: unknown;
 }
 
 /** Orchestrator context (extended McpContext) */
 interface OrchestratorContext {
   container: OrchestratorContainer;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic ctx shape from various callers
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ctx shape from various McpContext subtypes; needs dedicated interface (T4)
   [key: string]: any;
+}
+
+/** DIMENSION_CONFIGS_V3 entry shape for dynamic indexing */
+interface DimConfigV3Entry {
+  outputType: string;
+  allowedKnowledgeTypes: string[];
 }
 
 /** ProjectGraph minimal shape */
 interface ProjectGraphLike {
   getOverview(): { totalClasses: number; totalProtocols: number; [key: string]: unknown };
   [key: string]: unknown;
-}
-
-/** Fill context passed from bootstrapKnowledge to fillDimensionsV3 */
-interface FillContextV3 {
-  ctx: OrchestratorContext;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic shape from bootstrapKnowledge; properties vary per caller
-  [key: string]: any;
 }
 
 /** Bootstrap file entry */
@@ -109,8 +138,7 @@ interface AgentResultLike {
   reply?: string;
   toolCalls?: ToolCallRecord[];
   tokenUsage?: { input: number; output: number };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- phase results have dynamic shapes from agent execution
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- phase results have dynamic shapes from agent execution
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- agent phase results have dynamic shapes; needs AnalysisArtifact interface (T4)
   phases?: Record<string, { reply?: string; artifact?: Record<string, any>; [key: string]: any }>;
   degraded?: boolean;
   [key: string]: unknown;
@@ -156,10 +184,10 @@ interface DimensionCandidateData {
   analysisReport: {
     dimensionId?: string;
     analysisText: string;
-    findings: unknown[];
+    findings: Array<DimensionFinding | string>;
     referencedFiles: string[];
-    evidenceMap?: unknown;
-    negativeSignals?: unknown[];
+    evidenceMap?: Record<string, string[]> | null;
+    negativeSignals?: string[];
     metadata?: Record<string, unknown>;
   };
   producerResult: {
@@ -205,7 +233,8 @@ interface ConsolidationResult {
 interface DimensionFinding {
   finding?: string;
   importance?: number;
-  [key: string]: unknown;
+  evidence?: string;
+  source?: string;
 }
 
 /** Wiki generation result */
@@ -225,14 +254,13 @@ interface WikiResult {
 // ──────────────────────────────────────────────────────────────────
 
 /**
- * 从 fillContext.panoramaResult 提取维度级全景上下文
+ * 从 panoramaResult 提取维度级全景上下文
  * 注入 strategyContext.panorama，使 Agent 获得模块角色/层级/耦合/空白区信息
  */
 function buildPanoramaContext(
-  fillContext: FillContextV3,
+  panoramaResult: Record<string, unknown> | null | undefined,
   _dimConfig: Record<string, unknown>
 ): Record<string, unknown> | null {
-  const panoramaResult = fillContext.panoramaResult as Record<string, unknown> | null | undefined;
   if (!panoramaResult) {
     return null;
   }
@@ -284,21 +312,32 @@ function buildPanoramaContext(
 /**
  * fillDimensionsV3 — v3.0 AI-First 维度填充管线
  *
- * @param fillContext 由 bootstrapKnowledge 构建的上下文
+ * @param view PipelineFillView — 从 handler 传入的类型化视图
+ * @param dimensions 当前运行的维度列表（rescan 可能是 gap 子集）
  */
-export async function fillDimensionsV3(fillContext: FillContextV3) {
-  const {
-    ctx,
-    dimensions,
-    taskManager,
-    sessionId,
-    projectRoot,
-    depGraphData,
-    guardAudit,
-    primaryLang,
-    astProjectSummary,
-    incrementalPlan, // v5.0: 增量 Bootstrap 计划 (from bootstrap.js)
-  } = fillContext;
+export async function fillDimensionsV3(view: PipelineFillView, dimensions: DimensionDef[]) {
+  const { snapshot, projectRoot } = view;
+  const ctx = view.ctx as OrchestratorContext;
+
+  // 从 snapshot 提取 orchestrator 所需字段
+  const depGraphData = snapshot.dependencyGraph;
+  const guardAudit = snapshot.guardAudit;
+  const primaryLang = snapshot.language.primaryLang ?? 'unknown';
+  const astProjectSummary = snapshot.ast;
+  const incrementalPlan = snapshot.incrementalPlan as IncrementalPlan | null;
+  const panoramaResult = snapshot.panorama as Record<string, unknown> | null;
+  const callGraphResult = snapshot.callGraph as Record<string, unknown> | null;
+  const existingRecipes = view.existingRecipes ?? null;
+  const targetFileMap = view.targetFileMap;
+
+  // 从 ctx 获取运行时服务
+  let taskManager: TaskManagerLike | null = null;
+  try {
+    taskManager = ctx.container.get('bootstrapTaskManager') as TaskManagerLike;
+  } catch {
+    /* not available */
+  }
+  const sessionId = view.bootstrapSession?.id ?? '';
 
   const isIncremental = incrementalPlan?.canIncremental && incrementalPlan?.mode === 'incremental';
   const emitter = new BootstrapEventEmitter(ctx.container);
@@ -306,8 +345,9 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
     `[Insight-v3] ═══ fillDimensionsV3 entered — ${isIncremental ? 'INCREMENTAL' : 'FULL'} pipeline`
   );
 
-  let allFiles = fillContext.allFiles;
-  fillContext.allFiles = null;
+  let allFiles: BootstrapFileEntry[] | null = snapshot.allFiles as unknown as
+    | BootstrapFileEntry[]
+    | null;
 
   // ═══════════════════════════════════════════════════════════
   // Step 0: AI 可用性检查 (v7.2: 使用 AgentFactory)
@@ -325,164 +365,13 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
   }
 
   if (!agentFactory) {
-    logger.info('[Insight-v3] AI not available — entering rule-based fallback');
+    logger.error('[Insight-v3] AI Provider not available — bootstrap requires AI');
     emitter.emitProgress('bootstrap:ai-unavailable', {
-      message: 'AI 不可用，将使用规则化降级提取基础知识。请配置 AI Provider 以获取完整分析。',
+      message:
+        'AI Provider 不可用，Bootstrap 需要 AI 才能运行。请先配置 AI Provider（如 OpenAI、Anthropic 等）后重试。',
     });
-
-    // ── 规则化降级: 从 Phase 0-4 数据中提取基础知识 ──
-    try {
-      fillContext.allFiles = allFiles;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- FillContextV3 is structurally compatible with FillContext at runtime
-      const fallbackResult = await runNoAiFallback(
-        fillContext as unknown as Parameters<typeof runNoAiFallback>[0]
-      );
-
-      // ── 持久化候选到数据库 (KnowledgeService.create) ──
-      let persistedCount = 0;
-      if (fallbackResult.candidates.length > 0) {
-        try {
-          const knowledgeService = ctx.container.get('knowledgeService');
-          for (const candidate of fallbackResult.candidates) {
-            try {
-              await knowledgeService.create(
-                {
-                  title: candidate.title,
-                  content: candidate.content,
-                  language: candidate.language || primaryLang || '',
-                  category: candidate.category || '',
-                  knowledgeType: candidate.knowledgeType || 'code-pattern',
-                  source: 'bootstrap-fallback',
-                  difficulty: candidate.difficulty || 'beginner',
-                  scope: candidate.scope || 'project-specific',
-                  reasoning: candidate.reasoning || {},
-                  tags: ['bootstrap-fallback', 'rule-based'],
-                  trigger: candidate.trigger || '',
-                  doClause: candidate.doClause || '',
-                  dontClause: candidate.dontClause || '',
-                  whenClause: candidate.whenClause || '',
-                  coreCode: candidate.coreCode || '',
-                },
-                { userId: 'bootstrap-fallback' }
-              );
-              persistedCount++;
-            } catch (entryErr: unknown) {
-              logger.warn(
-                `[Bootstrap-fallback] Candidate "${candidate.title}" persist failed: ${entryErr instanceof Error ? entryErr.message : String(entryErr)}`
-              );
-            }
-          }
-          logger.info(
-            `[Bootstrap-fallback] ${persistedCount}/${fallbackResult.candidates.length} candidates persisted to DB`
-          );
-        } catch (svcErr: unknown) {
-          logger.warn(
-            `[Bootstrap-fallback] KnowledgeService not available — candidates not persisted: ${svcErr instanceof Error ? svcErr.message : String(svcErr)}`
-          );
-        }
-      }
-
-      // ── 持久化 Skill 文件 ──
-      let skillsCreated = 0;
-      if (fallbackResult.skills.length > 0) {
-        try {
-          const { createSkill } = await import('../../skill.js');
-          for (const sk of fallbackResult.skills) {
-            try {
-              const result = createSkill(ctx, {
-                name: sk.name,
-                description: sk.description,
-                content: sk.content,
-                overwrite: true,
-                createdBy: 'bootstrap-fallback',
-              });
-              const parsed = JSON.parse(result);
-              if (parsed.success) {
-                skillsCreated++;
-                logger.info(`[Bootstrap-fallback] Skill "${sk.name}" created`);
-              }
-            } catch (skErr: unknown) {
-              logger.warn(
-                `[Bootstrap-fallback] Skill "${sk.name}" write failed: ${skErr instanceof Error ? skErr.message : String(skErr)}`
-              );
-            }
-          }
-        } catch (importErr: unknown) {
-          logger.warn(
-            `[Bootstrap-fallback] Skill module import failed: ${importErr instanceof Error ? importErr.message : String(importErr)}`
-          );
-        }
-      }
-
-      // ── 写入降级报告 ──
-      try {
-        const reportDir = path.join(projectRoot, '.autosnippet');
-        await fs.mkdir(reportDir, { recursive: true });
-        await fs.writeFile(
-          path.join(reportDir, 'bootstrap-report.json'),
-          JSON.stringify(
-            {
-              version: '2.7.0',
-              timestamp: new Date().toISOString(),
-              mode: 'no-ai-fallback',
-              project: {
-                name: path.basename(projectRoot),
-                files: allFiles?.length || 0,
-                lang: primaryLang || 'unknown',
-              },
-              fallback: fallbackResult.report,
-              persisted: { candidates: persistedCount, skills: skillsCreated },
-            },
-            null,
-            2
-          )
-        );
-      } catch {
-        /* non-critical */
-      }
-
-      // ── 通知前端降级产出已完成 ──
-      emitter.emitProgress('bootstrap:fallback-complete', {
-        message: `降级产出完成: ${persistedCount} 条知识已入库, ${skillsCreated} 个 Skill 已生成`,
-        candidates: persistedCount,
-        skills: skillsCreated,
-        errors: fallbackResult.report.errors.length,
-      });
-
-      // ── R7: No-AI 降级路径完成后也触发 Cursor Delivery ──
-      if (persistedCount > 0 || skillsCreated > 0) {
-        try {
-          const { getServiceContainer } = await import('#inject/ServiceContainer.js');
-          const deliveryContainer = getServiceContainer();
-          if (deliveryContainer.services.cursorDeliveryPipeline) {
-            const pipeline = deliveryContainer.get('cursorDeliveryPipeline');
-            const deliveryResult = await pipeline.deliver();
-            logger.info(
-              `[Bootstrap-fallback] Cursor Delivery complete — ` +
-                `A: ${deliveryResult.channelA?.rulesCount || 0}, ` +
-                `B: ${deliveryResult.channelB?.topicCount || 0}, ` +
-                `F: ${deliveryResult.channelF?.filesWritten || 0}`
-            );
-          }
-        } catch (deliveryErr: unknown) {
-          logger.warn(
-            `[Bootstrap-fallback] CursorDelivery failed (non-blocking): ${deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr)}`
-          );
-        }
-      }
-
-      logger.info(
-        `[Bootstrap-fallback] Completed: ${persistedCount} candidates persisted, ` +
-          `${skillsCreated} skills written, ${fallbackResult.report.errors.length} errors`
-      );
-    } catch (fallbackErr: unknown) {
-      logger.error(
-        `[Bootstrap-fallback] Fallback failed: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`
-      );
-      // 即使降级也失败，仍标记所有维度为 skipped
-      for (const dim of dimensions) {
-        emitter.emitDimensionComplete(dim.id, { type: 'skipped', reason: 'fallback-failed' });
-      }
+    for (const dim of dimensions) {
+      emitter.emitDimensionComplete(dim.id, { type: 'skipped', reason: 'ai-unavailable' });
     }
     return;
   }
@@ -492,10 +381,11 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
   // ═══════════════════════════════════════════════════════════
   let projectGraph: ProjectGraphLike | null = null;
   try {
-    projectGraph = await ctx.container.buildProjectGraph(projectRoot, {
-      maxFiles: 500,
-      timeoutMs: 15_000,
-    });
+    projectGraph =
+      (await ctx.container.buildProjectGraph?.(projectRoot, {
+        maxFiles: 500,
+        timeoutMs: 15_000,
+      })) ?? null;
     if (projectGraph) {
       const overview = projectGraph.getOverview();
       logger.info(
@@ -530,11 +420,11 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
     projectName: projectInfo.name,
     primaryLang: projectInfo.lang,
     fileCount: projectInfo.fileCount,
-    targetCount: Object.keys(fillContext.targetFileMap || {}).length,
-    modules: Object.keys(fillContext.targetFileMap || {}),
-    depGraph: depGraphData || null,
-    astMetrics: astProjectSummary?.projectMetrics || null,
-    guardSummary: guardAudit?.summary || null,
+    targetCount: Object.keys(targetFileMap || {}).length,
+    modules: Object.keys(targetFileMap || {}),
+    depGraph: (depGraphData as Record<string, unknown>) ?? undefined,
+    astMetrics: (astProjectSummary?.projectMetrics as Record<string, unknown>) ?? undefined,
+    guardSummary: (guardAudit?.summary as Record<string, unknown>) ?? undefined,
   });
 
   // v4.0: SessionStore — 替代 EpisodicMemory + ToolResultCache
@@ -562,7 +452,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
       projectName: projectInfo.name,
       primaryLang: projectInfo.lang,
       fileCount: projectInfo.fileCount,
-      modules: Object.keys(fillContext.targetFileMap || {}),
+      modules: Object.keys(targetFileMap || {}),
     });
   }
 
@@ -637,7 +527,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
   const scheduler = new TierScheduler();
 
   // 包含所有维度（含 Enhancement Pack 动态追加的维度）
-  const activeDimIds = dimensions.map((d: BaseDimension) => d.id);
+  const activeDimIds = dimensions.map((d: DimensionDef) => d.id);
 
   // v5.0: 增量模式 — 仅执行受影响维度, 跳过未变更维度
   const incrementalSkippedDims: string[] = [];
@@ -692,6 +582,51 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
   // ── 跨维度去重集合 (实例级持久化，等效旧 ChatAgent.#globalSubmittedTitles/Patterns) ──
   const globalSubmittedTitles = new Set<string>();
   const globalSubmittedPatterns = new Set<string>();
+
+  // ── Rescan 模式: 预种已有 recipe 标题到去重集合，防止重复创建 ──
+  const existingRecipesList = existingRecipes as Array<{
+    id: string;
+    title: string;
+    trigger: string;
+    knowledgeType: string;
+    status?: string;
+    decayReason?: string;
+    auditScore?: number;
+  }> | null;
+  if (existingRecipesList && existingRecipesList.length > 0) {
+    for (const r of existingRecipesList) {
+      // ★ 只预种 healthy 标题，decaying 的允许被替代
+      if (r.title && r.status !== 'decaying') {
+        globalSubmittedTitles.add(r.title.toLowerCase().trim());
+      }
+    }
+    logger.info(
+      `[Insight-v3] Rescan mode: seeded ${globalSubmittedTitles.size} existing recipe titles into dedup set`
+    );
+  }
+
+  // 构建 rescanContext 供 Analyst/Producer prompt 使用（区分 healthy/decaying）
+  const rescanContext = existingRecipesList
+    ? {
+        // healthy 列表 — 告诉 Agent "不要重复"
+        existingRecipes: existingRecipesList.filter((r) => r.status !== 'decaying'),
+        // decaying 列表 — 告诉 Agent "可以替换"
+        decayingRecipes: existingRecipesList.filter((r) => r.status === 'decaying'),
+        // trigger 仍全部占用（含 decaying）
+        occupiedTriggers: existingRecipesList.map((r) => r.trigger).filter(Boolean),
+        coverageByDim: existingRecipesList.reduce(
+          (acc, r) => {
+            // 只有 healthy 计入覆盖
+            if (r.status !== 'decaying') {
+              const dim = r.knowledgeType || 'unknown';
+              acc[dim] = (acc[dim] || 0) + 1;
+            }
+            return acc;
+          },
+          {} as Record<string, number>
+        ),
+      }
+    : null;
 
   /** 执行单个维度: Analyst → Gate → Producer */
   async function executeDimension(dimId: string) {
@@ -759,7 +694,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
       return cpResult;
     }
 
-    const dim = dimensions.find((d: BaseDimension) => d.id === dimId);
+    const dim = dimensions.find((d: DimensionDef) => d.id === dimId);
     if (!dim) {
       return { candidateCount: 0, error: 'dimension not found' };
     }
@@ -767,7 +702,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
     // 合并 v3 配置和原始维度配置 — 优先使用 getFullDimensionConfig()
     // Enhancement Pack 动态维度可能不在 DIMENSION_CONFIGS_V3 中 — 从 dim 本身构建配置
     const fullConfig = getFullDimensionConfig(dimId);
-    const v3Config = (DIMENSION_CONFIGS_V3 as Record<string, any>)[dimId];
+    const v3Config = (DIMENSION_CONFIGS_V3 as Record<string, DimConfigV3Entry | undefined>)[dimId];
     const dimConfig = fullConfig
       ? {
           ...fullConfig,
@@ -815,7 +750,9 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
       const analystScopeId = `${dimId}:analyst`;
       memoryCoordinator.createDimensionScope(analystScopeId);
 
-      const v3OutputType = (DIMENSION_CONFIGS_V3 as Record<string, any>)[dimId]?.outputType;
+      const v3OutputType = (DIMENSION_CONFIGS_V3 as Record<string, DimConfigV3Entry | undefined>)[
+        dimId
+      ]?.outputType;
       const needsCandidates = v3OutputType
         ? v3OutputType !== 'skill'
         : !dimConfig.skillWorthy || dimConfig.dualOutput;
@@ -830,6 +767,7 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
         ...presetStages[0],
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pipeline stage shapes from PRESETS; needs PipelineStage interface (T4)
       let stages: Record<string, any>[];
       if (needsCandidates) {
         // 候选维度: Analyze→QualityGate→Produce→RejectionGate
@@ -883,7 +821,29 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
         activeContext: memoryCoordinator.getActiveContext(analystScopeId),
         outputType: dimConfig.outputType || 'analysis',
         // §M1: Panorama 全景上下文 (Phase 1.8 数据注入)
-        panorama: buildPanoramaContext(fillContext, dimConfig),
+        panorama: buildPanoramaContext(panoramaResult, dimConfig),
+        // §ES: Evidence Starters — 从 Phase 1-4 数据提取维度级证据启发
+        evidenceStarters: buildEvidenceStarters(dimConfig, {
+          astData: astProjectSummary,
+          guardAudit,
+          depGraphData,
+          callGraphResult,
+          panoramaResult,
+        }),
+        // §R1: Rescan 模式 — 已有 recipe 上下文 (避免重复分析/创建)
+        rescanContext: rescanContext
+          ? {
+              existingRecipes: rescanContext.existingRecipes.filter(
+                (r) => r.knowledgeType === dimId
+              ),
+              decayingRecipes: rescanContext.decayingRecipes.filter(
+                (r) => r.knowledgeType === dimId
+              ),
+              occupiedTriggers: rescanContext.occupiedTriggers,
+              gap: Math.max(0, 5 - (rescanContext.coverageByDim[dimId] || 0)),
+              existing: rescanContext.coverageByDim[dimId] || 0,
+            }
+          : null,
         // ── 引擎增强参数 (PipelineStrategy → reactLoop 透传) ──
         contextWindow: agentFactory!.createContextWindow({ isSystem: true }),
         // B1 fix: 分析阶段使用 analyst 策略 (SCAN→EXPLORE→VERIFY→SUMMARIZE)
@@ -1005,6 +965,35 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
 
       candidateResults.created += producerResult.candidateCount;
       dimensionCandidates[dimId] = { analysisReport, producerResult };
+
+      // ── Producer 阶段详细日志 ──
+      if (needsCandidates) {
+        const producerToolCalls = produceResult?.toolCalls || [];
+        const producerToolNames = producerToolCalls.map(
+          (tc: ToolCallRecord) => tc?.tool || tc?.name || 'unknown'
+        );
+        const toolBreakdown: Record<string, number> = {};
+        for (const name of producerToolNames) {
+          toolBreakdown[name] = (toolBreakdown[name] || 0) + 1;
+        }
+        const breakdownStr = Object.entries(toolBreakdown)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ');
+
+        logger.info(
+          `[Producer] "${dimId}": submitted=${submitCalls.length}, accepted=${successCount}, rejected=${rejectedCount}, ` +
+            `producerToolCalls=${producerToolCalls.length} (${breakdownStr || 'none'}), ` +
+            `analysisInput=${analysisText.length} chars`
+        );
+
+        if (successCount === 0 && submitCalls.length === 0) {
+          logger.warn(
+            `[Producer] "${dimId}": ⚠ Producer 未提交任何候选。` +
+              `分析文本=${analysisText.length} chars, findings=${(analysisReport.findings || []).length}, ` +
+              `producerIterations=${producerToolCalls.length}, degraded=${runResult?.degraded || false}`
+          );
+        }
+      }
 
       // ── Memory Update ──
       const ac = memoryCoordinator.getActiveContext(analystScopeId);
@@ -1232,16 +1221,16 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
       `[Insight-v3] All tiers complete: ${results.size} dimensions in ${Date.now() - t0}ms`
     );
     // v4.0: 记录 SessionStore 统计
-    const emStats = sessionStore.getStats() as Record<string, any>;
+    const emStats = sessionStore.getStats();
     logger.info(
       `[Insight-v3] Memory stats: ${emStats.completedDimensions} dims, ` +
         `${emStats.totalFindings} findings, ${emStats.referencedFiles} files, ` +
         `${emStats.crossReferences} cross-refs, ${emStats.tierReflections} reflections`
     );
-    if (emStats.cacheStats) {
+    if (emStats.cache) {
       logger.info(
-        `[Insight-v3] Cache stats: ${emStats.cacheStats.hitRate} hit rate, ` +
-          `${emStats.cacheStats.searchCacheSize} searches, ${emStats.cacheStats.fileCacheSize} files`
+        `[Insight-v3] Cache stats: ${emStats.cache.hitRate} hit rate, ` +
+          `${emStats.cache.searchCacheSize} searches, ${emStats.cache.fileCacheSize} files`
       );
     }
   } else {
@@ -1287,9 +1276,10 @@ export async function fillDimensionsV3(fillContext: FillContextV3) {
 
         // 从 SessionStore 获取结构化发现，供 Skill 生成使用
         const dimReport = sessionStore.getDimensionReport(dim.id);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SessionStore Finding type varies
-        const keyFindings = ((dimReport?.findings || []) as Array<Record<string, any>>)
-          .sort((a, b) => (b.importance || 5) - (a.importance || 5))
+        const keyFindings = (
+          (dimReport?.findings || []) as unknown as Array<Record<string, unknown>>
+        )
+          .sort((a, b) => (Number(b.importance) || 5) - (Number(a.importance) || 5))
           .slice(0, 10)
           .map((f) => String(f.finding || ''));
 

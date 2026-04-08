@@ -16,7 +16,7 @@
 
 import Logger from '#infra/logging/Logger.js';
 import { ActiveContext } from './ActiveContext.js';
-import type { SessionStore } from './SessionStore.js';
+import type { DimensionReportInput, SessionStore } from './SessionStore.js';
 
 // ── 类型定义 ──
 
@@ -511,7 +511,7 @@ export class MemoryCoordinator {
    * 完成维度: 蒸馏 + 存储到 SessionStore
    * @param [report] 附加报告数据
    */
-  completeDimension(scopeId: string, report?: Record<string, unknown>) {
+  completeDimension(scopeId: string, report?: DimensionReportInput) {
     try {
       const ac = this.#activeContexts.get(scopeId);
       const distilled = ac ? ac.distill() : null;

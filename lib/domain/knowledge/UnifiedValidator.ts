@@ -195,6 +195,17 @@ export class UnifiedValidator {
       if (!hasSourceRef) {
         warnings.push('建议在内容中标注代码来源 (来源: FileName.ext:行号)');
       }
+
+      // 源码位置质量检查 — 优先使用完整相对路径
+      const hasFullPathRef =
+        /来源[:：]\s*\S+\/\S+\.\w+:\d+/.test(markdown) || /\(\S+\/\S+\.\w+:\d+\)/.test(markdown);
+      const hasBareName =
+        /来源[:：]\s*[A-Z]\w+\.\w+:\d+/.test(markdown) || /\([A-Z]\w+\.\w+:\d+\)/.test(markdown);
+      if (hasBareName && !hasFullPathRef) {
+        warnings.push(
+          '源码位置应使用完整相对路径+行号（如 Packages/ModuleName/Sources/.../FileName.swift:42），而非仅文件名'
+        );
+      }
     }
 
     // coreCode 语法完整性
@@ -222,6 +233,20 @@ export class UnifiedValidator {
       const lines = markdown.split('\n').filter((l: string) => l.trim().length > 0);
       if (lines.length <= 2 && !/```[\s\S]*?```/.test(markdown)) {
         warnings.push(`内容仅 ${lines.length} 行 — 建议包含更多代码片段和设计意图描述`);
+      }
+    }
+
+    // reasoning.sources 路径质量检查 — 应包含路径分隔符，而非仅类名/文件名
+    const reasoning = candidate.reasoning as Record<string, unknown> | undefined;
+    const sources = reasoning?.sources;
+    if (Array.isArray(sources) && sources.length > 0) {
+      const bareSources = sources.filter(
+        (s: unknown) => typeof s === 'string' && !s.includes('/') && !s.includes('\\')
+      );
+      if (bareSources.length > 0 && bareSources.length === sources.length) {
+        warnings.push(
+          `reasoning.sources 中的路径缺少目录结构（如 "${bareSources[0]}"）— 应使用完整相对路径（如 Packages/ModuleName/Sources/.../FileName.swift）`
+        );
       }
     }
   }

@@ -140,7 +140,7 @@ asd ui -p 3000              # API + Dashboard
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `q` | string | — | 搜索查询（必填） |
-| `mode` | string | `auto` | 搜索模式：`auto` / `keyword` / `bm25` / `semantic` / `context` |
+| `mode` | string | `auto` | 搜索模式：`auto` / `keyword` / `weighted` / `semantic` / `context` |
 | `type` | string | `all` | 类型过滤：`all` / `recipe` / `solution` / `rule` |
 | `limit` | number | `10` | 最大结果数 |
 | `language` | string | — | 语言过滤 |
@@ -159,7 +159,7 @@ asd ui -p 3000              # API + Dashboard
     }
   ],
   "total": 42,
-  "mode": "bm25"
+  "mode": "weighted"
 }
 ```
 

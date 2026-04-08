@@ -2,7 +2,7 @@
  * Integration: SearchEngine Pipeline
  *
  * 端到端搜索管线测试 — 使用独立的 in-memory SQLite，
- * 验证: 数据插入 → 索引构建 → BM25 搜索 → 排序 → 缓存
+ * 验证: 数据插入 → 索引构建 → FieldWeighted 搜索 → 排序 → 缓存
  *
  * 注意: 使用独立 DB 避免与其他集成测试的数据竞争。
  */
@@ -283,8 +283,8 @@ describe('Integration: Search Pipeline', () => {
       expect(result.mode).toBe('keyword');
     });
 
-    it('BM25 模式应按相关性排序', async () => {
-      const result = await engine.search('网络请求 networking', { mode: 'bm25' });
+    it('weighted 模式应按相关性排序', async () => {
+      const result = await engine.search('网络请求 networking', { mode: 'weighted' });
       expect(result.items.length).toBeGreaterThanOrEqual(2);
       // 前两条应是 networking 相关
       const ids = result.items.map((r) => r.id);
@@ -305,7 +305,7 @@ describe('Integration: Search Pipeline', () => {
     });
 
     it('type 过滤 — rule 类型', async () => {
-      const result = await engine.search('dispatch', { mode: 'bm25', type: 'rule' });
+      const result = await engine.search('dispatch', { mode: 'weighted', type: 'rule' });
       expect(result.items.length).toBeGreaterThanOrEqual(1);
       for (const item of result.items) {
         expect(item.kind).toBe('rule');
@@ -314,7 +314,7 @@ describe('Integration: Search Pipeline', () => {
 
     it('groupByKind 分组', async () => {
       const result = await engine.search('dispatch', {
-        mode: 'bm25',
+        mode: 'weighted',
         groupByKind: true,
       });
       expect(result.byKind).toBeDefined();
@@ -323,7 +323,7 @@ describe('Integration: Search Pipeline', () => {
     });
 
     it('搜索结果应包含完整字段', async () => {
-      const result = await engine.search('URLSession', { mode: 'bm25' });
+      const result = await engine.search('URLSession', { mode: 'weighted' });
       const first = result.items[0];
       expect(first).toHaveProperty('id');
       expect(first).toHaveProperty('title');
@@ -334,8 +334,8 @@ describe('Integration: Search Pipeline', () => {
     });
 
     it('缓存命中 — 两次相同查询应返回一致结果', async () => {
-      const r1 = await engine.search('tableview', { mode: 'bm25' });
-      const r2 = await engine.search('tableview', { mode: 'bm25' });
+      const r1 = await engine.search('tableview', { mode: 'weighted' });
+      const r2 = await engine.search('tableview', { mode: 'weighted' });
       expect(r1.items.length).toBe(r2.items.length);
       expect(r1.items[0]?.id).toBe(r2.items[0]?.id);
     });
@@ -349,20 +349,20 @@ describe('Integration: Search Pipeline', () => {
 
     it('ranking 模式应使用 CoarseRanker + MultiSignalRanker', async () => {
       const result = await engine.search('networking swift', {
-        mode: 'bm25',
+        mode: 'weighted',
         rank: true,
       });
       expect(result.ranked).toBe(true);
       expect(result.items.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('auto 模式无 AI 时降级到 BM25', async () => {
+    it('auto 模式无 AI 时降级到 FieldWeighted', async () => {
       const result = await engine.search('URLSession', { mode: 'auto' });
       expect(result.items.length).toBeGreaterThanOrEqual(1);
-      expect(result.mode).toContain('bm25');
+      expect(result.mode).toContain('weighted');
     });
 
-    it('semantic 模式无 AI 时降级到 BM25', async () => {
+    it('semantic 模式无 AI 时降级到 FieldWeighted', async () => {
       const result = await engine.search('网络', { mode: 'semantic' });
       expect(result.items.length).toBeGreaterThanOrEqual(0);
     });

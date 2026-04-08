@@ -260,6 +260,16 @@ export const BootstrapInput = z.object({});
 export type BootstrapInput = z.infer<typeof BootstrapInput>;
 
 // ══════════════════════════════════════════════════════
+//  11a. autosnippet_rescan — 增量知识更新
+// ══════════════════════════════════════════════════════
+
+export const RescanInput = z.object({
+  dimensions: z.array(z.string()).optional().describe('指定维度列表，空 = 全部活跃维度'),
+  reason: z.string().optional().describe('触发原因（记录到报告）'),
+});
+export type RescanInput = z.infer<typeof RescanInput>;
+
+// ══════════════════════════════════════════════════════
 //  11b. autosnippet_dimension_complete
 // ══════════════════════════════════════════════════════
 
@@ -402,6 +412,7 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   autosnippet_submit_knowledge: SubmitKnowledgeInput,
   autosnippet_skill: SkillInput,
   autosnippet_bootstrap: BootstrapInput,
+  autosnippet_rescan: RescanInput,
   autosnippet_dimension_complete: DimensionCompleteInput,
   autosnippet_wiki: WikiInput,
   autosnippet_task: TaskInput,

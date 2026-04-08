@@ -83,32 +83,35 @@ export const SCAN_TASK_CONFIGS = {
 核心原则: 分析文本已经包含了所有发现，你的唯一工作是将它们格式化为 collect_scan_recipe 调用。
 
 每个候选必须:
-1. 有清晰的标题 (描述知识点的核心，使用项目真实类名)
+1. 有清晰的标题 (描述知识点的核心，使用项目真实类名，不以项目名开头)
 2. 有项目特写风格的正文 (content.markdown 字段，结合代码展示)
-3. 标注相关文件路径 (reasoning.sources)
+3. 标注相关文件的完整相对路径 + 行号 (reasoning.sources，如 ["Packages/ModuleName/Sources/.../FileName.swift"])
 4. 选择正确的 kind (rule/pattern/fact)
 5. 提供完整的 Cursor 交付字段 (trigger, doClause, whenClause 等)
+6. 标注所属模块/包名（特别是来自本地子包的知识）
 
 ## 「项目特写」写作要求（content.markdown）
 content.markdown 字段必须是「项目特写」：
 1. **项目选择了什么** — 采用了哪种写法/模式/约定
 2. **为什么这样选** — 统计分布、占比、历史决策
 3. **项目禁止什么** — 反模式、已废弃写法
-4. **新代码怎么写** — 可直接复制使用的代码模板 + 来源标注 (来源: FileName.ext:行号)
+4. **新代码怎么写** — 可直接复制使用的代码模板 + 来源标注 (来源: Full/Relative/Path/FileName.ext:行号)
 
 ## 工作流程
 1. 阅读分析文本，识别每个独立的知识点/发现
 2. 用 read_project_file 批量获取关键代码片段:
-   read_project_file({ filePaths: ["FileA.m", "FileB.m"], maxLines: 80 })
+   read_project_file({ filePaths: ["Full/Path/To/FileA.swift", "Full/Path/To/FileB.swift"], maxLines: 80 })
 3. 立刻调用 collect_scan_recipe 提交
 4. 重复直到分析中的所有知识点都已提交
 
 ## 关键规则
 - 分析中的每个要点/段落都应转化为至少一个候选
 - read_project_file 支持 filePaths 数组批量读取多个文件，一次调用完成
-- reasoning.sources 必须是非空数组，填写相关文件路径如 ["FileName.m"]
+- reasoning.sources 必须是非空数组，填写文件的完整相对路径（从项目根目录开始），禁止只写文件名
+- content.markdown 中的来源标注必须使用完整相对路径: (来源: Full/Path/FileName.ext:行号)
 - 如果分析提到了 3 个模式，就应该提交 3 个候选，不要合并
 - 禁止: 不要搜索新文件、不要做额外分析，专注于格式化和提交
+- 【跨维度去重】每条候选必须聚焦当前维度独有的视角，不得将同一知识点换个说法重复提交到不同维度。宁可少提交也不要充数
 
 容错规则:
 - 如果 read_project_file 返回"文件不存在"或错误，不要重试同一文件的其他路径变体
@@ -126,7 +129,7 @@ content.markdown 字段必须是「项目特写」：
 核心原则: 分析文本已经包含了所有发现，你的唯一工作是将它们格式化为 collect_scan_recipe 调用。
 
 这是单文件/代码片段的深度分析，提交一个（或少量）高质量的知识候选：
-1. 清晰的标题（描述代码的核心功能，使用项目真实类名）
+1. 清晰的标题（描述代码的核心功能，使用项目真实类名，不以项目名开头）
 2. 完整的技术文档正文（content.markdown 字段，≥200 字符）
 3. 实用的使用指南（usageGuide 字段，含示例）
 4. 准确的分类（category）和标签（tags）
@@ -285,7 +288,7 @@ export function buildScanPipelineStages(
 2. content.markdown 字段 ≥ 200 字符，含代码块 (\`\`\`)
 3. content.rationale 必填 — 设计原理说明
 4. reasoning.sources 必须是非空数组
-5. 标题使用项目真实类名
+5. 标题使用项目真实类名，不以项目名开头
 6. 必填: trigger (@kebab-case)、kind (rule/pattern/fact)、doClause (英文祈使句)`;
           },
           skipOnDegrade: true,

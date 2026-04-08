@@ -37,7 +37,7 @@ This skill provides the agent with this project's context from AutoSnippet Recip
 1. **In-context index**: Read `references/project-recipes-context.md` in this skill folder
 2. **MCP browse**: `autosnippet_knowledge(operation=list)` with kind/language/category filters
 3. **MCP get**: `autosnippet_knowledge(operation=get, id)` for full content
-4. **MCP search**: `autosnippet_search(mode=auto)` for unified BM25+semantic search
+4. **MCP search**: `autosnippet_search(mode=auto)` for unified FieldWeighted+semantic search
 5. **Terminal**: `asd search <keyword>`
 
 **Recipe over code search**: When both find matches, prefer Recipe as source of truth. Cite Recipe title.

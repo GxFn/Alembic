@@ -567,5 +567,66 @@ export function insightGateEvaluator(
 }
 
 // ──────────────────────────────────────────────────────────────────
+// Evolution Gate Evaluator — 检查所有衰退 Recipe 是否都被处理
+// ──────────────────────────────────────────────────────────────────
+
+/** Tool call record for evolution gate */
+interface EvolutionToolCallRecord {
+  tool?: string;
+  name?: string;
+  args?: Record<string, unknown>;
+  result?: unknown;
+}
+
+/**
+ * Evolution Gate 评估器 — 面向 PipelineStrategy gate.evaluator
+ *
+ * 检查 Evolution Agent 是否对所有衰退 Recipe 做出了决策:
+ * - evolved (submit_knowledge with supersedes)
+ * - deprecated (confirm_deprecation)
+ * - skipped (skip_evolution)
+ *
+ * 如果还有未处理的 Recipe，返回 retry 要求补充决策。
+ */
+export function evolutionGateEvaluator(
+  source: { toolCalls?: EvolutionToolCallRecord[] } | null | undefined,
+  _phaseResults: unknown,
+  strategyContext: { decayedRecipes?: Array<{ id: string }> } = {}
+) {
+  const totalRecipes = strategyContext.decayedRecipes?.length ?? 0;
+  const toolCalls = source?.toolCalls || [];
+
+  // 统计各决策数
+  const evolved = toolCalls.filter((tc) => {
+    const tool = tc.tool || tc.name;
+    return tool === 'submit_knowledge' && tc.args?.supersedes;
+  }).length;
+
+  const deprecated = toolCalls.filter((tc) => {
+    const tool = tc.tool || tc.name;
+    return tool === 'confirm_deprecation';
+  }).length;
+
+  const skipped = toolCalls.filter((tc) => {
+    const tool = tc.tool || tc.name;
+    return tool === 'skip_evolution';
+  }).length;
+
+  const processed = evolved + deprecated + skipped;
+
+  if (totalRecipes > 0 && processed < totalRecipes) {
+    return {
+      action: 'retry',
+      reason: `只处理了 ${processed}/${totalRecipes} 个 Recipe，还有 ${totalRecipes - processed} 个未决策`,
+    };
+  }
+
+  return {
+    action: 'pass',
+    artifact: { evolved, deprecated, skipped, totalRecipes },
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────
 // 类型定义 (JSDoc)
 // ──────────────────────────────────────────────────────────────────

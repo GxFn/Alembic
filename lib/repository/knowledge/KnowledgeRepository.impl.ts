@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Logger as WinstonLogger } from 'winston';
 import { inferKind, KnowledgeEntry } from '../../domain/knowledge/index.js';
 import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
@@ -90,6 +90,22 @@ export class KnowledgeRepositoryImpl extends BaseRepository {
       });
       throw error;
     }
+  }
+
+  /**
+   * 按标题精确查找（大小写不敏感）
+   */
+  async findByTitle(title: string): Promise<KnowledgeEntry | null> {
+    const rows = this.#drizzle
+      .select()
+      .from(knowledgeEntries)
+      .where(sql`lower(${knowledgeEntries.title}) = lower(${title})`)
+      .limit(1)
+      .all();
+    if (rows.length === 0) {
+      return null;
+    }
+    return this._rowToEntity(rows[0]);
   }
 
   /**

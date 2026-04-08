@@ -16,6 +16,7 @@
  * Admin tools (2):
  *   15-16: enrich_candidates/knowledge_lifecycle
  */
+import { z } from 'zod';
 
 import {
   BootstrapInput,
@@ -28,6 +29,7 @@ import {
   KnowledgeInput,
   KnowledgeLifecycleInput,
   PanoramaInput,
+  RescanInput,
   SearchInput,
   SkillInput,
   StructureInput,
@@ -37,6 +39,14 @@ import {
 } from '#shared/schemas/mcp-tools.js';
 import { zodToMcpSchema } from './zodToMcpSchema.js';
 
+// RescanInput may be undefined under certain Vitest module transforms; provide defensive fallback
+const _RescanSchema =
+  RescanInput ??
+  z.object({
+    dimensions: z.array(z.string()).optional(),
+    reason: z.string().optional(),
+  });
+
 // ─── Tier Definitions ────────────────────────────────────────
 export const TIER_ORDER = { agent: 0, admin: 1 };
 
@@ -45,6 +55,8 @@ export const TIER_ORDER = { agent: 0, admin: 1 };
 export const TOOL_GATEWAY_MAP = {
   // bootstrap — parameterless Mission Briefing (read-only analysis, no gating needed)
   // autosnippet_bootstrap: null,
+  // rescan — incremental knowledge update (write: cleans derived data + creates decay proposals)
+  autosnippet_rescan: { action: 'knowledge:bootstrap', resource: 'knowledge' },
   // dimension_complete — write operation (recipe tagging + skill creation + checkpoint)
   autosnippet_dimension_complete: { action: 'knowledge:bootstrap', resource: 'knowledge' },
   // wiki — finalize is a write operation (meta.json)
@@ -230,7 +242,20 @@ export const TOOLS = [
     inputSchema: zodToMcpSchema(BootstrapInput),
   },
 
-  // 11. Dimension Complete Notification
+  // 11. Incremental Rescan
+  {
+    name: 'autosnippet_rescan',
+    tier: 'agent',
+    description:
+      'Incremental rescan — preserves existing Recipes and re-analyzes project.\n' +
+      '• Snapshots approved Recipes → cleans derived caches → full Phase 1-4 analysis\n' +
+      '• Runs RecipeRelevanceAuditor (5-dimension evidence check, auto-decay stale Recipes)\n' +
+      '• Returns Mission Briefing with evidenceHints (existingRecipes + decayedRecipes)\n' +
+      '• Optional: dimensions (filter specific dimensions), reason (rescan justification)',
+    inputSchema: zodToMcpSchema(_RescanSchema),
+  },
+
+  // 12. Dimension Complete Notification
   {
     name: 'autosnippet_dimension_complete',
     tier: 'agent',

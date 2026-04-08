@@ -8,6 +8,7 @@
  *   - constitution, aiProvider, projectGraph
  */
 
+import { DimensionCopy } from '#domain/dimension/DimensionCopy.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { getDiscovererRegistry } from '../../core/discovery/index.js';
 import { getEnhancementRegistry } from '../../core/enhancement/index.js';
@@ -15,7 +16,6 @@ import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter
 import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
 import { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
-import { DimensionCopy } from '../../service/bootstrap/DimensionCopyRegistry.js';
 import { ConsolidationAdvisor } from '../../service/evolution/ConsolidationAdvisor.js';
 import { ContradictionDetector } from '../../service/evolution/ContradictionDetector.js';
 import { DecayDetector } from '../../service/evolution/DecayDetector.js';

@@ -431,6 +431,27 @@ export class ExternalSubmissionTracker {
       usedTriggers: this.#usedTriggers.size,
     };
   }
+
+  /**
+   * 获取所有已提交候选的标题集合（小写，用于跨维度硬去重）
+   *
+   * @param [excludeDimId] 可选，排除指定维度的标题
+   * @returns Set<string> 小写标题集合
+   */
+  getAllSubmittedTitles(excludeDimId?: string): Set<string> {
+    const titles = new Set<string>();
+    for (const [dimId, submissions] of this.#dimensionSubmissions) {
+      if (excludeDimId && dimId === excludeDimId) {
+        continue;
+      }
+      for (const sub of submissions) {
+        if (sub.title) {
+          titles.add(sub.title.toLowerCase().trim());
+        }
+      }
+    }
+    return titles;
+  }
 }
 
 export default ExternalSubmissionTracker;

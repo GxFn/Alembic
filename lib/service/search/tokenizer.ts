@@ -7,12 +7,12 @@
  * @module tokenizer
  */
 
-/** BM25 调参常量 */
+/** 评分调参常量（原 BM25 k1/b 参数，BM25Scorer 仍在使用） */
 export const BM25_K1 = 1.2;
 export const BM25_B = 0.75;
 
 /**
- * 中文停用词表 — 过滤常见虚词/助词/代词/连词，减少 BM25 噪声
+ * 中文停用词表 — 过滤常见虚词/助词/代词/连词，减少搜索噪声
  * 参考 jieba / Elasticsearch smartcn_stop / 百度停用词表
  */
 const CJK_STOPWORDS = new Set([

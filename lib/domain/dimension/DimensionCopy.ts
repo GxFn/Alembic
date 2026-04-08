@@ -7,10 +7,12 @@
  *
  * ---
  * 使用方式：
- *   import { DimensionCopy } from '../service/bootstrap/DimensionCopyRegistry.js';
- *   const copy = DimensionCopy.get('code-pattern', 'python');
+ *   import { DimensionCopy } from '#domain/dimension/DimensionCopy.js';
+ *   const copy = DimensionCopy.get('design-patterns', 'python');
  *   // → { label: '设计模式与代码惯例', guide: '装饰器/描述器/上下文管理器/生成器/ABC 抽象基类/Mixin 模式' }
  */
+
+import { getDimension } from './DimensionRegistry.js';
 
 // ═══════════════════════════════════════════════════════════
 // 语言族定义
@@ -49,11 +51,7 @@ function _langFamily(lang: string) {
  */
 const COPY_REGISTRY = {
   // ── ① 代码规范 ──────────────────────────────────────
-  'code-standard': {
-    _default: {
-      label: '代码规范',
-      guide: '命名约定、注释风格、文件组织规范、代码格式化标准',
-    },
+  'coding-standards': {
     apple: {
       label: '代码规范',
       guide:
@@ -91,11 +89,7 @@ const COPY_REGISTRY = {
   },
 
   // ── ② 设计模式与代码惯例 ─────────────────────────────
-  'code-pattern': {
-    _default: {
-      label: '设计模式与代码惯例',
-      guide: '单例/工厂/观察者/策略/Builder 等设计模式在项目中的使用方式',
-    },
+  'design-patterns': {
     apple: {
       label: '设计模式与代码惯例',
       guide: '单例/委托/Category·Extension/工厂/Builder/观察者/Coordinator 模式、继承关系',
@@ -134,10 +128,6 @@ const COPY_REGISTRY = {
 
   // ── ③ 架构模式 ──────────────────────────────────────
   architecture: {
-    _default: {
-      label: '架构模式',
-      guide: '分层架构、模块职责与边界、依赖图、导入约束规则',
-    },
     apple: {
       label: '架构模式',
       guide: '分层架构（MVVM/VIPER/TCA）、Package/Target 模块边界、依赖图、import 约束规则',
@@ -173,12 +163,8 @@ const COPY_REGISTRY = {
     },
   },
 
-  // ── ④ 最佳实践 ──────────────────────────────────────
-  'best-practice': {
-    _default: {
-      label: '最佳实践',
-      guide: '错误处理、并发安全、资源管理、日志规范、测试模式',
-    },
+  // ── ④ 错误韧性 ──────────────────────────────────────
+  'error-resilience': {
     apple: {
       label: '最佳实践',
       guide:
@@ -216,12 +202,8 @@ const COPY_REGISTRY = {
     },
   },
 
-  // ── ⑤ 事件与数据流 ─────────────────────────────────
-  'event-and-data-flow': {
-    _default: {
-      label: '事件与数据流',
-      guide: '事件传播机制、状态管理模式、数据流向追踪',
-    },
+  // ── ⑤ 数据与事件流 ─────────────────────────────────
+  'data-event-flow': {
     apple: {
       label: '事件与数据流',
       guide:
@@ -259,56 +241,8 @@ const COPY_REGISTRY = {
     },
   },
 
-  // ── ⑥ 项目特征 ──────────────────────────────────────
-  'project-profile': {
-    _default: {
-      label: '项目特征',
-      guide: '技术栈、目录结构、三方依赖枚举与用途、基础设施服务注册表',
-    },
-    apple: {
-      label: '项目特征',
-      guide:
-        '技术栈、目录结构、三方依赖枚举与用途、Extension/Category 分类聚合、自定义基类层级与全局定义（宏/typealias/PCH）、系统事件 hook 与生命周期入口、基础设施服务注册表、Runtime 与语言互操作',
-    },
-    js: {
-      label: '项目特征',
-      guide:
-        '技术栈（框架/构建工具/包管理器）、目录结构、三方依赖枚举与用途、monorepo 配置、环境变量与配置注入、CI/CD 管线',
-    },
-    jvm: {
-      label: '项目特征',
-      guide:
-        '技术栈（Spring/Android/Ktor）、module 结构、三方依赖枚举与用途、构建配置（Gradle/Maven）、Profile 环境管理、基础设施服务',
-    },
-    python: {
-      label: '项目特征',
-      guide:
-        '技术栈（Django/FastAPI/Flask）、包结构、三方依赖枚举与用途、pyproject.toml/setup.cfg 配置、虚拟环境管理',
-    },
-    go: {
-      label: '项目特征',
-      guide:
-        '技术栈、module 结构、go.mod 依赖枚举与用途、internal 包组织、build tags、Makefile 构建',
-    },
-    dart: {
-      label: '项目特征',
-      guide:
-        '技术栈（Flutter/Dart Server/CLI）、目录结构（lib/src 分层）、pubspec.yaml 依赖枚举与用途、平台通道（MethodChannel/FFI）、Flavors/多环境配置',
-    },
-    rust: {
-      label: '项目特征',
-      guide:
-        '技术栈、Workspace/crate 结构、Cargo.toml 依赖枚举与用途、feature flags、#[cfg] 条件编译',
-    },
-  },
-
-  // ── ⑦ Agent 开发注意事项 ─────────────────────────────
+  // ── ⑥ Agent 开发注意事项 ─────────────────────────────
   'agent-guidelines': {
-    _default: {
-      label: 'Agent 开发注意事项',
-      guide:
-        '三大核心原则（严谨性/深度特征挖掘/完整性）、命名强制、并发安全、资源管理、已废弃 API 标记、架构约束注释、TODO/FIXME',
-    },
     apple: {
       label: 'Agent 开发注意事项',
       guide:
@@ -362,12 +296,22 @@ export class DimensionCopy {
     const entry = (
       COPY_REGISTRY as Record<string, Record<string, { label: string; guide: string }>>
     )[dimId];
-    if (!entry) {
-      return null;
+
+    if (entry) {
+      const family = _langFamily(lang);
+      const match = entry[family] || entry[lang];
+      if (match) {
+        return match;
+      }
     }
 
-    const family = _langFamily(lang);
-    return entry[family] || entry[lang] || entry._default || null;
+    // 回退到 Registry 元数据（消除 _default 双源）
+    const dim = getDimension(dimId);
+    if (dim) {
+      return { label: dim.label, guide: dim.extractionGuide };
+    }
+
+    return null;
   }
 
   /**

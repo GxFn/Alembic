@@ -7,6 +7,8 @@
  * @module shared/BootstrapEventEmitter
  */
 
+import type { DimensionCompletePayload, ProgressPayload } from './bootstrap-event-types.js';
+
 export class BootstrapEventEmitter {
   /** EventBus 实例 */
   #eventBus: Record<string, (...args: unknown[]) => void> | null;
@@ -49,7 +51,7 @@ export class BootstrapEventEmitter {
    * @param [data.skillCreated] 是否生成了 Skill
    * @param [data.recipesBound] 关联的 recipe 数量
    */
-  emitDimensionComplete(dimId: string, data: Record<string, unknown> = {}) {
+  emitDimensionComplete(dimId: string, data: DimensionCompletePayload) {
     // TaskManager 标记
     try {
       this.#taskManager?.markTaskCompleted?.(dimId, data);
@@ -129,7 +131,7 @@ export class BootstrapEventEmitter {
    * @param event 事件名
    * @param data 事件数据
    */
-  emitProgress(event: string, data: Record<string, unknown> = {}) {
+  emitProgress(event: string, data: ProgressPayload = {}) {
     try {
       this.#eventBus?.emit?.(event, data);
     } catch {

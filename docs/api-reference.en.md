@@ -140,7 +140,7 @@ Search the knowledge base.
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | `q` | string | — | Search query (required) |
-| `mode` | string | `auto` | Search mode: `auto` / `keyword` / `bm25` / `semantic` / `context` |
+| `mode` | string | `auto` | Search mode: `auto` / `keyword` / `weighted` / `semantic` / `context` |
 | `type` | string | `all` | Type filter: `all` / `recipe` / `solution` / `rule` |
 | `limit` | number | `10` | Max results |
 | `language` | string | — | Language filter |
@@ -159,7 +159,7 @@ Search the knowledge base.
     }
   ],
   "total": 42,
-  "mode": "bm25"
+  "mode": "weighted"
 }
 ```
 

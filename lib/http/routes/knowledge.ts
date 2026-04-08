@@ -7,6 +7,8 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { ioLimit } from '#shared/concurrency.js';
 import {
+  BatchDeleteBody,
+  BatchDeprecateBody,
   BatchPublishBody,
   CreateKnowledgeBody,
   DeprecateKnowledgeBody,
@@ -176,6 +178,28 @@ router.get('/lifecycle', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/v1/knowledge/quality/refresh-all
+ * 批量重新计算所有条目的质量评分
+ */
+router.post('/quality/refresh-all', async (_req: Request, res: Response) => {
+  const container = getServiceContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const result = await knowledgeService.list({}, { page: 1, pageSize: 10000 });
+  const all = result.data;
+  let updated = 0;
+  let failed = 0;
+  for (const entry of all) {
+    try {
+      await knowledgeService.updateQuality(entry.id);
+      updated++;
+    } catch {
+      failed++;
+    }
+  }
+  res.json({ success: true, data: { updated, failed, total: all.length } });
+});
+
+/**
  * GET /api/v1/knowledge/:id
  * 获取知识条目详情
  */
@@ -308,6 +332,78 @@ router.patch(
   }
 );
 
+/**
+ * PATCH /api/v1/knowledge/:id/stage
+ * 暂存 (pending → staging)
+ */
+router.patch(
+  '/:id/stage',
+  requirePermission('knowledge', 'update'),
+  async (req: Request, res: Response) => {
+    const id = String(req.params.id);
+    const container = getServiceContainer();
+    const knowledgeService = container.get('knowledgeService');
+    const context = getContext(req);
+
+    const entry = await knowledgeService.stage(id, context);
+    res.json({ success: true, data: sanitizeForAPI(entry) });
+  }
+);
+
+/**
+ * PATCH /api/v1/knowledge/:id/evolve
+ * 进化 (active → evolving)
+ */
+router.patch(
+  '/:id/evolve',
+  requirePermission('knowledge', 'update'),
+  async (req: Request, res: Response) => {
+    const id = String(req.params.id);
+    const container = getServiceContainer();
+    const knowledgeService = container.get('knowledgeService');
+    const context = getContext(req);
+
+    const entry = await knowledgeService.evolve(id, context);
+    res.json({ success: true, data: sanitizeForAPI(entry) });
+  }
+);
+
+/**
+ * PATCH /api/v1/knowledge/:id/decay
+ * 衰退 (active|evolving → decaying)
+ */
+router.patch(
+  '/:id/decay',
+  requirePermission('knowledge', 'update'),
+  async (req: Request, res: Response) => {
+    const id = String(req.params.id);
+    const container = getServiceContainer();
+    const knowledgeService = container.get('knowledgeService');
+    const context = getContext(req);
+
+    const entry = await knowledgeService.decay(id, context);
+    res.json({ success: true, data: sanitizeForAPI(entry) });
+  }
+);
+
+/**
+ * PATCH /api/v1/knowledge/:id/restore
+ * 恢复为已发布 (decaying|evolving → active)
+ */
+router.patch(
+  '/:id/restore',
+  requirePermission('knowledge', 'update'),
+  async (req: Request, res: Response) => {
+    const id = String(req.params.id);
+    const container = getServiceContainer();
+    const knowledgeService = container.get('knowledgeService');
+    const context = getContext(req);
+
+    const entry = await knowledgeService.restore(id, context);
+    res.json({ success: true, data: sanitizeForAPI(entry) });
+  }
+);
+
 /* ═══ 批量操作 ═══════════════════════════════════════════ */
 
 /**
@@ -344,6 +440,83 @@ router.post(
         failed,
         total: ids.length,
         successCount: published.length,
+        failureCount: failed.length,
+      },
+    });
+  }
+);
+
+/**
+ * POST /api/v1/knowledge/batch-delete
+ * 批量删除知识条目
+ */
+router.post(
+  '/batch-delete',
+  requirePermission('knowledge', 'delete'),
+  validate(BatchDeleteBody),
+  async (req: Request, res: Response) => {
+    const { ids } = req.body;
+
+    const container = getServiceContainer();
+    const knowledgeService = container.get('knowledgeService');
+    const context = getContext(req);
+
+    const results = await Promise.allSettled(
+      ids.map((id: string) => ioLimit(() => knowledgeService.delete(id, context)))
+    );
+
+    const deleted = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results
+      .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message } : null))
+      .filter(Boolean);
+
+    res.json({
+      success: true,
+      data: {
+        total: ids.length,
+        deletedCount: deleted,
+        failureCount: failed.length,
+        failed,
+      },
+    });
+  }
+);
+
+/**
+ * POST /api/v1/knowledge/batch-deprecate
+ * 批量废弃知识条目 (active → deprecated)
+ */
+router.post(
+  '/batch-deprecate',
+  requirePermission('knowledge', 'publish'),
+  validate(BatchDeprecateBody),
+  async (req: Request, res: Response) => {
+    const { ids, reason } = req.body;
+
+    const container = getServiceContainer();
+    const knowledgeService = container.get('knowledgeService');
+    const context = getContext(req);
+
+    const results = await Promise.allSettled(
+      ids.map((id: string) =>
+        ioLimit(() => knowledgeService.deprecate(id, reason || 'batch deprecate', context))
+      )
+    );
+
+    const deprecated = results
+      .filter((r) => r.status === 'fulfilled')
+      .map((r) => sanitizeForAPI(r.value));
+    const failed = results
+      .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message } : null))
+      .filter(Boolean);
+
+    res.json({
+      success: true,
+      data: {
+        deprecated,
+        failed,
+        total: ids.length,
+        successCount: deprecated.length,
         failureCount: failed.length,
       },
     });

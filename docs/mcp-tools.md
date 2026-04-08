@@ -46,7 +46,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `query` | string | ✅ | 搜索查询 |
-| `mode` | string | — | 搜索模式：`auto` / `keyword` / `bm25` / `semantic` / `context`（默认 `auto`） |
+| `mode` | string | — | 搜索模式：`auto` / `keyword` / `weighted` / `semantic` / `context`（默认 `auto`） |
 | `type` | string | — | 类型过滤：`all` / `recipe` / `solution` / `rule` |
 | `limit` | number | — | 最大结果数（默认 10） |
 | `language` | string | — | 语言过滤 |
@@ -57,7 +57,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 |------|---------|------|
 | `auto` | 自动选择 | 默认推荐 |
 | `keyword` | 精确关键词匹配 | 已知确切术语 |
-| `bm25` | BM25 (TF-IDF) 评分 | 常规查询 |
+| `weighted` | 加权字段评分 | 常规查询 |
 | `semantic` | 向量语义相似度 | 概念性/模糊查询 |
 | `context` | 4 层检索漏斗 (keyword→semantic→fusion→rerank) | 最高质量检索 |
 
@@ -208,6 +208,19 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ---
 
+### 9b. autosnippet_rescan
+
+增量重扫描 — 保留已审核 Recipe，清理衍生缓存，重新执行 Phase 1-4 分析，运行 RecipeRelevanceAuditor 5 维证据审计。返回 Mission Briefing（含 evidenceHints：现有 Recipe + 衰退 Recipe 信息）。
+
+**参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `dimensions` | string[] | — | 指定维度列表，空 = 全部活跃维度 |
+| `reason` | string | — | 触发原因（记录到报告） |
+
+---
+
 ### 10. autosnippet_dimension_complete
 
 维度分析完成通知 — Agent 完成一个冷启动维度的分析后调用。负责 Recipe 关联、Skill 生成、Checkpoint 保存、进度推送。
@@ -339,6 +352,7 @@ MCP 工具与 Gateway Action 的映射关系：
 | `autosnippet_guard` | `read:guard_rules` | 所有角色 |
 | `autosnippet_skill` (create) | `create:skills` | `external_agent` / `developer` |
 | `autosnippet_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `autosnippet_rescan` | `knowledge:bootstrap` | `external_agent` / `developer` |
 | `autosnippet_task` | `task:create` / `task:update`（按 operation 路由） | `external_agent` / `developer` |
 | `autosnippet_knowledge_lifecycle` | 按 action 动态路由 | `developer` |
 

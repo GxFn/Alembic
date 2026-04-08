@@ -89,6 +89,7 @@ export class ExplorationTracker {
     iteration: 0,
     searchRoundsInPhase: 0,
     phaseRounds: 0,
+    consecutiveIdleRounds: 0,
   };
 
   // ── 阶段控制 ──
@@ -358,6 +359,13 @@ export class ExplorationTracker {
       this.#metrics.searchRoundsInPhase++;
     }
 
+    // 2.5 连续空闲轮次追踪（无任何工具调用 = 真正空转，有工具调用 = 活跃工作）
+    if (toolNames.length === 0) {
+      this.#metrics.consecutiveIdleRounds++;
+    } else {
+      this.#metrics.consecutiveIdleRounds = 0;
+    }
+
     // 3. 检查 metrics 驱动的阶段转换
     this.#checkMetricsTransition();
 
@@ -570,9 +578,10 @@ export class ExplorationTracker {
     // (SCAN 阶段的 roundsSinceNewInfo 不应影响 EXPLORE→VERIFY 的判定)
     this.#metrics.roundsSinceNewInfo = 0;
     this.#metrics.roundsSinceSubmit = 0;
+    this.#metrics.consecutiveIdleRounds = 0;
     this.#justTransitioned = true;
     this.#logger.info(
-      `[ExplorationTracker] ${oldPhase} → ${newPhase} (iter=${this.#metrics.iteration}, submits=${this.#metrics.submitCount})`
+      `[ExplorationTracker] ${oldPhase} → ${newPhase} (iter=${this.#metrics.iteration}, submits=${this.#metrics.submitCount}, phaseRounds=${this.#metrics.phaseRounds}, idleRounds=${this.#metrics.consecutiveIdleRounds})`
     );
 
     // Phase 3: 发射阶段转换信号

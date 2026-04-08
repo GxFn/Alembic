@@ -25,6 +25,10 @@ export class KnowledgeRepository {
     throw new Error('Not implemented');
   }
 
+  async findByTitle(title: string): Promise<KnowledgeEntry | null> {
+    throw new Error('Not implemented');
+  }
+
   async findWithPagination(
     filters?: Record<string, unknown>,
     options?: PaginationOptions & { orderBy?: string; order?: string }

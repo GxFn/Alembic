@@ -839,13 +839,14 @@ export class GuardCheckEngine {
 
     // 如果有 scope，按层级过滤：project ⊇ target ⊇ file
     // project 范围包含所有维度的规则；target 包含 file+target；file 仅匹配 file
+    // 'universal' 维度在所有 scope 下都生效
     if (scope) {
-      const SCOPE_HIERARCHY = {
-        project: ['file', 'target', 'project'],
-        target: ['file', 'target'],
-        file: ['file'],
+      const SCOPE_HIERARCHY: Record<string, string[]> = {
+        project: ['file', 'target', 'project', 'universal'],
+        target: ['file', 'target', 'universal'],
+        file: ['file', 'universal'],
       };
-      const allowedDimensions = (SCOPE_HIERARCHY as Record<string, string[]>)[scope] || [scope];
+      const allowedDimensions = SCOPE_HIERARCHY[scope] || [scope, 'universal'];
       rules = rules.filter((r) => !r.dimension || allowedDimensions.includes(r.dimension));
     }
 

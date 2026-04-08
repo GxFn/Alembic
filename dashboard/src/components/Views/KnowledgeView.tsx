@@ -50,22 +50,25 @@ const KIND_CONFIG: Record<string, { labelKey: string; color: string; bg: string;
 /** 生命周期操作按钮配置（6 状态） */
 const LIFECYCLE_ACTIONS: Record<string, Array<{ action: string; labelKey: string; color: string; bg: string; icon: React.ElementType; needsReason?: boolean }>> = {
   pending:       [
+    { action: 'publish',    labelKey: 'knowledge.actionPublish',    color: 'text-green-700',  bg: 'bg-green-50 hover:bg-green-100', icon: CheckCircle2 },
     { action: 'stage',      labelKey: 'knowledge.actionStage',      color: 'text-blue-700',   bg: 'bg-blue-50 hover:bg-blue-100',   icon: ArrowUpCircle },
     { action: 'deprecate',  labelKey: 'knowledge.actionDeprecate',  color: 'text-red-700',    bg: 'bg-red-50 hover:bg-red-100',     icon: Archive, needsReason: true },
   ],
   staging:       [
     { action: 'publish',    labelKey: 'knowledge.actionPublish',    color: 'text-green-700',  bg: 'bg-green-50 hover:bg-green-100', icon: CheckCircle2 },
-    { action: 'deprecate',  labelKey: 'knowledge.actionDeprecate',  color: 'text-red-700',    bg: 'bg-red-50 hover:bg-red-100',     icon: Archive, needsReason: true },
+    { action: 'reactivate', labelKey: 'knowledge.actionUnstage',    color: 'text-gray-700',   bg: 'bg-gray-50 hover:bg-gray-100',   icon: RotateCcw },
   ],
   active:        [
     { action: 'evolve',     labelKey: 'knowledge.actionEvolve',     color: 'text-purple-700', bg: 'bg-purple-50 hover:bg-purple-100', icon: Sparkles },
     { action: 'decay',      labelKey: 'knowledge.actionDecay',      color: 'text-orange-700', bg: 'bg-orange-50 hover:bg-orange-100', icon: TrendingDown, needsReason: true },
+    { action: 'deprecate',  labelKey: 'knowledge.actionDeprecate',  color: 'text-red-700',    bg: 'bg-red-50 hover:bg-red-100',     icon: Archive, needsReason: true },
   ],
   evolving:      [
-    { action: 'publish',    labelKey: 'knowledge.actionPublish',    color: 'text-green-700',  bg: 'bg-green-50 hover:bg-green-100', icon: CheckCircle2 },
+    { action: 'restore',    labelKey: 'knowledge.actionRestore',    color: 'text-green-700',  bg: 'bg-green-50 hover:bg-green-100', icon: CheckCircle2 },
+    { action: 'decay',      labelKey: 'knowledge.actionDecay',      color: 'text-orange-700', bg: 'bg-orange-50 hover:bg-orange-100', icon: TrendingDown, needsReason: true },
   ],
   decaying:      [
-    { action: 'reactivate', labelKey: 'knowledge.actionReactivate', color: 'text-green-700',  bg: 'bg-green-50 hover:bg-green-100', icon: RotateCcw },
+    { action: 'restore',    labelKey: 'knowledge.actionRestore',    color: 'text-green-700',  bg: 'bg-green-50 hover:bg-green-100', icon: CheckCircle2 },
     { action: 'deprecate',  labelKey: 'knowledge.actionDeprecate',  color: 'text-red-700',    bg: 'bg-red-50 hover:bg-red-100',     icon: Archive, needsReason: true },
   ],
   deprecated:    [
@@ -124,6 +127,16 @@ const SOURCE_LABEL_KEYS: Record<string, { labelKey: string; color: string }> = {
 interface KnowledgeViewProps {
   onRefresh?: () => void;
   idTitleMap?: Record<string, string>;
+}
+
+/* ═══ 驳回原因翻译（兼容旧英文数据） ═════════════════ */
+
+const REJECTION_REASON_MAP: Record<string, string> = {
+  'source file deleted (orphan)': '源文件已删除（孤儿条目）',
+};
+
+function translateRejectionReason(reason: string): string {
+  return REJECTION_REASON_MAP[reason] ?? reason;
 }
 
 /* ═══ 组件 ═════════════════════════════════════════════ */
@@ -294,12 +307,23 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
     }
   };
 
+  // ── 可发布状态（状态机中允许转移到 active 的状态）──
+  const PUBLISHABLE_STATES = ['pending', 'staging'];
+
   // ── 批量操作 ──
   const handleBatchPublish = async () => {
     if (selectedIds.size === 0) return;
+    // 只发布处于可发布状态的条目
+    const publishableIds = entries
+      .filter(e => selectedIds.has(e.id) && PUBLISHABLE_STATES.includes(e.lifecycle))
+      .map(e => e.id);
+    if (publishableIds.length === 0) {
+      notify(t('knowledge.noPublishable'), { title: t('knowledge.batchPublish'), type: 'info' });
+      return;
+    }
     setBatchLoading(true);
     try {
-      const result = await api.knowledgeBatchPublish([...selectedIds]);
+      const result = await api.knowledgeBatchPublish(publishableIds);
       notify(t('knowledge.batchPublishResult', { success: result.successCount, fail: result.failureCount }), { title: t('knowledge.batchPublish') });
       setSelectedIds(new Set());
       refresh();
@@ -326,6 +350,46 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
       refresh();
     } catch (err: unknown) {
       notify(getErrorMessage(err, t('knowledge.batchPublishFailed')), { title: t('common.operationFailed'), type: 'error' });
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  /** 批量废弃选中条目 */
+  const handleBatchDeprecate = async () => {
+    if (selectedIds.size === 0) { return; }
+    const deprecatableIds = entries
+      .filter(e => selectedIds.has(e.id) && (e.lifecycle === 'active' || e.lifecycle === 'evolving'))
+      .map(e => e.id);
+    if (deprecatableIds.length === 0) {
+      notify(t('knowledge.noDeprecatable'), { title: t('knowledge.batchDeprecate'), type: 'info' });
+      return;
+    }
+    setBatchLoading(true);
+    try {
+      const result = await api.knowledgeBatchDeprecate(deprecatableIds);
+      notify(t('knowledge.batchDeprecateResult', { success: result.successCount, fail: result.failureCount }), { title: t('knowledge.batchDeprecate') });
+      setSelectedIds(new Set());
+      refresh();
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('knowledge.batchDeprecateFailed')), { title: t('common.operationFailed'), type: 'error' });
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  /** 批量删除选中条目 */
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) { return; }
+    if (!confirm(t('knowledge.batchDeleteConfirm', { count: selectedIds.size }))) { return; }
+    setBatchLoading(true);
+    try {
+      const result = await api.knowledgeBatchDelete([...selectedIds]);
+      notify(t('knowledge.batchDeleteResult', { success: result.deletedCount, fail: result.failureCount }), { title: t('knowledge.batchDelete') });
+      setSelectedIds(new Set());
+      refresh();
+    } catch (err: unknown) {
+      notify(getErrorMessage(err, t('knowledge.batchDeleteFailed')), { title: t('common.operationFailed'), type: 'error' });
     } finally {
       setBatchLoading(false);
     }
@@ -463,20 +527,38 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
         </button>
 
         {/* 批量操作 */}
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2 ml-auto">
-            <span className="text-xs text-[var(--fg-secondary)]">{t('knowledge.selectedCount', { count: selectedIds.size })}</span>
-            <button onClick={handleBatchPublish} disabled={batchLoading}
-              className="px-2.5 py-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 disabled:opacity-50">
-              {batchLoading ? <Loader2 size={12} className="animate-spin" /> : t('knowledge.batchPublish')}
-            </button>
-            <button onClick={() => setSelectedIds(new Set())} className="p-1 text-[var(--fg-muted)] hover:text-[var(--fg-primary)]">
-              <X size={14} />
-            </button>
-          </div>
-        )}
-        {/* 快速批量发布可自动通过的条目 */}
-        {selectedIds.size === 0 && (
+        {selectedIds.size > 0 && (() => {
+          const publishableCount = entries.filter(e => selectedIds.has(e.id) && PUBLISHABLE_STATES.includes(e.lifecycle)).length;
+          const deprecatableCount = entries.filter(e => selectedIds.has(e.id) && (e.lifecycle === 'active' || e.lifecycle === 'evolving')).length;
+          return (
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-xs text-[var(--fg-secondary)]">{t('knowledge.selectedCount', { count: selectedIds.size })}</span>
+              {publishableCount > 0 && (
+                <button onClick={handleBatchPublish} disabled={batchLoading}
+                  className="px-2.5 py-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 disabled:opacity-50">
+                  {batchLoading ? <Loader2 size={12} className="animate-spin" /> : t('knowledge.batchPublish')} ({publishableCount})
+                </button>
+              )}
+              {deprecatableCount > 0 && (
+                <button onClick={handleBatchDeprecate} disabled={batchLoading}
+                  className="px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md hover:bg-amber-100 disabled:opacity-50 flex items-center gap-1">
+                  {batchLoading ? <Loader2 size={12} className="animate-spin" /> : <Archive size={12} />}
+                  {t('knowledge.batchDeprecate')} ({deprecatableCount})
+                </button>
+              )}
+              <button onClick={handleBatchDelete} disabled={batchLoading}
+                className="px-2.5 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 disabled:opacity-50 flex items-center gap-1">
+                {batchLoading ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                {t('knowledge.batchDelete')} ({selectedIds.size})
+              </button>
+              <button onClick={() => setSelectedIds(new Set())} className="p-1 text-[var(--fg-muted)] hover:text-[var(--fg-primary)]">
+                <X size={14} />
+              </button>
+            </div>
+          );
+        })()}
+        {/* 快速批量发布可自动通过的条目 — 仅当存在 pending 条目时显示 */}
+        {selectedIds.size === 0 && entries.some(e => e.lifecycle === 'pending') && (
           <button onClick={handleBatchPublishAutoApprovable} disabled={batchLoading}
             className="ml-auto px-3 py-1.5 text-xs font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-md hover:bg-cyan-100 disabled:opacity-50 flex items-center gap-1.5">
             {batchLoading ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
@@ -651,9 +733,9 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
             <Drawer.Body>
               {/* 驳回原因 */}
               {selected.rejectionReason && (
-                <div className="px-6 py-3 border-b border-red-200 bg-red-50/80">
-                  <label className="text-[10px] font-bold text-red-500 uppercase mb-1.5 block">{t('knowledge.rejectionReason')}</label>
-                  <p className="text-xs text-red-600">{selected.rejectionReason}</p>
+                <div className="px-6 py-3 border-b border-[var(--border-default)] bg-red-500/10">
+                  <label className="text-[10px] font-bold text-red-400 uppercase mb-1.5 block">{t('knowledge.rejectionReason')}</label>
+                  <p className="text-xs text-red-500 dark:text-red-400">{translateRejectionReason(selected.rejectionReason)}</p>
                 </div>
               )}
 

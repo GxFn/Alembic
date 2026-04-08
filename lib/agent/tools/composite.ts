@@ -18,6 +18,7 @@ import { findSimilarRecipes } from '#service/candidate/SimilarityService.js';
 import {
   checkDimensionType,
   DIMENSION_DISPLAY_GROUP,
+  stripProjectNamePrefix,
   type ToolHandlerContext,
   type ToolSchemaEntry,
 } from './_shared.js';
@@ -55,6 +56,8 @@ export interface SubmitWithCheckParams {
   sourceFile?: string;
   threshold?: number;
   knowledgeType?: string;
+  /** 被替代的旧 Recipe ID（进化架构入口） */
+  supersedes?: string;
   [key: string]: unknown;
 }
 
@@ -261,11 +264,20 @@ export const submitWithCheck = {
       },
       sourceFile: { type: 'string', description: '来源文件相对路径' },
       threshold: { type: 'number', description: '相似度阈值，默认 0.7' },
+      supersedes: {
+        type: 'string',
+        description: '被替代的旧 Recipe ID。传入后将创建 supersede 提案，72h 观察窗口后自动替代。',
+      },
     },
     required: getInternalAgentRequiredFields(),
   },
   handler: async (params: SubmitWithCheckParams, ctx: ToolHandlerContext) => {
     const projectRoot = ctx.projectRoot;
+
+    // ── 标题正规化：剥离冗余的项目名前缀 ──
+    if (params.title) {
+      params.title = stripProjectNamePrefix(params.title, projectRoot);
+    }
 
     // ── Bootstrap 维度类型校验 ──
     const dimMeta = ctx._dimensionMeta;
@@ -353,9 +365,7 @@ export const submitWithCheck = {
 
       const systemFields = {
         language: ctx._projectLanguage || '',
-        category: dimMeta
-          ? (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id
-          : 'general',
+        category: dimMeta ? dimMeta.id : 'general',
         knowledgeType: dimMeta?.allowedKnowledgeTypes?.[0] || 'code-pattern',
         source: ctx.source === 'system' ? 'bootstrap' : 'agent',
       };
@@ -404,10 +414,24 @@ export const submitWithCheck = {
         /* best effort */
       }
 
+      // ── Supersede 提案：统一进化架构入口 ──
+      let _supersedeProposal = null;
+      if (params.supersedes && created?.id) {
+        const { createSupersedeProposal } = await import(
+          '#service/evolution/createSupersedeProposal.js'
+        );
+        _supersedeProposal = createSupersedeProposal(ctx.container, {
+          oldRecipeId: params.supersedes,
+          newRecipeIds: [created.id],
+          source: 'ide-agent',
+        });
+      }
+
       return {
         submitted: true,
         entry: typeof created.toJSON === 'function' ? created.toJSON() : created,
         similar: similar.length > 0 ? similar : [],
+        ...(_supersedeProposal ? { _supersedeProposal } : {}),
         _meta: {
           confidence: 'high',
           hint:

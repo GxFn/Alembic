@@ -1111,3 +1111,4 @@ export {
   // ASTChunker 使用的低级 API
   parseToTree,
 };
+export type { ProjectAnalysisResult };
