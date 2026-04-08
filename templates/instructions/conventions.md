@@ -35,6 +35,7 @@ Users speak naturally; you translate to task operations. Never tell users to cal
 - `autosnippet_guard` — Code compliance check
 - `autosnippet_skill` — Load project skills (list/load)
 - `autosnippet_rescan` — Incremental rescan: preserves Recipes, cleans caches, re-analyzes & audits
+- `autosnippet_evolve` — Batch Recipe evolution decisions (propose/deprecate/skip)
 - `autosnippet_panorama` — Project panorama (overview/module/gaps/health)
 - `autosnippet_health` — Service health & KB stats
 

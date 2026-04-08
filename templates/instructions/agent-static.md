@@ -16,6 +16,7 @@ Access the knowledge base through MCP tools.
 - `autosnippet_structure` — Project structure discovery
 - `autosnippet_bootstrap` — Project cold-start & scan
 - `autosnippet_rescan` — Incremental rescan: preserves Recipes, cleans caches, re-analyzes project, runs relevance audit
+- `autosnippet_evolve` — Batch Recipe evolution decisions (propose_evolution/confirm_deprecation/skip), used per-dimension during rescan or standalone
 - `autosnippet_panorama` — Project panorama (operation: overview/module/gaps/health)
 - `autosnippet_health` — Service health & KB stats
 

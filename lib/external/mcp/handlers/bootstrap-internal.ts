@@ -100,6 +100,8 @@ interface BootstrapKnowledgeArgs {
   incremental?: boolean;
   skipAsyncFill?: boolean;
   loadSkills?: boolean;
+  /** 仅运行指定维度（传维度 id 数组），不传则运行全部活跃维度 */
+  dimensions?: string[];
   [key: string]: unknown;
 }
 
@@ -292,7 +294,14 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
     true
   );
 
-  const dimensions = activeDimensions as DimensionDef[];
+  let dimensions = activeDimensions as DimensionDef[];
+
+  // 如果调用方指定了维度子集，只保留匹配的维度
+  if (args.dimensions?.length) {
+    const requestedIds = new Set(args.dimensions);
+    dimensions = dimensions.filter((d) => requestedIds.has(d.id));
+    ctx.logger.info(`[Bootstrap] Dimension filter: ${dimensions.map((d) => d.id).join(', ')}`);
+  }
 
   const responseData: Record<string, unknown> = {
     // Step 0 清理信息（与 bootstrap-external 对齐）

@@ -592,6 +592,9 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     status?: string;
     decayReason?: string;
     auditScore?: number;
+    content?: { markdown?: string; rationale?: string; coreCode?: string };
+    sourceRefs?: string[];
+    auditEvidence?: Record<string, unknown>;
   }> | null;
   if (existingRecipesList && existingRecipesList.length > 0) {
     for (const r of existingRecipesList) {
@@ -759,6 +762,14 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
 
       // ── 获取 Preset 的标准 stages 配置作为基础 ──
       const presetStages = PRESETS.insight.strategy.stages;
+      const evolutionPresetStages = PRESETS.evolution.strategy.stages;
+
+      // ── 判断当前维度是否有现有 Recipe（按维度过滤后） ──
+      const dimExistingRecipes = [
+        ...(rescanContext?.existingRecipes?.filter((r) => r.knowledgeType === dimId) ?? []),
+        ...(rescanContext?.decayingRecipes?.filter((r) => r.knowledgeType === dimId) ?? []),
+      ];
+      const hasExistingRecipes = dimExistingRecipes.length > 0;
 
       // ── 构建 per-dimension 的 stages ──
       // NOTE: onToolCall 不再注入 ac.recordToolCall — ToolExecutionPipeline 的
@@ -770,7 +781,6 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- pipeline stage shapes from PRESETS; needs PipelineStage interface (T4)
       let stages: Record<string, any>[];
       if (needsCandidates) {
-        // 候选维度: Analyze→QualityGate→Produce→RejectionGate
         const produceStage = {
           ...presetStages[2],
           promptBuilder: (ctx: Record<string, unknown>) => {
@@ -780,12 +790,25 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
             return presetStages[2].promptBuilder?.(ctx);
           },
         };
-        stages = [
-          analyzeStage,
-          presetStages[1], // quality_gate
-          produceStage,
-          presetStages[3], // rejection_gate
-        ];
+        if (hasExistingRecipes) {
+          // 当前维度有旧 Recipe: Evolve→EvolutionGate→Analyze→QualityGate→Produce→RejectionGate
+          stages = [
+            evolutionPresetStages[0], // evolve
+            evolutionPresetStages[1], // evolution_gate
+            analyzeStage,
+            presetStages[1], // quality_gate
+            produceStage,
+            presetStages[3], // rejection_gate
+          ];
+        } else {
+          // 当前维度无旧 Recipe: Analyze→QualityGate→Produce→RejectionGate
+          stages = [
+            analyzeStage,
+            presetStages[1], // quality_gate
+            produceStage,
+            presetStages[3], // rejection_gate
+          ];
+        }
       } else {
         // Skill-only 维度: 仅 Analyze
         stages = [analyzeStage];
@@ -844,6 +867,33 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
               existing: rescanContext.coverageByDim[dimId] || 0,
             }
           : null,
+        // §EVO: Evolution Stage — 当前维度全部现有 Recipe（healthy + decaying），附带 audit hint
+        existingRecipes: dimExistingRecipes.map((r) => ({
+          id: r.id,
+          title: r.title,
+          trigger: r.trigger,
+          content: r.content,
+          sourceRefs: r.sourceRefs,
+          auditHint:
+            'auditScore' in r && r.auditScore != null
+              ? {
+                  relevanceScore: r.auditScore as number,
+                  verdict: (r as Record<string, unknown>).status === 'decaying' ? 'decay' : 'watch',
+                  evidence: (r as Record<string, unknown>).auditEvidence ?? {},
+                  decayReasons: (r as Record<string, unknown>).decayReason
+                    ? [String((r as Record<string, unknown>).decayReason)]
+                    : [],
+                }
+              : null,
+        })),
+        // Evolution 上下文字段 — buildEvolverPrompt 直接从 strategyContext 读取
+        dimensionId: dimId,
+        dimensionLabel: dimConfig.label,
+        projectOverview: {
+          primaryLang: primaryLang || projectInfo.lang || 'unknown',
+          fileCount: projectInfo.fileCount || 0,
+          modules: Object.keys(targetFileMap || {}),
+        },
         // ── 引擎增强参数 (PipelineStrategy → reactLoop 透传) ──
         contextWindow: agentFactory!.createContextWindow({ isSystem: true }),
         // B1 fix: 分析阶段使用 analyst 策略 (SCAN→EXPLORE→VERIFY→SUMMARIZE)
@@ -871,7 +921,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
 
       // ── 执行 ──
       // 外层超时 = 安全网 (各阶段已有独立超时: Analyst 300s + Producer 180s + 硬缓冲 60s)
-      const outerTimeoutMs = 600_000;
+      const outerTimeoutMs = 3_600_000; // 1 小时——维度分析本身耗时长
       const runResult = await Promise.race([
         runtime.execute(message, { strategyContext }),
         new Promise<never>((_, reject) =>

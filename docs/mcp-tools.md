@@ -210,7 +210,7 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ### 9b. autosnippet_rescan
 
-增量重扫描 — 保留已审核 Recipe，清理衍生缓存，重新执行 Phase 1-4 分析，运行 RecipeRelevanceAuditor 5 维证据审计。返回 Mission Briefing（含 evidenceHints：现有 Recipe + 衰退 Recipe 信息）。
+增量重扫描 — 保留已审核 Recipe，清理衍生缓存，重新执行 Phase 1-4 分析，运行 RecipeRelevanceAuditor 5 维证据审计。返回 Mission Briefing（含 allRecipes 完整内容 + auditHint + evolutionGuide）。
 
 **参数：**
 
@@ -218,6 +218,30 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 |------|------|------|------|
 | `dimensions` | string[] | — | 指定维度列表，空 = 全部活跃维度 |
 | `reason` | string | — | 触发原因（记录到报告） |
+
+---
+
+### 9c. autosnippet_evolve
+
+批量 Recipe 进化决策。双入口工具：
+- **Rescan 模式**：每维度内先 evolve 再 gap-fill（evolve → submit_knowledge → dimension_complete）
+- **独立模式**：用户主动触发，验证 Recipe 有效性
+
+三种决策类型：
+- `propose_evolution` — 代码已变更，建议更新 Recipe（进入观察窗口）
+- `confirm_deprecation` — 模式已消失，立即废弃 Recipe
+- `skip` — `still_valid`（刷新 lastVerifiedAt）或 `insufficient_info`
+
+**参数：**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `decisions` | array | ✅ | 进化决策数组 |
+| `decisions[].recipeId` | string | ✅ | 目标 Recipe ID |
+| `decisions[].action` | string | ✅ | `propose_evolution` / `confirm_deprecation` / `skip` |
+| `decisions[].evidence` | object | — | `propose_evolution` 时必填：`{ codeSnippet, filePath, type, suggestedChanges }` |
+| `decisions[].reason` | string | — | `confirm_deprecation` 时必填，废弃原因 |
+| `decisions[].skipReason` | string | — | `skip` 时必填：`still_valid` / `insufficient_info` |
 
 ---
 
@@ -353,6 +377,7 @@ MCP 工具与 Gateway Action 的映射关系：
 | `autosnippet_skill` (create) | `create:skills` | `external_agent` / `developer` |
 | `autosnippet_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
 | `autosnippet_rescan` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `autosnippet_evolve` | `knowledge:evolve` | `external_agent` / `developer` |
 | `autosnippet_task` | `task:create` / `task:update`（按 operation 路由） | `external_agent` / `developer` |
 | `autosnippet_knowledge_lifecycle` | 按 action 动态路由 | `developer` |
 

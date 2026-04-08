@@ -197,6 +197,7 @@ interface RescanContextLike {
  * @param [rescanContext] Rescan 已有知识上下文 (增量扫描时注入)
  * @param [panorama] 全景上下文 — 模块角色/层级/耦合/空白区 (Phase 1.8)
  * @param [evidenceStarters] Phase 1-4 证据启发 — 维度级分析起点
+ * @param [evolutionResult] Evolution Stage 产出 — 避免重复分析已处理的 Recipe
  */
 export async function buildAnalystPrompt(
   dimConfig: AnalystDimConfig,
@@ -207,7 +208,13 @@ export async function buildAnalystPrompt(
   codeEntityGraph: CodeEntityGraphLike | null | undefined,
   rescanContext?: RescanContextLike | null,
   panorama?: PanoramaContextLike | null,
-  evidenceStarters?: Record<string, EvidenceStarterEntry> | null
+  evidenceStarters?: Record<string, EvidenceStarterEntry> | null,
+  evolutionResult?: {
+    evolved?: number;
+    deprecated?: number;
+    skipped?: number;
+    totalRecipes?: number;
+  } | null
 ) {
   const parts: string[] = [];
 
@@ -389,6 +396,20 @@ ${depthHint}
       pLines.push('分析时请特别关注上述空白区，它们是最可能产出新知识的方向。');
     }
     parts.push(pLines.join('\n'));
+  }
+
+  // §EVO: Evolution 结果 — 避免重复覆盖已被 Evolution Agent 处理的模式
+  if (evolutionResult && evolutionResult.totalRecipes && evolutionResult.totalRecipes > 0) {
+    const evoLines = [
+      '## 🔄 Evolution 结果',
+      `Evolution Agent 已审查本维度 ${evolutionResult.totalRecipes} 个现有 Recipe:`,
+      `- 进化: ${evolutionResult.evolved ?? 0} 个（已提交新版本替代旧 Recipe）`,
+      `- 废弃: ${evolutionResult.deprecated ?? 0} 个（已确认过时）`,
+      `- 跳过: ${evolutionResult.skipped ?? 0} 个（仍然有效或信息不足）`,
+      '',
+      '**你的分析应关注发现新知识点**，不要重复覆盖已处理的模式。',
+    ];
+    parts.push(evoLines.join('\n'));
   }
 
   // §10a: Rescan 有效知识上下文 — 避免重复分析已覆盖的模式

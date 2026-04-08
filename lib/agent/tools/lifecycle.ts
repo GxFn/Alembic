@@ -17,7 +17,7 @@ import {
   getInternalAgentRequiredFields,
   getSystemInjectedFields,
 } from '#domain/knowledge/FieldSpec.js';
-import { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';
+
 import {
   checkDimensionType,
   DIMENSION_DISPLAY_GROUP,
@@ -113,7 +113,10 @@ export const submitCandidate = {
         description: '知识维度：code-pattern / architecture / best-practice 等',
       },
       usageGuide: { type: 'string', description: '使用指南 Markdown（### 章节格式）' },
-      sourceFile: { type: 'string', description: '来源文件相对路径' },
+      sourceFile: {
+        type: 'string',
+        description: 'Recipe md 文件相对路径（由系统自动设置，无需手动填写）',
+      },
       supersedes: {
         type: 'string',
         description: '被替代的旧 Recipe ID。传入后将创建 supersede 提案，72h 观察窗口后自动替代。',
@@ -123,14 +126,12 @@ export const submitCandidate = {
     required: getInternalAgentRequiredFields(),
   },
   handler: async (params: SubmitKnowledgeParams, ctx: ToolHandlerContext) => {
-    const knowledgeService = ctx.container.get('knowledgeService');
-
     // ── 标题正规化：剥离冗余的项目名前缀 ──
     if (params.title) {
       params.title = stripProjectNamePrefix(params.title, ctx.projectRoot);
     }
 
-    // ── Bootstrap 维度类型校验 ──
+    // ── Bootstrap 维度类型校验（source-specific: 仅 bootstrap 流程） ──
     const dimMeta = ctx._dimensionMeta;
     if (dimMeta && ctx.source === 'system') {
       const rejected = checkDimensionType(dimMeta, params, ctx.logger);
@@ -151,112 +152,73 @@ export const submitCandidate = {
 
       // Bootstrap 模式: 将 category 设为维度 ID（前端按此分组显示）
       params._category = dimMeta.id;
-
-      // ── UnifiedValidator 统一质量验证（替代 CandidateGuardrail） ──
-      const validator =
-        ctx._validator ||
-        new UnifiedValidator({
-          existingTitles: ctx._submittedTitles || new Set(),
-          existingFingerprints: ctx._submittedPatterns || new Set(),
-        });
-      const validResult = validator.validate(params, {
-        systemInjectedFields: getSystemInjectedFields(),
-      });
-      if (!validResult.pass) {
-        ctx.logger?.info(
-          `[submit_knowledge] ✗ validator rejected: ${validResult.errors.join('; ')}`
-        );
-        return {
-          status: 'rejected',
-          error: validResult.errors.join('\n'),
-          warnings: validResult.warnings,
-          hint: '请根据错误信息调整内容后重新提交。',
-        };
-      }
-      if (validResult.warnings.length > 0) {
-        ctx.logger?.debug(`[submit_knowledge] ⚠ warnings: ${validResult.warnings.join('; ')}`);
-      }
     }
 
     // ── 系统自动设置 ──
-    const systemFields = {
+    const item = {
+      ...params,
       language: ctx._projectLanguage || '',
-      category: dimMeta ? dimMeta.id : 'general',
-      knowledgeType: dimMeta?.allowedKnowledgeTypes?.[0] || 'code-pattern',
+      category: dimMeta ? dimMeta.id : params._category || 'general',
+      knowledgeType: dimMeta?.allowedKnowledgeTypes?.[0] || params.knowledgeType || 'code-pattern',
       source: ctx.source === 'system' ? 'bootstrap' : 'agent',
-    };
-
-    // ── 直传 → KnowledgeEntry ──
-    const reasoning = params.reasoning || { whyStandard: '', sources: ['agent'], confidence: 0.7 };
-    if (Array.isArray(reasoning.sources) && reasoning.sources.length === 0) {
-      reasoning.sources = ['agent'];
-    }
-
-    // V3 content 直透
-    const contentObj =
-      params.content && typeof params.content === 'object'
-        ? params.content
-        : { markdown: '', pattern: '' };
-
-    const data = {
-      ...systemFields,
-      title: params.title || '',
-      description: params.description || '',
-      tags: params.tags || [],
-      trigger: params.trigger || '',
-      kind: params.kind || 'pattern',
-      topicHint: params.topicHint || '',
-      whenClause: params.whenClause || '',
-      doClause: params.doClause || '',
-      dontClause: params.dontClause || '',
-      coreCode: contentObj.pattern || '',
-      content: contentObj,
-      reasoning,
-      // V3 扩展字段直透
-      scope: params.scope || '',
-      complexity: params.complexity || '',
-      headers: params.headers || [],
-      // 注意: sourceFile 由 KnowledgeFileWriter.persist() 自动设置，
-      // 不应从 AI params/reasoning.sources 取值（那是项目源文件路径，不是知识文件路径）
-      sourceFile: '',
-      // 7.3.9 agentNotes/aiInsight 注入
       agentNotes: dimMeta
         ? { dimensionId: dimMeta.id, outputType: dimMeta.outputType || 'candidate' }
         : null,
-      aiInsight: reasoning.whyStandard || params.description || null,
     };
 
     if (dimMeta && ctx.source === 'system') {
       const displayGroup =
         (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id;
-      data.tags = [...new Set([...(data.tags || []), displayGroup])];
+      item.tags = [...new Set([...(item.tags || []), displayGroup])];
     }
 
-    const saved = await knowledgeService.create(data, { userId: 'agent' });
+    // ── 委托 RecipeProductionGateway 统一管道 ──
+    const { RecipeProductionGateway } = await import(
+      '#service/knowledge/RecipeProductionGateway.js'
+    );
+    const gateway = new RecipeProductionGateway({
+      knowledgeService: ctx.container.get('knowledgeService'),
+      projectRoot: ctx.projectRoot,
+      logger: ctx.logger as { info(msg: string): void; warn(msg: string): void } | undefined,
+      proposalRepository: ctx.container.get('proposalRepository') ?? null,
+    });
 
-    // ── QualityScorer 自动评分 ──
-    try {
-      await knowledgeService.updateQuality(saved.id, { userId: 'agent' });
-    } catch {
-      /* best effort — 不阻塞创建流程 */
+    const gatewayResult = await gateway.create({
+      source: 'agent-tool',
+      items: [item],
+      options: {
+        skipSimilarityCheck: true,
+        skipConsolidation: true,
+        supersedes: params.supersedes,
+        existingTitles: ctx._submittedTitles,
+        existingFingerprints: ctx._submittedPatterns,
+        systemInjectedFields:
+          dimMeta && ctx.source === 'system' ? getSystemInjectedFields() : undefined,
+        userId: 'agent',
+      },
+    });
+
+    // ── 映射 Gateway 结果 → 原有返回格式 ──
+    if (gatewayResult.rejected.length > 0) {
+      const rej = gatewayResult.rejected[0];
+      ctx.logger?.info(`[submit_knowledge] ✗ validator rejected: ${rej.errors.join('; ')}`);
+      return {
+        status: 'rejected',
+        error: rej.errors.join('\n'),
+        warnings: rej.warnings,
+        hint: '请根据错误信息调整内容后重新提交。',
+      };
     }
 
-    // ── Supersede 提案：统一进化架构入口 ──
-    if (params.supersedes && saved?.id) {
-      const { createSupersedeProposal } = await import(
-        '#service/evolution/createSupersedeProposal.js'
-      );
-      const proposal = createSupersedeProposal(ctx.container, {
-        oldRecipeId: params.supersedes,
-        newRecipeIds: [saved.id],
-        source: 'ide-agent',
-      });
-      if (proposal) {
-        return { ...saved, _supersedeProposal: proposal };
+    if (gatewayResult.created.length > 0) {
+      const created = gatewayResult.created[0];
+      if (gatewayResult.supersedeProposal) {
+        return { ...created.raw, _supersedeProposal: gatewayResult.supersedeProposal };
       }
+      return created.raw;
     }
 
-    return saved;
+    return { status: 'error', error: 'No items created' };
   },
 };
 

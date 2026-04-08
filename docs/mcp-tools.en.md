@@ -210,7 +210,7 @@ Coldstart — No parameters required. Automatically analyzes the project (AST, d
 
 ### 9b. autosnippet_rescan
 
-Incremental rescan — Preserves approved Recipes, cleans derived caches, re-runs Phase 1-4 analysis, and executes RecipeRelevanceAuditor 5-dimension evidence audit. Returns Mission Briefing with evidenceHints (existing Recipes + decayed Recipes).
+Incremental rescan — Preserves approved Recipes, cleans derived caches, re-runs Phase 1-4 analysis, and executes RecipeRelevanceAuditor 5-dimension evidence audit. Returns Mission Briefing with allRecipes (full content + auditHint) and evolutionGuide.
 
 **Parameters:**
 
@@ -218,6 +218,30 @@ Incremental rescan — Preserves approved Recipes, cleans derived caches, re-run
 |-------|------|----------|-------------|
 | `dimensions` | string[] | — | Dimension filter list, empty = all active dimensions |
 | `reason` | string | — | Rescan justification (logged to report) |
+
+---
+
+### 9c. autosnippet_evolve
+
+Batch Recipe evolution decisions. Dual-entry tool:
+- **Rescan mode**: called per-dimension before gap-fill (evolve → submit_knowledge → dimension_complete)
+- **Standalone mode**: user triggers directly to verify Recipe validity
+
+Three decision types:
+- `propose_evolution` — code changed, suggest Recipe update (enters observation window)
+- `confirm_deprecation` — pattern disappeared, deprecate Recipe immediately
+- `skip` — `still_valid` (refreshes lastVerifiedAt) or `insufficient_info`
+
+**Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `decisions` | array | ✅ | Array of evolution decisions |
+| `decisions[].recipeId` | string | ✅ | Target Recipe ID |
+| `decisions[].action` | string | ✅ | `propose_evolution` / `confirm_deprecation` / `skip` |
+| `decisions[].evidence` | object | — | Required for `propose_evolution`: `{ codeSnippet, filePath, type, suggestedChanges }` |
+| `decisions[].reason` | string | — | Required for `confirm_deprecation`, deprecation reason |
+| `decisions[].skipReason` | string | — | Required for `skip`: `still_valid` / `insufficient_info` |
 
 ---
 
@@ -353,6 +377,7 @@ Mapping between MCP tools and Gateway Actions:
 | `autosnippet_skill` (create) | `create:skills` | `external_agent` / `developer` |
 | `autosnippet_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
 | `autosnippet_rescan` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `autosnippet_evolve` | `knowledge:evolve` | `external_agent` / `developer` |
 | `autosnippet_task` | `task:create` / `task:update` (routed by operation) | `external_agent` / `developer` |
 | `autosnippet_knowledge_lifecycle` | Dynamic by action | `developer` |
 

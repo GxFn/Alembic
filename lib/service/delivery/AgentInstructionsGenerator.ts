@@ -58,6 +58,10 @@ const MCP_TOOLS_SUMMARY = [
     desc: 'Incremental rescan: preserves Recipes, cleans caches, re-analyzes project, runs relevance audit',
   },
   {
+    name: 'autosnippet_evolve',
+    desc: 'Batch Recipe evolution decisions (propose_evolution/confirm_deprecation/skip), used per-dimension during rescan or standalone',
+  },
+  {
     name: 'autosnippet_panorama',
     desc: 'Project panorama (operation: overview/module/gaps/health)',
   },

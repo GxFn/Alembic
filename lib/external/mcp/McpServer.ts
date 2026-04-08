@@ -82,6 +82,7 @@ import * as systemHandlers from './handlers/system.js';
 
 import { bootstrapExternal } from './handlers/bootstrap-external.js';
 import { dimensionComplete } from './handlers/dimension-complete-external.js';
+import { evolveExternal } from './handlers/evolve-external.js';
 import { panoramaHandler } from './handlers/panorama.js';
 import { rescanExternal } from './handlers/rescan-external.js';
 import { taskHandler } from './handlers/task.js';
@@ -474,6 +475,11 @@ export class McpServer {
         bootstrapExternal(ctx as Parameters<typeof bootstrapExternal>[0]),
       autosnippet_rescan: (ctx, args) =>
         rescanExternal(ctx as Parameters<typeof rescanExternal>[0], args),
+      autosnippet_evolve: (ctx, args) =>
+        evolveExternal(
+          ctx as Parameters<typeof evolveExternal>[0],
+          args as Parameters<typeof evolveExternal>[1]
+        ),
       autosnippet_dimension_complete: (ctx, args) => dimensionComplete(ctx, args),
       autosnippet_wiki: (ctx, args) => wikiRouter(ctx, args),
       // ── Admin 层 (+4) ──

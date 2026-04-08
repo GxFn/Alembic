@@ -301,6 +301,13 @@ export interface ExistingRecipeInfo {
   decayReason?: string;
   /** 审计分数 0-100（来自 RecipeRelevanceAuditor） */
   auditScore?: number;
+
+  /** Recipe 完整内容 — Evolution Agent 读取以验证真实性 */
+  content?: { markdown?: string; rationale?: string; coreCode?: string };
+  /** 源文件引用列表 — Evolution Agent 读取以验证代码是否存在 */
+  sourceRefs?: string[];
+  /** 审计证据详情 — 作为 hint 提供给 Evolution Agent */
+  auditEvidence?: Record<string, unknown>;
 }
 
 // ── Discoverer ───────────────────────────────────────────────

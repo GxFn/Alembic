@@ -9,8 +9,8 @@
  *   2. rescanClean — 清理衍生缓存
  *   3. Phase 1-4 全量分析
  *   4. RecipeRelevanceAuditor — 证据验证 + 快速衰退
- *   5. 构建 Mission Briefing（含 existingRecipes / decayedRecipes）
- *   6. 返回给 Agent 执行 Phase 5 维度扫描
+ *   5. 构建 Mission Briefing（含 allRecipes + evolutionGuide）
+ *   6. 返回给 Agent 按维度执行: evolve → gap-fill → dimension_complete
  *
  * @module handlers/rescan-external
  */
@@ -40,6 +40,15 @@ interface McpContext {
   };
   startedAt?: number;
   [key: string]: unknown;
+}
+
+// ── Helpers ─────────────────────────────────────────────────
+
+function truncate(s: string | undefined | null, max: number): string {
+  if (!s) {
+    return '';
+  }
+  return s.length <= max ? s : `${s.slice(0, max)}…`;
 }
 
 // ── 主入口 ─────────────────────────────────────────────────
@@ -236,41 +245,43 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
   // 建立 recipeId → snapshot entry 映射，用于补充 audit 结果中缺少的字段
   const snapshotById = new Map(recipeSnapshot.entries.map((e) => [e.id, e]));
 
-  const healthyRecipes = auditSummary.results
-    .filter((r) => r.verdict === 'healthy' || r.verdict === 'watch')
+  // ── 构建 allRecipes: 全部 Recipe (healthy + decaying) 含完整内容 + auditHint ──
+  const allRecipes = auditSummary.results
+    .filter((r) => r.verdict !== 'dead') // dead 已直接 deprecated
     .map((r) => {
       const snap = snapshotById.get(r.recipeId);
+      const content = snap?.content as
+        | { markdown?: string; rationale?: string; coreCode?: string }
+        | undefined;
+      const sourceRefs = (snap?.sourceRefs ?? []) as string[];
       return {
         id: r.recipeId,
         title: r.title,
         trigger: snap?.trigger || '',
         knowledgeType: snap?.knowledgeType || '',
         doClause: snap?.doClause || '',
-        relevanceScore: r.relevanceScore,
-        verdict: r.verdict,
+        lifecycle: snap?.lifecycle || 'active',
+        // 完整内容（截断控制）
+        content: content
+          ? {
+              markdown: truncate(content.markdown, 500),
+              rationale: truncate(content.rationale, 200),
+              coreCode: truncate(content.coreCode, 400),
+            }
+          : null,
+        sourceRefs: sourceRefs.slice(0, 5),
+        // 系统预检
+        auditHint: {
+          relevanceScore: r.relevanceScore,
+          verdict: r.verdict as 'healthy' | 'watch' | 'decay' | 'severe',
+          decayReasons: r.decayReasons || [],
+        },
       };
     });
 
-  const decayedRecipes = auditSummary.results
-    .filter((r) => r.verdict === 'decay' || r.verdict === 'severe' || r.verdict === 'dead')
-    .map((r) => {
-      const snap = snapshotById.get(r.recipeId);
-      return {
-        id: r.recipeId,
-        title: r.title,
-        trigger: snap?.trigger || '',
-        knowledgeType: snap?.knowledgeType || '',
-        relevanceScore: r.relevanceScore,
-        verdict: r.verdict,
-        decayReasons: r.decayReasons,
-        action:
-          r.verdict === 'dead'
-            ? 'deprecated'
-            : r.verdict === 'severe'
-              ? 'decaying (3d grace)'
-              : 'decaying (7d grace)',
-      };
-    });
+  const decayCount = allRecipes.filter(
+    (r) => r.auditHint.verdict === 'decay' || r.auditHint.verdict === 'severe'
+  ).length;
 
   // ── 按维度分组现有 recipes，计算每维度的补齐配额 ──
   // 覆盖采用加权策略：
@@ -322,12 +333,19 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
   // occupiedTriggers 包含全量（含 audit-failed 的 staging），防止 trigger 冲突
   const occupiedTriggers = recipeSnapshot.entries.map((e) => e.trigger).filter(Boolean);
 
-  // ── 注入 evidenceHints ──
+  // ── 注入 evidenceHints (allRecipes + evolutionGuide + dimensionGaps) ──
   (briefing as Record<string, unknown>).evidenceHints = {
-    existingRecipes: healthyRecipes,
-    decayedRecipes,
+    allRecipes,
     rescanMode: true,
     dimensionGaps,
+    evolutionGuide: {
+      decayCount,
+      totalCount: allRecipes.length,
+      instructions:
+        decayCount > 0
+          ? `${decayCount} 个 Recipe 标记为衰退，需优先验证。每个维度内先 evolve 再补齐。`
+          : '所有 Recipe 状态健康，快速确认后补齐新知识。',
+    },
     constraints: {
       occupiedTriggers,
       rules: [
@@ -336,22 +354,20 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
         '专注于尚未覆盖的新模式，不要重复已有知识的内容',
       ],
     },
-    rescanInstructions:
-      '这是增量扫描（rescan）模式。以下知识已存在并已审核，你的任务是**补齐**尚未覆盖的知识。' +
-      '请查看 dimensionGaps 了解每个维度的现有覆盖和补齐目标。' +
-      'gap=0 的维度已覆盖充分，只在发现全新模式时才提交；gap>0 的维度需要补齐。' +
-      '标记为衰退的 Recipe 不要重复提交类似内容。',
   };
 
-  // ── 覆盖 executionPlan.workflow 为 rescan 专属版本 ──
+  // ── 覆盖 executionPlan.workflow 为 rescan 专属版本 (per-dimension evolve + gap-fill) ──
   const briefingRecord = briefing as Record<string, unknown>;
   if (briefingRecord.executionPlan && typeof briefingRecord.executionPlan === 'object') {
     (briefingRecord.executionPlan as Record<string, unknown>).workflow =
-      '【增量扫描模式】对每个维度: ' +
-      '(1) 查看 evidenceHints.dimensionGaps 中该维度的 gap 值和已有 triggers → ' +
-      '(2) 用原生能力阅读代码，专注发现已有 recipes 未覆盖的新模式 → ' +
-      '(3) 调用 autosnippet_submit_knowledge_batch 提交新发现（数量 = gap 值，gap=0 则跳过或仅提交全新发现） → ' +
-      '(4) 调用 autosnippet_dimension_complete 完成维度';
+      '【增量扫描模式 — 按维度 Evolve + Gap-Fill】 ' +
+      '对每个维度 (按 tiers 顺序): ' +
+      'Step 1 — Evolve (维度级首步): ' +
+      '过滤 allRecipes 中本维度的 Recipe，读 sourceRefs 源码验证 → ' +
+      '调用 autosnippet_evolve({ decisions: [本维度决策] }) → ' +
+      'Step 2 — Gap-Fill: ' +
+      '分析代码发现新模式 → 调用 autosnippet_submit_knowledge 提交 (数量参考 gap 值) → ' +
+      'Step 3 — Complete: 调用 autosnippet_dimension_complete 完成维度';
   }
 
   const dimGapLog = dimensionGaps
@@ -359,7 +375,7 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
     .join(', ');
   ctx.logger.info(
     `[Rescan] Mission Briefing ready: ${allFiles.length} files, ${dimensions.length} dims, ` +
-      `preserved: ${recipeSnapshot.count}, decayed: ${decayedRecipes.length}, totalGap: ${totalGap} — session ${session.id}`
+      `preserved: ${recipeSnapshot.count}, decayed: ${decayCount}, totalGap: ${totalGap} — session ${session.id}`
   );
   ctx.logger.info(`[Rescan] Dimension gaps: ${dimGapLog}`);
 
@@ -395,14 +411,13 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
       ...briefing,
     },
     message:
-      `✅ Rescan 完成项目扫描，保留 ${recipeSnapshot.count} 个 Recipe（衰退 ${decayedRecipes.length} 个），` +
+      `✅ Rescan 完成项目扫描，保留 ${recipeSnapshot.count} 个 Recipe（衰退 ${decayCount} 个），` +
       `${coveredDims}/${dimensions.length} 个维度已充分覆盖。` +
       `${gapSummary}` +
-      `按 executionPlan.tiers 顺序，对每个维度执行：` +
-      `(1) 查看 evidenceHints.dimensionGaps 了解该维度的补齐目标 → ` +
-      `(2) 分析代码，专注发现未覆盖的新模式 → ` +
-      `(3) 调用 autosnippet_submit_knowledge 提交新发现（数量参考 gap 值） → ` +
-      `(4) 调用 autosnippet_dimension_complete 标记完成。` +
+      `对每个维度执行三步：` +
+      `(1) autosnippet_evolve — 过滤 allRecipes 中本维度 Recipe，读源码验证后提交决策 → ` +
+      `(2) autosnippet_submit_knowledge — 分析代码，发现未覆盖的新模式 → ` +
+      `(3) autosnippet_dimension_complete — 标记维度完成。` +
       `注意: evidenceHints.constraints.occupiedTriggers 中的 trigger 已被占用，请勿重复。`,
     meta: { tool: 'autosnippet_rescan', responseTimeMs: Date.now() - t0 },
   });

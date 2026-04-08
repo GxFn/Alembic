@@ -581,19 +581,25 @@ interface EvolutionToolCallRecord {
 /**
  * Evolution Gate 评估器 — 面向 PipelineStrategy gate.evaluator
  *
- * 检查 Evolution Agent 是否对所有衰退 Recipe 做出了决策:
+ * 检查 Evolution Agent 是否对所有现有 Recipe 做出了决策:
  * - evolved (submit_knowledge with supersedes)
  * - deprecated (confirm_deprecation)
  * - skipped (skip_evolution)
  *
  * 如果还有未处理的 Recipe，返回 retry 要求补充决策。
+ *
+ * 兼容旧字段: 优先读 existingRecipes，回退 decayedRecipes。
  */
 export function evolutionGateEvaluator(
   source: { toolCalls?: EvolutionToolCallRecord[] } | null | undefined,
   _phaseResults: unknown,
-  strategyContext: { decayedRecipes?: Array<{ id: string }> } = {}
+  strategyContext: {
+    existingRecipes?: Array<{ id: string }>;
+    decayedRecipes?: Array<{ id: string }>;
+  } = {}
 ) {
-  const totalRecipes = strategyContext.decayedRecipes?.length ?? 0;
+  const totalRecipes = (strategyContext.existingRecipes ?? strategyContext.decayedRecipes ?? [])
+    .length;
   const toolCalls = source?.toolCalls || [];
 
   // 统计各决策数

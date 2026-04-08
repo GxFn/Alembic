@@ -136,7 +136,7 @@ export class AiScanService {
             recipe.source = 'ai-scan';
             recipe.tags = [...new Set([...(recipe.tags || []), 'ai-scan', file.targetName])];
             recipe.moduleName = file.targetName;
-            recipe.sourceFile = file.relativePath || file.name;
+            // 注意：不设置 sourceFile，由 KnowledgeFileWriter 持久化时自动设置为 md 文件路径
 
             if (!recipe.aiInsight && recipe.description) {
               recipe.aiInsight = recipe.description;

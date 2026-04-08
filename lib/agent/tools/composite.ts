@@ -13,8 +13,8 @@ import {
   getInternalAgentRequiredFields,
   getSystemInjectedFields,
 } from '#domain/knowledge/FieldSpec.js';
-import { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';
 import { findSimilarRecipes } from '#service/candidate/SimilarityService.js';
+
 import {
   checkDimensionType,
   DIMENSION_DISPLAY_GROUP,
@@ -262,7 +262,10 @@ export const submitWithCheck = {
         enum: ['basic', 'intermediate', 'advanced'],
         description: '复杂度',
       },
-      sourceFile: { type: 'string', description: '来源文件相对路径' },
+      sourceFile: {
+        type: 'string',
+        description: 'Recipe md 文件相对路径（由系统自动设置，无需手动填写）',
+      },
       threshold: { type: 'number', description: '相似度阈值，默认 0.7' },
       supersedes: {
         type: 'string',
@@ -298,148 +301,128 @@ export const submitWithCheck = {
       }
     }
 
-    // Step 0.5: UnifiedValidator 质量验证（与 submit_knowledge 对齐）
+    // ── 系统自动设置 ──
+    const item = {
+      ...params,
+      language: ctx._projectLanguage || '',
+      category: dimMeta ? dimMeta.id : 'general',
+      knowledgeType: dimMeta?.allowedKnowledgeTypes?.[0] || params.knowledgeType || 'code-pattern',
+      source: ctx.source === 'system' ? 'bootstrap' : 'agent',
+      agentNotes: dimMeta
+        ? { dimensionId: dimMeta.id, outputType: dimMeta.outputType || 'candidate' }
+        : null,
+    };
+
     if (dimMeta && ctx.source === 'system') {
-      const validator =
-        ctx._validator ||
-        new UnifiedValidator({
-          existingTitles: ctx._submittedTitles || new Set(),
-          existingFingerprints: ctx._submittedPatterns || new Set(),
-        });
-      const validResult = validator.validate(params, {
-        systemInjectedFields: getSystemInjectedFields(),
+      const displayGroup =
+        (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id;
+      item.tags = [...new Set([...(item.tags || []), displayGroup])];
+    }
+
+    // ── 委托 RecipeProductionGateway 统一管道（含查重） ──
+    try {
+      const { RecipeProductionGateway } = await import(
+        '#service/knowledge/RecipeProductionGateway.js'
+      );
+      const gateway = new RecipeProductionGateway({
+        knowledgeService: ctx.container.get('knowledgeService'),
+        projectRoot,
+        logger: ctx.logger as { info(msg: string): void; warn(msg: string): void } | undefined,
+        proposalRepository: ctx.container.get('proposalRepository') ?? null,
+        findSimilarRecipes,
       });
-      if (!validResult.pass) {
-        ctx.logger?.info(
-          `[submit_with_check] ✗ validator rejected: ${validResult.errors.join('; ')}`
-        );
+
+      const gatewayResult = await gateway.create({
+        source: 'agent-tool',
+        items: [item],
+        options: {
+          skipSimilarityCheck: false,
+          skipConsolidation: true,
+          similarityThreshold: params.threshold || 0.7,
+          supersedes: params.supersedes,
+          existingTitles: ctx._submittedTitles,
+          existingFingerprints: ctx._submittedPatterns,
+          systemInjectedFields:
+            dimMeta && ctx.source === 'system' ? getSystemInjectedFields() : undefined,
+          userId: 'agent',
+        },
+      });
+
+      // ── 映射 Gateway 结果 → 原有返回格式 ──
+
+      // 验证拒绝
+      if (gatewayResult.rejected.length > 0 && gatewayResult.created.length === 0) {
+        const rej = gatewayResult.rejected[0];
+        if (rej.reason === 'validation_failed') {
+          return {
+            submitted: false,
+            status: 'rejected',
+            reason: 'validation_failed',
+            errors: rej.errors,
+            warnings: rej.warnings,
+            _meta: {
+              confidence: 'high',
+              hint: '请根据错误信息调整内容后重新提交。',
+            },
+          };
+        }
+        return { submitted: false, reason: 'submit_error', error: rej.errors.join('\n') };
+      }
+
+      // 重复阻止
+      if (gatewayResult.duplicates.length > 0) {
+        const dup = gatewayResult.duplicates[0];
         return {
           submitted: false,
-          status: 'rejected',
-          reason: 'validation_failed',
-          errors: validResult.errors,
-          warnings: validResult.warnings,
+          reason: 'duplicate_blocked',
+          similar: dup.similarTo,
+          highestSimilarity: dup.similarTo[0]?.similarity || 0,
           _meta: {
             confidence: 'high',
-            hint: '请根据错误信息调整内容后重新提交。',
+            hint: `发现高度相似 Recipe（相似度 ${((dup.similarTo[0]?.similarity || 0) * 100).toFixed(0)}%），已阻止提交。`,
           },
         };
       }
-    }
 
-    // Step 1: 查重
-    const threshold = params.threshold || 0.7;
-    const contentObj2 =
-      params.content && typeof params.content === 'object'
-        ? params.content
-        : { markdown: '', pattern: '' };
-    const cand = {
-      title: params.title || '',
-      summary: params.description || '',
-      code: contentObj2.markdown || contentObj2.pattern || '',
-    };
-    const similar = findSimilarRecipes(projectRoot, cand, { threshold: 0.5, topK: 5 });
-    const hasDuplicate = similar.some((s) => s.similarity >= threshold);
+      // 成功创建
+      if (gatewayResult.created.length > 0) {
+        const created = gatewayResult.created[0];
+        const raw = created.raw;
+        const entry =
+          typeof (raw as { toJSON?: () => unknown }).toJSON === 'function'
+            ? (raw as { toJSON: () => unknown }).toJSON()
+            : raw;
 
-    if (hasDuplicate) {
-      return {
-        submitted: false,
-        reason: 'duplicate_blocked',
-        similar,
-        highestSimilarity: similar[0]?.similarity || 0,
-        _meta: {
-          confidence: 'high',
-          hint: `发现高度相似 Recipe（相似度 ${(similar[0]?.similarity * 100).toFixed(0)}%），已阻止提交。`,
-        },
-      };
-    }
+        // 获取低相似度匹配（如有）
+        const contentObj2 =
+          params.content && typeof params.content === 'object'
+            ? params.content
+            : { markdown: '', pattern: '' };
+        const cand = {
+          title: params.title || '',
+          summary: params.description || '',
+          code: contentObj2.markdown || contentObj2.pattern || '',
+        };
+        const similar = findSimilarRecipes(projectRoot, cand, { threshold: 0.5, topK: 5 });
 
-    // Step 2: 提交 — 委托给 submit_knowledge handler
-    try {
-      const knowledgeService = ctx.container.get('knowledgeService');
-      const reasoning = params.reasoning || {
-        whyStandard: '',
-        sources: ['agent'],
-        confidence: 0.7,
-      };
-
-      const systemFields = {
-        language: ctx._projectLanguage || '',
-        category: dimMeta ? dimMeta.id : 'general',
-        knowledgeType: dimMeta?.allowedKnowledgeTypes?.[0] || 'code-pattern',
-        source: ctx.source === 'system' ? 'bootstrap' : 'agent',
-      };
-
-      const data = {
-        ...systemFields,
-        title: params.title || '',
-        description: params.description || '',
-        tags: params.tags || [],
-        trigger: params.trigger || '',
-        kind: params.kind || 'pattern',
-        topicHint: params.topicHint || '',
-        whenClause: params.whenClause || '',
-        doClause: params.doClause || '',
-        dontClause: params.dontClause || '',
-        coreCode: contentObj2.pattern || '',
-        content: contentObj2,
-        reasoning,
-        // V3 扩展字段直透（与 submit_knowledge 对齐）
-        headers: params.headers || [],
-        usageGuide: params.usageGuide || '',
-        scope: params.scope || '',
-        complexity: params.complexity || '',
-        // 注意: sourceFile 由 KnowledgeFileWriter.persist() 自动设置，
-        // 不应从 AI params/reasoning.sources 取值（那是项目源文件路径，不是知识文件路径）
-        sourceFile: '',
-        // agentNotes / aiInsight（与 submit_knowledge 对齐）
-        agentNotes: dimMeta
-          ? { dimensionId: dimMeta.id, outputType: dimMeta.outputType || 'candidate' }
-          : null,
-        aiInsight: reasoning.whyStandard || params.description || null,
-      };
-
-      if (dimMeta && ctx.source === 'system') {
-        const displayGroup =
-          (DIMENSION_DISPLAY_GROUP as Record<string, string>)[dimMeta.id] || dimMeta.id;
-        data.tags = [...new Set([...(data.tags || []), displayGroup])];
+        return {
+          submitted: true,
+          entry,
+          similar: similar.length > 0 ? similar : [],
+          ...(gatewayResult.supersedeProposal
+            ? { _supersedeProposal: gatewayResult.supersedeProposal }
+            : {}),
+          _meta: {
+            confidence: 'high',
+            hint:
+              similar.length > 0
+                ? `已提交，但有 ${similar.length} 个低相似度匹配。`
+                : '已提交，无重复风险。',
+          },
+        };
       }
 
-      const created = await knowledgeService.create(data, { userId: 'agent' });
-
-      // QualityScorer 自动评分（与 submit_knowledge 对齐）
-      try {
-        await knowledgeService.updateQuality(created.id, { userId: 'agent' });
-      } catch {
-        /* best effort */
-      }
-
-      // ── Supersede 提案：统一进化架构入口 ──
-      let _supersedeProposal = null;
-      if (params.supersedes && created?.id) {
-        const { createSupersedeProposal } = await import(
-          '#service/evolution/createSupersedeProposal.js'
-        );
-        _supersedeProposal = createSupersedeProposal(ctx.container, {
-          oldRecipeId: params.supersedes,
-          newRecipeIds: [created.id],
-          source: 'ide-agent',
-        });
-      }
-
-      return {
-        submitted: true,
-        entry: typeof created.toJSON === 'function' ? created.toJSON() : created,
-        similar: similar.length > 0 ? similar : [],
-        ...(_supersedeProposal ? { _supersedeProposal } : {}),
-        _meta: {
-          confidence: 'high',
-          hint:
-            similar.length > 0
-              ? `已提交，但有 ${similar.length} 个低相似度匹配。`
-              : '已提交，无重复风险。',
-        },
-      };
+      return { submitted: false, reason: 'submit_error', error: 'No items created' };
     } catch (err: unknown) {
       return { submitted: false, reason: 'submit_error', error: (err as Error).message };
     }

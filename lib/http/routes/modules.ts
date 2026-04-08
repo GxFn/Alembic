@@ -520,16 +520,22 @@ router.post(
     const { maxFiles, skipGuard, contentMaxLines } = req.body || {};
 
     const container = getServiceContainer();
-    const agentFactory = container.get('agentFactory');
 
     logger.info('Bootstrap cold start initiated (ModuleService path)');
 
-    const bootstrapResult = await agentFactory.bootstrapKnowledge({
-      maxFiles: maxFiles || 500,
-      skipGuard: skipGuard || false,
-      contentMaxLines: contentMaxLines || 120,
-      loadSkills: true,
-    });
+    // 直接调用 bootstrap-internal handler（统一编排管线）
+    const { bootstrapKnowledge } = await import('#external/mcp/handlers/bootstrap-internal.js');
+    const raw = await bootstrapKnowledge(
+      { container, logger },
+      {
+        maxFiles: maxFiles || 500,
+        skipGuard: skipGuard || false,
+        contentMaxLines: contentMaxLines || 120,
+        loadSkills: true,
+      }
+    );
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const bootstrapResult = parsed?.data || parsed;
 
     res.json({
       success: true,
@@ -582,8 +588,14 @@ router.post(
 
     logger.info('Rescan (internal) initiated from Dashboard', { reason, dimensions });
 
-    const agentFactory = container.get('agentFactory');
-    const result = await agentFactory.rescanKnowledge({ reason, dimensions });
+    // 直接调用 rescan-internal handler（统一编排管线）
+    const { rescanInternal } = await import('#external/mcp/handlers/rescan-internal.js');
+    const raw = await rescanInternal(
+      { container, logger },
+      { reason: reason || 'dashboard-rescan', dimensions }
+    );
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const result = parsed?.data || parsed;
 
     res.json({
       success: true,

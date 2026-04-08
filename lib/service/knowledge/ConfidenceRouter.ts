@@ -46,7 +46,7 @@ const DEFAULT_CONFIG = {
   /** 自动通过要求 reasoning.isValid() */
   requireReasoning: true,
   /** 来源白名单（这些来源可以适用更宽松的阈值） */
-  trustedSources: ['bootstrap', 'cursor-scan'],
+  trustedSources: ['bootstrap', 'cursor-scan', 'mcp'],
   /** 可信来源的自动通过阈值 */
   trustedAutoApproveThreshold: 0.7,
   /** 极高置信度阈值 (≥0.90 → 24h Grace) */

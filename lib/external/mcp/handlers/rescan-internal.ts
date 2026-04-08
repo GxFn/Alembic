@@ -407,7 +407,7 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
       projectRoot,
     };
 
-    // 构建 existingRecipes（含审计状态），供管线内 Evolution Stage 使用
+    // 构建 existingRecipes（含审计状态 + 完整内容），供管线内 Evolution Stage 使用
     const allExistingRecipes = recipeSnapshot.entries.map((e) => {
       const auditResult = auditSummary.results.find(
         (r: { recipeId: string }) => r.recipeId === e.id
@@ -425,6 +425,13 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
             ? (auditResult.decayReasons as string[]).join('; ')
             : undefined,
         auditScore: (auditResult as { relevanceScore?: number } | undefined)?.relevanceScore,
+        // Evolution Agent 需要完整内容来验证 Recipe 真实性
+        content: e.content as
+          | { markdown?: string; rationale?: string; coreCode?: string }
+          | undefined,
+        sourceRefs: e.sourceRefs as string[] | undefined,
+        auditEvidence: (auditResult as { evidence?: Record<string, unknown> } | undefined)
+          ?.evidence,
       };
     });
     dispatchPipelineFill(

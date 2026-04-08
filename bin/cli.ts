@@ -186,6 +186,7 @@ program
   .description('冷启动知识库：9 维度项目分析 + AI 异步填充（与 Dashboard 点击冷启动流程一致）')
   .option('-d, --dir <path>', '项目目录', '.')
   .option('-m, --max-files <n>', '最大扫描文件数', '500')
+  .option('--dims <ids...>', '仅运行指定维度（逗号分隔或多次指定）')
   .option('--skip-guard', '跳过 Guard 审计')
   .option('--no-skills', '禁用 Skill 加载')
   .option('--wait', '等待 AI 异步填充完成（默认骨架完成即退出）')
@@ -199,19 +200,27 @@ program
     try {
       const { bootstrap, container } = await initContainer({ projectRoot });
 
-      // 通过 Agent 统一管道执行 bootstrap_knowledge
-      const agentFactory = container.get('agentFactory');
-
       const ora = (await import('ora')).default;
       const spinner = ora('Phase 1-4: 收集文件、AST 分析、SPM 依赖、Guard 审计...').start();
 
-      const result = await agentFactory.bootstrapKnowledge({
-        maxFiles: parseInt(opts.maxFiles, 10),
-        skipGuard: opts.skipGuard || false,
-        contentMaxLines: 120,
-        loadSkills: opts.skills !== false,
-        skipAsyncFill: !opts.wait, // CLI 非 --wait 模式: 跳过异步 AI 填充 (DB 将被关闭)
-      });
+      // 直接调用 bootstrap-internal handler（统一编排管线）
+      const { bootstrapKnowledge } = await import(
+        '../lib/external/mcp/handlers/bootstrap-internal.js'
+      );
+      const logger = container.get('logger');
+      const raw = await bootstrapKnowledge(
+        { container, logger },
+        {
+          maxFiles: parseInt(opts.maxFiles, 10),
+          skipGuard: opts.skipGuard || false,
+          contentMaxLines: 120,
+          loadSkills: opts.skills !== false,
+          skipAsyncFill: !opts.wait,
+          dimensions: opts.dims,
+        }
+      );
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const result = parsed?.data || parsed;
 
       spinner.stop();
 
@@ -282,7 +291,7 @@ program
         const waitSpinner = ora2('Phase 5: AI 正在逐维度填充知识...').start();
         let lastStatus = '';
         let attempts = 0;
-        const maxAttempts = 600; // 最多等 10 分钟（每秒轮询）
+        const maxAttempts = Infinity; // 不限时——冷启动/增量扫描本身就耗时较长
 
         while (attempts < maxAttempts) {
           await new Promise((r) => setTimeout(r, 1000));
@@ -334,10 +343,6 @@ program
             // bootstrapTaskManager 可能还没就绪
           }
         }
-
-        if (attempts >= maxAttempts) {
-          waitSpinner.warn('AI 填充超时（10 分钟），可通过 asd ui 查看进度');
-        }
       } else if (!opts.json) {
         cli.log('');
         cli.log('  📋 下一步：打开 IDE Agent Mode，告诉它「帮我冷启动」');
@@ -360,146 +365,133 @@ program
 
 // ─────────────────────────────────────────────────────
 // rescan 命令 (增量知识更新)
-// TODO: 当前 CLI rescan 仅执行 Phase 1-4 + 证据审计，尚未接入内部 Agent AI pipeline（Phase 5）。
-//       后续需要：1) 创建 rescan-internal.ts 或在 bootstrap-internal.ts 增加 rescan 模式
-//                 2) AgentFactory 增加 rescanKnowledge() 方法
-//                 3) CLI rescan 改为调用 agentFactory.rescanKnowledge()
-//       优先级：低（当前先完善 IDE Agent 外部路径）
 // ─────────────────────────────────────────────────────
 program
   .command('rescan')
-  .description('增量知识更新：保留已审核 Recipe，清理衍生缓存，重新扫描项目')
+  .description('增量知识更新：保留已审核 Recipe，清理衍生缓存，重新扫描项目 + AI 补齐')
   .option('-d, --dir <path>', '项目目录', '.')
   .option('-m, --max-files <n>', '最大扫描文件数', '500')
   .option('--dims <ids...>', '仅扫描指定维度（逗号分隔或多次指定）')
   .option('--reason <text>', '重扫原因（记录到日志）')
+  .option('--wait', '等待 AI 异步填充完成（默认骨架完成即退出）')
   .option('--json', '以 JSON 格式输出')
   .action(async (opts) => {
     const projectRoot = resolve(opts.dir);
 
     try {
-      const { container } = await initContainer({ projectRoot });
-      const db = container.get('database');
-      const logger = container.get('logger');
+      const { bootstrap, container } = await initContainer({ projectRoot });
 
       const ora = (await import('ora')).default;
-      const spinner = ora('Rescan: 快照 Recipe → 清理缓存 → Phase 1-4 分析...').start();
+      const spinner = ora('Rescan: 快照 Recipe → 清理缓存 → Phase 1-4 + 证据审计...').start();
 
-      // 1. CleanupService — 快照 + 清理
-      const { CleanupService } = await import('../lib/service/cleanup/CleanupService.js');
-      const cleanupService = new CleanupService({ projectRoot, db, logger });
-      const recipeSnapshot = await cleanupService.snapshotRecipes();
-      const cleanResult = await cleanupService.rescanClean();
-
-      spinner.text = `已保留 ${recipeSnapshot.count} 个 Recipe，Phase 1-4 分析中...`;
-
-      // 2. Phase 1-4 全量分析
-      const { runAllPhases } = await import(
-        '../lib/external/mcp/handlers/bootstrap/shared/bootstrap-phases.js'
+      // 直接调用 rescan-internal handler（统一编排管线）
+      const { rescanInternal } = await import('../lib/external/mcp/handlers/rescan-internal.js');
+      const logger = container.get('logger');
+      const raw = await rescanInternal(
+        { container, logger },
+        {
+          reason: opts.reason || 'cli-rescan',
+          dimensions: opts.dims,
+          skipAsyncFill: !opts.wait,
+        }
       );
-      const ctx = { container, logger, startedAt: Date.now() };
-      const phaseResults = await runAllPhases(projectRoot, ctx, {
-        maxFiles: parseInt(opts.maxFiles, 10),
-        contentMaxLines: 120,
-        sourceTag: 'cli-rescan',
-        summaryPrefix: 'Rescan',
-        clearOldData: false,
-        generateReport: true,
-        incremental: false,
-      });
-
-      spinner.text = 'Recipe 证据审计...';
-
-      // 3. RecipeRelevanceAuditor — 证据验证
-      const { RecipeRelevanceAuditor } = await import(
-        '../lib/service/evolution/RecipeRelevanceAuditor.js'
-      );
-      const auditor = new RecipeRelevanceAuditor({ db, logger });
-
-      const codeEntities: Array<{ name: string; kind?: string; file?: string }> = [];
-      const astSummary = phaseResults.astProjectSummary;
-      if (astSummary) {
-        for (const cls of astSummary.classes || []) {
-          codeEntities.push({
-            name: cls.name,
-            kind: 'class',
-            file: (cls.relativePath || cls.file) as string | undefined,
-          });
-        }
-        for (const proto of astSummary.protocols || []) {
-          codeEntities.push({
-            name: proto.name,
-            kind: 'protocol',
-            file: (proto.relativePath || proto.file) as string | undefined,
-          });
-        }
-      }
-
-      const depEdges: Array<{ from: string; to: string }> = [];
-      const depData = phaseResults.depGraphData;
-      if (depData?.edges) {
-        for (const edge of depData.edges as Array<{ from?: string; to?: string }>) {
-          if (edge.from && edge.to) {
-            depEdges.push({ from: edge.from, to: edge.to });
-          }
-        }
-      }
-
-      const auditSummary = await auditor.audit(recipeSnapshot.entries, {
-        fileList: phaseResults.allFiles.map(
-          (f: { relativePath?: string; name: string }) => f.relativePath || f.name
-        ),
-        codeEntities,
-        dependencyGraph: depEdges,
-      });
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const result = parsed?.data || parsed;
 
       spinner.stop();
 
       if (opts.json) {
-        cli.json({
-          rescan: {
-            preservedRecipes: recipeSnapshot.count,
-            cleanedTables: cleanResult.clearedTables.length,
-            cleanedFiles: cleanResult.deletedFiles,
-            reason: opts.reason || null,
-          },
-          relevanceAudit: {
-            totalAudited: auditSummary.totalAudited,
-            healthy: auditSummary.healthy,
-            watch: auditSummary.watch,
-            decay: auditSummary.decay,
-            severe: auditSummary.severe,
-            dead: auditSummary.dead,
-            proposalsCreated: auditSummary.proposalsCreated,
-            immediateDeprecated: auditSummary.immediateDeprecated,
-          },
-          filesScanned: phaseResults.allFiles.length,
-          dimensions: phaseResults.activeDimensions?.length || 0,
-        });
+        cli.json(result);
       } else {
         cli.log('\n📊 Rescan Report');
         cli.log(`${'─'.repeat(50)}`);
-        cli.log(`  保留 Recipe: ${recipeSnapshot.count}`);
-        cli.log(`  清理表: ${cleanResult.clearedTables.length}`);
-        cli.log(`  扫描文件: ${phaseResults.allFiles.length}`);
-        cli.log(`  维度: ${phaseResults.activeDimensions?.length || 0}`);
+        const rescan = result.rescan || {};
+        const audit = result.relevanceAudit || {};
+        const gap = result.gapAnalysis || {};
+        cli.log(`  保留 Recipe: ${rescan.preservedRecipes ?? '?'}`);
+        cli.log(`  扫描文件: ${result.files ?? '?'}`);
+        cli.log(`  维度: ${gap.totalDimensions ?? '?'} (gap: ${gap.gapDimensions ?? 0})`);
         cli.log('\n  证据审计:');
-        cli.log(`    健康: ${auditSummary.healthy}  观察: ${auditSummary.watch}`);
+        cli.log(`    健康: ${audit.healthy ?? '?'}  观察: ${audit.watch ?? '?'}`);
         cli.log(
-          `    衰退: ${auditSummary.decay}  严重: ${auditSummary.severe}  死亡: ${auditSummary.dead}`
+          `    衰退: ${audit.decay ?? '?'}  严重: ${audit.severe ?? '?'}  死亡: ${audit.dead ?? '?'}`
         );
-        if (auditSummary.proposalsCreated > 0) {
-          cli.log(`    创建进化提案: ${auditSummary.proposalsCreated}`);
+        if (audit.proposalsCreated > 0) {
+          cli.log(`    创建进化提案: ${audit.proposalsCreated}`);
         }
-        if (auditSummary.immediateDeprecated > 0) {
-          cli.log(`    即时淘汰: ${auditSummary.immediateDeprecated}`);
+        if (audit.immediateDeprecated > 0) {
+          cli.log(`    即时淘汰: ${audit.immediateDeprecated}`);
         }
-        if (opts.reason) {
-          cli.log(`\n  原因: ${opts.reason}`);
+        if (gap.gapDimensions > 0 && opts.wait) {
+          cli.log(`\n  AI 正在异步填充 ${gap.gapDimensions} 个 gap 维度...`);
+        } else if (gap.gapDimensions > 0) {
+          cli.log(`\n  ${gap.gapDimensions} 个 gap 维度可通过 --wait 等待 AI 填充`);
+        } else {
+          cli.log('\n  所有维度已完全覆盖，无需 AI 补齐。');
         }
-        cli.log('\n✅ Rescan 完成。请通过 MCP Agent 执行维度分析以补充新知识。');
       }
 
+      // --wait 模式: 轮询 BootstrapTaskManager
+      if (opts.wait && result.asyncFill) {
+        const ora2 = (await import('ora')).default;
+        const waitSpinner = ora2('AI 正在逐维度填充知识...').start();
+        let lastStatus = '';
+        let attempts = 0;
+        const maxAttempts = Infinity; // 不限时——增量扫描本身就耗时较长
+
+        while (attempts < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 1000));
+          attempts++;
+
+          try {
+            const taskManager = container.get('bootstrapTaskManager');
+            const sessionStatus = taskManager.getSessionStatus();
+
+            if (!sessionStatus || !('tasks' in sessionStatus)) {
+              break;
+            }
+
+            const total = sessionStatus.tasks.length;
+            const done = sessionStatus.tasks.filter(
+              (t: any) => t.status === 'done' || t.status === 'error'
+            ).length;
+            const current = sessionStatus.tasks.find((t: any) => t.status === 'running');
+            const statusText = current
+              ? `[${done}/${total}] 正在处理: ${current.meta?.label || current.id}`
+              : `[${done}/${total}] 等待中...`;
+
+            if (statusText !== lastStatus) {
+              waitSpinner.text = statusText;
+              lastStatus = statusText;
+            }
+
+            if (done >= total) {
+              waitSpinner.succeed(`AI 填充完成: ${total} 个维度`);
+              if (!opts.json) {
+                const succeeded = sessionStatus.tasks.filter(
+                  (t: any) => t.status === 'done'
+                ).length;
+                const failed = sessionStatus.tasks.filter((t: any) => t.status === 'error').length;
+                cli.log(`\n  Results: ${succeeded} succeeded, ${failed} failed`);
+                for (const t of sessionStatus.tasks) {
+                  const icon = t.status === 'done' ? '✅' : '❌';
+                  cli.log(`    ${icon} ${t.meta?.label || t.id}`);
+                }
+                cli.blank();
+              }
+              break;
+            }
+          } catch {
+            /* bootstrapTaskManager 可能还没就绪 */
+          }
+        }
+      }
+
+      await bootstrap.shutdown();
+      if (process.stdout.writableLength > 0) {
+        await new Promise((resolve) => process.stdout.once('drain', resolve));
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
       process.exit(0);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

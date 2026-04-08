@@ -397,6 +397,38 @@ export const PanoramaInput = z.object({
 });
 export type PanoramaInput = z.infer<typeof PanoramaInput>;
 
+// 19. autosnippet_evolve
+const EvolveDecisionSchema = z.object({
+  recipeId: z.string().describe('目标 Recipe ID'),
+  action: z
+    .enum(['propose_evolution', 'confirm_deprecation', 'skip'])
+    .describe('propose_evolution=提案进化 | confirm_deprecation=确认废弃 | skip=跳过'),
+  evidence: z
+    .object({
+      codeSnippet: z.string().describe('读到的真实代码片段'),
+      filePath: z.string().describe('代码所在文件路径'),
+      type: z
+        .enum(['enhance', 'correction'])
+        .describe('enhance=模式迁移/功能扩展 | correction=描述错误/接口变更'),
+      suggestedChanges: z.string().describe('建议的内容变更'),
+    })
+    .optional()
+    .describe('propose_evolution 时必填'),
+  reason: z.string().optional().describe('confirm_deprecation 时必填，废弃原因'),
+  skipReason: z
+    .enum(['still_valid', 'insufficient_info'])
+    .optional()
+    .describe('skip 时必填: still_valid=仍然有效(刷新验证时间) | insufficient_info=信息不足'),
+});
+
+export const EvolveInput = z.object({
+  decisions: z
+    .array(EvolveDecisionSchema)
+    .min(1)
+    .describe('进化决策数组，每个元素对应一个 Recipe 的决策'),
+});
+export type EvolveInput = z.infer<typeof EvolveInput>;
+
 // ══════════════════════════════════════════════════════
 //  工具名 → Schema 映射表（用于 wrapHandler 自动注入校验）
 // ══════════════════════════════════════════════════════
@@ -419,4 +451,5 @@ export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
   autosnippet_enrich_candidates: EnrichCandidatesInput,
   autosnippet_knowledge_lifecycle: KnowledgeLifecycleInput,
   autosnippet_panorama: PanoramaInput,
+  autosnippet_evolve: EvolveInput,
 };

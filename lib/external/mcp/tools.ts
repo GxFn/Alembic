@@ -23,6 +23,7 @@ import {
   CallContextInput,
   DimensionCompleteInput,
   EnrichCandidatesInput,
+  EvolveInput,
   GraphInput,
   GuardInput,
   HealthInput,
@@ -84,6 +85,8 @@ export const TOOL_GATEWAY_MAP = {
   },
   // knowledge submission (unified pipeline)
   autosnippet_submit_knowledge: { action: 'knowledge:create', resource: 'knowledge' },
+  // evolve — Recipe evolution decisions (propose/deprecate/skip)
+  autosnippet_evolve: { action: 'knowledge:evolve', resource: 'knowledge' },
   // task write operations (create/close/fail + record_decision)
   autosnippet_task: {
     resolver: (args: Record<string, unknown>) =>
@@ -250,9 +253,25 @@ export const TOOLS = [
       'Incremental rescan — preserves existing Recipes and re-analyzes project.\n' +
       '• Snapshots approved Recipes → cleans derived caches → full Phase 1-4 analysis\n' +
       '• Runs RecipeRelevanceAuditor (5-dimension evidence check, auto-decay stale Recipes)\n' +
-      '• Returns Mission Briefing with evidenceHints (existingRecipes + decayedRecipes)\n' +
-      '• Optional: dimensions (filter specific dimensions), reason (rescan justification)',
+      '\u2022 Returns Mission Briefing with allRecipes (full content + auditHint per recipe)\n' +
+      '\u2022 Per-dimension workflow: evolve (autosnippet_evolve) \u2192 gap-fill (submit_knowledge) \u2192 dimension_complete\n' +
+      '\u2022 Optional: dimensions (filter specific dimensions), reason (rescan justification)',
     inputSchema: zodToMcpSchema(_RescanSchema),
+  },
+
+  // 11.5. Recipe Evolution
+  {
+    name: 'autosnippet_evolve',
+    tier: 'agent',
+    description:
+      'Batch Recipe evolution decisions. Dual-entry tool:\n' +
+      '\u2022 Rescan mode: called per-dimension before gap-fill (evolve \u2192 submit \u2192 complete)\n' +
+      '\u2022 Standalone mode: user triggers directly to verify Recipe validity\n' +
+      'Three decision types per Recipe:\n' +
+      '\u2022 propose_evolution \u2014 code changed, suggest Recipe update (enters observation window)\n' +
+      '\u2022 confirm_deprecation \u2014 pattern disappeared, deprecate Recipe immediately\n' +
+      '\u2022 skip \u2014 still_valid (refreshes lastVerifiedAt) or insufficient_info',
+    inputSchema: zodToMcpSchema(EvolveInput),
   },
 
   // 12. Dimension Complete Notification

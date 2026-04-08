@@ -30,8 +30,8 @@ import {
   submitWithCheck,
 } from './composite.js';
 
-// ── Evolution Agent 工具 (2) ──
-import { confirmDeprecation, skipEvolution } from './evolution-tools.js';
+// ── Evolution Agent 工具 (3) ──
+import { confirmDeprecation, proposeEvolution, skipEvolution } from './evolution-tools.js';
 
 // ── Guard 安全类 (4) ──
 import { getRecommendations, guardCheckCode, listGuardRules, queryViolations } from './guard.js';
@@ -156,6 +156,7 @@ export {
   writeProjectFile,
   getEnvironmentInfo,
   // Evolution Agent 工具
+  proposeEvolution,
   confirmDeprecation,
   skipEvolution,
 };
@@ -236,7 +237,8 @@ export const ALL_TOOLS = [
   getEnvironmentInfo,
   // 扫描 Recipe 收集 (1) — scanKnowledge produce 阶段专用
   collectScanRecipe,
-  // Evolution Agent 工具 (2) — 衰退 Recipe 处理决策
+  // Evolution Agent 工具 (3) — 提案驱动的 Recipe 进化决策
+  proposeEvolution,
   confirmDeprecation,
   skipEvolution,
 ];

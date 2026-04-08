@@ -38,7 +38,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   [Lifecycle.PENDING]: [Lifecycle.STAGING, Lifecycle.ACTIVE, Lifecycle.DEPRECATED],
   [Lifecycle.STAGING]: [Lifecycle.ACTIVE, Lifecycle.PENDING],
   [Lifecycle.ACTIVE]: [Lifecycle.EVOLVING, Lifecycle.DECAYING, Lifecycle.DEPRECATED],
-  [Lifecycle.EVOLVING]: [Lifecycle.ACTIVE, Lifecycle.DECAYING],
+  [Lifecycle.EVOLVING]: [Lifecycle.STAGING, Lifecycle.ACTIVE, Lifecycle.DECAYING],
   [Lifecycle.DECAYING]: [Lifecycle.ACTIVE, Lifecycle.DEPRECATED],
   [Lifecycle.DEPRECATED]: [Lifecycle.PENDING],
 };

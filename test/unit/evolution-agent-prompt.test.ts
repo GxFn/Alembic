@@ -2,10 +2,11 @@
  * evolution-agent-prompt.test.ts
  *
  * buildEvolverPrompt 的 Prompt 构建测试:
- *   - 正确注入衰退 Recipe 清单
- *   - 证据明细格式
- *   - 决策指令存在
- *   - 边界: 空 decayedRecipes
+ *   - 正确注入现有 Recipe 清单（含编号）
+ *   - 可选 audit hint 格式
+ *   - 提案驱动的决策指令
+ *   - 验证工作流步骤
+ *   - 边界: 空 existingRecipes
  */
 
 import { describe, expect, it } from 'vitest';
@@ -21,7 +22,7 @@ import {
 
 function makeContext(overrides: Partial<EvolutionContext> = {}): EvolutionContext {
   return {
-    decayedRecipes: [
+    existingRecipes: [
       {
         id: 'recipe-abc',
         title: 'WBISigner 请求签名',
@@ -29,44 +30,30 @@ function makeContext(overrides: Partial<EvolutionContext> = {}): EvolutionContex
         sourceRefs: ['Sources/NetworkKit/WBISigner.swift'],
         content: {
           markdown: 'WBI 签名实现...',
-          rationale: '安全认证',
+          rationale: '安全认证需要 WBI 签名以防 API 滥用',
           coreCode: 'func sign(params: [String: Any]) -> String { ... }',
         },
-        audit: {
+        auditHint: {
           relevanceScore: 35,
           verdict: 'decay',
           evidence: {
-            sourceFileExists: false,
             triggerStillMatches: true,
             symbolsAlive: 0.2,
             depsIntact: false,
             codeFilesExist: 0.3,
           },
-          decayReasons: ['源文件不存在', '符号存活率低于阈值'],
+          decayReasons: ['符号存活率低于阈值'],
         },
       },
       {
         id: 'recipe-def',
         title: 'SessionPool 隔离策略',
         trigger: '@session-pool-isolation',
-        audit: {
-          relevanceScore: 18,
-          verdict: 'severe',
-          evidence: {
-            sourceFileExists: true,
-            triggerStillMatches: false,
-            symbolsAlive: 0.1,
-            depsIntact: true,
-            codeFilesExist: 0.5,
-          },
-          decayReasons: ['Trigger 不再匹配', '符号几乎全部消失'],
+        content: {
+          coreCode: 'class SessionPool { ... }',
         },
-        existingProposal: {
-          id: 'prop-001',
-          type: 'deprecate',
-          status: 'pending',
-          expiresAt: Date.now() + 86400000,
-        },
+        // 无 auditHint — healthy Recipe
+        auditHint: null,
       },
     ],
     dimensionId: 'network',
@@ -97,83 +84,119 @@ describe('buildEvolverPrompt', () => {
     expect(prompt).toContain('NetworkKit');
   });
 
-  it('should render recipe details with audit evidence', () => {
+  it('should render recipe details with numbered format', () => {
     const prompt = buildEvolverPrompt(null, null, makeContext());
-    // Recipe 1
+    // Recipe 1 with numbering
+    expect(prompt).toContain('[1/2]');
     expect(prompt).toContain('WBISigner 请求签名');
     expect(prompt).toContain('recipe-abc');
     expect(prompt).toContain('@wbi-signer-pattern');
-    expect(prompt).toContain('35/100');
-    expect(prompt).toContain('DECAY');
-    // Evidence checkmarks
-    expect(prompt).toContain('源文件存在: ❌');
-    expect(prompt).toContain('Trigger 仍匹配: ✅');
-    expect(prompt).toContain('20%'); // symbolsAlive 0.2
-    // Decay reasons
-    expect(prompt).toContain('源文件不存在');
-    // Source refs
-    expect(prompt).toContain('WBISigner.swift');
+    // Recipe 2 with numbering
+    expect(prompt).toContain('[2/2]');
+    expect(prompt).toContain('SessionPool 隔离策略');
   });
 
-  it('should render severe recipe correctly', () => {
+  it('should render source refs with read instruction', () => {
     const prompt = buildEvolverPrompt(null, null, makeContext());
-    expect(prompt).toContain('SEVERE');
+    expect(prompt).toContain('WBISigner.swift');
+    expect(prompt).toContain('read_project_file');
+  });
+
+  it('should render recipe core code with verification framing', () => {
+    const prompt = buildEvolverPrompt(null, null, makeContext());
+    expect(prompt).toContain('Recipe 声称的核心代码');
+    expect(prompt).toContain('func sign');
+  });
+
+  it('should render rationale when present', () => {
+    const prompt = buildEvolverPrompt(null, null, makeContext());
+    expect(prompt).toContain('设计原理');
+    expect(prompt).toContain('WBI 签名');
+  });
+
+  it('should render audit hint in compact format', () => {
+    const prompt = buildEvolverPrompt(null, null, makeContext());
+    expect(prompt).toContain('系统预检提示');
+    expect(prompt).toContain('35/100');
+    expect(prompt).toContain('decay');
+    expect(prompt).toContain('Trigger: ✅');
+    expect(prompt).toContain('20%'); // symbolsAlive 0.2
+    expect(prompt).toContain('符号存活率低于阈值');
+  });
+
+  it('should render recipe without audit hint (healthy)', () => {
+    const prompt = buildEvolverPrompt(null, null, makeContext());
     expect(prompt).toContain('SessionPool 隔离策略');
     expect(prompt).toContain('recipe-def');
-    expect(prompt).toContain('18/100');
   });
 
-  it('should include existing proposal info', () => {
-    const prompt = buildEvolverPrompt(null, null, makeContext());
-    expect(prompt).toContain('已有 Proposal');
-    expect(prompt).toContain('deprecate');
-    expect(prompt).toContain('pending');
-  });
-
-  it('should include decision instructions', () => {
+  it('should include proposal-based decision instructions', () => {
     const prompt = buildEvolverPrompt(null, null, makeContext());
     expect(prompt).toContain('决策指令');
-    expect(prompt).toContain('submit_knowledge');
+    // Proposal-based: propose_evolution instead of submit_knowledge
+    expect(prompt).toContain('propose_evolution');
     expect(prompt).toContain('confirm_deprecation');
     expect(prompt).toContain('skip_evolution');
-    expect(prompt).toContain('supersedes');
+    // Should NOT reference submit_knowledge (proposal approach)
+    expect(prompt).not.toContain('submit_knowledge');
+    expect(prompt).not.toContain('supersedes');
   });
 
-  it('should truncate long coreCode', () => {
+  it('should include structured verification workflow', () => {
+    const prompt = buildEvolverPrompt(null, null, makeContext());
+    expect(prompt).toContain('验证工作流');
+    expect(prompt).toContain('步骤 1');
+    expect(prompt).toContain('步骤 2');
+    expect(prompt).toContain('步骤 3');
+    expect(prompt).toContain('read_project_file');
+    expect(prompt).toContain('search_project_code');
+  });
+
+  it('should show propose_evolution JSON example with evidence fields', () => {
+    const prompt = buildEvolverPrompt(null, null, makeContext());
+    expect(prompt).toContain('sourceStatus');
+    expect(prompt).toContain('currentCode');
+    expect(prompt).toContain('suggestedChanges');
+    expect(prompt).toContain('confidence');
+  });
+
+  it('should truncate long coreCode at 400 chars', () => {
     const longCode = 'x'.repeat(500);
     const ctx = makeContext({
-      decayedRecipes: [
+      existingRecipes: [
         {
           id: 'r1',
           title: 'Long code recipe',
           trigger: '@long-code',
           content: { coreCode: longCode },
-          audit: {
-            relevanceScore: 40,
-            verdict: 'decay',
-            evidence: {
-              sourceFileExists: true,
-              triggerStillMatches: true,
-              symbolsAlive: 0.5,
-              depsIntact: true,
-              codeFilesExist: 0.8,
-            },
-            decayReasons: ['test'],
-          },
         },
       ],
     });
     const prompt = buildEvolverPrompt(null, null, ctx);
-    // Should contain truncated code (300 chars + ...)
     expect(prompt).toContain('...');
     expect(prompt).not.toContain(longCode);
   });
 
-  it('should handle empty decayedRecipes gracefully', () => {
-    const ctx = makeContext({ decayedRecipes: [] });
+  it('should handle empty existingRecipes gracefully', () => {
+    const ctx = makeContext({ existingRecipes: [] });
     const prompt = buildEvolverPrompt(null, null, ctx);
     expect(prompt).toContain('**0**');
     expect(prompt).toContain('决策指令');
+  });
+
+  it('should handle recipe without sourceRefs', () => {
+    const ctx = makeContext({
+      existingRecipes: [
+        {
+          id: 'r1',
+          title: 'No source recipe',
+          trigger: '@no-source',
+        },
+      ],
+    });
+    const prompt = buildEvolverPrompt(null, null, ctx);
+    expect(prompt).toContain('search_project_code');
+    expect(prompt).toContain('无');
   });
 
   it('should include module list in overview', () => {
@@ -181,6 +204,19 @@ describe('buildEvolverPrompt', () => {
     expect(prompt).toContain('NetworkKit');
     expect(prompt).toContain('AuthService');
     expect(prompt).toContain('BiliCore');
+  });
+
+  it('should use neutral framing (not assume decay)', () => {
+    const prompt = buildEvolverPrompt(null, null, makeContext());
+    expect(prompt).toContain('现有 Recipe');
+    expect(prompt).toContain('真实性');
+    expect(prompt).not.toContain('衰退 Recipe 清单');
+  });
+
+  it('should distinguish skip reasons in examples', () => {
+    const prompt = buildEvolverPrompt(null, null, makeContext());
+    expect(prompt).toContain('验证有效');
+    expect(prompt).toContain('信息不足');
   });
 });
 
@@ -190,10 +226,26 @@ describe('EVOLVER_SYSTEM_PROMPT', () => {
     expect(EVOLVER_SYSTEM_PROMPT.length).toBeGreaterThan(100);
   });
 
-  it('should mention three decision types', () => {
+  it('should mention proposal-based decision tools', () => {
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('propose_evolution');
     expect(EVOLVER_SYSTEM_PROMPT).toContain('confirm_deprecation');
     expect(EVOLVER_SYSTEM_PROMPT).toContain('skip_evolution');
-    expect(EVOLVER_SYSTEM_PROMPT).toContain('submit_knowledge');
+    // Should NOT reference submit_knowledge
+    expect(EVOLVER_SYSTEM_PROMPT).not.toContain('submit_knowledge');
+  });
+
+  it('should frame as proposal-driven verification', () => {
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('真实性');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('提案');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('不创建新 Recipe');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('read_project_file');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('search_project_code');
+  });
+
+  it('should include decision table with verification results', () => {
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('验证结果');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('代码匹配');
+    expect(EVOLVER_SYSTEM_PROMPT).toContain('观察窗口');
   });
 });
 
@@ -202,20 +254,21 @@ describe('EVOLVER_TOOLS', () => {
     expect(EVOLVER_TOOLS).toHaveLength(5);
   });
 
-  it('should include all required tools', () => {
+  it('should include proposal-based tools (no submit_knowledge)', () => {
     expect(EVOLVER_TOOLS).toContain('read_project_file');
     expect(EVOLVER_TOOLS).toContain('search_project_code');
-    expect(EVOLVER_TOOLS).toContain('submit_knowledge');
+    expect(EVOLVER_TOOLS).toContain('propose_evolution');
     expect(EVOLVER_TOOLS).toContain('confirm_deprecation');
     expect(EVOLVER_TOOLS).toContain('skip_evolution');
+    expect(EVOLVER_TOOLS).not.toContain('submit_knowledge');
   });
 });
 
 describe('EVOLVER_BUDGET', () => {
   it('should have expected budget values', () => {
-    expect(EVOLVER_BUDGET.maxIterations).toBe(16);
-    expect(EVOLVER_BUDGET.searchBudget).toBe(8);
-    expect(EVOLVER_BUDGET.maxSubmits).toBe(5);
+    expect(EVOLVER_BUDGET.maxIterations).toBe(20);
+    expect(EVOLVER_BUDGET.searchBudget).toBe(10);
+    expect(EVOLVER_BUDGET.maxSubmits).toBe(8);
     expect(EVOLVER_BUDGET.idleRoundsToExit).toBe(2);
   });
 });

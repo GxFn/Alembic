@@ -65,6 +65,10 @@ export interface RecipeSnapshotEntry {
   doClause: string;
   sourceFile?: string;
   lifecycle: string;
+  /** Recipe 完整内容 (JSON parsed) — Evolution Agent 需要 */
+  content?: { markdown?: string; rationale?: string; coreCode?: string };
+  /** 源文件引用列表 (JSON parsed) — Evolution Agent 需要 */
+  sourceRefs?: string[];
 }
 
 /** Recipe 快照 */
@@ -317,7 +321,8 @@ export class CleanupService {
     try {
       const rows = this.#db
         .prepare(
-          `SELECT id, title, trigger, category, knowledgeType, doClause, source_file AS sourceFile, lifecycle
+          `SELECT id, title, trigger, category, knowledgeType, doClause,
+                  sourceFile, lifecycle, content, json_extract(reasoning, '$.sources') AS sourceRefsJson
            FROM knowledge_entries
            WHERE lifecycle IN ('active', 'staging', 'evolving')`
         )
@@ -330,18 +335,40 @@ export class CleanupService {
         doClause: string | null;
         sourceFile: string | null;
         lifecycle: string;
+        content: string | null;
+        sourceRefsJson: string | null;
       }>;
 
-      const entries: RecipeSnapshotEntry[] = rows.map((r) => ({
-        id: r.id,
-        title: r.title || '',
-        trigger: r.trigger || '',
-        category: r.category || '',
-        knowledgeType: r.knowledgeType || 'code-pattern',
-        doClause: r.doClause || '',
-        sourceFile: r.sourceFile || undefined,
-        lifecycle: r.lifecycle,
-      }));
+      const entries: RecipeSnapshotEntry[] = rows.map((r) => {
+        let parsedContent: RecipeSnapshotEntry['content'];
+        try {
+          parsedContent = r.content
+            ? (JSON.parse(r.content) as RecipeSnapshotEntry['content'])
+            : undefined;
+        } catch {
+          parsedContent = undefined;
+        }
+        let parsedSourceRefs: string[] | undefined;
+        try {
+          parsedSourceRefs = r.sourceRefsJson
+            ? (JSON.parse(r.sourceRefsJson) as string[])
+            : undefined;
+        } catch {
+          parsedSourceRefs = undefined;
+        }
+        return {
+          id: r.id,
+          title: r.title || '',
+          trigger: r.trigger || '',
+          category: r.category || '',
+          knowledgeType: r.knowledgeType || 'code-pattern',
+          doClause: r.doClause || '',
+          sourceFile: r.sourceFile || undefined,
+          lifecycle: r.lifecycle,
+          content: parsedContent,
+          sourceRefs: parsedSourceRefs,
+        };
+      });
 
       // 按维度统计覆盖度 (使用 knowledgeType = 维度 id)
       const coverageByDimension: Record<string, number> = {};

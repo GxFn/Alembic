@@ -8,6 +8,7 @@
  *   4. refreshIndex:          BM25 增量刷新
  *   5. proposalCheck:         到期 Proposal 检查 + 自动执行/拒绝
  *   6. metabolismCycle:       知识新陈代谢（矛盾/冗余/衰退扫描 → 新 Proposal）
+ *   7. timeoutCheck:          中间态超时兜底（evolving/decaying 超时自动恢复）
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
@@ -36,6 +37,7 @@ export interface UiStartupReport {
     redundancies: number;
     decaying: number;
   };
+  timeoutCheck?: { timedOut: number; checked: number };
   durationMs: number;
   errors: string[];
 }
@@ -204,6 +206,29 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
     }
   } catch (err: unknown) {
     const msg = `metabolism cycle failed: ${(err as Error).message}`;
+    report.errors.push(msg);
+    logger.warn(`[UiStartupTasks] ${msg}`);
+  }
+
+  // ── Stage 7: Supervisor — 中间态超时兜底 ──
+  try {
+    if (ctx.container.services.lifecycleSupervisor) {
+      const supervisor = ctx.container.get('lifecycleSupervisor') as {
+        checkTimeouts(): { timedOut: { recipeId: string }[]; checked: number };
+      };
+      const result = supervisor.checkTimeouts();
+      report.timeoutCheck = {
+        timedOut: result.timedOut.length,
+        checked: result.checked,
+      };
+      if (result.timedOut.length > 0) {
+        logger.info(
+          `[UiStartupTasks] Stage 7: timeout check — ${result.timedOut.length} recipes timed out (checked: ${result.checked})`
+        );
+      }
+    }
+  } catch (err: unknown) {
+    const msg = `timeout check failed: ${(err as Error).message}`;
     report.errors.push(msg);
     logger.warn(`[UiStartupTasks] ${msg}`);
   }

@@ -2,11 +2,10 @@
  * RecipeRelevanceAuditor — 基于代码证据验证 Recipe 当前相关性
  *
  * Rescan 时主动触发，检查每个保留 Recipe 的代码证据是否仍然存在：
- *   1. 源文件存在性 (sourceFile 对应文件是否仍在项目中)
- *   2. 触发模式匹配 (trigger 引用的文件类型/路径模式是否有匹配)
- *   3. 代码符号存活 (content.pattern 引用的类名/函数名是否在 AST 中)
- *   4. 依赖关系完整 (涉及模块依赖是否在依赖图中)
- *   5. 内容适用性 (content.codeChanges 的 file 路径是否存在)
+ *   1. 触发模式匹配 (trigger 引用的文件类型/路径模式是否有匹配)
+ *   2. 代码符号存活 (content.pattern 引用的类名/函数名是否在 AST 中)
+ *   3. 依赖关系完整 (涉及模块依赖是否在依赖图中)
+ *   4. 源代码文件存活 (reasoning.sources + content.codeChanges 的文件是否存在)
  *
  * 评分后驱动快速衰退：
  *   - healthy (80-100): 无操作
@@ -55,7 +54,6 @@ interface FullRecipeRow {
   title: string;
   trigger: string;
   category: string;
-  sourceFile: string | null;
   content: string;
   doClause: string | null;
   coreCode: string | null;
@@ -78,7 +76,6 @@ export interface RelevanceAuditResult {
   relevanceScore: number;
   verdict: 'healthy' | 'watch' | 'decay' | 'severe' | 'dead';
   evidence: {
-    sourceFileExists: boolean;
     triggerStillMatches: boolean;
     symbolsAlive: number;
     depsIntact: boolean;
@@ -102,7 +99,6 @@ export interface RelevanceAuditSummary {
 
 /** 证据维度权重 */
 interface EvidenceWeights {
-  sourceFileExists: number;
   triggerStillMatches: number;
   symbolsAlive: number;
   depsIntact: number;
@@ -111,39 +107,40 @@ interface EvidenceWeights {
 
 // ── 常量 ────────────────────────────────────────────────────
 
-/** 默认证据权重 */
+/** 默认证据权重
+ *
+ * 注意：不包含 sourceFileExists。DB 中 sourceFile 存储的是 Recipe md 文件路径
+ * （如 AutoSnippet/candidates/xxx.md），不是源代码路径。
+ * 真正的源代码来源在 reasoning.sources 中，由 codeFilesExist 维度检查。
+ */
 const DEFAULT_WEIGHTS: EvidenceWeights = {
-  sourceFileExists: 0.25,
   triggerStillMatches: 0.2,
   symbolsAlive: 0.3,
   depsIntact: 0.15,
-  codeFilesExist: 0.1,
+  codeFilesExist: 0.35,
 };
 
 /**
- * 按 category 覆盖权重 — 架构/规范类侧重触发模式和源文件
+ * 按 category 覆盖权重 — 架构/规范类侧重触发模式和来源文件
  */
 const CATEGORY_WEIGHT_OVERRIDES: Record<string, Partial<EvidenceWeights>> = {
   architecture: {
     symbolsAlive: 0.05,
     depsIntact: 0.05,
     triggerStillMatches: 0.45,
-    sourceFileExists: 0.35,
-    codeFilesExist: 0.1,
+    codeFilesExist: 0.45,
   },
   'coding-standards': {
     symbolsAlive: 0.05,
     depsIntact: 0.05,
     triggerStillMatches: 0.45,
-    sourceFileExists: 0.35,
-    codeFilesExist: 0.1,
+    codeFilesExist: 0.45,
   },
   'agent-guidelines': {
     symbolsAlive: 0.0,
     depsIntact: 0.0,
     triggerStillMatches: 0.5,
-    sourceFileExists: 0.4,
-    codeFilesExist: 0.1,
+    codeFilesExist: 0.5,
   },
 };
 
@@ -239,7 +236,7 @@ export class RecipeRelevanceAuditor {
     try {
       const row = this.#db
         .prepare(
-          `SELECT id, title, trigger, category, source_file AS sourceFile,
+          `SELECT id, title, trigger, category,
                   content, doClause, coreCode
            FROM knowledge_entries WHERE id = ?`
         )
@@ -268,23 +265,13 @@ export class RecipeRelevanceAuditor {
 
     const decayReasons: string[] = [];
 
-    // 1. sourceFile 存在性
-    const sourceFileExists = recipe.sourceFile
-      ? ctx.fileSet.has(recipe.sourceFile.toLowerCase()) ||
-        ctx.fileSet.has(path.basename(recipe.sourceFile).toLowerCase())
-      : true; // 无 sourceFile 的视为存在
-
-    if (!sourceFileExists) {
-      decayReasons.push(`源文件 ${recipe.sourceFile} 已删除`);
-    }
-
-    // 2. trigger 模式匹配
+    // 1. trigger 模式匹配
     const triggerStillMatches = this.#checkTriggerMatch(recipe.trigger, ctx.fileList);
     if (!triggerStillMatches) {
       decayReasons.push(`触发条件 "${recipe.trigger}" 无匹配文件`);
     }
 
-    // 3. 代码符号存活率
+    // 2. 代码符号存活率
     const referencedSymbols = this.#extractReferencedSymbols(recipe);
     let symbolsAlive = 1.0;
     if (referencedSymbols.length > 0) {
@@ -299,7 +286,7 @@ export class RecipeRelevanceAuditor {
       }
     }
 
-    // 4. 依赖关系完整性
+    // 3. 依赖关系完整性
     const referencedModules = this.#extractModuleReferences(recipe);
     let depsIntact = true;
     if (referencedModules.length > 0) {
@@ -312,7 +299,7 @@ export class RecipeRelevanceAuditor {
       }
     }
 
-    // 5. codeChanges 文件存活率
+    // 4. 源代码文件存活率（来自 reasoning.sources + content.codeChanges）
     const codeFiles = this.#extractCodeFiles(recipe);
     let codeFilesExist = 1.0;
     if (codeFiles.length > 0) {
@@ -325,8 +312,7 @@ export class RecipeRelevanceAuditor {
 
     // 加权计算 relevanceScore
     const relevanceScore = Math.round(
-      (sourceFileExists ? 1 : 0) * weights.sourceFileExists * 100 +
-        (triggerStillMatches ? 1 : 0) * weights.triggerStillMatches * 100 +
+      (triggerStillMatches ? 1 : 0) * weights.triggerStillMatches * 100 +
         symbolsAlive * weights.symbolsAlive * 100 +
         (depsIntact ? 1 : 0) * weights.depsIntact * 100 +
         codeFilesExist * weights.codeFilesExist * 100
@@ -352,7 +338,6 @@ export class RecipeRelevanceAuditor {
       relevanceScore,
       verdict,
       evidence: {
-        sourceFileExists,
         triggerStillMatches,
         symbolsAlive,
         depsIntact,

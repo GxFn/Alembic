@@ -23,6 +23,8 @@ import type {
   ProposalRepository,
   ProposalType,
 } from '../../repository/evolution/ProposalRepository.js';
+import type { ContentPatcher } from './ContentPatcher.js';
+import type { RecipeLifecycleSupervisor } from './RecipeLifecycleSupervisor.js';
 
 /* ────────────────────── Types ────────────────────── */
 
@@ -64,12 +66,24 @@ export class ProposalExecutor {
   readonly #db: DatabaseLike;
   readonly #repo: ProposalRepository;
   readonly #signalBus: SignalBus | null;
+  readonly #contentPatcher: ContentPatcher | null;
+  readonly #supervisor: RecipeLifecycleSupervisor | null;
   readonly #logger = Logger.getInstance();
 
-  constructor(db: DatabaseLike, repo: ProposalRepository, options: { signalBus?: SignalBus } = {}) {
+  constructor(
+    db: DatabaseLike,
+    repo: ProposalRepository,
+    options: {
+      signalBus?: SignalBus;
+      contentPatcher?: ContentPatcher;
+      supervisor?: RecipeLifecycleSupervisor;
+    } = {}
+  ) {
     this.#db = db;
     this.#repo = repo;
     this.#signalBus = options.signalBus ?? null;
+    this.#contentPatcher = options.contentPatcher ?? null;
+    this.#supervisor = options.supervisor ?? null;
   }
 
   /**
@@ -158,12 +172,35 @@ export class ProposalExecutor {
     const hasUsage = metrics.guardHits > 0 || metrics.searchHits > 0;
 
     if (fpOk && hasUsage) {
-      // 通过 → 将 Recipe 回到 staging（重新走 ConfidenceRouter）
-      this.#transitionRecipe(proposal.targetRecipeId, 'staging');
-      this.#repo.markExecuted(
-        proposal.id,
-        `观察期表现合格: FP=${(metrics.ruleFalsePositiveRate * 100).toFixed(0)}%, hits=${metrics.guardHits + metrics.searchHits}`
-      );
+      // 通过 → evolving → ContentPatcher → staging（重走 Grace Period）
+      this.#transitionRecipe(proposal.targetRecipeId, 'evolving', 'proposal-attach', proposal.id);
+      const patchResult = this.#tryApplyPatch(proposal, 'agent-suggestion');
+
+      if (patchResult?.skipped || (!patchResult?.success && patchResult !== null)) {
+        // Patch 跳过或失败 → 回退到 active，避免无变更进入 staging 导致空进化循环
+        this.#transitionRecipe(
+          proposal.targetRecipeId,
+          'active',
+          'content-patch-complete',
+          proposal.id
+        );
+        const skipInfo = patchResult?.skipReason ? `: ${patchResult.skipReason}` : '';
+        this.#repo.markExecuted(proposal.id, `观察期合格但 patch 未生效${skipInfo}, 回退 active`);
+      } else {
+        this.#transitionRecipe(
+          proposal.targetRecipeId,
+          'staging',
+          'content-patch-complete',
+          proposal.id
+        );
+        const patchInfo = patchResult?.success
+          ? `, patched=[${patchResult.fieldsPatched.join(',')}]`
+          : '';
+        this.#repo.markExecuted(
+          proposal.id,
+          `观察期表现合格: FP=${(metrics.ruleFalsePositiveRate * 100).toFixed(0)}%, hits=${metrics.guardHits + metrics.searchHits}${patchInfo}`
+        );
+      }
       result.executed.push({
         id: proposal.id,
         type: proposal.type,
@@ -224,7 +261,12 @@ export class ProposalExecutor {
 
     if (newUsage >= oldUsage * 0.5 || oldUsage === 0) {
       // 新 Recipe 表现足够 → 旧 Recipe → decaying，建立 deprecated_by
-      this.#transitionRecipe(proposal.targetRecipeId, 'decaying');
+      this.#transitionRecipe(
+        proposal.targetRecipeId,
+        'decaying',
+        'proposal-execution',
+        proposal.id
+      );
       this.#createDeprecatedByEdge(newRecipeId, proposal.targetRecipeId);
       this.#repo.markExecuted(
         proposal.id,
@@ -282,11 +324,21 @@ export class ProposalExecutor {
     // 无回升 → 根据 decayScore 决定操作
     if (currentDecay <= 19) {
       // 死亡 → 直接 deprecated
-      this.#transitionRecipe(proposal.targetRecipeId, 'deprecated');
+      this.#transitionRecipe(
+        proposal.targetRecipeId,
+        'deprecated',
+        'proposal-execution',
+        proposal.id
+      );
       this.#repo.markExecuted(proposal.id, `deprecated (dead): decayScore=${currentDecay}`);
     } else if (currentDecay <= 40) {
       // 严重 → decaying
-      this.#transitionRecipe(proposal.targetRecipeId, 'decaying');
+      this.#transitionRecipe(
+        proposal.targetRecipeId,
+        'decaying',
+        'proposal-execution',
+        proposal.id
+      );
       this.#repo.markExecuted(proposal.id, `decaying (severe): decayScore=${currentDecay}`);
     } else {
       // 衰退减缓 → 拒绝
@@ -319,11 +371,37 @@ export class ProposalExecutor {
     metrics: RecipeMetrics,
     result: ProposalExecutionResult
   ): void {
-    // correction 低风险，到期直接执行（Recipe → staging 重新审核）
+    // correction 低风险，到期直接执行（Recipe → evolving → patch → staging 重新审核）
     const hasUsage = metrics.guardHits > 0 || metrics.searchHits > 0;
     if (hasUsage) {
-      this.#transitionRecipe(proposal.targetRecipeId, 'staging');
-      this.#repo.markExecuted(proposal.id, 'correction applied, recipe → staging for re-review');
+      this.#transitionRecipe(proposal.targetRecipeId, 'evolving', 'proposal-attach', proposal.id);
+      const patchResult = this.#tryApplyPatch(proposal, 'correction');
+
+      if (patchResult?.skipped || (!patchResult?.success && patchResult !== null)) {
+        // Patch 跳过或失败 → 回退到 active
+        this.#transitionRecipe(
+          proposal.targetRecipeId,
+          'active',
+          'content-patch-complete',
+          proposal.id
+        );
+        const skipInfo = patchResult?.skipReason ? `: ${patchResult.skipReason}` : '';
+        this.#repo.markExecuted(proposal.id, `correction patch 未生效${skipInfo}, 回退 active`);
+      } else {
+        this.#transitionRecipe(
+          proposal.targetRecipeId,
+          'staging',
+          'content-patch-complete',
+          proposal.id
+        );
+        const patchInfo = patchResult?.success
+          ? `, patched=[${patchResult.fieldsPatched.join(',')}]`
+          : '';
+        this.#repo.markExecuted(
+          proposal.id,
+          `correction applied, recipe → evolving → staging for re-review${patchInfo}`
+        );
+      }
       result.executed.push({
         id: proposal.id,
         type: proposal.type,
@@ -414,10 +492,38 @@ export class ProposalExecutor {
     return row ?? null;
   }
 
-  #transitionRecipe(recipeId: string, newLifecycle: string): void {
-    this.#db
-      .prepare(`UPDATE knowledge_entries SET lifecycle = ?, updatedAt = ? WHERE id = ?`)
-      .run(newLifecycle, Date.now(), recipeId);
+  #transitionRecipe(
+    recipeId: string,
+    newLifecycle: string,
+    trigger:
+      | 'proposal-execution'
+      | 'proposal-attach'
+      | 'content-patch-complete'
+      | 'timeout-recovery' = 'proposal-execution',
+    proposalId?: string
+  ): void {
+    if (this.#supervisor) {
+      const result = this.#supervisor.transition({
+        recipeId,
+        targetState: newLifecycle,
+        trigger,
+        proposalId,
+        operatorId: 'system',
+      });
+      if (!result.success) {
+        this.#logger.warn(
+          `[ProposalExecutor] Supervisor rejected transition ${recipeId} → ${newLifecycle}: ${result.error}`
+        );
+        // Fallback to raw DB update for backward compatibility
+        this.#db
+          .prepare(`UPDATE knowledge_entries SET lifecycle = ?, updatedAt = ? WHERE id = ?`)
+          .run(newLifecycle, Date.now(), recipeId);
+      }
+    } else {
+      this.#db
+        .prepare(`UPDATE knowledge_entries SET lifecycle = ?, updatedAt = ? WHERE id = ?`)
+        .run(newLifecycle, Date.now(), recipeId);
+    }
   }
 
   #restoreRecipe(recipeId: string): void {
@@ -425,6 +531,27 @@ export class ProposalExecutor {
     const current = this.#getRecipeLifecycle(recipeId);
     if (current && (current.lifecycle === 'evolving' || current.lifecycle === 'decaying')) {
       this.#transitionRecipe(recipeId, 'active');
+    }
+  }
+
+  /**
+   * 尝试通过 ContentPatcher 应用 Proposal 中的 suggestedChanges
+   * 降级容忍：无 ContentPatcher 或 patch 失败时返回 null/skipped，不阻塞状态转移
+   */
+  #tryApplyPatch(
+    proposal: ProposalRecord,
+    patchSource: 'agent-suggestion' | 'correction' | 'merge'
+  ): import('../../types/evolution.js').ContentPatchResult | null {
+    if (!this.#contentPatcher) {
+      return null;
+    }
+    try {
+      return this.#contentPatcher.applyProposal(proposal, patchSource);
+    } catch (err: unknown) {
+      this.#logger.warn(
+        `[ProposalExecutor] ContentPatcher failed for proposal ${proposal.id}: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return null;
     }
   }
 

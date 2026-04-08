@@ -415,7 +415,7 @@ export class ScanProduction extends Capability {
 // ─── Evolution Analysis ─────────────────────────
 
 /**
- * Evolution Analysis — 衰退 Recipe 进化决策能力
+ * Evolution Analysis — 现有 Recipe 进化决策能力
  *
  * 用于: evolution preset 的 evolve 阶段
  */
@@ -425,14 +425,14 @@ export class EvolutionAnalysis extends Capability {
   }
 
   get promptFragment() {
-    return '你是知识进化专家，负责审查衰退 Recipe 并决定进化或废弃。';
+    return '你是知识进化专家，负责验证现有 Recipe 真实性并通过提案推动知识演化。';
   }
 
   get tools() {
     return [
       'read_project_file',
       'search_project_code',
-      'submit_knowledge',
+      'propose_evolution',
       'confirm_deprecation',
       'skip_evolution',
     ];

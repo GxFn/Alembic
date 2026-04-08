@@ -17,11 +17,13 @@ import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.j
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
 import { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
 import { ConsolidationAdvisor } from '../../service/evolution/ConsolidationAdvisor.js';
+import { ContentPatcher } from '../../service/evolution/ContentPatcher.js';
 import { ContradictionDetector } from '../../service/evolution/ContradictionDetector.js';
 import { DecayDetector } from '../../service/evolution/DecayDetector.js';
 import { EnhancementSuggester } from '../../service/evolution/EnhancementSuggester.js';
 import { KnowledgeMetabolism } from '../../service/evolution/KnowledgeMetabolism.js';
 import { ProposalExecutor } from '../../service/evolution/ProposalExecutor.js';
+import { RecipeLifecycleSupervisor } from '../../service/evolution/RecipeLifecycleSupervisor.js';
 import { RedundancyAnalyzer } from '../../service/evolution/RedundancyAnalyzer.js';
 import { StagingManager } from '../../service/evolution/StagingManager.js';
 import { CodeEntityGraph } from '../../service/knowledge/CodeEntityGraph.js';
@@ -291,6 +293,24 @@ export function register(c: ServiceContainer) {
     );
   });
 
+  c.singleton('contentPatcher', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new ContentPatcher(db.getDb() as ConstructorParameters<typeof ContentPatcher>[0]);
+  });
+
+  c.singleton('lifecycleSupervisor', (ct: ServiceContainer) => {
+    const db = ct.get('database') as { getDb(): unknown };
+    return new RecipeLifecycleSupervisor(
+      db.getDb() as ConstructorParameters<typeof RecipeLifecycleSupervisor>[0],
+      {
+        signalBus:
+          (ct.singletons.signalBus as
+            | import('../../infrastructure/signal/SignalBus.js').SignalBus
+            | undefined) || undefined,
+      }
+    );
+  });
+
   c.singleton('proposalExecutor', (ct: ServiceContainer) => {
     const db = ct.get('database') as { getDb(): unknown };
     return new ProposalExecutor(
@@ -301,6 +321,8 @@ export function register(c: ServiceContainer) {
           (ct.singletons.signalBus as
             | import('../../infrastructure/signal/SignalBus.js').SignalBus
             | undefined) || undefined,
+        contentPatcher: ct.get('contentPatcher') as ContentPatcher,
+        supervisor: ct.get('lifecycleSupervisor') as RecipeLifecycleSupervisor,
       }
     );
   });

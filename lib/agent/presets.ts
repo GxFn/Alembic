@@ -167,7 +167,8 @@ export const PRESETS = Object.freeze({
               ctx.codeEntityGraph as Parameters<typeof buildAnalystPrompt>[5],
               ctx.rescanContext as Parameters<typeof buildAnalystPrompt>[6],
               ctx.panorama as Parameters<typeof buildAnalystPrompt>[7],
-              ctx.evidenceStarters as Parameters<typeof buildAnalystPrompt>[8]
+              ctx.evidenceStarters as Parameters<typeof buildAnalystPrompt>[8],
+              ctx.gateArtifact as Parameters<typeof buildAnalystPrompt>[9]
             ),
           retryPromptBuilder: (
             retryCtx: { reason?: string },
@@ -259,7 +260,7 @@ export const PRESETS = Object.freeze({
           maxIterations: config?.maxIterations ?? 24,
           maxTokens: config?.maxTokens ?? 4096,
           temperature: config?.temperature ?? 0.3,
-          timeoutMs: config?.timeoutMs ?? 600_000,
+          timeoutMs: config?.timeoutMs ?? 3_600_000,
         }),
       (config?: PolicyFactoryConfig) =>
         new QualityGatePolicy({
