@@ -179,6 +179,8 @@ export async function bootstrapExternal(ctx: McpContext) {
         clearedTables: cleanupResult.clearedTables.length,
         dbCleared: true,
         errors: cleanupResult.errors,
+        trash: cleanupResult.trash ?? null,
+        purgedTrash: cleanupResult.purgedTrash ?? null,
       },
       ...briefing,
     },

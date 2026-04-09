@@ -1,12 +1,20 @@
 /**
- * CleanupService — 统一数据清理策略
+ * CleanupService — 统一数据清理策略（垃圾桶模式）
  *
  * 提供两种清理模式:
- *   - fullReset(): 全量清理（删除一切知识/缓存/衍生数据），用于 bootstrap 冷启动
- *   - rescanClean(): Rescan 清理（保留 Recipe，清除衍生缓存），用于增量知识更新
+ *   - fullReset(): 全量清理 — 将旧数据打包到时间戳垃圾桶文件夹，DB 表清空
+ *   - rescanClean(): Rescan 清理 — 保留 Recipe，清除衍生缓存
  *   - snapshotRecipes(): 快照当前活跃 Recipe 信息
+ *   - purgeExpiredTrash(): 清除超时限的垃圾桶文件夹
  *
- * 设计原则:
+ * 垃圾桶设计:
+ *   - 位于 .autosnippet/.trash/<ISO-timestamp>/ 下
+ *   - fullReset 时先将 candidates/ recipes/ skills/ wiki/ 移入垃圾桶，再清 DB
+ *   - DB 数据导出为 db-snapshot.jsonl 保存在垃圾桶内
+ *   - 超过保留天数(默认 7 天)的垃圾桶在下次 fullReset 或服务启动时自动清除
+ *   - 暂不提供恢复功能（需要 merge 处理过于复杂）
+ *
+ * 保留原则:
  *   - 配置数据 (config.json, constitution.yaml, boxspec.json) 永不清理
  *   - IDE 集成配置 (.vscode/, .cursor/, .github/) 永不清理
  *   - 交付物 (.cursor/rules/autosnippet-*) 由 R4 重建，不在此清理
@@ -53,6 +61,22 @@ export interface CleanupResult {
   clearedTables: string[];
   preservedRecipes: number;
   errors: string[];
+  /** 垃圾桶信息（fullReset 时填充） */
+  trash?: {
+    /** 垃圾桶文件夹路径 */
+    folder: string;
+    /** 移入垃圾桶的文件/目录数 */
+    movedItems: number;
+    /** DB 快照行数 */
+    dbSnapshotRows: number;
+  };
+  /** 本次清除的过期垃圾桶 */
+  purgedTrash?: {
+    /** 清除的垃圾桶数 */
+    count: number;
+    /** 释放的磁盘空间估算 (bytes) */
+    freedBytes: number;
+  };
 }
 
 /** Recipe 快照条目 */
@@ -80,37 +104,58 @@ export interface RecipeSnapshot {
 
 // ── 常量 ────────────────────────────────────────────────────
 
-/** fullReset 时清除的所有 DB 表（不含 schema_migrations） */
+/** 垃圾桶根目录（相对于 .autosnippet/） */
+const TRASH_DIR = '.trash';
+
+/** 垃圾桶保留天数，超过后自动 purge */
+const TRASH_RETENTION_DAYS = 7;
+
+/** DB 快照文件名 */
+const DB_SNAPSHOT_FILE = 'db-snapshot.jsonl';
+
+/**
+ * fullReset 时清除的所有 DB 表（不含 schema_migrations）
+ *
+ * ⚠️ 顺序重要：子表必须排在父表之前，否则 FK 约束会阻止 DELETE。
+ *   lifecycle_transition_events → knowledge_entries, evolution_proposals
+ *   evolution_proposals         → knowledge_entries
+ *   recipe_source_refs          → knowledge_entries (CASCADE)
+ *   bootstrap_dim_files         → bootstrap_snapshots (CASCADE)
+ */
 const ALL_DATA_TABLES = [
-  'knowledge_entries',
+  // ── FK 子表先删 ──
+  'lifecycle_transition_events',
+  'recipe_source_refs',
+  'evolution_proposals',
   'knowledge_edges',
+  'bootstrap_dim_files',
+  // ── 父表后删 ──
+  'knowledge_entries',
+  'bootstrap_snapshots',
+  // ── 无 FK 依赖 ──
   'guard_violations',
   'audit_logs',
   'sessions',
   'token_usage',
   'semantic_memories',
-  'bootstrap_snapshots',
-  'bootstrap_dim_files',
   'code_entities',
   'remote_commands',
   'remote_state',
-  'evolution_proposals',
-  'recipe_source_refs',
 ];
 
 /** rescanClean 时清除的 DB 表（保留知识/进化相关表） */
 const RESCAN_CLEAN_TABLES = [
+  'bootstrap_dim_files', // FK → bootstrap_snapshots, 先删
+  'recipe_source_refs', // FK → knowledge_entries, 先删
+  'bootstrap_snapshots',
   'code_entities',
   'guard_violations',
-  'bootstrap_snapshots',
-  'bootstrap_dim_files',
   'semantic_memories',
   'sessions',
   'audit_logs',
   'token_usage',
   'remote_commands',
   'remote_state',
-  'recipe_source_refs',
 ];
 
 // ── CleanupService ──────────────────────────────────────────
@@ -143,13 +188,19 @@ export class CleanupService {
       : null;
   }
 
-  // ─── 需求 A：全量清理（删除一切） ─────────────────────
+  // ─── 需求 A：全量清理（垃圾桶模式） ────────────────────
 
   /**
-   * 全量清理 — 用于 bootstrap 冷启动
+   * 全量清理 — 用于 bootstrap 冷启动（垃圾桶模式）
    *
-   * 清除: DB 所有数据表、candidates/、recipes/、skills/、wiki/、
-   *       向量索引、bootstrap-report.json、logs/signals/
+   * 流程:
+   *   1. 先清除过期垃圾桶（超过 TRASH_RETENTION_DAYS）
+   *   2. 创建时间戳垃圾桶文件夹
+   *   3. 将 candidates/ recipes/ skills/ wiki/ 移入垃圾桶
+   *   4. 导出 DB 关键表数据到 db-snapshot.jsonl
+   *   5. 清空 DB 所有数据表
+   *   6. 清除向量索引、bootstrap-report、logs 等缓存
+   *
    * 保留: config.json、constitution.yaml、boxspec.json、IDE 配置
    */
   async fullReset(): Promise<CleanupResult> {
@@ -160,9 +211,40 @@ export class CleanupService {
       errors: [],
     };
 
-    this.#logger.info('[CleanupService] Starting fullReset...');
+    this.#logger.info('[CleanupService] Starting fullReset (trash-bin mode)...');
 
-    // 1. 清除 DB 所有数据表
+    // 0. 清除过期垃圾桶
+    const purged = this.#purgeExpiredTrash();
+    if (purged.count > 0) {
+      result.purgedTrash = purged;
+      this.#logger.info(`[CleanupService] Purged ${purged.count} expired trash folders`);
+    }
+
+    // 1. 创建时间戳垃圾桶文件夹
+    const trashFolder = this.#createTrashFolder();
+    let movedItems = 0;
+    let dbSnapshotRows = 0;
+
+    // 2. 将知识目录移入垃圾桶（move 而非 copy，速度快）
+    const kbPath = getProjectKnowledgePath(this.#projectRoot);
+    const dirsToTrash: Array<{ src: string; name: string }> = [
+      { src: path.join(this.#projectRoot, CANDIDATES_DIR), name: 'candidates' },
+      { src: getProjectRecipesPath(this.#projectRoot), name: 'recipes' },
+      { src: getProjectSkillsPath(this.#projectRoot), name: 'skills' },
+      { src: path.join(kbPath, 'wiki'), name: 'wiki' },
+    ];
+
+    for (const { src, name } of dirsToTrash) {
+      const moved = this.#moveToTrash(src, path.join(trashFolder, name));
+      movedItems += moved;
+    }
+
+    // 3. 导出 DB 数据到垃圾桶（JSONL 格式，每行一个 {table, row}）
+    if (this.#db) {
+      dbSnapshotRows = this.#exportDbToTrash(trashFolder);
+    }
+
+    // 4. 清空 DB 所有数据表
     if (this.#db) {
       for (const table of ALL_DATA_TABLES) {
         try {
@@ -170,14 +252,14 @@ export class CleanupService {
           result.clearedTables.push(table);
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
-          // 表可能不存在（未 migrate），跳过
           if (!msg.includes('no such table')) {
             result.errors.push(`Failed to clear ${table}: ${msg}`);
+            this.#logger.warn(`[CleanupService] DELETE FROM ${table} failed: ${msg}`);
           }
         }
       }
-      // 也清除 tasks 相关表（来自 migration 002）
-      for (const table of ['tasks', 'task_dependencies', 'task_events']) {
+      // tasks 相关表（来自 migration 002，需先删子表）
+      for (const table of ['task_events', 'task_dependencies', 'tasks']) {
         try {
           this.#db.exec(`DELETE FROM ${table}`);
           result.clearedTables.push(table);
@@ -185,38 +267,40 @@ export class CleanupService {
           /* table may not exist */
         }
       }
+    } else {
+      this.#logger.warn('[CleanupService] No database reference — DB tables NOT cleared!');
+      result.errors.push('DB reference is null, database tables were not cleared');
     }
 
-    // 2. 清空 candidates/ 目录
-    result.deletedFiles += this.#clearDirectory(path.join(this.#projectRoot, CANDIDATES_DIR));
+    // 5. 重建被移走的空目录（bootstrap 后续步骤需要）
+    for (const { src } of dirsToTrash) {
+      if (!fs.existsSync(src)) {
+        fs.mkdirSync(src, { recursive: true });
+      }
+    }
 
-    // 3. 清空 recipes/ 目录
-    result.deletedFiles += this.#clearDirectory(getProjectRecipesPath(this.#projectRoot));
-
-    // 4. 清空 skills/ 目录
-    result.deletedFiles += this.#clearDirectory(getProjectSkillsPath(this.#projectRoot));
-
-    // 5. 清空 wiki/ 目录
-    result.deletedFiles += this.#clearDirectory(
-      path.join(getProjectKnowledgePath(this.#projectRoot), 'wiki')
-    );
-
-    // 6. 删除向量索引
+    // 6. 清除向量索引
     result.deletedFiles += this.#clearDirectory(getContextIndexPath(this.#projectRoot));
 
     // 7. 删除 bootstrap-report.json
     result.deletedFiles += this.#deleteFile(
-      path.join(getProjectKnowledgePath(this.#projectRoot), '.autosnippet', 'bootstrap-report.json')
+      path.join(kbPath, '.autosnippet', 'bootstrap-report.json')
     );
 
     // 8. 清除 logs/signals/
     result.deletedFiles += this.#clearDirectory(
-      path.join(getProjectKnowledgePath(this.#projectRoot), '.autosnippet', 'logs', 'signals')
+      path.join(kbPath, '.autosnippet', 'logs', 'signals')
     );
 
-    this.#logger.info('[CleanupService] fullReset complete', {
+    result.deletedFiles += movedItems;
+    result.trash = { folder: trashFolder, movedItems, dbSnapshotRows };
+
+    this.#logger.info('[CleanupService] fullReset complete (trash-bin mode)', {
+      trashFolder: path.basename(trashFolder),
+      movedItems,
+      dbSnapshotRows,
       tables: result.clearedTables.length,
-      files: result.deletedFiles,
+      purgedExpired: purged.count,
       errors: result.errors.length,
     });
 
@@ -389,7 +473,206 @@ export class CleanupService {
     }
   }
 
+  // ─── 垃圾桶管理 ───────────────────────────────────────
+
+  /**
+   * 清除超过保留期限的垃圾桶文件夹
+   * 可在服务启动时或 fullReset 前调用
+   */
+  purgeExpiredTrash(): { count: number; freedBytes: number; folders: string[] } {
+    return this.#purgeExpiredTrash();
+  }
+
+  /**
+   * 列出当前所有垃圾桶（供 Dashboard 展示）
+   */
+  listTrashFolders(): Array<{ name: string; createdAt: Date; sizeMB: number }> {
+    const trashRoot = this.#getTrashRoot();
+    if (!fs.existsSync(trashRoot)) {
+      return [];
+    }
+    const entries = fs.readdirSync(trashRoot).sort().reverse();
+    return entries
+      .filter((name) => /^\d{4}-\d{2}-\d{2}T/.test(name))
+      .map((name) => {
+        const fullPath = path.join(trashRoot, name);
+        const stat = fs.statSync(fullPath);
+        return {
+          name,
+          createdAt: stat.birthtime,
+          sizeMB: Math.round((this.#getDirSize(fullPath) / 1024 / 1024) * 100) / 100,
+        };
+      });
+  }
+
   // ─── 内部工具方法 ─────────────────────────────────────
+
+  /** 获取垃圾桶根目录 (.autosnippet/.trash/) */
+  #getTrashRoot(): string {
+    return path.join(this.#projectRoot, '.autosnippet', TRASH_DIR);
+  }
+
+  /** 创建时间戳垃圾桶文件夹，返回绝对路径 */
+  #createTrashFolder(): string {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const trashFolder = path.join(this.#getTrashRoot(), ts);
+    fs.mkdirSync(trashFolder, { recursive: true });
+    return trashFolder;
+  }
+
+  /**
+   * 将源目录内容移入垃圾桶对应子目录
+   * 使用 rename 实现（同文件系统内是原子操作，速度极快）
+   * @returns 移动的顶层条目数
+   */
+  #moveToTrash(srcDir: string, trashSubDir: string): number {
+    if (!fs.existsSync(srcDir)) {
+      return 0;
+    }
+    const entries = fs.readdirSync(srcDir);
+    if (entries.length === 0) {
+      return 0;
+    }
+
+    fs.mkdirSync(trashSubDir, { recursive: true });
+    let count = 0;
+    for (const entry of entries) {
+      const src = path.join(srcDir, entry);
+      const dest = path.join(trashSubDir, entry);
+      try {
+        fs.renameSync(src, dest);
+        count++;
+      } catch {
+        // rename 可能跨设备失败，fallback 到 copy+delete
+        try {
+          fs.cpSync(src, dest, { recursive: true });
+          fs.rmSync(src, { recursive: true, force: true });
+          count++;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          this.#logger.warn(`[CleanupService] Failed to move ${entry} to trash: ${msg}`);
+        }
+      }
+    }
+    return count;
+  }
+
+  /**
+   * 导出 DB 关键表数据到垃圾桶（JSONL 格式）
+   * 只导出有实际业务数据的表，跳过纯缓存表
+   */
+  #exportDbToTrash(trashFolder: string): number {
+    if (!this.#db) {
+      return 0;
+    }
+
+    const tablesToExport = [
+      'knowledge_entries',
+      'knowledge_edges',
+      'lifecycle_transition_events',
+      'evolution_proposals',
+      'recipe_source_refs',
+      'guard_violations',
+    ];
+
+    const snapshotPath = path.join(trashFolder, DB_SNAPSHOT_FILE);
+    let totalRows = 0;
+    const lines: string[] = [];
+
+    for (const table of tablesToExport) {
+      try {
+        const rows = this.#db.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[];
+        for (const row of rows) {
+          lines.push(JSON.stringify({ _table: table, ...row }));
+          totalRows++;
+        }
+      } catch {
+        // 表可能不存在，跳过
+      }
+    }
+
+    if (lines.length > 0) {
+      fs.writeFileSync(snapshotPath, `${lines.join('\n')}\n`, 'utf-8');
+      this.#logger.info(`[CleanupService] DB snapshot: ${totalRows} rows → ${DB_SNAPSHOT_FILE}`);
+    }
+
+    return totalRows;
+  }
+
+  /** 清除过期垃圾桶文件夹 */
+  #purgeExpiredTrash(): { count: number; freedBytes: number; folders: string[] } {
+    const trashRoot = this.#getTrashRoot();
+    if (!fs.existsSync(trashRoot)) {
+      return { count: 0, freedBytes: 0, folders: [] };
+    }
+
+    const now = Date.now();
+    const maxAge = TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const entries = fs.readdirSync(trashRoot);
+    let count = 0;
+    let freedBytes = 0;
+    const folders: string[] = [];
+
+    for (const entry of entries) {
+      const fullPath = path.join(trashRoot, entry);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (!stat.isDirectory()) {
+          continue;
+        }
+        // 从文件夹名解析时间戳（格式: 2026-04-09T14-30-00-000Z）
+        const ts = entry.replace(/-(\d{2})-(\d{2})-(\d{3}Z)$/, ':$1:$2.$3');
+        const created = new Date(ts).getTime();
+        const age = now - (Number.isNaN(created) ? stat.birthtimeMs : created);
+
+        if (age > maxAge) {
+          const size = this.#getDirSize(fullPath);
+          fs.rmSync(fullPath, { recursive: true, force: true });
+          freedBytes += size;
+          count++;
+          folders.push(entry);
+          this.#logger.info(
+            `[CleanupService] Purged expired trash: ${entry} (${Math.round(size / 1024)}KB)`
+          );
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.#logger.warn(`[CleanupService] Failed to purge trash ${entry}: ${msg}`);
+      }
+    }
+
+    // 如果垃圾桶根目录为空，也删掉
+    try {
+      const remaining = fs.readdirSync(trashRoot);
+      if (remaining.length === 0) {
+        fs.rmdirSync(trashRoot);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    return { count, freedBytes, folders };
+  }
+
+  /** 递归计算目录大小 (bytes) */
+  #getDirSize(dirPath: string): number {
+    let size = 0;
+    try {
+      const entries = fs.readdirSync(dirPath);
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          size += this.#getDirSize(fullPath);
+        } else {
+          size += stat.size;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return size;
+  }
 
   /**
    * 清空目录内容（保留目录本身）

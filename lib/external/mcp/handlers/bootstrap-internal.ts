@@ -310,6 +310,8 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
       clearedTables: cleanupResult.clearedTables.length,
       dbCleared: true,
       errors: cleanupResult.errors,
+      trash: cleanupResult.trash ?? null,
+      purgedTrash: cleanupResult.purgedTrash ?? null,
     },
     report,
     targets:
