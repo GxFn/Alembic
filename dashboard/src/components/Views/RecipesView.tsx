@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Edit3, Trash2, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BookOpenCheck, Eye, Save, Link2, Plus, Search, ArrowUp, ArrowDown, Code2, Layers, Globe, MoreHorizontal, Clock } from 'lucide-react';
+import { Edit3, Trash2, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BadgeCheck, Eye, Save, Link2, Plus, Search, ArrowUp, ArrowDown, Code2, Layers, Globe, MoreHorizontal, Clock } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { Recipe, KnowledgeEntry } from '../../types';
 import { categoryConfigs } from '../../constants';
@@ -355,7 +355,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
     <div className="relative pb-6">
       {recipes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <BookOpenCheck size={48} className="text-[var(--fg-muted)] mb-4 opacity-40" />
+          <BadgeCheck size={48} className="text-[var(--fg-muted)] mb-4 opacity-40" />
           <p className="font-medium text-[var(--fg-secondary)] mb-1">{t('recipes.noResults')}</p>
           <p className="text-sm text-[var(--fg-muted)]">{t('recipes.noContent')}</p>
         </div>

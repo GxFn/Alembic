@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  BookOpen, Plus, RefreshCw, ChevronRight, ChevronDown,
+  ScrollText, Plus, RefreshCw, ChevronRight, ChevronDown,
   Sparkles, X, Send, Package, FolderOpen, Copy, Check,
-  AlertCircle, Loader2, FileText, Lightbulb, Zap, Bot, User, Cpu,
-  Pencil, Trash2, Save,
+  AlertCircle, Loader2, FileText, Lightbulb, BookOpen, Bot, User, Cpu,
+  Pencil, Trash2, Save, Zap,
 } from 'lucide-react';
 import api from '../../api';
 import { getErrorMessage, getErrorStatus } from '../../utils/error';
@@ -260,26 +260,17 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
       {/* ── Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center shrink-0">
-            <BookOpen size={20} className="text-violet-600" />
+          <div className="w-10 h-10 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0">
+            <ScrollText size={20} className="text-violet-600" />
           </div>
           <div className="min-w-0">
             <h2 className="text-lg xl:text-xl font-bold text-[var(--fg-primary)]">{t('skills.title')}</h2>
-            <p className="text-sm text-[var(--fg-secondary)]">
+            <p className="text-xs text-[var(--fg-muted)] mt-0.5 truncate">
               {t('skills.subtitle')}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleSuggest}
-            disabled={loadingSuggestions}
-            className="flex items-center gap-2 px-3 py-2 border border-amber-300 text-amber-700 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors text-sm font-medium disabled:opacity-50"
-            title={t('skills.aiRecommendTooltip')}
-          >
-            {loadingSuggestions ? <Loader2 size={14} className="animate-spin" /> : <Lightbulb size={14} />}
-            {t('skills.aiRecommend')}
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={fetchSkills}
             className="p-2 rounded-lg text-[var(--fg-muted)] hover:text-[var(--fg-secondary)] hover:bg-[var(--bg-subtle)] transition-colors"
@@ -288,8 +279,21 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
             <RefreshCw size={16} />
           </button>
           <button
+            onClick={handleSuggest}
+            disabled={loadingSuggestions}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+              loadingSuggestions
+                ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
+                : 'text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100'
+            }`}
+            title={t('skills.aiRecommendTooltip')}
+          >
+            {loadingSuggestions ? <Loader2 size={14} className="animate-spin" /> : <Lightbulb size={14} />}
+            {t('skills.aiRecommend')}
+          </button>
+          <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-sm font-medium"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-sm hover:shadow transition-all"
           >
             <Sparkles size={14} />
             {t('skills.addSkill')}
@@ -389,7 +393,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
             </div>
           ) : filteredSkills.length === 0 ? (
             <div className="text-center py-20 text-[var(--fg-muted)]">
-              <BookOpen size={40} className="mx-auto mb-3 opacity-40" />
+              <ScrollText size={40} className="mx-auto mb-3 opacity-40" />
               <p>{t('skills.noResults')}</p>
             </div>
           ) : (
@@ -590,7 +594,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
           ) : (
             <div className="flex items-center justify-center h-full text-[var(--fg-muted)]">
               <div className="text-center">
-                <BookOpen size={40} className="mx-auto mb-3 opacity-30" />
+                <ScrollText size={40} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">{t('skills.selectToView')}</p>
               </div>
             </div>

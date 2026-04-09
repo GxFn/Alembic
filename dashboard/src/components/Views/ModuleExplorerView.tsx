@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Box, Zap, Edit3, Cpu, Loader2, Layers, Shield, AlertTriangle, RefreshCw, Trash2, FolderOpen, ChevronRight } from 'lucide-react';
+import { Box, Boxes, Zap, Edit3, Cpu, Loader2, Layers, Shield, AlertTriangle, RefreshCw, Trash2, FolderOpen, ChevronRight } from 'lucide-react';
 import { SPMTarget, ScanResultItem, Recipe, GuardAuditResult, ProjectDirectory, ScannedFile } from '../../types';
 import api from '../../api';
 import { notify } from '../../utils/notification';
@@ -333,7 +333,7 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         </div>
       ) : projectDirs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-[var(--fg-muted)]">
-        <FolderOpen size={ICON_SIZES.xl} className="mb-3 opacity-20" />
+        <Boxes size={ICON_SIZES.xl} className="mb-3 opacity-20" />
         <p className="text-xs text-center px-4 leading-relaxed">
           {t('moduleExplorer.noDirs')}
         </p>

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, Layers } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { RefreshCw, Layers, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import api from '../../api';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
@@ -30,14 +30,33 @@ interface DepGraphData {
   generatedAt?: string;
 }
 
-const LAYER_HEIGHT = 72;
-const SUB_ROW_HEIGHT = 52;
-const NODE_GAP = 24;
-const PADDING = 40;
-const LAYER_SIDE_PADDING = 36;
-const NODE_WIDTH = 140;
-const NODE_HEIGHT = 40;
-const MAX_PER_ROW = 8;
+/* ── 自适应布局参数 ─────────────────────────────── */
+
+/** 根据节点总数和容器宽度计算布局参数 */
+function computeLayoutParams(nodeCount: number, containerWidth: number) {
+  // 紧凑模式阈值
+  const compact = nodeCount > 40;
+  const ultraCompact = nodeCount > 120;
+
+  const nodeWidth = ultraCompact ? 100 : compact ? 120 : 140;
+  const nodeHeight = ultraCompact ? 30 : compact ? 34 : 40;
+  const nodeGap = ultraCompact ? 6 : compact ? 8 : 16;
+  const layerGap = ultraCompact ? 6 : compact ? 8 : 12; // 层与层之间的间距
+  const layerPadY = ultraCompact ? 4 : compact ? 5 : 6;  // 层背景上下内边距
+  const subRowGap = ultraCompact ? 4 : compact ? 5 : 8;  // 同层多行的行间距
+  const padding = ultraCompact ? 12 : compact ? 16 : 24;
+  const layerSidePadding = ultraCompact ? 10 : compact ? 14 : 20;
+  const fontSize = ultraCompact ? 9 : compact ? 10.5 : 12;
+  const labelMaxChars = ultraCompact ? 10 : compact ? 13 : 16;
+
+  // 根据容器宽度计算每行最大节点数
+  const usableWidth = Math.max(400, containerWidth) - padding * 2 - layerSidePadding * 2;
+  const maxPerRow = Math.max(4, Math.floor((usableWidth + nodeGap) / (nodeWidth + nodeGap)));
+
+  return { nodeWidth, nodeHeight, nodeGap, layerGap, layerPadY, subRowGap, padding, layerSidePadding, fontSize, labelMaxChars, maxPerRow };
+}
+
+type LayoutParams = ReturnType<typeof computeLayoutParams>;
 
 /** 按依赖关系计算层级：tier 0 = 不依赖任何人（顶层），tier 越大越往下（被依赖的基础层）；遇环则按 0 处理避免栈溢出 */
 function computeTiers(nodes: DepGraphNode[], edges: DepGraphEdge[]): Map<string, number> {
@@ -70,15 +89,18 @@ function computeTiers(nodes: DepGraphNode[], edges: DepGraphEdge[]): Map<string,
 }
 
 /** 计算每层需要多少子行 */
-function subRowCount(count: number): number {
-  return Math.ceil(count / MAX_PER_ROW);
+function subRowCount(count: number, maxPerRow: number): number {
+  return Math.ceil(count / maxPerRow);
 }
 
-/** 金字塔分层布局：顶层（根包）在上，底层（基础依赖）在下；同层节点过多时自动换行 */
+interface TierRange { y: number; h: number; contentW: number }
+
+/** 金字塔分层布局：顶层（根包）在上，底层（基础依赖）在下；同层节点过多时自动换行；每层背景宽度适配节点数 */
 function pyramidLayout(
   nodes: DepGraphNode[],
-  edges: DepGraphEdge[]
-): { positions: Map<string, { x: number; y: number }>; tiers: Map<string, number>; tierOrder: number[]; tierYRanges: Map<number, { y: number; h: number }> } {
+  edges: DepGraphEdge[],
+  lp: LayoutParams,
+): { positions: Map<string, { x: number; y: number }>; tiers: Map<string, number>; tierOrder: number[]; tierYRanges: Map<number, TierRange>; totalWidth: number } {
   const tiers = computeTiers(nodes, edges);
   const tierToIds = new Map<number, string[]>();
   for (const n of nodes) {
@@ -89,30 +111,51 @@ function pyramidLayout(
   const tierOrder = [...new Set(tiers.values())].sort((a, b) => a - b);
   const displayOrder = [...tierOrder].reverse();
   const positions = new Map<string, { x: number; y: number }>();
-  const tierYRanges = new Map<number, { y: number; h: number }>();
-  // 每行最多 MAX_PER_ROW 个节点，计算最宽行的宽度
-  const effectivePerRow = Math.min(MAX_PER_ROW, Math.max(...tierOrder.map(t => (tierToIds.get(t) ?? []).length), 1));
-  const maxW = (effectivePerRow - 1) * NODE_GAP + effectivePerRow * NODE_WIDTH;
-  let currentY = PADDING;
-  displayOrder.forEach((tier) => {
+  const tierYRanges = new Map<number, TierRange>();
+
+  // 计算全局最宽行的宽度（用于居中对齐）
+  const globalMaxPerRow = Math.min(lp.maxPerRow, Math.max(...tierOrder.map(t => (tierToIds.get(t) ?? []).length), 1));
+  const totalWidth = globalMaxPerRow * lp.nodeWidth + (globalMaxPerRow - 1) * lp.nodeGap + lp.layerSidePadding * 2;
+  const centerX = lp.padding + totalWidth / 2;
+
+  let currentY = lp.padding;
+  displayOrder.forEach((tier, idx) => {
   const ids = tierToIds.get(tier) ?? [];
-  const rows = subRowCount(ids.length);
-  const tierStartY = currentY;
+  const rows = subRowCount(ids.length, lp.maxPerRow);
+
+  // 计算该层最宽行（首行或节点最多行）的内容宽度
+  let tierMaxRowW = 0;
   for (let row = 0; row < rows; row++) {
-    const rowIds = ids.slice(row * MAX_PER_ROW, (row + 1) * MAX_PER_ROW);
-    const rowW = (rowIds.length - 1) * NODE_GAP + rowIds.length * NODE_WIDTH;
-    const offset = (maxW - rowW) / 2;
+    const rowIds = ids.slice(row * lp.maxPerRow, (row + 1) * lp.maxPerRow);
+    const rowW = rowIds.length * lp.nodeWidth + (rowIds.length - 1) * lp.nodeGap;
+    tierMaxRowW = Math.max(tierMaxRowW, rowW);
+  }
+  const tierContentW = tierMaxRowW + lp.layerSidePadding * 2;
+
+  const tierStartY = currentY;
+  currentY += lp.layerPadY; // 层内顶部留白
+
+  for (let row = 0; row < rows; row++) {
+    const rowIds = ids.slice(row * lp.maxPerRow, (row + 1) * lp.maxPerRow);
+    const rowW = rowIds.length * lp.nodeWidth + (rowIds.length - 1) * lp.nodeGap;
     rowIds.forEach((id, i) => {
-    const x = PADDING + LAYER_SIDE_PADDING + offset + i * (NODE_WIDTH + NODE_GAP) + NODE_WIDTH / 2;
-    const y = currentY + NODE_HEIGHT / 2;
+    const x = centerX - rowW / 2 + i * (lp.nodeWidth + lp.nodeGap) + lp.nodeWidth / 2;
+    const y = currentY + lp.nodeHeight / 2;
     positions.set(id, { x, y });
     });
-    currentY += row < rows - 1 ? SUB_ROW_HEIGHT : LAYER_HEIGHT;
+    currentY += lp.nodeHeight + (row < rows - 1 ? lp.subRowGap : 0);
   }
+
+  currentY += lp.layerPadY; // 层内底部留白
   const tierH = currentY - tierStartY;
-  tierYRanges.set(tier, { y: tierStartY, h: tierH });
+  tierYRanges.set(tier, { y: tierStartY, h: tierH, contentW: tierContentW });
+
+  // 层与层之间的间距
+  if (idx < displayOrder.length - 1) {
+    currentY += lp.layerGap;
+  }
   });
-  return { positions, tiers, tierOrder, tierYRanges };
+  return { positions, tiers, tierOrder, tierYRanges, totalWidth };
 }
 
 const DepGraphView: React.FC = () => {
@@ -124,6 +167,27 @@ const DepGraphView: React.FC = () => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [graphLevel, _setGraphLevel] = useState<'package' | 'target'>('package');
   const [nodeFilter, setNodeFilter] = useState<'all' | 'internal' | 'external'>('all');
+  const [zoom, setZoom] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(900);
+
+  // 监测容器宽度变化
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) { return; }
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    ro.observe(el);
+    setContainerWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  const handleZoomIn = useCallback(() => setZoom((z) => Math.min(z + 0.2, 3)), []);
+  const handleZoomOut = useCallback(() => setZoom((z) => Math.max(z - 0.2, 0.3)), []);
+  const handleZoomReset = useCallback(() => setZoom(1), []);
 
   const fetchGraph = async () => {
   setLoading(true);
@@ -162,9 +226,12 @@ const DepGraphView: React.FC = () => {
     return allEdges.filter(e => nodeIds.has(e.from) || nodeIds.has(e.to));
   }, [allEdges, nodeIds]);
 
-  const { positions, tiers, tierOrder, tierYRanges } = useMemo(
-  () => pyramidLayout(nodes, edges),
-  [nodes, edges]
+  // 自适应布局参数
+  const lp = useMemo(() => computeLayoutParams(nodes.length, containerWidth), [nodes.length, containerWidth]);
+
+  const { positions, tiers, tierOrder, tierYRanges, totalWidth } = useMemo(
+  () => pyramidLayout(nodes, edges, lp),
+  [nodes, edges, lp]
   );
   const tierToIds = useMemo(() => {
   const m = new Map<number, string[]>();
@@ -189,13 +256,19 @@ const DepGraphView: React.FC = () => {
   return { dependsOn: out, dependedBy: by };
   }, [edges]);
 
-  const effectivePerRow = Math.min(MAX_PER_ROW, Math.max(...tierOrder.map((t) => (tierToIds.get(t) ?? []).length), 1));
-  const contentWidth = (effectivePerRow - 1) * NODE_GAP + effectivePerRow * NODE_WIDTH;
-  const graphWidth = contentWidth + LAYER_SIDE_PADDING * 2;
-  const svgW = Math.max(600, PADDING * 2 + graphWidth);
+  const effectivePerRow = Math.min(lp.maxPerRow, Math.max(...tierOrder.map((t) => (tierToIds.get(t) ?? []).length), 1));
+  const svgW = lp.padding * 2 + totalWidth;
   // 总高度：取所有节点最大 y + 余量
   const maxY = Math.max(...[...positions.values()].map(p => p.y), 0);
-  const svgH = Math.max(420, maxY + NODE_HEIGHT / 2 + PADDING + 20);
+  const svgH = Math.max(320, maxY + lp.nodeHeight / 2 + lp.padding);
+
+  // 自动适配缩放：当图形自然宽度 > 容器宽度时缩小以完整展示
+  const autoScale = useMemo(() => {
+    if (containerWidth <= 0 || svgW <= 0) { return 1; }
+    const fitScale = containerWidth / svgW;
+    return fitScale < 1 ? fitScale : 1;
+  }, [containerWidth, svgW]);
+  const effectiveZoom = zoom * autoScale;
 
   const tierColors = isDark ? [
     { bg: 'rgba(59, 130, 246, 0.14)', border: 'rgba(59, 130, 246, 0.40)', text: 'rgb(147 197 253)' },
@@ -267,21 +340,33 @@ const DepGraphView: React.FC = () => {
       </div>
     )}
 
-    {/* 图区域：金字塔分层（不画连线），点击节点在浮窗显示依赖 */}
-    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-subtle)] overflow-auto shadow-sm min-h-[480px] flex items-center justify-center relative">
+    {/* 图区域：金字塔分层，点击节点在浮窗显示依赖 */}
+    <div ref={containerRef} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-subtle)] overflow-auto shadow-sm relative" style={{ minHeight: 320, maxHeight: '75vh' }}>
+    {/* 缩放控制 */}
+    <div className="sticky top-2 right-2 z-20 flex items-center gap-1 float-right mr-2 mt-2">
+      <button type="button" onClick={handleZoomOut} className="p-1 rounded-md bg-[var(--bg-surface)] border border-[var(--border-default)] text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] hover:border-[var(--border-hover)] transition-colors" title="Zoom out">
+      <ZoomOut size={14} />
+      </button>
+      <span className="text-[10px] text-[var(--fg-muted)] min-w-[3em] text-center tabular-nums">{Math.round(effectiveZoom * 100)}%</span>
+      <button type="button" onClick={handleZoomIn} className="p-1 rounded-md bg-[var(--bg-surface)] border border-[var(--border-default)] text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] hover:border-[var(--border-hover)] transition-colors" title="Zoom in">
+      <ZoomIn size={14} />
+      </button>
+      <button type="button" onClick={handleZoomReset} className="p-1 rounded-md bg-[var(--bg-surface)] border border-[var(--border-default)] text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] hover:border-[var(--border-hover)] transition-colors" title="Reset zoom">
+      <Maximize2 size={14} />
+      </button>
+    </div>
     <svg
-      width="100%"
-      height={svgH}
+      width={svgW * effectiveZoom}
+      height={svgH * effectiveZoom}
       viewBox={`0 0 ${svgW} ${svgH}`}
-      className="block min-h-[480px] w-full"
-      style={{ maxHeight: 640 }}
+      className="block mx-auto"
     >
       <defs>
       <filter id="nodeShadow" x="-20%" y="-20%" width="140%" height="140%">
         <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.12" />
       </filter>
       </defs>
-      {/* 层背景条：相对背景居中 */}
+      {/* 层背景条：统一全宽 */}
       {displayOrder.map((tier, displayIndex) => {
       const style = getTierStyle(displayIndex);
       const range = tierYRanges.get(tier);
@@ -289,10 +374,10 @@ const DepGraphView: React.FC = () => {
       return (
         <rect
         key={tier}
-        x={PADDING}
-        y={range.y - NODE_HEIGHT / 2 - 4}
-        width={graphWidth}
-        height={range.h + 8}
+        x={lp.padding}
+        y={range.y}
+        width={totalWidth}
+        height={range.h}
         rx={8}
         fill={style.bg}
         stroke={style.border}
@@ -307,7 +392,7 @@ const DepGraphView: React.FC = () => {
       if (!pos) return null;
       const tier = tiers.get(node.id) ?? 0;
       const baseStyle = getTierStyle(displayOrder.indexOf(tier));
-      const label = node.label.length > 14 ? node.label.slice(0, 13) + '…' : node.label;
+      const label = node.label.length > lp.labelMaxChars ? node.label.slice(0, lp.labelMaxChars - 1) + '…' : node.label;
       const isSelected = selectedNodeId === node.id;
       const isDependency = selectedNodeId ? (dependsOn.get(selectedNodeId) ?? []).includes(node.id) : false;
       const isDependent = selectedNodeId ? (dependedBy.get(selectedNodeId) ?? []).includes(node.id) : false;
@@ -347,11 +432,12 @@ const DepGraphView: React.FC = () => {
         style={{ cursor: 'pointer', opacity: nodeStyle.opacity }}
         onClick={() => setSelectedNodeId(isSelected ? null : node.id)}
         >
+        <title>{node.label}</title>
         <rect
-          x={pos.x - NODE_WIDTH / 2}
-          y={pos.y - NODE_HEIGHT / 2}
-          width={NODE_WIDTH}
-          height={NODE_HEIGHT}
+          x={pos.x - lp.nodeWidth / 2}
+          y={pos.y - lp.nodeHeight / 2}
+          width={lp.nodeWidth}
+          height={lp.nodeHeight}
           rx={10}
           ry={10}
           fill={nodeStyle.fill}
@@ -365,20 +451,20 @@ const DepGraphView: React.FC = () => {
           y={pos.y + (typeStyle.badge ? -2 : 0)}
           textAnchor="middle"
           dominantBaseline="middle"
-          fontSize="12"
+          fontSize={lp.fontSize}
           fontWeight="600"
           fill={nodeStyle.text}
           pointerEvents="none"
         >
           {label}
         </text>
-        {typeStyle.badge && (
+        {typeStyle.badge && lp.nodeHeight >= 32 && (
           <text
           x={pos.x}
           y={pos.y + 12}
           textAnchor="middle"
           dominantBaseline="middle"
-          fontSize="8"
+          fontSize={Math.max(7, lp.fontSize - 3)}
           fontWeight="500"
           fill={typeStyle.text}
           opacity={0.6}

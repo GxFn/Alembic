@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  BookOpen, Shield, Lightbulb, Search,
+  Library, Shield, Lightbulb, Search, BookOpen,
   Loader2, Zap, Archive, RotateCcw, Trash2, X, Clock, CheckCircle2,
   RefreshCw,
   Globe, Layers, Link2,
@@ -572,7 +572,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
         <KnowledgeSkeleton />
       ) : entries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-[var(--fg-muted)]">
-          <BookOpen size={48} className="mb-4 opacity-30" />
+          <Library size={48} className="mb-4 opacity-30" />
           <p className="text-sm">{t('knowledge.noResults')}</p>
           {(keyword || filterLifecycle || filterKind || filterCategory) && (
             <button

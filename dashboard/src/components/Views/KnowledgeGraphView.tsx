@@ -588,7 +588,7 @@ const KnowledgeGraphView: React.FC = () => {
       <div className="flex flex-col items-center justify-center h-full gap-4 text-[var(--fg-secondary)]">
         <Share2 size={48} className="text-[var(--fg-muted)]" />
         <p className="text-lg font-medium">{t('knowledgeGraph.empty')}</p>
-        <p className="text-sm text-center max-w-md">{t('knowledgeGraph.emptyDesc')}</p>
+        <p className="text-sm text-center max-w-xl">{t('knowledgeGraph.emptyDesc')}</p>
         {discoverResult && (
           <p className={`text-sm ${discoverIsError ? 'text-red-500' : 'text-green-600'}`}>{discoverResult}</p>
         )}

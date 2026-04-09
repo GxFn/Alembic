@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bookmark, FolderOpen, Clock, Shield, MessageSquare, HelpCircle, LogOut, User, Moon, Sun, Library, FileText, BookOpen, Languages, Layers, Radio } from 'lucide-react';
+import { BadgeCheck, Boxes, Inbox, Shield, MessageSquare, HelpCircle, LogOut, User, Moon, Sun, Library, ScrollText, BookOpen, Languages, Layers, Radio } from 'lucide-react';
 import { TabType } from '../../constants';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
@@ -76,14 +76,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { isDark, toggle: toggleTheme } = useTheme();
 
   const navItems: NavItem[] = [
-    { tab: 'recipes', icon: Bookmark, label: t('sidebar.recipes') },
-    { tab: 'spm', icon: FolderOpen, label: t('sidebar.moduleExplorer') },
-    { tab: 'candidates', icon: Clock, label: t('sidebar.candidates', { count: candidateCount }) },
+    { tab: 'recipes', icon: BadgeCheck, label: t('sidebar.recipes') },
+    { tab: 'spm', icon: Boxes, label: t('sidebar.moduleExplorer') },
+    { tab: 'candidates', icon: Inbox, label: t('sidebar.candidates', { count: candidateCount }) },
     { tab: 'knowledge', icon: Library, label: t('sidebar.batchManage') },
     { tab: 'guard', icon: Shield, label: t('sidebar.guard') },
     { tab: 'panorama', icon: Layers, label: t('sidebar.panorama') },
-    { tab: 'skills', icon: BookOpen, label: t('sidebar.skills'), badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined },
-    { tab: 'wiki', icon: FileText, label: t('sidebar.repoWiki') },
+    { tab: 'skills', icon: ScrollText, label: t('sidebar.skills'), badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined },
+    { tab: 'wiki', icon: BookOpen, label: t('sidebar.repoWiki') },
     { tab: 'signals', icon: Radio, label: 'Signals' },
     { tab: 'ai', icon: MessageSquare, label: t('sidebar.aiAssistant') },
     { tab: 'help', icon: HelpCircle, label: t('sidebar.help') },

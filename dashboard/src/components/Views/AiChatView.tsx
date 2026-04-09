@@ -318,7 +318,7 @@ const AiChatView: React.FC = () => {
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-center mb-4">
-                  <Sparkles className="text-blue-500" size={28} />
+                  <MessageSquare className="text-blue-500" size={28} />
                 </div>
                 <h3 className="text-base font-bold text-[var(--fg-primary)] mb-2">{t('aiChat.startChat')}</h3>
                 <p className="text-sm text-[var(--fg-muted)] max-w-md leading-relaxed mb-5">

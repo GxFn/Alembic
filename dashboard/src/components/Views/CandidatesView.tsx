@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FileSearch, Box, Trash2, Edit3, Layers, GitCompare, Copy, Brain, Sparkles, Clock, Code2, CheckCircle2, BarChart3, ArrowUpDown, Rocket, Wand2, Loader2, Globe, RefreshCw, RotateCcw } from 'lucide-react';
+import { FileSearch, Box, Trash2, Edit3, Layers, GitCompare, Copy, Brain, Inbox, Sparkles, Clock, Code2, CheckCircle2, BarChart3, ArrowUpDown, Rocket, Wand2, Loader2, Globe, RefreshCw, RotateCcw } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { ProjectData, KnowledgeEntry, SimilarRecipe, Recipe } from '../../types';
 import api from '../../api';
@@ -414,7 +414,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
       <div className="mb-4 flex flex-wrap justify-between items-center gap-3 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-            <Sparkles className="text-blue-600" size={20} />
+            <Inbox className="text-blue-600" size={20} />
           </div>
           <div className="min-w-0">
             <h2 className="text-lg xl:text-xl font-bold text-[var(--fg-primary)]">AI Scan Candidates</h2>
@@ -572,7 +572,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
         {(!data?.candidates || Object.keys(data.candidates).length === 0) && !isBootstrapping && (
           <div className="h-72 flex flex-col items-center justify-center bg-[var(--bg-surface)] rounded-2xl border border-dashed border-[var(--border-default)] text-[var(--fg-muted)]">
             <div className="w-16 h-16 rounded-2xl bg-[var(--bg-subtle)] flex items-center justify-center mb-4">
-              <FileSearch size={32} className="text-[var(--fg-muted)]" />
+              <Inbox size={32} className="text-[var(--fg-muted)]" />
             </div>
             <p className="text-sm font-medium text-[var(--fg-secondary)]">{t('candidates.noResults')}</p>
             <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-[var(--fg-muted)]">
