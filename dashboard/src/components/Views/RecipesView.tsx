@@ -91,19 +91,17 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   onPageSizeChange: controlledOnPageSizeChange,
 }) => {
   const { t } = useI18n();
-  type SortKey = 'default' | 'name' | 'authorityScore' | 'authority' | 'totalUsage' | 'lastUsed' | 'category';
+  type SortKey = 'newest' | 'quality' | 'usage' | 'alpha' | 'category';
   type SortDir = 'asc' | 'desc';
-  const [sortKey, setSortKey] = useState<SortKey>('default');
+  const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   const sortOptions: { key: SortKey; label: string; defaultDir: SortDir }[] = [
-    { key: 'default',        label: t('recipes.sortNewest'),   defaultDir: 'desc' },
-    { key: 'authorityScore', label: t('recipes.qualityAuthorityScore'), defaultDir: 'desc' },
-    { key: 'authority',      label: t('recipes.qualityExcellent'), defaultDir: 'desc' },
-    { key: 'totalUsage',     label: t('recipes.qualityBasic'),   defaultDir: 'desc' },
-    { key: 'lastUsed',       label: t('recipes.sortQuality'),   defaultDir: 'desc' },
-    { key: 'name',           label: t('recipes.sortAlpha'),   defaultDir: 'asc' },
-    { key: 'category',       label: t('recipes.knowledgeType'),   defaultDir: 'asc' },
+    { key: 'newest',   label: t('recipes.sortNewest'),   defaultDir: 'desc' },
+    { key: 'quality',  label: t('recipes.sortQuality'),  defaultDir: 'desc' },
+    { key: 'usage',    label: t('recipes.sortUsage'),    defaultDir: 'desc' },
+    { key: 'alpha',    label: t('recipes.sortAlpha'),    defaultDir: 'asc' },
+    { key: 'category', label: t('recipes.sortCategory'), defaultDir: 'asc' },
   ];
 
   const [internalPage, setInternalPage] = useState(1);
@@ -295,28 +293,23 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   }, [recipes.length, controlledPage]);
 
   const sortedRecipes = React.useMemo(() => {
-    if (sortKey === 'default') return recipes;
+    if (sortKey === 'newest') {
+      return recipes;
+    }
     const arr = [...recipes];
     const dir = sortDir === 'asc' ? 1 : -1;
     arr.sort((a, b) => {
       let va: number | string = 0, vb: number | string = 0;
       switch (sortKey) {
-        case 'name':
+        case 'alpha':
           va = getDisplayName(a).toLowerCase(); vb = getDisplayName(b).toLowerCase();
           return dir * (va < vb ? -1 : va > vb ? 1 : 0);
-        case 'authorityScore':
-          va = a.stats?.authorityScore ?? -1; vb = b.stats?.authorityScore ?? -1; break;
-        case 'authority':
-          va = a.stats?.authority ?? -1; vb = b.stats?.authority ?? -1; break;
-        case 'totalUsage':
+        case 'quality':
+          va = a.quality?.overall ?? -1; vb = b.quality?.overall ?? -1; break;
+        case 'usage':
           va = (a.stats?.guardUsageCount ?? 0) + (a.stats?.humanUsageCount ?? 0) + (a.stats?.aiUsageCount ?? 0);
           vb = (b.stats?.guardUsageCount ?? 0) + (b.stats?.humanUsageCount ?? 0) + (b.stats?.aiUsageCount ?? 0);
           break;
-        case 'lastUsed': {
-          const ta = a.stats?.lastUsedAt ? new Date(a.stats.lastUsedAt).getTime() : 0;
-          const tb = b.stats?.lastUsedAt ? new Date(b.stats.lastUsedAt).getTime() : 0;
-          va = isNaN(ta) ? 0 : ta; vb = isNaN(tb) ? 0 : tb; break;
-        }
         case 'category':
           va = (a.category || '').toLowerCase(); vb = (b.category || '').toLowerCase();
           return dir * (va < vb ? -1 : va > vb ? 1 : 0);
@@ -388,7 +381,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                   )}
                 >
                   {opt.label}
-                  {active && sortKey !== 'default' && (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                  {active && sortKey !== 'newest' && (sortDir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                 </button>
               );
             })}
@@ -491,7 +484,18 @@ const RecipesView: React.FC<RecipesViewProps> = ({
         return (
           <Drawer open={!!selectedRecipe} onClose={closeDrawer} size={drawerWide ? 'lg' : 'md'}>
               {/* ── Header ── */}
-              <Drawer.Header title={displayName}>
+              <Drawer.Header
+                title={displayName}
+                leading={
+                  <button
+                    onClick={() => { handleDeleteRecipe(recipe.name || recipe.id || ''); closeDrawer(); }}
+                    title={t('recipes.deleteRecipe')}
+                    className="p-1.5 text-[var(--fg-muted)] hover:text-red-500 rounded-md transition-colors opacity-30 hover:opacity-100 shrink-0"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                }
+              >
                 <Drawer.Nav currentIndex={currentIndex} total={sortedRecipes.length} onPrev={goToPrev} onNext={goToNext} />
                 <Drawer.HeaderActions>
                   <div className="flex bg-[var(--bg-subtle)] p-0.5 rounded-lg mr-1">
@@ -499,7 +503,6 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     <button onClick={() => { setDrawerMode('edit'); }} className={cn("px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1", drawerMode === 'edit' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--accent)]' : 'text-[var(--fg-muted)] hover:text-[var(--fg-secondary)]')}><Edit3 size={ICON_SIZES.sm} /> {t('common.edit')}</button>
                   </div>
                   <Drawer.WidthToggle isWide={drawerWide} onToggle={toggleDrawerWide} />
-                  <Button variant="danger" size="icon-sm" onClick={() => { handleDeleteRecipe(recipe.name || recipe.id || ''); closeDrawer(); }}><Trash2 size={16} /></Button>
                   <Drawer.CloseButton onClose={closeDrawer} />
                 </Drawer.HeaderActions>
               </Drawer.Header>
@@ -641,7 +644,7 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     metadata={(() => {
                       const m: MetaItem[] = [];
                       if (recipe.scope) m.push({ icon: Globe, iconClass: 'text-teal-400', label: t('candidates.path'), value: recipe.scope === 'universal' ? t('common.all') : recipe.scope === 'project-specific' ? t('candidates.category') : recipe.scope });
-                      if (recipe.complexity) m.push({ icon: Layers, iconClass: 'text-orange-400', label: t('candidates.category'), value: recipe.complexity === 'advanced' ? t('candidates.confidenceHigh') : recipe.complexity === 'intermediate' ? t('candidates.confidenceMedium') : recipe.complexity === 'basic' ? t('candidates.confidenceLow') : recipe.complexity });
+                      if (recipe.complexity) m.push({ icon: Layers, iconClass: 'text-orange-400', label: t('knowledge.complexity'), value: recipe.complexity === 'advanced' ? t('knowledge.complexityAdvanced') : recipe.complexity === 'intermediate' ? t('knowledge.complexityIntermediate') : recipe.complexity === 'beginner' ? t('knowledge.complexityBeginner') : recipe.complexity });
                       if (recipe.source && recipe.source !== 'unknown') m.push({ icon: Globe, iconClass: 'text-violet-400', label: t('recipes.sourceLabel'), value: recipe.source === 'bootstrap-scan' ? t('recipes.sourceBootstrap') : recipe.source === 'agent' ? t('recipes.sourceAiScan') : recipe.source });
                       if (recipe.updatedAt && isValidTimestamp(recipe.updatedAt)) m.push({ icon: Clock, iconClass: 'text-[var(--fg-muted)]', label: t('candidates.updatedAt'), value: formatDate(recipe.updatedAt) });
                       return m;

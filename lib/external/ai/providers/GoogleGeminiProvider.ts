@@ -70,6 +70,18 @@ export class GoogleGeminiProvider extends AiProvider {
 
       const url = `${GEMINI_BASE}/models/${this.model}:generateContent?key=${this.apiKey}`;
       const data = await this._post(url, body);
+
+      // 提取 token 用量
+      if (data?.usageMetadata) {
+        this._emitTokenUsage({
+          inputTokens: data.usageMetadata.promptTokenCount || 0,
+          outputTokens: data.usageMetadata.candidatesTokenCount || 0,
+          totalTokens:
+            (data.usageMetadata.promptTokenCount || 0) +
+            (data.usageMetadata.candidatesTokenCount || 0),
+        });
+      }
+
       return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     });
   }
@@ -383,6 +395,18 @@ export class GoogleGeminiProvider extends AiProvider {
 
       const url = `${GEMINI_BASE}/models/${this.model}:generateContent?key=${this.apiKey}`;
       const data = await this._post(url, body);
+
+      // 提取 token 用量
+      if (data?.usageMetadata) {
+        this._emitTokenUsage({
+          inputTokens: data.usageMetadata.promptTokenCount || 0,
+          outputTokens: data.usageMetadata.candidatesTokenCount || 0,
+          totalTokens:
+            (data.usageMetadata.promptTokenCount || 0) +
+            (data.usageMetadata.candidatesTokenCount || 0),
+        });
+      }
+
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
       if (!text) {

@@ -46,8 +46,8 @@ export const CreateKnowledgeBody = z
     language: z.string().optional(),
     category: z.string().optional(),
     knowledgeType: z.string().optional(),
-    complexity: z.enum(['basic', 'intermediate', 'advanced']).nullish(),
-    scope: z.enum(['universal', 'project', 'team', 'personal']).nullish(),
+    complexity: z.string().nullish(),
+    scope: z.string().nullish(),
     tags: z.array(z.string()).optional(),
   })
   .loose();

@@ -48,6 +48,10 @@ export async function initialize(c: ServiceContainer) {
       c.singletons.aiProvider = null;
     }
   }
+  // 挂载 provider 级 token 用量回调 — 覆盖所有 chat/chatWithStructuredOutput/chatWithTools 调用
+  wireTokenTracking(c);
+  // 挂载 provider 级 token 用量回调 — 覆盖所有 chat/chatWithStructuredOutput/chatWithTools 调用
+  wireTokenTracking(c);
 
   // Embedding fallback provider
   initEmbeddingFallback(c);
@@ -110,4 +114,59 @@ export function register(c: ServiceContainer) {
   // KnowledgeModule 中已注册 'aiProvider' 的 register 工厂
   // 此处仅标记 AI 模块已就绪
   c.singletons._aiModuleReady = true;
+}
+
+/**
+ * 为当前 aiProvider 挂载 provider 级 token 用量回调。
+ * 每次 chat() / chatWithStructuredOutput() / chatWithTools() 调用后自动记录到 TokenUsageStore。
+ * reloadAiProvider() 时也需要重新调用以确保新 provider 被追踪。
+ */
+/** Minimal shape of TokenUsageStore.record() — avoids importing the concrete class */
+interface TokenStoreRef {
+  record(r: {
+    source: string;
+    provider?: string;
+    model?: string;
+    inputTokens: number;
+    outputTokens: number;
+  }): void;
+}
+
+export function wireTokenTracking(c: ServiceContainer) {
+  const provider = c.singletons.aiProvider as {
+    _onTokenUsage?: unknown;
+    name?: string;
+    model?: string;
+  } | null;
+  if (!provider || typeof provider !== 'object') {
+    return;
+  }
+
+  provider._onTokenUsage = (usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    source?: string;
+  }) => {
+    try {
+      let tokenStore = c.singletons._tokenUsageStoreRef as TokenStoreRef | null;
+      if (!tokenStore) {
+        try {
+          tokenStore = c.get('tokenUsageStore') as TokenStoreRef;
+          c.singletons._tokenUsageStoreRef = tokenStore;
+        } catch {
+          return;
+        }
+      }
+      tokenStore.record({
+        source: usage.source || 'provider',
+        provider: provider.name ?? undefined,
+        model: provider.model ?? undefined,
+        inputTokens: usage.inputTokens || 0,
+        outputTokens: usage.outputTokens || 0,
+      });
+    } catch {
+      /* token tracking should never break execution */
+    }
+  };
 }

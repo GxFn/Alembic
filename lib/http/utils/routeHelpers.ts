@@ -5,6 +5,7 @@
 
 import type { Request } from 'express';
 import { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
+import { getDeveloperIdentity } from '../../shared/developer-identity.js';
 
 /**
  * 从请求中提取操作上下文（用户身份、IP、UA）
@@ -12,7 +13,7 @@ import { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
  */
 export function getContext(req: Request) {
   return {
-    userId: String(req.headers['x-user-id'] || 'anonymous'),
+    userId: String(req.headers['x-user-id'] || getDeveloperIdentity()),
     ip: req.ip || '',
     userAgent: req.headers['user-agent'] || '',
   };

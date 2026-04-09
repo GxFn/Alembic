@@ -669,17 +669,31 @@ export class KnowledgeService {
       const scorerInput = this._adaptForScorer(entry);
       const result = this._qualityScorer.score(scorerInput);
 
-      // 更新 Quality 值对象
-      await this.repository.update(id, {
-        quality: JSON.stringify({
-          completeness: result.dimensions.completeness,
-          adaptation: result.dimensions.metadata,
-          documentation: result.dimensions.format,
-          overall: result.score,
-          grade: result.grade,
-        }),
+      // 更新 Quality 值对象；同步计算 authority（0‑5）
+      const qualityJson = {
+        completeness: result.dimensions.completeness,
+        adaptation: result.dimensions.metadata,
+        documentation: result.dimensions.format,
+        overall: result.score,
+        grade: result.grade,
+      };
+
+      // 当 authority 从未手动设置（仍为 0）时，从 quality.overall 自动推导
+      const currentAuthority = entry.stats?.authority ?? 0;
+      const updatePayload: Record<string, unknown> = {
+        quality: JSON.stringify(qualityJson),
         updatedAt: Math.floor(Date.now() / 1000),
-      });
+      };
+      if (currentAuthority === 0 && result.score > 0) {
+        const statsObj =
+          entry.stats?.toJSON?.() ?? (typeof entry.stats === 'object' ? { ...entry.stats } : {});
+        updatePayload.stats = JSON.stringify({
+          ...statsObj,
+          authority: Math.round(result.score * 5),
+        });
+      }
+
+      await this.repository.update(id, updatePayload);
 
       if (context.userId) {
         await this._audit('update_knowledge_quality', id, context.userId, {
@@ -730,6 +744,9 @@ export class KnowledgeService {
           detail: `Lifecycle ${method} failed for ${id}`,
         });
       }
+
+      // 标记操作人到最后一条 lifecycleHistory 条目
+      entry.stampLastTransition(context.userId);
 
       // 构建 DB 更新
       // 注意: 不在此处 JSON.stringify — repository.update() 内部

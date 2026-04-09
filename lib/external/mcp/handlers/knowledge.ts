@@ -4,6 +4,7 @@
  */
 
 import { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';
+import { getDeveloperIdentity } from '#shared/developer-identity.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import type { McpContext, McpServiceContainer } from './types.js';
@@ -120,7 +121,7 @@ export async function submitKnowledge(
   // V3 字段增强
   const enrichedData = _enrichToV3(args, ctx.container);
 
-  const entry = await service.create(enrichedData, { userId: 'mcp' });
+  const entry = await service.create(enrichedData, { userId: getDeveloperIdentity() });
 
   // ── QualityScorer 自动评分（R9: create 后置执行）──
   try {
@@ -294,10 +295,10 @@ export async function submitKnowledgeBatch(ctx: McpContext, args: SubmitBatchArg
 
     try {
       const itemData = _enrichToV3({ ...items[i], source }, ctx.container);
-      const entry = await service.create(itemData, { userId: 'mcp' });
+      const entry = await service.create(itemData, { userId: getDeveloperIdentity() });
       // ── QualityScorer 自动评分（R9: create 后置执行）──
       try {
-        await service.updateQuality(entry.id, { userId: 'mcp' });
+        await service.updateQuality(entry.id, { userId: getDeveloperIdentity() });
       } catch {
         /* best effort — 不阻塞批量提交 */
       }
@@ -379,7 +380,7 @@ export async function knowledgeLifecycle(
   }
 
   const service = ctx.container.get('knowledgeService');
-  const context = { userId: 'mcp' };
+  const context = { userId: getDeveloperIdentity() };
 
   const entry = await service.reactivate(id, context);
 

@@ -100,7 +100,7 @@ export interface KnowledgeEntryWire {
 
   // ── 生命周期 ──
   lifecycle: string;
-  lifecycleHistory: Array<{ from: string; to: string; at: number }>;
+  lifecycleHistory: Array<{ from: string; to: string; at: number; by?: string }>;
   autoApprovable: boolean;
 
   // ── 分类 ──

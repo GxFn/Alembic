@@ -192,6 +192,9 @@ export class ServiceContainer {
       AiModule.initEmbeddingFallback(this);
     }
 
+    // 挂载 provider 级 token 用量回调
+    AiModule.wireTokenTracking(this);
+
     // 清除持有旧 aiProvider 引用的 singleton 缓存
     // 下次调用 container.get() 时会使用新 provider 重建
     const cleared: string[] = [];

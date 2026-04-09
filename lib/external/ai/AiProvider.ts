@@ -166,6 +166,13 @@ export class AiProvider {
   name: string;
   timeout: number;
   _fallbackFrom?: string;
+
+  /**
+   * Token 用量回调 — 每次 API 调用后触发（包括 chat / chatWithStructuredOutput / chatWithTools）
+   * 由外部（如 DI 容器）注入以实现全局 token 计量。
+   */
+  _onTokenUsage: ((usage: TokenUsage & { source?: string }) => void) | null = null;
+
   constructor(config: AiProviderConfig = {}) {
     this.model = config.model || '';
     this.apiKey = config.apiKey || '';
@@ -236,6 +243,25 @@ export class AiProvider {
    */
   async chat(prompt: string, context: ChatContext = {}): Promise<string> {
     throw new Error(`${this.name}.chat() not implemented`);
+  }
+
+  /**
+   * 从 API 原始响应中提取 token 用量并触发回调。
+   * 子类在 chat() / chatWithStructuredOutput() 中调用。
+   */
+  _emitTokenUsage(usage: TokenUsage | null | undefined, source?: string) {
+    if (!usage || !this._onTokenUsage) {
+      return;
+    }
+    const total = (usage.inputTokens || 0) + (usage.outputTokens || 0);
+    if (total === 0) {
+      return;
+    }
+    try {
+      this._onTokenUsage({ ...usage, source });
+    } catch {
+      /* token tracking should never break execution */
+    }
   }
 
   /** 摘要 - 对代码/文档生成结构化摘要 */

@@ -15,6 +15,7 @@
 
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
 import type { ProposalRepository } from '#repo/evolution/ProposalRepository.js';
+import { getDeveloperIdentity } from '#shared/developer-identity.js';
 import type { EvolveInput } from '#shared/schemas/mcp-tools.js';
 import type { RecipeLifecycleSupervisor } from '../../../service/evolution/RecipeLifecycleSupervisor.js';
 import { envelope } from '../envelope.js';
@@ -174,7 +175,7 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
               // Supervisor 拒绝（可能状态不允许直接转 deprecated），回退到 KnowledgeService
               if (knowledgeService) {
                 await knowledgeService.deprecate(decision.recipeId, reason, {
-                  userId: 'ide-agent',
+                  userId: getDeveloperIdentity(),
                 });
               } else {
                 result.errors.push({
@@ -186,7 +187,9 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
             }
           } else if (knowledgeService) {
             // P3: 添加 await
-            await knowledgeService.deprecate(decision.recipeId, reason, { userId: 'ide-agent' });
+            await knowledgeService.deprecate(decision.recipeId, reason, {
+              userId: getDeveloperIdentity(),
+            });
           } else {
             result.errors.push({
               recipeId: decision.recipeId,

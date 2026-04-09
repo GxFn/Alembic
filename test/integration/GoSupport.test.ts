@@ -11,7 +11,7 @@
  *  L5 — 新增基础设施: SUMMARY_EXTRACTORS[go]、IndexingPipeline、extForLang
  *  L6 — Bootstrap 条件维度: go-module-scan
  *
- * 前置条件: /Users/gaoxuefeng/Documents/github/gin 存在
+ * 前置条件: 上级目录中存在 gin 项目（自动推导路径）
  */
 
 import fs from 'node:fs';

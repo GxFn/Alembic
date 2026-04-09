@@ -709,7 +709,18 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
 
         return (
         <Drawer open={!!selected} onClose={() => setSelected(null)} size={drawerWide ? 'lg' : 'md'}>
-          <Drawer.Header title={selected.title}>
+          <Drawer.Header
+            title={selected.title}
+            leading={
+              <button
+                onClick={() => { handleDelete(selected); setSelected(null); }}
+                title={t('common.delete')}
+                className="p-1.5 text-[var(--fg-muted)] hover:text-red-500 rounded-md transition-colors opacity-30 hover:opacity-100 shrink-0"
+              >
+                <Trash2 size={14} />
+              </button>
+            }
+          >
               <Drawer.Nav
                 currentIndex={currentIndex}
                 total={entries.length}
@@ -724,7 +735,6 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
                   onToggle={toggleDrawerWide}
                   title={drawerWide ? t('knowledge.narrow') : t('knowledge.widen')}
                 />
-                <Button variant="danger" size="icon-sm" onClick={() => { handleDelete(selected); setSelected(null); }}><Trash2 size={16} /></Button>
                 <Drawer.CloseButton onClose={() => setSelected(null)} />
               </Drawer.HeaderActions>
           </Drawer.Header>
@@ -803,11 +813,11 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
               )}
 
               {/* 4. Stats */}
-              {selected.stats && Object.values(selected.stats).some(v => v > 0) && (
+              {(selected.stats && Object.values(selected.stats).some(v => typeof v === 'number' && v > 0)) || (selected.quality && selected.quality.overall > 0) ? (
                 <div className="px-6 py-3 border-b border-[var(--border-default)]">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="bg-amber-50/60 rounded-xl p-3 text-center border border-amber-100">
-                      <div className="text-lg font-bold text-amber-700">{selected.stats?.authority ?? '—'}</div>
+                      <div className="text-lg font-bold text-amber-700">{selected.stats?.authority || Math.round((selected.quality?.overall || 0) * 5) || '—'}</div>
                       <div className="text-[10px] text-amber-500 font-medium">{t('knowledge.authorityScore')}</div>
                     </div>
                     <div className="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-default)]">
@@ -823,14 +833,14 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
                       <div className="text-[10px] text-blue-500 font-medium">{t('knowledge.searchHits')}</div>
                     </div>
                   </div>
-                  {(selected.stats.views > 0 || selected.stats.applications > 0) && (
+                  {selected.stats && (selected.stats.views > 0 || selected.stats.applications > 0) && (
                     <div className="flex items-center gap-4 mt-2 text-[10px] text-[var(--fg-muted)]">
                       <span>{t('knowledge.statViews')}: {selected.stats.views}</span>
                       <span>{t('knowledge.statApplications')}: {selected.stats.applications}</span>
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
 
               {/* 5. Reasoning — 推理依据 */}
               <DrawerContent.Reasoning

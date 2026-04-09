@@ -59,8 +59,8 @@ function toRecipe(r: RawKnowledgeRecord): Recipe {
     '@' + (r.title || '').replace(/[\s_-]+(.)?/g, (_: string, c: string) => (c ? c.toUpperCase() : ''));
 
   const stats: RecipeStats = {
-    authority: statistics.authority || quality.overall || 0,
-    authorityScore: statistics.authority || quality.overall || 0,
+    authority: statistics.authority || Math.round((quality.overall || 0) * 5) || 0,
+    authorityScore: statistics.authority || Math.round((quality.overall || 0) * 5) || 0,
     guardUsageCount: statistics.applications || 0,
     humanUsageCount: statistics.adoptions || 0,
     aiUsageCount: 0,

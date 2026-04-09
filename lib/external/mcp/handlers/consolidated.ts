@@ -10,6 +10,7 @@
  */
 
 import { getRequiredFieldsDescription } from '#domain/knowledge/FieldSpec.js';
+import { getDeveloperIdentity } from '#shared/developer-identity.js';
 import { envelope } from '../envelope.js';
 import * as browseHandlers from './browse.js';
 import * as guardHandlers from './guard.js';
@@ -324,7 +325,7 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
       skipConsolidation,
       supersedes,
       existingTitles,
-      userId: 'mcp',
+      userId: getDeveloperIdentity(),
     },
   });
 

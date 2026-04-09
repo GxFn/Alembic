@@ -752,6 +752,35 @@ router.post(
           toolCalls: result.toolCalls || [],
           iterations: result.iterations || 0,
         });
+
+        // ── Token 用量持久化（streaming） ──
+        try {
+          const tokenUsage = result.tokenUsage as { input?: number; output?: number } | undefined;
+          if (tokenUsage) {
+            const tokenStore = container.get('tokenUsageStore');
+            const aiProvider = container.singletons?.aiProvider as
+              | { name?: string; model?: string }
+              | undefined;
+            tokenStore.record({
+              source: 'user',
+              provider: aiProvider?.name ?? undefined,
+              model: aiProvider?.model ?? undefined,
+              inputTokens: tokenUsage.input || 0,
+              outputTokens: tokenUsage.output || 0,
+              durationMs: (result.durationMs as number | undefined) || 0,
+              toolCalls: (result.toolCalls as unknown[] | undefined)?.length || 0,
+            });
+            try {
+              const realtime = getRealtimeService();
+              realtime?.broadcastTokenUsageUpdated?.();
+            } catch {
+              /* ignore */
+            }
+          }
+        } catch {
+          /* token tracking should never break streaming */
+        }
+
         logger.debug('SSE session completed', {
           sessionId: session.sessionId,
           events: session.buffer.length,

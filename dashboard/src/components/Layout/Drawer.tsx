@@ -61,6 +61,8 @@ interface DrawerProps {
 interface DrawerHeaderProps {
   /** 标题文本 */
   title?: React.ReactNode;
+  /** 标题左侧前置元素 */
+  leading?: React.ReactNode;
   /** 标题区域额外元素 (放在标题下方) */
   subtitle?: React.ReactNode;
   /** 头部额外 className */
@@ -108,7 +110,7 @@ interface DrawerFooterProps {
 
 // ── 子组件: Header ────────────────────────────────────────
 
-function DrawerHeader({ title, subtitle, className, children }: DrawerHeaderProps) {
+function DrawerHeader({ title, leading, subtitle, className, children }: DrawerHeaderProps) {
   return (
     <div
       className={cn(
@@ -116,19 +118,22 @@ function DrawerHeader({ title, subtitle, className, children }: DrawerHeaderProp
         className
       )}
     >
-      {/* 左侧: 标题区 */}
-      {title && (
-        <div className="flex-1 min-w-0 mr-3">
-          <h3 className="font-bold text-[var(--fg-primary)] text-lg leading-snug break-words">
-            {title}
-          </h3>
-          {subtitle && (
-            <span className="text-xs text-[var(--fg-muted)] mt-0.5 block truncate">
-              {subtitle}
-            </span>
-          )}
-        </div>
-      )}
+      {/* 左侧: 前置 + 标题区 */}
+      <div className="flex items-center flex-1 min-w-0 mr-3 gap-2">
+        {leading}
+        {title && (
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-[var(--fg-primary)] text-lg leading-snug break-words">
+              {title}
+            </h3>
+            {subtitle && (
+              <span className="text-xs text-[var(--fg-muted)] mt-0.5 block truncate">
+                {subtitle}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
       {/* 右侧: 操作区 (children = Nav + HeaderActions + Close) */}
       {children && (
         <div className="flex items-center gap-1 shrink-0">{children}</div>

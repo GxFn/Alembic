@@ -61,6 +61,16 @@ export class OpenAiProvider extends AiProvider {
       };
 
       const data = await this._post(`${this.baseUrl}/chat/completions`, body);
+
+      // 提取 token 用量
+      if (data?.usage) {
+        this._emitTokenUsage({
+          inputTokens: data.usage.prompt_tokens || 0,
+          outputTokens: data.usage.completion_tokens || 0,
+          totalTokens: data.usage.total_tokens || 0,
+        });
+      }
+
       return data?.choices?.[0]?.message?.content || '';
     });
   }
@@ -250,6 +260,16 @@ export class OpenAiProvider extends AiProvider {
       };
 
       const data = await this._post(`${this.baseUrl}/chat/completions`, body);
+
+      // 提取 token 用量
+      if (data?.usage) {
+        this._emitTokenUsage({
+          inputTokens: data.usage.prompt_tokens || 0,
+          outputTokens: data.usage.completion_tokens || 0,
+          totalTokens: data.usage.total_tokens || 0,
+        });
+      }
+
       const text = data?.choices?.[0]?.message?.content || '';
 
       if (!text) {

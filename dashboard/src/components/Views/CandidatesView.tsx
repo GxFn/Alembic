@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FileSearch, Box, Trash2, Edit3, Layers, GitCompare, Copy, Brain, Sparkles, Clock, Code2, CheckCircle2, BarChart3, ArrowUpDown, Rocket, Wand2, Loader2, Globe, RefreshCw } from 'lucide-react';
+import { FileSearch, Box, Trash2, Edit3, Layers, GitCompare, Copy, Brain, Sparkles, Clock, Code2, CheckCircle2, BarChart3, ArrowUpDown, Rocket, Wand2, Loader2, Globe, RefreshCw, RotateCcw } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { ProjectData, KnowledgeEntry, SimilarRecipe, Recipe } from '../../types';
 import api from '../../api';
@@ -267,7 +267,26 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
     }
   }, [expandedId, effectiveTarget, fetchSimilarity]);
 
-  // 统计数据
+  // 全局统计（所有候选）
+  const globalStats = useMemo(() => {
+    if (!data?.candidates) return null;
+    let total = 0;
+    let confidenceSum = 0;
+    let withCode = 0;
+    for (const group of Object.values(data.candidates)) {
+      for (const c of group.items) {
+        total++;
+        confidenceSum += c.reasoning?.confidence ?? 0;
+        if ((c.content?.pattern && c.content.pattern.trim().length > 0) || (c.coreCode && c.coreCode.trim().length > 0)) {
+          withCode++;
+        }
+      }
+    }
+    const avgConfidence = total > 0 ? confidenceSum / total : 0;
+    return { total, avgConfidence, withCode };
+  }, [data?.candidates]);
+
+  // 当前维度统计
   const stats = useMemo(() => {
     if (!effectiveTarget || !data?.candidates?.[effectiveTarget]) return null;
     const items = data.candidates[effectiveTarget].items;
@@ -474,18 +493,15 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
             </button>
           )}
           {/* ── 统计指标 ── */}
-          {stats && (
+          {globalStats && (
             <div className="flex items-center gap-2 text-xs">
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] border border-[var(--border-default)]">
                 <BarChart3 size={14} className="text-[var(--fg-muted)]" />
-                <span className="text-[var(--fg-secondary)]">{t('candidates.totalCount', { count: stats.total })}</span>
-                {stats.withCode < stats.total && (
-                  <span className="text-[var(--fg-muted)] ml-1">{t('candidates.withCode', { count: stats.withCode })}</span>
-                )}
+                <span className="text-[var(--fg-secondary)]">{t('candidates.totalCount', { count: globalStats.total })}</span>
               </div>
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-100">
                 <span className="text-emerald-500">{t('candidates.confidence')}</span>
-                <strong className="text-emerald-700">{Math.round(stats.avgConfidence * 100)}%</strong>
+                <strong className="text-emerald-700">{Math.round(globalStats.avgConfidence * 100)}%</strong>
               </div>
             </div>
           )}
@@ -681,46 +697,44 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                         value={filters.sort}
                         onChange={v => setFilters(prev => ({ ...prev, sort: v as typeof prev.sort }))}
                         options={[
-                          { value: 'score-desc', label: `${t('candidates.sortConfidence')} ↓` },
-                          { value: 'score-asc', label: `${t('candidates.sortConfidence')} ↑` },
-                          { value: 'confidence-desc', label: `${t('candidates.confidence')} ↓` },
+                          { value: 'score-desc', label: `${t('candidates.sortScore')} ↓` },
+                          { value: 'score-asc', label: `${t('candidates.sortScore')} ↑` },
+                          { value: 'confidence-desc', label: `${t('candidates.sortConfidence')} ↓` },
                           { value: 'default', label: t('candidates.sortDefault') },
                         ]}
                         size="xs"
                         className="border-none bg-transparent"
                       />
                     </div>
-                  </div>
-
-                  <div className="h-5 w-px bg-[var(--border-default)]" />
-
-                  {/* 操作按钮 */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-[var(--fg-muted)] font-medium">{t('candidates.totalCount', { count: totalItems })}</span>
+                    <div className="h-4 w-px bg-[var(--border-default)]" />
                     <button
                       onClick={() => onAuditAllInTarget(paginatedItems, targetName)}
                       className="text-[11px] font-bold text-blue-600 hover:text-blue-700 px-2.5 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
                     >
                       {t('candidates.approveCurrentPage')}
                     </button>
-                    <button
-                      onClick={async () => {
-                        if (!window.confirm(t('candidates.batchDeleteConfirm', { count: paginatedItems.length }))) return;
-                        const results = await Promise.allSettled(
-                          paginatedItems.map(item => handleDeleteCandidate(targetName, item.id))
-                        );
-                        const failed = results.filter(r => r.status === 'rejected').length;
-                        if (failed > 0) notify(`${failed} ${t('common.deleteFailed')}`, { title: t('common.operationFailed'), type: 'error' });
-                        onRefresh?.();
-                      }}
-                      className="text-[11px] font-bold text-orange-500 hover:text-orange-600 px-2.5 py-1.5 rounded-lg hover:bg-orange-50 transition-colors"
-                    >
-                      {t('candidates.removeCurrentPage')}
-                    </button>
+                  </div>
+
+                  <div className="h-5 w-px bg-[var(--border-default)]" />
+
+                  {/* 统计 */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[var(--fg-muted)] font-medium">{t('candidates.totalCount', { count: totalItems })}</span>
+                    {totalItems > 0 && (
+                      <span className="text-[11px] text-emerald-600 font-medium ml-1.5 pl-2 border-l border-[var(--border-default)]">
+                        {t('candidates.confidence')} {Math.round((group.items.reduce((s, c) => s + (c.reasoning?.confidence ?? 0), 0) / totalItems) * 100)}%
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 全部删除（与清理重建同风格） */}
+                  <div className="ml-auto">
                     <button
                       onClick={() => handleDeleteAllInTarget(targetName)}
-                      className="text-[11px] font-bold text-red-500 hover:text-red-600 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors border border-red-200"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] transition-all text-[var(--fg-muted)] hover:text-red-600 hover:bg-red-50"
+                      title={t('candidates.deleteAll')}
                     >
+                      <Trash2 size={12} />
                       {t('candidates.deleteAll')}
                     </button>
                   </div>
@@ -774,10 +788,10 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                 )}
                                 {cand.complexity && (
                                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border
-                                    ${cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' :
-                                      cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                                    ${cand.complexity === 'advanced' ? 'bg-violet-50 text-violet-600 border-violet-100' :
+                                      cand.complexity === 'intermediate' ? 'bg-sky-50 text-sky-600 border-sky-100' :
                                         'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
-                                    {cand.complexity === 'advanced' ? t('candidates.confidenceHigh') : cand.complexity === 'intermediate' ? t('candidates.confidenceMedium') : t('candidates.confidenceLow')}
+                                    {cand.complexity === 'advanced' ? t('knowledge.complexityAdvanced') : cand.complexity === 'intermediate' ? t('knowledge.complexityIntermediate') : t('knowledge.complexityBeginner')}
                                   </span>
                                 )}
                               </div>
@@ -889,6 +903,16 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0">
+                            {/* 删除 */}
+                            <button
+                              onClick={() => { handleDeleteCandidate(targetName, cand.id); if (expandedId === cand.id) { setExpandedId(null); setCompareModal(null); } }}
+                              title={t('common.delete')}
+                              className="p-1.5 text-[var(--fg-muted)] hover:text-red-500 rounded-lg transition-colors opacity-30 hover:opacity-100"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                            <div className="h-4 w-px bg-[var(--border-default)]" />
+                            {/* 功能按钮组 */}
                             <button
                               onClick={() => handleEnrichCandidate(cand.id)}
                               disabled={enrichingIds.has(cand.id)}
@@ -914,13 +938,6 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                               {refiningIds.has(cand.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                             </button>
                             <button
-                              onClick={() => { handleDeleteCandidate(targetName, cand.id); if (expandedId === cand.id) { setExpandedId(null); setCompareModal(null); } }}
-                              title={t('common.delete')}
-                              className="p-1.5 hover:bg-red-50 text-[var(--fg-muted)] hover:text-red-500 rounded-lg transition-colors"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                            <button
                               onClick={() => onAuditCandidate(cand, targetName)}
                               className="text-[11px] font-bold text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors flex items-center gap-1"
                             >
@@ -943,6 +960,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                                 <Rocket size={12} /> {t('candidates.approve')}
                               </button>
                             )}
+
                           </div>
                         </div>
                       </div>
@@ -1085,14 +1103,15 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
                   {/* 操作栏 */}
                   <div className="flex items-center gap-1.5 px-5 py-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)] shrink-0">
-                    <button onClick={handleCompareDelete} className="text-xs font-medium text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1">
-                      <Trash2 size={12} /> {t('common.delete')}
-                    </button>
                     <button onClick={handleCompareAudit} className="text-xs font-medium text-blue-600 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1">
                       <Edit3 size={12} /> {t('candidates.approveAndSave')}
                     </button>
                     <button onClick={() => copyCandidate()} className="text-xs font-medium text-[var(--fg-secondary)] hover:bg-[var(--bg-subtle)] px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1">
                       <Copy size={12} /> {t('common.copy')}
+                    </button>
+                    <div className="flex-1" />
+                    <button onClick={handleCompareDelete} title={t('common.delete')} className="p-1.5 text-[var(--fg-muted)] hover:text-red-500 rounded-md transition-colors opacity-30 hover:opacity-100">
+                      <Trash2 size={13} />
                     </button>
                   </div>
 
@@ -1106,7 +1125,18 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
 
             <Drawer.Panel size={drawerWide ? 'lg' : 'md'}>
               {/* ── 面板头部 ── */}
-              <Drawer.Header title={cand.title}>
+              <Drawer.Header
+                title={cand.title}
+                leading={
+                  <button
+                    onClick={() => { handleDeleteCandidate(effectiveTarget!, cand.id); setExpandedId(null); setCompareModal(null); }}
+                    title={t('common.delete')}
+                    className="p-1.5 text-[var(--fg-muted)] hover:text-red-500 rounded-md transition-colors opacity-30 hover:opacity-100 shrink-0"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                }
+              >
                 <Drawer.Nav
                   currentIndex={currentIndex}
                   total={allItems.length}
@@ -1121,7 +1151,6 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     onToggle={toggleDrawerWide}
                     title={drawerWide ? t('common.collapse') : t('common.expand')}
                   />
-                  <Button variant="danger" size="icon-sm" onClick={() => { handleDeleteCandidate(effectiveTarget!, cand.id); setExpandedId(null); setCompareModal(null); }}><Trash2 size={16} /></Button>
                   <Drawer.CloseButton onClose={() => { setExpandedId(null); setCompareModal(null); }} />
                 </Drawer.HeaderActions>
               </Drawer.Header>
@@ -1136,7 +1165,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     b.push({ label: cand.category || 'general', className: `font-bold uppercase ${candCatCfg?.bg || 'bg-[var(--bg-subtle)]'} ${candCatCfg?.color || 'text-[var(--fg-muted)]'} ${candCatCfg?.border || 'border-[var(--border-default)]'}` });
                     if (cand.knowledgeType) b.push({ label: cand.knowledgeType, className: 'bg-purple-50 text-purple-700 border-purple-200' });
                     if (cand.language) b.push({ label: cand.language, className: 'uppercase font-bold text-[var(--fg-secondary)] bg-[var(--bg-subtle)] border-[var(--border-default)]' });
-                    if (cand.complexity) b.push({ label: cand.complexity === 'advanced' ? t('candidates.confidenceHigh') : cand.complexity === 'intermediate' ? t('candidates.confidenceMedium') : t('candidates.confidenceLow'), className: cand.complexity === 'advanced' ? 'bg-red-50 text-red-600 border-red-100' : cand.complexity === 'intermediate' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100' });
+                    if (cand.complexity) b.push({ label: cand.complexity === 'advanced' ? t('knowledge.complexityAdvanced') : cand.complexity === 'intermediate' ? t('knowledge.complexityIntermediate') : t('knowledge.complexityBeginner'), className: cand.complexity === 'advanced' ? 'bg-violet-50 text-violet-600 border-violet-100' : cand.complexity === 'intermediate' ? 'bg-sky-50 text-sky-600 border-sky-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100' });
                     if (cand.trigger) b.push({ label: cand.trigger, className: 'font-mono font-bold bg-amber-50 text-amber-700 border-amber-200' });
                     if (cand.source && cand.source !== 'unknown') b.push({ label: srcInfo.labelKey.startsWith('candidates.') ? t(srcInfo.labelKey) : srcInfo.labelKey, className: srcInfo.color });
                     if (cand.lifecycle === 'staging') {
@@ -1289,15 +1318,14 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                     {refiningIds.has(cand.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                     {t('candidates.refineShort')}
                   </button>
-                  <button
-                    onClick={() => { handleDeleteCandidate(effectiveTarget!, cand.id); setExpandedId(null); setCompareModal(null); }}
-                    title={t('common.delete')}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-red-500 hover:bg-red-50 border border-red-200 transition-colors`}
-                  >
-                    <Trash2 size={14} /> {t('common.delete')}
-                  </button>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { onAuditCandidate(cand, effectiveTarget!); setExpandedId(null); setCompareModal(null); }}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors"
+                  >
+                    <Edit3 size={14} /> {t('candidates.approveAndSave')}
+                  </button>
                   {(cand.lifecycle === 'pending' || cand.lifecycle === 'staging') && (
                     <button
                       onClick={async () => {
@@ -1314,12 +1342,6 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
                       <Rocket size={14} /> {t('candidates.approve')}
                     </button>
                   )}
-                  <button
-                    onClick={() => { onAuditCandidate(cand, effectiveTarget!); setExpandedId(null); setCompareModal(null); }}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm"
-                  >
-                    <Edit3 size={14} /> {t('candidates.approveAndSave')}
-                  </button>
                 </div>
               </Drawer.Footer>
             </Drawer.Panel>

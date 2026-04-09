@@ -1,6 +1,6 @@
 {
   "Alamofire": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/Alamofire",
+    "projectRoot": "/tmp/test-projects/Alamofire",
     "discoverer": "spm",
     "discovererName": "Swift Package Manager (SPM)",
     "targets": 2,
@@ -18,7 +18,7 @@
     "elapsedMs": 55
   },
   "iCarousel": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/iCarousel",
+    "projectRoot": "/tmp/test-projects/iCarousel",
     "discoverer": "generic",
     "discovererName": "Generic (directory scan)",
     "targets": 1,
@@ -37,7 +37,7 @@
     "elapsedMs": 8
   },
   "Euclid": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/Euclid",
+    "projectRoot": "/tmp/test-projects/Euclid",
     "discoverer": "spm",
     "discovererName": "Swift Package Manager (SPM)",
     "targets": 2,
@@ -55,7 +55,7 @@
     "elapsedMs": 33
   },
   "Expression": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/Expression",
+    "projectRoot": "/tmp/test-projects/Expression",
     "discoverer": "spm",
     "discovererName": "Swift Package Manager (SPM)",
     "targets": 2,
@@ -74,7 +74,7 @@
     "elapsedMs": 3
   },
   "VectorMath": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/VectorMath",
+    "projectRoot": "/tmp/test-projects/VectorMath",
     "discoverer": "spm",
     "discovererName": "Swift Package Manager (SPM)",
     "targets": 2,
@@ -92,7 +92,7 @@
     "elapsedMs": 1
   },
   "layout": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/layout",
+    "projectRoot": "/tmp/test-projects/layout",
     "discoverer": "generic",
     "discovererName": "Generic (directory scan)",
     "targets": 1,
@@ -111,7 +111,7 @@
     "elapsedMs": 5
   },
   "RetroRampage": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/RetroRampage",
+    "projectRoot": "/tmp/test-projects/RetroRampage",
     "discoverer": "generic",
     "discovererName": "Generic (directory scan)",
     "targets": 1,
@@ -129,7 +129,7 @@
     "elapsedMs": 5
   },
   "Consumer": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/Consumer",
+    "projectRoot": "/tmp/test-projects/Consumer",
     "discoverer": "spm",
     "discovererName": "Swift Package Manager (SPM)",
     "targets": 2,
@@ -148,7 +148,7 @@
     "elapsedMs": 2
   },
   "SwiftFormat": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/SwiftFormat",
+    "projectRoot": "/tmp/test-projects/SwiftFormat",
     "discoverer": "spm",
     "discovererName": "Swift Package Manager (SPM)",
     "targets": 3,
@@ -167,7 +167,7 @@
     "elapsedMs": 6
   },
   "flask": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/flask",
+    "projectRoot": "/tmp/test-projects/flask",
     "discoverer": "python",
     "discovererName": "Python (pip/poetry/pdm)",
     "targets": 2,
@@ -185,7 +185,7 @@
     "elapsedMs": 2
   },
   "fastapi": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/fastapi",
+    "projectRoot": "/tmp/test-projects/fastapi",
     "discoverer": "python",
     "discovererName": "Python (pip/poetry/pdm)",
     "targets": 2,
@@ -203,7 +203,7 @@
     "elapsedMs": 5
   },
   "django-website": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/django-website",
+    "projectRoot": "/tmp/test-projects/django-website",
     "discoverer": "python",
     "discovererName": "Python (pip/poetry/pdm)",
     "targets": 16,
@@ -221,7 +221,7 @@
     "elapsedMs": 6
   },
   "spring-petclinic": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/spring-petclinic",
+    "projectRoot": "/tmp/test-projects/spring-petclinic",
     "discoverer": "jvm",
     "discovererName": "JVM (Gradle)",
     "targets": 1,
@@ -239,7 +239,7 @@
     "elapsedMs": 2
   },
   "Pokedex": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/Pokedex",
+    "projectRoot": "/tmp/test-projects/Pokedex",
     "discoverer": "jvm",
     "discovererName": "JVM (Gradle)",
     "targets": 7,
@@ -257,7 +257,7 @@
     "elapsedMs": 4
   },
   "gin": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/gin",
+    "projectRoot": "/tmp/test-projects/gin",
     "discoverer": "generic",
     "discovererName": "Generic (directory scan)",
     "targets": 1,
@@ -275,7 +275,7 @@
     "elapsedMs": 1
   },
   "axum": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/axum",
+    "projectRoot": "/tmp/test-projects/axum",
     "discoverer": "generic",
     "discovererName": "Generic (directory scan)",
     "targets": 1,
@@ -294,7 +294,7 @@
     "elapsedMs": 9
   },
   "nest": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/nest",
+    "projectRoot": "/tmp/test-projects/nest",
     "discoverer": "node",
     "discovererName": "Node.js (npm/pnpm/yarn)",
     "targets": 9,
@@ -312,7 +312,7 @@
     "elapsedMs": 10
   },
   "todomvc": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/todomvc",
+    "projectRoot": "/tmp/test-projects/todomvc",
     "discoverer": "node",
     "discovererName": "Node.js (npm/pnpm/yarn)",
     "targets": 1,
@@ -336,7 +336,7 @@
     "elapsedMs": 12
   },
   "vue-element-admin": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/vue-element-admin",
+    "projectRoot": "/tmp/test-projects/vue-element-admin",
     "discoverer": "node",
     "discovererName": "Node.js (npm/pnpm/yarn)",
     "targets": 1,
@@ -355,7 +355,7 @@
     "elapsedMs": 3
   },
   "discourse": {
-    "projectRoot": "/Users/gaoxuefeng/Documents/github/discourse",
+    "projectRoot": "/tmp/test-projects/discourse",
     "discoverer": "node",
     "discovererName": "Node.js (npm/pnpm/yarn)",
     "targets": 52,

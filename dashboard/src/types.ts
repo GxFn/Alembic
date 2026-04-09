@@ -283,7 +283,7 @@ export interface KnowledgeEntry {
   trigger: string;
   description: string;
   lifecycle: KnowledgeLifecycle;
-  lifecycleHistory?: Array<{ from: string; to: string; at: number; by: string }>;
+  lifecycleHistory?: Array<{ from: string; to: string; at: number; by?: string }>;
   autoApprovable?: boolean;
   language: string;
   category: string;

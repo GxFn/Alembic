@@ -76,7 +76,7 @@ export class KnowledgeEntry {
 
   // Lifecycle
   lifecycle: string;
-  lifecycleHistory: Array<{ from: string; to: string; at: number }>;
+  lifecycleHistory: Array<{ from: string; to: string; at: number; by?: string }>;
   autoApprovable: boolean;
   stagingDeadline: number | null;
 
@@ -268,6 +268,17 @@ export class KnowledgeEntry {
     return result;
   }
 
+  /**
+   * 将最后一条 lifecycleHistory 条目标记操作人。
+   * 由 KnowledgeService._lifecycleTransition() 在 entity method 执行后调用。
+   */
+  stampLastTransition(by: string) {
+    const last = this.lifecycleHistory[this.lifecycleHistory.length - 1];
+    if (last) {
+      last.by = by;
+    }
+  }
+
   /* ═══ 谓词 ═══════════════════════════════════════════ */
 
   /** 是否处于候选阶段 */
@@ -401,18 +412,22 @@ export class KnowledgeEntry {
   /* ═══ 私有 ═══════════════════════════════════════════ */
 
   /** @returns } */
-  _transition(to: string): { success: boolean; error?: string } {
+  _transition(to: string, by?: string): { success: boolean; error?: string } {
     if (!isValidTransition(this.lifecycle, to)) {
       return {
         success: false,
         error: `Invalid lifecycle transition: ${this.lifecycle} → ${to}`,
       };
     }
-    this.lifecycleHistory.push({
+    const entry: { from: string; to: string; at: number; by?: string } = {
       from: this.lifecycle,
       to,
       at: this._now(),
-    });
+    };
+    if (by) {
+      entry.by = by;
+    }
+    this.lifecycleHistory.push(entry);
     this.lifecycle = to;
     this.updatedAt = this._now();
     return { success: true };

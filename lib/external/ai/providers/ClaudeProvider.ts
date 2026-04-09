@@ -54,7 +54,21 @@ export class ClaudeProvider extends AiProvider {
       temperature,
     };
 
+    if (context.systemPrompt) {
+      body.system = context.systemPrompt;
+    }
+
     const data = await this._post(`${CLAUDE_BASE}/messages`, body);
+
+    // 提取 token 用量
+    if (data?.usage) {
+      this._emitTokenUsage({
+        inputTokens: data.usage.input_tokens || 0,
+        outputTokens: data.usage.output_tokens || 0,
+        totalTokens: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0),
+      });
+    }
+
     const textBlock = (data?.content || []).find((c: { type: string }) => c.type === 'text');
     return textBlock?.text || '';
   }

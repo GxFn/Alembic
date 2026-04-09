@@ -1,6 +1,7 @@
 /** 健康检查端点 */
 
 import express from 'express';
+import { getDeveloperIdentity } from '../../shared/developer-identity.js';
 
 const router = express.Router();
 
@@ -27,6 +28,17 @@ router.get('/ready', (req, res) => {
     success: true,
     ready: true,
     timestamp: Math.floor(Date.now() / 1000),
+  });
+});
+
+/**
+ * GET /api/v1/health/identity
+ * 当前开发者身份（从 git config / 环境变量解析）
+ */
+router.get('/identity', (_req, res) => {
+  res.json({
+    success: true,
+    developer: getDeveloperIdentity(),
   });
 });
 

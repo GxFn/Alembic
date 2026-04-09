@@ -17,6 +17,7 @@
 
 import Logger from '#infra/logging/Logger.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
+import { getDeveloperIdentity } from '#shared/developer-identity.js';
 import { envelope } from '../envelope.js';
 import { saveDimensionCheckpoint } from './bootstrap/pipeline/checkpoint.js';
 import { BOOTSTRAP_COMPLETE_ACTIONS } from './bootstrap/shared/dimension-text.js';
@@ -217,7 +218,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
                   category: dimensionId,
                   tags: newTags,
                 },
-                { userId: 'mcp' }
+                { userId: getDeveloperIdentity() }
               );
               recipesBound++;
             }
