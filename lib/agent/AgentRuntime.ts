@@ -36,10 +36,8 @@ import {
   type AgentResult,
   type AiError,
   type FileCacheEntry,
-  type FunctionCall,
   type LLMResult,
   MAX_TOOL_CALLS_PER_ITER,
-  type ProgressEvent,
   type ReactLoopOpts,
   type RuntimeConfig,
   type ToolCallEntry,
@@ -953,25 +951,34 @@ export class AgentRuntime {
       ctx.lastReply = `[scan complete: ${recipeCount} recipes collected]`;
     }
 
-    // 强制摘要 (系统场景或 tracker 场景)
-    if (!ctx.lastReply && (ctx.tracker || ctx.isSystem)) {
-      const forcedResult = await produceForcedSummary({
-        aiProvider: this.aiProvider,
-        source: ctx.source,
-        toolCalls: ctx.toolCalls,
-        tracker: ctx.tracker ?? undefined,
-        contextWindow: ctx.contextWindow,
-        prompt: ctx.prompt,
-        tokenUsage: this.tokenUsage,
-      });
-      ctx.lastReply = forcedResult.reply;
-      if (forcedResult.tokenUsage) {
-        this.tokenUsage.input += forcedResult.tokenUsage.input || 0;
-        this.tokenUsage.output += forcedResult.tokenUsage.output || 0;
-        ctx.addTokenUsage({
-          inputTokens: forcedResult.tokenUsage.input || 0,
-          outputTokens: forcedResult.tokenUsage.output || 0,
+    // 强制摘要 — 循环结束后无文本回复时，生成摘要
+    // 覆盖所有场景: 系统管线、tracker 管线、用户对话(有/无工具调用)
+    if (!ctx.lastReply) {
+      if (ctx.toolCalls.length > 0 || ctx.tracker || ctx.isSystem) {
+        const forcedResult = await produceForcedSummary({
+          aiProvider: this.aiProvider,
+          source: ctx.source,
+          toolCalls: ctx.toolCalls,
+          tracker: ctx.tracker ?? undefined,
+          contextWindow: ctx.contextWindow,
+          prompt: ctx.prompt,
+          tokenUsage: this.tokenUsage,
         });
+        ctx.lastReply = forcedResult.reply;
+        if (forcedResult.tokenUsage) {
+          this.tokenUsage.input += forcedResult.tokenUsage.input || 0;
+          this.tokenUsage.output += forcedResult.tokenUsage.output || 0;
+          ctx.addTokenUsage({
+            inputTokens: forcedResult.tokenUsage.input || 0,
+            outputTokens: forcedResult.tokenUsage.output || 0,
+          });
+        }
+      } else {
+        // 兜底: 既无工具调用也无文本回复
+        ctx.lastReply = '抱歉，AI 未能生成有效回复。请重试或换个问题。';
+        this.logger.warn(
+          `[AgentRuntime] ⚠ finalize: no reply, no tool calls (iter=${ctx.iteration}) — fallback message`
+        );
       }
     }
 

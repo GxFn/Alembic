@@ -110,7 +110,7 @@ export async function produceForcedSummary({
   let finalReply: string | undefined;
 
   // 如果熔断器已打开，跳过 AI 调用直接合成摘要
-  const isCircuitOpen = aiProvider._circuitState === 'OPEN';
+  const isCircuitOpen = aiProvider._circuitState === 'OPEN' || aiProvider.name === 'mock';
   if (isCircuitOpen) {
     const outputType = isAnalyst ? 'analysis' : isSystem ? 'digest' : 'summary';
     logger.warn(
@@ -249,7 +249,7 @@ ${toolContextSummary}
         .filter(
           (tc: ToolCallRecord) => tc.tool === 'get_class_info' || tc.tool === 'get_class_hierarchy'
         )
-        .map((tc: ToolCallRecord) => (tc.args || tc.params || {}).className)
+        .map((tc: ToolCallRecord) => (tc.args || tc.params)?.className)
         .filter((v): v is string => Boolean(v))
         .slice(0, 10);
 
@@ -321,6 +321,12 @@ ${toolContextSummary}
       finalReply += `### 使用的工具\n${toolNames.map((t) => `- ${t}`).join('\n')}\n\n`;
       finalReply += '> ⚠️ AI 服务异常，未能生成完整分析。请稍后重试或缩小分析范围。';
     }
+  }
+
+  // 兜底: 确保 finalReply 始终非空
+  if (!finalReply) {
+    logger.warn('[ForcedSummary] ⚠ finalReply is empty after all paths — using fallback');
+    finalReply = `## 分析总结\n\n通过 **${toolCalls.length} 次工具调用**探索了项目代码，但未能生成完整分析。请重试或缩小分析范围。`;
   }
 
   logger.info(`[ForcedSummary] ✅ forced summary — ${finalReply.length} chars`);
