@@ -55,7 +55,7 @@ AutoSnippet/
 ├── test/                   # Tests
 ├── resources/              # Resources (WASM grammars/native UI/VS Code extension)
 ├── docs/                   # Formal documentation (git-tracked)
-├── docs/copilot/           # Dev temp docs (not git-tracked)
+├── docs-dev/               # Dev temp docs (not git-tracked)
 ├── scratch/                # Temp test scripts (not git-tracked)
 └── logs/                   # Runtime logs (not git-tracked)
 ```
@@ -339,7 +339,7 @@ The `prepublishOnly` script auto-builds native UI (macOS), but Dashboard require
 | Directory | Purpose | Git Tracked |
 |-----------|---------|-------------|
 | `docs/` | Formal documentation | ✅ |
-| `docs/copilot/` | Development temp docs | ❌ |
+| `docs-dev/` | Development temp docs | ❌ |
 | `scratch/` | Temp test scripts | ❌ |
 | `scripts/` | Formal scripts | ✅ |
 | `logs/` | Runtime logs | ❌ |

@@ -7,7 +7,6 @@
  *   3. 不可变冻结（Object.freeze）
  *
  * @module types/project-snapshot-builder
- * @see docs/copilot/unified-project-snapshot-design.md
  */
 
 import type {

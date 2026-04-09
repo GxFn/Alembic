@@ -5,7 +5,6 @@
  * View Factory 提供针对特定消费场景的轻量级投影。
  *
  * @module types/snapshot-views
- * @see docs/copilot/unified-project-snapshot-design.md §3.4
  */
 
 import type {
@@ -30,7 +29,6 @@ import type {
  * 替代之前 `Record<string, unknown>` 的擦除类型，
  * 消费端（dimension-complete-external、wiki-external）不再需要 `as` 手动转型。
  *
- * @see docs/copilot/unified-project-snapshot-design.md §11.3 H4
  */
 export interface SessionCacheShape {
   readonly allFiles: readonly SnapshotFile[];

@@ -9,7 +9,6 @@ import { vi } from 'vitest';
  *   - SessionStore: 缓存排除副作用工具, buildContextForDimension, distilled
  *   - PersistentMemory: extends PSM, conflict resolution, migration
  *
- * @see docs/copilot/memory-system-redesign.md §7.7
  */
 // ── mock Logger ──────────────────────────────────────────
 const mockLogger = {

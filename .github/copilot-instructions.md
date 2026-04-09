@@ -15,7 +15,7 @@
 - **运行测试**：`npm run test:unit`（单元）、`npm run test:integration`（集成）、`npx vitest run test/path/to/file.test.ts`（单文件）
 
 ### 文件存放约定
-- **开发中的临时文档**：保存到 `docs/copilot/`（不跟随 git）
+- **开发中的临时文档**：保存到 `docs-dev/`（不跟随 git）
 - **临时测试脚本**：保存到 `scratch/`（不跟随 git）
 - **正式文档**：保存到 `docs/`（跟随 git）
 - **正式脚本**：保存到 `scripts/` 或 `bin/`（跟随 git）

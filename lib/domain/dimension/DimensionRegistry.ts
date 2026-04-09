@@ -9,8 +9,6 @@
  * 这是整个系统中维度定义的唯一来源。
  * Bootstrap / Panorama / Rescan / Dashboard 均从此模块消费维度元数据。
  *
- * 设计文档: docs/copilot/unified-dimension-design.md §4
- *
  * @module domain/dimension/DimensionRegistry
  */
 

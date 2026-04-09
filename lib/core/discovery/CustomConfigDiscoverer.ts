@@ -10,8 +10,6 @@
  *  - Baidu EasyBox (Boxfile + *.boxspec)
  *  - Tuist (Project.swift)
  *  - XcodeGen (project.yml)
- *
- * 设计文档: docs/copilot/custom-config-discoverer-design.md
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';

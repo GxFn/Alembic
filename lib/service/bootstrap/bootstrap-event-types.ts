@@ -5,7 +5,6 @@
  * 通过 discriminated union（`type` 字段）实现编译期事件校验。
  *
  * @module service/bootstrap/bootstrap-event-types
- * @see docs/copilot/unified-project-snapshot-design.md §11.3 H6
  */
 
 // ── DimensionComplete payload variants ───────────────────────

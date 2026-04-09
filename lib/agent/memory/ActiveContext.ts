@@ -1,8 +1,6 @@
 /**
  * ActiveContext — 合并 WorkingMemory + ReasoningTrace 为统一的会话工作记忆
  *
- * 设计来源: docs/copilot/memory-system-redesign.md §4.3, §6.2
- *
  * 三个内部子区:
  *   1. Scratchpad   — Agent 通过 note_finding 主动标记的发现 (不可压缩)
  *   2. ObservationLog — 每轮 ReAct 记录 (合并原 RT.rounds + WM.observations，滑动窗口压缩)

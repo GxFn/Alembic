@@ -4,8 +4,6 @@
  * Bootstrap / Panorama / Rescan 共用的维度接口，
  * 消除三套维度体系之间的 ID 不一致和字段缺失问题。
  *
- * 设计文档: docs/copilot/unified-dimension-design.md §4
- *
  * @module domain/dimension/UnifiedDimension
  */
 

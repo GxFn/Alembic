@@ -1,8 +1,6 @@
 /**
  * SessionStore — Bootstrap 会话级存储 (合并 EpisodicMemory + ToolResultCache)
  *
- * 设计来源: docs/copilot/memory-system-redesign.md §4.4, §6.3
- *
  * 内部子系统:
  *   1. DimensionReports — 跨维度分析报告 + 结构化证据 + 交叉引用 (from EpisodicMemory)
  *   2. ReadOnlyCache — 只读工具结果缓存 (from ToolResultCache, 排除副作用工具 B3 fix)

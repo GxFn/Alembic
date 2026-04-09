@@ -11,8 +11,6 @@
  *   5. Quality Scoring — 质量评分
  *   6. Supersede Proposal — 创建替代提案
  *   7. Audit — 统一审计
- *
- * @see docs/copilot/recipe-lifecycle-management.md §6
  */
 
 import { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';

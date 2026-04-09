@@ -12,7 +12,6 @@
  *   4. **单一定义** — 项目分析数据的唯一类型来源
  *
  * @module types/project-snapshot
- * @see docs/copilot/unified-project-snapshot-design.md
  */
 
 // ── Phase 1: 文件发现 ────────────────────────────────────────

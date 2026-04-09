@@ -55,7 +55,7 @@ AutoSnippet/
 ├── test/                   # 测试
 ├── resources/              # 资源文件（WASM grammars/原生 UI/VS Code 扩展）
 ├── docs/                   # 正式文档（跟随 Git）
-├── docs/copilot/           # 开发临时文档（不跟随 Git）
+├── docs-dev/               # 开发临时文档（不跟随 Git）
 ├── scratch/                # 临时测试脚本（不跟随 Git）
 └── logs/                   # 运行日志（不跟随 Git）
 ```
@@ -339,7 +339,7 @@ npm run build:dashboard    # 必须在 npm publish 前执行
 | 目录 | 用途 | Git 追踪 |
 |------|------|---------|
 | `docs/` | 正式文档 | ✅ |
-| `docs/copilot/` | 开发中的临时文档 | ❌ |
+| `docs-dev/` | 开发中的临时文档 | ❌ |
 | `scratch/` | 临时测试脚本 | ❌ |
 | `scripts/` | 正式脚本 | ✅ |
 | `logs/` | 运行日志 | ❌ |
