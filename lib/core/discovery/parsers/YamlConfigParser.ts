@@ -13,12 +13,7 @@
 
 import yaml from 'js-yaml';
 
-import type {
-  ParsedLayer,
-  ParsedModule,
-  ParsedModuleSpec,
-  ParsedProjectConfig,
-} from './RubyDslParser.js';
+import type { ParsedModule, ParsedModuleSpec, ParsedProjectConfig } from './RubyDslParser.js';
 
 // ── XcodeGen YAML 类型 ───────────────────────────────
 
@@ -142,7 +137,7 @@ export function parseXcodeGenProject(content: string): ParsedProjectConfig {
     if (!layerMap.has(layerName)) {
       layerMap.set(layerName, []);
     }
-    layerMap.get(layerName)!.push(mod);
+    layerMap.get(layerName)?.push(mod);
   }
 
   // 转为 ParsedLayer[]
@@ -274,4 +269,53 @@ function isExternalTarget(targetName: string, doc: XcodeGenProject): boolean {
   }
   // Targets defined in the project are local
   return false;
+}
+
+// ── Melos YAML 解析 ─────────────────────────────────
+
+interface MelosConfig {
+  name?: string;
+  packages?: string[];
+  scripts?: Record<string, unknown>;
+  command?: Record<string, unknown>;
+  ide?: Record<string, unknown>;
+}
+
+export interface ParsedMelosProject {
+  name: string;
+  packageGlobs: string[];
+  scripts: string[];
+}
+
+/**
+ * 解析 melos.yaml 内容
+ * 提取项目名、包路径 glob 模式、scripts 列表
+ */
+export function parseMelosProject(content: string): ParsedMelosProject {
+  const result: ParsedMelosProject = {
+    name: '',
+    packageGlobs: [],
+    scripts: [],
+  };
+
+  try {
+    const doc = yaml.load(content, { schema: yaml.CORE_SCHEMA }) as MelosConfig | null;
+    if (!doc) {
+      return result;
+    }
+
+    result.name = doc.name ?? '';
+
+    if (Array.isArray(doc.packages)) {
+      result.packageGlobs = doc.packages.filter((p): p is string => typeof p === 'string');
+    }
+
+    if (doc.scripts && typeof doc.scripts === 'object') {
+      result.scripts = Object.keys(doc.scripts);
+    }
+  } catch {
+    // YAML 解析失败时返回空结果
+  }
+
+  return result;
 }

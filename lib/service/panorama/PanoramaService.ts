@@ -485,8 +485,10 @@ export class PanoramaService {
       return;
     }
     if (!this.#scanPromise) {
-      this.#scanPromise = this.#scanner.ensureData().then(() => {
-        this.#cache = null; // 扫描后清除缓存以触发重新计算
+      this.#scanPromise = this.#scanner.ensureData().then((scanResult) => {
+        if (scanResult) {
+          this.#cache = null; // 扫描后清除缓存以触发重新计算
+        }
       });
     }
     await this.#scanPromise;

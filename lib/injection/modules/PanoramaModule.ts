@@ -48,7 +48,7 @@ export const PanoramaModule = {
 
     ct.singleton('layerInferrer', () => new LayerInferrer());
 
-    ct.singleton('dimensionAnalyzer', () => new DimensionAnalyzer(getDb()));
+    ct.singleton('dimensionAnalyzer', () => new DimensionAnalyzer(getDb(), getProjectRoot()));
 
     ct.singleton('panoramaAggregator', (c: unknown) => {
       const sc = c as ServiceContainer;

@@ -47,7 +47,8 @@ export class PanoramaAggregator {
     this.#layerInferrer = opts.layerInferrer;
     this.#db = opts.db;
     this.#projectRoot = opts.projectRoot;
-    this.#dimensionAnalyzer = opts.dimensionAnalyzer ?? new DimensionAnalyzer(opts.db);
+    this.#dimensionAnalyzer =
+      opts.dimensionAnalyzer ?? new DimensionAnalyzer(opts.db, opts.projectRoot);
   }
 
   /**

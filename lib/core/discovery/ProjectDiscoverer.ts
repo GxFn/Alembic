@@ -28,6 +28,12 @@ export interface DependencyEdge {
   from: string;
   to: string;
   type: string;
+  /** 依赖作用域 (如 CMake PUBLIC/PRIVATE, Gradle implementation/api) */
+  scope?: string;
+  /** 构建配置 (如 Gradle configuration) */
+  configuration?: string;
+  /** 跨语言桥接类型 (如 flutter-engine / native-module / cinterop) */
+  bridgeType?: string;
 }
 
 export interface DependencyGraphLayer {
@@ -45,6 +51,12 @@ export interface DependencyGraph {
         type?: string;
         fullPath?: string;
         indirect?: boolean;
+        /** 标签 (如 Nx tags, Bazel visibility) */
+        tags?: string[];
+        /** 可见性 (如 Bazel //visibility:public) */
+        visibility?: string[];
+        /** Convention 角色 (如 Gradle convention plugin 推断的角色) */
+        conventionRole?: string;
         [key: string]: unknown;
       }
   )[];

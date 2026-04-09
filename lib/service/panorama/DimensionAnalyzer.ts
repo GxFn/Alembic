@@ -15,25 +15,22 @@
  */
 
 import type { UnifiedDimension } from '#domain/dimension/index.js';
-import { classifyRecipeToDimension, DIMENSION_REGISTRY } from '#domain/dimension/index.js';
+import {
+  classifyRecipeToDimension,
+  DIMENSION_REGISTRY,
+  resolveActiveDimensions,
+} from '#domain/dimension/index.js';
 import type { CeDbLike, HealthDimension, HealthRadar, KnowledgeGap } from './PanoramaTypes.js';
-
-/* ═══ 维度定义 — 从统一注册表派生 ═══════════════════════ */
-
-/**
- * Panorama 使用全量维度注册表进行健康评估。
- * 所有维度（含语言/框架条件维度）都参与评估 —
- * 若该语言未激活但有 Recipe → 仍计入(只是不生成 gap 建议)。
- */
-const DIMENSION_DEFS: readonly UnifiedDimension[] = DIMENSION_REGISTRY;
 
 /* ═══ DimensionAnalyzer Class ═════════════════════════════ */
 
 export class DimensionAnalyzer {
   readonly #db: CeDbLike;
+  readonly #projectRoot: string;
 
-  constructor(db: CeDbLike) {
+  constructor(db: CeDbLike, projectRoot: string) {
     this.#db = db;
+    this.#projectRoot = projectRoot;
   }
 
   /**
@@ -42,12 +39,15 @@ export class DimensionAnalyzer {
    * @param moduleRoles — 项目中存在的模块角色 (用于 gap 优先级推断)
    */
   analyze(moduleRoles: string[]): { radar: HealthRadar; gaps: KnowledgeGap[] } {
+    // 0. 按项目语言过滤活跃维度（排除无关语言/框架维度）
+    const activeDims = this.#resolveActiveDims();
+
     // 1. 从 DB 获取所有活跃 recipe 的维度分类信息
     const recipes = this.#fetchRecipeMetadata();
 
     // 2. 将每条 recipe 映射到维度
     const dimensionCounts = new Map<string, { count: number; titles: string[] }>();
-    for (const def of DIMENSION_DEFS) {
+    for (const def of activeDims) {
       dimensionCounts.set(def.id, { count: 0, titles: [] });
     }
 
@@ -65,7 +65,7 @@ export class DimensionAnalyzer {
     }
 
     // 3. 计算各维度得分与状态
-    const dimensions: HealthDimension[] = DIMENSION_DEFS.map((def) => {
+    const dimensions: HealthDimension[] = activeDims.map((def) => {
       const entry = dimensionCounts.get(def.id)!;
       return this.#scoreDimension(def, entry.count, entry.titles);
     });
@@ -73,9 +73,9 @@ export class DimensionAnalyzer {
     // 4. 加权平均健康分
     let weightedSum = 0;
     let weightTotal = 0;
-    for (let i = 0; i < DIMENSION_DEFS.length; i++) {
-      weightedSum += dimensions[i].score * DIMENSION_DEFS[i].weight;
-      weightTotal += DIMENSION_DEFS[i].weight;
+    for (let i = 0; i < activeDims.length; i++) {
+      weightedSum += dimensions[i].score * activeDims[i].weight;
+      weightTotal += activeDims[i].weight;
     }
     const overallScore = weightTotal > 0 ? Math.round(weightedSum / weightTotal) : 0;
 
@@ -94,9 +94,30 @@ export class DimensionAnalyzer {
 
     // 6. 生成维度空白 (gaps)
     const roleSet = new Set(moduleRoles);
-    const gaps = this.#detectDimensionGaps(dimensions, roleSet);
+    const gaps = this.#detectDimensionGaps(dimensions, activeDims, roleSet);
 
     return { radar, gaps };
+  }
+
+  /* ─── 按项目语言解析活跃维度 ───────────────────── */
+
+  #resolveActiveDims(): readonly UnifiedDimension[] {
+    try {
+      const row = this.#db
+        .prepare(
+          `SELECT primary_lang FROM bootstrap_snapshots
+           WHERE project_root = ? ORDER BY created_at DESC LIMIT 1`
+        )
+        .get(this.#projectRoot) as Record<string, unknown> | undefined;
+
+      const primaryLang = row?.primary_lang as string | null;
+      if (primaryLang) {
+        return resolveActiveDimensions(primaryLang);
+      }
+    } catch {
+      // 无 bootstrap 数据 → 回退全量维度
+    }
+    return DIMENSION_REGISTRY;
   }
 
   /* ─── 从 DB 获取 recipe 元数据 ─────────────────── */
@@ -177,12 +198,16 @@ export class DimensionAnalyzer {
 
   /* ─── 维度空白检测 ─────────────────────────────── */
 
-  #detectDimensionGaps(dimensions: HealthDimension[], moduleRoles: Set<string>): KnowledgeGap[] {
+  #detectDimensionGaps(
+    dimensions: HealthDimension[],
+    activeDims: readonly UnifiedDimension[],
+    moduleRoles: Set<string>
+  ): KnowledgeGap[] {
     const gaps: KnowledgeGap[] = [];
 
     for (let i = 0; i < dimensions.length; i++) {
       const dim = dimensions[i];
-      const def = DIMENSION_DEFS[i];
+      const def = activeDims[i];
 
       if (dim.status !== 'missing' && dim.status !== 'weak') {
         continue;

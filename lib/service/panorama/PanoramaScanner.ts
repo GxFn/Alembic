@@ -174,6 +174,51 @@ export class PanoramaScanner {
         }
       }
 
+      // Phase 2-extra: CustomConfig 增强
+      // 当主 discoverer 不是 customConfig 时，尝试 CustomConfigDiscoverer
+      // 以获取更丰富的模块视图（混编项目常见：jvm/node/dart 获胜但模块数偏少）
+      if (phase1.discoverer && phase1.discoverer.id !== 'customConfig') {
+        try {
+          const { CustomConfigDiscoverer } = await import(
+            '../../core/discovery/CustomConfigDiscoverer.js'
+          );
+          const ccDiscoverer = new CustomConfigDiscoverer();
+          const ccDetect = await ccDiscoverer.detect(this.#projectRoot);
+
+          if (ccDetect.match && ccDetect.confidence >= 0.7) {
+            await ccDiscoverer.load(this.#projectRoot);
+            const ccTargets = await ccDiscoverer.listTargets();
+
+            // 仅当 CustomConfig 发现更多模块时才采纳
+            if (ccTargets.length > modules) {
+              this.#logger.info(
+                `[PanoramaScanner] CustomConfig enrichment: ${ccTargets.length} modules ` +
+                  `(primary discoverer '${phase1.discoverer.id}' found ${modules})`
+              );
+              const ccPhase2 = await runPhase2_DependencyGraph(
+                ccDiscoverer as unknown as Parameters<typeof runPhase2_DependencyGraph>[0],
+                this.#container,
+                this.#logger,
+                'custom-enrichment'
+              );
+              edges += ccPhase2.depEdgesWritten;
+
+              if (ccPhase2.depGraphData) {
+                await runPhase2_1_ModuleEntities(
+                  ccPhase2.depGraphData,
+                  this.#projectRoot,
+                  this.#container,
+                  this.#logger
+                );
+                modules = Math.max(modules, ccPhase2.depGraphData.nodes?.length ?? 0);
+              }
+            }
+          }
+        } catch {
+          // CustomConfig 增强失败不阻塞主流程
+        }
+      }
+
       // Phase 2.2: 目录推断兜底
       // 当 Phase 2.1 未产出 module 实体时（无 Package.swift / build.gradle 等），
       // 从已有 code_entities 按顶层目录分组写入 module 实体

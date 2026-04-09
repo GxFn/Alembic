@@ -25,6 +25,13 @@ import {
   type DiscoveredTarget,
   ProjectDiscoverer,
 } from './ProjectDiscoverer.js';
+import { parseCMakeProject } from './parsers/CMakeParser.js';
+import { inferConventionRole, parseGradleProject } from './parsers/GradleDslParser.js';
+import {
+  parseFlutterPluginsDeps,
+  parseNxWorkspace,
+  parseReactNativeProject,
+} from './parsers/JsonConfigParser.js';
 import {
   type ParsedLayer,
   type ParsedModuleSpec,
@@ -33,7 +40,12 @@ import {
   parseModuleSpec,
 } from './parsers/RubyDslParser.js';
 import {
-  extractXcodeGenDependencyEdges,
+  type ParsedBuildFile,
+  parseStarlarkBuildFile,
+  RULE_TO_LANGUAGE,
+} from './parsers/StarlarkParser.js';
+import {
+  parseMelosProject,
   parseXcodeGenProject,
   parseXcodeGenTarget,
 } from './parsers/YamlConfigParser.js';
@@ -44,13 +56,58 @@ interface CustomSystemProfile {
   id: string;
   displayName: string;
   markers: string[];
+  markerStrategy?: 'all' | 'any' | 'ordered';
+  antiMarkers?: string[];
   moduleSpecPattern: string | null;
   language: readonly string[];
   confidence: number;
-  parser: 'ruby-dsl' | 'yaml' | 'swift-dsl' | 'starlark';
+  parser: 'ruby-dsl' | 'yaml' | 'swift-dsl' | 'starlark' | 'gradle-dsl' | 'cmake' | 'json-config';
 }
 
 const KNOWN_CUSTOM_SYSTEMS: readonly CustomSystemProfile[] = Object.freeze([
+  // ── Tier 1: Bazel / Buck2 (Starlark) ──
+  {
+    id: 'bazel',
+    displayName: 'Bazel',
+    markers: ['MODULE.bazel', 'WORKSPACE', 'WORKSPACE.bazel'],
+    markerStrategy: 'any' as const,
+    moduleSpecPattern: 'BUILD.bazel',
+    language: Object.freeze([]),
+    confidence: 0.85,
+    parser: 'starlark' as const,
+  },
+  {
+    id: 'buck2',
+    displayName: 'Buck2',
+    markers: ['.buckconfig', '.buckroot'],
+    markerStrategy: 'any' as const,
+    moduleSpecPattern: 'BUCK',
+    language: Object.freeze([]),
+    confidence: 0.85,
+    parser: 'starlark' as const,
+  },
+  // ── Tier 1: Android Gradle Convention Plugins ──
+  {
+    id: 'gradle-convention',
+    displayName: 'Gradle Convention Plugins',
+    markers: ['build-logic/convention/', 'buildSrc/src/main/kotlin/'],
+    markerStrategy: 'any' as const,
+    moduleSpecPattern: null,
+    language: Object.freeze(['kotlin', 'java']),
+    confidence: 0.8,
+    parser: 'gradle-dsl' as const,
+  },
+  // ── Tier 1: Flutter Melos ──
+  {
+    id: 'melos',
+    displayName: 'Melos (Flutter Monorepo)',
+    markers: ['melos.yaml'],
+    moduleSpecPattern: null,
+    language: Object.freeze(['dart']),
+    confidence: 0.82,
+    parser: 'yaml' as const,
+  },
+  // ── Tier 1: iOS 生态 ──
   {
     id: 'easybox',
     displayName: 'Baidu EasyBox',
@@ -70,9 +127,89 @@ const KNOWN_CUSTOM_SYSTEMS: readonly CustomSystemProfile[] = Object.freeze([
     parser: 'swift-dsl' as const,
   },
   {
+    id: 'ks-component',
+    displayName: 'KSComponent (快手)',
+    markers: ['KSPodfile', 'Podfile.ks'],
+    markerStrategy: 'any' as const,
+    moduleSpecPattern: '*.podspec',
+    language: Object.freeze(['swift', 'objectivec']),
+    confidence: 0.8,
+    parser: 'ruby-dsl' as const,
+  },
+  {
+    id: 'mt-component',
+    displayName: 'MTComponent (美团)',
+    markers: ['MTModulefile', 'MTConfig.yml'],
+    markerStrategy: 'any' as const,
+    moduleSpecPattern: '*.podspec',
+    language: Object.freeze(['swift', 'objectivec']),
+    confidence: 0.78,
+    parser: 'ruby-dsl' as const,
+  },
+  // ── Tier 1: 混合架构 ──
+  {
+    id: 'flutter-add-to-app',
+    displayName: 'Flutter Add-to-App',
+    markers: ['.flutter-plugins-dependencies', '.flutter-plugins'],
+    markerStrategy: 'any' as const,
+    moduleSpecPattern: 'pubspec.yaml',
+    language: Object.freeze(['dart']),
+    confidence: 0.78,
+    parser: 'json-config' as const,
+  },
+  {
+    id: 'react-native-hybrid',
+    displayName: 'React Native Hybrid',
+    markers: ['metro.config.js', 'metro.config.ts', 'react-native.config.js'],
+    markerStrategy: 'any' as const,
+    moduleSpecPattern: null,
+    language: Object.freeze(['typescript', 'javascript']),
+    confidence: 0.78,
+    parser: 'json-config' as const,
+  },
+  {
+    id: 'kotlin-multiplatform',
+    displayName: 'Kotlin Multiplatform',
+    markers: ['shared/build.gradle.kts'],
+    moduleSpecPattern: null,
+    language: Object.freeze(['kotlin']),
+    confidence: 0.78,
+    parser: 'gradle-dsl' as const,
+  },
+  // ── Tier 2: Nx / Pants / CMake ──
+  {
+    id: 'nx-monorepo',
+    displayName: 'Nx Monorepo',
+    markers: ['nx.json'],
+    moduleSpecPattern: 'project.json',
+    language: Object.freeze(['typescript', 'javascript']),
+    confidence: 0.8,
+    parser: 'json-config' as const,
+  },
+  {
+    id: 'pants',
+    displayName: 'Pants Build',
+    markers: ['pants.toml'],
+    moduleSpecPattern: 'BUILD',
+    language: Object.freeze([]),
+    confidence: 0.8,
+    parser: 'starlark' as const,
+  },
+  {
+    id: 'cmake-multiproject',
+    displayName: 'CMake Multi-Project',
+    markers: ['CMakeLists.txt'],
+    antiMarkers: ['MODULE.bazel', 'WORKSPACE', 'meson.build'],
+    moduleSpecPattern: 'CMakeLists.txt',
+    language: Object.freeze(['cpp', 'c']),
+    confidence: 0.75,
+    parser: 'cmake' as const,
+  },
+  {
     id: 'xcodegen',
     displayName: 'XcodeGen',
     markers: ['project.yml', 'project.yaml'],
+    markerStrategy: 'any' as const,
     moduleSpecPattern: null,
     language: Object.freeze(['swift', 'objectivec']),
     confidence: 0.75,
@@ -180,9 +317,21 @@ function loadUserCustomSystems(projectRoot: string): CustomSystemProfile[] {
         moduleSpecPattern: item.moduleSpecPattern ? String(item.moduleSpecPattern) : null,
         language: Array.isArray(item.language) ? item.language.map(String) : ['swift'],
         confidence: typeof item.confidence === 'number' ? item.confidence : 0.75,
-        parser: ['ruby-dsl', 'yaml', 'swift-dsl', 'starlark'].includes(item.parser)
+        parser: [
+          'ruby-dsl',
+          'yaml',
+          'swift-dsl',
+          'starlark',
+          'gradle-dsl',
+          'cmake',
+          'json-config',
+        ].includes(item.parser)
           ? item.parser
           : 'ruby-dsl',
+        markerStrategy: ['all', 'any', 'ordered'].includes(item.markerStrategy)
+          ? item.markerStrategy
+          : undefined,
+        antiMarkers: Array.isArray(item.antiMarkers) ? item.antiMarkers.map(String) : undefined,
       });
     }
 
@@ -230,10 +379,20 @@ export class CustomConfigDiscoverer extends ProjectDiscoverer {
     // Level 1: 已知自研工具指纹匹配（含用户自定义系统）
     const systems = getEffectiveSystemProfiles(projectRoot);
     for (const system of systems) {
-      const markerFound = system.markers.some((marker) => {
-        const fullPath = join(projectRoot, marker);
-        return existsSync(fullPath);
-      });
+      // antiMarkers 排除检查
+      if (system.antiMarkers?.some((am) => existsSync(join(projectRoot, am)))) {
+        continue;
+      }
+
+      const strategy = system.markerStrategy ?? 'all';
+      let markerFound = false;
+
+      if (strategy === 'any') {
+        markerFound = system.markers.some((marker) => existsSync(join(projectRoot, marker)));
+      } else {
+        // 'all' 和 'ordered' 都要求所有 markers 存在（ordered 未来可扩展）
+        markerFound = system.markers.every((marker) => existsSync(join(projectRoot, marker)));
+      }
 
       if (markerFound) {
         return {
@@ -306,20 +465,46 @@ export class CustomConfigDiscoverer extends ProjectDiscoverer {
     this.#matchedSystem = null;
     const systems = getEffectiveSystemProfiles(projectRoot);
     for (const system of systems) {
-      const markerFound = system.markers.some((marker) => existsSync(join(projectRoot, marker)));
+      if (system.antiMarkers?.some((am) => existsSync(join(projectRoot, am)))) {
+        continue;
+      }
+      const strategy = system.markerStrategy ?? 'all';
+      const markerFound =
+        strategy === 'any'
+          ? system.markers.some((marker) => existsSync(join(projectRoot, marker)))
+          : system.markers.every((marker) => existsSync(join(projectRoot, marker)));
       if (markerFound) {
         this.#matchedSystem = system;
         break;
       }
     }
 
-    if (this.#matchedSystem?.parser === 'ruby-dsl') {
-      this.#loadRubyDsl(projectRoot);
-    } else if (this.#matchedSystem?.parser === 'yaml') {
-      this.#loadYaml(projectRoot);
-    } else {
-      // 启发式 fallback: 扫描目录结构
+    if (!this.#matchedSystem) {
       this.#loadHeuristic(projectRoot);
+      return;
+    }
+
+    switch (this.#matchedSystem.parser) {
+      case 'ruby-dsl':
+        this.#loadRubyDsl(projectRoot);
+        break;
+      case 'yaml':
+        this.#loadYaml(projectRoot);
+        break;
+      case 'starlark':
+        this.#loadStarlark(projectRoot);
+        break;
+      case 'gradle-dsl':
+        this.#loadGradleDsl(projectRoot);
+        break;
+      case 'cmake':
+        this.#loadCMake(projectRoot);
+        break;
+      case 'json-config':
+        this.#loadJsonConfig(projectRoot);
+        break;
+      default:
+        this.#loadHeuristic(projectRoot);
     }
   }
 
@@ -704,6 +889,12 @@ export class CustomConfigDiscoverer extends ProjectDiscoverer {
       return;
     }
 
+    // Melos 项目走专用加载路径
+    if (system.id === 'melos') {
+      this.#loadMelos(projectRoot, yamlContent);
+      return;
+    }
+
     // 解析 project.yml
     const config = parseXcodeGenProject(yamlContent);
     this.#parsedConfig = config;
@@ -746,6 +937,385 @@ export class CustomConfigDiscoverer extends ProjectDiscoverer {
       if (this.#targets.some((t) => t.name === dep.name)) {
       }
       // 外部包不加入 targets，留给 getDependencyGraph 处理
+    }
+  }
+
+  // ── Private: Melos 加载 ──────────────────────────────
+
+  #loadMelos(projectRoot: string, yamlContent: string) {
+    const melos = parseMelosProject(yamlContent);
+
+    // 使用 glob 模式扫描 pubspec.yaml 文件
+    const pubspecFiles = this.#findBuildFiles(projectRoot, ['pubspec.yaml']);
+
+    for (const pf of pubspecFiles) {
+      // 排除根目录 pubspec
+      if (pf === join(projectRoot, 'pubspec.yaml')) {
+        continue;
+      }
+
+      try {
+        const content = readFileSync(pf, 'utf-8');
+        const nameMatch = content.match(/^name:\s*(\S+)/m);
+        if (nameMatch) {
+          const modDir = join(pf, '..');
+          const relPath = relative(projectRoot, modDir);
+
+          this.#targets.push({
+            name: nameMatch[1],
+            path: modDir,
+            type: 'library',
+            language: 'dart',
+            metadata: {
+              melosProject: melos.name,
+              pubspecPath: relative(projectRoot, pf),
+              packageDir: relPath,
+            },
+          });
+        }
+      } catch {
+        /* skip */
+      }
+    }
+  }
+
+  // ── Private: Starlark 加载 (Bazel/Buck2/Pants) ──────
+
+  #loadStarlark(projectRoot: string) {
+    const system = this.#matchedSystem!;
+    const specPattern = system.moduleSpecPattern ?? 'BUILD';
+    const buildFileNames = specPattern === 'BUCK' ? ['BUCK'] : ['BUILD.bazel', 'BUILD'];
+
+    // 扫描所有 BUILD 文件
+    const buildFiles = this.#findBuildFiles(projectRoot, buildFileNames);
+    const allTargets: ParsedBuildFile['targets'] = [];
+    const detectedLanguages = new Set<string>();
+
+    for (const buildFile of buildFiles) {
+      try {
+        const content = readFileSync(buildFile, 'utf-8');
+        const parsed = parseStarlarkBuildFile(content);
+
+        const dirRelative = relative(projectRoot, buildFile).replace(/\/[^/]+$/, '') || '.';
+
+        for (const target of parsed.targets) {
+          allTargets.push(target);
+
+          // 语言推断
+          const lang = RULE_TO_LANGUAGE[target.rule];
+          if (lang) {
+            detectedLanguages.add(lang);
+          }
+
+          const modulePath = join(projectRoot, dirRelative);
+          this.#targets.push({
+            name: target.name,
+            path: modulePath,
+            type:
+              target.rule.includes('binary') || target.rule.includes('executable')
+                ? 'application'
+                : 'library',
+            language: lang ?? 'unknown',
+            metadata: {
+              rule: target.rule,
+              visibility: target.visibility,
+              buildFile: relative(projectRoot, buildFile),
+            },
+          });
+        }
+      } catch {
+        /* skip unreadable BUILD files */
+      }
+    }
+  }
+
+  #findBuildFiles(dir: string, names: string[], depth = 0): string[] {
+    if (depth > 8) {
+      return [];
+    }
+    const results: string[] = [];
+    try {
+      const entries = readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith('.') || EXCLUDE_DIRS.has(entry.name)) {
+          continue;
+        }
+        const fullPath = join(dir, entry.name);
+        if (entry.isFile() && names.includes(entry.name)) {
+          results.push(fullPath);
+        } else if (entry.isDirectory()) {
+          results.push(...this.#findBuildFiles(fullPath, names, depth + 1));
+        }
+      }
+    } catch {
+      /* skip */
+    }
+    return results;
+  }
+
+  // ── Private: Gradle DSL 加载 ─────────────────────────
+
+  #loadGradleDsl(projectRoot: string) {
+    // 查找 settings.gradle.kts 或 settings.gradle
+    let settingsContent: string | null = null;
+    for (const name of ['settings.gradle.kts', 'settings.gradle']) {
+      const settingsPath = join(projectRoot, name);
+      if (existsSync(settingsPath)) {
+        try {
+          settingsContent = readFileSync(settingsPath, 'utf-8');
+          break;
+        } catch {
+          /* skip */
+        }
+      }
+    }
+
+    if (!settingsContent) {
+      this.#loadHeuristic(projectRoot);
+      return;
+    }
+
+    const project = parseGradleProject(settingsContent);
+    const primaryLang = (this.#matchedSystem?.language[0] as string) || 'kotlin';
+
+    // 解析每个模块的 build.gradle.kts
+    for (const mod of project.includedModules) {
+      const modulePath = join(projectRoot, mod.directory);
+      if (!existsSync(modulePath)) {
+        continue;
+      }
+
+      // 读取 build.gradle.kts 获取 dependencies 和 plugins
+      for (const buildName of ['build.gradle.kts', 'build.gradle']) {
+        const buildPath = join(modulePath, buildName);
+        if (existsSync(buildPath)) {
+          try {
+            const buildContent = readFileSync(buildPath, 'utf-8');
+            const updatedMod = parseGradleProject(buildContent, mod);
+            // 更新 module 的 convention plugin 和 dependencies
+            mod.conventionPlugin =
+              updatedMod.includedModules[0]?.conventionPlugin ?? mod.conventionPlugin;
+            mod.dependencies = updatedMod.includedModules[0]?.dependencies ?? mod.dependencies;
+          } catch {
+            /* skip */
+          }
+          break;
+        }
+      }
+
+      const inferredRole = mod.conventionPlugin
+        ? inferConventionRole(mod.conventionPlugin)
+        : undefined;
+
+      this.#targets.push({
+        name: mod.path,
+        path: modulePath,
+        type: mod.path === ':app' ? 'application' : 'library',
+        language: primaryLang,
+        metadata: {
+          gradlePath: mod.path,
+          conventionPlugin: mod.conventionPlugin,
+          conventionRole: inferredRole,
+        },
+      });
+    }
+  }
+
+  // ── Private: CMake 加载 ──────────────────────────────
+
+  #loadCMake(projectRoot: string) {
+    const cmakePath = join(projectRoot, 'CMakeLists.txt');
+    if (!existsSync(cmakePath)) {
+      this.#loadHeuristic(projectRoot);
+      return;
+    }
+
+    let content: string;
+    try {
+      content = readFileSync(cmakePath, 'utf-8');
+    } catch {
+      return;
+    }
+
+    const project = parseCMakeProject(content);
+    const primaryLang = (this.#matchedSystem?.language[0] as string) || 'cpp';
+
+    // 主目标
+    for (const target of project.targets) {
+      this.#targets.push({
+        name: target.name,
+        path: projectRoot,
+        type: target.type === 'executable' ? 'application' : 'library',
+        language: primaryLang,
+        metadata: {
+          cmakeType: target.type,
+        },
+      });
+    }
+
+    // 递归解析子目录的 CMakeLists.txt
+    for (const subdir of project.subdirectories) {
+      const subdirPath = join(projectRoot, subdir);
+      const subdirCmakePath = join(subdirPath, 'CMakeLists.txt');
+      if (!existsSync(subdirCmakePath)) {
+        continue;
+      }
+
+      try {
+        const subcontent = readFileSync(subdirCmakePath, 'utf-8');
+        const subproject = parseCMakeProject(subcontent);
+
+        for (const target of subproject.targets) {
+          this.#targets.push({
+            name: target.name,
+            path: subdirPath,
+            type: target.type === 'executable' ? 'application' : 'library',
+            language: primaryLang,
+            metadata: {
+              cmakeType: target.type,
+              subdirectory: subdir,
+            },
+          });
+        }
+      } catch {
+        /* skip */
+      }
+    }
+  }
+
+  // ── Private: JSON Config 加载 (Nx/Flutter/RN) ────────
+
+  #loadJsonConfig(projectRoot: string) {
+    const system = this.#matchedSystem!;
+
+    switch (system.id) {
+      case 'nx-monorepo':
+        this.#loadNx(projectRoot);
+        break;
+      case 'flutter-add-to-app':
+        this.#loadFlutterAddToApp(projectRoot);
+        break;
+      case 'react-native-hybrid':
+        this.#loadReactNative(projectRoot);
+        break;
+      default:
+        this.#loadHeuristic(projectRoot);
+    }
+  }
+
+  #loadNx(projectRoot: string) {
+    const nxJsonPath = join(projectRoot, 'nx.json');
+    if (!existsSync(nxJsonPath)) {
+      return;
+    }
+
+    // 扫描所有 project.json 文件
+    const projectJsonFiles = this.#findBuildFiles(projectRoot, ['project.json']);
+    const projects: Array<{ name: string; root: string; projectType: string; tags: string[] }> = [];
+
+    for (const pjFile of projectJsonFiles) {
+      try {
+        const content = readFileSync(pjFile, 'utf-8');
+        const parsed = parseNxWorkspace(content);
+        for (const proj of parsed.projects) {
+          projects.push(proj);
+          const modulePath = join(projectRoot, proj.root);
+
+          this.#targets.push({
+            name: proj.name,
+            path: modulePath,
+            type: proj.projectType === 'application' ? 'application' : 'library',
+            language: 'typescript',
+            metadata: {
+              tags: proj.tags,
+              nxProjectType: proj.projectType,
+            },
+          });
+        }
+      } catch {
+        /* skip */
+      }
+    }
+  }
+
+  #loadFlutterAddToApp(projectRoot: string) {
+    // 解析 .flutter-plugins-dependencies
+    const depsPath = join(projectRoot, '.flutter-plugins-dependencies');
+    if (existsSync(depsPath)) {
+      try {
+        const content = readFileSync(depsPath, 'utf-8');
+        const parsed = parseFlutterPluginsDeps(content);
+
+        for (const plugin of parsed.plugins) {
+          this.#targets.push({
+            name: plugin.name,
+            path: plugin.path,
+            type: 'library',
+            language: 'dart',
+            metadata: {
+              platform: plugin.platform,
+              bridgeType: 'flutter-engine',
+            },
+          });
+        }
+      } catch {
+        /* skip */
+      }
+    }
+
+    // 查找嵌入的 pubspec.yaml
+    const pubspecFiles = this.#findBuildFiles(projectRoot, ['pubspec.yaml']);
+    for (const pf of pubspecFiles) {
+      // 排除根目录的 pubspec（交给 DartDiscoverer 处理）
+      if (pf === join(projectRoot, 'pubspec.yaml')) {
+        continue;
+      }
+
+      try {
+        const content = readFileSync(pf, 'utf-8');
+        const nameMatch = content.match(/^name:\s*(\S+)/m);
+        if (nameMatch) {
+          const modDir = join(pf, '..');
+          this.#targets.push({
+            name: nameMatch[1],
+            path: modDir,
+            type: 'library',
+            language: 'dart',
+            metadata: {
+              pubspecPath: relative(projectRoot, pf),
+            },
+          });
+        }
+      } catch {
+        /* skip */
+      }
+    }
+  }
+
+  #loadReactNative(projectRoot: string) {
+    const pkgJsonPath = join(projectRoot, 'package.json');
+    if (!existsSync(pkgJsonPath)) {
+      return;
+    }
+
+    try {
+      const content = readFileSync(pkgJsonPath, 'utf-8');
+      const parsed = parseReactNativeProject(content);
+
+      if (parsed.isReactNative) {
+        this.#targets.push({
+          name: parsed.name,
+          path: projectRoot,
+          type: 'application',
+          language: 'typescript',
+          metadata: {
+            rnVersion: parsed.rnVersion,
+            bridgeType: 'native-module',
+          },
+        });
+      }
+    } catch {
+      /* skip */
     }
   }
 

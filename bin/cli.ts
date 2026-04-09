@@ -855,6 +855,7 @@ program
       const projectRoot = resolve(scanPath || '.');
       const { bootstrap, container } = await initContainer({ projectRoot });
       const panoramaService = container.get('panoramaService');
+      await panoramaService.ensureData();
 
       if (opts.gaps) {
         const gaps = panoramaService.getGaps();
