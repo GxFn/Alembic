@@ -4,10 +4,28 @@
  * 基于模块依赖图，通过去环 + 拓扑排序 + 最长路径法推断架构层级 (L0-Ln)。
  * 底层 (L0) = Foundation/Core，顶层 = App/UI。
  *
+ * 当配置文件声明了明确的层级结构时（如 Boxfile 的 layer 定义），
+ * 优先使用配置层级，仅对未覆盖的模块做拓扑推断。
+ *
  * @module LayerInferrer
  */
 
 import type { CyclicDependency, Edge, LayerHierarchy, LayerViolation } from './PanoramaTypes.js';
+
+/* ═══ Types ═══════════════════════════════════════════════ */
+
+export interface ConfigLayer {
+  name: string;
+  order: number;
+  accessibleLayers: string[];
+}
+
+export interface InferOptions {
+  /** 来自配置文件的层级定义（如 Boxfile、Project.swift 等） */
+  configLayers?: ConfigLayer[] | null;
+  /** 模块 → 配置层级名映射 */
+  moduleLayerMap?: Map<string, string>;
+}
 
 /* ═══ Constants ═══════════════════════════════════════════ */
 
@@ -32,8 +50,150 @@ export class LayerInferrer {
    * @param edges - 模块间依赖边 (from depends_on/calls/data_flow to)
    * @param modules - 所有模块名
    * @param cycles - 已检测到的循环依赖
+   * @param options - 可选配置：configLayers（配置声明的层级）和 moduleLayerMap（模块→层级映射）
    */
-  infer(edges: Edge[], modules: string[], cycles: CyclicDependency[]): LayerHierarchy {
+  infer(
+    edges: Edge[],
+    modules: string[],
+    cycles: CyclicDependency[],
+    options?: InferOptions
+  ): LayerHierarchy {
+    // 如果有配置文件声明的层级且覆盖了大部分模块，优先使用
+    if (options?.configLayers?.length && options.moduleLayerMap?.size) {
+      const coverage = this.#computeConfigCoverage(modules, options.moduleLayerMap);
+      if (coverage >= 0.5) {
+        return this.#inferFromConfig(edges, modules, options.configLayers, options.moduleLayerMap);
+      }
+    }
+
+    return this.#inferFromTopology(edges, modules, cycles);
+  }
+
+  /* ─── Config-based layer inference ──────────────── */
+
+  /**
+   * 基于配置文件声明的层级直接分配
+   * 未被配置覆盖的模块附加到最近匹配的层级
+   */
+  #inferFromConfig(
+    edges: Edge[],
+    modules: string[],
+    configLayers: ConfigLayer[],
+    moduleLayerMap: Map<string, string>
+  ): LayerHierarchy {
+    // 按 order 排序层级
+    const sortedLayers = [...configLayers].sort((a, b) => a.order - b.order);
+
+    // 构建层级名 → level 映射 (底层 = L0, 反序: order 最大的是底层)
+    // 配置中 order=0 是最高层 (如 Accessories), order=N 是最底层 (如 Vendors)
+    const maxOrder = sortedLayers.length > 0 ? sortedLayers[sortedLayers.length - 1].order : 0;
+    const layerNameToLevel = new Map<string, number>();
+    for (const cl of sortedLayers) {
+      // 反转: 配置中 order 越大越底层 → level 越小
+      layerNameToLevel.set(cl.name, maxOrder - cl.order);
+    }
+
+    // 分配每个模块到层级
+    const moduleLevels = new Map<string, number>();
+    const uncovered: string[] = [];
+
+    for (const mod of modules) {
+      const layerName = moduleLayerMap.get(mod);
+      if (layerName && layerNameToLevel.has(layerName)) {
+        moduleLevels.set(mod, layerNameToLevel.get(layerName)!);
+      } else {
+        uncovered.push(mod);
+      }
+    }
+
+    // 未覆盖的模块: 基于依赖关系推断最可能的层级
+    for (const mod of uncovered) {
+      const depEdges = edges.filter((e) => e.from === mod);
+      let bestLevel = maxOrder + 1; // 默认最高层
+
+      for (const e of depEdges) {
+        const targetLevel = moduleLevels.get(e.to);
+        if (targetLevel !== undefined) {
+          bestLevel = Math.min(bestLevel, targetLevel + 1);
+        }
+      }
+
+      // 如果没有依赖线索, 查看谁依赖它
+      if (bestLevel > maxOrder) {
+        const reverseEdges = edges.filter((e) => e.to === mod);
+        for (const e of reverseEdges) {
+          const sourceLevel = moduleLevels.get(e.from);
+          if (sourceLevel !== undefined) {
+            bestLevel = Math.min(bestLevel, Math.max(0, sourceLevel - 1));
+          }
+        }
+      }
+
+      // 兜底: 放到最高层
+      if (bestLevel > maxOrder) {
+        bestLevel = maxOrder;
+      }
+
+      moduleLevels.set(mod, bestLevel);
+    }
+
+    // 聚合: 同层模块分组
+    const layerGroups = new Map<number, string[]>();
+    for (const [mod, level] of moduleLevels) {
+      if (!layerGroups.has(level)) {
+        layerGroups.set(level, []);
+      }
+      layerGroups.get(level)!.push(mod);
+    }
+
+    // 构建 levelEntries, 使用配置中的层级名
+    const levelToConfigName = new Map<number, string>();
+    for (const cl of sortedLayers) {
+      levelToConfigName.set(maxOrder - cl.order, cl.name);
+    }
+
+    const sortedLevels = [...layerGroups.entries()].sort((a, b) => a[0] - b[0]);
+    const levelEntries = sortedLevels.map(([level, mods]) => ({
+      level,
+      name: levelToConfigName.get(level) ?? this.#inferLayerName(mods, level, sortedLevels.length),
+      modules: mods.sort(),
+    }));
+
+    // 检测层级违规（基于 access 规则）
+    const violations: LayerViolation[] = [];
+    for (const edge of edges) {
+      const fromLevel = moduleLevels.get(edge.from);
+      const toLevel = moduleLevels.get(edge.to);
+      if (fromLevel !== undefined && toLevel !== undefined && fromLevel < toLevel) {
+        violations.push({
+          from: edge.from,
+          to: edge.to,
+          fromLayer: fromLevel,
+          toLayer: toLevel,
+          relation: edge.relation,
+        });
+      }
+    }
+
+    return { levels: levelEntries, violations };
+  }
+
+  #computeConfigCoverage(modules: string[], moduleLayerMap: Map<string, string>): number {
+    if (modules.length === 0) {
+      return 0;
+    }
+    let covered = 0;
+    for (const mod of modules) {
+      if (moduleLayerMap.has(mod)) {
+        covered++;
+      }
+    }
+    return covered / modules.length;
+  }
+
+  /* ─── Topology-based layer inference ────────────── */
+
+  #inferFromTopology(edges: Edge[], modules: string[], cycles: CyclicDependency[]): LayerHierarchy {
     // 1. 建图 (邻接表: from → to[])
     const adjacency = new Map<string, Set<string>>();
     const reverseAdj = new Map<string, Set<string>>();

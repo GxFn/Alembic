@@ -303,11 +303,13 @@ export class PanoramaService {
     let prefix = paths[0];
     for (const p of paths) {
       while (!p.startsWith(prefix)) {
-        const lastSlash = prefix.lastIndexOf('/');
+        // Strip trailing slash before searching for last separator
+        const trimmed = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
+        const lastSlash = trimmed.lastIndexOf('/');
         if (lastSlash < 0) {
           return '';
         }
-        prefix = prefix.slice(0, lastSlash + 1);
+        prefix = trimmed.slice(0, lastSlash + 1);
       }
     }
     return prefix;
@@ -517,7 +519,8 @@ export class PanoramaService {
     }
 
     const candidates = this.#moduleDiscoverer.discover();
-    this.#cache = this.#aggregator.compute(candidates);
+    const configLayers = this.#moduleDiscoverer.readConfigLayers();
+    this.#cache = this.#aggregator.compute(candidates, { configLayers });
     return this.#cache;
   }
 }

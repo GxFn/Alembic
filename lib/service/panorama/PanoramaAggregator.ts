@@ -9,15 +9,16 @@
 
 import type { CouplingAnalyzer } from './CouplingAnalyzer.js';
 import { DimensionAnalyzer } from './DimensionAnalyzer.js';
-import type { LayerInferrer } from './LayerInferrer.js';
+import type { ConfigLayer, LayerInferrer } from './LayerInferrer.js';
 import type {
   CallFlowSummary,
   CeDbLike,
-  KnowledgeGap,
+  ExternalDepProfile,
   PanoramaModule,
   PanoramaResult,
 } from './PanoramaTypes.js';
 import type { ModuleCandidate, RoleRefiner } from './RoleRefiner.js';
+import { profileTechStack } from './TechStackProfiler.js';
 
 /* ═══ Options ═════════════════════════════════════════════ */
 
@@ -51,8 +52,13 @@ export class PanoramaAggregator {
 
   /**
    * 计算完整全景数据
+   * @param moduleCandidates 模块候选列表
+   * @param options.configLayers 来自配置文件的层级声明（如 Boxfile layer 定义）
    */
-  compute(moduleCandidates: ModuleCandidate[]): PanoramaResult {
+  compute(
+    moduleCandidates: ModuleCandidate[],
+    options?: { configLayers?: ConfigLayer[] | null }
+  ): PanoramaResult {
     // 1. RoleRefiner: 精化角色
     const refinedRoles = this.#roleRefiner.refineAll(moduleCandidates);
 
@@ -62,12 +68,23 @@ export class PanoramaAggregator {
       moduleFiles.set(mc.name, mc.files);
     }
 
-    // 3. CouplingAnalyzer: 耦合分析
-    const coupling = this.#couplingAnalyzer.analyze(moduleFiles);
+    // 3. CouplingAnalyzer: 耦合分析（含外部依赖 fan-in）
+    const externalModules = this.#collectExternalModules();
+    const coupling = this.#couplingAnalyzer.analyze(moduleFiles, externalModules);
 
-    // 4. LayerInferrer: 层级推断
+    // 4. LayerInferrer: 层级推断（优先使用配置层级）
     const modules = moduleCandidates.map((m) => m.name);
-    const layers = this.#layerInferrer.infer(coupling.edges, modules, coupling.cycles);
+    const configModuleLayerMap = new Map<string, string>();
+    for (const mc of moduleCandidates) {
+      if (mc.configLayer) {
+        configModuleLayerMap.set(mc.name, mc.configLayer);
+      }
+    }
+
+    const layers = this.#layerInferrer.infer(coupling.edges, modules, coupling.cycles, {
+      configLayers: options?.configLayers,
+      moduleLayerMap: configModuleLayerMap.size > 0 ? configModuleLayerMap : undefined,
+    });
 
     // 5. 构建层级映射 (模块名 → 层级号)
     const moduleLayerMap = new Map<string, number>();
@@ -123,6 +140,10 @@ export class PanoramaAggregator {
     // 10. 调用流概要
     const callFlowSummary = this.#computeCallFlowSummary();
 
+    // 11. 外部依赖概况 + 技术栈画像
+    const externalDeps = this.#buildExternalDepProfiles(coupling.externalDeps);
+    const techStack = externalDeps.length > 0 ? profileTechStack(externalDeps) : null;
+
     return {
       modules: panoramaModules,
       layers,
@@ -131,6 +152,8 @@ export class PanoramaAggregator {
       healthRadar: radar,
       callFlowSummary,
       projectRecipeCount,
+      externalDeps,
+      techStack,
       computedAt: Date.now(),
     };
   }
@@ -148,6 +171,77 @@ export class PanoramaAggregator {
     } catch {
       return 0;
     }
+  }
+
+  /* ─── External Dependencies ─────────────────────── */
+
+  /**
+   * 从 code_entities 收集标记为 external 的模块名
+   */
+  #collectExternalModules(): Set<string> {
+    try {
+      const rows = this.#db
+        .prepare(
+          `SELECT entity_id FROM code_entities
+           WHERE entity_type = 'module' AND project_root = ?
+             AND json_extract(metadata_json, '$.nodeType') IN ('external', 'host')`
+        )
+        .all(this.#projectRoot) as Array<Record<string, unknown>>;
+
+      return new Set(rows.map((r) => r.entity_id as string));
+    } catch {
+      return new Set();
+    }
+  }
+
+  /**
+   * 将 CouplingAnalyzer 的外部依赖统计转为 ExternalDepProfile
+   * 并从 code_entities 补充 layer/version 元数据
+   */
+  #buildExternalDepProfiles(
+    rawExternalDeps: Array<{ name: string; fanIn: number; dependedBy: string[] }>
+  ): ExternalDepProfile[] {
+    if (rawExternalDeps.length === 0) {
+      return [];
+    }
+
+    // 批量查询外部依赖的元数据
+    const metadataMap = new Map<string, { layer?: string; version?: string }>();
+    try {
+      for (const dep of rawExternalDeps) {
+        const row = this.#db
+          .prepare(
+            `SELECT metadata_json FROM code_entities
+             WHERE entity_id = ? AND entity_type = 'module' AND project_root = ?
+             LIMIT 1`
+          )
+          .get(dep.name, this.#projectRoot) as Record<string, unknown> | undefined;
+
+        if (row?.metadata_json) {
+          const meta =
+            typeof row.metadata_json === 'string'
+              ? JSON.parse(row.metadata_json)
+              : row.metadata_json;
+          metadataMap.set(dep.name, {
+            layer: meta.layer as string | undefined,
+            version: meta.version as string | undefined,
+          });
+        }
+      }
+    } catch {
+      /* skip metadata enrichment errors */
+    }
+
+    return rawExternalDeps.map((dep) => {
+      const meta = metadataMap.get(dep.name);
+      return {
+        name: dep.name,
+        fanIn: dep.fanIn,
+        dependedBy: dep.dependedBy,
+        layer: meta?.layer,
+        version: meta?.version,
+      };
+    });
   }
 
   /* ─── Layer Naming (role-based) ─────────────────── */

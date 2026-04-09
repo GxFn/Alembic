@@ -761,6 +761,7 @@ export class ModuleService {
       go: 'go',
       jvm: 'java',
       python: 'python',
+      customConfig: 'swift',
       generic: 'unknown',
     };
     return map[id] || 'unknown';

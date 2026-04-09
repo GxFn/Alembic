@@ -3,6 +3,7 @@
  * @description ProjectDiscoverer 系统入口 - 初始化 Registry 并注册所有 Discoverer
  */
 
+import { CustomConfigDiscoverer } from './CustomConfigDiscoverer.js';
 import { DartDiscoverer } from './DartDiscoverer.js';
 import { DiscovererRegistry } from './DiscovererRegistry.js';
 import { GenericDiscoverer } from './GenericDiscoverer.js';
@@ -27,6 +28,7 @@ export function getDiscovererRegistry() {
       .register(new GoDiscoverer())
       .register(new DartDiscoverer())
       .register(new RustDiscoverer())
+      .register(new CustomConfigDiscoverer())
       .register(new GenericDiscoverer());
   }
   return _registry;
@@ -37,7 +39,17 @@ export function resetDiscovererRegistry() {
   _registry = null;
 }
 
+export { CustomConfigDiscoverer } from './CustomConfigDiscoverer.js';
 export { DartDiscoverer } from './DartDiscoverer.js';
+export {
+  type ConflictResult,
+  type DetectMatch,
+  type DiscovererPreferenceData,
+  detectConflict,
+  loadPreference,
+  promptDiscovererChoice,
+  savePreference,
+} from './DiscovererPreference.js';
 export { DiscovererRegistry } from './DiscovererRegistry.js';
 export { GenericDiscoverer } from './GenericDiscoverer.js';
 export { GoDiscoverer } from './GoDiscoverer.js';

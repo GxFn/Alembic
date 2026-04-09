@@ -69,11 +69,12 @@ export class ModuleDiscoverer {
    * 若无 module 实体，返回空数组（让调用侧决定是否重新扫描）。
    */
   discover(): ModuleCandidate[] {
-    // 从 code_entities 查 entity_type = 'module'
+    // 从 code_entities 查 entity_type = 'module'（排除 external/host 节点）
     const moduleEntities = this.#db
       .prepare(
         `SELECT DISTINCT entity_id, name FROM code_entities
-         WHERE entity_type = 'module' AND project_root = ?`
+         WHERE entity_type = 'module' AND project_root = ?
+           AND COALESCE(json_extract(metadata_json, '$.nodeType'), 'local') NOT IN ('external', 'host')`
       )
       .all(this.#projectRoot) as Array<Record<string, unknown>>;
 
@@ -114,14 +115,83 @@ export class ModuleDiscoverer {
       this.#enrichModuleFiles(moduleFiles);
     }
 
+    // 读取模块 metadata 中的 configLayer 信息
+    const moduleLayerMap = this.#readModuleLayerMetadata(moduleEntities);
+
     return [...moduleFiles.entries()].map(([name, files]) => ({
       name,
       inferredRole: inferTargetRole(name) as ModuleRole,
       files: [...files],
+      configLayer: moduleLayerMap.get(name),
     }));
   }
 
+  /**
+   * 读取 config layers 元数据（如果存在）
+   * @returns 从 `__config_layers__` 实体中恢复的层级定义
+   */
+  readConfigLayers(): Array<{ name: string; order: number; accessibleLayers: string[] }> | null {
+    try {
+      const row = this.#db
+        .prepare(
+          `SELECT metadata_json FROM code_entities
+           WHERE entity_id = '__config_layers__' AND entity_type = 'config' AND project_root = ?
+           LIMIT 1`
+        )
+        .get(this.#projectRoot) as Record<string, unknown> | undefined;
+
+      if (!row?.metadata_json) {
+        return null;
+      }
+
+      const meta =
+        typeof row.metadata_json === 'string' ? JSON.parse(row.metadata_json) : row.metadata_json;
+
+      if (Array.isArray(meta.layers) && meta.layers.length > 0) {
+        return meta.layers as Array<{ name: string; order: number; accessibleLayers: string[] }>;
+      }
+    } catch {
+      /* skip parse error */
+    }
+
+    return null;
+  }
+
   /* ─── 策略 1.5: 模块文件充填 ───────────────────── */
+
+  /**
+   * 从 code_entities metadata 中读取每个模块的 layer 信息
+   */
+  #readModuleLayerMetadata(moduleEntities: Array<Record<string, unknown>>): Map<string, string> {
+    const result = new Map<string, string>();
+
+    for (const me of moduleEntities) {
+      const moduleName = me.entity_id as string;
+      try {
+        const row = this.#db
+          .prepare(
+            `SELECT metadata_json FROM code_entities
+             WHERE entity_id = ? AND entity_type = 'module' AND project_root = ?
+             LIMIT 1`
+          )
+          .get(moduleName, this.#projectRoot) as Record<string, unknown> | undefined;
+
+        if (row?.metadata_json) {
+          const meta =
+            typeof row.metadata_json === 'string'
+              ? JSON.parse(row.metadata_json)
+              : row.metadata_json;
+          if (meta.layer && typeof meta.layer === 'string') {
+            result.set(moduleName, meta.layer);
+          }
+        }
+      } catch {
+        /* skip parse error */
+      }
+    }
+
+    return result;
+  }
 
   /**
    * 为已知模块名填充文件路径：

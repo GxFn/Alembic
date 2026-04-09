@@ -40,6 +40,36 @@ export interface PanoramaModule {
   fileCount: number;
   recipeCount: number;
   coverageRatio: number;
+  /** 模块类型: local(有源码) / external(第三方) / host(宿主应用) */
+  kind?: 'local' | 'external' | 'host';
+}
+
+/* ═══ External Dependency Profile ═════════════════════════ */
+
+export interface ExternalDepProfile {
+  name: string;
+  /** 被多少本地模块依赖 */
+  fanIn: number;
+  /** 依赖此外部库的本地模块列表 */
+  dependedBy: string[];
+  /** 所属层级 */
+  layer?: string;
+  /** 声明版本 */
+  version?: string;
+  /** 技术栈分类标签 */
+  category?: string;
+}
+
+export interface TechStackProfile {
+  /** 按类别分组的外部依赖 */
+  categories: Array<{
+    name: string;
+    deps: Array<{ name: string; fanIn: number; version?: string }>;
+  }>;
+  /** 关键外部依赖（fan-in ≥ 3 的热点） */
+  hotspots: Array<{ name: string; fanIn: number; dependedBy: string[] }>;
+  /** 外部依赖总数 */
+  totalExternalDeps: number;
 }
 
 export interface LayerLevel {
@@ -147,5 +177,9 @@ export interface PanoramaResult {
   callFlowSummary: CallFlowSummary;
   /** 项目级活跃 recipe 总数（不限模块匹配） */
   projectRecipeCount: number;
+  /** 外部依赖概况 */
+  externalDeps: ExternalDepProfile[];
+  /** 技术栈画像 */
+  techStack: TechStackProfile | null;
   computedAt: number;
 }

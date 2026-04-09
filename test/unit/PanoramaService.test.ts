@@ -237,4 +237,40 @@ describe('PanoramaService', () => {
     const uikitLayer = overview.layers.flatMap((l) => l.modules).find((m) => m.name === 'BDUIKit');
     expect(uikitLayer?.fileCount).toBe(1);
   });
+
+  it('getModule should not hang when files have divergent paths (commonPathPrefix regression)', () => {
+    const db = createMockDb({
+      modules: [{ entity_id: 'TestMod', name: 'TestMod' }],
+      parts: [{ from_id: 'fileA' }, { from_id: 'fileB' }, { from_id: 'fileC' }],
+      entityFiles: [
+        { entity_id: 'fileA', file_path: '/project/ModA/Sources/A.swift' },
+        { entity_id: 'fileB', file_path: '/project/ModB/Sources/B.swift' },
+        { entity_id: 'fileC', file_path: '/project/ModC/Sources/C.swift' },
+      ],
+    });
+    const service = makeService(db);
+
+    // Should complete without hanging (was an infinite loop before the fix)
+    const detail = service.getModule('TestMod');
+    expect(detail).not.toBeNull();
+    expect(detail!.module.name).toBe('TestMod');
+    expect(detail!.fileGroups.length).toBeGreaterThan(0);
+  });
+
+  it('getModule should handle files in completely different trees', () => {
+    const db = createMockDb({
+      modules: [{ entity_id: 'DivMod', name: 'DivMod' }],
+      parts: [{ from_id: 'x1' }, { from_id: 'x2' }],
+      entityFiles: [
+        { entity_id: 'x1', file_path: '/alpha/src/a.ts' },
+        { entity_id: 'x2', file_path: '/beta/src/b.ts' },
+      ],
+    });
+    const service = makeService(db);
+
+    const detail = service.getModule('DivMod');
+    expect(detail).not.toBeNull();
+    // With no common path, groups should be at root level
+    expect(detail!.module.fileCount).toBe(2);
+  });
 });

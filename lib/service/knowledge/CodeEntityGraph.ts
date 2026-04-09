@@ -125,6 +125,12 @@ interface DepGraphNode {
   id?: string;
   label?: string;
   type?: string;
+  layer?: string;
+  version?: string;
+  group?: string;
+  fullPath?: string;
+  indirect?: boolean;
+  [key: string]: unknown;
 }
 
 interface DepGraphData {
@@ -383,7 +389,26 @@ export class CodeEntityGraph {
           name: nodeObj.label || nodeObj.id || String(node),
           metadata: {
             nodeType: nodeObj.type || 'module',
+            ...(nodeObj.layer != null ? { layer: nodeObj.layer } : {}),
+            ...(nodeObj.version != null ? { version: nodeObj.version } : {}),
+            ...(nodeObj.group != null ? { group: nodeObj.group } : {}),
+            ...(nodeObj.fullPath != null ? { fullPath: nodeObj.fullPath } : {}),
+            ...(nodeObj.indirect != null ? { indirect: nodeObj.indirect } : {}),
           },
+        });
+        entities++;
+      }
+
+      // 存储 layers 元数据（如果存在）到特殊实体
+      const layers = (depGraphData as Record<string, unknown>).layers as
+        | Array<Record<string, unknown>>
+        | undefined;
+      if (layers?.length) {
+        this.#upsertEntity({
+          entityId: '__config_layers__',
+          entityType: 'config',
+          name: 'Config Layers',
+          metadata: { layers },
         });
         entities++;
       }

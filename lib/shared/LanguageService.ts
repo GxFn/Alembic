@@ -232,6 +232,7 @@ const LANG_ALIASES: Record<string, string> = Object.freeze({
 
 const ECO_TO_LANGS: Record<string, readonly string[]> = Object.freeze({
   spm: Object.freeze(['swift', 'objectivec']),
+  xcode: Object.freeze(['swift', 'objectivec']),
   node: Object.freeze(['javascript', 'typescript']),
   go: Object.freeze(['go']),
   jvm: Object.freeze(['java', 'kotlin']),
@@ -251,6 +252,8 @@ const BUILD_SYSTEM_MARKERS = Object.freeze([
   // Apple / iOS
   { file: 'Package.swift', eco: 'spm', buildTool: 'SPM' },
   { file: 'Podfile', eco: 'spm', buildTool: 'CocoaPods' },
+  { file: '*.xcodeproj', eco: 'xcode', buildTool: 'Xcode' },
+  { file: '*.xcworkspace', eco: 'xcode', buildTool: 'Xcode' },
   // JS / TS (lock files before package.json to detect specific tool)
   { file: 'yarn.lock', eco: 'node', buildTool: 'Yarn' },
   { file: 'pnpm-lock.yaml', eco: 'node', buildTool: 'pnpm' },

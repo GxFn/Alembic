@@ -54,6 +54,8 @@ export interface ModuleCandidate {
   name: string;
   inferredRole: ModuleRole;
   files: string[];
+  /** 来自配置文件的层级名称（如 Boxfile 中的 layer 声明） */
+  configLayer?: string;
 }
 
 /* ═══ Constants ═══════════════════════════════════════════ */
@@ -65,6 +67,36 @@ const WEIGHTS = {
   entityGraph: 0.1,
   regex: 0.15,
 } as const;
+
+/**
+ * 配置文件层级名 → 模块角色映射
+ * 当配置文件声明了层级时（如 Boxfile 的 layer），
+ * 层级名是判断模块角色的强信号
+ */
+const CONFIG_LAYER_TO_ROLE: Record<string, ModuleRole> = {
+  vendors: 'utility',
+  vendor: 'utility',
+  basics: 'core',
+  basic: 'core',
+  foundation: 'core',
+  core: 'core',
+  services: 'service',
+  service: 'service',
+  components: 'feature',
+  component: 'feature',
+  accessories: 'feature',
+  accessory: 'feature',
+  underlays: 'feature',
+  application: 'app',
+  app: 'app',
+  ui: 'ui',
+  networking: 'networking',
+  network: 'networking',
+  storage: 'storage',
+  model: 'model',
+  test: 'test',
+  tests: 'test',
+};
 
 /* ─── 语言族定义 ─────────────────────────────────────────── */
 
@@ -345,6 +377,19 @@ export class RoleRefiner {
 
     // 4. EntityGraph 拓扑信号 (0.10)
     signals.push(...this.#extractTopoSignals(module));
+
+    // 4.5. 配置层级信号 — 来自 Boxfile/Tuist 等配置文件的 layer 声明
+    if (module.configLayer) {
+      const layerRole = CONFIG_LAYER_TO_ROLE[module.configLayer.toLowerCase()];
+      if (layerRole) {
+        signals.push({
+          role: layerRole,
+          confidence: 0.85,
+          weight: WEIGHTS.ast, // 与 AST 等权重级别 (0.30)
+          source: 'config-layer',
+        });
+      }
+    }
 
     // 5. 正则基线 (0.15)
     signals.push({

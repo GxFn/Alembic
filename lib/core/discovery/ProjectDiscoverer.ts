@@ -30,6 +30,12 @@ export interface DependencyEdge {
   type: string;
 }
 
+export interface DependencyGraphLayer {
+  name: string;
+  order: number;
+  accessibleLayers: string[];
+}
+
 export interface DependencyGraph {
   nodes: (
     | string
@@ -43,6 +49,8 @@ export interface DependencyGraph {
       }
   )[];
   edges: DependencyEdge[];
+  /** 层级元数据（来自自研构建系统的分层声明） */
+  layers?: DependencyGraphLayer[];
 }
 
 export class ProjectDiscoverer {

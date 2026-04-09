@@ -16,10 +16,19 @@ export interface CouplingMetrics {
   fanOut: number;
 }
 
+export interface ExternalDepMetrics {
+  name: string;
+  fanIn: number;
+  /** 依赖此外部库的本地模块列表 */
+  dependedBy: string[];
+}
+
 export interface CouplingResult {
   cycles: CyclicDependency[];
   metrics: Map<string, CouplingMetrics>;
   edges: Edge[];
+  /** 外部依赖 fan-in 统计（按 fan-in 降序排列） */
+  externalDeps: ExternalDepMetrics[];
 }
 
 /* ═══ Edge Weights ════════════════════════════════════════ */
@@ -44,8 +53,9 @@ export class CouplingAnalyzer {
   /**
    * 分析模块间耦合关系
    * @param moduleFiles - Map<moduleName, filePaths[]>
+   * @param externalModules - 外部模块名集合（无源码但参与依赖图）
    */
-  analyze(moduleFiles: Map<string, string[]>): CouplingResult {
+  analyze(moduleFiles: Map<string, string[]>, externalModules?: Set<string>): CouplingResult {
     // 1. 构建 file → module 反向索引
     const fileToModule = new Map<string, string>();
     for (const [mod, files] of moduleFiles) {
@@ -95,10 +105,13 @@ export class CouplingAnalyzer {
       }
     }
 
+    // 5.5 外部依赖 fan-in 统计
+    const externalDeps = this.#computeExternalFanIn(moduleFiles, externalModules);
+
     // 去重边 (同 from→to 聚合)
     const dedupEdges = this.#deduplicateEdges(edges);
 
-    return { cycles, metrics, edges: dedupEdges };
+    return { cycles, metrics, edges: dedupEdges, externalDeps };
   }
 
   /* ─── Internal helpers ──────────────────────────── */
@@ -231,6 +244,56 @@ export class CouplingAnalyzer {
         cycle: cycle.reverse(),
         severity: cycle.length > 3 ? ('error' as const) : ('warning' as const),
       }));
+  }
+
+  /**
+   * 统计外部依赖的 fan-in（被多少本地模块依赖）
+   * 数据来源：knowledge_edges 中 from_type='module' AND to_type='module' 且 to 不在 moduleFiles 中
+   */
+  #computeExternalFanIn(
+    moduleFiles: Map<string, string[]>,
+    externalModules?: Set<string>
+  ): ExternalDepMetrics[] {
+    const fanInMap = new Map<string, Set<string>>();
+
+    // 从 DB 查询 module-to-module depends_on 边
+    const rows = this.#db
+      .prepare(
+        `SELECT from_id, to_id FROM knowledge_edges
+         WHERE relation = 'depends_on' AND from_type = 'module' AND to_type = 'module'`
+      )
+      .all() as Array<Record<string, unknown>>;
+
+    for (const row of rows) {
+      const fromId = row.from_id as string;
+      const toId = row.to_id as string;
+
+      // from 必须是本地模块, to 必须是外部模块
+      if (!moduleFiles.has(fromId)) {
+        continue;
+      }
+      if (moduleFiles.has(toId)) {
+        continue;
+      }
+      // 如果提供了 externalModules 集合，检查 toId 是否在其中
+      if (externalModules && !externalModules.has(toId)) {
+        continue;
+      }
+
+      if (!fanInMap.has(toId)) {
+        fanInMap.set(toId, new Set());
+      }
+      fanInMap.get(toId)!.add(fromId);
+    }
+
+    // 转换为排序数组（按 fan-in 降序）
+    return [...fanInMap.entries()]
+      .map(([name, deps]) => ({
+        name,
+        fanIn: deps.size,
+        dependedBy: [...deps].sort(),
+      }))
+      .sort((a, b) => b.fanIn - a.fanIn);
   }
 
   #deduplicateEdges(edges: Edge[]): Edge[] {
