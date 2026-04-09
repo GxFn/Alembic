@@ -149,12 +149,48 @@ const App: React.FC = () => {
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [targets, setTargets] = useState<SPMTarget[]>([]);
   const [customFolderTargets, setCustomFolderTargets] = useState<SPMTarget[]>([]);
-  const [selectedTargetName, setSelectedTargetName] = useState<string | null>(null);
+  const [selectedTargetName, setSelectedTargetName] = useState<string | null>(() => {
+    try { return sessionStorage.getItem('asd:selected-target') || null; } catch { return null; }
+  });
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<{ current: number, total: number, status: string }>({ current: 0, total: 0, status: '' });
   const [scanFileList, setScanFileList] = useState<ScannedFile[]>([]);
-  const [scanResults, setScanResults] = useState<ScanResultItem[]>([]);
-  const [guardAudit, setGuardAudit] = useState<GuardAuditResult | null>(null);
+  const [scanResults, setScanResults_raw] = useState<ScanResultItem[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('asd:scan-results');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
+  const [guardAudit, setGuardAudit] = useState<GuardAuditResult | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('asd:guard-audit');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
+  // 包装 setScanResults：同步写入 sessionStorage
+  const setScanResults: typeof setScanResults_raw = useCallback((action) => {
+    setScanResults_raw(prev => {
+      const next = typeof action === 'function' ? action(prev) : action;
+      try { sessionStorage.setItem('asd:scan-results', JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
+  }, []);
+
+  // 持久化 selectedTargetName / guardAudit
+  useEffect(() => {
+    try {
+      if (selectedTargetName) { sessionStorage.setItem('asd:selected-target', selectedTargetName); }
+      else { sessionStorage.removeItem('asd:selected-target'); }
+    } catch { /* noop */ }
+  }, [selectedTargetName]);
+
+  useEffect(() => {
+    try {
+      if (guardAudit) { sessionStorage.setItem('asd:guard-audit', JSON.stringify(guardAudit)); }
+      else { sessionStorage.removeItem('asd:guard-audit'); }
+    } catch { /* noop */ }
+  }, [guardAudit]);
 
   const [recipePage, setRecipePage] = useState(1);
   const [recipePageSize, setRecipePageSize] = useState(12);
@@ -787,7 +823,7 @@ const App: React.FC = () => {
       kind:          extracted.kind || 'pattern',
       knowledgeType: extracted.knowledgeType || 'code-pattern',
       complexity:    extracted.complexity || 'intermediate',
-      scope:         extracted.scope || null,
+      scope:         extracted.scope || undefined,
       difficulty:    extracted.difficulty || '',
       tags:          extracted.tags || [],
       source:        extracted.source || 'ai-scan',

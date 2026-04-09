@@ -37,29 +37,32 @@ const PaginationQuery = z.object({
 
 // ═══ Knowledge ═══════════════════════════════════
 
-export const CreateKnowledgeBody = z.object({
-  title: z.string().min(1, 'title is required'),
-  content: z.union([z.string().min(1), z.record(z.string(), z.unknown())]),
-  description: z.string().optional(),
-  kind: z.enum(['rule', 'pattern', 'fact']).optional(),
-  language: z.string().optional(),
-  category: z.string().optional(),
-  knowledgeType: z.string().optional(),
-  complexity: z.enum(['basic', 'intermediate', 'advanced']).optional(),
-  scope: z.enum(['universal', 'project', 'team', 'personal']).optional(),
-  tags: z.array(z.string()).optional(),
-});
+export const CreateKnowledgeBody = z
+  .object({
+    title: z.string().min(1, 'title is required'),
+    content: z.union([z.string().min(1), z.record(z.string(), z.unknown())]),
+    description: z.string().optional(),
+    kind: z.enum(['rule', 'pattern', 'fact']).nullish(),
+    language: z.string().optional(),
+    category: z.string().optional(),
+    knowledgeType: z.string().optional(),
+    complexity: z.enum(['basic', 'intermediate', 'advanced']).nullish(),
+    scope: z.enum(['universal', 'project', 'team', 'personal']).nullish(),
+    tags: z.array(z.string()).optional(),
+  })
+  .loose();
 
 export const UpdateKnowledgeBody = z
   .object({
     title: z.string().min(1).optional(),
     description: z.string().optional(),
     content: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
-    kind: z.enum(['rule', 'pattern', 'fact']).optional(),
+    kind: z.enum(['rule', 'pattern', 'fact']).nullish(),
     language: z.string().optional(),
     category: z.string().optional(),
     tags: z.array(z.string()).optional(),
   })
+  .loose()
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one field must be provided for update',
   });
