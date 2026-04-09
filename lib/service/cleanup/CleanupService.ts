@@ -136,7 +136,6 @@ const ALL_DATA_TABLES = [
   'guard_violations',
   'audit_logs',
   'sessions',
-  'token_usage',
   'semantic_memories',
   'code_entities',
   'remote_commands',
@@ -153,7 +152,6 @@ const RESCAN_CLEAN_TABLES = [
   'semantic_memories',
   'sessions',
   'audit_logs',
-  'token_usage',
   'remote_commands',
   'remote_state',
 ];

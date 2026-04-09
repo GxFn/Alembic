@@ -21,6 +21,7 @@ import type Gateway from '../core/gateway/Gateway.js';
 // ── Domain Types ──
 // ── External Types ──
 import type { AiProvider } from '../external/ai/AiProvider.js';
+import type { AiProviderManager } from '../external/ai/AiProviderManager.js';
 // ── InfraModule Types ──
 import type AuditLogger from '../infrastructure/audit/AuditLogger.js';
 import type AuditStore from '../infrastructure/audit/AuditStore.js';
@@ -116,6 +117,7 @@ export interface ServiceMap {
   dimensionCopy: typeof DimensionCopy;
   constitution: Constitution | null;
   aiProvider: AiProvider | null;
+  aiProviderManager: AiProviderManager;
   projectGraph: ProjectGraph | null;
 
   // ═══ VectorModule ═══

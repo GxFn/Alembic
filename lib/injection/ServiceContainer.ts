@@ -172,44 +172,22 @@ export class ServiceContainer {
   /**
    * 热重载 AI Provider（API Key 变更后调用，无需重启进程）
    *
-   * 流程：
-   *  1. 替换 singletons.aiProvider
-   *  2. 重新创建 _embedProvider（如果主 provider 不支持 embedding）
-   *  3. 清除已缓存的依赖 AI 的 singleton（SearchEngine 等），
-   *     下次 get() 时会用新 provider 重新创建
+   * 委托给 AiProviderManager.switchProvider() — 原子操作:
+   *  1. 替换 provider 引用 + DI 数据管道同步
+   *  2. Token 追踪 AOP 重新挂载
+   *  3. Embedding fallback 重建
+   *  4. 清除已缓存的依赖 AI 的 singleton（SearchEngine 等）
+   *  5. 监听器回调通知
    */
   reloadAiProvider(newProvider: Record<string, unknown> | null) {
-    const old = this.singletons.aiProvider as Record<string, unknown> | null;
-    this.singletons.aiProvider = newProvider;
-
-    // 重新创建 embedding fallback provider（委托 AiModule）
-    this.singletons._embedProvider = null;
-    if (
-      newProvider &&
-      typeof newProvider.supportsEmbedding === 'function' &&
-      !(newProvider.supportsEmbedding as () => boolean)()
-    ) {
-      AiModule.initEmbeddingFallback(this);
+    if (!newProvider) {
+      this.logger.warn('[ServiceContainer] reloadAiProvider called with null — ignored');
+      return;
     }
-
-    // 挂载 provider 级 token 用量回调
-    AiModule.wireTokenTracking(this);
-
-    // 清除持有旧 aiProvider 引用的 singleton 缓存
-    // 下次调用 container.get() 时会使用新 provider 重建
-    const cleared: string[] = [];
-    for (const key of this._aiDependentSingletons || []) {
-      if (this.singletons[key]) {
-        this.singletons[key] = null;
-        cleared.push(key);
-      }
-    }
-
-    this.logger.info('AI provider hot-reloaded', {
-      old: (old?.constructor as { name?: string } | undefined)?.name || 'none',
-      new: (newProvider?.constructor as { name?: string } | undefined)?.name || 'none',
-      clearedSingletons: cleared,
-    });
+    const manager = this.singletons._aiProviderManager as {
+      switchProvider: (p: Record<string, unknown>) => unknown;
+    };
+    manager.switchProvider(newProvider);
   }
 
   // ─── 跨进程缓存协调 ─────
