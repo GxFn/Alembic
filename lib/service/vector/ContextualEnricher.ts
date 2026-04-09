@@ -20,6 +20,7 @@ import Logger from '../../infrastructure/logging/Logger.js';
 // ── Types ──
 
 export interface AiProviderLike {
+  name?: string;
   chat(
     prompt: string,
     options?: { system?: string; maxTokens?: number; temperature?: number }
@@ -71,6 +72,11 @@ export class ContextualEnricher {
   async enrichChunks(document: DocumentInfo, chunks: ChunkData[]): Promise<ChunkData[]> {
     if (chunks.length === 0) {
       return [];
+    }
+
+    // Mock 模式下跳过 AI enrichment，直接返回原始 chunks
+    if (this.#aiProvider.name === 'mock') {
+      return chunks;
     }
 
     const systemPrompt = this.#buildSystemPrompt(document);

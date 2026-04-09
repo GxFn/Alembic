@@ -24,7 +24,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { CANDIDATES_DIR, KNOWLEDGE_BASE_DIR } from '#infra/config/Defaults.js';
+import { CANDIDATES_DIR } from '#infra/config/Defaults.js';
 import {
   getContextIndexPath,
   getProjectKnowledgePath,
@@ -172,7 +172,7 @@ export class CleanupService {
     this.#logger = opts.logger || { info() {}, warn() {} };
     this.#db = opts.db
       ? typeof (opts.db as DbWrapper)?.getDb === 'function'
-        ? (opts.db as DbWrapper).getDb!()
+        ? (opts.db as DbWrapper).getDb?.()
         : (opts.db as SqliteDb)
       : null;
   }
@@ -181,7 +181,7 @@ export class CleanupService {
   setDb(db: unknown): void {
     this.#db = db
       ? typeof (db as DbWrapper)?.getDb === 'function'
-        ? (db as DbWrapper).getDb!()
+        ? (db as DbWrapper).getDb?.()
         : (db as SqliteDb)
       : null;
   }

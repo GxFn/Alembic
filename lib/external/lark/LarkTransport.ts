@@ -29,6 +29,7 @@ import Logger from '#infra/logging/Logger.js';
 interface AgentFactory {
   createLark(opts: RuntimeOverrides): AgentRuntime;
   createRemoteExec(opts: RuntimeOverrides): AgentRuntime;
+  getAiProviderInfo(): { name: string; model?: string };
 }
 
 interface RuntimeOverrides {
@@ -45,7 +46,7 @@ interface ProgressEvent {
 interface LarkTransportConfig {
   agentFactory: AgentFactory;
   replyFn: (messageId: string, text: string) => Promise<void>;
-  sendFn: (text: string) => Promise<void | boolean>;
+  sendFn: (text: string) => Promise<undefined | boolean>;
   sendImageFn?: (caption: string) => Promise<{ success: boolean; message: string }>;
   getStatusFn?: () => Promise<string>;
   enqueueIdeFn?: (command: string, meta: Record<string, unknown>) => Promise<{ id: string }>;
@@ -416,6 +417,11 @@ export class LarkTransport {
     senderId: string,
     senderName: string
   ) {
+    if (this.#agentFactory.getAiProviderInfo().name === 'mock') {
+      await this.#reply(messageId, '⚠️ AI 服务未配置，当前为 Mock 模式。请先配置 API Key。');
+      return;
+    }
+
     await this.#reply(messageId, `⚡ 正在执行: \`${command.slice(0, 60)}\`...`);
 
     try {
@@ -472,6 +478,11 @@ export class LarkTransport {
     senderId: string,
     senderName: string
   ) {
+    if (this.#agentFactory.getAiProviderInfo().name === 'mock') {
+      await this.#reply(messageId, '⚠️ AI 服务未配置，当前为 Mock 模式。请先配置 API Key。');
+      return;
+    }
+
     // 进度提示
     await this.#reply(messageId, '🤔 正在思考...');
 
@@ -631,8 +642,8 @@ export class LarkTransport {
     const history = this.#conversationHistory.get(chatId)!;
     history.push({ role, content });
     // 限制内存历史长度
-    if (history!.length > LarkTransport.MAX_HISTORY * 2) {
-      history!.splice(0, history!.length - LarkTransport.MAX_HISTORY * 2);
+    if (history?.length > LarkTransport.MAX_HISTORY * 2) {
+      history?.splice(0, history?.length - LarkTransport.MAX_HISTORY * 2);
     }
   }
 

@@ -68,6 +68,14 @@ router.post('/enrich', validate(EnrichBody), async (req: Request, res: Response)
   const results: Record<string, unknown>[] = [];
 
   if (aiProvider) {
+    // Mock 模式下跳过 AI enrichment
+    if (aiProvider.name === 'mock') {
+      return void res.json({
+        success: true,
+        data: { enriched: 0, total: candidates.length, results: [], mock: true },
+      });
+    }
+
     let enriched: Record<string, unknown>[] = [];
     try {
       // 获取用户语言偏好
@@ -464,8 +472,8 @@ router.post('/refine-preview', validate(RefinePreviewBody), async (req: Request,
   const container = getServiceContainer();
   const knowledgeService = container.get('knowledgeService');
   const aiProvider = container.get('aiProvider');
-  if (!aiProvider) {
-    throw new ValidationError('AI provider not configured');
+  if (!aiProvider || aiProvider.name === 'mock') {
+    throw new ValidationError('AI Provider 未配置，当前为 Mock 模式。请先配置 API Key。');
   }
 
   const entry = await knowledgeService.get(candidateId);
@@ -516,8 +524,8 @@ router.post(
     const container = getServiceContainer();
     const knowledgeService = container.get('knowledgeService');
     const aiProvider = container.get('aiProvider');
-    if (!aiProvider) {
-      throw new ValidationError('AI provider not configured');
+    if (!aiProvider || aiProvider.name === 'mock') {
+      throw new ValidationError('AI Provider 未配置，当前为 Mock 模式。请先配置 API Key。');
     }
 
     const entry = await knowledgeService.get(candidateId);

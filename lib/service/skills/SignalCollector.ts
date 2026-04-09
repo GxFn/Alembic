@@ -82,6 +82,7 @@ interface ContainerService {
 
 interface ContainerLike {
   get(name: string): ContainerService | null;
+  singletons?: Record<string, unknown>;
 }
 
 interface SignalSnapshot {
@@ -188,8 +189,10 @@ export class SignalCollector {
       this.#logger.info('[SignalCollector] mode=off, skipping start');
       return;
     }
-    const aiProvider = this.#container?.get('aiProvider');
-    if (!aiProvider || aiProvider.name === 'mock') {
+    const manager = this.#container?.singletons?._aiProviderManager as
+      | { isMock: boolean }
+      | undefined;
+    if (manager?.isMock) {
       this.#logger.info(
         '[SignalCollector] no AI provider available, starting in rule-fallback mode'
       );
@@ -312,8 +315,10 @@ export class SignalCollector {
       };
 
       // ── 离线 Fallback: 当 AI 不可用时，降级到 SkillAdvisor 规则引擎 ──
-      const aiProvider = this.#container?.get('aiProvider');
-      if (!this.#agentFactory || !aiProvider || aiProvider.name === 'mock') {
+      const isMock =
+        (this.#container?.singletons?._aiProviderManager as { isMock: boolean } | undefined)
+          ?.isMock ?? true;
+      if (!this.#agentFactory || isMock) {
         this.#logger.info('[SignalCollector] AI unavailable, falling back to rule-based analysis');
         return this.#ruleFallback();
       }
@@ -323,7 +328,7 @@ export class SignalCollector {
 
       // 3. 调用 Agent 系统进行 AI 分析
       this.#logger.debug('[SignalCollector] invoking Agent for analysis...');
-      const agent = this.#agentFactory!.createChat({ lang: 'en' });
+      const agent = this.#agentFactory?.createChat({ lang: 'en' });
       const { AgentMessage } = await import('#agent/AgentMessage.js');
       const message = AgentMessage.internal(prompt, { source: 'signal_collector' });
       const result = await agent.execute(message);

@@ -62,6 +62,7 @@ interface KnowledgeServiceLike {
 /** Agent factory interface for relation discovery */
 interface AgentFactoryLike {
   discoverRelations(opts: { batchSize?: number }): Promise<unknown>;
+  getAiProviderInfo?(): { name: string } | undefined;
 }
 
 /** Guard violation entry */
@@ -135,6 +136,12 @@ ${highSim.map((s: DuplicateEntry) => `- ${s.title} (相似度: ${s.similarity})`
 export async function taskDiscoverAllRelations(context: TaskContext, { batchSize = 20 } = {}) {
   const { container } = context;
   const agentFactory = container.get('agentFactory') as AgentFactoryLike;
+
+  // Mock 模式下跳过 AI 关系发现
+  if (agentFactory.getAiProviderInfo?.()?.name === 'mock') {
+    return { discovered: 0, message: 'AI Provider 未配置（Mock 模式），跳过关系发现。' };
+  }
+
   return agentFactory.discoverRelations({ batchSize });
 }
 

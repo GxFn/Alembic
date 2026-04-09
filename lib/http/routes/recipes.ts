@@ -79,6 +79,14 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
     });
   }
 
+  // Mock 模式下跳过 AI 关系发现
+  if (agentFactory.getAiProviderInfo?.()?.name === 'mock') {
+    return void res.json({
+      success: true,
+      data: { status: 'error', error: 'AI Provider 未配置，当前为 Mock 模式。请先配置 API Key。' },
+    });
+  }
+
   // 快速检查：至少需要 2 条活跃 Recipe
   try {
     const knowledgeService = container.get('knowledgeService');

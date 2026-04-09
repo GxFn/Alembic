@@ -46,6 +46,16 @@ function getContainer() {
   return getServiceContainer();
 }
 
+/** 检查 AI Provider 是否可用（非 mock），不可用则抛 ValidationError */
+function requireAiReady() {
+  const container = getContainer();
+  const manager = container.singletons?._aiProviderManager as { isMock: boolean } | undefined;
+  if (manager?.isMock) {
+    throw new ValidationError('AI Provider 未配置，当前为 Mock 模式。请先在 .env 中配置 API Key。');
+  }
+  return container;
+}
+
 // ═══════════════════════════════════════════════════════
 //  UI 语言偏好 — 前端 ↔ 服务端同步
 // ═══════════════════════════════════════════════════════
@@ -103,23 +113,24 @@ router.get('/providers', async (req: Request, res: Response): Promise<void> => {
 
 /**
  * GET /api/v1/ai/config
- * 获取当前 AI 配置
+ * 获取当前 AI 配置（优先从 AiProviderManager 读取）
  */
 router.get('/config', async (req: Request, res: Response): Promise<void> => {
   const container = getServiceContainer();
-  const p = container.singletons?.aiProvider as { name?: string; model?: string } | undefined;
+  const manager = container.singletons?._aiProviderManager as {
+    name: string;
+    model: string;
+    isMock: boolean;
+  };
   res.json({
     success: true,
-    data: {
-      provider: p?.name || '',
-      model: p?.model || '',
-    },
+    data: { provider: manager.name, model: manager.model, isMock: manager.isMock },
   });
 });
 
 /**
  * POST /api/v1/ai/config
- * 更新 AI 配置（切换提供商/模型）
+ * 更新 AI 配置（切换提供商/模型）— 通过 AiProviderManager 统一热切换
  */
 router.post(
   '/config',
@@ -138,17 +149,13 @@ router.post(
       throw new ValidationError(`Invalid provider: ${(error as Error).message}`);
     }
 
-    // 同步到 DI 容器，使 SearchEngine / Agent / IndexingPipeline 等也使用新 provider
-    try {
-      const container = getServiceContainer();
-      container.reloadAiProvider(newProvider as unknown as Record<string, unknown>);
-      logger.info('AI provider synced to DI container', {
-        provider: provider.toLowerCase(),
-        model: newProvider.model,
-      });
-    } catch (err: unknown) {
-      logger.debug('DI container 同步 AI provider 失败', { error: (err as Error).message });
-    }
+    // 通过 reloadAiProvider → AiProviderManager.switchProvider() 统一热切换
+    const container = getServiceContainer();
+    container.reloadAiProvider(newProvider as unknown as Record<string, unknown>);
+    logger.info('AI provider switched via AiProviderManager', {
+      provider: provider.toLowerCase(),
+      model: newProvider.model,
+    });
 
     res.json({
       success: true,
@@ -162,6 +169,63 @@ router.post(
 );
 
 /**
+ * POST /api/v1/ai/mock/cleanup
+ * 清理 Mock 模式产生的候选数据
+ */
+router.post('/mock/cleanup', async (_req: Request, res: Response): Promise<void> => {
+  const container = getContainer();
+  const knowledgeService = container.get('knowledgeService');
+  const dbConn = container.get('database') as {
+    getDb(): {
+      prepare(sql: string): { all(...p: unknown[]): unknown[]; run(...p: unknown[]): void };
+    };
+  };
+  const rawDb = dbConn.getDb();
+
+  // 查找所有 mock 来源的候选
+  const mockSources = ['mock-bootstrap', 'mock-pipeline'];
+  let totalDeleted = 0;
+
+  for (const source of mockSources) {
+    const rows = rawDb
+      .prepare('SELECT id FROM knowledge_entries WHERE source = ?')
+      .all(source) as Array<{ id: string }>;
+
+    for (const row of rows) {
+      try {
+        await knowledgeService.delete(row.id, { userId: 'system:mock-cleanup' });
+        totalDeleted++;
+      } catch {
+        logger.debug(`Mock cleanup: failed to delete ${row.id}`);
+      }
+    }
+  }
+
+  // 清理 mock 相关的 semantic_memories
+  try {
+    rawDb
+      .prepare(
+        "DELETE FROM semantic_memories WHERE source = 'bootstrap' AND metadata LIKE '%mock%'"
+      )
+      .run();
+  } catch {
+    // 表可能不存在
+  }
+
+  logger.info(`Mock cleanup completed: ${totalDeleted} entries deleted`);
+
+  const rt = getRealtimeService();
+  if (rt) {
+    rt.broadcastEvent('mock-cleanup-completed', { deleted: totalDeleted });
+  }
+
+  res.json({
+    success: true,
+    data: { deleted: totalDeleted },
+  });
+});
+
+/**
  * POST /api/v1/ai/summarize
  * AI 摘要生成
  */
@@ -171,7 +235,7 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const { code, language } = req.body;
 
-    const container = getContainer();
+    const container = requireAiReady();
     const factory = container.get('agentFactory');
     const result = await factory.scanKnowledge({
       label: 'code',
@@ -205,7 +269,7 @@ router.post(
     }
 
     try {
-      const container = getContainer();
+      const container = requireAiReady();
       const factory = container.get('agentFactory');
       const result = await factory.translateToEnglish(summary, usageGuide);
 
@@ -248,7 +312,7 @@ router.post(
 router.post('/chat', validate(AiChatBody), async (req: Request, res: Response): Promise<void> => {
   const { prompt, history, lang, conversationId } = req.body;
 
-  const container = getContainer();
+  const container = requireAiReady();
   const factory = container.get('agentFactory');
 
   // ── 对话持久化: 从 ConversationStore 加载历史 ──
@@ -368,7 +432,7 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const { tool, params } = req.body;
 
-    const container = getContainer();
+    const container = requireAiReady();
     const factory = container.get('agentFactory');
     const result = await factory.invokeAgent(tool, params);
 
@@ -399,7 +463,7 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const { task, params } = req.body;
 
-    const container = getContainer();
+    const container = requireAiReady();
     const factory = container.get('agentFactory');
 
     // 优先尝试 DAG 任务
@@ -632,7 +696,7 @@ router.post(
       process.env[k] = String(v);
     }
 
-    // 尝试热切换 AI Provider（包括依赖 AI 的所有服务）
+    // 尝试热切换 AI Provider（通过 AiProviderManager 统一处理）
     try {
       const newProvider = createProvider({
         provider: provider.toLowerCase(),
@@ -640,7 +704,7 @@ router.post(
       });
       const container = getServiceContainer();
       container.reloadAiProvider(newProvider as unknown as Record<string, unknown>);
-      logger.info('AI provider hot-swapped after env update', {
+      logger.info('AI provider hot-swapped via AiProviderManager after env update', {
         provider,
         model: newProvider.model,
       });
@@ -685,7 +749,7 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     const { prompt, history, lang } = req.body;
 
-    const container = getContainer();
+    const container = requireAiReady();
     const factory = container.get('agentFactory');
     const session = createStreamSession('chat');
 
@@ -740,15 +804,23 @@ router.post(
     runtime
       .execute(message)
       .then((result: Record<string, unknown>) => {
+        const replyText = (result.reply as string) || '';
+
         // 发送最终文本
-        if (result.reply) {
+        if (replyText) {
           const textId = `text_${Date.now()}`;
           session.send({ type: 'text:start', id: textId, role: 'assistant' });
-          session.send({ type: 'text:delta', id: textId, delta: result.reply });
+          session.send({ type: 'text:delta', id: textId, delta: replyText });
           session.send({ type: 'text:end', id: textId });
+        } else {
+          logger.warn('SSE session: empty reply from AgentRuntime', {
+            sessionId: session.sessionId,
+            iterations: result.iterations,
+            toolCalls: (result.toolCalls as unknown[] | undefined)?.length || 0,
+          });
         }
         session.end({
-          text: result.reply,
+          text: replyText || '抱歉，AI 未能生成有效回复。请重试或换个问题。',
           toolCalls: result.toolCalls || [],
           iterations: result.iterations || 0,
         });

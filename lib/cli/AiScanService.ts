@@ -56,10 +56,10 @@ export class AiScanService {
     // 1. 初始化 AgentFactory (内置 AI Provider + ToolExecutionPipeline + 中间件)
     try {
       this.agentFactory = this.container.get('agentFactory') as typeof this.agentFactory;
-      // 验证 AI Provider 可用性
-      const aiProvider = this.container.singletons?.aiProvider as Record<string, unknown> | null;
-      if (!aiProvider || aiProvider.name === 'mock') {
-        throw new Error('AI Provider 未配置或为 mock');
+      // 通过 AiProviderManager 统一检查 AI 可用性
+      const manager = this.container.singletons?._aiProviderManager as { isMock: boolean };
+      if (manager.isMock) {
+        throw new Error('AI Provider 为 mock 模式');
       }
     } catch (err: unknown) {
       throw new Error(
@@ -106,7 +106,7 @@ export class AiScanService {
         const fileData = [{ name: file.name, content: truncated }];
 
         // 委托 AgentFactory.scanKnowledge — Agent(LLM) 直接分析
-        const extractResult = await this.agentFactory!.scanKnowledge({
+        const extractResult = await this.agentFactory?.scanKnowledge({
           label: file.targetName,
           files: fileData,
           task: 'extract',

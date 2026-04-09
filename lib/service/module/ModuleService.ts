@@ -438,8 +438,10 @@ export class ModuleService {
     const scannedFiles = files.map((f) => ({ name: f.name, path: f.relativePath }));
     this.#logger.info(`[ModuleService] scanTarget: ${targetName}, ${files.length} files`);
 
-    // 3. AI 提取
-    if (!this.#agentFactory) {
+    // 3. AI 提取 — mock 模式或无 agentFactory 时直接跳过
+    const aiManager = (this.#container?.singletons as Record<string, unknown> | undefined)
+      ?._aiProviderManager as { isMock: boolean } | undefined;
+    if (!this.#agentFactory || aiManager?.isMock) {
       return {
         recipes: [],
         scannedFiles,
@@ -466,19 +468,7 @@ export class ModuleService {
 
     const result: Record<string, unknown> = { recipes, scannedFiles };
     if (recipes.length === 0) {
-      // 检查是否因为 AI Provider mock 导致空结果
-      try {
-        const singletons = this.#container?.singletons as Record<string, unknown> | undefined;
-        const aiProvider = singletons?.aiProvider as Record<string, unknown> | undefined;
-        if (!aiProvider || aiProvider.name === 'mock') {
-          result.noAi = true;
-          result.message = 'AI 未配置，已跳过智能提取。请在 .env 中设置 API Key 后重试。';
-        } else {
-          result.message = `AI 提取完成，但未发现可复用的代码模式（${targetName}, ${files.length} 个文件）`;
-        }
-      } catch {
-        result.message = `AI 提取完成，但未发现可复用的代码模式（${targetName}, ${files.length} 个文件）`;
-      }
+      result.message = `AI 提取完成，但未发现可复用的代码模式（${targetName}, ${files.length} 个文件）`;
     }
     onProgress?.({
       type: 'scan:completed',
@@ -573,14 +563,16 @@ export class ModuleService {
       targetName: f.targetName,
     }));
 
-    // 3. AI 提取 Recipes
+    // 3. AI 提取 Recipes — mock 模式跳过
     const allRecipes: Record<string, unknown>[] = [];
     const PER_BATCH_TIMEOUT = options.batchTimeout || 90000;
     const startTime = Date.now();
     const TOTAL_TIMEOUT = options.totalTimeout || 540000;
     let timedOut = false;
+    const scanAiMgr = (this.#container?.singletons as Record<string, unknown> | undefined)
+      ?._aiProviderManager as { isMock: boolean } | undefined;
 
-    if (this.#agentFactory) {
+    if (this.#agentFactory && !scanAiMgr?.isMock) {
       const BATCH_SIZE = options.batchSize || 20;
 
       for (let i = 0; i < allFiles.length; i += BATCH_SIZE) {

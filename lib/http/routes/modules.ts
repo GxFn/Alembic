@@ -574,6 +574,44 @@ router.get('/bootstrap/status', async (req: Request, res: Response): Promise<voi
 });
 
 /**
+ * POST /api/v1/modules/bootstrap/cancel
+ * 取消正在运行的 bootstrap / rescan 异步填充会话
+ */
+router.post('/bootstrap/cancel', async (req: Request, res: Response): Promise<void> => {
+  const container = getServiceContainer();
+
+  let taskManager: {
+    isRunning: boolean;
+    abortSession(reason: string): void;
+    getSessionStatus(): Record<string, unknown>;
+  } | null = null;
+  try {
+    taskManager = container.get('bootstrapTaskManager');
+  } catch {
+    /* not registered */
+  }
+
+  if (!taskManager) {
+    return void res.json({ success: true, message: 'No bootstrap task manager initialized' });
+  }
+
+  if (!taskManager.isRunning) {
+    return void res.json({ success: true, message: 'No active bootstrap session' });
+  }
+
+  const reason =
+    ((req.body as Record<string, unknown>)?.reason as string) || 'Cancelled by user via Dashboard';
+  taskManager.abortSession(reason);
+
+  logger.info('Bootstrap session cancelled via HTTP', { reason });
+
+  res.json({
+    success: true,
+    data: taskManager.getSessionStatus(),
+  });
+});
+
+/**
  * POST /api/v1/modules/rescan
  * 增量扫描：保留已有 Recipe，重新分析项目，补齐缺失知识
  * 使用内部 Agent pipeline 自动完成知识补齐

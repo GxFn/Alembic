@@ -100,6 +100,16 @@ vi.mock('#domain/knowledge/RecipeReadinessChecker.js', () => ({
   checkRecipeReadiness: vi.fn(() => ({ ready: true, missing: [], suggestions: [] })),
 }));
 
+// Mock developer-identity — CI 环境下 git/OS username 不确定，固定为 'mcp'
+vi.mock('#shared/developer-identity.js', () => ({
+  getDeveloperIdentity: vi.fn(() => 'mcp'),
+  clearDeveloperIdentityCache: vi.fn(),
+}));
+vi.mock('../../lib/shared/developer-identity.js', () => ({
+  getDeveloperIdentity: vi.fn(() => 'mcp'),
+  clearDeveloperIdentityCache: vi.fn(),
+}));
+
 const { submitKnowledge, submitKnowledgeBatch, knowledgeLifecycle } = await import(
   '../../lib/external/mcp/handlers/knowledge.js'
 );
@@ -489,7 +499,7 @@ vi.mock('../../lib/infrastructure/logging/Logger.js', () => ({
 
 vi.mock('../../lib/http/utils/routeHelpers.js', () => ({
   getContext: vi.fn(() => ({ userId: 'test-user', ip: '127.0.0.1' })),
-  safeInt: vi.fn((val, def) => parseInt(val) || def),
+  safeInt: vi.fn((val, def) => parseInt(val, 10) || def),
 }));
 
 vi.mock('../../lib/shared/errors/index.js', () => ({

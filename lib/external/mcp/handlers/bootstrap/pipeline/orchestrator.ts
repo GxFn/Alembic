@@ -29,7 +29,7 @@ import Logger from '#infra/logging/Logger.js';
 import { BootstrapEventEmitter } from '#service/bootstrap/BootstrapEventEmitter.js';
 import type { DimensionDef } from '#types/project-snapshot.js';
 import type { PipelineFillView } from '#types/snapshot-views.js';
-import type { IncrementalPlan, McpContext } from '../../types.js';
+import type { IncrementalPlan } from '../../types.js';
 import { buildEvidenceStarters } from '../MissionBriefingBuilder.js';
 import { generateSkill } from '../shared/skill-generator.js';
 import { clearCheckpoints, loadCheckpoints, saveDimensionCheckpoint } from './checkpoint.js';
@@ -40,6 +40,7 @@ import {
 } from './dimension-configs.js';
 import { DimensionContext, parseDimensionDigest } from './dimension-context.js';
 import { IncrementalBootstrap } from './IncrementalBootstrap.js';
+import { fillDimensionsMock } from './mock-pipeline.js';
 import { TierScheduler } from './tier-scheduler.js';
 
 const logger = Logger.getInstance();
@@ -350,21 +351,22 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     | null;
 
   // ═══════════════════════════════════════════════════════════
-  // Step 0: AI 可用性检查 (v7.2: 使用 AgentFactory)
+  // Step 0: AI 可用性检查 (v7.2: 使用 AgentFactory + AiProviderManager)
   // ═══════════════════════════════════════════════════════════
   let agentFactory: AgentFactoryLike | null = null;
+  let isMockMode = false;
   try {
-    agentFactory = ctx.container.get('agentFactory');
-    // 检查 AI Provider 是否可用
-    const aiProvider = ctx.container.singletons?.aiProvider;
-    if (!aiProvider || aiProvider.name === 'mock') {
-      agentFactory = null;
+    // 通过 AiProviderManager 统一检查 mock 模式
+    const manager = ctx.container.singletons?._aiProviderManager as { isMock: boolean } | undefined;
+    isMockMode = manager?.isMock ?? false;
+    if (!isMockMode) {
+      agentFactory = ctx.container.get('agentFactory');
     }
   } catch {
     /* not available */
   }
 
-  if (!agentFactory) {
+  if (!agentFactory && !isMockMode) {
     logger.error('[Insight-v3] AI Provider not available — bootstrap requires AI');
     emitter.emitProgress('bootstrap:ai-unavailable', {
       message:
@@ -373,6 +375,13 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     for (const dim of dimensions) {
       emitter.emitDimensionComplete(dim.id, { type: 'skipped', reason: 'ai-unavailable' });
     }
+    return;
+  }
+
+  // Mock AI: 走 mock-pipeline 轻量管线
+  if (isMockMode) {
+    logger.info('[Insight-v3] Mock AI detected — routing to mock-pipeline');
+    await fillDimensionsMock(view, dimensions);
     return;
   }
 
@@ -815,7 +824,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       }
 
       // ── 创建 Runtime (使用增强 PipelineStrategy) ──
-      const runtime = agentFactory!.createRuntime('insight', {
+      const runtime = agentFactory?.createRuntime('insight', {
         lang: primaryLang || projectInfo.lang || null,
         strategy: {
           type: 'pipeline',
@@ -895,7 +904,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
           modules: Object.keys(targetFileMap || {}),
         },
         // ── 引擎增强参数 (PipelineStrategy → reactLoop 透传) ──
-        contextWindow: agentFactory!.createContextWindow({ isSystem: true }),
+        contextWindow: agentFactory?.createContextWindow({ isSystem: true }),
         // B1 fix: 分析阶段使用 analyst 策略 (SCAN→EXPLORE→VERIFY→SUMMARIZE)
         // 而非 bootstrap (EXPLORE→PRODUCE→SUMMARIZE)，避免 PRODUCE nudge 浪费轮次
         // B3 fix: 透传完整 ANALYST_BUDGET (searchBudget/maxSubmits/softSubmitLimit/idleRoundsToExit)

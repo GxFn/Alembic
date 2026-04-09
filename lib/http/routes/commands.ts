@@ -36,6 +36,16 @@ router.post('/spm-map', async (req: Request, res: Response) => {
 router.post('/embed', async (req: Request, res: Response) => {
   const container = getServiceContainer();
 
+  // Mock 模式下向量构建需要 embedding — 拒绝执行
+  const manager = container.singletons?._aiProviderManager as { isMock: boolean } | undefined;
+  if (manager?.isMock) {
+    res.status(400).json({
+      success: false,
+      message: 'AI Provider 未配置，当前为 Mock 模式。Embedding 不可用。',
+    });
+    return;
+  }
+
   // 优先使用 VectorService (新架构), 降级到 indexingPipeline (旧架构)
   const vectorService = container.services.vectorService ? container.get('vectorService') : null;
 
@@ -92,7 +102,7 @@ router.get('/status', async (req: Request, res: Response) => {
   };
 
   try {
-    const indexingPipeline = container.get('indexingPipeline');
+    const _indexingPipeline = container.get('indexingPipeline');
     status.index.ready = true; // IndexingPipeline is available
   } catch {
     /* ignore */
