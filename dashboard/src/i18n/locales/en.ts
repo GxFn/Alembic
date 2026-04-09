@@ -84,6 +84,9 @@ export const en: DeepString<typeof zh> = {
     configureLlm: 'Configure LLM',
     clickSwitchAi: 'Click to switch AI provider',
     switchAi: 'Switch AI',
+    mockModeHint: 'Mock mode — generated from code structure, not AI deep analysis',
+    mockSwitchToConfirm: 'Switching to Mock mode. Bootstrap will generate fake data based on code structure (not AI deep analysis). Continue?',
+    mockSwitchFromConfirm: 'Clean up mock-generated data?\nChoosing OK will delete all candidates created by Mock mode.',
     editEnvConfig: 'Edit .env config',
     closeAiChat: 'Close AI Chat',
     openAiChat: 'Open AI Chat',
@@ -877,6 +880,7 @@ export const en: DeepString<typeof zh> = {
     notifyPartial: '{completed}/{total} succeeded, {failed} failed',
     coldStartComplete: 'Bootstrap complete',
     close: 'Close',
+    cancel: 'Cancel',
     reviewPipeline: 'AI Review Pipeline',
     reviewRounds: {
       round1Label: 'Eligibility Check',

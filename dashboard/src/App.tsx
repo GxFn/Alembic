@@ -149,46 +149,48 @@ const App: React.FC = () => {
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [targets, setTargets] = useState<SPMTarget[]>([]);
   const [customFolderTargets, setCustomFolderTargets] = useState<SPMTarget[]>([]);
-  const [selectedTargetName, setSelectedTargetName] = useState<string | null>(() => {
-    try { return sessionStorage.getItem('asd:selected-target') || null; } catch { return null; }
-  });
+  const [selectedTargetName, setSelectedTargetName] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState<{ current: number, total: number, status: string }>({ current: 0, total: 0, status: '' });
   const [scanFileList, setScanFileList] = useState<ScannedFile[]>([]);
-  const [scanResults, setScanResults_raw] = useState<ScanResultItem[]>(() => {
-    try {
-      const saved = sessionStorage.getItem('asd:scan-results');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
-  const [guardAudit, setGuardAudit] = useState<GuardAuditResult | null>(() => {
-    try {
-      const saved = sessionStorage.getItem('asd:guard-audit');
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
-  });
+  const [scanResults, setScanResults_raw] = useState<ScanResultItem[]>([]);
+  const [guardAudit, setGuardAudit] = useState<GuardAuditResult | null>(null);
 
-  // 包装 setScanResults：同步写入 sessionStorage
+  // projectRoot ref — 用于缓存 key 构建（避免 useCallback 依赖变化）
+  const projectRootRef = useRef<string | null>(null);
+  const spmCacheKey = (suffix: string) => {
+    const root = projectRootRef.current;
+    return root ? `asd:spm:${suffix}:${root}` : null;
+  };
+
+  // 包装 setScanResults：同步写入 sessionStorage（project-scoped key）
   const setScanResults: typeof setScanResults_raw = useCallback((action) => {
     setScanResults_raw(prev => {
       const next = typeof action === 'function' ? action(prev) : action;
-      try { sessionStorage.setItem('asd:scan-results', JSON.stringify(next)); } catch { /* quota */ }
+      try {
+        const key = spmCacheKey('scan-results');
+        if (key) { sessionStorage.setItem(key, JSON.stringify(next)); }
+      } catch { /* quota */ }
       return next;
     });
   }, []);
 
-  // 持久化 selectedTargetName / guardAudit
+  // 持久化 selectedTargetName / guardAudit（project-scoped key）
   useEffect(() => {
     try {
-      if (selectedTargetName) { sessionStorage.setItem('asd:selected-target', selectedTargetName); }
-      else { sessionStorage.removeItem('asd:selected-target'); }
+      const key = spmCacheKey('selected-target');
+      if (!key) { return; }
+      if (selectedTargetName) { sessionStorage.setItem(key, selectedTargetName); }
+      else { sessionStorage.removeItem(key); }
     } catch { /* noop */ }
   }, [selectedTargetName]);
 
   useEffect(() => {
     try {
-      if (guardAudit) { sessionStorage.setItem('asd:guard-audit', JSON.stringify(guardAudit)); }
-      else { sessionStorage.removeItem('asd:guard-audit'); }
+      const key = spmCacheKey('guard-audit');
+      if (!key) { return; }
+      if (guardAudit) { sessionStorage.setItem(key, JSON.stringify(guardAudit)); }
+      else { sessionStorage.removeItem(key); }
     } catch { /* noop */ }
   }, [guardAudit]);
 
@@ -231,9 +233,49 @@ const App: React.FC = () => {
     } catch { setCustomFolderTargets([]); }
   }, [data?.projectRoot]);
 
+  // 项目切换时从 sessionStorage 加载 SPM 扫描缓存（project-scoped）
+  useEffect(() => {
+    if (!data?.projectRoot) { return; }
+    projectRootRef.current = data.projectRoot;
+    const root = data.projectRoot;
+
+    try {
+      setSelectedTargetName(sessionStorage.getItem(`asd:spm:selected-target:${root}`) || null);
+    } catch { setSelectedTargetName(null); }
+
+    try {
+      const saved = sessionStorage.getItem(`asd:spm:scan-results:${root}`);
+      setScanResults_raw(saved ? JSON.parse(saved) : []);
+    } catch { setScanResults_raw([]); }
+
+    try {
+      const saved = sessionStorage.getItem(`asd:spm:guard-audit:${root}`);
+      setGuardAudit(saved ? JSON.parse(saved) : null);
+    } catch { setGuardAudit(null); }
+  }, [data?.projectRoot]);
+
   /** 切换 AI 前停止当前 AI 任务（扫描等）；不置空 ref，由各任务 finally 清理并更新 UI */
   const stopCurrentAiTasks = () => {
   if (abortControllerRef.current) abortControllerRef.current.abort();
+  };
+
+  /** 取消正在运行的 bootstrap/rescan 异步填充 */
+  const [isCancellingBootstrap, setIsCancellingBootstrap] = useState(false);
+  const handleCancelBootstrap = async () => {
+    if (isCancellingBootstrap) return;
+    setIsCancellingBootstrap(true);
+    try {
+      // 取消前端 HTTP 请求
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      // 取消后端异步填充
+      await api.cancelBootstrap('Cancelled by user via Dashboard');
+    } catch {
+      // best-effort
+    } finally {
+      setIsCancellingBootstrap(false);
+    }
   };
 
   // SignalCollector 轮询：每 5 分钟检查是否有新建议
@@ -1119,6 +1161,8 @@ const App: React.FC = () => {
               isAllDone={bootstrap.isAllDone}
               reviewState={bootstrap.reviewState}
               onDismiss={() => bootstrap.resetSession()}
+              onCancel={handleCancelBootstrap}
+              isCancelling={isCancellingBootstrap}
             />
           </div>
         )}

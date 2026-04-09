@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Check, X, Loader2, Sparkles, Code2, Layers, BookOpen, Zap, Settings, Bot, Brain, Filter, Wand2, GitMerge, Clock, Wrench } from 'lucide-react';
+import { Check, X, Loader2, Sparkles, Code2, Layers, BookOpen, Zap, Settings, Bot, Brain, Filter, Wand2, GitMerge, Clock, Wrench, StopCircle } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import type { BootstrapSession, BootstrapTask, ReviewState } from '../../hooks/useBootstrapSocket';
 
@@ -284,6 +284,10 @@ interface BootstrapProgressViewProps {
   reviewState?: ReviewState;
   /** Called when user acknowledges completion */
   onDismiss?: () => void;
+  /** Called when user cancels the running operation */
+  onCancel?: () => void;
+  /** Whether cancel is in flight */
+  isCancelling?: boolean;
 }
 
 const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
@@ -291,6 +295,8 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
   isAllDone,
   reviewState,
   onDismiss,
+  onCancel,
+  isCancelling = false,
 }) => {
   const { t } = useI18n();
   const [now, setNow] = useState(Date.now());
@@ -328,14 +334,32 @@ const BootstrapProgressView: React.FC<BootstrapProgressViewProps> = ({
           <h2 className="text-lg font-semibold text-[var(--fg-primary)]">{t('bootstrap.title')}</h2>
           {statusText && <p className="text-sm text-[var(--fg-secondary)] mt-0.5">{statusText}</p>}
         </div>
-        {isAllDone && onDismiss && (
-          <button
-            onClick={onDismiss}
-            className="text-sm px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--bg-subtle)] text-[var(--fg-secondary)] transition-colors"
+        <div className="flex items-center gap-2">
+          {/* Cancel button — only when running */}
+          {session.status === 'running' && onCancel && (
+            <button
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCancelling ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <StopCircle size={14} />
+              )}
+              {t('bootstrap.cancel')}
+            </button>
+          )}
+          {/* Dismiss button — only when done */}
+          {isAllDone && onDismiss && (
+            <button
+              onClick={onDismiss}
+              className="text-sm px-3 py-1.5 rounded-lg bg-[var(--bg-subtle)] hover:bg-[var(--bg-subtle)] text-[var(--fg-secondary)] transition-colors"
           >
             {t('bootstrap.close')}
           </button>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Stats bar — elapsed time, remaining time, tool calls */}

@@ -751,6 +751,12 @@ export const api = {
     return res.data?.data || { status: 'idle' };
   },
 
+  /** 取消正在运行的 bootstrap / rescan 异步填充 */
+  async cancelBootstrap(reason?: string): Promise<{ success: boolean }> {
+    const res = await http.post('/modules/bootstrap/cancel', { reason });
+    return res.data || { success: true };
+  },
+
   /** 增量扫描：保留已有 Recipe，重新分析项目，内部 AI 补齐缺失知识 */
   async rescan(opts?: { reason?: string; dimensions?: string[] }, signal?: AbortSignal) {
     const res = await http.post('/modules/rescan', opts || {}, { signal, timeout: 300000 });
@@ -1064,6 +1070,11 @@ export const api = {
   ): Promise<{ provider: string; model: string }> {
     const res = await http.post('/ai/config', { provider, model });
     return res.data?.data || { provider, model };
+  },
+
+  async cleanupMockData(): Promise<{ deleted: number }> {
+    const res = await http.post('/ai/mock/cleanup');
+    return res.data?.data || { deleted: 0 };
   },
 
   async chat(

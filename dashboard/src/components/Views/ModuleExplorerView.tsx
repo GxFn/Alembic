@@ -339,8 +339,19 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
         </p>
         </div>
       ) : (
-        projectDirs.map(dir => {
+        projectDirs.map((dir, idx) => {
         const dirLangClass = LANG_COLORS[dir.language] || 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)] border-[var(--border-default)]';
+        // 只在外层目录（depth 0）或语言与最近祖先不同的目录上显示语言标签
+        const showLangBadge = dir.hasSourceFiles && dir.language !== 'unknown' && (() => {
+          if (dir.depth === 0) return true;
+          // 向上找最近的祖先目录（depth 更小）
+          for (let i = idx - 1; i >= 0; i--) {
+            if (projectDirs[i].depth < dir.depth) {
+              return projectDirs[i].language !== dir.language;
+            }
+          }
+          return true;
+        })();
         return (
           <button
           key={dir.path}
@@ -355,13 +366,13 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
           >
           <FolderOpen size={ICON_SIZES.sm} className={dir.hasSourceFiles ? 'text-emerald-500 shrink-0' : 'text-[var(--fg-muted)] shrink-0'} />
           <span className="text-sm font-medium flex-1 truncate">{dir.name}</span>
-          {dir.hasSourceFiles && dir.language !== 'unknown' && (
+          {showLangBadge && (
             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${dirLangClass}`}>
             {LANG_ABBR[dir.language] || dir.language.toUpperCase()}
             </span>
           )}
           {dir.hasSourceFiles && (
-            <span className="text-[10px] text-[var(--fg-muted)] shrink-0">{t('moduleExplorer.sourceFileCount', { count: dir.sourceFileCount })}</span>
+            <span className="text-[10px] text-[var(--fg-muted)] shrink-0">{dir.sourceFileCount}</span>
           )}
           <ChevronRight size={12} className="text-[var(--fg-muted)] shrink-0" />
           </button>

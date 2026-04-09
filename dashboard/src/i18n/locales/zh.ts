@@ -81,6 +81,9 @@ export const zh = {
     configureLlm: '配置 LLM',
     clickSwitchAi: '点击切换 AI 提供商',
     switchAi: '切换 AI',
+    mockModeHint: 'Mock 模式 — 基于代码结构生成，非 AI 深度分析',
+    mockSwitchToConfirm: '切换到 Mock 模式后，Bootstrap 将生成基于代码结构的伪造数据（非 AI 深度分析）。确定切换？',
+    mockSwitchFromConfirm: '是否清理 Mock 模式产生的伪造数据？\n选择「确定」会删除所有 Mock 生成的候选条目。',
     editEnvConfig: '修改 .env 配置',
     closeAiChat: '关闭 AI 对话',
     openAiChat: '打开 AI 对话',
@@ -874,6 +877,7 @@ export const zh = {
     notifyPartial: '{completed}/{total} 成功，{failed} 失败',
     coldStartComplete: '冷启动完成',
     close: '关闭',
+    cancel: '取消',
     reviewPipeline: 'AI 审查管线',
     reviewRounds: {
       round1Label: '资格审查',
