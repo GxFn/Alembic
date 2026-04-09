@@ -215,7 +215,7 @@ export const en: DeepString<typeof zh> = {
 
   /* ═══════════════════════════════ candidates ══════════════════════════ */
   candidates: {
-    title: 'Candidate Review Pool',
+    title: 'Patterns discovered by AI scan, review to promote as Recipes',
     tabs: {
       pending: 'Pending',
       approved: 'Approved',
@@ -584,6 +584,9 @@ export const en: DeepString<typeof zh> = {
     metricCoverage: 'Coverage',
     metricConfidence: 'Confidence',
     metricQualityGate: 'Quality Gate',
+    hintCompliance: 'Score deducted by violations',
+    hintCoverage: 'Executed checks / total planned',
+    hintConfidence: 'Ratio of results without uncertainty',
     tabViolations: 'Violations',
     tabUncertain: 'Uncertain',
     tabRules: 'Rules',

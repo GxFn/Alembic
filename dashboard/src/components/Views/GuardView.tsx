@@ -87,7 +87,7 @@ type GuardTab = 'violations' | 'uncertain' | 'rules' | 'boundaries' | 'audit';
 const CIRCLE_RADIUS = 36;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
 
-const CircularProgress: React.FC<{ value: number; label: string; suffix?: string }> = ({ value, label, suffix = '' }) => {
+const CircularProgress: React.FC<{ value: number; label: string; suffix?: string; hint?: string }> = ({ value, label, suffix = '', hint }) => {
   const clamped = Math.max(0, Math.min(100, value));
   const offset = CIRCLE_CIRCUMFERENCE - (clamped / 100) * CIRCLE_CIRCUMFERENCE;
   const color =
@@ -114,6 +114,7 @@ const CircularProgress: React.FC<{ value: number; label: string; suffix?: string
         </text>
       </svg>
       <span className="text-xs font-medium text-[var(--fg-secondary)]">{label}</span>
+      {hint && <span className="text-[10px] text-[var(--fg-muted)] text-center leading-tight">{hint}</span>}
     </div>
   );
 };
@@ -347,13 +348,13 @@ const GuardView: React.FC<{ onRefresh?: () => void }> = ({ onRefresh }) => {
     {!reportLoading && guardReport && (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5 shrink-0">
       <div className="flex items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] py-4 px-3">
-        <CircularProgress value={guardReport.complianceScore} label={t('guard.metricCompliance')} suffix="/100" />
+        <CircularProgress value={guardReport.complianceScore} label={t('guard.metricCompliance')} suffix="/100" hint={t('guard.hintCompliance')} />
       </div>
       <div className="flex items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] py-4 px-3">
-        <CircularProgress value={guardReport.coverageScore} label={t('guard.metricCoverage')} suffix="/100" />
+        <CircularProgress value={guardReport.coverageScore} label={t('guard.metricCoverage')} suffix="/100" hint={t('guard.hintCoverage')} />
       </div>
       <div className="flex items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] py-4 px-3">
-        <CircularProgress value={guardReport.confidenceScore} label={t('guard.metricConfidence')} suffix="%" />
+        <CircularProgress value={guardReport.confidenceScore} label={t('guard.metricConfidence')} suffix="%" hint={t('guard.hintConfidence')} />
       </div>
       <div className="flex items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] py-4 px-3">
         <GateStatusBadge status={guardReport.qualityGate.status} label={t('guard.metricQualityGate')} />

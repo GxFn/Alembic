@@ -212,7 +212,7 @@ export const zh = {
 
   /* ═══════════════════════════════ candidates ══════════════════════════ */
   candidates: {
-    title: 'Candidate 审核池',
+    title: 'AI 扫描发现的知识模式，审核后升级为 Recipe',
     tabs: {
       pending: '待审',
       approved: '已批准',
@@ -581,6 +581,9 @@ export const zh = {
     metricCoverage: '覆盖率',
     metricConfidence: '置信度',
     metricQualityGate: '质量门禁',
+    hintCompliance: '基于违规数量的扣分评估',
+    hintCoverage: '已执行检查 / 计划总检查',
+    hintConfidence: '结果中无不确定项的比例',
     tabViolations: '违规',
     tabUncertain: '不确定',
     tabRules: '规则',

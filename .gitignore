@@ -50,8 +50,7 @@ logs/
 
 # ─── Development scratch (not committed) ─────────────
 scratch/
-docs/copilot/
-docs/.obsidian/
+docs-dev/
 
 # ─── Editor / IDE local config ───────────────────────
 .vscode/

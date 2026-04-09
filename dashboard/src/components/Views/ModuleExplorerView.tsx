@@ -292,8 +292,8 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
           isScanning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[var(--bg-subtle)]'
         } ${isSelected ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-[var(--bg-surface)] border-transparent'} ${isShell ? 'opacity-90' : ''}`}
         >
-        <div className={`flex flex-col max-w-[85%] ${isShell ? 'opacity-60' : ''}`}>
-          <div className="flex items-center gap-2">
+        <div className={`flex flex-col min-w-0 flex-1 ${isShell ? 'opacity-60' : ''}`}>
+          <div className="flex items-center gap-2 min-w-0">
           {!isShell && <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isVirtual ? 'bg-emerald-500' : isSelected ? 'bg-blue-600' : 'bg-blue-600'}`} />}
           <span className={`text-sm truncate ${!isShell ? 'font-bold' : 'font-medium'} ${isSelected ? 'text-blue-700' : ''}`}>{tgt.name}</span>
           {lang && !isShell && !isVirtual && lang !== 'unknown' && (
@@ -308,7 +308,6 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
           <span className="text-[9px] font-bold text-[var(--fg-muted)] border border-[var(--border-default)] px-1 rounded">SHELL</span>
         ) : isVirtual && onRemoveCustomFolder ? (
           <div className="flex items-center gap-0.5 shrink-0">
-          <Zap size={ICON_SIZES.sm} className={`${isSelected ? 'text-blue-500 opacity-100' : 'text-blue-500 opacity-0 group-hover:opacity-100'} transition-opacity`} />
           <button
             onClick={(e) => { e.stopPropagation(); onRemoveCustomFolder(tgt.path || ''); }}
             title={t('moduleExplorer.removeFolder')}
@@ -317,9 +316,7 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
             <Trash2 size={12} />
           </button>
           </div>
-        ) : (
-          <Zap size={ICON_SIZES.sm} className={`shrink-0 ${isSelected ? 'text-blue-500 opacity-100' : 'text-blue-500 opacity-0 group-hover:opacity-100'} transition-opacity`} />
-        )}
+        ) : null}
         </button>
       );
       })}
