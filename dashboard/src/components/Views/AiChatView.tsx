@@ -163,8 +163,13 @@ const AiChatView: React.FC = () => {
       }, abort.signal, lang);
 
       const finalText = result.text || getState().answerText;
-      chatHistoryRef.current.push({ role: 'model', content: finalText });
-      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: finalText } : m));
+      // 兜底: 如果 finalText 为空但有工具调用日志, 保留日志内容而非显示空白
+      const toolLogsFallback = getState().toolLogs.length > 0
+        ? getState().toolLogs.join('\n') + '\n\n---\n\n' + t('aiChat.noReplyFallback', { defaultValue: '> AI 未能生成文字回复，以上是执行过程记录。' })
+        : '';
+      const displayText = finalText || toolLogsFallback || t('aiChat.requestFailed', { error: 'Empty response' });
+      chatHistoryRef.current.push({ role: 'model', content: displayText });
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: displayText } : m));
     } catch (err: unknown) {
       if (isAbortError(err)) {
         const partial = t('aiChat.cancelled');
