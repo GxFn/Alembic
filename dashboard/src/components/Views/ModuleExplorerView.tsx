@@ -341,13 +341,21 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
       ) : (
         projectDirs.map((dir, idx) => {
         const dirLangClass = LANG_COLORS[dir.language] || 'bg-[var(--bg-subtle)] text-[var(--fg-secondary)] border-[var(--border-default)]';
-        // 只在外层目录（depth 0）或语言与最近祖先不同的目录上显示语言标签
+        // 语言标签显示策略:
+        // 1. depth 0 始终显示
+        // 2. 父目录已有相同语言 → 不显示
+        // 3. 同级前面的兄弟已显示相同语言 → 不显示（避免重复）
         const showLangBadge = dir.hasSourceFiles && dir.language !== 'unknown' && (() => {
           if (dir.depth === 0) return true;
-          // 向上找最近的祖先目录（depth 更小）
           for (let i = idx - 1; i >= 0; i--) {
-            if (projectDirs[i].depth < dir.depth) {
-              return projectDirs[i].language !== dir.language;
+            const prev = projectDirs[i];
+            // 遇到父级（depth 更小）: 如果父级语言相同则不显示
+            if (prev.depth < dir.depth) {
+              return prev.language !== dir.language;
+            }
+            // 同级兄弟（depth 相同）: 如果已有相同语言则不显示
+            if (prev.depth === dir.depth && prev.language === dir.language && prev.hasSourceFiles) {
+              return false;
             }
           }
           return true;

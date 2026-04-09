@@ -824,7 +824,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       }
 
       // ── 创建 Runtime (使用增强 PipelineStrategy) ──
-      const runtime = agentFactory?.createRuntime('insight', {
+      const runtime = agentFactory!.createRuntime('insight', {
         lang: primaryLang || projectInfo.lang || null,
         strategy: {
           type: 'pipeline',

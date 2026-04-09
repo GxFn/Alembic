@@ -172,7 +172,7 @@ export class CleanupService {
     this.#logger = opts.logger || { info() {}, warn() {} };
     this.#db = opts.db
       ? typeof (opts.db as DbWrapper)?.getDb === 'function'
-        ? (opts.db as DbWrapper).getDb?.()
+        ? (opts.db as DbWrapper).getDb!()
         : (opts.db as SqliteDb)
       : null;
   }
@@ -181,7 +181,7 @@ export class CleanupService {
   setDb(db: unknown): void {
     this.#db = db
       ? typeof (db as DbWrapper)?.getDb === 'function'
-        ? (db as DbWrapper).getDb?.()
+        ? (db as DbWrapper).getDb!()
         : (db as SqliteDb)
       : null;
   }

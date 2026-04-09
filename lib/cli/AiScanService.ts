@@ -106,7 +106,7 @@ export class AiScanService {
         const fileData = [{ name: file.name, content: truncated }];
 
         // 委托 AgentFactory.scanKnowledge — Agent(LLM) 直接分析
-        const extractResult = await this.agentFactory?.scanKnowledge({
+        const extractResult = await this.agentFactory!.scanKnowledge({
           label: file.targetName,
           files: fileData,
           task: 'extract',
