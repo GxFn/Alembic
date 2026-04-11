@@ -120,22 +120,31 @@ export class ConfidenceRouter {
     let qualityScore: number | null = null;
     if (this._qualityScorer) {
       try {
+        const content =
+          entry.content && typeof entry.content === 'object'
+            ? (entry.content as unknown as Record<string, unknown>)
+            : ({} as Record<string, unknown>);
+        const reasoning =
+          entry.reasoning && typeof entry.reasoning === 'object'
+            ? (entry.reasoning as unknown as Record<string, unknown>)
+            : ({} as Record<string, unknown>);
         const scorerInput = {
           title: entry.title,
           trigger: entry.trigger,
-          code: entry.content?.pattern || entry.content?.markdown || '',
+          description: entry.description || '',
           language: entry.language,
           category: entry.category,
-          summary:
-            entry.description ||
-            (entry as unknown as Record<string, string>).summaryCn ||
-            (entry as unknown as Record<string, string>).summaryEn ||
-            '',
-          usageGuide:
-            entry.usageGuide ||
-            (entry as unknown as Record<string, string>).usageGuideCn ||
-            (entry as unknown as Record<string, string>).usageGuideEn ||
-            '',
+          doClause: entry.doClause || '',
+          dontClause: entry.dontClause || '',
+          whenClause: entry.whenClause || '',
+          coreCode: entry.coreCode || '',
+          usageGuide: entry.usageGuide || (content.markdown as string) || '',
+          contentMarkdown: (content.markdown as string) || '',
+          contentRationale: (content.rationale as string) || '',
+          reasoningWhyStandard: (reasoning.whyStandard as string) || '',
+          reasoningSources: (reasoning.sources as string[]) || [],
+          reasoningConfidence: (reasoning.confidence as number) || 0,
+          source: entry.source || '',
           headers: entry.headers || [],
           tags: entry.tags || [],
         };

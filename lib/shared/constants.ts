@@ -8,21 +8,21 @@
 
 // ─── 质量评分 ───────────────────────────────────────────
 
-/** QualityScorer 维度权重 */
+/** QualityScorer v2 维度权重 */
 export const QUALITY_WEIGHTS = Object.freeze({
-  completeness: 0.3,
-  format: 0.25,
-  codeQuality: 0.25,
-  metadata: 0.1,
-  engagement: 0.1,
+  completeness: 0.25,
+  contentDepth: 0.3,
+  deliveryReady: 0.2,
+  actionability: 0.15,
+  provenance: 0.1,
 });
 
 /** QualityScorer 等级分界线 */
 export const QUALITY_GRADES = Object.freeze({
-  A: 0.9,
-  B: 0.75,
-  C: 0.6,
-  D: 0.4,
+  A: 0.85,
+  B: 0.7,
+  C: 0.55,
+  D: 0.35,
 });
 
 /** 代码质量评估 — 合理长度范围 */

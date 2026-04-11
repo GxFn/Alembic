@@ -698,8 +698,8 @@ export class KnowledgeService {
       // 更新 Quality 值对象；同步计算 authority（0‑5）
       const qualityJson = {
         completeness: result.dimensions.completeness,
-        adaptation: result.dimensions.metadata,
-        documentation: result.dimensions.format,
+        adaptation: result.dimensions.deliveryReady,
+        documentation: result.dimensions.contentDepth,
         overall: result.score,
         grade: result.grade,
       };
@@ -885,25 +885,47 @@ export class KnowledgeService {
 
   /**
    * 为 QualityScorer 适配输入
-   * QualityScorer 需要: title, trigger, code, language, category, summary, usageGuide, headers, tags
+   * QualityScorer v2 needs: title, trigger, description, language, category,
+   * doClause, dontClause, whenClause, coreCode, usageGuide,
+   * contentMarkdown, contentRationale, reasoningWhyStandard, reasoningSources,
+   * reasoningConfidence, source, headers, tags, views, clicks, rating
    */
   _adaptForScorer(entry: KnowledgeEntry): Record<string, unknown> {
-    // 从 Stats 值对象提取 engagement 指标，映射到 QualityScorer 期望的 views/clicks/rating
+    // 从 Stats 值对象提取 engagement 指标
     const stats =
       entry.stats && typeof entry.stats === 'object'
         ? (entry.stats as unknown as Record<string, number>)
         : ({} as Record<string, number>);
+    // 从 Content 值对象提取深度字段
+    const content =
+      entry.content && typeof entry.content === 'object'
+        ? (entry.content as unknown as Record<string, unknown>)
+        : ({} as Record<string, unknown>);
+    // 从 Reasoning 值对象提取溯源字段
+    const reasoning =
+      entry.reasoning && typeof entry.reasoning === 'object'
+        ? (entry.reasoning as unknown as Record<string, unknown>)
+        : ({} as Record<string, unknown>);
+
     return {
       title: entry.title,
       trigger: entry.trigger,
-      code: entry.content?.pattern || entry.content?.markdown || '',
+      description: entry.description || '',
       language: entry.language,
       category: entry.category,
-      summary: entry.description || '',
-      usageGuide: entry.content?.markdown || entry.doClause || '',
+      doClause: entry.doClause || '',
+      dontClause: entry.dontClause || '',
+      whenClause: entry.whenClause || '',
+      coreCode: entry.coreCode || '',
+      usageGuide: entry.usageGuide || (content.markdown as string) || entry.doClause || '',
+      contentMarkdown: (content.markdown as string) || '',
+      contentRationale: (content.rationale as string) || '',
+      reasoningWhyStandard: (reasoning.whyStandard as string) || '',
+      reasoningSources: (reasoning.sources as string[]) || [],
+      reasoningConfidence: (reasoning.confidence as number) || 0,
+      source: entry.source || '',
       headers: entry.headers || [],
       tags: entry.tags || [],
-      // engagement: views → views, adoptions+applications → clicks, authority → rating
       views: (stats.views ?? 0) + (stats.searchHits ?? 0),
       clicks: (stats.adoptions ?? 0) + (stats.applications ?? 0) + (stats.guardHits ?? 0),
       rating: stats.authority ?? 0,
