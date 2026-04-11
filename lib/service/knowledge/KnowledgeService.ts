@@ -721,6 +721,18 @@ export class KnowledgeService {
 
       await this.repository.update(id, updatePayload);
 
+      // ── .md 文件同步: quality 更新后重新落盘，保持文件=真相源 ──
+      if (this._fileWriter) {
+        try {
+          const updated = await this.repository.findById(id);
+          if (updated) {
+            this._fileWriter.persist(updated);
+          }
+        } catch {
+          /* best effort — 不阻塞质量更新流程 */
+        }
+      }
+
       if (context.userId) {
         await this._audit('update_knowledge_quality', id, context.userId, {
           score: result.score,

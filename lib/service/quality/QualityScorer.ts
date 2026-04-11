@@ -5,6 +5,7 @@
  */
 
 import { CODE_LENGTH, QUALITY_GRADES, QUALITY_WEIGHTS } from '../../shared/constants.js';
+import { LanguageProfiles } from '../../shared/LanguageProfiles.js';
 
 const DEFAULT_WEIGHTS = QUALITY_WEIGHTS;
 
@@ -109,19 +110,7 @@ export class QualityScorer {
       }
     }
     if (r.language) {
-      const valid = new Set([
-        'swift',
-        'objective-c',
-        'objc',
-        'javascript',
-        'typescript',
-        'python',
-        'c',
-        'cpp',
-        'shell',
-        'markdown',
-      ]);
-      s += valid.has(r.language.toLowerCase()) ? 0.5 : 0.25;
+      s += LanguageProfiles.validCodeLanguages.has(r.language.toLowerCase()) ? 0.5 : 0.25;
     }
     return s;
   }

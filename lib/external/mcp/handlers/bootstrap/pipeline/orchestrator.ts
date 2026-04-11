@@ -598,6 +598,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   // ── 跨维度去重集合 (实例级持久化，等效旧 ChatAgent.#globalSubmittedTitles/Patterns) ──
   const globalSubmittedTitles = new Set<string>();
   const globalSubmittedPatterns = new Set<string>();
+  const globalSubmittedTriggers = new Set<string>();
 
   // ── Rescan 模式: 预种已有 recipe 标题到去重集合，防止重复创建 ──
   const existingRecipesList = existingRecipes as Array<{
@@ -618,9 +619,13 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       if (r.title && r.status !== 'decaying') {
         globalSubmittedTitles.add(r.title.toLowerCase().trim());
       }
+      // ★ trigger 全部预种（含 decaying），防止 trigger 冲突
+      if (r.trigger) {
+        globalSubmittedTriggers.add(r.trigger.toLowerCase().trim());
+      }
     }
     logger.info(
-      `[Insight-v3] Rescan mode: seeded ${globalSubmittedTitles.size} existing recipe titles into dedup set`
+      `[Insight-v3] Rescan mode: seeded ${globalSubmittedTitles.size} titles + ${globalSubmittedTriggers.size} triggers into dedup set`
     );
   }
 
@@ -924,6 +929,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
         sharedState: {
           submittedTitles: globalSubmittedTitles,
           submittedPatterns: globalSubmittedPatterns,
+          submittedTriggers: globalSubmittedTriggers,
           _dimensionMeta: {
             id: dimId,
             outputType: dimConfig.outputType || 'candidate',

@@ -34,6 +34,7 @@ interface TokenUsage {
 interface SharedState {
   submittedTitles?: Set<string>;
   submittedPatterns?: Set<string>;
+  submittedTriggers?: Set<string>;
   submitToolName?: string;
   _dimensionMeta?: { id?: string; [key: string]: unknown };
   [key: string]: unknown;

@@ -648,6 +648,100 @@ let _skipDirs: Set<string> | null = null;
 let _artifactSuffixes: string[] | null = null;
 let _vendorDirs: Set<string> | null = null;
 let _thirdPartyPathRegex: RegExp | null = null;
+let _baseClassExclusions: ReadonlySet<string> | null = null;
+let _validCodeLanguages: ReadonlySet<string> | null = null;
+
+/**
+ * 各语言族中需额外排除的基础类型 — superclassRoles / protocolRoles 未覆盖到的通用根类型。
+ * getHotNodes() 等统计查询中应剔除这些高入度但无信息量的节点。
+ */
+const EXTRA_BASE_TYPE_EXCLUSIONS: Record<LanguageFamily | 'universal', string[]> = {
+  apple: [
+    'UIControl',
+    'UITableViewController',
+    'UICollectionViewController',
+    'UINavigationController',
+    'UITabBarController',
+    'NSOperation',
+    'Any',
+    'AnyObject',
+    'Sendable',
+    'NSCoding',
+    'NSCopying',
+  ],
+  jvm: [
+    'Object',
+    'ViewGroup',
+    'RecyclerView.ViewHolder',
+    'BaseAdapter',
+    'ArrayAdapter',
+    'MutableLiveData',
+    'Cloneable',
+    'Runnable',
+  ],
+  dart: ['Widget', 'InheritedWidget', 'RenderObject'],
+  python: [
+    'object',
+    'type',
+    'Exception',
+    'BaseException',
+    'ABC',
+    'Protocol',
+    'dict',
+    'list',
+    'tuple',
+    'str',
+    'int',
+    'float',
+  ],
+  web: [
+    'EventTarget',
+    'HTMLElement',
+    'Error',
+    'Promise',
+    'Map',
+    'Set',
+    'Array',
+    'Function',
+    'EventEmitter',
+    'ReadableStream',
+    'WritableStream',
+  ],
+  go: ['error', 'Stringer', 'Reader', 'Writer', 'Closer', 'Handler'],
+  rust: [
+    'Display',
+    'Debug',
+    'Clone',
+    'Copy',
+    'Send',
+    'Sync',
+    'Default',
+    'Iterator',
+    'IntoIterator',
+    'From',
+    'Into',
+  ],
+  dotnet: [
+    'System.Object',
+    'ValueType',
+    'Enum',
+    'Exception',
+    'IEnumerable',
+    'IComparable',
+    'Task',
+    'MonoBehaviour',
+  ],
+  universal: [
+    'Object',
+    'Any',
+    'Unit',
+    'Nothing',
+    'Companion',
+    'Component',
+    'PureComponent',
+    'React.Component',
+  ],
+};
 
 /* ═══ LanguageProfiles — Static API ═══════════════════════ */
 
@@ -862,5 +956,92 @@ export class LanguageProfiles {
       _thirdPartyPathRegex = new RegExp(`(?:^|/)(?:${dirPart})/|(?:^/)(?:${libPart})/`, 'i');
     }
     return _thirdPartyPathRegex;
+  }
+
+  /* ─── HotNodes: Base Class Exclusions ────────── */
+
+  /**
+   * 多语言基类/根类型排除集 — 合并所有族的 superclassRoles + protocolRoles + 额外基础类型。
+   *
+   * 用于 getHotNodes() 等入度统计，排除高入度但无信息量的语言根类型。
+   * 新增语言族时自动生效，无需手动维护排除列表。
+   */
+  static get baseClassExclusions(): ReadonlySet<string> {
+    if (!_baseClassExclusions) {
+      const set = new Set<string>();
+      // 从各族的 superclassRoles / protocolRoles keys 自动聚合
+      for (const fp of ALL_FAMILIES) {
+        for (const name of Object.keys(fp.superclassRoles)) {
+          set.add(name);
+        }
+        for (const name of Object.keys(fp.protocolRoles)) {
+          set.add(name);
+        }
+      }
+      // 追加额外基础类型
+      for (const names of Object.values(EXTRA_BASE_TYPE_EXCLUSIONS)) {
+        for (const name of names) {
+          set.add(name);
+        }
+      }
+      _baseClassExclusions = set;
+    }
+    return _baseClassExclusions;
+  }
+
+  /* ─── QualityScorer: Valid Code Languages ─────── */
+
+  /**
+   * 合法代码语言集合 — 合并 LanguageService.knownLangs + 常见别名。
+   *
+   * QualityScorer 格式评分使用，判断 recipe 的 language 字段是否合法。
+   * 新增语言时只需在 LanguageService 添加，此处自动生效。
+   */
+  static get validCodeLanguages(): ReadonlySet<string> {
+    if (!_validCodeLanguages) {
+      const set = new Set<string>(LanguageService.knownLangs);
+      // 添加常见别名，使 QualityScorer 能宽容匹配
+      const extraAliases = [
+        'objective-c',
+        'objc',
+        'c#',
+        'golang',
+        'shell',
+        'bash',
+        'zsh',
+        'markdown',
+        'md',
+        'json',
+        'yaml',
+        'yml',
+        'toml',
+        'sql',
+        'graphql',
+        'html',
+        'css',
+        'scss',
+        'less',
+        'jsx',
+        'tsx',
+        'scala',
+        'groovy',
+        'clojure',
+        'lua',
+        'perl',
+        'r',
+        'matlab',
+        'haskell',
+        'elixir',
+        'erlang',
+        'zig',
+        'nim',
+        'v',
+      ];
+      for (const alias of extraAliases) {
+        set.add(alias);
+      }
+      _validCodeLanguages = set;
+    }
+    return _validCodeLanguages;
   }
 }

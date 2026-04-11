@@ -315,11 +315,26 @@ export const submitDedup = {
 
     if (!isRejected && !isError && sharedState.submittedTitles) {
       const normalizedTitle = title.toLowerCase().trim();
+
+      // ── trigger 去重 (防止不同 title 相同 trigger 的跨维度重复) ──
+      const trigger = String(call.args?.trigger || '')
+        .toLowerCase()
+        .trim();
+      if (trigger && sharedState.submittedTriggers?.has(trigger)) {
+        meta.dedupMessage = `⚠ 重复 trigger: "${trigger}" 已被其他候选占用。`;
+        ctx.runtime.logger.info(`[ToolPipeline] 🔁 duplicate trigger: "${trigger}"`);
+        return;
+      }
+
       if (sharedState.submittedTitles.has(normalizedTitle)) {
         meta.dedupMessage = `⚠ 重复提交: "${title}" 已存在。`;
         ctx.runtime.logger.info(`[ToolPipeline] 🔁 duplicate: "${title}"`);
       } else {
         sharedState.submittedTitles.add(normalizedTitle);
+        // trigger 去重注册
+        if (trigger && sharedState.submittedTriggers) {
+          sharedState.submittedTriggers.add(trigger);
+        }
         // 模式指纹去重
         const contentObj = call.args?.content as Record<string, unknown> | undefined;
         const pattern = String(contentObj?.pattern || '');

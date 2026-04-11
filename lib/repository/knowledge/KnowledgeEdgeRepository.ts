@@ -7,6 +7,7 @@
 
 import { and, count, desc, eq, exists, inArray, like, ne, or, sql } from 'drizzle-orm';
 import { codeEntities, knowledgeEdges } from '../../infrastructure/database/drizzle/schema.js';
+import { LanguageProfiles } from '../../shared/LanguageProfiles.js';
 import { unixNow } from '../../shared/utils/common.js';
 import { type DrizzleTx, type PaginatedResult, RepositoryBase } from '../base/RepositoryBase.js';
 
@@ -282,8 +283,10 @@ export class KnowledgeEdgeRepositoryImpl extends RepositoryBase<
     return result;
   }
 
-  /** 获取入度最高的节点（被引用最多） */
+  /** 获取入度最高的节点（被引用最多），排除多语言基类和框架根类 */
   async getHotNodes(limit = 15): Promise<{ id: string; type: string; inDegree: number }[]> {
+    const exclusions = LanguageProfiles.baseClassExclusions;
+    const exclusionList = [...exclusions].map((v) => sql`${v}`);
     const rows = this.drizzle
       .select({
         toId: this.table.toId,
@@ -291,6 +294,7 @@ export class KnowledgeEdgeRepositoryImpl extends RepositoryBase<
         inDegree: count(),
       })
       .from(this.table)
+      .where(sql`${this.table.toId} NOT IN (${sql.join(exclusionList, sql`, `)})`)
       .groupBy(this.table.toId, this.table.toType)
       .orderBy(sql`count(*) DESC`)
       .limit(limit)

@@ -241,7 +241,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '架构层次映射',
         action:
-          '浏览项目根目录和核心子目录，识别分层架构类型（MVC/MVVM/Clean Architecture/Feature-based/Monorepo）。阅读构建配置（Package.swift/build.gradle/package.json/Cargo.toml）确认模块划分。绘制层次关系：哪些目录属于哪一层、各层的职责边界',
+          '浏览项目根目录和核心子目录，识别分层架构类型（MVC/MVVM/Clean Architecture/Feature-based/Monorepo）。阅读构建配置（Package.swift/build.gradle/package.json/Cargo.toml/go.mod/pyproject.toml/CMakeLists.txt）确认模块划分。绘制层次关系：哪些目录属于哪一层、各层的职责边界',
         output: '架构层次图：层名→目录映射→职责定义→层间依赖方向（上层→下层，禁止反向）',
         tools: ['list_dir 浏览目录树（至少两层深度）', 'read_file 阅读构建配置文件确认模块划分'],
       },
@@ -371,7 +371,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '数据流框架识别',
         action:
-          '搜索项目中的状态管理和事件框架信号：RxSwift(Observable/Subject/Driver/Relay), Combine(Publisher/Subscriber/@Published), Redux/Flux(Store/Action/Reducer/dispatch), Vuex/Pinia(state/mutations/actions), EventBus/Notification/KVO。确认主框架选型及其在项目中的角色分配（ViewModel 用 Rx、View 用 Binding 等）',
+          '搜索项目中的状态管理和事件框架信号：Rx系列(Observable/Subject/Driver/Relay/Flowable), Combine/Publisher, Redux/Flux(Store/Action/Reducer/dispatch), Vuex/Pinia/Zustand(state/mutations/actions), EventBus/Notification/KVO/LiveData/StateFlow。确认主框架选型及其在项目中的角色分配',
         output: '数据流技术选型全景：主框架 + 辅助机制 + 各层的角色分配',
         tools: [
           'grep_search 搜索 Observable/Subject/Publisher/Store/dispatch 等信号词',
@@ -388,7 +388,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '订阅泄漏检测',
         action:
-          '搜索内存泄漏风险模式：未使用 disposeBag/cancellable 的订阅、闭包内强引用 self（缺少 [weak self]）、未取消的 Timer/NotificationCenter 观察者、长生命周期对象持有短生命周期对象的订阅',
+          '搜索内存泄漏风险模式：未取消的订阅/观察者(disposeBag/cancellable/removeObserver/取消订阅)、闭包/回调内强引用导致循环引用、未取消的 Timer/定时器、长生命周期对象持有短生命周期对象的订阅',
         output: '泄漏风险点清单 + 项目已有的防泄漏机制（disposeBag 管理策略、weak self 约定）',
       },
     ],
@@ -397,8 +397,8 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
     submitExtras: ['每个候选聚焦单一数据流模式，说明其适用场景和约束'],
     mistakes: [
       '不要只描述框架 API（如 "使用 Observable"）— 必须说明项目如何使用该框架、约定了哪些模式',
-      '不要混淆不同框架的模式 — 如果项目同时使用 RxSwift 和 Combine，应按框架分别提交',
-      '不要忽略订阅的生命周期管理 — disposeBag/cancellable/[weak self] 的使用约定是防泄漏的核心',
+      '不要混淆不同框架的模式 — 如果项目同时使用多种响应式/状态管理框架，应按框架分别提交',
+      '不要忽略订阅的生命周期管理 — 订阅取消/引用管理/防泄漏机制的使用约定是核心知识',
       '不要遗漏 Output 类型约束 — "Driver 不能 error" 这类约束比 "使用 Driver" 更有价值',
       '【跨维度边界】data-event-flow 只关注数据流/事件/状态 — UI 组件构建归 ui-interaction，设计模式归 design-patterns',
     ],
@@ -442,7 +442,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '规则强度分级',
         action:
-          '区分硬规则（CI 强制执行、lint 报错、pre-commit 拦截）和软指南（文档建议但无自动化检查）。阅读 CI 配置(.github/workflows/)、lint 配置(biome.json/.eslintrc/swiftlint.yml)、pre-commit/husky 配置，提取被工具链强制的规则',
+          '区分硬规则（CI 强制执行、lint 报错、pre-commit 拦截）和软指南（文档建议但无自动化检查）。阅读 CI 配置(.github/workflows/)、lint 配置(biome.json/.eslintrc/swiftlint.yml/rustfmt.toml/.golangci.yml/flake8/mypy.ini)、pre-commit/husky 配置，提取被工具链强制的规则',
         output: '规则强度矩阵：硬规则（工具强制）vs 软指南（文档建议）+ 每条规则的强制机制',
         tools: [
           'read_file 阅读 CI 配置和 lint 配置文件',
@@ -499,21 +499,23 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '并发模型全景扫描',
         action:
-          '搜索项目中的并发原语和异步模式：structured concurrency(async/await/Task/TaskGroup), actors(@MainActor/自定义Actor), locks(NSLock/os_unfair_lock/Mutex/synchronized), GCD(DispatchQueue/DispatchGroup), 线程池/Executor, Promise/Future/Combine。统计各种并发模型的使用频率和场景分布',
+          '搜索项目中的并发原语和异步模式：structured concurrency(async/await/Task/TaskGroup/asyncio), actors/isolates, locks/mutexes(Mutex/synchronized/Lock/RWLock), thread pools/executors/dispatch queues, Promise/Future/Rx/Channel/Flow。统计各种并发模型的使用频率和场景分布',
         output: '并发模型使用全景：主模型选型 + 各层/各场景的并发策略分布',
-        tools: ['grep_search 搜索 async/await/Task/Actor/DispatchQueue/Lock/Mutex 等关键词'],
+        tools: [
+          'grep_search 搜索 async/await/Task/Actor/Lock/Mutex/Thread/coroutine/goroutine 等关键词',
+        ],
       },
       {
         name: '线程安全策略提取',
         action:
-          '阅读核心并发文件，提取项目的线程安全约定：Sendable 合规策略(@unchecked Sendable + Lock vs 纯值类型)、共享可变状态的保护方式(Lock/Actor/串行队列)、主线程保障机制(@MainActor/DispatchQueue.main)、跨线程数据传递方式(值拷贝/不可变引用)',
+          '阅读核心并发文件，提取项目的线程安全约定：共享可变状态的保护方式(Lock/Actor/Mutex/串行队列/synchronized)、UI 线程保障机制(MainActor/main thread dispatch/runOnUiThread)、跨线程数据传递方式(值拷贝/不可变引用/Channel/Queue)、线程安全标注或约束(Sendable/ThreadSafe/@WorkerThread)',
         output: '线程安全策略矩阵：各场景的标准做法 + 标准代码骨架',
         tools: ['read_file 阅读包含并发逻辑的核心文件'],
       },
       {
         name: '竞态与死锁风险检测',
         action:
-          '搜索并发风险信号：未加锁的共享可变 var、缺少 @MainActor 的 UI 更新代码、嵌套锁(潜在死锁)、Task 中未捕获的 self 强引用、回调地狱(多层嵌套的异步回调)',
+          '搜索并发风险信号：未加锁的共享可变状态、缺少 UI 线程保障的界面更新代码、嵌套锁(潜在死锁)、异步闭包/回调中的资源泄漏(未释放引用/未取消订阅)、回调地狱(多层嵌套的异步回调)',
         output: '并发风险点清单 + 项目已有的防护机制评估',
       },
     ],
@@ -521,10 +523,10 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       '并发模型选型、线程安全策略、锁使用模式分别提交候选（**按实际发现提交，无实质内容则跳过本维度**）',
     submitExtras: ['每个候选聚焦单一并发策略，coreCode 展示标准的线程安全写法'],
     mistakes: [
-      '不要把不同并发策略混在一个候选中 — Actor 模式和 NSLock 模式应独立成条',
+      '不要把不同并发策略混在一个候选中 — 不同锁/队列/Actor 模式应独立成条',
       '不要写通用并发理论 — 必须引用项目实际代码，展示项目团队选择的具体方案',
-      '不要忽略 @MainActor 和 UI 线程保障 — 这是 iOS/桌面应用最常见的并发约束',
-      '不要忽略 Task 闭包中的 self 捕获策略 — [weak self] vs 值捕获 vs @Sendable 约束',
+      '不要忽略 UI 线程保障 — 确保界面更新总是在主线程/UI 线程执行是最常见的并发约束',
+      '不要忽略异步上下文中的资源管理 — 引用捕获/订阅取消/上下文传递策略是关键决策',
       '【跨维度边界】concurrency-async 只关注并发/线程安全 — 错误处理归 error-resilience，性能优化归 performance-optimization',
     ],
   },
@@ -559,7 +561,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '网络架构映射',
         action:
-          '搜索项目的网络请求基础设施：HTTP 客户端选型(URLSession/Alamofire/Moya/fetch/axios)、API 定义方式(枚举/类/装饰器)、请求构建流程(URL+参数+Header+Body 的组装方式)、拦截器/中间件链(认证注入/日志/重试/缓存)',
+          '搜索项目的网络请求基础设施：HTTP 客户端选型(URLSession/OkHttp/Retrofit/fetch/axios/requests/net/http)、API 定义方式(枚举/类/装饰器/接口)、请求构建流程(URL+参数+Header+Body 的组装方式)、拦截器/中间件链(认证注入/日志/重试/缓存)',
         output: '网络架构全景图：技术选型 → 分层结构 → 请求流水线（构建→拦截→发送→响应→解析）',
         tools: [
           'grep_search 搜索 request/response/API/endpoint/interceptor 关键词',
@@ -584,7 +586,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       '网络架构、请求模式、认证管理、响应解析分别提交候选（**按实际发现提交，无实质内容则跳过本维度**）',
     submitExtras: ['doClause 强制使用项目的网络封装层，禁止直接调用底层 HTTP API'],
     mistakes: [
-      '不要描述 URLSession/Alamofire 的通用 API 用法 — 必须说明项目特定的封装方式和约定',
+      '不要描述底层 HTTP 库的通用 API 用法 — 必须说明项目特定的封装方式和约定',
       '不要忽略认证/Token 管理 — Token 存储位置、刷新机制、过期处理是网络层核心知识',
       '不要遗漏错误码映射规则 — 服务端返回的 code/status 如何映射到客户端 Error 类型',
       '不要忽略超时、重试、缓存策略 — 这些直接影响用户体验和接口健壮性',
@@ -623,12 +625,9 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: 'UI 技术栈识别',
         action:
-          '搜索项目的 UI 构建方式：布局技术(代码布局/Storyboard/XIB/SwiftUI/CSS-in-JS/Tailwind)、布局引擎(SnapKit/AutoLayout/Flexbox/Grid)、组件库(自定义基础组件/第三方 UI 库)、动画框架。识别是否有统一的 BaseView/BaseViewController',
+          '搜索项目的 UI 构建方式：布局技术(代码布局/声明式UI/XML布局/CSS/模板引擎)、布局引擎(AutoLayout/SnapKit/Flexbox/Grid/ConstraintLayout/Compose)、组件库(自定义基础组件/第三方 UI 库)、动画框架。识别是否有统一的 BaseView/BaseComponent',
         output: 'UI 技术栈全景：布局方式 + 组件库 + 基类继承体系 + 动画技术',
-        tools: [
-          'grep_search 搜索 SnapKit/AutoLayout/Storyboard/SwiftUI/CSS 等关键词',
-          '浏览 UI/View/Component 集中目录',
-        ],
+        tools: ['grep_search 搜索项目使用的布局/UI 框架关键词', '浏览 UI/View/Component 集中目录'],
       },
       {
         name: '组件规范深挖',
@@ -640,7 +639,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: 'UI 一致性检测',
         action:
-          '搜索 UI 实现的不一致现象：混用不同布局方式（同一项目中 SnapKit 和纯 AutoLayout 混用）、硬编码样式值（直接写颜色/字体数值而非引用常量）、遗漏 Dark Mode 适配（未使用动态颜色）、缺失无障碍标注(accessibilityLabel)',
+          '搜索 UI 实现的不一致现象：混用不同布局方式（同一项目中多种布局引擎共存）、硬编码样式值（直接写颜色/字体数值而非引用常量/token）、遗漏 Dark Mode 适配（未使用动态颜色/CSS 变量）、缺失无障碍标注(accessibilityLabel/contentDescription/aria-label)',
         output: 'UI 一致性问题清单 + 项目 UI 规范整体遵守情况评估',
       },
     ],
@@ -648,10 +647,10 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       'UI 布局模式、样式管理、组件复用、主题适配分别提交候选（**按实际发现提交，无实质内容则跳过本维度**）',
     submitExtras: ['每个候选聚焦单一 UI 规范（布局写法 和 样式管理 是独立候选）'],
     mistakes: [
-      '不要描述 UIKit/SwiftUI/CSS 的通用 API — 必须说明项目特定的布局约定和样式管理方式',
+      '不要描述 UI 框架的通用 API — 必须说明项目特定的布局约定和样式管理方式',
       '不要合并不同层次的 UI 规范 — "布局约束写法"和"主题颜色管理"应独立提交',
       '不要忽略 Dark Mode/主题适配 — 动态颜色和样式切换是现代 UI 项目的标配',
-      '不要遗漏基类继承约定 — BaseViewController/BaseView 的重写点和使用规则是高频知识',
+      '不要遗漏基类/基组件继承约定 — BaseView/BaseActivity/BaseComponent 的重写点和使用规则是高频知识',
       '【跨维度边界】ui-interaction 只关注 UI 构建/布局/样式 — 数据绑定归 data-event-flow，设计模式归 design-patterns',
     ],
   },
@@ -687,7 +686,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '测试基础设施扫描',
         action:
-          '搜索项目的测试配置和目录结构：测试框架(XCTest/Jest/Vitest/pytest/JUnit)、测试目录组织(unit/integration/e2e 分离方式)、测试辅助工具(Mock 框架/Fixture 管理/测试 DSL)、CI 中的测试命令和覆盖率配置',
+          '搜索项目的测试配置和目录结构：测试框架(XCTest/Jest/Vitest/pytest/JUnit/go test/RSpec)、测试目录组织(unit/integration/e2e 分离方式)、测试辅助工具(Mock 框架/Fixture 管理/测试 DSL)、CI 中的测试命令和覆盖率配置',
         output: '测试基础设施全景：框架选型 + 目录结构 + 覆盖率要求 + CI 集成方式',
         tools: [
           'file_search 搜索 *Test*/*Spec*/*test* 文件',
@@ -715,7 +714,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       '不要只列出测试框架名称 — 必须说明项目特定的测试约定（命名/Mock/Fixture 管理方式）',
       '不要忽略 Mock 的创建和管理方式 — 手写 Mock vs Protocol Mock vs 框架 Mock 的选择策略是核心知识',
       '不要把单元测试和集成测试的约定混在一起 — 它们的 Mock 策略和 Fixture 管理通常不同',
-      '不要遗漏异步测试的写法约定 — async/await 测试、XCTestExpectation、超时控制',
+      '不要遗漏异步测试的写法约定 — async/await 测试、异步等待机制(expectation/waitFor/eventually)、超时控制',
       '【跨维度边界】testing-quality 只关注测试策略和模式 — CI/CD 流程归 agent-guidelines',
     ],
   },
@@ -751,10 +750,10 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '认证架构映射',
         action:
-          '搜索项目的认证/授权基础设施：认证方式(JWT/OAuth/Session/Cookie/SSO/生物识别)、Token 存储位置(KeyChain/SharedPreferences/内存/Cookie)、用户状态管理(登录/登出/Token 过期/Session 过期)、权限控制粒度(角色/功能/页面级)',
+          '搜索项目的认证/授权基础设施：认证方式(JWT/OAuth/Session/Cookie/SSO/生物识别)、Token 存储位置(Keychain/SharedPreferences/EncryptedStorage/HttpOnly Cookie/内存)、用户状态管理(登录/登出/Token 过期/Session 过期)、权限控制粒度(角色/功能/页面级)',
         output: '认证架构全景：认证方式 + Token 生命周期 + 权限控制体系 + 用户状态机',
         tools: [
-          'grep_search 搜索 Token/Auth/Login/KeyChain/Credential 关键词',
+          'grep_search 搜索 Token/Auth/Login/Credential/Session/OAuth 关键词',
           '浏览认证/安全相关目录',
         ],
       },
@@ -768,18 +767,24 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '安全漏洞扫描',
         action:
-          '搜索安全风险信号：硬编码的密钥/Token/URL、明文存储敏感数据(UserDefaults 存 Token)、缺失的输入校验、允许 HTTP 明文传输的配置、日志中泄漏敏感信息(打印 Token/密码)',
+          '搜索安全风险信号：硬编码的密钥/Token/URL、明文存储敏感数据(明文写入本地存储/localStorage/UserDefaults/plain text file)、缺失的输入校验、允许 HTTP 明文传输的配置、日志中泄漏敏感信息(打印 Token/密码)',
         output: '潜在安全漏洞清单 + 严重等级评估 + 修复建议',
       },
     ],
     submitAction:
       '认证机制、Token 管理、安全存储、权限控制分别提交候选（**按实际发现提交，无实质内容则跳过本维度**）',
-    submitExtras: ['严禁在候选的 coreCode/content 中包含实际密钥、Token 或敏感配置值'],
+    submitExtras: [
+      '严禁在候选的 coreCode/content 中包含实际密钥、Token 或敏感配置值',
+      '每个候选必须引用具体的安全相关类名和文件路径 — 纯理论描述会被拒绝',
+      '如果项目使用第三方 SDK 提供认证，只提交项目自身的集成方式和配置，不要重复 SDK 通用文档',
+    ],
     mistakes: [
       '不要描述通用安全理论 — 必须说明项目特定的认证机制和存储方式',
       '严禁在候选中暴露实际的密钥、Token、API Secret 或敏感配置 — 用占位符替代',
       '不要忽略 Token 刷新机制 — "过期后如何自动刷新、刷新失败如何引导重新登录"是核心流程',
       '不要遗漏登录/登出的状态广播机制 — 其他模块如何感知认证状态变化',
+      '不要将同一个认证流程拆分成过多候选 — "登录 + Token 存储 + Cookie 同步"如果是一个紧密耦合的流程，应合并为一个候选',
+      '不要提交与 networking-api 维度重叠的内容 — HTTPS 配置、证书校验归本维度，但请求拦截、Header 注入归 networking-api',
       '【跨维度边界】security-auth 只关注认证/授权/安全 — 网络请求封装归 networking-api，错误处理归 error-resilience',
     ],
   },
@@ -814,7 +819,7 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '性能策略扫描',
         action:
-          '搜索项目中的性能优化策略：缓存(内存缓存/磁盘缓存/HTTP 缓存)、懒加载/延迟初始化(lazy var/dynamic import)、预加载/预取(prefetch/preload)、列表优化(cell 复用/虚拟滚动/分页加载)、图片优化(压缩/缩放/CDN/缓存)、节流防抖(throttle/debounce/合并请求)',
+          '搜索项目中的性能优化策略：缓存(内存缓存/磁盘缓存/HTTP 缓存/CDN)、懒加载/延迟初始化(lazy init/dynamic import/按需创建)、预加载/预取(prefetch/preload)、列表优化(组件复用/虚拟滚动/分页加载)、图片/资源优化(压缩/缩放/缓存)、节流防抖(throttle/debounce/合并请求)',
         output: '性能优化策略全景：各场景的优化手段 + 技术选型 + 实现位置',
         tools: [
           'grep_search 搜索 cache/lazy/prefetch/throttle/debounce/reuse 关键词',
@@ -831,18 +836,24 @@ const COMPACT_SOPS: Record<string, CompactSop> = {
       {
         name: '性能瓶颈检测',
         action:
-          '搜索可能的性能问题：主线程上的同步 I/O 或重计算、未缓存的重复网络请求、未复用的 Cell/View、过大的图片未缩放直接渲染、内存泄漏点(未释放的缓存/循环引用)',
+          '搜索可能的性能问题：主线程/UI 线程上的同步 I/O 或重计算、未缓存的重复网络请求、未复用的列表项组件、过大的资源未优化直接加载、内存泄漏点(未释放的缓存/循环引用/未取消的订阅)',
         output: '潜在性能瓶颈清单 + 优化优先级建议',
       },
     ],
     submitAction:
       '缓存策略、列表优化、图片管线、启动优化分别提交候选（**按实际发现提交，无实质内容则跳过本维度**）',
-    submitExtras: ['每个候选聚焦单一优化策略，说明适用场景和配置参数'],
+    submitExtras: [
+      '每个候选聚焦单一优化策略，说明适用场景和配置参数',
+      '每个候选的 coreCode 必须包含项目实际的类名/方法名/配置值 — 不能是伪代码或通用示例',
+      'content.markdown 必须包含具体的度量数据或配置参数（如缓存大小、超时时间、阈值等）— 纯文字描述的优化建议会被拒绝',
+    ],
     mistakes: [
       '不要写通用性能理论 — 必须引用项目实际的优化代码和配置参数',
       '不要合并不同维度的优化策略 — "内存缓存策略"和"列表分页加载"是独立候选',
       '不要忽略缓存的淘汰和过期机制 — "缓存了什么"不如"何时淘汰、容量多大"有价值',
-      '不要遗漏图片优化管线 — 图片是移动端第一大性能杀手，压缩/缩放/缓存策略必须覆盖',
+      '不要遗漏资源加载优化 — 图片/字体/数据等大资源的压缩/缩放/缓存策略必须覆盖',
+      '不要提交没有具体代码证据的性能建议 — "建议使用懒加载"不是候选，"项目中 XxxManager 使用单例/延迟初始化模式"才是候选',
+      '不要重复框架/三方库的通用用法 — 只有项目对第三方库有自定义配置或封装时才值得提交',
       '【跨维度边界】performance-optimization 只关注性能优化策略 — 并发模型归 concurrency-async，网络策略归 networking-api',
     ],
   },
