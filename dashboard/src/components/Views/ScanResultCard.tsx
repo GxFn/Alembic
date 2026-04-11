@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Zap, CheckCircle, Pencil, Check, GitCompare, Inbox, Layers, Loader2 } from 'lucide-react';
-import { ScanResultItem, SimilarRecipe } from '../../types';
+import { Zap, CheckCircle, Pencil, Check, Inbox, Layers, Loader2 } from 'lucide-react';
+import { ScanResultItem } from '../../types';
 import { categories, LANGUAGE_OPTIONS, normalizeLanguageId, importPlaceholder } from '../../constants';
 import { ICON_SIZES } from '../../constants/icons';
 import CodeBlock from '../Shared/CodeBlock';
@@ -27,13 +27,10 @@ interface ScanResultCardProps {
   /* header expansion */
   expandedEditIndex: number | null;
   setExpandedEditIndex: (i: number | null) => void;
-  /* similarity */
-  similarityMap: Record<string, SimilarRecipe[]>;
   /* callbacks */
   handleUpdateScanResult: (index: number, updates: any) => void;
   handleSaveExtracted: (res: any) => void;
   handlePromoteToCandidate?: (res: ScanResultItem, index: number) => void;
-  openCompare: (res: ScanResultItem, recipeName: string, similarList: SimilarRecipe[]) => void;
   isSavingRecipe?: boolean;
 }
 
@@ -120,11 +117,9 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
   setEditingCodeIndex,
   expandedEditIndex,
   setExpandedEditIndex,
-  similarityMap,
   handleUpdateScanResult,
   handleSaveExtracted,
   handlePromoteToCandidate,
-  openCompare,
   isSavingRecipe = false,
 }) => {
   const { t } = useI18n();
@@ -623,54 +618,6 @@ const ScanResultCard: React.FC<ScanResultCardProps> = ({
             <p className="text-xs text-slate-400 italic py-4">{t('scanResult.noCode')}</p>
           )}
         </div>
-
-        {/* ── 3.7 Similarity warnings ── */}
-        {(() => {
-          const simKey = res.candidateId ?? res.id ?? `scan-${i}`;
-          const similar = similarityMap[simKey];
-          const meaningfulSimilar = (similar || []).filter(s => s.similarity >= 0.6);
-          if (meaningfulSimilar.length === 0) return null;
-          const highSimilar = meaningfulSimilar.filter(s => s.similarity >= 0.85);
-          const hasHighSimilar = highSimilar.length > 0;
-          return (
-            <div className="space-y-1.5">
-              {hasHighSimilar && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  <span className="text-red-500 text-sm">⚠️</span>
-                  <span className="text-[11px] font-bold text-red-700">{t('scanResult.highDuplicateRisk')}</span>
-                  {highSimilar.map(s => (
-                    <button
-                      key={s.recipeName}
-                      onClick={() => openCompare(res, s.recipeName, similar || [])}
-                      className="text-[11px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-300 hover:bg-red-200 transition-colors"
-                    >
-                      {s.recipeName.replace(/\.md$/i, '')} {(s.similarity * 100).toFixed(0)}%
-                    </button>
-                  ))}
-                  <span className="text-[10px] text-red-500">{t('scanResult.compareBeforeSave')}</span>
-                </div>
-              )}
-              <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-[10px] text-slate-400 font-bold">{t('scanResult.similarRecipes')}</span>
-                {meaningfulSimilar.slice(0, 5).map(s => (
-                  <button
-                    key={s.recipeName}
-                    onClick={() => openCompare(res, s.recipeName, similar || [])}
-                    className={`text-[10px] font-bold px-2 py-1 rounded border transition-colors flex items-center gap-1 ${
-                      s.similarity >= 0.85
-                        ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-                        : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                    }`}
-                    title={t('scanResultCard.similarWithClick', { name: s.recipeName, score: (s.similarity * 100).toFixed(0) })}
-                  >
-                    <GitCompare size={ICON_SIZES.xs} />
-                    {s.recipeName.replace(/\.md$/i, '')} {(s.similarity * 100).toFixed(0)}%
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
       </div>
     </div>
   );

@@ -5,10 +5,9 @@ import api from '../../api';
 import { notify } from '../../utils/notification';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
-import { getErrorMessage, getErrorStatus } from '../../utils/error';
+import { getErrorMessage } from '../../utils/error';
 import ContextAwareSearchPanel from './ContextAwareSearchPanel';
 import ScanResultCard from './ScanResultCard';
-import SPMCompareDrawer, { type CompareDrawerData, type SimilarRecipe } from './SPMCompareDrawer';
 
 interface ModuleExplorerViewProps {
   targets: SPMTarget[];
@@ -94,14 +93,9 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
   const { t } = useI18n();
   const [editingCodeIndex, setEditingCodeIndex] = useState<number | null>(null);
   const [expandedEditIndex, setExpandedEditIndex] = useState<number | null>(null);
-  const [similarityMap, setSimilarityMap] = useState<Record<string, SimilarRecipe[]>>({});
-  const [, setSimilarityLoading] = useState<string | null>(null);
-  const [compareDrawer, setCompareDrawer] = useState<CompareDrawerData | null>(null);
   const [isContextSearchOpen, setIsContextSearchOpen] = useState(false);
   const [selectedContextFile, ] = useState<string | undefined>();
   const [selectedContextTarget, ] = useState<string | undefined>();
-  const fetchedSimilarRef = useRef<Set<string>>(new Set());
-  const prevSimilarKeysRef = useRef<string[]>([]);
 
   // ── 目录浏览器状态（内联替代弹窗） ──
   const [projectDirs, setProjectDirs] = useState<ProjectDirectory[]>([]);
@@ -164,75 +158,6 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
     // 切回模块标签，以便看到新添加的虚拟目录
     setSidebarTab('modules');
   }, [handleScanTarget, onAddCustomFolder, t]);
-
-
-  const fetchSimilarity = useCallback(async (key: string, opts: { targetName?: string; candidateId?: string; candidate?: { title?: string; summary?: string; code?: string; usageGuide?: string } }) => {
-  if (fetchedSimilarRef.current.has(key)) return;
-  fetchedSimilarRef.current.add(key);
-  setSimilarityLoading(key);
-  try {
-    const body = opts.candidateId && opts.targetName
-    ? { targetName: opts.targetName, candidateId: opts.candidateId }
-    : { candidate: opts.candidate || {} };
-    const resp = await api.getCandidateSimilarityEx(body);
-    setSimilarityMap(prev => ({ ...prev, [key]: resp.similar || [] }));
-  } catch (_) {
-    setSimilarityMap(prev => ({ ...prev, [key]: [] }));
-  } finally {
-    setSimilarityLoading(null);
-  }
-  }, []);
-
-  const openCompare = useCallback(async (res: ScanResultItem, recipeName: string, similarList: SimilarRecipe[] = []) => {
-  const targetName = res.candidateTargetName || '';
-  // 移除 .md 后缀（如果有的话）
-  const normalizedRecipeName = recipeName.replace(/\.md$/i, '');
-  let recipeContent = '';
-  const existing = recipes?.find(r => r.name === normalizedRecipeName || r.name.endsWith('/' + normalizedRecipeName));
-  if (existing?.content) {
-    recipeContent = [existing.content.pattern, existing.content.markdown].filter(Boolean).join('\n\n') || '';
-  } else {
-    try {
-    const recipeData = await api.getRecipeContentByName(normalizedRecipeName);
-    recipeContent = recipeData.content;
-    } catch (err: unknown) {
-    const status = getErrorStatus(err);
-    const message = getErrorMessage(err);
-    if (status === 404) {
-      notify(t('moduleExplorer.recipeNotExist', { name: normalizedRecipeName }), { title: t('moduleExplorer.recipeNotExistTitle'), type: 'error' });
-    } else {
-      notify(message, { title: t('moduleExplorer.loadRecipeFailed'), type: 'error' });
-    }
-    return;
-    }
-  }
-  const initialCache: Record<string, string> = { [normalizedRecipeName]: recipeContent };
-  setCompareDrawer({ candidate: res, targetName, recipeName: normalizedRecipeName, recipeContent, similarList: similarList.slice(0, 3), recipeContents: initialCache });
-  }, [recipes]);
-
-
-
-  useEffect(() => {
-  const keys = scanResults.map((r, i) => r.candidateId ?? `scan-${i}`);
-  const prevKeys = prevSimilarKeysRef.current;
-  const keysChanged = keys.length !== prevKeys.length || keys.some((k, i) => k !== prevKeys[i]);
-  if (keysChanged) {
-    fetchedSimilarRef.current.clear();
-    prevSimilarKeysRef.current = keys;
-  }
-  // 延迟请求相似度 — 等待卡片动画渲染完成后再发起，避免布局抖动
-  const timer = setTimeout(() => {
-    scanResults.forEach((res, i) => {
-      const key = res.candidateId ?? res.id ?? `scan-${i}`;
-      if (res.candidateId && res.candidateTargetName) {
-        fetchSimilarity(key, { targetName: res.candidateTargetName, candidateId: res.candidateId });
-      } else {
-        fetchSimilarity(key, { candidate: { title: res.title, summary: res.description || '', code: res.content?.pattern || '', usageGuide: res.content?.markdown || '' } });
-      }
-    });
-  }, 800);
-  return () => clearTimeout(timer);
-  }, [scanResults, fetchSimilarity]);
 
   return (
   <div className="flex gap-4 xl:gap-6 2xl:gap-8 h-full">
@@ -495,30 +420,14 @@ const ModuleExplorerView: React.FC<ModuleExplorerViewProps> = ({
           setEditingCodeIndex={setEditingCodeIndex}
           expandedEditIndex={expandedEditIndex}
           setExpandedEditIndex={setExpandedEditIndex}
-          similarityMap={similarityMap}
           handleUpdateScanResult={handleUpdateScanResult}
           handleSaveExtracted={handleSaveExtracted}
           handlePromoteToCandidate={handlePromoteToCandidate}
-          openCompare={openCompare}
           isSavingRecipe={isSavingRecipe}
         />
       ))}
     </div>
     </div>
-
-    {/* Compare drawer */}
-    {compareDrawer && (
-      <SPMCompareDrawer
-        data={compareDrawer}
-        onClose={() => setCompareDrawer(null)}
-        onDataChange={setCompareDrawer}
-        recipes={recipes}
-        handleSaveExtracted={handleSaveExtracted}
-        handleDeleteCandidate={handleDeleteCandidate}
-        onEditRecipe={onEditRecipe}
-        isSavingRecipe={isSavingRecipe}
-      />
-    )}
 
     {/* 上下文感知搜索面板 */}
     <ContextAwareSearchPanel

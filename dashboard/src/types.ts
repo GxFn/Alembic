@@ -343,12 +343,6 @@ export interface KnowledgeStatsResponse {
   [key: string]: number;  // 允许按 key 索引
 }
 
-/** 相似 Recipe 条目 */
-export interface SimilarRecipe {
-  recipeName: string;
-  similarity: number;
-}
-
 export interface GuardAuditResult {
   summary: GuardAuditSummary;
   files?: Array<{

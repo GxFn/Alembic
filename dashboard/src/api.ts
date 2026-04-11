@@ -1026,37 +1026,6 @@ export const api = {
     return { ok: true, candidateId: res.data?.data?.id || '' };
   },
 
-  async getCandidateSimilarity(
-    code: string,
-    language: string,
-  ): Promise<{ similar: Array<{ recipeName: string; similarity: number }> }> {
-    const res = await http.post('/search/similarity', { code, language }).catch(() => ({ data: { data: { similar: [] } } }));
-    return res.data?.data || { similar: [] };
-  },
-
-  /** getCandidateSimilarityEx: supports targetName+candidateId or candidate object */
-  async getCandidateSimilarityEx(
-    params: { targetName?: string; candidateId?: string; candidate?: Partial<KnowledgeEntry> },
-  ): Promise<{ similar: Array<{ recipeName: string; similarity: number }> }> {
-    const res = await http.post('/search/similarity', params).catch(() => ({ data: { data: { similar: [] } } }));
-    return res.data?.data || { similar: [] };
-  },
-
-  /** Get recipe content by name (for compare modals) */
-  async getRecipeContentByName(
-    name: string,
-  ): Promise<{ name: string; content: string }> {
-    const knowledgeId = await resolveKnowledgeId(name);
-    const res = await http.get(`/knowledge/${knowledgeId}`);
-    const r = res.data?.data;
-    if (!r) throw new Error('Recipe not found');
-    const recipe = toRecipe(r);
-    // 将 V3 结构化 content 序列化为 markdown 字符串（用于 compare drawer 等需要纯文本的场景）
-    const c = recipe.content;
-    const contentStr = [c?.pattern, c?.markdown].filter(Boolean).join('\n\n') || '';
-    return { name, content: contentStr };
-  },
-
   // ── AI ──────────────────────────────────────────────
 
   async getAiProviders(): Promise<AiProviderInfo[]> {

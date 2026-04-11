@@ -597,7 +597,7 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
             <span className="text-xs text-[var(--fg-muted)] ml-auto">{t('knowledge.totalCount', { count: total })}</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             {entries.map(entry => {
               const lc = LIFECYCLE_CONFIG[entry.lifecycle] || LIFECYCLE_CONFIG.pending;
               const kc = KIND_CONFIG[entry.kind] || KIND_CONFIG.pattern;

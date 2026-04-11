@@ -284,7 +284,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
               loadingSuggestions
                 ? 'text-[var(--fg-muted)] bg-[var(--bg-subtle)] cursor-not-allowed'
-                : 'text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100'
+                : 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20'
             }`}
             title={t('skills.aiRecommendTooltip')}
           >
@@ -293,7 +293,7 @@ const SkillsView: React.FC<SkillsViewProps> = ({ onRefresh, signalSuggestionCoun
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 shadow-sm hover:shadow transition-all"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 transition-all"
           >
             <Sparkles size={14} />
             {t('skills.addSkill')}
