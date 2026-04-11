@@ -319,42 +319,43 @@ const DepGraphView: React.FC = () => {
 
   return (
   <div className="flex-1 flex flex-col overflow-hidden">
-    {/* ── 内容区域 ── */}
-    <div className="flex-1 overflow-y-auto pr-1 pb-6 space-y-6">
+    {/* ── Compact toolbar: legend + zoom ── */}
+    <div className="flex items-center justify-between mb-2 flex-shrink-0">
+      <div className="flex items-center gap-4 text-xs text-[var(--fg-secondary)]">
+        {hasTypes && (<>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded border-2 border-[var(--border-emphasis)] bg-[var(--bg-surface)]" /> {t('depGraph.projectRoot')}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded border-2 border-green-400 bg-green-50" /> {t('depGraph.filterInternal')}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded border-2 border-amber-400 bg-amber-50 border-dashed" /> {t('depGraph.filterExternal')}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded border-2 border-amber-400 bg-amber-50 border-dashed opacity-50" /> {t('depGraph.labelIndirect')}
+          </div>
+        </>)}
+      </div>
+      <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+        <button type="button" onClick={handleZoomOut} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title="Zoom out">
+          <ZoomOut size={14} />
+        </button>
+        <span className="text-[10px] text-[var(--fg-muted)] min-w-[3em] text-center tabular-nums">{Math.round(effectiveZoom * 100)}%</span>
+        <button type="button" onClick={handleZoomIn} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title="Zoom in">
+          <ZoomIn size={14} />
+        </button>
+        <button type="button" onClick={handleZoomReset} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title="Reset zoom">
+          <Maximize2 size={14} />
+        </button>
+      </div>
+    </div>
 
-    {/* 图例 */}
-    {hasTypes && (
-      <div className="flex items-center gap-4 text-xs text-[var(--fg-secondary)] px-1">
-      <div className="flex items-center gap-1.5">
-        <span className="inline-block w-3 h-3 rounded border-2 border-[var(--border-emphasis)] bg-[var(--bg-surface)]" /> {t('depGraph.projectRoot')}
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="inline-block w-3 h-3 rounded border-2 border-green-400 bg-green-50" /> {t('depGraph.filterInternal')}
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="inline-block w-3 h-3 rounded border-2 border-amber-400 bg-amber-50 border-dashed" /> {t('depGraph.filterExternal')}
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="inline-block w-3 h-3 rounded border-2 border-amber-400 bg-amber-50 border-dashed opacity-50" /> {t('depGraph.labelIndirect')}
-      </div>
-      </div>
-    )}
+    {/* ── 内容区域 ── */}
+    <div className="flex-1 overflow-y-auto pr-1 pb-6">
 
     {/* 图区域：金字塔分层，点击节点在浮窗显示依赖 */}
     <div ref={containerRef} className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-subtle)] overflow-auto shadow-sm relative" style={{ minHeight: 320, maxHeight: '75vh' }}>
-    {/* 缩放控制 */}
-    <div className="sticky top-2 right-2 z-20 flex items-center gap-1 float-right mr-2 mt-2">
-      <button type="button" onClick={handleZoomOut} className="p-1 rounded-md bg-[var(--bg-surface)] border border-[var(--border-default)] text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] hover:border-[var(--border-hover)] transition-colors" title="Zoom out">
-      <ZoomOut size={14} />
-      </button>
-      <span className="text-[10px] text-[var(--fg-muted)] min-w-[3em] text-center tabular-nums">{Math.round(effectiveZoom * 100)}%</span>
-      <button type="button" onClick={handleZoomIn} className="p-1 rounded-md bg-[var(--bg-surface)] border border-[var(--border-default)] text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] hover:border-[var(--border-hover)] transition-colors" title="Zoom in">
-      <ZoomIn size={14} />
-      </button>
-      <button type="button" onClick={handleZoomReset} className="p-1 rounded-md bg-[var(--bg-surface)] border border-[var(--border-default)] text-[var(--fg-secondary)] hover:text-[var(--fg-primary)] hover:border-[var(--border-hover)] transition-colors" title="Reset zoom">
-      <Maximize2 size={14} />
-      </button>
-    </div>
     <svg
       width={svgW * effectiveZoom}
       height={svgH * effectiveZoom}
