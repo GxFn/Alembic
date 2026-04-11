@@ -84,6 +84,7 @@ export class KnowledgeMetabolism {
   #logger = Logger.getInstance();
   #pendingTriggers: unknown[] = [];
   #debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  #running = false;
 
   constructor(options: {
     contradictionDetector: ContradictionDetector;
@@ -110,12 +111,16 @@ export class KnowledgeMetabolism {
   }
 
   #scheduleMetabolism(): void {
+    // 当前正在执行周期时，忽略信号（防止自身产出的信号导致无限循环）
+    if (this.#running) {
+      return;
+    }
     if (this.#debounceTimer) {
       return;
     }
     this.#debounceTimer = setTimeout(() => {
       this.#debounceTimer = null;
-      if (this.#pendingTriggers.length > 0) {
+      if (this.#pendingTriggers.length > 0 && !this.#running) {
         void this.runFullCycle();
         this.#pendingTriggers = [];
       }
@@ -126,87 +131,114 @@ export class KnowledgeMetabolism {
    * 执行完整治理周期
    */
   async runFullCycle(): Promise<MetabolismReport> {
-    this.#logger.info('KnowledgeMetabolism: starting full governance cycle');
-
-    // 1. 衰退检测
-    const decayResults = await this.#decayDetector.scanAll();
-
-    // 2. 矛盾检测
-    const contradictions = await this.#contradictionDetector.detectAll();
-
-    // 3. 冗余分析
-    const redundancies = await this.#redundancyAnalyzer.analyzeAll();
-
-    // 4. 生成进化提案
-    const proposals: EvolutionProposal[] = [
-      ...this.#proposalsFromContradictions(contradictions),
-      ...this.#proposalsFromRedundancies(redundancies),
-      ...this.#proposalsFromDecay(decayResults),
-    ];
-
-    // 5. 持久化提案到 evolution_proposals 表
-    let persistedCount = 0;
-    if (this.#proposalRepo && proposals.length > 0) {
-      for (const p of proposals) {
-        const sourceMap: Record<string, ProposalSource> = {
-          contradiction: 'metabolism',
-          redundancy: 'metabolism',
-          decay: 'decay-scan',
-          enhancement: 'metabolism',
-        };
-        const record = this.#proposalRepo.create({
-          type: p.type as RepoProposalType,
-          targetRecipeId: p.targetRecipeId,
-          relatedRecipeIds: p.relatedRecipeIds,
-          confidence: p.confidence,
-          source: sourceMap[p.source] ?? 'metabolism',
-          description: p.description,
-          evidence: p.evidence.map((e) => ({ detail: e })),
-        });
-        if (record) {
-          persistedCount++;
-        }
-      }
+    if (this.#running) {
+      this.#logger.warn('KnowledgeMetabolism: cycle already in progress, skipping');
+      return {
+        contradictions: [],
+        redundancies: [],
+        decayResults: [],
+        proposals: [],
+        summary: {
+          totalScanned: 0,
+          contradictionCount: 0,
+          redundancyCount: 0,
+          decayingCount: 0,
+          proposalCount: 0,
+        },
+      };
     }
 
-    // 6. 写入治理报告（降级：同时写 ReportStore）
-    if (this.#reportStore && proposals.length > 0) {
-      void this.#reportStore.write({
-        category: 'governance',
-        type: 'metabolism_cycle',
-        producer: 'KnowledgeMetabolism',
-        data: {
-          proposalCount: proposals.length,
-          persistedCount,
+    this.#running = true;
+    // 清除执行期间积累的信号，避免周期结束后立刻再次触发
+    this.#pendingTriggers = [];
+
+    try {
+      this.#logger.info('KnowledgeMetabolism: starting full governance cycle');
+
+      // 1. 衰退检测
+      const decayResults = await this.#decayDetector.scanAll();
+
+      // 2. 矛盾检测
+      const contradictions = await this.#contradictionDetector.detectAll();
+
+      // 3. 冗余分析
+      const redundancies = await this.#redundancyAnalyzer.analyzeAll();
+
+      // 4. 生成进化提案
+      const proposals: EvolutionProposal[] = [
+        ...this.#proposalsFromContradictions(contradictions),
+        ...this.#proposalsFromRedundancies(redundancies),
+        ...this.#proposalsFromDecay(decayResults),
+      ];
+
+      // 5. 持久化提案到 evolution_proposals 表
+      let persistedCount = 0;
+      if (this.#proposalRepo && proposals.length > 0) {
+        for (const p of proposals) {
+          const sourceMap: Record<string, ProposalSource> = {
+            contradiction: 'metabolism',
+            redundancy: 'metabolism',
+            decay: 'decay-scan',
+            enhancement: 'metabolism',
+          };
+          const record = this.#proposalRepo.create({
+            type: p.type as RepoProposalType,
+            targetRecipeId: p.targetRecipeId,
+            relatedRecipeIds: p.relatedRecipeIds,
+            confidence: p.confidence,
+            source: sourceMap[p.source] ?? 'metabolism',
+            description: p.description,
+            evidence: p.evidence.map((e) => ({ detail: e })),
+          });
+          if (record) {
+            persistedCount++;
+          }
+        }
+      }
+
+      // 6. 写入治理报告（降级：同时写 ReportStore）
+      if (this.#reportStore && proposals.length > 0) {
+        void this.#reportStore.write({
+          category: 'governance',
+          type: 'metabolism_cycle',
+          producer: 'KnowledgeMetabolism',
+          data: {
+            proposalCount: proposals.length,
+            persistedCount,
+            contradictionCount: contradictions.length,
+            redundancyCount: redundancies.length,
+            decayingCount: decayResults.filter((d) => d.level !== 'healthy' && d.level !== 'watch')
+              .length,
+          },
+          timestamp: Date.now(),
+        });
+      }
+
+      const report: MetabolismReport = {
+        contradictions,
+        redundancies,
+        decayResults,
+        proposals,
+        summary: {
+          totalScanned: decayResults.length,
           contradictionCount: contradictions.length,
           redundancyCount: redundancies.length,
           decayingCount: decayResults.filter((d) => d.level !== 'healthy' && d.level !== 'watch')
             .length,
+          proposalCount: proposals.length,
         },
-        timestamp: Date.now(),
-      });
+      };
+
+      this.#logger.info(
+        `KnowledgeMetabolism: cycle complete — ${report.summary.proposalCount} proposals generated`
+      );
+
+      return report;
+    } finally {
+      this.#running = false;
+      // 清除周期期间积累的信号，防止自身产出的信号立即触发下一轮
+      this.#pendingTriggers = [];
     }
-
-    const report: MetabolismReport = {
-      contradictions,
-      redundancies,
-      decayResults,
-      proposals,
-      summary: {
-        totalScanned: decayResults.length,
-        contradictionCount: contradictions.length,
-        redundancyCount: redundancies.length,
-        decayingCount: decayResults.filter((d) => d.level !== 'healthy' && d.level !== 'watch')
-          .length,
-        proposalCount: proposals.length,
-      },
-    };
-
-    this.#logger.info(
-      `KnowledgeMetabolism: cycle complete — ${report.summary.proposalCount} proposals generated`
-    );
-
-    return report;
   }
 
   /**
