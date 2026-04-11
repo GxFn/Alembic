@@ -121,24 +121,48 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
       const analyzed = (result.analyzed as number) || 0;
 
       // 将 AI 发现的关系写入知识图谱
+      // AI 返回的 from/to 是 Recipe 标题，需要解析为实际 ID
       let written = 0;
       if (relations.length > 0) {
         try {
           const graphService = container.get(
             'knowledgeGraphService'
           ) as import('../../service/knowledge/KnowledgeGraphService.js').KnowledgeGraphService;
+          const knowledgeRepo = container.get('knowledgeRepository') as {
+            findByTitle(title: string): Promise<{ id: string } | null>;
+          };
+
+          // 缓存标题 → ID 映射，避免重复查询
+          const titleToId = new Map<string, string | null>();
+          const resolveId = async (title: string): Promise<string | null> => {
+            if (titleToId.has(title)) {
+              return titleToId.get(title)!;
+            }
+            try {
+              const entry = await knowledgeRepo.findByTitle(title);
+              const id = entry?.id ?? null;
+              titleToId.set(title, id);
+              return id;
+            } catch {
+              titleToId.set(title, null);
+              return null;
+            }
+          };
+
           for (const rel of relations) {
             if (!rel.from || !rel.to || !rel.type) {
               continue;
             }
-            const res = await graphService.addEdge(
-              rel.from,
-              'knowledge',
-              rel.to,
-              'knowledge',
-              rel.type,
-              { weight: 0.7, source: 'ai-discovery', evidence: rel.evidence || '' }
-            );
+            const fromId = await resolveId(rel.from);
+            const toId = await resolveId(rel.to);
+            if (!fromId || !toId) {
+              continue;
+            }
+            const res = await graphService.addEdge(fromId, 'recipe', toId, 'recipe', rel.type, {
+              weight: 0.7,
+              source: 'ai-discovery',
+              evidence: rel.evidence || '',
+            });
             if (res.success) {
               written++;
             }

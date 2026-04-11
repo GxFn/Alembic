@@ -187,9 +187,11 @@ router.get('/graph/all', async (req: Request, res: Response): Promise<void> => {
     return void res.json({ success: true, data: { edges: [], nodeLabels: {} } });
   }
 
-  // 只返回 recipe 类型的关系边；module 依赖已由 /spm/dep-graph 提供
-  const nodeType = String(req.query.nodeType || 'recipe');
-  const edges = await graphService.getAllEdges(limit, nodeType === 'all' ? undefined : nodeType);
+  // 默认不过滤 nodeType，返回所有知识相关边（recipe + knowledge）
+  // 仅当显式指定 nodeType 时才过滤（module 类由 /spm/dep-graph 提供）
+  const rawNodeType = req.query.nodeType as string | undefined;
+  const nodeType = rawNodeType === 'all' ? undefined : rawNodeType || undefined;
+  const edges = await graphService.getAllEdges(limit, nodeType);
 
   // 收集节点 ID + 类型 → 按类型查标签
   const nodeMap = new Map(); // id → Set<type>
@@ -250,8 +252,9 @@ router.get('/graph/stats', async (req: Request, res: Response): Promise<void> =>
     });
   }
 
-  const nodeType = String(req.query.nodeType || 'recipe');
-  const stats = await graphService.getStats(nodeType === 'all' ? undefined : nodeType);
+  const rawStatsType = req.query.nodeType as string | undefined;
+  const statsNodeType = rawStatsType === 'all' ? undefined : rawStatsType || undefined;
+  const stats = await graphService.getStats(statsNodeType);
   res.json({ success: true, data: stats });
 });
 
