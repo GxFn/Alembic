@@ -5,7 +5,7 @@ import Database from 'better-sqlite3';
 /** Re-exported type alias so declaration emit can name it */
 export type SqliteDatabase = InstanceType<typeof Database>;
 
-import { isAutoSnippetDevRepo } from '../../shared/isOwnDevRepo.js';
+import { isExcludedProject } from '../../shared/isOwnDevRepo.js';
 import pathGuard from '../../shared/PathGuard.js';
 import { type DrizzleDB, initDrizzle } from './drizzle/index.js';
 
@@ -39,18 +39,19 @@ export class DatabaseConnection {
         ? path.resolve(projectRoot, dbPath)
         : path.resolve(dbPath);
 
-    // ── 开发仓库保护 ──────────────────────────────────────────
-    // 检测 DB 即将落地到 AutoSnippet 源码仓库内 → 重定向到临时目录
-    // 同时检查 projectRoot（MCP 模式）和 resolvedDbPath 的父目录（测试/CLI 模式）
+    // ── 排除项目保护 ──────────────────────────────────────────
+    // 检测 DB 即将落地到不适合创建知识库的项目 → 重定向到临时目录
+    // 包括：AutoSnippet 源码仓库、生态项目（autosnippet-book 等）、.autosnippet-skip 标记项目
     const effectiveRoot = projectRoot || path.resolve('.');
-    if (isAutoSnippetDevRepo(effectiveRoot)) {
+    const exclusion = isExcludedProject(effectiveRoot);
+    if (exclusion.excluded) {
       const devDbDir = path.join(os.tmpdir(), 'autosnippet-dev');
       if (!fs.existsSync(devDbDir)) {
         fs.mkdirSync(devDbDir, { recursive: true });
       }
       resolvedDbPath = path.join(devDbDir, 'autosnippet.db');
       process.stderr.write(
-        `[AutoSnippet] Dev repo detected — DB redirected to ${resolvedDbPath}\n`
+        `[AutoSnippet] Excluded project detected (${exclusion.reason}) — DB redirected to ${resolvedDbPath}\n`
       );
     } else {
       // 路径安全检查 — 防止 DB 文件创建到项目允许范围外

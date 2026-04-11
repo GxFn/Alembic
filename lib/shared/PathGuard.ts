@@ -28,7 +28,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { isAutoSnippetDevRepo } from './isOwnDevRepo.js';
+import { isAutoSnippetDevRepo, isExcludedProject } from './isOwnDevRepo.js';
 import {
   DEFAULT_KNOWLEDGE_BASE_DIR,
   detectKnowledgeBaseDir,
@@ -92,6 +92,12 @@ class PathGuard {
   /** projectRoot 是否是 AutoSnippet 自身的开发仓库 */
   #isDevRepo = false;
 
+  /** projectRoot 是否是应排除的项目（开发仓库、生态项目等） */
+  #isExcludedProject = false;
+
+  /** 排除原因 */
+  #excludeReason = '';
+
   /**
    * 配置 PathGuard（每个进程执行一次）
    * @param opts.projectRoot 用户项目根目录（绝对路径）
@@ -118,6 +124,9 @@ class PathGuard {
     this.#packageRoot = packageRoot ? path.resolve(packageRoot) : null;
     this.#knowledgeBaseDir = knowledgeBaseDir || null; // 延迟解析
     this.#isDevRepo = isAutoSnippetDevRepo(this.#projectRoot);
+    const exclusion = isExcludedProject(this.#projectRoot);
+    this.#isExcludedProject = exclusion.excluded;
+    this.#excludeReason = exclusion.reason;
 
     // 默认白名单：全局缓存 + 平台 Snippets 目录
     const HOME = process.env.HOME || process.env.USERPROFILE || '';
@@ -223,16 +232,15 @@ class PathGuard {
     const relative = path.relative(this.#projectRoot!, resolved);
     const firstSegment = relative.split(path.sep)[0];
 
-    // ── 开发仓库保护 ──────────────────────────────────
-    // 如果 projectRoot 是 AutoSnippet 自身源码仓库，
-    // 禁止写入 .autosnippet/ 和知识库目录（AutoSnippet/），
-    // 防止在开发仓库内产生运行时数据
-    if (this.#isDevRepo) {
+    // ── 排除项目保护 ──────────────────────────────────
+    // 如果 projectRoot 是排除项目（开发仓库、生态项目等），
+    // 禁止写入 .autosnippet/ 和知识库目录
+    if (this.#isExcludedProject) {
       if (firstSegment === '.autosnippet') {
         throw new PathGuardError(
           resolved,
           this.#projectRoot!,
-          'Dev repo 保护: 禁止在 AutoSnippet 源码仓库内创建 .autosnippet/ 运行时数据'
+          `排除项目保护 (${this.#excludeReason}): 禁止创建 .autosnippet/ 运行时数据`
         );
       }
       const kbDir = this.#resolveKnowledgeBaseDir();
@@ -240,10 +248,10 @@ class PathGuard {
         throw new PathGuardError(
           resolved,
           this.#projectRoot!,
-          `Dev repo 保护: 禁止在 AutoSnippet 源码仓库内创建 ${kbDir}/ 知识库数据`
+          `排除项目保护 (${this.#excludeReason}): 禁止创建 ${kbDir}/ 知识库数据`
         );
       }
-      // 开发仓库内允许写入 .cursor/.vscode/.github 等 IDE 配置
+      // 排除项目内仍允许写入 .cursor/.vscode/.github 等 IDE 配置
       for (const prefix of PROJECT_WRITE_SCOPE_PREFIXES) {
         if (prefix !== '.autosnippet' && firstSegment === prefix) {
           return;
@@ -255,7 +263,7 @@ class PathGuard {
       throw new PathGuardError(
         resolved,
         this.#projectRoot!,
-        `Dev repo 保护: "${relative}" 不在允许范围内`
+        `排除项目保护 (${this.#excludeReason}): "${relative}" 不在允许范围内`
       );
     }
 

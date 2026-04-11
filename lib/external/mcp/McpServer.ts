@@ -135,8 +135,28 @@ export class McpServer {
     if (!this.container) {
       const { default: Bootstrap } = await import('../../bootstrap.js');
 
-      // 路径安全守卫 — 在任何写操作前配置
-      const projectRoot = process.env.ASD_PROJECT_DIR || process.cwd();
+      // MCP 模式必须显式指定项目目录 — process.cwd() 在多根工作区中不可靠
+      const projectRoot = process.env.ASD_PROJECT_DIR;
+      if (!projectRoot) {
+        const msg =
+          `[MCP] 缺少 ASD_PROJECT_DIR 环境变量。MCP server 拒绝启动。\n` +
+          `在多根工作区中 process.cwd() 可能指向任意子目录，不能作为项目根目录。\n` +
+          `请在 .vscode/mcp.json 的 env 中设置 ASD_PROJECT_DIR 为目标项目的绝对路径。`;
+        process.stderr.write(`${msg}\n`);
+        throw new Error(msg);
+      }
+
+      // ── 排除项目检查 — 防止误配置 ASD_PROJECT_DIR 到不该创建运行时数据的目录 ──
+      const { isExcludedProject } = await import('../../shared/isOwnDevRepo.js');
+      const exclusion = isExcludedProject(projectRoot);
+      if (exclusion.excluded) {
+        const msg =
+          `[MCP] projectRoot "${projectRoot}" 是排除项目（${exclusion.reason}），` +
+          `MCP server 拒绝在此目录创建运行时数据。\n` +
+          `提示: 在 .vscode/mcp.json 的 env 中设置正确的 ASD_PROJECT_DIR。`;
+        process.stderr.write(`${msg}\n`);
+        throw new Error(msg);
+      }
 
       // 切换工作目录到项目根 — 确保 DB 等相对路径正确解析
       if (projectRoot !== process.cwd()) {

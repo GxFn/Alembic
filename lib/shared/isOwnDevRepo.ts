@@ -1,10 +1,14 @@
 /**
- * isOwnDevRepo — 检测当前 projectRoot 是否是 AutoSnippet 自身的开发仓库
+ * isOwnDevRepo — 检测 projectRoot 是否应排除 AutoSnippet 运行时数据创建
  *
- * 用于防止 MCP 服务器 / CLI 在开发环境中把源码仓库当做用户项目，
- * 避免在开发仓库内创建 `.autosnippet/` 和 `AutoSnippet/candidates/` 等运行时数据。
+ * 三层保护：
+ *  1. isAutoSnippetDevRepo — AutoSnippet 自身源码仓库
+ *  2. isAutoSnippetEcosystemRepo — AutoSnippet 生态项目（autosnippet-book 等）
+ *  3. isExcludedProject — 综合判定：不适合创建知识库的项目
  *
- * 检测条件（三者同时满足）：
+ * 用于防止 MCP 服务器 / CLI 在不当目录创建 `.autosnippet/` 运行时数据。
+ *
+ * isAutoSnippetDevRepo 检测条件（三者同时满足）：
  *  1. projectRoot/package.json 的 name === 'autosnippet'
  *  2. projectRoot/lib/bootstrap.ts 存在（源码标记）
  *  3. projectRoot/SOUL.md 存在（项目灵魂文档）
@@ -15,6 +19,9 @@ import path from 'node:path';
 
 /** 多路径缓存（同一进程可能检测多个目录） */
 const _cache = new Map<string, boolean>();
+
+/** 排除项目缓存 */
+const _excludeCache = new Map<string, { excluded: boolean; reason: string }>();
 
 /**
  * 判断 dir 是否是 AutoSnippet 自身的源码开发仓库
@@ -49,7 +56,62 @@ export function isAutoSnippetDevRepo(dir: string): boolean {
   return result;
 }
 
+/**
+ * 判断 dir 是否是 AutoSnippet 生态项目（不应创建运行时数据）
+ *
+ * 检测条件：package.json 的 name 以 'autosnippet-' 开头
+ * 例如 autosnippet-book、autosnippet-examples 等
+ */
+export function isAutoSnippetEcosystemRepo(dir: string): boolean {
+  const resolved = path.resolve(dir);
+  try {
+    const pkgPath = path.join(resolved, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const raw = fs.readFileSync(pkgPath, 'utf-8');
+      const pkg = JSON.parse(raw) as { name?: string };
+      return typeof pkg.name === 'string' && pkg.name.startsWith('autosnippet-');
+    }
+  } catch {
+    // 读取失败 → 不是
+  }
+  return false;
+}
+
+/**
+ * 综合判定：项目是否应排除创建 .autosnippet/ 运行时数据
+ *
+ * 当前排除：
+ *  1. AutoSnippet 源码仓库本身
+ *  2. AutoSnippet 生态项目（autosnippet-book 等）
+ *  3. 存在 .autosnippet-skip 标记文件的项目（用户手动排除）
+ *
+ * @returns { excluded: boolean; reason: string }
+ */
+export function isExcludedProject(dir: string): { excluded: boolean; reason: string } {
+  const resolved = path.resolve(dir);
+  const cached = _excludeCache.get(resolved);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  let result: { excluded: boolean; reason: string };
+
+  if (isAutoSnippetDevRepo(resolved)) {
+    result = { excluded: true, reason: 'AutoSnippet 源码开发仓库' };
+  } else if (isAutoSnippetEcosystemRepo(resolved)) {
+    result = { excluded: true, reason: 'AutoSnippet 生态项目' };
+  } else if (fs.existsSync(path.join(resolved, '.autosnippet-skip'))) {
+    result = { excluded: true, reason: '项目包含 .autosnippet-skip 标记' };
+  } else {
+    result = { excluded: false, reason: '' };
+  }
+
+  _excludeCache.set(resolved, result);
+  return result;
+}
+
 /** 重置缓存（仅用于测试） */
 export function _resetDevRepoCache() {
   _cache.clear();
+  _excludeCache.clear();
 }

@@ -482,15 +482,7 @@ export async function fillDimensionsMock(
     mockMode: true,
   });
 
-  const knowledgeService = ctx.container.get('knowledgeService') as {
-    create(
-      data: Record<string, unknown>,
-      opts: { userId: string }
-    ): Promise<{ id: string; lifecycle: string; title: string }>;
-    updateQuality?(id: string, opts: { userId: string }): Promise<void>;
-  };
-
-  let totalCreated = 0;
+  let totalGenerated = 0;
 
   for (const dim of dimensions) {
     const dimStartTime = Date.now();
@@ -505,7 +497,7 @@ export async function fillDimensionsMock(
 
     logger.info(`[MockPipeline] ── Dimension "${dim.id}" (${dimLabel}) ──`);
 
-    // 生成候选
+    // 生成候选（仅在内存中，不写入数据库）
     const candidates = generateDimensionCandidates(
       dim.id,
       dimLabel,
@@ -516,32 +508,10 @@ export async function fillDimensionsMock(
       repFiles
     );
 
-    const createdIds: string[] = [];
+    totalGenerated += candidates.length;
 
     for (const candidate of candidates) {
-      try {
-        const entry = await knowledgeService.create(
-          {
-            ...candidate,
-            source: 'mock-bootstrap',
-          } as unknown as Record<string, unknown>,
-          { userId: 'mock-ai' }
-        );
-        createdIds.push(entry.id);
-        totalCreated++;
-
-        // 尝试自动评分（非关键路径）
-        try {
-          await knowledgeService.updateQuality?.(entry.id, { userId: 'mock-ai' });
-        } catch {
-          /* best effort */
-        }
-
-        logger.info(`[MockPipeline] ✅ Created: "${candidate.title}" → ${entry.id}`);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.warn(`[MockPipeline] ⚠️ Failed to create "${candidate.title}": ${msg}`);
-      }
+      logger.info(`[MockPipeline] 📝 Generated (not persisted): "${candidate.title}"`);
     }
 
     const durationMs = Date.now() - dimStartTime;
@@ -549,7 +519,7 @@ export async function fillDimensionsMock(
     emitter.emitDimensionComplete(dim.id, {
       type: 'candidate',
       extracted: candidates.length,
-      created: createdIds.length,
+      created: 0,
       status: 'mock-pipeline-complete',
       degraded: false,
       durationMs,
@@ -558,17 +528,18 @@ export async function fillDimensionsMock(
     });
 
     logger.info(
-      `[MockPipeline] ✅ "${dim.id}": ${createdIds.length}/${candidates.length} candidates, ${durationMs}ms`
+      `[MockPipeline] ✅ "${dim.id}": ${candidates.length} candidates generated (mock-only, not persisted), ${durationMs}ms`
     );
   }
 
   emitter.emitProgress('bootstrap:mock-complete', {
-    message: `🧪 Mock Bootstrap 完成: ${totalCreated} 个候选知识已生成`,
-    totalCreated,
+    message: `🧪 Mock Bootstrap 完成: ${totalGenerated} 个候选知识已生成（仅预览，未写入数据库）`,
+    totalCreated: 0,
+    totalGenerated,
     mockMode: true,
   });
 
   logger.info(
-    `[MockPipeline] ═══ Mock bootstrap complete — ${totalCreated} candidates from ${dimensions.length} dimensions`
+    `[MockPipeline] ═══ Mock bootstrap complete — ${totalGenerated} candidates generated (not persisted) from ${dimensions.length} dimensions`
   );
 }

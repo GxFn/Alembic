@@ -57,7 +57,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { isAutoSnippetDevRepo } from '../shared/isOwnDevRepo.js';
+import { isExcludedProject } from '../shared/isOwnDevRepo.js';
 import {
   DEFAULT_KNOWLEDGE_BASE_DIR,
   DEFAULT_SUB_REPO_DIR,
@@ -108,10 +108,11 @@ export class SetupService {
     this.subRepoDir = options.subRepoDir || DEFAULT_SUB_REPO_DIR;
     this.subRepoUrl = options.subRepoUrl;
 
-    // ── 开发仓库保护 ──────────────────────────────────
-    if (isAutoSnippetDevRepo(this.projectRoot)) {
+    // ── 排除项目保护 ──────────────────────────────────
+    const exclusion = isExcludedProject(this.projectRoot);
+    if (exclusion.excluded) {
       throw new Error(
-        '[SetupService] 检测到当前目录是 AutoSnippet 源码开发仓库，' +
+        `[SetupService] 检测到当前目录是排除项目（${exclusion.reason}），` +
           '拒绝执行 setup 以避免创建 .autosnippet/ 和 AutoSnippet/ 运行时数据。' +
           '\n提示: 请在用户项目目录中运行 asd setup。'
       );

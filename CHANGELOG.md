@@ -4,6 +4,24 @@
 
 ---
 
+## [3.3.9] - 2026-04-12
+
+### 修复
+
+- **MCP projectRoot 安全加固**：MCP 模式下不再 fallback `process.cwd()`，必须显式设置 `ASD_PROJECT_DIR` 环境变量，彻底解决多根工作区中 MCP server 误在非目标目录创建 `.autosnippet/` 的问题
+  - McpServer：启动时校验 `ASD_PROJECT_DIR` 存在性，缺失则拒绝启动并给出配置提示
+  - Bootstrap：MCP 模式 + PathGuard 未配置时同样要求 `ASD_PROJECT_DIR`，防止绕过 McpServer 入口
+- **Mock 数据不再污染生产数据库**：`mock-pipeline` 不再调用 `knowledgeService.create()`，候选项仅在内存中生成
+- **Delivery 过滤 mock 条目**：`CursorDeliveryPipeline._loadEntries()` 过滤 `source=mock-bootstrap|mock-pipeline` 和 `createdBy=mock-ai` 的条目
+
+### 改进
+
+- **项目排除机制扩展**：新增 `isExcludedProject()` 综合判定函数，支持三种排除方式：
+  - AutoSnippet 源码仓库（`isAutoSnippetDevRepo`）
+  - AutoSnippet 生态项目（`isAutoSnippetEcosystemRepo`，`package.json` name 以 `autosnippet-` 开头）
+  - `.autosnippet-skip` 标记文件
+- PathGuard、DatabaseConnection、SetupService 统一使用 `isExcludedProject` 替代原有的 `isAutoSnippetDevRepo`
+
 ## [3.3.4] - 2026-03-30
 
 ### 改进

@@ -241,7 +241,25 @@ export class CursorDeliveryPipeline {
       );
     }
 
-    return allEntries;
+    // 过滤掉历史遗留的 mock 条目（source=mock-bootstrap/mock-pipeline 或 createdBy=mock-ai）
+    const MOCK_SOURCES = new Set(['mock-bootstrap', 'mock-pipeline']);
+    const filtered = allEntries.filter((e) => {
+      if (MOCK_SOURCES.has(e.source as string)) {
+        return false;
+      }
+      if (e.createdBy === 'mock-ai') {
+        return false;
+      }
+      return true;
+    });
+
+    if (filtered.length < allEntries.length) {
+      this.logger.info?.(
+        `[CursorDelivery] Filtered out ${allEntries.length - filtered.length} mock entries`
+      );
+    }
+
+    return filtered;
   }
 
   /**
