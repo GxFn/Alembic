@@ -116,11 +116,7 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
       /* not registered */
     }
     if (syncService) {
-      const rawDb =
-        typeof (db as { getDb?: () => unknown })?.getDb === 'function'
-          ? (db as { getDb: () => unknown }).getDb()
-          : db;
-      const syncReport = syncService.sync(rawDb as Parameters<typeof syncService.sync>[0], {
+      const syncReport = syncService.sync(db, {
         force: true,
       });
       ctx.logger.info('[Rescan-Internal] KnowledgeSyncService sync complete', {
@@ -182,7 +178,18 @@ export async function rescanInternal(ctx: RescanMcpContext, args: RescanInternal
   // Step 4: Recipe 证据验证 + 快速衰退
   // ═══════════════════════════════════════════════════════════
 
-  const auditor = new RecipeRelevanceAuditor({ db, logger: ctx.logger });
+  const auditor = new RecipeRelevanceAuditor({
+    knowledgeRepo: ctx.container.get(
+      'knowledgeRepository'
+    ) as import('../../../repository/knowledge/KnowledgeRepository.impl.js').default,
+    proposalRepo: (ctx.container.singletons as Record<string, unknown> | undefined)
+      ?.proposalRepository
+      ? (ctx.container.get(
+          'proposalRepository'
+        ) as import('../../../repository/evolution/ProposalRepository.js').ProposalRepository)
+      : undefined,
+    logger: ctx.logger,
+  });
 
   const codeEntities = extractCodeEntities(astProjectSummary);
   const dependencyEdges = extractDependencyEdges(depGraphData);

@@ -6,8 +6,12 @@
  */
 
 import * as AstAnalyzerModule from '../../core/AstAnalyzer.js';
+import { GUARD_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import type { GuardKnowledgeRepo } from '../../repository/search/SearchRepoAdapter.js';
+import { RawDbGuardAdapter, unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 import { runCodeLevelChecks } from './GuardCodeChecks.js';
 import { runCrossFileChecks } from './GuardCrossFileChecks.js';
@@ -91,6 +95,7 @@ interface GuardCheckEngineOptions {
   cacheTTL?: number;
   guardConfig?: GuardConfig;
   signalBus?: SignalBus;
+  knowledgeRepo?: KnowledgeRepositoryImpl;
 }
 
 interface ExternalRuleInput {
@@ -592,13 +597,20 @@ export class GuardCheckEngine {
   _lastBlindSpotSignalKey: string;
   _uncertaintyCollector: UncertaintyCollector;
   db: DatabaseLike;
+  #knowledgeRepo: GuardKnowledgeRepo;
   logger: ReturnType<typeof Logger.getInstance>;
   constructor(
     db: DatabaseLike | { getDb(): DatabaseLike } | null,
     options: GuardCheckEngineOptions = {}
   ) {
-    this.db =
-      db && 'getDb' in db && typeof db.getDb === 'function' ? db.getDb() : (db as DatabaseLike);
+    this.db = unwrapRawDb<DatabaseLike>(db as DatabaseLike);
+    this.#knowledgeRepo =
+      options.knowledgeRepo ??
+      (this.db
+        ? new RawDbGuardAdapter(this.db)
+        : new RawDbGuardAdapter({
+            prepare: () => ({ run: () => undefined, get: () => ({}), all: () => [] }),
+          } as unknown as DatabaseLike));
     this.logger = Logger.getInstance();
     this._builtInRules = BUILT_IN_RULES;
     this._customRulesCache = null;
@@ -682,14 +694,10 @@ export class GuardCheckEngine {
       if (!this._customRulesCache || now - this._cacheTime > this._cacheTTL) {
         let rows: Record<string, unknown>[] = [];
         try {
-          rows = this.db
-            .prepare(
-              `SELECT id, title, description, language, scope, constraints, lifecycle
-             FROM knowledge_entries
-             WHERE (kind = 'rule' OR knowledgeType = 'boundary-constraint')
-               AND lifecycle IN ('active', 'staging', 'evolving', 'decaying')`
-            )
-            .all();
+          rows = this.#knowledgeRepo.findGuardRulesSync(GUARD_LIFECYCLES) as Record<
+            string,
+            unknown
+          >[];
         } catch {
           /* table may not exist */
         }
@@ -1578,35 +1586,21 @@ export class GuardCheckEngine {
    * @param violations
    */
   trackGuardHits(violations: GuardViolation[]) {
-    if (!violations?.length || !this.db) {
+    if (!violations?.length || !this.#knowledgeRepo) {
       return;
     }
 
     try {
       // 收集来自数据库规则的 ruleId → 命中次数
-      const hitMap = new Map();
+      const hitMap = new Map<string, number>();
       for (const v of violations) {
         const count = hitMap.get(v.ruleId) || 0;
         hitMap.set(v.ruleId, count + 1);
       }
 
-      let updateStmt: { run(...params: unknown[]): unknown } | undefined;
-      try {
-        updateStmt = this.db.prepare(
-          `UPDATE knowledge_entries
-           SET stats = json_set(COALESCE(stats, '{}'), '$.guardHits',
-                 COALESCE(json_extract(stats, '$.guardHits'), 0) + ?),
-               updatedAt = ?
-           WHERE id = ?`
-        );
-      } catch {
-        /* table may not exist */
-      }
-      const now = Math.floor(Date.now() / 1000);
-
       for (const [ruleId, count] of hitMap) {
         try {
-          updateStmt?.run(count, now, ruleId);
+          this.#knowledgeRepo.incrementGuardHitsSync(ruleId, count);
         } catch {
           /* 非 Recipe 规则（内置规则）忽略 */
         }

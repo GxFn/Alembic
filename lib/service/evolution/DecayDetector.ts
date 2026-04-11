@@ -19,18 +19,14 @@
  *   0-19:   死亡 → 跳过确认直接 deprecated
  */
 
+import { and, like, sql } from 'drizzle-orm';
+import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
+import { auditLogs } from '../../infrastructure/database/drizzle/schema.js';
 import Logger from '../../infrastructure/logging/Logger.js';
-
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-
-/* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-    get(...params: unknown[]): Record<string, unknown> | undefined;
-  };
-}
+import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 
 export interface DecaySignal {
   recipeId: string;
@@ -108,24 +104,38 @@ const SCORE_WEIGHTS = {
 /* ────────────────────── Class ────────────────────── */
 
 export class DecayDetector {
-  #db: DatabaseLike;
+  #knowledgeRepo: KnowledgeRepositoryImpl;
+  #edgeRepo: KnowledgeEdgeRepositoryImpl | null;
+  #sourceRefRepo: RecipeSourceRefRepositoryImpl | null;
+  #drizzle: DrizzleDB | null;
   #signalBus: SignalBus | null;
   #logger = Logger.getInstance();
 
-  constructor(db: DatabaseLike, options: { signalBus?: SignalBus } = {}) {
-    this.#db = db;
+  constructor(
+    knowledgeRepo: KnowledgeRepositoryImpl,
+    options: {
+      signalBus?: SignalBus;
+      knowledgeEdgeRepo?: KnowledgeEdgeRepositoryImpl;
+      sourceRefRepo?: RecipeSourceRefRepositoryImpl;
+      drizzle?: DrizzleDB;
+    } = {}
+  ) {
+    this.#knowledgeRepo = knowledgeRepo;
+    this.#edgeRepo = options.knowledgeEdgeRepo ?? null;
+    this.#sourceRefRepo = options.sourceRefRepo ?? null;
+    this.#drizzle = options.drizzle ?? null;
     this.#signalBus = options.signalBus ?? null;
   }
 
   /**
    * 扫描所有 active 条目的衰退状态
    */
-  scanAll(): DecayScoreResult[] {
-    const recipes = this.#loadActiveRecipes();
+  async scanAll(): Promise<DecayScoreResult[]> {
+    const recipes = await this.#loadActiveRecipes();
     const results: DecayScoreResult[] = [];
 
     for (const recipe of recipes) {
-      const result = this.evaluate(recipe);
+      const result = await this.evaluate(recipe);
       results.push(result);
     }
 
@@ -154,7 +164,7 @@ export class DecayDetector {
   /**
    * 评估单条 Recipe 的衰退状态
    */
-  evaluate(recipe: RecipeForDecay): DecayScoreResult {
+  async evaluate(recipe: RecipeForDecay): Promise<DecayScoreResult> {
     const stats = DecayDetector.#parseStats(recipe.stats);
     const signals: DecaySignal[] = [];
     const now = Date.now();
@@ -198,7 +208,7 @@ export class DecayDetector {
     }
 
     // 策略 3: 符号漂移（由 ReverseGuard 提供，此处从 DB 查 drift 标记）
-    if (this.#hasSymbolDrift(recipe.id)) {
+    if (await this.#hasSymbolDrift(recipe.id)) {
       signals.push({
         recipeId: recipe.id,
         strategy: 'symbol_drift',
@@ -207,7 +217,7 @@ export class DecayDetector {
     }
 
     // 策略 3b: 来源引用失效（由 SourceRefReconciler 填充 recipe_source_refs）
-    const staleRefCount = this.#getStaleSourceRefCount(recipe.id);
+    const staleRefCount = await this.#getStaleSourceRefCount(recipe.id);
     if (staleRefCount > 0) {
       signals.push({
         recipeId: recipe.id,
@@ -217,7 +227,7 @@ export class DecayDetector {
     }
 
     // 策略 4: 被取代（有 deprecated_by 关系指向更新版本）
-    if (this.#isSuperseded(recipe.id)) {
+    if (await this.#isSuperseded(recipe.id)) {
       signals.push({
         recipeId: recipe.id,
         strategy: 'superseded',
@@ -226,7 +236,7 @@ export class DecayDetector {
     }
 
     // 计算 decayScore（staleRatio 影响 quality 维度）
-    const staleRatio = this.#getSourceRefStaleRatio(recipe.id);
+    const staleRatio = await this.#getSourceRefStaleRatio(recipe.id);
     const dimensions = this.#computeScoreDimensions(stats, recipe, { staleRatio });
     const decayScore = Math.round(
       dimensions.freshness * SCORE_WEIGHTS.freshness * 100 +
@@ -252,25 +262,25 @@ export class DecayDetector {
 
   /* ── Internal ── */
 
-  #loadActiveRecipes(): RecipeForDecay[] {
+  async #loadActiveRecipes(): Promise<RecipeForDecay[]> {
     try {
-      const rows = this.#db
-        .prepare(
-          `SELECT id, title, lifecycle, stats, quality, createdAt
-         FROM knowledge_entries
-         WHERE lifecycle = 'active'`
-        )
-        .all();
-      return rows.map((r) => {
-        const qualityObj = DecayDetector.#parseQuality(r.quality as string | null);
+      const entries = await this.#knowledgeRepo.findAllByLifecycles(['active']);
+      return entries.map((e) => {
+        const qualityObj =
+          typeof e.quality === 'object'
+            ? {
+                grade: (e.quality as { grade?: string }).grade ?? null,
+                score: (e.quality as { overall?: number }).overall ?? null,
+              }
+            : DecayDetector.#parseQuality(null);
         return {
-          id: r.id as string,
-          title: r.title as string,
-          lifecycle: r.lifecycle as string,
-          stats: (r.stats as string) ?? null,
+          id: e.id,
+          title: e.title,
+          lifecycle: e.lifecycle,
+          stats: typeof e.stats === 'object' ? JSON.stringify(e.stats) : null,
           quality_grade: qualityObj.grade,
           quality_score: qualityObj.score,
-          created_at: r.createdAt !== undefined ? Number(r.createdAt) : null,
+          created_at: e.createdAt ?? null,
         };
       });
     } catch {
@@ -333,69 +343,63 @@ export class DecayDetector {
     return { freshness, usage, quality, authority };
   }
 
-  #hasSymbolDrift(recipeId: string): boolean {
+  async #hasSymbolDrift(recipeId: string): Promise<boolean> {
     try {
-      // 查找 audit_logs 中 ReverseGuard 为此 recipe 发过 drift 信号
-      const row = this.#db
-        .prepare(
-          `SELECT 1 FROM audit_logs
-         WHERE action LIKE '%ReverseGuard%'
-           AND json_extract(details, '$.target') = ?
-         LIMIT 1`
+      if (!this.#drizzle) {
+        return false;
+      }
+      const row = this.#drizzle
+        .select({ id: auditLogs.id })
+        .from(auditLogs)
+        .where(
+          and(
+            like(auditLogs.action, '%ReverseGuard%'),
+            sql`json_extract(${auditLogs.operationData}, '$.target') = ${recipeId}`
+          )
         )
-        .get(recipeId);
+        .limit(1)
+        .get();
       return !!row;
     } catch {
       return false;
     }
   }
 
-  #getStaleSourceRefCount(recipeId: string): number {
+  async #getStaleSourceRefCount(recipeId: string): Promise<number> {
     try {
-      const row = this.#db
-        .prepare(
-          `SELECT COUNT(*) AS cnt FROM recipe_source_refs
-         WHERE recipe_id = ? AND status = 'stale'`
-        )
-        .get(recipeId) as { cnt: number } | undefined;
-      return row?.cnt ?? 0;
-    } catch {
-      // recipe_source_refs 表可能不存在
-      return 0;
-    }
-  }
-
-  /** stale / total 比率（0-1），无 ref 时返回 0（无惩罚） */
-  #getSourceRefStaleRatio(recipeId: string): number {
-    try {
-      const row = this.#db
-        .prepare(
-          `SELECT
-             SUM(CASE WHEN status = 'stale' THEN 1 ELSE 0 END) AS stale,
-             COUNT(*) AS total
-           FROM recipe_source_refs
-           WHERE recipe_id = ?`
-        )
-        .get(recipeId) as { stale: number; total: number } | undefined;
-      if (!row || row.total === 0) {
+      if (!this.#sourceRefRepo) {
         return 0;
       }
-      return row.stale / row.total;
+      const refs = this.#sourceRefRepo.findByRecipeId(recipeId);
+      return refs.filter((r) => r.status === 'stale').length;
     } catch {
       return 0;
     }
   }
 
-  #isSuperseded(recipeId: string): boolean {
+  async #getSourceRefStaleRatio(recipeId: string): Promise<number> {
     try {
-      const row = this.#db
-        .prepare(
-          `SELECT 1 FROM knowledge_edges
-         WHERE source_id = ? AND relation_type = 'deprecated_by'
-         LIMIT 1`
-        )
-        .get(recipeId);
-      return !!row;
+      if (!this.#sourceRefRepo) {
+        return 0;
+      }
+      const refs = this.#sourceRefRepo.findByRecipeId(recipeId);
+      if (refs.length === 0) {
+        return 0;
+      }
+      const stale = refs.filter((r) => r.status === 'stale').length;
+      return stale / refs.length;
+    } catch {
+      return 0;
+    }
+  }
+
+  async #isSuperseded(recipeId: string): Promise<boolean> {
+    try {
+      if (!this.#edgeRepo) {
+        return false;
+      }
+      const edges = await this.#edgeRepo.findByRelation(recipeId, 'recipe', 'deprecated_by');
+      return edges.length > 0;
     } catch {
       return false;
     }

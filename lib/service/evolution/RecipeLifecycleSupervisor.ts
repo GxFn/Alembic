@@ -21,6 +21,9 @@ import { randomUUID } from 'node:crypto';
 import { isValidTransition } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type { LifecycleEventRepository } from '../../repository/evolution/LifecycleEventRepository.js';
+import type { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type {
   LifecycleHealthSummary,
   TimeoutCheckResult,
@@ -30,14 +33,6 @@ import type {
 } from '../../types/evolution.js';
 
 /* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-    get(...params: unknown[]): Record<string, unknown> | undefined;
-    run(...params: unknown[]): { changes: number };
-  };
-}
 
 /* ────────────────────── Constants ────────────────────── */
 
@@ -77,12 +72,23 @@ const ENTRY_META_KEYS: Record<string, string> = {
 /* ────────────────────── Class ────────────────────── */
 
 export class RecipeLifecycleSupervisor {
-  readonly #db: DatabaseLike;
+  readonly #knowledgeRepo: KnowledgeRepositoryImpl;
+  readonly #proposalRepo: ProposalRepository | null;
+  readonly #lifecycleEventRepo: LifecycleEventRepository | null;
   readonly #signalBus: SignalBus | null;
   readonly #logger = Logger.getInstance();
 
-  constructor(db: DatabaseLike, options: { signalBus?: SignalBus } = {}) {
-    this.#db = db;
+  constructor(
+    knowledgeRepo: KnowledgeRepositoryImpl,
+    options: {
+      signalBus?: SignalBus;
+      lifecycleEventRepo?: LifecycleEventRepository;
+      proposalRepo?: ProposalRepository;
+    } = {}
+  ) {
+    this.#knowledgeRepo = knowledgeRepo;
+    this.#proposalRepo = options.proposalRepo ?? null;
+    this.#lifecycleEventRepo = options.lifecycleEventRepo ?? null;
     this.#signalBus = options.signalBus ?? null;
   }
 
@@ -99,12 +105,12 @@ export class RecipeLifecycleSupervisor {
    * 6. 记录 TransitionEvent
    * 7. 发射信号
    */
-  transition(request: TransitionRequest): TransitionResult {
+  async transition(request: TransitionRequest): Promise<TransitionResult> {
     const { recipeId, targetState, trigger, evidence, proposalId, operatorId } = request;
     const opId = operatorId ?? 'system';
 
     // 1. 获取当前状态
-    const current = this.#getRecipeState(recipeId);
+    const current = await this.#getRecipeState(recipeId);
     if (!current) {
       return {
         success: false,
@@ -130,16 +136,14 @@ export class RecipeLifecycleSupervisor {
     }
 
     // 3. Exit Action
-    this.#executeExitAction(recipeId, fromState);
+    await this.#executeExitAction(recipeId, fromState);
 
     // 4. 更新 lifecycle
     const now = Date.now();
-    this.#db
-      .prepare(`UPDATE knowledge_entries SET lifecycle = ?, updatedAt = ? WHERE id = ?`)
-      .run(targetState, now, recipeId);
+    await this.#knowledgeRepo.updateLifecycle(recipeId, targetState);
 
     // 5. Entry Action
-    this.#executeEntryAction(recipeId, targetState, now, proposalId);
+    await this.#executeEntryAction(recipeId, targetState, now, proposalId);
 
     // 6. 记录 TransitionEvent
     const event = this.#recordEvent({
@@ -172,7 +176,7 @@ export class RecipeLifecycleSupervisor {
    *   - evolving > 7d → active（回退）
    *   - decaying > 30d → deprecated
    */
-  checkTimeouts(): TimeoutCheckResult {
+  async checkTimeouts(): Promise<TimeoutCheckResult> {
     const result: TimeoutCheckResult = { timedOut: [], checked: 0 };
     const now = Date.now();
 
@@ -182,22 +186,19 @@ export class RecipeLifecycleSupervisor {
       }
 
       const targetState = TIMEOUT_TARGET[state as keyof typeof TIMEOUT_TARGET];
-      const rows = this.#db
-        .prepare(`SELECT id, stats FROM knowledge_entries WHERE lifecycle = ?`)
-        .all(state) as { id: string; stats: string }[];
+      const entries = await this.#knowledgeRepo.findAllByLifecycles([state]);
 
-      result.checked += rows.length;
+      result.checked += entries.length;
 
-      for (const row of rows) {
-        const stats = safeJsonParse<Record<string, unknown>>(row.stats, {});
+      for (const entry of entries) {
+        const stats = (entry.stats ?? {}) as unknown as Record<string, unknown>;
         const entryKey = ENTRY_META_KEYS[state];
         const enteredAt = (entryKey ? stats[entryKey] : null) as number | null;
 
-        // 用 updatedAt 作为 fallback
-        const stateAge = enteredAt ? now - enteredAt : this.#getRecipeAge(row.id, now);
+        const stateAge = enteredAt ? now - enteredAt : await this.#getRecipeAge(entry.id, now);
         if (stateAge > timeoutMs) {
-          const transitionResult = this.transition({
-            recipeId: row.id,
+          const transitionResult = await this.transition({
+            recipeId: entry.id,
             targetState,
             trigger: 'timeout-recovery',
             evidence: {
@@ -207,7 +208,7 @@ export class RecipeLifecycleSupervisor {
 
           if (transitionResult.success) {
             result.timedOut.push({
-              recipeId: row.id,
+              recipeId: entry.id,
               fromState: state,
               toState: targetState,
               age: stateAge,
@@ -233,18 +234,10 @@ export class RecipeLifecycleSupervisor {
    */
   getTransitionHistory(recipeId: string, limit = 50): TransitionEvent[] {
     try {
-      const rows = this.#db
-        .prepare(
-          `SELECT id, recipe_id, from_state, to_state, trigger, operator_id,
-                  evidence_json, proposal_id, created_at
-           FROM lifecycle_transition_events
-           WHERE recipe_id = ?
-           ORDER BY created_at DESC
-           LIMIT ?`
-        )
-        .all(recipeId, limit) as Record<string, unknown>[];
-
-      return rows.map((row) => this.#rowToEvent(row));
+      if (!this.#lifecycleEventRepo) {
+        return [];
+      }
+      return this.#lifecycleEventRepo.getHistory(recipeId, limit);
     } catch {
       // 表可能不存在（migration 未运行）
       return [];
@@ -254,18 +247,16 @@ export class RecipeLifecycleSupervisor {
   /**
    * 获取全局状态健康摘要
    */
-  getHealthSummary(): LifecycleHealthSummary {
+  async getHealthSummary(): Promise<LifecycleHealthSummary> {
     const now = Date.now();
 
-    // 状态分布
-    const stateDistribution = this.#getStateDistribution();
+    const stateDistribution = await this.#getStateDistribution();
 
-    // 中间态卡死检测
     const intermediateStates = {
-      stuckEvolving: this.#getStuckInfo('evolving', STUCK_THRESHOLD_MS.evolving, now),
-      stuckDecaying: this.#getStuckInfo('decaying', STUCK_THRESHOLD_MS.decaying, now),
-      stuckStaging: this.#getStuckInfo('staging', STUCK_THRESHOLD_MS.staging, now),
-      stuckPending: this.#getStuckInfo('pending', STUCK_THRESHOLD_MS.pending, now),
+      stuckEvolving: await this.#getStuckInfo('evolving', STUCK_THRESHOLD_MS.evolving, now),
+      stuckDecaying: await this.#getStuckInfo('decaying', STUCK_THRESHOLD_MS.decaying, now),
+      stuckStaging: await this.#getStuckInfo('staging', STUCK_THRESHOLD_MS.staging, now),
+      stuckPending: await this.#getStuckInfo('pending', STUCK_THRESHOLD_MS.pending, now),
     };
 
     // 最近转移统计
@@ -279,29 +270,25 @@ export class RecipeLifecycleSupervisor {
 
   /* ═══════════════════ Entry/Exit Actions ═══════════════════ */
 
-  #executeEntryAction(
+  async #executeEntryAction(
     recipeId: string,
     state: string,
     now: number,
     proposalId?: string | null
-  ): void {
+  ): Promise<void> {
     const metaKey = ENTRY_META_KEYS[state];
     if (!metaKey) {
       return;
     }
 
-    const statsRow = this.#db
-      .prepare(`SELECT stats FROM knowledge_entries WHERE id = ?`)
-      .get(recipeId) as { stats: string } | undefined;
-
-    const stats = safeJsonParse<Record<string, unknown>>(statsRow?.stats, {});
+    const entry = await this.#knowledgeRepo.findById(recipeId);
+    const stats = (entry?.stats ?? {}) as unknown as Record<string, unknown>;
     stats[metaKey] = now;
 
     if (state === 'evolving' && proposalId) {
       stats.evolvingProposalId = proposalId;
     }
     if (state === 'active') {
-      // 清除中间态元数据
       delete stats.evolvingStartedAt;
       delete stats.evolvingProposalId;
       delete stats.decayStartedAt;
@@ -310,24 +297,16 @@ export class RecipeLifecycleSupervisor {
       stats.deprecatedAt = now;
     }
 
-    this.#db
-      .prepare(`UPDATE knowledge_entries SET stats = ? WHERE id = ?`)
-      .run(JSON.stringify(stats), recipeId);
+    await this.#knowledgeRepo.update(recipeId, { stats } as unknown as Record<string, unknown>);
   }
 
-  #executeExitAction(recipeId: string, state: string): void {
+  async #executeExitAction(recipeId: string, state: string): Promise<void> {
     if (state === 'active') {
-      // 记录 lastActiveAt
-      const statsRow = this.#db
-        .prepare(`SELECT stats FROM knowledge_entries WHERE id = ?`)
-        .get(recipeId) as { stats: string } | undefined;
-      const stats = safeJsonParse<Record<string, unknown>>(statsRow?.stats, {});
+      const entry = await this.#knowledgeRepo.findById(recipeId);
+      const stats = (entry?.stats ?? {}) as unknown as Record<string, unknown>;
       stats.lastActiveAt = Date.now();
-      this.#db
-        .prepare(`UPDATE knowledge_entries SET stats = ? WHERE id = ?`)
-        .run(JSON.stringify(stats), recipeId);
+      await this.#knowledgeRepo.update(recipeId, { stats } as unknown as Record<string, unknown>);
     }
-    // staging exit: 清除 staging 元数据（由 StagingManager 自行处理）
   }
 
   /* ═══════════════════ Event Recording ═══════════════════ */
@@ -356,23 +335,23 @@ export class RecipeLifecycleSupervisor {
     };
 
     try {
-      this.#db
-        .prepare(
-          `INSERT INTO lifecycle_transition_events
-           (id, recipe_id, from_state, to_state, trigger, operator_id, evidence_json, proposal_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          id,
-          params.recipeId,
-          params.fromState,
-          params.toState,
-          params.trigger,
-          params.operatorId,
-          params.evidence ? JSON.stringify(params.evidence) : null,
-          params.proposalId,
-          params.createdAt
+      if (!this.#lifecycleEventRepo) {
+        this.#logger.warn(
+          `[Supervisor] No lifecycleEventRepo available, cannot record transition event`
         );
+        return event;
+      }
+      this.#lifecycleEventRepo.record({
+        id,
+        recipeId: params.recipeId,
+        fromState: params.fromState,
+        toState: params.toState,
+        trigger: params.trigger,
+        operatorId: params.operatorId,
+        evidence: params.evidence,
+        proposalId: params.proposalId,
+        createdAt: params.createdAt,
+      });
     } catch {
       // lifecycle_transition_events 表可能不存在（降级容忍）
       this.#logger.warn(`[Supervisor] Failed to record transition event (table may not exist)`);
@@ -383,7 +362,7 @@ export class RecipeLifecycleSupervisor {
 
   /* ═══════════════════ Health Queries ═══════════════════ */
 
-  #getStateDistribution(): Record<string, number> {
+  async #getStateDistribution(): Promise<Record<string, number>> {
     const dist: Record<string, number> = {
       pending: 0,
       staging: 0,
@@ -394,12 +373,9 @@ export class RecipeLifecycleSupervisor {
     };
 
     try {
-      const rows = this.#db
-        .prepare(`SELECT lifecycle, COUNT(*) as cnt FROM knowledge_entries GROUP BY lifecycle`)
-        .all() as { lifecycle: string; cnt: number }[];
-
-      for (const row of rows) {
-        dist[row.lifecycle] = row.cnt;
+      const grouped = await this.#knowledgeRepo.countGroupByLifecycle();
+      for (const [lifecycle, cnt] of Object.entries(grouped)) {
+        dist[lifecycle] = cnt;
       }
     } catch {
       // fallback
@@ -408,24 +384,22 @@ export class RecipeLifecycleSupervisor {
     return dist;
   }
 
-  #getStuckInfo(
+  async #getStuckInfo(
     state: string,
     thresholdMs: number,
     now: number
-  ): { count: number; oldestAge: number } {
+  ): Promise<{ count: number; oldestAge: number }> {
     try {
-      const rows = this.#db
-        .prepare(`SELECT id, stats, updatedAt FROM knowledge_entries WHERE lifecycle = ?`)
-        .all(state) as { id: string; stats: string; updatedAt: number }[];
+      const entries = await this.#knowledgeRepo.findAllByLifecycles([state]);
 
       let count = 0;
       let oldestAge = 0;
 
-      for (const row of rows) {
-        const stats = safeJsonParse<Record<string, unknown>>(row.stats, {});
+      for (const entry of entries) {
+        const stats = (entry.stats ?? {}) as unknown as Record<string, unknown>;
         const metaKey = ENTRY_META_KEYS[state];
         const enteredAt = (metaKey ? stats[metaKey] : null) as number | null;
-        const age = enteredAt ? now - enteredAt : now - (row.updatedAt || now);
+        const age = enteredAt ? now - enteredAt : now - (entry.updatedAt || now);
 
         if (age > thresholdMs) {
           count++;
@@ -447,36 +421,18 @@ export class RecipeLifecycleSupervisor {
     topTriggers: { trigger: string; count: number }[];
   } {
     try {
-      const last24hCount =
-        (
-          this.#db
-            .prepare(`SELECT COUNT(*) as cnt FROM lifecycle_transition_events WHERE created_at > ?`)
-            .get(now - 24 * 60 * 60 * 1000) as { cnt: number } | undefined
-        )?.cnt ?? 0;
+      if (!this.#lifecycleEventRepo) {
+        return { last24h: 0, last7d: 0, topTriggers: [] };
+      }
 
-      const last7dCount =
-        (
-          this.#db
-            .prepare(`SELECT COUNT(*) as cnt FROM lifecycle_transition_events WHERE created_at > ?`)
-            .get(now - 7 * 24 * 60 * 60 * 1000) as { cnt: number } | undefined
-        )?.cnt ?? 0;
+      const last24hCount = this.#lifecycleEventRepo.countSince(now - 24 * 60 * 60 * 1000);
+      const last7dCount = this.#lifecycleEventRepo.countSince(now - 7 * 24 * 60 * 60 * 1000);
+      const topTriggers = this.#lifecycleEventRepo.topTriggersSince(
+        now - 7 * 24 * 60 * 60 * 1000,
+        5
+      );
 
-      const triggerRows = this.#db
-        .prepare(
-          `SELECT trigger, COUNT(*) as cnt
-           FROM lifecycle_transition_events
-           WHERE created_at > ?
-           GROUP BY trigger
-           ORDER BY cnt DESC
-           LIMIT 5`
-        )
-        .all(now - 7 * 24 * 60 * 60 * 1000) as { trigger: string; cnt: number }[];
-
-      return {
-        last24h: last24hCount,
-        last7d: last7dCount,
-        topTriggers: triggerRows.map((r) => ({ trigger: r.trigger, count: r.cnt })),
-      };
+      return { last24h: last24hCount, last7d: last7dCount, topTriggers };
     } catch {
       return { last24h: 0, last7d: 0, topTriggers: [] };
     }
@@ -484,40 +440,27 @@ export class RecipeLifecycleSupervisor {
 
   #getProposalMetrics(): LifecycleHealthSummary['proposalMetrics'] {
     try {
-      const statusCounts = this.#db
-        .prepare(`SELECT status, COUNT(*) as cnt FROM evolution_proposals GROUP BY status`)
-        .all() as { status: string; cnt: number }[];
+      const statusMap = this.#proposalRepo
+        ? this.#proposalRepo.stats()
+        : ({} as Record<string, number>);
 
-      const map: Record<string, number> = {};
-      for (const row of statusCounts) {
-        map[row.status] = row.cnt;
-      }
-
-      const pending = map.pending ?? 0;
-      const observing = map.observing ?? 0;
-      const executed = map.executed ?? 0;
-      const rejected = map.rejected ?? 0;
-      const expired = map.expired ?? 0;
+      const pending = statusMap.pending ?? 0;
+      const observing = statusMap.observing ?? 0;
+      const executed = statusMap.executed ?? 0;
+      const rejected = statusMap.rejected ?? 0;
+      const expired = statusMap.expired ?? 0;
       const total = executed + rejected + expired;
 
-      // contentPatchRate: 有 patch 的事件 / 总 proposal-execution 事件
       let contentPatchRate = 0;
       try {
-        const patchEvents = this.#db
-          .prepare(
-            `SELECT COUNT(*) as cnt FROM lifecycle_transition_events
-             WHERE trigger = 'content-patch-complete'`
-          )
-          .get() as { cnt: number } | undefined;
-        const execEvents = this.#db
-          .prepare(
-            `SELECT COUNT(*) as cnt FROM lifecycle_transition_events
-             WHERE trigger = 'proposal-execution' OR trigger = 'proposal-attach'`
-          )
-          .get() as { cnt: number } | undefined;
-        const patchCount = patchEvents?.cnt ?? 0;
-        const execCount = execEvents?.cnt ?? 0;
-        contentPatchRate = execCount > 0 ? patchCount / execCount : 0;
+        if (this.#lifecycleEventRepo) {
+          const patchCount = this.#lifecycleEventRepo.countByTrigger('content-patch-complete');
+          const execCount = this.#lifecycleEventRepo.countByTriggers([
+            'proposal-execution',
+            'proposal-attach',
+          ]);
+          contentPatchRate = execCount > 0 ? patchCount / execCount : 0;
+        }
       } catch {
         // table may not exist yet
       }
@@ -526,7 +469,7 @@ export class RecipeLifecycleSupervisor {
         pendingCount: pending,
         observingCount: observing,
         executionRate: total > 0 ? executed / total : 0,
-        avgObservationDays: 0, // TODO: calculate from resolved proposals
+        avgObservationDays: 0,
         contentPatchRate,
       };
     } catch {
@@ -542,32 +485,14 @@ export class RecipeLifecycleSupervisor {
 
   /* ═══════════════════ DB Helpers ═══════════════════ */
 
-  #getRecipeState(recipeId: string): { lifecycle: string } | null {
-    const row = this.#db
-      .prepare(`SELECT lifecycle FROM knowledge_entries WHERE id = ?`)
-      .get(recipeId) as { lifecycle: string } | undefined;
-    return row ?? null;
+  async #getRecipeState(recipeId: string): Promise<{ lifecycle: string } | null> {
+    const entry = await this.#knowledgeRepo.findById(recipeId);
+    return entry ? { lifecycle: entry.lifecycle } : null;
   }
 
-  #getRecipeAge(recipeId: string, now: number): number {
-    const row = this.#db
-      .prepare(`SELECT updatedAt FROM knowledge_entries WHERE id = ?`)
-      .get(recipeId) as { updatedAt: number } | undefined;
-    return row ? now - row.updatedAt : 0;
-  }
-
-  #rowToEvent(row: Record<string, unknown>): TransitionEvent {
-    return {
-      id: row.id as string,
-      recipeId: row.recipe_id as string,
-      fromState: row.from_state as string,
-      toState: row.to_state as string,
-      trigger: row.trigger as TransitionEvent['trigger'],
-      evidence: row.evidence_json ? safeJsonParse(row.evidence_json as string, null) : null,
-      proposalId: (row.proposal_id as string) ?? null,
-      operatorId: row.operator_id as string,
-      createdAt: row.created_at as number,
-    };
+  async #getRecipeAge(recipeId: string, now: number): Promise<number> {
+    const entry = await this.#knowledgeRepo.findById(recipeId);
+    return entry ? now - (entry.updatedAt || now) : 0;
   }
 
   /* ═══════════════════ Signal ═══════════════════ */
@@ -584,18 +509,5 @@ export class RecipeLifecycleSupervisor {
         trigger,
       },
     });
-  }
-}
-
-/* ────────────────────── Util ────────────────────── */
-
-function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
-  if (!json) {
-    return fallback;
-  }
-  try {
-    return JSON.parse(json) as T;
-  } catch {
-    return fallback;
   }
 }

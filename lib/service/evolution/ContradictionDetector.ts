@@ -13,17 +13,10 @@
  * 结果：硬矛盾 (confidence ≥ 0.8) / 软矛盾 (0.4-0.8)
  */
 
+import { CONSUMABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
-
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-
-/* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-  };
-}
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 
 export interface ContradictionResult {
   recipeA: string;
@@ -107,20 +100,20 @@ const STOP_WORDS = new Set([
 /* ────────────────────── Class ────────────────────── */
 
 export class ContradictionDetector {
-  #db: DatabaseLike;
+  #knowledgeRepo: KnowledgeRepositoryImpl;
   #signalBus: SignalBus | null;
   #logger = Logger.getInstance();
 
-  constructor(db: DatabaseLike, options: { signalBus?: SignalBus } = {}) {
-    this.#db = db;
+  constructor(knowledgeRepo: KnowledgeRepositoryImpl, options: { signalBus?: SignalBus } = {}) {
+    this.#knowledgeRepo = knowledgeRepo;
     this.#signalBus = options.signalBus ?? null;
   }
 
   /**
    * 检测所有 active/staging/evolving Recipe 之间的矛盾
    */
-  detectAll(): ContradictionResult[] {
-    const recipes = this.#loadRecipes();
+  async detectAll(): Promise<ContradictionResult[]> {
+    const recipes = await this.#loadRecipes();
     const results: ContradictionResult[] = [];
 
     for (let i = 0; i < recipes.length; i++) {
@@ -206,28 +199,18 @@ export class ContradictionDetector {
 
   /* ── Internal ── */
 
-  #loadRecipes(): RecipeEntry[] {
+  async #loadRecipes(): Promise<RecipeEntry[]> {
     try {
-      const rows = this.#db
-        .prepare(
-          `SELECT id, title, lifecycle, description,
-                json_extract(content, '$.markdown') AS content_markdown,
-                doClause,
-                dontClause,
-                json_extract(content, '$.pattern') AS guardPattern
-         FROM knowledge_entries
-         WHERE lifecycle IN ('active', 'staging', 'evolving')`
-        )
-        .all();
-      return rows.map((r) => ({
-        id: r.id as string,
-        title: r.title as string,
-        lifecycle: r.lifecycle as string,
-        doClause: (r.doClause as string) ?? null,
-        dontClause: (r.dontClause as string) ?? null,
-        guardPattern: (r.guardPattern as string) ?? null,
-        description: (r.description as string) ?? null,
-        content_markdown: (r.content_markdown as string) ?? null,
+      const entries = await this.#knowledgeRepo.findAllByLifecycles(CONSUMABLE_LIFECYCLES);
+      return entries.map((e) => ({
+        id: e.id,
+        title: e.title,
+        lifecycle: e.lifecycle,
+        doClause: e.doClause || null,
+        dontClause: e.dontClause || null,
+        guardPattern: e.content?.pattern || null,
+        description: e.description || null,
+        content_markdown: e.content?.markdown || null,
       }));
     } catch {
       return [];

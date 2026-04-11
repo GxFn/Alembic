@@ -51,7 +51,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
 
   switch (op) {
     case 'overview': {
-      const overview = panoramaService.getOverview();
+      const overview = await panoramaService.getOverview();
       return envelope({
         success: true,
         data: overview,
@@ -68,7 +68,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
           meta: { tool: 'autosnippet_panorama' },
         });
       }
-      const detail = panoramaService.getModule(moduleName);
+      const detail = await panoramaService.getModule(moduleName);
       if (!detail) {
         return envelope({
           success: false,
@@ -84,7 +84,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
     }
 
     case 'gaps': {
-      const gaps = panoramaService.getGaps();
+      const gaps = await panoramaService.getGaps();
       return envelope({
         success: true,
         data: { gaps },
@@ -93,7 +93,7 @@ export async function panoramaHandler(ctx: McpContext, args: PanoramaArgs) {
     }
 
     case 'health': {
-      const health = panoramaService.getHealth();
+      const health = await panoramaService.getHealth();
       return envelope({
         success: true,
         data: health,
@@ -124,7 +124,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
         });
       }
 
-      const report = metabolism.runFullCycle();
+      const report = await metabolism.runFullCycle();
       return envelope({
         success: true,
         data: report,
@@ -145,7 +145,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
         });
       }
 
-      const results = decayDetector.scanAll();
+      const results = await decayDetector.scanAll();
       return envelope({
         success: true,
         data: { results },
@@ -166,8 +166,8 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
         });
       }
 
-      const checkResult = stagingManager.checkAndPromote();
-      const currentStaging = stagingManager.listStaging();
+      const checkResult = await stagingManager.checkAndPromote();
+      const currentStaging = await stagingManager.listStaging();
       return envelope({
         success: true,
         data: { checkResult, currentStaging },
@@ -188,7 +188,7 @@ async function handleGovernanceOps(ctx: McpContext, op: string) {
         });
       }
 
-      const suggestions = suggester.analyzeAll();
+      const suggestions = await suggester.analyzeAll();
       return envelope({
         success: true,
         data: { suggestions },

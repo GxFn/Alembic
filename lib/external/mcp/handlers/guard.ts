@@ -383,7 +383,7 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
   }
 
   // 2. 预加载 rule recipe 缓存
-  const recipeMap = _loadRuleRecipes(ctx);
+  const recipeMap = await _loadRuleRecipes(ctx);
 
   // 3. 创建引擎，注入 Enhancement Pack
   const engine = _getOrCreateEngine(ctx, GuardCheckEngine);
@@ -542,45 +542,39 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
  * 预加载所有 rule 类型 recipe 的修复字段
  * 构建 guardId → recipe 映射
  */
-function _loadRuleRecipes(ctx: McpContext): Map<string, RecipeEntry> {
-  const map = new Map();
+async function _loadRuleRecipes(ctx: McpContext): Promise<Map<string, RecipeEntry>> {
+  const map = new Map<string, RecipeEntry>();
   try {
-    const db =
-      typeof ctx.container.get('database')?.getDb === 'function'
-        ? ctx.container.get('database').getDb()
-        : ctx.container.get('database');
+    const knowledgeRepo = ctx.container.get('knowledgeRepository') as {
+      findActiveGuardRecipes(): Promise<Array<Record<string, unknown>>>;
+    };
+    const entries = await knowledgeRepo.findActiveGuardRecipes();
 
-    const rows = db
-      .prepare(`
-      SELECT id, title, doClause, dontClause, coreCode, constraints
-      FROM knowledge_entries
-      WHERE (kind = 'rule' OR knowledgeType = 'boundary-constraint')
-        AND lifecycle = 'active'
-    `)
-      .all();
-
-    for (const row of rows) {
+    for (const row of entries) {
       try {
-        const constraints = JSON.parse(row.constraints || '{}');
-        const guards = constraints.guards || [];
+        const constraints =
+          typeof row.constraints === 'object' && row.constraints
+            ? (row.constraints as Record<string, unknown>)
+            : JSON.parse((row.constraints as string) || '{}');
+        const guards = (constraints.guards || []) as Array<{ id?: string }>;
         for (const g of guards) {
           if (g.id) {
             map.set(g.id, {
-              title: row.title,
-              doClause: row.doClause,
-              dontClause: row.dontClause,
-              coreCode: row.coreCode,
+              title: row.title as string,
+              doClause: row.doClause as string,
+              dontClause: row.dontClause as string,
+              coreCode: row.coreCode as string,
             });
           }
         }
       } catch {
         /* skip */
       }
-      map.set(row.id, {
-        title: row.title,
-        doClause: row.doClause,
-        dontClause: row.dontClause,
-        coreCode: row.coreCode,
+      map.set(row.id as string, {
+        title: row.title as string,
+        doClause: row.doClause as string,
+        dontClause: row.dontClause as string,
+        coreCode: row.coreCode as string,
       });
     }
   } catch {
@@ -903,8 +897,13 @@ export async function guardReverseAudit(ctx: McpContext, args: ReverseAuditArgs)
   try {
     reverseGuard = ctx.container.get('reverseGuard') as InstanceType<typeof ReverseGuard>;
   } catch {
-    const db = ctx.container.get('database') as { getDb(): unknown };
-    reverseGuard = new ReverseGuard(db.getDb() as ConstructorParameters<typeof ReverseGuard>[0]);
+    reverseGuard = new ReverseGuard(
+      ctx.container.get('knowledgeRepository') as ConstructorParameters<typeof ReverseGuard>[0],
+      ctx.container.get('codeEntityRepository') as ConstructorParameters<typeof ReverseGuard>[1],
+      ctx.container.get('recipeSourceRefRepository') as ConstructorParameters<
+        typeof ReverseGuard
+      >[2]
+    );
   }
 
   const maxFiles = args.maxFiles || 200;
@@ -955,9 +954,11 @@ export async function guardCoverageMatrix(ctx: McpContext, _args: CoverageMatrix
   try {
     analyzer = ctx.container.get('coverageAnalyzer') as InstanceType<typeof CoverageAnalyzer>;
   } catch {
-    const db = ctx.container.get('database') as { getDb(): unknown };
     analyzer = new CoverageAnalyzer(
-      db.getDb() as ConstructorParameters<typeof CoverageAnalyzer>[0]
+      ctx.container.get('knowledgeRepository') as ConstructorParameters<typeof CoverageAnalyzer>[0],
+      ctx.container.get('guardViolationRepository') as ConstructorParameters<
+        typeof CoverageAnalyzer
+      >[1]
     );
   }
 
@@ -1057,13 +1058,13 @@ async function _buildModuleFiles(
 
   try {
     const panorama = ctx.container.get('panoramaService') as {
-      getOverview(): Promise<{ modules: { name: string; files: string[] }[] }>;
+      getResult(): Promise<{ modules: Map<string, { name: string; files: string[] }> }>;
     };
-    const overview = await panorama.getOverview();
-    if (overview?.modules) {
-      for (const mod of overview.modules) {
+    const result = await panorama.getResult();
+    if (result?.modules) {
+      for (const [name, mod] of result.modules) {
         if (mod.files?.length > 0) {
-          moduleFiles.set(mod.name, mod.files);
+          moduleFiles.set(name, mod.files);
         }
       }
     }

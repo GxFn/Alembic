@@ -7,134 +7,8 @@
  * @module TechStackProfiler
  */
 
+import { LanguageProfiles } from '#shared/LanguageProfiles.js';
 import type { ExternalDepProfile, TechStackProfile } from './PanoramaTypes.js';
-
-/* ═══ Known Library Categories ════════════════════════════ */
-
-/**
- * 知名开源库 → 技术栈分类映射
- * 覆盖 iOS/Swift/ObjC + 跨平台常见 + Node/Web 常见
- */
-const KNOWN_LIBRARIES: Record<string, string> = {
-  // 网络
-  afnetworking: 'Networking',
-  alamofire: 'Networking',
-  moya: 'Networking',
-  axios: 'Networking',
-  urlsession: 'Networking',
-  grpc: 'Networking',
-  starscream: 'Networking',
-  socketrocket: 'Networking',
-
-  // 图片
-  sdwebimage: 'Image',
-  kingfisher: 'Image',
-  nuke: 'Image',
-  yyimage: 'Image',
-  flanimatedimage: 'Image',
-
-  // UI / 布局
-  snapkit: 'UI',
-  masonry: 'UI',
-  flexlayout: 'UI',
-  yoga: 'UI',
-  texture: 'UI',
-  asyncdisplaykit: 'UI',
-  iglistkit: 'UI',
-  mbprogresshud: 'UI',
-  svprogresshud: 'UI',
-  lottie: 'UI',
-  yytext: 'UI',
-  dzzfloatingactionbutton: 'UI',
-  herocard: 'UI',
-
-  // 响应式 / 函数式
-  rxswift: 'Reactive',
-  rxcocoa: 'Reactive',
-  reactiveswift: 'Reactive',
-  combine: 'Reactive',
-  openombine: 'Reactive',
-  promisekit: 'Reactive',
-
-  // 数据 / 存储
-  realm: 'Storage',
-  coredata: 'Storage',
-  fmdb: 'Storage',
-  grdb: 'Storage',
-  sqlite: 'Storage',
-  wcdb: 'Storage',
-  mmkv: 'Storage',
-  userdefaults: 'Storage',
-  yymodel: 'Serialization',
-  objectmapper: 'Serialization',
-  codable: 'Serialization',
-  swiftyjson: 'Serialization',
-  mantle: 'Serialization',
-  handyjson: 'Serialization',
-  mjextension: 'Serialization',
-
-  // 日志 / 诊断
-  cocoalumberjack: 'Logging',
-  swiftybeaver: 'Logging',
-  oslog: 'Logging',
-  bugly: 'Diagnostics',
-  sentry: 'Diagnostics',
-  firebase: 'Diagnostics',
-  crashlytics: 'Diagnostics',
-
-  // 路由
-  urlnavigator: 'Routing',
-  deeplink: 'Routing',
-  arouter: 'Routing',
-  ctmediator: 'Routing',
-
-  // 测试
-  quick: 'Testing',
-  nimble: 'Testing',
-  xctest: 'Testing',
-  ocmock: 'Testing',
-  ohhttpstubs: 'Testing',
-
-  // 安全 / 加密
-  cryptoswift: 'Security',
-  keychain: 'Security',
-  keychainaccess: 'Security',
-  commonCrypto: 'Security',
-
-  // 依赖注入
-  swinject: 'Architecture',
-  needle: 'Architecture',
-
-  // 工具
-  swiftlint: 'Tooling',
-  r_swift: 'Tooling',
-  swiftgen: 'Tooling',
-  cocoapods: 'Tooling',
-};
-
-/**
- * 关键词 → 分类的启发式映射
- * 用于 KNOWN_LIBRARIES 未命中时的 fallback
- */
-const KEYWORD_CATEGORIES: Array<[RegExp, string]> = [
-  [/net(work)?|http|api|url|request|socket|grpc/i, 'Networking'],
-  [/image|photo|picture|avatar|thumbnail/i, 'Image'],
-  [/ui|view|layout|widget|button|label|cell|collection|table/i, 'UI'],
-  [/anim(at)?|lottie|transition|motion/i, 'Animation'],
-  [/rx|reactive|combine|signal|observable|promise/i, 'Reactive'],
-  [/db|database|sql|realm|store|cache|storage|persist/i, 'Storage'],
-  [/json|model|mapper|serial|codable|parse|decode/i, 'Serialization'],
-  [/log|debug|trace|monitor|crash|sentry|bugly|diagnostic/i, 'Diagnostics'],
-  [/route|router|navigation|deeplink|scheme|mediator/i, 'Routing'],
-  [/test|mock|stub|spec|expect|assert/i, 'Testing'],
-  [/crypto|encrypt|security|keychain|auth|token|oauth/i, 'Security'],
-  [/player|video|audio|media|av|stream/i, 'Media'],
-  [/map|location|geo|coordinate|clocation/i, 'Location'],
-  [/pay|purchase|billing|iap/i, 'Payment'],
-  [/push|notification|apns|message/i, 'Messaging'],
-  [/analytics|track|event|statistics/i, 'Analytics'],
-  [/ad|banner|interstitial|reward/i, 'Advertising'],
-];
 
 /* ═══ TechStackProfiler ═══════════════════════════════════ */
 
@@ -191,6 +65,7 @@ export function profileTechStack(externalDeps: ExternalDepProfile[]): TechStackP
  * 分类单个外部依赖
  */
 function classifyDependency(name: string): string {
+  const knownLibraries = LanguageProfiles.knownLibraries;
   // 标准化名称：移除前缀、转小写
   const normalized = name
     .replace(/^(BDMV|BDP|FMT|BD|MTL|Bai|Ali|TX|TT)/, '')
@@ -198,18 +73,18 @@ function classifyDependency(name: string): string {
     .replace(/[-_]/g, '');
 
   // 1. 精确匹配已知库
-  if (KNOWN_LIBRARIES[normalized]) {
-    return KNOWN_LIBRARIES[normalized];
+  if (knownLibraries[normalized]) {
+    return knownLibraries[normalized];
   }
 
   // 尝试原始名称小写
   const rawLower = name.toLowerCase().replace(/[-_]/g, '');
-  if (KNOWN_LIBRARIES[rawLower]) {
-    return KNOWN_LIBRARIES[rawLower];
+  if (knownLibraries[rawLower]) {
+    return knownLibraries[rawLower];
   }
 
   // 2. 关键词启发式
-  for (const [pattern, category] of KEYWORD_CATEGORIES) {
+  for (const [pattern, category] of LanguageProfiles.keywordCategories) {
     if (pattern.test(name)) {
       return category;
     }

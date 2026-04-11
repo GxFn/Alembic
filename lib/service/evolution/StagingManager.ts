@@ -14,17 +14,10 @@
 
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import { unixNow } from '../../shared/utils/common.js';
 
 /* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-    get(...params: unknown[]): Record<string, unknown> | undefined;
-    run(...params: unknown[]): { changes: number };
-  };
-}
 
 export interface StagingEntry {
   id: string;
@@ -42,25 +35,23 @@ export interface StagingCheckResult {
 /* ────────────────────── Class ────────────────────── */
 
 export class StagingManager {
-  #db: DatabaseLike;
+  #knowledgeRepo: KnowledgeRepositoryImpl;
   #signalBus: SignalBus | null;
   #logger = Logger.getInstance();
 
-  constructor(db: DatabaseLike, options: { signalBus?: SignalBus } = {}) {
-    this.#db = db;
+  constructor(knowledgeRepo: KnowledgeRepositoryImpl, options: { signalBus?: SignalBus } = {}) {
+    this.#knowledgeRepo = knowledgeRepo;
     this.#signalBus = options.signalBus ?? null;
   }
 
   /**
    * 将条目推入 staging 状态并记录 deadline
    */
-  enterStaging(entryId: string, gracePeriodMs: number, confidence: number): boolean {
+  async enterStaging(entryId: string, gracePeriodMs: number, confidence: number): Promise<boolean> {
     const now = Date.now();
     const deadline = now + gracePeriodMs;
 
-    const entry = this.#db
-      .prepare(`SELECT id, title, lifecycle FROM knowledge_entries WHERE id = ?`)
-      .get(entryId) as { id: string; title: string; lifecycle: string } | undefined;
+    const entry = await this.#knowledgeRepo.findById(entryId);
 
     if (!entry) {
       this.#logger.warn(`StagingManager: entry not found: ${entryId}`);
@@ -72,29 +63,11 @@ export class StagingManager {
       return false;
     }
 
-    // 更新 lifecycle → staging，记录 deadline 到 stats JSON
-    const statsRaw = this.#db
-      .prepare(`SELECT stats FROM knowledge_entries WHERE id = ?`)
-      .get(entryId) as { stats: string } | undefined;
+    await this.#knowledgeRepo.update(entryId, {
+      lifecycle: 'staging',
+      stagingDeadline: deadline,
+    } as unknown as Record<string, unknown>);
 
-    let stats: Record<string, unknown> = {};
-    try {
-      stats = JSON.parse(statsRaw?.stats || '{}');
-    } catch {
-      stats = {};
-    }
-
-    stats.stagingDeadline = deadline;
-    stats.stagingConfidence = confidence;
-    stats.stagingEnteredAt = now;
-
-    this.#db
-      .prepare(
-        `UPDATE knowledge_entries SET lifecycle = 'staging', stats = ?, updatedAt = ? WHERE id = ?`
-      )
-      .run(JSON.stringify(stats), unixNow(), entryId);
-
-    // 发射信号
     if (this.#signalBus) {
       this.#signalBus.send('lifecycle', 'StagingManager.enter', confidence, {
         target: entryId,
@@ -116,46 +89,33 @@ export class StagingManager {
   /**
    * 检查所有 staging 条目，执行自动发布或回滚
    */
-  checkAndPromote(): StagingCheckResult {
+  async checkAndPromote(): Promise<StagingCheckResult> {
     const now = Date.now();
     const result: StagingCheckResult = { promoted: [], rolledBack: [], waiting: [] };
 
-    const rows = this.#db
-      .prepare(`SELECT id, title, stats FROM knowledge_entries WHERE lifecycle = 'staging'`)
-      .all() as { id: string; title: string; stats: string }[];
+    const entries = await this.#knowledgeRepo.findAllByLifecycles(['staging']);
 
-    for (const row of rows) {
-      let stats: Record<string, unknown> = {};
-      try {
-        stats = JSON.parse(row.stats || '{}');
-      } catch {
-        stats = {};
-      }
-
-      const deadline = (stats.stagingDeadline as number) || 0;
-      const confidence = (stats.stagingConfidence as number) || 0;
+    for (const e of entries) {
+      const deadline = e.stagingDeadline || 0;
 
       const entry: StagingEntry = {
-        id: row.id,
-        title: row.title,
+        id: e.id,
+        title: e.title,
         stagingDeadline: deadline,
-        confidence,
+        confidence: 0,
       };
 
       if (deadline === 0) {
-        // 无 deadline 数据（旧数据兼容）→ 保持 waiting
         result.waiting.push(entry);
         continue;
       }
 
       if (now < deadline) {
-        // 未到期
         result.waiting.push(entry);
         continue;
       }
 
-      // 到期 → 自动发布
-      this.#promote(entry, stats, now);
+      await this.#promote(entry, now);
       result.promoted.push(entry);
     }
 
@@ -169,35 +129,17 @@ export class StagingManager {
   /**
    * 回滚 staging 条目到 pending（Guard 检测到冲突时调用）
    */
-  rollback(entryId: string, reason: string): boolean {
-    const now = Date.now();
-    const entry = this.#db
-      .prepare(`SELECT id, title, lifecycle, stats FROM knowledge_entries WHERE id = ?`)
-      .get(entryId) as { id: string; title: string; lifecycle: string; stats: string } | undefined;
+  async rollback(entryId: string, reason: string): Promise<boolean> {
+    const entry = await this.#knowledgeRepo.findById(entryId);
 
     if (!entry || entry.lifecycle !== 'staging') {
       return false;
     }
 
-    let stats: Record<string, unknown> = {};
-    try {
-      stats = JSON.parse(entry.stats || '{}');
-    } catch {
-      stats = {};
-    }
-
-    // 清除 staging 元数据
-    delete stats.stagingDeadline;
-    delete stats.stagingConfidence;
-    delete stats.stagingEnteredAt;
-    stats.lastRollbackReason = reason;
-    stats.lastRollbackAt = now;
-
-    this.#db
-      .prepare(
-        `UPDATE knowledge_entries SET lifecycle = 'pending', stats = ?, updatedAt = ? WHERE id = ?`
-      )
-      .run(JSON.stringify(stats), unixNow(), entryId);
+    await this.#knowledgeRepo.update(entryId, {
+      lifecycle: 'pending',
+      stagingDeadline: null,
+    } as unknown as Record<string, unknown>);
 
     if (this.#signalBus) {
       this.#signalBus.send('lifecycle', 'StagingManager.rollback', 0.8, {
@@ -217,42 +159,26 @@ export class StagingManager {
   /**
    * 获取所有 staging 条目及其状态
    */
-  listStaging(): StagingEntry[] {
-    const rows = this.#db
-      .prepare(`SELECT id, title, stats FROM knowledge_entries WHERE lifecycle = 'staging'`)
-      .all() as { id: string; title: string; stats: string }[];
+  async listStaging(): Promise<StagingEntry[]> {
+    const entries = await this.#knowledgeRepo.findAllByLifecycles(['staging']);
 
-    return rows.map((row) => {
-      let stats: Record<string, unknown> = {};
-      try {
-        stats = JSON.parse(row.stats || '{}');
-      } catch {
-        stats = {};
-      }
-      return {
-        id: row.id,
-        title: row.title,
-        stagingDeadline: (stats.stagingDeadline as number) || 0,
-        confidence: (stats.stagingConfidence as number) || 0,
-      };
-    });
+    return entries.map((e) => ({
+      id: e.id,
+      title: e.title,
+      stagingDeadline: e.stagingDeadline || 0,
+      confidence: 0,
+    }));
   }
 
   /* ── Private ── */
 
-  #promote(entry: StagingEntry, stats: Record<string, unknown>, now: number): void {
-    // 清除 staging 元数据，记录发布信息
-    delete stats.stagingDeadline;
-    delete stats.stagingConfidence;
-    delete stats.stagingEnteredAt;
-    stats.autoPublishedAt = now;
-
+  async #promote(entry: StagingEntry, now: number): Promise<void> {
     const nowS = unixNow();
-    this.#db
-      .prepare(
-        `UPDATE knowledge_entries SET lifecycle = 'active', publishedAt = ?, stats = ?, updatedAt = ? WHERE id = ?`
-      )
-      .run(nowS, JSON.stringify(stats), nowS, entry.id);
+    await this.#knowledgeRepo.update(entry.id, {
+      lifecycle: 'active',
+      publishedAt: nowS,
+      stagingDeadline: null,
+    } as unknown as Record<string, unknown>);
 
     if (this.#signalBus) {
       this.#signalBus.send('lifecycle', 'StagingManager.promote', 1.0, {

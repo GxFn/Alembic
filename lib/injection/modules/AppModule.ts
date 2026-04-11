@@ -9,6 +9,7 @@
  */
 
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
+import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 import { TokenUsageStore } from '../../repository/token/TokenUsageStore.js';
 import { CursorDeliveryPipeline } from '../../service/delivery/CursorDeliveryPipeline.js';
 import { RecipeExtractor } from '../../service/knowledge/RecipeExtractor.js';
@@ -18,7 +19,6 @@ import { QualityScorer } from '../../service/quality/QualityScorer.js';
 import { RecipeCandidateValidator } from '../../service/recipe/RecipeCandidateValidator.js';
 import { RecipeParser } from '../../service/recipe/RecipeParser.js';
 import { PrimeSearchPipeline } from '../../service/task/PrimeSearchPipeline.js';
-
 import type { ServiceContainer } from '../ServiceContainer.js';
 
 export function register(c: ServiceContainer) {
@@ -35,9 +35,9 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('tokenUsageStore', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb: () => unknown; getDrizzle: () => unknown };
+    const db = ct.get('database') as { getDrizzle: () => unknown };
     return new TokenUsageStore(
-      db.getDb() as ConstructorParameters<typeof TokenUsageStore>[0],
+      unwrapRawDb(db as unknown) as ConstructorParameters<typeof TokenUsageStore>[0],
       db.getDrizzle() as ConstructorParameters<typeof TokenUsageStore>[1]
     );
   });

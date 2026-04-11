@@ -10,18 +10,14 @@
  * 综合: weighted_sum(0.2*d1 + 0.3*d2 + 0.3*d3 + 0.2*d4) ≥ 0.65
  */
 
+import { CONSUMABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import { ContradictionDetector } from './ContradictionDetector.js';
 
 /* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-  };
-}
 
 export interface RedundancyResult {
   recipeA: string;
@@ -52,16 +48,16 @@ const REDUNDANCY_THRESHOLD = 0.65;
 /* ────────────────────── Class ────────────────────── */
 
 export class RedundancyAnalyzer {
-  #db: DatabaseLike;
+  #knowledgeRepo: KnowledgeRepositoryImpl;
   #signalBus: SignalBus | null;
   #reportStore: ReportStore | null;
   #logger = Logger.getInstance();
 
   constructor(
-    db: DatabaseLike,
+    knowledgeRepo: KnowledgeRepositoryImpl,
     options: { signalBus?: SignalBus; reportStore?: ReportStore } = {}
   ) {
-    this.#db = db;
+    this.#knowledgeRepo = knowledgeRepo;
     this.#signalBus = options.signalBus ?? null;
     this.#reportStore = options.reportStore ?? null;
   }
@@ -69,8 +65,8 @@ export class RedundancyAnalyzer {
   /**
    * 分析所有 active/staging 条目之间的冗余
    */
-  analyzeAll(): RedundancyResult[] {
-    const recipes = this.#loadRecipes();
+  async analyzeAll(): Promise<RedundancyResult[]> {
+    const recipes = await this.#loadRecipes();
     const results: RedundancyResult[] = [];
 
     for (let i = 0; i < recipes.length; i++) {
@@ -140,26 +136,16 @@ export class RedundancyAnalyzer {
 
   /* ── Internal ── */
 
-  #loadRecipes(): RecipeForRedundancy[] {
+  async #loadRecipes(): Promise<RecipeForRedundancy[]> {
     try {
-      const rows = this.#db
-        .prepare(
-          `SELECT id, title,
-                doClause,
-                dontClause,
-                json_extract(content, '$.pattern') AS guardPattern,
-                json_extract(content, '$.coreCode') AS coreCode
-         FROM knowledge_entries
-         WHERE lifecycle IN ('active', 'staging', 'evolving')`
-        )
-        .all();
-      return rows.map((r) => ({
-        id: r.id as string,
-        title: r.title as string,
-        doClause: (r.doClause as string) ?? null,
-        dontClause: (r.dontClause as string) ?? null,
-        coreCode: (r.coreCode as string) ?? null,
-        guardPattern: (r.guardPattern as string) ?? null,
+      const entries = await this.#knowledgeRepo.findAllByLifecycles(CONSUMABLE_LIFECYCLES);
+      return entries.map((e) => ({
+        id: e.id,
+        title: e.title,
+        doClause: e.doClause || null,
+        dontClause: e.dontClause || null,
+        coreCode: e.coreCode || null,
+        guardPattern: e.content?.pattern || null,
       }));
     } catch {
       return [];

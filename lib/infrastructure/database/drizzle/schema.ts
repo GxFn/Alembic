@@ -4,18 +4,28 @@
  * 所有表定义从 migration 001-003 忠实翻译。
  * DB 列名与 migration 保持一致；实体映射由 repository 层处理。
  *
- * 表清单 (16):
+ * 表清单 (15):
  *   001: knowledge_entries, knowledge_edges, guard_violations, audit_logs,
  *        sessions, token_usage, semantic_memories, bootstrap_snapshots,
  *        bootstrap_dim_files, code_entities
- *   002: tasks, task_dependencies, task_events
  *   003: remote_commands
  *   004: evolution_proposals (+ knowledge_entries.staging_deadline)
+ *   005: recipe_source_refs
  *   内联: remote_state
  *   内部: schema_migrations
+ *
+ * 注: Task 系统为纯内存 + JSONL 信号架构，不使用数据库表。
  */
 
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  blob,
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 // ═══════════════════════════════════════════════════════════════
 // 内部 — schema_migrations
@@ -438,4 +448,28 @@ export const recipeSourceRefs = sqliteTable(
     verifiedAt: integer('verified_at').notNull(),
   },
   (table) => [index('idx_rsr_path').on(table.sourcePath), index('idx_rsr_status').on(table.status)]
+);
+
+// ═══════════════════════════════════════════════════════════════
+// 18. lifecycle_transition_events — Recipe 生命周期转移事件 (migration 006)
+// ═══════════════════════════════════════════════════════════════
+
+export const lifecycleTransitionEvents = sqliteTable(
+  'lifecycle_transition_events',
+  {
+    id: text('id').primaryKey(),
+    recipeId: text('recipe_id').notNull(),
+    fromState: text('from_state').notNull(),
+    toState: text('to_state').notNull(),
+    trigger: text('trigger').notNull(),
+    operatorId: text('operator_id').notNull().default('system'),
+    evidenceJson: text('evidence_json'),
+    proposalId: text('proposal_id'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [
+    index('idx_lte_recipe_id').on(table.recipeId),
+    index('idx_lte_created_at').on(table.createdAt),
+    index('idx_lte_trigger').on(table.trigger),
+  ]
 );

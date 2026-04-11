@@ -7,12 +7,15 @@
  * @module PanoramaAggregator
  */
 
+import type { BootstrapRepositoryImpl } from '../../repository/bootstrap/BootstrapRepository.js';
+import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
+import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import type { CouplingAnalyzer } from './CouplingAnalyzer.js';
 import { DimensionAnalyzer } from './DimensionAnalyzer.js';
 import type { ConfigLayer, LayerInferrer } from './LayerInferrer.js';
 import type {
   CallFlowSummary,
-  CeDbLike,
   ExternalDepProfile,
   PanoramaModule,
   PanoramaResult,
@@ -26,7 +29,10 @@ export interface PanoramaAggregatorOptions {
   roleRefiner: RoleRefiner;
   couplingAnalyzer: CouplingAnalyzer;
   layerInferrer: LayerInferrer;
-  db: CeDbLike;
+  bootstrapRepo: BootstrapRepositoryImpl;
+  entityRepo: CodeEntityRepositoryImpl;
+  edgeRepo: KnowledgeEdgeRepositoryImpl;
+  knowledgeRepo: KnowledgeRepositoryImpl;
   projectRoot: string;
   dimensionAnalyzer?: DimensionAnalyzer;
 }
@@ -37,7 +43,9 @@ export class PanoramaAggregator {
   readonly #roleRefiner: RoleRefiner;
   readonly #couplingAnalyzer: CouplingAnalyzer;
   readonly #layerInferrer: LayerInferrer;
-  readonly #db: CeDbLike;
+  readonly #entityRepo: CodeEntityRepositoryImpl;
+  readonly #edgeRepo: KnowledgeEdgeRepositoryImpl;
+  readonly #knowledgeRepo: KnowledgeRepositoryImpl;
   readonly #projectRoot: string;
   readonly #dimensionAnalyzer: DimensionAnalyzer;
 
@@ -45,10 +53,18 @@ export class PanoramaAggregator {
     this.#roleRefiner = opts.roleRefiner;
     this.#couplingAnalyzer = opts.couplingAnalyzer;
     this.#layerInferrer = opts.layerInferrer;
-    this.#db = opts.db;
+    this.#entityRepo = opts.entityRepo;
+    this.#edgeRepo = opts.edgeRepo;
+    this.#knowledgeRepo = opts.knowledgeRepo;
     this.#projectRoot = opts.projectRoot;
     this.#dimensionAnalyzer =
-      opts.dimensionAnalyzer ?? new DimensionAnalyzer(opts.db, opts.projectRoot);
+      opts.dimensionAnalyzer ??
+      new DimensionAnalyzer(
+        opts.bootstrapRepo,
+        opts.entityRepo,
+        opts.knowledgeRepo,
+        opts.projectRoot
+      );
   }
 
   /**
@@ -56,12 +72,12 @@ export class PanoramaAggregator {
    * @param moduleCandidates 模块候选列表
    * @param options.configLayers 来自配置文件的层级声明（如 Boxfile layer 定义）
    */
-  compute(
+  async compute(
     moduleCandidates: ModuleCandidate[],
     options?: { configLayers?: ConfigLayer[] | null }
-  ): PanoramaResult {
+  ): Promise<PanoramaResult> {
     // 1. RoleRefiner: 精化角色
-    const refinedRoles = this.#roleRefiner.refineAll(moduleCandidates);
+    const refinedRoles = await this.#roleRefiner.refineAll(moduleCandidates);
 
     // 2. 构建模块-文件映射
     const moduleFiles = new Map<string, string[]>();
@@ -70,8 +86,8 @@ export class PanoramaAggregator {
     }
 
     // 3. CouplingAnalyzer: 耦合分析（含外部依赖 fan-in）
-    const externalModules = this.#collectExternalModules();
-    const coupling = this.#couplingAnalyzer.analyze(moduleFiles, externalModules);
+    const externalModules = await this.#collectExternalModules();
+    const coupling = await this.#couplingAnalyzer.analyze(moduleFiles, externalModules);
 
     // 4. LayerInferrer: 层级推断（优先使用配置层级）
     const modules = moduleCandidates.map((m) => m.name);
@@ -96,7 +112,7 @@ export class PanoramaAggregator {
     }
 
     // 6. 项目级 recipe 总数（recipe scope 通常为 universal，不做模块强关联）
-    const projectRecipeCount = this.#getProjectRecipeCount();
+    const projectRecipeCount = await this.#getProjectRecipeCount();
 
     // 7. 计算总文件数
     let totalFiles = 0;
@@ -128,21 +144,23 @@ export class PanoramaAggregator {
       });
     }
 
-    // 8.5 基于模块角色重命名层级（比模块名 pattern 更准确）
-    this.#renameLayersByRole(layers, panoramaModules);
+    // 8.5 基于模块角色重命名层级（仅在拓扑推断模式下；配置层级保留原名）
+    if (!layers.configBased) {
+      this.#renameLayersByRole(layers, panoramaModules);
+    }
 
     // 9. 多维度知识健康分析 (替代旧的基于模块文件数的覆盖率模型)
     const moduleRoles = moduleCandidates.map((m) => {
       const pm = panoramaModules.get(m.name);
       return pm?.refinedRole ?? m.inferredRole;
     });
-    const { radar, gaps } = this.#dimensionAnalyzer.analyze(moduleRoles);
+    const { radar, gaps } = await this.#dimensionAnalyzer.analyze(moduleRoles);
 
     // 10. 调用流概要
-    const callFlowSummary = this.#computeCallFlowSummary();
+    const callFlowSummary = await this.#computeCallFlowSummary();
 
     // 11. 外部依赖概况 + 技术栈画像
-    const externalDeps = this.#buildExternalDepProfiles(coupling.externalDeps);
+    const externalDeps = await this.#buildExternalDepProfiles(coupling.externalDeps);
     const techStack = externalDeps.length > 0 ? profileTechStack(externalDeps) : null;
 
     return {
@@ -161,14 +179,9 @@ export class PanoramaAggregator {
 
   /* ─── Project Recipe Count ──────────────────────── */
 
-  #getProjectRecipeCount(): number {
+  async #getProjectRecipeCount(): Promise<number> {
     try {
-      const row = this.#db
-        .prepare(
-          `SELECT COUNT(*) as cnt FROM knowledge_entries WHERE lifecycle IN ('active', 'pending')`
-        )
-        .get() as Record<string, unknown> | undefined;
-      return Number(row?.cnt ?? 0);
+      return await this.#knowledgeRepo.countByCountableLifecycles();
     } catch {
       return 0;
     }
@@ -179,17 +192,13 @@ export class PanoramaAggregator {
   /**
    * 从 code_entities 收集标记为 external 的模块名
    */
-  #collectExternalModules(): Set<string> {
+  async #collectExternalModules(): Promise<Set<string>> {
     try {
-      const rows = this.#db
-        .prepare(
-          `SELECT entity_id FROM code_entities
-           WHERE entity_type = 'module' AND project_root = ?
-             AND json_extract(metadata_json, '$.nodeType') IN ('external', 'host')`
-        )
-        .all(this.#projectRoot) as Array<Record<string, unknown>>;
-
-      return new Set(rows.map((r) => r.entity_id as string));
+      const rows = await this.#entityRepo.findModulesByNodeTypes(this.#projectRoot, [
+        'external',
+        'host',
+      ]);
+      return new Set(rows.map((r) => r.entityId));
     } catch {
       return new Set();
     }
@@ -199,30 +208,21 @@ export class PanoramaAggregator {
    * 将 CouplingAnalyzer 的外部依赖统计转为 ExternalDepProfile
    * 并从 code_entities 补充 layer/version 元数据
    */
-  #buildExternalDepProfiles(
+  async #buildExternalDepProfiles(
     rawExternalDeps: Array<{ name: string; fanIn: number; dependedBy: string[] }>
-  ): ExternalDepProfile[] {
+  ): Promise<ExternalDepProfile[]> {
     if (rawExternalDeps.length === 0) {
       return [];
     }
 
-    // 批量查询外部依赖的元数据
+    // 查询外部依赖的元数据
     const metadataMap = new Map<string, { layer?: string; version?: string }>();
     try {
       for (const dep of rawExternalDeps) {
-        const row = this.#db
-          .prepare(
-            `SELECT metadata_json FROM code_entities
-             WHERE entity_id = ? AND entity_type = 'module' AND project_root = ?
-             LIMIT 1`
-          )
-          .get(dep.name, this.#projectRoot) as Record<string, unknown> | undefined;
+        const entity = await this.#entityRepo.findByEntityIdOnly(dep.name, this.#projectRoot);
 
-        if (row?.metadata_json) {
-          const meta =
-            typeof row.metadata_json === 'string'
-              ? JSON.parse(row.metadata_json)
-              : row.metadata_json;
+        if (entity?.metadata) {
+          const meta = entity.metadata;
           metadataMap.set(dep.name, {
             layer: meta.layer as string | undefined,
             version: meta.version as string | undefined,
@@ -311,9 +311,33 @@ export class PanoramaAggregator {
         }
       }
 
-      // 去重：已使用的名称追加 level 号
+      // 去重：优先尝试次高票角色名，仍冲突则追加位置描述
       if (usedNames.has(layerName)) {
-        layerName = `${layerName} ${level.level}`;
+        // 尝试次高票角色
+        let resolved = false;
+        if (roleVotes.size > 1) {
+          const sortedRoles = [...roleVotes.entries()].sort((a, b) => b[1] - a[1]);
+          for (let i = 1; i < sortedRoles.length; i++) {
+            const altName =
+              PanoramaAggregator.#ROLE_TO_LAYER[sortedRoles[i][0]] ?? sortedRoles[i][0];
+            if (!usedNames.has(altName)) {
+              layerName = altName;
+              resolved = true;
+              break;
+            }
+          }
+        }
+        // 仍冲突：使用位置描述而非数字后缀
+        if (!resolved && usedNames.has(layerName)) {
+          const pos =
+            level.level <= maxLevel * 0.33
+              ? 'Core'
+              : level.level >= maxLevel * 0.67
+                ? 'App'
+                : 'Mid';
+          const qualifiedName = `${pos} ${layerName}`;
+          layerName = usedNames.has(qualifiedName) ? `${layerName} L${level.level}` : qualifiedName;
+        }
       }
       usedNames.add(layerName);
 
@@ -323,66 +347,27 @@ export class PanoramaAggregator {
 
   /* ─── Call Flow Summary ─────────────────────────── */
 
-  #computeCallFlowSummary(): CallFlowSummary {
+  async #computeCallFlowSummary(): Promise<CallFlowSummary> {
     // 最频繁被调用的方法
-    const topCalled = this.#db
-      .prepare(
-        `SELECT to_id, COUNT(*) as call_count
-         FROM knowledge_edges
-         WHERE relation = 'calls'
-         GROUP BY to_id
-         ORDER BY call_count DESC
-         LIMIT 10`
-      )
-      .all() as Array<Record<string, unknown>>;
+    const topCalled = await this.#edgeRepo.findTopCalledNodes(10);
 
     // 入口点: 只有出度没有入度的方法
-    const entryPoints = this.#db
-      .prepare(
-        `SELECT DISTINCT ke.from_id
-         FROM knowledge_edges ke
-         WHERE ke.relation = 'calls'
-         AND ke.from_id NOT IN (
-           SELECT to_id FROM knowledge_edges WHERE relation = 'calls'
-         )
-         LIMIT 20`
-      )
-      .all() as Array<Record<string, unknown>>;
+    const entryPoints = await this.#edgeRepo.findEntryPoints(20);
 
     // 数据生产者: data_flow outFlow >> inFlow
-    const dataProducers = this.#db
-      .prepare(
-        `SELECT from_id, COUNT(*) as out_cnt
-         FROM knowledge_edges
-         WHERE relation = 'data_flow'
-         GROUP BY from_id
-         HAVING out_cnt > 3
-         ORDER BY out_cnt DESC
-         LIMIT 10`
-      )
-      .all() as Array<Record<string, unknown>>;
+    const dataProducers = await this.#edgeRepo.findTopDataFlowSources(10, 3);
 
     // 数据消费者: data_flow inFlow >> outFlow
-    const dataConsumers = this.#db
-      .prepare(
-        `SELECT to_id, COUNT(*) as in_cnt
-         FROM knowledge_edges
-         WHERE relation = 'data_flow'
-         GROUP BY to_id
-         HAVING in_cnt > 3
-         ORDER BY in_cnt DESC
-         LIMIT 10`
-      )
-      .all() as Array<Record<string, unknown>>;
+    const dataConsumers = await this.#edgeRepo.findTopDataFlowSinks(10, 3);
 
     return {
       topCalledMethods: topCalled.map((r) => ({
-        id: r.to_id as string,
-        callCount: Number(r.call_count),
+        id: r.toId,
+        callCount: r.callCount,
       })),
-      entryPoints: entryPoints.map((r) => r.from_id as string),
-      dataProducers: dataProducers.map((r) => r.from_id as string),
-      dataConsumers: dataConsumers.map((r) => r.to_id as string),
+      entryPoints,
+      dataProducers,
+      dataConsumers,
     };
   }
 }

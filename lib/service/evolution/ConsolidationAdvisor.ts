@@ -15,16 +15,12 @@
  *   3. 独立价值   — 内容长度、具体性、是否有独立 coreCode
  */
 
+import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import { ContradictionDetector } from './ContradictionDetector.js';
 
 /* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-  };
-}
 
 /** 提交候选的必要字段 */
 export interface CandidateForConsolidation {
@@ -107,11 +103,11 @@ const WEIGHTS = { title: 0.2, clause: 0.3, code: 0.3, guard: 0.2 };
 /* ────────────────────── Class ────────────────────── */
 
 export class ConsolidationAdvisor {
-  readonly #db: DatabaseLike;
+  readonly #knowledgeRepo: KnowledgeRepositoryImpl;
   readonly #logger = Logger.getInstance();
 
-  constructor(db: DatabaseLike) {
-    this.#db = db;
+  constructor(knowledgeRepo: KnowledgeRepositoryImpl) {
+    this.#knowledgeRepo = knowledgeRepo;
   }
 
   /**
@@ -120,12 +116,12 @@ export class ConsolidationAdvisor {
    * @param candidate - 待提交的候选数据
    * @returns ConsolidationAdvice — 建议 + 理由 + 上下文
    */
-  analyze(candidate: CandidateForConsolidation): ConsolidationAdvice {
+  async analyze(candidate: CandidateForConsolidation): Promise<ConsolidationAdvice> {
     // ── Step 1: 独立价值评估 ──
     const substanceScore = this.#assessSubstance(candidate);
 
     // ── Step 2: 加载同域 / 相关 Recipe ──
-    const related = this.#loadRelatedRecipes(candidate);
+    const related = await this.#loadRelatedRecipes(candidate);
 
     // ── Step 3: insufficient — 独立价值不足，交给 Agent 与开发者决定 ──
     if (substanceScore < MIN_SUBSTANCE_SCORE) {
@@ -285,12 +281,12 @@ export class ConsolidationAdvisor {
    * @param candidates - 待提交的候选数组
    * @returns BatchConsolidationResult — 每条分析 + 批次内重叠
    */
-  analyzeBatch(candidates: CandidateForConsolidation[]): BatchConsolidationResult {
+  async analyzeBatch(candidates: CandidateForConsolidation[]): Promise<BatchConsolidationResult> {
     // 对每个候选独立分析（vs DB）
-    const items = candidates.map((c, index) => ({
-      index,
-      advice: this.analyze(c),
-    }));
+    const items: { index: number; advice: ConsolidationAdvice }[] = [];
+    for (let index = 0; index < candidates.length; index++) {
+      items.push({ index, advice: await this.analyze(candidates[index]) });
+    }
 
     // 检测批次内候选之间的相互重叠
     const internalOverlaps: BatchConsolidationResult['internalOverlaps'] = [];
@@ -400,9 +396,8 @@ export class ConsolidationAdvisor {
 
   /* ════════════════════ 相关 Recipe 加载 ════════════════════ */
 
-  #loadRelatedRecipes(candidate: CandidateForConsolidation): RecipeSummary[] {
+  async #loadRelatedRecipes(candidate: CandidateForConsolidation): Promise<RecipeSummary[]> {
     try {
-      // 先按 category 精确匹配 + trigger 前缀匹配
       const category = candidate.category || '';
       const trigger = candidate.trigger || '';
       const triggerPrefix = trigger.startsWith('@')
@@ -412,78 +407,56 @@ export class ConsolidationAdvisor {
           )
         : '';
 
-      let rows: Record<string, unknown>[];
+      const toSummary = (e: {
+        id: string;
+        title: string;
+        doClause: string;
+        dontClause: string;
+        coreCode: string;
+        category: string;
+        trigger: string;
+        whenClause: string;
+        content?: { pattern?: string };
+      }): RecipeSummary => ({
+        id: e.id,
+        title: e.title,
+        doClause: e.doClause || null,
+        dontClause: e.dontClause || null,
+        coreCode: e.coreCode || null,
+        category: e.category || null,
+        trigger: e.trigger || null,
+        whenClause: e.whenClause || null,
+        guardPattern: e.content?.pattern || null,
+      });
 
       if (category) {
-        // 同 category 的 Recipe 是最有可能重叠的
-        rows = this.#db
-          .prepare(
-            `SELECT id, title,
-                    doClause,
-                    dontClause,
-                    json_extract(content, '$.coreCode') AS coreCode,
-                    category, trigger, whenClause,
-                    json_extract(content, '$.pattern') AS guardPattern
-             FROM knowledge_entries
-             WHERE lifecycle IN ('active', 'staging', 'evolving', 'pending')
-               AND category = ?
-             ORDER BY lifecycle DESC
-             LIMIT ?`
-          )
-          .all(category, MAX_CANDIDATES_PER_ANALYSIS);
+        const entries = await this.#knowledgeRepo.findAllByLifecyclesAndCategory(
+          COUNTABLE_LIFECYCLES,
+          category,
+          MAX_CANDIDATES_PER_ANALYSIS
+        );
+        const results = entries.map(toSummary);
 
-        // 如果同 category 不够，再加载 trigger 相关的
-        if (rows.length < 5 && triggerPrefix.length >= 3) {
-          const extra = this.#db
-            .prepare(
-              `SELECT id, title,
-                      doClause,
-                      dontClause,
-                      json_extract(content, '$.coreCode') AS coreCode,
-                      category, trigger, whenClause,
-                      json_extract(content, '$.pattern') AS guardPattern
-               FROM knowledge_entries
-               WHERE lifecycle IN ('active', 'staging', 'evolving', 'pending')
-                 AND category != ?
-                 AND trigger LIKE ?
-               LIMIT ?`
-            )
-            .all(category, `${triggerPrefix}%`, MAX_CANDIDATES_PER_ANALYSIS - rows.length);
-          const existingIds = new Set(rows.map((r) => r.id));
+        if (results.length < 5 && triggerPrefix.length >= 3) {
+          const extra = await this.#knowledgeRepo.findByLifecyclesAndTriggerPrefix(
+            COUNTABLE_LIFECYCLES,
+            category,
+            triggerPrefix,
+            MAX_CANDIDATES_PER_ANALYSIS - results.length
+          );
+          const existingIds = new Set(results.map((r) => r.id));
           for (const e of extra) {
-            if (!existingIds.has(e.id)) {
-              rows.push(e);
+            const s = toSummary(e);
+            if (!existingIds.has(s.id)) {
+              results.push(s);
             }
           }
         }
-      } else {
-        // 无 category 时按 title 关键词粗筛
-        rows = this.#db
-          .prepare(
-            `SELECT id, title,
-                    doClause,
-                    dontClause,
-                    json_extract(content, '$.coreCode') AS coreCode,
-                    category, trigger, whenClause,
-                    json_extract(content, '$.pattern') AS guardPattern
-             FROM knowledge_entries
-             WHERE lifecycle IN ('active', 'staging', 'evolving', 'pending')
-             LIMIT ?`
-          )
-          .all(MAX_CANDIDATES_PER_ANALYSIS);
+        return results;
       }
 
-      return rows.map((r) => ({
-        id: r.id as string,
-        title: r.title as string,
-        doClause: (r.doClause as string) ?? null,
-        dontClause: (r.dontClause as string) ?? null,
-        coreCode: (r.coreCode as string) ?? null,
-        category: (r.category as string) ?? null,
-        trigger: (r.trigger as string) ?? null,
-        whenClause: (r.whenClause as string) ?? null,
-        guardPattern: (r.guardPattern as string) ?? null,
-      }));
+      const entries = await this.#knowledgeRepo.findAllByLifecycles(COUNTABLE_LIFECYCLES);
+      return entries.slice(0, MAX_CANDIDATES_PER_ANALYSIS).map(toSummary);
     } catch (err: unknown) {
       this.#logger.warn(
         `ConsolidationAdvisor: failed to load recipes: ${err instanceof Error ? err.message : String(err)}`

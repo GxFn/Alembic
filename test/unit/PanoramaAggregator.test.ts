@@ -7,86 +7,43 @@ import { LayerInferrer } from '../../lib/service/panorama/LayerInferrer.js';
 import { PanoramaAggregator } from '../../lib/service/panorama/PanoramaAggregator.js';
 import type { ModuleCandidate } from '../../lib/service/panorama/RoleRefiner.js';
 import { RoleRefiner } from '../../lib/service/panorama/RoleRefiner.js';
-
-/* ═══ Mock DB ═════════════════════════════════════════════ */
-
-function createMockDb(
-  opts: {
-    moduleEdges?: Array<Record<string, unknown>>;
-    projectRecipeCount?: number;
-    /** DimensionAnalyzer 查询返回的 recipe 元数据 */
-    recipeRows?: Array<Record<string, unknown>>;
-    topCalled?: Array<Record<string, unknown>>;
-  } = {}
-) {
-  return {
-    transaction: (fn: () => void) => fn,
-    exec: () => {},
-    prepare: (sql: string) => ({
-      run: () => ({ changes: 0 }),
-      get: (..._params: unknown[]) => {
-        if (
-          sql.includes('COUNT(*)') &&
-          sql.includes('knowledge_entries') &&
-          sql.includes('lifecycle')
-        ) {
-          return { cnt: opts.projectRecipeCount ?? 0 };
-        }
-        if (sql.includes('COUNT(*)') && sql.includes('from_id = ce.entity_id')) {
-          return { cnt: 0 };
-        }
-        if (sql.includes('COUNT(*)') && sql.includes('to_id = ce.entity_id')) {
-          return { cnt: 0 };
-        }
-        if (sql.includes('file_path') && sql.includes('code_entities') && !sql.includes('COUNT')) {
-          return undefined;
-        }
-        return undefined;
-      },
-      all: (...params: unknown[]) => {
-        // DimensionAnalyzer: SELECT title, category, topicHint, kind FROM knowledge_entries
-        if (
-          sql.includes('title') &&
-          sql.includes('topicHint') &&
-          sql.includes('knowledge_entries')
-        ) {
-          return opts.recipeRows ?? [];
-        }
-        if (sql.includes('knowledge_edges') && sql.includes('relation = ?')) {
-          const relation = params[0] as string;
-          return (opts.moduleEdges ?? []).filter((e) => e.relation === relation);
-        }
-        if (sql.includes("relation = 'calls'") && sql.includes('GROUP BY to_id')) {
-          return opts.topCalled ?? [];
-        }
-        if (sql.includes('NOT IN')) {
-          return [];
-        }
-        if (sql.includes("relation = 'data_flow'") && sql.includes('GROUP BY')) {
-          return [];
-        }
-        return [];
-      },
-    }),
-  };
-}
+import { createMockRepos, type MockEdge, type MockRepoOptions } from '../helpers/panorama-mocks.js';
 
 /* ═══ Tests ═══════════════════════════════════════════════ */
 
 describe('PanoramaAggregator', () => {
-  function makeAggregator(db: ReturnType<typeof createMockDb>) {
+  function makeAggregator(
+    opts: {
+      moduleEdges?: MockEdge[];
+      recipeCount?: number;
+      recipeRows?: MockRepoOptions['recipeRows'];
+    } = {}
+  ) {
     const projectRoot = '/test';
+    const repos = createMockRepos({
+      edges: opts.moduleEdges,
+      recipeCount: opts.recipeCount,
+      recipeRows: opts.recipeRows,
+    });
     return new PanoramaAggregator({
-      roleRefiner: new RoleRefiner(db as never, projectRoot),
-      couplingAnalyzer: new CouplingAnalyzer(db as never, projectRoot),
+      roleRefiner: new RoleRefiner(
+        repos.bootstrapRepo,
+        repos.entityRepo,
+        repos.edgeRepo,
+        projectRoot
+      ),
+      couplingAnalyzer: new CouplingAnalyzer(repos.edgeRepo, repos.entityRepo, projectRoot),
       layerInferrer: new LayerInferrer(),
-      db: db as never,
+      bootstrapRepo: repos.bootstrapRepo,
+      entityRepo: repos.entityRepo,
+      edgeRepo: repos.edgeRepo,
+      knowledgeRepo: repos.knowledgeRepo,
       projectRoot,
     });
   }
 
-  it('should compute panorama for simple module set', () => {
-    const db = createMockDb({
+  it('should compute panorama for simple module set', async () => {
+    const aggregator = makeAggregator({
       moduleEdges: [
         {
           from_id: 'App',
@@ -97,14 +54,13 @@ describe('PanoramaAggregator', () => {
         },
       ],
     });
-    const aggregator = makeAggregator(db);
 
     const candidates: ModuleCandidate[] = [
       { name: 'App', inferredRole: 'app', files: ['/test/app.swift'] },
       { name: 'Core', inferredRole: 'core', files: ['/test/core.swift'] },
     ];
 
-    const result = aggregator.compute(candidates);
+    const result = await aggregator.compute(candidates);
 
     expect(result.modules.size).toBe(2);
     expect(result.modules.has('App')).toBe(true);
@@ -115,15 +71,14 @@ describe('PanoramaAggregator', () => {
     expect(result.computedAt).toBeGreaterThan(0);
   });
 
-  it('should detect dimension-based gaps when no recipes exist', () => {
-    const db = createMockDb({ projectRecipeCount: 0, recipeRows: [] });
-    const aggregator = makeAggregator(db);
+  it('should detect dimension-based gaps when no recipes exist', async () => {
+    const aggregator = makeAggregator({ recipeCount: 0, recipeRows: [] });
 
     const candidates: ModuleCandidate[] = [
       { name: 'BigModule', inferredRole: 'service', files: ['/a', '/b', '/c', '/d', '/e'] },
     ];
 
-    const result = aggregator.compute(candidates);
+    const result = await aggregator.compute(candidates);
 
     // 所有 25 个维度都应为 gap (missing)
     expect(result.gaps.length).toBe(25);
@@ -138,9 +93,9 @@ describe('PanoramaAggregator', () => {
     expect(result.healthRadar.overallScore).toBe(0);
   });
 
-  it('should score dimensions based on recipe topicHint', () => {
-    const db = createMockDb({
-      projectRecipeCount: 8,
+  it('should score dimensions based on recipe topicHint', async () => {
+    const aggregator = makeAggregator({
+      recipeCount: 8,
       recipeRows: [
         {
           title: 'SPM 模块化',
@@ -162,13 +117,12 @@ describe('PanoramaAggregator', () => {
         },
       ],
     });
-    const aggregator = makeAggregator(db);
 
     const candidates: ModuleCandidate[] = [
       { name: 'TestMod', inferredRole: 'service', files: ['/a', '/b', '/c'] },
     ];
 
-    const result = aggregator.compute(candidates);
+    const result = await aggregator.compute(candidates);
     const radar = result.healthRadar;
 
     // architecture: 5 recipes → strong (score=100)
@@ -200,23 +154,19 @@ describe('PanoramaAggregator', () => {
     expect(radar.totalDimensions).toBe(25);
   });
 
-  it('should compute call flow summary', () => {
-    const db = createMockDb({
-      topCalled: [{ to_id: 'doSomething', call_count: 42 }],
-    });
-    const aggregator = makeAggregator(db);
+  it('should compute call flow summary', async () => {
+    const aggregator = makeAggregator();
 
-    const result = aggregator.compute([{ name: 'Mod', inferredRole: 'feature', files: [] }]);
+    const result = await aggregator.compute([{ name: 'Mod', inferredRole: 'feature', files: [] }]);
 
     expect(result.callFlowSummary).toBeDefined();
     expect(result.callFlowSummary.topCalledMethods.length).toBeGreaterThanOrEqual(0);
   });
 
-  it('should handle empty module set', () => {
-    const db = createMockDb();
-    const aggregator = makeAggregator(db);
+  it('should handle empty module set', async () => {
+    const aggregator = makeAggregator();
 
-    const result = aggregator.compute([]);
+    const result = await aggregator.compute([]);
 
     expect(result.modules.size).toBe(0);
     expect(result.cycles).toHaveLength(0);
@@ -224,18 +174,14 @@ describe('PanoramaAggregator', () => {
     expect(result.healthRadar.dimensions.length).toBe(25);
   });
 
-  it('should populate PanoramaModule fields correctly', () => {
-    const db = createMockDb({
-      projectRecipeCount: 3,
-      moduleEdges: [],
-    });
-    const aggregator = makeAggregator(db);
+  it('should populate PanoramaModule fields correctly', async () => {
+    const aggregator = makeAggregator({ recipeCount: 3 });
 
     const candidates: ModuleCandidate[] = [
       { name: 'TestMod', inferredRole: 'service', files: ['/a', '/b', '/c'] },
     ];
 
-    const result = aggregator.compute(candidates);
+    const result = await aggregator.compute(candidates);
     const mod = result.modules.get('TestMod')!;
 
     expect(mod.name).toBe('TestMod');

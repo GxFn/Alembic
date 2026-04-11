@@ -22,9 +22,9 @@ import express, { type Request, type Response } from 'express';
 import { LarkTransport } from '../../external/lark/LarkTransport.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
-import {
+import type {
   RemoteCommandRepository,
-  type StatusCounts,
+  StatusCounts,
 } from '../../repository/remote/RemoteCommandRepository.js';
 import { resolveProjectRoot } from '../../shared/resolveProjectRoot.js';
 import {
@@ -73,23 +73,10 @@ const CLEANUP_INTERVAL_MS = 30_000; // 每 30 秒清理一次
 
 // ─── 数据库辅助 ─────────────────────────────────────
 
-function getDb() {
-  const container = getServiceContainer();
-  const database = container.get('database');
-  return typeof database?.getDb === 'function' ? database.getDb() : database;
-}
-
-let _repo: RemoteCommandRepository | null = null;
-
-/** 获取或创建 RemoteCommandRepository 单例 */
+/** 从 DI 容器获取 RemoteCommandRepository */
 function getRepo(): RemoteCommandRepository {
-  if (!_repo) {
-    const db = getDb();
-    _repo = new RemoteCommandRepository(
-      db as unknown as ConstructorParameters<typeof RemoteCommandRepository>[0]
-    );
-  }
-  return _repo;
+  const container = getServiceContainer();
+  return container.get('remoteCommandRepository') as RemoteCommandRepository;
 }
 
 function genId() {

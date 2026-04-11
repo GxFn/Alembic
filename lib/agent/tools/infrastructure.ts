@@ -193,9 +193,10 @@ export const suggestSkills = {
   },
   handler: async (_params: Record<string, never>, ctx: ToolHandlerContext) => {
     const { SkillAdvisor } = await import('#service/skills/SkillAdvisor.js');
-    const database = ctx?.container?.get?.('database') || null;
     const projectRoot = ctx?.projectRoot || process.cwd();
-    const advisor = new SkillAdvisor(projectRoot, { database });
+    const knowledgeRepo = ctx?.container?.get?.('knowledgeRepository') || null;
+    const auditRepo = ctx?.container?.get?.('auditRepository') || null;
+    const advisor = new SkillAdvisor(projectRoot, { knowledgeRepo, auditRepo });
     return advisor.suggest();
   },
 };

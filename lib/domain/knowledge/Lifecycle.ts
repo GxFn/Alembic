@@ -33,6 +33,45 @@ export const CONSUMABLE_STATES = [Lifecycle.STAGING, Lifecycle.ACTIVE, Lifecycle
 /** 降级消费状态（Guard violation 降为 warning，Search 降权） */
 export const DEGRADED_STATES = [Lifecycle.DECAYING];
 
+// ═══ 新增统一命名常量 ═══
+
+/** 可消费状态（别名，与 CONSUMABLE_STATES 相同） */
+export const CONSUMABLE_LIFECYCLES = CONSUMABLE_STATES;
+
+/** 可计数状态: 全景/统计看板应纳入的 Recipe（含 PENDING） */
+export const COUNTABLE_LIFECYCLES = [
+  Lifecycle.ACTIVE,
+  Lifecycle.STAGING,
+  Lifecycle.PENDING,
+  Lifecycle.EVOLVING,
+] as const;
+
+/** 候选状态（别名，与 CANDIDATE_STATES 相同） */
+export const CANDIDATE_LIFECYCLES = CANDIDATE_STATES;
+
+/** Guard 可消费状态（含降级 decaying）: Guard/Search 可匹配的全范围 */
+export const GUARD_LIFECYCLES = [
+  Lifecycle.STAGING,
+  Lifecycle.ACTIVE,
+  Lifecycle.EVOLVING,
+  Lifecycle.DECAYING,
+] as const;
+
+/** 已发布状态: 通过置信度路由已确认的 Recipe */
+export const PUBLISHED_LIFECYCLES = [Lifecycle.ACTIVE, Lifecycle.STAGING] as const;
+
+/** 非弃用状态: 除 deprecated 外所有 */
+export const NON_DEPRECATED_LIFECYCLES = [
+  Lifecycle.PENDING,
+  Lifecycle.STAGING,
+  Lifecycle.ACTIVE,
+  Lifecycle.EVOLVING,
+  Lifecycle.DECAYING,
+] as const;
+
+/** 类型导出 */
+export type LifecycleFilter = (typeof Lifecycle)[keyof typeof Lifecycle];
+
 /** 合法状态转移表 */
 const VALID_TRANSITIONS: Record<string, string[]> = {
   [Lifecycle.PENDING]: [Lifecycle.STAGING, Lifecycle.ACTIVE, Lifecycle.DEPRECATED],
@@ -80,6 +119,24 @@ export function isConsumable(lifecycle: string): boolean {
 export function isDegraded(lifecycle: string): boolean {
   const normalized = normalizeLifecycle(lifecycle);
   return DEGRADED_STATES.includes(normalized);
+}
+
+/* ── SQL 辅助函数 ── */
+
+/**
+ * 生成 `column IN (?, ?, ...)` SQL 片段和对应的参数数组。
+ * 用于在 raw SQL 中安全引用 lifecycle 常量数组。
+ *
+ * @example
+ * const { sql, params } = lifecycleInSql(COUNTABLE_LIFECYCLES);
+ * db.prepare(`SELECT * FROM knowledge_entries WHERE ${sql}`).all(...params);
+ */
+export function lifecycleInSql(
+  lifecycles: readonly string[],
+  column = 'lifecycle'
+): { sql: string; params: string[] } {
+  const placeholders = lifecycles.map(() => '?').join(', ');
+  return { sql: `${column} IN (${placeholders})`, params: [...lifecycles] };
 }
 
 /* ── knowledgeType → kind 映射 ── */

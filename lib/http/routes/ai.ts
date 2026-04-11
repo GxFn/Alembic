@@ -175,41 +175,39 @@ router.post(
 router.post('/mock/cleanup', async (_req: Request, res: Response): Promise<void> => {
   const container = getContainer();
   const knowledgeService = container.get('knowledgeService');
-  const dbConn = container.get('database') as {
-    getDb(): {
-      prepare(sql: string): { all(...p: unknown[]): unknown[]; run(...p: unknown[]): void };
-    };
+  const knowledgeRepo = container.get('knowledgeRepository') as {
+    findIdsBySource(source: string): Promise<string[]>;
   };
-  const rawDb = dbConn.getDb();
 
   // 查找所有 mock 来源的候选
   const mockSources = ['mock-bootstrap', 'mock-pipeline'];
   let totalDeleted = 0;
 
   for (const source of mockSources) {
-    const rows = rawDb
-      .prepare('SELECT id FROM knowledge_entries WHERE source = ?')
-      .all(source) as Array<{ id: string }>;
+    const ids = await knowledgeRepo.findIdsBySource(source);
 
-    for (const row of rows) {
+    for (const id of ids) {
       try {
-        await knowledgeService.delete(row.id, { userId: 'system:mock-cleanup' });
+        await knowledgeService.delete(id, { userId: 'system:mock-cleanup' });
         totalDeleted++;
       } catch {
-        logger.debug(`Mock cleanup: failed to delete ${row.id}`);
+        logger.debug(`Mock cleanup: failed to delete ${id}`);
       }
     }
   }
 
-  // 清理 mock 相关的 semantic_memories
+  // 清理 bootstrap 来源的 semantic_memories
   try {
-    rawDb
-      .prepare(
-        "DELETE FROM semantic_memories WHERE source = 'bootstrap' AND metadata LIKE '%mock%'"
-      )
-      .run();
+    const memoryRepo = container.get('memoryRepository') as
+      | {
+          clearBootstrapMemories(): Promise<number>;
+        }
+      | undefined;
+    if (memoryRepo) {
+      await memoryRepo.clearBootstrapMemories();
+    }
   } catch {
-    // 表可能不存在
+    // memoryRepository 可能未注册
   }
 
   logger.info(`Mock cleanup completed: ${totalDeleted} entries deleted`);

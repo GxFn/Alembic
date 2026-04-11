@@ -307,6 +307,12 @@ const SCAN_SKIP_DIRS = Object.freeze(
 );
 
 // ═══════════════════════════════════════════════════════════
+// Lazy caches
+// ═══════════════════════════════════════════════════════════
+
+let _sourceExtRegex: RegExp | null = null;
+
+// ═══════════════════════════════════════════════════════════
 // LanguageService — 静态单例
 // ═══════════════════════════════════════════════════════════
 
@@ -497,6 +503,21 @@ export class LanguageService {
   /** 获取所有源代码扩展名（不可变） */
   static get sourceExts() {
     return SOURCE_CODE_EXTS;
+  }
+
+  /**
+   * 匹配源代码文件扩展名的正则（缓存 / 从 sourceExts 自动派生）
+   *
+   * 示例: `/\.(m|mm|swift|h|ts|tsx|py|...)$/i`
+   */
+  static get sourceExtRegex(): RegExp {
+    if (!_sourceExtRegex) {
+      const bareExts = [...SOURCE_CODE_EXTS].map((e) =>
+        e.slice(1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      );
+      _sourceExtRegex = new RegExp(`\\.(${bareExts.join('|')})$`, 'i');
+    }
+    return _sourceExtRegex;
   }
 
   /** 获取所有已知编程语言 ID（不可变） */

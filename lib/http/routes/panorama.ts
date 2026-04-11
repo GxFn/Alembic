@@ -39,7 +39,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       await panoramaService.ensureData();
     }
 
-    const overview = panoramaService.getOverview();
+    const overview = await panoramaService.getOverview();
 
     res.json({ success: true, data: overview });
   } catch (err: unknown) {
@@ -75,7 +75,7 @@ router.get('/health', async (req: Request, res: Response): Promise<void> => {
       await panoramaService.ensureData();
     }
 
-    const health = panoramaService.getHealth();
+    const health = await panoramaService.getHealth();
 
     res.json({ success: true, data: health });
   } catch (err: unknown) {
@@ -111,7 +111,7 @@ router.get('/gaps', async (req: Request, res: Response): Promise<void> => {
       await panoramaService.ensureData();
     }
 
-    const gaps = panoramaService.getGaps();
+    const gaps = await panoramaService.getGaps();
 
     res.json({ success: true, data: gaps });
   } catch (err: unknown) {
@@ -147,8 +147,8 @@ router.get('/coverage', async (req: Request, res: Response): Promise<void> => {
       await panoramaService.ensureData();
     }
 
-    const overview = panoramaService.getOverview();
-    const gaps = panoramaService.getGaps?.() ?? [];
+    const overview = await panoramaService.getOverview();
+    const gaps = (await panoramaService.getGaps?.()) ?? [];
 
     // 构建模块级覆盖率数据：从 overview.layers 中提取每个模块的文件数和 recipe 数
     const modules: {
@@ -224,7 +224,7 @@ router.get('/module/:name', async (req: Request, res: Response): Promise<void> =
       await panoramaService.ensureData();
     }
 
-    const detail = panoramaService.getModule(req.params.name as string);
+    const detail = await panoramaService.getModule(req.params.name as string);
 
     if (!detail) {
       res.status(404).json({
@@ -264,7 +264,7 @@ router.post('/governance/cycle', async (_req: Request, res: Response): Promise<v
       return;
     }
 
-    const report = metabolism.runFullCycle();
+    const report = await metabolism.runFullCycle();
     res.json({ success: true, data: report });
   } catch (err: unknown) {
     res.status(500).json({
@@ -291,7 +291,7 @@ router.get('/governance/decay', async (_req: Request, res: Response): Promise<vo
       return;
     }
 
-    const results = decayDetector.scanAll();
+    const results = await decayDetector.scanAll();
     res.json({ success: true, data: { results } });
   } catch (err: unknown) {
     res.status(500).json({
@@ -320,8 +320,8 @@ router.post('/governance/staging-check', async (_req: Request, res: Response): P
       return;
     }
 
-    const checkResult = stagingManager.checkAndPromote();
-    const currentStaging = stagingManager.listStaging();
+    const checkResult = await stagingManager.checkAndPromote();
+    const currentStaging = await stagingManager.listStaging();
     res.json({ success: true, data: { checkResult, currentStaging } });
   } catch (err: unknown) {
     res.status(500).json({
@@ -350,7 +350,7 @@ router.get('/governance/staging', async (_req: Request, res: Response): Promise<
       return;
     }
 
-    const entries = stagingManager.listStaging();
+    const entries = await stagingManager.listStaging();
     res.json({ success: true, data: { entries } });
   } catch (err: unknown) {
     res.status(500).json({
@@ -379,7 +379,7 @@ router.get('/governance/enhancements', async (_req: Request, res: Response): Pro
       return;
     }
 
-    const suggestions = suggester.analyzeAll();
+    const suggestions = await suggester.analyzeAll();
     res.json({ success: true, data: { suggestions } });
   } catch (err: unknown) {
     res.status(500).json({

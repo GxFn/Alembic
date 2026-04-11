@@ -2,26 +2,21 @@
  * ViolationsStore — Guard 违反记录存储（DB 版）
  * 记录每次 as:audit 运行的审计结果，持久化到 SQLite guard_violations 表。
  * 最多保留 200 条。
+ *
+ * 所有操作使用 Drizzle 类型安全 API（零 raw SQL）。
  */
 
-import { asc, desc, eq, sql } from 'drizzle-orm';
+import { asc, count, desc, eq, sql } from 'drizzle-orm';
 import { type DrizzleDB, getDrizzle } from '../../infrastructure/database/drizzle/index.js';
 import { guardViolations } from '../../infrastructure/database/drizzle/schema.js';
 
 const MAX_RUNS = 200;
 
-interface DatabaseLike {
-  prepare(sql: string): {
-    run(...params: unknown[]): unknown;
-    get(...params: unknown[]): Record<string, unknown>;
-    all(...params: unknown[]): Record<string, unknown>[];
-  };
-}
-
 interface ViolationRecord {
   ruleId?: string;
   severity?: string;
   message?: string;
+  line?: number;
   [key: string]: unknown;
 }
 
@@ -41,12 +36,10 @@ interface RunOutput {
 }
 
 export class ViolationsStore {
-  #db: DatabaseLike;
   #drizzle: DrizzleDB;
 
-  /** @param db SQLite 数据库实例 */
-  constructor(db: DatabaseLike, drizzle?: DrizzleDB) {
-    this.#db = db;
+  /** @param _db 保留签名兼容 (不再使用) */
+  constructor(_db: unknown, drizzle?: DrizzleDB) {
     this.#drizzle = drizzle ?? getDrizzle();
   }
 
@@ -55,7 +48,7 @@ export class ViolationsStore {
   /**
    * 追加一次 Guard 运行记录
    * ★ 去重：同一文件、同一违规集合不重复入库，仅更新时间戳
-   * ★ Drizzle 类型安全 INSERT + raw SQL 截断
+   * ★ 全 Drizzle 类型安全
    */
   appendRun(run: RunInput) {
     const filePath = run.filePath || '';
@@ -65,20 +58,31 @@ export class ViolationsStore {
     // ── 去重：查最近一条同文件记录，比较违规指纹 ──
     const fingerprint = this.#violationFingerprint(violations);
     if (filePath) {
-      const lastRow = this.#db
-        .prepare(
-          `SELECT id, violations_json FROM guard_violations WHERE file_path = ? ORDER BY created_at DESC LIMIT 1`
-        )
-        .get(filePath) as { id: string; violations_json: string } | undefined;
+      const lastRow = this.#drizzle
+        .select({
+          id: guardViolations.id,
+          violationsJson: guardViolations.violationsJson,
+        })
+        .from(guardViolations)
+        .where(eq(guardViolations.filePath, filePath))
+        .orderBy(desc(guardViolations.createdAt))
+        .limit(1)
+        .get();
+
       if (lastRow) {
         const lastFingerprint = this.#violationFingerprint(
-          JSON.parse(lastRow.violations_json || '[]')
+          JSON.parse(lastRow.violationsJson || '[]')
         );
         if (fingerprint === lastFingerprint) {
           // 违规未变化：仅刷新时间戳，不新增行
-          this.#db
-            .prepare(`UPDATE guard_violations SET triggered_at = ?, created_at = ? WHERE id = ?`)
-            .run(new Date().toISOString(), Math.floor(Date.now() / 1000), lastRow.id);
+          this.#drizzle
+            .update(guardViolations)
+            .set({
+              triggeredAt: new Date().toISOString(),
+              createdAt: Math.floor(Date.now() / 1000),
+            })
+            .where(eq(guardViolations.id, lastRow.id))
+            .run();
           return lastRow.id;
         }
       }
@@ -100,14 +104,17 @@ export class ViolationsStore {
       })
       .run();
 
-    // 超限截断：保留最新 MAX_RUNS 条（子查询保留 raw SQL）
-    this.#db
-      .prepare(`
-      DELETE FROM guard_violations WHERE id NOT IN (
-        SELECT id FROM guard_violations ORDER BY created_at DESC LIMIT ?
+    // 超限截断：保留最新 MAX_RUNS 条
+    this.#drizzle
+      .delete(guardViolations)
+      .where(
+        sql`${guardViolations.id} NOT IN (
+          SELECT ${guardViolations.id} FROM ${guardViolations}
+          ORDER BY ${guardViolations.createdAt} DESC
+          LIMIT ${MAX_RUNS}
+        )`
       )
-    `)
-      .run(MAX_RUNS);
+      .run();
 
     return id;
   }
@@ -126,7 +133,6 @@ export class ViolationsStore {
 
   /**
    * 获取所有运行记录（最新在后）
-   * ★ Drizzle 类型安全 SELECT
    */
   getRuns() {
     const rows = this.#drizzle
@@ -139,7 +145,6 @@ export class ViolationsStore {
 
   /**
    * 按文件路径查询历史
-   * ★ Drizzle 类型安全 SELECT WHERE
    */
   getRunsByFile(filePath: string) {
     const rows = this.#drizzle
@@ -153,7 +158,6 @@ export class ViolationsStore {
 
   /**
    * 获取最近 N 条记录
-   * ★ Drizzle 类型安全 SELECT + ORDER + LIMIT
    */
   getRecentRuns(n = 20) {
     const rows = this.#drizzle
@@ -167,44 +171,48 @@ export class ViolationsStore {
 
   /** 获取统计汇总 */
   getStats() {
-    const row = this.#db
-      .prepare(`
-      SELECT
-        COUNT(*)                 AS totalRuns,
-        COALESCE(SUM(violation_count), 0) AS totalViolations,
-        MAX(triggered_at)        AS lastRunAt
-      FROM guard_violations
-    `)
-      .get() as { totalRuns: number; totalViolations: number; lastRunAt: string | null };
+    const [row] = this.#drizzle
+      .select({
+        totalRuns: count(),
+        totalViolations: sql<number>`COALESCE(SUM(${guardViolations.violationCount}), 0)`,
+        lastRunAt: sql<string | null>`MAX(${guardViolations.triggeredAt})`,
+      })
+      .from(guardViolations)
+      .all();
+
+    const totalRuns = row?.totalRuns ?? 0;
+    const totalViolations = row?.totalViolations ?? 0;
 
     return {
-      totalRuns: row.totalRuns,
-      totalViolations: row.totalViolations,
-      averageViolationsPerRun:
-        row.totalRuns > 0 ? (row.totalViolations / row.totalRuns).toFixed(2) : 0,
-      lastRunAt: row.lastRunAt || null,
+      totalRuns,
+      totalViolations,
+      averageViolationsPerRun: totalRuns > 0 ? (totalViolations / totalRuns).toFixed(2) : 0,
+      lastRunAt: row?.lastRunAt || null,
     };
   }
 
   /**
    * 按规则 ID 聚合统计
    * 利用 SQLite json_each 展开 violations_json 数组
-   * @returns >}
+   *
+   * json_each 是 SQLite 专有函数，Drizzle 无 typed API (ORM limitation)
    */
   getStatsByRule() {
     try {
-      return this.#db
-        .prepare(`
+      return this.#drizzle.all<{
+        ruleId: string | null;
+        severity: string | null;
+        count: number;
+      }>(sql`
         SELECT
           json_extract(j.value, '$.ruleId') AS ruleId,
           json_extract(j.value, '$.severity') AS severity,
           COUNT(*) AS count
-        FROM guard_violations gv, json_each(gv.violations_json) j
+        FROM ${guardViolations} gv, json_each(gv.violations_json) j
         WHERE json_extract(j.value, '$.ruleId') IS NOT NULL
         GROUP BY ruleId, severity
         ORDER BY count DESC
-      `)
-        .all();
+      `);
     } catch {
       return [];
     }
@@ -212,7 +220,6 @@ export class ViolationsStore {
 
   /**
    * 获取趋势数据 — 对比最近两次运行
-   * @returns }
    */
   getTrend() {
     const recent = this.getRecentRuns(2);
@@ -248,10 +255,7 @@ export class ViolationsStore {
 
   // ─── 清除 ─────────────────────────────────────────────
 
-  /**
-   * 清空所有记录
-   * ★ Drizzle 类型安全 DELETE
-   */
+  /** 清空所有记录 */
   clearRuns() {
     this.#drizzle.delete(guardViolations).run();
   }
@@ -269,27 +273,26 @@ export class ViolationsStore {
     }
   }
 
-  /** 兼容 v2 violations.js 路由的 list() */
+  /** 分页查询 */
   async list(filters: { file?: string } = {}, { page = 1, limit = 20 } = {}) {
     const offset = (page - 1) * limit;
-    let sql = 'SELECT * FROM guard_violations';
-    const params: (string | number)[] = [];
+    const condition = filters.file ? eq(guardViolations.filePath, filters.file) : undefined;
 
-    if (filters.file) {
-      sql += ' WHERE file_path = ?';
-      params.push(filters.file);
-    }
+    const rows = this.#drizzle
+      .select()
+      .from(guardViolations)
+      .where(condition)
+      .orderBy(desc(guardViolations.createdAt))
+      .limit(limit)
+      .offset(offset)
+      .all();
 
-    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
-
-    const rows = this.#db.prepare(sql).all(...params);
-
-    const countSql = filters.file
-      ? 'SELECT COUNT(*) AS c FROM guard_violations WHERE file_path = ?'
-      : 'SELECT COUNT(*) AS c FROM guard_violations';
-    const countParams = filters.file ? [filters.file] : [];
-    const total = (this.#db.prepare(countSql).get(...countParams) as { c: number }).c;
+    const [totalRow] = this.#drizzle
+      .select({ c: count() })
+      .from(guardViolations)
+      .where(condition)
+      .all();
+    const total = totalRow?.c ?? 0;
 
     return {
       data: rows.map((r) => this.#rowToRun(r)),
@@ -299,16 +302,15 @@ export class ViolationsStore {
 
   // ─── 内部 ─────────────────────────────────────────────
 
-  /** 行转运行记录（兼容 raw SQL snake_case 和 Drizzle camelCase） */
-  #rowToRun(row: Record<string, unknown>): RunOutput {
-    const violationsRaw = (row.violationsJson ?? row.violations_json) as string | undefined;
+  /** Drizzle camelCase 行 → RunOutput */
+  #rowToRun(row: typeof guardViolations.$inferSelect): RunOutput {
     return {
-      id: row.id as string,
-      filePath: (row.filePath ?? row.file_path) as string,
-      triggeredAt: (row.triggeredAt ?? row.triggered_at) as string,
-      violations: violationsRaw ? JSON.parse(violationsRaw) : [],
-      violationCount: (row.violationCount ?? row.violation_count) as number,
-      summary: (row.summary as string) || '',
+      id: row.id,
+      filePath: row.filePath,
+      triggeredAt: row.triggeredAt,
+      violations: row.violationsJson ? JSON.parse(row.violationsJson) : [],
+      violationCount: row.violationCount ?? 0,
+      summary: row.summary || '',
     };
   }
 }

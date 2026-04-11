@@ -20,16 +20,30 @@ import {
   DIMENSION_REGISTRY,
   resolveActiveDimensions,
 } from '#domain/dimension/index.js';
-import type { CeDbLike, HealthDimension, HealthRadar, KnowledgeGap } from './PanoramaTypes.js';
+import { LanguageService } from '#shared/LanguageService.js';
+import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
+import type { BootstrapRepositoryImpl } from '../../repository/bootstrap/BootstrapRepository.js';
+import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import type { HealthDimension, HealthRadar, KnowledgeGap } from './PanoramaTypes.js';
 
 /* ═══ DimensionAnalyzer Class ═════════════════════════════ */
 
 export class DimensionAnalyzer {
-  readonly #db: CeDbLike;
+  readonly #bootstrapRepo: BootstrapRepositoryImpl;
+  readonly #entityRepo: CodeEntityRepositoryImpl;
+  readonly #knowledgeRepo: KnowledgeRepositoryImpl;
   readonly #projectRoot: string;
 
-  constructor(db: CeDbLike, projectRoot: string) {
-    this.#db = db;
+  constructor(
+    bootstrapRepo: BootstrapRepositoryImpl,
+    entityRepo: CodeEntityRepositoryImpl,
+    knowledgeRepo: KnowledgeRepositoryImpl,
+    projectRoot: string
+  ) {
+    this.#bootstrapRepo = bootstrapRepo;
+    this.#entityRepo = entityRepo;
+    this.#knowledgeRepo = knowledgeRepo;
     this.#projectRoot = projectRoot;
   }
 
@@ -38,12 +52,12 @@ export class DimensionAnalyzer {
    *
    * @param moduleRoles — 项目中存在的模块角色 (用于 gap 优先级推断)
    */
-  analyze(moduleRoles: string[]): { radar: HealthRadar; gaps: KnowledgeGap[] } {
+  async analyze(moduleRoles: string[]): Promise<{ radar: HealthRadar; gaps: KnowledgeGap[] }> {
     // 0. 按项目语言过滤活跃维度（排除无关语言/框架维度）
-    const activeDims = this.#resolveActiveDims();
+    const activeDims = await this.#resolveActiveDims();
 
     // 1. 从 DB 获取所有活跃 recipe 的维度分类信息
-    const recipes = this.#fetchRecipeMetadata();
+    const recipes = await this.#fetchRecipeMetadata();
 
     // 2. 将每条 recipe 映射到维度
     const dimensionCounts = new Map<string, { count: number; titles: string[] }>();
@@ -101,43 +115,85 @@ export class DimensionAnalyzer {
 
   /* ─── 按项目语言解析活跃维度 ───────────────────── */
 
-  #resolveActiveDims(): readonly UnifiedDimension[] {
+  async #resolveActiveDims(): Promise<readonly UnifiedDimension[]> {
+    // 1. 优先从 bootstrap_snapshots 获取 primary_lang
     try {
-      const row = this.#db
-        .prepare(
-          `SELECT primary_lang FROM bootstrap_snapshots
-           WHERE project_root = ? ORDER BY created_at DESC LIMIT 1`
-        )
-        .get(this.#projectRoot) as Record<string, unknown> | undefined;
-
-      const primaryLang = row?.primary_lang as string | null;
+      const primaryLang = await this.#bootstrapRepo.getLatestPrimaryLang(this.#projectRoot);
       if (primaryLang) {
         return resolveActiveDimensions(primaryLang);
       }
     } catch {
-      // 无 bootstrap 数据 → 回退全量维度
+      // 无 bootstrap 数据 → 继续尝试从 code_entities 推断
     }
+
+    // 2. 从 code_entities 文件扩展名推断主语言
+    const inferredLang = await this.#inferLanguageFromEntities();
+    if (inferredLang) {
+      return resolveActiveDimensions(inferredLang);
+    }
+
     return DIMENSION_REGISTRY;
+  }
+
+  /**
+   * 从 code_entities 文件扩展名统计推断项目主语言
+   *
+   * 当无 bootstrap_snapshots 时使用（如仅执行了 scan 但未 bootstrap 的项目）
+   */
+  async #inferLanguageFromEntities(): Promise<string | null> {
+    try {
+      const filePaths = await this.#entityRepo.findDistinctFilePaths(this.#projectRoot, 2000);
+
+      if (filePaths.length === 0) {
+        return null;
+      }
+
+      const langCounts = new Map<string, number>();
+      for (const fp of filePaths) {
+        if (!fp) {
+          continue;
+        }
+        const dotIdx = fp.lastIndexOf('.');
+        if (dotIdx < 0) {
+          continue;
+        }
+        const ext = fp.slice(dotIdx).toLowerCase();
+        const lang = LanguageService.langFromExt(ext);
+        if (lang !== 'unknown') {
+          langCounts.set(lang, (langCounts.get(lang) ?? 0) + 1);
+        }
+      }
+
+      // .h 文件可能属于 Swift/ObjC 项目 — 如果同时存在 .swift 文件则优先 swift
+      if (langCounts.has('swift') && langCounts.has('objectivec')) {
+        const swiftCount = langCounts.get('swift')!;
+        const objcCount = langCounts.get('objectivec')!;
+        if (swiftCount >= objcCount * 0.2) {
+          return 'swift';
+        }
+      }
+
+      // 选最多的语言
+      let bestLang = '';
+      let bestCount = 0;
+      for (const [lang, _count] of langCounts) {
+        if (_count > bestCount) {
+          bestLang = lang;
+          bestCount = _count;
+        }
+      }
+
+      return bestLang || null;
+    } catch {
+      return null;
+    }
   }
 
   /* ─── 从 DB 获取 recipe 元数据 ─────────────────── */
 
-  #fetchRecipeMetadata(): RecipeMetadata[] {
+  async #fetchRecipeMetadata(): Promise<RecipeMetadata[]> {
     try {
-      const rows = this.#db
-        .prepare(
-          `SELECT title, category, topicHint, kind
-           FROM knowledge_entries
-           WHERE lifecycle IN ('active', 'pending')`
-        )
-        .all() as Array<Record<string, unknown>>;
-
-      return rows.map((r) => ({
-        title: String(r.title ?? ''),
-        category: String(r.category ?? ''),
-        topicHint: String(r.topicHint ?? ''),
-        kind: String(r.kind ?? ''),
-      }));
+      return await this.#knowledgeRepo.findRecipeMetadata(COUNTABLE_LIFECYCLES);
     } catch {
       return [];
     }

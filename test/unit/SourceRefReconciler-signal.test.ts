@@ -6,78 +6,66 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SourceRefReconciler } from '../../lib/service/knowledge/SourceRefReconciler.js';
 
-/* ────────────────────── Mock DB ────────────────────── */
+/* ────────────────────── Mock Repos ────────────────────── */
 
-function createMockDb(options: {
+function createMockRepos(options: {
   entries?: { id: string; reasoning: string }[];
-  existingRefs?: { recipe_id: string; source_path: string; status: string; verified_at: number }[];
-  staleGroupRows?: { recipe_id: string; stale_count: number; total_count: number }[];
+  existingRefs?: { recipeId: string; sourcePath: string; status: string; verifiedAt: number }[];
+  staleGroupRows?: { recipeId: string; staleCount: number; totalCount: number }[];
 }) {
   const { entries = [], existingRefs = [], staleGroupRows = [] } = options;
 
-  // Track calls for verification
-  const insertCalls: unknown[][] = [];
-  const updateCalls: unknown[][] = [];
-
-  return {
-    db: {
-      prepare(sql: string) {
-        return {
-          all(..._params: unknown[]) {
-            if (sql.includes('knowledge_entries') && sql.includes('reasoning')) {
-              return entries;
-            }
-            if (sql.includes('GROUP BY recipe_id')) {
-              return staleGroupRows;
-            }
-            return [];
-          },
-          get(...params: unknown[]) {
-            if (sql.includes('SELECT 1 FROM recipe_source_refs LIMIT 1')) {
-              return { '1': 1 }; // table exists
-            }
-            if (sql.includes('recipe_source_refs') && sql.includes('recipe_id = ?')) {
-              const recipeId = params[0] as string;
-              const sourcePath = params[1] as string;
-              return existingRefs.find(
-                (r) => r.recipe_id === recipeId && r.source_path === sourcePath
-              );
-            }
-            return undefined;
-          },
-          run(...args: unknown[]) {
-            if (sql.includes('INSERT')) {
-              insertCalls.push(args);
-            } else if (sql.includes('UPDATE')) {
-              updateCalls.push(args);
-            }
-            return { changes: 1 };
-          },
-        };
-      },
+  const sourceRefRepo = {
+    isAccessible: () => true,
+    findOne(recipeId: string, sourcePath: string) {
+      return (
+        existingRefs.find((r) => r.recipeId === recipeId && r.sourcePath === sourcePath) ?? null
+      );
     },
-    insertCalls,
-    updateCalls,
+    findByRecipeId(recipeId: string) {
+      return existingRefs.filter((r) => r.recipeId === recipeId);
+    },
+    upsert: vi.fn(),
+    updateStatus: vi.fn(),
+    getStaleCountsByRecipe() {
+      return staleGroupRows;
+    },
+    findStale() {
+      return existingRefs.filter((r) => r.status === 'stale');
+    },
+    findRenamed() {
+      return existingRefs.filter((r) => r.status === 'renamed');
+    },
+    replaceSourcePath: vi.fn(),
   };
+
+  const knowledgeRepo = {
+    findAllIdAndReasoning: async () => entries,
+    findById: async (id: string) => entries.find((e) => e.id === id) ?? null,
+  };
+
+  return { sourceRefRepo, knowledgeRepo };
 }
 
 /* ────────────────────── Tests ────────────────────── */
 
 describe('SourceRefReconciler SignalBus Integration', () => {
-  it('should emit quality signals when stale refs are found', () => {
+  it('should emit quality signals when stale refs are found', async () => {
     const signalBus = { send: vi.fn() };
 
-    const { db } = createMockDb({
+    const { sourceRefRepo, knowledgeRepo } = createMockRepos({
       entries: [{ id: 'r1', reasoning: JSON.stringify({ sources: ['/nonexistent/file.ts'] }) }],
-      staleGroupRows: [{ recipe_id: 'r1', stale_count: 1, total_count: 1 }],
+      staleGroupRows: [{ recipeId: 'r1', staleCount: 1, totalCount: 1 }],
     });
 
-    const reconciler = new SourceRefReconciler('/tmp/test-project', db as never, {
-      signalBus: signalBus as never,
-      ttlMs: 0, // force recheck
-    });
+    const reconciler = new SourceRefReconciler(
+      '/tmp/test-project',
+      sourceRefRepo as never,
+      knowledgeRepo as never,
+      { signalBus: signalBus as never, ttlMs: 0 }
+    );
 
-    const report = reconciler.reconcile({ force: true });
+    const report = await reconciler.reconcile({ force: true });
 
     // stale > 0 → should emit signals
     expect(report.stale).toBeGreaterThan(0);
@@ -96,57 +84,65 @@ describe('SourceRefReconciler SignalBus Integration', () => {
     );
   });
 
-  it('should NOT emit signals when all refs are active', () => {
+  it('should NOT emit signals when all refs are active', async () => {
     const signalBus = { send: vi.fn() };
 
-    const { db } = createMockDb({
+    const { sourceRefRepo, knowledgeRepo } = createMockRepos({
       entries: [],
       staleGroupRows: [],
     });
 
-    const reconciler = new SourceRefReconciler('/tmp/test-project', db as never, {
-      signalBus: signalBus as never,
-    });
+    const reconciler = new SourceRefReconciler(
+      '/tmp/test-project',
+      sourceRefRepo as never,
+      knowledgeRepo as never,
+      { signalBus: signalBus as never }
+    );
 
-    const report = reconciler.reconcile();
+    const report = await reconciler.reconcile();
 
     expect(report.stale).toBe(0);
     expect(signalBus.send).not.toHaveBeenCalled();
   });
 
-  it('should work without signalBus (backward compatible)', () => {
-    const { db } = createMockDb({
+  it('should work without signalBus (backward compatible)', async () => {
+    const { sourceRefRepo, knowledgeRepo } = createMockRepos({
       entries: [{ id: 'r1', reasoning: JSON.stringify({ sources: ['/nonexistent/file.ts'] }) }],
     });
 
-    const reconciler = new SourceRefReconciler('/tmp/test-project', db as never, {
-      ttlMs: 0,
-    });
+    const reconciler = new SourceRefReconciler(
+      '/tmp/test-project',
+      sourceRefRepo as never,
+      knowledgeRepo as never,
+      { ttlMs: 0 }
+    );
 
     // Should not throw
-    const report = reconciler.reconcile({ force: true });
+    const report = await reconciler.reconcile({ force: true });
     expect(report.recipesProcessed).toBe(1);
   });
 
-  it('should emit staleRatio as signal value', () => {
+  it('should emit staleRatio as signal value', async () => {
     const signalBus = { send: vi.fn() };
 
-    const { db } = createMockDb({
+    const { sourceRefRepo, knowledgeRepo } = createMockRepos({
       entries: [
         {
           id: 'r1',
           reasoning: JSON.stringify({ sources: ['/a.ts', '/b.ts'] }),
         },
       ],
-      staleGroupRows: [{ recipe_id: 'r1', stale_count: 1, total_count: 2 }],
+      staleGroupRows: [{ recipeId: 'r1', staleCount: 1, totalCount: 2 }],
     });
 
-    const reconciler = new SourceRefReconciler('/tmp/test-project', db as never, {
-      signalBus: signalBus as never,
-      ttlMs: 0,
-    });
+    const reconciler = new SourceRefReconciler(
+      '/tmp/test-project',
+      sourceRefRepo as never,
+      knowledgeRepo as never,
+      { signalBus: signalBus as never, ttlMs: 0 }
+    );
 
-    reconciler.reconcile({ force: true });
+    await reconciler.reconcile({ force: true });
 
     // staleRatio = 1/2 = 0.5
     expect(signalBus.send).toHaveBeenCalledWith(

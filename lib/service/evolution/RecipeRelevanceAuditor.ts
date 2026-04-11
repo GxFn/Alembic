@@ -19,17 +19,10 @@
  * @module service/evolution/RecipeRelevanceAuditor
  */
 
-import path from 'node:path';
+import type { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 
-// ── 类型定义 ────────────────────────────────────────────────
-
-/** 最小 DB 接口 */
-interface AuditorDb {
-  prepare(sql: string): {
-    run(...params: unknown[]): { changes: number };
-    get(...params: unknown[]): Record<string, unknown> | undefined;
-  };
-}
+// ── 类型定义 ──────────────────────────────────────────────────
 
 /** Logger 接口 */
 interface AuditorLogger {
@@ -151,12 +144,17 @@ const GRACE_PERIOD_SEVERE = 3 * 24 * 60 * 60 * 1000; // 3d
 // ── RecipeRelevanceAuditor ──────────────────────────────────
 
 export class RecipeRelevanceAuditor {
-  readonly #db: AuditorDb;
+  readonly #knowledgeRepo: KnowledgeRepositoryImpl;
+  readonly #proposalRepo: ProposalRepository | null;
   readonly #logger: AuditorLogger;
 
-  constructor(opts: { db: unknown; logger?: AuditorLogger }) {
-    const dbRaw = opts.db as { getDb?: () => AuditorDb };
-    this.#db = typeof dbRaw?.getDb === 'function' ? dbRaw.getDb() : (opts.db as AuditorDb);
+  constructor(opts: {
+    knowledgeRepo: KnowledgeRepositoryImpl;
+    proposalRepo?: ProposalRepository;
+    logger?: AuditorLogger;
+  }) {
+    this.#knowledgeRepo = opts.knowledgeRepo;
+    this.#proposalRepo = opts.proposalRepo ?? null;
     this.#logger = opts.logger || { info() {}, warn() {} };
   }
 
@@ -189,12 +187,12 @@ export class RecipeRelevanceAuditor {
     }
 
     for (const recipe of recipes) {
-      const fullRecipe = this.#loadFullRecipe(recipe.id);
+      const fullRecipe = await this.#loadFullRecipe(recipe.id);
       if (!fullRecipe) {
         continue;
       }
 
-      const result = this.#computeRelevanceScore(fullRecipe, {
+      const result = await this.#computeRelevanceScore(fullRecipe, {
         fileSet,
         entityNames,
         depModules,
@@ -207,7 +205,7 @@ export class RecipeRelevanceAuditor {
 
       // 执行衰退状态转换
       if (result.verdict === 'dead' || result.verdict === 'severe' || result.verdict === 'decay') {
-        const executed = this.#executeDecay(result);
+        const executed = await this.#executeDecay(result);
         if (result.verdict === 'dead') {
           summary.immediateDeprecated += executed ? 1 : 0;
         }
@@ -232,23 +230,28 @@ export class RecipeRelevanceAuditor {
   // ─── 内部方法 ─────────────────────────────────────────
 
   /** 从 DB 加载完整 Recipe 数据 */
-  #loadFullRecipe(id: string): FullRecipeRow | null {
+  async #loadFullRecipe(id: string): Promise<FullRecipeRow | null> {
     try {
-      const row = this.#db
-        .prepare(
-          `SELECT id, title, trigger, category,
-                  content, doClause, coreCode
-           FROM knowledge_entries WHERE id = ?`
-        )
-        .get(id) as FullRecipeRow | undefined;
-      return row || null;
+      const entry = await this.#knowledgeRepo.findById(id);
+      if (!entry) {
+        return null;
+      }
+      return {
+        id: entry.id,
+        title: entry.title,
+        trigger: entry.trigger ?? '',
+        category: entry.category ?? '',
+        content: JSON.stringify(entry.content?.toJSON?.() ?? entry.content ?? {}),
+        doClause: entry.doClause ?? null,
+        coreCode: entry.coreCode ?? null,
+      };
     } catch {
       return null;
     }
   }
 
   /** 计算单个 Recipe 的 relevanceScore */
-  #computeRelevanceScore(
+  async #computeRelevanceScore(
     recipe: FullRecipeRow,
     ctx: {
       fileSet: Set<string>;
@@ -256,7 +259,7 @@ export class RecipeRelevanceAuditor {
       depModules: Set<string>;
       fileList: string[];
     }
-  ): RelevanceAuditResult {
+  ): Promise<RelevanceAuditResult> {
     const category = recipe.category || '';
     const weights: EvidenceWeights = {
       ...DEFAULT_WEIGHTS,
@@ -300,7 +303,7 @@ export class RecipeRelevanceAuditor {
     }
 
     // 4. 源代码文件存活率（来自 reasoning.sources + content.codeChanges）
-    const codeFiles = this.#extractCodeFiles(recipe);
+    const codeFiles = await this.#extractCodeFiles(recipe);
     let codeFilesExist = 1.0;
     if (codeFiles.length > 0) {
       const existCount = codeFiles.filter((f) => ctx.fileSet.has(f.toLowerCase())).length;
@@ -501,7 +504,7 @@ export class RecipeRelevanceAuditor {
   }
 
   /** 从 Recipe 中提取 codeChanges 引用的文件路径 */
-  #extractCodeFiles(recipe: FullRecipeRow): string[] {
+  async #extractCodeFiles(recipe: FullRecipeRow): Promise<string[]> {
     const files: string[] = [];
     try {
       const content = JSON.parse(recipe.content || '{}') as Record<string, unknown>;
@@ -513,19 +516,15 @@ export class RecipeRelevanceAuditor {
           }
         }
       }
-
-      // reasoning.sources 在 content 外层，由下方独立查询处理
     } catch {
       /* invalid JSON */
     }
 
-    // 也从 recipe 的 sourceFile 来源引用
+    // reasoning.sources 在 entry 的 reasoning 属性中
     try {
-      const row = this.#db
-        .prepare(`SELECT reasoning FROM knowledge_entries WHERE id = ?`)
-        .get(recipe.id) as { reasoning?: string } | undefined;
-      if (row?.reasoning) {
-        const reasoning = JSON.parse(row.reasoning) as {
+      const entry = await this.#knowledgeRepo.findById(recipe.id);
+      if (entry?.reasoning) {
+        const reasoning = (typeof entry.reasoning === 'object' ? entry.reasoning : {}) as {
           sources?: Array<string | { file?: string; path?: string }>;
         };
         if (Array.isArray(reasoning.sources)) {
@@ -541,28 +540,22 @@ export class RecipeRelevanceAuditor {
         }
       }
     } catch {
-      /* invalid JSON */
+      /* entry not found */
     }
 
     return [...new Set(files)];
   }
 
   /** 执行衰退状态转换 */
-  #executeDecay(result: RelevanceAuditResult): boolean {
+  async #executeDecay(result: RelevanceAuditResult): Promise<boolean> {
     try {
       const now = Date.now();
 
       switch (result.verdict) {
         case 'dead': {
-          // 直接 deprecated，无需观察
-          this.#db
-            .prepare(
-              `UPDATE knowledge_entries SET lifecycle = 'deprecated', updatedAt = ? WHERE id = ?`
-            )
-            .run(now, result.recipeId);
+          await this.#knowledgeRepo.updateLifecycle(result.recipeId, 'deprecated');
 
-          // 记录已执行的 proposal（审计追溯）
-          this.#createProposal({
+          await this.#createProposal({
             targetRecipeId: result.recipeId,
             type: 'deprecate',
             source: 'rescan-relevance-audit',
@@ -579,14 +572,9 @@ export class RecipeRelevanceAuditor {
         }
 
         case 'severe': {
-          // 加速衰退：3 天观察窗口
-          this.#db
-            .prepare(
-              `UPDATE knowledge_entries SET lifecycle = 'decaying', updatedAt = ? WHERE id = ?`
-            )
-            .run(now, result.recipeId);
+          await this.#knowledgeRepo.updateLifecycle(result.recipeId, 'decaying');
 
-          this.#createProposal({
+          await this.#createProposal({
             targetRecipeId: result.recipeId,
             type: 'deprecate',
             source: 'rescan-relevance-audit',
@@ -603,14 +591,9 @@ export class RecipeRelevanceAuditor {
         }
 
         case 'decay': {
-          // 加速衰退：7 天观察窗口
-          this.#db
-            .prepare(
-              `UPDATE knowledge_entries SET lifecycle = 'decaying', updatedAt = ? WHERE id = ?`
-            )
-            .run(now, result.recipeId);
+          await this.#knowledgeRepo.updateLifecycle(result.recipeId, 'decaying');
 
-          this.#createProposal({
+          await this.#createProposal({
             targetRecipeId: result.recipeId,
             type: 'deprecate',
             source: 'rescan-relevance-audit',
@@ -639,7 +622,7 @@ export class RecipeRelevanceAuditor {
   }
 
   /** 创建 evolution proposal */
-  #createProposal(input: {
+  async #createProposal(input: {
     targetRecipeId: string;
     type: string;
     source: string;
@@ -647,29 +630,22 @@ export class RecipeRelevanceAuditor {
     description: string;
     evidence: Record<string, unknown>;
     expiresAt: number;
-  }): void {
+  }): Promise<void> {
     try {
-      const id = `ep-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-      this.#db
-        .prepare(
-          `INSERT INTO evolution_proposals
-           (id, type, target_recipe_id, related_recipe_ids, confidence, source,
-            description, evidence, status, proposed_at, expires_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          id,
-          input.type,
-          input.targetRecipeId,
-          '[]',
-          0.95,
-          input.source,
-          input.description,
-          JSON.stringify([input.evidence]),
-          input.status,
-          Date.now(),
-          input.expiresAt
-        );
+      if (this.#proposalRepo) {
+        this.#proposalRepo.create({
+          type: input.type as 'deprecate',
+          targetRecipeId: input.targetRecipeId,
+          relatedRecipeIds: [],
+          confidence: 0.95,
+          source:
+            input.source as import('../../repository/evolution/ProposalRepository.js').ProposalSource,
+          description: input.description,
+          evidence: [input.evidence],
+          status: input.status as 'executed' | 'observing',
+          expiresAt: input.expiresAt,
+        });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.#logger.warn(`[RecipeRelevanceAuditor] createProposal failed: ${msg}`);

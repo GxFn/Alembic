@@ -355,7 +355,7 @@ export async function getTargetMetadata(ctx: McpContext, args: StructureArgs) {
   try {
     const graphService = ctx.container?.get('knowledgeGraphService');
     if (graphService) {
-      const edges = graphService.getEdges(target.name, 'module', 'both');
+      const edges = await graphService.getEdges(target.name, 'module', 'both');
       meta.graphEdges = {
         outgoing: (edges.outgoing || []).map((e: GraphEdge) => ({
           toId: e.toId,
@@ -390,9 +390,9 @@ export async function graphQuery(ctx: McpContext, args: GraphArgs) {
   let data: any;
   try {
     if (args.relation) {
-      data = graphService.getRelated(args.nodeId!, nodeType, args.relation);
+      data = await graphService.getRelated(args.nodeId!, nodeType, args.relation);
     } else {
-      data = graphService.getEdges(args.nodeId!, nodeType, direction);
+      data = await graphService.getEdges(args.nodeId!, nodeType, direction);
     }
   } catch (err: unknown) {
     // knowledge_edges 表不存在时 graceful 降级到 relations 字段
@@ -421,7 +421,7 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
   const nodeType = args.nodeType || 'recipe';
   let impacted: any;
   try {
-    impacted = graphService.getImpactAnalysis(args.nodeId!, nodeType, args.maxDepth ?? 3);
+    impacted = await graphService.getImpactAnalysis(args.nodeId!, nodeType, args.maxDepth ?? 3);
   } catch (err: unknown) {
     // knowledge_edges 表不存在时 graceful 降级
     if (err instanceof Error && err.message?.includes('no such table')) {
@@ -498,10 +498,13 @@ async function _fallbackRelationsFromRecipe(
       relation: string;
     }[] = [];
     if (direction === 'both' || direction === 'in') {
-      const knowledgeRepo = ctx.container.get('knowledgeRepository');
-      const reverseRows = knowledgeRepo.db
-        .prepare(`SELECT id, relations FROM knowledge_entries WHERE relations LIKE ? AND id != ?`)
-        .all(`%${nodeId}%`, nodeId);
+      const knowledgeRepo = ctx.container.get('knowledgeRepository') as {
+        findByRelationLike(
+          nodeId: string,
+          excludeId: string
+        ): Promise<Array<{ id: string; title: string; relations: string }>>;
+      };
+      const reverseRows = await knowledgeRepo.findByRelationLike(nodeId, nodeId);
       for (const row of reverseRows) {
         try {
           const rels = JSON.parse(row.relations || '{}');
@@ -537,12 +540,13 @@ async function _fallbackRelationsFromRecipe(
 /** 降级：从 knowledge_entries.relations 反查受影响的条目 */
 async function _fallbackImpactFromRecipe(ctx: McpContext, nodeId: string) {
   try {
-    const knowledgeRepo = ctx.container.get('knowledgeRepository');
-    const rows = knowledgeRepo.db
-      .prepare(
-        `SELECT id, title, relations FROM knowledge_entries WHERE relations LIKE ? AND id != ?`
-      )
-      .all(`%${nodeId}%`, nodeId);
+    const knowledgeRepo = ctx.container.get('knowledgeRepository') as {
+      findByRelationLike(
+        nodeId: string,
+        excludeId: string
+      ): Promise<Array<{ id: string; title: string; relations: string }>>;
+    };
+    const rows = await knowledgeRepo.findByRelationLike(nodeId, nodeId);
 
     const impacted: { id: string; title: string; type: string; relation: string; depth: number }[] =
       [];
@@ -591,7 +595,7 @@ export async function graphPath(ctx: McpContext, args: GraphArgs) {
   const maxDepth = Math.min(Math.max(args.maxDepth ?? 5, 1), 10);
   let result: any;
   try {
-    result = graphService.findPath(args.fromId, fromType, args.toId, toType, maxDepth);
+    result = await graphService.findPath(args.fromId, fromType, args.toId, toType, maxDepth);
   } catch (err: unknown) {
     if (err instanceof Error && err.message?.includes('no such table')) {
       // 降级：用 relations 字段做单跳查找
@@ -719,7 +723,7 @@ export async function graphStats(ctx: McpContext) {
   }
   let stats: any;
   try {
-    stats = graphService.getStats();
+    stats = await graphService.getStats();
   } catch (err: unknown) {
     if (err instanceof Error && err.message?.includes('no such table')) {
       return envelope({

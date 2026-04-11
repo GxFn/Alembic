@@ -21,6 +21,8 @@ import type { RecipeLifecycleSupervisor } from '../../../service/evolution/Recip
 import { envelope } from '../envelope.js';
 
 /** MCP handler context */
+
+/** MCP handler context */
 interface McpContext {
   container: ServiceContainer;
   logger: {
@@ -29,15 +31,6 @@ interface McpContext {
   };
   startedAt?: number;
   [key: string]: unknown;
-}
-
-// ── DB row helper ─────────────────────────────────────────
-
-interface RawDb {
-  prepare(sql: string): {
-    run(...args: unknown[]): unknown;
-    get(...args: unknown[]): unknown;
-  };
 }
 
 // ── 返回类型 ─────────────────────────────────────────────
@@ -90,16 +83,17 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
     deprecate(id: string, reason: string, opts: { userId: string }): Promise<unknown>;
   } | null;
   const supervisor = ctx.container.get('lifecycleSupervisor') as RecipeLifecycleSupervisor | null;
-  const dbConn = ctx.container.get('database') as { db: RawDb | null } | null;
-  const rawDb = dbConn?.db ?? null;
+  const knowledgeRepo = ctx.container.get('knowledgeRepository') as {
+    findById(id: string): Promise<{ id: string } | null>;
+    updateStats(id: string, stats: Record<string, unknown>): Promise<boolean>;
+    getStats(): Promise<Record<string, number>>;
+  } | null;
 
   for (const decision of decisions) {
     try {
       // O4: Recipe 存在性前置检查
-      if (rawDb) {
-        const exists = rawDb
-          .prepare('SELECT 1 FROM knowledge_entries WHERE id = ?')
-          .get(decision.recipeId);
+      if (knowledgeRepo) {
+        const exists = await knowledgeRepo.findById(decision.recipeId);
         if (!exists) {
           result.errors.push({ recipeId: decision.recipeId, error: 'Recipe not found' });
           result.processed++;
@@ -163,7 +157,7 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
           const reason = decision.reason || 'IDE Agent confirmed deprecation';
 
           if (supervisor) {
-            const transResult = supervisor.transition({
+            const transResult = await supervisor.transition({
               recipeId: decision.recipeId,
               targetState: 'deprecated',
               trigger: 'manual-deprecation',
@@ -223,17 +217,19 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
         }
 
         case 'skip': {
-          if (decision.skipReason === 'still_valid' && rawDb) {
+          if (decision.skipReason === 'still_valid' && knowledgeRepo) {
             // P4: 更新 stats.lastVerifiedAt 而非 updated_at
             try {
-              const row = rawDb
-                .prepare('SELECT stats FROM knowledge_entries WHERE id = ?')
-                .get(decision.recipeId) as { stats: string } | undefined;
-              const stats = JSON.parse((row?.stats as string) || '{}') as Record<string, unknown>;
-              stats.lastVerifiedAt = Date.now();
-              rawDb
-                .prepare('UPDATE knowledge_entries SET stats = ? WHERE id = ?')
-                .run(JSON.stringify(stats), decision.recipeId);
+              const entry = await knowledgeRepo.findById(decision.recipeId);
+              if (entry) {
+                const stats = (
+                  typeof (entry as Record<string, unknown>).stats === 'object'
+                    ? (entry as Record<string, unknown>).stats
+                    : {}
+                ) as Record<string, unknown>;
+                stats.lastVerifiedAt = Date.now();
+                await knowledgeRepo.updateStats(decision.recipeId, stats);
+              }
               result.refreshed++;
             } catch {
               // DB 更新失败时静默

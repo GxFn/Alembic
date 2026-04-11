@@ -46,11 +46,17 @@ let ConfidenceRouter: typeof import('../../lib/service/knowledge/ConfidenceRoute
 let SourceRefReconciler: typeof import('../../lib/service/knowledge/SourceRefReconciler.js').SourceRefReconciler;
 let SignalBus: typeof import('../../lib/infrastructure/signal/SignalBus.js').SignalBus;
 let RuleLearner: typeof import('../../lib/service/guard/RuleLearner.js').RuleLearner;
+let KnowledgeRepositoryImpl: typeof import('../../lib/repository/knowledge/KnowledgeRepository.impl.js').KnowledgeRepositoryImpl;
+let RecipeSourceRefRepositoryImpl: typeof import('../../lib/repository/sourceref/RecipeSourceRefRepository.js').RecipeSourceRefRepositoryImpl;
+let initDrizzle: typeof import('../../lib/infrastructure/database/drizzle/index.js').initDrizzle;
 
 describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
   let db: InstanceType<typeof Database>;
   let tmpDbPath: string;
   let signalBus: InstanceType<typeof SignalBus>;
+  let knowledgeRepo: InstanceType<typeof KnowledgeRepositoryImpl>;
+  let sourceRefRepo: InstanceType<typeof RecipeSourceRefRepositoryImpl>;
+  let drizzleDb: ReturnType<typeof initDrizzle>;
 
   beforeAll(async () => {
     // 动态 import 所有模块
@@ -70,6 +76,9 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       sourceRefMod,
       signalBusMod,
       ruleLearnerMod,
+      knowledgeRepoMod,
+      sourceRefRepoMod,
+      drizzleMod,
     ] = await Promise.all([
       import('../../lib/domain/knowledge/Lifecycle.js'),
       import('../../lib/service/guard/GuardCheckEngine.js'),
@@ -86,6 +95,9 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       import('../../lib/service/knowledge/SourceRefReconciler.js'),
       import('../../lib/infrastructure/signal/SignalBus.js'),
       import('../../lib/service/guard/RuleLearner.js'),
+      import('../../lib/repository/knowledge/KnowledgeRepository.impl.js'),
+      import('../../lib/repository/sourceref/RecipeSourceRefRepository.js'),
+      import('../../lib/infrastructure/database/drizzle/index.js'),
     ]);
 
     Lifecycle = lifecycleMod;
@@ -104,6 +116,9 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
     SourceRefReconciler = sourceRefMod.SourceRefReconciler;
     SignalBus = signalBusMod.SignalBus;
     RuleLearner = ruleLearnerMod.RuleLearner;
+    KnowledgeRepositoryImpl = knowledgeRepoMod.KnowledgeRepositoryImpl;
+    RecipeSourceRefRepositoryImpl = sourceRefRepoMod.RecipeSourceRefRepositoryImpl;
+    initDrizzle = drizzleMod.initDrizzle;
 
     // 复制 BiliDili DB 到临时目录（不影响原始数据）
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bilidili-pressure-'));
@@ -120,6 +135,9 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
     db = new Database(tmpDbPath);
     db.pragma('journal_mode = WAL');
     signalBus = new SignalBus();
+    drizzleDb = initDrizzle(db);
+    knowledgeRepo = new KnowledgeRepositoryImpl({ getDb: () => db });
+    sourceRefRepo = new RecipeSourceRefRepositoryImpl(drizzleDb);
   });
 
   afterAll(() => {
@@ -514,14 +532,14 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       );
     });
 
-    it('4.1 staging 条目可被 StagingManager 管理', () => {
-      const sm = new StagingManager(db, { signalBus });
-      const stagingList = sm.listStaging();
+    it('4.1 staging 条目可被 StagingManager 管理', async () => {
+      const sm = new StagingManager(knowledgeRepo, { signalBus });
+      const stagingList = await sm.listStaging();
       expect(stagingList.length).toBeGreaterThanOrEqual(1);
       expect(stagingList.some((s) => s.id === testStagingId)).toBe(true);
     });
 
-    it('4.2 checkAndPromote 在 deadline 未到时不提升', () => {
+    it('4.2 checkAndPromote 在 deadline 未到时不提升', async () => {
       // 先设置一个未来 deadline
       const futureDeadline = Date.now() + 72 * 60 * 60 * 1000;
       db.prepare(`
@@ -530,13 +548,13 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         WHERE id = ?
       `).run(futureDeadline, Date.now(), testStagingId);
 
-      const sm = new StagingManager(db, { signalBus });
-      const result = sm.checkAndPromote();
+      const sm = new StagingManager(knowledgeRepo, { signalBus });
+      const result = await sm.checkAndPromote();
       expect(result.promoted).toHaveLength(0);
       expect(result.waiting.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('4.3 checkAndPromote 在 deadline 到期时自动提升为 active', () => {
+    it('4.3 checkAndPromote 在 deadline 到期时自动提升为 active', async () => {
       const pastDeadline = Date.now() - 1000;
 
       db.prepare(`
@@ -545,8 +563,8 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         WHERE id = ?
       `).run(pastDeadline, Date.now() - 72 * 60 * 60 * 1000, testStagingId);
 
-      const sm = new StagingManager(db, { signalBus });
-      const result = sm.checkAndPromote();
+      const sm = new StagingManager(knowledgeRepo, { signalBus });
+      const result = await sm.checkAndPromote();
       expect(result.promoted.length).toBeGreaterThanOrEqual(1);
 
       // 验证 lifecycle 已变为 active
@@ -561,7 +579,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       );
     });
 
-    it('4.4 rollback 将 staging 回退为 pending', () => {
+    it('4.4 rollback 将 staging 回退为 pending', async () => {
       // 确保有 staging 元数据
       db.prepare(`
         UPDATE knowledge_entries 
@@ -570,8 +588,8 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         WHERE id = ?
       `).run(Date.now() + 72 * 60 * 60 * 1000, testStagingId);
 
-      const sm = new StagingManager(db, { signalBus });
-      const rolled = sm.rollback(testStagingId, 'Guard conflict detected');
+      const sm = new StagingManager(knowledgeRepo, { signalBus });
+      const rolled = await sm.rollback(testStagingId, 'Guard conflict detected');
       expect(rolled).toBe(true);
 
       const row = db
@@ -585,19 +603,19 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       );
     });
 
-    it('4.5 enterStaging 只接受 pending 条目', () => {
-      const sm = new StagingManager(db, { signalBus });
+    it('4.5 enterStaging 只接受 pending 条目', async () => {
+      const sm = new StagingManager(knowledgeRepo, { signalBus });
       // active 条目不应该能进入 staging
       const activeEntry = db
         .prepare(`SELECT id FROM knowledge_entries WHERE lifecycle = 'active' LIMIT 1`)
         .get() as { id: string } | undefined;
       if (activeEntry) {
-        const result = sm.enterStaging(activeEntry.id, 72 * 60 * 60 * 1000, 0.9);
+        const result = await sm.enterStaging(activeEntry.id, 72 * 60 * 60 * 1000, 0.9);
         expect(result).toBe(false);
       }
     });
 
-    it('4.6 lifecycle 信号在 promote 时正确发射', () => {
+    it('4.6 lifecycle 信号在 promote 时正确发射', async () => {
       const signals: unknown[] = [];
       const bus = new SignalBus();
       bus.subscribe('lifecycle', (signal) => signals.push(signal));
@@ -623,8 +641,8 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         WHERE id = ?
       `).run(Date.now() - 1000, Date.now() - 72 * 60 * 60 * 1000, stagingId);
 
-      const sm = new StagingManager(db, { signalBus: bus });
-      sm.checkAndPromote();
+      const sm = new StagingManager(knowledgeRepo, { signalBus: bus });
+      await sm.checkAndPromote();
 
       expect(signals.length).toBeGreaterThanOrEqual(1);
 
@@ -638,16 +656,16 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
    * ═══════════════════════════════════════════════════════════════ */
 
   describe('5. DecayDetector 衰退检测', () => {
-    it('5.1 scanAll 对 BiliDili 全量 active 条目不崩溃', () => {
-      const detector = new DecayDetector(db, { signalBus });
-      const results = detector.scanAll();
+    it('5.1 scanAll 对 BiliDili 全量 active 条目不崩溃', async () => {
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
+      const results = await detector.scanAll();
       // 应该返回所有 active 条目的评分
       expect(results.length).toBeGreaterThan(0);
     });
 
-    it('5.2 BiliDili 条目衰退评分分布合理', () => {
-      const detector = new DecayDetector(db, { signalBus });
-      const results = detector.scanAll();
+    it('5.2 BiliDili 条目衰退评分分布合理', async () => {
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
+      const results = await detector.scanAll();
       // BiliDili 是开发项目，recipe 未被实际 guard/search 命中
       // freshness=0 + usage=0 导致大量条目处于 severe/dead — 这是预期行为
       // 验证：所有条目都有有效的 decayScore 和 level
@@ -665,9 +683,9 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       expect(levelDist.size).toBeGreaterThan(0);
     });
 
-    it('5.3 decayScore 四维度加权结果在 0-100 范围', () => {
-      const detector = new DecayDetector(db, { signalBus });
-      const results = detector.scanAll();
+    it('5.3 decayScore 四维度加权结果在 0-100 范围', async () => {
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
+      const results = await detector.scanAll();
       for (const r of results) {
         expect(r.decayScore).toBeGreaterThanOrEqual(0);
         expect(r.decayScore).toBeLessThanOrEqual(100);
@@ -681,13 +699,16 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       }
     });
 
-    it('5.4 source_ref_stale 策略检测 BiliDili stale ref', () => {
+    it('5.4 source_ref_stale 策略检测 BiliDili stale ref', async () => {
       // 先执行 reconcile 确保 stale 标记已更新
-      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, db, { ttlMs: 0, signalBus });
-      reconciler.reconcile({ force: true });
+      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, sourceRefRepo, knowledgeRepo, {
+        ttlMs: 0,
+        signalBus,
+      });
+      await reconciler.reconcile({ force: true });
 
-      const detector = new DecayDetector(db, { signalBus });
-      const results = detector.scanAll();
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
+      const results = await detector.scanAll();
 
       // source_ref_stale 策略依赖 recipe_source_refs 表中的 stale 标记
       const staleRefCount = (
@@ -709,7 +730,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       expect(results.length).toBeGreaterThanOrEqual(0);
     });
 
-    it('5.5 模拟 no_recent_usage 场景：条目 90 天未使用', () => {
+    it('5.5 模拟 no_recent_usage 场景：条目 90 天未使用', async () => {
       // 选一个 active entry，模拟 90+ 天未使用
       const entry = db
         .prepare(`SELECT id FROM knowledge_entries WHERE lifecycle = 'active' LIMIT 1`)
@@ -722,8 +743,8 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         WHERE id = ?
       `).run(oldDate, entry.id);
 
-      const detector = new DecayDetector(db, { signalBus });
-      const results = detector.scanAll();
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
+      const results = await detector.scanAll();
       const target = results.find((r) => r.recipeId === entry.id);
       expect(target).toBeDefined();
       if (target) {
@@ -739,7 +760,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       `).run(entry.id);
     });
 
-    it('5.6 模拟 high_false_positive 场景：FP 率 > 40%', () => {
+    it('5.6 模拟 high_false_positive 场景：FP 率 > 40%', async () => {
       // 选一个 rule entry（如果没有 active rule，用任意 active entry 并临时改 kind）
       let entry = db
         .prepare(
@@ -762,8 +783,8 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         WHERE id = ?
       `).run(entry.id);
 
-      const detector = new DecayDetector(db, { signalBus });
-      const results = detector.scanAll();
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
+      const results = await detector.scanAll();
       const target = results.find((r) => r.recipeId === entry!.id);
       expect(target).toBeDefined();
       if (target) {
@@ -785,9 +806,9 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       }
     });
 
-    it('5.7 衰退级别与 Grace Period 映射正确', () => {
-      const detector = new DecayDetector(db, { signalBus });
-      const results = detector.scanAll();
+    it('5.7 衰退级别与 Grace Period 映射正确', async () => {
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
+      const results = await detector.scanAll();
       for (const r of results) {
         if (r.level === 'healthy') {
           expect(r.suggestedGracePeriod).toBeGreaterThanOrEqual(30 * 24 * 60 * 60 * 1000);
@@ -803,10 +824,10 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
    * ═══════════════════════════════════════════════════════════════ */
 
   describe('6. KnowledgeMetabolism 新陈代谢', () => {
-    it('6.1 runFullCycle 对 BiliDili 完整执行不崩溃', () => {
-      const cd = new ContradictionDetector(db, { signalBus });
-      const ra = new RedundancyAnalyzer(db, { signalBus });
-      const dd = new DecayDetector(db, { signalBus });
+    it('6.1 runFullCycle 对 BiliDili 完整执行不崩溃', async () => {
+      const cd = new ContradictionDetector(knowledgeRepo, { signalBus });
+      const ra = new RedundancyAnalyzer(knowledgeRepo, { signalBus });
+      const dd = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
 
       const metabolism = new KnowledgeMetabolism({
         contradictionDetector: cd,
@@ -815,22 +836,22 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         signalBus,
       });
 
-      const report = metabolism.runFullCycle();
+      const report = await metabolism.runFullCycle();
       expect(report).toBeDefined();
       expect(report.summary).toBeDefined();
     });
 
-    it('6.2 矛盾检测对 BiliDili 40 条 recipe 输出结构正确', () => {
-      const cd = new ContradictionDetector(db, { signalBus });
-      const contradictions = cd.detectAll();
+    it('6.2 矛盾检测对 BiliDili 40 条 recipe 输出结构正确', async () => {
+      const cd = new ContradictionDetector(knowledgeRepo, { signalBus });
+      const contradictions = await cd.detectAll();
       // BiliDili 条目是 bootstrap 生成的，不应该有硬矛盾
       const hard = contradictions.filter((c) => c.type === 'hard');
       expect(hard.length).toBe(0);
     });
 
-    it('6.3 冗余分析对相似 recipe 有检测', () => {
-      const ra = new RedundancyAnalyzer(db, { signalBus });
-      const redundancies = ra.analyzeAll();
+    it('6.3 冗余分析对相似 recipe 有检测', async () => {
+      const ra = new RedundancyAnalyzer(knowledgeRepo, { signalBus });
+      const redundancies = await ra.analyzeAll();
       // 返回结构正确
       for (const r of redundancies) {
         expect(r.similarity).toBeGreaterThanOrEqual(0);
@@ -840,10 +861,10 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
       }
     });
 
-    it('6.4 metabolism report 含 proposals 结构', () => {
-      const cd = new ContradictionDetector(db, { signalBus });
-      const ra = new RedundancyAnalyzer(db, { signalBus });
-      const dd = new DecayDetector(db, { signalBus });
+    it('6.4 metabolism report 含 proposals 结构', async () => {
+      const cd = new ContradictionDetector(knowledgeRepo, { signalBus });
+      const ra = new RedundancyAnalyzer(knowledgeRepo, { signalBus });
+      const dd = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
 
       const metabolism = new KnowledgeMetabolism({
         contradictionDetector: cd,
@@ -852,7 +873,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
         signalBus,
       });
 
-      const report = metabolism.runFullCycle();
+      const report = await metabolism.runFullCycle();
       expect(Array.isArray(report.proposals)).toBe(true);
       for (const p of report.proposals) {
         expect(p.type).toBeDefined();
@@ -1255,13 +1276,13 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
    * ═══════════════════════════════════════════════════════════════ */
 
   describe('11. SourceRefReconciler 路径健康', () => {
-    it('11.1 reconcile 对 BiliDili 执行完整检查', () => {
-      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, db, {
+    it('11.1 reconcile 对 BiliDili 执行完整检查', async () => {
+      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, sourceRefRepo, knowledgeRepo, {
         ttlMs: 0, // 强制所有条目重新检查
         signalBus,
       });
 
-      const report = reconciler.reconcile({ force: true });
+      const report = await reconciler.reconcile({ force: true });
       expect(report).toBeDefined();
       expect(report.recipesProcessed).toBeGreaterThan(0);
       expect(report.active).toBeGreaterThan(0);
@@ -1270,9 +1291,12 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       expect(report.stale).toBeGreaterThanOrEqual(1);
     });
 
-    it('11.2 stale ref 被正确标记', () => {
-      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, db, { ttlMs: 0, signalBus });
-      reconciler.reconcile({ force: true });
+    it('11.2 stale ref 被正确标记', async () => {
+      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, sourceRefRepo, knowledgeRepo, {
+        ttlMs: 0,
+        signalBus,
+      });
+      await reconciler.reconcile({ force: true });
 
       // 检查是否有任何 stale ref 被标记
       const staleRows = db
@@ -1291,9 +1315,12 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       expect(true).toBe(true);
     });
 
-    it('11.3 active ref 路径真实存在于 BiliDili', () => {
-      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, db, { ttlMs: 0, signalBus });
-      reconciler.reconcile({ force: true });
+    it('11.3 active ref 路径真实存在于 BiliDili', async () => {
+      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, sourceRefRepo, knowledgeRepo, {
+        ttlMs: 0,
+        signalBus,
+      });
+      await reconciler.reconcile({ force: true });
 
       const activeRefs = db
         .prepare(`SELECT source_path FROM recipe_source_refs WHERE status = 'active'`)
@@ -1310,16 +1337,16 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       expect(existCount).toBe(activeRefs.length);
     });
 
-    it('11.4 quality 信号在 stale 检测时发射', () => {
+    it('11.4 quality 信号在 stale 检测时发射', async () => {
       const signals: any[] = [];
       const bus = new SignalBus();
       bus.subscribe('quality', (s) => signals.push(s));
 
-      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, db, {
+      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, sourceRefRepo, knowledgeRepo, {
         ttlMs: 0,
         signalBus: bus,
       });
-      reconciler.reconcile({ force: true });
+      await reconciler.reconcile({ force: true });
 
       // 有 stale 时应该发射 quality 信号
       const staleCount = (
@@ -1334,8 +1361,11 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
     });
 
     it('11.5 repairRenames 尝试修复 stale ref', async () => {
-      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, db, { ttlMs: 0, signalBus });
-      reconciler.reconcile({ force: true });
+      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, sourceRefRepo, knowledgeRepo, {
+        ttlMs: 0,
+        signalBus,
+      });
+      await reconciler.reconcile({ force: true });
 
       const repairReport = await reconciler.repairRenames();
       expect(repairReport).toBeDefined();
@@ -1345,9 +1375,12 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       expect(repairReport.stillStale).toBeGreaterThanOrEqual(0);
     });
 
-    it('11.6 带行号的 source_path 被正确处理', () => {
-      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, db, { ttlMs: 0, signalBus });
-      reconciler.reconcile({ force: true });
+    it('11.6 带行号的 source_path 被正确处理', async () => {
+      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, sourceRefRepo, knowledgeRepo, {
+        ttlMs: 0,
+        signalBus,
+      });
+      await reconciler.reconcile({ force: true });
 
       // 查找任何含行号后缀的 source_path
       const lineRefs = db
@@ -1412,18 +1445,21 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       expect(all.length).toBe(3);
     });
 
-    it('12.3 SourceRefReconciler → DecayDetector 信号链路', () => {
+    it('12.3 SourceRefReconciler → DecayDetector 信号链路', async () => {
       const qualitySignals: any[] = [];
       const bus = new SignalBus();
       bus.subscribe('quality', (s) => qualitySignals.push(s));
 
       // SourceRefReconciler 发射 quality 信号
-      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, db, { ttlMs: 0, signalBus: bus });
-      reconciler.reconcile({ force: true });
+      const reconciler = new SourceRefReconciler(BILIDILI_ROOT, sourceRefRepo, knowledgeRepo, {
+        ttlMs: 0,
+        signalBus: bus,
+      });
+      await reconciler.reconcile({ force: true });
 
       // DecayDetector 可以消费这些信号（通过 DB 间接关联）
-      const detector = new DecayDetector(db, { signalBus: bus });
-      const results = detector.scanAll();
+      const detector = new DecayDetector(knowledgeRepo, { signalBus: bus, drizzle: drizzleDb });
+      const results = await detector.scanAll();
 
       // 验证 reconcile + scanAll 完整链路不崩溃
       expect(Array.isArray(results)).toBe(true);
@@ -1441,7 +1477,7 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       }
     });
 
-    it('12.4 StagingManager promote → lifecycle 信号 → 下游可消费', () => {
+    it('12.4 StagingManager promote → lifecycle 信号 → 下游可消费', async () => {
       const lifecycleSignals: any[] = [];
       const bus = new SignalBus();
       bus.subscribe('lifecycle', (s) => lifecycleSignals.push(s));
@@ -1467,8 +1503,8 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
         WHERE id = ?
       `).run(Date.now() - 1000, Date.now() - 72 * 60 * 60 * 1000, stagingId);
 
-      const sm = new StagingManager(db, { signalBus: bus });
-      sm.checkAndPromote();
+      const sm = new StagingManager(knowledgeRepo, { signalBus: bus });
+      await sm.checkAndPromote();
 
       expect(lifecycleSignals.length).toBeGreaterThanOrEqual(1);
       const promoteSignal = lifecycleSignals.find(
@@ -1505,12 +1541,12 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       expect(Array.isArray(violations)).toBe(true);
     });
 
-    it('13.4 并发 scanAll + auditFiles 不互相干扰', () => {
+    it('13.4 并发 scanAll + auditFiles 不互相干扰', async () => {
       const engine = new GuardCheckEngine(db, { signalBus });
-      const detector = new DecayDetector(db, { signalBus });
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
 
       // 同步并行调用
-      const decayResults = detector.scanAll();
+      const decayResults = await detector.scanAll();
       const auditResult = engine.auditFiles([
         {
           path: 'test.swift',
@@ -1522,7 +1558,7 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       expect(auditResult.files.length).toBe(1);
     });
 
-    it('13.5 DB 写入后 DecayDetector 即时反映变化', () => {
+    it('13.5 DB 写入后 DecayDetector 即时反映变化', async () => {
       // 查找 DecayDetector 可见的 active 条目（需要存在于 #loadActiveRecipes 的查询结果中）
       const entries = db
         .prepare(`SELECT id, stats FROM knowledge_entries WHERE lifecycle = 'active' LIMIT 5`)
@@ -1537,8 +1573,8 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
         WHERE id = ?
       `).run(entry.id);
 
-      const detector = new DecayDetector(db, { signalBus });
-      const results = detector.scanAll();
+      const detector = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
+      const results = await detector.scanAll();
       // DecayDetector now correctly reads createdAt column
       expect(results.length).toBeGreaterThan(0);
 
@@ -1555,10 +1591,10 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       `).run(entry.id);
     });
 
-    it('13.6 大量 recipe 批量 metabolism 不超时', () => {
-      const cd = new ContradictionDetector(db, { signalBus });
-      const ra = new RedundancyAnalyzer(db, { signalBus });
-      const dd = new DecayDetector(db, { signalBus });
+    it('13.6 大量 recipe 批量 metabolism 不超时', async () => {
+      const cd = new ContradictionDetector(knowledgeRepo, { signalBus });
+      const ra = new RedundancyAnalyzer(knowledgeRepo, { signalBus });
+      const dd = new DecayDetector(knowledgeRepo, { signalBus, drizzle: drizzleDb });
 
       const metabolism = new KnowledgeMetabolism({
         contradictionDetector: cd,
@@ -1568,7 +1604,7 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
       });
 
       const start = performance.now();
-      const report = metabolism.runFullCycle();
+      const report = await metabolism.runFullCycle();
       const elapsed = performance.now() - start;
 
       // 41 条 recipe 的 metabolism 不应超过 5 秒
@@ -1719,7 +1755,7 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
 
         // Step 3: 进入 staging
         db.prepare(`UPDATE knowledge_entries SET lifecycle = 'staging' WHERE id = ?`).run(testId);
-        const sm = new StagingManager(db, { signalBus: bus });
+        const sm = new StagingManager(knowledgeRepo, { signalBus: bus });
 
         // 设置 staging 元数据（模拟 enterStaging 的效果）
         db.prepare(`
@@ -1731,17 +1767,17 @@ let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
               lifecycle = 'pending'
           WHERE id = ?
         `).run(Date.now() - 1000, Date.now() - 24 * 60 * 60 * 1000, testId);
-        sm.enterStaging(testId, 24 * 60 * 60 * 1000, 0.95);
+        await sm.enterStaging(testId, 24 * 60 * 60 * 1000, 0.95);
 
         // 强制设置过期 deadline 以测试 promote
         db.prepare(`
           UPDATE knowledge_entries 
-          SET stats = json_set(stats, '$.stagingDeadline', ?)
+          SET staging_deadline = ?
           WHERE id = ?
         `).run(Date.now() - 1000, testId);
 
         // Step 4: StagingManager promote
-        const promoteResult = sm.checkAndPromote();
+        const promoteResult = await sm.checkAndPromote();
         const promoted = promoteResult.promoted.find((p) => p.id === testId);
         expect(promoted).toBeDefined();
 
@@ -1761,8 +1797,11 @@ print(x!)  // force unwrap
         expect(Array.isArray(violations)).toBe(true);
 
         // Step 6: SourceRefReconciler 填充
-        const reconciler = new SourceRefReconciler(BILIDILI_ROOT, db, { ttlMs: 0, signalBus: bus });
-        reconciler.reconcile({ force: true });
+        const reconciler = new SourceRefReconciler(BILIDILI_ROOT, sourceRefRepo, knowledgeRepo, {
+          ttlMs: 0,
+          signalBus: bus,
+        });
+        await reconciler.reconcile({ force: true });
 
         // 验证新 recipe 的 source ref 被填充
         const refs = db.prepare(`SELECT * FROM recipe_source_refs WHERE recipe_id = ?`).all(testId);
@@ -1777,7 +1816,7 @@ print(x!)  // force unwrap
       }
     });
 
-    it('15.2 衰退全链路: active → DecayDetector → decaying → deprecated', () => {
+    it('15.2 衰退全链路: active → DecayDetector → decaying → deprecated', async () => {
       const testId = `decay-e2e-${Date.now()}`;
       const bus = new SignalBus();
       const decaySignals: any[] = [];
@@ -1814,8 +1853,8 @@ print(x!)  // force unwrap
         );
 
         // DecayDetector scan
-        const detector = new DecayDetector(db, { signalBus: bus });
-        const results = detector.scanAll();
+        const detector = new DecayDetector(knowledgeRepo, { signalBus: bus, drizzle: drizzleDb });
+        const results = await detector.scanAll();
         const target = results.find((r) => r.recipeId === testId);
         expect(target).toBeDefined();
         expect(target!.signals.length).toBeGreaterThan(0);
@@ -1844,7 +1883,7 @@ print(x!)  // force unwrap
       }
     });
 
-    it('15.3 Guard → RuleLearner → FP 检测 → 衰退信号链', () => {
+    it('15.3 Guard → RuleLearner → FP 检测 → 衰退信号链', async () => {
       const testId = `fp-chain-${Date.now()}`;
       const bus = new SignalBus();
 
@@ -1861,8 +1900,8 @@ print(x!)  // force unwrap
         `).run(testId, Date.now(), Date.now());
 
         // DecayDetector 应该检测到 high_false_positive
-        const detector = new DecayDetector(db, { signalBus: bus });
-        const results = detector.scanAll();
+        const detector = new DecayDetector(knowledgeRepo, { signalBus: bus, drizzle: drizzleDb });
+        const results = await detector.scanAll();
         const target = results.find((r) => r.recipeId === testId);
 
         expect(target).toBeDefined();

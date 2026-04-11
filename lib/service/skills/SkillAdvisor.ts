@@ -18,6 +18,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getProjectSkillsPath } from '../../infrastructure/config/Paths.js';
+import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 
 export interface SkillSuggestion {
   name: string;
@@ -29,12 +31,8 @@ export interface SkillSuggestion {
 }
 
 interface SkillAdvisorOpts {
-  database?: {
-    prepare(sql: string): {
-      all(...args: unknown[]): Record<string, unknown>[];
-      get(...args: unknown[]): Record<string, unknown> | undefined;
-    };
-  } | null;
+  knowledgeRepo?: KnowledgeRepositoryImpl | null;
+  auditRepo?: AuditRepositoryImpl | null;
 }
 
 interface InsightResult {
@@ -44,15 +42,13 @@ interface InsightResult {
 
 export class SkillAdvisor {
   #projectRoot;
-  #db;
+  #knowledgeRepo;
+  #auditRepo;
 
-  /**
-   * @param projectRoot 用户项目根目录
-   * @param [opts.database] better-sqlite3 实例（可选）
-   */
-  constructor(projectRoot: string, { database }: SkillAdvisorOpts = {}) {
+  constructor(projectRoot: string, { knowledgeRepo, auditRepo }: SkillAdvisorOpts = {}) {
     this.#projectRoot = projectRoot;
-    this.#db = database || null;
+    this.#knowledgeRepo = knowledgeRepo || null;
+    this.#auditRepo = auditRepo || null;
   }
 
   /**
@@ -70,14 +66,14 @@ export class SkillAdvisor {
    *   analysisContext: object
    * }}
    */
-  suggest() {
+  async suggest() {
     const existingSkills = this.#listExistingProjectSkills();
     const suggestions: SkillSuggestion[] = [];
     const analysisContext: Record<string, unknown> = {};
 
     // ── 维度 1: Guard 违规模式 ──
     try {
-      const guardInsights = this.#analyzeGuardPatterns();
+      const guardInsights = await this.#analyzeGuardPatterns();
       analysisContext.guard = guardInsights.summary;
       suggestions.push(...guardInsights.suggestions.filter((s) => !existingSkills.has(s.name)));
     } catch {
@@ -95,7 +91,7 @@ export class SkillAdvisor {
 
     // ── 维度 3: Recipe 分布与使用 ──
     try {
-      const recipeInsights = this.#analyzeRecipePatterns();
+      const recipeInsights = await this.#analyzeRecipePatterns();
       analysisContext.recipes = recipeInsights.summary;
       suggestions.push(...recipeInsights.suggestions.filter((s) => !existingSkills.has(s.name)));
     } catch {
@@ -104,7 +100,7 @@ export class SkillAdvisor {
 
     // ── 维度 4: 候选积压 ──
     try {
-      const candidateInsights = this.#analyzeCandidatePatterns();
+      const candidateInsights = await this.#analyzeCandidatePatterns();
       analysisContext.candidates = candidateInsights.summary;
       suggestions.push(...candidateInsights.suggestions.filter((s) => !existingSkills.has(s.name)));
     } catch {
@@ -134,27 +130,14 @@ export class SkillAdvisor {
   //  维度 1: Guard 违规模式分析
   // ═══════════════════════════════════════════════════════
 
-  #analyzeGuardPatterns(): InsightResult {
+  async #analyzeGuardPatterns(): Promise<InsightResult> {
     const suggestions: SkillSuggestion[] = [];
-    if (!this.#db) {
-      return { summary: 'DB 不可用', suggestions };
+    if (!this.#auditRepo) {
+      return { summary: 'AuditRepo 不可用', suggestions };
     }
 
     try {
-      // 查询 Guard 违规记录（audit_logs 中 action LIKE 'guard%' + result='violation'）
-      const rows = this.#db
-        .prepare(`
-        SELECT json_extract(operation_data, '$.ruleName') as ruleName,
-               COUNT(*) as cnt
-        FROM audit_logs
-        WHERE action LIKE 'guard%'
-          AND result = 'violation'
-        GROUP BY ruleName
-        HAVING cnt >= 3
-        ORDER BY cnt DESC
-        LIMIT 5
-      `)
-        .all() as Array<{ ruleName: string; cnt: number }>;
+      const rows = await this.#auditRepo.findTopGuardViolationRules(3, 5);
 
       if (rows.length > 0) {
         const topRule = rows[0];
@@ -237,34 +220,18 @@ export class SkillAdvisor {
   //  维度 3: Recipe 分布与使用热度
   // ═══════════════════════════════════════════════════════
 
-  #analyzeRecipePatterns(): InsightResult {
+  async #analyzeRecipePatterns(): Promise<InsightResult> {
     const suggestions: SkillSuggestion[] = [];
-    if (!this.#db) {
-      return { summary: 'DB 不可用', suggestions };
+    if (!this.#knowledgeRepo) {
+      return { summary: 'KnowledgeRepo 不可用', suggestions };
     }
 
     try {
       // 按 category 分布
-      const categories = this.#db
-        .prepare(`
-        SELECT category, COUNT(*) as cnt
-        FROM knowledge_entries
-        WHERE lifecycle = 'active' AND category IS NOT NULL AND category != ''
-        GROUP BY category
-        ORDER BY cnt DESC
-      `)
-        .all() as Array<{ category: string; cnt: number }>;
+      const categories = await this.#knowledgeRepo.countGroupByCategory();
 
       // 按 language 分布
-      const languages = this.#db
-        .prepare(`
-        SELECT language, COUNT(*) as cnt
-        FROM knowledge_entries
-        WHERE lifecycle = 'active' AND language IS NOT NULL AND language != ''
-        GROUP BY language
-        ORDER BY cnt DESC
-      `)
-        .all();
+      const languages = await this.#knowledgeRepo.countGroupByLanguage();
 
       // 高频使用但无自定义 Skill 的 category
       const topCategory = categories[0];
@@ -284,20 +251,10 @@ export class SkillAdvisor {
         });
       }
 
-      // 高使用量 Recipe 统计（V3: stats JSON 中的 adoptions + applications）
+      // 高使用量 Recipe 统计
       let hotRecipes: Record<string, unknown>[] = [];
       try {
-        hotRecipes = this.#db
-          .prepare(`
-          SELECT title, category,
-                 (COALESCE(json_extract(stats, '$.adoptions'), 0) + COALESCE(json_extract(stats, '$.applications'), 0)) as total_usage
-          FROM knowledge_entries
-          WHERE lifecycle = 'active'
-            AND (COALESCE(json_extract(stats, '$.adoptions'), 0) + COALESCE(json_extract(stats, '$.applications'), 0)) >= 5
-          ORDER BY total_usage DESC
-          LIMIT 10
-        `)
-          .all();
+        hotRecipes = await this.#knowledgeRepo.findHotRecipesByUsage(5, 10);
       } catch {
         /* 查询失败时降级为空 */
       }
@@ -310,38 +267,30 @@ export class SkillAdvisor {
       return { summary: 'Recipe 查询失败', suggestions };
     }
   }
-
   // ═══════════════════════════════════════════════════════
   //  维度 4: 候选积压分析
   // ═══════════════════════════════════════════════════════
 
-  #analyzeCandidatePatterns(): InsightResult {
+  async #analyzeCandidatePatterns(): Promise<InsightResult> {
     const suggestions: SkillSuggestion[] = [];
-    if (!this.#db) {
-      return { summary: 'DB 不可用', suggestions };
+    if (!this.#knowledgeRepo) {
+      return { summary: 'KnowledgeRepo 不可用', suggestions };
     }
 
     try {
-      // V3: candidates 已合并到 knowledge_entries，ifecycle='pending' 即为候选
-      const stats = this.#db
-        .prepare(`
-        SELECT
-          COUNT(*) as total,
-          SUM(CASE WHEN lifecycle='pending' THEN 1 ELSE 0 END) as pending,
-          SUM(CASE WHEN lifecycle='deprecated' THEN 1 ELSE 0 END) as rejected
-        FROM knowledge_entries
-      `)
-        .get() as { total: number; pending: number; rejected: number } | undefined;
+      const stats = await this.#knowledgeRepo.getLifecycleCounts();
+
+      const rejected = stats?.deprecated ?? 0;
 
       // 大量被拒绝 → 提示候选质量 Skill
-      if (stats && stats.rejected >= 10) {
+      if (rejected >= 10) {
         suggestions.push({
           name: 'project-candidate-quality',
-          description: `候选提交质量指南 — ${stats.rejected} 条候选被拒，建议创建提交标准 Skill`,
-          rationale: `已有 ${stats.rejected} 条候选被驳回（总计 ${stats.total} 条）。创建一个 Skill 明确项目的候选提交标准（哪些代码值得提取、必填字段要求、质量标杆），可以减少返工。`,
+          description: `候选提交质量指南 — ${rejected} 条候选被拒，建议创建提交标准 Skill`,
+          rationale: `已有 ${rejected} 条候选被驳回（总计 ${stats?.total ?? 0} 条）。创建一个 Skill 明确项目的候选提交标准（哪些代码值得提取、必填字段要求、质量标杆），可以减少返工。`,
           source: 'candidate_rejection',
-          priority: stats.rejected >= 20 ? 'high' : 'medium',
-          signals: { total: stats.total, pending: stats.pending, rejected: stats.rejected },
+          priority: rejected >= 20 ? 'high' : 'medium',
+          signals: { total: stats?.total ?? 0, pending: stats?.pending ?? 0, rejected },
         });
       }
 

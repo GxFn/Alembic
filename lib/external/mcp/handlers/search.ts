@@ -38,7 +38,9 @@ function getSearchEngine(ctx: McpContext) {
 async function getFallbackEngine(ctx: McpContext) {
   const { SearchEngine } = await import('#service/search/SearchEngine.js');
   const db = ctx.container.get('database');
-  return new SearchEngine(db);
+  const knowledgeRepo = ctx.container.get('knowledgeRepository');
+  const sourceRefRepo = ctx.container.get('recipeSourceRefRepository');
+  return new SearchEngine(db, { knowledgeRepo, sourceRefRepo } as Record<string, unknown>);
 }
 
 /** 根据 kind 参数过滤 items */

@@ -6,16 +6,11 @@
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { GuardViolationRepositoryImpl } from '../../repository/guard/GuardViolationRepository.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import { LanguageService } from '../../shared/LanguageService.js';
 
 /* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-    get(...params: unknown[]): Record<string, unknown> | undefined;
-  };
-}
 
 interface RuleLearnerLike {
   getMetrics(ruleId: string): {
@@ -53,12 +48,18 @@ const LOW_COVERAGE_THRESHOLD = 50;
 /* ────────────────────── Class ────────────────────── */
 
 export class CoverageAnalyzer {
-  #db: DatabaseLike;
+  #knowledgeRepo: KnowledgeRepositoryImpl;
+  #guardViolationRepo: GuardViolationRepositoryImpl;
   #ruleLearner: RuleLearnerLike | null;
   #logger = Logger.getInstance();
 
-  constructor(db: DatabaseLike, options: { ruleLearner?: RuleLearnerLike } = {}) {
-    this.#db = db;
+  constructor(
+    knowledgeRepo: KnowledgeRepositoryImpl,
+    guardViolationRepo: GuardViolationRepositoryImpl,
+    options: { ruleLearner?: RuleLearnerLike } = {}
+  ) {
+    this.#knowledgeRepo = knowledgeRepo;
+    this.#guardViolationRepo = guardViolationRepo;
     this.#ruleLearner = options.ruleLearner ?? null;
   }
 
@@ -155,15 +156,11 @@ export class CoverageAnalyzer {
 
   #loadActiveRules(): { id: string; languages: string[] }[] {
     try {
-      const rows = this.#db
-        .prepare(
-          `SELECT id, language FROM knowledge_entries WHERE lifecycle = 'active' AND kind = 'rule'`
-        )
-        .all();
+      const rows = this.#knowledgeRepo.findActiveRuleIdsSync();
       return rows.map((r) => ({
-        id: r.id as string,
+        id: r.id,
         languages: r.language
-          ? (r.language as string).split(',').map((l) => LanguageService.normalize(l.trim()))
+          ? r.language.split(',').map((l) => LanguageService.normalize(l.trim()))
           : [],
       }));
     } catch {
@@ -174,17 +171,13 @@ export class CoverageAnalyzer {
   #buildRuleFileMap(): Map<string, string[]> {
     const map = new Map<string, string[]>();
     try {
-      const rows = this.#db
-        .prepare(
-          `SELECT file_path, violations_json FROM guard_violations ORDER BY created_at DESC LIMIT 200`
-        )
-        .all();
+      const rows = this.#guardViolationRepo.findRecentViolationsJson(200);
       for (const row of rows) {
         try {
-          const violations = JSON.parse((row.violations_json as string) || '[]') as {
+          const violations = JSON.parse(row.violationsJson || '[]') as {
             ruleId?: string;
           }[];
-          const filePath = row.file_path as string;
+          const filePath = row.filePath;
           for (const v of violations) {
             if (!v.ruleId) {
               continue;

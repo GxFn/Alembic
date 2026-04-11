@@ -11,6 +11,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
+import type { GuardViolationRepositoryImpl } from '../../repository/guard/GuardViolationRepository.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
+import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import { ComplianceReporter } from '../../service/guard/ComplianceReporter.js';
 import { CoverageAnalyzer } from '../../service/guard/CoverageAnalyzer.js';
 import { ExclusionManager } from '../../service/guard/ExclusionManager.js';
@@ -76,6 +81,7 @@ export function register(c: ServiceContainer) {
       {
         guardConfig: merged,
         signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
+        knowledgeRepo: ct.get('knowledgeRepository') as KnowledgeRepositoryImpl,
       }
     );
   });
@@ -93,9 +99,9 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('violationsStore', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb: () => unknown; getDrizzle: () => unknown };
+    const db = ct.get('database') as { getDrizzle: () => unknown };
     return new ViolationsStore(
-      db.getDb() as ConstructorParameters<typeof ViolationsStore>[0],
+      unwrapRawDb(db as unknown) as ConstructorParameters<typeof ViolationsStore>[0],
       db.getDrizzle() as ConstructorParameters<typeof ViolationsStore>[1]
     );
   });
@@ -125,23 +131,35 @@ export function register(c: ServiceContainer) {
   );
 
   c.singleton('reverseGuard', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new ReverseGuard(db.getDb() as ConstructorParameters<typeof ReverseGuard>[0], {
-      signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
-    });
+    return new ReverseGuard(
+      ct.get('knowledgeRepository') as KnowledgeRepositoryImpl,
+      ct.get('codeEntityRepository') as CodeEntityRepositoryImpl,
+      ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl,
+      {
+        signalBus: (ct.singletons.signalBus as SignalBus | undefined) || undefined,
+      }
+    );
   });
 
   c.singleton('coverageAnalyzer', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    let ruleLearner: ConstructorParameters<typeof CoverageAnalyzer>[1] | undefined;
+    let ruleLearner:
+      | {
+          ruleLearner?: ConstructorParameters<typeof CoverageAnalyzer>[2] extends {
+            ruleLearner?: infer R;
+          }
+            ? R
+            : never;
+        }
+      | undefined;
     try {
       ruleLearner = { ruleLearner: ct.get('ruleLearner') as never };
     } catch {
       /* ruleLearner not yet available */
     }
     return new CoverageAnalyzer(
-      db.getDb() as ConstructorParameters<typeof CoverageAnalyzer>[0],
-      ruleLearner
+      ct.get('knowledgeRepository') as KnowledgeRepositoryImpl,
+      ct.get('guardViolationRepository') as GuardViolationRepositoryImpl,
+      ruleLearner as ConstructorParameters<typeof CoverageAnalyzer>[2]
     );
   });
 }

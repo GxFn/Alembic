@@ -21,6 +21,7 @@ import { ExplorationTracker } from '#agent/context/ExplorationTracker.js';
 import { EpisodicConsolidator } from '#agent/domain/EpisodicConsolidator.js';
 import { ANALYST_BUDGET } from '#agent/domain/insight-analyst.js';
 import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
+import { MemoryEmbeddingStore } from '#agent/memory/MemoryEmbeddingStore.js';
 import { PersistentMemory } from '#agent/memory/PersistentMemory.js';
 import { SessionStore } from '#agent/memory/SessionStore.js';
 import { PRESETS } from '#agent/presets.js';
@@ -396,7 +397,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
         timeoutMs: 15_000,
       })) ?? null;
     if (projectGraph) {
-      const overview = projectGraph.getOverview();
+      const overview = await projectGraph.getOverview();
       logger.info(
         `[Insight-v3] ProjectGraph: ${overview.totalClasses} classes, ${overview.totalProtocols} protocols (${(overview as Record<string, unknown>).buildTimeMs}ms)`
       );
@@ -485,7 +486,11 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       } catch {
         // EmbedProvider 不可用时 fallback 到无向量模式
       }
-      semanticMemory = new PersistentMemory(db, { logger, embeddingFn });
+      semanticMemory = new PersistentMemory(db, {
+        logger,
+        embeddingFn,
+        embeddingStore: new MemoryEmbeddingStore(projectRoot),
+      });
       const smStats = semanticMemory.getStats();
       if (smStats.total > 0) {
         logger.info(
@@ -501,14 +506,16 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   }
 
   // Phase E: CodeEntityGraph — 代码实体关系图谱 (供 Analyst prompt 注入)
-  let codeEntityGraphInst: { getTopology(): { totalEntities: number; totalEdges: number } } | null =
-    null;
+  let codeEntityGraphInst: {
+    getTopology(): Promise<{ totalEntities: number; totalEdges: number }>;
+  } | null = null;
   try {
     const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
-    const db = ctx.container.get('database');
-    if (db) {
-      codeEntityGraphInst = new CodeEntityGraph(db, { projectRoot, logger });
-      const topo = codeEntityGraphInst.getTopology();
+    const entityRepo = ctx.container.get('codeEntityRepository');
+    const edgeRepo = ctx.container.get('knowledgeEdgeRepository');
+    if (entityRepo && edgeRepo) {
+      codeEntityGraphInst = new CodeEntityGraph(entityRepo, edgeRepo, { projectRoot, logger });
+      const topo = await codeEntityGraphInst.getTopology();
       if (topo.totalEntities > 0) {
         logger.info(
           `[Insight-v3] CodeEntityGraph: ${topo.totalEntities} entities, ${topo.totalEdges} edges`
@@ -1414,9 +1421,10 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   // ═══════════════════════════════════════════════════════════
   try {
     const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
-    const db = ctx.container.get('database');
-    if (db) {
-      const ceg = new CodeEntityGraph(db, { projectRoot, logger });
+    const entityRepo = ctx.container.get('codeEntityRepository');
+    const edgeRepo = ctx.container.get('knowledgeEdgeRepository');
+    if (entityRepo && edgeRepo) {
+      const ceg = new CodeEntityGraph(entityRepo, edgeRepo, { projectRoot, logger });
       // 收集所有维度产出的候选 (从 Producer toolCalls 中提取)
       const allCandidates: Array<{ title: unknown; relations: unknown }> = [];
       for (const dimData of Object.values(dimensionCandidates)) {
@@ -1435,7 +1443,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
         }
       }
       if (allCandidates.length > 0) {
-        const relResult = ceg.populateFromCandidateRelations(
+        const relResult = await ceg.populateFromCandidateRelations(
           allCandidates as unknown as Parameters<typeof ceg.populateFromCandidateRelations>[0]
         );
         logger.info(
@@ -1459,7 +1467,10 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   try {
     const db = ctx.container.get('database');
     if (db) {
-      const semanticMemory = new PersistentMemory(db, { logger });
+      const semanticMemory = new PersistentMemory(db, {
+        logger,
+        embeddingStore: new MemoryEmbeddingStore(projectRoot),
+      });
       const consolidator = new EpisodicConsolidator(semanticMemory, { logger });
 
       consolidationResult = consolidator.consolidate(sessionStore, {
@@ -1593,10 +1604,11 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     // Phase E: 附加 Code Entity Graph 拓扑到报告
     try {
       const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
-      const db = ctx.container.get('database');
-      if (db) {
-        const ceg = new CodeEntityGraph(db, { projectRoot, logger });
-        const topo = ceg.getTopology();
+      const entityRepo = ctx.container.get('codeEntityRepository');
+      const edgeRepo = ctx.container.get('knowledgeEdgeRepository');
+      if (entityRepo && edgeRepo) {
+        const ceg = new CodeEntityGraph(entityRepo, edgeRepo, { projectRoot, logger });
+        const topo = await ceg.getTopology();
         report.codeEntityGraph = {
           entities: topo.entities,
           edges: topo.edges,

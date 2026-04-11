@@ -26,44 +26,23 @@ export async function health(ctx: McpContext) {
 
   // 2) Database 连通性 + 知识库统计
   try {
-    const dbConn = ctx.container.get('database');
-    if (dbConn) {
-      // DatabaseConnection 包装器 → 解包获取原始 better-sqlite3 实例
-      const db = typeof dbConn.getDb === 'function' ? dbConn.getDb() : dbConn;
-      db.prepare('SELECT 1').get();
+    const knowledgeRepo = ctx.container.get('knowledgeRepository') as {
+      getStats(): Promise<Record<string, number>>;
+    } | null;
+    if (knowledgeRepo) {
+      const stats = (await knowledgeRepo.getStats()) as Record<string, number> | null;
       checks.database = true;
-      // 知识库统计（轻量聚合查询）
-      try {
-        // V3: knowledge_entries 统一表（lifecycle 替代 status）
-        const rStats = db
-          .prepare(`
-          SELECT COUNT(*) as total,
-            SUM(CASE WHEN lifecycle='active' THEN 1 ELSE 0 END) as active,
-            SUM(CASE WHEN kind='rule' THEN 1 ELSE 0 END) as rules,
-            SUM(CASE WHEN kind='pattern' THEN 1 ELSE 0 END) as patterns,
-            SUM(CASE WHEN kind='fact' THEN 1 ELSE 0 END) as facts
-          FROM knowledge_entries
-        `)
-          .get();
-        const cPending = db
-          .prepare(`
-          SELECT COUNT(*) as total,
-            SUM(CASE WHEN lifecycle='pending' THEN 1 ELSE 0 END) as pending
-          FROM knowledge_entries
-        `)
-          .get();
+      if (stats) {
         knowledgeBase = {
           recipes: {
-            total: rStats.total,
-            active: rStats.active,
-            rules: rStats.rules,
-            patterns: rStats.patterns,
-            facts: rStats.facts,
+            total: stats.total,
+            active: stats.active,
+            rules: stats.rules,
+            patterns: stats.patterns,
+            facts: stats.facts,
           },
-          candidates: { total: cPending.total, pending: cPending.pending },
+          candidates: { total: stats.total, pending: stats.pending },
         };
-      } catch {
-        /* 统计查询失败不影响 health */
       }
     }
   } catch (e: unknown) {

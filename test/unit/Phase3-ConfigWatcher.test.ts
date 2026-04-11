@@ -22,83 +22,64 @@ import {
 import { CouplingAnalyzer } from '../../lib/service/panorama/CouplingAnalyzer.js';
 import type { ExternalDepProfile } from '../../lib/service/panorama/PanoramaTypes.js';
 import { profileTechStack } from '../../lib/service/panorama/TechStackProfiler.js';
+import { createMockRepos, type MockEdge } from '../helpers/panorama-mocks.js';
 
 // ═══════════════════════════════════════════════════════════
 // Phase 2.5: CouplingAnalyzer — External Fan-in
 // ═══════════════════════════════════════════════════════════
 
-describe('CouplingAnalyzer — External Fan-in', () => {
-  function createMockDb(opts: { moduleEdges?: Array<Record<string, unknown>> } = {}) {
-    return {
-      transaction: (fn: () => void) => fn,
-      exec: () => {},
-      prepare: (sql: string) => ({
-        run: () => ({ changes: 0 }),
-        get: () => undefined,
-        all: (..._params: unknown[]) => {
-          if (sql.includes('knowledge_edges')) {
-            return opts.moduleEdges ?? [];
-          }
-          return [];
-        },
-      }),
-    };
-  }
+function makeAnalyzerFromEdges(edges: MockEdge[] = []) {
+  const repos = createMockRepos({ edges });
+  return new CouplingAnalyzer(repos.edgeRepo, repos.entityRepo, '/test');
+}
 
-  it('should return empty externalDeps when no externalModules provided', () => {
-    const db = createMockDb();
-    const analyzer = new CouplingAnalyzer(db as never, '/test');
+describe('CouplingAnalyzer — External Fan-in', () => {
+  it('should return empty externalDeps when no externalModules provided', async () => {
+    const analyzer = makeAnalyzerFromEdges();
 
     const moduleFiles = new Map([
       ['ModuleA', ['a.swift']],
       ['ModuleB', ['b.swift']],
     ]);
 
-    const result = analyzer.analyze(moduleFiles);
+    const result = await analyzer.analyze(moduleFiles);
     expect(result.externalDeps).toEqual([]);
   });
 
-  it('should return empty externalDeps when no matching edges', () => {
-    const db = createMockDb({ moduleEdges: [] });
-    const analyzer = new CouplingAnalyzer(db as never, '/test');
+  it('should return empty externalDeps when no matching edges', async () => {
+    const analyzer = makeAnalyzerFromEdges([]);
 
     const moduleFiles = new Map([['ModuleA', ['a.swift']]]);
     const externalModules = new Set(['RxSwift', 'Alamofire']);
 
-    const result = analyzer.analyze(moduleFiles, externalModules);
+    const result = await analyzer.analyze(moduleFiles, externalModules);
     expect(result.externalDeps).toEqual([]);
   });
 
-  it('should compute fan-in for external modules from edges', () => {
-    const db = createMockDb({
-      moduleEdges: [
-        {
-          from_id: 'ModuleA',
-          to_id: 'RxSwift',
-          relation: 'depends_on',
-          weight: 0.5,
-          from_type: 'module',
-          to_type: 'module',
-        },
-        {
-          from_id: 'ModuleB',
-          to_id: 'RxSwift',
-          relation: 'depends_on',
-          weight: 0.5,
-          from_type: 'module',
-          to_type: 'module',
-        },
-        {
-          from_id: 'ModuleA',
-          to_id: 'Alamofire',
-          relation: 'depends_on',
-          weight: 0.5,
-          from_type: 'module',
-          to_type: 'module',
-        },
-      ],
-    });
-    const analyzer = new CouplingAnalyzer(db as never, '/test');
+  it('should compute fan-in for external modules from edges', async () => {
+    const analyzer = makeAnalyzerFromEdges([
+      {
+        from_id: 'ModuleA',
+        to_id: 'RxSwift',
+        relation: 'depends_on',
+        from_type: 'module',
+        to_type: 'module',
+      },
+      {
+        from_id: 'ModuleB',
+        to_id: 'RxSwift',
+        relation: 'depends_on',
+        from_type: 'module',
+        to_type: 'module',
+      },
+      {
+        from_id: 'ModuleA',
+        to_id: 'Alamofire',
+        relation: 'depends_on',
+        from_type: 'module',
+        to_type: 'module',
+      },
+    ]);
 
     const moduleFiles = new Map([
       ['ModuleA', ['a.swift']],
@@ -106,10 +87,9 @@ describe('CouplingAnalyzer — External Fan-in', () => {
     ]);
     const externalModules = new Set(['RxSwift', 'Alamofire']);
 
-    const result = analyzer.analyze(moduleFiles, externalModules);
+    const result = await analyzer.analyze(moduleFiles, externalModules);
     expect(result.externalDeps.length).toBe(2);
 
-    // RxSwift should have higher fan-in (2 dependBy)
     const rxDep = result.externalDeps.find((d) => d.name === 'RxSwift');
     expect(rxDep).toBeDefined();
     expect(rxDep!.fanIn).toBe(2);
@@ -120,44 +100,13 @@ describe('CouplingAnalyzer — External Fan-in', () => {
     expect(alamofireDep!.fanIn).toBe(1);
   });
 
-  it('should sort externalDeps by fan-in descending', () => {
-    const db = createMockDb({
-      moduleEdges: [
-        {
-          from_id: 'A',
-          to_id: 'X',
-          relation: 'depends_on',
-          weight: 0.5,
-          from_type: 'module',
-          to_type: 'module',
-        },
-        {
-          from_id: 'B',
-          to_id: 'X',
-          relation: 'depends_on',
-          weight: 0.5,
-          from_type: 'module',
-          to_type: 'module',
-        },
-        {
-          from_id: 'C',
-          to_id: 'X',
-          relation: 'depends_on',
-          weight: 0.5,
-          from_type: 'module',
-          to_type: 'module',
-        },
-        {
-          from_id: 'A',
-          to_id: 'Y',
-          relation: 'depends_on',
-          weight: 0.5,
-          from_type: 'module',
-          to_type: 'module',
-        },
-      ],
-    });
-    const analyzer = new CouplingAnalyzer(db as never, '/test');
+  it('should sort externalDeps by fan-in descending', async () => {
+    const analyzer = makeAnalyzerFromEdges([
+      { from_id: 'A', to_id: 'X', relation: 'depends_on', from_type: 'module', to_type: 'module' },
+      { from_id: 'B', to_id: 'X', relation: 'depends_on', from_type: 'module', to_type: 'module' },
+      { from_id: 'C', to_id: 'X', relation: 'depends_on', from_type: 'module', to_type: 'module' },
+      { from_id: 'A', to_id: 'Y', relation: 'depends_on', from_type: 'module', to_type: 'module' },
+    ]);
 
     const moduleFiles = new Map([
       ['A', ['a.swift']],
@@ -165,17 +114,16 @@ describe('CouplingAnalyzer — External Fan-in', () => {
       ['C', ['c.swift']],
     ]);
 
-    const result = analyzer.analyze(moduleFiles, new Set(['X', 'Y']));
+    const result = await analyzer.analyze(moduleFiles, new Set(['X', 'Y']));
     expect(result.externalDeps[0].name).toBe('X');
     expect(result.externalDeps[0].fanIn).toBe(3);
     expect(result.externalDeps[1].name).toBe('Y');
     expect(result.externalDeps[1].fanIn).toBe(1);
   });
 
-  it('should include externalDeps in CouplingResult type', () => {
-    const db = createMockDb();
-    const analyzer = new CouplingAnalyzer(db as never, '/test');
-    const result = analyzer.analyze(new Map());
+  it('should include externalDeps in CouplingResult type', async () => {
+    const analyzer = makeAnalyzerFromEdges();
+    const result = await analyzer.analyze(new Map());
     expect(result).toHaveProperty('externalDeps');
     expect(Array.isArray(result.externalDeps)).toBe(true);
   });

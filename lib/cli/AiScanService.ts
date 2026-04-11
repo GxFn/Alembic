@@ -244,21 +244,8 @@ export class AiScanService {
     if (files.length >= maxFiles) {
       return;
     }
-    const CODE_EXTS = new Set([
-      '.swift',
-      '.m',
-      '.mm',
-      '.h',
-      '.js',
-      '.ts',
-      '.tsx',
-      '.py',
-      '.java',
-      '.kt',
-      '.go',
-      '.rs',
-      '.rb',
-    ]);
+    const sourceExts = LanguageService.sourceExts;
+    const skipDirs = LanguageService.scanSkipDirs;
 
     let entries: fs.Dirent[];
     try {
@@ -277,15 +264,11 @@ export class AiScanService {
 
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (
-          ['node_modules', '.build', 'DerivedData', 'build', 'Pods', '__pycache__'].includes(
-            entry.name
-          )
-        ) {
+        if (skipDirs.has(entry.name)) {
           continue;
         }
         this._walkDir(fullPath, files, maxFiles, targetName);
-      } else if (CODE_EXTS.has(path.extname(entry.name))) {
+      } else if (sourceExts.has(path.extname(entry.name).toLowerCase())) {
         files.push({
           name: entry.name,
           path: fullPath,

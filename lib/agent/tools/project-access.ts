@@ -10,6 +10,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { LanguageProfiles } from '#shared/LanguageProfiles.js';
 import { LanguageService } from '#shared/LanguageService.js';
 
 // ─── 本文件内部接口 ─────────────────────────────────────────
@@ -184,12 +185,11 @@ export interface SemanticSearchParams {
 
 // ─── 共享常量 ──────────────────────────────────────────────
 
-/** 三方库路径识别（与 bootstrap/shared/third-party-filter.js 对齐） */
-export const THIRD_PARTY_RE =
-  /(?:^|\/)(?:Pods|Carthage|\.build\/checkouts|vendor|ThirdParty|External|Submodules|DerivedData|include|node_modules|build)\/|(?:^|\/)(?:Masonry|AFNetworking|SDWebImage|MJRefresh|MJExtension|YYKit|YYModel|Lottie|FLEX|IQKeyboardManager|MBProgressHUD|SVProgressHUD|SnapKit|Kingfisher|Alamofire|Moya|ReactiveObjC|ReactiveCocoa|RxSwift|RxCocoa|FMDB|Realm|Mantle|JSONModel|CocoaLumberjack|CocoaAsyncSocket|SocketRocket|GPUImage|FBSDKCore|FBSDKLogin|FlatBuffers|Protobuf|PromiseKit|Charts|Hero)\//i;
+/** 三方库路径识别 — 从 LanguageProfiles 统一派生 */
+export const THIRD_PARTY_RE = LanguageProfiles.thirdPartyPathRegex;
 
-/** 源码文件扩展名 */
-export const SOURCE_EXT_RE = /\.(m|mm|swift|h|c|cpp|js|ts|jsx|tsx|py|rb|java|kt|go|rs)$/i;
+/** 源码文件扩展名 — 从 LanguageService 统一派生 */
+export const SOURCE_EXT_RE = LanguageService.sourceExtRegex;
 
 /** 声明行识别 — 用于对匹配行打分（与 bootstrap/shared/scanner.js 对齐） */
 const DECL_RE =

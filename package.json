@@ -87,6 +87,7 @@
     "diagnose:mcp": "node dist/scripts/diagnose-mcp.js",
     "lint": "biome check lib/ bin/ config/ scripts/",
     "lint:fix": "biome check --fix lib/ bin/ config/ scripts/",
+    "lint:repo-boundary": "node scripts/lint-repo-boundary.mjs",
     "format": "biome format --write lib/ bin/ config/ scripts/",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run lint",

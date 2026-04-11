@@ -57,6 +57,11 @@ export function register(c: ServiceContainer) {
           : null,
         autoSyncOnCrud: (config.autoSyncOnCrud as boolean) !== false,
         syncDebounceMs: (config.syncDebounceMs as number) || 2000,
+        drizzle: ct.services.database
+          ? ((ct.get('database') as unknown as { getDrizzle?(): unknown }).getDrizzle?.() as
+              | import('../../infrastructure/database/drizzle/index.js').DrizzleDB
+              | undefined)
+          : undefined,
       });
     },
     { aiDependent: true }

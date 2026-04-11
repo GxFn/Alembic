@@ -6,41 +6,42 @@ import { DecayDetector } from '../../lib/service/evolution/DecayDetector.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function makeMockDb(
-  options: {
-    recipes?: Record<string, unknown>[];
-    auditRow?: Record<string, unknown> | undefined;
-    edgeRow?: Record<string, unknown> | undefined;
-    staleRefCount?: Record<string, number>;
-    totalRefCount?: Record<string, number>;
-  } = {}
-) {
+function makeMockRepo(entries: Record<string, unknown>[] = []) {
   return {
-    prepare: (sql: string) => ({
-      all: () => options.recipes ?? [],
-      get: (...params: unknown[]) => {
-        if (sql.includes('audit_logs')) {
-          return options.auditRow;
-        }
-        if (sql.includes('knowledge_edges')) {
-          return options.edgeRow;
-        }
-        if (sql.includes('recipe_source_refs') && sql.includes('SUM(CASE')) {
-          // #getSourceRefStaleRatio query
-          const recipeId = params[0] as string;
-          const stale = options.staleRefCount?.[recipeId] ?? 0;
-          const total = options.totalRefCount?.[recipeId] ?? stale;
-          return { stale, total };
-        }
-        if (sql.includes('recipe_source_refs') && sql.includes('stale')) {
-          // #getStaleSourceRefCount query
-          const recipeId = params[0] as string;
-          const cnt = options.staleRefCount?.[recipeId] ?? 0;
-          return { cnt };
-        }
-        return undefined;
-      },
+    findAllByLifecycles: async () => entries,
+    findById: async (id: string) => entries.find((e) => e.id === id) || null,
+    updateLifecycle: async () => {},
+  };
+}
+
+function makeMockDrizzle(auditRow?: Record<string, unknown>) {
+  return {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: () => ({
+            get: () => auditRow,
+          }),
+        }),
+      }),
     }),
+  };
+}
+
+function makeMockEdgeRepo(hasEdge: boolean) {
+  return {
+    findByRelation: async () => (hasEdge ? [{ id: 'edge-1' }] : []),
+  };
+}
+
+function makeMockSourceRefRepo(staleCount: number, totalCount?: number) {
+  const total = totalCount ?? staleCount;
+  const refs: { status: string }[] = [];
+  for (let i = 0; i < total; i++) {
+    refs.push({ status: i < staleCount ? 'stale' : 'valid' });
+  }
+  return {
+    findByRecipeId: () => refs,
   };
 }
 
@@ -58,7 +59,7 @@ function makeRecipe(overrides: Record<string, unknown> = {}) {
 }
 
 describe('DecayDetector', () => {
-  it('should score a healthy recipe with recent usage', () => {
+  it('should score a healthy recipe with recent usage', async () => {
     const now = Date.now();
     const stats = JSON.stringify({
       lastHitAt: now - 2 * DAY_MS, // 2 days ago
@@ -66,39 +67,39 @@ describe('DecayDetector', () => {
       authority: 80,
     });
     const recipe = makeRecipe({ stats, quality_score: 0.9 });
-    const detector = new DecayDetector(makeMockDb());
+    const detector = new DecayDetector(makeMockRepo() as any);
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     expect(result.level).toBe('healthy');
     expect(result.decayScore).toBeGreaterThanOrEqual(80);
     expect(result.signals).toHaveLength(0);
     expect(result.suggestedGracePeriod).toBe(30 * DAY_MS);
   });
 
-  it('should detect no_recent_usage when lastHitAt > 90d', () => {
+  it('should detect no_recent_usage when lastHitAt > 90d', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 120 * DAY_MS, // 120 days ago
       hitsLast90d: 0,
       authority: 50,
     });
     const recipe = makeRecipe({ stats, quality_score: 0.5 });
-    const detector = new DecayDetector(makeMockDb());
+    const detector = new DecayDetector(makeMockRepo() as any);
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     expect(result.signals.some((s) => s.strategy === 'no_recent_usage')).toBe(true);
     expect(result.level).not.toBe('healthy');
   });
 
-  it('should detect no_recent_usage for never-used old recipes', () => {
+  it('should detect no_recent_usage for never-used old recipes', async () => {
     const created = Date.now() - 120 * DAY_MS;
     const recipe = makeRecipe({ stats: null, quality_score: 0.5, created_at: created });
-    const detector = new DecayDetector(makeMockDb());
+    const detector = new DecayDetector(makeMockRepo() as any);
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     expect(result.signals.some((s) => s.strategy === 'no_recent_usage')).toBe(true);
   });
 
-  it('should detect high_false_positive when rate > 0.4 and triggers >= 10', () => {
+  it('should detect high_false_positive when rate > 0.4 and triggers >= 10', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 10 * DAY_MS,
       hitsLast90d: 15,
@@ -107,13 +108,13 @@ describe('DecayDetector', () => {
       authority: 50,
     });
     const recipe = makeRecipe({ stats, quality_score: 0.5 });
-    const detector = new DecayDetector(makeMockDb());
+    const detector = new DecayDetector(makeMockRepo() as any);
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     expect(result.signals.some((s) => s.strategy === 'high_false_positive')).toBe(true);
   });
 
-  it('should NOT flag high_false_positive with insufficient triggers', () => {
+  it('should NOT flag high_false_positive with insufficient triggers', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 10 * DAY_MS,
       hitsLast90d: 5,
@@ -122,43 +123,47 @@ describe('DecayDetector', () => {
       authority: 50,
     });
     const recipe = makeRecipe({ stats, quality_score: 0.5 });
-    const detector = new DecayDetector(makeMockDb());
+    const detector = new DecayDetector(makeMockRepo() as any);
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     expect(result.signals.some((s) => s.strategy === 'high_false_positive')).toBe(false);
   });
 
-  it('should detect symbol_drift from audit_logs', () => {
+  it('should detect symbol_drift from audit_logs', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 10 * DAY_MS,
       hitsLast90d: 10,
       authority: 50,
     });
     const recipe = makeRecipe({ stats, quality_score: 0.5 });
-    const detector = new DecayDetector(makeMockDb({ auditRow: { '1': 1 } }));
+    const detector = new DecayDetector(makeMockRepo() as any, {
+      drizzle: makeMockDrizzle({ id: '1' }) as any,
+    });
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     expect(result.signals.some((s) => s.strategy === 'symbol_drift')).toBe(true);
   });
 
-  it('should detect superseded from deprecated_by edge', () => {
+  it('should detect superseded from deprecated_by edge', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 10 * DAY_MS,
       hitsLast90d: 10,
       authority: 50,
     });
     const recipe = makeRecipe({ stats, quality_score: 0.5 });
-    const detector = new DecayDetector(makeMockDb({ edgeRow: { '1': 1 } }));
+    const detector = new DecayDetector(makeMockRepo() as any, {
+      knowledgeEdgeRepo: makeMockEdgeRepo(true) as any,
+    });
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     expect(result.signals.some((s) => s.strategy === 'superseded')).toBe(true);
   });
 
-  it('should classify score levels correctly', () => {
-    const detector = new DecayDetector(makeMockDb());
+  it('should classify score levels correctly', async () => {
+    const detector = new DecayDetector(makeMockRepo() as any);
 
     // healthy: high freshness, usage, quality, authority
-    const healthy = detector.evaluate(
+    const healthy = await detector.evaluate(
       makeRecipe({
         stats: JSON.stringify({
           lastHitAt: Date.now() - 1 * DAY_MS,
@@ -171,7 +176,7 @@ describe('DecayDetector', () => {
     expect(healthy.level).toBe('healthy');
 
     // dead: no usage for over a year, low everything
-    const dead = detector.evaluate(
+    const dead = await detector.evaluate(
       makeRecipe({
         stats: JSON.stringify({
           lastHitAt: Date.now() - 400 * DAY_MS,
@@ -185,11 +190,11 @@ describe('DecayDetector', () => {
     expect(dead.suggestedGracePeriod).toBe(0);
   });
 
-  it('should set grace period to 15d for severe', () => {
+  it('should set grace period to 15d for severe', async () => {
     // Severe means decayScore 20-39
     // We need low freshness, low usage, low quality, low authority
-    const detector = new DecayDetector(makeMockDb());
-    const result = detector.evaluate(
+    const detector = new DecayDetector(makeMockRepo() as any);
+    const result = await detector.evaluate(
       makeRecipe({
         stats: JSON.stringify({
           lastHitAt: Date.now() - 300 * DAY_MS,
@@ -207,36 +212,40 @@ describe('DecayDetector', () => {
     expect(result.decayScore).toBeLessThan(80);
   });
 
-  it('should detect source_ref_stale from recipe_source_refs', () => {
+  it('should detect source_ref_stale from recipe_source_refs', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 10 * DAY_MS,
       hitsLast90d: 10,
       authority: 50,
     });
     const recipe = makeRecipe({ stats, quality_score: 0.5 });
-    const detector = new DecayDetector(makeMockDb({ staleRefCount: { r1: 2 } }));
+    const detector = new DecayDetector(makeMockRepo() as any, {
+      sourceRefRepo: makeMockSourceRefRepo(2) as any,
+    });
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     expect(result.signals.some((s) => s.strategy === 'source_ref_stale')).toBe(true);
     expect(result.signals.find((s) => s.strategy === 'source_ref_stale')?.detail).toContain(
       '2 source reference(s)'
     );
   });
 
-  it('should NOT flag source_ref_stale when no stale refs', () => {
+  it('should NOT flag source_ref_stale when no stale refs', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 10 * DAY_MS,
       hitsLast90d: 10,
       authority: 50,
     });
     const recipe = makeRecipe({ stats, quality_score: 0.5 });
-    const detector = new DecayDetector(makeMockDb({ staleRefCount: { r1: 0 } }));
+    const detector = new DecayDetector(makeMockRepo() as any, {
+      sourceRefRepo: makeMockSourceRefRepo(0, 2) as any,
+    });
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     expect(result.signals.some((s) => s.strategy === 'source_ref_stale')).toBe(false);
   });
 
-  it('should penalize quality dimension based on staleRatio', () => {
+  it('should penalize quality dimension based on staleRatio', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 2 * DAY_MS,
       hitsLast90d: 30,
@@ -244,18 +253,18 @@ describe('DecayDetector', () => {
     });
     // All refs stale: staleRatio = 3/3 = 1.0 → quality × 0.7
     const recipe = makeRecipe({ stats, quality_score: 0.9 });
-    const detector = new DecayDetector(
-      makeMockDb({ staleRefCount: { r1: 3 }, totalRefCount: { r1: 3 } })
-    );
+    const detector = new DecayDetector(makeMockRepo() as any, {
+      sourceRefRepo: makeMockSourceRefRepo(3, 3) as any,
+    });
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     // quality = 0.9 × 0.7 = 0.63, weighted = 0.63 × 0.2 × 100 = 12.6
     // vs no-stale: quality = 0.9, weighted = 0.9 × 0.2 × 100 = 18
     // diff ≈ 5.4 points
     expect(result.dimensions.quality).toBeCloseTo(0.63, 1);
   });
 
-  it('should recover quality when stale ratio drops to zero (self-repair)', () => {
+  it('should recover quality when stale ratio drops to zero (self-repair)', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 2 * DAY_MS,
       hitsLast90d: 30,
@@ -264,16 +273,16 @@ describe('DecayDetector', () => {
     const recipe = makeRecipe({ stats, quality_score: 0.9 });
 
     // After repair: 0 stale, 3 total → staleRatio = 0
-    const detector = new DecayDetector(
-      makeMockDb({ staleRefCount: { r1: 0 }, totalRefCount: { r1: 3 } })
-    );
+    const detector = new DecayDetector(makeMockRepo() as any, {
+      sourceRefRepo: makeMockSourceRefRepo(0, 3) as any,
+    });
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     // quality should be unpenalized
     expect(result.dimensions.quality).toBeCloseTo(0.9, 1);
   });
 
-  it('should apply partial penalty for partial staleness', () => {
+  it('should apply partial penalty for partial staleness', async () => {
     const stats = JSON.stringify({
       lastHitAt: Date.now() - 2 * DAY_MS,
       hitsLast90d: 30,
@@ -281,37 +290,38 @@ describe('DecayDetector', () => {
     });
     // 1 of 2 stale: staleRatio = 0.5 → quality × 0.85
     const recipe = makeRecipe({ stats, quality_score: 0.8 });
-    const detector = new DecayDetector(
-      makeMockDb({ staleRefCount: { r1: 1 }, totalRefCount: { r1: 2 } })
-    );
+    const detector = new DecayDetector(makeMockRepo() as any, {
+      sourceRefRepo: makeMockSourceRefRepo(1, 2) as any,
+    });
 
-    const result = detector.evaluate(recipe);
+    const result = await detector.evaluate(recipe);
     // quality = 0.8 × (1 - 0.5 × 0.3) = 0.8 × 0.85 = 0.68
     expect(result.dimensions.quality).toBeCloseTo(0.68, 1);
   });
 
-  it('scanAll emits decay signals for non-healthy recipes', () => {
-    const recipes = [
+  it('scanAll emits decay signals for non-healthy recipes', async () => {
+    const repoEntries = [
       {
         id: 'r1',
         title: 'Decaying recipe',
         lifecycle: 'active',
-        stats: JSON.stringify({
+        stats: {
           lastHitAt: Date.now() - 200 * DAY_MS,
           hitsLast90d: 0,
           authority: 10,
-        }),
-        quality_grade: null,
-        quality_score: 0.2,
-        created_at: null,
+        },
+        quality: { grade: null, overall: 0.2 },
+        createdAt: null,
       },
     ];
 
     const signals: unknown[] = [];
     const signalBus = { send: (...args: unknown[]) => signals.push(args) };
-    const detector = new DecayDetector(makeMockDb({ recipes }), { signalBus: signalBus as never });
+    const detector = new DecayDetector(makeMockRepo(repoEntries) as any, {
+      signalBus: signalBus as never,
+    });
 
-    const results = detector.scanAll();
+    const results = await detector.scanAll();
     expect(results.length).toBe(1);
     expect(results[0].level).not.toBe('healthy');
     expect(signals.length).toBeGreaterThanOrEqual(1);

@@ -116,7 +116,7 @@ export class KnowledgeMetabolism {
     this.#debounceTimer = setTimeout(() => {
       this.#debounceTimer = null;
       if (this.#pendingTriggers.length > 0) {
-        this.runFullCycle();
+        void this.runFullCycle();
         this.#pendingTriggers = [];
       }
     }, 30_000);
@@ -125,17 +125,17 @@ export class KnowledgeMetabolism {
   /**
    * 执行完整治理周期
    */
-  runFullCycle(): MetabolismReport {
+  async runFullCycle(): Promise<MetabolismReport> {
     this.#logger.info('KnowledgeMetabolism: starting full governance cycle');
 
     // 1. 衰退检测
-    const decayResults = this.#decayDetector.scanAll();
+    const decayResults = await this.#decayDetector.scanAll();
 
     // 2. 矛盾检测
-    const contradictions = this.#contradictionDetector.detectAll();
+    const contradictions = await this.#contradictionDetector.detectAll();
 
     // 3. 冗余分析
-    const redundancies = this.#redundancyAnalyzer.analyzeAll();
+    const redundancies = await this.#redundancyAnalyzer.analyzeAll();
 
     // 4. 生成进化提案
     const proposals: EvolutionProposal[] = [
@@ -212,22 +212,22 @@ export class KnowledgeMetabolism {
   /**
    * 只执行衰退扫描
    */
-  checkDecay(): DecayScoreResult[] {
-    return this.#decayDetector.scanAll();
+  async checkDecay(): Promise<DecayScoreResult[]> {
+    return await this.#decayDetector.scanAll();
   }
 
   /**
    * 只执行矛盾检测
    */
-  checkContradictions(): ContradictionResult[] {
-    return this.#contradictionDetector.detectAll();
+  async checkContradictions(): Promise<ContradictionResult[]> {
+    return await this.#contradictionDetector.detectAll();
   }
 
   /**
    * 只执行冗余分析
    */
-  checkRedundancy(): RedundancyResult[] {
-    return this.#redundancyAnalyzer.analyzeAll();
+  async checkRedundancy(): Promise<RedundancyResult[]> {
+    return await this.#redundancyAnalyzer.analyzeAll();
   }
 
   /* ── Proposal Generation ── */

@@ -4,11 +4,9 @@
 import { describe, expect, it } from 'vitest';
 import { ContradictionDetector } from '../../lib/service/evolution/ContradictionDetector.js';
 
-function mockDb(rows: Record<string, unknown>[] = []) {
+function mockRepo(rows: Record<string, unknown>[] = []) {
   return {
-    prepare: () => ({
-      all: () => rows,
-    }),
+    findAllByLifecycles: async () => rows,
   };
 }
 
@@ -28,7 +26,7 @@ function makeRecipe(overrides: Record<string, unknown> = {}) {
 
 describe('ContradictionDetector', () => {
   it('should return empty for non-contradicting recipes', () => {
-    const detector = new ContradictionDetector(mockDb());
+    const detector = new ContradictionDetector(mockRepo() as any);
     const a = makeRecipe({ id: 'r1', title: 'Use SnapKit for layout', doClause: 'Use SnapKit' });
     const b = makeRecipe({ id: 'r2', title: 'Use Masonry for layout', doClause: 'Use Masonry' });
 
@@ -37,7 +35,7 @@ describe('ContradictionDetector', () => {
   });
 
   it('should detect negation-based contradiction', () => {
-    const detector = new ContradictionDetector(mockDb());
+    const detector = new ContradictionDetector(mockRepo() as any);
     const a = makeRecipe({
       id: 'r1',
       title: 'Use dispatch_sync for UI updates',
@@ -55,7 +53,7 @@ describe('ContradictionDetector', () => {
   });
 
   it('should detect doClause vs dontClause cross reference', () => {
-    const detector = new ContradictionDetector(mockDb());
+    const detector = new ContradictionDetector(mockRepo() as any);
     const a = makeRecipe({
       id: 'r1',
       doClause: 'Use NSTimer in viewDidLoad for periodic updates',
@@ -71,7 +69,7 @@ describe('ContradictionDetector', () => {
   });
 
   it('should detect guard regex mutual exclusion', () => {
-    const detector = new ContradictionDetector(mockDb());
+    const detector = new ContradictionDetector(mockRepo() as any);
     const a = makeRecipe({
       id: 'r1',
       title: 'Use SnapKit pattern',
@@ -91,7 +89,7 @@ describe('ContradictionDetector', () => {
   });
 
   it('should classify hard vs soft contradiction', () => {
-    const detector = new ContradictionDetector(mockDb());
+    const detector = new ContradictionDetector(mockRepo() as any);
     // Hard: negation + cross clause = score >= 0.7
     const a = makeRecipe({
       id: 'r1',
@@ -121,7 +119,7 @@ describe('ContradictionDetector', () => {
     expect(words.has('use')).toBe(false);
   });
 
-  it('should detectAll with SignalBus emission', () => {
+  it('should detectAll with SignalBus emission', async () => {
     const rows = [
       {
         id: 'r1',
@@ -147,9 +145,11 @@ describe('ContradictionDetector', () => {
 
     const signals: unknown[] = [];
     const signalBus = { send: (...args: unknown[]) => signals.push(args) };
-    const detector = new ContradictionDetector(mockDb(rows), { signalBus: signalBus as never });
+    const detector = new ContradictionDetector(mockRepo(rows) as any, {
+      signalBus: signalBus as never,
+    });
 
-    const results = detector.detectAll();
+    const results = await detector.detectAll();
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(signals.length).toBeGreaterThanOrEqual(1);
   });

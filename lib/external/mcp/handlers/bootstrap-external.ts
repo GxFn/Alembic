@@ -156,7 +156,7 @@ export async function bootstrapExternal(ctx: McpContext) {
     session,
     languageExtension: buildLanguageExtension(primaryLang), // §7.1
     languageStats: langStats,
-    panoramaResult: snapshot.panorama, // §M1: Phase 1.8 全景数据
+    panoramaResult: snapshot.panorama, // §M1: Phase 2.2 全景数据
     localPackageModules, // 本地子包模块信息
   });
 

@@ -13,6 +13,7 @@
  * @module service/vector/VectorService
  */
 
+import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
 import type { EventBus } from '../../infrastructure/event/EventBus.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
@@ -36,6 +37,7 @@ export interface VectorServiceConfig {
   contextualEnricher: ContextualEnricher | null;
   autoSyncOnCrud: boolean;
   syncDebounceMs: number;
+  drizzle?: DrizzleDB;
 }
 
 export interface BuildResult {
@@ -85,6 +87,7 @@ export class VectorService {
   #syncCoordinator: SyncCoordinator | null = null;
   #autoSyncOnCrud: boolean;
   #syncDebounceMs: number;
+  #drizzle: DrizzleDB | null;
   #logger = Logger.getInstance();
   #initialized = false;
 
@@ -103,6 +106,7 @@ export class VectorService {
     this.#contextualEnricher = config.contextualEnricher;
     this.#autoSyncOnCrud = config.autoSyncOnCrud;
     this.#syncDebounceMs = config.syncDebounceMs;
+    this.#drizzle = config.drizzle ?? null;
   }
 
   // ═══ Lifecycle ═══
@@ -121,6 +125,7 @@ export class VectorService {
         embedProvider: this.#embedProvider,
         contextualEnricher: this.#contextualEnricher,
         debounceMs: this.#syncDebounceMs,
+        drizzle: this.#drizzle ?? undefined,
       });
       this.#syncCoordinator.bindEventBus(this.#eventBus);
       this.#logger.info('[VectorService] SyncCoordinator bound to EventBus');

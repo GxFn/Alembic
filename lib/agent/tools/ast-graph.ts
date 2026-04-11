@@ -131,7 +131,7 @@ export const getProjectOverview = {
       return 'AST 分析不可用 — ProjectGraph 未构建。请检查 tree-sitter 是否已安装。';
     }
 
-    const o = graph.getOverview();
+    const o = await graph.getOverview();
 
     // §P2: 从文件扩展名统计语言分布
     const langStats: Record<string, number> = {};
@@ -697,18 +697,19 @@ export const queryCodeGraph = {
       let ceg = ctx?.container?.get?.('codeEntityGraph');
       if (!ceg) {
         const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
-        const db = ctx?.container?.get?.('database');
-        if (!db) {
+        const entityRepo = ctx?.container?.get?.('codeEntityRepository');
+        const edgeRepo = ctx?.container?.get?.('knowledgeEdgeRepository');
+        if (!entityRepo || !edgeRepo) {
           return '代码实体图谱不可用: 数据库未初始化';
         }
         const projectRoot = ctx?.projectRoot || process.env.ASD_PROJECT_DIR || '';
-        ceg = new CodeEntityGraph(db, { projectRoot });
+        ceg = new CodeEntityGraph(entityRepo, edgeRepo, { projectRoot });
       }
       const maxDepth = params.max_depth || 3;
 
       switch (params.action) {
         case 'search': {
-          const results = ceg.searchEntities(params.entity_id, {
+          const results = await ceg.searchEntities(params.entity_id, {
             type: params.entity_type,
             limit: 15,
           });
@@ -725,7 +726,7 @@ export const queryCodeGraph = {
         }
 
         case 'inheritance_chain': {
-          const chain = ceg.getInheritanceChain(params.entity_id, maxDepth);
+          const chain = await ceg.getInheritanceChain(params.entity_id, maxDepth);
           if (chain.length <= 1) {
             return `\`${params.entity_id}\` 没有已知的继承关系。`;
           }
@@ -734,7 +735,7 @@ export const queryCodeGraph = {
 
         case 'descendants': {
           const type = params.entity_type || 'class';
-          const desc = ceg.getDescendants(params.entity_id, type, maxDepth);
+          const desc = await ceg.getDescendants(params.entity_id, type, maxDepth);
           if (desc.length === 0) {
             return `\`${params.entity_id}\` 没有已知的子类/遵循者。`;
           }
@@ -746,7 +747,7 @@ export const queryCodeGraph = {
         }
 
         case 'conformances': {
-          const protos = ceg.getConformances(params.entity_id);
+          const protos = await ceg.getConformances(params.entity_id);
           if (protos.length === 0) {
             return `\`${params.entity_id}\` 没有已知的协议遵循。`;
           }
@@ -755,7 +756,7 @@ export const queryCodeGraph = {
 
         case 'impact': {
           const type = params.entity_type || 'class';
-          const impact = ceg.getImpactRadius(params.entity_id, type, maxDepth);
+          const impact = await ceg.getImpactRadius(params.entity_id, type, maxDepth);
           if (impact.length === 0) {
             return `修改 \`${params.entity_id}\` 没有检测到直接影响。`;
           }
@@ -767,7 +768,7 @@ export const queryCodeGraph = {
         }
 
         case 'topology': {
-          const topo = ceg.getTopology();
+          const topo = await ceg.getTopology();
           if (topo.totalEntities === 0) {
             return '代码实体图谱为空。需先执行 Bootstrap。';
           }
@@ -788,7 +789,7 @@ export const queryCodeGraph = {
 
         case 'entity_edges': {
           const type = params.entity_type || 'class';
-          const edges = ceg.getEntityEdges(params.entity_id, type);
+          const edges = await ceg.getEntityEdges(params.entity_id, type);
           const total = edges.outgoing.length + edges.incoming.length;
           if (total === 0) {
             return `\`${params.entity_id}\` 没有已知的图谱边。`;
@@ -875,12 +876,13 @@ export const queryCallGraph = {
       if (!ceg) {
         // fallback: 手动构建
         const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
-        const db = ctx?.container?.get?.('database');
-        if (!db) {
+        const entityRepo = ctx?.container?.get?.('codeEntityRepository');
+        const edgeRepo = ctx?.container?.get?.('knowledgeEdgeRepository');
+        if (!entityRepo || !edgeRepo) {
           return '调用图查询不可用: 数据库未初始化。';
         }
         const projectRoot = ctx?.projectRoot || process.env.ASD_PROJECT_DIR || '';
-        ceg = new CodeEntityGraph(db, { projectRoot });
+        ceg = new CodeEntityGraph(entityRepo, edgeRepo, { projectRoot });
       }
 
       const direction = params.direction || 'both';
@@ -888,10 +890,10 @@ export const queryCallGraph = {
 
       // search 模式: 按名称搜索方法实体
       if (direction === 'search') {
-        const results = ceg.searchEntities(methodName, { type: 'method', limit: 15 });
+        const results = await ceg.searchEntities(methodName, { type: 'method', limit: 15 });
         if (results.length === 0) {
           // 降级: 不限类型搜索
-          const allResults = ceg.searchEntities(methodName, { limit: 15 });
+          const allResults = await ceg.searchEntities(methodName, { limit: 15 });
           if (allResults.length === 0) {
             return `未找到匹配 "${methodName}" 的实体。请确认 bootstrap 已完成。`;
           }
@@ -912,7 +914,7 @@ export const queryCallGraph = {
 
       // impact 模式
       if (direction === 'impact') {
-        const impact = ceg.getCallImpactRadius(methodName);
+        const impact = await ceg.getCallImpactRadius(methodName);
         const lines = [
           `⚡ 修改 "${methodName}" 的影响半径:`,
           `  直接调用者: ${impact.directCallers}`,
@@ -935,10 +937,10 @@ export const queryCallGraph = {
       // callers / callees / both 模式
       const result: { callers?: CallGraphCallerEntry[]; callees?: CallGraphCalleeEntry[] } = {};
       if (direction === 'callers' || direction === 'both') {
-        result.callers = ceg.getCallers(methodName, maxDepth);
+        result.callers = await ceg.getCallers(methodName, maxDepth);
       }
       if (direction === 'callees' || direction === 'both') {
-        result.callees = ceg.getCallees(methodName, maxDepth);
+        result.callees = await ceg.getCallees(methodName, maxDepth);
       }
 
       const totalCallers = result.callers?.length || 0;

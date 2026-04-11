@@ -9,7 +9,7 @@
  *   Phase 1   → 文件收集（DiscovererRegistry → 多语言项目类型检测）
  *   Phase 1.5 → AST 代码结构分析（tree-sitter + SFC 预处理）
  *   Phase 1.6 → Code Entity Graph（代码实体关系图谱）
- *   Phase 1.8 → Panorama 全景汇总（RoleRefiner + CouplingAnalyzer + LayerInferrer）
+ *   Phase 2.2 → Panorama 全景汇总（RoleRefiner + CouplingAnalyzer + LayerInferrer）
  *   Phase 2   → 依赖关系 → knowledge_edges
  *   Phase 2.1 → Module 实体写入 Entity Graph
  *   Phase 3   → Guard 规则审计
@@ -434,12 +434,13 @@ export async function runPhase1_6_EntityGraph(
   if (astProjectSummary) {
     try {
       const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
-      const db = container.get('database');
-      if (db) {
-        const ceg = new CodeEntityGraph(db, { projectRoot });
-        ceg.clearProject();
+      const entityRepo = container.get('codeEntityRepository');
+      const edgeRepo = container.get('knowledgeEdgeRepository');
+      if (entityRepo && edgeRepo) {
+        const ceg = new CodeEntityGraph(entityRepo, edgeRepo, { projectRoot });
+        await ceg.clearProject();
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- ProjectAnalysisResult structurally compatible at runtime
-        codeEntityResult = ceg.populateFromAst(
+        codeEntityResult = await ceg.populateFromAst(
           astProjectSummary as Parameters<typeof ceg.populateFromAst>[0]
         );
         logger.info(
@@ -528,16 +529,17 @@ export async function runPhase1_7_CallGraph(
         );
 
     // 写入 CodeEntityGraph
-    const db = container.get('database');
-    if (db && result && result.callEdges.length > 0) {
-      const ceg = new CodeEntityGraph(db, { projectRoot });
+    const entityRepo = container.get('codeEntityRepository');
+    const edgeRepo = container.get('knowledgeEdgeRepository');
+    if (entityRepo && edgeRepo && result && result.callEdges.length > 0) {
+      const ceg = new CodeEntityGraph(entityRepo, edgeRepo, { projectRoot });
 
       // 增量模式: 先删除变更文件的旧边
       if (isIncremental) {
-        ceg.clearCallGraphForFiles(changedFiles ?? null);
+        await ceg.clearCallGraphForFiles(changedFiles ?? null);
       }
 
-      callGraphResult = ceg.populateCallGraph(result.callEdges, result.dataFlowEdges);
+      callGraphResult = await ceg.populateCallGraph(result.callEdges, result.dataFlowEdges);
 
       const partialTag = result.stats.partial ? ' [partial]' : '';
       const incrTag = isIncremental ? ' [incremental]' : '';
@@ -586,7 +588,7 @@ export async function runPhase2_DependencyGraph(
     depGraphData = await discoverer.getDependencyGraph();
     if (knowledgeGraphService) {
       for (const edge of depGraphData.edges || []) {
-        const result = knowledgeGraphService.addEdge(
+        const result = await knowledgeGraphService.addEdge(
           edge.from,
           'module',
           edge.to,
@@ -626,10 +628,11 @@ export async function runPhase2_1_ModuleEntities(
 
   try {
     const { CodeEntityGraph } = await import('#service/knowledge/CodeEntityGraph.js');
-    const db = container.get('database');
-    if (db) {
-      const ceg = new CodeEntityGraph(db, { projectRoot });
-      const result = ceg.populateFromSpm(depGraphData);
+    const entityRepo = container.get('codeEntityRepository');
+    const edgeRepo = container.get('knowledgeEdgeRepository');
+    if (entityRepo && edgeRepo) {
+      const ceg = new CodeEntityGraph(entityRepo, edgeRepo, { projectRoot });
+      const result = await ceg.populateFromSpm(depGraphData);
       logger.info(`[Bootstrap] Entity Graph modules: ${result.entitiesUpserted} entities`);
     }
   } catch (e: unknown) {
@@ -992,36 +995,6 @@ export async function runAllPhases(
     report.phases.callGraph = { result: phase1_7.callGraphResult, ms: Date.now() - p17Start };
   }
 
-  // ── Phase 1.8: Panorama 全景汇总 ──
-  let panoramaResult: Record<string, unknown> | null = null;
-  try {
-    const panoramaService = ctx.container?.resolve?.('panoramaService');
-    if (
-      panoramaService &&
-      typeof (panoramaService as { invalidate?: () => void }).invalidate === 'function'
-    ) {
-      const p18Start = Date.now();
-      (panoramaService as { invalidate: () => void }).invalidate();
-      const result = (panoramaService as { getResult: () => Record<string, unknown> }).getResult();
-      panoramaResult = result;
-      ctx.logger.info(`[Bootstrap] Phase 1.8: Panorama computed in ${Date.now() - p18Start}ms`);
-      if (report) {
-        const overview = (
-          panoramaService as { getOverview: () => Record<string, unknown> }
-        ).getOverview();
-        report.phases.panorama = {
-          moduleCount: (overview as { moduleCount?: number }).moduleCount ?? 0,
-          layerCount: (overview as { layerCount?: number }).layerCount ?? 0,
-          ms: Date.now() - p18Start,
-        };
-      }
-    }
-  } catch (err: unknown) {
-    warnings.push(
-      `Phase 1.8 panorama failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
-
   // ── Phase 2: 依赖图 ──
   const p2Start = Date.now();
   const phase2 = await runPhase2_DependencyGraph(
@@ -1040,6 +1013,39 @@ export async function runAllPhases(
 
   // ── Phase 2.1: Module 实体 ──
   await runPhase2_1_ModuleEntities(phase2.depGraphData, projectRoot, ctx.container, ctx.logger);
+
+  // ── Phase 2.2: Panorama 全景汇总 ──
+  // 必须在 Phase 2.1 之后：此时 code_entities 中已有 module 记录
+  let panoramaResult: Record<string, unknown> | null = null;
+  try {
+    const panoramaService = ctx.container.get('panoramaService');
+    if (
+      panoramaService &&
+      typeof (panoramaService as { invalidate?: () => void }).invalidate === 'function'
+    ) {
+      const pPanoStart = Date.now();
+      (panoramaService as { invalidate: () => void }).invalidate();
+      const result = await (
+        panoramaService as { getResult: () => Promise<Record<string, unknown>> }
+      ).getResult();
+      panoramaResult = result;
+      ctx.logger.info(`[Bootstrap] Phase 2.2: Panorama computed in ${Date.now() - pPanoStart}ms`);
+      if (report) {
+        const overview = await (
+          panoramaService as { getOverview: () => Promise<Record<string, unknown>> }
+        ).getOverview();
+        report.phases.panorama = {
+          moduleCount: (overview as { moduleCount?: number }).moduleCount ?? 0,
+          layerCount: (overview as { layerCount?: number }).layerCount ?? 0,
+          ms: Date.now() - pPanoStart,
+        };
+      }
+    }
+  } catch (err: unknown) {
+    warnings.push(
+      `Phase 2.2 panorama failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 
   // ── Phase 3: Guard 审计 ──
   const p3Start = Date.now();
@@ -1141,7 +1147,7 @@ export async function runAllPhases(
     warnings,
     report, // NEW: Phase 级报告 (null if generateReport=false)
     incrementalPlan, // NEW: 增量评估结果 (null if incremental=false)
-    panoramaResult, // Phase 1.8: 全景汇总 (null if panoramaService unavailable)
+    panoramaResult, // Phase 2.2: 全景汇总 (null if panoramaService unavailable)
     isEmpty: false,
   };
 }

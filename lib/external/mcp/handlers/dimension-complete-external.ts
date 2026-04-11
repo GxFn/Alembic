@@ -358,7 +358,7 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
     if (knowledgeGraphService && keyFindings.length > 0) {
       // 将每个 keyFinding 创建为知识图谱中的实体
       for (const finding of keyFindings) {
-        knowledgeGraphService.addEdge(
+        await knowledgeGraphService.addEdge(
           dimensionId,
           'dimension',
           finding.substring(0, 80),
@@ -462,8 +462,10 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
         typeof (panoramaService as { rescan?: () => Promise<void> }).rescan === 'function'
       ) {
         await (panoramaService as { rescan: () => Promise<void> }).rescan();
-        const overview = (
-          panoramaService as { getOverview: () => { moduleCount: number; gapCount: number } }
+        const overview = await (
+          panoramaService as {
+            getOverview: () => Promise<{ moduleCount: number; gapCount: number }>;
+          }
         ).getOverview();
         logger.info(
           `[DimensionComplete] Panorama refreshed — ${overview.moduleCount} modules, ${overview.gapCount} gaps`
@@ -511,7 +513,11 @@ export async function dimensionComplete(ctx: McpContext, args: DimensionComplete
         const db = ctx.container.get?.('database') ?? ctx.container.get?.('db');
         if (db && session.sessionStore) {
           const { PersistentMemory } = await import('#agent/memory/PersistentMemory.js');
-          const semanticMemory = new PersistentMemory(db, { logger });
+          const { MemoryEmbeddingStore } = await import('#agent/memory/MemoryEmbeddingStore.js');
+          const semanticMemory = new PersistentMemory(db, {
+            logger,
+            embeddingStore: new MemoryEmbeddingStore(projectRoot),
+          });
           const consolidator = new EpisodicConsolidator(semanticMemory, { logger });
           const result = await consolidator.consolidate(session.sessionStore, {
             bootstrapSession: session.id,

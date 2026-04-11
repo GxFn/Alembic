@@ -13,23 +13,21 @@
  * @module PanoramaService
  */
 
+import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-import { ModuleDiscoverer } from './ModuleDiscoverer.js';
+import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import type { ModuleDiscoverer } from './ModuleDiscoverer.js';
 import type { PanoramaAggregator } from './PanoramaAggregator.js';
 import type { PanoramaScanner } from './PanoramaScanner.js';
-import type {
-  CeDbLike,
-  HealthRadar,
-  KnowledgeGap,
-  PanoramaModule,
-  PanoramaResult,
-} from './PanoramaTypes.js';
+import type { HealthRadar, KnowledgeGap, PanoramaModule, PanoramaResult } from './PanoramaTypes.js';
 
 /* ═══ Types ═══════════════════════════════════════════════ */
 
 export interface PanoramaServiceOptions {
   aggregator: PanoramaAggregator;
-  db: CeDbLike;
+  edgeRepo: KnowledgeEdgeRepositoryImpl;
+  knowledgeRepo: KnowledgeRepositoryImpl;
   projectRoot: string;
   scanner?: PanoramaScanner;
   moduleDiscoverer?: ModuleDiscoverer;
@@ -95,7 +93,8 @@ const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24h
 
 export class PanoramaService {
   readonly #aggregator: PanoramaAggregator;
-  readonly #db: CeDbLike;
+  readonly #edgeRepo: KnowledgeEdgeRepositoryImpl;
+  readonly #knowledgeRepo: KnowledgeRepositoryImpl;
   readonly #projectRoot: string;
   readonly #scanner: PanoramaScanner | null;
   readonly #moduleDiscoverer: ModuleDiscoverer;
@@ -106,11 +105,15 @@ export class PanoramaService {
 
   constructor(opts: PanoramaServiceOptions) {
     this.#aggregator = opts.aggregator;
-    this.#db = opts.db;
+    this.#edgeRepo = opts.edgeRepo;
+    this.#knowledgeRepo = opts.knowledgeRepo;
     this.#projectRoot = opts.projectRoot;
     this.#scanner = opts.scanner ?? null;
     this.#moduleDiscoverer =
-      opts.moduleDiscoverer ?? new ModuleDiscoverer(opts.db, opts.projectRoot);
+      opts.moduleDiscoverer ??
+      (() => {
+        throw new Error('moduleDiscoverer is required');
+      })();
     this.#signalBus = opts.signalBus ?? null;
 
     // Phase 2: 订阅信号标记缓存失效
@@ -126,8 +129,8 @@ export class PanoramaService {
   /**
    * 获取项目全景概览
    */
-  getOverview(): PanoramaOverview {
-    const result = this.#getOrCompute();
+  async getOverview(): Promise<PanoramaOverview> {
+    const result = await this.#getOrCompute();
     const isStale = Date.now() - result.computedAt > STALE_THRESHOLD_MS;
 
     let totalFiles = 0;
@@ -184,8 +187,8 @@ export class PanoramaService {
   /**
    * 获取单模块详情 (enriched with file groups, recipes, and summary)
    */
-  getModule(moduleName: string): PanoramaModuleDetail | null {
-    const result = this.#getOrCompute();
+  async getModule(moduleName: string): Promise<PanoramaModuleDetail | null> {
+    const result = await this.#getOrCompute();
     const mod = result.modules.get(moduleName);
     if (!mod) {
       return null;
@@ -198,43 +201,31 @@ export class PanoramaService {
     const fileGroups = PanoramaService.#groupFilesBySubdir(mod.files);
 
     // Matched recipes from DB
-    const recipes = this.#findModuleRecipes(moduleName, mod);
+    const recipes = await this.#findModuleRecipes(moduleName, mod);
 
     // Uncovered file count estimate
     const coveredFileCount = Math.min(recipes.length * 2, mod.fileCount); // rough heuristic
     const uncoveredFileCount = Math.max(0, mod.fileCount - coveredFileCount);
 
-    // Neighbors from DB edges
+    // Neighbors from edge repo
     const neighbors: Array<{ name: string; direction: 'in' | 'out'; weight: number }> = [];
 
-    const outNeighbors = this.#db
-      .prepare(
-        `SELECT DISTINCT to_id, weight FROM knowledge_edges
-         WHERE from_id = ? AND from_type = 'module' AND relation = 'depends_on'`
-      )
-      .all(moduleName) as Array<Record<string, unknown>>;
-
-    for (const n of outNeighbors) {
-      neighbors.push({
-        name: n.to_id as string,
-        direction: 'out',
-        weight: Number(n.weight ?? 1),
-      });
+    const outEdges = await this.#edgeRepo.findOutgoingByRelation(moduleName, 'depends_on');
+    const seenOut = new Set<string>();
+    for (const e of outEdges) {
+      if (!seenOut.has(e.toId)) {
+        seenOut.add(e.toId);
+        neighbors.push({ name: e.toId, direction: 'out', weight: e.weight });
+      }
     }
 
-    const inNeighbors = this.#db
-      .prepare(
-        `SELECT DISTINCT from_id, weight FROM knowledge_edges
-         WHERE to_id = ? AND to_type = 'module' AND relation = 'depends_on'`
-      )
-      .all(moduleName) as Array<Record<string, unknown>>;
-
-    for (const n of inNeighbors) {
-      neighbors.push({
-        name: n.from_id as string,
-        direction: 'in',
-        weight: Number(n.weight ?? 1),
-      });
+    const inEdges = await this.#edgeRepo.findIncomingByRelation(moduleName, 'depends_on');
+    const seenIn = new Set<string>();
+    for (const e of inEdges) {
+      if (!seenIn.has(e.fromId)) {
+        seenIn.add(e.fromId);
+        neighbors.push({ name: e.fromId, direction: 'in', weight: e.weight });
+      }
     }
 
     // Generate summary
@@ -316,10 +307,10 @@ export class PanoramaService {
   }
 
   /** Find recipes related to this module by category, trigger, or title match */
-  #findModuleRecipes(
+  async #findModuleRecipes(
     moduleName: string,
     mod: PanoramaModule
-  ): Array<{ id: string; title: string; trigger: string; kind: string }> {
+  ): Promise<Array<{ id: string; title: string; trigger: string; kind: string }>> {
     try {
       // Map refined role to typical recipe categories
       const roleCategories: Record<string, string[]> = {
@@ -335,38 +326,12 @@ export class PanoramaService {
 
       const categories = roleCategories[mod.refinedRole] ?? [];
 
-      // Build a LIKE query that matches module name or related categories
-      const conditions: string[] = [];
-      const params: string[] = [];
-
-      // Match by module name in title or trigger
-      conditions.push('(title LIKE ? OR trigger LIKE ?)');
-      params.push(`%${moduleName}%`, `%${moduleName}%`);
-
-      // Match by category
-      for (const cat of categories) {
-        conditions.push('category = ?');
-        params.push(cat);
-      }
-
-      const whereClause = conditions.join(' OR ');
-
-      const rows = this.#db
-        .prepare(
-          `SELECT id, title, trigger, kind FROM knowledge_entries
-           WHERE lifecycle IN ('active', 'staging', 'pending')
-             AND (${whereClause})
-           ORDER BY lifecycle ASC
-           LIMIT 20`
-        )
-        .all(...params) as Array<Record<string, unknown>>;
-
-      return rows.map((r) => ({
-        id: String(r.id ?? ''),
-        title: String(r.title ?? ''),
-        trigger: String(r.trigger ?? ''),
-        kind: String(r.kind ?? ''),
-      }));
+      return await this.#knowledgeRepo.findModuleRecipes(
+        COUNTABLE_LIFECYCLES,
+        moduleName,
+        categories,
+        20
+      );
     } catch {
       return [];
     }
@@ -427,16 +392,16 @@ export class PanoramaService {
   /**
    * 获取知识空白区
    */
-  getGaps(): KnowledgeGap[] {
-    const result = this.#getOrCompute();
+  async getGaps(): Promise<KnowledgeGap[]> {
+    const result = await this.#getOrCompute();
     return result.gaps;
   }
 
   /**
    * 获取全景健康度
    */
-  getHealth(): PanoramaHealth {
-    const result = this.#getOrCompute();
+  async getHealth(): Promise<PanoramaHealth> {
+    const result = await this.#getOrCompute();
 
     let totalCoupling = 0;
     let count = 0;
@@ -472,8 +437,8 @@ export class PanoramaService {
   /**
    * 获取完整 PanoramaResult（内部使用或 Bootstrap 注入）
    */
-  getResult(): PanoramaResult {
-    return this.#getOrCompute();
+  async getResult(): Promise<PanoramaResult> {
+    return await this.#getOrCompute();
   }
 
   /**
@@ -515,14 +480,14 @@ export class PanoramaService {
 
   /* ─── Cache + Compute ───────────────────────────── */
 
-  #getOrCompute(): PanoramaResult {
+  async #getOrCompute(): Promise<PanoramaResult> {
     if (this.#cache) {
       return this.#cache;
     }
 
-    const candidates = this.#moduleDiscoverer.discover();
-    const configLayers = this.#moduleDiscoverer.readConfigLayers();
-    this.#cache = this.#aggregator.compute(candidates, { configLayers });
+    const candidates = await this.#moduleDiscoverer.discover();
+    const configLayers = await this.#moduleDiscoverer.readConfigLayers();
+    this.#cache = await this.#aggregator.compute(candidates, { configLayers });
     return this.#cache;
   }
 }

@@ -243,6 +243,7 @@ Recipe 是 Markdown 文件，SQLite 只是读缓存。数据库坏了 `asd sync`
 
 | 文档 | 内容 |
 |------|------|
+| **[技术解构 Book](https://docs.gaoxuefeng.com/part1/ch01-introduction)** | **逐模块深度解读 — 架构决策、数据流与实现细节** |
 | [技术参考](docs/technical-reference.md) | 六大子系统实现细节、工程数据、防御链详解 |
 | [Dashboard](docs/dashboard.md) | Dashboard 功能视图与技术栈 |
 | [CLI 命令参考](docs/cli-reference.md) | 20 个命令的完整用法 |

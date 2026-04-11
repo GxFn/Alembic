@@ -16,6 +16,7 @@ import type {
   ProposalRepository,
   ProposalSource,
 } from '../../repository/evolution/ProposalRepository.js';
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 
 /* ────────────────────── Types ────────────────────── */
 
@@ -23,7 +24,6 @@ import type {
 interface MinimalContainer {
   get(name: string): unknown;
 }
-
 export interface SupersedeInput {
   /** 被替代的旧 Recipe ID */
   oldRecipeId: string;
@@ -44,14 +44,6 @@ export interface SupersedeResult {
   message: string;
 }
 
-/* ────────────────────── DB helper types ────────────────────── */
-
-interface DatabaseLike {
-  getDb(): {
-    prepare(sql: string): { get(...p: unknown[]): unknown };
-  };
-}
-
 /* ────────────────────── Main ────────────────────── */
 
 /**
@@ -59,10 +51,10 @@ interface DatabaseLike {
  *
  * @returns SupersedeResult（成功）| null（ProposalRepo 不可用 / 旧 Recipe 不存在 / 去重拒绝）
  */
-export function createSupersedeProposal(
+export async function createSupersedeProposal(
   container: MinimalContainer,
   input: SupersedeInput
-): SupersedeResult | null {
+): Promise<SupersedeResult | null> {
   const { oldRecipeId, newRecipeIds, source = 'ide-agent', confidence = 0.8 } = input;
 
   if (!oldRecipeId || newRecipeIds.length === 0) {
@@ -81,7 +73,7 @@ export function createSupersedeProposal(
   }
 
   // 2. 验证旧 Recipe 存在
-  if (!verifyRecipeExists(container, oldRecipeId)) {
+  if (!(await verifyRecipeExists(container, oldRecipeId))) {
     return null;
   }
 
@@ -118,15 +110,16 @@ export function createSupersedeProposal(
 
 /* ────────────────────── Helpers ────────────────────── */
 
-function verifyRecipeExists(container: MinimalContainer, recipeId: string): boolean {
+async function verifyRecipeExists(container: MinimalContainer, recipeId: string): Promise<boolean> {
   try {
-    const db = container.get('database') as DatabaseLike | undefined;
-    if (!db) {
+    const knowledgeRepo = container.get('knowledgeRepository') as
+      | KnowledgeRepositoryImpl
+      | undefined;
+    if (!knowledgeRepo) {
       return false;
     }
-    const rawDb = db.getDb();
-    const row = rawDb.prepare('SELECT id FROM knowledge_entries WHERE id = ?').get(recipeId);
-    return row !== undefined;
+    const entry = await knowledgeRepo.findById(recipeId);
+    return entry !== null;
   } catch {
     return false;
   }

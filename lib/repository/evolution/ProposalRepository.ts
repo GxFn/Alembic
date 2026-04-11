@@ -1,5 +1,5 @@
 /**
- * ProposalRepository — evolution_proposals 表 CRUD
+ * ProposalRepository — evolution_proposals 表 CRUD (Drizzle ORM)
  *
  * 操作 evolution_proposals 表，存储进化提案（merge/supersede/enhance/deprecate/
  * reorganize/contradiction/correction）。
@@ -8,19 +8,18 @@
  *   - 去重：同 target + 同 type 不允许多个 observing 状态的 Proposal
  *   - Rate Limit：同一 target 不允许同时存在多个相同类型的 observing Proposal
  *   - JSON 字段（evidence/related_recipe_ids）序列化/反序列化
+ *
+ * Drizzle 迁移策略 (Phase 5a)：
+ *   - 全部 raw SQL → Drizzle 类型安全 API
+ *   - 构造器接收 DrizzleDB（不再需要 raw Database）
  */
 
 import { randomBytes } from 'node:crypto';
+import { and, count, desc, eq, inArray, lte } from 'drizzle-orm';
+import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
+import { evolutionProposals } from '../../infrastructure/database/drizzle/schema.js';
 
 /* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-    get(...params: unknown[]): Record<string, unknown> | undefined;
-    run(...params: unknown[]): { changes: number };
-  };
-}
 
 /** Proposal 类型 — 统一标准 */
 export type ProposalType =
@@ -105,13 +104,17 @@ const AUTO_OBSERVE_THRESHOLDS: Record<ProposalType, number> = {
   reorganize: Infinity, // 需开发者确认
 };
 
+/* ────────────────────── Drizzle row type ────────────────────── */
+
+type ProposalRow = typeof evolutionProposals.$inferSelect;
+
 /* ────────────────────── Class ────────────────────── */
 
 export class ProposalRepository {
-  readonly #db: DatabaseLike;
+  readonly #drizzle: DrizzleDB;
 
-  constructor(db: DatabaseLike) {
-    this.#db = db;
+  constructor(drizzle: DrizzleDB) {
+    this.#drizzle = drizzle;
   }
 
   /* ═══════════════════ Create ═══════════════════ */
@@ -154,25 +157,22 @@ export class ProposalRepository {
       resolution: null,
     };
 
-    this.#db
-      .prepare(
-        `INSERT INTO evolution_proposals
-         (id, type, target_recipe_id, related_recipe_ids, confidence, source, description, evidence, status, proposed_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        record.id,
-        record.type,
-        record.targetRecipeId,
-        JSON.stringify(record.relatedRecipeIds),
-        record.confidence,
-        record.source,
-        record.description,
-        JSON.stringify(record.evidence),
-        record.status,
-        record.proposedAt,
-        record.expiresAt
-      );
+    this.#drizzle
+      .insert(evolutionProposals)
+      .values({
+        id: record.id,
+        type: record.type,
+        targetRecipeId: record.targetRecipeId,
+        relatedRecipeIds: JSON.stringify(record.relatedRecipeIds),
+        confidence: record.confidence,
+        source: record.source,
+        description: record.description,
+        evidence: JSON.stringify(record.evidence),
+        status: record.status,
+        proposedAt: record.proposedAt,
+        expiresAt: record.expiresAt,
+      })
+      .run();
 
     return record;
   }
@@ -181,52 +181,53 @@ export class ProposalRepository {
 
   /** 按 ID 查询 */
   findById(id: string): ProposalRecord | null {
-    const row = this.#db.prepare(`SELECT * FROM evolution_proposals WHERE id = ?`).get(id);
+    const row = this.#drizzle
+      .select()
+      .from(evolutionProposals)
+      .where(eq(evolutionProposals.id, id))
+      .limit(1)
+      .get();
     return row ? ProposalRepository.#mapRow(row) : null;
   }
 
   /** 按条件查询 */
   find(filter: ProposalFilter = {}): ProposalRecord[] {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+    const conditions = [];
 
     if (filter.status) {
       if (Array.isArray(filter.status)) {
-        const placeholders = filter.status.map(() => '?').join(', ');
-        conditions.push(`status IN (${placeholders})`);
-        params.push(...filter.status);
+        conditions.push(inArray(evolutionProposals.status, filter.status));
       } else {
-        conditions.push('status = ?');
-        params.push(filter.status);
+        conditions.push(eq(evolutionProposals.status, filter.status));
       }
     }
 
     if (filter.type) {
-      conditions.push('type = ?');
-      params.push(filter.type);
+      conditions.push(eq(evolutionProposals.type, filter.type));
     }
 
     if (filter.targetRecipeId) {
-      conditions.push('target_recipe_id = ?');
-      params.push(filter.targetRecipeId);
+      conditions.push(eq(evolutionProposals.targetRecipeId, filter.targetRecipeId));
     }
 
     if (filter.source) {
-      conditions.push('source = ?');
-      params.push(filter.source);
+      conditions.push(eq(evolutionProposals.source, filter.source));
     }
 
     if (filter.expiredBefore) {
-      conditions.push('expires_at <= ?');
-      params.push(filter.expiredBefore);
+      conditions.push(lte(evolutionProposals.expiresAt, filter.expiredBefore));
     }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const rows = this.#db
-      .prepare(`SELECT * FROM evolution_proposals ${where} ORDER BY proposed_at DESC`)
-      .all(...params);
+    const condition = conditions.length > 0 ? and(...conditions) : undefined;
 
-    return rows.map(ProposalRepository.#mapRow);
+    const rows = this.#drizzle
+      .select()
+      .from(evolutionProposals)
+      .where(condition)
+      .orderBy(desc(evolutionProposals.proposedAt))
+      .all();
+
+    return rows.map((r) => ProposalRepository.#mapRow(r));
   }
 
   /** 查询已到期的 observing 状态 Proposal */
@@ -263,59 +264,100 @@ export class ProposalRepository {
     }
 
     const expiresAt = now + (OBSERVATION_WINDOWS[proposal.type] ?? DEFAULT_OBSERVATION_WINDOW);
-    const result = this.#db
-      .prepare(
-        `UPDATE evolution_proposals SET status = 'observing', expires_at = ? WHERE id = ? AND status = 'pending'`
-      )
-      .run(expiresAt, id);
+    const result = this.#drizzle
+      .update(evolutionProposals)
+      .set({ status: 'observing', expiresAt })
+      .where(and(eq(evolutionProposals.id, id), eq(evolutionProposals.status, 'pending')))
+      .run();
     return result.changes > 0;
   }
 
   /** 标记 Proposal 为已执行 */
   markExecuted(id: string, resolution: string, resolvedBy = 'auto'): boolean {
-    const result = this.#db
-      .prepare(
-        `UPDATE evolution_proposals SET status = 'executed', resolved_at = ?, resolved_by = ?, resolution = ? WHERE id = ? AND status = 'observing'`
-      )
-      .run(Date.now(), resolvedBy, resolution, id);
+    const result = this.#drizzle
+      .update(evolutionProposals)
+      .set({
+        status: 'executed',
+        resolvedAt: Date.now(),
+        resolvedBy,
+        resolution,
+      })
+      .where(and(eq(evolutionProposals.id, id), eq(evolutionProposals.status, 'observing')))
+      .run();
     return result.changes > 0;
   }
 
   /** 标记 Proposal 为已拒绝 */
   markRejected(id: string, resolution: string, resolvedBy = 'auto'): boolean {
-    const result = this.#db
-      .prepare(
-        `UPDATE evolution_proposals SET status = 'rejected', resolved_at = ?, resolved_by = ?, resolution = ? WHERE id = ? AND status IN ('pending', 'observing')`
+    const result = this.#drizzle
+      .update(evolutionProposals)
+      .set({
+        status: 'rejected',
+        resolvedAt: Date.now(),
+        resolvedBy,
+        resolution,
+      })
+      .where(
+        and(
+          eq(evolutionProposals.id, id),
+          inArray(evolutionProposals.status, ['pending', 'observing'])
+        )
       )
-      .run(Date.now(), resolvedBy, resolution, id);
+      .run();
     return result.changes > 0;
   }
 
   /** 标记 Proposal 为过期 */
   markExpired(id: string): boolean {
-    const result = this.#db
-      .prepare(
-        `UPDATE evolution_proposals SET status = 'expired', resolved_at = ? WHERE id = ? AND status IN ('pending', 'observing')`
+    const result = this.#drizzle
+      .update(evolutionProposals)
+      .set({
+        status: 'expired',
+        resolvedAt: Date.now(),
+      })
+      .where(
+        and(
+          eq(evolutionProposals.id, id),
+          inArray(evolutionProposals.status, ['pending', 'observing'])
+        )
       )
-      .run(Date.now(), id);
+      .run();
     return result.changes > 0;
   }
 
   /** 更新 evidence（用于追加观察期指标快照） */
   updateEvidence(id: string, evidence: Record<string, unknown>[]): boolean {
-    const result = this.#db
-      .prepare(`UPDATE evolution_proposals SET evidence = ? WHERE id = ?`)
-      .run(JSON.stringify(evidence), id);
+    const result = this.#drizzle
+      .update(evolutionProposals)
+      .set({ evidence: JSON.stringify(evidence) })
+      .where(eq(evolutionProposals.id, id))
+      .run();
     return result.changes > 0;
+  }
+
+  /* ═══════════════════ Delete ═══════════════════ */
+
+  /** 按 target Recipe ID 删除所有 Proposal（用于知识删除时清理关联提案） */
+  deleteByTargetRecipeId(targetRecipeId: string): number {
+    const result = this.#drizzle
+      .delete(evolutionProposals)
+      .where(eq(evolutionProposals.targetRecipeId, targetRecipeId))
+      .run();
+    return result.changes;
   }
 
   /* ═══════════════════ Stats ═══════════════════ */
 
   /** 统计各状态的 Proposal 数量 */
   stats(): Record<ProposalStatus, number> {
-    const rows = this.#db
-      .prepare(`SELECT status, COUNT(*) as count FROM evolution_proposals GROUP BY status`)
-      .all() as { status: string; count: number }[];
+    const rows = this.#drizzle
+      .select({
+        status: evolutionProposals.status,
+        count: count(),
+      })
+      .from(evolutionProposals)
+      .groupBy(evolutionProposals.status)
+      .all();
 
     const result: Record<string, number> = {
       pending: 0,
@@ -334,11 +376,18 @@ export class ProposalRepository {
 
   /** 去重检查：同 target + 同 type 是否已有 pending/observing Proposal */
   #hasDuplicate(targetRecipeId: string, type: ProposalType): boolean {
-    const row = this.#db
-      .prepare(
-        `SELECT 1 FROM evolution_proposals WHERE target_recipe_id = ? AND type = ? AND status IN ('pending', 'observing') LIMIT 1`
+    const row = this.#drizzle
+      .select({ id: evolutionProposals.id })
+      .from(evolutionProposals)
+      .where(
+        and(
+          eq(evolutionProposals.targetRecipeId, targetRecipeId),
+          eq(evolutionProposals.type, type),
+          inArray(evolutionProposals.status, ['pending', 'observing'])
+        )
       )
-      .get(targetRecipeId, type);
+      .limit(1)
+      .get();
     return row !== undefined;
   }
 
@@ -354,23 +403,23 @@ export class ProposalRepository {
     return `ep-${timestamp}-${rand}`;
   }
 
-  /** DB 行 → ProposalRecord */
-  static #mapRow(row: Record<string, unknown>): ProposalRecord {
+  /** Drizzle Row → ProposalRecord */
+  static #mapRow(row: ProposalRow): ProposalRecord {
     return {
-      id: row.id as string,
+      id: row.id,
       type: row.type as ProposalType,
-      targetRecipeId: row.target_recipe_id as string,
-      relatedRecipeIds: safeJsonParse(row.related_recipe_ids as string, []),
-      confidence: row.confidence as number,
+      targetRecipeId: row.targetRecipeId,
+      relatedRecipeIds: safeJsonParse(row.relatedRecipeIds, []),
+      confidence: row.confidence,
       source: row.source as ProposalSource,
-      description: row.description as string,
-      evidence: safeJsonParse(row.evidence as string, []),
+      description: row.description ?? '',
+      evidence: safeJsonParse(row.evidence, []),
       status: row.status as ProposalStatus,
-      proposedAt: row.proposed_at as number,
-      expiresAt: row.expires_at as number,
-      resolvedAt: (row.resolved_at as number) ?? null,
-      resolvedBy: (row.resolved_by as string) ?? null,
-      resolution: (row.resolution as string) ?? null,
+      proposedAt: row.proposedAt,
+      expiresAt: row.expiresAt,
+      resolvedAt: row.resolvedAt ?? null,
+      resolvedBy: row.resolvedBy ?? null,
+      resolution: row.resolution ?? null,
     };
   }
 }

@@ -27,6 +27,8 @@ import type { Edge } from '../../lib/service/panorama/PanoramaTypes.js';
 import type { ModuleCandidate } from '../../lib/service/panorama/RoleRefiner.js';
 import { RoleRefiner } from '../../lib/service/panorama/RoleRefiner.js';
 
+import { createMockRepos, type MockEdge } from '../helpers/panorama-mocks.js';
+
 // ═══════════════════════════════════════════════════════════
 // Phase 1.9-1.10: DiscovererPreference
 // ═══════════════════════════════════════════════════════════
@@ -333,53 +335,29 @@ describe('LayerInferrer — config-based inference', () => {
 // ═══════════════════════════════════════════════════════════
 
 describe('RoleRefiner — configLayer signal', () => {
-  function createMockDb(opts: { moduleEdges?: Array<Record<string, unknown>> } = {}) {
-    return {
-      transaction: (fn: () => void) => fn,
-      exec: () => {},
-      prepare: (sql: string) => ({
-        run: () => ({ changes: 0 }),
-        get: () => undefined,
-        all: (...params: unknown[]) => {
-          if (sql.includes('knowledge_edges') && sql.includes('relation = ?')) {
-            const relation = params[0] as string;
-            return (opts.moduleEdges ?? []).filter((e) => e.relation === relation);
-          }
-          if (sql.includes("relation = 'calls'") && sql.includes('GROUP BY to_id')) {
-            return [];
-          }
-          if (sql.includes("relation = 'data_flow'") && sql.includes('GROUP BY')) {
-            return [];
-          }
-          return [];
-        },
-      }),
-    };
+  function makeRefiner(moduleEdges: MockEdge[] = []) {
+    const repos = createMockRepos({ edges: moduleEdges });
+    return new RoleRefiner(repos.bootstrapRepo, repos.entityRepo, repos.edgeRepo, '/test');
   }
 
-  it('should boost role from configLayer when layer name maps to a role', () => {
-    const db = createMockDb();
-    const refiner = new RoleRefiner(db as never, '/test');
+  it('should boost role from configLayer when layer name maps to a role', async () => {
+    const refiner = makeRefiner();
 
     const candidate: ModuleCandidate = {
       name: 'BDMVNetwork',
-      inferredRole: 'feature', // regex baseline 会给 feature
+      inferredRole: 'feature',
       files: ['/test/BDMVNetwork/Network.swift'],
-      configLayer: 'Services', // 配置声明在 Services 层
+      configLayer: 'Services',
     };
 
-    const result = refiner.refineRole(candidate);
-    // configLayer='Services' → 映射到 'service'
-    // 因为 config-layer 信号的 confidence 0.85 * weight 0.30 = 0.255
-    // 这是一个强信号；即使其他信号分散，service 应该有显著得分
+    const result = await refiner.refineRole(candidate);
     expect(result.signals.some((s) => s.source === 'config-layer' && s.role === 'service')).toBe(
       true
     );
   });
 
-  it('should map Vendors layer to utility role', () => {
-    const db = createMockDb();
-    const refiner = new RoleRefiner(db as never, '/test');
+  it('should map Vendors layer to utility role', async () => {
+    const refiner = makeRefiner();
 
     const candidate: ModuleCandidate = {
       name: 'SomeThirdParty',
@@ -388,16 +366,15 @@ describe('RoleRefiner — configLayer signal', () => {
       configLayer: 'Vendors',
     };
 
-    const result = refiner.refineRole(candidate);
+    const result = await refiner.refineRole(candidate);
     const configSignal = result.signals.find((s) => s.source === 'config-layer');
     expect(configSignal).toBeDefined();
     expect(configSignal!.role).toBe('utility');
     expect(configSignal!.confidence).toBe(0.85);
   });
 
-  it('should map Basics layer to core role', () => {
-    const db = createMockDb();
-    const refiner = new RoleRefiner(db as never, '/test');
+  it('should map Basics layer to core role', async () => {
+    const refiner = makeRefiner();
 
     const candidate: ModuleCandidate = {
       name: 'NetworkKit',
@@ -406,15 +383,14 @@ describe('RoleRefiner — configLayer signal', () => {
       configLayer: 'Basics',
     };
 
-    const result = refiner.refineRole(candidate);
+    const result = await refiner.refineRole(candidate);
     const configSignal = result.signals.find((s) => s.source === 'config-layer');
     expect(configSignal).toBeDefined();
     expect(configSignal!.role).toBe('core');
   });
 
-  it('should map Components/Accessories layer to feature role', () => {
-    const db = createMockDb();
-    const refiner = new RoleRefiner(db as never, '/test');
+  it('should map Components/Accessories layer to feature role', async () => {
+    const refiner = makeRefiner();
 
     for (const layer of ['Components', 'Accessories']) {
       const candidate: ModuleCandidate = {
@@ -424,31 +400,28 @@ describe('RoleRefiner — configLayer signal', () => {
         configLayer: layer,
       };
 
-      const result = refiner.refineRole(candidate);
+      const result = await refiner.refineRole(candidate);
       const configSignal = result.signals.find((s) => s.source === 'config-layer');
       expect(configSignal).toBeDefined();
       expect(configSignal!.role).toBe('feature');
     }
   });
 
-  it('should not add config-layer signal when configLayer is absent', () => {
-    const db = createMockDb();
-    const refiner = new RoleRefiner(db as never, '/test');
+  it('should not add config-layer signal when configLayer is absent', async () => {
+    const refiner = makeRefiner();
 
     const candidate: ModuleCandidate = {
       name: 'SomeModule',
       inferredRole: 'feature',
       files: ['/test/SomeModule/Main.swift'],
-      // no configLayer
     };
 
-    const result = refiner.refineRole(candidate);
+    const result = await refiner.refineRole(candidate);
     expect(result.signals.every((s) => s.source !== 'config-layer')).toBe(true);
   });
 
-  it('should not add config-layer signal for unknown layer names', () => {
-    const db = createMockDb();
-    const refiner = new RoleRefiner(db as never, '/test');
+  it('should not add config-layer signal for unknown layer names', async () => {
+    const refiner = makeRefiner();
 
     const candidate: ModuleCandidate = {
       name: 'SomeModule',
@@ -457,22 +430,21 @@ describe('RoleRefiner — configLayer signal', () => {
       configLayer: 'SomeRandomLayerName',
     };
 
-    const result = refiner.refineRole(candidate);
+    const result = await refiner.refineRole(candidate);
     expect(result.signals.every((s) => s.source !== 'config-layer')).toBe(true);
   });
 
-  it('should handle case-insensitive layer names', () => {
-    const db = createMockDb();
-    const refiner = new RoleRefiner(db as never, '/test');
+  it('should handle case-insensitive layer names', async () => {
+    const refiner = makeRefiner();
 
     const candidate: ModuleCandidate = {
       name: 'SomeService',
       inferredRole: 'feature',
       files: ['/test/SomeService/Main.swift'],
-      configLayer: 'SERVICES', // 大写
+      configLayer: 'SERVICES',
     };
 
-    const result = refiner.refineRole(candidate);
+    const result = await refiner.refineRole(candidate);
     const configSignal = result.signals.find((s) => s.source === 'config-layer');
     expect(configSignal).toBeDefined();
     expect(configSignal!.role).toBe('service');
@@ -484,115 +456,62 @@ describe('RoleRefiner — configLayer signal', () => {
 // ═══════════════════════════════════════════════════════════
 
 describe('ModuleDiscoverer — configLayer integration', () => {
-  function createModuleDiscovererDb(
-    opts: {
-      modules?: Array<{ entity_id: string; name: string; metadata_json?: string }>;
-      configLayersEntity?: { metadata_json: string };
-      partOfEdges?: Array<{ from_id: string; to_id: string }>;
-    } = {}
-  ) {
-    return {
-      prepare: (sql: string) => ({
-        run: () => ({ changes: 0 }),
-        get: (...params: unknown[]) => {
-          // readConfigLayers query
-          if (sql.includes('__config_layers__') && sql.includes('config')) {
-            return opts.configLayersEntity ?? undefined;
-          }
-          // #readModuleLayerMetadata: per-module metadata
-          if (
-            sql.includes("entity_type = 'module'") &&
-            sql.includes('LIMIT 1') &&
-            sql.includes('metadata_json')
-          ) {
-            const moduleId = params[0] as string;
-            const mod = opts.modules?.find((m) => m.entity_id === moduleId);
-            return mod?.metadata_json ? { metadata_json: mod.metadata_json } : undefined;
-          }
-          // file_path lookup for enrichModuleFiles
-          if (sql.includes('file_path') && sql.includes('entity_id = ?')) {
-            return undefined;
-          }
-          return undefined;
-        },
-        all: (..._params: unknown[]) => {
-          // module entities query (now filters nodeType)
-          if (sql.includes("entity_type = 'module'") && sql.includes('DISTINCT entity_id')) {
-            // Simulate the SQL filtering: exclude external/host nodeType
-            return (opts.modules ?? []).filter((m) => {
-              if (!m.metadata_json) {
-                return true; // no metadata = local
-              }
-              try {
-                const meta = JSON.parse(m.metadata_json);
-                return meta.nodeType !== 'external' && meta.nodeType !== 'host';
-              } catch {
-                return true;
-              }
-            });
-          }
-          // is_part_of edges
-          if (sql.includes('is_part_of')) {
-            return opts.partOfEdges ?? [];
-          }
-          // enrichModuleFiles DB fallback
-          if (sql.includes('DISTINCT file_path')) {
-            return [];
-          }
-          return [];
-        },
-      }),
-    };
-  }
-
-  it('should read configLayers from __config_layers__ entity', () => {
+  it('should read configLayers from __config_layers__ entity', async () => {
     const layers = [
       { name: 'Services', order: 0, accessibleLayers: ['Basics', 'Vendors'] },
       { name: 'Basics', order: 1, accessibleLayers: ['Vendors'] },
       { name: 'Vendors', order: 2, accessibleLayers: [] },
     ];
 
-    const db = createModuleDiscovererDb({
-      configLayersEntity: { metadata_json: JSON.stringify({ layers }) },
+    const repos = createMockRepos({
+      entities: [
+        {
+          entity_id: '__config_layers__',
+          entity_type: 'config',
+          metadata_json: JSON.stringify({ layers }),
+        },
+      ],
     });
 
-    const discoverer = new ModuleDiscoverer(db as never, '/test');
+    const discoverer = new ModuleDiscoverer(repos.entityRepo, repos.edgeRepo, '/test');
 
-    const result = discoverer.readConfigLayers();
+    const result = await discoverer.readConfigLayers();
     expect(result).not.toBeNull();
     expect(result).toHaveLength(3);
     expect(result![0].name).toBe('Services');
     expect(result![2].accessibleLayers).toEqual([]);
   });
 
-  it('should return null when no config layers entity exists', () => {
-    const db = createModuleDiscovererDb();
+  it('should return null when no config layers entity exists', async () => {
+    const repos = createMockRepos();
 
-    const discoverer = new ModuleDiscoverer(db as never, '/test');
+    const discoverer = new ModuleDiscoverer(repos.entityRepo, repos.edgeRepo, '/test');
 
-    const result = discoverer.readConfigLayers();
+    const result = await discoverer.readConfigLayers();
     expect(result).toBeNull();
   });
 
-  it('should populate configLayer on discovered modules from metadata', () => {
-    const db = createModuleDiscovererDb({
-      modules: [
+  it('should populate configLayer on discovered modules from metadata', async () => {
+    const repos = createMockRepos({
+      entities: [
         {
           entity_id: 'NetworkKit',
+          entity_type: 'module',
           name: 'NetworkKit',
           metadata_json: JSON.stringify({ nodeType: 'local', layer: 'Basics' }),
         },
         {
           entity_id: 'Alamofire',
+          entity_type: 'module',
           name: 'Alamofire',
           metadata_json: JSON.stringify({ nodeType: 'host', layer: 'Vendors' }),
         },
       ],
     });
 
-    const discoverer = new ModuleDiscoverer(db as never, '/test');
+    const discoverer = new ModuleDiscoverer(repos.entityRepo, repos.edgeRepo, '/test');
 
-    const candidates = discoverer.discover();
+    const candidates = await discoverer.discover();
     // External/host modules are now filtered out
     expect(candidates).toHaveLength(1);
 
@@ -604,54 +523,59 @@ describe('ModuleDiscoverer — configLayer integration', () => {
     expect(af).toBeUndefined();
   });
 
-  it('should exclude external modules from discover()', () => {
-    const db = createModuleDiscovererDb({
-      modules: [
+  it('should exclude external modules from discover()', async () => {
+    const repos = createMockRepos({
+      entities: [
         {
           entity_id: 'AppModule',
+          entity_type: 'module',
           name: 'AppModule',
           metadata_json: JSON.stringify({ nodeType: 'local' }),
         },
         {
           entity_id: 'Lottie',
+          entity_type: 'module',
           name: 'Lottie',
           metadata_json: JSON.stringify({ nodeType: 'external' }),
         },
         {
           entity_id: 'SDWebImage',
+          entity_type: 'module',
           name: 'SDWebImage',
           metadata_json: JSON.stringify({ nodeType: 'external' }),
         },
         {
           entity_id: 'HostApp',
+          entity_type: 'module',
           name: 'HostApp',
           metadata_json: JSON.stringify({ nodeType: 'host' }),
         },
       ],
     });
 
-    const discoverer = new ModuleDiscoverer(db as never, '/test');
-    const candidates = discoverer.discover();
+    const discoverer = new ModuleDiscoverer(repos.entityRepo, repos.edgeRepo, '/test');
+    const candidates = await discoverer.discover();
 
     // Only local module should be returned
     expect(candidates).toHaveLength(1);
     expect(candidates[0].name).toBe('AppModule');
   });
 
-  it('should leave configLayer undefined when metadata has no layer', () => {
-    const db = createModuleDiscovererDb({
-      modules: [
+  it('should leave configLayer undefined when metadata has no layer', async () => {
+    const repos = createMockRepos({
+      entities: [
         {
           entity_id: 'SomeModule',
+          entity_type: 'module',
           name: 'SomeModule',
           metadata_json: JSON.stringify({ nodeType: 'local' }),
         },
       ],
     });
 
-    const discoverer = new ModuleDiscoverer(db as never, '/test');
+    const discoverer = new ModuleDiscoverer(repos.entityRepo, repos.edgeRepo, '/test');
 
-    const candidates = discoverer.discover();
+    const candidates = await discoverer.discover();
     expect(candidates).toHaveLength(1);
     expect(candidates[0].configLayer).toBeUndefined();
   });
@@ -662,82 +586,37 @@ describe('ModuleDiscoverer — configLayer integration', () => {
 // ═══════════════════════════════════════════════════════════
 
 describe('PanoramaAggregator — configLayers integration', () => {
-  function createMockDb(opts: { moduleEdges?: Array<Record<string, unknown>> } = {}) {
-    return {
-      transaction: (fn: () => void) => fn,
-      exec: () => {},
-      prepare: (sql: string) => ({
-        run: () => ({ changes: 0 }),
-        get: (..._params: unknown[]) => {
-          if (
-            sql.includes('COUNT(*)') &&
-            sql.includes('knowledge_entries') &&
-            sql.includes('lifecycle')
-          ) {
-            return { cnt: 0 };
-          }
-          if (sql.includes('COUNT(*)') && sql.includes('from_id = ce.entity_id')) {
-            return { cnt: 0 };
-          }
-          if (sql.includes('COUNT(*)') && sql.includes('to_id = ce.entity_id')) {
-            return { cnt: 0 };
-          }
-          return undefined;
-        },
-        all: (...params: unknown[]) => {
-          if (
-            sql.includes('title') &&
-            sql.includes('topicHint') &&
-            sql.includes('knowledge_entries')
-          ) {
-            return [];
-          }
-          if (sql.includes('knowledge_edges') && sql.includes('relation = ?')) {
-            const relation = params[0] as string;
-            return (opts.moduleEdges ?? []).filter((e) => e.relation === relation);
-          }
-          if (sql.includes("relation = 'calls'") && sql.includes('GROUP BY to_id')) {
-            return [];
-          }
-          if (sql.includes('NOT IN')) {
-            return [];
-          }
-          if (sql.includes("relation = 'data_flow'") && sql.includes('GROUP BY')) {
-            return [];
-          }
-          return [];
-        },
-      }),
-    };
-  }
-
-  it('should pass configLayers to LayerInferrer and produce config-based levels', () => {
-    const db = createMockDb({
-      moduleEdges: [
-        {
-          from_id: 'App',
-          from_type: 'module',
-          to_id: 'Service',
-          to_type: 'module',
-          relation: 'depends_on',
-        },
-        {
-          from_id: 'Service',
-          from_type: 'module',
-          to_id: 'Core',
-          to_type: 'module',
-          relation: 'depends_on',
-        },
-      ],
-    });
-
-    const aggregator = new PanoramaAggregator({
-      roleRefiner: new RoleRefiner(db as never, '/test'),
-      couplingAnalyzer: new CouplingAnalyzer(db as never, '/test'),
+  function makeAggregator(moduleEdges: MockEdge[] = []) {
+    const repos = createMockRepos({ edges: moduleEdges });
+    return new PanoramaAggregator({
+      roleRefiner: new RoleRefiner(repos.bootstrapRepo, repos.entityRepo, repos.edgeRepo, '/test'),
+      couplingAnalyzer: new CouplingAnalyzer(repos.edgeRepo, repos.entityRepo, '/test'),
       layerInferrer: new LayerInferrer(),
-      db: db as never,
+      bootstrapRepo: repos.bootstrapRepo,
+      entityRepo: repos.entityRepo,
+      edgeRepo: repos.edgeRepo,
+      knowledgeRepo: repos.knowledgeRepo,
       projectRoot: '/test',
     });
+  }
+
+  it('should pass configLayers to LayerInferrer and produce config-based levels', async () => {
+    const aggregator = makeAggregator([
+      {
+        from_id: 'App',
+        from_type: 'module',
+        to_id: 'Service',
+        to_type: 'module',
+        relation: 'depends_on',
+      },
+      {
+        from_id: 'Service',
+        from_type: 'module',
+        to_id: 'Core',
+        to_type: 'module',
+        relation: 'depends_on',
+      },
+    ]);
 
     const configLayers: ConfigLayer[] = [
       { name: 'Application', order: 0, accessibleLayers: ['Services', 'Core'] },
@@ -756,7 +635,7 @@ describe('PanoramaAggregator — configLayers integration', () => {
       { name: 'Core', inferredRole: 'core', files: ['/test/core.swift'], configLayer: 'Core' },
     ];
 
-    const result = aggregator.compute(candidates, { configLayers });
+    const result = await aggregator.compute(candidates, { configLayers });
 
     expect(result.modules.size).toBe(3);
     expect(result.layers.levels.length).toBeGreaterThanOrEqual(2);
@@ -767,26 +646,10 @@ describe('PanoramaAggregator — configLayers integration', () => {
     expect(coreLevel!.level).toBe(0);
   });
 
-  it('should work without configLayers (backward compatible)', () => {
-    const db = createMockDb({
-      moduleEdges: [
-        {
-          from_id: 'A',
-          from_type: 'module',
-          to_id: 'B',
-          to_type: 'module',
-          relation: 'depends_on',
-        },
-      ],
-    });
-
-    const aggregator = new PanoramaAggregator({
-      roleRefiner: new RoleRefiner(db as never, '/test'),
-      couplingAnalyzer: new CouplingAnalyzer(db as never, '/test'),
-      layerInferrer: new LayerInferrer(),
-      db: db as never,
-      projectRoot: '/test',
-    });
+  it('should work without configLayers (backward compatible)', async () => {
+    const aggregator = makeAggregator([
+      { from_id: 'A', from_type: 'module', to_id: 'B', to_type: 'module', relation: 'depends_on' },
+    ]);
 
     const candidates: ModuleCandidate[] = [
       { name: 'A', inferredRole: 'app', files: ['/test/a.swift'] },
@@ -794,7 +657,7 @@ describe('PanoramaAggregator — configLayers integration', () => {
     ];
 
     // 不传 configLayers
-    const result = aggregator.compute(candidates);
+    const result = await aggregator.compute(candidates);
     expect(result.modules.size).toBe(2);
     expect(result.layers.levels.length).toBeGreaterThanOrEqual(1);
   });

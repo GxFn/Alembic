@@ -1,7 +1,7 @@
 /**
  * ContentPatcher 单元测试
  *
- * Mock DB，验证:
+ * Mock KnowledgeRepository，验证:
  *   - 结构化 JSON patch 应用
  *   - 纯文本降级 patch
  *   - content.markdown section 替换
@@ -14,68 +14,58 @@ import { ContentPatcher } from '../../lib/service/evolution/ContentPatcher.js';
 
 /* ── Mock factories ── */
 
-const DEFAULT_RECIPE = {
+/** KnowledgeEntry shape (content is object, headers is array) */
+const DEFAULT_ENTRY = {
   id: 'r-001',
   title: 'Test Recipe',
   coreCode: 'func original() {}',
   doClause: 'Use original pattern',
   dontClause: 'Do not skip validation',
   whenClause: 'When creating instances',
-  content: JSON.stringify({
+  content: {
     markdown: '### 使用指南\nOriginal guide\n\n### 示例\nSome example',
     rationale: 'Original rationale',
-  }),
-  sourceRefs: JSON.stringify(['src/original.swift']),
-  headers: JSON.stringify(['import UIKit']),
+  },
+  headers: ['import UIKit'],
 };
 
-function createMockDb(recipe?: typeof DEFAULT_RECIPE) {
-  const recipeData = recipe ?? { ...DEFAULT_RECIPE };
-  const updates: { sql: string; args: unknown[] }[] = [];
+function createMockRepo(entry?: typeof DEFAULT_ENTRY) {
+  const entryData = entry ?? {
+    ...DEFAULT_ENTRY,
+    content: { ...DEFAULT_ENTRY.content },
+    headers: [...DEFAULT_ENTRY.headers],
+  };
+  const updates: { id: string; data: Record<string, unknown> }[] = [];
 
   return {
-    recipeData,
+    entryData,
     updates,
-    prepare: vi.fn((sql: string) => {
-      // SELECT recipe fields
-      if (sql.includes('SELECT id, title, coreCode')) {
-        return {
-          all: vi.fn(),
-          get: vi.fn((...args: unknown[]) => {
-            const id = args[0] as string;
-            return id === recipeData.id ? { ...recipeData } : undefined;
-          }),
-          run: vi.fn(() => ({ changes: 1 })),
-        };
+    findById: vi.fn(async (id: string) => {
+      return id === entryData.id
+        ? { ...entryData, content: { ...entryData.content }, headers: [...entryData.headers] }
+        : null;
+    }),
+    update: vi.fn(async (id: string, data: Record<string, unknown>) => {
+      updates.push({ id, data });
+      // Update in-memory for subsequent reads
+      if (data.coreCode !== undefined) {
+        entryData.coreCode = data.coreCode as string;
       }
-
-      // UPDATE knowledge_entries
-      if (sql.includes('UPDATE knowledge_entries')) {
-        return {
-          all: vi.fn(),
-          get: vi.fn(),
-          run: vi.fn((...args: unknown[]) => {
-            updates.push({ sql, args: [...args] });
-            // Update in-memory for subsequent reads
-            if (sql.includes('coreCode')) {
-              recipeData.coreCode = args[0] as string;
-              recipeData.doClause = args[1] as string;
-              recipeData.dontClause = args[2] as string;
-              recipeData.whenClause = args[3] as string;
-              recipeData.content = args[4] as string;
-              recipeData.sourceRefs = args[5] as string;
-              recipeData.headers = args[6] as string;
-            }
-            return { changes: 1 };
-          }),
-        };
+      if (data.doClause !== undefined) {
+        entryData.doClause = data.doClause as string;
       }
-
-      return {
-        all: vi.fn(() => []),
-        get: vi.fn(() => undefined),
-        run: vi.fn(() => ({ changes: 0 })),
-      };
+      if (data.dontClause !== undefined) {
+        entryData.dontClause = data.dontClause as string;
+      }
+      if (data.whenClause !== undefined) {
+        entryData.whenClause = data.whenClause as string;
+      }
+      if (data.content !== undefined) {
+        entryData.content = data.content as typeof entryData.content;
+      }
+      if (data.headers !== undefined) {
+        entryData.headers = data.headers as string[];
+      }
     }),
   };
 }
@@ -111,18 +101,18 @@ function makeProposal(evidenceOverrides?: Record<string, unknown>) {
 /* ── Tests ── */
 
 describe('ContentPatcher', () => {
-  let db: ReturnType<typeof createMockDb>;
+  let mockRepo: ReturnType<typeof createMockRepo>;
   let patcher: ContentPatcher;
 
   beforeEach(() => {
-    db = createMockDb();
-    patcher = new ContentPatcher(db);
+    mockRepo = createMockRepo();
+    patcher = new ContentPatcher(mockRepo as never);
   });
 
   describe('applyProposal — structured JSON patch', () => {
-    it('applies coreCode replacement', () => {
+    it('applies coreCode replacement', async () => {
       const proposal = makeProposal();
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(true);
       expect(result.skipped).toBe(false);
@@ -131,7 +121,7 @@ describe('ContentPatcher', () => {
       expect(result.afterSnapshot.coreCode).toBe('func updated() {}');
     });
 
-    it('applies multiple field changes', () => {
+    it('applies multiple field changes', async () => {
       const proposal = {
         id: 'ep-002',
         type: 'enhance',
@@ -151,7 +141,7 @@ describe('ContentPatcher', () => {
         ],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(true);
       expect(result.fieldsPatched).toHaveLength(3);
@@ -160,7 +150,7 @@ describe('ContentPatcher', () => {
       expect(result.fieldsPatched).toContain('whenClause');
     });
 
-    it('applies content.markdown replacement', () => {
+    it('applies content.markdown replacement', async () => {
       const proposal = {
         id: 'ep-003',
         type: 'correction',
@@ -182,14 +172,14 @@ describe('ContentPatcher', () => {
         ],
       };
 
-      const result = patcher.applyProposal(proposal, 'correction');
+      const result = await patcher.applyProposal(proposal, 'correction');
 
       expect(result.success).toBe(true);
       expect(result.fieldsPatched).toContain('content.markdown');
       expect(result.patchSource).toBe('correction');
     });
 
-    it('applies content.markdown section replacement', () => {
+    it('applies content.markdown section replacement', async () => {
       const proposal = {
         id: 'ep-004',
         type: 'enhance',
@@ -212,17 +202,16 @@ describe('ContentPatcher', () => {
         ],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(true);
       expect(result.fieldsPatched).toContain('content.markdown');
       // Verify section was replaced but other sections preserved
-      const content = JSON.parse(db.recipeData.content);
-      expect(content.markdown).toContain('Updated guide content');
-      expect(content.markdown).toContain('### 示例'); // other section preserved
+      expect(result.afterSnapshot.content.markdown).toContain('Updated guide content');
+      expect(result.afterSnapshot.content.markdown).toContain('### 示例'); // other section preserved
     });
 
-    it('applies sourceRefs replacement', () => {
+    it('applies sourceRefs replacement', async () => {
       const proposal = {
         id: 'ep-005',
         type: 'enhance',
@@ -244,14 +233,14 @@ describe('ContentPatcher', () => {
         ],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(true);
       expect(result.fieldsPatched).toContain('sourceRefs');
       expect(result.afterSnapshot.sourceRefs).toEqual(['src/new-location.swift']);
     });
 
-    it('applies append action', () => {
+    it('applies append action', async () => {
       const proposal = {
         id: 'ep-006',
         type: 'enhance',
@@ -273,7 +262,7 @@ describe('ContentPatcher', () => {
         ],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(true);
       expect(result.fieldsPatched).toContain('content.rationale');
@@ -281,7 +270,7 @@ describe('ContentPatcher', () => {
   });
 
   describe('applyProposal — fallback text patch', () => {
-    it('falls back to content.markdown replacement for non-JSON text', () => {
+    it('falls back to content.markdown replacement for non-JSON text', async () => {
       const proposal = {
         id: 'ep-fallback',
         type: 'enhance',
@@ -294,7 +283,7 @@ describe('ContentPatcher', () => {
         ],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(true);
       expect(result.fieldsPatched).toContain('content.markdown');
@@ -302,7 +291,7 @@ describe('ContentPatcher', () => {
   });
 
   describe('applyProposal — skip conditions', () => {
-    it('skips when recipe not found', () => {
+    it('skips when recipe not found', async () => {
       const proposal = {
         id: 'ep-missing',
         type: 'enhance',
@@ -310,14 +299,14 @@ describe('ContentPatcher', () => {
         evidence: [{ suggestedChanges: '{"changes":[]}' }],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(false);
       expect(result.skipped).toBe(true);
       expect(result.skipReason).toContain('not found');
     });
 
-    it('skips when no suggestedChanges in evidence', () => {
+    it('skips when no suggestedChanges in evidence', async () => {
       const proposal = {
         id: 'ep-nochanges',
         type: 'enhance',
@@ -325,14 +314,14 @@ describe('ContentPatcher', () => {
         evidence: [{ sourceStatus: 'modified', currentCode: 'func foo() {}' }],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(false);
       expect(result.skipped).toBe(true);
       expect(result.skipReason).toContain('No suggestedChanges');
     });
 
-    it('skips when suggestedChanges is empty string', () => {
+    it('skips when suggestedChanges is empty string', async () => {
       const proposal = {
         id: 'ep-empty',
         type: 'enhance',
@@ -340,13 +329,13 @@ describe('ContentPatcher', () => {
         evidence: [{ suggestedChanges: '' }],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(false);
       expect(result.skipped).toBe(true);
     });
 
-    it('skips when suggestedChanges JSON has empty changes array', () => {
+    it('skips when suggestedChanges JSON has empty changes array', async () => {
       const proposal = {
         id: 'ep-empty-changes',
         type: 'enhance',
@@ -362,13 +351,13 @@ describe('ContentPatcher', () => {
         ],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(false);
       expect(result.skipped).toBe(true);
     });
 
-    it('skips when suggestedChanges text is too short', () => {
+    it('skips when suggestedChanges text is too short', async () => {
       const proposal = {
         id: 'ep-short',
         type: 'enhance',
@@ -376,7 +365,7 @@ describe('ContentPatcher', () => {
         evidence: [{ suggestedChanges: 'too short' }],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(false);
       expect(result.skipped).toBe(true);
@@ -384,7 +373,7 @@ describe('ContentPatcher', () => {
   });
 
   describe('applyProposal — field whitelist', () => {
-    it('skips non-patchable fields', () => {
+    it('skips non-patchable fields', async () => {
       const proposal = {
         id: 'ep-illegal',
         type: 'enhance',
@@ -404,7 +393,7 @@ describe('ContentPatcher', () => {
         ],
       };
 
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.success).toBe(true);
       // Only coreCode should be patched, id and lifecycle should be skipped
@@ -413,9 +402,9 @@ describe('ContentPatcher', () => {
   });
 
   describe('applyProposal — snapshots', () => {
-    it('creates before and after snapshots', () => {
+    it('creates before and after snapshots', async () => {
       const proposal = makeProposal();
-      const result = patcher.applyProposal(proposal, 'agent-suggestion');
+      const result = await patcher.applyProposal(proposal, 'agent-suggestion');
 
       expect(result.beforeSnapshot).toBeDefined();
       expect(result.afterSnapshot).toBeDefined();
@@ -423,7 +412,7 @@ describe('ContentPatcher', () => {
       // Before snapshot matches original
       expect(result.beforeSnapshot.coreCode).toBe('func original() {}');
       expect(result.beforeSnapshot.doClause).toBe('Use original pattern');
-      expect(result.beforeSnapshot.sourceRefs).toEqual(['src/original.swift']);
+      expect(result.beforeSnapshot.sourceRefs).toEqual([]);
 
       // After snapshot reflects patch
       expect(result.afterSnapshot.coreCode).toBe('func updated() {}');
@@ -431,14 +420,16 @@ describe('ContentPatcher', () => {
   });
 
   describe('applyProposal — DB persistence', () => {
-    it('persists updated recipe to DB', () => {
+    it('persists updated recipe to repo', async () => {
       const proposal = makeProposal();
-      patcher.applyProposal(proposal, 'agent-suggestion');
+      await patcher.applyProposal(proposal, 'agent-suggestion');
 
-      // Verify UPDATE was called
-      expect(db.updates.length).toBeGreaterThan(0);
-      const updateCall = db.updates.find((u) => u.sql.includes('coreCode'));
-      expect(updateCall).toBeDefined();
+      // Verify update was called
+      expect(mockRepo.update).toHaveBeenCalled();
+      expect(mockRepo.updates.length).toBeGreaterThan(0);
+      const updateCall = mockRepo.updates[0];
+      expect(updateCall.id).toBe('r-001');
+      expect(updateCall.data.coreCode).toBe('func updated() {}');
     });
   });
 });

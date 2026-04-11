@@ -770,11 +770,11 @@ export async function suggestSkills(ctx: McpContext) {
 
     // ── Fallback: 直接使用 SkillAdvisor ──
     const { SkillAdvisor } = await import('#service/skills/SkillAdvisor.js');
-    const dbConn = ctx?.container?.get?.('database') || null;
-    const database = dbConn?.getDb?.() || dbConn || null;
     const projectRoot = resolveProjectRoot(ctx?.container);
-    const advisor = new SkillAdvisor(projectRoot, { database });
-    const result = advisor.suggest();
+    const knowledgeRepo = ctx?.container?.get?.('knowledgeRepository') || null;
+    const auditRepo = ctx?.container?.get?.('auditRepository') || null;
+    const advisor = new SkillAdvisor(projectRoot, { knowledgeRepo, auditRepo });
+    const result = await advisor.suggest();
 
     return JSON.stringify({
       success: true,

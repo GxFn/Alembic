@@ -17,13 +17,13 @@ function createMockProposalRepo(createResult: unknown = null) {
   };
 }
 
-function createMockDb(recipeExists = true) {
+function createMockKnowledgeRepo(recipeExists = true) {
   return {
-    getDb: () => ({
-      prepare: () => ({
-        get: () => (recipeExists ? { id: 'old-recipe-1' } : undefined),
-      }),
-    }),
+    findById: vi.fn((id: string) =>
+      recipeExists
+        ? Promise.resolve({ id, title: 'Mock Recipe', lifecycle: 'approved' })
+        : Promise.resolve(null)
+    ),
   };
 }
 
@@ -46,15 +46,15 @@ function createMockContainer(
   } = options;
 
   const proposalRepo = proposalRepoAvailable ? createMockProposalRepo(proposalResult) : null;
-  const db = createMockDb(recipeExists);
+  const knowledgeRepo = createMockKnowledgeRepo(recipeExists);
 
   return {
     get: vi.fn((name: string) => {
       if (name === 'proposalRepository') {
         return proposalRepo;
       }
-      if (name === 'database') {
-        return db;
+      if (name === 'knowledgeRepository') {
+        return knowledgeRepo;
       }
       return null;
     }),
@@ -73,9 +73,9 @@ function makeInput(overrides: Partial<SupersedeInput> = {}): SupersedeInput {
 /* ── Tests ── */
 
 describe('createSupersedeProposal', () => {
-  it('creates a supersede proposal when all conditions are met', () => {
+  it('creates a supersede proposal when all conditions are met', async () => {
     const container = createMockContainer();
-    const result = createSupersedeProposal(container, makeInput());
+    const result = await createSupersedeProposal(container, makeInput());
 
     expect(result).not.toBeNull();
     expect(result?.type).toBe('supersede');
@@ -96,39 +96,39 @@ describe('createSupersedeProposal', () => {
     );
   });
 
-  it('returns null when oldRecipeId is empty', () => {
+  it('returns null when oldRecipeId is empty', async () => {
     const container = createMockContainer();
-    const result = createSupersedeProposal(container, makeInput({ oldRecipeId: '' }));
+    const result = await createSupersedeProposal(container, makeInput({ oldRecipeId: '' }));
     expect(result).toBeNull();
   });
 
-  it('returns null when newRecipeIds is empty', () => {
+  it('returns null when newRecipeIds is empty', async () => {
     const container = createMockContainer();
-    const result = createSupersedeProposal(container, makeInput({ newRecipeIds: [] }));
+    const result = await createSupersedeProposal(container, makeInput({ newRecipeIds: [] }));
     expect(result).toBeNull();
   });
 
-  it('returns null when ProposalRepository is not registered', () => {
+  it('returns null when ProposalRepository is not registered', async () => {
     const container = createMockContainer({ proposalRepoAvailable: false });
-    const result = createSupersedeProposal(container, makeInput());
+    const result = await createSupersedeProposal(container, makeInput());
     expect(result).toBeNull();
   });
 
-  it('returns null when old recipe does not exist in DB', () => {
+  it('returns null when old recipe does not exist in DB', async () => {
     const container = createMockContainer({ recipeExists: false });
-    const result = createSupersedeProposal(container, makeInput());
+    const result = await createSupersedeProposal(container, makeInput());
     expect(result).toBeNull();
   });
 
-  it('returns null when ProposalRepository.create returns null (dedup)', () => {
+  it('returns null when ProposalRepository.create returns null (dedup)', async () => {
     const container = createMockContainer({ proposalResult: null });
-    const result = createSupersedeProposal(container, makeInput());
+    const result = await createSupersedeProposal(container, makeInput());
     expect(result).toBeNull();
   });
 
-  it('uses custom source and confidence when provided', () => {
+  it('uses custom source and confidence when provided', async () => {
     const container = createMockContainer();
-    createSupersedeProposal(
+    await createSupersedeProposal(
       container,
       makeInput({
         source: 'metabolism',
@@ -144,9 +144,9 @@ describe('createSupersedeProposal', () => {
     );
   });
 
-  it('handles multiple new recipe IDs', () => {
+  it('handles multiple new recipe IDs', async () => {
     const container = createMockContainer();
-    createSupersedeProposal(
+    await createSupersedeProposal(
       container,
       makeInput({
         newRecipeIds: ['new-1', 'new-2', 'new-3'],
@@ -160,26 +160,26 @@ describe('createSupersedeProposal', () => {
     );
   });
 
-  it('tolerates container.get throwing', () => {
+  it('tolerates container.get throwing', async () => {
     const container = {
       get: vi.fn(() => {
         throw new Error('DI not initialized');
       }),
     };
-    const result = createSupersedeProposal(container, makeInput());
+    const result = await createSupersedeProposal(container, makeInput());
     expect(result).toBeNull();
   });
 
-  it('tolerates database.getDb throwing', () => {
+  it('tolerates knowledgeRepository.findById throwing', async () => {
     const proposalRepo = createMockProposalRepo({ id: 'ep-x' });
     const container = {
       get: vi.fn((name: string) => {
         if (name === 'proposalRepository') {
           return proposalRepo;
         }
-        if (name === 'database') {
+        if (name === 'knowledgeRepository') {
           return {
-            getDb: () => {
+            findById: () => {
               throw new Error('DB closed');
             },
           };
@@ -187,14 +187,14 @@ describe('createSupersedeProposal', () => {
         return null;
       }),
     };
-    const result = createSupersedeProposal(container, makeInput());
+    const result = await createSupersedeProposal(container, makeInput());
     expect(result).toBeNull();
   });
 
-  it('includes evidence with snapshotAt and declaredBy in proposal', () => {
+  it('includes evidence with snapshotAt and declaredBy in proposal', async () => {
     const before = Date.now();
     const container = createMockContainer();
-    createSupersedeProposal(container, makeInput());
+    await createSupersedeProposal(container, makeInput());
     const after = Date.now();
 
     const callArg = container._proposalRepo?.create.mock.calls[0]?.[0];

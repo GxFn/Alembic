@@ -7,6 +7,7 @@
  */
 
 import express, { type Request, type Response } from 'express';
+import { COUNTABLE_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import { getServiceContainer } from '../../injection/ServiceContainer.js';
 
@@ -87,14 +88,12 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
     });
   }
 
-  // 快速检查：至少需要 2 条活跃 Recipe
+  // 快速检查：至少需要 2 条可消费 Recipe（active/staging/pending/evolving）
   try {
-    const knowledgeService = container.get('knowledgeService');
-    const { items = [], data = [] } = (await knowledgeService.list(
-      { lifecycle: 'active' },
-      { page: 1, pageSize: 5 }
-    )) as unknown as Record<string, unknown[]>;
-    const count = items.length || data.length;
+    const knowledgeRepo = container.get('knowledgeRepository') as {
+      countByLifecycles(lifecycles: readonly string[]): Promise<number>;
+    };
+    const count = await knowledgeRepo.countByLifecycles(COUNTABLE_LIFECYCLES);
     if (count < 2) {
       return void res.json({
         success: true,
@@ -105,7 +104,7 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
       });
     }
   } catch {
-    // 如果 list 失败，继续尝试（让 runTask 给出具体错误）
+    // 如果查询失败，继续尝试（让 runTask 给出具体错误）
   }
 
   // 重置并启动后台任务

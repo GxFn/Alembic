@@ -8,6 +8,7 @@
  * 4. 提供增量 diff 计算
  *
  * 存储: SQLite bootstrap_snapshots + bootstrap_dim_files 表
+ * 所有操作使用 Drizzle 类型安全 API。
  *
  * @module pipeline/BootstrapSnapshot
  */
@@ -15,36 +16,23 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { relative } from 'node:path';
+import { and, desc, eq, sql } from 'drizzle-orm';
+import type { DrizzleDB } from '../../../../../infrastructure/database/drizzle/index.js';
+import { getDrizzle } from '../../../../../infrastructure/database/drizzle/index.js';
+import {
+  bootstrapDimFiles,
+  bootstrapSnapshots,
+} from '../../../../../infrastructure/database/drizzle/schema.js';
 import type { LoggerLike } from '../../types.js';
 
 // ──────────────────────────────────────────────────────────────────
 // 本地类型定义
 // ──────────────────────────────────────────────────────────────────
 
-/** 最小化 better-sqlite3 Database 接口 */
-interface SqliteDb {
-  exec(sql: string): void;
-  prepare(sql: string): SqliteStatement;
-  transaction<T extends (...args: unknown[]) => unknown>(fn: T): T;
-}
-
-/** 最小化 Statement 接口 */
-interface SqliteStatement {
-  run(...params: unknown[]): unknown;
-  get(...params: unknown[]): Record<string, unknown> | undefined;
-  all(...params: unknown[]): Record<string, unknown>[];
-}
-
-/** 所有预编译 SQL 语句 */
-interface PreparedStatements {
-  insertSnapshot: SqliteStatement;
-  insertDimFile: SqliteStatement;
-  getLatest: SqliteStatement;
-  getById: SqliteStatement;
-  listByProject: SqliteStatement;
-  getDimFiles: SqliteStatement;
-  enforceCapacity: SqliteStatement;
-  deleteById: SqliteStatement;
+/** db 可能包含 getDrizzle/getDb 方法的包装 */
+interface DbWrapper {
+  getDrizzle?: () => DrizzleDB;
+  getDb?: () => unknown;
 }
 
 /** 快照反序列化结果 */
@@ -130,11 +118,6 @@ interface AffectedDimensionResult {
   reason: string;
 }
 
-/** db 可能包含 getDb 方法的包装 */
-interface DbWrapper {
-  getDb?: () => SqliteDb;
-}
-
 // ──────────────────────────────────────────────────────────────
 // 常量
 // ──────────────────────────────────────────────────────────────
@@ -145,30 +128,28 @@ const MAX_SNAPSHOTS = 5;
 /** 全量/增量判断阈值: 文件变更超过此比例 → 全量重跑 */
 const FULL_REBUILD_THRESHOLD = 0.5;
 
+// Drizzle row type
+type SnapshotRow = typeof bootstrapSnapshots.$inferSelect;
+
 // ──────────────────────────────────────────────────────────────
 // BootstrapSnapshot 类
 // ──────────────────────────────────────────────────────────────
 
 export class BootstrapSnapshot {
-  #db: SqliteDb;
+  #drizzle: DrizzleDB;
 
   #logger: LoggerLike | null;
 
-  #stmts!: PreparedStatements;
-
-  /** @param db better-sqlite3 实例 */
+  /** @param db DatabaseConnection 或 better-sqlite3 实例 */
   constructor(db: unknown, { logger }: { logger?: LoggerLike | null } = {}) {
     if (!db) {
       throw new Error('BootstrapSnapshot requires a database instance');
     }
-    this.#db =
-      typeof (db as DbWrapper)?.getDb === 'function'
-        ? (db as DbWrapper).getDb!()
-        : (db as SqliteDb);
+    this.#drizzle =
+      typeof (db as DbWrapper)?.getDrizzle === 'function'
+        ? (db as DbWrapper).getDrizzle!()
+        : getDrizzle();
     this.#logger = logger || null;
-
-    this.#ensureTable();
-    this.#prepareStatements();
   }
 
   // ─── 快照保存 ─────────────────────────────────────────
@@ -226,28 +207,30 @@ export class BootstrapSnapshot {
       };
     }
 
-    // 事务保存
-    const saveTransaction = this.#db.transaction(() => {
+    // 事务保存（Drizzle 类型安全）
+    this.#drizzle.transaction((tx) => {
       // 主记录
-      this.#stmts.insertSnapshot.run({
-        id,
-        session_id: sessionId || null,
-        project_root: projectRoot,
-        created_at: now,
-        duration_ms: meta.durationMs || 0,
-        file_count: allFiles.length,
-        dimension_count: Object.keys(dimensionStats || {}).length,
-        candidate_count: meta.candidateCount || 0,
-        primary_lang: meta.primaryLang || null,
-        file_hashes: JSON.stringify(fileHashes),
-        dimension_meta: JSON.stringify(dimensionMeta),
-        episodic_data: episodicData ? JSON.stringify(episodicData) : null,
-        is_incremental: isIncremental ? 1 : 0,
-        parent_id: parentId,
-        changed_files: JSON.stringify(changedFiles),
-        affected_dims: JSON.stringify(affectedDims),
-        status: 'complete',
-      });
+      tx.insert(bootstrapSnapshots)
+        .values({
+          id,
+          sessionId: sessionId || null,
+          projectRoot,
+          createdAt: now,
+          durationMs: meta.durationMs || 0,
+          fileCount: allFiles.length,
+          dimensionCount: Object.keys(dimensionStats || {}).length,
+          candidateCount: meta.candidateCount || 0,
+          primaryLang: meta.primaryLang || null,
+          fileHashes: JSON.stringify(fileHashes),
+          dimensionMeta: JSON.stringify(dimensionMeta),
+          episodicData: episodicData ? JSON.stringify(episodicData) : null,
+          isIncremental: isIncremental ? 1 : 0,
+          parentId: parentId as string | null,
+          changedFiles: JSON.stringify(changedFiles),
+          affectedDims: JSON.stringify(affectedDims),
+          status: 'complete',
+        })
+        .run();
 
       // 维度-文件关联
       for (const [dimId, stat] of Object.entries(dimensionStats || {}) as [
@@ -262,20 +245,21 @@ export class BootstrapSnapshot {
                 ? relative(projectRoot, filePath)
                 : filePath
               : filePath;
-          this.#stmts.insertDimFile.run({
-            snapshot_id: id,
-            dim_id: dimId,
-            file_path: rel,
-            role: 'referenced',
-          });
+          tx.insert(bootstrapDimFiles)
+            .values({
+              snapshotId: id,
+              dimId,
+              filePath: rel,
+              role: 'referenced',
+            })
+            .onConflictDoNothing()
+            .run();
         }
       }
 
       // 容量控制: 保留最新 N 个
-      this.#enforceCapacity(projectRoot);
+      this.#enforceCapacity(projectRoot, tx);
     });
-
-    saveTransaction();
 
     this.#log(
       `Snapshot saved: ${id} (${allFiles.length} files, ${Object.keys(dimensionStats || {}).length} dims)`
@@ -288,9 +272,14 @@ export class BootstrapSnapshot {
   /** 清除项目的所有快照 — 用于手动重新冷启动时强制全量 */
   clearProject(projectRoot: string) {
     try {
-      const rows = this.#stmts.listByProject.all(projectRoot, 9999) as { id: string }[];
+      const rows = this.#drizzle
+        .select({ id: bootstrapSnapshots.id })
+        .from(bootstrapSnapshots)
+        .where(eq(bootstrapSnapshots.projectRoot, projectRoot))
+        .all();
+
       for (const row of rows) {
-        this.#stmts.deleteById.run(row.id);
+        this.#drizzle.delete(bootstrapSnapshots).where(eq(bootstrapSnapshots.id, row.id)).run();
       }
       this.#log(`Cleared ${rows.length} snapshots for project`);
     } catch (err: unknown) {
@@ -305,7 +294,19 @@ export class BootstrapSnapshot {
    * @returns 快照数据
    */
   getLatest(projectRoot: string): SnapshotData | null {
-    const row = this.#stmts.getLatest.get(projectRoot);
+    const row = this.#drizzle
+      .select()
+      .from(bootstrapSnapshots)
+      .where(
+        and(
+          eq(bootstrapSnapshots.projectRoot, projectRoot),
+          eq(bootstrapSnapshots.status, 'complete')
+        )
+      )
+      .orderBy(desc(bootstrapSnapshots.createdAt))
+      .limit(1)
+      .get();
+
     if (!row) {
       return null;
     }
@@ -314,7 +315,12 @@ export class BootstrapSnapshot {
 
   /** 根据 ID 加载快照 */
   getById(id: string): SnapshotData | null {
-    const row = this.#stmts.getById.get(id);
+    const row = this.#drizzle
+      .select()
+      .from(bootstrapSnapshots)
+      .where(eq(bootstrapSnapshots.id, id))
+      .get();
+
     if (!row) {
       return null;
     }
@@ -323,9 +329,14 @@ export class BootstrapSnapshot {
 
   /** 获取项目的所有快照 (按时间降序) */
   list(projectRoot: string, limit = 10): SnapshotData[] {
-    return this.#stmts.listByProject
-      .all(projectRoot, limit)
-      .map((r: Record<string, unknown>) => this.#deserialize(r));
+    return this.#drizzle
+      .select()
+      .from(bootstrapSnapshots)
+      .where(eq(bootstrapSnapshots.projectRoot, projectRoot))
+      .orderBy(desc(bootstrapSnapshots.createdAt))
+      .limit(limit)
+      .all()
+      .map((r) => this.#deserialize(r));
   }
 
   // ─── 增量 Diff 计算 ──────────────────────────────────
@@ -468,13 +479,21 @@ export class BootstrapSnapshot {
 
   /** 获取某个快照中每个维度引用的文件集合 */
   #getDimFileMap(snapshotId: string): Record<string, Set<string>> {
-    const rows = this.#stmts.getDimFiles.all(snapshotId) as { dim_id: string; file_path: string }[];
+    const rows = this.#drizzle
+      .select({
+        dimId: bootstrapDimFiles.dimId,
+        filePath: bootstrapDimFiles.filePath,
+      })
+      .from(bootstrapDimFiles)
+      .where(eq(bootstrapDimFiles.snapshotId, snapshotId))
+      .all();
+
     const map: Record<string, Set<string>> = {};
     for (const row of rows) {
-      if (!map[row.dim_id]) {
-        map[row.dim_id] = new Set();
+      if (!map[row.dimId]) {
+        map[row.dimId] = new Set();
       }
-      map[row.dim_id].add(row.file_path);
+      map[row.dimId].add(row.filePath);
     }
     return map;
   }
@@ -579,37 +598,47 @@ export class BootstrapSnapshot {
     }
   }
 
-  #enforceCapacity(projectRoot: string) {
+  #enforceCapacity(projectRoot: string, db: DrizzleDB = this.#drizzle) {
     try {
-      this.#stmts.enforceCapacity.run(projectRoot, projectRoot, MAX_SNAPSHOTS);
+      db.delete(bootstrapSnapshots)
+        .where(
+          sql`${bootstrapSnapshots.projectRoot} = ${projectRoot}
+          AND ${bootstrapSnapshots.id} NOT IN (
+            SELECT ${bootstrapSnapshots.id} FROM ${bootstrapSnapshots}
+            WHERE ${bootstrapSnapshots.projectRoot} = ${projectRoot}
+            ORDER BY ${bootstrapSnapshots.createdAt} DESC
+            LIMIT ${MAX_SNAPSHOTS}
+          )`
+        )
+        .run();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.#log(`Capacity enforcement failed: ${msg}`, 'warn');
     }
   }
 
-  #deserialize(row: Record<string, unknown>): SnapshotData {
+  #deserialize(row: SnapshotRow): SnapshotData {
     return {
-      id: row.id as string,
-      sessionId: (row.session_id as string) ?? null,
-      projectRoot: row.project_root as string,
-      createdAt: row.created_at as string,
-      durationMs: row.duration_ms as number,
-      fileCount: row.file_count as number,
-      dimensionCount: row.dimension_count as number,
-      candidateCount: row.candidate_count as number,
-      primaryLang: (row.primary_lang as string) ?? null,
-      fileHashes: this.#safeParseJSON(row.file_hashes, {} as Record<string, string>),
+      id: row.id,
+      sessionId: row.sessionId ?? null,
+      projectRoot: row.projectRoot,
+      createdAt: row.createdAt,
+      durationMs: row.durationMs ?? 0,
+      fileCount: row.fileCount ?? 0,
+      dimensionCount: row.dimensionCount ?? 0,
+      candidateCount: row.candidateCount ?? 0,
+      primaryLang: row.primaryLang ?? null,
+      fileHashes: this.#safeParseJSON(row.fileHashes, {} as Record<string, string>),
       dimensionMeta: this.#safeParseJSON(
-        row.dimension_meta,
+        row.dimensionMeta,
         {} as Record<string, DimensionStatMeta>
       ),
-      episodicData: this.#safeParseJSON(row.episodic_data, null as Record<string, unknown> | null),
-      isIncremental: !!row.is_incremental,
-      parentId: (row.parent_id as string) ?? null,
-      changedFiles: this.#safeParseJSON(row.changed_files, [] as string[]),
-      affectedDims: this.#safeParseJSON(row.affected_dims, [] as string[]),
-      status: row.status as string,
+      episodicData: this.#safeParseJSON(row.episodicData, null as Record<string, unknown> | null),
+      isIncremental: !!row.isIncremental,
+      parentId: row.parentId ?? null,
+      changedFiles: this.#safeParseJSON(row.changedFiles, [] as string[]),
+      affectedDims: this.#safeParseJSON(row.affectedDims, [] as string[]),
+      status: row.status ?? 'complete',
     };
   }
 
@@ -625,106 +654,6 @@ export class BootstrapSnapshot {
     if (this.#logger && this.#logger[level]) {
       this.#logger[level]!(`[BootstrapSnapshot] ${msg}`);
     }
-  }
-
-  // ─── 初始化 ───────────────────────────────────────────
-
-  #ensureTable() {
-    this.#db.exec(`
-      CREATE TABLE IF NOT EXISTS bootstrap_snapshots (
-        id               TEXT PRIMARY KEY,
-        session_id       TEXT,
-        project_root     TEXT NOT NULL,
-        created_at       TEXT NOT NULL,
-        duration_ms      INTEGER DEFAULT 0,
-        file_count       INTEGER DEFAULT 0,
-        dimension_count  INTEGER DEFAULT 0,
-        candidate_count  INTEGER DEFAULT 0,
-        primary_lang     TEXT,
-        file_hashes      TEXT NOT NULL DEFAULT '{}',
-        dimension_meta   TEXT NOT NULL DEFAULT '{}',
-        episodic_data    TEXT,
-        is_incremental   INTEGER DEFAULT 0,
-        parent_id        TEXT,
-        changed_files    TEXT DEFAULT '[]',
-        affected_dims    TEXT DEFAULT '[]',
-        status           TEXT DEFAULT 'complete'
-      );
-
-      CREATE TABLE IF NOT EXISTS bootstrap_dim_files (
-        snapshot_id      TEXT NOT NULL,
-        dim_id           TEXT NOT NULL,
-        file_path        TEXT NOT NULL,
-        role             TEXT DEFAULT 'referenced',
-        PRIMARY KEY (snapshot_id, dim_id, file_path),
-        FOREIGN KEY (snapshot_id) REFERENCES bootstrap_snapshots(id) ON DELETE CASCADE
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_snapshots_project
-        ON bootstrap_snapshots(project_root, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_dim_files_file
-        ON bootstrap_dim_files(file_path);
-    `);
-  }
-
-  #prepareStatements() {
-    this.#stmts = {
-      insertSnapshot: this.#db.prepare(`
-        INSERT INTO bootstrap_snapshots
-          (id, session_id, project_root, created_at, duration_ms,
-           file_count, dimension_count, candidate_count, primary_lang,
-           file_hashes, dimension_meta, episodic_data,
-           is_incremental, parent_id, changed_files, affected_dims, status)
-        VALUES
-          (@id, @session_id, @project_root, @created_at, @duration_ms,
-           @file_count, @dimension_count, @candidate_count, @primary_lang,
-           @file_hashes, @dimension_meta, @episodic_data,
-           @is_incremental, @parent_id, @changed_files, @affected_dims, @status)
-      `),
-
-      insertDimFile: this.#db.prepare(`
-        INSERT OR IGNORE INTO bootstrap_dim_files (snapshot_id, dim_id, file_path, role)
-        VALUES (@snapshot_id, @dim_id, @file_path, @role)
-      `),
-
-      getLatest: this.#db.prepare(`
-        SELECT * FROM bootstrap_snapshots
-        WHERE project_root = ? AND status = 'complete'
-        ORDER BY created_at DESC
-        LIMIT 1
-      `),
-
-      getById: this.#db.prepare(`
-        SELECT * FROM bootstrap_snapshots WHERE id = ?
-      `),
-
-      listByProject: this.#db.prepare(`
-        SELECT * FROM bootstrap_snapshots
-        WHERE project_root = ?
-        ORDER BY created_at DESC
-        LIMIT ?
-      `),
-
-      getDimFiles: this.#db.prepare(`
-        SELECT dim_id, file_path FROM bootstrap_dim_files
-        WHERE snapshot_id = ?
-      `),
-
-      enforceCapacity: this.#db.prepare(`
-        DELETE FROM bootstrap_snapshots
-        WHERE project_root = ?
-        AND id NOT IN (
-          SELECT id FROM bootstrap_snapshots
-          WHERE project_root = ?
-          ORDER BY created_at DESC
-          LIMIT ?
-        )
-      `),
-
-      deleteById: this.#db.prepare(`
-        DELETE FROM bootstrap_snapshots WHERE id = ?
-      `),
-    };
   }
 }
 

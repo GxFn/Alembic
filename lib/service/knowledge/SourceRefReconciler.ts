@@ -15,20 +15,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import Logger from '../../infrastructure/logging/Logger.js';
-
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 
 const execFileAsync = promisify(execFile);
-
-/* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-    get(...params: unknown[]): Record<string, unknown> | undefined;
-    run(...params: unknown[]): { changes: number };
-  };
-}
 
 export interface ReconcileReport {
   /** 新插入的 sourceRef 条目 */
@@ -64,18 +55,21 @@ const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 export class SourceRefReconciler {
   #projectRoot: string;
-  #db: DatabaseLike;
+  #sourceRefRepo: RecipeSourceRefRepositoryImpl;
+  #knowledgeRepo: KnowledgeRepositoryImpl;
   #signalBus: SignalBus | null;
   #logger = Logger.getInstance();
   #ttlMs: number;
 
   constructor(
     projectRoot: string,
-    db: DatabaseLike,
+    sourceRefRepo: RecipeSourceRefRepositoryImpl,
+    knowledgeRepo: KnowledgeRepositoryImpl,
     options?: { ttlMs?: number; signalBus?: SignalBus }
   ) {
     this.#projectRoot = projectRoot;
-    this.#db = db;
+    this.#sourceRefRepo = sourceRefRepo;
+    this.#knowledgeRepo = knowledgeRepo;
     this.#signalBus = options?.signalBus ?? null;
     this.#ttlMs = options?.ttlMs ?? DEFAULT_TTL_MS;
   }
@@ -84,7 +78,7 @@ export class SourceRefReconciler {
    * 从 knowledge_entries.reasoning 填充 recipe_source_refs 表。
    * 对已有条目验证路径存在性，更新 status。
    */
-  reconcile(opts?: { force?: boolean }): ReconcileReport {
+  async reconcile(opts?: { force?: boolean }): Promise<ReconcileReport> {
     const force = opts?.force ?? false;
     const report: ReconcileReport = {
       inserted: 0,
@@ -94,15 +88,14 @@ export class SourceRefReconciler {
       recipesProcessed: 0,
     };
 
-    // 确保表存在（兼容未跑 migration 的场景）
-    this.#ensureTable();
+    // 确保表可访问
+    if (!this.#sourceRefRepo.isAccessible()) {
+      this.#logger.warn('SourceRefReconciler: recipe_source_refs table not accessible, skipping');
+      return report;
+    }
 
     // 获取所有有 reasoning 的知识条目
-    const rows = this.#db
-      .prepare(
-        `SELECT id, reasoning FROM knowledge_entries WHERE reasoning IS NOT NULL AND reasoning != '{}'`
-      )
-      .all() as { id: string; reasoning: string }[];
+    const rows = await this.#knowledgeRepo.findAllIdAndReasoning();
 
     const now = Date.now();
 
@@ -127,15 +120,11 @@ export class SourceRefReconciler {
 
       for (const sourcePath of sources) {
         // 检查是否已有记录
-        const existing = this.#db
-          .prepare(
-            `SELECT status, verified_at FROM recipe_source_refs WHERE recipe_id = ? AND source_path = ?`
-          )
-          .get(row.id, sourcePath) as { status: string; verified_at: number } | undefined;
+        const existing = this.#sourceRefRepo.findOne(row.id, sourcePath);
 
         if (existing && !force) {
           // TTL 检查：跳过近期已验证的条目
-          if (now - existing.verified_at < this.#ttlMs) {
+          if (now - existing.verifiedAt < this.#ttlMs) {
             report.skipped++;
             if (existing.status === 'active') {
               report.active++;
@@ -153,28 +142,32 @@ export class SourceRefReconciler {
         if (existing) {
           // 更新已有记录
           if (exists) {
-            this.#db
-              .prepare(
-                `UPDATE recipe_source_refs SET status = 'active', new_path = NULL, verified_at = ? WHERE recipe_id = ? AND source_path = ?`
-              )
-              .run(now, row.id, sourcePath);
+            this.#sourceRefRepo.upsert({
+              recipeId: row.id,
+              sourcePath,
+              status: 'active',
+              newPath: null,
+              verifiedAt: now,
+            });
             report.active++;
           } else {
-            this.#db
-              .prepare(
-                `UPDATE recipe_source_refs SET status = 'stale', verified_at = ? WHERE recipe_id = ? AND source_path = ?`
-              )
-              .run(now, row.id, sourcePath);
+            this.#sourceRefRepo.upsert({
+              recipeId: row.id,
+              sourcePath,
+              status: 'stale',
+              verifiedAt: now,
+            });
             report.stale++;
           }
         } else {
           // 新增记录
           const status = exists ? 'active' : 'stale';
-          this.#db
-            .prepare(
-              `INSERT OR REPLACE INTO recipe_source_refs (recipe_id, source_path, status, verified_at) VALUES (?, ?, ?, ?)`
-            )
-            .run(row.id, sourcePath, status, now);
+          this.#sourceRefRepo.upsert({
+            recipeId: row.id,
+            sourcePath,
+            status,
+            verifiedAt: now,
+          });
           report.inserted++;
           if (exists) {
             report.active++;
@@ -210,24 +203,16 @@ export class SourceRefReconciler {
       return;
     }
     try {
-      const staleRecipes = this.#db
-        .prepare(
-          `SELECT recipe_id, COUNT(*) AS stale_count,
-                  (SELECT COUNT(*) FROM recipe_source_refs r2 WHERE r2.recipe_id = r.recipe_id) AS total_count
-           FROM recipe_source_refs r
-           WHERE status = 'stale'
-           GROUP BY recipe_id`
-        )
-        .all() as { recipe_id: string; stale_count: number; total_count: number }[];
+      const staleRecipes = this.#sourceRefRepo.getStaleCountsByRecipe();
 
       for (const row of staleRecipes) {
-        const staleRatio = row.stale_count / row.total_count;
+        const staleRatio = row.staleCount / row.totalCount;
         this.#signalBus.send('quality', 'SourceRefReconciler', staleRatio, {
-          target: row.recipe_id,
+          target: row.recipeId,
           metadata: {
             reason: 'source_ref_stale',
-            staleCount: row.stale_count,
-            totalRefs: row.total_count,
+            staleCount: row.staleCount,
+            totalRefs: row.totalCount,
           },
         });
       }
@@ -244,9 +229,7 @@ export class SourceRefReconciler {
     const report: RepairReport = { renamed: 0, stillStale: 0 };
 
     // 获取所有 stale 条目
-    const staleRows = this.#db
-      .prepare(`SELECT recipe_id, source_path FROM recipe_source_refs WHERE status = 'stale'`)
-      .all() as { recipe_id: string; source_path: string }[];
+    const staleRows = this.#sourceRefRepo.findStale();
 
     if (staleRows.length === 0) {
       return report;
@@ -257,16 +240,18 @@ export class SourceRefReconciler {
 
     const now = Date.now();
     for (const row of staleRows) {
-      const newPath = renameMap.get(row.source_path);
+      const newPath = renameMap.get(row.sourcePath);
       if (newPath) {
         // 验证 newPath 存在
         const absNewPath = path.resolve(this.#projectRoot, newPath);
         if (fs.existsSync(absNewPath)) {
-          this.#db
-            .prepare(
-              `UPDATE recipe_source_refs SET status = 'renamed', new_path = ?, verified_at = ? WHERE recipe_id = ? AND source_path = ?`
-            )
-            .run(newPath, now, row.recipe_id, row.source_path);
+          this.#sourceRefRepo.upsert({
+            recipeId: row.recipeId,
+            sourcePath: row.sourcePath,
+            status: 'renamed',
+            newPath,
+            verifiedAt: now,
+          });
           report.renamed++;
           continue;
         }
@@ -299,35 +284,29 @@ export class SourceRefReconciler {
    * 将 renamed 条目的 new_path 写回 Recipe .md 文件的 _reasoning.sources。
    * 完成后 status → active。
    */
-  applyRepairs(): ApplyReport {
+  async applyRepairs(): Promise<ApplyReport> {
     const report: ApplyReport = { applied: 0, failed: 0 };
 
-    const renamedRows = this.#db
-      .prepare(
-        `SELECT recipe_id, source_path, new_path FROM recipe_source_refs WHERE status = 'renamed' AND new_path IS NOT NULL`
-      )
-      .all() as { recipe_id: string; source_path: string; new_path: string }[];
+    const renamedRows = this.#sourceRefRepo.findRenamed();
 
     if (renamedRows.length === 0) {
       return report;
     }
 
-    // 按 recipe_id 分组
-    const byRecipe = new Map<string, Array<{ source_path: string; new_path: string }>>();
+    // 按 recipeId 分组
+    const byRecipe = new Map<string, Array<{ sourcePath: string; newPath: string }>>();
     for (const row of renamedRows) {
-      if (!byRecipe.has(row.recipe_id)) {
-        byRecipe.set(row.recipe_id, []);
+      if (!byRecipe.has(row.recipeId)) {
+        byRecipe.set(row.recipeId, []);
       }
-      byRecipe.get(row.recipe_id)?.push({ source_path: row.source_path, new_path: row.new_path });
+      byRecipe.get(row.recipeId)?.push({ sourcePath: row.sourcePath, newPath: row.newPath! });
     }
 
     // 获取 recipe 的 sourceFile 以定位 .md 文件
     const now = Date.now();
     for (const [recipeId, renames] of byRecipe) {
       try {
-        const entry = this.#db
-          .prepare(`SELECT sourceFile, reasoning FROM knowledge_entries WHERE id = ?`)
-          .get(recipeId) as { sourceFile?: string; reasoning?: string } | undefined;
+        const entry = await this.#knowledgeRepo.findSourceFileAndReasoning(recipeId);
 
         if (!entry?.sourceFile || !entry.reasoning) {
           report.failed += renames.length;
@@ -354,9 +333,9 @@ export class SourceRefReconciler {
         let modified = false;
 
         for (const rename of renames) {
-          const idx = sources.indexOf(rename.source_path);
+          const idx = sources.indexOf(rename.sourcePath);
           if (idx >= 0) {
-            sources[idx] = rename.new_path;
+            sources[idx] = rename.newPath;
             modified = true;
           }
         }
@@ -368,17 +347,11 @@ export class SourceRefReconciler {
           // 查找 YAML frontmatter 中的 reasoning 并替换
           const updatedReasoning = JSON.stringify(reasoning);
           // 更新 DB reasoning 列
-          this.#db
-            .prepare(`UPDATE knowledge_entries SET reasoning = ?, updatedAt = ? WHERE id = ?`)
-            .run(updatedReasoning, now, recipeId);
+          await this.#knowledgeRepo.updateReasoning(recipeId, updatedReasoning, now);
 
           // 更新 recipe_source_refs 状态
           for (const rename of renames) {
-            this.#db
-              .prepare(
-                `UPDATE recipe_source_refs SET status = 'active', source_path = ?, new_path = NULL, verified_at = ? WHERE recipe_id = ? AND source_path = ?`
-              )
-              .run(rename.new_path, now, recipeId, rename.source_path);
+            this.#sourceRefRepo.replaceSourcePath(recipeId, rename.sourcePath, rename.newPath, now);
           }
 
           report.applied += renames.length;
@@ -402,27 +375,6 @@ export class SourceRefReconciler {
   }
 
   /* ═══ Private helpers ═══════════════════════════════ */
-
-  #ensureTable(): void {
-    try {
-      this.#db.prepare(`SELECT 1 FROM recipe_source_refs LIMIT 1`).get();
-    } catch {
-      // 表不存在，创建之
-      (this.#db as unknown as { exec: (sql: string) => void }).exec?.(
-        `CREATE TABLE IF NOT EXISTS recipe_source_refs (
-          recipe_id    TEXT    NOT NULL,
-          source_path  TEXT    NOT NULL,
-          status       TEXT    NOT NULL DEFAULT 'active',
-          new_path     TEXT,
-          verified_at  INTEGER NOT NULL,
-          PRIMARY KEY (recipe_id, source_path),
-          FOREIGN KEY (recipe_id) REFERENCES knowledge_entries(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_rsr_path   ON recipe_source_refs(source_path);
-        CREATE INDEX IF NOT EXISTS idx_rsr_status ON recipe_source_refs(status);`
-      );
-    }
-  }
 
   /**
    * 通过 git log 获取 rename 映射（旧路径 → 新路径）

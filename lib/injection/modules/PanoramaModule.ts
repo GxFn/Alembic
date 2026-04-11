@@ -13,6 +13,10 @@
  * @module PanoramaModule
  */
 
+import type { BootstrapRepositoryImpl } from '../../repository/bootstrap/BootstrapRepository.js';
+import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
+import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import { CouplingAnalyzer } from '../../service/panorama/CouplingAnalyzer.js';
 import { DimensionAnalyzer } from '../../service/panorama/DimensionAnalyzer.js';
 import { LayerInferrer } from '../../service/panorama/LayerInferrer.js';
@@ -31,24 +35,44 @@ export const PanoramaModule = {
       config: { projectRoot?: string };
     };
 
-    const getDb = () => {
-      const db = ct.singletons.database as { getDb?: () => unknown } | undefined;
-      return (
-        db?.getDb ? db.getDb() : db
-      ) as import('../../service/panorama/PanoramaTypes.js').CeDbLike;
-    };
-
     const getProjectRoot = () => ct.config?.projectRoot ?? process.cwd();
 
-    ct.singleton('moduleDiscoverer', () => new ModuleDiscoverer(getDb(), getProjectRoot()));
+    const getBootstrapRepo = () =>
+      container.get('bootstrapRepository') as unknown as BootstrapRepositoryImpl;
+    const getEntityRepo = () =>
+      container.get('codeEntityRepository') as unknown as CodeEntityRepositoryImpl;
+    const getEdgeRepo = () =>
+      container.get('knowledgeEdgeRepository') as unknown as KnowledgeEdgeRepositoryImpl;
+    const getKnowledgeRepo = () =>
+      container.get('knowledgeRepository') as unknown as KnowledgeRepositoryImpl;
 
-    ct.singleton('roleRefiner', () => new RoleRefiner(getDb(), getProjectRoot()));
+    ct.singleton(
+      'moduleDiscoverer',
+      () => new ModuleDiscoverer(getEntityRepo(), getEdgeRepo(), getProjectRoot())
+    );
 
-    ct.singleton('couplingAnalyzer', () => new CouplingAnalyzer(getDb(), getProjectRoot()));
+    ct.singleton(
+      'roleRefiner',
+      () => new RoleRefiner(getBootstrapRepo(), getEntityRepo(), getEdgeRepo(), getProjectRoot())
+    );
+
+    ct.singleton(
+      'couplingAnalyzer',
+      () => new CouplingAnalyzer(getEdgeRepo(), getEntityRepo(), getProjectRoot())
+    );
 
     ct.singleton('layerInferrer', () => new LayerInferrer());
 
-    ct.singleton('dimensionAnalyzer', () => new DimensionAnalyzer(getDb(), getProjectRoot()));
+    ct.singleton(
+      'dimensionAnalyzer',
+      () =>
+        new DimensionAnalyzer(
+          getBootstrapRepo(),
+          getEntityRepo(),
+          getKnowledgeRepo(),
+          getProjectRoot()
+        )
+    );
 
     ct.singleton('panoramaAggregator', (c: unknown) => {
       const sc = c as ServiceContainer;
@@ -61,7 +85,10 @@ export const PanoramaModule = {
         roleRefiner,
         couplingAnalyzer,
         layerInferrer,
-        db: getDb(),
+        bootstrapRepo: getBootstrapRepo(),
+        entityRepo: getEntityRepo(),
+        edgeRepo: getEdgeRepo(),
+        knowledgeRepo: getKnowledgeRepo(),
         projectRoot: getProjectRoot(),
         dimensionAnalyzer,
       });
@@ -75,6 +102,8 @@ export const PanoramaModule = {
       return new PanoramaScanner({
         projectRoot: getProjectRoot(),
         container: container,
+        entityRepo: getEntityRepo(),
+        edgeRepo: getEdgeRepo(),
         logger,
       });
     });
@@ -87,7 +116,8 @@ export const PanoramaModule = {
 
       return new PanoramaService({
         aggregator,
-        db: getDb(),
+        edgeRepo: getEdgeRepo(),
+        knowledgeRepo: getKnowledgeRepo(),
         projectRoot: getProjectRoot(),
         scanner,
         moduleDiscoverer,

@@ -14,9 +14,14 @@
 
 /* ═══ Types ═══════════════════════════════════════════════ */
 
+import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
+import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
+
 export interface PanoramaScannerOptions {
   projectRoot: string;
   container: ScannerContainer;
+  entityRepo: CodeEntityRepositoryImpl;
+  edgeRepo: KnowledgeEdgeRepositoryImpl;
   logger?: ScannerLogger;
 }
 
@@ -49,29 +54,26 @@ const SILENT_LOGGER: ScannerLogger = {
 export class PanoramaScanner {
   readonly #projectRoot: string;
   readonly #container: ScannerContainer;
+  readonly #entityRepo: CodeEntityRepositoryImpl;
+  readonly #edgeRepo: KnowledgeEdgeRepositoryImpl;
   readonly #logger: ScannerLogger;
   #hasScanned = false;
 
   constructor(opts: PanoramaScannerOptions) {
     this.#projectRoot = opts.projectRoot;
     this.#container = opts.container;
+    this.#entityRepo = opts.entityRepo;
+    this.#edgeRepo = opts.edgeRepo;
     this.#logger = opts.logger ?? SILENT_LOGGER;
   }
 
   /**
    * 检测 DB 中是否已有该项目的 code_entities 数据
    */
-  hasData(): boolean {
+  async hasData(): Promise<boolean> {
     try {
-      const db = this.#container.get('database');
-      const rawDb = db?.getDb ? db.getDb() : db;
-      if (!rawDb?.prepare) {
-        return false;
-      }
-      const row = rawDb
-        .prepare(`SELECT COUNT(*) as cnt FROM code_entities WHERE project_root = ?`)
-        .get(this.#projectRoot) as { cnt: number } | undefined;
-      return (row?.cnt ?? 0) > 0;
+      const cnt = await this.#entityRepo.getEntityCount(this.#projectRoot);
+      return cnt > 0;
     } catch {
       return false;
     }
@@ -82,7 +84,7 @@ export class PanoramaScanner {
    * 幂等：扫描过一次后不再重复（重启进程或手动 reset 可重新触发）。
    */
   async ensureData(): Promise<ScanResult | null> {
-    if (this.#hasScanned || this.hasData()) {
+    if (this.#hasScanned || (await this.hasData())) {
       return null;
     }
     return this.scan();
@@ -223,7 +225,7 @@ export class PanoramaScanner {
       // 当 Phase 2.1 未产出 module 实体时（无 Package.swift / build.gradle 等），
       // 从已有 code_entities 按顶层目录分组写入 module 实体
       if (modules === 0 && entities > 0) {
-        modules = this.#inferModulesFromDirectories();
+        modules = await this.#inferModulesFromDirectories();
       }
     } catch (err: unknown) {
       this.#logger.warn(
@@ -253,21 +255,10 @@ export class PanoramaScanner {
    * 从 code_entities 中按顶层目录分组写入 module 实体 + is_part_of 边。
    * 仅在 Phase 2.1 未产出 module 时调用。
    */
-  #inferModulesFromDirectories(): number {
+  async #inferModulesFromDirectories(): Promise<number> {
     try {
-      const db = this.#container.get('database');
-      const rawDb = db?.getDb ? db.getDb() : db;
-      if (!rawDb?.prepare) {
-        return 0;
-      }
-
       // 查询所有非 module 实体的文件路径
-      const rows = rawDb
-        .prepare(
-          `SELECT DISTINCT entity_id, file_path FROM code_entities
-           WHERE project_root = ? AND file_path IS NOT NULL AND entity_type != 'module'`
-        )
-        .all(this.#projectRoot) as Array<Record<string, unknown>>;
+      const rows = await this.#entityRepo.findDistinctEntityIdsWithFilePath(this.#projectRoot);
 
       if (rows.length === 0) {
         return 0;
@@ -276,7 +267,7 @@ export class PanoramaScanner {
       // 按顶层目录分组
       const groups = new Map<string, string[]>();
       for (const row of rows) {
-        const filePath = row.file_path as string;
+        const filePath = row.filePath;
         if (!filePath) {
           continue;
         }
@@ -292,29 +283,44 @@ export class PanoramaScanner {
         if (!groups.has(firstDir)) {
           groups.set(firstDir, []);
         }
-        groups.get(firstDir)!.push(row.entity_id as string);
+        groups.get(firstDir)!.push(row.entityId);
       }
 
       if (groups.size === 0) {
         return 0;
       }
 
-      // 写入 module 实体 + is_part_of 边
-      const insertEntity = rawDb.prepare(
-        `INSERT OR IGNORE INTO code_entities (entity_id, name, entity_type, file_path, project_root)
-         VALUES (?, ?, 'module', NULL, ?)`
-      );
-      const insertEdge = rawDb.prepare(
-        `INSERT OR IGNORE INTO knowledge_edges (from_id, from_type, to_id, to_type, relation, weight)
-         VALUES (?, 'entity', ?, 'module', 'is_part_of', 1.0)`
-      );
+      // 写入 module 实体
+      const moduleEntities = [...groups.keys()].map((dirName) => ({
+        entityId: dirName,
+        name: dirName,
+        entityType: 'module' as const,
+        projectRoot: this.#projectRoot,
+      }));
+      await this.#entityRepo.batchInsertIgnore(moduleEntities);
 
+      // 写入 is_part_of 边
+      const edges: Array<{
+        fromId: string;
+        fromType: string;
+        toId: string;
+        toType: string;
+        relation: string;
+        weight: number;
+      }> = [];
       for (const [dirName, entityIds] of groups) {
-        insertEntity.run(dirName, dirName, this.#projectRoot);
         for (const entityId of entityIds) {
-          insertEdge.run(entityId, dirName);
+          edges.push({
+            fromId: entityId,
+            fromType: 'entity',
+            toId: dirName,
+            toType: 'module',
+            relation: 'is_part_of',
+            weight: 1.0,
+          });
         }
       }
+      await this.#edgeRepo.bulkInsertIgnore(edges);
 
       this.#logger.info(
         `[PanoramaScanner] Directory fallback: inferred ${groups.size} modules from top-level dirs`

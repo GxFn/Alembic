@@ -89,6 +89,8 @@ export interface LayerViolation {
 export interface LayerHierarchy {
   levels: LayerLevel[];
   violations: LayerViolation[];
+  /** 是否基于配置文件（如 Boxfile）声明的层级推断（而非纯拓扑） */
+  configBased?: boolean;
 }
 
 export interface CyclicDependency {
@@ -166,6 +168,11 @@ export interface CallFlowSummary {
   dataProducers: string[];
   dataConsumers: string[];
 }
+
+/* ═══ Module Role ═════════════════════════════════════════ */
+
+// Canonical definition lives in LanguageProfiles; re-exported here for panorama consumers.
+export type { ModuleRole } from '#shared/LanguageProfiles.js';
 
 export interface PanoramaResult {
   modules: Map<string, PanoramaModule>;

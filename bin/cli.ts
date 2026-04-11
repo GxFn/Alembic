@@ -858,7 +858,7 @@ program
       await panoramaService.ensureData();
 
       if (opts.gaps) {
-        const gaps = panoramaService.getGaps();
+        const gaps = await panoramaService.getGaps();
         if (opts.json) {
           cli.log(JSON.stringify(gaps, null, 2));
         } else {
@@ -878,7 +878,7 @@ program
       }
 
       if (opts.health) {
-        const health = panoramaService.getHealth();
+        const health = await panoramaService.getHealth();
         if (opts.json) {
           cli.log(JSON.stringify(health, null, 2));
         } else {
@@ -895,7 +895,7 @@ program
       }
 
       // 默认: 全景概览
-      const overview = panoramaService.getOverview();
+      const overview = await panoramaService.getOverview();
       if (opts.json) {
         cli.log(JSON.stringify(overview, null, 2));
       } else {
@@ -1033,10 +1033,13 @@ program
         );
         const db = container.get('database');
         const agentFactory = container.get('agentFactory');
+        const knowledgeRepo = container.get('knowledgeRepository');
+        const auditRepo = container.get('auditRepository');
 
         const signalCollector = new SignalCollector({
           projectRoot,
-          database: db as any,
+          knowledgeRepo: knowledgeRepo as any,
+          auditRepo: auditRepo as any,
           agentFactory,
           container,
           mode: process.env.ASD_SIGNAL_MODE || 'auto',

@@ -91,11 +91,7 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
       ? ctx.container.get('knowledgeSyncService')
       : null;
     if (syncService) {
-      const rawDb =
-        typeof (db as { getDb?: () => unknown })?.getDb === 'function'
-          ? (db as { getDb: () => unknown }).getDb()
-          : db;
-      const syncReport = syncService.sync(rawDb as Parameters<typeof syncService.sync>[0], {
+      const syncReport = syncService.sync(db, {
         force: true,
       });
       ctx.logger.info('[Rescan] KnowledgeSyncService sync complete', {
@@ -166,7 +162,15 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
   // ═══════════════════════════════════════════════════════════
 
   const auditor = new RecipeRelevanceAuditor({
-    db,
+    knowledgeRepo: ctx.container.get(
+      'knowledgeRepository'
+    ) as import('../../../repository/knowledge/KnowledgeRepository.impl.js').default,
+    proposalRepo: (ctx.container.singletons as Record<string, unknown> | undefined)
+      ?.proposalRepository
+      ? (ctx.container.get(
+          'proposalRepository'
+        ) as import('../../../repository/evolution/ProposalRepository.js').ProposalRepository)
+      : undefined,
     logger: ctx.logger,
   });
 
@@ -185,7 +189,7 @@ export async function rescanExternal(ctx: McpContext, args: RescanInput) {
 
   // 按需过滤维度
   const dimensions = args.dimensions?.length
-    ? allDimensions.filter((d) => args.dimensions!.includes(d.id))
+    ? allDimensions.filter((d) => args.dimensions?.includes(d.id))
     : allDimensions;
 
   // 创建 Session

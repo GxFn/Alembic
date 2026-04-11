@@ -24,6 +24,7 @@ import path from 'node:path';
 import type { KnowledgeEntry } from '../../domain/knowledge/KnowledgeEntry.js';
 import { CANDIDATES_DIR, RECIPES_DIR } from '../../infrastructure/config/Defaults.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { KnowledgeFileStore } from '../../repository/knowledge/KnowledgeFileStore.js';
 import pathGuard from '../../shared/PathGuard.js';
 
 /* ═══════════════════════════════════════════════════════════
@@ -66,7 +67,7 @@ const SCALAR_FIELDS = [
  * KnowledgeFileWriter 类
  * ═══════════════════════════════════════════════════════════ */
 
-export class KnowledgeFileWriter {
+export class KnowledgeFileWriter implements KnowledgeFileStore {
   candidatesDir: string;
   logger: ReturnType<typeof Logger.getInstance>;
   projectRoot: string;

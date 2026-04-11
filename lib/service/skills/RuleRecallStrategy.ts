@@ -6,6 +6,8 @@
  * 将 SkillSuggestion 转换为标准 RecommendationCandidate。
  */
 
+import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import { SkillAdvisor } from './SkillAdvisor.js';
 import type { RecallStrategy, RecommendationCandidate, RecommendationContext } from './types.js';
 
@@ -14,22 +16,17 @@ export class RuleRecallStrategy implements RecallStrategy {
   readonly type = 'rule' as const;
 
   async recall(context: RecommendationContext): Promise<RecommendationCandidate[]> {
-    const db = context.database as Parameters<
-      (typeof SkillAdvisor.prototype)['suggest']
-    > extends never[]
-      ? never
-      : {
-          prepare(sql: string): {
-            all(...args: unknown[]): Record<string, unknown>[];
-            get(...args: unknown[]): Record<string, unknown> | undefined;
-          };
-        } | null;
+    const ct = context.container as { get?(key: string): unknown } | undefined;
+    const knowledgeRepo = (ct?.get?.('knowledgeRepository') ||
+      null) as KnowledgeRepositoryImpl | null;
+    const auditRepo = (ct?.get?.('auditRepository') || null) as AuditRepositoryImpl | null;
 
     const advisor = new SkillAdvisor(context.projectRoot, {
-      database: db as SkillAdvisorDatabase,
+      knowledgeRepo,
+      auditRepo,
     });
 
-    const result = advisor.suggest();
+    const result = await advisor.suggest();
 
     // 过滤已有 Skill
     const existingSet = context.existingSkills ?? new Set<string>();
@@ -51,13 +48,5 @@ export class RuleRecallStrategy implements RecallStrategy {
     return true;
   }
 }
-
-/** SkillAdvisor 期望的 database 接口 */
-type SkillAdvisorDatabase = {
-  prepare(sql: string): {
-    all(...args: unknown[]): Record<string, unknown>[];
-    get(...args: unknown[]): Record<string, unknown> | undefined;
-  };
-} | null;
 
 export default RuleRecallStrategy;

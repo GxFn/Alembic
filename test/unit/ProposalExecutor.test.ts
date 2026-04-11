@@ -49,67 +49,40 @@ function createMockRepo() {
   } satisfies Record<keyof ProposalRepository, unknown>;
 }
 
-function createMockDb(
-  recipeData?: Record<string, { stats: string; quality: string; lifecycle: string }>
+function createMockKnowledgeRepo(
+  recipeData?: Record<
+    string,
+    {
+      stats: Record<string, unknown>;
+      quality: Record<string, unknown>;
+      lifecycle: string;
+    }
+  >
 ) {
   const data = recipeData ?? {
     'r-001': {
-      stats: JSON.stringify({
+      stats: {
         guardHits: 10,
         searchHits: 20,
         hitsLast30d: 5,
         decayScore: 50,
         ruleFalsePositiveRate: 0.1,
-      }),
-      quality: JSON.stringify({ overall: 0.8 }),
+      },
+      quality: { overall: 0.8 },
       lifecycle: 'evolving',
     },
   };
 
   return {
-    prepare: vi.fn((sql: string) => {
-      if (sql.includes('SELECT stats, quality')) {
-        return {
-          all: vi.fn(),
-          get: vi.fn((...args: unknown[]) => {
-            const id = args[0] as string;
-            const row = data[id];
-            return row ? { stats: row.stats, quality: row.quality } : undefined;
-          }),
-          run: vi.fn(() => ({ changes: 1 })),
-        };
+    findById: vi.fn(async (id: string) => {
+      const row = data[id];
+      if (!row) {
+        return null;
       }
-      if (sql.includes('SELECT lifecycle')) {
-        return {
-          all: vi.fn(),
-          get: vi.fn((...args: unknown[]) => {
-            const id = args[0] as string;
-            const row = data[id];
-            return row ? { lifecycle: row.lifecycle } : undefined;
-          }),
-          run: vi.fn(() => ({ changes: 1 })),
-        };
-      }
-      if (sql.includes('UPDATE knowledge_entries')) {
-        return {
-          all: vi.fn(),
-          get: vi.fn(),
-          run: vi.fn(() => ({ changes: 1 })),
-        };
-      }
-      if (sql.includes('INSERT OR IGNORE INTO knowledge_edges')) {
-        return {
-          all: vi.fn(),
-          get: vi.fn(),
-          run: vi.fn(() => ({ changes: 1 })),
-        };
-      }
-      return {
-        all: vi.fn(() => []),
-        get: vi.fn(() => undefined),
-        run: vi.fn(() => ({ changes: 0 })),
-      };
+      return { id, stats: row.stats, quality: row.quality, lifecycle: row.lifecycle };
     }),
+    updateLifecycle: vi.fn(async () => {}),
+    update: vi.fn(async () => {}),
   };
 }
 
@@ -121,26 +94,26 @@ function createMockSignalBus() {
 }
 
 describe('ProposalExecutor', () => {
-  let db: ReturnType<typeof createMockDb>;
+  let knowledgeRepo: ReturnType<typeof createMockKnowledgeRepo>;
   let repo: ReturnType<typeof createMockRepo>;
   let signalBus: ReturnType<typeof createMockSignalBus>;
   let executor: ProposalExecutor;
 
   beforeEach(() => {
-    db = createMockDb();
+    knowledgeRepo = createMockKnowledgeRepo();
     repo = createMockRepo();
     signalBus = createMockSignalBus();
-    executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
+    executor = new ProposalExecutor(knowledgeRepo as never, repo as unknown as ProposalRepository, {
       signalBus: signalBus as never,
     });
   });
 
   describe('checkAndExecute — empty', () => {
-    it('returns empty result when no expired proposals', () => {
+    it('returns empty result when no expired proposals', async () => {
       repo.findExpiredObserving.mockReturnValue([]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
       expect(result.executed).toHaveLength(0);
       expect(result.rejected).toHaveLength(0);
       expect(result.expired).toHaveLength(0);
@@ -149,12 +122,12 @@ describe('ProposalExecutor', () => {
   });
 
   describe('checkAndExecute — merge', () => {
-    it('executes merge when FP ok and has usage', () => {
+    it('executes merge when FP ok and has usage', async () => {
       const proposal = makeProposal({ type: 'merge' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]); // no old pending
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.executed).toHaveLength(1);
       expect(result.executed[0].type).toBe('merge');
@@ -167,58 +140,66 @@ describe('ProposalExecutor', () => {
       );
     });
 
-    it('rejects merge when FP rate too high', () => {
-      db = createMockDb({
+    it('rejects merge when FP rate too high', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({
         'r-001': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 10,
             searchHits: 20,
             hitsLast30d: 5,
             decayScore: 50,
             ruleFalsePositiveRate: 0.5, // > 0.4 threshold
-          }),
-          quality: JSON.stringify({ overall: 0.8 }),
+          },
+          quality: { overall: 0.8 },
           lifecycle: 'evolving',
         },
       });
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({ type: 'merge' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.rejected).toHaveLength(1);
       expect(result.rejected[0].reason).toContain('FP rate too high');
       expect(repo.markRejected).toHaveBeenCalled();
     });
 
-    it('rejects merge when no usage during observation', () => {
-      db = createMockDb({
+    it('rejects merge when no usage during observation', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({
         'r-001': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 0,
             searchHits: 0,
             hitsLast30d: 0,
             decayScore: 50,
             ruleFalsePositiveRate: 0.1,
-          }),
-          quality: JSON.stringify({ overall: 0.8 }),
+          },
+          quality: { overall: 0.8 },
           lifecycle: 'evolving',
         },
       });
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({ type: 'merge' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.rejected).toHaveLength(1);
       expect(result.rejected[0].reason).toContain('no usage during observation');
@@ -226,12 +207,12 @@ describe('ProposalExecutor', () => {
   });
 
   describe('checkAndExecute — enhance', () => {
-    it('executes enhance same as merge logic', () => {
+    it('executes enhance same as merge logic', async () => {
       const proposal = makeProposal({ type: 'enhance' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.executed).toHaveLength(1);
       expect(result.executed[0].type).toBe('enhance');
@@ -239,34 +220,38 @@ describe('ProposalExecutor', () => {
   });
 
   describe('checkAndExecute — supersede', () => {
-    it('executes supersede when new recipe is active and has enough usage', () => {
-      db = createMockDb({
+    it('executes supersede when new recipe is active and has enough usage', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({
         'r-001': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 10,
             searchHits: 10,
             hitsLast30d: 5,
             decayScore: 50,
             ruleFalsePositiveRate: 0.1,
-          }),
-          quality: JSON.stringify({ overall: 0.7 }),
+          },
+          quality: { overall: 0.7 },
           lifecycle: 'active',
         },
         'r-new': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 8,
             searchHits: 7,
             hitsLast30d: 4,
             decayScore: 80,
             ruleFalsePositiveRate: 0.05,
-          }),
-          quality: JSON.stringify({ overall: 0.85 }),
+          },
+          quality: { overall: 0.85 },
           lifecycle: 'active',
         },
       });
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({
         type: 'supersede',
@@ -276,41 +261,45 @@ describe('ProposalExecutor', () => {
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.executed).toHaveLength(1);
       expect(result.executed[0].type).toBe('supersede');
       expect(repo.markExecuted).toHaveBeenCalled();
     });
 
-    it('rejects supersede when new recipe has insufficient usage', () => {
-      db = createMockDb({
+    it('rejects supersede when new recipe has insufficient usage', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({
         'r-001': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 50,
             searchHits: 50,
             hitsLast30d: 10,
             decayScore: 50,
             ruleFalsePositiveRate: 0.1,
-          }),
-          quality: JSON.stringify({ overall: 0.7 }),
+          },
+          quality: { overall: 0.7 },
           lifecycle: 'active',
         },
         'r-new': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 2,
             searchHits: 3,
             hitsLast30d: 1,
             decayScore: 80,
             ruleFalsePositiveRate: 0.05,
-          }),
-          quality: JSON.stringify({ overall: 0.85 }),
+          },
+          quality: { overall: 0.85 },
           lifecycle: 'active',
         },
       });
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({
         type: 'supersede',
@@ -320,13 +309,13 @@ describe('ProposalExecutor', () => {
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.rejected).toHaveLength(1);
       expect(result.rejected[0].reason).toContain('insufficient usage');
     });
 
-    it('rejects supersede when no related recipe specified', () => {
+    it('rejects supersede when no related recipe specified', async () => {
       const proposal = makeProposal({
         type: 'supersede',
         relatedRecipeIds: [],
@@ -334,40 +323,44 @@ describe('ProposalExecutor', () => {
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.rejected).toHaveLength(1);
       expect(result.rejected[0].reason).toContain('no related new recipe');
     });
 
-    it('skips supersede when new recipe not yet active', () => {
-      db = createMockDb({
+    it('skips supersede when new recipe not yet active', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({
         'r-001': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 10,
             searchHits: 10,
             hitsLast30d: 5,
             decayScore: 50,
             ruleFalsePositiveRate: 0.1,
-          }),
-          quality: JSON.stringify({ overall: 0.7 }),
+          },
+          quality: { overall: 0.7 },
           lifecycle: 'active',
         },
         'r-new': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 5,
             searchHits: 5,
             hitsLast30d: 2,
             decayScore: 80,
             ruleFalsePositiveRate: 0.05,
-          }),
-          quality: JSON.stringify({ overall: 0.85 }),
+          },
+          quality: { overall: 0.85 },
           lifecycle: 'staging', // not yet active
         },
       });
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({
         type: 'supersede',
@@ -377,7 +370,7 @@ describe('ProposalExecutor', () => {
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.skipped).toHaveLength(1);
       expect(result.skipped[0].reason).toContain('not yet active');
@@ -385,23 +378,27 @@ describe('ProposalExecutor', () => {
   });
 
   describe('checkAndExecute — deprecate', () => {
-    it('executes deprecate (deprecated) when decayScore <= 19', () => {
-      db = createMockDb({
+    it('executes deprecate (deprecated) when decayScore <= 19', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({
         'r-001': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 0,
             searchHits: 0,
             hitsLast30d: 0,
             decayScore: 10,
             ruleFalsePositiveRate: 0,
-          }),
-          quality: JSON.stringify({ overall: 0.3 }),
+          },
+          quality: { overall: 0.3 },
           lifecycle: 'decaying',
         },
       });
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({
         type: 'deprecate',
@@ -410,7 +407,7 @@ describe('ProposalExecutor', () => {
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.executed).toHaveLength(1);
       expect(repo.markExecuted).toHaveBeenCalledWith(
@@ -419,23 +416,27 @@ describe('ProposalExecutor', () => {
       );
     });
 
-    it('executes deprecate (decaying) when decayScore 20-40', () => {
-      db = createMockDb({
+    it('executes deprecate (decaying) when decayScore 20-40', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({
         'r-001': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 1,
             searchHits: 0,
             hitsLast30d: 0,
             decayScore: 30,
             ruleFalsePositiveRate: 0,
-          }),
-          quality: JSON.stringify({ overall: 0.5 }),
+          },
+          quality: { overall: 0.5 },
           lifecycle: 'decaying',
         },
       });
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({
         type: 'deprecate',
@@ -444,7 +445,7 @@ describe('ProposalExecutor', () => {
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.executed).toHaveLength(1);
       expect(repo.markExecuted).toHaveBeenCalledWith(
@@ -453,23 +454,27 @@ describe('ProposalExecutor', () => {
       );
     });
 
-    it('rejects deprecate when decayScore recovered', () => {
-      db = createMockDb({
+    it('rejects deprecate when decayScore recovered', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({
         'r-001': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 5,
             searchHits: 10,
             hitsLast30d: 3,
             decayScore: 60, // recovered from 35
             ruleFalsePositiveRate: 0.05,
-          }),
-          quality: JSON.stringify({ overall: 0.7 }),
+          },
+          quality: { overall: 0.7 },
           lifecycle: 'decaying',
         },
       });
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({
         type: 'deprecate',
@@ -478,7 +483,7 @@ describe('ProposalExecutor', () => {
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.rejected).toHaveLength(1);
       expect(result.rejected[0].reason).toContain('recovered');
@@ -486,40 +491,44 @@ describe('ProposalExecutor', () => {
   });
 
   describe('checkAndExecute — correction', () => {
-    it('executes correction when recipe has usage', () => {
+    it('executes correction when recipe has usage', async () => {
       const proposal = makeProposal({ type: 'correction' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.executed).toHaveLength(1);
       expect(result.executed[0].type).toBe('correction');
     });
 
-    it('rejects correction when no usage', () => {
-      db = createMockDb({
+    it('rejects correction when no usage', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({
         'r-001': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 0,
             searchHits: 0,
             hitsLast30d: 0,
             decayScore: 50,
             ruleFalsePositiveRate: 0,
-          }),
-          quality: JSON.stringify({ overall: 0.5 }),
+          },
+          quality: { overall: 0.5 },
           lifecycle: 'active',
         },
       });
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({ type: 'correction' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.rejected).toHaveLength(1);
       expect(result.rejected[0].reason).toBe('no usage');
@@ -527,24 +536,24 @@ describe('ProposalExecutor', () => {
   });
 
   describe('checkAndExecute — high risk types', () => {
-    it('skips contradiction (high risk)', () => {
+    it('skips contradiction (high risk)', async () => {
       const proposal = makeProposal({ type: 'contradiction' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.skipped).toHaveLength(1);
       expect(result.skipped[0].reason).toContain('high-risk');
       expect(repo.markExecuted).not.toHaveBeenCalled();
     });
 
-    it('skips reorganize (high risk)', () => {
+    it('skips reorganize (high risk)', async () => {
       const proposal = makeProposal({ type: 'reorganize' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.skipped).toHaveLength(1);
       expect(result.skipped[0].reason).toContain('high-risk');
@@ -552,7 +561,7 @@ describe('ProposalExecutor', () => {
   });
 
   describe('checkAndExecute — old pending cleanup', () => {
-    it('expires pending proposals older than 14 days', () => {
+    it('expires pending proposals older than 14 days', async () => {
       repo.findExpiredObserving.mockReturnValue([]);
       repo.find.mockReturnValue([
         makeProposal({
@@ -562,7 +571,7 @@ describe('ProposalExecutor', () => {
         }),
       ]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.expired).toHaveLength(1);
       expect(result.expired[0].id).toBe('ep-old-1');
@@ -571,7 +580,7 @@ describe('ProposalExecutor', () => {
   });
 
   describe('checkAndExecute — multiple proposals', () => {
-    it('processes multiple proposals in one cycle', () => {
+    it('processes multiple proposals in one cycle', async () => {
       const p1 = makeProposal({ id: 'ep-1', type: 'merge' });
       const p2 = makeProposal({ id: 'ep-2', type: 'enhance' });
       const p3 = makeProposal({ id: 'ep-3', type: 'contradiction' });
@@ -579,7 +588,7 @@ describe('ProposalExecutor', () => {
       repo.findExpiredObserving.mockReturnValue([p1, p2, p3]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.executed).toHaveLength(2); // merge + enhance
       expect(result.skipped).toHaveLength(1); // contradiction
@@ -587,12 +596,12 @@ describe('ProposalExecutor', () => {
   });
 
   describe('signal emission', () => {
-    it('emits lifecycle signal on executed', () => {
+    it('emits lifecycle signal on executed', async () => {
       const proposal = makeProposal({ type: 'merge' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      executor.checkAndExecute();
+      await executor.checkAndExecute();
 
       expect(signalBus.send).toHaveBeenCalledTimes(1);
       expect(signalBus.send).toHaveBeenCalledWith(
@@ -610,52 +619,63 @@ describe('ProposalExecutor', () => {
       );
     });
 
-    it('does not throw without signalBus', () => {
-      const executorNoSignal = new ProposalExecutor(db, repo as unknown as ProposalRepository);
+    it('does not throw without signalBus', async () => {
+      const executorNoSignal = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository
+      );
       const proposal = makeProposal({ type: 'merge' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      expect(() => executorNoSignal.checkAndExecute()).not.toThrow();
+      await expect(executorNoSignal.checkAndExecute()).resolves.not.toThrow();
     });
   });
 
   describe('recipe metric collection', () => {
-    it('returns zero defaults when recipe not found', () => {
-      db = createMockDb({}); // no recipes in DB
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+    it('returns zero defaults when recipe not found', async () => {
+      knowledgeRepo = createMockKnowledgeRepo({}); // no recipes
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({ type: 'merge', targetRecipeId: 'r-nonexistent' });
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
       // Should not throw, should reject due to no usage
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
       expect(result.rejected).toHaveLength(1);
     });
   });
 
   describe('snapshot extraction', () => {
-    it('uses evidence snapshot for deprecate comparison', () => {
+    it('uses evidence snapshot for deprecate comparison', async () => {
       // decayScore went from 35 (snapshot) to 50 (current) → recovered > 10 → reject
-      db = createMockDb({
+      knowledgeRepo = createMockKnowledgeRepo({
         'r-001': {
-          stats: JSON.stringify({
+          stats: {
             guardHits: 3,
             searchHits: 5,
             hitsLast30d: 2,
             decayScore: 50,
             ruleFalsePositiveRate: 0.05,
-          }),
-          quality: JSON.stringify({ overall: 0.7 }),
+          },
+          quality: { overall: 0.7 },
           lifecycle: 'decaying',
         },
       });
-      executor = new ProposalExecutor(db, repo as unknown as ProposalRepository, {
-        signalBus: signalBus as never,
-      });
+      executor = new ProposalExecutor(
+        knowledgeRepo as never,
+        repo as unknown as ProposalRepository,
+        {
+          signalBus: signalBus as never,
+        }
+      );
 
       const proposal = makeProposal({
         type: 'deprecate',
@@ -669,7 +689,7 @@ describe('ProposalExecutor', () => {
       repo.findExpiredObserving.mockReturnValue([proposal]);
       repo.find.mockReturnValue([]);
 
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
 
       expect(result.rejected).toHaveLength(1);
       expect(result.rejected[0].reason).toContain('recovered');

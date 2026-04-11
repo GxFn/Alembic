@@ -10,28 +10,28 @@ import type { RedundancyResult } from '../../lib/service/evolution/RedundancyAna
 /* ── Mock factories ── */
 
 function mockContradictionDetector(results: ContradictionResult[] = []) {
-  return { detectAll: () => results } as never;
+  return { detectAll: async () => results } as never;
 }
 
 function mockRedundancyAnalyzer(results: RedundancyResult[] = []) {
-  return { analyzeAll: () => results } as never;
+  return { analyzeAll: async () => results } as never;
 }
 
 function mockDecayDetector(results: DecayScoreResult[] = []) {
-  return { scanAll: () => results } as never;
+  return { scanAll: async () => results } as never;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe('KnowledgeMetabolism', () => {
-  it('runFullCycle returns empty report when no issues', () => {
+  it('runFullCycle returns empty report when no issues', async () => {
     const metabolism = new KnowledgeMetabolism({
       contradictionDetector: mockContradictionDetector(),
       redundancyAnalyzer: mockRedundancyAnalyzer(),
       decayDetector: mockDecayDetector(),
     });
 
-    const report = metabolism.runFullCycle();
+    const report = await metabolism.runFullCycle();
     expect(report.contradictions).toHaveLength(0);
     expect(report.redundancies).toHaveLength(0);
     expect(report.decayResults).toHaveLength(0);
@@ -39,7 +39,7 @@ describe('KnowledgeMetabolism', () => {
     expect(report.summary.proposalCount).toBe(0);
   });
 
-  it('generates merge proposal from hard contradiction', () => {
+  it('generates merge proposal from hard contradiction', async () => {
     const contradiction: ContradictionResult = {
       recipeA: 'r1',
       recipeB: 'r2',
@@ -54,7 +54,7 @@ describe('KnowledgeMetabolism', () => {
       decayDetector: mockDecayDetector(),
     });
 
-    const report = metabolism.runFullCycle();
+    const report = await metabolism.runFullCycle();
     expect(report.proposals).toHaveLength(1);
     expect(report.proposals[0].type).toBe('contradiction');
     expect(report.proposals[0].source).toBe('contradiction');
@@ -62,7 +62,7 @@ describe('KnowledgeMetabolism', () => {
     expect(report.proposals[0].relatedRecipeIds).toEqual(['r2']);
   });
 
-  it('generates review proposal from soft contradiction', () => {
+  it('generates review proposal from soft contradiction', async () => {
     const contradiction: ContradictionResult = {
       recipeA: 'r1',
       recipeB: 'r2',
@@ -77,12 +77,12 @@ describe('KnowledgeMetabolism', () => {
       decayDetector: mockDecayDetector(),
     });
 
-    const report = metabolism.runFullCycle();
+    const report = await metabolism.runFullCycle();
     expect(report.proposals).toHaveLength(1);
     expect(report.proposals[0].type).toBe('correction');
   });
 
-  it('generates merge proposal from redundancy', () => {
+  it('generates merge proposal from redundancy', async () => {
     const redundancy: RedundancyResult = {
       recipeA: 'r1',
       recipeB: 'r2',
@@ -96,14 +96,14 @@ describe('KnowledgeMetabolism', () => {
       decayDetector: mockDecayDetector(),
     });
 
-    const report = metabolism.runFullCycle();
+    const report = await metabolism.runFullCycle();
     expect(report.proposals).toHaveLength(1);
     expect(report.proposals[0].type).toBe('merge');
     expect(report.proposals[0].source).toBe('redundancy');
     expect(report.proposals[0].confidence).toBe(0.78);
   });
 
-  it('generates deprecate proposal from decaying recipe', () => {
+  it('generates deprecate proposal from decaying recipe', async () => {
     const decayResult: DecayScoreResult = {
       recipeId: 'r1',
       title: 'Old recipe',
@@ -120,7 +120,7 @@ describe('KnowledgeMetabolism', () => {
       decayDetector: mockDecayDetector([decayResult]),
     });
 
-    const report = metabolism.runFullCycle();
+    const report = await metabolism.runFullCycle();
     expect(report.proposals).toHaveLength(1);
     expect(report.proposals[0].type).toBe('deprecate');
     expect(report.proposals[0].source).toBe('decay');
@@ -128,7 +128,7 @@ describe('KnowledgeMetabolism', () => {
     expect(report.summary.decayingCount).toBe(1);
   });
 
-  it('does NOT generate deprecate for healthy or watch recipes', () => {
+  it('does NOT generate deprecate for healthy or watch recipes', async () => {
     const healthyResult: DecayScoreResult = {
       recipeId: 'r1',
       title: 'Healthy recipe',
@@ -154,12 +154,12 @@ describe('KnowledgeMetabolism', () => {
       decayDetector: mockDecayDetector([healthyResult, watchResult]),
     });
 
-    const report = metabolism.runFullCycle();
+    const report = await metabolism.runFullCycle();
     expect(report.proposals).toHaveLength(0);
     expect(report.summary.decayingCount).toBe(0);
   });
 
-  it('proposals have valid TTL (7 days)', () => {
+  it('proposals have valid TTL (7 days)', async () => {
     const contradiction: ContradictionResult = {
       recipeA: 'r1',
       recipeB: 'r2',
@@ -174,13 +174,13 @@ describe('KnowledgeMetabolism', () => {
       decayDetector: mockDecayDetector(),
     });
 
-    const report = metabolism.runFullCycle();
+    const report = await metabolism.runFullCycle();
     const proposal = report.proposals[0];
     const ttl = proposal.expiresAt - proposal.proposedAt;
     expect(ttl).toBe(7 * DAY_MS);
   });
 
-  it('writes governance report when proposals are generated', () => {
+  it('writes governance report when proposals are generated', async () => {
     const contradiction: ContradictionResult = {
       recipeA: 'r1',
       recipeB: 'r2',
@@ -206,14 +206,14 @@ describe('KnowledgeMetabolism', () => {
       reportStore: reportStore as never,
     });
 
-    metabolism.runFullCycle();
+    await metabolism.runFullCycle();
     expect(writeMock).toHaveBeenCalledTimes(1);
     const entry = writeMock.mock.calls[0][0] as { type: string; category: string };
     expect(entry.category).toBe('governance');
     expect(entry.type).toBe('metabolism_cycle');
   });
 
-  it('does NOT write governance report when no proposals', () => {
+  it('does NOT write governance report when no proposals', async () => {
     const writeMock = vi.fn();
     const reportStore = { write: writeMock };
 
@@ -224,11 +224,11 @@ describe('KnowledgeMetabolism', () => {
       reportStore: reportStore as never,
     });
 
-    metabolism.runFullCycle();
+    await metabolism.runFullCycle();
     expect(writeMock).not.toHaveBeenCalled();
   });
 
-  it('convenience methods delegate to detectors', () => {
+  it('convenience methods delegate to detectors', async () => {
     const decay: DecayScoreResult = {
       recipeId: 'r1',
       title: 'test',
@@ -245,12 +245,12 @@ describe('KnowledgeMetabolism', () => {
       decayDetector: mockDecayDetector([decay]),
     });
 
-    expect(metabolism.checkDecay()).toHaveLength(1);
-    expect(metabolism.checkContradictions()).toHaveLength(0);
-    expect(metabolism.checkRedundancy()).toHaveLength(0);
+    expect(await metabolism.checkDecay()).toHaveLength(1);
+    expect(await metabolism.checkContradictions()).toHaveLength(0);
+    expect(await metabolism.checkRedundancy()).toHaveLength(0);
   });
 
-  it('combines proposals from all sources in full cycle', () => {
+  it('combines proposals from all sources in full cycle', async () => {
     const contradiction: ContradictionResult = {
       recipeA: 'r1',
       recipeB: 'r2',
@@ -280,7 +280,7 @@ describe('KnowledgeMetabolism', () => {
       decayDetector: mockDecayDetector([decay]),
     });
 
-    const report = metabolism.runFullCycle();
+    const report = await metabolism.runFullCycle();
     expect(report.proposals).toHaveLength(3);
     expect(report.proposals.map((p) => p.type).sort()).toEqual([
       'contradiction',

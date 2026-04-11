@@ -9,6 +9,7 @@ import { CacheCoordinator } from '../infrastructure/cache/CacheCoordinator.js';
 import { GraphCache } from '../infrastructure/cache/GraphCache.js';
 // ─── P3: Infrastructure ──────────────────────────────
 import Logger from '../infrastructure/logging/Logger.js';
+import { unwrapRawDb } from '../repository/search/SearchRepoAdapter.js';
 import * as AgentModule from './modules/AgentModule.js';
 import * as AiModule from './modules/AiModule.js';
 import * as AppModule from './modules/AppModule.js';
@@ -210,7 +211,11 @@ export class ServiceContainer {
             getDb?: () => import('../infrastructure/database/DatabaseConnection.js').SqliteDatabase;
           }
         | undefined;
-      const rawDb = db?.getDb ? db.getDb() : null;
+      const rawDb = db
+        ? (unwrapRawDb(db as unknown) as
+            | import('../infrastructure/database/DatabaseConnection.js').SqliteDatabase
+            | null)
+        : null;
       if (!rawDb) {
         return;
       }
@@ -366,7 +371,7 @@ export class ServiceContainer {
           // 完全命中
           this.singletons.projectGraph = graph;
           this.logger.info(
-            `[ServiceContainer] ProjectGraph ⚡ 缓存命中 (${graph.getOverview()?.totalClasses} classes, ` +
+            `[ServiceContainer] ProjectGraph ⚡ 缓存命中 (${(await graph.getOverview())?.totalClasses} classes, ` +
               `${Date.now() - startTime}ms)`
           );
           return graph;
@@ -379,7 +384,7 @@ export class ServiceContainer {
         // 写回缓存
         cache.save('project-graph', graph.toJSON(), { fileHashes: newHashes });
 
-        const overview = graph.getOverview()!;
+        const overview = (await graph.getOverview())!;
         this.logger.info(
           `[ServiceContainer] ProjectGraph 增量更新: +${diff.added} ~${diff.updated} -${diff.deleted} ` +
             `(${overview.totalClasses} classes, ${Date.now() - startTime}ms)`
@@ -390,7 +395,7 @@ export class ServiceContainer {
       // ── 无缓存，全量构建 ──
       const graph = await ProjectGraph.build(projectRoot, options);
       this.singletons.projectGraph = graph;
-      const overview = graph.getOverview()!;
+      const overview = (await graph.getOverview())!;
 
       // 计算文件 hash 并写入缓存
       const currentFiles = this.#collectSourceFilePaths(projectRoot, options);

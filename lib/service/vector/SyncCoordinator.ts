@@ -12,9 +12,13 @@
  * @module service/vector/SyncCoordinator
  */
 
+import { and, ne } from 'drizzle-orm';
+import type { DrizzleDB } from '../../infrastructure/database/drizzle/index.js';
+import { knowledgeEntries } from '../../infrastructure/database/drizzle/schema.js';
 import type { EventBus } from '../../infrastructure/event/EventBus.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { VectorStore } from '../../infrastructure/vector/VectorStore.js';
+import { queryNonDeprecatedEntries } from '../../repository/search/SearchRepoAdapter.js';
 import type { ContextualEnricher } from './ContextualEnricher.js';
 import type { EmbedProvider } from './VectorService.js';
 
@@ -26,6 +30,7 @@ export interface SyncCoordinatorConfig {
   contextualEnricher: ContextualEnricher | null;
   debounceMs: number;
   maxBatchSize?: number;
+  drizzle?: DrizzleDB;
 }
 
 interface PendingChange {
@@ -45,6 +50,7 @@ export class SyncCoordinator {
   #contextualEnricher: ContextualEnricher | null;
   #debounceMs: number;
   #maxBatchSize: number;
+  #drizzle: DrizzleDB | null;
   #pendingChanges: Map<string, PendingChange> = new Map();
   #debounceTimer: ReturnType<typeof setTimeout> | null = null;
   #processing = false;
@@ -58,6 +64,7 @@ export class SyncCoordinator {
     this.#contextualEnricher = config.contextualEnricher;
     this.#debounceMs = config.debounceMs;
     this.#maxBatchSize = config.maxBatchSize ?? 20;
+    this.#drizzle = config.drizzle ?? null;
   }
 
   /** 绑定 EventBus，开始监听知识变更事件 */
@@ -101,7 +108,7 @@ export class SyncCoordinator {
    * @param db - 数据库连接 (better-sqlite3 style)
    * @returns 对账结果
    */
-  async reconcile(db: {
+  async reconcile(db?: {
     prepare(sql: string): {
       all(
         ...args: unknown[]
@@ -117,11 +124,24 @@ export class SyncCoordinator {
       // 2. 获取 DB 中所有 active 知识条目 ID
       let dbEntries: Array<{ id: string; title?: string; content?: string; kind?: string }> = [];
       try {
-        dbEntries = db
-          .prepare(
-            `SELECT id, title, content, kind FROM knowledge_entries WHERE lifecycle != 'deprecated'`
-          )
-          .all();
+        if (this.#drizzle) {
+          // Drizzle 类型安全查询
+          dbEntries = this.#drizzle
+            .select({
+              id: knowledgeEntries.id,
+              title: knowledgeEntries.title,
+              content: knowledgeEntries.content,
+              kind: knowledgeEntries.kind,
+            })
+            .from(knowledgeEntries)
+            .where(ne(knowledgeEntries.lifecycle, 'deprecated'))
+            .all() as Array<{ id: string; title?: string; content?: string; kind?: string }>;
+        } else if (db) {
+          // 向后兼容: 测试时可传入 mock db
+          dbEntries = queryNonDeprecatedEntries(db);
+        } else {
+          return result;
+        }
       } catch {
         // 表可能不存在
         return result;

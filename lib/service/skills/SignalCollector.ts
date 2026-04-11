@@ -41,26 +41,22 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { AuditRepositoryImpl } from '../../repository/audit/AuditRepository.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
 import pathGuard from '../../shared/PathGuard.js';
 import { EventAggregator } from './EventAggregator.js';
 import { SkillAdvisor } from './SkillAdvisor.js';
 
 interface SignalCollectorOpts {
   projectRoot: string;
-  database?: DatabaseLike | null;
+  knowledgeRepo?: KnowledgeRepositoryImpl | null;
+  auditRepo?: AuditRepositoryImpl | null;
   agentFactory?: AgentFactoryLike | null;
   container?: ContainerLike | null;
   signalBus?: import('../../infrastructure/signal/SignalBus.js').SignalBus | null;
   mode?: string;
   intervalMs?: number;
   onSuggestions?: ((suggestions: Record<string, unknown>[]) => void) | null;
-}
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...args: unknown[]): Record<string, unknown>[];
-    get(...args: unknown[]): Record<string, unknown> | undefined;
-  };
 }
 
 interface AgentResult {
@@ -111,7 +107,8 @@ const SNAPSHOT_FILE = 'signal-snapshot.json';
 
 export class SignalCollector {
   #projectRoot: string;
-  #db: DatabaseLike | null;
+  #knowledgeRepo: KnowledgeRepositoryImpl | null;
+  #auditRepo: AuditRepositoryImpl | null;
   #agentFactory: AgentFactoryLike | null;
   #container: ContainerLike | null;
   #mode: string;
@@ -139,7 +136,8 @@ export class SignalCollector {
    */
   constructor({
     projectRoot,
-    database = null,
+    knowledgeRepo = null,
+    auditRepo = null,
     agentFactory = null,
     container = null,
     signalBus = null,
@@ -148,7 +146,8 @@ export class SignalCollector {
     onSuggestions = null as ((suggestions: Record<string, unknown>[]) => void) | null,
   }: SignalCollectorOpts) {
     this.#projectRoot = projectRoot;
-    this.#db = database;
+    this.#knowledgeRepo = knowledgeRepo;
+    this.#auditRepo = auditRepo;
     this.#agentFactory = agentFactory;
     this.#container = container;
     this.#mode = ['off', 'suggest', 'auto'].includes(mode) ? mode : 'auto';
@@ -305,12 +304,12 @@ export class SignalCollector {
 
     try {
       // 1. 多维度收集信号
-      const signals = {
-        guard: this.#collectGuardSignals(),
+      const signals: CollectedSignals = {
+        guard: await this.#collectGuardSignals(),
         memory: this.#collectMemorySignals(),
-        recipes: this.#collectRecipeSignals(),
-        candidates: this.#collectCandidateSignals(),
-        actions: this.#collectRecentActions(),
+        recipes: await this.#collectRecipeSignals(),
+        candidates: await this.#collectCandidateSignals(),
+        actions: await this.#collectRecentActions(),
         codeChanges: this.#collectCodeChangeSignals(),
       };
 
@@ -320,7 +319,7 @@ export class SignalCollector {
           ?.isMock ?? true;
       if (!this.#agentFactory || isMock) {
         this.#logger.info('[SignalCollector] AI unavailable, falling back to rule-based analysis');
-        return this.#ruleFallback();
+        return await this.#ruleFallback();
       }
 
       // 2. 构造分析 prompt
@@ -451,13 +450,16 @@ export class SignalCollector {
    *
    * 零延迟、零 token 消耗 — 确保推荐系统始终有输出
    */
-  #ruleFallback(): {
+  async #ruleFallback(): Promise<{
     suggestions: Record<string, unknown>[];
     stats: Record<string, unknown> | null;
-  } {
+  }> {
     try {
-      const advisor = new SkillAdvisor(this.#projectRoot, { database: this.#db });
-      const result = advisor.suggest();
+      const advisor = new SkillAdvisor(this.#projectRoot, {
+        knowledgeRepo: this.#knowledgeRepo,
+        auditRepo: this.#auditRepo,
+      });
+      const result = await advisor.suggest();
 
       const newSuggestions = result.suggestions.filter(
         (s: { name: string }) => !this.#snapshot.pushedNames.includes(s.name)
@@ -527,25 +529,12 @@ export class SignalCollector {
   //  信号收集器（6 维度）
   // ═══════════════════════════════════════════════════════
 
-  #collectGuardSignals() {
+  async #collectGuardSignals(): Promise<Record<string, unknown>[]> {
     try {
-      if (!this.#db) {
+      if (!this.#auditRepo) {
         return [];
       }
-      // audit_logs 中 action='guard:check' + result='violation' 的记录
-      const rows = this.#db
-        .prepare(
-          `SELECT json_extract(operation_data, '$.ruleName') as ruleName,
-                COUNT(*) as cnt,
-                MAX(timestamp) as last_at
-         FROM audit_logs
-         WHERE action LIKE 'guard%'
-           AND result = 'violation'
-         GROUP BY ruleName
-         HAVING cnt > 0
-         ORDER BY cnt DESC LIMIT 20`
-        )
-        .all();
+      const rows = await this.#auditRepo.findGuardViolationSignals(20);
       return rows;
     } catch {
       return [];
@@ -574,67 +563,40 @@ export class SignalCollector {
     }
   }
 
-  #collectRecipeSignals() {
+  async #collectRecipeSignals(): Promise<Record<string, unknown>[]> {
     try {
-      if (!this.#db) {
+      if (!this.#knowledgeRepo) {
         return [];
       }
-      // V3: knowledge_entries 统一表，统计字段在 stats/quality JSON 中
-      const rows = this.#db
-        .prepare(
-          `SELECT id, title, knowledgeType, category, language,
-                json_extract(stats, '$.adoptions') as adoption_count,
-                json_extract(stats, '$.applications') as application_count,
-                json_extract(quality, '$.overall') as quality_overall,
-                updatedAt
-         FROM knowledge_entries
-         WHERE lifecycle = 'active'
-         ORDER BY updatedAt DESC LIMIT 30`
-        )
-        .all();
+      const rows = await this.#knowledgeRepo.findActiveRecipeSignals(30);
       return rows;
     } catch {
       return [];
     }
   }
 
-  #collectCandidateSignals() {
+  async #collectCandidateSignals(): Promise<Record<string, unknown>[]> {
     try {
-      if (!this.#db) {
+      if (!this.#knowledgeRepo) {
         return [];
       }
-      // V3: candidates 已合并到 knowledge_entries，lifecycle='pending' 即为候选
-      const rows = this.#db
-        .prepare(
-          `SELECT id, source, lifecycle as status, language, category,
-                title, createdAt
-         FROM knowledge_entries WHERE lifecycle = 'pending'
-         ORDER BY createdAt DESC LIMIT 30`
-        )
-        .all();
+      const rows = await this.#knowledgeRepo.findPendingCandidates(30);
       return rows;
     } catch {
       return [];
     }
   }
 
-  #collectRecentActions() {
+  async #collectRecentActions(): Promise<Record<string, unknown>[]> {
     try {
-      if (!this.#db) {
+      if (!this.#auditRepo) {
         return [];
       }
-      // audit_logs.timestamp 是 INTEGER (epoch seconds)
       const sinceStr = this.#snapshot.lastRun;
       const sinceTs = sinceStr
         ? Math.floor(new Date(sinceStr).getTime() / 1000)
         : Math.floor((Date.now() - 24 * 3600 * 1000) / 1000);
-      const rows = this.#db
-        .prepare(
-          `SELECT actor, action, resource, result, timestamp
-         FROM audit_logs WHERE timestamp > ?
-         ORDER BY timestamp DESC LIMIT 50`
-        )
-        .all(sinceTs);
+      const rows = await this.#auditRepo.findRecentActions(sinceTs, 50);
       return rows;
     } catch {
       return [];

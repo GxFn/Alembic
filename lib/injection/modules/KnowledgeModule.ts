@@ -15,7 +15,11 @@ import { getEnhancementRegistry } from '../../core/enhancement/index.js';
 import { HnswVectorAdapter } from '../../infrastructure/vector/HnswVectorAdapter.js';
 import { IndexingPipeline } from '../../infrastructure/vector/IndexingPipeline.js';
 import { JsonVectorAdapter } from '../../infrastructure/vector/JsonVectorAdapter.js';
+import { LifecycleEventRepository } from '../../repository/evolution/LifecycleEventRepository.js';
 import { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
+import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import { ConsolidationAdvisor } from '../../service/evolution/ConsolidationAdvisor.js';
 import { ContentPatcher } from '../../service/evolution/ContentPatcher.js';
 import { ContradictionDetector } from '../../service/evolution/ContradictionDetector.js';
@@ -62,6 +66,8 @@ export function register(c: ServiceContainer) {
           confidenceRouter: ct.get('confidenceRouter'),
           qualityScorer: ct.get('qualityScorer'),
           eventBus: ct.services.eventBus ? ct.get('eventBus') : null,
+          edgeRepo: ct.get('knowledgeEdgeRepository'),
+          proposalRepo: ct.get('proposalRepository'),
         } as ConstructorParameters<typeof KnowledgeService>[4]
       )
   );
@@ -70,14 +76,15 @@ export function register(c: ServiceContainer) {
     'knowledgeGraphService',
     (ct: ServiceContainer) =>
       new KnowledgeGraphService(
-        ct.get('database') as unknown as ConstructorParameters<typeof KnowledgeGraphService>[0]
+        ct.get('knowledgeEdgeRepository') as ConstructorParameters<typeof KnowledgeGraphService>[0]
       )
   );
 
   c.singleton('codeEntityGraph', (ct: ServiceContainer) => {
     const projectRoot = resolveProjectRoot(ct);
     return new CodeEntityGraph(
-      ct.get('database') as unknown as ConstructorParameters<typeof CodeEntityGraph>[0],
+      ct.get('codeEntityRepository') as ConstructorParameters<typeof CodeEntityGraph>[0],
+      ct.get('knowledgeEdgeRepository') as ConstructorParameters<typeof CodeEntityGraph>[1],
       { projectRoot }
     );
   });
@@ -97,11 +104,10 @@ export function register(c: ServiceContainer) {
           vectorStore: ct.get('vectorStore'),
           vectorService,
           hybridRetriever: ct.get('hybridRetriever'),
-          // CrossEncoderReranker disabled — BM25+vector dual-recall + CoarseRanker + MultiSignalRanker
-          // is sufficient for knowledge-base scale (hundreds~thousands of entries).
-          // Re-enable when document scale grows to 10k+ or external noisy sources are integrated.
           crossEncoderReranker: null,
           signalBus: ct.singletons.signalBus || null,
+          knowledgeRepo: ct.get('knowledgeRepository'),
+          sourceRefRepo: ct.get('recipeSourceRefRepository'),
         } as unknown as ConstructorParameters<typeof SearchEngine>[1]
       );
     },
@@ -198,23 +204,20 @@ export function register(c: ServiceContainer) {
   // ═══ Governance / Evolution ═══
 
   c.singleton('sourceRefReconciler', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
     const projectRoot = resolveProjectRoot();
-    return new SourceRefReconciler(
-      projectRoot,
-      db.getDb() as ConstructorParameters<typeof SourceRefReconciler>[1],
-      {
-        signalBus:
-          (ct.singletons.signalBus as
-            | import('../../infrastructure/signal/SignalBus.js').SignalBus
-            | undefined) || undefined,
-      }
-    );
+    const sourceRefRepo = ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    return new SourceRefReconciler(projectRoot, sourceRefRepo, knowledgeRepo, {
+      signalBus:
+        (ct.singletons.signalBus as
+          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | undefined) || undefined,
+    });
   });
 
   c.singleton('stagingManager', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new StagingManager(db.getDb() as ConstructorParameters<typeof StagingManager>[0], {
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    return new StagingManager(knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
           | import('../../infrastructure/signal/SignalBus.js').SignalBus
@@ -223,8 +226,29 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('decayDetector', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new DecayDetector(db.getDb() as ConstructorParameters<typeof DecayDetector>[0], {
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    return new DecayDetector(knowledgeRepo, {
+      signalBus:
+        (ct.singletons.signalBus as
+          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | undefined) || undefined,
+      knowledgeEdgeRepo: ct.services.knowledgeEdgeRepository
+        ? (ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepositoryImpl)
+        : undefined,
+      sourceRefRepo: ct.services.recipeSourceRefRepository
+        ? (ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl)
+        : undefined,
+      drizzle: (
+        ct.get('database') as unknown as {
+          getDrizzle(): import('../../infrastructure/database/drizzle/index.js').DrizzleDB;
+        }
+      ).getDrizzle(),
+    });
+  });
+
+  c.singleton('contradictionDetector', (ct: ServiceContainer) => {
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    return new ContradictionDetector(knowledgeRepo, {
       signalBus:
         (ct.singletons.signalBus as
           | import('../../infrastructure/signal/SignalBus.js').SignalBus
@@ -232,43 +256,24 @@ export function register(c: ServiceContainer) {
     });
   });
 
-  c.singleton('contradictionDetector', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new ContradictionDetector(
-      db.getDb() as ConstructorParameters<typeof ContradictionDetector>[0],
-      {
-        signalBus:
-          (ct.singletons.signalBus as
-            | import('../../infrastructure/signal/SignalBus.js').SignalBus
-            | undefined) || undefined,
-      }
-    );
-  });
-
   c.singleton('redundancyAnalyzer', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new RedundancyAnalyzer(
-      db.getDb() as ConstructorParameters<typeof RedundancyAnalyzer>[0],
-      {
-        signalBus:
-          (ct.singletons.signalBus as
-            | import('../../infrastructure/signal/SignalBus.js').SignalBus
-            | undefined) || undefined,
-      }
-    );
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    return new RedundancyAnalyzer(knowledgeRepo, {
+      signalBus:
+        (ct.singletons.signalBus as
+          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | undefined) || undefined,
+    });
   });
 
   c.singleton('enhancementSuggester', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new EnhancementSuggester(
-      db.getDb() as ConstructorParameters<typeof EnhancementSuggester>[0],
-      {
-        signalBus:
-          (ct.singletons.signalBus as
-            | import('../../infrastructure/signal/SignalBus.js').SignalBus
-            | undefined) || undefined,
-      }
-    );
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    return new EnhancementSuggester(knowledgeRepo, {
+      signalBus:
+        (ct.singletons.signalBus as
+          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | undefined) || undefined,
+    });
   });
 
   c.singleton('knowledgeMetabolism', (ct: ServiceContainer) => {
@@ -287,51 +292,59 @@ export function register(c: ServiceContainer) {
   });
 
   c.singleton('proposalRepository', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new ProposalRepository(
-      db.getDb() as ConstructorParameters<typeof ProposalRepository>[0]
-    );
+    const db = ct.get('database') as unknown as { getDrizzle(): unknown };
+    const drizzle = db.getDrizzle();
+    return new ProposalRepository(drizzle as ConstructorParameters<typeof ProposalRepository>[0]);
   });
 
   c.singleton('contentPatcher', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new ContentPatcher(db.getDb() as ConstructorParameters<typeof ContentPatcher>[0]);
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const sourceRefRepo = ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl;
+    return new ContentPatcher(knowledgeRepo, sourceRefRepo);
+  });
+
+  c.singleton('lifecycleEventRepository', (ct: ServiceContainer) => {
+    const db = ct.get('database') as unknown as { getDrizzle(): unknown };
+    const drizzle = db.getDrizzle();
+    return new LifecycleEventRepository(
+      drizzle as ConstructorParameters<typeof LifecycleEventRepository>[0]
+    );
   });
 
   c.singleton('lifecycleSupervisor', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new RecipeLifecycleSupervisor(
-      db.getDb() as ConstructorParameters<typeof RecipeLifecycleSupervisor>[0],
-      {
-        signalBus:
-          (ct.singletons.signalBus as
-            | import('../../infrastructure/signal/SignalBus.js').SignalBus
-            | undefined) || undefined,
-      }
-    );
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    return new RecipeLifecycleSupervisor(knowledgeRepo, {
+      signalBus:
+        (ct.singletons.signalBus as
+          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | undefined) || undefined,
+      lifecycleEventRepo: ct.services.lifecycleEventRepository
+        ? (ct.get('lifecycleEventRepository') as LifecycleEventRepository)
+        : undefined,
+      proposalRepo: ct.services.proposalRepository
+        ? (ct.get('proposalRepository') as ProposalRepository)
+        : undefined,
+    });
   });
 
   c.singleton('proposalExecutor', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new ProposalExecutor(
-      db.getDb() as ConstructorParameters<typeof ProposalExecutor>[0],
-      ct.get('proposalRepository') as ProposalRepository,
-      {
-        signalBus:
-          (ct.singletons.signalBus as
-            | import('../../infrastructure/signal/SignalBus.js').SignalBus
-            | undefined) || undefined,
-        contentPatcher: ct.get('contentPatcher') as ContentPatcher,
-        supervisor: ct.get('lifecycleSupervisor') as RecipeLifecycleSupervisor,
-      }
-    );
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    return new ProposalExecutor(knowledgeRepo, ct.get('proposalRepository') as ProposalRepository, {
+      signalBus:
+        (ct.singletons.signalBus as
+          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | undefined) || undefined,
+      contentPatcher: ct.get('contentPatcher') as ContentPatcher,
+      supervisor: ct.get('lifecycleSupervisor') as RecipeLifecycleSupervisor,
+      knowledgeEdgeRepo: ct.services.knowledgeEdgeRepository
+        ? (ct.get('knowledgeEdgeRepository') as KnowledgeEdgeRepositoryImpl)
+        : undefined,
+    });
   });
 
   c.singleton('consolidationAdvisor', (ct: ServiceContainer) => {
-    const db = ct.get('database') as { getDb(): unknown };
-    return new ConsolidationAdvisor(
-      db.getDb() as ConstructorParameters<typeof ConsolidationAdvisor>[0]
-    );
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    return new ConsolidationAdvisor(knowledgeRepo);
   });
 }
 
@@ -365,7 +378,7 @@ export function initializeKnowledgeServices(c: ServiceContainer): void {
       try {
         const d = data as { action?: string; entryId?: string };
         if (d.action === 'create' && d.entryId) {
-          _populateSourceRefsForEntry(c, d.entryId);
+          void _populateSourceRefsForEntry(c, d.entryId);
         }
       } catch {
         /* sourceRef population failure is non-fatal */
@@ -386,50 +399,48 @@ function await_import_EventBus() {
 
 /**
  * 从 knowledge_entries.reasoning 中提取 sources 并填充 recipe_source_refs 桥接表
+ * 使用 KnowledgeRepository + RecipeSourceRefRepository 类型安全 API
  */
-function _populateSourceRefsForEntry(c: ServiceContainer, entryId: string): void {
-  const db = c.get('database') as {
-    getDb(): {
-      prepare: (sql: string) => {
-        get: (...args: unknown[]) => Record<string, unknown> | undefined;
-        run: (...args: unknown[]) => void;
-      };
-    };
-  };
-  const rawDb = db.getDb();
-
-  const row = rawDb.prepare(`SELECT reasoning FROM knowledge_entries WHERE id = ?`).get(entryId) as
-    | { reasoning?: string }
-    | undefined;
-  if (!row?.reasoning) {
-    return;
-  }
-
-  let sources: string[] = [];
+async function _populateSourceRefsForEntry(c: ServiceContainer, entryId: string): Promise<void> {
   try {
-    const reasoning = JSON.parse(row.reasoning);
-    sources = Array.isArray(reasoning.sources)
-      ? reasoning.sources.filter((s: unknown) => typeof s === 'string' && (s as string).length > 0)
-      : [];
-  } catch {
-    return;
-  }
+    const knowledgeRepo = c.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const sourceRefRepo = c.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl;
 
-  if (sources.length === 0) {
-    return;
-  }
-
-  const now = Date.now();
-  const upsert = rawDb.prepare(
-    `INSERT OR REPLACE INTO recipe_source_refs (recipe_id, source_path, status, verified_at)
-     VALUES (?, ?, 'active', ?)`
-  );
-
-  for (const sourcePath of sources) {
-    try {
-      upsert.run(entryId, sourcePath, now);
-    } catch {
-      /* table may not exist yet */
+    const row = await knowledgeRepo.findSourceFileAndReasoning(entryId);
+    if (!row?.reasoning) {
+      return;
     }
+
+    let sources: string[] = [];
+    try {
+      const reasoning = JSON.parse(row.reasoning);
+      sources = Array.isArray(reasoning.sources)
+        ? reasoning.sources.filter(
+            (s: unknown) => typeof s === 'string' && (s as string).length > 0
+          )
+        : [];
+    } catch {
+      return;
+    }
+
+    if (sources.length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    for (const sourcePath of sources) {
+      try {
+        sourceRefRepo.upsert({
+          recipeId: entryId,
+          sourcePath,
+          status: 'active',
+          verifiedAt: now,
+        });
+      } catch {
+        /* table may not exist yet */
+      }
+    }
+  } catch {
+    /* repos may not be registered yet */
   }
 }

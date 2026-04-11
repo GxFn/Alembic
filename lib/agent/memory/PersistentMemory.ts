@@ -21,12 +21,14 @@
  * @module PersistentMemory
  */
 
+import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 import type {
   CandidateMemory,
   ConsolidateOptions,
   ConsolidateStats,
 } from './MemoryConsolidator.js';
 import { MemoryConsolidator } from './MemoryConsolidator.js';
+import type { MemoryEmbeddingStore } from './MemoryEmbeddingStore.js';
 import type {
   AppendEntry,
   EmbeddingFn,
@@ -48,6 +50,7 @@ import { MemoryStore } from './MemoryStore.js';
 export interface PersistentMemoryOptions {
   logger?: MemoryLogger | null;
   embeddingFn?: EmbeddingFn;
+  embeddingStore?: MemoryEmbeddingStore;
 }
 
 /** Logger 接口 */
@@ -73,20 +76,17 @@ export class PersistentMemory {
 
   /** @param db better-sqlite3 实例 */
   constructor(db: SqliteDatabase | DbWrapper, opts: PersistentMemoryOptions = {}) {
-    const { logger, embeddingFn } =
+    const { logger, embeddingFn, embeddingStore } =
       typeof opts === 'object' && opts !== null ? opts : ({} as PersistentMemoryOptions);
     if (!db) {
       throw new Error('PersistentMemory requires a database instance');
     }
-    const rawDb =
-      typeof (db as DbWrapper)?.getDb === 'function'
-        ? (db as DbWrapper).getDb()
-        : (db as SqliteDatabase);
+    const rawDb = unwrapRawDb<SqliteDatabase>(db as SqliteDatabase);
     this.#logger = logger || null;
 
     // 组装子模块
     this.#store = new MemoryStore(rawDb);
-    this.#retriever = new MemoryRetriever(this.#store, { embeddingFn });
+    this.#retriever = new MemoryRetriever(this.#store, { embeddingFn, embeddingStore });
     this.#consolidator = new MemoryConsolidator(this.#store, { logger: this.#logger });
   }
 

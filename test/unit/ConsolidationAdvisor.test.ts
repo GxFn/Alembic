@@ -10,13 +10,20 @@ import {
   ConsolidationAdvisor,
 } from '../../lib/service/evolution/ConsolidationAdvisor.js';
 
-/* ── Mock DB ── */
+/* ── Mock Repo ── */
 
-function mockDb(rows: Record<string, unknown>[] = []) {
+// biome-ignore lint/suspicious/noExplicitAny: test mock
+function mockRepo(rows: Record<string, unknown>[] = []): any {
   return {
-    prepare: () => ({
-      all: () => rows,
-    }),
+    findAllByLifecyclesAndCategory: async (_lifecycles: string[], category: string) =>
+      rows.filter((r) => !category || r.category === category),
+    findByLifecyclesAndTriggerPrefix: async (
+      _lifecycles: string[],
+      _category: string,
+      _prefix: string,
+      _limit: number
+    ) => [],
+    findAllByLifecycles: async () => rows,
   };
 }
 
@@ -54,9 +61,9 @@ function makeCandidate(
 
 describe('ConsolidationAdvisor', () => {
   describe('create — no related recipes', () => {
-    it('should advise create when no related recipes exist', () => {
-      const advisor = new ConsolidationAdvisor(mockDb([]));
-      const advice = advisor.analyze(makeCandidate());
+    it('should advise create when no related recipes exist', async () => {
+      const advisor = new ConsolidationAdvisor(mockRepo([]));
+      const advice = await advisor.analyze(makeCandidate());
 
       expect(advice.action).toBe('create');
       expect(advice.confidence).toBeGreaterThan(0.8);
@@ -64,9 +71,9 @@ describe('ConsolidationAdvisor', () => {
   });
 
   describe('insufficient — insufficient substance', () => {
-    it('should flag candidates with minimal content as insufficient', () => {
-      const advisor = new ConsolidationAdvisor(mockDb([]));
-      const advice = advisor.analyze({
+    it('should flag candidates with minimal content as insufficient', async () => {
+      const advisor = new ConsolidationAdvisor(mockRepo([]));
+      const advice = await advisor.analyze({
         title: 'Short',
         doClause: 'Use it',
         dontClause: '',
@@ -79,9 +86,9 @@ describe('ConsolidationAdvisor', () => {
       expect(advice.reason).toContain('实质性评分');
     });
 
-    it('should flag candidates without trigger and whenClause as insufficient', () => {
-      const advisor = new ConsolidationAdvisor(mockDb([]));
-      const advice = advisor.analyze({
+    it('should flag candidates without trigger and whenClause as insufficient', async () => {
+      const advisor = new ConsolidationAdvisor(mockRepo([]));
+      const advice = await advisor.analyze({
         title: 'Some rule',
         doClause: 'Do something properly',
         dontClause: '',
@@ -91,10 +98,10 @@ describe('ConsolidationAdvisor', () => {
       expect(advice.action).toBe('insufficient');
     });
 
-    it('should include coveredBy when related recipes exist', () => {
+    it('should include coveredBy when related recipes exist', async () => {
       const existingRow = makeDbRow();
-      const advisor = new ConsolidationAdvisor(mockDb([existingRow]));
-      const advice = advisor.analyze({
+      const advisor = new ConsolidationAdvisor(mockRepo([existingRow]));
+      const advice = await advisor.analyze({
         title: 'Short',
         doClause: 'Use it',
         dontClause: '',
@@ -112,12 +119,12 @@ describe('ConsolidationAdvisor', () => {
   });
 
   describe('merge — high overlap with single recipe', () => {
-    it('should advise merge when candidate overlaps with existing recipe', () => {
+    it('should advise merge when candidate overlaps with existing recipe', async () => {
       const existingRow = makeDbRow();
-      const advisor = new ConsolidationAdvisor(mockDb([existingRow]));
+      const advisor = new ConsolidationAdvisor(mockRepo([existingRow]));
 
       // Candidate that is very similar to existing
-      const advice = advisor.analyze(
+      const advice = await advisor.analyze(
         makeCandidate({
           title: 'BDFoundation Safe Dictionary Access',
           doClause: 'Use BDFoundation category methods for safe collection access to dictionaries',
@@ -134,7 +141,7 @@ describe('ConsolidationAdvisor', () => {
   });
 
   describe('reorganize — high overlap with multiple recipes', () => {
-    it('should advise merge or reorganize when candidate overlaps with 2+ recipes', () => {
+    it('should advise merge or reorganize when candidate overlaps with 2+ recipes', async () => {
       // Use nearly-identical text across all three to guarantee high similarity
       const sharedDo =
         'Use BDFoundation category methods bd_stringForKey and bd_objectForKeyCheck for safe collection dictionary access';
@@ -158,9 +165,9 @@ describe('ConsolidationAdvisor', () => {
           coreCode: sharedCode,
         }),
       ];
-      const advisor = new ConsolidationAdvisor(mockDb(rows));
+      const advisor = new ConsolidationAdvisor(mockRepo(rows));
 
-      const advice = advisor.analyze(
+      const advice = await advisor.analyze(
         makeCandidate({
           title: 'BDFoundation Safe Dictionary Access Pattern',
           doClause: sharedDo,
@@ -177,7 +184,7 @@ describe('ConsolidationAdvisor', () => {
   });
 
   describe('create — moderate overlap but new dimensions', () => {
-    it('should allow create when candidate provides new dimensions', () => {
+    it('should allow create when candidate provides new dimensions', async () => {
       const existingRow = makeDbRow({
         title: 'Network Request Retry',
         doClause: 'Use retry logic for network requests',
@@ -185,9 +192,9 @@ describe('ConsolidationAdvisor', () => {
         coreCode: '', // no code in existing
         whenClause: '', // no whenClause in existing
       });
-      const advisor = new ConsolidationAdvisor(mockDb([existingRow]));
+      const advisor = new ConsolidationAdvisor(mockRepo([existingRow]));
 
-      const advice = advisor.analyze(
+      const advice = await advisor.analyze(
         makeCandidate({
           title: 'Network Request Retry with Exponential Backoff',
           doClause: 'Use exponential backoff retry logic for network request failures',
@@ -210,7 +217,7 @@ for (int i = 0; i < maxRetry; i++) {
   });
 
   describe('create — low overlap', () => {
-    it('should advise create for genuinely different topics', () => {
+    it('should advise create for genuinely different topics', async () => {
       const existingRow = makeDbRow({
         title: 'UITableView Cell Registration',
         doClause: 'Register cells in viewDidLoad',
@@ -219,9 +226,9 @@ for (int i = 0; i < maxRetry; i++) {
           '[self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"cell"]',
         category: 'UIKit',
       });
-      const advisor = new ConsolidationAdvisor(mockDb([existingRow]));
+      const advisor = new ConsolidationAdvisor(mockRepo([existingRow]));
 
-      const advice = advisor.analyze(
+      const advice = await advisor.analyze(
         makeCandidate({
           title: 'AES Encryption for Sensitive Data',
           doClause: 'Use NSData bd_encryptAES for encrypting sensitive local data',
@@ -239,7 +246,7 @@ for (int i = 0; i < maxRetry; i++) {
   });
 
   describe('merge direction analysis', () => {
-    it('should suggest merge when candidate adds nothing new', () => {
+    it('should suggest merge when candidate adds nothing new', async () => {
       // Existing already has everything — candidate is a near-duplicate
       const existingRow = makeDbRow({
         title: 'BDFoundation Safe Array Element Access Using bd_safeObjectAtIndex',
@@ -250,9 +257,9 @@ for (int i = 0; i < maxRetry; i++) {
         whenClause: 'When accessing array elements from parsed server data',
         category: 'Foundation',
       });
-      const advisor = new ConsolidationAdvisor(mockDb([existingRow]));
+      const advisor = new ConsolidationAdvisor(mockRepo([existingRow]));
 
-      const advice = advisor.analyze(
+      const advice = await advisor.analyze(
         makeCandidate({
           title: 'BDFoundation Safe Array Element Access Using bd_safeObjectAtIndex',
           doClause:
@@ -272,7 +279,7 @@ for (int i = 0; i < maxRetry; i++) {
       expect(advice.targetRecipe).toBeDefined();
     });
 
-    it('should allow create when candidate adds new dimensions to partial recipe', () => {
+    it('should allow create when candidate adds new dimensions to partial recipe', async () => {
       // Existing is incomplete — candidate fills gaps
       const existingRow = makeDbRow({
         title: 'BDFoundation Safe Array Element Access',
@@ -282,9 +289,9 @@ for (int i = 0; i < maxRetry; i++) {
         whenClause: null,
         category: 'Foundation',
       });
-      const advisor = new ConsolidationAdvisor(mockDb([existingRow]));
+      const advisor = new ConsolidationAdvisor(mockRepo([existingRow]));
 
-      const advice = advisor.analyze(
+      const advice = await advisor.analyze(
         makeCandidate({
           title: 'BDFoundation Safe Array Element Access Pattern',
           doClause: 'Use bd_safeObjectAtIndex for safe array element retrieval',
@@ -309,17 +316,17 @@ for (int i = 0; i < maxRetry; i++) {
   });
 
   describe('substance scoring', () => {
-    it('should pass substance check for well-formed candidates', () => {
-      const advisor = new ConsolidationAdvisor(mockDb([]));
-      const advice = advisor.analyze(makeCandidate());
+    it('should pass substance check for well-formed candidates', async () => {
+      const advisor = new ConsolidationAdvisor(mockRepo([]));
+      const advice = await advisor.analyze(makeCandidate());
 
       // makeCandidate has good doClause, dontClause, coreCode, trigger, whenClause
       expect(advice.action).not.toBe('insufficient');
     });
 
-    it('should pass substance check with long clauses even without code', () => {
-      const advisor = new ConsolidationAdvisor(mockDb([]));
-      const advice = advisor.analyze(
+    it('should pass substance check with long clauses even without code', async () => {
+      const advisor = new ConsolidationAdvisor(mockRepo([]));
+      const advice = await advisor.analyze(
         makeCandidate({
           doClause:
             'Always dispatch UI updates to the main queue using dispatch_async(dispatch_get_main_queue()) and verify main thread',

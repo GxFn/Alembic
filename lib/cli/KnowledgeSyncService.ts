@@ -19,6 +19,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { CANDIDATES_DIR, RECIPES_DIR } from '../infrastructure/config/Defaults.js';
 import Logger from '../infrastructure/logging/Logger.js';
+import { unwrapRawDb } from '../repository/search/SearchRepoAdapter.js';
+import { RawDbSyncAdapter, type SyncRepo } from '../repository/sync/SyncRepoAdapter.js';
 import {
   computeKnowledgeHash,
   parseKnowledgeMarkdown,
@@ -27,8 +29,8 @@ import type {
   ApplyReport,
   ReconcileReport,
   RepairReport,
+  SourceRefReconciler,
 } from '../service/knowledge/SourceRefReconciler.js';
-import { SourceRefReconciler } from '../service/knowledge/SourceRefReconciler.js';
 
 export interface SyncAllReport {
   synced: number;
@@ -77,20 +79,21 @@ export class KnowledgeSyncService {
 
     // 2. 填充/验证 recipe_source_refs 桥接表
     try {
-      const reconciler =
-        this.#sourceRefReconciler ??
-        new SourceRefReconciler(
-          this.projectRoot,
-          db as unknown as ConstructorParameters<typeof SourceRefReconciler>[1]
+      const reconciler = this.#sourceRefReconciler;
+      if (!reconciler) {
+        this.logger.warn(
+          'KnowledgeSyncService: sourceRefReconciler not available, skipping reconcile'
         );
-      report.reconcileReport = reconciler.reconcile({ force: opts.force });
+        return report;
+      }
+      report.reconcileReport = await reconciler.reconcile({ force: opts.force });
 
       // 3. git rename 修复
       report.repairReport = await reconciler.repairRenames();
 
       // 4. 写回修复
       if (report.repairReport.renamed > 0) {
-        report.applyReport = reconciler.applyRepairs();
+        report.applyReport = await reconciler.applyRepairs();
       }
     } catch (err: unknown) {
       this.logger.warn('KnowledgeSyncService: sourceRef reconcile failed (non-blocking)', {
@@ -106,22 +109,13 @@ export class KnowledgeSyncService {
    *
    * 同时扫描 candidates/ 和 recipes/ 两个目录。
    *
-   * @param db better-sqlite3 原始句柄
+   * @param db better-sqlite3 原始句柄或 DatabaseConnection
    * @param [opts.dryRun=false] 只报告不写入
    * @param [opts.force=false] 忽略 hash，强制覆盖
    * @param [opts.skipViolations=false] 跳过违规记录（setup 场景）
    * @returns }
    */
-  sync(
-    db: {
-      prepare: (sql: string) => {
-        run: (...args: unknown[]) => void;
-        get: (...args: unknown[]) => unknown;
-        all: () => Array<Record<string, unknown>>;
-      };
-    },
-    opts: { dryRun?: boolean; force?: boolean; skipViolations?: boolean } = {}
-  ) {
+  sync(db: unknown, opts: { dryRun?: boolean; force?: boolean; skipViolations?: boolean } = {}) {
     const { dryRun = false, force = false, skipViolations = false } = opts;
 
     const report = {
@@ -144,9 +138,12 @@ export class KnowledgeSyncService {
       return report;
     }
 
-    // ── 2. 准备 upsert 语句 ──
-    const upsertStmt = dryRun ? null : this._prepareUpsert(db);
-    const auditStmt = dryRun || skipViolations ? null : this._prepareAuditInsert(db);
+    // ── 2. 创建仓储适配器 ──
+    const rawDb = unwrapRawDb(db as unknown) as ConstructorParameters<typeof RawDbSyncAdapter>[0];
+    const repo: SyncRepo = new RawDbSyncAdapter(rawDb);
+
+    const upsertStmt = dryRun ? null : repo.createUpsertStmt(this._upsertCols());
+    const auditStmt = dryRun || skipViolations ? null : repo.createAuditInsertStmt();
 
     // ── 3. 逐文件同步 ──
     const syncedIds = new Set<string>();
@@ -184,7 +181,7 @@ export class KnowledgeSyncService {
 
         // ── upsert ──
         if (!dryRun) {
-          const existed = this._entryExists(db, parsed.id as string);
+          const existed = repo.entryExists(parsed.id as string);
           const row = this._buildDbRow(parsed, relPath, content);
           upsertStmt?.run(...Object.values(row));
 
@@ -205,7 +202,7 @@ export class KnowledgeSyncService {
     }
 
     // ── 4. 检测孤儿 ──
-    report.orphaned = this._detectOrphans(db, syncedIds, dryRun);
+    report.orphaned = this._detectOrphans(repo, syncedIds, dryRun);
 
     this.logger.info('KnowledgeSyncService: sync complete', {
       synced: report.synced,
@@ -312,9 +309,9 @@ export class KnowledgeSyncService {
     };
   }
 
-  /** 准备 upsert 语句（INSERT ... ON CONFLICT DO UPDATE 全字段） */
-  _prepareUpsert(db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } }) {
-    const cols = [
+  /** UPSERT 使用的列名列表 */
+  _upsertCols() {
+    return [
       'id',
       'title',
       'trigger',
@@ -360,42 +357,9 @@ export class KnowledgeSyncService {
       'publishedBy',
       'contentHash',
     ];
-
-    // ON CONFLICT 更新除 id, createdBy, createdAt 以外的所有列
-    const updateCols = cols.filter((c) => !['id', 'createdBy', 'createdAt'].includes(c));
-    const setClauses = updateCols.map((c) => `${c} = excluded.${c}`).join(',\n      ');
-
-    const sql = `
-      INSERT INTO knowledge_entries (${cols.join(', ')})
-      VALUES (${cols.map(() => '?').join(', ')})
-      ON CONFLICT(id) DO UPDATE SET
-      ${setClauses}
-    `;
-
-    return db.prepare(sql);
-  }
-
-  /** 检查 entry 是否已存在于 DB */
-  _entryExists(
-    db: { prepare: (sql: string) => { get: (...args: unknown[]) => unknown } },
-    id: string
-  ) {
-    const row = db.prepare('SELECT 1 FROM knowledge_entries WHERE id = ?').get(id);
-    return !!row;
   }
 
   /* ═══ 违规记录 ═══════════════════════════════════════════ */
-
-  _prepareAuditInsert(db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } }) {
-    try {
-      return db.prepare(`
-        INSERT INTO audit_logs (id, timestamp, actor, actor_context, action, resource, operation_data, result, error_message, duration)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-    } catch {
-      return null;
-    }
-  }
 
   _logViolation(
     stmt: { run: (...args: unknown[]) => void },
@@ -431,38 +395,17 @@ export class KnowledgeSyncService {
    * 检测 DB 中存在但 .md 已删除的 Entry → 标记 deprecated
    * @returns 孤儿 entry id 列表
    */
-  _detectOrphans(
-    db: {
-      prepare: (sql: string) => {
-        run: (...args: unknown[]) => void;
-        all: () => Array<Record<string, unknown>>;
-      };
-    },
-    syncedIds: Set<string>,
-    dryRun: boolean
-  ) {
+  _detectOrphans(repo: SyncRepo, syncedIds: Set<string>, dryRun: boolean) {
     const orphanIds: string[] = [];
     try {
-      const rows = db
-        .prepare(
-          `SELECT id, sourceFile FROM knowledge_entries 
-         WHERE lifecycle NOT IN ('deprecated') 
-         AND sourceFile IS NOT NULL`
-        )
-        .all();
+      const rows = repo.findActiveEntriesWithSourceFile();
 
       for (const row of rows) {
-        if (!syncedIds.has(row.id as string)) {
-          orphanIds.push(row.id as string);
+        if (!syncedIds.has(row.id)) {
+          orphanIds.push(row.id);
           if (!dryRun) {
             const now = Math.floor(Date.now() / 1000);
-            db.prepare(
-              `UPDATE knowledge_entries 
-               SET lifecycle = 'deprecated', 
-                   rejectionReason = ?, 
-                   updatedAt = ?
-               WHERE id = ?`
-            ).run('源文件已删除（孤儿条目）', now, row.id);
+            repo.deprecateEntry(row.id, '源文件已删除（孤儿条目）', now);
           }
         }
       }

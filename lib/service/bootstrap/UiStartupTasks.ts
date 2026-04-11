@@ -63,10 +63,9 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
       sourceRefReconciler: sourceRefReconciler || undefined,
     });
 
-    const db = ctx.container.get('database') as { getDb(): unknown };
-    const rawDb = db.getDb() as Parameters<InstanceType<typeof KnowledgeSyncService>['sync']>[0];
+    const db = ctx.container.get('database');
 
-    const syncReport = await syncService.syncAll(rawDb, { skipViolations: true });
+    const syncReport = await syncService.syncAll(db, { skipViolations: true });
     report.syncAll = {
       synced: syncReport.synced,
       created: syncReport.created,
@@ -92,7 +91,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
       const sm = ctx.container.get('stagingManager') as {
         checkAndPromote(): { promoted: { id: string }[] };
       };
-      const result = sm.checkAndPromote();
+      const result = await sm.checkAndPromote();
       report.staging = { promoted: result.promoted.length };
       if (result.promoted.length > 0) {
         logger.info(
@@ -158,7 +157,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
           expired: { id: string }[];
         };
       };
-      const result = executor.checkAndExecute();
+      const result = await executor.checkAndExecute();
       report.proposalCheck = {
         executed: result.executed.length,
         rejected: result.rejected.length,
@@ -191,7 +190,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
           };
         };
       };
-      const result = metabolism.runFullCycle();
+      const result = await metabolism.runFullCycle();
       report.metabolismCycle = {
         proposalCount: result.summary.proposalCount,
         contradictions: result.summary.contradictionCount,
@@ -216,7 +215,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
       const supervisor = ctx.container.get('lifecycleSupervisor') as {
         checkTimeouts(): { timedOut: { recipeId: string }[]; checked: number };
       };
-      const result = supervisor.checkTimeouts();
+      const result = await supervisor.checkTimeouts();
       report.timeoutCheck = {
         timedOut: result.timedOut.length,
         checked: result.checked,

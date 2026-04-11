@@ -142,8 +142,8 @@ router.get(
     }
 
     const edges = relation
-      ? graphService.getRelated(nodeId, nodeType, relation)
-      : graphService.getEdges(nodeId, nodeType, direction);
+      ? await graphService.getRelated(nodeId, nodeType, relation)
+      : await graphService.getEdges(nodeId, nodeType, direction);
 
     res.json({ success: true, data: edges });
   }
@@ -167,7 +167,7 @@ router.get(
       return void res.json({ success: true, data: [] });
     }
 
-    const impact = graphService.getImpactAnalysis(nodeId, nodeType, maxDepth);
+    const impact = await graphService.getImpactAnalysis(nodeId, nodeType, maxDepth);
     res.json({ success: true, data: impact });
   }
 );
@@ -189,7 +189,7 @@ router.get('/graph/all', async (req: Request, res: Response): Promise<void> => {
 
   // 只返回 recipe 类型的关系边；module 依赖已由 /spm/dep-graph 提供
   const nodeType = String(req.query.nodeType || 'recipe');
-  const edges = graphService.getAllEdges(limit, nodeType === 'all' ? undefined : nodeType);
+  const edges = await graphService.getAllEdges(limit, nodeType === 'all' ? undefined : nodeType);
 
   // 收集节点 ID + 类型 → 按类型查标签
   const nodeMap = new Map(); // id → Set<type>
@@ -251,7 +251,7 @@ router.get('/graph/stats', async (req: Request, res: Response): Promise<void> =>
   }
 
   const nodeType = String(req.query.nodeType || 'recipe');
-  const stats = graphService.getStats(nodeType === 'all' ? undefined : nodeType);
+  const stats = await graphService.getStats(nodeType === 'all' ? undefined : nodeType);
   res.json({ success: true, data: stats });
 });
 

@@ -32,8 +32,18 @@ import type Logger from '../infrastructure/logging/Logger.js';
 import type { SignalBus } from '../infrastructure/signal/SignalBus.js';
 import type { IndexingPipeline } from '../infrastructure/vector/IndexingPipeline.js';
 import type { VectorStore } from '../infrastructure/vector/VectorStore.js';
+import type { AuditRepositoryImpl } from '../repository/audit/AuditRepository.js';
+import type { BootstrapRepositoryImpl } from '../repository/bootstrap/BootstrapRepository.js';
+import type { CodeEntityRepositoryImpl } from '../repository/code/CodeEntityRepository.js';
+import type { ProposalRepository } from '../repository/evolution/ProposalRepository.js';
+import type { GuardViolationRepositoryImpl } from '../repository/guard/GuardViolationRepository.js';
+import type { KnowledgeEdgeRepositoryImpl } from '../repository/knowledge/KnowledgeEdgeRepository.js';
 // ── Repository Types ──
 import type { KnowledgeRepositoryImpl } from '../repository/knowledge/KnowledgeRepository.impl.js';
+import type { MemoryRepositoryImpl } from '../repository/memory/MemoryRepository.js';
+import type { RemoteCommandRepository } from '../repository/remote/RemoteCommandRepository.js';
+import type { SessionRepositoryImpl } from '../repository/session/SessionRepository.js';
+import type { RecipeSourceRefRepositoryImpl } from '../repository/sourceref/RecipeSourceRefRepository.js';
 import type { TokenUsageStore } from '../repository/token/TokenUsageStore.js';
 import type { BootstrapTaskManager } from '../service/bootstrap/BootstrapTaskManager.js';
 import type { CursorDeliveryPipeline } from '../service/delivery/CursorDeliveryPipeline.js';
@@ -88,6 +98,16 @@ export interface ServiceMap {
   eventBus: EventBus;
   bootstrapTaskManager: BootstrapTaskManager;
   knowledgeRepository: KnowledgeRepositoryImpl;
+  knowledgeEdgeRepository: KnowledgeEdgeRepositoryImpl;
+  codeEntityRepository: CodeEntityRepositoryImpl;
+  bootstrapRepository: BootstrapRepositoryImpl;
+  guardViolationRepository: GuardViolationRepositoryImpl;
+  auditRepository: AuditRepositoryImpl;
+  memoryRepository: MemoryRepositoryImpl;
+  sessionRepository: SessionRepositoryImpl;
+  proposalRepository: ProposalRepository;
+  remoteCommandRepository: RemoteCommandRepository;
+  recipeSourceRefRepository: RecipeSourceRefRepositoryImpl;
   knowledgeFileWriter: KnowledgeFileWriter;
   knowledgeSyncService: KnowledgeSyncService;
 

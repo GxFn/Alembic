@@ -20,6 +20,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { KnowledgeEntryProps } from '../../domain/knowledge/KnowledgeEntry.js';
+import {
+  type CallGraphRepo,
+  RawDbCallGraphAdapter,
+} from '../../repository/delivery/DeliveryRepoAdapter.js';
+import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 import { DELIVERY_RANK, KNOWLEDGE_CONFIDENCE } from '../../shared/constants.js';
 import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 import { AgentInstructionsGenerator } from './AgentInstructionsGenerator.js';
@@ -420,15 +425,13 @@ export class CursorDeliveryPipeline {
     }
 
     try {
-      const db = typeof this.database.getDb === 'function' ? this.database.getDb() : this.database;
+      const rawDb = unwrapRawDb(this.database as unknown) as ConstructorParameters<
+        typeof RawDbCallGraphAdapter
+      >[0];
+      const repo: CallGraphRepo = new RawDbCallGraphAdapter(rawDb);
 
       // 查询调用边中的跨目录调用模式
-      const callEdges = db
-        .prepare(
-          `SELECT from_id, to_id, metadata_json FROM knowledge_edges
-         WHERE relation = 'calls' AND metadata_json LIKE '%phase5%'`
-        )
-        .all();
+      const callEdges = repo.findCallEdges();
 
       if (!callEdges || callEdges.length < 5) {
         return null;
@@ -436,9 +439,7 @@ export class CursorDeliveryPipeline {
 
       // 提取 caller/callee 对应的文件路径
       const entityFiles = new Map();
-      const entities = db
-        .prepare(`SELECT entity_id, file_path FROM code_entities WHERE entity_type = 'method'`)
-        .all();
+      const entities = repo.findMethodEntities();
       for (const e of entities) {
         entityFiles.set(e.entity_id, e.file_path);
       }

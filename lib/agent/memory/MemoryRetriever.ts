@@ -12,6 +12,7 @@
  */
 
 import { cosineSimilarity } from '#shared/similarity.js';
+import type { MemoryEmbeddingStore } from './MemoryEmbeddingStore.js';
 import type { DeserializedMemory, MemoryRow } from './MemoryStore.js';
 import { MemoryStore } from './MemoryStore.js';
 
@@ -72,10 +73,17 @@ export class MemoryRetriever {
   /** 向量嵌入函数 */
   #embeddingFn: EmbeddingFn | null;
 
+  /** 向量嵌入存储 (JSON sidecar) */
+  #embeddingStore: MemoryEmbeddingStore | null;
+
   /** @param [opts.embeddingFn] 向量嵌入函数 (异步) */
-  constructor(store: MemoryStore, opts: { embeddingFn?: EmbeddingFn } = {}) {
+  constructor(
+    store: MemoryStore,
+    opts: { embeddingFn?: EmbeddingFn; embeddingStore?: MemoryEmbeddingStore } = {}
+  ) {
     this.#store = store;
     this.#embeddingFn = typeof opts.embeddingFn === 'function' ? opts.embeddingFn : null;
+    this.#embeddingStore = opts.embeddingStore ?? null;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -132,16 +140,17 @@ export class MemoryRetriever {
         m.content
       );
 
-      // 向量相关性: 对有 embedding 的记忆计算余弦相似度
+      // 向量相关性: 从 embeddingStore 查找 embedding 做余弦相似度
       const deserialized = MemoryStore.deserialize(m);
       let vectorRelevance = 0;
-      if (queryVec && deserialized.embedding) {
-        vectorRelevance = Math.max(0, cosineSimilarity(queryVec, deserialized.embedding));
+      const storedEmbedding = this.#embeddingStore?.get(m.id) ?? null;
+      if (queryVec && storedEmbedding) {
+        vectorRelevance = Math.max(0, cosineSimilarity(queryVec, storedEmbedding));
       }
 
       // 混合相关性: 有向量时 0.6 * vector + 0.4 * lexical，否则纯 lexical
       const relevance =
-        queryVec && deserialized.embedding
+        queryVec && storedEmbedding
           ? 0.6 * vectorRelevance + 0.4 * lexicalRelevance
           : lexicalRelevance;
 
@@ -292,20 +301,31 @@ export class MemoryRetriever {
    * @returns 成功嵌入的记忆数
    */
   async embedAllMemories(batchSize = 20): Promise<number> {
-    if (!this.#embeddingFn) {
+    if (!this.#embeddingFn || !this.#embeddingStore) {
       return 0;
     }
 
-    const missing = this.#store.getWithoutEmbedding(batchSize);
-    if (missing.length === 0) {
+    // 从 MemoryStore 获取所有活跃记忆 ID，找出 embeddingStore 中缺失的
+    const allActive = this.#store.getAllActive();
+    const allIds = allActive.map((m) => m.id);
+    const missingIds = this.#embeddingStore.getMissingIds(allIds);
+    if (missingIds.length === 0) {
       return 0;
     }
+
+    // 取前 batchSize 条
+    const batch = missingIds.slice(0, batchSize);
+    const contentMap = new Map(allActive.map((m) => [m.id, m.content]));
 
     const entries: Array<{ id: string; embedding: number[] }> = [];
-    for (const item of missing) {
+    for (const id of batch) {
+      const content = contentMap.get(id);
+      if (!content) {
+        continue;
+      }
       try {
-        const vec = await this.#embeddingFn(item.content);
-        entries.push({ id: item.id, embedding: vec });
+        const vec = await this.#embeddingFn(content);
+        entries.push({ id, embedding: vec });
       } catch {
         // 单条失败不阻塞
       }
@@ -315,7 +335,7 @@ export class MemoryRetriever {
       return 0;
     }
 
-    return this.#store.batchUpdateEmbeddings(entries);
+    return this.#embeddingStore.batchSet(entries);
   }
 
   /**

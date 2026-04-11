@@ -4,11 +4,9 @@
 import { describe, expect, it } from 'vitest';
 import { RedundancyAnalyzer } from '../../lib/service/evolution/RedundancyAnalyzer.js';
 
-function mockDb(rows: Record<string, unknown>[] = []) {
+function mockRepo(rows: Record<string, unknown>[] = []) {
   return {
-    prepare: () => ({
-      all: () => rows,
-    }),
+    findAllByLifecycles: async () => rows,
   };
 }
 
@@ -26,7 +24,7 @@ function makeRecipe(overrides: Record<string, unknown> = {}) {
 
 describe('RedundancyAnalyzer', () => {
   it('should return null for dissimilar recipes', () => {
-    const analyzer = new RedundancyAnalyzer(mockDb());
+    const analyzer = new RedundancyAnalyzer(mockRepo() as any);
     const a = makeRecipe({ id: 'r1', title: 'Use SnapKit for layout' });
     const b = makeRecipe({ id: 'r2', title: 'Implement network caching' });
 
@@ -35,7 +33,7 @@ describe('RedundancyAnalyzer', () => {
   });
 
   it('should detect redundancy with high title similarity', () => {
-    const analyzer = new RedundancyAnalyzer(mockDb());
+    const analyzer = new RedundancyAnalyzer(mockRepo() as any);
     const a = makeRecipe({
       id: 'r1',
       title: 'Use NSTimer invalidation in dealloc method',
@@ -55,7 +53,7 @@ describe('RedundancyAnalyzer', () => {
   });
 
   it('should detect identical guard regex as full match', () => {
-    const analyzer = new RedundancyAnalyzer(mockDb());
+    const analyzer = new RedundancyAnalyzer(mockRepo() as any);
     const a = makeRecipe({
       id: 'r1',
       title: 'Use weakify self capture in blocks',
@@ -79,7 +77,7 @@ describe('RedundancyAnalyzer', () => {
   });
 
   it('should detect code similarity', () => {
-    const analyzer = new RedundancyAnalyzer(mockDb());
+    const analyzer = new RedundancyAnalyzer(mockRepo() as any);
     const a = makeRecipe({
       id: 'r1',
       title: 'Dispatch main queue for UI updates pattern',
@@ -101,7 +99,7 @@ describe('RedundancyAnalyzer', () => {
   });
 
   it('should return 0 code similarity for null coreCode', () => {
-    const analyzer = new RedundancyAnalyzer(mockDb());
+    const analyzer = new RedundancyAnalyzer(mockRepo() as any);
     const a = makeRecipe({ id: 'r1', title: 'Rule A', coreCode: null });
     const b = makeRecipe({ id: 'r2', title: 'Rule B', coreCode: 'some code' });
 
@@ -113,7 +111,7 @@ describe('RedundancyAnalyzer', () => {
   });
 
   it('should use n-gram similarity for large code', () => {
-    const analyzer = new RedundancyAnalyzer(mockDb());
+    const analyzer = new RedundancyAnalyzer(mockRepo() as any);
     const largeCode = 'a'.repeat(2500);
     const a = makeRecipe({
       id: 'r1',
@@ -135,7 +133,7 @@ describe('RedundancyAnalyzer', () => {
     }
   });
 
-  it('analyzeAll emits signals', () => {
+  it('analyzeAll emits signals', async () => {
     const rows = [
       {
         id: 'r1',
@@ -157,9 +155,11 @@ describe('RedundancyAnalyzer', () => {
 
     const signals: unknown[] = [];
     const signalBus = { send: (...args: unknown[]) => signals.push(args) };
-    const analyzer = new RedundancyAnalyzer(mockDb(rows), { signalBus: signalBus as never });
+    const analyzer = new RedundancyAnalyzer(mockRepo(rows) as any, {
+      signalBus: signalBus as never,
+    });
 
-    const results = analyzer.analyzeAll();
+    const results = await analyzer.analyzeAll();
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(signals.length).toBeGreaterThanOrEqual(1);
   });

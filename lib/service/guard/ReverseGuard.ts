@@ -15,15 +15,11 @@
 import Logger from '../../infrastructure/logging/Logger.js';
 
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
+import type { CodeEntityRepositoryImpl } from '../../repository/code/CodeEntityRepository.js';
+import type { KnowledgeRepositoryImpl } from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 
 /* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-    get(...params: unknown[]): Record<string, unknown> | undefined;
-  };
-}
 
 export type DriftType =
   | 'symbol_missing'
@@ -91,12 +87,21 @@ const DRIFT_THRESHOLDS = {
 /* ────────────────────── Class ────────────────────── */
 
 export class ReverseGuard {
-  #db: DatabaseLike;
+  #knowledgeRepo: KnowledgeRepositoryImpl;
+  #entityRepo: CodeEntityRepositoryImpl;
+  #sourceRefRepo: RecipeSourceRefRepositoryImpl;
   #signalBus: SignalBus | null;
   #logger = Logger.getInstance();
 
-  constructor(db: DatabaseLike, options: { signalBus?: SignalBus } = {}) {
-    this.#db = db;
+  constructor(
+    knowledgeRepo: KnowledgeRepositoryImpl,
+    entityRepo: CodeEntityRepositoryImpl,
+    sourceRefRepo: RecipeSourceRefRepositoryImpl,
+    options: { signalBus?: SignalBus } = {}
+  ) {
+    this.#knowledgeRepo = knowledgeRepo;
+    this.#entityRepo = entityRepo;
+    this.#sourceRefRepo = sourceRefRepo;
     this.#signalBus = options.signalBus ?? null;
   }
 
@@ -177,23 +182,13 @@ export class ReverseGuard {
 
   #loadActiveRuleRecipes(): RecipeRow[] {
     try {
-      const rows = this.#db
-        .prepare(
-          `SELECT id, title,
-                json_extract(content, '$.coreCode') AS core_code,
-                json_extract(content, '$.pattern') AS guard_pattern,
-                stats
-         FROM knowledge_entries
-         WHERE lifecycle = 'active'
-           AND kind = 'rule'`
-        )
-        .all();
+      const rows = this.#knowledgeRepo.findActiveRulesWithContentSync();
       return rows.map((r) => ({
-        id: r.id as string,
-        title: r.title as string,
-        core_code: (r.core_code as string) ?? null,
-        guard_pattern: (r.guard_pattern as string) ?? null,
-        stats: (r.stats as string) ?? null,
+        id: r.id,
+        title: r.title,
+        core_code: r.coreCode ?? null,
+        guard_pattern: r.guardPattern ?? null,
+        stats: r.stats ?? null,
       }));
     } catch {
       return [];
@@ -212,10 +207,8 @@ export class ReverseGuard {
     const signals: PatternDriftSignal[] = [];
     for (const symbol of symbols) {
       try {
-        const row = this.#db
-          .prepare(`SELECT name FROM code_entities WHERE name = ? LIMIT 1`)
-          .get(symbol);
-        if (!row) {
+        const exists = this.#entityRepo.existsByName(symbol);
+        if (!exists) {
           signals.push({
             type: 'symbol_missing',
             detail: `Symbol "${symbol}" referenced in recipe coreCode not found in codebase`,
@@ -293,29 +286,26 @@ export class ReverseGuard {
    */
   #checkSourceRefStaleness(recipeId: string): PatternDriftSignal[] {
     try {
-      const rows = this.#db
-        .prepare(
-          `SELECT source_path FROM recipe_source_refs WHERE recipe_id = ? AND status = 'stale'`
-        )
-        .all(recipeId) as { source_path: string }[];
+      const staleRefs = this.#sourceRefRepo
+        .findByRecipeId(recipeId)
+        .filter((r) => r.status === 'stale');
 
-      if (rows.length === 0) {
+      if (staleRefs.length === 0) {
         return [];
       }
 
       return [
         {
           type: 'source_ref_stale',
-          detail: `${rows.length} source file(s) no longer exist: ${rows
+          detail: `${staleRefs.length} source file(s) no longer exist: ${staleRefs
             .slice(0, 3)
-            .map((r) => r.source_path)
-            .join(', ')}${rows.length > 3 ? ` (+${rows.length - 3} more)` : ''}`,
-          severity: rows.length >= 3 ? 'high' : 'medium',
+            .map((r) => r.sourcePath)
+            .join(', ')}${staleRefs.length > 3 ? ` (+${staleRefs.length - 3} more)` : ''}`,
+          severity: staleRefs.length >= 3 ? 'high' : 'medium',
           evidence: {},
         },
       ];
     } catch {
-      // recipe_source_refs 表可能不存在
       return [];
     }
   }
@@ -343,12 +333,7 @@ export class ReverseGuard {
 
   #getHistoricalHits(recipeId: string): number {
     try {
-      const row = this.#db
-        .prepare(
-          `SELECT json_extract(stats, '$.guardHits') AS hits FROM knowledge_entries WHERE id = ?`
-        )
-        .get(recipeId) as { hits: number | null } | undefined;
-      return row?.hits ?? 0;
+      return this.#knowledgeRepo.getGuardHitsSync(recipeId);
     } catch {
       return 0;
     }

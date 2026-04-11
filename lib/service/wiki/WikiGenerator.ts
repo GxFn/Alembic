@@ -456,7 +456,7 @@ export class WikiGenerator {
   /** AST 分析 — 利用已有 ProjectGraph 或重新构建 */
   async _analyzeAST() {
     if (this.projectGraph) {
-      const overview = this.projectGraph.getOverview();
+      const overview = await this.projectGraph.getOverview();
       const allClasses = this.projectGraph.getAllClassNames();
       const allProtocols = this.projectGraph.getAllProtocolNames();
 

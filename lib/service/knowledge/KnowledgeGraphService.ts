@@ -5,59 +5,35 @@
  * 支持关系查询、路径分析、PageRank 权重计算
  */
 
-import type { Database } from 'better-sqlite3';
 import { RelationType } from '../../domain/index.js';
 import Logger from '../../infrastructure/logging/Logger.js';
+import type { KnowledgeEdgeRepositoryImpl } from '../../repository/knowledge/KnowledgeEdgeRepository.js';
 
-/** SQLite row from knowledge_edges table */
-interface EdgeRow {
-  id: number;
-  from_id: string;
-  from_type: string;
-  to_id: string;
-  to_type: string;
-  relation: string;
-  weight: number;
-  metadata_json: string;
-  created_at: number;
-  updated_at: number;
-}
-
-interface MappedEdge {
-  id: number;
-  fromId: string;
-  fromType: string;
-  toId: string;
-  toType: string;
-  relation: string;
-  weight: number;
-  metadata: Record<string, unknown>;
-  createdAt: number;
-  updatedAt: number;
-}
-
-interface DbLike {
-  getDb?: () => Database;
-  prepare(sql: string): {
-    run(...params: unknown[]): { changes: number };
-    get(...params: unknown[]): EdgeRow;
-    all(...params: unknown[]): EdgeRow[];
-  };
-}
+type EdgeRepoLike = Pick<
+  KnowledgeEdgeRepositoryImpl,
+  | 'upsertEdge'
+  | 'removeEdge'
+  | 'findOutgoing'
+  | 'findIncoming'
+  | 'findIncomingByRelations'
+  | 'findByRelation'
+  | 'findAll'
+  | 'getStats'
+>;
 
 // Re-export unified RelationType for backward compatibility
 export { RelationType };
 
 export class KnowledgeGraphService {
-  db: DbLike;
+  #edgeRepo: EdgeRepoLike;
   logger: ReturnType<typeof Logger.getInstance>;
-  constructor(db: DbLike) {
-    this.db = typeof db?.getDb === 'function' ? (db.getDb() as unknown as DbLike) : db;
+  constructor(edgeRepo: EdgeRepoLike) {
+    this.#edgeRepo = edgeRepo;
     this.logger = Logger.getInstance();
   }
 
   /** 添加关系边 */
-  addEdge(
+  async addEdge(
     fromId: string,
     fromType: string,
     toId: string,
@@ -65,24 +41,16 @@ export class KnowledgeGraphService {
     relation: string,
     metadata: Record<string, unknown> = {}
   ) {
-    const now = Math.floor(Date.now() / 1000);
     try {
-      this.db
-        .prepare(`
-        INSERT OR REPLACE INTO knowledge_edges (from_id, from_type, to_id, to_type, relation, weight, metadata_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-        .run(
-          fromId,
-          fromType,
-          toId,
-          toType,
-          relation,
-          metadata.weight || 1.0,
-          JSON.stringify(metadata),
-          now,
-          now
-        );
+      await this.#edgeRepo.upsertEdge({
+        fromId,
+        fromType,
+        toId,
+        toType,
+        relation,
+        weight: (metadata.weight as number) || 1.0,
+        metadata,
+      });
 
       return { success: true };
     } catch (error: unknown) {
@@ -93,51 +61,38 @@ export class KnowledgeGraphService {
   }
 
   /** 删除关系边 */
-  removeEdge(fromId: string, fromType: string, toId: string, toType: string, relation: string) {
-    this.db
-      .prepare(`
-      DELETE FROM knowledge_edges WHERE from_id = ? AND from_type = ? AND to_id = ? AND to_type = ? AND relation = ?
-    `)
-      .run(fromId, fromType, toId, toType, relation);
+  async removeEdge(
+    fromId: string,
+    fromType: string,
+    toId: string,
+    toType: string,
+    relation: string
+  ) {
+    await this.#edgeRepo.removeEdge(fromId, fromType, toId, toType, relation);
   }
 
   /** 查询某个节点的所有关系 */
-  getEdges(nodeId: string, nodeType: string, direction = 'both') {
+  async getEdges(nodeId: string, nodeType: string, direction = 'both') {
     const outgoing =
       direction === 'both' || direction === 'out'
-        ? this.db
-            .prepare(`SELECT * FROM knowledge_edges WHERE from_id = ? AND from_type = ?`)
-            .all(nodeId, nodeType)
+        ? await this.#edgeRepo.findOutgoing(nodeId, nodeType)
         : [];
 
     const incoming =
       direction === 'both' || direction === 'in'
-        ? this.db
-            .prepare(`SELECT * FROM knowledge_edges WHERE to_id = ? AND to_type = ?`)
-            .all(nodeId, nodeType)
+        ? await this.#edgeRepo.findIncoming(nodeId, nodeType)
         : [];
 
-    return {
-      outgoing: outgoing.map((row) => this._mapEdge(row)),
-      incoming: incoming.map((row) => this._mapEdge(row)),
-    };
+    return { outgoing, incoming };
   }
 
   /** 查询指定关系类型的连接 */
-  getRelated(nodeId: string, nodeType: string, relation: string) {
-    const rows = this.db
-      .prepare(`
-      SELECT * FROM knowledge_edges WHERE from_id = ? AND from_type = ? AND relation = ?
-      UNION ALL
-      SELECT * FROM knowledge_edges WHERE to_id = ? AND to_type = ? AND relation = ?
-    `)
-      .all(nodeId, nodeType, relation, nodeId, nodeType, relation);
-
-    return rows.map((row) => this._mapEdge(row));
+  async getRelated(nodeId: string, nodeType: string, relation: string) {
+    return this.#edgeRepo.findByRelation(nodeId, nodeType, relation);
   }
 
   /** 查找两个节点之间的路径 (BFS, 最大深度 5) */
-  findPath(fromId: string, fromType: string, toId: string, toType: string, maxDepth = 5) {
+  async findPath(fromId: string, fromType: string, toId: string, toType: string, maxDepth = 5) {
     const visited = new Set();
     const queue = [
       {
@@ -152,7 +107,11 @@ export class KnowledgeGraphService {
     ];
 
     while (queue.length > 0) {
-      const { id, type, path } = queue.shift()!;
+      const current = queue.shift();
+      if (!current) {
+        break;
+      }
+      const { id, type, path } = current;
 
       if (path.length >= maxDepth) {
         continue;
@@ -164,27 +123,23 @@ export class KnowledgeGraphService {
       }
       visited.add(key);
 
-      const neighbors = this.db
-        .prepare(`
-        SELECT to_id, to_type, relation, weight FROM knowledge_edges WHERE from_id = ? AND from_type = ?
-      `)
-        .all(id, type);
+      const neighbors = await this.#edgeRepo.findOutgoing(id, type);
 
       for (const neighbor of neighbors) {
         const newPath = [
           ...path,
           {
             from: { id, type },
-            to: { id: neighbor.to_id, type: neighbor.to_type },
+            to: { id: neighbor.toId, type: neighbor.toType },
             relation: neighbor.relation,
           },
         ];
 
-        if (neighbor.to_id === toId && neighbor.to_type === toType) {
+        if (neighbor.toId === toId && neighbor.toType === toType) {
           return { found: true, path: newPath, depth: newPath.length };
         }
 
-        queue.push({ id: neighbor.to_id, type: neighbor.to_type, path: newPath });
+        queue.push({ id: neighbor.toId, type: neighbor.toType, path: newPath });
       }
     }
 
@@ -200,33 +155,42 @@ export class KnowledgeGraphService {
   }
 
   /** 获取节点的影响范围（下游依赖分析） */
-  getImpactAnalysis(nodeId: string, nodeType: string, maxDepth = 3) {
+  async getImpactAnalysis(nodeId: string, nodeType: string, maxDepth = 3) {
+    const impactRelations = [
+      'requires',
+      'extends',
+      'enforces',
+      'depends_on',
+      'inherits',
+      'implements',
+      'calls',
+      'prerequisite',
+    ];
     const impacted = new Map();
     const queue = [{ id: nodeId, type: nodeType, depth: 0 }];
 
     while (queue.length > 0) {
-      const { id, type, depth } = queue.shift()!;
+      const current = queue.shift();
+      if (!current) {
+        break;
+      }
+      const { id, type, depth } = current;
       if (depth >= maxDepth) {
         continue;
       }
 
-      const dependents = this.db
-        .prepare(`
-        SELECT from_id, from_type, relation FROM knowledge_edges 
-        WHERE to_id = ? AND to_type = ? AND relation IN ('requires', 'extends', 'enforces', 'depends_on', 'inherits', 'implements', 'calls', 'prerequisite')
-      `)
-        .all(id, type);
+      const dependents = await this.#edgeRepo.findIncomingByRelations(id, type, impactRelations);
 
       for (const dep of dependents) {
-        const key = `${dep.from_type}:${dep.from_id}`;
+        const key = `${dep.fromType}:${dep.fromId}`;
         if (!impacted.has(key)) {
           impacted.set(key, {
-            id: dep.from_id,
-            type: dep.from_type,
+            id: dep.fromId,
+            type: dep.fromType,
             relation: dep.relation,
             depth: depth + 1,
           });
-          queue.push({ id: dep.from_id, type: dep.from_type, depth: depth + 1 });
+          queue.push({ id: dep.fromId, type: dep.fromType, depth: depth + 1 });
         }
       }
     }
@@ -235,34 +199,8 @@ export class KnowledgeGraphService {
   }
 
   /** 获取图谱整体统计 */
-  /** @param [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部 */
-  getStats(nodeType?: string) {
-    const typeFilter = nodeType
-      ? ` WHERE from_type = '${nodeType}' AND to_type = '${nodeType}'`
-      : '';
-    const edgeCount = this.db
-      .prepare(`SELECT COUNT(*) as total FROM knowledge_edges${typeFilter}`)
-      .get();
-    const byRelation = this.db
-      .prepare(
-        `SELECT relation, COUNT(*) as count FROM knowledge_edges${typeFilter} GROUP BY relation`
-      )
-      .all();
-    const byType = this.db
-      .prepare(
-        `SELECT from_type as type, COUNT(DISTINCT from_id) as count FROM knowledge_edges${typeFilter} GROUP BY from_type
-       UNION
-       SELECT to_type as type, COUNT(DISTINCT to_id) as count FROM knowledge_edges${typeFilter} GROUP BY to_type`
-      )
-      .all();
-
-    return {
-      totalEdges: (edgeCount as unknown as Record<string, number>).total,
-      byRelation: Object.fromEntries(
-        byRelation.map((r) => [r.relation, (r as unknown as Record<string, unknown>).count])
-      ),
-      nodeTypes: byType,
-    };
+  async getStats(nodeType?: string) {
+    return this.#edgeRepo.getStats(nodeType);
   }
 
   /**
@@ -270,41 +208,15 @@ export class KnowledgeGraphService {
    * @param [limit=500] 最大返回条数
    * @param [nodeType] 过滤节点类型（如 'recipe'），为空则返回全部
    */
-  getAllEdges(limit = 500, nodeType?: string) {
-    let sql: string, params: (string | number)[];
-    if (nodeType) {
-      sql = `SELECT * FROM knowledge_edges WHERE from_type = ? AND to_type = ? ORDER BY updated_at DESC LIMIT ?`;
-      params = [nodeType, nodeType, limit];
-    } else {
-      sql = `SELECT * FROM knowledge_edges ORDER BY updated_at DESC LIMIT ?`;
-      params = [limit];
-    }
-    const rows = this.db.prepare(sql).all(...params);
-    return rows.map((row) => this._mapEdge(row));
-  }
-
-  // Private
-
-  _mapEdge(row: EdgeRow): MappedEdge {
-    return {
-      id: row.id,
-      fromId: row.from_id,
-      fromType: row.from_type,
-      toId: row.to_id,
-      toType: row.to_type,
-      relation: row.relation,
-      weight: row.weight,
-      metadata: JSON.parse(row.metadata_json || '{}'),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    };
+  async getAllEdges(limit = 500, nodeType?: string) {
+    return this.#edgeRepo.findAll({ nodeType, limit });
   }
 }
 
 let instance: KnowledgeGraphService | null = null;
 
-export function initKnowledgeGraphService(db: DbLike) {
-  instance = new KnowledgeGraphService(db);
+export function initKnowledgeGraphService(edgeRepo: EdgeRepoLike) {
+  instance = new KnowledgeGraphService(edgeRepo);
   return instance;
 }
 

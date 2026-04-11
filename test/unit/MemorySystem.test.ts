@@ -25,6 +25,7 @@ vi.mock('../../lib/infrastructure/logging/Logger.js', () => ({
 const { MemoryCoordinator } = await import('../../lib/agent/memory/MemoryCoordinator.js');
 const { ActiveContext } = await import('../../lib/agent/memory/ActiveContext.js');
 const { SessionStore } = await import('../../lib/agent/memory/SessionStore.js');
+const { MemoryEmbeddingStore } = await import('../../lib/agent/memory/MemoryEmbeddingStore.js');
 
 // ══════════════════════════════════════════════════════════
 //  1. MemoryCoordinator
@@ -840,12 +841,16 @@ describe('PersistentMemory', () => {
   });
 
   // 使用 in-memory SQLite 测试核心功能
-  const createInMemoryPM = () => {
+  const createInMemoryPM = (opts?: { withEmbeddingStore?: boolean }) => {
     if (!Database) {
       return null;
     }
     const db = new Database(':memory:');
-    return new PersistentMemory(db, { logger: mockLogger });
+    const pmOpts: Record<string, unknown> = { logger: mockLogger };
+    if (opts?.withEmbeddingStore) {
+      pmOpts.embeddingStore = new MemoryEmbeddingStore(`/tmp/autosnippet-test-${Date.now()}`);
+    }
+    return new PersistentMemory(db, pmOpts);
   };
 
   describe('PersistentMemory 核心 API', () => {
@@ -1091,7 +1096,7 @@ describe('PersistentMemory', () => {
     });
 
     test('embedAllMemories — 批量嵌入缺失记忆', async () => {
-      const pm = createInMemoryPM();
+      const pm = createInMemoryPM({ withEmbeddingStore: true });
       if (!pm) {
         return;
       }
@@ -1105,7 +1110,7 @@ describe('PersistentMemory', () => {
     });
 
     test('retrieve — 有向量时融合向量相关性', async () => {
-      const pm = createInMemoryPM();
+      const pm = createInMemoryPM({ withEmbeddingStore: true });
       if (!pm) {
         return;
       }

@@ -4,32 +4,27 @@
 import { describe, expect, it } from 'vitest';
 import { CoverageAnalyzer } from '../../lib/service/guard/CoverageAnalyzer.js';
 
-function createMockDb(
+function createMockRepos(
   options: {
     rules?: { id: string; language: string }[];
-    violations?: { file_path: string; violations_json: string }[];
+    violations?: { filePath: string; violationsJson: string }[];
   } = {}
 ) {
   const { rules = [], violations = [] } = options;
 
-  return {
-    prepare(sql: string) {
-      return {
-        all(..._params: unknown[]) {
-          if (sql.includes('knowledge_entries') && sql.includes("kind = 'rule'")) {
-            return rules;
-          }
-          if (sql.includes('guard_violations')) {
-            return violations;
-          }
-          return [];
-        },
-        get(..._params: unknown[]) {
-          return undefined;
-        },
-      };
+  const knowledgeRepo = {
+    findActiveRuleIdsSync() {
+      return rules.map((r) => ({ id: r.id, language: r.language }));
     },
   };
+
+  const guardViolationRepo = {
+    findRecentViolationsJson(_limit: number) {
+      return violations;
+    },
+  };
+
+  return { knowledgeRepo, guardViolationRepo };
 }
 
 function createMockLearner(stats: Record<string, { triggers: number; fp: number }> = {}) {
@@ -60,17 +55,18 @@ function createMockLearner(stats: Record<string, { triggers: number; fp: number 
 
 describe('CoverageAnalyzer', () => {
   it('should return empty matrix for no modules', () => {
-    const analyzer = new CoverageAnalyzer(createMockDb());
+    const { knowledgeRepo, guardViolationRepo } = createMockRepos();
+    const analyzer = new CoverageAnalyzer(knowledgeRepo as any, guardViolationRepo as any);
     const result = analyzer.analyze(new Map());
     expect(result.modules).toHaveLength(0);
     expect(result.overallCoverage).toBe(0);
   });
 
   it('should detect zero coverage modules', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, guardViolationRepo } = createMockRepos({
       rules: [{ id: 'r1', language: 'swift' }],
     });
-    const analyzer = new CoverageAnalyzer(db);
+    const analyzer = new CoverageAnalyzer(knowledgeRepo as any, guardViolationRepo as any);
 
     const moduleFiles = new Map([
       ['BDAuth', []], // no files = zero coverage
@@ -82,14 +78,14 @@ describe('CoverageAnalyzer', () => {
   });
 
   it('should match rules by language', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, guardViolationRepo } = createMockRepos({
       rules: [
         { id: 'r1', language: 'swift' },
         { id: 'r2', language: 'objectivec' },
         { id: 'r3', language: 'javascript' },
       ],
     });
-    const analyzer = new CoverageAnalyzer(db);
+    const analyzer = new CoverageAnalyzer(knowledgeRepo as any, guardViolationRepo as any);
 
     const moduleFiles = new Map([['BDUIKit', ['BDUIKit/View.swift', 'BDUIKit/Helper.swift']]]);
 
@@ -100,16 +96,16 @@ describe('CoverageAnalyzer', () => {
   });
 
   it('should match rules from violation history', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, guardViolationRepo } = createMockRepos({
       rules: [],
       violations: [
         {
-          file_path: 'BDNet/API.swift',
-          violations_json: JSON.stringify([{ ruleId: 'r-net-1' }, { ruleId: 'r-net-2' }]),
+          filePath: 'BDNet/API.swift',
+          violationsJson: JSON.stringify([{ ruleId: 'r-net-1' }, { ruleId: 'r-net-2' }]),
         },
       ],
     });
-    const analyzer = new CoverageAnalyzer(db);
+    const analyzer = new CoverageAnalyzer(knowledgeRepo as any, guardViolationRepo as any);
 
     const moduleFiles = new Map([['BDNet', ['BDNet/API.swift', 'BDNet/Config.swift']]]);
 
@@ -118,13 +114,15 @@ describe('CoverageAnalyzer', () => {
   });
 
   it('should calculate FP rate from RuleLearner', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, guardViolationRepo } = createMockRepos({
       rules: [{ id: 'r1', language: 'swift' }],
     });
     const learner = createMockLearner({
       r1: { triggers: 20, fp: 4 }, // 20% FP rate
     });
-    const analyzer = new CoverageAnalyzer(db, { ruleLearner: learner as any });
+    const analyzer = new CoverageAnalyzer(knowledgeRepo as any, guardViolationRepo as any, {
+      ruleLearner: learner as any,
+    });
 
     const moduleFiles = new Map([['Mod', ['Mod/A.swift']]]);
 
@@ -133,13 +131,13 @@ describe('CoverageAnalyzer', () => {
   });
 
   it('should compute overall coverage', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, guardViolationRepo } = createMockRepos({
       rules: [
         { id: 'r1', language: 'swift' },
         { id: 'r2', language: 'swift' },
       ],
     });
-    const analyzer = new CoverageAnalyzer(db);
+    const analyzer = new CoverageAnalyzer(knowledgeRepo as any, guardViolationRepo as any);
 
     const moduleFiles = new Map([
       ['A', ['A/1.swift']], // 2 rules / 1 file → 100% (capped)
@@ -153,10 +151,10 @@ describe('CoverageAnalyzer', () => {
   });
 
   it('should identify low coverage modules', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, guardViolationRepo } = createMockRepos({
       rules: [{ id: 'r1', language: 'swift' }],
     });
-    const analyzer = new CoverageAnalyzer(db);
+    const analyzer = new CoverageAnalyzer(knowledgeRepo as any, guardViolationRepo as any);
 
     const moduleFiles = new Map([
       ['Huge', Array.from({ length: 10 }, (_, i) => `Huge/${i}.swift`)],
@@ -170,13 +168,13 @@ describe('CoverageAnalyzer', () => {
   });
 
   it('should handle multi-language modules', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, guardViolationRepo } = createMockRepos({
       rules: [
         { id: 'r1', language: 'swift' },
         { id: 'r2', language: 'objectivec' },
       ],
     });
-    const analyzer = new CoverageAnalyzer(db);
+    const analyzer = new CoverageAnalyzer(knowledgeRepo as any, guardViolationRepo as any);
 
     const moduleFiles = new Map([['Mixed', ['Mixed/A.swift', 'Mixed/B.m', 'Mixed/C.h']]]);
 

@@ -13,6 +13,7 @@
  */
 
 import type { SignalBus, SignalType } from '#infra/signal/SignalBus.js';
+import { unwrapRawDb } from '../../repository/search/SearchRepoAdapter.js';
 
 /** better-sqlite3 兼容类型（与 GuardCheckEngine 相同模式） */
 interface DatabaseLike {
@@ -77,10 +78,7 @@ export class HitRecorder {
     config: HitRecorderConfig = {}
   ) {
     this.#bus = bus;
-    this.#db =
-      'getDb' in db && typeof db.getDb === 'function'
-        ? (db as { getDb(): DatabaseLike }).getDb()
-        : (db as DatabaseLike);
+    this.#db = unwrapRawDb<DatabaseLike>(db as DatabaseLike);
     this.#flushIntervalMs = config.flushIntervalMs ?? 30_000;
     this.#maxBufferSize = config.maxBufferSize ?? 100;
   }
@@ -177,6 +175,7 @@ export class HitRecorder {
 
     try {
       const stmt = this.#db.prepare(
+        // @escape-hatch(permanent) — json_set() not expressible in Drizzle
         `UPDATE knowledge_entries
          SET stats = json_set(
                COALESCE(stats, '{}'),

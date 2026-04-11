@@ -9,6 +9,7 @@ import AuditStore from './infrastructure/audit/AuditStore.js';
 import ConfigLoader from './infrastructure/config/ConfigLoader.js';
 import DatabaseConnection from './infrastructure/database/DatabaseConnection.js';
 import Logger from './infrastructure/logging/Logger.js';
+import { unwrapRawDb } from './repository/search/SearchRepoAdapter.js';
 import { SkillHooks } from './service/skills/SkillHooks.js';
 import pathGuard from './shared/PathGuard.js';
 import { CONFIG_DIR, PACKAGE_ROOT } from './shared/package-root.js';
@@ -217,7 +218,9 @@ export class Bootstrap {
     if (this.components.db) {
       try {
         // 刷盘 WAL — 确保所有待写入数据持久化后再关闭
-        const rawDb = this.components.db.getDb();
+        const rawDb = unwrapRawDb(this.components.db as unknown) as InstanceType<
+          typeof DatabaseConnection
+        > & { pragma: (cmd: string) => void };
         rawDb.pragma('wal_checkpoint(TRUNCATE)');
       } catch {
         // WAL checkpoint 失败不阻断 shutdown

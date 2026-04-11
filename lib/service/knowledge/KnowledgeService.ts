@@ -30,12 +30,23 @@ interface EventBusLike {
   emit(event: string | symbol, ...args: unknown[]): boolean;
 }
 
+interface EdgeRepoLike {
+  deleteOutgoing(fromId: string, fromType: string): Promise<number>;
+  deleteByEntryId(entryId: string): Promise<number>;
+}
+
+interface ProposalRepoLike {
+  deleteByTargetRecipeId(targetRecipeId: string): number;
+}
+
 interface KnowledgeServiceOptions {
   fileWriter?: KnowledgeFileWriter | null;
   skillHooks?: SkillHooksLike | null;
   confidenceRouter?: ConfidenceRouter | null;
   qualityScorer?: QualityScorerLike | null;
   eventBus?: EventBusLike | null;
+  edgeRepo?: EdgeRepoLike | null;
+  proposalRepo?: ProposalRepoLike | null;
 }
 
 interface ServiceContext {
@@ -70,9 +81,11 @@ interface PaginationOptions {
  */
 export class KnowledgeService {
   _confidenceRouter: ConfidenceRouter | null;
+  _edgeRepo: EdgeRepoLike | null;
   _eventBus: EventBusLike | null;
   _fileWriter: KnowledgeFileWriter | null;
   _knowledgeGraphService: KnowledgeGraphService | null;
+  _proposalRepo: ProposalRepoLike | null;
   _qualityScorer: QualityScorerLike | null;
   _skillHooks: SkillHooksLike | null;
   auditLogger: AuditLoggerLike;
@@ -95,6 +108,8 @@ export class KnowledgeService {
     this._confidenceRouter = options.confidenceRouter || null;
     this._qualityScorer = options.qualityScorer || null;
     this._eventBus = options.eventBus || null;
+    this._edgeRepo = options.edgeRepo || null;
+    this._proposalRepo = options.proposalRepo || null;
     this.logger = Logger.getInstance();
   }
 
@@ -166,6 +181,13 @@ export class KnowledgeService {
       // autoApprovable 标记保留，供前端显示「推荐批准」徽章。
       // CursorDelivery 已支持高置信度 staging/pending 条目的交付。
 
+      // ── file-first: 先落盘 .md，再写 DB（文件=真相源） ──
+      // fileWriter.persist() 会设置 entry.sourceFile，
+      // 后续 repository.create() 自动包含 sourceFile 字段，无需异步回写。
+      if (this._fileWriter) {
+        this._fileWriter.persist(entry);
+      }
+
       const saved = await this.repository.create(entry);
 
       // 同步 relations → knowledge_edges
@@ -175,9 +197,6 @@ export class KnowledgeService {
       this._autoDiscoverRelations(saved.id, saved).catch((err) =>
         this.logger.warn('_autoDiscoverRelations error', { id: saved.id, error: err.message })
       );
-
-      // 落盘 .md 文件
-      this._persistToFile(saved);
 
       // 审计日志
       await this._audit('create_knowledge', saved.id, context.userId, {
@@ -337,15 +356,22 @@ export class KnowledgeService {
 
       dbUpdates.updatedAt = Math.floor(Date.now() / 1000);
 
+      // ── file-first: 先落盘 .md，再写 DB（文件=真相源） ──
+      if (this._fileWriter) {
+        Object.assign(_entry, dbUpdates);
+        this._fileWriter.persist(_entry);
+        // fileWriter 可能更新 sourceFile，同步到 dbUpdates
+        if (_entry.sourceFile) {
+          dbUpdates.sourceFile = _entry.sourceFile;
+        }
+      }
+
       const updated = await this.repository.update(id, dbUpdates);
 
       // 若 relations 变更，同步到 knowledge_edges
       if (dbUpdates.relations) {
         this._syncRelationsToGraph(id, data.relations);
       }
-
-      // 落盘
-      this._persistToFile(updated);
 
       await this._audit('update_knowledge', id, context.userId, {
         fields: Object.keys(dbUpdates),
@@ -778,19 +804,12 @@ export class KnowledgeService {
         dbUpdates.autoApprovable = entry.autoApprovable ? 1 : 0;
       }
 
-      const updated = await this.repository.update(id, dbUpdates);
-
-      // 文件位置迁移（candidate ↔ recipe 目录）
+      // ── file-first: 先迁移 .md 文件，再更新 DB lifecycle（文件=真相源） ──
       if (this._fileWriter) {
-        try {
-          this._fileWriter.moveOnLifecycleChange(updated);
-        } catch (err: unknown) {
-          this.logger.warn('moveOnLifecycleChange failed (non-blocking)', {
-            id,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
+        this._fileWriter.moveOnLifecycleChange(entry);
       }
+
+      const updated = await this.repository.update(id, dbUpdates);
 
       await this._audit(`${method}_knowledge`, id, context.userId, {
         from: prevLifecycle,
@@ -895,13 +914,15 @@ export class KnowledgeService {
     try {
       const candidates: { target: string; relation: string; weight: number }[] = [];
 
-      // 仅与已发布 Recipe（active）建立关联，不与其他候选（pending）互关联
-      const activeOnly = { lifecycle: Lifecycle.ACTIVE };
+      // 与可消费 Recipe（active/staging/evolving）建立关联
+      const consumableFilter = {
+        lifecycle: [Lifecycle.ACTIVE, Lifecycle.STAGING, Lifecycle.EVOLVING],
+      };
 
-      // 按 moduleName 查同模块已发布条目
+      // 按 moduleName 查同模块可消费条目
       if (entry.moduleName) {
         const sameModule = await this.repository.findWithPagination(
-          { ...activeOnly, moduleName: entry.moduleName },
+          { ...consumableFilter, moduleName: entry.moduleName },
           { page: 1, pageSize: 20 }
         );
         for (const r of sameModule.data) {
@@ -911,10 +932,10 @@ export class KnowledgeService {
         }
       }
 
-      // 按 category 查同类已发布条目（弱关联）
+      // 按 category 查同类可消费条目（弱关联）
       if (entry.category && candidates.length < 10) {
         const sameCat = await this.repository.findWithPagination(
-          { ...activeOnly, category: entry.category },
+          { ...consumableFilter, category: entry.category },
           { page: 1, pageSize: 10 }
         );
         for (const r of sameCat.data) {
@@ -969,9 +990,9 @@ export class KnowledgeService {
     }
 
     try {
-      gs.db
-        .prepare(`DELETE FROM knowledge_edges WHERE from_id = ? AND from_type = 'knowledge'`)
-        .run(id);
+      if (this._edgeRepo) {
+        this._edgeRepo.deleteOutgoing(id, 'knowledge');
+      }
 
       if (!relations || typeof relations !== 'object') {
         return;
@@ -1009,13 +1030,12 @@ export class KnowledgeService {
 
   /** 删除所有关联边 */
   _removeAllEdges(id: string) {
-    const gs = this._knowledgeGraphService;
-    if (!gs) {
+    if (!this._edgeRepo) {
       return;
     }
 
     try {
-      gs.db.prepare(`DELETE FROM knowledge_edges WHERE from_id = ? OR to_id = ?`).run(id, id);
+      this._edgeRepo.deleteByEntryId(id);
     } catch (err: unknown) {
       this.logger.warn('Failed to remove edges', {
         id,
@@ -1026,13 +1046,12 @@ export class KnowledgeService {
 
   /** 删除关联的 evolution_proposals（target_recipe_id 无 CASCADE） */
   _removeRelatedProposals(id: string) {
-    const gs = this._knowledgeGraphService;
-    if (!gs) {
+    if (!this._proposalRepo) {
       return;
     }
 
     try {
-      gs.db.prepare(`DELETE FROM evolution_proposals WHERE target_recipe_id = ?`).run(id);
+      this._proposalRepo.deleteByTargetRecipeId(id);
     } catch (err: unknown) {
       this.logger.warn('Failed to remove related proposals', {
         id,

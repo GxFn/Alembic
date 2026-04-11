@@ -1,21 +1,16 @@
-/** AuditStore - 审计日志存储 */
-import { desc, eq, sql } from 'drizzle-orm';
+/** AuditStore - 审计日志存储（全 Drizzle 类型安全） */
+import { and, avg, count, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import type { DrizzleDB } from '../database/drizzle/index.js';
 import { getDrizzle } from '../database/drizzle/index.js';
 import { auditLogs } from '../database/drizzle/schema.js';
 
 export class AuditStore {
-  db: import('better-sqlite3').Database;
   #drizzle: DrizzleDB;
   constructor(db: { getDb: () => import('better-sqlite3').Database }, drizzle?: DrizzleDB) {
-    this.db = db.getDb();
     this.#drizzle = drizzle ?? getDrizzle();
   }
 
-  /**
-   * 保存审计日志
-   * ★ Drizzle 类型安全 INSERT
-   */
+  /** 保存审计日志 */
   async save(entry: {
     id: string;
     timestamp: number;
@@ -45,7 +40,7 @@ export class AuditStore {
       .run();
   }
 
-  /** 查询审计日志 */
+  /** 查询审计日志（动态多条件，全 Drizzle） */
   query(
     filters: {
       actor?: string;
@@ -56,57 +51,45 @@ export class AuditStore {
       limit?: number;
     } = {}
   ) {
-    let sql = 'SELECT * FROM audit_logs WHERE 1=1';
-    const params: (string | number)[] = [];
+    const conditions = [];
 
     if (filters.actor) {
-      sql += ' AND actor = ?';
-      params.push(filters.actor);
+      conditions.push(eq(auditLogs.actor, filters.actor));
     }
-
     if (filters.action) {
-      sql += ' AND action = ?';
-      params.push(filters.action);
+      conditions.push(eq(auditLogs.action, filters.action));
     }
-
     if (filters.result) {
-      sql += ' AND result = ?';
-      params.push(filters.result);
+      conditions.push(eq(auditLogs.result, filters.result));
     }
-
     if (filters.startDate) {
-      sql += ' AND timestamp >= ?';
-      params.push(filters.startDate);
+      conditions.push(gte(auditLogs.timestamp, filters.startDate));
     }
-
     if (filters.endDate) {
-      sql += ' AND timestamp <= ?';
-      params.push(filters.endDate);
+      conditions.push(lte(auditLogs.timestamp, filters.endDate));
     }
 
-    sql += ' ORDER BY timestamp DESC';
+    const condition = conditions.length > 0 ? and(...conditions) : undefined;
+
+    let query = this.#drizzle
+      .select()
+      .from(auditLogs)
+      .where(condition)
+      .orderBy(desc(auditLogs.timestamp));
 
     if (filters.limit) {
-      sql += ' LIMIT ?';
-      params.push(filters.limit);
+      query = query.limit(filters.limit) as typeof query;
     }
 
-    const stmt = this.db.prepare(sql);
-    return stmt.all(...params);
+    return query.all();
   }
 
-  /**
-   * 根据请求 ID 查询
-   * ★ Drizzle 类型安全 SELECT
-   */
+  /** 根据请求 ID 查询 */
   findByRequestId(requestId: string) {
     return this.#drizzle.select().from(auditLogs).where(eq(auditLogs.id, requestId)).get();
   }
 
-  /**
-   * 根据角色查询
-   * ★ Drizzle 类型安全 SELECT
-   */
+  /** 根据角色查询 */
   findByActor(actor: string, limit = 100) {
     return this.#drizzle
       .select()
@@ -117,10 +100,7 @@ export class AuditStore {
       .all();
   }
 
-  /**
-   * 根据操作查询
-   * ★ Drizzle 类型安全 SELECT
-   */
+  /** 根据操作查询 */
   findByAction(action: string, limit = 100) {
     return this.#drizzle
       .select()
@@ -131,10 +111,7 @@ export class AuditStore {
       .all();
   }
 
-  /**
-   * 根据结果查询
-   * ★ Drizzle 类型安全 SELECT
-   */
+  /** 根据结果查询 */
   findByResult(result: string, limit = 100) {
     return this.#drizzle
       .select()
@@ -145,69 +122,80 @@ export class AuditStore {
       .all();
   }
 
-  /** 获取统计数据 */
+  /** 获取统计数据（全 Drizzle） */
   getStats(timeRange = '24h') {
-    // 计算时间范围
     const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 168 : 720; // 30d
     const startTime = Date.now() - hours * 60 * 60 * 1000;
 
-    // 总数统计
-    const total = this.db
-      .prepare('SELECT COUNT(*) as count FROM audit_logs WHERE timestamp >= ?')
-      .get(startTime) as { count: number };
+    const startCondition = gte(auditLogs.timestamp, startTime);
 
-    // 成功/失败统计
-    const successCount = this.db
-      .prepare(
-        "SELECT COUNT(*) as count FROM audit_logs WHERE timestamp >= ? AND result = 'success'"
-      )
-      .get(startTime) as { count: number };
+    // 总数
+    const [totalRow] = this.#drizzle
+      .select({ count: count() })
+      .from(auditLogs)
+      .where(startCondition)
+      .all();
+    const total = totalRow?.count ?? 0;
 
-    const failureCount = this.db
-      .prepare(
-        "SELECT COUNT(*) as count FROM audit_logs WHERE timestamp >= ? AND result = 'failure'"
-      )
-      .get(startTime) as { count: number };
+    // 成功数
+    const [successRow] = this.#drizzle
+      .select({ count: count() })
+      .from(auditLogs)
+      .where(and(startCondition, eq(auditLogs.result, 'success')))
+      .all();
+    const successCount = successRow?.count ?? 0;
+
+    // 失败数
+    const [failureRow] = this.#drizzle
+      .select({ count: count() })
+      .from(auditLogs)
+      .where(and(startCondition, eq(auditLogs.result, 'failure')))
+      .all();
+    const failureCount = failureRow?.count ?? 0;
 
     // 按角色统计
-    const byActor = this.db
-      .prepare(`
-        SELECT actor, COUNT(*) as count
-        FROM audit_logs
-        WHERE timestamp >= ?
-        GROUP BY actor
-        ORDER BY count DESC
-      `)
-      .all(startTime);
+    const byActor = this.#drizzle
+      .select({
+        actor: auditLogs.actor,
+        count: count(),
+      })
+      .from(auditLogs)
+      .where(startCondition)
+      .groupBy(auditLogs.actor)
+      .orderBy(desc(count()))
+      .all();
 
     // 按操作统计
-    const byAction = this.db
-      .prepare(`
-        SELECT action, COUNT(*) as count
-        FROM audit_logs
-        WHERE timestamp >= ?
-        GROUP BY action
-        ORDER BY count DESC
-      `)
-      .all(startTime);
+    const byAction = this.#drizzle
+      .select({
+        action: auditLogs.action,
+        count: count(),
+      })
+      .from(auditLogs)
+      .where(startCondition)
+      .groupBy(auditLogs.action)
+      .orderBy(desc(count()))
+      .all();
 
     // 平均响应时间
-    const avgDuration = this.db
-      .prepare(`
-        SELECT AVG(duration) as avg_duration
-        FROM audit_logs
-        WHERE timestamp >= ? AND duration IS NOT NULL
-      `)
-      .get(startTime) as { avg_duration: number | null };
+    const [avgRow] = this.#drizzle
+      .select({
+        avg_duration: avg(auditLogs.duration),
+      })
+      .from(auditLogs)
+      .where(and(startCondition, sql`${auditLogs.duration} IS NOT NULL`))
+      .all();
+    const avgDuration = avgRow?.avg_duration
+      ? `${Math.round(Number(avgRow.avg_duration))}ms`
+      : 'N/A';
 
     return {
       timeRange,
-      total: total.count,
-      success: successCount.count,
-      failure: failureCount.count,
-      successRate:
-        total.count > 0 ? `${((successCount.count / total.count) * 100).toFixed(2)}%` : '0%',
-      avgDuration: avgDuration.avg_duration ? `${Math.round(avgDuration.avg_duration)}ms` : 'N/A',
+      total,
+      success: successCount,
+      failure: failureCount,
+      successRate: total > 0 ? `${((successCount / total) * 100).toFixed(2)}%` : '0%',
+      avgDuration,
       byActor,
       byAction,
     };
@@ -215,9 +203,7 @@ export class AuditStore {
 
   /**
    * 清理过期审计日志
-   * ★ Drizzle 类型安全 DELETE
-   * @param [opts.maxAgeDays=90] 保留天数，超过此天数的记录将被删除
-   * @returns }
+   * @param [opts.maxAgeDays=90] 保留天数
    */
   cleanup({ maxAgeDays = 90 } = {}) {
     try {

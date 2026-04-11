@@ -11,7 +11,14 @@
  * 由于 enhancedSubmitKnowledge 依赖大量 DI + 动态 import，
  * 本测试通过对 ProposalRepository.create 的行为验证核心逻辑。
  */
-import { describe, expect, it, vi } from 'vitest';
+import Database from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  getDrizzle,
+  initDrizzle,
+  resetDrizzle,
+} from '../../lib/infrastructure/database/drizzle/index.js';
+import migrate004 from '../../lib/infrastructure/database/migrations/004_evolution_proposals.js';
 import { ProposalRepository } from '../../lib/repository/evolution/ProposalRepository.js';
 
 describe('Consolidated Proposal creation logic', () => {
@@ -77,19 +84,25 @@ describe('Consolidated Proposal creation logic', () => {
     return null;
   }
 
-  function createMockDb() {
-    const runFn = vi.fn(() => ({ changes: 1 }));
-    const allFn = vi.fn(() => [] as Record<string, unknown>[]);
-    const getFn = vi.fn(() => undefined as Record<string, unknown> | undefined);
-    const prepare = vi.fn(() => ({ run: runFn, all: allFn, get: getFn }));
-    return { prepare, runFn, allFn, getFn };
-  }
+  let sqlite: InstanceType<typeof Database>;
+  let repo: ProposalRepository;
+
+  beforeEach(() => {
+    resetDrizzle();
+    sqlite = new Database(':memory:');
+    sqlite.pragma('foreign_keys = OFF');
+    migrate004(sqlite);
+    initDrizzle(sqlite);
+    repo = new ProposalRepository(getDrizzle());
+  });
+
+  afterEach(() => {
+    resetDrizzle();
+    sqlite.close();
+  });
 
   describe('merge advice → merge Proposal', () => {
     it('creates merge Proposal with correct fields', () => {
-      const db = createMockDb();
-      const repo = new ProposalRepository(db);
-
       const result = createProposalFromAdvice(
         repo,
         {
@@ -111,11 +124,16 @@ describe('Consolidated Proposal creation logic', () => {
     });
 
     it('returns null when duplicate exists', () => {
-      const db = createMockDb();
-      // Simulate existing proposal
-      db.getFn.mockReturnValue({ id: 'ep-existing' });
-      const repo = new ProposalRepository(db);
+      // Create a first merge proposal
+      repo.create({
+        type: 'merge',
+        targetRecipeId: 'r-001',
+        confidence: 0.85,
+        source: 'ide-agent',
+        description: 'first',
+      });
 
+      // Second should be deduplicated
       const result = createProposalFromAdvice(
         repo,
         {
@@ -133,9 +151,6 @@ describe('Consolidated Proposal creation logic', () => {
 
   describe('reorganize advice → reorganize Proposal', () => {
     it('creates reorganize Proposal as pending (high risk)', () => {
-      const db = createMockDb();
-      const repo = new ProposalRepository(db);
-
       const result = createProposalFromAdvice(
         repo,
         {
@@ -162,9 +177,6 @@ describe('Consolidated Proposal creation logic', () => {
 
   describe('insufficient advice → enhance Proposal', () => {
     it('creates enhance Proposal when coveredBy exists', () => {
-      const db = createMockDb();
-      const repo = new ProposalRepository(db);
-
       const result = createProposalFromAdvice(
         repo,
         {
@@ -187,9 +199,6 @@ describe('Consolidated Proposal creation logic', () => {
 
   describe('unknown advice → null', () => {
     it('returns null for unrecognized action', () => {
-      const db = createMockDb();
-      const repo = new ProposalRepository(db);
-
       const result = createProposalFromAdvice(
         repo,
         {
@@ -206,9 +215,6 @@ describe('Consolidated Proposal creation logic', () => {
 
   describe('supersede Proposal from submit_knowledge', () => {
     it('creates supersede Proposal with correct structure', () => {
-      const db = createMockDb();
-      const repo = new ProposalRepository(db);
-
       const result = repo.create({
         type: 'supersede',
         targetRecipeId: 'r-old',
@@ -228,9 +234,6 @@ describe('Consolidated Proposal creation logic', () => {
     });
 
     it('supersede stays pending when confidence < 0.8', () => {
-      const db = createMockDb();
-      const repo = new ProposalRepository(db);
-
       const result = repo.create({
         type: 'supersede',
         targetRecipeId: 'r-old',

@@ -31,6 +31,7 @@ import {
   getProjectRecipesPath,
   getProjectSkillsPath,
 } from '#infra/config/Paths.js';
+import { CONSUMABLE_LIFECYCLES, lifecycleInSql } from '../../domain/knowledge/Lifecycle.js';
 
 // ── 类型定义 ────────────────────────────────────────────────
 
@@ -401,14 +402,16 @@ export class CleanupService {
     }
 
     try {
+      const { sql: lcFilter, params: lcParams } = lifecycleInSql(CONSUMABLE_LIFECYCLES);
       const rows = this.#db
         .prepare(
+          // @escape-hatch(permanent) — dynamic lifecycle filter + json_extract
           `SELECT id, title, trigger, category, knowledgeType, doClause,
                   sourceFile, lifecycle, content, json_extract(reasoning, '$.sources') AS sourceRefsJson
            FROM knowledge_entries
-           WHERE lifecycle IN ('active', 'staging', 'evolving')`
+           WHERE ${lcFilter}`
         )
-        .all() as Array<{
+        .all(...lcParams) as Array<{
         id: string;
         title: string;
         trigger: string;
@@ -579,7 +582,7 @@ export class CleanupService {
 
     for (const table of tablesToExport) {
       try {
-        const rows = this.#db.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[];
+        const rows = this.#db.prepare(`SELECT * FROM ${table}`).all() as Record<string, unknown>[]; // @escape-hatch(permanent) — dynamic table name for backup export
         for (const row of rows) {
           lines.push(JSON.stringify({ _table: table, ...row }));
           totalRows++;

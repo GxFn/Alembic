@@ -18,6 +18,8 @@
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
+import type { RecipeSourceRefRepositoryImpl } from '../../repository/sourceref/RecipeSourceRefRepository.js';
 import type {
   ContentPatchResult,
   PatchChange,
@@ -26,14 +28,6 @@ import type {
 } from '../../types/evolution.js';
 
 /* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-    get(...params: unknown[]): Record<string, unknown> | undefined;
-    run(...params: unknown[]): { changes: number };
-  };
-}
 
 /** DB 行格式 */
 interface RecipeRow {
@@ -74,11 +68,16 @@ const PATCHABLE_FIELDS = new Set([
 /* ────────────────────── Class ────────────────────── */
 
 export class ContentPatcher {
-  readonly #db: DatabaseLike;
+  readonly #knowledgeRepo: KnowledgeRepositoryImpl;
+  readonly #sourceRefRepo: RecipeSourceRefRepositoryImpl;
   readonly #logger = Logger.getInstance();
 
-  constructor(db: DatabaseLike) {
-    this.#db = db;
+  constructor(
+    knowledgeRepo: KnowledgeRepositoryImpl,
+    sourceRefRepo: RecipeSourceRefRepositoryImpl
+  ) {
+    this.#knowledgeRepo = knowledgeRepo;
+    this.#sourceRefRepo = sourceRefRepo;
   }
 
   /**
@@ -86,7 +85,7 @@ export class ContentPatcher {
    *
    * @returns ContentPatchResult — success: 是否成功应用了至少一个 patch
    */
-  applyProposal(
+  async applyProposal(
     proposal: {
       id: string;
       type: string;
@@ -94,11 +93,11 @@ export class ContentPatcher {
       evidence: Record<string, unknown>[];
     },
     patchSource: 'agent-suggestion' | 'correction' | 'merge' = 'agent-suggestion'
-  ): ContentPatchResult {
+  ): Promise<ContentPatchResult> {
     const recipeId = proposal.targetRecipeId;
 
     // 1. 获取 Recipe 当前内容
-    const recipe = this.#getRecipe(recipeId);
+    const recipe = await this.#getRecipe(recipeId);
     if (!recipe) {
       return this.#skipResult(recipeId, patchSource, 'Recipe not found');
     }
@@ -129,7 +128,7 @@ export class ContentPatcher {
     }
 
     // 6. 持久化
-    this.#persistRecipe(recipe);
+    await this.#persistRecipe(recipe);
 
     // 7. 创建 after 快照
     const afterSnapshot = this.#createSnapshot(recipe);
@@ -361,35 +360,50 @@ export class ContentPatcher {
 
   /* ═══════════════════ DB ═══════════════════ */
 
-  #getRecipe(recipeId: string): RecipeRow | null {
-    const row = this.#db
-      .prepare(
-        `SELECT id, title, coreCode, doClause, dontClause, whenClause, content, sourceRefs, headers
-         FROM knowledge_entries WHERE id = ?`
-      )
-      .get(recipeId) as RecipeRow | undefined;
-    return row ?? null;
+  async #getRecipe(recipeId: string): Promise<RecipeRow | null> {
+    const entry = await this.#knowledgeRepo.findById(recipeId);
+    if (!entry) {
+      return null;
+    }
+    // 从 recipe_source_refs 表读取关联的源引用路径
+    const refs = this.#sourceRefRepo.findByRecipeId(entry.id);
+    const sourcePaths = refs.map((r) => r.sourcePath);
+
+    return {
+      id: entry.id,
+      title: entry.title,
+      coreCode: entry.coreCode || '',
+      doClause: entry.doClause || '',
+      dontClause: entry.dontClause || '',
+      whenClause: entry.whenClause || '',
+      content: JSON.stringify(entry.content || {}),
+      sourceRefs: JSON.stringify(sourcePaths),
+      headers: JSON.stringify(entry.headers || []),
+    };
   }
 
-  #persistRecipe(recipe: RecipeRow): void {
-    this.#db
-      .prepare(
-        `UPDATE knowledge_entries
-         SET coreCode = ?, doClause = ?, dontClause = ?, whenClause = ?,
-             content = ?, sourceRefs = ?, headers = ?, updatedAt = ?
-         WHERE id = ?`
-      )
-      .run(
-        recipe.coreCode,
-        recipe.doClause,
-        recipe.dontClause,
-        recipe.whenClause,
-        recipe.content,
-        recipe.sourceRefs,
-        recipe.headers,
-        Date.now(),
-        recipe.id
-      );
+  async #persistRecipe(recipe: RecipeRow): Promise<void> {
+    await this.#knowledgeRepo.update(recipe.id, {
+      coreCode: recipe.coreCode,
+      doClause: recipe.doClause,
+      dontClause: recipe.dontClause,
+      whenClause: recipe.whenClause,
+      content: safeJsonParse(recipe.content, {}),
+      headers: safeJsonParse(recipe.headers, []),
+    });
+
+    // 同步 sourceRefs 到 recipe_source_refs 表
+    const newPaths = safeJsonParse<string[]>(recipe.sourceRefs, []);
+    const now = Math.floor(Date.now() / 1000);
+    this.#sourceRefRepo.deleteByRecipeId(recipe.id);
+    for (const sourcePath of newPaths) {
+      this.#sourceRefRepo.upsert({
+        recipeId: recipe.id,
+        sourcePath,
+        status: 'active',
+        verifiedAt: now,
+      });
+    }
   }
 
   /* ═══════════════════ Helpers ═══════════════════ */

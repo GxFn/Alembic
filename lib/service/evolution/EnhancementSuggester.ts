@@ -8,18 +8,12 @@
  *   ④ 关联 Recipe 已 deprecated → 建议检查引用是否过时
  */
 
+import type { KnowledgeEntry } from '../../domain/knowledge/index.js';
+import { Lifecycle, PUBLISHED_LIFECYCLES } from '../../domain/knowledge/Lifecycle.js';
 import Logger from '../../infrastructure/logging/Logger.js';
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-
-/* ────────────────────── Types ────────────────────── */
-
-interface DatabaseLike {
-  prepare(sql: string): {
-    all(...params: unknown[]): Record<string, unknown>[];
-    get(...params: unknown[]): Record<string, unknown> | undefined;
-  };
-}
+import type KnowledgeRepositoryImpl from '../../repository/knowledge/KnowledgeRepository.impl.js';
 
 export type EnhancementType =
   | 'missing_code_example'
@@ -45,16 +39,16 @@ const LOW_AUTHORITY_PERCENTILE = 0.25;
 /* ────────────────────── Class ────────────────────── */
 
 export class EnhancementSuggester {
-  #db: DatabaseLike;
+  #knowledgeRepo: KnowledgeRepositoryImpl;
   #signalBus: SignalBus | null;
   #reportStore: ReportStore | null;
   #logger = Logger.getInstance();
 
   constructor(
-    db: DatabaseLike,
+    knowledgeRepo: KnowledgeRepositoryImpl,
     options: { signalBus?: SignalBus; reportStore?: ReportStore } = {}
   ) {
-    this.#db = db;
+    this.#knowledgeRepo = knowledgeRepo;
     this.#signalBus = options.signalBus ?? null;
     this.#reportStore = options.reportStore ?? null;
   }
@@ -62,12 +56,13 @@ export class EnhancementSuggester {
   /**
    * 运行全部 4 种增强策略
    */
-  analyzeAll(): EnhancementSuggestion[] {
+  async analyzeAll(): Promise<EnhancementSuggestion[]> {
+    const entries = await this.#knowledgeRepo.findAllByLifecycles(PUBLISHED_LIFECYCLES);
     const suggestions: EnhancementSuggestion[] = [
-      ...this.#checkMissingCodeExamples(),
-      ...this.#checkLowAdoption(),
-      ...this.#checkLowAuthority(),
-      ...this.#checkDeprecatedReferences(),
+      ...this.#checkMissingCodeExamples(entries),
+      ...this.#checkLowAdoption(entries),
+      ...this.#checkLowAuthority(entries),
+      ...(await this.#checkDeprecatedReferences(entries)),
     ];
 
     if (this.#reportStore && suggestions.length > 0) {
@@ -89,35 +84,22 @@ export class EnhancementSuggester {
 
   /* ── Strategy ①: Guard 频繁命中但无 coreCode ── */
 
-  #checkMissingCodeExamples(): EnhancementSuggestion[] {
-    const rows = this.#db
-      .prepare(
-        `SELECT id, title, coreCode, stats
-       FROM knowledge_entries
-       WHERE lifecycle IN ('active', 'staging') AND kind = 'rule'`
-      )
-      .all() as { id: string; title: string; coreCode: string; stats: string }[];
-
+  #checkMissingCodeExamples(entries: KnowledgeEntry[]): EnhancementSuggestion[] {
+    const rules = entries.filter((e) => e.kind === 'rule');
     const suggestions: EnhancementSuggestion[] = [];
 
-    for (const row of rows) {
-      const hasCode = row.coreCode && row.coreCode.trim().length > 10;
+    for (const entry of rules) {
+      const hasCode = entry.coreCode && entry.coreCode.trim().length > 10;
       if (hasCode) {
         continue;
       }
 
-      let stats: Record<string, unknown> = {};
-      try {
-        stats = JSON.parse(row.stats || '{}');
-      } catch {
-        continue;
-      }
-
+      const stats = (entry.stats ?? {}) as unknown as Record<string, unknown>;
       const guardHits = (stats.guardHits as number) || 0;
       if (guardHits >= GUARD_HIT_THRESHOLD) {
         suggestions.push({
-          recipeId: row.id,
-          title: row.title,
+          recipeId: entry.id,
+          title: entry.title,
           type: 'missing_code_example',
           description: `Guard 已命中 ${guardHits} 次但无代码示例，建议补充 coreCode 帮助开发者理解正确用法`,
           priority: guardHits >= GUARD_HIT_THRESHOLD * 3 ? 'high' : 'medium',
@@ -131,32 +113,18 @@ export class EnhancementSuggester {
 
   /* ── Strategy ②: Search 高频命中但 adoptions=0 ── */
 
-  #checkLowAdoption(): EnhancementSuggestion[] {
-    const rows = this.#db
-      .prepare(
-        `SELECT id, title, stats
-       FROM knowledge_entries
-       WHERE lifecycle IN ('active', 'staging')`
-      )
-      .all() as { id: string; title: string; stats: string }[];
-
+  #checkLowAdoption(entries: KnowledgeEntry[]): EnhancementSuggestion[] {
     const suggestions: EnhancementSuggestion[] = [];
 
-    for (const row of rows) {
-      let stats: Record<string, unknown> = {};
-      try {
-        stats = JSON.parse(row.stats || '{}');
-      } catch {
-        continue;
-      }
-
+    for (const entry of entries) {
+      const stats = (entry.stats ?? {}) as unknown as Record<string, unknown>;
       const searchHits = (stats.searchHits as number) || 0;
       const adoptions = (stats.adoptions as number) || 0;
 
       if (searchHits >= SEARCH_HIT_THRESHOLD && adoptions === 0) {
         suggestions.push({
-          recipeId: row.id,
-          title: row.title,
+          recipeId: entry.id,
+          title: entry.title,
           type: 'low_adoption',
           description: `搜索命中 ${searchHits} 次但采纳为 0，建议改善 usageGuide 或 whenClause 使知识更具可操作性`,
           priority: searchHits >= SEARCH_HIT_THRESHOLD * 3 ? 'high' : 'medium',
@@ -170,32 +138,17 @@ export class EnhancementSuggester {
 
   /* ── Strategy ③: 同类知识中 authority 偏低 ── */
 
-  #checkLowAuthority(): EnhancementSuggestion[] {
-    const rows = this.#db
-      .prepare(
-        `SELECT id, title, category, stats
-       FROM knowledge_entries
-       WHERE lifecycle IN ('active', 'staging')`
-      )
-      .all() as { id: string; title: string; category: string; stats: string }[];
-
-    // 按 category 分组计算 authority 分位
+  #checkLowAuthority(entries: KnowledgeEntry[]): EnhancementSuggestion[] {
     const byCategory = new Map<string, { id: string; title: string; authority: number }[]>();
 
-    for (const row of rows) {
-      let stats: Record<string, unknown> = {};
-      try {
-        stats = JSON.parse(row.stats || '{}');
-      } catch {
-        continue;
-      }
-
+    for (const entry of entries) {
+      const stats = (entry.stats ?? {}) as unknown as Record<string, unknown>;
       const authority = (stats.authority as number) || 0;
-      const cat = row.category || 'general';
+      const cat = entry.category || 'general';
       if (!byCategory.has(cat)) {
         byCategory.set(cat, []);
       }
-      byCategory.get(cat)!.push({ id: row.id, title: row.title, authority });
+      byCategory.get(cat)?.push({ id: entry.id, title: entry.title, authority });
     }
 
     const suggestions: EnhancementSuggestion[] = [];
@@ -230,26 +183,12 @@ export class EnhancementSuggester {
 
   /* ── Strategy ④: 关联 Recipe 已 deprecated ── */
 
-  #checkDeprecatedReferences(): EnhancementSuggestion[] {
-    const rows = this.#db
-      .prepare(
-        `SELECT id, title, relations
-       FROM knowledge_entries
-       WHERE lifecycle IN ('active', 'staging')`
-      )
-      .all() as { id: string; title: string; relations: string }[];
-
+  async #checkDeprecatedReferences(entries: KnowledgeEntry[]): Promise<EnhancementSuggestion[]> {
     const suggestions: EnhancementSuggestion[] = [];
 
-    for (const row of rows) {
-      let relations: Record<string, unknown> = {};
-      try {
-        relations = JSON.parse(row.relations || '{}');
-      } catch {
-        continue;
-      }
+    for (const entry of entries) {
+      const relations = (entry.relations ?? {}) as unknown as Record<string, unknown>;
 
-      // 检查 related, depends_on 等关系桶中的 ID
       const relatedIds: string[] = [];
       for (const [bucket, ids] of Object.entries(relations)) {
         if (bucket === 'deprecated_by') {
@@ -265,22 +204,18 @@ export class EnhancementSuggester {
       }
 
       // 批量检查关联条目的 lifecycle
-      const placeholders = relatedIds.map(() => '?').join(',');
-      const deprecated = this.#db
-        .prepare(
-          `SELECT id, title FROM knowledge_entries WHERE id IN (${placeholders}) AND lifecycle = 'deprecated'`
-        )
-        .all(...relatedIds) as { id: string; title: string }[];
-
-      for (const dep of deprecated) {
-        suggestions.push({
-          recipeId: row.id,
-          title: row.title,
-          type: 'deprecated_reference',
-          description: `引用了已废弃的 Recipe "${dep.title}" (${dep.id})，建议检查引用是否过时`,
-          priority: 'high',
-          evidence: [`referenced: ${dep.id}`, `referenced_title: ${dep.title}`],
-        });
+      for (const relId of relatedIds) {
+        const relEntry = await this.#knowledgeRepo.findById(relId);
+        if (relEntry && relEntry.lifecycle === Lifecycle.DEPRECATED) {
+          suggestions.push({
+            recipeId: entry.id,
+            title: entry.title,
+            type: 'deprecated_reference',
+            description: `引用了已废弃的 Recipe "${relEntry.title}" (${relEntry.id})，建议检查引用是否过时`,
+            priority: 'high',
+            evidence: [`referenced: ${relEntry.id}`, `referenced_title: ${relEntry.title}`],
+          });
+        }
       }
     }
 

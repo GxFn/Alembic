@@ -78,8 +78,11 @@ router.get('/reverse', async (req: Request, res: Response): Promise<void> => {
     try {
       reverseGuard = container.get('reverseGuard') as InstanceType<typeof ReverseGuard>;
     } catch {
-      const db = container.get('database') as { getDb(): unknown };
-      reverseGuard = new ReverseGuard(db.getDb() as ConstructorParameters<typeof ReverseGuard>[0]);
+      reverseGuard = new ReverseGuard(
+        container.get('knowledgeRepository') as ConstructorParameters<typeof ReverseGuard>[0],
+        container.get('codeEntityRepository') as ConstructorParameters<typeof ReverseGuard>[1],
+        container.get('recipeSourceRefRepository') as ConstructorParameters<typeof ReverseGuard>[2]
+      );
     }
 
     const maxFiles = req.query.maxFiles ? Number(req.query.maxFiles) : 200;
@@ -125,9 +128,11 @@ router.get('/coverage', async (_req: Request, res: Response): Promise<void> => {
     try {
       analyzer = container.get('coverageAnalyzer') as InstanceType<typeof CoverageAnalyzer>;
     } catch {
-      const db = container.get('database') as { getDb(): unknown };
       analyzer = new CoverageAnalyzer(
-        db.getDb() as ConstructorParameters<typeof CoverageAnalyzer>[0]
+        container.get('knowledgeRepository') as ConstructorParameters<typeof CoverageAnalyzer>[0],
+        container.get('guardViolationRepository') as ConstructorParameters<
+          typeof CoverageAnalyzer
+        >[1]
       );
     }
 
@@ -135,9 +140,9 @@ router.get('/coverage', async (_req: Request, res: Response): Promise<void> => {
     const moduleFiles = new Map<string, string[]>();
     try {
       const panorama = container.get('panoramaService') as unknown as {
-        getOverview(): { modules: { name: string; files: string[] }[] };
+        getOverview(): Promise<{ modules: { name: string; files: string[] }[] }>;
       };
-      const overview = panorama.getOverview();
+      const overview = await panorama.getOverview();
       if (overview?.modules) {
         for (const mod of overview.modules) {
           if (mod.files?.length > 0) {

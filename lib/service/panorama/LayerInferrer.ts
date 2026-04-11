@@ -175,7 +175,7 @@ export class LayerInferrer {
       }
     }
 
-    return { levels: levelEntries, violations };
+    return { levels: levelEntries, violations, configBased: true };
   }
 
   #computeConfigCoverage(modules: string[], moduleLayerMap: Map<string, string>): number {

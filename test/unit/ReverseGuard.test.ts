@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ReverseGuard } from '../../lib/service/guard/ReverseGuard.js';
 
-function createMockDb(
+function createMockRepos(
   options: {
     recipes?: {
       id: string;
@@ -21,45 +21,43 @@ function createMockDb(
   const { recipes = [], codeEntities = [], guardHits = {}, staleSourceRefs = {} } = options;
   const entitySet = new Set(codeEntities);
 
-  return {
-    prepare(sql: string) {
-      return {
-        all(...params: unknown[]) {
-          if (sql.includes('knowledge_entries') && sql.includes('lifecycle')) {
-            return recipes;
-          }
-          if (sql.includes('recipe_source_refs') && sql.includes('stale')) {
-            const recipeId = params[0] as string;
-            const paths = staleSourceRefs[recipeId] ?? [];
-            return paths.map((p) => ({ source_path: p }));
-          }
-          return [];
-        },
-        get(...params: unknown[]) {
-          if (sql.includes('code_entities') && sql.includes('name = ?')) {
-            const name = params[0] as string;
-            if (entitySet.has(name)) {
-              return { name };
-            }
-            return undefined;
-          }
-          if (sql.includes('json_extract(stats')) {
-            const id = params[0] as string;
-            return { hits: guardHits[id] ?? 0 };
-          }
-          return undefined;
-        },
-      };
+  const knowledgeRepo = {
+    findActiveRulesWithContentSync() {
+      return recipes.map((r) => ({
+        id: r.id,
+        title: r.title,
+        coreCode: r.core_code,
+        guardPattern: r.guard_pattern,
+        stats: r.stats,
+      }));
+    },
+    getGuardHitsSync(id: string) {
+      return guardHits[id] ?? 0;
     },
   };
+
+  const entityRepo = {
+    existsByName(name: string) {
+      return entitySet.has(name);
+    },
+  };
+
+  const sourceRefRepo = {
+    findByRecipeId(recipeId: string) {
+      const paths = staleSourceRefs[recipeId] ?? [];
+      return paths.map((p) => ({ sourcePath: p, status: 'stale' }));
+    },
+  };
+
+  return { knowledgeRepo, entityRepo, sourceRefRepo };
 }
 
 describe('ReverseGuard', () => {
   it('should return healthy for recipe with no drift', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({
       codeEntities: ['BDNetworkManager', 'URLSession'],
     });
-    const guard = new ReverseGuard(db);
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any);
 
     const result = guard.checkRecipe(
       {
@@ -77,10 +75,10 @@ describe('ReverseGuard', () => {
   });
 
   it('should detect symbol_missing when coreCode references removed symbols', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({
       codeEntities: [], // nothing in codebase
     });
-    const guard = new ReverseGuard(db);
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any);
 
     const result = guard.checkRecipe(
       {
@@ -100,8 +98,8 @@ describe('ReverseGuard', () => {
   });
 
   it('should detect zero_match when guard pattern matches nothing', () => {
-    const db = createMockDb({});
-    const guard = new ReverseGuard(db);
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({});
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any);
 
     const result = guard.checkRecipe(
       {
@@ -121,10 +119,10 @@ describe('ReverseGuard', () => {
   });
 
   it('should detect match_rate_drop when historical hits are much higher', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({
       guardHits: { r1: 100 },
     });
-    const guard = new ReverseGuard(db);
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any);
 
     const result = guard.checkRecipe(
       {
@@ -142,8 +140,8 @@ describe('ReverseGuard', () => {
   });
 
   it('should return healthy when pattern matches and no historical drop', () => {
-    const db = createMockDb({ guardHits: {} });
-    const guard = new ReverseGuard(db);
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({ guardHits: {} });
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any);
 
     const result = guard.checkRecipe(
       {
@@ -160,10 +158,10 @@ describe('ReverseGuard', () => {
   });
 
   it('should recommend decay when multiple high-severity signals', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({
       codeEntities: [], // nothing found
     });
-    const guard = new ReverseGuard(db);
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any);
 
     const result = guard.checkRecipe(
       {
@@ -182,8 +180,10 @@ describe('ReverseGuard', () => {
 
   it('should emit signal to SignalBus on drift', () => {
     const signalBus = { send: vi.fn() };
-    const db = createMockDb({ codeEntities: [] });
-    const guard = new ReverseGuard(db, { signalBus: signalBus as never });
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({ codeEntities: [] });
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any, {
+      signalBus: signalBus as never,
+    });
 
     guard.checkRecipe(
       {
@@ -205,13 +205,13 @@ describe('ReverseGuard', () => {
   });
 
   it('should batch audit all active rule recipes', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({
       recipes: [
         { id: 'r1', title: 'Rule 1', core_code: null, guard_pattern: 'TODO', stats: null },
         { id: 'r2', title: 'Rule 2', core_code: null, guard_pattern: 'FIXME', stats: null },
       ],
     });
-    const guard = new ReverseGuard(db);
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any);
 
     const results = guard.auditAllRules([
       { path: 'a.m', content: '// TODO: fix\n// FIXME: broken' },
@@ -222,13 +222,13 @@ describe('ReverseGuard', () => {
   });
 
   it('should detect source_ref_stale when sourceRefs are stale', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({
       codeEntities: ['BDNetworkManager'],
       staleSourceRefs: {
         r1: ['Sources/Old/Removed.swift', 'Sources/Old/Gone.swift', 'Sources/Old/Missing.swift'],
       },
     });
-    const guard = new ReverseGuard(db);
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any);
 
     const result = guard.checkRecipe(
       {
@@ -248,10 +248,10 @@ describe('ReverseGuard', () => {
   });
 
   it('should not detect source_ref_stale when no stale refs', () => {
-    const db = createMockDb({
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({
       staleSourceRefs: {}, // empty — no stale refs
     });
-    const guard = new ReverseGuard(db);
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any);
 
     const result = guard.checkRecipe(
       {
@@ -269,8 +269,8 @@ describe('ReverseGuard', () => {
   });
 
   it('should filter drift results', () => {
-    const db = createMockDb({ codeEntities: [] });
-    const guard = new ReverseGuard(db);
+    const { knowledgeRepo, entityRepo, sourceRefRepo } = createMockRepos({ codeEntities: [] });
+    const guard = new ReverseGuard(knowledgeRepo as any, entityRepo as any, sourceRefRepo as any);
 
     const results = [
       guard.checkRecipe(

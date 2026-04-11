@@ -26,37 +26,15 @@ const DEFAULTS = {
   maxFiles: 500,
   maxFileSizeBytes: 500_000, // 500KB — 跳过超大文件
   excludePatterns: [
-    // 通用
-    'node_modules/',
-    '.build/',
-    'build/',
-    '.git/',
-    'dist/',
-    'out/',
-    // iOS
-    'Pods/',
-    'Carthage/',
-    'DerivedData/',
-    // Python
-    '__pycache__/',
-    '.venv/',
-    'venv/',
-    '.tox/',
-    '*.egg-info/',
-    // JVM
-    'target/',
-    '.gradle/',
-    '.idea/',
-    // Test
+    // 从 LanguageService 统一跳过目录派生（添加 '/' 后缀以匹配路径片段）
+    ...[...LanguageService.scanSkipDirs].map((d) => `${d}/`),
+    // ProjectGraph 额外: 测试目录
     '__tests__/',
     'Tests/',
     'test/',
     'tests/',
-    // Dart / Flutter
-    '.dart_tool/',
-    '.fvm/',
-    // Misc
-    'vendor/',
+    // Glob-style (egg-info)
+    '*.egg-info/',
   ],
   // 从 LanguageService 派生，仅覆盖 AST 解析需要区分 tsx 的场景
   extensionToLang: {

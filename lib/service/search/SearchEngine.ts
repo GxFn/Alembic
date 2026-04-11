@@ -6,6 +6,15 @@
  */
 
 import Logger from '../../infrastructure/logging/Logger.js';
+import type {
+  SearchKnowledgeRepo,
+  SearchSourceRefRepo,
+} from '../../repository/search/SearchRepoAdapter.js';
+import {
+  RawDbKnowledgeAdapter,
+  RawDbSourceRefAdapter,
+  unwrapSearchDb,
+} from '../../repository/search/SearchRepoAdapter.js';
 import { CoarseRanker } from './CoarseRanker.js';
 import type { SearchItem } from './contextBoost.js';
 import { contextBoost } from './contextBoost.js';
@@ -75,12 +84,19 @@ export class SearchEngine {
   aiProvider: SearchAiProvider | null;
   db: SearchDb;
   hybridRetriever: SearchHybridRetriever | null;
+  #knowledgeRepo: SearchKnowledgeRepo;
+  #sourceRefRepo: SearchSourceRefRepo;
   logger: ReturnType<typeof Logger.getInstance>;
   scorer: Scorer;
   vectorService: SearchVectorService | null;
   vectorStore: SearchVectorStore | null;
   constructor(db: SearchDb & { getDb?: () => SearchDb }, options: SearchEngineOptions = {}) {
-    this.db = (typeof db?.getDb === 'function' ? db.getDb() : db) as SearchDb;
+    this.db = unwrapSearchDb(db);
+    const opts = options as Record<string, unknown>;
+    this.#knowledgeRepo =
+      (opts.knowledgeRepo as SearchKnowledgeRepo | null) ?? new RawDbKnowledgeAdapter(this.db);
+    this.#sourceRefRepo =
+      (opts.sourceRefRepo as SearchSourceRefRepo | null) ?? new RawDbSourceRefAdapter(this.db);
     this.logger = Logger.getInstance();
     this.aiProvider = options.aiProvider || null;
     this.vectorStore = options.vectorStore || null;
@@ -118,18 +134,11 @@ export class SearchEngine {
       let entries: DbRow[] = [];
 
       try {
-        entries = this.db
-          .prepare(
-            `SELECT id, title, description, language, category, knowledgeType, kind,
-                  content, lifecycle, tags, trigger, difficulty, quality, stats,
-                  updatedAt, createdAt
-           FROM knowledge_entries WHERE lifecycle != 'deprecated'`
-          )
-          .all();
-        entries = entries.map((e) => ({
+        const rawEntries = this.#knowledgeRepo.findNonDeprecatedSync();
+        entries = rawEntries.map((e) => ({
           ...e,
-          status: e.lifecycle,
-        }));
+          status: (e as Record<string, unknown>).lifecycle,
+        })) as unknown as DbRow[];
       } catch {
         /* table may not exist */
       }
@@ -404,14 +413,13 @@ export class SearchEngine {
       try {
         let rows: DbRow[] = [];
         try {
-          rows = this.db
-            .prepare(
-              `SELECT id, title, description, language, category, knowledgeType, kind, lifecycle as status, content, trigger, headers, moduleName, 'knowledge' as type
-             FROM knowledge_entries
-             WHERE lifecycle != 'deprecated' AND (title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR trigger LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\')
-             LIMIT ?`
-            )
-            .all(pattern, pattern, pattern, pattern, limit);
+          const rawRows = this.#knowledgeRepo.keywordSearchSync(pattern, limit);
+          rows = rawRows.map((r) => ({
+            ...r,
+            status:
+              (r as Record<string, unknown>).lifecycle ?? (r as Record<string, unknown>).status,
+            type: 'knowledge',
+          })) as unknown as DbRow[];
         } catch {
           /* table may not exist */
         }
@@ -650,17 +658,9 @@ export class SearchEngine {
     }
     try {
       const ids = items.map((it: SearchResultItem) => it.id);
-      const placeholders = ids.map(() => '?').join(',');
       let rows: DbRow[] = [];
       try {
-        rows = this.db
-          .prepare(
-            `SELECT id, content, description, trigger, headers, moduleName,
-                  tags, language, category, updatedAt, createdAt, quality, stats, difficulty,
-                  whenClause, doClause
-           FROM knowledge_entries WHERE id IN (${placeholders})`
-          )
-          .all(...ids);
+        rows = this.#knowledgeRepo.findByIdsDetailSync(ids) as unknown as DbRow[];
       } catch {
         /* table may not exist */
       }
@@ -741,19 +741,13 @@ export class SearchEngine {
       if (ids.length === 0) {
         return;
       }
-      const placeholders = ids.map(() => '?').join(',');
-      const refsRows = this.db
-        .prepare(
-          `SELECT recipe_id, source_path, status, new_path
-           FROM recipe_source_refs
-           WHERE recipe_id IN (${placeholders}) AND status != 'stale'`
-        )
-        .all(...ids) as unknown as Array<{
-        recipe_id: string;
-        source_path: string;
+      let refsRows: Array<{
+        recipeId: string;
+        sourcePath: string;
         status: string;
-        new_path: string | null;
+        newPath: string | null;
       }>;
+      refsRows = this.#sourceRefRepo.findActiveByRecipeIds(ids);
 
       this.logger.debug('recipe_source_refs query', {
         idCount: ids.length,
@@ -762,11 +756,21 @@ export class SearchEngine {
 
       const refsMap = new Map<string, string[]>();
       for (const row of refsRows) {
-        const refPath = row.status === 'renamed' && row.new_path ? row.new_path : row.source_path;
-        if (!refsMap.has(row.recipe_id)) {
-          refsMap.set(row.recipe_id, []);
+        const recipeId =
+          ((row as Record<string, unknown>).recipeId as string) ??
+          ((row as Record<string, unknown>).recipe_id as string);
+        const sourcePath =
+          ((row as Record<string, unknown>).sourcePath as string) ??
+          ((row as Record<string, unknown>).source_path as string);
+        const status = row.status;
+        const newPath =
+          ((row as Record<string, unknown>).newPath as string | null) ??
+          ((row as Record<string, unknown>).new_path as string | null);
+        const refPath = status === 'renamed' && newPath ? newPath : sourcePath;
+        if (!refsMap.has(recipeId)) {
+          refsMap.set(recipeId, []);
         }
-        refsMap.get(row.recipe_id)?.push(refPath);
+        refsMap.get(recipeId)?.push(refPath);
       }
 
       for (const item of items) {
@@ -803,14 +807,9 @@ export class SearchEngine {
 
     try {
       // 查找自上次索引后更新的条目
-      const changed = this.db
-        .prepare(
-          `SELECT id, title, description, language, category, knowledgeType, kind,
-                  content, lifecycle, tags, trigger, difficulty, quality, stats,
-                  updatedAt, createdAt
-           FROM knowledge_entries WHERE updatedAt > ?`
-        )
-        .all(this._lastIndexTime);
+      const changed = this.#knowledgeRepo.findUpdatedSinceSync(
+        this._lastIndexTime!
+      ) as unknown as DbRow[];
 
       let added = 0;
       let removed = 0;
