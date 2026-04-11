@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Rocket, Database, Zap, Search, Shield, Code, GitBranch, MessageSquare, Terminal, FileCode, List, ChevronDown, ChevronRight, Layers, RefreshCw, ArrowRightLeft, BarChart3, Network, MonitorSmartphone, Lock, Brain } from 'lucide-react';
+import { BookOpen, Rocket, Database, Zap, Search, Shield, Code, GitBranch, MessageSquare, Terminal, FileCode, List, ChevronDown, ChevronRight, Layers, RefreshCw, ArrowRightLeft, BarChart3, Network, MonitorSmartphone, Lock, Brain, Github, ExternalLink } from 'lucide-react';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
 import TokenUsageChart from '../Charts/TokenUsageChart';
@@ -40,20 +40,22 @@ const HelpView: React.FC = () => {
     <div className="max-w-5xl mx-auto py-8 px-4">
       {/* 头部 */}
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-[var(--fg-primary)] mb-4 flex items-center justify-center gap-3">
-          <BookOpen size={ICON_SIZES.xxl} className="text-blue-600" />
+        <h1 className="text-4xl font-bold text-[var(--fg-primary)] mb-4">
           {t('help.pageTitle')}
         </h1>
         <p className="text-[var(--fg-secondary)] text-lg max-w-3xl mx-auto text-center">
           {t('help.subtitle')}
         </p>
         <p className="text-[var(--fg-muted)] text-sm mt-2">{t('help.techSpecs')}</p>
-        <div className="mt-6 flex gap-4 justify-center text-sm">
-          <a href="https://github.com/GxFn/AutoSnippet" target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        <div className="mt-6 flex gap-3 justify-center text-sm">
+          <a href="https://github.com/GxFn/AutoSnippet" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--bg-subtle)] border border-[var(--border-default)] text-[var(--fg-primary)] rounded-full hover:bg-[var(--bg-muted)] transition-colors">
+            <Github size={ICON_SIZES.sm} />
             {t('help.viewGithub')}
           </a>
-          <a href="https://github.com/GxFn/AutoSnippet/blob/main/README.md" target="_blank" rel="noopener noreferrer" className="px-4 py-2 border border-[var(--border-default)] text-[var(--fg-primary)] rounded-lg hover:bg-[var(--bg-subtle)] transition-colors">
+          <a href="https://docs.gaoxuefeng.com/part1/ch01-introduction.html" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors">
+            <BookOpen size={ICON_SIZES.sm} />
             {t('help.fullDocs')}
+            <ExternalLink size={12} />
           </a>
         </div>
       </div>

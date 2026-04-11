@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { RefreshCw, Layers, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { ICON_SIZES } from '../../constants/icons';
 import api from '../../api';
 import { useI18n } from '../../i18n';
 import { useTheme } from '../../theme';
@@ -338,15 +339,18 @@ const DepGraphView: React.FC = () => {
         </>)}
       </div>
       <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-        <button type="button" onClick={handleZoomOut} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title="Zoom out">
-          <ZoomOut size={14} />
+        <button type="button" onClick={handleZoomIn} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('depGraph.zoomIn') || 'Zoom in'}>
+          <ZoomIn size={ICON_SIZES.sm} />
+        </button>
+        <button type="button" onClick={handleZoomOut} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('depGraph.zoomOut') || 'Zoom out'}>
+          <ZoomOut size={ICON_SIZES.sm} />
         </button>
         <span className="text-[10px] text-[var(--fg-muted)] min-w-[3em] text-center tabular-nums">{Math.round(effectiveZoom * 100)}%</span>
-        <button type="button" onClick={handleZoomIn} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title="Zoom in">
-          <ZoomIn size={14} />
+        <button type="button" onClick={handleZoomReset} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('depGraph.resetZoom') || 'Reset zoom'}>
+          <Maximize2 size={ICON_SIZES.sm} />
         </button>
-        <button type="button" onClick={handleZoomReset} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title="Reset zoom">
-          <Maximize2 size={14} />
+        <button type="button" onClick={() => fetchGraph()} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('depGraph.refresh') || 'Refresh'}>
+          <RefreshCw size={ICON_SIZES.sm} />
         </button>
       </div>
     </div>

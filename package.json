@@ -1,6 +1,6 @@
 {
   "name": "autosnippet",
-  "version": "3.3.7",
+  "version": "3.3.8",
   "description": "Extract code patterns into a knowledge base for AI coding assistants",
   "type": "module",
   "main": "dist/lib/bootstrap.js",

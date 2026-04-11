@@ -650,6 +650,7 @@ const KnowledgeGraphView: React.FC = () => {
           <button onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.zoomOut')}>
             <ZoomOut size={ICON_SIZES.sm} />
           </button>
+          <span className="text-[10px] text-[var(--fg-muted)] min-w-[3em] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
           <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.resetView')}>
             <Maximize2 size={ICON_SIZES.sm} />
           </button>

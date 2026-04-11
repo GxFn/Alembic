@@ -76,15 +76,20 @@ const Sidebar: React.FC<SidebarProps> = ({
   const { isDark, toggle: toggleTheme } = useTheme();
 
   const navItems: NavItem[] = [
+    /* ── 知识核心：生命周期 ── */
     { tab: 'recipes', icon: BadgeCheck, label: t('sidebar.recipes') },
-    { tab: 'spm', icon: Boxes, label: t('sidebar.moduleExplorer') },
     { tab: 'candidates', icon: Inbox, label: t('sidebar.candidates', { count: candidateCount }) },
     { tab: 'knowledge', icon: Library, label: t('sidebar.batchManage') },
-    { tab: 'guard', icon: Shield, label: t('sidebar.guard') },
+    /* ── 项目探索 ── */
     { tab: 'panorama', icon: Layers, label: t('sidebar.panorama') },
+    { tab: 'spm', icon: Boxes, label: t('sidebar.moduleExplorer') },
+    /* ── 质量治理 ── */
+    { tab: 'guard', icon: Shield, label: t('sidebar.guard') },
     { tab: 'skills', icon: ScrollText, label: t('sidebar.skills'), badge: signalSuggestionCount > 0 ? signalSuggestionCount : undefined },
+    /* ── 参考 & 监控 ── */
     { tab: 'wiki', icon: BookOpen, label: t('sidebar.repoWiki') },
     { tab: 'signals', icon: Radio, label: 'Signals' },
+    /* ── 辅助 ── */
     { tab: 'ai', icon: MessageSquare, label: t('sidebar.aiAssistant') },
     { tab: 'help', icon: HelpCircle, label: t('sidebar.help') },
   ];

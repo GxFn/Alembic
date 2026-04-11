@@ -1,6 +1,6 @@
 {
   "name": "autosnippet-dashboard",
-  "version": "3.3.3",
+  "version": "3.3.8",
   "private": true,
   "type": "module",
   "scripts": {
