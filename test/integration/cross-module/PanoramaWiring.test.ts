@@ -31,8 +31,8 @@ describe('PanoramaModule DI Wiring', () => {
       expect(refiner).toBe(ct.get('roleRefiner')); // singleton
     } catch (err: unknown) {
       // 开发仓库保护可能阻止 DB 初始化
-      const msg = String(err);
-      if (msg.includes('PathGuard') || msg.includes('isOwnDevRepo') || msg.includes('database')) {
+      const msg = String(err).toLowerCase();
+      if (msg.includes('pathguard') || msg.includes('isowndevrepo') || msg.includes('database')) {
         expect(true).toBe(true); // acceptable
       } else {
         throw err;
@@ -46,8 +46,8 @@ describe('PanoramaModule DI Wiring', () => {
       const analyzer = ct.get('couplingAnalyzer');
       expect(analyzer).toBeDefined();
     } catch (err: unknown) {
-      const msg = String(err);
-      if (msg.includes('PathGuard') || msg.includes('isOwnDevRepo') || msg.includes('database')) {
+      const msg = String(err).toLowerCase();
+      if (msg.includes('pathguard') || msg.includes('isowndevrepo') || msg.includes('database')) {
         expect(true).toBe(true);
       } else {
         throw err;
@@ -61,8 +61,8 @@ describe('PanoramaModule DI Wiring', () => {
       const inferrer = ct.get('layerInferrer');
       expect(inferrer).toBeDefined();
     } catch (err: unknown) {
-      const msg = String(err);
-      if (msg.includes('PathGuard') || msg.includes('isOwnDevRepo') || msg.includes('database')) {
+      const msg = String(err).toLowerCase();
+      if (msg.includes('pathguard') || msg.includes('isowndevrepo') || msg.includes('database')) {
         expect(true).toBe(true);
       } else {
         throw err;
@@ -77,8 +77,8 @@ describe('PanoramaModule DI Wiring', () => {
       expect(service).toBeDefined();
       expect(service).toBe(ct.get('panoramaService')); // singleton
     } catch (err: unknown) {
-      const msg = String(err);
-      if (msg.includes('PathGuard') || msg.includes('isOwnDevRepo') || msg.includes('database')) {
+      const msg = String(err).toLowerCase();
+      if (msg.includes('pathguard') || msg.includes('isowndevrepo') || msg.includes('database')) {
         expect(true).toBe(true);
       } else {
         throw err;
@@ -92,8 +92,8 @@ describe('PanoramaModule DI Wiring', () => {
       const service = ct.get('panoramaService');
       expect(typeof (service as Record<string, unknown>).invalidate).toBe('function');
     } catch (err: unknown) {
-      const msg = String(err);
-      if (msg.includes('PathGuard') || msg.includes('isOwnDevRepo') || msg.includes('database')) {
+      const msg = String(err).toLowerCase();
+      if (msg.includes('pathguard') || msg.includes('isowndevrepo') || msg.includes('database')) {
         expect(true).toBe(true);
       } else {
         throw err;

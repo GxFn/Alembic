@@ -185,12 +185,14 @@ function createService(overrides = {}) {
   const skillHooks = overrides.skillHooks || mockSkillHooks();
   const confidenceRouter = overrides.confidenceRouter || null;
   const qualityScorer = overrides.qualityScorer || null;
+  const edgeRepo = overrides.edgeRepo || null;
 
   const service = new KnowledgeService(repo, audit, gateway, graph, {
     fileWriter,
     skillHooks,
     confidenceRouter,
     qualityScorer,
+    edgeRepo,
   });
 
   return { service, repo, audit, gateway, graph, fileWriter, skillHooks };
@@ -367,7 +369,11 @@ describe('KnowledgeService', () => {
   describe('delete()', () => {
     test('删除条目 + 文件 + edges', async () => {
       const graph = mockGraphService();
-      const { service, repo, fileWriter } = createService({ graphService: graph });
+      const edgeRepo = {
+        deleteOutgoing: vi.fn(async () => 0),
+        deleteByEntryId: vi.fn(async () => 1),
+      };
+      const { service, repo, fileWriter } = createService({ graphService: graph, edgeRepo });
       repo._seed(makeEntry());
 
       const result = await service.delete('test-id-001', { userId: 'user1' });
@@ -375,7 +381,7 @@ describe('KnowledgeService', () => {
       expect(result.success).toBe(true);
       expect(fileWriter.remove).toHaveBeenCalledTimes(1);
       expect(repo.delete).toHaveBeenCalledWith('test-id-001');
-      expect(graph.db.prepare).toHaveBeenCalled();
+      expect(edgeRepo.deleteByEntryId).toHaveBeenCalledWith('test-id-001');
     });
 
     test('删除不存在的条目抛出 NotFoundError', async () => {

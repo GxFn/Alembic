@@ -167,7 +167,7 @@ describe('Integration: Complete Gateway Flow', () => {
       expect(logs.length).toBeGreaterThan(0);
       const log = logs[0];
       expect(log.result).toBe('failure');
-      expect(log.error_message).toBeDefined();
+      expect(log.errorMessage).toBeDefined();
     });
 
     test('should track operation duration', async () => {

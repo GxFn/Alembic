@@ -77,39 +77,35 @@ describe('Guard Immune System Integration', () => {
 
   describe('ReverseGuard end-to-end', () => {
     it('should detect drift when symbols removed from codebase', () => {
-      const db = {
-        prepare(sql: string) {
-          return {
-            all(..._params: unknown[]) {
-              if (sql.includes('knowledge_entries') && sql.includes('lifecycle')) {
-                return [
-                  {
-                    id: 'r-old',
-                    title: 'Old API Rule',
-                    core_code: 'BDLegacyManager.fetchData()',
-                    guard_pattern: 'BDLegacyManager',
-                    stats: null,
-                  },
-                ];
-              }
-              return [];
+      const knowledgeRepo = {
+        findActiveRulesWithContentSync() {
+          return [
+            {
+              id: 'r-old',
+              title: 'Old API Rule',
+              coreCode: 'BDLegacyManager.fetchData()',
+              guardPattern: 'BDLegacyManager',
+              stats: null,
             },
-            get(...params: unknown[]) {
-              // code_entities: nothing found
-              if (sql.includes('code_entities')) {
-                return undefined;
-              }
-              // guardHits
-              if (sql.includes('json_extract(stats')) {
-                return { hits: 50 };
-              }
-              return undefined;
-            },
-          };
+          ];
+        },
+      };
+      const entityRepo = {
+        existsByName(_name: string) {
+          return false; // symbol not found → drift
+        },
+      };
+      const sourceRefRepo = {
+        findByRecipeId(_id: string) {
+          return [];
         },
       };
 
-      const reverseGuard = new ReverseGuard(db);
+      const reverseGuard = new ReverseGuard(
+        knowledgeRepo as never,
+        entityRepo as never,
+        sourceRefRepo as never
+      );
       const results = reverseGuard.auditAllRules([
         { path: 'a.swift', content: 'let x = BDNewManager.fetchData()' },
       ]);
@@ -123,30 +119,22 @@ describe('Guard Immune System Integration', () => {
 
   describe('CoverageAnalyzer with real module structure', () => {
     it('should produce coverage matrix from multi-module project', () => {
-      const db = {
-        prepare(sql: string) {
-          return {
-            all() {
-              if (sql.includes('knowledge_entries') && sql.includes('kind')) {
-                return [
-                  { id: 'r1', language: 'swift' },
-                  { id: 'r2', language: 'objectivec' },
-                  { id: 'r3', language: 'swift' },
-                ];
-              }
-              if (sql.includes('guard_violations')) {
-                return [];
-              }
-              return [];
-            },
-            get() {
-              return undefined;
-            },
-          };
+      const knowledgeRepo = {
+        findActiveRuleIdsSync() {
+          return [
+            { id: 'r1', language: 'swift' },
+            { id: 'r2', language: 'objectivec' },
+            { id: 'r3', language: 'swift' },
+          ];
+        },
+      };
+      const guardViolationRepo = {
+        findRecentViolationsJson(_limit: number) {
+          return [];
         },
       };
 
-      const analyzer = new CoverageAnalyzer(db);
+      const analyzer = new CoverageAnalyzer(knowledgeRepo as never, guardViolationRepo as never);
       const moduleFiles = new Map([
         ['BDUIKit', ['BDUIKit/A.swift', 'BDUIKit/B.swift']],
         ['BDNet', ['BDNet/C.m', 'BDNet/D.h']],

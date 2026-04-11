@@ -29,6 +29,14 @@ const DEFAULT_ENTRY = {
   headers: ['import UIKit'],
 };
 
+function createMockSourceRefRepo() {
+  return {
+    findByRecipeId: vi.fn(() => []),
+    deleteByRecipeId: vi.fn(),
+    upsert: vi.fn(),
+  };
+}
+
 function createMockRepo(entry?: typeof DEFAULT_ENTRY) {
   const entryData = entry ?? {
     ...DEFAULT_ENTRY,
@@ -102,11 +110,13 @@ function makeProposal(evidenceOverrides?: Record<string, unknown>) {
 
 describe('ContentPatcher', () => {
   let mockRepo: ReturnType<typeof createMockRepo>;
+  let mockSourceRefRepo: ReturnType<typeof createMockSourceRefRepo>;
   let patcher: ContentPatcher;
 
   beforeEach(() => {
     mockRepo = createMockRepo();
-    patcher = new ContentPatcher(mockRepo as never);
+    mockSourceRefRepo = createMockSourceRefRepo();
+    patcher = new ContentPatcher(mockRepo as never, mockSourceRefRepo as never);
   });
 
   describe('applyProposal — structured JSON patch', () => {

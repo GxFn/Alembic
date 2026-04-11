@@ -297,7 +297,7 @@ describe('Integration: Gateway Full Chain', () => {
       const logs = await auditStore.query({ action: actionName });
       expect(logs.length).toBeGreaterThan(0);
       expect(logs[0].result).toBe('failure');
-      expect(logs[0].error_message).toBeDefined();
+      expect(logs[0].errorMessage).toBeDefined();
     });
 
     test('权限拒绝也产生审计日志', async () => {
