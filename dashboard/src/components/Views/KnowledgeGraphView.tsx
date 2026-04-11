@@ -613,34 +613,53 @@ const KnowledgeGraphView: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <Share2 size={ICON_SIZES.lg} className="text-blue-600" />
-          <h2 className="text-lg xl:text-xl font-bold text-[var(--fg-primary)]">{t('knowledgeGraph.title')}</h2>
+      {/* Compact toolbar — no redundant title since parent tab already shows "知识图谱" */}
+      <div className="flex items-center justify-between mb-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none">
+          {/* Stats badge */}
           {stats && (
-            <span className="text-xs px-2 py-1 rounded-full text-[var(--fg-secondary)] bg-[var(--bg-subtle)]">
+            <span className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap text-[var(--fg-secondary)] bg-[var(--bg-subtle)]">
               {t('knowledgeGraph.statsLabel', { nodes: nodes.length, edges: stats.totalEdges })}
             </span>
           )}
+          {/* Inline relation filter */}
+          {uniqueRelations.map(rel => (
+            <button
+              key={rel}
+              onClick={() => toggleRelation(rel)}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all border whitespace-nowrap ${
+                activeRelations.has(rel)
+                  ? 'border-transparent shadow-sm'
+                  : 'border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--fg-muted)] opacity-40'
+              }`}
+              style={activeRelations.has(rel) ? {
+                backgroundColor: (RELATION_COLORS[rel] || '#6b7280') + '18',
+                color: RELATION_COLORS[rel] || '#6b7280',
+              } : {}}
+            >
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: RELATION_COLORS[rel] || '#6b7280' }} />
+              {relationLabel(rel)}
+              {stats?.byRelation?.[rel] != null && <span className="opacity-60">({stats.byRelation[rel]})</span>}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => setZoom(z => Math.min(z + 0.2, 3))} className="p-1.5 rounded-lg transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.zoomIn')}>
+        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+          <button onClick={() => setZoom(z => Math.min(z + 0.2, 3))} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.zoomIn')}>
             <ZoomIn size={ICON_SIZES.sm} />
           </button>
-          <button onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} className="p-1.5 rounded-lg transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.zoomOut')}>
+          <button onClick={() => setZoom(z => Math.max(z - 0.2, 0.2))} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.zoomOut')}>
             <ZoomOut size={ICON_SIZES.sm} />
           </button>
-          <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="p-1.5 rounded-lg transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.resetView')}>
+          <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.resetView')}>
             <Maximize2 size={ICON_SIZES.sm} />
           </button>
-          <button onClick={fetchGraph} className="p-1.5 rounded-lg transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.refresh')}>
+          <button onClick={fetchGraph} className="p-1 rounded-md transition-colors bg-[var(--bg-subtle)] hover:bg-[var(--border-default)] text-[var(--fg-secondary)]" title={t('knowledgeGraph.refresh')}>
             <RefreshCw size={ICON_SIZES.sm} />
           </button>
           <button
             onClick={handleDiscover}
             disabled={discovering}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent-emphasis)] hover:opacity-90"
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors disabled:opacity-50 bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent-emphasis)] hover:opacity-90"
             title={t('knowledgeGraph.discoverTooltip')}
           >
             {discovering ? (
@@ -650,29 +669,6 @@ const KnowledgeGraphView: React.FC = () => {
             )}
           </button>
         </div>
-      </div>
-
-      {/* Relation filter */}
-      <div className="flex flex-wrap gap-1.5 mb-3 flex-shrink-0">
-        {uniqueRelations.map(rel => (
-          <button
-            key={rel}
-            onClick={() => toggleRelation(rel)}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all border ${
-              activeRelations.has(rel)
-                ? 'border-transparent shadow-sm'
-                : 'border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--fg-muted)] opacity-40'
-            }`}
-            style={activeRelations.has(rel) ? {
-              backgroundColor: (RELATION_COLORS[rel] || '#6b7280') + '18',
-              color: RELATION_COLORS[rel] || '#6b7280',
-            } : {}}
-          >
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: RELATION_COLORS[rel] || '#6b7280' }} />
-            {relationLabel(rel)}
-            {stats?.byRelation?.[rel] != null && <span className="opacity-60">({stats.byRelation[rel]})</span>}
-          </button>
-        ))}
       </div>
 
       {/* SVG Canvas */}
@@ -899,6 +895,13 @@ const KnowledgeGraphView: React.FC = () => {
           >
             {t('knowledgeGraph.cancelSelection')}
           </button>
+        )}
+
+        {/* Floating discover result toast */}
+        {discoverResult && (
+          <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 max-w-md px-3 py-1.5 rounded-lg text-xs shadow-md border ${discoverIsError ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/60 dark:border-red-800 dark:text-red-300' : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/60 dark:border-green-800 dark:text-green-300'}`}>
+            {discoverResult}
+          </div>
         )}
       </div>
 
