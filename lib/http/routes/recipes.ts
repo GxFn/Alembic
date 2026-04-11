@@ -116,11 +116,45 @@ router.post('/discover-relations', async (req: Request, res: Response): Promise<
   (async () => {
     try {
       const result = await agentFactory.discoverRelations();
+      const relations =
+        (result.relations as { from: string; to: string; type: string; evidence?: string }[]) || [];
+      const analyzed = (result.analyzed as number) || 0;
+
+      // 将 AI 发现的关系写入知识图谱
+      let written = 0;
+      if (relations.length > 0) {
+        try {
+          const graphService = container.get(
+            'knowledgeGraphService'
+          ) as import('../../service/knowledge/KnowledgeGraphService.js').KnowledgeGraphService;
+          for (const rel of relations) {
+            if (!rel.from || !rel.to || !rel.type) {
+              continue;
+            }
+            const res = await graphService.addEdge(
+              rel.from,
+              'knowledge',
+              rel.to,
+              'knowledge',
+              rel.type,
+              { weight: 0.7, source: 'ai-discovery', evidence: rel.evidence || '' }
+            );
+            if (res.success) {
+              written++;
+            }
+          }
+        } catch (graphErr: unknown) {
+          logger.warn('Failed to write some discovered edges', {
+            error: (graphErr as Error).message,
+          });
+        }
+      }
+
       discoverTask.status = 'done';
       discoverTask.finishedAt = new Date().toISOString();
-      discoverTask.discovered = result.discovered || 0;
-      discoverTask.totalPairs = result.totalPairs || 0;
-      discoverTask.batchErrors = result.batchErrors || 0;
+      discoverTask.discovered = written;
+      discoverTask.totalPairs = analyzed;
+      discoverTask.batchErrors = relations.length - written;
       discoverTask.elapsed = Math.round(
         (new Date(discoverTask.finishedAt).getTime() - new Date(discoverTask.startedAt).getTime()) /
           1000

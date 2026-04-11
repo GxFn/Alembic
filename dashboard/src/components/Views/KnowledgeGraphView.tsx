@@ -592,22 +592,17 @@ const KnowledgeGraphView: React.FC = () => {
         {discoverResult && (
           <p className={`text-sm ${discoverIsError ? 'text-red-500' : 'text-green-600'}`}>{discoverResult}</p>
         )}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleDiscover}
-            disabled={discovering}
-            className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            {discovering ? (
-              <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> {t('knowledgeGraph.discovering')}</>
-            ) : (
-              <><Sparkles size={ICON_SIZES.sm} /> {t('knowledgeGraph.discoverRelations')}</>
-            )}
-          </button>
-          <button onClick={fetchGraph} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-            <RefreshCw size={ICON_SIZES.sm} /> {t('knowledgeGraph.refresh')}
-          </button>
-        </div>
+        <button
+          onClick={handleDiscover}
+          disabled={discovering}
+          className="px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors disabled:opacity-50 bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent-emphasis)] hover:opacity-90"
+        >
+          {discovering ? (
+            <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[var(--accent)]" /> {t('knowledgeGraph.discovering')}</>
+          ) : (
+            <><Sparkles size={ICON_SIZES.sm} /> {t('knowledgeGraph.discoverRelations')}</>
+          )}
+        </button>
       </div>
     );
   }
@@ -645,11 +640,11 @@ const KnowledgeGraphView: React.FC = () => {
           <button
             onClick={handleDiscover}
             disabled={discovering}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 bg-violet-50 hover:bg-violet-100 text-violet-700"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent-emphasis)] hover:opacity-90"
             title={t('knowledgeGraph.discoverTooltip')}
           >
             {discovering ? (
-              <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-violet-600" /> {t('knowledgeGraph.discovering')}</>
+              <><div className="animate-spin rounded-full h-3 w-3 border-b-2 border-[var(--accent)]" /> {t('knowledgeGraph.discovering')}</>
             ) : (
               <><Sparkles size={ICON_SIZES.sm} /> {t('knowledgeGraph.discoverRelations')}</>
             )}
