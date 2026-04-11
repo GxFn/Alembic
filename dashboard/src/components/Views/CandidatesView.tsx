@@ -571,7 +571,7 @@ const CandidatesView: React.FC<CandidatesViewProps> = ({
               <Loader2 size={32} className="text-violet-400 animate-spin" />
             </div>
             <p className="text-sm font-medium text-violet-400">{t('common.loading')}</p>
-            <p className="mt-2 text-xs max-w-sm text-center leading-relaxed text-[var(--fg-muted)]">
+            <p className="mt-2 text-xs text-center leading-relaxed text-[var(--fg-muted)]">
               {t('candidates.scanningHint')}
             </p>
           </div>

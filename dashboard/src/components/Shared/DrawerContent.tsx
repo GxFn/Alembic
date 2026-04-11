@@ -118,13 +118,11 @@ export interface QualityLabels {
 export interface QualityProps {
   quality?: QualityData | null;
   labels: QualityLabels;
-  /** 是否使用 .toFixed(2) 格式化数字（Knowledge 用） */
-  formatFixed?: boolean;
 }
 
-const Quality: React.FC<QualityProps> = ({ quality, labels, formatFixed = false }) => {
+const Quality: React.FC<QualityProps> = ({ quality, labels }) => {
   if (!quality?.grade || quality.grade === 'F') return null;
-  const fmt = (v: number) => (formatFixed ? v.toFixed(2) : String(v));
+  const fmt = (v: number) => v.toFixed(2);
   return (
     <div className="px-6 py-3 border-b border-[var(--border-default)]">
       <label className="text-[10px] font-bold text-[var(--fg-muted)] uppercase mb-2 block">{labels.section}</label>

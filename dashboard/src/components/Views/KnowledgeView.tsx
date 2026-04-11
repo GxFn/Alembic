@@ -853,7 +853,6 @@ const KnowledgeView: React.FC<KnowledgeViewProps> = ({ onRefresh, idTitleMap: id
               <DrawerContent.Quality
                 quality={selected.quality}
                 labels={{ section: t('knowledge.qualityGrade'), completeness: t('knowledge.qualityCompletionLabel'), adaptation: t('knowledge.qualityAdaptation'), documentation: t('knowledge.qualityDocumentation') }}
-                formatFixed
               />
 
               {/* 7. Description / Summary */}
