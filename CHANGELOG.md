@@ -4,6 +4,22 @@
 
 ---
 
+## [3.4.0] - 2026-04-12
+
+### 新增
+
+- **Bootstrap 运行时与分析预算增强**：冷启动分析主线升级，改进 Analyst 预算计算、PipelineStrategy 运行控制和维度注册配置
+  - AgentRuntime、PipelineStrategy、LoopContext、ExplorationTracker、ContextWindow 等核心链路补齐运行时状态传递与探索控制
+  - `computeAnalystBudget` 覆盖测试补齐，确保预算策略可回归验证
+- **LLM 模型元数据同步**：更新最新模型信息与 provider 元数据，补齐 Google Gemini、Claude、OpenAI provider 的模型能力描述
+
+### 改进
+
+- **记忆蒸馏与固化质量提升**：强化 EpisodicConsolidator、MemoryConsolidator 和 bootstrap orchestrator 的统计与合并行为
+  - 细化按维度、重要性分布、实体数的蒸馏日志
+  - 提升 insight analyst / gate 的分析与筛选质量
+- **Bootstrap Mission Briefing 输出优化**：MissionBriefingBuilder 与 orchestrator 生成的信息更完整，便于冷启动后复盘分析
+
 ## [3.3.9] - 2026-04-12
 
 ### 修复
