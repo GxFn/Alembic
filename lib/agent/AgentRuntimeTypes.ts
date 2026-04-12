@@ -113,6 +113,8 @@ export interface ReactLoopOpts {
   sharedState?: Record<string, unknown>;
   source?: string;
   toolChoiceOverride?: string | null;
+  /** 外部中止信号 — PipelineStrategy hard timeout 时取消进行中的 LLM 调用 */
+  abortSignal?: AbortSignal;
   [key: string]: unknown;
 }
 

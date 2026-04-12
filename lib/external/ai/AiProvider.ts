@@ -69,6 +69,8 @@ export interface ChatWithToolsOptions {
   systemPrompt?: string;
   temperature?: number;
   maxTokens?: number;
+  /** 外部中止信号 — hard timeout 时取消进行中的 LLM 请求 */
+  abortSignal?: AbortSignal;
 }
 
 /** 函数调用结果 */
@@ -917,8 +919,14 @@ ${items}`;
           status?: number;
           code?: string;
           retryAfterMs?: number;
-          cause?: { code?: string; message?: string };
+          cause?: { code?: string; message?: string; name?: string };
         };
+
+        // AbortError — 外部主动中止（如 PipelineStrategy hard timeout），不重试直接抛出
+        if (e.name === 'AbortError' || e.cause?.name === 'AbortError') {
+          throw e;
+        }
+
         // ── 综合判断是否为可重试的网络/服务端错误 ──
         const causeCode = e.cause?.code || '';
         // 网络级错误：无 HTTP status，底层连接失败

@@ -51,7 +51,8 @@ interface MemoryLogger {
 /** 相似度阈值 */
 const SIMILARITY_UPDATE = 0.85; // ≥85% 同义 → UPDATE
 const SIMILARITY_MERGE = 0.6; // ≥60% 相关 → MERGE
-
+/** 详细日志开关 (合并时记录每次 MERGE/UPDATE/REPLACE 的内容摘要) */
+const VERBOSE_CONSOLIDATION = true;
 // ─── 矛盾检测模式 (Mem0 风格冲突解决) ─────────────────
 
 /** 中文否定/禁止模式 */
@@ -122,6 +123,11 @@ export class MemoryConsolidator {
             accessCount: topMatch.access_count + 1,
           });
           stats.updated++;
+          if (VERBOSE_CONSOLIDATION) {
+            this.#logDebug(
+              `UPDATE sim=${(topMatch.similarity ?? 0).toFixed(2)}: "${content.substring(0, 40)}..." → existing "${topMatch.content.substring(0, 40)}..."`
+            );
+          }
         } else if ((topMatch.similarity ?? 0) >= SIMILARITY_MERGE) {
           // MERGE: 相关但不同 → 合并信息
           const mergedContent = `${topMatch.content}; ${content}`.substring(0, 500);
@@ -132,6 +138,11 @@ export class MemoryConsolidator {
             relatedMemories: [...existingRelated, `merged:${Date.now()}`],
           });
           stats.merged++;
+          if (VERBOSE_CONSOLIDATION) {
+            this.#logDebug(
+              `MERGE sim=${(topMatch.similarity ?? 0).toFixed(2)}: "${content.substring(0, 40)}..." ⊕ "${topMatch.content.substring(0, 40)}..."`
+            );
+          }
         } else {
           this.#store.add({ ...candidate, bootstrapSession });
           stats.added++;
@@ -392,6 +403,15 @@ export class MemoryConsolidator {
         return 'preference';
       default:
         return 'fact';
+    }
+  }
+
+  #logDebug(msg: string) {
+    const formatted = `[MemoryConsolidator] ${msg}`;
+    if (this.#logger?.debug) {
+      this.#logger.debug(formatted);
+    } else if (this.#logger?.info) {
+      this.#logger.info(formatted);
     }
   }
 

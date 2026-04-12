@@ -288,7 +288,12 @@ export class ContextWindow {
     }
 
     if (truncated > 0) {
-      this.#logger.info(`[ContextWindow] L1 compact: truncated ${truncated} tool results`);
+      const afterTokens = this.estimateTokens();
+      const ratio = this.getTokenUsageRatio();
+      this.#logger.info(
+        `[ContextWindow] L1 compact: truncated ${truncated} tool results | ` +
+          `tokens≈${afterTokens}/${this.#tokenBudget} (${(ratio * 100).toFixed(1)}%)`
+      );
     }
     return { level: 1, removed: truncated };
   }
@@ -378,8 +383,12 @@ export class ContextWindow {
     this.#compactionLog.push(
       `L${level}: removed ${removedCount} messages (${toolCallCount} rounds)`
     );
+    const afterTokens = this.estimateTokens();
+    const ratio = this.getTokenUsageRatio();
     this.#logger.info(
-      `[ContextWindow] L${level} compact: removed ${removedCount} messages, kept last ${level === 2 ? 2 : 1} rounds`
+      `[ContextWindow] L${level} compact: removed ${removedCount} messages (${toolCallCount} rounds), ` +
+        `kept last ${level === 2 ? 2 : 1} round(s) | ` +
+        `tokens≈${afterTokens}/${this.#tokenBudget} (${(ratio * 100).toFixed(1)}%)`
     );
 
     return { level, removed: removedCount };

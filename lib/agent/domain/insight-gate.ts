@@ -15,11 +15,14 @@
  * @module insight-gate
  */
 
+import Logger from '#infra/logging/Logger.js';
 import {
   EvidenceCollector,
   type EvidenceCollectorResult,
   type ToolCall,
 } from './EvidenceCollector.js';
+
+const logger = Logger.getInstance();
 
 // ──────────────────────────────────────────────────────────────────
 // 类型定义
@@ -558,6 +561,20 @@ export function insightGateEvaluator(
     : buildAnalysisReport(source as AnalystResult, dimId as string, projectGraph);
 
   const gate = analysisQualityGate(artifact, { outputType: outputType || 'analysis' });
+
+  const qr = (artifact as Record<string, unknown>).qualityReport as QualityReport | undefined;
+  if (qr?.scores) {
+    logger.info(
+      `[QualityGate] dim="${dimId}" action=${gate.pass ? 'pass' : gate.action} ` +
+        `total=${qr.totalScore} depth=${qr.scores.depthScore} breadth=${qr.scores.breadthScore} ` +
+        `evidence=${qr.scores.evidenceScore} coherence=${qr.scores.coherenceScore}` +
+        (qr.suggestions.length > 0 ? ` suggestions=[${qr.suggestions.join('; ')}]` : '')
+    );
+  } else {
+    logger.info(
+      `[QualityGate] dim="${dimId}" action=${gate.pass ? 'pass' : gate.action} reason="${gate.reason || 'v1-rules'}" (v1 fallback)`
+    );
+  }
 
   return {
     action: gate.action || (gate.pass ? 'pass' : 'retry'),

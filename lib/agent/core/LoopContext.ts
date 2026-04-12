@@ -66,6 +66,7 @@ interface LoopContextConfig {
   context?: Record<string, unknown>;
   contextWindow?: ContextWindow | null;
   toolChoiceOverride?: string | null;
+  abortSignal?: AbortSignal | null;
 }
 
 export class LoopContext {
@@ -143,6 +144,9 @@ export class LoopContext {
   /** 首轮 toolChoice 覆盖 ('required'/'auto'/'none') */
   toolChoiceOverride: string | null;
 
+  /** 外部中止信号 — hard timeout 时取消进行中的 LLM 调用 */
+  abortSignal: AbortSignal | null;
+
   constructor(config: LoopContextConfig) {
     this.messages = config.messages;
     this.tracker = (config.tracker || null) as ExplorationTracker | null;
@@ -159,6 +163,7 @@ export class LoopContext {
     this.context = config.context || {};
     this.contextWindow = config.contextWindow || null;
     this.toolChoiceOverride = config.toolChoiceOverride || null;
+    this.abortSignal = (config.abortSignal || null) as AbortSignal | null;
     this.loopStartTime = Date.now();
   }
 

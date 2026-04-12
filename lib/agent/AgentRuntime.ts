@@ -345,6 +345,7 @@ export class AgentRuntime {
       sharedState,
       source,
       toolChoiceOverride,
+      abortSignal,
     } = opts;
 
     // 解析 capabilities
@@ -420,6 +421,7 @@ export class AgentRuntime {
       context: context || {},
       contextWindow: contextWindow || null,
       toolChoiceOverride: toolChoiceOverride || null,
+      abortSignal: (abortSignal as AbortSignal) || null,
     });
   }
 
@@ -428,6 +430,12 @@ export class AgentRuntime {
    * @returns true = 应退出循环
    */
   #shouldExit(ctx: LoopContext): boolean {
+    // 外部中止信号 — 立即退出
+    if (ctx.abortSignal?.aborted) {
+      this.logger.info('[AgentRuntime] ⛔ abortSignal fired — exiting loop');
+      return true;
+    }
+
     // ExplorationTracker: tick + 退出检查
     if (ctx.tracker) {
       ctx.tracker.tick();
@@ -587,6 +595,7 @@ export class AgentRuntime {
         systemPrompt: effectiveSystemPrompt,
         temperature: ctx.budget.temperature ?? (ctx.isSystem ? 0.3 : 0.7),
         maxTokens: ctx.budget.maxTokens ?? (ctx.isSystem ? 8192 : 4096),
+        abortSignal: ctx.abortSignal ?? undefined,
       })) as LLMResult;
       ctx.consecutiveAiErrors = 0;
     } catch (aiErr: unknown) {
@@ -673,6 +682,12 @@ export class AgentRuntime {
    * @returns continueResult() 或 null (退出)
    */
   async #handleAiError(ctx: LoopContext, aiErr: AiError): Promise<LLMResult | null> {
+    // AbortError — 外部中止信号已触发，不计入错误计数，立即退出
+    if (ctx.abortSignal?.aborted) {
+      this.logger.info('[AgentRuntime] ⛔ abortSignal fired during LLM call — exiting');
+      return null;
+    }
+
     ctx.consecutiveAiErrors++;
     this.logger.warn(
       `[AgentRuntime] AI call failed (attempt ${ctx.consecutiveAiErrors}): ${aiErr.message}`

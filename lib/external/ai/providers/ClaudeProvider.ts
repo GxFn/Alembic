@@ -139,7 +139,7 @@ export class ClaudeProvider extends AiProvider {
       }
     }
 
-    const data = await this._post(`${CLAUDE_BASE}/messages`, body);
+    const data = await this._post(`${CLAUDE_BASE}/messages`, body, opts.abortSignal);
     return this.#parseToolResponse(data);
   }
 
@@ -296,7 +296,11 @@ export class ClaudeProvider extends AiProvider {
     return false;
   }
 
-  async _post(url: string, body: Record<string, unknown>): Promise<ApiResponse> {
+  async _post(
+    url: string,
+    body: Record<string, unknown>,
+    externalSignal?: AbortSignal
+  ): Promise<ApiResponse> {
     if (!this.apiKey) {
       const err = new Error(
         'Claude API Key 未配置。请在 .env 中设置 ASD_CLAUDE_API_KEY，或运行 asd setup 完成配置。'
@@ -307,6 +311,9 @@ export class ClaudeProvider extends AiProvider {
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeout);
+    // 外部中止信号 → 联动本地 controller
+    const onExternalAbort = () => controller.abort();
+    externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
 
     try {
       const res = await this._fetch(url, {
@@ -328,6 +335,7 @@ export class ClaudeProvider extends AiProvider {
       return (await res.json()) as ApiResponse;
     } finally {
       clearTimeout(timer);
+      externalSignal?.removeEventListener('abort', onExternalAbort);
     }
   }
 }

@@ -19,7 +19,7 @@ import path from 'node:path';
 import { AgentMessage } from '#agent/AgentMessage.js';
 import { ExplorationTracker } from '#agent/context/ExplorationTracker.js';
 import { EpisodicConsolidator } from '#agent/domain/EpisodicConsolidator.js';
-import { ANALYST_BUDGET } from '#agent/domain/insight-analyst.js';
+import { ANALYST_BUDGET, computeAnalystBudget } from '#agent/domain/insight-analyst.js';
 import { MemoryCoordinator } from '#agent/memory/MemoryCoordinator.js';
 import { MemoryEmbeddingStore } from '#agent/memory/MemoryEmbeddingStore.js';
 import { PersistentMemory } from '#agent/memory/PersistentMemory.js';
@@ -918,11 +918,11 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
         // ── 引擎增强参数 (PipelineStrategy → reactLoop 透传) ──
         contextWindow: agentFactory?.createContextWindow({ isSystem: true }),
         // B1 fix: 分析阶段使用 analyst 策略 (SCAN→EXPLORE→VERIFY→SUMMARIZE)
-        // 而非 bootstrap (EXPLORE→PRODUCE→SUMMARIZE)，避免 PRODUCE nudge 浪费轮次
-        // B3 fix: 透传完整 ANALYST_BUDGET (searchBudget/maxSubmits/softSubmitLimit/idleRoundsToExit)
+        // B3 fix: 透传完整 ANALYST_BUDGET
+        // B4 fix: 自适应预算 — 根据项目文件数缩放 maxIterations (24~40)
         tracker: ExplorationTracker.resolve(
           { source: 'system', strategy: 'analyst' },
-          { ...ANALYST_BUDGET }
+          computeAnalystBudget(projectInfo.fileCount || 0)
         ),
         trace: memoryCoordinator.getActiveContext(analystScopeId),
         memoryCoordinator,
@@ -1197,6 +1197,9 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       });
 
       const dimTokenUsage = combinedTokenUsage;
+      const qualityScores = (artifact as Record<string, unknown>).qualityReport as
+        | { scores: Record<string, number>; totalScore: number; suggestions: string[] }
+        | undefined;
       const dimResult = {
         candidateCount: producerResult.candidateCount,
         rejectedCount: producerResult.rejectedCount || 0,
@@ -1207,6 +1210,13 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
         tokenUsage: dimTokenUsage,
         analysisText: analysisReport.analysisText,
         referencedFilesList: analysisReport.referencedFiles || [],
+        qualityGate: qualityScores
+          ? {
+              totalScore: qualityScores.totalScore,
+              scores: qualityScores.scores,
+              action: gateResult?.action || (runResult?.degraded ? 'degrade' : 'pass'),
+            }
+          : null,
       };
 
       dimensionStats[dimId] = dimResult;
@@ -1492,6 +1502,34 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
           `⊕${consolidationResult.total.merged} MERGE | ` +
           `Total: ${smStats.total} memories (avg importance: ${smStats.avgImportance})`
       );
+      // 按类型和来源分布
+      logger.info(
+        `[Insight-v3] Memory by type: ${Object.entries(smStats.byType)
+          .map(([t, n]) => `${t}=${n}`)
+          .join(', ')} | ` +
+          `by source: ${Object.entries(smStats.bySource)
+            .map(([s, n]) => `${s}=${n}`)
+            .join(', ')}`
+      );
+      // 蒸馏管线详情 (来自 EpisodicConsolidator 增强返回值)
+      const cr = consolidationResult as Record<string, unknown>;
+      if (cr.perDimension) {
+        const perDim = cr.perDimension as Record<string, number>;
+        const topDims = Object.entries(perDim)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 6);
+        logger.info(
+          `[Insight-v3] Memory per-dimension (top ${topDims.length}): ${topDims.map(([d, n]) => `${d}=${n}`).join(', ')}`
+        );
+      }
+      if (cr.importanceDistribution) {
+        const hist = cr.importanceDistribution as Record<number, number>;
+        const histStr = Object.entries(hist)
+          .sort(([a], [b]) => Number(a) - Number(b))
+          .map(([k, v]) => `imp${k}=${v}`)
+          .join(' ');
+        logger.info(`[Insight-v3] Importance histogram: ${histStr}`);
+      }
     } else {
       logger.warn('[Insight-v3] Database not available — skipping Semantic Memory consolidation');
     }
@@ -1604,6 +1642,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
         durationMs: stat.durationMs || 0,
         toolCallCount: stat.toolCallCount || 0,
         tokenUsage: stat.tokenUsage || { input: 0, output: 0 },
+        qualityGate: stat.qualityGate || null,
       };
     }
 

@@ -151,7 +151,7 @@ export class GoogleGeminiProvider extends AiProvider {
       }
 
       const url = `${GEMINI_BASE}/models/${this.model}:generateContent?key=${this.apiKey}`;
-      const data = await this._post(url, body);
+      const data = await this._post(url, body, opts.abortSignal);
 
       return this.#parseToolResponse(data);
     });
@@ -445,7 +445,11 @@ export class GoogleGeminiProvider extends AiProvider {
     return Array.isArray(text) ? results : results[0] || [];
   }
 
-  async _post(url: string, body: Record<string, unknown>): Promise<ApiResponse> {
+  async _post(
+    url: string,
+    body: Record<string, unknown>,
+    externalSignal?: AbortSignal
+  ): Promise<ApiResponse> {
     if (!this.apiKey) {
       const err = new Error(
         'Google Gemini API Key 未配置。请在 .env 中设置 ASD_GOOGLE_API_KEY，或运行 asd setup 完成配置。'
@@ -456,6 +460,9 @@ export class GoogleGeminiProvider extends AiProvider {
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeout);
+    // 外部中止信号 → 联动本地 controller
+    const onExternalAbort = () => controller.abort();
+    externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
 
     try {
       const res = await this._fetch(url, {
@@ -497,6 +504,7 @@ export class GoogleGeminiProvider extends AiProvider {
       return (await res.json()) as ApiResponse;
     } finally {
       clearTimeout(timer);
+      externalSignal?.removeEventListener('abort', onExternalAbort);
     }
   }
 }

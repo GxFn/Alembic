@@ -108,6 +108,8 @@ export class ExplorationTracker {
   #submitToolName = 'submit_knowledge';
   /** 管线类型标识 — 统一场景判别（替代 submitToolName / strategy.name 字符串比较） */
   #pipelineType: PipelineType;
+  /** 当前阶段开始时间（用于 dwell time 统计） */
+  #phaseStartTime = Date.now();
 
   /**
    * @param strategy 策略配置对象
@@ -570,8 +572,10 @@ export class ExplorationTracker {
 
   #transitionTo(newPhase: string) {
     const oldPhase = this.#phase;
+    const dwellMs = Date.now() - this.#phaseStartTime;
     this.#transitionFromPhase = oldPhase;
     this.#phase = newPhase;
+    this.#phaseStartTime = Date.now();
     this.#metrics.phaseRounds = 0;
     this.#metrics.searchRoundsInPhase = 0;
     // 重置停滞计数器 — 防止跨阶段累积导致级联式过早转换
@@ -581,7 +585,8 @@ export class ExplorationTracker {
     this.#metrics.consecutiveIdleRounds = 0;
     this.#justTransitioned = true;
     this.#logger.info(
-      `[ExplorationTracker] ${oldPhase} → ${newPhase} (iter=${this.#metrics.iteration}, submits=${this.#metrics.submitCount}, phaseRounds=${this.#metrics.phaseRounds}, idleRounds=${this.#metrics.consecutiveIdleRounds})`
+      `[ExplorationTracker] ${oldPhase} → ${newPhase} (iter=${this.#metrics.iteration}, submits=${this.#metrics.submitCount}, ` +
+        `dwellMs=${dwellMs}, files=${this.#metrics.uniqueFiles.size}, patterns=${this.#metrics.uniquePatterns.size})`
     );
 
     // Phase 3: 发射阶段转换信号

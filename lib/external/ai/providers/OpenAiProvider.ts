@@ -167,7 +167,7 @@ export class OpenAiProvider extends AiProvider {
         body.tool_choice = 'auto';
       }
 
-      const data = await this._post(`${this.baseUrl}/chat/completions`, body);
+      const data = await this._post(`${this.baseUrl}/chat/completions`, body, opts.abortSignal);
       return this.#parseToolResponse(data);
     });
   }
@@ -313,7 +313,11 @@ export class OpenAiProvider extends AiProvider {
     }
   }
 
-  async _post(url: string, body: Record<string, unknown>): Promise<ApiResponse> {
+  async _post(
+    url: string,
+    body: Record<string, unknown>,
+    externalSignal?: AbortSignal
+  ): Promise<ApiResponse> {
     // Ollama 使用固定 dummy key，不需要校验
     if (!this.apiKey && this.name !== 'ollama') {
       const envKey = this.name === 'deepseek' ? 'ASD_DEEPSEEK_API_KEY' : 'ASD_OPENAI_API_KEY';
@@ -326,6 +330,9 @@ export class OpenAiProvider extends AiProvider {
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeout);
+    // 外部中止信号 → 联动本地 controller
+    const onExternalAbort = () => controller.abort();
+    externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
 
     try {
       const res = await this._fetch(url, {
@@ -348,6 +355,7 @@ export class OpenAiProvider extends AiProvider {
       return (await res.json()) as ApiResponse;
     } finally {
       clearTimeout(timer);
+      externalSignal?.removeEventListener('abort', onExternalAbort);
     }
   }
 }

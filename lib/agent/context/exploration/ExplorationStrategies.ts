@@ -166,7 +166,8 @@ export const STRATEGY_ANALYST = {
   phases: ['SCAN', 'EXPLORE', 'VERIFY', 'SUMMARIZE'],
   transitions: {
     'SCAN→EXPLORE': {
-      onMetrics: (m: ExplorationMetrics) => m.iteration >= 3,
+      // 2 轮结构扫描足够获取项目骨架（目录 + 关键文件列表），将 1 轮还给 EXPLORE
+      onMetrics: (m: ExplorationMetrics) => m.iteration >= 2,
       onTextResponse: false,
     },
     'EXPLORE→VERIFY': {

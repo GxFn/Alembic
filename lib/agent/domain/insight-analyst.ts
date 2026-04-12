@@ -134,6 +134,7 @@ export const ANALYST_TOOLS = [
 // Analyst 预算 — 使用 analyst 策略（自由探索，无阶段约束）
 // ──────────────────────────────────────────────────────────────────
 
+/** 默认 Analyst 预算（24 轮基线） */
 export const ANALYST_BUDGET = {
   maxIterations: 24,
   searchBudget: 18,
@@ -142,6 +143,45 @@ export const ANALYST_BUDGET = {
   softSubmitLimit: 0,
   idleRoundsToExit: 2,
 };
+
+/**
+ * 根据项目规模自适应计算 Analyst 预算
+ *
+ * 策略: 以文件数为主要缩放因子，保持 searchBudget/maxIterations 的比例关系。
+ *   - ≤40 文件: 基线 24 轮（小型项目无需额外预算）
+ *   - 41~100 文件: 线性插值到 32 轮
+ *   - 101~200 文件: 线性插值到 40 轮
+ *   - >200 文件: 封顶 40 轮（避免单维度成本失控）
+ *
+ * searchBudget 按比例随 maxIterations 缩放（保持 75%）。
+ * timeoutMs 按比例随 maxIterations 缩放（基线 300s 对应 24 轮）。
+ */
+export function computeAnalystBudget(
+  fileCount: number
+): typeof ANALYST_BUDGET & { timeoutMs: number } {
+  const clamped = Math.max(0, fileCount);
+  let maxIter: number;
+
+  if (clamped <= 40) {
+    maxIter = 24;
+  } else if (clamped <= 100) {
+    // 40→100 文件: 24→32 轮（线性插值）
+    maxIter = Math.round(24 + ((clamped - 40) / 60) * 8);
+  } else if (clamped <= 200) {
+    // 100→200 文件: 32→40 轮
+    maxIter = Math.round(32 + ((clamped - 100) / 100) * 8);
+  } else {
+    maxIter = 40;
+  }
+
+  return {
+    ...ANALYST_BUDGET,
+    maxIterations: maxIter,
+    searchBudget: Math.round(maxIter * 0.75),
+    // 超时随轮次等比缩放: 24轮→300s, 40轮→500s
+    timeoutMs: Math.round((maxIter / 24) * 300_000),
+  };
+}
 
 // ──────────────────────────────────────────────────────────────────
 // 维度 Prompt 模板 (9 段式)

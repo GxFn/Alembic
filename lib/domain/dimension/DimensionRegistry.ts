@@ -161,7 +161,7 @@ const D7_NETWORKING_API: UnifiedDimension = {
   weight: 0.7,
   suggestedTopics: ['api-contract', 'retry-strategy', 'request-pattern'],
   relatedRoles: ['networking'],
-  tierHint: 3,
+  tierHint: 2,
   displayGroup: 'data-event-flow',
 };
 
@@ -181,7 +181,7 @@ const D8_UI_INTERACTION: UnifiedDimension = {
   weight: 0.7,
   suggestedTopics: ['component-pattern', 'lifecycle', 'navigation'],
   relatedRoles: ['ui', 'feature'],
-  tierHint: 3,
+  tierHint: 4,
   displayGroup: 'architecture',
 };
 
@@ -201,7 +201,7 @@ const D9_TESTING_QUALITY: UnifiedDimension = {
   weight: 0.9,
   suggestedTopics: ['unit-test', 'mock-strategy', 'ci-cd'],
   relatedRoles: [],
-  tierHint: 3,
+  tierHint: 4,
   displayGroup: 'best-practice',
 };
 
@@ -221,7 +221,7 @@ const D10_SECURITY_AUTH: UnifiedDimension = {
   weight: 1.0,
   suggestedTopics: ['authentication', 'authorization', 'encryption'],
   relatedRoles: ['networking', 'service'],
-  tierHint: 3,
+  tierHint: 4,
   displayGroup: 'best-practice',
 };
 
@@ -241,7 +241,7 @@ const D11_PERFORMANCE_OPTIMIZATION: UnifiedDimension = {
   weight: 0.8,
   suggestedTopics: ['memory-management', 'lazy-loading', 'rendering'],
   relatedRoles: ['ui', 'storage'],
-  tierHint: 3,
+  tierHint: 5,
   displayGroup: 'data-event-flow',
 };
 
@@ -261,7 +261,7 @@ const D12_OBSERVABILITY_LOGGING: UnifiedDimension = {
   weight: 0.7,
   suggestedTopics: ['logging-standard', 'event-tracking', 'diagnostics'],
   relatedRoles: ['service', 'core'],
-  tierHint: 3,
+  tierHint: 5,
   displayGroup: 'data-event-flow',
 };
 
@@ -280,7 +280,7 @@ const D13_AGENT_GUIDELINES: UnifiedDimension = {
   weight: 0.6,
   suggestedTopics: ['constraints', 'deprecated-api', 'agent-rules'],
   relatedRoles: [],
-  tierHint: 3,
+  tierHint: 5,
   displayGroup: 'best-practice',
 };
 
@@ -641,30 +641,28 @@ export function resolveActiveDimensions(
 /**
  * 构建 Tier 分层调度计划
  *
- * 基于每个维度的 tierHint 字段将活跃维度分为 3 层:
- * - Tier 1 (tierHint=1): 基础数据层 — architecture + 语言/框架条件维度
- * - Tier 2 (tierHint=2): 规范+设计层 — coding-standards, design-patterns
- * - Tier 3 (tierHint=3): 实践+质量层 — 其余所有维度
+ * 基于每个维度的 tierHint 字段动态分为 N 层 (不再硬编码 3 层):
+ * - tierHint=1: 基础数据层 — architecture + 语言/框架条件维度
+ * - tierHint=2: 规范+设计层 — coding-standards, design-patterns 等
+ * - tierHint=3+: 实践+质量层 — 按声明值自动分桶
+ *
+ * 未声明 tierHint 的维度默认归入最后一层 (tierHint=max 或 3)。
  */
 export function buildTierPlan(
   activeDims: readonly UnifiedDimension[] = DIMENSION_REGISTRY
 ): string[][] {
-  const tier1: string[] = [];
-  const tier2: string[] = [];
-  const tier3: string[] = [];
+  const tierMap = new Map<number, string[]>();
 
   for (const dim of activeDims) {
     const hint = dim.tierHint ?? 3;
-    if (hint === 1) {
-      tier1.push(dim.id);
-    } else if (hint === 2) {
-      tier2.push(dim.id);
-    } else {
-      tier3.push(dim.id);
+    if (!tierMap.has(hint)) {
+      tierMap.set(hint, []);
     }
+    tierMap.get(hint)!.push(dim.id);
   }
 
-  return [tier1, tier2, tier3].filter((t) => t.length > 0);
+  // 按 tier 编号升序排列，过滤空层
+  return [...tierMap.entries()].sort(([a], [b]) => a - b).map(([, dims]) => dims);
 }
 
 /**

@@ -97,16 +97,18 @@ interface SessionStoreLike {
  *   - "XX 采用了 YY"
  */
 const FACT_PATTERNS = [
-  // "项目使用/采用了 XXX"
+  // Chinese
   /(?:项目|工程|代码库)(?:使用|采用|基于|遵循)了?\s*([^，。,.\n]{5,60})/g,
-  // "主要/核心 XXX 是 YYY"
   /(?:主要|核心|主|主力)\s*(\S+)\s*(?:是|为|使用)\s*([^，。,.\n]{3,40})/g,
-  // "发现了? N 个 XXX"
   /(?:发现|找到|扫描到|识别|共有|包含)\s*了?\s*(\d+)\s*个?\s*([^，。,.\n]{2,30})/g,
-  // "XXX 是唯一的/主要的 YYY"
   /(\S{2,20})\s*是\s*(?:唯一的?|主要的?|核心的?|全局的?)\s*([^，。,.\n]{3,30})/g,
-  // "使用了 XXX 前缀/后缀/命名"
   /(?:使用|采用|遵循)了?\s*(\S{1,10})\s*(?:前缀|后缀|命名|约定|规范)/g,
+  // English
+  /(?:the\s+)?project\s+(?:uses?|adopts?|relies\s+on|follows?)\s+([^.,\n]{5,60})/gi,
+  /(?:found|discovered|identified|detected)\s+(\d+)\s+([^.,\n]{3,40})/gi,
+  /(?:the\s+)?(?:primary|main|core)\s+(\S+)\s+(?:is|are)\s+([^.,\n]{3,40})/gi,
+  /(?:all|every)\s+([^.,\n]{3,30})\s+(?:use|adopt|follow|implement)\s+([^.,\n]{3,40})/gi,
+  /(?:there\s+(?:is|are))\s+(\d+)\s+([^.,\n]{3,40})/gi,
 ];
 
 /**
@@ -116,9 +118,14 @@ const FACT_PATTERNS = [
  *   - "建议/推荐 XXX"
  */
 const INSIGHT_PATTERNS = [
+  // Chinese
   /([^，。,.\n]{5,40})(?:暗示|表明|说明|意味着|揭示)\s*([^，。,.\n]{5,60})/g,
   /([^，。,.\n]{3,20})\s*(?:与|和)\s*([^，。,.\n]{3,20})\s*(?:耦合|关联|存在依赖|有关系)/g,
   /(?:建议|推荐|应该|需要)\s*([^，。,.\n]{5,60})/g,
+  // English
+  /([^.,\n]{5,40})\s+(?:suggests?|indicates?|implies?|reveals?)\s+(?:that\s+)?([^.,\n]{5,60})/gi,
+  /([^.,\n]{3,20})\s+(?:is|are)\s+(?:tightly\s+)?(?:coupled|linked|related)\s+(?:to|with)\s+([^.,\n]{3,30})/gi,
+  /(?:recommend|should|consider|suggest)\s+([^.,\n]{5,60})/gi,
 ];
 
 // ──────────────────────────────────────────────────────────────
@@ -175,10 +182,21 @@ export class EpisodicConsolidator {
     // 5. 合并所有候选, 使用 consolidate 去重
     const allCandidates = [...findingMemories, ...insightMemories, ...textFactMemories];
 
+    // ── 结构化统计日志 ──
+    const dimStats = this.#computeDimStats(allCandidates);
+    const importanceDist = this.#computeImportanceDistribution(allCandidates);
+    const entityCount = allCandidates.reduce((sum, c) => sum + (c.relatedEntities?.length || 0), 0);
+
     this.#logger.info(
       `[Consolidator] Extracted ${allCandidates.length} candidate memories: ` +
         `${findingMemories.length} findings, ${insightMemories.length} insights, ` +
         `${textFactMemories.length} text facts`
+    );
+    this.#logger.info(
+      `[Consolidator] Per-dimension: ${dimStats.map((d) => `${d.dim}=${d.count}`).join(', ')}`
+    );
+    this.#logger.info(
+      `[Consolidator] Importance distribution: ${importanceDist} | Entities extracted: ${entityCount}`
     );
 
     const result = this.#semanticMemory.consolidate(allCandidates, { bootstrapSession });
@@ -196,6 +214,9 @@ export class EpisodicConsolidator {
       textFacts: { extracted: textFactMemories.length },
       total: result,
       durationMs,
+      perDimension: Object.fromEntries(dimStats.map((d) => [d.dim, d.count])),
+      importanceDistribution: this.#importanceHistogram(allCandidates),
+      entityCount,
     };
   }
 
@@ -397,6 +418,46 @@ export class EpisodicConsolidator {
   }
 
   // ─── 辅助方法 ─────────────────────────────────────────
+
+  /** 按维度聚合候选数量 */
+  #computeDimStats(candidates: CandidateMemoryEntry[]) {
+    const counts = new Map<string, number>();
+    for (const c of candidates) {
+      const dim = c.sourceDimension || 'unknown';
+      counts.set(dim, (counts.get(dim) || 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([dim, count]) => ({ dim, count }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  /** 生成重要性分布字符串: "[1-3]=N [4-6]=N [7-10]=N" */
+  #computeImportanceDistribution(candidates: CandidateMemoryEntry[]) {
+    let low = 0;
+    let mid = 0;
+    let high = 0;
+    for (const c of candidates) {
+      const imp = c.importance || 5;
+      if (imp <= 3) {
+        low++;
+      } else if (imp <= 6) {
+        mid++;
+      } else {
+        high++;
+      }
+    }
+    return `[1-3]=${low} [4-6]=${mid} [7-10]=${high}`;
+  }
+
+  /** 构建重要性直方图对象 (供返回值使用) */
+  #importanceHistogram(candidates: CandidateMemoryEntry[]) {
+    const hist: Record<number, number> = {};
+    for (const c of candidates) {
+      const imp = c.importance || 5;
+      hist[imp] = (hist[imp] || 0) + 1;
+    }
+    return hist;
+  }
 
   /**
    * 从文本中提取实体名 (类名/文件名/模块名)

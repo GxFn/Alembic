@@ -1021,11 +1021,19 @@ function buildExecutionPlan(activeDimensions: DimensionDef[]) {
   const tiers = scheduler.getTiers();
   const activeDimIds = new Set(activeDimensions.map((d: DimensionDef) => d.id));
 
-  const tierLabels = ['基础数据层', '规范 + 架构 + 模式', '流转 + 实践 + 总结'];
+  const tierLabels = [
+    '基础数据层',
+    '规范 + 设计 + 网络',
+    '核心质量',
+    '领域专项',
+    '终端优化 + 总结',
+  ];
   const tierNotes = [
     '这些维度相互独立，可以任意顺序分析。产出的上下文将帮助后续维度。',
     '建议利用 Tier 1 中了解到的项目结构和代码特征。',
-    'agent-guidelines 应在最后分析 — 综合前序所有维度的发现。',
+    '利用前两层建立的架构和规范上下文深入分析。',
+    '各维度相对独立，可充分利用并行能力。',
+    'agent-guidelines 应综合前序所有维度的发现。',
   ];
 
   const plan = tiers

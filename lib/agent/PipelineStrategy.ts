@@ -357,7 +357,7 @@ export class PipelineStrategy extends Strategy {
     );
 
     // 执行 reactLoop (含 per-stage 硬超时保护)
-    const stageResult = await this.#runWithTimeout(
+    let stageResult = await this.#runWithTimeout(
       runtime,
       stagePrompt,
       message,
@@ -369,6 +369,56 @@ export class PipelineStrategy extends Strategy {
       phaseResults,
       bus
     );
+
+    // ── 超时零输出快速重试 ──
+    // 当阶段 hard timeout 且 0 tool calls（LLM 完全卡住），
+    // 如果有 retryBudget 且本次非 retry，立即以降级预算重跑一次，
+    // 跳过 gate 往返，争取在更短时限内拿到输出。
+    if (stageResult.timedOut && !stageResult.toolCalls?.length && !isRetry && stage.retryBudget) {
+      _pipelineLogger.info(
+        `[PipelineStrategy] ♻️ Stage "${stage.name}" timed out with 0 tool calls — fast-retrying with retryBudget`
+      );
+      bus.publish(AgentEvents.PROGRESS, {
+        type: 'pipeline_stage_fast_retry',
+        stage: stage.name,
+      });
+
+      // 重置 ContextWindow (清空上一轮的空消息)
+      if (ctxWin) {
+        ctxWin.resetForNewStage();
+      }
+
+      // 重建 tracker — 用 retryBudget 的更短限制
+      const retryTracker = this.#resolveStageTracker(
+        stage,
+        ctx,
+        strategyContext,
+        stage.retryBudget
+      );
+
+      // 构建简化 prompt（如果有 retryPromptBuilder 则使用）
+      let retryPrompt = stagePrompt;
+      if (typeof stage.retryPromptBuilder === 'function') {
+        retryPrompt = stage.retryPromptBuilder(
+          { reason: 'Stage hard timeout with 0 tool calls', artifact: null },
+          message.content,
+          phaseResults
+        );
+      }
+
+      stageResult = await this.#runWithTimeout(
+        runtime,
+        retryPrompt,
+        message,
+        stage,
+        stage.retryBudget,
+        ctxWin,
+        retryTracker,
+        strategyContext,
+        phaseResults,
+        bus
+      );
+    }
 
     // 累计结果
     phaseResults[stage.name] = stageResult;
@@ -484,6 +534,9 @@ export class PipelineStrategy extends Strategy {
     phaseResults: Record<string, unknown>,
     bus: AgentEventBus
   ): Promise<StageResult> {
+    // 创建 AbortController — hard timeout 时取消进行中的 LLM 请求
+    const abortController = new AbortController();
+
     const reactPromise = runtime.reactLoop(stagePrompt, {
       history: message.history,
       context: {
@@ -501,6 +554,7 @@ export class PipelineStrategy extends Strategy {
       memoryCoordinator: strategyContext.memoryCoordinator || null,
       sharedState: strategyContext.sharedState || null,
       source: strategyContext.source || null,
+      abortSignal: abortController.signal,
     });
 
     const stageTimeoutMs = effectiveBudget?.timeoutMs;
@@ -515,7 +569,11 @@ export class PipelineStrategy extends Strategy {
     return Promise.race([
       reactPromise,
       new Promise<StageResult>((_, reject) => {
-        hardTimer = setTimeout(() => reject(new Error('__STAGE_HARD_TIMEOUT__')), hardLimitMs);
+        hardTimer = setTimeout(() => {
+          // 先中止进行中的 LLM HTTP 请求，再触发 reject
+          abortController.abort();
+          reject(new Error('__STAGE_HARD_TIMEOUT__'));
+        }, hardLimitMs);
       }),
     ])
       .catch((err: unknown) => {
