@@ -440,7 +440,6 @@ function _maxNesting(node: any, depth: any) {
     'enhanced_for_statement',
     'while_statement',
     'switch_expression',
-    'block',
     'try_statement',
   ]);
   let max = depth;

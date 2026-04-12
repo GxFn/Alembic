@@ -379,7 +379,6 @@ function _maxNesting(node: any, depth: any) {
     'while_statement',
     'with_statement',
     'try_statement',
-    'block',
   ]);
   let max = depth;
   const nextDepth = NESTING_TYPES.has(node.type) ? depth + 1 : depth;

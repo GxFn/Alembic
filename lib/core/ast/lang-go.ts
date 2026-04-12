@@ -485,7 +485,6 @@ function _maxNesting(node: any, depth: any) {
     'expression_switch_statement',
     'type_switch_statement',
     'select_statement',
-    'block',
   ]);
   let max = depth;
   const nextDepth = NESTING_TYPES.has(node.type) ? depth + 1 : depth;

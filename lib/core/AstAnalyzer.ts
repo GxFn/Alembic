@@ -778,7 +778,6 @@ function _maxNesting(node: TreeSitterNode, depth: number) {
     'for_in_statement',
     'while_statement',
     'switch_statement',
-    'compound_statement',
   ]);
 
   let max = depth;
