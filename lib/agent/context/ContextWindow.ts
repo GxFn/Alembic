@@ -108,6 +108,8 @@ export class ContextWindow {
     [/gemini-1\.0/i, 32_000],
     [/gemini/i, 1_000_000], // 未知版本回退
     // ── OpenAI ──
+    [/gpt-5\.4-(?:mini|nano)/i, 400_000],
+    [/gpt-5/i, 1_000_000],
     [/gpt-4o/i, 128_000],
     [/gpt-4-turbo/i, 128_000],
     [/gpt-4-(?!turbo)/i, 8_192],
@@ -115,6 +117,7 @@ export class ContextWindow {
     [/gpt-3\.5/i, 4_096],
     [/o1|o3|o4/i, 200_000], // OpenAI reasoning models
     // ── Anthropic ──
+    [/claude-(?:opus|sonnet)-4[.-]6/i, 1_000_000], // Opus 4.6 / Sonnet 4.6
     [/claude-.*sonnet-4/i, 200_000],
     [/claude-3[.-]5/i, 200_000],
     [/claude-3[.-]opus/i, 200_000],
@@ -137,12 +140,13 @@ export class ContextWindow {
    * 根据模型名称解析合适的 ContextWindow token 预算。
    *
    * 策略: 取模型最大上下文窗口的一个安全分片，
+   *   - 超大窗口 (≥400k): 预算 48000（1M 级模型可容纳更多上下文）
    *   - 大窗口 (≥200k): 预算 32000（tool schemas + system prompt 占显著空间）
    *   - 中窗口 (≥64k):  预算 24000
    *   - 小窗口 (≥16k):  预算 12000
    *   - 微窗口 (<16k):  预算 = 窗口 × 0.7（留 30% 给 prompt/tool schema）
    *
-   * @param modelName 模型名称，如 'gemini-3-flash-preview', 'gpt-4o-mini'
+   * @param modelName 模型名称，如 'gemini-3-flash-preview', 'gpt-5.4-mini'
    * @param [opts] - isSystem 为 true 时给予更高预算
    * @returns 建议的 token 预算
    */
@@ -162,7 +166,9 @@ export class ContextWindow {
 
     // 2. 按分级策略计算 token 预算
     let budget: number;
-    if (contextSize >= 200_000) {
+    if (contextSize >= 400_000) {
+      budget = isSystem ? 48_000 : 36_000;
+    } else if (contextSize >= 200_000) {
       budget = isSystem ? 32_000 : 24_000;
     } else if (contextSize >= 64_000) {
       budget = isSystem ? 24_000 : 20_000;

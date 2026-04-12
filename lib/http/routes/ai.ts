@@ -96,9 +96,9 @@ router.get('/providers', async (req: Request, res: Response): Promise<void> => {
 
   const providers = [
     { id: 'google', label: 'Google Gemini', defaultModel: 'gemini-3-flash-preview' },
-    { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-4o' },
+    { id: 'openai', label: 'OpenAI', defaultModel: 'gpt-5.4' },
     { id: 'deepseek', label: 'DeepSeek', defaultModel: 'deepseek-chat' },
-    { id: 'claude', label: 'Claude', defaultModel: 'claude-3-5-sonnet-20240620' },
+    { id: 'claude', label: 'Claude', defaultModel: 'claude-sonnet-4-20250514' },
     { id: 'ollama', label: 'Ollama', defaultModel: 'llama3' },
     { id: 'mock', label: 'Mock (测试)', defaultModel: 'mock-l3' },
   ].map((p) => ({

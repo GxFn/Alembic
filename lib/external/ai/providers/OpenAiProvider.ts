@@ -28,7 +28,7 @@ export class OpenAiProvider extends AiProvider {
   constructor(config: AiProviderConfig = {}) {
     super(config);
     this.name = config.name || 'openai';
-    this.model = config.model || 'gpt-4o-mini';
+    this.model = config.model || 'gpt-5.4-mini';
     this.apiKey = config.apiKey || process.env.ASD_OPENAI_API_KEY || '';
     this.baseUrl = config.baseUrl || OPENAI_BASE;
     this.embedModel = config.embedModel || 'text-embedding-3-small';

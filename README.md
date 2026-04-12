@@ -48,7 +48,7 @@ asd ui        # Start background service (MCP Server + Dashboard) — IDE and MC
 
 > **First time:** Manually enable the `autosnippet` service in your IDE's MCP settings.
 
-> **Tip:** Stronger models work better. We recommend Claude Opus 4 / Sonnet 4, GPT-5, or Gemini 3 Pro in Cursor / Copilot for more accurate patterns and fewer false positives.
+> **Tip:** Stronger models work better. We recommend Claude Opus 4.6 / Sonnet 4.6, GPT-5.4, or Gemini 3.1 Pro in Cursor / Copilot for more accurate patterns and fewer false positives.
 
 ### Cold Start: Build Your Knowledge Base
 

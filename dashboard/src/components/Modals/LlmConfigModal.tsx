@@ -11,10 +11,10 @@ interface LlmConfigModalProps {
 }
 
 const PROVIDERS = [
-  { id: 'google', labelKey: 'llmConfig.providers.gemini' as const, defaultModel: 'gemini-2.0-flash', keyEnv: 'ASD_GOOGLE_API_KEY' },
-  { id: 'openai', labelKey: 'llmConfig.providers.openai' as const, defaultModel: 'gpt-4o', keyEnv: 'ASD_OPENAI_API_KEY' },
+  { id: 'google', labelKey: 'llmConfig.providers.gemini' as const, defaultModel: 'gemini-3-flash-preview', keyEnv: 'ASD_GOOGLE_API_KEY' },
+  { id: 'openai', labelKey: 'llmConfig.providers.openai' as const, defaultModel: 'gpt-5.4', keyEnv: 'ASD_OPENAI_API_KEY' },
   { id: 'deepseek', labelKey: 'llmConfig.providers.deepseek' as const, defaultModel: 'deepseek-chat', keyEnv: 'ASD_DEEPSEEK_API_KEY' },
-  { id: 'claude', labelKey: 'llmConfig.providers.claude' as const, defaultModel: 'claude-3-5-sonnet-20240620', keyEnv: 'ASD_CLAUDE_API_KEY' },
+  { id: 'claude', labelKey: 'llmConfig.providers.claude' as const, defaultModel: 'claude-sonnet-4-20250514', keyEnv: 'ASD_CLAUDE_API_KEY' },
   { id: 'ollama', labelKey: 'llmConfig.providers.ollama' as const, defaultModel: 'llama3', keyEnv: '' },
 ];
 
@@ -24,7 +24,7 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
   const [saving, setSaving] = useState(false);
   const [hasEnvFile, setHasEnvFile] = useState(false);
   const [provider, setProvider] = useState('google');
-  const [model, setModel] = useState('gemini-2.0-flash');
+  const [model, setModel] = useState('gemini-3-flash-preview');
   const [apiKey, setApiKey] = useState('');
   const [proxy, setProxy] = useState('');
   const [showKey, setShowKey] = useState(false);
