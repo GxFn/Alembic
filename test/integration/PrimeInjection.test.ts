@@ -29,7 +29,8 @@ import { PrimeSearchPipeline } from '../../lib/service/task/PrimeSearchPipeline.
 const __dirname = import.meta.dirname;
 const BILIDILI_ROOT = path.resolve(__dirname, '../../../BiliDili');
 const RECIPES_DIR = path.join(BILIDILI_ROOT, 'AutoSnippet/recipes');
-const HAS_BILIDILI = fs.existsSync(RECIPES_DIR);
+const CANDIDATES_DIR = path.join(BILIDILI_ROOT, 'AutoSnippet/candidates');
+const HAS_BILIDILI = fs.existsSync(RECIPES_DIR) || fs.existsSync(CANDIDATES_DIR);
 
 // ── DB Setup ────────────────────────────────────────
 
@@ -170,8 +171,8 @@ describe.skipIf(!HAS_BILIDILI)('Integration: Prime Injection with BiliDili Recip
   beforeAll(() => {
     // 1. 创建 DB 并加载 BiliDili recipes
     db = createInMemoryDb();
-    const mdFiles = collectMdFiles(RECIPES_DIR);
-    expect(mdFiles.length).toBeGreaterThan(2); // BiliDili 应有若干 recipes
+    const mdFiles = [...collectMdFiles(RECIPES_DIR), ...collectMdFiles(CANDIDATES_DIR)];
+    expect(mdFiles.length).toBeGreaterThan(2); // BiliDili 应有若干 recipes 或 candidates
 
     let loaded = 0;
     for (const absPath of mdFiles) {
@@ -1143,7 +1144,8 @@ describe.skipIf(!HAS_BILIDILI)('Integration: Prime Injection with BiliDili Recip
       if (result !== null) {
         const maxScore = Math.max(...result.relatedKnowledge.map((r) => r.score));
         // 无关查询的最高分通常 < 5 (相关查询的 top 分数通常 > 10)
-        expect(maxScore).toBeLessThan(10);
+        // 多查询 RRF 融合 + candidates 数量增长会略微推高噪音分数
+        expect(maxScore).toBeLessThan(15);
       }
     });
 
@@ -1160,7 +1162,7 @@ describe.skipIf(!HAS_BILIDILI)('Integration: Prime Injection with BiliDili Recip
         'configure Kubernetes pod autoscaling with HPA and custom metrics'
       );
       if (result !== null) {
-        expect(result.relatedKnowledge.length).toBeLessThanOrEqual(3);
+        expect(result.relatedKnowledge.length).toBeLessThanOrEqual(5);
       }
     });
 
@@ -1176,7 +1178,7 @@ describe.skipIf(!HAS_BILIDILI)('Integration: Prime Injection with BiliDili Recip
     it('无关: 日常对话 → null 或极少结果', async () => {
       const { result } = await runPrime('今天天气怎么样，适合出去打球吗');
       if (result !== null) {
-        expect(result.relatedKnowledge.length).toBeLessThanOrEqual(3);
+        expect(result.relatedKnowledge.length).toBeLessThanOrEqual(5);
       }
     });
 

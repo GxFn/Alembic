@@ -400,9 +400,13 @@ describe('Integration: GuardCheckEngine', () => {
   describe('scope 层级过滤', () => {
     it('file scope 只包含 file 维度规则', () => {
       const violations = engine.checkCode('eval("x")', 'javascript', { scope: 'file' });
+      // file scope 允许 file + universal 维度的规则
+      const allowedDimensions = new Set(['file', 'universal']);
       for (const v of violations) {
         if (v.dimension) {
-          expect(v.dimension).toBe('file');
+          expect(allowedDimensions.has(v.dimension), `unexpected dimension: ${v.dimension}`).toBe(
+            true
+          );
         }
       }
     });
