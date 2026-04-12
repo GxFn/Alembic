@@ -241,7 +241,7 @@ Recipe 是 Markdown 文件，SQLite 只是读缓存。数据库坏了 `asd sync`
 
 ## 深入了解
 
-> **[图解速览 — 5 分钟看懂整个系统](https://docs.gaoxuefeng.com/visual-tour)** · 24 张手绘架构图，从工作流到 Agent 循环一目了然
+> **[图解速览 — 5 分钟看懂整个系统](https://docs.gaoxuefeng.com/visual-tour)** · 25 张手绘架构图，从工作流到 Agent 循环一目了然
 
 | 章节 | 内容 |
 |------|------|
@@ -263,6 +263,31 @@ Recipe 是 Markdown 文件，SQLite 只是读缓存。数据库坏了 `asd sync`
 - Node.js ≥ 22
 - macOS 推荐（Xcode 功能需要；其他功能跨平台可用）
 - better-sqlite3（已内置）
+
+### 推荐：安装本地 Embedding 模型提升语义搜索
+
+AutoSnippet 内置了混合搜索引擎（关键词 + 向量语义）。安装本地 Embedding 模型可以解锁语义搜索——即使关键词不完全匹配，也能通过概念级理解找到相关 Recipe。
+
+```bash
+# 安装 Ollama（https://ollama.com）
+brew install ollama && ollama serve
+
+# 拉取推荐模型（约 639MB，原生支持中文 + 英文 + 代码）
+ollama pull qwen3-embedding:0.6b
+```
+
+然后在项目的 `.env` 中配置：
+
+```bash
+ASD_EMBED_PROVIDER=ollama
+ASD_EMBED_MODEL=qwen3-embedding:0.6b
+```
+
+也可以在 Dashboard（`asd ui`）→ 设置 → Embedding 模型中配置。
+
+配置完成后运行 `asd embed` 构建向量索引。语义搜索每次查询约增加 200–400ms 延迟（本地推理，无需 API 调用，数据不出本机）。
+
+> **不装也能用**——搜索默认走字段加权关键词匹配，对精确术语搜索已经很快很准。语义搜索是额外升级，善于处理概念性查询，比如 *「数据竞争怎么避免」*、*「Cookie 怎么持久化」* 这类用自然语言描述的问题。
 
 ## 贡献
 

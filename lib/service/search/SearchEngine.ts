@@ -176,6 +176,7 @@ export class SearchEngine {
   async search(query: string, options: SearchOptions = {}) {
     const { type = 'all', limit = 20, mode = 'keyword', context } = options;
     const shouldRank = options.rank ?? mode !== 'keyword';
+    const tSearchStart = performance.now();
 
     if (!query || !query.trim()) {
       return { items: [], total: 0, query };
@@ -203,65 +204,73 @@ export class SearchEngine {
 
     switch (mode) {
       case 'auto': {
-        // 缓存 FieldWeighted 结果, 避免 RRF 降级时重复计算
-        let cachedScorerItems: SearchResultItem[] | null = null;
-        const getScorerResults = () => {
-          if (!cachedScorerItems) {
-            cachedScorerItems = this._scorerSearch(query, type, recallLimit);
-          }
-          return cachedScorerItems;
-        };
+        // ── Weighted-First + Confidence Gate ──
+        // 先跑 weighted（~40ms），评估是否需要 embed（2-22s）
+        const weightedItems = this._scorerSearch(query, type, recallLimit);
+        const confidence = this.#computeWeightedConfidence(query, weightedItems, limit);
 
-        // 优先使用 VectorService 的 hybridSearch (统一 RRF 融合)
-        if (this.vectorService) {
-          try {
-            const sparseItems = getScorerResults();
-            const rrfResults = await this.vectorService.hybridSearch(query, {
-              topK: recallLimit,
-              alpha: this._fusionSemanticWeight,
-              sparseSearchFn: () => sparseItems!,
-            });
-            if (rrfResults.length > 0) {
-              results = rrfResults.map((r) => {
-                const base =
-                  ((r as Record<string, unknown>).data as Record<string, unknown>)?.item ||
-                  (r as Record<string, unknown>).data ||
-                  {};
-                const baseMeta = ((base as Record<string, unknown>).metadata || {}) as Record<
-                  string,
-                  unknown
-                >;
-                return {
-                  id: r.id,
-                  title: ((base as Record<string, unknown>).title ||
-                    baseMeta.title ||
-                    r.id) as string,
-                  type: ((base as Record<string, unknown>).type || 'recipe') as string,
-                  kind: ((base as Record<string, unknown>).kind ||
-                    baseMeta.kind ||
-                    'pattern') as string,
-                  status: ((base as Record<string, unknown>).status ||
-                    baseMeta.status ||
-                    'active') as string,
-                  score: Math.round(r.score * 1000) / 1000,
-                  content: (base as Record<string, unknown>).content as string | undefined,
-                  description: (base as Record<string, unknown>).description as string | undefined,
-                } as SearchResultItem;
-              });
-              this._supplementDetails(results as SearchResultItem[]);
-              actualMode = 'auto(rrf)';
-              break;
-            }
-          } catch {
-            // VectorService RRF 失败, 降级到 min-max 融合
-          }
+        if (confidence >= 60 || !this.vectorService) {
+          // 高 confidence: weighted 已足够，跳过 embed
+          results = weightedItems;
+          actualMode = `auto(weighted-only,conf=${confidence})`;
+          this.logger.info(
+            `[QueryRouter] skip-semantic: conf=${confidence} topScore=${weightedItems[0]?.score ?? 0} query="${query}"`
+          );
+          break;
         }
 
-        // 降级: VectorService 不可用或 RRF 零结果 → 纯 FieldWeighted
-        // 旧版在此做 BM25+semantic min-max 融合，但当 VectorService 不可用时
-        // semantic 通常也会失败，最终退化为纯 FieldWeighted。简化为直接走 scorer。
-        results = getScorerResults();
-        actualMode = 'auto(weighted-only)';
+        // 低 confidence: 投入 embed，RRF 融合
+        // 自适应 alpha：confidence 越低 → semantic 权重越高
+        // conf=0 → alpha=0.75, conf=30 → alpha=0.575, conf=55 → alpha=0.42
+        const adaptiveAlpha =
+          this._fusionSemanticWeight + (0.75 - this._fusionSemanticWeight) * (1 - confidence / 60);
+        this.logger.info(
+          `[QueryRouter] invoke-semantic: conf=${confidence} alpha=${adaptiveAlpha.toFixed(2)} topScore=${weightedItems[0]?.score ?? 0} query="${query}"`
+        );
+        try {
+          const rrfResults = await this.vectorService.hybridSearch(query, {
+            topK: recallLimit,
+            alpha: adaptiveAlpha,
+            sparseSearchFn: () => weightedItems,
+          });
+          if (rrfResults.length > 0) {
+            results = rrfResults.map((r) => {
+              const base =
+                ((r as Record<string, unknown>).data as Record<string, unknown>)?.item ||
+                (r as Record<string, unknown>).data ||
+                {};
+              const baseMeta = ((base as Record<string, unknown>).metadata || {}) as Record<
+                string,
+                unknown
+              >;
+              return {
+                id: r.id,
+                title: ((base as Record<string, unknown>).title ||
+                  baseMeta.title ||
+                  r.id) as string,
+                type: ((base as Record<string, unknown>).type || 'recipe') as string,
+                kind: ((base as Record<string, unknown>).kind ||
+                  baseMeta.kind ||
+                  'pattern') as string,
+                status: ((base as Record<string, unknown>).status ||
+                  baseMeta.status ||
+                  'active') as string,
+                score: Math.round(r.score * 1000) / 1000,
+                content: (base as Record<string, unknown>).content as string | undefined,
+                description: (base as Record<string, unknown>).description as string | undefined,
+              } as SearchResultItem;
+            });
+            this._supplementDetails(results as SearchResultItem[]);
+            actualMode = `auto(rrf,conf=${confidence},α=${adaptiveAlpha.toFixed(2)})`;
+            break;
+          }
+        } catch {
+          // VectorService RRF 失败, 降级
+        }
+
+        // 降级: embed 失败 → 返回已有的 weighted 结果
+        results = weightedItems;
+        actualMode = `auto(weighted-fallback,conf=${confidence})`;
         break;
       }
       case 'weighted':
@@ -293,6 +302,12 @@ export class SearchEngine {
       type,
       ranked: shouldRank && results.length > 0,
     };
+
+    // ── 搜索计时日志 ──
+    const tSearchEnd = performance.now();
+    this.logger.info(
+      `Search completed: mode=${actualMode} total=${results.length} time=${Math.round(tSearchEnd - tSearchStart)}ms ranked=${response.ranked} query="${query}"`
+    );
 
     if (options.groupByKind) {
       response.byKind = { rule: [], pattern: [], fact: [] };
@@ -550,15 +565,20 @@ export class SearchEngine {
           let results: SearchResultItem[] = vectorResults.map((vr) => {
             const item = vr.item as Record<string, unknown>;
             const metadata = (item.metadata || {}) as Record<string, unknown>;
+            const rawId = (item.id as string) || '';
+            // 从 vector ID 提取 DB entryId: "entry_<uuid>" → "<uuid>"
+            const entryId = (metadata.entryId as string) || rawId.replace(/^entry_/, '');
             return {
-              id: (item.id as string) || (metadata.entryId as string) || '',
-              title: (metadata.title as string) || (item.id as string) || '',
+              id: entryId,
+              title: (metadata.title as string) || entryId,
               type: 'recipe',
               kind: (metadata.kind as string) || 'pattern',
               status: (metadata.status as string) || 'active',
               score: Math.round(vr.score * 1000) / 1000,
             } as SearchResultItem;
           });
+          // 按 entryId 去重 — 同一 Recipe 的多个 chunk 只保留最高分
+          results = this.#deduplicateByEntryId(results);
           if (type !== 'all') {
             results = results.filter((r: SearchResultItem) => {
               if (type === 'rule') {
@@ -608,17 +628,20 @@ export class SearchEngine {
             vectorResults = await this.vectorStore.query(queryEmbedding, limit * 2);
           }
           if (vectorResults && vectorResults.length > 0) {
-            let results: SearchResultItem[] = vectorResults.map(
-              (vr: VectorHit) =>
-                ({
-                  id: vr.id,
-                  title: (vr.metadata?.title as string) || vr.id,
-                  type: 'recipe',
-                  kind: (vr.metadata?.kind as string) || 'pattern',
-                  status: (vr.metadata?.status as string) || 'active',
-                  score: Math.round((vr.similarity || vr.score || 0) * 1000) / 1000,
-                }) as SearchResultItem
-            );
+            let results: SearchResultItem[] = vectorResults.map((vr: VectorHit) => {
+              const rawId = vr.id || '';
+              const entryId = (vr.metadata?.entryId as string) || rawId.replace(/^entry_/, '');
+              return {
+                id: entryId,
+                title: (vr.metadata?.title as string) || entryId,
+                type: 'recipe',
+                kind: (vr.metadata?.kind as string) || 'pattern',
+                status: (vr.metadata?.status as string) || 'active',
+                score: Math.round((vr.similarity || vr.score || 0) * 1000) / 1000,
+              } as SearchResultItem;
+            });
+            // 按 entryId 去重
+            results = this.#deduplicateByEntryId(results);
             if (type !== 'all') {
               results = results.filter((r: SearchResultItem) => {
                 if (type === 'rule') {
@@ -646,6 +669,104 @@ export class SearchEngine {
       });
       return { items: this._scorerSearch(query, type, limit), actualMode: 'weighted' };
     }
+  }
+
+  /**
+   * 按 entryId 去重 — 同一 Recipe 的多个 chunk 只保留最高分的
+   * 解决向量搜索返回同一条目的多个 chunk 浪费结果位的问题
+   */
+  #deduplicateByEntryId(items: SearchResultItem[]): SearchResultItem[] {
+    const seen = new Map<string, SearchResultItem>();
+    for (const item of items) {
+      const existing = seen.get(item.id);
+      if (!existing || (item.score ?? 0) > (existing.score ?? 0)) {
+        seen.set(item.id, item);
+      }
+    }
+    return [...seen.values()].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  }
+
+  /**
+   * 评估 weighted 搜索结果的 confidence，决定是否需要语义搜索
+   * 返回 0-100 的分数，>= 60 跳过语义
+   */
+  #computeWeightedConfidence(
+    query: string,
+    items: SearchResultItem[],
+    requestedLimit: number
+  ): number {
+    let score = 0;
+
+    // ── 结果质量信号 ──
+    // FieldWeightedScorer 分数范围约 0-20，归一化后判断
+    const topScore = items[0]?.score ?? 0;
+    const secondScore = items[1]?.score ?? 0;
+
+    // top1 与 top2 分差大 → 明确命中
+    if (items.length >= 2 && topScore > 0) {
+      const relativeGap = (topScore - secondScore) / topScore;
+      if (relativeGap > 0.3) {
+        score += 25;
+      } else if (relativeGap > 0.15) {
+        score += 15;
+      }
+    }
+
+    // title/trigger 匹配（子串级别）
+    const lq = query.toLowerCase();
+    const matchLevel = items.slice(0, 3).reduce((best, it) => {
+      const t = (it.title || '').toLowerCase();
+      const tr = (it.trigger || '').toLowerCase();
+      if (t === lq || tr === lq || tr === `@${lq}`) {
+        return Math.max(best, 3); // 完全匹配
+      }
+      if (t.includes(lq) || tr.includes(lq)) {
+        return Math.max(best, 2); // 子串匹配
+      }
+      if (lq.includes(t) && t.length > 3) {
+        return Math.max(best, 1); // 反向包含
+      }
+      return best;
+    }, 0);
+    if (matchLevel === 3) {
+      score += 50;
+    } else if (matchLevel === 2) {
+      score += 35;
+    } else if (matchLevel === 1) {
+      score += 15;
+    }
+
+    // 代码术语检测（CamelCase、snake_case、@trigger）
+    if (
+      /^[A-Z][a-zA-Z0-9]+$/.test(query) ||
+      /^[a-z]+(_[a-z]+)+$/.test(query) ||
+      query.startsWith('@')
+    ) {
+      score += 25;
+    }
+
+    // 候选充足
+    if (items.length >= requestedLimit) {
+      score += 10;
+    }
+
+    // ── 查询特征信号（降低 confidence → 倾向调用语义）──
+    // 中文自然语言疑问句
+    if (/[如怎什为何哪]么?|是否|有没有|都有哪些|应该|需要/.test(query)) {
+      score -= 40;
+    }
+    // 英文自然语言问句
+    if (/^(how|what|why|when|where|which|can|does|is|should)\b/i.test(query)) {
+      score -= 40;
+    }
+    // 较长查询（可能是描述性语句）
+    if (query.length > 20) {
+      score -= 20;
+    } else if (query.length > 10) {
+      score -= 10;
+    }
+
+    return Math.max(0, Math.min(100, score));
   }
 
   /**

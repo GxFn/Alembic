@@ -177,6 +177,14 @@ export class PrimeSearchPipeline {
         .catch(() => ({ items: [] }))
     );
 
+    // Semantic-mode search for primary query — ensures semantic is always
+    // part of RRF fusion even when auto mode skips it (confidence ≥ 60)
+    const semanticPromise = autoQueries[0]
+      ? this.#search
+          .search(autoQueries[0], { mode: 'semantic', limit: 6, rank: false })
+          .catch(() => ({ items: [] }))
+      : Promise.resolve({ items: [] });
+
     // Keyword-mode searches (raw FWS scores — for cross-language synonym matching)
     const kwPromises = keywordQueries.map((q) =>
       this.#search
@@ -184,12 +192,20 @@ export class PrimeSearchPipeline {
         .catch(() => ({ items: [] }))
     );
 
-    const [autoResponses, kwResponses] = await Promise.all([
+    const [autoResponses, kwResponses, semanticResponse] = await Promise.all([
       Promise.all(autoPromises),
       Promise.all(kwPromises),
+      semanticPromise,
     ]);
 
-    const allResponses = [...autoResponses, ...kwResponses];
+    // Merge: auto + semantic + keyword
+    const semanticItems = ((semanticResponse as { items?: unknown[] }).items ||
+      []) as SearchResultItem[];
+    const allResponses = [
+      ...autoResponses,
+      ...(semanticItems.length > 0 ? [semanticResponse] : []),
+      ...kwResponses,
+    ];
 
     // Single-query shortcut: preserve original scores from search engine.
     // RRF is pointless with one response — it just converts rank to score,
