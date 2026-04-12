@@ -4,6 +4,27 @@
 
 ---
 
+## [3.4.1] - 2026-04-13
+
+### 修复
+
+- **Guard Go 规则误报大幅减少**：优化多项 Go 语言 Guard 规则，消除所有假阳性
+  - `go-defer-in-loop`：花括号回溯算法识别 goroutine 作用域，排除 `go func()` 内的 defer
+  - `go-no-global-var`：新增 `excludePrevLinePatterns` 机制处理 `//go:embed` 指令，排除 `embed`/`sync`/`atomic` 包级变量
+  - `go-no-err-ignored`：排除 Cobra `RegisterFlagCompletionFunc`/`MarkFlagRequired` 模式
+  - `go-no-panic`：修复 `skipTestFiles` 属性在 BuiltInRule → GuardRule 转换中丢失的问题
+- **AST 嵌套深度双重计算**：修复 10 个语言插件（Go、Swift、TypeScript、JavaScript、Python、Java、Rust、Dart、Obj-C）中嵌套深度被重复累加的问题
+- **Bootstrap 取消信号未传播**：Dashboard 取消冷启动时，AbortSignal 现在会正确传递到 AI Provider HTTP 调用，确保后端任务及时终止
+
+### 改进
+
+- **测试文件检测统一化**：`LanguageService.isTestFile()` 提供跨语言的测试文件识别，Guard 和 SourceFileCollector 统一使用该接口
+
+### 新增
+
+- **自适应 RRF 融合搜索**：`prime` 语义搜索采用自适应 alpha 参数的 RRF 融合策略
+- **双轨 AI Provider 配置**：Embed 模型与 LLM 模型配置分离，支持独立选择向量化和生成模型
+
 ## [3.4.0] - 2026-04-12
 
 ### 新增
