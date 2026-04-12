@@ -59,9 +59,11 @@ export function createProvider(options: Record<string, unknown> = {}) {
       break;
     case 'ollama':
       config.name = 'ollama';
-      config.baseUrl = config.baseUrl || 'http://localhost:11434/v1';
+      config.baseUrl =
+        config.baseUrl || process.env.ASD_OLLAMA_BASE_URL || 'http://localhost:11434/v1';
       config.apiKey = config.apiKey || 'ollama';
       config.model = config.model || 'llama3';
+      config.embedModel = config.embedModel || 'qwen3-embedding:0.6b';
       break;
     default:
       break;
@@ -212,10 +214,40 @@ export async function getProviderWithFallback() {
   return primary;
 }
 
+/**
+ * 创建独立的 Embedding Provider
+ *
+ * 当 ASD_EMBED_PROVIDER 被设置时，创建一个专用于 embedding 的 provider 实例，
+ * 使 embedding 和 LLM 生成可以使用不同的提供商/模型。
+ *
+ * 典型场景：LLM 用 Google Gemini，Embedding 用本地 Ollama + qwen3-embedding
+ *
+ * @returns 独立的 embed provider，或 null（未配置时）
+ */
+export function createEmbedProvider(): ReturnType<typeof createProvider> | null {
+  const embedProviderName = process.env.ASD_EMBED_PROVIDER;
+  if (!embedProviderName) {
+    return null;
+  }
+
+  const logger = Logger.getInstance();
+  logger.info(`[AiFactory] Creating dedicated embed provider: ${embedProviderName}`);
+
+  return createProvider({
+    provider: embedProviderName,
+    model: process.env.ASD_EMBED_MODEL || undefined,
+    baseUrl: process.env.ASD_EMBED_BASE_URL || undefined,
+    apiKey: process.env.ASD_EMBED_API_KEY || undefined,
+    embedModel: process.env.ASD_EMBED_MODEL || undefined,
+  });
+}
+
 /** 获取当前 AI 配置信息（同步，用于 UI 展示） */
 export function getAiConfigInfo() {
   const provider = process.env.ASD_AI_PROVIDER || 'auto';
   const model = process.env.ASD_AI_MODEL || '';
+  const embedProvider = process.env.ASD_EMBED_PROVIDER || '';
+  const embedModel = process.env.ASD_EMBED_MODEL || '';
   const hasGoogleKey = !!process.env.ASD_GOOGLE_API_KEY;
   const hasOpenAiKey = !!process.env.ASD_OPENAI_API_KEY;
   const hasClaudeKey = !!process.env.ASD_CLAUDE_API_KEY;
@@ -224,6 +256,8 @@ export function getAiConfigInfo() {
   return {
     provider,
     model,
+    embedProvider,
+    embedModel,
     hasKey: hasGoogleKey || hasOpenAiKey || hasClaudeKey || hasDeepSeekKey,
     keys: {
       google: hasGoogleKey,
@@ -243,6 +277,7 @@ export { OpenAiProvider } from './providers/OpenAiProvider.js';
 
 export default {
   createProvider,
+  createEmbedProvider,
   autoDetectProvider,
   getAiConfigInfo,
   getProviderWithFallback,

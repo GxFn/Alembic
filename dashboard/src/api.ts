@@ -1520,6 +1520,10 @@ Skill 文档格式要求：
     model?: string;
     apiKey?: string;
     proxy?: string;
+    embedProvider?: string;
+    embedModel?: string;
+    embedBaseUrl?: string;
+    embedApiKey?: string;
   }): Promise<{
     vars: Record<string, string>;
     hasEnvFile: boolean;

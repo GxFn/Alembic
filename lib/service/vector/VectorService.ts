@@ -302,14 +302,23 @@ export class VectorService {
     const { topK = 10, filter = null, minScore = 0 } = opts;
 
     try {
+      const t0 = performance.now();
       const embedResult = await this.#embedProvider.embed(query);
+      const tEmbed = performance.now();
       const queryVector = Array.isArray(embedResult[0]) ? embedResult[0] : embedResult;
 
-      return this.#vectorStore.searchVector(queryVector as number[], {
+      const results = await this.#vectorStore.searchVector(queryVector as number[], {
         topK,
         filter,
         minScore,
       });
+      const tHnsw = performance.now();
+
+      this.#logger.info(
+        `[VectorService] search: embed=${Math.round(tEmbed - t0)}ms hnsw=${Math.round(tHnsw - tEmbed)}ms total=${Math.round(tHnsw - t0)}ms results=${results.length}`
+      );
+
+      return results;
     } catch (err: unknown) {
       this.#logger.warn('[VectorService] search failed', {
         error: err instanceof Error ? err.message : String(err),
@@ -356,6 +365,7 @@ export class VectorService {
     // Embed query — circuit breaker skips embed after repeated failures
     let queryVector: number[] | null = null;
     const circuitOpen = Date.now() < this.#embedCircuitOpenUntil;
+    const tEmbedStart = performance.now();
     if (circuitOpen) {
       this.#logger.debug('[VectorService] embed circuit open, skipping embed');
     } else {
@@ -380,6 +390,7 @@ export class VectorService {
         }
       }
     }
+    const tEmbedEnd = performance.now();
 
     try {
       const fused = await this.#hybridRetriever.search(query, queryVector, {
@@ -387,6 +398,11 @@ export class VectorService {
         alpha,
         sparseSearchFn: sparseSearchFn ?? undefined,
       });
+      const tFuseEnd = performance.now();
+
+      this.#logger.info(
+        `[VectorService] hybridSearch: embed=${Math.round(tEmbedEnd - tEmbedStart)}ms fuse=${Math.round(tFuseEnd - tEmbedEnd)}ms total=${Math.round(tFuseEnd - tEmbedStart)}ms hasVector=${!!queryVector} results=${fused.length} alpha=${alpha}`
+      );
 
       return fused.map((r: Record<string, unknown>) => ({
         id: (r.id as string) || '',

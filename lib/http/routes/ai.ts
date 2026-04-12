@@ -566,6 +566,10 @@ const LLM_ENV_KEYS = [
   'ASD_CLAUDE_API_KEY',
   'ASD_DEEPSEEK_API_KEY',
   'ASD_AI_PROXY',
+  'ASD_EMBED_PROVIDER',
+  'ASD_EMBED_MODEL',
+  'ASD_EMBED_BASE_URL',
+  'ASD_EMBED_API_KEY',
 ];
 
 /**
@@ -637,7 +641,8 @@ router.post(
   '/env-config',
   validate(AiEnvConfigBody),
   async (req: Request, res: Response): Promise<void> => {
-    const { provider, model, apiKey, proxy } = req.body;
+    const { provider, model, apiKey, proxy, embedProvider, embedModel, embedBaseUrl, embedApiKey } =
+      req.body;
 
     const envPath = _getProjectEnvPath();
     let content = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
@@ -663,6 +668,20 @@ router.post(
     const keyName = (providerKeyMap as Record<string, string>)[provider];
     if (keyName && apiKey) {
       updates[keyName] = apiKey;
+    }
+
+    // Embedding 独立配置
+    if (embedProvider) {
+      updates.ASD_EMBED_PROVIDER = embedProvider;
+      if (embedModel) {
+        updates.ASD_EMBED_MODEL = embedModel;
+      }
+      if (embedBaseUrl) {
+        updates.ASD_EMBED_BASE_URL = embedBaseUrl;
+      }
+      if (embedApiKey) {
+        updates.ASD_EMBED_API_KEY = embedApiKey;
+      }
     }
 
     // 逐条合并到 .env 内容

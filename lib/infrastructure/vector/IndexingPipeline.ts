@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import { LanguageService } from '../../shared/LanguageService.js';
-import { KNOWLEDGE_BASE_DIR } from '../config/Defaults.js';
+import { CANDIDATES_DIR, KNOWLEDGE_BASE_DIR } from '../config/Defaults.js';
 import { BatchEmbedder } from './BatchEmbedder.js';
 import { chunk } from './Chunker.js';
 import type { VectorStore } from './VectorStore.js';
@@ -73,7 +73,12 @@ export class IndexingPipeline {
   ) {
     this.#vectorStore = options.vectorStore || null;
     this.#aiProvider = options.aiProvider || null;
-    this.#scanDirs = options.scanDirs || ['recipes', `${KNOWLEDGE_BASE_DIR}/recipes`];
+    this.#scanDirs = options.scanDirs || [
+      'recipes',
+      'candidates',
+      `${KNOWLEDGE_BASE_DIR}/recipes`,
+      `${KNOWLEDGE_BASE_DIR}/candidates`,
+    ];
     this.#projectRoot = options.projectRoot || process.cwd();
     this.#chunkingOptions = {
       strategy: options.chunking?.strategy ?? 'auto',

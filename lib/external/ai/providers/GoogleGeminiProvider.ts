@@ -21,9 +21,11 @@ import {
 } from '../AiProvider.js';
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-const EMBED_MODEL = 'models/gemini-embedding-001';
+const DEFAULT_EMBED_MODEL = 'models/gemini-embedding-001';
 
 export class GoogleGeminiProvider extends AiProvider {
+  #embedModel: string;
+
   constructor(config: AiProviderConfig = {}) {
     super({
       ...config,
@@ -34,6 +36,9 @@ export class GoogleGeminiProvider extends AiProvider {
     this.name = 'google-gemini';
     this.model = config.model || 'gemini-3-flash-preview';
     this.apiKey = config.apiKey || process.env.ASD_GOOGLE_API_KEY || '';
+    this.#embedModel = config.embedModel
+      ? `models/${config.embedModel.replace(/^models\//, '')}`
+      : DEFAULT_EMBED_MODEL;
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
   }
 
@@ -431,11 +436,11 @@ export class GoogleGeminiProvider extends AiProvider {
     for (let i = 0; i < texts.length; i += 100) {
       const batch = texts.slice(i, i + 100);
       const requests = batch.map((t) => ({
-        model: EMBED_MODEL,
+        model: this.#embedModel,
         content: { parts: [{ text: t.slice(0, 8000) }] },
       }));
 
-      const url = `${GEMINI_BASE}/${EMBED_MODEL}:batchEmbedContents?key=${this.apiKey}`;
+      const url = `${GEMINI_BASE}/${this.#embedModel}:batchEmbedContents?key=${this.apiKey}`;
       const data = await this._post(url, { requests });
       if (data?.embeddings) {
         results.push(...data.embeddings.map((e: { values: number[] }) => e.values));

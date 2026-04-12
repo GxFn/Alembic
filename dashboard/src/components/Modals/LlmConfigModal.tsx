@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2, Eye, EyeOff, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { X, Save, Loader2, Eye, EyeOff, CheckCircle2, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../../api';
 import { ICON_SIZES } from '../../constants/icons';
 import { useI18n } from '../../i18n';
@@ -18,6 +18,13 @@ const PROVIDERS = [
   { id: 'ollama', labelKey: 'llmConfig.providers.ollama' as const, defaultModel: 'llama3', keyEnv: '' },
 ];
 
+const EMBED_PROVIDERS = [
+  { id: '', labelKey: 'llmConfig.embedProviders.followLlm' as const, defaultModel: '' },
+  { id: 'ollama', labelKey: 'llmConfig.providers.ollama' as const, defaultModel: 'qwen3-embedding:0.6b' },
+  { id: 'google', labelKey: 'llmConfig.providers.gemini' as const, defaultModel: 'gemini-embedding-001' },
+  { id: 'openai', labelKey: 'llmConfig.providers.openai' as const, defaultModel: 'text-embedding-3-small' },
+];
+
 const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => {
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
@@ -30,6 +37,9 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
   const [showKey, setShowKey] = useState(false);
   const [existingKeys, setExistingKeys] = useState<Record<string, string>>({});
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [embedExpanded, setEmbedExpanded] = useState(false);
+  const [embedProvider, setEmbedProvider] = useState('');
+  const [embedModel, setEmbedModel] = useState('');
 
   useEffect(() => {
     loadConfig();
@@ -44,6 +54,11 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
       if (vars.ASD_AI_PROVIDER) setProvider(vars.ASD_AI_PROVIDER);
       if (vars.ASD_AI_MODEL) setModel(vars.ASD_AI_MODEL);
       if (vars.ASD_AI_PROXY) setProxy(vars.ASD_AI_PROXY);
+      if (vars.ASD_EMBED_PROVIDER) {
+        setEmbedProvider(vars.ASD_EMBED_PROVIDER);
+        setEmbedExpanded(true);
+      }
+      if (vars.ASD_EMBED_MODEL) setEmbedModel(vars.ASD_EMBED_MODEL);
       setExistingKeys(vars);
     } catch {
       // ignore
@@ -79,6 +94,8 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
         model: model || undefined,
         apiKey: apiKey.trim() || undefined,
         proxy: proxy.trim() || undefined,
+        embedProvider: embedProvider || undefined,
+        embedModel: embedModel || undefined,
       });
       setSaveSuccess(true);
       setTimeout(() => {
@@ -101,7 +118,7 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden bg-[var(--bg-surface)]"
+        className="rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden bg-[var(--bg-surface)]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -113,7 +130,7 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-5">
+        <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 size={24} className="animate-spin text-blue-500" />
@@ -202,6 +219,68 @@ const LlmConfigModal: React.FC<LlmConfigModalProps> = ({ onClose, onSaved }) => 
                   placeholder="http://127.0.0.1:7890"
                   className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)]/20 focus:border-[var(--accent-emphasis)] border-[var(--border-default)] bg-[var(--bg-subtle)] text-[var(--fg-primary)]"
                 />
+              </div>
+
+              {/* Embedding Provider */}
+              <div className="border border-[var(--border-default)] rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setEmbedExpanded(v => !v)}
+                  className="flex items-center justify-between w-full px-4 py-2.5 text-sm font-medium text-[var(--fg-primary)] hover:bg-[var(--bg-subtle)] transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    {t('llmConfig.embedTitle')}
+                    <span className="text-xs font-normal text-[var(--fg-muted)]">{t('llmConfig.optional')}</span>
+                    {!embedExpanded && embedProvider && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 font-medium">
+                        {embedProvider}{embedModel ? ` / ${embedModel}` : ''}
+                      </span>
+                    )}
+                  </span>
+                  {embedExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                {embedExpanded && (
+                  <div className="px-4 pb-3 pt-2 space-y-3 border-t border-[var(--border-default)]">
+                    <p className="text-xs text-[var(--fg-muted)]">{t('llmConfig.embedHint')}</p>
+                    {/* Embed Provider */}
+                    <div>
+                      <label className="block text-xs font-medium mb-1.5 text-[var(--fg-primary)]">{t('llmConfig.provider')}</label>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {EMBED_PROVIDERS.map(ep => (
+                          <button
+                            key={ep.id}
+                            type="button"
+                            onClick={() => {
+                              setEmbedProvider(ep.id);
+                              if (ep.defaultModel) { setEmbedModel(ep.defaultModel); }
+                              else { setEmbedModel(''); }
+                            }}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all whitespace-nowrap ${
+                              embedProvider === ep.id
+                                ? 'bg-[var(--accent-subtle)] border-[var(--accent-emphasis)] text-[var(--accent)] ring-1 ring-[var(--accent-emphasis)]/30'
+                                : 'bg-[var(--bg-surface)] border-[var(--border-default)] text-[var(--fg-secondary)] hover:border-[var(--border-emphasis)] hover:bg-[var(--bg-subtle)]'
+                            }`}
+                          >
+                            {t(ep.labelKey)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Embed Model */}
+                    {embedProvider && (
+                      <div>
+                        <label className="block text-xs font-medium mb-1.5 text-[var(--fg-primary)]">{t('llmConfig.embedModel')}</label>
+                        <input
+                          type="text"
+                          value={embedModel}
+                          onChange={e => setEmbedModel(e.target.value)}
+                          placeholder={EMBED_PROVIDERS.find(ep => ep.id === embedProvider)?.defaultModel || ''}
+                          className="w-full px-3 py-1.5 border rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[var(--accent-emphasis)]/20 focus:border-[var(--accent-emphasis)] border-[var(--border-default)] bg-[var(--bg-subtle)] text-[var(--fg-primary)]"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}

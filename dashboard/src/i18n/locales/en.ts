@@ -1547,6 +1547,12 @@ export const en: DeepString<typeof zh> = {
       claude: 'Claude',
       ollama: 'Ollama (Local)',
     },
+    embedTitle: 'Embedding Model',
+    embedHint: 'Configure a separate Embedding provider when it differs from the LLM provider. Leave unset to follow LLM.',
+    embedModel: 'Embedding Model Name',
+    embedProviders: {
+      followLlm: 'Follow LLM',
+    },
   },
 
   /* ═══════════════════════════════ recipeEditor ════════════════════════ */

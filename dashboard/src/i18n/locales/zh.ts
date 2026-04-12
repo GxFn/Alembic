@@ -1544,6 +1544,12 @@ export const zh = {
       claude: 'Claude',
       ollama: 'Ollama (本地)',
     },
+    embedTitle: 'Embedding 模型',
+    embedHint: '当 Embedding 和 LLM 使用不同提供商时，单独配置 Embedding Provider。不设则跟随 LLM。',
+    embedModel: 'Embedding 模型名称',
+    embedProviders: {
+      followLlm: '跟随 LLM',
+    },
   },
 
   /* ═══════════════════════════════ recipeEditor ════════════════════════ */

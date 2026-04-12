@@ -31,7 +31,7 @@ export class OpenAiProvider extends AiProvider {
     this.model = config.model || 'gpt-5.4-mini';
     this.apiKey = config.apiKey || process.env.ASD_OPENAI_API_KEY || '';
     this.baseUrl = config.baseUrl || OPENAI_BASE;
-    this.embedModel = config.embedModel || 'text-embedding-3-small';
+    this.embedModel = config.embedModel || process.env.ASD_EMBED_MODEL || 'text-embedding-3-small';
     this.logger = Logger.getInstance() as unknown as import('../AiProvider.js').AiLogger;
   }
 

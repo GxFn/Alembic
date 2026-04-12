@@ -365,6 +365,10 @@ export const AiEnvConfigBody = z.object({
   model: z.string().optional(),
   apiKey: z.string().optional(),
   proxy: z.string().optional(),
+  embedProvider: z.string().optional(),
+  embedModel: z.string().optional(),
+  embedBaseUrl: z.string().optional(),
+  embedApiKey: z.string().optional(),
 });
 
 // ═══ Extract Routes ══════════════════════════════
