@@ -11,6 +11,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { LanguageService } from '#shared/LanguageService.js';
 import { resolveProjectRoot } from '#shared/resolveProjectRoot.js';
 import { envelope } from '../envelope.js';
 import type { McpContext } from './types.js';
@@ -98,7 +99,7 @@ interface GuardEngineLike {
     summary: { total: number; errors: number; warnings: number; uncertain: number };
   };
   auditFiles(
-    files: Array<{ path: string; content: string }>,
+    files: Array<{ path: string; content: string; isTest?: boolean }>,
     opts: Record<string, unknown>
   ): GuardAuditResult;
   injectExternalRules(rules: unknown[]): void;
@@ -252,7 +253,7 @@ export async function guardAuditFiles(ctx: McpContext, args: GuardAuditArgs) {
           content = '';
         }
       }
-      return { path: absPath, content };
+      return { path: absPath, content, isTest: LanguageService.isTestFile(absPath) };
     })
   );
 
@@ -399,7 +400,7 @@ export async function guardReview(ctx: McpContext, args: GuardReviewArgs) {
   for (const fp of filePaths) {
     try {
       const code = await readFile(fp, 'utf8');
-      const auditResult = engine.auditFile(fp, code);
+      const auditResult = engine.auditFile(fp, code, { isTest: LanguageService.isTestFile(fp) });
       const violations = auditResult.violations;
 
       // 收集 uncertain
@@ -725,7 +726,7 @@ export async function scanProject(ctx: McpContext, args: ScanProjectArgs) {
             content = '';
           }
         }
-        return { path: f.path, content };
+        return { path: f.path, content, isTest: LanguageService.isTestFile(f.path) };
       })
     );
     guardAudit = engine.auditFiles(filesToAudit, { scope: 'project' });
@@ -851,9 +852,13 @@ async function _injectEnhancementGuardRules(
   try {
     const { initEnhancementRegistry } = await import('#core/enhancement/index.js');
     const enhReg = await initEnhancementRegistry();
-    // 使用空语言+空框架列表获取所有已注册的 Pack（不过滤）
-    // 这里我们注入 ALL 规则，让 GuardCheckEngine 按 languages 字段自行过滤
-    const allPacks = enhReg.all();
+    // 仅注入无框架条件的通用 Pack 规则（如 go-web 无 frameworks 条件）
+    // 有框架条件的 Pack（如 go-grpc 需要 frameworks: ['grpc']）由 Bootstrap Phase 4
+    // 通过 resolve(lang, detectedFrameworks) 精确注入，避免非 gRPC 项目出现误报
+    const allPacks = enhReg.all().filter((pack) => {
+      const cond = pack.conditions;
+      return !cond?.frameworks?.length;
+    });
     const allGuardRules: unknown[] = [];
     for (const pack of allPacks) {
       try {

@@ -126,6 +126,7 @@ export function runCodeLevelChecks(
   // ── Go ──
   if (language === 'go') {
     // defer 在循环内检查 — defer 在函数结束时才执行，循环内 defer 可能资源泄露
+    // 排除 go func() { defer ... } 模式（goroutine 内的 defer 是安全的）
     if (!isDisabled('go-defer-in-loop')) {
       let inLoop = false;
       for (let i = 0; i < lines.length; i++) {
@@ -134,15 +135,32 @@ export function runCodeLevelChecks(
           inLoop = true;
         }
         if (inLoop && /^\s*defer\s/.test(lines[i])) {
-          violations.push({
-            ruleId: 'go-defer-in-loop',
-            message: 'defer 在循环内会延迟到函数返回时才执行，可能导致资源泄露或大量堆积',
-            severity: 'warning',
-            line: i + 1,
-            snippet: lines[i].trim().slice(0, 120),
-            dimension: 'file',
-            fixSuggestion: '将循环体提取到独立函数中，或手动调用 Close()',
-          });
+          // 回溯找最近的作用域开场 { — 判断 defer 是否在匿名函数/goroutine 内
+          let insideAnonymousFunc = false;
+          let braceBalance = 0;
+          for (let j = i - 1; j >= 0; j--) {
+            const prev = lines[j];
+            braceBalance += (prev.match(/\}/g) || []).length;
+            braceBalance -= (prev.match(/\{/g) || []).length;
+            if (braceBalance < 0) {
+              // 找到包裹 defer 的最近 { — 检查该行是否包含 func 关键字
+              if (/\bfunc\b/.test(prev)) {
+                insideAnonymousFunc = true;
+              }
+              break;
+            }
+          }
+          if (!insideAnonymousFunc) {
+            violations.push({
+              ruleId: 'go-defer-in-loop',
+              message: 'defer 在循环内会延迟到函数返回时才执行，可能导致资源泄露或大量堆积',
+              severity: 'warning',
+              line: i + 1,
+              snippet: lines[i].trim().slice(0, 120),
+              dimension: 'file',
+              fixSuggestion: '将循环体提取到独立函数中，或手动调用 Close()',
+            });
+          }
         }
         // 简化: 遇到 } 且缩进回到顶层，认为循环结束
         if (inLoop && trimmed === '}' && (lines[i].match(/^\t/) || lines[i].match(/^}/))) {

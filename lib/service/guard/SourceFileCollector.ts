@@ -94,22 +94,22 @@ export async function collectSourceFiles(
 }
 
 /**
- * 收集源文件并读取内容
+ * 收集源文件并读取内容（带测试文件标记）
  * @param dir 根目录
  * @param options collectSourceFiles 选项
- * @returns >>}
+ * @returns { path, content, isTest }[]
  */
 export async function collectSourceFilesWithContent(
   dir: string,
   options: { extensions?: Set<string>; skipDirs?: Set<string>; maxFiles?: number } = {}
 ) {
   const paths = await collectSourceFiles(dir, options);
-  const results: { path: string; content: string }[] = [];
+  const results: { path: string; content: string; isTest: boolean }[] = [];
 
   for (const filePath of paths) {
     try {
       const content = await readFile(filePath, 'utf-8');
-      results.push({ path: filePath, content });
+      results.push({ path: filePath, content, isTest: LanguageService.isTestFile(filePath) });
     } catch {
       // 读取失败跳过
     }

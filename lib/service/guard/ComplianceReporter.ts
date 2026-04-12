@@ -209,7 +209,11 @@ export class ComplianceReporter {
     try {
       const { initEnhancementRegistry } = await import('#core/enhancement/index.js');
       const enhReg = await initEnhancementRegistry();
-      const allPacks = enhReg.all();
+      // 仅注入无框架条件的通用 Pack（有框架条件的由 Bootstrap resolve() 精确注入）
+      const allPacks = enhReg.all().filter((pack) => {
+        const cond = pack.conditions;
+        return !cond?.frameworks?.length;
+      });
       const allGuardRules: unknown[] = [];
       for (const pack of allPacks) {
         try {

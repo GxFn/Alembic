@@ -307,6 +307,13 @@ const SCAN_SKIP_DIRS = Object.freeze(
 );
 
 // ═══════════════════════════════════════════════════════════
+// 7.5) 通用测试目录模式（路径中包含典型测试目录名）
+// ═══════════════════════════════════════════════════════════
+
+const TEST_DIR_PATTERN =
+  /(?:^|[/\\])(?:tests?|__tests__|spec|__mocks__|testdata|test_driver|integration_test|e2e)[/\\]/;
+
+// ═══════════════════════════════════════════════════════════
 // Lazy caches
 // ═══════════════════════════════════════════════════════════
 
@@ -644,6 +651,14 @@ export class LanguageService {
             langSet.add(lang);
           }
         }
+        // 启发式: node 与其他生态共存时，JS/TS 通常只是构建工具，去掉
+        if (nonGeneric.length > 1 && nonGeneric.includes('node')) {
+          const hasOther = nonGeneric.some((e) => e !== 'node');
+          if (hasOther) {
+            langSet.delete('javascript');
+            langSet.delete('typescript');
+          }
+        }
         if (langSet.size > 0) {
           return [...langSet];
         }
@@ -726,6 +741,85 @@ export class LanguageService {
     }
 
     return [...langSet];
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 9) 测试文件判定 — 统一入口
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * 判定文件路径是否为测试文件
+   *
+   * 两层判定：
+   *   1. 语言特定的文件名模式（_test.go, .test.ts, test_*.py 等）
+   *   2. 通用测试目录模式（test/, tests/, __tests__/, spec/ 等）
+   *
+   * @param filePath 文件路径（相对或绝对均可）
+   * @param [language] 已知语言 ID，省略时从扩展名推断
+   * @returns 是否为测试文件
+   */
+  static isTestFile(filePath: string, language?: string): boolean {
+    if (!filePath) {
+      return false;
+    }
+    const name = filePath.split(/[/\\]/).pop() || '';
+    const lang = language || LanguageService.inferLang(name);
+
+    // ── 1. 语言特定的文件名模式 ──
+    switch (lang) {
+      case 'go':
+        if (name.endsWith('_test.go')) {
+          return true;
+        }
+        break;
+      case 'swift':
+        if (name.endsWith('Tests.swift') || name.endsWith('Test.swift')) {
+          return true;
+        }
+        break;
+      case 'rust':
+        if (name.endsWith('_test.rs') || name.startsWith('test_')) {
+          return true;
+        }
+        break;
+      case 'javascript':
+      case 'typescript':
+        if (/\.(test|spec)\.(js|ts|jsx|tsx|mjs|mts)$/.test(name)) {
+          return true;
+        }
+        break;
+      case 'python':
+        if (name.startsWith('test_') || name.endsWith('_test.py')) {
+          return true;
+        }
+        break;
+      case 'java':
+      case 'kotlin':
+        if (
+          name.endsWith('Test.java') ||
+          name.endsWith('Test.kt') ||
+          name.endsWith('Tests.java') ||
+          name.endsWith('Tests.kt')
+        ) {
+          return true;
+        }
+        break;
+      case 'ruby':
+        if (name.endsWith('_spec.rb') || name.endsWith('_test.rb') || name.startsWith('test_')) {
+          return true;
+        }
+        break;
+      case 'dart':
+        if (name.endsWith('_test.dart')) {
+          return true;
+        }
+        break;
+      default:
+        break;
+    }
+
+    // ── 2. 通用测试目录模式 ──
+    return TEST_DIR_PATTERN.test(filePath);
   }
 }
 

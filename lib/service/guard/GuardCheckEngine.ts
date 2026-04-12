@@ -45,8 +45,10 @@ interface BuiltInRule {
   fixSuggestion?: string;
   excludePaths?: RegExp;
   excludeLinePatterns?: string[];
+  excludePrevLinePatterns?: string[];
   skipComments?: boolean;
   skipTestBlocks?: boolean;
+  skipTestFiles?: boolean;
 }
 
 interface GuardRule {
@@ -63,8 +65,11 @@ interface GuardRule {
   fixSuggestion?: string | null;
   excludePaths?: RegExp | string;
   excludeLinePatterns?: string[];
+  excludePrevLinePatterns?: string[];
   skipComments?: boolean;
   skipTestBlocks?: boolean;
+  /** When true, this rule is skipped for test files (detected by LanguageService.isTestFile) */
+  skipTestFiles?: boolean;
   astQuery?: { queryType: string; params?: Record<string, string> };
 }
 
@@ -120,6 +125,8 @@ interface AuditFileResult {
 interface AuditFilesInput {
   path: string;
   content: string;
+  /** Pre-computed test file flag from LanguageService.isTestFile */
+  isTest?: boolean;
 }
 
 /**
@@ -383,6 +390,7 @@ const BUILT_IN_RULES = {
     languages: ['go'],
     dimension: 'file',
     category: 'correctness',
+    skipTestFiles: true,
   },
   'go-no-err-ignored': {
     message: '错误值不应用 _ 忽略，应处理或明确标注',
@@ -392,6 +400,11 @@ const BUILT_IN_RULES = {
     dimension: 'file',
     category: 'correctness',
     excludePaths: /(?:^|[/\\])(?:tests?|testdata|_test)[/\\]|_test\.go$/,
+    excludeLinePatterns: [
+      '\\.\\([^)]*\\)', // type assertion: val, _ := expr.(Type) — _ 是 bool ok，不是 error
+      'RegisterFlagCompletionFunc', // cobra flag completion: flag 名由同函数字面量保证，不会失败
+      'MarkFlagRequired', // cobra flag setup: 同上
+    ],
   },
   'go-no-init-abuse': {
     message: 'init() 函数副作用难以追踪，避免在 init 中执行复杂逻辑',
@@ -409,6 +422,14 @@ const BUILT_IN_RULES = {
     dimension: 'file',
     category: 'style',
     excludePaths: /(?:^|[/\\])(?:tests?|testdata)[/\\]|_test\.go$/,
+    excludeLinePatterns: [
+      '\\bembed\\.', // //go:embed requires package-level var
+      '\\bsync\\.', // sync.Map, sync.Once, sync.Mutex etc. are designed as package-level vars
+      '\\batomic\\.', // atomic.Pointer, atomic.Value etc.
+    ],
+    excludePrevLinePatterns: [
+      '//go:embed', // //go:embed directive on previous line requires package-level var
+    ],
   },
 
   // ══════════════════════════════════════════════════════════
@@ -770,7 +791,11 @@ export class GuardCheckEngine {
           ...(rule.excludePaths ? { excludePaths: rule.excludePaths } : {}),
           ...(rule.skipComments ? { skipComments: true } : {}),
           ...(rule.skipTestBlocks ? { skipTestBlocks: true } : {}),
+          ...(rule.skipTestFiles ? { skipTestFiles: true } : {}),
           ...(rule.excludeLinePatterns ? { excludeLinePatterns: rule.excludeLinePatterns } : {}),
+          ...(rule.excludePrevLinePatterns
+            ? { excludePrevLinePatterns: rule.excludePrevLinePatterns }
+            : {}),
         });
       }
     }
@@ -820,15 +845,15 @@ export class GuardCheckEngine {
    * 对代码运行静态检查
    * @param code 源代码
    * @param language 'objc'|'swift'|'javascript' 等
-   * @param options {scope, filePath}
+   * @param options {scope, filePath, isTest}
    * @returns >}
    */
   checkCode(
     code: string,
     language: string,
-    options: { scope?: string | null; filePath?: string } = {}
+    options: { scope?: string | null; filePath?: string; isTest?: boolean } = {}
   ) {
-    const { scope = null, filePath = '' } = options;
+    const { scope = null, filePath = '', isTest = false } = options;
     const violations: GuardViolation[] = [];
 
     // 获取匹配语言的规则
@@ -843,6 +868,11 @@ export class GuardCheckEngine {
         const re = r.excludePaths instanceof RegExp ? r.excludePaths : new RegExp(r.excludePaths);
         return !re.test(filePath);
       });
+    }
+
+    // 按 skipTestFiles 标记过滤测试文件
+    if (isTest) {
+      rules = rules.filter((r) => !r.skipTestFiles);
     }
 
     // 如果有 scope，按层级过滤：project ⊇ target ⊇ file
@@ -901,6 +931,10 @@ export class GuardCheckEngine {
       // 合并内置 + 配置级排除行模式
       const ruleId = rule.id || rule.name;
       const excludeLineRegexes = this._getExcludeLineRegexes(ruleId, rule.excludeLinePatterns);
+      const excludePrevLineRegexes = this._getExcludeLineRegexes(
+        `${ruleId}:prev`,
+        rule.excludePrevLinePatterns
+      );
 
       for (let i = 0; i < lines.length; i++) {
         // skipComments: 跳过注释行（doc comments / 行注释 / 块注释内）
@@ -915,6 +949,14 @@ export class GuardCheckEngine {
         if (re.test(lines[i])) {
           // excludeLinePatterns: 跳过匹配排除模式的行（UIKit 框架契约安全等场景）
           if (excludeLineRegexes.length > 0 && excludeLineRegexes.some((ep) => ep.test(lines[i]))) {
+            continue;
+          }
+          // excludePrevLinePatterns: 跳过前一行匹配排除模式的行（//go:embed 等指令注释）
+          if (
+            excludePrevLineRegexes.length > 0 &&
+            i > 0 &&
+            excludePrevLineRegexes.some((ep) => ep.test(lines[i - 1]))
+          ) {
             continue;
           }
           violations.push({
@@ -1616,7 +1658,11 @@ export class GuardCheckEngine {
    * @param code 文件内容
    * @param options {scope}
    */
-  auditFile(filePath: string, code: string, options: { scope?: string } = {}): AuditFileResult {
+  auditFile(
+    filePath: string,
+    code: string,
+    options: { scope?: string; isTest?: boolean } = {}
+  ): AuditFileResult {
     const language = detectLanguage(filePath);
     // 每次文件审计前重置 collector（单文件粒度）
     this._uncertaintyCollector.reset();
@@ -1647,8 +1693,8 @@ export class GuardCheckEngine {
     let totalViolations = 0;
     let totalErrors = 0;
 
-    for (const { path: filePath, content } of files) {
-      const result = this.auditFile(filePath, content, options);
+    for (const { path: filePath, content, isTest } of files) {
+      const result = this.auditFile(filePath, content, { ...options, isTest });
       results.push(result);
       totalViolations += result.summary.total;
       totalErrors += result.summary.errors;
@@ -1661,8 +1707,11 @@ export class GuardCheckEngine {
     totalViolations += crossFileViolations.length;
     totalErrors += crossFileViolations.filter((v) => v.severity === 'error').length;
 
+    const testFileCount = files.filter((f) => f.isTest).length;
     const summary = {
       filesChecked: results.length,
+      testFiles: testFileCount,
+      productionFiles: results.length - testFileCount,
       totalViolations,
       totalErrors,
       totalUncertain: results.reduce((s, r) => s + r.summary.uncertain, 0),
