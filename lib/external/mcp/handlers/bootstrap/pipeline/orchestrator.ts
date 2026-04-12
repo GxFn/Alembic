@@ -116,6 +116,7 @@ interface BootstrapFileEntry {
 /** Task manager minimal shape */
 interface TaskManagerLike {
   isSessionValid(sessionId: string): boolean;
+  getSessionAbortSignal?(): AbortSignal | null;
   emitProgress?(event: string, data: Record<string, unknown>): void;
   [key: string]: unknown;
 }
@@ -340,6 +341,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     /* not available */
   }
   const sessionId = view.bootstrapSession?.id ?? '';
+  const sessionAbortSignal = taskManager?.getSessionAbortSignal?.() ?? null;
 
   const isIncremental = incrementalPlan?.canIncremental && incrementalPlan?.mode === 'incremental';
   const emitter = new BootstrapEventEmitter(ctx.container);
@@ -945,7 +947,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       // 外层超时 = 安全网 (各阶段已有独立超时: Analyst 300s + Producer 180s + 硬缓冲 60s)
       const outerTimeoutMs = 3_600_000; // 1 小时——维度分析本身耗时长
       const runResult = await Promise.race([
-        runtime.execute(message, { strategyContext }),
+        runtime.execute(message, { strategyContext, abortSignal: sessionAbortSignal }),
         new Promise<never>((_, reject) =>
           setTimeout(
             () => reject(new Error(`Bootstrap runtime timeout for "${dimId}"`)),

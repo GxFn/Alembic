@@ -164,6 +164,9 @@ export class BootstrapTaskManager {
 
   #signalBus: SignalBus | null = null;
 
+  /** 当前 session 的 AbortController，用于取消正在执行的 AI 调用 */
+  #sessionAbortController: AbortController | null = null;
+
   /** 获取 RealtimeService 的 getter（延迟获取，避免循环依赖） */
   #getRealtimeService: (() => { broadcastEvent(name: string, data: unknown): void } | null) | null =
     null;
@@ -196,6 +199,7 @@ export class BootstrapTaskManager {
 
     const sessionId = `bs_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     this.#currentSession = new BootstrapSession(sessionId);
+    this.#sessionAbortController = new AbortController();
 
     for (const { id, meta } of taskDefs) {
       this.#currentSession.addTask(id, meta);
@@ -235,6 +239,12 @@ export class BootstrapTaskManager {
       }
     }
 
+    // 触发 AbortController，中断正在执行的 AI 调用
+    if (this.#sessionAbortController) {
+      this.#sessionAbortController.abort(reason);
+      this.#sessionAbortController = null;
+    }
+
     session.status = 'aborted';
     session.completedAt = Date.now();
     session.summary = {
@@ -267,6 +277,16 @@ export class BootstrapTaskManager {
         failed: session.failedTasks,
       },
     });
+  }
+
+  /**
+   * 获取当前 session 的 AbortSignal
+   *
+   * 用于传入 AgentRuntime.execute()，使得 abortSession() 可以立即中断正在执行的 AI 调用，
+   * 而不是等到下一个维度边界才检测到取消。
+   */
+  getSessionAbortSignal(): AbortSignal | null {
+    return this.#sessionAbortController?.signal ?? null;
   }
 
   /**

@@ -59,6 +59,8 @@ interface BootstrapFileEntry {
   relativePath: string;
   content: string;
   targetName: string;
+  /** Whether this file belongs to a test target or matches test file naming patterns */
+  isTest: boolean;
 }
 
 /** Target item — either a plain string or an object with metadata */
@@ -237,6 +239,7 @@ export async function runPhase1_FileCollection(
   const seenPaths = new Set<string>();
   const allFiles: BootstrapFileEntry[] = [];
   for (const t of allTargets) {
+    const isTestTarget = typeof t === 'object' && /^test/i.test(t.type || '');
     try {
       const fileList = await discoverer.getTargetFiles(t);
       for (const f of fileList) {
@@ -256,6 +259,7 @@ export async function runPhase1_FileCollection(
             relativePath: f.relativePath || path.basename(fp),
             content,
             targetName: typeof t === 'string' ? t : t.name,
+            isTest: isTestTarget || LanguageService.isTestFile(fp),
           });
         } catch {
           /* skip unreadable */
@@ -672,6 +676,7 @@ export async function runPhase3_GuardAudit(
     const guardFiles = allFiles.map((f: BootstrapFileEntry) => ({
       path: f.path,
       content: f.content,
+      isTest: f.isTest,
     }));
     guardAudit = guardEngine!.auditFiles(guardFiles, { scope: 'project' });
 
@@ -793,6 +798,7 @@ export async function runPhase4_DimensionResolve(params: Phase4Params) {
       const guardFiles = allFiles.map((f: BootstrapFileEntry) => ({
         path: f.path,
         content: f.content,
+        isTest: f.isTest,
       }));
       guardAudit = guardEngine.auditFiles(guardFiles, { scope: 'project' });
       logger.info(
