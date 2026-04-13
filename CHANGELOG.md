@@ -4,6 +4,16 @@
 
 ---
 
+## [3.4.2] - 2026-04-13
+
+### 新功能
+
+- **Mission Briefing 7 项结构增强**：`MissionBriefingBuilder` 输出新增 `architectureOverview`（架构概览）、`technologyStack`（技术栈）、`keyAbstractions`（核心抽象）三大顶层字段；`compressedClasses` 携带 `kind` 字段；`patterns` 附带代表性类名（top-3）；依赖图去重并新增 `dependentCount`；`ast.summary` 改为结构化输出（`kindDistribution` + `insight`）
+
+### 修复
+
+- **多语言 AST 解析器改进**：Swift kind 字段修复（extension/protocol 正确分派）、模式检测扩展至 11 种模式；JavaScript `extends` 属性提取和 `properties` 提取修复；Objective-C 模式检测修复；Dart 方法和属性解析修复；Java 注解提取修复
+
 ## [3.4.1] - 2026-04-13
 
 ### 修复
