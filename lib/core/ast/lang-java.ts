@@ -194,10 +194,8 @@ function _parseJavaClass(node: any) {
     }
   }
 
-  // 提取注解
-  const annotations = node.namedChildren
-    .filter((c: any) => c.type === 'marker_annotation' || c.type === 'annotation')
-    .map((a: any) => a.text);
+  // 提取注解（tree-sitter-java: 注解在 modifiers 子节点内）
+  const annotations = _extractAnnotations(node);
 
   // 修饰符
   const modifiers = node.namedChildren.find((c: any) => c.type === 'modifiers');
@@ -246,9 +244,7 @@ function _parseJavaMethod(node: any, className: any) {
   const complexity = body ? _estimateComplexity(body) : 1;
   const nestingDepth = body ? _maxNesting(body, 0) : 0;
 
-  const annotations = node.namedChildren
-    .filter((c: any) => c.type === 'marker_annotation' || c.type === 'annotation')
-    .map((a: any) => a.text);
+  const annotations = _extractAnnotations(node);
 
   return {
     name,
@@ -275,9 +271,7 @@ function _parseJavaField(node: any, className: any) {
   const isFinal = modifiers?.text?.includes('final') || false;
   const isPrivate = modifiers?.text?.includes('private') || false;
 
-  const annotations = node.namedChildren
-    .filter((c: any) => c.type === 'marker_annotation' || c.type === 'annotation')
-    .map((a: any) => a.text);
+  const annotations = _extractAnnotations(node);
 
   // Phase 5.3: Extract field type for DI resolution
   // field_declaration: [modifiers] type_identifier variable_declarator
@@ -305,6 +299,28 @@ function _parseJavaField(node: any, className: any) {
     typeAnnotation,
     line: node.startPosition.row + 1,
   };
+}
+
+/**
+ * tree-sitter-java 中注解位于 modifiers 子节点内，而非声明节点的直接子节点。
+ * 此辅助函数同时搜索两层：node.namedChildren + modifiers.namedChildren。
+ */
+function _extractAnnotations(node: any): string[] {
+  // 1. 直接子节点（兼容其他可能的 AST 结构）
+  const direct = node.namedChildren
+    .filter((c: any) => c.type === 'marker_annotation' || c.type === 'annotation')
+    .map((a: any) => a.text);
+  if (direct.length > 0) {
+    return direct;
+  }
+  // 2. modifiers 子节点
+  const modifiers = node.namedChildren.find((c: any) => c.type === 'modifiers');
+  if (modifiers) {
+    return modifiers.namedChildren
+      .filter((c: any) => c.type === 'marker_annotation' || c.type === 'annotation')
+      .map((a: any) => a.text);
+  }
+  return [];
 }
 
 // ── Java 模式检测 ──

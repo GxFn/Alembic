@@ -90,7 +90,17 @@ function _walkNode(node: any, ctx: any, parentClassName: any) {
         break;
       }
 
-      case 'function_signature':
+      case 'function_signature': {
+        // 顶层 function_signature 同样需要向前看兄弟 function_body
+        const nextSib = node.namedChild(i + 1);
+        const bodyNode = nextSib?.type === 'function_body' ? nextSib : null;
+        const func = _parseDartMethod(child, parentClassName, bodyNode);
+        if (func) {
+          ctx.methods.push(func);
+        }
+        break;
+      }
+
       case 'function_definition':
       case 'top_level_definition': {
         const func = _parseFunctionDef(child, parentClassName);
@@ -200,9 +210,20 @@ function _walkClassBody(body: any, ctx: any, className: any) {
 
     switch (child.type) {
       case 'method_signature':
-      case 'function_definition':
       case 'getter_signature':
       case 'setter_signature': {
+        // tree-sitter-dart: method_signature 和 function_body 是兄弟节点
+        // 需要向前看下一个兄弟，合并传递给解析器
+        const nextSibling = body.namedChild(i + 1);
+        const bodyNode = nextSibling?.type === 'function_body' ? nextSibling : null;
+        const method = _parseDartMethod(child, className, bodyNode);
+        if (method) {
+          ctx.methods.push(method);
+        }
+        break;
+      }
+
+      case 'function_definition': {
         const method = _parseFunctionDef(child, className);
         if (method) {
           ctx.methods.push(method);
@@ -329,11 +350,80 @@ function _parseEnumDecl(node: any, ctx: any) {
 
 // ── Function / Method ────────────────────────────────────────
 
+/**
+ * 解析 Dart class body 中的 method_signature / getter_signature / setter_signature。
+ * tree-sitter-dart 中这些节点的 identifier 嵌在 function_signature 子节点内，
+ * 且 function_body 是兄弟节点而非子节点。
+ */
+function _parseDartMethod(sigNode: any, className: any, bodyNode: any) {
+  // 递归搜索第一个 identifier（跳过类型标识符）
+  const name = _findMethodName(sigNode);
+  if (!name) {
+    return null;
+  }
+
+  const text = sigNode.text;
+  const isStatic = text.includes('static ');
+  const isAsync = bodyNode
+    ? bodyNode.text.includes('async') || bodyNode.text.includes('async*')
+    : false;
+  const isOverride = text.includes('@override');
+
+  const bodyLines = bodyNode ? bodyNode.endPosition.row - bodyNode.startPosition.row + 1 : 0;
+  const complexity = bodyNode ? _estimateComplexity(bodyNode) : 1;
+  const nestingDepth = bodyNode ? _maxNesting(bodyNode, 0) : 0;
+
+  let kind = 'definition';
+  if (sigNode.type === 'getter_signature') {
+    kind = 'getter';
+  }
+  if (sigNode.type === 'setter_signature') {
+    kind = 'setter';
+  }
+
+  return {
+    name,
+    className: className || null,
+    isClassMethod: isStatic,
+    isExported: !name.startsWith('_'),
+    isAsync,
+    isOverride,
+    paramCount: _countChildParams(sigNode),
+    bodyLines,
+    complexity,
+    nestingDepth,
+    line: sigNode.startPosition.row + 1,
+    kind,
+  };
+}
+
+function _findMethodName(node: any): string | null {
+  // method_signature > function_signature > identifier
+  // getter_signature > identifier
+  // setter_signature > identifier
+  for (let i = 0; i < node.namedChildCount; i++) {
+    const c = node.namedChild(i);
+    if (c.type === 'identifier') {
+      return c.text;
+    }
+    if (c.type === 'function_signature') {
+      const id = c.namedChildren.find((n: any) => n.type === 'identifier');
+      if (id) {
+        return id.text;
+      }
+    }
+  }
+  return null;
+}
+
 function _parseFunctionDef(node: any, className: any) {
-  const nameNode = node.namedChildren.find(
+  // 先尝试直接子节点，再递归搜索
+  let name = node.namedChildren.find(
     (c: any) => c.type === 'identifier' || c.type === 'function_name'
-  );
-  const name = nameNode?.text;
+  )?.text;
+  if (!name) {
+    name = _findMethodName(node);
+  }
   if (!name) {
     return null;
   }
@@ -368,14 +458,45 @@ function _parseFunctionDef(node: any, className: any) {
 // ── Property / Field ─────────────────────────────────────────
 
 function _parsePropertyDecl(node: any, className: any) {
-  const nameNode = node.namedChildren.find(
-    (c: any) => c.type === 'identifier' || c.type === 'initialized_identifier'
-  );
-  if (!nameNode) {
+  // tree-sitter-dart property 结构:
+  //   declaration > type_identifier + initialized_identifier_list > initialized_identifier > identifier
+  //   declaration > identifier (简单)
+  //   static_final_declaration > identifier
+  let name: string | null = null;
+
+  // 1. 直接子节点 identifier
+  const directId = node.namedChildren.find((c: any) => c.type === 'identifier');
+  if (directId) {
+    name = directId.text;
+  }
+
+  // 2. 嵌套在 initialized_identifier_list > initialized_identifier > identifier
+  if (!name) {
+    const idList = node.namedChildren.find((c: any) => c.type === 'initialized_identifier_list');
+    if (idList) {
+      const initId = idList.namedChildren.find((c: any) => c.type === 'initialized_identifier');
+      if (initId) {
+        const id = initId.namedChildren.find((c: any) => c.type === 'identifier');
+        if (id) {
+          name = id.text;
+        }
+      }
+    }
+  }
+
+  // 3. 直接 initialized_identifier
+  if (!name) {
+    const initId = node.namedChildren.find((c: any) => c.type === 'initialized_identifier');
+    if (initId) {
+      const id = initId.namedChildren.find((c: any) => c.type === 'identifier');
+      name = id?.text || initId.text;
+    }
+  }
+
+  if (!name) {
     return null;
   }
 
-  const name = nameNode.text;
   const text = node.text;
   const isFinal = text.includes('final ');
   const isLate = text.includes('late ');

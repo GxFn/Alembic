@@ -33,10 +33,34 @@ function _walkSwiftNode(node: any, ctx: any, parentClassName: any) {
       case 'class_declaration':
       case 'struct_declaration':
       case 'enum_declaration': {
+        // tree-sitter-swift maps protocol/extension to class_declaration too.
+        // Detect the actual keyword child and dispatch accordingly.
+        const keyword = _findKeywordChild(child);
+        if (keyword === 'protocol') {
+          const protoInfo = _parseSwiftProtocol(child);
+          ctx.protocols.push(protoInfo);
+          break;
+        }
+        if (keyword === 'extension') {
+          const extInfo = _parseSwiftExtension(child);
+          ctx.categories.push(extInfo);
+          const extBody = child.namedChildren.find(
+            (c: any) => c.type === 'class_body' || c.type === 'extension_body'
+          );
+          if (extBody) {
+            _walkSwiftNode(extBody, ctx, extInfo.className);
+          }
+          break;
+        }
+
         const classInfo = _parseSwiftTypeDecl(child);
         ctx.classes.push(classInfo);
         const body = child.namedChildren.find(
-          (c: any) => c.type === 'class_body' || c.type === 'struct_body' || c.type === 'enum_body'
+          (c: any) =>
+            c.type === 'class_body' ||
+            c.type === 'struct_body' ||
+            c.type === 'enum_body' ||
+            c.type === 'enum_class_body'
         );
         if (body) {
           _walkSwiftNode(body, ctx, classInfo.name);
@@ -86,12 +110,27 @@ function _walkSwiftNode(node: any, ctx: any, parentClassName: any) {
   }
 }
 
+/** Detect the actual Swift keyword from a class_declaration node's children. */
+const _swiftKeywords = ['struct', 'class', 'enum', 'actor', 'protocol', 'extension'];
+function _findKeywordChild(node: any): string {
+  for (let i = 0; i < node.childCount; i++) {
+    const childType = node.child(i).type;
+    if (_swiftKeywords.includes(childType)) {
+      return childType;
+    }
+  }
+  return 'class';
+}
+
 function _parseSwiftTypeDecl(node: any) {
   const name =
     node.namedChildren.find(
       (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
     )?.text || 'Unknown';
-  const kind = node.type.replace('_declaration', '');
+
+  // tree-sitter-swift maps struct/class/enum/actor all to `class_declaration`.
+  // Detect the actual kind from the keyword child node (e.g. struct="struct").
+  const kind = _findKeywordChild(node);
 
   const _superclass = null;
   const protocols: any[] = [];
@@ -173,7 +212,9 @@ function _parseSwiftExtension(node: any) {
   }
 
   const methods: any[] = [];
-  const body = node.namedChildren.find((c: any) => c.type === 'extension_body');
+  const body = node.namedChildren.find(
+    (c: any) => c.type === 'extension_body' || c.type === 'class_body'
+  );
   if (body) {
     for (const child of body.namedChildren) {
       if (child.type === 'function_declaration') {
@@ -250,8 +291,170 @@ function _parseSwiftProperty(node: any, className: any) {
 
 // ── Swift 模式检测 ──
 
-function detectSwiftPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
-  return [];
+function detectSwiftPatterns(root: any, _lang: any, methods: any, properties: any, classes: any) {
+  const patterns: any[] = [];
+
+  // Index properties by className for quick lookup
+  const propsByClass = new Map<string, any[]>();
+  for (const p of properties) {
+    if (p.className) {
+      const arr = propsByClass.get(p.className) || [];
+      arr.push(p);
+      propsByClass.set(p.className, arr);
+    }
+  }
+
+  // Index methods by className
+  const methodsByClass = new Map<string, any[]>();
+  for (const m of methods) {
+    if (m.className && m.kind === 'definition') {
+      const arr = methodsByClass.get(m.className) || [];
+      arr.push(m);
+      methodsByClass.set(m.className, arr);
+    }
+  }
+
+  for (const cls of classes) {
+    const kind = cls.kind as string;
+    const className = cls.name as string;
+    const clsProps = propsByClass.get(className) || [];
+    const clsMethods = methodsByClass.get(className) || [];
+
+    // ── 1. Singleton: `static let shared = ...` 属性 ──
+    const sharedProp = clsProps.find(
+      (p: any) =>
+        p.isStatic &&
+        (p.isConstant || p.isConst) &&
+        /^shared$|^default$|^instance$|^current$/.test(p.name)
+    );
+    if (sharedProp) {
+      patterns.push({
+        type: 'singleton',
+        className,
+        propertyName: sharedProp.name,
+        line: sharedProp.line,
+        confidence: 0.95,
+      });
+    }
+
+    // ── 2. Delegate: `weak var delegate` 属性或 protocol 命名以 Delegate/DataSource 结尾 ──
+    for (const p of clsProps) {
+      if (/delegate/i.test(p.name) && !p.name.startsWith('_')) {
+        patterns.push({
+          type: 'delegate',
+          className,
+          propertyName: p.name,
+          isWeakRef: /weak/.test(`${(p.attributes || []).join(' ')} ${p.modifiers || ''}`),
+          line: p.line,
+          confidence: 0.95,
+        });
+      }
+    }
+
+    // ── 3. Factory: `static func make/create/from/build` ──
+    for (const m of clsMethods) {
+      if (m.isClassMethod && /^make|^create|^from|^build/.test(m.name)) {
+        patterns.push({
+          type: 'factory',
+          className,
+          methodName: m.name,
+          line: m.line,
+          confidence: 0.85,
+        });
+      }
+    }
+
+    // ── 4. Actor: Swift concurrency primitive ──
+    if (kind === 'actor') {
+      patterns.push({
+        type: 'actor',
+        className,
+        line: cls.line,
+        confidence: 0.95,
+      });
+    }
+
+    // ── 5. Value type (struct): immutable-by-default semantics ──
+    if (kind === 'struct' && !className.endsWith('Error')) {
+      // Only flag structs with methods (not pure data containers)
+      if (clsMethods.length > 0) {
+        patterns.push({
+          type: 'value-type',
+          className,
+          methodCount: clsMethods.length,
+          line: cls.line,
+          confidence: 0.9,
+        });
+      }
+    }
+
+    // ── 6. Protocol-oriented default implementation ──
+    // (detected via categories/extensions that match a protocol name)
+    // Handled below after the class loop.
+
+    // ── 7. ViewModel: class name ends with ViewModel ──
+    if (/ViewModel$/.test(className)) {
+      patterns.push({
+        type: 'viewmodel',
+        className,
+        line: cls.line,
+        confidence: 0.9,
+      });
+    }
+
+    // ── 8. Coordinator pattern ──
+    if (/Coordinator$/.test(className)) {
+      patterns.push({
+        type: 'coordinator',
+        className,
+        line: cls.line,
+        confidence: 0.85,
+      });
+    }
+
+    // ── 9. Error type: enum conforming to Error ──
+    if (kind === 'enum') {
+      const conformsError = (cls.protocols || []).some(
+        (p: string) => p === 'Error' || p === 'LocalizedError'
+      );
+      if (conformsError || className.endsWith('Error')) {
+        patterns.push({
+          type: 'error-type',
+          className,
+          line: cls.line,
+          confidence: 0.9,
+        });
+      }
+    }
+
+    // ── 10. Middleware / Interceptor pattern ──
+    if (/Middleware$|Interceptor$/.test(className)) {
+      patterns.push({
+        type: 'middleware',
+        className,
+        line: cls.line,
+        confidence: 0.85,
+      });
+    }
+  }
+
+  // ── 11. Observer: methods matching didChange/willChange/observe/subscribe ──
+  for (const m of methods) {
+    if (m.kind !== 'definition') {
+      continue;
+    }
+    if (/^didChange|^willChange|^observe|^addObserver|^subscribe|^on[A-Z]/.test(m.name)) {
+      patterns.push({
+        type: 'observer',
+        className: m.className,
+        methodName: m.name,
+        line: m.line,
+        confidence: 0.7,
+      });
+    }
+  }
+
+  return patterns;
 }
 
 // ── 工具函数 ──
@@ -353,7 +556,11 @@ function _collectSwiftScopes(root: any) {
           (c: any) => c.type === 'type_identifier' || c.type === 'simple_identifier'
         )?.text;
         const body = child.namedChildren.find(
-          (c: any) => c.type === 'class_body' || c.type === 'struct_body' || c.type === 'enum_body'
+          (c: any) =>
+            c.type === 'class_body' ||
+            c.type === 'struct_body' ||
+            c.type === 'enum_body' ||
+            c.type === 'enum_class_body'
         );
         if (body) {
           visit(body, name || className);

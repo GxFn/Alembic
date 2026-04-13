@@ -292,9 +292,100 @@ function _parseObjCProperty(node: any, className: any) {
 // ── ObjC 模式检测 ──
 
 function detectObjCPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
-  // ObjC 特有的模式检测交由 AstAnalyzer 内的通用 _detectPatterns 处理
-  // 此函数可扩展 ObjC 特有模式（如 Category 模式）
-  return [];
+  const patterns: any[] = [];
+
+  // 按 className 分组
+  const methodsByClass = new Map<string, any[]>();
+  const propsByClass = new Map<string, any[]>();
+  for (const m of methods) {
+    const k = m.className || '';
+    if (!methodsByClass.has(k)) {
+      methodsByClass.set(k, []);
+    }
+    methodsByClass.get(k)!.push(m);
+  }
+  for (const p of properties) {
+    const k = p.className || '';
+    if (!propsByClass.has(k)) {
+      propsByClass.set(k, []);
+    }
+    propsByClass.get(k)!.push(p);
+  }
+
+  for (const cls of classes) {
+    const clsMethods = methodsByClass.get(cls.name) || [];
+    const clsProps = propsByClass.get(cls.name) || [];
+
+    // ── Singleton: +sharedInstance / +shared / +defaultManager ──
+    const singletonMethod = clsMethods.find(
+      (m: any) => m.isClassMethod && /^shared|^default|^current|^instance$/.test(m.name)
+    );
+    if (singletonMethod) {
+      patterns.push({
+        type: 'singleton',
+        className: cls.name,
+        methodName: singletonMethod.name,
+        line: singletonMethod.line,
+        confidence: 0.9,
+      });
+    }
+
+    // ── Delegate: @property (weak) id<XXXDelegate> delegate ──
+    for (const p of clsProps) {
+      if (/delegate/i.test(p.name)) {
+        const isWeak = (p.attributes || []).some((a: string) => a === 'weak');
+        patterns.push({
+          type: 'delegate',
+          className: cls.name,
+          propertyName: p.name,
+          isWeakRef: isWeak,
+          line: p.line,
+          confidence: 0.95,
+        });
+      }
+      if (/dataSource/i.test(p.name)) {
+        patterns.push({
+          type: 'delegate',
+          className: cls.name,
+          propertyName: p.name,
+          isWeakRef: true,
+          line: p.line,
+          confidence: 0.85,
+        });
+      }
+    }
+
+    // ── Factory: +classWithXxx / +xxxWithYyy (class factory methods) ──
+    for (const m of clsMethods) {
+      if (m.isClassMethod && /With[A-Z]/.test(m.name)) {
+        patterns.push({
+          type: 'factory',
+          className: cls.name,
+          methodName: m.name,
+          line: m.line,
+          confidence: 0.8,
+        });
+      }
+    }
+
+    // ── KVO Observer: observeValueForKeyPath / addObserver ──
+    const hasKVO = clsMethods.some((m: any) =>
+      /^observeValueForKeyPath$|^addObserver$|^removeObserver$/.test(m.name)
+    );
+    if (hasKVO) {
+      patterns.push({ type: 'observer', className: cls.name, line: cls.line, confidence: 0.85 });
+    }
+
+    // ── Notification Observer: NSNotificationCenter pattern ──
+    const hasNSNotif = clsMethods.some((m: any) =>
+      /notification|handleNotification|didReceiveNotification/i.test(m.name)
+    );
+    if (hasNSNotif) {
+      patterns.push({ type: 'observer', className: cls.name, line: cls.line, confidence: 0.7 });
+    }
+  }
+
+  return patterns;
 }
 
 // ── 工具函数 ──

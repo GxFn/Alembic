@@ -93,8 +93,76 @@ function _walkJSClassBody(body: any, ctx: any, className: any) {
     } else if (child.type === 'field_definition' || child.type === 'public_field_definition') {
       const name = child.namedChildren.find((c: any) => c.type === 'property_identifier')?.text;
       if (name) {
-        ctx.properties.push({ name, className, line: child.startPosition.row + 1 });
+        const isStatic = child.text.trimStart().startsWith('static');
+        ctx.properties.push({
+          name,
+          className,
+          isStatic,
+          isConstant: false,
+          line: child.startPosition.row + 1,
+        });
       }
+    }
+  }
+
+  // 从 constructor 中提取 this.xxx = ... 赋值属性
+  _extractConstructorProperties(body, ctx, className);
+}
+
+function _extractConstructorProperties(body: any, ctx: any, className: any) {
+  if (!body) {
+    return;
+  }
+  for (let i = 0; i < body.namedChildCount; i++) {
+    const child = body.namedChild(i);
+    if (child.type !== 'method_definition') {
+      continue;
+    }
+    const nameNode = child.namedChildren.find(
+      (c: any) => c.type === 'property_identifier' || c.type === 'identifier'
+    );
+    if (nameNode?.text !== 'constructor') {
+      continue;
+    }
+    const stmtBlock = child.namedChildren.find((c: any) => c.type === 'statement_block');
+    if (!stmtBlock) {
+      continue;
+    }
+    const seen = new Set<string>(
+      ctx.properties.filter((p: any) => p.className === className).map((p: any) => p.name)
+    );
+    _walkForThisAssignments(stmtBlock, ctx, className, seen);
+  }
+}
+
+function _walkForThisAssignments(node: any, ctx: any, className: any, seen: Set<string>) {
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child.type === 'expression_statement') {
+      const expr = child.namedChildren.find((c: any) => c.type === 'assignment_expression');
+      if (expr) {
+        const left = expr.namedChildren[0];
+        if (left?.type === 'member_expression') {
+          const obj = left.namedChildren.find((c: any) => c.type === 'this');
+          const prop = left.namedChildren.find((c: any) => c.type === 'property_identifier');
+          if (obj && prop && !seen.has(prop.text)) {
+            seen.add(prop.text);
+            ctx.properties.push({
+              name: prop.text,
+              className,
+              isStatic: false,
+              isConstant: false,
+              line: child.startPosition.row + 1,
+            });
+          }
+        }
+      }
+    } else if (
+      child.namedChildCount > 0 &&
+      child.type !== 'function' &&
+      child.type !== 'arrow_function'
+    ) {
+      _walkForThisAssignments(child, ctx, className, seen);
     }
   }
 }
@@ -105,14 +173,12 @@ function _parseJSClass(node: any) {
 
   for (const child of node.namedChildren) {
     if (child.type === 'class_heritage') {
-      const ext = child.namedChildren.find((c: any) => c.type === 'extends_clause');
-      if (ext) {
-        const typeNode = ext.namedChildren.find(
-          (c: any) => c.type === 'identifier' || c.type === 'member_expression'
-        );
-        if (typeNode) {
-          superclass = typeNode.text;
-        }
+      // tree-sitter-javascript: class_heritage → identifier (直接子节点, 无 extends_clause 包装)
+      const typeNode = child.namedChildren.find(
+        (c: any) => c.type === 'identifier' || c.type === 'member_expression'
+      );
+      if (typeNode) {
+        superclass = typeNode.text;
       }
     }
   }
@@ -172,6 +238,57 @@ function _parseJSVariableDecl(node: any, ctx: any, parentClassName: any) {
 function detectJSPatterns(root: any, lang: any, methods: any, properties: any, classes: any) {
   const patterns: any[] = [];
 
+  // 按 className 分组
+  const methodsByClass = new Map<string, any[]>();
+  const propsByClass = new Map<string, any[]>();
+  for (const m of methods) {
+    const k = m.className || '';
+    if (!methodsByClass.has(k)) {
+      methodsByClass.set(k, []);
+    }
+    methodsByClass.get(k)!.push(m);
+  }
+  for (const p of properties) {
+    const k = p.className || '';
+    if (!propsByClass.has(k)) {
+      propsByClass.set(k, []);
+    }
+    propsByClass.get(k)!.push(p);
+  }
+
+  for (const cls of classes) {
+    const clsMethods = methodsByClass.get(cls.name) || [];
+    const clsProps = propsByClass.get(cls.name) || [];
+
+    // ── Singleton: static getInstance() / static instance ──
+    const hasGetInstance = clsMethods.some(
+      (m: any) => m.isClassMethod && /^getInstance$|^shared$/.test(m.name)
+    );
+    const hasStaticInstance = clsProps.some(
+      (p: any) => p.isStatic && /^instance$|^shared$|^default$/.test(p.name)
+    );
+    if (hasGetInstance || hasStaticInstance) {
+      patterns.push({ type: 'singleton', className: cls.name, line: cls.line, confidence: 0.9 });
+    }
+
+    // ── Observer / EventEmitter ──
+    const emitMethods = clsMethods.filter((m: any) =>
+      /^on$|^emit$|^addEventListener$|^removeEventListener$|^subscribe$|^addListener$/.test(m.name)
+    );
+    if (emitMethods.length >= 2) {
+      patterns.push({ type: 'observer', className: cls.name, line: cls.line, confidence: 0.85 });
+    }
+
+    // ── Middleware ──
+    if (
+      /middleware|interceptor/i.test(cls.name) ||
+      clsMethods.some((m: any) => /^use$|^handle$/.test(m.name) && m.isClassMethod === false)
+    ) {
+      patterns.push({ type: 'middleware', className: cls.name, line: cls.line, confidence: 0.8 });
+    }
+  }
+
+  // 自由函数级别的模式
   for (const m of methods) {
     if (/^use[A-Z]/.test(m.name) && !m.className) {
       patterns.push({ type: 'react-hook', methodName: m.name, line: m.line, confidence: 0.9 });
@@ -183,15 +300,6 @@ function detectJSPatterns(root: any, lang: any, methods: any, properties: any, c
         methodName: m.name,
         line: m.line,
         confidence: 0.8,
-      });
-    }
-    if (/^on[A-Z]|^emit$|^addEventListener$|^subscribe$/.test(m.name)) {
-      patterns.push({
-        type: 'observer',
-        className: m.className,
-        methodName: m.name,
-        line: m.line,
-        confidence: 0.7,
       });
     }
   }
