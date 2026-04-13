@@ -95,6 +95,7 @@ interface CompressedProtocol {
 /** 压缩后的 AST 类 */
 interface CompressedAstClass {
   name: string;
+  kind?: string;
   superclass?: string | null;
   file?: string | null;
   methodCount: number;
@@ -107,7 +108,7 @@ interface MissionBriefing {
   ast: {
     available: boolean;
     compressionLevel?: string;
-    summary?: string;
+    summary?: string | { text: string; kindDistribution: Record<string, number>; insight: string };
     classes: CompressedAstClass[];
     protocols: CompressedProtocol[];
     categories?: { baseClass?: string; name: string; file?: string | null; methods: string[] }[];
@@ -120,10 +121,26 @@ interface MissionBriefing {
       longMethods?: number;
     } | null;
   };
+  architectureOverview?: {
+    style: string;
+    layers: { name: string; modules: string[]; fileCount: number; role: string }[];
+    externalDeps: { name: string; role: string }[];
+    keyInsights: string[];
+  } | null;
+  technologyStack?: { name: string; role: string; usedBy: string[] }[] | null;
+  keyAbstractions?:
+    | {
+        name: string;
+        kind: string;
+        module: string;
+        significance: string;
+        detail: string;
+      }[]
+    | null;
   codeEntityGraph: { totalEntities: number; totalEdges: number } | null;
   callGraph: { methodEntities: number; callEdges: number; durationMs: number } | null;
   dependencyGraph: {
-    nodes: { id: string; label: string; fileCount?: number }[];
+    nodes: { id: string; label: string; fileCount?: number; dependentCount?: number }[];
     edges: unknown[];
   } | null;
   guardFindings: {
@@ -855,6 +872,7 @@ function compressAstForBriefing(astProjectSummary: AstSummary | null, fileCount:
 
   const compressedClasses = sortedClasses.map((c) => ({
     name: c.name,
+    kind: c.kind || 'class',
     superclass: c.superclass || null,
     file: c.file || c.relativePath || null,
     methodCount: c.methodCount || c.methods?.length || 0,
@@ -877,9 +895,44 @@ function compressAstForBriefing(astProjectSummary: AstSummary | null, fileCount:
       .slice(0, 10),
   }));
 
-  const summary = `${classes.length} classes, ${protocols.length} protocols, ${categories.length} categories, ${astProjectSummary.projectMetrics?.totalMethods || 0} methods`;
+  // ── 结构化 summary: 含 kindDistribution + insight ──
+  const kindDist: Record<string, number> = {};
+  for (const c of dedupedClasses) {
+    const k = (c.kind as string) || 'class';
+    kindDist[k] = (kindDist[k] || 0) + 1;
+  }
+  const totalTypes = dedupedClasses.length;
+  const kindParts = Object.entries(kindDist)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `${v} ${k}`);
+  const summaryText = `${totalTypes} types (${kindParts.join(', ')}), ${protocols.length} protocols, ${categories.length} ${categories.length > 0 && categories[0]?.baseClass ? 'categories' : 'extensions'}, ${astProjectSummary.projectMetrics?.totalMethods || 0} methods`;
 
-  // 压缩 patternStats: 保留计数，移除详细列表
+  // 生成 insight
+  const valueTypeCount = (kindDist.struct || 0) + (kindDist.enum || 0);
+  const refTypeCount = kindDist.class || 0;
+  const actorCount = kindDist.actor || 0;
+  let insight = '';
+  if (totalTypes > 0) {
+    const vtRatio = Math.round((valueTypeCount / totalTypes) * 100);
+    if (vtRatio >= 60) {
+      insight = `Value types (struct+enum) account for ${vtRatio}% — project favors value semantics`;
+    } else if (refTypeCount > valueTypeCount) {
+      insight = `Reference types (class) account for ${Math.round((refTypeCount / totalTypes) * 100)}% — OOP-heavy codebase`;
+    } else {
+      insight = `Balanced mix of value types (${vtRatio}%) and reference types (${Math.round((refTypeCount / totalTypes) * 100)}%)`;
+    }
+    if (actorCount > 0) {
+      insight += `; ${actorCount} actors indicate structured concurrency adoption`;
+    }
+  }
+
+  const summary = {
+    text: summaryText,
+    kindDistribution: kindDist,
+    insight,
+  };
+
+  // ── 压缩 patternStats: 保留计数 + 代表性类名 ──
   const rawPatterns = astProjectSummary.patternStats || {};
   const compressedPatterns: Record<string, PatternValue> = {};
   for (const [key, val] of Object.entries(rawPatterns)) {
@@ -888,15 +941,26 @@ function compressAstForBriefing(astProjectSummary: AstSummary | null, fileCount:
     } else if (Array.isArray(val)) {
       compressedPatterns[key] = val.length; // 数组 → 计数
     } else if (val && typeof val === 'object') {
-      // 嵌套对象: 保留 count/总数，或递归压缩为浅层概要
       const sub: Record<string, number | string | boolean> = {};
       for (const [sk, sv] of Object.entries(val)) {
         if (typeof sv === 'number' || typeof sv === 'string' || typeof sv === 'boolean') {
           sub[sk] = sv;
         } else if (Array.isArray(sv)) {
-          sub[sk] = sv.length;
+          // instances 数组: 提取 top-3 类名作为 representatives
+          if (sk === 'instances' && sv.length > 0 && typeof sv[0] === 'object') {
+            sub[sk] = sv.length;
+            const classNames = sv
+              .map((inst: Record<string, unknown>) => inst.className || '')
+              .filter(Boolean) as string[];
+            const unique = [...new Set(classNames)].slice(0, 3);
+            if (unique.length > 0) {
+              sub.representatives = unique.join(', ');
+            }
+          } else {
+            sub[sk] = sv.length;
+          }
         } else if (sv && typeof sv === 'object') {
-          sub[sk] = Object.keys(sv).length; // 深层对象 → key 计数
+          sub[sk] = Object.keys(sv).length;
         }
       }
       compressedPatterns[key] = sub;
@@ -1070,6 +1134,349 @@ function buildExecutionPlan(activeDimensions: DimensionDef[]) {
   };
 }
 
+// ── Architecture Overview 自动推断 ────────────────────────
+
+/** 知名外部依赖的角色映射 */
+const KNOWN_DEPENDENCIES: Record<string, string> = {
+  // Swift / iOS
+  alamofire: 'HTTP networking',
+  moya: 'Network abstraction over Alamofire',
+  rxswift: 'Reactive programming (ReactiveX)',
+  rxcocoa: 'RxSwift UIKit bindings',
+  combine: 'Apple reactive framework',
+  kingfisher: 'Image downloading & caching',
+  sdwebimage: 'Image downloading & caching',
+  snapkit: 'Auto Layout DSL',
+  lottie: 'Animation rendering',
+  realm: 'Mobile database',
+  coredata: 'Apple persistence framework',
+  swiftui: 'Declarative UI framework',
+  // JavaScript / TypeScript
+  react: 'UI component framework',
+  vue: 'Progressive UI framework',
+  angular: 'Full-featured UI framework',
+  express: 'HTTP server framework',
+  nestjs: 'Enterprise Node.js framework',
+  axios: 'HTTP client',
+  prisma: 'Database ORM',
+  sequelize: 'SQL ORM',
+  mongoose: 'MongoDB ODM',
+  tailwindcss: 'Utility-first CSS',
+  webpack: 'Module bundler',
+  vite: 'Frontend build tool',
+  jest: 'Testing framework',
+  vitest: 'Vite-native testing',
+  redux: 'State management',
+  zustand: 'Lightweight state management',
+  // Go
+  gin: 'HTTP web framework',
+  echo: 'HTTP web framework',
+  gorm: 'Go ORM',
+  cobra: 'CLI framework',
+  // Python
+  django: 'Full-stack web framework',
+  flask: 'Micro web framework',
+  fastapi: 'Async web framework',
+  sqlalchemy: 'SQL toolkit & ORM',
+  pytorch: 'Deep learning framework',
+  tensorflow: 'Machine learning framework',
+  pandas: 'Data analysis library',
+  numpy: 'Numerical computing',
+};
+
+/**
+ * 从 targets + depGraph + localPackageModules 自动推断架构概览
+ */
+function buildArchitectureOverview(
+  targets: MissionBriefing['targets'],
+  depGraphData: DependencyGraph | null,
+  localPackageModules?: LocalPackageModule[]
+): MissionBriefing['architectureOverview'] {
+  if (!targets || targets.length === 0) {
+    return null;
+  }
+
+  // ── 分层: 按 inferredRole 分组 ──
+  const roleGroups: Record<string, { modules: string[]; fileCount: number }> = {};
+  for (const t of targets) {
+    const role = t.inferredRole || 'unknown';
+    if (!roleGroups[role]) {
+      roleGroups[role] = { modules: [], fileCount: 0 };
+    }
+    roleGroups[role].modules.push(t.name);
+    roleGroups[role].fileCount += t.fileCount || 0;
+  }
+
+  // 层级命名映射
+  const ROLE_LAYER_MAP: Record<string, { name: string; priority: number; role: string }> = {
+    app: {
+      name: 'App Shell',
+      priority: 0,
+      role: 'Application entry point, coordinators, DI assembly',
+    },
+    core: {
+      name: 'Core Infrastructure',
+      priority: 2,
+      role: 'Shared infrastructure libraries, base classes, utilities',
+    },
+    networking: {
+      name: 'Networking',
+      priority: 2,
+      role: 'Network client, middleware, API definitions',
+    },
+    feature: {
+      name: 'Feature Modules',
+      priority: 1,
+      role: 'Per-feature UI, view models, business logic',
+    },
+    ui: { name: 'UI Components', priority: 2, role: 'Shared UI components, themes, extensions' },
+    test: { name: 'Tests', priority: 3, role: 'Unit tests, integration tests, mocks' },
+    unknown: { name: 'Other', priority: 3, role: 'Uncategorized modules' },
+  };
+
+  const layers: { name: string; modules: string[]; fileCount: number; role: string }[] = [];
+  for (const [role, group] of Object.entries(roleGroups)) {
+    if (role === 'test') {
+      continue;
+    } // 测试模块不加入架构层
+    const layerDef = ROLE_LAYER_MAP[role] || ROLE_LAYER_MAP.unknown;
+    // 合并同优先级的层
+    const existing = layers.find((l) => l.name === layerDef.name);
+    if (existing) {
+      existing.modules.push(...group.modules);
+      existing.fileCount += group.fileCount;
+    } else {
+      layers.push({
+        name: layerDef.name,
+        modules: [...group.modules],
+        fileCount: group.fileCount,
+        role: layerDef.role,
+      });
+    }
+  }
+  // 按 priority 排序 (App Shell → Features → Core → Other)
+  layers.sort((a, b) => {
+    const pa = Object.values(ROLE_LAYER_MAP).find((v) => v.name === a.name)?.priority ?? 99;
+    const pb = Object.values(ROLE_LAYER_MAP).find((v) => v.name === b.name)?.priority ?? 99;
+    return pa - pb;
+  });
+
+  // ── 外部依赖识别 ──
+  const externalDeps: { name: string; role: string }[] = [];
+  const localModuleNames = new Set(targets.map((t) => t.name));
+  if (depGraphData?.nodes) {
+    for (const n of depGraphData.nodes) {
+      const id = typeof n === 'string' ? n : n.id || '';
+      const label = typeof n === 'string' ? n : n.label || id;
+      if (!localModuleNames.has(id) && !localModuleNames.has(label)) {
+        const knownRole = KNOWN_DEPENDENCIES[label.toLowerCase()];
+        externalDeps.push({
+          name: label,
+          role: knownRole || 'third-party dependency',
+        });
+      }
+    }
+  }
+
+  // ── 关键洞察 ──
+  const insights: string[] = [];
+  const totalFiles = targets.reduce((s, t) => s + (t.fileCount || 0), 0);
+  const featureGroup = roleGroups.feature;
+  const coreGroup = roleGroups.core;
+  const networkGroup = roleGroups.networking;
+
+  // 本地子包占比
+  if (localPackageModules && localPackageModules.length > 0) {
+    const pkgFiles = localPackageModules.reduce((s, m) => s + m.fileCount, 0);
+    const pct = totalFiles > 0 ? Math.round((pkgFiles / totalFiles) * 100) : 0;
+    insights.push(
+      `${localPackageModules.length} local packages provide ${pct}% of the codebase (${pkgFiles}/${totalFiles} files)`
+    );
+  }
+
+  // Feature 模块特征
+  if (featureGroup) {
+    const avgFiles = Math.round(featureGroup.fileCount / featureGroup.modules.length);
+    if (avgFiles <= 5) {
+      insights.push(
+        `Feature modules are thin (avg ${avgFiles} files) — business logic likely concentrates in core infrastructure`
+      );
+    } else {
+      insights.push(
+        `Feature modules average ${avgFiles} files each — self-contained feature architecture`
+      );
+    }
+  }
+
+  // 最大基础设施模块
+  if (coreGroup || networkGroup) {
+    const infraModules = [...(coreGroup?.modules || []), ...(networkGroup?.modules || [])];
+    const heaviest = targets
+      .filter((t) => infraModules.includes(t.name))
+      .sort((a, b) => (b.fileCount || 0) - (a.fileCount || 0));
+    if (heaviest.length > 0 && heaviest[0].fileCount) {
+      insights.push(
+        `${heaviest[0].name} (${heaviest[0].fileCount} files) is the heaviest infrastructure module`
+      );
+    }
+  }
+
+  // 推断架构风格
+  let style = 'Monolithic application';
+  if (localPackageModules && localPackageModules.length >= 2) {
+    style = 'Modular monolith (local packages)';
+  } else if (targets.length >= 5 && featureGroup && featureGroup.modules.length >= 3) {
+    style = 'Feature-modular architecture';
+  }
+
+  return { style, layers, externalDeps, keyInsights: insights };
+}
+
+/**
+ * 从外部依赖图中提取技术栈信息
+ */
+function buildTechnologyStack(
+  depGraphData: DependencyGraph | null,
+  targets: MissionBriefing['targets']
+): MissionBriefing['technologyStack'] {
+  if (!depGraphData?.nodes || !depGraphData?.edges) {
+    return null;
+  }
+
+  const localModuleNames = new Set(targets.map((t) => t.name));
+  const stack: { name: string; role: string; usedBy: string[] }[] = [];
+
+  for (const n of depGraphData.nodes) {
+    const id = typeof n === 'string' ? n : n.id || '';
+    const label = typeof n === 'string' ? n : n.label || id;
+    if (localModuleNames.has(id) || localModuleNames.has(label)) {
+      continue;
+    }
+    const role = KNOWN_DEPENDENCIES[label.toLowerCase()] || 'third-party dependency';
+    // 找出哪些模块依赖它
+    const usedBy = (depGraphData.edges || [])
+      .filter((e) => {
+        const edge = e as { to?: string; from?: string };
+        return edge.to === id || edge.to === label;
+      })
+      .map((e) => (e as { from: string }).from)
+      .filter((f) => localModuleNames.has(f))
+      .slice(0, 5);
+    stack.push({ name: label, role, usedBy });
+  }
+
+  return stack.length > 0 ? stack : null;
+}
+
+/**
+ * 提取项目关键抽象 — 从继承热点、协议遵从数、模块入口类中识别
+ */
+function buildKeyAbstractions(
+  astData: AstSummary | null,
+  targets: MissionBriefing['targets']
+): MissionBriefing['keyAbstractions'] {
+  if (!astData) {
+    return null;
+  }
+
+  const classes = astData.classes || [];
+  const protocols = astData.protocols || [];
+  const abstractions: {
+    name: string;
+    kind: string;
+    module: string;
+    significance: string;
+    detail: string;
+  }[] = [];
+
+  // §1: 高继承热点 — 被多个子类继承的基类
+  const subclassCount: Record<string, number> = {};
+  for (const cls of classes) {
+    if (cls.superclass) {
+      subclassCount[cls.superclass] = (subclassCount[cls.superclass] || 0) + 1;
+    }
+  }
+  const topBases = Object.entries(subclassCount)
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  for (const [baseName, count] of topBases) {
+    const baseCls = classes.find((c) => c.name === baseName);
+    const module =
+      baseCls?.targetName || _inferModule(baseCls?.file || baseCls?.relativePath, targets);
+    abstractions.push({
+      name: baseName,
+      kind: (baseCls?.kind as string) || 'class',
+      module,
+      significance: `Base class with ${count} subclasses`,
+      detail: `Subclasses: ${classes
+        .filter((c) => c.superclass === baseName)
+        .map((c) => c.name)
+        .slice(0, 5)
+        .join(', ')}`,
+    });
+  }
+
+  // §2: 高方法数类 — 复杂度热点
+  const methodHeavy = classes
+    .filter((c) => (c.methodCount || 0) >= 15)
+    .sort((a, b) => (b.methodCount || 0) - (a.methodCount || 0))
+    .slice(0, 3);
+  for (const cls of methodHeavy) {
+    // 跳过已在继承热点中出现的
+    if (abstractions.some((a) => a.name === cls.name)) {
+      continue;
+    }
+    const module = cls.targetName || _inferModule(cls.file || cls.relativePath, targets);
+    abstractions.push({
+      name: cls.name,
+      kind: (cls.kind as string) || 'class',
+      module,
+      significance: `Complexity hotspot (${cls.methodCount} methods)`,
+      detail: cls.superclass ? `extends ${cls.superclass}` : 'root class',
+    });
+  }
+
+  // §3: 高遵从协议 — 核心抽象接口
+  const protoWithConformers = protocols
+    .filter((p) => (p.conformers?.length || 0) >= 2 || (p.methodCount || 0) >= 3)
+    .sort((a, b) => (b.conformers?.length || 0) - (a.conformers?.length || 0))
+    .slice(0, 5);
+  for (const proto of protoWithConformers) {
+    const module = proto.targetName || _inferModule(proto.file || proto.relativePath, targets);
+    const conformerCount = proto.conformers?.length || 0;
+    abstractions.push({
+      name: proto.name,
+      kind: 'protocol',
+      module,
+      significance:
+        conformerCount > 0
+          ? `Protocol with ${conformerCount} conformers`
+          : `Protocol with ${proto.methodCount || 0} method requirements`,
+      detail:
+        conformerCount > 0
+          ? `Conformers: ${proto.conformers!.slice(0, 5).join(', ')}`
+          : `${proto.methodCount || 0} required methods`,
+    });
+  }
+
+  return abstractions.length > 0 ? abstractions.slice(0, 10) : null;
+}
+
+/** 从文件路径推断模块名 */
+function _inferModule(filePath: string | undefined, targets: MissionBriefing['targets']): string {
+  if (!filePath) {
+    return 'unknown';
+  }
+  for (const t of targets) {
+    if (filePath.includes(t.name)) {
+      return t.name;
+    }
+  }
+  return filePath.split('/')[0] || 'unknown';
+}
+
 // ── Panorama 摘要构建 ──────────────────────────────────────
 
 /**
@@ -1236,34 +1643,82 @@ export function buildMissionBriefing({
     EXAMPLE_TEMPLATES._default;
 
   // ── 组装 ──
+
+  // ── 依赖图节点去重 ──
+  const dedupedDepNodes: {
+    id: string;
+    label: string;
+    fileCount?: number;
+    dependentCount?: number;
+  }[] = [];
+  if (depGraphData?.nodes) {
+    const nodeMap = new Map<
+      string,
+      { id: string; label: string; fileCount?: number; dependentCount: number }
+    >();
+    for (const n of depGraphData.nodes) {
+      const id = typeof n === 'string' ? n : n.id || '';
+      const label = typeof n === 'string' ? n : n.label || id;
+      const fileCount = typeof n === 'string' ? undefined : n.fileCount;
+      if (!nodeMap.has(id)) {
+        nodeMap.set(id, { id, label, fileCount, dependentCount: 0 });
+      } else if (fileCount && !nodeMap.get(id)!.fileCount) {
+        nodeMap.get(id)!.fileCount = fileCount;
+      }
+    }
+    // 计算每个节点被多少模块依赖（fan-in）
+    for (const e of depGraphData.edges || []) {
+      const edge = e as { to?: string };
+      if (edge.to && nodeMap.has(edge.to)) {
+        nodeMap.get(edge.to)!.dependentCount++;
+      }
+    }
+    for (const node of nodeMap.values()) {
+      dedupedDepNodes.push(node);
+    }
+  }
+
+  // ── targets 构建 ──
+  const builtTargets = (targets || []).map((t: string | TargetInfo) => ({
+    name: typeof t === 'string' ? t : t.name,
+    type: typeof t === 'string' ? 'target' : t.type || 'target',
+    inferredRole: typeof t === 'string' ? undefined : t.inferredRole,
+    fileCount: typeof t === 'string' ? undefined : t.fileCount,
+  }));
+
   const briefing: MissionBriefing = {
     projectMeta,
 
     ast: compressAstForBriefing(astData ?? null, (projectMeta.fileCount as number) || 0),
 
+    // 高层次架构概览 — Agent 一目了然项目结构
+    architectureOverview: buildArchitectureOverview(
+      builtTargets,
+      depGraphData ?? null,
+      localPackageModules
+    ),
+
+    // 技术栈 — 外部依赖的角色识别
+    technologyStack: buildTechnologyStack(depGraphData ?? null, builtTargets),
+
+    // 关键抽象 — Agent 优先分析的核心类/协议
+    keyAbstractions: buildKeyAbstractions(astData ?? null, builtTargets),
+
     codeEntityGraph: summarizeEntityGraph(codeEntityResult ?? null),
 
     callGraph: summarizeCallGraph(callGraphResult ?? null),
 
-    dependencyGraph: depGraphData
-      ? {
-          nodes: (depGraphData.nodes || []).map((n: string | DependencyNode) => ({
-            id: typeof n === 'string' ? n : n.id || '',
-            label: typeof n === 'string' ? n : n.label || '',
-            fileCount: typeof n === 'string' ? undefined : n.fileCount,
-          })),
-          edges: (depGraphData.edges || []).slice(0, 100), // 限制边数
-        }
-      : null,
+    dependencyGraph:
+      dedupedDepNodes.length > 0
+        ? {
+            nodes: dedupedDepNodes,
+            edges: (depGraphData?.edges || []).slice(0, 100),
+          }
+        : null,
 
     guardFindings: summarizeGuardFindings(guardAudit ?? null),
 
-    targets: (targets || []).map((t: string | TargetInfo) => ({
-      name: typeof t === 'string' ? t : t.name,
-      type: typeof t === 'string' ? 'target' : t.type || 'target',
-      inferredRole: typeof t === 'string' ? undefined : t.inferredRole,
-      fileCount: typeof t === 'string' ? undefined : t.fileCount,
-    })),
+    targets: builtTargets,
 
     dimensions,
 
@@ -1347,10 +1802,11 @@ export function buildMissionBriefing({
       briefing.meta.compressionLevel = 'moderate';
     } else {
       // ── Level 4-5: 高代价压缩 (移除辅助数据) ──
-      // Level 4: 移除 evidenceStarters (体积优先)
+      // Level 4: 移除 evidenceStarters + technologyStack (体积优先)
       for (const dim of briefing.dimensions) {
         delete dim.evidenceStarters;
       }
+      briefing.technologyStack = null;
       // Level 5: SOP 降级为紧凑文本 + 移除 FAIL_EXAMPLES
       for (const dim of briefing.dimensions) {
         if (dim.analysisGuide && typeof dim.analysisGuide === 'object') {

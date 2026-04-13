@@ -73,6 +73,7 @@ export interface AstSummary {
 
 export interface AstClassInfo {
   name: string;
+  kind?: string;
   superclass?: string;
   methodCount?: number;
   methods?: unknown[];
