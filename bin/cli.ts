@@ -1656,11 +1656,10 @@ program
     }
 
     // 通过 Bootstrap 打开目标项目的 DB
-    const dbPath = join(projectRoot, '.autosnippet', 'autosnippet.db');
     const ConfigLoader = (await import('../lib/infrastructure/config/ConfigLoader.js')).default;
     const env = process.env.NODE_ENV || 'development';
     ConfigLoader.load(env);
-    ConfigLoader.set('database.path', dbPath);
+    ConfigLoader.set('database.path', '.autosnippet/autosnippet.db');
 
     const { bootstrap, container } = await initContainer({ projectRoot });
     const db = container.get('database')?.getDb?.();

@@ -217,7 +217,7 @@ export class SetupService {
       const config: Record<string, unknown> = {
         version: 2,
         projectName: this.projectName,
-        database: this.dbPath,
+        database: '.autosnippet/autosnippet.db',
         core: {
           dir: DEFAULT_KNOWLEDGE_BASE_DIR,
           constitution: `${DEFAULT_KNOWLEDGE_BASE_DIR}/constitution.yaml`,
@@ -565,7 +565,7 @@ export class SetupService {
 
     const env = process.env.NODE_ENV || 'development';
     ConfigLoader.load(env);
-    ConfigLoader.set('database.path', this.dbPath);
+    ConfigLoader.set('database.path', '.autosnippet/autosnippet.db');
 
     const bootstrap = new Bootstrap({ env });
     await bootstrap.initialize();
