@@ -1,16 +1,16 @@
 /**
  * Guard Code Action Provider — 灯泡菜单集成
  *
- * 当编辑器显示 AutoSnippet Guard 诊断时，在灯泡菜单提供：
- *   1. "搜索 AutoSnippet 知识库修复" → 触发 autosnippet.search 命令
- *   2. "忽略此规则" → 在行首添加 // autosnippet-disable-next-line: <ruleId>
+ * 当编辑器显示 Alembic Guard 诊断时，在灯泡菜单提供：
+ *   1. "搜索 Alembic 知识库修复" → 触发 asd.search 命令
+ *   2. "忽略此规则" → 在行首添加 // asd-disable-next-line: <ruleId>
  *
  * Agent 可通过 Code Action 获取修复建议（部分 IDE Agent 支持读取 Code Actions）。
  */
 
 import * as vscode from 'vscode';
 
-const DIAGNOSTIC_SOURCE = 'AutoSnippet Guard';
+const DIAGNOSTIC_SOURCE = 'Alembic Guard';
 
 export class GuardCodeActionProvider implements vscode.CodeActionProvider {
   static readonly providedCodeActionKinds = [
@@ -38,12 +38,12 @@ export class GuardCodeActionProvider implements vscode.CodeActionProvider {
 
       // ── Action 1: 搜索知识库修复 ──
       const searchAction = new vscode.CodeAction(
-        `搜索 AutoSnippet 知识库: ${ruleId}`,
+        `搜索 Alembic 知识库: ${ruleId}`,
         vscode.CodeActionKind.QuickFix
       );
       searchAction.command = {
-        title: '搜索 AutoSnippet 知识库',
-        command: 'autosnippet.searchGuardFix',
+        title: '搜索 Alembic 知识库',
+        command: 'asd.searchGuardFix',
         arguments: [ruleId],
       };
       searchAction.diagnostics = [diagnostic];
@@ -61,7 +61,7 @@ export class GuardCodeActionProvider implements vscode.CodeActionProvider {
       disableAction.edit.insert(
         document.uri,
         new vscode.Position(disableLine, 0),
-        `${indent}// autosnippet-disable-next-line: ${ruleId}\n`
+        `${indent}// asd-disable-next-line: ${ruleId}\n`
       );
       disableAction.diagnostics = [diagnostic];
       actions.push(disableAction);
@@ -88,11 +88,11 @@ export function registerGuardCodeActions(context: vscode.ExtensionContext): void
 
   // 搜索修复命令
   context.subscriptions.push(
-    vscode.commands.registerCommand('autosnippet.searchGuardFix', async (ruleId: string) => {
+    vscode.commands.registerCommand('asd.searchGuardFix', async (ruleId: string) => {
       if (!ruleId) { return; }
 
       // 尝试通过 MCP 搜索（如果 Agent Mode 可用），否则用 Quick Pick 展示
-      vscode.commands.executeCommand('autosnippet.search', ruleId);
+      vscode.commands.executeCommand('asd.search', ruleId);
     })
   );
 }

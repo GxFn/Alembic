@@ -172,7 +172,7 @@ export async function getTargets(ctx: McpContext, args: StructureArgs = {}) {
   const includeSummary = args.includeSummary !== false; // 默认 true
 
   if (!includeSummary) {
-    return envelope({ success: true, data: { targets }, meta: { tool: 'autosnippet_structure' } });
+    return envelope({ success: true, data: { targets }, meta: { tool: 'asd_structure' } });
   }
 
   // 带摘要：每个 target 附加文件数、语言统计、推断职责
@@ -218,7 +218,7 @@ export async function getTargets(ctx: McpContext, args: StructureArgs = {}) {
       targets: enriched,
       summary: { targetCount: targets.length, totalFiles, languageStats: globalLangStats },
     },
-    meta: { tool: 'autosnippet_structure' },
+    meta: { tool: 'asd_structure' },
   });
 }
 
@@ -301,7 +301,7 @@ export async function getTargetFiles(ctx: McpContext, args: StructureArgs) {
       totalAvailable: rawFiles.length,
       languageStats: langStats,
     },
-    meta: { tool: 'autosnippet_structure' },
+    meta: { tool: 'asd_structure' },
   });
 }
 
@@ -336,7 +336,7 @@ export async function getTargetMetadata(ctx: McpContext, args: StructureArgs) {
   // ── SPM 图谱 (spmmap.json) ──
   try {
     const knowledgeDir = Paths.getProjectKnowledgePath(projectRoot);
-    const mapPath = path.join(knowledgeDir, 'AutoSnippet.spmmap.json');
+    const mapPath = path.join(knowledgeDir, 'Alembic.spmmap.json');
     if (fs.existsSync(mapPath)) {
       const raw = await readFile(mapPath, 'utf8');
       const graph = JSON.parse(raw)?.graph || null;
@@ -373,7 +373,7 @@ export async function getTargetMetadata(ctx: McpContext, args: StructureArgs) {
     /* knowledge_edges may not exist */
   }
 
-  return envelope({ success: true, data: meta, meta: { tool: 'autosnippet_structure' } });
+  return envelope({ success: true, data: meta, meta: { tool: 'asd_structure' } });
 }
 
 export async function graphQuery(ctx: McpContext, args: GraphArgs) {
@@ -382,7 +382,7 @@ export async function graphQuery(ctx: McpContext, args: GraphArgs) {
     return envelope({
       success: false,
       message: 'KnowledgeGraphService not available — knowledge_edges 表可能未初始化',
-      meta: { tool: 'autosnippet_graph' },
+      meta: { tool: 'asd_graph' },
     });
   }
   const nodeType = args.nodeType || 'recipe';
@@ -401,12 +401,12 @@ export async function graphQuery(ctx: McpContext, args: GraphArgs) {
       return envelope({
         success: true,
         data,
-        meta: { tool: 'autosnippet_graph', source: 'relations-fallback' },
+        meta: { tool: 'asd_graph', source: 'relations-fallback' },
       });
     }
     throw err;
   }
-  return envelope({ success: true, data, meta: { tool: 'autosnippet_graph' } });
+  return envelope({ success: true, data, meta: { tool: 'asd_graph' } });
 }
 
 export async function graphImpact(ctx: McpContext, args: GraphArgs) {
@@ -415,7 +415,7 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
     return envelope({
       success: false,
       message: 'KnowledgeGraphService not available — knowledge_edges 表可能未初始化',
-      meta: { tool: 'autosnippet_graph' },
+      meta: { tool: 'asd_graph' },
     });
   }
   const nodeType = args.nodeType || 'recipe';
@@ -435,7 +435,7 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
           degraded: true,
           degradedReason: 'knowledge_edges 表不存在，仅从 relations 字段反查',
         },
-        meta: { tool: 'autosnippet_graph', source: 'relations-fallback' },
+        meta: { tool: 'asd_graph', source: 'relations-fallback' },
       });
     }
     throw err;
@@ -443,7 +443,7 @@ export async function graphImpact(ctx: McpContext, args: GraphArgs) {
   return envelope({
     success: true,
     data: { nodeId: args.nodeId, impactedCount: impacted.length, impacted },
-    meta: { tool: 'autosnippet_graph' },
+    meta: { tool: 'asd_graph' },
   });
 }
 
@@ -587,7 +587,7 @@ export async function graphPath(ctx: McpContext, args: GraphArgs) {
     return envelope({
       success: false,
       message: 'KnowledgeGraphService not available',
-      meta: { tool: 'autosnippet_graph' },
+      meta: { tool: 'asd_graph' },
     });
   }
   const fromType = args.fromType || 'recipe';
@@ -603,12 +603,12 @@ export async function graphPath(ctx: McpContext, args: GraphArgs) {
       return envelope({
         success: true,
         data: result,
-        meta: { tool: 'autosnippet_graph', source: 'relations-fallback' },
+        meta: { tool: 'asd_graph', source: 'relations-fallback' },
       });
     }
     throw err;
   }
-  return envelope({ success: true, data: result, meta: { tool: 'autosnippet_graph' } });
+  return envelope({ success: true, data: result, meta: { tool: 'asd_graph' } });
 }
 
 /** 降级路径查找：只能发现 1-hop 直接关系 */
@@ -651,7 +651,7 @@ async function _fallbackPathFromRecipe(ctx: McpContext, fromId: string, toId: st
 // ─── call_context — 调用链上下文 (Phase 5) ──────────────────
 
 /**
- * autosnippet_call_context handler
+ * asd_call_context handler
  * 查询方法的调用者、被调用者、影响半径
  */
 export async function callContext(ctx: McpContext, args: GraphArgs) {
@@ -664,7 +664,7 @@ export async function callContext(ctx: McpContext, args: GraphArgs) {
     return envelope({
       success: false,
       message: 'CodeEntityGraph not available — 请先运行 bootstrap',
-      meta: { tool: 'autosnippet_call_context' },
+      meta: { tool: 'asd_call_context' },
     });
   }
 
@@ -692,7 +692,7 @@ export async function callContext(ctx: McpContext, args: GraphArgs) {
           callees: [],
           note: 'knowledge_edges 表不存在，请运行 bootstrap 后再查询',
         },
-        meta: { tool: 'autosnippet_call_context' },
+        meta: { tool: 'asd_call_context' },
       });
     }
     throw err;
@@ -706,7 +706,7 @@ export async function callContext(ctx: McpContext, args: GraphArgs) {
       maxDepth,
       ...result,
     },
-    meta: { tool: 'autosnippet_call_context' },
+    meta: { tool: 'asd_call_context' },
   });
 }
 
@@ -718,7 +718,7 @@ export async function graphStats(ctx: McpContext) {
     return envelope({
       success: false,
       message: 'KnowledgeGraphService not available',
-      meta: { tool: 'autosnippet_graph' },
+      meta: { tool: 'asd_graph' },
     });
   }
   let stats: any;
@@ -734,10 +734,10 @@ export async function graphStats(ctx: McpContext) {
           nodeTypes: [],
           note: 'knowledge_edges 表不存在，请运行数据库迁移',
         },
-        meta: { tool: 'autosnippet_graph' },
+        meta: { tool: 'asd_graph' },
       });
     }
     throw err;
   }
-  return envelope({ success: true, data: stats, meta: { tool: 'autosnippet_graph' } });
+  return envelope({ success: true, data: stats, meta: { tool: 'asd_graph' } });
 }

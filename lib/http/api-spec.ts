@@ -3,12 +3,12 @@
 export const apiSpec = {
   openapi: '3.0.0',
   info: {
-    title: 'AutoSnippet API',
+    title: 'Alembic API',
     description: '自动代码片段管理系统 REST API',
     version: '2.0.0',
     contact: {
-      name: 'AutoSnippet Team',
-      url: 'https://github.com/autosnippet',
+      name: 'Alembic Team',
+      url: 'https://github.com/GxFn/Alembic',
     },
   },
   servers: [
@@ -17,7 +17,7 @@ export const apiSpec = {
       description: 'Development server',
     },
     {
-      url: 'https://api.autosnippet.dev/api/v1',
+      url: 'https://api.asd.dev/api/v1',
       description: 'Production server',
     },
   ],

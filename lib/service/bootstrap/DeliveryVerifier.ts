@@ -2,8 +2,8 @@
  * DeliveryVerifier — Bootstrap/Rescan 完成后交付完整性检查
  *
  * 验证以下交付物是否正确生成:
- *   - Channel A: autosnippet-project-rules.mdc
- *   - Channel B: autosnippet-patterns 系列文件
+ *   - Channel A: alembic-project-rules.mdc
+ *   - Channel B: alembic-patterns 系列文件
  *   - Channel C: .cursor/skills/ 目录
  *   - Channel F: AGENTS.md, CLAUDE.md, copilot-instructions.md
  *   - Wiki: meta.json
@@ -77,16 +77,16 @@ export class DeliveryVerifier {
   verify(): DeliveryVerification {
     const failures: string[] = [];
 
-    // Channel A: .cursor/rules/autosnippet-project-rules.mdc
+    // Channel A: .cursor/rules/alembic-project-rules.mdc
     const channelA = this.#verifyChannelA();
     if (!channelA.generated) {
-      failures.push('Channel A: autosnippet-project-rules.mdc missing or empty');
+      failures.push('Channel A: alembic-project-rules.mdc missing or empty');
     }
 
-    // Channel B: .cursor/rules/autosnippet-patterns-*.mdc
+    // Channel B: .cursor/rules/alembic-patterns-*.mdc
     const channelB = this.#verifyChannelB();
     if (!channelB.generated) {
-      failures.push('Channel B: no autosnippet-patterns-*.mdc files found');
+      failures.push('Channel B: no alembic-patterns-*.mdc files found');
     }
 
     // Channel C: .cursor/skills/
@@ -126,15 +126,10 @@ export class DeliveryVerifier {
   // ─── 各通道验证 ───────────────────────────────────────
 
   #verifyChannelA(): ChannelVerification {
-    const filePath = path.join(
-      this.#projectRoot,
-      '.cursor',
-      'rules',
-      'autosnippet-project-rules.mdc'
-    );
+    const filePath = path.join(this.#projectRoot, '.cursor', 'rules', 'alembic-project-rules.mdc');
     if (fs.existsSync(filePath)) {
       const size = fs.statSync(filePath).size;
-      return { generated: size > 0, file: 'autosnippet-project-rules.mdc', size };
+      return { generated: size > 0, file: 'alembic-project-rules.mdc', size };
     }
     return { generated: false };
   }
@@ -146,7 +141,7 @@ export class DeliveryVerifier {
     }
     const files = fs
       .readdirSync(rulesDir)
-      .filter((f) => f.startsWith('autosnippet-patterns-') && f.endsWith('.mdc'));
+      .filter((f) => f.startsWith('alembic-patterns-') && f.endsWith('.mdc'));
     return {
       generated: files.length > 0,
       files,
@@ -164,9 +159,9 @@ export class DeliveryVerifier {
   }
 
   #verifyChannelF(): ChannelVerification {
-    const agentsMd = this.#hasAutoSnippetSection(path.join(this.#projectRoot, 'AGENTS.md'));
-    const claudeMd = this.#hasAutoSnippetSection(path.join(this.#projectRoot, 'CLAUDE.md'));
-    const copilotInstructions = this.#hasAutoSnippetSection(
+    const agentsMd = this.#hasAlembicSection(path.join(this.#projectRoot, 'AGENTS.md'));
+    const claudeMd = this.#hasAlembicSection(path.join(this.#projectRoot, 'CLAUDE.md'));
+    const copilotInstructions = this.#hasAlembicSection(
       path.join(this.#projectRoot, '.github', 'copilot-instructions.md')
     );
     return {
@@ -226,13 +221,13 @@ export class DeliveryVerifier {
 
   // ─── 辅助 ───────────────────────────────────────────
 
-  #hasAutoSnippetSection(filePath: string): boolean {
+  #hasAlembicSection(filePath: string): boolean {
     try {
       if (!fs.existsSync(filePath)) {
         return false;
       }
       const content = fs.readFileSync(filePath, 'utf8');
-      return content.includes('autosnippet:begin');
+      return content.includes('asd:begin');
     } catch {
       return false;
     }

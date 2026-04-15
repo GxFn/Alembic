@@ -1,5 +1,5 @@
 /**
- * AutoSnippet Agent 模块 — 统一出口
+ * Alembic Agent 模块 — 统一出口
  *
  * @module agent
  *

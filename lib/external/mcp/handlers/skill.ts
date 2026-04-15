@@ -2,7 +2,7 @@
  * MCP Handlers — Skills 加载与发现
  *
  * 为 MCP 外部 Agent 提供 Skills 访问能力，使其能按需获取领域操作指南。
- * Skills 是 Agent 的知识增强文档，指导如何正确使用 AutoSnippet 工具。
+ * Skills 是 Agent 的知识增强文档，指导如何正确使用 Alembic 工具。
  *
  * 设计原则：
  *   - Skills 是只读文档，不涉及 AI 调用，不需要 Gateway gating
@@ -20,7 +20,7 @@ import type { McpContext } from './types.js';
 
 /**
  * 获取项目级 Skills 目录（运行时动态解析）
- * 路径: {projectRoot}/AutoSnippet/skills/ — 跟随项目走
+ * 路径: {projectRoot}/Alembic/skills/ — 跟随项目走
  */
 function _getProjectSkillsDir(ctx?: McpContext) {
   return getProjectSkillsPath(resolveProjectRoot(ctx?.container));
@@ -67,11 +67,11 @@ function _parseSkillMeta(skillName: string, baseDir = SKILLS_DIR) {
 
 /** Skill 适用场景映射 — 帮助 Agent 判断何时该加载哪个 Skill */
 const SKILL_USE_CASES: Record<string, string> = {
-  'autosnippet-create': '将代码模式/规则/事实提交到知识库',
-  'autosnippet-guard': '代码规范审计（Guard 规则检查）',
-  'autosnippet-recipes': '查询/使用项目标准（Recipe 上下文检索）',
-  'autosnippet-structure': '了解项目结构（Target / 依赖图谱 / 知识图谱）',
-  'autosnippet-devdocs': '保存开发文档（架构决策、调试报告、设计文档）',
+  'alembic-create': '将代码模式/规则/事实提交到知识库',
+  'alembic-guard': '代码规范审计（Guard 规则检查）',
+  'alembic-recipes': '查询/使用项目标准（Recipe 上下文检索）',
+  'alembic-structure': '了解项目结构（Target / 依赖图谱 / 知识图谱）',
+  'alembic-devdocs': '保存开发文档（架构决策、调试报告、设计文档）',
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -271,8 +271,8 @@ export function loadSkill(ctx: McpContext | null, args: { skillName?: string; se
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 创建项目级 Skill — 写入 {projectRoot}/AutoSnippet/skills/<name>/SKILL.md
- * 创建后自动 regenerate 编辑器索引（.cursor/rules/autosnippet-skills.mdc）
+ * 创建项目级 Skill — 写入 {projectRoot}/Alembic/skills/<name>/SKILL.md
+ * 创建后自动 regenerate 编辑器索引（.cursor/rules/alembic-skills.mdc）
  *
  * @param _ctx MCP context
  * @param args { name, description, content, overwrite? }
@@ -416,13 +416,13 @@ export function createSkill(ctx: McpContext | null, args: CreateSkillArgs) {
       path: skillPath,
       overwritten: fs.existsSync(skillPath) && overwrite,
       editorIndex: indexResult,
-      hint: `Skill "${name}" created. Use autosnippet_skill({ operation: "load", name: "${name}" }) to verify content.`,
+      hint: `Skill "${name}" created. Use asd_skill({ operation: "load", name: "${name}" }) to verify content.`,
     },
   });
 }
 
 /**
- * Regenerate .cursor/rules/autosnippet-skills.mdc 索引文件
+ * Regenerate .cursor/rules/alembic-skills.mdc 索引文件
  * 扫描所有项目级 Skills，生成摘要索引供 External Agent 被动发现
  *
  * @returns }
@@ -450,7 +450,7 @@ function _regenerateEditorIndex(ctx?: McpContext) {
 
     if (projectSkills.length === 0) {
       // 没有项目级 Skills 时，删除索引文件（如果存在）
-      const indexPath = path.join(rulesDir, 'autosnippet-skills.mdc');
+      const indexPath = path.join(rulesDir, 'alembic-skills.mdc');
       try {
         fs.unlinkSync(indexPath);
       } catch {
@@ -464,13 +464,13 @@ function _regenerateEditorIndex(ctx?: McpContext) {
 
     const mdcContent = [
       '---',
-      'description: AutoSnippet 项目级 Skills 索引（自动生成，请勿手动编辑）',
+      'description: Alembic 项目级 Skills 索引（自动生成，请勿手动编辑）',
       'alwaysApply: true',
       '---',
       '',
-      '# AutoSnippet Project Skills',
+      '# Alembic Project Skills',
       '',
-      `本项目已注册 ${projectSkills.length} 个自定义 Skill。使用 \`autosnippet_skill({ operation: "load", name })\` 加载完整内容。`,
+      `本项目已注册 ${projectSkills.length} 个自定义 Skill。使用 \`asd_skill({ operation: "load", name })\` 加载完整内容。`,
       '',
       skillLines,
       '',
@@ -479,7 +479,7 @@ function _regenerateEditorIndex(ctx?: McpContext) {
     // 写入 .cursor/rules/
     pathGuard.assertProjectWriteSafe(rulesDir);
     fs.mkdirSync(rulesDir, { recursive: true });
-    const indexPath = path.join(rulesDir, 'autosnippet-skills.mdc');
+    const indexPath = path.join(rulesDir, 'alembic-skills.mdc');
     fs.writeFileSync(indexPath, mdcContent, 'utf8');
 
     return { success: true, path: indexPath, skillCount: projectSkills.length };
@@ -493,7 +493,7 @@ function _regenerateEditorIndex(ctx?: McpContext) {
 // ═══════════════════════════════════════════════════════════
 
 /**
- * 删除项目级 Skill — 移除 {projectRoot}/AutoSnippet/skills/<name>/ 整个目录
+ * 删除项目级 Skill — 移除 {projectRoot}/Alembic/skills/<name>/ 整个目录
  * 内置 Skill 不可删除。删除后自动 regenerate 编辑器索引。
  *
  * @param _ctx MCP context
@@ -642,7 +642,7 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
       success: false,
       error: {
         code: 'SKILL_NOT_FOUND',
-        message: `Project skill "${name}" not found. Use autosnippet_skill({ operation: "create" }) to create it first.`,
+        message: `Project skill "${name}" not found. Use asd_skill({ operation: "create" }) to create it first.`,
       },
     });
   }
@@ -712,7 +712,7 @@ export function updateSkill(ctx: McpContext | null, args: UpdateSkillArgs) {
         Boolean
       ),
       editorIndex: indexResult,
-      hint: `Skill "${name}" updated. Use autosnippet_skill({ operation: "load", name: "${name}" }) to verify content.`,
+      hint: `Skill "${name}" updated. Use asd_skill({ operation: "load", name: "${name}" }) to verify content.`,
     },
   });
 }
@@ -807,11 +807,11 @@ function _listExistingProjectSkillNames(ctx?: McpContext | null): Set<string> {
 /** 推荐相关 Skills（基于静态映射） */
 function _getRelatedSkills(skillName: string) {
   const relations = {
-    'autosnippet-create': ['autosnippet-recipes'],
-    'autosnippet-guard': ['autosnippet-recipes'],
-    'autosnippet-recipes': ['autosnippet-guard', 'autosnippet-structure', 'autosnippet-create'],
-    'autosnippet-structure': ['autosnippet-recipes', 'autosnippet-create'],
-    'autosnippet-devdocs': ['autosnippet-recipes', 'autosnippet-create'],
+    'alembic-create': ['alembic-recipes'],
+    'alembic-guard': ['alembic-recipes'],
+    'alembic-recipes': ['alembic-guard', 'alembic-structure', 'alembic-create'],
+    'alembic-structure': ['alembic-recipes', 'alembic-create'],
+    'alembic-devdocs': ['alembic-recipes', 'alembic-create'],
   };
   return (relations as Record<string, string[]>)[skillName] || [];
 }

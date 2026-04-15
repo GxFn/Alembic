@@ -52,14 +52,14 @@ function buildCommentedHeaders(
   if (!headers || headers.length === 0) return [];
 
   const lines: string[] = [];
-  lines.push(`${indent}${commentPrefix} ── 🤖 AutoSnippet deps (already added to imports) ──`);
+  lines.push(`${indent}${commentPrefix} ── 🤖 Alembic deps (already added to imports) ──`);
   for (const h of headers) {
     lines.push(`${indent}${commentPrefix}   ${h.trim()}`);
   }
   return lines;
 }
 
-/** 生成 AutoSnippet 插入标记 */
+/** 生成 Alembic 插入标记 */
 function generateMarker(
   selected: SearchResultItem,
   commentPrefix: string
@@ -73,7 +73,7 @@ function generateMarker(
     hour: '2-digit',
     minute: '2-digit',
   });
-  return `${commentPrefix} 🤖 AutoSnippet${trigger}${name} @ ${timestamp}`;
+  return `${commentPrefix} 🤖 Alembic${trigger}${name} @ ${timestamp}`;
 }
 
 /**

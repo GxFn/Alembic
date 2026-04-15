@@ -99,7 +99,7 @@ function makeEntry(overrides = {}) {
     reviewedBy: 'reviewer-001',
     reviewedAt: 1739779200,
     source: 'bootstrap',
-    sourceFile: 'AutoSnippet/recipes/architecture/singleton.md',
+    sourceFile: 'Alembic/recipes/architecture/singleton.md',
     createdBy: 'agent',
     createdAt: 1739692800,
     updatedAt: 1739779200,
@@ -118,8 +118,8 @@ describe('KnowledgeFileWriter', () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asd-kfw-'));
     // 创建必要的目录结构
-    fs.mkdirSync(path.join(tmpDir, 'AutoSnippet', 'recipes'), { recursive: true });
-    fs.mkdirSync(path.join(tmpDir, 'AutoSnippet', 'candidates'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'Alembic', 'recipes'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, 'Alembic', 'candidates'), { recursive: true });
     writer = new KnowledgeFileWriter(tmpDir);
   });
 
@@ -527,7 +527,7 @@ description: "包含冒号：和引号的描述"
       writer.persist(entry);
 
       expect(entry.sourceFile).toBeDefined();
-      expect(entry.sourceFile).toContain('AutoSnippet/recipes/architecture/');
+      expect(entry.sourceFile).toContain('Alembic/recipes/architecture/');
     });
 
     it('should use trigger as filename when available', () => {
@@ -642,7 +642,7 @@ describe('KnowledgeSyncService', () => {
       };
 
       const rawContent = '---\nid: sync-test-001\n---\n\n## Test';
-      const row = syncService._buildDbRow(parsed, 'AutoSnippet/recipes/view/test.md', rawContent);
+      const row = syncService._buildDbRow(parsed, 'Alembic/recipes/view/test.md', rawContent);
 
       expect(row.id).toBe('sync-test-001');
       expect(row.title).toBe('Test Entry');
@@ -658,7 +658,7 @@ describe('KnowledgeSyncService', () => {
       expect(JSON.parse(row.reasoning)).toEqual({ whyStandard: 'reason', sources: ['a.swift'] });
       expect(row.includeHeaders).toBe(1);
       expect(JSON.parse(row.agentNotes)).toEqual(['note']);
-      expect(row.sourceFile).toBe('AutoSnippet/recipes/view/test.md');
+      expect(row.sourceFile).toBe('Alembic/recipes/view/test.md');
       expect(row.contentHash).toMatch(/^[a-f0-9]{16}$/);
     });
 

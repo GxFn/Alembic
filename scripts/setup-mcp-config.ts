@@ -2,7 +2,7 @@
 
 /**
  * VSCode/Cursor MCP 配置辅助脚本
- * 帮助用户快速配置 AutoSnippet MCP 集成
+ * 帮助用户快速配置 Alembic MCP 集成
  *
  * 使用:
  *   node scripts/setup-mcp-config.js [--editor vscode|cursor] [--path /path/to/project]
@@ -24,13 +24,13 @@ const isVSCode = editor === 'vscode';
 const isCursor = editor === 'cursor';
 const isQuiet = process.env.ASD_QUIET === 'true';
 
-// 检测是否在 AutoSnippet 仓库内执行
-const isAutoSnippetRepo =
+// 检测是否在 Alembic 仓库内执行
+const isAlembicRepo =
   fs.existsSync(path.join(projectPath, 'bin/mcp-server.js')) &&
   fs.existsSync(path.join(projectPath, 'bin/asd')) &&
   fs.existsSync(path.join(projectPath, 'package.json'));
 
-if (isAutoSnippetRepo && !args.path) {
+if (isAlembicRepo && !args.path) {
   if (!isQuiet) {
   }
   process.exit(0);
@@ -81,7 +81,7 @@ function configureVSCode() {
     config.servers = {};
   }
 
-  config.servers.autosnippet = {
+  config.servers.asd = {
     type: 'stdio',
     command: 'node',
     args: [mcpServerPath],
@@ -111,7 +111,7 @@ function configureCursor() {
   // 创建配置
   const config = {
     mcpServers: {
-      autosnippet: {
+      alembic: {
         command: 'node',
         args: [path.relative(projectPath, mcpServerPath) || './bin/mcp-server.js'],
         env: {

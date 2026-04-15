@@ -5,7 +5,7 @@ import pathGuard, { PathGuardError } from '../../lib/shared/PathGuard.js';
 
 describe('PathGuard', () => {
   const PROJECT_ROOT = '/Users/test/projects/MyApp';
-  const PACKAGE_ROOT = '/Users/test/.nvm/versions/node/v20/lib/node_modules/autosnippet';
+  const PACKAGE_ROOT = '/Users/test/.nvm/versions/node/v20/lib/node_modules/alembic';
 
   beforeEach(() => {
     pathGuard._reset();
@@ -50,11 +50,9 @@ describe('PathGuard', () => {
     });
 
     test('should allow paths within projectRoot', () => {
+      expect(() => pathGuard.assertSafe(path.join(PROJECT_ROOT, '.asd/alembic.db'))).not.toThrow();
       expect(() =>
-        pathGuard.assertSafe(path.join(PROJECT_ROOT, '.autosnippet/autosnippet.db'))
-      ).not.toThrow();
-      expect(() =>
-        pathGuard.assertSafe(path.join(PROJECT_ROOT, 'AutoSnippet/recipes/general/test.md'))
+        pathGuard.assertSafe(path.join(PROJECT_ROOT, 'Alembic/recipes/general/test.md'))
       ).not.toThrow();
       expect(() => pathGuard.assertSafe(path.join(PROJECT_ROOT, 'src/main.m'))).not.toThrow();
     });
@@ -79,10 +77,10 @@ describe('PathGuard', () => {
       }
     });
 
-    test('should allow global .autosnippet cache', () => {
+    test('should allow global .asd cache', () => {
       const HOME = process.env.HOME || process.env.USERPROFILE;
       if (HOME) {
-        const cachePath = path.join(HOME, '.autosnippet/cache/embeddings.json');
+        const cachePath = path.join(HOME, '.asd/cache/embeddings.json');
         expect(() => pathGuard.assertSafe(cachePath)).not.toThrow();
       }
     });
@@ -94,9 +92,9 @@ describe('PathGuard', () => {
     });
 
     test('should block sibling project directories (BiliDemo scenario)', () => {
-      expect(() =>
-        pathGuard.assertSafe('/Users/test/projects/BiliDemo/data/autosnippet.db')
-      ).toThrow(PathGuardError);
+      expect(() => pathGuard.assertSafe('/Users/test/projects/BiliDemo/data/alembic.db')).toThrow(
+        PathGuardError
+      );
     });
 
     test('should block parent directory traversal', () => {
@@ -131,67 +129,57 @@ describe('PathGuard', () => {
       pathGuard.configure({
         projectRoot: PROJECT_ROOT,
         packageRoot: PACKAGE_ROOT,
-        knowledgeBaseDir: 'AutoSnippet',
+        knowledgeBaseDir: 'Alembic',
       });
     });
 
     // ── 允许的写入路径 ──
 
-    test('should allow .autosnippet/ (DB, memory, conversations)', () => {
+    test('should allow .asd/ (DB, memory, conversations)', () => {
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.autosnippet/autosnippet.db'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.asd/alembic.db'))
       ).not.toThrow();
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.autosnippet/memory.jsonl'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.asd/memory.jsonl'))
       ).not.toThrow();
       expect(() =>
-        pathGuard.assertProjectWriteSafe(
-          path.join(PROJECT_ROOT, '.autosnippet/conversations/abc.jsonl')
-        )
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.asd/conversations/abc.jsonl'))
       ).not.toThrow();
       expect(() =>
-        pathGuard.assertProjectWriteSafe(
-          path.join(PROJECT_ROOT, '.autosnippet/signal-snapshot.json')
-        )
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, '.asd/signal-snapshot.json'))
       ).not.toThrow();
     });
 
-    test('should allow AutoSnippet/ (knowledge base: recipes, candidates, skills)', () => {
+    test('should allow Alembic/ (knowledge base: recipes, candidates, skills)', () => {
       expect(() =>
-        pathGuard.assertProjectWriteSafe(
-          path.join(PROJECT_ROOT, 'AutoSnippet/recipes/general/test.md')
-        )
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'Alembic/recipes/general/test.md'))
+      ).not.toThrow();
+      expect(() =>
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'Alembic/candidates/ui/widget.md'))
       ).not.toThrow();
       expect(() =>
         pathGuard.assertProjectWriteSafe(
-          path.join(PROJECT_ROOT, 'AutoSnippet/candidates/ui/widget.md')
+          path.join(PROJECT_ROOT, 'Alembic/skills/coldstart/SKILL.md')
         )
       ).not.toThrow();
       expect(() =>
-        pathGuard.assertProjectWriteSafe(
-          path.join(PROJECT_ROOT, 'AutoSnippet/skills/coldstart/SKILL.md')
-        )
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'Alembic/guard-exclusions.json'))
       ).not.toThrow();
       expect(() =>
-        pathGuard.assertProjectWriteSafe(
-          path.join(PROJECT_ROOT, 'AutoSnippet/guard-exclusions.json')
-        )
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'Alembic/guard-learner.json'))
       ).not.toThrow();
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/guard-learner.json'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'Alembic/recipe-stats.json'))
       ).not.toThrow();
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/recipe-stats.json'))
-      ).not.toThrow();
-      expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/feedback.json'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'Alembic/feedback.json'))
       ).not.toThrow();
     });
 
-    test('should allow AutoSnippet/.autosnippet/ (vector index, context)', () => {
+    test('should allow Alembic/.asd/ (vector index, context)', () => {
       expect(() =>
         pathGuard.assertProjectWriteSafe(
-          path.join(PROJECT_ROOT, 'AutoSnippet/.autosnippet/context/index/vector_index.json')
+          path.join(PROJECT_ROOT, 'Alembic/.asd/context/index/vector_index.json')
         )
       ).not.toThrow();
     });
@@ -202,7 +190,7 @@ describe('PathGuard', () => {
       ).not.toThrow();
       expect(() =>
         pathGuard.assertProjectWriteSafe(
-          path.join(PROJECT_ROOT, '.cursor/rules/autosnippet-skills.mdc')
+          path.join(PROJECT_ROOT, '.cursor/rules/alembic-skills.mdc')
         )
       ).not.toThrow();
     });
@@ -239,17 +227,17 @@ describe('PathGuard', () => {
       const HOME = process.env.HOME || process.env.USERPROFILE;
       if (HOME) {
         expect(() =>
-          pathGuard.assertProjectWriteSafe(path.join(HOME, '.autosnippet/cache/test.json'))
+          pathGuard.assertProjectWriteSafe(path.join(HOME, '.asd/cache/test.json'))
         ).not.toThrow();
       }
     });
 
-    test('should BLOCK ~/.autosnippet/autosnippet.db (not in cache scope)', () => {
+    test('should BLOCK ~/.asd/alembic.db (not in cache scope)', () => {
       const HOME = process.env.HOME || process.env.USERPROFILE;
       if (HOME) {
-        expect(() =>
-          pathGuard.assertProjectWriteSafe(path.join(HOME, '.autosnippet/autosnippet.db'))
-        ).toThrow(PathGuardError);
+        expect(() => pathGuard.assertProjectWriteSafe(path.join(HOME, '.asd/alembic.db'))).toThrow(
+          PathGuardError
+        );
       }
     });
 
@@ -257,10 +245,10 @@ describe('PathGuard', () => {
 
     test('should BLOCK data/ directory (BiliDemo incident root cause)', () => {
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'data/autosnippet.db'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'data/alembic.db'))
       ).toThrow(PathGuardError);
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'data/autosnippet.db-shm'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'data/alembic.db-shm'))
       ).toThrow(PathGuardError);
     });
 
@@ -313,9 +301,9 @@ describe('PathGuard', () => {
       expect(() =>
         pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'Knowledge/recipes/test.md'))
       ).not.toThrow();
-      // Default 'AutoSnippet' should be blocked since kbDir is 'Knowledge'
+      // Default 'Alembic' should be blocked since kbDir is 'Knowledge'
       expect(() =>
-        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'AutoSnippet/recipes/test.md'))
+        pathGuard.assertProjectWriteSafe(path.join(PROJECT_ROOT, 'Alembic/recipes/test.md'))
       ).toThrow(PathGuardError);
     });
 
@@ -334,7 +322,7 @@ describe('PathGuard', () => {
 
   describe('isSafe / isProjectWriteSafe', () => {
     beforeEach(() => {
-      pathGuard.configure({ projectRoot: PROJECT_ROOT, knowledgeBaseDir: 'AutoSnippet' });
+      pathGuard.configure({ projectRoot: PROJECT_ROOT, knowledgeBaseDir: 'Alembic' });
     });
 
     test('isSafe should return true for project paths', () => {
@@ -346,7 +334,7 @@ describe('PathGuard', () => {
     });
 
     test('isProjectWriteSafe should return true for allowed scopes', () => {
-      expect(pathGuard.isProjectWriteSafe(path.join(PROJECT_ROOT, '.autosnippet/db'))).toBe(true);
+      expect(pathGuard.isProjectWriteSafe(path.join(PROJECT_ROOT, '.asd/db'))).toBe(true);
     });
 
     test('isProjectWriteSafe should return false for disallowed scopes', () => {
@@ -360,8 +348,8 @@ describe('PathGuard', () => {
     });
 
     test('should resolve relative paths within projectRoot', () => {
-      const resolved = pathGuard.resolveProjectPath('.autosnippet/autosnippet.db');
-      expect(resolved).toBe(path.join(PROJECT_ROOT, '.autosnippet/autosnippet.db'));
+      const resolved = pathGuard.resolveProjectPath('.asd/alembic.db');
+      expect(resolved).toBe(path.join(PROJECT_ROOT, '.asd/alembic.db'));
     });
 
     test('should reject relative paths that escape projectRoot', () => {

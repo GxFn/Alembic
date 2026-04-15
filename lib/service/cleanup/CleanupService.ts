@@ -8,7 +8,7 @@
  *   - purgeExpiredTrash(): 清除超时限的垃圾桶文件夹
  *
  * 垃圾桶设计:
- *   - 位于 .autosnippet/.trash/<ISO-timestamp>/ 下
+ *   - 位于 .asd/.trash/<ISO-timestamp>/ 下
  *   - fullReset 时先将 candidates/ recipes/ skills/ wiki/ 移入垃圾桶，再清 DB
  *   - DB 数据导出为 db-snapshot.jsonl 保存在垃圾桶内
  *   - 超过保留天数(默认 7 天)的垃圾桶在下次 fullReset 或服务启动时自动清除
@@ -17,7 +17,7 @@
  * 保留原则:
  *   - 配置数据 (config.json, constitution.yaml, boxspec.json) 永不清理
  *   - IDE 集成配置 (.vscode/, .cursor/, .github/) 永不清理
- *   - 交付物 (.cursor/rules/autosnippet-*) 由 R4 重建，不在此清理
+ *   - 交付物 (.cursor/rules/alembic-*) 由 R4 重建，不在此清理
  *
  * @module service/cleanup/CleanupService
  */
@@ -105,7 +105,7 @@ export interface RecipeSnapshot {
 
 // ── 常量 ────────────────────────────────────────────────────
 
-/** 垃圾桶根目录（相对于 .autosnippet/） */
+/** 垃圾桶根目录（相对于 .asd/） */
 const TRASH_DIR = '.trash';
 
 /** 垃圾桶保留天数，超过后自动 purge */
@@ -282,14 +282,10 @@ export class CleanupService {
     result.deletedFiles += this.#clearDirectory(getContextIndexPath(this.#projectRoot));
 
     // 7. 删除 bootstrap-report.json
-    result.deletedFiles += this.#deleteFile(
-      path.join(kbPath, '.autosnippet', 'bootstrap-report.json')
-    );
+    result.deletedFiles += this.#deleteFile(path.join(kbPath, '.asd', 'bootstrap-report.json'));
 
     // 8. 清除 logs/signals/
-    result.deletedFiles += this.#clearDirectory(
-      path.join(kbPath, '.autosnippet', 'logs', 'signals')
-    );
+    result.deletedFiles += this.#clearDirectory(path.join(kbPath, '.asd', 'logs', 'signals'));
 
     result.deletedFiles += movedItems;
     result.trash = { folder: trashFolder, movedItems, dbSnapshotRows };
@@ -378,7 +374,7 @@ export class CleanupService {
 
     // 6. 删除 bootstrap-report.json
     result.deletedFiles += this.#deleteFile(
-      path.join(getProjectKnowledgePath(this.#projectRoot), '.autosnippet', 'bootstrap-report.json')
+      path.join(getProjectKnowledgePath(this.#projectRoot), '.asd', 'bootstrap-report.json')
     );
 
     this.#logger.info('[CleanupService] rescanClean complete', {
@@ -508,9 +504,9 @@ export class CleanupService {
 
   // ─── 内部工具方法 ─────────────────────────────────────
 
-  /** 获取垃圾桶根目录 (.autosnippet/.trash/) */
+  /** 获取垃圾桶根目录 (.asd/.trash/) */
   #getTrashRoot(): string {
-    return path.join(this.#projectRoot, '.autosnippet', TRASH_DIR);
+    return path.join(this.#projectRoot, '.asd', TRASH_DIR);
   }
 
   /** 创建时间戳垃圾桶文件夹，返回绝对路径 */

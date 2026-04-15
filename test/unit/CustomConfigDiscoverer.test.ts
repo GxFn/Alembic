@@ -274,7 +274,7 @@ describe('RubyDslParser — parseModuleSpec', () => {
 // ═══ CustomConfigDiscoverer ═══════════════════════════════
 
 describe('CustomConfigDiscoverer', () => {
-  const testDir = join(tmpdir(), `autosnippet-test-custom-config-${Date.now()}`);
+  const testDir = join(tmpdir(), `alembic-test-custom-config-${Date.now()}`);
   const discoverer = new CustomConfigDiscoverer();
 
   beforeAll(() => {
@@ -382,7 +382,7 @@ end
   });
 
   it('should not match a directory without markers', async () => {
-    const emptyDir = join(tmpdir(), `autosnippet-test-empty-${Date.now()}`);
+    const emptyDir = join(tmpdir(), `alembic-test-empty-${Date.now()}`);
     mkdirSync(emptyDir, { recursive: true });
     try {
       const result = await discoverer.detect(emptyDir);

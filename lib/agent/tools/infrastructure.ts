@@ -97,14 +97,13 @@ export const queryAuditLog = {
 export const loadSkill = {
   name: 'load_skill',
   description:
-    '加载指定的 Agent Skill 文档，获取领域操作指南和最佳实践参考。如知识提交 (autosnippet-create)、规范审计 (autosnippet-guard)、项目标准 (autosnippet-recipes) 等。',
+    '加载指定的 Agent Skill 文档，获取领域操作指南和最佳实践参考。如知识提交 (alembic-create)、规范审计 (alembic-guard)、项目标准 (alembic-recipes) 等。',
   parameters: {
     type: 'object',
     properties: {
       skillName: {
         type: 'string',
-        description:
-          'Skill 目录名（如 autosnippet-create, autosnippet-guard, autosnippet-recipes 等）',
+        description: 'Skill 目录名（如 alembic-create, alembic-guard, alembic-recipes 等）',
       },
     },
     required: ['skillName'],
@@ -149,7 +148,7 @@ export const loadSkill = {
 export const createSkillTool = {
   name: 'create_skill',
   description:
-    '创建项目级 Skill 文档，写入 AutoSnippet/skills/<name>/SKILL.md。Skill 是 Agent 的领域知识增强文档。创建后自动更新编辑器索引。',
+    '创建项目级 Skill 文档，写入 Alembic/skills/<name>/SKILL.md。Skill 是 Agent 的领域知识增强文档。创建后自动更新编辑器索引。',
   parameters: {
     type: 'object',
     properties: {

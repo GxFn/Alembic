@@ -1,13 +1,13 @@
 #!/bin/bash
-# AutoSnippet session hook for Claude Code
+# Alembic session hook for Claude Code
 # SessionStart: full task rules + prime reminder
 # PreCompact (--brief): minimal rules to survive compaction
 
 if [[ "$1" == "--brief" ]]; then
   # Brief mode — survives compaction, minimal context
   cat <<'EOF'
-📋 AutoSnippet Task Rules (MANDATORY):
-• Prime EVERY message: autosnippet_task({ operation: "prime" }) FIRST.
+📋 Alembic Task Rules (MANDATORY):
+• Prime EVERY message: asd_task({ operation: "prime" }) FIRST.
 • Create task for non-trivial work (≥2 files OR ≥10 lines). Create → code → close.
 • Handle in-progress tasks before new work. Close/fail ALL on session end.
 • You are the task operator — user speaks naturally, you run task operations.
@@ -17,12 +17,12 @@ EOF
 else
   # Full mode — SessionStart
   cat <<'EOF'
-[AutoSnippet Task Rules]
+[Alembic Task Rules]
 
-⚡ FIRST: Call autosnippet_task({ "operation": "prime" }) on EVERY message. No exceptions.
+⚡ FIRST: Call asd_task({ "operation": "prime" }) on EVERY message. No exceptions.
 
-🔑 CRITICAL: YOU Operate autosnippet_task — The User Doesn't
-• WRONG: "You can run autosnippet_task to create a task"
+🔑 CRITICAL: YOU Operate asd_task — The User Doesn't
+• WRONG: "You can run asd_task to create a task"
 • RIGHT: (you run create yourself and tell the user "Created task asd-42")
 
 📋 MUST:
@@ -45,14 +45,14 @@ else
 
 💡 When in doubt → create a task.
 
-📌 User agrees/disagrees with plan → autosnippet_task({ operation: "record_decision" }) immediately
+📌 User agrees/disagrees with plan → asd_task({ operation: "record_decision" }) immediately
 
 ✅ Session end checklist:
   [ ] Close every task with reason
   [ ] Fail incomplete tasks with notes
   [ ] Verify zero in_progress
 
-🔎 Search knowledge: autosnippet_search({ query: "..." })
-📚 Do NOT modify AutoSnippet/recipes/ or .autosnippet/ directly
+🔎 Search knowledge: asd_search({ query: "..." })
+📚 Do NOT modify Alembic/recipes/ or .asd/ directly
 EOF
 fi

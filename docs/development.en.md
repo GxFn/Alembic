@@ -1,6 +1,6 @@
 # Development Guide
 
-Developer guide for AutoSnippet. Covers environment setup, project structure, coding standards, testing, and release workflow.
+Developer guide for Alembic. Covers environment setup, project structure, coding standards, testing, and release workflow.
 
 ---
 
@@ -13,8 +13,8 @@ Developer guide for AutoSnippet. Covers environment setup, project structure, co
 ## Quick Start
 
 ```bash
-git clone https://github.com/GxFn/AutoSnippet.git
-cd AutoSnippet
+git clone https://github.com/GxFn/Alembic.git
+cd Alembic
 npm install
 
 # Global-link development version
@@ -29,7 +29,7 @@ npm run dev:verify    # → which asd && asd -v
 ## Project Structure
 
 ```
-AutoSnippet/
+Alembic/
 ├── bin/                    # Entry scripts
 │   ├── cli.js              # CLI entry (asd command)
 │   ├── mcp-server.js       # MCP stdio server
@@ -348,7 +348,7 @@ The `prepublishOnly` script auto-builds native UI (macOS), but Dashboard require
 
 ## Important Development Notes
 
-1. **Do not run asd user commands in this repo** (e.g., `asd setup`, `asd embed`) — this repo is AutoSnippet source code, not a user project
+1. **Do not run asd user commands in this repo** (e.g., `asd setup`, `asd embed`) — this repo is Alembic source code, not a user project
 2. **To test asd commands** — first run `npm run dev:link` to deploy globally, then execute in a separate test project
 3. **ESM compatibility** — All imports must include the `.js` extension
 4. **DI registration** — New services must be registered in `ServiceContainer.js`

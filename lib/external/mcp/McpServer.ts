@@ -1,5 +1,5 @@
 /**
- * AutoSnippet V3 MCP Server — 整合版
+ * Alembic V3 MCP Server — 整合版
  *
  * Model Context Protocol (stdio transport)
  * 提供给 IDE AI Agent (Cursor/VSCode Copilot) 的工具集
@@ -192,7 +192,7 @@ export class McpServer {
     }
 
     this.sdkServer = new SdkMcpServer(
-      { name: 'autosnippet-v3', version: '3.0.0' },
+      { name: 'alembic-v3', version: '3.0.0' },
       { capabilities: { tools: {} } }
     );
 
@@ -258,7 +258,7 @@ export class McpServer {
     const wrapped = wrapHandler(name, handler as Parameters<typeof wrapHandler>[1]);
 
     // Track task operation for _injectDecisions
-    if (name === 'autosnippet_task') {
+    if (name === 'asd_task') {
       this._lastTaskOperation = (args.operation as string) || '';
     }
 
@@ -301,7 +301,7 @@ export class McpServer {
     this._session.lastActivityAt = Date.now();
 
     // Task handler manages IntentState internally — skip behavior tracking
-    if (toolName === 'autosnippet_task') {
+    if (toolName === 'asd_task') {
       return;
     }
 
@@ -319,7 +319,7 @@ export class McpServer {
     });
 
     // Auto-collect search queries
-    if (toolName === 'autosnippet_search') {
+    if (toolName === 'asd_search') {
       const query = this._extractSearchQuery(result);
       if (query) {
         intent.searchQueries.push(query);
@@ -349,7 +349,7 @@ export class McpServer {
    * Currently deferred — enable by uncommenting the call in _handleToolCall.
    */
   async _injectDecisions(toolName: string, result: unknown) {
-    if (toolName === 'autosnippet_task') {
+    if (toolName === 'asd_task') {
       return result;
     }
 
@@ -392,7 +392,7 @@ export class McpServer {
         }
       }
     }
-    if (toolName === 'autosnippet_search' && intent.searchQueries.length > 0) {
+    if (toolName === 'asd_search' && intent.searchQueries.length > 0) {
       const latestQuery = intent.searchQueries[intent.searchQueries.length - 1]!;
       const overlap = this._computeKeywordOverlap(latestQuery, intent.primeQuery);
       if (overlap < 0.3) {
@@ -475,37 +475,35 @@ export class McpServer {
   _resolveHandler(name: string): ToolHandlerFn | null {
     const HANDLER_MAP: Record<string, ToolHandlerFn> = {
       // ── Agent 层 ──
-      autosnippet_health: (ctx) => systemHandlers.health(ctx),
-      autosnippet_search: (ctx, args) =>
+      asd_health: (ctx) => systemHandlers.health(ctx),
+      asd_search: (ctx, args) =>
         consolidated.consolidatedSearch(
           ctx,
           args as Parameters<typeof consolidated.consolidatedSearch>[1]
         ),
-      autosnippet_knowledge: (ctx, args) => consolidated.consolidatedKnowledge(ctx, args),
-      autosnippet_structure: (ctx, args) => consolidated.consolidatedStructure(ctx, args),
-      autosnippet_call_context: (ctx, args) => consolidated.consolidatedCallContext(ctx, args),
-      autosnippet_graph: (ctx, args) => consolidated.consolidatedGraph(ctx, args),
-      autosnippet_guard: (ctx, args) => consolidated.consolidatedGuard(ctx, args),
-      autosnippet_submit_knowledge: (ctx, args) => consolidated.enhancedSubmitKnowledge(ctx, args),
-      autosnippet_skill: (ctx, args) => consolidated.consolidatedSkill(ctx, args),
-      autosnippet_task: (ctx, args) => taskHandler(ctx, args),
-      autosnippet_panorama: (ctx, args) => panoramaHandler(ctx, args),
+      asd_knowledge: (ctx, args) => consolidated.consolidatedKnowledge(ctx, args),
+      asd_structure: (ctx, args) => consolidated.consolidatedStructure(ctx, args),
+      asd_call_context: (ctx, args) => consolidated.consolidatedCallContext(ctx, args),
+      asd_graph: (ctx, args) => consolidated.consolidatedGraph(ctx, args),
+      asd_guard: (ctx, args) => consolidated.consolidatedGuard(ctx, args),
+      asd_submit_knowledge: (ctx, args) => consolidated.enhancedSubmitKnowledge(ctx, args),
+      asd_skill: (ctx, args) => consolidated.consolidatedSkill(ctx, args),
+      asd_task: (ctx, args) => taskHandler(ctx, args),
+      asd_panorama: (ctx, args) => panoramaHandler(ctx, args),
       // ── External Agent Bootstrap (v3.1) ──
-      autosnippet_bootstrap: (ctx, _args) =>
+      asd_bootstrap: (ctx, _args) =>
         bootstrapExternal(ctx as Parameters<typeof bootstrapExternal>[0]),
-      autosnippet_rescan: (ctx, args) =>
-        rescanExternal(ctx as Parameters<typeof rescanExternal>[0], args),
-      autosnippet_evolve: (ctx, args) =>
+      asd_rescan: (ctx, args) => rescanExternal(ctx as Parameters<typeof rescanExternal>[0], args),
+      asd_evolve: (ctx, args) =>
         evolveExternal(
           ctx as Parameters<typeof evolveExternal>[0],
           args as Parameters<typeof evolveExternal>[1]
         ),
-      autosnippet_dimension_complete: (ctx, args) => dimensionComplete(ctx, args),
-      autosnippet_wiki: (ctx, args) => wikiRouter(ctx, args),
+      asd_dimension_complete: (ctx, args) => dimensionComplete(ctx, args),
+      asd_wiki: (ctx, args) => wikiRouter(ctx, args),
       // ── Admin 层 (+4) ──
-      autosnippet_enrich_candidates: (ctx, args) => candidateHandlers.enrichCandidates(ctx, args),
-      autosnippet_knowledge_lifecycle: (ctx, args) =>
-        knowledgeHandlers.knowledgeLifecycle(ctx, args),
+      asd_enrich_candidates: (ctx, args) => candidateHandlers.enrichCandidates(ctx, args),
+      asd_knowledge_lifecycle: (ctx, args) => knowledgeHandlers.knowledgeLifecycle(ctx, args),
     };
     return HANDLER_MAP[name] ?? null;
   }
@@ -628,7 +626,7 @@ export class McpServer {
     ).length;
 
     this.logger.info(`MCP Server started (stdio) — ${visibleCount} tools [tier=${tierName}]`);
-    process.stderr.write(`AutoSnippet MCP ready — ${visibleCount} tools [tier=${tierName}]\n`);
+    process.stderr.write(`Alembic MCP ready — ${visibleCount} tools [tier=${tierName}]\n`);
   }
 
   async shutdown() {

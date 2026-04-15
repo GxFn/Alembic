@@ -1130,7 +1130,7 @@ function buildExecutionPlan(activeDimensions: DimensionDef[]) {
     tiers: plan,
     totalDimensions: activeDimensions.length,
     workflow:
-      '对每个维度: (1) 用你的原生能力阅读代码分析 → (2) 调用 autosnippet_submit_knowledge_batch 批量提交候选（**每维度最少 3 条，目标 5 条**，将不同关注点拆分为独立候选，1-2 条视为不合格） → (3) 调用 autosnippet_dimension_complete 完成维度（必须传 referencedFiles=[分析过的文件路径] 和 keyFindings=[3-5条关键发现]）',
+      '对每个维度: (1) 用你的原生能力阅读代码分析 → (2) 调用 asd_submit_knowledge_batch 批量提交候选（**每维度最少 3 条，目标 5 条**，将不同关注点拆分为独立候选，1-2 条视为不合格） → (3) 调用 asd_dimension_complete 完成维度（必须传 referencedFiles=[分析过的文件路径] 和 keyFindings=[3-5条关键发现]）',
   };
 }
 

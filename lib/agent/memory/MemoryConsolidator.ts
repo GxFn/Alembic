@@ -178,7 +178,7 @@ export class MemoryConsolidator {
   async migrateFromLegacy(
     projectRoot: string
   ): Promise<{ migrated: number; skipped: number; error?: string }> {
-    const legacyPath = path.join(projectRoot, '.autosnippet', 'memory.jsonl');
+    const legacyPath = path.join(projectRoot, '.asd', 'memory.jsonl');
 
     if (!fs.existsSync(legacyPath)) {
       return { migrated: 0, skipped: 0 };

@@ -128,7 +128,7 @@ export class Conversation extends Capability {
 
   get promptFragment() {
     return `## 对话能力
-你是 AutoSnippet 知识管理助手。
+你是 Alembic 知识管理助手。
 
 行为规则:
 1. 回答问题时优先从知识库搜索相关知识

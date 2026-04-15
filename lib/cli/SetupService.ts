@@ -1,10 +1,10 @@
 /**
  * SetupService — 项目初始化服务（V2 重构版）
  *
- * 一键初始化 AutoSnippet V2 工作空间，5 步完成：
+ * 一键初始化 Alembic V2 工作空间，5 步完成：
  *
- *   Step 1  .autosnippet/ 运行时目录 + config.json + .gitignore
- *   Step 2  AutoSnippet/ 知识库目录结构 + AutoSnippet/recipes/（有 --repo 则 clone，无则为普通目录）
+ *   Step 1  .asd/ 运行时目录 + config.json + .gitignore
+ *   Step 2  Alembic/ 知识库目录结构 + Alembic/recipes/（有 --repo 则 clone，无则为普通目录）
  *   Step 3  IDE 集成（VSCode MCP + Cursor MCP + copilot-instructions + cursor-rules
  *           + skills-template + cursor-workflow + claude-hooks + guard-ci + pre-commit-hook）
  *   Step 4  SQLite 数据库 + V1 数据迁移
@@ -14,7 +14,7 @@
  *
  * 数据架构（核心数据在子仓库，受 git 权限保护）
  * ─────────────────────────────────────────────
- *   AutoSnippet/  (知识库根目录)
+ *   Alembic/  (知识库根目录)
  *     ├─ constitution.yaml    权限宪法：角色 + 权限矩阵 + 治理规则 + 能力探测
  *     ├─ boxspec.json         项目规格定义
  *     ├─ recipes/             Git 子仓库 = 唯一真实来源 Source of Truth
@@ -23,9 +23,9 @@
  *     ├─ skills/              Project Skills（冷启动自动生成 + 手动创建）
  *     └─ README.md
  *
- *   .autosnippet/  (运行时缓存，gitignored)
+ *   .asd/  (运行时缓存，gitignored)
  *     ├─ config.json          项目配置（含 core.subRepoDir 子仓库路径）
- *     ├─ autosnippet.db       SQLite 运行时缓存（从子仓库同步 + candidates/snippets/audit）
+ *     ├─ alembic.db       SQLite 运行时缓存（从子仓库同步 + candidates/snippets/audit）
  *     ├─ context/             向量索引缓存
  *     └─ logs/                运行日志
  *
@@ -66,7 +66,7 @@ import {
 import { PACKAGE_ROOT } from '../shared/package-root.js';
 import { FileDeployer } from './deploy/FileDeployer.js';
 
-/** AutoSnippet 源码仓库根目录（定位 templates/ 等资源） */
+/** Alembic 源码仓库根目录（定位 templates/ 等资源） */
 const REPO_ROOT = PACKAGE_ROOT;
 
 // ─────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ export class SetupService {
   runtimeDir: string;
   seed: boolean;
   skillsDir: string;
-  /** 子仓库相对路径（相对于 projectRoot），如 'AutoSnippet/recipes' */
+  /** 子仓库相对路径（相对于 projectRoot），如 'Alembic/recipes' */
   subRepoDir: string;
   /** 子仓库绝对路径 */
   subRepoPath: string;
@@ -96,7 +96,7 @@ export class SetupService {
     projectRoot: string;
     force?: boolean;
     seed?: boolean;
-    /** 自定义子仓库相对路径（默认 'AutoSnippet/recipes'） */
+    /** 自定义子仓库相对路径（默认 'Alembic/recipes'） */
     subRepoDir?: string;
     /** 子仓库远程仓库 URL（提供则 clone，不提供则 recipes/ 为普通目录） */
     subRepoUrl?: string;
@@ -113,14 +113,14 @@ export class SetupService {
     if (exclusion.excluded) {
       throw new Error(
         `[SetupService] 检测到当前目录是排除项目（${exclusion.reason}），` +
-          '拒绝执行 setup 以避免创建 .autosnippet/ 和 AutoSnippet/ 运行时数据。' +
+          '拒绝执行 setup 以避免创建 .asd/ 和 Alembic/ 运行时数据。' +
           '\n提示: 请在用户项目目录中运行 asd setup。'
       );
     }
 
     // 运行时目录（gitignored）
-    this.runtimeDir = join(this.projectRoot, '.autosnippet');
-    this.dbPath = join(this.runtimeDir, 'autosnippet.db');
+    this.runtimeDir = join(this.projectRoot, '.asd');
+    this.dbPath = join(this.runtimeDir, 'alembic.db');
 
     // 知识库根目录
     this.coreDir = join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR);
@@ -217,7 +217,7 @@ export class SetupService {
       const config: Record<string, unknown> = {
         version: 2,
         projectName: this.projectName,
-        database: '.autosnippet/autosnippet.db',
+        database: '.asd/alembic.db',
         core: {
           dir: DEFAULT_KNOWLEDGE_BASE_DIR,
           constitution: `${DEFAULT_KNOWLEDGE_BASE_DIR}/constitution.yaml`,
@@ -302,7 +302,7 @@ export class SetupService {
         const status = this._git(['status', '--porcelain'], this.subRepoPath);
         if (status.trim().length > 0) {
           this._git(['add', '.'], this.subRepoPath);
-          this._git(['commit', '-m', 'Add AutoSnippet template files'], this.subRepoPath);
+          this._git(['commit', '-m', 'Add Alembic template files'], this.subRepoPath);
         }
       } catch {
         /* clone 的空仓库首次 commit 可能无变更，忽略 */
@@ -332,7 +332,7 @@ export class SetupService {
       writeFileSync(
         dest,
         [
-          '# AutoSnippet Constitution',
+          '# Alembic Constitution',
           'version: "2.0"',
           '',
           'capabilities:',
@@ -453,14 +453,14 @@ export class SetupService {
     writeFileSync(
       dest,
       [
-        `# ${this.projectName} — AutoSnippet Knowledge Base`,
+        `# ${this.projectName} — Alembic Knowledge Base`,
         '',
         '此目录是项目的 **核心知识库**，`recipes/` 目录存放核心知识数据。',
         '',
         '## 目录结构',
         '',
         '```',
-        'AutoSnippet/',
+        'Alembic/',
         '├── constitution.yaml   权限宪法（角色 + 权限 + 治理规则 + 能力探测）',
         '├── boxspec.json        项目规格',
         ...(this.subRepoUrl
@@ -498,7 +498,7 @@ export class SetupService {
         '',
         '## 权限模型',
         '',
-        'AutoSnippet 使用 **三层权限架构**：',
+        'Alembic 使用 **三层权限架构**：',
         '',
         '| 层级 | 机制 | 职责 |',
         '|------|------|------|',
@@ -532,7 +532,7 @@ export class SetupService {
               '```',
             ]),
         '',
-        '> 运行时缓存（DB 索引、Candidates、Snippets、审计日志）在 `.autosnippet/autosnippet.db`。',
+        '> 运行时缓存（DB 索引、Candidates、Snippets、审计日志）在 `.asd/alembic.db`。',
         '> **核心数据的唯一真实来源是 `recipes/` 目录中的文件**，DB 仅做缓存。',
         '',
       ].join('\n')
@@ -565,7 +565,7 @@ export class SetupService {
 
     const env = process.env.NODE_ENV || 'development';
     ConfigLoader.load(env);
-    ConfigLoader.set('database.path', '.autosnippet/autosnippet.db');
+    ConfigLoader.set('database.path', '.asd/alembic.db');
 
     const bootstrap = new Bootstrap({ env });
     await bootstrap.initialize();
@@ -582,7 +582,7 @@ export class SetupService {
   }
 
   /**
-   * 从 AutoSnippet/recipes/*.md + candidates/*.md 同步到 DB 缓存
+   * 从 Alembic/recipes/*.md + candidates/*.md 同步到 DB 缓存
    * 委托 KnowledgeSyncService 执行全字段同步（setup 场景跳过违规记录）
    */
   private async _syncRecipesToDB(db: unknown) {
@@ -626,7 +626,7 @@ export class SetupService {
       writeFileSync(
         envPath,
         [
-          '# AutoSnippet AI 配置（由 asd setup 自动生成）',
+          '# Alembic AI 配置（由 asd setup 自动生成）',
           '# 完整配置说明见 .env.example',
           '',
           'ASD_AI_PROVIDER=google',

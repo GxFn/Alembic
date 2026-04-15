@@ -1,9 +1,9 @@
 # CLI 命令参考
 
-AutoSnippet 的命令行工具名为 `asd`，基于 [commander](https://github.com/tj/commander.js) 构建。
+Alembic 的命令行工具名为 `asd`，基于 [commander](https://github.com/tj/commander.js) 构建。
 
 ```bash
-npm install -g autosnippet
+npm install -g alembic
 asd --help
 ```
 
@@ -51,12 +51,12 @@ asd setup [options]
 
 ```
 your-project/
-├── AutoSnippet/
+├── Alembic/
 │   ├── recipes/         # 已批准的知识条目 (Markdown)
 │   ├── candidates/      # 待审核的候选条目
 │   └── skills/          # 项目级 Agent 指令
-├── .autosnippet/
-│   ├── autosnippet.db   # SQLite 数据库
+├── .asd/
+│   ├── alembic.db   # SQLite 数据库
 │   └── context/         # 向量索引
 ├── .cursor/mcp.json     # Cursor MCP 配置
 ├── .vscode/mcp.json     # VS Code MCP 配置
@@ -372,7 +372,7 @@ asd task <subcommand> [options]
 
 ## asd sync
 
-增量同步 `AutoSnippet/recipes/*.md` 和 `AutoSnippet/candidates/*.md` 到 SQLite 数据库。
+增量同步 `Alembic/recipes/*.md` 和 `Alembic/candidates/*.md` 到 SQLite 数据库。
 
 ```bash
 asd sync [options]

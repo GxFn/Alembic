@@ -4,11 +4,11 @@
  * 通过 `git push --dry-run` 探测当前用户对子仓库的物理写权限。
  * 探测结果被缓存（默认 24h）以避免重复执行。
  *
- * 子仓库默认指向 `AutoSnippet/recipes/`（可通过 config 或 options 自定义）。
+ * 子仓库默认指向 `Alembic/recipes/`（可通过 config 或 options 自定义）。
  * 探测路径解析优先级：
  *   1. 构造函数 options.subRepoPath（显式指定）
- *   2. `.autosnippet/config.json` 中 `core.subRepoDir`
- *   3. 默认 `AutoSnippet/recipes`
+ *   2. `.asd/config.json` 中 `core.subRepoDir`
+ *   3. 默认 `Alembic/recipes`
  *
  * 三种探测结果：
  *   'admin'       — 无子仓库（个人项目）/ 有 push 权限 → developer
@@ -49,7 +49,7 @@ export class CapabilityProbe {
   logger;
   noRemote: 'allow' | 'deny';
   /**
-   * @param [options.subRepoPath] 子仓库根路径（默认 cwd/AutoSnippet）
+   * @param [options.subRepoPath] 子仓库根路径（默认 cwd/Alembic）
    * @param [options.cacheTTL] 缓存 TTL（秒），默认 86400
    * @param [options.noRemote] 无 remote 策略: 'allow' | 'deny'
    */
@@ -144,7 +144,7 @@ export class CapabilityProbe {
 
   /**
    * 自动检测子仓库路径
-   * 优先级：config.json > 默认 AutoSnippet/recipes
+   * 优先级：config.json > 默认 Alembic/recipes
    */
   _detectSubRepo(): string | null {
     const effectiveRoot = resolveProjectRoot();

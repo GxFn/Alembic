@@ -881,7 +881,7 @@ export class LanguageProfiles {
         }
       }
       // panorama 特有的跳过目录
-      _skipDirs.add('.autosnippet');
+      _skipDirs.add('.asd');
     }
     return _skipDirs;
   }

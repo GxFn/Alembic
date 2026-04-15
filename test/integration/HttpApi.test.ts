@@ -92,7 +92,7 @@ describe('Integration: HTTP API Endpoints', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: process.env.ASD_AUTH_USERNAME || 'admin',
-          password: process.env.ASD_AUTH_PASSWORD || 'autosnippet',
+          password: process.env.ASD_AUTH_PASSWORD || 'alembic',
         }),
       });
       const body = await res.json();
@@ -134,7 +134,7 @@ describe('Integration: HTTP API Endpoints', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: process.env.ASD_AUTH_USERNAME || 'admin',
-          password: process.env.ASD_AUTH_PASSWORD || 'autosnippet',
+          password: process.env.ASD_AUTH_PASSWORD || 'alembic',
         }),
       });
       const {

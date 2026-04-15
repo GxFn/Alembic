@@ -194,13 +194,13 @@ export function semanticSearch(ctx: McpContext, args: SearchArgs) {
 function _toolName(mode: string): string {
   switch (mode) {
     case 'context':
-      return 'autosnippet_context_search';
+      return 'asd_context_search';
     case 'keyword':
-      return 'autosnippet_keyword_search';
+      return 'asd_keyword_search';
     case 'semantic':
-      return 'autosnippet_semantic_search';
+      return 'asd_semantic_search';
     default:
-      return 'autosnippet_search';
+      return 'asd_search';
   }
 }
 

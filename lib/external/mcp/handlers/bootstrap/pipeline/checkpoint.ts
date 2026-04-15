@@ -33,7 +33,7 @@ export async function saveDimensionCheckpoint(
   digest = null
 ) {
   try {
-    const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');
+    const checkpointDir = path.join(projectRoot, '.asd', 'bootstrap-checkpoint');
     await fs.mkdir(checkpointDir, { recursive: true });
     await fs.writeFile(
       path.join(checkpointDir, `${dimId}.json`),
@@ -53,7 +53,7 @@ export async function saveDimensionCheckpoint(
 export async function loadCheckpoints(projectRoot: string) {
   const checkpoints = new Map();
   try {
-    const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');
+    const checkpointDir = path.join(projectRoot, '.asd', 'bootstrap-checkpoint');
     const files = await fs.readdir(checkpointDir).catch(() => []);
     const now = Date.now();
     for (const file of files) {
@@ -79,7 +79,7 @@ export async function loadCheckpoints(projectRoot: string) {
 /** 清理 checkpoint 目录 */
 export async function clearCheckpoints(projectRoot: string) {
   try {
-    const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');
+    const checkpointDir = path.join(projectRoot, '.asd', 'bootstrap-checkpoint');
     pathGuard.assertSafe(checkpointDir);
     await fs.rm(checkpointDir, { recursive: true, force: true });
   } catch (err: unknown) {

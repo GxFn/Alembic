@@ -6,7 +6,7 @@
  * 职责：
  *  - KnowledgeEntry → YAML frontmatter + Markdown body  (serialize)
  *  - .md 内容 → wire format JSON → KnowledgeEntry.fromJSON()  (parse)
- *  - 落盘到 AutoSnippet/{candidates|recipes}/{category}/ 目录
+ *  - 落盘到 Alembic/{candidates|recipes}/{category}/ 目录
  *  - .md 文件 = 完整唯一数据源（Source of Truth），DB = 索引缓存
  *
  * Frontmatter 分层：
@@ -243,8 +243,8 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
 
   /**
    * 将 KnowledgeEntry 落盘到对应目录
-   * - isCandidate() → AutoSnippet/candidates/{category}/
-   * - isActive()/deprecated → AutoSnippet/recipes/{category}/
+   * - isCandidate() → Alembic/candidates/{category}/
+   * - isActive()/deprecated → Alembic/recipes/{category}/
    *
    * @returns 写入的文件路径，失败返回 null
    */
@@ -386,7 +386,7 @@ export class KnowledgeFileWriter implements KnowledgeFileStore {
       return;
     }
 
-    // 安全防护: 仅清理 AutoSnippet 知识目录内的 .md 文件
+    // 安全防护: 仅清理 Alembic 知识目录内的 .md 文件
     // entry.sourceFile 可能被 AI 误设为项目源文件路径（如 .xcdatamodeld），
     // 绝不能删除知识目录之外的文件。
     const isInsideKnowledge =

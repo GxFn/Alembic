@@ -1,7 +1,7 @@
 /**
  * FeedbackCollector — 用户反馈收集器
  * 记录交互事件 (view/click/rate/dismiss)，可持久化，支持统计汇总
- * 持久化到 AutoSnippet/feedback.json（Git 友好）
+ * 持久化到 Alembic/feedback.json（Git 友好）
  */
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -32,7 +32,7 @@ export class FeedbackCollector {
     this.#feedbackPath = join(projectRoot, kbDir, 'feedback.json');
     pathGuard.assertProjectWriteSafe(this.#feedbackPath);
     this.#maxEvents = options.maxEvents || 1000;
-    this.#migrateOldPath(projectRoot, options.internalDir || '.autosnippet');
+    this.#migrateOldPath(projectRoot, options.internalDir || '.asd');
     this.#events = this.#load();
   }
 

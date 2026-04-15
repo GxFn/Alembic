@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { SKILLS_DIR } from '#shared/package-root.js';
 
-const COLDSTART_SKILL_NAME = 'autosnippet-coldstart';
+const COLDSTART_SKILL_NAME = 'alembic-coldstart';
 
 /** Minimal logger for bootstrap skill loading */
 interface SkillLogger {

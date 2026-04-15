@@ -1,6 +1,6 @@
 # HTTP API Reference
 
-AutoSnippet provides a RESTful API for the Dashboard and external integrations.
+Alembic provides a RESTful API for the Dashboard and external integrations.
 
 **Start:**
 

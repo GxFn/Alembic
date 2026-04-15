@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 const DatabaseConfig = z.object({
   type: z.enum(['sqlite']).default('sqlite'),
-  path: z.string().default('./.autosnippet/autosnippet.db'),
+  path: z.string().default('./.asd/alembic.db'),
   verbose: z.boolean().default(false),
 });
 
@@ -40,7 +40,7 @@ const MonitoringConfig = z.object({
 
 const FileLogConfig = z.object({
   enabled: z.boolean().default(true),
-  path: z.string().default('./.autosnippet/logs'),
+  path: z.string().default('./.asd/logs'),
 });
 
 const LoggingConfig = z.object({

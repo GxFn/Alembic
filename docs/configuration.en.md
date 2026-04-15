@@ -1,6 +1,6 @@
 # Configuration
 
-AutoSnippet configuration is organized in three tiers: project-level `.env` file, global `config/default.json`, and permission `constitution.yaml`.
+Alembic configuration is organized in three tiers: project-level `.env` file, global `config/default.json`, and permission `constitution.yaml`.
 
 ---
 
@@ -77,7 +77,7 @@ Framework-level defaults, typically no modification needed.
 {
   "database": {
     "type": "sqlite",
-    "path": "./.autosnippet/autosnippet.db"
+    "path": "./.asd/alembic.db"
   },
   "server": {
     "port": 3000,
@@ -100,7 +100,7 @@ Framework-level defaults, typically no modification needed.
     "format": "json",
     "file": {
       "enabled": true,
-      "path": "./.autosnippet/logs"
+      "path": "./.asd/logs"
     }
   },
   "constitution": {
@@ -352,12 +352,12 @@ Standard directory structure created by `asd setup`:
 ```
 your-project/
 ├── .env                       # AI Provider configuration
-├── AutoSnippet/               # Knowledge data (git-tracked)
+├── Alembic/               # Knowledge data (git-tracked)
 │   ├── recipes/               # Approved patterns (Markdown)
 │   ├── candidates/            # Pending review candidates
 │   └── skills/                # Project-level Agent instructions
-├── .autosnippet/              # Runtime cache (gitignored)
-│   ├── autosnippet.db         # SQLite database
+├── .asd/              # Runtime cache (gitignored)
+│   ├── alembic.db         # SQLite database
 │   └── context/               # Vector index
 ├── .cursor/mcp.json           # Cursor MCP config
 ├── .vscode/mcp.json           # VS Code MCP config
@@ -367,5 +367,5 @@ your-project/
 **Key principles:**
 - Markdown files are the Source of Truth
 - SQLite is a read cache; `asd sync` can rebuild it
-- `AutoSnippet/` directory is tracked by Git
-- `.autosnippet/` directory is in `.gitignore`
+- `Alembic/` directory is tracked by Git
+- `.asd/` directory is in `.gitignore`

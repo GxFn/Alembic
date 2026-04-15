@@ -1,6 +1,6 @@
 # Technical Reference
 
-> Detailed implementation of AutoSnippet's five organs, engineering metrics, and defense chain. For overview, see [README](../README.md).
+> Detailed implementation of Alembic's five organs, engineering metrics, and defense chain. For overview, see [README](../README.md).
 >
 > [中文](technical-reference.md)
 
@@ -42,7 +42,7 @@ Six-layer defense chain, each independently effective:
 | 2 | **Gateway** | Unified request pipeline: validate → guard → route → audit, EventEmitter async observation |
 | 3 | **Permission** | 3-tuple enforcement: actor + action + resource → allowed/denied, wildcard admin |
 | 4 | **SafetyPolicy** | Agent constraints: Budget / QualityGate / behavior policies |
-| 5 | **PathGuard** | Dual-layer path safety: Layer 1 blocks writes outside project; Layer 2 constrains to whitelisted directories (.autosnippet / .cursor / .vscode / .github) |
+| 5 | **PathGuard** | Dual-layer path safety: Layer 1 blocks writes outside project; Layer 2 constrains to whitelisted directories (.asd / .cursor / .vscode / .github) |
 | 6 | **ConfidenceRouter** | Numerical routing: confidence + source reputation + content length + reasoning validity → 6-stage auto-review |
 
 ---
@@ -115,10 +115,10 @@ Knowledge changes auto-deliver to IDE-consumable formats:
 
 | Channel | Path | Content |
 |---------|------|---------|
-| **A** | `.cursor/rules/autosnippet-project-rules.mdc` | alwaysApply one-liner rules (≤ 80 rules, ≤ 8K tokens) |
-| **B** | `.cursor/rules/autosnippet-patterns-{topic}.mdc` | When/Do/Don't themed smart rules + architecture layer rules |
+| **A** | `.cursor/rules/alembic-project-rules.mdc` | alwaysApply one-liner rules (≤ 80 rules, ≤ 8K tokens) |
+| **B** | `.cursor/rules/alembic-patterns-{topic}.mdc` | When/Do/Don't themed smart rules + architecture layer rules |
 | **C** | `.cursor/skills/` | Project Skills sync |
-| **D** | `.cursor/skills/autosnippet-devdocs/` | Development docs |
+| **D** | `.cursor/skills/alembic-devdocs/` | Development docs |
 | **F** | `AGENTS.md` / `CLAUDE.md` / `.github/copilot-instructions.md` | Agent instruction files |
 | **Mirror** | `.qoder/` / `.trae/` | IDE tool mirrors |
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * AutoSnippet 发布辅助脚本
+ * Alembic 发布辅助脚本
  * 用途：自动化发布前检查和发布流程
  * 使用：node scripts/release.js [patch|minor|major]
  */

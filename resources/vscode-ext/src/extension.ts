@@ -1,5 +1,5 @@
 /**
- * AutoSnippet VSCode Extension — 入口
+ * Alembic VSCode Extension — 入口
  *
  * 功能对标 Xcode 工作流：
  *   1. `// as:s <query>` → 搜索知识库 → QuickPick 选择 → editor.edit() 插入代码
@@ -10,11 +10,11 @@
  *
  * Guard 工作方式：
  *   - **用户手动**：写 `// as:a` 后保存 → 波浪线显示 violations
- *   - **Agent MCP**：调 `autosnippet_task({ operation: "guard_review" })` → 返回 violations
+ *   - **Agent MCP**：调 `asd_task({ operation: "guard_review" })` → 返回 violations
  *   - 不再在每次保存时自动检查（避免干扰开发流程）
  *
  * 架构：
- *   Extension ←→ ApiClient ←→ AutoSnippet API Server (asd ui / asd start)
+ *   Extension ←→ ApiClient ←→ Alembic API Server (asd ui / asd start)
  *   Extension → editor.edit() → 原生编辑（支持 Undo）
  */
 
@@ -49,18 +49,18 @@ export function activate(context: vscode.ExtensionContext) {
     registerTaskTool(context);
   } catch (err: unknown) {
     // lm.registerTool 在低版本 VS Code 可能不存在
-    console.warn('[AutoSnippet] registerTaskTool skipped:', toErrorMsg(err));
+    console.warn('[Alembic] registerTaskTool skipped:', toErrorMsg(err));
   }
 
   try {
-  const config = vscode.workspace.getConfiguration('autosnippet');
+  const config = vscode.workspace.getConfiguration('asd');
   const host = config.get<string>('serverHost', 'localhost');
   const port = config.get<number>('serverPort', 3000);
 
   // 初始化 API Client
   apiClient = new ApiClient(host, port);
 
-  // 状态栏 — 仅在工作区包含 AutoSnippet 项目时显示
+  // 状态栏 — 仅在工作区包含 Alembic 项目时显示
   statusBar = new StatusBar(apiClient);
   if (hasAnyProject()) {
     statusBar.show();
@@ -88,12 +88,12 @@ export function activate(context: vscode.ExtensionContext) {
   // ─── 注册命令 ───
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('autosnippet.search', cmdSearch),
-    vscode.commands.registerCommand('autosnippet.create', cmdCreate),
-    vscode.commands.registerCommand('autosnippet.audit', cmdAudit),
-    vscode.commands.registerCommand('autosnippet.auditProject', cmdAuditProject),
-    vscode.commands.registerCommand('autosnippet.status', cmdStatus),
-    vscode.commands.registerCommand('autosnippet._executeDirective', cmdExecuteDirective),
+    vscode.commands.registerCommand('asd.search', cmdSearch),
+    vscode.commands.registerCommand('asd.create', cmdCreate),
+    vscode.commands.registerCommand('asd.audit', cmdAudit),
+    vscode.commands.registerCommand('asd.auditProject', cmdAuditProject),
+    vscode.commands.registerCommand('asd.status', cmdStatus),
+    vscode.commands.registerCommand('asd._executeDirective', cmdExecuteDirective),
   );
 
   // ─── onSave 指令检测（仅限作用域内文件） ───
@@ -121,17 +121,17 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (
-        e.affectsConfiguration('autosnippet.serverHost') ||
-        e.affectsConfiguration('autosnippet.serverPort')
+        e.affectsConfiguration('asd.serverHost') ||
+        e.affectsConfiguration('asd.serverPort')
       ) {
-        const cfg = vscode.workspace.getConfiguration('autosnippet');
+        const cfg = vscode.workspace.getConfiguration('asd');
         apiClient.updateConfig(
           cfg.get<string>('serverHost', 'localhost'),
           cfg.get<number>('serverPort', 3000)
         );
         statusBar.checkNow();
       }
-      if (e.affectsConfiguration('autosnippet.enableCodeLens')) {
+      if (e.affectsConfiguration('asd.enableCodeLens')) {
         codeLensProvider.refresh();
       }
     })
@@ -175,8 +175,8 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
   } catch (err: unknown) {
-    console.error('[AutoSnippet] activate() failed:', err);
-    vscode.window.showErrorMessage(`AutoSnippet activation error: ${toErrorMsg(err)}`);
+    console.error('[Alembic] activate() failed:', err);
+    vscode.window.showErrorMessage(`Alembic activation error: ${toErrorMsg(err)}`);
   }
 }
 
@@ -189,14 +189,14 @@ export function deactivate() {
 // ─────────────────────────────────────────────
 
 /**
- * autosnippet.search — 搜索知识库
+ * asd.search — 搜索知识库
  * 可通过 Command Palette 或快捷键触发
  */
 async function cmdSearch() {
   if (!await ensureConnected()) return;
 
   const query = await vscode.window.showInputBox({
-    prompt: 'Search AutoSnippet knowledge base',
+    prompt: 'Search Alembic knowledge base',
     placeHolder: 'e.g. tableview cell, fetch API, auth middleware...',
   });
   if (!query) return;
@@ -211,7 +211,7 @@ async function cmdSearch() {
 }
 
 /**
- * autosnippet.create — 从选区创建候选
+ * asd.create — 从选区创建候选
  */
 async function cmdCreate() {
   if (!await ensureConnected()) return;
@@ -252,7 +252,7 @@ async function cmdCreate() {
 }
 
 /**
- * autosnippet.audit — 审计当前文件
+ * asd.audit — 审计当前文件
  */
 async function cmdAudit() {
   if (!await ensureConnected()) return;
@@ -267,7 +267,7 @@ async function cmdAudit() {
 }
 
 /**
- * autosnippet.auditProject — 审计整个项目
+ * asd.auditProject — 审计整个项目
  */
 async function cmdAuditProject() {
   if (!await ensureConnected()) return;
@@ -275,26 +275,26 @@ async function cmdAuditProject() {
 }
 
 /**
- * autosnippet.status — 显示连接状态
+ * asd.status — 显示连接状态
  */
 async function cmdStatus() {
   const connected = await statusBar.checkNow();
-  const config = vscode.workspace.getConfiguration('autosnippet');
+  const config = vscode.workspace.getConfiguration('asd');
   const host = config.get<string>('serverHost', 'localhost');
   const port = config.get<number>('serverPort', 3000);
 
   if (connected) {
     vscode.window.showInformationMessage(
-      `✅ AutoSnippet API Server is running at ${host}:${port}`
+      `✅ Alembic API Server is running at ${host}:${port}`
     );
   } else {
     const action = await vscode.window.showWarningMessage(
-      `AutoSnippet API Server is not running at ${host}:${port}.\n` +
+      `Alembic API Server is not running at ${host}:${port}.\n` +
       `Run \`asd ui\` or \`asd start\` in your project directory.`,
       'Open Terminal'
     );
     if (action === 'Open Terminal') {
-      const terminal = vscode.window.createTerminal('AutoSnippet');
+      const terminal = vscode.window.createTerminal('Alembic');
       terminal.show();
       terminal.sendText('asd ui');
     }
@@ -302,7 +302,7 @@ async function cmdStatus() {
 }
 
 /**
- * autosnippet._executeDirective — CodeLens / onSave 调用
+ * asd._executeDirective — CodeLens / onSave 调用
  */
 async function cmdExecuteDirective(directive: DetectedDirective) {
   const editor = vscode.window.activeTextEditor;
@@ -363,7 +363,7 @@ async function doSearch(
   const selected = await showSearchQuickPick(results, query, editor);
   if (!selected) return;
 
-  const config = vscode.workspace.getConfiguration('autosnippet');
+  const config = vscode.workspace.getConfiguration('asd');
   const highlightDuration = config.get<number>('insertHighlightDuration', 2000);
 
   // ── 1. 头文件自动插入到 import 区域（TODO: 以后再做）──
@@ -423,7 +423,7 @@ async function showSearchQuickPick(
   });
 
   const picked = await vscode.window.showQuickPick(picks, {
-    title: `AutoSnippet: "${query}" — ${results.length} results`,
+    title: `Alembic: "${query}" — ${results.length} results`,
     placeHolder: 'Select a snippet to insert',
     matchOnDetail: true,
   });
@@ -523,7 +523,7 @@ async function doCreate(
     }
   } else {
     // 打开 Dashboard
-    const config = vscode.workspace.getConfiguration('autosnippet');
+    const config = vscode.workspace.getConfiguration('asd');
     const host = config.get<string>('serverHost', 'localhost');
     const port = config.get<number>('serverPort', 3000);
     const url = `http://${host}:${port}/?action=create`;
@@ -546,11 +546,11 @@ async function doAudit(
   if (scope === 'project') {
     // ── 项目级审计：收集源文件 → 调用 Guard batch API ──
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'AutoSnippet Guard: Auditing project…' },
+      { location: vscode.ProgressLocation.Notification, title: 'Alembic Guard: Auditing project…' },
       async () => {
         const roots = (await import('./projectScope')).getActiveProjectRoots();
         if (roots.length === 0) {
-          vscode.window.showWarningMessage('No AutoSnippet project found in workspace.');
+          vscode.window.showWarningMessage('No Alembic project found in workspace.');
           return;
         }
         // 搜集所有打开的编辑器中的文件（或扫描项目源文件）
@@ -608,7 +608,7 @@ async function doAudit(
   }
 
   await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'AutoSnippet Guard: Checking file…' },
+    { location: vscode.ProgressLocation.Notification, title: 'Alembic Guard: Checking file…' },
     async () => {
       // 直接复用 guardDiagnostics.checkFile 来写入诊断
       if (guardDiagnostics) {
@@ -660,13 +660,13 @@ async function ensureConnected(): Promise<boolean> {
   if (ok) return true;
 
   const action = await vscode.window.showWarningMessage(
-    'AutoSnippet API Server is not running. Start it with `asd ui` or `asd start`.',
+    'Alembic API Server is not running. Start it with `asd ui` or `asd start`.',
     'Open Terminal',
     'Retry'
   );
 
   if (action === 'Open Terminal') {
-    const terminal = vscode.window.createTerminal('AutoSnippet');
+    const terminal = vscode.window.createTerminal('Alembic');
     terminal.show();
     terminal.sendText('asd ui');
     return false;

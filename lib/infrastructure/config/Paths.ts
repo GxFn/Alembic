@@ -48,7 +48,7 @@ export function getSnippetsPath() {
     return ensureDir(path.join(USER_HOME, 'Library/Developer/Xcode/UserData/CodeSnippets'));
   }
   // 非 macOS: 放到全局缓存目录下
-  return ensureDir(path.join(USER_HOME, '.autosnippet', 'snippets'));
+  return ensureDir(path.join(USER_HOME, '.asd', 'snippets'));
 }
 
 /** VSCode 项目级 Snippets 目录 = projectRoot/.vscode/ */
@@ -57,20 +57,20 @@ export function getVSCodeSnippetsPath(projectRoot: string) {
 }
 
 /**
- * AutoSnippet 全局缓存目录 ~/.autosnippet/cache
+ * Alembic 全局缓存目录 ~/.asd/cache
  * 可通过 ASD_CACHE_PATH 环境变量覆盖
  */
 export function getCachePath() {
   if (process.env.ASD_CACHE_PATH) {
     return process.env.ASD_CACHE_PATH;
   }
-  return ensureDir(path.join(USER_HOME, '.autosnippet', 'cache'));
+  return ensureDir(path.join(USER_HOME, '.asd', 'cache'));
 }
 
 /**
- * 获取包含 AutoSnippet.boxspec.json 的子目录名称
+ * 获取包含 Alembic.boxspec.json 的子目录名称
  * 委托 ProjectMarkers.detectKnowledgeBaseDir() 统一探测逻辑
- * @returns 知识库目录名（默认 'AutoSnippet'）
+ * @returns 知识库目录名（默认 'Alembic'）
  */
 export function getKnowledgeBaseDirName(projectRoot: string) {
   return detectKnowledgeBaseDir(projectRoot);
@@ -84,17 +84,17 @@ export function getProjectKnowledgePath(projectRoot: string) {
   return path.join(projectRoot, getKnowledgeBaseDirName(projectRoot));
 }
 
-/** Spec 文件路径 = knowledgePath/AutoSnippet.boxspec.json */
+/** Spec 文件路径 = knowledgePath/Alembic.boxspec.json */
 export function getProjectSpecPath(projectRoot: string) {
   return path.join(getProjectKnowledgePath(projectRoot), SPEC_FILENAME);
 }
 
 /**
- * 项目内部隐藏数据目录 = knowledgePath/.autosnippet
+ * 项目内部隐藏数据目录 = knowledgePath/.asd
  * 注意：仅返回路径，不创建目录
  */
 export function getProjectInternalDataPath(projectRoot: string) {
-  return path.join(getProjectKnowledgePath(projectRoot), '.autosnippet');
+  return path.join(getProjectKnowledgePath(projectRoot), '.asd');
 }
 
 /**

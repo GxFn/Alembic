@@ -1,7 +1,7 @@
 /**
  * PathGuard — 文件写入路径安全守卫（双层防护）
  *
- * 防止 AutoSnippet 在项目目录之外 或 项目内非法位置 创建文件。
+ * 防止 Alembic 在项目目录之外 或 项目内非法位置 创建文件。
  * BiliDemo/data 事件的根因：process.cwd() 解析到非预期目录，DB/日志等写操作
  * 逃逸到用户项目外，创建了脏数据。
  *
@@ -10,7 +10,7 @@
  *    边界检查，拦截写到 projectRoot 外的操作
  *  Layer 2 — assertProjectWriteSafe(path):
  *    项目内作用域检查，仅允许写入以下前缀：
- *      .autosnippet/     — 运行时 DB、记忆、对话、信号快照
+ *      .asd/     — 运行时 DB、记忆、对话、信号快照
  *      {kbDir}/          — 知识库（recipes、candidates、skills、guard 文件）
  *      .cursor/          — Cursor IDE 集成
  *      .vscode/          — VSCode 集成
@@ -28,7 +28,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { isAutoSnippetDevRepo, isExcludedProject } from './isOwnDevRepo.js';
+import { isAlembicDevRepo, isExcludedProject } from './isOwnDevRepo.js';
 import {
   DEFAULT_KNOWLEDGE_BASE_DIR,
   detectKnowledgeBaseDir,
@@ -59,11 +59,11 @@ export class PathGuardError extends Error {
 }
 
 /**
- * 项目内允许 AutoSnippet 创建新文件/目录的前缀
+ * 项目内允许 Alembic 创建新文件/目录的前缀
  * 注意：这是相对于 projectRoot 的前缀列表
  */
 const PROJECT_WRITE_SCOPE_PREFIXES = [
-  '.autosnippet', // 运行时 DB、记忆、对话、信号快照
+  '.asd', // 运行时 DB、记忆、对话、信号快照
   '.cursor', // Cursor IDE 集成
   '.vscode', // VSCode 集成
   '.github', // Copilot instructions
@@ -77,19 +77,19 @@ class PathGuard {
   /** 项目根目录（绝对路径） */
   #projectRoot: string | null = null;
 
-  /** AutoSnippet 包自身根目录 */
+  /** Alembic 包自身根目录 */
   #packageRoot: string | null = null;
 
   /** 额外允许的绝对路径前缀 */
   #allowList = new Set<string>();
 
-  /** 知识库目录名（如 'AutoSnippet'） */
+  /** 知识库目录名（如 'Alembic'） */
   #knowledgeBaseDir: string | null = null;
 
   /** 是否已配置 */
   #configured = false;
 
-  /** projectRoot 是否是 AutoSnippet 自身的开发仓库 */
+  /** projectRoot 是否是 Alembic 自身的开发仓库 */
   #isDevRepo = false;
 
   /** projectRoot 是否是应排除的项目（开发仓库、生态项目等） */
@@ -101,8 +101,8 @@ class PathGuard {
   /**
    * 配置 PathGuard（每个进程执行一次）
    * @param opts.projectRoot 用户项目根目录（绝对路径）
-   * @param [opts.packageRoot] AutoSnippet 包自身根目录
-   * @param [opts.knowledgeBaseDir='AutoSnippet'] 知识库目录名
+   * @param [opts.packageRoot] Alembic 包自身根目录
+   * @param [opts.knowledgeBaseDir='Alembic'] 知识库目录名
    * @param [opts.extraAllowPaths] 额外允许的路径前缀
    */
   configure({
@@ -123,7 +123,7 @@ class PathGuard {
     this.#projectRoot = path.resolve(projectRoot);
     this.#packageRoot = packageRoot ? path.resolve(packageRoot) : null;
     this.#knowledgeBaseDir = knowledgeBaseDir || null; // 延迟解析
-    this.#isDevRepo = isAutoSnippetDevRepo(this.#projectRoot);
+    this.#isDevRepo = isAlembicDevRepo(this.#projectRoot);
     const exclusion = isExcludedProject(this.#projectRoot);
     this.#isExcludedProject = exclusion.excluded;
     this.#excludeReason = exclusion.reason;
@@ -131,8 +131,8 @@ class PathGuard {
     // 默认白名单：全局缓存 + 平台 Snippets 目录
     const HOME = process.env.HOME || process.env.USERPROFILE || '';
     if (HOME) {
-      this.#allowList.add(path.join(HOME, '.autosnippet', 'cache'));
-      this.#allowList.add(path.join(HOME, '.autosnippet', 'snippets'));
+      this.#allowList.add(path.join(HOME, '.asd', 'cache'));
+      this.#allowList.add(path.join(HOME, '.asd', 'snippets'));
       if (process.platform === 'darwin') {
         this.#allowList.add(path.join(HOME, 'Library/Developer/Xcode/UserData/CodeSnippets'));
       }
@@ -160,7 +160,7 @@ class PathGuard {
 
   /**
    * 设置知识库目录名（可在 configure 之后延迟设置）
-   * @param dirName 如 'AutoSnippet'、'Knowledge' 等
+   * @param dirName 如 'Alembic'、'Knowledge' 等
    */
   setKnowledgeBaseDir(dirName: string) {
     if (dirName && typeof dirName === 'string') {
@@ -190,7 +190,7 @@ class PathGuard {
       return;
     }
 
-    // 2. AutoSnippet 包自身目录内（logs/ 等）— 允许
+    // 2. Alembic 包自身目录内（logs/ 等）— 允许
     if (this.#packageRoot && this.#isUnder(resolved, this.#packageRoot)) {
       return;
     }
@@ -234,13 +234,13 @@ class PathGuard {
 
     // ── 排除项目保护 ──────────────────────────────────
     // 如果 projectRoot 是排除项目（开发仓库、生态项目等），
-    // 禁止写入 .autosnippet/ 和知识库目录
+    // 禁止写入 .asd/ 和知识库目录
     if (this.#isExcludedProject) {
-      if (firstSegment === '.autosnippet') {
+      if (firstSegment === '.asd') {
         throw new PathGuardError(
           resolved,
           this.#projectRoot!,
-          `排除项目保护 (${this.#excludeReason}): 禁止创建 .autosnippet/ 运行时数据`
+          `排除项目保护 (${this.#excludeReason}): 禁止创建 .asd/ 运行时数据`
         );
       }
       const kbDir = this.#resolveKnowledgeBaseDir();
@@ -253,7 +253,7 @@ class PathGuard {
       }
       // 排除项目内仍允许写入 .cursor/.vscode/.github 等 IDE 配置
       for (const prefix of PROJECT_WRITE_SCOPE_PREFIXES) {
-        if (prefix !== '.autosnippet' && firstSegment === prefix) {
+        if (prefix !== '.asd' && firstSegment === prefix) {
           return;
         }
       }
@@ -289,7 +289,7 @@ class PathGuard {
     throw new PathGuardError(
       resolved,
       this.#projectRoot!,
-      `项目内写入范围受限: "${relative}" 不在允许的目录中（允许: ${[...PROJECT_WRITE_SCOPE_PREFIXES, kbDir || 'AutoSnippet'].join(', ')}）`
+      `项目内写入范围受限: "${relative}" 不在允许的目录中（允许: ${[...PROJECT_WRITE_SCOPE_PREFIXES, kbDir || 'Alembic'].join(', ')}）`
     );
   }
 

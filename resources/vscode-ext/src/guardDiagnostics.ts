@@ -53,7 +53,7 @@ interface GuardFileResponse {
 }
 
 /** Diagnostic source 标记 */
-const DIAGNOSTIC_SOURCE = 'AutoSnippet Guard';
+const DIAGNOSTIC_SOURCE = 'Alembic Guard';
 
 export class GuardDiagnostics {
   private diagnosticCollection: vscode.DiagnosticCollection;
@@ -62,8 +62,8 @@ export class GuardDiagnostics {
   private outputChannel: vscode.OutputChannel;
 
   constructor() {
-    this.diagnosticCollection = vscode.languages.createDiagnosticCollection('autosnippet-guard');
-    this.outputChannel = vscode.window.createOutputChannel('AutoSnippet Guard', { log: true });
+    this.diagnosticCollection = vscode.languages.createDiagnosticCollection('alembic-guard');
+    this.outputChannel = vscode.window.createOutputChannel('Alembic Guard', { log: true });
   }
 
   /**
@@ -151,7 +151,7 @@ export class GuardDiagnostics {
   ): Promise<GuardFileResponse> {
     // 使用 apiClient 的私有 HTTP 方法不太合适，
     // 直接用 node:http 或 fetch
-    const config = vscode.workspace.getConfiguration('autosnippet');
+    const config = vscode.workspace.getConfiguration('asd');
     const host = config.get<string>('serverHost', 'localhost');
     const port = config.get<number>('serverPort', 3000);
 
@@ -209,7 +209,7 @@ export class GuardDiagnostics {
       const severity = this._mapSeverity(v.severity);
       const diagnostic = new vscode.Diagnostic(range, message, severity);
 
-      // source 标记为 AutoSnippet Guard（Agent 可据此识别）
+      // source 标记为 Alembic Guard（Agent 可据此识别）
       diagnostic.source = DIAGNOSTIC_SOURCE;
 
       // code 使用 ruleId（方便 Code Action 解析）

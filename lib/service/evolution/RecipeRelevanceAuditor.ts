@@ -103,7 +103,7 @@ interface EvidenceWeights {
 /** 默认证据权重
  *
  * 注意：不包含 sourceFileExists。DB 中 sourceFile 存储的是 Recipe md 文件路径
- * （如 AutoSnippet/candidates/xxx.md），不是源代码路径。
+ * （如 Alembic/candidates/xxx.md），不是源代码路径。
  * 真正的源代码来源在 reasoning.sources 中，由 codeFilesExist 维度检查。
  */
 const DEFAULT_WEIGHTS: EvidenceWeights = {

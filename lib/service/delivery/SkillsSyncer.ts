@@ -1,11 +1,11 @@
 /**
- * SkillsSyncer — AutoSnippet Skills to .cursor/skills/ 同步器
+ * SkillsSyncer — Alembic Skills to .cursor/skills/ 同步器
  *
  * Channel C: 将内置 Skills 和项目级 Skills 统一同步到
  * .cursor/skills/ 目录，适配 Cursor Agent Skills 标准格式。
  *
- * - 内置 Skills：从 AutoSnippet 包 skills/ 目录直接复制（autosnippet-create 等）
- * - 项目级 Skills：从 AutoSnippet/skills/ 转换格式后写入（project-* → autosnippet-*）
+ * - 内置 Skills：从 Alembic 包 skills/ 目录直接复制（alembic-create 等）
+ * - 项目级 Skills：从 Alembic/skills/ 转换格式后写入（project-* → alembic-*）
  * - 同时为项目级 Skill 生成 references/RECIPES.md（相关 Recipe 摘要）
  */
 
@@ -15,48 +15,48 @@ import { DEFAULT_KNOWLEDGE_BASE_DIR } from '../../shared/ProjectMarkers.js';
 import { SKILLS_DIR as BUILTIN_SKILLS_DIR } from '../../shared/package-root.js';
 
 /**
- * 技能名称映射：AutoSnippet/skills/ → .cursor/skills/
- * AutoSnippet/skills/ 下面是 bootstrap 动态生成的项目级 skills，
+ * 技能名称映射：Alembic/skills/ → .cursor/skills/
+ * Alembic/skills/ 下面是 bootstrap 动态生成的项目级 skills，
  * 如 project-architecture/, project-code-standard/ 等。
  */
 const SKILL_NAME_MAP = {
-  'project-architecture': 'autosnippet-architecture',
-  'project-coding-standards': 'autosnippet-coding-standards',
-  'project-agent-guidelines': 'autosnippet-guidelines',
-  'project-data-event-flow': 'autosnippet-data-flow',
-  'project-design-patterns': 'autosnippet-design-patterns',
-  'project-error-resilience': 'autosnippet-error-resilience',
-  'project-swift-objc-idiom': 'autosnippet-swift-objc-idiom',
+  'project-architecture': 'alembic-architecture',
+  'project-coding-standards': 'alembic-coding-standards',
+  'project-agent-guidelines': 'alembic-guidelines',
+  'project-data-event-flow': 'alembic-data-flow',
+  'project-design-patterns': 'alembic-design-patterns',
+  'project-error-resilience': 'alembic-error-resilience',
+  'project-swift-objc-idiom': 'alembic-swift-objc-idiom',
   // 语言维度
-  'project-ts-js-module': 'autosnippet-ts-js-module',
-  'project-react-patterns': 'autosnippet-react-patterns',
-  'project-python-structure': 'autosnippet-python-structure',
-  'project-jvm-annotation': 'autosnippet-jvm-annotation',
+  'project-ts-js-module': 'alembic-ts-js-module',
+  'project-react-patterns': 'alembic-react-patterns',
+  'project-python-structure': 'alembic-python-structure',
+  'project-jvm-annotation': 'alembic-jvm-annotation',
 };
 
 /** 用途描述模板（英文，Cursor 优先） */
 const SKILL_DESC_MAP = {
-  'autosnippet-architecture':
+  'alembic-architecture':
     'Architecture patterns, module boundaries, and dependency rules for {project}. Use when creating new modules, reviewing architecture, or understanding dependencies.',
-  'autosnippet-coding-standards':
+  'alembic-coding-standards':
     'Coding standards and style conventions for {project}. Use when writing new code, reviewing formatting, or enforcing naming conventions.',
-  'autosnippet-guidelines':
+  'alembic-guidelines':
     'Agent interaction guidelines for {project}. Use when understanding how to work with this specific project.',
-  'autosnippet-data-flow':
+  'alembic-data-flow':
     'Event and data flow patterns for {project}. Use when working with events, state management, or data pipelines.',
-  'autosnippet-design-patterns':
+  'alembic-design-patterns':
     'Common code patterns and idioms for {project}. Use when implementing features following project conventions.',
-  'autosnippet-error-resilience':
+  'alembic-error-resilience':
     'Error handling, resilience patterns and defensive coding for {project}. Use when making design decisions or code review.',
-  'autosnippet-swift-objc-idiom':
+  'alembic-swift-objc-idiom':
     'Swift/ObjC idioms, categories, method swizzling and interop for {project}. Use when working with Swift or Objective-C code.',
-  'autosnippet-ts-js-module':
+  'alembic-ts-js-module':
     'Module export structure, barrel exports, and public API surface for {project}. Use when working with imports/exports or module boundaries.',
-  'autosnippet-react-patterns':
+  'alembic-react-patterns':
     'React component patterns, state management conventions and routing for {project}. Use when following framework patterns.',
-  'autosnippet-python-structure':
+  'alembic-python-structure':
     'Python package structure, __init__.py exports, import patterns and type hint coverage for {project}. Use when working with Python modules.',
-  'autosnippet-jvm-annotation':
+  'alembic-jvm-annotation':
     'Annotation patterns (DI, ORM, API, custom) and meta-programming for {project}. Use when working with Spring, Jakarta, or framework annotations.',
 };
 
@@ -115,7 +115,7 @@ export class SkillsSyncer {
   }
 
   /**
-   * 同步内置 Skills：从 AutoSnippet 包 skills/ 目录直接复制到 .cursor/skills/
+   * 同步内置 Skills：从 Alembic 包 skills/ 目录直接复制到 .cursor/skills/
    */
   _syncBuiltinSkills(result: { builtinSynced: string[]; errors: string[] }) {
     if (!fs.existsSync(BUILTIN_SKILLS_DIR)) {
@@ -140,7 +140,7 @@ export class SkillsSyncer {
   }
 
   /**
-   * 同步项目级 Skills：从 AutoSnippet/skills/ 转换格式后写入 .cursor/skills/
+   * 同步项目级 Skills：从 Alembic/skills/ 转换格式后写入 .cursor/skills/
    */
   async _syncProjectSkills(result: { synced: string[]; skipped: string[]; errors: string[] }) {
     // 检查源目录是否存在
@@ -164,7 +164,7 @@ export class SkillsSyncer {
 
         const targetName =
           (SKILL_NAME_MAP as Record<string, string>)[dirName] ||
-          `autosnippet-${dirName.replace(/^project-/, '')}`;
+          `alembic-${dirName.replace(/^project-/, '')}`;
         const targetSkillDir = path.join(this.targetDir, targetName);
 
         // 创建目标目录
@@ -190,7 +190,7 @@ export class SkillsSyncer {
   }
 
   /**
-   * 转换 SKILL.md 格式 — 从 AutoSnippet 格式到 Cursor Agent Skills 标准
+   * 转换 SKILL.md 格式 — 从 Alembic 格式到 Cursor Agent Skills 标准
    */
   _convertSkillMd(source: string, targetName: string, sourceDirName: string) {
     // 提取原始内容（去掉 frontmatter）
@@ -223,7 +223,7 @@ export class SkillsSyncer {
       '## Deeper Knowledge',
       '',
       `For detailed recipes and code examples:`,
-      `- \`autosnippet_search("${dimensionLabel}")\``,
+      `- \`asd_search("${dimensionLabel}")\``,
       '',
       '## Referenced Files',
       '',
@@ -285,7 +285,7 @@ export class SkillsSyncer {
     }
 
     lines.push('');
-    lines.push(`For full content, use: \`autosnippet_search("${dimensionLabel}")\``);
+    lines.push(`For full content, use: \`asd_search("${dimensionLabel}")\``);
 
     fs.writeFileSync(path.join(refsDir, 'RECIPES.md'), `${lines.join('\n')}\n`, 'utf8');
   }

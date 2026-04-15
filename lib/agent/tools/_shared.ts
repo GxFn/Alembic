@@ -8,7 +8,7 @@ export const PROJECT_ROOT = PACKAGE_ROOT;
 /** skills/ 目录绝对路径 */
 export const SKILLS_DIR = _SKILLS_DIR;
 /** 项目级 skills 目录 */
-export const PROJECT_SKILLS_DIR = path.resolve(PACKAGE_ROOT, '.autosnippet', 'skills');
+export const PROJECT_SKILLS_DIR = path.resolve(PACKAGE_ROOT, '.asd', 'skills');
 
 // Bootstrap 维度展示分组 — 从 DimensionRegistry 自动生成
 export { DIMENSION_DISPLAY_GROUP } from '#domain/dimension/DimensionRegistry.js';

@@ -2,7 +2,7 @@
  * MockProvider — Smart Mock AI 提供商
  *
  * 不发网络请求，但根据 prompt 内容智能匹配场景，返回符合格式的仿真响应。
- * 用于让用户在没有 API Key 的情况下体验 AutoSnippet 完整工作流。
+ * 用于让用户在没有 API Key 的情况下体验 Alembic 完整工作流。
  *
  * 智能匹配场景:
  *   1. probe / ping → "pong"

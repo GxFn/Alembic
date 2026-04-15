@@ -186,6 +186,6 @@ export function register(c: ServiceContainer) {
 
   c.singleton('reportStore', (ct: ServiceContainer) => {
     const projectRoot = resolveProjectRoot(ct);
-    return new ReportStore(path.join(projectRoot, '.autosnippet', 'logs', 'reports'));
+    return new ReportStore(path.join(projectRoot, '.asd', 'logs', 'reports'));
   });
 }

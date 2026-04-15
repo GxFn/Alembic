@@ -53,7 +53,7 @@ export class ErrorTracker {
     this.config = {
       logDirectory:
         options.logDirectory ||
-        path.join(pathGuard.projectRoot ?? process.cwd(), '.autosnippet', 'logs', 'errors'),
+        path.join(pathGuard.projectRoot ?? process.cwd(), '.asd', 'logs', 'errors'),
       maxErrorsInMemory: options.maxErrorsInMemory || 500,
       enableFileLogging: options.enableFileLogging !== false,
       enableConsoleLogging: options.enableConsoleLogging !== false,

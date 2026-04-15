@@ -1,9 +1,9 @@
 {
-  "name": "autosnippet",
-  "displayName": "AutoSnippet",
+  "name": "asd",
+  "displayName": "Alembic",
   "description": "Knowledge-driven code snippets — search, insert, create, and audit directly in your editor",
   "version": "0.1.0",
-  "publisher": "autosnippet",
+  "publisher": "asd",
   "license": "MIT",
   "engines": {
     "vscode": "^1.109.0"
@@ -16,7 +16,7 @@
     "snippet",
     "knowledge",
     "code-search",
-    "autosnippet"
+    "asd"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -25,73 +25,73 @@
   "contributes": {
     "commands": [
       {
-        "command": "autosnippet.search",
-        "title": "AutoSnippet: Search Knowledge Base",
+        "command": "asd.search",
+        "title": "Alembic: Search Knowledge Base",
         "icon": "$(search)"
       },
       {
-        "command": "autosnippet.create",
-        "title": "AutoSnippet: Create Candidate from Selection"
+        "command": "asd.create",
+        "title": "Alembic: Create Candidate from Selection"
       },
       {
-        "command": "autosnippet.audit",
-        "title": "AutoSnippet: Audit Current File"
+        "command": "asd.audit",
+        "title": "Alembic: Audit Current File"
       },
       {
-        "command": "autosnippet.auditProject",
-        "title": "AutoSnippet: Audit Entire Project"
+        "command": "asd.auditProject",
+        "title": "Alembic: Audit Entire Project"
       },
       {
-        "command": "autosnippet.status",
-        "title": "AutoSnippet: Show Connection Status"
+        "command": "asd.status",
+        "title": "Alembic: Show Connection Status"
       },
       {
-        "command": "autosnippet.toggleRemotePoller",
-        "title": "AutoSnippet: Toggle Remote Command Poller"
+        "command": "asd.toggleRemotePoller",
+        "title": "Alembic: Toggle Remote Command Poller"
       },
       {
-        "command": "autosnippet.startRemotePoller",
-        "title": "AutoSnippet: Start Remote Command Poller"
+        "command": "asd.startRemotePoller",
+        "title": "Alembic: Start Remote Command Poller"
       },
       {
-        "command": "autosnippet.stopRemotePoller",
-        "title": "AutoSnippet: Stop Remote Command Poller"
+        "command": "asd.stopRemotePoller",
+        "title": "Alembic: Stop Remote Command Poller"
       }
     ],
     "configuration": {
-      "title": "AutoSnippet",
+      "title": "Alembic",
       "properties": {
-        "autosnippet.serverPort": {
+        "asd.serverPort": {
           "type": "number",
           "default": 3000,
-          "description": "Port of the AutoSnippet API server (asd ui / asd start)"
+          "description": "Port of the Alembic API server (asd ui / asd start)"
         },
-        "autosnippet.serverHost": {
+        "asd.serverHost": {
           "type": "string",
           "default": "localhost",
-          "description": "Host of the AutoSnippet API server"
+          "description": "Host of the Alembic API server"
         },
-        "autosnippet.enableDirectiveDetection": {
+        "asd.enableDirectiveDetection": {
           "type": "boolean",
           "default": true,
-          "description": "Enable automatic detection of AutoSnippet directives in code"
+          "description": "Enable automatic detection of Alembic directives in code"
         },
-        "autosnippet.enableCodeLens": {
+        "asd.enableCodeLens": {
           "type": "boolean",
           "default": true,
-          "description": "Show CodeLens actions above AutoSnippet directives"
+          "description": "Show CodeLens actions above Alembic directives"
         },
-        "autosnippet.enableGuardDiagnostics": {
+        "asd.enableGuardDiagnostics": {
           "type": "boolean",
           "default": true,
           "description": "Enable Guard diagnostics on file save (shows violations as editor warnings)"
         },
-        "autosnippet.insertHighlightDuration": {
+        "asd.insertHighlightDuration": {
           "type": "number",
           "default": 2000,
           "description": "Duration (ms) to highlight inserted code"
         },
-        "autosnippet.enableRemotePoller": {
+        "asd.enableRemotePoller": {
           "type": "boolean",
           "default": false,
           "description": "Enable remote command polling (飞书/Lark Bot → IDE bridge). When enabled, the extension polls for remote commands and injects them into Copilot Chat."
@@ -100,7 +100,7 @@
     },
     "keybindings": [
       {
-        "command": "autosnippet.search",
+        "command": "asd.search",
         "key": "ctrl+shift+f5",
         "mac": "cmd+shift+f5"
       }
@@ -108,7 +108,7 @@
     "languageModelTools": [
       {
         "name": "asd",
-        "displayName": "AutoSnippet",
+        "displayName": "Alembic",
         "toolReferenceName": "asd",
         "canBeReferencedInPrompt": true,
         "modelDescription": "Project persistent memory. Stores team decisions and tracks tasks across sessions.\n\nWorkflow: 1) prime → load decisions & tasks. 2) Respect ALL returned decisions. 3) record_decision when user agrees/disagrees on something. 4) create/close to track work.\n\nKey operations: prime (load memory), record_decision (save agreement), create (new task), close (finish task), list/show/stats (query).",

@@ -17,7 +17,7 @@ export class JsonVectorAdapter extends VectorStore {
 
   constructor(projectRoot: string, options: { contextDir?: string; indexPath?: string } = {}) {
     super();
-    const contextDir = options.contextDir || '.autosnippet/context/index';
+    const contextDir = options.contextDir || '.asd/context/index';
     this.#indexPath = options.indexPath || join(projectRoot, contextDir, 'vector_index.json');
     this.#data = new Map();
     this.#dirty = false;

@@ -1,9 +1,9 @@
 # CLI Reference
 
-AutoSnippet's command-line tool is called `asd`, built on [commander](https://github.com/tj/commander.js).
+Alembic's command-line tool is called `asd`, built on [commander](https://github.com/tj/commander.js).
 
 ```bash
-npm install -g autosnippet
+npm install -g alembic
 asd --help
 ```
 
@@ -51,12 +51,12 @@ asd setup [options]
 
 ```
 your-project/
-├── AutoSnippet/
+├── Alembic/
 │   ├── recipes/         # Approved knowledge entries (Markdown)
 │   ├── candidates/      # Pending review candidates
 │   └── skills/          # Project-level Agent instructions
-├── .autosnippet/
-│   ├── autosnippet.db   # SQLite database
+├── .asd/
+│   ├── alembic.db   # SQLite database
 │   └── context/         # Vector index
 ├── .cursor/mcp.json     # Cursor MCP config
 ├── .vscode/mcp.json     # VS Code MCP config
@@ -372,7 +372,7 @@ asd task <subcommand> [options]
 
 ## asd sync
 
-Incrementally sync `AutoSnippet/recipes/*.md` and `AutoSnippet/candidates/*.md` to the SQLite database.
+Incrementally sync `Alembic/recipes/*.md` and `Alembic/candidates/*.md` to the SQLite database.
 
 ```bash
 asd sync [options]

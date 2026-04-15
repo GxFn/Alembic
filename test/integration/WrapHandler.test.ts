@@ -74,7 +74,7 @@ describe('Integration: wrapHandler', () => {
     test('should use TOOL_SCHEMAS when no explicit schema', async () => {
       // Use a real tool name that exists in TOOL_SCHEMAS
       let receivedArgs: Record<string, unknown> = {};
-      const handler = wrapHandler('autosnippet_health', async (_ctx, args) => {
+      const handler = wrapHandler('asd_health', async (_ctx, args) => {
         receivedArgs = args;
         return { health: 'ok' };
       });

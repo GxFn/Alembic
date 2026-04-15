@@ -10,7 +10,7 @@
  *   - 写入时更新内存 + debounced flush 到 JSON
  *   - 崩溃丢失可通过 embedAllMemories() backfill 恢复
  *
- * 文件位置: .autosnippet/context/memory_embeddings.json
+ * 文件位置: .asd/context/memory_embeddings.json
  *
  * @module MemoryEmbeddingStore
  */
@@ -40,7 +40,7 @@ export class MemoryEmbeddingStore {
    */
   constructor(projectRoot: string, opts?: { filePath?: string }) {
     this.#filePath =
-      opts?.filePath ?? join(projectRoot, '.autosnippet', 'context', 'memory_embeddings.json');
+      opts?.filePath ?? join(projectRoot, '.asd', 'context', 'memory_embeddings.json');
     this.#load();
   }
 

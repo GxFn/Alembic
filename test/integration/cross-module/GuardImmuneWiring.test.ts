@@ -51,8 +51,8 @@ describe('Guard Immune System Wiring', () => {
 
   it('RuleLearner should have checkPrecisionDrop method', async () => {
     const { RuleLearner } = await import('../../../lib/service/guard/RuleLearner.js');
-    const tmpDir = `/tmp/autosnippet-smoke-${Date.now()}`;
-    const learner = new RuleLearner(tmpDir, { knowledgeBaseDir: 'AutoSnippet' });
+    const tmpDir = `/tmp/alembic-smoke-${Date.now()}`;
+    const learner = new RuleLearner(tmpDir, { knowledgeBaseDir: 'Alembic' });
     expect(typeof learner.checkPrecisionDrop).toBe('function');
     const result = learner.checkPrecisionDrop();
     expect(Array.isArray(result)).toBe(true);

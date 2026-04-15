@@ -26,7 +26,7 @@ describe('Gateway', () => {
     constitutionValidator = new ConstitutionValidator(constitution);
     permissionManager = new PermissionManager(constitution);
 
-    const dbPath = path.join(os.tmpdir(), 'autosnippet-test-gateway.db');
+    const dbPath = path.join(os.tmpdir(), 'alembic-test-gateway.db');
     db = new DatabaseConnection({ path: dbPath });
     await db.connect();
     await db.runMigrations();

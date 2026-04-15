@@ -245,7 +245,7 @@ describe('ConfigWatcher — lifecycle', () => {
   let testDir: string;
 
   beforeAll(() => {
-    testDir = join(tmpdir(), `autosnippet-configwatcher-test-${Date.now()}`);
+    testDir = join(tmpdir(), `alembic-configwatcher-test-${Date.now()}`);
     mkdirSync(testDir, { recursive: true });
   });
 
@@ -553,8 +553,8 @@ describe('CustomConfigDiscoverer — User Custom Systems', () => {
   let kbDir: string;
 
   beforeAll(() => {
-    testDir = join(tmpdir(), `autosnippet-customsys-test-${Date.now()}`);
-    kbDir = join(testDir, 'AutoSnippet');
+    testDir = join(tmpdir(), `alembic-customsys-test-${Date.now()}`);
+    kbDir = join(testDir, 'Alembic');
     mkdirSync(kbDir, { recursive: true });
   });
 
@@ -579,7 +579,7 @@ describe('CustomConfigDiscoverer — User Custom Systems', () => {
 
     // Write boxspec.json with customDiscoverer
     writeFileSync(
-      join(kbDir, 'AutoSnippet.boxspec.json'),
+      join(kbDir, 'Alembic.boxspec.json'),
       JSON.stringify({
         name: 'TestProject',
         schemaVersion: 2,
@@ -606,7 +606,7 @@ describe('CustomConfigDiscoverer — User Custom Systems', () => {
 
   it('should handle invalid customDiscoverer gracefully', async () => {
     writeFileSync(
-      join(kbDir, 'AutoSnippet.boxspec.json'),
+      join(kbDir, 'Alembic.boxspec.json'),
       JSON.stringify({
         name: 'TestProject',
         schemaVersion: 2,
@@ -622,7 +622,7 @@ describe('CustomConfigDiscoverer — User Custom Systems', () => {
 
   it('should handle array of custom discoverers', async () => {
     writeFileSync(
-      join(kbDir, 'AutoSnippet.boxspec.json'),
+      join(kbDir, 'Alembic.boxspec.json'),
       JSON.stringify({
         name: 'TestProject',
         schemaVersion: 2,

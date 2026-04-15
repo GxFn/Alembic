@@ -188,7 +188,7 @@ export interface PhaseReport {
 
 // ── 类型定义 ────────────────────────────────────────────────
 
-// ── R13: AutoSnippet 生成物黑名单 ─────────────────────────
+// ── R13: Alembic 生成物黑名单 ─────────────────────────
 
 const ASD_GENERATED_BASENAMES = new Set(['AGENTS.md', 'CLAUDE.md', 'copilot-instructions.md']);
 const ASD_GENERATED_PATH_SEGMENTS = [
@@ -196,8 +196,8 @@ const ASD_GENERATED_PATH_SEGMENTS = [
   `${path.sep}.github${path.sep}copilot-instructions.md`,
 ];
 
-/** 判断文件是否为 AutoSnippet 生成物（用于排除自引用循环知识） */
-export function isAutoSnippetGenerated(filePath: string) {
+/** 判断文件是否为 Alembic 生成物（用于排除自引用循环知识） */
+export function isAlembicGenerated(filePath: string) {
   const base = path.basename(filePath);
   if (ASD_GENERATED_BASENAMES.has(base)) {
     return true;
@@ -247,7 +247,7 @@ export async function runPhase1_FileCollection(
         if (seenPaths.has(fp)) {
           continue;
         }
-        if (isAutoSnippetGenerated(fp)) {
+        if (isAlembicGenerated(fp)) {
           continue; // R13: skip generated files
         }
         seenPaths.add(fp);

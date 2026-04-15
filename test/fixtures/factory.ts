@@ -59,7 +59,7 @@ export function createTempGitRepo(options = {}) {
   const exec = (cmd) => execSync(cmd, { cwd: tmpDir, stdio: 'pipe', encoding: 'utf8' });
 
   exec('git init');
-  exec('git config user.email "test@autosnippet.dev"');
+  exec('git config user.email "test@alembic.dev"');
   exec('git config user.name "Test User"');
 
   if (initialCommit) {

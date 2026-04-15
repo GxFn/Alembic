@@ -1,7 +1,7 @@
 {
   "database": {
     "type": "sqlite",
-    "path": "./.autosnippet/autosnippet.db",
+    "path": "./.asd/alembic.db",
     "verbose": false
   },
   "server": {
@@ -26,7 +26,7 @@
     "console": true,
     "file": {
       "enabled": true,
-      "path": "./.autosnippet/logs"
+      "path": "./.asd/logs"
     }
   },
   "constitution": {

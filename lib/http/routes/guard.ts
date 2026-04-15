@@ -261,14 +261,14 @@ async function _getEngine(
 function _buildDiagnosticMessage(violation: Record<string, unknown>) {
   const { ruleId, message, fixSuggestion } = violation;
 
-  let msg = `[AutoSnippet Guard] ${ruleId}: ${message}`;
+  let msg = `[Alembic Guard] ${ruleId}: ${message}`;
 
   if (fixSuggestion) {
     msg += `\n修复建议: ${fixSuggestion}`;
   }
 
   // Agent 指引：嵌入 MCP 搜索建议
-  msg += `\n搜 autosnippet_search('${ruleId}') 查找正确写法。`;
+  msg += `\n搜 asd_search('${ruleId}') 查找正确写法。`;
 
   return msg;
 }

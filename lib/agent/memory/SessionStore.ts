@@ -673,7 +673,7 @@ export class SessionStore {
   // ═══════════════════════════════════════════════════════
 
   async saveCheckpoint(projectRoot: string) {
-    const checkpointDir = path.join(projectRoot, '.autosnippet', 'bootstrap-checkpoint');
+    const checkpointDir = path.join(projectRoot, '.asd', 'bootstrap-checkpoint');
     try {
       fs.mkdirSync(checkpointDir, { recursive: true });
       const data = {
@@ -706,15 +706,10 @@ export class SessionStore {
 
   async loadCheckpoint(projectRoot: string) {
     // Try new format first, then legacy
-    const newPath = path.join(
-      projectRoot,
-      '.autosnippet',
-      'bootstrap-checkpoint',
-      'session-store.json'
-    );
+    const newPath = path.join(projectRoot, '.asd', 'bootstrap-checkpoint', 'session-store.json');
     const legacyPath = path.join(
       projectRoot,
-      '.autosnippet',
+      '.asd',
       'bootstrap-checkpoint',
       'episodic-memory.json'
     );

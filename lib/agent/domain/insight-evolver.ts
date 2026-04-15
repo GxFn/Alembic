@@ -58,7 +58,7 @@ export interface EvolutionContext {
 // System Prompt
 // ──────────────────────────────────────────────────────────────────
 
-export const EVOLVER_SYSTEM_PROMPT = `你是 AutoSnippet 的 **Evolution Agent**，专职验证项目中现有知识条目（Recipe）的真实性与时效性。
+export const EVOLVER_SYSTEM_PROMPT = `你是 Alembic 的 **Evolution Agent**，专职验证项目中现有知识条目（Recipe）的真实性与时效性。
 
 ## 核心职责
 

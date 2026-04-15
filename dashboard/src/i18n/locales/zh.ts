@@ -103,7 +103,7 @@ export const zh = {
 
   /* ═══════════════════════════════ login ═══════════════════════════════ */
   login: {
-    title: 'AutoSnippet',
+    title: 'Alembic',
     subtitle: '连接开发者、AI 与项目知识库',
     heading: '登录 Dashboard',
     username: '用户名',
@@ -661,7 +661,7 @@ export const zh = {
     priorityMedium: '中',
     priorityLow: '低',
     // View-specific keys
-    subtitle: 'Agent 技能文档 — 指导 AI 如何正确使用 AutoSnippet 工具',
+    subtitle: 'Agent 技能文档 — 指导 AI 如何正确使用 Alembic 工具',
     fetchFailed: '获取 Skills 列表失败',
     loadError: '不存在或读取出错',
     loadSkillFailed: '加载 Skill 失败',
@@ -1003,7 +1003,7 @@ export const zh = {
     faq: '常见问题',
     tokenUsage: 'Token 用量',
     about: '关于',
-    pageTitle: 'AutoSnippet 使用说明',
+    pageTitle: 'Alembic 使用说明',
     subtitle: '连接开发者、AI 与项目知识库：知识挖掘自我进化 · 规范治理 AI 编码产出 · 多语言支持',
     techSpecs: 'Node.js ≥ 22 · 18 MCP 工具 · 5 Skills · Agent Runtime · AST · VSCode Extension · Vector',
     viewGithub: '查看 GitHub',
@@ -1319,11 +1319,11 @@ export const zh = {
     vscodeExtGuardDiagDesc: 'onDidSave → Guard API → DiagnosticCollection 波浪线标记 + 灯泡菜单搜索修复',
     vscodeExtCodeLens: '指令检测 CodeLens',
     vscodeExtCodeLensDesc: '检测 // as:search / // as:create 等指令，提供可视化操作按钮',
-    vscodeExtCmd1: 'autosnippet.search — 搜索知识库（Cmd+Shift+F5）',
-    vscodeExtCmd2: 'autosnippet.create — 从选区创建候选',
-    vscodeExtCmd3: 'autosnippet.audit — 审计当前文件',
-    vscodeExtCmd4: 'autosnippet.auditProject — 审计整个项目',
-    vscodeExtCmd5: 'autosnippet.status — 显示连接状态',
+    vscodeExtCmd1: 'asd.search — 搜索知识库（Cmd+Shift+F5）',
+    vscodeExtCmd2: 'asd.create — 从选区创建候选',
+    vscodeExtCmd3: 'asd.audit — 审计当前文件',
+    vscodeExtCmd4: 'asd.auditProject — 审计整个项目',
+    vscodeExtCmd5: 'asd.status — 显示连接状态',
     // New CLI groups
     cliColdstartAndScan: '冷启动与扫描',
     cliTaskManagement: '任务管理',

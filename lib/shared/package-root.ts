@@ -16,7 +16,7 @@ import path from 'node:path';
 const __dirname = import.meta.dirname;
 
 /**
- * 沿目录树向上查找包含 package.json（且 name === 'autosnippet'）的目录。
+ * 沿目录树向上查找包含 package.json（且 name === 'alembic'）的目录。
  * 使用 name 校验避免误匹配到 monorepo 父包或 node_modules 中的其它包。
  */
 function findPackageRoot(): string {
@@ -27,7 +27,7 @@ function findPackageRoot(): string {
     if (existsSync(candidate)) {
       try {
         const pkg = JSON.parse(readFileSync(candidate, 'utf-8'));
-        if (pkg.name === 'autosnippet') {
+        if (pkg.name === 'alembic') {
           return dir;
         }
       } catch {
@@ -41,14 +41,14 @@ function findPackageRoot(): string {
     dir = parent;
   }
   throw new Error(
-    '[AutoSnippet] Could not locate package root. ' +
-      'No ancestor directory contains a package.json with name "autosnippet".'
+    '[Alembic] Could not locate package root. ' +
+      'No ancestor directory contains a package.json with name "alembic".'
   );
 }
 
 // ─── 导出常量 ────────────────────────────────────────────
 
-/** AutoSnippet 包的根目录（包含 package.json 的目录） */
+/** Alembic 包的根目录（包含 package.json 的目录） */
 export const PACKAGE_ROOT = findPackageRoot();
 
 /** `<root>/config/` — 配置文件目录 */

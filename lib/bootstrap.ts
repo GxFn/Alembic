@@ -50,7 +50,7 @@ export class Bootstrap {
    * 配置 PathGuard 路径安全守卫
    * 必须在任何文件写操作前调用
    * @param projectRoot 用户项目的绝对路径
-   * @param [knowledgeBaseDir] 知识库目录名（如 'AutoSnippet'）
+   * @param [knowledgeBaseDir] 知识库目录名（如 'Alembic'）
    */
   static configurePathGuard(projectRoot: string, knowledgeBaseDir?: string) {
     if (!pathGuard.configured && projectRoot) {
@@ -89,7 +89,7 @@ export class Bootstrap {
       // 2. 初始化日志系统
       await this.initializeLogger();
 
-      this.components.logger!.info('AutoSnippet - Starting initialization...');
+      this.components.logger!.info('Alembic - Starting initialization...');
 
       // 3. 连接数据库
       await this.initializeDatabase();
@@ -107,11 +107,11 @@ export class Bootstrap {
       // await this.registerRoutes();
 
       const duration = Date.now() - startTime;
-      this.components.logger!.info(`AutoSnippet initialized successfully (${duration}ms)`);
+      this.components.logger!.info(`Alembic initialized successfully (${duration}ms)`);
 
       return this.components;
     } catch (error: unknown) {
-      console.error('Failed to initialize AutoSnippet:', error);
+      console.error('Failed to initialize Alembic:', error);
       throw error;
     }
   }
@@ -119,7 +119,7 @@ export class Bootstrap {
   /** 加载 .env 文件（dotenv），不覆盖已有环境变量 */
   async loadDotEnv() {
     try {
-      // 沿目录树向上查找 .env：cwd → AutoSnippet 包根 → 用户项目根
+      // 沿目录树向上查找 .env：cwd → Alembic 包根 → 用户项目根
       const candidates = [path.resolve(process.cwd(), '.env'), path.resolve(PACKAGE_ROOT, '.env')];
       for (const envPath of candidates) {
         if (existsSync(envPath)) {
@@ -191,7 +191,7 @@ export class Bootstrap {
     this.components.auditLogger = auditLogger;
     logger!.info('Audit system initialized');
 
-    // Skill Hooks (扫描 skills/*/hooks.js + AutoSnippet/skills/*/hooks.js)
+    // Skill Hooks (扫描 skills/*/hooks.js + Alembic/skills/*/hooks.js)
     const skillHooks = new SkillHooks();
     await skillHooks.load();
     this.components.skillHooks = skillHooks;
@@ -219,7 +219,7 @@ export class Bootstrap {
 
   /** 关闭应用程序 */
   async shutdown() {
-    this.components.logger?.info('AutoSnippet - Shutting down...');
+    this.components.logger?.info('Alembic - Shutting down...');
 
     // 关闭数据库连接（WAL checkpoint → close）
     if (this.components.db) {
@@ -235,7 +235,7 @@ export class Bootstrap {
       this.components.db.close();
     }
 
-    this.components.logger?.info('AutoSnippet - Shutdown complete');
+    this.components.logger?.info('Alembic - Shutdown complete');
   }
 
   /** 获取组件 */

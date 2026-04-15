@@ -1,5 +1,5 @@
 /**
- * Global type declarations for AutoSnippet project.
+ * Global type declarations for Alembic project.
  *
  * Types are organized into modular files:
  *   - ast.d.ts       — TreeSitter, ClassInfo, MethodInfo, FileSymbols, etc.

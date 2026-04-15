@@ -106,7 +106,7 @@ export const en: DeepString<typeof zh> = {
 
   /* ═══════════════════════════════ login ═══════════════════════════════ */
   login: {
-    title: 'AutoSnippet',
+    title: 'Alembic',
     subtitle: 'Connect developers, AI & project knowledge',
     heading: 'Sign in to Dashboard',
     username: 'Username',
@@ -664,7 +664,7 @@ export const en: DeepString<typeof zh> = {
     priorityMedium: 'Medium',
     priorityLow: 'Low',
     // View-specific keys
-    subtitle: 'Agent skill docs — guide AI on how to use AutoSnippet tools',
+    subtitle: 'Agent skill docs — guide AI on how to use Alembic tools',
     fetchFailed: 'Failed to fetch Skills list',
     loadError: 'does not exist or read error',
     loadSkillFailed: 'Failed to load Skill',
@@ -1006,7 +1006,7 @@ export const en: DeepString<typeof zh> = {
     faq: 'FAQ',
     tokenUsage: 'Token Usage',
     about: 'About',
-    pageTitle: 'AutoSnippet Guide',
+    pageTitle: 'Alembic Guide',
     subtitle: 'Connect developers, AI & project knowledge: Self-evolving knowledge mining · Governing AI coding output · Multi-language support',
     techSpecs: 'Node.js ≥ 22 · 18 MCP Tools · 5 Skills · Agent Runtime · AST · VSCode Extension · Vector',
     viewGithub: 'View on GitHub',
@@ -1322,11 +1322,11 @@ export const en: DeepString<typeof zh> = {
     vscodeExtGuardDiagDesc: 'onDidSave → Guard API → DiagnosticCollection squiggles + lightbulb menu search fix',
     vscodeExtCodeLens: 'Directive CodeLens',
     vscodeExtCodeLensDesc: 'Detects // as:search / // as:create directives and provides visual action buttons',
-    vscodeExtCmd1: 'autosnippet.search — Search knowledge base (Cmd+Shift+F5)',
-    vscodeExtCmd2: 'autosnippet.create — Create candidate from selection',
-    vscodeExtCmd3: 'autosnippet.audit — Audit current file',
-    vscodeExtCmd4: 'autosnippet.auditProject — Audit entire project',
-    vscodeExtCmd5: 'autosnippet.status — Show connection status',
+    vscodeExtCmd1: 'asd.search — Search knowledge base (Cmd+Shift+F5)',
+    vscodeExtCmd2: 'asd.create — Create candidate from selection',
+    vscodeExtCmd3: 'asd.audit — Audit current file',
+    vscodeExtCmd4: 'asd.auditProject — Audit entire project',
+    vscodeExtCmd5: 'asd.status — Show connection status',
     // New CLI groups
     cliColdstartAndScan: 'Cold Start & Scan',
     cliTaskManagement: 'Task Management',

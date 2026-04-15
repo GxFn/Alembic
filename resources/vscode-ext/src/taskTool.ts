@@ -1,5 +1,5 @@
 /**
- * AutoSnippet Task Tool — lm.registerTool 核心通道
+ * Alembic Task Tool — lm.registerTool 核心通道
  *
  * 通过 #asd 引用激活，Agent Mode 全能力可用。
  *
@@ -27,7 +27,7 @@ export function registerTaskTool(context: vscode.ExtensionContext) {
         fail: 'Failing task...',
       };
       return {
-        invocationMessage: messages[op] || `AutoSnippet: ${op}`,
+        invocationMessage: messages[op] || `Alembic: ${op}`,
       };
     },
 
@@ -88,7 +88,7 @@ function textResult(data: Record<string, unknown>): vscode.LanguageModelToolResu
 }
 
 function forwardToServer(args: Record<string, unknown> | undefined): Promise<Record<string, unknown>> {
-  const config = vscode.workspace.getConfiguration('autosnippet');
+  const config = vscode.workspace.getConfiguration('asd');
   const host = config.get<string>('serverHost', 'localhost');
   const port = config.get<number>('serverPort', 3000);
   const body = JSON.stringify(args || {});

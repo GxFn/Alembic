@@ -4,7 +4,7 @@
  * 每个 MCP 工具的输入参数定义为 Zod Schema，既做运行时校验，
  * 又可通过 zodToJsonSchema() 自动生成 inputSchema 声明（消除双重维护）。
  *
- * 命名约定：`{ToolSuffix}Input`，如 `SearchInput` 对应 `autosnippet_search`。
+ * 命名约定：`{ToolSuffix}Input`，如 `SearchInput` 对应 `asd_search`。
  *
  * @module shared/schemas/mcp-tools
  */
@@ -23,14 +23,14 @@ import {
 } from './common.js';
 
 // ══════════════════════════════════════════════════════
-//  1. autosnippet_health — 无参数
+//  1. asd_health — 无参数
 // ══════════════════════════════════════════════════════
 
 export const HealthInput = z.object({});
 export type HealthInput = z.infer<typeof HealthInput>;
 
 // ══════════════════════════════════════════════════════
-//  2. autosnippet_search
+//  2. asd_search
 // ══════════════════════════════════════════════════════
 
 export const SearchInput = z.object({
@@ -50,7 +50,7 @@ export const SearchInput = z.object({
 export type SearchInput = z.infer<typeof SearchInput>;
 
 // ══════════════════════════════════════════════════════
-//  3. autosnippet_knowledge
+//  3. asd_knowledge
 // ══════════════════════════════════════════════════════
 
 export const KnowledgeInput = z
@@ -84,7 +84,7 @@ export const KnowledgeInput = z
 export type KnowledgeInput = z.infer<typeof KnowledgeInput>;
 
 // ══════════════════════════════════════════════════════
-//  4. autosnippet_structure
+//  4. asd_structure
 // ══════════════════════════════════════════════════════
 
 export const StructureInput = z.object({
@@ -101,7 +101,7 @@ export const StructureInput = z.object({
 export type StructureInput = z.infer<typeof StructureInput>;
 
 // ══════════════════════════════════════════════════════
-//  5. autosnippet_graph
+//  5. asd_graph
 // ══════════════════════════════════════════════════════
 
 export const GraphInput = z.object({
@@ -119,7 +119,7 @@ export const GraphInput = z.object({
 export type GraphInput = z.infer<typeof GraphInput>;
 
 // ══════════════════════════════════════════════════════
-//  6. autosnippet_call_context
+//  6. asd_call_context
 // ══════════════════════════════════════════════════════
 
 export const CallContextInput = z.object({
@@ -133,7 +133,7 @@ export const CallContextInput = z.object({
 export type CallContextInput = z.infer<typeof CallContextInput>;
 
 // ══════════════════════════════════════════════════════
-//  7. autosnippet_guard
+//  7. asd_guard
 // ══════════════════════════════════════════════════════
 
 export const GuardInput = z.object({
@@ -152,7 +152,7 @@ export const GuardInput = z.object({
 export type GuardInput = z.infer<typeof GuardInput>;
 
 // ══════════════════════════════════════════════════════
-//  7b. autosnippet_submit_knowledge (unified pipeline)
+//  7b. asd_submit_knowledge (unified pipeline)
 // ══════════════════════════════════════════════════════
 
 /**
@@ -233,7 +233,7 @@ export const SubmitKnowledgeInput = z.object({
 export type SubmitKnowledgeInput = z.infer<typeof SubmitKnowledgeInput>;
 
 // ══════════════════════════════════════════════════════
-//  10. autosnippet_skill
+//  10. asd_skill
 // ══════════════════════════════════════════════════════
 
 export const SkillInput = z.object({
@@ -242,7 +242,7 @@ export const SkillInput = z.object({
     .describe(
       'list=列表 | load=加载内容(name) | create=创建 | update=更新 | delete=删除 | suggest=推荐'
     ),
-  name: z.string().optional().describe('Skill 名称（kebab-case，如 autosnippet-create）'),
+  name: z.string().optional().describe('Skill 名称（kebab-case，如 alembic-create）'),
   skillName: z.string().optional().describe('name 的别名，与 name 等价'),
   section: z.string().optional().describe('load 时过滤指定章节'),
   description: z.string().optional().describe('create/update 时的简短描述'),
@@ -253,14 +253,14 @@ export const SkillInput = z.object({
 export type SkillInput = z.infer<typeof SkillInput>;
 
 // ══════════════════════════════════════════════════════
-//  11. autosnippet_bootstrap — 无参数
+//  11. asd_bootstrap — 无参数
 // ══════════════════════════════════════════════════════
 
 export const BootstrapInput = z.object({});
 export type BootstrapInput = z.infer<typeof BootstrapInput>;
 
 // ══════════════════════════════════════════════════════
-//  11a. autosnippet_rescan — 增量知识更新
+//  11a. asd_rescan — 增量知识更新
 // ══════════════════════════════════════════════════════
 
 export const RescanInput = z.object({
@@ -270,7 +270,7 @@ export const RescanInput = z.object({
 export type RescanInput = z.infer<typeof RescanInput>;
 
 // ══════════════════════════════════════════════════════
-//  11b. autosnippet_dimension_complete
+//  11b. asd_dimension_complete
 // ══════════════════════════════════════════════════════
 
 export const DimensionCompleteInput = z.object({
@@ -291,7 +291,7 @@ export const DimensionCompleteInput = z.object({
 export type DimensionCompleteInput = z.infer<typeof DimensionCompleteInput>;
 
 // ══════════════════════════════════════════════════════
-//  11c. autosnippet_wiki (merged: plan + finalize)
+//  11c. asd_wiki (merged: plan + finalize)
 // ══════════════════════════════════════════════════════
 
 export const WikiInput = z.object({
@@ -307,14 +307,14 @@ export const WikiInput = z.object({
 export type WikiInput = z.infer<typeof WikiInput>;
 
 // ══════════════════════════════════════════════════════
-//  12. autosnippet_capabilities — 无参数
+//  12. asd_capabilities — 无参数
 // ══════════════════════════════════════════════════════
 
 export const CapabilitiesInput = z.object({});
 export type CapabilitiesInput = z.infer<typeof CapabilitiesInput>;
 
 // ══════════════════════════════════════════════════════
-//  13. autosnippet_task (5 operations)
+//  13. asd_task (5 operations)
 // ══════════════════════════════════════════════════════
 
 export const TaskInput = z.object({
@@ -346,7 +346,7 @@ export type TaskInput = z.infer<typeof TaskInput>;
 //  Admin Tools
 // ══════════════════════════════════════════════════════
 
-// 14. autosnippet_enrich_candidates
+// 14. asd_enrich_candidates
 export const EnrichCandidatesInput = z.object({
   candidateIds: z
     .array(z.string())
@@ -355,7 +355,7 @@ export const EnrichCandidatesInput = z.object({
 });
 export type EnrichCandidatesInput = z.infer<typeof EnrichCandidatesInput>;
 
-// 15. autosnippet_knowledge_lifecycle
+// 15. asd_knowledge_lifecycle
 export const KnowledgeLifecycleInput = z.object({
   id: IdField,
   action: z
@@ -376,7 +376,7 @@ export const KnowledgeLifecycleInput = z.object({
 });
 export type KnowledgeLifecycleInput = z.infer<typeof KnowledgeLifecycleInput>;
 
-// 18. autosnippet_panorama
+// 18. asd_panorama
 export const PanoramaInput = z.object({
   operation: z
     .enum([
@@ -397,7 +397,7 @@ export const PanoramaInput = z.object({
 });
 export type PanoramaInput = z.infer<typeof PanoramaInput>;
 
-// 19. autosnippet_evolve
+// 19. asd_evolve
 const EvolveDecisionSchema = z.object({
   recipeId: z.string().describe('目标 Recipe ID'),
   action: z
@@ -434,22 +434,22 @@ export type EvolveInput = z.infer<typeof EvolveInput>;
 // ══════════════════════════════════════════════════════
 
 export const TOOL_SCHEMAS: Record<string, z.ZodType> = {
-  autosnippet_health: HealthInput,
-  autosnippet_search: SearchInput,
-  autosnippet_knowledge: KnowledgeInput,
-  autosnippet_structure: StructureInput,
-  autosnippet_graph: GraphInput,
-  autosnippet_call_context: CallContextInput,
-  autosnippet_guard: GuardInput,
-  autosnippet_submit_knowledge: SubmitKnowledgeInput,
-  autosnippet_skill: SkillInput,
-  autosnippet_bootstrap: BootstrapInput,
-  autosnippet_rescan: RescanInput,
-  autosnippet_dimension_complete: DimensionCompleteInput,
-  autosnippet_wiki: WikiInput,
-  autosnippet_task: TaskInput,
-  autosnippet_enrich_candidates: EnrichCandidatesInput,
-  autosnippet_knowledge_lifecycle: KnowledgeLifecycleInput,
-  autosnippet_panorama: PanoramaInput,
-  autosnippet_evolve: EvolveInput,
+  asd_health: HealthInput,
+  asd_search: SearchInput,
+  asd_knowledge: KnowledgeInput,
+  asd_structure: StructureInput,
+  asd_graph: GraphInput,
+  asd_call_context: CallContextInput,
+  asd_guard: GuardInput,
+  asd_submit_knowledge: SubmitKnowledgeInput,
+  asd_skill: SkillInput,
+  asd_bootstrap: BootstrapInput,
+  asd_rescan: RescanInput,
+  asd_dimension_complete: DimensionCompleteInput,
+  asd_wiki: WikiInput,
+  asd_task: TaskInput,
+  asd_enrich_candidates: EnrichCandidatesInput,
+  asd_knowledge_lifecycle: KnowledgeLifecycleInput,
+  asd_panorama: PanoramaInput,
+  asd_evolve: EvolveInput,
 };

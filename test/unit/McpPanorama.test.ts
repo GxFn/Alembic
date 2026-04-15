@@ -1,5 +1,5 @@
 /**
- * autosnippet_panorama MCP Handler — 单元测试
+ * asd_panorama MCP Handler — 单元测试
  */
 import { describe, expect, it } from 'vitest';
 import { panoramaHandler } from '../../lib/external/mcp/handlers/panorama.js';
@@ -129,7 +129,7 @@ function makeCtx(hasPanorama: boolean) {
 
 /* ─── Tests ────────────────────────────────────────── */
 
-describe('autosnippet_panorama', () => {
+describe('asd_panorama', () => {
   describe('overview', () => {
     it('returns project overview with layers and modules', async () => {
       const result = (await panoramaHandler(makeCtx(true), { operation: 'overview' })) as Record<

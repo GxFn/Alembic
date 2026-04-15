@@ -157,10 +157,10 @@ describe('Guard Immune System Integration', () => {
       const { RuleLearner } = await import('../../lib/service/guard/RuleLearner.js');
 
       const signalBus = { send: vi.fn() };
-      const tmpDir = `/tmp/autosnippet-test-${Date.now()}`;
+      const tmpDir = `/tmp/alembic-test-${Date.now()}`;
 
       const learner = new RuleLearner(tmpDir, {
-        knowledgeBaseDir: 'AutoSnippet',
+        knowledgeBaseDir: 'Alembic',
         signalBus: signalBus as any,
       });
 

@@ -12,7 +12,7 @@ describe('AuditLogger & AuditStore', () => {
   let auditLogger;
 
   beforeAll(async () => {
-    const dbPath = path.join(os.tmpdir(), 'autosnippet-test-audit.db');
+    const dbPath = path.join(os.tmpdir(), 'alembic-test-audit.db');
     db = new DatabaseConnection({ path: dbPath });
     await db.connect();
     await db.runMigrations();

@@ -313,7 +313,7 @@ export class LarkTransport {
         await this.#reply(
           messageId,
           [
-            '🤖 AutoSnippet 智能助手',
+            '🤖 Alembic 智能助手',
             '',
             '直接用自然语言和我对话即可:',
             '',

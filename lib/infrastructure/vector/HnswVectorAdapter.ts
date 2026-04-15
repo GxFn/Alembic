@@ -78,7 +78,7 @@ export class HnswVectorAdapter extends VectorStore {
       flushBatchSize: options.flushBatchSize || 100,
       walEnabled: options.walEnabled !== false,
     };
-    this.#indexDir = options.indexDir || join(projectRoot, '.autosnippet/context/index');
+    this.#indexDir = options.indexDir || join(projectRoot, '.asd/context/index');
     this.#indexPath = join(this.#indexDir, 'vector_index.asvec');
     this.#metadata = new Map();
     this.#contents = new Map();

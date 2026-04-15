@@ -1,10 +1,10 @@
 /**
  * StatusBar — 底部状态栏指示器
  *
- * 显示 AutoSnippet API Server 连接状态：
- *   🟢 AutoSnippet    — 已连接
- *   🔴 AutoSnippet    — 未连接
- *   ⏳ AutoSnippet    — 连接中
+ * 显示 Alembic API Server 连接状态：
+ *   🟢 Alembic    — 已连接
+ *   🔴 Alembic    — 未连接
+ *   ⏳ Alembic    — 连接中
  */
 
 import * as vscode from 'vscode';
@@ -26,8 +26,8 @@ export class StatusBar {
       vscode.StatusBarAlignment.Right,
       100
     );
-    this.item.command = 'autosnippet.status';
-    this.item.tooltip = 'AutoSnippet: click for status';
+    this.item.command = 'asd.status';
+    this.item.tooltip = 'Alembic: click for status';
     this.setDisconnected();
     // 不再自动 show()，由 extension.ts 根据 projectScope 决定
   }
@@ -77,7 +77,7 @@ export class StatusBar {
     this._isConnected = true;
     this.item.text = '$(check) AS';
     this.item.backgroundColor = undefined;
-    this.item.tooltip = 'AutoSnippet: Connected to API Server';
+    this.item.tooltip = 'Alembic: Connected to API Server';
   }
 
   private setDisconnected(): void {
@@ -87,7 +87,7 @@ export class StatusBar {
       'statusBarItem.warningBackground'
     );
     this.item.tooltip =
-      'AutoSnippet: Not connected. Run `asd ui` or `asd start` first.';
+      'Alembic: Not connected. Run `asd ui` or `asd start` first.';
   }
 
   private setLoading(): void {

@@ -1,5 +1,5 @@
 /**
- * I18n Context, Provider & Hook for AutoSnippet Dashboard.
+ * I18n Context, Provider & Hook for Alembic Dashboard.
  *
  * Usage:
  *   1. Wrap <App /> with <I18nProvider>

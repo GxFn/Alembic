@@ -3,7 +3,7 @@
  *
  * "首次手动授权，后续自动" 的安全实现：
  *
- *   1. 首次 bootstrap 成功 → 写标记文件 `.autosnippet/.auto-approve-pending`
+ *   1. 首次 bootstrap 成功 → 写标记文件 `.asd/.auto-approve-pending`
  *      （不碰 mcp.json，避免 Cursor 检测配置变更重启 MCP Server 中断当前 session）
  *   2. 下次 MCP Server 启动 → 检查标记 → 注入 autoApprove → 删标记
  *      （写入发生在连接建立前，安全无副作用）
@@ -31,31 +31,31 @@ interface AutoApproveLogger {
  * 不加入自动授权 — 保留对高级操作的手动确认。
  */
 const AUTO_APPROVE_TOOLS = [
-  'autosnippet_health',
-  'autosnippet_capabilities',
-  'autosnippet_search',
-  'autosnippet_knowledge',
-  'autosnippet_structure',
-  'autosnippet_graph',
-  'autosnippet_guard',
-  'autosnippet_submit_knowledge',
-  'autosnippet_skill',
-  'autosnippet_task',
-  'autosnippet_bootstrap',
-  'autosnippet_dimension_complete',
-  'autosnippet_wiki_plan',
-  'autosnippet_wiki_finalize',
+  'asd_health',
+  'asd_capabilities',
+  'asd_search',
+  'asd_knowledge',
+  'asd_structure',
+  'asd_graph',
+  'asd_guard',
+  'asd_submit_knowledge',
+  'asd_skill',
+  'asd_task',
+  'asd_bootstrap',
+  'asd_dimension_complete',
+  'asd_wiki_plan',
+  'asd_wiki_finalize',
 ];
 
 /** 标记文件路径 */
 function _markerPath(projectRoot: string) {
-  return path.join(projectRoot, '.autosnippet', '.auto-approve-pending');
+  return path.join(projectRoot, '.asd', '.auto-approve-pending');
 }
 
 /**
  * 写入标记文件 — 标记首次 bootstrap 已完成，下次启动时注入 autoApprove
  *
- * 在 bootstrap handler 中调用。只写一个轻量标记文件到 .autosnippet/，
+ * 在 bootstrap handler 中调用。只写一个轻量标记文件到 .asd/，
  * 不触碰 .cursor/mcp.json，避免 Cursor 检测配置变更重启 MCP Server。
  *
  * @param projectRoot 项目根目录
@@ -78,11 +78,11 @@ export function markAutoApproveNeeded(projectRoot: string, logger?: AutoApproveL
 }
 
 /**
- * 向 .cursor/mcp.json 中 autosnippet 服务器注入 autoApprove 工具列表
+ * 向 .cursor/mcp.json 中 alembic 服务器注入 autoApprove 工具列表
  *
  * @param projectRoot 项目根目录
  * @param [logger] 日志实例（可选）
- * @returns 是否成功写入（false = 文件不存在或无 autosnippet 配置）
+ * @returns 是否成功写入（false = 文件不存在或无 alembic 配置）
  */
 export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogger) {
   const configPath = path.join(projectRoot, '.cursor', 'mcp.json');
@@ -100,7 +100,7 @@ export function injectAutoApprove(projectRoot: string, logger?: AutoApproveLogge
     return false;
   }
 
-  const serverConfig = config?.mcpServers?.autosnippet;
+  const serverConfig = config?.mcpServers?.asd;
   if (!serverConfig) {
     return false;
   }

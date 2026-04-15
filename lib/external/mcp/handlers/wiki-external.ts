@@ -6,7 +6,7 @@
  *
  * 设计理念:
  *   现有 WikiGenerator 的核心价值在于 **数据收集 + 主题发现**（AST、模块图、知识库）。
- *   文章撰写由外部 Agent 完成（200K+ context），AutoSnippet 只做规划和元数据。
+ *   文章撰写由外部 Agent 完成（200K+ context），Alembic 只做规划和元数据。
  *   bootstrap Phase 1-4 的分析缓存可被 wikiPlan 复用，避免重复计算。
  *
  * @module handlers/wiki-external
@@ -104,11 +104,11 @@ function tryGet(container: McpServiceContainer, name: string): unknown {
 }
 
 // ════════════════════════════════════════════════════════════
-//  wikiRouter — 统一入口 (autosnippet_wiki)
+//  wikiRouter — 统一入口 (asd_wiki)
 // ════════════════════════════════════════════════════════════
 
 /**
- * 统一 Wiki 路由入口 (autosnippet_wiki)
+ * 统一 Wiki 路由入口 (asd_wiki)
  *
  * @param args.operation 'plan' | 'finalize'
  */
@@ -125,7 +125,7 @@ export async function wikiRouter(ctx: McpContext, args: Record<string, unknown>)
 // ════════════════════════════════════════════════════════════
 
 /**
- * 规划 Wiki 文档生成 (autosnippet_wiki operation=plan)
+ * 规划 Wiki 文档生成 (asd_wiki operation=plan)
  *
  * 复用 WikiGenerator 的数据收集和主题发现逻辑（Phase 1-5），
  * 但不撰写文章，只返回规划清单和每个主题的数据包。
@@ -319,7 +319,7 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
       cacheHit,
     },
     meta: {
-      tool: 'autosnippet_wiki_plan',
+      tool: 'asd_wiki_plan',
       responseTimeMs: Date.now() - t0,
     },
   });
@@ -330,7 +330,7 @@ export async function wikiPlan(ctx: McpContext, args: WikiPlanArgs) {
 // ════════════════════════════════════════════════════════════
 
 /**
- * 完成 Wiki 生成 (autosnippet_wiki_finalize)
+ * 完成 Wiki 生成 (asd_wiki_finalize)
  *
  * Agent 写完所有文章后调用。负责：
  *   1. 验证文件存在性
@@ -350,7 +350,7 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
       success: false,
       message: 'articlesWritten is required and must be a non-empty array of file paths',
       errorCode: 'VALIDATION_ERROR',
-      meta: { tool: 'autosnippet_wiki_finalize' },
+      meta: { tool: 'asd_wiki_finalize' },
     });
   }
 
@@ -442,20 +442,14 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
       success: false,
       message: `Failed to write meta.json: ${msg}`,
       errorCode: 'IO_ERROR',
-      meta: { tool: 'autosnippet_wiki_finalize' },
+      meta: { tool: 'asd_wiki_finalize' },
     });
   }
 
   // ── 4. 同步 Cursor 端文档（仅检测，不修改 Agent 写的内容）──
   let syncedDocs = 0;
   try {
-    const devdocsDir = path.join(
-      projectRoot,
-      '.cursor',
-      'skills',
-      'autosnippet-devdocs',
-      'references'
-    );
+    const devdocsDir = path.join(projectRoot, '.cursor', 'skills', 'alembic-devdocs', 'references');
     if (fs.existsSync(devdocsDir)) {
       const docsDir = path.join(wikiDir, 'documents');
       _ensureDir(docsDir);
@@ -466,7 +460,7 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
         if (!fs.existsSync(dest)) {
           // 只同步 Agent 没写的文档
           const content = fs.readFileSync(src, 'utf-8');
-          const header = `<!-- synced from .cursor/skills/autosnippet-devdocs/references/${file} -->\n\n`;
+          const header = `<!-- synced from .cursor/skills/alembic-devdocs/references/${file} -->\n\n`;
           fs.writeFileSync(dest, header + content);
           syncedDocs++;
         }
@@ -492,7 +486,7 @@ export async function wikiFinalize(ctx: McpContext, args: WikiFinalizeArgs) {
       meta,
     },
     meta: {
-      tool: 'autosnippet_wiki_finalize',
+      tool: 'asd_wiki_finalize',
       responseTimeMs: Date.now() - t0,
     },
   });

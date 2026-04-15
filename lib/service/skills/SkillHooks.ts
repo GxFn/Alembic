@@ -11,7 +11,7 @@
  *   - 完全向后兼容旧版 hooks.js (直接导出函数)
  *   - 新格式支持: export default { hooks: { onXxx: { handler, priority, timeout } } }
  *
- * 加载顺序: 内置 skills/ → 项目级 AutoSnippet/skills/（同名覆盖）
+ * 加载顺序: 内置 skills/ → 项目级 Alembic/skills/（同名覆盖）
  */
 
 import fs from 'node:fs';
@@ -75,7 +75,7 @@ const DEFAULT_HANDLER_PRIORITY = 100;
 
 /**
  * 获取项目级 Skills 目录（运行时动态解析）
- * 路径: {projectRoot}/AutoSnippet/skills/
+ * 路径: {projectRoot}/Alembic/skills/
  */
 function _getProjectSkillsDir(container?: { singletons?: { _projectRoot?: unknown } }) {
   const projectRoot = resolveProjectRoot(container);

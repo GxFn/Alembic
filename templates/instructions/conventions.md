@@ -1,43 +1,43 @@
-## YOU Operate autosnippet_task — The User Doesn't
+## YOU Operate asd_task — The User Doesn't
 
-Users speak naturally; you translate to task operations. Never tell users to call autosnippet_task.
+Users speak naturally; you translate to task operations. Never tell users to call asd_task.
 
 ## Task Rules (MANDATORY)
 
-1. **Prime EVERY message** — `autosnippet_task({ operation: "prime" })` FIRST.
+1. **Prime EVERY message** — `asd_task({ operation: "prime" })` FIRST.
 2. **Create task for non-trivial work** — ≥2 files OR ≥10 lines → `create` → code → `close`.
 3. **Decision persistence** — User agrees/disagrees → `record_decision` immediately.
 4. **Session end** — Close or fail ALL tasks. Zero in_progress on exit.
-5. **You are the operator** — Never tell users to call autosnippet_task.
+5. **You are the operator** — Never tell users to call asd_task.
 6. **Skip task for**: Quick questions, single-file trivial fixes (<10 lines), code explanation.
 
 | User Says | You Run |
 |---|---|
-| "fix bug" / "implement" | `create` → code → `close` → `autosnippet_guard()` |
-| "continue" | resume in-progress → `close` → `autosnippet_guard()` |
+| "fix bug" / "implement" | `create` → code → `close` → `asd_guard()` |
+| "continue" | resume in-progress → `close` → `asd_guard()` |
 | "pause" / "abandon" | `fail(id, reason)` |
 | "agreed" | `record_decision(...)` |
 
-7. **After close** — MUST call `autosnippet_guard()` (no args) for compliance review before moving on. Never skip.
+7. **After close** — MUST call `asd_guard()` (no args) for compliance review before moving on. Never skip.
 
 ## Knowledge Rules
 
-- **Do NOT modify** `AutoSnippet/recipes/` or `.autosnippet/` directly.
+- **Do NOT modify** `Alembic/recipes/` or `.asd/` directly.
 - **Prefer Recipe** as project standard; source code is supplementary.
-- **Search**: `autosnippet_search({ query: "..." })` — auto mode (FieldWeighted + semantic).
+- **Search**: `asd_search({ query: "..." })` — auto mode (FieldWeighted + semantic).
 
 ## Essential MCP Tools
 
-- `autosnippet_task` — Task & decision management (**call `prime` first on every message**)
-- `autosnippet_search` — Search knowledge (mode: auto/context/keyword/semantic)
-- `autosnippet_knowledge` — Browse recipes (operation: list/get/insights)
-- `autosnippet_submit_knowledge` — Submit knowledge candidate
-- `autosnippet_guard` — Code compliance check
-- `autosnippet_skill` — Load project skills (list/load)
-- `autosnippet_rescan` — Incremental rescan: preserves Recipes, cleans caches, re-analyzes & audits
-- `autosnippet_evolve` — Batch Recipe evolution decisions (propose/deprecate/skip)
-- `autosnippet_panorama` — Project panorama (overview/module/gaps/health)
-- `autosnippet_health` — Service health & KB stats
+- `asd_task` — Task & decision management (**call `prime` first on every message**)
+- `asd_search` — Search knowledge (mode: auto/context/keyword/semantic)
+- `asd_knowledge` — Browse recipes (operation: list/get/insights)
+- `asd_submit_knowledge` — Submit knowledge candidate
+- `asd_guard` — Code compliance check
+- `asd_skill` — Load project skills (list/load)
+- `asd_rescan` — Incremental rescan: preserves Recipes, cleans caches, re-analyzes & audits
+- `asd_evolve` — Batch Recipe evolution decisions (propose/deprecate/skip)
+- `asd_panorama` — Project panorama (overview/module/gaps/health)
+- `asd_health` — Service health & KB stats
 
 ## Context Pressure
 

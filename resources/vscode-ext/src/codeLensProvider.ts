@@ -19,12 +19,12 @@ export class DirectiveCodeLensProvider implements vscode.CodeLensProvider {
   }
 
   provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
-    // 仅对 AutoSnippet 项目内的文件提供 CodeLens
+    // 仅对 Alembic 项目内的文件提供 CodeLens
     if (!isDocumentInScope(document)) {
       return [];
     }
 
-    const config = vscode.workspace.getConfiguration('autosnippet');
+    const config = vscode.workspace.getConfiguration('asd');
     if (!config.get<boolean>('enableCodeLens', true)) {
       return [];
     }
@@ -40,7 +40,7 @@ export class DirectiveCodeLensProvider implements vscode.CodeLensProvider {
           lenses.push(
             new vscode.CodeLens(range, {
               title: `🔍 Search "${directive.argument}"`,
-              command: 'autosnippet._executeDirective',
+              command: 'asd._executeDirective',
               arguments: [directive],
             })
           );
@@ -49,7 +49,7 @@ export class DirectiveCodeLensProvider implements vscode.CodeLensProvider {
           lenses.push(
             new vscode.CodeLens(range, {
               title: `📝 Create Candidate`,
-              command: 'autosnippet._executeDirective',
+              command: 'asd._executeDirective',
               arguments: [directive],
             })
           );
@@ -58,7 +58,7 @@ export class DirectiveCodeLensProvider implements vscode.CodeLensProvider {
           lenses.push(
             new vscode.CodeLens(range, {
               title: `🛡️ Audit ${directive.argument || 'file'}`,
-              command: 'autosnippet._executeDirective',
+              command: 'asd._executeDirective',
               arguments: [directive],
             })
           );

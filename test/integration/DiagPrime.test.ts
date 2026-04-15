@@ -14,7 +14,7 @@ import { PrimeSearchPipeline } from '../../lib/service/task/PrimeSearchPipeline.
 
 const __dirname = import.meta.dirname;
 const BILIDILI_ROOT = path.resolve(__dirname, '../../../BiliDili');
-const RECIPES_DIR = path.join(BILIDILI_ROOT, 'AutoSnippet/recipes');
+const RECIPES_DIR = path.join(BILIDILI_ROOT, 'Alembic/recipes');
 const HAS_BILIDILI = fs.existsSync(RECIPES_DIR);
 
 function createInMemoryDb() {

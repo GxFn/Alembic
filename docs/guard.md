@@ -1,6 +1,6 @@
 # Guard 规范检查系统
 
-Guard 是 AutoSnippet 的代码规范检查引擎，提供 50+ 内置规则，支持正则匹配、AST 语义分析和跨文件检查。
+Guard 是 Alembic 的代码规范检查引擎，提供 50+ 内置规则，支持正则匹配、AST 语义分析和跨文件检查。
 
 ---
 
@@ -46,11 +46,11 @@ asd guard:staged
 
 ### MCP 工具
 
-AI 助手通过 `autosnippet_guard` 工具调用：
+AI 助手通过 `asd_guard` 工具调用：
 
 ```json
 {
-  "tool": "autosnippet_guard",
+  "tool": "asd_guard",
   "arguments": {
     "files": ["src/utils/helper.ts"],
     "scope": "file"
@@ -276,7 +276,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install -g autosnippet
+      - run: npm install -g alembic
       - run: asd guard:ci --report markdown --output guard-report.md
       - uses: actions/upload-artifact@v4
         if: failure()

@@ -2,8 +2,8 @@
  * ConversationStore — 对话持久化 + 上下文窗口管理
  *
  * 设计:
- * - 每个对话一个 JSONL 文件: .autosnippet/conversations/{id}.jsonl
- * - 索引文件: .autosnippet/conversations/index.json
+ * - 每个对话一个 JSONL 文件: .asd/conversations/{id}.jsonl
+ * - 索引文件: .asd/conversations/index.json
  * - 按 category 隔离: 'user'(Dashboard) / 'system'(SignalCollector)
  * - Token 预算: 超限时自动生成摘要压缩旧轮次
  * - 静默降级: 持久化失败不影响核心功能
@@ -13,7 +13,7 @@
  *   简单高效，无需额外依赖
  *
  * 文件结构:
- *   .autosnippet/conversations/
+ *   .asd/conversations/
  *     index.json   — 对话元数据索引
  *     {id}.jsonl   — 每行一条消息 {role, content, ts}
  */
@@ -58,7 +58,7 @@ export class ConversationStore {
 
   /** @param projectRoot 用户项目根目录 */
   constructor(projectRoot: string) {
-    this.#dir = path.join(projectRoot, '.autosnippet', 'conversations');
+    this.#dir = path.join(projectRoot, '.asd', 'conversations');
     this.#indexPath = path.join(this.#dir, 'index.json');
     this.#logger = Logger.getInstance();
     // 路径安全检查

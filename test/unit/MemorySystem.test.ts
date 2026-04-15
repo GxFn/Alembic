@@ -848,7 +848,7 @@ describe('PersistentMemory', () => {
     const db = new Database(':memory:');
     const pmOpts: Record<string, unknown> = { logger: mockLogger };
     if (opts?.withEmbeddingStore) {
-      pmOpts.embeddingStore = new MemoryEmbeddingStore(`/tmp/autosnippet-test-${Date.now()}`);
+      pmOpts.embeddingStore = new MemoryEmbeddingStore(`/tmp/alembic-test-${Date.now()}`);
     }
     return new PersistentMemory(db, pmOpts);
   };

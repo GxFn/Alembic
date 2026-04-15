@@ -129,7 +129,7 @@ export class Logger {
     config: { level?: string; console?: boolean; file?: { enabled?: boolean; path?: string } } = {}
   ) {
     if (!this.instance) {
-      const rawLogsDir = config.file?.path || './.autosnippet/logs';
+      const rawLogsDir = config.file?.path || './.asd/logs';
       // 与 DatabaseConnection 一致：相对路径按 PathGuard.projectRoot 解析，避免 MCP cwd 非项目目录时写到错误位置
       const projectRoot = pathGuard.projectRoot;
       const logsDir =

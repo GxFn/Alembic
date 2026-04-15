@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * AutoSnippet V2 CLI
+ * Alembic V2 CLI
  *
  * Usage:
  *   asd setup           - 初始化项目（--repo 指定子仓库远程地址）
@@ -60,7 +60,7 @@ process.on('unhandledRejection', (reason) => {
 shutdown.install();
 
 const program = new Command();
-program.name('asd').description('AutoSnippet V2 - AI 知识库管理工具').version(pkg.version);
+program.name('asd').description('Alembic V2 - AI 知识库管理工具').version(pkg.version);
 
 // ─────────────────────────────────────────────────────
 // setup 命令
@@ -141,7 +141,7 @@ program
     gitExec(`remote add origin ${url}`);
     gitExec('add .');
     try {
-      gitExec('commit -m "Init AutoSnippet recipes"');
+      gitExec('commit -m "Init Alembic recipes"');
     } catch {
       /* 空目录时 commit 可能失败，无影响 */
     }
@@ -155,13 +155,13 @@ program
     cli.log('后续步骤：');
     cli.log('  1. git push -u origin main');
     cli.log('  2. 在主仓库中选择一种方式管理 recipes/:');
-    cli.log(`     • git submodule add ${url} AutoSnippet/recipes`);
-    cli.log('     • 或将 AutoSnippet/recipes/ 加入 .gitignore');
+    cli.log(`     • git submodule add ${url} Alembic/recipes`);
+    cli.log('     • 或将 Alembic/recipes/ 加入 .gitignore');
   });
 
-/** 更新 .autosnippet/config.json 中的 core.subRepoUrl 字段 */
+/** 更新 .asd/config.json 中的 core.subRepoUrl 字段 */
 function _updateConfigUrl(projectRoot: string, url: string) {
-  const configPath = join(projectRoot, '.autosnippet', 'config.json');
+  const configPath = join(projectRoot, '.asd', 'config.json');
   if (!existsSync(configPath)) {
     return;
   }
@@ -952,7 +952,7 @@ program
   .description('启动 Dashboard UI（API 服务 + 前端开发服务器）')
   .option('-p, --port <port>', 'API 服务端口', '3000')
   .option('--no-open', '禁止自动打开浏览器（CI/CD 环境适用）')
-  .option('-d, --dir <directory>', '指定 AutoSnippet 项目目录（默认：当前目录）')
+  .option('-d, --dir <directory>', '指定 Alembic 项目目录（默认：当前目录）')
   .option('--api-only', '仅启动 API 服务（不启动前端）')
   .action(async (opts) => {
     const { spawn } = await import('node:child_process');
@@ -1004,7 +1004,7 @@ program
       const hasMcpConfig = (() => {
         try {
           const c = JSON.parse(readFileSync(cursorMcpPath, 'utf8'));
-          if ('autosnippet' in (c.mcpServers || {})) {
+          if ('alembic' in (c.mcpServers || {})) {
             return true;
           }
         } catch {
@@ -1012,7 +1012,7 @@ program
         }
         try {
           const v = JSON.parse(readFileSync(vscodeMcpPath, 'utf8'));
-          if ('autosnippet' in (v.servers || {})) {
+          if ('alembic' in (v.servers || {})) {
             return true;
           }
         } catch {
@@ -1022,7 +1022,7 @@ program
       })();
 
       if (hasMcpConfig) {
-        console.log('💡 请确认 IDE 中 AutoSnippet MCP 开关已打开，否则 Agent 无法调用工具');
+        console.log('💡 请确认 IDE 中 Alembic MCP 开关已打开，否则 Agent 无法调用工具');
       }
 
       // 启动 SignalCollector 后台 AI 分析服务
@@ -1140,7 +1140,7 @@ program
   .description('检查环境状态')
   .option('--json', 'JSON 格式输出')
   .action(async (opts) => {
-    cli.log('\n  AutoSnippet Environment Status');
+    cli.log('\n  Alembic Environment Status');
     cli.log(`  ${'─'.repeat(40)}`);
 
     // AI 配置
@@ -1156,14 +1156,14 @@ program
     }
 
     // 检查数据库
-    const dbPath = join(process.cwd(), '.autosnippet', 'autosnippet.db');
+    const dbPath = join(process.cwd(), '.asd', 'alembic.db');
     const dbExists = existsSync(dbPath);
     cli.log(`  Database:     ${dbExists ? `✅ ${dbPath}` : '❌ not found'}`);
 
-    // 检查 .autosnippet 目录
-    const asdDir = join(process.cwd(), '.autosnippet');
+    // 检查 .asd 目录
+    const asdDir = join(process.cwd(), '.asd');
     cli.log(
-      `  Workspace:    ${existsSync(asdDir) ? '✅ .autosnippet/' : '❌ not initialized (run asd setup)'}`
+      `  Workspace:    ${existsSync(asdDir) ? '✅ .asd/' : '❌ not initialized (run asd setup)'}`
     );
 
     // 检查依赖
@@ -1237,7 +1237,7 @@ program
     const aiInfo = getAiConfigInfo();
     const aiOk = !!(aiInfo.provider && aiInfo.provider !== 'none');
 
-    const dbPath = join(projectRoot, '.autosnippet', 'autosnippet.db');
+    const dbPath = join(projectRoot, '.asd', 'alembic.db');
     const dbExists = existsSync(dbPath);
 
     let dbSizeMB = 0;
@@ -1343,7 +1343,7 @@ program
       const aiIcon = aiOk ? '✅' : '❌';
 
       cli.log('');
-      cli.log('AutoSnippet Health Report');
+      cli.log('Alembic Health Report');
       cli.log('═════════════════════════');
       cli.log(`🔧 System:  AI:${aiIcon}  DB:${dbStatus}  Guard:${guardRuleCount} rules`);
       cli.log(
@@ -1534,18 +1534,18 @@ program
 
 // ─────────────────────────────────────────────────────
 // task 命令 — Task 系统已迁移到 MCP (零 DB，纯内存 + JSONL)
-// CLI task 子命令已废弃，通过 MCP autosnippet_task 操作
+// CLI task 子命令已废弃，通过 MCP asd_task 操作
 // ─────────────────────────────────────────────────────
 const taskCmd = program
   .command('task')
-  .description('Task 管理（已迁移到 MCP — 通过 autosnippet_task 操作）');
+  .description('Task 管理（已迁移到 MCP — 通过 asd_task 操作）');
 
 taskCmd
   .command('list')
   .description('[已废弃] Task 系统不再使用数据库。通过 MCP prime 操作获取上下文。')
   .action(() => {
     cli.log('\n  ⚠️ Task 系统已迁移到 MCP（零 DB，纯内存 + JSONL）。');
-    cli.log('  使用 autosnippet_task({ operation: "prime" }) 加载上下文。\n');
+    cli.log('  使用 asd_task({ operation: "prime" }) 加载上下文。\n');
   });
 
 // ─────────────────────────────────────────────────────
@@ -1569,13 +1569,13 @@ program
     for (const target of targets) {
       let count = 0;
 
-      // 1. 镜像 rules/ — autosnippet- 前缀文件（.mdc → .md 改名）
+      // 1. 镜像 rules/ — alembic- 前缀文件（.mdc → .md 改名）
       const cursorRulesDir = join(cursorDir, 'rules');
       if (existsSync(cursorRulesDir)) {
         const targetRulesDir = join(projectRoot, target, 'rules');
         mkdirSync(targetRulesDir, { recursive: true });
         const files = readdirSync(cursorRulesDir).filter(
-          (f) => f.startsWith('autosnippet-') && (f.endsWith('.mdc') || f.endsWith('.md'))
+          (f) => f.startsWith('alembic-') && (f.endsWith('.mdc') || f.endsWith('.md'))
         );
         for (const file of files) {
           const destName = file.endsWith('.mdc') ? file.replace(/\.mdc$/, '.md') : file;
@@ -1584,12 +1584,12 @@ program
         }
       }
 
-      // 2. 镜像 skills/ — autosnippet- 前缀目录
+      // 2. 镜像 skills/ — alembic- 前缀目录
       const cursorSkillsDir = join(cursorDir, 'skills');
       if (existsSync(cursorSkillsDir)) {
         const targetSkillsDir = join(projectRoot, target, 'skills');
         const skillDirs = readdirSync(cursorSkillsDir, { withFileTypes: true }).filter(
-          (d) => d.isDirectory() && d.name.startsWith('autosnippet-')
+          (d) => d.isDirectory() && d.name.startsWith('alembic-')
         );
         for (const dir of skillDirs) {
           _copyDirRecursive(join(cursorSkillsDir, dir.name), join(targetSkillsDir, dir.name));
@@ -1659,7 +1659,7 @@ program
     const ConfigLoader = (await import('../lib/infrastructure/config/ConfigLoader.js')).default;
     const env = process.env.NODE_ENV || 'development';
     ConfigLoader.load(env);
-    ConfigLoader.set('database.path', '.autosnippet/autosnippet.db');
+    ConfigLoader.set('database.path', '.asd/alembic.db');
 
     const { bootstrap, container } = await initContainer({ projectRoot });
     const db = container.get('database')?.getDb?.();

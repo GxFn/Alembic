@@ -1,6 +1,6 @@
 # Dashboard
 
-> AutoSnippet's visual management interface. Start with `asd ui`.
+> Alembic's visual management interface. Start with `asd ui`.
 >
 > [中文](dashboard.md)
 

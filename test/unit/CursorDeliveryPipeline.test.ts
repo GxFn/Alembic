@@ -369,7 +369,7 @@ describe('RulesGenerator', () => {
       expect(content).toContain('alwaysApply: true');
       expect(content).toContain('TestProject');
       expect(content).toContain('dispatch_once');
-      expect(content).toContain('autosnippet_search');
+      expect(content).toContain('asd_search');
     });
 
     test('respects max rules budget', () => {
@@ -394,7 +394,7 @@ describe('RulesGenerator', () => {
 
     test('file name includes topic', () => {
       const result = generator.writeSmartRules('networking', 'body', 'desc');
-      expect(path.basename(result.filePath)).toBe('autosnippet-patterns-networking.mdc');
+      expect(path.basename(result.filePath)).toBe('alembic-patterns-networking.mdc');
     });
   });
 
@@ -402,15 +402,15 @@ describe('RulesGenerator', () => {
     test('removes dynamic files, keeps static', () => {
       const rulesDir = path.join(tmpDir, '.cursor', 'rules');
       fs.mkdirSync(rulesDir, { recursive: true });
-      fs.writeFileSync(path.join(rulesDir, 'autosnippet-project-rules.mdc'), 'dynamic');
-      fs.writeFileSync(path.join(rulesDir, 'autosnippet-patterns-ui.mdc'), 'dynamic');
-      fs.writeFileSync(path.join(rulesDir, 'autosnippet-conventions.mdc'), 'static');
+      fs.writeFileSync(path.join(rulesDir, 'alembic-project-rules.mdc'), 'dynamic');
+      fs.writeFileSync(path.join(rulesDir, 'alembic-patterns-ui.mdc'), 'dynamic');
+      fs.writeFileSync(path.join(rulesDir, 'alembic-conventions.mdc'), 'static');
 
       generator.cleanDynamicFiles();
 
-      expect(fs.existsSync(path.join(rulesDir, 'autosnippet-project-rules.mdc'))).toBe(false);
-      expect(fs.existsSync(path.join(rulesDir, 'autosnippet-patterns-ui.mdc'))).toBe(false);
-      expect(fs.existsSync(path.join(rulesDir, 'autosnippet-conventions.mdc'))).toBe(true);
+      expect(fs.existsSync(path.join(rulesDir, 'alembic-project-rules.mdc'))).toBe(false);
+      expect(fs.existsSync(path.join(rulesDir, 'alembic-patterns-ui.mdc'))).toBe(false);
+      expect(fs.existsSync(path.join(rulesDir, 'alembic-conventions.mdc'))).toBe(true);
     });
   });
 });
@@ -441,7 +441,7 @@ describe('SkillsSyncer', () => {
 
   test('sync converts SKILL.md to Cursor format', async () => {
     // Create source skill
-    const srcDir = path.join(tmpDir, 'AutoSnippet', 'skills', 'project-architecture');
+    const srcDir = path.join(tmpDir, 'Alembic', 'skills', 'project-architecture');
     fs.mkdirSync(srcDir, { recursive: true });
     fs.writeFileSync(
       path.join(srcDir, 'SKILL.md'),
@@ -459,30 +459,24 @@ describe('SkillsSyncer', () => {
     );
 
     const result = await syncer.sync();
-    expect(result.synced).toContain('autosnippet-architecture');
+    expect(result.synced).toContain('alembic-architecture');
 
     // Check output
-    const outputPath = path.join(
-      tmpDir,
-      '.cursor',
-      'skills',
-      'autosnippet-architecture',
-      'SKILL.md'
-    );
+    const outputPath = path.join(tmpDir, '.cursor', 'skills', 'alembic-architecture', 'SKILL.md');
     expect(fs.existsSync(outputPath)).toBe(true);
 
     const content = fs.readFileSync(outputPath, 'utf8');
-    expect(content).toContain('name: autosnippet-architecture');
+    expect(content).toContain('name: alembic-architecture');
     expect(content).toContain('TestProject');
     expect(content).toContain('modular architecture');
-    expect(content).toContain('autosnippet_search');
+    expect(content).toContain('asd_search');
 
     // Check references/RECIPES.md exists
     const recipesPath = path.join(
       tmpDir,
       '.cursor',
       'skills',
-      'autosnippet-architecture',
+      'alembic-architecture',
       'references',
       'RECIPES.md'
     );
@@ -490,7 +484,7 @@ describe('SkillsSyncer', () => {
   });
 
   test('sync skips dirs without SKILL.md', async () => {
-    const srcDir = path.join(tmpDir, 'AutoSnippet', 'skills', 'empty-skill');
+    const srcDir = path.join(tmpDir, 'Alembic', 'skills', 'empty-skill');
     fs.mkdirSync(srcDir, { recursive: true });
 
     const result = await syncer.sync();
@@ -611,7 +605,7 @@ describe('CursorDeliveryPipeline', () => {
     expect(result.channelA.tokensUsed).toBeGreaterThan(0);
     expect(result.channelA.tokensUsed).toBeLessThanOrEqual(BUDGET.CHANNEL_A_MAX);
 
-    const filePath = path.join(tmpDir, '.cursor', 'rules', 'autosnippet-project-rules.mdc');
+    const filePath = path.join(tmpDir, '.cursor', 'rules', 'alembic-project-rules.mdc');
     expect(fs.existsSync(filePath)).toBe(true);
     const content = fs.readFileSync(filePath, 'utf8');
     expect(content).toContain('alwaysApply: true');
@@ -624,7 +618,7 @@ describe('CursorDeliveryPipeline', () => {
 
     // Check at least one pattern file exists
     const rulesDir = path.join(tmpDir, '.cursor', 'rules');
-    const files = fs.readdirSync(rulesDir).filter((f) => f.startsWith('autosnippet-patterns-'));
+    const files = fs.readdirSync(rulesDir).filter((f) => f.startsWith('alembic-patterns-'));
     expect(files.length).toBeGreaterThan(0);
 
     const content = fs.readFileSync(path.join(rulesDir, files[0]), 'utf8');
@@ -725,14 +719,14 @@ describe('CursorDeliveryPipeline', () => {
     expect(result.channelA.rulesCount).toBeGreaterThan(0);
 
     // SKILL.md index should exist
-    const skillPath = path.join(tmpDir, '.cursor', 'skills', 'autosnippet-devdocs', 'SKILL.md');
+    const skillPath = path.join(tmpDir, '.cursor', 'skills', 'alembic-devdocs', 'SKILL.md');
     expect(fs.existsSync(skillPath)).toBe(true);
     const skillContent = fs.readFileSync(skillPath, 'utf8');
-    expect(skillContent).toContain('autosnippet-devdocs');
+    expect(skillContent).toContain('alembic-devdocs');
     expect(skillContent).toContain('BiliDemo');
 
     // Reference MD files should exist
-    const refsDir = path.join(tmpDir, '.cursor', 'skills', 'autosnippet-devdocs', 'references');
+    const refsDir = path.join(tmpDir, '.cursor', 'skills', 'alembic-devdocs', 'references');
     const refFiles = fs.readdirSync(refsDir);
     expect(refFiles.length).toBe(2);
   });

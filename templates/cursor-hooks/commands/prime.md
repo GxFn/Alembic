@@ -1,6 +1,6 @@
-# Prime AutoSnippet Context
+# Prime Alembic Context
 
-Call `autosnippet_task` with `{ "operation": "prime" }` to load the current project context.
+Call `asd_task` with `{ "operation": "prime" }` to load the current project context.
 
 **You MUST call this on EVERY user message BEFORE doing anything else. No exceptions.**
 

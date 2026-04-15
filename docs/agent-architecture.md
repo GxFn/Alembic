@@ -1,6 +1,6 @@
 # Agent 架构设计
 
-AutoSnippet Agent 层（`lib/agent/`，路径别名 `#agent/*`）是项目的独立智能层，负责所有 AI Agent 的运行时能力。它从 Service 层独立出来，作为与 Service 层平行的顶级架构模块。
+Alembic Agent 层（`lib/agent/`，路径别名 `#agent/*`）是项目的独立智能层，负责所有 AI Agent 的运行时能力。它从 Service 层独立出来，作为与 Service 层平行的顶级架构模块。
 
 ---
 

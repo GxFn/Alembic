@@ -1,11 +1,11 @@
 <div align="center">
 
-# AutoSnippet
+# Alembic
 
 Extract patterns from your codebase into a knowledge base that AI coding assistants can query in your IDE — so generated code actually follows your team's conventions.
 
-[![npm version](https://img.shields.io/npm/v/autosnippet.svg?style=flat-square)](https://www.npmjs.com/package/autosnippet)
-[![License](https://img.shields.io/npm/l/autosnippet.svg?style=flat-square)](https://github.com/GxFn/AutoSnippet/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/alembic.svg?style=flat-square)](https://www.npmjs.com/package/alembic)
+[![License](https://img.shields.io/npm/l/alembic.svg?style=flat-square)](https://github.com/GxFn/Alembic/blob/main/LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-brightgreen?style=flat-square)](https://nodejs.org)
 
 [中文](README_CN.md)
@@ -20,7 +20,7 @@ Extract patterns from your codebase into a knowledge base that AI coding assista
 
 Copilot and Cursor don't know how your team writes code. What they generate works, but doesn't look like yours — wrong naming, wrong patterns, wrong abstractions. You end up rewriting AI output or explaining the same conventions in every Code Review.
 
-AutoSnippet builds a layer of **localized project memory**. It scans your codebase, extracts valuable patterns (with your approval), and makes them searchable by all AI tools via [MCP](https://modelcontextprotocol.io/). Knowledge persists locally, never consuming the LLM context window — it's injected on-demand when the AI needs it. The more knowledge accumulates, the more the generated code matches your conventions.
+Alembic builds a layer of **localized project memory**. It scans your codebase, extracts valuable patterns (with your approval), and makes them searchable by all AI tools via [MCP](https://modelcontextprotocol.io/). Knowledge persists locally, never consuming the LLM context window — it's injected on-demand when the AI needs it. The more knowledge accumulates, the more the generated code matches your conventions.
 
 ```
 Your code  →  AI extracts patterns  →  You review  →  Knowledge base
@@ -33,7 +33,7 @@ Your code  →  AI extracts patterns  →  You review  →  Knowledge base
 ## Getting Started
 
 ```bash
-npm install -g autosnippet
+npm install -g alembic
 
 cd your-project
 asd setup     # Initialize workspace + database + MCP config (auto-detects Cursor / VS Code / Trae / Qoder)
@@ -46,7 +46,7 @@ asd ui        # Start background service (MCP Server + Dashboard) — IDE and MC
 
 `asd setup` configures everything. Open your IDE's **Agent Mode** (Cursor Composer / VS Code Copilot Chat / Trae) and start chatting.
 
-> **First time:** Manually enable the `autosnippet` service in your IDE's MCP settings.
+> **First time:** Manually enable the `alembic` service in your IDE's MCP settings.
 
 > **Tip:** Stronger models work better. We recommend Claude Opus 4.6 / Sonnet 4.6, GPT-5.4, or Gemini 3.1 Pro in Cursor / Copilot for more accurate patterns and fewer false positives.
 
@@ -75,7 +75,7 @@ Review and approve candidates in Dashboard (`asd ui`) → they become **Recipes*
 
 ## Evolution Architecture
 
-AutoSnippet isn't a static knowledge tool — it's a **knowledge organism**. Recipes are its cells — the IDE Agent is the external driving force, and each interaction triggers coordinated responses from different organs inside the organism.
+Alembic isn't a static knowledge tool — it's a **knowledge organism**. Recipes are its cells — the IDE Agent is the external driving force, and each interaction triggers coordinated responses from different organs inside the organism.
 
 ```
                 IDE Agent (Cursor / Copilot / Trae)
@@ -83,7 +83,7 @@ AutoSnippet isn't a static knowledge tool — it's a **knowledge organism**. Rec
                    │ Capture · Write · Search · Shift · Complete · Boundary
                    │
   ═════════════════▼══════════════════════════════════════
-  ║              AutoSnippet Knowledge Organism             ║
+  ║              Alembic Knowledge Organism             ║
   ║                                                        ║
   ║  ┌─ Panorama (Skeleton) ──── Project Structure ───┐   ║
   ║  │                                                │   ║
@@ -171,8 +171,8 @@ Knowledge changes auto-deliver to IDE-consumable formats:
 
 | Channel | Path | Content |
 |---------|------|---------|
-| **A** | `.cursor/rules/autosnippet-project-rules.mdc` | alwaysApply one-liner rules |
-| **B** | `.cursor/rules/autosnippet-patterns-{topic}.mdc` | When/Do/Don't themed rules |
+| **A** | `.cursor/rules/alembic-project-rules.mdc` | alwaysApply one-liner rules |
+| **B** | `.cursor/rules/alembic-patterns-{topic}.mdc` | When/Do/Don't themed rules |
 | **C · D** | `.cursor/skills/` | Project Skills + development docs |
 | **F** | `AGENTS.md` / `CLAUDE.md` / `.github/copilot-instructions.md` | Agent instructions |
 | **Mirror** | `.qoder/` / `.trae/` | IDE mirrors |
@@ -196,13 +196,13 @@ After `asd setup`, your project gains these:
 
 ```
 your-project/
-├── AutoSnippet/           # Knowledge data (git-tracked)
+├── Alembic/           # Knowledge data (git-tracked)
 │   ├── recipes/           # Reviewed patterns (Markdown)
 │   ├── candidates/        # Pending review
 │   ├── skills/            # Project-specific Agent instructions
 │   └── wiki/              # Project Wiki
-├── .autosnippet/          # Runtime cache (gitignored)
-│   ├── autosnippet.db     # SQLite (WAL mode)
+├── .asd/          # Runtime cache (gitignored)
+│   ├── alembic.db     # SQLite (WAL mode)
 │   └── context/           # Vector index (HNSW)
 ├── .cursor/
 │   ├── mcp.json           # Cursor MCP config
@@ -267,7 +267,7 @@ All configuration auto-generated by `asd setup`. Run `asd upgrade` after updates
 
 ### Recommended: Local Embedding for Semantic Search
 
-AutoSnippet has a built-in hybrid search engine (keyword + vector semantic). Install a local embedding model to unlock semantic search — concept-level matching that finds relevant recipes even when exact keywords don't match.
+Alembic has a built-in hybrid search engine (keyword + vector semantic). Install a local embedding model to unlock semantic search — concept-level matching that finds relevant recipes even when exact keywords don't match.
 
 ```bash
 # Install Ollama (https://ollama.com)

@@ -194,7 +194,7 @@ describe('MCP Knowledge Handlers', () => {
 
     test('meta 中应包含 tool 名称', async () => {
       const result = await submitKnowledge(ctx, validArgs);
-      expect(result.meta.tool).toBe('autosnippet_submit_knowledge');
+      expect(result.meta.tool).toBe('asd_submit_knowledge');
     });
   });
 
@@ -414,30 +414,30 @@ describe('MCP Tool Definitions (V3)', () => {
   const _v3Tools = TOOLS.filter((t) => t.name.includes('knowledge'));
 
   test('应包含 submit_knowledge 工具（unified items 格式）', () => {
-    const tool = TOOLS.find((t) => t.name === 'autosnippet_submit_knowledge');
+    const tool = TOOLS.find((t) => t.name === 'asd_submit_knowledge');
     expect(tool).toBeDefined();
     expect(tool.inputSchema.required).toEqual(['items']);
   });
 
   test('submit_knowledge_batch 和 save_document 应已合并删除', () => {
-    const batch = TOOLS.find((t) => t.name === 'autosnippet_submit_knowledge_batch');
+    const batch = TOOLS.find((t) => t.name === 'asd_submit_knowledge_batch');
     expect(batch).toBeUndefined();
-    const saveDoc = TOOLS.find((t) => t.name === 'autosnippet_save_document');
+    const saveDoc = TOOLS.find((t) => t.name === 'asd_save_document');
     expect(saveDoc).toBeUndefined();
   });
 
   test('应包含 knowledge_lifecycle 工具', () => {
-    const tool = TOOLS.find((t) => t.name === 'autosnippet_knowledge_lifecycle');
+    const tool = TOOLS.find((t) => t.name === 'asd_knowledge_lifecycle');
     expect(tool).toBeDefined();
     expect(tool.inputSchema.required).toEqual(['id', 'action']);
   });
 
   test('V3 工具应在 TOOL_GATEWAY_MAP 中注册', () => {
-    expect(TOOL_GATEWAY_MAP.autosnippet_submit_knowledge).toEqual({
+    expect(TOOL_GATEWAY_MAP.asd_submit_knowledge).toEqual({
       action: 'knowledge:create',
       resource: 'knowledge',
     });
-    expect(TOOL_GATEWAY_MAP.autosnippet_knowledge_lifecycle).toEqual({
+    expect(TOOL_GATEWAY_MAP.asd_knowledge_lifecycle).toEqual({
       action: 'knowledge:update',
       resource: 'knowledge',
     });
@@ -448,13 +448,13 @@ describe('MCP Tool Definitions (V3)', () => {
   });
 
   test('submit_knowledge items 字段应为数组类型', () => {
-    const tool = TOOLS.find((t) => t.name === 'autosnippet_submit_knowledge');
+    const tool = TOOLS.find((t) => t.name === 'asd_submit_knowledge');
     const itemsProp = tool.inputSchema.properties.items;
     expect(itemsProp.type).toBe('array');
   });
 
   test('knowledge_lifecycle 的 action enum 应包含全部操作', () => {
-    const tool = TOOLS.find((t) => t.name === 'autosnippet_knowledge_lifecycle');
+    const tool = TOOLS.find((t) => t.name === 'asd_knowledge_lifecycle');
     const actionEnum = tool.inputSchema.properties.action.enum;
     expect(actionEnum).toEqual(
       expect.arrayContaining([

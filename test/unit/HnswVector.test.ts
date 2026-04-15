@@ -635,7 +635,7 @@ describe('VectorMigration', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asd-mig-'));
-    indexDir = path.join(tmpDir, '.autosnippet', 'context', 'index');
+    indexDir = path.join(tmpDir, '.asd', 'context', 'index');
     fs.mkdirSync(indexDir, { recursive: true });
   });
   afterEach(() => {
@@ -1724,7 +1724,7 @@ describe('HnswVectorAdapter WAL integration', () => {
     await store.upsert({ id: 'a', content: 'hello', vector: [1, 0, 0], metadata: {} });
 
     // WAL file should exist
-    const walPath = path.join(tmpDir, '.autosnippet/context/index/vector_index.wal');
+    const walPath = path.join(tmpDir, '.asd/context/index/vector_index.wal');
     expect(fs.existsSync(walPath)).toBe(true);
 
     store.destroy();
@@ -1739,7 +1739,7 @@ describe('HnswVectorAdapter WAL integration', () => {
 
     await store.upsert({ id: 'a', content: 'hello', vector: [1, 0, 0], metadata: {} });
 
-    const walPath = path.join(tmpDir, '.autosnippet/context/index/vector_index.wal');
+    const walPath = path.join(tmpDir, '.asd/context/index/vector_index.wal');
     expect(fs.existsSync(walPath)).toBe(false);
 
     store.destroy();
@@ -1767,7 +1767,7 @@ describe('HnswVectorAdapter WAL integration', () => {
     await store1.upsert({ id: 'c', content: 'gamma', vector: [0, 0, 1], metadata: { x: 3 } });
 
     // Verify WAL file exists with the unflushed op
-    const walPath = path.join(tmpDir, '.autosnippet/context/index/vector_index.wal');
+    const walPath = path.join(tmpDir, '.asd/context/index/vector_index.wal');
     expect(fs.existsSync(walPath)).toBe(true);
 
     // "Crash" - destroy without flush

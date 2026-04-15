@@ -48,7 +48,7 @@ const HelpView: React.FC = () => {
         </p>
         <p className="text-[var(--fg-muted)] text-sm mt-2">{t('help.techSpecs')}</p>
         <div className="mt-6 flex gap-3 justify-center text-sm">
-          <a href="https://github.com/GxFn/AutoSnippet" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--bg-subtle)] border border-[var(--border-default)] text-[var(--fg-primary)] rounded-full hover:bg-[var(--bg-muted)] transition-colors">
+          <a href="https://github.com/GxFn/Alembic" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--bg-subtle)] border border-[var(--border-default)] text-[var(--fg-primary)] rounded-full hover:bg-[var(--bg-muted)] transition-colors">
             <Github size={ICON_SIZES.sm} />
             {t('help.viewGithub')}
           </a>
@@ -72,7 +72,7 @@ const HelpView: React.FC = () => {
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
               <div className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center mb-3 font-bold">1</div>
               <h3 className="font-semibold text-[var(--fg-primary)] mb-2">{t('help.step1Title')}</h3>
-              <pre className="bg-blue-100/70 text-blue-900 px-3 py-2 rounded text-xs overflow-x-auto whitespace-pre-wrap break-all"><code>npm install -g autosnippet{'\n'}cd your-project{'\n'}asd setup</code></pre>
+              <pre className="bg-blue-100/70 text-blue-900 px-3 py-2 rounded text-xs overflow-x-auto whitespace-pre-wrap break-all"><code>npm install -g alembic{'\n'}cd your-project{'\n'}asd setup</code></pre>
             </div>
             <div className="bg-green-50 rounded-lg p-4 border border-green-200">
               <div className="bg-green-600 text-white rounded-full w-8 h-8 flex items-center justify-center mb-3 font-bold">2</div>
@@ -812,7 +812,7 @@ const HelpView: React.FC = () => {
       <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg text-center">
         <p className="text-[var(--fg-primary)] text-sm" dangerouslySetInnerHTML={{
           __html: t('help.footerHint', {
-            link: `<a href="https://github.com/GxFn/AutoSnippet" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-medium">${t('help.footerGithubReadme')}</a>`,
+            link: `<a href="https://github.com/GxFn/Alembic" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-medium">${t('help.footerGithubReadme')}</a>`,
             cmd: '<code class="bg-blue-100 px-1.5 py-0.5 rounded text-xs">asd status</code>'
           })
         }} />

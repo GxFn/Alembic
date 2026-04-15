@@ -1,9 +1,9 @@
 ---
-name: autosnippet-structure
+name: alembic-structure
 description: Discover project structure (targets, files, dependency graph) and browse the knowledge graph (relations between Recipes). Use when the user asks about module structure, project targets, dependency relationships, or knowledge graph navigation.
 ---
 
-# AutoSnippet — Structure & Dependencies & Knowledge Graph
+# Alembic — Structure & Dependencies & Knowledge Graph
 
 Use this skill when the user asks about **project structure**, **module targets**, **dependency graph**, or **knowledge graph relationships**.
 
@@ -13,9 +13,9 @@ Use this skill when the user asks about **project structure**, **module targets*
 
 | Tool | Purpose | Key Input |
 |------|---------|-----------|
-| `autosnippet_structure(operation=targets)` | List all module Targets (file count, language stats, inferred role) | `includeSummary` |
-| `autosnippet_structure(operation=files)` | Get source files for a Target | `targetName` (required) |
-| `autosnippet_structure(operation=metadata)` | Target metadata (dependencies, package info, graph edges) | `targetName` (required) |
+| `asd_structure(operation=targets)` | List all module Targets (file count, language stats, inferred role) | `includeSummary` |
+| `asd_structure(operation=files)` | Get source files for a Target | `targetName` (required) |
+| `asd_structure(operation=metadata)` | Target metadata (dependencies, package info, graph edges) | `targetName` (required) |
 
 ### Workflow
 1. `targets` → see all Targets with roles
@@ -30,10 +30,10 @@ Captures **relationships between Recipes** (dependencies, extensions, conflicts,
 
 | Tool | Purpose | Key Input |
 |------|---------|-----------|
-| `autosnippet_graph(operation=query)` | Get all relations for a Recipe node | `nodeId`, `relation`, `direction` |
-| `autosnippet_graph(operation=impact)` | Impact analysis: downstream dependencies | `nodeId`, `maxDepth` |
-| `autosnippet_graph(operation=path)` | Shortest path between two Recipes (BFS) | `fromId`, `toId` |
-| `autosnippet_graph(operation=stats)` | Global graph statistics | — |
+| `asd_graph(operation=query)` | Get all relations for a Recipe node | `nodeId`, `relation`, `direction` |
+| `asd_graph(operation=impact)` | Impact analysis: downstream dependencies | `nodeId`, `maxDepth` |
+| `asd_graph(operation=path)` | Shortest path between two Recipes (BFS) | `fromId`, `toId` |
+| `asd_graph(operation=stats)` | Global graph statistics | — |
 
 ### When to use
 - "修改这个 Recipe 会影响什么？" → `impact`
@@ -44,12 +44,12 @@ Captures **relationships between Recipes** (dependencies, extensions, conflicts,
 
 ## Dependency Structure File
 
-SPM dependency structure: `AutoSnippet/AutoSnippet.spmmap.json`
+SPM dependency structure: `Alembic/Alembic.spmmap.json`
 - Run `asd spm-map` to refresh (supports SPM / Node / Go / JVM / Python / Dart / Rust)
 
 ---
 
 ## Related Skills
 
-- **autosnippet-recipes**: Recipe content used as project standards
-- **autosnippet-create**: After understanding structure, submit knowledge candidates
+- **alembic-recipes**: Recipe content used as project standards
+- **alembic-create**: After understanding structure, submit knowledge candidates

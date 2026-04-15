@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * AutoSnippet V2 MCP Server 入口
+ * Alembic V2 MCP Server 入口
  * 供 Cursor / VSCode Copilot MCP 配置使用
  *
  * VSCode 配置示例 (.vscode/mcp.json):
  * {
  *   "servers": {
- *     "autosnippet": {
+ *     "alembic": {
  *       "type": "stdio",
  *       "command": "node",
  *       "args": ["/path/to/v2/bin/mcp-server.js"]
@@ -18,7 +18,7 @@
  * Cursor 配置示例 (.cursor/mcp.json):
  * {
  *   "mcpServers": {
- *     "autosnippet": {
+ *     "alembic": {
  *       "command": "node",
  *       "args": ["/path/to/v2/bin/mcp-server.js"]
  *     }

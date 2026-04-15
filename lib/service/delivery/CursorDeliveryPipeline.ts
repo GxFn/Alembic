@@ -3,10 +3,10 @@
  *
  * 读取知识库 → 筛选 + 分类 + 排序 + 压缩 → 写入 6 个通道
  *
- * Channel A: .cursor/rules/autosnippet-project-rules.mdc (alwaysApply rules)
- * Channel B: .cursor/rules/autosnippet-patterns-{topic}.mdc (smart rules)
+ * Channel A: .cursor/rules/alembic-project-rules.mdc (alwaysApply rules)
+ * Channel B: .cursor/rules/alembic-patterns-{topic}.mdc (smart rules)
  * Channel C: .cursor/skills/ (project skills sync)
- * Channel D: .cursor/skills/autosnippet-devdocs/ (dev documents)
+ * Channel D: .cursor/skills/alembic-devdocs/ (dev documents)
  * Channel F: AGENTS.md + CLAUDE.md + .github/copilot-instructions.md (agent instructions)
  * + Mirror: .qoder/ .trae/ (IDE mirror)
  *
@@ -645,7 +645,7 @@ export class CursorDeliveryPipeline {
   /**
    * Channel D — Dev Documents 生成
    * 将 knowledgeType='dev-document' 的条目以原始 MD 写入
-   * .cursor/skills/autosnippet-devdocs/references/ 目录
+   * .cursor/skills/alembic-devdocs/references/ 目录
    */
   _generateChannelD(documents: KnowledgeEntryProps[]) {
     const result = { documentsCount: 0, filesWritten: 0, filePaths: [] as string[] };
@@ -653,14 +653,14 @@ export class CursorDeliveryPipeline {
       return result;
     }
 
-    const devdocsDir = path.join(this.projectRoot, '.cursor', 'skills', 'autosnippet-devdocs');
+    const devdocsDir = path.join(this.projectRoot, '.cursor', 'skills', 'alembic-devdocs');
     const refsDir = path.join(devdocsDir, 'references');
     fs.mkdirSync(refsDir, { recursive: true });
 
     // 生成 SKILL.md（索引页）
     const skillLines = [
       '---',
-      'name: autosnippet-devdocs',
+      'name: alembic-devdocs',
       `description: "Development documents and knowledge artifacts for ${this.projectName}. Use when looking up architecture decisions, debug reports, design docs, or analysis notes."`,
       '---',
       '',
@@ -715,7 +715,7 @@ export class CursorDeliveryPipeline {
     skillLines.push('## Deeper Knowledge');
     skillLines.push('');
     skillLines.push('For full-text search across all documents:');
-    skillLines.push('- `autosnippet_search("your query")`');
+    skillLines.push('- `asd_search("your query")`');
 
     fs.writeFileSync(path.join(devdocsDir, 'SKILL.md'), `${skillLines.join('\n')}\n`, 'utf8');
     result.documentsCount = documents.length;
@@ -789,7 +789,7 @@ export class CursorDeliveryPipeline {
 
   /**
    * 镜像 .cursor/ 交付物料到目标 IDE 目录（Qoder / Trae 等兼容 IDE）
-   * 只复制 autosnippet- 前缀的文件/目录，不触碰用户自定义内容
+   * 只复制 alembic- 前缀的文件/目录，不触碰用户自定义内容
    * @param targetDirName 目标目录名，如 '.qoder' 或 '.trae'
    */
   _mirrorToIDE(targetDirName: string) {
@@ -797,13 +797,13 @@ export class CursorDeliveryPipeline {
       const cursorDir = path.join(this.projectRoot, '.cursor');
       const targetDir = path.join(this.projectRoot, targetDirName);
 
-      // Mirror rules/ — 只复制 autosnippet-* 文件
+      // Mirror rules/ — 只复制 alembic-* 文件
       const cursorRulesDir = path.join(cursorDir, 'rules');
       if (fs.existsSync(cursorRulesDir)) {
         const targetRulesDir = path.join(targetDir, 'rules');
         fs.mkdirSync(targetRulesDir, { recursive: true });
         for (const file of fs.readdirSync(cursorRulesDir)) {
-          if (!file.startsWith('autosnippet-')) {
+          if (!file.startsWith('alembic-')) {
             continue;
           }
           const src = path.join(cursorRulesDir, file);
@@ -816,12 +816,12 @@ export class CursorDeliveryPipeline {
         }
       }
 
-      // Mirror skills/ — 只复制 autosnippet-* 子目录
+      // Mirror skills/ — 只复制 alembic-* 子目录
       const cursorSkillsDir = path.join(cursorDir, 'skills');
       if (fs.existsSync(cursorSkillsDir)) {
         const targetSkillsDir = path.join(targetDir, 'skills');
         for (const entry of fs.readdirSync(cursorSkillsDir, { withFileTypes: true })) {
-          if (!entry.isDirectory() || !entry.name.startsWith('autosnippet-')) {
+          if (!entry.isDirectory() || !entry.name.startsWith('alembic-')) {
             continue;
           }
           this._copyDirRecursive(
@@ -831,7 +831,7 @@ export class CursorDeliveryPipeline {
         }
       }
 
-      this.logger.info?.(`[CursorDelivery] Mirrored autosnippet-* to ${targetDirName}/`);
+      this.logger.info?.(`[CursorDelivery] Mirrored alembic-* to ${targetDirName}/`);
     } catch (err: unknown) {
       this.logger.warn?.(
         `[CursorDelivery] Mirror to ${targetDirName}/ failed: ${(err as Error).message}`

@@ -29,8 +29,8 @@ import {
 
 /** 知识提交的完整 Schema — 定义必填字段、内容结构、枚举值和质量门控 */
 export const SUBMISSION_SCHEMA = {
-  tool: 'autosnippet_submit_knowledge',
-  batchTool: 'autosnippet_submit_knowledge_batch',
+  tool: 'asd_submit_knowledge',
+  batchTool: 'asd_submit_knowledge_batch',
   requiredFields: getRequiredFieldNames(),
   contentStructure: {
     pattern: '代码片段（可选）',
@@ -201,17 +201,17 @@ export function buildInternalNextSteps(
     '进度通过 Dashboard 实时展示，无需手动操作。',
     '',
     '== 完成后可执行的后续操作 ==',
-    '1. 调用 autosnippet_enrich_candidates(candidateIds) 补全候选缺失字段',
-    '2. 使用 autosnippet_submit_knowledge_batch 手动提交更多知识条目',
-    '3. 使用 autosnippet_submit_knowledge 逐条提交高质量知识',
-    '4. 使用 autosnippet_skill({ operation: "load", name }) 加载自动生成的 Project Skills',
+    '1. 调用 asd_enrich_candidates(candidateIds) 补全候选缺失字段',
+    '2. 使用 asd_submit_knowledge_batch 手动提交更多知识条目',
+    '3. 使用 asd_submit_knowledge 逐条提交高质量知识',
+    '4. 使用 asd_skill({ operation: "load", name }) 加载自动生成的 Project Skills',
     '',
     '== 宏观维度 → Project Skills ==',
     `宏观维度（${dimensions
       .filter((d) => d.skillWorthy)
       .map((d) => d.id)
       .join('/')}）`,
-    '自动生成 Project Skill 到 AutoSnippet/skills/，可通过 autosnippet_skill({ operation: "load" }) 加载。',
+    '自动生成 Project Skill 到 Alembic/skills/，可通过 asd_skill({ operation: "load" }) 加载。',
   ];
 }
 
@@ -221,13 +221,13 @@ export const BOOTSTRAP_COMPLETE_ACTIONS = [
     action: 'cursor_delivery',
     prompt:
       '知识库初始化完成！Cursor Rules 已自动生成到 .cursor/rules/ 目录。如果生成失败，你可以手动触发 Cursor Delivery。',
-    tool: 'autosnippet_cursor_delivery',
+    tool: 'asd_cursor_delivery',
     auto: true, // R4: 已自动触发，此条仅为通知
   },
   {
     action: 'wiki_generate',
     prompt:
       '知识库初始化完成！是否继续生成项目 Wiki 文档？Wiki 将基于刚建立的知识库和项目分析数据自动生成结构化文档。',
-    tool: 'autosnippet_wiki_plan',
+    tool: 'asd_wiki_plan',
   },
 ];

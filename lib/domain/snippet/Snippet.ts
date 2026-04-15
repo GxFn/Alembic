@@ -46,7 +46,7 @@ export class Snippet {
   updatedAt: number;
   constructor(props: SnippetProps) {
     this.id = props.id || uuidv4();
-    this.identifier = props.identifier || ''; // 唯一标识符（如 com.autosnippet.guard-let）
+    this.identifier = props.identifier || ''; // 唯一标识符（如 com.asd.guard-let）
     this.title = props.title || '';
     this.language = props.language || 'unknown';
     this.category = props.category || '';

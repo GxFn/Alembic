@@ -1,5 +1,5 @@
 /**
- * MCP Handler — autosnippet_evolve (批量 Recipe 进化决策)
+ * MCP Handler — asd_evolve (批量 Recipe 进化决策)
  *
  * 双入口工具：
  *   - Rescan 模式: 每个维度内先 evolve 再 gap-fill，与内部 Agent Pipeline 一致
@@ -64,7 +64,7 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
         errors: [],
       },
       message: '⚠️ 没有提交任何 evolve 决策',
-      meta: { tool: 'autosnippet_evolve', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'asd_evolve', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -281,6 +281,6 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
     message:
       `✅ 处理了 ${result.processed} 个 Recipe: ${summary}` +
       (result.errors.length > 0 ? ` (${result.errors.length} 个错误)` : ''),
-    meta: { tool: 'autosnippet_evolve', responseTimeMs: Date.now() - t0 },
+    meta: { tool: 'asd_evolve', responseTimeMs: Date.now() - t0 },
   });
 }

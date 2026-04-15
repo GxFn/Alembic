@@ -22,7 +22,7 @@ import type { ServiceContainer } from '../ServiceContainer.js';
 
 /**
  * Register intent signal subscriber for JSONL persistence.
- * Replaces standalone SignalLogger — writes IntentChainRecord to .autosnippet/logs/signals/YYYY-MM-DD.jsonl.
+ * Replaces standalone SignalLogger — writes IntentChainRecord to .asd/logs/signals/YYYY-MM-DD.jsonl.
  */
 function registerIntentPersistence(signalBus: SignalBus, projectRoot: string): void {
   signalBus.subscribe('intent', (signal: Signal) => {
@@ -31,7 +31,7 @@ function registerIntentPersistence(signalBus: SignalBus, projectRoot: string): v
       if (!chain) {
         return;
       }
-      const dir = path.join(projectRoot, '.autosnippet', 'logs', 'signals');
+      const dir = path.join(projectRoot, '.asd', 'logs', 'signals');
       fs.mkdirSync(dir, { recursive: true });
       const d = new Date(signal.timestamp);
       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -86,7 +86,7 @@ export function register(c: ServiceContainer) {
   c.singleton('signalTraceWriter', (ct: ServiceContainer) => {
     const bus = ct.get('signalBus') as SignalBus;
     const root = resolveProjectRoot(ct);
-    return new SignalTraceWriter(bus, path.join(root, '.autosnippet', 'logs', 'signals'));
+    return new SignalTraceWriter(bus, path.join(root, '.asd', 'logs', 'signals'));
   });
 
   // ═══ SignalAggregator — 滑窗统计 + 异常检测 ═══

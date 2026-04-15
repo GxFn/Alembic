@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * AutoSnippet VSCode Copilot 安装脚本
+ * Alembic VSCode Copilot 安装脚本
  *
  * 功能：
  * 1. 自动配置 VSCode 全局和工作区 settings.json
@@ -35,15 +35,15 @@ const require = createRequire(import.meta.url);
 const args = require('minimist')(process.argv.slice(2));
 const projectPath = args.path || args.p || process.cwd();
 
-// 检测是否在 AutoSnippet 仓库内执行
-const isAutoSnippetRepo =
+// 检测是否在 Alembic 仓库内执行
+const isAlembicRepo =
   fs.existsSync(path.join(projectPath, 'bin/mcp-server.js')) &&
   fs.existsSync(path.join(projectPath, 'bin/asd')) &&
   fs.existsSync(path.join(projectPath, 'package.json'));
 
 // 默认只做工作区配置，不做全局配置
-// 如果在 AutoSnippet 仓库内执行且未明确指定 --path，跳过所有配置
-const configWorkspace = !args.global && !isAutoSnippetRepo && (args.path || !isAutoSnippetRepo);
+// 如果在 Alembic 仓库内执行且未明确指定 --path，跳过所有配置
+const configWorkspace = !args.global && !isAlembicRepo && (args.path || !isAlembicRepo);
 const skipVerify = args['skip-verify'];
 const isQuiet = args.quiet || process.env.ASD_QUIET === 'true';
 
@@ -97,7 +97,7 @@ function getMcpServerPath() {
   const scriptPath = path.join(projectPath, 'bin/mcp-server.js');
   if (!fs.existsSync(scriptPath)) {
     error(`✗ MCP Server 不存在: ${scriptPath}`);
-    error(`  请确保在 AutoSnippet 项目目录下运行此脚本`);
+    error(`  请确保在 Alembic 项目目录下运行此脚本`);
     process.exit(1);
   }
   return scriptPath;
@@ -108,8 +108,8 @@ function getMcpServerPath() {
 function configureVSCodeSettings() {
   log('\n📝 配置 VSCode MCP 设置...', 'blue');
 
-  if (isAutoSnippetRepo && !args.path) {
-    log('ℹ️  检测到在 AutoSnippet 仓库内执行，仅配置全局设置', 'yellow');
+  if (isAlembicRepo && !args.path) {
+    log('ℹ️  检测到在 Alembic 仓库内执行，仅配置全局设置', 'yellow');
     log('   如需为其他项目配置，请使用: --path /path/to/project', 'yellow');
   }
 
@@ -142,7 +142,7 @@ function configureVSCodeSettings() {
     if (!config.servers) {
       config.servers = {};
     }
-    config.servers.autosnippet = mcpServerConfig;
+    config.servers.asd = mcpServerConfig;
 
     if (writeJsonFile(mcpConfigPath, config)) {
       log(`✅ 工作区 MCP 配置完成: ${mcpConfigPath}`, 'green');
@@ -193,13 +193,13 @@ function createCopilotInstructions() {
 
   const body = fs.readFileSync(templatePath, 'utf8').trimEnd();
   const content = [
-    '<!-- autosnippet:begin -->',
+    '<!-- asd:begin -->',
     '',
-    '# AutoSnippet Conventions',
+    '# Alembic Conventions',
     '',
     body,
     '',
-    '<!-- autosnippet:end -->',
+    '<!-- asd:end -->',
     '',
   ].join('\n');
 
@@ -228,10 +228,10 @@ function verifyConfiguration() {
     const mcpConfigPath = path.join(projectPath, '.vscode/mcp.json');
     if (fs.existsSync(mcpConfigPath)) {
       const config = readJsonFile(mcpConfigPath, {});
-      if (config.servers?.autosnippet) {
+      if (config.servers?.asd) {
         log(`✅ VSCode 工作区 MCP 配置验证成功 (.vscode/mcp.json)`, 'green');
       } else {
-        log(`⚠️  .vscode/mcp.json 中未找到 autosnippet 服务器`, 'yellow');
+        log(`⚠️  .vscode/mcp.json 中未找到 alembic 服务器`, 'yellow');
       }
     } else {
       log(`⚠️  未找到 .vscode/mcp.json`, 'yellow');
@@ -269,15 +269,15 @@ function printQuickStart() {
 
   log('3️⃣  在 VSCode Copilot Chat 中测试');
   log('   ⌘+⇧+I 打开 Copilot Chat');
-  log('   输入: @autosnippet search async', 'yellow');
+  log('   输入: @alembic search async', 'yellow');
   log('   预期: 返回 async/await 代码片段\n');
 
   log('📚 可用命令：\n', 'blue');
-  log('   @autosnippet search <关键词>      # 代码搜索');
-  log('   @autosnippet recipes list          # 查看 Recipe');
-  log('   @autosnippet create                # 创建 Recipe');
-  log('   @autosnippet guard                 # 代码审查');
-  log('   @autosnippet when <场景>           # 决策辅助\n');
+  log('   @alembic search <关键词>      # 代码搜索');
+  log('   @alembic recipes list          # 查看 Recipe');
+  log('   @alembic create                # 创建 Recipe');
+  log('   @alembic guard                 # 代码审查');
+  log('   @alembic when <场景>           # 决策辅助\n');
 
   log('📖 项目指令位置：');
   log(`   ${path.join(projectPath, '.github/copilot-instructions.md')}`, 'yellow');
@@ -299,7 +299,7 @@ function printQuickStart() {
 // ============ 主程序 ============
 
 async function main() {
-  log('\n🚀 AutoSnippet VSCode Copilot 安装程序', 'blue');
+  log('\n🚀 Alembic VSCode Copilot 安装程序', 'blue');
   log(`📍 项目路径: ${projectPath}\n`, 'blue');
 
   const results = {

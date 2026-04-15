@@ -2,7 +2,7 @@
  * Integration: Task Prime Injection Correctness
  *
  * 使用 BiliDili 项目的真实 recipes 验证 prime 流水线的注入质量：
- *   1. 从 BiliDili/AutoSnippet/recipes/ 加载全部 .md → 内存 DB
+ *   1. 从 BiliDili/Alembic/recipes/ 加载全部 .md → 内存 DB
  *   2. 构建 SearchEngine + FieldWeighted 索引
  *   3. 构造代表性用户输入 → IntentExtractor → PrimeSearchPipeline
  *   4. 验证搜索结果的相关性、completeness、排序正确性
@@ -28,8 +28,8 @@ import { PrimeSearchPipeline } from '../../lib/service/task/PrimeSearchPipeline.
 // ── Paths ───────────────────────────────────────────
 const __dirname = import.meta.dirname;
 const BILIDILI_ROOT = path.resolve(__dirname, '../../../BiliDili');
-const RECIPES_DIR = path.join(BILIDILI_ROOT, 'AutoSnippet/recipes');
-const CANDIDATES_DIR = path.join(BILIDILI_ROOT, 'AutoSnippet/candidates');
+const RECIPES_DIR = path.join(BILIDILI_ROOT, 'Alembic/recipes');
+const CANDIDATES_DIR = path.join(BILIDILI_ROOT, 'Alembic/candidates');
 const HAS_BILIDILI = fs.existsSync(RECIPES_DIR) || fs.existsSync(CANDIDATES_DIR);
 
 // ── DB Setup ────────────────────────────────────────

@@ -15,7 +15,7 @@ export const KNOWLEDGE_BASE_DIR = DEFAULT_KNOWLEDGE_BASE_DIR;
 export const RECIPES_DIR = `${DEFAULT_KNOWLEDGE_BASE_DIR}/recipes`;
 export const CANDIDATES_DIR = `${DEFAULT_KNOWLEDGE_BASE_DIR}/candidates`;
 export const RECIPES_INDEX = `${DEFAULT_KNOWLEDGE_BASE_DIR}/recipes/index.json`;
-export const SPMMAP_FILENAME = 'AutoSnippet.spmmap.json';
+export const SPMMAP_FILENAME = 'Alembic.spmmap.json';
 export const SPMMAP_PATH = `${DEFAULT_KNOWLEDGE_BASE_DIR}/${SPMMAP_FILENAME}`;
 /** 默认子仓库相对路径（相对于 projectRoot） */
 export const SUB_REPO_DIR = DEFAULT_SUB_REPO_DIR;

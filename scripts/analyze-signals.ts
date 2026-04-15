@@ -2,7 +2,7 @@
 /**
  * analyze-signals.ts — JSONL Signal Analyzer
  *
- * Reads intent chain records from .autosnippet/logs/signals/*.jsonl and produces
+ * Reads intent chain records from .asd/logs/signals/*.jsonl and produces
  * summary analytics for evaluating the Intent Pipeline effectiveness.
  *
  * Usage: npx tsx scripts/analyze-signals.ts [project-root]
@@ -216,7 +216,7 @@ function formatMs(ms: number): string {
 // ── Main ────────────────────────────────────────────
 
 const projectRoot = process.argv[2] || process.env.ASD_PROJECT_DIR || process.cwd();
-const signalDir = path.join(projectRoot, '.autosnippet', 'logs', 'signals');
+const signalDir = path.join(projectRoot, '.asd', 'logs', 'signals');
 
 console.log(`Reading signals from: ${signalDir}`);
 const records = loadRecords(signalDir);

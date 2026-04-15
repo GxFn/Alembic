@@ -1,6 +1,6 @@
 # MCP 工具参考
 
-AutoSnippet 通过 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 向 IDE 中的 AI 助手提供知识库访问能力。
+Alembic 通过 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 向 IDE 中的 AI 助手提供知识库访问能力。
 
 ---
 
@@ -18,7 +18,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 
 ## Agent Tier 工具
 
-### 1. autosnippet_health
+### 1. asd_health
 
 服务健康状态与知识库统计。
 
@@ -37,7 +37,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 
 ---
 
-### 2. autosnippet_search
+### 2. asd_search
 
 统合搜索知识库。支持多种搜索模式，自动选择最优策略。
 
@@ -63,7 +63,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 
 ---
 
-### 3. autosnippet_knowledge
+### 3. asd_knowledge
 
 知识浏览。获取、列表或确认知识条目使用。
 
@@ -88,7 +88,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 
 ---
 
-### 4. autosnippet_structure
+### 4. asd_structure
 
 项目结构探查。帮助 AI 理解项目组织方式。
 
@@ -109,7 +109,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 
 ---
 
-### 5. autosnippet_graph
+### 5. asd_graph
 
 知识图谱查询。分析条目间的关联关系。
 
@@ -132,7 +132,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 
 ---
 
-### 6. autosnippet_guard
+### 6. asd_guard
 
 代码规范检查。检查代码片段或文件列表是否符合 Guard 规则。输出三态结果（pass / violation / uncertain），三维报告（合规度 + 覆盖率 + 置信度）。ReverseGuard 反向验证 Recipe 引用的 API 符号是否仍存在于代码中。
 
@@ -147,7 +147,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 
 ---
 
-### 7. autosnippet_submit_knowledge
+### 7. asd_submit_knowledge
 
 统一知识提交（单条/批量/文档）。使用 `items` 数组格式传入 1~N 条。
 
@@ -188,7 +188,7 @@ MCP 服务器通过 stdio 协议运行，IDE（Cursor / VS Code / Trae / Qoder /
 
 ---
 
-### 8. autosnippet_skill
+### 8. asd_skill
 
 Skill 管理。创建、加载、更新、删除项目 Skills。
 
@@ -202,13 +202,13 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ---
 
-### 9. autosnippet_bootstrap
+### 9. asd_bootstrap
 
 冷启动 — 无需参数，自动分析项目（AST、依赖图、Guard 审计），返回 Mission Briefing。
 
 ---
 
-### 9b. autosnippet_rescan
+### 9b. asd_rescan
 
 增量重扫描 — 保留已审核 Recipe，清理衍生缓存，重新执行 Phase 1-4 分析，运行 RecipeRelevanceAuditor 5 维证据审计。返回 Mission Briefing（含 allRecipes 完整内容 + auditHint + evolutionGuide）。
 
@@ -221,7 +221,7 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ---
 
-### 9c. autosnippet_evolve
+### 9c. asd_evolve
 
 批量 Recipe 进化决策。双入口工具：
 - **Rescan 模式**：每维度内先 evolve 再 gap-fill（evolve → submit_knowledge → dimension_complete）
@@ -245,7 +245,7 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ---
 
-### 10. autosnippet_dimension_complete
+### 10. asd_dimension_complete
 
 维度分析完成通知 — Agent 完成一个冷启动维度的分析后调用。负责 Recipe 关联、Skill 生成、Checkpoint 保存、进度推送。
 
@@ -262,7 +262,7 @@ Skill 管理。创建、加载、更新、删除项目 Skills。
 
 ---
 
-### 11. autosnippet_wiki
+### 11. asd_wiki
 
 Wiki 文档生成。
 
@@ -277,7 +277,7 @@ Wiki 文档生成。
 
 ---
 
-### 12. autosnippet_panorama
+### 12. asd_panorama
 
 项目全景查询。
 
@@ -303,7 +303,7 @@ Wiki 文档生成。
 
 ---
 
-### 13. autosnippet_task
+### 13. asd_task
 
 任务与决策管理（5 operations）。每次对话开始时先调用 `prime` 加载知识上下文。
 
@@ -326,7 +326,7 @@ Wiki 文档生成。
 
 ## Admin Tier 工具
 
-### 14. autosnippet_enrich_candidates
+### 14. asd_enrich_candidates
 
 候选字段完整性诊断（纯逻辑检查，不调用 AI）。
 
@@ -338,7 +338,7 @@ Wiki 文档生成。
 
 ---
 
-### 15. autosnippet_knowledge_lifecycle
+### 15. asd_knowledge_lifecycle
 
 知识条目生命周期操作。
 
@@ -370,16 +370,16 @@ MCP 工具与 Gateway Action 的映射关系：
 
 | 工具 | Gateway Action | 角色要求 |
 |------|---------------|---------|
-| `autosnippet_search` | `read:recipes` | 所有角色 |
-| `autosnippet_knowledge` (list/get) | `read:recipes` | 所有角色 |
-| `autosnippet_submit_knowledge` | `submit:knowledge` | `external_agent` / `developer` |
-| `autosnippet_guard` | `read:guard_rules` | 所有角色 |
-| `autosnippet_skill` (create) | `create:skills` | `external_agent` / `developer` |
-| `autosnippet_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
-| `autosnippet_rescan` | `knowledge:bootstrap` | `external_agent` / `developer` |
-| `autosnippet_evolve` | `knowledge:evolve` | `external_agent` / `developer` |
-| `autosnippet_task` | `task:create` / `task:update`（按 operation 路由） | `external_agent` / `developer` |
-| `autosnippet_knowledge_lifecycle` | 按 action 动态路由 | `developer` |
+| `asd_search` | `read:recipes` | 所有角色 |
+| `asd_knowledge` (list/get) | `read:recipes` | 所有角色 |
+| `asd_submit_knowledge` | `submit:knowledge` | `external_agent` / `developer` |
+| `asd_guard` | `read:guard_rules` | 所有角色 |
+| `asd_skill` (create) | `create:skills` | `external_agent` / `developer` |
+| `asd_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `asd_rescan` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `asd_evolve` | `knowledge:evolve` | `external_agent` / `developer` |
+| `asd_task` | `task:create` / `task:update`（按 operation 路由） | `external_agent` / `developer` |
+| `asd_knowledge_lifecycle` | 按 action 动态路由 | `developer` |
 
 ---
 
@@ -391,9 +391,9 @@ MCP 工具与 Gateway Action 的映射关系：
 ```json
 {
   "mcpServers": {
-    "autosnippet": {
+    "alembic": {
       "command": "node",
-      "args": ["/path/to/autosnippet/bin/mcp-server.js"],
+      "args": ["/path/to/alembic/bin/mcp-server.js"],
       "env": { "ASD_PROJECT_ROOT": "/path/to/your-project" }
     }
   }
@@ -406,9 +406,9 @@ MCP 工具与 Gateway Action 的映射关系：
 ```json
 {
   "servers": {
-    "autosnippet": {
+    "alembic": {
       "command": "node",
-      "args": ["/path/to/autosnippet/bin/mcp-server.js"],
+      "args": ["/path/to/alembic/bin/mcp-server.js"],
       "env": { "ASD_PROJECT_ROOT": "/path/to/your-project" }
     }
   }

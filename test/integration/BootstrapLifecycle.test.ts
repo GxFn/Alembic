@@ -102,7 +102,7 @@ describe('Integration: Bootstrap Lifecycle', () => {
     test('should accept knowledge base dir', async () => {
       const { Bootstrap } = await import('../../lib/bootstrap.js');
       expect(() => {
-        Bootstrap.configurePathGuard('/tmp/test-project', 'AutoSnippet');
+        Bootstrap.configurePathGuard('/tmp/test-project', 'Alembic');
       }).not.toThrow();
     });
   });

@@ -1,6 +1,6 @@
 # HTTP API 参考
 
-AutoSnippet 提供 RESTful API 供 Dashboard 和外部集成使用。
+Alembic 提供 RESTful API 供 Dashboard 和外部集成使用。
 
 **启动方式：**
 

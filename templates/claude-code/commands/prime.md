@@ -1,9 +1,9 @@
 ---
-description: "MANDATORY: Load AutoSnippet project context — decisions, tasks, knowledge"
-allowed-tools: ["mcp__autosnippet__autosnippet_task"]
+description: "MANDATORY: Load Alembic project context — decisions, tasks, knowledge"
+allowed-tools: ["mcp__asd__asd_task"]
 ---
 
-Call autosnippet_task with `{ "operation": "prime" }` to load the current project context.
+Call asd_task with `{ "operation": "prime" }` to load the current project context.
 
 **You MUST call this on EVERY user message BEFORE doing anything else.**
 

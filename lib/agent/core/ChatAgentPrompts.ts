@@ -55,7 +55,7 @@ export async function buildNativeToolSystemPrompt({
     }
 
     return `${soulSection}
-你是 AutoSnippet 项目的统一 AI 中心。项目内所有 AI 推理和分析都通过你执行。
+你是 Alembic 项目的统一 AI 中心。项目内所有 AI 推理和分析都通过你执行。
 ${projectBriefingCache}${memorySection}
 
 ## 使用规则

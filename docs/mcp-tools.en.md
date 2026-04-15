@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-AutoSnippet provides knowledge base access to AI assistants in IDEs via [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
+Alembic provides knowledge base access to AI assistants in IDEs via [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
 
 ---
 
@@ -18,7 +18,7 @@ All tools pass through the Gateway pipeline (validate → guard → route → au
 
 ## Agent Tier Tools
 
-### 1. autosnippet_health
+### 1. asd_health
 
 Service health status and knowledge base statistics.
 
@@ -37,7 +37,7 @@ Service health status and knowledge base statistics.
 
 ---
 
-### 2. autosnippet_search
+### 2. asd_search
 
 Unified knowledge base search. Supports multiple search modes with automatic strategy selection.
 
@@ -63,7 +63,7 @@ Unified knowledge base search. Supports multiple search modes with automatic str
 
 ---
 
-### 3. autosnippet_knowledge
+### 3. asd_knowledge
 
 Knowledge browsing. Get, list, or confirm knowledge entry usage.
 
@@ -88,7 +88,7 @@ Knowledge browsing. Get, list, or confirm knowledge entry usage.
 
 ---
 
-### 4. autosnippet_structure
+### 4. asd_structure
 
 Project structure exploration. Helps AI understand project organization.
 
@@ -109,7 +109,7 @@ Project structure exploration. Helps AI understand project organization.
 
 ---
 
-### 5. autosnippet_graph
+### 5. asd_graph
 
 Knowledge graph queries. Analyze relationships between entries.
 
@@ -132,7 +132,7 @@ Knowledge graph queries. Analyze relationships between entries.
 
 ---
 
-### 6. autosnippet_guard
+### 6. asd_guard
 
 Code compliance check. Check code snippets or file lists against Guard rules. Outputs 3-state results (pass / violation / uncertain) with a 3-dimensional report (compliance + coverage + confidence). ReverseGuard reverse-validates that API symbols referenced in Recipes still exist in code.
 
@@ -147,7 +147,7 @@ Code compliance check. Check code snippets or file lists against Guard rules. Ou
 
 ---
 
-### 7. autosnippet_submit_knowledge
+### 7. asd_submit_knowledge
 
 Unified knowledge submission (single/batch/document). Pass 1~N entries via `items` array.
 
@@ -188,7 +188,7 @@ Unified knowledge submission (single/batch/document). Pass 1~N entries via `item
 
 ---
 
-### 8. autosnippet_skill
+### 8. asd_skill
 
 Skill management. Create, load, update, and delete project Skills.
 
@@ -202,13 +202,13 @@ Skill management. Create, load, update, and delete project Skills.
 
 ---
 
-### 9. autosnippet_bootstrap
+### 9. asd_bootstrap
 
 Coldstart — No parameters required. Automatically analyzes the project (AST, dependency graph, Guard audit) and returns a Mission Briefing.
 
 ---
 
-### 9b. autosnippet_rescan
+### 9b. asd_rescan
 
 Incremental rescan — Preserves approved Recipes, cleans derived caches, re-runs Phase 1-4 analysis, and executes RecipeRelevanceAuditor 5-dimension evidence audit. Returns Mission Briefing with allRecipes (full content + auditHint) and evolutionGuide.
 
@@ -221,7 +221,7 @@ Incremental rescan — Preserves approved Recipes, cleans derived caches, re-run
 
 ---
 
-### 9c. autosnippet_evolve
+### 9c. asd_evolve
 
 Batch Recipe evolution decisions. Dual-entry tool:
 - **Rescan mode**: called per-dimension before gap-fill (evolve → submit_knowledge → dimension_complete)
@@ -245,7 +245,7 @@ Three decision types:
 
 ---
 
-### 10. autosnippet_dimension_complete
+### 10. asd_dimension_complete
 
 Dimension analysis completion notification — Called after the Agent finishes analyzing a coldstart dimension. Handles Recipe association, Skill generation, checkpoint saving, and progress push.
 
@@ -262,7 +262,7 @@ Dimension analysis completion notification — Called after the Agent finishes a
 
 ---
 
-### 11. autosnippet_wiki
+### 11. asd_wiki
 
 Wiki document generation.
 
@@ -277,7 +277,7 @@ Wiki document generation.
 
 ---
 
-### 12. autosnippet_panorama
+### 12. asd_panorama
 
 Project panorama queries.
 
@@ -303,7 +303,7 @@ Project panorama queries.
 
 ---
 
-### 13. autosnippet_task
+### 13. asd_task
 
 Task and decision management (5 operations). Call `prime` at the start of every conversation to load knowledge context.
 
@@ -326,7 +326,7 @@ Task and decision management (5 operations). Call `prime` at the start of every 
 
 ## Admin Tier Tools
 
-### 14. autosnippet_enrich_candidates
+### 14. asd_enrich_candidates
 
 Candidate field completeness diagnosis (pure logic check, no AI).
 
@@ -338,7 +338,7 @@ Candidate field completeness diagnosis (pure logic check, no AI).
 
 ---
 
-### 15. autosnippet_knowledge_lifecycle
+### 15. asd_knowledge_lifecycle
 
 Knowledge entry lifecycle operations.
 
@@ -370,16 +370,16 @@ Mapping between MCP tools and Gateway Actions:
 
 | Tool | Gateway Action | Role Requirement |
 |------|---------------|-----------------|
-| `autosnippet_search` | `read:recipes` | All roles |
-| `autosnippet_knowledge` (list/get) | `read:recipes` | All roles |
-| `autosnippet_submit_knowledge` | `submit:knowledge` | `external_agent` / `developer` |
-| `autosnippet_guard` | `read:guard_rules` | All roles |
-| `autosnippet_skill` (create) | `create:skills` | `external_agent` / `developer` |
-| `autosnippet_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
-| `autosnippet_rescan` | `knowledge:bootstrap` | `external_agent` / `developer` |
-| `autosnippet_evolve` | `knowledge:evolve` | `external_agent` / `developer` |
-| `autosnippet_task` | `task:create` / `task:update` (routed by operation) | `external_agent` / `developer` |
-| `autosnippet_knowledge_lifecycle` | Dynamic by action | `developer` |
+| `asd_search` | `read:recipes` | All roles |
+| `asd_knowledge` (list/get) | `read:recipes` | All roles |
+| `asd_submit_knowledge` | `submit:knowledge` | `external_agent` / `developer` |
+| `asd_guard` | `read:guard_rules` | All roles |
+| `asd_skill` (create) | `create:skills` | `external_agent` / `developer` |
+| `asd_bootstrap` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `asd_rescan` | `knowledge:bootstrap` | `external_agent` / `developer` |
+| `asd_evolve` | `knowledge:evolve` | `external_agent` / `developer` |
+| `asd_task` | `task:create` / `task:update` (routed by operation) | `external_agent` / `developer` |
+| `asd_knowledge_lifecycle` | Dynamic by action | `developer` |
 
 ---
 
@@ -391,9 +391,9 @@ Mapping between MCP tools and Gateway Actions:
 ```json
 {
   "mcpServers": {
-    "autosnippet": {
+    "alembic": {
       "command": "node",
-      "args": ["/path/to/autosnippet/bin/mcp-server.js"],
+      "args": ["/path/to/alembic/bin/mcp-server.js"],
       "env": { "ASD_PROJECT_ROOT": "/path/to/your-project" }
     }
   }
@@ -406,9 +406,9 @@ Mapping between MCP tools and Gateway Actions:
 ```json
 {
   "servers": {
-    "autosnippet": {
+    "alembic": {
       "command": "node",
-      "args": ["/path/to/autosnippet/bin/mcp-server.js"],
+      "args": ["/path/to/alembic/bin/mcp-server.js"],
       "env": { "ASD_PROJECT_ROOT": "/path/to/your-project" }
     }
   }

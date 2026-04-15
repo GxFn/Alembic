@@ -1,6 +1,6 @@
 # Agent Architecture
 
-The AutoSnippet Agent layer (`lib/agent/`, path alias `#agent/*`) is an independent intelligence layer responsible for all AI Agent runtime capabilities. It was extracted from the Service layer to become a top-level architecture module parallel to Service.
+The Alembic Agent layer (`lib/agent/`, path alias `#agent/*`) is an independent intelligence layer responsible for all AI Agent runtime capabilities. It was extracted from the Service layer to become a top-level architecture module parallel to Service.
 
 ---
 

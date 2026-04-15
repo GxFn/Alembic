@@ -1,11 +1,11 @@
 /**
  * UpgradeService — IDE 集成升级服务
  *
- * 当 AutoSnippet 发布新版本后，老用户执行 `asd upgrade` 即可更新所有 IDE 集成文件。
+ * 当 Alembic 发布新版本后，老用户执行 `asd upgrade` 即可更新所有 IDE 集成文件。
  * 底层委托 FileDeployer 按 MANIFEST 定义的策略执行，确保与 SetupService 使用同一套部署逻辑。
  *
  * 额外职责：
- *   - Skills 路径迁移（.autosnippet/skills/ → AutoSnippet/skills/）
+ *   - Skills 路径迁移（.asd/skills/ → Alembic/skills/）
  */
 
 import { execSync } from 'node:child_process';
@@ -54,7 +54,7 @@ export class UpgradeService {
   /* ═══ Skills 路径迁移 ═══════════════════════════════ */
 
   _migrateSkillsPath() {
-    const oldSkillsDir = join(this.projectRoot, '.autosnippet', 'skills');
+    const oldSkillsDir = join(this.projectRoot, '.asd', 'skills');
     const newSkillsDir = join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR, 'skills');
 
     if (!existsSync(oldSkillsDir)) {

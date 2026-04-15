@@ -7,7 +7,7 @@
  *  - .md 文件 = 完整唯一数据源（Source of Truth），DB = 索引缓存
  *  - 通过 contentHash 检测手写/手改 .md → 进入违规统计（audit_logs）
  *  - 孤儿 Entry（DB 有但 .md 不存在）→ 自动标记 deprecated
- *  - 同时扫描 AutoSnippet/candidates/ 和 AutoSnippet/recipes/ 两个目录
+ *  - 同时扫描 Alembic/candidates/ 和 Alembic/recipes/ 两个目录
  *
  * 使用方式：
  *  - CLI: `asd sync` 委托调用
@@ -221,7 +221,7 @@ export class KnowledgeSyncService {
   /**
    * 递归收集指定目录下所有 .md 文件（跳过 _ 前缀模板）
    * @param dir 绝对目录路径
-   * @param prefix 相对路径前缀 (e.g. 'AutoSnippet/candidates')
+   * @param prefix 相对路径前缀 (e.g. 'Alembic/candidates')
    * @returns []}
    */
   _collectMdFiles(dir: string, prefix: string) {

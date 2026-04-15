@@ -1,5 +1,5 @@
 /**
- * HTTP Server - AutoSnippet 2.0
+ * HTTP Server - Alembic 2.0
  * 基于 Express 框架的 REST API 服务器
  * 集成监控、缓存和错误追踪
  */
@@ -333,7 +333,7 @@ export class HttpServer {
     // 根路径 — 返回 API 元信息（避免外部探测产生无意义 404）
     this.app.all('/', (_req: Request, res: Response) => {
       res.json({
-        name: 'AutoSnippet API',
+        name: 'Alembic API',
         version: '2.0',
         docs: '/api-spec',
         health: `${apiPrefix}/health`,

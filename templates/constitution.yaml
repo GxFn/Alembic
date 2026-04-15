@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════
-# AutoSnippet Constitution — 权限宪法
+# Alembic Constitution — 权限宪法
 # ═══════════════════════════════════════════════════════════
 #
 # 三层权限架构:
@@ -21,7 +21,7 @@ capabilities:
     description: "recipes 子仓库 git push 权限"
     probe: "git push --dry-run"
     # 子仓库路径（相对于 projectRoot，可自定义）
-    sub_repo_dir: "AutoSnippet/recipes"
+    sub_repo_dir: "Alembic/recipes"
     no_subrepo: "allow"
     no_remote: "allow"
     cache_ttl: 86400
@@ -61,7 +61,7 @@ roles:
 
   - id: "chat_agent"
     name: "ChatAgent"
-    description: "AutoSnippet 内置 AI Agent（Dashboard 对话 / 程序化调用）"
+    description: "Alembic 内置 AI Agent（Dashboard 对话 / 程序化调用）"
     permissions:
       - "read:recipes"
       - "read:candidates"

@@ -16,7 +16,7 @@ Lark Notification  ←  Write Result  ←  VSCode Extension Polls  ←  Inject C
 
 - Node.js ≥ 22
 - VS Code + GitHub Copilot (Agent Mode)
-- AutoSnippet installed (`npm install -g autosnippet`, then `asd setup` in your project)
+- Alembic installed (`npm install -g alembic`, then `asd setup` in your project)
 - Feishu Open Platform account
 
 ## Step 1: Create a Feishu Custom App
@@ -54,7 +54,7 @@ Start the server without a whitelist first, send a message in Lark, then query t
 ```bash
 node -e "
 const Database = require('better-sqlite3');
-const db = new Database('.autosnippet/autosnippet.db');
+const db = new Database('.asd/alembic.db');
 const rows = db.prepare('SELECT user_id, command FROM remote_commands ORDER BY created_at DESC LIMIT 3').all();
 rows.forEach(r => console.log(r.user_id, '|', r.command));
 "
@@ -88,8 +88,8 @@ If `asd setup` didn't install it automatically:
 
 ```bash
 cd your-project
-ls .autosnippet/*.vsix
-code --install-extension .autosnippet/autosnippet-*.vsix --force
+ls .asd/*.vsix
+code --install-extension .asd/alembic-*.vsix --force
 ```
 
 The extension auto-detects the API server and Lark connection, and starts polling. The status bar shows `$(radio-tower) Remote: ON`.
@@ -137,7 +137,7 @@ Settings managed:
 
 ## Task Notifications
 
-If you use AutoSnippet's TaskGraph system, task status changes are automatically pushed to Lark:
+If you use Alembic's TaskGraph system, task status changes are automatically pushed to Lark:
 
 - 📋 Task created
 - 🚀 Task claimed
@@ -226,5 +226,5 @@ Common causes:
 ### VS Code Extension Not Polling
 
 1. Check if status bar shows `Remote: ON`
-2. If it shows `Remote: OFF`, click to toggle or run `AutoSnippet: Start Remote Poller`
+2. If it shows `Remote: OFF`, click to toggle or run `Alembic: Start Remote Poller`
 3. Confirm API server port 3000 is responding

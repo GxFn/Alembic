@@ -9,10 +9,10 @@
  *   overwrite-dir    — 递归复制目录中的所有文件
  *   signature-safe   — safeCopyFile（签名匹配才覆盖）
  *   create-only      — 仅在文件不存在时复制
- *   merge-json       — 读取现有 JSON，合并 autosnippet 键，写回
+ *   merge-json       — 读取现有 JSON，合并 alembic 键，写回
  *   merge-gitignore  — 增量追加缺失规则 + 迁移旧格式
  *   backup-overwrite — 备份旧文件再覆盖
- *   inject-marker    — 在 <!-- autosnippet:begin/end --> 标记间注入
+ *   inject-marker    — 在 <!-- asd:begin/end --> 标记间注入
  *   generate         — 调用自定义生成函数
  */
 
@@ -40,7 +40,7 @@ import {
   MANIFEST,
 } from './FileManifest.js';
 
-/** AutoSnippet 源码仓库根目录 */
+/** Alembic 源码仓库根目录 */
 const REPO_ROOT = PACKAGE_ROOT;
 
 /** Manifest entry type */
@@ -147,7 +147,7 @@ export class FileDeployer {
 
   /* ═══ 策略实现 ═══════════════════════════════════════ */
 
-  /** overwrite — AutoSnippet 完全拥有，始终覆盖 */
+  /** overwrite — Alembic 完全拥有，始终覆盖 */
   _strategyOverwrite(entry: ManifestEntry) {
     const src = join(TEMPLATES_DIR, entry.src!);
     if (!existsSync(src)) {
@@ -190,7 +190,7 @@ export class FileDeployer {
     return copied;
   }
 
-  /** signature-safe — 有 AutoSnippet 签名才覆盖 */
+  /** signature-safe — 有 Alembic 签名才覆盖 */
   _strategySignatureSafe(entry: ManifestEntry, mode: 'setup' | 'upgrade') {
     const src = join(TEMPLATES_DIR, entry.src!);
     if (!existsSync(src)) {
@@ -262,7 +262,7 @@ export class FileDeployer {
     return true;
   }
 
-  /** merge-json — 读取现有 JSON，合并 autosnippet 键 */
+  /** merge-json — 读取现有 JSON，合并 alembic 键 */
   _strategyMergeJson(entry: ManifestEntry) {
     const dest = join(this.projectRoot, entry.dest!);
     mkdirSync(dirname(dest), { recursive: true });
@@ -282,7 +282,7 @@ export class FileDeployer {
     }
 
     const ide = entry.id === 'vscode-mcp' ? 'vscode' : 'cursor';
-    config[parentKey].autosnippet = buildMcpServerEntry(this.projectRoot, ide);
+    config[parentKey].asd = buildMcpServerEntry(this.projectRoot, ide);
 
     writeFileSync(dest, JSON.stringify(config, null, 2));
     return true;
@@ -291,7 +291,7 @@ export class FileDeployer {
   /**
    * merge-gitignore — section-based 管理
    *
-   * 设计：用 BEGIN/END 标记包裹 AutoSnippet 规则块，整块替换。
+   * 设计：用 BEGIN/END 标记包裹 Alembic 规则块，整块替换。
    * - 首次：追加 section 到文件末尾
    * - 升级：替换已有 section（规则变更自动生效）
    * - 迁移：清理旧版逐行追加的散落规则
@@ -309,7 +309,7 @@ export class FileDeployer {
       }
     }
 
-    // 2. 迁移：清理旧版散落的 AutoSnippet 规则（无 section marker 时代的残留）
+    // 2. 迁移：清理旧版散落的 Alembic 规则（无 section marker 时代的残留）
     const oldPatterns = GITIGNORE_RULES.map((r) => r.pattern);
     const oldComments = GITIGNORE_RULES.filter((r) => r.comment).map((r) => `# ${r.comment}`);
     // 也清除旧版注入的通用规则
@@ -318,9 +318,9 @@ export class FileDeployer {
       'nohup.out',
       '*.sw[a-p]',
       '# macOS 元数据',
-      '# AutoSnippet 运行时缓存（不入库）',
-      '# AutoSnippet 环境变量（含 API Key，不入库）',
-      '# AutoSnippet 运行日志',
+      '# Alembic 运行时缓存（不入库）',
+      '# Alembic 环境变量（含 API Key，不入库）',
+      '# Alembic 运行日志',
     ];
     const allOldTokens = new Set([...oldPatterns, ...oldComments, ...legacyTokens]);
 
@@ -338,7 +338,7 @@ export class FileDeployer {
       }
     }
 
-    // 3. 构建 AutoSnippet section block
+    // 3. 构建 Alembic section block
     const sectionLines = [GITIGNORE_SECTION_BEGIN];
     for (const rule of GITIGNORE_RULES) {
       if (rule.comment) {
@@ -347,7 +347,7 @@ export class FileDeployer {
       sectionLines.push(rule.pattern);
     }
 
-    // 确保 AutoSnippet/ 知识库不被忽略
+    // 确保 Alembic/ 知识库不被忽略
     const kbDir = DEFAULT_KNOWLEDGE_BASE_DIR;
     const contentLines = content.split('\n');
     const hasIgnoreAS = contentLines.some((l) => {
@@ -419,10 +419,10 @@ export class FileDeployer {
     return true;
   }
 
-  /** inject-marker — 在 autosnippet:begin/end 标记间注入 */
+  /** inject-marker — 在 asd:begin/end 标记间注入 */
   _strategyInjectMarker(entry: ManifestEntry) {
-    const BEGIN_MARKER = '<!-- autosnippet:begin -->';
-    const END_MARKER = '<!-- autosnippet:end -->';
+    const BEGIN_MARKER = '<!-- asd:begin -->';
+    const END_MARKER = '<!-- asd:end -->';
 
     const src = join(TEMPLATES_DIR, entry.src!);
     if (!existsSync(src)) {
@@ -473,7 +473,7 @@ export class FileDeployer {
   /* ═══ 自定义生成器 ═══════════════════════════════════ */
 
   _generators: Record<string, (this: FileDeployer) => boolean | void> = {
-    /** .cursor/rules/autosnippet-conventions.mdc — 读 conventions.md + YAML frontmatter */
+    /** .cursor/rules/alembic-conventions.mdc — 读 conventions.md + YAML frontmatter */
     generateConventionsMdc() {
       const tpl = join(TEMPLATES_DIR, 'instructions/conventions.md');
       if (!existsSync(tpl)) {
@@ -483,17 +483,17 @@ export class FileDeployer {
       const body = readFileSync(tpl, 'utf8').trimEnd();
       const content = [
         '---',
-        'description: AutoSnippet conventions — behavioral rules for task tracking, knowledge guardrails, and MCP usage',
+        'description: Alembic conventions — behavioral rules for task tracking, knowledge guardrails, and MCP usage',
         'alwaysApply: true',
         '---',
         '',
-        '# AutoSnippet Conventions',
+        '# Alembic Conventions',
         '',
         body,
         '',
       ].join('\n');
 
-      const dest = join(this.projectRoot, '.cursor/rules/autosnippet-conventions.mdc');
+      const dest = join(this.projectRoot, '.cursor/rules/alembic-conventions.mdc');
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, content);
       return true;
@@ -508,13 +508,13 @@ export class FileDeployer {
 
       const body = readFileSync(tpl, 'utf8').trimEnd();
       const content = [
-        '<!-- autosnippet:begin -->',
+        '<!-- asd:begin -->',
         '',
-        '# AutoSnippet Conventions',
+        '# Alembic Conventions',
         '',
         body,
         '',
-        '<!-- autosnippet:end -->',
+        '<!-- asd:end -->',
         '',
       ].join('\n');
 
@@ -525,15 +525,15 @@ export class FileDeployer {
       // 如果文件已存在且包含 begin/end markers，仅替换标记间内容
       if (existsSync(dest)) {
         const existing = readFileSync(dest, 'utf8');
-        const BEGIN = '<!-- autosnippet:begin -->';
-        const END = '<!-- autosnippet:end -->';
+        const BEGIN = '<!-- asd:begin -->';
+        const END = '<!-- asd:end -->';
         if (existing.includes(BEGIN) && existing.includes(END)) {
           const snippet = content.trimEnd();
           const updated = existing.replace(new RegExp(`${BEGIN}[\\s\\S]*?${END}`), snippet);
           writeFileSync(dest, updated);
           return true;
         }
-        // 用户文件无 markers 且无 AutoSnippet 签名 → 追加
+        // 用户文件无 markers 且无 Alembic 签名 → 追加
         const { canWrite } = checkWriteSafety(dest);
         if (!canWrite) {
           writeFileSync(dest, `${existing}\n\n${content}`);
@@ -591,7 +591,7 @@ export class FileDeployer {
       }
     },
 
-    /** 确保 AutoSnippet/skills/ 目录存在 */
+    /** 确保 Alembic/skills/ 目录存在 */
     ensureSkillsDir() {
       const autoDir = join(this.projectRoot, DEFAULT_KNOWLEDGE_BASE_DIR);
       if (!existsSync(autoDir)) {
@@ -636,12 +636,12 @@ export class FileDeployer {
         execSync('npx tsc -p ./tsconfig.json', { cwd: extDir, stdio: 'pipe' });
 
         // 打包 .vsix
-        execSync('npx @vscode/vsce package --no-dependencies -o autosnippet.vsix', {
+        execSync('npx @vscode/vsce package --no-dependencies -o alembic.vsix', {
           cwd: extDir,
           stdio: 'pipe',
         });
 
-        const vsixPath = join(extDir, 'autosnippet.vsix');
+        const vsixPath = join(extDir, 'alembic.vsix');
         if (!existsSync(vsixPath)) {
           return false;
         }

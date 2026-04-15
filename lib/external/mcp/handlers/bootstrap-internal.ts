@@ -1,7 +1,7 @@
 /**
  * MCP Handlers — Bootstrap 冷启动知识库初始化 (内部 Agent 路径)
  *
- * ⚠️ 本文件是「内部 Agent」冷启动路径 — 由 AutoSnippet 内置的 Analyst/Producer
+ * ⚠️ 本文件是「内部 Agent」冷启动路径 — 由 Alembic 内置的 Analyst/Producer
  *    双 Agent AI pipeline 自动完成知识提取。需要配置 AI Provider (API Key)。
  *
  * 调用方:
@@ -29,7 +29,7 @@
  *              skillWorthy 维度仅提取内容，不创建 Candidate（避免与 Skill 重复）
  *              anti-pattern 已移除 — 代码问题由 Guard 独立处理
  *   Phase 5.5 → 宏观维度（architecture/code-standard/project-profile/agent-guidelines）
- *              自动聚合为 Project Skill → 写入 AutoSnippet/skills/（不产生 Candidate）
+ *              自动聚合为 Project Skill → 写入 Alembic/skills/（不产生 Candidate）
  *
  * 进度推送事件（Socket.io + EventBus）:
  *   bootstrap:started        — 骨架创建完成，携带任务清单
@@ -166,7 +166,7 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
     return envelope({
       success: true,
       data: { report: phaseResults.report, message: 'No source files found, nothing to bootstrap' },
-      meta: { tool: 'autosnippet_bootstrap', responseTimeMs: Date.now() - t0 },
+      meta: { tool: 'asd_bootstrap', responseTimeMs: Date.now() - t0 },
     });
   }
 
@@ -390,7 +390,7 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
       skillWorthyDimensions: dimensions.filter((d) => d.skillWorthy).map((d) => d.id),
       candidateOnlyDimensions: dimensions.filter((d) => !d.skillWorthy).map((d) => d.id),
       candidateRequiredFields: getInternalAgentRequiredFields(),
-      submissionTool: 'autosnippet_submit_knowledge_batch',
+      submissionTool: 'asd_submit_knowledge_batch',
       expectedOutput: `候选知识（微观代码维度：code-pattern/best-practice/event-and-data-flow + 语言条件扫描）+ Project Skills（宏观叙事维度：code-standard/architecture/project-profile/agent-guidelines + 语言条件扫描）— 共 ${dimensions.length} 个维度`,
     },
 
@@ -550,7 +550,7 @@ export async function bootstrapKnowledge(ctx: BootstrapMcpContext, args: Bootstr
   return envelope({
     success: true,
     data: responseData,
-    meta: { tool: 'autosnippet_bootstrap', responseTimeMs: Date.now() - t0 },
+    meta: { tool: 'asd_bootstrap', responseTimeMs: Date.now() - t0 },
   });
 }
 

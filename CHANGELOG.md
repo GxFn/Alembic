@@ -1,6 +1,22 @@
 # Changelog
 
-本文档记录 AutoSnippet 的版本变更，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
+本文档记录 Alembic（原 AutoSnippet）的版本变更，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
+
+---
+
+## [0.0.1] - 2026-04-15
+
+### Changed
+
+- **品牌重命名**: AutoSnippet → Alembic (Auto Source Distill)
+- npm 包名: `autosnippet` → `alembic`
+- MCP 工具前缀: `autosnippet_*` → `asd_*`
+- 运行时目录: `.autosnippet/` → `.asd/`
+- 知识库目录: `AutoSnippet/` → `Alembic/`
+- 数据库文件: `autosnippet.db` → `alembic.db`
+- VSCode 扩展命令: `autosnippet.*` → `asd.*`
+- 注释指令: `autosnippet-disable-next-line` → `asd-disable-next-line`
+- GitHub 仓库: `GxFn/AutoSnippet` → `GxFn/Alembic`
 
 ---
 

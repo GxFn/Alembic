@@ -1,11 +1,11 @@
 ---
-name: autosnippet-devdocs
-description: Generate and publish project Wiki documentation using autosnippet_wiki MCP tool (plan → write → finalize). Use when user says "generate wiki/docs", "write documentation", or agent needs to produce structured project documentation from the knowledge base.
+name: alembic-devdocs
+description: Generate and publish project Wiki documentation using asd_wiki MCP tool (plan → write → finalize). Use when user says "generate wiki/docs", "write documentation", or agent needs to produce structured project documentation from the knowledge base.
 ---
 
-# AutoSnippet — Wiki Documentation Generation
+# Alembic — Wiki Documentation Generation
 
-This skill guides the agent through generating structured **Wiki documentation** from the AutoSnippet knowledge base using the `autosnippet_wiki` MCP tool.
+This skill guides the agent through generating structured **Wiki documentation** from the Alembic knowledge base using the `asd_wiki` MCP tool.
 
 ## When to use this skill
 
@@ -18,10 +18,10 @@ This skill guides the agent through generating structured **Wiki documentation**
 
 | Tool | Operation | Description |
 |------|-----------|-------------|
-| `autosnippet_wiki` | `plan` | Plan topics + data packages (returns topic list + per-topic data for writing) |
-| `autosnippet_wiki` | `finalize` | Complete generation (write meta.json, dedup check, validate completeness) |
-| `autosnippet_search` | — | Search knowledge for additional context during writing |
-| `autosnippet_knowledge` | `get` | Retrieve full Recipe content for reference |
+| `asd_wiki` | `plan` | Plan topics + data packages (returns topic list + per-topic data for writing) |
+| `asd_wiki` | `finalize` | Complete generation (write meta.json, dedup check, validate completeness) |
+| `asd_search` | — | Search knowledge for additional context during writing |
+| `asd_knowledge` | `get` | Retrieve full Recipe content for reference |
 
 ## Workflow
 
@@ -43,7 +43,7 @@ Returns:
 
 For each topic in the plan:
 1. Read the **dataPackage** for that topic
-2. Write a well-structured Markdown article to the wiki directory (`AutoSnippet/wiki/`)
+2. Write a well-structured Markdown article to the wiki directory (`Alembic/wiki/`)
 3. Use Recipe content as source of truth — cite Recipe titles
 4. Follow the structure: Overview → Details → Code Examples → Related Topics
 
@@ -53,7 +53,7 @@ For each topic in the plan:
 {
   "operation": "finalize",
   "sessionId": "<from plan>",
-  "articlesWritten": ["AutoSnippet/wiki/topic-1.md", "AutoSnippet/wiki/topic-2.md"]
+  "articlesWritten": ["Alembic/wiki/topic-1.md", "Alembic/wiki/topic-2.md"]
 }
 ```
 
@@ -82,6 +82,6 @@ This triggers:
 
 | Skill | When to use |
 |-------|-------------|
-| `autosnippet-create` | Submitting **code patterns/recipes** to KB (not documents) |
-| `autosnippet-devdocs` (this) | Generating **Wiki documentation** from KB |
-| `autosnippet-recipes` | Looking up existing knowledge for reference |
+| `alembic-create` | Submitting **code patterns/recipes** to KB (not documents) |
+| `alembic-devdocs` (this) | Generating **Wiki documentation** from KB |
+| `alembic-recipes` | Looking up existing knowledge for reference |

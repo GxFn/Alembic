@@ -1,5 +1,5 @@
 # ──────────────────────────────────────────────────────
-# AutoSnippet V2 CI Pipeline
+# Alembic V2 CI Pipeline
 # 构建 → API 验证 → 单元测试 → 集成测试
 # ──────────────────────────────────────────────────────
 name: CI
@@ -82,7 +82,7 @@ jobs:
         run: |
           ROOT=$(curl -sf $API_BASE/../..)
           echo "$ROOT" | jq .
-          echo "$ROOT" | jq -e '.name == "AutoSnippet API"'
+          echo "$ROOT" | jq -e '.name == "Alembic API"'
 
       - name: Knowledge listing
         run: |

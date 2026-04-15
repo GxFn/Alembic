@@ -16,7 +16,7 @@
 
 - Node.js ≥ 22
 - VS Code + GitHub Copilot（Agent Mode）
-- AutoSnippet 已安装（`npm install -g autosnippet`，然后在项目里 `asd setup`）
+- Alembic 已安装（`npm install -g alembic`，然后在项目里 `asd setup`）
 - 飞书开放平台账号
 
 ## 第一步：创建飞书自建应用
@@ -54,7 +54,7 @@ ASD_LARK_ALLOWED_USERS=ou_xxxxxxxxxxxx
 ```bash
 node -e "
 const Database = require('better-sqlite3');
-const db = new Database('.autosnippet/autosnippet.db');
+const db = new Database('.asd/alembic.db');
 const rows = db.prepare('SELECT user_id, command FROM remote_commands ORDER BY created_at DESC LIMIT 3').all();
 rows.forEach(r => console.log(r.user_id, '|', r.command));
 "
@@ -88,8 +88,8 @@ curl -s http://localhost:3000/api/v1/remote/lark/status | python3 -m json.tool
 
 ```bash
 cd your-project
-ls .autosnippet/*.vsix  # 找到扩展文件
-code --install-extension .autosnippet/autosnippet-*.vsix --force
+ls .asd/*.vsix  # 找到扩展文件
+code --install-extension .asd/alembic-*.vsix --force
 ```
 
 扩展会自动探测 API Server 和飞书连接状态，自动启动远程指令轮询。状态栏会显示 `$(radio-tower) Remote: ON`。
@@ -137,7 +137,7 @@ code --install-extension .autosnippet/autosnippet-*.vsix --force
 
 ## 任务通知
 
-如果你使用了 AutoSnippet 的 TaskGraph 任务系统，任务状态变化会自动推送到飞书：
+如果你使用了 Alembic 的 TaskGraph 任务系统，任务状态变化会自动推送到飞书：
 
 - 📋 任务创建
 - 🚀 任务认领
@@ -226,5 +226,5 @@ curl -s -X POST http://localhost:3000/api/v1/remote/lark/start | python3 -m json
 ### VS Code 扩展没有轮询
 
 1. 检查状态栏是否显示 `Remote: ON`
-2. 如果显示 `Remote: OFF`，点击切换或运行命令 `AutoSnippet: Start Remote Poller`
+2. 如果显示 `Remote: OFF`，点击切换或运行命令 `Alembic: Start Remote Poller`
 3. 确认 API Server 端口 3000 正常

@@ -1,4 +1,4 @@
-# AutoSnippet 发布：打 tag v* 时构建、测试并发布到 npm
+# Alembic 发布：打 tag v* 时构建、测试并发布到 npm
 name: Release
 
 on:

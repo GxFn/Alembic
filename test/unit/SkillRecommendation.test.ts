@@ -296,8 +296,8 @@ describe('FeedbackStore', () => {
 
   beforeEach(() => {
     dir = tmpDir();
-    // FeedbackStore 需要 projectRoot，内部拼接 .autosnippet/feedback.jsonl
-    fs.mkdirSync(path.join(dir, '.autosnippet'), { recursive: true });
+    // FeedbackStore 需要 projectRoot，内部拼接 .asd/feedback.jsonl
+    fs.mkdirSync(path.join(dir, '.asd'), { recursive: true });
     store = new FeedbackStore(dir);
   });
 
@@ -542,7 +542,7 @@ describe('RecommendationPipeline', () => {
 
   test('FeedbackStore 集成: 频繁忽略的类别被过滤', async () => {
     const dir = tmpDir();
-    fs.mkdirSync(path.join(dir, '.autosnippet'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.asd'), { recursive: true });
     const feedbackStore = new FeedbackStore(dir);
 
     // 填充足够多的忽略记录
@@ -629,7 +629,7 @@ describe('RecommendationMetrics', () => {
 
   beforeEach(() => {
     dir = tmpDir();
-    fs.mkdirSync(path.join(dir, '.autosnippet'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.asd'), { recursive: true });
     feedbackStore = new FeedbackStore(dir);
     metrics = new RecommendationMetrics(feedbackStore);
   });
@@ -716,7 +716,7 @@ describe('RuleRecallStrategy', () => {
 
   test('recall 返回数组 (可为空)', async () => {
     const strategy = new RuleRecallStrategy();
-    // 没有数据库 + 没有 .autosnippet 目录 → 应返回空但不崩溃
+    // 没有数据库 + 没有 .asd 目录 → 应返回空但不崩溃
     const dir = tmpDir();
     const results = await strategy.recall({ projectRoot: dir });
     expect(Array.isArray(results)).toBe(true);
@@ -803,7 +803,7 @@ describe('全链路: Pipeline + Strategy + Feedback + Metrics + Hooks', () => {
 
   beforeEach(() => {
     dir = tmpDir();
-    fs.mkdirSync(path.join(dir, '.autosnippet'), { recursive: true });
+    fs.mkdirSync(path.join(dir, '.asd'), { recursive: true });
   });
 
   afterEach(() => {

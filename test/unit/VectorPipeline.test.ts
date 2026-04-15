@@ -19,7 +19,7 @@ describe('JsonVectorAdapter', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'asd-vec-'));
-    fs.mkdirSync(path.join(tmpDir, '.autosnippet', 'context', 'index'), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, '.asd', 'context', 'index'), { recursive: true });
   });
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });

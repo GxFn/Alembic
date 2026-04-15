@@ -1,7 +1,7 @@
 /**
  * ExclusionManager — Guard 规则排除策略管理
  * 三级排除: path（路径排除）、rule（规则在特定文件排除）、globalRule（全局禁用规则）
- * 持久化到 AutoSnippet/guard-exclusions.json（Git 友好，跟随知识库提交）
+ * 持久化到 Alembic/guard-exclusions.json（Git 友好，跟随知识库提交）
  */
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -61,7 +61,7 @@ export class ExclusionManager {
     this.#exclusionsPath = join(projectRoot, kbDir, 'guard-exclusions.json');
     pathGuard.assertProjectWriteSafe(this.#exclusionsPath);
     // 迁移旧路径
-    this.#migrateOldPath(projectRoot, options.internalDir || '.autosnippet');
+    this.#migrateOldPath(projectRoot, options.internalDir || '.asd');
     this.#data = this.#load();
   }
 
@@ -275,7 +275,7 @@ export class ExclusionManager {
     }
   }
 
-  /** 自动迁移旧路径 .autosnippet/guard-exclusions.json → AutoSnippet/guard-exclusions.json */
+  /** 自动迁移旧路径 .asd/guard-exclusions.json → Alembic/guard-exclusions.json */
   #migrateOldPath(projectRoot: string, internalDir: string) {
     try {
       const oldPath = join(projectRoot, internalDir, 'guard-exclusions.json');

@@ -136,5 +136,5 @@ export function importPlaceholder(langId?: string): string {
 }
 
 /** GitHub 提交问题入口（Guard 误报、规则建议等） */
-export const GITHUB_ISSUES_URL = 'https://github.com/GxFn/AutoSnippet/issues';
-export const GITHUB_ISSUES_NEW_GUARD_URL = 'https://github.com/GxFn/AutoSnippet/issues/new?title=Guard%20误报%2F建议%3A%20&body=请描述误报的规则ID、代码片段或改进建议。';
+export const GITHUB_ISSUES_URL = 'https://github.com/GxFn/Alembic/issues';
+export const GITHUB_ISSUES_NEW_GUARD_URL = 'https://github.com/GxFn/Alembic/issues/new?title=Guard%20误报%2F建议%3A%20&body=请描述误报的规则ID、代码片段或改进建议。';

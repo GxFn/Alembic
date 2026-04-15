@@ -2,7 +2,7 @@
  * WikiGenerator — Repo Wiki 生成引擎 (V3 Content-First)
  *
  * 自动分析项目代码结构，生成结构化的项目文档 Wiki。
- * 结合 AutoSnippet 的 AST 深度分析能力（ProjectGraph、CodeEntityGraph、SPM 依赖图）
+ * 结合 Alembic 的 AST 深度分析能力（ProjectGraph、CodeEntityGraph、SPM 依赖图）
  * 做到深层代码洞察。
  *
  * V3 核心设计: "内容驱动 + AI 优先"
@@ -13,7 +13,7 @@
  *   5. 降级保底 — AI 不可用时使用丰富模板内容
  *
  * Wiki 文档结构 (动态生成，按项目特征而异):
- *   AutoSnippet/wiki/
+ *   Alembic/wiki/
  *   ├── index.md              — 项目概述 (始终生成)
  *   ├── architecture.md       — 架构总览 (多模块项目)
  *   ├── getting-started.md    — 快速上手 (有构建系统时)
@@ -1015,7 +1015,7 @@ export class WikiGenerator {
    * 同步 Cursor 端保存的 MD 到 wiki 目录
    *
    * 同步源:
-   *   1. .cursor/skills/autosnippet-devdocs/references/ (*.md)  → wiki/documents/
+   *   1. .cursor/skills/alembic-devdocs/references/ (*.md)  → wiki/documents/
    *
    * @returns >}
    */
@@ -1028,7 +1028,7 @@ export class WikiGenerator {
       this.projectRoot,
       '.cursor',
       'skills',
-      'autosnippet-devdocs',
+      'alembic-devdocs',
       'references'
     );
     if (fs.existsSync(devdocsDir)) {
@@ -1037,7 +1037,7 @@ export class WikiGenerator {
       for (const file of files) {
         try {
           const content = fs.readFileSync(path.join(devdocsDir, file), 'utf-8');
-          const header = `<!-- synced from .cursor/skills/autosnippet-devdocs/references/${file} -->\n\n`;
+          const header = `<!-- synced from .cursor/skills/alembic-devdocs/references/${file} -->\n\n`;
           const result: WikiFileResult = this._writeFile(`documents/${file}`, header + content);
           result.source = 'cursor-devdocs';
           synced.push(result);
@@ -1107,7 +1107,7 @@ export class WikiGenerator {
   ) {
     const meta = {
       version: '3.0.0',
-      generator: 'AutoSnippet WikiGenerator V3',
+      generator: 'Alembic WikiGenerator V3',
       generatedAt: new Date().toISOString(),
       duration: Date.now() - startTime,
       projectRoot: this.projectRoot,

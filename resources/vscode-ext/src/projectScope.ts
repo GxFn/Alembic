@@ -1,12 +1,12 @@
 /**
- * ProjectScope — 判断文件是否属于 AutoSnippet 项目
+ * ProjectScope — 判断文件是否属于 Alembic 项目
  *
  * 检测逻辑（与核心库 ProjectMarkers.ts 保持一致）：
  *   扫描所有 workspaceFolders，检查根目录下是否存在
- *   `AutoSnippet/` 或 `.autosnippet/` 目录。
+ *   `Alembic/` 或 `.asd/` 目录。
  *   只有属于这些目录的文件才会触发扩展功能。
  *
- * 非 AutoSnippet 项目零开销：不扫描指令、不触发 CodeLens、不显示状态栏。
+ * 非 Alembic 项目零开销：不扫描指令、不触发 CodeLens、不显示状态栏。
  *
  * ⚠️  探测标记目录必须与核心库 `lib/shared/ProjectMarkers.ts` 中的
  *     `PROJECT_MARKER_DIRS` 保持同步。
@@ -17,18 +17,18 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 /**
- * 项目标记目录（任一存在即视为 AutoSnippet 项目）
+ * 项目标记目录（任一存在即视为 Alembic 项目）
  * ⚠️  与核心库 PROJECT_MARKER_DIRS 保持同步
  */
-const PROJECT_MARKER_DIRS = ['AutoSnippet', '.autosnippet'] as const;
+const PROJECT_MARKER_DIRS = ['Alembic', '.asd'] as const;
 
 /** 缓存：workspaceFolder fsPath → boolean */
 const _cache = new Map<string, boolean>();
 
 /**
- * 判断某个 workspace folder 是否为 AutoSnippet 项目
+ * 判断某个 workspace folder 是否为 Alembic 项目
  */
-function isAutoSnippetProject(folderPath: string): boolean {
+function isAlembicProject(folderPath: string): boolean {
   const cached = _cache.get(folderPath);
   if (cached !== undefined) return cached;
 
@@ -40,25 +40,25 @@ function isAutoSnippetProject(folderPath: string): boolean {
 }
 
 /**
- * 取得当前工作区中所有 AutoSnippet 项目的根路径
+ * 取得当前工作区中所有 Alembic 项目的根路径
  */
 export function getActiveProjectRoots(): string[] {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders) return [];
   return folders
     .map((f) => f.uri.fsPath)
-    .filter((p) => isAutoSnippetProject(p));
+    .filter((p) => isAlembicProject(p));
 }
 
 /**
- * 当前工作区是否包含至少一个 AutoSnippet 项目
+ * 当前工作区是否包含至少一个 Alembic 项目
  */
 export function hasAnyProject(): boolean {
   return getActiveProjectRoots().length > 0;
 }
 
 /**
- * 判断文件路径是否属于某个 AutoSnippet 项目
+ * 判断文件路径是否属于某个 Alembic 项目
  */
 export function isFileInScope(filePath: string): boolean {
   const roots = getActiveProjectRoots();

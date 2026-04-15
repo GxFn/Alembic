@@ -1,6 +1,6 @@
 {
-  "name": "AutoSnippet Dashboard",
-  "short_name": "AutoSnippet",
+  "name": "Alembic Dashboard",
+  "short_name": "Alembic",
   "description": "智能代码片段管理系统 - 实时协作仪表盘",
   "start_url": "/",
   "display": "standalone",
@@ -25,7 +25,7 @@
   "categories": ["productivity"],
   "screenshots": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect fill='%230f172a' width='540' height='720'/><rect fill='%233b82f6' width='540' height='120'/><text x='270' y='60' text-anchor='middle' dy='.3em' fill='white' font-size='40' font-weight='bold' font-family='sans-serif'>AutoSnippet</text></svg>",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect fill='%230f172a' width='540' height='720'/><rect fill='%233b82f6' width='540' height='120'/><text x='270' y='60' text-anchor='middle' dy='.3em' fill='white' font-size='40' font-weight='bold' font-family='sans-serif'>Alembic</text></svg>",
       "sizes": "540x720",
       "type": "image/svg+xml",
       "form_factor": "narrow"

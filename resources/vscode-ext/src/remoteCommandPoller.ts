@@ -93,12 +93,12 @@ export class RemoteCommandPoller implements vscode.Disposable {
   private readonly SESSION_GAP_MS = 5 * 60 * 1000;
 
   constructor(private apiClient: ApiClient) {
-    this.out = vscode.window.createOutputChannel('AutoSnippet Remote');
+    this.out = vscode.window.createOutputChannel('Alembic Remote');
     this.statusItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Right,
       90
     );
-    this.statusItem.command = 'autosnippet.toggleRemotePoller';
+    this.statusItem.command = 'asd.toggleRemotePoller';
     // 初始不显示 — 等待确认当前工作区匹配服务端项目后再展示
   }
 
@@ -115,14 +115,14 @@ export class RemoteCommandPoller implements vscode.Disposable {
 
   register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
-      vscode.commands.registerCommand('autosnippet.toggleRemotePoller', () => this.toggle()),
-      vscode.commands.registerCommand('autosnippet.startRemotePoller', () => this.start()),
-      vscode.commands.registerCommand('autosnippet.stopRemotePoller', () => this.stop()),
+      vscode.commands.registerCommand('asd.toggleRemotePoller', () => this.toggle()),
+      vscode.commands.registerCommand('asd.startRemotePoller', () => this.start()),
+      vscode.commands.registerCommand('asd.stopRemotePoller', () => this.stop()),
       this,
     );
 
     // 读设置 — 若开启则直接启动
-    const config = vscode.workspace.getConfiguration('autosnippet');
+    const config = vscode.workspace.getConfiguration('asd');
     if (config.get<boolean>('enableRemotePoller', false)) {
       this.start();
     } else {

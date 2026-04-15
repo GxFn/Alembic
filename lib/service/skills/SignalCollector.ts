@@ -155,7 +155,7 @@ export class SignalCollector {
     this.#logger = Logger.getInstance();
     this.#onSuggestions = onSuggestions;
 
-    const dotDir = path.join(projectRoot, '.autosnippet');
+    const dotDir = path.join(projectRoot, '.asd');
     this.#snapshotPath = path.join(dotDir, SNAPSHOT_FILE);
     this.#snapshot = this.#loadSnapshot();
 
@@ -543,7 +543,7 @@ export class SignalCollector {
 
   #collectMemorySignals() {
     try {
-      const memoryFile = path.join(this.#projectRoot, '.autosnippet', 'memory.jsonl');
+      const memoryFile = path.join(this.#projectRoot, '.asd', 'memory.jsonl');
       if (!fs.existsSync(memoryFile)) {
         return [];
       }
@@ -629,7 +629,7 @@ export class SignalCollector {
         ? '你处于 auto 模式：除了推荐之外，对于高优先级的建议，请直接调用 create_skill 工具自动创建 Skill。'
         : '你处于 suggest 模式：只输出推荐，不要自动创建 Skill。';
 
-    return `你是 AutoSnippet 的后台行为分析 AI。你的任务是分析以下多维度信号，判断用户当前的开发状态，并给出 Skill 推荐建议。
+    return `你是 Alembic 的后台行为分析 AI。你的任务是分析以下多维度信号，判断用户当前的开发状态，并给出 Skill 推荐建议。
 
 ${modeInstruction}
 

@@ -1,7 +1,7 @@
 {
-  "name": "autosnippet",
-  "version": "3.4.2",
-  "description": "Extract code patterns into a knowledge base for AI coding assistants",
+  "name": "alembic",
+  "version": "0.0.1",
+  "description": "Alembic — Auto Source Distill. Distill project knowledge from source code into structured recipes for humans and AI agents.",
   "type": "module",
   "main": "dist/lib/bootstrap.js",
   "engines": {
@@ -119,10 +119,10 @@
     "developer-tools",
     "cli"
   ],
-  "homepage": "https://github.com/GxFn/AutoSnippet#readme",
+  "homepage": "https://github.com/GxFn/Alembic#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/GxFn/AutoSnippet.git"
+    "url": "git+https://github.com/GxFn/Alembic.git"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.59.0",
@@ -147,7 +147,7 @@
     "zod": "^4.3.6"
   },
   "bugs": {
-    "url": "https://github.com/GxFn/AutoSnippet/issues"
+    "url": "https://github.com/GxFn/Alembic/issues"
   },
   "files": [
     "dist",

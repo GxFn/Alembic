@@ -1,6 +1,6 @@
 # 配置指南
 
-AutoSnippet 的配置分为三层：项目级 `.env` 文件、全局 `config/default.json`、权限 `constitution.yaml`。
+Alembic 的配置分为三层：项目级 `.env` 文件、全局 `config/default.json`、权限 `constitution.yaml`。
 
 ---
 
@@ -77,7 +77,7 @@ ASD_PROJECT_ROOT=/path/to/your-project
 {
   "database": {
     "type": "sqlite",
-    "path": "./.autosnippet/autosnippet.db"
+    "path": "./.asd/alembic.db"
   },
   "server": {
     "port": 3000,
@@ -100,7 +100,7 @@ ASD_PROJECT_ROOT=/path/to/your-project
     "format": "json",
     "file": {
       "enabled": true,
-      "path": "./.autosnippet/logs"
+      "path": "./.asd/logs"
     }
   },
   "constitution": {
@@ -352,12 +352,12 @@ rules:
 ```
 your-project/
 ├── .env                       # AI Provider 配置
-├── AutoSnippet/               # 知识数据（git-tracked）
+├── Alembic/               # 知识数据（git-tracked）
 │   ├── recipes/               # 已批准的模式 (Markdown)
 │   ├── candidates/            # 待审核的候选
 │   └── skills/                # 项目级 Agent 指令
-├── .autosnippet/              # 运行时缓存（gitignored）
-│   ├── autosnippet.db         # SQLite 数据库
+├── .asd/              # 运行时缓存（gitignored）
+│   ├── alembic.db         # SQLite 数据库
 │   └── context/               # 向量索引
 ├── .cursor/mcp.json           # Cursor MCP 配置
 ├── .vscode/mcp.json           # VS Code MCP 配置
@@ -367,5 +367,5 @@ your-project/
 **重要原则：**
 - Markdown 文件是 Source of Truth
 - SQLite 是读缓存，`asd sync` 可重建
-- `AutoSnippet/` 目录跟随 Git
-- `.autosnippet/` 目录列入 `.gitignore`
+- `Alembic/` 目录跟随 Git
+- `.asd/` 目录列入 `.gitignore`

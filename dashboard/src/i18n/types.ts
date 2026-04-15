@@ -1,5 +1,5 @@
 /**
- * i18n type definitions for AutoSnippet Dashboard.
+ * i18n type definitions for Alembic Dashboard.
  *
  * Locale objects are strongly typed — every key in `zh` must also exist in `en`.
  * Use dot-notation with the `t()` helper: `t('sidebar.recipes')`.

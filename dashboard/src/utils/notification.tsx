@@ -7,7 +7,7 @@
 import React from 'react';
 import toast from 'react-hot-toast';
 
-const APP_TITLE = 'AutoSnippet';
+const APP_TITLE = 'Alembic';
 
 /* ── macOS 系统通知（页面不可见时降级） ─────────────── */
 
@@ -16,7 +16,7 @@ function showSystemNotification(body: string) {
 
   const send = () => {
     try {
-      new Notification(APP_TITLE, { body, tag: 'autosnippet' });
+      new Notification(APP_TITLE, { body, tag: 'alembic' });
     } catch (_) {
       // intentionally ignored: Notification constructor may throw in insecure contexts
     }

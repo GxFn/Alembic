@@ -1,7 +1,7 @@
 /**
  * FeedbackStore — 推荐反馈持久化与用户偏好推导
  *
- * 存储位置: {projectRoot}/.autosnippet/feedback.jsonl
+ * 存储位置: {projectRoot}/.asd/feedback.jsonl
  * 格式: 每行一个 JSON 对象 (append-only log)
  *
  * 职责:

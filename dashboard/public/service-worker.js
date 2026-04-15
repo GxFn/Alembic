@@ -3,8 +3,8 @@
  * 将此文件放在 public 目录：public/service-worker.js
  */
 
-const CACHE_NAME = 'autosnippet-v1';
-const DYNAMIC_CACHE = 'autosnippet-dynamic-v1';
+const CACHE_NAME = 'alembic-v1';
+const DYNAMIC_CACHE = 'alembic-dynamic-v1';
 const ASSETS_TO_CACHE = [
   '/', // HTML 页面
   '/index.html',

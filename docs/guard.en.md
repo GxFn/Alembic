@@ -1,6 +1,6 @@
 # Guard System
 
-Guard is AutoSnippet's code compliance checking engine, providing 50+ built-in rules with support for regex matching, AST semantic analysis, and cross-file checks.
+Guard is Alembic's code compliance checking engine, providing 50+ built-in rules with support for regex matching, AST semantic analysis, and cross-file checks.
 
 ---
 
@@ -46,11 +46,11 @@ Add a directive in source code, automatically triggered by VS Code extension or 
 
 ### MCP Tool
 
-AI assistants call via the `autosnippet_guard` tool:
+AI assistants call via the `asd_guard` tool:
 
 ```json
 {
-  "tool": "autosnippet_guard",
+  "tool": "asd_guard",
   "arguments": {
     "files": ["src/utils/helper.ts"],
     "scope": "file"
@@ -276,7 +276,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install -g autosnippet
+      - run: npm install -g alembic
       - run: asd guard:ci --report markdown --output guard-report.md
       - uses: actions/upload-artifact@v4
         if: failure()

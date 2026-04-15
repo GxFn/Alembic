@@ -79,25 +79,25 @@ export const TIER_ORDER = { agent: 0, admin: 1 };
 
 export const TOOL_GATEWAY_MAP = {
   // bootstrap — parameterless Mission Briefing (read-only analysis, no gating needed)
-  // autosnippet_bootstrap: null,
+  // asd_bootstrap: null,
   // rescan — incremental knowledge update (write: cleans derived data + creates decay proposals)
-  autosnippet_rescan: { action: 'knowledge:bootstrap', resource: 'knowledge' },
+  asd_rescan: { action: 'knowledge:bootstrap', resource: 'knowledge' },
   // dimension_complete — write operation (recipe tagging + skill creation + checkpoint)
-  autosnippet_dimension_complete: { action: 'knowledge:bootstrap', resource: 'knowledge' },
+  asd_dimension_complete: { action: 'knowledge:bootstrap', resource: 'knowledge' },
   // wiki — finalize is a write operation (meta.json)
-  autosnippet_wiki: {
+  asd_wiki: {
     resolver: (args: Record<string, unknown>) =>
       args?.operation === 'finalize' ? { action: 'knowledge:create', resource: 'knowledge' } : null, // plan is read-only
   },
   // guard write operation (files mode only)
-  autosnippet_guard: {
+  asd_guard: {
     resolver: (args: Record<string, unknown>) =>
       args?.files && Array.isArray(args.files)
         ? { action: 'guard_rule:check_code', resource: 'guard_rules' }
         : null, // code mode is read-only, skip Gateway
   },
   // skill write operations (create/update/delete)
-  autosnippet_skill: {
+  asd_skill: {
     resolver: (args: Record<string, unknown>) =>
       (
         ({
@@ -108,11 +108,11 @@ export const TOOL_GATEWAY_MAP = {
       )[args?.operation as string] || null, // list/load/suggest are read-only
   },
   // knowledge submission (unified pipeline)
-  autosnippet_submit_knowledge: { action: 'knowledge:create', resource: 'knowledge' },
+  asd_submit_knowledge: { action: 'knowledge:create', resource: 'knowledge' },
   // evolve — Recipe evolution decisions (propose/deprecate/skip)
-  autosnippet_evolve: { action: 'knowledge:evolve', resource: 'knowledge' },
+  asd_evolve: { action: 'knowledge:evolve', resource: 'knowledge' },
   // task write operations (create/close/fail + record_decision)
-  autosnippet_task: {
+  asd_task: {
     resolver: (args: Record<string, unknown>) =>
       (
         ({
@@ -124,8 +124,8 @@ export const TOOL_GATEWAY_MAP = {
       )[args?.operation as string] || null, // prime is read-only
   },
   // admin tools
-  autosnippet_enrich_candidates: { action: 'knowledge:update', resource: 'knowledge' },
-  autosnippet_knowledge_lifecycle: { action: 'knowledge:update', resource: 'knowledge' },
+  asd_enrich_candidates: { action: 'knowledge:update', resource: 'knowledge' },
+  asd_knowledge_lifecycle: { action: 'knowledge:update', resource: 'knowledge' },
 };
 
 // ─── Tool Declarations ───────────────────────────────────────
@@ -137,16 +137,16 @@ export const TOOLS = [
 
   // 1. Health Check
   {
-    name: 'autosnippet_health',
+    name: 'asd_health',
     tier: 'agent',
     description:
-      'Check service status and knowledge base stats. Returns total (entry count) and kind/lifecycle distribution. When total=0, cold-start is needed (call autosnippet_bootstrap).',
+      'Check service status and knowledge base stats. Returns total (entry count) and kind/lifecycle distribution. When total=0, cold-start is needed (call asd_bootstrap).',
     inputSchema: zodToMcpSchema(HealthInput),
   },
 
   // 2. Unified Search
   {
-    name: 'autosnippet_search',
+    name: 'asd_search',
     tier: 'agent',
     description:
       'Search the knowledge base. 5 modes:\n' +
@@ -161,7 +161,7 @@ export const TOOLS = [
 
   // 3. Knowledge Browser
   {
-    name: 'autosnippet_knowledge',
+    name: 'asd_knowledge',
     tier: 'agent',
     description:
       'Knowledge entry management.\n' +
@@ -174,7 +174,7 @@ export const TOOLS = [
 
   // 4. Project Structure
   {
-    name: 'autosnippet_structure',
+    name: 'asd_structure',
     tier: 'agent',
     description:
       'Explore project structure.\n' +
@@ -186,7 +186,7 @@ export const TOOLS = [
 
   // 5. Knowledge Graph
   {
-    name: 'autosnippet_graph',
+    name: 'asd_graph',
     tier: 'agent',
     description:
       'Knowledge relationship graph queries.\n' +
@@ -199,7 +199,7 @@ export const TOOLS = [
 
   // 6. Call Context
   {
-    name: 'autosnippet_call_context',
+    name: 'asd_call_context',
     tier: 'agent',
     description:
       'Query function/method call chains.\n' +
@@ -212,7 +212,7 @@ export const TOOLS = [
 
   // 7. Guard Code Check
   {
-    name: 'autosnippet_guard',
+    name: 'asd_guard',
     tier: 'agent',
     description:
       'Code compliance check and Guard immune system.\n' +
@@ -227,7 +227,7 @@ export const TOOLS = [
 
   // 8. Submit Knowledge (Unified Pipeline)
   {
-    name: 'autosnippet_submit_knowledge',
+    name: 'asd_submit_knowledge',
     tier: 'agent',
     description:
       'Submit knowledge entries (single/batch unified pipeline). Pass 1~N items via the items array.\n' +
@@ -243,7 +243,7 @@ export const TOOLS = [
 
   // 9. Skill Management
   {
-    name: 'autosnippet_skill',
+    name: 'asd_skill',
     tier: 'agent',
     description:
       'Skill management.\n' +
@@ -258,7 +258,7 @@ export const TOOLS = [
 
   // 10. Cold-Start Bootstrap
   {
-    name: 'autosnippet_bootstrap',
+    name: 'asd_bootstrap',
     tier: 'agent',
     description:
       'Cold-start — no parameters needed. Auto-analyzes the project (AST, dependency graph, Guard audit) and returns a Mission Briefing:\n' +
@@ -271,21 +271,21 @@ export const TOOLS = [
 
   // 11. Incremental Rescan
   {
-    name: 'autosnippet_rescan',
+    name: 'asd_rescan',
     tier: 'agent',
     description:
       'Incremental rescan — preserves existing Recipes and re-analyzes project.\n' +
       '• Snapshots approved Recipes → cleans derived caches → full Phase 1-4 analysis\n' +
       '• Runs RecipeRelevanceAuditor (5-dimension evidence check, auto-decay stale Recipes)\n' +
       '\u2022 Returns Mission Briefing with allRecipes (full content + auditHint per recipe)\n' +
-      '\u2022 Per-dimension workflow: evolve (autosnippet_evolve) \u2192 gap-fill (submit_knowledge) \u2192 dimension_complete\n' +
+      '\u2022 Per-dimension workflow: evolve (asd_evolve) \u2192 gap-fill (submit_knowledge) \u2192 dimension_complete\n' +
       '\u2022 Optional: dimensions (filter specific dimensions), reason (rescan justification)',
     inputSchema: zodToMcpSchema(_RescanSchema),
   },
 
   // 11.5. Recipe Evolution
   {
-    name: 'autosnippet_evolve',
+    name: 'asd_evolve',
     tier: 'agent',
     description:
       'Batch Recipe evolution decisions. Dual-entry tool:\n' +
@@ -300,7 +300,7 @@ export const TOOLS = [
 
   // 12. Dimension Complete Notification
   {
-    name: 'autosnippet_dimension_complete',
+    name: 'asd_dimension_complete',
     tier: 'agent',
     description:
       'Dimension analysis completion notification. Handles: Recipe linking, Skill generation (auto-synthesized from submitted candidates), Checkpoint saving, cross-dimension Hints distribution.\n' +
@@ -310,7 +310,7 @@ export const TOOLS = [
 
   // 12. Wiki Documentation Generation
   {
-    name: 'autosnippet_wiki',
+    name: 'asd_wiki',
     tier: 'agent',
     description:
       'Wiki documentation generation.\n' +
@@ -321,7 +321,7 @@ export const TOOLS = [
 
   // 13. Project Panorama
   {
-    name: 'autosnippet_panorama',
+    name: 'asd_panorama',
     tier: 'agent',
     description:
       'Project panorama queries. Auto-triggers structure scan when no data exists — no manual cold-start needed.\n' +
@@ -338,7 +338,7 @@ export const TOOLS = [
 
   // 14. Task & Decision Management
   {
-    name: 'autosnippet_task',
+    name: 'asd_task',
     tier: 'agent',
     description:
       'Task and decision management (5 operations). Call prime first at the start of each conversation to load knowledge context.\n' +
@@ -356,7 +356,7 @@ export const TOOLS = [
 
   // 15. Candidate Field Diagnosis
   {
-    name: 'autosnippet_enrich_candidates',
+    name: 'asd_enrich_candidates',
     tier: 'admin',
     description:
       'Diagnose field completeness of candidate entries (no AI). Returns missingFields list per candidate for Agent to fill in and resubmit.',
@@ -365,7 +365,7 @@ export const TOOLS = [
 
   // 16. Knowledge Lifecycle
   {
-    name: 'autosnippet_knowledge_lifecycle',
+    name: 'asd_knowledge_lifecycle',
     tier: 'admin',
     description:
       'Knowledge entry lifecycle operations. approve/fast_track → publish; reject → reject; deprecate → deprecate; reactivate → restore.',

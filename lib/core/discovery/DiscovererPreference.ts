@@ -33,7 +33,7 @@ export interface ConflictResult {
 
 // ── Constants ───────────────────────────────────────
 
-const PREFERENCE_DIR = '.autosnippet';
+const PREFERENCE_DIR = '.asd';
 const PREFERENCE_FILE = 'discoverer-preference.json';
 
 /** 两个 Discoverer confidence 差值低于此阈值视为模糊 */

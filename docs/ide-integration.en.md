@@ -1,6 +1,6 @@
 # IDE Integration
 
-AutoSnippet supports deep integration with multiple IDEs. The core protocol is MCP (Model Context Protocol), with additional VS Code extension and Xcode automation support.
+Alembic supports deep integration with multiple IDEs. The core protocol is MCP (Model Context Protocol), with additional VS Code extension and Xcode automation support.
 
 ---
 
@@ -40,9 +40,9 @@ asd upgrade        # Update to the latest IDE configuration
 ```json
 {
   "mcpServers": {
-    "autosnippet": {
+    "alembic": {
       "command": "node",
-      "args": ["/usr/local/lib/node_modules/autosnippet/bin/mcp-server.js"],
+      "args": ["/usr/local/lib/node_modules/alembic/bin/mcp-server.js"],
       "env": {
         "ASD_PROJECT_ROOT": "/path/to/your-project"
       }
@@ -71,11 +71,11 @@ Skills directory structure:
 
 ```
 skills/
-├── autosnippet-create/       # Knowledge creation & submission
-├── autosnippet-guard/        # Guard rule auditing
-├── autosnippet-recipes/      # Recipe context retrieval
-├── autosnippet-structure/    # Structure exploration & knowledge graph
-├── autosnippet-devdocs/      # Developer documentation
+├── alembic-create/       # Knowledge creation & submission
+├── alembic-guard/        # Guard rule auditing
+├── alembic-recipes/      # Recipe context retrieval
+├── alembic-structure/    # Structure exploration & knowledge graph
+├── alembic-devdocs/      # Developer documentation
 └── [project-level skills]    # Project-level custom Skills
 ```
 
@@ -90,9 +90,9 @@ skills/
 ```json
 {
   "servers": {
-    "autosnippet": {
+    "alembic": {
       "command": "node",
-      "args": ["/usr/local/lib/node_modules/autosnippet/bin/mcp-server.js"],
+      "args": ["/usr/local/lib/node_modules/alembic/bin/mcp-server.js"],
       "env": {
         "ASD_PROJECT_ROOT": "/path/to/your-project"
       }
@@ -125,13 +125,13 @@ npm run install:vscode-copilot     # Generate Copilot Instructions
 
 | Feature | Description |
 |---------|-------------|
-| **Status Bar** | Shows AutoSnippet connection status and knowledge base stats |
+| **Status Bar** | Shows Alembic connection status and knowledge base stats |
 | **CodeLens** | Displays matching Recipes above code lines |
 | **Directive Detection** | Auto-detects `as:s` / `as:c` / `as:a` directives on save |
 | **Search Panel** | Quick search the knowledge base |
 | **Guard on Save** | Auto-runs Guard checks on save |
 
-**Project Scope**: The extension activates only when the workspace contains an AutoSnippet project (detects `AutoSnippet/` or `.autosnippet/` directory).
+**Project Scope**: The extension activates only when the workspace contains an Alembic project (detects `Alembic/` or `.asd/` directory).
 
 ---
 
@@ -221,7 +221,7 @@ Common issues:
 | Problem | Solution |
 |---------|----------|
 | MCP server fails to start | Verify Node.js ≥ 22, run `asd status` |
-| Cannot find mcp-server.js | Run `npm install -g autosnippet` to reinstall |
+| Cannot find mcp-server.js | Run `npm install -g alembic` to reinstall |
 | Permission error | Check API Key configuration in `.env` |
 | IDE not detecting tools | Restart IDE, verify MCP config file path |
 | Knowledge base is empty | Run `asd coldstart` to generate initial knowledge |
@@ -248,7 +248,7 @@ Equivalent to:
 
 ```bash
 # Update npm package
-npm update -g autosnippet
+npm update -g alembic
 
 # Update IDE configuration
 asd upgrade

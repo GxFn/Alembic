@@ -1,5 +1,5 @@
 /**
- * AutoSnippet Dashboard API Client
+ * Alembic Dashboard API Client
  *
  * 直接调用 V3 RESTful API（/api/v1/*）。
  * 前端统一使用 V3 KnowledgeEntry 类型，不做字段映射。
@@ -1462,7 +1462,7 @@ export const api = {
 
   /** AI 生成 Skill 内容（通过 ChatAgent 对话） */
   async aiGenerateSkill(prompt: string): Promise<{ reply: string; hasContext?: boolean }> {
-    const systemPrompt = `你是一个 AutoSnippet Skill 文档生成助手。用户会描述他们想创建的 Skill，你需要生成完整的 SKILL.md 内容。
+    const systemPrompt = `你是一个 Alembic Skill 文档生成助手。用户会描述他们想创建的 Skill，你需要生成完整的 SKILL.md 内容。
 
 Skill 文档格式要求：
 1. 开头用 Markdown 标题说明 Skill 的目的

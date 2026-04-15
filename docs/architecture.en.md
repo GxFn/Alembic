@@ -1,6 +1,6 @@
 # Architecture
 
-AutoSnippet uses a Layered Domain-Driven Design (DDD) architecture. Its core purpose is to extract code patterns into structured knowledge and deliver them to AI coding assistants through multiple channels.
+Alembic uses a Layered Domain-Driven Design (DDD) architecture. Its core purpose is to extract code patterns into structured knowledge and deliver them to AI coding assistants through multiple channels.
 
 ---
 
@@ -260,4 +260,4 @@ Three-tier permission architecture:
 3. **No Build Step** — Pure JavaScript, no TypeScript compilation needed (except Dashboard)
 4. **DI without Framework** — Lightweight self-implemented DI container, no external DI framework dependency
 5. **WASM AST** — `web-tree-sitter` replaces native `tree-sitter`, eliminating C++ compilation dependency
-6. **Convention over Configuration** — Project structure conventions (`AutoSnippet/recipes/`, `AutoSnippet/candidates/`), minimal configuration
+6. **Convention over Configuration** — Project structure conventions (`Alembic/recipes/`, `Alembic/candidates/`), minimal configuration

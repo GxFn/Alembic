@@ -43,7 +43,7 @@ describe('ToolForge', () => {
     });
 
     it('should reuse tool with fuzzy match', async () => {
-      const reg = createMockRegistry({ autosnippet_search_knowledge: () => ({ results: [] }) });
+      const reg = createMockRegistry({ asd_search_knowledge: () => ({ results: [] }) });
       const forge = new ToolForge(reg);
 
       const result = await forge.forge({
@@ -54,7 +54,7 @@ describe('ToolForge', () => {
 
       expect(result.success).toBe(true);
       expect(result.mode).toBe('reuse');
-      expect(result.toolName).toBe('autosnippet_search_knowledge');
+      expect(result.toolName).toBe('asd_search_knowledge');
 
       forge.dispose();
     });

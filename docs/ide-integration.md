@@ -1,6 +1,6 @@
 # IDE 集成
 
-AutoSnippet 支持多种 IDE 的深度集成。核心协议是 MCP（Model Context Protocol），附加 VS Code 扩展和 Xcode 自动化。
+Alembic 支持多种 IDE 的深度集成。核心协议是 MCP（Model Context Protocol），附加 VS Code 扩展和 Xcode 自动化。
 
 ---
 
@@ -40,9 +40,9 @@ asd upgrade        # 更新到最新版本的 IDE 配置
 ```json
 {
   "mcpServers": {
-    "autosnippet": {
+    "alembic": {
       "command": "node",
-      "args": ["/usr/local/lib/node_modules/autosnippet/bin/mcp-server.js"],
+      "args": ["/usr/local/lib/node_modules/alembic/bin/mcp-server.js"],
       "env": {
         "ASD_PROJECT_ROOT": "/path/to/your-project"
       }
@@ -71,11 +71,11 @@ Skills 目录结构：
 
 ```
 skills/
-├── autosnippet-create/       # 知识创建与提交
-├── autosnippet-guard/        # Guard 规则审计
-├── autosnippet-recipes/      # Recipe 上下文检索
-├── autosnippet-structure/    # 结构探查与知识图谱
-├── autosnippet-devdocs/      # 开发文档保存
+├── alembic-create/       # 知识创建与提交
+├── alembic-guard/        # Guard 规则审计
+├── alembic-recipes/      # Recipe 上下文检索
+├── alembic-structure/    # 结构探查与知识图谱
+├── alembic-devdocs/      # 开发文档保存
 └── [project-level skills]    # 项目级自定义 Skill
 ```
 
@@ -90,9 +90,9 @@ skills/
 ```json
 {
   "servers": {
-    "autosnippet": {
+    "alembic": {
       "command": "node",
-      "args": ["/usr/local/lib/node_modules/autosnippet/bin/mcp-server.js"],
+      "args": ["/usr/local/lib/node_modules/alembic/bin/mcp-server.js"],
       "env": {
         "ASD_PROJECT_ROOT": "/path/to/your-project"
       }
@@ -125,13 +125,13 @@ npm run install:vscode-copilot     # 生成 Copilot Instructions
 
 | 功能 | 说明 |
 |------|------|
-| **状态栏** | 显示 AutoSnippet 连接状态和知识库统计 |
+| **状态栏** | 显示 Alembic 连接状态和知识库统计 |
 | **CodeLens** | 代码行上方显示匹配的 Recipe |
 | **指令检测** | 保存时自动检测 `as:s` / `as:c` / `as:a` 指令 |
 | **搜索面板** | 快速搜索知识库 |
 | **Guard on Save** | 保存时自动运行 Guard 检查 |
 
-**项目作用域**：扩展仅在工作区包含 AutoSnippet 项目时激活（检测 `AutoSnippet/` 或 `.autosnippet/` 目录）。
+**项目作用域**：扩展仅在工作区包含 Alembic 项目时激活（检测 `Alembic/` 或 `.asd/` 目录）。
 
 ---
 
@@ -221,7 +221,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | node bin/mcp-server.js
 | 问题 | 解决方案 |
 |------|---------|
 | MCP 服务器启动失败 | 检查 Node.js ≥ 22，运行 `asd status` |
-| 找不到 mcp-server.js | 运行 `npm install -g autosnippet` 重新安装 |
+| 找不到 mcp-server.js | 运行 `npm install -g alembic` 重新安装 |
 | 权限错误 | 检查 `.env` 中的 API Key 配置 |
 | IDE 未检测到工具 | 重启 IDE，检查 MCP 配置文件路径 |
 | 知识库为空 | 运行 `asd coldstart` 生成初始知识 |
@@ -248,7 +248,7 @@ npm run install:full
 
 ```bash
 # 更新 npm 包
-npm update -g autosnippet
+npm update -g alembic
 
 # 更新 IDE 配置
 asd upgrade

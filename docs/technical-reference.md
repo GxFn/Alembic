@@ -1,6 +1,6 @@
 # 技术参考
 
-> 本文档是 AutoSnippet 五大器官的实现细节、工程数据与防御链详解。概述见 [README](../README_CN.md)。
+> 本文档是 Alembic 五大器官的实现细节、工程数据与防御链详解。概述见 [README](../README_CN.md)。
 >
 > [English](technical-reference.en.md)
 
@@ -42,7 +42,7 @@
 | 2 | **Gateway** | 统一请求管线：validate → guard → route → audit，EventEmitter 异步观察 |
 | 3 | **Permission** | 3 元组权限校验：actor + action + resource → allowed/denied，通配符 admin |
 | 4 | **SafetyPolicy** | Agent 约束：预算（Budget）/ 质量门（QualityGate）/ 行为策略 |
-| 5 | **PathGuard** | 双层路径安全：Layer 1 阻止项目外写入；Layer 2 约束到白名单目录（.autosnippet / .cursor / .vscode / .github） |
+| 5 | **PathGuard** | 双层路径安全：Layer 1 阻止项目外写入；Layer 2 约束到白名单目录（.asd / .cursor / .vscode / .github） |
 | 6 | **ConfidenceRouter** | 数值路由：置信度 + 来源信誉 + 内容长度 + reasoning 有效性 → 6 阶段自动审核 |
 
 ---
@@ -115,10 +115,10 @@ pending → staging → active → evolving → active (增强后回归)
 
 | 通道 | 路径 | 内容 |
 |------|------|------|
-| **A** | `.cursor/rules/autosnippet-project-rules.mdc` | alwaysApply 一行式规则（≤ 80 条，≤ 8K tokens） |
-| **B** | `.cursor/rules/autosnippet-patterns-{topic}.mdc` | When/Do/Don't 主题 Smart 规则 + 架构分层规则 |
+| **A** | `.cursor/rules/alembic-project-rules.mdc` | alwaysApply 一行式规则（≤ 80 条，≤ 8K tokens） |
+| **B** | `.cursor/rules/alembic-patterns-{topic}.mdc` | When/Do/Don't 主题 Smart 规则 + 架构分层规则 |
 | **C** | `.cursor/skills/` | Project Skills 同步 |
-| **D** | `.cursor/skills/autosnippet-devdocs/` | 开发文档 |
+| **D** | `.cursor/skills/alembic-devdocs/` | 开发文档 |
 | **F** | `AGENTS.md` / `CLAUDE.md` / `.github/copilot-instructions.md` | Agent 指令文件 |
 | **Mirror** | `.qoder/` / `.trae/` | IDE 工具镜像 |
 

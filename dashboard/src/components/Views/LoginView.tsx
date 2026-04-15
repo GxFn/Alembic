@@ -55,7 +55,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading }) => {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--accent-emphasis)] rounded-2xl shadow-lg shadow-[var(--accent-emphasis)]/20 mb-4">
             <Code size={ICON_SIZES.xxl} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--fg-primary)]">AutoSnippet</h1>
+          <h1 className="text-2xl font-bold text-[var(--fg-primary)]">Alembic</h1>
           <p className="text-sm text-[var(--fg-secondary)] mt-1">{t('login.subtitle')}</p>
         </div>
 

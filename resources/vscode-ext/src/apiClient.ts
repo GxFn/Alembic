@@ -1,5 +1,5 @@
 /**
- * ApiClient — 与 AutoSnippet API Server (asd ui / asd start) 通信
+ * ApiClient — 与 Alembic API Server (asd ui / asd start) 通信
  *
  * 通过 HTTP 调用 localhost 上的 API Server 端点，
  * 替代 FileWatcher 直接调用 ServiceContainer 的方式。

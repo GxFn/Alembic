@@ -2,7 +2,7 @@
  * 开发者身份解析
  *
  * 优先级链：
- *   1. 环境变量 AUTOSNIPPET_USER
+ *   1. 环境变量 ALEMBIC_USER
  *   2. git config user.name（项目级 → 全局）
  *   3. 操作系统用户名
  *   4. 'unknown'
@@ -34,7 +34,7 @@ export function clearDeveloperIdentityCache() {
 
 function resolveDeveloperIdentity(cwd?: string): string {
   // 1. 环境变量
-  const envUser = process.env['AUTOSNIPPET_USER'];
+  const envUser = process.env['ALEMBIC_USER'];
   if (envUser?.trim()) {
     return envUser.trim();
   }

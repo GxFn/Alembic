@@ -24,12 +24,12 @@ export interface DetectedDirective {
 }
 
 // 与 CLI 端 DirectiveDetector.js 保持一致的正则
-const SEARCH_RE = /\/\/\s*(?:autosnippet|as):(?:search|s)\s+(.*)/;
-const CREATE_RE = /\/\/\s*(?:autosnippet|as):(?:create|c)\b(.*)?/;
-const AUDIT_RE = /\/\/\s*(?:autosnippet|as):(?:audit|a)\b(.*)?/;
+const SEARCH_RE = /\/\/\s*(?:asd|as):(?:search|s)\s+(.*)/;
+const CREATE_RE = /\/\/\s*(?:asd|as):(?:create|c)\b(.*)?/;
+const AUDIT_RE = /\/\/\s*(?:asd|as):(?:audit|a)\b(.*)?/;
 
 /**
- * 扫描文档中所有 AutoSnippet 指令
+ * 扫描文档中所有 Alembic 指令
  */
 export function detectDirectives(document: vscode.TextDocument): DetectedDirective[] {
   const directives: DetectedDirective[] = [];

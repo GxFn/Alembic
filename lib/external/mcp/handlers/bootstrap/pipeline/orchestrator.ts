@@ -1668,13 +1668,13 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
       /* non-blocking */
     }
 
-    const reportDir = path.join(projectRoot, '.autosnippet');
+    const reportDir = path.join(projectRoot, '.asd');
     await fs.mkdir(reportDir, { recursive: true });
     await fs.writeFile(
       path.join(reportDir, 'bootstrap-report.json'),
       JSON.stringify(report, null, 2)
     );
-    logger.info(`[Insight-v3] 📊 Bootstrap report saved to .autosnippet/bootstrap-report.json`);
+    logger.info(`[Insight-v3] 📊 Bootstrap report saved to .asd/bootstrap-report.json`);
   } catch (reportErr: unknown) {
     logger.warn(
       `[Insight-v3] Bootstrap report generation failed: ${reportErr instanceof Error ? reportErr.message : String(reportErr)}`

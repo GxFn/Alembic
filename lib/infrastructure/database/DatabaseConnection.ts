@@ -41,17 +41,17 @@ export class DatabaseConnection {
 
     // ── 排除项目保护 ──────────────────────────────────────────
     // 检测 DB 即将落地到不适合创建知识库的项目 → 重定向到临时目录
-    // 包括：AutoSnippet 源码仓库、生态项目（autosnippet-book 等）、.autosnippet-skip 标记项目
+    // 包括：Alembic 源码仓库、生态项目（alembic-book 等）、.asd-skip 标记项目
     const effectiveRoot = projectRoot || path.resolve('.');
     const exclusion = isExcludedProject(effectiveRoot);
     if (exclusion.excluded) {
-      const devDbDir = path.join(os.tmpdir(), 'autosnippet-dev');
+      const devDbDir = path.join(os.tmpdir(), 'alembic-dev');
       if (!fs.existsSync(devDbDir)) {
         fs.mkdirSync(devDbDir, { recursive: true });
       }
-      resolvedDbPath = path.join(devDbDir, 'autosnippet.db');
+      resolvedDbPath = path.join(devDbDir, 'alembic.db');
       process.stderr.write(
-        `[AutoSnippet] Excluded project detected (${exclusion.reason}) — DB redirected to ${resolvedDbPath}\n`
+        `[Alembic] Excluded project detected (${exclusion.reason}) — DB redirected to ${resolvedDbPath}\n`
       );
     } else {
       // 路径安全检查 — 防止 DB 文件创建到项目允许范围外

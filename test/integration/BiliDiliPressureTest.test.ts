@@ -24,7 +24,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 /* ── 项目路径 ── */
 const BILIDILI_ROOT = path.resolve(import.meta.dirname, '..', '..', '..', 'BiliDili');
-const BILIDILI_DB_PATH = path.join(BILIDILI_ROOT, '.autosnippet/autosnippet.db');
+const BILIDILI_DB_PATH = path.join(BILIDILI_ROOT, '.asd/alembic.db');
 
 /* ── 跳过条件 ── */
 const DB_EXISTS = fs.existsSync(BILIDILI_DB_PATH);
@@ -122,7 +122,7 @@ describe.skipIf(!DB_EXISTS)('BiliDili 真实项目压力测试', () => {
 
     // 复制 BiliDili DB 到临时目录（不影响原始数据）
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bilidili-pressure-'));
-    tmpDbPath = path.join(tmpDir, 'autosnippet.db');
+    tmpDbPath = path.join(tmpDir, 'alembic.db');
     fs.copyFileSync(BILIDILI_DB_PATH, tmpDbPath);
     // 复制 WAL/SHM 如果存在
     if (fs.existsSync(`${BILIDILI_DB_PATH}-wal`)) {

@@ -47,13 +47,13 @@ export function register(c: ServiceContainer) {
 
   c.singleton('guardCheckEngine', (ct: ServiceContainer) => {
     const config = (ct.singletons._config as Record<string, unknown> | undefined) || {};
-    // 基础配置（AutoSnippet 自身 config/default.json）
+    // 基础配置（Alembic 自身 config/default.json）
     const baseGuard = (config.guard as Record<string, unknown>) || {};
-    // 项目级覆盖（.autosnippet/config.json 的 guard 段）
+    // 项目级覆盖（.asd/config.json 的 guard 段）
     let projectGuard: Record<string, unknown> = {};
     try {
       const projectRoot = resolveProjectRoot(ct);
-      const projConfigPath = path.join(projectRoot, '.autosnippet', 'config.json');
+      const projConfigPath = path.join(projectRoot, '.asd', 'config.json');
       if (fs.existsSync(projConfigPath)) {
         const raw = JSON.parse(fs.readFileSync(projConfigPath, 'utf-8'));
         if (raw.guard && typeof raw.guard === 'object') {

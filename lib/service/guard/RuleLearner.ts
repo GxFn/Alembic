@@ -1,7 +1,7 @@
 /**
  * RuleLearner — Guard 规则学习系统
  * 追踪规则触发与用户反馈，计算 P/R/F1，识别高误报规则并给出优化建议
- * 持久化到 AutoSnippet/guard-learner.json（Git 友好）
+ * 持久化到 Alembic/guard-learner.json（Git 友好）
  */
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -43,7 +43,7 @@ export class RuleLearner {
     const kbDir = options.knowledgeBaseDir || DEFAULT_KNOWLEDGE_BASE_DIR;
     this.#learnerPath = join(projectRoot, kbDir, 'guard-learner.json');
     pathGuard.assertProjectWriteSafe(this.#learnerPath);
-    this.#migrateOldPath(projectRoot, options.internalDir || '.autosnippet');
+    this.#migrateOldPath(projectRoot, options.internalDir || '.asd');
     this.#data = this.#load();
     this.#signalBus = options.signalBus || null;
   }

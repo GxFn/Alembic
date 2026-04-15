@@ -121,7 +121,7 @@ describe('DiscovererPreference — persistence', () => {
   });
 
   it('should return null for corrupted preference file', () => {
-    const prefPath = join(testDir, '.autosnippet', 'discoverer-preference.json');
+    const prefPath = join(testDir, '.asd', 'discoverer-preference.json');
     writeFileSync(prefPath, 'NOT VALID JSON', 'utf8');
 
     const pref = loadPreference(testDir);
@@ -129,7 +129,7 @@ describe('DiscovererPreference — persistence', () => {
   });
 
   it('should return null for preference with missing required fields', () => {
-    const prefPath = join(testDir, '.autosnippet', 'discoverer-preference.json');
+    const prefPath = join(testDir, '.asd', 'discoverer-preference.json');
     writeFileSync(prefPath, JSON.stringify({ foo: 'bar' }), 'utf8');
 
     const pref = loadPreference(testDir);

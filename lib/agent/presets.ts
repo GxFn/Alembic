@@ -118,7 +118,7 @@ export const PRESETS = Object.freeze({
     ],
     persona: {
       role: 'assistant',
-      description: 'AutoSnippet 知识管理助手',
+      description: 'Alembic 知识管理助手',
     },
     memory: {
       enabled: true,
@@ -351,7 +351,7 @@ export const PRESETS = Object.freeze({
     ],
     persona: {
       role: 'assistant',
-      description: 'AutoSnippet 知识管理助手 (飞书)。用中文回复，简洁专业。',
+      description: 'Alembic 知识管理助手 (飞书)。用中文回复，简洁专业。',
     },
     memory: {
       enabled: true,
@@ -383,7 +383,7 @@ export const PRESETS = Object.freeze({
     ],
     persona: {
       role: 'assistant',
-      description: 'AutoSnippet 远程编程助手',
+      description: 'Alembic 远程编程助手',
     },
     memory: {
       enabled: true,

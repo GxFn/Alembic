@@ -169,7 +169,7 @@ const Header: React.FC<HeaderProps> = ({
       >
         {/* ── 左侧：面包屑 ── */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm text-[var(--fg-subtle)] font-medium truncate max-w-[160px]" title={projectName || 'AutoSnippet'}>{projectName || 'AutoSnippet'}</span>
+          <span className="text-sm text-[var(--fg-subtle)] font-medium truncate max-w-[160px]" title={projectName || 'Alembic'}>{projectName || 'Alembic'}</span>
           {tabLabel && (
             <>
               <ChevronRight size={14} className="text-[var(--fg-subtle)]/50 shrink-0" />

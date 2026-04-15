@@ -1,6 +1,6 @@
 # 架构设计
 
-AutoSnippet 采用分层领域驱动架构（Layered DDD），核心目标是将代码模式提取为结构化知识，并通过多种通道交付给 AI 编码助手。
+Alembic 采用分层领域驱动架构（Layered DDD），核心目标是将代码模式提取为结构化知识，并通过多种通道交付给 AI 编码助手。
 
 ---
 
@@ -259,4 +259,4 @@ IDE AI 请求 → MCP Server → Gateway (权限校验)
 3. **无编译步骤** — 纯 JavaScript，不需要 TypeScript 编译（Dashboard 除外）
 4. **DI without Framework** — 自实现轻量 DI 容器，无外部 DI 框架依赖
 5. **WASM AST** — `web-tree-sitter` 替代原生 `tree-sitter`，消除 C++ 编译依赖
-6. **Convention over Configuration** — 项目结构约定（`AutoSnippet/recipes/`、`AutoSnippet/candidates/`），最小化配置
+6. **Convention over Configuration** — 项目结构约定（`Alembic/recipes/`、`Alembic/candidates/`），最小化配置

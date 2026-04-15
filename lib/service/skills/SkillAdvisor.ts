@@ -121,7 +121,7 @@ export class SkillAdvisor {
       analysisContext,
       hint:
         suggestions.length > 0
-          ? `发现 ${suggestions.length} 个 Skill 创建建议。你可以使用 autosnippet_skill({ operation: "create" }) 直接创建，也可以根据 rationale 自行判断是否需要。`
+          ? `发现 ${suggestions.length} 个 Skill 创建建议。你可以使用 asd_skill({ operation: "create" }) 直接创建，也可以根据 rationale 自行判断是否需要。`
           : '当前项目使用模式暂无明确的 Skill 创建建议。继续使用后会积累更多信号。',
     };
   }
@@ -166,7 +166,7 @@ export class SkillAdvisor {
 
   #analyzeMemoryPatterns(): InsightResult {
     const suggestions: SkillSuggestion[] = [];
-    const memoryPath = path.join(this.#projectRoot, '.autosnippet', 'memory.jsonl');
+    const memoryPath = path.join(this.#projectRoot, '.asd', 'memory.jsonl');
 
     if (!fs.existsSync(memoryPath)) {
       return { summary: '无 Memory 记录', suggestions };

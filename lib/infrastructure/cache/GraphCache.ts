@@ -6,7 +6,7 @@
  * 2. 基于 contentHash 判断缓存是否有效（Package.swift / 源文件）
  * 3. 支持 SPM 依赖图和 AST ProjectGraph 两种场景
  *
- * 缓存位置: {projectRoot}/.autosnippet/cache/
+ * 缓存位置: {projectRoot}/.asd/cache/
  */
 
 import { createHash } from 'node:crypto';
@@ -20,7 +20,7 @@ export class GraphCache {
 
   /** @param projectRoot 项目根目录 */
   constructor(projectRoot: string) {
-    this.#cacheDir = join(projectRoot, '.autosnippet', 'cache');
+    this.#cacheDir = join(projectRoot, '.asd', 'cache');
     this.#logger = Logger.getInstance();
   }
 

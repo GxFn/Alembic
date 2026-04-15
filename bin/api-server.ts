@@ -38,7 +38,7 @@ async function main() {
   const host = process.env.HOST || 'localhost';
 
   try {
-    logger.info('Initializing AutoSnippet HTTP API Server...', {
+    logger.info('Initializing Alembic HTTP API Server...', {
       port,
       host,
       timestamp: new Date().toISOString(),
