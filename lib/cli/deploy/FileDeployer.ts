@@ -310,19 +310,20 @@ export class FileDeployer {
     }
 
     // 2. 迁移：清理旧版散落的 Alembic 规则（无 section marker 时代的残留）
-    const oldPatterns = GITIGNORE_RULES.map((r) => r.pattern);
-    const oldComments = GITIGNORE_RULES.filter((r) => r.comment).map((r) => `# ${r.comment}`);
-    // 也清除旧版注入的通用规则
+    //    只清理 Alembic 专属规则，不触碰通用规则（.DS_Store, .env 等可能是用户自己添加的）
+    const alembicOnlyPatterns = GITIGNORE_RULES.filter((r) => r.pattern.startsWith('.asd')).map(
+      (r) => r.pattern
+    );
+    const alembicOnlyComments = GITIGNORE_RULES.filter(
+      (r) => r.comment && r.pattern.startsWith('.asd')
+    ).map((r) => `# ${r.comment}`);
+    // 仅清除含 "Alembic" 标识的旧版注入注释（确保是 Alembic 写入的，非用户自己添加的）
     const legacyTokens = [
-      '.DS_Store',
-      'nohup.out',
-      '*.sw[a-p]',
-      '# macOS 元数据',
       '# Alembic 运行时缓存（不入库）',
       '# Alembic 环境变量（含 API Key，不入库）',
       '# Alembic 运行日志',
     ];
-    const allOldTokens = new Set([...oldPatterns, ...oldComments, ...legacyTokens]);
+    const allOldTokens = new Set([...alembicOnlyPatterns, ...alembicOnlyComments, ...legacyTokens]);
 
     // 只有在 section markers 不存在时才清理散落规则（避免误删 section 内容后重复清理）
     if (!content.includes(GITIGNORE_SECTION_BEGIN)) {
