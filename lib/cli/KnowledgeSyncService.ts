@@ -77,29 +77,8 @@ export class KnowledgeSyncService {
 
     const report: SyncAllReport = { ...syncReport };
 
-    // 2. 填充/验证 recipe_source_refs 桥接表
-    try {
-      const reconciler = this.#sourceRefReconciler;
-      if (!reconciler) {
-        this.logger.warn(
-          'KnowledgeSyncService: sourceRefReconciler not available, skipping reconcile'
-        );
-        return report;
-      }
-      report.reconcileReport = await reconciler.reconcile({ force: opts.force });
-
-      // 3. git rename 修复
-      report.repairReport = await reconciler.repairRenames();
-
-      // 4. 写回修复
-      if (report.repairReport.renamed > 0) {
-        report.applyReport = await reconciler.applyRepairs();
-      }
-    } catch (err: unknown) {
-      this.logger.warn('KnowledgeSyncService: sourceRef reconcile failed (non-blocking)', {
-        error: (err as Error).message,
-      });
-    }
+    // sourceRef 全量扫描已移除 — 路径检测由 ReactiveEvolutionService 实时处理
+    // SourceRefReconciler 仍保留用于 knowledge:changed 事件中的单条 sourceRef 填充
 
     return report;
   }

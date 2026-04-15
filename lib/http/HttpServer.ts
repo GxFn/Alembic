@@ -27,6 +27,7 @@ import auditRouter from './routes/audit.js';
 import authRouter from './routes/auth.js';
 import candidatesRouter from './routes/candidates.js';
 import commandsRouter from './routes/commands.js';
+import evolutionRouter from './routes/evolution.js';
 import extractRouter from './routes/extract.js';
 import guardRouter from './routes/guard.js';
 import guardReportRouter from './routes/guardReport.js';
@@ -323,6 +324,9 @@ export class HttpServer {
 
     // Panorama 全景路由（项目结构 + 覆盖率 + 健康度）
     this.app.use(`${apiPrefix}/panorama`, panoramaRouter);
+
+    // 进化路由（文件变更驱动 Recipe 修复/弃用）
+    this.app.use(`${apiPrefix}/evolution`, evolutionRouter);
 
     // 信号留痕 & 报告路由
     this.app.use(`${apiPrefix}/signals`, signalsRouter);

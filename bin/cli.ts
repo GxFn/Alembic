@@ -8,6 +8,7 @@
  *   asd remote <url>    - 将 recipes 目录转为独立子仓库并关联远程仓库
  *   asd coldstart       - 冷启动知识库（9 维度分析 + AI 填充）
  *   asd rescan          - 增量知识更新（保留 Recipe，重新扫描）
+ *   asd evolve-check    - 定向 Recipe 进化审计（轻量级）
  *   asd ais [Target]    - AI 扫描 Target → 直接发布 Recipes
  *   asd search <query>  - 搜索知识库
  *   asd guard <file>    - Guard 检查
@@ -498,6 +499,221 @@ program
       cli.error(`\n❌ ${msg}`);
       if (err instanceof Error && err.stack) {
         cli.debug(err.stack);
+      }
+      process.exit(1);
+    }
+  });
+
+// ─────────────────────────────────────────────────────
+// evolve-check 命令 (Agent 驱动的全量 Recipe 进化审计)
+// ─────────────────────────────────────────────────────
+program
+  .command('evolve-check')
+  .description('Agent 驱动的 Recipe 进化审计：读源码验证全部 Recipe，自动提交进化决策')
+  .option('--recipes <ids>', '逗号分隔的 Recipe ID 列表（省略则审计全部活跃 Recipe）')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .option('--json', '以 JSON 格式输出')
+  .option('--dry-run', '仅输出规则审计报告，不启动 Agent')
+  .action(async (opts) => {
+    const projectRoot = resolve(opts.dir);
+
+    try {
+      const { bootstrap, container } = await initContainer({ projectRoot });
+
+      const ora = (await import('ora')).default;
+      const knowledgeRepo = container.get('knowledgeRepository');
+      const proposalRepo = container.get('proposalRepository');
+
+      // ── Step 1: 收集项目文件列表 ──
+      const allFiles: string[] = [];
+      try {
+        const { readdirSync: rd } = await import('node:fs');
+        const { join: jn, relative: rel } = await import('node:path');
+        const walk = (dir: string, base: string): void => {
+          for (const entry of rd(dir, { withFileTypes: true })) {
+            if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+              continue;
+            }
+            const full = jn(dir, entry.name);
+            if (entry.isDirectory()) {
+              walk(full, base);
+            } else {
+              allFiles.push(rel(base, full));
+            }
+          }
+        };
+        walk(projectRoot, projectRoot);
+      } catch {
+        /* non-blocking */
+      }
+
+      // ── Step 2: 获取目标 Recipe ──
+      let targetRecipes: Array<{
+        id: string;
+        title: string;
+        trigger: string;
+        category: string;
+        lifecycle: string;
+      }>;
+      if (opts.recipes) {
+        const ids = (opts.recipes as string)
+          .split(',')
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+        targetRecipes = [];
+        for (const id of ids) {
+          const entry = await knowledgeRepo.findById(id);
+          if (entry) {
+            targetRecipes.push({
+              id: entry.id,
+              title: entry.title,
+              trigger: entry.trigger ?? '',
+              category: entry.category ?? '',
+              lifecycle: entry.lifecycle ?? 'active',
+            });
+          }
+        }
+      } else {
+        const entries = await knowledgeRepo.findAllByLifecycles(['active', 'staging', 'evolving']);
+        targetRecipes = entries.map(
+          (e: {
+            id: string;
+            title: string;
+            trigger?: string;
+            category?: string;
+            lifecycle?: string;
+          }) => ({
+            id: e.id,
+            title: e.title,
+            trigger: e.trigger ?? '',
+            category: e.category ?? '',
+            lifecycle: e.lifecycle ?? 'active',
+          })
+        );
+      }
+
+      if (targetRecipes.length === 0) {
+        cli.warn('未找到任何需要审计的 Recipe');
+        await bootstrap.shutdown();
+        return;
+      }
+
+      // ── Step 3: 规则引擎预审计 ──
+      const spinnerAudit = ora(`预审计: ${targetRecipes.length} 条 Recipe...`).start();
+      const { RecipeRelevanceAuditor } = await import(
+        '../lib/service/evolution/RecipeRelevanceAuditor.js'
+      );
+      const auditor = new RecipeRelevanceAuditor({ knowledgeRepo, proposalRepo });
+      const auditResult = await auditor.audit(targetRecipes, {
+        fileList: allFiles,
+        codeEntities: [],
+        dependencyGraph: [],
+      });
+      spinnerAudit.stop();
+
+      cli.log('\n📊 规则预审计结果');
+      cli.log(`${'─'.repeat(50)}`);
+      cli.log(
+        `  总计: ${auditResult.totalAudited} | 健康: ${auditResult.healthy} | 观察: ${auditResult.watch} | 衰退: ${auditResult.decay} | 严重: ${auditResult.severe} | 死亡: ${auditResult.dead}`
+      );
+
+      if (opts.dryRun) {
+        for (const r of auditResult.results) {
+          const icon =
+            r.verdict === 'healthy'
+              ? '✅'
+              : r.verdict === 'watch'
+                ? '👀'
+                : r.verdict === 'dead'
+                  ? '💀'
+                  : '⚠️';
+          cli.log(`  ${icon} ${r.title} (score: ${r.relevanceScore})`);
+          for (const reason of r.decayReasons) {
+            cli.log(`     └─ ${reason}`);
+          }
+        }
+        if (opts.json) {
+          cli.json(auditResult);
+        }
+        await bootstrap.shutdown();
+        return;
+      }
+
+      // ── Step 4: Agent 驱动的深度验证（evolution 管线）──
+      const agentFactory = container.get('agentFactory');
+      if (!agentFactory) {
+        cli.error('AgentFactory not available (需要配置 AI Provider)');
+        await bootstrap.shutdown();
+        process.exit(1);
+      }
+
+      // 为每个 Recipe 附加 auditHint
+      const auditMap = new Map(
+        auditResult.results.map(
+          (r: {
+            recipeId: string;
+            relevanceScore: number;
+            verdict: string;
+            evidence: {
+              triggerStillMatches: boolean;
+              symbolsAlive: number;
+              depsIntact: boolean;
+              codeFilesExist: number;
+            };
+            decayReasons: string[];
+          }) => [r.recipeId, r]
+        )
+      );
+      const recipesWithHints = targetRecipes.map((r) => {
+        const hint = auditMap.get(r.id);
+        return {
+          ...r,
+          auditHint: hint
+            ? {
+                relevanceScore: hint.relevanceScore,
+                verdict: hint.verdict,
+                evidence: hint.evidence,
+                decayReasons: hint.decayReasons,
+              }
+            : null,
+        };
+      });
+
+      const spinnerAgent = ora('Agent 正在读取源码验证 Recipe...').start();
+
+      const agentResult = await agentFactory.evolveCheck({
+        recipes: recipesWithHints,
+        projectOverview: {
+          primaryLang: 'unknown',
+          fileCount: allFiles.length,
+          modules: [],
+        },
+      });
+
+      spinnerAgent.stop();
+
+      // ── Step 5: 输出结果 ──
+      cli.log('\n🤖 Agent 进化决策结果');
+      cli.log(`${'─'.repeat(50)}`);
+      cli.log(
+        `  进化提案: ${agentResult.proposed} | 确认废弃: ${agentResult.deprecated} | 跳过(有效): ${agentResult.skipped}`
+      );
+      cli.log(`  Agent 轮次: ${agentResult.iterations} | 工具调用: ${agentResult.toolCalls}`);
+
+      if (agentResult.reply) {
+        cli.log(`\n${agentResult.reply}`);
+      }
+
+      if (opts.json) {
+        cli.json({ audit: auditResult, agent: agentResult });
+      }
+
+      await bootstrap.shutdown();
+    } catch (err: unknown) {
+      cli.error(`evolve-check failed: ${(err as Error).message}`);
+      const stack = (err as Error).stack;
+      if (stack) {
+        cli.debug(stack);
       }
       process.exit(1);
     }

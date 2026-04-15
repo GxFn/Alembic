@@ -49,6 +49,20 @@ export interface AuditResponse {
   };
 }
 
+/** ReactiveEvolution 文件变更报告 */
+export interface FileChangeReport {
+  needsReview: number;
+  suggestReview: boolean;
+  deprecated: number;
+  fixed: number;
+  details: Array<{
+    recipeId: string;
+    recipeTitle: string;
+    action: string;
+    reason: string;
+  }>;
+}
+
 /** Shape of a parsed content block inside a raw search item */
 interface ParsedContent {
   code?: string;
@@ -174,6 +188,29 @@ export class ApiClient {
     files: Array<{ filePath: string; content?: string; language?: string }>
   ): Promise<AuditResponse> {
     return this._post<AuditResponse>('/guard/batch', { files });
+  }
+
+  /**
+   * 通知服务端文件变更事件 — 驱动 Recipe 实时进化
+   * 非阻塞调用，失败时静默。
+   */
+  async notifyFileChanges(
+    events: Array<{ type: 'renamed' | 'deleted' | 'modified'; oldPath: string; newPath?: string }>
+  ): Promise<FileChangeReport> {
+    try {
+      const res = await this._post('/evolution/file-changed', { events });
+      const data = (res as { data?: Record<string, unknown> })?.data ?? {};
+      return {
+        needsReview: (data.needsReview as number) ?? 0,
+        suggestReview: (data.suggestReview as boolean) ?? false,
+        deprecated: (data.deprecated as number) ?? 0,
+        fixed: (data.fixed as number) ?? 0,
+        details: (data.details as FileChangeReport['details']) ?? [],
+      };
+    } catch {
+      // 非阻塞，服务端不可用时静默忽略
+      return { needsReview: 0, suggestReview: false, deprecated: 0, fixed: 0, details: [] };
+    }
   }
 
   /**
@@ -315,9 +352,9 @@ export class ApiClient {
     return new Promise<T>((resolve, reject) => {
       const url = `${this.baseUrl}${path}`;
       http
-        .get(url, { timeout: 10000 }, (res) => {
+        .get(url, { timeout: 10000 }, (res: http.IncomingMessage) => {
           let data = '';
-          res.on('data', (chunk) => (data += chunk));
+          res.on('data', (chunk: string) => (data += chunk));
           res.on('end', () => {
             try {
               resolve(JSON.parse(data));
@@ -350,9 +387,9 @@ export class ApiClient {
           },
           timeout: 15000,
         },
-        (res) => {
+        (res: http.IncomingMessage) => {
           let data = '';
-          res.on('data', (chunk) => (data += chunk));
+          res.on('data', (chunk: string) => (data += chunk));
           res.on('end', () => {
             try {
               resolve(JSON.parse(data));
@@ -466,9 +503,9 @@ export class ApiClient {
           method: 'GET',
           timeout: timeout + 5000, // 额外 5s 余量
         },
-        (res) => {
+        (res: http.IncomingMessage) => {
           let body = '';
-          res.on('data', (chunk) => (body += chunk));
+          res.on('data', (chunk: string) => (body += chunk));
           res.on('end', () => {
             try {
               const data = JSON.parse(body);
@@ -480,7 +517,7 @@ export class ApiClient {
         }
       );
 
-      req.on('error', (err) => reject(err));
+      req.on('error', (err: Error) => reject(err));
       req.on('timeout', () => {
         req.destroy();
         resolve({ hasNew: false });

@@ -27,6 +27,7 @@ import { DecayDetector } from '../../service/evolution/DecayDetector.js';
 import { EnhancementSuggester } from '../../service/evolution/EnhancementSuggester.js';
 import { KnowledgeMetabolism } from '../../service/evolution/KnowledgeMetabolism.js';
 import { ProposalExecutor } from '../../service/evolution/ProposalExecutor.js';
+import { ReactiveEvolutionService } from '../../service/evolution/ReactiveEvolutionService.js';
 import { RecipeLifecycleSupervisor } from '../../service/evolution/RecipeLifecycleSupervisor.js';
 import { RedundancyAnalyzer } from '../../service/evolution/RedundancyAnalyzer.js';
 import { StagingManager } from '../../service/evolution/StagingManager.js';
@@ -345,6 +346,19 @@ export function register(c: ServiceContainer) {
   c.singleton('consolidationAdvisor', (ct: ServiceContainer) => {
     const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
     return new ConsolidationAdvisor(knowledgeRepo);
+  });
+
+  c.singleton('reactiveEvolutionService', (ct: ServiceContainer) => {
+    const sourceRefRepo = ct.get('recipeSourceRefRepository') as RecipeSourceRefRepositoryImpl;
+    const knowledgeRepo = ct.get('knowledgeRepository') as KnowledgeRepositoryImpl;
+    const contentPatcher = ct.get('contentPatcher') as ContentPatcher;
+    const supervisor = ct.get('lifecycleSupervisor') as RecipeLifecycleSupervisor;
+    return new ReactiveEvolutionService(sourceRefRepo, knowledgeRepo, contentPatcher, supervisor, {
+      signalBus:
+        (ct.singletons.signalBus as
+          | import('../../infrastructure/signal/SignalBus.js').SignalBus
+          | undefined) || undefined,
+    });
   });
 }
 

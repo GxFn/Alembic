@@ -482,6 +482,96 @@ export class AgentFactory {
   }
 
   /**
+   * 全量 Recipe 进化审计 — 走 evolution 管线 (Evolve → EvolutionGate)
+   *
+   * 使用 evolution preset 的 Agent 逐条读源码验证 Recipe，
+   * 通过 propose_evolution / confirm_deprecation / skip_evolution 提交决策。
+   *
+   * @param opts.recipes  待审计 Recipe 列表（含可选 auditHint）
+   * @param opts.projectOverview 项目概览（primaryLang, fileCount, modules）
+   * @param [opts.dimensionId='all'] 维度标识（全量时为 'all'）
+   * @param [opts.dimensionLabel='全量进化审计'] 维度标签
+   * @returns 包含 proposed/deprecated/skipped 计数 + toolCalls 详情
+   */
+  async evolveCheck({
+    recipes,
+    projectOverview,
+    dimensionId = 'all',
+    dimensionLabel = '全量进化审计',
+  }: {
+    recipes: Array<{
+      id: string;
+      title: string;
+      trigger: string;
+      content?: { markdown?: string; rationale?: string; coreCode?: string };
+      sourceRefs?: string[];
+      auditHint?: {
+        relevanceScore: number;
+        verdict: string;
+        evidence: {
+          triggerStillMatches: boolean;
+          symbolsAlive: number;
+          depsIntact: boolean;
+          codeFilesExist: number;
+        };
+        decayReasons: string[];
+      } | null;
+    }>;
+    projectOverview: { primaryLang: string; fileCount: number; modules: string[] };
+    dimensionId?: string;
+    dimensionLabel?: string;
+  }) {
+    if (recipes.length === 0) {
+      return { proposed: 0, deprecated: 0, skipped: 0, toolCalls: [], reply: '' };
+    }
+
+    // 构建 EvolutionContext (evolution preset 的 strategyContext)
+    const strategyContext = {
+      existingRecipes: recipes,
+      dimensionId,
+      dimensionLabel,
+      projectOverview,
+    };
+
+    // 根据 Recipe 数量动态调整预算
+    const maxIter = Math.min(recipes.length * 4 + 10, 120);
+
+    const runtime = this.createRuntime('evolution', {
+      policies: [
+        new BudgetPolicy({
+          maxIterations: maxIter,
+          maxTokens: 8192,
+          temperature: 0.3,
+          timeoutMs: 600_000,
+        }),
+      ],
+    });
+
+    const message = AgentMessage.internal(
+      `请验证 ${recipes.length} 条 Recipe 的源码真实性并提交进化决策。`
+    );
+
+    const result = await runtime.execute(message, { strategyContext });
+
+    // 统计结果
+    const toolCalls = (result.toolCalls || []) as Array<{ tool?: string; name?: string }>;
+    const proposed = toolCalls.filter((tc) => (tc.tool || tc.name) === 'propose_evolution').length;
+    const deprecated = toolCalls.filter(
+      (tc) => (tc.tool || tc.name) === 'confirm_deprecation'
+    ).length;
+    const skipped = toolCalls.filter((tc) => (tc.tool || tc.name) === 'skip_evolution').length;
+
+    return {
+      proposed,
+      deprecated,
+      skipped,
+      iterations: result.iterations || 0,
+      toolCalls: toolCalls.length,
+      reply: result.reply || '',
+    };
+  }
+
+  /**
    * AI 翻译 — chat 模式，单轮生成
    *
    * Agent(LLM) 直接翻译文本，无需工具。
