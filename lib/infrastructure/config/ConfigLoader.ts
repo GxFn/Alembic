@@ -11,7 +11,7 @@ export class ConfigLoader {
   static config: Record<string, unknown> | null = null;
 
   /**
-   * 沿目录树向上查找包含 package.json（name=alembic）的目录。
+   * 沿目录树向上查找包含 package.json（name=alembic-ai）的目录。
    * ConfigLoader 是最早加载的模块之一，不能依赖 package-root.ts，因此内联实现。
    */
   static _findPackageRoot(): string {
@@ -21,7 +21,7 @@ export class ConfigLoader {
       if (fs.existsSync(candidate)) {
         try {
           const pkg = JSON.parse(fs.readFileSync(candidate, 'utf-8'));
-          if (pkg.name === 'alembic') {
+          if (pkg.name === 'alembic-ai') {
             return dir;
           }
         } catch {

@@ -16,7 +16,7 @@ import path from 'node:path';
 const __dirname = import.meta.dirname;
 
 /**
- * 沿目录树向上查找包含 package.json（且 name === 'alembic'）的目录。
+ * 沿目录树向上查找包含 package.json（且 name === 'alembic-ai'）的目录。
  * 使用 name 校验避免误匹配到 monorepo 父包或 node_modules 中的其它包。
  */
 function findPackageRoot(): string {
@@ -27,7 +27,7 @@ function findPackageRoot(): string {
     if (existsSync(candidate)) {
       try {
         const pkg = JSON.parse(readFileSync(candidate, 'utf-8'));
-        if (pkg.name === 'alembic') {
+        if (pkg.name === 'alembic-ai') {
           return dir;
         }
       } catch {
@@ -42,7 +42,7 @@ function findPackageRoot(): string {
   }
   throw new Error(
     '[Alembic] Could not locate package root. ' +
-      'No ancestor directory contains a package.json with name "alembic".'
+      'No ancestor directory contains a package.json with name "alembic-ai".'
   );
 }
 

@@ -9,7 +9,7 @@
  * 用于防止 MCP 服务器 / CLI 在不当目录创建 `.asd/` 运行时数据。
  *
  * isAlembicDevRepo 检测条件（三者同时满足）：
- *  1. projectRoot/package.json 的 name === 'alembic'
+ *  1. projectRoot/package.json 的 name === 'alembic-ai'
  *  2. projectRoot/lib/bootstrap.ts 存在（源码标记）
  *  3. projectRoot/SOUL.md 存在（项目灵魂文档）
  */
@@ -36,12 +36,12 @@ export function isAlembicDevRepo(dir: string): boolean {
 
   let result = false;
   try {
-    // 条件 1: package.json name === 'alembic'
+    // 条件 1: package.json name === 'alembic-ai'
     const pkgPath = path.join(resolved, 'package.json');
     if (fs.existsSync(pkgPath)) {
       const raw = fs.readFileSync(pkgPath, 'utf-8');
       const pkg = JSON.parse(raw) as { name?: string };
-      if (pkg.name === 'alembic') {
+      if (pkg.name === 'alembic-ai') {
         // 条件 2 & 3: 源码标记文件同时存在
         const hasBootstrap = fs.existsSync(path.join(resolved, 'lib', 'bootstrap.ts'));
         const hasSoul = fs.existsSync(path.join(resolved, 'SOUL.md'));

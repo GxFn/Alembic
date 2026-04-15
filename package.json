@@ -1,5 +1,5 @@
 {
-  "name": "alembic",
+  "name": "alembic-ai",
   "version": "0.0.1",
   "description": "Alembic — Auto Source Distill. Distill project knowledge from source code into structured recipes for humans and AI agents.",
   "type": "module",
