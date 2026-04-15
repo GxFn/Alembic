@@ -105,9 +105,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       >
         {/* ── Logo ── */}
         <div className="flex items-center justify-center h-[var(--topbar-height)] border-b border-[var(--border-muted)]">
-          <div className="w-9 h-9 rounded-[var(--radius-md)] flex items-center justify-center text-white shadow-[0_0_20px_var(--accent-glow)]" style={{ background: 'var(--accent-gradient)' }}>
-            <span className="text-[11px] font-black italic tracking-tighter leading-none">AS</span>
-          </div>
+          <img src="/logo.svg" alt="Alembic" className="w-9 h-9 rounded-[var(--radius-md)] shadow-[0_0_20px_var(--accent-glow)]" />
         </div>
 
         {/* ── 主导航 ── */}
