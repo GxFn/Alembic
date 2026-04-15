@@ -5,6 +5,11 @@
   "version": "0.1.0",
   "publisher": "asd",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GxFn/Alembic.git",
+    "directory": "resources/vscode-ext"
+  },
   "engines": {
     "vscode": "^1.109.0"
   },

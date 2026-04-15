@@ -1,4 +1,4 @@
-# AutoSnippet VSCode Extension
+# Alembic VSCode Extension
 
 Knowledge-driven code snippets — search, insert, create, and audit directly in your editor.
 
@@ -12,10 +12,10 @@ Knowledge-driven code snippets — search, insert, create, and audit directly in
 
 ## Requirements
 
-AutoSnippet CLI must be installed and the API server running:
+Alembic CLI must be installed and the API server running:
 
 ```bash
-npm install -g autosnippet
+npm install -g alembic-ai
 cd your-project
 asd ui   # starts API server + dashboard
 ```
@@ -24,8 +24,8 @@ asd ui   # starts API server + dashboard
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `autosnippet.serverPort` | `3000` | API server port |
-| `autosnippet.serverHost` | `localhost` | API server host |
-| `autosnippet.enableDirectiveDetection` | `true` | Auto-detect directives on save |
-| `autosnippet.enableCodeLens` | `true` | Show CodeLens above directives |
-| `autosnippet.insertHighlightDuration` | `2000` | Highlight duration (ms) |
+| `asd.serverPort` | `3000` | API server port |
+| `asd.serverHost` | `localhost` | API server host |
+| `asd.enableDirectiveDetection` | `true` | Auto-detect directives on save |
+| `asd.enableCodeLens` | `true` | Show CodeLens above directives |
+| `asd.insertHighlightDuration` | `2000` | Highlight duration (ms) |
