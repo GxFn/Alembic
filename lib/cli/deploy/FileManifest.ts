@@ -232,10 +232,11 @@ export const GITIGNORE_RULES = [
 export const GITIGNORE_MIGRATIONS: { find: RegExp; replace: string }[] = [];
 
 /** MCP Server 配置生成器 */
-export function buildMcpServerEntry(projectRoot: string, ide: 'cursor' | 'vscode') {
+export function buildMcpServerEntry(_projectRoot: string, ide: 'cursor' | 'vscode') {
+  // Cursor / VSCode 均为 VSCode 内核，支持 ${workspaceFolder} 变量
   const base = {
     command: 'asd-mcp',
-    env: { ASD_PROJECT_DIR: projectRoot },
+    env: { ASD_PROJECT_DIR: '${workspaceFolder}' },
   };
   if (ide === 'vscode') {
     return { type: 'stdio', ...base };

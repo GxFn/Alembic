@@ -4,7 +4,7 @@ import AppKit
 import CoreGraphics
 
 /**
- * AutoSnippet Screenshot Tool
+ * Alembic Screenshot Tool
  *
  * 使用 macOS ScreenCaptureKit 原生 API 截取窗口/屏幕画面。
  * 息屏时可用（不依赖显示器输出）。无需 OBS。
@@ -67,7 +67,7 @@ struct Args {
 
     static func printUsage() {
         let usage = """
-        AutoSnippet Screenshot Tool (ScreenCaptureKit)
+        Alembic Screenshot Tool (ScreenCaptureKit)
 
         Usage:
           screenshot                               Capture main screen

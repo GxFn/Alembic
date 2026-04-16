@@ -40,7 +40,7 @@ const PROJECTS = [
   'discourse',
 ];
 
-// ── 加载 AutoSnippet 模块 ─────────────────────────────────────────
+// ── 加载 Alembic 模块 ─────────────────────────────────────────
 const { getDiscovererRegistry, resetDiscovererRegistry } = await import(
   '../lib/core/discovery/index.js'
 );

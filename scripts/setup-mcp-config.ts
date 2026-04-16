@@ -83,10 +83,9 @@ function configureVSCode() {
 
   config.servers.asd = {
     type: 'stdio',
-    command: 'node',
-    args: [mcpServerPath],
+    command: 'asd-mcp',
     env: {
-      ASD_UI_URL: 'http://localhost:3000',
+      ASD_PROJECT_DIR: '${workspaceFolder}',
     },
   };
 
@@ -111,11 +110,10 @@ function configureCursor() {
   // 创建配置
   const config = {
     mcpServers: {
-      alembic: {
-        command: 'node',
-        args: [path.relative(projectPath, mcpServerPath) || './bin/mcp-server.js'],
+      asd: {
+        command: 'asd-mcp',
         env: {
-          ASD_UI_URL: 'http://localhost:3000',
+          ASD_PROJECT_DIR: projectPath,
         },
       },
     },

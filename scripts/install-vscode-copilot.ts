@@ -113,13 +113,11 @@ function configureVSCodeSettings() {
     log('   如需为其他项目配置，请使用: --path /path/to/project', 'yellow');
   }
 
-  const mcpServerPath = getMcpServerPath();
   const mcpServerConfig = {
     type: 'stdio',
-    command: 'node',
-    args: [mcpServerPath],
+    command: 'asd-mcp',
     env: {
-      ASD_UI_URL: 'http://localhost:3000',
+      ASD_PROJECT_DIR: '${workspaceFolder}',
     },
   };
 
