@@ -137,6 +137,7 @@ export class ToolExecutionPipeline {
           _sharedState: loopCtx.sharedState || null,
           _dimensionMeta: loopCtx.sharedState?._dimensionMeta || null,
           _projectLanguage: loopCtx.sharedState?._projectLanguage || null,
+          _bootstrapDedup: loopCtx.sharedState?._bootstrapDedup || null,
           _memoryCoordinator: loopCtx.memoryCoordinator || null,
           _dimensionScopeId: loopCtx.sharedState?._dimensionScopeId || null,
           _currentRound: loopCtx.iteration || 0,

@@ -14,6 +14,7 @@
  */
 
 import { UnifiedValidator } from '#domain/knowledge/UnifiedValidator.js';
+import type { BootstrapDedup, CandidateSummary } from '../bootstrap/BootstrapDedup.js';
 
 /** Lightweight log interface — avoids importing static-only Logger class. */
 interface GatewayLogger {
@@ -73,6 +74,8 @@ export interface CreateRecipeRequest {
     skipUniqueness?: boolean;
     /** 操作用户 ID */
     userId?: string;
+    /** Bootstrap 会话级去重缓存（冷启动跨维度去重） */
+    bootstrapDedup?: BootstrapDedup;
   };
 }
 
@@ -141,7 +144,9 @@ interface GatewayKnowledgeService {
 }
 
 interface GatewayConsolidationAdvisor {
-  analyzeBatch(candidates: Array<{ title: string; category?: string; [key: string]: unknown }>): {
+  analyzeBatch(
+    candidates: Array<{ title: string; category?: string; [key: string]: unknown }>
+  ): Promise<{
     items: Array<{
       index: number;
       advice: {
@@ -154,7 +159,7 @@ interface GatewayConsolidationAdvisor {
         mergeDirection?: { addedDimensions: string[]; summary: string };
       };
     }>;
-  };
+  }>;
 }
 
 interface GatewayProposalRepository {
@@ -290,8 +295,40 @@ export class RecipeProductionGateway {
       }
     }
 
+    // ── Step 1.5: Bootstrap Session-Level Dedup (fast, in-memory) ──
+    let afterDedupItems = validItems;
+
+    if (options.bootstrapDedup && validItems.length > 0) {
+      afterDedupItems = [];
+      for (const entry of validItems) {
+        const { item, index } = entry;
+        const summary: CandidateSummary = {
+          id: '',
+          title: item.title || '',
+          category: item.category || ((item as Record<string, unknown>)._category as string) || '',
+          coreCode: item.coreCode || '',
+          doClause: item.doClause || '',
+          dontClause: item.dontClause || '',
+          guardPattern: item.content?.pattern,
+        };
+        const match = options.bootstrapDedup.findDuplicate(summary);
+        if (match) {
+          result.duplicates.push({
+            index,
+            title: item.title || '(untitled)',
+            similarTo: [{ file: '', title: match.existingTitle, similarity: match.similarity }],
+          });
+          this.#logger?.info(
+            `[Gateway] ✗ bootstrap dedup blocked item ${index}: "${item.title}" ≈ "${match.existingTitle}" (${match.similarity})`
+          );
+        } else {
+          afterDedupItems.push(entry);
+        }
+      }
+    }
+
     // ── Step 2: Similarity Check ──
-    let afterSimilarityItems = validItems;
+    let afterSimilarityItems = afterDedupItems;
 
     if (!options.skipSimilarityCheck && this.#findSimilarRecipes) {
       const threshold = options.similarityThreshold ?? 0.7;
@@ -345,7 +382,7 @@ export class RecipeProductionGateway {
           ...e.item,
         }));
 
-        const batchAdvice = this.#consolidationAdvisor.analyzeBatch(candidates);
+        const batchAdvice = await this.#consolidationAdvisor.analyzeBatch(candidates);
 
         for (let ai = 0; ai < batchAdvice.items.length; ai++) {
           const { advice } = batchAdvice.items[ai];
@@ -409,6 +446,17 @@ export class RecipeProductionGateway {
           raw: saved as Record<string, unknown>,
         });
         createdIds.push(saved.id);
+
+        // Register to bootstrap session dedup cache
+        options.bootstrapDedup?.register({
+          id: saved.id,
+          title: saved.title,
+          category: item.category || ((item as Record<string, unknown>)._category as string) || '',
+          coreCode: item.coreCode || '',
+          doClause: item.doClause || '',
+          dontClause: item.dontClause || '',
+          guardPattern: item.content?.pattern,
+        });
 
         // ── Step 5: Quality Scoring (best effort) ──
         try {

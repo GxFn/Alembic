@@ -17,6 +17,8 @@ import {
   getInternalAgentRequiredFields,
   getSystemInjectedFields,
 } from '#domain/knowledge/FieldSpec.js';
+import type { BootstrapDedup } from '#service/bootstrap/BootstrapDedup.js';
+import type { GatewayDeps } from '#service/knowledge/RecipeProductionGateway.js';
 
 import {
   checkDimensionType,
@@ -176,26 +178,38 @@ export const submitCandidate = {
     const { RecipeProductionGateway } = await import(
       '#service/knowledge/RecipeProductionGateway.js'
     );
+
+    // Bootstrap 模式: 启用去重（ConsolidationAdvisor + BootstrapDedup）
+    const isBootstrap = !!(dimMeta && ctx.source === 'system');
+    const bootstrapDedup = isBootstrap
+      ? ((ctx as Record<string, unknown>)._bootstrapDedup ?? null)
+      : null;
+    const consolidationAdvisor = isBootstrap
+      ? (ctx.container.get('consolidationAdvisor') ?? null)
+      : null;
+
     const gateway = new RecipeProductionGateway({
       knowledgeService: ctx.container.get('knowledgeService'),
       projectRoot: ctx.projectRoot,
       logger: ctx.logger as { info(msg: string): void; warn(msg: string): void } | undefined,
       proposalRepository: ctx.container.get('proposalRepository') ?? null,
       evolutionGateway: ctx.container.get('evolutionGateway') ?? null,
+      consolidationAdvisor: consolidationAdvisor as GatewayDeps['consolidationAdvisor'],
     });
 
     const gatewayResult = await gateway.create({
       source: 'agent-tool',
       items: [item],
       options: {
-        skipSimilarityCheck: true,
-        skipConsolidation: true,
+        skipSimilarityCheck: !isBootstrap,
+        skipConsolidation: !isBootstrap || !consolidationAdvisor,
         supersedes: params.supersedes,
         existingTitles: ctx._submittedTitles,
         existingFingerprints: ctx._submittedPatterns,
         systemInjectedFields:
           dimMeta && ctx.source === 'system' ? getSystemInjectedFields() : undefined,
         userId: 'agent',
+        bootstrapDedup: (bootstrapDedup as BootstrapDedup | null) ?? undefined,
       },
     });
 

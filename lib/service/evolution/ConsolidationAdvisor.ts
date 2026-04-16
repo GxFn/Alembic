@@ -71,8 +71,8 @@ export interface BatchConsolidationResult {
   internalOverlaps: { indexA: number; indexB: number; similarity: number }[];
 }
 
-/** 内部用：从 DB 读取的 Recipe 简要信息 */
-interface RecipeSummary {
+/** 从 DB 读取的 Recipe 简要信息（也可用于会话级缓存注入） */
+export interface RecipeSummary {
   id: string;
   title: string;
   doClause: string | null;
@@ -98,6 +98,9 @@ const HIGH_OVERLAP_THRESHOLD = 0.65;
 /** 最多分析多少条同域 Recipe（控制性能） */
 const MAX_CANDIDATES_PER_ANALYSIS = 30;
 
+/** 同域结果数 < 此值时触发全库加载（跨域可见性） */
+const CROSS_DOMAIN_THRESHOLD = 20;
+
 const WEIGHTS = { title: 0.2, clause: 0.3, code: 0.3, guard: 0.2 };
 
 /* ────────────────────── Class ────────────────────── */
@@ -114,14 +117,22 @@ export class ConsolidationAdvisor {
    * 分析候选知识与现有知识库的关系，返回融合建议。
    *
    * @param candidate - 待提交的候选数据
+   * @param options - 可选参数
+   *   - sessionRecipes: 会话级缓存的候选（解决 DB 写入延迟导致的盲区）
    * @returns ConsolidationAdvice — 建议 + 理由 + 上下文
    */
-  async analyze(candidate: CandidateForConsolidation): Promise<ConsolidationAdvice> {
+  async analyze(
+    candidate: CandidateForConsolidation,
+    options?: { sessionRecipes?: RecipeSummary[] }
+  ): Promise<ConsolidationAdvice> {
     // ── Step 1: 独立价值评估 ──
     const substanceScore = this.#assessSubstance(candidate);
 
-    // ── Step 2: 加载同域 / 相关 Recipe ──
-    const related = await this.#loadRelatedRecipes(candidate);
+    // ── Step 2: 加载同域 / 相关 Recipe + 合并 session 缓存 ──
+    const dbRelated = await this.#loadRelatedRecipes(candidate);
+    const related = options?.sessionRecipes
+      ? this.#mergeUnique(dbRelated, options.sessionRecipes)
+      : dbRelated;
 
     // ── Step 3: insufficient — 独立价值不足，交给 Agent 与开发者决定 ──
     if (substanceScore < MIN_SUBSTANCE_SCORE) {
@@ -452,6 +463,23 @@ export class ConsolidationAdvisor {
             }
           }
         }
+
+        // Phase 2: 跨域补充 — 当同域结果 < CROSS_DOMAIN_THRESHOLD 时加载全库
+        // 解决冷启动初期不同维度间的知识重复（同域 Recipe 少时几乎一定触发）
+        if (results.length < CROSS_DOMAIN_THRESHOLD) {
+          const all = await this.#knowledgeRepo.findAllByLifecycles(COUNTABLE_LIFECYCLES);
+          const seenIds = new Set(results.map((r) => r.id));
+          for (const e of all) {
+            const s = toSummary(e);
+            if (!seenIds.has(s.id)) {
+              results.push(s);
+              if (results.length >= MAX_CANDIDATES_PER_ANALYSIS) {
+                break;
+              }
+            }
+          }
+        }
+
         return results;
       }
 
@@ -463,6 +491,19 @@ export class ConsolidationAdvisor {
       );
       return [];
     }
+  }
+
+  /** 合并 DB 结果与 session 缓存，去重（按 id） */
+  #mergeUnique(dbRecipes: RecipeSummary[], sessionRecipes: RecipeSummary[]): RecipeSummary[] {
+    const seenIds = new Set(dbRecipes.map((r) => r.id));
+    const merged = [...dbRecipes];
+    for (const s of sessionRecipes) {
+      if (!seenIds.has(s.id)) {
+        merged.push(s);
+        seenIds.add(s.id);
+      }
+    }
+    return merged.slice(0, MAX_CANDIDATES_PER_ANALYSIS);
   }
 
   /* ════════════════════ 结构相似度计算 ════════════════════ */

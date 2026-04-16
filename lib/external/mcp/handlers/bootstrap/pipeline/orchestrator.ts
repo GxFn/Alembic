@@ -602,6 +602,10 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
   const globalSubmittedPatterns = new Set<string>();
   const globalSubmittedTriggers = new Set<string>();
 
+  // ── Bootstrap 会话级去重缓存 (跨维度内存级快速去重) ──
+  const { BootstrapDedup } = await import('#service/bootstrap/BootstrapDedup.js');
+  const bootstrapDedup = new BootstrapDedup();
+
   // ── Rescan 模式: 预种已有 recipe 标题到去重集合，防止重复创建 ──
   const existingRecipesList = existingRecipes as Array<{
     id: string;
@@ -932,6 +936,7 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
           submittedTitles: globalSubmittedTitles,
           submittedPatterns: globalSubmittedPatterns,
           submittedTriggers: globalSubmittedTriggers,
+          _bootstrapDedup: bootstrapDedup,
           _dimensionMeta: {
             id: dimId,
             outputType: dimConfig.outputType || 'candidate',
@@ -1332,6 +1337,14 @@ export async function fillDimensionsV3(view: PipelineFillView, dimensions: Dimen
     }
     logger.info(`[Insight-v3] Serial execution complete in ${Date.now() - t0}ms`);
   }
+
+  // ── Bootstrap Dedup 统计 + 清理 ──
+  if (bootstrapDedup.count > 0) {
+    logger.info(
+      `[Insight-v3] BootstrapDedup: ${bootstrapDedup.count} entries registered during session`
+    );
+  }
+  bootstrapDedup.clear();
 
   // ═══════════════════════════════════════════════════════════
   // Step 4: Project Skill 生成 (skillWorthy 维度)
