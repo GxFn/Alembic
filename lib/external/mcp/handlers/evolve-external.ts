@@ -1,26 +1,18 @@
 /**
  * MCP Handler — asd_evolve (批量 Recipe 进化决策)
  *
- * 双入口工具：
- *   - Rescan 模式: 每个维度内先 evolve 再 gap-fill，与内部 Agent Pipeline 一致
- *   - 独立模式: 用户通过提示词触发，验证已有 Recipe 的有效性
- *
- * 三种决策委托给 evolution-tools.ts 中已有的 handler 实现：
- *   - propose_evolution → ProposalRepository.create (观察窗口)
- *   - confirm_deprecation → RecipeLifecycleSupervisor.transition → deprecated (优先) / KnowledgeService.deprecate (回退)
- *   - skip → 不变更状态，skip(still_valid) 刷新 stats.lastVerifiedAt
+ * 所有决策统一通过 EvolutionGateway 提交：
+ *   - propose_evolution → gateway.submit({ action: 'update' })
+ *   - confirm_deprecation → gateway.submit({ action: 'deprecate' })
+ *   - skip → gateway.submit({ action: 'valid' }) 或直接 skip
  *
  * @module handlers/evolve-external
  */
 
 import type { ServiceContainer } from '#inject/ServiceContainer.js';
-import type { ProposalRepository } from '#repo/evolution/ProposalRepository.js';
-import { getDeveloperIdentity } from '#shared/developer-identity.js';
 import type { EvolveInput } from '#shared/schemas/mcp-tools.js';
-import type { RecipeLifecycleSupervisor } from '../../../service/evolution/RecipeLifecycleSupervisor.js';
+import type { EvolutionGateway } from '../../../service/evolution/EvolutionGateway.js';
 import { envelope } from '../envelope.js';
-
-/** MCP handler context */
 
 /** MCP handler context */
 interface McpContext {
@@ -78,38 +70,20 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
     errors: [],
   };
 
-  const proposalRepo = ctx.container.get('proposalRepository') as ProposalRepository | null;
-  const knowledgeService = ctx.container.get('knowledgeService') as {
-    deprecate(id: string, reason: string, opts: { userId: string }): Promise<unknown>;
-  } | null;
-  const supervisor = ctx.container.get('lifecycleSupervisor') as RecipeLifecycleSupervisor | null;
-  const knowledgeRepo = ctx.container.get('knowledgeRepository') as {
-    findById(id: string): Promise<{ id: string } | null>;
-    updateStats(id: string, stats: Record<string, unknown>): Promise<boolean>;
-    getStats(): Promise<Record<string, number>>;
-  } | null;
+  const gateway = ctx.container.get('evolutionGateway') as EvolutionGateway | null;
+  if (!gateway) {
+    return envelope({
+      success: false,
+      data: result,
+      message: '❌ EvolutionGateway not available',
+      meta: { tool: 'asd_evolve', responseTimeMs: Date.now() - t0 },
+    });
+  }
 
   for (const decision of decisions) {
     try {
-      // O4: Recipe 存在性前置检查
-      if (knowledgeRepo) {
-        const exists = await knowledgeRepo.findById(decision.recipeId);
-        if (!exists) {
-          result.errors.push({ recipeId: decision.recipeId, error: 'Recipe not found' });
-          result.processed++;
-          continue;
-        }
-      }
-
       switch (decision.action) {
         case 'propose_evolution': {
-          if (!proposalRepo) {
-            result.errors.push({
-              recipeId: decision.recipeId,
-              error: 'ProposalRepository not available',
-            });
-            break;
-          }
           if (!decision.evidence) {
             result.errors.push({
               recipeId: decision.recipeId,
@@ -118,12 +92,11 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
             break;
           }
 
-          const proposal = proposalRepo.create({
-            type: decision.evidence.type,
-            targetRecipeId: decision.recipeId,
-            relatedRecipeIds: [],
-            confidence: 0.8,
+          const gResult = await gateway.submit({
+            recipeId: decision.recipeId,
+            action: 'update',
             source: 'ide-agent',
+            confidence: 0.8,
             description: decision.evidence.suggestedChanges,
             evidence: [
               {
@@ -137,102 +110,59 @@ export async function evolveExternal(ctx: McpContext, args: EvolveInput) {
             ],
           });
 
-          if (proposal) {
+          if (gResult.outcome === 'proposal-created') {
             result.proposed++;
             ctx.logger.info(
-              `[Evolve] propose_evolution: ${decision.recipeId} → proposal ${proposal.id}`
+              `[Evolve] propose_evolution: ${decision.recipeId} → proposal ${gResult.proposalId}`
             );
           } else {
             result.errors.push({
               recipeId: decision.recipeId,
-              error:
-                'Failed to create proposal (target recipe may not exist or duplicate proposal)',
+              error: gResult.error ?? `Unexpected outcome: ${gResult.outcome}`,
             });
           }
           break;
         }
 
         case 'confirm_deprecation': {
-          // O1: 优先通过 RecipeLifecycleSupervisor 执行，回退到 KnowledgeService
           const reason = decision.reason || 'IDE Agent confirmed deprecation';
 
-          if (supervisor) {
-            const transResult = await supervisor.transition({
-              recipeId: decision.recipeId,
-              targetState: 'deprecated',
-              trigger: 'manual-deprecation',
-              evidence: { reason },
-              operatorId: 'ide-agent',
-            });
+          const gResult = await gateway.submit({
+            recipeId: decision.recipeId,
+            action: 'deprecate',
+            source: 'ide-agent',
+            confidence: 0.9,
+            reason,
+          });
 
-            if (!transResult.success) {
-              // Supervisor 拒绝（可能状态不允许直接转 deprecated），回退到 KnowledgeService
-              if (knowledgeService) {
-                await knowledgeService.deprecate(decision.recipeId, reason, {
-                  userId: getDeveloperIdentity(),
-                });
-              } else {
-                result.errors.push({
-                  recipeId: decision.recipeId,
-                  error: `Supervisor rejected: ${transResult.error}`,
-                });
-                break;
-              }
-            }
-          } else if (knowledgeService) {
-            // P3: 添加 await
-            await knowledgeService.deprecate(decision.recipeId, reason, {
-              userId: getDeveloperIdentity(),
-            });
+          if (
+            gResult.outcome === 'immediately-executed' ||
+            gResult.outcome === 'proposal-created'
+          ) {
+            result.deprecated++;
+            result.quotaChange.freed++;
+            ctx.logger.info(`[Evolve] confirm_deprecation: ${decision.recipeId}`);
           } else {
             result.errors.push({
               recipeId: decision.recipeId,
-              error: 'Neither Supervisor nor KnowledgeService available',
+              error: gResult.error ?? `Unexpected outcome: ${gResult.outcome}`,
             });
-            break;
           }
-
-          // 解决关联的 deprecate proposal
-          if (proposalRepo) {
-            try {
-              const existing = proposalRepo.findByTarget(decision.recipeId);
-              for (const p of existing) {
-                if (p.type === 'deprecate') {
-                  proposalRepo.markExecuted(
-                    p.id,
-                    `IDE Agent confirmed deprecation: ${reason}`,
-                    'ide-agent'
-                  );
-                }
-              }
-            } catch {
-              // ProposalRepository 操作失败时静默
-            }
-          }
-
-          result.deprecated++;
-          result.quotaChange.freed++;
-          ctx.logger.info(`[Evolve] confirm_deprecation: ${decision.recipeId}`);
           break;
         }
 
         case 'skip': {
-          if (decision.skipReason === 'still_valid' && knowledgeRepo) {
-            // P4: 更新 stats.lastVerifiedAt 而非 updated_at
-            try {
-              const entry = await knowledgeRepo.findById(decision.recipeId);
-              if (entry) {
-                const stats = (
-                  typeof (entry as Record<string, unknown>).stats === 'object'
-                    ? (entry as Record<string, unknown>).stats
-                    : {}
-                ) as Record<string, unknown>;
-                stats.lastVerifiedAt = Date.now();
-                await knowledgeRepo.updateStats(decision.recipeId, stats);
-              }
+          if (decision.skipReason === 'still_valid') {
+            const gResult = await gateway.submit({
+              recipeId: decision.recipeId,
+              action: 'valid',
+              source: 'ide-agent',
+              confidence: 0.5,
+              reason: decision.skipReason,
+            });
+
+            if (gResult.outcome === 'verified') {
               result.refreshed++;
-            } catch {
-              // DB 更新失败时静默
             }
           }
           result.skipped++;

@@ -374,3 +374,46 @@ export type ScanResultItem = Partial<KnowledgeEntry> & {
   /** 权威分 1-5（top-level override，编辑时直接写入） */
   authority?: number;
 };
+
+/* ════════════════════════════════════════════════════════
+ *  Evolution — Proposal & Warning 类型
+ * ════════════════════════════════════════════════════════ */
+
+export type ProposalType = 'update' | 'deprecate';
+export type ProposalSource = 'ide-agent' | 'metabolism' | 'decay-scan' | 'consolidation';
+export type ProposalStatus = 'pending' | 'observing' | 'executed' | 'rejected' | 'expired';
+
+export interface ProposalRecord {
+  id: string;
+  type: ProposalType;
+  targetRecipeId: string;
+  relatedRecipeIds: string[];
+  confidence: number;
+  source: ProposalSource;
+  description: string;
+  evidence: Record<string, unknown>[];
+  status: ProposalStatus;
+  proposedAt: number;
+  expiresAt: number;
+  resolvedAt: number | null;
+  resolvedBy: string | null;
+  resolution: string | null;
+}
+
+export type WarningType = 'contradiction' | 'redundancy';
+export type WarningStatus = 'open' | 'resolved' | 'dismissed';
+
+export interface WarningRecord {
+  id: string;
+  type: WarningType;
+  targetRecipeId: string;
+  relatedRecipeIds: string[];
+  confidence: number;
+  description: string;
+  evidence: string[];
+  status: WarningStatus;
+  detectedAt: number;
+  resolvedAt: number | null;
+  resolvedBy: string | null;
+  resolution: string | null;
+}

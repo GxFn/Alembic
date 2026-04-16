@@ -132,7 +132,7 @@ export class ReactiveEvolutionService {
         const patchResult = await this.#contentPatcher.applyProposal(
           {
             id: `reactive-rename-${ref.recipeId}-${Date.now()}`,
-            type: 'correction',
+            type: 'update',
             targetRecipeId: ref.recipeId,
             evidence: [
               {

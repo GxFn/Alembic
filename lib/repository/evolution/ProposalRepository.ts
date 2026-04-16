@@ -1,13 +1,13 @@
 /**
  * ProposalRepository — evolution_proposals 表 CRUD (Drizzle ORM)
  *
- * 操作 evolution_proposals 表，存储进化提案（merge/supersede/enhance/deprecate/
- * reorganize/contradiction/correction）。
+ * 操作 evolution_proposals 表，存储进化提案（update/deprecate）。
  *
  * 设计要求：
  *   - 去重：同 target + 同 type 不允许多个 observing 状态的 Proposal
  *   - Rate Limit：同一 target 不允许同时存在多个相同类型的 observing Proposal
  *   - JSON 字段（evidence/related_recipe_ids）序列化/反序列化
+ *   - 观察窗口按风险等级分 tier（low 24h / medium 72h / high 7d）
  *
  * Drizzle 迁移策略 (Phase 5a)：
  *   - 全部 raw SQL → Drizzle 类型安全 API
@@ -21,8 +21,18 @@ import { evolutionProposals } from '../../infrastructure/database/drizzle/schema
 
 /* ────────────────────── Types ────────────────────── */
 
-/** Proposal 类型 — 统一标准 */
-export type ProposalType =
+/**
+ * Proposal 类型 — 统一为两种进化方向
+ *
+ * 旧类型映射：
+ *   enhance/correction → update
+ *   supersede → deprecate + replacedByRecipeId
+ *   merge/contradiction/reorganize → 移出 Proposal 系统（RecipeWarning）
+ */
+export type ProposalType = 'update' | 'deprecate';
+
+/** @deprecated 旧 ProposalType，仅用于 DB 迁移兼容 */
+export type LegacyProposalType =
   | 'merge'
   | 'supersede'
   | 'enhance'
@@ -32,7 +42,7 @@ export type ProposalType =
   | 'correction';
 
 /** Proposal 来源 */
-export type ProposalSource = 'ide-agent' | 'metabolism' | 'decay-scan';
+export type ProposalSource = 'ide-agent' | 'metabolism' | 'decay-scan' | 'consolidation';
 
 /** Proposal 状态 */
 export type ProposalStatus = 'pending' | 'observing' | 'executed' | 'rejected' | 'expired';
@@ -79,29 +89,19 @@ export interface ProposalFilter {
 
 /* ────────────────────── Constants ────────────────────── */
 
-/** 默认观察窗口：7 天 */
-const DEFAULT_OBSERVATION_WINDOW = 7 * 24 * 60 * 60 * 1000;
+/** 默认观察窗口：72h（medium tier） */
+const DEFAULT_OBSERVATION_WINDOW = 72 * 60 * 60 * 1000;
 
-/** 各 Proposal 类型的默认观察窗口（ms） */
+/** 观察窗口按 ProposalType 的默认值（EvolutionGateway 按 RiskTier 精确控制） */
 const OBSERVATION_WINDOWS: Record<ProposalType, number> = {
-  enhance: 48 * 60 * 60 * 1000, // 48h
-  correction: 24 * 60 * 60 * 1000, // 24h
-  merge: 72 * 60 * 60 * 1000, // 72h
-  supersede: 72 * 60 * 60 * 1000, // 72h
-  deprecate: 7 * 24 * 60 * 60 * 1000, // 7d
-  contradiction: 7 * 24 * 60 * 60 * 1000, // 7d
-  reorganize: 7 * 24 * 60 * 60 * 1000, // 7d
+  update: 72 * 60 * 60 * 1000, // 72h (medium tier default)
+  deprecate: 7 * 24 * 60 * 60 * 1000, // 7d (high tier)
 };
 
 /** 自动进入观察状态的置信度阈值 */
 const AUTO_OBSERVE_THRESHOLDS: Record<ProposalType, number> = {
-  enhance: 0.7,
-  correction: 0.7,
-  merge: 0.75,
-  supersede: 0.8,
-  deprecate: 0.0, // decayScore ≤ 40 即可
-  contradiction: Infinity, // 需开发者确认
-  reorganize: Infinity, // 需开发者确认
+  update: 0.7,
+  deprecate: 0.0, // decayScore 即可
 };
 
 /* ────────────────────── Drizzle row type ────────────────────── */

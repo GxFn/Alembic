@@ -6,8 +6,8 @@
  *   2. staging promote:       到期 staging → active 晋升
  *   3. vector reconcile:      向量对账（best-effort）
  *   4. refreshIndex:          BM25 增量刷新
- *   5. proposalCheck:         到期 Proposal 检查 + 自动执行/拒绝
- *   6. metabolismCycle:       知识新陈代谢（矛盾/冗余/衰退扫描 → 新 Proposal）
+ *   5. metabolismCycle:       知识新陈代谢（矛盾/冗余/衰退扫描 → 新 Proposal）
+ *   6. proposalCheck:         到期 Proposal 检查 + 自动执行/拒绝（含 Metabolism 新建的 Proposal）
  *   7. timeoutCheck:          中间态超时兜底（evolving/decaying 超时自动恢复）
  */
 
@@ -147,36 +147,7 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
     logger.warn(`[UiStartupTasks] ${msg}`);
   }
 
-  // ── Stage 5: ProposalExecutor — 到期 Proposal 检查 + 自动执行 ──
-  try {
-    if (ctx.container.services.proposalExecutor) {
-      const executor = ctx.container.get('proposalExecutor') as {
-        checkAndExecute(): {
-          executed: { id: string }[];
-          rejected: { id: string }[];
-          expired: { id: string }[];
-        };
-      };
-      const result = await executor.checkAndExecute();
-      report.proposalCheck = {
-        executed: result.executed.length,
-        rejected: result.rejected.length,
-        expired: result.expired.length,
-      };
-      const total = result.executed.length + result.rejected.length + result.expired.length;
-      if (total > 0) {
-        logger.info(
-          `[UiStartupTasks] Stage 5: proposal check — executed=${result.executed.length}, rejected=${result.rejected.length}, expired=${result.expired.length}`
-        );
-      }
-    }
-  } catch (err: unknown) {
-    const msg = `proposal check failed: ${(err as Error).message}`;
-    report.errors.push(msg);
-    logger.warn(`[UiStartupTasks] ${msg}`);
-  }
-
-  // ── Stage 6: KnowledgeMetabolism — 知识新陈代谢扫描 ──
+  // ── Stage 5: KnowledgeMetabolism — 知识新陈代谢扫描 ──
   try {
     if (ctx.container.services.knowledgeMetabolism) {
       const metabolism = ctx.container.get('knowledgeMetabolism') as {
@@ -199,12 +170,41 @@ export async function runUiStartupTasks(ctx: UiStartupContext): Promise<UiStartu
       };
       if (result.summary.proposalCount > 0) {
         logger.info(
-          `[UiStartupTasks] Stage 6: metabolism cycle — ${result.summary.proposalCount} proposals generated`
+          `[UiStartupTasks] Stage 5: metabolism cycle — ${result.summary.proposalCount} proposals generated`
         );
       }
     }
   } catch (err: unknown) {
     const msg = `metabolism cycle failed: ${(err as Error).message}`;
+    report.errors.push(msg);
+    logger.warn(`[UiStartupTasks] ${msg}`);
+  }
+
+  // ── Stage 6: ProposalExecutor — 到期 Proposal 检查 + 自动执行（含 Metabolism 新建的 Proposal） ──
+  try {
+    if (ctx.container.services.proposalExecutor) {
+      const executor = ctx.container.get('proposalExecutor') as {
+        checkAndExecute(): {
+          executed: { id: string }[];
+          rejected: { id: string }[];
+          expired: { id: string }[];
+        };
+      };
+      const result = await executor.checkAndExecute();
+      report.proposalCheck = {
+        executed: result.executed.length,
+        rejected: result.rejected.length,
+        expired: result.expired.length,
+      };
+      const total = result.executed.length + result.rejected.length + result.expired.length;
+      if (total > 0) {
+        logger.info(
+          `[UiStartupTasks] Stage 6: proposal check — executed=${result.executed.length}, rejected=${result.rejected.length}, expired=${result.expired.length}`
+        );
+      }
+    }
+  } catch (err: unknown) {
+    const msg = `proposal check failed: ${(err as Error).message}`;
     report.errors.push(msg);
     logger.warn(`[UiStartupTasks] ${msg}`);
   }

@@ -253,7 +253,7 @@ describe('RecipeProductionGateway', () => {
       });
 
       expect(result.merged).toHaveLength(1);
-      expect(result.merged[0].type).toBe('merge');
+      expect(result.merged[0].type).toBe('update');
       expect(result.merged[0].targetRecipeId).toBe('existing-1');
       expect(result.merged[0].status).toBe('observing');
       expect(result.created).toHaveLength(0);
@@ -334,10 +334,44 @@ describe('RecipeProductionGateway', () => {
   });
 
   describe('create — supersede', () => {
-    it('应创建 supersede 提案', async () => {
+    it('应通过 EvolutionGateway 创建 deprecate 提案', async () => {
+      const evolutionGateway = {
+        submit: vi.fn(async () => ({
+          recipeId: 'old-recipe-id',
+          action: 'deprecate',
+          outcome: 'proposal-created',
+          proposalId: 'supersede-1',
+        })),
+      };
+
+      const gateway = new RecipeProductionGateway(makeDeps({ evolutionGateway }));
+
+      const result = await gateway.create({
+        source: 'agent-tool',
+        items: [makeItem()],
+        options: {
+          skipSimilarityCheck: true,
+          skipConsolidation: true,
+          supersedes: 'old-recipe-id',
+        },
+      });
+
+      expect(result.created).toHaveLength(1);
+      expect(result.supersedeProposal).not.toBeNull();
+      expect(result.supersedeProposal?.proposalId).toBe('supersede-1');
+      expect(evolutionGateway.submit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipeId: 'old-recipe-id',
+          action: 'deprecate',
+          confidence: 0.9,
+        })
+      );
+    });
+
+    it('降级到 ProposalRepo 当无 EvolutionGateway 时', async () => {
       const proposalRepo = {
         create: vi.fn(() => ({
-          id: 'supersede-1',
+          id: 'supersede-fallback',
           status: 'observing',
           expiresAt: Date.now() + 72 * 3600_000,
         })),
@@ -357,10 +391,10 @@ describe('RecipeProductionGateway', () => {
 
       expect(result.created).toHaveLength(1);
       expect(result.supersedeProposal).not.toBeNull();
-      expect(result.supersedeProposal?.proposalId).toBe('supersede-1');
+      expect(result.supersedeProposal?.proposalId).toBe('supersede-fallback');
       expect(proposalRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'supersede',
+          type: 'deprecate',
           targetRecipeId: 'old-recipe-id',
         })
       );

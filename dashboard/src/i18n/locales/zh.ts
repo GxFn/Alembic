@@ -2121,4 +2121,28 @@ export const zh = {
     openMonitor: '打开信号监控',
     closeMonitor: '关闭信号监控',
   },
+
+  /* ═══ Evolution ═══ */
+  evolution: {
+    title: '进化信号',
+    togglePanel: '进化信号面板',
+    proposals: '进化提案',
+    warnings: '知识警告',
+    history: '历史记录',
+    noSignals: '暂无进化信号',
+    noSignalsDesc: '当前 Recipe 没有待处理的提案或警告',
+    source: '来源',
+    confidence: '置信度',
+    proposed: '提出时间',
+    expires: '过期时间',
+    detected: '检测时间',
+    related: '关联 Recipe',
+    evidence: '证据',
+    reject: '拒绝',
+    resolve: '解决',
+    dismiss: '忽略',
+    proposalRejected: '提案已拒绝',
+    warningResolved: '警告已解决',
+    warningDismissed: '警告已忽略',
+  },
 } as const;

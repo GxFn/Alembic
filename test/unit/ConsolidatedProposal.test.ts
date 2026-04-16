@@ -2,10 +2,9 @@
  * Consolidated Submit — Proposal 集成逻辑测试
  *
  * 测试 `enhancedSubmitKnowledge` 中与 Proposal 相关的逻辑路径：
- *   - ConsolidationAdvisor merge → 创建 Proposal（非 block）
- *   - ConsolidationAdvisor reorganize → 创建 Proposal（pending）
- *   - ConsolidationAdvisor insufficient → 创建 enhance Proposal
- *   - supersedes 参数 → 创建 supersede Proposal
+ *   - ConsolidationAdvisor merge / insufficient → 创建 update Proposal
+ *   - reorganize → 仅记录日志，不创建 Proposal
+ *   - supersedes 参数 → 创建 deprecate Proposal
  *   - ProposalRepository 未注册时降级回 blocked 行为
  *
  * 由于 enhancedSubmitKnowledge 依赖大量 DI + 动态 import，
@@ -47,7 +46,7 @@ describe('Consolidated Proposal creation logic', () => {
 
     if (advice.action === 'merge' && advice.targetRecipe) {
       return repo.create({
-        type: 'merge',
+        type: 'update',
         targetRecipeId: advice.targetRecipe.id,
         confidence: advice.confidence,
         source: 'ide-agent',
@@ -57,22 +56,14 @@ describe('Consolidated Proposal creation logic', () => {
     }
 
     if (advice.action === 'reorganize' && advice.reorganizeTargets?.length) {
-      const target = advice.reorganizeTargets[0];
-      return repo.create({
-        type: 'reorganize',
-        targetRecipeId: target.id,
-        relatedRecipeIds: advice.reorganizeTargets.slice(1).map((t) => t.id),
-        confidence: advice.confidence,
-        source: 'ide-agent',
-        description: advice.reason,
-        evidence,
-      });
+      // reorganize 不再创建 Proposal — 仅记录日志
+      return null;
     }
 
     if (advice.action === 'insufficient' && advice.coveredBy?.length) {
       const target = advice.coveredBy[0];
       return repo.create({
-        type: 'enhance',
+        type: 'update',
         targetRecipeId: target.id,
         confidence: advice.confidence,
         source: 'ide-agent',
@@ -101,8 +92,8 @@ describe('Consolidated Proposal creation logic', () => {
     sqlite.close();
   });
 
-  describe('merge advice → merge Proposal', () => {
-    it('creates merge Proposal with correct fields', () => {
+  describe('merge advice → update Proposal', () => {
+    it('creates update Proposal with correct fields', () => {
       const result = createProposalFromAdvice(
         repo,
         {
@@ -115,18 +106,18 @@ describe('Consolidated Proposal creation logic', () => {
       );
 
       expect(result).not.toBeNull();
-      expect(result?.type).toBe('merge');
+      expect(result?.type).toBe('update');
       expect(result?.targetRecipeId).toBe('r-001');
       expect(result?.source).toBe('ide-agent');
       expect(result?.confidence).toBe(0.85);
-      // merge confidence 0.85 >= 0.75 → observing
+      // update confidence 0.85 >= 0.7 → observing
       expect(result?.status).toBe('observing');
     });
 
     it('returns null when duplicate exists', () => {
-      // Create a first merge proposal
+      // Create a first update proposal
       repo.create({
-        type: 'merge',
+        type: 'update',
         targetRecipeId: 'r-001',
         confidence: 0.85,
         source: 'ide-agent',
@@ -149,8 +140,8 @@ describe('Consolidated Proposal creation logic', () => {
     });
   });
 
-  describe('reorganize advice → reorganize Proposal', () => {
-    it('creates reorganize Proposal as pending (high risk)', () => {
+  describe('reorganize advice → null (logged only)', () => {
+    it('returns null for reorganize advice', () => {
       const result = createProposalFromAdvice(
         repo,
         {
@@ -166,17 +157,12 @@ describe('Consolidated Proposal creation logic', () => {
         { title: 'test' }
       );
 
-      expect(result).not.toBeNull();
-      expect(result?.type).toBe('reorganize');
-      expect(result?.targetRecipeId).toBe('r-001');
-      expect(result?.relatedRecipeIds).toEqual(['r-002', 'r-003']);
-      // reorganize threshold = Infinity → always pending
-      expect(result?.status).toBe('pending');
+      expect(result).toBeNull();
     });
   });
 
-  describe('insufficient advice → enhance Proposal', () => {
-    it('creates enhance Proposal when coveredBy exists', () => {
+  describe('insufficient advice → update Proposal', () => {
+    it('creates update Proposal when coveredBy exists', () => {
       const result = createProposalFromAdvice(
         repo,
         {
@@ -189,10 +175,10 @@ describe('Consolidated Proposal creation logic', () => {
       );
 
       expect(result).not.toBeNull();
-      expect(result?.type).toBe('enhance');
+      expect(result?.type).toBe('update');
       expect(result?.targetRecipeId).toBe('r-005');
       expect(result?.source).toBe('ide-agent');
-      // enhance confidence 0.75 >= 0.7 → observing
+      // update confidence 0.75 >= 0.7 → observing
       expect(result?.status).toBe('observing');
     });
   });
@@ -213,10 +199,10 @@ describe('Consolidated Proposal creation logic', () => {
     });
   });
 
-  describe('supersede Proposal from submit_knowledge', () => {
-    it('creates supersede Proposal with correct structure', () => {
+  describe('deprecate Proposal from submit_knowledge', () => {
+    it('creates deprecate Proposal with correct structure', () => {
       const result = repo.create({
-        type: 'supersede',
+        type: 'deprecate',
         targetRecipeId: 'r-old',
         relatedRecipeIds: ['r-new-001'],
         confidence: 0.8,
@@ -226,25 +212,11 @@ describe('Consolidated Proposal creation logic', () => {
       });
 
       expect(result).not.toBeNull();
-      expect(result?.type).toBe('supersede');
+      expect(result?.type).toBe('deprecate');
       expect(result?.targetRecipeId).toBe('r-old');
       expect(result?.relatedRecipeIds).toEqual(['r-new-001']);
-      // supersede confidence 0.8 >= 0.8 → observing
+      // deprecate threshold 0.0 → always observing
       expect(result?.status).toBe('observing');
-    });
-
-    it('supersede stays pending when confidence < 0.8', () => {
-      const result = repo.create({
-        type: 'supersede',
-        targetRecipeId: 'r-old',
-        relatedRecipeIds: ['r-new-001'],
-        confidence: 0.7,
-        source: 'ide-agent',
-        description: 'Low confidence supersede',
-      });
-
-      expect(result).not.toBeNull();
-      expect(result?.status).toBe('pending');
     });
   });
 

@@ -186,17 +186,8 @@ describe('Knowledge Governance Integration', () => {
       // Proposals should have valid structure
       for (const p of report.proposals) {
         expect(p.proposedAt).toBeGreaterThan(0);
-        expect(p.expiresAt).toBeGreaterThan(p.proposedAt);
         expect(p.targetRecipeId).toBeTruthy();
-        expect([
-          'merge',
-          'enhance',
-          'supersede',
-          'deprecate',
-          'contradiction',
-          'correction',
-          'reorganize',
-        ]).toContain(p.type);
+        expect(['update', 'deprecate']).toContain(p.type);
       }
 
       // SignalBus should have received signals

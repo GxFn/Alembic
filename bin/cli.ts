@@ -708,6 +708,25 @@ program
         cli.json({ audit: auditResult, agent: agentResult });
       }
 
+      // ── Step 6: 执行到期 Proposal（含 Agent 刚创建的） ──
+      if (container.services.proposalExecutor) {
+        const executor = container.get('proposalExecutor') as {
+          checkAndExecute(): Promise<{
+            executed: { id: string }[];
+            rejected: { id: string }[];
+            expired: { id: string }[];
+          }>;
+        };
+        const execResult = await executor.checkAndExecute();
+        const total =
+          execResult.executed.length + execResult.rejected.length + execResult.expired.length;
+        if (total > 0) {
+          cli.log(
+            `\n📋 Proposal 执行: executed=${execResult.executed.length}, rejected=${execResult.rejected.length}, expired=${execResult.expired.length}`
+          );
+        }
+      }
+
       await bootstrap.shutdown();
     } catch (err: unknown) {
       cli.error(`evolve-check failed: ${(err as Error).message}`);
@@ -1927,6 +1946,64 @@ program
         cli.log(`\n  👻 Orphaned entries (${report.orphaned.length}):`);
         for (const id of report.orphaned) {
           cli.log(`    ${id}`);
+        }
+      }
+      cli.blank();
+    } finally {
+      await bootstrap.shutdown?.();
+    }
+  });
+
+// ─────────────────────────────────────────────────────
+// list-warnings 命令
+// ─────────────────────────────────────────────────────
+program
+  .command('list-warnings')
+  .description('列出知识库中的 warnings（矛盾 / 冗余）')
+  .option('-d, --dir <path>', '项目目录', '.')
+  .option('--status <status>', '按状态过滤：open / resolved / dismissed', 'open')
+  .option('--type <type>', '按类型过滤：contradiction / redundancy')
+  .option('--json', '以 JSON 格式输出')
+  .action(async (opts) => {
+    const projectRoot = resolve(opts.dir);
+    const { bootstrap, container } = await initContainer({ projectRoot });
+    try {
+      const warningRepo = container.get(
+        'warningRepository'
+      ) as import('../lib/repository/evolution/WarningRepository.js').WarningRepository;
+
+      const filter: Record<string, string> = {};
+      if (opts.status) {
+        filter.status = opts.status;
+      }
+      if (opts.type) {
+        filter.type = opts.type;
+      }
+
+      const warnings = warningRepo.find(filter as any, 200);
+      const openCount = warningRepo.countOpen();
+
+      if (opts.json) {
+        cli.json({ openCount, warnings });
+        return;
+      }
+
+      cli.log(`\n  Recipe Warnings (open: ${openCount})`);
+      cli.log(`  ${'─'.repeat(50)}`);
+
+      if (warnings.length === 0) {
+        cli.log('  ✅ No warnings found');
+      } else {
+        for (const w of warnings) {
+          const icon = w.type === 'contradiction' ? '⚠️' : '🔄';
+          const date = new Date(w.detectedAt).toISOString().slice(0, 10);
+          cli.log(`  ${icon} [${w.type}] ${w.description}`);
+          cli.log(
+            `     target: ${w.targetRecipeId}  confidence: ${(w.confidence * 100).toFixed(0)}%  detected: ${date}  status: ${w.status}`
+          );
+          if (w.relatedRecipeIds.length > 0) {
+            cli.log(`     related: ${w.relatedRecipeIds.join(', ')}`);
+          }
         }
       }
       cli.blank();

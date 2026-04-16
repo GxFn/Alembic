@@ -4,15 +4,17 @@
  * 核心职责：
  *   1. 扫描所有 observing 状态的 Proposal，检查是否到期
  *   2. 到期 → 收集观察期表现数据 → 评估执行判据
- *   3. 通过 → 执行操作（merge/deprecate/enhance/...）
+ *   3. 通过 → 执行操作（update → ContentPatcher / deprecate → 状态转移）
  *   4. 不通过 → 拒绝 Proposal，Recipe 恢复原状态
  *
- * 触发时机：UiStartupTasks Stage 5
+ * 触发时机：
+ *   - UiStartupTasks Stage 5（启动时）
+ *   - evolve-check 完成后
+ *   - HttpServer 运行期间 30min interval
  *
  * 安全边界：
  *   - Agent 只做分析，ProposalExecutor 做执行
- *   - merge/enhance 执行后 Recipe → staging（走正常路径）
- *   - contradiction/reorganize 始终等开发者确认（不自动执行）
+ *   - update 执行后 Recipe → staging（走正常路径）
  *   - 到期无判据 → expired
  */
 
@@ -47,9 +49,6 @@ interface RecipeMetrics {
 }
 
 /* ────────────────────── Constants ────────────────────── */
-
-/** 高风险类型：需开发者确认，不自动执行 */
-const HIGH_RISK_TYPES = new Set<ProposalType>(['contradiction', 'reorganize']);
 
 /** 超过此天数未操作的 pending Proposal 自动过期 */
 const PENDING_EXPIRY_DAYS = 14;
@@ -99,16 +98,6 @@ export class ProposalExecutor {
     // 1. 处理到期的 observing Proposal
     const expiredObserving = this.#repo.findExpiredObserving();
     for (const proposal of expiredObserving) {
-      if (HIGH_RISK_TYPES.has(proposal.type)) {
-        // 高风险类型跳过自动执行
-        result.skipped.push({
-          id: proposal.id,
-          type: proposal.type,
-          reason: 'high-risk type requires developer confirmation',
-        });
-        continue;
-      }
-
       await this.#processExpiredProposal(proposal, result);
     }
 
@@ -135,18 +124,11 @@ export class ProposalExecutor {
     const snapshot = this.#extractSnapshot(proposal);
 
     switch (proposal.type) {
-      case 'merge':
-      case 'enhance':
-        await this.#executeMergeOrEnhance(proposal, metrics, snapshot, result);
-        break;
-      case 'supersede':
-        await this.#executeSupersede(proposal, metrics, snapshot, result);
+      case 'update':
+        await this.#executeUpdate(proposal, metrics, snapshot, result);
         break;
       case 'deprecate':
         await this.#executeDeprecate(proposal, metrics, snapshot, result);
-        break;
-      case 'correction':
-        await this.#executeCorrection(proposal, metrics, result);
         break;
       default:
         result.skipped.push({
@@ -157,12 +139,12 @@ export class ProposalExecutor {
     }
   }
 
-  /* ── merge / enhance ── */
+  /* ── update（合并旧 enhance + correction + merge 逻辑） ── */
 
-  async #executeMergeOrEnhance(
+  async #executeUpdate(
     proposal: ProposalRecord,
     metrics: RecipeMetrics,
-    snapshot: RecipeMetrics | null,
+    _snapshot: RecipeMetrics | null,
     result: ProposalExecutionResult
   ): Promise<void> {
     // 执行判据：
@@ -173,37 +155,56 @@ export class ProposalExecutor {
 
     if (fpOk && hasUsage) {
       // 通过 → evolving → ContentPatcher → staging（重走 Grace Period）
-      await this.#transitionRecipe(
-        proposal.targetRecipeId,
-        'evolving',
-        'proposal-attach',
-        proposal.id
-      );
-      const patchResult = await this.#tryApplyPatch(proposal, 'agent-suggestion');
+      try {
+        await this.#transitionRecipe(
+          proposal.targetRecipeId,
+          'evolving',
+          'proposal-attach',
+          proposal.id
+        );
+        const patchResult = await this.#tryApplyPatch(proposal, 'agent-suggestion');
 
-      if (patchResult?.skipped || (!patchResult?.success && patchResult !== null)) {
-        await this.#transitionRecipe(
-          proposal.targetRecipeId,
-          'active',
-          'content-patch-complete',
-          proposal.id
+        if (patchResult?.skipped || (!patchResult?.success && patchResult !== null)) {
+          await this.#transitionRecipe(
+            proposal.targetRecipeId,
+            'active',
+            'content-patch-complete',
+            proposal.id
+          );
+          const skipInfo = patchResult?.skipReason ? `: ${patchResult.skipReason}` : '';
+          this.#repo.markExecuted(proposal.id, `观察期合格但 patch 未生效${skipInfo}, 回退 active`);
+        } else {
+          await this.#transitionRecipe(
+            proposal.targetRecipeId,
+            'staging',
+            'content-patch-complete',
+            proposal.id
+          );
+          const patchInfo = patchResult?.success
+            ? `, patched=[${patchResult.fieldsPatched.join(',')}]`
+            : '';
+          this.#repo.markExecuted(
+            proposal.id,
+            `观察期表现合格: FP=${(metrics.ruleFalsePositiveRate * 100).toFixed(0)}%, hits=${metrics.guardHits + metrics.searchHits}${patchInfo}`
+          );
+        }
+      } catch (err: unknown) {
+        // 转移或 patch 过程中出错 → 恢复 Recipe 状态，避免卡在 evolving
+        this.#logger.warn(
+          `[ProposalExecutor] #executeUpdate failed for ${proposal.targetRecipeId}, restoring recipe: ${err instanceof Error ? err.message : String(err)}`
         );
-        const skipInfo = patchResult?.skipReason ? `: ${patchResult.skipReason}` : '';
-        this.#repo.markExecuted(proposal.id, `观察期合格但 patch 未生效${skipInfo}, 回退 active`);
-      } else {
-        await this.#transitionRecipe(
-          proposal.targetRecipeId,
-          'staging',
-          'content-patch-complete',
-          proposal.id
-        );
-        const patchInfo = patchResult?.success
-          ? `, patched=[${patchResult.fieldsPatched.join(',')}]`
-          : '';
-        this.#repo.markExecuted(
+        await this.#restoreRecipe(proposal.targetRecipeId);
+        this.#repo.markRejected(
           proposal.id,
-          `观察期表现合格: FP=${(metrics.ruleFalsePositiveRate * 100).toFixed(0)}%, hits=${metrics.guardHits + metrics.searchHits}${patchInfo}`
+          `执行异常, Recipe 已恢复: ${err instanceof Error ? err.message : String(err)}`
         );
+        result.rejected.push({
+          id: proposal.id,
+          type: proposal.type,
+          reason: `execution error: ${err instanceof Error ? err.message : String(err)}`,
+        });
+        this.#emitSignal(proposal, 'rejected');
+        return;
       }
       result.executed.push({
         id: proposal.id,
@@ -222,77 +223,6 @@ export class ProposalExecutor {
         id: proposal.id,
         type: proposal.type,
         reason: fpOk ? 'no usage during observation' : 'FP rate too high',
-      });
-      this.#emitSignal(proposal, 'rejected');
-    }
-  }
-
-  /* ── supersede ── */
-
-  async #executeSupersede(
-    proposal: ProposalRecord,
-    metrics: RecipeMetrics,
-    snapshot: RecipeMetrics | null,
-    result: ProposalExecutionResult
-  ): Promise<void> {
-    // 新 Recipe 必须已到达 active
-    const newRecipeId = proposal.relatedRecipeIds[0];
-    if (!newRecipeId) {
-      this.#repo.markRejected(proposal.id, 'no related new recipe specified');
-      result.rejected.push({
-        id: proposal.id,
-        type: proposal.type,
-        reason: 'no related new recipe',
-      });
-      return;
-    }
-
-    const newRecipe = await this.#getRecipeLifecycle(newRecipeId);
-    if (newRecipe?.lifecycle !== 'active') {
-      // 新 Recipe 尚未 active → 跳过，等下次检查
-      result.skipped.push({
-        id: proposal.id,
-        type: proposal.type,
-        reason: `new recipe ${newRecipeId} not yet active (lifecycle: ${newRecipe?.lifecycle ?? 'unknown'})`,
-      });
-      return;
-    }
-
-    // 对比新旧 Recipe 的使用数据
-    const newMetrics = await this.#collectRecipeMetrics(newRecipeId);
-    const oldUsage = metrics.guardHits + metrics.searchHits;
-    const newUsage = newMetrics.guardHits + newMetrics.searchHits;
-
-    if (newUsage >= oldUsage * 0.5 || oldUsage === 0) {
-      // 新 Recipe 表现足够 → 旧 Recipe → decaying，建立 deprecated_by
-      await this.#transitionRecipe(
-        proposal.targetRecipeId,
-        'decaying',
-        'proposal-execution',
-        proposal.id
-      );
-      await this.#createDeprecatedByEdge(newRecipeId, proposal.targetRecipeId);
-      this.#repo.markExecuted(
-        proposal.id,
-        `supersede executed: new usage=${newUsage}, old usage=${oldUsage}`
-      );
-      result.executed.push({
-        id: proposal.id,
-        type: proposal.type,
-        targetRecipeId: proposal.targetRecipeId,
-      });
-      this.#emitSignal(proposal, 'executed');
-    } else {
-      // 新 Recipe 表现不足 → 拒绝
-      await this.#restoreRecipe(proposal.targetRecipeId);
-      this.#repo.markRejected(
-        proposal.id,
-        `new recipe usage (${newUsage}) < 50% of old (${oldUsage})`
-      );
-      result.rejected.push({
-        id: proposal.id,
-        type: proposal.type,
-        reason: 'new recipe insufficient usage',
       });
       this.#emitSignal(proposal, 'rejected');
     }
@@ -360,71 +290,18 @@ export class ProposalExecutor {
       return;
     }
 
+    // 如有 replacedByRecipeId → 建立 deprecated_by edge
+    const replacedBy = proposal.relatedRecipeIds[0];
+    if (replacedBy) {
+      await this.#createDeprecatedByEdge(replacedBy, proposal.targetRecipeId);
+    }
+
     result.executed.push({
       id: proposal.id,
       type: proposal.type,
       targetRecipeId: proposal.targetRecipeId,
     });
     this.#emitSignal(proposal, 'executed');
-  }
-
-  /* ── correction ── */
-
-  async #executeCorrection(
-    proposal: ProposalRecord,
-    metrics: RecipeMetrics,
-    result: ProposalExecutionResult
-  ): Promise<void> {
-    // correction 低风险，到期直接执行（Recipe → evolving → patch → staging 重新审核）
-    const hasUsage = metrics.guardHits > 0 || metrics.searchHits > 0;
-    if (hasUsage) {
-      await this.#transitionRecipe(
-        proposal.targetRecipeId,
-        'evolving',
-        'proposal-attach',
-        proposal.id
-      );
-      const patchResult = await this.#tryApplyPatch(proposal, 'correction');
-
-      if (patchResult?.skipped || (!patchResult?.success && patchResult !== null)) {
-        await this.#transitionRecipe(
-          proposal.targetRecipeId,
-          'active',
-          'content-patch-complete',
-          proposal.id
-        );
-        const skipInfo = patchResult?.skipReason ? `: ${patchResult.skipReason}` : '';
-        this.#repo.markExecuted(proposal.id, `correction patch 未生效${skipInfo}, 回退 active`);
-      } else {
-        await this.#transitionRecipe(
-          proposal.targetRecipeId,
-          'staging',
-          'content-patch-complete',
-          proposal.id
-        );
-        const patchInfo = patchResult?.success
-          ? `, patched=[${patchResult.fieldsPatched.join(',')}]`
-          : '';
-        this.#repo.markExecuted(
-          proposal.id,
-          `correction applied, recipe → evolving → staging for re-review${patchInfo}`
-        );
-      }
-      result.executed.push({
-        id: proposal.id,
-        type: proposal.type,
-        targetRecipeId: proposal.targetRecipeId,
-      });
-      this.#emitSignal(proposal, 'executed');
-    } else {
-      this.#repo.markRejected(proposal.id, 'no usage during observation, correction unnecessary');
-      result.rejected.push({
-        id: proposal.id,
-        type: proposal.type,
-        reason: 'no usage',
-      });
-      this.#emitSignal(proposal, 'rejected');
-    }
   }
 
   /* ── expired pending cleanup ── */

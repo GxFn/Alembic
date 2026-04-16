@@ -64,6 +64,7 @@ export type TransitionTrigger =
   | 'content-patch-complete'
   | 'decay-detection'
   | 'manual-deprecation'
+  | 'evolution-gateway'
   | 'timeout-recovery'
   | 'evidence-recovery'
   | 'resurrection';

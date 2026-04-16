@@ -2124,4 +2124,28 @@ export const en: DeepString<typeof zh> = {
     openMonitor: 'Open Signal Monitor',
     closeMonitor: 'Close Signal Monitor',
   },
+
+  /* ═══ Evolution ═══ */
+  evolution: {
+    title: 'Evolution Signals',
+    togglePanel: 'Toggle Evolution Panel',
+    proposals: 'Proposals',
+    warnings: 'Warnings',
+    history: 'History',
+    noSignals: 'No Evolution Signals',
+    noSignalsDesc: 'No pending proposals or warnings for this recipe',
+    source: 'Source',
+    confidence: 'Confidence',
+    proposed: 'Proposed',
+    expires: 'Expires',
+    detected: 'Detected',
+    related: 'Related Recipes',
+    evidence: 'Evidence',
+    reject: 'Reject',
+    resolve: 'Resolve',
+    dismiss: 'Dismiss',
+    proposalRejected: 'Proposal rejected',
+    warningResolved: 'Warning resolved',
+    warningDismissed: 'Warning dismissed',
+  },
 } as const;

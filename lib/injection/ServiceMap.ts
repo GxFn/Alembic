@@ -36,6 +36,7 @@ import type { AuditRepositoryImpl } from '../repository/audit/AuditRepository.js
 import type { BootstrapRepositoryImpl } from '../repository/bootstrap/BootstrapRepository.js';
 import type { CodeEntityRepositoryImpl } from '../repository/code/CodeEntityRepository.js';
 import type { ProposalRepository } from '../repository/evolution/ProposalRepository.js';
+import type { WarningRepository } from '../repository/evolution/WarningRepository.js';
 import type { GuardViolationRepositoryImpl } from '../repository/guard/GuardViolationRepository.js';
 import type { KnowledgeEdgeRepositoryImpl } from '../repository/knowledge/KnowledgeEdgeRepository.js';
 // ── Repository Types ──
@@ -106,6 +107,7 @@ export interface ServiceMap {
   memoryRepository: MemoryRepositoryImpl;
   sessionRepository: SessionRepositoryImpl;
   proposalRepository: ProposalRepository;
+  warningRepository: WarningRepository;
   remoteCommandRepository: RemoteCommandRepository;
   recipeSourceRefRepository: RecipeSourceRefRepositoryImpl;
   knowledgeFileWriter: KnowledgeFileWriter;

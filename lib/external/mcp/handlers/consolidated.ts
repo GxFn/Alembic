@@ -309,12 +309,19 @@ export async function enhancedSubmitKnowledge(ctx: McpContext, args: Record<stri
   } catch {
     /* not registered */
   }
+  let evolutionGateway = null;
+  try {
+    evolutionGateway = ctx.container.get('evolutionGateway');
+  } catch {
+    /* not registered */
+  }
 
   const gateway = new RecipeProductionGateway({
     knowledgeService,
     projectRoot,
     consolidationAdvisor: consolidationAdvisor ?? null,
     proposalRepository: proposalRepository ?? null,
+    evolutionGateway: evolutionGateway ?? null,
   });
 
   const gatewayResult = await gateway.create({

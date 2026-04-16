@@ -2,14 +2,16 @@
  * evolution-tools.ts — Evolution Agent 专用工具
  *
  * 三个提案驱动的决策工具，供 Evolution Agent 在 rescan 时对现有 Recipe 做出明确决策：
- *   - propose_evolution: 附加进化提案（代码已变但知识仍有价值）
- *   - confirm_deprecation: 确认 Recipe 应被废弃（加速 deprecate 流程）
- *   - skip_evolution: 显式跳过进化决策（仍然有效或信息不足）
+ *   - propose_evolution: 附加进化提案（代码已变但知识仍有价值）→ EvolutionGateway.submit(update)
+ *   - confirm_deprecation: 确认 Recipe 应被废弃 → EvolutionGateway.submit(deprecate)
+ *   - skip_evolution: 显式跳过进化决策 → EvolutionGateway.submit(valid)
+ *
+ * 所有工具统一通过 EvolutionGateway 提交决策。
  *
  * @module agent/tools/evolution-tools
  */
 
-import type { ProposalRepository } from '../../repository/evolution/ProposalRepository.js';
+import type { EvolutionGateway } from '../../service/evolution/EvolutionGateway.js';
 import type { ToolHandlerContext } from './_shared.js';
 
 // ── Param types ──────────────────────────────────────────
@@ -35,6 +37,12 @@ interface ConfirmDeprecationParams {
 interface SkipEvolutionParams {
   recipeId: string;
   reason: string;
+}
+
+// ── Helper ──────────────────────────────────────────────
+
+function getGateway(ctx: ToolHandlerContext): EvolutionGateway | null {
+  return ctx.container.get('evolutionGateway') as EvolutionGateway | null;
 }
 
 // ──────────────────────────────────────────────────────────
@@ -91,24 +99,22 @@ export const proposeEvolution = {
     required: ['recipeId', 'type', 'description', 'evidence', 'confidence'],
   },
   handler: async (params: ProposeEvolutionParams, ctx: ToolHandlerContext) => {
-    const { recipeId, type, description, evidence, confidence } = params;
+    const { recipeId, description, evidence, confidence } = params;
 
-    // 通过 ProposalRepository 创建提案
-    const proposalRepo = ctx.container.get('proposalRepository') as ProposalRepository | null;
-    if (!proposalRepo) {
+    const gateway = getGateway(ctx);
+    if (!gateway) {
       return {
         status: 'error' as const,
-        message: 'ProposalRepository not available',
+        message: 'EvolutionGateway not available',
         recipeId,
       };
     }
 
-    const proposal = proposalRepo.create({
-      type,
-      targetRecipeId: recipeId,
-      relatedRecipeIds: [],
-      confidence: Math.max(0, Math.min(1, confidence)),
+    const result = await gateway.submit({
+      recipeId,
+      action: 'update',
       source: 'decay-scan',
+      confidence: Math.max(0, Math.min(1, confidence)),
       description,
       evidence: [
         {
@@ -122,20 +128,20 @@ export const proposeEvolution = {
       ],
     });
 
-    if (!proposal) {
+    if (result.outcome === 'error') {
       return {
         status: 'error' as const,
-        message: 'Failed to create proposal (target recipe may not exist or duplicate proposal)',
+        message: result.error ?? 'Failed to create proposal',
         recipeId,
       };
     }
 
     return {
       status: 'proposed' as const,
-      proposalId: proposal.id,
+      proposalId: result.proposalId,
       recipeId,
-      type,
-      expiresAt: proposal.expiresAt,
+      type: 'update',
+      expiresAt: undefined,
     };
   },
 };
@@ -158,32 +164,29 @@ export const confirmDeprecation = {
   handler: async (params: ConfirmDeprecationParams, ctx: ToolHandlerContext) => {
     const { recipeId, reason } = params;
 
-    // 1. 通过 knowledgeService 将 lifecycle 转为 deprecated
-    const knowledgeService = ctx.container.get('knowledgeService') as {
-      deprecate(id: string, reason: string, opts: { userId: string }): unknown;
-    };
-    const result = knowledgeService.deprecate(recipeId, reason, { userId: 'evolution-agent' });
-
-    // 2. 尝试解决关联的 deprecate proposal（status → executed）
-    try {
-      const proposalRepo = ctx.container.get('proposalRepository') as ProposalRepository | null;
-      if (proposalRepo) {
-        const existing = proposalRepo.findByTarget(recipeId);
-        for (const p of existing) {
-          if (p.type === 'deprecate') {
-            proposalRepo.markExecuted(
-              p.id,
-              `Evolution Agent confirmed deprecation: ${reason}`,
-              'evolution-agent'
-            );
-          }
-        }
-      }
-    } catch {
-      // ProposalRepository 不可用时静默失败
+    const gateway = getGateway(ctx);
+    if (!gateway) {
+      return {
+        status: 'error' as const,
+        message: 'EvolutionGateway not available',
+        recipeId,
+      };
     }
 
-    return { status: 'deprecated', recipeId, reason, result };
+    const result = await gateway.submit({
+      recipeId,
+      action: 'deprecate',
+      source: 'decay-scan',
+      confidence: 0.9, // Agent 已验证，高置信度 → Gateway 会立即执行
+      reason,
+    });
+
+    return {
+      status: result.outcome === 'immediately-executed' ? 'deprecated' : result.outcome,
+      recipeId,
+      reason,
+      result,
+    };
   },
 };
 
@@ -193,7 +196,7 @@ export const confirmDeprecation = {
 
 export const skipEvolution = {
   name: 'skip_evolution',
-  description: '显式跳过一个 Recipe 的进化决策（信息不足或不紧急，交给时限机制处理）',
+  description: '显式跳过一个 Recipe 的进化决策（仍然有效或信息不足，刷新验证时间）',
   parameters: {
     type: 'object',
     properties: {
@@ -202,8 +205,23 @@ export const skipEvolution = {
     },
     required: ['recipeId', 'reason'],
   },
-  handler: async (params: SkipEvolutionParams, _ctx: ToolHandlerContext) => {
-    // 不修改 proposal 状态，仅记录决策
-    return { status: 'skipped', recipeId: params.recipeId, reason: params.reason };
+  handler: async (params: SkipEvolutionParams, ctx: ToolHandlerContext) => {
+    const { recipeId, reason } = params;
+
+    const gateway = getGateway(ctx);
+    if (!gateway) {
+      // 降级：不修改状态，仅返回
+      return { status: 'skipped', recipeId, reason };
+    }
+
+    const result = await gateway.submit({
+      recipeId,
+      action: 'valid',
+      source: 'decay-scan',
+      confidence: 0.5,
+      reason,
+    });
+
+    return { status: 'skipped', recipeId, reason, verified: result.outcome === 'verified' };
   },
 };

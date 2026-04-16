@@ -2,7 +2,11 @@
  * KnowledgeMetabolism — 知识新陈代谢总线
  *
  * 治理总线：编排三种进化策略 (矛盾检测 + 冗余分析 + 衰退检测)
- * 产出 EvolutionProposal，通过 ConfidenceRouter + 状态机 驱动转换。
+ *
+ * 进化系统重构后：
+ *   - 衰退检测 → EvolutionGateway.submit({ action: 'deprecate', source: 'metabolism' })
+ *   - 矛盾检测 → RecipeWarning (不走 Proposal，仅信号层)
+ *   - 冗余分析 → RecipeWarning (不走 Proposal，仅信号层)
  *
  * 入口：
  *   - runFullCycle() — 完整治理周期（日常定时 / 手动触发）
@@ -15,38 +19,46 @@ import Logger from '../../infrastructure/logging/Logger.js';
 
 import type { ReportStore } from '../../infrastructure/report/ReportStore.js';
 import type { SignalBus } from '../../infrastructure/signal/SignalBus.js';
-import type {
-  ProposalRepository,
-  ProposalSource,
-  ProposalType as RepoProposalType,
-} from '../../repository/evolution/ProposalRepository.js';
 import type { ContradictionDetector, ContradictionResult } from './ContradictionDetector.js';
 import type { DecayDetector, DecayScoreResult } from './DecayDetector.js';
+import type { EvolutionGateway, EvolutionResult } from './EvolutionGateway.js';
 import type { RedundancyAnalyzer, RedundancyResult } from './RedundancyAnalyzer.js';
 
 /* ────────────────────── Types ────────────────────── */
 
-export type ProposalType = 'merge' | 'enhance' | 'deprecate' | 'contradiction' | 'correction';
+/** Metabolism 内部提案类型，仅保留走 Proposal 的 'deprecate' */
+export type ProposalType = 'deprecate';
+
+/** 警告类型（不走 Proposal 的发现型信号） */
+export type WarningType = 'contradiction' | 'redundancy';
+
+export interface RecipeWarning {
+  type: WarningType;
+  targetRecipeId: string;
+  relatedRecipeIds: string[];
+  confidence: number;
+  description: string;
+  evidence: string[];
+  detectedAt: number;
+}
 
 export interface EvolutionProposal {
   /** 进化提案类型 */
   type: ProposalType;
   /** 目标 Recipe ID */
   targetRecipeId: string;
-  /** 关联 Recipe IDs（合并/矛盾对象） */
+  /** 关联 Recipe IDs */
   relatedRecipeIds: string[];
   /** 置信度 0-1 */
   confidence: number;
   /** 触发来源 */
-  source: 'contradiction' | 'redundancy' | 'decay' | 'enhancement';
+  source: 'decay';
   /** 描述 */
   description: string;
   /** 原始信号证据 */
   evidence: string[];
   /** 创建时间 */
   proposedAt: number;
-  /** 过期时间 */
-  expiresAt: number;
 }
 
 export interface MetabolismReport {
@@ -56,8 +68,10 @@ export interface MetabolismReport {
   redundancies: RedundancyResult[];
   /** 衰退评估结果 */
   decayResults: DecayScoreResult[];
-  /** 生成的进化提案 */
+  /** 生成的进化提案（仅 deprecate） */
   proposals: EvolutionProposal[];
+  /** 警告信号（矛盾 + 冗余，不走 Proposal） */
+  warnings: RecipeWarning[];
   /** 统计摘要 */
   summary: {
     totalScanned: number;
@@ -65,12 +79,9 @@ export interface MetabolismReport {
     redundancyCount: number;
     decayingCount: number;
     proposalCount: number;
+    warningCount: number;
   };
 }
-
-/* ────────────────────── Constants ────────────────────── */
-
-const PROPOSAL_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /* ────────────────────── Class ────────────────────── */
 
@@ -80,7 +91,8 @@ export class KnowledgeMetabolism {
   #decayDetector: DecayDetector;
   #signalBus: SignalBus | null;
   #reportStore: ReportStore | null;
-  #proposalRepo: ProposalRepository | null;
+  #gateway: EvolutionGateway | null;
+  #warningRepo: import('../../repository/evolution/WarningRepository.js').WarningRepository | null;
   #logger = Logger.getInstance();
   #pendingTriggers: unknown[] = [];
   #debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -92,14 +104,16 @@ export class KnowledgeMetabolism {
     decayDetector: DecayDetector;
     signalBus?: SignalBus;
     reportStore?: ReportStore;
-    proposalRepository?: ProposalRepository;
+    evolutionGateway?: EvolutionGateway;
+    warningRepository?: import('../../repository/evolution/WarningRepository.js').WarningRepository;
   }) {
     this.#contradictionDetector = options.contradictionDetector;
     this.#redundancyAnalyzer = options.redundancyAnalyzer;
     this.#decayDetector = options.decayDetector;
     this.#signalBus = options.signalBus ?? null;
     this.#reportStore = options.reportStore ?? null;
-    this.#proposalRepo = options.proposalRepository ?? null;
+    this.#gateway = options.evolutionGateway ?? null;
+    this.#warningRepo = options.warningRepository ?? null;
 
     // Phase 2: 订阅告警型信号，触发代谢周期
     if (this.#signalBus) {
@@ -138,12 +152,14 @@ export class KnowledgeMetabolism {
         redundancies: [],
         decayResults: [],
         proposals: [],
+        warnings: [],
         summary: {
           totalScanned: 0,
           contradictionCount: 0,
           redundancyCount: 0,
           decayingCount: 0,
           proposalCount: 0,
+          warningCount: 0,
         },
       };
     }
@@ -164,46 +180,65 @@ export class KnowledgeMetabolism {
       // 3. 冗余分析
       const redundancies = await this.#redundancyAnalyzer.analyzeAll();
 
-      // 4. 生成进化提案
-      const proposals: EvolutionProposal[] = [
-        ...this.#proposalsFromContradictions(contradictions),
-        ...this.#proposalsFromRedundancies(redundancies),
-        ...this.#proposalsFromDecay(decayResults),
+      // 4. 生成进化提案（仅衰退走 Proposal）
+      const proposals: EvolutionProposal[] = this.#proposalsFromDecay(decayResults);
+
+      // 5. 生成警告信号（矛盾 + 冗余，不走 Proposal）
+      const warnings: RecipeWarning[] = [
+        ...this.#warningsFromContradictions(contradictions),
+        ...this.#warningsFromRedundancies(redundancies),
       ];
 
-      // 5. 持久化提案到 evolution_proposals 表
+      // 6. 通过 EvolutionGateway 提交 deprecate 提案
       let persistedCount = 0;
-      if (this.#proposalRepo && proposals.length > 0) {
+      const gatewayResults: EvolutionResult[] = [];
+      if (this.#gateway && proposals.length > 0) {
         for (const p of proposals) {
-          const sourceMap: Record<string, ProposalSource> = {
-            contradiction: 'metabolism',
-            redundancy: 'metabolism',
-            decay: 'decay-scan',
-            enhancement: 'metabolism',
-          };
-          const record = this.#proposalRepo.create({
-            type: p.type as RepoProposalType,
-            targetRecipeId: p.targetRecipeId,
-            relatedRecipeIds: p.relatedRecipeIds,
+          const result = await this.#gateway.submit({
+            recipeId: p.targetRecipeId,
+            action: 'deprecate',
+            source: 'metabolism',
             confidence: p.confidence,
-            source: sourceMap[p.source] ?? 'metabolism',
             description: p.description,
             evidence: p.evidence.map((e) => ({ detail: e })),
           });
-          if (record) {
+          gatewayResults.push(result);
+          if (result.outcome === 'proposal-created' || result.outcome === 'immediately-executed') {
             persistedCount++;
           }
         }
       }
 
-      // 6. 写入治理报告（降级：同时写 ReportStore）
-      if (this.#reportStore && proposals.length > 0) {
+      // 7. 持久化 warnings 到 DB（去重 upsert）
+      if (this.#warningRepo && warnings.length > 0) {
+        try {
+          this.#warningRepo.upsertBatch(
+            warnings.map((w) => ({
+              type: w.type,
+              targetRecipeId: w.targetRecipeId,
+              relatedRecipeIds: w.relatedRecipeIds,
+              confidence: w.confidence,
+              description: w.description,
+              evidence: w.evidence,
+            }))
+          );
+          this.#logger.info(`KnowledgeMetabolism: persisted ${warnings.length} warnings to DB`);
+        } catch (err: unknown) {
+          this.#logger.warn(
+            `KnowledgeMetabolism: failed to persist warnings: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+
+      // 8. 写入治理报告
+      if (this.#reportStore && (proposals.length > 0 || warnings.length > 0)) {
         void this.#reportStore.write({
           category: 'governance',
           type: 'metabolism_cycle',
           producer: 'KnowledgeMetabolism',
           data: {
             proposalCount: proposals.length,
+            warningCount: warnings.length,
             persistedCount,
             contradictionCount: contradictions.length,
             redundancyCount: redundancies.length,
@@ -219,6 +254,7 @@ export class KnowledgeMetabolism {
         redundancies,
         decayResults,
         proposals,
+        warnings,
         summary: {
           totalScanned: decayResults.length,
           contradictionCount: contradictions.length,
@@ -226,11 +262,12 @@ export class KnowledgeMetabolism {
           decayingCount: decayResults.filter((d) => d.level !== 'healthy' && d.level !== 'watch')
             .length,
           proposalCount: proposals.length,
+          warningCount: warnings.length,
         },
       };
 
       this.#logger.info(
-        `KnowledgeMetabolism: cycle complete — ${report.summary.proposalCount} proposals generated`
+        `KnowledgeMetabolism: cycle complete — ${report.summary.proposalCount} proposals, ${report.summary.warningCount} warnings`
       );
 
       return report;
@@ -262,37 +299,33 @@ export class KnowledgeMetabolism {
     return await this.#redundancyAnalyzer.analyzeAll();
   }
 
-  /* ── Proposal Generation ── */
+  /* ── Warning & Proposal Generation ── */
 
-  #proposalsFromContradictions(results: ContradictionResult[]): EvolutionProposal[] {
+  #warningsFromContradictions(results: ContradictionResult[]): RecipeWarning[] {
     const now = Date.now();
     return results.map((r) => ({
-      type: r.type === 'hard' ? ('contradiction' as const) : ('correction' as const),
+      type: 'contradiction' as const,
       targetRecipeId: r.recipeA,
       relatedRecipeIds: [r.recipeB],
       confidence: r.confidence,
-      source: 'contradiction' as const,
       description: `${r.type === 'hard' ? 'Hard' : 'Soft'} contradiction detected between recipes`,
       evidence: r.evidence,
-      proposedAt: now,
-      expiresAt: now + PROPOSAL_TTL,
+      detectedAt: now,
     }));
   }
 
-  #proposalsFromRedundancies(results: RedundancyResult[]): EvolutionProposal[] {
+  #warningsFromRedundancies(results: RedundancyResult[]): RecipeWarning[] {
     const now = Date.now();
     return results.map((r) => ({
-      type: 'merge' as const,
+      type: 'redundancy' as const,
       targetRecipeId: r.recipeA,
       relatedRecipeIds: [r.recipeB],
       confidence: r.similarity,
-      source: 'redundancy' as const,
       description: `Redundant content detected (similarity: ${(r.similarity * 100).toFixed(0)}%)`,
       evidence: Object.entries(r.dimensions)
         .filter(([, v]) => v > 0)
         .map(([k, v]) => `${k}: ${(v * 100).toFixed(0)}%`),
-      proposedAt: now,
-      expiresAt: now + PROPOSAL_TTL,
+      detectedAt: now,
     }));
   }
 
@@ -309,7 +342,6 @@ export class KnowledgeMetabolism {
         description: `Decay detected: score=${r.decayScore}, level=${r.level}`,
         evidence: r.signals.map((s) => `${s.strategy}: ${s.detail}`),
         proposedAt: now,
-        expiresAt: now + PROPOSAL_TTL,
       }));
   }
 }

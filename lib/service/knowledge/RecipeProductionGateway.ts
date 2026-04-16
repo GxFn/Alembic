@@ -166,6 +166,25 @@ interface GatewayProposalRepository {
   } | null;
 }
 
+/** EvolutionGateway — 统一进化决策提交接口 */
+interface GatewayEvolutionGateway {
+  submit(decision: {
+    recipeId: string;
+    action: 'update' | 'deprecate' | 'valid';
+    source: string;
+    confidence: number;
+    description?: string;
+    evidence?: Record<string, unknown>[];
+    replacedByRecipeId?: string;
+  }): Promise<{
+    recipeId: string;
+    action: string;
+    outcome: string;
+    proposalId?: string;
+    error?: string;
+  }>;
+}
+
 type GatewaySimilarityFn = (
   projectRoot: string,
   candidate: { title: string; summary: string; code: string },
@@ -178,8 +197,10 @@ export interface GatewayDeps {
   logger?: GatewayLogger;
   /** ConsolidationAdvisor（可选 — MCP 路径使用） */
   consolidationAdvisor?: GatewayConsolidationAdvisor | null;
-  /** ProposalRepository（可选 — supersede 提案需要） */
+  /** ProposalRepository（可选 — 仅用于检查已有提案等直接操作） */
   proposalRepository?: GatewayProposalRepository | null;
+  /** EvolutionGateway（可选 — 优先通过 Gateway 创建进化提案） */
+  evolutionGateway?: GatewayEvolutionGateway | null;
   /** 相似度检测函数（可选 — 默认导入 SimilarityService） */
   findSimilarRecipes?: GatewaySimilarityFn | null;
 }
@@ -192,6 +213,7 @@ export class RecipeProductionGateway {
   readonly #logger?: GatewayLogger;
   readonly #consolidationAdvisor: GatewayConsolidationAdvisor | null;
   readonly #proposalRepo: GatewayProposalRepository | null;
+  readonly #evolutionGateway: GatewayEvolutionGateway | null;
   readonly #findSimilarRecipes: GatewaySimilarityFn | null;
 
   constructor(deps: GatewayDeps) {
@@ -200,6 +222,7 @@ export class RecipeProductionGateway {
     this.#logger = deps.logger;
     this.#consolidationAdvisor = deps.consolidationAdvisor ?? null;
     this.#proposalRepo = deps.proposalRepository ?? null;
+    this.#evolutionGateway = deps.evolutionGateway ?? null;
     this.#findSimilarRecipes = deps.findSimilarRecipes ?? null;
   }
 
@@ -333,8 +356,8 @@ export class RecipeProductionGateway {
 
           if (advice.action === 'create') {
             submittableItems.push(validEntry);
-          } else if (this.#proposalRepo) {
-            const proposal = this.#createProposalFromAdvice(advice, validEntry.item);
+          } else if (this.#evolutionGateway || this.#proposalRepo) {
+            const proposal = await this.#createProposalFromAdvice(advice, validEntry.item);
             if (proposal) {
               result.merged.push({
                 index: validEntry.index,
@@ -410,14 +433,30 @@ export class RecipeProductionGateway {
     // ── Step 6: Supersede Proposal ──
     if (options.supersedes && createdIds.length > 0) {
       try {
-        // 直接使用 ProposalRepository（Gateway 不依赖 ServiceContainer）
-        if (this.#proposalRepo) {
+        if (this.#evolutionGateway) {
+          // 优先通过 EvolutionGateway 提交 deprecate（supersede 语义）
+          const gwResult = await this.#evolutionGateway.submit({
+            recipeId: options.supersedes,
+            action: 'deprecate',
+            source: 'consolidation',
+            confidence: 0.9,
+            description: `Supersede proposal: ${createdIds.length} new recipe(s) replace ${options.supersedes}`,
+            evidence: [{ snapshotAt: Date.now(), newRecipeIds: createdIds }],
+            replacedByRecipeId: createdIds[0],
+          });
+          if (gwResult.proposalId || gwResult.outcome === 'immediately-executed') {
+            result.supersedeProposal = {
+              proposalId: gwResult.proposalId ?? `immediate-${options.supersedes}`,
+            };
+          }
+        } else if (this.#proposalRepo) {
+          // 降级：直接 ProposalRepo（无 Gateway 时）
           const proposal = this.#proposalRepo.create({
-            type: 'supersede',
+            type: 'deprecate',
             targetRecipeId: options.supersedes,
             relatedRecipeIds: createdIds,
             confidence: 0.9,
-            source: source === 'mcp-external' ? 'ide-agent' : 'ide-agent',
+            source: 'consolidation',
             description: `Supersede proposal: ${createdIds.length} new recipe(s) replace ${options.supersedes}`,
             evidence: [{ snapshotAt: Date.now(), newRecipeIds: createdIds }],
           });
@@ -514,7 +553,7 @@ export class RecipeProductionGateway {
     }
   }
 
-  #createProposalFromAdvice(
+  async #createProposalFromAdvice(
     advice: {
       action: string;
       confidence: number;
@@ -525,7 +564,7 @@ export class RecipeProductionGateway {
       mergeDirection?: { addedDimensions: string[]; summary: string };
     },
     item: CreateRecipeItem
-  ): {
+  ): Promise<{
     proposalId: string;
     type: string;
     targetRecipeId: string;
@@ -533,8 +572,8 @@ export class RecipeProductionGateway {
     status: string;
     expiresAt: number;
     message: string;
-  } | null {
-    if (!this.#proposalRepo) {
+  } | null> {
+    if (!this.#evolutionGateway && !this.#proposalRepo) {
       return null;
     }
 
@@ -549,11 +588,34 @@ export class RecipeProductionGateway {
     ];
 
     if (advice.action === 'merge' && advice.targetRecipe) {
-      const proposal = this.#proposalRepo.create({
-        type: 'merge',
+      if (this.#evolutionGateway) {
+        const gwResult = await this.#evolutionGateway.submit({
+          recipeId: advice.targetRecipe.id,
+          action: 'update',
+          source: 'consolidation',
+          confidence: advice.confidence,
+          description: advice.reason,
+          evidence,
+        });
+        if (gwResult.error) {
+          return null;
+        }
+        const isImmediate = gwResult.outcome === 'immediately-executed';
+        return {
+          proposalId: gwResult.proposalId ?? `immediate-${advice.targetRecipe.id}`,
+          type: 'update',
+          targetRecipeId: advice.targetRecipe.id,
+          targetTitle: advice.targetRecipe.title,
+          status: isImmediate ? 'executed' : 'observing',
+          expiresAt: isImmediate ? 0 : Date.now() + 72 * 3600_000,
+          message: `已为「${advice.targetRecipe.title}」创建更新提案，${isImmediate ? '已自动执行' : '观察窗口 72h 后自动执行'}。`,
+        };
+      }
+      const proposal = this.#proposalRepo!.create({
+        type: 'update',
         targetRecipeId: advice.targetRecipe.id,
         confidence: advice.confidence,
-        source: 'ide-agent',
+        source: 'consolidation',
         description: advice.reason,
         evidence,
       });
@@ -562,47 +624,54 @@ export class RecipeProductionGateway {
       }
       return {
         proposalId: proposal.id,
-        type: 'merge',
+        type: 'update',
         targetRecipeId: advice.targetRecipe.id,
         targetTitle: advice.targetRecipe.title,
         status: proposal.status,
         expiresAt: proposal.expiresAt,
-        message: `已为「${advice.targetRecipe.title}」创建融合提案，${proposal.status === 'observing' ? '观察窗口 72h 后自动执行' : '等待开发者确认'}。`,
+        message: `已为「${advice.targetRecipe.title}」创建更新提案，${proposal.status === 'observing' ? '观察窗口 72h 后自动执行' : '等待开发者确认'}。`,
       };
     }
 
     if (advice.action === 'reorganize' && advice.reorganizeTargets?.length) {
-      const target = advice.reorganizeTargets[0];
-      const proposal = this.#proposalRepo.create({
-        type: 'reorganize',
-        targetRecipeId: target.id,
-        relatedRecipeIds: advice.reorganizeTargets.slice(1).map((t) => t.id),
-        confidence: advice.confidence,
-        source: 'ide-agent',
-        description: advice.reason,
-        evidence,
-      });
-      if (!proposal) {
-        return null;
-      }
-      return {
-        proposalId: proposal.id,
-        type: 'reorganize',
-        targetRecipeId: target.id,
-        targetTitle: target.title,
-        status: proposal.status,
-        expiresAt: proposal.expiresAt,
-        message: `已为 ${advice.reorganizeTargets.length} 条 Recipe 创建重组提案，需开发者在 Dashboard 确认。`,
-      };
+      // reorganize 不再映射为 ProposalType — 仅记录日志
+      this.#logger?.info(
+        `[Gateway] reorganize advice for ${advice.reorganizeTargets.length} recipes — logged only (no proposal created)`
+      );
+      return null;
     }
 
     if (advice.action === 'insufficient' && advice.coveredBy?.length) {
       const target = advice.coveredBy[0];
-      const proposal = this.#proposalRepo.create({
-        type: 'enhance',
+      if (this.#evolutionGateway) {
+        const gwResult = await this.#evolutionGateway.submit({
+          recipeId: target.id,
+          action: 'update',
+          source: 'consolidation',
+          confidence: advice.confidence,
+          description: advice.reason,
+          evidence,
+        });
+        if (gwResult.error) {
+          return null;
+        }
+        const isImmediate = gwResult.outcome === 'immediately-executed';
+        return {
+          proposalId: gwResult.proposalId ?? `immediate-${target.id}`,
+          type: 'update',
+          targetRecipeId: target.id,
+          targetTitle: target.title,
+          status: isImmediate ? 'executed' : 'observing',
+          expiresAt: isImmediate ? 0 : Date.now() + 72 * 3600_000,
+          message: `候选独立价值不足，已创建更新提案建议补充到「${target.title}」。`,
+        };
+      }
+      // 降级：直接 ProposalRepo
+      const proposal = this.#proposalRepo!.create({
+        type: 'update',
         targetRecipeId: target.id,
         confidence: advice.confidence,
-        source: 'ide-agent',
+        source: 'consolidation',
         description: advice.reason,
         evidence,
       });
@@ -611,7 +680,7 @@ export class RecipeProductionGateway {
       }
       return {
         proposalId: proposal.id,
-        type: 'enhance',
+        type: 'update',
         targetRecipeId: target.id,
         targetTitle: target.title,
         status: proposal.status,

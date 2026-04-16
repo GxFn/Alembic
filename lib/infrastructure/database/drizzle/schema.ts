@@ -473,3 +473,31 @@ export const lifecycleTransitionEvents = sqliteTable(
     index('idx_lte_trigger').on(table.trigger),
   ]
 );
+
+// ═══════════════════════════════════════════════════════════════
+// 19. recipe_warnings — 知识新陈代谢警告持久化 (migration 008)
+// ═══════════════════════════════════════════════════════════════
+
+export const recipeWarnings = sqliteTable(
+  'recipe_warnings',
+  {
+    id: text('id').primaryKey(),
+    type: text('type').notNull(),
+    targetRecipeId: text('target_recipe_id').notNull(),
+    relatedRecipeIds: text('related_recipe_ids').notNull().default('[]'),
+    confidence: real('confidence').notNull().default(0),
+    description: text('description').notNull().default(''),
+    evidence: text('evidence').notNull().default('[]'),
+    status: text('status').notNull().default('open'),
+    detectedAt: integer('detected_at').notNull(),
+    resolvedAt: integer('resolved_at'),
+    resolvedBy: text('resolved_by'),
+    resolution: text('resolution'),
+  },
+  (table) => [
+    index('idx_rw_target').on(table.targetRecipeId),
+    index('idx_rw_type').on(table.type),
+    index('idx_rw_status').on(table.status),
+    index('idx_rw_detected').on(table.detectedAt),
+  ]
+);

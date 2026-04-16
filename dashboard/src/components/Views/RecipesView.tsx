@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Edit3, Trash2, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BadgeCheck, Eye, Save, Link2, Plus, Search, ArrowUp, ArrowDown, Code2, Layers, Globe, MoreHorizontal, Clock } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Edit3, Trash2, BookOpen, Shield, Lightbulb, FileText, FileCode, X, BadgeCheck, Eye, Save, Link2, Plus, Search, ArrowUp, ArrowDown, Code2, Layers, Globe, MoreHorizontal, Clock, GitMerge, AlertTriangle } from 'lucide-react';
 import { useDrawerWide } from '../../hooks/useDrawerWide';
 import { Recipe, KnowledgeEntry } from '../../types';
 import { categoryConfigs } from '../../constants';
@@ -17,6 +17,8 @@ import { cn } from '../../lib/utils';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Drawer } from '../Layout/Drawer';
+import PageOverlay from '../Shared/PageOverlay';
+import EvolutionPanel, { fetchEvolutionCounts } from './EvolutionPanel';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '../ui/DropdownMenu';
 import Select from '../ui/Select';
 
@@ -132,7 +134,31 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   const [newRelationType, setNewRelationType] = useState('related');
   const [relationSearchQuery, setRelationSearchQuery] = useState('');
 
+  /* ── Evolution signals state ── */
+  const [showEvolution, setShowEvolution] = useState(false);
+  const [evolutionCounts, setEvolutionCounts] = useState<Record<string, { proposals: number; warnings: number }>>({});
+
   useEffect(() => { return () => { isMountedRef.current = false; }; }, []);
+
+  /* ── Fetch evolution counts for current page recipes ── */
+  const fetchPageEvolutionCounts = useCallback(async (pageRecipes: Recipe[]) => {
+    const ids = pageRecipes.map(r => r.id).filter((id): id is string => !!id);
+    if (ids.length === 0) { return; }
+    const entries = await Promise.all(
+      ids.map(async id => {
+        const counts = await fetchEvolutionCounts(id);
+        return [id, counts] as const;
+      }),
+    );
+    if (!isMountedRef.current) { return; }
+    setEvolutionCounts(prev => {
+      const next = { ...prev };
+      for (const [id, counts] of entries) {
+        next[id] = counts;
+      }
+      return next;
+    });
+  }, []);
 
   const RELATION_TYPES = [
     { key: 'related',    label: t('knowledgeGraph.relationAssociates'), icon: '∼' },
@@ -323,6 +349,11 @@ const RecipesView: React.FC<RecipesViewProps> = ({
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedRecipes = sortedRecipes.slice(startIndex, startIndex + pageSize);
 
+  /* Fetch evolution counts when page changes */
+  useEffect(() => {
+    fetchPageEvolutionCounts(paginatedRecipes);
+  }, [paginatedRecipes, fetchPageEvolutionCounts]);
+
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -416,6 +447,25 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                         {recipe.stats?.authority != null && recipe.stats.authority >= 4 && (
                           <span className="text-amber-500 text-[11px] shrink-0">★ {recipe.stats.authority}</span>
                         )}
+                        {/* ── Evolution signal badges ── */}
+                        {(() => {
+                          const ec = recipe.id ? evolutionCounts[recipe.id] : undefined;
+                          if (!ec) { return null; }
+                          return (
+                            <>
+                              {ec.proposals > 0 && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 shrink-0" title={t('evolution.proposals')}>
+                                  <GitMerge size={10} /> {ec.proposals}
+                                </span>
+                              )}
+                              {ec.warnings > 0 && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 shrink-0" title={t('evolution.warnings')}>
+                                  <AlertTriangle size={10} /> {ec.warnings}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                       {summary && (
                         <p className="text-xs text-[var(--fg-secondary)] line-clamp-1 leading-relaxed mb-1.5">{summary.replace(/^#+\s*/gm, '').replace(/\*\*/g, '')}</p>
@@ -481,8 +531,34 @@ const RecipesView: React.FC<RecipesViewProps> = ({
         const codeLang = getCodeLang(recipe);
         const contentV3 = recipe.content;
 
+        const evoCount = (recipe.id ? evolutionCounts[recipe.id] : undefined) || { proposals: 0, warnings: 0 };
+        const hasEvolution = evoCount.proposals > 0 || evoCount.warnings > 0;
+
         return (
-          <Drawer open={!!selectedRecipe} onClose={closeDrawer} size={drawerWide ? 'lg' : 'md'}>
+          <PageOverlay className="z-30 flex justify-end" onClick={closeDrawer}>
+            <PageOverlay.Backdrop className="bg-black/20 dark:bg-black/40 backdrop-blur-sm" />
+
+            {/* ── Evolution side panel ── */}
+            {showEvolution && (
+              <Drawer.Panel size="sm" className="mr-0.5">
+                <Drawer.Header title={t('evolution.title')}>
+                  <Drawer.HeaderActions>
+                    <Drawer.CloseButton onClose={() => setShowEvolution(false)} />
+                  </Drawer.HeaderActions>
+                </Drawer.Header>
+                <Drawer.Body padded>
+                  <EvolutionPanel
+                    recipeId={recipe.id || ''}
+                    recipeName={displayName}
+                    idTitleMap={idTitleMapProp}
+                    onActionComplete={() => fetchPageEvolutionCounts(paginatedRecipes)}
+                  />
+                </Drawer.Body>
+              </Drawer.Panel>
+            )}
+
+            {/* ── Main recipe panel ── */}
+            <Drawer.Panel size={drawerWide ? 'lg' : 'md'}>
               {/* ── Header ── */}
               <Drawer.Header
                 title={displayName}
@@ -502,6 +578,22 @@ const RecipesView: React.FC<RecipesViewProps> = ({
                     <button onClick={() => setDrawerMode('view')} className={cn("px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1", drawerMode === 'view' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--accent)]' : 'text-[var(--fg-muted)] hover:text-[var(--fg-secondary)]')}><Eye size={ICON_SIZES.sm} /> {t('common.preview')}</button>
                     <button onClick={() => { setDrawerMode('edit'); }} className={cn("px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1", drawerMode === 'edit' ? 'bg-[var(--bg-surface)] shadow-sm text-[var(--accent)]' : 'text-[var(--fg-muted)] hover:text-[var(--fg-secondary)]')}><Edit3 size={ICON_SIZES.sm} /> {t('common.edit')}</button>
                   </div>
+                  {/* ── Evolution toggle ── */}
+                  <button
+                    onClick={() => setShowEvolution(v => !v)}
+                    title={t('evolution.togglePanel')}
+                    className={cn(
+                      "relative p-1.5 rounded-md transition-colors",
+                      showEvolution
+                        ? "text-[var(--accent)] bg-[var(--accent-subtle)]"
+                        : "text-[var(--fg-muted)] hover:text-[var(--fg-secondary)]"
+                    )}
+                  >
+                    <GitMerge size={ICON_SIZES.sm} />
+                    {hasEvolution && !showEvolution && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-500 rounded-full" />
+                    )}
+                  </button>
                   <Drawer.WidthToggle isWide={drawerWide} onToggle={toggleDrawerWide} />
                   <Drawer.CloseButton onClose={closeDrawer} />
                 </Drawer.HeaderActions>
@@ -870,7 +962,8 @@ const RecipesView: React.FC<RecipesViewProps> = ({
 
                 </Drawer.Body>
               )}
-          </Drawer>
+          </Drawer.Panel>
+          </PageOverlay>
         );
       })()}
     </div>

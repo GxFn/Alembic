@@ -20,11 +20,11 @@ import {
 
 function makeInput(overrides: Partial<CreateProposalInput> = {}): CreateProposalInput {
   return {
-    type: 'merge',
+    type: 'update',
     targetRecipeId: 'r-001',
     confidence: 0.85,
     source: 'ide-agent',
-    description: 'Test merge proposal',
+    description: 'Test update proposal',
     ...overrides,
   };
 }
@@ -53,11 +53,11 @@ describe('ProposalRepository', () => {
 
       expect(result).not.toBeNull();
       expect(result?.id).toMatch(/^ep-\d+-[0-9a-f]+$/);
-      expect(result?.type).toBe('merge');
+      expect(result?.type).toBe('update');
       expect(result?.targetRecipeId).toBe('r-001');
       expect(result?.confidence).toBe(0.85);
       expect(result?.source).toBe('ide-agent');
-      expect(result?.description).toBe('Test merge proposal');
+      expect(result?.description).toBe('Test update proposal');
       expect(result?.relatedRecipeIds).toEqual([]);
       expect(result?.evidence).toEqual([]);
       expect(result?.resolvedAt).toBeNull();
@@ -71,29 +71,21 @@ describe('ProposalRepository', () => {
       expect(result).toBeNull();
     });
 
-    it('auto-resolves to observing when confidence >= threshold (merge: 0.75)', () => {
-      const result = repo.create(makeInput({ type: 'merge', confidence: 0.8 }));
+    it('auto-resolves to observing when confidence >= threshold (update: 0.7)', () => {
+      const result = repo.create(makeInput({ type: 'update', confidence: 0.8 }));
       expect(result?.status).toBe('observing');
     });
 
-    it('auto-resolves to pending when confidence < threshold (merge: 0.75)', () => {
-      const result = repo.create(makeInput({ type: 'merge', confidence: 0.5 }));
+    it('auto-resolves to pending when confidence < threshold (update: 0.7)', () => {
+      const result = repo.create(makeInput({ type: 'update', confidence: 0.5 }));
       expect(result?.status).toBe('pending');
     });
 
-    it('enhance auto-observes at confidence >= 0.7', () => {
-      const result = repo.create(makeInput({ type: 'enhance', confidence: 0.7 }));
+    it('deprecate auto-observes at any confidence (threshold: 0.0)', () => {
+      const result = repo.create(
+        makeInput({ type: 'deprecate', confidence: 0.1, targetRecipeId: 'r-dep' })
+      );
       expect(result?.status).toBe('observing');
-    });
-
-    it('contradiction always starts as pending (threshold = Infinity)', () => {
-      const result = repo.create(makeInput({ type: 'contradiction', confidence: 0.99 }));
-      expect(result?.status).toBe('pending');
-    });
-
-    it('reorganize always starts as pending (threshold = Infinity)', () => {
-      const result = repo.create(makeInput({ type: 'reorganize', confidence: 0.99 }));
-      expect(result?.status).toBe('pending');
     });
 
     it('allows explicit status override', () => {
@@ -109,10 +101,10 @@ describe('ProposalRepository', () => {
 
     it('sets type-specific observation windows', () => {
       const before = Date.now();
-      const result = repo.create(makeInput({ type: 'correction', confidence: 0.8 }));
-      // correction: 24h
-      expect(result?.expiresAt).toBeGreaterThanOrEqual(before + 24 * 60 * 60 * 1000 - 100);
-      expect(result?.expiresAt).toBeLessThanOrEqual(Date.now() + 24 * 60 * 60 * 1000 + 100);
+      const result = repo.create(makeInput({ type: 'update', confidence: 0.8 }));
+      // update: 72h
+      expect(result?.expiresAt).toBeGreaterThanOrEqual(before + 72 * 60 * 60 * 1000 - 100);
+      expect(result?.expiresAt).toBeLessThanOrEqual(Date.now() + 72 * 60 * 60 * 1000 + 100);
     });
 
     it('stores relatedRecipeIds and evidence', () => {
@@ -126,16 +118,8 @@ describe('ProposalRepository', () => {
       expect(result?.evidence).toEqual([{ snapshotAt: 12345, reason: 'test' }]);
     });
 
-    it('covers all 7 proposal types', () => {
-      const types: ProposalType[] = [
-        'merge',
-        'supersede',
-        'enhance',
-        'deprecate',
-        'reorganize',
-        'contradiction',
-        'correction',
-      ];
+    it('covers all 2 proposal types', () => {
+      const types: ProposalType[] = ['update', 'deprecate'];
       for (const type of types) {
         const result = repo.create(
           makeInput({ type, confidence: 0.5, targetRecipeId: `r-${type}` })
@@ -171,17 +155,17 @@ describe('ProposalRepository', () => {
 
   describe('find (filters)', () => {
     it('filters by status, type, and targetRecipeId', () => {
-      repo.create(makeInput({ type: 'merge', confidence: 0.5, targetRecipeId: 'r-001' }));
-      repo.create(makeInput({ type: 'enhance', confidence: 0.5, targetRecipeId: 'r-002' }));
+      repo.create(makeInput({ type: 'update', confidence: 0.5, targetRecipeId: 'r-001' }));
+      repo.create(makeInput({ type: 'deprecate', confidence: 0.5, targetRecipeId: 'r-002' }));
 
-      const results = repo.find({ type: 'merge', targetRecipeId: 'r-001' });
+      const results = repo.find({ type: 'update', targetRecipeId: 'r-001' });
       expect(results).toHaveLength(1);
-      expect(results[0].type).toBe('merge');
+      expect(results[0].type).toBe('update');
     });
 
     it('supports array status filter', () => {
-      repo.create(makeInput({ type: 'merge', confidence: 0.5, targetRecipeId: 'r-a' }));
-      repo.create(makeInput({ type: 'enhance', confidence: 0.8, targetRecipeId: 'r-b' }));
+      repo.create(makeInput({ type: 'update', confidence: 0.5, targetRecipeId: 'r-a' }));
+      repo.create(makeInput({ type: 'deprecate', confidence: 0.8, targetRecipeId: 'r-b' }));
 
       const results = repo.find({ status: ['pending', 'observing'] });
       expect(results.length).toBeGreaterThanOrEqual(2);
@@ -223,7 +207,7 @@ describe('ProposalRepository', () => {
   describe('findByTarget', () => {
     it('queries by target + active status', () => {
       repo.create(makeInput({ targetRecipeId: 'r-target' }));
-      repo.create(makeInput({ targetRecipeId: 'r-other', type: 'enhance' }));
+      repo.create(makeInput({ targetRecipeId: 'r-other', type: 'deprecate' }));
 
       const results = repo.findByTarget('r-target');
       expect(results).toHaveLength(1);
@@ -317,8 +301,8 @@ describe('ProposalRepository', () => {
     it('returns counts per status', () => {
       // Create proposals in different statuses
       repo.create(makeInput({ confidence: 0.5, targetRecipeId: 'r-1' })); // pending
-      repo.create(makeInput({ confidence: 0.5, targetRecipeId: 'r-2', type: 'enhance' })); // pending
-      repo.create(makeInput({ confidence: 0.8, targetRecipeId: 'r-3', type: 'supersede' })); // observing
+      repo.create(makeInput({ confidence: 0.5, targetRecipeId: 'r-2', type: 'update' })); // pending (dup type but diff target)
+      repo.create(makeInput({ confidence: 0.8, targetRecipeId: 'r-3', type: 'deprecate' })); // observing
 
       const result = repo.stats();
       expect(result.pending).toBe(2);

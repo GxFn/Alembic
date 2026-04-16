@@ -1,10 +1,10 @@
 /**
  * evolution-tools.test.ts
  *
- * Evolution Agent 工具处理器测试:
- *   - propose_evolution: 附加进化提案
- *   - confirm_deprecation: 确认废弃
- *   - skip_evolution: 显式跳过
+ * Evolution Agent 工具处理器测试 (EvolutionGateway 版):
+ *   - propose_evolution → gateway.submit({ action: 'update' })
+ *   - confirm_deprecation → gateway.submit({ action: 'deprecate' })
+ *   - skip_evolution → gateway.submit({ action: 'valid' })
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -15,7 +15,15 @@ import {
   skipEvolution,
 } from '../../lib/agent/tools/evolution-tools.js';
 
-// ── Helpers ──────────────────────────────────────────────
+function createMockGateway(outcome = 'proposal-created', proposalId = 'prop-001') {
+  return {
+    submit: vi.fn(async () => ({
+      outcome,
+      proposalId: outcome === 'error' ? undefined : proposalId,
+      error: outcome === 'error' ? 'Something went wrong' : undefined,
+    })),
+  };
+}
 
 function makeContext(services: Record<string, unknown> = {}): ToolHandlerContext {
   return {
@@ -28,8 +36,6 @@ function makeContext(services: Record<string, unknown> = {}): ToolHandlerContext
   };
 }
 
-// ── propose_evolution ────────────────────────────────────
-
 describe('proposeEvolution', () => {
   it('should have correct tool metadata', () => {
     expect(proposeEvolution.name).toBe('propose_evolution');
@@ -40,15 +46,9 @@ describe('proposeEvolution', () => {
     expect(proposeEvolution.parameters.required).toContain('confidence');
   });
 
-  it('should create proposal via ProposalRepository and return result', async () => {
-    const createFn = vi.fn().mockReturnValue({
-      id: 'prop-001',
-      status: 'pending',
-      expiresAt: Date.now() + 48 * 3600_000,
-    });
-    const ctx = makeContext({
-      proposalRepository: { create: createFn },
-    });
+  it('should submit update via EvolutionGateway and return result', async () => {
+    const gateway = createMockGateway();
+    const ctx = makeContext({ evolutionGateway: gateway });
 
     const result = await proposeEvolution.handler(
       {
@@ -65,58 +65,22 @@ describe('proposeEvolution', () => {
       ctx
     );
 
-    expect(createFn).toHaveBeenCalledOnce();
-    expect(createFn).toHaveBeenCalledWith(
+    expect(gateway.submit).toHaveBeenCalledOnce();
+    expect(gateway.submit).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'enhance',
-        targetRecipeId: 'recipe-abc',
-        relatedRecipeIds: [],
-        confidence: 0.85,
+        recipeId: 'recipe-abc',
+        action: 'update',
         source: 'decay-scan',
       })
     );
     expect(result.status).toBe('proposed');
     expect(result.proposalId).toBe('prop-001');
     expect(result.recipeId).toBe('recipe-abc');
-    expect(result.type).toBe('enhance');
-  });
-
-  it('should pass evidence with verifiedBy metadata', async () => {
-    const createFn = vi.fn().mockReturnValue({
-      id: 'prop-002',
-      expiresAt: Date.now() + 24 * 3600_000,
-    });
-    const ctx = makeContext({
-      proposalRepository: { create: createFn },
-    });
-
-    await proposeEvolution.handler(
-      {
-        recipeId: 'recipe-abc',
-        type: 'correction',
-        description: '源文件已迁移',
-        evidence: {
-          sourceStatus: 'moved',
-          newLocation: 'Sources/NewKit/WBISigner.swift',
-          suggestedChanges: '更新 sourceRefs 路径',
-        },
-        confidence: 0.9,
-      },
-      ctx
-    );
-
-    const evidenceArg = createFn.mock.calls[0][0].evidence[0];
-    expect(evidenceArg.verifiedBy).toBe('evolution-agent');
-    expect(evidenceArg.sourceStatus).toBe('moved');
-    expect(evidenceArg.newLocation).toBe('Sources/NewKit/WBISigner.swift');
-    expect(typeof evidenceArg.verifiedAt).toBe('number');
   });
 
   it('should clamp confidence to 0-1 range', async () => {
-    const createFn = vi.fn().mockReturnValue({ id: 'prop-003', expiresAt: 0 });
-    const ctx = makeContext({
-      proposalRepository: { create: createFn },
-    });
+    const gateway = createMockGateway();
+    const ctx = makeContext({ evolutionGateway: gateway });
 
     await proposeEvolution.handler(
       {
@@ -128,7 +92,7 @@ describe('proposeEvolution', () => {
       },
       ctx
     );
-    expect(createFn.mock.calls[0][0].confidence).toBe(1);
+    expect(gateway.submit.mock.calls[0][0].confidence).toBe(1);
 
     await proposeEvolution.handler(
       {
@@ -140,11 +104,11 @@ describe('proposeEvolution', () => {
       },
       ctx
     );
-    expect(createFn.mock.calls[1][0].confidence).toBe(0);
+    expect(gateway.submit.mock.calls[1][0].confidence).toBe(0);
   });
 
-  it('should return error when ProposalRepository unavailable', async () => {
-    const ctx = makeContext(); // no proposalRepository
+  it('should return error when EvolutionGateway unavailable', async () => {
+    const ctx = makeContext();
     const result = await proposeEvolution.handler(
       {
         recipeId: 'recipe-abc',
@@ -159,11 +123,9 @@ describe('proposeEvolution', () => {
     expect(result.recipeId).toBe('recipe-abc');
   });
 
-  it('should return error when create returns null', async () => {
-    const createFn = vi.fn().mockReturnValue(null);
-    const ctx = makeContext({
-      proposalRepository: { create: createFn },
-    });
+  it('should return error when gateway returns error outcome', async () => {
+    const gateway = createMockGateway('error');
+    const ctx = makeContext({ evolutionGateway: gateway });
 
     const result = await proposeEvolution.handler(
       {
@@ -179,8 +141,6 @@ describe('proposeEvolution', () => {
   });
 });
 
-// ── confirm_deprecation ──────────────────────────────────
-
 describe('confirmDeprecation', () => {
   it('should have correct tool metadata', () => {
     expect(confirmDeprecation.name).toBe('confirm_deprecation');
@@ -188,86 +148,37 @@ describe('confirmDeprecation', () => {
     expect(confirmDeprecation.parameters.required).toContain('reason');
   });
 
-  it('should call knowledgeService.deprecate and return result', async () => {
-    const deprecateFn = vi.fn().mockReturnValue({ success: true });
-    const ctx = makeContext({
-      knowledgeService: { deprecate: deprecateFn },
-    });
+  it('should submit deprecate via EvolutionGateway with high confidence', async () => {
+    const gateway = createMockGateway('immediately-executed');
+    const ctx = makeContext({ evolutionGateway: gateway });
 
     const result = await confirmDeprecation.handler(
       { recipeId: 'recipe-abc', reason: '源文件已删除' },
       ctx
     );
 
-    expect(deprecateFn).toHaveBeenCalledWith('recipe-abc', '源文件已删除', {
-      userId: 'evolution-agent',
-    });
+    expect(gateway.submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipeId: 'recipe-abc',
+        action: 'deprecate',
+        confidence: 0.9,
+        source: 'decay-scan',
+      })
+    );
     expect(result.status).toBe('deprecated');
     expect(result.recipeId).toBe('recipe-abc');
     expect(result.reason).toBe('源文件已删除');
   });
 
-  it('should resolve related deprecate proposals', async () => {
-    const deprecateFn = vi.fn();
-    const markExecutedFn = vi.fn();
-    const ctx = makeContext({
-      knowledgeService: { deprecate: deprecateFn },
-      proposalRepository: {
-        findByTarget: vi.fn().mockReturnValue([
-          { id: 'prop-1', type: 'deprecate', status: 'pending' },
-          { id: 'prop-2', type: 'evolve', status: 'pending' },
-        ]),
-        markExecuted: markExecutedFn,
-      },
-    });
-
-    await confirmDeprecation.handler({ recipeId: 'recipe-abc', reason: 'test' }, ctx);
-
-    // Should only mark deprecate proposals as executed, not evolve
-    expect(markExecutedFn).toHaveBeenCalledTimes(1);
-    expect(markExecutedFn).toHaveBeenCalledWith(
-      'prop-1',
-      expect.stringContaining('Evolution Agent confirmed deprecation'),
-      'evolution-agent'
-    );
-  });
-
-  it('should not fail when proposalRepository is unavailable', async () => {
-    const deprecateFn = vi.fn();
-    const ctx = makeContext({
-      knowledgeService: { deprecate: deprecateFn },
-      // No proposalRepository
-    });
-
+  it('should return error when EvolutionGateway unavailable', async () => {
+    const ctx = makeContext();
     const result = await confirmDeprecation.handler(
       { recipeId: 'recipe-abc', reason: 'test' },
       ctx
     );
-
-    expect(result.status).toBe('deprecated');
-  });
-
-  it('should not fail when proposalRepository.findByTarget throws', async () => {
-    const deprecateFn = vi.fn();
-    const ctx = makeContext({
-      knowledgeService: { deprecate: deprecateFn },
-      proposalRepository: {
-        findByTarget: vi.fn().mockImplementation(() => {
-          throw new Error('DB error');
-        }),
-      },
-    });
-
-    const result = await confirmDeprecation.handler(
-      { recipeId: 'recipe-abc', reason: 'test' },
-      ctx
-    );
-
-    expect(result.status).toBe('deprecated');
+    expect(result.status).toBe('error');
   });
 });
-
-// ── skip_evolution ───────────────────────────────────────
 
 describe('skipEvolution', () => {
   it('should have correct tool metadata', () => {
@@ -276,24 +187,29 @@ describe('skipEvolution', () => {
     expect(skipEvolution.parameters.required).toContain('reason');
   });
 
-  it('should return skipped status with params', async () => {
-    const ctx = makeContext();
+  it('should submit valid via EvolutionGateway and return skipped status', async () => {
+    const gateway = createMockGateway('verified');
+    const ctx = makeContext({ evolutionGateway: gateway });
+
     const result = await skipEvolution.handler({ recipeId: 'recipe-xyz', reason: '信息不足' }, ctx);
 
+    expect(gateway.submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipeId: 'recipe-xyz',
+        action: 'valid',
+        source: 'decay-scan',
+      })
+    );
     expect(result.status).toBe('skipped');
     expect(result.recipeId).toBe('recipe-xyz');
     expect(result.reason).toBe('信息不足');
   });
 
-  it('should not modify any state', async () => {
-    const deprecateFn = vi.fn();
-    const ctx = makeContext({
-      knowledgeService: { deprecate: deprecateFn },
-    });
+  it('should return skipped even when gateway unavailable', async () => {
+    const ctx = makeContext();
+    const result = await skipEvolution.handler({ recipeId: 'recipe-xyz', reason: 'test' }, ctx);
 
-    await skipEvolution.handler({ recipeId: 'recipe-xyz', reason: 'test' }, ctx);
-
-    // knowledgeService.deprecate should NOT be called
-    expect(deprecateFn).not.toHaveBeenCalled();
+    expect(result.status).toBe('skipped');
+    expect(result.recipeId).toBe('recipe-xyz');
   });
 });
